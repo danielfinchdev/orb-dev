@@ -340,6 +340,11 @@ html[data-skin="vaporwave"] .bar-title-main { font-weight: 700; letter-spacing: 
 html[data-skin="retro"] .project-icon:not(.is-image) { border-radius: 3px; box-shadow: 1px 1px 0 var(--foreground); }
 html[data-skin="nube"] .project-icon:not(.is-image) { border-radius: 999px; }
 html[data-skin="profesional"] .project-icon:not(.is-image) { background: var(--muted); color: var(--foreground); box-shadow: inset 0 0 0 1px var(--border); }
+/* 3.8.1 (H1e): the corner of a chat's avatar (views/orb/inbox.jsx › OrbAvatar): the mark of who answers on a small
+   round chip that reads on any row (hovered, open, glass) without cutting a ring out of the icon under it. */
+.orb-avatar-badge { position: absolute; right: -3px; bottom: -3px; display: grid; place-items: center; border-radius: 999px; background: var(--card); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / 0.12); }
+.dark .orb-avatar-badge { background: var(--popover); }
+html.glass .orb-avatar-badge { background: var(--glass-solid); box-shadow: 0 0 0 1px var(--glass-stroke), 0 1px 2px rgb(30 36 90 / 0.14); }
 /* 3.2: the search of the sidebar and the card of a conversation on hover. */
 .side-search-box { background: color-mix(in oklch, var(--card) 70%, transparent); transition: border-color 0.15s, box-shadow 0.15s; }
 .side-search-box:focus-within { border-color: color-mix(in oklch, var(--ring) 70%, var(--border)); box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 18%, transparent); }

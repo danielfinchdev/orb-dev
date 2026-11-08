@@ -31,6 +31,9 @@ export function shortTime(at, { now = new Date(), locale = 'es', yesterday = 'Ay
 // from inbox.list when there) and each direct conversation with an agent (sessions of kind «chat»: no marks, they are
 // not in inbox.list). Each row carries its own tasks (newest first) for its progress line.
 const OPEN_TASK = ['queued', 'running', 'awaiting_approval', 'limited'];
+// 3.8.1 (H1e): a conversation is orchestrated when the work went to more than one agent: its brain and the agents its tasks
+// ran with (or were given to; «any» not yet assigned does not count). Its avatar's corner then shows the orchestrator.
+export const orchestrated = (brain, tasks = []) => new Set([brain, ...tasks.map((x) => x.assigned_to || x.agent)].filter((a) => a && a !== 'any')).size > 1;
 export function orbItems({ inbox = null, conversations = [], sessions = [], tasks = [], chats = [], approvals = [], completed = [], skip = null } = {}) {
   const marks = new Map((Array.isArray(inbox?.items) ? inbox.items : []).map((x) => [x.key, x]));
   const byConv = new Map();
@@ -51,7 +54,7 @@ export function orbItems({ inbox = null, conversations = [], sessions = [], task
       pinned: Boolean(m.pinned), pinOrder: m.pinOrder ?? null, muted: Boolean(m.muted), unread: Number(m.unread) || 0, lastMessage: m.lastMessage ?? null,
       at: [m.lastMessage?.at, c.updated_at, own[0]?.updated_at].filter(Boolean).sort().pop() ?? null,
       done: c.status === 'done', busy: Boolean(c.busy || c.waiting || live.has(c.id) || m.state === 'working'), asking: Boolean(c.asking),
-      tasks: own, open: own.filter((x) => OPEN_TASK.includes(x.status)).length
+      orchestrated: orchestrated(c.agent, own), tasks: own, open: own.filter((x) => OPEN_TASK.includes(x.status)).length
     });
   }
   for (const s of Array.isArray(sessions) ? sessions : []) {
@@ -61,7 +64,7 @@ export function orbItems({ inbox = null, conversations = [], sessions = [], task
     const m = marks.get(`session:${s.id}`) ?? {};
     out.push({ key: `session:${s.id}`, kind: 'session', id: s.id, title: s.title, project: s.project ?? null, agent: s.agent ?? null, model: s.model ?? null,
       pinned: Boolean(m.pinned), pinOrder: m.pinOrder ?? null, muted: Boolean(m.muted), unread: 0, lastMessage: null, at: s.updated_at ?? null,
-      done: Boolean(s.settled) || done.has(`s${s.id}`), busy: s.status === 'running', asks, stalled: stalled && !asks, tasks: [], open: 0 });
+      done: Boolean(s.settled) || done.has(`s${s.id}`), busy: s.status === 'running', asks, stalled: stalled && !asks, orchestrated: false, tasks: [], open: 0 });
   }
   return out;
 }

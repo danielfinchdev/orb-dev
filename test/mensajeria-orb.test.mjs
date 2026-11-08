@@ -28,6 +28,26 @@ test('las filas de Orb: las conversaciones con sus marcas y tareas, y las direct
   assert.equal(s.kind, 'session'); assert.equal(s.stalled, true);
 });
 
+test('3.8.1 (H1e): el avatar de cada fila: el proyecto en grande y en la esquina quién contesta (o el orquestador)', () => {
+  assert.equal(M.orchestrated('claude', []), false, 'solo su cerebro');
+  assert.equal(M.orchestrated('claude', [{ agent: 'claude' }, { agent: 'any' }]), false, '«cualquiera» sin asignar no cuenta');
+  assert.equal(M.orchestrated('claude', [{ agent: 'any', assigned_to: 'codex' }]), true, 'una tarea que hizo otro agente');
+  assert.equal(M.orchestrated('claude', [{ agent: 'codex' }, { agent: 'gemini' }]), true);
+  assert.equal(M.orchestrated(null, [{ agent: 'codex' }]), false, 'sin cerebro conocido y un solo agente');
+  const items = M.orbItems({
+    conversations: [{ id: 1, title: 'A', project: 'web', agent: 'codex' }, { id: 2, title: 'B', project: null, agent: 'claude' }],
+    tasks: [{ id: 5, conversation_id: 2, agent: 'codex', status: 'done' }],
+    sessions: [{ id: 's1', kind: 'chat', title: 'Directo', project: 'web', agent: 'cursor' }]
+  });
+  assert.deepEqual(items.map((x) => [x.agent, x.orchestrated]), [['codex', false], ['claude', true], ['cursor', false]]);
+  const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'views', 'orb', 'inbox.jsx'), 'utf8');
+  const avatar = ui.slice(ui.indexOf('export function OrbAvatar'), ui.indexOf('// ---- what can be done with a chat'));
+  assert.match(avatar, /<ProjectIcon name=\{item\.project\} size=\{size\} \/>/, 'grande: el icono del proyecto');
+  assert.match(avatar, /<OrchestratorIcon[\s\S]*<AgentIcon agent=\{item\.agent\}/, 'esquina: orquestador o agente');
+  assert.match(avatar, /aria-label=/, 'con su nombre para los lectores de pantalla');
+  assert.equal((ui.match(/<OrbAvatar /g) ?? []).length, 3, 'filas, hoja del móvil y mensajes encontrados usan el mismo avatar');
+});
+
 test('el avance de cada fila: primero lo que espera al usuario, luego lo que trabaja, luego cómo acabó', () => {
   const base = { kind: 'conversation', tasks: [], lastMessage: null };
   assert.deepEqual(M.orbProgress({ ...base, tasks: [{ id: 3, status: 'running', title: 'X' }, { id: 4, status: 'awaiting_approval' }] }, t), { text: 'orbchats.awaiting', tone: 'warn', badge: true });

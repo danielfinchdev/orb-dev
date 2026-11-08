@@ -2,8 +2,8 @@
 // the left pane; on the phone the «Chats» tab. From the top: search (titles, projects, the
 // messages and «#12» for a task) with its filter, «+» (Nuevo chat, Nuevo proyecto), the zone's other places (PC: Tareas,
 // Proyectos, Programadas, Pizarra, and «Más» with God mode when it is on), the pinned
-// chats, then one group per project (its coloured initials, folding) with its chats. Each row: Orbe's head with the
-// project's badge (a direct conversation: its agent's mark), the title, the time, its latest progress (a running task,
+// chats, then one group per project (its coloured initials, folding) with its chats. Each row: the project's icon with
+// the mark of who answers in its corner (OrbAvatar), the title, the time, its latest progress (a running task,
 // «Esperando tu aprobación», how its last task ended, else its last line) and the unread count. Right click or ⋯ (PC) and
 // a long press (phone) open the chat's menu: info, pin, mute, mark read, complete or reopen, delete.
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
@@ -13,6 +13,7 @@ import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
+import { OrchestratorIcon } from '@/components/orchestrator-icon.jsx';
 import { createProjectFlow } from '@/components/project-actions.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, DropdownMenuCheckboxItem, Collapsible, CollapsibleTrigger, CollapsibleContent, Dialog, DialogContent, DialogTitle, DialogDescription, Tip } from '@/components/ui/overlay.jsx';
 import { confirm } from '@/components/dialogs.jsx';
@@ -47,19 +48,27 @@ export const openOrbItem = (x) => go(x.kind === 'session' ? { view: 'session', i
 const isOpen = (route, x) => (x.kind === 'session' ? route.view === 'session' : route.view === 'chat') && route.id === x.id;
 const conversationRef = (x) => ({ kind: x.kind === 'session' ? 'session' : 'conversation', id: x.id });
 
-// Orbe's head with the project's badge; a direct conversation: its agent's mark in a soft circle.
+// 3.8.1 (H1e): the chat's avatar. Big: its project's icon (its own picture or its coloured initials); without a project,
+// Orbe's head. In the corner: who answers, the agent's mark (the conversation's brain, or the agent of a direct one), or
+// the orchestrator's when the work went to more than one agent. An agent Orb no longer knows gets the neutral mark.
 export function OrbAvatar({ item, size = 40 }) {
+  const t = useT();
   const skin = useStore((s) => s.app?.config?.ui?.skin);
-  const badge = Math.round(size * 0.42);
-  const body = item.kind === 'session'
-    ? <span className="bg-muted grid place-items-center rounded-full" style={{ width: size, height: size }}><AgentIcon agent={item.agent} className={cn(item.busy && 'animate-pulse')} /></span>
+  const badge = Math.max(16, Math.round(size * 0.44));
+  const who = item.orchestrated ? t('orbchats.orchestrator') : (item.agentName ?? AGENT[item.agent] ?? item.agent ?? '');
+  const body = item.project
+    ? <ProjectIcon name={item.project} size={size} />
     : skin === 'profesional'
       ? <span className="bg-primary/12 text-primary grid place-items-center rounded-full" style={{ width: size, height: size }}><Sparkles className="size-1/2" /></span>
       : <Robot size={size} still mood={item.busy ? 'thinking' : 'idle'} />;
   return (
-    <span className="relative inline-grid shrink-0" style={{ width: size, height: size }} data-testid="orb-avatar">
+    <span className="relative inline-grid shrink-0" style={{ width: size, height: size }} role="img" aria-label={who ? `${item.project ?? t('orbchats.noProject')} · ${who}` : (item.project ?? t('orbchats.noProject'))} data-testid="orb-avatar">
       {body}
-      {item.project ? <span className="ring-sidebar absolute -right-0.5 -bottom-0.5 grid place-items-center rounded-[6px] ring-2" style={{ width: badge, height: badge }}><ProjectIcon name={item.project} size={badge} /></span> : null}
+      {item.agent || item.orchestrated ? (
+        <span className={cn('orb-avatar-badge', item.busy && 'animate-pulse')} style={{ width: badge, height: badge }} data-badge={item.orchestrated ? 'orchestrator' : item.agent}>
+          {item.orchestrated ? <OrchestratorIcon className="text-primary size-[64%]" /> : <AgentIcon agent={item.agent} className="size-[64%]" />}
+        </span>
+      ) : null}
     </span>
   );
 }

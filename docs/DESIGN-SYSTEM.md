@@ -160,8 +160,10 @@ what is built, sections 2.1–2.4 describe the shipped app.
   of a task, with a filter by state and agent; «+» with Nuevo chat / Nuevo proyecto; on the PC the places Tareas (with
   what waits for approval) · Proyectos · Programadas · Pizarra and «Más» with God mode when it is on;
   pinned chats on top; one collapsible group per project with its coloured initials and a ⋯ (new
-  chat there, project info), «Sin proyecto» last; completed chats behind «Ver completados». Each row: Orbe's head with
-  the project's badge (a direct conversation: its agent's mark), title, time, its latest progress (`orbProgress` in
+  chat there, project info), «Sin proyecto» last; completed chats behind «Ver completados». Each row: its avatar (3.8.1,
+  `OrbAvatar`: big, the project's icon, or Orbe's head without a project; in the corner, on a small round chip, the mark of
+  who answers: the conversation's brain or a direct conversation's agent, or the orchestrator's when its tasks went to
+  more than one agent), title, time, its latest progress (`orbProgress` in
   `lib/inbox.js`: waiting for approval / a question / a permission first, then a running task, then how its last task
   ended, else its last line) and unread; right click or ⋯ (PC) and a long press (phone) open its menu: info, pin, mute,
   mark read, complete or reopen, delete). The conversation (`views/chat.jsx`): the header pill (Orbe, title, project ·
