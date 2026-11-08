@@ -8,9 +8,15 @@ import crypto from 'node:crypto';
 
 // One app at a time around a file. On Windows a handle open with no sharing (libuv's UV_FS_O_EXLOCK): nobody else can
 // open, rename or delete the file while it is held, and Windows lets it go when the app ends, however it ends.
-// Elsewhere, a file made with 'wx' and taken over when older than STALE_MS.
+// Elsewhere, a file made with 'wx' and taken over when older than STALE_MS, or at once when the app that wrote its process
+// id there is gone (killed: it never removed it).
 export const EXLOCK = 0x10000000;
 const STALE_MS = 30_000;
+const holderGone = (file) => {
+  let pid = 0; try { pid = Number.parseInt(fs.readFileSync(file, 'utf8'), 10); } catch { return false; }
+  if (!(pid > 0) || pid === process.pid) return false; // not written yet: its age decides
+  try { process.kill(pid, 0); return false; } catch (error) { return error.code === 'ESRCH'; }
+};
 // → an open fd, null (held by another one: try again), or undefined (cannot be made here: go on without it).
 export function exclusiveOpen(file) {
   if (process.platform === 'win32') {
@@ -20,7 +26,7 @@ export function exclusiveOpen(file) {
     if (error.code !== 'EEXIST') return undefined;
     // Taken over atomically: only one of two apps that both see an old lock renames it away; the other tries again.
     try {
-      if (Date.now() - fs.statSync(file).mtimeMs <= STALE_MS) return null;
+      if (Date.now() - fs.statSync(file).mtimeMs <= STALE_MS && !holderGone(file)) return null;
       const gone = `${file}.${process.pid}-${crypto.randomBytes(4).toString('hex')}.old`;
       fs.renameSync(file, gone);
       fs.rmSync(gone, { force: true });

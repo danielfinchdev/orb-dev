@@ -80,7 +80,16 @@ export function secretDir(home) {
 // clave.bin, the runs…) but the folders meant to be opened: MCP servers, skills, what an agent prepared, the tools (adb),
 // the logs and the isolated copies tasks work in. Compared by the real path (a junction, a short 8.3 name or the \\?\
 // prefix lead to the same folder).
-const realLower = (p) => { let r = path.resolve(p); try { r = fs.realpathSync.native(r); } catch { /* not there: as written */ } return r.replace(/^\\\\\?\\/, '').toLowerCase(); };
+// A path not made yet: its nearest existing parent resolved (a short name there too), the rest as written.
+const realOf = (p) => {
+  let at = path.resolve(p); const rest = [];
+  for (;;) {
+    try { return path.join(fs.realpathSync.native(at), ...rest.reverse()); } catch { /* not there: its parent */ }
+    const up = path.dirname(at); if (up === at) return path.resolve(p);
+    rest.push(path.basename(at)); at = up;
+  }
+};
+const realLower = (p) => realOf(p).replace(/^\\\\\?\\/, '').toLowerCase();
 export function guardedCore(home, target) {
   if (!home || typeof target !== 'string') return false;
   const t = realLower(target);

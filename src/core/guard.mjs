@@ -140,6 +140,9 @@ const realOf = (p) => {
   }
   return path.resolve(p);
 };
+// A folder as given and where it really is (links followed, and the long name of an 8.3 one such as C:\Users\RUNNER~1, which
+// a TEMP or a user name longer than eight letters gives): what a path is compared with, since realOf gives the long one.
+const rootsOf = (dir) => [...new Set([norm(dir), norm(realOf(dir))])];
 const under = (rest) => (o) => o.every((part, i) => rest[i] === part);
 // read: true (every folder a reading tool may see), false, or the names of the ones that count (['skills']).
 const readable = (read) => (read === true ? READ_INTERNAL : Array.isArray(read) ? READ_INTERNAL.filter((o) => read.includes(o[0])) : []);
@@ -151,7 +154,7 @@ let guardedRoots = []; let guardedAsGiven = [];
 // The engine names them once it knows them (src/engine/engine.mjs › open). guardedRootsNow: as given (Cursor's rules).
 export function setGuardedRoots(list) {
   guardedAsGiven = [...new Set((list ?? []).filter((d) => typeof d === 'string' && path.isAbsolute(d)).map((d) => path.resolve(d)))];
-  guardedRoots = [...new Set(guardedAsGiven.map(norm))];
+  guardedRoots = [...new Set(guardedAsGiven.flatMap(rootsOf))];
 }
 export const guardedRootsNow = () => [...guardedAsGiven];
 // 3.8.1: the folder Orb is installed in (its node.exe and the engine's code, which every agent's MCP server runs, and Orb.exe
@@ -160,7 +163,7 @@ export const guardedRootsNow = () => [...guardedAsGiven];
 let appRoots = []; let appAsGiven = [];
 export function setAppRoots(list) {
   appAsGiven = [...new Set((list ?? []).filter((d) => typeof d === 'string' && path.isAbsolute(d)).map((d) => path.resolve(d)))];
-  appRoots = [...new Set(appAsGiven.map(norm))];
+  appRoots = [...new Set(appAsGiven.flatMap(rootsOf))];
 }
 export const appRootsNow = () => [...appAsGiven];
 export function isOrbData(target, internalDir, cwd, { read = false } = {}) {
@@ -169,8 +172,8 @@ export function isOrbData(target, internalDir, cwd, { read = false } = {}) {
   if (!path.isAbsolute(p) && !path.win32.isAbsolute(p)) { if (!cwd) return false; p = path.resolve(cwd, p); }
   const full = norm(realOf(p));
   const within = (root) => full === root || full.startsWith(`${root}\\`);
-  const root = norm(internalDir);
-  if (within(root)) return !openInCore(full.slice(root.length + 1).split('\\'), read);
+  const root = rootsOf(internalDir).find(within);
+  if (root) return !openInCore(full.slice(root.length + 1).split('\\'), read);
   if (read !== true && appRoots.some(within)) return true;
   return guardedRoots.some(within);
 }
@@ -276,12 +279,12 @@ function touchesOnce({ command: given, paths, patterns, internalDir, cwd, read =
   if ([...paths, ...patterns].some((p) => isOrbData(p, internalDir, cwd, { read }))) return true;
   // The folder written out anywhere in the command (in a script's string too), with either separator or case.
   const t = String(command ?? '').replace(/\//g, '\\').toLowerCase();
-  const root = norm(internalDir);
-  for (const r of [root, ...guardedRoots, ...(read === true ? [] : appRoots)]) {
+  const coreRoots = rootsOf(internalDir);
+  for (const r of [...coreRoots, ...guardedRoots, ...(read === true ? [] : appRoots)]) {
     for (let i = t.indexOf(r); i >= 0; i = t.indexOf(r, i + 1)) {
       const after = t.slice(i + r.length);
       if (/^[^\\]/.test(after) && !/^["'\s;|&)]/.test(after)) continue; // .orbx is another folder
-      if (r !== root || !(OPEN_TEXT.test(after) || readText(read, after))) return true;
+      if (!coreRoots.includes(r) || !(OPEN_TEXT.test(after) || readText(read, after))) return true;
     }
   }
   if (pathWords(command).some((w) => isOrbData(w, internalDir, cwd, { read }))) return true;
@@ -289,8 +292,8 @@ function touchesOnce({ command: given, paths, patterns, internalDir, cwd, read =
   // core (but its open folders) is refused whatever it names, and each word, also one without a slash (a junction's
   // name), is resolved there. (An agent whose own folder is inside core, a run's: its plain words are not looked at.)
   const start = cwd ? norm(realOf(cwd)) : null;
-  const startInCore = Boolean(start) && (start === root || start.startsWith(`${root}\\`));
-  const roots = [root, ...guardedRoots, ...(read === true ? [] : appRoots)];
+  const startInCore = Boolean(start) && coreRoots.some((root) => start === root || start.startsWith(`${root}\\`));
+  const roots = [...coreRoots, ...guardedRoots, ...(read === true ? [] : appRoots)];
   for (const part of workDirs(command, cwd)) {
     if (part.moved && part.dir && isOrbData(part.dir, internalDir, null, { read })) return true;
     for (const w of part.words) {
@@ -362,8 +365,7 @@ const MAKES_LINK = /\bmklink\b|\b(new-item|ni)\b[^|;&\n]*\b(junction|symboliclin
 export const makesLink = (command) => MAKES_LINK.test(String(command ?? ''));
 function linkIntoCore(command, internalDir, cwd) {
   if (!internalDir || !makesLink(command)) return false;
-  const root = norm(internalDir);
-  const realRoot = norm(realOf(internalDir));
+  const [root, realRoot = root] = rootsOf(internalDir);
   const inCore = (p) => { const f = norm(realOf(p)); return [root, realRoot].some((r) => f === r || f.startsWith(`${r}\\`)); };
   const t = expandEnv(command).replace(/\//g, '\\').toLowerCase();
   const named = (r) => { for (let i = t.indexOf(r); i >= 0; i = t.indexOf(r, i + 1)) if (/^($|[\\"'\s;|&)])/.test(t.slice(i + r.length))) return true; return false; };
@@ -397,8 +399,8 @@ function runsSkillScript(command, internalDir, cwd) {
   if (!script || !/\.(py|js|mjs|cjs|sh|ps1)$/i.test(script)) return false;
   const full = path.isAbsolute(script) || path.win32.isAbsolute(script) ? script : cwd ? path.resolve(cwd, script) : null;
   if (!full) return false;
-  const f = norm(realOf(full)); const skills = norm(path.join(internalDir, 'skills'));
-  return f.startsWith(`${skills}\\`) && !f.slice(skills.length + 1).startsWith('.');
+  const f = norm(realOf(full));
+  return rootsOf(path.join(internalDir, 'skills')).some((skills) => f.startsWith(`${skills}\\`) && !f.slice(skills.length + 1).startsWith('.'));
 }
 export function decide({ permission = 'editar', tool, kind, command = '', paths = [], patterns = [], internalDir, cwd, lang = 'es' }) {
   const T = (k) => translate(lang, `msg.guard.${k}`);
