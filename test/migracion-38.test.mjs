@@ -450,7 +450,9 @@ test('A1/A2: si la transacción falla tras la copia no se mueve ni se borra nada
   board.db.close();
 });
 
-test('R3: si orb.json no se puede escribir tras el COMMIT, Orb no arranca (ni con la configuración de 3.7) y el siguiente arranque lo termina', () => {
+// A read-only file cannot be replaced by a rename only on Windows (elsewhere the folder's permissions decide).
+const READONLY_BLOCKS = process.platform !== 'win32' && 'solo Windows: renombrar sobre un archivo de solo lectura';
+test('R3: si orb.json no se puede escribir tras el COMMIT, Orb no arranca (ni con la configuración de 3.7) y el siguiente arranque lo termina', { skip: READONLY_BLOCKS }, () => {
   const { t } = setup37();
   const file = path.join(t.home, 'core', 'orb.json');
   fs.chmodSync(file, 0o444); // read-only (or held by an antivirus): the rename over it fails
@@ -476,7 +478,7 @@ test('R3: si orb.json no se puede escribir tras el COMMIT, Orb no arranca (ni co
   board.db.close();
 });
 
-test('R3: la configuración pendiente nunca pisa los cambios hechos después en orb.json', () => {
+test('R3: la configuración pendiente nunca pisa los cambios hechos después en orb.json', { skip: READONLY_BLOCKS }, () => {
   const { t } = setup37();
   const file = path.join(t.home, 'core', 'orb.json');
   fs.chmodSync(file, 0o444);
@@ -601,7 +603,7 @@ useHome(process.env.ORB_TEST_HOME); const b = new Board(); process.stdout.write(
   const results = await Promise.all([runOne(), runOne()]);
   assert.deepEqual(results, [{ failure: null }, { failure: null }]);
   assert.deepEqual(fs.readdirSync(path.join(t.home, 'core')).filter((n) => n.startsWith(ARCHIVE_DIR)), [ARCHIVE_DIR], 'un solo archivo');
-  assert.ok(!fs.existsSync(lockFile));
+  assert.equal(fs.existsSync(lockFile), process.platform !== 'win32', 'quitado en Windows; fuera, se queda');
   const board = new Board();
   assert.ok(!isLegacy(board.db));
   assert.deepEqual(own(board), ['Plan de Dani']);

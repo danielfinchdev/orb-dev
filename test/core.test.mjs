@@ -175,7 +175,9 @@ test('3.8: proyectos viejos de fuera que ya no existen se quitan; sin «(2)»: u
   // A linked folder that exists, and one whose drive is not there (a disk unplugged): both stay.
   const linked = fs.mkdtempSync(path.join(t.base, 'enlazada-'));
   board.addProject({ name: 'enlazada', path: linked }, 'usuario', { fromUser: true });
-  board.run('INSERT INTO projects (name, path, notes, created_at) VALUES (?, ?, ?, ?)', 'usb', process.platform === 'win32' ? 'Q:\\no-hay-disco\\usb' : '/no-hay-disco/usb', '', Date.now());
+  // (A drive letter: only Windows has a whole drive that can be missing.)
+  const win = process.platform === 'win32';
+  if (win) board.run('INSERT INTO projects (name, path, notes, created_at) VALUES (?, ?, ?, ?)', 'usb', 'Q:\\no-hay-disco\\usb', '', Date.now());
   // Gone, but with an open task: stays.
   const busy = path.join(t.base, 'Orb-viejo', 'web', 'ocupado');
   board.run('INSERT INTO projects (name, path, notes, created_at) VALUES (?, ?, ?, ?)', 'ocupado', busy, '', Date.now());
@@ -185,16 +187,14 @@ test('3.8: proyectos viejos de fuera que ya no existen se quitan; sin «(2)»: u
   assert.equal(syncProjects(board), true);
   assert.equal(board.project('erp').path, fs.realpathSync(path.join(t.home, 'web', 'erp')), 'el de la carpeta del espacio se queda con el nombre');
   assert.ok(!board.project('erp (2)'));
-  assert.ok(board.project('enlazada') && board.project('ocupado'));
-  // A missing drive (Windows): it stays. Elsewhere / is always there, so the folder is just gone.
-  assert.equal(Boolean(board.project('usb')), process.platform === 'win32');
+  assert.ok(board.project('enlazada') && (!win || board.project('usb')) && board.project('ocupado'));
   assert.equal(board.project('app').path, fs.realpathSync(path.join(t.home, 'android', 'app')));
   assert.equal(board.project('app (web)').path, fs.realpathSync(path.join(t.home, 'web', 'app')));
   assert.equal(syncProjects(board), false, 'sin cambios la segunda vez');
   board.run("UPDATE tasks SET status = 'cancelled' WHERE id = ?", task.id);
   assert.equal(syncProjects(board), true);
   assert.ok(!board.project('ocupado'), 'sin tareas abiertas ya se quita');
-  for (const n of ['erp', 'enlazada', 'usb', 'app', 'app (web)']) board.removeProject(n, 'usuario');
+  for (const n of ['erp', 'enlazada', ...(win ? ['usb'] : []), 'app', 'app (web)']) board.removeProject(n, 'usuario');
   for (const d of ['web/erp', 'android/app', 'web/app']) fs.rmSync(path.join(t.home, d), { recursive: true });
 });
 

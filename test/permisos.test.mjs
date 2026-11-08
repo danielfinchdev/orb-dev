@@ -392,7 +392,7 @@ test('guardia: la carpeta de datos de Orb por su ruta resuelta, sin falsos posit
   assert.equal(decide({ permission: 'editar', tool: 'Read', paths: ['C:/proj/orb.db'], internalDir, cwd }).decision, 'allow', 'el orb.db de otro proyecto');
   // Orb's own folder, however it is written: absolute (other case, other separator), relative to the agent's folder, in a script.
   const db = path.join(internalDir, 'datos', 'orb.db');
-  for (const command of [`sqlite3 "${db}" .tables`, `type ${db.toUpperCase().replace(/\\/g, '/')}`, 'cat ../core/datos/orb.db', 'copy ..\\core\\datos\\orb.db-wal .', `node -e "require('fs').writeFileSync('${db.replace(/\\/g, '/')}', '')"`,
+  for (const command of [`sqlite3 "${db}" .tables`, `type ${db.toUpperCase().replace(/\\/g, '/')}`, 'cat ../core/datos/orb.db', `copy ..${path.sep}core${path.sep}datos${path.sep}orb.db-wal .`, `node -e "require('fs').writeFileSync('${db.replace(/\\/g, '/')}', '')"`,
     `echo x > ${path.join(internalDir, 'ejecuciones', 'a.log')}`]) {
     assert.equal(verdict(command), 'deny', command);
     assert.equal(verdict(command, 'total'), 'ask', `total pregunta: ${command}`);
