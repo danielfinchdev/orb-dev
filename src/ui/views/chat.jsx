@@ -193,14 +193,21 @@ function MonthCalendar({ today }) {
     </div>
   );
 }
-// The time a message was written, small at its bottom right (the day too when it is not today).
+// The time a message was written, small at its bottom right (the day too when it is not today). One formatter per
+// language (toLocale…String builds one on every call, for every message).
+const msgFormats = new Map();
+const msgFormat = (locale, day) => {
+  const k = `${locale}|${day}`;
+  if (!msgFormats.has(k)) msgFormats.set(k, new Intl.DateTimeFormat(locale, day ? { day: 'numeric', month: 'short' } : { hour: '2-digit', minute: '2-digit' }));
+  return msgFormats.get(k);
+};
 function MsgTime({ at }) {
   const locale = useLocale();
   if (!at) return null;
   const d = new Date(at); if (Number.isNaN(d.getTime())) return null;
   const today = d.toDateString() === new Date().toDateString();
-  const time = d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
-  return <time className="msg-time" dateTime={d.toISOString()}>{today ? time : `${d.toLocaleDateString(locale, { day: 'numeric', month: 'short' })} ${time}`}</time>;
+  const time = msgFormat(locale, false).format(d);
+  return <time className="msg-time" dateTime={d.toISOString()}>{today ? time : `${msgFormat(locale, true).format(d)} ${time}`}</time>;
 }
 
 // A list fetched again keeps the lines that did not change as they were, so that their memoised Message is not drawn
