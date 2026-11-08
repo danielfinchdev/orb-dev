@@ -884,7 +884,7 @@ launched hidden, with its output read by Orb, and it stores the session in the a
   no token). It checks on open (after 15 s) and every 4 h; it downloads nothing until the user clicks **Update**.
 - States the window receives (`app:update` event): `checking`, `available`, `downloading` (with `percent`), `downloaded`,
   `none`, `error`, `off`. A card at the top right (below the header: it does not cover the menu or the text box) and an "Updates" card in Settings.
-- **Restart and update** (`app:updateInstall`): if tasks are running it asks first; then it stops the engine and calls
+- **Restart and install** (`app:updateInstall`): if tasks are running it asks first; then it stops the engine and calls
   `quitAndInstall` (silent install and Orb reopens). With "Later" it installs when the app closes.
 - **Not installed** (Orb Light with `PORTABLE_EXECUTABLE_FILE`, or the program folder without `Uninstall Orb.exe` next to it): it queries the GitHub API (`releases/latest`) and the button opens the download.
 - Running from source there are no updates (`off`). `ORB_NO_UPDATE=1` turns them off; `ORB_FAKE_UPDATE=<version>`

@@ -1,5 +1,5 @@
-// New version of Orb: a card in the top-right corner, under the header (it never covers the menu or the message box), with «Actualizar», the download progress and
-// «Reiniciar y actualizar». The state comes from the main process (src/main/updater.mjs); the phone has no updates.
+// New version of Orb: a card in the top-right corner, under the header (it never covers the menu or the message box), with «Descargar e instalar», the download progress
+// and «Reiniciar e instalar». The state comes from the main process (src/main/updater.mjs); the phone has no updates.
 import { useEffect, useState } from 'react';
 import { X, Download, RotateCw } from 'lucide-react';
 import { bridge, act } from '@/lib/store.js';
@@ -37,9 +37,9 @@ export function UpdateCard() {
   return (
     <div data-testid="update-card" role="status" className="animate-in fade-in-0 slide-in-from-top-2 fixed top-20 right-4 z-50 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl bg-linear-to-br from-[#8f9ef0] to-[#3d63e0] p-5 text-center text-white shadow-2xl">
       <button onClick={hide} className="absolute top-3 right-3 grid size-7 cursor-pointer place-items-center rounded-full hover:bg-white/15" aria-label={t('update.close')}><X className="size-4" /></button>
-      <div className="text-[15px] font-semibold">{t('update.title')}</div>
+      <div className="px-6 text-[15px] font-semibold">{t('update.title', { version: st.version })}</div>
       <p className="mt-2 text-[13px] leading-snug text-white/90">
-        {st.state === 'downloaded' ? t('update.ready', { version: st.version }) : t('update.available', { version: st.version })}
+        {st.state === 'downloaded' ? t('update.ready', { version: st.version }) : st.portable ? t('update.availablePortable') : t('update.available')}
       </p>
       {st.state === 'downloading' ? (
         <div className="mt-4 grid gap-1.5" data-testid="update-progress">

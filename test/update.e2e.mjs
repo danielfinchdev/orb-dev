@@ -56,7 +56,7 @@ try {
   await page.evaluate(() => window.orb.update.check());
   await until(async () => (await st()).state === 'available', `aviso de la ${target}`);
   assert.equal((await st()).version, target);
-  await page.waitForSelector(`[data-testid=update-card] >> text=(${target})`);
+  await page.waitForSelector(`[data-testid=update-card] >> text=${target}`);
   await page.screenshot({ path: path.join(OUT, 'actualizar-1-aviso.png') });
   await page.click('[data-testid=update-now]');
   await until(async () => (await st()).state === 'downloaded', 'descarga', 300000);

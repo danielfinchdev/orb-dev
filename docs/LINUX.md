@@ -25,8 +25,8 @@ chmod +x Orb-*-linux-x86_64.AppImage
   folder must be writable.
 - For a menu entry, use your desktop's AppImage tool (AppImageLauncher, Gear Lever…).
 
-**Update:** Orb checks GitHub at start and every 4 hours. **Ajustes › Actualizaciones** shows a new version; «Actualizar»
-downloads it and «Reiniciar y actualizar» swaps the file and opens the new one. Your data is not touched (and Orb makes a
+**Update:** Orb checks GitHub at start and every 4 hours. **Ajustes › Actualizaciones** shows a new version; «Descargar e
+instalar» downloads it and «Reiniciar e instalar» swaps the file and opens the new one. Your data is not touched (and Orb makes a
 backup of it first).
 
 **Uninstall:** delete the `.AppImage` file.
