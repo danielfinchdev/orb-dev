@@ -11,6 +11,8 @@ BITACORA.md
 !.env.example
 *.pem
 *.key
+# The updater's TEST key (password «prueba»): only the test build trusts it (scripts/tauri-check-release.mjs).
+!test/fixtures/actualizador-prueba.key
 
 # Carpetas de pruebas locales
 .orb-prueba/

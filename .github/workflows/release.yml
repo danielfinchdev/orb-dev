@@ -1,17 +1,12 @@
-# The desktop downloads, built and checked on a real machine of each system and published together as a GitHub release:
-#   Orb-<version>-instalador.exe      Windows (Tauri): installs for the user and updates itself; the same file as
-#                                     Orb_<version>_x64-setup.exe, which the updaters download:
-#                                     latest.json + .sig for Orb on Tauri (signed with the updater key, secrets
-#                                     TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD), latest.yml for
-#                                     Orb 3.8.0 (Electron), whose updater installs it and is replaced by it
-#   Orb-<version>-linux-<arch>.AppImage  Linux, nothing to install, updates itself (latest-linux*.yml)
-#   Orb-<version>-linux-<arch>.deb       Linux (Debian, Ubuntu…), installed with the system; it tells of new versions
-# Publishing a version = changing "version" in package.json on main: when that version has no release yet, this builds it,
-# tests it (also the packaged app on Windows and Linux) and publishes it as release v<version>, creating the tag. From the Actions
-# tab ("Run workflow") it does the same; a version already published is only built and checked (files kept in the run).
-# The Android app (Orb-<version>-android.apk) is built and signed on the owner's PC (npm run android:build, its signing
-# key never leaves it) and attached to the release by hand.
-name: Release for Windows and Linux
+# The Windows download (Orb on Tauri), built and checked on a clean Windows machine. This workflow builds and tests
+# ONLY: it holds no signing key and cannot write to the repository or its releases (review D9 A1/M1). Publishing is done
+# on the owner's PC: `npm run release:firmar -- <version>` downloads the installer this run made, signs it with the
+# updater key (which never leaves that PC), writes latest.json (Orb on Tauri) and latest.yml (Orb 3.8.0's updater, the
+# bridge) and creates release v<version> with gh.
+# Runs when "version" in package.json changes on main and that version has no release yet, or from the Actions tab.
+# Linux: planned for a later version (docs/ARCHITECTURE.md); the Android app is built and signed on the owner's PC too.
+# Actions are pinned by commit (the tag in the comment).
+name: Release build
 
 on:
   push:
@@ -23,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   version:
@@ -32,7 +27,9 @@ jobs:
       version: ${{ steps.v.outputs.version }}
       new: ${{ steps.v.outputs.new }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - id: v
         name: New version?
         env:
@@ -42,116 +39,41 @@ jobs:
           echo "version=$V" >> "$GITHUB_OUTPUT"
           if gh release view "v$V" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "new=false" >> "$GITHUB_OUTPUT"; else echo "new=true" >> "$GITHUB_OUTPUT"; fi
 
-  pruebas:
+  windows:
     needs: version
     if: needs.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run check
-      - run: npm test
-        timeout-minutes: 20
-      - run: sudo apt-get update && sudo apt-get install -y xvfb
-      - name: The whole app with Electron
-        run: xvfb-run -a -s "-screen 0 1920x1080x24" npm run test:app
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: test-screenshots
-          path: test-results/
-
-  windows:
-    needs: [version, pruebas]
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
       - name: Rust
         run: rustup toolchain install stable --profile minimal && rustup default stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: src-tauri
       - run: npm ci
-      - name: Build the installer (Tauri), signed for the updater
-        run: npm run tauri:build
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-      - name: Update manifests (latest.json for Orb on Tauri, latest.yml for Orb 3.8.0)
+      - run: npm run check
+      - run: npm test
+        timeout-minutes: 25
+      - run: cargo test --lib
+        working-directory: src-tauri
+      - name: Build the installer (Tauri), not signed (signing happens on the owner's PC)
         shell: bash
-        run: node scripts/release-manifests.mjs --setup "src-tauri/target/release/bundle/nsis/Orb_${{ needs.version.outputs.version }}_x64-setup.exe" --out dist
-      - uses: actions/upload-artifact@v4
-        if: always()
+        run: npx tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}' && node scripts/tauri-check-release.mjs
+      - name: Open the packaged Orb and check it works (smoke test)
+        run: node test/smoke.e2e.mjs --exe src-tauri/target/release/Orb.exe
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: orb-dev-windows
-          path: |
-            dist/Orb_*_x64-setup.exe
-            dist/Orb_*_x64-setup.exe.sig
-            dist/Orb-*-instalador.exe
-            dist/latest.json
-            dist/latest.yml
-
-  # The Linux app (AppImage and .deb, x64 and arm64), built on Ubuntu; the x64 one is opened and checked like on Windows.
-  linux:
-    needs: [version, pruebas]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+          name: orb-windows-${{ needs.version.outputs.version }}
+          path: src-tauri/target/release/bundle/nsis/Orb_${{ needs.version.outputs.version }}_x64-setup.exe
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure()
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Build the AppImage and the .deb
-        run: npx vite build && npx electron-builder --linux AppImage deb --x64 --arm64 --publish never
-      - run: sudo apt-get update && sudo apt-get install -y xvfb
-      - name: Test the packaged app on Linux
-        run: xvfb-run -a node test/smoke.e2e.mjs
-        env:
-          ORB_E2E_EXE: dist/linux-unpacked/orb-dev
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: orb-dev-linux
-          path: |
-            dist/*.AppImage
-            dist/*.deb
-            dist/latest-linux*.yml
-            test-results/
-
-  # One release with every file, once both systems are built and checked.
-  publicar:
-    needs: [version, windows, linux]
-    if: needs.version.outputs.new == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: orb-dev-*
-          merge-multiple: true
-      - name: Publish the release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ needs.version.outputs.version }}
-          target_commitish: ${{ github.sha }}
-          name: Orb ${{ needs.version.outputs.version }}
-          make_latest: true
-          body_path: docs/CHANGELOG.md
-          files: |
-            dist/Orb_*_x64-setup.exe
-            dist/Orb_*_x64-setup.exe.sig
-            dist/Orb-*-instalador.exe
-            dist/latest.json
-            dist/latest.yml
-            dist/Orb-*.AppImage
-            dist/Orb-*.deb
-            dist/latest-linux*.yml
+          name: test-results
+          path: test-results/

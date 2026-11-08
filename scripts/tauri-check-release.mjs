@@ -1,9 +1,10 @@
 // The Tauri builds that must never be mixed up (review D4 B4):
 //   node scripts/tauri-check-release.mjs              after `tauri build`: the release Orb.exe must not be a test build
-//                                                     (no DevTools port, hidden window, local update feed or timing marks: their names are not in it);
+//                                                     (no DevTools port, hidden window, local update feed or timing marks: their names are not in it;
+//                                                     nor the test updater key);
 //   node scripts/tauri-check-release.mjs --build-e2e  the test build (cargo feature e2e), in a target folder of its own
 //                                                     (src-tauri/target-e2e), so target/release never holds one; its
-//                                                     updater also accepts a local http feed.
+//                                                     updater also accepts a local http feed and trusts only the test key.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -11,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MARKS = ['ORB_E2E_CDP_PORT', 'ORB_HIDDEN_WINDOW', 'ORB_UPDATE_URL', 'ORB_TRACE'];
+const TEST_PUBKEY = () => fs.readFileSync(path.join(ROOT, 'test', 'fixtures', 'actualizador-prueba.key.pub'), 'utf8').trim();
 
 if (process.argv.includes('--build-e2e')) {
   const env = { ...process.env, CARGO_TARGET_DIR: path.join(ROOT, 'src-tauri', 'target-e2e') };
@@ -18,7 +20,9 @@ if (process.argv.includes('--build-e2e')) {
   // release build never can.
   const conf = path.join(env.CARGO_TARGET_DIR, 'e2e.conf.json');
   fs.mkdirSync(env.CARGO_TARGET_DIR, { recursive: true });
-  fs.writeFileSync(conf, JSON.stringify({ plugins: { updater: { dangerousInsecureTransportProtocol: true } } }));
+  // And it trusts only the TEST key (test/fixtures/actualizador-prueba.key), never Orb's: what the tests sign is never
+  // valid for a real Orb (review D9 M2).
+  fs.writeFileSync(conf, JSON.stringify({ plugins: { updater: { dangerousInsecureTransportProtocol: true, pubkey: TEST_PUBKEY() } } }));
   const r = spawnSync('npx', ['tauri', 'build', '--features', 'e2e', '--no-bundle', '--config', `"${conf}"`], { cwd: ROOT, env, stdio: 'inherit', shell: true });
   process.exit(r.status ?? 1);
 }
@@ -27,5 +31,6 @@ const exe = path.join(ROOT, 'src-tauri', 'target', 'release', 'Orb.exe');
 if (!fs.existsSync(exe)) { console.error(`no existe ${exe}`); process.exit(2); }
 const bytes = fs.readFileSync(exe);
 const found = MARKS.filter((m) => bytes.includes(Buffer.from(m)));
+if (bytes.includes(Buffer.from(TEST_PUBKEY()))) found.push('la clave pública de PRUEBA');
 if (found.length) { console.error(`${exe} es una build de pruebas (${found.join(', ')}): no se publica`); process.exit(1); }
 console.log(`${path.relative(ROOT, exe)}: build normal (sin ${MARKS.join(' ni ')})`);

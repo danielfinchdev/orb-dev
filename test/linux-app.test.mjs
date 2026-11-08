@@ -64,23 +64,3 @@ test('cómo se actualiza cada copia en Linux, y el aviso de llavero', () => {
   assert.equal(externalEnv(plain), plain);
 });
 
-test('el empaquetado para Linux y su publicación con las de Windows', () => {
-  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-  const linux = pkg.build.linux;
-  const targets = Object.fromEntries(linux.target.map((t) => [t.target, t.arch]));
-  assert.deepEqual(Object.keys(targets).sort(), ['AppImage', 'deb']);
-  for (const arch of Object.values(targets)) assert.deepEqual(arch, ['x64', 'arm64']);
-  assert.equal(linux.icon, 'build/icons');
-  assert.ok(pkg.build.files.includes('build/icon.png'), 'el icono va dentro (ventana y avisos)');
-  assert.ok(pkg.build.files.includes('build/icon.ico'), 'y el .ico (la ventana en Windows)');
-  assert.ok(pkg.devDependencies.pngjs, 'npm run icon usa pngjs: dependencia propia, no de paso');
-  assert.equal(linux.desktop.entry.StartupWMClass, pkg.productName, 'el dock agrupa la ventana con su icono');
-  assert.equal(pkg.desktopName, `${linux.executableName}.desktop`);
-  assert.ok(pkg.homepage && /<.+@.+>/.test(linux.maintainer), 'el .deb necesita página y responsable');
-  const release = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'release.yml'), 'utf8');
-  assert.match(release, /electron-builder --linux AppImage deb --x64 --arm64 --publish never/);
-  for (const f of ['dist/Orb-*.AppImage', 'dist/Orb-*.deb', 'dist/latest-linux*.yml', 'dist/Orb-*-instalador.exe', 'dist/latest.yml', 'dist/latest.json', 'dist/Orb_*_x64-setup.exe.sig']) assert.ok(release.includes(f), f);
-  const pruebas = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'pruebas.yml'), 'utf8');
-  assert.match(pruebas, /windows-latest, ubuntu-latest/);
-  assert.match(pruebas, /npm run test:app/);
-});

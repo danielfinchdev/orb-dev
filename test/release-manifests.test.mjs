@@ -76,3 +76,44 @@ test('the updater: GitHub release feed, Orb\'s public key, signed versions, pass
   // The private key never in the repository.
   for (const f of ['src-tauri/tauri.conf.json', 'scripts/release-manifests.mjs']) assert.doesNotMatch(fs.readFileSync(path.join(ROOT, f), 'utf8'), /secret key|PRIVATE KEY/i);
 });
+
+// 3.8.1 (review D9 M2): the tests' updater key is not Orb's: release:firmar refuses a signature whose key id is not the
+// one in tauri.conf.json, and the test build trusts only the test key.
+test('the test updater key is not the one Orb trusts, and a signature says which key made it', async () => {
+  const { keyId } = await import('../scripts/release-firmar.mjs');
+  const { execFileSync } = await import('node:child_process');
+  const conf = JSON.parse(fs.readFileSync(path.join(ROOT, 'src-tauri', 'tauri.conf.json'), 'utf8')).plugins.updater.pubkey;
+  const testPub = fs.readFileSync(path.join(ROOT, 'test', 'fixtures', 'actualizador-prueba.key.pub'), 'utf8');
+  assert.notEqual(keyId(testPub), keyId(conf));
+  assert.match(keyId(conf), /^[0-9a-f]{16}$/);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-firma-'));
+  try {
+    const file = path.join(dir, 'x.bin'); fs.writeFileSync(file, 'x');
+    const env = { ...process.env, TAURI_SIGNING_PRIVATE_KEY_PATH: path.join(ROOT, 'test', 'fixtures', 'actualizador-prueba.key'), TAURI_SIGNING_PRIVATE_KEY_PASSWORD: 'prueba' };
+    delete env.TAURI_SIGNING_PRIVATE_KEY;
+    execFileSync(process.execPath, [path.join(ROOT, 'node_modules', '@tauri-apps', 'cli', 'tauri.js'), 'signer', 'sign', file], { env, stdio: 'ignore' });
+    assert.equal(keyId(fs.readFileSync(`${file}.sig`, 'utf8')), keyId(testPub));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// 3.8.1 (review D9 A1/M1/M7): GitHub Actions build and test only: a read-only token that is not kept in .git, no
+// signing key, nothing published from there, every action pinned by commit, and the packaged Orb opened before its
+// installer is kept. Linux is not built for 3.8.1 (planned later).
+test('the workflows: read-only, no keys, pinned actions, smoke test of the packaged Orb, Windows only', () => {
+  for (const name of ['release.yml', 'pruebas.yml']) {
+    const y = fs.readFileSync(path.join(ROOT, '.github', 'workflows', name), 'utf8');
+    assert.match(y, /^permissions:\n {2}contents: read$/m, `${name}: token de solo lectura`);
+    assert.doesNotMatch(y, /contents: write|secrets\.|TAURI_SIGNING|action-gh-release|gh release create/, `${name}: sin claves ni publicación`);
+    const uses = [...y.matchAll(/uses: (\S+)/g)].map((m) => m[1]);
+    assert.ok(uses.length > 0);
+    for (const u of uses) assert.match(u, /@[0-9a-f]{40}$/, `${name}: ${u} fijada por commit`);
+    const checkouts = (y.match(/actions\/checkout@/g) ?? []).length;
+    assert.equal((y.match(/persist-credentials: false/g) ?? []).length, checkouts, `${name}: el token no se queda en .git`);
+    assert.doesNotMatch(y.replace(/^\s*#.*$/gm, ''), /electron|linux|AppImage|\.deb\b/i, `${name}: sin Electron ni Linux en la 3.8.1`);
+  }
+  const release = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'release.yml'), 'utf8');
+  assert.match(release, /createUpdaterArtifacts":false/, 'se compila sin firmar');
+  assert.match(release, /node test\/smoke\.e2e\.mjs --exe src-tauri\/target\/release\/Orb\.exe/, 'humo de la app empaquetada');
+  assert.match(release, /orb-windows-\$\{\{ needs\.version\.outputs\.version \}\}/);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).scripts['release:firmar'], 'node scripts/release-firmar.mjs');
+});

@@ -28,6 +28,7 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build && node scripts/tauri-check-release.mjs",
     "tauri:build:e2e": "node scripts/tauri-check-release.mjs --build-e2e",
+    "release:firmar": "node scripts/release-firmar.mjs",
     "android:build": "node scripts/android-build.mjs",
     "android:build:debug": "node scripts/android-build.mjs --debug"
   },

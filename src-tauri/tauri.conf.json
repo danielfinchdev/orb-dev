@@ -41,7 +41,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFBNzYyMDVGNzdEMTBENjEKUldSaERkRjNYeUIycWtyaTNNQTlPVHJDc3ZhbkRVV1pRWVV2U0dhOUcyNUcxSk9MY0lRN3MxMEoK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMwN0Q5QzlBRkRDOTY2NUEKUldSYVpzbjltcHg5TURFQXJ6QUo4VEpPRVVFMDMxZ1lzSm84Vld5L1QzdzQ2Unp4MHdOWnNnOEgK",
       "endpoints": [
         "https://github.com/danielfinchdev/orb-dev/releases/latest/download/latest.json"
       ],

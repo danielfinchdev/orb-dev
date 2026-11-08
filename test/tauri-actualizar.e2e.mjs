@@ -1,12 +1,13 @@
 // 3.8.1 (D9): Orb on Tauri updating itself, with nobody at the PC. The e2e build (npm run tauri:build:e2e) runs with its
 // window never shown, its data in %TEMP%, and its updater pointed at a local feed (ORB_UPDATE_URL, which only that build
-// reads): latest.json made by scripts/release-manifests.mjs for a fake 9.9.9 installer signed with Orb's updater key.
+// reads): latest.json made by scripts/release-manifests.mjs for a fake 9.9.9 installer signed with the TEST updater key
+// (test/fixtures/actualizador-prueba.key, password «prueba»), the only one that build trusts (tauri-check-release.mjs).
+// Orb's real key never signs anything here (review D9 M2).
 //   - a new version is found and downloaded through the window's own buttons (window.orb.update), its signature checked
-//     against the public key in tauri.conf.json;
+//     against the test public key;
 //   - a tampered installer, or one signed for another version than the feed announces (requireSignedVersion), is refused
 //     and the window offers to try again;
 //   - nothing is installed: «Reiniciar e instalar» would run the real installer on this PC (left for the owner's PC).
-// Needs the updater's private key: TAURI_SIGNING_PRIVATE_KEY (its path or contents) and TAURI_SIGNING_PRIVATE_KEY_PASSWORD.
 //   node test/tauri-actualizar.e2e.mjs [--exe <Orb.exe>]
 import fs from 'node:fs';
 import os from 'node:os';
@@ -23,7 +24,6 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argExe = process.argv.indexOf('--exe');
 const EXE = argExe > 0 ? process.argv[argExe + 1] : path.join(ROOT, 'src-tauri', 'target-e2e', 'release', 'Orb.exe');
 if (!fs.existsSync(EXE)) { console.error(`no existe ${EXE} (npm run tauri:build:e2e)`); process.exit(2); }
-if (!process.env.TAURI_SIGNING_PRIVATE_KEY || process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD == null) { console.error('falta la clave del actualizador (TAURI_SIGNING_PRIVATE_KEY y TAURI_SIGNING_PRIVATE_KEY_PASSWORD)'); process.exit(2); }
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const until = async (fn, what, ms = 60000, every = 200) => { const end = Date.now() + ms; while (Date.now() < end) { try { const v = await fn(); if (v) return v; } catch { /* not yet */ } await wait(every); } throw new Error(`no llegó: ${what}`); };
@@ -35,10 +35,8 @@ const USER_DATA = path.join(tmp, 'datos-app');
 fs.mkdirSync(USER_DATA, { recursive: true });
 
 // ---- three feeds: a good release, a tampered installer, and an installer signed for another version
-// The key as `tauri build` takes it: its path or its contents (`signer sign` wants a path in _PATH).
-const KEY = process.env.TAURI_SIGNING_PRIVATE_KEY;
-const signEnv = { ...process.env };
-if (fs.existsSync(KEY)) { delete signEnv.TAURI_SIGNING_PRIVATE_KEY; signEnv.TAURI_SIGNING_PRIVATE_KEY_PATH = KEY; }
+const signEnv = { ...process.env, TAURI_SIGNING_PRIVATE_KEY_PATH: path.join(ROOT, 'test', 'fixtures', 'actualizador-prueba.key'), TAURI_SIGNING_PRIVATE_KEY_PASSWORD: 'prueba' };
+delete signEnv.TAURI_SIGNING_PRIVATE_KEY;
 const sign = (file, version) => execFileSync(process.execPath, [path.join(ROOT, 'node_modules', '@tauri-apps', 'cli', 'tauri.js'), 'signer', 'sign', '--app-version', version, file], { env: signEnv, stdio: 'ignore' });
 const feeds = {};
 for (const [name, signedFor] of [['buena', '9.9.9'], ['alterada', '9.9.9'], ['otra-version', '9.9.8']]) {
@@ -136,5 +134,8 @@ try {
   server.close();
 }
 for (const [mark, name, why] of results) console.log(`${mark} ${name}${why ? `\n    ${why}` : ''}`);
-console.log(`\n${results.filter((r) => r[0] === '✔').length}/${results.length} · datos en ${tmp}`);
+// Nothing left in %TEMP% when it passed (the data stay for a look only when something failed).
+const failed = results.some((r) => r[0] === '✖');
+if (!failed) { await wait(1000); fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); }
+console.log(`\n${results.filter((r) => r[0] === '✔').length}/${results.length}${failed ? ` · datos en ${tmp}` : ''}`);
 process.exitCode = results.some((r) => r[0] === '✖') ? 1 : 0;
