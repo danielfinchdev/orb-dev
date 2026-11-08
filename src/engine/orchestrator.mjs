@@ -12,7 +12,6 @@ import * as claude from '../agents/claude.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { titleFrom } from '../core/titles.mjs';
 import { mcpServersOf } from './sessions.mjs';
-import { liveSkills } from './api-extensions.mjs';
 import { agentAuth } from './agent-auth.mjs';
 import { accountEnv } from '../core/accounts.mjs';
 import { briefing } from './logs.mjs';
@@ -312,7 +311,7 @@ class Lane {
       ...(isClaude ? { systemPrompt: persona(this.board) } : {}),
       tools: isClaude ? { allowed: ['mcp__orb', 'Read', 'Glob', 'Grep'], disallowed: claude.COORDINATOR_DENIED } : undefined,
       addDirs: [...new Set(dirs)].filter((d) => d !== cwd).slice(0, 40), internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog,
-      skills: liveSkills(), // 3.8.1: the skills of core that are on
+      // 3.8.1 (review H1c B10): no skills of core here: the coordinator has Skill denied; the agents of its tasks get them.
       onEvent: (ev) => this.onEvent(ev)
     });
     this.liveKey = key;
