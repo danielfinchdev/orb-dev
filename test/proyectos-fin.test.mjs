@@ -258,7 +258,10 @@ test('permisos: Finalizar también desde el móvil; Eliminar solo en el PC y con
     // Cancelled: it works again; checked again and deleted with the ticket (the password token is no longer needed).
     await e.call('projects.deleteAbort', { name: 'motor', ticket: check.ticket });
     await assert.rejects(e.call('projects.delete', { name: 'motor', ticket: check.ticket }), /ya no está en curso/);
-    const again = await e.call('projects.deleteCheck', { name: 'motor', unlock: fresh });
+    // H1c-fix (B1): the token for deleting is used up by its first check: checking again asks for the password again.
+    await assert.rejects(e.call('projects.deleteCheck', { name: 'motor', unlock: fresh }), /necesita tu contraseña maestra/, 'un solo uso');
+    const fresh2 = (await e.call('master.unlock', { password: 'una frase larga de prueba', purpose: 'deleteProject' })).unlock;
+    const again = await e.call('projects.deleteCheck', { name: 'motor', unlock: fresh2 });
     await e.call('projects.delete', { name: 'motor', ticket: again.ticket });
     assert.ok(!fs.existsSync(path.join(h.home, 'web', 'motor')));
     // Finish and reopen through the API.

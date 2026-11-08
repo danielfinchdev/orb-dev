@@ -74,7 +74,9 @@ export function checkUnlock(method, params) {
   if (!needsUnlock(method, params, ctx.config)) return;
   const m = ctx.master;
   if (!m?.hasPassword()) throw userError(m?.state().lost ? 'msg.master.lost' : 'msg.master.createFirst', {}, { reason: 'unlock' });
-  if (!m.checkToken(params?.unlock, FRESH_UNLOCK[method] ?? null)) throw userError('msg.master.needUnlock', {}, { reason: 'unlock' });
+  // 3.8.1: a token for one action (FRESH_UNLOCK) opens it once: it is used up here.
+  const purpose = FRESH_UNLOCK[method] ?? null;
+  if (!m.checkToken(params?.unlock, purpose, { consume: Boolean(purpose) })) throw userError('msg.master.needUnlock', {}, { reason: 'unlock' });
 }
 
 export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => {} }) {

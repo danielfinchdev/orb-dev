@@ -271,9 +271,12 @@ export class Master {
     this.tokens.set(token, { until, purpose: purpose ?? null });
     return { unlock: token, until };
   }
-  checkToken(token, purpose = null) {
+  // consume: the token is used up (a token for one action opens it only once).
+  checkToken(token, purpose = null, { consume = false } = {}) {
     const t = typeof token === 'string' ? this.tokens.get(token) : null;
-    return Boolean(t && t.until > this.now() && t.purpose === (purpose ?? null));
+    const ok = Boolean(t && t.until > this.now() && t.purpose === (purpose ?? null));
+    if (ok && consume) this.tokens.delete(token);
+    return ok;
   }
   lock() { this.tokens.clear(); }
 
