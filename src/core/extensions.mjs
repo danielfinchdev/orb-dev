@@ -48,11 +48,26 @@ const LIMITS = { skill: { bytes: 20 * 1024 * 1024, files: 2000 }, mcp: { bytes: 
 export const DEP_DIRS = new Set(['node_modules', '.git', '.venv', 'venv', '__pycache__', '.cache']);
 const TOOL_CONFIG = /^(\.npmrc|\.yarnrc(\.ya?ml)?|\.yarn|\.pnpmfile\.c?js|pnpm-workspace\.ya?ml|\.pnpmrc)$/i;
 const SKIP = (name) => DEP_DIRS.has(name) || TOOL_CONFIG.test(name);
-// A server's secrets (tokens, keys, credentials): never copied out of core («mejorar», «Editar en un proyecto»); a new
-// version keeps the ones of core. Known names, plus what the server declares (package.json › orb.secrets, or one
-// pattern per line in .orb-secrets).
-const SECRET_DIR = /^\.?(tokens?|secrets?|credentials?)$/i;
-const SECRET_FILE = /^(\.env(?!\.(example|sample|template|dist)$)(\..+)?|\.netrc|\.pypirc|\.npmrc|id_(rsa|dsa|ecdsa|ed25519)(\.pub)?|.*\.(pem|key|p12|pfx|jks|keystore)|client_secrets?.*\.json|service[-_]?account.*\.json|.*(token|credential|secret)s?[^/]*\.(json|txt|ya?ml|dat|db|sqlite3?|pickle|pkl|bin|cache|enc))$/i;
+// A server's secrets (tokens, keys, credentials, sessions): never copied out of core («mejorar», «Editar en un proyecto»);
+// a new version always keeps the ones of core. Known names, plus what the server declares (package.json › orb.secrets,
+// or one pattern per line in .orb-secrets). A folder: tokens/, secrets/, credentials/ and the session folders of WhatsApp
+// servers anywhere; auth/, session(s)/ and store/ when they are not in a folder of code (src, lib…: there they are
+// code). A file: keys, tokens, cookies, sessions and databases of any kind, also with .bak, .old or .orig after them.
+const SECRET_DIR = /^\.?(tokens?|secrets?|credentials?|wwebjs_auth|wwebjs_cache|auth_info.*|baileys_auth.*)$/i;
+const SESSION_DIR = /^\.?(auth|session|sessions|store)$/i;
+const CODE_DIR = /(^|\/)(src|lib|app|apps|components|pages|packages|test|tests|dist|build)\//i;
+const DATA_EXT = String.raw`(\.(json|txt|ya?ml|env|cfg|conf|ini|toml|dat|bin|enc|key|pem|pickle|pkl|cache))?`;
+const SECRET_FILE = new RegExp(`^(?:${[
+  String.raw`\.env(?!\.(example|sample|template|dist)$)(\..+)?`, String.raw`\.netrc`, String.raw`\.pypirc`, String.raw`\.npmrc`, String.raw`\.git-credentials`, 'credentials',
+  String.raw`id_(rsa|dsa|ecdsa|ed25519)(\.pub)?`, String.raw`.*\.(pem|key|p12|pfx|jks|keystore)`, String.raw`client_secrets?.*\.json`, String.raw`service[-_]?account.*\.json`,
+  String.raw`.*(token|credential|secret)s?[^/]*\.(json|txt|ya?ml|dat|db|sqlite3?|pickle|pkl|bin|cache|enc)`,
+  String.raw`.*\.keys?\.json`, String.raw`keys?\.json`, String.raw`o?auth([-_.][^/]*)?\.json`, String.raw`api[-_]?keys?([-_][^/.]*)?${DATA_EXT}`, String.raw`cookies?([-_][^/.]*)?${DATA_EXT}`,
+  String.raw`.*session.*\.(json|db|sqlite3?)`, String.raw`storage[-_]?state.*\.json`, String.raw`.*\.(db|sqlite3?)(-journal|-wal|-shm)?`
+].map((p) => `(?:${p})`).join('|')})$`, 'i');
+const BACKUP = /(\.(bak|old|orig|save|backup|tmp)|~)+$/i;
+const secretName = (name, rel, isDirectory) => (isDirectory
+  ? SECRET_DIR.test(name) || (SESSION_DIR.test(name) && !CODE_DIR.test(rel))
+  : SECRET_FILE.test(name) || SECRET_FILE.test(name.replace(BACKUP, '')));
 
 const isDir = (p) => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
 const isFile = (p) => { try { return fs.statSync(p).isFile(); } catch { return false; } };
@@ -167,9 +182,11 @@ function checkTree(dir, kind, tr) {
   if (t.files > lim.files || t.bytes > lim.bytes) throw new ExtensionError('ext.err.tooBig', { mb: Math.round(lim.bytes / 1048576), files: lim.files }, tr);
   return t;
 }
-// A copy that never follows a link: each entry is looked at (lstat) and copied right then; a file must still be the same
-// file inside the folder after its copy (a swap for a link or a junction meanwhile is caught). links: 'refuse' (throw,
-// the default) or 'skip'. kind: the size limit of a skill or a server ('mcp' by default; null: none). → { files, bytes }
+// A copy that never follows a link: each entry is looked at (lstat) and copied right then. A file is opened and checked
+// to be that same file (its id, from the open handle: a folder above swapped for a junction meanwhile is caught), and
+// copied from that handle, its main content only (NTFS alternate data streams, which no list or fingerprint sees, stay
+// behind). links: 'refuse' (throw, the default) or 'skip'. kind: the size limit of a skill or a server ('mcp' by
+// default; null: none). → { files, bytes }
 export function copyTree(src, dest, { kind = 'mcp', skip = SKIP, links = 'refuse', tr = null } = {}) {
   if (isLink(src)) throw new ExtensionError('ext.err.link', { file: path.basename(src) }, tr);
   const root = norm(fs.realpathSync.native(src));
@@ -180,18 +197,21 @@ export function copyTree(src, dest, { kind = 'mcp', skip = SKIP, links = 'refuse
     fs.mkdirSync(to, { recursive: true });
     for (const e of fs.readdirSync(from, { withFileTypes: true })) {
       const full = path.join(from, e.name); const r = rel ? `${rel}/${e.name}` : e.name;
-      let st; try { st = fs.lstatSync(full); } catch { continue; }
+      let st; try { st = fs.lstatSync(full, { bigint: true }); } catch { continue; }
       if (skip?.(e.name, r, st.isDirectory())) continue;
       if (st.isSymbolicLink()) { if (links === 'refuse') refuse(r); continue; }
       if (st.isDirectory()) { walk(full, path.join(to, e.name), r); continue; }
       if (!st.isFile()) continue;
-      if (st.nlink > 1 && links === 'refuse') refuse(r);
-      if (++files > lim.files || (bytes += st.size) > lim.bytes) throw new ExtensionError('ext.err.tooBig', { mb: Math.round(lim.bytes / 1048576), files: lim.files }, tr);
+      if (st.nlink > 1n && links === 'refuse') refuse(r);
+      if (++files > lim.files || (bytes += Number(st.size)) > lim.bytes) throw new ExtensionError('ext.err.tooBig', { mb: Math.round(lim.bytes / 1048576), files: lim.files }, tr);
       const real = norm(fs.realpathSync.native(full));
       if (!real.startsWith(root + path.sep)) refuse(r);
-      fs.copyFileSync(full, path.join(to, e.name), fs.constants.COPYFILE_EXCL);
-      const again = fs.lstatSync(full);
-      if (again.isSymbolicLink() || again.ino !== st.ino || again.dev !== st.dev) refuse(r);
+      const fd = fs.openSync(full, 'r');
+      try {
+        const open = fs.fstatSync(fd, { bigint: true });
+        if (!open.isFile() || open.ino !== st.ino || open.dev !== st.dev) refuse(r);
+        fs.writeFileSync(path.join(to, e.name), fs.readFileSync(fd), { flag: 'wx' });
+      } finally { fs.closeSync(fd); }
     }
   };
   try { walk(src, dest, ''); } catch (error) { fs.rmSync(dest, { recursive: true, force: true }); throw error; }
@@ -273,37 +293,118 @@ function declaredSecrets(dirs) {
     return p.replace(/\/+$/, '').includes('/') ? (rel) => re.test(rel) : (rel) => re.test(rel.split('/').pop());
   });
 }
-// A test for what is a secret in these folders: (name, rel, isDir) → true.
+// A test for what is a secret in these folders, by its name or what the server declares: (name, rel, isDir) → true.
 export function secretTest(...dirs) {
   const declared = declaredSecrets(dirs);
-  return (name, rel, isDirectory) => (isDirectory ? SECRET_DIR.test(name) : SECRET_FILE.test(name)) || declared.some((t) => t(rel));
+  return (name, rel, isDirectory) => secretName(name, rel, isDirectory) || declared.some((t) => t(rel));
 }
-// Whether a server of core holds keys: its connector has some (in the vault), or its folder has secret files.
+// What a folder's .gitignore files leave out of git (and its .git\info\exclude), read by Orb: git is never run there (its
+// settings could start a program). → (rel, isDir) → true when ignored. Each .gitignore counts for its folder and below,
+// the last pattern that matches wins (a later «!» brings a path back), and an ignored folder is left out whole.
+export function gitignored(dir) {
+  const cache = new Map();
+  const esc = (c) => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const compile = (line) => {
+    let re = '';
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '*' && line[i + 1] === '*' && (i === 0 || line[i - 1] === '/') && (i + 2 === line.length || line[i + 2] === '/')) {
+        if (i + 2 === line.length) re += '.*'; else { re += '(?:.*/)?'; i += 2; continue; }
+        i++; continue;
+      }
+      if (c === '*') re += '[^/]*';
+      else if (c === '?') re += '[^/]';
+      else if (c === '[' && line.indexOf(']', i + 2) > 0) { const end = line.indexOf(']', i + 2); re += `[${line.slice(i + 1, end).replace(/^!/, '^').replace(/\\/g, '\\\\')}]`; i = end; }
+      else if (c === '\\' && i + 1 < line.length) re += esc(line[++i]);
+      else re += esc(c);
+    }
+    try { return new RegExp(`^${re}$`, 'i'); } catch { return null; }
+  };
+  const rulesOf = (sub) => {
+    if (cache.has(sub)) return cache.get(sub);
+    const files = [path.join(dir, ...sub.split('/').filter(Boolean), '.gitignore')];
+    if (!sub) files.unshift(path.join(dir, '.git', 'info', 'exclude'));
+    const rules = [];
+    for (const f of files) {
+      let text = ''; try { if (!isLink(f)) text = fs.readFileSync(f, 'utf8'); } catch { continue; }
+      for (let line of text.split(/\r?\n/).slice(0, 2000)) {
+        line = line.replace(/(?<!\\)\s+$/, '');
+        if (!line || line.startsWith('#')) continue;
+        const negate = line.startsWith('!'); if (negate) line = line.slice(1);
+        line = line.replace(/^\\(?=[#!])/, '');
+        const dirOnly = line.endsWith('/'); line = line.replace(/\/+$/, '');
+        const anchored = line.includes('/'); line = line.replace(/^\/+/, '');
+        const test = line ? compile(line) : null;
+        if (test) rules.push({ test, negate, dirOnly, anchored });
+      }
+    }
+    cache.set(sub, rules);
+    return rules;
+  };
+  return (rel, isDirectory) => {
+    const parts = String(rel).split('/'); let ignored = false;
+    for (let depth = 0; depth < parts.length; depth++) {
+      const inside = parts.slice(depth).join('/');
+      for (const r of rulesOf(parts.slice(0, depth).join('/'))) {
+        if (r.dirOnly && !isDirectory) continue;
+        if (r.anchored ? r.test.test(inside) : r.test.test(parts[parts.length - 1])) ignored = !r.negate;
+      }
+    }
+    return ignored;
+  };
+}
+// Build output: left out of git, but no secret (copied out, not counted, never carried over a new version's own).
+const BUILD_OUT = /^(dist|build|out|coverage|\.next|\.nuxt|\.turbo|\.parcel-cache|target|\.nyc_output)$/i;
+// What never goes out of core in a copy («mejorar», «Editar en un proyecto»): the secrets and what the server's
+// .gitignore leaves out of git (a private log, a list of accounts, a session…), its dependencies and build output aside.
+export function privateTest(...dirs) {
+  const secret = secretTest(...dirs); const ignored = dirs.filter(Boolean).map(gitignored);
+  return (name, rel, isDirectory) => secret(name, rel, isDirectory) || (!DEP_DIRS.has(name) && !BUILD_OUT.test(name) && ignored.some((t) => t(rel, isDirectory)));
+}
+// Whether a server of core holds keys: its connector has some (in the vault), or its folder has secret or git-ignored
+// files (when unsure, the user is asked).
 export function holdsKeys(core, config, name) {
   const dir = path.join(extensionPaths(core).mcp, String(name));
   const entry = (config?.mcpServers ?? []).find((s) => (s.args ?? []).some((a) => typeof a === 'string' && path.isAbsolute(a) && norm(a).startsWith(norm(dir) + path.sep)));
   if (Object.keys(entry?.env ?? {}).length) return true;
-  const secret = secretTest(dir); let found = false;
-  walkTree(dir, { skip: (n, rel, d) => { if (found || DEP_DIRS.has(n)) return true; if (secret(n, rel, d)) { found = true; return true; } return false; } });
+  const hidden = privateTest(dir); let found = false;
+  walkTree(dir, { skip: (n, rel, d) => { if (found || DEP_DIRS.has(n)) return true; if (hidden(n, rel, d)) { found = true; return true; } return false; } });
   return found;
 }
-// The secrets of the version in core go on into the new one (where it has none of its own with that path).
+// What the version in core keeps into the new one: its secrets ALWAYS, over whatever the new one has with that path (an
+// agent cannot swap the server's account); what core's .gitignore leaves out (not build output) only where the new one
+// has nothing.
 function carrySecrets(from, to) {
   if (!isDir(from)) return;
-  const secret = secretTest(from);
+  const secret = secretTest(from); const ignored = gitignored(from);
   walkTree(from, { skip: (n, rel, d) => {
     if (DEP_DIRS.has(n) || TOOL_CONFIG.test(n)) return true;
-    if (!secret(n, rel, d)) return false;
+    const isSecret = secret(n, rel, d);
+    if (!isSecret && (BUILD_OUT.test(n) || !ignored(rel, d))) return false;
     const src = path.join(from, ...rel.split('/')); const dest = path.join(to, ...rel.split('/'));
-    if (!exists(dest)) {
-      if (d) { if (!isLink(src)) copyTree(src, dest, { skip: null, links: 'skip' }); }
-      else if (!isLink(src)) { fs.mkdirSync(path.dirname(dest), { recursive: true }); fs.copyFileSync(src, dest); }
-    }
+    if (isLink(src)) return true;
+    if (isSecret) fs.rmSync(dest, { recursive: true, force: true });
+    else if (exists(dest)) return true;
+    if (d) copyTree(src, dest, { kind: null, skip: null, links: 'skip' });
+    else { fs.mkdirSync(path.dirname(dest), { recursive: true }); fs.copyFileSync(src, dest); }
     return true;
   } });
 }
+// A git setting file copied out of core (.git\config): the remotes without user or token in their address, and no
+// credential settings or extra HTTP headers (a token may sit in any of them).
+export function cleanGitConfig(text) {
+  const out = []; let drop = false;
+  for (const line of String(text).split(/\r?\n/)) {
+    const section = /^\s*\[\s*([^\]\s"]+)/.exec(line);
+    if (section) drop = /^credential$/i.test(section[1]);
+    if (drop) continue;
+    if (/^\s*(extraheader|password|token|helper|sslkey|sslcertpasswordprotected)\s*=/i.test(line)) continue;
+    out.push(line.replace(/(\b[a-z][\w+.-]*:\/\/)[^/@\s]+@/gi, '$1'));
+  }
+  return out.join('\n');
+}
 
-/// ---- dependencies: installed by Orb only when a server is turned on, never running a package's scripts
+// ---- dependencies: installed by Orb only when a server is turned on, never running a package's scripts
 const MANIFESTS = ['package.json', 'package-lock.json', 'npm-shrinkwrap.json'];
 // A node server whose package.json names dependencies that are not there.
 export function needsDeps(dir) {
@@ -438,8 +539,8 @@ export function listExtensions(core, config = {}, { projects = [], requests = []
     return { kind: 'project', name: pr.name, dir: pr.path, command: start.command, args: start.args, connector: entry?.name ?? null, editOf: Object.entries(edits ?? {}).find(([, p]) => typeof p === 'string' && norm(p) === norm(pr.path))?.[0] ?? null };
   });
   // What agents made and wait for the user: what the user would bring in is the quarantine's copy (its folder and files).
-  const pending = (requests ?? []).filter((r) => r?.status === 'pending' || r?.status === 'asking').map(({ id, kind, name, description, status, quarantine, dir, by, files, total, bytes, asks, deps, update, asked }) => ({
-    id, kind, name, description, status, dir: quarantine ?? dir ?? null, by, files: files ?? [], total: total ?? (files ?? []).length, bytes: bytes ?? null, asks: asks ?? null, deps: deps ?? false, update: update ?? null, asked }));
+  const pending = (requests ?? []).filter((r) => r?.status === 'pending' || r?.status === 'asking').map(({ id, kind, name, description, status, quarantine, dir, by, files, total, bytes, asks, deps, update, asked, kept }) => ({
+    id, kind, name, description, status, dir: quarantine ?? dir ?? null, by, files: files ?? [], total: total ?? (files ?? []).length, bytes: bytes ?? null, asks: asks ?? null, deps: deps ?? false, update: update ?? null, asked, kept: kept ?? [] }));
   return { dirs: { skills: P.skills, mcp: P.mcp }, skills, mcp, connectors, projects: fromProjects, pending };
 }
 
@@ -650,13 +751,14 @@ const MCP_PY = (name, description) => ({
   'pyproject.toml': `[project]\nname = "${name}"\nversion = "0.1.0"\ndescription = "${description.replace(/"/g, "'")}"\ndependencies = ["mcp"]\n`,
   'server.py': `# ${description}\nfrom mcp.server.fastmcp import FastMCP\n\nmcp = FastMCP("${name}")\n\n# @mcp.tool()\n# def nombre(parametro: str) -> str:\n#     """Qué hace."""\n\nif __name__ == "__main__":\n    mcp.run()\n`
 });
-// The copy an agent starts from when it improves one of core: its code only (no secrets, dependencies, git or links).
+// The copy an agent starts from when it improves one of core: its code only (no secrets, nothing its .gitignore leaves
+// out of git, no dependencies, git or links).
 function draftCopy(core, request) {
   const P = extensionPaths(core);
   const current = path.join(request.kind === 'skill' ? P.skills : P.mcp, request.name);
   if (!realFolder(request.kind === 'skill' ? P.skills : P.mcp, current)) throw new ExtensionError('ext.err.notFound', { name: request.name });
-  const secret = secretTest(current);
-  copyTree(current, request.dir, { kind: request.kind, skip: (n, rel, d) => SKIP(n) || secret(n, rel, d), links: 'skip' });
+  const hidden = privateTest(current);
+  copyTree(current, request.dir, { kind: request.kind, skip: (n, rel, d) => SKIP(n) || hidden(n, rel, d), links: 'skip' });
 }
 // A new request: its folder (a copy of the current version when it improves one of core), with a starting point. A
 // server that holds keys (holdsKeys) is not copied until the user allows it: the request waits ('asking').
@@ -693,7 +795,8 @@ export function allowDraft(core, request, { tr = null } = {}) {
 }
 // The agent asks for it to be turned on: its folder is copied into the quarantine (agents cannot write there; links
 // refused anywhere, dependencies and package manager settings left out, the size limit over all of it), checked there,
-// and the fingerprint and list of that copy kept: what the user sees and approves is what moves. → the request
+// and the fingerprint and list of that copy kept: what the user sees and approves is what moves. A new version of a
+// server leaves its own secret files out (kept: the dialog says so): the ones of core stay (carrySecrets). → the request
 export function requestActivation(core, request, { tr = null } = {}) {
   if (!request || request.status !== 'drafting' || !/^[\w-]+$/.test(String(request.id ?? ''))) throw new ExtensionError('ext.err.noRequest', {}, tr);
   const P = extensionPaths(core);
@@ -703,12 +806,14 @@ export function requestActivation(core, request, { tr = null } = {}) {
   if (request.quarantine) fs.rmSync(request.quarantine, { recursive: true, force: true });
   fs.mkdirSync(P.quarantine, { recursive: true });
   const q = quarantineFor(core, request.id);
+  const kept = [];
+  const secret = request.update && request.kind === 'mcp' ? secretTest(src, path.join(P.mcp, request.name)) : null;
   try {
-    copyTree(src, q, { kind: request.kind, tr });
+    copyTree(src, q, { kind: request.kind, tr, skip: (n, rel, d) => SKIP(n) || Boolean(secret?.(n, rel, d) && kept.push(rel)) });
     if (request.kind === 'skill') checkSkill(q, { name: request.name, tr }); else checkMcp(q, { tr });
     const t = walkTree(q);
     return { ...request, status: 'pending', asked: new Date().toISOString(), quarantine: q, hash: fingerprint(q), files: t.files.map((f) => f.rel).sort(), total: t.files.length, bytes: t.bytes,
-      asks: request.kind === 'skill' ? skillAsks(q) : null, deps: request.kind === 'mcp' && needsDeps(q) };
+      asks: request.kind === 'skill' ? skillAsks(q) : null, deps: request.kind === 'mcp' && needsDeps(q), kept: kept.sort() };
   } catch (error) { fs.rmSync(q, { recursive: true, force: true }); throw error; }
 }
 // The user approved: the quarantine's copy (the same files as when it was asked) goes into core and on; a server's
@@ -760,16 +865,18 @@ export async function installFor(core, name, { tr = null, install = installDeps 
 }
 
 // ---- improving a server of core in a project
-// Copied to <home>\<category>\<name> (or name-2…), its git history and dependencies too, never its secrets (they stay in
-// core and go on into the new version) nor a link. → the project folder
+// Copied to <home>\<category>\<name> (or name-2…), its git history and dependencies too, never its secrets nor what its
+// .gitignore leaves out of git (they stay in core and go on into the new version), nor a link; git's settings without
+// credentials (cleanGitConfig) and without FETCH_HEAD (the address it fetched from). → the project folder
 export function editInProject(home, core, name, category = 'windows', { tr = null } = {}) {
   const from = path.join(extensionPaths(core).mcp, String(name));
   if (!MCP_NAME.test(String(name)) || !realFolder(extensionPaths(core).mcp, from)) throw new ExtensionError('ext.err.notFound', { name }, tr);
   if (!CATEGORIES.includes(category)) throw new ExtensionError('ext.err.notFound', { name: category }, tr);
   let to = path.join(home, category, name);
   for (let i = 2; exists(to); i++) to = path.join(home, category, `${name}-${i}`);
-  const secret = secretTest(from);
-  copyTree(from, to, { kind: null, skip: (n, rel, d) => TOOL_CONFIG.test(n) || secret(n, rel, d), links: 'skip' });
+  const hidden = privateTest(from);
+  copyTree(from, to, { kind: null, skip: (n, rel, d) => TOOL_CONFIG.test(n) || /^\.git\/(.+\/)?FETCH_HEAD$/i.test(rel) || hidden(n, rel, d), links: 'skip' });
+  for (const f of walkTree(path.join(to, '.git'), { skip: null }).files) if (/^config(\.worktree)?$/i.test(path.basename(f.full))) fs.writeFileSync(f.full, cleanGitConfig(fs.readFileSync(f.full, 'utf8')));
   return to;
 }
 // What «Aplicar cambios» would change: { added, changed, removed } (relative paths; dependencies and secrets aside).

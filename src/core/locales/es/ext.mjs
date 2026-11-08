@@ -113,6 +113,7 @@ export default {
   'ext.confirmMcpTitle': '¿Activar el servidor MCP «{name}»?',
   'ext.confirmMcpBody': 'Se ejecutará en tu PC con tus permisos y lo usarán todos tus agentes. Actívalo solo si confías en lo que ha hecho {agent}.',
   'ext.confirmDeps': 'Necesita paquetes: Orb los descargará al activarlo, sin ejecutar sus instalaciones.',
+  'ext.keptNote': 'Sus propios archivos de claves no se usan ({files}): se quedan los que ya tiene en Orb.',
   'ext.confirmEditTitle': '¿Dejar que {agent} mejore «{name}»?',
   'ext.confirmEditBody': '«{name}» guarda claves o tokens. El agente trabajará en una copia sin ellos; la versión nueva usará los de Orb cuando la actives.',
   'ext.filesTitle': 'Se activará esto ({n} archivos):',

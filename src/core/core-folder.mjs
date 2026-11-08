@@ -26,7 +26,7 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { paths, LEGACY, moveLogs, CATEGORIES, CORE_DIR, LOGS_DIR, MCP_DIR } from './home.mjs';
 import { translate } from './i18n.mjs';
-import { isMcpProject, startCommand } from './extensions.mjs';
+import { isMcpProject, startCommand, linkOut } from './extensions.mjs';
 
 export const MOVE_STATE = 'migracion-carpetas.json'; // in core while the moves are not finished and their paths rewritten
 export const CONFLICTS_DIR = 'conflictos-migracion'; // in core: an old file that differed from the one already in core
@@ -181,10 +181,13 @@ export function applyLayout(home, choices = {}, { language = 'es' } = {}) {
 
 // 3.8.1: a project that is an MCP server moves into core\mcp (Ajustes › Skills y MCP › «Mover a core»): the same steps
 // as «Ordenar carpetas» (checked free first, a note in case it stops halfway, orb.json and the database pointed to the new
-// place). → the new folder. Throws LayoutBusy (nothing moved) when some program is using it.
+// place). → the new folder. Throws LayoutBusy (nothing moved) when some program is using it. A link or a junction inside
+// it (node_modules too) that leads out of it is refused: the server in core would go on loading what agents write.
 export function moveIntoCore(home, from, { language = 'es' } = {}) {
   const to = path.join(coreMcp(home), path.basename(from));
   if (exists(to)) throw Object.assign(new Error(translate(language, 'ext.err.mcpExists', { name: path.basename(from) })), { userFacing: true });
+  const out = linkOut(from);
+  if (out) throw Object.assign(new Error(translate(language, 'ext.err.link', { file: out })), { userFacing: true });
   if (isHeld(from)) throw new LayoutBusy([from], language);
   const [state] = notes(home);
   writeJsonAtomic(state, { v: 2, home, started: new Date().toISOString(), moves: [...(readJson(state)?.moves ?? []), { from, to }] });

@@ -11,6 +11,7 @@ import { ROOT } from './helpers.mjs';
 import * as X from '../src/core/extensions.mjs';
 import * as claude from '../src/agents/claude.mjs';
 import { decide } from '../src/core/guard.mjs';
+import { moveIntoCore } from '../src/core/core-folder.mjs';
 import { cleanEnv } from '../src/agents/common.mjs';
 
 const tmp = [];
@@ -207,4 +208,101 @@ test('M2: la guardia sigue los cd de un comando compuesto (bash, cmd y PowerShel
   // A link made after a cd into core\preparacion is still a link into core.
   assert.equal(d('cd ..\\..\\core\\preparacion && mklink /J x ..\\datos').decision, 'deny');
   fs.unlinkSync(path.join(proj, 'h'));
+});
+
+test('M3: más nombres de secretos (Gmail, AWS, WhatsApp, Playwright…) y lo que el .gitignore del servidor deja fuera nunca sale de core', () => {
+  const root = scratch(); const core = path.join(root, 'core');
+  const secret = X.secretTest(root);
+  for (const name of ['gcp-oauth.keys.json', '.git-credentials', 'credentials', 'auth.json', 'oauth.json', 'api_key.txt', 'apikey', 'key.json', 'tokens.json.bak', 'token.json.old', 'cookies.txt', 'storage_state.json', 'session.json', 'messages.db', 'store.sqlite3', '.env.local', 'client_secret.json']) assert.equal(secret(name, name, false), true, name);
+  for (const [name, rel] of [['.wwebjs_auth', '.wwebjs_auth'], ['auth_info_baileys', 'auth_info_baileys'], ['store', 'store'], ['store', 'whatsapp-bridge/store'], ['session', 'session'], ['tokens', 'tokens']]) assert.equal(secret(name, rel, true), true, rel);
+  for (const name of ['api_key.js', 'cookies.ts', 'author.json', 'tokenizer.js', 'keyboard.json', 'index.js', 'package.json', 'README.md']) assert.equal(secret(name, `src/${name}`, false), false, name);
+  for (const rel of ['src/store', 'src/auth', 'lib/session']) assert.equal(secret(rel.split('/').pop(), rel, true), false, `${rel}: código`);
+  // A server whose keys are only under those names now holds keys (it asks before an agent improves it).
+  const dir = path.join(core, 'mcp', 'gmail');
+  put(path.join(dir, 'package.json'), pkg({})); put(path.join(dir, 'server.mjs'), '//'); put(path.join(dir, 'gcp-oauth.keys.json'), '{"k":1}');
+  assert.equal(X.holdsKeys(core, {}, 'gmail'), true);
+  fs.rmSync(path.join(dir, 'gcp-oauth.keys.json'));
+  assert.equal(X.holdsKeys(core, {}, 'gmail'), false);
+  // Its .gitignore: what it leaves out of git counts as private (a private log, the accounts), build output aside.
+  put(path.join(dir, '.gitignore'), '# privado\nBITACORA.md\naccounts.json\n*.log\n/privado/\n!guardar.log\ndist/\n');
+  put(path.join(dir, 'dist', 'index.js'), '// build');
+  assert.equal(X.holdsKeys(core, {}, 'gmail'), false, 'la carpeta de compilación no cuenta');
+  put(path.join(dir, 'BITACORA.md'), 'privada'); put(path.join(dir, 'accounts.json'), '{"ana":"a@x"}'); put(path.join(dir, 'privado', 'nota.txt'), 'p');
+  put(path.join(dir, 'logs', 'run.log'), 'l'); put(path.join(dir, 'guardar.log'), 'g'); put(path.join(dir, 'src', 'sub', '.gitignore'), 'local.json\n'); put(path.join(dir, 'src', 'sub', 'local.json'), '{}');
+  put(path.join(dir, 'src', 'sub', 'codigo.js'), '//');
+  assert.equal(X.holdsKeys(core, {}, 'gmail'), true, 'lo ignorado cuenta');
+  const r = X.allowDraft(core, X.draftExtension(core, { kind: 'mcp', name: 'gmail', description: 'Mejor', update: 'gmail', config: {} }));
+  const project = X.editInProject(path.join(root, 'espacio'), core, 'gmail', 'windows');
+  for (const at of [r.dir, project]) {
+    for (const f of ['BITACORA.md', 'accounts.json', 'privado', path.join('logs', 'run.log'), path.join('src', 'sub', 'local.json')]) assert.ok(!fs.existsSync(path.join(at, f)), `${at}: ${f}`);
+    for (const f of ['server.mjs', 'guardar.log', path.join('src', 'sub', 'codigo.js'), '.gitignore']) assert.ok(fs.existsSync(path.join(at, f)), `${at}: ${f}`);
+  }
+  // The new version keeps core's ignored files (where it has none) and its secrets.
+  fs.writeFileSync(path.join(r.dir, 'server.mjs'), '// v2');
+  const out = X.activateRequest(core, { mcpServers: [] }, X.requestActivation(core, r, { tr }), { tr, install: async () => false });
+  return out.then((o) => {
+    assert.equal(fs.readFileSync(path.join(o.to, 'server.mjs'), 'utf8'), '// v2');
+    assert.equal(fs.readFileSync(path.join(o.to, 'accounts.json'), 'utf8'), '{"ana":"a@x"}');
+    assert.ok(fs.existsSync(path.join(o.to, 'BITACORA.md')) && fs.existsSync(path.join(o.to, 'privado', 'nota.txt')));
+  });
+});
+
+test('B1: «Editar en un proyecto» no copia credenciales de .git (remotos con token, cabeceras, FETCH_HEAD)', () => {
+  const root = scratch(); const core = path.join(root, 'core');
+  const dir = path.join(core, 'mcp', 'repo');
+  put(path.join(dir, 'package.json'), pkg({})); put(path.join(dir, 'server.mjs'), '//');
+  put(path.join(dir, '.git', 'config'), '[core]\n\tbare = false\n[remote "origin"]\n\turl = https://ana:ghp_secreto123@github.com/ana/repo.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n[http "https://github.com/"]\n\textraheader = AUTHORIZATION: basic c2VjcmV0bw==\n[credential]\n\thelper = store\n[user]\n\tname = Ana\n');
+  put(path.join(dir, '.git', 'FETCH_HEAD'), "abc branch 'main' of https://ana:ghp_secreto123@github.com/ana/repo\n");
+  put(path.join(dir, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+  const project = X.editInProject(path.join(root, 'espacio'), core, 'repo', 'windows');
+  const config = fs.readFileSync(path.join(project, '.git', 'config'), 'utf8');
+  assert.doesNotMatch(config, /ghp_secreto123|extraheader|c2VjcmV0bw|\[credential/);
+  assert.match(config, /url = https:\/\/github\.com\/ana\/repo\.git/);
+  assert.match(config, /name = Ana/);
+  assert.ok(!fs.existsSync(path.join(project, '.git', 'FETCH_HEAD')));
+  assert.ok(fs.existsSync(path.join(project, '.git', 'HEAD')));
+});
+
+test('B2: la versión de un agente no puede cambiar las claves de core (las suyas se quitan y quedan las de core)', async () => {
+  const root = scratch(); const core = path.join(root, 'core');
+  const dir = path.join(core, 'mcp', 'correo');
+  put(path.join(dir, 'package.json'), pkg({})); put(path.join(dir, 'server.mjs'), '//'); put(path.join(dir, 'tokens', 'dani.json'), '{"cuenta":"dani"}');
+  const r = X.allowDraft(core, X.draftExtension(core, { kind: 'mcp', name: 'correo', description: 'Mejor', update: 'correo', config: {} }));
+  put(path.join(r.dir, 'tokens', 'dani.json'), '{"cuenta":"agente"}'); put(path.join(r.dir, 'credentials', 'client_secret.json'), '{"app":"agente"}');
+  put(path.join(r.dir, 'gcp-oauth.keys.json'), '{"app":"agente"}');
+  const asked = X.requestActivation(core, r, { tr });
+  assert.ok(!asked.files.some((f) => /tokens|credentials|gcp-oauth/.test(f)), 'no van en lo que se aprueba');
+  assert.deepEqual(asked.kept, ['credentials', 'gcp-oauth.keys.json', 'tokens']);
+  assert.deepEqual(X.listExtensions(core, {}, { requests: [asked] }).pending[0].kept, asked.kept, 'el diálogo lo dice');
+  const out = await X.activateRequest(core, { mcpServers: [] }, asked, { tr, install: async () => false });
+  assert.equal(fs.readFileSync(path.join(out.to, 'tokens', 'dani.json'), 'utf8'), '{"cuenta":"dani"}');
+  assert.ok(!fs.existsSync(path.join(out.to, 'credentials')) && !fs.existsSync(path.join(out.to, 'gcp-oauth.keys.json')));
+  // «Aplicar cambios» from a project: the same.
+  const project = path.join(root, 'proyecto'); put(path.join(project, 'package.json'), pkg({})); put(path.join(project, 'server.mjs'), '// v3'); put(path.join(project, 'tokens', 'dani.json'), '{"cuenta":"otra"}');
+  const done = await X.applyEdit(core, {}, 'correo', X.prepareApply(core, 'correo', project, { tr }), { tr, install: async () => false });
+  assert.equal(fs.readFileSync(path.join(done.to, 'tokens', 'dani.json'), 'utf8'), '{"cuenta":"dani"}');
+});
+
+test('B4: los flujos alternativos de NTFS no se copian (solo el contenido que se ve y entra en la huella)', { skip: process.platform !== 'win32' && 'solo NTFS' }, () => {
+  const root = scratch(); const core = path.join(root, 'core');
+  const r = X.draftExtension(core, { kind: 'skill', name: 'flujos', description: 'Prueba.' });
+  fs.writeFileSync(`${path.join(r.dir, 'SKILL.md')}:oculto`, 'contenido invisible');
+  assert.equal(fs.readFileSync(`${path.join(r.dir, 'SKILL.md')}:oculto`, 'utf8'), 'contenido invisible');
+  const asked = X.requestActivation(core, r, { tr });
+  assert.ok(!fs.existsSync(`${path.join(asked.quarantine, 'SKILL.md')}:oculto`), 'el flujo no llega a la cuarentena');
+  assert.equal(fs.readFileSync(path.join(asked.quarantine, 'SKILL.md'), 'utf8'), fs.readFileSync(path.join(r.dir, 'SKILL.md'), 'utf8'));
+});
+
+test('M4: «Mover a core» rechaza un proyecto con un enlace o una unión que sale de él (también en node_modules)', () => {
+  const root = scratch(); const home = path.join(root, 'Orb');
+  fs.mkdirSync(path.join(home, 'core', 'mcp'), { recursive: true });
+  const proj = path.join(home, 'windows', 'correo-mcp'); put(path.join(proj, 'package.json'), pkg({})); put(path.join(proj, 'server.mjs'), '//');
+  const other = path.join(home, 'windows', 'otro'); put(path.join(other, 'lib.js'), '//');
+  junction(other, path.join(proj, 'node_modules', 'lib'));
+  assert.throws(() => moveIntoCore(home, proj), /enlace a otra carpeta \(node_modules\/lib\)/);
+  fs.unlinkSync(path.join(proj, 'node_modules', 'lib'));
+  junction(other, path.join(proj, 'src'));
+  assert.throws(() => moveIntoCore(home, proj), /enlace a otra carpeta \(src\)/);
+  assert.ok(fs.existsSync(path.join(proj, 'server.mjs')) && !fs.existsSync(path.join(home, 'core', 'mcp', 'correo-mcp')), 'no se ha movido nada');
+  fs.unlinkSync(path.join(proj, 'src'));
 });

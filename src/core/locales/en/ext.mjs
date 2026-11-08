@@ -113,6 +113,7 @@ export default {
   'ext.confirmMcpTitle': 'Turn on the MCP server «{name}»?',
   'ext.confirmMcpBody': 'It will run on your PC with your permissions and all your agents will use it. Only turn it on if you trust what {agent} made.',
   'ext.confirmDeps': 'It needs packages: Orb downloads them when you turn it on, without running their install steps.',
+  'ext.keptNote': 'Its own key files are not used ({files}): it keeps the ones it already has in Orb.',
   'ext.confirmEditTitle': 'Let {agent} improve «{name}»?',
   'ext.confirmEditBody': '«{name}» holds keys or tokens. The agent works on a copy without them; the new version uses the ones in Orb when you turn it on.',
   'ext.filesTitle': 'This is what will be turned on ({n} files):',
