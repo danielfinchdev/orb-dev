@@ -326,7 +326,10 @@ try {
   await ctrl('0');
   await until(async () => Math.abs((await factor()) - 1.15) < 0.01, 'Ctrl 0 vuelve a normal');
   await win.getByText('Tamaño de la interfaz', { exact: true }).waitFor();
-  await win.getByRole('combobox').filter({ hasText: 'Normal' }).click();
+  // Settings scroll to the section they open: let that end before the menu opens (it would open off screen).
+  const sizeBox = win.getByRole('combobox').filter({ hasText: 'Normal' });
+  await sizeBox.scrollIntoViewIfNeeded(); await win.waitForTimeout(800); await sizeBox.scrollIntoViewIfNeeded();
+  await sizeBox.click();
   await win.getByRole('option', { name: 'Grande' }).click();
   await until(async () => Math.abs((await factor()) - 1.15 * 1.15) < 0.01, 'tamaño grande');
   assert.equal(JSON.parse(fs.readFileSync(path.join(tmp, 'datos-app', 'interfaz.json'), 'utf8')).zoom, 1.15);
