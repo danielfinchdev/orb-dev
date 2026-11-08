@@ -48,3 +48,18 @@ test('bubbles stay inside the window and the composer folder is a chip like the 
   assert.ok(chip, 'folder chip');
   for (const c of ['h-8', 'rounded-lg', 'border', 'px-2.5', 'gap-1.5', 'text-[13px]']) assert.ok(chip[1].split(' ').includes(c), c);
 });
+
+test('the cost line can be hidden in Apariencia and the message time shows on hover', async () => {
+  const { DEFAULT_CONFIG } = await import('../src/core/home.mjs');
+  assert.equal(DEFAULT_CONFIG.ui.usageLine, true);
+  assert.match(read('views', 'settings.jsx'), /<Switch checked=\{ui\.usageLine !== false\} onCheckedChange=\{\(usageLine\) => set\(\{ usageLine \}\)\}/);
+  const session = read('views', 'session.jsx');
+  assert.match(session, /useStore\(\(st\) => st\.app\?\.config\?\.ui\?\.usageLine !== false\)/);
+  assert.match(session, /if \(it\.kind === 'usage'\) \{[\s\S]{0,120}if \(!usageLine\) return null;/);
+  assert.equal([...session.matchAll(/<MsgTime at=\{it\.at\} hover \/>/g)].length, 2);
+  assert.match(read('app.css'), /\.msg-hover:hover \.msg-time-hover/);
+  for (const lang of ['es', 'en']) {
+    const { default: dict } = await import(`../src/core/locales/${lang}/settings.mjs`);
+    assert.ok(dict['appearance.usageLine'] && dict['appearance.usageLineHint'], lang);
+  }
+});

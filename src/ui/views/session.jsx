@@ -8,7 +8,7 @@ import { Markdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
-import { Composer, useAutoScroll, BarClock, BarHeading, BarPause, CompactButton, COMPACT_AT } from './chat.jsx';
+import { Composer, useAutoScroll, BarClock, BarHeading, BarPause, MsgTime, CompactButton, COMPACT_AT } from './chat.jsx';
 import { BackToList } from '@/components/chat-bar.jsx';
 import { ContextSlot } from '@/components/context-slot.jsx';
 import { NotificationBell } from '@/components/notification-center.jsx';
@@ -93,6 +93,7 @@ const FILE_ICON = { add: FilePlus2, delete: FileMinus2 };
 const Block = memo(function Block({ b, agent, brain, sessionId, project, catalog }) {
   const t = useT();
   const locale = useLocale();
+  const usageLine = useStore((st) => st.app?.config?.ui?.usageLine !== false);
   if (b.type === 'tool') return <ToolBlock b={b} />;
   if (b.type === 'item' && b.item.kind === 'approval') return <ApprovalCard sessionId={sessionId} body={b.item.body} />;
   if (b.type === 'item' && b.item.kind === 'opti_action') return <OptiOldCard body={b.item.body} />;
@@ -104,16 +105,19 @@ const Block = memo(function Block({ b, agent, brain, sessionId, project, catalog
     const images = typeof body === 'object' && body?.images ? body.images : [];
     const long = textBody.length > 1200 && /^Encargo de /.test(textBody);
     return (
-      <div className="bg-bubble text-bubble-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 break-words whitespace-pre-wrap">
+      <div className="msg-hover bg-bubble text-bubble-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 break-words whitespace-pre-wrap">
         {typeof body === 'object' && body?.steer ? <div className="mb-1 flex items-center gap-1 text-[11px] opacity-80"><CornerDownRight className="size-3" />{t('session.steered')}</div> : null}
         {long ? <Collapsible><CollapsibleTrigger className="cursor-pointer text-left underline-offset-2 hover:underline">{textBody.split('\n')[0]} ({t('session.seeFullTask')})</CollapsibleTrigger><CollapsibleContent className="mt-2 text-[13px] opacity-90">{textBody}</CollapsibleContent></Collapsible> : textBody}
         {images.length ? <div className="mt-2 flex flex-wrap gap-1.5">{images.map((p) => <span key={p} className="inline-flex items-center gap-1 rounded-md bg-white/15 px-2 py-0.5 text-xs"><ImageIcon className="size-3" />{baseName(p)}</span>)}</div> : null}
+        <MsgTime at={it.at} hover />
       </div>
     );
   }
-  if (it.kind === 'text' && it.role === 'assistant') return <div className="flex gap-3"><AgentIcon agent={agent} className="mt-1 size-5" /><div className="min-w-0 flex-1"><Markdown>{body}</Markdown></div></div>;
+  if (it.kind === 'text' && it.role === 'assistant') return <div className="msg-hover flex gap-3"><AgentIcon agent={agent} className="mt-1 size-5" /><div className="min-w-0 flex-1"><Markdown>{body}</Markdown><div className="text-muted-foreground flow-root"><MsgTime at={it.at} hover /></div></div></div>;
   if (it.kind === 'reasoning') return <div className="text-muted-foreground border-l-2 pl-3 text-[13px] italic whitespace-pre-wrap line-clamp-4">{body}</div>;
   if (it.kind === 'usage') {
+    // 3.8.2: Ajustes › Apariencia can hide it (shown by default).
+    if (!usageLine) return null;
     const parts = [body?.costUsd != null ? `$${Number(body.costUsd).toFixed(3)}` : null, body?.inputTokens != null ? `${t('session.tokensIn', { n: (body.inputTokens + (body.cacheReadTokens ?? 0) + (body.cacheWriteTokens ?? 0)).toLocaleString(locale) })}${body.cacheReadTokens ? ` (${t('session.tokensCached', { n: body.cacheReadTokens.toLocaleString(locale) })})` : ''}` : null, body?.outputTokens != null ? t('session.tokensOut', { n: body.outputTokens.toLocaleString(locale) }) : null].filter(Boolean);
     return parts.length ? <div className="text-muted-foreground text-right text-[11px]">{parts.join(' · ')}</div> : null;
   }

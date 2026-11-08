@@ -271,6 +271,8 @@ export default {
   'appearance.codeTheme.solarized': 'Solarized',
   'appearance.codeSample': 'Code sample',
   'appearance.noRobot': 'The Professional theme does not show the robot, its animations or its sounds.',
+  'appearance.usageLine': 'Cost and tokens of each reply',
+  'appearance.usageLineHint': 'Shows the cost and tokens under each reply from an agent.',
   'contribute.supportTitle': 'Support development',
   'contribute.supportDesc': 'Orb is an independent project. If you find it useful, you can support its development with a contribution.',
   'contribute.paypal': 'Contribute with PayPal',

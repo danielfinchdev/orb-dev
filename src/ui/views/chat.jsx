@@ -219,14 +219,15 @@ const msgFormat = (locale, day) => {
   if (!msgFormats.has(k)) msgFormats.set(k, new Intl.DateTimeFormat(locale, day ? { day: 'numeric', month: 'short' } : { hour: '2-digit', minute: '2-digit' }));
   return msgFormats.get(k);
 };
-function MsgTime({ at }) {
+// hover (3.8.2, an agent's conversation): shown while the pointer is over the message (or it has the focus).
+export function MsgTime({ at, hover = false }) {
   const locale = useLocale();
   useDay();
   if (!at) return null;
   const d = new Date(at); if (Number.isNaN(d.getTime())) return null;
   const today = d.toDateString() === new Date().toDateString();
   const time = msgFormat(locale, false).format(d);
-  return <time className="msg-time" dateTime={d.toISOString()}>{today ? time : `${msgFormat(locale, true).format(d)} ${time}`}</time>;
+  return <time className={hover ? 'msg-time msg-time-hover' : 'msg-time'} dateTime={d.toISOString()}>{today ? time : `${msgFormat(locale, true).format(d)} ${time}`}</time>;
 }
 
 // Memoised: the list (up to 120 lines) is not drawn again while the assistant streams its answer.
