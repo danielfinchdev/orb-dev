@@ -496,6 +496,7 @@ try {
   // The bubble that is open (another one may still be closing for a moment: seen on the CI's Linux machine).
   await win.locator('[data-testid=bubble-tip]:not([data-state=closed])').first().waitFor();
   await shot('11b-barra-globo');
+  await win.click('[data-testid=orb-chat-more]');
   await win.click('[data-testid=bar-games]');
   await win.locator('[data-testid=games-dialog]').waitFor();
   await shot('11c-minijuegos');

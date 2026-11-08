@@ -402,6 +402,14 @@ function TaskLine({ task, live }) {
 
 // The title of a conversation in the middle of a bar, and under it, small, its project with its icon (direct
 // conversations, views/session.jsx).
+// The bar's pause / resume of all of Orb's work (the chat's bar and an agent conversation's).
+export function BarPause() {
+  const t = useT();
+  const paused = useStore((s) => Boolean(s.app?.paused));
+  return paused
+    ? <BubbleTip title={t('bar.resume')} text={t('bar.resumeText')}><Button variant="soft" size="icon-sm" onClick={() => act(call('control.resume'), t('chat.resumed'))} aria-label={t('bar.resume')} data-testid="bar-resume"><Play /></Button></BubbleTip>
+    : <BubbleTip title={t('bar.pause')} text={t('bar.pauseText')}><Button variant="ghost" size="icon-sm" onClick={() => act(call('control.pause'), t('chat.paused'))} aria-label={t('bar.pause')} data-testid="bar-pause"><Pause /></Button></BubbleTip>;
+}
 export function BarHeading({ title, project, onRename, renameLabel, extra, showProject = true }) {
   const t = useT();
   return (
@@ -594,7 +602,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   return (
     <>
       {/* 3.6 (M3): the bar of a messaging app: (phone: back to the list) the pill with Orbe, the title and, small, the
-          project and what it is doing; a click opens the chat's info. On the right: notifications, pause, games and ⋯. */}
+          project and what it is doing; a click opens the chat's info. On the right: notifications, pause and ⋯. */}
       <ChatBar back={embedded ? null : <BackToList to="chats" />} testid="orb-chat-bar" className="topbar-chat" title={<>
         <h1 className="sr-only">{conv?.title ?? t('orbchats.newChatTitle')}</h1>
         <button type="button" disabled={!conv || embedded} onClick={() => (infoOpen ? closeOrbInfo() : openOrbInfo({ type: 'chat' }))}
@@ -612,17 +620,17 @@ export function ChatView({ route, onConversation, project: inProject }) {
       </>}>
         {/* The phone keeps the bar light: the bell is the system's notifications there, and «Pausar» goes into ⋯. */}
         {slim ? null : <NotificationBell />}
-        {slim ? null : app.paused
-          ? <BubbleTip title={t('bar.resume')} text={t('bar.resumeText')}><Button variant="soft" size="icon-sm" onClick={() => act(call('control.resume'), t('chat.resumed'))} aria-label={t('bar.resume')} data-testid="bar-resume"><Play /></Button></BubbleTip>
-          : <BubbleTip title={t('bar.pause')} text={t('bar.pauseText')}><Button variant="ghost" size="icon-sm" onClick={() => act(call('control.pause'), t('chat.paused'))} aria-label={t('bar.pause')} data-testid="bar-pause"><Pause /></Button></BubbleTip>}
-        {!fullPc() ? null : <BubbleTip title={t('bar.games')} text={t('bar.gamesText')}><Button variant="ghost" size="icon-sm" onClick={openGames} aria-label={t('bar.games')} data-testid="bar-games"><Gamepad2 /></Button></BubbleTip>}
-        {conv ? (
+        {slim ? null : <BarPause />}
+        {/* 3.8.2: only the bell and pause stay on the bar; the chat's actions and the games go into ⋯ (also in «Nuevo chat»). */}
+        {conv || fullPc() ? (
           <DropdownMenu modal={false}>
             <BubbleTip title={t('chats.more')}><DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={t('chats.more')} data-testid="orb-chat-more"><Ellipsis /></Button></DropdownMenuTrigger></BubbleTip>
             <DropdownMenuContent align="end" className="w-56">
-              {embedded ? null : <DropdownMenuItem onSelect={() => openOrbInfo({ type: 'chat' })} data-testid="more-info"><Info />{t('orbchats.info')}</DropdownMenuItem>}
+              {conv && !embedded ? <DropdownMenuItem onSelect={() => openOrbInfo({ type: 'chat' })} data-testid="more-info"><Info />{t('orbchats.info')}</DropdownMenuItem> : null}
               {slim ? <DropdownMenuItem onSelect={() => (app.paused ? act(call('control.resume'), t('chat.resumed')) : act(call('control.pause'), t('chat.paused')))} data-testid={app.paused ? 'bar-resume' : 'bar-pause'}>{app.paused ? <Play /> : <Pause />}{app.paused ? t('bar.resume') : t('bar.pause')}</DropdownMenuItem> : null}
-              {chatActions.filter((a) => a.id !== 'info').map((a) => <div key={a.id}>{a.danger ? <DropdownMenuSeparator /> : null}<DropdownMenuItem variant={a.danger ? 'destructive' : undefined} onSelect={a.run} data-testid={`more-${a.id}`}><a.icon />{a.label}</DropdownMenuItem></div>)}
+              {chatActions.filter((a) => a.id !== 'info' && !a.danger).map((a) => <DropdownMenuItem key={a.id} onSelect={a.run} data-testid={`more-${a.id}`}><a.icon />{a.label}</DropdownMenuItem>)}
+              {fullPc() ? <DropdownMenuItem onSelect={openGames} data-testid="bar-games"><Gamepad2 />{t('bar.games')}</DropdownMenuItem> : null}
+              {chatActions.filter((a) => a.danger).map((a) => <div key={a.id}><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onSelect={a.run} data-testid={`more-${a.id}`}><a.icon />{a.label}</DropdownMenuItem></div>)}
             </DropdownMenuContent>
           </DropdownMenu>
         ) : null}

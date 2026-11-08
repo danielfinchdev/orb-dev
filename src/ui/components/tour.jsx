@@ -22,7 +22,7 @@ export const TOUR_STEPS = [
   { id: 'reasoning', target: 'reasoning-picker', view: 'chat' },
   { id: 'orchestrator', target: 'orchestrator-check', view: 'chat', wrap: 'label' },
   { id: 'context', target: 'context-meter', view: 'chat', optional: true },
-  // 3.2.1: the whole bar (its text speaks of the title, the project, the notifications, pause and the games), not the last button.
+  // 3.2.1: the whole bar (its text speaks of the title, the project, the notifications, pause and ⋯ with the games), not the last button.
   { id: 'bar', target: 'orb-chat-bar', view: 'chat' },
   { id: 'newchat', target: 'chats-new', sidebar: true },
   { id: 'search', target: 'sidebar-search', sidebar: true },

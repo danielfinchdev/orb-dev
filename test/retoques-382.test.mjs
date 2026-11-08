@@ -18,3 +18,23 @@ test('the list ⋯ of a chat and of an agent conversation offers «Renombrar»',
   const actions = inbox.slice(inbox.indexOf('export function useOrbActions'), inbox.indexOf('export function renameChat'));
   assert.equal([...actions.matchAll(/^\s+rename,$/gm)].length, 2);
 });
+
+test('the chat bars keep only the bell and pause; the rest goes into ⋯', () => {
+  const chat = read('views', 'chat.jsx');
+  const bar = chat.slice(chat.indexOf('<ChatBar back='), chat.indexOf('</ChatBar>'));
+  // Outside the menu only the bell and pause; the games live in ⋯, also in «Nuevo chat» (no conversation yet).
+  const outside = bar.slice(0, bar.indexOf('<DropdownMenu'));
+  assert.match(outside, /<NotificationBell \/>/); assert.match(outside, /<BarPause \/>/);
+  assert.doesNotMatch(outside, /Gamepad2|bar-games/);
+  assert.match(bar, /\{conv \|\| fullPc\(\) \? \(\s*<DropdownMenu/);
+  assert.match(bar, /<DropdownMenuItem onSelect=\{openGames\} data-testid="bar-games">/);
+  // An agent's conversation: folder, details, fork, archive, games and delete (red, after a separator, with its confirmation).
+  const session = read('views', 'session.jsx');
+  const head = session.slice(session.indexOf('<PageHeader className="topbar-chat"'), session.indexOf('</PageHeader>'));
+  const top = head.slice(0, head.indexOf('<DropdownMenu'));
+  assert.doesNotMatch(top, /FolderOpen|GitFork|Archive|Trash2|<Info|Gamepad2/);
+  assert.match(top, /<NotificationBell \/>\s*<BarPause \/>/);
+  const menu = head.slice(head.indexOf('<DropdownMenu'));
+  for (const id of ['open-folder', 'details', 'fork', 'archive', 'bar-games', 'delete']) assert.match(menu, new RegExp(`data-testid="${id}"`), id);
+  assert.match(menu, /<DropdownMenuSeparator \/>\s*<DropdownMenuItem variant="destructive" onSelect=\{async \(\) => \{ if \(await confirm\(/);
+});
