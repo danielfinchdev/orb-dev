@@ -421,10 +421,13 @@ html[data-skin="nube"] .win-control.win-close:hover { background-color: var(--pr
 /* ---- Orb: the bar stays as it is; behind the chat, the robot's periwinkle sky with a few soft clouds drifting. ---- */
 .scene-orb .scene-blur { background: radial-gradient(60% 50% at 30% 0%, #c3cbff, transparent 70%), radial-gradient(50% 60% at 90% 100%, #a7b1f6, transparent 70%); --scene-opacity: 0.5; }
 html.dark .scene-orb .scene-blur { background: radial-gradient(60% 50% at 30% 0%, #2b3270, transparent 70%), radial-gradient(50% 60% at 90% 100%, #1d2257, transparent 70%); --scene-opacity: 0.75; }
-/* Orb's wash is soft already: the pane only smooths the clouds. */
-.scene-orb { --frost-tint: 40%; --frost-filter: blur(8px); }
-html.dark .scene-orb { --frost-tint: 45%; --frost-filter: blur(8px); }
-.orb-cloud { width: 260px; height: 72px; border-radius: 999px; background: radial-gradient(closest-side, rgb(255 255 255 / 0.75), rgb(255 255 255 / 0.3) 60%, transparent); animation: cloud-drift linear infinite; }
+/* Orb's wash is soft already: the pane only smooths the clouds. 3.8.1 (H4d): so each cloud carries that blur itself
+   (the same 8 px; a blur of a moving piece is the moving blurred piece) and the pane only tints. A backdrop-filter over
+   the whole screen had to blur everything under it again on every frame the clouds moved (≈6 ms of GPU per frame on
+   the Tasks screen); a cloud's own blur is drawn once into its layer and slides. */
+.scene-orb { --frost-tint: 40%; --frost-filter: none; }
+html.dark .scene-orb { --frost-tint: 45%; --frost-filter: none; }
+.orb-cloud { width: 260px; height: 72px; border-radius: 999px; background: radial-gradient(closest-side, rgb(255 255 255 / 0.75), rgb(255 255 255 / 0.3) 60%, transparent); filter: blur(8px); animation: cloud-drift linear infinite; }
 html.dark .orb-cloud { background: radial-gradient(closest-side, rgb(160 170 255 / 0.18), rgb(160 170 255 / 0.06) 60%, transparent); }
 @keyframes cloud-drift { from { transform: translateX(-30vw); } to { transform: translateX(130vw); } }
 

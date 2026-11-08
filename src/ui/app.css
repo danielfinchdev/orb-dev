@@ -198,7 +198,7 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
 .orb { --k: 1; --eye: #8cf6ff; position: relative; isolation: isolate; display: inline-block; flex: none; line-height: 0; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
 .orb-body { position: absolute; bottom: 0; animation: orb-float 4.2s ease-in-out infinite; will-change: transform; }
 .orb-img { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.orb-face { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.orb-face, .orb-gaze { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .orb-eyes { transition: transform .35s ease; }
 .orb-eye { transform-box: fill-box; transform-origin: center; transition: transform .12s ease, opacity .2s; }
 .orb-pill { fill: var(--eye); }
@@ -213,12 +213,15 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
 .orb[data-blink] .orb-eye { transform: scaleY(.08); }
 .orb[data-act="wink"] .orb-eye-r .orb-pill { display: none; }
 .orb[data-act="wink"] .orb-eye-r .orb-shut { display: inline; }
-.orb[data-act="look"] .orb-eyes { animation: orb-look 1.8s ease-in-out; }
+/* Looking around and peeking move the box around the face's SVG (only the eyes are in it), not the eyes' group: an HTML
+   element the compositor can move, where an SVG element is redrawn on the main thread every frame. The same path:
+   var(--u) is one unit of the SVG's viewBox in CSS pixels (orb.jsx), the unit the group's translate used. */
+.orb[data-act="look"] .orb-gaze { animation: orb-look 1.8s ease-in-out; }
 .orb[data-act="code"] .orb-code, .orb[data-mood="thinking"] .orb-code { opacity: 1; animation: orb-code 2.4s linear infinite; }
 .orb[data-act="code"] .orb-eyes, .orb[data-mood="thinking"] .orb-eyes { opacity: 0; transition: opacity .25s; }
 .orb[data-act="code"] .orb-glint { animation: orb-glint 1.2s ease-in-out; }
 .orb[data-act="tilt"] .orb-body { animation: orb-tilt 2.2s ease-in-out; transform-origin: 50% 80%; }
-.orb[data-act="tilt"] .orb-eyes { animation: orb-peek 2.2s ease-in-out; }
+.orb[data-act="tilt"] .orb-gaze { animation: orb-peek 2.2s ease-in-out; }
 .orb[data-act="hop"] .orb-body { animation: orb-hop .8s ease-in-out; }
 .orb[data-act="boop"] .orb-body { animation: orb-boop .38s ease-out; }
 .orb[data-act="laugh"] .orb-body { animation: orb-laugh .2s ease-in-out 8 alternate; }
@@ -236,6 +239,9 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
 .orb[data-mood="sleeping"] .orb-body { animation: orb-breathe 4.5s ease-in-out infinite; transform-origin: 50% 100%; }
 .orb[data-mood="sleeping"] .orb-led { animation: none; opacity: .2; }
 .orb.still .orb-body, .orb.still .orb-led, .orb.calm .orb-body { animation: none; }
+/* 3.8.1 (H4d): a robot out of view or in a hidden window (orb.jsx › useOnScreen) holds still where it is: nothing to see,
+   and no frames drawn for it. It goes on from the same point when it shows again. */
+.orb[data-away], .orb[data-away] * { animation-play-state: paused !important; }
 /* A robot that stands still needs no layer of its own: hundreds of them (one per message and per chat in the list) made
    every scrolled frame rebuild hundreds of layers. */
 .orb.still .orb-body, .orb.calm:not([data-act]) .orb-body { will-change: auto; }
@@ -244,11 +250,14 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
 @keyframes orb-float { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-5%) rotate(-1.5deg); } }
 @keyframes orb-breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.015, .97); } }
 @keyframes orb-led { 0%, 100% { opacity: .9; } 50% { opacity: .25; } }
-@keyframes orb-look { 0%, 100% { transform: translate(0, 0); } 20%, 45% { transform: translate(calc(var(--k) * -28px), calc(var(--k) * -6px)); } 60%, 85% { transform: translate(calc(var(--k) * 30px), calc(var(--k) * -10px)); } }
+@keyframes orb-look { 0%, 100% { transform: translate(0, 0); } 20%, 45% { transform: translate(calc(var(--k) * -28 * var(--u)), calc(var(--k) * -6 * var(--u))); } 60%, 85% { transform: translate(calc(var(--k) * 30 * var(--u)), calc(var(--k) * -10 * var(--u))); } }
 @keyframes orb-code { from { transform: translateY(0); } to { transform: translateY(-50%); } }
-@keyframes orb-glint { from { left: -60%; opacity: 1; } to { left: 120%; opacity: 1; } }
+/* The glint crosses the visor from left -60% to 120% of it: moved with translate (the compositor's), not left (a layout
+   every frame). 180% of the visor is 514.2857% of the glint's own width (35%); rotate stays in transform, applied first,
+   so the path is the same as with left. */
+@keyframes orb-glint { from { translate: 0 0; opacity: 1; } to { translate: 514.2857% 0; opacity: 1; } }
 @keyframes orb-tilt { 0%, 100% { transform: rotate(0); } 25%, 70% { transform: rotate(-11deg) translateY(-2%); } }
-@keyframes orb-peek { 0%, 100% { transform: translate(0, 0); } 25%, 70% { transform: translate(calc(var(--k) * 14px), calc(var(--k) * -18px)); } }
+@keyframes orb-peek { 0%, 100% { transform: translate(0, 0); } 25%, 70% { transform: translate(calc(var(--k) * 14 * var(--u)), calc(var(--k) * -18 * var(--u))); } }
 @keyframes orb-hop { 0%, 100% { transform: translateY(0); } 35% { transform: translateY(-16%) rotate(-4deg); } 60% { transform: translateY(0) scale(1.06, .94); } }
 @keyframes orb-boop { 0% { transform: scale(1); } 35% { transform: scale(1.12, .88); } 70% { transform: scale(.96, 1.04); } 100% { transform: scale(1); } }
 @keyframes orb-laugh { from { transform: rotate(-7deg) translateY(-3%); } to { transform: rotate(7deg) translateY(0); } }

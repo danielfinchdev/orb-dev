@@ -920,9 +920,19 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   is tested in `test/feed.test.mjs` (random changes, callers far behind, the engine, the phone's path stripping).
 - **Robot:** a still robot has no compositor layer and builds the visor's code rows only the first time it shows them
   (`orb.jsx`, app.css). Avoid `will-change`, `backdrop-filter` and blend modes on elements repeated in long lists.
+- **Idle animations:** while anything on screen moves (the robot floating, its LED, the «orb» theme's clouds) the
+  compositor draws every frame, so what matters is the GPU cost of each frame, not style work (≈1–5 ms/s of style
+  recalculation at rest). The robot's moves are compositor-only: `transform`/`translate`/`opacity` on HTML elements
+  (looking around and peeking move an HTML box around the face's SVG, not the eyes' group; the visor's glint moves with `translate`, not
+  `left`); only blinking and talking scale the SVG eyes on the main thread. A robot out of view or in a hidden window
+  pauses its animations and schedules no blinks or gestures (`useOnScreen`: one shared `IntersectionObserver`,
+  `data-away`). The «orb» theme blurs each cloud itself (`filter: blur(8px)`) instead of a full-screen
+  `backdrop-filter` that had to blur everything under it again on every frame. Avoid full-screen `backdrop-filter`
+  over anything that moves.
 - **Measuring:** `scripts/medir.mjs` (start, memory, CPU at rest, scrolling smoothness; `--hidden` keeps the window
   offscreen via `ORB_HIDDEN_WINDOW=1`; `--profile <dir>` saves a trace, CPU profiles, the compositor's layers and a
-  heap snapshot; `--big` uses a large workspace and times refreshes on the Tasks screen) and `scripts/medir-motor.mjs`
+  heap snapshot; `--big` uses a large workspace and times refreshes on the Tasks screen; `--anim <s>` / `--anim-only` measure
+  idle animations: main thread, renderer and GPU CPU and, with `--profile`, frames per second and GPU ms per frame) and `scripts/medir-motor.mjs`
   (the engine alone: start, memory, call latency and the bytes of a refresh, whole and as feeds, also as a phone gets it).
 
 ### Tutorials and guided tour

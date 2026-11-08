@@ -33,6 +33,31 @@ const CODE = Array.from({ length: 14 }, (_, i) => {
 
 const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
+// 3.8.1 (H4d): whether a robot that moves is on screen. One IntersectionObserver for all of them: a robot out of view (a
+// screen scrolled away, a hidden sidebar) or in a hidden window has its animations paused (data-away, app.css) and no
+// blinking or gestures scheduled, so nothing keeps the compositor drawing frames for what nobody can see. Still robots
+// (the lists) are not watched: they never move.
+const watchers = new Map();
+let observer = null;
+const watch = (el, fn) => {
+  if (typeof IntersectionObserver === 'undefined') { fn(true); return () => {}; }
+  observer ??= new IntersectionObserver((entries) => { for (const e of entries) watchers.get(e.target)?.(e.isIntersecting); });
+  watchers.set(el, fn); observer.observe(el);
+  return () => { watchers.delete(el); observer.unobserve(el); };
+};
+function useOnScreen(ref, on) {
+  const [inView, setInView] = useState(true);
+  const [shown, setShown] = useState(() => !document.hidden);
+  useEffect(() => {
+    if (!on || !ref.current) return;
+    const unwatch = watch(ref.current, setInView);
+    const vis = () => setShown(!document.hidden);
+    document.addEventListener('visibilitychange', vis);
+    return () => { unwatch(); document.removeEventListener('visibilitychange', vis); setInView(true); };
+  }, [on]); // eslint-disable-line react-hooks/exhaustive-deps
+  return !on || (inView && shown);
+}
+
 // pose: head, stand, wave, point, think. size: the width of the head, or of the standing robot (the other poses are
 // scaled so the robot itself stays the same size). gesture: play one now (wink, look, code, tilt, hop).
 export function Orb({ pose = 'head', size = 34, mood = 'idle', live: wantsLive = false, still = false, gesture, title = 'Orb', className, onPoke }) {
@@ -41,26 +66,28 @@ export function Orb({ pose = 'head', size = 34, mood = 'idle', live: wantsLive =
   const [act, setAct] = useState(null);
   const [blink, setBlink] = useState(false);
   const clicks = useRef([]);
+  const self = useRef(null);
+  const seen = useOnScreen(self, !still);
   const timers = useRef({});
   const busy = mood !== 'idle';
 
-  // Blinking: every 3–6 s.
+  // Blinking: every 3–6 s (while it is seen).
   useEffect(() => {
-    if (still || reduced()) return;
+    if (still || !seen || reduced()) return;
     let t;
     const next = () => { t = setTimeout(() => { if (!document.hidden) { setBlink(true); setTimeout(() => setBlink(false), 140); } next(); }, 3000 + Math.random() * 3000); };
     next();
     return () => clearTimeout(t);
-  }, [still]);
+  }, [still, seen]);
 
   // Spontaneous gestures: one every 9–20 s, only for the live robot, only when nothing else is going on.
   useEffect(() => {
-    if (!live || still || busy || reduced()) return;
+    if (!live || still || busy || !seen || reduced()) return;
     let t;
     const next = () => { t = setTimeout(() => { if (!document.hidden) play(ACTS[Math.floor(Math.random() * ACTS.length)]); next(); }, 9000 + Math.random() * 11000); };
     next();
     return () => clearTimeout(t);
-  }, [live, still, busy]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [live, still, busy, seen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { if (gesture && !still) play(gesture); }, [gesture]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => Object.values(timers.current).forEach(clearTimeout), []);
@@ -96,9 +123,9 @@ export function Orb({ pose = 'head', size = 34, mood = 'idle', live: wantsLive =
   const k = G.visor.w / geo.cabeza.visor.w; // eye movements are measured on the head
   const url = (n) => `${BASE}robot/${n}.png`;
   return (
-    <span className={cn('orb', still && 'still', calm && 'calm', className)} data-mood={face} data-act={act ?? undefined} data-blink={blink || undefined}
+    <span ref={self} className={cn('orb', still && 'still', calm && 'calm', className)} data-away={seen ? undefined : ''} data-mood={face} data-act={act ?? undefined} data-blink={blink || undefined}
       style={{ width: box.w, height: box.h, '--k': k }} role="img" aria-label={title} onClick={still ? undefined : poke}>
-      <span className="orb-body" style={{ width: w, height: w * G.ratio, left: (box.w - w) / 2 }}>
+      <span className="orb-body" style={{ width: w, height: w * G.ratio, left: (box.w - w) / 2, '--u': `${w / VW}px` }}>
         <img className="orb-img" src={url(file)} alt="" draggable={false} />
         <span className="orb-visor" style={{ maskImage: `url(${url(`${file}-visera`)})`, WebkitMaskImage: `url(${url(`${file}-visera`)})` }}>
           {coded ? (
@@ -110,27 +137,29 @@ export function Orb({ pose = 'head', size = 34, mood = 'idle', live: wantsLive =
           ) : null}
           <span className="orb-glint" />
         </span>
-        <svg className="orb-face" viewBox={`0 0 ${VW} ${VH}`} aria-hidden="true">
-          <defs>
-            <filter id={`orb-glow-${file}`} x="-80%" y="-40%" width="260%" height="180%"><feGaussianBlur stdDeviation={16 * k} result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
-          </defs>
-          <g className="orb-eyes" filter={`url(#orb-glow-${file})`}>
-            {G.eyes.map((e, i) => {
-              const ew = (e.w / 100) * VW, eh = (e.h / 100) * VH;
-              return (
-                <g key={i} transform={`translate(${(e.x / 100) * VW} ${(e.y / 100) * VH}) rotate(${e.tilt})`}>
-                  <g className={cn('orb-eye', i === 1 && 'orb-eye-r')}>
-                    <rect className="orb-pill" x={-ew / 2} y={-eh / 2} width={ew} height={eh} rx={ew / 2} />
-                    <path className="orb-arc" d={`M${-eh * 0.42} ${eh * 0.12} Q0 ${-eh * 0.5} ${eh * 0.42} ${eh * 0.12}`} strokeWidth={ew * 0.85} />
-                    <path className="orb-shut" d={`M${-eh * 0.38} 0 Q0 ${eh * 0.22} ${eh * 0.38} 0`} strokeWidth={ew * 0.7} />
-                    {/* worried: sad brows, inner end up */}
-                    <path className="orb-brow" d={i === 0 ? `M${-ew * 1.3} ${-eh * 0.5} Q${-ew * 0.2} ${-eh * 0.62} ${ew * 0.9} ${-eh * 0.86}` : `M${-ew * 0.9} ${-eh * 0.86} Q${ew * 0.2} ${-eh * 0.62} ${ew * 1.3} ${-eh * 0.5}`} strokeWidth={ew * 0.62} />
+        <span className="orb-gaze">
+          <svg className="orb-face" viewBox={`0 0 ${VW} ${VH}`} aria-hidden="true">
+            <defs>
+              <filter id={`orb-glow-${file}`} x="-80%" y="-40%" width="260%" height="180%"><feGaussianBlur stdDeviation={16 * k} result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+            </defs>
+            <g className="orb-eyes" filter={`url(#orb-glow-${file})`}>
+              {G.eyes.map((e, i) => {
+                const ew = (e.w / 100) * VW, eh = (e.h / 100) * VH;
+                return (
+                  <g key={i} transform={`translate(${(e.x / 100) * VW} ${(e.y / 100) * VH}) rotate(${e.tilt})`}>
+                    <g className={cn('orb-eye', i === 1 && 'orb-eye-r')}>
+                      <rect className="orb-pill" x={-ew / 2} y={-eh / 2} width={ew} height={eh} rx={ew / 2} />
+                      <path className="orb-arc" d={`M${-eh * 0.42} ${eh * 0.12} Q0 ${-eh * 0.5} ${eh * 0.42} ${eh * 0.12}`} strokeWidth={ew * 0.85} />
+                      <path className="orb-shut" d={`M${-eh * 0.38} 0 Q0 ${eh * 0.22} ${eh * 0.38} 0`} strokeWidth={ew * 0.7} />
+                      {/* worried: sad brows, inner end up */}
+                      <path className="orb-brow" d={i === 0 ? `M${-ew * 1.3} ${-eh * 0.5} Q${-ew * 0.2} ${-eh * 0.62} ${ew * 0.9} ${-eh * 0.86}` : `M${-ew * 0.9} ${-eh * 0.86} Q${ew * 0.2} ${-eh * 0.62} ${ew * 1.3} ${-eh * 0.5}`} strokeWidth={ew * 0.62} />
+                    </g>
                   </g>
-                </g>
-              );
-            })}
-          </g>
-        </svg>
+                );
+              })}
+            </g>
+          </svg>
+        </span>
         {G.button ? <span className="orb-led" style={{ left: `${G.button.x}%`, top: `${G.button.y}%`, width: `${G.button.r * 2.6}%` }} /> : null}
       </span>
     </span>
