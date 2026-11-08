@@ -37,9 +37,11 @@ export default {
   'sys.main.startFailed': 'No se pudo iniciar {name}',
   'sys.main.keyringWeak': 'Tu escritorio no tiene un llavero (GNOME Keyring o KWallet), así que la clave de Orb se guarda en un archivo de su carpeta sin cifrar. Funciona igual; para protegerla, instala gnome-keyring o kwallet y reinicia Orb.',
   'sys.main.notice': '{name} · Notificación',
+  'sys.main.noticePrivate': 'Nuevo mensaje (desbloquea Windows para verlo)',
   // Errores del proceso principal (acaban en un toast)
   'sys.main.engineStopped': '{name} se ha detenido',
   'sys.main.engineStartStopped': '{name} se detuvo al iniciarse',
+  'sys.main.noJob': '{name} no ha podido vigilar los procesos del motor: si se cierra de golpe, pueden quedar agentes abiertos. Más detalles en motor-salida.log.',
   'sys.main.engineOff': '{name} no está en ejecución',
   'sys.main.engineTimeout': '{name} no respondió a tiempo',
   'sys.main.badOrigin': 'origen no permitido',
@@ -182,6 +184,9 @@ export default {
   'sys.engine.notHome': 'no es una carpeta de Orb: {home}',
   'sys.engine.notStarted': '{name} todavía no se ha iniciado',
   'sys.engine.sealedSecret': 'Windows no ha podido abrir la clave cifrada de este espacio de trabajo. Cierra Orb y vuelve a abrirlo.',
+  'sys.engine.otherApp': 'Este espacio de trabajo ya está abierto en otro {name} de este PC (quizá una versión anterior). Ciérralo y pulsa «Reintentar».',
+  'sys.engine.secretBusy': 'Windows no deja leer ahora la clave cifrada de este espacio de trabajo. Espera un momento y pulsa «Reintentar».',
+  'sys.engine.secretUnreadable': 'Windows no puede abrir la clave cifrada de este espacio de trabajo (puede ser de otro usuario de Windows o estar dañada). Pulsa «Reintentar» o empieza con una clave nueva: se volverán a pedir las aprobaciones.',
   // Tareas programadas
   'sys.schedules.badEvery': 'every debe ser {list}',
   'sys.schedules.badTime': 'at_time debe tener el formato HH:MM',

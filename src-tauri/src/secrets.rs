@@ -13,6 +13,66 @@ const ENTROPY: &[u8] = b"orb.clave.v2";
 /// Far more than a sealed secret (95 bytes from Electron, ~250 from DPAPI): anything bigger is not one.
 pub const MAX_BLOB: usize = 16 * 1024;
 
+/// Local State is a few KB; anything this big is not Chromium's.
+const MAX_LOCAL_STATE: u64 = 4 * 1024 * 1024;
+
+/// Why a sealed secret did not open, for the engine (src/engine/approval-secret.mjs › loadHostSecret): `Io` is for now
+/// (try again: never a new secret); the rest is how the key is (the user decides).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum UnsealError {
+  /// Local State could not be read now (in use, no access, a read error).
+  Io,
+  /// No Local State: Electron's v10 can never open here.
+  Missing,
+  /// DPAPI refuses it: another Windows user's, or damaged.
+  Dpapi,
+  /// The AES-GCM tag does not match: another key, or damaged.
+  Tag,
+  /// Not a sealed secret, a damaged Local State, or not text.
+  Format,
+}
+
+impl UnsealError {
+  pub fn code(self) -> &'static str {
+    match self {
+      Self::Io => "io",
+      Self::Missing => "missing",
+      Self::Dpapi => "dpapi",
+      Self::Tag => "tag",
+      Self::Format => "format",
+    }
+  }
+}
+
+impl std::fmt::Display for UnsealError {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_str(match self {
+      Self::Io => "no se puede leer Local State ahora",
+      Self::Missing => "falta Local State",
+      Self::Dpapi => "DPAPI: no abre (otro usuario de Windows o dañado)",
+      Self::Tag => "no abre con esta clave",
+      Self::Format => "formato desconocido",
+    })
+  }
+}
+
+/// Overwrites a buffer that held a secret (the text or a key) before it is freed; volatile, so it is not optimised away.
+pub fn wipe(bytes: &mut [u8]) {
+  for b in bytes.iter_mut() {
+    // SAFETY: a valid, aligned &mut u8.
+    unsafe { std::ptr::write_volatile(b, 0) };
+  }
+  std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::SeqCst);
+}
+
+/// A buffer wiped when dropped.
+pub struct Secret(pub Vec<u8>);
+impl Drop for Secret {
+  fn drop(&mut self) {
+    wipe(&mut self.0);
+  }
+}
+
 pub fn seal(text: &str) -> Result<Vec<u8>, String> {
   let mut out = ORB2.to_vec();
   out.extend(dpapi::protect(text.as_bytes(), ENTROPY)?);
@@ -20,45 +80,58 @@ pub fn seal(text: &str) -> Result<Vec<u8>, String> {
 }
 
 /// The text of a sealed secret: ORB2 (DPAPI) or Electron's v10 with the key of `local_state`.
-pub fn unseal(blob: &[u8], local_state: &Path) -> Result<String, String> {
+pub fn unseal(blob: &[u8], local_state: &Path) -> Result<String, UnsealError> {
   if blob.len() > MAX_BLOB {
-    return Err("demasiado grande".into());
+    return Err(UnsealError::Format);
   }
   let plain = if let Some(rest) = blob.strip_prefix(ORB2) {
-    dpapi::unprotect(rest, ENTROPY)?
+    Secret(dpapi::unprotect(rest, ENTROPY).map_err(|_| UnsealError::Dpapi)?)
   } else if blob.starts_with(V10) {
-    let text = std::fs::read_to_string(local_state).map_err(|_| "falta Local State".to_string())?;
-    electron_open(&electron_key(&text)?, blob)?
+    let text = read_local_state(local_state)?;
+    let key = Secret(electron_key(&text)?);
+    Secret(electron_open(&key.0, blob)?)
   } else {
-    return Err("formato desconocido".into());
+    return Err(UnsealError::Format);
   };
-  String::from_utf8(plain).map_err(|_| "no es texto".to_string())
+  std::str::from_utf8(&plain.0).map(str::to_string).map_err(|_| UnsealError::Format)
+}
+
+fn read_local_state(file: &Path) -> Result<String, UnsealError> {
+  use std::io::Read;
+  let f = std::fs::File::open(file).map_err(|e| if e.kind() == std::io::ErrorKind::NotFound { UnsealError::Missing } else { UnsealError::Io })?;
+  if f.metadata().map_err(|_| UnsealError::Io)?.len() > MAX_LOCAL_STATE {
+    return Err(UnsealError::Format);
+  }
+  let mut text = String::new();
+  f.take(MAX_LOCAL_STATE + 1).read_to_string(&mut text).map_err(|e| if e.kind() == std::io::ErrorKind::InvalidData { UnsealError::Format } else { UnsealError::Io })?;
+  Ok(text)
 }
 
 /// The AES key of Chromium's os_crypt, from the text of Local State.
-pub fn electron_key(local_state: &str) -> Result<Vec<u8>, String> {
+pub fn electron_key(local_state: &str) -> Result<Vec<u8>, UnsealError> {
   use base64::Engine as _;
-  let v: serde_json::Value = serde_json::from_str(local_state).map_err(|_| "Local State dañado".to_string())?;
-  let wrapped = v.pointer("/os_crypt/encrypted_key").and_then(|k| k.as_str()).ok_or("Local State sin clave")?;
-  let wrapped = base64::engine::general_purpose::STANDARD.decode(wrapped).map_err(|_| "Local State dañado".to_string())?;
-  let blob = wrapped.strip_prefix(b"DPAPI").ok_or("Local State: clave desconocida")?;
-  let key = dpapi::unprotect(blob, &[])?;
+  let v: serde_json::Value = serde_json::from_str(local_state).map_err(|_| UnsealError::Format)?;
+  let wrapped = v.pointer("/os_crypt/encrypted_key").and_then(|k| k.as_str()).ok_or(UnsealError::Format)?;
+  let wrapped = base64::engine::general_purpose::STANDARD.decode(wrapped).map_err(|_| UnsealError::Format)?;
+  let blob = wrapped.strip_prefix(b"DPAPI").ok_or(UnsealError::Format)?;
+  let mut key = dpapi::unprotect(blob, &[]).map_err(|_| UnsealError::Dpapi)?;
   if key.len() != 32 {
-    return Err("Local State: clave desconocida".into());
+    wipe(&mut key);
+    return Err(UnsealError::Format);
   }
   Ok(key)
 }
 
 /// v10 + nonce(12) + AES-256-GCM ciphertext and tag.
-pub fn electron_open(key: &[u8], blob: &[u8]) -> Result<Vec<u8>, String> {
+pub fn electron_open(key: &[u8], blob: &[u8]) -> Result<Vec<u8>, UnsealError> {
   use aes_gcm::aead::{Aead, KeyInit};
   use aes_gcm::{Aes256Gcm, Nonce};
-  let body = blob.strip_prefix(V10).ok_or("no es v10")?;
+  let body = blob.strip_prefix(V10).ok_or(UnsealError::Format)?;
   if body.len() < 12 + 16 {
-    return Err("v10 corto".into());
+    return Err(UnsealError::Format);
   }
-  let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| "clave no válida".to_string())?;
-  cipher.decrypt(Nonce::from_slice(&body[..12]), &body[12..]).map_err(|_| "no abre con esta clave".to_string())
+  let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| UnsealError::Format)?;
+  cipher.decrypt(Nonce::from_slice(&body[..12]), &body[12..]).map_err(|_| UnsealError::Tag)
 }
 
 #[cfg(windows)]
@@ -71,9 +144,12 @@ pub mod dpapi {
   }
 
   fn take(out: CRYPT_INTEGER_BLOB) -> Vec<u8> {
-    // SAFETY: DPAPI filled `out` with a LocalAlloc'ed buffer of cbData bytes, freed here once copied.
+    // SAFETY: DPAPI filled `out` with a LocalAlloc'ed buffer of cbData bytes, wiped and freed here once copied (it may
+    // hold the secret in clear or Electron's key).
     unsafe {
-      let v = std::slice::from_raw_parts(out.pbData, out.cbData as usize).to_vec();
+      let raw = std::slice::from_raw_parts_mut(out.pbData, out.cbData as usize);
+      let v = raw.to_vec();
+      super::wipe(raw);
       let _ = LocalFree(Some(HLOCAL(out.pbData as _)));
       v
     }
@@ -155,7 +231,7 @@ mod tests {
     // Plain DPAPI without Orb's entropy (another program's blob) does not open as ORB2, nor the other way round.
     let mut foreign = ORB2.to_vec();
     foreign.extend(dpapi::protect(SECRET.as_bytes(), &[]).unwrap());
-    assert!(unseal(&foreign, Path::new("x")).is_err());
+    assert_eq!(unseal(&foreign, Path::new("x")), Err(UnsealError::Dpapi));
     assert!(dpapi::unprotect(&sealed[4..], &[]).is_err());
     let mut broken = sealed.clone();
     let last = broken.len() - 1;
@@ -172,12 +248,12 @@ mod tests {
     assert_eq!(unseal(&blob, &state).unwrap(), SECRET);
     assert_eq!(std::fs::read(&state).unwrap(), before, "Local State is never changed");
     // Without Local State, with another one, or changed: it does not open (and says so, never a wrong text).
-    assert!(unseal(&blob, &dir.join("no-existe")).is_err());
+    assert_eq!(unseal(&blob, &dir.join("no-existe")), Err(UnsealError::Missing));
     let other = temp("v10-otro");
     electron_like(&other, "otra cosa");
     let mut tampered = blob.clone();
     tampered[20] ^= 1;
-    assert!(unseal(&tampered, &state).is_err());
+    assert_eq!(unseal(&tampered, &state), Err(UnsealError::Tag));
     std::fs::write(other.join("Local State"), r#"{"os_crypt":{"encrypted_key":"bm8gZHBhcGk="}}"#).unwrap();
     assert!(unseal(&blob, &other.join("Local State")).is_err());
     std::fs::write(other.join("Local State"), "roto").unwrap();
@@ -185,6 +261,13 @@ mod tests {
     assert!(unseal(b"v10corto", &state).is_err());
     assert!(unseal(b"otro formato", &state).is_err());
     assert!(unseal(&vec![b'v'; MAX_BLOB + 1], &state).is_err());
+    assert_eq!(unseal(b"otro formato", &state), Err(UnsealError::Format));
+    // A Local State far too big is not read at all; one that cannot be opened now is «try again», not «unreadable».
+    let big = other.join("grande");
+    std::fs::write(&big, vec![b' '; (MAX_LOCAL_STATE + 1) as usize]).unwrap();
+    assert_eq!(unseal(&blob, &big), Err(UnsealError::Format));
+    assert_eq!(unseal(&blob, &dir), Err(UnsealError::Io), "a folder where Local State should be: a read error");
+    assert_eq!(UnsealError::Io.code(), "io");
     let _ = std::fs::remove_dir_all(dir);
     let _ = std::fs::remove_dir_all(other);
   }

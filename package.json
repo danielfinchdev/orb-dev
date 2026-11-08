@@ -24,8 +24,8 @@
     "test:glass": "node test/glass.e2e.mjs",
     "test:tauri-navegador": "node test/tauri-navegador.e2e.mjs",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build",
-    "tauri:build:e2e": "tauri build --features e2e --no-bundle",
+    "tauri:build": "tauri build && node scripts/tauri-check-release.mjs",
+    "tauri:build:e2e": "node scripts/tauri-check-release.mjs --build-e2e",
     "android:build": "node scripts/android-build.mjs",
     "android:build:debug": "node scripts/android-build.mjs --debug"
   },

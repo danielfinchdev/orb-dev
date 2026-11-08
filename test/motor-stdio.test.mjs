@@ -126,6 +126,12 @@ test('the engine over stdio: starts, answers, asks the app (host.*) and ends whe
   assert.equal(await call('app.openTerminal', { dir: home }), 'CMD');
   assert.equal(hostAnswers.at(-1).method, 'host.openTerminal');
   assert.deepEqual(hostAnswers.at(-1).params, { dir: home, choice: 'cmd' });
+  // In core or its secrets: the terminal opens in the workspace; an action there needs the master password.
+  assert.equal(await call('app.openTerminal', { dir: path.join(home, 'core', 'secretos') }), 'CMD');
+  assert.deepEqual(hostAnswers.at(-1).params, { dir: home, choice: 'cmd' });
+  const before = hostAnswers.length;
+  await assert.rejects(call('app.runAction', { dir: path.join(home, 'core'), command: 'dir' }));
+  assert.equal(hostAnswers.length, before);
   // The app could not do it: the window gets the reason.
   answer = () => ({ ok: false, error: 'el sistema no pudo abrirlo' });
   await assert.rejects(call('app.openIn', { which: 'explorer', dir: home }), /no pudo abrirlo/);
@@ -205,8 +211,16 @@ test('the engine answers the Tauri app: locate, setup, switchHome, texts; a seal
     fs.rmSync(file);
   }
   assert.deepEqual(sealings, []);
-  // Tauri seals it (hostSecret): Electron's v10 opens, is sealed again as ORB2 and the old file is kept aside, in core and
-  // outside (Local State is the app's business: never touched here).
+  // Tauri seals it (hostSecret): sealed keys that none opens stop the start with a code (the window asks the user);
+  // never a new secret behind the user's back.
+  fs.writeFileSync(sealed, 'basura'); fs.writeFileSync(copy, 'basura');
+  seen.length = 0;
+  send({ type: 'start', home, version: 'prueba', userData, hostSecret: true });
+  const unreadable = await until(() => seen.find((m) => m.type === 'started'), 'started', 30000);
+  assert.equal(unreadable.ok, false); assert.equal(unreadable.code, 'secretUnreadable');
+  assert.equal(fs.existsSync(path.join(path.dirname(sealed), 'clave2.enc')), false);
+  // Electron's v10 opens and is sealed again as ORB2 in Tauri's own files; Electron's (Orb 3.8.0 may run here again) are
+  // never changed, nor Local State (the app's business).
   fs.writeFileSync(sealed, `v10${secret}`);
   fs.writeFileSync(copy, `v10${secret}`);
   seen.length = 0;
@@ -214,10 +228,10 @@ test('the engine answers the Tauri app: locate, setup, switchHome, texts; a seal
   const started = await until(() => seen.find((m) => m.type === 'started'), 'started', 30000);
   assert.ok(started.ok, started.error);
   assert.ok(sealings.includes('host.unseal') && sealings.includes('host.seal'));
-  assert.equal(fs.readFileSync(sealed, 'latin1'), `ORB2${secret}`);
-  assert.equal(fs.readFileSync(copy, 'latin1'), `ORB2${secret}`);
-  assert.ok(fs.readdirSync(path.dirname(sealed)).some((f) => /^clave\.\d{8}T\d{6}Z\.v10\.enc$/.test(f)), 'el v10 de core, aparte');
-  assert.ok(fs.readdirSync(path.dirname(copy)).some((f) => f.endsWith('.v10.enc')), 'el v10 de la copia, aparte');
+  assert.equal(fs.readFileSync(sealed, 'latin1'), `v10${secret}`);
+  assert.equal(fs.readFileSync(copy, 'latin1'), `v10${secret}`);
+  assert.equal(fs.readFileSync(path.join(path.dirname(sealed), 'clave2.enc'), 'latin1'), `ORB2${secret}`);
+  assert.equal(fs.readFileSync(copy.replace(/\.enc$/, '.v2.enc'), 'latin1'), `ORB2${secret}`);
   assert.equal(seen.some((m) => m.id === 99), false);
   child.stdin.end();
   assert.equal(await Promise.race([exited, wait(10000).then(() => 'sigue vivo')]), 0, stderr.slice(-2000));

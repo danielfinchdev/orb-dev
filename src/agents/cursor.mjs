@@ -9,7 +9,7 @@ import { IS_WIN, firstFile, inPath, appDataDirs, userHome, clip, describeInput, 
 import { Turn, spawnAgent, killTree } from './live.mjs';
 import { tr } from '../core/context.mjs';
 import { isModelLimitText, parseReset, untilText } from '../core/budget.mjs';
-import { guardedRootsNow } from '../core/guard.mjs';
+import { guardedRootsNow, appRootsNow } from '../core/guard.mjs';
 
 export const id = 'cursor';
 export const label = 'Cursor';
@@ -150,6 +150,8 @@ export function cursorRules(permission, internalDir) {
     for (const dir of [...['datos', 'ejecuciones', path.join('copias', 'fotos'), 'secretos'].map((sub) => path.join(internalDir, sub)), ...guardedRootsNow()]) {
       for (const p of [dir, dir.replace(/\\/g, '/')]) deny.push(`Read(${p}/**)`, `Write(${p}/**)`);
     }
+    // 3.8.1: the folder Orb is installed in: readable, never written.
+    for (const dir of appRootsNow()) for (const p of [dir, dir.replace(/\\/g, '/')]) deny.push(`Write(${p}/**)`);
   }
   return [...new Set(deny)];
 }

@@ -43,8 +43,13 @@ pub fn find_terminals(f: &Finder) -> Terminals {
       .first(vec![local.as_ref().map(|l| l.join("Programs").join("Warp").join("warp.exe")), Some(programs.join("Warp").join("warp.exe"))])
       .or_else(|| f.in_path("warp.exe")),
     wt: f.first(vec![local.as_ref().map(|l| l.join("Microsoft").join("WindowsApps").join("wt.exe"))]).or_else(|| f.in_path("wt.exe")),
-    powershell: f.in_path("powershell.exe").unwrap_or_else(|| system.join("WindowsPowerShell").join("v1.0").join("powershell.exe")),
-    cmd: f.var("ComSpec").filter(|p| p.is_absolute()).unwrap_or_else(|| system.join("cmd.exe")),
+    // Windows' own, from System32 first: a folder of the user's PATH (WindowsApps, npm…) is writable by any program, and
+    // ComSpec is the user's to change. The PATH only when Windows' PowerShell is not there (removed by an admin).
+    powershell: f
+      .first(vec![Some(system.join("WindowsPowerShell").join("v1.0").join("powershell.exe"))])
+      .or_else(|| f.in_path("powershell.exe"))
+      .unwrap_or_else(|| system.join("WindowsPowerShell").join("v1.0").join("powershell.exe")),
+    cmd: system.join("cmd.exe"),
   }
 }
 
@@ -150,7 +155,7 @@ mod tests {
       ("LOCALAPPDATA", "C:\\Users\\a\\AppData\\Local"),
       ("SystemRoot", "C:\\Windows"),
       ("PATH", ".;;relativa;C:\\herramientas"),
-      ("ComSpec", "cmd.exe"),
+      ("ComSpec", "C:\\Users\\a\\cmd.exe"),
     ]);
     // A powershell.exe and a wt.exe in «.» or a relative folder of the PATH are never picked.
     let files: HashSet<PathBuf> = ["powershell.exe", ".\\powershell.exe", "relativa\\wt.exe", "C:\\herramientas\\warp.exe", "C:\\Users\\a\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe"]
@@ -163,7 +168,15 @@ mod tests {
     assert_eq!(t.warp, Some(PathBuf::from("C:\\herramientas\\warp.exe")));
     assert_eq!(t.wt, None);
     assert_eq!(t.powershell, PathBuf::from("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"));
-    assert_eq!(t.cmd, PathBuf::from("C:\\Windows\\System32\\cmd.exe"), "a relative ComSpec is ignored");
+    assert_eq!(t.cmd, PathBuf::from("C:\\Windows\\System32\\cmd.exe"), "ComSpec is ignored");
+    // Windows' PowerShell wins over one in a folder of the PATH.
+    let both: HashSet<PathBuf> = ["C:\\herramientas\\powershell.exe", "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"].iter().map(PathBuf::from).collect();
+    let (e2, x2) = finder(&env, &both);
+    assert_eq!(find_terminals(&Finder { env: &e2, exists: &x2 }).powershell, PathBuf::from("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"));
+    // Only when it is not there, the PATH's (absolute folders only).
+    let only_path: HashSet<PathBuf> = ["C:\\herramientas\\powershell.exe"].iter().map(PathBuf::from).collect();
+    let (e3, x3) = finder(&env, &only_path);
+    assert_eq!(find_terminals(&Finder { env: &e3, exists: &x3 }).powershell, PathBuf::from("C:\\herramientas\\powershell.exe"));
     assert_eq!(find_editor(&f, "vscode"), Some(PathBuf::from("C:\\Users\\a\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe")));
     assert_eq!(find_editor(&f, "cursor"), None);
     assert_eq!(find_editor(&f, "notepad"), None);

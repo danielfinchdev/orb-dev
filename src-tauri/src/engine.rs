@@ -60,13 +60,28 @@ pub struct Engine {
   texts: Mutex<HashMap<String, String>>,
   restarts: AtomicU32,
   quitting: AtomicBool,
+  /// Why the last 'start' failed, when the window offers something for it (protocol::Incoming::Started).
+  start_code: Mutex<Option<String>>,
+  /// The Job Object could not be made or the engine put in it: its processes would outlive a killed Orb.
+  job_failed: AtomicBool,
   #[cfg(windows)]
   job: Option<job::Job>,
 }
 
+/// How big the engine's log file grows before it is renamed to motor-salida.1.log (one kept).
+const LOG_MAX: u64 = 10 * 1024 * 1024;
+
 impl Engine {
   pub fn new(app: AppHandle, cfg: Config) -> Arc<Self> {
+    #[cfg(windows)]
+    let job = job::Job::new();
+    #[cfg(windows)]
+    let job_failed = job.is_err();
+    #[cfg(not(windows))]
+    let job_failed = false;
     Arc::new(Self {
+      job_failed: AtomicBool::new(job_failed),
+      start_code: Mutex::new(None),
       cfg,
       app,
       proc: Mutex::new(None),
@@ -79,7 +94,7 @@ impl Engine {
       restarts: AtomicU32::new(0),
       quitting: AtomicBool::new(false),
       #[cfg(windows)]
-      job: job::Job::new().map_err(|e| eprintln!("motor: sin Job Object: {e}")).ok(),
+      job: job.ok(),
     })
   }
 
@@ -144,11 +159,17 @@ impl Engine {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Out>();
     let log = self.clone();
     let process = Process::spawn(cmd, move |o| drop(tx.send(o)), move |bytes| log.append_log(bytes)).map_err(|e| e.to_string())?;
+    // Assigned right after the start: the engine starts nothing of its own before 'locate' (the moment in between is
+    // accepted). If it fails, its processes would outlive a killed Orb: said in the log and to the user once started.
     #[cfg(windows)]
-    if let Some(job) = &self.job {
-      if let Err(e) = process.with_child(|c| job.assign(c)).unwrap_or(Ok(())) {
-        eprintln!("motor: Job Object: {e}");
+    match &self.job {
+      Some(job) => {
+        if let Err(e) = process.with_child(|c| job.assign(c)).unwrap_or(Ok(())) {
+          self.job_failed.store(true, Ordering::SeqCst);
+          self.append_log(format!("\n[orb] el motor no entró en el Job Object: {e}\n").as_bytes());
+        }
       }
+      None => self.append_log(b"\n[orb] sin Job Object para el motor\n"),
     }
     *self.proc.lock().unwrap() = Some((generation, process));
     let me = self.clone();
@@ -156,6 +177,7 @@ impl Engine {
       while let Some(o) = rx.recv().await {
         match o {
           Out::Line(line) => me.on_line(&line),
+          Out::TooLong(n) => me.append_log(format!("\n[orb] línea del motor de {n} bytes descartada (máx. {} MB)\n", crate::pipes::MAX_LINE >> 20).as_bytes()),
           Out::Exit(code) => {
             me.on_exit(generation, code);
             break;
@@ -168,9 +190,11 @@ impl Engine {
 
   /// Starts the engine, finds the workspace and starts it there. `restarted`: the exit code of the crash that led here.
   pub async fn boot(self: Arc<Self>, restarted: Option<Option<i32>>) {
-    if let Err(e) = self.spawn() {
-      self.status.send_replace(Status::Failed(format!("{}: {e}", self.t_name("sys.main.engineStartStopped"))));
-      return;
+    if !self.is_running() {
+      if let Err(e) = self.spawn() {
+        self.status.send_replace(Status::Failed(format!("{}: {e}", self.t_name("sys.main.engineStartStopped"))));
+        return;
+      }
     }
     if self.home().is_none() {
       let located = self
@@ -194,7 +218,7 @@ impl Engine {
       self.status.send_replace(Status::NoHome);
       return;
     }
-    if self.start().await.is_ok() {
+    if self.start(false).await.is_ok() {
       if let Some(code) = restarted {
         self.emit_event("engine:restarted", json!({ "code": code }));
       }
@@ -208,14 +232,16 @@ impl Engine {
     }
   }
 
-  /// 'start' in the workspace; resolves when the engine says it has started (or why it could not).
-  pub async fn start(&self) -> Result<Value, String> {
+  /// 'start' in the workspace; resolves when the engine says it has started (or why it could not). `new_secret`: the user
+  /// chose to start with a new key after the sealed ones could not be opened (secretUnreadable).
+  pub async fn start(&self, new_secret: bool) -> Result<Value, String> {
     let mut rx = self.status.subscribe();
+    *self.start_code.lock().unwrap() = None;
     self.status.send_replace(Status::Starting);
     // The engine opens the approval secret itself with this app's sealing (hostSecret: host.seal / host.unseal, DPAPI in
     // secrets.rs, which still reads Electron's v10 and seals it again as ORB2): src/engine/approval-secret.mjs.
     // The agents' browser lives in the engine, with this app's hidden pages (browser 'host': browser.rs).
-    let start = json!({ "type": "start", "home": self.home(), "version": self.cfg.version, "secret": null, "hostSecret": true, "browser": "host", "userData": self.cfg.user_data });
+    let start = json!({ "type": "start", "home": self.home(), "version": self.cfg.version, "secret": null, "hostSecret": true, "newSecret": new_secret, "browser": "host", "userData": self.cfg.user_data });
     if !self.send(&start) {
       let e = self.t_name("sys.main.engineOff");
       self.status.send_replace(Status::Failed(e.clone()));
@@ -263,15 +289,47 @@ impl Engine {
     }
   }
 
-  /// A call of the window (or of the app: app.state before closing): waits until the engine has started.
-  pub async fn call(&self, method: &str, params: Value, timeout: Duration) -> Reply {
-    let mut rx = self.status.subscribe();
-    let s = rx.wait_for(|s| !matches!(s, Status::Booting | Status::Starting)).await.map(|s| s.clone()).unwrap_or(Status::Stopped);
-    match s {
-      Status::Ready(_) => self.request("call", json!({ "method": method, "params": params }), timeout).await,
-      Status::Failed(e) => Err(e),
-      _ => Err(self.t_name("sys.main.engineOff")),
+  /// Why the last start failed, when the window offers something for it.
+  pub fn start_code(&self) -> Option<String> {
+    self.start_code.lock().unwrap().clone()
+  }
+
+  /// The window's «Reintentar» (and «Empezar con una clave nueva») after the start failed: the engine started again if it
+  /// is gone, the workspace looked for again if that failed, or 'start' again.
+  pub async fn retry(self: Arc<Self>, new_secret: bool) -> Result<(), String> {
+    match self.status() {
+      Status::Failed(_) | Status::Stopped => {}
+      _ => return Ok(()),
     }
+    if !self.is_running() {
+      self.restarts.store(0, Ordering::SeqCst);
+      self.status.send_replace(Status::Booting);
+      self.clone().boot(None).await;
+    } else if self.home().is_none() {
+      self.status.send_replace(Status::Booting);
+      self.clone().boot(None).await;
+    } else {
+      let _ = self.start(new_secret).await;
+    }
+    match self.status() {
+      Status::Failed(e) => Err(e),
+      _ => Ok(()),
+    }
+  }
+
+  /// A call of the window (or of the app: app.state before closing): waits until the engine has started. `timeout` is
+  /// the whole call's, the wait for the start included (an engine stuck starting never hangs a call, or closing Orb).
+  pub async fn call(&self, method: &str, params: Value, timeout: Duration) -> Reply {
+    let work = async {
+      let mut rx = self.status.subscribe();
+      let s = rx.wait_for(|s| !matches!(s, Status::Booting | Status::Starting)).await.map(|s| s.clone()).unwrap_or(Status::Stopped);
+      match s {
+        Status::Ready(_) => self.request("call", json!({ "method": method, "params": params }), timeout).await,
+        Status::Failed(e) => Err(e),
+        _ => Err(self.t_name("sys.main.engineOff")),
+      }
+    };
+    tokio::time::timeout(timeout, work).await.unwrap_or_else(|_| Err(self.t_name("sys.main.engineTimeout")))
   }
 
   fn emit_event(&self, event: &str, payload: Value) {
@@ -285,10 +343,14 @@ impl Engine {
           let _ = tx.send(result);
         }
       }
-      Incoming::Started(result) => {
+      Incoming::Started { result, code } => {
+        *self.start_code.lock().unwrap() = code;
         self.status.send_replace(match result {
           Ok(v) => {
             crate::window::set_title(&self.app, v.get("name").and_then(Value::as_str));
+            if self.job_failed.load(Ordering::SeqCst) {
+              self.emit_event("notice", json!({ "body": self.t_name("sys.main.noJob"), "tone": "warning" }));
+            }
             Status::Ready(v)
           }
           Err(e) => Status::Failed(e),
@@ -311,7 +373,7 @@ impl Engine {
         tauri::async_runtime::spawn(async move {
           let reply = match crate::host::handle(&me.app, &method, &params).await {
             Ok(result) => json!({ "type": "hostReply", "id": id, "ok": true, "result": result }),
-            Err(error) => json!({ "type": "hostReply", "id": id, "ok": false, "error": error }),
+            Err(e) => json!({ "type": "hostReply", "id": id, "ok": false, "error": e.message, "code": e.code }),
           };
           me.send(&reply);
         });
@@ -364,7 +426,8 @@ impl Engine {
 
   /// The first-run setup: the engine creates the workspace and remembers it; then it starts there.
   pub async fn setup(&self, data: Value) -> Reply {
-    if self.home().is_some() {
+    // Only when the engine said there is no workspace: never after it failed to look for one (the real one may exist).
+    if self.home().is_some() || self.status() != Status::NoHome {
       return Err(self.t("sys.main.alreadySetup", &[]));
     }
     let mut fields = match data {
@@ -377,7 +440,7 @@ impl Engine {
     let home = v.get("home").and_then(Value::as_str).map(PathBuf::from).ok_or_else(|| self.t("sys.main.notHome", &[]))?;
     *self.home.lock().unwrap() = Some(home.clone());
     self.refresh_texts().await;
-    self.start().await?;
+    self.start(false).await?;
     Ok(json!({ "home": home }))
   }
 
@@ -416,10 +479,21 @@ impl Engine {
     }
   }
 
+  /// One line of the app's own in the engine's log (motor-salida.log), for what nobody would see otherwise.
+  pub fn log_line(&self, line: &str) {
+    self.append_log(format!("
+[orb] {line}
+").as_bytes());
+  }
+
   fn append_log(&self, bytes: &[u8]) {
     let file = self.log_file();
     if let Some(dir) = file.parent() {
       let _ = std::fs::create_dir_all(dir);
+    }
+    // At LOG_MAX it becomes motor-salida.1.log (the one before is dropped): an engine flooding stderr never fills the disk.
+    if std::fs::metadata(&file).map(|m| m.len() > LOG_MAX).unwrap_or(false) {
+      let _ = std::fs::rename(&file, file.with_extension("1.log"));
     }
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(file) {
       let _ = f.write_all(bytes);
@@ -449,7 +523,9 @@ mod job {
       unsafe {
         let job = CreateJobObjectW(None, None)?;
         let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
-        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
+        // No BREAKAWAY_OK: nothing the engine or an agent starts may leave the job (CREATE_BREAKAWAY_FROM_JOB) and outlive
+        // Orb. What must outlive it (a terminal, an editor) Rust starts itself (host.rs).
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
         SetInformationJobObject(job, JobObjectExtendedLimitInformation, &info as *const _ as _, std::mem::size_of_val(&info) as u32)?;
         Ok(Self(job))
       }

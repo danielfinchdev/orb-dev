@@ -20,6 +20,9 @@ import { loadApprovalSecret } from '../engine/approval-secret.mjs';
 import { deletableFolder, folderInUse } from '../core/project-close.mjs';
 
 const SRC = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+// ORB_NODE names the Node that runs Orb's MCP server for the agents (src/agents/common.mjs): Tauri sets its own; Electron
+// runs it with itself, so one left in the user's environment never decides it.
+delete process.env.ORB_NODE;
 // Packaged: the code lives in app.asar.unpacked (agents start the MCP server from there with the app's own executable).
 const UNPACKED = SRC.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
 const RENDERER = path.join(SRC, 'renderer');

@@ -10,9 +10,20 @@ use std::path::Path;
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
 
-pub async fn handle(app: &AppHandle, method: &str, params: &Value) -> Result<Value, String> {
+/// An error for the engine; `code` when it must tell kinds apart (host.unseal: secrets::UnsealError).
+pub struct HostError {
+  pub message: String,
+  pub code: Option<&'static str>,
+}
+impl From<String> for HostError {
+  fn from(message: String) -> Self {
+    Self { message, code: None }
+  }
+}
+
+pub async fn handle(app: &AppHandle, method: &str, params: &Value) -> Result<Value, HostError> {
   if let Some(req) = crate::browser_rules::check_browser(method, params) {
-    return crate::browser::handle(app, req?).await;
+    return Ok(crate::browser::handle(app, req?).await?);
   }
   let engine = crate::engine::get(app);
   let t = |key: &str, vars: &[(&str, String)]| engine.t(key, vars);
@@ -53,15 +64,41 @@ pub async fn handle(app: &AppHandle, method: &str, params: &Value) -> Result<Val
     }
     HostRequest::Seal(text) => {
       use base64::Engine as _;
-      json!({ "data": base64::engine::general_purpose::STANDARD.encode(crate::secrets::seal(&text)?) })
+      let mut text = crate::secrets::Secret(text.into_bytes());
+      let sealed = crate::secrets::seal(std::str::from_utf8(&text.0).unwrap_or_default());
+      crate::secrets::wipe(&mut text.0);
+      json!({ "data": base64::engine::general_purpose::STANDARD.encode(sealed?) })
     }
-    HostRequest::Unseal(blob) => json!({ "text": crate::secrets::unseal(&blob, &engine.local_state())? }),
+    // The text goes to the engine, which keeps the secret anyway (the JSON line is the only other copy).
+    HostRequest::Unseal(blob) => match crate::secrets::unseal(&blob, &engine.local_state()) {
+      Ok(text) => json!({ "text": text }),
+      Err(e) => return Err(HostError { message: e.to_string(), code: Some(e.code()) }),
+    },
   })
 }
 
-/// This PC's places and PATH, as they are now.
+/// This PC's places and PATH, as they are now. Windows' own folder from Windows itself, not from the environment.
 fn finder() -> Finder<'static> {
-  Finder { env: &|k| std::env::var(k).ok(), exists: &|p| p.is_file() }
+  Finder {
+    env: &|k| match k {
+      "SystemRoot" | "windir" => windows_dir().or_else(|| std::env::var(k).ok()),
+      _ => std::env::var(k).ok(),
+    },
+    exists: &|p| p.is_file(),
+  }
+}
+
+#[cfg(windows)]
+fn windows_dir() -> Option<String> {
+  use windows::Win32::System::SystemInformation::GetSystemWindowsDirectoryW;
+  let mut buf = [0u16; 260];
+  // SAFETY: a buffer of MAX_PATH wide characters; the call writes at most that many.
+  let n = unsafe { GetSystemWindowsDirectoryW(Some(&mut buf)) } as usize;
+  (n > 0 && n < buf.len()).then(|| String::from_utf16_lossy(&buf[..n]))
+}
+#[cfg(not(windows))]
+fn windows_dir() -> Option<String> {
+  None
 }
 
 /// A program on its own: a console program gets its own window, and it is outside the engine's Job Object (Rust starts

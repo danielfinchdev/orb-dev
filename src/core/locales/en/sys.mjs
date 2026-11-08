@@ -35,9 +35,11 @@ export default {
   'sys.main.startFailed': '{name} could not start',
   'sys.main.keyringWeak': 'Your desktop has no keyring (GNOME Keyring or KWallet), so Orb’s key is kept unencrypted in a file in its folder. Everything works the same; to protect it, install gnome-keyring or kwallet and restart Orb.',
   'sys.main.notice': '{name} · Notification',
+  'sys.main.noticePrivate': 'New message (unlock Windows to see it)',
   // Main process errors
   'sys.main.engineStopped': '{name} has stopped',
   'sys.main.engineStartStopped': '{name} stopped while starting',
+  'sys.main.noJob': '{name} could not watch the engine’s processes: if it is closed abruptly, agents may be left running. Details in motor-salida.log.',
   'sys.main.engineOff': '{name} is not running',
   'sys.main.engineTimeout': '{name} did not respond in time',
   'sys.main.badOrigin': 'origin not allowed',
@@ -179,6 +181,9 @@ export default {
   'sys.engine.notHome': 'not an Orb folder: {home}',
   'sys.engine.notStarted': '{name} has not started yet',
   'sys.engine.sealedSecret': 'Windows could not open the encrypted key of this workspace. Close Orb and open it again.',
+  'sys.engine.otherApp': 'This workspace is already open in another {name} on this PC (maybe an earlier version). Close it and press “Retry”.',
+  'sys.engine.secretBusy': 'Windows cannot read the encrypted key of this workspace right now. Wait a moment and press “Retry”.',
+  'sys.engine.secretUnreadable': 'Windows cannot open the encrypted key of this workspace (it may belong to another Windows user or be damaged). Press “Retry” or start with a new key: approvals will be asked again.',
   // Scheduled tasks
   'sys.schedules.badEvery': 'every must be {list}',
   'sys.schedules.badTime': 'at_time must use the HH:MM format',

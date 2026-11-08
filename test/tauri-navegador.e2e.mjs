@@ -23,7 +23,7 @@ import { chromium } from 'playwright-core';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argExe = process.argv.indexOf('--exe');
-const EXE = argExe > 0 ? process.argv[argExe + 1] : path.join(ROOT, 'src-tauri', 'target', 'release', 'Orb.exe');
+const EXE = argExe > 0 ? process.argv[argExe + 1] : path.join(ROOT, 'src-tauri', 'target-e2e', 'release', 'Orb.exe');
 if (!fs.existsSync(EXE)) { console.error(`no existe ${EXE} (npm run tauri:build:e2e)`); process.exit(2); }
 
 const FAKE = path.join(ROOT, 'test', 'fixtures', 'fake-live.mjs');

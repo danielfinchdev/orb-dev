@@ -170,3 +170,55 @@ mod tests {
     let _ = std::fs::remove_dir_all(home);
   }
 }
+
+/// Orb on Electron (3.8.0 or earlier, still installed) open with this same data folder: Chromium's single-instance lock
+/// is a message-only window of class Chrome_MessageWindow named after the data folder. Tauri's own lock does not see it,
+/// and two engines on one workspace would step on each other (the engine also keeps a lock of its own: engine.mjs).
+#[cfg(windows)]
+pub fn electron_running(user_data: &std::path::Path) -> bool {
+  use windows::core::{w, HSTRING};
+  use windows::Win32::UI::WindowsAndMessaging::{FindWindowExW, HWND_MESSAGE};
+  // SAFETY: two valid wide strings for the length of the call.
+  unsafe { FindWindowExW(Some(HWND_MESSAGE), None, w!("Chrome_MessageWindow"), &HSTRING::from(user_data.as_os_str())) }.map(|h| !h.is_invalid()).unwrap_or(false)
+}
+#[cfg(not(windows))]
+pub fn electron_running(_: &std::path::Path) -> bool {
+  false
+}
+
+
+#[cfg(all(test, windows))]
+mod electron_tests {
+  /// The real Electron of this repository (the one Orb 3.8.0 ships), with no window, holding its single-instance lock in
+  /// a throwaway data folder: seen; another folder is not. Skipped where that Electron is not installed.
+  #[test]
+  fn an_open_electron_orb_is_seen_by_its_data_folder() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let electron = root.join("node_modules").join("electron").join("dist").join("electron.exe");
+    if !electron.exists() {
+      eprintln!("sin node_modules/electron: prueba omitida");
+      return;
+    }
+    let dir = std::env::temp_dir().join(format!("orb-instancia-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("datos")).unwrap();
+    let script = dir.join("uno.cjs");
+    std::fs::write(&script, "const { app } = require('electron'); app.setPath('userData', process.env.ORB_TEST_DATA); if (!app.requestSingleInstanceLock()) app.quit(); setInterval(() => {}, 1000);").unwrap();
+    let data = dir.join("datos");
+    assert!(!super::electron_running(&data));
+    let mut child = std::process::Command::new(&electron).arg(&script).env("ORB_TEST_DATA", &data).env_remove("ELECTRON_RUN_AS_NODE").spawn().unwrap();
+    let mut seen = false;
+    for _ in 0..100 {
+      if super::electron_running(&data) {
+        seen = true;
+        break;
+      }
+      std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    assert!(!super::electron_running(&dir), "otra carpeta");
+    let _ = child.kill();
+    let _ = child.wait();
+    assert!(seen, "la ventana de instancia única de Electron");
+    let _ = std::fs::remove_dir_all(&dir);
+  }
+}

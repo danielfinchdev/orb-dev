@@ -153,6 +153,15 @@ export function setGuardedRoots(list) {
   guardedRoots = [...new Set(guardedAsGiven.map(norm))];
 }
 export const guardedRootsNow = () => [...guardedAsGiven];
+// 3.8.1: the folder Orb is installed in (its node.exe and the engine's code, which every agent's MCP server runs, and Orb.exe
+// itself): under a per-user install the user, so any agent, could write there and have its code run with all of Orb's
+// secrets. A reading tool may look; nothing may write, move or delete there, nor run a command that names it.
+let appRoots = []; let appAsGiven = [];
+export function setAppRoots(list) {
+  appAsGiven = [...new Set((list ?? []).filter((d) => typeof d === 'string' && path.isAbsolute(d)).map((d) => path.resolve(d)))];
+  appRoots = [...new Set(appAsGiven.map(norm))];
+}
+export const appRootsNow = () => [...appAsGiven];
 export function isOrbData(target, internalDir, cwd, { read = false } = {}) {
   if (!internalDir || !target) return false;
   let p = String(target).trim().replace(/^~(?=[\\/]|$)/, os.homedir());
@@ -161,6 +170,7 @@ export function isOrbData(target, internalDir, cwd, { read = false } = {}) {
   const within = (root) => full === root || full.startsWith(`${root}\\`);
   const root = norm(internalDir);
   if (within(root)) return !openInCore(full.slice(root.length + 1).split('\\'), read);
+  if (read !== true && appRoots.some(within)) return true;
   return guardedRoots.some(within);
 }
 // The words of a command that may be paths (a=b and --opt=b give b), without quotes.
@@ -184,7 +194,7 @@ function touchesInternal({ command: given, paths, patterns, internalDir, cwd, re
   // The folder written out anywhere in the command (in a script's string too), with either separator or case.
   const t = String(command ?? '').replace(/\//g, '\\').toLowerCase();
   const root = norm(internalDir);
-  for (const r of [root, ...guardedRoots]) {
+  for (const r of [root, ...guardedRoots, ...(read === true ? [] : appRoots)]) {
     for (let i = t.indexOf(r); i >= 0; i = t.indexOf(r, i + 1)) {
       const after = t.slice(i + r.length);
       if (/^[^\\]/.test(after) && !/^["'\s;|&)]/.test(after)) continue; // .orbx is another folder

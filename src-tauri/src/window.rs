@@ -29,13 +29,17 @@ pub struct E2e {
 }
 
 pub fn e2e(separate_data: bool) -> E2e {
-  if !cfg!(feature = "e2e") || !separate_data {
-    return E2e { cdp_port: None, hidden: false };
+  // Compiled only into the e2e build: the release binary does not even hold these names (checked before a release by
+  // scripts/tauri-check-release.mjs).
+  #[cfg(feature = "e2e")]
+  if separate_data {
+    return E2e {
+      cdp_port: std::env::var("ORB_E2E_CDP_PORT").ok().and_then(|p| p.parse().ok()),
+      hidden: std::env::var("ORB_HIDDEN_WINDOW").as_deref() == Ok("1"),
+    };
   }
-  E2e {
-    cdp_port: std::env::var("ORB_E2E_CDP_PORT").ok().and_then(|p| p.parse().ok()),
-    hidden: std::env::var("ORB_HIDDEN_WINDOW").as_deref() == Ok("1"),
-  }
+  let _ = separate_data;
+  E2e { cdp_port: None, hidden: false }
 }
 
 const DARK: (u8, u8, u8) = (0x16, 0x15, 0x1d);
@@ -60,7 +64,9 @@ pub fn create_main(app: &AppHandle, user_data: &std::path::Path, webview_data: P
     // The page's own drag and drop (the sidebar, the Pizarra) keeps working; dropped files are handled in a later step.
     .disable_drag_drop_handler()
     // Only Orb's pages in this window; a link that opens a new window goes to the browser if it is https.
-    .on_navigation(|url| url.host_str() == Some("tauri.localhost") || url.scheme() == "tauri")
+    // Exactly http://tauri.localhost/ (its default port): another port of *.localhost is loopback, where an agent's dev
+    // server may listen.
+    .on_navigation(own_page)
     .on_new_window(|url, _features| {
       if url.scheme() == "https" {
         let _ = tauri_plugin_opener::open_url(url.as_str(), None::<&str>);
@@ -104,6 +110,12 @@ pub fn create_main(app: &AppHandle, user_data: &std::path::Path, webview_data: P
     _ => {}
   });
   Ok(())
+}
+
+/// One of Orb's own pages: exactly http://tauri.localhost/ (its default port; another port of *.localhost is loopback,
+/// where an agent's dev server may listen), or Tauri's own scheme.
+pub fn own_page(url: &tauri::Url) -> bool {
+  (url.scheme() == "http" && url.host_str() == Some("tauri.localhost") && url.port().is_none()) || url.scheme() == "tauri"
 }
 
 /// A test build whose window is never shown (nobody at the PC): its notices go to a file instead of the screen.
@@ -167,10 +179,11 @@ pub fn set_zoom(app: &AppHandle, value: f64) -> f64 {
   z
 }
 
-/// Closing goes ahead without asking: Orb is already quitting, or there is no engine to ask.
+/// Closing goes ahead without asking: Orb is already quitting, or there is no engine to ask, or it has not started (no
+/// task can be running yet; asking would wait for a start that may never end).
 fn close_now(w: &WebviewWindow) -> bool {
   let engine = engine::get(w.app_handle());
-  engine.quitting() || !engine.is_running()
+  engine.quitting() || !engine.is_running() || !matches!(engine.status(), engine::Status::Ready(_))
 }
 
 /// With tasks running, Windows' question first (a second click on the X while it is open does not ask twice).

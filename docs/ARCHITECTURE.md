@@ -73,7 +73,11 @@ Data: <workspace>/core/datos/orb.db (SQLite, src/core/db.mjs)
   stdin/stdout (`ORB_ENGINE_STDIO=1`, `src/engine/stdio.mjs`; console output goes to stderr), and it asks the app for
   what only the app can do — open a link or a folder, start a program that outlives Orb — with `host.*` messages
   (`src/engine/host.mjs`). Orb's own Node scripts for the agents run with `ORB_NODE` (the bundled `node.exe`) or the
-  engine's runtime (`src/agents/common.mjs › nodeRuntime`).
+  engine's runtime (`src/agents/common.mjs › nodeRuntime`). The Tauri installer installs per user
+  (`%LOCALAPPDATA%\Programs`), a folder any program of the user can write: the agents' guard keeps it read-only for them
+  (`guard.mjs › setAppRoots`, `workspace-layout.mjs › appInstallDir`), which does not stop other programs. A per-machine
+  install (Program Files, writable only by administrators: NSIS `installMode: "perMachine"` or `"both"`) is the option for
+  whoever wants that; it is not the default because it asks for administrator rights.
 - **The agents** are the official programs the user already has (Claude Code, Codex, Cursor, Gemini CLI…), with their
   own session. Orb never sees credentials.
 - **Layers** (bottom to top):
@@ -1309,8 +1313,16 @@ in `src/core/home.mjs`; nothing else builds them.
   the copies, sealed with that secret, still open on this PC. A `clave.enc` that cannot be read gives way to that copy
   and is kept aside (`clave.<date>.ilegible.enc`), and the copy is never replaced by a different secret: the old one is
   kept as `<workspace>.<date>.enc` first. 3.8.1 (Tauri): Rust seals it with DPAPI as `ORB2` (`host.seal`/`host.unseal`,
-  `src-tauri/src/secrets.rs`) and still reads Electron's `v10` with the key in `%APPDATA%\Orb.dev\Local State` (never
-  changed or deleted); a `v10` file is sealed again once and kept as `clave.<date>.v10.enc` (and `<workspace>.<date>.v10.enc`).
+  `src-tauri/src/secrets.rs`) in files of its own, `clave2.enc` and `<workspace>.v2.enc` (`loadHostSecret`), and reads
+  Electron's `v10` (`clave.enc` and its copy, with the key in `%APPDATA%\Orb.dev\Local State`) only when it has none of
+  its own. It never writes, moves or renames Electron's files nor Local State: Orb 3.8.0 (still installed, reinstalled or
+  portable) makes a new secret when its `clave.enc` does not open, so both apps can take turns on a workspace with the
+  same secret (`test/clave-compatible.test.mjs` runs 3.8.0's real code). Tauri never makes a new secret by itself:
+  `host.unseal` says why a key did not open (`io` for now → the start stops and the window offers «Reintentar»;
+  `missing`, `dpapi`, `tag`, `format` → also «Empezar con una clave nueva», the old files kept aside). Every write goes to
+  a temporary file of its own, flushed, checked (it opens again to the same secret) and renamed over the old one; a
+  `clave.lock` keeps two apps from doing it at once. DPAPI per user is not a barrier against the agents (same Windows
+  user): it protects the key at rest and from other users.
 - **core missing** (`repairCore` in `backup.mjs`, called by `engine.mjs › start` before the database opens): when core,
   its orb.json or its database is gone, only what is missing **of core** is put back (`applyPendingRestore` with
   `onlyMissing`: a database newer than the copy stays; a project or whiteboard the user deleted stays deleted), from the

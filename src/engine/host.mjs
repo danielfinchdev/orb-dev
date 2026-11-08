@@ -7,7 +7,7 @@
 // which kind, the folder and, for an action, its command. Never a program name, never a shell line.
 // The same transport as the rest of the engine's messages (engine.mjs):
 //   engine → app  { type: 'host', id, method, params }
-//   app → engine  { type: 'hostReply', id, ok, result | error }
+//   app → engine  { type: 'hostReply', id, ok, result | error, code? }   (code: a typed error, e.g. host.unseal's)
 // The app checks every request again (checkHostRequest): the engine is trusted, but a link or a path in it may come from
 // a project's settings or an agent's text.
 import path from 'node:path';
@@ -21,10 +21,10 @@ export function attachHost(fn) { send = fn; }
 
 export function hostCall(method, params = {}, timeoutMs = 30_000) {
   if (!HOST_METHODS.includes(method)) return Promise.reject(new Error(`host: ${method} desconocido`));
-  if (!send) return Promise.reject(new Error('host: sin app'));
+  if (!send) return Promise.reject(Object.assign(new Error('host: sin app'), { code: 'noApp' }));
   const id = ++next;
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { pending.delete(id); reject(new Error(`host: ${method} sin respuesta`)); }, timeoutMs);
+    const timer = setTimeout(() => { pending.delete(id); reject(Object.assign(new Error(`host: ${method} sin respuesta`), { code: 'timeout' })); }, timeoutMs);
     timer.unref?.();
     pending.set(id, { resolve, reject, timer });
     try { send({ type: 'host', id, method, params }); } catch (error) { clearTimeout(timer); pending.delete(id); reject(error); }
@@ -35,7 +35,8 @@ export function hostCall(method, params = {}, timeoutMs = 30_000) {
 export function hostReply(msg) {
   const p = pending.get(msg?.id); if (!p) return false;
   pending.delete(msg.id); clearTimeout(p.timer);
-  if (msg.ok) p.resolve(msg.result ?? null); else p.reject(new Error(String(msg.error ?? 'host: error')));
+  if (msg.ok) p.resolve(msg.result ?? null);
+  else p.reject(Object.assign(new Error(String(msg.error ?? 'host: error')), typeof msg.code === 'string' && /^[a-z]{1,20}$/i.test(msg.code) ? { code: msg.code } : {}));
   return true;
 }
 

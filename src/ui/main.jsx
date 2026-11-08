@@ -240,6 +240,7 @@ function Root() {
   const ready = useStore((s) => s.ready);
   const [phase, setPhase] = useState('loading'); // loading | setup | pair | update | offline | core | migration | master | unlock | layout | app | error
   const [error, setError] = useState('');
+  const [startError, setStartError] = useState(null); // Tauri: why the engine did not start ({ code, message })
   const [migration, setMigration] = useState(null);
   const [core, setCore] = useState(null);
   const [layout, setLayout] = useState(null);
@@ -248,7 +249,9 @@ function Root() {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const info = await bridge.info();
+      // 3.8.1 (Tauri): the engine could not look for the workspace: an error to retry, never the welcome.
+      let info;
+      try { info = await bridge.info(); } catch (e) { setError(String(e?.message ?? e)); return alive && setPhase('error'); }
       setState({ info });
       if (info.needsSetup) return alive && setPhase('setup');
       if (info.needsPairing) return alive && setPhase('pair');
@@ -286,6 +289,7 @@ function Root() {
           setError(String(e?.message ?? e)); await new Promise((r) => setTimeout(r, 250));
         }
       }
+      if (bridge.retryStart) { const again = await bridge.info().catch(() => null); if (again?.startError) { setStartError(again.startError); setError(again.startError.message); } }
       if (alive) setPhase('error');
     })();
     return () => { alive = false; };
@@ -356,6 +360,12 @@ function Root() {
       if (event === 'engine:restarted') { if (coreLost) { location.reload(); return; } notify({ body: tNow('app.engineRestarted'), tone: 'warning' }); refreshSoon(); }
     });
   }, [phase]);
+  // 3.8.1: the main screen's first frame, marked for scripts/medir.mjs (the same mark under every app, read whenever the
+  // measurement reaches the page).
+  useEffect(() => {
+    if (phase !== 'app' || !ready) return;
+    try { if (!performance.getEntriesByName('orb:ready').length) requestAnimationFrame(() => performance.mark('orb:ready')); } catch { /* no performance API */ }
+  }, [phase, ready]);
   if (phase === 'setup') return <>{strip}<Suspense fallback={null}><Setup resume={resume} onDone={async (route) => { await refresh(); setPhase('app'); if (route) go(route); }} /></Suspense></>;
   if (phase === 'pair' && bridge.link) return <>{strip}<AppLink /></>;
   // 3.8: a browser opened from the QR: the master password before linking.
@@ -385,6 +395,12 @@ function Root() {
       <div className="grid max-w-md justify-items-center gap-3">
         <Robot size={90} mood="worried" /><h1 className="mt-1 text-xl">{t('app.errorTitle')}</h1><p className="text-muted-foreground text-sm break-words">{error}</p>
         {bridge.mobile ? <Button size="lg" onClick={() => location.reload()} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
+        {/* 3.8.1 (Tauri): start the engine again; after sealed keys that do not open, also with a new key (asked first). */}
+        {bridge.retryStart ? <Button size="lg" onClick={() => bridge.retryStart().catch(() => {}).finally(() => location.reload())} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
+        {bridge.retryStart && startError?.code === 'secretUnreadable' ? <Button variant="ghost" size="sm" data-testid="app-error-new-secret" onClick={async () => {
+          if (!(await confirm(t('app.newSecretTitle'), t('app.newSecretBody'), { ok: t('app.newSecretOk'), danger: true }))) return;
+          await bridge.retryStart({ newSecret: true }).catch(() => {}); location.reload();
+        }}>{t('app.newSecretOk')}</Button> : null}
         {bridge.mobile && bridge.unlink ? <Button variant="ghost" size="sm" onClick={async () => { if (await relinkPhone(getState().info?.pcName)) setPhase('pair'); }} data-testid="app-error-relink"><Link2 />{t('app.offlineRelink')}</Button> : null}
       </div>
     </div>

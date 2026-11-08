@@ -67,7 +67,7 @@ fn window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     .additional_browser_args(&pip.args)
     .zoom_hotkeys_enabled(false)
     .disable_drag_drop_handler()
-    .on_navigation(|url| url.host_str() == Some("tauri.localhost") || url.scheme() == "tauri")
+    .on_navigation(crate::window::own_page)
     .on_new_window(|_, _| tauri::webview::NewWindowResponse::Deny)
     .on_page_load(|w, payload| {
       if payload.event() == PageLoadEvent::Finished {

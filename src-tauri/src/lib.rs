@@ -3,6 +3,7 @@
 // own window (capabilities/main.json and a check of the window's label in each one).
 mod browser;
 mod browser_rules;
+mod delete;
 mod desktop;
 mod engine;
 mod host;
@@ -52,9 +53,35 @@ async fn app_info(window: WebviewWindow) -> Result<Value, String> {
   let mut rx = engine.status_watch();
   let _ = tokio::time::timeout(Duration::from_secs(30), rx.wait_for(|s| !matches!(s, engine::Status::Booting))).await;
   let home = engine.home();
+  let status = engine.status();
+  // The first-run setup only when the engine said there is no workspace. Looking for it failed (or never ended): an
+  // error the window offers to retry, never the welcome (the real workspace may exist; a new one would replace it).
+  if home.is_none() {
+    match status {
+      engine::Status::NoHome => {}
+      engine::Status::Failed(e) => return Err(e),
+      engine::Status::Booting => return Err(engine.t("sys.main.engineTimeout", &[])),
+      _ => return Err(engine.t("sys.main.engineStartStopped", &[("name", "Orb".into())])),
+    }
+  }
+  // Why the start failed, when the window offers something for it (secretBusy, secretUnreadable).
+  let start_error = match &status {
+    engine::Status::Failed(e) => engine.start_code().map(|code| json!({ "code": code, "message": e })),
+    _ => None,
+  };
   // 3.8: the workspace goes to C:\Orb unless the user picks another place (the welcome shows it already chosen).
   let base = std::env::var("ORB_DEFAULT_BASE").unwrap_or_else(|_| format!("{}\\", std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into())));
-  Ok(json!({ "version": app.package_info().version.to_string(), "home": home, "needsSetup": home.is_none(), "platform": "win32", "defaultBase": base }))
+  Ok(json!({ "version": app.package_info().version.to_string(), "home": home, "needsSetup": home.is_none(), "platform": "win32", "defaultBase": base, "startError": start_error }))
+}
+
+/// The window's «Reintentar» after the engine failed to start, and «Empezar con una clave nueva» after the sealed keys
+/// could not be opened (newSecret: only then).
+#[tauri::command]
+async fn app_retry_start(window: WebviewWindow, new_secret: Option<bool>) -> Result<(), String> {
+  only_main(&window)?;
+  let engine = engine::get(window.app_handle());
+  let new_secret = new_secret == Some(true) && engine.start_code().as_deref() == Some("secretUnreadable");
+  engine.retry(new_secret).await
 }
 
 #[tauri::command]
@@ -143,6 +170,14 @@ fn app_open_external(window: WebviewWindow, url: String) -> Result<bool, String>
   desktop::open_external(&window, url)
 }
 
+/// «Eliminar proyecto»: the master password's token, then «Reintentar», «Borrar para siempre» or «Cancelar» (delete.rs).
+#[tauri::command]
+async fn app_delete_project(window: WebviewWindow, name: String, unlock: Option<String>, step: Option<String>) -> Result<Value, String> {
+  only_main(&window)?;
+  let app = window.app_handle();
+  delete::delete_project(engine::get(app), &app.state::<delete::Deletes>(), name, unlock, step).await
+}
+
 /// Ajustes › «Ver el navegador»: the little window of the agents' browser again, and what it has open.
 #[tauri::command]
 async fn app_show_browser(window: WebviewWindow) -> Result<Value, String> {
@@ -192,6 +227,15 @@ pub fn run() {
   }
   // ORB_USER_DATA: separate app data (tests, measurements); never the real profile then.
   let separate = std::env::var_os("ORB_USER_DATA").filter(|v| !v.is_empty()).map(PathBuf::from);
+  let separate_for_errors = separate.clone();
+  // Orb on Electron (an earlier version still installed) open on the same data: never two at once.
+  if separate.is_none() {
+    if let Some(dir) = std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join(DATA_DIR)) {
+      if desktop::electron_running(&dir) {
+        return startup_failed("Ya hay otro Orb abierto en este PC (una versión anterior). Ciérralo y vuelve a abrir Orb. / Another Orb (an earlier version) is open on this PC: close it and open Orb again.", None, false);
+      }
+    }
+  }
   let mut builder = tauri::Builder::default();
   // One Orb per PC: a second start brings the open one to the front. Not for a separate data folder (tests run next to
   // the installed app, as with Electron, whose lock lived in the data folder).
@@ -210,6 +254,7 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       engine_call,
       app_info,
+      app_retry_start,
       app_setup,
       app_switch_home,
       app_zoom,
@@ -224,6 +269,7 @@ pub fn run() {
       app_feedback_capture,
       app_open_path,
       app_open_external,
+      app_delete_project,
       app_show_browser,
       pip_action
     ])
@@ -263,16 +309,47 @@ pub fn run() {
         },
       );
       app.manage(engine.clone());
+      app.manage(delete::Deletes::default());
       // The engine starts while the window loads.
       tauri::async_runtime::spawn(engine.boot(None));
       window::create_main(&handle, &user_data, webview_data, e2e)?;
       Ok(())
     })
-    .build(tauri::generate_context!())
-    .expect("Orb no pudo arrancar");
+    .build(tauri::generate_context!());
+  let app = match app {
+    Ok(app) => app,
+    Err(e) => return startup_failed(&e.to_string(), separate_for_errors.as_deref(), true),
+  };
   app.run(|app, event| {
     if let RunEvent::Exit = event {
-      engine::get(app).shutdown(Duration::from_secs(3));
+      // The engine gives `tailscale serve` up to 4.3 s to stop (engine.mjs › shutdown): a little more here.
+      engine::get(app).shutdown(Duration::from_secs(5));
     }
   });
+}
+
+/// Orb could not start (WebView2 missing or broken, the data folder not writable…): never a silent exit. Said in the
+/// log of the app's data folder and in a message box (before the engine, so in both languages).
+fn startup_failed(error: &str, separate: Option<&std::path::Path>, webview_hint: bool) {
+  let dir = separate.map(PathBuf::from).or_else(|| std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join(DATA_DIR)));
+  if let Some(dir) = dir {
+    use std::io::Write as _;
+    let _ = std::fs::create_dir_all(&dir);
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("motor-salida.log")) {
+      let _ = writeln!(f, "\n[orb] Orb no pudo arrancar: {error}");
+    }
+  }
+  #[cfg(feature = "e2e")]
+  if std::env::var_os("ORB_USER_DATA").is_some() {
+    return; // a test build: nobody at the PC to read a message box
+  }
+  #[cfg(windows)]
+  {
+    use windows::core::HSTRING;
+    use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
+    let hint = if webview_hint { "\n\nSi falta Microsoft Edge WebView2 Runtime, instálalo y vuelve a abrir Orb." } else { "" };
+    let text = format!("Orb no pudo arrancar / Orb could not start:\n\n{error}{hint}");
+    // SAFETY: two valid wide strings for the length of the call; no owner window.
+    unsafe { MessageBoxW(None, &HSTRING::from(text), &HSTRING::from("Orb"), MB_OK | MB_ICONERROR) };
+  }
 }

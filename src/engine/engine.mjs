@@ -3,6 +3,7 @@
 // { type: 'call', id, method, params } → { type: 'reply', id, ok, result | error }, and { type: 'event', event, payload }.
 // There is no HTTP server: nothing on the network or in a browser can reach it.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { useHome, ctx, tr } from '../core/context.mjs';
 import { ensureLayout, paths } from '../core/home.mjs';
@@ -13,10 +14,9 @@ import { DESKTOP } from '../core/permissions.mjs';
 
 import { stdioTransport } from './stdio.mjs';
 import { attachHost, hostReply, hostCall } from './host.mjs';
-import { loadApprovalSecret, hostSealing } from './approval-secret.mjs';
 import { appMethods } from './api-app.mjs';
 import { locateHome, setupHome, switchHome, secretCopy, secretsCopy, adoptOldKeyNames, secretDir } from './desktop-home.mjs';
-import { loadConfig } from '../core/home.mjs';
+import { loadConfig, homeKey } from '../core/home.mjs';
 import es from '../core/locales/es.mjs';
 import en from '../core/locales/en.mjs';
 
@@ -53,26 +53,68 @@ const log = (line) => { try { if (logFile) { rotateIfBig(logFile); fs.appendFile
 process.on('uncaughtException', (error) => log(`uncaughtException: ${error?.stack ?? error}`));
 process.on('unhandledRejection', (error) => log(`unhandledRejection: ${error?.stack ?? error}`));
 
+// 3.8.1: one engine per workspace on this PC. Electron and Tauri each keep one app open (their own single-instance
+// locks, which do not see each other): two engines on one database and one key would step on each other. A lock file in
+// %TEMP% (never in the workspace) with this process's id; one left by a process that is gone is taken over.
+let held = null;
+function holdWorkspace(home) {
+  if (held) return;
+  const file = path.join(os.tmpdir(), `orb-motor-${homeKey(home)}.lock`);
+  for (let i = 0; i < 2; i++) {
+    try { fs.writeFileSync(file, String(process.pid), { flag: 'wx' }); held = file; break; } catch (error) {
+      if (error.code !== 'EEXIST') return; // %TEMP% not writable: not a reason to refuse the start
+      let pid = 0; try { pid = Number(fs.readFileSync(file, 'utf8')) || 0; } catch { /* being written */ }
+      // Alive: that process exists and has touched the file lately (a heartbeat every minute: an id Windows gave to
+      // another program after the engine died does not count).
+      let alive = pid > 0 && pid !== process.pid;
+      try { if (Date.now() - fs.statSync(file).mtimeMs > 3 * 60_000) alive = false; } catch { /* gone */ }
+      if (alive) { try { process.kill(pid, 0); } catch (e) { alive = e.code === 'EPERM'; } }
+      if (alive) throw new Error(tr('sys.engine.otherApp', { name: PRODUCT.name }));
+      fs.rmSync(file, { force: true });
+    }
+  }
+  if (held) setInterval(() => { try { const now = new Date(); fs.utimesSync(held, now, now); } catch { /* gone */ } }, 60_000).unref();
+  process.once('exit', () => { try { if (fs.readFileSync(held, 'utf8') === String(process.pid)) fs.rmSync(held, { force: true }); } catch { /* gone */ } });
+}
+
 let mirror = null; // 3.8: the copy of core\secretos outside the workspace (the app's data folder), when the app gives one
 const validSecret = (s) => typeof s === 'string' && /^[0-9a-f]{64}$/.test(s);
-// 3.8.1, Tauri: the approval secret, opened and kept by the engine (src/engine/approval-secret.mjs) with the app's sealing
-// (host.seal / host.unseal: DPAPI in Rust, which still reads Electron's v10). The app is asked to seal once first: if it
-// cannot (no DPAPI), the engine does not start rather than set the sealed key aside for a new one.
-async function secretFromApp(home, userData) {
-  try { const probe = await hostCall('host.seal', { text: '0'.repeat(64) }); if (!probe?.data) throw new Error('sin datos'); } catch { throw new Error(tr('sys.engine.sealedSecret')); }
-  return loadApprovalSecret({ dir: secretDir(home), copy: secretCopy(userData, home), ...hostSealing(hostCall) });
+// 3.8.1, Tauri: the approval secret, opened and kept by the engine (src/engine/approval-secret.mjs › loadHostSecret) with
+// the app's sealing (host.seal / host.unseal: DPAPI in Rust, which still reads Electron's v10, never changed). The app is
+// asked to seal once first. Never a new secret behind the user's back: a key that cannot be read now is tried again a
+// few times and then the start stops (code 'secretBusy': the window offers «Reintentar»); sealed keys that none opens
+// stop it too (code 'secretUnreadable': «Reintentar» or «Empezar con una clave nueva», newSecret).
+const startError = (key, code, detail) => Object.assign(new Error(tr(key)), { code, detail });
+async function secretFromApp(home, userData, newSecret) {
+  const { loadHostSecret, hostSealing, SecretError } = await import('./approval-secret.mjs');
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const probe = await hostCall('host.seal', { text: '0'.repeat(64) });
+      if (!probe?.data) throw new SecretError('busy', 'host.seal sin datos');
+      return await loadHostSecret({ dir: secretDir(home), copy: secretCopy(userData, home), ...hostSealing(hostCall), allowNew: newSecret === true });
+    } catch (error) {
+      const code = error instanceof SecretError ? error.code : 'busy';
+      console.error(`clave: ${code} (${error.message})`);
+      if (code === 'unreadable') throw startError('sys.engine.secretUnreadable', 'secretUnreadable', error.message);
+      if (attempt >= 3) throw startError('sys.engine.secretBusy', 'secretBusy', error.message);
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
 }
 // userData: the app's data folder, from an app that leaves the copies outside the workspace to the engine (Tauri; Electron
-// passes keep itself). hostSecret: that app seals the secret itself when asked (host.seal / host.unseal).
-async function start(home, version, secret, browser, keep = null, userData = null, hostSecret = false) {
+// passes keep itself). hostSecret: that app seals the secret itself when asked (host.seal / host.unseal); newSecret: the
+// user chose to start with a new key after the sealed ones could not be opened.
+async function start(home, version, secret, browser, keep = null, userData = null, hostSecret = false, newSecret = false) {
   if (!home || !path.isAbsolute(home)) throw new Error(tr('sys.engine.notHome', { home }));
+  holdWorkspace(home);
   if (typeof userData === 'string' && path.isAbsolute(userData)) {
     adoptOldKeyNames(userData, home);
     keep ??= secretsCopy(userData, home);
-    if (!validSecret(secret) && hostSecret === true) secret = await secretFromApp(home, userData);
+    if (!validSecret(secret) && hostSecret === true) secret = await secretFromApp(home, userData, newSecret);
     // An app that cannot open a sealed secret (in core or its copy outside, which would be put back): never a new plain
     // key instead, or this workspace's approvals and backups would no longer open.
-    if (!validSecret(secret) && [path.join(secretDir(home), 'clave.enc'), secretCopy(userData, home)].some((f) => fs.existsSync(f))) throw new Error(tr('sys.engine.sealedSecret'));
+    const { enc2, copy2 } = (await import('./approval-secret.mjs')).secret2Files(secretDir(home), secretCopy(userData, home));
+    if (!validSecret(secret) && [path.join(secretDir(home), 'clave.enc'), secretCopy(userData, home), enc2, copy2].some((f) => fs.existsSync(f))) throw new Error(tr('sys.engine.sealedSecret'));
   }
   // The approval secret comes from the app (kept encrypted by Windows); without it, the file fallback is used.
   if (validSecret(secret)) ctx.secret = Buffer.from(secret, 'hex');
@@ -420,8 +462,8 @@ const APP_MESSAGES = {
 transport.on(async (msg) => {
   if (!msg || typeof msg !== 'object') return;
   if (msg.type === 'start') {
-    try { transport.send({ type: 'started', ok: true, result: await start(msg.home, msg.version, msg.secret, msg.browser, msg.keep, msg.userData, msg.hostSecret) }); }
-    catch (error) { transport.send({ type: 'started', ok: false, error: error.message }); }
+    try { transport.send({ type: 'started', ok: true, result: await start(msg.home, msg.version, msg.secret, msg.browser, msg.keep, msg.userData, msg.hostSecret, msg.newSecret) }); }
+    catch (error) { transport.send({ type: 'started', ok: false, error: error.message, ...(error.code && /^secret/.test(error.code) ? { code: error.code } : {}) }); }
     return;
   }
   if (msg.type === 'shutdown') return shutdown();

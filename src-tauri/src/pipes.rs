@@ -15,8 +15,13 @@ use std::time::Duration;
 #[derive(Debug)]
 pub enum Out {
   Line(String),
+  /// A line longer than MAX_LINE, dropped as it came (never held whole): its length.
+  TooLong(usize),
   Exit(Option<i32>),
 }
+
+/// The longest line of the engine kept: far more than any message (a screenshot is a few MB); a longer one is a fault.
+pub const MAX_LINE: usize = 64 * 1024 * 1024;
 
 pub struct Process {
   writer: mpsc::Sender<Vec<u8>>,
@@ -63,8 +68,14 @@ impl Process {
       let mut line = Vec::new();
       loop {
         line.clear();
-        match reader.read_until(b'\n', &mut line) {
+        // At most MAX_LINE and its line break; a longer line is skipped to its end without being kept.
+        match (&mut reader).take(MAX_LINE as u64 + 1).read_until(b'\n', &mut line) {
           Ok(0) | Err(_) => break,
+          Ok(_) if line.len() > MAX_LINE && line.last() != Some(&b'\n') => {
+            let rest = reader.skip_until(b'\n').unwrap_or(0);
+            on_out(Out::TooLong(line.len() + rest));
+            line = Vec::new();
+          }
           Ok(_) => on_out(Out::Line(String::from_utf8_lossy(&line).trim_end().to_string())),
         }
       }
@@ -157,6 +168,7 @@ mod tests {
           }
         }
         Out::Line(l) => done = Some(serde_json::from_str::<serde_json::Value>(&l).unwrap()),
+        Out::TooLong(_) => panic!("ninguna línea es tan larga"),
         Out::Exit(c) => {
           code = c;
           break;
@@ -174,6 +186,19 @@ mod tests {
     eprintln!("flood: {events} events, {} MB stderr, {ms} ms, {ticks} ticks, app side {:?}", *err_bytes.lock().unwrap() / 1_000_000, start.elapsed());
     assert!(ticks >= ms / 10.0 * 0.3, "timers starved: {ticks} ticks in {ms} ms");
     assert!(start.elapsed() < Duration::from_secs(60));
+  }
+
+  // A line longer than MAX_LINE is dropped without being held whole, and the next ones still arrive.
+  #[test]
+  fn a_line_too_long_is_dropped_and_the_next_one_arrives() {
+    let Some(node) = node() else { return };
+    let mut cmd = Command::new(node);
+    cmd.args(["-e", &format!("const b = Buffer.alloc({}, 120); process.stdout.write(b); process.stdout.write('\\n{{\"ok\":1}}\\n');", MAX_LINE + 10)]);
+    let (tx, rx) = mpsc::channel();
+    let _p = Process::spawn(cmd, move |o| tx.send(o).unwrap(), |_| {}).unwrap();
+    let got: Vec<Out> = rx.iter().collect();
+    assert!(matches!(got[0], Out::TooLong(n) if n == MAX_LINE + 11), "{:?}", &got[0]);
+    assert!(matches!(&got[1], Out::Line(l) if l == r#"{"ok":1}"#));
   }
 
   #[test]

@@ -18,8 +18,9 @@ pub fn encode(message: &Value) -> Vec<u8> {
 pub enum Incoming {
   /// The answer to one of the app's messages (a window call, locate, setup, texts…).
   Reply { id: u64, result: Result<Value, String> },
-  /// The answer to `start`.
-  Started(Result<Value, String>),
+  /// The answer to `start`; `code`: why it did not start, when the window offers something for it (secretBusy:
+  /// «Reintentar»; secretUnreadable: also «Empezar con una clave nueva»).
+  Started { result: Result<Value, String>, code: Option<String> },
   /// An event for the window (and for the app: config:changed…).
   Event { event: String, payload: Value },
   /// The engine asks the app for something only the app can do (host.*).
@@ -46,7 +47,10 @@ pub fn decode(line: &str) -> Incoming {
       Some(id) => Incoming::Reply { id, result: outcome(&m) },
       None => Incoming::Unknown,
     },
-    Some("started") => Incoming::Started(outcome(&m)),
+    Some("started") => Incoming::Started {
+      result: outcome(&m),
+      code: m.get("code").and_then(Value::as_str).filter(|c| matches!(*c, "secretBusy" | "secretUnreadable")).map(str::to_string),
+    },
     Some("event") => match m.get("event").and_then(Value::as_str) {
       Some(event) => Incoming::Event { event: event.to_string(), payload: m.get("payload").cloned().unwrap_or(Value::Null) },
       None => Incoming::Unknown,
@@ -127,9 +131,16 @@ pub fn guarded_core(target: &str, core: &str, secrets: &str) -> bool {
 }
 
 /// Node's own variables (NODE_OPTIONS, NODE_PATH, NODE_EXTRA_CA_CERTS…), dropped from the engine's environment: Node
-/// would run --require / --import code from them inside the engine. ORB_NODE is the app's (set for every start).
+/// would run --require / --import code from them inside the engine. And OpenSSL's (OPENSSL_CONF, OPENSSL_MODULES…): a
+/// configuration file can load engines or providers, DLLs, into the engine. ORB_NODE is the app's (set for every start).
 pub fn node_vars<I: IntoIterator<Item = String>>(names: I) -> Vec<String> {
-  names.into_iter().filter(|n| n.to_ascii_uppercase().starts_with("NODE_")).collect()
+  names
+    .into_iter()
+    .filter(|n| {
+      let u = n.to_ascii_uppercase();
+      u.starts_with("NODE_") || u.starts_with("OPENSSL_") || u == "SSLKEYLOGFILE"
+    })
+    .collect()
 }
 
 /// What the engine may ask the app to do, once checked. The app picks the program of a terminal, an editor or an action
@@ -234,7 +245,12 @@ mod tests {
     assert_eq!(encode(&json!({"a": "uno\ndos"})), b"{\"a\":\"uno\\ndos\"}\n".to_vec());
     assert_eq!(decode(r#"{"type":"reply","id":3,"ok":true,"result":{"x":1}}"#), Incoming::Reply { id: 3, result: Ok(json!({"x": 1})) });
     assert_eq!(decode(r#"{"type":"reply","id":4,"ok":false,"error":"no"}"#), Incoming::Reply { id: 4, result: Err("no".into()) });
-    assert_eq!(decode(r#"{"type":"started","ok":true,"result":{"name":"Orb"}}"#), Incoming::Started(Ok(json!({"name": "Orb"}))));
+    assert_eq!(decode(r#"{"type":"started","ok":true,"result":{"name":"Orb"}}"#), Incoming::Started { result: Ok(json!({"name": "Orb"})), code: None });
+    assert_eq!(
+      decode(r#"{"type":"started","ok":false,"error":"x","code":"secretUnreadable"}"#),
+      Incoming::Started { result: Err("x".into()), code: Some("secretUnreadable".into()) }
+    );
+    assert_eq!(decode(r#"{"type":"started","ok":false,"error":"x","code":"otro"}"#), Incoming::Started { result: Err("x".into()), code: None });
     assert_eq!(decode(r#"{"type":"event","event":"chat:new","payload":{"body":"hola"}}"#), Incoming::Event { event: "chat:new".into(), payload: json!({"body": "hola"}) });
     assert_eq!(
       decode(r#"{"type":"host","id":7,"method":"host.openUrl","params":{"url":"https://x.y"}}"#),
@@ -291,10 +307,10 @@ mod tests {
 
   #[test]
   fn node_variables_never_reach_the_engine() {
-    let names = ["PATH", "NODE_OPTIONS", "node_path", "NODE_EXTRA_CA_CERTS", "NODE_TLS_REJECT_UNAUTHORIZED", "ORB_NODE", "NODEJS_X"];
+    let names = ["PATH", "NODE_OPTIONS", "node_path", "NODE_EXTRA_CA_CERTS", "NODE_TLS_REJECT_UNAUTHORIZED", "ORB_NODE", "NODEJS_X", "OPENSSL_CONF", "openssl_modules", "SSLKEYLOGFILE", "OPENSSLX"];
     assert_eq!(
       node_vars(names.iter().map(|s| s.to_string())),
-      vec!["NODE_OPTIONS", "node_path", "NODE_EXTRA_CA_CERTS", "NODE_TLS_REJECT_UNAUTHORIZED"]
+      vec!["NODE_OPTIONS", "node_path", "NODE_EXTRA_CA_CERTS", "NODE_TLS_REJECT_UNAUTHORIZED", "OPENSSL_CONF", "openssl_modules", "SSLKEYLOGFILE"]
     );
   }
 

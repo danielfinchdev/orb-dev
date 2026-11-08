@@ -3,11 +3,12 @@
 //     3.8.1, the projects 3.8.0 made of MCP servers; what the user chose for each; nothing moves before layoutApply.
 //   - guardOutside: what Orb keeps about the workspace outside it (the backups' folders, the copies of its sealed
 //     secrets) is named to the guard (src/core/guard.mjs), so agents leave it alone like core.
+import fs from 'node:fs';
 import path from 'node:path';
 import { ctx } from '../core/context.mjs';
 import { planWorkspace, applyLayout, inside } from '../core/core-folder.mjs';
 import { paths, loadConfig, ensureLayout } from '../core/home.mjs';
-import { setGuardedRoots } from '../core/guard.mjs';
+import { setGuardedRoots, setAppRoots } from '../core/guard.mjs';
 import { rebindMoved } from '../core/connector-secrets.mjs';
 import { rebindMovedOrWait } from './api-extensions.mjs';
 import { backupRoot, backupDir } from '../core/backup.mjs';
@@ -46,4 +47,20 @@ export function guardOutside({ mirror } = {}) {
   const state = keys && path.basename(keys) === 'claves' ? path.join(path.dirname(keys), 'Local State') : null;
   // Never one that holds the workspace itself (that would shut the agents out of their projects).
   setGuardedRoots([backupRoot(), backupDir(ctx.home, ctx.config), keys, state].filter((d) => d && !inside(d, ctx.home)));
+  // 3.8.1: and the folder Orb is installed in (writable by the user under a per-user install): agents may read it only.
+  const app = appInstallDir();
+  setAppRoots(app && !inside(app, ctx.home) ? [app] : []);
+}
+
+// The folder of an installed Orb: Tauri's (Orb.exe with node\node.exe and app\ beside it: ORB_NODE, set by the app) or
+// Electron's (…\resources\app.asar.unpacked holds ORB_MCP_SCRIPT). Not a build of the code (a cargo target folder or the
+// repository: agents may work on Orb itself).
+export function appInstallDir(env = process.env) {
+  const node = env.ORB_NODE;
+  if (typeof node === 'string' && path.isAbsolute(node) && path.basename(path.dirname(node)).toLowerCase() === 'node') {
+    const dir = path.dirname(path.dirname(node));
+    if (fs.existsSync(path.join(dir, 'app')) && !/[\\/]target[\\/]/i.test(dir)) return dir;
+  }
+  const m = /^(.*)[\\/]resources[\\/]app\.asar\.unpacked[\\/]/i.exec(String(env.ORB_MCP_SCRIPT ?? ''));
+  return m && path.isAbsolute(m[1]) ? m[1] : null;
 }

@@ -281,6 +281,31 @@ test('lo que Orb guarda fuera del espacio (copias, claves) queda vetado a los ag
   } finally { setGuardedRoots([]); }
 });
 
+// 3.8.1 (Tauri D-fix, review D4 M5): the folder Orb is installed in (per user: writable by any program of the user) is
+// read-only for the agents: its node.exe and engine code run with all of Orb's secrets.
+test('la carpeta de instalación de Orb: los agentes pueden leerla, nunca escribir ni ejecutar lo que nombra', async () => {
+  const { appInstallDir } = await import('../src/engine/workspace-layout.mjs');
+  const { setAppRoots } = await import('../src/core/guard.mjs');
+  const base = newBase();
+  const install = path.join(base, 'Programs', 'Orb'); put(path.join(install, 'node', 'node.exe')); put(path.join(install, 'app', 'src', 'mcp', 'server.mjs'));
+  assert.equal(appInstallDir({ ORB_NODE: path.join(install, 'node', 'node.exe') }), install);
+  assert.equal(appInstallDir({ ORB_NODE: path.join(base, 'target', 'release', 'node', 'node.exe') }), null, 'una compilación del código');
+  assert.equal(appInstallDir({ ORB_NODE: 'C:\\herramientas\\node.exe' }), null);
+  assert.equal(appInstallDir({ ORB_MCP_SCRIPT: 'C:\\Users\\a\\AppData\\Local\\Programs\\Orb\\resources\\app.asar.unpacked\\src\\mcp\\server.mjs' }), 'C:\\Users\\a\\AppData\\Local\\Programs\\Orb');
+  const internal = path.join(base, 'Orb', 'core');
+  setAppRoots([install]);
+  try {
+    const node = path.join(install, 'node', 'node.exe');
+    assert.ok(isOrbData(node, internal, base));
+    assert.ok(!isOrbData(node, internal, base, { read: true }), 'leer, sí');
+    const ask = (tool, command, paths = []) => decide({ permission: 'editar', tool, command, paths, patterns: [], internalDir: internal, cwd: base }).decision;
+    assert.equal(ask('Read', '', [path.join(install, 'app', 'src', 'mcp', 'server.mjs')]), 'allow');
+    assert.equal(ask('Write', '', [path.join(install, 'app', 'src', 'mcp', 'server.mjs')]), 'deny');
+    assert.equal(ask('Bash', `copy evil.exe "${node}"`), 'deny');
+    assert.equal(ask('Bash', `del /q ${install}\\Orb.exe`), 'deny');
+  } finally { setAppRoots([]); }
+});
+
 test('los secretos que ya están en el almacén salen enseguida del archivo de 3.7 y de las copias de su base', () => {
   const { home } = createHome(newBase());
   const p = paths(home);
@@ -334,45 +359,4 @@ test('la copia del secreto fuera del espacio nunca se pisa con otro; un clave.en
   assert.ok(fs.readdirSync(path.dirname(copy)).some((n) => n !== path.basename(copy) && read(path.join(path.dirname(copy), n)) === `S${good}`), 'la copia vieja se conserva');
 });
 
-// 3.8.1 (Tauri): Electron's sealing (v10) is read once and sealed again in the app's own format (ORB2); the old files are
-// kept aside, never deleted, and an app that only reads the old format (Electron run again) still finds its secret.
-test('el secreto sellado por Electron se vuelve a sellar en ORB2 sin perder nada, también por una app asíncrona', async () => {
-  const { loadApprovalSecret, staleSealing } = await import('../src/engine/approval-secret.mjs');
-  const base = newBase();
-  const dir = path.join(base, 'datos'); const copy = path.join(base, 'claves', 'orb-1234abcd.enc');
-  const enc = path.join(dir, 'clave.enc'); const secret = 'd4'.repeat(32);
-  const later = (v) => new Promise((r) => setTimeout(() => r(v), 2));
-  // Tauri: seals ORB2 and opens ORB2 and v10, asynchronously (host.seal / host.unseal).
-  const tauri = {
-    seal: (hex) => later(Buffer.from(`ORB2${hex}`)),
-    unseal: async (b) => { const s = b.toString('latin1'); await later(); if (s.startsWith('ORB2')) return s.slice(4); if (s.startsWith('v10')) return s.slice(3); throw new Error('no abre'); },
-    stale: staleSealing
-  };
-  // Electron: only v10.
-  const electron = { seal: (hex) => Buffer.from(`v10${hex}`), unseal: (b) => { const s = b.toString('latin1'); if (!s.startsWith('v10')) throw new Error('no abre'); return s.slice(3); } };
-  assert.equal(staleSealing(Buffer.from('v10xx')), 'v10');
-  assert.equal(staleSealing(Buffer.from('ORB2xx')), false);
-  assert.equal(staleSealing(Buffer.from('otro')), false);
-  put(enc, `v10${secret}`); put(copy, `v10${secret}`);
-  assert.equal(await loadApprovalSecret({ dir, copy, ...tauri }), secret);
-  assert.equal(read(enc), `ORB2${secret}`);
-  assert.equal(read(copy), `ORB2${secret}`);
-  const asideCore = fs.readdirSync(dir).filter((n) => /^clave\.\d{8}T\d{6}Z\.v10\.enc$/.test(n));
-  assert.equal(asideCore.length, 1); assert.equal(read(path.join(dir, asideCore[0])), `v10${secret}`);
-  const asideCopy = fs.readdirSync(path.dirname(copy)).filter((n) => n.endsWith('.v10.enc'));
-  assert.equal(asideCopy.length, 1); assert.equal(read(path.join(path.dirname(copy), asideCopy[0])), `v10${secret}`);
-  assert.equal(fs.readdirSync(dir).some((n) => n.endsWith('.tmp')), false);
-  // A second start: nothing more to do.
-  assert.equal(await loadApprovalSecret({ dir, copy, ...tauri }), secret);
-  assert.equal(fs.readdirSync(dir).length, 2);
-  // Electron run again on the same data cannot read ORB2: it finds the v10 kept aside, the same secret (never a new one).
-  assert.equal(await loadApprovalSecret({ dir, copy, ...electron }), secret);
-  assert.equal(read(enc), `v10${secret}`);
-  // And Tauri afterwards: the same secret again, sealed as ORB2.
-  assert.equal(await loadApprovalSecret({ dir, copy, ...tauri }), secret);
-  assert.equal(read(enc), `ORB2${secret}`);
-  // Sealing fails half way (DPAPI refused): the v10 stays where it was and still opens.
-  put(enc, `v10${secret}`);
-  assert.equal(await loadApprovalSecret({ dir, copy, ...tauri, seal: async () => { throw new Error('DPAPI'); } }), secret);
-  assert.equal(read(enc), `v10${secret}`);
-});
+// 3.8.1 (Tauri): ORB2 in its own files beside Electron's v10, typed errors, atomic writes: test/clave-compatible.test.mjs.

@@ -8,6 +8,8 @@
     "core:event:allow-unlisten",
     "allow-engine-call",
     "allow-app-info",
+    "allow-app-retry-start",
+    "allow-app-delete-project",
     "allow-app-setup",
     "allow-app-switch-home",
     "allow-app-zoom",

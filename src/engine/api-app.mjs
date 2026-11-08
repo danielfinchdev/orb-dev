@@ -21,8 +21,11 @@ export function appMethods({ home, version }) {
   const openUrl = (url) => hostCall('host.openUrl', { url });
   return {
     // Ctrl+J: a terminal (Warp, Windows Terminal, PowerShell…) in the folder the window shows, or the workspace.
+    // core itself and its secrets are not opened this way (that is the File Explorer's, with the master password): the
+    // terminal opens in the workspace instead.
     'app.openTerminal': ({ dir } = {}) => {
-      const target = absolute(dir) ? dir : home;
+      let target = absolute(dir) ? dir : home;
+      if (target && home && guardedCore(home, target)) target = home;
       if (!target) fail(tr('sys.main.noFolderYet'));
       return hostCall('host.openTerminal', { dir: target, choice: choice() });
     },
@@ -38,8 +41,10 @@ export function appMethods({ home, version }) {
       return true;
     },
     // A project's action in a terminal window of its own; its preview (only a page of this PC) opens a moment later.
-    'app.runAction': async ({ dir, command, preview, openPreview } = {}) => {
+    // Never in core itself or its secrets without a fresh unlock (as app.openIn).
+    'app.runAction': async ({ dir, command, preview, openPreview, unlock } = {}) => {
       if (!absolute(dir) || typeof command !== 'string' || !command.trim() || command.length > 2000) fail(tr('sys.main.badAction'));
+      if (home && guardedCore(home, dir)) checkUnlock('master.check', { unlock });
       await hostCall('host.runAction', { command, dir, choice: choice() });
       if (openPreview && typeof preview === 'string') {
         let u = null; try { u = new URL(preview); } catch { /* not a link */ }

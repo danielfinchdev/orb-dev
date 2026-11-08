@@ -57,6 +57,9 @@ if (window.__TAURI_INTERNALS__ && !window.orb) {
       return () => listeners.get(event)?.delete(fn);
     },
     info: () => invoke('app_info'),
+    // After the engine failed to start: «Reintentar», and «Empezar con una clave nueva» when the sealed keys could not be
+    // opened (info().startError.code === 'secretUnreadable').
+    retryStart: (opts) => invoke('app_retry_start', { newSecret: opts?.newSecret === true }),
     platform: 'win32',
     light: false,
     setup: (data) => invoke('app_setup', { data: data ?? {} }),
@@ -69,6 +72,8 @@ if (window.__TAURI_INTERNALS__ && !window.orb) {
     // unlock: the master password's token, for core and its secrets (Rust checks it with the engine).
     openPath: (folder, unlock) => invoke('app_open_path', { path: String(folder ?? ''), unlock: text(unlock) }),
     openExternal: (url) => invoke('app_open_external', { url: String(url ?? '') }),
+    // «Eliminar proyecto» (src-tauri/src/delete.rs, the same steps as Electron's preload): step 'retry' | 'forever' | 'cancel'.
+    deleteProject: (name, unlock, step) => invoke('app_delete_project', { name: String(name ?? ''), unlock: text(unlock), step: ['retry', 'forever', 'cancel'].includes(step) ? step : null }),
     showBrowser: () => invoke('app_show_browser'),
     zoom: (value) => invoke('app_zoom', { value: value ?? null }),
     windowControls: {

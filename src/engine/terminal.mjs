@@ -50,9 +50,12 @@ export function findTerminals(platform = process.platform, env = process.env) {
     const local = env.LOCALAPPDATA ?? ''; const programs = env.ProgramFiles ?? 'C:\\Program Files';
     const warp = [path.join(local, 'Programs', 'Warp', 'warp.exe'), path.join(programs, 'Warp', 'warp.exe')].find(exists) ?? inPath('warp', env);
     const wt = [path.join(local, 'Microsoft', 'WindowsApps', 'wt.exe')].find(exists) ?? inPath('wt', env);
-    // Always an absolute path: a bare name would also be looked for in the folder the program starts in.
+    // Always an absolute path: a bare name would also be looked for in the folder the program starts in. Windows' own
+    // PowerShell and cmd from System32 first (a folder of the user's PATH is writable by any program, and ComSpec is the
+    // user's to change); the PATH only when that PowerShell is not there.
     const system = path.join(env.SystemRoot || env.windir || 'C:\\Windows', 'System32');
-    return { warp, wt, powershell: inPath('powershell', env) ?? path.join(system, 'WindowsPowerShell', 'v1.0', 'powershell.exe'), cmd: env.ComSpec && path.isAbsolute(env.ComSpec) ? env.ComSpec : path.join(system, 'cmd.exe') };
+    const ps = path.join(system, 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+    return { warp, wt, powershell: exists(ps) ? ps : inPath('powershell', env) ?? ps, cmd: path.join(system, 'cmd.exe') };
   }
   if (platform === 'darwin') return { warp: exists('/Applications/Warp.app') ? '/Applications/Warp.app' : null, terminal: 'Terminal' };
   const installed = Object.keys(LINUX_TERMINALS).filter((n) => inPath(n, env));
