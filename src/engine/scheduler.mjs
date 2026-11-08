@@ -488,7 +488,8 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
     const acc = findAccount(accountId);
     const { board } = this;
     const fresh = board.task(task.id);
-    if (!fresh || fresh.status !== 'queued' || this.running.has(task.id) || !board.approvalOk(fresh)) return;
+    // 3.8.1: nor one of a project being deleted (its pending tasks were cancelled; this is the last guard).
+    if (!fresh || fresh.status !== 'queued' || this.running.has(task.id) || !board.approvalOk(fresh) || board.isDeleting(fresh.project)) return;
     // 2.7: «Orb elige el modelo»: a task without a model gets, on the agent and account it runs on, the most efficient
     // model (and, when the assistant said how hard it is, reasoning) for it (catalog.chooseModel); kept on the task, so a
     // retry or a follow-up uses the same one, and explained in its history.

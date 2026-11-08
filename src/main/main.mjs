@@ -15,7 +15,7 @@ import { PRODUCT } from '../core/product.mjs';
 import { translate } from '../core/i18n.mjs';
 import { keyringWeak } from './linux.mjs';
 import { loadApprovalSecret } from './approval-secret.mjs';
-import { deletableFolder } from '../core/project-close.mjs';
+import { deletableFolder, folderInUse } from '../core/project-close.mjs';
 
 const SRC = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // Packaged: the code lives in app.asar.unpacked (agents start the MCP server from there with the app's own executable).
@@ -312,21 +312,50 @@ ipcMain.handle('app:openPath', guard(async (target, unlock) => {
   const err = await shell.openPath(target); if (err) throw new Error(err);
   return true;
 }));
-// 3.8.1: «Eliminar proyecto»: the engine checks the master password's token, that nothing of it works and what may go
-// (projects.deleteCheck); the folder is checked here again by its real path and moved to the Recycle Bin; then the engine
-// takes the project out (projects.delete, trashed). permanent: the user chose to delete it for good after the Recycle
-// Bin could not take it. → { ok: true } or { ok: false, noTrash: true, path } (the window then offers «Borrar para siempre»).
-ipcMain.handle('app:deleteProject', guard(async (name, unlock, permanent) => {
+// 3.8.1: «Eliminar proyecto». The engine checks the master password's token, that nothing of it works and what may go
+// (projects.deleteCheck: from then on nothing of the project starts, and it returns a one-off ticket); the folder is
+// checked here again by its real path and moved to the Recycle Bin; then the engine takes the project out with that
+// ticket (projects.delete, trashed). When the Recycle Bin cannot take it:
+//   - some program is using the folder → { ok: false, locked: true, path }: the window offers only «Reintentar»;
+//   - otherwise → { ok: false, noTrash: true, path }: «Reintentar» or «Borrar para siempre».
+// step: undefined (start; unlock: the token) | 'retry' | 'forever' (only after a noTrash for that same project) |
+// 'cancel' (the project works again). A delete under way is kept here, by name, with its ticket and folder.
+const deletes = new Map(); // name -> { ticket, path, noTrash }
+async function trashProject(name, d) {
+  const real = deletableFolder(home, d.path);
+  let failed = false;
+  try { await shell.trashItem(real); } catch { failed = true; }
+  if (failed || fs.existsSync(real)) {
+    if (folderInUse(real)) { d.noTrash = false; return { ok: false, locked: true, path: real }; }
+    d.noTrash = true;
+    return { ok: false, noTrash: true, path: real };
+  }
+  deletes.delete(name);
+  return { ok: true, ...(await callEngine('projects.delete', { name, ticket: d.ticket, trashed: true })) };
+}
+ipcMain.handle('app:deleteProject', guard(async (name, unlock, step) => {
   if (typeof name !== 'string' || !name || name.length > 200) throw new Error(T('sys.main.badAction'));
-  const token = typeof unlock === 'string' ? unlock : '';
   await engineReady;
-  if (permanent === true) return { ok: true, ...(await callEngine('projects.delete', { name, unlock: token })) };
-  const { path: folder } = await callEngine('projects.deleteCheck', { name, unlock: token }, 30_000);
   if (!home) throw new Error(T('sys.main.badPath'));
-  const real = deletableFolder(home, folder);
-  try { await shell.trashItem(real); } catch { return { ok: false, noTrash: true, path: real }; }
-  if (fs.existsSync(real)) return { ok: false, noTrash: true, path: real };
-  return { ok: true, ...(await callEngine('projects.delete', { name, unlock: token, trashed: true })) };
+  const d = deletes.get(name);
+  if (step === 'cancel') { deletes.delete(name); if (d) await callEngine('projects.deleteAbort', { name, ticket: d.ticket }).catch(() => {}); return { ok: false, cancelled: true }; }
+  if (step === 'retry' || step === 'forever') {
+    if (!d || (step === 'forever' && !d.noTrash)) throw new Error(T('sys.main.badAction'));
+    if (step === 'retry') return trashProject(name, d);
+    const real = deletableFolder(home, d.path);
+    if (folderInUse(real)) { d.noTrash = false; return { ok: false, locked: true, path: real }; }
+    deletes.delete(name); // one try: a delete that stops half-way says what is left, and the project works again
+    return { ok: true, ...(await callEngine('projects.delete', { name, ticket: d.ticket }, 600_000)) };
+  }
+  if (d) { deletes.delete(name); await callEngine('projects.deleteAbort', { name, ticket: d.ticket }).catch(() => {}); }
+  const check = await callEngine('projects.deleteCheck', { name, unlock: typeof unlock === 'string' ? unlock : '' }, 30_000);
+  const next = { ticket: check.ticket, path: check.path, noTrash: false };
+  deletes.set(name, next);
+  try { return await trashProject(name, next); } catch (error) {
+    // Not even checked here (the folder is not one Orb may delete): the project works again.
+    if (deletes.get(name) === next) { deletes.delete(name); await callEngine('projects.deleteAbort', { name, ticket: next.ticket }).catch(() => {}); }
+    throw error;
+  }
 }));
 ipcMain.handle('app:openExternal', guard(async (url) => {
   let u; try { u = new URL(String(url)); } catch { throw new Error(T('sys.main.badLink')); }

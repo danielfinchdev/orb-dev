@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { FolderKanban, FolderPlus, FolderOpen, Pin, MessageSquare, BookOpen, Unlink, GitBranch, Save, Upload, RefreshCw, GitPullRequest, Folder, ScanSearch, ShieldCheck, PencilLine, Ellipsis, CircleCheckBig, Trash2, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader, PageBody, BackButton } from '@/components/page.jsx';
-import { confirm, form } from '@/components/dialogs.jsx';
+import { confirm, choose, form } from '@/components/dialogs.jsx';
 import { createProjectFlow, linkFolderFlow, cloneRepoFlow, CATEGORIES } from '@/components/project-actions.jsx';
 import { askReview, askSecurityReview } from './tasks.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -67,8 +67,9 @@ function ContributionGraph() {
 }
 
 // 3.8.1: the end of a project (src/core/project-close.mjs). Finished: it leaves Orb, its folder stays («Finalizados»
-// brings it back). Deleted: its folder goes to the Recycle Bin (main.mjs), behind the master password, only on the PC;
-// when the Recycle Bin cannot take it, «Borrar para siempre» after a stronger warning.
+// brings it back). Deleted: its folder goes to the Recycle Bin (main.mjs), behind the master password, only on the PC.
+// When the Recycle Bin cannot take it: a folder some program is using offers only «Reintentar»; otherwise «Reintentar»
+// or «Borrar para siempre» after a stronger warning. Cancelling gives the project back as it was.
 async function finishFlow(p, t) {
   if (!(await confirm(t('projects.finish.title'), t('projects.finish.body', { name: p.name }), { ok: t('projects.finish.ok') }))) return;
   if ((await act(call('projects.finish', { name: p.name }), t('projects.finish.done'))) !== undefined) await refresh().catch(() => {});
@@ -78,10 +79,16 @@ async function deleteFlow(p, t) {
   const unlock = await unlockCore('deleteProject');
   if (!unlock) return;
   try {
-    const r = await bridge.deleteProject(p.name, unlock);
-    if (r?.ok) { toast.success(t('projects.delete.done')); return; }
-    if (!r?.noTrash || !(await confirm(t('projects.delete.noTrash.title'), t('projects.delete.noTrash.body', { path: r.path }), { ok: t('projects.delete.noTrash.ok'), danger: true }))) return;
-    if ((await bridge.deleteProject(p.name, unlock, true))?.ok) toast.success(t('projects.delete.doneForever'));
+    let r = await bridge.deleteProject(p.name, unlock);
+    while (r && !r.ok) {
+      let step = null;
+      if (r.locked) step = await choose(t('projects.delete.locked.title'), t('projects.delete.locked.body', { path: r.path }), [{ value: 'retry', label: t('projects.delete.retry') }]);
+      else if (r.noTrash) step = await choose(t('projects.delete.noTrash.title'), t('projects.delete.noTrash.body', { path: r.path }), [{ value: 'forever', label: t('projects.delete.noTrash.ok'), variant: 'destructive' }, { value: 'retry', label: t('projects.delete.retry') }]);
+      if (!step) { await bridge.deleteProject(p.name, null, 'cancel'); return; }
+      r = await bridge.deleteProject(p.name, null, step);
+      if (r?.ok) { toast.success(t(step === 'forever' ? 'projects.delete.doneForever' : 'projects.delete.done')); return; }
+    }
+    if (r?.ok) toast.success(t('projects.delete.done'));
   } catch (error) { toast.error(errorText(error)); }
   finally { await refresh().catch(() => {}); }
 }

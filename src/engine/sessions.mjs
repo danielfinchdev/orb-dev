@@ -482,6 +482,8 @@ export class Sessions {
     const s = this.must(id);
     if (this.running.has(id)) throw new Error(tr('msg.sessions.stillWorking'));
     if (!String(text ?? '').trim() && !images.length) throw new Error(tr('msg.sessions.writeMessage'));
+    // 3.8.1: its project is being deleted (project-close.mjs): no new turn in a folder that is going away.
+    if (s.kind !== 'task' && s.project && this.board.isDeleting(s.project)) throw new Error(tr('msg.projects.deleting', { name: s.project }));
     // The conversation's own account: if it was removed, the turn does not silently move to another subscription.
     const acc = s.account ? findAccount(s.account) : pickAccount(this.board, { agent: s.agent });
     if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));

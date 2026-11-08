@@ -76,9 +76,12 @@ function LogsMoved({ moved, onDone }) {
         </div>
         <div className="grid gap-2">
           {files.map((f) => (
-            <div key={f} className="flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2">
-              <span className="min-w-0 flex-1 font-mono text-xs break-all" data-testid="layout-logs-path">{f}</span>
-              <Button variant="ghost" size="icon" title={t('layout.copyPath')} aria-label={t('layout.copyPath')} onClick={() => copy(f)}><Copy /></Button>
+            <div key={f} className="grid gap-1 rounded-lg border px-3 py-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="min-w-0 flex-1 font-mono text-xs break-all" data-testid="layout-logs-path">{f}</span>
+                <Button variant="ghost" size="icon" title={t('layout.copyPath')} aria-label={t('layout.copyPath')} onClick={() => copy(f)}><Copy /></Button>
+              </div>
+              {moved.readOnly?.includes(f) ? <span className="text-muted-foreground text-xs" data-testid="layout-logs-readonly">{t('layout.logsReadOnly')}</span> : null}
             </div>
           ))}
         </div>

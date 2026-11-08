@@ -13,7 +13,7 @@ import { accountsOf, accountDir, accountLabel, accounts as allAccounts } from '.
 import { usageReport, modelName } from '../core/budget.mjs';
 import { brainOf } from './orchestrator.mjs';
 import { newProject, syncProjects, checkProjectName, renameProject } from '../core/projects.mjs';
-import { finishProject, finishedProjects, reopenProject, checkDelete, deleteProject } from '../core/project-close.mjs';
+import { finishProject, finishedProjects, reopenProject, checkDelete, deleteProject, abortDelete } from '../core/project-close.mjs';
 import { PRODUCT } from '../core/product.mjs';
 import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../core/schedules.mjs';
 import { oneLine, redactSecrets, localStamp } from '../core/safety.mjs';
@@ -120,6 +120,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     try { writeLog(board, 'general', { ...entry, tema: tr('sys.logs.okGeneralTopic', { project: where, ids: done.map((t) => `#${t.id}`).join(', ') }) }, author); } catch (error) { log(`bitácora general del OK: ${error.message}`); }
     return done.map((t) => t.id);
   };
+  // 3.8.1: a coordinator in the middle of a turn in a conversation of the project (it could create a task right after).
+  const coordinatorBusy = (name) => board.all('SELECT id FROM conversations WHERE project = ?', name).some((c) => orchestrator?.state(c.id)?.busy);
   // What the other parts of the API share.
   const shared = { board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, project, conversationId };
   const data = dataApi(shared); // 3.6 (WS5): backups
@@ -204,18 +206,30 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     },
     'projects.setActive': ({ name }) => board.setActiveProject(name ? project(name).name : '', 'usuario'),
     // 3.8.1: the end of a project (src/core/project-close.mjs). Finished: it leaves Orb, its folder stays (listed in
-    // «Finalizados» to reopen it). Deleted: its folder goes too; main.mjs moves it to the Recycle Bin (projects.deleteCheck
-    // first, then projects.delete with trashed) or, when the user chose so, the engine deletes it for good.
-    'projects.finish': ({ name }) => { const p = project(name); return finishProject(board, p.name, 'usuario', { category: categoryOf(realHome, p.path) }); },
+    // «Finalizados» to reopen it). Deleted: its folder goes too. main.mjs: projects.deleteCheck (the master password; from
+    // then on nothing of the project starts, and it returns a one-off ticket), the Recycle Bin, then projects.delete with
+    // that ticket (trashed; or, when the Recycle Bin could not take it and the user chose so, the engine deletes it for
+    // good) or projects.deleteAbort (cancelled: it works again, its schedules back on).
+    'projects.finish': ({ name }) => { const p = project(name); return finishProject(board, p.name, 'usuario', { category: categoryOf(realHome, p.path), busy: coordinatorBusy }); },
     'projects.finished': () => finishedProjects(board).map(({ key, name, path: folder, category, at }) => ({ key, name, path: folder, category: category ?? null, at })),
     'projects.reopen': ({ key }) => reopenProject(board, str(key, 'proyecto', 2000), 'usuario').name,
-    'projects.deleteCheck': ({ name }) => checkDelete(board, ctx.home, project(name).name),
-    'projects.delete': ({ name, trashed }) => {
+    'projects.deleteCheck': ({ name }) => {
+      const out = checkDelete(board, ctx.home, project(name).name, { busy: coordinatorBusy });
+      // Its direct conversations' processes (idle, but working in that folder) are closed, so the folder can go.
+      for (const s of board.all('SELECT id FROM sessions WHERE project = ?', out.name)) sessions.closeLive(s.id);
+      return out;
+    },
+    'projects.delete': ({ name, ticket, trashed }) => {
       const p = project(name);
-      const out = deleteProject(board, ctx.home, p.name, 'usuario', { trashed: trashed === true });
+      const stop = (n) => {
+        for (const t of board.all("SELECT id FROM tasks WHERE project = ? AND status = 'running'", n)) { try { scheduler.cancel(t.id, 'usuario'); } catch { /* finished meanwhile */ } }
+        for (const s of board.all('SELECT id FROM sessions WHERE project = ?', n)) { sessions.stop(s.id); sessions.closeLive(s.id); }
+      };
+      const out = deleteProject(board, ctx.home, p.name, 'usuario', { ticket: typeof ticket === 'string' ? ticket : '', trashed: trashed === true, stop });
       clearProjectIcon(p);
       return out;
     },
+    'projects.deleteAbort': ({ name, ticket }) => abortDelete(board, str(name, 'proyecto', 200), typeof ticket === 'string' ? ticket : ''),
     // 3.2: the projects' icons (their favicon or app icon, or one chosen here) for the sidebar: { name: dataUrl | null }.
     'projects.icons': () => Object.fromEntries(board.projects().map((x) => [x.name, projectIcon(x)])),
     'projects.setIcon': ({ name, path: file }) => { const p = project(name); const icon = setProjectIcon(p, str(file, 'imagen', 1000)); board.changed('projects'); return icon; },

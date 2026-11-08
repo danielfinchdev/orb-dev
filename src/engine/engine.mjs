@@ -253,6 +253,8 @@ async function run(board, { home, version, restored, repair }) {
   board.onChange(changed);
   let dataVersion = board.one('PRAGMA data_version').data_version;
   const { syncProjects } = await import('../core/projects.mjs');
+  // 3.8.1: a project delete the app left half-way (closed between the check and the end) is finished or undone.
+  try { (await import('../core/project-close.mjs')).settleDeleting(board, home, { all: true }); } catch (error) { log(`eliminar proyecto: ${error.message}`); }
   syncProjects(board);
   // 3.8.1: the skills of core that are on, ready for the agents (core\skills\.activas).
   try { (await import('./api-extensions.mjs')).refreshSkills(); } catch (error) { log(`skills: ${error.message}`); }

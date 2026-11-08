@@ -148,7 +148,8 @@ const BUSY_CODES = ['EBUSY', 'EPERM', 'EACCES', 'ENOTEMPTY'];
 
 // Moves the folders as the user chose. choices: { [item.id]: choice } (an item without one is left as it is,
 // undecided). Throws LayoutBusy (nothing moved) when a folder to move is in use. → { moved, rewritten, logs } or null
-// (logs: when the logs moved into core, { dir, files }: where they are now and the user's own files in them, full paths).
+// (logs: when the logs moved into core, { dir, files, readOnly }: where they are now and the user's own files in them,
+// full paths, and which of those are read-only).
 export function applyLayout(home, choices = {}, { language = 'es' } = {}) {
   const { items } = planWorkspace(home);
   const moves = []; const decided = {};
@@ -169,7 +170,12 @@ export function applyLayout(home, choices = {}, { language = 'es' } = {}) {
   const [state] = notes(home);
   writeJsonAtomic(state, { v: 2, home, started: new Date().toISOString(), moves: [...(readJson(state)?.moves ?? []), ...moves] });
   const r = finish(home, state, language);
-  if (logsMove && !exists(logsMove.from)) r.logs = { dir: logsMove.to, files: own.map((n) => path.join(logsMove.to, n)) };
+  if (logsMove && !exists(logsMove.from)) {
+    const files = own.map((n) => path.join(logsMove.to, n));
+    // The read-only ones: Orb's agents only read them (orb_write_log never changes a file's attributes).
+    const readOnly = files.filter((f) => { try { return (fs.statSync(f).mode & 0o200) === 0; } catch { return false; } });
+    r.logs = { dir: logsMove.to, files, readOnly };
+  }
   return r;
 }
 

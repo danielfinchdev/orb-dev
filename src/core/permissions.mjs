@@ -37,7 +37,7 @@ export const METHODS = Object.freeze({
   'projects.branch': 'remote', 'projects.info': 'remote', 'projects.commit': 'pc', 'projects.merge': 'pc', 'projects.push': 'pc',
   'projects.createPr': 'pc', 'projects.createRepo': 'pc', 'projects.review': 'remote', 'projects.securityReview': 'remote',
   // 3.8.1: finishing a project (its folder stays) also from the phone; deleting it (its folder too) only here.
-  'projects.finish': 'remote', 'projects.finished': 'remote', 'projects.reopen': 'remote', 'projects.deleteCheck': 'pc', 'projects.delete': 'pc',
+  'projects.finish': 'remote', 'projects.finished': 'remote', 'projects.reopen': 'remote', 'projects.deleteCheck': 'pc', 'projects.delete': 'pc', 'projects.deleteAbort': 'pc',
   'whiteboard.load': 'remote', 'whiteboard.save': 'remote', 'whiteboard.note': 'remote', 'whiteboard.attach': 'pc', 'whiteboard.remove': 'pc', 'whiteboard.folder': 'pc',
   'logs.list': 'remote', 'logs.read': 'remote',
   // tasks
@@ -81,10 +81,12 @@ export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter(
 // «Cosas que nadie toca»; 3.8.1: deleting a project (its folder) and removing a skill or an MCP server from core (or a
 // connector). current: the settings now (the engine's), to compare
 // with. Changing the password asks for the current one instead.
-export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'projects.deleteCheck', 'projects.delete', 'extensions.remove']));
+export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'projects.deleteCheck', 'extensions.remove']));
 // 3.8.1: the actions that ask for the master password EVERY time, even right after another unlock (the owner: deleting a
 // project «requiere master pass»): method → the purpose its token must carry (src/core/master.mjs › issue(purpose)).
-export const FRESH_UNLOCK = Object.freeze({ 'projects.deleteCheck': 'deleteProject', 'projects.delete': 'deleteProject' });
+// projects.delete and projects.deleteAbort need no token: they take the one-off ticket projects.deleteCheck returned
+// (project-close.mjs), so a token that expires while the Recycle Bin works never leaves a delete half-way.
+export const FRESH_UNLOCK = Object.freeze({ 'projects.deleteCheck': 'deleteProject' });
 export const FRESH_PURPOSES = Object.freeze([...new Set(Object.values(FRESH_UNLOCK))]);
 export function needsUnlock(method, params, current = {}) {
   if (UNLOCK_METHODS.has(method)) return true;

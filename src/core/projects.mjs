@@ -7,6 +7,7 @@ import { ctx, tr } from './context.mjs';
 import { folderName, isReservedName, isReservedInCategory, isCategory, categoryOf, folderKey, IGNORED_PROJECTS, FINISHED_PROJECTS, CATEGORIES, DEFAULT_CATEGORY, PLATFORMS, MULTI, SHARED_DIR } from './home.mjs';
 import { git, ORB_GIT } from './workspace.mjs';
 import { projectNameProblem } from './product.mjs';
+import { settleDeleting, deletingProjects } from './project-close.mjs';
 
 export const checkCategory = (category) => {
   const c = String(category ?? '').trim().toLowerCase() || DEFAULT_CATEGORY;
@@ -133,22 +134,36 @@ export function groupOf(board, project) {
 // assistant's folder was deleted, or that are not a project folder of a category (2.3.0 took the categories and Orb's own
 // folders for projects), are dropped unless they still have open tasks. Linked outside folders are left alone.
 // 3.8: the folders of other users' projects of 3.7 (IGNORED_PROJECTS) are not listed; 3.8.1: nor the finished ones.
+const FINISHED_GONE_MS = 30 * 24 * 3_600_000;
 export function syncProjects(board) {
   const home = ctx.paths.home;
   const norm = folderKey;
   const ignoredList = board.settingJson(IGNORED_PROJECTS);
   const ignored = new Set(Array.isArray(ignoredList) ? ignoredList : []);
-  // 3.8.1: the finished projects (project-close.mjs) are not brought back; one whose folder is gone leaves that list.
+  // 3.8.1: the finished projects (project-close.mjs) are not brought back. One whose folder is not found leaves that list
+  // only after FINISHED_GONE_MS (a folder renamed for a while, a disk unplugged: it is still finished when it is back).
   const finishedList = board.settingJson(FINISHED_PROJECTS);
   const finished = Array.isArray(finishedList) ? finishedList.filter((x) => x && typeof x.key === 'string') : [];
-  if (finished.some((x) => !fs.existsSync(x.path))) board.settingJson(FINISHED_PROJECTS, finished.filter((x) => fs.existsSync(x.path)));
+  let finishedDirty = false;
+  const finishedNow = finished.flatMap((x) => {
+    if (fs.existsSync(x.path)) { if (!x.missingSince) return [x]; finishedDirty = true; const { missingSince, ...back } = x; return [back]; }
+    if (!x.missingSince) { finishedDirty = true; return [{ ...x, missingSince: new Date().toISOString() }]; }
+    if (Date.now() - Date.parse(x.missingSince) > FINISHED_GONE_MS) { finishedDirty = true; return []; }
+    return [x];
+  });
+  if (finishedDirty) board.settingJson(FINISHED_PROJECTS, finishedNow);
   for (const x of finished) ignored.add(x.key);
+  // 3.8.1: a delete left half-way is settled; one under way keeps its project (its folder may already be in the Recycle
+  // Bin) until the engine finishes it.
+  settleDeleting(board, home);
+  const deleting = new Set(deletingProjects(board).map((x) => x.name));
   let changed = false;
   // First what is gone, so a folder found again (or moved into the workspace) gets its own name, not «name (2)».
   // Inside the workspace: a folder deleted or no longer in a category. Outside: a linked folder that no longer exists
   // (one of an earlier workspace, a moved folder), unless its whole drive is missing (a disk unplugged for a while).
   // A project with open tasks stays (removeProject refuses).
   for (const p of board.projects()) {
+    if (deleting.has(p.name)) continue;
     const rel = path.relative(home, p.path);
     const inside = Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel);
     if (inside ? fs.existsSync(p.path) && categoryOf(home, p.path) : !rel || fs.existsSync(p.path) || !fs.existsSync(path.parse(p.path).root)) continue;

@@ -132,13 +132,26 @@ C:\Orb\                   (C:\Orb by default; always <chosen folder>\Orb, the sa
 - **The end of a project** (3.8.1, Proyectos › right click, a long press or «…» on the row; `src/core/project-close.mjs`):
   «Finalizar proyecto» (also from the phone: `projects.finish`) cancels its pending tasks, puts its tasks, conversations
   and direct conversations in «Completadas», pauses its schedules and takes it out of Orb while its folder stays;
-  `projects_finished` (a setting) keeps it out of `syncProjects`, and the «Finalizados» tab lists it with «Reabrir»
-  (`projects.reopen`, its schedules back on). «Eliminar proyecto» (PC only, behind the master password, asked
-  every time: `projects.deleteCheck` / `projects.delete` are in `UNLOCK_METHODS` and `FRESH_UNLOCK`) moves its folder to the Recycle Bin: `main.mjs ›
-  app:deleteProject` asks the engine to check it, checks the folder again by its real path (`deletableFolder`: only a
-  folder straight inside a category of the workspace, never a link or a junction, a category, core or the workspace),
-  calls `shell.trashItem` and then tells the engine (`trashed`); when the Recycle Bin cannot take it, the window warns
-  and offers «Borrar para siempre». Both refuse while a task of the project runs or a direct conversation answers.
+  `projects_finished` (a setting) keeps it out of `syncProjects` (one whose folder is missing stays there for 30 days:
+  a folder renamed for a while or a disk unplugged is still finished when it is back), and the «Finalizados» tab lists
+  it with «Reabrir» (`projects.reopen`, its schedules back on). Tasks, conversations, direct conversations and schedules
+  are tied to a project by name: when it is finished or deleted they move to a name of their own (`«name»: finalizado` /
+  `«name»: eliminado`; «:» cannot be in a project's name), so a new project with that name starts clean, and a reopened
+  one (under `«name» (category)` when the name was taken) gets them back, with its log, as `renameProject` does.
+  «Eliminar proyecto» (PC only, behind the master password, asked every time: `projects.deleteCheck` is in
+  `UNLOCK_METHODS` and `FRESH_UNLOCK`) moves its folder to the Recycle Bin. `main.mjs › app:deleteProject` asks the
+  engine to check it (`checkDelete`: from then on the project is being deleted — `projects_deleting`; `board.createTask`,
+  the scheduler and its direct conversations refuse —, its pending tasks are cancelled, its schedules paused and the
+  processes of its direct conversations closed; it returns a one-off ticket, valid 30 minutes), checks the folder again
+  by its real path (`deletableFolder`: only a folder straight inside a category of the workspace, never a link or a
+  junction, a category, core or the workspace), calls `shell.trashItem` and then tells the engine (`projects.delete`
+  with the ticket and `trashed`: whatever still works there is stopped, not refused). When the Recycle Bin cannot take
+  it: a folder some program is using (the rename test, `folderInUse`) offers only «Reintentar»; otherwise «Reintentar»
+  or «Borrar para siempre» (accepted by `main.mjs` only after that failure; refused while the folder is in use; one that
+  stops half-way says what is left). Cancelling (`projects.deleteAbort`) gives the project back with its schedules; a
+  delete left half-way (the app closed, the ticket expired) is finished when its folder is gone, undone otherwise
+  (`settleDeleting`, at start and in the project sync). Finishing and checking a delete refuse while a task of the
+  project runs, a direct conversation answers or a coordinator is in the middle of a turn in one of its conversations.
 
 On Windows, it then offers to install whatever is missing (section 24).
 
@@ -1196,7 +1209,10 @@ in `src/core/home.mjs`; nothing else builds them.
   drops it from the list; any answer writes `mcpAsked: 2` and is final. Each row can be «Dejar donde está»; «Dejar todo como está» keeps them all. Nothing moves until
   «Aplicar». What is kept is remembered (`core\carpetas.json`) and not asked again, and a kept `bitacora` or `adb-tools`
   is used where it is (`paths().logs`, `paths().adb`), so the user's own rules that point to `C:\Orb\bitacora` keep
-  working. In core the agents read the logs with their reading tools (section 28) and write to them only through Orb:
+  working. Once the logs moved into core (`decided.bitacora: 'move'`; or nothing decided while core already has its
+  `GENERAL.md`, as in a new workspace) core stays the general log: a `bitacora` that shows up at the top again (a tool outside Orb writing to the old path) never takes its place,
+  and «Ordenar carpetas» offers to merge it into core. The last screen also says which of the user's files are read-only
+  (Orb's agents can only read those). In core the agents read the logs with their reading tools (section 28) and write to them only through Orb:
   `orb_write_log` / `orb_read_log` with `general` (`GENERAL.md`) or, with `archivo`, one of the user's own `.md` files
   at the top of the logs folder (`logs.mjs › ownLogFiles`; a read-only one stays untouched). Settings › Skills y MCP lists the projects that are MCP servers (their name says mcp or they depend on an MCP SDK)
   with «Usar» and «Mover a core» (section 25). A server's own credentials go with its folder: in core they enter every
@@ -1349,7 +1365,7 @@ channel's waits), making a new recovery code (`backup.recovery`: the code opens 
 `secrets.saveConnector`), and in `config.save` (compared with the settings in force): choosing the backups' folder,
 writing a connector key in clear, changing a connector that has keys (its command, arguments or name, removing it or one
 of its keys) and taking an entry off «Cosas que nadie toca»; 3.8.1: deleting a project with its folder
-(`projects.deleteCheck`, `projects.delete`). Opening core in the Explorer too (`main.mjs` asks the engine
+(`projects.deleteCheck`; its end, `projects.delete` / `projects.deleteAbort`, takes the one-off ticket the check returned). Opening core in the Explorer too (`main.mjs` asks the engine
 `master.check` before `app:openPath` on core itself or on `core\secretos`, compared by real path; core's tool folders
 open as before). The dispatcher refuses them without a fresh token: `master.unlock` (the password) gives one for 5
 minutes, kept in the engine's memory and the window's (`unlockCore`, which asks with a dialog). It ends with

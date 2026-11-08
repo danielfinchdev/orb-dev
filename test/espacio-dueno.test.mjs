@@ -139,7 +139,7 @@ test('3.8.1: un «Dejar donde está» de 3.8.0 en la bitácora se pregunta una v
   try {
     const r = await e.call('app.layoutApply', { choices: { bitacora: 'move' } });
     assert.equal(r.pending, false);
-    assert.deepEqual(r.logsMoved, { dir: at('core', 'bitacora'), files: ['anexos.md', 'bitacora_project.md'].map((n) => at('core', 'bitacora', n)) }, 'la ruta exacta de sus archivos, para AGENTS.md');
+    assert.deepEqual(r.logsMoved, { dir: at('core', 'bitacora'), files: ['anexos.md', 'bitacora_project.md'].map((n) => at('core', 'bitacora', n)), readOnly: [at('core', 'bitacora', 'bitacora_project.md')] }, 'la ruta exacta de sus archivos, para AGENTS.md, y cuáles son de solo lectura');
     assert.equal(read(at('core', 'bitacora', 'bitacora_project.md')), 'índice central');
     assert.match(read(at('core', 'bitacora', 'GENERAL.md')), /entrada del dueño/);
     assert.ok(!fs.existsSync(at('bitacora')));

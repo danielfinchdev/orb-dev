@@ -121,13 +121,21 @@ export const isReservedInCategory = (category, name) => /^\./.test(String(name))
 // Names a project can never take (they would read as one of Orb's own folders).
 export const isReservedName = (name) => isConfigName(name) || lower(name) === OLD_ADB_DIR;
 
+// What the user decided in «Ordenar carpetas» about the logs at the top (core\carpetas.json, core-folder.mjs).
+const logsDecision = (core) => { try { return JSON.parse(fs.readFileSync(path.join(core, 'carpetas.json'), 'utf8'))?.decided?.bitacora ?? null; } catch { return null; } };
 export function paths(home) {
   const core = path.join(home, CORE_DIR);
   const data = path.join(core, 'datos');
   // A log folder or Android tools left at the top (kept by the user, or not decided about yet) are used there.
+  // 3.8.1: the logs at the top are the general log only when the user kept them there, or before deciding while core has
+  // no general log of its own (a 3.7 workspace). Once they moved into core (or a workspace that always had them there),
+  // a bitacora that shows up at the top again (a tool outside Orb writing to the old path) never takes core's place
+  // («Ordenar carpetas» offers to merge it into core).
   const keptLogs = path.join(home, LEGACY.logs);
   const keptAdb = path.join(home, ...LEGACY.adb);
-  const logs = isDirSync(keptLogs) ? keptLogs : path.join(core, LOGS_DIR);
+  const coreLogs = path.join(core, LOGS_DIR);
+  const decided = isDirSync(keptLogs) ? logsDecision(core) : 'move';
+  const logs = decided === 'keep' || (decided === null && !fs.existsSync(path.join(coreLogs, 'GENERAL.md'))) ? keptLogs : coreLogs;
   const copies = path.join(core, 'copias');
   const tools = path.join(core, 'herramientas');
   return {
@@ -167,6 +175,8 @@ export const folderKey = (folder) => { try { return fs.realpathSync(folder).toLo
 export const IGNORED_PROJECTS = 'projects_ignored';
 // 3.8.1: the projects the user finished (src/core/project-close.mjs): their folders stay, Orb no longer lists them.
 export const FINISHED_PROJECTS = 'projects_finished';
+// 3.8.1: the projects being deleted (between the engine's check and the end of the Recycle Bin: project-close.mjs).
+export const DELETING_PROJECTS = 'projects_deleting';
 
 const isObject = (v) => v && typeof v === 'object' && !Array.isArray(v);
 // Deep merge where arrays and scalars of `over` replace those of `base`.

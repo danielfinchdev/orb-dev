@@ -101,6 +101,8 @@ function sendMessage(a) {
   if (owner && !['orb', 'usuario', 'all'].includes(a.to) && owner !== a.to) refuse('msg.authz.wrongAgent', { id: task, agent: owner });
   return board.send({ ...a, task_id: task, from: ME, from_task: TASK_ID });
 }
+// 3.8.1: the general log in core (moved there, or a new workspace) or kept at the top by the user (home.mjs › paths).
+const generalInCore = (() => { const rel = path.relative(ctx.paths.core, ctx.paths.generalLog); return Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel); })();
 // 3.8: the logs of the projects its conversation works on, and the general one.
 function myLog(project) {
   const [name] = findLog(board, project);
@@ -360,7 +362,7 @@ const tools = [
     { name: 'orb_read_log', description: `Lee una bitácora: la de un proyecto de esta conversación o la "general" (está en ${path.dirname(ctx.paths.generalLog)}). Devuelve las entradas más recientes completas. Sin project: lista las bitácoras.`, readOnly: true,
       inputSchema: { type: 'object', properties: { project: str('Proyecto registrado o "general"'), archivo: str('Con "general": otro archivo .md de esa carpeta (p. ej. bitacora_project.md)'), chars: { type: 'integer', minimum: 1000, maximum: 40000 }, entera: { type: 'boolean' } } },
       run: (a) => (a.project ? readLog(board, myLog(a.project), { chars: a.chars, whole: a.entera === true, file: a.archivo }) : listLogs()) },
-    { name: 'orb_write_log', description: `Añade una entrada al FINAL de una bitácora (un proyecto de esta conversación o "general"), firmada y con el formato estándar. Nunca borra. Sin contraseñas ni datos personales. La general está en ${path.dirname(ctx.paths.generalLog)} (core): escribe en ella solo con esta herramienta.`,
+    { name: 'orb_write_log', description: `Añade una entrada al FINAL de una bitácora (un proyecto de esta conversación o "general"), firmada y con el formato estándar. Nunca borra. Sin contraseñas ni datos personales. La general está en ${path.dirname(ctx.paths.generalLog)}${generalInCore ? ' (core): escribe en ella solo con esta herramienta' : ''}.`,
       inputSchema: { type: 'object', required: ['project', 'tema', 'hecho'], properties: { project: str('Proyecto o "general"'), archivo: str('Con "general": otro archivo .md de esa carpeta (p. ej. bitacora_project.md)'), tema: str('Tema corto'), pedido: str('Qué se pidió'), hecho: str('Qué se decidió o hizo'), revertir: str('Cómo revertirlo'), estado: str('Estado / pendiente') } },
       run: (a) => writeLog(board, myLog(a.project), a, brainAuthor()) },
     { name: 'orb_schedule', description: `Programa una tarea que se repite (p. ej. cada lunes a las 9 revisar dependencias). ${USER} la aprueba una vez en la app antes de que funcione sola.`,

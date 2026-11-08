@@ -30,7 +30,7 @@ contextBridge.exposeInMainWorld('orb', {
   // 3.8: unlock: the master password's token, for core (main.mjs checks it with the engine).
   openPath: (folder, unlock) => ipcRenderer.invoke('app:openPath', folder, unlock ?? null),
   // 3.8.1: a project and its folder (to the Recycle Bin; permanent: for good), with the master password's token.
-  deleteProject: (name, unlock, permanent) => ipcRenderer.invoke('app:deleteProject', String(name ?? ''), unlock ?? null, permanent === true),
+  deleteProject: (name, unlock, step) => ipcRenderer.invoke('app:deleteProject', String(name ?? ''), unlock ?? null, ['retry', 'forever', 'cancel'].includes(step) ? step : null),
   openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
   showBrowser: () => ipcRenderer.invoke('app:showBrowser'),
   // Size of the interface on this PC (1 = normal): read with zoom(), change with zoom(value).

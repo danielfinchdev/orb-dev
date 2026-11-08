@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { openDb, taskOptions, checkPolicy } from './db.mjs';
 import { ctx, tr } from './context.mjs';
-import { AGENT_IDS, AGENT_LABELS, folderName, projectLogHeader, isConfigName, categoryOf, CATEGORIES, folderKey, IGNORED_PROJECTS, FINISHED_PROJECTS } from './home.mjs';
+import { AGENT_IDS, AGENT_LABELS, folderName, projectLogHeader, isConfigName, categoryOf, CATEGORIES, folderKey, IGNORED_PROJECTS, FINISHED_PROJECTS, DELETING_PROJECTS } from './home.mjs';
 import { oneLine, MAX_DESCRIPTION } from './safety.mjs';
 import { contentHash, sign, verify, detectSensitivity, deletionAskedByUser, defaultApprovalKey } from './approval.mjs';
 import { PRODUCT } from './product.mjs';
@@ -156,6 +156,8 @@ export class Board {
     return this.project(name);
   }
   project(name) { return this.one('SELECT * FROM projects WHERE name = ?', String(name ?? '')); }
+  // 3.8.1: between the check of «Eliminar proyecto» and its end (project-close.mjs): nothing of it starts.
+  isDeleting(name) { const list = this.settingJson(DELETING_PROJECTS); return Array.isArray(list) && list.some((x) => x?.name === name); }
   projects() { return this.all('SELECT * FROM projects ORDER BY name'); }
   removeProject(name, actor) {
     const project = this.project(name); if (!project) throw new Error(tr('msg.board.noProject', { name }));
@@ -227,6 +229,8 @@ export class Board {
     if (!MODES.includes(mode)) throw new Error(tr('sys.board.badMode'));
     const proj = this.project(project);
     if (!proj) throw new Error(tr('sys.board.unknownProject', { name: project }));
+    // 3.8.1: a project being deleted takes nothing new (project-close.mjs › checkDelete).
+    if (this.isDeleting(proj.name)) throw new Error(tr('msg.projects.deleting', { name: proj.name }));
     const convId = (conversation_id ? this.conversation(conversation_id)?.id : null) ?? (parent_id ? this.conversationOfTask(parent_id) : review_of ? this.conversationOfTask(review_of) : null);
     // A subtask or a review is checked against the project of its own conversation, not the folder another one set.
     const conversation = convId ? this.conversation(convId) : null;
