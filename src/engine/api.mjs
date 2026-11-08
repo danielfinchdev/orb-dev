@@ -43,7 +43,8 @@ import { createFeeds } from './feeds.mjs';
 export { fail, str, int, oneOf } from './api-common.mjs';
 
 // 3.8.1: what only some calls need is loaded the first time one of them comes (the engine's start does not wait for it).
-const lazy = (load) => { let p = null; return () => (p ??= load()); };
+// A failed load is not kept (a file locked for a moment): the next call tries again.
+const lazy = (load) => { let p = null; return () => (p ??= load().catch((error) => { p = null; throw error; })); };
 const gh = lazy(() => import('./github.mjs'));
 const inst = lazy(() => import('./installer.mjs'));
 const exp = lazy(() => import('./expert.mjs'));

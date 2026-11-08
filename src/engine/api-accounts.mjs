@@ -16,7 +16,7 @@ import { fail, str, oneOf } from './api-common.mjs';
 
 // 3.8.1: the installer is loaded the first time an install is asked for (not at the engine's start).
 let installerModule = null;
-const inst = () => (installerModule ??= import('./installer.mjs'));
+const inst = () => (installerModule ??= import('./installer.mjs').catch((error) => { installerModule = null; throw error; }));
 
 export function accountMethods({ board, emit, log }) {
   return {

@@ -408,10 +408,25 @@ export function coreHealth(home) {
 // core hidden in the Explorer on Windows (hidden only: a system attribute would make the user's own backup tools skip
 // it); elsewhere nothing (the workspace is the user's). No access rules: see docs/ARCHITECTURE.md (core) for why a deny
 // ACE was left out.
-// 3.8.1: wait false: attrib runs on its own (the engine's start waited ~25 ms for it on every start).
+// 3.8.1: wait false: attrib runs on its own (the engine's start waited ~25 ms for it on every start) and a promise of
+// whether it worked comes back instead (it never says «hidden» before attrib has said so); the promise of the last one
+// is kept (coreProtecting) so that whoever must not race with it (a test removing the folder) can wait for it.
+let protecting = Promise.resolve(false);
+export const coreProtecting = () => protecting;
 export function protectCore(home, { wait = true } = {}) {
-  if (process.platform !== 'win32') return false;
+  if (process.platform !== 'win32') return wait ? false : Promise.resolve(false);
   const args = ['-s', '+h', paths(home).core];
-  if (!wait) { try { const child = spawn('attrib', args, { windowsHide: true, stdio: 'ignore' }); child.on('error', () => {}); child.unref(); return true; } catch { return false; } }
+  if (!wait) {
+    protecting = new Promise((resolve) => {
+      try {
+        const child = spawn('attrib', args, { windowsHide: true, stdio: 'ignore' });
+        const timer = setTimeout(() => { try { child.kill(); } catch { /* gone */ } resolve(false); }, 5000); timer.unref?.();
+        child.on('error', () => { clearTimeout(timer); resolve(false); });
+        child.on('exit', (code) => { clearTimeout(timer); resolve(code === 0); });
+        child.unref();
+      } catch { resolve(false); }
+    });
+    return protecting;
+  }
   try { return spawnSync('attrib', args, { windowsHide: true, timeout: 5000 }).status === 0; } catch { return false; }
 }

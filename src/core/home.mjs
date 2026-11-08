@@ -228,7 +228,7 @@ export function createHome(base, { assistantName = PRODUCT.assistant, userName =
 // categories) exist. Folders made by 2.3.0 and older are put in order: their "bitacoras" moves into the log
 // folder, dropping only the empty logs 2.3.0 wrote for the category and configuration folders it took for projects.
 // Nothing with content is deleted. core is hidden again (src/core/core-folder.mjs › protectCore; wait false: without
-// waiting for it, as the engine starts).
+// waiting for it, as the engine starts: the promise of whether it worked is returned).
 export function ensureLayout(home, config = null, { wait = true } = {}) {
   migrateWorkspace(home);
   const p = paths(home);
@@ -239,7 +239,7 @@ export function ensureLayout(home, config = null, { wait = true } = {}) {
     let c = config; if (!c) { try { c = loadConfig(home); } catch { c = DEFAULT_CONFIG; } }
     fs.writeFileSync(p.generalLog, generalLogHeader(c));
   }
-  protectCore(home, { wait });
+  return protectCore(home, { wait });
 }
 
 // Moves a log folder into another: a file that exists in both keeps the new one and gets the old entries at its end.
