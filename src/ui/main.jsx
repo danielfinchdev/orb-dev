@@ -200,6 +200,24 @@ function Shell() {
   );
 }
 
+// The conversations' states that arrived since the last frame, drawn together (only the newest one of each counts).
+let chatStates = null;
+function chatStateSoon(payload) {
+  if (!chatStates) {
+    chatStates = new Map();
+    const flush = () => {
+      const states = chatStates; chatStates = null;
+      setState((s) => {
+        let chats = s.app?.chats ?? [];
+        for (const p of states.values()) { const others = chats.filter((c) => c.conversation !== p.conversation); chats = p.busy || p.waiting ? [...others, p] : others; }
+        return { app: { ...s.app, chats } };
+      });
+    };
+    if (document.hidden) setTimeout(flush, 100); else requestAnimationFrame(flush);
+  }
+  chatStates.set(payload.conversation, payload);
+}
+
 let coreLost = false;
 // The linking screen's own «back» (AppLink): true when it took the press.
 const linkBack = { current: null };
@@ -321,11 +339,9 @@ function Root() {
     if (phase !== 'app') return undefined;
     return bridge.on('*', (event, payload) => {
       if (event === 'board:changed' || event === 'session:update' || event === 'session:removed' || event === 'config:changed' || event === 'approval:changed') refreshSoon();
-      // 3.2: what one conversation is doing now (answering, waiting its turn or idle again).
-      if (event === 'chat:state' && payload?.conversation != null) setState((s) => {
-        const others = (s.app?.chats ?? []).filter((c) => c.conversation !== payload.conversation);
-        return { app: { ...s.app, chats: payload.busy || payload.waiting ? [...others, payload] : others } };
-      });
+      // 3.2: what one conversation is doing now (answering, waiting its turn or idle again). 3.8.1 (H4a): an answer
+      // streams in many small pieces; the screen takes them once per frame (the newest state of each conversation).
+      if (event === 'chat:state' && payload?.conversation != null) chatStateSoon(payload);
       // 2.7: what only informs (working folder, brain in use, schedule created…) passes by as a notification.
       // 3.2: through lib/notify.js: one at a time, never repeated, kept under the bell.
       if (event === 'notice' && payload?.body) notify({ body: payload.body, tone: payload.tone });
