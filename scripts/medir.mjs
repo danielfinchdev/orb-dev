@@ -4,7 +4,7 @@
 //
 //   node scripts/medir.mjs [--exe src-tauri/target-e2e/release/Orb.exe] [--shell tauri|electron] [--runs 5] [--idle 30]
 //                          [--installer <setup.exe>] [--apk <file.apk>] [--out <results.json>] [--hidden] [--profile <dir>]
-//                          [--big] [--anim <s>] [--anim-only] [--quiet-scene]
+//                          [--big] [--anim <s>] [--anim-only] [--quiet-scene] [--css <file>] [--ui <json>]
 //
 // Tauri: measures a build with the `e2e` cargo feature (npm run tauri:build:e2e), the only one that opens the window's
 // DevTools port (ORB_E2E_CDP_PORT; a normal build ignores it and every WEBVIEW2_* variable). --hidden keeps its window
@@ -42,6 +42,9 @@
 // still), plus «robot-activo»: the new chat with the pointer over the sidebar's robot (it floats), with the
 // requestAnimationFrame deltas meanwhile (dropped frames). --quiet-scene pauses the theme's moving backdrop (the «orb»
 // theme's clouds) to see what the robot alone costs.
+// 3.8.1 (H4f): --css <file> adds that style sheet to each animation screen after it loads (to try a variant of an
+// animation, or to put the old one back, on the same build).
+// --ui '{"skin":"vaporwave","theme":"oscuro"}' saves that interface setting first (another theme's backdrop).
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -66,6 +69,8 @@ const big = process.argv.includes('--big');
 const animOnly = process.argv.includes('--anim-only');
 const animS = Number(arg('anim', animOnly ? 10 : 0));
 const quietScene = process.argv.includes('--quiet-scene');
+const extraCss = arg('css') ? fs.readFileSync(arg('css'), 'utf8') : null;
+const uiPatch = arg('ui') ? JSON.parse(arg('ui')) : null;
 if (profileDir) fs.mkdirSync(profileDir, { recursive: true });
 if (!fs.existsSync(exe)) { console.error(`no existe ${exe} (compila antes o pasa --exe)`); process.exit(2); }
 
@@ -326,11 +331,13 @@ async function idleAnimations(run) {
   const { page } = run;
   const longId = await page.evaluate(async () => (await window.orb.call('conversations.list')).find?.((c) => c.title === 'Conversación larga')?.id ?? null).catch(() => null);
   const screens = { 'chat-nuevo': { view: 'chat' }, tareas: { view: 'tasks' }, ...(longId ? { 'chat-largo': { view: 'chat', id: longId } } : {}), 'robot-activo': { view: 'chat', hover: '[data-testid=sidebar-home] .orb' } };
-  results.animations = { quietScene };
+  results.animations = { quietScene, ...(uiPatch ? { ui: uiPatch } : {}) };
+  if (uiPatch) await page.evaluate((ui) => window.orb.call('config.save', { patch: { ui } }), uiPatch);
   for (const [name, { hover, ...route }] of Object.entries(screens)) {
     await page.evaluate((r) => { localStorage.setItem('orb.route', JSON.stringify(r)); location.reload(); }, route);
     await page.waitForSelector(READY, { timeout: 30000 });
     if (quietScene) await page.addStyleTag({ content: '.scene *, .scene *::before, .scene *::after, .theme-band::before { animation-play-state: paused !important; }' });
+    if (extraCss) await page.addStyleTag({ content: extraCss });
     await wait(12000);
     if (hover) { await page.hover(hover).catch(() => {}); await wait(1500); }
     const perf = await page.context().newCDPSession(page); await perf.send('Performance.enable');
