@@ -213,7 +213,7 @@ export default {
   'help.tour.tutorials.title': 'Tutorials',
   'help.tour.tutorials.text': 'Guides, FAQ, keyboard shortcuts and the option to replay this tour.',
   'help.tour.settings.title': 'Settings',
-  'help.tour.settings.text': 'General, Magic Link, Agents and usage, Data, Advanced and About.',
+  'help.tour.settings.text': 'General, Magic Link, Agents and usage, Skills and MCP, Data, Advanced and About.',
   'help.tour.end.title': 'You’re all set',
   'help.tour.end.text': 'Pick a project, tell me what you need and let’s get started.',
   // 3.2: conversaciones, menú lateral, buscador y globito

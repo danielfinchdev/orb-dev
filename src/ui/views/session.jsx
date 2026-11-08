@@ -26,7 +26,7 @@ import { useT, t, useLocale, currentLocale } from '@/lib/i18n.js';
 import { sameBlock } from '@/lib/memo.js';
 
 // Items → blocks: a tool call and its result become one block (the latest call with that id gets the result).
-function toBlocks(items) {
+function toBlocks(items, t) {
   const blocks = []; const tools = new Map();
   for (const it of items) {
     if (it.kind === 'tool') { const b = { type: 'tool', key: it.id, call: it.body, result: null }; if (it.body?.id) tools.set(it.body.id, b); blocks.push(b); continue; }
@@ -316,7 +316,8 @@ export function SessionView({ route }) {
     const offQueue = bridge.on('session:queue', (q) => { if (q.id === route.id) setQueue(q.queue); });
     return () => { alive = false; offItem(); offDelta(); offQueue(); };
   }, [route.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const blocks = useMemo(() => toBlocks(items), [items]);
+  const tb = useT(); // H4a B2: «Resultado» in the language on screen
+  const blocks = useMemo(() => toBlocks(items, tb), [items, tb]);
   const scroll = useAutoScroll([blocks.length, items.at(-1)?.id, partial.length > 0, Math.floor(partial.length / 200)]);
   useEffect(() => { if (s && s.status !== 'running') setPartial(''); }, [s?.status]); // eslint-disable-line react-hooks/exhaustive-deps
   const catalog = useCatalog();

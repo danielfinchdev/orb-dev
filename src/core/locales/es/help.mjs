@@ -214,7 +214,7 @@ export default {
   'help.tour.tutorials.title': 'Tutoriales',
   'help.tour.tutorials.text': 'Guías, preguntas frecuentes, atajos de teclado y la opción de repetir este recorrido.',
   'help.tour.settings.title': 'Ajustes',
-  'help.tour.settings.text': 'General, Magic Link, Agentes y uso, Datos, Avanzado y Acerca de.',
+  'help.tour.settings.text': 'General, Magic Link, Agentes y uso, Skills y MCP, Datos, Avanzado y Acerca de.',
   'help.tour.end.title': 'Todo listo',
   'help.tour.end.text': 'Elige un proyecto, cuéntame qué necesitas y empezamos.',
   // 3.2: conversaciones, menú lateral, buscador y globito
