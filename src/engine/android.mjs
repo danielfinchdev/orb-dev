@@ -16,6 +16,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import zlib from 'node:zlib';
 import { spawnSync, execFile } from 'node:child_process';
 import { ctx, tr } from '../core/context.mjs';
 import { isOrbData } from '../core/guard.mjs';
@@ -37,6 +38,28 @@ export const adbPath = () => path.join(ctx.paths.adb, exe('adb'));
 export const adbDisabled = () => process.env.ORB_NO_ADB === '1' || Boolean(process.env.ORB_FAKE_AGENTS);
 export const adbStatus = () => ({ ...state, dir: ctx.paths.adb, ready: fs.existsSync(adbPath()) });
 
+// 3.8.2 (review A2): what Orb downloaded, file by file (SHA-256), kept where agents cannot write (core\datos). Before
+// every run of adb the folder must be exactly that: same files, same contents, nothing added (a DLL next to adb.exe
+// would be loaded by it).
+export const adbPrints = () => path.join(ctx.paths.data, 'adb-huellas.json');
+export function fingerprints(dir) {
+  const out = {};
+  const walk = (d, pre) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const rel = pre ? `${pre}/${e.name}` : e.name; if (e.isDirectory()) walk(path.join(d, e.name), rel); else out[rel.toLowerCase()] = crypto.createHash('sha256').update(fs.readFileSync(path.join(d, e.name))).digest('hex'); } };
+  walk(dir, '');
+  return out;
+}
+export function verifyAdb(dir = ctx.paths.adb, prints = adbPrints()) {
+  let want; try { want = JSON.parse(fs.readFileSync(prints, 'utf8')).files; } catch { return false; }
+  if (!want || typeof want !== 'object') return false;
+  let have; try { have = fingerprints(dir); } catch { return false; }
+  const a = Object.keys(want); const b = Object.keys(have);
+  return a.length === b.length && a.every((k) => have[k] === want[k]);
+}
+function wipeAdb() {
+  try { for (const name of fs.readdirSync(ctx.paths.adb)) fs.rmSync(path.join(ctx.paths.adb, name), { recursive: true, force: true }); } catch { /* not there */ }
+  try { fs.rmSync(adbPrints(), { force: true }); } catch { /* not there */ }
+}
+
 // The downloaded archive against its pin. → null when it matches, or why not.
 export function checkArchive(buf, pin) {
   if (!pin) return tr('sys.android.noDownload', { platform: process.platform });
@@ -51,7 +74,12 @@ export function checkArchive(buf, pin) {
 // Tests (fake agents) and ORB_NO_ADB=1 never download, unless they bring their own fetch and pin.
 export function ensureAdb({ log = () => {}, fetchImpl = null, pin = PLATFORM_TOOLS[process.platform] } = {}) {
   if (adbDisabled() && !fetchImpl) { state = { state: 'off', error: null }; return Promise.resolve({ ...adbStatus(), ready: false }); }
-  if (fs.existsSync(adbPath())) { state = { state: 'ready', error: null }; return Promise.resolve(adbStatus()); }
+  if (fs.existsSync(adbPath())) {
+    if (verifyAdb()) { state = { state: 'ready', error: null }; return Promise.resolve(adbStatus()); }
+    // 3.8.2 (review A2): not what Orb downloaded (changed, a file added, or from before the fingerprints): again.
+    log('android: adb no coincide con lo descargado; se descarga de nuevo');
+    wipeAdb();
+  }
   if (!pin) { state = { state: 'error', error: tr('sys.android.noDownload', { platform: process.platform }) }; return Promise.resolve(adbStatus()); }
   running ??= download(pin, log, fetchImpl ?? globalThis.fetch).finally(() => { running = null; });
   return running;
@@ -83,6 +111,9 @@ async function download(pin, log, fetchImpl) {
     if (!fs.existsSync(path.join(from, exe('adb')))) throw new Error(tr('sys.android.noAdb'));
     fs.mkdirSync(ctx.paths.adb, { recursive: true });
     for (const name of fs.readdirSync(from)) fs.cpSync(path.join(from, name), path.join(ctx.paths.adb, name), { recursive: true, force: true });
+    // The fingerprint of every file, kept in core\datos (closed to agents): checked before each use (verifyAdb).
+    fs.mkdirSync(ctx.paths.data, { recursive: true });
+    fs.writeFileSync(adbPrints(), JSON.stringify({ version: pin.url, files: fingerprints(ctx.paths.adb) }));
     if (process.platform !== 'win32') for (const name of ['adb', 'fastboot']) { try { fs.chmodSync(path.join(ctx.paths.adb, name), 0o755); } catch { /* not there */ } }
     state = { state: 'ready', error: null };
     log(`android: platform-tools descargadas y comprobadas en ${ctx.paths.adb}`);
@@ -95,10 +126,15 @@ async function download(pin, log, fetchImpl) {
 
 // One run of adb, never through a shell: its arguments go as they are. A script (.mjs, the tests' fake adb) runs with
 // this Node. → { code, out: Buffer, err: string }
+// 3.8.2 (review M2): Orb's adb keeps its pairing keys and known phones in core\datos\android (ANDROID_USER_HOME), closed to
+// agents, instead of the user's .android (also closed: src/engine/workspace-layout.mjs › adbHomes).
+export const adbHome = () => path.join(ctx.paths.data, 'android');
 export function runAdb(file, args, { timeout = 30_000, maxBuffer = 24 * 1024 * 1024 } = {}) {
   const script = /\.(mjs|js)$/i.test(file);
+  let env = process.env;
+  if (!script) { try { fs.mkdirSync(adbHome(), { recursive: true }); env = { ...process.env, ANDROID_USER_HOME: adbHome() }; } catch { /* its default */ } }
   return new Promise((resolve) => {
-    execFile(script ? process.execPath : file, script ? [file, ...args] : args, { windowsHide: true, timeout, maxBuffer, encoding: 'buffer' }, (error, stdout, stderr) => {
+    execFile(script ? process.execPath : file, script ? [file, ...args] : args, { windowsHide: true, timeout, maxBuffer, encoding: 'buffer', env }, (error, stdout, stderr) => {
       resolve({ code: error ? (typeof error.code === 'number' ? error.code : 1) : 0, out: stdout ?? Buffer.alloc(0), err: String(stderr ?? '') || (error && typeof error.code !== 'number' ? String(error.message) : '') });
     });
   });
@@ -128,14 +164,65 @@ export function parseDevices(text) {
 }
 // `adb pair`: the phone's id (guid, '' when adb did not say it) when it worked, null when not.
 export const pairedGuid = (text) => (/Successfully paired/i.test(text) ? (/\[guid=([^\]\s]+)\]/.exec(text)?.[1] ?? '') : null);
-// `pm list packages -3 -f`: Map package → its apk path (a new install gets a new folder, even for the same package).
-export function parsePackages(text) {
-  const m = new Map();
-  for (const l of String(text ?? '').split(/\r?\n/)) { const x = /^package:(.+)=([\w.]+)\s*$/.exec(l.trim()); if (x) m.set(x[2], x[1]); }
-  return m;
+// 3.8.2 (review B2): the package an apk declares: its AndroidManifest.xml (Android's binary XML) read from the zip, the
+// «package» attribute of <manifest>. → the package, or null when the file is not an apk Orb can read.
+export function apkPackage(file) {
+  let buf; try { buf = fs.readFileSync(file); } catch { return null; }
+  try {
+    const xml = zipEntry(buf, 'AndroidManifest.xml');
+    return xml ? manifestPackage(xml) : null;
+  } catch { return null; }
 }
-// The packages that are new or were installed again between two lists.
-export const installedBetween = (before, after) => [...after].filter(([p, at]) => before.get(p) !== at).map(([p]) => p);
+function zipEntry(buf, name) {
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65_557); i--) if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) return null;
+  const count = buf.readUInt16LE(eocd + 10); let at = buf.readUInt32LE(eocd + 16);
+  for (let n = 0; n < count && at + 46 <= buf.length; n++) {
+    if (buf.readUInt32LE(at) !== 0x02014b50) return null;
+    const method = buf.readUInt16LE(at + 10); const size = buf.readUInt32LE(at + 20);
+    const nameLen = buf.readUInt16LE(at + 28); const extra = buf.readUInt16LE(at + 30); const comment = buf.readUInt16LE(at + 32);
+    const local = buf.readUInt32LE(at + 42);
+    if (buf.toString('utf8', at + 46, at + 46 + nameLen) === name) {
+      if (buf.readUInt32LE(local) !== 0x04034b50) return null;
+      const start = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
+      const data = buf.subarray(start, start + size);
+      if (method === 0) return data;
+      if (method === 8) return zlib.inflateRawSync(data, { maxOutputLength: 8 * 1024 * 1024 });
+      return null;
+    }
+    at += 46 + nameLen + extra + comment;
+  }
+  return null;
+}
+function manifestPackage(x) {
+  if (x.readUInt16LE(0) !== 0x0003) return null;
+  let strings = [];
+  for (let at = x.readUInt16LE(2); at + 8 <= x.length;) {
+    const type = x.readUInt16LE(at); const head = x.readUInt16LE(at + 2); const size = x.readUInt32LE(at + 4);
+    if (size < 8) return null;
+    if (type === 0x0001) { // string pool
+      const count = x.readUInt32LE(at + 8); const utf8 = (x.readUInt32LE(at + 16) & 0x100) !== 0; const base = at + x.readUInt32LE(at + 20);
+      strings = Array.from({ length: Math.min(count, 100_000) }, (_, i) => {
+        let p = base + x.readUInt32LE(at + head + i * 4);
+        if (utf8) { p += (x[p] & 0x80) ? 2 : 1; let len = x[p]; if (len & 0x80) { len = ((len & 0x7f) << 8) | x[p + 1]; p += 2; } else p += 1; return x.toString('utf8', p, p + len); }
+        let len = x.readUInt16LE(p); if (len & 0x8000) { len = ((len & 0x7fff) << 16) | x.readUInt16LE(p + 2); p += 4; } else p += 2;
+        return x.toString('utf16le', p, p + len * 2);
+      });
+    } else if (type === 0x0102) { // start of an element
+      if (strings[x.readUInt32LE(at + 20)] === 'manifest') {
+        const first = at + head + x.readUInt16LE(at + 24); const step = x.readUInt16LE(at + 26); const n = x.readUInt16LE(at + 28);
+        for (let i = 0; i < n; i++) {
+          const a = first + i * step;
+          if (strings[x.readUInt32LE(a + 4)] === 'package') { const v = strings[x.readUInt32LE(a + 8)]; return PACKAGE.test(v ?? '') ? v : null; }
+        }
+        return null;
+      }
+    }
+    at += size;
+  }
+  return null;
+}
 
 // `input text` through the phone's shell: one single-quoted word, spaces as %s (how input reads them). Plain ASCII only.
 export function inputText(text) {
@@ -164,14 +251,19 @@ const userError = (key, vars) => Object.assign(new Error(tr(key, vars)), { userF
 
 // The engine's phone. board: settings (the devices Orb paired, what each chat installed); exe(): adb's path (the tests: a
 // fake adb script); ensure(): the download.
-export function createAndroid({ board, log = () => {}, exe = adbPath, ensure = () => ensureAdb({ log }), now = () => Date.now(), pollMs = 1500, pairMs = 120_000 } = {}) {
+export function createAndroid({ board, log = () => {}, exe = adbPath, ensure = () => ensureAdb({ log }), verify = () => verifyAdb(), now = () => Date.now(), pollMs = 1500, pairMs = 120_000 } = {}) {
   let pairing = null; // { name, password, qr, state, error, until, device, timer }
   const off = () => exe === adbPath && adbDisabled(); // tests and ORB_NO_ADB: Orb's own adb never runs
+  // 3.8.2 (review A2): every adb binary runs only as Orb downloaded it (verify); only the tests' fake adb script does not.
+  const trusted = () => /\.(mjs|js)$/i.test(exe()) || verify();
+  const usable = () => !off() && fs.existsSync(exe()) && trusted();
   const ready = async () => {
     if (off()) throw userError('msg.android.noAdb', { error: 'ORB_NO_ADB' });
-    if (fs.existsSync(exe())) return exe();
+    // 3.8.2 (review A2): Orb's own adb runs only as it was downloaded (verify, every time); otherwise ensure() fetches it again.
+    const good = () => fs.existsSync(exe()) && trusted();
+    if (good()) return exe();
     const st = await ensure();
-    if (fs.existsSync(exe())) return exe();
+    if (good()) return exe();
     throw userError('msg.android.noAdb', { error: st?.error ?? '' });
   };
   const adb = async (args, opts) => runAdb(await ready(), args, opts);
@@ -181,11 +273,13 @@ export function createAndroid({ board, log = () => {}, exe = adbPath, ensure = (
 
   async function connected() { const r = await adb(['devices', '-l'], { timeout: 15_000 }); return parseDevices(text(r)); }
 
-  // After pairing: the phone's connection service (same guid, or the same address), then adb connect.
+  // After pairing: the connection service of the very phone that paired (3.8.2 review B4: its exact name, the guid adb
+  // gave, at the address it paired from; without a guid, that address only), then adb connect. (adb's TLS connection
+  // also checks the phone's certificate against the one it learnt when pairing: AOSP's design, not tested here.)
   async function connectAfterPair(host, guid) {
     for (let i = 0; i < 8; i++) {
       const list = parseMdns(text(await adb(['mdns', 'services'], { timeout: 10_000 })));
-      const svc = list.find((x) => /_adb-tls-connect/.test(x.type) && ((guid && x.name.startsWith(guid)) || x.address.startsWith(`${host}:`)));
+      const svc = list.find((x) => /_adb-tls-connect/.test(x.type) && x.address.startsWith(`${host}:`) && (!guid || x.name === guid));
       if (svc) { const r = await adb(['connect', svc.address], { timeout: 15_000 }); if (/connected to/i.test(text(r))) return svc.address; }
       await new Promise((ok) => setTimeout(ok, pollMs));
     }
@@ -254,15 +348,16 @@ export function createAndroid({ board, log = () => {}, exe = adbPath, ensure = (
       const roots = [s.cwd, ctx.paths.projects].map((d) => { try { return fs.realpathSync.native(d).toLowerCase(); } catch { return path.resolve(d).toLowerCase(); } });
       const low = real.toLowerCase();
       if (!roots.some((r) => low.startsWith(`${r}${path.sep}`)) || isOrbData(real, ctx.paths.internal, null, { read: false })) throw userError('msg.android.apkOutside');
+      // 3.8.2 (review B2): the package is the one the apk itself declares (its AndroidManifest.xml): only that one counts
+      // as this chat's (uninstall), never another app that changed on the phone meanwhile.
+      const pkg = apkPackage(real);
+      if (!pkg) throw userError('msg.android.badApk');
       const serial = await pick(a.serial);
-      const before = parsePackages(text(await adb(['-s', serial, 'shell', 'pm', 'list', 'packages', '-3', '-f'], { timeout: 30_000 })));
       const r = await adb(['-s', serial, 'install', '-r', real], { timeout: 300_000 });
       const out = `${text(r)}\n${r.err}`.trim();
       if (!/\bSuccess\b/.test(out)) throw userError('msg.android.installFailed', { error: clipEnd(out, 400) });
-      const after = parsePackages(text(await adb(['-s', serial, 'shell', 'pm', 'list', 'packages', '-3', '-f'], { timeout: 30_000 })));
-      const pkgs = installedBetween(before, after);
-      if (pkgs.length) board?.settingJson(installedKey(s), [...new Set([...installedBy(s), ...pkgs])].slice(-50));
-      return { text: tr('msg.android.installed', { pkg: pkgs.join(', ') || '?', serial }) };
+      board?.settingJson(installedKey(s), [...new Set([...installedBy(s), pkg])].slice(-50));
+      return { text: tr('msg.android.installed', { pkg, serial }) };
     },
     async launch(s, a) {
       const pkg = String(a.package ?? '');
@@ -374,7 +469,7 @@ export function createAndroid({ board, log = () => {}, exe = adbPath, ensure = (
     // Paired (Orb's record) and connected (adb's list), together.
     async devices() {
       let live = [];
-      if (!off() && fs.existsSync(exe())) { try { live = await connected(); } catch { live = []; } }
+      if (usable()) { try { live = await connected(); } catch { live = []; } }
       const rows = known().map((d) => {
         const on = live.find((x) => x.serial === d.serial || (d.guid && x.serial.startsWith(d.guid)) || x.serial.startsWith(`${d.host}:`));
         return { ...d, serial: on?.serial ?? d.serial, connected: on?.state === 'device', model: on?.model ?? d.model };
@@ -392,7 +487,7 @@ export function createAndroid({ board, log = () => {}, exe = adbPath, ensure = (
     async forget({ serial, host }) {
       const list = known();
       const gone = list.filter((d) => (serial && d.serial === serial) || (host && d.host === host));
-      for (const d of gone) if (d.serial && !off() && fs.existsSync(exe())) { try { await runAdb(exe(), ['disconnect', d.serial], { timeout: 15_000 }); } catch { /* not connected */ } }
+      for (const d of gone) if (d.serial && usable()) { try { await runAdb(exe(), ['disconnect', d.serial], { timeout: 15_000 }); } catch { /* not connected */ } }
       remember(list.filter((d) => !gone.includes(d)));
       log(`android: olvidado ${serial ?? host}`);
       return true;
@@ -409,7 +504,7 @@ export function createAndroid({ board, log = () => {}, exe = adbPath, ensure = (
     // this PC until someone uses it again from Orb).
     async stopServer() {
       api.pairCancel();
-      if (off() || !fs.existsSync(exe())) return false;
+      if (!usable()) return false; // never an adb that is not Orb's download
       try { await runAdb(exe(), ['kill-server'], { timeout: 10_000 }); } catch { /* not running */ }
       return true;
     }

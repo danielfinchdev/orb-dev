@@ -26,6 +26,9 @@ export function grantMethods({ board, sessions, log = () => {}, android = null }
   // 3.8.2 (D5): «total» of a chat with a project follows the same rules; taken back, it returns to the permission it had
   // (kept in settings), or «Editar archivos»; a chat without a project returns to «Solo lectura».
   const holdsTotal = (s) => s.permission === 'total';
+  // 3.8.2 (review M3): what the chat is doing goes with what it lost: its running turn stops and its agent process (and
+  // every shell it started under it) is closed; the next message starts it again with the new permission.
+  const halt = (s) => { try { sessions.stop(s.id); } catch { /* not running */ } try { sessions.closeLive(s.id); } catch { /* not open */ } };
   const before = (s) => { const k = `grant_prev:${s.id}`; const p = board.settingJson(k); board.settingJson(k, null); return s.project ? (['leer', 'probar', 'editar', 'preguntar'].includes(p) ? p : 'editar') : 'leer'; };
   // Every grant of every chat goes (Orb locked). → how many chats lost one.
   async function revokeAll(why = 'bloqueo') {
@@ -34,6 +37,7 @@ export function grantMethods({ board, sessions, log = () => {}, android = null }
       const s = sessions.get(id); if (!s) continue;
       if (holdsTotal(s)) { sessions.update(s.id, { permission: before(s) }); audit(s, 'totalOff', why); }
       if (Number(s.android) === 1) { sessions.update(s.id, { android: 0 }); audit(s, 'androidOff', why); }
+      halt(s);
     }
     try { await android?.stopServer(); } catch (error) { log(`android: ${error.message}`); }
     return rows.length;
@@ -60,8 +64,8 @@ export function grantMethods({ board, sessions, log = () => {}, android = null }
       // Taking one back needs nothing.
       'sessions.revokeGrant': ({ id, grant }) => {
         const s = chat(id); const g = oneOf(grant, GRANTS, 'permiso');
-        if (g === 'total' && holdsTotal(s)) { const out = sessions.update(s.id, { permission: before(s) }); audit(s, 'totalOff'); return out; }
-        if (g === 'android' && Number(s.android) === 1) { const out = sessions.update(s.id, { android: 0 }); audit(s, 'androidOff'); return out; }
+        if (g === 'total' && holdsTotal(s)) { const out = sessions.update(s.id, { permission: before(s) }); audit(s, 'totalOff'); halt(s); return out; }
+        if (g === 'android' && Number(s.android) === 1) { const out = sessions.update(s.id, { android: 0 }); audit(s, 'androidOff'); halt(s); return out; }
         return s;
       }
     }

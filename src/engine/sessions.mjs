@@ -40,9 +40,6 @@ const parseRow = (row) => row && { ...row, archived: Boolean(row.archived), sett
 const parseItem = (row) => { let body = row.body; if (/^[[{]/.test(body)) { try { body = JSON.parse(body); } catch { /* plain text */ } } return { ...row, body }; };
 const bodyText = (body) => (typeof body === 'string' ? body : body?.text ?? '');
 
-// 3.8.2: «Acceso total al PC»: a chat without a project with «total» (only the master password gives it: grants.mjs).
-export const fullPc = (s) => Boolean(s && s.kind === 'chat' && !s.project && s.permission === 'total');
-
 export const browserOn = () => Boolean(ctx.browser) && ctx.config.browser?.enabled !== false;
 
 // MCP servers handed to an agent: the assistant's board (with the browser tools when the app offers them) plus the
@@ -263,9 +260,9 @@ export class Sessions {
   }
 
   // ---- the live process of a conversation
-  // 3.8.2: «Acceso total al PC» given or taken back starts the agent again at its next turn (its tools are chosen when
-  // it starts).
-  liveKey(s, acc) { return [s.agent, acc.id, s.cwd, s.reasoning, fullPc(s) ? 'pc' : ''].join('|'); }
+  // 3.8.2 (review M3): a new permission starts the agent again at its next turn (its tools, Codex's sandbox and
+  // approvals are chosen when it starts).
+  liveKey(s, acc) { return [s.agent, acc.id, s.cwd, s.reasoning, s.permission].join('|'); }
 
   closeLive(id) {
     // Its MCP servers' grants end with its process (a new process gets new tickets).

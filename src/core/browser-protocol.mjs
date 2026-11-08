@@ -276,7 +276,13 @@ export function createActions({ driver, T, language = () => 'es', onChallenge = 
   async function run(tab, action, args) {
     let timer;
     try {
-      return await Promise.race([ACTIONS[action](tab, args), new Promise((_, reject) => { timer = setTimeout(() => reject(Object.assign(new Error(T('sys.browser.hung')), { hung: true })), ACTION_MS); })]);
+      const out = await Promise.race([ACTIONS[action](tab, args), new Promise((_, reject) => { timer = setTimeout(() => reject(Object.assign(new Error(T('sys.browser.hung')), { hung: true })), ACTION_MS); })]);
+      // 3.8.2 (review B3): wherever the action ended (a redirect, a click, back), a page of «Elementos protegidos» is left
+      // at once and nothing of it reaches the agent.
+      let url = ''; try { url = String(driver.url(tab) ?? ''); } catch { /* closed */ }
+      const hit = url && protectedHit(url);
+      if (hit) { try { await driver.load(tab, 'about:blank'); } catch { /* gone */ } throw new Error(T('sys.browser.protected', { name: hit })); }
+      return out;
     } catch (error) {
       if (error.hung) { tab.crashed = true; try { driver.kill(tab); } catch { /* gone */ } }
       throw error;

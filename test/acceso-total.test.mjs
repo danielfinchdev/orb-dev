@@ -14,7 +14,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { tempHome, startEngine, until, fake } from './helpers.mjs';
-import { decide, runsAdb, setGuardedRoots, setAppRoots } from '../src/core/guard.mjs';
+import { decide, runsAdb, setGuardedRoots, setAppRoots, localPath } from '../src/core/guard.mjs';
+import zlib from 'node:zlib';
 import { needsUnlock, FRESH_UNLOCK, METHODS } from '../src/core/permissions.mjs';
 import { useHome, ctx } from '../src/core/context.mjs';
 import { AgentAuth } from '../src/engine/agent-auth.mjs';
@@ -22,7 +23,7 @@ import { redeem } from '../src/mcp/auth-client.mjs';
 import { cursorRules } from '../src/agents/cursor.mjs';
 import { createActions } from '../src/core/browser-protocol.mjs';
 import { permissionModeOf } from '../src/agents/claude.mjs';
-import { pairingQr, newPairing, parseMdns, parseDevices, pairedGuid, parsePackages, installedBetween, inputText, ensureAdb, checkArchive, createAndroid, androidAllowed, shellAllowed, adbStatus } from '../src/engine/android.mjs';
+import { pairingQr, newPairing, parseMdns, parseDevices, pairedGuid, apkPackage, verifyAdb, fingerprints, inputText, ensureAdb, checkArchive, createAndroid, androidAllowed, shellAllowed, adbStatus } from '../src/engine/android.mjs';
 
 const WIN = process.platform === 'win32';
 const v = (args) => decide({ lang: 'es', ...args }).decision;
@@ -226,9 +227,6 @@ test('emparejar: el QR de Android y lo que dice adb', () => {
     [{ serial: 'R5CT1', state: 'device', model: 'Pixel 8', product: 'a', device: 'b' }, { serial: 'emu', state: 'offline', model: null, product: null, device: null }]);
   assert.equal(pairedGuid('Successfully paired to 1.2.3.4:5 [guid=adb-X-y]'), 'adb-X-y');
   assert.equal(pairedGuid('Failed: Wrong password'), null);
-  const before = parsePackages('package:/data/app/~~a/x-1/base.apk=com.a\npackage:/data/app/~~b/y/base.apk=com.b');
-  const after = parsePackages('package:/data/app/~~a/x-1/base.apk=com.a\npackage:/data/app/~~c/y/base.apk=com.b\npackage:/d/z.apk=com.c');
-  assert.deepEqual(installedBetween(before, after), ['com.b', 'com.c'], 'reinstalada y nueva');
   assert.equal(inputText("hola mundo it's"), "'hola%smundo%sit'\\''s'");
   for (const bad of ['', 'x'.repeat(501), 'línea\n', 'ñ']) assert.equal(inputText(bad), null, bad);
 });
@@ -256,9 +254,12 @@ test('el móvil de los agentes: un adb falso, permisos en cada llamada y límite
     const qr = await android.pairStart();
     assert.equal(qr.state, 'waiting');
     const [, name, password] = /S:([^;]+);P:([^;]+);;/.exec(qr.qr);
-    fs.writeFileSync(path.join(work, 'mdns.txt'), `${name}\t_adb-tls-pairing._tcp\t192.168.1.20:37001\nadb-R5CT10ABCD-xyz\t_adb-tls-connect._tcp\t192.168.1.20:41000\n`);
+    // B4 (review): decoys on the network (same name elsewhere, another name at the same address) are never connected to.
+    fs.writeFileSync(path.join(work, 'mdns.txt'), `${name}\t_adb-tls-pairing._tcp\t192.168.1.20:37001\nadb-R5CT10ABCD-xyz\t_adb-tls-connect._tcp\t192.168.1.66:41000\nadb-R5CT10ABCD-xyz-falso\t_adb-tls-connect._tcp\t192.168.1.20:42000\nadb-R5CT10ABCD-xyz\t_adb-tls-connect._tcp\t192.168.1.20:41000\n`);
     await until(async () => android.pairState().state === 'done', 'emparejado por QR', 5000);
     assert.ok(calls().some((c) => c[0] === 'pair' && c[1] === '192.168.1.20:37001' && c[2] === password));
+    assert.deepEqual(calls().filter((c) => c[0] === 'connect').map((c) => c[1]).slice(-1), ['192.168.1.20:41000']);
+    assert.ok(!calls().some((c) => c[0] === 'connect' && /\.66:|:42000/.test(c[1])));
     assert.equal((await android.devices()).length, 1, 'el mismo móvil, una vez');
     // The tools: only while the chat holds the phone.
     const s = { id: 'c1', kind: 'chat', project: 'web', permission: 'editar', android: false, cwd: path.join(t.home, 'web', 'app') };
@@ -267,10 +268,12 @@ test('el móvil de los agentes: un adb falso, permisos en cada llamada y límite
     s.android = true;
     assert.match((await android.tool(s, 'devices')).text, /Pixel 8/);
     // install: an apk of the project, never one outside the workspace or in core.
-    fs.writeFileSync(path.join(s.cwd, 'build', 'app.apk'), 'apk');
-    const outside = path.join(work, 'fuera.apk'); fs.writeFileSync(outside, 'apk');
+    fs.writeFileSync(path.join(s.cwd, 'build', 'app.apk'), makeApk('com.ejemplo.app'));
+    fs.writeFileSync(path.join(s.cwd, 'build', 'roto.apk'), 'no es un apk');
+    await assert.rejects(android.tool(s, 'install', { apk: 'build/roto.apk' }), /.apk/, 'un apk que no se puede leer');
+    const outside = path.join(work, 'fuera.apk'); fs.writeFileSync(outside, makeApk('com.fuera.app'));
     await assert.rejects(android.tool(s, 'install', { apk: outside }), /espacio de trabajo/);
-    fs.mkdirSync(path.join(t.home, 'core', 'datos'), { recursive: true }); fs.writeFileSync(path.join(t.home, 'core', 'datos', 'x.apk'), 'apk');
+    fs.mkdirSync(path.join(t.home, 'core', 'datos'), { recursive: true }); fs.writeFileSync(path.join(t.home, 'core', 'datos', 'x.apk'), makeApk('com.x.app'));
     await assert.rejects(android.tool(s, 'install', { apk: path.join(t.home, 'core', 'datos', 'x.apk') }), /espacio de trabajo/);
     await assert.rejects(android.tool(s, 'install', { apk: 'build/nada.apk' }), /No existe/);
     assert.match((await android.tool(s, 'install', { apk: 'build/app.apk' })).text, /com\.ejemplo\.app/);
@@ -308,4 +311,122 @@ test('el móvil de los agentes: un adb falso, permisos en cada llamada y límite
     for (const [k, val] of Object.entries(env)) { if (val === undefined) delete process.env[k]; else process.env[k] = val; }
     fs.rmSync(work, { recursive: true, force: true }); t.cleanup();
   }
+});
+
+// 3.8.2 (review B2): a minimal apk: a zip with a binary AndroidManifest.xml that declares its package (UTF-16 string pool).
+function makeApk(pkg, { deflate = true } = {}) {
+  const strs = ['manifest', 'package', pkg];
+  const enc = strs.map((x) => { const b = Buffer.alloc(2 + x.length * 2 + 2); b.writeUInt16LE(x.length, 0); b.write(x, 2, 'utf16le'); return b; });
+  const offs = []; let o = 0; for (const b of enc) { offs.push(o); o += b.length; }
+  const data = Buffer.concat(enc); const pad = Buffer.alloc((4 - (data.length % 4)) % 4);
+  const poolHead = 28; const pool = Buffer.alloc(poolHead + offs.length * 4);
+  pool.writeUInt16LE(0x0001, 0); pool.writeUInt16LE(poolHead, 2); pool.writeUInt32LE(pool.length + data.length + pad.length, 4);
+  pool.writeUInt32LE(strs.length, 8); pool.writeUInt32LE(0, 12); pool.writeUInt32LE(0, 16); pool.writeUInt32LE(pool.length, 20); pool.writeUInt32LE(0, 24);
+  offs.forEach((x, i) => pool.writeUInt32LE(x, poolHead + i * 4));
+  const el = Buffer.alloc(36 + 20); el.writeUInt16LE(0x0102, 0); el.writeUInt16LE(16, 2); el.writeUInt32LE(el.length, 4);
+  el.writeUInt32LE(0xffffffff, 12); el.writeUInt32LE(0xffffffff, 16); el.writeUInt32LE(0, 20); el.writeUInt16LE(20, 24); el.writeUInt16LE(20, 26); el.writeUInt16LE(1, 28);
+  el.writeUInt32LE(0xffffffff, 36); el.writeUInt32LE(1, 40); el.writeUInt32LE(2, 44); el.writeUInt16LE(8, 48); el.writeUInt8(3, 51); el.writeUInt32LE(2, 52);
+  const body = Buffer.concat([pool, data, pad, el]);
+  const head = Buffer.alloc(8); head.writeUInt16LE(0x0003, 0); head.writeUInt16LE(8, 2); head.writeUInt32LE(8 + body.length, 4);
+  return zipOf([['classes.dex', Buffer.from('dex')], ['AndroidManifest.xml', Buffer.concat([head, body])]], deflate);
+}
+function zipOf(files, deflate) {
+  const locals = []; const central = []; let off = 0;
+  for (const [name, raw] of files) {
+    const data = deflate ? zlib.deflateRawSync(raw) : raw; const n = Buffer.from(name);
+    const crc = zlib.crc32(raw);
+    const l = Buffer.alloc(30); l.writeUInt32LE(0x04034b50, 0); l.writeUInt16LE(20, 4); l.writeUInt16LE(deflate ? 8 : 0, 8); l.writeUInt32LE(crc, 14); l.writeUInt32LE(data.length, 18); l.writeUInt32LE(raw.length, 22); l.writeUInt16LE(n.length, 26);
+    const c = Buffer.alloc(46); c.writeUInt32LE(0x02014b50, 0); c.writeUInt16LE(20, 4); c.writeUInt16LE(20, 6); c.writeUInt16LE(deflate ? 8 : 0, 10); c.writeUInt32LE(crc, 16); c.writeUInt32LE(data.length, 20); c.writeUInt32LE(raw.length, 24); c.writeUInt16LE(n.length, 28); c.writeUInt32LE(off, 42);
+    locals.push(l, n, data); central.push(c, n); off += 30 + n.length + data.length;
+  }
+  const cd = Buffer.concat(central); const e = Buffer.alloc(22);
+  e.writeUInt32LE(0x06054b50, 0); e.writeUInt16LE(files.length, 8); e.writeUInt16LE(files.length, 10); e.writeUInt32LE(cd.length, 12); e.writeUInt32LE(off, 16);
+  return Buffer.concat([...locals, cd, e]);
+}
+
+test('revisión 3.8.2 (A1, M1, M2): UNC al propio PC, unidades nuevas, elevar y copiar la carpeta padre', () => {
+  const t = tempHome();
+  try {
+    const core = path.join(t.home, 'core');
+    fs.mkdirSync(path.join(core, 'datos'), { recursive: true }); fs.writeFileSync(path.join(core, 'datos', 'orb.db'), 'x');
+    const android = path.join(os.homedir(), '.android');
+    setGuardedRoots([path.join(t.home, 'personal'), android]);
+    const db = path.join(core, 'datos', 'orb.db');
+    const drive = db.slice(0, 1); const rest = db.slice(2);
+    // A1: the same file through a share of this PC, in every mode (reading too).
+    const uncs = [`\\\\localhost\\${drive}$${rest}`, `\\\\${os.hostname()}\\${drive}$${rest}`, `\\\\127.0.0.1\\${drive}$${rest}`, `\\\\?\\UNC\\localhost\\${drive}$${rest}`, `//localhost/${drive}$${rest.replace(/\\/g, '/')}`, `\\\\?\\${db}`, `\\\\.\\${db}`];
+    for (const u of uncs) {
+      assert.equal(String(localPath(u)).toLowerCase().replace(/\//g, '\\'), db.toLowerCase(), u);
+      for (const permission of ['leer', 'editar', 'total']) {
+        assert.equal(v({ permission, tool: 'Read', paths: [u], internalDir: core, cwd: t.home }), 'deny', `${permission} ${u}`);
+        assert.equal(v({ permission, tool: 'Bash', command: `type "${u}"`, internalDir: core, cwd: t.home }), 'deny', `${permission} cmd ${u}`);
+      }
+    }
+    assert.equal(localPath('\\\\localhost\\compartida\\x'), false, 'un recurso del PC que no es una unidad: cerrado');
+    assert.equal(v({ permission: 'total', tool: 'Read', paths: ['\\\\?\\Volume{0000}\\Orb\\core'], internalDir: core, cwd: t.home }), 'deny');
+    assert.equal(localPath('\\\\otro-equipo\\C$\\x'), null, 'otro equipo: no es este PC');
+    assert.equal(localPath('\\\\.\\pipe\\docker_engine'), null);
+    for (const c of ['subst X: C:\\Orb', 'net use Z: \\\\localhost\\C$', 'New-PSDrive -Name O -PSProvider FileSystem -Root C:\\Orb', 'cmd /c "subst Q: ."']) {
+      assert.equal(v({ permission: 'total', tool: 'Bash', command: c, internalDir: core, cwd: t.home }), 'deny', c);
+    }
+    // M1: raising privileges on Windows, also under «total».
+    for (const c of ['runas /user:Administrator cmd', 'gsudo type x', 'Start-Process powershell -Verb RunAs', 'saps cmd -verb runas', 'psexec -s -i cmd', 'psexec64.exe -i -s cmd', '(New-Object -ComObject Shell.Application).ShellExecute("cmd", "", "", "runas")', 'nircmd elevate cmd']) {
+      assert.equal(v({ permission: 'total', tool: 'Bash', command: c, internalDir: core, cwd: t.home }), 'deny', c);
+    }
+    assert.equal(v({ permission: 'total', tool: 'Bash', command: 'Start-Process notepad', internalDir: core, cwd: t.home }), 'allow');
+    // M2: .android whole, %HOMEDRIVE%%HOMEPATH%, and copies or archives of a folder that holds a closed one.
+    if (process.env.HOMEDRIVE && process.env.HOMEPATH) assert.equal(v({ permission: 'total', tool: 'Bash', command: 'type %HOMEDRIVE%%HOMEPATH%\\.android\\adbkey', internalDir: core, cwd: t.home }), 'deny');
+    assert.equal(v({ permission: 'total', tool: 'Read', paths: [path.join(android, 'adb_known_hosts.pb')], internalDir: core, cwd: t.home }), 'deny');
+    for (const c of ['Copy-Item -Recurse $HOME\\.android C:\\x', 'tar -C ~ -cf x.tar .android', `robocopy ${t.home} D:\\copia /E`, 'cp -r . /tmp/x', `Compress-Archive -Path ${t.home} -DestinationPath x.zip`, `7z a x.7z ${os.homedir()}`, `xcopy ${t.home} D:\\c /s /e`]) {
+      assert.equal(v({ permission: 'editar', tool: 'Bash', command: c, internalDir: core, cwd: t.home }), 'deny', c);
+    }
+    const proj = path.join(t.home, 'web', 'app'); fs.mkdirSync(proj, { recursive: true });
+    for (const c of ['cp -r src dist', 'Copy-Item -Recurse .\\src .\\copia', 'robocopy src build /E', 'tar -cf app.tar .']) {
+      assert.equal(v({ permission: 'editar', tool: 'Bash', command: c, internalDir: core, cwd: proj }), 'allow', `dentro del proyecto: ${c}`);
+    }
+    // A2: Orb's adb: readable, never written or run by an agent (any mode).
+    const adbExe = path.join(core, 'herramientas', 'adb', 'adb.exe');
+    assert.equal(v({ permission: 'total', tool: 'Write', paths: [adbExe], internalDir: core, cwd: t.home }), 'deny');
+    assert.equal(v({ permission: 'total', tool: 'Bash', command: `copy x.dll "${path.join(core, 'herramientas', 'adb', 'AdbWinApi.dll')}"`, internalDir: core, cwd: t.home }), 'deny');
+    assert.equal(v({ permission: 'total', android: true, tool: 'Bash', command: `"${adbExe}" devices`, internalDir: core, cwd: t.home }), 'deny');
+    assert.equal(v({ permission: 'leer', tool: 'Read', paths: [adbExe], internalDir: core, cwd: t.home }), 'allow');
+    assert.equal(v({ permission: 'editar', tool: 'Write', paths: [path.join(core, 'herramientas', 'gradle', 'x')], internalDir: core, cwd: t.home }), 'allow', 'el resto de herramientas sigue abierto');
+  } finally { setGuardedRoots([]); t.cleanup(); }
+});
+
+test('revisión 3.8.2 (A2, B2, B3, M3): huellas de adb, paquete del apk, navegación y reinicio por permiso', async () => {
+  const t = tempHome();
+  try {
+    useHome(t.home);
+    // A2: the folder must be exactly what was downloaded.
+    const dir = ctx.paths.adb; fs.mkdirSync(dir, { recursive: true }); fs.mkdirSync(ctx.paths.data, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'adb.exe'), 'adb'); fs.writeFileSync(path.join(dir, 'AdbWinApi.dll'), 'dll');
+    assert.equal(verifyAdb(), false, 'sin huellas, no se usa');
+    fs.writeFileSync(path.join(ctx.paths.data, 'adb-huellas.json'), JSON.stringify({ files: fingerprints(dir) }));
+    assert.equal(verifyAdb(), true);
+    fs.writeFileSync(path.join(dir, 'AdbWinApi.dll'), 'otra dll'); assert.equal(verifyAdb(), false, 'cambiada');
+    fs.writeFileSync(path.join(dir, 'AdbWinApi.dll'), 'dll'); fs.writeFileSync(path.join(dir, 'version.dll'), 'puesta'); assert.equal(verifyAdb(), false, 'una DLL de más');
+    fs.rmSync(path.join(dir, 'version.dll')); assert.equal(verifyAdb(), true);
+    let fetched = 0;
+    const android = createAndroid({ board: null, exe: () => path.join(dir, 'adb.exe'), verify: () => false, ensure: async () => { fetched++; return { error: 'no' }; } });
+    await assert.rejects(android.tool({ id: 'c', kind: 'chat', android: true, project: 'web', permission: 'editar', cwd: t.home }, 'devices'), /adb/);
+    assert.equal(fetched, 1, 'sin coincidir, se pide otra descarga y no se ejecuta');
+    // B2: the package from the apk itself (stored or deflated), nothing for another file.
+    const apk = path.join(t.home, 'a.apk');
+    for (const deflate of [true, false]) { fs.writeFileSync(apk, makeApk('com.ejemplo.app', { deflate })); assert.equal(apkPackage(apk), 'com.ejemplo.app'); }
+    fs.writeFileSync(apk, makeApk('com.x;reboot')); assert.equal(apkPackage(apk), null);
+    fs.writeFileSync(apk, 'PK no'); assert.equal(apkPackage(apk), null);
+    // B3: wherever an action ends (a redirect, a click, back), a protected page is left and nothing of it is returned.
+    const loads = [];
+    const { run } = createActions({ T: (k, vars) => `${k} ${JSON.stringify(vars ?? {})}`, driver: { url: (x) => x.url, load: async (x, u) => { loads.push(u); x.url = u; } } });
+    const tab = { url: 'https://casa.lan/vaultwarden/#/login', console: [] };
+    await assert.rejects(run(tab, 'console', {}), /sys\.browser\.protected/);
+    assert.deepEqual(loads, ['about:blank']);
+    tab.url = 'https://example.com/';
+    assert.match(await run(tab, 'console', {}), /sin errores/);
+    // M3: a new permission is a new agent process at the next turn (Codex's sandbox, Claude's tools).
+    const { Sessions } = await import('../src/engine/sessions.mjs');
+    const key = (p) => Sessions.prototype.liveKey.call(null, { agent: 'codex', cwd: 'x', reasoning: 'medium', permission: p }, { id: 'a' });
+    assert.notEqual(key('total'), key('editar'));
+  } finally { t.cleanup(); }
 });
