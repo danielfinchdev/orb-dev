@@ -28,6 +28,7 @@ export const KEPT = [FILES.master, FILES.machine, FILES.vault];
 export const MIN_LENGTH = 10;
 export const MAX_LENGTH = 256;
 export const UNLOCK_MS = 5 * 60_000;
+export const FRESH_MS = 2 * 60_000; // a token for one action that asks for the password every time (issue(purpose))
 // Wrong passwords: after five in a row, 30 s of wait, and twice as long after each new one (15 min at most).
 export const FREE_TRIES = 5;
 const WAIT_FIRST_S = 30;
@@ -260,14 +261,20 @@ export class Master {
   }
 
   // ---- the window's unlock: a token for 5 minutes (memory only), dropped when the window locks or closes.
-  issue() {
-    for (const [k, until] of this.tokens) if (until <= this.now()) this.tokens.delete(k);
+  // 3.8.1: purpose: a token for ONE action that always asks for the password again (FRESH_UNLOCK in
+  // src/core/permissions.mjs, e.g. deleting a project): it lasts FRESH_MS and opens nothing else, and a token of the
+  // usual 5 minutes does not open that action.
+  issue(purpose = null) {
+    for (const [k, t] of this.tokens) if (t.until <= this.now()) this.tokens.delete(k);
     const token = crypto.randomBytes(24).toString('hex');
-    const until = this.now() + UNLOCK_MS;
-    this.tokens.set(token, until);
+    const until = this.now() + (purpose ? FRESH_MS : UNLOCK_MS);
+    this.tokens.set(token, { until, purpose: purpose ?? null });
     return { unlock: token, until };
   }
-  checkToken(token) { const until = typeof token === 'string' ? this.tokens.get(token) : null; return Boolean(until && until > this.now()); }
+  checkToken(token, purpose = null) {
+    const t = typeof token === 'string' ? this.tokens.get(token) : null;
+    return Boolean(t && t.until > this.now() && t.purpose === (purpose ?? null));
+  }
   lock() { this.tokens.clear(); }
 
   // Changing it: the current one first (the same waits as any other check). The data key stays (only wrapped again).

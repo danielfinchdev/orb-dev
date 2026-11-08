@@ -49,6 +49,7 @@ export default {
   'master.ask.unlink': 'Para cerrar la sesión de un dispositivo.',
   'master.ask.deleteProject': 'Para eliminar un proyecto y su carpeta.',
   'master.askNote': 'Queda desbloqueado {n} minutos o hasta que bloquees el PC.',
+  'master.askEveryTime': 'Para esto Orb la pide siempre.',
   'master.cardTitle': 'Contraseña maestra',
   'master.cardDesc': 'Protege las claves de tus móviles y conectores, y las acciones sensibles de Orb.',
   'master.since': 'Último cambio: {when}',

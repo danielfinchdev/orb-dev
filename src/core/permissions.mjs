@@ -78,6 +78,10 @@ export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter(
 // «Cosas que nadie toca»; 3.8.1: deleting a project (its folder). current: the settings now (the engine's), to compare
 // with. Changing the password asks for the current one instead.
 export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'projects.deleteCheck', 'projects.delete']));
+// 3.8.1: the actions that ask for the master password EVERY time, even right after another unlock (the owner: deleting a
+// project «requiere master pass»): method → the purpose its token must carry (src/core/master.mjs › issue(purpose)).
+export const FRESH_UNLOCK = Object.freeze({ 'projects.deleteCheck': 'deleteProject', 'projects.delete': 'deleteProject' });
+export const FRESH_PURPOSES = Object.freeze([...new Set(Object.values(FRESH_UNLOCK))]);
 export function needsUnlock(method, params, current = {}) {
   if (UNLOCK_METHODS.has(method)) return true;
   if (method !== 'config.save') return false;

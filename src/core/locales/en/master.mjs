@@ -49,6 +49,7 @@ export default {
   'master.ask.unlink': 'To sign a device out.',
   'master.ask.deleteProject': 'To delete a project and its folder.',
   'master.askNote': 'It stays unlocked for {n} minutes or until you lock the PC.',
+  'master.askEveryTime': 'Orb asks for it every time for this.',
   'master.cardTitle': 'Master password',
   'master.cardDesc': "Protects the keys of your phones and connectors, and Orb's sensitive actions.",
   'master.since': 'Last changed: {when}',

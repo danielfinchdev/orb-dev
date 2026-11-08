@@ -118,9 +118,15 @@ test('permisos: Finalizar también desde el móvil; Eliminar solo en el PC y con
       await assert.rejects(e.call(method, params), /necesita tu contraseña maestra/, method);
     }
     assert.ok(fs.existsSync(path.join(h.home, 'web', 'motor')), 'sin la contraseña, nada');
-    const check = await e.call('projects.deleteCheck', { name: 'motor', unlock });
+    // 3.8.1: the password is asked again every time: an unlock still good for other actions does not delete a project,
+    // and a token made for deleting opens nothing else.
+    await assert.rejects(e.call('projects.deleteCheck', { name: 'motor', unlock }), /necesita tu contraseña maestra/, 'un desbloqueo de otra acción no vale');
+    assert.equal(await e.call('master.check', { unlock }), true);
+    const fresh = (await e.call('master.unlock', { password: 'una frase larga de prueba', purpose: 'deleteProject' })).unlock;
+    await assert.rejects(e.call('master.check', { unlock: fresh }), /necesita tu contraseña maestra/, 'el de eliminar no abre otra cosa');
+    const check = await e.call('projects.deleteCheck', { name: 'motor', unlock: fresh });
     assert.equal(check.path.toLowerCase(), fs.realpathSync.native(path.join(h.home, 'web', 'motor')).toLowerCase());
-    await e.call('projects.delete', { name: 'motor', unlock });
+    await e.call('projects.delete', { name: 'motor', unlock: fresh });
     assert.ok(!fs.existsSync(path.join(h.home, 'web', 'motor')));
     // Finish and reopen through the API.
     await e.call('projects.create', { name: 'acabado', category: 'linux' });
@@ -131,4 +137,18 @@ test('permisos: Finalizar también desde el móvil; Eliminar solo en el PC y con
     assert.equal(await e.call('projects.reopen', { key: f.key }), 'acabado');
     assert.ok((await e.call('projects.list')).some((p) => p.name === 'acabado'));
   } finally { await e.stop(); h.cleanup(); }
+});
+
+test('la ventana pide la contraseña cada vez para eliminar, aunque haya otro desbloqueo vigente', async () => {
+  const { setMasterAsker, keepUnlock, dropUnlock, unlockCore, heldUnlock } = await import('../src/ui/lib/core-access.js');
+  const asked = [];
+  setMasterAsker(async (action, opts) => { asked.push([action, Boolean(opts?.fresh)]); return { unlock: `token-${action}`, until: Date.now() + 120_000 }; });
+  try {
+    keepUnlock({ unlock: 'general', until: Date.now() + 300_000 });
+    assert.equal(await unlockCore('open'), 'general', 'lo demás usa el desbloqueo de 5 minutos');
+    assert.equal(await unlockCore('deleteProject'), 'token-deleteProject');
+    assert.equal(await unlockCore('deleteProject'), 'token-deleteProject');
+    assert.deepEqual(asked, [['deleteProject', true], ['deleteProject', true]], 'se pide las dos veces');
+    assert.equal(heldUnlock(), 'general', 'el token de eliminar no se guarda para otra acción');
+  } finally { dropUnlock(); setMasterAsker(null); }
 });

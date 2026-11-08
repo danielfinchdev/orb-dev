@@ -131,8 +131,8 @@ C:\Orb\                   (C:\Orb by default; always <chosen folder>\Orb, the sa
   «Finalizar proyecto» (also from the phone: `projects.finish`) cancels its pending tasks, puts its tasks, conversations
   and direct conversations in «Completadas», pauses its schedules and takes it out of Orb while its folder stays;
   `projects_finished` (a setting) keeps it out of `syncProjects`, and the «Finalizados» tab lists it with «Reabrir»
-  (`projects.reopen`, its schedules back on). «Eliminar proyecto» (PC only, behind the master password:
-  `projects.deleteCheck` / `projects.delete` are in `UNLOCK_METHODS`) moves its folder to the Recycle Bin: `main.mjs ›
+  (`projects.reopen`, its schedules back on). «Eliminar proyecto» (PC only, behind the master password, asked
+  every time: `projects.deleteCheck` / `projects.delete` are in `UNLOCK_METHODS` and `FRESH_UNLOCK`) moves its folder to the Recycle Bin: `main.mjs ›
   app:deleteProject` asks the engine to check it, checks the folder again by its real path (`deletableFolder`: only a
   folder straight inside a category of the workspace, never a link or a junction, a category, core or the workspace),
   calls `shell.trashItem` and then tells the engine (`trashed`); when the Recycle Bin cannot take it, the window warns
@@ -1285,7 +1285,11 @@ of its keys) and taking an entry off «Cosas que nadie toca»; 3.8.1: deleting a
 open as before). The dispatcher refuses them without a fresh token: `master.unlock` (the password) gives one for 5
 minutes, kept in the engine's memory and the window's (`unlockCore`, which asks with a dialog). It ends with
 `master.lock`, called by `main.mjs` when Windows locks, the PC sleeps or shuts down; and with the window, which keeps it
-in memory only. Changing the password asks for the current one. `backup.now` stays free.
+in memory only. Changing the password asks for the current one. `backup.now` stays free. Some actions ask for the
+password **every time** (`FRESH_UNLOCK` in `permissions.mjs`; 3.8.1: deleting a project): the window asks even with an
+unlock in force (`unlockCore` skips it for `FRESH_ACTIONS`), `master.unlock({ purpose })` gives a token for that action
+only, for 2 minutes and never kept, and the dispatcher accepts nothing else for it (an unlock of 5 minutes does not open
+it, and its token opens nothing else).
 
 **Change, forgot and starting from scratch.**
 - `master.change` wraps the same data key with the new password: nothing else is encrypted again and linked phones stay.
