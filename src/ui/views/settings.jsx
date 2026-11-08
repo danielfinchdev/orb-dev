@@ -3,6 +3,7 @@
 // Acerca de.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import QRCode from 'qrcode';
 import { DatabaseBackup, Settings, FlaskConical, FolderOpen, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink, ShieldBan, RotateCcw, Puzzle } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS } from '../../core/appearance.mjs';
@@ -256,12 +257,68 @@ function UpdatesCard() {
   );
 }
 
-// Android's adb: downloaded by Orb into core\herramientas\adb (and in the agents' PATH).
+// 3.8.2 (D2): the pairing of «Emparejar móvil»: Android's QR (Depuración inalámbrica) that the engine waits for on the
+// network, or the six-digit code by hand. unlock: the master password's token (pairing gives the agents a way in).
+function PairPanel({ v, set }) {
+  const t = useT();
+  const [st, setSt] = useState(null); const [svg, setSvg] = useState('');
+  const start = async () => {
+    setSt(null); setSvg('');
+    const unlock = await unlockCore('androidPair'); if (!unlock) return;
+    const r = await act(call('android.pairStart', { unlock }));
+    if (r) { setSt(r); setSvg(await QRCode.toString(r.qr, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' })); }
+  };
+  useEffect(() => { if (!v.manual) start(); return () => { call('android.pairCancel').catch(() => {}); }; }, [v.manual]);
+  useEffect(() => {
+    if (st?.state !== 'waiting' && st?.state !== 'pairing') return undefined;
+    const id = setInterval(() => { call('android.pairState').then(setSt).catch(() => {}); }, 1500);
+    return () => clearInterval(id);
+  }, [st?.state]);
+  if (v.manual) return (
+    <div className="grid gap-3">
+      <p className="text-muted-foreground text-sm">{t('settings.android.manualSteps')}</p>
+      <Field label={t('settings.android.address')}><Input value={v.address} onChange={(e) => set({ address: e.target.value.trim() })} placeholder="192.168.1.20:37000" autoFocus data-testid="android-pair-address" /></Field>
+      <Field label={t('settings.android.code')}><Input value={v.code} inputMode="numeric" maxLength={6} onChange={(e) => set({ code: e.target.value.replace(/\D/g, '') })} data-testid="android-pair-code" /></Field>
+      <Field label={t('settings.android.connectAddress')} hint={t('settings.android.connectHint')}><Input value={v.connect} onChange={(e) => set({ connect: e.target.value.trim() })} placeholder="192.168.1.20:41000" /></Field>
+    </div>
+  );
+  const label = { waiting: 'settings.android.waiting', pairing: 'settings.android.pairing', done: 'settings.android.paired', expired: 'settings.android.expired' }[st?.state];
+  return (
+    <div className="grid justify-items-center gap-3">
+      {svg ? <div className="size-56 rounded-xl bg-white p-2 [&_svg]:size-full" data-testid="android-pair-qr" dangerouslySetInnerHTML={{ __html: svg }} /> : <div className="grid size-56 place-items-center"><Spinner /></div>}
+      <div className={cn('flex items-center gap-2 text-sm', st?.state === 'error' && 'text-destructive')} data-testid="android-pair-state">
+        {st?.state === 'waiting' || st?.state === 'pairing' ? <Spinner /> : null}{st?.state === 'error' ? st.error : label ? t(label) : null}
+      </div>
+      {st?.state === 'expired' || st?.state === 'error' ? <Button size="sm" variant="outline" onClick={start}>{t('settings.android.retry')}</Button> : null}
+      <Button size="sm" variant="ghost" onClick={() => set({ manual: true })} data-testid="android-pair-manual">{t('settings.android.manual')}</Button>
+    </div>
+  );
+}
+
+// Ajustes › Android: the phone the agents test apps on (paired here, used in a chat with «Usar mi móvil Android») and
+// Google's platform-tools, downloaded into core\herramientas\adb the first time.
 function AndroidCard() {
   const t = useT();
   const [st, setSt] = useState(null);
+  const [phones, setPhones] = useState([]);
   const load = () => call('android.status').then(setSt).catch(() => setSt(null));
+  const loadPhones = () => call('android.devices').then(setPhones).catch(() => setPhones([]));
   useEffect(() => { load(); const id = setInterval(load, st?.state === 'downloading' ? 1500 : 15000); return () => clearInterval(id); }, [st?.state]);
+  useEffect(() => { loadPhones(); const id = setInterval(loadPhones, 15000); return () => clearInterval(id); }, []);
+  const pair = async () => {
+    await form(t('settings.android.pair'), {
+      description: t('settings.android.pairSteps'), initial: { manual: false, address: '', code: '', connect: '' },
+      body: (v, set) => <PairPanel v={v} set={set} />,
+      ok: t('settings.android.pairButton'),
+      onOk: async (v) => {
+        if (!v.manual) return true;
+        const unlock = await unlockCore('androidPair'); if (!unlock) throw new Error(t('msg.master.needUnlock'));
+        return call('android.pairCode', { address: v.address, code: v.code, connect: v.connect || undefined, unlock });
+      }
+    });
+    loadPhones(); load();
+  };
+  const forget = async (p) => { if (await confirm(t('settings.android.forget'), t('settings.android.forgetBody'), { ok: t('settings.android.forget') })) { await act(call('android.forget', { serial: p.serial ?? undefined, host: p.host ?? undefined })); loadPhones(); } };
   if (!st) return null;
   const label = st.ready ? t('settings.android.ready') : st.state === 'downloading' ? t('settings.android.downloading') : st.state === 'error' ? t('settings.android.error', { error: st.error }) : t('settings.android.missing');
   return (
@@ -273,7 +330,18 @@ function AndroidCard() {
           {st.ready ? <BubbleTip title={t('settings.open')}><Button size="icon-sm" variant="ghost" onClick={() => act(bridge.openPath(st.dir))} aria-label={t('settings.open')}><FolderOpen /></Button></BubbleTip>
             : st.state !== 'downloading' ? <Button size="sm" variant="outline" onClick={async () => { setSt({ ...st, state: 'downloading' }); const r = await act(call('android.install')); if (r) setSt(r); else load(); }}>{t('settings.android.download')}</Button> : null}
         </div>
+        <div className="grid gap-1" data-testid="android-phones">
+          {phones.length ? phones.map((p) => (
+            <div key={`${p.guid ?? ''}${p.serial ?? p.host}`} className="flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2">
+              <Smartphone className="text-muted-foreground size-4 shrink-0" />
+              <div className="grid min-w-0 flex-1"><span className="truncate text-sm">{p.model ?? p.host}</span><span className={cn('text-xs', p.connected ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground')}>{t(p.connected ? 'settings.android.connected' : 'settings.android.offline')}</span></div>
+              {p.connected ? <Button size="sm" variant="ghost" onClick={async () => { await act(call('android.disconnect', { serial: p.serial })); loadPhones(); }}>{t('settings.android.disconnect')}</Button> : null}
+              <Button size="sm" variant="ghost" onClick={() => forget(p)}>{t('settings.android.forget')}</Button>
+            </div>
+          )) : <span className="text-muted-foreground text-sm">{t('settings.android.noDevices')}</span>}
+        </div>
       </CardContent>
+      <CardFooter><Button size="sm" onClick={pair} data-testid="android-pair"><Smartphone />{t('settings.android.pair')}</Button></CardFooter>
     </Card>
   );
 }

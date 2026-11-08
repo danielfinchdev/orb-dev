@@ -17,7 +17,8 @@ const RELEASE_WAIT_MS = 3000; // a server that restarts waits for the old connec
 const HELLO_WITHIN_MS = 10_000; // a connection that never says hello is closed
 
 export class AgentAuth {
-  constructor() { this.grants = new Map(); this.server = null; this.pipe = null; }
+  // onCall({ session, who }, method, args) → result: set by the engine (src/engine/api.mjs) for the 'call' requests.
+  constructor() { this.grants = new Map(); this.server = null; this.pipe = null; this.onCall = null; }
 
   // The pipe's name (the server starts listening the first time it is needed).
   get address() { this.listen(); return this.pipe; }
@@ -72,6 +73,16 @@ export class AgentAuth {
       const g = this.grants.get(ticket);
       if (m?.op === 'ack' && g?.holder === socket) g.acked = true;
       if (m?.op === 'check') send({ id: m.id, ok: g?.holder === socket });
+      // 3.8.2: a request of Orb's own MCP server for the engine (the phone's tools): only on the connection that holds a
+      // grant of Orb's board (never a connector's), for the conversation the engine gave it. Not awaited here, so the
+      // checks of the same connection are answered while it runs (an install can take minutes).
+      if (m?.op === 'call' && Number.isInteger(m.id) && g?.holder === socket) {
+        const ours = g.reply && typeof g.reply === 'object' && g.reply.who && !g.reply.who.boss;
+        Promise.resolve().then(() => {
+          if (!ours || !this.onCall) throw Object.assign(new Error('not allowed'), { userFacing: true });
+          return this.onCall({ session: g.session, who: g.reply.who }, String(m.method ?? ''), m.args && typeof m.args === 'object' ? m.args : {});
+        }).then((result) => send({ call: true, id: m.id, ok: true, result }), (error) => send({ call: true, id: m.id, ok: false, error: error?.userFacing ? error.message : 'error' }));
+      }
     };
     socket.on('data', (chunk) => {
       buf += chunk;

@@ -73,7 +73,7 @@ export default {
   'session.forked': 'Conversation forked. The original is kept.',
   'session.openFolder': 'Open the folder',
   'session.modelSet': 'Model: {model}',
-  'session.noProjectReadOnly': 'No project: read-only',
+  'session.noProjectReadOnly': 'No project: read-only or full PC access',
   'session.permissionsChanged': 'Permissions updated',
   'session.fork': 'Fork',
   'session.forkTip': 'Creates a copy of the conversation from this point.',

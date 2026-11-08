@@ -73,7 +73,7 @@ export default {
   'session.forked': 'Conversación bifurcada. La original se conserva.',
   'session.openFolder': 'Abrir la carpeta',
   'session.modelSet': 'Modelo: {model}',
-  'session.noProjectReadOnly': 'Sin proyecto: solo lectura',
+  'session.noProjectReadOnly': 'Sin proyecto: solo lectura o acceso total al PC',
   'session.permissionsChanged': 'Permisos actualizados',
   'session.fork': 'Bifurcar',
   'session.forkTip': 'Crea una copia de la conversación desde este punto.',

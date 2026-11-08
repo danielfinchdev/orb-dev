@@ -22,7 +22,9 @@ import { PERMISSIONS } from './sessions.mjs';
 import { readLog, writeLog, logFiles } from './logs.mjs';
 import { expandMentions, mentionOptions } from './mentions.mjs';
 import { ofUserLabel, userLabel, userName, assistantName } from '../core/board.mjs';
-import { adbStatus, ensureAdb } from './android.mjs';
+import { adbStatus, ensureAdb, createAndroid } from './android.mjs';
+import { grantMethods } from './grants.mjs';
+import { agentAuth } from './agent-auth.mjs';
 import { extensionMethods } from './api-extensions.mjs';
 import { layoutPlan, layoutApply, guardOutside } from './workspace-layout.mjs';
 import { modelCatalog, chooseModel, LEVELS, REASONING_LEVELS, levelsOf } from './catalog.mjs';
@@ -130,6 +132,15 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   const coordinatorBusy = (name) => board.all('SELECT id FROM conversations WHERE project = ?', name).some((c) => orchestrator?.state(c.id)?.busy);
   // What the other parts of the API share.
   const shared = { board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, project, conversationId };
+  // 3.8.2: the phone the agents test apps on, and what the master password gives a chat (grants.mjs).
+  const android = createAndroid({ board, log });
+  const grants = grantMethods({ board, sessions, log, android });
+  // The phone's tools of Orb's MCP server (src/mcp/server.mjs): for the conversation of the server's grant, as it is now.
+  agentAuth.onCall = async ({ session }, method, args) => {
+    if (method !== 'android' || !session) throw Object.assign(new Error(tr('msg.android.notAllowed')), { userFacing: true });
+    const s = sessions.get(session);
+    return android.tool(s, String(args.tool ?? ''), args.args);
+  };
   const data = dataApi(shared); // 3.6 (WS5): backups
 
   const methods = {
@@ -290,7 +301,15 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
 
     // Android's tools, managed only from Ajustes (the skills and MCP servers of core: api-extensions.mjs).
     'android.status': () => adbStatus(),
-    'android.install': () => ensureAdb({ log, force: true }),
+    'android.install': () => ensureAdb({ log }),
+    'android.pairStart': () => android.pairStart(),
+    'android.pairState': () => android.pairState(),
+    'android.pairCancel': () => android.pairCancel(),
+    'android.pairCode': ({ address, code, connect }) => android.pairCode({ address: str(address, 'dirección', 80), code: str(code, 'código', 6), connect: str(connect, 'dirección', 80, { optional: true }) || null }),
+    'android.devices': () => android.devices(),
+    'android.disconnect': ({ serial }) => android.disconnect({ serial: str(serial, 'móvil', 120) }),
+    'android.forget': ({ serial, host }) => android.forget({ serial: str(serial, 'móvil', 120, { optional: true }) || null, host: str(host, 'móvil', 120, { optional: true }) || null }),
+    ...grants.methods,
 
     'github.status': async () => (await gh()).status(),
     'github.contributions': async () => (await gh()).contributions(),
@@ -656,7 +675,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...linkMethods(shared),
     ...inboxMethods(shared),
     ...data.methods,
-    ...masterMethods({ ...shared, onUnlocked }),
+    ...masterMethods({ ...shared, onUnlocked, onLock: (why) => grants.revokeAll(why) }),
     ...extensionMethods(shared),
     ...appMethods({ home: ctx.home, version }) // 3.8.1: this PC's tools (terminal, editors, feedback…)
   };
@@ -698,7 +717,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // 3.6: the daily backup (03:00 in the owner's zone), looked at from the engine's loop.
     dataTick: () => data.tick(),
     // Running tasks stay "running": the next start continues them (scheduler.finish does not close them while closing).
-    shutdown() { scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); log('motor detenido'); }
+    // 3.8.2: adb's server goes with Orb (no phone reachable from this PC while Orb is closed).
+    shutdown() { scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); android.stopServer().catch(() => {}); log('motor detenido'); }
   };
 }
 

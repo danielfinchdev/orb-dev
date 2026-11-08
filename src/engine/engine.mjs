@@ -202,9 +202,8 @@ async function open({ home, version, repair = null }) {
   { const { guardOutside } = await import('./workspace-layout.mjs'); guardOutside({ mirror }); }
   // 3.8: the backups of 3.7 (inside the data folder, now core) go where backups go now, outside the workspace.
   try { const { adoptOldBackups } = await import('../core/backup.mjs'); const n = adoptOldBackups(home, ctx.config); if (n) log(`copias: ${n} copia(s) de 3.7 movidas fuera de core`); } catch (error) { log(`copias de 3.7: ${error.message}`); }
-  // Android's adb: in the PATH of every agent, downloaded in the background the first time.
-  const { addAdbToPath, ensureAdb } = await import('./android.mjs');
-  addAdbToPath(); ensureAdb({ log });
+  // 3.8.2: Android's adb is no longer in the agents' PATH nor downloaded at start: the first use downloads it
+  // (src/engine/android.mjs) and agents reach the phone through Orb's tools.
   const { Board } = await import('../core/board.mjs');
   // 3.8: a data folder of 3.5–3.7 is moved to 3.8 when its database opens (src/core/migrate-38.mjs). If that could not be
   // done (or its files and orb.json could not be finished), Orb does not run on those data (other users' conversations,

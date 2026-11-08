@@ -25,7 +25,10 @@ export const METHODS = Object.freeze({
   'activity.list': 'remote', 'usage.get': 'remote', 'usage.now': 'remote', 'models.guide': 'remote', 'models.catalog': 'remote',
   'mentions.options': 'remote', 'approvals.list': 'remote',
   // this PC's tools
-  'android.status': 'pc', 'android.install': 'pc', 'github.status': 'pc', 'github.contributions': 'pc', 'github.login': 'pc',
+  'android.status': 'pc', 'android.install': 'pc',
+  // 3.8.2: pairing a phone for the agents (Ajustes › Android, src/engine/android.mjs)
+  'android.pairStart': 'pc', 'android.pairState': 'pc', 'android.pairCancel': 'pc', 'android.pairCode': 'pc', 'android.devices': 'pc', 'android.disconnect': 'pc', 'android.forget': 'pc',
+  'github.status': 'pc', 'github.contributions': 'pc', 'github.login': 'pc',
   'expert.tree': 'pc', 'expert.read': 'pc', 'expert.status': 'pc', 'expert.diff': 'pc', 'expert.log': 'pc', 'expert.system': 'pc',
   'actions.list': 'pc', 'actions.save': 'pc', 'actions.remove': 'pc',
   'images.read': 'pc', 'images.mark': 'pc', 'images.save': 'pc',
@@ -50,6 +53,8 @@ export const METHODS = Object.freeze({
   'sessions.list': 'remote', 'sessions.create': 'remote', 'sessions.items': 'remote', 'sessions.send': 'remote', 'sessions.queue': 'remote',
   'sessions.editQueued': 'remote', 'sessions.approve': 'remote', 'sessions.resume': 'remote', 'sessions.fork': 'remote', 'sessions.settle': 'remote',
   'sessions.stop': 'remote', 'sessions.compact': 'remote', 'sessions.update': 'remote', 'sessions.remove': 'pc',
+  // 3.8.2: «Acceso total al PC» and «Usar mi móvil Android» (src/engine/grants.mjs): given and taken back only here
+  'sessions.grantTotal': 'pc', 'sessions.grantAndroid': 'pc', 'sessions.revokeGrant': 'pc',
   // scheduled tasks
   'schedules.list': 'remote', 'schedules.create': 'remote', 'schedules.update': 'remote', 'schedules.run': 'remote', 'schedules.remove': 'pc',
   // the chat list (pins, sections, read marks)
@@ -83,12 +88,16 @@ export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter(
 // «Cosas que nadie toca»; 3.8.1: deleting a project (its folder) and removing a skill or an MCP server from core (or a
 // connector). current: the settings now (the engine's), to compare
 // with. Changing the password asks for the current one instead.
-export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'backup.previousKey', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'projects.deleteCheck', 'extensions.remove']));
+// 3.8.2: pairing a phone (the agents may then reach it), and giving a chat «Acceso total al PC» or the phone (below: every
+// time).
+export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'backup.previousKey', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'projects.deleteCheck', 'extensions.remove',
+  'android.pairStart', 'android.pairCode', 'sessions.grantTotal', 'sessions.grantAndroid']));
 // 3.8.1: the actions that ask for the master password EVERY time, even right after another unlock (the owner: deleting a
 // project «requiere master pass»): method → the purpose its token must carry (src/core/master.mjs › issue(purpose)).
 // projects.delete and projects.deleteAbort need no token: they take the one-off ticket projects.deleteCheck returned
 // (project-close.mjs), so a token that expires while the Recycle Bin works never leaves a delete half-way.
-export const FRESH_UNLOCK = Object.freeze({ 'projects.deleteCheck': 'deleteProject' });
+// 3.8.2 (D1, D2): «Acceso total al PC» and «Usar mi móvil Android», given to a chat.
+export const FRESH_UNLOCK = Object.freeze({ 'projects.deleteCheck': 'deleteProject', 'sessions.grantTotal': 'fullAccess', 'sessions.grantAndroid': 'android' });
 export const FRESH_PURPOSES = Object.freeze([...new Set(Object.values(FRESH_UNLOCK))]);
 export function needsUnlock(method, params, current = {}) {
   if (UNLOCK_METHODS.has(method)) return true;

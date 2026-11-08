@@ -38,7 +38,13 @@ export async function redeem(pipe, ticket, { attempts = 20, helloMs = HELLO_MS, 
       if (link.socket.destroyed) await new Promise((r) => setTimeout(r, 200)); // a reconnect on its way
       return ended ? false : link.check(checkMs);
     },
-    onClose: (fn) => { if (ended) fn(); else closers.push(fn); }
+    onClose: (fn) => { if (ended) fn(); else closers.push(fn); },
+    // 3.8.2: a request for the engine (the phone's tools). → its result; throws its error.
+    call: async (method, args = {}, ms = 330_000) => {
+      if (ended) throw new Error('closed');
+      if (link.socket.destroyed) await new Promise((r) => setTimeout(r, 200));
+      return link.call(method, args, ms);
+    }
   };
 }
 
@@ -60,11 +66,11 @@ function once(pipe, ticket, secret, helloMs) {
     socket.setEncoding('utf8');
     let buf = ''; let link = null; let seq = 0; let markClosed;
     const closed = new Promise((r) => { markClosed = r; });
-    const waiting = new Map();
+    const waiting = new Map(); const calls = new Map();
     const timer = setTimeout(() => { if (!link) { socket.destroy(); resolve('slow'); } }, helloMs);
     socket.on('connect', () => socket.write(`${JSON.stringify(secret ? { hello: ticket, secret } : { hello: ticket })}\n`));
     socket.on('error', (error) => { if (!link) { clearTimeout(timer); reject(error); } });
-    socket.on('close', () => { clearTimeout(timer); if (!link) resolve(null); for (const w of waiting.values()) w(false); waiting.clear(); markClosed(); });
+    socket.on('close', () => { clearTimeout(timer); if (!link) resolve(null); for (const w of waiting.values()) w(false); waiting.clear(); for (const c of calls.values()) c({ ok: false, error: 'closed' }); calls.clear(); markClosed(); });
     socket.on('data', (chunk) => {
       buf += chunk; let nl;
       while ((nl = buf.indexOf('\n')) >= 0) {
@@ -82,11 +88,19 @@ function once(pipe, ticket, secret, helloMs) {
               const t = setTimeout(() => { waiting.delete(id); done(null); }, ms);
               waiting.set(id, (v) => { clearTimeout(t); done(v); });
               socket.write(`${JSON.stringify({ op: 'check', id })}\n`);
+            }),
+            call: (method, args, ms) => new Promise((done, fail) => {
+              if (socket.destroyed) { fail(new Error('closed')); return; }
+              const id = ++seq;
+              const t = setTimeout(() => { calls.delete(id); fail(new Error('timeout')); }, ms);
+              calls.set(id, (m) => { clearTimeout(t); if (m.ok) done(m.result); else fail(new Error(String(m.error ?? 'error'))); });
+              socket.write(`${JSON.stringify({ op: 'call', id, method, args })}\n`);
             })
           };
           resolve(link);
           continue;
         }
+        if (m.call === true) { const c = calls.get(m.id); calls.delete(m.id); c?.(m); continue; }
         const w = waiting.get(m.id); waiting.delete(m.id); w?.(m.ok === true);
       }
     });

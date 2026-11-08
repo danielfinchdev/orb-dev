@@ -19,6 +19,7 @@ import { git, isGitRepo, repoRoot } from '../core/workspace.mjs';
 import { account as findAccount, accountEnv } from '../core/accounts.mjs';
 import { pickAccount, recordSpend } from '../core/budget.mjs';
 import { browserKey } from '../core/browser-key.mjs';
+import { androidAllowed } from './android.mjs';
 import { PERMISSIONS, plainAction, pidKills, unwrapShell } from '../core/guard.mjs';
 import { processList, taskProcesses } from '../core/procs.mjs';
 import { explainFailure } from '../core/agent-errors.mjs';
@@ -35,9 +36,12 @@ const IDLE_CLOSE_MS = 20 * 60_000; // a live process with nothing to do for this
 const WATCH_MS = Number(process.env.ORB_WATCH_MS) || 5000; // how often a running turn is checked (time limit, permissions)
 const now = () => new Date().toISOString();
 const parseJson = (v, fallback = null) => { try { return v ? JSON.parse(v) : fallback; } catch { return fallback; } };
-const parseRow = (row) => row && { ...row, archived: Boolean(row.archived), settled: Boolean(row.settled), titled: Boolean(row.titled), context: parseJson(row.context) };
+const parseRow = (row) => row && { ...row, archived: Boolean(row.archived), settled: Boolean(row.settled), titled: Boolean(row.titled), android: Boolean(row.android), context: parseJson(row.context) };
 const parseItem = (row) => { let body = row.body; if (/^[[{]/.test(body)) { try { body = JSON.parse(body); } catch { /* plain text */ } } return { ...row, body }; };
 const bodyText = (body) => (typeof body === 'string' ? body : body?.text ?? '');
+
+// 3.8.2: «Acceso total al PC»: a chat without a project with «total» (only the master password gives it: grants.mjs).
+export const fullPc = (s) => Boolean(s && s.kind === 'chat' && !s.project && s.permission === 'total');
 
 export const browserOn = () => Boolean(ctx.browser) && ctx.config.browser?.enabled !== false;
 
@@ -171,7 +175,7 @@ export class Sessions {
   }
 
   update(id, fields) {
-    const allowed = ['title', 'model', 'reasoning', 'permission', 'archived', 'status', 'cli_session', 'cwd', 'account', 'settled', 'context', 'titled'];
+    const allowed = ['title', 'model', 'reasoning', 'permission', 'archived', 'status', 'cli_session', 'cwd', 'account', 'settled', 'context', 'titled', 'android'];
     const keys = Object.keys(fields).filter((k) => allowed.includes(k));
     if (!keys.length) return this.get(id);
     if ('permission' in fields && !PERMISSIONS.includes(fields.permission)) throw new Error(tr('msg.sessions.badPermission'));
@@ -259,7 +263,9 @@ export class Sessions {
   }
 
   // ---- the live process of a conversation
-  liveKey(s, acc) { return [s.agent, acc.id, s.cwd, s.reasoning].join('|'); }
+  // 3.8.2: «Acceso total al PC» given or taken back starts the agent again at its next turn (its tools and Claude in
+  // Chrome are chosen when it starts).
+  liveKey(s, acc) { return [s.agent, acc.id, s.cwd, s.reasoning, fullPc(s) ? 'pc' : ''].join('|'); }
 
   closeLive(id) {
     // Its MCP servers' grants end with its process (a new process gets new tickets).
@@ -309,6 +315,8 @@ export class Sessions {
       mcpServers: mcpServersOf(a, s.agent, { taskId, session: s.id }), budgetUsd,
       env: { ...accountEnv(acc), ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
       internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, cfg: ctx.config.agents[s.agent] ?? {},
+      // 3.8.2: read on every action (the owner may take it back at any moment): adb by hand needs it (src/core/guard.mjs).
+      android: () => androidAllowed(this.get(s.id)), fullPc: fullPc(s),
       skills: liveSkills(), // 3.8.1: the skills of core that are on (Claude and Codex load them themselves)
       onEvent: (ev) => this.onLiveEvent(s.id, ev)
     });
@@ -609,7 +617,8 @@ export class Sessions {
     const s = this.must(id);
     if (this.running.has(id)) throw new Error(tr('msg.sessions.forkWait'));
     const a = adapter(s.agent);
-    const copy = this.create({ kind: 'chat', agent: s.agent, account: s.account, model: s.model, reasoning: s.reasoning, permission: s.permission,
+    // 3.8.2: what was given with the master password stays with the original (a copy without a project reads only).
+    const copy = this.create({ kind: 'chat', agent: s.agent, account: s.account, model: s.model, reasoning: s.reasoning, permission: fullPc(s) ? 'leer' : s.permission,
       project: s.project, cwd: s.cwd, title: title || tr('msg.sessions.forkTitle', { title: s.title }), parentId: s.id });
     this.board.run('UPDATE sessions SET titled = 1 WHERE id = ?', copy.id); // 3.2: its title stays (not renamed by its next message)
     const old = this.board.all("SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT 40", s.id).reverse();
