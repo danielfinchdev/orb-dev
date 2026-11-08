@@ -3,7 +3,11 @@
 // folder in %TEMP% with the fake agents: never the real C:\Orb, %APPDATA%\Orb.dev or the installed app.
 //
 //   node scripts/medir.mjs [--exe dist/win-unpacked/Orb.exe] [--shell electron|tauri] [--runs 5] [--idle 30]
-//                          [--installer <setup.exe>] [--apk <file.apk>] [--out <results.json>]
+//                          [--installer <setup.exe>] [--apk <file.apk>] [--out <results.json>] [--hidden]
+//
+// Tauri: measures a build with the `e2e` cargo feature (npm run tauri:build:e2e), the only one that opens the window's
+// DevTools port (ORB_E2E_CDP_PORT; a normal build ignores it and every WEBVIEW2_* variable). --hidden keeps its window
+// hidden the whole time (ORB_HIDDEN_WINDOW=1: nobody at the PC; the numbers are then of a window never shown).
 //
 // Start: from spawning the process to the first paint (the page's own paint timing), to the engine being ready (its
 // «motor arrancado» line in motor.log, written with the system clock) and to the main screen being drawn (the sidebar).
@@ -28,6 +32,8 @@ const RUNS = Number(arg('runs', 5));
 const IDLE_S = Number(arg('idle', 30));
 const installer = arg('installer', path.join(ROOT, 'dist', `Orb-${PKG.version}-instalador.exe`));
 const apk = arg('apk');
+const hidden = process.argv.includes('--hidden');
+if (hidden && shell !== 'tauri') { console.error('--hidden solo con --shell tauri'); process.exit(2); }
 if (!fs.existsSync(exe)) { console.error(`no existe ${exe} (compila antes o pasa --exe)`); process.exit(2); }
 
 // The test environment before any module of Orb loads (the fake agents are read when src/agents loads).
@@ -110,7 +116,7 @@ async function launch() {
   const port = 9400 + Math.floor(Math.random() * 500);
   // The window's occlusion tracking could pause the frames of a window behind another one: off, the same for every shell.
   const args = shell === 'electron' ? [`--remote-debugging-port=${port}`, '--disable-features=CalculateNativeWinOcclusion'] : [];
-  const env = { ...process.env, ...SANDBOX, ...(shell === 'tauri' ? { ORB_E2E_CDP_PORT: String(port), WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port} --disable-features=CalculateNativeWinOcclusion` } : {}) };
+  const env = { ...process.env, ...SANDBOX, ...(shell === 'tauri' ? { ORB_E2E_CDP_PORT: String(port), ...(hidden ? { ORB_HIDDEN_WINDOW: '1' } : {}) } : {}) };
   const t0 = Date.now();
   const app = spawn(exe, args, { env, stdio: 'ignore' });
   const exited = new Promise((r) => app.once('exit', r));
@@ -173,7 +179,7 @@ const scrollFrames = (page, selector, px = 2000, step = 40) => page.evaluate(asy
 const frameStats = (s) => (s ? { element: s.element, px: s.scrolled, frames: s.deltas.length, p50: r1(pct(s.deltas, 50)), p95: r1(pct(s.deltas, 95)), max: r1(Math.max(...s.deltas)), // % of frames that took longer than one frame at 60 Hz with margin (25 ms: at least one frame dropped) and than 50 ms
     dropped: r1((100 * s.deltas.filter((d) => d > 25).length) / s.deltas.length), over50: r1((100 * s.deltas.filter((d) => d > 50).length) / s.deltas.length), longFrames: s.loaf.length, longFramesMax: r1(s.loaf.length ? Math.max(...s.loaf) : 0) } : null);
 
-const results = { target: { exe, shell, version: PKG.version }, starts: [], memory: {}, frames: {}, sizes: {}, machine: {} };
+const results = { target: { exe, shell, version: PKG.version, ...(shell === 'tauri' ? { build: 'e2e feature', hiddenWindow: hidden } : {}) }, starts: [], memory: {}, frames: {}, sizes: {}, machine: {} };
 
 // ---- 0: the first start of this workspace (master password, folders' review): not timed
 {
@@ -181,6 +187,8 @@ const results = { target: { exe, shell, version: PKG.version }, starts: [], memo
   await throughStart(run.page, { ready: READY, timeout: 120000 });
   await wait(3000);
   await quit(run);
+  // The window's WebView2 profile must be the throwaway one (Tauri puts it in ORB_USER_DATAwebview), never the PC's.
+  if (shell === 'tauri' && !fs.existsSync(path.join(SANDBOX.ORB_USER_DATA, 'webview', 'EBWebView'))) { console.error('el perfil de WebView2 no está en la carpeta de prueba: abortado'); process.exit(3); }
 }
 
 // ---- 1..n: the start
@@ -237,7 +245,13 @@ const js = fs.existsSync(assets) ? fs.readdirSync(assets).filter((f) => f.endsWi
 const entry = (() => { try { const html = fs.readFileSync(path.join(ROOT, 'src', 'renderer', 'index.html'), 'utf8'); const m = /assets\/(index-[^"]+\.js)/.exec(html); return m ? fs.statSync(path.join(assets, m[1])).size : null; } catch { return null; } })();
 results.sizes = {
   installerMB: fs.existsSync(installer) ? MB(fs.statSync(installer).size) : null, installer: fs.existsSync(installer) ? installer : null,
-  appFolderMB: MB(dirSize(path.dirname(exe))),
+  // Electron: win-unpacked. Tauri: what the installer puts next to Orb.exe (the exe and its resources), not the whole
+  // cargo target folder.
+  ...(() => {
+    if (shell !== 'tauri') return { appFolderMB: MB(dirSize(path.dirname(exe))), appFolder: path.dirname(exe) };
+    const parts = [exe, ...['node', 'app'].map((d) => path.join(path.dirname(exe), d)).filter((d) => fs.existsSync(d))];
+    return { appFolderMB: MB(parts.reduce((n, p) => n + (fs.statSync(p).isDirectory() ? dirSize(p) : fs.statSync(p).size), 0)), appFolder: parts };
+  })(),
   apkMB: apk && fs.existsSync(apk) ? MB(fs.statSync(apk).size) : null, apk: apk ?? null,
   jsBundle: { files: js.length, totalMB: MB(js.reduce((s, b) => s + b.length, 0)), gzipMB: MB(js.reduce((s, b) => s + zlib.gzipSync(b, { level: 9 }).length, 0)), entryKB: entry ? Math.round(entry / 1024) : null },
   rendererMB: fs.existsSync(path.join(ROOT, 'src', 'renderer')) ? MB(dirSize(path.join(ROOT, 'src', 'renderer'))) : null
