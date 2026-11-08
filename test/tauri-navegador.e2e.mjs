@@ -1,7 +1,10 @@
 // 3.8.1 (D7, D8): the agents' browser and dropped files in the real Tauri app, with nobody at the PC. Runs the e2e build
 // (npm run tauri:build:e2e) with its window never shown (ORB_HIDDEN_WINDOW=1), app data and workspace in %TEMP% and the
 // fake agents (test/fixtures/fake-live.mjs): never the real C:\Orb, %APPDATA%\Orb.dev or the installed app.
-//   node test/tauri-navegador.e2e.mjs [--exe <Orb.exe>]
+//   node test/tauri-navegador.e2e.mjs [--exe <Orb.exe>] [--trampa]
+// --trampa (only with someone at the PC: if a protection failed, a native dialog would show on the desktop): a page that
+// tries every native picker on a click of the agent (a transparent file input over a button, a color input, a select,
+// showSaveFilePicker) and checks that no window of the agents' browser ever becomes visible.
 // A fake Claude drives the agents' browser through Orb's real MCP server (NAVEGA_GUION) against a local test site, and
 // this script checks, from outside, what Rust promised (src-tauri/src/browser.rs):
 //   - the pages work (type, click, screenshot) and the little window gets its pictures (kept hidden here);
@@ -11,7 +14,10 @@
 //   - the agents' browser is another browser process, with no DevTools port and no visible window, and Orb's window is
 //     not in it; its pages cannot reach Orb (no Tauri IPC, no Orb pages); the user agent is Edge's;
 //   - the browser process ends when its last page closes;
-//   - D8: a file dropped from disk on a conversation's box arrives with its real path.
+//   - D8: a file dropped from disk on a conversation's box arrives with its real path;
+//   - review D7–D8: a page has no clipboard writing, File System Access pickers, share or WebAuthn; a page flooding
+//     events (huge console errors, pushState and titles in a loop) neither freezes Orb nor grows its memory, and the
+//     agent learns events were dropped.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -73,6 +79,13 @@ const SITE = {
     r.ua = navigator.userAgent;
     out.textContent = 'RESULTADO ' + JSON.stringify(r);
   })()</script>`,
+  '/capacidades': `<!doctype html><title>Capacidades</title><pre id=out>...</pre><script>
+    const native = (f) => typeof f === 'function' && /native code/.test(Function.prototype.toString.call(f));
+    out.textContent = 'RESULTADO ' + JSON.stringify({ clipboardWrite: native(navigator.clipboard?.writeText), execCopy: native(document.execCommand),
+      fsPicker: typeof window.showSaveFilePicker, share: typeof navigator.share, credentials: native(navigator.credentials?.create), displayMedia: native(navigator.mediaDevices?.getDisplayMedia) });
+  </script>`,
+  '/inunda': '<!doctype html><title>Inunda</title><p>inunda</p><script>const big = "x".repeat(2e6); let n = 0; setInterval(() => { for (let i = 0; i < 20; i++) { console.error(big + n); try { null.x; } catch (e) {} history.pushState({}, "", "#" + (n++)); document.title = "t" + n + big.slice(0, 5000); } }, 0);</script>',
+  '/trampa': '<!doctype html><title>Trampa</title><div style="position:relative"><button id=b style="width:300px;height:80px">Continuar</button><input type=file style="position:absolute;inset:0;opacity:0;width:300px;height:80px"></div><input type=color id=c><select id=s><option>uno</option><option>dos</option></select><button onclick="window.showSaveFilePicker?.().catch(()=>{})">Guardar</button>',
   '/anima': '<!doctype html><title>Anima</title><div id=b style="width:400px;height:300px;background:red"></div><script>let i=0;setInterval(()=>{b.style.background="hsl("+(i++*15)+",80%,50%)"},30)</script>'
 };
 const site = http.createServer((req, res) => {
@@ -154,7 +167,14 @@ try {
     ['orb_browser_open', { url: `${B}/auth` }],
     ['orb_browser_console', {}],
     ['orb_browser_open', { url: `${B}/aislamiento` }],
-    ['orb_browser_wait', { text: 'RESULTADO', ms: 8000 }]
+    ['orb_browser_wait', { text: 'RESULTADO', ms: 8000 }],
+    ['orb_browser_open', { url: `${B}/capacidades` }],
+    ['orb_browser_wait', { text: 'RESULTADO', ms: 8000 }],
+    ['orb_browser_open', { url: `${B}/inunda` }],
+    ['sleep', { ms: 4000 }],
+    ['orb_browser_console', {}],
+    ['orb_browser_open', { url: `${B}/` }],
+    ...(process.argv.includes('--trampa') ? [['orb_browser_open', { url: `${B}/trampa` }], ['orb_browser_click', { ref: 1 }], ['sleep', { ms: 1500 }], ['orb_browser_click', { ref: 2 }], ['sleep', { ms: 1500 }], ['orb_browser_click', { ref: 3 }], ['sleep', { ms: 1500 }], ['orb_browser_click', { ref: 4 }], ['sleep', { ms: 1500 }], ['orb_browser_console', {}]] : [])
   ];
   const scriptFile = path.join(tmp, 'guion.json');
   fs.writeFileSync(scriptFile, JSON.stringify(steps));
@@ -169,10 +189,21 @@ try {
     const listening = ps(`Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { @(${pids.join(',')}) -contains $_.OwningProcess } | Select-Object -ExpandProperty LocalPort`).split(/\r?\n/).filter(Boolean);
     seen = { procs: all.length ? all : procs, listening, windows: visibleWindows([...pids, app.pid]), devtoolsFile: fs.existsSync(path.join(agentsDir, 'DevToolsActivePort')) };
   })().catch((error) => { seen = { error: error.message }; });
+  // While the flooding page is open: Orb's window keeps answering, and the memory of Orb.exe is watched.
+  let slowest = 0; let peakMB = 0;
+  const floodWatch = setInterval(async () => {
+    const t0 = Date.now();
+    try { await call('app.state', {}); } catch { /* closing */ }
+    slowest = Math.max(slowest, Date.now() - t0);
+    try { peakMB = Math.max(peakMB, Number(ps(`(Get-Process -Id ${app.pid}).PrivateMemorySize64`).trim()) / 1048576); } catch { /* gone */ }
+  }, 1000);
+  let trapWindows = [];
+  const trapWatch = process.argv.includes('--trampa') ? setInterval(() => { try { const pids = asList(agentProcesses()).map((p) => p.ProcessId); trapWindows.push(...visibleWindows([...pids, app.pid]).filter((w) => !/Tao Thread Event Target/.test(w))); } catch { /* none */ } }, 700) : null;
   await call('sessions.send', { id: s.id, text: `NAVEGA_GUION ${scriptFile}` });
   const outFile = path.join(project, 'navegador-guion.json');
   const out = JSON.parse(await until(() => fs.existsSync(outFile) && fs.readFileSync(outFile, 'utf8'), 'el guion del agente', 240000, 500));
   await watcher;
+  clearInterval(floodWatch); if (trapWatch) clearInterval(trapWatch);
   const at = (i) => String(out[i] ?? '');
   fs.writeFileSync(path.join(tmp, 'guion-respuestas.json'), JSON.stringify(out, null, 1));
 
@@ -218,6 +249,25 @@ try {
     assert.match(r.ipc, /^sin acceso/); assert.ok(!/<!doctype|Orb/i.test(r.ui), `ui: ${r.ui}`);
     assert.match(r.ua, /Edg\/\d+/); assert.doesNotMatch(r.ua, /orb|tauri|wry|webview2/i);
   });
+  check('la página no puede escribir el portapapeles ni abrir selectores de archivos, compartir o WebAuthn', () => {
+    const r = JSON.parse(/RESULTADO (\{.*?\})\n/s.exec(`${at(37)}\n`)?.[1] ?? 'null');
+    assert.ok(r, at(37));
+    assert.deepEqual(r, { clipboardWrite: false, execCopy: false, fsPicker: 'undefined', share: 'undefined', credentials: false, displayMedia: false });
+  });
+  check('una página que inunda de eventos no congela Orb ni dispara su memoria, y el agente lo sabe', () => {
+    // Stopped by Orb (blanked, events dropped or cut) or closed by the engine because it stopped answering: either way gone.
+    assert.match(`${at(38)}
+${at(40)}`, /stopped this page|dropped \d+ events|no leído|no responde y se ha cerrado/, `${at(38)} | ${at(40)}`.slice(0, 400));
+    console.error(`inundación: app.state máx ${slowest} ms, memoria privada máx de Orb.exe ${Math.round(peakMB)} MB`);
+    assert.ok(slowest < 3000, `app.state tardó ${slowest} ms`);
+    assert.ok(peakMB < 1500, `memoria privada de Orb.exe: ${Math.round(peakMB)} MB`);
+  });
+  if (process.argv.includes('--trampa')) {
+    check('trampa: ningún selector nativo visible (archivo, color, desplegable, guardar) y el agente lo sabe', () => {
+      assert.deepEqual([...new Set(trapWindows)], [], `ventanas visibles: ${[...new Set(trapWindows)]}`);
+      assert.match(String(out.at(-1) ?? ''), /file chooser/, String(out.at(-1)).slice(0, 400));
+    });
+  }
   check('otro proceso de navegador, sin puerto de depuración ni ventanas visibles', () => {
     assert.ok(seen && !seen.error, seen?.error);
     assert.ok(seen.procs.length > 0);

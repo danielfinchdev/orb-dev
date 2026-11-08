@@ -46,6 +46,9 @@ export function startDevControl({ api, board, sessions, log = () => {}, home, in
         let raw = ''; for await (const chunk of req) { raw += chunk; if (raw.length > 1_000_000) throw new Error('petición demasiado grande'); }
         const { method, params } = JSON.parse(raw || '{}');
         log(`control de desarrollo: ${method}`);
+        // 3.8.1: what starts a program on this PC outside the approvals (a terminal, an editor, a project's action) is the
+        // window's alone: this line's key lives in %TEMP%, which the agents can read.
+        if (/^app\.(openTerminal|openIn|runAction)$/.test(String(method))) return send(res, 403, { ok: false, error: 'no disponible desde el control de desarrollo' });
         return send(res, 200, { ok: true, result: (await api.call(String(method), params ?? {}, DESKTOP)) ?? null });
       }
       send(res, 404, { ok: false, error: 'no existe' });

@@ -10,7 +10,7 @@ import { ensureLayout, paths } from '../core/home.mjs';
 import { coreHealth } from '../core/core-folder.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { PRODUCT } from '../core/product.mjs';
-import { DESKTOP } from '../core/permissions.mjs';
+import { DESKTOP, authorize } from '../core/permissions.mjs';
 
 import { stdioTransport } from './stdio.mjs';
 import { attachHost, hostReply, hostCall } from './host.mjs';
@@ -216,7 +216,10 @@ function coreBlocked({ home, version, repair }) {
     return { missing: false };
   };
   api = {
-    async call(method, params) {
+    // Who calls counts here too (only this PC's window reaches these today; the phone and the developer's line start
+    // later, but nothing should depend on that).
+    async call(method, params, principal) {
+      authorize(principal, method);
       if (method === 'app.coreState') return core;
       if (method === 'app.coreRepair') { busy ??= repairNow(params ?? {}).finally(() => { busy = null; }); return busy; }
       if (method === 'app.migrationState') return { failed: false };
@@ -246,7 +249,8 @@ async function blocked(board, info) {
     return { failed: false };
   };
   api = {
-    async call(method, params) {
+    async call(method, params, principal) {
+      authorize(principal, method);
       // core is whole (the window asks this first: src/ui/lib/startup.js).
       if (method === 'app.coreState') return null;
       if (method === 'app.migrationState') return migration;

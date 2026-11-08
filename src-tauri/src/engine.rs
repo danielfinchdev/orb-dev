@@ -255,9 +255,10 @@ impl Engine {
     }
   }
 
-  /// A message for the engine that needs no answer (the agents' browser pages' events).
+  /// A message for the engine that needs no answer and may be dropped (the agents' browser pages' events): never more
+  /// than 32 MB of them waiting for an engine that cannot keep up.
   pub fn notify(&self, message: &Value) -> bool {
-    self.send(message)
+    self.proc.lock().unwrap().as_ref().map(|(_, p)| p.send_droppable(protocol::encode(message), 32 * 1024 * 1024)).unwrap_or(false)
   }
 
   fn send(&self, message: &Value) -> bool {

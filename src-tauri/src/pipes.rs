@@ -8,6 +8,7 @@
 // When stdout ends, the same channel says the process has gone, with its exit code.
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
@@ -25,6 +26,8 @@ pub const MAX_LINE: usize = 64 * 1024 * 1024;
 
 pub struct Process {
   writer: mpsc::Sender<Vec<u8>>,
+  /// Bytes queued for stdin and not written yet.
+  queued: Arc<AtomicUsize>,
   child: Arc<Mutex<Child>>,
 }
 
@@ -44,9 +47,14 @@ impl Process {
     let child = Arc::new(Mutex::new(child));
 
     let (writer, queue) = mpsc::channel::<Vec<u8>>();
+    let queued = Arc::new(AtomicUsize::new(0));
+    let written = queued.clone();
     std::thread::Builder::new().name("motor-stdin".into()).spawn(move || {
       for chunk in queue {
-        if stdin.write_all(&chunk).and_then(|_| stdin.flush()).is_err() {
+        let n = chunk.len();
+        let ok = stdin.write_all(&chunk).and_then(|_| stdin.flush()).is_ok();
+        written.fetch_sub(n, Ordering::SeqCst);
+        if !ok {
           break; // the engine has gone: the stdout thread says so
         }
       }
@@ -90,12 +98,27 @@ impl Process {
       on_out(Out::Exit(code));
     })?;
 
-    Ok(Self { writer, child })
+    Ok(Self { writer, queued, child })
   }
 
   /// Queues bytes for stdin (never blocks). False when the writer has gone.
   pub fn send(&self, bytes: Vec<u8>) -> bool {
-    self.writer.send(bytes).is_ok()
+    let n = bytes.len();
+    self.queued.fetch_add(n, Ordering::SeqCst);
+    let ok = self.writer.send(bytes).is_ok();
+    if !ok {
+      self.queued.fetch_sub(n, Ordering::SeqCst);
+    }
+    ok
+  }
+
+  /// Queues bytes only while less than `max` are waiting to be written: for what may be dropped (the agents' pages'
+  /// events), so an engine that cannot keep up never makes Orb's memory grow without end. False when dropped.
+  pub fn send_droppable(&self, bytes: Vec<u8>, max: usize) -> bool {
+    if self.queued.load(Ordering::SeqCst) + bytes.len() > max {
+      return false;
+    }
+    self.send(bytes)
   }
 
   pub fn with_child<T>(&self, f: impl FnOnce(&mut Child) -> T) -> Option<T> {
@@ -199,6 +222,21 @@ mod tests {
     let got: Vec<Out> = rx.iter().collect();
     assert!(matches!(got[0], Out::TooLong(n) if n == MAX_LINE + 11), "{:?}", &got[0]);
     assert!(matches!(&got[1], Out::Line(l) if l == r#"{"ok":1}"#));
+  }
+
+  // What may be dropped is dropped once too much waits for an engine that does not read; the rest still queues.
+  #[test]
+  fn droppable_messages_stop_queueing_when_the_engine_is_behind() {
+    let Some(node) = node() else { return };
+    let mut cmd = Command::new(node);
+    cmd.args(["-e", "process.stdin.pause(); setTimeout(() => process.exit(0), 3000);"]);
+    let p = Process::spawn(cmd, |_| {}, |_| {}).unwrap();
+    let chunk = vec![b'x'; 1024 * 1024];
+    let sent = (0..64).filter(|_| p.send_droppable(chunk.clone(), 8 * 1024 * 1024)).count();
+    assert!(sent < 64 && sent >= 1, "{sent}");
+    assert!(p.send(b"{}
+".to_vec()), "what must go still goes");
+    p.kill();
   }
 
   #[test]

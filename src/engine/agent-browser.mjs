@@ -10,8 +10,8 @@
 //       Orb.popup { url }     the page asked for a new window; none was made (Rust refuses it before it exists): its
 //                             address opens in this page, as Electron did
 //       Orb.blocked { kind, url }   refused by the app: navigation (not http(s)), external (another app's protocol),
-//                             download, auth (an HTTP sign-in prompt), permission
-//       Orb.title { title }, Orb.crashed
+//                             download, auth (an HTTP sign-in prompt), permission, file (a file chooser)
+//       Orb.title { title }, Orb.crashed, Orb.dropped { count } (events of a flooding page dropped by the app)
 // hooks: onActivity(tab, action) before each action; onUpdate(tab) when its address, title or loading change;
 // onRelease(tab) when its turn ends; onClose(tab). The little live window (PiP) uses them (host-browser.mjs).
 import crypto from 'node:crypto';

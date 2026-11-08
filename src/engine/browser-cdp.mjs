@@ -23,7 +23,7 @@ export async function attachPage(source, tab, { onUpdate = () => {} } = {}) {
     if (tab.console.length > 200) tab.console.shift();
   };
   // What the app refused, told to the agent as console errors (orb_browser_console, and the snapshot's error count).
-  const REFUSED = { navigation: 'Orb blocked a page that is not http(s)', external: 'Orb blocked opening another app', download: 'Orb refused a download (this browser never downloads files)', auth: 'Orb cancelled an HTTP sign-in prompt', permission: 'Orb denied a permission request' };
+  const REFUSED = { navigation: 'Orb blocked a page that is not http(s)', external: 'Orb blocked opening another app', download: 'Orb refused a download (this browser never downloads files)', auth: 'Orb cancelled an HTTP sign-in prompt', permission: 'Orb denied a permission request', file: 'Orb blocked a file chooser (this browser never picks local files)', flood: 'Orb stopped this page: it sent too many events (a console or navigation flood) and was replaced by a blank page' };
   on('Orb.blocked', ({ kind, url, permission } = {}) => note('error', `${REFUSED[kind] ?? 'Orb blocked'}${permission ? ` (${permission})` : ''}`, url));
   // A new window the page asked for (window.open, target=_blank): never made; its address opens in this page.
   on('Orb.popup', ({ url } = {}) => {
@@ -33,6 +33,8 @@ export async function attachPage(source, tab, { onUpdate = () => {} } = {}) {
   });
   on('Orb.title', ({ title } = {}) => { tab.title = String(title ?? ''); onUpdate(); });
   on('Orb.crashed', () => { tab.crashed = true; });
+  // The app dropped some of the page's events (a page flooding them): said once a second.
+  on('Orb.dropped', ({ count } = {}) => note('warning', `Orb dropped ${Number(count) || 0} events of this page (too many)`));
   on('Page.frameNavigated', ({ frame }) => { if (!frame.parentId) { page.mainFrame = frame.id; page.url = frame.url; page.world = null; tab.url = frame.url; onUpdate(); } });
   on('Page.navigatedWithinDocument', ({ frameId, url }) => { if (frameId === page.mainFrame) { page.url = url; tab.url = url; onUpdate(); } });
   on('Page.frameStartedLoading', ({ frameId }) => { if (frameId === page.mainFrame) { page.loading = true; tab.loading = true; onUpdate(); } });
@@ -110,7 +112,9 @@ export function cdpDriver(T) {
       await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
       await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 });
     },
-    focusPage: (tab) => tab.page.send('Page.bringToFront').catch(() => {}),
+    // Keys reach the page through DevTools with its focus emulated (Emulation.setFocusEmulationEnabled): never the
+    // system's focus (Page.bringToFront could take the keyboard from what the owner is typing in).
+    focusPage: async () => {},
     insertText: (tab, text) => tab.page.send('Input.insertText', { text }),
     async press(tab, def) {
       const send = tab.page.send;
