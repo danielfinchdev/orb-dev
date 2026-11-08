@@ -258,7 +258,10 @@ export function createLive(o) {
       stderr: (d) => log(`stderr: ${d}`),
       // 3.8: no hooks of the project's .claude/settings*.json: a task could leave one there that later agents in the same
       // folder (other conversations) would run with their environment. (Managed policy hooks still apply.)
-      settings: { fastMode: false, disableAllHooks: true },
+      // 3.8.1: nor the commands a skill or a slash command runs when it loads (!`…` in its text): checked with the real
+      // Claude Code, they ran without asking canUseTool. (A skill's allowed-tools skipped it too: the skills of core reach
+      // Claude without it, src/core/extensions.mjs › exposeSkills.)
+      settings: { fastMode: false, disableAllHooks: true, disableSkillShellExecution: true },
       // 3.8 (F2.6c): nor its permission rules: an allow rule there (Bash, Edit…) would let Claude act without asking Orb's
       // guard (canUseTool), past «leer», «probar» and «Cosas que nadie toca». Only policy rules count (checked with the
       // real Claude Code: a trusted project's "allow": ["Bash"] no longer skips the guard, and CLAUDE.md still loads).

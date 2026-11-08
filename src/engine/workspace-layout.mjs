@@ -9,6 +9,7 @@ import { planWorkspace, applyLayout, inside } from '../core/core-folder.mjs';
 import { paths, loadConfig, ensureLayout } from '../core/home.mjs';
 import { setGuardedRoots } from '../core/guard.mjs';
 import { rebindMoved } from '../core/connector-secrets.mjs';
+import { rebindMovedOrWait } from './api-extensions.mjs';
 import { backupRoot, backupDir } from '../core/backup.mjs';
 
 export function layoutPlan() {
@@ -18,7 +19,7 @@ export function layoutPlan() {
 
 // choices: { [id]: choice }. Throws a user-facing error (code 'busy', nothing moved) when a folder is in use. → the plan
 // as it is now, with logsMoved ({ dir, files }) when the logs went into core: the window says once where they are now.
-export async function layoutApply(choices, { emit = () => {}, log = () => {} } = {}) {
+export async function layoutApply(choices, { emit = () => {}, log = () => {}, board = null } = {}) {
   const clean = {};
   if (choices && typeof choices === 'object' && !Array.isArray(choices)) {
     for (const [k, v] of Object.entries(choices).slice(0, 200)) if (typeof v === 'string' && k.length <= 300 && v.length <= 40) clean[k] = v;
@@ -28,7 +29,8 @@ export async function layoutApply(choices, { emit = () => {}, log = () => {} } =
   // Where the logs and the Android tools are now, and the paths orb.json had into what moved (3.8.1: a server Orb moved
   // into core\mcp keeps its keys, tied now to its new path).
   ctx.paths = paths(ctx.home); ctx.config = loadConfig(ctx.home);
-  rebindMoved(ctx.master, before, ctx.config.mcpServers ?? []);
+  // With the vault locked, the keys wait for it to open (a notice says so), never lost silently.
+  if (board) rebindMovedOrWait(board, before, ctx.config.mcpServers ?? []); else rebindMoved(ctx.master, before, ctx.config.mcpServers ?? []);
   ensureLayout(ctx.home, ctx.config);
   const { addAdbToPath } = await import('./android.mjs');
   addAdbToPath();

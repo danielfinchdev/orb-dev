@@ -112,3 +112,37 @@ export function rebindMoved(master, before = [], after = []) {
   }
   return n;
 }
+
+// 3.8.1: the same when the vault is locked (no master password typed yet): what has to be tied again waits in `store`
+// (the connectors' names and the two bindings, never a key) until it opens (settleRebinds). → the names that wait
+export const REBINDS = 'connector_rebinds'; // board setting
+export function rebindOrWait(master, before = [], after = [], store) {
+  if (master?.unlocked()) { rebindMoved(master, before, after); return []; }
+  const wait = [];
+  for (const s of after ?? []) {
+    if (!s || !hasRefs(s)) continue;
+    const old = (before ?? []).find((x) => x?.name === s.name);
+    if (!old || bindingOf(old) === bindingOf(s)) continue;
+    wait.push({ name: s.name, from: bindingOf(old), to: bindingOf(s) });
+  }
+  if (!wait.length || !store) return [];
+  const list = Array.isArray(store.get()) ? store.get() : [];
+  // Moved twice while locked: it waits to go from the first binding to the last.
+  const merged = wait.map((w) => { const prev = list.find((x) => x.name === w.name && x.to === w.from); return prev ? { ...w, from: prev.from } : w; });
+  store.set([...list.filter((x) => !merged.some((w) => w.name === x.name)), ...merged].slice(-100));
+  return merged.map((w) => w.name);
+}
+// The vault opened: the connectors that waited get their keys tied to where they are now (if still held by the old
+// program). → the names tied again
+export function settleRebinds(master, store) {
+  if (!master?.unlocked() || !store) return [];
+  const list = Array.isArray(store.get()) ? store.get() : [];
+  if (!list.length) return [];
+  const done = [];
+  for (const w of list) {
+    let held = null; try { held = master.get(bindId(w.name)); } catch { held = null; }
+    if (held === w.from) { master.set(bindId(w.name), w.to); done.push(w.name); }
+  }
+  store.set([]);
+  return done;
+}

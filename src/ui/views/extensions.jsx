@@ -2,7 +2,8 @@
 // came from, its folder, removing it after the master password), «Importar» (a folder or a git repository: it comes in
 // off), what agents made and wait for the user («Activar» / «Descartar»), the connectors of the PC (a package run with
 // npx…) and the projects that are MCP servers («Usar», «Mover a core»). A server of core is improved in a project
-// («Editar en un proyecto», then «Aplicar cambios»). PC only.
+// («Editar en un proyecto», then «Aplicar cambios»). PC only. Turning on what an agent made always goes through a dialog
+// that lists every file that will be turned on (the quarantine's copy, src/core/extensions.mjs) and opens its folder.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Check, Download, Ellipsis, FolderOpen, KeyRound, PencilLine, Plus, Puzzle, Server, Trash2, Upload, X } from 'lucide-react';
@@ -28,7 +29,16 @@ export function ExtensionsPanel() {
   useEffect(() => { load(); }, [changed]);
   const run = async (promise, ok) => { const r = await act(promise, ok); if (r?.skills) setData(r); else if (r?.list?.skills) setData(r.list); else load(); return r; };
   if (!data) return null;
-  const toggle = (kind, name, enabled) => run(call('extensions.toggle', { kind, name, enabled }), t(enabled ? 'ext.turnedOn' : 'ext.turnedOff', { name }));
+  // A server that needs packages is turned on only after saying so (Orb downloads them without running their scripts).
+  const toggle = async (kind, name, enabled, row = null) => {
+    if (enabled && row?.needsInstall) {
+      if (!await confirm(t('ext.installTitle', { name }), t('ext.installBody'), { ok: t('ext.activate') })) return;
+      const id = toast.loading(t('ext.installing'));
+      try { await run(call('extensions.toggle', { kind, name, enabled, install: true }), t('ext.turnedOn', { name })); } finally { toast.dismiss(id); }
+      return;
+    }
+    run(call('extensions.toggle', { kind, name, enabled }), t(enabled ? 'ext.turnedOn' : 'ext.turnedOff', { name }));
+  };
   const remove = async (kind, name) => {
     if (!await confirm(t('ext.removeTitle', { name }), t(kind === 'connector' ? 'ext.removeConnectorBody' : 'ext.removeBody', { name }), { ok: t('ext.remove'), danger: true })) return;
     const unlock = await unlockCore('removeExtension');
@@ -41,21 +51,22 @@ export function ExtensionsPanel() {
       {data.pending.length ? <PendingCard list={data.pending} run={run} /> : null}
       <Card>
         <CardHeader className="flex-row items-start justify-between gap-3">
-          <div><CardTitle>{t('ext.title')}</CardTitle><CardDescription>{t('ext.desc')}</CardDescription></div>
+          <div><CardTitle>{t('ext.title')}</CardTitle><CardDescription>{t('ext.desc')}</CardDescription><CardDescription className="mt-1">{t('ext.help')}</CardDescription></div>
           <Button size="sm" onClick={() => importFlow(run)} data-testid="ext-import"><Download />{t('ext.import')}</Button>
         </CardHeader>
         <CardContent className="grid gap-4">
           <Group title={t('ext.skills')} icon={Puzzle} dir={data.dirs.skills} onOpen={open} empty={t('ext.noSkills')}>
             {data.skills.map((s) => (
-              <Row key={s.name} item={s} testid={`ext-skill-${s.name}`} detail={s.valid ? s.description : t('ext.invalidSkill')}
-                on={s.enabled} disabled={!s.valid && !s.enabled} onToggle={(v) => toggle('skill', s.name, v)}
+              <Row key={s.name} item={s} testid={`ext-skill-${s.name}`} detail={s.linked ? t('ext.linked') : s.valid ? s.description : t('ext.invalidSkill')}
+                note={s.asks?.tools || s.asks?.hooks ? t('ext.asksNote') : null}
+                on={s.enabled} disabled={(!s.valid || s.linked) && !s.enabled} onToggle={(v) => toggle('skill', s.name, v)}
                 menu={[{ icon: FolderOpen, label: t('ext.openFolder'), run: () => open(s.dir) }, null, { icon: Trash2, label: t('ext.remove'), danger: true, run: () => remove('skill', s.name), testid: 'ext-remove' }]} />
             ))}
           </Group>
           <Group title={t('ext.servers')} icon={Server} dir={data.dirs.mcp} onOpen={open} empty={t('ext.noServers')}>
             {data.mcp.map((s) => (
-              <Row key={s.name} item={s} testid={`ext-mcp-${s.name}`} detail={s.description || (s.startable ? `${s.command} ${s.args.map((a) => a.split(/[\\/]/).pop()).join(' ')}` : t('ext.noStart'))}
-                on={s.enabled} disabled={!s.startable && !s.enabled} onToggle={(v) => toggle('mcp', s.name, v)}
+              <Row key={s.name} item={s} testid={`ext-mcp-${s.name}`} detail={s.linked ? t('ext.linked') : s.description || (s.startable ? `${s.command} ${s.args.map((a) => a.split(/[\\/]/).pop()).join(' ')}` : t('ext.noStart'))}
+                on={s.enabled} disabled={!s.startable && !s.enabled} onToggle={(v) => toggle('mcp', s.name, v, s)}
                 extra={s.editing ? <Badge variant="outline" data-testid="ext-editing">{t('ext.editing')}</Badge> : null}
                 keys={s.connector ? { name: s.connector } : null}
                 menu={[
@@ -107,15 +118,15 @@ function Group({ title, hint, icon: Icon, dir, onOpen, empty, children }) {
   );
 }
 
-function Row({ item, detail, mono = false, on, disabled = false, onToggle, keys = null, extra = null, menu = [], testid }) {
+function Row({ item, detail, note = null, mono = false, on, disabled = false, onToggle, keys = null, extra = null, menu = [], testid }) {
   const t = useT();
   return (
     <div className="flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2" data-testid={testid}>
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm"><span className="truncate">{item.name}</span><Badge variant="outline" className="text-[11px]">{sourceLabel(item.source)}</Badge>{extra}</div>
         <div className={`text-muted-foreground line-clamp-2 text-xs ${mono ? 'truncate font-mono' : ''}`}>{detail}</div>
+        {note ? <div className="text-warning text-xs" data-testid="ext-note">{note}</div> : null}
       </div>
-      <span className="text-muted-foreground hidden text-xs sm:inline">{on ? t('ext.on') : t('ext.off')}</span>
       <Switch checked={on} disabled={disabled} onCheckedChange={onToggle} aria-label={t('ext.toggle', { name: item.name })} data-testid="ext-toggle" />
       {keys ? <BubbleTip title={t('master.keys')}><Button variant="ghost" size="icon-sm" aria-label={t('master.keys')} onClick={() => connectorKeys(keys)} data-testid="mcp-keys"><KeyRound /></Button></BubbleTip> : null}
       <DropdownMenu modal={false}>
@@ -137,19 +148,61 @@ function PendingCard({ list, run }) {
       <CardContent className="grid gap-2">
         {list.map((r) => (
           <div key={r.id} className="grid gap-1.5 rounded-lg border px-3 py-2">
-            <div className="text-sm">{t(r.kind === 'skill' ? 'ext.kindSkill' : 'ext.kindMcp')} «{r.name}»{r.update ? ` · ${t('ext.newVersion')}` : ''} <span className="text-muted-foreground">· {r.by?.agent ?? ''}</span></div>
+            <div className="text-sm">{t(r.kind === 'skill' ? 'ext.kindSkill' : 'ext.kindMcp')} «{r.name}»{r.status === 'asking' ? ` · ${t('ext.wantsEdit')}` : r.update ? ` · ${t('ext.newVersion')}` : ''} <span className="text-muted-foreground">· {r.by?.agent ?? ''}</span></div>
             <div className="text-muted-foreground text-xs">{r.description}</div>
-            <div className="text-muted-foreground font-mono text-[11px] break-all">{(r.files ?? []).join(' · ')}</div>
+            {r.status === 'asking' ? null : <FileList files={r.files} total={r.total} />}
             <div className="flex flex-wrap gap-2">
-              <Button size="xs" onClick={() => run(call('extensions.approve', { id: r.id }), t('ext.activated', { name: r.name }))} data-testid="ext-approve"><Check />{t('ext.activate')}</Button>
-              <Button size="xs" variant="outline" onClick={() => act(bridge.openPath(r.dir))}><FolderOpen />{t('ext.openFolder')}</Button>
-              <Button size="xs" variant="outline" onClick={() => run(call('extensions.reject', { id: r.id }), t('ext.discarded', { name: r.name }))} data-testid="ext-reject"><X />{t('ext.discard')}</Button>
+              <Button size="xs" onClick={() => answerRequest(r, true, run)} data-testid="ext-approve"><Check />{t(r.status === 'asking' ? 'ext.allow' : 'ext.activate')}</Button>
+              {r.dir ? <Button size="xs" variant="outline" onClick={() => act(bridge.openPath(r.dir))}><FolderOpen />{t('ext.openFolder')}</Button> : null}
+              <Button size="xs" variant="outline" onClick={() => answerRequest(r, false, run)} data-testid="ext-reject"><X />{t('ext.discard')}</Button>
             </div>
           </div>
         ))}
       </CardContent>
     </Card>
   );
+}
+
+// The files that would be turned on: the first ones, «y N más» and the whole list one click away.
+function FileList({ files = [], total = files.length, first = 8 }) {
+  const t = useT();
+  const [all, setAll] = useState(false);
+  const shown = all ? files : files.slice(0, first);
+  const more = Math.max(0, (all ? files.length : total) - shown.length);
+  return (
+    <div className="text-muted-foreground font-mono text-[11px] break-all" data-testid="ext-files">
+      {shown.join(' · ')}
+      {!all && more > 0 ? <> · <button type="button" className="text-foreground underline" onClick={() => setAll(true)} data-testid="ext-files-more">{t('ext.andMore', { n: more })}</button></> : null}
+    </div>
+  );
+}
+
+// «Activar» (or «Permitir» for an agent that wants to improve a server with keys), always after a dialog that says what
+// it means, lists every file and opens the folder; «Descartar» at once. → the engine's answer, or undefined
+async function answerRequest(r, approve, run, done = (x) => x) {
+  if (!approve) return done(await run(call('extensions.reject', { id: r.id }), t('ext.discarded', { name: r.name })));
+  const agent = r.by?.agent ?? t('ext.kindAgent');
+  const asking = r.status === 'asking';
+  const title = asking ? t('ext.confirmEditTitle', { agent, name: r.name }) : t(r.kind === 'skill' ? 'ext.confirmSkillTitle' : 'ext.confirmMcpTitle', { name: r.name });
+  const body = asking ? t('ext.confirmEditBody', { name: r.name }) : t(r.kind === 'skill' ? 'ext.confirmSkillBody' : 'ext.confirmMcpBody', { agent });
+  const ok = await form(title, {
+    description: body,
+    wide: true,
+    body: () => (asking ? <span /> : (
+      <div className="grid gap-2 text-sm" data-testid="ext-confirm">
+        {r.deps ? <p>{t('ext.confirmDeps')}</p> : null}
+        {r.asks?.tools || r.asks?.hooks ? <p className="text-warning">{t('ext.asksNote')}</p> : null}
+        <p className="text-muted-foreground">{t('ext.filesTitle', { n: r.total ?? r.files?.length ?? 0 })}</p>
+        <div className="bg-muted/50 max-h-60 overflow-auto rounded-md p-2 font-mono text-[11px]" data-testid="ext-confirm-files">{(r.files ?? []).map((f) => <div key={f}>{f}</div>)}</div>
+        {r.dir ? <div><Button type="button" size="xs" variant="outline" onClick={() => act(bridge.openPath(r.dir))}><FolderOpen />{t('ext.openFolder')}</Button></div> : null}
+      </div>
+    )),
+    ok: t(asking ? 'ext.allow' : 'ext.activate'),
+    onOk: () => call('extensions.approve', { id: r.id })
+  });
+  if (!ok) return undefined;
+  toast.success(asking ? t('ext.stateAllowed') : t('ext.activated', { name: r.name }));
+  return done(await run(Promise.resolve(ok)));
 }
 
 // «Importar»: a folder of this PC or a git repository (https).
@@ -160,14 +213,14 @@ async function importFlow(run) {
   ], { testid: 'ext-import-how' });
   if (how === 'folder') {
     const from = await bridge.pickFolder?.(t('ext.importFolder'));
-    if (from) run(call('extensions.import', { from }), t('ext.imported'));
+    if (from) { const id = toast.loading(t('ext.importing')); try { await run(call('extensions.import', { from }), t('ext.imported')); } finally { toast.dismiss(id); } }
   } else if (how === 'repo') {
     await form(t('ext.importRepo'), {
       description: t('ext.importRepoDesc'),
       initial: { url: '' },
       body: (v, set) => <Field label={t('ext.repoUrl')}><Input autoFocus value={v.url} onChange={(e) => set({ url: e.target.value })} placeholder="https://github.com/usuario/repositorio" data-testid="ext-repo-url" /></Field>,
       ok: t('ext.import'),
-      onOk: async (v) => { await run(call('extensions.import', { url: v.url.trim() }), t('ext.imported')); return true; }
+      onOk: async (v) => { const r = await call('extensions.import', { url: v.url.trim() }); toast.success(t('ext.imported')); await run(Promise.resolve(r)); return true; }
     });
   }
 }
@@ -188,8 +241,8 @@ async function applyFlow(name, run) {
   const n = check.added.length + check.changed.length + check.removed.length;
   if (!n) { toast.info(t('ext.applyNothing')); return; }
   const lines = [...check.added.map((f) => `+ ${f}`), ...check.changed.map((f) => `~ ${f}`), ...check.removed.map((f) => `− ${f}`)].slice(0, 12).join('\n');
-  if (!await confirm(t('ext.applyTitle', { name }), `${t('ext.applyBody', { path: check.path, n })}\n\n${lines}${n > 12 ? '\n…' : ''}`, { ok: t('ext.apply') })) return;
-  run(call('extensions.apply', { name }), t('ext.applied', { name }));
+  if (!await confirm(t('ext.applyTitle', { name }), `${t('ext.applyBody', { path: check.path, n })}\n\n${lines}${n > 12 ? `\n${t('ext.andMore', { n: n - 12 })}` : ''}`, { ok: t('ext.apply') })) return;
+  run(call('extensions.apply', { name, id: check.id }), t('ext.applied', { name }));
 }
 async function adoptFlow(p, run) {
   if (!await confirm(t('ext.adoptTitle', { name: p.name }), t('ext.adoptBody', { path: p.dir }), { ok: t('ext.moveToCore') })) return;
@@ -222,23 +275,31 @@ function addConnector(run) {
   });
 }
 
-// The card in the chat when an agent asks for what it made to be turned on (src/mcp/server.mjs › orb_request_activation).
+// The card in the chat when an agent asks for what it made to be turned on (src/mcp/server.mjs › orb_request_activation),
+// or for permission to improve a server that holds keys (meta.ask = 'edit'). «Activar» opens the same dialog as Ajustes.
 export function ExtensionRequestCard({ m }) {
   const t = useT();
   const [local, setLocal] = useState(null);
   const state = local ?? m.meta.status ?? 'pending';
+  const asking = m.meta.ask === 'edit';
+  const pendingOne = async () => (await call('extensions.list')).pending.find((r) => r.id === m.meta.extension);
   const answer = async (approve) => {
-    const r = await act(call(approve ? 'extensions.approve' : 'extensions.reject', { id: m.meta.extension }), approve ? t('ext.activated', { name: m.meta.name }) : undefined);
-    if (r !== undefined) setLocal(approve ? 'approved' : 'rejected');
+    let r; try { r = await pendingOne(); } catch (error) { toast.error(String(error?.message ?? error)); return; }
+    if (!r) { setLocal('gone'); return; }
+    const out = await answerRequest(r, approve, (p) => act(p));
+    if (out !== undefined) setLocal(approve ? 'approved' : 'rejected');
   };
+  const openFolder = async () => { const r = await pendingOne().catch(() => null); if (r?.dir) act(bridge.openPath(r.dir)); };
+  const more = (m.meta.total ?? m.meta.files?.length ?? 0) - (m.meta.files?.length ?? 0);
   return (
     <div className={`mx-auto w-full max-w-[88%] rounded-xl border px-3.5 py-2.5 text-[13px] ${state === 'pending' ? 'border-warning/50 bg-warning/10' : 'bg-muted/50'}`} data-testid="ext-request">
       <div className="flex items-start gap-2">{m.meta.ext === 'skill' ? <Puzzle className="mt-0.5 size-4 shrink-0" /> : <Server className="mt-0.5 size-4 shrink-0" />}<div className="min-w-0 flex-1"><div>{m.body}</div>{m.meta.description ? <div className="text-muted-foreground mt-0.5">{m.meta.description}</div> : null}</div></div>
-      {m.meta.files?.length ? <div className="text-muted-foreground mt-1.5 pl-6 font-mono text-[11px] break-all">{m.meta.files.join(' · ')}</div> : null}
+      {m.meta.files?.length ? <div className="text-muted-foreground mt-1.5 pl-6 font-mono text-[11px] break-all">{m.meta.files.join(' · ')}{more > 0 ? ` · ${t('ext.andMore', { n: more })}` : ''}</div> : null}
       <div className="chat-actions mt-2 flex flex-wrap items-center gap-2 pl-6">
-        {state !== 'pending' ? <Badge variant={state === 'approved' ? 'success' : 'outline'}>{t(state === 'approved' ? 'ext.stateApproved' : 'ext.stateRejected')}</Badge>
+        {state !== 'pending' ? <Badge variant={state === 'approved' ? 'success' : 'outline'}>{t(state === 'approved' ? (asking ? 'ext.stateAllowed' : 'ext.stateApproved') : 'ext.stateRejected')}</Badge>
           : bridge.mobile ? <span className="text-muted-foreground">{t('ext.onPc')}</span> : (<>
-            <Button size="xs" className="px-2.5" onClick={() => answer(true)} data-testid="ext-card-approve"><Check />{t('ext.activate')}</Button>
+            <Button size="xs" className="px-2.5" onClick={() => answer(true)} data-testid="ext-card-approve"><Check />{t(asking ? 'ext.allow' : 'ext.activate')}</Button>
+            {asking ? null : <Button size="xs" className="px-2.5" variant="outline" onClick={openFolder} data-testid="ext-card-folder"><FolderOpen />{t('ext.openFolder')}</Button>}
             <Button size="xs" className="px-2.5" variant="outline" onClick={() => answer(false)}><X />{t('ext.discard')}</Button>
           </>)}
       </div>

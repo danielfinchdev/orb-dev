@@ -188,25 +188,43 @@ function askUser(a) {
 // it): who made each one, so only that agent asks for it to be turned on.
 const myScopeOf = () => ({ agent: ME, task: TASK_ID, conversation: BOSS ? CONV : TASK_ID ? scopeOf(TASK_ID) : null, session: SIGNED_SESSION ?? null });
 const requests = () => { const r = board.settingJson(REQUESTS); return Array.isArray(r) ? r : []; };
+// The agent that made a request, or one working in the same conversation (the coordinator makes it, a task's agent writes it).
+const isMine = (r, mine = myScopeOf()) => {
+  const by = r?.by ?? {};
+  if (by.conversation != null && by.conversation === mine.conversation) return true;
+  return Boolean(r) && ['agent', 'task', 'conversation', 'session'].every((k) => (by[k] ?? null) === (mine[k] ?? null));
+};
+const draftReply = (req) => ({ id: req.id, carpeta: req.dir, archivos: fileList(req.dir), siguiente: `Escribe ${req.kind === 'skill' ? 'la skill' : 'el servidor'} en esa carpeta (solo ahí) y, cuando esté listo y probado, llama a orb_request_activation con id ${req.id}.` });
 function draft(kind, a) {
-  const req = draftExtension(ctx.paths.core, { kind, name: a.name, description: a.description, language: a.lenguaje === 'python' ? 'python' : 'node', update: a.mejorar === true ? a.name : null, by: myScopeOf(), tr });
+  const update = a.mejorar === true ? String(a.name ?? '').trim() : null;
+  // Improving a server that holds keys waits for the user (its copy never carries them): once allowed, the same call
+  // gives the folder.
+  if (update) {
+    const ready = requests().find((r) => r.kind === kind && r.update === update && isMine(r) && (r.status === 'drafting' || r.status === 'asking'));
+    if (ready?.status === 'drafting' && ready.allowed) return draftReply(ready);
+    if (ready?.status === 'asking') return `Sigue esperando a que ${USER} lo permita. Termina tu turno; cuando lo permita, vuelve a llamar a orb_create_${kind} con mejorar: true.`;
+  }
+  const req = draftExtension(ctx.paths.core, { kind, name: a.name, description: a.description, language: a.lenguaje === 'python' ? 'python' : 'node', update, by: myScopeOf(), config: ctx.config, tr });
   board.settingJson(REQUESTS, [...requests(), req].slice(-50));
-  return { id: req.id, carpeta: req.dir, archivos: fileList(req.dir), siguiente: `Escribe ${kind === 'skill' ? 'la skill' : 'el servidor'} en esa carpeta (solo ahí) y, cuando esté listo y probado, llama a orb_request_activation con id ${req.id}.` };
+  if (req.status === 'asking') {
+    const what = tr('ext.card.mcpKeys', { agent: ME, name: req.name });
+    board.addChat('system', what, { kind: 'extension', extension: req.id, ext: req.kind, name: req.name, description: req.description, update: req.update, ask: 'edit', status: 'pending' }, myScopeOf().conversation);
+    board.notice(what, 'info');
+    return `«${req.name}» guarda claves: ${USER} tiene que permitir que lo mejores (las claves nunca se copian; la versión nueva usará las de Orb). Termina tu turno; cuando lo permita, vuelve a llamar a orb_create_${kind} con mejorar: true.`;
+  }
+  return draftReply(req);
 }
 function askActivation(a) {
   const list = requests();
   const i = list.findIndex((r) => r.id === String(a.id ?? ''));
   const mine = myScopeOf();
-  // The agent that made it, or one working in the same conversation (the coordinator makes it, a task's agent writes it).
-  const by = list[i]?.by ?? {};
-  const same = by.conversation != null && by.conversation === mine.conversation;
-  if (i < 0 || (!same && ['agent', 'task', 'conversation', 'session'].some((k) => (by[k] ?? null) !== (mine[k] ?? null)))) refuse('ext.err.noRequest');
-  const req = requestActivation(list[i], { tr });
+  if (i < 0 || !isMine(list[i], mine)) refuse('ext.err.noRequest');
+  const req = requestActivation(ctx.paths.core, list[i], { tr });
   board.settingJson(REQUESTS, list.map((r, j) => (j === i ? req : r)));
   const what = tr(req.kind === 'skill' ? (req.update ? 'ext.card.skillUpdate' : 'ext.card.skill') : (req.update ? 'ext.card.mcpUpdate' : 'ext.card.mcp'), { agent: ME, name: req.name });
-  board.addChat('system', what, { kind: 'extension', extension: req.id, ext: req.kind, name: req.name, description: req.description, files: req.files, update: req.update, status: 'pending' }, mine.conversation);
+  board.addChat('system', what, { kind: 'extension', extension: req.id, ext: req.kind, name: req.name, description: req.description, files: req.files.slice(0, 20), total: req.total, asks: req.asks, deps: req.deps, update: req.update, status: 'pending' }, mine.conversation);
   board.notice(what, 'info');
-  return `Pedido a ${USER}: le sale una tarjeta para revisarlo y activarlo. No cambies nada más en esa carpeta.`;
+  return `Pedido a ${USER}: le sale una tarjeta para revisarlo y activarlo. Orb ha guardado una copia de lo que hay ahora: lo que cambies en la carpeta a partir de aquí no se activa (si hace falta, vuelve a pedirlo).`;
 }
 
 // 2.7: the advice to use the Pizarra, as a card with its button, below the answer of this turn (like orb_ask).
@@ -323,10 +341,10 @@ const tools = [
   { name: 'orb_create_skill', description: `Prepara una skill nueva de Orb (o una versión mejorada de una que ya existe, con mejorar: true) cuando ${USER} la pida. Devuelve la carpeta donde escribir su SKILL.md (con name y description en el encabezado) y sus archivos de apoyo. Al terminar llama a orb_request_activation: ${USER} la revisa y la activa desde la app.`,
     inputSchema: { type: 'object', required: ['name', 'description'], properties: { name: str('Nombre: minúsculas, números y guiones (p. ej. revisar-facturas)'), description: str('Qué hace y cuándo usarla, en una o dos frases (los agentes la eligen por esto)'), mejorar: { type: 'boolean', description: 'true para preparar una versión nueva de una skill que ya está en Orb (parte de su copia actual)' } } },
     run: (a) => draft('skill', a) },
-  { name: 'orb_create_mcp', description: `Prepara un servidor MCP nuevo de Orb (o una versión mejorada de uno que ya existe, con mejorar: true) cuando ${USER} lo pida. Devuelve la carpeta donde escribir su código (con un punto de partida en Node o Python). Instala sus dependencias en esa carpeta. Al terminar llama a orb_request_activation: ${USER} lo revisa y lo activa desde la app.`,
+  { name: 'orb_create_mcp', description: `Prepara un servidor MCP nuevo de Orb (o una versión mejorada de uno que ya existe, con mejorar: true) cuando ${USER} lo pida. Devuelve la carpeta donde escribir su código (con un punto de partida en Node o Python). Puedes instalar sus dependencias ahí para probarlo, pero no se copian: Orb las instala al activarlo. Si guarda claves, mejorarlo necesita el permiso de ${USER}. Al terminar llama a orb_request_activation: ${USER} lo revisa y lo activa desde la app.`,
     inputSchema: { type: 'object', required: ['name', 'description'], properties: { name: str('Nombre: letras, números, - y _ (p. ej. gmail-multi-mcp)'), description: str('Qué hace, en una o dos frases'), lenguaje: { type: 'string', enum: ['node', 'python'], description: 'Por defecto node' }, mejorar: { type: 'boolean', description: 'true para preparar una versión nueva de un servidor que ya está en Orb (parte de su copia actual)' } } },
     run: (a) => draft('mcp', a) },
-  { name: 'orb_request_activation', description: `Pide a ${USER} que active lo que preparaste con orb_create_skill u orb_create_mcp (le sale una tarjeta en la app). Compruébalo antes: no se puede cambiar después de pedirlo.`,
+  { name: 'orb_request_activation', description: `Pide a ${USER} que active lo que preparaste con orb_create_skill u orb_create_mcp (le sale una tarjeta en la app). Compruébalo antes: se activa la copia que Orb guarda al pedirlo.`,
     inputSchema: { type: 'object', required: ['id'], properties: { id: str('El id que devolvió orb_create_skill u orb_create_mcp') } },
     run: (a) => askActivation(a) },
   { name: 'orb_read_messages', description: 'Lee tus mensajes sin leer (y los marca como leídos).', inputSchema: { type: 'object', properties: {} },

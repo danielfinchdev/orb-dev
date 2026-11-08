@@ -10,7 +10,7 @@ export default {
   'datos.folderChange': 'Change folder…',
   'datos.folderDefault': 'Use the default',
   'datos.coreTitle': 'Core folder',
-  'datos.coreDesc': 'What Orb needs to work: settings, database, logs, skills, MCP servers and tools. It is hidden and agents only read its skills (not a hard barrier: do not keep your own things there). If it is deleted, Orb brings it back from the latest backup.',
+  'datos.coreDesc': 'What Orb needs to work: settings, database, logs, skills, MCP servers and tools. It is hidden; agents only read its skills and prepare new ones in core\\preparacion (not a hard barrier: do not keep your own things there). If it is deleted, Orb brings it back from the latest backup.',
   'datos.coreOpen': 'Open core',
   'datos.lastOk': 'Last backup: {when}',
   'datos.lastFailed': 'The last backup failed ({when}): {error}',

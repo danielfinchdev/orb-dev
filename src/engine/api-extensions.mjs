@@ -10,11 +10,12 @@ import { ctx, saveConfig, tr } from '../core/context.mjs';
 import { CATEGORIES, loadConfig } from '../core/home.mjs';
 import { syncProjects } from '../core/projects.mjs';
 import { moveIntoCore } from '../core/core-folder.mjs';
-import { sealConnectors, rebindMoved } from '../core/connector-secrets.mjs';
+import { sealConnectors, rebindOrWait, settleRebinds, REBINDS } from '../core/connector-secrets.mjs';
 import { oneOf, str } from './api-common.mjs';
 import {
   listExtensions, skillsWith, mcpWith, importExtension, removeExtension, exposeSkills, activateRequest, editInProject,
-  applyEdit, compareTrees, isMcpProject, startCommand, ExtensionError, REQUESTS, EDITS, MCP_NAME, SKILL_NAME
+  applyEdit, prepareApply, isMcpProject, startCommand, checkSkill, allowDraft, discardRequest, installFor,
+  ExtensionError, REQUESTS, EDITS, MCP_NAME, SKILL_NAME
 } from '../core/extensions.mjs';
 
 // ---- what the agents load (core\skills\.activas), made again when the skills that are on change
@@ -25,6 +26,17 @@ export function refreshSkills() {
   return live;
 }
 export const liveSkills = () => (live && liveKey === JSON.stringify(ctx.config?.skills ?? []) ? live : refreshSkills());
+
+// ---- a connector Orb moved while the vault was locked: its keys are tied again when it opens (never silently lost)
+const rebindStore = (board) => ({ get: () => board.settingJson(REBINDS) ?? [], set: (v) => board.settingJson(REBINDS, v) });
+export function rebindMovedOrWait(board, before, after) {
+  const waiting = rebindOrWait(ctx.master, before, after, rebindStore(board));
+  if (waiting.length) board.notice(tr('ext.keysWaiting', { names: waiting.join(', ') }), 'warning');
+  return waiting;
+}
+export function settleWaitingKeys(board, log = () => {}) {
+  try { const done = settleRebinds(ctx.master, rebindStore(board)); if (done.length) log(`claves: atadas de nuevo ${done.join(', ')}`); return done; } catch (error) { log(`claves: ${error.message}`); return []; }
+}
 
 const KINDS = ['skill', 'mcp', 'connector'];
 const fail = (key, vars) => { throw new ExtensionError(key, vars, tr); };
@@ -41,7 +53,7 @@ export function extensionMethods({ board, emit, log }) {
     const before = ctx.config.mcpServers ?? [];
     let p = patch;
     if (Array.isArray(patch.mcpServers)) {
-      if (moved) rebindMoved(ctx.master, before, patch.mcpServers);
+      if (moved) rebindMovedOrWait(board, before, patch.mcpServers);
       const sealed = sealConnectors(ctx.master, patch.mcpServers, { trusted: false });
       if (sealed) p = { ...patch, mcpServers: sealed };
     }
@@ -59,20 +71,36 @@ export function extensionMethods({ board, emit, log }) {
     }
   };
   const request = (id) => { const r = requests().find((x) => x.id === String(id ?? '')); if (!r) fail('ext.err.noRequest'); return r; };
+  // One at a time per request, server or import (each may wait for git or npm without blocking the engine).
+  const running = new Set();
+  const once = async (key, fn) => { if (running.has(key)) fail('ext.err.inProgress'); running.add(key); try { return await fn(); } finally { running.delete(key); } };
+  const busyProject = (dir) => { const p = board.projects().find((x) => path.resolve(x.path).toLowerCase() === path.resolve(dir).toLowerCase()); return p && board.one("SELECT COUNT(*) AS n FROM tasks WHERE project = ? AND status IN ('queued', 'awaiting_approval', 'running')", p.name).n ? p.name : null; };
+  // What «Aplicar cambios» showed (the quarantine's copy and its fingerprint): only that is applied.
+  const applies = new Map();
 
   return {
     'extensions.list': () => list(),
     // On or off. A server of core with no connector yet gets one (the command that starts it); a connector of the PC
     // (npx…) by its name.
-    'extensions.toggle': ({ kind, name: raw, enabled }) => {
+    // A skill is checked as when it came in (a skill put in core by hand too); a server that needs its dependencies is
+    // turned on only once the user was told (install: true): Orb installs them then, with no install scripts.
+    'extensions.toggle': async ({ kind, name: raw, enabled, install }) => {
       const k = oneOf(kind, KINDS, 'tipo');
       const on = enabled === true;
       if (k === 'skill') {
         const n = name(raw, 'skill');
-        if (!list().skills.some((s) => s.name === n && (s.valid || !on))) fail('ext.err.notFound', { name: n });
+        const row = list().skills.find((s) => s.name === n);
+        if (!row || (on && !row.valid)) fail(row?.linked ? 'ext.err.link' : 'ext.err.notFound', { name: n, file: n });
+        if (on) checkSkill(row.dir, { name: n, tr });
         save({ skills: skillsWith(ctx.config, n, { enabled: on }) });
       } else if (k === 'mcp') {
         const n = name(raw, 'mcp');
+        const row = list().mcp.find((s) => s.name === n);
+        if (on && row?.linked) fail('ext.err.link', { file: n });
+        if (on && row?.needsInstall) {
+          if (install !== true) fail('ext.err.needsInstall', { name: n });
+          await once(`mcp:${n}`, () => installFor(ctx.paths.core, n, { tr }));
+        }
         const servers = mcpWith(ctx.config, ctx.paths.core, n, on);
         if (!servers) fail('ext.err.noStart');
         save({ mcpServers: servers });
@@ -81,15 +109,16 @@ export function extensionMethods({ board, emit, log }) {
         if (!(ctx.config.mcpServers ?? []).some((s) => s.name === n)) fail('ext.err.notFound', { name: n });
         save({ mcpServers: ctx.config.mcpServers.map((s) => (s.name === n ? { ...s, enabled: on } : s)) });
       }
-      log(`extensiones: ${k} ${raw} ${on ? 'activada' : 'desactivada'}`);
+      log(`extensiones: ${k} ${raw} ${on ? 'activado' : 'desactivado'}`);
       return list();
     },
     // From a folder of this PC or a git repository (https): into core, checked, off until the user turns it on.
-    'extensions.import': ({ from, url }) => {
+    // Cloned or copied into the quarantine without running anything (no git hooks, no install scripts), in the background.
+    'extensions.import': async ({ from, url }) => {
       if (!from === !url) fail('ext.err.importWhat');
-      const r = importExtension(ctx.paths.core, ctx.config, { from: from ? str(from, 'carpeta', 1000) : null, url: url ? str(url, 'repositorio', 500) : null, tr });
+      const r = await once('import', () => importExtension(ctx.paths.core, ctx.config, { from: from ? str(from, 'carpeta', 1000) : null, url: url ? str(url, 'repositorio', 500) : null, tr }));
       save(r.patch);
-      log(`extensiones: importada ${r.kind} ${r.name} (${from ? 'carpeta' : url})`);
+      log(`extensiones: importado ${r.kind} ${r.name} (${from ? 'carpeta' : url})`);
       return { kind: r.kind, name: r.name, list: list() };
     },
     // Guarded (the master password, src/core/permissions.mjs): a skill or a server leaves core, folder and all; a connector
@@ -106,26 +135,35 @@ export function extensionMethods({ board, emit, log }) {
         save(removeExtension(ctx.paths.core, ctx.config, k, n, { tr }));
         if (k === 'mcp' && e[n]) { delete e[n]; board.settingJson(EDITS, e); }
       }
-      log(`extensiones: ${k} ${raw} quitada de core`);
+      log(`extensiones: ${k} ${raw} quitado de core`);
       return list();
     },
-    // An agent's request (src/mcp/server.mjs › orb_request_activation): the same files it asked with go into core, on.
-    'extensions.approve': ({ id }) => {
+    // An agent's request (src/mcp/server.mjs): the quarantine's copy it asked with goes into core, on. A request to improve
+    // a server that holds keys ('asking'): allowed, its copy (without them) is made for the agent.
+    'extensions.approve': ({ id }) => once(`req:${id}`, async () => {
       const r = request(id);
-      const out = activateRequest(ctx.paths.core, ctx.config, r, { tr });
+      if (r.status === 'asking') {
+        const next = allowDraft(ctx.paths.core, r, { tr });
+        saveRequests(requests().map((x) => (x.id === r.id ? next : x)));
+        markCards(r.id, 'approved');
+        log(`extensiones: permitido mejorar ${r.name}`);
+        return list();
+      }
+      const out = await activateRequest(ctx.paths.core, ctx.config, r, { tr });
       save(out.patch, { moved: Boolean(r.update) });
       saveRequests(requests().filter((x) => x.id !== r.id));
       markCards(r.id, 'approved');
       board.notice(tr(r.kind === 'skill' ? 'ext.approvedSkill' : 'ext.approvedMcp', { name: r.name }), 'success');
-      log(`extensiones: ${r.kind} ${r.name} aprobada (${r.update ? 'versión nueva' : 'nueva'})`);
+      log(`extensiones: ${r.kind} ${r.name} aprobado (${r.update ? 'versión nueva' : 'nuevo'})`);
       return list();
-    },
+    }),
     'extensions.reject': ({ id }) => {
       const r = request(id);
-      try { fs.rmSync(r.dir, { recursive: true, force: true }); } catch { /* left in core\preparacion */ }
+      if (running.has(`req:${r.id}`)) fail('ext.err.inProgress');
+      discardRequest(ctx.paths.core, r);
       saveRequests(requests().filter((x) => x.id !== r.id));
       markCards(r.id, 'rejected');
-      log(`extensiones: ${r.kind} ${r.name} descartada`);
+      log(`extensiones: ${r.kind} ${r.name} descartado`);
       return list();
     },
     // «Editar en un proyecto»: a copy of a server of core becomes a project (work on it there with any agent).
@@ -150,27 +188,34 @@ export function extensionMethods({ board, emit, log }) {
       const before = ctx.config.mcpServers ?? [];
       const to = moveIntoCore(ctx.home, p.path, { language: ctx.config.language });
       ctx.config = loadConfig(ctx.home);
-      rebindMoved(ctx.master, before, ctx.config.mcpServers ?? []);
+      rebindMovedOrWait(board, before, ctx.config.mcpServers ?? []);
       emit('config:changed', ctx.config);
       syncProjects(board);
       log(`extensiones: proyecto ${p.name} movido a ${to}`);
       return list();
     },
-    // What «Aplicar cambios» would change (the window asks before).
+    // What «Aplicar cambios» would change (the window asks before): the project's version is copied into the quarantine
+    // now, and only that copy is applied (a change in the project after this is not).
     'extensions.applyCheck': ({ name: raw }) => {
       const n = name(raw, 'mcp');
       const from = edits()[n];
       if (!from || !fs.existsSync(from)) fail('ext.err.noEdit', { name: n });
-      return { name: n, path: from, ...compareTrees(path.join(ctx.paths.mcp, n), from) };
+      const busy = busyProject(from);
+      if (busy) fail('ext.err.projectBusy', { name: busy });
+      const prepared = prepareApply(ctx.paths.core, n, from, { tr });
+      applies.set(n, prepared);
+      const { id, added, changed, removed } = prepared;
+      return { name: n, path: from, id, added, changed, removed };
     },
-    'extensions.apply': ({ name: raw }) => {
+    'extensions.apply': ({ name: raw, id }) => once(`mcp:${raw}`, async () => {
       const n = name(raw, 'mcp');
-      const from = edits()[n];
-      if (!from || !fs.existsSync(from)) fail('ext.err.noEdit', { name: n });
-      const out = applyEdit(ctx.paths.core, ctx.config, n, from, { tr });
+      const prepared = applies.get(n);
+      if (!prepared || prepared.id !== String(id ?? '')) fail('ext.err.changed', { name: n });
+      const out = await applyEdit(ctx.paths.core, ctx.config, n, prepared, { tr });
+      applies.delete(n);
       save(out.patch, { moved: true });
-      log(`extensiones: cambios de ${from} aplicados a ${n}`);
+      log(`extensiones: cambios de ${edits()[n] ?? n} aplicados a ${n}`);
       return list();
-    }
+    })
   };
 }

@@ -126,6 +126,19 @@ export function riskOf(command, lang = 'es') {
 const OPEN_INTERNAL = [['copias', 'aisladas'], ['herramientas'], ['preparacion']];
 const READ_INTERNAL = [['bitacora'], ['skills']];
 const norm = (p) => path.resolve(p).replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
+// 3.8.1: where a path really is: links and junctions followed, also for a file not made yet (its nearest existing parent
+// is resolved), so a junction made earlier (in a project or in core\preparacion) cannot send a write into core.
+const realOf = (p) => {
+  let at = path.resolve(p); const rest = [];
+  for (let i = 0; i < 64; i++) {
+    try { return path.join(fs.realpathSync.native(at), ...rest.reverse()); } catch { /* not there: its parent */ }
+    // A link whose target is not there (yet): where it points.
+    try { if (fs.lstatSync(at).isSymbolicLink()) { at = path.resolve(path.dirname(at), fs.readlinkSync(at)); continue; } } catch { /* not a link */ }
+    const up = path.dirname(at); if (up === at) break;
+    rest.push(path.basename(at)); at = up;
+  }
+  return path.resolve(p);
+};
 const under = (rest) => (o) => o.every((part, i) => rest[i] === part);
 // read: true (every folder a reading tool may see), false, or the names of the ones that count (['skills']).
 const readable = (read) => (read === true ? READ_INTERNAL : Array.isArray(read) ? READ_INTERNAL.filter((o) => read.includes(o[0])) : []);
@@ -144,8 +157,7 @@ export function isOrbData(target, internalDir, cwd, { read = false } = {}) {
   if (!internalDir || !target) return false;
   let p = String(target).trim().replace(/^~(?=[\\/]|$)/, os.homedir());
   if (!path.isAbsolute(p) && !path.win32.isAbsolute(p)) { if (!cwd) return false; p = path.resolve(cwd, p); }
-  let full = norm(p);
-  try { full = norm(fs.realpathSync.native(p)); } catch { /* not there (yet): as written */ }
+  const full = norm(realOf(p));
   const within = (root) => full === root || full.startsWith(`${root}\\`);
   const root = norm(internalDir);
   if (within(root)) return !openInCore(full.slice(root.length + 1).split('\\'), read);
@@ -234,19 +246,60 @@ export const touchesProtected = (text, list) => protectedHit(text, list) !== nul
 // run0.
 const ESCALATE = /\b(sudo|doas|pkexec|run0)\b|(^|[;&|(`]|\$\()\s*su(\s|$)|\/etc\/sudoers/i;
 export const escalates = (command) => ESCALATE.test(String(command ?? ''));
-// 3.8.1: a command that changes, moves or deletes files (on a skill of core it is denied, not asked).
-const CHANGES_FILES = /(^|[\s;&|(`"'])(rm|rmdir|rd|del|erase|mv|move|ren|rename|cp|copy|xcopy|robocopy|mkdir|md|ni|tee|touch|chmod|attrib|icacls|git|sed\s+-i|remove-item|move-item|rename-item|copy-item|new-item|set-content|add-content|clear-content|out-file|set-itemproperty)(\.exe)?(?=$|[\s;&|)"'])/i;
+// 3.8.1: a command that makes a link (a junction, a symbolic or a hard link), in any shell or language: one that names core
+// (or runs inside it) is denied, so nothing in core\preparacion (or anywhere) can point into core and turn an allowed write
+// there into a write in core\skills, core\datos…
+const MAKES_LINK = /\bmklink\b|\b(new-item|ni)\b[^|;&\n]*\b(junction|symboliclink|hardlink)\b|\bfsutil(\.exe)?\s+(hardlink|reparsepoint)\b|(^|[\s;&|(`"'])ln(\.exe)?\s|\bjunction(64)?(\.exe)?\s|create(symbolic|hard)link|createjunction|\b(sym)?linksync\b|\b(fs|fsp|promises)\.(sym)?link\b|\bos\.(sym)?link\b|\.(symlink|hardlink)_to\b|\bmountvol\b/i;
+export const makesLink = (command) => MAKES_LINK.test(String(command ?? ''));
+function linkIntoCore(command, internalDir, cwd) {
+  if (!internalDir || !makesLink(command)) return false;
+  const root = norm(internalDir);
+  const realRoot = norm(realOf(internalDir));
+  const inCore = (p) => { const f = norm(realOf(p)); return [root, realRoot].some((r) => f === r || f.startsWith(`${r}\\`)); };
+  const t = expandEnv(command).replace(/\//g, '\\').toLowerCase();
+  const named = (r) => { for (let i = t.indexOf(r); i >= 0; i = t.indexOf(r, i + 1)) if (/^($|[\\"'\s;|&)])/.test(t.slice(i + r.length))) return true; return false; };
+  if (named(root) || named(realRoot)) return true;
+  if (cwd && inCore(cwd)) return true;
+  return pathWords(expandEnv(command)).some((w) => { const p = path.isAbsolute(w) || path.win32.isAbsolute(w) ? w : cwd ? path.resolve(cwd, w) : null; return p ? inCore(p) : false; });
+}
+// 3.8.1: running a script of a skill of core: one interpreter and one script file in core\skills, as a single plain command
+// (no -c / -e, no chaining, no redirection). It asks; any other command that touches core\skills is denied.
+const RUNNERS = { python: [], python3: [], py: [], node: [], bash: [], sh: [], pwsh: ['-noprofile', '-nologo', '-noninteractive', '-executionpolicy'], powershell: ['-noprofile', '-nologo', '-noninteractive', '-executionpolicy'] };
+function runsSkillScript(command, internalDir, cwd) {
+  const c = unwrapShell(command).trim(); // Codex runs every command as powershell -Command '…'
+  if (!c || /[;&|<>`\r\n]|\$\(/.test(c)) return false;
+  const w = words(c);
+  const exe = String(w[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
+  if (!Object.hasOwn(RUNNERS, exe)) return false;
+  let i = 1;
+  if (exe === 'pwsh' || exe === 'powershell') {
+    for (; i < w.length && w[i].toLowerCase() !== '-file'; i++) {
+      const a = w[i].toLowerCase();
+      if (!RUNNERS[exe].includes(a)) return false;
+      if (a === '-executionpolicy') i++;
+    }
+    if (w[i]?.toLowerCase() !== '-file') return false;
+    i++;
+  }
+  const script = w[i];
+  if (!script || !/\.(py|js|mjs|cjs|sh|ps1)$/i.test(script)) return false;
+  const full = path.isAbsolute(script) || path.win32.isAbsolute(script) ? script : cwd ? path.resolve(cwd, script) : null;
+  if (!full) return false;
+  const f = norm(realOf(full)); const skills = norm(path.join(internalDir, 'skills'));
+  return f.startsWith(`${skills}\\`) && !f.slice(skills.length + 1).startsWith('.');
+}
 export function decide({ permission = 'editar', tool, kind, command = '', paths = [], patterns = [], internalDir, cwd, lang = 'es' }) {
   const T = (k) => translate(lang, `msg.guard.${k}`);
   const cls = toolClass(tool, kind);
   const text = [command, ...paths, ...patterns].join(' ');
+  if (linkIntoCore(command, internalDir, cwd)) return { decision: permission === 'total' ? 'ask' : 'deny', reason: T('internalLink') };
   if (touchesInternal({ command, paths, patterns, internalDir, cwd, read: cls === 'read' })) {
     // 3.8.1: only the general log in core (what a reading tool may see): the reason says how to write to it.
     const logsOnly = cls !== 'read' && !touchesInternal({ command, paths, patterns, internalDir, cwd, read: ['bitacora'] });
     // 3.8.1: only the skills of core: a command (one of their scripts) asks first; changing them, never (an agent makes a
     // new version with orb_create_skill, which the user approves).
     const skillsOnly = cls !== 'read' && !logsOnly && !touchesInternal({ command, paths, patterns, internalDir, cwd, read: ['skills'] });
-    if (skillsOnly && cls === 'exec' && permission !== 'leer' && !escalates(command) && !protectedHit(text) && !CHANGES_FILES.test(command) && !/(?<![0-9&])>/.test(command)) return { decision: 'ask', reason: T('internalSkillsRun') };
+    if (skillsOnly && cls === 'exec' && permission !== 'leer' && !escalates(command) && !protectedHit(text) && runsSkillScript(command, internalDir, cwd)) return { decision: 'ask', reason: T('internalSkillsRun') };
     return { decision: permission === 'total' ? 'ask' : 'deny', reason: T(logsOnly ? 'internalLogs' : skillsOnly ? 'internalSkills' : 'internal') };
   }
   if (escalates(command)) return { decision: 'deny', reason: T('sudo') };

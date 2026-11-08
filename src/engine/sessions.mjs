@@ -12,6 +12,7 @@ import { liveSkills } from './api-extensions.mjs';
 import { orbMcpServer, connectorLauncher } from '../agents/common.mjs';
 import { agentAuth } from './agent-auth.mjs';
 import { resolveEnv } from '../core/connector-secrets.mjs';
+import { connectorSafe } from '../core/extensions.mjs';
 import { CURSOR_FILES } from '../agents/cursor.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { git, isGitRepo, repoRoot } from '../core/workspace.mjs';
@@ -66,6 +67,8 @@ export function mcpServersFor(agent, { taskId = '', orchestrator = false, browse
     const taken = new Set(['orb']);
     for (const s of ctx.config.mcpServers ?? []) {
       if (s.enabled === false || (s.agents?.length && !s.agents.includes(agent)) || taken.has(connectorKey(s.name))) continue;
+      // 3.8.1: a server of core\mcp whose folder is a link or a junction (or reaches out of core) never starts.
+      if (!connectorSafe(ctx.paths.core, s)) continue;
       taken.add(connectorKey(s.name)); // F2.6c: never two servers on one variable name (config checks it too)
       // 3.8: its keys come out of the vault here, only for its launcher (orb.json has references).
       servers[s.name] = ticketed(s.name, connectorLauncher(), { launch: { command: s.command, args: s.args ?? [], env: resolveEnv(ctx.master, s) } });

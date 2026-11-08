@@ -228,7 +228,10 @@ async function run(board, { home, version, restored, repair }) {
   ctx.master = openMaster(home, secretOf(home), { mirror, log, notice: (text) => board.notice(text, 'warning') });
   try { migrateSecrets(board, ctx.master, { log, emit }); } catch (error) { log(`secretos: ${error.message}`); }
   // Unlocked later (the password on another PC): the phone access opens then.
-  const onUnlocked = () => { if (ctx.config.mobile?.enabled) remote?.start().catch((error) => log(`móvil: ${error.message}`)); };
+  // 3.8.1: also the keys of a connector Orb moved while it was locked (src/engine/api-extensions.mjs › rebindMovedOrWait).
+  const { settleWaitingKeys } = await import('./api-extensions.mjs');
+  const onUnlocked = () => { settleWaitingKeys(board, log); if (ctx.config.mobile?.enabled) remote?.start().catch((error) => log(`móvil: ${error.message}`)); };
+  if (ctx.master.unlocked()) settleWaitingKeys(board, log);
   api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, onUnlocked });
   remote = remoteRef.current = createRemote({ board, api, log, emit, version });
   // 3.1: only an unpacked Orb.dev started with ORB_DEV_CONTROL=1 (main.mjs decides; never an installed Orb).

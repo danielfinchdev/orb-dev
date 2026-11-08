@@ -11,7 +11,7 @@ export default {
   'datos.folderChange': 'Cambiar carpeta…',
   'datos.folderDefault': 'Usar la predeterminada',
   'datos.coreTitle': 'Carpeta core',
-  'datos.coreDesc': 'Lo que Orb necesita para funcionar: ajustes, base de datos, bitácoras, skills, servidores MCP y herramientas. Está oculta y los agentes solo leen sus skills (no es una barrera total: no guardes ahí nada tuyo). Si se borra, Orb la recupera de la última copia.',
+  'datos.coreDesc': 'Lo que Orb necesita para funcionar: ajustes, base de datos, bitácoras, skills, servidores MCP y herramientas. Está oculta y los agentes solo leen sus skills y preparan las nuevas en core\\preparacion (no es una barrera total: no guardes ahí nada tuyo). Si se borra, Orb la recupera de la última copia.',
   'datos.coreOpen': 'Abrir core',
   'datos.lastOk': 'Última copia: {when}',
   'datos.lastFailed': 'La última copia falló ({when}): {error}',

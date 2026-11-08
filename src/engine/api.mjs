@@ -149,7 +149,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // 3.8: the folders Orb 3.7 kept at the top of the workspace: what would happen to each, and the user's choice
     // (nothing moves before it; src/core/core-folder.mjs).
     'app.layoutPlan': () => layoutPlan(),
-    'app.layoutApply': ({ choices }) => layoutApply(choices, { emit, log }),
+    'app.layoutApply': ({ choices }) => layoutApply(choices, { emit, log, board }),
     'conversations.list': () => conversationList(),
     // 3.2: completed by hand (or open again): a task («t<id>»), a direct conversation («s<id>») or a conversation with the
     // assistant («c<id>»).
