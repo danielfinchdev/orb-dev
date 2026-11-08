@@ -123,7 +123,7 @@ async function startEngine({ execArgv = [] } = {}) {
 }
 
 // The calls of the window's refresh (src/ui/lib/store.js › refresh) and the other lists it asks for often.
-const HOT = [['app.state', {}], ['conversations.list', {}], ['inbox.list', { zone: 'orb' }], ['tasks.list', { limit: 200 }], ['projects.list', {}], ['sessions.list', {}], ['chat.list', () => ({ conversation: longId })], ['tasks.get', { id: 1000 }]];
+const HOT = [['app.state', {}], ['conversations.list', {}], ['inbox.list', { zone: 'orb' }], ['tasks.list', { limit: 200 }], ['projects.list', {}], ['sessions.list', {}], ['chat.list', () => ({ conversation: longId })], ['tasks.get', () => ({ id: Math.ceil(N.tasks / 2) })]];
 const REFRESH = [['app.state', {}], ['sessions.list', {}], ['projects.list', {}], ['tasks.list', { limit: 200 }], ['conversations.list', {}]];
 async function latency(e) {
   const res = {};
