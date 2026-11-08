@@ -65,7 +65,8 @@ export class AgentAuth {
         if (!g || (g.holder && !g.holder.destroyed) || traded || socket.destroyed) { send({ ok: false }); socket.end(); return; }
         ticket = t; g.holder = socket; clearTimeout(idle);
         g.secret ??= crypto.randomBytes(32).toString('hex');
-        send({ ok: true, ...g.reply, secret: g.secret });
+        // reply: a function when it is made at each trade (a connector's one-time grant of the vault, sessions.mjs).
+        send({ ok: true, ...(typeof g.reply === 'function' ? g.reply() : g.reply), secret: g.secret });
         return;
       }
       const g = this.grants.get(ticket);

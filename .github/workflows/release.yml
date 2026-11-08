@@ -60,7 +60,7 @@ jobs:
       - run: npm run check
       - run: npm test
         timeout-minutes: 25
-      - run: cargo test --lib
+      - run: cargo test --workspace --lib
         working-directory: src-tauri
       - name: Build the installer (Tauri), not signed (signing happens on the owner's PC)
         shell: bash

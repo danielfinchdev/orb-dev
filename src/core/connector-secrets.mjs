@@ -51,23 +51,21 @@ export function bindMissing(master, servers = []) {
   return n;
 }
 
-// The connector's env with its real values (what its launcher gets). A key the vault does not have (locked, or lost), or
-// any key of a connector whose command changed since its keys were given, is left out.
-export function resolveEnv(master, server) {
-  const out = {};
-  let bound = null;
-  const boundOk = () => {
-    if (bound === null) { let b = null; try { b = master?.unlocked() ? master.get(bindId(server.name)) : null; } catch { b = null; } bound = b === bindingOf(server); }
-    return bound;
-  };
+// What its launcher gets (src/mcp/launch.mjs): the plain values as they are, and for the keys in the vault a one-time
+// grant the launcher trades with the vault itself (3.8.1: the keys never pass through the engine). The vault hands them
+// only while they are still tied to the program the connector starts (its binding); a key it does not have is left out.
+// → { env, vault: { pipe, grant } | null }
+export function connectorLaunch(master, server) {
+  const env = {}; const vars = {};
   for (const [k, v] of Object.entries(server?.env ?? {})) {
-    if (!isRef(v)) { out[k] = String(v ?? ''); continue; }
-    if (!boundOk()) continue;
-    let value = null; try { value = master?.unlocked() ? master.get(secretId(server.name, k)) : null; } catch { value = null; }
-    if (typeof value === 'string') out[k] = value;
+    if (!isRef(v)) env[k] = String(v ?? '');
+    else if (ENV_NAME.test(k)) vars[k] = secretId(server.name, k);
   }
-  return out;
+  let vault = null;
+  if (Object.keys(vars).length && master?.unlocked()) { try { vault = master.grant(bindId(server.name), bindingOf(server), vars); } catch { vault = null; } }
+  return { env, vault };
 }
+
 // Whether a connector's keys are held back (its command changed without the master password).
 export function keysHeld(master, server) {
   if (!hasRefs(server) || !master?.unlocked()) return false;

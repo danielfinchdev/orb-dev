@@ -159,6 +159,9 @@ impl Engine {
       // ORB_DEV_CONTROL (3.1): only a build from the code started with ORB_DEV_CONTROL=1, whatever the environment says.
       .env("ORB_DEV_CONTROL", if self.cfg.dev_control { "1" } else { "0" })
       .current_dir(&self.cfg.src);
+    // 3.8.1: the vault's channel for this engine only (vault_host.rs): without it the engine does not start.
+    let (vault_name, serve_vault) = crate::vault_host::channel()?;
+    cmd.env("ORB_VAULT_PIPE", &vault_name);
     #[cfg(windows)]
     {
       use std::os::windows::process::CommandExt;
@@ -178,6 +181,9 @@ impl Engine {
         }
       }
       None => self.append_log(b"\n[orb] sin Job Object para el motor\n"),
+    }
+    if let Some(pid) = process.with_child(|c| c.id()) {
+      serve_vault(pid);
     }
     *self.proc.lock().unwrap() = Some((generation, process));
     let me = self.clone();

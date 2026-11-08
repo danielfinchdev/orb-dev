@@ -38,6 +38,8 @@ tauri-plugin-single-instance = "=2.5.4"
 tauri-plugin-dialog = "=2.8.3"
 tauri-plugin-opener = "=2.7.2"
 tauri-plugin-updater = "=2.14.0"
+# The master password and Orb's secrets, out of the engine (vault_host.rs).
+orb-vault = { path = "vault" }
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "=0.21.1" # phone_crypto.rs › jni_api (the same copy Tauri uses)
@@ -56,3 +58,8 @@ opt-level = "s"
 # cost is the unwinding tables: a few percent more exe size and no measurable speed difference in Orb (no hot loops).
 panic = "unwind"
 strip = true
+
+# The vault (the master password and Orb's secrets, out of the engine) is a crate of its own: Orb.exe links it, and the
+# tests run its orb-vault binary (scripts/vault-build.mjs).
+[workspace]
+members = [".", "vault"]

@@ -31,6 +31,7 @@ mod secrets;
 mod tools;
 mod trace;
 mod updater;
+mod vault_host;
 mod webview;
 mod window;
 
