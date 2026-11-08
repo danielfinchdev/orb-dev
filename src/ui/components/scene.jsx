@@ -113,6 +113,11 @@ const SHAPES = [
   { el: <ThinSparkle />, c: '#f08a4b', left: '3%', bottom: '18%', w: 56, r: 0, dur: 10, delay: -6 }
 ];
 
+// 3.8.1 (H4f): the clouds drift about half a pixel per frame at 60 fps (a 1360 px window), so they step 30 times a second
+// instead (steps of dur × CLOUD_FPS: about 1 px, under their 8 px blur nothing tells it from a glide) and the compositor
+// draws half the frames. Whole-second durations and delays keep the three clouds' steps on the same instants: one
+// redraw moves all of them.
+const CLOUD_FPS = 30;
 const ORB_CLOUDS = [{ dur: 90, delay: -10 }, { dur: 70, delay: -45 }, { dur: 110, delay: -70 }];
 // Candy: the pastel blobs (colour, place, size, how far they drift, how long) and the 3D sweets floating at the edges.
 const BLOBS = [
@@ -191,7 +196,7 @@ export function Scene() {
   return (
     <div className={`scene scene-${skin}`} aria-hidden="true" data-testid="scene">
       <div className="scene-blur">
-        {skin === 'orb' ? ORB_CLOUDS.map((c, i) => <div key={i} className="orb-cloud" style={{ top: `${18 + i * 26}%`, animationDuration: `${c.dur}s`, animationDelay: `${c.delay}s` }} />) : null}
+        {skin === 'orb' ? ORB_CLOUDS.map((c, i) => <div key={i} className="orb-cloud" style={{ top: `${18 + i * 26}%`, animationDuration: `${c.dur}s`, animationDelay: `${c.delay}s`, animationTimingFunction: `steps(${c.dur * CLOUD_FPS})` }} />) : null}
         {skin === 'vaporwave' ? (<>
           <div className="vw-stars" /><div className="vw-shoot a" /><div className="vw-shoot b" />
           <div className="vw-beam a" /><div className="vw-beam b" /><div className="vw-beam c" /><div className="vw-beam d" />

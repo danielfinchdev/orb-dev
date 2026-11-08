@@ -958,12 +958,17 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   so it never jumps. At rest it only blinks (a few main-thread frames every 3–6 s): with nothing else moving the
   compositor draws ~2–10 frames a second instead of 60. The «orb» theme blurs each cloud itself (`filter: blur(8px)`) instead of a full-screen
   `backdrop-filter` that had to blur everything under it again on every frame. Avoid full-screen `backdrop-filter`
-  over anything that moves.
+  over anything that moves. The clouds drift ~0.5 px per 60 Hz frame, so they step 30 times a second (3.8.1, H4f:
+  `steps(dur × 30)` with whole-second durations and delays, so the three clouds step on the same instants and the
+  compositor draws ~30 frames a second instead of 60; each step is ~1 px under an 8 px blur). Slow
+  `background-position` drifts, which repaint on the main thread, step every ~0.5 px (the Candy band); fast ones move a
+  pre-drawn layer with `transform` instead (the Vaporwave floor's grid); the indeterminate progress bar slides with
+  `translate`, not `left`. The themes' backdrop pauses while the window is unfocused or hidden (`html.window-idle`).
 - **Measuring:** `scripts/medir.mjs` (start, memory, CPU at rest, scrolling smoothness; `--hidden` keeps the window
   offscreen via `ORB_HIDDEN_WINDOW=1`; `--profile <dir>` saves a trace, CPU profiles, the compositor's layers and a
   heap snapshot; `--big` uses a large workspace and times refreshes on the Tasks screen; `--anim <s>` / `--anim-only` measure
   idle animations: main thread, renderer and GPU CPU and, with `--profile`, frames per second and GPU ms per frame,
-  plus the robot floating under the pointer with its dropped frames; `--quiet-scene` pauses the theme's backdrop) and `scripts/medir-motor.mjs`
+  plus the robot floating under the pointer with its dropped frames; `--quiet-scene` pauses the theme's backdrop; `--css <file>` adds a style sheet to try a variant on the same build; `--ui <json>` saves an interface setting first, e.g. another theme) and `scripts/medir-motor.mjs`
   (the engine alone: start, memory, call latency and the bytes of a refresh, whole and as feeds, also as a phone gets it).
 
 ### Tutorials and guided tour

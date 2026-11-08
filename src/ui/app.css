@@ -151,8 +151,10 @@ html[data-skin="nube"] { --tip-border: transparent; --tip-radius: 20px; --tip-sh
 html[data-skin="nube"] .orb-tip-title { color: var(--primary); }
 html[data-skin="profesional"] { --tip-radius: 10px; --tip-shadow: 0 10px 24px -10px rgb(0 0 0 / 0.25), 0 2px 6px -2px rgb(0 0 0 / 0.12); }
 
-/* Progress of a task that does not report its percentage: a sliding bar. */
-@keyframes orb-indeterminate { 0% { left: -35%; } 100% { left: 100%; } }
+/* Progress of a task that does not report its percentage: a sliding bar (a third of the track wide). 3.8.1 (H4f): it
+   slides with translate (percentages of its own width: -105% / 300% are the old left -35% / 100% of the track), on the
+   compositor, not by laying out the page 60 times a second. */
+@keyframes orb-indeterminate { 0% { translate: -105% 0; } 100% { translate: 300% 0; } }
 
 /* Ajustes → Contribuye → «Capturar la ventana»: the capture shows what is behind Ajustes, not Ajustes itself. At once:
    the window's duration-200 would otherwise fade it over 200 ms (transition-property defaults to all). */
