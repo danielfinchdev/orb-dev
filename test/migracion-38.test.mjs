@@ -222,7 +222,7 @@ test('una base 3.7 de dos usuarios: copia y archivo primero, luego fuera bots, r
   for (const gone of ['role', 'admin', 'kind_ok', 'approve', 'dev_ok']) assert.ok(!devCols.includes(gone), gone);
   // The owner's data, intact and without a person.
   assert.deepEqual(board.all('SELECT title FROM conversations ORDER BY id').map((r) => r.title), ['Plan de Dani']);
-  assert.deepEqual(board.chat(ids.cDani).map((l) => l.body), ['hola Orb', 'hola Dani']);
+  assert.deepEqual(board.chat(ids.cDani).map((l) => l.body), ['hola Orb', 'hola Dani', '(mensaje de otro usuario de Orb 3.7)'], 'la línea del otro usuario sigue en su sitio, sin su texto');
   assert.deepEqual(board.all('SELECT title FROM tasks').map((r) => r.title), ['Tarea de Dani']);
   assert.deepEqual(board.all('SELECT name FROM projects').map((r) => r.name), ['web-dani']);
   assert.deepEqual(board.all('SELECT title FROM schedules').map((r) => r.title), ['Revisar']);

@@ -10,9 +10,16 @@ import { PRODUCT } from '../core/product.mjs';
 const location = (userData) => path.join(userData, 'ubicacion.json');
 
 // 3.8: a saved workspace whose core is gone is still this PC's workspace: the engine puts core back from the newest backup
-// or the window says why it cannot (only a workspace folder that is gone altogether brings the welcome back).
+// or the window says why it cannot (only a workspace folder that is gone altogether brings the welcome back). Global B13:
+// a folder without core counts only when this app keeps copies for it (claves<its key>…); an old location pointing
+// to some other folder brings the welcome, not «Falta core».
+const keptHere = (userData, h) => {
+  let names = []; try { names = fs.readdirSync(path.join(userData, 'claves')); } catch { return false; }
+  const keys = [homeKey(h), oldHomeKey(h)];
+  return names.some((n) => keys.some((k) => n === k || n.startsWith(`${k}.`) || n.startsWith(`${k}-`)));
+};
 export function readLocation(userData) {
-  try { const h = JSON.parse(fs.readFileSync(location(userData), 'utf8')).home; return typeof h === 'string' && h && (isHome(h) || fs.existsSync(h)) ? h : null; } catch { return null; }
+  try { const h = JSON.parse(fs.readFileSync(location(userData), 'utf8')).home; return typeof h === 'string' && h && (isHome(h) || (fs.existsSync(h) && keptHere(userData, h))) ? h : null; } catch { return null; }
 }
 export function saveLocation(userData, home) { fs.mkdirSync(userData, { recursive: true }); writeJson(location(userData), { home }); }
 

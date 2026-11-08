@@ -15,8 +15,9 @@ import crypto from 'node:crypto';
 import http from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import { tempHome, startEngine, until } from './helpers.mjs';
-import { Master, FILES, FREE_TRIES, UNLOCK_MS, mirrorTo, restoreMissing, keyIdOf, kdfOk, PAIR_ID } from '../src/core/master.mjs';
-import { sealConnectors, resolveEnv, isRef, keysHeld, touchesKeys } from '../src/core/connector-secrets.mjs';
+import { Master, FILES, FREE_TRIES, UNLOCK_MS, mirrorTo, restoreMissing, kdfOk, PAIR_ID } from '../src/core/master.mjs';
+import { sealConnectors, connectorLaunch, isRef, keysHeld, touchesKeys } from '../src/core/connector-secrets.mjs';
+import { tradeGrant } from '../src/mcp/vault-client.mjs';
 import { needsUnlock } from '../src/core/permissions.mjs';
 import { passwordStrength, MASTER_MIN } from '../src/ui/lib/core-access.js';
 import * as C from '../src/core/mobile-crypto.mjs';
@@ -28,6 +29,8 @@ import { createPhone, TEST_MASTER } from './fixtures/phone-client.mjs';
 import { walkFiles } from '../src/core/backup.mjs';
 
 const PASS = 'una frase larga de prueba';
+// 3.8.1: what a connector's launcher gets: its plain values and the vault's keys, traded straight with the vault.
+const resolveEnv = async (m, server) => { const l = connectorLaunch(m, server); return { ...l.env, ...(await tradeGrant(l.vault)) }; };
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'orb-maestra-'));
 const secretA = crypto.randomBytes(32); const secretB = crypto.randomBytes(32);
 const filesText = (dir) => walkFiles(dir).map((f) => fs.readFileSync(f).toString('latin1')).join('\n');
@@ -50,7 +53,8 @@ test('la clave de datos: se crea con este PC, la contraseña la envuelve, los se
     assert.ok(!text.includes('CLAVE-PRIVADA-DEL-PC') && !text.includes(PASS), `${f} sin secretos ni contraseña en claro`);
   }
   // Every wrap names the data key it holds.
-  for (const f of [FILES.master, FILES.machine, FILES.vault]) assert.equal(read(dir, f).keyId, keyIdOf(m.dek), f);
+  for (const f of [FILES.master, FILES.machine, FILES.vault]) assert.equal(read(dir, f).keyId, m.keyId, f);
+  assert.equal(m.dek, undefined, 'the engine never holds the data key (3.8.1: it lives in Rust)');
   // Another PC (another secret): it cannot open by itself; the password opens it and wraps it for that PC.
   const other = new Master(dir, { secret: secretB });
   assert.equal(other.openWithMachine(), false);
@@ -183,16 +187,16 @@ test('la copia fuera de core repone lo que falta; los conectores guardan referen
   const sealed = sealConnectors(back, servers);
   assert.ok(sealed.every((s) => Object.values(s.env).every(isRef)));
   assert.ok(!JSON.stringify(sealed).includes('ghp_SECRETO'));
-  assert.deepEqual(resolveEnv(back, sealed[0]), { GITHUB_TOKEN: 'ghp_SECRETO' });
-  assert.deepEqual(resolveEnv(back, sealed[1]), {}, 'la referencia de otro conector no le da su clave');
+  assert.deepEqual(await resolveEnv(back, sealed[0]), { GITHUB_TOKEN: 'ghp_SECRETO' });
+  assert.deepEqual(await resolveEnv(back, sealed[1]), {}, 'la referencia de otro conector no le da su clave');
   // Its command changed without the master password (orb.json edited): no keys for the new program.
   const swapped = { ...sealed[0], command: 'powershell', args: ['-c', 'robar'] };
-  assert.deepEqual(resolveEnv(back, swapped), {}, 'otro comando: sin claves');
+  assert.deepEqual(await resolveEnv(back, swapped), {}, 'otro comando: sin claves');
   assert.equal(keysHeld(back, swapped), true);
   assert.equal(sealConnectors(back, [swapped]), null, 'guardar sin desbloquear no lo ata al comando nuevo');
-  assert.deepEqual(resolveEnv(back, swapped), {});
+  assert.deepEqual(await resolveEnv(back, swapped), {});
   sealConnectors(back, [swapped], { trusted: true });
-  assert.deepEqual(resolveEnv(back, swapped), { GITHUB_TOKEN: 'ghp_SECRETO' }, 'con la ventana desbloqueada, sí');
+  assert.deepEqual(await resolveEnv(back, swapped), { GITHUB_TOKEN: 'ghp_SECRETO' }, 'con la ventana desbloqueada, sí');
   sealConnectors(back, [sealed[0]], { trusted: true });
   assert.equal(sealConnectors(back, sealed.slice(0, 1)), null, 'nada nuevo que guardar');
   assert.deepEqual(back.ids('mcp/'), ['mcp/github/GITHUB_TOKEN'], 'las claves de un conector quitado se van');

@@ -1099,6 +1099,10 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
 
 ## 29. Packaging, versions and CI
 
+The user's WEBVIEW2_* variables are dropped before any webview starts (also names that are not valid Unicode); WebView2
+policies set by an administrator in the registry (HKLM/HKCU \Software\Policies\Microsoft\Edge\WebView2) still apply and
+are not overridden: they are the PC owner's.
+
 - **Windows installer** (Tauri, NSIS, per user, no admin): `npm run tauri:build`. Next to `Orb.exe` it carries `node\`
   (Node 24, checked against its pinned SHA-256) and `app\` (the engine's `src`, the built window, the Claude SDK, `zod`
   and `@noble/*`): `scripts/tauri-resources.mjs`. The e2e build (`npm run tauri:build:e2e`, cargo feature `e2e`, its own
@@ -1508,9 +1512,22 @@ workspace), `test/multiplataforma.test.mjs` and `test/migracion-38.test.mjs` (th
 
 ## 37. The master password and Magic Link
 
-One password, made once, protects what Orb keeps for itself and the actions that could hurt. Code: `src/core/master.mjs`
-(the crypto, no engine imports), `src/engine/api-master.mjs` (the API and the guard), `src/core/connector-secrets.mjs`,
+One password, made once, protects what Orb keeps for itself and the actions that could hurt. Code: `src-tauri/vault`
+(the orb-vault crate: the crypto, the files, the waits, the unlock tokens), `src/core/master.mjs` (the engine's client of
+it, same API as before), `src/engine/api-master.mjs` (the API and the guard), `src/core/connector-secrets.mjs`,
 `src/core/mobile-crypto.mjs` (linking), `src/ui/views/master.jsx` and `src/ui/lib/core-access.js`.
+
+**Where the secrets live (3.8.1).** In Rust, not in the engine. Orb.exe runs the vault (`src-tauri/src/vault_host.rs`)
+and gives each engine process its own named pipe (`ORB_VAULT_PIPE`; first instance, this user's SID only, no remote
+clients, only the engine's process id). The data key, this PC's wrap key and every key made from a password stay in
+VirtualLock'ed pages and are wiped after use (zeroize); so are the buffers that carried a password or a secret. The
+engine asks for concrete operations: open or seal one secret (`get`/`set`), check a password (scrypt runs as a job it
+polls), issue or check an unlock token, check a phone's key confirmation (`pairFinish`: the verifier and K never leave
+Rust), or a one-time grant of a connector's keys, which its launcher (`src/mcp/launch.mjs`) trades on a second pipe
+(`src/mcp/vault-client.mjs`): those keys never pass through the engine. The files on disk are the same as 3.8's. Without
+an app (tests, scripts) the engine starts the `orb-vault` binary (`scripts/vault-build.mjs`, run by `npm test`).
+What stays: the engine still holds the approval secret (approvals, backups), from which this PC's wrap could be derived,
+and the secrets it opens for its own use (this PC's keys for the phones).
 
 **Keys** (`core\secretos\`):
 - A random **data key** (32 bytes) encrypts Orb's own secrets: the PC's X25519 and VAPID keys for the phones (the

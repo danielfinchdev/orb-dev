@@ -17,12 +17,12 @@ import { ctx, tr } from '../core/context.mjs';
 import { oneLine } from '../core/safety.mjs';
 import { quickRun } from '../agents/index.mjs';
 import { IS_WIN } from '../agents/common.mjs';
-import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, AAD, CLOCK_SKEW_MS, shortSecret, sharedSecret, pakeTranscript, pakeKey, pakeMac, MAC_PHONE, macPc, sameBytes, pairKdfOk } from '../core/mobile-crypto.mjs';
-import { PAIR_ID } from '../core/master.mjs';
+import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, AAD, CLOCK_SKEW_MS, shortSecret, pairKdfOk } from '../core/mobile-crypto.mjs';
 import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
 import { PROTOCOL, MIN_PROTOCOL, PAIR_PROTOCOL, versionOfProtocol, CODE_ALPHABET, shortCodeLabel } from '../core/link-payload.mjs';
 import { REMOTE_METHODS, principalOf } from '../core/permissions.mjs';
 import { isLegacy } from '../core/migrate-38.mjs';
+import { ownPorts } from './host.mjs';
 
 const RENDERER = path.resolve(process.env.ORB_RENDERER || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'renderer'));
 const SESSION_DAYS = 30; // a phone unused for this long has to be paired again
@@ -159,8 +159,8 @@ const parseMeta = (d) => { try { return d?.meta ? JSON.parse(d.meta) : {}; } cat
 const metaVOf = (d) => Number(parseMeta(d).v ?? 2);
 // 3.5: the Android app's page is not served by this PC but by the app itself: it may call the API, where everything is
 // still sealed with the phone's own key, and its WebView has to be told so (CORS). 3.8.1 (Tauri): http://tauri.localhost
-// only (review D8 B1: the Capacitor app of 3.8.0 is uninstalled first, owner's decision 18; a page on this PC's
-// localhost, an agent's for one, is not the app).
+// only. The Capacitor app's origins (localhost, capacitor://) are gone (review D8 B1: a page on this PC's localhost, such
+// as an agent's, would pass for the app; the phone is reinstalled with 3.8.1, definition item 18).
 const APP_ORIGINS = new Set(['http://tauri.localhost', 'https://tauri.localhost']);
 const APP_CORS = { 'Access-Control-Allow-Methods': 'GET, POST', 'Access-Control-Allow-Headers': 'Content-Type, X-Orb-Device, X-Orb-Auth', 'Access-Control-Allow-Private-Network': 'true', 'Access-Control-Max-Age': '600', Vary: 'Origin' };
 const appOrigin = (req) => { const o = String(req.headers.origin ?? '').toLowerCase(); return APP_ORIGINS.has(o) ? o : null; };
@@ -518,14 +518,15 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     if (!m?.hasPassword()) return send(res, 403, { error: tr('msg.link.noMaster'), reason: 'noMaster' });
     const until = m.waitOf('pair');
     if (until) return send(res, 429, { error: tr('msg.link.passWait', { s: Math.max(1, Math.ceil((until - Date.now()) / 1000)) }), reason: 'wait' });
-    let verifier = null; try { verifier = m.get(PAIR_ID); } catch { verifier = null; }
-    if (!verifier?.pub || !pairKdfOk(verifier.kdf)) return send(res, 403, { error: tr('msg.link.noVerifier'), reason: 'noVerifier' });
+    // 3.8.1: the verifier itself stays in the vault (Rust); only its salt and cost come out, for the phone.
+    let vkdf = null; try { vkdf = m.pairInfo(); } catch { vkdf = null; }
+    if (!vkdf || !pairKdfOk(vkdf)) return send(res, 403, { error: tr('msg.link.noVerifier'), reason: 'noVerifier' });
     // One exchange per device key, a few at a time, while the code lives.
     const sid = crypto.randomBytes(16).toString('base64url');
-    const kdf = { N: verifier.kdf.N, r: verifier.kdf.r, p: verifier.kdf.p, salt: verifier.kdf.salt };
+    const kdf = { N: vkdf.N, r: vkdf.r, p: vkdf.p, salt: vkdf.salt };
     for (const [k, x] of pairing.pending) if (x.pub === body.pub) pairing.pending.delete(k);
     if (pairing.pending.size >= 8) pairing.pending.delete(pairing.pending.keys().next().value);
-    pairing.pending.set(sid, { pub: body.pub, via: body.via === 'code3' ? 'code3' : 'qr', secret: secretOf, kdf, verifier: verifier.pub, kind, name: proof.name, v: proof.v });
+    pairing.pending.set(sid, { pub: body.pub, via: body.via === 'code3' ? 'code3' : 'qr', secret: secretOf, kdf, kind, name: proof.name, v: proof.v });
     return send(res, 200, { sid, box: seal(codeKey, { sid, kdf }, AAD.pairChallenge) });
   }
 
@@ -534,13 +535,12 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const x = typeof body.sid === 'string' ? issued.pending.get(body.sid) : null;
     if (!x || x.pub !== body.pub) return fail();
     issued.pending.delete(body.sid); // one try per exchange
-    let mac; try { mac = b64.dec(body.mac); } catch { mac = null; }
-    let K = null;
-    try {
-      const transcript = pakeTranscript({ via: x.via, devPub, pcPub: own().pub, sid: body.sid, kdf: x.kdf });
-      K = pakeKey({ secret: x.secret, dhDevice: sharedSecret(own().priv, devPub), dhPassword: sharedSecret(own().priv, b64.dec(x.verifier)), transcript });
-    } catch { return fail(); }
-    const r = await ctx.master.attempt('pair', () => sameBytes(mac, pakeMac(K, MAC_PHONE)));
+    // 3.8.1: the key confirmation is checked in the vault (Rust), with the verifier and this PC's key there: K never
+    // reaches the engine. The PC's own MAC comes back for the id this device will get.
+    const id = crypto.randomUUID();
+    let r;
+    try { r = await ctx.master.serial(() => ctx.master.pairFinish({ via: x.via, devPub: body.pub, pcPub: b64.enc(own().pub), sid: body.sid, kdf: x.kdf, secret: x.secret, mac: typeof body.mac === 'string' ? body.mac : '', id })); } catch { return fail(); }
+    if (r.reason === 'noVerifier' || r.reason === 'bad') return fail();
     if (!r.ok) {
       if (r.reason === 'wait') return send(res, 429, { error: tr('msg.link.passWait', { s: Math.max(1, Math.ceil((Date.parse(r.until) - Date.now()) / 1000)) }), reason: 'wait' });
       if (r.reason === 'tries') return send(res, 503, { error: tr('msg.master.tries'), reason: 'tries' });
@@ -551,7 +551,6 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     if (pairing !== issued || Date.now() > issued.expires) return fail(); // used or gone while the password was checked
     const { route } = pairing;
     pairing = null; // one use
-    const id = crypto.randomUUID();
     const name = oneLine(typeof x.name === 'string' && x.name ? x.name : tr('msg.remote.defaultName'), 60);
     board.run('INSERT INTO devices (id, name, token_hash, created_at, last_seen, public_key, route, kind, ip, meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       id, name, `clave:${id}`, now(), now(), body.pub, route, x.kind, who, JSON.stringify({ v: Number(x.v) || PAIR_PROTOCOL }));
@@ -560,7 +559,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     // The PC's MAC proves it is the PC of the code and of the verifier; the answer is sealed with the new session key.
     const key = sessionKey(own().priv, devPub); keys.set(id, key);
     linkChanged();
-    return send(res, 200, { id, mac: b64.enc(pakeMac(K, macPc(id))), box: seal(key, { id, name: ctx.config.assistantName, orb: orbName(), ...versions(), pc: pcFingerprint() }, AAD.paired(id)) });
+    return send(res, 200, { id, mac: r.pcMac, box: seal(key, { id, name: ctx.config.assistantName, orb: orbName(), ...versions(), pc: pcFingerprint() }, AAD.paired(id)) });
   }
 
   // 3.5.1: a request from a browser's page that came over plain http on the home network (not this PC, not Tailscale's
@@ -704,7 +703,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   const listen = async (address, port) => { const { default: http } = await import('node:http'); return new Promise((resolve) => {
     const srv = http.createServer((req, res) => { handle(req, res).catch((error) => { log(`móvil: ${error.stack}`); try { send(res, 500, { error: tr('msg.remote.internalError') }); } catch { /* sent */ } }); });
     srv.headersTimeout = 15_000; srv.requestTimeout = 60_000;    srv.once('error', (error) => resolve({ error }));
-    srv.listen(port, address, () => resolve({ srv }));
+    srv.listen(port, address, () => { ownPorts.add(srv.address().port); resolve({ srv }); });
   }); };
   async function serveHttps(port) {
     const r = await quickRun(tailscaleExe(), ['serve', '--bg', `--https=${port}`, `http://127.0.0.1:${port}`], { timeoutMs: 30_000 });

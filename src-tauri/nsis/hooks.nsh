@@ -362,6 +362,17 @@ Function OrbRemoveElectron
     Goto done
   ${EndIf}
   DetailPrint "Orb $OrbElectronVersion (Electron): $OrbElectronDir"
+  ; D9 B5: 3.8.0's uninstaller is a file of this user's folder (anything the user runs may have changed it): an installer
+  ; running as administrator never runs it elevated. It says so and stops; opened normally, it goes on.
+  !ifdef ORB_HOOK_ACCOUNT
+    StrCpy $R0 "${ORB_HOOK_ACCOUNT}" ; the tests' stand-in (a test shell may itself run elevated)
+  !else
+    UserInfo::GetAccountType
+    Pop $R0
+  !endif
+  ${If} $R0 == "Admin"
+    !insertmacro OrbRefuse "Este instalador se ha abierto como administrador y no puede quitar Orb $OrbElectronVersion así. Ábrelo de nuevo con doble clic, sin «Ejecutar como administrador».$\r$\n$\r$\nThis installer was opened as administrator and cannot remove Orb $OrbElectronVersion that way. Open it again with a double click, without «Run as administrator»." "elevado"
+  ${EndIf}
   ; M4: its uninstaller deletes its whole folder: only one that is surely Orb 3.8.0's.
   Call OrbSafeToRemove
   ${If} $R0 != 1

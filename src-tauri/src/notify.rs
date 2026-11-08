@@ -10,7 +10,8 @@
 //   - Never a flood, never a lost one: at most one per conversation every 3 s and 12 a minute in all; what comes faster
 //     waits and the conversation's latest is shown when its turn comes (an approval asked right after an answer is not
 //     dropped). Each conversation's replaces its previous one in the Action Center (tag = the conversation, group = Orb).
-//   - Private: while Windows is locked (the lock screen may show notices) only the title, never the agent's text.
+//   - Private: while Windows is locked (the lock screen may show notices), or Orb's own lock screen is up (idle: the
+//     master password is needed again), only the title, never the agent's text.
 use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
@@ -183,7 +184,7 @@ fn prepare(app: &AppHandle, payload: &Value) -> Option<Pending> {
   // In front: focused, shown and not minimised (a hidden window may still say it has the focus).
   let in_front = w.is_focused().unwrap_or(false) && w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false);
   let (title, mut body, target, tag) = notice(payload, in_front, &assistant, &header)?;
-  if crate::power::session_locked() {
+  if crate::power::session_locked() || engine.screen_locked() {
     body = engine.t("sys.main.noticePrivate", &[]);
   }
   Some(Pending { title, body, tag, target })

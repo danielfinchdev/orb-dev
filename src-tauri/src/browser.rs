@@ -113,7 +113,7 @@ mod imp {
     take_pwstr, BasicAuthenticationRequestedEventHandler, CallDevToolsProtocolMethodCompletedHandler, CoreWebView2EnvironmentOptions,
     CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler, DevToolsProtocolEventReceivedEventHandler,
     DocumentTitleChangedEventHandler, DownloadStartingEventHandler, LaunchingExternalUriSchemeEventHandler, NavigationStartingEventHandler,
-    NewWindowRequestedEventHandler, PermissionRequestedEventHandler, ProcessFailedEventHandler, ScreenCaptureStartingEventHandler, ScriptDialogOpeningEventHandler,
+    NewWindowRequestedEventHandler, PermissionRequestedEventHandler, WebResourceRequestedEventHandler, ProcessFailedEventHandler, ScreenCaptureStartingEventHandler, ScriptDialogOpeningEventHandler,
   };
   use windows::core::{w, Interface, HSTRING, PCWSTR, PWSTR};
   use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
@@ -536,6 +536,32 @@ mod imp {
         } else {
           core.add_FrameNavigationStarting(&NavigationStartingEventHandler::create(Box::new(move |_, a| handler(a))), &mut token)?;
         }
+      }
+      // Review D8 B1: nor any request (fetch, an image, a form) to the engine's own servers on this PC's loopback.
+      let ports = browser_rules::own_ports();
+      if !ports.is_empty() {
+        let env = core.cast::<ICoreWebView2_2>()?.Environment()?;
+        for p in &ports {
+          for host in ["127.0.0.1", "localhost", "[::1]", "0.0.0.0"] {
+            for scheme in ["http", "https"] {
+              core.AddWebResourceRequestedFilter(&HSTRING::from(format!("{scheme}://{host}:{p}/*")), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL)?;
+            }
+          }
+        }
+        let e = gated.clone();
+        core.add_WebResourceRequested(
+          &WebResourceRequestedEventHandler::create(Box::new(move |_, args| {
+            let Some(a) = args else { return Ok(()) };
+            let url = a.Request().map(|r| uri(|p| r.Uri(p))).unwrap_or_default();
+            if !browser_rules::url_allowed(&url, false) || url.is_empty() {
+              let r = env.CreateWebResourceResponse(None, 403, w!("Forbidden"), w!(""))?;
+              a.SetResponse(&r)?;
+              e.send("Orb.blocked", json!({ "kind": "request", "url": short(url) }));
+            }
+            Ok(())
+          })),
+          &mut token,
+        )?;
       }
       // Another app's protocol (mailto:, ms-settings:, an installed app's link): never launched.
       let e = gated.clone();

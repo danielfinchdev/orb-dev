@@ -117,7 +117,8 @@ async function tryOpen(file, unseal) {
 async function adoptTmp(file, unseal, others) {
   if (fs.existsSync(file)) return;
   let tmps = []; try { tmps = fs.readdirSync(path.dirname(file)).filter((n) => n.startsWith(`${path.basename(file)}.`) && n.endsWith('.tmp')); } catch { return; }
-  const full = tmps.map((n) => path.join(path.dirname(file), n)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+  const at = (f) => { try { return fs.statSync(f).mtimeMs; } catch { return 0; } };
+  const full = tmps.map((n) => path.join(path.dirname(file), n)).map((f) => ({ f, t: at(f) })).sort((a, b) => b.t - a.t).map((x) => x.f);
   let agreed;
   for (const tmp of full) {
     const { hex } = await tryOpen(tmp, unseal);
@@ -175,13 +176,17 @@ async function previousKey({ dir, enc2, copy2, hex, seal, unseal, warn }) {
 }
 
 // Create a file only if it is not there (a hard link of a whole temporary: never replaces what another app wrote in
-// between). → whether it was made.
+// between). A file system without hard links (exFAT, FAT, some network drives: review D10 B8) gets an exclusive copy
+// instead, which also never replaces an existing file. → whether it was made.
 function createOnly(file, bytes) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = TMP(file);
   const fd = fs.openSync(tmp, 'wx');
   try { fs.writeSync(fd, bytes); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
-  try { fs.linkSync(tmp, file); return true; } catch { return false; } finally { fs.rmSync(tmp, { force: true }); }
+  try { fs.linkSync(tmp, file); return true; } catch (error) {
+    if (error.code === 'EEXIST') return false;
+    try { fs.copyFileSync(tmp, file, fs.constants.COPYFILE_EXCL); console.error(`clave: sin enlaces duros en ${path.dirname(file)} (${error.code}); copia exclusiva`); return true; } catch { return false; }
+  } finally { fs.rmSync(tmp, { force: true }); }
 }
 
 // dir, copy: as above (Electron's names: claves\<key>.enc; ORB2 goes beside it as <key>.v2.enc); seal/unseal: the app's
@@ -205,7 +210,7 @@ export async function loadHostSecret({ dir, copy, seal, unseal, sealV10 = null, 
     const state = async (file) => { if (!seen.has(file)) seen.set(file, await tryOpen(file, unseal)); return seen.get(file); };
     let hex = null; let found = false;
     // A restored backup's key wins over everything from before the restore (kept aside below, never overwritten).
-    const restored = restoredKey(dir);
+    let restored; try { restored = restoredKey(dir); } catch (error) { throw new SecretError('busy', error.message); }
     const unsealed = missingIsBusy ? async (b) => { try { return await unseal(b); } catch (error) { throw error?.code === 'missing' ? Object.assign(new Error(error.message), { code: 'io' }) : error; } } : unseal;
     let lost = []; // allowNew: the sealed files that did not open, for the way back
     if (restored) {

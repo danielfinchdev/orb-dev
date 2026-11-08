@@ -125,9 +125,28 @@ pub fn webview2_vars<I: IntoIterator<Item = String>>(names: I) -> Vec<String> {
   names.into_iter().filter(|n| n.to_ascii_uppercase().starts_with("WEBVIEW2_")).collect()
 }
 
+/// Whether an engine event raises (Some(true)) or lowers (Some(false)) Orb's own lock screen: master:locked with
+/// { screen: true } raises it; master:unlocked, or master:locked with { screen: false }, lowers it.
+pub fn screen_lock_of(event: &str, payload: &Value) -> Option<bool> {
+  match event {
+    "master:locked" => payload.get("screen").and_then(Value::as_bool),
+    "master:unlocked" => Some(false),
+    _ => None,
+  }
+}
+
 /// core itself, or its secrets or anything inside them (real paths, lower case): guarded by the master password.
-pub fn guarded_core(target: &str, core: &str, secrets: &str) -> bool {
-  target == core || target == secrets || target.starts_with(&format!("{secrets}\\"))
+/// 3.8.1 (item f): core\datos too (orb.db, the sealed approval secret), with everything under it.
+pub fn guarded_core(target: &str, core: &str, inside: &[&str]) -> bool {
+  target == core || inside.iter().any(|d| target == *d || target.starts_with(&format!("{d}\\")))
+}
+
+/// The environment's variables a filter of names picks, by their real names (a name that is not valid Unicode is looked
+/// at as lossy text, so it is never skipped).
+pub fn env_matching(pick: fn(Vec<String>) -> Vec<String>) -> Vec<std::ffi::OsString> {
+  let names: Vec<std::ffi::OsString> = std::env::vars_os().map(|(k, _)| k).collect();
+  let picked = pick(names.iter().map(|k| k.to_string_lossy().into_owned()).collect());
+  names.into_iter().filter(|k| picked.contains(&k.to_string_lossy().into_owned())).collect()
 }
 
 /// Node's own variables (NODE_OPTIONS, NODE_PATH, NODE_EXTRA_CA_CERTS…), dropped from the engine's environment: Node
@@ -245,6 +264,14 @@ pub fn check_host(method: &str, params: &Value, is_dir: impl Fn(&Path) -> bool) 
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn orb_lock_screen_from_events() {
+    assert_eq!(screen_lock_of("master:locked", &json!({ "screen": true })), Some(true));
+    assert_eq!(screen_lock_of("master:locked", &json!({})), None, "tokens dropped, the screen as it was");
+    assert_eq!(screen_lock_of("master:unlocked", &json!({})), Some(false));
+    assert_eq!(screen_lock_of("chat:new", &json!({ "screen": true })), None);
+  }
 
   #[test]
   fn lines_encode_and_decode() {

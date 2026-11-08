@@ -66,6 +66,8 @@ pub struct Engine {
   job_failed: AtomicBool,
   /// First start after the installer replaced Orb on Electron (migrate.rs): said once, when the engine is ready.
   migrated: AtomicBool,
+  /// Orb's lock screen is up (master:locked { screen: true } until master:unlocked): notices without the agents' text.
+  screen_locked: AtomicBool,
   #[cfg(windows)]
   job: Option<job::Job>,
 }
@@ -84,6 +86,7 @@ impl Engine {
     Arc::new(Self {
       job_failed: AtomicBool::new(job_failed),
       migrated: AtomicBool::new(false),
+      screen_locked: AtomicBool::new(false),
       start_code: Mutex::new(None),
       cfg,
       app,
@@ -127,6 +130,10 @@ impl Engine {
     self.migrated.store(true, Ordering::SeqCst);
   }
 
+  pub fn screen_locked(&self) -> bool {
+    self.screen_locked.load(Ordering::SeqCst)
+  }
+
   pub fn begin_quit(&self) {
     self.quitting.store(true, Ordering::SeqCst);
   }
@@ -147,7 +154,7 @@ impl Engine {
     let mut cmd = Command::new(&self.cfg.node);
     // Node reads NODE_OPTIONS (--require, --import: code run inside the engine), NODE_PATH and the rest of NODE_* from the
     // environment; Electron had them off (its fuse). None of the user's reaches the engine or what it starts.
-    for name in protocol::node_vars(std::env::vars_os().filter_map(|(k, _)| k.into_string().ok())) {
+    for name in protocol::env_matching(protocol::node_vars::<Vec<String>>) {
       cmd.env_remove(name);
     }
     cmd
@@ -159,6 +166,9 @@ impl Engine {
       // ORB_DEV_CONTROL (3.1): only a build from the code started with ORB_DEV_CONTROL=1, whatever the environment says.
       .env("ORB_DEV_CONTROL", if self.cfg.dev_control { "1" } else { "0" })
       .current_dir(&self.cfg.src);
+    // 3.8.1: the vault's channel for this engine only (vault_host.rs): without it the engine does not start.
+    let (vault_name, serve_vault) = crate::vault_host::channel()?;
+    cmd.env("ORB_VAULT_PIPE", &vault_name);
     #[cfg(windows)]
     {
       use std::os::windows::process::CommandExt;
@@ -178,6 +188,9 @@ impl Engine {
         }
       }
       None => self.append_log(b"\n[orb] sin Job Object para el motor\n"),
+    }
+    if let Some(pid) = process.with_child(|c| c.id()) {
+      serve_vault(pid);
     }
     *self.proc.lock().unwrap() = Some((generation, process));
     let me = self.clone();
@@ -371,6 +384,10 @@ impl Engine {
         });
       }
       Incoming::Event { event, payload } => {
+        // 3.8.1: Orb's own lock screen (idle, or Windows locked): notices stop showing the agents' text.
+        if let Some(locked) = protocol::screen_lock_of(&event, &payload) {
+          self.screen_locked.store(locked, Ordering::SeqCst);
+        }
         if event == "chat:new" {
           let log = crate::window::hidden(&self.app).then(|| self.cfg.user_data.join("avisos-e2e.jsonl"));
           crate::notify::chat_new(&self.app, &payload, log);

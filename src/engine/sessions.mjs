@@ -11,7 +11,7 @@ import { adapter, executable } from '../agents/index.mjs';
 import { liveSkills } from './api-extensions.mjs';
 import { orbMcpServer, connectorLauncher } from '../agents/common.mjs';
 import { agentAuth } from './agent-auth.mjs';
-import { resolveEnv } from '../core/connector-secrets.mjs';
+import { connectorLaunch } from '../core/connector-secrets.mjs';
 import { connectorSafe } from '../core/extensions.mjs';
 import { CURSOR_FILES } from '../agents/cursor.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
@@ -70,8 +70,9 @@ export function mcpServersFor(agent, { taskId = '', orchestrator = false, browse
       // 3.8.1: a server of core\mcp whose folder is a link or a junction (or reaches out of core) never starts.
       if (!connectorSafe(ctx.paths.core, s)) continue;
       taken.add(connectorKey(s.name)); // F2.6c: never two servers on one variable name (config checks it too)
-      // 3.8: its keys come out of the vault here, only for its launcher (orb.json has references).
-      servers[s.name] = ticketed(s.name, connectorLauncher(), { launch: { command: s.command, args: s.args ?? [], env: resolveEnv(ctx.master, s) } });
+      // 3.8: its keys only for its launcher (orb.json has references). 3.8.1: as a one-time grant of the vault, made when
+      // the launcher trades its ticket: the keys go from the vault to the launcher, never through the engine.
+      servers[s.name] = ticketed(s.name, connectorLauncher(), () => ({ launch: { command: s.command, args: s.args ?? [], ...connectorLaunch(ctx.master, s) } }));
     }
   }
   return Object.defineProperty(servers, 'release', { value: () => { for (const t of tickets) agentAuth.revoke(t); } });

@@ -35,6 +35,8 @@ export default {
   'data.migration38.blocked': 'Orb does not work until your data are updated to Orb 3.8.',
   'data.migration38.busy': 'Another Orb process is updating the data. Wait a moment and try again.',
   'data.migration38.noOwner': 'The owner of this Orb is unknown: the users of Orb 3.7 have no owner. Nothing has been deleted.',
+  'data.migration38.otherUserLine': '(message of another user of Orb 3.7)',
+  'data.migration38.noSpace': 'There is not enough disk space to update the data of Orb: {need} MB are needed and {free} MB are free. Free some space and try again. Nothing was changed.',
   'data.migration38.badCopy': 'A valid copy of the database could not be made ({error}). Free some disk space and try again.',
   'data.backup.dailyFailed': 'Today\'s backup could not be made: {error}. It will try again in an hour.',
   'data.backup.err.badKind': 'That kind of backup does not exist.',

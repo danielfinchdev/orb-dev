@@ -1,26 +1,33 @@
-// 3.8: the master password and the secrets Orb keeps for itself. No engine imports: the engine (src/engine/api-master.mjs),
-// the backups and the tests use it directly.
+// 3.8: the master password and the secrets Orb keeps for itself. 3.8.1: all of it lives in Rust (the orb-vault crate,
+// src-tauri/vault): this is only the engine's side of the channel, with the API the engine, the backups and the tests
+// have always used. The engine never holds the data key, this PC's wrap key or a key made from a password: it asks for
+// concrete operations (open or seal one secret, check a password, hand a connector's keys to its launcher).
 //
 // One random data key (32 bytes) encrypts every secret Orb stores (the PC's key for the phones, the connectors' keys).
 // The data key is never on disk in clear; it is kept twice, in core\secretos:
-//   maestra.json     wrapped by a key made from the master password (scrypt, its own salt): opens on any PC
-//   maestra-pc.json  wrapped by a key derived from this PC's secret, the one Windows keeps sealed (DPAPI through the app,
+//   maestra.json     wrapped by a key made from the master password (scrypt N=2^17 r8 p1, its own salt): opens on any PC
+//   maestra-pc.json  wrapped by a key derived from this PC's secret (the approval secret Windows keeps sealed,
 //                    core\datos\clave2.enc: src/engine/approval-secret.mjs): Orb starts without asking for the password.
 //                    It also says (authenticated) that a password was made, so a deleted maestra.json is noticed.
-//   secretos.json    the secrets themselves, one JSON map sealed with the data key. It holds the phones' verifier of the
-//                    password too (Magic Link never sends the password: src/core/mobile-crypto.mjs › linkDevice).
+//   secretos.json    the secrets themselves, one JSON map sealed with the data key (XChaCha20-Poly1305). It holds the
+//                    phones' verifier of the password too (Magic Link never sends the password; Rust checks the phone's
+//                    key confirmation itself: pairFinish).
 //   intentos.json    wrong passwords so far, per channel (this PC's window, the phones' linking, the recovery code):
 //                    growing waits. When it cannot be written no password is checked at all (fail closed).
-// The password is never stored. Every wrap names the data key it holds (keyId, an HMAC of the key) in its additional data,
-// and a password only counts when it opens THE data key this PC already has (compared in constant time): a maestra.json
-// from elsewhere, or made by someone else with their own password, opens nothing here.
+// The password is never stored. Every wrap names the data key it holds (keyId) in its additional data, and a password
+// only counts when it opens THE data key this PC already has: a maestra.json from elsewhere opens nothing here.
 // Changing the password wraps the same data key again. Forgetting it (with the backups' recovery code) makes a new data key
 // and encrypts the secrets again; starting from scratch (without the code) deletes them.
+//
+// The channel: under Orb.exe a named pipe only the engine may open (ORB_VAULT_PIPE, src-tauri/src/vault_host.rs); with no
+// app (the tests, a script) this process starts its own orb-vault (built by scripts/vault-build.mjs, ORB_VAULT_BIN).
+// Requests are synchronous (each a few microseconds); scrypt runs as a job polled from here, so the event loop never waits.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
-import { verifierFromSeed, PAIR_KDF, b64 as b64url } from './mobile-crypto.mjs';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 export const FILES = { master: 'maestra.json', machine: 'maestra-pc.json', vault: 'secretos.json', tries: 'intentos.json' };
 // What a backup and the copy outside core take (the tries are this PC's only).
@@ -29,45 +36,15 @@ export const MIN_LENGTH = 10;
 export const MAX_LENGTH = 256;
 export const UNLOCK_MS = 5 * 60_000;
 export const FRESH_MS = 2 * 60_000; // a token for one action that asks for the password every time (issue(purpose))
-// Wrong passwords: after five in a row, 30 s of wait, and twice as long after each new one (15 min at most).
 export const FREE_TRIES = 5;
-const WAIT_FIRST_S = 30;
-const WAIT_MAX_S = 15 * 60;
 export const CHANNELS = ['pc', 'pair', 'recovery'];
-// scrypt: N = 2^17, r = 8 (128 MB, about a third of a second on a modest laptop). A test run uses a cheap one (the cost
-// is kept in maestra.json, so a password made either way opens the same way).
-export const KDF = Object.freeze({ N: 2 ** 17, r: 8, p: 1 });
-const TEST_KDF = Object.freeze({ N: 2 ** 12, r: 8, p: 1 });
-const testRun = () => Boolean(process.env.NODE_TEST_CONTEXT);
-export const kdfCost = () => (testRun() ? TEST_KDF : KDF);
-const pairCost = () => (testRun() ? { N: 2 ** 11, r: 8, p: 1 } : PAIR_KDF);
 // The vault's own entries (never a connector's key).
 export const PAIR_ID = 'master/pair';
-const HAD_ID = 'master/had';
+const CODES = new Set(['short', 'long', 'exists', 'lost', 'locked', 'damaged']);
 
 export class MasterError extends Error {
   constructor(code, extra = {}) { super(code); this.code = code; Object.assign(this, extra); }
 }
-
-const b64 = (bytes) => Buffer.from(bytes).toString('base64');
-const unb64 = (text) => new Uint8Array(Buffer.from(String(text ?? ''), 'base64'));
-const seal = (key, bytes, aad) => { const nonce = crypto.randomBytes(24); return b64(Buffer.concat([nonce, xchacha20poly1305(key, nonce, Buffer.from(aad)).encrypt(bytes)])); };
-const unseal = (key, box, aad) => { const raw = unb64(box); if (raw.length < 24 + 16) throw new Error('box'); return xchacha20poly1305(key, raw.subarray(0, 24), Buffer.from(aad)).decrypt(raw.subarray(24)); };
-const readJson = (file) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } };
-function writeFile(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
-  fs.renameSync(tmp, file);
-}
-const same = (a, b) => { const x = Buffer.from(a); const y = Buffer.from(b); return x.length === y.length && crypto.timingSafeEqual(x, y); };
-// Which data key a wrap holds (never the key itself).
-export const keyIdOf = (dek) => crypto.createHmac('sha256', Buffer.from(dek)).update('orb-key-id').digest().subarray(0, 16).toString('base64');
-const AAD = {
-  password: (keyId) => `orb-master:password|${keyId}`,
-  machine: (keyId, had) => `orb-master:machine|${keyId}|${had ? 'password' : 'none'}`,
-  vault: (keyId) => `orb-secretos-v2|${keyId}`
-};
 
 // A password as typed: NFC, nothing trimmed (spaces count). → the string, or a MasterError('short' | 'long').
 export function checkPassword(password) {
@@ -78,273 +55,179 @@ export function checkPassword(password) {
   if (n > MAX_LENGTH) throw new MasterError('long');
   return p;
 }
+const typed = (password) => (typeof password === 'string' ? password.normalize('NFC') : '');
 
-// The cost a maestra.json may ask for: a file someone left there can neither make it cheap nor hang the engine.
-export function kdfOk(kdf) {
-  if (!kdf || typeof kdf !== 'object') return false;
-  const { N, r, p, salt } = kdf;
-  const s = Buffer.from(String(salt ?? ''), 'base64');
-  return Number.isInteger(N) && N >= (testRun() ? 2 ** 10 : 2 ** 15) && N <= 2 ** 20 && (N & (N - 1)) === 0 && r === 8 && p === 1 && s.length === 16;
+// ---- the channel to Rust (one per process)
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+const wipe = (buf) => { try { buf.fill(0); } catch { /* not a buffer */ } };
+let channel = null;
+
+function helperPath() {
+  if (process.env.ORB_VAULT_BIN) return process.env.ORB_VAULT_BIN;
+  return path.join(ROOT, 'src-tauri', 'target', 'release', process.platform === 'win32' ? 'orb-vault.exe' : 'orb-vault');
 }
-const scrypt = (password, salt, { N, r, p }) => new Promise((resolve, reject) => {
-  crypto.scrypt(String(password).normalize('NFC'), salt, 32, { N, r, p, maxmem: 1200 * 1024 * 1024 }, (error, key) => (error ? reject(error) : resolve(new Uint8Array(key))));
-});
-// The key made from the password (async: scrypt runs off the engine's main thread).
-export function passwordKey(password, kdf) {
-  if (!kdfOk(kdf)) return Promise.reject(new MasterError('damaged'));
-  return scrypt(password, Buffer.from(kdf.salt, 'base64'), kdf);
+// Opens the engine's end (retrying a short while: the helper may still be making it).
+function openEnd(name, unix) {
+  const t0 = Date.now();
+  for (;;) {
+    try {
+      if (!unix) return { read: fs.openSync(name, 'r+'), write: null };
+      const write = fs.openSync(path.join(name, 'req'), 'w');
+      return { write, read: fs.openSync(path.join(name, 'res'), 'r') };
+    } catch (error) {
+      if (Date.now() - t0 > 10_000) throw Object.assign(new Error(`secretos: no se puede abrir la bóveda (${error.code ?? error.message})`), { code: 'noVault' });
+      sleep(20);
+    }
+  }
 }
-// The phones' verifier of a password: { kdf, pub } (the private half is never kept).
-export async function pairVerifier(password, kdf = { ...pairCost(), salt: b64url.enc(crypto.randomBytes(16)) }) {
-  const seed = await scrypt(password, b64url.dec(kdf.salt), kdf);
-  return { kdf, pub: b64url.enc(verifierFromSeed(seed).pub) };
+function connect() {
+  if (channel) return channel;
+  let name = process.env.ORB_VAULT_PIPE;
+  const unix = process.platform !== 'win32';
+  if (name) delete process.env.ORB_VAULT_PIPE; // nothing this engine starts inherits it
+  else {
+    const bin = helperPath();
+    if (!fs.existsSync(bin)) throw Object.assign(new Error(`secretos: falta ${bin} (node scripts/vault-build.mjs)`), { code: 'noVault' });
+    const id = crypto.randomBytes(12).toString('hex');
+    const dir = unix ? fs.mkdtempSync(path.join(os.tmpdir(), 'orb-boveda-')) : null;
+    name = unix ? path.join(dir, 'c') : `\\\\.\\pipe\\orb-boveda-${id}`;
+    const grants = unix ? path.join(dir, 'claves.sock') : `\\\\.\\pipe\\orb-claves-${id}`;
+    const args = ['--channel', name, '--grants', grants, ...(process.env.NODE_TEST_CONTEXT ? ['--test'] : [])];
+    const child = spawn(bin, args, { stdio: ['ignore', 'ignore', 'inherit'], windowsHide: true });
+    child.unref();
+  }
+  channel = { ...openEnd(name, unix), rest: Buffer.alloc(0) };
+  channel.hello = request({ op: 'hello' });
+  return channel;
 }
-const checkOf = (kek) => crypto.createHmac('sha256', Buffer.from(kek)).update('orb-master-check-v1').digest();
-export const machineKey = (secret) => new Uint8Array(crypto.hkdfSync('sha256', Buffer.from(secret), Buffer.from('orb-master'), Buffer.from('machine-v1'), 32));
-const waitSeconds = (fails) => Math.min(WAIT_FIRST_S * 2 ** Math.max(0, fails - FREE_TRIES), WAIT_MAX_S);
+// One request, its answer (synchronous).
+function request(msg) {
+  const c = channel ?? connect();
+  const out = Buffer.from(`${JSON.stringify(msg)}\n`);
+  try { let off = 0; while (off < out.length) off += fs.writeSync(c.write ?? c.read, out, off); } finally { wipe(out); }
+  for (;;) {
+    const nl = c.rest.indexOf(10);
+    if (nl >= 0) {
+      const line = c.rest.subarray(0, nl);
+      let reply; try { reply = JSON.parse(line.toString('utf8')); } finally { wipe(line); }
+      c.rest = c.rest.subarray(nl + 1);
+      return reply;
+    }
+    const buf = Buffer.alloc(64 * 1024);
+    const n = fs.readSync(c.read, buf, 0, buf.length, null);
+    if (!n) { channel = null; throw Object.assign(new Error('secretos: la bóveda se ha cerrado'), { code: 'noVault' }); }
+    const all = Buffer.concat([c.rest, buf.subarray(0, n)]);
+    wipe(buf); wipe(c.rest);
+    c.rest = all;
+  }
+}
+const failed = (reply) => (CODES.has(reply.code) ? new MasterError(reply.code) : new Error(`secretos: ${reply.code ?? 'error'}`));
+
+// Whether a maestra.json's cost is one Orb accepts (a planted file can neither make it cheap nor hang it).
+export function kdfOk(kdf) { const r = request({ op: 'kdfOk', kdf: kdf ?? null }); return r.ok && r.r === true; }
 
 // dir: core\secretos. secret: this PC's secret (Buffer, 32 bytes or more), or null when there is none.
 export class Master {
   constructor(dir, { secret = null, now = () => Date.now() } = {}) {
-    this.dir = dir; this.secret = secret && secret.length >= 32 ? Buffer.from(secret) : null; this.now = now;
-    this.dek = null; this.keyId = null; this.items = null; this.tokens = new Map(); this.busy = Promise.resolve();
-    this.fails = {}; // per channel, in memory too: a tries file put back or emptied does not give tries back
-    this.hadMachine = false; // the machine wrap said a password had been made
+    this.dir = dir; this.now = now; this.busy = Promise.resolve();
     this.onChange = () => {};
     this.onFails = () => {}; // (channel, fails): FREE_TRIES wrong ones in a row (the engine tells the owner)
+    const s = secret && secret.length >= 32 ? Buffer.from(secret).toString('base64') : null;
+    this.h = this.raw({ op: 'open', dir: path.resolve(dir), secret: s });
   }
-  file(name) { return path.join(this.dir, name); }
-  hasPassword() { return Boolean(readJson(this.file(FILES.master))?.wrapped); }
-  unlocked() { return Boolean(this.dek); }
-  // Whether a password was ever made in this workspace (its file may be gone): the vault and the machine wrap say so.
-  hadPassword() {
-    if (this.hadMachine) return true;
-    if (!this.dek) return false;
-    try { return Boolean(this.readVault()[HAD_ID]); } catch { return true; } // a vault that does not open: assume so
+  // What the vault asks after a request: copy the folder outside core (changed), tell the owner (notices).
+  after(reply) {
+    if (reply.changed) { try { this.onChange(); } catch { /* the next change copies again */ } }
+    for (const [channel, n] of reply.notices ?? []) { try { this.onFails(channel, n); } catch { /* only a notice */ } }
+    if (!reply.ok) throw failed(reply);
+    return reply.r;
   }
-  state() {
-    const m = readJson(this.file(FILES.master));
-    const file = Boolean(m?.wrapped);
-    const had = file || this.hadPassword() || readJson(this.file(FILES.machine))?.password === true;
-    return { exists: had, lost: had && !file, locked: !this.dek, changedAt: m?.changed ?? m?.created ?? null };
-  }
-
-  // At the engine's start: the data key from this PC's wrap. A workspace without any (new, or of 3.7) gets a new one, so
-  // its secrets are encrypted from the first start; the password wraps it when it is made. → true when it is open.
-  openWithMachine() {
-    if (this.dek) return true;
-    const pc = readJson(this.file(FILES.machine));
-    if (pc?.wrapped && this.secret) {
-      try {
-        const key = unseal(machineKey(this.secret), pc.wrapped, AAD.machine(pc.keyId, pc.password === true));
-        if (keyIdOf(key) === pc.keyId) { this.useKey(key); this.hadMachine = pc.password === true; return true; }
-      } catch { /* another PC or another Windows user */ }
+  raw(msg) { return this.after(request({ ...msg, now: this.now() })); }
+  call(op, extra = {}) { return this.raw({ op, h: this.h, ...extra }); }
+  // A slow one (scrypt): a job in Rust, polled without blocking the event loop.
+  async job(op, extra) {
+    const start = request({ op, h: this.h, ...extra, now: this.now() });
+    if (!start.ok) throw failed(start);
+    for (let wait = 2; ; wait = Math.min(wait * 2, 25)) {
+      await new Promise((r) => setTimeout(r, wait));
+      const reply = request({ op: 'job', id: start.job });
+      if (!(reply.ok && reply.running)) return this.after(reply);
     }
-    // Something to open with the password, or this PC's wrap that did not open (never replaced by a new key in silence).
-    if (pc || this.hasPassword() || fs.existsSync(this.file(FILES.vault))) return false;
-    this.useKey(crypto.randomBytes(32));
-    this.writeVault({});
-    this.sealForMachine();
-    return true;
-  }
-  useKey(key) { this.dek = new Uint8Array(key); this.keyId = keyIdOf(this.dek); this.items = null; }
-  sealForMachine() {
-    if (!this.dek || !this.secret) return false;
-    const had = this.hadPassword();
-    writeFile(this.file(FILES.machine), { v: 2, keyId: this.keyId, password: had, wrapped: seal(machineKey(this.secret), this.dek, AAD.machine(this.keyId, had)) });
-    this.hadMachine = had;
-    this.onChange();
-    return true;
-  }
-  // The password's wrap, the phones' verifier and the mark «there is a password» (in the vault and the machine wrap).
-  async wrapWithPassword(password, { created = null } = {}) {
-    const kdf = { alg: 'scrypt', ...kdfCost(), salt: b64(crypto.randomBytes(16)) };
-    const kek = await passwordKey(password, kdf);
-    const verifier = await pairVerifier(password);
-    const at = new Date(this.now()).toISOString();
-    this.writeVault({ ...this.readVault(), [PAIR_ID]: verifier, [HAD_ID]: { at } });
-    writeFile(this.file(FILES.master), { v: 2, keyId: this.keyId, kdf, check: b64(checkOf(kek)), wrapped: seal(kek, this.dek, AAD.password(this.keyId)), created: created ?? at, changed: at });
-    this.sealForMachine();
-    this.onChange();
   }
   // One change at a time (two windows' clicks, a phone linking while the password changes).
   serial(fn) { const run = this.busy.then(fn, fn); this.busy = run.catch(() => {}); return run; }
 
-  // The first password (the welcome, or the first start of 3.8). Needs the data key open (it always is the first time).
-  // Never a second time: when maestra.json is gone but a password was made, it comes back from the copy outside core or
-  // through «He olvidado la contraseña» (the recovery code) or «Borrar secretos y empezar de cero».
-  create(password) {
-    return this.serial(async () => {
-      const p = checkPassword(password);
-      if (this.hasPassword()) throw new MasterError('exists');
-      if (!this.dek && !this.openWithMachine()) throw new MasterError('locked');
-      if (this.hadPassword()) throw new MasterError('lost');
-      await this.wrapWithPassword(p);
-      return true;
-    });
-  }
+  file(name) { return path.join(this.dir, name); }
+  hasPassword() { return this.call('has'); }
+  unlocked() { return this.call('unlocked'); }
+  // Which data key is open (an HMAC of it, never the key), or null.
+  get keyId() { return this.call('keyId'); }
+  hadPassword() { return this.call('had'); }
+  state() { return this.call('state'); }
+  // At the engine's start: the data key from this PC's wrap; a new workspace gets a new one. → true when it is open.
+  openWithMachine() { return this.call('openMachine'); }
+  sealForMachine() { return this.call('sealMachine'); }
+
+  // The first password (the welcome, or the first start of 3.8). Never a second time (src/engine/api-master.mjs).
+  create(password) { return this.serial(async () => { const p = checkPassword(password); await this.job('create', { password: p }); return true; }); }
 
   // ---- the waits. channel: 'pc' (this PC's window), 'pair' (a phone linking), 'recovery' (the backups' recovery code).
-  // An unreadable tries file counts as the most fails there can be (someone put it there).
-  tries() {
-    let raw; try { raw = fs.readFileSync(this.file(FILES.tries), 'utf8'); } catch (error) { return error.code === 'ENOENT' ? {} : null; }
-    try { const v = JSON.parse(raw); return v && typeof v === 'object' && !Array.isArray(v) ? v : null; } catch { return null; }
-  }
-  failsOf(channel) { const t = this.tries(); return Math.max(this.fails[channel] ?? 0, t ? Number(t[channel]?.fails ?? 0) || 0 : FREE_TRIES + 5); }
-  waitOf(channel) {
-    const t = this.tries();
-    let until = t?.[channel]?.until ? Date.parse(t[channel].until) : 0;
-    if (!t) { try { until = fs.statSync(this.file(FILES.tries)).mtimeMs + WAIT_MAX_S * 1000; } catch { until = this.now() + WAIT_MAX_S * 1000; } }
-    if (this.fails[`${channel}:until`] > until) until = this.fails[`${channel}:until`];
-    return until > this.now() ? until : 0;
-  }
-  // → false when it could not be written (the caller refuses the try: fail closed).
-  noteTry(channel, ok) {
-    const all = this.tries() ?? {};
-    if (ok) { delete all[channel]; this.fails[channel] = 0; this.fails[`${channel}:until`] = 0; }
-    else {
-      const fails = this.failsOf(channel) + 1;
-      const until = fails >= FREE_TRIES ? this.now() + waitSeconds(fails) * 1000 : 0;
-      this.fails[channel] = fails; this.fails[`${channel}:until`] = until;
-      all[channel] = { fails, until: until ? new Date(until).toISOString() : null };
-      if (fails % FREE_TRIES === 0) { try { this.onFails(channel, fails); } catch { /* only a notice */ } }
-    }
-    try { writeFile(this.file(FILES.tries), all); return true; } catch { return false; }
-  }
-  // Whether the tries file can be written right now (it is written again as it is).
-  canCount() { const t = this.tries(); if (!t) return false; try { writeFile(this.file(FILES.tries), t); return true; } catch { return false; } }
-  // One try on a channel, with its waits: check() → true when right. → { ok: true } | { ok: false, reason: 'wrong', left,
-  // until? } | { ok: false, reason: 'wait', until } | { ok: false, reason: 'tries' } (the count cannot be kept: refused).
+  waitOf(channel) { return this.call('wait', { channel }); }
+  // One try on a channel whose check is the engine's (the recovery code), with the vault's waits: check() → true when
+  // right. → { ok: true } | { ok: false, reason: 'wrong', left, until? } | { reason: 'wait', until } | { reason: 'tries' }.
   attempt(channel, check) {
     return this.serial(async () => {
-      const until = this.waitOf(channel);
-      if (until) return { ok: false, reason: 'wait', until: new Date(until).toISOString() };
-      if (!this.canCount()) return { ok: false, reason: 'tries' };
+      const refused = this.call('tryBegin', { channel });
+      if (refused) return refused;
       let ok = false; try { ok = Boolean(await check()); } catch { ok = false; }
-      if (!this.noteTry(channel, ok) && !ok) return { ok: false, reason: 'tries' };
-      if (ok) return { ok: true };
-      const fails = this.failsOf(channel);
-      const wait = this.waitOf(channel);
-      return { ok: false, reason: 'wrong', left: Math.max(0, FREE_TRIES - fails), ...(wait ? { until: new Date(wait).toISOString() } : {}) };
+      return this.call('tryEnd', { channel, ok });
     });
-  }
-
-  // The data key in maestra.json for this password, or null. Only THE data key counts: one this PC has already (compared
-  // in constant time), or, on a PC that has none open yet, one whose id matches its wrap.
-  async keyFor(password) {
-    const m = readJson(this.file(FILES.master));
-    if (!m?.wrapped || typeof m.keyId !== 'string' || typeof password !== 'string' || !password.length || password.length > MAX_LENGTH * 4) return null;
-    const kek = await passwordKey(password, m.kdf);
-    if (!same(Buffer.from(String(m.check ?? ''), 'base64'), checkOf(kek))) return null;
-    const key = unseal(kek, m.wrapped, AAD.password(m.keyId));
-    if (keyIdOf(key) !== m.keyId) return null;
-    if (this.dek) return same(key, this.dek) ? key : null;
-    // Nothing open yet: the key must open the secrets that are here (a maestra.json brought from elsewhere does not).
-    const v = readJson(this.file(FILES.vault));
-    if (v?.box) { try { unseal(key, v.box, AAD.vault(keyIdOf(key))); } catch { return null; } }
-    return key;
   }
   // → { ok: true } | the refusals of attempt() | { ok: false, reason: 'none' } (no password made, or its file is gone).
-  // A right password also opens a data key this PC could not open by itself (another PC, a backup restored) and wraps it
-  // for this PC again.
-  async verify(password, channel = 'pc') {
-    if (!this.hasPassword()) return { ok: false, reason: 'none' };
-    let key = null;
-    const r = await this.attempt(channel, async () => { key = await this.keyFor(password); return Boolean(key); });
-    if (!r.ok) return r;
-    await this.serial(async () => {
-      if (!this.dek) { this.useKey(key); this.hadMachine = true; this.sealForMachine(); }
-      // A password made before the phones' verifier existed gets it now.
-      try { if (!this.readVault()[PAIR_ID]) this.writeVault({ ...this.readVault(), [PAIR_ID]: await pairVerifier(password.normalize('NFC')) }); } catch { /* a damaged vault says so where it is read */ }
-    });
-    return { ok: true };
-  }
+  // A right password also opens a data key this PC could not open by itself and wraps it for this PC again.
+  verify(password, channel = 'pc') { return this.serial(() => this.job('verify', { password: typed(password), channel })); }
 
-  // ---- the window's unlock: a token for 5 minutes (memory only), dropped when the window locks or closes.
-  // 3.8.1: purpose: a token for ONE action that always asks for the password again (FRESH_UNLOCK in
-  // src/core/permissions.mjs, e.g. deleting a project): it lasts FRESH_MS and opens nothing else, and a token of the
-  // usual 5 minutes does not open that action.
-  issue(purpose = null) {
-    for (const [k, t] of this.tokens) if (t.until <= this.now()) this.tokens.delete(k);
-    const token = crypto.randomBytes(24).toString('hex');
-    const until = this.now() + (purpose ? FRESH_MS : UNLOCK_MS);
-    this.tokens.set(token, { until, purpose: purpose ?? null });
-    return { unlock: token, until };
-  }
-  // consume: the token is used up (a token for one action opens it only once).
+  // ---- the window's unlock: a token for 5 minutes (kept in Rust), dropped when the window locks or closes.
+  // purpose: a token for ONE action that always asks again (FRESH_UNLOCK in src/core/permissions.mjs): FRESH_MS.
+  issue(purpose = null) { return this.call('issue', { purpose: purpose ?? null }); }
   checkToken(token, purpose = null, { consume = false } = {}) {
-    const t = typeof token === 'string' ? this.tokens.get(token) : null;
-    const ok = Boolean(t && t.until > this.now() && t.purpose === (purpose ?? null));
-    if (ok && consume) this.tokens.delete(token);
-    return ok;
+    if (typeof token !== 'string' || token.length > 200) return false;
+    return this.call('check', { token, purpose: purpose ?? null, consume: Boolean(consume) });
   }
-  lock() { this.tokens.clear(); }
+  lock() { this.call('lock'); }
 
-  // Changing it: the current one first (the same waits as any other check). The data key stays (only wrapped again).
-  async change(current, next) {
-    const p = checkPassword(next);
-    const r = await this.verify(current, 'pc');
-    if (!r.ok) return r;
-    await this.serial(() => this.wrapWithPassword(p, { created: readJson(this.file(FILES.master))?.created ?? null }));
-    this.lock();
-    return { ok: true };
-  }
-  // «He olvidado la contraseña» (the caller checked the backups' recovery code): a NEW data key, the secrets encrypted
-  // again with it (keep: which ones stay; the caller drops this PC's keys for the phones), and the new password. Old
-  // copies of maestra.json (in backups, in old copies of the folder) no longer open anything current.
+  // Changing it: the current one first (the same waits). The data key stays (only wrapped again).
+  change(current, next) { return this.serial(async () => { const p = checkPassword(next); return this.job('change', { current: typed(current), next: p }); }); }
+  // «He olvidado la contraseña» (the caller checked the recovery code): a NEW data key, the secrets kept (keep(id))
+  // encrypted again with it, and the new password.
   forgot(next, { keep = () => true } = {}) {
     return this.serial(async () => {
       const p = checkPassword(next);
-      if (!this.dek) throw new MasterError('locked');
-      const items = Object.fromEntries(Object.entries(this.readVault()).filter(([id]) => keep(id)));
-      this.useKey(crypto.randomBytes(32));
-      this.writeVault(items);
-      await this.wrapWithPassword(p);
-      fs.rmSync(this.file(FILES.tries), { force: true }); this.fails = {};
-      this.lock();
-      return { ok: true };
+      if (!this.unlocked()) throw new MasterError('locked');
+      return this.job('forgot', { next: p, keep: this.ids('').filter((id) => keep(id)) });
     });
   }
-  // «Borrar secretos y empezar de cero» (without the recovery code): the sealed files go (here; the caller's onChange takes
-  // them out of the copy outside core too; backups are never touched), a new data key, an empty vault and the new password.
-  reset(next) {
-    return this.serial(async () => {
-      const p = checkPassword(next);
-      for (const f of KEPT) fs.rmSync(this.file(f), { force: true });
-      this.hadMachine = false;
-      this.useKey(crypto.randomBytes(32));
-      this.writeVault({});
-      await this.wrapWithPassword(p);
-      fs.rmSync(this.file(FILES.tries), { force: true }); this.fails = {};
-      this.lock();
-      return { ok: true };
-    });
-  }
+  // «Borrar secretos y empezar de cero»: the sealed files go, a new data key, an empty vault and the new password.
+  reset(next) { return this.serial(async () => { const p = checkPassword(next); return this.job('reset', { next: p }); }); }
 
-  // ---- the secrets (needs the data key open)
-  readVault() {
-    if (!this.dek) throw new MasterError('locked');
-    if (this.items) return this.items;
-    const v = readJson(this.file(FILES.vault));
-    if (!v?.box) { this.items = {}; return this.items; }
-    let items; try { items = JSON.parse(Buffer.from(unseal(this.dek, v.box, AAD.vault(this.keyId))).toString('utf8')); } catch { throw new MasterError('damaged'); }
-    this.items = items && typeof items === 'object' && !Array.isArray(items) ? items : {};
-    return this.items;
-  }
-  writeVault(items) {
-    if (!this.dek) throw new MasterError('locked');
-    writeFile(this.file(FILES.vault), { v: 2, keyId: this.keyId, box: seal(this.dek, Buffer.from(JSON.stringify(items)), AAD.vault(this.keyId)) });
-    this.items = items;
-    this.onChange();
-  }
-  get(id) { const v = this.readVault()[id]; return v === undefined ? null : structuredClone(v); }
-  set(id, value) { const items = { ...this.readVault() }; if (value === null || value === undefined) delete items[id]; else items[id] = structuredClone(value); this.writeVault(items); }
-  ids(prefix = '') { return Object.keys(this.readVault()).filter((k) => k.startsWith(prefix)); }
+  // ---- the secrets (needs the data key open), one at a time
+  get(id) { return this.call('get', { id: String(id) }); }
+  set(id, value) { this.call('set', { id: String(id), value: value === undefined ? null : value }); }
+  ids(prefix = '') { return this.call('ids', { prefix: String(prefix) }); }
+
+  // ---- Magic Link: the verifier stays in Rust. The cost and salt the phone needs, or null without a usable verifier.
+  pairInfo() { return this.call('pairInfo'); }
+  // The phone's key confirmation, checked in Rust with the 'pair' waits: → attempt()'s answer (+ pcMac when right), or
+  // { ok: false, reason: 'noVerifier' | 'bad' }.
+  pairFinish(x) { return this.call('pairFinish', x); }
+  // A connector's keys for its launcher only: → { grant, pipe } or null (none, or not tied to this program any more).
+  grant(bind, binding, vars) { return this.call('grant', { bind, binding, vars }); }
 }
 
 // The copy outside core (this app's data folder, next to the copy of clave.enc): what is missing in core\secretos comes
 // back from it before anything opens; after every change it is written again. What it brings back proves nothing by
-// itself: a password only counts when it opens the data key this PC has (Master › keyFor).
+// itself: a password only counts when it opens the data key this PC has.
 export function mirrorTo(dir, mirror) {
   if (!mirror) return 0;
   let n = 0;

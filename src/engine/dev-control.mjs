@@ -12,6 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { DESKTOP } from '../core/permissions.mjs';
+import { ownPorts } from './host.mjs';
 
 export function startDevControl({ api, board, sessions, log = () => {}, home, internalDir }) {
   const token = crypto.randomBytes(24).toString('hex');
@@ -56,6 +57,7 @@ export function startDevControl({ api, board, sessions, log = () => {}, home, in
   });
   server.listen(0, '127.0.0.1', () => {
     const { port } = server.address();
+    ownPorts.add(port);
     fs.mkdirSync(path.dirname(keyFile), { recursive: true });
     fs.writeFileSync(keyFile, JSON.stringify({ url: `http://127.0.0.1:${port}`, token, home, pid: process.pid, startedAt: new Date().toISOString() }, null, 2), { mode: 0o600 });
     fs.writeFileSync(file, JSON.stringify({ keyFile, home, pid: process.pid }, null, 2));

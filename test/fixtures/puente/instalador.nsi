@@ -9,6 +9,7 @@ Unicode true
 !define ORB_DATA_DIR "${DATA_DIR}"
 !define ORB_HOOK_LOG "${HOOK_LOG}"
 !define ORB_HOOK_QUIET ; a refusal never waits for a click (no one is at a test)
+!define ORB_HOOK_ACCOUNT "${ACCOUNT}" ; User, or Admin (an elevated installer: review D9 B5)
 !include "${HOOKS}"
 Name "Orb (prueba del puente)"
 OutFile "${OUT}"
