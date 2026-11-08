@@ -388,6 +388,8 @@ pub fn run() {
   };
   app.run(|app, event| {
     if let RunEvent::Exit = event {
+      // A downloaded version installs on closing: its backup first, while the engine still runs.
+      updater::before_exit(app);
       // The engine gives `tailscale serve` up to 4.3 s to stop (engine.mjs › shutdown): a little more here.
       engine::get(app).shutdown(Duration::from_secs(5));
       // A new version downloaded and left for later installs now (it ends the process).

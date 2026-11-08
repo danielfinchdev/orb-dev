@@ -137,7 +137,11 @@ mod imp {
   unsafe extern "system" fn line_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if msg == WM_RUN {
       while let Some(job) = JOBS.with(|j| j.borrow().as_ref().and_then(|r| r.try_recv().ok())) {
-        job();
+        // A panic in a job must not leave this window procedure (unwinding out of `extern "system"` ends Orb): it is
+        // caught here, written down, and the thread goes on with the next job (review D9 B8).
+        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(job)).is_err() {
+          eprintln!("navegador de los agentes: un trabajo falló (pánico); se sigue con el siguiente");
+        }
       }
       return LRESULT(0);
     }
@@ -169,7 +173,8 @@ mod imp {
           }
         }
         let mut msg = MSG::default();
-        while GetMessageW(&mut msg, None, 0, 0).as_bool() {
+        // > 0: a message; 0: WM_QUIT; -1: an error (never a busy loop on it).
+        while GetMessageW(&mut msg, None, 0, 0).0 > 0 {
           let _ = TranslateMessage(&msg);
           DispatchMessageW(&msg);
         }

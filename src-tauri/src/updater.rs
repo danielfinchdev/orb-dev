@@ -44,6 +44,8 @@ pub struct Updates {
   found: Mutex<Option<Update>>,
   bytes: Mutex<Option<Vec<u8>>>,
   backed_up: Mutex<Option<String>>,
+  /// One pre-update backup at a time: a second asker waits for the one under way (review D9 M6).
+  backing_up: tokio::sync::Mutex<()>,
   installing: std::sync::atomic::AtomicBool,
 }
 
@@ -88,7 +90,7 @@ pub fn init(app: &AppHandle) {
   // Only a release build updates (from the code there is nothing to replace).
   let enabled = fake.is_some() || ((!cfg!(debug_assertions) || local) && std::env::var("ORB_NO_UPDATE").as_deref() != Ok("1"));
   let state = State { state: if enabled { "idle" } else { "off" }, current, version: None, percent: 0, error: None, portable, linux: None, url: RELEASES_URL };
-  app.manage(Updates { state: Mutex::new(state), fake, enabled, found: Mutex::new(None), bytes: Mutex::new(None), backed_up: Mutex::new(None), installing: Default::default() });
+  app.manage(Updates { state: Mutex::new(state), fake, enabled, found: Mutex::new(None), bytes: Mutex::new(None), backed_up: Mutex::new(None), backing_up: Default::default(), installing: Default::default() });
 }
 
 fn set(app: &AppHandle, patch: impl FnOnce(&mut State)) -> State {
@@ -184,6 +186,14 @@ pub async fn download(app: &AppHandle) -> State {
     return st;
   }
   let Some(update) = u.found.lock().unwrap().clone() else { return st };
+  // Only from Orb's own releases (review D9 B1): the signature already guarantees what is installed; this keeps the
+  // download itself on GitHub over https (a local test feed: its own address).
+  if feed().is_none() && !official_download(update.download_url.as_str()) {
+    return set(app, |s| {
+      s.state = "error";
+      s.error = Some("download url".into());
+    });
+  }
   set(app, |s| {
     s.state = "downloading";
     s.percent = 0;
@@ -227,18 +237,24 @@ pub async fn download(app: &AppHandle) -> State {
   }
 }
 
-async fn backup(app: &AppHandle, version: &str) {
+/// The backup before installing `version`, once: one under way is waited for, never started twice. → whether it is done.
+async fn backup(app: &AppHandle, version: &str) -> bool {
   let u = app.state::<Updates>();
+  let _one = u.backing_up.lock().await;
   if u.backed_up.lock().unwrap().as_deref() == Some(version) {
-    return;
+    return true;
   }
   let engine = crate::engine::get(app);
   match engine.call("backup.now", json!({ "kind": "preupdate" }), BACKUP_WAIT).await {
     Ok(_) => {
       *u.backed_up.lock().unwrap() = Some(version.to_string());
       engine.log_line(&format!("actualizar: copia de seguridad hecha antes de la {version}"));
+      true
     }
-    Err(e) => engine.log_line(&format!("actualizar: no se pudo hacer la copia antes de actualizar: {}", short(e))),
+    Err(e) => {
+      engine.log_line(&format!("actualizar: no se pudo hacer la copia antes de actualizar: {}", short(e)));
+      false
+    }
   }
 }
 
@@ -309,18 +325,50 @@ fn run_installer(app: &AppHandle, restart: bool) {
   u.installing.store(false, std::sync::atomic::Ordering::SeqCst);
 }
 
-/// Orb is closing with a new version downloaded and not installed («Más tarde»): it installs now, without opening Orb
-/// again (as Electron's autoInstallOnAppQuit).
+/// Orb is closing with a new version downloaded and not installed («Más tarde»): before the engine stops, the backup of
+/// that version is finished (the one under way is waited for, or made now, at most BACKUP_WAIT).
+pub fn before_exit(app: &AppHandle) {
+  if app.try_state::<Updates>().is_none() || feed().is_some() {
+    return;
+  }
+  let st = get(app);
+  if let (true, Some(v)) = (st.state == "downloaded", st.version) {
+    tauri::async_runtime::block_on(async { tokio::time::timeout(BACKUP_WAIT, backup(app, &v)).await.unwrap_or(false) });
+  }
+}
+
+/// After the engine stopped: it installs now, without opening Orb again (as Electron's autoInstallOnAppQuit), only with
+/// its backup made; without it, the next start finds the version again and asks.
 pub fn on_exit(app: &AppHandle) {
   // Never from a test's local feed (its installer is not a real one).
-  if app.try_state::<Updates>().is_some() && feed().is_none() && get(app).state == "downloaded" {
-    run_installer(app, false);
+  if app.try_state::<Updates>().is_none() || feed().is_some() {
+    return;
   }
+  let st = get(app);
+  let backed = app.state::<Updates>().backed_up.lock().unwrap().clone();
+  if st.state == "downloaded" && st.version.is_some() && backed == st.version {
+    run_installer(app, false);
+  } else if st.state == "downloaded" {
+    crate::engine::get(app).log_line("actualizar: no se instala al cerrar: falta la copia de seguridad (se ofrecerá al volver a abrir Orb)");
+  }
+}
+
+/// An installer address of Orb's releases on GitHub (https, that repository's release downloads).
+pub fn official_download(url: &str) -> bool {
+  url.starts_with("https://github.com/danielfinchdev/orb-dev/releases/download/") && !url.contains("..") && !url.contains('@')
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn downloads_only_from_orbs_releases() {
+    assert!(official_download("https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.1/Orb_3.8.1_x64-setup.exe"));
+    for bad in ["http://github.com/danielfinchdev/orb-dev/releases/download/v3.8.1/x.exe", "https://github.com.evil/danielfinchdev/orb-dev/releases/download/x", "https://github.com/otro/orb-dev/releases/download/v1/x.exe", "https://github.com/danielfinchdev/orb-dev/releases/download/../../x", "https://evil.example/Orb.exe"] {
+      assert!(!official_download(bad), "{bad}");
+    }
+  }
 
   #[test]
   fn versions_compare_as_numbers() {
