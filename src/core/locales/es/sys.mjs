@@ -41,6 +41,7 @@ export default {
   // Errores del proceso principal (acaban en un toast)
   'sys.main.engineStopped': '{name} se ha detenido',
   'sys.main.engineStartStopped': '{name} se detuvo al iniciarse',
+  'sys.main.migratedFromElectron': '{name} se ha actualizado a su nueva base. Las preferencias de la interfaz (tema, vista abierta, avisos) vuelven a los valores de siempre.',
   'sys.main.noJob': '{name} no ha podido vigilar los procesos del motor: si se cierra de golpe, pueden quedar agentes abiertos. Más detalles en motor-salida.log.',
   'sys.main.engineOff': '{name} no está en ejecución',
   'sys.main.engineTimeout': '{name} no respondió a tiempo',

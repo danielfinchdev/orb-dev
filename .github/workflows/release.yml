@@ -1,6 +1,9 @@
 # The desktop downloads, built and checked on a real machine of each system and published together as a GitHub release:
-#   Orb-<version>-instalador.exe      the whole app: installs for the user and updates itself (recommended)
-#   Orb-<version>-light-portable.exe  Orb Light: the essentials, nothing to install (it only tells of new versions)
+#   Orb-<version>-instalador.exe      Windows (Tauri): installs for the user and updates itself; the same file as
+#                                     Orb_<version>_x64-setup.exe, which the updaters download:
+#                                     latest.json + .sig for Orb on Tauri (signed with the updater key, secrets
+#                                     TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD), latest.yml for
+#                                     Orb 3.8.0 (Electron), whose updater installs it and is replaced by it
 #   Orb-<version>-linux-<arch>.AppImage  Linux, nothing to install, updates itself (latest-linux*.yml)
 #   Orb-<version>-linux-<arch>.deb       Linux (Debian, Ubuntu…), installed with the system; it tells of new versions
 # Publishing a version = changing "version" in package.json on main: when that version has no release yet, this builds it,
@@ -71,22 +74,30 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Rust
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
       - run: npm ci
-      - name: Build the installer and Orb Light (portable)
-        run: npx vite build && npx electron-builder --win nsis portable --x64 --publish never
-      - name: Test the packaged app on Windows
-        run: node test/smoke.e2e.mjs
+      - name: Build the installer (Tauri), signed for the updater
+        run: npm run tauri:build
         env:
-          ORB_E2E_EXE: dist/win-unpacked/Orb.exe
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      - name: Update manifests (latest.json for Orb on Tauri, latest.yml for Orb 3.8.0)
+        shell: bash
+        run: node scripts/release-manifests.mjs --setup "src-tauri/target/release/bundle/nsis/Orb_${{ needs.version.outputs.version }}_x64-setup.exe" --out dist
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: orb-dev-windows
           path: |
-            dist/*.exe
-            dist/*.blockmap
+            dist/Orb_*_x64-setup.exe
+            dist/Orb_*_x64-setup.exe.sig
+            dist/Orb-*-instalador.exe
+            dist/latest.json
             dist/latest.yml
-            test-results/
 
   # The Linux app (AppImage and .deb, x64 and arm64), built on Ubuntu; the x64 one is opened and checked like on Windows.
   linux:
@@ -136,8 +147,10 @@ jobs:
           make_latest: true
           body_path: docs/CHANGELOG.md
           files: |
-            dist/Orb-*.exe
-            dist/Orb-*.blockmap
+            dist/Orb_*_x64-setup.exe
+            dist/Orb_*_x64-setup.exe.sig
+            dist/Orb-*-instalador.exe
+            dist/latest.json
             dist/latest.yml
             dist/Orb-*.AppImage
             dist/Orb-*.deb

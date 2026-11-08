@@ -64,6 +64,8 @@ pub struct Engine {
   start_code: Mutex<Option<String>>,
   /// The Job Object could not be made or the engine put in it: its processes would outlive a killed Orb.
   job_failed: AtomicBool,
+  /// First start after the installer replaced Orb on Electron (migrate.rs): said once, when the engine is ready.
+  migrated: AtomicBool,
   #[cfg(windows)]
   job: Option<job::Job>,
 }
@@ -81,6 +83,7 @@ impl Engine {
     let job_failed = false;
     Arc::new(Self {
       job_failed: AtomicBool::new(job_failed),
+      migrated: AtomicBool::new(false),
       start_code: Mutex::new(None),
       cfg,
       app,
@@ -119,6 +122,11 @@ impl Engine {
     self.proc.lock().unwrap().is_some()
   }
   /// Orb is closing on purpose: the engine ending now is not a crash.
+  /// The window will say once that Orb moved from Electron (migrate.rs).
+  pub fn set_migrated(&self) {
+    self.migrated.store(true, Ordering::SeqCst);
+  }
+
   pub fn begin_quit(&self) {
     self.quitting.store(true, Ordering::SeqCst);
   }
@@ -351,6 +359,9 @@ impl Engine {
         self.status.send_replace(match result {
           Ok(v) => {
             crate::window::set_title(&self.app, v.get("name").and_then(Value::as_str));
+            if self.migrated.swap(false, Ordering::SeqCst) {
+              self.emit_event("notice", json!({ "body": self.t_name("sys.main.migratedFromElectron"), "tone": "info" }));
+            }
             if self.job_failed.load(Ordering::SeqCst) {
               self.emit_event("notice", json!({ "body": self.t_name("sys.main.noJob"), "tone": "warning" }));
             }

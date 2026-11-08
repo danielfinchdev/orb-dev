@@ -7,6 +7,7 @@ mod delete;
 mod desktop;
 mod engine;
 mod host;
+mod migrate;
 mod notify;
 mod pip;
 mod pipes;
@@ -15,6 +16,7 @@ mod protocol;
 mod secrets;
 mod tools;
 mod trace;
+mod updater;
 mod webview;
 mod window;
 
@@ -186,6 +188,31 @@ async fn app_show_browser(window: WebviewWindow) -> Result<Value, String> {
   engine::get(window.app_handle()).request("pip", json!({ "action": "show" }), Duration::from_secs(5)).await
 }
 
+/// New versions (updater.rs): the state, «Buscar», «Descargar e instalar» and «Reiniciar e instalar».
+#[tauri::command]
+fn app_update(window: WebviewWindow) -> Result<updater::State, String> {
+  only_main(&window)?;
+  Ok(updater::get(window.app_handle()))
+}
+
+#[tauri::command]
+async fn app_update_check(window: WebviewWindow) -> Result<updater::State, String> {
+  only_main(&window)?;
+  Ok(updater::check(window.app_handle()).await)
+}
+
+#[tauri::command]
+async fn app_update_download(window: WebviewWindow) -> Result<updater::State, String> {
+  only_main(&window)?;
+  Ok(updater::download(window.app_handle()).await)
+}
+
+#[tauri::command]
+async fn app_update_install(window: WebviewWindow) -> Result<bool, String> {
+  only_main(&window)?;
+  updater::install(window.app_handle()).await
+}
+
 /// A button of the little window (pip.rs). Only from that window.
 #[tauri::command]
 fn pip_action(window: WebviewWindow, action: String) -> Result<(), String> {
@@ -252,6 +279,7 @@ pub fn run() {
   let app = builder
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_opener::init())
+    .plugin(tauri_plugin_updater::Builder::new().build())
     .invoke_handler(tauri::generate_handler![
       engine_call,
       app_info,
@@ -272,6 +300,10 @@ pub fn run() {
       app_open_external,
       app_delete_project,
       app_show_browser,
+      app_update,
+      app_update_check,
+      app_update_download,
+      app_update_install,
       pip_action
     ])
     .setup(move |app| {
@@ -310,11 +342,21 @@ pub fn run() {
           dev_control: cfg!(debug_assertions) && std::env::var("ORB_DEV_CONTROL").as_deref() == Ok("1"),
         },
       );
+      // Installed over Orb 3.8.0 (Electron): its leftovers go, and the window says so once (migrate.rs).
+      let updater_cache = match &separate {
+        None => std::env::var_os("LOCALAPPDATA").map(|d| PathBuf::from(d).join("orb-dev-updater")),
+        Some(_) => None,
+      };
+      if migrate::after_electron(&user_data, updater_cache) {
+        engine.set_migrated();
+      }
       app.manage(engine.clone());
       app.manage(delete::Deletes::default());
       // The engine starts while the window loads.
       tauri::async_runtime::spawn(engine.boot(None));
       window::create_main(&handle, &user_data, webview_data, e2e)?;
+      updater::init(&handle);
+      updater::start(&handle);
       Ok(())
     })
     .build(tauri::generate_context!());
@@ -326,6 +368,8 @@ pub fn run() {
     if let RunEvent::Exit = event {
       // The engine gives `tailscale serve` up to 4.3 s to stop (engine.mjs › shutdown): a little more here.
       engine::get(app).shutdown(Duration::from_secs(5));
+      // A new version downloaded and left for later installs now (it ends the process).
+      updater::on_exit(app);
     }
   });
 }

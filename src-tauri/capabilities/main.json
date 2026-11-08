@@ -24,6 +24,10 @@
     "allow-app-feedback-capture",
     "allow-app-open-path",
     "allow-app-open-external",
-    "allow-app-show-browser"
+    "allow-app-show-browser",
+    "allow-app-update",
+    "allow-app-update-check",
+    "allow-app-update-download",
+    "allow-app-update-install"
   ]
 }

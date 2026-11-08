@@ -578,8 +578,11 @@ as a **bounded excerpt**, not in full, and marked as "data, not instructions".
     driver `browser-cdp.mjs`). Its pages are hidden WebView2 views in a browser environment of their own
     (`src-tauri/src/browser.rs`), with no DevTools port: Rust passes the engine's DevTools calls with
     `CallDevToolsProtocolMethod` over the engine's stdio channel and enforces the limits (http(s) only, no other app's
-    protocol, no new windows, permissions, downloads or HTTP sign-in prompts, sound off: `browser_rules.rs`). The mini
-    window is `src-tauri/src/pip.rs`, fed by a screencast with one frame in flight;
+    protocol, no new windows, permissions, downloads or HTTP sign-in prompts, sound off: `browser_rules.rs`). The pages
+    live on a thread of their own (an STA with its own message loop), never on the window's UI thread, so a page
+    flooding DevTools events cannot slow Orb's window; a page past the flood limits (events, console lines or bytes a
+    second) is closed and the agent told. The mini window is `src-tauri/src/pip.rs`, fed by a screencast with one frame
+    in flight;
   - the tools in `src/mcp/server.mjs`;
   - `src/core/browser-key.mjs`.
 
@@ -1038,6 +1041,22 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
 - Running from source there are no updates (`off`). `ORB_NO_UPDATE=1` turns them off; `ORB_FAKE_UPDATE=<version>`
   simulates a new version without network (tests); `ORB_UPDATE_URL=http://127.0.0.1:<port>/` uses a local server to
   test an update before publishing it.
+- 3.8.1 (Tauri, `src-tauri/src/updater.rs`): the same states, buttons and timings with `tauri-plugin-updater`. It reads
+  `latest.json` of the latest GitHub release; the installer (`Orb_<version>_x64-setup.exe`) is signed with Orb's updater
+  key (minisign; the public key is `plugins.updater.pubkey` in `tauri.conf.json`, the private one never enters the
+  repository: `TAURI_SIGNING_PRIVATE_KEY` and `_PASSWORD` at build time) and its signature, including the version it was
+  signed for (`requireSignedVersion`), is checked before it runs. It installs in passive mode (a progress bar) and Orb
+  reopens; with "Later" it installs when Orb closes. `ORB_UPDATE_URL` only works in the e2e build. Not installed (no
+  `uninstall.exe` next to `Orb.exe`): the button opens the release page.
+- **From 3.8.0 (Electron) to 3.8.1 (Tauri)**: the release also publishes a `latest.yml` (electron-updater's format, the
+  same installer with its sha512 and size: `scripts/release-manifests.mjs`, which writes `latest.json` too). Orb 3.8.0
+  downloads it and runs it with `--updated /S --force-run`. The installer's hooks (`src-tauri/nsis/hooks.nsh`) run
+  3.8.0's own uninstaller silently and wait for it (program folder, shortcuts, AppUserModelID and uninstall entry go;
+  `%APPDATA%\Orb.dev` and the workspace stay), leave `migrado-desde-electron.json` in `%APPDATA%\Orb.dev`, and open Orb.
+  On that first start (`src-tauri/src/migrate.rs`) Electron's Chromium caches and electron-updater's download folder go
+  (never `Local State`, the keys or the workspace) and the window says once that Orb moved to its new base.
+  `test/puente-electron.e2e.mjs` checks the whole path with a copy of an installed 3.8.0 on a hidden desktop against a
+  fake install; `test/tauri-actualizar.e2e.mjs` checks Tauri → Tauri against a local feed.
 
 ## 30. Tests
 

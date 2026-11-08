@@ -7,9 +7,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
-// Features of later steps of the move to Tauri: they answer, but say they are not there yet.
-const later = () => Promise.reject(new Error('Todavía no disponible en esta versión de prueba'));
-
 if (window.__TAURI_INTERNALS__ && !window.orb) {
   const listeners = new Map();
   const fire = (event, payload) => {
@@ -91,7 +88,8 @@ if (window.__TAURI_INTERNALS__ && !window.orb) {
     runAction: (action) => engine('app.runAction', action ?? {}),
     feedback: { capture, images: () => invoke('app_feedback_images'), send: (data) => engine('app.feedbackSend', data ?? {}) },
     moreApps: () => engine('app.moreApps'),
-    update: { get: later, check: later, download: later, install: later },
+    // New versions (src-tauri/src/updater.rs); the state also comes as the 'app:update' event.
+    update: { get: () => invoke('app_update'), check: () => invoke('app_update_check'), download: () => invoke('app_update_download'), install: () => invoke('app_update_install') },
     // A promise here (Electron's preload answers at once): the callers wait for it either way.
     pathForFile
   };

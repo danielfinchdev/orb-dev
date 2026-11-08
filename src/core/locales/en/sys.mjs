@@ -39,6 +39,7 @@ export default {
   // Main process errors
   'sys.main.engineStopped': '{name} has stopped',
   'sys.main.engineStartStopped': '{name} stopped while starting',
+  'sys.main.migratedFromElectron': '{name} has moved to its new base. The interface preferences (theme, open view, notifications) are back to their defaults.',
   'sys.main.noJob': '{name} could not watch the engine’s processes: if it is closed abruptly, agents may be left running. Details in motor-salida.log.',
   'sys.main.engineOff': '{name} is not running',
   'sys.main.engineTimeout': '{name} did not respond in time',

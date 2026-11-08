@@ -27,6 +27,10 @@ fn main() {
     "app_open_path",
     "app_open_external",
     "app_show_browser",
+    "app_update",
+    "app_update_check",
+    "app_update_download",
+    "app_update_install",
     "pip_action",
   ])))
   .expect("tauri build script");

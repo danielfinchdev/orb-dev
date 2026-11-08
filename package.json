@@ -23,6 +23,8 @@
     "test:movil": "vite build && node test/mobile.e2e.mjs",
     "test:glass": "node test/glass.e2e.mjs",
     "test:tauri-navegador": "node test/tauri-navegador.e2e.mjs",
+    "test:tauri-actualizar": "node test/tauri-actualizar.e2e.mjs",
+    "test:puente-electron": "node test/puente-electron.e2e.mjs",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build && node scripts/tauri-check-release.mjs",
     "tauri:build:e2e": "node scripts/tauri-check-release.mjs --build-e2e",
