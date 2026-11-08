@@ -82,6 +82,10 @@ export function Orb({ pose = 'head', size = 34, mood = 'idle', live: wantsLive =
   }
 
   const face = act === 'laugh' ? 'happy' : mood;
+  // The visor's code rows (about a hundred elements) are only built once this robot first shows them: a list of chats
+  // draws hundreds of still robots that never do.
+  const [coded, setCoded] = useState(false);
+  if (!coded && (face === 'thinking' || act === 'code')) setCoded(true);
   const file = pose === 'head' ? FILES.head : FILES[coherent(pose, face)] ?? FILES.stand;
   const G = geo[file];
   const head = file === 'cabeza';
@@ -97,11 +101,13 @@ export function Orb({ pose = 'head', size = 34, mood = 'idle', live: wantsLive =
       <span className="orb-body" style={{ width: w, height: w * G.ratio, left: (box.w - w) / 2 }}>
         <img className="orb-img" src={url(file)} alt="" draggable={false} />
         <span className="orb-visor" style={{ maskImage: `url(${url(`${file}-visera`)})`, WebkitMaskImage: `url(${url(`${file}-visera`)})` }}>
-          <span className="orb-code" style={{ left: `${G.visor.x + G.visor.w * 0.18}%`, width: `${G.visor.w * 0.7}%` }}>
-            {[...CODE, ...CODE].map((row, i) => (
-              <span key={i} className="orb-code-row">{row.map((s, j) => <i key={j} style={{ left: `${s.x}%`, width: `${s.w}%`, background: s.c }} />)}</span>
-            ))}
-          </span>
+          {coded ? (
+            <span className="orb-code" style={{ left: `${G.visor.x + G.visor.w * 0.18}%`, width: `${G.visor.w * 0.7}%` }}>
+              {[...CODE, ...CODE].map((row, i) => (
+                <span key={i} className="orb-code-row">{row.map((s, j) => <i key={j} style={{ left: `${s.x}%`, width: `${s.w}%`, background: s.c }} />)}</span>
+              ))}
+            </span>
+          ) : null}
           <span className="orb-glint" />
         </span>
         <svg className="orb-face" viewBox={`0 0 ${VW} ${VH}`} aria-hidden="true">
