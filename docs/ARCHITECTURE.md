@@ -664,8 +664,10 @@ phone does not have the app open. On iPhone they work with Orb added to the home
 - It is turned on in Settings › Advanced › God mode; the panels can only be ticked with the mode on.
 - Files: `src/engine/expert.mjs` and `src/ui/views/expert.jsx`.
 - **"Open in":** the project in Cursor or VS Code (only the installed ones) or in Explorer (`src/engine/editors.mjs`,
-  `app.openIn`; programs are launched directly, never through cmd.exe, and by the app — `host.spawnDetached` — so they
-  outlive Orb).
+  `app.openIn`; programs are launched directly, never through cmd.exe, and by the app — `host.openEditor`,
+  `host.openTerminal`, `host.runAction`: the engine names the kind and the folder, the app picks the program by its
+  absolute path — so they outlive Orb). core itself and `core\secretos` open in Explorer only with a fresh unlock of the
+  master password.
 - **Project actions:** each project's own commands (`actions:<project>` on the board, at most 20;
   `actions.list/save/remove`) with a name, a keyboard shortcut and an optional preview, which can only be a page on this
   PC. They are launched from "Actions" or with their shortcut (`ActionShortcuts`: the God mode project, or the working
@@ -1166,10 +1168,12 @@ in `src/core/home.mjs`; nothing else builds them.
   `core/bitacora/…`, `core/mcp` without dependencies, or `bitacora/…` for a log folder kept at the top); a 3.7 copy
   (`.orb/…`, `orb.json`, `bitacora/…`) restores into core (`legacyName`, only for a copy made by 3.7) and its paths are
   rewritten. The app keeps a copy of the sealed secret (`clave.enc`) in its own data folder
-  (`%APPDATA%\Orb.dev\claves\<workspace>.enc`, `src/main/approval-secret.mjs`) and puts it back when core loses it, so
+  (`%APPDATA%\Orb.dev\claves\<workspace>.enc`, `src/engine/approval-secret.mjs`) and puts it back when core loses it, so
   the copies, sealed with that secret, still open on this PC. A `clave.enc` that cannot be read gives way to that copy
   and is kept aside (`clave.<date>.ilegible.enc`), and the copy is never replaced by a different secret: the old one is
-  kept as `<workspace>.<date>.enc` first.
+  kept as `<workspace>.<date>.enc` first. 3.8.1 (Tauri): Rust seals it with DPAPI as `ORB2` (`host.seal`/`host.unseal`,
+  `src-tauri/src/secrets.rs`) and still reads Electron's `v10` with the key in `%APPDATA%\Orb.dev\Local State` (never
+  changed or deleted); a `v10` file is sealed again once and kept as `clave.<date>.v10.enc` (and `<workspace>.<date>.v10.enc`).
 - **core missing** (`repairCore` in `backup.mjs`, called by `engine.mjs › start` before the database opens): when core,
   its orb.json or its database is gone, only what is missing **of core** is put back (`applyPendingRestore` with
   `onlyMissing`: a database newer than the copy stays; a project or whiteboard the user deleted stays deleted), from the

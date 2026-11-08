@@ -37,7 +37,8 @@ export function externalEnv(env = process.env) {
 const exists = (file) => Boolean(file) && fs.existsSync(file);
 function inPath(name, env) {
   const exts = process.platform === 'win32' ? ['', '.exe', '.cmd'] : [''];
-  for (const dir of String(env.PATH ?? env.Path ?? '').split(path.delimiter).filter(Boolean)) {
+  // Only absolute folders of the PATH: a relative one («.», empty) would find a program planted in the current folder.
+  for (const dir of String(env.PATH ?? env.Path ?? '').split(path.delimiter).filter((d) => path.isAbsolute(d))) {
     for (const ext of exts) { const file = path.join(dir, name + ext); if (exists(file)) return file; }
   }
   return null;
@@ -49,7 +50,9 @@ export function findTerminals(platform = process.platform, env = process.env) {
     const local = env.LOCALAPPDATA ?? ''; const programs = env.ProgramFiles ?? 'C:\\Program Files';
     const warp = [path.join(local, 'Programs', 'Warp', 'warp.exe'), path.join(programs, 'Warp', 'warp.exe')].find(exists) ?? inPath('warp', env);
     const wt = [path.join(local, 'Microsoft', 'WindowsApps', 'wt.exe')].find(exists) ?? inPath('wt', env);
-    return { warp, wt, powershell: inPath('powershell', env) ?? 'powershell.exe', cmd: env.ComSpec || 'cmd.exe' };
+    // Always an absolute path: a bare name would also be looked for in the folder the program starts in.
+    const system = path.join(env.SystemRoot || env.windir || 'C:\\Windows', 'System32');
+    return { warp, wt, powershell: inPath('powershell', env) ?? path.join(system, 'WindowsPowerShell', 'v1.0', 'powershell.exe'), cmd: env.ComSpec && path.isAbsolute(env.ComSpec) ? env.ComSpec : path.join(system, 'cmd.exe') };
   }
   if (platform === 'darwin') return { warp: exists('/Applications/Warp.app') ? '/Applications/Warp.app' : null, terminal: 'Terminal' };
   const installed = Object.keys(LINUX_TERMINALS).filter((n) => inPath(n, env));
@@ -82,8 +85,8 @@ export function terminalPlan(choice, dir, found, platform = process.platform, la
 }
 
 // A program started on its own, detached: a console program gets its own window on Windows and outlives the app. The
-// engine asks the app for it (host.spawnDetached, src/engine/host.mjs): under Tauri the engine runs inside a Job Object
-// that ends with Orb, and only the app can start something outside it. This is the plain way (tests, Electron's app).
+// engine asks the app for a terminal, an editor or an action by kind (host.openTerminal…, src/engine/host.mjs) and the
+// app picks and starts the program: Electron's main process with these functions, Tauri's Rust (src-tauri/src/tools.rs).
 export const spawnDetached = ({ cmd, args = [], cwd }) => new Promise((resolve, reject) => {
   const child = spawn(cmd, args, { cwd, detached: true, stdio: 'ignore', windowsHide: false, env: externalEnv() });
   child.once('error', reject);

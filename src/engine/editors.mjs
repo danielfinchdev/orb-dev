@@ -8,7 +8,7 @@ import { translate } from '../core/i18n.mjs';
 
 const exists = (file) => Boolean(file) && fs.existsSync(file);
 function inPath(names, env) {
-  for (const dir of String(env.PATH ?? env.Path ?? '').split(path.delimiter).filter(Boolean)) {
+  for (const dir of String(env.PATH ?? env.Path ?? '').split(path.delimiter).filter((d) => path.isAbsolute(d))) {
     for (const name of names) { const file = path.join(dir, name); if (exists(file)) return file; }
   }
   return null;
@@ -35,7 +35,7 @@ const folderOf = (dir, language) => {
   return dir;
 };
 
-// spawn: how a detached program starts (terminal.mjs › spawnDetached, or the app's when the engine asks).
+// spawn: how a detached program starts (terminal.mjs › spawnDetached).
 export async function openInEditor(which, dir, { language = 'es', spawn = spawnDetached } = {}) {
   folderOf(dir, language);
   const exe = findEditors()[which];

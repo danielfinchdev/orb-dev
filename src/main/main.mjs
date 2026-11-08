@@ -6,16 +6,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadConfig, writeJson, paths } from '../core/home.mjs';
-import { locateHome, setupHome, switchHome, secretCopy, secretsCopy, adoptOldKeyNames, secretDir } from '../engine/desktop-home.mjs';
+import { locateHome, setupHome, switchHome, secretCopy, secretsCopy, adoptOldKeyNames, secretDir, guardedCore as coreGuarded } from '../engine/desktop-home.mjs';
 import { createAgentBrowser } from './browser.mjs';
 import { createUpdater, RELEASES_URL } from './updater.mjs';
 import { MAX_IMAGES, readImage, screenshot } from '../engine/feedback.mjs';
-import { checkHostRequest } from '../engine/host.mjs';
-import { spawnDetached } from '../engine/terminal.mjs';
+import { checkHostRequest, localPath } from '../engine/host.mjs';
+import { openTerminal } from '../engine/terminal.mjs';
+import { openInEditor, runAction } from '../engine/editors.mjs';
 import { PRODUCT } from '../core/product.mjs';
 import { translate } from '../core/i18n.mjs';
 import { keyringWeak } from './linux.mjs';
-import { loadApprovalSecret } from './approval-secret.mjs';
+import { loadApprovalSecret } from '../engine/approval-secret.mjs';
 
 const SRC = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // Packaged: the code lives in app.asar.unpacked (agents start the MCP server from there with the app's own executable).
@@ -94,7 +95,7 @@ let weakKeyring = false;
 // Orb 3.7 still has it in .orb\datos until the engine moves that folder into core (src/core/core-folder.mjs): read there
 // and never written into core before the move. Returns the secret as hex, or null when encryption is not available
 // (then the engine uses clave.bin).
-function approvalSecret(h) {
+async function approvalSecret(h) {
   adoptOldKeyNames(USER_DATA(), h);
   const available = safeStorage.isEncryptionAvailable();
   let backend = null; try { backend = process.platform === 'linux' ? safeStorage.getSelectedStorageBackend() : null; } catch { /* older Electron */ }
@@ -105,7 +106,7 @@ function approvalSecret(h) {
     if (available) { try { const hex = safeStorage.decryptString(fs.readFileSync(path.join(dir, 'clave.enc'))); if (/^[0-9a-f]{64}$/.test(hex)) return hex; } catch { /* none */ } }
     return null;
   }
-  // The rest (the copy outside, a clave.enc that cannot be read kept aside): src/main/approval-secret.mjs.
+  // The rest (the copy outside, a clave.enc that cannot be read kept aside): src/engine/approval-secret.mjs.
   return loadApprovalSecret({ dir, copy: secretCopy(USER_DATA(), h), seal: (hex) => safeStorage.encryptString(hex), unseal: (buf) => safeStorage.decryptString(buf) });
 }
 
@@ -141,9 +142,12 @@ function startEngine(h) {
       else win?.webContents.send('engine:event', 'engine:stopped', { code });
     });
   });
-  let secret = null; try { secret = approvalSecret(h); } catch { /* falls back to the file */ }
-  const browser = agentBrowser ? { pipe: agentBrowser.pipe, token: agentBrowser.token } : null;
-  engine.postMessage({ type: 'start', home: h, version: VERSION, secret, browser, keep: secretsCopy(USER_DATA(), h) });
+  const child = engine;
+  (async () => {
+    let secret = null; try { secret = await approvalSecret(h); } catch { /* falls back to the file */ }
+    const browser = agentBrowser ? { pipe: agentBrowser.pipe, token: agentBrowser.token } : null;
+    try { child.postMessage({ type: 'start', home: h, version: VERSION, secret, browser, keep: secretsCopy(USER_DATA(), h) }); } catch { /* the engine went: restarted by its exit */ }
+  })();
   return engineReady;
 }
 
@@ -157,8 +161,9 @@ function callEngine(method, params, timeoutMs = 10 * 60_000) {
   });
 }
 
-// 3.8.1: what the engine asks this app to do (src/engine/host.mjs): open a link or a folder with the system, or start a
-// program that outlives Orb. Every request is checked again here (checkHostRequest).
+// 3.8.1: what the engine asks this app to do (src/engine/host.mjs): open a link or a folder with the system, or open a
+// terminal, an editor or a project's action (this app picks the program: terminal.mjs, editors.mjs). Every request is
+// checked again here (checkHostRequest). host.seal / host.unseal are Tauri's: Electron hands the engine the secret itself.
 const isDir = (p) => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
 async function onHostCall({ id, method, params }) {
   const reply = (m) => { try { engine?.postMessage({ type: 'hostReply', id, ...m }); } catch { /* engine gone */ } };
@@ -167,7 +172,10 @@ async function onHostCall({ id, method, params }) {
     let result = true;
     if (method === 'host.openUrl') await shell.openExternal(p.url);
     else if (method === 'host.openPath') { const err = await shell.openPath(p.path); if (err) throw new Error(err); }
-    else if (method === 'host.spawnDetached') result = await spawnDetached(p);
+    else if (method === 'host.openTerminal') result = await openTerminal(p.dir, p.choice, { openExternal: (url) => shell.openExternal(url), language: langOf(config()) });
+    else if (method === 'host.openEditor') await openInEditor(p.which, p.dir, { language: langOf(config()) });
+    else if (method === 'host.runAction') await runAction(p.command, p.dir, { choice: p.choice, language: langOf(config()) });
+    else throw new Error(`host: ${method} no disponible`);
     reply({ ok: true, result });
   } catch (error) { reply({ ok: false, error: String(error?.message ?? error) }); }
 }
@@ -260,16 +268,9 @@ ipcMain.handle('app:pickImages', guard(async () => {
 // 3.8: core itself (all of it at once) and its secrets open only with a fresh unlock of the master password, checked by
 // the engine. Its tool folders (MCP servers, adb, logs) and the data folder a failed migration points to open as
 // before: the window offers them where they are needed, also before there is a password.
-// Compared by the real path (a junction, a short 8.3 name or the \\?\ prefix lead to the same folder).
-const realLower = (p) => { let r = path.resolve(p); try { r = fs.realpathSync.native(r); } catch { /* not there: as written */ } return r.replace(/^\\\\\?\\/, '').toLowerCase(); };
-const guardedCore = (target) => {
-  if (!home) return false;
-  const t = realLower(target);
-  const core = realLower(paths(home).core); const secrets = realLower(paths(home).secrets);
-  return t === core || t === secrets || t.startsWith(secrets + path.sep);
-};
+const guardedCore = (target) => coreGuarded(home, target);
 ipcMain.handle('app:openPath', guard(async (target, unlock) => {
-  if (typeof target !== 'string' || !path.isAbsolute(target)) throw new Error(T('sys.main.badPath'));
+  if (!localPath(target)) throw new Error(T('sys.main.badPath'));
   if (guardedCore(target)) { await engineReady; await callEngine('master.check', { unlock: typeof unlock === 'string' ? unlock : '' }, 10_000); }
   let st; try { st = fs.statSync(target); } catch { throw new Error(T('sys.main.folderMissing')); }
   if (!st.isDirectory()) throw new Error(T('sys.main.foldersOnly')); // never run a file

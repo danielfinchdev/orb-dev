@@ -67,3 +67,14 @@ export function secretDir(home) {
   const legacy = path.join(home, LEGACY.internal, 'datos');
   return fs.existsSync(legacy) && !fs.existsSync(paths(home).core) ? legacy : paths(home).data;
 }
+
+// 3.8: core itself (all of it at once) and its secrets open in the File Explorer only with a fresh unlock of the master
+// password; its tool folders (MCP servers, adb, logs) open as before. Compared by the real path (a junction, a short 8.3
+// name or the \\?\ prefix lead to the same folder).
+const realLower = (p) => { let r = path.resolve(p); try { r = fs.realpathSync.native(r); } catch { /* not there: as written */ } return r.replace(/^\\\\\?\\/, '').toLowerCase(); };
+export function guardedCore(home, target) {
+  if (!home || typeof target !== 'string') return false;
+  const t = realLower(target);
+  const core = realLower(paths(home).core); const secrets = realLower(paths(home).secrets);
+  return t === core || t === secrets || t.startsWith(secrets + path.sep);
+}

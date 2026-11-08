@@ -277,19 +277,62 @@ test('rutas en la base: lo que escribió el usuario se queda como lo escribió',
 });
 
 test('la copia del secreto fuera del espacio nunca se pisa con otro; un clave.enc ilegible no gana a la copia buena', async () => {
-  const { loadApprovalSecret } = await import('../src/main/approval-secret.mjs');
+  const { loadApprovalSecret } = await import('../src/engine/approval-secret.mjs');
   const base = newBase();
   const dir = path.join(base, 'datos'); const copy = path.join(base, 'claves', 'orb-1234abcd.enc');
   const seal = (hex) => Buffer.from(`S${hex}`); const unseal = (b) => { const s = b.toString(); if (!s.startsWith('S')) throw new Error('no abre'); return s.slice(1); };
   const good = 'a1'.repeat(32); const other = 'b2'.repeat(32);
   // core lost its clave.enc, and it cannot be read (damaged, or another Windows user's): the good copy wins.
   put(copy, `S${good}`); put(path.join(dir, 'clave.enc'), 'basura');
-  assert.equal(loadApprovalSecret({ dir, copy, seal, unseal }), good);
+  assert.equal(await loadApprovalSecret({ dir, copy, seal, unseal }), good);
   assert.equal(read(path.join(dir, 'clave.enc')), `S${good}`);
   assert.ok(fs.readdirSync(dir).some((n) => /^clave\..*\.ilegible\.enc$/.test(n) && read(path.join(dir, n)) === 'basura'), 'el ilegible, aparte');
   // A clave.enc with another secret: the copy that had the old one is put aside, not overwritten.
   put(path.join(dir, 'clave.enc'), `S${other}`);
-  assert.equal(loadApprovalSecret({ dir, copy, seal, unseal }), other);
+  assert.equal(await loadApprovalSecret({ dir, copy, seal, unseal }), other);
   assert.equal(read(copy), `S${other}`);
   assert.ok(fs.readdirSync(path.dirname(copy)).some((n) => n !== path.basename(copy) && read(path.join(path.dirname(copy), n)) === `S${good}`), 'la copia vieja se conserva');
+});
+
+// 3.8.1 (Tauri): Electron's sealing (v10) is read once and sealed again in the app's own format (ORB2); the old files are
+// kept aside, never deleted, and an app that only reads the old format (Electron run again) still finds its secret.
+test('el secreto sellado por Electron se vuelve a sellar en ORB2 sin perder nada, también por una app asíncrona', async () => {
+  const { loadApprovalSecret, staleSealing } = await import('../src/engine/approval-secret.mjs');
+  const base = newBase();
+  const dir = path.join(base, 'datos'); const copy = path.join(base, 'claves', 'orb-1234abcd.enc');
+  const enc = path.join(dir, 'clave.enc'); const secret = 'd4'.repeat(32);
+  const later = (v) => new Promise((r) => setTimeout(() => r(v), 2));
+  // Tauri: seals ORB2 and opens ORB2 and v10, asynchronously (host.seal / host.unseal).
+  const tauri = {
+    seal: (hex) => later(Buffer.from(`ORB2${hex}`)),
+    unseal: async (b) => { const s = b.toString('latin1'); await later(); if (s.startsWith('ORB2')) return s.slice(4); if (s.startsWith('v10')) return s.slice(3); throw new Error('no abre'); },
+    stale: staleSealing
+  };
+  // Electron: only v10.
+  const electron = { seal: (hex) => Buffer.from(`v10${hex}`), unseal: (b) => { const s = b.toString('latin1'); if (!s.startsWith('v10')) throw new Error('no abre'); return s.slice(3); } };
+  assert.equal(staleSealing(Buffer.from('v10xx')), 'v10');
+  assert.equal(staleSealing(Buffer.from('ORB2xx')), false);
+  assert.equal(staleSealing(Buffer.from('otro')), false);
+  put(enc, `v10${secret}`); put(copy, `v10${secret}`);
+  assert.equal(await loadApprovalSecret({ dir, copy, ...tauri }), secret);
+  assert.equal(read(enc), `ORB2${secret}`);
+  assert.equal(read(copy), `ORB2${secret}`);
+  const asideCore = fs.readdirSync(dir).filter((n) => /^clave\.\d{8}T\d{6}Z\.v10\.enc$/.test(n));
+  assert.equal(asideCore.length, 1); assert.equal(read(path.join(dir, asideCore[0])), `v10${secret}`);
+  const asideCopy = fs.readdirSync(path.dirname(copy)).filter((n) => n.endsWith('.v10.enc'));
+  assert.equal(asideCopy.length, 1); assert.equal(read(path.join(path.dirname(copy), asideCopy[0])), `v10${secret}`);
+  assert.equal(fs.readdirSync(dir).some((n) => n.endsWith('.tmp')), false);
+  // A second start: nothing more to do.
+  assert.equal(await loadApprovalSecret({ dir, copy, ...tauri }), secret);
+  assert.equal(fs.readdirSync(dir).length, 2);
+  // Electron run again on the same data cannot read ORB2: it finds the v10 kept aside, the same secret (never a new one).
+  assert.equal(await loadApprovalSecret({ dir, copy, ...electron }), secret);
+  assert.equal(read(enc), `v10${secret}`);
+  // And Tauri afterwards: the same secret again, sealed as ORB2.
+  assert.equal(await loadApprovalSecret({ dir, copy, ...tauri }), secret);
+  assert.equal(read(enc), `ORB2${secret}`);
+  // Sealing fails half way (DPAPI refused): the v10 stays where it was and still opens.
+  put(enc, `v10${secret}`);
+  assert.equal(await loadApprovalSecret({ dir, copy, ...tauri, seal: async () => { throw new Error('DPAPI'); } }), secret);
+  assert.equal(read(enc), `v10${secret}`);
 });

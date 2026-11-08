@@ -121,21 +121,58 @@ pub fn webview2_vars<I: IntoIterator<Item = String>>(names: I) -> Vec<String> {
   names.into_iter().filter(|n| n.to_ascii_uppercase().starts_with("WEBVIEW2_")).collect()
 }
 
-/// What the engine may ask the app to do, once checked.
+/// Node's own variables (NODE_OPTIONS, NODE_PATH, NODE_EXTRA_CA_CERTS…), dropped from the engine's environment: Node
+/// would run --require / --import code from them inside the engine. ORB_NODE is the app's (set for every start).
+pub fn node_vars<I: IntoIterator<Item = String>>(names: I) -> Vec<String> {
+  names.into_iter().filter(|n| n.to_ascii_uppercase().starts_with("NODE_")).collect()
+}
+
+/// What the engine may ask the app to do, once checked. The app picks the program of a terminal, an editor or an action
+/// itself (tools.rs): the engine only names the kind.
 #[derive(Debug, PartialEq)]
 pub enum HostRequest {
   OpenUrl(String),
   OpenPath(PathBuf),
-  Spawn { cmd: String, args: Vec<String>, cwd: PathBuf },
+  OpenTerminal { dir: PathBuf, choice: String },
+  OpenEditor { which: String, dir: PathBuf },
+  RunAction { command: String, dir: PathBuf, choice: String },
+  Seal(String),
+  Unseal(Vec<u8>),
 }
 
 const LOOPBACK: [&str; 3] = ["localhost", "127.0.0.1", "[::1]"];
+pub const TERMINAL_CHOICES: [&str; 5] = ["auto", "warp", "wt", "powershell", "cmd"];
 
-/// A web page over https, a page of this PC (a project's preview) or Warp's link to open a tab in a folder; folders only,
-/// never a file to run; a program as an absolute path or a bare name with its arguments as a list (never a shell line)
-/// and an existing folder to start in. The same rules as src/engine/host.mjs › checkHostRequest.
+/// A folder of this PC: absolute with a drive letter, never a network or device path (\\server\share, \\?\…, \\.\…):
+/// only looking at one of those already sends this user's Windows credentials to that server.
+pub fn local_path(p: &str) -> bool {
+  let b = p.as_bytes();
+  !p.is_empty()
+    && p.len() < 2000
+    && !p.contains('\0')
+    && b.len() >= 3
+    && b[0].is_ascii_alphabetic()
+    && b[1] == b':'
+    && (b[2] == b'\\' || b[2] == b'/')
+}
+
+fn choice(params: &Value) -> String {
+  let c = params.get("choice").and_then(Value::as_str).unwrap_or("auto");
+  if TERMINAL_CHOICES.contains(&c) { c } else { "auto" }.to_string()
+}
+
+/// A web page over https, a page of this PC (a project's preview) or Warp's link to open a tab in a folder; existing
+/// folders of this PC only, never a file to run; a terminal, an editor or an action by kind; the secret (64 hex characters
+/// to seal, a base64 blob of at most 16 KB to open). The same rules as src/engine/host.mjs › checkHostRequest.
 pub fn check_host(method: &str, params: &Value, is_dir: impl Fn(&Path) -> bool) -> Result<HostRequest, String> {
   let text = |k: &str| params.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+  let folder = |k: &str, error: &str| {
+    let d = text(k);
+    if !local_path(&d) || !is_dir(Path::new(&d)) {
+      return Err(error.to_string());
+    }
+    Ok(PathBuf::from(d))
+  };
   match method {
     "host.openUrl" => {
       let u = tauri::Url::parse(&text("url")).map_err(|_| "enlace no válido".to_string())?;
@@ -147,32 +184,37 @@ pub fn check_host(method: &str, params: &Value, is_dir: impl Fn(&Path) -> bool) 
       }
       Ok(HostRequest::OpenUrl(u.to_string()))
     }
-    "host.openPath" => {
-      let p = PathBuf::from(text("path"));
-      if !p.is_absolute() || !is_dir(&p) {
-        return Err("solo carpetas".into());
+    "host.openPath" => Ok(HostRequest::OpenPath(folder("path", "solo carpetas")?)),
+    "host.openTerminal" => Ok(HostRequest::OpenTerminal { dir: folder("dir", "carpeta no válida")?, choice: choice(params) }),
+    "host.openEditor" => {
+      let which = text("which");
+      if !matches!(which.as_str(), "cursor" | "vscode") {
+        return Err("editor no válido".into());
       }
-      Ok(HostRequest::OpenPath(p))
+      Ok(HostRequest::OpenEditor { which, dir: folder("dir", "carpeta no válida")? })
     }
-    "host.spawnDetached" => {
-      let cmd = text("cmd");
-      let bare = !cmd.contains('/') && !cmd.contains('\\');
-      if cmd.is_empty() || cmd.len() > 1000 || cmd.contains(['\r', '\n', '\0']) || !(Path::new(&cmd).is_absolute() || bare) {
-        return Err("programa no válido".into());
+    "host.runAction" => {
+      let command = text("command");
+      if command.trim().is_empty() || command.len() > 2000 || command.contains('\0') {
+        return Err("acción no válida".into());
       }
-      let args = match params.get("args").unwrap_or(&json!([])) {
-        Value::Array(a) if a.len() <= 50 => a
-          .iter()
-          .map(|x| x.as_str().filter(|s| s.len() <= 4000 && !s.contains('\0')).map(str::to_string))
-          .collect::<Option<Vec<_>>>()
-          .ok_or_else(|| "argumentos no válidos".to_string())?,
-        _ => return Err("argumentos no válidos".into()),
-      };
-      let cwd = PathBuf::from(text("cwd"));
-      if !cwd.is_absolute() || !is_dir(&cwd) {
-        return Err("carpeta no válida".into());
+      Ok(HostRequest::RunAction { command, dir: folder("dir", "carpeta no válida")?, choice: choice(params) })
+    }
+    "host.seal" => {
+      let t = text("text");
+      if t.len() != 64 || !t.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+        return Err("secreto no válido".into());
       }
-      Ok(HostRequest::Spawn { cmd, args, cwd })
+      Ok(HostRequest::Seal(t))
+    }
+    "host.unseal" => {
+      use base64::Engine as _;
+      let d = text("data");
+      let blob = if d.is_empty() || d.len() > 22_000 { None } else { base64::engine::general_purpose::STANDARD.decode(d).ok() };
+      match blob {
+        Some(b) if !b.is_empty() && b.len() <= crate::secrets::MAX_BLOB => Ok(HostRequest::Unseal(b)),
+        _ => Err("datos no válidos".into()),
+      }
     }
     _ => Err(format!("host: {method} desconocido")),
   }
@@ -243,9 +285,18 @@ mod tests {
   }
 
   #[test]
+  fn node_variables_never_reach_the_engine() {
+    let names = ["PATH", "NODE_OPTIONS", "node_path", "NODE_EXTRA_CA_CERTS", "NODE_TLS_REJECT_UNAUTHORIZED", "ORB_NODE", "NODEJS_X"];
+    assert_eq!(
+      node_vars(names.iter().map(|s| s.to_string())),
+      vec!["NODE_OPTIONS", "node_path", "NODE_EXTRA_CA_CERTS", "NODE_TLS_REJECT_UNAUTHORIZED"]
+    );
+  }
+
+  #[test]
   fn host_requests_are_checked() {
-    let dir = std::env::temp_dir();
-    let is_dir = |p: &Path| p == dir.as_path();
+    let dir = PathBuf::from("C:\\carpeta");
+    let is_dir = |p: &Path| p == Path::new("C:\\carpeta");
     let ok = |m: &str, p: Value| check_host(m, &p, is_dir);
     assert_eq!(ok("host.openUrl", json!({"url": "https://github.com/x"})), Ok(HostRequest::OpenUrl("https://github.com/x".into())));
     assert!(ok("host.openUrl", json!({"url": "http://localhost:5173/"})).is_ok());
@@ -257,16 +308,37 @@ mod tests {
     assert_eq!(ok("host.openPath", json!({"path": dir})), Ok(HostRequest::OpenPath(dir.clone())));
     assert!(ok("host.openPath", json!({"path": "relativa"})).is_err());
     assert!(ok("host.openPath", json!({"path": "C:\\otra\\archivo.exe"})).is_err());
+    // Network and device paths are refused before anything looks at them.
+    let anything = |_: &Path| true;
+    for p in ["\\\\servidor\\recurso", "\\\\?\\C:\\carpeta", "\\\\.\\C:", "//servidor/x", "\\carpeta", "C:carpeta"] {
+      assert!(check_host("host.openPath", &json!({ "path": p }), anything).is_err(), "{p}");
+      assert!(check_host("host.openTerminal", &json!({ "dir": p }), anything).is_err(), "{p}");
+    }
+    // By kind: the engine never names a program (an extra field is ignored).
     assert_eq!(
-      ok("host.spawnDetached", json!({"cmd": "powershell.exe", "args": ["-NoExit"], "cwd": dir})),
-      Ok(HostRequest::Spawn { cmd: "powershell.exe".into(), args: vec!["-NoExit".into()], cwd: dir.clone() })
+      ok("host.openTerminal", json!({"dir": dir, "choice": "cmd", "cmd": "C:\\malo.exe"})),
+      Ok(HostRequest::OpenTerminal { dir: dir.clone(), choice: "cmd".into() })
     );
-    assert!(ok("host.spawnDetached", json!({"cmd": "C:\\apps\\wt.exe", "args": [], "cwd": dir})).is_ok());
-    assert!(ok("host.spawnDetached", json!({"cmd": "sub\\prog.exe", "args": [], "cwd": dir})).is_err());
-    assert!(ok("host.spawnDetached", json!({"cmd": "cmd.exe", "args": "/c calc", "cwd": dir})).is_err());
-    assert!(ok("host.spawnDetached", json!({"cmd": "cmd.exe", "args": [1], "cwd": dir})).is_err());
-    assert!(ok("host.spawnDetached", json!({"cmd": "cmd.exe\n", "args": [], "cwd": dir})).is_err());
-    assert!(ok("host.spawnDetached", json!({"cmd": "cmd.exe", "args": [], "cwd": "C:\\no-existe"})).is_err());
+    assert_eq!(ok("host.openTerminal", json!({"dir": dir, "choice": "otra"})), Ok(HostRequest::OpenTerminal { dir: dir.clone(), choice: "auto".into() }));
+    assert_eq!(ok("host.openEditor", json!({"which": "vscode", "dir": dir})), Ok(HostRequest::OpenEditor { which: "vscode".into(), dir: dir.clone() }));
+    assert!(ok("host.openEditor", json!({"which": "notepad", "dir": dir})).is_err());
+    assert_eq!(
+      ok("host.runAction", json!({"command": "npm run dev", "dir": dir, "choice": "wt"})),
+      Ok(HostRequest::RunAction { command: "npm run dev".into(), dir: dir.clone(), choice: "wt".into() })
+    );
+    assert!(ok("host.runAction", json!({"command": "  ", "dir": dir})).is_err());
+    assert!(ok("host.runAction", json!({"command": "x", "dir": "C:\\no-existe"})).is_err());
+    assert!(ok("host.spawnDetached", json!({"cmd": "cmd.exe", "args": [], "cwd": dir})).is_err());
+    // The secret.
+    let hex = "ab".repeat(32);
+    assert_eq!(ok("host.seal", json!({ "text": hex })), Ok(HostRequest::Seal(hex.clone())));
+    for t in ["", "xyz", &"AB".repeat(32), &"ab".repeat(33)] {
+      assert!(ok("host.seal", json!({ "text": t })).is_err(), "{t}");
+    }
+    assert_eq!(ok("host.unseal", json!({"data": "T1JCMnh5eg=="})), Ok(HostRequest::Unseal(b"ORB2xyz".to_vec())));
+    for d in ["", "no es base64!", &"A".repeat(30_000)] {
+      assert!(ok("host.unseal", json!({ "data": d })).is_err());
+    }
     assert!(ok("host.borrarTodo", json!({})).is_err());
   }
 }

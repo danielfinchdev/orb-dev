@@ -5,6 +5,8 @@ mod engine;
 mod host;
 mod pipes;
 mod protocol;
+mod secrets;
+mod tools;
 mod window;
 
 use serde_json::{json, Value};

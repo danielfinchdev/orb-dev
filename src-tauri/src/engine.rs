@@ -83,6 +83,10 @@ impl Engine {
     })
   }
 
+  /// Electron's Local State in the app's data folder: the key of the secrets Orb 3.8.0 sealed (read only, never changed).
+  pub fn local_state(&self) -> PathBuf {
+    self.cfg.user_data.join("Local State")
+  }
   pub fn home(&self) -> Option<PathBuf> {
     self.home.lock().unwrap().clone()
   }
@@ -114,6 +118,11 @@ impl Engine {
   fn spawn(self: &Arc<Self>) -> Result<(), String> {
     let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
     let mut cmd = Command::new(&self.cfg.node);
+    // Node reads NODE_OPTIONS (--require, --import: code run inside the engine), NODE_PATH and the rest of NODE_* from the
+    // environment; Electron had them off (its fuse). None of the user's reaches the engine or what it starts.
+    for name in protocol::node_vars(std::env::vars_os().filter_map(|(k, _)| k.into_string().ok())) {
+      cmd.env_remove(name);
+    }
     cmd
       .arg(self.cfg.src.join("engine").join("engine.mjs"))
       .env("ORB_ENGINE_STDIO", "1")
@@ -199,9 +208,9 @@ impl Engine {
   pub async fn start(&self) -> Result<Value, String> {
     let mut rx = self.status.subscribe();
     self.status.send_replace(Status::Starting);
-    // D3: no secret yet (host.unseal comes with the secrets step): the engine uses the plain key of a new workspace and
-    // refuses one whose key Electron sealed (engine.mjs › start).
-    let start = json!({ "type": "start", "home": self.home(), "version": self.cfg.version, "secret": null, "browser": null, "userData": self.cfg.user_data });
+    // The engine opens the approval secret itself with this app's sealing (hostSecret: host.seal / host.unseal, DPAPI in
+    // secrets.rs, which still reads Electron's v10 and seals it again as ORB2): src/engine/approval-secret.mjs.
+    let start = json!({ "type": "start", "home": self.home(), "version": self.cfg.version, "secret": null, "hostSecret": true, "browser": null, "userData": self.cfg.user_data });
     if !self.send(&start) {
       let e = self.t_name("sys.main.engineOff");
       self.status.send_replace(Status::Failed(e.clone()));

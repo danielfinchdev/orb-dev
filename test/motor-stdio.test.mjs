@@ -12,7 +12,7 @@ import { PassThrough } from 'node:stream';
 import { spawn } from 'node:child_process';
 import { stdioTransport, encode, decode } from '../src/engine/stdio.mjs';
 import { checkHostRequest } from '../src/engine/host.mjs';
-import { writeJson, loadConfig, merge } from '../src/core/home.mjs';
+import { writeJson, loadConfig, merge, homeKey } from '../src/core/home.mjs';
 import { METHODS } from '../src/core/permissions.mjs';
 
 test('stdio: one JSON message per line, and nothing else ever reaches stdout', async () => {
@@ -36,7 +36,7 @@ test('stdio: one JSON message per line, and nothing else ever reaches stdout', a
   await until(() => closed, 'stdin cerrado');
 });
 
-test('host requests are checked by the app: https, this PC\'s pages and Warp\'s tab; folders; programs as a list', () => {
+test('host requests are checked by the app: https, this PC\'s pages and Warp\'s tab; local folders; programs by kind; the secret', () => {
   const isDir = (p) => p === path.resolve('C:/carpeta') || p === path.resolve('/carpeta');
   const dir = path.resolve('/carpeta');
   assert.deepEqual(checkHostRequest('host.openUrl', { url: 'https://github.com/x' }), { url: 'https://github.com/x' });
@@ -49,11 +49,25 @@ test('host requests are checked by the app: https, this PC\'s pages and Warp\'s 
   assert.deepEqual(checkHostRequest('host.openPath', { path: dir }, { isDir }), { path: dir });
   assert.throws(() => checkHostRequest('host.openPath', { path: 'relativa' }, { isDir }));
   assert.throws(() => checkHostRequest('host.openPath', { path: path.resolve('/otra/archivo.exe') }, { isDir }));
-  assert.deepEqual(checkHostRequest('host.spawnDetached', { cmd: 'powershell.exe', args: ['-NoExit'], cwd: dir }, { isDir }), { cmd: 'powershell.exe', args: ['-NoExit'], cwd: dir });
-  assert.ok(checkHostRequest('host.spawnDetached', { cmd: path.resolve('/apps/wt.exe'), args: [], cwd: dir }, { isDir }));
-  assert.throws(() => checkHostRequest('host.spawnDetached', { cmd: 'sub\\prog.exe', args: [], cwd: dir }, { isDir }));
-  assert.throws(() => checkHostRequest('host.spawnDetached', { cmd: 'cmd.exe', args: '/c calc', cwd: dir }, { isDir }));
-  assert.throws(() => checkHostRequest('host.spawnDetached', { cmd: 'cmd.exe', args: [], cwd: path.resolve('/no-existe') }, { isDir }));
+  // A network or device path is never touched (looking at it already sends Windows' credentials to that server).
+  for (const p of ['\\\\servidor\\recurso', '\\\\?\\C:\\carpeta', '\\\\.\\C:', '//servidor/recurso']) {
+    assert.throws(() => checkHostRequest('host.openPath', { path: p }, { isDir: () => true }), undefined, p);
+    assert.throws(() => checkHostRequest('host.openTerminal', { dir: p }, { isDir: () => true }), undefined, p);
+  }
+  // A terminal, an editor or an action by kind: the app picks the program; the engine never names one.
+  assert.deepEqual(checkHostRequest('host.openTerminal', { dir, choice: 'cmd', cmd: 'C:\\malo.exe' }, { isDir }), { dir, choice: 'cmd' });
+  assert.deepEqual(checkHostRequest('host.openTerminal', { dir, choice: 'otra' }, { isDir }), { dir, choice: 'auto' });
+  assert.deepEqual(checkHostRequest('host.openEditor', { which: 'vscode', dir }, { isDir }), { which: 'vscode', dir });
+  assert.throws(() => checkHostRequest('host.openEditor', { which: 'notepad', dir }, { isDir }));
+  assert.deepEqual(checkHostRequest('host.runAction', { command: 'npm run dev', dir, choice: 'wt' }, { isDir }), { command: 'npm run dev', dir, choice: 'wt' });
+  assert.throws(() => checkHostRequest('host.runAction', { command: '  ', dir }, { isDir }));
+  assert.throws(() => checkHostRequest('host.runAction', { command: 'x', dir: path.resolve('/no-existe') }, { isDir }));
+  assert.throws(() => checkHostRequest('host.spawnDetached', { cmd: 'cmd.exe', args: [], cwd: dir }, { isDir }));
+  // The secret: 64 hex characters to seal, a base64 blob to open.
+  assert.deepEqual(checkHostRequest('host.seal', { text: 'ab'.repeat(32) }), { text: 'ab'.repeat(32) });
+  for (const text of ['', 'xyz', 'AB'.repeat(32), 'ab'.repeat(33)]) assert.throws(() => checkHostRequest('host.seal', { text }), undefined, text);
+  assert.ok(checkHostRequest('host.unseal', { data: Buffer.from('ORB2xyz').toString('base64') }));
+  for (const data of ['', 'no es base64!', 'A'.repeat(30_000)]) assert.throws(() => checkHostRequest('host.unseal', { data }));
   assert.throws(() => checkHostRequest('host.borrarTodo', {}));
 });
 
@@ -97,16 +111,21 @@ test('the engine over stdio: starts, answers, asks the app (host.*) and ends whe
   assert.equal(hostAnswers.at(-1).params.path, home);
   await assert.rejects(call('app.openIn', { which: 'notepad', dir: home }));
   await assert.rejects(call('app.openIn', { which: 'explorer', dir: 'relativa' }));
-  // A project's action: a program started by the app (outside the engine), its command never through a shell line.
+  // core itself and its secrets: only with a fresh unlock of the master password (none here: refused, nothing asked).
+  const asked = hostAnswers.length;
+  await assert.rejects(call('app.openIn', { which: 'explorer', dir: path.join(home, 'core') }));
+  await assert.rejects(call('app.openIn', { which: 'vscode', dir: path.join(home, 'core', 'secretos') }));
+  await assert.rejects(call('app.openIn', { which: 'explorer', dir: '\\\\servidor\\recurso' }));
+  assert.equal(hostAnswers.length, asked);
+  // A project's action: the app picks the terminal and starts it (outside the engine); the engine only gives the command.
   assert.equal(await call('app.runAction', { dir: home, command: 'npm run dev' }), true);
-  const run = hostAnswers.at(-1);
-  assert.equal(run.method, 'host.spawnDetached');
-  assert.equal(run.params.cwd, home);
-  assert.ok(run.params.args.some((a) => a.includes('npm run dev')), JSON.stringify(run.params));
-  // Ctrl+J with the CMD chosen in Ajustes › Interfaz.
+  assert.equal(hostAnswers.at(-1).method, 'host.runAction');
+  assert.deepEqual(hostAnswers.at(-1).params, { command: 'npm run dev', dir: home, choice: 'cmd' });
+  // Ctrl+J with the CMD chosen in Ajustes › Interfaz: the app answers with the terminal's name.
+  answer = (m) => ({ ok: true, result: m.method === 'host.openTerminal' ? 'CMD' : true });
   assert.equal(await call('app.openTerminal', { dir: home }), 'CMD');
-  assert.equal(hostAnswers.at(-1).method, 'host.spawnDetached');
-  assert.equal(hostAnswers.at(-1).params.cwd, home);
+  assert.equal(hostAnswers.at(-1).method, 'host.openTerminal');
+  assert.deepEqual(hostAnswers.at(-1).params, { dir: home, choice: 'cmd' });
   // The app could not do it: the window gets the reason.
   answer = () => ({ ok: false, error: 'el sistema no pudo abrirlo' });
   await assert.rejects(call('app.openIn', { which: 'explorer', dir: home }), /no pudo abrirlo/);
@@ -123,7 +142,7 @@ test('the engine over stdio: starts, answers, asks the app (host.*) and ends whe
 // 3.8.1 (D3): what the Tauri app asks the engine around the start (it has no Node of its own): where the workspace is,
 // the first-run setup, moving to another workspace and the texts of its own dialogs. The same rules as Electron's main
 // process (src/engine/desktop-home.mjs).
-test('the engine answers the Tauri app: locate, setup, switchHome, texts, and refuses a sealed secret it cannot open', async (t) => {
+test('the engine answers the Tauri app: locate, setup, switchHome, texts; a sealed secret only with the app\'s sealing', async (t) => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-shell-'));
   t.after(() => { try { fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch { /* temp folder */ } });
   const userData = path.join(tmp, 'datos-app'); const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
@@ -132,8 +151,20 @@ test('the engine answers the Tauri app: locate, setup, switchHome, texts, and re
   t.after(() => { try { child.kill(); } catch { /* gone */ } });
   let stderr = ''; child.stderr.on('data', (c) => { stderr += c; });
   const seen = [];
-  readline.createInterface({ input: child.stdout }).on('line', (line) => { const m = decode(line); if (m) seen.push(m); });
   const send = (m) => child.stdin.write(encode(m));
+  // The app's sealing (host.seal / host.unseal), faked: ORB2 + the text, and Electron's v10 + the text.
+  const sealings = [];
+  const host = (m) => {
+    if (m.method === 'host.seal') return { ok: true, result: { data: Buffer.from(`ORB2${m.params.text}`).toString('base64') } };
+    const b = Buffer.from(m.params.data, 'base64').toString('latin1');
+    if (b.startsWith('ORB2')) return { ok: true, result: { text: b.slice(4) } };
+    if (b.startsWith('v10')) return { ok: true, result: { text: b.slice(3) } };
+    return { ok: false, error: 'formato desconocido' };
+  };
+  readline.createInterface({ input: child.stdout }).on('line', (line) => {
+    const m = decode(line); if (!m) return;
+    if (m.type === 'host') { sealings.push(m.method); send({ type: 'hostReply', id: m.id, ...host(m) }); } else seen.push(m);
+  });
   let n = 0;
   const ask = async (type, fields = {}) => {
     const id = ++n; send({ type, id, ...fields });
@@ -151,24 +182,42 @@ test('the engine answers the Tauri app: locate, setup, switchHome, texts, and re
   const texts = await ask('texts', { home });
   assert.equal(texts['sys.dialog.closeAnyway'], 'Close anyway');
   assert.ok(texts['sys.main.engineOff']);
-  assert.ok(Object.keys(texts).every((k) => /^sys\.(main|dialog)\./.test(k)));
+  assert.ok(Object.keys(texts).every((k) => /^sys\.(main|dialog|terminal)\./.test(k)));
+  assert.ok(texts['sys.terminal.notInstalled']);
   // Another folder only if it is a workspace.
   assert.deepEqual(await ask('switchHome', { userData, target: base }), { ok: false });
   assert.deepEqual(await ask('switchHome', { userData, target: home }), { ok: true });
   // Not a message the engine knows: nothing comes back for it, and the engine keeps answering.
   send({ type: 'toString', id: 99 });
-  // A secret sealed by Electron that this app cannot open yet: the engine does not start with a new plain key.
+  // A sealed secret (in core, or only its copy outside: core would be put back from it) and an app that does not seal:
+  // the engine never starts with a new plain key instead.
+  const secret = 'c3'.repeat(32);
   const sealed = path.join(home, 'core', 'datos', 'clave.enc');
-  fs.writeFileSync(sealed, 'v10-sellada');
-  send({ type: 'start', home, version: 'prueba', userData });
-  const refused = await until(() => seen.find((m) => m.type === 'started'), 'started', 30000);
-  assert.equal(refused.ok, false);
-  assert.match(refused.error, /clave cifrada|encrypted key/);
-  fs.rmSync(sealed);
+  const copy = path.join(userData, 'claves', `${homeKey(home)}.enc`);
+  for (const file of [sealed, copy]) {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, `v10${secret}`);
+    seen.length = 0;
+    send({ type: 'start', home, version: 'prueba', userData });
+    const refused = await until(() => seen.find((m) => m.type === 'started'), 'started', 30000);
+    assert.equal(refused.ok, false, file);
+    assert.match(refused.error, /clave cifrada|encrypted key/);
+    fs.rmSync(file);
+  }
+  assert.deepEqual(sealings, []);
+  // Tauri seals it (hostSecret): Electron's v10 opens, is sealed again as ORB2 and the old file is kept aside, in core and
+  // outside (Local State is the app's business: never touched here).
+  fs.writeFileSync(sealed, `v10${secret}`);
+  fs.writeFileSync(copy, `v10${secret}`);
   seen.length = 0;
-  send({ type: 'start', home, version: 'prueba', userData });
+  send({ type: 'start', home, version: 'prueba', userData, hostSecret: true });
   const started = await until(() => seen.find((m) => m.type === 'started'), 'started', 30000);
   assert.ok(started.ok, started.error);
+  assert.ok(sealings.includes('host.unseal') && sealings.includes('host.seal'));
+  assert.equal(fs.readFileSync(sealed, 'latin1'), `ORB2${secret}`);
+  assert.equal(fs.readFileSync(copy, 'latin1'), `ORB2${secret}`);
+  assert.ok(fs.readdirSync(path.dirname(sealed)).some((f) => /^clave\.\d{8}T\d{6}Z\.v10\.enc$/.test(f)), 'el v10 de core, aparte');
+  assert.ok(fs.readdirSync(path.dirname(copy)).some((f) => f.endsWith('.v10.enc')), 'el v10 de la copia, aparte');
   assert.equal(seen.some((m) => m.id === 99), false);
   child.stdin.end();
   assert.equal(await Promise.race([exited, wait(10000).then(() => 'sigue vivo')]), 0, stderr.slice(-2000));

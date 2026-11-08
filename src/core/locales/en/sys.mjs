@@ -178,7 +178,7 @@ export default {
   // Start-up
   'sys.engine.notHome': 'not an Orb folder: {home}',
   'sys.engine.notStarted': '{name} has not started yet',
-  'sys.engine.sealedSecret': 'This test build cannot open the encrypted key of this workspace yet. Use the installed app.',
+  'sys.engine.sealedSecret': 'Windows could not open the encrypted key of this workspace. Close Orb and open it again.',
   // Scheduled tasks
   'sys.schedules.badEvery': 'every must be {list}',
   'sys.schedules.badTime': 'at_time must use the HH:MM format',

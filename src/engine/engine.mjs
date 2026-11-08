@@ -12,9 +12,10 @@ import { PRODUCT } from '../core/product.mjs';
 import { DESKTOP } from '../core/permissions.mjs';
 
 import { stdioTransport } from './stdio.mjs';
-import { attachHost, hostReply } from './host.mjs';
+import { attachHost, hostReply, hostCall } from './host.mjs';
+import { loadApprovalSecret, hostSealing } from './approval-secret.mjs';
 import { appMethods } from './api-app.mjs';
-import { locateHome, setupHome, switchHome, secretsCopy, adoptOldKeyNames, secretDir } from './desktop-home.mjs';
+import { locateHome, setupHome, switchHome, secretCopy, secretsCopy, adoptOldKeyNames, secretDir } from './desktop-home.mjs';
 import { loadConfig } from '../core/home.mjs';
 import es from '../core/locales/es.mjs';
 import en from '../core/locales/en.mjs';
@@ -50,19 +51,28 @@ process.on('uncaughtException', (error) => log(`uncaughtException: ${error?.stac
 process.on('unhandledRejection', (error) => log(`unhandledRejection: ${error?.stack ?? error}`));
 
 let mirror = null; // 3.8: the copy of core\secretos outside the workspace (the app's data folder), when the app gives one
+const validSecret = (s) => typeof s === 'string' && /^[0-9a-f]{64}$/.test(s);
+// 3.8.1, Tauri: the approval secret, opened and kept by the engine (src/engine/approval-secret.mjs) with the app's sealing
+// (host.seal / host.unseal: DPAPI in Rust, which still reads Electron's v10). The app is asked to seal once first: if it
+// cannot (no DPAPI), the engine does not start rather than set the sealed key aside for a new one.
+async function secretFromApp(home, userData) {
+  try { const probe = await hostCall('host.seal', { text: '0'.repeat(64) }); if (!probe?.data) throw new Error('sin datos'); } catch { throw new Error(tr('sys.engine.sealedSecret')); }
+  return loadApprovalSecret({ dir: secretDir(home), copy: secretCopy(userData, home), ...hostSealing(hostCall) });
+}
 // userData: the app's data folder, from an app that leaves the copies outside the workspace to the engine (Tauri; Electron
-// passes keep itself).
-async function start(home, version, secret, browser, keep = null, userData = null) {
+// passes keep itself). hostSecret: that app seals the secret itself when asked (host.seal / host.unseal).
+async function start(home, version, secret, browser, keep = null, userData = null, hostSecret = false) {
   if (!home || !path.isAbsolute(home)) throw new Error(tr('sys.engine.notHome', { home }));
   if (typeof userData === 'string' && path.isAbsolute(userData)) {
     adoptOldKeyNames(userData, home);
     keep ??= secretsCopy(userData, home);
-    // 3.8.1: the Tauri app does not open the secret sealed by Electron yet (host.unseal comes in a later step). Without it
-    // the engine would fall back to a new plain key and this workspace's approvals and backups would no longer open.
-    if (!(typeof secret === 'string' && /^[0-9a-f]{64}$/.test(secret)) && fs.existsSync(path.join(secretDir(home), 'clave.enc'))) throw new Error(tr('sys.engine.sealedSecret'));
+    if (!validSecret(secret) && hostSecret === true) secret = await secretFromApp(home, userData);
+    // An app that cannot open a sealed secret (in core or its copy outside, which would be put back): never a new plain
+    // key instead, or this workspace's approvals and backups would no longer open.
+    if (!validSecret(secret) && [path.join(secretDir(home), 'clave.enc'), secretCopy(userData, home)].some((f) => fs.existsSync(f))) throw new Error(tr('sys.engine.sealedSecret'));
   }
   // The approval secret comes from the app (kept encrypted by Windows); without it, the file fallback is used.
-  if (typeof secret === 'string' && /^[0-9a-f]{64}$/.test(secret)) ctx.secret = Buffer.from(secret, 'hex');
+  if (validSecret(secret)) ctx.secret = Buffer.from(secret, 'hex');
   // The agents' browser lives in the app (main process): its pipe and token go to the agents' MCP servers.
   if (typeof browser?.pipe === 'string' && /^[0-9a-f]{48}$/.test(browser.token ?? '') && /orb-navegador-[0-9a-f]{16}(\.sock)?$/.test(browser.pipe)) ctx.browser = { pipe: browser.pipe, token: browser.token };
   if (typeof keep === 'string' && path.isAbsolute(keep)) mirror = keep;
@@ -367,8 +377,9 @@ function shutdown() {
 // 3.8.1: what an app without Node of its own (Tauri) asks the engine before and around the start, answered as
 // { type: 'reply', id, ok, result | error }: where the workspace is, the first-run setup, moving to another workspace
 // (src/engine/desktop-home.mjs, the same rules as Electron's main process) and the texts of its own dialogs and errors
-// (sys.main.* and sys.dialog.*) in the language of the settings. Not API methods: the window cannot send them.
-const SHELL_TEXTS = /^sys.(main|dialog)./;
+// (sys.main.*, sys.dialog.* and sys.terminal.*: the terminals and editors it opens) in the language of the settings.
+// Not API methods: the window cannot send them.
+const SHELL_TEXTS = /^sys\.(main|dialog|terminal)\./;
 const APP_MESSAGES = {
   locate: (m) => ({ home: locateHome({ userData: String(m.userData ?? ''), packaged: m.packaged === true, separateData: m.separateData === true, documents: m.documents ?? null, profile: m.profile ?? null }) }),
   setup: (m) => ({ home: setupHome({ userData: String(m.userData ?? ''), base: m.base, assistantName: m.assistantName, userName: m.userName, language: m.language }) }),
@@ -384,7 +395,7 @@ const APP_MESSAGES = {
 transport.on(async (msg) => {
   if (!msg || typeof msg !== 'object') return;
   if (msg.type === 'start') {
-    try { transport.send({ type: 'started', ok: true, result: await start(msg.home, msg.version, msg.secret, msg.browser, msg.keep, msg.userData) }); }
+    try { transport.send({ type: 'started', ok: true, result: await start(msg.home, msg.version, msg.secret, msg.browser, msg.keep, msg.userData, msg.hostSecret) }); }
     catch (error) { transport.send({ type: 'started', ok: false, error: error.message }); }
     return;
   }
