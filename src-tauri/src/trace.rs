@@ -36,7 +36,9 @@ mod imp {
 
   pub fn mark(what: &str, detail: Value) {
     if let Some(t) = get() {
-      let line = json!({ "t": t.start.elapsed().as_millis() as u64, "thread": std::thread::current().name().unwrap_or("?"), "what": what, "detail": detail });
+      // w: the wall clock (Unix ms), to set the marks beside a test's own timings.
+      let w = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+      let line = json!({ "t": t.start.elapsed().as_millis() as u64, "w": w, "thread": std::thread::current().name().unwrap_or("?"), "what": what, "detail": detail });
       let _ = writeln!(t.file.lock().unwrap(), "{line}");
     }
   }

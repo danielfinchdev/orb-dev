@@ -152,6 +152,14 @@ pub async fn handle(app: &AppHandle, req: BrowserRequest) -> Result<Value, Strin
       trace(app, json!({ "frame": data.len() }));
       if app.get_webview_window(LABEL).is_some() {
         let _ = app.emit_to(LABEL, "pip:frame", format!("data:image/jpeg;base64,{data}"));
+        // The emit is only queued for Orb's UI thread (a script of ~100–200 KB for the little window). The engine sends
+        // the next picture when this one is answered: answered once the UI thread has got through it (a no-op queued
+        // after it), so pictures never pile up there and Orb's window keeps answering (the flood measurements showed
+        // a growing backlog of 0.1 → 1.4 s stalls). At most 2 s: a busy UI drops pictures, never the other way round.
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        if app.run_on_main_thread(move || { let _ = tx.send(()); }).is_ok() {
+          let _ = tokio::time::timeout(std::time::Duration::from_secs(2), rx).await;
+        }
       }
       Ok(json!(true))
     }

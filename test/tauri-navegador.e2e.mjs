@@ -191,11 +191,12 @@ try {
   })().catch((error) => { seen = { error: error.message }; });
   // While the flooding page is open: Orb's window keeps answering, and the memory of Orb.exe is watched.
   // Measured without blocking this script's event loop (a synchronous PowerShell call would make a call look slow).
-  let slowest = 0; let peakMB = 0; const times = [];
+  let slowest = 0; let peakMB = 0; const times = []; const calls = [];
   const floodWatch = setInterval(async () => {
     const t0 = performance.now();
     try { await call('app.state', {}); } catch { /* closing */ }
     const ms = Math.round(performance.now() - t0); times.push(ms); slowest = Math.max(slowest, ms);
+    calls.push({ at: Date.now() - ms, ms }); // when it started (wall clock, as ORB_TRACE's marks), to set slow ones beside them
   }, 250);
   const memWatch = setInterval(() => {
     execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `(Get-Process -Id ${app.pid}).PrivateMemorySize64`], (error, out) => { if (!error) peakMB = Math.max(peakMB, Number(out.trim()) / 1048576); });
@@ -209,6 +210,7 @@ try {
   clearInterval(floodWatch); clearInterval(memWatch); if (trapWatch) clearInterval(trapWatch);
   const at = (i) => String(out[i] ?? '');
   fs.writeFileSync(path.join(tmp, 'guion-respuestas.json'), JSON.stringify(out, null, 1));
+  fs.writeFileSync(path.join(tmp, 'app-state-llamadas.json'), JSON.stringify(calls));
 
   check('abre, escribe, pulsa y captura', () => {
     assert.match(at(0), /Página: Prueba/);
