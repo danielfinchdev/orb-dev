@@ -132,7 +132,9 @@ export const answersOrb = (m) => !(m?.origin?.kind && m.origin.kind !== 'human')
 // 3.8.1: Claude loads the skills of core by itself (a plugin); agents without this get them in their brief.
 export const nativeSkills = true;
 
-export const permissionModeOf = (p) => (p === 'total' ? 'bypassPermissions' : p === 'editar' ? 'acceptEdits' : 'default');
+// 3.8.2: «total» is no longer bypassPermissions (which never calls canUseTool, so Orb's guard did not run): Claude asks
+// for what it would ask in «default» and the guard allows all but the protected set (src/core/guard.mjs).
+export const permissionModeOf = (p) => (p === 'editar' ? 'acceptEdits' : 'default');
 
 // options: exe, cwd, model, reasoning, permission, resumeId, newSessionId, forkSession, mcpServers, env, systemPrompt
 // (appended to Claude Code's own), tools ({ allowed, disallowed }), addDirs, budgetUsd, internalDir, log, onEvent, skills
@@ -157,7 +159,7 @@ export function createLive(o) {
     const paths = [toolInput?.file_path, toolInput?.path, toolInput?.notebook_path].filter(Boolean);
     // Glob and Grep patterns are checked too (where they reach).
     const patterns = [toolInput?.pattern, toolInput?.glob].filter((x) => typeof x === 'string' && x);
-    const verdict = decide({ permission, tool: toolName, command, paths, patterns: toolName === 'Grep' ? patterns.slice(1) : patterns, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang });
+    const verdict = decide({ permission, tool: toolName, command, paths, patterns: toolName === 'Grep' ? patterns.slice(1) : patterns, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()) });
     if (verdict.decision === 'allow') return { behavior: 'allow', updatedInput: toolInput };
     if (verdict.decision === 'deny') return { behavior: 'deny', message: `Orb no lo permite: ${verdict.reason}.` };
     // 3.1: summary: what the agent itself says the command is for (Claude's Bash tool asks it for a description).
@@ -283,7 +285,10 @@ export function createLive(o) {
     if (o.tools?.allowed?.length) options.allowedTools = o.tools.allowed;
     const disallowed = [...(o.tools?.disallowed ?? []), ...(permission === 'leer' ? ['Bash', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit'] : permission === 'probar' ? ['Edit', 'Write', 'NotebookEdit', 'MultiEdit'] : [])];
     if (disallowed.length) options.disallowedTools = disallowed;
-    if (permission === 'total') options.allowDangerouslySkipPermissions = true;
+    // 3.8.2: «Acceso total al PC» (a chat without a project): Claude in Chrome too (Claude Code's --chrome; its tools are
+    // MCP tools, so they reach canUseTool and are denied once the access is taken back). Computer use is not a Claude
+    // Code option: not offered.
+    if (o.fullPc) options.extraArgs = { ...options.extraArgs, chrome: null };
     if (o.budgetUsd) options.maxBudgetUsd = o.budgetUsd;
     // 3.8.1: the skills of core that are on, as a plugin Orb makes (src/core/extensions.mjs › exposeSkills): Claude lists
     // them («orb-skills:<name>») and loads one when it fits. Checked with the real Claude Code (supportedCommands).

@@ -138,9 +138,11 @@ const RISKY_ANYWHERE = ['git push', 'git -C * push', 'git remote add', 'git remo
   'gh pr ', 'gh release', 'gh repo', 'gh api', 'gh secret', 'npm publish', 'pnpm publish', 'yarn publish', 'cargo publish', 'twine upload',
   'rm -rf', 'rm -fr', 'taskkill', 'Stop-Process', 'stop-process', 'Invoke-Expression', 'invoke-expression', 'Set-ExecutionPolicy',
   'schtasks', 'Restart-Computer', 'Stop-Computer', 'reg add', 'reg delete', 'diskpart', 'bcdedit', '-EncodedCommand', '-encodedcommand'];
-export function cursorRules(permission, internalDir) {
-  if (permission === 'total') return [];
-  const deny = [...RISKY_SHELL.map((c) => `Shell(${c})`), ...RISKY_ANYWHERE.map((c) => `Shell(*${c}*)`)];
+export function cursorRules(permission, internalDir, { android = false } = {}) {
+  // 3.8.2: «total» drops the risky-command rules, never the protected folders below (Cursor cannot ask Orb's guard).
+  const deny = permission === 'total' ? [] : [...RISKY_SHELL.map((c) => `Shell(${c})`), ...RISKY_ANYWHERE.map((c) => `Shell(*${c}*)`)];
+  // 3.8.2: adb by hand only with «total» and «Usar mi móvil Android» (the phone itself goes through Orb's tools, which check the chat's grant).
+  if (!(permission === 'total' && android)) deny.push('Shell(adb)', 'Shell(adb *)', 'Shell(adb.exe *)', 'Shell(*adb.exe*)');
   // «Preguntar antes»: every command would ask; Cursor cannot ask, so it runs none.
   if (permission === 'preguntar') deny.push('Shell(*)');
   // «Revisar y probar»: commands yes, changing files no.
@@ -232,7 +234,7 @@ export function createLive(o) {
     let restore = Object.assign(() => {}, { env: {} });
     const servers = (typeof o.mcpServers === 'function' ? o.mcpServers() : o.mcpServers) ?? {};
     current.promise.finally(() => servers.release?.());
-    try { restore = prepareCursorFolder(o.cwd, { mcpServers: servers, deny: cursorRules(permission, o.internalDir) }); }
+    try { restore = prepareCursorFolder(o.cwd, { mcpServers: servers, deny: cursorRules(permission, o.internalDir, { android: Boolean(o.android?.()) }) }); }
     catch (error) { log(`preparar .cursor: ${error.message}`); }
     current.promise.finally(() => restore());
     const args = [...o.exe.pre, '-p', '--output-format', 'stream-json', '--stream-partial-output', '--trust', '--workspace', o.cwd, '--approve-mcps', '--background-shell-timeout', '60'];

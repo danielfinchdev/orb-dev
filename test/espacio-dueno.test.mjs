@@ -277,7 +277,10 @@ test('lo que Orb guarda fuera del espacio (copias, claves) queda vetado a los ag
     assert.ok(!isOrbData(path.join(internal, 'copias', 'aisladas', 'x', 'a.txt'), internal, os.tmpdir()));
     const v = decide({ permission: 'editar', tool: 'Bash', command: `del /q "${path.join(copies, 'Orb-1234abcd')}\\*.orbbak"`, paths: [], patterns: [], internalDir: internal, cwd: os.tmpdir() });
     assert.equal(v.decision, 'deny');
-    assert.equal(decide({ permission: 'editar', tool: 'Bash', command: `"${path.join(internal, 'herramientas', 'adb', 'adb.exe')}" devices`, paths: [], patterns: [], internalDir: internal, cwd: os.tmpdir() }).decision, 'allow');
+    // 3.8.2: core\herramientas stays open, but adb by hand needs «Acceso total» and «Usar mi móvil Android».
+    const adbRun = { tool: 'Bash', command: `"${path.join(internal, 'herramientas', 'adb', 'adb.exe')}" devices`, paths: [], patterns: [], internalDir: internal, cwd: os.tmpdir() };
+    assert.equal(decide({ ...adbRun, permission: 'editar' }).decision, 'deny');
+    assert.equal(decide({ ...adbRun, permission: 'total', android: true }).decision, 'allow');
     const rules = cursorRules('editar', internal);
     assert.ok(rules.includes(`Read(${copies}/**)`) && rules.includes(`Write(${keys}/**)`));
   } finally { setGuardedRoots([]); }

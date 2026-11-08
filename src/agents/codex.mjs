@@ -89,12 +89,13 @@ export function mcpArgs(servers) {
 }
 
 // The guard decides every action, so Codex asks for anything that is not plainly safe ("untrusted"); the sandbox keeps
-// writes inside the folder. Read-only conversations cannot write at all; "total" runs without sandbox or questions.
+// writes inside the folder. Read-only conversations cannot write at all; "total" runs without sandbox (3.8.2: still asking the guard).
 function policy(permission) {
   // 2.6: read-only also asks Orb's guard (which denies anything that changes something) instead of trusting only the
   // sandbox: this is how a Codex brain coordinates.
   if (permission === 'leer') return { approvalPolicy: 'untrusted', sandbox: 'read-only' };
-  if (permission === 'total') return { approvalPolicy: 'never', sandbox: 'danger-full-access' };
+  // 3.8.2: «total» keeps asking Orb's guard (it allows all but the protected set); it only drops the sandbox.
+  if (permission === 'total') return { approvalPolicy: 'untrusted', sandbox: 'danger-full-access' };
   return { approvalPolicy: 'untrusted', sandbox: 'workspace-write' };
 }
 // 3.6: «Extra» (xhigh) goes through as it is: Orb only offers it for the models whose model/list says they take it.
@@ -165,7 +166,7 @@ export function createLive(o) {
   const live = { sessionId: o.resumeId ?? null, caps, pid: null, get busy() { return Boolean(turn && !turn.done); } };
 
   const guardAsk = async ({ itemId, command, paths = [], tool, kind }) => {
-    const verdict = decide({ permission, tool, kind, command, paths, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang });
+    const verdict = decide({ permission, tool, kind, command, paths, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()) });
     if (verdict.decision !== 'ask') return verdict.decision;
     return approvals.ask({ id: itemId, tool, title: command || paths.join(', ') || tool, reason: verdict.reason, input: clip(command || paths.join(', '), 400) });
   };

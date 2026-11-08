@@ -7,7 +7,11 @@
 //   leer       look only: reading and searching; anything that changes something is denied
 //   editar     (default) edit files and run commands in its folder; risky commands ask first
 //   preguntar  edit files; every command asks first (for when you want to watch closely)
-//   total      no checks at all (asked once when chosen; never from the phone)
+//   total      no questions (asked once when chosen; never from the phone). 3.8.2: in a chat without a project it is
+//              «Acceso total al PC» (the master password, dropped when Orb locks: src/engine/grants.mjs). Whatever the
+//              chat, «total» still goes through this guard: its boundary is the protected set (core but its open folders,
+//              the folders kept outside it, the folder Orb is installed in, «Elementos protegidos» and raising privileges),
+//              which is denied as in every other mode.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -353,7 +357,7 @@ export function protectedHit(text, list = protectedList()) {
 export const touchesProtected = (text, list) => protectedHit(text, list) !== null;
 // decide({ permission, tool, kind, command, paths, patterns, internalDir, cwd, lang }) → (cwd: the agent's folder, to
 // resolve relative paths; lang: language of the reasons, default 'es') { decision: 'allow' | 'ask' | 'deny', reason }
-// Orb's data folder: denied, and in «total» it asks (the user may want an agent to look, but it is never silent).
+// Orb's data folder: denied, whatever the permission (3.8.2: «total» too; it asked before).
 // 3.7: no agent ever raises its privileges, whatever its permission (also «total»): sudo, doas, pkexec, su or
 // run0.
 const ESCALATE = /\b(sudo|doas|pkexec|run0)\b|(^|[;&|(`]|\$\()\s*su(\s|$)|\/etc\/sudoers/i;
@@ -402,11 +406,16 @@ function runsSkillScript(command, internalDir, cwd) {
   const f = norm(realOf(full));
   return rootsOf(path.join(internalDir, 'skills')).some((skills) => f.startsWith(`${skills}\\`) && !f.slice(skills.length + 1).startsWith('.'));
 }
-export function decide({ permission = 'editar', tool, kind, command = '', paths = [], patterns = [], internalDir, cwd, lang = 'es' }) {
+// 3.8.2: a command that runs Android's adb (by name, by path, or Orb's copy in core\herramientas\adb), in any shell.
+// Hardening only, not a boundary (a script can build the name at run time): the adb server itself is stopped when Orb
+// locks (src/engine/android.mjs › stopServer).
+const RUNS_ADB = /(^|[\s;&|(`"'\\/=])adb(\.exe)?(?=$|[\s;&|)`"'])/i;
+export const runsAdb = (command) => RUNS_ADB.test(String(command ?? '')) || RUNS_ADB.test(unquoted(command));
+export function decide({ permission = 'editar', tool, kind, command = '', paths = [], patterns = [], internalDir, cwd, lang = 'es', android = false }) {
   const T = (k) => translate(lang, `msg.guard.${k}`);
   const cls = toolClass(tool, kind);
   const text = [command, ...paths, ...patterns].join(' ');
-  if (linkIntoCore(command, internalDir, cwd)) return { decision: permission === 'total' ? 'ask' : 'deny', reason: T('internalLink') };
+  if (linkIntoCore(command, internalDir, cwd)) return { decision: 'deny', reason: T('internalLink') };
   if (touchesInternal({ command, paths, patterns, internalDir, cwd, read: cls === 'read' })) {
     // 3.8.1: only the general log in core (what a reading tool may see): the reason says how to write to it.
     const logsOnly = cls !== 'read' && !touchesInternal({ command, paths, patterns, internalDir, cwd, read: ['bitacora'] });
@@ -414,11 +423,14 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
     // new version with orb_create_skill, which the user approves).
     const skillsOnly = cls !== 'read' && !logsOnly && !touchesInternal({ command, paths, patterns, internalDir, cwd, read: ['skills'] });
     if (skillsOnly && cls === 'exec' && permission !== 'leer' && !escalates(command) && !protectedHit(text) && runsSkillScript(command, internalDir, cwd)) return { decision: 'ask', reason: T('internalSkillsRun') };
-    return { decision: permission === 'total' ? 'ask' : 'deny', reason: T(logsOnly ? 'internalLogs' : skillsOnly ? 'internalSkills' : 'internal') };
+    return { decision: 'deny', reason: T(logsOnly ? 'internalLogs' : skillsOnly ? 'internalSkills' : 'internal') };
   }
   if (escalates(command)) return { decision: 'deny', reason: T('sudo') };
   const hit = protectedHit(text);
   if (hit) return { decision: 'deny', reason: translate(lang, 'msg.guard.protected', { name: hit }) };
+  // 3.8.2: Android's adb by hand only with «Acceso total» and «Usar mi móvil Android» (android): otherwise the agent has
+  // Orb's own tools (orb_android_*), which check the grant on every call.
+  if (cls !== 'read' && cls !== 'orb' && runsAdb(command) && !(permission === 'total' && android)) return { decision: 'deny', reason: T('adb') };
   if (permission === 'total') return { decision: 'allow', reason: T('full') };
   if (cls === 'read' || cls === 'orb') return { decision: 'allow', reason: T('readOnlyTool') };
   if (permission === 'leer') return { decision: 'deny', reason: T('readOnlyChat') };
