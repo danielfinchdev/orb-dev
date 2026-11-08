@@ -15,9 +15,9 @@ import { ChatBar, BackToList } from '@/components/chat-bar.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
 import { useOrbInbox, useOrbActions } from '@/views/orb/inbox.jsx';
 import { NotificationBell } from '@/components/notification-center.jsx';
-import { confirm, form } from '@/components/dialogs.jsx';
+import { confirm } from '@/components/dialogs.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
-import { Input, Spinner } from '@/components/ui/basic.jsx';
+import { Spinner } from '@/components/ui/basic.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { Switch, Tip, BubbleTip, Popover, PopoverTrigger, PopoverContent } from '@/components/ui/overlay.jsx';
@@ -589,7 +589,6 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const infoOpen = useStore((s) => s.orbInfo?.type === 'chat') && !embedded;
   const headProject = conv ? conv.project ?? null : workProject?.name ?? null;
   const waitingYou = useStore((s) => id != null && s.tasks.some((x) => x.conversation_id === id && x.status === 'awaiting_approval'));
-  const rename = () => form(t('chat.renameTitle'), { initial: { title: conv.title }, body: (v, set) => <Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={80} data-testid="rename-input" />, ok: t('session.save'), onOk: async (v) => { const r = await call('conversations.update', { id: conv.id, title: v.title.trim() || conv.title }); refreshSoon(); return r; } });
   const chatActions = useOrbActions(conv ? { kind: 'conversation', id: conv.id, title: conv.title, done: conv.status === 'done', pinned: Boolean(item?.pinned), muted: Boolean(item?.muted), unread: 0 } : null);
 
   return (
@@ -622,7 +621,6 @@ export function ChatView({ route, onConversation, project: inProject }) {
             <BubbleTip title={t('chats.more')}><DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={t('chats.more')} data-testid="orb-chat-more"><Ellipsis /></Button></DropdownMenuTrigger></BubbleTip>
             <DropdownMenuContent align="end" className="w-56">
               {embedded ? null : <DropdownMenuItem onSelect={() => openOrbInfo({ type: 'chat' })} data-testid="more-info"><Info />{t('orbchats.info')}</DropdownMenuItem>}
-              <DropdownMenuItem onSelect={rename} data-testid="more-rename"><PencilLine />{t('orbchats.rename')}</DropdownMenuItem>
               {slim ? <DropdownMenuItem onSelect={() => (app.paused ? act(call('control.resume'), t('chat.resumed')) : act(call('control.pause'), t('chat.paused')))} data-testid={app.paused ? 'bar-resume' : 'bar-pause'}>{app.paused ? <Play /> : <Pause />}{app.paused ? t('bar.resume') : t('bar.pause')}</DropdownMenuItem> : null}
               {chatActions.filter((a) => a.id !== 'info').map((a) => <div key={a.id}>{a.danger ? <DropdownMenuSeparator /> : null}<DropdownMenuItem variant={a.danger ? 'destructive' : undefined} onSelect={a.run} data-testid={`more-${a.id}`}><a.icon />{a.label}</DropdownMenuItem></div>)}
             </DropdownMenuContent>

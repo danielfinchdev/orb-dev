@@ -7,7 +7,7 @@
 // «Esperando tu aprobación», how its last task ended, else its last line) and the unread count. Right click or ⋯ (PC) and
 // a long press (phone) open the chat's menu: info, pin, mute, mark read, complete or reopen, delete.
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ListTodo, FolderKanban, CalendarClock, PenTool, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, Sparkles } from 'lucide-react';
+import { Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ListTodo, FolderKanban, CalendarClock, PenTool, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, Sparkles, PencilLine } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
@@ -15,7 +15,8 @@ import { AgentIcon } from '@/components/agent-icon.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { createProjectFlow } from '@/components/project-actions.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, DropdownMenuCheckboxItem, Collapsible, CollapsibleTrigger, CollapsibleContent, Dialog, DialogContent, DialogTitle, DialogDescription, Tip } from '@/components/ui/overlay.jsx';
-import { confirm } from '@/components/dialogs.jsx';
+import { confirm, form } from '@/components/dialogs.jsx';
+import { Input } from '@/components/ui/basic.jsx';
 import { useStore, go, call, act, newChat, orbAct, loadOrbInbox, openOrbInfo, closeOrbInfo, getState, phoneLayout, fullPc, refreshSoon, setState } from '@/lib/store.js';
 import { orbItems, orbProgress, groupOrb, shortTime } from '@/lib/inbox.js';
 import { sameItem } from '@/lib/memo.js';
@@ -89,7 +90,9 @@ export function useOrbActions(item) {
   const t = useT();
   if (!item) return [];
   // 3.6: a direct conversation with an agent: pinned and muted like the others; completed through the sidebar's mark.
+  const rename = { id: 'rename', icon: PencilLine, label: t('orbchats.rename'), run: () => renameChat(item, t) };
   if (item.kind === 'session') return [
+    rename,
     item.pinned ? { id: 'unpin', icon: PinOff, label: t('chats.unpin'), run: () => orbAct('inbox.unpin', conversationRef(item)) } : { id: 'pin', icon: Pin, label: t('chats.pin'), run: () => orbAct('inbox.pin', conversationRef(item)) },
     item.muted ? { id: 'unmute', icon: Bell, label: t('chats.unmute'), run: () => orbAct('inbox.mute', { ...conversationRef(item), muted: false }) } : { id: 'mute', icon: BellOff, label: t('chats.mute'), run: () => orbAct('inbox.mute', { ...conversationRef(item), muted: true }) },
     item.done
@@ -99,6 +102,7 @@ export function useOrbActions(item) {
   const ref = conversationRef(item);
   return [
     { id: 'info', icon: Info, label: t('orbchats.info'), run: () => { openOrbItem(item); openOrbInfo({ type: 'chat' }); } },
+    rename,
     item.pinned ? { id: 'unpin', icon: PinOff, label: t('chats.unpin'), run: () => orbAct('inbox.unpin', ref) } : { id: 'pin', icon: Pin, label: t('chats.pin'), run: () => orbAct('inbox.pin', ref) },
     item.muted ? { id: 'unmute', icon: Bell, label: t('chats.unmute'), run: () => orbAct('inbox.mute', { ...ref, muted: false }) } : { id: 'mute', icon: BellOff, label: t('chats.mute'), run: () => orbAct('inbox.mute', { ...ref, muted: true }) },
     ...(item.unread ? [{ id: 'read', icon: CheckCheck, label: t('chats.markRead'), run: () => orbAct('inbox.markRead', ref) }] : []),
@@ -107,6 +111,16 @@ export function useOrbActions(item) {
       : { id: 'complete', icon: CircleCheck, label: t('orbchats.complete'), run: () => act(call('conversations.update', { id: item.id, done: true })).then(refreshSoon) },
     { id: 'delete', icon: Trash2, label: t('orbchats.delete'), danger: true, run: () => deleteChat(item, t) }
   ];
+}
+// 3.8.2: «Renombrar» from the list's ⋯ (and the chat's own ⋯): the same title a chat or an agent's conversation already has.
+export function renameChat(item, t) {
+  const method = item.kind === 'session' ? 'sessions.update' : 'conversations.update';
+  return form(t('chat.renameTitle'), {
+    initial: { title: item.title ?? '' },
+    body: (v, set) => <Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={80} data-testid="rename-input" />,
+    ok: t('session.save'),
+    onOk: async (v) => { const r = await call(method, { id: item.id, title: v.title.trim() || item.title }); refreshSoon(); loadOrbInbox(); return r; }
+  });
 }
 export async function deleteChat(item, t) {
   if (!(await confirm(t('orbchats.deleteTitle', { title: item.title }), t('orbchats.deleteBody'), { ok: t('orbchats.delete'), danger: true }))) return false;
