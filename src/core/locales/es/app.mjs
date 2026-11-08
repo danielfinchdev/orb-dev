@@ -21,7 +21,6 @@ export default {
   'app.linkNoShortCode': "Tu Orb no admite el código corto. Escanea el código QR o pega su enlace.",
   'app.scanPreparing': "Se está instalando el lector de códigos QR. Vuelve a intentarlo en unos segundos.",
   'app.dictateUnavailable': "El dictado no está disponible en este móvil.",
-  'app.dictateDenied': "Falta el permiso del micrófono. Actívalo en los ajustes de Android.",
   'app.sharedImage': "Imagen compartida: {path}",
   'app.noticeFrom': "{name} · Notificación",
   'app.pushDeniedApp': "Las notificaciones de Orb están desactivadas. Actívalas en los ajustes de Android.",

@@ -1,6 +1,7 @@
-// 3.5, the Android app (android-app/, src/ui/lib/app-bridge.js): what it reads from a QR or a typed code
-// (src/ui/lib/link-payload.js), which bridge the page gets, which addresses it may use, and that the phone access lets
-// the app's own page (another origin: http://localhost) in, with every message still sealed with the phone's key.
+// 3.5, the Android app (3.8.1: Tauri's Android app, src-tauri/gen/android; src/ui/lib/app-bridge.js): what it reads from
+// a QR or a typed code (src/ui/lib/link-payload.js), which bridge the page gets, which addresses it may use, and that the
+// phone access lets the app's own page (another origin: http://tauri.localhost) in, with every message still sealed with
+// the phone's key.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -75,23 +76,32 @@ test('qué puente tiene la página: el del escritorio, el de la app o el del nav
 
 test('la app de Android se compila aparte y no entra en el instalador del PC', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-  // The PC's package carries src (without the window's sources), the engine's packages and package.json: never android-app.
+  // The PC's package carries src (without the window's sources), the engine's packages and package.json: never the app.
   const resources = fs.readFileSync(path.join(ROOT, 'scripts', 'tauri-resources.mjs'), 'utf8');
   assert.match(resources, /copy\(src, path\.join\(dest, 'src'\)/);
-  assert.doesNotMatch(resources, /android-app/);
+  assert.doesNotMatch(resources, /android|renderer-android/);
   assert.match(pkg.scripts['android:build'], /android-build\.mjs/);
-  const cap = JSON.parse(fs.readFileSync(path.join(ROOT, 'android-app', 'capacitor.config.json'), 'utf8'));
-  assert.equal(cap.appId, 'dev.orb.app'); assert.equal(cap.appName, 'Orb');
-  assert.equal(cap.server.androidScheme, 'http', 'la página de la app es http://localhost (el origen que el PC deja pasar)');
-  const manifest = fs.readFileSync(path.join(ROOT, 'android-app', 'android', 'app', 'src', 'main', 'AndroidManifest.xml'), 'utf8');
+  assert.equal(pkg.scripts.tauri, 'tauri', 'Gradle builds the Rust part through `npm run tauri`');
+  assert.ok(!fs.existsSync(path.join(ROOT, 'android-app')), '3.8.1: the Capacitor app is gone');
+  for (const dep of Object.keys({ ...pkg.dependencies, ...pkg.devDependencies })) assert.doesNotMatch(dep, /capacitor/, dep);
+  const conf = JSON.parse(fs.readFileSync(path.join(ROOT, 'src-tauri', 'tauri.conf.json'), 'utf8'));
+  assert.equal(conf.identifier, 'dev.orb.app', 'the same applicationId: the update installs over 3.8.0');
+  assert.equal(conf.productName, 'Orb');
+  const android = JSON.parse(fs.readFileSync(path.join(ROOT, 'src-tauri', 'tauri.android.conf.json'), 'utf8'));
+  assert.equal(android.build.frontendDist, '../src/renderer-android');
+  assert.match(android.build.beforeBuildCommand, /android-web\.mjs/);
+  assert.equal(android.bundle.android.minSdkVersion, 24);
+  assert.match(android.app.security.csp, /connect-src 'self' data: blob: ipc: http: https:;/, 'the page talks to the PC it is linked with');
+  const manifest = fs.readFileSync(path.join(ROOT, 'src-tauri', 'gen', 'android', 'app', 'src', 'main', 'AndroidManifest.xml'), 'utf8');
   assert.match(manifest, /android:allowBackup="false"/);
   assert.match(manifest, /android\.intent\.action\.SEND/);
   assert.match(manifest, /network_security_config/);
   const ignore = fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf8');
-  for (const x of ['android-app/www/', '*.jks', '*.apk']) assert.ok(ignore.includes(x), x);
+  for (const x of ['src/renderer-android/', '*.jks', '*.apk']) assert.ok(ignore.includes(x), x);
 });
 
-// The phone access with the app's page: another origin (http://localhost), let in with CORS; still sealed end to end.
+// The phone access with the app's page: another origin (3.8.1 http://tauri.localhost; 3.8.0's http://localhost until the
+// phone updates), let in with CORS; still sealed end to end.
 let t; let engine; let n = 0; const pending = new Map(); let port;
 const call = (method, params = {}) => new Promise((resolve, reject) => { const id = ++n; pending.set(id, { resolve, reject }); engine.send({ type: 'call', id, method, params }); });
 const raw = (method, pathname, headers = {}, body = null) => new Promise((resolve, reject) => {
@@ -112,9 +122,12 @@ before(async () => {
 after(() => { engine?.send({ type: 'shutdown' }); t?.cleanup(); });
 
 test('el PC deja pasar la página de la app (CORS) y a nadie más; todo sigue cifrado', async () => {
-  const pre = await raw('OPTIONS', '/api/call', { Origin: 'http://localhost', 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type,x-orb-device' });
+  const APP = 'http://tauri.localhost';
+  const pre = await raw('OPTIONS', '/api/call', { Origin: APP, 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type,x-orb-device' });
   assert.equal(pre.status, 204);
-  assert.equal(pre.headers['access-control-allow-origin'], 'http://localhost');
+  assert.equal(pre.headers['access-control-allow-origin'], APP);
+  const old = await raw('OPTIONS', '/api/call', { Origin: 'http://localhost', 'Access-Control-Request-Method': 'POST' });
+  assert.equal(old.headers['access-control-allow-origin'], 'http://localhost', 'the 3.8.0 app until the phone updates');
   assert.match(pre.headers['access-control-allow-headers'], /X-Orb-Device/);
   assert.equal((await raw('OPTIONS', '/api/call', { Origin: 'https://atacante.example' })).status, 403);
   assert.equal((await raw('POST', '/api/call', { Origin: 'https://atacante.example', 'Content-Type': 'application/json' }, '{}')).status, 403, 'otra web: fuera');
@@ -126,15 +139,15 @@ test('el PC deja pasar la página de la app (CORS) y a nadie más; todo sigue ci
   // Both steps of linking (3.8, the master password never sent) from the app's page (its Origin).
   const allowed = [];
   const appFetch = async (u, init) => {
-    const r = await raw('POST', new URL(u).pathname, { Origin: 'http://localhost', 'Content-Type': 'application/json' }, init.body);
+    const r = await raw('POST', new URL(u).pathname, { Origin: APP, 'Content-Type': 'application/json' }, init.body);
     allowed.push(r.headers['access-control-allow-origin']);
     return new Response(r.body, { status: r.status });
   };
   const linked = await C.linkDevice({ base: 'http://app', pcPub, secret: pairingSecret(q), via: q.via, name: 'Pixel 9 (app)', kind: 'phone', v: 4, min: 2, password: 'contraseña del PC', fetch: appFetch });
-  assert.deepEqual(allowed, ['http://localhost', 'http://localhost'], 'las respuestas llevan el permiso para la app');
+  assert.deepEqual(allowed, [APP, APP], 'las respuestas llevan el permiso para la app');
   const { id, key } = linked;
   const req = C.seal(key, { t: Date.now(), m: 'me', b: null }, C.AAD.request(id));
-  const me = await raw('POST', '/api/me', { Origin: 'http://localhost', 'Content-Type': 'application/json', 'X-Orb-Device': id }, JSON.stringify(req));
+  const me = await raw('POST', '/api/me', { Origin: APP, 'Content-Type': 'application/json', 'X-Orb-Device': id }, JSON.stringify(req));
   assert.equal(me.status, 200);
   const msg = C.open(key, JSON.parse(me.body), C.AAD.response(id));
   assert.equal(msg.r, req.n); assert.equal(msg.result.device, 'Pixel 9 (app)');
@@ -146,7 +159,7 @@ test('el PC deja pasar la página de la app (CORS) y a nadie más; todo sigue ci
 // content area, and the «o» and the «•» apart even at mdpi and hdpi (H1c-fix: they touched there and read as a blob).
 test('el icono pequeño de los avisos de Android: silueta blanca «o•» en todas las densidades', async () => {
   const { PNG } = (await import('pngjs')).default;
-  const res = path.join(ROOT, 'android-app', 'android', 'app', 'src', 'main', 'res');
+  const res = path.join(ROOT, 'src-tauri', 'gen', 'android', 'app', 'src', 'main', 'res');
   assert.ok(!fs.existsSync(path.join(res, 'drawable', 'ic_stat_orb.xml')), 'fuera el orbe con anillo de antes');
   const covered = {};
   for (const [density, k] of Object.entries({ mdpi: 1, hdpi: 1.5, xhdpi: 2, xxhdpi: 3, xxxhdpi: 4 })) {
@@ -177,6 +190,7 @@ test('el icono pequeño de los avisos de Android: silueta blanca «o•» en tod
   const shares = Object.values(covered);
   assert.ok(Math.max(...shares) - Math.min(...shares) < 0.08, JSON.stringify(covered));
   assert.ok(shares.every((s) => s > 0.25 && s < 0.6), JSON.stringify(covered));
-  const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'android-app', 'capacitor.config.json'), 'utf8'));
-  assert.equal(cfg.plugins.LocalNotifications.smallIcon, 'ic_stat_orb');
+  // The app's notifications use it (3.8.1: Notes.kt, no notifications plugin).
+  const notes = fs.readFileSync(path.join(ROOT, 'src-tauri', 'gen', 'android', 'app', 'src', 'main', 'java', 'dev', 'orb', 'app', 'Notes.kt'), 'utf8');
+  assert.equal(notes.match(/setSmallIcon\(R\.drawable\.ic_stat_orb\)/g)?.length, 2);
 });

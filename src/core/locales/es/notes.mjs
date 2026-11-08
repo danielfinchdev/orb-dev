@@ -7,6 +7,7 @@ export default {
   'msg.notes.open': 'Abrir',
   'msg.notes.expired': 'Este aviso ya no sirve. Ábrelo en Orb.',
   'notes.count': '{n} mensajes nuevos',
+  'notes.sending': 'Enviando…',
   'notes.sent': 'Respuesta enviada',
   'notes.allowed': 'Aprobado',
   'notes.denied': 'Rechazado',

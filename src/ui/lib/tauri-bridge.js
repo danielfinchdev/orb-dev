@@ -2,12 +2,12 @@
 // no component changes: engine calls and events go through Rust (src-tauri/src), which checks them again and relays them
 // to the engine over its stdin/stdout. Also what Electron's menu and window did for the page: the keys (zoom, Ctrl+J,
 // F11), Ctrl + mouse wheel, and moving the window by its top bars (WebView2 under Tauri ignores CSS app-region).
-// Does nothing outside Tauri (a phone's browser and the Android app have their own bridge). Must be
-// imported first.
+// Does nothing outside the desktop app (a phone's browser and the Android app, Tauri too, have their own bridge). Must
+// be imported first.
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
-if (window.__TAURI_INTERNALS__ && !window.orb) {
+if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.orb) {
   const listeners = new Map();
   const fire = (event, payload) => {
     for (const fn of listeners.get(event) ?? []) { try { fn(payload); } catch (error) { console.error(error); } }

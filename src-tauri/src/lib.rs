@@ -1,6 +1,20 @@
-// Orb on Tauri 2 (Windows): one window with the React interface (src/renderer), the engine in its own Node process
+// Orb on Tauri 2. Windows: one window with the React interface (src/renderer), the engine in its own Node process
 // (engine.rs) and a narrow, checked bridge between them: the window may call only these commands, and only from Orb's
 // own window (capabilities/main.json and a check of the window's label in each one).
+// Android (mobile.rs) is a thin client of the PC with its own native bits: none of the desktop's modules or commands.
+#[cfg(mobile)]
+mod mobile;
+#[cfg(mobile)]
+pub use mobile::run;
+// The phone's end-to-end encryption, the same as src/core/mobile-crypto.mjs (Android's notification buttons use it).
+mod phone_crypto;
+
+/// Everything below is the desktop app only (one #[cfg(desktop)] per item, so the items keep their paths).
+macro_rules! desktop_only {
+  ($($item:item)*) => { $(#[cfg(desktop)] $item)* };
+}
+
+desktop_only! {
 mod browser;
 mod browser_rules;
 mod delete;
@@ -253,7 +267,6 @@ fn engine_paths(app: &AppHandle) -> (PathBuf, PathBuf) {
   }
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   // Before any webview or the engine exists: no WEBVIEW2_* from the environment (a DevTools port, another data folder)
   // reaches Orb's window, nor the engine and what it starts (protocol::webview2_vars).
@@ -422,4 +435,5 @@ fn startup_failed(error: &str, separate: Option<&std::path::Path>, webview_hint:
     // SAFETY: two valid wide strings for the length of the call; no owner window.
     unsafe { MessageBoxW(None, &HSTRING::from(text), &HSTRING::from("Orb"), MB_OK | MB_ICONERROR) };
   }
+}
 }

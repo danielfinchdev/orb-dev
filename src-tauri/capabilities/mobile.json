@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "The Android app's window: Orb's own Kotlin plugin (the Keystore, share, QR, dictation, notifications) and Android's back button (Tauri's app plugin), nothing else. The PC is reached by the page itself over HTTP (web-bridge.js), never through Tauri.",
+  "windows": ["main"],
+  "platforms": ["android"],
+  "permissions": [
+    "orb-native:default",
+    "core:app:allow-register-listener",
+    "core:app:allow-remove-listener"
+  ]
+}

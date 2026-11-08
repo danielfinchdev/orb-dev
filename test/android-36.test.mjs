@@ -1,5 +1,5 @@
 // 3.6, the Android app and the phone's page: the protocol they speak (and when they must update), and what the app
-// does on its own (app-bridge.js, OrbNativePlugin.java).
+// does on its own (app-bridge.js; 3.8.1: the Tauri app's OrbNativePlugin.kt).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -24,15 +24,16 @@ test('la página y la app hablan el protocolo del Orb y piden actualizar solo si
   assert.match(web, /me: \(\) => me/);
 });
 
-test('la app: sin bloqueo propio en 3.8.0; los recordatorios de 3.7 se anulan una vez', () => {
+test('la app: sin bloqueo propio; su versión es la del paquete', () => {
   const app = read('src/ui/lib/app-bridge.js');
   assert.doesNotMatch(app, /appLock|biometric/, '3.8.0: sin bloqueo con PIN ni huella (llega con la contraseña maestra)');
   assert.doesNotMatch(app, /bots\.reminders\.list/);
-  assert.match(app, /x\.id >= 50_000 && x\.id < 51_000/, '3.8: los recordatorios que dejó 3.7 en el móvil se anulan');
+  // 3.8.1: the reminders 3.7 left pointed at Capacitor's receiver, gone in the Tauri app: Android ignores them.
+  assert.doesNotMatch(app, /50_000/);
   assert.doesNotMatch(app, /config\?\.mobile\?\.preview \?\? 'chat';\n\s*const title/, 'el aviso del chat usa la preferencia de la persona');
-  const java = read('android-app/android/app/src/main/java/dev/orb/app/OrbNativePlugin.java');
-  assert.doesNotMatch(java, /Biometric/);
-  assert.doesNotMatch(read('android-app/android/app/src/main/AndroidManifest.xml'), /USE_BIOMETRIC/);
-  const { version } = JSON.parse(read('package.json'));
-  assert.equal(JSON.parse(read('android-app/package.json')).version, version);
+  const kt = read('src-tauri/gen/android/app/src/main/java/dev/orb/app/OrbNativePlugin.kt');
+  assert.doesNotMatch(kt, /Biometric/);
+  assert.doesNotMatch(read('src-tauri/gen/android/app/src/main/AndroidManifest.xml'), /USE_BIOMETRIC/);
+  // The app's version is the package's (Tauri: versionName and versionCode = major·1 000 000 + minor·1000 + patch).
+  assert.equal(JSON.parse(read('src-tauri/tauri.conf.json')).version, '../package.json');
 });

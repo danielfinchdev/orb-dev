@@ -7,7 +7,28 @@ fn main() {
   // The app's own commands, allowed per window by the capabilities (capabilities/main.json): only Orb's window may call
   // them; the little window of the agents' browser only pip_action (capabilities/pip.json); the agents' pages are not Tauri
   // windows at all (browser.rs).
-  tauri_build::try_build(tauri_build::Attributes::new().app_manifest(tauri_build::AppManifest::new().commands(&[
+  // Android: the Kotlin plugin «orb-native» (gen/android/app/src/main/java/dev/orb/app/OrbNativePlugin.kt), only for the
+  // app's window (capabilities/mobile.json). register/remove_listener are its events (back, shared, a notification's
+  // button that needs the app).
+  let orb_native = tauri_build::InlinedPlugin::new()
+    .commands(&[
+      "secure_get",
+      "secure_set",
+      "secure_remove",
+      "minimize",
+      "info",
+      "take_shared",
+      "scan_qr",
+      "dictate",
+      "notify",
+      "notify_clear",
+      "notify_permission",
+      "take_note_action",
+      "register_listener",
+      "remove_listener",
+    ])
+    .default_permission(tauri_build::DefaultPermissionRule::AllowAllCommands);
+  tauri_build::try_build(tauri_build::Attributes::new().plugin("orb-native", orb_native).app_manifest(tauri_build::AppManifest::new().commands(&[
     "engine_call",
     "app_info",
     "app_retry_start",

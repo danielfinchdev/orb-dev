@@ -18,11 +18,12 @@ const excalidrawFonts = () => ({
   }
 });
 
-// 3.5: `vite build --mode android` builds the Android app's page (android-app/www, scripts/android-build.mjs): the same pages,
-// but this one may talk to the linked Orb at its own address (connect-src). The other builds may talk to Tauri's IPC.
+// 3.5: `vite build --mode android` builds the Android app's page (3.8.1: src/renderer-android, the Tauri app's
+// frontendDist, scripts/android-web.mjs): the same pages, but this one may talk to the linked Orb at its own address
+// (connect-src http: https:, as src-tauri/tauri.android.conf.json says too) besides Tauri's IPC.
 const androidCsp = () => ({
   name: 'orb-android-csp',
-  transformIndexHtml: (html) => html.replace("connect-src 'self' ipc: http://ipc.localhost;", "connect-src 'self' http: https:;")
+  transformIndexHtml: (html) => html.replace("connect-src 'self' ipc: http://ipc.localhost;", "connect-src 'self' ipc: http: https:;")
 });
 
 export default defineConfig(({ mode }) => {
@@ -34,7 +35,7 @@ export default defineConfig(({ mode }) => {
     resolve: { alias: { '@': path.resolve('src/ui') } },
     build: {
       rollupOptions: { input: { index: path.resolve('src/ui/index.html'), pip: path.resolve('src/ui/pip.html') } },
-      outDir: android ? path.resolve('android-app/www') : '../renderer', emptyOutDir: true, target: 'chrome140', sourcemap: false, chunkSizeWarningLimit: 2000, assetsInlineLimit: 0
+      outDir: android ? path.resolve('src/renderer-android') : '../renderer', emptyOutDir: true, target: 'chrome140', sourcemap: false, chunkSizeWarningLimit: 2000, assetsInlineLimit: 0
     }
   };
 });

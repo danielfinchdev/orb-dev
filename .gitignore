@@ -20,13 +20,11 @@ test-results/
 
 # Interfaz compilada (npm run build la genera desde src/ui)
 src/renderer/
+src/renderer-android/
 
-# App Android (npm run android:build): la interfaz copiada, lo compilado y las claves (van en %LOCALAPPDATA%\orb-build-cache)
-android-app/www/
-android-app/android/.gradle/
-android-app/android/app/build/
-android-app/android/build/
-android-app/android/app/src/main/res/drawable-nodpi/av_*.png
+# App Android (npm run android:build): la interfaz (src/renderer-android), lo compilado (src-tauri/gen/android tiene sus
+# propios .gitignore), la imagen de los avisos copiada en cada compilación y las claves (van en orb-build-cache\keys)
+src-tauri/gen/android/app/src/main/res/drawable-nodpi/av_*.png
 *.jks
 *.keystore
 *.apk

@@ -7,6 +7,7 @@ export default {
   'msg.notes.open': 'Open',
   'msg.notes.expired': 'This notification has expired. Open it in Orb.',
   'notes.count': '{n} new messages',
+  'notes.sending': 'Sending…',
   'notes.sent': 'Reply sent',
   'notes.allowed': 'Approved',
   'notes.denied': 'Rejected',

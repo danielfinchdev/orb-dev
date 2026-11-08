@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Orb</string>
+    <string name="main_activity_title">Orb</string>
+    <string name="share_label">Compartir con Orb</string>
+</resources>

@@ -154,14 +154,15 @@ console.log(`✔ build/icons (${PNG_SIZES.join(', ')} px), build/icon.png, build
   console.log('✔ src/ui/public/icon-maskable.png (PWA, maskable)');
 }
 
-// ---- Android launcher (android-app/android/app/src/main/res/mipmap-*) from the same whole-word drawing ----
+// ---- Android launcher (src-tauri/gen/android/app/src/main/res/mipmap-*) from the same whole-word drawing ----
 // Android sizes icons in dp, so every density uses the whole word. Legacy icons (before Android 8): the tile as is
 // (ic_launcher) and cut as a circle (ic_launcher_round). Adaptive icon (Android 8+, 108 dp with the launcher's mask on
 // the middle 72 dp): ic_launcher_background is the tile's gradient edge to edge and ic_launcher_foreground the word and
 // the orb shrunk to 2/3, so they sit in the mask as they sit on the tile (well inside the 66 dp safe circle). Paints
-// stay in canvas units, so the ring around the orb matches the background behind it. The splash shows ic_launcher.
+// stay in canvas units, so the ring around the orb matches the background behind it. The splash shows
+// ic_launcher_foreground on Orb's colour (themes.xml › Theme.Orb.Starting).
 const DENSITIES = { mdpi: 1, hdpi: 1.5, xhdpi: 2, xxhdpi: 3, xxxhdpi: 4 };
-const RES = path.join(ROOT, 'android-app', 'android', 'app', 'src', 'main', 'res');
+const RES = path.join(ROOT, 'src-tauri', 'gen', 'android', 'app', 'src', 'main', 'res');
 const tile = big.layers.find((l) => l.tag === 'rect'), marks = big.layers.filter((l) => l !== tile), c = big.size / 2;
 const square = [[[0, 0], [big.size, 0], [big.size, big.size], [0, big.size]]];
 const circle = [Array.from({ length: 721 }, (_, i) => [c + c * Math.cos((i * Math.PI) / 360), c + c * Math.sin((i * Math.PI) / 360)])];
@@ -183,8 +184,8 @@ console.log(`✔ Android: mipmap-{${Object.keys(DENSITIES).join(',')}}/{${Object
 // is the short «o•» as a white silhouette on transparent: the «o» and the orb, with the pale ring between them cut out.
 // 24 dp per density (24 to 96 px), the drawing in Material's 20 dp content area (2 dp of margin all round). Every pixel
 // is white; only its alpha varies. At low densities (mdpi, hdpi) the cut between the «o» and the orb is widened to at
-// least GAP_PX pixels, so they never touch and read as one blob. (Tauri: the same drawable-* files and the name
-// «ic_stat_orb» go to its notification plugin; today android-app/capacitor.config.json › LocalNotifications.smallIcon.)
+// least GAP_PX pixels, so they never touch and read as one blob. The app's notifications use it by that name
+// (gen/android/…/Notes.kt › R.drawable.ic_stat_orb).
 {
   const GAP_PX = 1.6;
   const o = small.layers.filter((l) => l.tag !== 'rect');

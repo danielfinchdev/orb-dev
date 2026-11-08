@@ -96,3 +96,20 @@ export function actionRoute(note, actionId, { text = null } = {}) {
   }
   return open;
 }
+
+// 3.8.1 (Android, Tauri): the call a notification's button makes by itself, without opening the app (the app's
+// NoteReceiver sends it to the PC natively): { method, params, text? } (text: the parameter the typed reply goes in), or
+// null when the button must open the app (actionRoute then decides there).
+export function backgroundCall(note, actionId) {
+  const a = note?.actions?.find((x) => x.id === actionId);
+  if (!a || a.open) return null;
+  if (actionId === 'reply') {
+    if (!a.input) return null;
+    const r = actionRoute(note, 'reply', { text: '·' });
+    if (!r.call) return null;
+    const [method, { text, ...params }] = r.call;
+    return { method, params, text: 'text' };
+  }
+  const r = actionRoute(note, actionId);
+  return r.call ? { method: r.call[0], params: r.call[1] } : null;
+}

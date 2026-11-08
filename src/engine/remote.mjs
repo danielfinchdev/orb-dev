@@ -159,9 +159,10 @@ export function plainHttpBrowser({ origin, app = false, localAddress, routes = [
 }
 const parseMeta = (d) => { try { return d?.meta ? JSON.parse(d.meta) : {}; } catch { return {}; } };
 const metaVOf = (d) => Number(parseMeta(d).v ?? 2);
-// 3.5: the Android app's page (Capacitor) is not served by this PC but by the app itself (http://localhost): it may call
-// the API, where everything is still sealed with the phone's own key, and its WebView has to be told so (CORS).
-const APP_ORIGINS = new Set(['http://localhost', 'https://localhost', 'capacitor://localhost']);
+// 3.5: the Android app's page is not served by this PC but by the app itself: it may call the API, where everything is
+// still sealed with the phone's own key, and its WebView has to be told so (CORS). 3.8.1 (Tauri): http://tauri.localhost;
+// the Capacitor app of 3.8.0 (http://localhost) until the phone updates.
+const APP_ORIGINS = new Set(['http://tauri.localhost', 'https://tauri.localhost', 'http://localhost', 'https://localhost', 'capacitor://localhost']);
 const APP_CORS = { 'Access-Control-Allow-Methods': 'GET, POST', 'Access-Control-Allow-Headers': 'Content-Type, X-Orb-Device, X-Orb-Auth', 'Access-Control-Allow-Private-Network': 'true', 'Access-Control-Max-Age': '600', Vary: 'Origin' };
 const appOrigin = (req) => { const o = String(req.headers.origin ?? '').toLowerCase(); return APP_ORIGINS.has(o) ? o : null; };
 
@@ -633,7 +634,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const c = board.one('SELECT id, title FROM conversations WHERE id = ?', Number(it.id));
     return c ? { kind: 'conversation', id: c.id, name: c.title || name } : null;
   }
-  // The picture: Orb's own for the Android app (av_orb, copied from the app's icon by scripts/android-build.mjs).
+  // The picture: Orb's own for the Android app (av_orb, copied from the app's icon by scripts/android-web.mjs).
   const dress = (note) => ({ ...note, largeIcon: 'av_orb' });
   // The answers a notification of the phone's browser may give right there: one token per action, only for this device,
   // used once (either answer spends both).

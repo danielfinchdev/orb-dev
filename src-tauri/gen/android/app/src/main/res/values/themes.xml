@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The app: no action bar; Orb's colour behind the page until it draws (no white flash). -->
+    <style name="Theme.orb" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/orb_splash</item>
+    </style>
+
+    <!-- The launch screen (MainActivity › installSplashScreen): Orb's colour with its icon in the middle. -->
+    <style name="Theme.Orb.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/orb_splash</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.orb</item>
+    </style>
+</resources>

@@ -21,7 +21,6 @@ export default {
   'app.linkNoShortCode': "Your Orb does not accept the short code. Scan the QR code or paste its link.",
   'app.scanPreparing': "The QR code reader is being installed. Try again in a few seconds.",
   'app.dictateUnavailable': "Dictation is not available on this phone.",
-  'app.dictateDenied': "Microphone permission is missing. Turn it on in Android settings.",
   'app.sharedImage': "Shared picture: {path}",
   'app.noticeFrom': "{name} · Notification",
   'app.pushDeniedApp': "Orb's notifications are turned off. Turn them on in Android settings.",

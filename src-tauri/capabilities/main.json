@@ -3,6 +3,7 @@
   "identifier": "main",
   "description": "Orb's window: the engine bridge, the window's own controls and the engine's events. Nothing else (no file system, shell or dialog permissions: Rust does those after its own checks).",
   "windows": ["main"],
+  "platforms": ["windows"],
   "permissions": [
     "core:event:allow-listen",
     "core:event:allow-unlisten",

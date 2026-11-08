@@ -99,8 +99,8 @@ export function passwordPageOk({ protocol, hostname } = {}, { app = false } = {}
 // The secret both sides derive the pairing key from (link.mjs › pairAt): the QR's code as is, the short one marked.
 export const pairingSecret = (p) => (p.via === 'code' ? `corto:${normalCode(p.code)}` : p.code);
 
-// Which window.orb the page gets: the desktop app's (Tauri's bridge, already there), the Android app
-// (Capacitor) or the browser's.
+// Which window.orb the page gets: the desktop app's (Tauri's bridge, already there), the Android app (Tauri's Android
+// build: app-bridge.js) or the browser's.
 export function pickBridge({ hasOrb = false, native = false } = {}) {
   if (hasOrb) return 'desktop';
   return native ? 'app' : 'web';

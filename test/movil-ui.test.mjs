@@ -72,17 +72,18 @@ test('«atrás» de Android: cierra lo abierto, sube un nivel y solo sale desde 
   for (const view of ['tasks', 'projects', 'logs', 'schedules', 'tutorials', 'phone', 'more']) assert.deepEqual(backStep({ route: { view } }), { go: { view: 'chats' } }, view);
   assert.deepEqual(backStep({ route: { view: 'chats' } }), { exit: true });
   assert.equal(backStep({ route: { view: 'tasks' }, phone: false }), null, 'el PC no tiene botón atrás');
-  // The app hands Android's back to the page (OrbNativePlugin) and goes to the background on the first screen.
-  const java = read('android-app/android/app/src/main/java/dev/orb/app/OrbNativePlugin.java');
-  assert.match(java, /getOnBackPressedDispatcher\(\)\.addCallback\(getActivity\(\), new OnBackPressedCallback\(true\)/);
-  assert.match(java, /if \(hasListeners\("back"\)\) \{\s*notifyListeners\("back", new JSObject\(\), false\);/);
-  assert.match(java, /public void minimize\(PluginCall call\)[\s\S]*moveTaskToBack\(true\)/);
-  // F5b (A3): the launch intent is replaced only after a share: a notification's action with the app closed reaches
-  // the notifications plugin.
-  assert.match(java, /if \(pending != null\) getActivity\(\)\.setIntent\(/);
-  assert.equal(java.match(/setIntent\(/g).length, 1);
+  // The app hands Android's back to the page (3.8.1: Tauri's app plugin, «back-button»; the WebView's own history is off)
+  // and goes to the background on the first screen.
+  const activity = read('src-tauri/gen/android/app/src/main/java/dev/orb/app/MainActivity.kt');
+  assert.match(activity, /override val handleBackNavigation: Boolean = false/);
+  const kt = read('src-tauri/gen/android/app/src/main/java/dev/orb/app/OrbNativePlugin.kt');
+  assert.match(kt, /fun minimize\(invoke: Invoke\)[\s\S]*moveTaskToBack\(true\)/);
+  // F5b (A3): the launch intent is replaced only after a share or a notification the page takes.
+  assert.equal(kt.match(/activity\.intent = /g).length, 1);
+  assert.match(kt, /if \(pendingShare != null \|\| pendingNote != null\) activity\.intent = /);
+  assert.match(read('src-tauri/capabilities/mobile.json'), /core:app:allow-register-listener/);
   const app = read('src/ui/lib/app-bridge.js');
-  assert.match(app, /orb\.onBack = /); assert.match(app, /n\.addListener\('back'/); assert.match(app, /\.minimize\(\)/);
+  assert.match(app, /orb\.onBack = /); assert.match(app, /addPluginListener\('app', 'back-button'/); assert.match(app, /nat\('minimize'\)/);
   const main = read('src/ui/main.jsx');
   assert.match(main, /bridge\.onBack\(\(\) => \{ if \(back\(\) === 'exit'\) bridge\.minimize\?\.\(\); \}\)/);
   assert.match(main, /app\.backExit/, '«Pulsa otra vez para salir»');
