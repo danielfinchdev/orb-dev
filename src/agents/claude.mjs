@@ -158,8 +158,7 @@ export function createLive(o) {
     const command = toolInput?.command ?? '';
     const paths = [toolInput?.file_path, toolInput?.path, toolInput?.notebook_path].filter(Boolean);
     // Glob and Grep patterns are checked too (where they reach).
-    // 3.8.2: and the address Claude in Chrome opens (the user's own browser): «Elementos protegidos» counts there too.
-    const patterns = [toolInput?.pattern, toolInput?.glob, /^mcp__claude-in-chrome__/.test(toolName) ? toolInput?.url : null].filter((x) => typeof x === 'string' && x);
+    const patterns = [toolInput?.pattern, toolInput?.glob].filter((x) => typeof x === 'string' && x);
     const verdict = decide({ permission, tool: toolName, command, paths, patterns: toolName === 'Grep' ? patterns.slice(1) : patterns, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()) });
     if (verdict.decision === 'allow') return { behavior: 'allow', updatedInput: toolInput };
     if (verdict.decision === 'deny') return { behavior: 'deny', message: `Orb no lo permite: ${verdict.reason}.` };
@@ -286,10 +285,8 @@ export function createLive(o) {
     if (o.tools?.allowed?.length) options.allowedTools = o.tools.allowed;
     const disallowed = [...(o.tools?.disallowed ?? []), ...(permission === 'leer' ? ['Bash', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit'] : permission === 'probar' ? ['Edit', 'Write', 'NotebookEdit', 'MultiEdit'] : [])];
     if (disallowed.length) options.disallowedTools = disallowed;
-    // 3.8.2: «Acceso total al PC» (a chat without a project): Claude in Chrome too (Claude Code's --chrome; its tools are
-    // MCP tools, so they reach canUseTool and are denied once the access is taken back). Computer use is not a Claude
-    // Code option: not offered.
-    if (o.fullPc) options.extraArgs = { ...options.extraArgs, chrome: null };
+    // 3.8.2 (owner's decision D8): no Claude in Chrome (it drives the user's own Chrome); every agent's browser is Orb's
+    // (orb_browser_*), with Orb's browser rules. Under «Acceso total» the PC is used through the terminal.
     if (o.budgetUsd) options.maxBudgetUsd = o.budgetUsd;
     // 3.8.1: the skills of core that are on, as a plugin Orb makes (src/core/extensions.mjs › exposeSkills): Claude lists
     // them («orb-skills:<name>») and loads one when it fits. Checked with the real Claude Code (supportedCommands).

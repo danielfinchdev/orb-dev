@@ -20,6 +20,7 @@ import { useHome, ctx } from '../src/core/context.mjs';
 import { AgentAuth } from '../src/engine/agent-auth.mjs';
 import { redeem } from '../src/mcp/auth-client.mjs';
 import { cursorRules } from '../src/agents/cursor.mjs';
+import { createActions } from '../src/core/browser-protocol.mjs';
 import { permissionModeOf } from '../src/agents/claude.mjs';
 import { pairingQr, newPairing, parseMdns, parseDevices, pairedGuid, parsePackages, installedBetween, inputText, ensureAdb, checkArchive, createAndroid, androidAllowed, shellAllowed, adbStatus } from '../src/engine/android.mjs';
 
@@ -38,9 +39,6 @@ test('guard «total»: todo menos lo protegido (core, lo guardado fuera, la carp
     const desk = path.join(os.homedir(), 'Desktop', 'nota.txt');
     assert.equal(v({ ...base, tool: 'Write', paths: [desk] }), 'allow');
     assert.equal(v({ ...base, tool: 'Bash', command: 'git push origin main' }), 'allow', 'sin preguntas');
-    // Claude in Chrome: the address it opens counts for «Elementos protegidos» (claude.mjs passes it as a pattern).
-    assert.equal(v({ ...base, tool: 'mcp__claude-in-chrome__navigate', patterns: ['https://casa.lan/vaultwarden/#/vault'] }), 'deny');
-    assert.equal(v({ ...base, tool: 'mcp__claude-in-chrome__navigate' }), 'allow', 'Claude in Chrome');
     // The protected set: denied, never asked.
     for (const p of [path.join(core, 'datos', 'orb.db'), path.join(core, 'secretos', 'boveda.enc'), path.join(core, 'orb.json'), path.join(personal, 'plan.md')]) {
       assert.equal(v({ ...base, tool: 'Write', paths: [p] }), 'deny', p);
@@ -87,6 +85,18 @@ test('guard: adb a mano solo con «Acceso total» y el móvil', () => {
   assert.ok(cursorRules('total', core).some((r) => r.includes(path.join(core, 'datos'))), 'Cursor con total: core sigue cerrado');
   // Claude: «total» no longer skips canUseTool (bypassPermissions); Codex keeps asking the guard.
   assert.equal(permissionModeOf('total'), 'default');
+});
+
+test('navegador de los agentes (D8): no abre direcciones de «Elementos protegidos»', async () => {
+  const loaded = [];
+  const { ACTIONS } = createActions({ driver: { load: async (tab, u) => { loaded.push(u); throw new Error('cargada'); } }, T: (k, vars) => `${k} ${JSON.stringify(vars ?? {})}` });
+  await assert.rejects(ACTIONS.open({}, { url: 'https://casa.lan/vaultwarden/#/vault' }), /sys.browser.protected.*vaultwarden/i);
+  await assert.rejects(ACTIONS.open({}, { url: 'vault.bitwarden.com' }), /protected/);
+  assert.deepEqual(loaded, [], 'nada se carga');
+  await assert.rejects(ACTIONS.open({}, { url: 'example.com' }), /cargada/);
+  assert.deepEqual(loaded, ['https://example.com/']);
+  // No Claude in Chrome (the user's own Chrome): Claude Code starts without --chrome.
+  assert.doesNotMatch(fs.readFileSync(new URL('../src/agents/claude.mjs', import.meta.url), 'utf8'), /chrome: null/);
 });
 
 test('permisos: dar acceso total o el móvil pide la contraseña cada vez, solo desde este PC', () => {

@@ -1,6 +1,7 @@
 // 3.8.2 (fase 3): «Acceso total al PC», «Usar mi móvil Android» y el emparejamiento del móvil (Ajustes › Android).
 export default {
   'msg.guard.adb': 'ejecuta adb; usa las herramientas orb_android_* (adb a mano solo con «Acceso total» y «Usar mi móvil Android»)',
+  'sys.browser.protected': 'Orb no abre esta dirección: incluye un elemento protegido ({name}).',
   'msg.grants.chatOnly': 'Solo está disponible en un chat.',
   'msg.grants.totalNeedsPassword': 'El acceso total se activa y se retira en el selector de permisos del chat, con la contraseña maestra.',
   'msg.grants.totalOn': 'Acceso total activado.',

@@ -263,8 +263,8 @@ export class Sessions {
   }
 
   // ---- the live process of a conversation
-  // 3.8.2: «Acceso total al PC» given or taken back starts the agent again at its next turn (its tools and Claude in
-  // Chrome are chosen when it starts).
+  // 3.8.2: «Acceso total al PC» given or taken back starts the agent again at its next turn (its tools are chosen when
+  // it starts).
   liveKey(s, acc) { return [s.agent, acc.id, s.cwd, s.reasoning, fullPc(s) ? 'pc' : ''].join('|'); }
 
   closeLive(id) {
@@ -316,7 +316,7 @@ export class Sessions {
       env: { ...accountEnv(acc), ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
       internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, cfg: ctx.config.agents[s.agent] ?? {},
       // 3.8.2: read on every action (the owner may take it back at any moment): adb by hand needs it (src/core/guard.mjs).
-      android: () => androidAllowed(this.get(s.id)), fullPc: fullPc(s),
+      android: () => androidAllowed(this.get(s.id)),
       skills: liveSkills(), // 3.8.1: the skills of core that are on (Claude and Codex load them themselves)
       onEvent: (ev) => this.onLiveEvent(s.id, ev)
     });
