@@ -229,7 +229,7 @@ function UpdatesCard() {
   }[st.state] ?? '';
   return (
     <Card data-testid="updates-card">
-      <CardHeader><CardTitle>{t('settings.updates')}</CardTitle><CardDescription>{st.portable ? t(st.linux === 'package' ? 'settings.update.linuxPackage' : 'settings.update.portable') : t('settings.updatesDesc')}</CardDescription></CardHeader>
+      <CardHeader><CardTitle>{t('settings.updates')}</CardTitle><CardDescription>{st.portable ? t('settings.update.portable') : t('settings.updatesDesc')}</CardDescription></CardHeader>
       <CardContent className="grid gap-1">
         <div className="text-sm">{t('settings.update.current', { version: st.current })}</div>
         {line ? <div className={cn('text-xs', st.state === 'error' ? 'text-destructive' : 'text-muted-foreground')}>{line}</div> : null}
@@ -616,7 +616,6 @@ const SECTIONS = [
   { id: 'datos', icon: DatabaseBackup, cards: () => <DataCards /> },
   { id: 'avanzado', icon: Wrench, groups: () => ['herramientas', ...(fullPc() ? ['experto'] : [])],
     cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /><ProtectedCard c={c} /><AndroidCard /></SubSection>
-      {/* 2.7.3: Orb Light (the portable .exe) leaves out God mode. */}
       {fullPc() ? <SubSection id="experto" title={t('settings.group.experto')}><ExpertCard c={c} /></SubSection> : null}</> },
   { id: 'acerca', icon: Info, groups: ['contribuye', 'apps'],
     cards: (c, app) => <><AboutCard version={app.version} /><SubSection id="contribuye" title={t('settings.group.contribuye')}><SupportCard /><FeedbackCard /></SubSection><SubSection id="apps" title={t('settings.group.apps')}><MoreAppsCard /></SubSection></> }

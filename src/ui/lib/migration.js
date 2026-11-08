@@ -1,5 +1,5 @@
 // 3.8: what the screen «No se pudieron actualizar tus datos a Orb 3.8» shows (main.jsx › MigrationFailed), kept apart so
-// it can be tested without a window. state: app.migrationState; update: the app's updater (src/main/updater.mjs) or null.
+// it can be tested without a window. state: app.migrationState; update: the app's updater (src-tauri/src/updater.rs) or null.
 
 // The folder that holds a file (the copy of the database, or the database itself), for «Abrir carpeta».
 export const folderOf = (file) => (typeof file === 'string' && /[\\/]/.test(file) ? file.replace(/[\\/][^\\/]*$/, '') : null);

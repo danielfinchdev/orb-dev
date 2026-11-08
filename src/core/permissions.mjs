@@ -19,7 +19,7 @@ const REMOTE = new Set(['phone', 'browser']);
 export const METHODS = Object.freeze({
   // the app and its settings
   'app.state': 'remote', 'app.migrationState': 'pc', 'app.migrationRetry': 'pc', 'app.coreState': 'pc', 'app.coreRepair': 'pc', 'app.layoutPlan': 'pc', 'app.layoutApply': 'pc', 'config.save': 'pc', 'sidebar.complete': 'remote', 'control.pause': 'remote', 'control.resume': 'remote',
-  // 3.8.1: this PC's tools, moved from Electron's main process into the engine (src/engine/api-app.mjs)
+  // 3.8.1: this PC's tools, in the engine (src/engine/api-app.mjs)
   'app.openTerminal': 'pc', 'app.editors': 'pc', 'app.openIn': 'pc', 'app.runAction': 'pc', 'app.feedbackSend': 'pc', 'app.moreApps': 'pc',
   'system.check': 'pc', 'installer.check': 'pc', 'installer.progress': 'pc', 'installer.start': 'pc',
   'activity.list': 'remote', 'usage.get': 'remote', 'usage.now': 'remote', 'models.guide': 'remote', 'models.catalog': 'remote',
@@ -77,7 +77,7 @@ export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter(
 
 // 3.8: what this PC's window may only do right after the master password (a token of 5 minutes, src/engine/api-master.mjs):
 // restoring a backup, checking one or making a new recovery code (the code opens the backups, and a check would try codes),
-// deleting the data of Orb 3.7, unlinking a phone, seeing or changing a connector's keys, opening core (main.mjs asks
+// deleting the data of Orb 3.7, unlinking a phone, seeing or changing a connector's keys, opening core (the app asks
 // master.check) and, in config.save, choosing where the backups go, writing a connector's keys in clear, changing a
 // connector that has keys (its command, its arguments, its name, removing it or one of its keys) and taking a path off
 // «Cosas que nadie toca»; 3.8.1: deleting a project (its folder) and removing a skill or an MCP server from core (or a

@@ -340,7 +340,7 @@ export function SessionView({ route }) {
     if (older) { setItems((prev) => [...older, ...prev]); setMore(older.length >= PAGE); }
   };
   const addImages = (paths) => setImages((prev) => [...new Set([...prev, ...(paths ?? []).filter(Boolean)])].slice(0, 10));
-  // The files' real paths (Tauri answers with a promise, Electron at once); the list is read before the event ends.
+  // The files' real paths (a promise); the list is read before the event ends.
   const fromTransfer = (dt) => Promise.all([...(dt?.files ?? [])].filter((f) => /^image\//.test(f.type)).map((f) => bridge.pathForFile(f))).then((p) => p.filter(Boolean));
   // While the agent works, Enter corrects it on the fly (it reads the message at its next step) and Ctrl+Enter queues
   // the message for after the turn. Agents that cannot be corrected on the fly always queue.

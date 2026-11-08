@@ -1,7 +1,7 @@
 // 3.5: the Android app («Orb», android-app/). The same interface, packed with Capacitor; this file gives web-bridge.js
 // what is different there: the page is the app's own (not served by the Orb), so it says where the linked Orb is, keeps
 // this phone's keys in the Android Keystore, and adds the phone's extras: scan the QR with the camera, dictate, «Share with
-// Orb» from other apps and notifications. Does nothing outside the app (Electron or a phone's browser). Must be imported
+// Orb» from other apps and notifications. Does nothing outside the app (the desktop or a phone's browser). Must be imported
 // before web-bridge.js. The plugins load only inside the app.
 import * as L from './link-payload.js';
 import * as N from '../../core/notes.mjs';

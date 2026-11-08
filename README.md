@@ -2,7 +2,7 @@
 
 # Orb·e: Your pocket director
 
-**Orb** is a desktop app (Windows, also Linux) to build software with the AI coding agents you already pay for. You
+**Orb** is a desktop app for Windows (Linux is planned) to build software with the AI coding agents you already pay for. You
 tell it what you need and its assistant, **Orb·e**, plans the work, splits it between Claude Code, Codex, Cursor,
 Gemini CLI, OpenCode, Qwen Code and GitHub Copilot, picks the right model for each task and reviews the result before
 asking for your OK. An Android app links to it so you can follow and approve the work from your phone.
@@ -37,23 +37,23 @@ pauses Cursor for a day and, if the task was for "any agent", assigns it to anot
 
 From [**Releases → latest**](https://github.com/danielfinchdev/orb-dev/releases/latest):
 
-- **`Orb-<version>-instalador.exe`** (recommended): the full app. It installs for your user, without administrator
-  rights, and updates itself.
-- **`Orb-<version>-light-portable.exe`**: **Orb Light**, the essentials with nothing to install (no minigames, God mode
-  or themes). It tells you about new versions.
+- **`Orb-<version>-instalador.exe`**: the app. It installs for your user, without administrator rights, and updates
+  itself (each update is signed and checked before it installs). Installed over Orb 3.8.0, it replaces it and keeps
+  your data.
 - **`Orb-<version>-android.apk`**: the Android app. How to install and link it: [`docs/ANDROID.md`](docs/ANDROID.md).
-- **`Orb-<version>-linux-x86_64.AppImage`** or **`.deb`** (also arm64): the same app for a Linux desktop. The
-  AppImage updates itself; the `.deb` tells you about new versions. See [`docs/LINUX.md`](docs/LINUX.md).
 
-Windows 10 and 11. Since the app is not signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
+Windows 10 and 11, with Microsoft Edge WebView2 (already part of Windows 11 and of up-to-date Windows 10). Since the app
+is not signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
 
-Every desktop version is published automatically: when `version` changes in `package.json` on `main`, CI tests it,
-builds the installer, Orb Light, the AppImage and the `.deb`, and publishes them to Releases
-(`.github/workflows/release.yml`). The APK is built and signed on the owner's PC and attached to the same release.
+**Linux:** planned for a later version. Orb 3.7's Linux builds remain on its release page ([`docs/LINUX.md`](docs/LINUX.md)).
+
+How a version is published: when `version` changes in `package.json` on `main`, CI tests it and builds the installer
+(`.github/workflows/release.yml`, which holds no keys); the owner signs it and publishes the release from his PC
+(`npm run release:firmar`). The APK is built and signed on the owner's PC and attached to the same release.
 
 ## Getting started
 
-1. Open Orb from the Start menu (or the portable `.exe`, or `npm start` if you run it from source).
+1. Open Orb from the Start menu (or `npm start` if you run it from source).
 2. Choose its name, what it calls you and where its workspace goes: `C:\Orb` unless you pick another place.
 3. If that folder already has things in it (for example an older Orb), Orb shows what it would move into `core` and
    moves nothing of yours until you choose.
@@ -114,7 +114,8 @@ Orb to a new computer.
 
 ## Run it from source (for development)
 
-1. Install [Git](https://git-scm.com/) and [Node.js 22.13 or later](https://nodejs.org/).
+1. Install [Git](https://git-scm.com/), [Node.js 22.13 or later](https://nodejs.org/), [Rust](https://rustup.rs/) and the
+   Visual Studio C++ Build Tools (what [Tauri](https://tauri.app/start/prerequisites/) needs on Windows).
 2. Clone and start it:
    ```bash
    git clone https://github.com/danielfinchdev/orb-dev.git
@@ -125,19 +126,21 @@ Orb to a new computer.
 3. To get the latest version: `git pull` and `npm install` before `npm start`.
 
 ```bash
-npm start               # builds the UI and opens the app
+npm start               # builds the UI and opens the app (tauri dev)
 npm test                # engine tests (fake agents, no accounts)
-npm run test:app        # the whole app with Electron (on Linux: xvfb-run -a npm run test:app)
+cd src-tauri && cargo test --lib   # the app's own tests (Rust)
+npm run tauri:build:e2e # the test build (its window can stay hidden), then:
+npm run test:app        # the whole app with fake agents, on that build
+node test/smoke.e2e.mjs # the packaged app (the test build; a release build only in CI)
 npm run test:movil      # the mobile web app at phone size
-ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/smoke.e2e.mjs   # tests the packaged app
-npm run dist            # the installer and Orb Light in dist\ (on Windows)
+npm run tauri:build     # the installer in src-tauri\target\release\bundle\nsis
 npm run android:build   # the Android app in dist\ (see docs/ANDROID.md)
-npm run icon            # renders every app icon (Windows, Linux, favicon, Android) from build/icon-src/*.svg
+npm run icon            # renders every app icon (Windows, favicon, Android) from build/icon-src/*.svg
 ```
 
 | Folder | Contents |
 |---|---|
-| `src/main/` | Electron: window, first launch, secure bridge, engine startup and the agents' browser with its mini window |
+| `src-tauri/` | The desktop app (Tauri 2, Rust): window, secure bridge, engine startup, sealed keys, the agents' browser with its mini window, notices, updates and the installer |
 | `src/engine/` | Engine (separate process): API, live sessions, scheduler, orchestrator, logbooks, GitHub, phone access, installer, God mode |
 | `src/core/` | Board, permissions, guard, master password and secrets, workspace and core, backups, usage, undo |
 | `src/agents/` | One adapter per agent: detect it, launch it and parse its events |

@@ -3,7 +3,7 @@
 //     conversations in «Completadas», its schedules paused) and it leaves Orb's lists, while its folder stays where it
 //     is. FINISHED_PROJECTS remembers it, so the project sync (projects.mjs › syncProjects) does not bring it back;
 //     reopenProject lists it again (and turns its schedules back on).
-//   - deleteProject: its folder goes (to the Recycle Bin: main.mjs moves it there with Electron and then tells the
+//   - deleteProject: its folder goes (to the Recycle Bin: the app moves it there, src-tauri/src/delete.rs, and then tells the
 //     engine; permanently only when the Recycle Bin could not take it and the user chose so) and it leaves Orb. Behind
 //     the master password (permissions.mjs › UNLOCK_METHODS) and only from this PC. deletableFolder decides what may go:
 //     only a project folder straight inside a category of the workspace, compared by real path (a junction or a link
@@ -13,7 +13,7 @@
 // they move to a name of their own («name: finalizado», «name: eliminado»; never a project's name, since «:» cannot be
 // in one), so a project that takes the name later starts clean, and a reopened one gets them back under the name it
 // gets then (as renameProject moves them).
-// Deleting is two steps with the Recycle Bin in between (main.mjs): checkDelete marks the project as being deleted
+// Deleting is two steps with the Recycle Bin in between (the app): checkDelete marks the project as being deleted
 // (DELETING_PROJECTS: nothing of it starts — board.createTask, the scheduler and the direct conversations refuse —, its
 // pending tasks are cancelled and its schedules paused) and returns a one-off ticket; deleteProject (with that ticket)
 // finishes, abortDelete undoes it. One left half-way (the app closed meanwhile, or the ticket expired) is settled by
@@ -175,7 +175,7 @@ function entryFor(board, name, ticket) {
   return entry;
 }
 
-// The engine's check before main.mjs moves the folder to the Recycle Bin: what would go, and from now on nothing of the
+// The engine's check before the app moves the folder to the Recycle Bin: what would go, and from now on nothing of the
 // project starts (marked as being deleted, its pending tasks cancelled, its schedules paused). A check left from before
 // (the window closed half-way) is undone first. → { name, path, ticket } (the ticket: for deleteProject or abortDelete,
 // one use, valid TICKET_MS).
@@ -206,7 +206,7 @@ export function abortDelete(board, name, ticket, { force = false } = {}) {
 }
 
 // Finishes a delete started by checkDelete (ticket: the one it returned; force: without it, settleDeleting).
-//   trashed: main.mjs already moved the folder to the Recycle Bin (it must be gone). What still works in it is stopped
+//   trashed: the app already moved the folder to the Recycle Bin (it must be gone). What still works in it is stopped
 //     (stop(name): the engine stops its running tasks and direct conversations) instead of refusing: the folder is gone.
 //   otherwise: deleted here for good (the user chose so after the Recycle Bin could not take it). Refused, with nothing
 //     deleted, while some program uses the folder; one that stops half-way says what is left.

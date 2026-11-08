@@ -115,9 +115,9 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       if (wasLocked) { log('secretos: abiertos con la contraseña maestra'); opened(); }
       return m.issue(FRESH_PURPOSES.includes(purpose) ? purpose : null);
     },
-    // The window locked or closed (main.mjs), or «Bloquear» by hand: every token goes.
+    // The window locked or closed (the app), or «Bloquear» by hand: every token goes.
     'master.lock': () => { master().lock(); emit('master:locked', {}); return true; },
-    // Guarded (checkUnlock): whether the window's token is still good (main.mjs asks before opening core in the Explorer).
+    // Guarded (checkUnlock): whether the window's token is still good (the app asks before opening core in the Explorer).
     'master.check': () => true,
     'master.change': async ({ current, next }) => {
       let r; try { r = await master().change(password(current), password(next)); } catch (error) { throw asUser(error); }

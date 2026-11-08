@@ -105,7 +105,7 @@ function Whiteboard({ project }) {
   const openFolder = async () => { const dir = await act(call('whiteboard.folder', { project })); if (dir) act(bridge.openPath(dir)); };
 
   // Files dropped on the panel (from the Explorer) are attached; on the canvas, Excalidraw places pictures itself.
-  // Their real paths: a promise under Tauri, at once under Electron.
+  // Their real paths (a promise).
   const drop = (e) => { e.preventDefault(); setDropping(false); Promise.all([...(e.dataTransfer?.files ?? [])].map((f) => bridge.pathForFile?.(f))).then(attach); };
 
   const menu = null;

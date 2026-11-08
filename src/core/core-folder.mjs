@@ -19,7 +19,7 @@
 //     isolated copies, images, plans; the git worktrees of the isolated copies) are made to point to the new place.
 //     What the user wrote in a message is left as written (only Orb's own .orb paths, e.g. attached images, change).
 //   - coreHealth / protectCore: whether core is whole, and core hidden in the Explorer.
-// No engine imports: the engine, the app's main process (src/main/main.mjs) and the tests use it.
+// No engine imports: the engine and the tests use it.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';

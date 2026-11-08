@@ -1,5 +1,5 @@
 // New version of Orb: a card in the top-right corner, under the header (it never covers the menu or the message box), with «Descargar e instalar», the download progress
-// and «Reiniciar e instalar». The state comes from the main process (src/main/updater.mjs); the phone has no updates.
+// and «Reiniciar e instalar». The state comes from the app (src-tauri/src/updater.rs); the phone has no updates.
 import { useEffect, useState } from 'react';
 import { X, Download, RotateCw } from 'lucide-react';
 import { bridge, act } from '@/lib/store.js';
@@ -20,7 +20,7 @@ export function useUpdate() {
   return st;
 }
 
-// What the button does in each state: download (installed), open the download page (not installed: Orb Light, the portable .exe) or restart into it.
+// What the button does in each state: download (installed), open the download page (a copy that is not installed) or restart into it.
 export const updateActions = {
   update: (st) => act(st?.portable ? bridge.update.install() : bridge.update.download()),
   restart: () => act(bridge.update.install()),

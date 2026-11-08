@@ -1,5 +1,5 @@
 // 3.8.1 (review Tauri D-fix A1): a backup restored with another key keeps that key at every later start, in Orb 3.8.0
-// (its real code, test/fixtures), Electron 3.8.1 and Tauri, and when they take turns. Before, the next start of 3.8.1
+// (its real code, test/fixtures) and 3.8.1, and when they take turns. Before, the next start of 3.8.1
 // opened the sealed key from before the restore (clave2.enc or the copy outside) and deleted the restored clave.bin.
 // The reviewer's repro (restore-repro.mjs), with the real applyPendingRestore instead of a simulated one.
 import { test, after } from 'node:test';
@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { loadApprovalSecret as load380 } from './fixtures/approval-secret-3.8.0.mjs';
-import { loadApprovalSecret, loadHostSecret, secret2Files } from '../src/engine/approval-secret.mjs';
+import { loadHostSecret, secret2Files } from '../src/engine/approval-secret.mjs';
 import { applyPendingRestore, pendingDir } from '../src/core/backup.mjs';
 import { RESTORE_MARKER } from '../src/core/restored-key.mjs';
 
@@ -45,7 +45,6 @@ function restoreBy380(k) {
 }
 const apps = {
   '3.8.0': (k) => load380({ ...k, ...electron }),
-  'Electron 3.8.1': (k) => loadApprovalSecret({ ...k, ...electron }),
   Tauri: (k) => loadHostSecret({ ...k, ...withV10 }),
   'Tauri sin Local State': (k) => loadHostSecret({ ...k, ...noV10 })
 };
@@ -68,7 +67,7 @@ for (const [name, load] of Object.entries(apps)) {
 }
 
 test('restored in Tauri, then 3.8.0, then Tauri (and the other way round): always the restored key', async () => {
-  for (const [by, order] of [['Tauri', ['Tauri', '3.8.0', 'Tauri', '3.8.0']], ['3.8.0', ['3.8.0', 'Tauri', '3.8.0', 'Tauri']], ['Electron 3.8.1', ['Electron 3.8.1', 'Tauri', '3.8.0']], ['3.8.0 (su código)', ['3.8.0', 'Tauri', 'Tauri', '3.8.0']]]) {
+  for (const [by, order] of [['Tauri', ['Tauri', '3.8.0', 'Tauri', '3.8.0']], ['3.8.0', ['3.8.0', 'Tauri', '3.8.0', 'Tauri']], ['3.8.0 (su código)', ['3.8.0', 'Tauri', 'Tauri', '3.8.0']]]) {
     const k = mk();
     // Both apps used this workspace before: 3.8.0's v10 files and Tauri's ORB2 files hold the old secret.
     const old = load380({ ...k, ...electron }); assert.equal(await loadHostSecret({ ...k, ...withV10 }), old);

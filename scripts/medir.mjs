@@ -2,7 +2,7 @@
 // start time, memory, sizes and how smooth the interface scrolls. Everything runs on a throwaway workspace and app-data
 // folder in %TEMP% with the fake agents: never the real C:\Orb, %APPDATA%\Orb.dev or the installed app.
 //
-//   node scripts/medir.mjs [--exe dist/win-unpacked/Orb.exe] [--shell electron|tauri] [--runs 5] [--idle 30]
+//   node scripts/medir.mjs [--exe src-tauri/target-e2e/release/Orb.exe] [--shell tauri|electron] [--runs 5] [--idle 30]
 //                          [--installer <setup.exe>] [--apk <file.apk>] [--out <results.json>] [--hidden] [--profile <dir>]
 //
 // Tauri: measures a build with the `e2e` cargo feature (npm run tauri:build:e2e), the only one that opens the window's
@@ -39,8 +39,9 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arg = (name, fallback = null) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : fallback; };
 const PKG = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-const exe = path.resolve(arg('exe', path.join(ROOT, 'dist', 'win-unpacked', `${PKG.productName}.exe`)));
-const shell = arg('shell', 'electron');
+// --shell electron: Orb 3.8.0, the baseline (--exe of a copy of an installed 3.8.0; Electron is no longer in this repository).
+const shell = arg('shell', 'tauri');
+const exe = path.resolve(arg('exe', shell === 'tauri' ? path.join(ROOT, 'src-tauri', 'target-e2e', 'release', 'Orb.exe') : path.join(ROOT, 'dist', 'win-unpacked', `${PKG.productName}.exe`)));
 const RUNS = Number(arg('runs', 5));
 const IDLE_S = Number(arg('idle', 30));
 const installer = arg('installer', path.join(ROOT, 'dist', `Orb-${PKG.version}-instalador.exe`));

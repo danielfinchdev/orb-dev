@@ -156,7 +156,7 @@ export const homeKey = (home) => {
   const name = path.basename(full).toLowerCase().replace(/[^\w.-]+/g, '_').slice(0, 40) || 'orb';
   return `${name}-${crypto.createHash('sha256').update(full.toLowerCase()).digest('hex').slice(0, 8)}`;
 };
-// The name the first 3.8 builds used (C:\Orb → C-Orb): what was kept under it is taken over once (backup.mjs, main.mjs).
+// The name the first 3.8 builds used (C:\Orb → C-Orb): what was kept under it is taken over once (backup.mjs, desktop-home.mjs).
 export const oldHomeKey = (home) => path.resolve(home).replace(/[:\\/]+/g, '-').replace(/^-+|-+$/g, '') || 'orb';
 
 // Category of a project folder inside Orb's folder: <home>\<category>\<project>[\…]. null for anything else (outside,

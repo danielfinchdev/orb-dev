@@ -1,4 +1,4 @@
-// «Eliminar proyecto» (3.8.1), the same steps as Electron's main.mjs › app:deleteProject. The engine checks the master
+// «Eliminar proyecto» (3.8.1), the same steps as Orb 3.8.0 took. The engine checks the master
 // password's token, that nothing of the project works and what may go (projects.deleteCheck: from then on nothing of it
 // starts, and it returns a one-off ticket); the folder is checked here again by its real path and moved to the Recycle
 // Bin (never deleted for good on the way: a folder the Recycle Bin cannot take stays); then the engine takes the project

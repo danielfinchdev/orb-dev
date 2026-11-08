@@ -12,7 +12,7 @@ const launch = auth?.reply?.launch;
 if (!launch?.command) { process.stderr.write('Orb no ha autorizado este conector\n'); process.exit(1); }
 
 // Its environment: the agent's, without Orb's own variables, plus the connector's keys.
-const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(ORB_|ELECTRON_RUN_AS_NODE$)/i.test(k)));
+const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^ORB_/i.test(k)));
 Object.assign(env, launch.env ?? {});
 
 // Windows: npm shims run as their script with node, an .exe directly, anything else through cmd.exe escaped (win-spawn).

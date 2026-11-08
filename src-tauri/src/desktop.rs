@@ -1,4 +1,4 @@
-// What Orb's window asks the app for directly, as Electron's main.mjs did (app:pick*, app:openPath, app:openExternal,
+// What Orb's window asks the app for directly, as Orb 3.8.0 did (app:pick*, app:openPath, app:openExternal,
 // app:feedbackCapture / app:feedbackImages): Windows' own file and folder dialogs (the page has no dialog permission:
 // Rust opens them), a folder in the File Explorer (never a file to run; core and its secrets only with a fresh unlock of
 // the master password, checked by the engine), a web page over https in the browser, and the window's picture and the
@@ -282,16 +282,14 @@ pub fn guard_against_electron(_: &std::path::Path, _: impl Fn() + Send + Sync + 
 
 #[cfg(all(test, windows))]
 mod electron_tests {
-  /// The real Electron of this repository (the one Orb 3.8.0 ships), with no window, holding its single-instance lock in
-  /// a throwaway data folder: seen; another folder is not. Skipped where that Electron is not installed.
+  /// The real Electron of Orb 3.8.0 (secrets::test_electron), with no window, holding its single-instance lock in
+  /// a throwaway data folder: seen; another folder is not. Skipped where that Electron is not there.
   #[test]
   fn an_open_electron_orb_is_seen_by_its_data_folder() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-    let electron = root.join("node_modules").join("electron").join("dist").join("electron.exe");
-    if !electron.exists() {
-      eprintln!("sin node_modules/electron: prueba omitida");
+    let Some(electron) = crate::secrets::test_electron() else {
+      eprintln!("sin el Electron de la 3.8.0 (ORB_TEST_ELECTRON o la caché de compilación): prueba omitida");
       return;
-    }
+    };
     let dir = std::env::temp_dir().join(format!("orb-instancia-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("datos")).unwrap();
@@ -320,12 +318,10 @@ mod electron_tests {
   /// guard is not taken for an Electron by this same program.
   #[test]
   fn electron_opened_afterwards_quits_and_this_orb_is_told() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-    let electron = root.join("node_modules").join("electron").join("dist").join("electron.exe");
-    if !electron.exists() {
-      eprintln!("sin node_modules/electron: prueba omitida");
+    let Some(electron) = crate::secrets::test_electron() else {
+      eprintln!("sin el Electron de la 3.8.0 (ORB_TEST_ELECTRON o la caché de compilación): prueba omitida");
       return;
-    }
+    };
     let dir = std::env::temp_dir().join(format!("orb-guarda-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("datos")).unwrap();

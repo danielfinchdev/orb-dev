@@ -1,4 +1,4 @@
-// New versions (D9), as Electron's src/main/updater.mjs did: Orb looks at the latest release when it opens (after 15 s)
+// New versions (D9), as Orb 3.8.0 did: Orb looks at the latest release when it opens (after 15 s)
 // and every 4 hours; the user decides with «Descargar e instalar» (downloaded in the background, with its progress), and
 // «Reiniciar e instalar» (or closing Orb) runs the installer. Before a new version touches the data the engine makes a
 // backup (backup.now, kind preupdate, at most 3 minutes, a failure only logged).
@@ -32,7 +32,6 @@ pub struct State {
   pub percent: u32,
   pub error: Option<String>,
   pub portable: bool,
-  pub linux: Option<String>,
   pub url: &'static str,
 }
 
@@ -89,7 +88,7 @@ pub fn init(app: &AppHandle) {
   let portable = fake.is_none() && !installed && !local;
   // Only a release build updates (from the code there is nothing to replace).
   let enabled = fake.is_some() || ((!cfg!(debug_assertions) || local) && std::env::var("ORB_NO_UPDATE").as_deref() != Ok("1"));
-  let state = State { state: if enabled { "idle" } else { "off" }, current, version: None, percent: 0, error: None, portable, linux: None, url: RELEASES_URL };
+  let state = State { state: if enabled { "idle" } else { "off" }, current, version: None, percent: 0, error: None, portable, url: RELEASES_URL };
   app.manage(Updates { state: Mutex::new(state), fake, enabled, found: Mutex::new(None), bytes: Mutex::new(None), backed_up: Mutex::new(None), backing_up: Default::default(), installing: Default::default() });
 }
 

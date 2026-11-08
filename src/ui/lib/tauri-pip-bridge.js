@@ -1,5 +1,5 @@
 // 3.8.1 (D7): the little window of the agents' browser on Tauri (src-tauri/src/pip.rs). Defines window.pip with the same
-// shape as Electron's pip-preload.cjs: pictures and state from the engine, and its buttons. Keeps the last picture and
+// shape as in Orb 3.8.0: pictures and state from the engine, and its buttons. Keeps the last picture and
 // state, so the page gets them even if they arrived before it subscribed. Moves the window by its top bar (.drag), as
 // app-region did in Electron. Does nothing outside Tauri. Must be imported first.
 import { invoke } from '@tauri-apps/api/core';

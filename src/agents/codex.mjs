@@ -61,7 +61,7 @@ const toml = (value) => JSON.stringify(value); // JSON strings and arrays are va
 // the server gets it by that name (env_vars); the config names only what is plainly not secret (PLAIN). Orb's servers
 // read their ticket from the variable their --ticket-env names; connectors start through launch.mjs, which gets their
 // real keys from the engine. Codex's own commands never see any of it (shell_environment_policy, see start()).
-const PLAIN = new Set(['ELECTRON_RUN_AS_NODE', 'ORB_AUTH_PIPE']);
+const PLAIN = new Set(['ORB_AUTH_PIPE']);
 const envName = (server, key) => `ORB_MCP_${server}_${key}`.replace(/[^A-Za-z0-9_]/g, '_');
 export function mcpSecrets(servers) {
   return Object.fromEntries(Object.entries(servers ?? {}).flatMap(([name, s]) => Object.entries(s.env ?? {}).filter(([k]) => !PLAIN.has(k)).map(([k, v]) => [envName(name, k), String(v)])));

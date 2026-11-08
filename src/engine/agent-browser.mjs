@@ -1,6 +1,6 @@
-// 3.8.1 (D2, D7): the agents' browser without Electron, living in the engine: its pages, the control pipe the MCP servers
+// 3.8.1 (D2, D7): the agents' browser, living in the engine: its pages, the control pipe the MCP servers
 // of the agents speak (src/core/browser-protocol.mjs › servePipe, with the key of each conversation) and the DevTools
-// driver (src/engine/browser-cdp.mjs). Electron's own browser (src/main/browser.mjs) stays until Electron goes.
+// driver (src/engine/browser-cdp.mjs).
 //
 // Where the pages come from is the app's business (windows):
 //   open(key) → a page: { id, send(method, params) → result, on(method, fn) → off, close() }

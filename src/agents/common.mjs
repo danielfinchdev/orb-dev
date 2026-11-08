@@ -105,21 +105,19 @@ export function readOutput(cmd, args, { env = {}, cwd = discoverDir(), timeoutMs
 // A promise that gives up after ms (with null), for the steps of a discovery that may hang.
 export const within = (promise, ms) => Promise.race([promise, new Promise((resolve) => { setTimeout(() => resolve(null), ms).unref?.(); })]);
 
-// The Node that runs Orb's own scripts for the agents: ORB_NODE when the app names one (3.8.1, Tauri: the bundled
-// node.exe), otherwise the engine's own runtime (Node in the tests and under Tauri; under Electron the app's executable,
-// which then needs ELECTRON_RUN_AS_NODE to behave as Node instead of opening another window).
+// The Node that runs Orb's own scripts for the agents: ORB_NODE when the app names one (the bundled node.exe), otherwise
+// the engine's own runtime (the same Node).
 export const nodeRuntime = () => process.env.ORB_NODE || process.execPath;
-export const runAsNode = () => (process.versions.electron && !process.env.ORB_NODE ? { ELECTRON_RUN_AS_NODE: '1' } : {});
 
 // How an agent process starts the assistant's MCP server (server.mjs) or one of the user's connectors (launch.mjs, which
 // gets the connector's real command and keys from the engine): nodeRuntime() and the script. Nothing secret goes in here.
-// (Packaged, ORB_MCP_SCRIPT is the server out of the app's archive; launch.mjs sits next to it.)
+// (ORB_MCP_SCRIPT: another copy of the server, when the app names one; launch.mjs sits next to it.)
 const mcpDir = () => (process.env.ORB_MCP_SCRIPT ? path.dirname(process.env.ORB_MCP_SCRIPT) : path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'mcp'));
 export function orbMcpServer(env = {}) {
   const script = process.env.ORB_MCP_SCRIPT || path.join(mcpDir(), 'server.mjs');
-  return { command: nodeRuntime(), args: [script], env: { ...runAsNode(), ...env } };
+  return { command: nodeRuntime(), args: [script], env };
 }
-export const connectorLauncher = (env = {}) => ({ command: nodeRuntime(), args: [path.join(mcpDir(), 'launch.mjs')], env: { ...runAsNode(), ...env } });
+export const connectorLauncher = (env = {}) => ({ command: nodeRuntime(), args: [path.join(mcpDir(), 'launch.mjs')], env });
 
 // 3.8: the MCP servers' environment (Orb's signatures, a connector's keys) never goes on a command line, which any
 // process of the user can read: each value moves to the agent's own environment under a name of its own, and the

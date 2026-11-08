@@ -208,6 +208,15 @@ pub mod dpapi {
   }
 }
 
+/// The Electron of Orb 3.8.0 (44.5.1, the one it ships) for the tests that check this Orb against it, without a window:
+/// ORB_TEST_ELECTRON, or <ORB_BUILD_CACHE>\electron-44.5.1\electron.exe (the build cache; Electron is not a dependency
+/// of this repository any more). None: those tests are skipped and say so.
+#[cfg(test)]
+pub fn test_electron() -> Option<std::path::PathBuf> {
+  let cache = std::env::var_os("ORB_BUILD_CACHE").map(std::path::PathBuf::from).or_else(|| std::env::var_os("LOCALAPPDATA").map(|d| std::path::PathBuf::from(d).join("orb-build-cache")));
+  std::env::var_os("ORB_TEST_ELECTRON").map(std::path::PathBuf::from).or_else(|| cache.map(|c| c.join("electron-44.5.1").join("electron.exe"))).filter(|p| p.exists())
+}
+
 #[cfg(all(test, windows))]
 mod tests {
   use super::*;
@@ -306,16 +315,14 @@ mod tests {
     let _ = std::fs::remove_dir_all(other);
   }
 
-  /// A clave.enc made by the real Electron of this repository (node_modules/electron, the one Orb 3.8.0 ships), with no
+  /// A clave.enc made by the real Electron of Orb 3.8.0 (test_electron), with no
   /// window, in a throwaway data folder: Rust opens it. Skipped (and says so) where that Electron is not installed.
   #[test]
   fn real_electron_safe_storage_blob_opens() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-    let electron = root.join("node_modules").join("electron").join("dist").join("electron.exe");
-    if !electron.exists() {
-      eprintln!("sin node_modules/electron: prueba con Electron real omitida");
+    let Some(electron) = crate::secrets::test_electron() else {
+      eprintln!("sin el Electron de la 3.8.0 (ORB_TEST_ELECTRON o la caché de compilación): prueba con Electron real omitida");
       return;
-    }
+    };
     let dir = temp("electron");
     let script = dir.join("sellar.cjs");
     std::fs::write(

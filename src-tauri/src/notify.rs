@@ -1,5 +1,5 @@
 // Notices while Orb's window is in the background: a new message of the chat (finished tasks, approvals, the assistant's
-// answers), as Electron's main.mjs did. Windows' own notification (WinRT ToastNotification), because only it says when it
+// answers), as Orb 3.8.0 did. Windows' own notification (WinRT ToastNotification), because only it says when it
 // is clicked: the click brings Orb to the front on that conversation ('ui:navigate'). An installed Orb shows them as
 // itself (the installer sets the AUMID dev.orb.app on its shortcuts); a build run from the code has no shortcut, so
 // Windows shows them as PowerShell's. A test build with its window hidden writes them to <test data>\avisos-e2e.jsonl

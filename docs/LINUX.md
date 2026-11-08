@@ -1,5 +1,9 @@
 # Orb on Linux (desktop app)
 
+> **3.8.1 and later:** Orb's desktop app moved to a new base (Tauri) on Windows, and the Linux version is **planned for a
+> later release**. Until then, 3.8.1 has no Linux downloads; the Linux builds of 3.7 described below stay on their own
+> release page.
+
 Since 3.7 the Orb app (the same one as on Windows) has Linux downloads. It is for a Linux **desktop** (GNOME, KDE,
 Xfce…).
 

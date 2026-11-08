@@ -291,7 +291,6 @@ test('la carpeta de instalación de Orb: los agentes pueden leerla, nunca escrib
   assert.equal(appInstallDir({ ORB_NODE: path.join(install, 'node', 'node.exe') }), install);
   assert.equal(appInstallDir({ ORB_NODE: path.join(base, 'target', 'release', 'node', 'node.exe') }), null, 'una compilación del código');
   assert.equal(appInstallDir({ ORB_NODE: 'C:\\herramientas\\node.exe' }), null);
-  assert.equal(appInstallDir({ ORB_MCP_SCRIPT: 'C:\\Users\\a\\AppData\\Local\\Programs\\Orb\\resources\\app.asar.unpacked\\src\\mcp\\server.mjs' }), 'C:\\Users\\a\\AppData\\Local\\Programs\\Orb');
   const internal = path.join(base, 'Orb', 'core');
   setAppRoots([install]);
   try {
@@ -339,24 +338,6 @@ test('rutas en la base: lo que escribió el usuario se queda como lo escribió',
     assert.deepEqual(d.prepare('SELECT role, body FROM session_items').all().map((r) => [r.role, r.body]), [['user', `abre ${from}\\index.js`], ['assistant', `abierto ${to}\\index.js`]]);
     assert.equal(d.prepare('SELECT text FROM session_queue').get().text, `y luego ${from}\\x`);
   } finally { d.close(); }
-});
-
-test('la copia del secreto fuera del espacio nunca se pisa con otro; un clave.enc ilegible no gana a la copia buena', async () => {
-  const { loadApprovalSecret } = await import('../src/engine/approval-secret.mjs');
-  const base = newBase();
-  const dir = path.join(base, 'datos'); const copy = path.join(base, 'claves', 'orb-1234abcd.enc');
-  const seal = (hex) => Buffer.from(`S${hex}`); const unseal = (b) => { const s = b.toString(); if (!s.startsWith('S')) throw new Error('no abre'); return s.slice(1); };
-  const good = 'a1'.repeat(32); const other = 'b2'.repeat(32);
-  // core lost its clave.enc, and it cannot be read (damaged, or another Windows user's): the good copy wins.
-  put(copy, `S${good}`); put(path.join(dir, 'clave.enc'), 'basura');
-  assert.equal(await loadApprovalSecret({ dir, copy, seal, unseal }), good);
-  assert.equal(read(path.join(dir, 'clave.enc')), `S${good}`);
-  assert.ok(fs.readdirSync(dir).some((n) => /^clave\..*\.ilegible\.enc$/.test(n) && read(path.join(dir, n)) === 'basura'), 'el ilegible, aparte');
-  // A clave.enc with another secret: the copy that had the old one is put aside, not overwritten.
-  put(path.join(dir, 'clave.enc'), `S${other}`);
-  assert.equal(await loadApprovalSecret({ dir, copy, seal, unseal }), other);
-  assert.equal(read(copy), `S${other}`);
-  assert.ok(fs.readdirSync(path.dirname(copy)).some((n) => n !== path.basename(copy) && read(path.join(path.dirname(copy), n)) === `S${good}`), 'la copia vieja se conserva');
 });
 
 // 3.8.1 (Tauri): ORB2 in its own files beside Electron's v10, typed errors, atomic writes: test/clave-compatible.test.mjs.

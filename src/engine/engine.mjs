@@ -1,4 +1,4 @@
-// The engine: a process of its own (Electron utility process, or a plain Node child in tests) that owns the database, the
+// The engine: a process of its own (the bundled Node, started by the app, or a plain Node child in tests) that owns the database, the
 // agents' processes and the scheduler. The window talks to it only through messages relayed by the main process:
 // { type: 'call', id, method, params } → { type: 'reply', id, ok, result | error }, and { type: 'event', event, payload }.
 // There is no HTTP server: nothing on the network or in a browser can reach it.
@@ -20,10 +20,9 @@ import { loadConfig, homeKey } from '../core/home.mjs';
 import es from '../core/locales/es.mjs';
 import en from '../core/locales/en.mjs';
 
-// Electron's utility process (parentPort), a plain process with JSON lines on stdin/stdout (3.8.1: Tauri starts the
-// bundled node.exe with ORB_ENGINE_STDIO=1; src/engine/stdio.mjs), or a Node child with an IPC channel (the tests).
+// A plain process with JSON lines on stdin/stdout (the app starts the bundled node.exe with ORB_ENGINE_STDIO=1;
+// src/engine/stdio.mjs), or a Node child with an IPC channel (the tests).
 const transport = (() => {
-  if (process.parentPort) return { send: (m) => process.parentPort.postMessage(m), on: (fn) => process.parentPort.on('message', (e) => fn(e.data)) };
   if (process.env.ORB_ENGINE_STDIO === '1') return stdioTransport({ onClose: () => shutdown() });
   if (process.send) return { send: (m) => process.send(m), on: (fn) => process.on('message', fn) };
   throw new Error('el motor debe arrancarse desde la app');
@@ -39,7 +38,7 @@ let devControl = null; // 3.1: the developer's control line (src/engine/dev-cont
 // developer's control line.
 const toWindow = (event, payload) => { try { transport.send({ type: 'event', event, payload }); } catch { /* window gone */ } };
 const emit = (event, payload) => {
-  // 3.8.1: under Tauri the agents' browser lives here: a task that ended closes its pages (Electron's main process does it).
+  // 3.8.1: the agents' browser lives here: a task that ended closes its pages.
   if (event === 'agentBrowser:closeTask' && hostBrowser) { try { hostBrowser.closeTask(payload?.task); } catch { /* going away */ } return; }
   toWindow(event, payload);
   try { remote?.broadcast(event, payload); } catch (error) { log(`móvil: ${event}: ${error.message}`); }
@@ -53,8 +52,8 @@ const log = (line) => { try { if (logFile) { rotateIfBig(logFile); fs.appendFile
 process.on('uncaughtException', (error) => log(`uncaughtException: ${error?.stack ?? error}`));
 process.on('unhandledRejection', (error) => log(`unhandledRejection: ${error?.stack ?? error}`));
 
-// 3.8.1: one engine per workspace on this PC. Electron and Tauri each keep one app open (their own single-instance
-// locks, which do not see each other): two engines on one database and one key would step on each other. A lock file in
+// 3.8.1: one engine per workspace on this PC (two starts of the app, or a build from the code next to the installed
+// one, whose single-instance locks do not see each other): two engines on one database and one key would step on each other. A lock file in
 // %TEMP% (never in the workspace) kept open with no sharing for the engine's whole life (approval-secret.mjs ›
 // exclusiveOpen): while this engine lives nobody can open, rename or delete it (Storage Sense or a cleaner neither), it
 // never ages (a PC asleep or a long migration do not free it), and Windows lets it go when the engine ends, however it
@@ -111,8 +110,7 @@ async function secretFromApp(home, userData, newSecret) {
     }
   }
 }
-// userData: the app's data folder, from an app that leaves the copies outside the workspace to the engine (Tauri; Electron
-// passes keep itself). hostSecret: that app seals the secret itself when asked (host.seal / host.unseal); newSecret: the
+// userData: the app's data folder (the engine keeps the copies outside the workspace there). hostSecret: that app seals the secret itself when asked (host.seal / host.unseal); newSecret: the
 // user chose to start with a new key after the sealed ones could not be opened.
 async function start(home, version, secret, browser, keep = null, userData = null, hostSecret = false, newSecret = false) {
   if (!home || !path.isAbsolute(home)) throw new Error(tr('sys.engine.notHome', { home }));
@@ -129,8 +127,7 @@ async function start(home, version, secret, browser, keep = null, userData = nul
   }
   // The approval secret comes from the app (kept encrypted by Windows); without it, the file fallback is used.
   if (validSecret(secret)) ctx.secret = Buffer.from(secret, 'hex');
-  // The agents' browser: Electron's lives in its main process (its pipe and token come here, for the agents' MCP servers);
-  // under Tauri (browser 'host') it lives here, with the app's hidden pages (src/engine/host-browser.mjs).
+  // The agents' browser (browser 'host'): it lives here, with the app's hidden pages (src/engine/host-browser.mjs).
   if (browser === 'host' && !hostBrowser) {
     const { createHostBrowser } = await import('./host-browser.mjs');
     const AGENTS = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor' };
@@ -142,7 +139,6 @@ async function start(home, version, secret, browser, keep = null, userData = nul
     await hostBrowser.ready;
   }
   if (hostBrowser) ctx.browser = { pipe: hostBrowser.pipe, token: hostBrowser.token };
-  else if (typeof browser?.pipe === 'string' && /^[0-9a-f]{48}$/.test(browser.token ?? '') && /orb-navegador-[0-9a-f]{16}(\.sock)?$/.test(browser.pipe)) ctx.browser = { pipe: browser.pipe, token: browser.token };
   if (typeof keep === 'string' && path.isAbsolute(keep)) mirror = keep;
   tools = appMethods({ home, version });
   // 3.8: the folders of Orb 3.7 move into core (src/core/core-folder.mjs); then, if core or part of it is gone (deleted
@@ -344,7 +340,7 @@ async function run(board, { home, version, restored, repair }) {
   if (ctx.master.unlocked()) settleWaitingKeys(board, log);
   api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, onUnlocked });
   remote = remoteRef.current = createRemote({ board, api, log, emit, version });
-  // 3.1: only an unpacked Orb.dev started with ORB_DEV_CONTROL=1 (main.mjs decides; never an installed Orb).
+  // 3.1: only an unpacked Orb.dev started with ORB_DEV_CONTROL=1 (the app decides: src-tauri/src/lib.rs; never an installed Orb).
   if (process.env.ORB_DEV_CONTROL === '1') {
     const { startDevControl } = await import('./dev-control.mjs');
     devControl = startDevControl({ api, board, sessions, log, home, internalDir: ctx.paths.internal });
@@ -457,7 +453,7 @@ function shutdown() {
 
 // 3.8.1: what an app without Node of its own (Tauri) asks the engine before and around the start, answered as
 // { type: 'reply', id, ok, result | error }: where the workspace is, the first-run setup, moving to another workspace
-// (src/engine/desktop-home.mjs, the same rules as Electron's main process) and the texts of its own dialogs and errors
+// (src/engine/desktop-home.mjs) and the texts of its own dialogs and errors
 // (sys.main.*, sys.dialog.* and sys.terminal.*: the terminals and editors it opens) in the language of the settings.
 // Not API methods: the window cannot send them.
 const SHELL_TEXTS = /^sys\.(main|dialog|terminal)\./;

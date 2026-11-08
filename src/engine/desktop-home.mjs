@@ -1,7 +1,7 @@
 // Where this PC's workspace is, for the desktop app: the location saved in the app's data folder (%APPDATA%\Orb.dev\
 // ubicacion.json), an Orb folder already on the PC for a fresh install, the first-run setup and the copies kept outside
-// the workspace (claves\). No Electron imports: Electron's main process uses it in-process, and under Tauri the engine
-// answers the app's 'locate' / 'setup' / 'switchHome' messages with it (src/engine/engine.mjs), so the rules live once.
+// the workspace (claves\). The engine answers the app's 'locate' / 'setup' / 'switchHome' messages with it
+// (src/engine/engine.mjs), so the rules live once.
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHome, isHome, writeJson, paths, homeKey, oldHomeKey, LEGACY } from '../core/home.mjs';

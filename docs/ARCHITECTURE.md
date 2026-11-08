@@ -53,8 +53,8 @@ change and which other features it connects to.
 ## 1. App map
 
 ```
-Window (React)  ──messages──►  Main process (Electron)  ──messages──►  Engine (separate process)
-src/ui/**                      src/main/main.mjs + preload.cjs         src/engine/engine.mjs
+Window (React, WebView2)  ──commands──►  App (Tauri 2, Rust)  ──JSON lines──►  Engine (bundled Node)
+src/ui/** + tauri-bridge.js             src-tauri/src/*.rs               src/engine/engine.mjs
                                                                          ├─ api.mjs          window actions
                                                                          ├─ sessions.mjs     live conversations
                                                                          ├─ scheduler.mjs    tasks
@@ -65,12 +65,13 @@ Agents (processes)  ◄── adapters src/agents/*.mjs (live) ──┘
 Data: <workspace>/core/datos/orb.db (SQLite, src/core/db.mjs)
 ```
 
-- **There is no web server for the window.** The window talks to the engine through Electron's internal messages. The
+- **There is no web server for the window.** The window talks to the engine through the app's own commands (Tauri's
+  IPC, only from Orb's window: `src-tauri/capabilities`, `lib.rs › only_main`), relayed over the engine's stdin/stdout. The
   only server is the phone access (section 22), which is off by default and only listens on the home network and
   Tailscale addresses.
-- **The engine** is a separate process (`utilityProcess`). If it crashes, the main process restarts it, up to three times.
-  3.8.1 (on the way to Tauri): the engine also runs as a plain Node process speaking one JSON message per line on
-  stdin/stdout (`ORB_ENGINE_STDIO=1`, `src/engine/stdio.mjs`; console output goes to stderr), and it asks the app for
+- **The engine** is a separate process: the bundled `node.exe` (Node 24, `scripts/tauri-resources.mjs`) in a Job Object,
+  speaking one JSON message per line on stdin/stdout (`ORB_ENGINE_STDIO=1`, `src/engine/stdio.mjs`; console output goes
+  to stderr; `src-tauri/src/engine.rs`, `pipes.rs`). If it crashes, the app restarts it, up to three times. It asks the app for
   what only the app can do — open a link or a folder, start a program that outlives Orb — with `host.*` messages
   (`src/engine/host.mjs`). Orb's own Node scripts for the agents run with `ORB_NODE` (the bundled `node.exe`) or the
   engine's runtime (`src/agents/common.mjs › nodeRuntime`). The Tauri installer installs per user
@@ -99,7 +100,7 @@ same structure for everyone:
 
 > **Existing folder.** If no location is saved (new install), the installed app looks for an Orb folder that
 > already exists (`<drive>:\Orb`, `Documents\Orb` or `<user>\Orb`, the most recently used) and uses it as is, without the
-> welcome (`findExistingHome` in `src/main/main.mjs`). It does not do this when running from source or in tests
+> welcome (`findExistingHome` in `src/engine/desktop-home.mjs`). It does not do this when running from source or in tests
 > (`ORB_USER_DATA`).
 
 > **Names.** The program is **Orb** (`Orb.exe`); its robot, **Orb·e**; **Orb.dev** is only the development build (this
@@ -168,13 +169,13 @@ On Windows, it then offers to install whatever is missing (section 24).
 - Interface: `src/ui/views/setup.jsx`.
 - Creating and organizing the folder: `src/core/home.mjs` (`createHome`, `homeFor`, `ensureLayout`, `paths`, `categoryOf`, `DEFAULT_CONFIG`, `loadConfig`), `src/core/layout.mjs` (the names), `src/core/core-folder.mjs` (core).
 - Projects by category: `src/core/projects.mjs` (`createProject`, `syncProjects`).
-- Remembering where it is: `src/main/main.mjs` (`ubicacion.json` in the app data).
+- Remembering where it is: `src/engine/desktop-home.mjs` (`ubicacion.json` in the app data).
 
 **Inside.**
 - `loadConfig` merges `core\orb.json` with the defaults. It adds new things to an old folder on its own:
   - accounts for new agents;
   - in version 3, the new usage caps (section 12).
-- `ORB_USER_DATA` lets you separate the app data (another copy or the tests). `ORB_LIGHT=1` opens Orb Light from source.
+- `ORB_USER_DATA` lets you separate the app data (another copy or the tests).
 
 ## 3. The chat with the assistant
 
@@ -572,7 +573,6 @@ as a **bounded excerpt**, not in full, and marked as "data, not instructions".
 - It has none of your sessions, and pages cannot open dialogs.
 - A **mini window** at the top right shows what they do live.
 - Files:
-  - `src/main/browser.mjs` (hidden pages, the mini window and the per-conversation keyed pipe);
   - `src/core/browser-protocol.mjs` (the actions, page scripts and pipe every driver shares);
   - 3.8.1, Tauri: the browser lives in the engine (`src/engine/host-browser.mjs`, `agent-browser.mjs`, the DevTools
     driver `browser-cdp.mjs`). Its pages are hidden WebView2 views in a browser environment of their own
@@ -967,12 +967,12 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   and latin-ext only) and `src/ui/code.css` (code colors). Highlighting (`src/ui/lib/highlight.js`, highlight.js with
   common languages) is loaded the first time it is needed (`use-highlight.js`).
 - **Window without the Windows title bar:** `titleBarStyle: 'hidden'`. Minimize, maximize and close are drawn by
-  `src/ui/components/window-controls.jsx` (IPC `app:window` and the `app:window-state` event in
-  `main.mjs`/`preload.cjs`), styled per theme in `themes.css` (`.win-control`); `--wco-inset` is their fixed width with
+  `src/ui/components/window-controls.jsx` (the `window_act` command and the `app:window-state` event:
+  `src-tauri/src/window.rs`, `src/ui/lib/tauri-bridge.js`), styled per theme in `themes.css` (`.win-control`); `--wco-inset` is their fixed width with
   `html.has-win-controls`. The top bars (`.app-titlebar` in `app.css`) move the window
   (double-click: maximize) and leave room for the buttons (`--wco-inset`, `.wco-pad`). Without the Windows bar there is
-  no menu bar (`applyMenuBar()` in `src/main/main.mjs` keeps it hidden; the old `ui.menuBar` setting is dropped when orb.json loads) and
-  the menu remains only for its shortcuts (zoom, Ctrl+J, F11).
+  no menu bar (the old `ui.menuBar` setting is dropped when orb.json loads); its shortcuts (zoom, Ctrl+J, F11) live in
+  `tauri-bridge.js`.
 - **Contribute and More apps** (`src/engine/feedback.mjs`, `app.feedbackSend` / `app.moreApps`, in the engine because the
   window does not go out to the internet; the screenshot and the picked files come from the app): the developer's PayPal; feedback via FormSubmit (to the developer's inbox) with up to 3 PNG/JPEG
   screenshots of the window or from files; and the other apps with their latest version from GitHub Releases.
@@ -1068,11 +1068,23 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
 
 ## 29. Packaging, versions and CI
 
-- **Windows installer and Orb Light (portable):** `npm run dist`, or CI when `version` changes on `main` (`.github/workflows/release.yml`).
-- The Claude SDK and `zod` go in `app.asar.unpacked`, next to the engine (`build.asarUnpack`).
+- **Windows installer** (Tauri, NSIS, per user, no admin): `npm run tauri:build`. Next to `Orb.exe` it carries `node\`
+  (Node 24, checked against its pinned SHA-256) and `app\` (the engine's `src`, the built window, the Claude SDK, `zod`
+  and `@noble/*`): `scripts/tauri-resources.mjs`. The e2e build (`npm run tauri:build:e2e`, cargo feature `e2e`, its own
+  target folder) is the only one with a DevTools port, a hidden window, a local update feed and timing marks, and it
+  trusts only the test updater key; `scripts/tauri-check-release.mjs` refuses a release `Orb.exe` with any of them.
+- **Releases** (review D9): `.github/workflows/release.yml` builds and tests only (read-only token not kept in `.git`,
+  actions pinned by commit, no keys): npm and cargo tests, the unsigned installer, the packaged-app smoke test
+  (`test/smoke.e2e.mjs`), and the installer as an artifact. The owner signs and publishes on his PC: `npm run
+  release:firmar -- <version>` (`scripts/release-firmar.mjs`) downloads that installer, signs it for its version with the
+  updater key (`C:\orb-project\claves`, never in GitHub), refuses any key but the one in `tauri.conf.json`, writes
+  `latest.json`, `latest.yml` and `Orb-<version>-instalador.exe` (`scripts/release-manifests.mjs`) and creates the
+  release with `gh`. Recommended on GitHub (not set by Orb): protect `main`, 2FA, and an environment with a reviewer for
+  anything that could publish.
+- **Linux:** planned for a later version (Orb 3.7's Linux builds and `docs/LINUX.md` stay as they were).
 - The SDK's copy of Claude Code (238 MB) **is not packaged**: the user's is used.
 - The app icon is drawn in `build/icon-src/*.svg`; `npm run icon` renders `build/icon.ico` (10 sizes, the short «o•»
-  version up to 32 px; also the window's icon on Windows), `build/icons/` (Linux), `build/icon.png`,
+  version up to 32 px; also the window's icon on Windows), `build/icons/` (the sizes Tauri bundles), `build/icon.png`,
   `src/ui/public/icon.png`, `src/ui/public/icon-o.png` (the short «o•», 128 px: the «Acerca de» card), `src/ui/public/icon-maskable.png` (the PWA's maskable icon: the
   tile edge to edge, the word at 80 %), the Android launcher icons (`android-app/android/app/src/main/res/mipmap-*`,
   legacy, round and adaptive) and the small notification icon (`drawable-*/ic_stat_orb.png`: the short «o•» as a white
@@ -1080,32 +1092,35 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   «o» and the orb widened at mdpi/hdpi so they stay apart; `capacitor.config.json` names it in `LocalNotifications.smallIcon`,
   and the Tauri app must carry the same `drawable-*` files and name to its notification plugin).
 - **Tests on every push and PR**, on Windows and Linux: `.github/workflows/pruebas.yml`.
-- **Installer** (NSIS, per user, no admin): desktop and Start menu shortcut. The release also publishes `latest.yml` and
-  the `.blockmap` files, which the updater uses.
+- **Installer**: desktop and Start menu shortcut.
 
-**Updates** (`src/main/updater.mjs`, `src/ui/components/update-card.jsx`):
-- The installed app uses `electron-updater` with GitHub Releases (`build.publish` in `package.json`; public repository,
-  no token). It checks on open (after 15 s) and every 4 h; it downloads nothing until the user clicks **Download and install**.
+**Updates** (`src-tauri/src/updater.rs`, `src/ui/components/update-card.jsx`):
+- It checks on open (after 15 s) and every 4 h; it downloads nothing until the user clicks **Download and install**.
 - States the window receives (`app:update` event): `checking`, `available`, `downloading` (with `percent`), `downloaded`,
   `none`, `error`, `off`. A card at the top right (below the header: it does not cover the menu or the text box) and an "Updates" card in Settings.
-- **Restart and install** (`app:updateInstall`): if tasks are running it asks first; then it stops the engine and calls
-  `quitAndInstall` (silent install and Orb reopens). With "Later" it installs when the app closes.
-- **Not installed** (Orb Light with `PORTABLE_EXECUTABLE_FILE`, or the program folder without `Uninstall Orb.exe` next to it): it queries the GitHub API (`releases/latest`) and the button opens the download.
+- **Restart and install**: if tasks are running it asks first; then the pre-update backup (one at a time: a second asker
+  waits for it) and the installer. With "Later" it installs when Orb closes, only once that backup is done (it is
+  finished before the engine stops; otherwise the next start offers the version again).
 - Running from source there are no updates (`off`). `ORB_NO_UPDATE=1` turns them off; `ORB_FAKE_UPDATE=<version>`
-  simulates a new version without network (tests); `ORB_UPDATE_URL=http://127.0.0.1:<port>/` uses a local server to
-  test an update before publishing it.
-- 3.8.1 (Tauri, `src-tauri/src/updater.rs`): the same states, buttons and timings with `tauri-plugin-updater`. It reads
+  simulates a new version without network (tests).
+- With `tauri-plugin-updater`. It reads
   `latest.json` of the latest GitHub release; the installer (`Orb_<version>_x64-setup.exe`) is signed with Orb's updater
   key (minisign; the public key is `plugins.updater.pubkey` in `tauri.conf.json`, the private one never enters the
   repository: `TAURI_SIGNING_PRIVATE_KEY` and `_PASSWORD` at build time) and its signature, including the version it was
   signed for (`requireSignedVersion`), is checked before it runs. It installs in passive mode (a progress bar) and Orb
-  reopens; with "Later" it installs when Orb closes. `ORB_UPDATE_URL` only works in the e2e build. Not installed (no
-  `uninstall.exe` next to `Orb.exe`): the button opens the release page.
+  reopens. The installer is downloaded only from Orb's GitHub releases (https). `ORB_UPDATE_URL` (a local feed) only works
+  in the e2e build. Not installed (no `uninstall.exe` next to `Orb.exe`): the button opens the release page.
 - **From 3.8.0 (Electron) to 3.8.1 (Tauri)**: the release also publishes a `latest.yml` (electron-updater's format, the
   same installer with its sha512 and size: `scripts/release-manifests.mjs`, which writes `latest.json` too). Orb 3.8.0
   downloads it and runs it with `--updated /S --force-run`. The installer's hooks (`src-tauri/nsis/hooks.nsh`) run
   3.8.0's own uninstaller silently and wait for it (program folder, shortcuts, AppUserModelID and uninstall entry go;
   `%APPDATA%\Orb.dev` and the workspace stay), leave `migrado-desde-electron.json` in `%APPDATA%\Orb.dev`, and open Orb.
+  Only from a folder that is surely 3.8.0's (its uninstaller deletes it whole: the default one, or one ending in `\Orb`
+  with `Orb.exe` and `resources\app.asar`, and never the workspace, a folder holding it or inside it, nor the data
+  folder), with no `Orb.exe` of the user running (3.8.0's uninstaller falls back to `taskkill /IM Orb.exe`, which would
+  also end Orb on Tauri), and only on when it worked: otherwise the user is told and nothing is installed
+  (`test/puente-ganchos.e2e.mjs`). Orb 3.8.0 opened afterwards never starts: Orb leaves the window Chromium's
+  single-instance lock looks for (`desktop.rs › guard_against_electron`), so 3.8.0 quits and Orb comes to the front.
   On that first start (`src-tauri/src/migrate.rs`) Electron's Chromium caches and electron-updater's download folder go
   (never `Local State`, the keys or the workspace) and the window says once that Orb moved to its new base.
   `test/puente-electron.e2e.mjs` checks the whole path with a copy of an installed 3.8.0 on a hidden desktop against a
@@ -1116,11 +1131,15 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
 | Command | What it covers |
 |---|---|
 | `npm test` | Every `test/*.test.mjs` (including that the es/en dictionaries match and that the English has no Spanish) of the engine with fake agents (`test/fixtures/fake-live.mjs` via `ORB_FAKE_AGENTS`), the real protocols against fake servers (ACP, codex app-server, Cursor CLI), the guard, sessions, tasks, delegation, Task Review, usage, permissions, the phone access, the master password and migrations |
-| `npm run test:app` | The whole app with Electron |
-| `node scripts/medir.mjs --hidden` | Performance of the packaged app (`electron-builder --win dir` first): start, memory, CPU at rest and scrolling (§27, Performance) |
+| `cd src-tauri && cargo test --lib` | The app's Rust: sealing (and Orb 3.8.0's real Electron from the build cache, `ORB_TEST_ELECTRON`), stdio, guards, delete, notices |
+| `npm run test:app` | The whole app on the e2e build (`npm run tauri:build:e2e` first), its window hidden, driven over CDP (`test/fixtures/launch-orb.mjs`) |
+| `node test/smoke.e2e.mjs` | The packaged app: the e2e build hidden; a release build only in CI (`--visible`), engine and MCP server |
+| `node test/tauri-navegador.e2e.mjs` | The agents' browser on real WebView2 (hidden): limits, isolation, a flooding page |
+| `node test/tauri-actualizar.e2e.mjs` · `node test/puente-ganchos.e2e.mjs` · `node test/puente-electron.e2e.mjs` | Updates (test key, local feed), the installer's hooks, and the bridge from an installed 3.8.0 (hidden desktop) |
+| `node scripts/medir.mjs --hidden` | Performance of the e2e build (`--shell electron --exe <copy of 3.8.0>`: the baseline): start, memory, CPU at rest and scrolling (§27, Performance) |
 | `node test/explora.e2e.mjs` | Walkthrough with screenshots in `test-results/explora/`: first launch ("Preparing your PC", with the folder dialog mocked), every view and Settings section in day and night, the five themes, narrow window. With `ORB_LANG=en`, the same in English (`explora-en/`). Notes go to `notas.txt` |
 | `node test/real.e2e.mjs claude,codex,cursor` | **Real agents**: conversations, assistant task, report, undo, approval, steering, queue, fork, Task Review and scheduled tasks |
-| `ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/packaged-live.e2e.mjs` | The packaged app with real Claude |
+| `node test/packaged-live.e2e.mjs` | The packaged app with real Claude (by hand) |
 
 ## 31. How to rework a feature
 
@@ -1388,13 +1407,22 @@ in `src/core/home.mjs`; nothing else builds them.
   kept as `<workspace>.<date>.enc` first. 3.8.1 (Tauri): Rust seals it with DPAPI as `ORB2` (`host.seal`/`host.unseal`,
   `src-tauri/src/secrets.rs`) in files of its own, `clave2.enc` and `<workspace>.v2.enc` (`loadHostSecret`), and reads
   Electron's `v10` (`clave.enc` and its copy, with the key in `%APPDATA%\Orb.dev\Local State`) only when it has none of
-  its own. It never writes, moves or renames Electron's files nor Local State: Orb 3.8.0 (still installed, reinstalled or
-  portable) makes a new secret when its `clave.enc` does not open, so both apps can take turns on a workspace with the
-  same secret (`test/clave-compatible.test.mjs` runs 3.8.0's real code). Tauri never makes a new secret by itself:
+  its own. It never replaces, moves or renames Electron's files nor Local State: Orb 3.8.0 (still installed, reinstalled
+  or portable) makes a new secret when its `clave.enc` does not open, so where there is no `clave.enc` at all and
+  Electron's Local State exists, Orb makes one as 3.8.0 would seal it (`host.seal` format `v10`, created only if absent);
+  if one exists with another secret, the user is told. Both apps take turns on a workspace with the same secret
+  (`test/clave-compatible.test.mjs` runs 3.8.0's real code). A backup restored with another key keeps it:
+  `applyPendingRestore` sets aside `clave.enc`, `clave2.enc` and the outside `.v2.enc` copy and leaves
+  `clave-restaurada.json` (`src/core/restored-key.mjs`, the restored `clave.bin`'s fingerprint), so the next start seals
+  that `clave.bin` over everything from before; a restore made by 3.8.0 itself is recognised by its
+  `antes-de-restaurar-*` folder (`test/clave-restaurar.test.mjs`). After «Empezar con una clave nueva» the keys that did
+  not open are noted (`clave-anterior.json`); when Windows opens one again, Ajustes › Datos offers to go back to it
+  (`backup.previousKey`, done at the next start, the new key kept aside). Tauri never makes a new secret by itself:
   `host.unseal` says why a key did not open (`io` for now → the start stops and the window offers «Reintentar»;
   `missing`, `dpapi`, `tag`, `format` → also «Empezar con una clave nueva», the old files kept aside). Every write goes to
   a temporary file of its own, flushed, checked (it opens again to the same secret) and renamed over the old one; a
-  `clave.lock` keeps two apps from doing it at once. DPAPI per user is not a barrier against the agents (same Windows
+  `clave.lock` held as a handle with no sharing keeps two starts from doing it at once (the engine's own lock in %TEMP%
+  works the same way: `engine.mjs › holdWorkspace`). DPAPI per user is not a barrier against the agents (same Windows
   user): it protects the key at rest and from other users.
 - **core missing** (`repairCore` in `backup.mjs`, called by `engine.mjs › start` before the database opens): when core,
   its orb.json or its database is gone, only what is missing **of core** is put back (`applyPendingRestore` with
@@ -1456,10 +1484,9 @@ One password, made once, protects what Orb keeps for itself and the actions that
   p = 1, a 16-byte salt): a file left there can neither make the check cheap nor hang the engine. An HMAC of that key
   checks the password in constant time before the wrap is opened (itself authenticated). The password is never stored.
 - `maestra-pc.json`: the same data key wrapped by a key derived (HKDF) from this PC's secret, the one Windows keeps
-  sealed (DPAPI through Electron's `safeStorage`, `core\datos\clave.enc`, handed to the engine in memory at start). So
+  sealed (DPAPI, `core\datos\clave2.enc`, opened by the engine at start: `src/engine/approval-secret.mjs`). So
   Orb starts and works without asking for the password; it is asked only for guarded actions and to link a phone. It
-  also records, authenticated, that a password was made. Without a usable OS keyring (Linux without one) that secret is
-  `clave.bin`, as for approvals.
+  also records, authenticated, that a password was made. Without the app (tests) that secret is `clave.bin`, as for approvals.
 - **Which key.** Every wrap carries the id of the data key it holds (`keyId`, an HMAC of the key) in its additional
   data. A password only counts when it opens **the** data key: if this PC already has it open, the key from
   `maestra.json` must be the same (compared in constant time); if not (another PC), it must open the `secretos.json`

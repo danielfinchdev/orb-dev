@@ -1,5 +1,5 @@
 // Entry of the window: first-run setup or the app (sidebar + current view), live refresh from the engine's events.
-import './lib/tauri-bridge.js'; // first of all: in the Tauri desktop app it provides window.orb (Electron's preload does it there)
+import './lib/tauri-bridge.js'; // first of all: in the desktop app it provides window.orb
 import './lib/app-bridge.js'; // then: in the Android app it tells the web bridge where the linked Orb is
 import './lib/web-bridge.js'; // last: in a phone's browser (or the app) it provides window.orb
 import './app.css';
@@ -92,9 +92,7 @@ const ChatsView = OrbChatsView;
 // 3.8: a route of a screen that is gone (a bot's, saved before or in an old notification) falls back to the chat.
 const VIEWS = bridge.mobile
   ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
-  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView,
-    // 2.7.3: Orb Light (the portable .exe) has no God mode.
-    ...(bridge.light ? {} : { expert: ExpertView }) };
+  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView, expert: ExpertView };
 setViews(Object.keys(VIEWS));
 const routeKey = (route) => `${route.view}:${route.id ?? ''}:${route.project ?? ''}`;
 

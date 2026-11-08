@@ -7,7 +7,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { terminalPlan, linuxTerminal, externalEnv, terminalChoices, LINUX_TERMINALS } from '../src/engine/terminal.mjs';
 import { actionPlan, findEditors } from '../src/engine/editors.mjs';
-import { linuxKind, keyringWeak } from '../src/main/linux.mjs';
 import { ROOT } from './helpers.mjs';
 
 const found = { warp: null, linux: 'x-terminal-emulator', installed: ['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xterm'] };
@@ -48,19 +47,4 @@ test('los editores en Linux se buscan también fuera del PATH del escritorio (sn
   } finally { fs.rmSync(home, { recursive: true, force: true }); }
 });
 
-test('cómo se actualiza cada copia en Linux, y el aviso de llavero', () => {
-  assert.equal(linuxKind('linux', { APPIMAGE: '/home/ana/Apps/Orb.AppImage' }), 'appimage');
-  assert.equal(linuxKind('linux', {}), 'package');
-  assert.equal(linuxKind('win32', { APPIMAGE: 'x' }), null);
-  assert.equal(keyringWeak('linux', true, 'gnome_libsecret'), false);
-  assert.equal(keyringWeak('linux', true, 'kwallet6'), false);
-  assert.equal(keyringWeak('linux', true, 'basic_text'), true);
-  assert.equal(keyringWeak('linux', false, null), true);
-  assert.equal(keyringWeak('win32', true, null), false);
-  // A program started from the AppImage (an editor, a terminal) does not inherit its variables.
-  const env = externalEnv({ PATH: '/usr/bin', APPIMAGE: '/a/Orb.AppImage', APPDIR: '/tmp/.mount_Orb', ARGV0: 'Orb', OWD: '/home/ana' });
-  assert.deepEqual(env, { PATH: '/usr/bin' });
-  const plain = { PATH: '/usr/bin' };
-  assert.equal(externalEnv(plain), plain);
-});
 

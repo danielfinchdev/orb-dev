@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { loadApprovalSecret as load380 } from './fixtures/approval-secret-3.8.0.mjs';
-import { loadApprovalSecret, loadHostSecret, SecretError } from '../src/engine/approval-secret.mjs';
+import { loadHostSecret, SecretError } from '../src/engine/approval-secret.mjs';
 
 const bases = [];
 after(() => { for (const b of bases) fs.rmSync(b, { recursive: true, force: true, maxRetries: 5 }); });
@@ -40,9 +40,6 @@ test('3.8.0 → 3.8.1 → 3.8.0 → 3.8.1: always the same secret, and 3.8.0\'s 
   assert.equal(await loadHostSecret({ dir: k.dir, copy: k.copy, ...tauri() }), s); // 3.8.1 again
   assert.deepEqual(files(k.dir), ['clave.enc', 'clave2.enc'], 'nada apartado ni temporales');
   assert.deepEqual(files(path.dirname(k.copy)), ['orb-1234abcd.enc', 'orb-1234abcd.v2.enc']);
-  // And Electron 3.8.1 (main.mjs, its own rules on its own files) in between: the same.
-  assert.equal(await loadApprovalSecret({ dir: k.dir, copy: k.copy, ...electron }), s);
-  assert.equal(read(k.enc), v10core);
   // core deleted by mistake: 3.8.1 brings it back from its copy outside (3.8.0's copy still untouched).
   fs.rmSync(path.join(k.base, 'core'), { recursive: true });
   assert.equal(await loadHostSecret({ dir: k.dir, copy: k.copy, ...tauri() }), s);
@@ -109,7 +106,6 @@ test('a key that cannot be read now stops the start; keys that none opens are th
   fs.mkdirSync(k2.dir, { recursive: true }); fs.writeFileSync(k2.enc, 'v10x'); fs.writeFileSync(path.join(k2.dir, 'clave.bin'), Buffer.alloc(32, 9));
   const n = await loadHostSecret({ dir: k2.dir, copy: k2.copy, ...tauri({ unseal: async () => { throw coded('tag'); } }), allowNew: true }).catch((e) => e);
   assert.notEqual(n, '09'.repeat(32));
-  assert.equal(await loadApprovalSecret({ dir: k2.dir, copy: k2.copy, ...electron }) === '09'.repeat(32), false, 'tampoco en Electron');
 });
 
 test('the move to ORB2 is atomic: checked first, a cut write is adopted, a seal that does not open again changes nothing', async () => {
@@ -142,7 +138,7 @@ test('two apps at once: one waits for the other (clave.lock); a lock left by a d
   const k = setup();
   const s = load380({ dir: k.dir, copy: k.copy, ...electron });
   const slow = tauri({ unseal: async (b) => { await new Promise((r) => setTimeout(r, 30)); return tauri().unseal(b); } });
-  const [a, b, c] = await Promise.all([loadHostSecret({ dir: k.dir, copy: k.copy, ...slow }), loadHostSecret({ dir: k.dir, copy: k.copy, ...slow }), loadApprovalSecret({ dir: k.dir, copy: k.copy, ...electron })]);
+  const [a, b, c] = await Promise.all([loadHostSecret({ dir: k.dir, copy: k.copy, ...slow }), loadHostSecret({ dir: k.dir, copy: k.copy, ...slow }), loadHostSecret({ dir: k.dir, copy: k.copy, ...tauri() })]);
   assert.deepEqual([a, b, c], [s, s, s]);
   assert.deepEqual(files(k.dir), ['clave.enc', 'clave2.enc']);
   const lock = path.join(k.dir, 'clave.lock');

@@ -1,4 +1,4 @@
-// When the interface runs in a phone's browser there is no Electron bridge: this one talks to the PC over HTTP
+// When the interface runs in a phone's browser there is no desktop bridge: this one talks to the PC over HTTP
 // (/api/call, live events on /api/events), every message encrypted end to end (src/core/mobile-crypto.mjs). It must be
 // imported before anything else. Not imported statically: i18n.js needs the store, which reads window.orb when it loads
 // (and this file defines it); the encryption code is loaded only on the phone.

@@ -89,7 +89,7 @@ export function terminalPlan(choice, dir, found, platform = process.platform, la
 
 // A program started on its own, detached: a console program gets its own window on Windows and outlives the app. The
 // engine asks the app for a terminal, an editor or an action by kind (host.openTerminal…, src/engine/host.mjs) and the
-// app picks and starts the program: Electron's main process with these functions, Tauri's Rust (src-tauri/src/tools.rs).
+// app picks and starts the program: Tauri's Rust (src-tauri/src/tools.rs).
 export const spawnDetached = ({ cmd, args = [], cwd }) => new Promise((resolve, reject) => {
   const child = spawn(cmd, args, { cwd, detached: true, stdio: 'ignore', windowsHide: false, env: externalEnv() });
   child.once('error', reject);

@@ -43,12 +43,12 @@ test('Codex: el MCP de Orb va por -c con rutas de Windows escapadas para TOML', 
   // 3.8 (N3, N4): no value but the plainly public ones on the command line, whatever its name (PASSWORD, DATABASE_URL…):
   // each one through Codex's environment under a name of its own (two connectors' API_KEY do not clash), the ticket's
   // --ticket-env following it, and none of Orb's variables in the commands Codex runs.
-  const servers = { orb: { command: 'node', args: ['server.mjs', '--ticket-env=ORB_TICKET_orb'], env: { ELECTRON_RUN_AS_NODE: '1', ORB_TICKET_orb: 'ticket-secreto' } },
+  const servers = { orb: { command: 'node', args: ['server.mjs', '--ticket-env=ORB_TICKET_orb'], env: { ORB_AUTH_PIPE: 'tubo', ORB_TICKET_orb: 'ticket-secreto' } },
     uno: { command: 'npx', args: [], env: { API_KEY: 'clave-uno', DATABASE_URL: 'postgres://u:pass@h/db' } }, dos: { command: 'npx', args: [], env: { API_KEY: 'clave-dos' } } };
   const withSecrets = codex.mcpArgs(servers);
   for (const v of ['ticket-secreto', 'clave-uno', 'clave-dos', 'pass@h']) assert.ok(!withSecrets.some((a) => a.includes(v)), `${v} no está en los argumentos`);
   assert.ok(withSecrets.includes('mcp_servers.orb.args=["server.mjs","--ticket-env=ORB_MCP_orb_ORB_TICKET_orb"]'));
-  assert.ok(withSecrets.includes('mcp_servers.orb.env={ELECTRON_RUN_AS_NODE="1"}'));
+  assert.ok(withSecrets.includes('mcp_servers.orb.env={ORB_AUTH_PIPE="tubo"}'));
   assert.ok(withSecrets.includes('mcp_servers.uno.env_vars=["ORB_MCP_uno_API_KEY","ORB_MCP_uno_DATABASE_URL"]'));
   assert.ok(withSecrets.includes('shell_environment_policy.exclude=["ORB_*"]'));
   assert.deepEqual(codex.mcpSecrets(servers), { ORB_MCP_orb_ORB_TICKET_orb: 'ticket-secreto', ORB_MCP_uno_API_KEY: 'clave-uno', ORB_MCP_uno_DATABASE_URL: 'postgres://u:pass@h/db', ORB_MCP_dos_API_KEY: 'clave-dos' });

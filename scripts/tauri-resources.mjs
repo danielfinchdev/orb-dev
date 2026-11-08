@@ -1,11 +1,11 @@
 // What the Tauri package carries next to Orb.exe (src-tauri/resources, git-ignored; tauri.windows.conf.json lists it):
 //   node/node.exe   the official Node 24 LTS for Windows x64 (signed by the OpenJS Foundation), checked against its
 //                   pinned SHA-256 and kept in the build cache (ORB_BUILD_CACHE, by default %LOCALAPPDATA%\orb-build-cache)
-//   app/src/...     the engine's code (src without the window's sources and Electron's main process) and the built
+//   app/src/...     the engine's code (src without the window's sources) and the built
 //                   window (src/renderer: the phone's page is served from it)
 //   app/node_modules/{@anthropic-ai/claude-agent-sdk,zod,@noble/*}   the engine's packages (no platform binaries)
 //   app/package.json
-// The same list electron-builder used (package.json › build.files / asarUnpack). Run after `vite build`.
+// Run after `vite build`.
 //   node scripts/tauri-resources.mjs
 import fs from 'node:fs';
 import os from 'node:os';
@@ -55,9 +55,9 @@ function app() {
   const dest = path.join(OUT, 'app');
   fs.rmSync(dest, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   if (!fs.existsSync(path.join(ROOT, 'src', 'renderer', 'index.html'))) throw new Error('falta src/renderer: ejecuta antes `npx vite build`');
-  // src without the window's sources (built into src/renderer) and Electron's main process.
+  // src without the window's sources (built into src/renderer).
   const src = path.join(ROOT, 'src');
-  copy(src, path.join(dest, 'src'), (name, full) => [path.join(src, 'ui'), path.join(src, 'main')].includes(full));
+  copy(src, path.join(dest, 'src'), (name, full) => full === path.join(src, 'ui'));
   const modules = ['@anthropic-ai/claude-agent-sdk', 'zod', ...fs.readdirSync(path.join(ROOT, 'node_modules', '@noble')).map((n) => `@noble/${n}`)];
   for (const m of modules) copy(path.join(ROOT, 'node_modules', m), path.join(dest, 'node_modules', m));
   copy(path.join(ROOT, 'package.json'), path.join(dest, 'package.json'));

@@ -211,7 +211,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     },
     'projects.setActive': ({ name }) => board.setActiveProject(name ? project(name).name : '', 'usuario'),
     // 3.8.1: the end of a project (src/core/project-close.mjs). Finished: it leaves Orb, its folder stays (listed in
-    // «Finalizados» to reopen it). Deleted: its folder goes too. main.mjs: projects.deleteCheck (the master password; from
+    // «Finalizados» to reopen it). Deleted: its folder goes too. The app: projects.deleteCheck (the master password; from
     // then on nothing of the project starts, and it returns a one-off ticket), the Recycle Bin, then projects.delete with
     // that ticket (trashed; or, when the Recycle Bin could not take it and the user chose so, the engine deletes it for
     // good) or projects.deleteAbort (cancelled: it works again, its schedules back on).

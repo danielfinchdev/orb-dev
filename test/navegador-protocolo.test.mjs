@@ -1,7 +1,6 @@
-// 3.7 (WS5): the agents' browser speaks one pipe protocol. The suite runs against the app's browser code (its Electron
-// driver, src/main/browser-driver.mjs, over a stand-in webContents driving the local Edge or Chromium, headless) and,
-// 3.8.1 (D2, D7), against the engine's browser with its DevTools driver as it runs under Tauri (src/engine/host-browser.mjs,
-// agent-browser.mjs, browser-cdp.mjs), with a stand-in for the app's side (Rust's browser.rs) over pages of the local Edge.
+// 3.7 (WS5): the agents' browser speaks one pipe protocol. 3.8.1 (D2, D7): the suite runs against the engine's browser
+// with its DevTools driver (src/engine/host-browser.mjs, agent-browser.mjs, browser-cdp.mjs), with a stand-in for the
+// app's side (Rust's browser.rs) over pages of the local Edge, headless.
 // Secret fields never leave the page.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,7 +10,6 @@ import path from 'node:path';
 import http from 'node:http';
 import { browserKey } from '../src/core/browser-key.mjs';
 import { createActions, servePipe, KEYS, dialogsHook } from '../src/core/browser-protocol.mjs';
-import { electronDriver } from '../src/main/browser-driver.mjs';
 import { createHostBrowser } from '../src/engine/host-browser.mjs';
 import { translate } from '../src/core/i18n.mjs';
 
@@ -69,70 +67,6 @@ async function connect(pipe, token, who = { agent: 'claude', session: 'conv-1', 
   };
 }
 
-// ---- the app's browser, with its own driver over a stand-in for Electron's webContents (a page of the local Chromium).
-async function stubWebContents(page, context) {
-  const cdp = await context.newCDPSession(page);
-  await cdp.send('Page.enable');
-  const main = (await cdp.send('Page.getFrameTree')).frameTree.frame.id;
-  let ctxId = null; let loading = false; let history = 0; let chain = Promise.resolve();
-  cdp.on('Page.frameNavigated', (e) => { if (!e.frame.parentId) { ctxId = null; history++; } });
-  cdp.on('Page.frameStartedLoading', (e) => { if (e.frameId === main) loading = true; });
-  cdp.on('Page.frameStoppedLoading', (e) => { if (e.frameId === main) loading = false; });
-  const queue = (fn) => { chain = chain.then(fn).catch(() => {}); return chain; };
-  const byElectron = Object.fromEntries(Object.values(KEYS).map((d) => [d.electron, d]));
-  return {
-    async executeJavaScriptInIsolatedWorld(_world, [{ code }]) {
-      await chain;
-      for (let i = 0; ; i++) {
-        try {
-          if (!ctxId) ctxId = (await cdp.send('Page.createIsolatedWorld', { frameId: main, worldName: 'electron-1717' })).executionContextId;
-          const r = await cdp.send('Runtime.evaluate', { expression: code, contextId: ctxId, returnByValue: true, awaitPromise: true });
-          if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? 'error');
-          return r.result.value;
-        } catch (error) { if (i >= 2 || !/context/i.test(error.message)) throw error; ctxId = null; }
-      }
-    },
-    executeJavaScript: (code) => page.evaluate(code),
-    loadURL: (url) => page.goto(url, { waitUntil: 'load' }).then(() => {}),
-    isLoading: () => loading,
-    sendInputEvent(ev) {
-      queue(async () => {
-        if (ev.type.startsWith('mouse')) await cdp.send('Input.dispatchMouseEvent', { type: { mouseMove: 'mouseMoved', mouseDown: 'mousePressed', mouseUp: 'mouseReleased' }[ev.type], x: ev.x, y: ev.y, button: ev.button ?? 'none', clickCount: ev.clickCount ?? 0 });
-        else if (ev.type === 'char') await cdp.send('Input.dispatchKeyEvent', { type: 'char', text: ev.keyCode });
-        else { const d = byElectron[ev.keyCode]; await cdp.send('Input.dispatchKeyEvent', { type: ev.type === 'keyDown' ? 'rawKeyDown' : 'keyUp', key: d.key, code: d.code, windowsVirtualKeyCode: d.vk }); }
-      });
-    },
-    focus() {},
-    insertText: (text) => queue(() => page.keyboard.insertText(text)),
-    navigationHistory: { canGoBack: () => history > 1, goBack: () => { history -= 2; page.goBack().catch(() => {}); } },
-    capturePage: async () => { await chain; const jpg = await page.screenshot({ type: 'jpeg', quality: 70 }); return { resize: () => ({ toJPEG: () => jpg }) }; },
-    getURL: () => page.url(),
-    startPainting() {}, stopPainting() {}, invalidate() {},
-    forcefullyCrashRenderer: () => { page.close().catch(() => {}); }
-  };
-}
-async function electronHarness() {
-  const { chromium } = await import('playwright-core');
-  const browser = await chromium.launch({ executablePath: EXE, headless: true });
-  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
-  const token = 'e'.repeat(48);
-  const tabs = new Map();
-  const actions = createActions({ driver: electronDriver(T), T });
-  async function create(key, who) {
-    const page = await context.newPage();
-    const wc = await stubWebContents(page, context);
-    const tab = { key, ...who, win: { webContents: wc, isDestroyed: () => page.isClosed() }, users: 0, painting: true, console: [], dialogAnswer: { accept: false, text: '' } };
-    page.on('console', (m) => { if (m.type() === 'error') tab.console.push({ level: 'error', message: m.text(), source: '', line: 0 }); });
-    // Electron puts its alert/confirm/prompt in place on every page (dom-ready): the same here.
-    page.on('domcontentloaded', () => { wc.executeJavaScript(dialogsHook(tab.dialogAnswer)).catch(() => {}); });
-    tabs.set(key, tab);
-    return tab;
-  }
-  const served = servePipe({ token, T, actions, pages: { get: (k) => tabs.get(k), dead: (t) => t.win.isDestroyed(), create, close: (t) => { tabs.delete(t.key); t.win.webContents.forcefullyCrashRenderer(); } } });
-  await served.ready;
-  return { pipe: served.pipe, token, profileDir: null, async close() { served.close(); await browser.close(); } };
-}
-
 async function suite(t, browser) {
   // A key for another conversation (or none) is cut off before any action.
   const forged = await connect(browser.pipe, browser.token, { agent: 'claude', session: 'conv-1', task: '' }, 'f'.repeat(64));
@@ -188,11 +122,6 @@ async function suite(t, browser) {
     assert.match((await c.act('close')).result, /No había navegador abierto/);
   } finally { c.end(); }
 }
-
-test('navegador de la app (driver de Electron): el protocolo de las herramientas y los secretos', { skip }, async (t) => {
-  const b = await electronHarness();
-  try { await suite(t, b); } finally { await b.close(); }
-});
 
 // ---- 3.8.1 (D2, D7): the engine's browser as under Tauri (src/engine/host-browser.mjs). The app's side, which Rust does
 // with hidden WebView2 windows (src-tauri/src/browser.rs), is played here by pages of a headless Edge: the same host.*

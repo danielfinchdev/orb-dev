@@ -1,5 +1,5 @@
 // The engine: the bundled node.exe running src/engine/engine.mjs with ORB_ENGINE_STDIO=1, one JSON message per line on
-// its stdin/stdout (src-tauri/src/pipes.rs). The same life as under Electron's main.mjs:
+// its stdin/stdout (src-tauri/src/pipes.rs). The same life as in Orb 3.8.0:
 //   - started with Orb, before the window has loaded; it first says where the workspace is ('locate'), then 'start's;
 //   - a call of the window waits until it has started; a crash restarts it (at most 3 times), exit code 75 included
 //     («core lost»: it restores core when it starts again); then 'engine:restarted' or 'engine:stopped';

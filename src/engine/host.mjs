@@ -45,7 +45,7 @@ export const TERMINAL_CHOICES = Object.freeze(['auto', 'warp', 'wt', 'powershell
 // A folder of this PC: absolute, and not a network or device path (\\server\share, \\?\..., \\.\...): only looking at
 // one of those already sends this user's Windows credentials to that server.
 export const localPath = (p) => typeof p === 'string' && p.length > 0 && p.length < 2000 && !p.includes('\0') && path.isAbsolute(p) && !/^[\\/]{2}/.test(p) && (process.platform !== 'win32' || /^[a-z]:[\\/]/i.test(p));
-// What the app accepts, the same rules in every app (Electron's main.mjs; Tauri's Rust repeats them in protocol.rs): a
+// What the app accepts, the same rules as the app (Tauri's Rust repeats them in protocol.rs): a
 // web page over https, a page of this PC (a project's preview), or Warp's own link to open a tab in a folder. Folders
 // only, never a file to run. A terminal, an editor or an action by kind, in an existing folder of this PC; the app picks
 // the program. The secret: 64 hex characters to seal, a sealed blob (base64, at most 16 KB) to open. Returns the request

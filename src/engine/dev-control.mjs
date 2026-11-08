@@ -1,6 +1,6 @@
 // 3.1, development only: a control line from the developer's terminal to Orb.dev's engine, so the app can be watched and
 // driven (tasks, chat, permissions, approvals) without clicking in its window. It exists only when the app runs unpacked
-// AND it was started with ORB_DEV_CONTROL=1 (main.mjs never passes it to an installed Orb). Local only (127.0.0.1), and
+// AND it was started with ORB_DEV_CONTROL=1 (the app never passes it to an installed Orb). Local only (127.0.0.1), and
 // every request needs the random key written, with the port, to a file only this user can read (ORB_DEV_CONTROL_FILE, or
 // %TEMP%\orb-dev-control.json). The client is scripts/orb-dev.mjs.
 //   POST /call      { method, params } → the same API the window uses (the answer of api.call)

@@ -1,8 +1,8 @@
-// 3.8.1: the desktop app on Tauri. Defines window.orb with the same shape as Electron's preload (src/main/preload.cjs), so
+// 3.8.1: the desktop app on Tauri. Defines window.orb (the shape every bridge of Orb has), so
 // no component changes: engine calls and events go through Rust (src-tauri/src), which checks them again and relays them
 // to the engine over its stdin/stdout. Also what Electron's menu and window did for the page: the keys (zoom, Ctrl+J,
 // F11), Ctrl + mouse wheel, and moving the window by its top bars (WebView2 under Tauri ignores CSS app-region).
-// Does nothing outside Tauri (Electron's preload, a phone's browser and the Android app have their own bridge). Must be
+// Does nothing outside Tauri (a phone's browser and the Android app have their own bridge). Must be
 // imported first.
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -58,7 +58,6 @@ if (window.__TAURI_INTERNALS__ && !window.orb) {
     // opened (info().startError.code === 'secretUnreadable').
     retryStart: (opts) => invoke('app_retry_start', { newSecret: opts?.newSecret === true }),
     platform: 'win32',
-    light: false,
     setup: (data) => invoke('app_setup', { data: data ?? {} }),
     switchHome: (folder) => invoke('app_switch_home', { target: String(folder ?? '') }),
     // Windows' own dialogs, opened by Rust (the page has no dialog permission).
@@ -95,7 +94,7 @@ if (window.__TAURI_INTERNALS__ && !window.orb) {
   };
 
   // Ctrl and the key, whatever the keyboard: «+» has its own key on a Spanish one, «=» shares it on an English one, and the
-  // number pad has its own (the same keys as Electron's main.mjs › zoomKey).
+  // number pad has its own (the same keys as Orb 3.8.0).
   const zoomKey = (e) => {
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return null;
     if (['+', '=', 'Add'].includes(e.key) || e.code === 'NumpadAdd') return 'in';

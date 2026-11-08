@@ -1,5 +1,5 @@
-// 3.7 (WS5): what the agents' browser does (the app's, src/main/browser.mjs, Electron; 3.8.1: the engine's,
-// src/engine/agent-browser.mjs, over the DevTools protocol). It speaks a line-JSON pipe with the MCP server of each agent
+// 3.7 (WS5): what the agents' browser does (3.8.1: the engine's, src/engine/agent-browser.mjs, over the DevTools
+// protocol). It speaks a line-JSON pipe with the MCP server of each agent
 // (src/mcp/server.mjs: orb_browser_*).
 //
 // Here: the limits, the keys, the scripts that run in the page's isolated world (what can be clicked or typed into, and
@@ -21,27 +21,26 @@ export const MAX_TABS = 4;
 export const MAX_LINE = 64 * 1024;
 export const ACTION_MS = 40_000; // a page that does not answer in this time is stopped (endless loops, frozen renderers)
 export const MAX_PENDING = 8; // queued requests per connection
-export const WORLD = 1717; // Electron's isolated world: our scripts share the page's DOM but none of its JavaScript
+export const WORLD = 1717; // the isolated world: our scripts share the page's DOM but none of its JavaScript
 export const TEXT_MAX = 5000;
 
 // The keys an agent (and the live view's special-key buttons) may press. name: the tool's (and Playwright's) name; key and
-// code: the DOM's; vk: Windows' key code (CDP Input.dispatchKeyEvent); electron: Electron's sendInputEvent keyCode; text:
-// the character the key types, if any.
+// code: the DOM's; vk: Windows' key code (CDP Input.dispatchKeyEvent); text: the character the key types, if any.
 export const KEYS = Object.freeze({
-  Enter: { key: 'Enter', code: 'Enter', vk: 13, electron: 'Enter', text: '\r' },
-  Tab: { key: 'Tab', code: 'Tab', vk: 9, electron: 'Tab' },
-  Escape: { key: 'Escape', code: 'Escape', vk: 27, electron: 'Escape' },
-  Backspace: { key: 'Backspace', code: 'Backspace', vk: 8, electron: 'Backspace' },
-  Delete: { key: 'Delete', code: 'Delete', vk: 46, electron: 'Delete' },
-  Space: { key: ' ', code: 'Space', vk: 32, electron: 'Space', text: ' ' },
-  ArrowUp: { key: 'ArrowUp', code: 'ArrowUp', vk: 38, electron: 'Up' },
-  ArrowDown: { key: 'ArrowDown', code: 'ArrowDown', vk: 40, electron: 'Down' },
-  ArrowLeft: { key: 'ArrowLeft', code: 'ArrowLeft', vk: 37, electron: 'Left' },
-  ArrowRight: { key: 'ArrowRight', code: 'ArrowRight', vk: 39, electron: 'Right' },
-  PageUp: { key: 'PageUp', code: 'PageUp', vk: 33, electron: 'PageUp' },
-  PageDown: { key: 'PageDown', code: 'PageDown', vk: 34, electron: 'PageDown' },
-  Home: { key: 'Home', code: 'Home', vk: 36, electron: 'Home' },
-  End: { key: 'End', code: 'End', vk: 35, electron: 'End' }
+  Enter: { key: 'Enter', code: 'Enter', vk: 13, text: '\r' },
+  Tab: { key: 'Tab', code: 'Tab', vk: 9 },
+  Escape: { key: 'Escape', code: 'Escape', vk: 27 },
+  Backspace: { key: 'Backspace', code: 'Backspace', vk: 8 },
+  Delete: { key: 'Delete', code: 'Delete', vk: 46 },
+  Space: { key: ' ', code: 'Space', vk: 32, text: ' ' },
+  ArrowUp: { key: 'ArrowUp', code: 'ArrowUp', vk: 38 },
+  ArrowDown: { key: 'ArrowDown', code: 'ArrowDown', vk: 40 },
+  ArrowLeft: { key: 'ArrowLeft', code: 'ArrowLeft', vk: 37 },
+  ArrowRight: { key: 'ArrowRight', code: 'ArrowRight', vk: 39 },
+  PageUp: { key: 'PageUp', code: 'PageUp', vk: 33 },
+  PageDown: { key: 'PageDown', code: 'PageDown', vk: 34 },
+  Home: { key: 'Home', code: 'Home', vk: 36 },
+  End: { key: 'End', code: 'End', vk: 35 }
 });
 export const KEY_NAMES = Object.keys(KEYS);
 
@@ -122,7 +121,7 @@ export const MASK_OFF = `(() => { const m = globalThis.__orbMask; if (m) m.remov
 
 // 3.2.1: the page's alert/confirm/prompt (an off-screen page cannot show them) replaced in the page itself: they answer
 // what the agent chose (orb_browser_dialog) and are noted for it to read. Installed again on each page; the answer of the
-// tab is carried over (Electron).
+// tab is carried over.
 export const dialogsHook = (answer) => `(() => {
   window.__orbDialogAnswer = ${JSON.stringify({ accept: Boolean(answer?.accept), text: String(answer?.text ?? '') })};
   if (window.__orbDialogsOn) return; window.__orbDialogsOn = true;

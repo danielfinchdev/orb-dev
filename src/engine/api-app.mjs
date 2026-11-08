@@ -1,6 +1,6 @@
-// 3.8.1: this PC's tools that used to live in Electron's main process and need no window: a terminal in a folder
+// 3.8.1: this PC's tools that need no window: a terminal in a folder
 // (Ctrl+J), the project in an editor or the File Explorer, a project's action in a terminal of its own, the feedback mail
-// and the author's other apps. In the engine they work the same under any app (Electron now, Tauri next); what only the
+// and the author's other apps. In the engine they work the same under any app; what only the
 // app can do (open a link or a folder; a terminal, an editor or an action, the program picked by the app) is asked to it
 // (src/engine/host.mjs).
 // This PC only (src/core/permissions.mjs). engine.mjs also answers them while core or the data are blocked.

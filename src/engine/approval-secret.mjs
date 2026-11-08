@@ -1,26 +1,17 @@
-// The approval secret on disk, sealed by the system, and its copy outside the workspace (the app's data folder). No
-// Electron imports: the tests use it with a fake seal. Two apps keep it, each in its own files, so that either can run
-// on the same workspace after the other without ever making a new secret:
+// The approval secret on disk, sealed by Windows, and its copy outside the workspace (the app's data folder): Windows'
+// DPAPI in Rust (host.seal / host.unseal), ORB2 in core\datos\clave2.enc and claves\<key>.v2.enc (loadHostSecret). The
+// tests use it with a fake seal.
 //
-//   Electron (Orb up to 3.8.0, and main.mjs): safeStorage's v10 in core\datos\clave.enc and claves\<key>.enc
-//     (loadApprovalSecret, the same rules as 3.8.0):
-//     - clave.enc opens: it is the secret; the copy is brought up to date.
-//     - It is gone or cannot be read (core deleted or damaged): the copy outside, put back. A clave.enc that cannot be
-//       read is kept aside (clave.<date>.ilegible.enc), never overwritten: another Windows user may still open it.
-//     - Neither: the plain clave.bin of a new workspace (only when no sealed key exists at all), or a new secret.
-//     The copy outside is never replaced by a different secret: one that holds another secret (or cannot be read) is
-//     put aside first (<name>.<date>.enc), since old backups may only open with it.
-//
-//   Tauri (3.8.1): Windows' DPAPI in Rust (host.seal / host.unseal), ORB2 in core\datos\clave2.enc and
-//     claves\<key>.v2.enc (loadHostSecret). It reads its own ORB2 first and Electron's v10 after, and NEVER writes,
-//     moves or renames Electron's files: Orb 3.8.0 (still installed, reinstalled, portable) opens its clave.enc as it
-//     always did, and would make a new secret if it found anything else there. And it never makes a new secret on its
-//     own: a key it cannot read now (a file or Local State busy, the app not answering) stops the start (SecretError
-//     'busy': try again); sealed keys that none opens are the user's call (SecretError 'unreadable': try again, or
-//     start with a new key, allowNew).
+// Orb 3.8.0 (Electron: still installed, reinstalled or portable) keeps its own files: safeStorage's v10 in
+// core\datos\clave.enc and claves\<key>.enc, and makes a NEW secret when its clave.enc is not there or does not open
+// (test/fixtures/approval-secret-3.8.0.mjs, its real code). So Orb reads its own ORB2 first and 3.8.0's v10 after, never
+// writes, moves or renames 3.8.0's files, and makes 3.8.0's clave.enc only where there is none (see loadHostSecret): both
+// open the same secret on the same workspace. And it never makes a new secret on its own: a key it cannot read now (a
+// file or Local State busy, the app not answering) stops the start (SecretError 'busy': try again); sealed keys that none
+// opens are the user's call (SecretError 'unreadable': try again, or start with a new key, allowNew).
 //
 // Every write: a temporary file of its own, flushed to disk, then renamed over the old one (the file always exists and
-// is whole); what is replaced is copied aside first. A lock file (clave.lock) keeps two apps from doing it at once.
+// is whole); what is replaced is copied aside first. A lock (clave.lock) keeps two starts from doing it at once.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -92,53 +83,6 @@ async function withLock(dir, wait, fn) {
     }
   }
 }
-
-// ---- Electron (3.8.0's rules; its files only) -------------------------------------------------------------------------
-
-// dir: the data folder (clave.enc, clave.bin); copy: the file outside; seal(hex) → Buffer; unseal(Buffer) → string (both
-// may return a promise). → the secret as hex.
-export async function loadApprovalSecret({ dir, copy, seal, unseal }) {
-  const enc = path.join(dir, 'clave.enc'); const plain = path.join(dir, 'clave.bin');
-  const open = async (file) => { try { const hex = await unseal(fs.readFileSync(file)); return HEX.test(hex) ? hex : null; } catch { return null; } };
-  const keep = async (sealed, hex) => {
-    try {
-      if (fs.existsSync(copy)) {
-        if (fs.readFileSync(copy).equals(sealed)) return;
-        if (await open(copy) !== hex) keepAside(copy);
-      }
-      writeWhole(copy, sealed);
-    } catch { /* the next start */ }
-  };
-  return withLock(dir, 5000, async () => {
-    // A restored backup's key: it wins over everything from before the restore (kept aside, never overwritten).
-    const restored = restoredKey(dir);
-    if (restored) {
-      const sealed = await seal(restored);
-      if (fs.existsSync(enc) && await open(enc) !== restored) { try { keepAside(enc, 'antes'); } catch { /* replaced below */ } }
-      writeWhole(enc, sealed);
-      forgetRestored(dir);
-      await keep(sealed, restored);
-      return restored;
-    }
-    let hex = await open(enc);
-    if (hex) { fs.rmSync(plain, { force: true }); await keep(fs.readFileSync(enc), hex); return hex; }
-    hex = await open(copy);
-    if (!hex) {
-      // The plain key of a new workspace only when no sealed one exists: one that could not be read never loses to it.
-      const sealedExists = [enc, copy].some((f) => fs.existsSync(f));
-      try { const b = fs.readFileSync(plain); hex = !sealedExists && b.length >= 32 ? b.subarray(0, 32).toString('hex') : null; } catch { hex = null; }
-      hex ??= crypto.randomBytes(32).toString('hex');
-    }
-    const sealed = await seal(hex);
-    if (fs.existsSync(enc)) { try { keepAside(enc, 'ilegible'); } catch { /* replaced below */ } }
-    writeWhole(enc, sealed);
-    fs.rmSync(plain, { force: true });
-    await keep(sealed, hex);
-    return hex;
-  });
-}
-
-// ---- Tauri (ORB2 in its own files; Electron's read, never touched) ---------------------------------------------------
 
 export class SecretError extends Error {
   constructor(code, message) { super(message ?? code); this.code = code; }
@@ -318,7 +262,7 @@ export async function loadHostSecret({ dir, copy, seal, unseal, sealV10 = null, 
   });
 }
 
-// Under Tauri: Rust seals with DPAPI as ORB2 and still reads Electron's v10 (with the Local State of the app's data
+// Rust seals with DPAPI as ORB2 and still reads Electron's v10 (with the Local State of the app's data
 // folder, never changed). hostCall: src/engine/host.mjs (its errors carry Rust's code).
 export const ORB2 = Buffer.from('ORB2');
 export function hostSealing(hostCall) {

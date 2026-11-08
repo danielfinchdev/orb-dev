@@ -75,7 +75,10 @@ test('qué puente tiene la página: el del escritorio, el de la app o el del nav
 
 test('la app de Android se compila aparte y no entra en el instalador del PC', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-  assert.ok(pkg.build.files.includes('!android-app/**'));
+  // The PC's package carries src (without the window's sources), the engine's packages and package.json: never android-app.
+  const resources = fs.readFileSync(path.join(ROOT, 'scripts', 'tauri-resources.mjs'), 'utf8');
+  assert.match(resources, /copy\(src, path\.join\(dest, 'src'\)/);
+  assert.doesNotMatch(resources, /android-app/);
   assert.match(pkg.scripts['android:build'], /android-build\.mjs/);
   const cap = JSON.parse(fs.readFileSync(path.join(ROOT, 'android-app', 'capacitor.config.json'), 'utf8'));
   assert.equal(cap.appId, 'dev.orb.app'); assert.equal(cap.appName, 'Orb');

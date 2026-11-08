@@ -1,6 +1,6 @@
 // The pure rules of the agents' browser (browser.rs), kept apart so `cargo test` covers them: which addresses its pages
 // may load, which DevTools methods the engine may call on them, its user agent, and the checks of the engine's host.browser.*
-// and host.pip.* requests. The same limits as Electron's agents' browser (src/main/browser.mjs): only http(s) pages, no
+// and host.pip.* requests. The limits of Orb's agents' browser (as in 3.8.0): only http(s) pages, no
 // other scheme (file:, an app's own protocol, Orb's own pages), and nothing beyond what the shared actions need.
 use serde_json::{json, Value};
 use std::time::{Duration, Instant};

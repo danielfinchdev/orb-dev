@@ -1,6 +1,5 @@
 // 3.8.1 (D2, D7): what the agents' browser does with one of its pages over the DevTools protocol, for the shared actions
-// of src/core/browser-protocol.mjs: the same driver interface as Electron's (src/main/browser-driver.mjs, kept until
-// Electron goes). Under Tauri the pages are hidden WebView2 windows driven by Rust (CallDevToolsProtocolMethod, no
+// of src/core/browser-protocol.mjs: the driver interface browser-protocol.mjs expects. Under Tauri the pages are hidden WebView2 windows driven by Rust (CallDevToolsProtocolMethod, no
 // DevTools port: src/engine/host-browser.mjs); in the tests, pages of a headless Edge.
 //
 // attachPage(page, tab) takes a page ({ id, send, on, close }: src/engine/agent-browser.mjs) and keeps on the tab what the

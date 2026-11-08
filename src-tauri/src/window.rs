@@ -1,6 +1,6 @@
 // Orb's window: no Windows title bar (the app draws its own minimise / maximise / close and moves the window by its top
 // bars: src/ui/lib/tauri-bridge.js), the size of the interface (interfaz.json), the theme's background before the page
-// paints, only Orb's own pages, and the question before closing with tasks running. As Electron's main.mjs did.
+// paints, only Orb's own pages, and the question before closing with tasks running. As Orb 3.8.0 did.
 use crate::engine::{self, Engine};
 use crate::protocol;
 use serde_json::{json, Value};

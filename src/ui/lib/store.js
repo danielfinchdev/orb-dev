@@ -8,13 +8,12 @@ import { cleanRoute, backStep } from './phone-nav.js';
 import { t } from './i18n.js';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from '../../core/appearance.mjs';
 
-// The bridge to the PC: Electron's preload, or the phone's web bridge (src/ui/lib/web-bridge.js). Read when used, not when
+// The bridge to the PC: the desktop app's (src/ui/lib/tauri-bridge.js), or the phone's web bridge (src/ui/lib/web-bridge.js). Read when used, not when
 // this module loads: the bundler may load this module before the phone's bridge has defined window.orb.
 export const bridge = new Proxy({}, { get: (_, key) => window.orb?.[key], has: (_, key) => Boolean(window.orb) && key in window.orb });
 export const call = (method, params) => bridge.call(method, params);
-// 2.7.3: the whole PC app (the installer), not the phone nor Orb Light (the portable .exe): mini-games, God mode, PC Status
-// and the themes live only here.
-export const fullPc = () => !bridge.mobile && !bridge.light;
+// 2.7.3: the whole PC app, not the phone: mini-games, God mode, PC Status and the themes live only here.
+export const fullPc = () => !bridge.mobile;
 // 3.5: a computer's browser linked with an Orb: the PC's layout, with what
 // a linked device may do. Decided once, when the page opens (a phone, or the Android app, keeps the phone's layout).
 let wide = null;
@@ -224,7 +223,7 @@ export const isDark = () => document.documentElement.classList.contains('dark');
 export function applyAppearance(ui = {}) {
   const pick = (value, list) => (list.includes(value) ? value : list[0]);
   const root = document.documentElement.dataset;
-  root.skin = fullPc() ? pick(ui.skin, SKINS) : SKINS[0]; // 2.7: the phone (and Orb Light) always wears the default theme
+  root.skin = fullPc() ? pick(ui.skin, SKINS) : SKINS[0]; // 2.7: the phone always wears the default theme
   root.font = pick(ui.font, FONTS);
   root.codeFont = pick(ui.codeFont, CODE_FONTS);
   root.codeTheme = pick(ui.codeTheme, CODE_THEMES);

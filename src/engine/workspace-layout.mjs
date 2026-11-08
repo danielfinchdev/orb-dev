@@ -39,7 +39,7 @@ export async function layoutApply(choices, { emit = () => {}, log = () => {}, bo
   return { ...layoutPlan(), logsMoved: r?.logs ?? null };
 }
 
-let keys = null; // the folder of the app's copies of the sealed secrets (main.mjs), when the app gives it
+let keys = null; // the folder of the app's copies of the sealed secrets, when the app gives it
 export function guardOutside({ mirror } = {}) {
   if (typeof mirror === 'string' && path.isAbsolute(mirror)) keys = path.dirname(mirror);
   // 3.8: and the app's «Local State» next to that folder (it holds the key Windows seals Orb's secret with), when the
@@ -52,15 +52,13 @@ export function guardOutside({ mirror } = {}) {
   setAppRoots(app && !inside(app, ctx.home) ? [app] : []);
 }
 
-// The folder of an installed Orb: Tauri's (Orb.exe with node\node.exe and app\ beside it: ORB_NODE, set by the app) or
-// Electron's (…\resources\app.asar.unpacked holds ORB_MCP_SCRIPT). Not a build of the code (a cargo target folder or the
-// repository: agents may work on Orb itself).
+// The folder of an installed Orb (Orb.exe with node\node.exe and app\ beside it: ORB_NODE, set by the app). Not a build of
+// the code (a cargo target folder or the repository: agents may work on Orb itself).
 export function appInstallDir(env = process.env) {
   const node = env.ORB_NODE;
   if (typeof node === 'string' && path.isAbsolute(node) && path.basename(path.dirname(node)).toLowerCase() === 'node') {
     const dir = path.dirname(path.dirname(node));
     if (fs.existsSync(path.join(dir, 'app')) && !/[\\/]target[\\/]/i.test(dir)) return dir;
   }
-  const m = /^(.*)[\\/]resources[\\/]app\.asar\.unpacked[\\/]/i.exec(String(env.ORB_MCP_SCRIPT ?? ''));
-  return m && path.isAbsolute(m[1]) ? m[1] : null;
+  return null;
 }
