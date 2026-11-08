@@ -241,7 +241,36 @@ export function workDirs(command, cwd) {
   }
   return out;
 }
-function touchesInternal({ command: given, paths, patterns, internalDir, cwd, read = false }) {
+// 3.8.1 (review final M3, hardening only: not a boundary): the same command with its quotes and escapes taken out
+// (`pers''onal`, "pers"onal, PowerShell's `, cmd's ^, bash's \x between letters) is checked too: any of them that names
+// a closed folder refuses it.
+const unquoted = (c) => String(c ?? '').replace(/['"`^]/g, '');
+const unescaped = (c) => unquoted(c).replace(/(?<=[A-Za-z0-9_.-])\\(?=[A-Za-z0-9_.-])/g, '');
+// A word with a wildcard (`pers*`, `C:/Orb/*/x`, `p?rsonal`) that could expand into a closed folder (core, the owner's
+// personal folder, the copies outside): its segments, resolved from the folder it runs in, matched against each root's.
+const GLOB = /[*?[]/;
+const globRe = (seg) => new RegExp(`^${seg.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.').replace(/\[!/g, '[^')}$`, 'i');
+function globReaches(word, dir, roots) {
+  const w = winPath(String(word ?? '')).replace(/^~(?=[\\/]|$)/, os.homedir());
+  if (!GLOB.test(w)) return false;
+  const abs = path.isAbsolute(w) || path.win32.isAbsolute(w) ? w : dir ? `${dir}\\${w}` : null;
+  if (!abs) return false;
+  const segs = []; // resolved by hand, segment by segment ('..' and '.' as a shell takes them)
+  for (const s of abs.split(/[\\/]+/)) { if (!s || s === '.') continue; if (s === '..') segs.pop(); else segs.push(s); }
+  return roots.some((r) => {
+    const rs = r.split('\\').filter(Boolean);
+    const n = Math.min(segs.length, rs.length);
+    // No wildcard on the way to the root: the literal checks see it.
+    if (!segs.slice(0, n).some((s) => GLOB.test(s))) return false;
+    for (let i = 0; i < n; i++) { if (GLOB.test(segs[i]) ? !globRe(segs[i]).test(rs[i]) : segs[i].toLowerCase() !== rs[i]) return false; }
+    return true;
+  });
+}
+function touchesInternal(args) {
+  const variants = [...new Set([args.command, unquoted(args.command), unescaped(args.command)].map((c) => String(c ?? '')))];
+  return variants.some((command) => touchesOnce({ ...args, command }));
+}
+function touchesOnce({ command: given, paths, patterns, internalDir, cwd, read = false }) {
   if (!internalDir) return false;
   const command = expandEnv(given);
   if ([...paths, ...patterns].some((p) => isOrbData(p, internalDir, cwd, { read }))) return true;
@@ -261,9 +290,11 @@ function touchesInternal({ command: given, paths, patterns, internalDir, cwd, re
   // name), is resolved there. (An agent whose own folder is inside core, a run's: its plain words are not looked at.)
   const start = cwd ? norm(realOf(cwd)) : null;
   const startInCore = Boolean(start) && (start === root || start.startsWith(`${root}\\`));
+  const roots = [root, ...guardedRoots, ...(read === true ? [] : appRoots)];
   for (const part of workDirs(command, cwd)) {
     if (part.moved && part.dir && isOrbData(part.dir, internalDir, null, { read })) return true;
     for (const w of part.words) {
+      if (globReaches(w, part.dir, roots)) return true;
       if (/^-/.test(w) && !/[\\/]/.test(w)) continue;
       if (!part.moved && startInCore && !/[\\/~]|^\.\.?$/.test(w)) continue;
       if (isOrbData(w, internalDir, part.dir, { read })) return true;

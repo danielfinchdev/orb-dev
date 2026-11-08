@@ -77,5 +77,13 @@ test('la carpeta personal del dueño: ningún agente la lee ni la toca', () => {
     assert.equal(read.decision, 'deny');
     const cmd = decide({ tool: 'Bash', command: `type "${path.join(privateDir(t.home), 'notas.md')}"`, cwd: project, permission: 'total', internalDir: internal });
     assert.notEqual(cmd.decision, 'allow', 'ni con permiso total');
+    // Review final M3 (hardening): quotes, escapes and wildcards in the name are seen through.
+    const home = t.home.replace(/\\/g, '/');
+    for (const command of [`cat ${home}/pers''onal/notas.md`, `cat "${home}/pers"onal/notas.md`, 'cd ../.. && cat pers*/notas.md', `cat ${home}/p?rsonal/notas.md`, `type ${t.home}\\pers^onal\\notas.md`, `cat ${home}/*/notas.md`, 'cd ../.. && cat co*/datos/orb.db']) {
+      assert.notEqual(decide({ tool: 'Bash', command, cwd: project, permission: 'total', internalDir: internal }).decision, 'allow', command);
+    }
+    for (const command of ['cat src/*.js', 'ls *.md', 'cat ../tienda/pers*.txt']) {
+      assert.equal(decide({ tool: 'Bash', command, cwd: project, permission: 'total', internalDir: internal }).decision, 'allow', command);
+    }
   } finally { t.cleanup(); }
 });
