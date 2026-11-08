@@ -14,9 +14,17 @@
 // a heap snapshot after the views, saved in <dir> (open them in Chrome's DevTools). cpuIdle: the CPU all the processes
 // used at rest, from 5 s after the start until the idle memory point.
 //
+// Fair between shells (review T0–D2 A3/A4/M5): the DevTools port is 0 (the app picks a free one and writes it to
+// DevToolsActivePort in the throwaway data folder: never another Orb's port); the main screen is the page's own mark
+// (performance.mark('orb:ready'), src/ui/main.jsx), so a late DevTools connection changes nothing; the throwaway data
+// folder is checked to really hold the window's profile; the private working set (what Task Manager shows) is given
+// next to the working set and private bytes; and the commit, the exe's date, the window's size, its devicePixelRatio and
+// the monitors' refresh rates are recorded. The installed size of Tauri is that of what the installer puts in the
+// install folder (Orb.exe, node\, app\), measured next to the exe: installing the real installer, even in a temporary
+// folder, would register an Orb in this user's Windows (uninstall entry, shortcuts) over the one installed.
 // Start: from spawning the process to the first paint (the page's own paint timing), to the engine being ready (its
 // «motor arrancado» line in motor.log, written with the system clock) and to the main screen being drawn (the sidebar).
-// Run 1 is the first start after the build (Windows' file cache may still hold it: a true cold start needs a reboot and
+// Run 1 is the first timed start (start 0, the workspace's first, is not timed) (Windows' file cache may still hold it: a true cold start needs a reboot and
 // is not done here); runs 2..n are warm. RAM: working set and private bytes of the whole process tree (Win32_Process by
 // ParentProcessId) after --idle seconds and after opening chats, tasks, projects and other views. Smoothness:
 // requestAnimationFrame deltas and long animation frames while scrolling the long chat list and a long conversation.
@@ -46,6 +54,13 @@ if (!fs.existsSync(exe)) { console.error(`no existe ${exe} (compila antes o pasa
 const FAKE = path.join(ROOT, 'test', 'fixtures', 'fake-live.mjs');
 process.env.ORB_FAKE_AGENTS = FAKE;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-medir-'));
+// Whatever happens, the app this script started is closed (by its pid) and the throwaway folder goes.
+let current = null;
+process.on('exit', () => {
+  if (current) { try { execFileSync('taskkill', ['/PID', String(current.pid), '/T', '/F'], { stdio: 'ignore' }); } catch { /* gone */ } }
+  try { fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); } catch { /* temp folder */ }
+});
+for (const ev of ['uncaughtException', 'unhandledRejection']) process.on(ev, (e) => { console.error(e?.stack ?? e); process.exit(1); });
 const SANDBOX = { ORB_NO_ADB: '1', ORB_NO_UPDATE: '1', ORB_FAKE_AGENTS: FAKE, ORB_BACKUP_ROOT: path.join(tmp, 'copias'), ORB_BRIDGE_DIR: path.join(tmp, 'puente'), ORB_USER_DATA: path.join(tmp, 'datos-app'), ORB_MODELS_DELAY_MS: '600000' };
 Object.assign(process.env, { ORB_BACKUP_ROOT: SANDBOX.ORB_BACKUP_ROOT, ORB_BRIDGE_DIR: SANDBOX.ORB_BRIDGE_DIR, ORB_NO_ADB: '1' });
 const { createHome, loadConfig, writeJson, merge, paths } = await import('../src/core/home.mjs');
@@ -99,15 +114,24 @@ function processTree(rootPid) {
   while (stack.length) { const p = stack.pop(); out.push(p); stack.push(...(kids.get(p.ProcessId) ?? []).filter((k) => k.ProcessId !== p.ProcessId)); }
   return out;
 }
+// The private working set of each process (Task Manager's «Memory»): not in Win32_Process.
+function privateWs(pids) {
+  try {
+    const ps = `Get-CimInstance Win32_PerfFormattedData_PerfProc_Process | Where-Object { @(${pids.join(',')}) -contains $_.IDProcess } | Select-Object IDProcess,WorkingSetPrivate | ConvertTo-Json -Compress`;
+    const rows = [JSON.parse(execFileSync('powershell.exe', ['-NoProfile', '-Command', ps], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }) || '[]')].flat();
+    return new Map(rows.map((r) => [r.IDProcess, Number(r.WorkingSetPrivate)]));
+  } catch { return new Map(); }
+}
 function memory(rootPid) {
   const tree = processTree(rootPid);
+  const pws = privateWs(tree.map((p) => p.ProcessId));
   // What each process is: Chromium's --type (renderer, gpu-process, utility…), a Node script, or the app itself.
   const kind = (p) => {
     const cl = String(p.CommandLine ?? ''); const t = /--type=([\w-]+)/.exec(cl)?.[1]; const u = /--utility-sub-type=([\w.-]+)/.exec(cl)?.[1]; const s = /([\w.-]+\.m?js)\b/i.exec(cl)?.[1];
     return `${p.Name} ${t ? (u ? `${t}:${u}` : t) : s ? `node:${s}` : 'main'}`;
   };
   const by = {}; for (const p of tree) { const k = kind(p); by[k] ??= { n: 0, ws: 0, priv: 0, cpu: 0 }; by[k].n++; by[k].ws += p.WorkingSetSize; by[k].priv += p.PrivatePageCount; by[k].cpu += (Number(p.KernelModeTime) + Number(p.UserModeTime)) / 1e7; }
-  return { at: Date.now(), cpuSec: tree.reduce((n, p) => n + (Number(p.KernelModeTime) + Number(p.UserModeTime)) / 1e7, 0), processes: tree.length, wsMB: MB(tree.reduce((s, p) => s + p.WorkingSetSize, 0)), privateMB: MB(tree.reduce((s, p) => s + p.PrivatePageCount, 0)),
+  return { at: Date.now(), privateWsMB: pws.size ? MB(tree.reduce((s, p) => s + (pws.get(p.ProcessId) ?? 0), 0)) : null, cpuSec: tree.reduce((n, p) => n + (Number(p.KernelModeTime) + Number(p.UserModeTime)) / 1e7, 0), processes: tree.length, wsMB: MB(tree.reduce((s, p) => s + p.WorkingSetSize, 0)), privateMB: MB(tree.reduce((s, p) => s + p.PrivatePageCount, 0)),
     byName: Object.fromEntries(Object.entries(by).map(([k, v]) => [k, { n: v.n, wsMB: MB(v.ws), privateMB: MB(v.priv), cpuSec: Math.round(v.cpu * 100) / 100 }])),
     largestWsMB: MB(Math.max(...tree.map((p) => p.WorkingSetSize))) };
 }
@@ -119,14 +143,18 @@ function engineReadyAt(since) {
   return stamps.at(-1) ?? null;
 }
 
+// Where each shell writes the port it picked (--remote-debugging-port=0): its data folder in the throwaway one.
+const portFile = () => (shell === 'tauri' ? path.join(SANDBOX.ORB_USER_DATA, 'webview', 'EBWebView', 'DevToolsActivePort') : path.join(SANDBOX.ORB_USER_DATA, 'DevToolsActivePort'));
 async function launch() {
-  const port = 9400 + Math.floor(Math.random() * 500);
+  fs.rmSync(portFile(), { force: true });
   // The window's occlusion tracking could pause the frames of a window behind another one: off, the same for every shell.
-  const args = shell === 'electron' ? [`--remote-debugging-port=${port}`, '--disable-features=CalculateNativeWinOcclusion'] : [];
-  const env = { ...process.env, ...SANDBOX, ...(shell === 'tauri' ? { ORB_E2E_CDP_PORT: String(port) } : {}), ...(hidden ? { ORB_HIDDEN_WINDOW: '1' } : {}) };
+  const args = shell === 'electron' ? ['--remote-debugging-port=0', '--disable-features=CalculateNativeWinOcclusion'] : [];
+  const env = { ...process.env, ...SANDBOX, ...(shell === 'tauri' ? { ORB_E2E_CDP_PORT: '0' } : {}), ...(hidden ? { ORB_HIDDEN_WINDOW: '1' } : {}) };
   const t0 = Date.now();
   const app = spawn(exe, args, { env, stdio: 'ignore' });
+  current = app;
   const exited = new Promise((r) => app.once('exit', r));
+  const port = await until(() => { const n = Number(fs.readFileSync(portFile(), 'utf8').split(/\r?\n/)[0]); return n > 0 ? n : null; }, 'DevToolsActivePort', 60000, 25);
   const browser = await until(() => chromium.connectOverCDP(`http://127.0.0.1:${port}`), 'la ventana (CDP)', 60000, 25);
   const page = await until(() => browser.contexts().flatMap((c) => c.pages()).find((p) => /index\.html|tauri\.localhost\/?$/.test(p.url())), 'la página principal', 60000, 25);
   return { app, t0, browser, page, exited };
@@ -134,7 +162,8 @@ async function launch() {
 async function quit(run) {
   try { await run.page.evaluate(() => window.orb?.windowControls?.act('close')); } catch { /* closing */ }
   const gone = await Promise.race([run.exited.then(() => true), wait(15000).then(() => false)]);
-  if (!gone) { try { execFileSync('taskkill', ['/PID', String(run.app.pid), '/T', '/F'], { stdio: 'ignore' }); } catch { /* gone */ } await run.exited; }
+  if (!gone) { run.forced = true; try { execFileSync('taskkill', ['/PID', String(run.app.pid), '/T', '/F'], { stdio: 'ignore' }); } catch { /* gone */ } await run.exited; }
+  current = null;
   try { await run.browser.close(); } catch { /* gone */ }
   await wait(1500); // the engine's last writes and the database closing
 }
@@ -144,9 +173,13 @@ const READY = '[data-testid=sidebar-home]';
 const pageTimes = (page) => page.evaluate(async (sel) => {
   const at = (ms) => performance.timeOrigin + ms;
   const ready = await new Promise((resolve) => {
+    // The page's own mark of its first main-screen frame (src/ui/main.jsx): exact however late this script arrives.
+    const mark = () => performance.getEntriesByName('orb:ready')[0];
+    if (mark()) return resolve({ t: performance.timeOrigin + mark().startTime, late: false });
     const seen = () => document.querySelector(sel);
-    if (seen()) return resolve({ t: Date.now(), late: true });
-    const mo = new MutationObserver(() => { if (seen()) { mo.disconnect(); resolve({ t: performance.timeOrigin + performance.now(), late: false }); } });
+    const poll = setInterval(() => { if (mark()) { clearInterval(poll); resolve({ t: performance.timeOrigin + mark().startTime, late: false }); } }, 20);
+    if (seen()) { setTimeout(() => { clearInterval(poll); resolve(mark() ? { t: performance.timeOrigin + mark().startTime, late: false } : { t: Date.now(), late: true }); }, 1000); return; }
+    const mo = new MutationObserver(() => { if (seen() && !mark()) { mo.disconnect(); clearInterval(poll); resolve({ t: performance.timeOrigin + performance.now(), late: false }); } });
     mo.observe(document, { childList: true, subtree: true });
   });
   const paint = Object.fromEntries(performance.getEntriesByType('paint').map((e) => [e.name, at(e.startTime)]));
@@ -206,6 +239,7 @@ async function heapSnapshot(page, file) {
   await cdp.send('HeapProfiler.takeHeapSnapshot', { reportProgress: false });
   await new Promise((r) => out.end(r)); await cdp.detach();
 }
+let windowInfo = null;
 const results = { target: { exe, shell, version: PKG.version, hiddenWindow: hidden, ...(shell === 'tauri' ? { build: 'e2e feature' } : {}) }, starts: [], memory: {}, frames: {}, sizes: {}, machine: {} };
 
 // ---- 0: the first start of this workspace (master password, folders' review): not timed
@@ -232,6 +266,7 @@ for (let i = 1; i <= RUNS; i++) {
   if (i < RUNS) { await quit(run); continue; }
 
   // ---- memory and smoothness on the last start
+  windowInfo = await run.page.evaluate(() => ({ innerWidth, innerHeight, outerWidth, outerHeight, devicePixelRatio, screen: { width: screen.width, height: screen.height } })).catch(() => null);
   await wait(Math.min(5, IDLE_S) * 1000);
   const settled = memory(run.app.pid);
   await wait(Math.max(0, IDLE_S - 5) * 1000);
@@ -333,7 +368,14 @@ const warm = results.starts.slice(1);
 const summary = (k) => ({ first: results.starts[0]?.[k] ?? null, warmMedian: median(warm.map((s) => s[k])), warmP95: pct(warm.map((s) => s[k]), 95) });
 results.summary = { firstPaint: summary('toFirstPaintMs'), scriptsReady: summary('toScriptsReadyMs'), engineReady: summary('toEngineReadyMs'), mainScreen: summary('toMainScreenMs') };
 let windows = os.release(); try { windows = execFileSync('powershell.exe', ['-NoProfile', '-Command', '(Get-CimInstance Win32_OperatingSystem).Caption + " " + (Get-CimInstance Win32_OperatingSystem).BuildNumber'], { encoding: 'utf8' }).trim(); } catch { /* the release number */ }
-results.machine = { cpu: os.cpus()[0]?.model, cores: os.cpus().length, ramGB: Math.round(os.totalmem() / 1073741824), windows, node: process.version, date: new Date().toISOString() };
+const git = (...a) => { try { return execFileSync('git', a, { cwd: ROOT, encoding: 'utf8' }).trim(); } catch { return null; } };
+let monitors = null; try { monitors = [JSON.parse(execFileSync('powershell.exe', ['-NoProfile', '-Command', 'Get-CimInstance Win32_VideoController | Select-Object Name,CurrentHorizontalResolution,CurrentVerticalResolution,CurrentRefreshRate | ConvertTo-Json -Compress'], { encoding: 'utf8' }) || '[]')].flat(); } catch { /* not known */ }
+results.target.commit = git('rev-parse', 'HEAD'); results.target.dirty = Boolean(git('status', '--porcelain', '--untracked-files=no'));
+results.target.exeDate = fs.statSync(exe).mtime.toISOString();
+// The bundle measured (sizes.jsBundle) is this checkout's src/renderer: said when the exe is older than its last commit.
+results.target.exeOlderThanCommit = (() => { const t = Date.parse(git('log', '-1', '--format=%cI') ?? ''); return Number.isFinite(t) ? fs.statSync(exe).mtimeMs < t : null; })();
+results.target.startsLate = results.starts.filter((x) => x.mainScreenLate).length;
+results.machine = { monitors, window: windowInfo, cpu: os.cpus()[0]?.model, cores: os.cpus().length, ramGB: Math.round(os.totalmem() / 1073741824), windows, node: process.version, date: new Date().toISOString() };
 const out = arg('out');
 if (out) fs.writeFileSync(out, JSON.stringify(results, null, 2));
 console.log(JSON.stringify(results, null, 2));
