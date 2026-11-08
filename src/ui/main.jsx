@@ -1,6 +1,7 @@
 // Entry of the window: first-run setup or the app (sidebar + current view), live refresh from the engine's events.
-import './lib/app-bridge.js'; // first: in the Android app it tells the web bridge where the linked Orb is
-import './lib/web-bridge.js'; // then: in a phone's browser (or the app) it provides window.orb
+import './lib/tauri-bridge.js'; // first of all: in the Tauri desktop app it provides window.orb (Electron's preload does it there)
+import './lib/app-bridge.js'; // then: in the Android app it tells the web bridge where the linked Orb is
+import './lib/web-bridge.js'; // last: in a phone's browser (or the app) it provides window.orb
 import './app.css';
 // 3.6: the Android app's «glass» look, only in the Android build (the other builds drop this line and its CSS).
 if (import.meta.env.MODE === 'android') (await import('./lib/glass.js')).enableGlass();

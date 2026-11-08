@@ -1,0 +1,28 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Orb",
+  "mainBinaryName": "Orb",
+  "version": "../package.json",
+  "identifier": "dev.orb.app",
+  "build": {
+    "frontendDist": "../src/renderer",
+    "beforeDevCommand": "npm run build && node scripts/tauri-resources.mjs",
+    "beforeBuildCommand": "npm run build && node scripts/tauri-resources.mjs"
+  },
+  "app": {
+    "windows": [],
+    "withGlobalTauri": false,
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self' data: blob: ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "dangerousDisableAssetCspModification": ["style-src"]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["../build/icons/32x32.png", "../build/icons/128x128.png", "../build/icons/256x256.png", "../build/icon.png", "../build/icon.ico"],
+    "windows": {
+      "nsis": { "installMode": "currentUser" }
+    }
+  }
+}

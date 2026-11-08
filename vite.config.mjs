@@ -19,10 +19,10 @@ const excalidrawFonts = () => ({
 });
 
 // 3.5: `vite build --mode android` builds the Android app's page (android-app/www, scripts/android-build.mjs): the same pages,
-// but this one may talk to the linked Orb at its own address (connect-src).
+// but this one may talk to the linked Orb at its own address (connect-src). The other builds may talk to Tauri's IPC.
 const androidCsp = () => ({
   name: 'orb-android-csp',
-  transformIndexHtml: (html) => html.replace("worker-src 'self' blob:;", "worker-src 'self' blob:; connect-src 'self' http: https:;")
+  transformIndexHtml: (html) => html.replace("connect-src 'self' ipc: http://ipc.localhost;", "connect-src 'self' http: https:;")
 });
 
 export default defineConfig(({ mode }) => {

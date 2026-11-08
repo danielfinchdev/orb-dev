@@ -22,6 +22,9 @@
     "dist:linux": "vite build && electron-builder --linux AppImage deb",
     "test:movil": "vite build && node test/mobile.e2e.mjs",
     "test:glass": "node test/glass.e2e.mjs",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "tauri:build:e2e": "tauri build --features e2e --no-bundle",
     "android:build": "node scripts/android-build.mjs",
     "android:build:debug": "node scripts/android-build.mjs --debug"
   },
@@ -61,6 +64,8 @@
     "@radix-ui/react-tabs": "^1.1.21",
     "@radix-ui/react-tooltip": "^1.2.16",
     "@tailwindcss/vite": "^4.3.3",
+    "@tauri-apps/api": "2.12.4",
+    "@tauri-apps/cli": "2.12.4",
     "@vitejs/plugin-react": "^6.1.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
