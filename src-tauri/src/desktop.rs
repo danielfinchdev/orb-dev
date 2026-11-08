@@ -102,7 +102,8 @@ fn real_lower(p: &Path) -> String {
 pub fn guarded(home: Option<&Path>, target: &Path) -> bool {
   let Some(home) = home else { return false };
   let core = home.join("core");
-  protocol::guarded_core(&real_lower(target), &real_lower(&core), &real_lower(&core.join("secretos")))
+  let (secrets, data) = (real_lower(&core.join("secretos")), real_lower(&core.join("datos")));
+  protocol::guarded_core(&real_lower(target), &real_lower(&core), &[&secrets, &data])
 }
 
 pub async fn open_path(window: &WebviewWindow, target: String, unlock: Option<String>) -> Result<bool, String> {
@@ -164,6 +165,9 @@ mod tests {
     assert!(guarded(h, &home.join("CORE").join("secretos")));
     assert!(guarded(h, &home.join("core").join("secretos").join("x")));
     assert!(guarded(h, &home.join("core").join("mcp").join("..").join("secretos")));
+    assert!(guarded(h, &home.join("core").join("datos")));
+    assert!(guarded(h, &home.join("core").join("datos").join("copias")));
+    assert!(!guarded(h, &home.join("core").join("datosx")));
     assert!(!guarded(h, &home.join("core").join("mcp")));
     assert!(!guarded(h, &home));
     assert!(!guarded(None, &home.join("core")));

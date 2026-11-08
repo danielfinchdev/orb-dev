@@ -66,6 +66,8 @@ pub struct Engine {
   job_failed: AtomicBool,
   /// First start after the installer replaced Orb on Electron (migrate.rs): said once, when the engine is ready.
   migrated: AtomicBool,
+  /// Orb's lock screen is up (master:locked { screen: true } until master:unlocked): notices without the agents' text.
+  screen_locked: AtomicBool,
   #[cfg(windows)]
   job: Option<job::Job>,
 }
@@ -84,6 +86,7 @@ impl Engine {
     Arc::new(Self {
       job_failed: AtomicBool::new(job_failed),
       migrated: AtomicBool::new(false),
+      screen_locked: AtomicBool::new(false),
       start_code: Mutex::new(None),
       cfg,
       app,
@@ -125,6 +128,10 @@ impl Engine {
   /// The window will say once that Orb moved from Electron (migrate.rs).
   pub fn set_migrated(&self) {
     self.migrated.store(true, Ordering::SeqCst);
+  }
+
+  pub fn screen_locked(&self) -> bool {
+    self.screen_locked.load(Ordering::SeqCst)
   }
 
   pub fn begin_quit(&self) {
@@ -377,6 +384,10 @@ impl Engine {
         });
       }
       Incoming::Event { event, payload } => {
+        // 3.8.1: Orb's own lock screen (idle, or Windows locked): notices stop showing the agents' text.
+        if let Some(locked) = protocol::screen_lock_of(&event, &payload) {
+          self.screen_locked.store(locked, Ordering::SeqCst);
+        }
         if event == "chat:new" {
           let log = crate::window::hidden(&self.app).then(|| self.cfg.user_data.join("avisos-e2e.jsonl"));
           crate::notify::chat_new(&self.app, &payload, log);
