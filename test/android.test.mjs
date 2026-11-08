@@ -137,3 +137,32 @@ test('el PC deja pasar la página de la app (CORS) y a nadie más; todo sigue ci
   assert.equal(msg.r, req.n); assert.equal(msg.result.device, 'Pixel 9 (app)');
   assert.ok(!me.body.includes('Pixel'), 'la respuesta va cifrada');
 });
+
+// 3.8.1: the small notification icon (status bar) is the short «o•» of the app icon, made by scripts/icono.mjs: a white
+// silhouette on transparent (Android draws only its alpha), 24 dp in every density, with room around it.
+test('el icono pequeño de los avisos de Android: silueta blanca «o•» en todas las densidades', async () => {
+  const { PNG } = (await import('pngjs')).default;
+  const res = path.join(ROOT, 'android-app', 'android', 'app', 'src', 'main', 'res');
+  assert.ok(!fs.existsSync(path.join(res, 'drawable', 'ic_stat_orb.xml')), 'fuera el orbe con anillo de antes');
+  const covered = {};
+  for (const [density, k] of Object.entries({ mdpi: 1, hdpi: 1.5, xhdpi: 2, xxhdpi: 3, xxxhdpi: 4 })) {
+    const img = PNG.sync.read(fs.readFileSync(path.join(res, `drawable-${density}`, 'ic_stat_orb.png')));
+    assert.deepEqual([img.width, img.height], [24 * k, 24 * k], density);
+    let seen = 0; let edge = 0;
+    for (let y = 0; y < img.height; y++) for (let x = 0; x < img.width; x++) {
+      const i = (y * img.width + x) * 4;
+      if (!img.data[i + 3]) continue;
+      seen++;
+      assert.deepEqual([...img.data.subarray(i, i + 3)], [255, 255, 255], `${density}: solo blanco (${x},${y})`);
+      if (x === 0 || y === 0 || x === img.width - 1 || y === img.height - 1) edge++;
+    }
+    assert.equal(edge, 0, `${density}: con margen`);
+    covered[density] = seen / (img.width * img.height);
+  }
+  // The same drawing in each density: the share it covers barely changes; and the orb is cut from the «o» (not a blob).
+  const shares = Object.values(covered);
+  assert.ok(Math.max(...shares) - Math.min(...shares) < 0.08, JSON.stringify(covered));
+  assert.ok(shares.every((s) => s > 0.25 && s < 0.6), JSON.stringify(covered));
+  const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'android-app', 'capacitor.config.json'), 'utf8'));
+  assert.equal(cfg.plugins.LocalNotifications.smallIcon, 'ic_stat_orb');
+});

@@ -3,8 +3,8 @@
 // 32 px and less, where the word can't be read). This script renders them, with no extra dependencies, into:
 //   build/icons/NxN.png (16 to 1024 px, Linux), build/icon.png (512 px: window, notifications), build/icon.ico (every
 //   size Windows uses: .exe, installer, taskbar, the window on Windows), src/ui/public/icon.png (favicon, PWA, the
-//   photo of Android notifications, «Acerca de»), src/ui/public/icon-maskable.png (PWA) and the Android launcher icons
-//   (see below).
+//   photo of Android notifications, «Acerca de»), src/ui/public/icon-maskable.png (PWA), the Android launcher icons and
+//   the small notification icon of Android (see below).
 // It understands only what those SVGs use: <linearGradient> (userSpaceOnUse), <rect rx>, <circle> and <path> with
 // absolute M/L/Q/C/Z. The letters are Outfit SemiBold (OFL) outlines.                    Usage: npm run icon
 import fs from 'node:fs';
@@ -177,3 +177,22 @@ for (const [density, k] of Object.entries(DENSITIES)) {
 }
 console.log(`✔ Android: mipmap-{${Object.keys(DENSITIES).join(',')}}/{${Object.keys(android).join(',')}}.png`);
 
+// ---- Android notification icon (drawable-*/ic_stat_orb.png): the status bar draws only the alpha of a small icon, so it
+// is the short «o•» as a white silhouette on transparent: the «o» and the orb, with the pale ring between them cut out.
+// 24 dp per density (24 to 96 px), the drawing centred in the middle 22 dp. Every pixel is white; only its alpha varies.
+{
+  const o = small.layers.filter((l) => l.tag !== 'rect');
+  const ring = o.find((l) => l.tag === 'circle'); // the first circle: the tile's colour around the orb
+  const white = () => [255, 255, 255];
+  const pts = o.flatMap((l) => l.polys.flat());
+  const [x0, x1, y0, y1] = [Math.min(...pts.map((q) => q[0])), Math.max(...pts.map((q) => q[0])), Math.min(...pts.map((q) => q[1])), Math.max(...pts.map((q) => q[1]))];
+  const k = (small.size * 22 / 24) / Math.max(x1 - x0, y1 - y0), mx = (x0 + x1) / 2, my = (y0 + y1) / 2, h = small.size / 2;
+  const fit = (l) => ({ ...l, paint: l === ring ? () => null : white, polys: l.polys.map((poly) => poly.map(([x, y]) => [h + (x - mx) * k, h + (y - my) * k])) });
+  const stat = { size: small.size, layers: o.map(fit) };
+  for (const [density, d] of Object.entries(DENSITIES)) {
+    const dir = path.join(RES, `drawable-${density}`);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'ic_stat_orb.png'), render(stat, 24 * d));
+  }
+  console.log(`✔ Android: drawable-{${Object.keys(DENSITIES).join(',')}}/ic_stat_orb.png (silueta blanca «o•»)`);
+}

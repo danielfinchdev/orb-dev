@@ -886,8 +886,9 @@ launched hidden, with its output read by Orb, and it stores the session in the a
 - The app icon is drawn in `build/icon-src/*.svg`; `npm run icon` renders `build/icon.ico` (10 sizes, the short «o•»
   version up to 32 px; also the window's icon on Windows), `build/icons/` (Linux), `build/icon.png`,
   `src/ui/public/icon.png` (also the «Acerca de» card), `src/ui/public/icon-maskable.png` (the PWA's maskable icon: the
-  tile edge to edge, the word at 80 %) and the Android launcher icons (`android-app/android/app/src/main/res/mipmap-*`,
-  legacy, round and adaptive).
+  tile edge to edge, the word at 80 %), the Android launcher icons (`android-app/android/app/src/main/res/mipmap-*`,
+  legacy, round and adaptive) and the small notification icon (`drawable-*/ic_stat_orb.png`: the short «o•» as a white
+  silhouette on transparent, 24 dp in every density).
 - **Tests on every push and PR**, on Windows and Linux: `.github/workflows/pruebas.yml`.
 - **Installer** (NSIS, per user, no admin): desktop and Start menu shortcut. The release also publishes `latest.yml` and
   the `.blockmap` files, which the updater uses.
