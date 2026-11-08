@@ -1,7 +1,7 @@
 // The Tauri builds that must never be mixed up (review D4 B4):
 //   node scripts/tauri-check-release.mjs              after `tauri build`: the release Orb.exe must not be a test build
 //                                                     (no DevTools port, hidden window, local update feed or timing marks: their names are not in it;
-//                                                     nor the test updater key);
+//                                                     nor the test updater key) and trusts the updater key of tauri.conf.json;
 //   node scripts/tauri-check-release.mjs --build-e2e  the test build (cargo feature e2e), in a target folder of its own
 //                                                     (src-tauri/target-e2e), so target/release never holds one; its
 //                                                     updater also accepts a local http feed and trusts only the test key.
@@ -27,10 +27,20 @@ if (process.argv.includes('--build-e2e')) {
   process.exit(r.status ?? 1);
 }
 
-const exe = path.join(ROOT, 'src-tauri', 'target', 'release', 'Orb.exe');
-if (!fs.existsSync(exe)) { console.error(`no existe ${exe}`); process.exit(2); }
-const bytes = fs.readFileSync(exe);
-const found = MARKS.filter((m) => bytes.includes(Buffer.from(m)));
-if (bytes.includes(Buffer.from(TEST_PUBKEY()))) found.push('la clave pública de PRUEBA');
-if (found.length) { console.error(`${exe} es una build de pruebas (${found.join(', ')}): no se publica`); process.exit(1); }
-console.log(`${path.relative(ROOT, exe)}: build normal (sin ${MARKS.join(' ni ')})`);
+// What makes an Orb.exe unfit to publish: the test build's names, the test updater key, or not trusting the updater key
+// in src-tauri/tauri.conf.json (an old build from before a key rotation). Also used on the installer CI built
+// (scripts/release-firmar.mjs, review D10 M2).
+export function releaseProblems(bytes, pubkey = JSON.parse(fs.readFileSync(path.join(ROOT, 'src-tauri', 'tauri.conf.json'), 'utf8')).plugins.updater.pubkey) {
+  const found = MARKS.filter((m) => bytes.includes(Buffer.from(m)));
+  if (bytes.includes(Buffer.from(TEST_PUBKEY()))) found.push('la clave pública de PRUEBA');
+  if (!bytes.includes(Buffer.from(pubkey))) found.push('sin la clave pública del actualizador de tauri.conf.json');
+  return found;
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const exe = path.join(ROOT, 'src-tauri', 'target', 'release', 'Orb.exe');
+  if (!fs.existsSync(exe)) { console.error(`no existe ${exe}`); process.exit(2); }
+  const found = releaseProblems(fs.readFileSync(exe));
+  if (found.length) { console.error(`${exe} no se publica (${found.join(', ')})`); process.exit(1); }
+  console.log(`${path.relative(ROOT, exe)}: build normal (sin ${MARKS.join(' ni ')}) con la clave del actualizador de tauri.conf.json`);
+}

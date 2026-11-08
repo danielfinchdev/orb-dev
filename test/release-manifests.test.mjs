@@ -117,3 +117,21 @@ test('the workflows: read-only, no keys, pinned actions, smoke test of the packa
   assert.match(release, /orb-windows-\$\{\{ needs\.version\.outputs\.version \}\}/);
   assert.equal(JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).scripts['release:firmar'], 'node scripts/release-firmar.mjs');
 });
+
+// 3.8.1 (review D10 M2/B2): release:firmar publishes only a newer version, with its own notes, and an Orb.exe that trusts
+// the updater key of tauri.conf.json and carries nothing of the test build.
+test('release:firmar: newer versions only, the version\'s notes, and the Orb.exe it would publish is checked', async () => {
+  const { newer, releaseNotes } = await import('../scripts/release-firmar.mjs');
+  const { releaseProblems } = await import('../scripts/tauri-check-release.mjs');
+  assert.ok(newer('3.8.1', '3.8.0') && newer('3.10.0', '3.9.9') && !newer('3.8.0', '3.8.0') && !newer('3.7.9', '3.8.0'));
+  const notes = releaseNotes(fs.readFileSync(path.join(ROOT, 'docs', 'CHANGELOG.md'), 'utf8'), JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version);
+  assert.ok(notes, 'CHANGELOG has «## Download» and «## What\'s new in» the package\'s version');
+  assert.match(notes, /^## Download\n/); assert.doesNotMatch(notes, /What's new in 3\.8\.0/);
+  assert.equal(releaseNotes('## Download\nx\n## What\'s new in 3.8.0\ny\n', '3.8.1'), null);
+  const pub = 'cHVibGljLWtleQ==';
+  const testPub = fs.readFileSync(path.join(ROOT, 'test', 'fixtures', 'actualizador-prueba.key.pub'), 'utf8').trim();
+  assert.deepEqual(releaseProblems(Buffer.from(`...${pub}...`), pub), []);
+  assert.match(releaseProblems(Buffer.from('...'), pub).join(), /sin la clave pública/);
+  assert.match(releaseProblems(Buffer.from(`${pub} ${testPub}`), pub).join(), /PRUEBA/);
+  assert.match(releaseProblems(Buffer.from(`${pub} ORB_E2E_CDP_PORT`), pub).join(), /ORB_E2E_CDP_PORT/);
+});
