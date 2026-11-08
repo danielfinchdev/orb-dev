@@ -223,9 +223,10 @@ test('la copia que vuelve: la más nueva de ESTE espacio que se pueda abrir; ult
 });
 
 test('dos espacios nunca comparten nombre fuera (ni con rutas largas); las copias de los primeros 3.8 se adoptan', () => {
-  assert.notEqual(homeKey('C:\\a-b\\Orb'), homeKey('C:\\a\\b\\Orb'));
-  assert.equal(homeKey('C:\\Orb'), homeKey('c:\\orb'));
-  assert.match(homeKey(`C:\\${'carpeta-larga\\'.repeat(30)}Orb`), /^orb-[0-9a-f]{8}$/);
+  const win = process.platform === 'win32'; const abs = (...parts) => (win ? 'C:\\' : '/') + parts.join(path.sep);
+  assert.notEqual(homeKey(abs('a-b', 'Orb')), homeKey(abs('a', 'b', 'Orb')));
+  if (win) assert.equal(homeKey('C:\\Orb'), homeKey('c:\\orb')); // Windows' paths: any case
+  assert.match(homeKey(abs(...Array(30).fill('carpeta-larga'), 'Orb')), /^orb-[0-9a-f]{8}$/);
   const base = newBase();
   const { home } = createHome(base);
   const old = path.join(K.backupRoot(), path.resolve(home).replace(/[:\\/]+/g, '-').replace(/^-+|-+$/g, ''));
@@ -330,14 +331,14 @@ test('rutas en la base: lo que escribió el usuario se queda como lo escribió',
   const db = new DatabaseSync(file);
   const from = path.join(home, 'mcp-servers', 'correo'); const to = path.join(home, 'windows', 'correo');
   db.exec('CREATE TABLE session_items (role TEXT, kind TEXT, body TEXT); CREATE TABLE session_queue (text TEXT)');
-  db.prepare("INSERT INTO session_items VALUES ('user', 'text', ?), ('assistant', 'text', ?)").run(`abre ${from}\\index.js`, `abierto ${from}\\index.js`);
-  db.prepare('INSERT INTO session_queue VALUES (?)').run(`y luego ${from}\\x`);
+  db.prepare("INSERT INTO session_items VALUES ('user', 'text', ?), ('assistant', 'text', ?)").run(`abre ${from}${path.sep}index.js`, `abierto ${from}${path.sep}index.js`);
+  db.prepare('INSERT INTO session_queue VALUES (?)').run(`y luego ${from}${path.sep}x`);
   db.close();
   rewriteDb(file, home, [{ from, to }]);
   const d = new DatabaseSync(file, { readOnly: true });
   try {
-    assert.deepEqual(d.prepare('SELECT role, body FROM session_items').all().map((r) => [r.role, r.body]), [['user', `abre ${from}\\index.js`], ['assistant', `abierto ${to}\\index.js`]]);
-    assert.equal(d.prepare('SELECT text FROM session_queue').get().text, `y luego ${from}\\x`);
+    assert.deepEqual(d.prepare('SELECT role, body FROM session_items').all().map((r) => [r.role, r.body]), [['user', `abre ${from}${path.sep}index.js`], ['assistant', `abierto ${to}${path.sep}index.js`]]);
+    assert.equal(d.prepare('SELECT text FROM session_queue').get().text, `y luego ${from}${path.sep}x`);
   } finally { d.close(); }
 });
 

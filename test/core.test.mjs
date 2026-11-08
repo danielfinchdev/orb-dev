@@ -185,7 +185,9 @@ test('3.8: proyectos viejos de fuera que ya no existen se quitan; sin «(2)»: u
   assert.equal(syncProjects(board), true);
   assert.equal(board.project('erp').path, fs.realpathSync(path.join(t.home, 'web', 'erp')), 'el de la carpeta del espacio se queda con el nombre');
   assert.ok(!board.project('erp (2)'));
-  assert.ok(board.project('enlazada') && board.project('usb') && board.project('ocupado'));
+  assert.ok(board.project('enlazada') && board.project('ocupado'));
+  // A missing drive (Windows): it stays. Elsewhere / is always there, so the folder is just gone.
+  assert.equal(Boolean(board.project('usb')), process.platform === 'win32');
   assert.equal(board.project('app').path, fs.realpathSync(path.join(t.home, 'android', 'app')));
   assert.equal(board.project('app (web)').path, fs.realpathSync(path.join(t.home, 'web', 'app')));
   assert.equal(syncProjects(board), false, 'sin cambios la segunda vez');

@@ -71,7 +71,7 @@ test('la carpeta personal del dueño: ningún agente la lee ni la toca', () => {
     const internal = paths(t.home).internal;
     const project = path.join(t.home, 'web', 'tienda'); fs.mkdirSync(project, { recursive: true });
     assert.equal(isOrbData(path.join(privateDir(t.home), 'notas.md'), internal, project, { read: true }), true, 'leer');
-    assert.equal(isOrbData('..\\..\\personal\\notas.md', internal, project, { read: true }), true, 'por ruta relativa');
+    assert.equal(isOrbData(['..', '..', 'personal', 'notas.md'].join(path.sep), internal, project, { read: true }), true, 'por ruta relativa');
     assert.equal(isOrbData(path.join(t.home, 'personalidad', 'x.md'), internal, project, { read: true }), false, 'otra carpeta');
     const read = decide({ tool: 'Read', paths: [path.join(privateDir(t.home), 'notas.md')], cwd: project, permission: 'editar', internalDir: internal });
     assert.equal(read.decision, 'deny');

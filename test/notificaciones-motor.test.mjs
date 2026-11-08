@@ -126,7 +126,8 @@ test('un dispositivo con persona (de otro usuario de 3.7) no recibe avisos y sus
     const before = pushes(tablet.endpoint).length; const k = pushes(ana.endpoint).length;
     await A.call('chat.send', { text: 'una respuesta más', conversation: conv });
     await until(() => pushes(ana.endpoint).slice(k).find((x) => x.data.tag === `orb-conversation:${conv}`), 'el aviso al móvil del dueño', 30_000);
-    assert.equal(pushes(tablet.endpoint).length, before, 'ninguno al de otra persona');
+    // A push sent before the device got its person (the previous task's, say) may still land: only this message's counts.
+    assert.equal(pushes(tablet.endpoint).slice(before).filter((x) => x.data.tag === `orb-conversation:${conv}`).length, 0, 'ninguno al de otra persona');
   } finally { db.run('UPDATE devices SET person_id = NULL WHERE id = ?', tablet.id); db.db.close(); }
 });
 

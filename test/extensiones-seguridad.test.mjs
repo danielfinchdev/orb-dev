@@ -174,7 +174,7 @@ test('M1: si la cuarentena cambia mientras se instalan los paquetes, «Activar»
   assert.equal(fs.readFileSync(path.join(core, 'mcp', 'bien', 'server.mjs'), 'utf8'), '// bueno');
 });
 
-test('M2: la guardia sigue los cd de un comando compuesto (bash, cmd y PowerShell) y deniega la cuarentena y core\\datos|skills|mcp', () => {
+test('M2: la guardia sigue los cd de un comando compuesto (bash, cmd y PowerShell) y deniega la cuarentena y core\\datos|skills|mcp', { skip: process.platform !== 'win32' && 'órdenes y rutas de Windows (cmd, \\, unidades)' }, () => {
   const root = scratch(); const core = path.join(root, 'core'); const proj = path.join(root, 'web', 'a');
   for (const d of [path.join(core, 'datos', 'cuarentena', 'skill-x-abc'), path.join(core, 'skills', 'demo'), path.join(core, 'mcp', 'srv'), path.join(core, 'preparacion', 'skill-x'), path.join(proj, 'src')]) fs.mkdirSync(d, { recursive: true });
   junction(root, path.join(proj, 'h')); // a junction to the workspace (made without naming core)
