@@ -1,7 +1,7 @@
 // app.*
 export default {
   'app.linkTitle': "Enlazar con tu Orb",
-  'app.linkBody': "En tu Orb, abre Ajustes → Magic Link, pulsa «Mostrar el código QR» y escanéalo. Después escribe la contraseña maestra del PC.",
+  'app.linkBody': 'En tu Orb, abre Ajustes › Magic Link, pulsa «Mostrar código QR» y escanéalo. Después escribe la contraseña maestra del PC.',
   'app.linkScan': "Escanear el código QR",
   'app.linkManual': "Enlazar sin cámara",
   'app.linkPaste': "Enlace de tu Orb",
@@ -99,5 +99,6 @@ export default {
   "app.crashHome": "Volver al inicio",
   "app.loadOfflineTitle": "Sin conexión",
   "app.loadOfflineBody": "No se pudo cargar esta pantalla. Comprueba la conexión y vuelve a intentarlo.",
-  "app.loadOfflineToast": "No se pudo abrir: sin conexión."
+  "app.loadOfflineToast": "No se pudo abrir: sin conexión.",
+  'app.linkOfflineWifi': 'No se pudo conectar con tu Orb por la red local. En el PC, permite Orb en el firewall de Windows para redes privadas.',
 };
