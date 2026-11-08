@@ -1,7 +1,8 @@
 // What the engine asks the app to do (src/engine/host.mjs): open a link or a folder with the system; open a terminal, an
 // editor or a project's action (programs that must outlive Orb: started here, outside the engine's Job Object, the
 // program picked here: tools.rs); and seal or open the approval secret with DPAPI (secrets.rs). Every request is checked
-// again here (protocol::check_host, the same rules as the engine's).
+// again here (protocol::check_host, the same rules as the engine's). And the agents' browser and its little window
+// (host.browser.*, host.pip.*: browser.rs, pip.rs, checked by browser_rules.rs).
 use crate::protocol::{check_host, HostRequest};
 use crate::tools::{self, Finder, Plan, Program};
 use serde_json::{json, Value};
@@ -10,6 +11,9 @@ use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
 
 pub async fn handle(app: &AppHandle, method: &str, params: &Value) -> Result<Value, String> {
+  if let Some(req) = crate::browser_rules::check_browser(method, params) {
+    return crate::browser::handle(app, req?).await;
+  }
   let engine = crate::engine::get(app);
   let t = |key: &str, vars: &[(&str, String)]| engine.t(key, vars);
   Ok(match check_host(method, params, |p: &Path| p.is_dir())? {

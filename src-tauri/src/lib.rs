@@ -1,10 +1,13 @@
 // Orb on Tauri 2 (Windows): one window with the React interface (src/renderer), the engine in its own Node process
 // (engine.rs) and a narrow, checked bridge between them: the window may call only these commands, and only from Orb's
 // own window (capabilities/main.json and a check of the window's label in each one).
+mod browser;
+mod browser_rules;
 mod desktop;
 mod engine;
 mod host;
 mod notify;
+mod pip;
 mod pipes;
 mod power;
 mod protocol;
@@ -140,6 +143,25 @@ fn app_open_external(window: WebviewWindow, url: String) -> Result<bool, String>
   desktop::open_external(&window, url)
 }
 
+/// Ajustes › «Ver el navegador»: the little window of the agents' browser again, and what it has open.
+#[tauri::command]
+async fn app_show_browser(window: WebviewWindow) -> Result<Value, String> {
+  only_main(&window)?;
+  engine::get(window.app_handle()).request("pip", json!({ "action": "show" }), Duration::from_secs(5)).await
+}
+
+/// A button of the little window (pip.rs). Only from that window.
+#[tauri::command]
+fn pip_action(window: WebviewWindow, action: String) -> Result<(), String> {
+  if window.label() != "pip" {
+    return Err("origen no permitido".into());
+  }
+  if action == "drag" {
+    return window.start_dragging().map_err(|e| e.to_string());
+  }
+  pip::action(window.app_handle(), &action)
+}
+
 #[tauri::command]
 fn window_drag(window: WebviewWindow) -> Result<(), String> {
   only_main(&window)?;
@@ -201,7 +223,9 @@ pub fn run() {
       app_feedback_images,
       app_feedback_capture,
       app_open_path,
-      app_open_external
+      app_open_external,
+      app_show_browser,
+      pip_action
     ])
     .setup(move |app| {
       let handle = app.handle().clone();
@@ -214,6 +238,15 @@ pub fn run() {
         Some(dir) => dir.join("webview"),
         None => app.path().app_local_data_dir()?.join("EBWebView"),
       };
+      // The agents' browser: its own WebView2 environment, in a data folder of its own (browser.rs).
+      let agents_data = match &separate {
+        Some(dir) => dir.join("navegador-agente"),
+        None => app.path().app_local_data_dir()?.join("navegador-agente"),
+      };
+      browser::init(&handle, agents_data);
+      let e2e = window::e2e(separate.is_some());
+      // The little window of the agents' browser shares Orb's window's WebView2 environment (same folder and arguments).
+      pip::init(&handle, webview_data.clone(), protocol::browser_args(e2e.cdp_port));
       let (node, src) = engine_paths(&handle);
       let engine = engine::Engine::new(
         handle.clone(),
@@ -232,7 +265,7 @@ pub fn run() {
       app.manage(engine.clone());
       // The engine starts while the window loads.
       tauri::async_runtime::spawn(engine.boot(None));
-      window::create_main(&handle, &user_data, webview_data, window::e2e(separate.is_some()))?;
+      window::create_main(&handle, &user_data, webview_data, e2e)?;
       Ok(())
     })
     .build(tauri::generate_context!())

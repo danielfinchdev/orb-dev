@@ -39,12 +39,15 @@ let devControl = null; // 3.1: the developer's control line (src/engine/dev-cont
 // developer's control line.
 const toWindow = (event, payload) => { try { transport.send({ type: 'event', event, payload }); } catch { /* window gone */ } };
 const emit = (event, payload) => {
+  // 3.8.1: under Tauri the agents' browser lives here: a task that ended closes its pages (Electron's main process does it).
+  if (event === 'agentBrowser:closeTask' && hostBrowser) { try { hostBrowser.closeTask(payload?.task); } catch { /* going away */ } return; }
   toWindow(event, payload);
   try { remote?.broadcast(event, payload); } catch (error) { log(`móvil: ${event}: ${error.message}`); }
   try { devControl?.broadcast(event, payload); } catch (error) { log(`control: ${event}: ${error.message}`); }
 };
 
 let api = null;
+let hostBrowser = null; // 3.8.1 (D7): the agents' browser when the app's pages are driven from here (src/engine/host-browser.mjs)
 let logFile = null;
 const log = (line) => { try { if (logFile) { rotateIfBig(logFile); fs.appendFileSync(logFile, `${new Date().toISOString()} ${line}\n`); } } catch { /* never fatal */ } };
 process.on('uncaughtException', (error) => log(`uncaughtException: ${error?.stack ?? error}`));
@@ -73,8 +76,20 @@ async function start(home, version, secret, browser, keep = null, userData = nul
   }
   // The approval secret comes from the app (kept encrypted by Windows); without it, the file fallback is used.
   if (validSecret(secret)) ctx.secret = Buffer.from(secret, 'hex');
-  // The agents' browser lives in the app (main process): its pipe and token go to the agents' MCP servers.
-  if (typeof browser?.pipe === 'string' && /^[0-9a-f]{48}$/.test(browser.token ?? '') && /orb-navegador-[0-9a-f]{16}(\.sock)?$/.test(browser.pipe)) ctx.browser = { pipe: browser.pipe, token: browser.token };
+  // The agents' browser: Electron's lives in its main process (its pipe and token come here, for the agents' MCP servers);
+  // under Tauri (browser 'host') it lives here, with the app's hidden pages (src/engine/host-browser.mjs).
+  if (browser === 'host' && !hostBrowser) {
+    const { createHostBrowser } = await import('./host-browser.mjs');
+    const AGENTS = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor' };
+    hostBrowser = createHostBrowser({
+      log: (line) => log(line), language: () => ctx.config?.language ?? 'es', skin: () => ctx.config?.ui?.skin ?? 'orb',
+      pipEnabled: () => ctx.config?.ui?.pip !== false && ctx.config?.browser?.enabled !== false,
+      label: (agent) => (agent === 'orb' ? ctx.config?.assistantName ?? PRODUCT.assistant : AGENTS[agent] ?? agent)
+    });
+    await hostBrowser.ready;
+  }
+  if (hostBrowser) ctx.browser = { pipe: hostBrowser.pipe, token: hostBrowser.token };
+  else if (typeof browser?.pipe === 'string' && /^[0-9a-f]{48}$/.test(browser.token ?? '') && /orb-navegador-[0-9a-f]{16}(\.sock)?$/.test(browser.pipe)) ctx.browser = { pipe: browser.pipe, token: browser.token };
   if (typeof keep === 'string' && path.isAbsolute(keep)) mirror = keep;
   tools = appMethods({ home, version });
   // 3.8: the folders of Orb 3.7 move into core (src/core/core-folder.mjs); then, if core or part of it is gone (deleted
@@ -370,6 +385,7 @@ let stopping = false;
 function shutdown() {
   if (stopping) return; stopping = true;
   try { api?.shutdown(); } catch { /* closing anyway */ }
+  try { hostBrowser?.shutdown(); } catch { /* closing anyway */ }
   try { devControl?.stop(); } catch { /* closing anyway */ }
   Promise.race([Promise.resolve(remote?.stop()).catch(() => {}), new Promise((r) => setTimeout(r, 4000))]).finally(() => setTimeout(() => process.exit(0), 300));
 }
@@ -384,6 +400,8 @@ const APP_MESSAGES = {
   locate: (m) => ({ home: locateHome({ userData: String(m.userData ?? ''), packaged: m.packaged === true, separateData: m.separateData === true, documents: m.documents ?? null, profile: m.profile ?? null }) }),
   setup: (m) => ({ home: setupHome({ userData: String(m.userData ?? ''), base: m.base, assistantName: m.assistantName, userName: m.userName, language: m.language }) }),
   switchHome: (m) => ({ ok: switchHome({ userData: String(m.userData ?? ''), target: m.target }) }),
+  // The little window of the agents' browser: its buttons and Ajustes › «Ver el navegador» (src/engine/host-browser.mjs).
+  pip: (m) => hostBrowser?.pip(String(m.action ?? '')) ?? null,
   texts: (m) => {
     let lang = ctx.config?.language;
     if (!lang && typeof m.home === 'string' && m.home) { try { lang = loadConfig(m.home).language; } catch { /* Spanish */ } }
@@ -401,6 +419,7 @@ transport.on(async (msg) => {
   }
   if (msg.type === 'shutdown') return shutdown();
   if (msg.type === 'hostReply') { hostReply(msg); return; }
+  if (msg.type === 'browserEvent') { hostBrowser?.event(msg); return; }
   if (Object.hasOwn(APP_MESSAGES, msg.type)) {
     try { transport.send({ type: 'reply', id: msg.id, ok: true, result: await APP_MESSAGES[msg.type](msg) }); }
     catch (error) { transport.send({ type: 'reply', id: msg.id, ok: false, error: oneLine(error?.message ?? String(error), 1000) }); }

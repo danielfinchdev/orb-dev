@@ -545,9 +545,12 @@ as a **bounded excerpt**, not in full, and marked as "data, not instructions".
 - Files:
   - `src/main/browser.mjs` (hidden pages, the mini window and the per-conversation keyed pipe);
   - `src/core/browser-protocol.mjs` (the actions, page scripts and pipe every driver shares);
-  - 3.8.1, on the way to Tauri: `src/engine/agent-browser.mjs` (the same pages and pipe without Electron, so they can
-    live in the engine), driven over the DevTools protocol (`src/engine/browser-cdp.mjs`, `src/engine/cdp.mjs`, Node's
-    own WebSocket, no `--remote-allow-origins`); the app only provides the pages (hidden WebView2 windows);
+  - 3.8.1, Tauri: the browser lives in the engine (`src/engine/host-browser.mjs`, `agent-browser.mjs`, the DevTools
+    driver `browser-cdp.mjs`). Its pages are hidden WebView2 views in a browser environment of their own
+    (`src-tauri/src/browser.rs`), with no DevTools port: Rust passes the engine's DevTools calls with
+    `CallDevToolsProtocolMethod` over the engine's stdio channel and enforces the limits (http(s) only, no other app's
+    protocol, no new windows, permissions, downloads or HTTP sign-in prompts, sound off: `browser_rules.rs`). The mini
+    window is `src-tauri/src/pip.rs`, fed by a screencast with one frame in flight;
   - the tools in `src/mcp/server.mjs`;
   - `src/core/browser-key.mjs`.
 

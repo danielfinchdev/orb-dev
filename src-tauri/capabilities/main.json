@@ -21,6 +21,7 @@
     "allow-app-feedback-images",
     "allow-app-feedback-capture",
     "allow-app-open-path",
-    "allow-app-open-external"
+    "allow-app-open-external",
+    "allow-app-show-browser"
   ]
 }

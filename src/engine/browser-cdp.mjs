@@ -1,31 +1,42 @@
-// 3.8.1 (D2): what the agents' browser does with one of its pages over the DevTools protocol (src/engine/cdp.mjs), for
-// the shared actions of src/core/browser-protocol.mjs: the same driver interface as Electron's (src/main/browser-driver.mjs,
-// kept until Electron goes). Under Tauri the pages are hidden WebView2 windows; in the tests, pages of a headless Edge.
+// 3.8.1 (D2, D7): what the agents' browser does with one of its pages over the DevTools protocol, for the shared actions
+// of src/core/browser-protocol.mjs: the same driver interface as Electron's (src/main/browser-driver.mjs, kept until
+// Electron goes). Under Tauri the pages are hidden WebView2 windows driven by Rust (CallDevToolsProtocolMethod, no
+// DevTools port: src/engine/host-browser.mjs); in the tests, pages of a headless Edge.
 //
-// attachPage(cdp, targetId, tab) joins a page with a flat session and keeps on the tab what the actions read: its main
-// frame, address, whether it is loading, its console errors and warnings, and the isolated world Orb's scripts run in
+// attachPage(page, tab) takes a page ({ id, send, on, close }: src/engine/agent-browser.mjs) and keeps on the tab what the
+// actions read: its main frame, address, title, whether it is loading, its console errors and warnings (and what the app
+// refused: a download, a sign-in prompt, an address that is not a web page), and the isolated world Orb's scripts run in
 // (the page's DOM, none of its JavaScript). Then cdpDriver(T) does the rest.
-import { VIEW, dialogsHook, TAKE_DIALOGS } from '../core/browser-protocol.mjs';
+import { VIEW, allowed, dialogsHook, TAKE_DIALOGS } from '../core/browser-protocol.mjs';
 
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
 export const WORLD_NAME = 'orb-agent';
 const LOAD_MS = 25_000;
 
-export async function attachPage(cdp, targetId, tab) {
-  const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
-  const send = (method, params = {}) => cdp.send(method, params, sessionId);
-  const on = (method, fn) => cdp.on(method, fn, sessionId);
-  const page = { targetId, sessionId, send, on, mainFrame: null, url: '', loading: false, world: null, dialogScript: null, gone: false };
+export async function attachPage(source, tab, { onUpdate = () => {} } = {}) {
+  const { send, on } = source;
+  const page = { ...source, mainFrame: null, url: '', loading: false, world: null, dialogScript: null, gone: false };
   tab.page = page;
   tab.console ??= [];
   const note = (level, message, source = '', line = 0) => {
     tab.console.push({ level, message: String(message ?? '').slice(0, 500), source: String(source ?? '').slice(0, 200), line: Number(line) || 0 });
     if (tab.console.length > 200) tab.console.shift();
   };
-  on('Page.frameNavigated', ({ frame }) => { if (!frame.parentId) { page.mainFrame = frame.id; page.url = frame.url; page.world = null; tab.url = frame.url; } });
-  on('Page.navigatedWithinDocument', ({ frameId, url }) => { if (frameId === page.mainFrame) { page.url = url; tab.url = url; } });
-  on('Page.frameStartedLoading', ({ frameId }) => { if (frameId === page.mainFrame) { page.loading = true; tab.loading = true; } });
-  on('Page.frameStoppedLoading', ({ frameId }) => { if (frameId === page.mainFrame) { page.loading = false; tab.loading = false; } });
+  // What the app refused, told to the agent as console errors (orb_browser_console, and the snapshot's error count).
+  const REFUSED = { navigation: 'Orb blocked a page that is not http(s)', external: 'Orb blocked opening another app', download: 'Orb refused a download (this browser never downloads files)', auth: 'Orb cancelled an HTTP sign-in prompt', permission: 'Orb denied a permission request' };
+  on('Orb.blocked', ({ kind, url, permission } = {}) => note('error', `${REFUSED[kind] ?? 'Orb blocked'}${permission ? ` (${permission})` : ''}`, url));
+  // A new window the page asked for (window.open, target=_blank): never made; its address opens in this page.
+  on('Orb.popup', ({ url } = {}) => {
+    if (!url || url === 'about:blank') return;
+    if (!allowed(url)) { note('error', REFUSED.navigation, url); return; }
+    send('Page.navigate', { url }).catch(() => {});
+  });
+  on('Orb.title', ({ title } = {}) => { tab.title = String(title ?? ''); onUpdate(); });
+  on('Orb.crashed', () => { tab.crashed = true; });
+  on('Page.frameNavigated', ({ frame }) => { if (!frame.parentId) { page.mainFrame = frame.id; page.url = frame.url; page.world = null; tab.url = frame.url; onUpdate(); } });
+  on('Page.navigatedWithinDocument', ({ frameId, url }) => { if (frameId === page.mainFrame) { page.url = url; tab.url = url; onUpdate(); } });
+  on('Page.frameStartedLoading', ({ frameId }) => { if (frameId === page.mainFrame) { page.loading = true; tab.loading = true; onUpdate(); } });
+  on('Page.frameStoppedLoading', ({ frameId }) => { if (frameId === page.mainFrame) { page.loading = false; tab.loading = false; onUpdate(); } });
   on('Runtime.executionContextsCleared', () => { page.world = null; });
   on('Runtime.executionContextDestroyed', ({ executionContextId }) => { if (executionContextId === page.world) page.world = null; });
   // 3.2.1: what the page writes to its console (errors and warnings), for orb_browser_console.
@@ -68,10 +79,11 @@ export function cdpDriver(T) {
       let loaded; const done = new Promise((r) => { loaded = r; });
       const off = page.on('Page.loadEventFired', () => loaded());
       try {
-        const r = await page.send('Page.navigate', { url });
+        const r = await page.send('Page.navigate', { url }).catch((error) => { throw new Error(T('sys.browser.openFailed', { url, error: /ERR_\w+/.exec(error.message)?.[0] ?? error.message })); });
         const failure = r.errorText && !/ERR_ABORTED/.test(r.errorText) ? r.errorText : null;
-        // An HTTP error status (404, 500…) still renders the server's page: the agent sees it. Anything else never loaded.
-        if (failure && !/ERR_HTTP_RESPONSE_CODE_FAILURE/.test(failure)) throw new Error(T('sys.browser.openFailed', { url, error: failure.replace(/^.*?(ERR_\w+).*$/s, '$1') }));
+        // An HTTP error status (404, 500…) still renders the server's page: the agent sees it, as it does a page that asked
+        // for an HTTP sign-in (the app cancels the prompt and the server's 401 page shows). Anything else never loaded.
+        if (failure && !/ERR_HTTP_RESPONSE_CODE_FAILURE|ERR_INVALID_AUTH_CREDENTIALS/.test(failure)) throw new Error(T('sys.browser.openFailed', { url, error: failure.replace(/^.*?(ERR_\w+).*$/s, '$1') }));
         if (r.loaderId) await Promise.race([done, settle(LOAD_MS)]); // a jump inside the same page has no load
       } finally { off(); }
     },
@@ -84,8 +96,9 @@ export function cdpDriver(T) {
           if (r.exceptionDetails) throw Object.assign(new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text ?? 'error'), { fromPage: true });
           return r.result?.value ?? null;
         } catch (error) {
-          // The page moved on (its document and world are gone): once more in the new one.
-          if (error.fromPage || i >= 2 || !/context|frame/i.test(error.message)) throw error;
+          // The page moved on (its document and world are gone): once more in the new one. WebView2 says so with a bare
+          // «invalid argument» (0x80070057) after a page that failed to load.
+          if (error.fromPage || i >= 2 || !/context|frame|0x80070057/i.test(error.message)) throw error;
           page.world = null; await settle(100);
         }
       }

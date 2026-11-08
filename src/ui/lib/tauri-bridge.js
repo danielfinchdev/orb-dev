@@ -69,7 +69,7 @@ if (window.__TAURI_INTERNALS__ && !window.orb) {
     // unlock: the master password's token, for core and its secrets (Rust checks it with the engine).
     openPath: (folder, unlock) => invoke('app_open_path', { path: String(folder ?? ''), unlock: text(unlock) }),
     openExternal: (url) => invoke('app_open_external', { url: String(url ?? '') }),
-    showBrowser: () => Promise.resolve(null),
+    showBrowser: () => invoke('app_show_browser'),
     zoom: (value) => invoke('app_zoom', { value: value ?? null }),
     windowControls: {
       act: windowAct,

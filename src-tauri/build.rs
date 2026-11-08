@@ -1,6 +1,7 @@
 fn main() {
   // The app's own commands, allowed per window by the capabilities (capabilities/main.json): only Orb's window may call
-  // them; the agents' browser windows (a later step) get no capability and so no IPC at all.
+  // them; the little window of the agents' browser only pip_action (capabilities/pip.json); the agents' pages are not Tauri
+  // windows at all (browser.rs).
   tauri_build::try_build(tauri_build::Attributes::new().app_manifest(tauri_build::AppManifest::new().commands(&[
     "engine_call",
     "app_info",
@@ -18,6 +19,8 @@ fn main() {
     "app_feedback_capture",
     "app_open_path",
     "app_open_external",
+    "app_show_browser",
+    "pip_action",
   ])))
   .expect("tauri build script");
 }

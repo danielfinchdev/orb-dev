@@ -83,6 +83,10 @@ impl Engine {
     })
   }
 
+  /// The app's data folder (%APPDATA%\Orb.dev, or ORB_USER_DATA).
+  pub fn user_data(&self) -> PathBuf {
+    self.cfg.user_data.clone()
+  }
   /// Electron's Local State in the app's data folder: the key of the secrets Orb 3.8.0 sealed (read only, never changed).
   pub fn local_state(&self) -> PathBuf {
     self.cfg.user_data.join("Local State")
@@ -210,7 +214,8 @@ impl Engine {
     self.status.send_replace(Status::Starting);
     // The engine opens the approval secret itself with this app's sealing (hostSecret: host.seal / host.unseal, DPAPI in
     // secrets.rs, which still reads Electron's v10 and seals it again as ORB2): src/engine/approval-secret.mjs.
-    let start = json!({ "type": "start", "home": self.home(), "version": self.cfg.version, "secret": null, "hostSecret": true, "browser": null, "userData": self.cfg.user_data });
+    // The agents' browser lives in the engine, with this app's hidden pages (browser 'host': browser.rs).
+    let start = json!({ "type": "start", "home": self.home(), "version": self.cfg.version, "secret": null, "hostSecret": true, "browser": "host", "userData": self.cfg.user_data });
     if !self.send(&start) {
       let e = self.t_name("sys.main.engineOff");
       self.status.send_replace(Status::Failed(e.clone()));
@@ -222,6 +227,11 @@ impl Engine {
       Status::Failed(e) => Err(e),
       _ => Err(self.t_name("sys.main.engineStartStopped")),
     }
+  }
+
+  /// A message for the engine that needs no answer (the agents' browser pages' events).
+  pub fn notify(&self, message: &Value) -> bool {
+    self.send(message)
   }
 
   fn send(&self, message: &Value) -> bool {
@@ -317,6 +327,11 @@ impl Engine {
         return;
       }
       *proc = None;
+    }
+    // The agents' browser pages and its little window belonged to the engine that went.
+    crate::browser::close_all(&self.app);
+    if let Some(w) = self.app.get_webview_window("pip") {
+      let _ = w.hide();
     }
     let stopped = self.t_name("sys.main.engineStopped");
     for (_, tx) in self.pending.lock().unwrap().drain() {
