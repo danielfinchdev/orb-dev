@@ -419,6 +419,26 @@ try {
   await win.waitForSelector('[data-testid=expert-system] >> text=Memoria');
   await win.waitForTimeout(400);
   await shot('10b-modo-experto');
+  // 3.8.1: the bar's buttons never go under the window's minimise / maximise / close, also in a narrower window.
+  const clearOfControls = async (label) => {
+    const [iw, sw] = await win.evaluate(() => [innerWidth, document.documentElement.scrollWidth]);
+    assert.ok(sw <= iw + 1, `${label}: la ventana se sale por los lados`);
+    if (iw < 1024) { assert.equal(await win.locator('[data-testid=expert-view]:visible').count(), 0, `${label}: God mode pide una ventana más ancha`); return; }
+    const [panels, controls, bar] = await win.evaluate(() => ['[data-testid=expert-panels]', '.win-controls', '[data-testid=expert-bar]'].map((q) => { const r = document.querySelector(q)?.getBoundingClientRect(); return r ? { left: r.left, right: r.right, width: r.width } : null; }));
+    assert.ok(panels && panels.width > 0, `${label}: se ve «Paneles»`);
+    if (controls) assert.ok(panels.right <= controls.left + 1, `${label}: «Paneles» (${Math.round(panels.right)}) bajo los botones de la ventana (${Math.round(controls.left)})`);
+    const overflow = await win.evaluate(() => { const b = document.querySelector('[data-testid=expert-bar]'); return b.scrollWidth - b.clientWidth; });
+    assert.ok(overflow <= 1, `${label}: la barra de God mode se sale (${overflow} px)`);
+  };
+  await clearOfControls('1360');
+  for (const width of [800, 1024, 1040, 1100, 1200]) {
+    await win.setViewportSize({ width, height: 860 });
+    await win.waitForTimeout(200);
+    await clearOfControls(String(width));
+  }
+  await shot('10c-modo-experto-1024');
+  await win.setViewportSize({ width: 1360, height: 860 });
+  await win.waitForTimeout(200);
   await win.click('[data-testid=expert-panels]');
   await win.getByRole('menuitem', { name: /Actividad en directo/ }).click();
   await until(async () => (await call('app.state')).config.expert.panels.activity === false, 'panel quitado');
