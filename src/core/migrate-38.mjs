@@ -725,8 +725,9 @@ function migrate(db, home) {
     return done;
   } finally {
     release();
-    // Done: no process needs the lock any more.
-    if (state() && !pendingWork()) { try { fs.rmSync(path.join(p.data, LOCK_FILE), { force: true }); } catch { /* another process still has it open */ } }
+    // Done: no process needs the lock any more. Only on Windows, where the file cannot go while another process waits on
+    // it; elsewhere it would be unlinked under that process (its lock then on a file nobody else sees): it stays.
+    if (process.platform === 'win32' && state() && !pendingWork()) { try { fs.rmSync(path.join(p.data, LOCK_FILE), { force: true }); } catch { /* another process still has it open */ } }
   }
 }
 

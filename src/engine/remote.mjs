@@ -91,7 +91,7 @@ const TEXT_FIELD = /^(body|text|title|description|message|note|notes|result|summ
 const isPath = (v) => ABSOLUTE.test(v) && v.length <= 400 && !/[\r\n]|[.,;:!?]\s/.test(v);
 function placeOf(file) {
   const rel = ctx.home ? path.relative(ctx.home, file) : '';
-  return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel.split(/[\\/]+/).join('/') : path.basename(file.replace(/[\\/]+$/, '')) || '…';
+  return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel.split(/[\\/]+/).join('/') : file.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || '…'; // either separator: a Windows path on any system
 }
 // The assistant folder inside a text: «<home>\x» → «x», the folder alone → «…» (in JSON its \ are doubled: matched too).
 const homePattern = () => {
