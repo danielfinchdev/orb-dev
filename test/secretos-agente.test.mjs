@@ -78,7 +78,10 @@ test('secretos: tarjeta privada, identificador de un solo uso y nada en el chat 
   assert.match(await third, /rechazado/);
 });
 
-test('secretos: sin respuesta, demasiadas y al bloquear Orb no queda nada que canjear', async () => {
+test('secretos: sin respuesta, demasiadas y al bloquear Orb no queda nada que canjear', async (t) => {
+  // The card's timers are unref'd (in Orb the engine's server keeps the process alive): here nothing else would, and
+  // the test runner would end while the first request still waits for its timeout.
+  const alive = setInterval(() => {}, 1_000); t.after(() => clearInterval(alive));
   const { secrets } = setup({ askMs: 50 });
   assert.match(await secrets.request(chat, { name: 'TOKEN', reason: 'x' }), /no ha respondido/);
   const s = setup();
