@@ -239,7 +239,7 @@ function UpdatesCard() {
   const line = {
     off: t('settings.update.off'), idle: '', checking: t('settings.update.checking'), none: t('settings.update.none'),
     available: t('settings.update.available', { version: st.version }), downloading: t('settings.update.downloading', { version: st.version, percent: st.percent ?? 0 }),
-    downloaded: t('settings.update.downloaded', { version: st.version }), error: t('settings.update.error', { error: st.error })
+    downloaded: t('settings.update.downloaded', { version: st.version }), installing: t('settings.update.installing', { version: st.version }), error: t('settings.update.error', { error: st.error })
   }[st.state] ?? '';
   return (
     <Card data-testid="updates-card">
@@ -252,7 +252,7 @@ function UpdatesCard() {
         <CardFooter>
           {st.state === 'available' ? <Button size="sm" onClick={() => updateActions.update(st)}>{st.portable ? t('update.download') : t('update.update')}</Button>
             : st.state === 'downloaded' ? <Button size="sm" onClick={updateActions.restart}>{t('update.restart')}</Button>
-              : <Button size="sm" variant="outline" disabled={['checking', 'downloading'].includes(st.state)} onClick={updateActions.check}>{t('settings.update.check')}</Button>}
+              : <Button size="sm" variant="outline" disabled={['checking', 'downloading', 'installing'].includes(st.state)} onClick={updateActions.check}>{t('settings.update.check')}</Button>}
           {st.version ? <Button size="sm" variant="ghost" onClick={() => act(bridge.openExternal(notesUrl(st.version)))}>{t('update.notes')}</Button> : null}
         </CardFooter>
       )}

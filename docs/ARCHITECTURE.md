@@ -1230,10 +1230,14 @@ are not overridden: they are the PC owner's.
 **Updates** (`src-tauri/src/updater.rs`, `src/ui/components/update-card.jsx`):
 - It checks on open (after 15 s) and every 4 h; it downloads nothing until the user clicks **Download and install**.
 - States the window receives (`app:update` event): `checking`, `available`, `downloading` (with `percent`), `downloaded`,
-  `none`, `error`, `off`. A card at the top right (below the header: it does not cover the menu or the text box) and an "Updates" card in Settings.
-- **Restart and install**: if tasks are running it asks first; then the pre-update backup (one at a time: a second asker
-  waits for it) and the installer. With "Later" it installs when Orb closes, only once that backup is done (it is
-  finished before the engine stops; otherwise the next start offers the version again).
+  `installing` (with `step`: `backup` and its `percent`, then `installer`), `none`, `error`, `off`. A card at the top right (below the header: it does not cover the menu or the text box) and an "Updates" card in Settings.
+- **Restart and install**: if tasks are running it asks first; then the card shows the pre-update backup with its
+  progress (the engine's `backup:progress` event) and the installer opening. That backup starts once per version when
+  the download ends (never twice, a failed one is not retried) and the update never waits for it more than 45 s
+  (20 s when Orb closes): then it installs without it and says so in `motor-salida.log` (the daily copy is there). If
+  the installer cannot be started, the card says so and offers **Download again** and the release page (the engine,
+  if it had been stopped for the installer, starts again). With "Later" it installs when Orb closes. What a copy cut
+  short leaves in the backup folder (`.preparando-*`, `*.orbbak.<pid>.tmp`) goes at the next start, after an hour.
 - Running from source there are no updates (`off`). `ORB_NO_UPDATE=1` turns them off; `ORB_FAKE_UPDATE=<version>`
   simulates a new version without network (tests).
 - With `tauri-plugin-updater`. It reads
@@ -1257,7 +1261,9 @@ are not overridden: they are the PC owner's.
   On that first start (`src-tauri/src/migrate.rs`) Electron's Chromium caches and electron-updater's download folder go
   (never `Local State`, the keys or the workspace) and the window says once that Orb moved to its new base.
   `test/puente-electron.e2e.mjs` checks the whole path with a copy of an installed 3.8.0 on a hidden desktop against a
-  fake install; `test/tauri-actualizar.e2e.mjs` checks Tauri → Tauri against a local feed.
+  fake install; `test/tauri-actualizar.e2e.mjs` checks Tauri → Tauri against a local feed, and
+  `test/tauri-instalar.e2e.mjs` installs two test builds («OrbPrueba», this version and the next) in a temporary folder
+  and updates one to the other through the card's **Restart and install**, as the user does.
 
 ## 30. Tests
 
@@ -1269,6 +1275,7 @@ are not overridden: they are the PC owner's.
 | `node test/smoke.e2e.mjs` | The packaged app: the e2e build hidden; a release build only in CI (`--visible`), engine and MCP server |
 | `node test/tauri-navegador.e2e.mjs` | The agents' browser on real WebView2 (hidden): limits, isolation, a flooding page |
 | `node test/tauri-actualizar.e2e.mjs` · `node test/puente-ganchos.e2e.mjs` · `node test/puente-electron.e2e.mjs` | Updates (test key, local feed), the installer's hooks, and the bridge from an installed 3.8.0 (hidden desktop) |
+| `node test/tauri-instalar.e2e.mjs` | A real update of an installed Orb: «Reiniciar e instalar», the backup, the passive installer and the new version opening (test builds «OrbPrueba» in a temporary folder) |
 | `node scripts/medir.mjs --hidden` | Performance of the e2e build (`--shell electron --exe <copy of 3.8.0>`: the baseline): start, memory, CPU at rest and scrolling (§27, Performance) |
 | `node test/explora.e2e.mjs` | Walkthrough with screenshots in `test-results/explora/`: first launch ("Preparing your PC", with the folder dialog mocked), every view and Settings section in day and night, the five themes, narrow window. With `ORB_LANG=en`, the same in English (`explora-en/`). Notes go to `notas.txt` |
 | `node test/real.e2e.mjs claude,codex,cursor` | **Real agents**: conversations, assistant task, report, undo, approval, steering, queue, fork, Task Review and scheduled tasks |

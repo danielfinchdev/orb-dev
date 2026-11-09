@@ -336,6 +336,18 @@ impl Engine {
     }
   }
 
+  /// Orb is not closing after all (the installer of a new version could not be started after the engine was stopped
+  /// for it): the engine starts again, as after a crash.
+  pub async fn resume(self: Arc<Self>) {
+    self.quitting.store(false, Ordering::SeqCst);
+    if self.is_running() {
+      return;
+    }
+    self.restarts.store(0, Ordering::SeqCst);
+    self.status.send_replace(if self.home().is_some() { Status::Starting } else { Status::Booting });
+    self.boot(Some(None)).await;
+  }
+
   /// A call of the window (or of the app: app.state before closing): waits until the engine has started. `timeout` is
   /// the whole call's, the wait for the start included (an engine stuck starting never hangs a call, or closing Orb).
   pub async fn call(&self, method: &str, params: Value, timeout: Duration) -> Reply {
@@ -393,6 +405,9 @@ impl Engine {
           crate::window::set_title(&self.app, payload.get("assistantName").and_then(Value::as_str));
           let me = self.clone();
           tauri::async_runtime::spawn(async move { me.refresh_texts().await });
+        }
+        if event == "backup:progress" {
+          crate::updater::backup_progress(&self.app, &payload);
         }
         self.emit_event(&event, payload);
       }

@@ -196,6 +196,7 @@ export default {
   'settings.update.available': 'Nueva versión disponible: {version}',
   'settings.update.downloading': 'Descargando {version}… {percent} %',
   'settings.update.downloaded': '{version} descargada. Se instalará al reiniciar.',
+  'settings.update.installing': 'Instalando {version}…',
   'settings.update.error': 'No se pudo buscar actualizaciones ({error}). Inténtalo más tarde.',
   'settings.update.off': 'Las actualizaciones solo están disponibles en la versión instalada.',
   'settings.update.portable': 'Versión portable: descarga las actualizaciones desde GitHub.',
