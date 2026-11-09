@@ -118,8 +118,11 @@ function listLogs() {
 }
 function boardSummary() {
   const out = board.summary(null, CONV); const projects = convProjects();
-  // Every count of the PC, but only the tasks it may list.
+  // Only the tasks it may list. 3.8.3: the counts of the whole PC came beside them unlabelled («3 en cola» with one task
+  // listed: Orbe reported the board did not add up); now both, named, and each listed task says its conversation.
   out.active = out.active.filter((t) => listsTask(t, projects));
+  const here = {}; for (const t of out.active) here[t.status] = (here[t.status] ?? 0) + 1;
+  out.counts = { todoElPc: out.counts, enLaLista: here };
   out.unreadForYou = board.inbox(ME, false, mayRead, INBOX).length;
   return out;
 }

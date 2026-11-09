@@ -259,6 +259,12 @@ test('MCP: listas, bitácoras, mensajes y proyectos, confinados a lo suyo', asyn
     const summary = (await worker.call('orb_board')).text;
     assert.match(summary, /TAREA-A/); assert.doesNotMatch(summary, /OTRO-PROYECTO|MISMO-PROYECTO/);
     assert.doesNotMatch((await boss.call('orb_board')).text, /OTRO-PROYECTO/);
+    // 3.8.3: the counts of the whole PC and of what it lists, named apart, so they add up with the list.
+    const board1 = JSON.parse((await boss.call('orb_board')).text);
+    const listed = board1.active.length;
+    assert.equal(Object.values(board1.counts.enLaLista).reduce((x, y) => x + y, 0), listed);
+    assert.ok(Object.values(board1.counts.todoElPc).reduce((x, y) => x + y, 0) >= listed);
+    assert.ok(board1.active.every((x) => 'conversation' in x), 'each one says its conversation');
     // Logs: its conversation's projects and the general one.
     assert.equal((await boss.call('orb_write_log', { project: 'tienda', tema: 'Plan', hecho: 'hecho' })).error, false);
     assert.equal((await boss.call('orb_write_log', { project: 'general', tema: 'Plan', hecho: 'hecho' })).error, false);

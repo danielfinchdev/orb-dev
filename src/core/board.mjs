@@ -767,7 +767,7 @@ export class Board {
       projects: this.projects().map((p) => `${p.name} — ${p.path}`),
       counts,
       // 3.8.3: why each queued one waits, and the ones held for the user's review (the coordinator explains them).
-      active: active.map((t) => ({ id: t.id, project: t.project, title: t.title, agent: t.assigned_to ?? t.agent, launch: t.launch, status: t.status, depends_on: t.depends_on, ...this.explainForAgents(t) })),
+      active: active.map((t) => ({ id: t.id, project: t.project, title: t.title, agent: t.assigned_to ?? t.agent, launch: t.launch, status: t.status, depends_on: t.depends_on, conversation: t.conversation_id ?? null, ...this.explainForAgents(t) })),
       unreadForYou: agent ? this.inbox(agent, false).length : undefined
     };
   }
