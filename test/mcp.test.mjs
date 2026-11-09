@@ -84,6 +84,21 @@ test('la bitácora: el pedido sale del último mensaje del usuario, y se leen en
   } finally { boss.close(); }
 });
 
+// 3.8.3 (what Orbe itself reported): orb_create_task offered accounts of agents that are not on this PC.
+test('crear tareas solo ofrece los agentes y las cuentas que este PC puede usar', async () => {
+  const before = board.setting('agents_available');
+  board.settingJson('agents_available', ['claude', 'codex']);
+  const boss = client(bossServer());
+  try {
+    await boss.rpc('initialize', {});
+    const tool = (await boss.rpc('tools/list', {})).result.tools.find((x) => x.name === 'orb_create_task');
+    assert.deepEqual(tool.inputSchema.properties.agent.enum, ['claude', 'codex', 'any']);
+    const offered = tool.inputSchema.properties.account.description;
+    assert.match(offered, /claude/);
+    for (const gone of ['gemini', 'opencode', 'qwen', 'copilot', 'cursor']) assert.doesNotMatch(offered, new RegExp(gone), gone);
+  } finally { boss.close(); board.setting('agents_available', before ?? ''); }
+});
+
 test('el coordinador crea proyectos, escribe bitácoras y no puede leer otra cosa que bitácoras', async () => {
   const boss = client(bossServer(null));
   try {

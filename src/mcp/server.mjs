@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { useHome, ctx, tr } from '../core/context.mjs';
 import { isHome, CATEGORIES, PLATFORMS, AGENT_LABELS } from '../core/home.mjs';
 import { budgetConfig, waitReason, modelLimits } from '../core/budget.mjs';
-import { accountLabel, accountsOf } from '../core/accounts.mjs';
+import { accountLabel, accountsOf, usableAccounts } from '../core/accounts.mjs';
 import { oneLine, redactSecrets } from '../core/safety.mjs';
 import { git, copyIntoWorkdir } from '../core/workspace.mjs';
 import { newProject } from '../core/projects.mjs';
@@ -309,7 +309,9 @@ function taskBrief(id) {
     messages: d.messages.slice(-20).map((m) => ({ ...m, body: oneLine(m.body, 600) })),
     dependencies: d.dependencies.map((x) => x && { ...x, result: oneLine(x.result, 1500) }) };
 }
-const myAccounts = () => { try { return AGENTS.flatMap((a) => accountsOf(a)); } catch { return []; } };
+// 3.8.3: the accounts of the agents this PC can run (Orbe was offered gemini, opencode, qwen and copilot accounts that
+// do not exist here: every agent has a default one in the settings).
+const myAccounts = () => { try { return AVAILABLE.flatMap((a) => usableAccounts(a)); } catch { return []; } };
 const modelsHelp = () => AVAILABLE.map((a) => `${a}: ${modelsOf(a).join(', ') || 'predeterminado'}`).join(' | ');
 const tools = [
   ...(TASK_ID && !BOSS ? [
