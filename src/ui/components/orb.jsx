@@ -7,7 +7,7 @@
 // blinks, so nothing keeps the compositor drawing 60 frames a second for it.
 // Click it: it boops; click it a lot and it laughs (with its little sounds, lib/sounds.js). Ajustes → «Animaciones:
 // mínimas» keeps it still apart from blinking and its moods.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { cn } from '@/lib/utils.js';
 import { useStore } from '@/lib/store.js';
 import { play as sound } from '@/lib/sounds.js';
@@ -167,6 +167,7 @@ export function Orb({ pose = 'head', size = 34, mood = 'idle', live: wantsLive =
   const w = head ? size : (size * STAND.visor.w) / G.visor.w;
   const VW = 1000, VH = Math.round(1000 * G.ratio);
   const k = G.visor.w / geo.cabeza.visor.w; // eye movements are measured on the head
+  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, ''); // each robot's glow filters are its own (sizes differ)
   const url = (n) => `${BASE}robot/${n}.png`;
   return (
     <span ref={self} className={cn('orb', still && 'still', calm && 'calm', className)} data-away={seen ? undefined : ''} data-mood={face} data-act={act ?? undefined} data-blink={blink || undefined}
@@ -187,7 +188,8 @@ export function Orb({ pose = 'head', size = 34, mood = 'idle', live: wantsLive =
         </span>
         {/* 3.8.3: each eye is its own little picture inside an HTML box (placed and tilted like the artwork's eye): blinking
             and talking scale that box, which the compositor does alone. They used to scale an SVG group, which the main
-            thread redrew, glow filter included, on every frame of every blink and all through an answer. */}
+            thread redrew, glow filter included, on every frame of every blink and all through an answer. The glow is the
+            same SVG filter, applied to the unscaled box around the eye (in CSS px), so a shut eye glows as it did. */}
         <span className="orb-gaze">
           <span className="orb-eyes">
             {G.eyes.map((e, i) => {
@@ -195,15 +197,15 @@ export function Orb({ pose = 'head', size = 34, mood = 'idle', live: wantsLive =
               const glow = 16 * k;
               // Room for the brows (the widest part) and three times the glow's spread around them.
               const R = Math.ceil(Math.max(ew * 1.3, eh * 0.86) + glow * 3);
-              const id = `orb-glow-${file}-${i}`;
+              const id = `orb-glow-${uid}-${i}`;
               return (
-                <span key={i} className="orb-eye-at" style={{ left: `${e.x}%`, top: `${e.y}%`, width: `calc(${2 * R} * var(--u))`, height: `calc(${2 * R} * var(--u))`, transform: `translate(-50%, -50%) rotate(${e.tilt}deg)` }}>
+                <span key={i} className="orb-eye-at" style={{ left: `${e.x}%`, top: `${e.y}%`, width: `calc(${2 * R} * var(--u))`, height: `calc(${2 * R} * var(--u))`, transform: `translate(-50%, -50%) rotate(${e.tilt}deg)`, filter: `url(#${id})` }}>
                   <span className={cn('orb-eye', i === 1 && 'orb-eye-r')}>
                     <svg className="orb-face" viewBox={`${-R} ${-R} ${2 * R} ${2 * R}`} aria-hidden="true">
                       <defs>
-                        <filter id={id} filterUnits="userSpaceOnUse" x={-R} y={-R} width={2 * R} height={2 * R}><feGaussianBlur stdDeviation={glow} result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+                        <filter id={id}><feGaussianBlur stdDeviation={glow * (w / VW)} result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
                       </defs>
-                      <g filter={`url(#${id})`}>
+                      <g>
                         <rect className="orb-pill" x={-ew / 2} y={-eh / 2} width={ew} height={eh} rx={ew / 2} />
                         <path className="orb-arc" d={`M${-eh * 0.42} ${eh * 0.12} Q0 ${-eh * 0.5} ${eh * 0.42} ${eh * 0.12}`} strokeWidth={ew * 0.85} />
                         <path className="orb-shut" d={`M${-eh * 0.38} 0 Q0 ${eh * 0.22} ${eh * 0.38} 0`} strokeWidth={ew * 0.7} />
