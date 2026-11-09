@@ -281,3 +281,28 @@ export function recordSpend(board, { account = null, conversation = null, sessio
   } catch { /* a database before 3.6 */ }
   return { day };
 }
+
+// 3.8.2: what was spent in the last `days` days, for the usage page: by day (every day, also the empty ones), by agent
+// and by model. From usage_ledger: the agent is the account's; the model, the one of the chat or task the turn was in.
+export function usageHistory(board, { days = 30, now = new Date() } = {}) {
+  const tz = ownerTz(ctx.config);
+  const list = Array.from({ length: days }, (_, i) => localDay(new Date(now.getTime() - (days - 1 - i) * 86_400_000), tz));
+  const agentOf = new Map(accounts().map((a) => [a.id, a.agent]));
+  const rows = board.all(`SELECT u.day, u.account_id AS account, u.turns, u.tokens_in AS tin, u.tokens_out AS tout, u.usd,
+      COALESCE(s.agent, t.assigned_to, t.agent, c.agent) AS agent, COALESCE(s.model, t.model, c.model) AS model
+    FROM usage_ledger u LEFT JOIN sessions s ON s.id = u.session_id LEFT JOIN tasks t ON t.id = u.task_id LEFT JOIN conversations c ON c.id = u.conversation_id
+    WHERE u.day >= ? AND u.day <= ?`, list[0], list.at(-1));
+  const zero = () => ({ usd: 0, tokensIn: 0, tokensOut: 0, turns: 0 });
+  const add = (into, r) => { into.usd += r.usd ?? 0; into.tokensIn += r.tin ?? 0; into.tokensOut += r.tout ?? 0; into.turns += r.turns ?? 0; return into; };
+  const byDay = new Map(list.map((d) => [d, { day: d, ...zero() }]));
+  const byAgent = new Map(); const byModel = new Map(); const total = zero();
+  for (const r of rows) {
+    const agent = agentOf.get(r.account) ?? r.agent ?? 'claude';
+    add(total, r); add(byDay.get(r.day) ?? { ...zero() }, r);
+    add(byAgent.get(agent) ?? byAgent.set(agent, { agent, ...zero() }).get(agent), r);
+    const key = `${agent}\0${r.model ?? ''}`;
+    add(byModel.get(key) ?? byModel.set(key, { agent, model: r.model ?? null, account: r.account ?? null, ...zero() }).get(key), r);
+  }
+  const most = (a, b) => b.usd - a.usd || (b.tokensIn + b.tokensOut) - (a.tokensIn + a.tokensOut);
+  return { from: list[0], to: list.at(-1), days: [...byDay.values()], agents: [...byAgent.values()].sort(most), models: [...byModel.values()].sort(most), total };
+}

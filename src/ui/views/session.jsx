@@ -2,7 +2,7 @@
 // files appear as the agent works, risky actions wait for a click (approval cards), messages written meanwhile correct the
 // agent on the fly or wait in a queue, and the context meter shows how full the conversation is. Task runs open here too.
 import { lazy, memo, Suspense, useEffect, useMemo, useState } from 'react';
-import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, RefreshCw, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Ellipsis, Gamepad2, Smartphone } from 'lucide-react';
+import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, RefreshCw, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Ellipsis, Gamepad2, Smartphone, Gauge } from 'lucide-react';
 import { unlockCore } from '@/lib/core-access.js';
 import { toast } from 'sonner';
 import { Markdown } from '@/components/markdown.jsx';
@@ -29,6 +29,7 @@ import { sameBlock } from '@/lib/memo.js';
 import { toBlocks, subagentState } from '@/lib/session-blocks.js';
 import { kindOf } from '../../core/attach-kind.mjs';
 import { reloadWait, markReloaded } from '@/lib/usage-reload.js';
+import { UsageBar, windowLabel, resetText, toneOf } from '@/components/usage-bits.jsx';
 
 // An icon that says what the tool does (reading, writing, searching, the web, a command…).
 function toolIcon(name = '') {
@@ -219,7 +220,6 @@ export function ApprovalCard({ sessionId, body, compact = false }) {
 // How full the agent's context window is (when the agent reports it).
 // 2.6: how full the conversation is, as a ring that fills up (no number); a click opens the panel with the context in
 // tokens and the limits of the plans working right now (the brain's and the agents' accounts: session, weekly…).
-const toneOf = (pct) => (pct >= 85 ? 'text-destructive' : pct >= 60 ? 'text-warning' : 'text-primary');
 const short = (n) => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
 function Ring({ pct, className }) {
   const r = 7; const c = 2 * Math.PI * r;
@@ -229,27 +229,6 @@ function Ring({ pct, className }) {
       <circle cx="9" cy="9" r={r} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - Math.max(pct, 2) / 100)} className="transition-[stroke-dashoffset] duration-500" />
     </svg>
   );
-}
-function UsageBar({ pct }) {
-  return <span className="bg-muted block h-1.5 overflow-hidden rounded-full"><span className={cn('block h-full rounded-full bg-current', toneOf(pct))} style={{ width: `${Math.min(100, Math.max(pct, 1))}%` }} /></span>;
-}
-// «five_hour», «seven_day_opus», «300min»… in words.
-function windowLabel(t, w) {
-  const s = String(w);
-  const model = s.match(/seven_day_(\w+)/)?.[1];
-  if (/five_hour|^300min$|^5h$/.test(s)) return t('session.usage.session');
-  if (model) return t('session.usage.weeklyOf', { model: model[0].toUpperCase() + model.slice(1) });
-  if (/seven_day|^10080min$/.test(s)) return t('session.usage.weekly');
-  const min = Number(s.match(/^(\d+)min$/)?.[1]);
-  if (min) return min % 1440 === 0 ? t('session.usage.days', { n: min / 1440 }) : t('session.usage.hours', { n: Math.round(min / 60) });
-  return s;
-}
-function resetText(t, locale, at) {
-  if (!at) return '';
-  const ms = at - Date.now();
-  if (ms <= 0) return t('session.usage.resetNow');
-  if (ms < 86_400_000) { const h = Math.floor(ms / 3_600_000); const m = Math.floor((ms % 3_600_000) / 60_000); return t('session.usage.resetIn', { time: h ? `${h} h ${m} min` : `${m} min` }); }
-  return t('session.usage.resetOn', { when: new Date(at).toLocaleString(locale, { weekday: 'short', hour: '2-digit', minute: '2-digit' }) });
 }
 function UsagePanel({ context, pct }) {
   const t = useT();
@@ -290,6 +269,8 @@ function UsagePanel({ context, pct }) {
           }) : <p className="text-muted-foreground text-xs leading-snug">{t('session.usage.noData')}</p>}
         </div>
       ))}
+      {/* 3.8.2: the whole usage page (cost and tokens by day, agent and model). */}
+      <DropdownMenuItem className="border-t pt-2.5" onSelect={() => go({ view: 'usage' })} data-testid="usage-page"><Gauge />{t('usage.open')}</DropdownMenuItem>
     </div>
   );
 }

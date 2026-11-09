@@ -10,7 +10,7 @@ import path from 'node:path';
 import { ctx, saveConfig, tr } from '../core/context.mjs';
 import { AGENT_IDS, categoryOf, CATEGORIES, PLATFORMS } from '../core/home.mjs';
 import { accountsOf, accountDir, accountLabel, accounts as allAccounts } from '../core/accounts.mjs';
-import { usageReport, modelName } from '../core/budget.mjs';
+import { usageReport, usageHistory, modelName } from '../core/budget.mjs';
 import { brainOf } from './orchestrator.mjs';
 import { newProject, syncProjects, checkProjectName, renameProject } from '../core/projects.mjs';
 import { finishProject, finishedProjects, reopenProject, checkDelete, deleteProject, abortDelete } from '../core/project-close.mjs';
@@ -694,6 +694,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     },
     // 3.2.1: only the accounts of the agents this PC can run (not every agent Orb knows).
     'usage.get': () => { const avail = board.availableAgents(); return usageReport(board).filter((u) => !avail || avail.includes(u.agent)); },
+    // 3.8.2: the usage page: what was spent in the last 7, 30 or 90 days, by day, agent and model (names as the selector
+    // shows them).
+    'usage.history': ({ days }) => {
+      const out = usageHistory(board, { days: oneOf(days, [7, 30, 90], 'días', 30) });
+      return { ...out, models: out.models.map(({ account, ...m }) => ({ ...m, label: m.model ? modelLabelOf(m.agent, account ?? m.agent, m.model) : null })) };
+    },
     // 2.6: the accounts working right now (the assistant's brain and the agents' running sessions), with the windows of
     // their plan the agents reported (session, weekly…), for the panel of the context ring.
     // 3.8.2: «Recargar» in the usage panel: the open agents ask their plan now (at most every 20 s), then usage.now.

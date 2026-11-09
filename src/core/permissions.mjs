@@ -24,7 +24,7 @@ export const METHODS = Object.freeze({
   // 3.8.2: the Windows app's music (src/engine/music.mjs)
   'music.track': 'pc',
   'system.check': 'pc', 'installer.check': 'pc', 'installer.progress': 'pc', 'installer.start': 'pc',
-  'activity.list': 'remote', 'usage.get': 'remote', 'usage.now': 'remote', 'usage.refresh': 'remote', 'models.guide': 'remote', 'models.catalog': 'remote',
+  'activity.list': 'remote', 'usage.get': 'remote', 'usage.now': 'remote', 'usage.refresh': 'remote', 'usage.history': 'remote', 'models.guide': 'remote', 'models.catalog': 'remote',
   'mentions.options': 'remote', 'approvals.list': 'remote',
   // this PC's tools
   'android.status': 'pc', 'android.install': 'pc',
