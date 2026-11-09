@@ -31,7 +31,7 @@ export function terminalDir(dir, { core = ctx.paths?.core, internal = ctx.paths?
 export function shellPlan(platform = process.platform, env = process.env) {
   const clean = Object.fromEntries(Object.entries(env).filter(([k]) => !/^ORB_/i.test(k)));
   if (platform === 'win32') {
-    const ps = path.join(env.SystemRoot || env.windir || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+    const ps = path.win32.join(env.SystemRoot || env.windir || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
     // PowerShell reads its stdin in the console's old code page whatever it is told later: a line with other characters
     // (ñ, é, emoji) goes as UTF-8 in base64 and runs in the same scope (its variables and folder stay).
     const line = (text) => (/^[\x20-\x7e\t]*$/.test(text) ? text : `Invoke-Expression ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${Buffer.from(text, 'utf8').toString('base64')}')))`);
