@@ -138,11 +138,18 @@ export function PopoverContent({ className, children, side = 'bottom', align = '
 // ---- dropdown menu
 export const DropdownMenu = DropdownPrimitive.Root;
 export const DropdownMenuTrigger = DropdownPrimitive.Trigger;
-export function DropdownMenuContent({ className, align = 'end', ...props }) {
-  return <DropdownPrimitive.Portal><DropdownPrimitive.Content data-slot="menu-content" align={align} sideOffset={4} className={cn('bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 origin-(--radix-dropdown-menu-content-transform-origin) z-50 min-w-[11rem] overflow-hidden rounded-lg border p-1 shadow-md', className)} {...props} /></DropdownPrimitive.Portal>;
+// 3.8.2: an item that opens a dialog (Renombrar, Posponer…): the focus stays in the dialog's field. The closing menu does
+// not take it back (the dialog slides under the pointer and Radix's «pointer left the item» focused the menu), nor hand it
+// to its button once closed (typing went nowhere). A menu inside a dialog still gives the focus back to its button.
+const inDialog = () => Boolean(document.activeElement?.closest?.('[role=dialog], [role=alertdialog]'));
+const closing = (el) => el?.closest?.('[data-slot=menu-content]')?.getAttribute('data-state') === 'closed';
+export function DropdownMenuContent({ className, align = 'end', onCloseAutoFocus, ...props }) {
+  const closeFocus = (e) => { onCloseAutoFocus?.(e); if (!e.defaultPrevented && inDialog()) e.preventDefault(); };
+  return <DropdownPrimitive.Portal><DropdownPrimitive.Content data-slot="menu-content" align={align} sideOffset={4} onCloseAutoFocus={closeFocus} className={cn('bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 origin-(--radix-dropdown-menu-content-transform-origin) z-50 min-w-[11rem] overflow-hidden rounded-lg border p-1 shadow-md', className)} {...props} /></DropdownPrimitive.Portal>;
 }
-export function DropdownMenuItem({ className, variant, ...props }) {
-  return <DropdownPrimitive.Item className={cn("focus:bg-accent focus:text-accent-foreground relative flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:text-muted-foreground", variant === 'destructive' && 'text-destructive focus:text-destructive [&_svg]:text-destructive', className)} {...props} />;
+export function DropdownMenuItem({ className, variant, onPointerLeave, ...props }) {
+  const leave = (e) => { onPointerLeave?.(e); if (!e.defaultPrevented && closing(e.currentTarget)) e.preventDefault(); };
+  return <DropdownPrimitive.Item onPointerLeave={leave} className={cn("focus:bg-accent focus:text-accent-foreground relative flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:text-muted-foreground", variant === 'destructive' && 'text-destructive focus:text-destructive [&_svg]:text-destructive', className)} {...props} />;
 }
 // 2.7: an item that is ticked or not (lists where several can be chosen); the menu stays open while ticking.
 export function DropdownMenuCheckboxItem({ className, children, checked, onCheckedChange, ...props }) {

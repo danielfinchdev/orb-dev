@@ -132,14 +132,16 @@ export function renameChat(item, t) {
 const localInput = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
 export function snoozeChat(item, t) {
   const quick = snoozeTimes();
+  // The dialog opens with the focus on the time already chosen (it went to the first one, which looked chosen too).
+  const initialAt = localInput(quick[2]?.[1] ?? quick[1][1]);
   return form(t('orbchats.snoozeTitle', { title: item.title }), {
     description: t('orbchats.snoozeDesc'),
-    initial: { at: localInput(quick[2]?.[1] ?? quick[1][1]) },
+    initial: { at: initialAt },
     body: (v, set) => (
       <>
         <div className="grid gap-1" role="radiogroup">
           {quick.map(([key, d]) => (
-            <button key={key} type="button" role="radio" aria-checked={v.at === localInput(d)} onClick={() => set({ at: localInput(d) })} data-testid={`snooze-${key}`}
+            <button key={key} type="button" role="radio" aria-checked={v.at === localInput(d)} autoFocus={initialAt === localInput(d)} onClick={() => set({ at: localInput(d) })} data-testid={`snooze-${key}`}
               className={cn('flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2 text-left text-[14px]', v.at === localInput(d) ? 'border-primary bg-primary/8' : 'hover:bg-accent/60')}>
               <span>{t(`orbchats.${key}`)}</span>
             </button>
