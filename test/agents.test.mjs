@@ -339,3 +339,13 @@ test('el entorno de los agentes no lleva secretos del proceso', () => {
   assert.equal(env.ORB_AGENT, 'codex'); assert.ok(env.PATH ?? env.Path);
   delete process.env.GITHUB_TOKEN; delete process.env.ANTHROPIC_API_KEY; delete process.env.ORB_ORCH_KEY;
 });
+
+// 3.8.3 (what Orbe itself reported): Orb's tools came deferred behind Claude Code's tool search, three steps per use.
+test('Claude: las herramientas de Orb van siempre cargadas; los conectores del usuario, no', () => {
+  const servers = { orb: { command: 'node', args: ['orb.mjs'], env: { A: '${A}' } }, notas: { command: 'notas' } };
+  const out = claude.orbAlwaysLoaded(servers);
+  assert.deepEqual(out.orb, { ...servers.orb, alwaysLoad: true });
+  assert.equal(out.notas.alwaysLoad, undefined);
+  assert.equal(servers.orb.alwaysLoad, undefined, 'the caller\'s object is not changed');
+  assert.deepEqual(claude.orbAlwaysLoaded({ notas: servers.notas }), { notas: servers.notas });
+});

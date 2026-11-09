@@ -145,6 +145,10 @@ export const nativeSkills = true;
 // for what it would ask in «default» and the guard allows all but the protected set (src/core/guard.mjs).
 export const permissionModeOf = (p) => (p === 'editar' ? 'acceptEdits' : 'default');
 
+// 3.8.3: Orb's own tools always in the prompt (Claude Code's alwaysLoad), never behind its tool search: Orbe reported
+// spending three steps fetching orb_* tools before each use. The other servers (the user's connectors) stay deferrable.
+export const orbAlwaysLoaded = (servers) => (servers?.orb ? { ...servers, orb: { ...servers.orb, alwaysLoad: true } } : servers);
+
 // options: exe, cwd, model, reasoning, permission, resumeId, newSessionId, forkSession, mcpServers, env, systemPrompt
 // (appended to Claude Code's own), tools ({ allowed, disallowed }), addDirs, budgetUsd, internalDir, log, onEvent, skills
 // (3.8.1: { plugin, root, list }, the skills of core that are on)
@@ -263,7 +267,7 @@ export function createLive(o) {
       includePartialMessages: true,
       settingSources: risky.length ? [] : LEAN_SOURCES,
       extraArgs: { 'strict-mcp-config': null },
-      mcpServers: mcp.servers,
+      mcpServers: orbAlwaysLoaded(mcp.servers),
       additionalDirectories: o.addDirs ?? [],
       abortController: abort,
       canUseTool,
