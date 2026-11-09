@@ -14,6 +14,11 @@ export const ASK_MS = 5 * 60_000; // how long the agent waits for the user
 export const HANDLE_MS = 10 * 60_000; // how long a handle may be traded
 export const MAX_VALUE = 8 * 1024;
 const PER_SESSION = 3; // requests waiting at once in one chat
+// 3.8.2 (final review): the master-password check of a typed value counts no try in the vault, so the card would be an
+// oracle with no waits for whoever could answer cards (an injected script in the window, with an agent asking again and
+// again). At most this many values checked in that time; then the card says to wait.
+export const MASTER_CHECKS = 6;
+export const MASTER_CHECKS_MS = 10 * 60_000;
 export const savedId = (name) => `agent/${name}`; // the vault's id of a saved one
 export const handleOf = (pipeId, ticket) => `orbsec1.${pipeId}.${ticket}`; // read back by src/mcp/secret-run.mjs
 
@@ -25,8 +30,15 @@ async function isMaster(m, value) {
 const userError = (key, vars) => Object.assign(new Error(tr(key, vars)), { userFacing: true });
 
 // sessions: the engine's (get, addItem); auth: agent-auth.mjs's instance; master(): the vault (ctx.master).
-export function createSecretRequests({ sessions, auth, master, emit = () => {}, log = () => {}, askMs = ASK_MS, handleMs = HANDLE_MS }) {
+export function createSecretRequests({ sessions, auth, master, emit = () => {}, log = () => {}, askMs = ASK_MS, handleMs = HANDLE_MS, now = Date.now }) {
   let seq = 0;
+  let checks = []; // when each typed value was checked against the master password
+  const mayCheck = () => {
+    const t = now();
+    checks = checks.filter((at) => t - at < MASTER_CHECKS_MS);
+    if (checks.length >= MASTER_CHECKS) return false;
+    checks.push(t); return true;
+  };
   const pending = new Map(); // id -> { id, session, agent, name, reason, done(result), timer }
   const issued = new Map(); // ticket -> timer
   const view = (r) => {
@@ -73,6 +85,7 @@ export function createSecretRequests({ sessions, auth, master, emit = () => {}, 
         secret = typeof value === 'string' ? value : '';
         if (!secret || secret.length > MAX_VALUE) throw userError('msg.secrets.badValue');
         // Orb never asks for its master password on this card: a card that gets it (a tricked user) refuses it.
+        if (!mayCheck()) { log('secreto: demasiadas respuestas seguidas; se espera'); throw userError('msg.secrets.wait'); }
         if (await isMaster(master(), secret)) throw userError('msg.secrets.isMaster');
         if (pending.get(r.id) !== r) throw userError('msg.secrets.gone');
         if (save) master().set(savedId(r.name), secret);

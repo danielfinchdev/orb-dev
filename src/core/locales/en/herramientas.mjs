@@ -33,6 +33,7 @@ export default {
   'msg.secrets.noSaved': 'There’s no saved secret with that name.',
   'msg.secrets.badValue': 'Type the secret (8 KB max.).',
   'msg.secrets.isMaster': 'That’s the master password. Orb never asks for it here, so it wasn’t sent.',
+  'msg.secrets.wait': 'Too many secrets typed in a row. Wait a few minutes and try again.',
   'msg.secrets.declined': 'The user declined to give the secret {name}. Don’t ask for it again this turn.',
   'msg.secrets.locked': 'Orb locked: the request for {name} was cancelled.',
   'pip.point': 'Point at an element',

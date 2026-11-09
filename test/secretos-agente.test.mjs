@@ -11,7 +11,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { Master, FREE_TRIES } from '../src/core/master.mjs';
 import { AgentAuth } from '../src/engine/agent-auth.mjs';
-import { createSecretRequests, savedId } from '../src/engine/agent-secrets.mjs';
+import { createSecretRequests, savedId, MASTER_CHECKS, MASTER_CHECKS_MS } from '../src/engine/agent-secrets.mjs';
 import { parseArgs, trade, masker } from '../src/mcp/secret-run.mjs';
 import { allowed, needsUnlock, freshPurpose, principalOf, METHODS } from '../src/core/permissions.mjs';
 import { tempHome, startEngine } from './helpers.mjs';
@@ -23,13 +23,13 @@ const MASTER = 'contraseña-maestra-de-prueba';
 // The helper runs as its own process (async: the agents' pipe lives in this test's process).
 const helper = (args) => new Promise((resolve) => { execFile(process.execPath, [HELPER, ...args], { encoding: 'utf8', timeout: 20_000 }, (error, stdout, stderr) => resolve({ status: error ? (typeof error.code === 'number' ? error.code : -1) : 0, stdout, stderr })); });
 
-function setup({ askMs, handleMs } = {}) {
+function setup({ askMs, handleMs, now } = {}) {
   const auth = new AgentAuth();
   const items = []; const lines = []; const events = [];
   const vault = new Map(); let unlocked = true;
   const master = { unlocked: () => unlocked, get: (id) => { if (!unlocked) throw new Error('locked'); return vault.get(id) ?? null; }, set: (id, v) => { if (!unlocked) throw new Error('locked'); vault.set(id, v); }, isPassword: async (v) => v === MASTER };
   const sessions = { addItem: (...a) => items.push(a) };
-  const secrets = createSecretRequests({ sessions, auth, master: () => master, emit: (e, p) => events.push([e, p]), log: (l) => lines.push(l), askMs, handleMs });
+  const secrets = createSecretRequests({ sessions, auth, master: () => master, emit: (e, p) => events.push([e, p]), log: (l) => lines.push(l), askMs, handleMs, now });
   return { auth, secrets, items, lines, events, vault, lock: () => { unlocked = false; } };
 }
 const chat = { id: 's1', kind: 'chat', agent: 'claude' };
@@ -164,4 +164,26 @@ test('secretos: la bóveda dice si un valor es la contraseña maestra sin contar
     assert.equal(await m.isPassword(PASS), true);
     assert.equal((await m.verify(PASS)).ok, true, 'ningún intento contado: la contraseña sigue entrando sin esperas');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// 3.8.2 (final review): the master-password check counts no try, so typed values are checked a few at a time at most:
+// a script answering cards in a loop cannot use the card to guess the master password.
+test('secretos: la comprobación de la contraseña maestra en la tarjeta tiene un límite de ritmo', async () => {
+  let t = 1_000_000;
+  const { secrets } = setup({ now: () => t });
+  for (let i = 0; i < MASTER_CHECKS; i++) {
+    const asked = secrets.request(chat, { name: 'TOKEN', reason: 'prueba' });
+    const [card] = secrets.pending();
+    assert.equal(await secrets.answer({ id: card.id, value: `intento-${i}` }), true);
+    await asked;
+  }
+  const asked = secrets.request(chat, { name: 'TOKEN', reason: 'prueba' });
+  const [card] = secrets.pending();
+  await assert.rejects(secrets.answer({ id: card.id, value: MASTER }), /Espera unos minutos/, 'sin decir si era la contraseña');
+  await assert.rejects(secrets.answer({ id: card.id, value: 'otro' }), /Espera unos minutos/);
+  assert.equal(secrets.pending().length, 1, 'la petición sigue esperando');
+  t += MASTER_CHECKS_MS;
+  await assert.rejects(secrets.answer({ id: card.id, value: MASTER }), /contraseña maestra/);
+  assert.equal(await secrets.answer({ id: card.id, value: 'ya-vale' }), true);
+  await asked;
 });

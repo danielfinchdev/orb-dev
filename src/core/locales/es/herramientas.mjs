@@ -33,6 +33,7 @@ export default {
   'msg.secrets.noSaved': 'No hay ninguna clave guardada con ese nombre.',
   'msg.secrets.badValue': 'Escribe la clave (máx. 8 KB).',
   'msg.secrets.isMaster': 'Esa es la contraseña maestra. Orb nunca la pide aquí: no se ha enviado.',
+  'msg.secrets.wait': 'Demasiadas claves escritas seguidas. Espera unos minutos y vuelve a intentarlo.',
   'msg.secrets.declined': 'El usuario ha rechazado dar la clave {name}. No la pidas otra vez en este turno.',
   'msg.secrets.locked': 'Orb se ha bloqueado: la petición de {name} se ha cancelado.',
   'pip.point': 'Señalar elemento',
