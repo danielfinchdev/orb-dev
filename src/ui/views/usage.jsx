@@ -21,7 +21,7 @@ function Stat({ label, value, detail }) {
   return (
     <Card className="gap-1 py-4">
       <div className="text-muted-foreground px-5 text-xs">{label}</div>
-      <div className="px-5 text-xl font-medium tabular-nums">{value}</div>
+      <div className="mt-auto px-5 text-xl font-medium tabular-nums">{value}</div>
       {detail ? <div className="text-muted-foreground px-5 text-xs tabular-nums">{detail}</div> : null}
     </Card>
   );
@@ -114,9 +114,9 @@ export function UsageView() {
         <Tabs value={days} onValueChange={setDays}><TabsList>{['7', '30', '90'].map((d) => <TabsTrigger key={d} value={d} data-testid={`usage-range-${d}`}>{t('usage.days', { n: d })}</TabsTrigger>)}</TabsList></Tabs>
       </PageHeader>
       <PageBody>
-        <div className="mx-auto grid max-w-4xl gap-5" data-testid="usage-view">
+        <div className="@container mx-auto grid max-w-4xl gap-5" data-testid="usage-view">
           {data === null ? <Spinner /> : data === false ? <Empty icon={Gauge} title={t('usage.unavailable')} /> : (<>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-4">
               <Stat label={t('usage.cost')} value={usd(data.total.usd, locale)} />
               <Stat label={t('usage.in')} value={tokens(data.total.tokensIn)} />
               <Stat label={t('usage.out')} value={tokens(data.total.tokensOut)} />
