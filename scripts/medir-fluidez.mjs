@@ -3,7 +3,7 @@
 // (their STREAM_LARGO answer streams ~2 KB of Markdown for ~3 s, as a real agent does): never the real C:\Orb,
 // %APPDATA%\Orb* or the installed app. The window is shown (frames are only drawn for a visible window).
 //
-//   node scripts/medir-fluidez.mjs [--exe src-tauri/target-e2e/release/OrbPrueba.exe] [--runs 3] [--out <results.json>]
+//   node scripts/medir-fluidez.mjs [--exe src-tauri/target-e2e/release/Orb.exe] [--runs 3] [--out <results.json>]
 //
 // Per run, in a new chat and then twice in that same chat (each answer streams ~3 s):
 //   ownMs      Enter → the first frame showing the user's own message
@@ -12,66 +12,13 @@
 //              saved message not drawn yet; 0 = no gap)
 //   keyMs      while it streams (third message), keydown → the next frame (p50 / p90 / max of 30 keys typed 60 ms apart)
 //   longTasks  main-thread tasks over 50 ms while it streams, and their total ms
-import { chromium } from 'playwright-core';
 import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { spawn, execFileSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { sandbox, arg, wait, until, pct, r1 } from './lib/e2e-window.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const arg = (name, fallback = null) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : fallback; };
-const exe = path.resolve(arg('exe', path.join(ROOT, 'src-tauri', 'target-e2e', 'release', 'OrbPrueba.exe')));
 const RUNS = Number(arg('runs', 3));
 const out = arg('out');
-if (!fs.existsSync(exe)) { console.error(`no existe ${exe} (npm run tauri:build:e2e o pasa --exe)`); process.exit(2); }
-
-const FAKE = path.join(ROOT, 'test', 'fixtures', 'fake-live.mjs');
-process.env.ORB_FAKE_AGENTS = FAKE;
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-medir-fluidez-'));
-let current = null;
-process.on('exit', () => {
-  if (current) { try { execFileSync('taskkill', ['/PID', String(current.pid), '/T', '/F'], { stdio: 'ignore' }); } catch { /* gone */ } }
-  try { fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); } catch { /* temp folder */ }
-});
-for (const ev of ['uncaughtException', 'unhandledRejection']) process.on(ev, (e) => { console.error(e?.stack ?? e); process.exit(1); });
-const SANDBOX = { ORB_NO_ADB: '1', ORB_NO_UPDATE: '1', ORB_FAKE_AGENTS: FAKE, ORB_BACKUP_ROOT: path.join(tmp, 'copias'), ORB_BRIDGE_DIR: path.join(tmp, 'puente'), ORB_USER_DATA: path.join(tmp, 'datos-app'), ORB_MODELS_DELAY_MS: '600000' };
-Object.assign(process.env, { ORB_BACKUP_ROOT: SANDBOX.ORB_BACKUP_ROOT, ORB_BRIDGE_DIR: SANDBOX.ORB_BRIDGE_DIR, ORB_NO_ADB: '1' });
-const { createHome, loadConfig, writeJson, merge, paths } = await import('../src/core/home.mjs');
+const { exe, launch, quit } = await sandbox({ name: 'medir-fluidez' });
 const { throughStart } = await import('../test/fixtures/e2e-flows.mjs');
-
-const pct = (xs, p) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.min(s.length - 1, Math.ceil((p / 100) * s.length) - 1)] : null; };
-const r1 = (x) => (x == null ? null : Math.round(x * 10) / 10);
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-const until = async (fn, what, ms = 60000, every = 50) => { const end = Date.now() + ms; while (Date.now() < end) { try { const v = await fn(); if (v) return v; } catch { /* not yet */ } await wait(every); } throw new Error(`no llegó: ${what}`); };
-
-// ---- the workspace: a few conversations (a list to draw) and the default theme
-const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
-const { home } = createHome(base, { userName: 'Ana' });
-const OFF = Object.fromEntries(['codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot'].map((a) => [a, { enabled: false }]));
-writeJson(paths(home).config, merge(loadConfig(home), { ui: { tourDone: true }, agents: OFF, autoRun: false }));
-fs.mkdirSync(SANDBOX.ORB_USER_DATA, { recursive: true });
-fs.writeFileSync(path.join(SANDBOX.ORB_USER_DATA, 'ubicacion.json'), JSON.stringify({ home }));
-
-const portFile = () => path.join(SANDBOX.ORB_USER_DATA, 'webview', 'EBWebView', 'DevToolsActivePort');
-async function launch() {
-  fs.rmSync(portFile(), { force: true });
-  const app = spawn(exe, [], { env: { ...process.env, ...SANDBOX, ORB_E2E_CDP_PORT: '0' }, stdio: 'ignore' });
-  current = app;
-  const exited = new Promise((r) => app.once('exit', r));
-  const port = await until(() => { const n = Number(fs.readFileSync(portFile(), 'utf8').split(/\r?\n/)[0]); return n > 0 ? n : null; }, 'DevToolsActivePort', 60000, 25);
-  const browser = await until(() => chromium.connectOverCDP(`http://127.0.0.1:${port}`), 'la ventana (CDP)', 60000, 25);
-  const page = await until(() => browser.contexts().flatMap((c) => c.pages()).find((p) => /index\.html|tauri\.localhost\/?$/.test(p.url())), 'la página principal', 60000, 25);
-  return { app, browser, page, exited };
-}
-async function quit(run) {
-  try { await run.page.evaluate(() => window.orb?.windowControls?.act('close')); } catch { /* closing */ }
-  const gone = await Promise.race([run.exited.then(() => true), wait(15000).then(() => false)]);
-  if (!gone) { try { execFileSync('taskkill', ['/PID', String(run.app.pid), '/T', '/F'], { stdio: 'ignore' }); } catch { /* gone */ } await run.exited; }
-  current = null;
-  try { await run.browser.close(); } catch { /* gone */ }
-  await wait(1500);
-}
 
 // In the page: every frame, whether the user's message (its text) and the answer (the nth «ZORRO») are on screen.
 const watch = (page, mine, nth) => page.evaluate(({ mine, nth }) => {

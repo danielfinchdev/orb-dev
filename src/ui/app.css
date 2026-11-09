@@ -210,9 +210,16 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
    takes them away at the end of a sway or a pulse, where both are back at rest); still, it costs no frames at all. */
 .orb[data-float] .orb-body { animation: orb-float 4.2s ease-in-out infinite; will-change: transform; }
 .orb-img { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.orb-face, .orb-gaze { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.orb-gaze, .orb-eyes { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .orb-eyes { transition: transform .35s ease; }
-.orb-eye { transform-box: fill-box; transform-origin: center; transition: transform .12s ease, opacity .2s; }
+/* 3.8.3: each eye is an HTML box (orb.jsx) placed on the artwork's eye and tilted like it; .orb-eye fills it and is what
+   blinks and talks (scaleY around the eye's centre), a transform the compositor runs alone. */
+.orb-eye-at { position: absolute; }
+.orb-eye { position: absolute; inset: 0; transform-origin: center; transition: transform .12s ease, opacity .2s; }
+/* A robot that moves keeps its eyes' layers, so each blink only moves them (no paint); still robots (hundreds in the
+   lists) never blink and get none. */
+.orb:not(.still) .orb-eye { will-change: transform; }
+.orb-face { display: block; width: 100%; height: 100%; overflow: visible; }
 .orb-pill { fill: var(--eye); }
 .orb-arc, .orb-shut, .orb-brow { fill: none; stroke: var(--eye); stroke-linecap: round; display: none; }
 .orb-visor { position: absolute; inset: 0; mask-size: 100% 100%; -webkit-mask-size: 100% 100%; pointer-events: none; overflow: clip; }

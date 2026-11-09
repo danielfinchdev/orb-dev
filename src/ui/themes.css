@@ -535,11 +535,17 @@ html.dark .scene-orb .scene-blur { background: radial-gradient(60% 50% at 30% 0%
 /* Orb's wash is soft already: the pane only smooths the clouds. 3.8.1 (H4d): so each cloud carries that blur itself
    (the same 8 px; a blur of a moving piece is the moving blurred piece) and the pane only tints. A backdrop-filter over
    the whole screen had to blur everything under it again on every frame the clouds moved (≈6 ms of GPU per frame on
-   the Tasks screen); a cloud's own blur is drawn once into its layer and slides. */
+   the Tasks screen); a cloud's own blur is drawn once into its layer and slides.
+   3.8.3: the GPU applied that filter again on every frame anyway. Each cloud is now a picture with the blur already in
+   it (components/scene.jsx › cloudPictures: this gradient, blurred 8 px, with 24 px of room around it), so a moving
+   cloud is a layer that only slides. The CSS cloud below stays for a window without a canvas. */
 .scene-orb { --frost-tint: 40%; --frost-filter: none; }
 html.dark .scene-orb { --frost-tint: 45%; --frost-filter: none; }
+/* The picture has a whole rule per mode: html.dark .orb-cloud would otherwise reset its size and repeat. */
 .orb-cloud { width: 260px; height: 72px; border-radius: 999px; background: radial-gradient(closest-side, rgb(255 255 255 / 0.75), rgb(255 255 255 / 0.3) 60%, transparent); filter: blur(8px); animation: cloud-drift linear infinite; }
 html.dark .orb-cloud { background: radial-gradient(closest-side, rgb(160 170 255 / 0.18), rgb(160 170 255 / 0.06) 60%, transparent); }
+.orb-cloud.baked { width: 308px; height: 120px; margin: -24px 0 0 -24px; border-radius: 0; filter: none; background: var(--orb-cloud-art) 0 0 / 100% 100% no-repeat; will-change: transform; }
+html.dark .orb-cloud.baked { background: var(--orb-cloud-art-dark) 0 0 / 100% 100% no-repeat; }
 @keyframes cloud-drift { from { transform: translateX(-30vw); } to { transform: translateX(130vw); } }
 
 /* ================================================================================================================

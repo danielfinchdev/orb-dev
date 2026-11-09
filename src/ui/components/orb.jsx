@@ -185,28 +185,37 @@ export function Orb({ pose = 'head', size = 34, mood = 'idle', live: wantsLive =
           ) : null}
           <span className="orb-glint" />
         </span>
+        {/* 3.8.3: each eye is its own little picture inside an HTML box (placed and tilted like the artwork's eye): blinking
+            and talking scale that box, which the compositor does alone. They used to scale an SVG group, which the main
+            thread redrew, glow filter included, on every frame of every blink and all through an answer. */}
         <span className="orb-gaze">
-          <svg className="orb-face" viewBox={`0 0 ${VW} ${VH}`} aria-hidden="true">
-            <defs>
-              <filter id={`orb-glow-${file}`} x="-80%" y="-40%" width="260%" height="180%"><feGaussianBlur stdDeviation={16 * k} result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
-            </defs>
-            <g className="orb-eyes" filter={`url(#orb-glow-${file})`}>
-              {G.eyes.map((e, i) => {
-                const ew = (e.w / 100) * VW, eh = (e.h / 100) * VH;
-                return (
-                  <g key={i} transform={`translate(${(e.x / 100) * VW} ${(e.y / 100) * VH}) rotate(${e.tilt})`}>
-                    <g className={cn('orb-eye', i === 1 && 'orb-eye-r')}>
-                      <rect className="orb-pill" x={-ew / 2} y={-eh / 2} width={ew} height={eh} rx={ew / 2} />
-                      <path className="orb-arc" d={`M${-eh * 0.42} ${eh * 0.12} Q0 ${-eh * 0.5} ${eh * 0.42} ${eh * 0.12}`} strokeWidth={ew * 0.85} />
-                      <path className="orb-shut" d={`M${-eh * 0.38} 0 Q0 ${eh * 0.22} ${eh * 0.38} 0`} strokeWidth={ew * 0.7} />
-                      {/* worried: sad brows, inner end up */}
-                      <path className="orb-brow" d={i === 0 ? `M${-ew * 1.3} ${-eh * 0.5} Q${-ew * 0.2} ${-eh * 0.62} ${ew * 0.9} ${-eh * 0.86}` : `M${-ew * 0.9} ${-eh * 0.86} Q${ew * 0.2} ${-eh * 0.62} ${ew * 1.3} ${-eh * 0.5}`} strokeWidth={ew * 0.62} />
-                    </g>
-                  </g>
-                );
-              })}
-            </g>
-          </svg>
+          <span className="orb-eyes">
+            {G.eyes.map((e, i) => {
+              const ew = (e.w / 100) * VW, eh = (e.h / 100) * VH;
+              const glow = 16 * k;
+              // Room for the brows (the widest part) and three times the glow's spread around them.
+              const R = Math.ceil(Math.max(ew * 1.3, eh * 0.86) + glow * 3);
+              const id = `orb-glow-${file}-${i}`;
+              return (
+                <span key={i} className="orb-eye-at" style={{ left: `${e.x}%`, top: `${e.y}%`, width: `calc(${2 * R} * var(--u))`, height: `calc(${2 * R} * var(--u))`, transform: `translate(-50%, -50%) rotate(${e.tilt}deg)` }}>
+                  <span className={cn('orb-eye', i === 1 && 'orb-eye-r')}>
+                    <svg className="orb-face" viewBox={`${-R} ${-R} ${2 * R} ${2 * R}`} aria-hidden="true">
+                      <defs>
+                        <filter id={id} filterUnits="userSpaceOnUse" x={-R} y={-R} width={2 * R} height={2 * R}><feGaussianBlur stdDeviation={glow} result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+                      </defs>
+                      <g filter={`url(#${id})`}>
+                        <rect className="orb-pill" x={-ew / 2} y={-eh / 2} width={ew} height={eh} rx={ew / 2} />
+                        <path className="orb-arc" d={`M${-eh * 0.42} ${eh * 0.12} Q0 ${-eh * 0.5} ${eh * 0.42} ${eh * 0.12}`} strokeWidth={ew * 0.85} />
+                        <path className="orb-shut" d={`M${-eh * 0.38} 0 Q0 ${eh * 0.22} ${eh * 0.38} 0`} strokeWidth={ew * 0.7} />
+                        {/* worried: sad brows, inner end up */}
+                        <path className="orb-brow" d={i === 0 ? `M${-ew * 1.3} ${-eh * 0.5} Q${-ew * 0.2} ${-eh * 0.62} ${ew * 0.9} ${-eh * 0.86}` : `M${-ew * 0.9} ${-eh * 0.86} Q${ew * 0.2} ${-eh * 0.62} ${ew * 1.3} ${-eh * 0.5}`} strokeWidth={ew * 0.62} />
+                      </g>
+                    </svg>
+                  </span>
+                </span>
+              );
+            })}
+          </span>
         </span>
         {G.button ? <span className="orb-led" style={{ left: `${G.button.x}%`, top: `${G.button.y}%`, width: `${G.button.r * 2.6}%` }} /> : null}
       </span>
