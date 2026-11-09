@@ -43,6 +43,13 @@ export function pickGreeting({ tasks = [], project = null, first = false, seriou
   return pick([...words(TIME(now.getHours(), now.getDay())), ...words(BACK)]);
 }
 
+// 3.8.3: the greeting picked when the chat opened, for the project chosen now: one naming a project names this one, or
+// gives way to `plain` (picked at the same time, without a project) when there is none.
+export function greetingFor(g, project) {
+  if (g.key !== 'greet.project' || g.project === project) return g;
+  return project ? { ...g, project } : { ...g.plain, sub: g.sub };
+}
+
 // 3.2.1: the suggestions under the greeting. With a project already chosen, nothing about creating one; without one,
 // nothing about «the project».
 const SUGGESTIONS = ['chat.suggestion1', 'chat.suggestion2', 'chat.suggestion4'];

@@ -363,7 +363,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'conversations.update': ({ id, title, project: name, done }) => {
       const c = conversationId(id);
       if (title !== undefined) board.updateConversation(c, { title: oneLine(str(title, 'título', 80), 80), titled: true });
-      if (name !== undefined) board.setConversationProject(c, name ? project(name).name : '', 'usuario');
+      if (name !== undefined) board.setConversationProject(c, name ? project(name).name : '', 'usuario', { asDefault: true });
       if (done !== undefined) board.setConversationDone(c, Boolean(done));
       return board.conversation(c);
     },

@@ -670,13 +670,16 @@ export class Board {
     // Opened again counts as activity: the day-long quiet before it would complete it again at once.
     return this.updateConversation(c.id, { status: done ? 'done' : 'open', done_at: done ? now() : null, ...(done ? {} : { updated_at: now() }) });
   }
-  // The project of a conversation; 3.2: also the default for the next new conversation (the global working folder).
-  setConversationProject(id, name, actor) {
+  // The project of a conversation. 3.2: when the user chooses it (asDefault), also the default for the next new
+  // conversation (the global working folder). 3.8.3: the assistant choosing a project for its conversation (a task, a
+  // new project, orb_set_project) no longer moves the user's working folder too: a test project ended up as the
+  // «Proyecto de trabajo» of every new chat.
+  setConversationProject(id, name, actor, { asDefault = false } = {}) {
     const c = this.conversation(id); if (!c) throw new Error(tr('msg.board.noConversation'));
     const project = name ? this.project(name) : null;
     if (name && !project) throw new Error(tr('sys.board.unknownProject', { name }));
     if ((c.project ?? null) !== (project?.name ?? null)) this.updateConversation(c.id, { project: project?.name ?? null });
-    this.setActiveProject(project?.name ?? '', actor);
+    if (asDefault) this.setActiveProject(project?.name ?? '', actor);
     return project;
   }
   // The conversation a task belongs to: its own, or the one of the task it comes from (a subtask, a review, a join).

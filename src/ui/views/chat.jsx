@@ -27,7 +27,7 @@ import { Switch, Tip, BubbleTip, Popover, PopoverTrigger, PopoverContent } from 
 import { bridge, useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout, plainSkin, addPending, movePending, dropPending, pendingShown, usePending } from '@/lib/store.js';
 import { notify } from '@/lib/notify.js';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
-import { pickGreeting, pickSubtitle, suggestionsFor } from '@/lib/greeting.js';
+import { pickGreeting, pickSubtitle, suggestionsFor, greetingFor } from '@/lib/greeting.js';
 import { LiveActivity, QuestionCard } from '@/components/chat-live.jsx';
 import { ContextMeter } from './session.jsx';
 import { OrchestratorIcon } from '@/components/orchestrator-icon.jsx';
@@ -159,16 +159,19 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
 
 // 2.6: the system's date and time on the left of the chat's top bar (app.css .bar-clock, in the theme's title type).
 // 2.7: a different greeting each time the chat opens (lib/greeting.js); the last one is remembered so it does not repeat.
-function useGreeting() {
+// 3.8.3: one that names the project («Seguimos con «orb-bots»») follows the project chosen for the new chat afterwards:
+// it names the new one, or gives way to one without a project (picked at the same time) after «Sin proyecto».
+function useGreeting(project) {
   const [g] = useState(() => {
     const { app, tasks, projects } = getState();
     let last = {}; try { last = JSON.parse(localStorage.getItem('orb.greet') || '{}'); } catch { /* none */ }
-    const pick = pickGreeting({ tasks, project: app.activeProject?.name ?? null, first: !tasks.length && !projects.length, serious: plainSkin(app.config.ui?.skin), last: last.key });
+    const ask = { tasks, first: !tasks.length && !projects.length, serious: plainSkin(app.config.ui?.skin), last: last.key };
+    const pick = pickGreeting({ ...ask, project: app.activeProject?.name ?? null });
     const sub = pickSubtitle({ last: last.sub });
     try { localStorage.setItem('orb.greet', JSON.stringify({ key: pick.key, sub })); } catch { /* storage unavailable */ }
-    return { ...pick, sub };
+    return { ...pick, sub, plain: pick.key === 'greet.project' ? pickGreeting({ ...ask, project: null }) : null };
   });
-  return g;
+  return greetingFor(g, project);
 }
 
 // 2.7: with the pointer on it, the seconds too; a click opens the month's calendar in a bubble (MonthCalendar).
@@ -561,12 +564,12 @@ export function ChatView({ route, onConversation, project: inProject }) {
     : { agent: defaults.agent ?? 'claude', model: defaults.model ?? '', account: defaults.account, reasoning: defaults.reasoning ?? 'medium' };
   const orchestrate = conv ? true : defaults.orchestrate !== false;
   const bubble = useUsageBubble(catalog, brain);
-  const greeting = useGreeting();
   const userName = useStore((st) => st.app?.config?.userName?.trim() || '');
   const [sending, setSending] = useState(false);
   // 3.2.1: in God mode, a new conversation goes to the project chosen there, and the bar says that one.
   const projects = useStore((s) => s.projects);
   const workProject = inProject ? projects.find((p) => p.name === inProject) ?? { name: inProject } : app.activeProject ?? null;
+  const greeting = useGreeting(workProject?.name ?? null);
 
   // 3.2.1: inside God mode, the project chosen there right now (the answer to a first message may come after a change).
   const projectNow = useRef(inProject); projectNow.current = inProject;
