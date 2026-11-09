@@ -85,3 +85,28 @@ test('stream deltas: only the added text, whole again on a new block or turn, an
   assert.equal(streamText('ab', { conversation: 1, busy: true, append: 'x', base: 3 }), null);
   assert.equal(streamText('abcdef', { conversation: 1, busy: true, append: 'X', base: 3 }), 'abcX', 'a newer whole text it holds (a refresh) is cut back to the base');
 });
+
+// 3.8.3: the robot's voice (and the minigames' effects) made `new AudioContext()` at Orb's first answer: measured in the
+// e2e build, a 1.5–2 s frozen window, because building it with a device waits on the audio service while answers stream.
+// Now it is built without a device (instant) and gets the default one asynchronously; sounds wait for it.
+test('the voice\'s audio context is made without its device and gets it later', async () => {
+  const made = []; let attach = null;
+  class FakeAC { constructor(opts) { made.push(opts ?? null); this.state = 'suspended'; } setSinkId(id) { this.sink = id; return new Promise((r) => { attach = r; }); } resume() { this.state = 'running'; return Promise.resolve(); } }
+  const before = globalThis.window; globalThis.window = { AudioContext: FakeAC };
+  try {
+    const { quietAudioContext } = await import('../src/ui/lib/audio-context.js');
+    const a = quietAudioContext();
+    assert.deepEqual(made, [{ sinkId: { type: 'none' } }], 'no device asked for while building it');
+    assert.equal(a.ready(), false, 'sounds are skipped meanwhile');
+    assert.equal(a.ctx.sink, '', 'the default device, asynchronously');
+    attach(); await tick();
+    assert.equal(a.ready(), true); assert.equal(a.ctx.state, 'running');
+    // Without setSinkId (older engines): the usual way.
+    globalThis.window = { AudioContext: class { constructor(o) { made.push(o ?? 'plain'); } } };
+    assert.equal(quietAudioContext().ready(), true); assert.equal(made.at(-1), 'plain');
+  } finally { globalThis.window = before; }
+  for (const f of ['src/ui/lib/sounds.js', 'src/ui/games/sfx.js']) {
+    const src = (await import('node:fs')).readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+    assert.match(src, /quietAudioContext\(\)/, f); assert.doesNotMatch(src, /new AC\(\)/, f);
+  }
+});

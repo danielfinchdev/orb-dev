@@ -3,23 +3,28 @@
 // when it needs you. Quiet by default; Ajustes turns it off or sets the volume (config.ui.sounds / ui.volume).
 // Never while you are typing, never with the window in the background, and never piling up.
 import { getState } from './store.js';
+import { quietAudioContext } from './audio-context.js';
 
-let ctx = null, out = null, lastKey = 0, busyUntil = 0;
-window.addEventListener('keydown', () => { lastKey = Date.now(); }, { capture: true, passive: true });
-
+let ctx = null, out = null, ready = () => false, lastKey = 0, busyUntil = 0;
 const settings = () => { const ui = getState().app?.config?.ui ?? {}; return { on: ui.sounds !== false, volume: ui.volume ?? 0.5 }; };
+// 3.8.3: the context is made at the first key or click (instantly, without its device: lib/audio-context.js), so its
+// device is ready before Orb's first answer speaks.
+const warm = () => { if (!ctx && settings().on && document.documentElement.dataset.skin !== 'profesional') audio(); };
+window.addEventListener('keydown', () => { lastKey = Date.now(); warm(); }, { capture: true, passive: true });
+window.addEventListener('pointerdown', warm, { capture: true, passive: true });
 
 function audio() {
   if (!ctx) {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return null;
-    ctx = new AC();
+    const made = quietAudioContext();
+    if (!made) return null;
+    ctx = made.ctx; ready = made.ready;
     // A soft low-pass and a touch of compression keep every blip round and at the same loudness.
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200;
     const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -18; comp.ratio.value = 4;
     out = ctx.createGain();
     out.connect(lp); lp.connect(comp); comp.connect(ctx.destination);
   }
+  if (!ready()) return null; // its device is still on its way: this sound is skipped
   if (ctx.state === 'suspended') ctx.resume().catch(() => {});
   out.gain.value = 0.22 * settings().volume;
   return ctx;
