@@ -1377,6 +1377,11 @@ finished (`unfinished`: also when orb.json cannot be written), the engine does n
 the phone access and the MCP server refuses it; the window shows «No se pudieron actualizar tus datos a Orb 3.8», what to
 do, the copy («Abrir carpeta»), «Reintentar», «Buscar actualización» (the app's updater) and the reason under «Detalles»
 (`app.migrationState`, `app.migrationRetry`, PC only; `committed` says whether going back to 3.7 would need the copy).
+3.8.2 (review F2.5b M6): meanwhile, with the phone access turned on, its addresses and port answer one fixed state
+(`remote.mjs › startAttention`): every `/api/` request gets 503 `{ attention: 'migration', error }` (with the Android
+app's CORS) and a page a short notice; no data, devices or keys are read. A linked phone shows «El PC necesita atención»
+instead of «Sin conexión» and keeps retrying (`main.jsx › PcOffline`); a successful «Reintentar» closes it before the
+real phone access opens on the same port.
 The migration writes only inside the data folder and the bridge's file (`insideData`); `ORB_BRIDGE_DIR` is for tests
 only, and under `node --test` without it there is no bridge. The engine tells the owner once («Orb 3.8 ya no tiene bots
 ni usuarios…», `data.migrated38`, and to revoke Home Assistant's token when 3.7 had one) and logs what was done. 30 days

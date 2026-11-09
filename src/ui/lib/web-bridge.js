@@ -78,6 +78,9 @@ if (!window.orb) {
   const answer = async (res, s, nonce) => {
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) { unpaired(); throw new Error(data.error ?? await tl('app.notLinked')); }
+    // 3.8.2 (review F2.5b M6): the PC is there but needs attention (its data could not be updated: remote.mjs ›
+    // startAttention); said as such, never as «sin conexión».
+    if (res.status === 503 && typeof data.attention === 'string') throw Object.assign(new Error(await tl('app.pcAttentionBody')), { attention: data.attention });
     if (!res.ok) throw new Error(data.error ?? await tl('app.httpError', { n: res.status }));
     const C = await crypto$();
     let msg; try { msg = C.open(s.key, data, C.AAD.response(s.id)); } catch { throw new Error(await tl('app.badAnswer')); }
@@ -277,6 +280,8 @@ if (!window.orb) {
         if (!await record()) return { mobile: true, needsPairing: true, needsSetup: false, pairError, app: Boolean(host) };
         // 3.8: the PC is off, asleep, out of this network or Orb is closed: a calm screen that keeps trying (main.jsx),
         // never «No se pudo iniciar Orb».
+        // 3.8.2: the same calm screen when the PC answers that it needs attention, with that said instead.
+        if (e.attention) return { mobile: true, needsSetup: false, offline: true, attention: e.attention, pcName: saved?.name ?? null, seenAt: Number(localStorage.getItem('orb.visto') ?? 0) || null, app: Boolean(host) };
         if (isOffline(e)) return { mobile: true, needsSetup: false, offline: true, pcName: saved?.name ?? null, seenAt: Number(localStorage.getItem('orb.visto') ?? 0) || null, app: Boolean(host) };
       }
       const gap = r && !r.ok && (r.status === 426 || r.update) ? { has: L.PROTOCOL, need: L.PROTOCOL + 1 } : L.updateNeeded(me);

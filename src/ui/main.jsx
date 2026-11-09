@@ -483,10 +483,12 @@ function PcOffline({ info, onRelink }) {
   const t = useT();
   const [busy, setBusy] = useState(false);
   const [wait, setWait] = useState(null); // seconds to the next try
+  // 3.8.2 (review F2.5b M6): the PC answers but needs attention (its data could not be updated): said so, still retrying.
+  const [attention, setAttention] = useState(info?.attention ?? null);
   const loop = useRef(null);
   useEffect(() => {
     const l = retryLoop({
-      attempt: async () => { const r = await bridge.info(); if (r.offline) return false; location.reload(); return true; },
+      attempt: async () => { const r = await bridge.info(); if (r.offline) { setAttention(r.attention ?? null); return false; } location.reload(); return true; },
       onWait: (s, b) => { setWait(s); setBusy(b); },
       hidden: () => document.visibilityState === 'hidden'
     });
@@ -499,13 +501,22 @@ function PcOffline({ info, onRelink }) {
   }, []);
   const relink = async () => { if (await relinkPhone(info?.pcName)) { loop.current.stop(); onRelink(); } };
   return (
-    <div className="brand-sky flex h-full overflow-y-auto p-6 pt-20" data-testid="pc-offline">
+    <div className="brand-sky flex h-full overflow-y-auto p-6 pt-20" data-testid="pc-offline" data-attention={attention ?? undefined}>
       <div className="bg-card/95 m-auto grid w-full max-w-sm gap-3 rounded-3xl p-7 text-center shadow-2xl">
         <div className="-mt-16 flex justify-center"><Robot size={110} mood={busy ? 'thinking' : 'sleeping'} /></div>
-        <h1 className="text-xl">{info?.pcName ? t('app.offlineTitleNamed', { name: info.pcName }) : t('app.offlineTitle')}</h1>
-        <p className="text-muted-foreground text-sm">{t('app.offlineBody')}</p>
+        {attention ? (
+          <>
+            <h1 className="text-xl">{info?.pcName ? t('app.pcAttentionTitleNamed', { name: info.pcName }) : t('app.pcAttentionTitle')}</h1>
+            <p className="text-muted-foreground text-sm" data-testid="pc-attention">{t('app.pcAttentionBody')}</p>
+          </>
+        ) : (
+          <>
+            <h1 className="text-xl">{info?.pcName ? t('app.offlineTitleNamed', { name: info.pcName }) : t('app.offlineTitle')}</h1>
+            <p className="text-muted-foreground text-sm">{t('app.offlineBody')}</p>
+          </>
+        )}
         {/* 3.8.1, the Android app: a PC still on Orb 3.8.0 refuses it (another origin) and looks just like one turned off. */}
-        {window.__orbHost?.app ? <p className="text-muted-foreground text-sm" data-testid="pc-offline-old">{t('app.offlineOldPc')}</p> : null}
+        {window.__orbHost?.app && !attention ? <p className="text-muted-foreground text-sm" data-testid="pc-offline-old">{t('app.offlineOldPc')}</p> : null}
         {info?.seenAt ? <p className="text-muted-foreground text-xs">{t('app.offlineSeen', { when: ago(info.seenAt) })}</p> : null}
         <Button size="lg" disabled={busy} onClick={() => loop.current?.now({ reset: true })} data-testid="pc-offline-retry">{busy ? <Spinner /> : <RotateCw />}{t('app.offlineRetry')}</Button>
         <p className="text-muted-foreground min-h-4 text-xs" aria-live="polite">{wait ? t('app.offlineNext', { s: wait }) : ''}</p>

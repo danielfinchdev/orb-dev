@@ -646,7 +646,21 @@ test('M2: si la migración falla, Orb no funciona sobre los datos de 3.7 (ni mó
     assert.equal(start.phase, 'migration');
     assert.equal(start.data.failed, true);
     await assert.rejects(engine.call('remote.status'), /Orb no funciona hasta actualizar tus datos/);
-    await assert.rejects(fetch(`http://127.0.0.1:${port}/api/me`, { method: 'POST' }), 'el acceso del móvil no se abre');
+    // 3.8.2 (M6): the phone access does not open, but a linked phone is told the PC needs attention (not «sin conexión»),
+    // with nothing of the data: one fixed state, also readable by the Android app's origin.
+    await until(async () => { try { return (await fetch(`http://127.0.0.1:${port}/api/me`, { method: 'POST' })).status === 503; } catch { return false; } }, 'el aviso de atención');
+    const me = await fetch(`http://127.0.0.1:${port}/api/me`, { method: 'POST', headers: { Origin: 'http://tauri.localhost', 'Content-Type': 'application/json' }, body: '{}' });
+    assert.equal(me.status, 503);
+    assert.equal(me.headers.get('access-control-allow-origin'), 'http://tauri.localhost');
+    const said = await me.json();
+    assert.deepEqual(Object.keys(said).sort(), ['attention', 'error']);
+    assert.equal(said.attention, 'migration'); assert.match(said.error, /necesita atención/);
+    for (const p of ['/api/call', '/api/events', '/api/pair', '/api/hello']) assert.equal((await fetch(`http://127.0.0.1:${port}${p}`, { method: p === '/api/events' || p === '/api/hello' ? 'GET' : 'POST' })).status, 503, `${p}: solo el aviso`);
+    const pageRes = await fetch(`http://127.0.0.1:${port}/`);
+    assert.equal(pageRes.status, 503); assert.match(await pageRes.text(), /necesita atención/);
+    const { default: http } = await import('node:http');
+    const other = await new Promise((resolve, reject) => { const r = http.request({ host: '127.0.0.1', port, path: '/api/me', method: 'POST', headers: { Host: `otro:${port}` } }, (res) => { res.resume(); resolve(res.statusCode); }); r.on('error', reject); r.end(); });
+    assert.equal(other, 421, 'otro host, no');
     await wait(2000);
     assert.equal(raw37(u, (db) => db.prepare('SELECT status FROM tasks WHERE id = ?').get(ids.tAna).status), 'queued', 'nada de los otros se ejecuta');
     assert.match(fs.readFileSync(path.join(u.home, 'core', 'ejecuciones', 'motor.log'), 'utf8'), /3\.8: la migración no se pudo hacer/);
@@ -813,4 +827,20 @@ test('F3b M5: Ajustes › Datos cuenta las copias de antes de la 3.8 (guardan la
   const { before38 } = await import('../src/engine/api-data.mjs');
   for (const v of ['3.7.2', '3.7', '2.6.0', '3.0.1']) assert.equal(before38(v), true, v);
   for (const v of ['3.8.0', '3.8.1', '3.10.0', '4.0.0', null, undefined, '', 'x']) assert.equal(before38(v), false, String(v));
+});
+
+test('3.8.2 (M6): el móvil dice «El PC necesita atención» cuando el PC responde con ese estado, nunca «sin conexión»', () => {
+  const bridge = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'lib', 'web-bridge.js'), 'utf8');
+  assert.match(bridge, /res\.status === 503 && typeof data\.attention === 'string'\) throw Object\.assign\(new Error\(await tl\('app\.pcAttentionBody'\)\), \{ attention: data\.attention \}\)/);
+  assert.match(bridge, /if \(e\.attention\) return \{ mobile: true, needsSetup: false, offline: true, attention: e\.attention/);
+  const main = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'main.jsx'), 'utf8');
+  const screen = main.slice(main.indexOf('function PcOffline'), main.indexOf('function MigrationFailed'));
+  assert.match(screen, /setAttention\(r\.attention \?\? null\)/, 'sigue reintentando y pasa sola a la app cuando el PC se arregla');
+  assert.match(screen, /t\('app\.pcAttentionBody'\)/);
+  for (const lang of ['es', 'en']) {
+    const text = fs.readFileSync(path.join(ROOT, 'src', 'core', 'locales', lang, 'app.mjs'), 'utf8');
+    for (const k of ['app.pcAttentionTitle', 'app.pcAttentionTitleNamed', 'app.pcAttentionBody']) assert.ok(text.includes(`"${k}"`), `${lang}: ${k}`);
+  }
+  const engine = fs.readFileSync(path.join(ROOT, 'src', 'engine', 'engine.mjs'), 'utf8');
+  assert.match(engine, /await stopAttention\(\);\n {4}await run\(next, info\)/, 'el aviso se cierra antes de abrir el acceso de verdad en el mismo puerto');
 });

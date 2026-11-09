@@ -264,11 +264,17 @@ function coreBlocked({ home, version, repair }) {
 
 // While the data could not be updated: only the window's calls about it (and core is whole). → what start() returns.
 let migration = null; // { failed: true, reason, backup, data, committed }
+// 3.8.2 (review F2.5b M6): meanwhile a linked phone is told the PC needs attention (remote.mjs › startAttention) instead
+// of finding nothing there («sin conexión»). Closed before the engine runs on the updated data (the real phone access
+// takes the same port) and when it ends.
+let attention = null; // promise of { stop } or null
+const stopAttention = async () => { const a = attention; attention = null; await (await a)?.stop().catch(() => {}); };
 async function blocked(board, info) {
   const { migrationFailure, unfinished, isLegacy } = await import('../core/migrate-38.mjs');
   const f = migrationFailure();
   migration = { failed: true, reason: f?.reason ?? tr('data.migration38.blocked'), backup: f?.backup ?? null, data: ctx.paths.db, committed: f?.committed ?? !isLegacy(board.db) };
   log(`3.8: la migración no se pudo hacer; Orb no arranca sobre los datos de 3.7: ${migration.reason}`);
+  attention ??= import('./remote.mjs').then(({ startAttention }) => startAttention({ log })).catch((error) => { log(`móvil (atención): ${error.message}`); return null; });
   let retrying = null;
   const retry = async () => {
     try { board.db.close(); } catch { /* closed */ }
@@ -276,6 +282,7 @@ async function blocked(board, info) {
     const next = new Board();
     if (unfinished(next.db)) { await blocked(next, info); return migration; }
     migration = null;
+    await stopAttention();
     await run(next, info);
     return { failed: false };
   };
@@ -474,7 +481,7 @@ function shutdown() {
   try { api?.shutdown(); } catch { /* closing anyway */ }
   try { hostBrowser?.shutdown(); } catch { /* closing anyway */ }
   try { devControl?.stop(); } catch { /* closing anyway */ }
-  Promise.race([Promise.resolve(remote?.stop()).catch(() => {}), new Promise((r) => setTimeout(r, 4000))]).finally(() => setTimeout(() => process.exit(0), 300));
+  Promise.race([Promise.all([Promise.resolve(remote?.stop()).catch(() => {}), stopAttention()]), new Promise((r) => setTimeout(r, 4000))]).finally(() => setTimeout(() => process.exit(0), 300));
 }
 
 // 3.8.1: what an app without Node of its own (Tauri) asks the engine before and around the start, answered as

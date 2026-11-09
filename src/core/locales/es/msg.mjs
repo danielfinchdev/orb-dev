@@ -361,6 +361,7 @@ export default {
   "msg.remote.internalError": "error interno",
   "msg.remote.noDevice": "ese dispositivo no existe",
   "msg.remote.notMigrated": "El acceso del móvil no se abre hasta terminar de pasar los datos de Orb 3.7. Cierra y vuelve a abrir Orb.",
+  "msg.remote.attention": "El PC necesita atención: la actualización de los datos de Orb falló. Abre Orb en el PC para resolverlo.",
   "msg.remote.noTailscale": "No se ha detectado Tailscale en este PC. Solo es necesario para acceder desde fuera de tu red local.",
   "msg.remote.notLinked": "este dispositivo no está vinculado",
   "msg.remote.clock": "la hora del móvil no coincide con la del PC",
