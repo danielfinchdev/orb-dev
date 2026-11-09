@@ -88,3 +88,17 @@ test('la lista de procesos es asíncrona y nunca se solapa', { skip: process.pla
   assert.ok(la.some((p) => p.id === process.pid), 'este proceso está en la lista');
   assert.ok(ticks > 5, 'el bucle siguió vivo mientras PowerShell trabajaba');
 });
+
+test('el texto que escribe un agente va a la ventana en trozos de 50 ms, y antes que cualquier otra cosa que haga', async () => {
+  const { Sessions } = await import('../src/engine/sessions.mjs');
+  const sent = [];
+  const s = Object.assign(Object.create(Sessions.prototype), { deltas: new Map(), running: new Map(), emit: (event, payload) => sent.push([event, payload]) });
+  for (let i = 0; i < 40; i++) s.onLiveEvent('x', { type: 'delta', text: `t${i} ` });
+  assert.equal(sent.length, 0, 'aún nada: se agrupan');
+  s.onLiveEvent('x', { type: 'context', used: 1, size: 0 }); // any other event sends what was pending first
+  assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0], ['session:delta', { id: 'x', text: Array.from({ length: 40 }, (_, i) => `t${i} `).join('') }]);
+  s.onLiveEvent('x', { type: 'delta', text: 'fin' });
+  await wait(120);
+  assert.deepEqual(sent.at(-1), ['session:delta', { id: 'x', text: 'fin' }], 'y si no pasa nada más, a los 50 ms');
+});

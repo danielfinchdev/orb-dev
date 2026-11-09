@@ -124,6 +124,7 @@ export class Sessions {
     this.board = board; this.emit = emit; this.log = log;
     this.running = new Map();   // session id -> the running turn { agent, startedAt, lastAt, steps, last, stopped, live }
     this.lives = new Map();     // session id -> { live, key, lastUsed, logFile }
+    this.deltas = new Map();    // 3.8.3: session id -> { text, timer }: the streamed text not sent to the window yet
     this.approvals = new Map(); // `${session}:${request}` -> item id of its card
     this.onApproval = () => {}; // set by the engine: a notice in the chat when a task waits for a click
     this.onApprovalDone = () => {}; // set by the engine: that notice shows how it ended (allowed, denied, nobody answered)
@@ -162,6 +163,7 @@ export class Sessions {
   }
 
   update(id, fields) {
+    this.flushDelta(id); // what was streamed goes before the change (the turn's end) it came before
     const allowed = ['title', 'model', 'reasoning', 'permission', 'archived', 'status', 'cli_session', 'cwd', 'account', 'settled', 'context', 'titled', 'android'];
     const keys = Object.keys(fields).filter((k) => allowed.includes(k));
     if (!keys.length) return this.get(id);
@@ -311,16 +313,31 @@ export class Sessions {
     return entry;
   }
 
+  // 3.8.3: the streamed text goes to the window (and to each linked phone, ciphered for each) in pieces of up to 50 ms, not
+  // one event per token; anything else the agent does sends what was pending first, so the order stays the same.
+  queueDelta(id, text) {
+    const d = this.deltas.get(id);
+    if (d) { d.text += text; return; }
+    const timer = setTimeout(() => this.flushDelta(id), 50); timer.unref?.();
+    this.deltas.set(id, { text, timer });
+  }
+  flushDelta(id) {
+    const d = this.deltas.get(id); if (!d) return;
+    clearTimeout(d.timer); this.deltas.delete(id);
+    this.emit('session:delta', { id, text: d.text });
+  }
+
   onLiveEvent(id, ev) {
     const run = this.running.get(id);
     if (run) run.lastAt = Date.now();
+    if (ev.type === 'delta') { this.queueDelta(id, ev.text); return; }
+    this.flushDelta(id);
     if (ev.type === 'models') { const s = this.get(id); if (s) rememberModels(this.board, s.agent, ev.list, s.account ?? s.agent); return; }
     if (ev.type === 'item') {
       const item = this.addItem(id, ev.role, ev.kind, ev.body);
       if (run) { const what = describeItem(item); if (what) run.last = what; if (ev.kind === 'tool' || ev.kind === 'file') run.steps++; }
       return;
     }
-    if (ev.type === 'delta') { this.emit('session:delta', { id, text: ev.text }); return; }
     if (ev.type === 'session') { if (ev.id && this.get(id)?.cli_session !== ev.id) this.update(id, { cli_session: ev.id }); return; }
     if (ev.type === 'approval') {
       const r = ev.request;
