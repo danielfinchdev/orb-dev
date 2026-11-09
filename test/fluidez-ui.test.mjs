@@ -109,7 +109,7 @@ test('el texto del cuadro vive en su borrador: la vista no se redibuja con cada 
     assert.doesNotMatch(src, /\[text, setText\] = useState/, `${name}: no text state in the view`);
     assert.match(src, /<Composer draft=\{/, `${name}: the box gets its draft`);
   }
-  assert.match(chat, /const value = useDraftValue\(draft\)/, 'only the Composer follows the text');
+  assert.match(fs.readFileSync(path.join(ROOT, 'src', 'ui', 'components', 'conversation', 'composer.jsx'), 'utf8'), /const value = useDraftValue\(draft\)/, 'only the Composer follows the text');
 });
 
 // 3.8.3 (fix C): the moving backdrop and the robot's blinking run on the compositor (transform / opacity only).

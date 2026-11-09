@@ -1,6 +1,5 @@
 // App state shared by every view: what the engine knows (assistant, projects, tasks, conversations) plus the current
-// route. A tiny external store read with useSyncExternalStore; engine events trigger a debounced refresh.
-import { useRef, useSyncExternalStore } from 'react';
+// route. The state container itself is state.js; engine events trigger a debounced refresh.
 import { toast } from 'sonner';
 import { errorText } from './utils.js';
 import { bumpNav, navTicket, stillHere } from './nav.js';
@@ -32,34 +31,8 @@ function firstOpenToday() {
   const day = new Date().toLocaleDateString('sv');
   try { if (localStorage.getItem('orb.testDay') === day) return false; localStorage.setItem('orb.testDay', day); return true; } catch { return false; }
 }
-// chats: 3.8.3, what each conversation with the assistant is doing now (answering, its streamed text, its steps), kept
-// apart from `app` so a streamed piece redraws only what shows it; answers: the line each one wrote last (by id).
-let state = { version: 0, ready: false, info: null, app: null, chats: [], answers: {}, sessions: [], projects: [], tasks: [], conversations: [], route: { view: 'chat' }, settings: null, testToday: null };
-const listeners = new Set();
-const emit = () => { for (const fn of listeners) fn(); };
-export const getState = () => state;
-export function setState(patch) { state = { ...state, ...(typeof patch === 'function' ? patch(state) : patch) }; emit(); }
-const subscribe = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
-// 3.0: a component draws again only when what it selects changes (before, every change of the store redrew every
-// component). A selector that builds a new object or array each time is compared one level deep, so it stays stable.
-const same = (a, b) => {
-  if (Object.is(a, b)) return true;
-  if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) !== Array.isArray(b)) return false;
-  const ka = Object.keys(a); if (ka.length !== Object.keys(b).length) return false;
-  return ka.every((k) => Object.prototype.hasOwnProperty.call(b, k) && Object.is(a[k], b[k]));
-};
-const whole = (s) => s;
-export function useStore(select = whole) {
-  const last = useRef(null);
-  const snapshot = () => {
-    const prev = last.current;
-    if (prev && prev.state === state && prev.select === select) return prev.value;
-    const value = select(state);
-    last.current = { state, select, value: prev && same(prev.value, value) ? prev.value : value };
-    return last.current.value;
-  };
-  return useSyncExternalStore(subscribe, snapshot);
-}
+import { getState, setState, useStore, uiLanguage } from './state.js';
+export { getState, setState, useStore, uiLanguage };
 
 // Ajustes is a window over the current view: open on a section (general, apariencia, contribuye…) or close it.
 // settingsAt: each open (also of the same part again) scrolls that part into view (SettingsDialog).
@@ -72,7 +45,7 @@ export function setSidebarCollapsed(collapsed) {
   setState({ sidebarCollapsed: collapsed });
   try { localStorage.setItem('orb.sidebar', collapsed ? 'plegada' : 'abierta'); } catch { /* this session only */ }
 }
-try { if (localStorage.getItem('orb.sidebar') === 'plegada') state = { ...state, sidebarCollapsed: true }; } catch { /* storage unavailable */ }
+try { if (localStorage.getItem('orb.sidebar') === 'plegada') setState({ sidebarCollapsed: true }); } catch { /* storage unavailable */ }
 export function closeSettings() { setState({ settings: null }); }
 // 2.6: the guided tour (components/tour.jsx): the robot walks through the app, on the first launch after the setup and
 // from Tutoriales. Ajustes closes so the tour can point at the screens; done or skipped, ui.tourDone is saved in the
@@ -91,7 +64,7 @@ export function go(route) {
   let next = cleanRoute(route, { views, phone: phoneLayout() }) ?? { view: phoneLayout() ? 'chats' : 'chat' };
   if (next.view === 'settings') { openSettings(next.section); return; }
   // 3.8 (F5b): a task opened from a chat remembers it, so that «back» on the phone returns there (phone-nav.js › backStep).
-  const here = state.route;
+  const here = getState().route;
   if (next.view === 'tasks' && next.id != null && !next.from && (here?.view === 'chat' || here?.view === 'session')) next = { ...next, from: { view: here.view, ...(here.id != null ? { id: here.id } : {}) } };
   bumpNav(); // even to the same screen («Nuevo chat» while on a new chat): the user chose where to be
   setState({ route: next });
@@ -104,7 +77,7 @@ const KEEPS_ID = new Set(['session', 'chat']);
 // 3.8: Android's back (or a phone browser's): one level up (lib/phone-nav.js › backStep). → the step taken, or what the
 // caller must do ({ close }: what is open over the screen; { exit }: the first screen).
 export function goBack({ overlay = false } = {}) {
-  const step = backStep({ route: state.route, overlay, phone: phoneLayout() });
+  const step = backStep({ route: getState().route, overlay, phone: phoneLayout() });
   if (step?.go) go(step.go);
   return step;
 }
@@ -180,7 +153,6 @@ export const refresh = oneAtATime(async () => {
   document.documentElement.lang = uiLanguage(getState()) === 'en' ? 'en' : 'es';
 });
 // The app's language (Ajustes › General).
-export const uiLanguage = (s) => s.app?.config?.language || 'es';
 
 let iconsFor = null;
 export function loadProjectIcons(names = iconsFor) {
@@ -211,7 +183,7 @@ export async function act(promise, okText) {
 // 3.2: «Nuevo chat»: the screen of a new conversation (it is made with its first message), in that project when one is
 // given (it becomes the working folder) or in the current one.
 export async function newChat(project) {
-  if (project !== undefined && (project ?? '') !== (state.app?.activeProject?.name ?? '')) await act(call('projects.setActive', { name: project ?? '' }));
+  if (project !== undefined && (project ?? '') !== (getState().app?.activeProject?.name ?? '')) await act(call('projects.setActive', { name: project ?? '' }));
   go({ view: 'chat' });
 }
 // 3.2: what a conversation with the assistant is doing now (answering, its streamed text, its steps).
@@ -266,8 +238,8 @@ function snapshotChats(live, snapshot = []) {
 }
 
 // Whether «Iniciar test» is offered in the chat (decided once per opening of the app, the first time the chat shows).
-export function initTestOfTheDay() { if (state.testToday === null) setState({ testToday: firstOpenToday() }); }
-export const dismissTest = () => { if (state.testToday) setState({ testToday: false }); };
+export function initTestOfTheDay() { if (getState().testToday === null) setState({ testToday: firstOpenToday() }); }
+export const dismissTest = () => { if (getState().testToday) setState({ testToday: false }); };
 // «Iniciar test»: a new conversation with «Orquestador» on and the test request (t('test.prompt')), to check that the
 // whole chain works: the assistant plans, the agents build a web page and it is opened to try it.
 export { navTicket, stillHere };
@@ -276,11 +248,11 @@ export async function runTest(prompt) {
   const ticket = navTicket();
   const ok = await act((async () => {
     // Cursor cannot coordinate the agents: the test runs with Claude as the brain.
-    await call('chat.settings', state.app?.assistant?.agent === 'cursor' ? { agent: 'claude', model: '', orchestrate: true } : { orchestrate: true });
+    await call('chat.settings', getState().app?.assistant?.agent === 'cursor' ? { agent: 'claude', model: '', orchestrate: true } : { orchestrate: true });
     // 3.2.1: a project of its own (prueba-orb-<date>, never one of the user's) and «decide tú»: the test ran into three
     // questions (which project, the whiteboard, the plan) before any task started.
     const day = new Date().toLocaleDateString('sv').replace(/-/g, '');
-    const taken = new Set((state.projects ?? []).map((p) => String(p.name).toLowerCase()));
+    const taken = new Set((getState().projects ?? []).map((p) => String(p.name).toLowerCase()));
     let name = `prueba-orb-${day}`; for (let i = 2; taken.has(name.toLowerCase()); i++) name = `prueba-orb-${day}-${i}`;
     const project = await call('projects.create', { name, category: 'web', notes: t('test.projectNotes') });
     return call('chat.send', { text: t('test.wrap', { prompt, project: project.name }), project: project.name });
@@ -292,7 +264,7 @@ export async function runTest(prompt) {
 
 // Ctrl+J: a terminal in the folder of what is on screen (a conversation's project, the active project) or the assistant's.
 export function terminalFolder() {
-  const { route, sessions, projects, app } = state;
+  const { route, sessions, projects, app } = getState();
   const session = route.view === 'session' ? sessions.find((s) => s.id === route.id) : null;
   const named = (name) => projects.find((p) => p.name === name)?.path;
   return session?.cwd ?? (route.project && named(route.project)) ?? app?.activeProject?.path ?? app?.home ?? null;

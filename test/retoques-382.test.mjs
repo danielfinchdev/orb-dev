@@ -92,7 +92,7 @@ test('F5 reloads the window and hands each unsent message back to its box, once'
   } finally { delete globalThis.window; }
   const main = read('main.jsx');
   assert.match(main, /if \(isReloadKey\(e\)\) \{ e\.preventDefault\(\); reloadOrb\(getState\(\)\.route\); \}/);
-  assert.match(read('views', 'chat.jsx'), /const saved = takeDraft\(testid, getState\(\)\.route\); if \(saved && !draft\.get\(\)\.trim\(\)\) draft\.set\(saved\);/);
+  assert.match(read('components', 'conversation', 'composer.jsx'), /const saved = takeDraft\(testid, getState\(\)\.route\); if \(saved && !draft\.get\(\)\.trim\(\)\) draft\.set\(saved\);/);
 });
 
 test('the first-run welcome opens maximised and fits the window', () => {

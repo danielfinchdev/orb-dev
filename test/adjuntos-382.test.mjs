@@ -184,8 +184,7 @@ test('the microphone per platform (D3): Win+H on Windows, none on a phone', () =
   assert.equal(micMode({ mobile: true, coarse: true, webSpeech: true }), null, 'a phone browser: the keyboard dictates');
   assert.equal(micMode({ mobile: true, coarse: false, webSpeech: true }), 'web', 'a computer browser keeps its speech recognition');
   assert.equal(micMode({ mobile: true, webSpeech: false }), null);
-  const chat = ui('views', 'chat.jsx');
-  const composer = chat.slice(chat.indexOf('export function Composer'), chat.indexOf('// 2.6: the system'));
+  const composer = ui('components', 'conversation', 'composer.jsx').split('export function Composer')[1];
   // Between the usage ring (at the end of «bottom») and «enviar», with its label and tooltip.
   const at = (s) => composer.indexOf(s);
   assert.ok(at('{bottom}</div>') < at('data-testid="dictate"') && at('data-testid="dictate"') < at('data-testid="send"'));
@@ -203,7 +202,7 @@ test('«Recargar» in the usage panel: spinner, 20 s between reloads, the agents
   markReloaded(50_000);
   assert.equal(reloadWait(55_000), RELOAD_GAP_MS - 5000);
   assert.equal(reloadWait(50_000 + RELOAD_GAP_MS), 0);
-  const session = ui('views', 'session.jsx');
+  const session = ui('components', 'conversation', 'context-meter.jsx');
   const panel = session.slice(session.indexOf('function UsagePanel'), session.indexOf('export function ContextMeter'));
   assert.match(panel, /disabled=\{reloading \|\| wait > 0\} aria-label=\{t\('session\.usage\.reload'\)\} aria-busy=\{reloading\} data-testid="usage-reload">\{reloading \? <Spinner/);
   assert.match(panel, /call\('usage\.refresh'\)/);

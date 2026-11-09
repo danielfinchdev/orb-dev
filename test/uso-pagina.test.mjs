@@ -70,7 +70,7 @@ test('an even pace through a window: only for windows of known length with a res
 });
 
 test('the usage panel is the same, with its reload button, and links to the page; the page is a screen of its own', () => {
-  const session = read('views', 'session.jsx');
+  const session = read('components', 'conversation', 'context-meter.jsx');
   const panel = session.slice(session.indexOf('function UsagePanel'), session.indexOf('export function ContextMeter'));
   assert.match(panel, /call\('usage\.now'\)/); assert.match(panel, /call\('usage\.refresh'\)/); assert.match(panel, /data-testid="usage-reload"/);
   assert.match(panel, /go\(\{ view: 'usage' \}\)/);

@@ -1,5 +1,5 @@
 // The interface's translations: useT() gives t(key, vars) in the language chosen in Ajustes (config.language).
-import { useStore, getState, uiLanguage } from './store.js';
+import { useStore, getState, uiLanguage } from './state.js';
 import { createT, localeOf } from '../../shared/i18n.mjs';
 
 export function useT() { const lang = useStore(uiLanguage); return createT(lang); }
