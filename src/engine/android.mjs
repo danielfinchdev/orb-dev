@@ -269,7 +269,6 @@ const ACTIVITY = /^\.?[A-Za-z][A-Za-z0-9_$]*(\.[A-Za-z][A-Za-z0-9_$]*)*$/;
 const SERIAL = /^[A-Za-z0-9._:\-[\]%]{1,120}$/;
 const ADDRESS = /^[A-Za-z0-9._[\]%-]{1,80}(:[A-Za-z0-9._[\]%-]{1,80})*:\d{2,5}$/;
 const KEYS = ['HOME', 'BACK', 'ENTER', 'DEL', 'FORWARD_DEL', 'TAB', 'ESCAPE', 'APP_SWITCH', 'MENU', 'SEARCH', 'SPACE', 'DPAD_UP', 'DPAD_DOWN', 'DPAD_LEFT', 'DPAD_RIGHT', 'DPAD_CENTER', 'VOLUME_UP', 'VOLUME_DOWN', 'VOLUME_MUTE', 'POWER', 'WAKEUP', 'SLEEP', 'MOVE_HOME', 'MOVE_END', 'PAGE_UP', 'PAGE_DOWN', 'NOTIFICATION'];
-export const ANDROID_KEYS = Object.freeze(KEYS);
 const LEVELS = ['V', 'D', 'I', 'W', 'E', 'F'];
 const clipEnd = (s, n) => (s.length > n ? `…${s.slice(-n)}` : s);
 const int = (v, min, max) => { const n = Number(v); return Number.isInteger(n) && n >= min && n <= max ? n : null; };
