@@ -143,6 +143,13 @@ C:\Orb\                   (C:\Orb by default; always <chosen folder>\Orb, the sa
   (`emulator -list-avds`) and starts one by its exact name with the master password; agents use
   `orb_android_emulators` / `orb_android_emulator` under the same grant as the phone. The emulator starts without the
   engine's `ORB_*` variables and is one more adb device (`emulator-5554`) for the other `orb_android_*` tools.
+- **Development tools** (3.8.3, `src/engine/dev-tools.mjs`): Flutter, the Android SDK and a JDK live in their own
+  standard places outside Orb's folder (Android Studio's `%LOCALAPPDATA%\Android\Sdk`; Flutter in a folder of the user),
+  so agents and the user's terminal run them and reinstalling Orb never removes them. Orb downloads none of them; it
+  checks the files (no program started), lists them in Settings → Android with a link to install each, and gives the
+  coordinator's briefing (and the brief of a mobile or multiplatform task) what it found, which overrides older notes in
+  the logs. A PATH entry that does not exist is named as such; a copy inside core (outside `core\herramientas`, the only
+  part open to agents) counts as unusable.
 - **Older folders**: `ensureLayout` (every start) moves Orb 3.7's own data into core (its other folders move only as the
   user chooses, section 36), creates whatever is missing and moves 2.3.0's `bitacoras\` into the log folder (if a file exists in both, the old entries are
   appended at the end). It only discards the empty logs that 2.3.0 created for the categories and configuration folders

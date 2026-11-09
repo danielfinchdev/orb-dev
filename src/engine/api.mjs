@@ -21,6 +21,7 @@ import { oneLine, redactSecrets, localStamp } from '../core/safety.mjs';
 import { quickRun } from '../agents/index.mjs';
 import { PERMISSIONS, ATTACH_DIR } from './sessions.mjs';
 import { playableType } from '../core/attach-kind.mjs';
+import { checkDevTools } from './dev-tools.mjs';
 import { readLog, writeLog, logFiles } from './logs.mjs';
 import { expandMentions, mentionOptions } from './mentions.mjs';
 import { ofUserLabel, userLabel, userName, assistantName } from '../core/board.mjs';
@@ -573,6 +574,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
 
     // 3.0: the list of every view, sent on each refresh: long texts cut (the whole task is tasks.get) and no approval
     // signatures (only the detail needs them).
+    // 3.8.3: Flutter, the Android SDK and a JDK as they really are on this PC (Ajustes › Android; engine/dev-tools.mjs).
+    'devtools.check': () => checkDevTools(),
     'tasks.list': ({ limit }) => {
       // 3.8.1: a range of the settings' key (its index), not LIKE (which read every setting: one per accepted task, …).
       const undone = new Set(board.all("SELECT key FROM settings WHERE key >= 'undone:' AND key < 'undone;' AND value <> '' AND value <> 'null'").map((r) => Number(r.key.slice('undone:'.length))));

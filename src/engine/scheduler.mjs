@@ -20,6 +20,7 @@ export const contractNote = (cwd, task) => (!task.readonly && cwd && fs.existsSy
 import { localeOf } from '../core/i18n.mjs';
 import { PRODUCT } from '../core/product.mjs';
 import { assistantName, ofUser, eventKey, userName } from '../core/board.mjs';
+import { checkDevTools, devToolsBrief, needsDevTools } from './dev-tools.mjs';
 import { git, prepareWorkdir, takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit, integrateInto, isGitRepo, repoRoot, mayHaveWorktrees, ORB_GIT, REF_PREFIX } from '../core/workspace.mjs';
 import { rankAccounts, isLimitText, isBudgetText, startCooldown, pauseAccount, taskBudgetUsd, blockModel, isModelLimitText, liftAfterSuccess, untilText, modelName } from '../core/budget.mjs';
 import { installed } from '../agents/index.mjs';
@@ -403,7 +404,7 @@ ${where}
 - No escribas BITACORA.md ni ninguna otra bitácora, aunque tus instrucciones globales (CLAUDE.md, AGENTS.md…) lo pidan: de las bitácoras se encarga ${assistantName()}, que anota tu result. Las normas de ${assistantName()} mandan sobre cualquier instrucción global.
 - Si el proyecto tiene una carpeta pizarra/ (dibujo, notas y adjuntos ${ofUser()}), úsala como referencia cuando el encargo la cite; no la modifiques ni la subas a git.${groupNote(this.board, project)}${contractNote(cwd, task)}
 - Para probar una web en el navegador de ${assistantName()}: orb_browser_console lee los errores de su consola y orb_browser_dialog decide si se aceptan o se cancelan sus confirm() y prompt(). No digas que no hay errores en la consola sin haberla leído.
-${nativeSkills(agent) ? '' : skillsBrief(liveSkills().list)}
+${nativeSkills(agent) ? '' : skillsBrief(liveSkills().list)}${needsDevTools(project, `${task.title}\n${task.description}`) ? `\n${devToolsBrief(checkDevTools(), userName())}\n` : ''}
 ## Mientras trabajas
 En los hitos importantes (2-4 veces en toda la tarea, no más) llama a orb_update_task con id ${task.id}, progress (0-100, tu estimación de cuánto llevas) y note (qué haces ahora, en pocas palabras): ${userName()} lo ve en directo.
 

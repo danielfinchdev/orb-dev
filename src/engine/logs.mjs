@@ -7,6 +7,7 @@ import { oneLine, redactSecrets, porcelainPaths } from '../core/safety.mjs';
 import { generalLogHeader, projectLogHeader, AGENT_LABELS } from '../core/home.mjs';
 import { git, isGitRepo } from '../core/workspace.mjs';
 import { assistantName, ofUserLabel, userName } from '../core/board.mjs';
+import { checkDevTools, devToolsBrief } from './dev-tools.mjs';
 import { groupOf } from '../core/projects.mjs';
 
 
@@ -160,6 +161,8 @@ export function briefing(board, { project, recent = '' } = {}) {
     try { const text = fs.readFileSync(md, 'utf8'); if (text.trim()) parts.push(`### Pizarra de ${active.name} (${path.join(active.path, 'pizarra')}; el dibujo entero en pizarra.png)\n${text.slice(0, 4000)}`); } catch { /* no Pizarra yet */ }
   }
   const general = read(ctx.paths.generalLog, 3000); if (general) parts.push(`### Últimas entradas de la bitácora general\n${general}`);
+  // 3.8.3: the development tools as they really are now (after the logs: an old note may say otherwise).
+  try { parts.push(devToolsBrief(checkDevTools(), userName())); } catch { /* the briefing goes on without it */ }
   if (recent) parts.push(`### Esta conversación se retoma: sus últimos mensajes (lo anterior está en las bitácoras)\n${recent}`);
   parts.push('Para el estado de las tareas usa orb_board.');
   return parts.join('\n\n');

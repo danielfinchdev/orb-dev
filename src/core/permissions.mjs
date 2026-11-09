@@ -31,7 +31,7 @@ export const METHODS = Object.freeze({
   // 3.8.2: pairing a phone for the agents (Ajustes › Android, src/engine/android.mjs)
   'android.pairStart': 'pc', 'android.pairState': 'pc', 'android.pairCancel': 'pc', 'android.pairCode': 'pc', 'android.devices': 'pc', 'android.disconnect': 'pc', 'android.forget': 'pc',
   // 3.8.2 (T3 3.17): an Android emulator already installed on this PC
-  'android.emulators': 'pc', 'android.emulatorStart': 'pc',
+  'android.emulators': 'pc', 'android.emulatorStart': 'pc', 'devtools.check': 'pc',
   'github.status': 'pc', 'github.contributions': 'pc', 'github.login': 'pc',
   'expert.tree': 'pc', 'expert.read': 'pc', 'expert.status': 'pc', 'expert.diff': 'pc', 'expert.log': 'pc', 'expert.system': 'pc',
   'actions.list': 'pc', 'actions.save': 'pc', 'actions.remove': 'pc',

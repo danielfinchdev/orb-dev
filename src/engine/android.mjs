@@ -144,13 +144,16 @@ export function runAdb(file, args, { timeout = 30_000, maxBuffer = 24 * 1024 * 1
 // Only the Android SDK's emulator already installed on this PC (Android Studio's): Orb never downloads the emulator nor
 // its system images. An emulator that runs is one more device for adb (emulator-5554…), so the agents use it with the
 // same orb_android_* tools and the same grant as the phone.
-export function sdkEmulator(env = process.env, platform = process.platform) {
+// 3.8.3: where the Android SDK may be (its variables, then Android Studio's default folder); shared with dev-tools.mjs.
+export function sdkRoots(env = process.env, platform = process.platform) {
   const home = env.USERPROFILE || env.HOME || '';
-  const roots = [env.ANDROID_SDK_ROOT, env.ANDROID_HOME,
+  return [env.ANDROID_SDK_ROOT, env.ANDROID_HOME,
     platform === 'win32' && env.LOCALAPPDATA ? path.join(env.LOCALAPPDATA, 'Android', 'Sdk') : null,
     platform === 'darwin' && home ? path.join(home, 'Library', 'Android', 'sdk') : null,
-    platform === 'linux' && home ? path.join(home, 'Android', 'Sdk') : null];
-  for (const root of roots.filter((r) => r && path.isAbsolute(r))) {
+    platform === 'linux' && home ? path.join(home, 'Android', 'Sdk') : null].filter((r) => r && path.isAbsolute(r));
+}
+export function sdkEmulator(env = process.env, platform = process.platform) {
+  for (const root of sdkRoots(env, platform)) {
     const file = path.join(root, 'emulator', platform === 'win32' ? 'emulator.exe' : 'emulator');
     try { if (fs.statSync(file).isFile()) return file; } catch { /* not here */ }
   }
