@@ -134,5 +134,7 @@ export default {
   'usage.unavailable': 'Usage could not be loaded',
   'session.switchAgent': 'Continue with another agent',
   'session.switchAgentDesc': 'Opens a new chat with a summary of this one. The original is kept.',
-  'session.switchAgentOk': 'Continue'
+  'session.switchAgentOk': 'Continue',
+  'session.capture': 'Capture window',
+  'session.captureFailed': 'The window could not be captured. Try again.'
 };

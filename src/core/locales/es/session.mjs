@@ -134,5 +134,7 @@ export default {
   'usage.unavailable': 'No se pudo cargar el uso',
   'session.switchAgent': 'Continuar con otro agente',
   'session.switchAgentDesc': 'Se abre un chat nuevo con un resumen de este. El original se conserva.',
-  'session.switchAgentOk': 'Continuar'
+  'session.switchAgentOk': 'Continuar',
+  'session.capture': 'Capturar ventana',
+  'session.captureFailed': 'No se pudo capturar la ventana. Inténtalo de nuevo.'
 };

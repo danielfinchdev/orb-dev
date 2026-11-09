@@ -419,6 +419,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       if (!rel || rel.startsWith('..') || path.isAbsolute(rel) || !/\.pdf$/i.test(f) || fs.statSync(f).size > 25 * 1024 * 1024) fail(tr('msg.api.badAttachment'));
       return { kind: 'pdf', base64: fs.readFileSync(f).toString('base64') };
     },
+    // A PNG made in the window, kept in Orb's folder to attach: the marked zone of a picture, or (3.8.2) a window the user
+    // captured from the composer.
     'images.mark': ({ dataUrl }) => {
       const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl ?? ''));
       if (!m || m[1].length > 34 * 1024 * 1024) fail(tr('msg.api.badImage'));

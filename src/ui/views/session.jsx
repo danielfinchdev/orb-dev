@@ -2,7 +2,7 @@
 // files appear as the agent works, risky actions wait for a click (approval cards), messages written meanwhile correct the
 // agent on the fly or wait in a queue, and the context meter shows how full the conversation is. Task runs open here too.
 import { lazy, memo, Suspense, useEffect, useMemo, useState } from 'react';
-import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, RefreshCw, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Ellipsis, Gamepad2, Smartphone, Gauge, Shuffle } from 'lucide-react';
+import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, RefreshCw, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Ellipsis, Gamepad2, Smartphone, Gauge, Shuffle, ScreenShare } from 'lucide-react';
 import { unlockCore } from '@/lib/core-access.js';
 import { toast } from 'sonner';
 import { Markdown } from '@/components/markdown.jsx';
@@ -29,6 +29,7 @@ import { sameBlock } from '@/lib/memo.js';
 import { toBlocks, subagentState } from '@/lib/session-blocks.js';
 import { kindOf } from '../../core/attach-kind.mjs';
 import { reloadWait, markReloaded } from '@/lib/usage-reload.js';
+import { canCapture, captureFrame } from '@/lib/window-capture.js';
 import { UsageBar, windowLabel, resetText, toneOf } from '@/components/usage-bits.jsx';
 
 // An icon that says what the tool does (reading, writing, searching, the web, a command…).
@@ -378,6 +379,12 @@ export function SessionView({ route }) {
     if (older) { setItems((prev) => [...older, ...prev]); setMore(older.length >= PAGE); }
   };
   const addImages = (paths) => setImages((prev) => [...new Set([...prev, ...(paths ?? []).filter(Boolean)])].slice(0, 10));
+  const capture = async () => {
+    try {
+      const dataUrl = await captureFrame(); if (!dataUrl) return;
+      const saved = await act(call('images.mark', { dataUrl })); if (saved?.path) addImages([saved.path]);
+    } catch { toast.error(t('session.captureFailed')); }
+  };
   // The files' real paths (a promise); the list is read before the event ends. 3.8.2: any file in Orb for Windows (a
   // linked device attaches pictures only: they are uploaded to the PC first).
   const fromTransfer = (dt) => Promise.all([...(dt?.files ?? [])].filter((f) => !bridge.mobile || /^image\//.test(f.type)).map((f) => bridge.pathForFile(f))).then((p) => p.filter(Boolean));
@@ -481,6 +488,8 @@ export function SessionView({ route }) {
         top={images.length || compactable ? <>{compactable ? <ContextSlot items={[{ key: 'compact', node: <CompactButton onCompact={compact} busy={compacting} /> }]} /> : null}<div className="flex min-w-0 flex-wrap items-center gap-2">{pictures}</div></> : null}
         bottom={<>
           <Tip label={t('session.attach')}><Button variant="ghost" size="icon-sm" aria-label={t('session.attach')} onClick={async () => addImages(await bridge.pickAttachments())} data-testid="attach"><Paperclip /></Button></Tip>
+          {/* 3.8.2: a window captured by the user (the system's picker), attached as a picture. PC only. */}
+          {fullPc() && canCapture() ? <Tip label={t('session.capture')}><Button variant="ghost" size="icon-sm" aria-label={t('session.capture')} onClick={capture} data-testid="capture-window"><ScreenShare /></Button></Tip> : null}
           {/* 3.2: the model, the permissions and the reasoning under the box, like the chat's brain (the bar keeps the title). */}
           {s.kind === 'chat' ? (<>
             {models.length ? <Select size="sm" value={s.model || models[0].value} title={t('session.model')} options={models} onValueChange={(model) => act(call('sessions.update', { id: s.id, model }), t('session.modelSet', { model: modelName(model) }))} data-testid="session-model" /> : null}
