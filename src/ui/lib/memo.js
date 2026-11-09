@@ -26,8 +26,10 @@ export function keepSame(prev, next) {
 
 // A block of a direct conversation (views/session.jsx › toBlocks: an item, a tool call with its result, a run of changed
 // files) shows the same as before.
+// 3.8.2: a subagent's block, also the same steps and state of its threads.
 export const sameBlock = (a, b) => a.type === b.type && a.key === b.key && a.item === b.item && a.call === b.call && a.result === b.result
-  && (a.files === b.files || (a.files?.length === b.files?.length && a.files.every((f, i) => f === b.files[i])));
+  && (a.files === b.files || (a.files?.length === b.files?.length && a.files.every((f, i) => f === b.files[i])))
+  && a.threadState === b.threadState && (a.steps === b.steps || (a.steps?.length === b.steps?.length && a.steps.every((s, i) => sameBlock(s, b.steps[i]))));
 
 // A row of the chat list shows the same as before: every field the same (objects such as its tasks or last line
 // compared by reference first, then by content).

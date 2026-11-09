@@ -2,7 +2,7 @@
 // files appear as the agent works, risky actions wait for a click (approval cards), messages written meanwhile correct the
 // agent on the fly or wait in a queue, and the context meter shows how full the conversation is. Task runs open here too.
 import { memo, useEffect, useMemo, useState } from 'react';
-import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, RefreshCw, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Ellipsis, Gamepad2, Smartphone } from 'lucide-react';
+import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, RefreshCw, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Ellipsis, Gamepad2, Smartphone } from 'lucide-react';
 import { unlockCore } from '@/lib/core-access.js';
 import { toast } from 'sonner';
 import { Markdown } from '@/components/markdown.jsx';
@@ -25,20 +25,9 @@ import { AGENT, PERMISSION, REASONING, STATUS, DECISION, CAN_STEER as AGENT_CAN_
 import { baseName, cn } from '@/lib/utils.js';
 import { useT, t, useLocale, currentLocale } from '@/lib/i18n.js';
 import { sameBlock } from '@/lib/memo.js';
+import { toBlocks, subagentState } from '@/lib/session-blocks.js';
 import { kindOf } from '../../core/attach-kind.mjs';
 import { reloadWait, markReloaded } from '@/lib/usage-reload.js';
-
-// Items → blocks: a tool call and its result become one block (the latest call with that id gets the result).
-function toBlocks(items, t) {
-  const blocks = []; const tools = new Map();
-  for (const it of items) {
-    if (it.kind === 'tool') { const b = { type: 'tool', key: it.id, call: it.body, result: null }; if (it.body?.id) tools.set(it.body.id, b); blocks.push(b); continue; }
-    if (it.kind === 'tool_result') { const b = it.body?.id ? tools.get(it.body.id) : null; if (b) b.result = it.body; else blocks.push({ type: 'tool', key: it.id, call: { name: t('session.result') }, result: it.body }); continue; }
-    if (it.kind === 'file') { const last = blocks.at(-1); if (last?.type === 'files') last.files.push(it.body); else blocks.push({ type: 'files', key: it.id, files: [it.body] }); continue; }
-    blocks.push({ type: 'item', key: it.id, item: it });
-  }
-  return blocks;
-}
 
 // An icon that says what the tool does (reading, writing, searching, the web, a command…).
 function toolIcon(name = '') {
@@ -83,6 +72,32 @@ function ToolBlock({ b }) {
   );
 }
 
+// 3.8.2: a subagent as one folding row: its name, model and state; unfolded, what it was asked, the steps it took and
+// its answer.
+const SUB_STATE = { running: 'bg-info animate-pulse', done: 'bg-success', failed: 'bg-destructive' };
+function SubagentBlock({ b }) {
+  const t = useT();
+  const a = b.call.agent;
+  const state = subagentState(b);
+  return (
+    <Collapsible className={cn('bg-card rounded-xl border text-[13px]', state === 'failed' && 'border-destructive/40')} data-testid="subagent">
+      <CollapsibleTrigger className="group flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left">
+        <ChevronRight className="text-muted-foreground size-3.5 transition-transform group-data-[state=open]:rotate-90" />
+        <Bot className="text-muted-foreground size-3.5" />
+        <span className="font-medium">{a.name ?? t('session.subagent')}</span>
+        {a.model ? <Badge variant="secondary" className="font-normal">{a.model}</Badge> : null}
+        <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs">{a.description ?? ''}</span>
+        {b.steps.length ? <span className="text-muted-foreground shrink-0 text-xs tabular-nums">{t('session.subagentSteps', { n: b.steps.length })}</span> : null}
+        <span className={cn('size-1.5 shrink-0 rounded-full', SUB_STATE[state])} role="img" aria-label={t(`session.subagentState.${state}`)} data-state={state} />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="grid gap-1.5 px-3 pb-3">
+        {b.steps.map((s) => (s.type === 'subagent' ? <SubagentBlock key={s.key} b={s} /> : <ToolBlock key={s.key} b={s} />))}
+        {b.result?.output ? <pre className="bg-muted max-h-80 overflow-auto rounded-lg px-3 py-2 font-mono text-xs whitespace-pre-wrap break-words">{b.result.output}</pre> : null}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 // 3.2.1: «Claude Code · claude-sonnet-5-5», «Codex · gpt-6-luna» (the line an agent writes when it starts) with the names
 // the rest of the app uses.
 function statusText(body, agent, catalog) {
@@ -101,6 +116,7 @@ const Block = memo(function Block({ b, agent, brain, sessionId, project, catalog
   const locale = useLocale();
   const usageLine = useStore((st) => st.app?.config?.ui?.usageLine !== false);
   if (b.type === 'tool') return <ToolBlock b={b} />;
+  if (b.type === 'subagent') return <SubagentBlock b={b} />;
   if (b.type === 'item' && b.item.kind === 'approval') return <ApprovalCard sessionId={sessionId} body={b.item.body} />;
   if (b.type === 'item' && b.item.kind === 'opti_action') return <OptiOldCard body={b.item.body} />;
   if (b.type === 'item' && b.item.kind === 'image') return <div className="flex gap-3"><AgentIcon agent={agent} className="mt-1 size-5" /><GeneratedImage body={b.item.body} sessionId={sessionId} project={project} /></div>;

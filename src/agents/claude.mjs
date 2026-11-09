@@ -18,6 +18,14 @@ export const kind = 'sdk';
 export const caps = { images: true, steer: true, fork: true, approvals: true, models: true, context: true, compact: true };
 
 // The assistant's coordinator process never runs commands or edits (that is the agents' work).
+// 3.8.2: a subagent (Claude Code's Agent tool, «Task» in older versions): its type, what it was asked and its model, so
+// the conversation shows it as one row; the steps it takes name it as their parent (parent_tool_use_id).
+export function subagentOf(name, input) {
+  if (!['Agent', 'Task'].includes(name) || !input || typeof input !== 'object') return {};
+  const text = (v, n) => (typeof v === 'string' && v.trim() ? clip(v.trim(), n) : null);
+  return { agent: { name: text(input.subagent_type, 60) ?? 'general-purpose', description: text(input.description, 200), model: text(input.model, 60) } };
+}
+const stepOf = (m) => (m.parent_tool_use_id ? { parent: m.parent_tool_use_id } : {});
 export const COORDINATOR_DENIED = ['Bash', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit', 'WebFetch', 'WebSearch', 'Task', 'Skill'];
 // Lighter processes: only the project's own settings, and only the MCP servers Orb passes (strict-mcp-config).
 export const LEAN_SOURCES = ['project', 'local'];
@@ -183,12 +191,12 @@ export function createLive(o) {
       for (const part of m.message?.content ?? []) {
         if (part.type === 'text' && part.text?.trim()) { onEvent({ type: 'item', role: 'assistant', kind: 'text', body: part.text, sub }); if (!sub) turn?.addText(part.text); }
         if (part.type === 'thinking' && part.thinking?.trim()) onEvent({ type: 'item', role: 'assistant', kind: 'reasoning', body: clip(part.thinking, 4000) });
-        if (part.type === 'tool_use') onEvent({ type: 'item', role: 'tool', kind: 'tool', body: { id: part.id, name: String(part.name ?? '').replace(/^mcp__orb__/, 'orb:'), input: describeInput(part.input), sub } });
+        if (part.type === 'tool_use') onEvent({ type: 'item', role: 'tool', kind: 'tool', body: { id: part.id, name: String(part.name ?? '').replace(/^mcp__orb__/, 'orb:'), input: describeInput(part.input), sub, ...stepOf(m), ...subagentOf(part.name, part.input) } });
       }
     }
     if (m.type === 'user') {
       for (const part of Array.isArray(m.message?.content) ? m.message.content : []) {
-        if (part.type === 'tool_result') onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: { id: part.tool_use_id, output: clip(textOf(part.content), 3000), error: Boolean(part.is_error) } });
+        if (part.type === 'tool_result') onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: { id: part.tool_use_id, output: clip(textOf(part.content), 3000), error: Boolean(part.is_error), ...stepOf(m) } });
       }
     }
     if (m.type === 'rate_limit_event') {

@@ -106,10 +106,22 @@ const ITEM_TOOL = (item) => {
   if (item.type === 'mcpToolCall') return { name: `${item.server}:${item.tool}`, input: clip(item.arguments ?? '', 300) };
   if (item.type === 'webSearch') return { name: tr('sys.agents.tool.webSearch'), input: clip(item.query ?? item.action?.query ?? '', 300) };
   if (item.type === 'dynamicToolCall') return { name: item.tool, input: clip(item.arguments ?? '', 300) };
-  if (item.type === 'collabAgentToolCall') return { name: tr('sys.agents.tool.subagent', { tool: item.tool }), input: clip(item.prompt ?? '', 300) };
+  if (item.type === 'collabAgentToolCall') return { name: tr('sys.agents.tool.subagent', { tool: item.tool }), input: clip(item.prompt ?? '', 300), ...collabAgent(item) };
   if (item.type === 'imageGeneration') return { name: tr('sys.agents.tool.imageGen'), input: '' }; // 2.7
   return null;
 };
+
+// 3.8.2: a subagent Codex starts (collabAgentToolCall spawnAgent): its model and threads, so the conversation shows it as
+// one row; the state of its threads comes with each collab call's end (agentsStates: pendingInit, running, completed…).
+export function collabAgent(item) {
+  if (item?.type !== 'collabAgentToolCall' || item.tool !== 'spawnAgent') return {};
+  return { agent: { name: null, description: item.prompt ? clip(item.prompt, 200) : null, model: item.model ?? null, threads: Array.isArray(item.receiverThreadIds) ? item.receiverThreadIds.slice(0, 20) : [] } };
+}
+export function collabResult(item) {
+  const states = Object.fromEntries(Object.entries(item?.agentsStates ?? {}).slice(0, 20).map(([id, st]) => [id, String(st?.status ?? '')]));
+  const output = Object.values(item?.agentsStates ?? {}).map((st) => st?.message).filter((m) => typeof m === 'string' && m.trim()).join('\n\n');
+  return { id: item.id, output: clip(output, 3000), error: item.status === 'failed', states };
+}
 
 // 2.6: the answer of app-server's model/list as the brain selector wants it: the models Codex shows (hidden ones are left
 // out), with their own names, and which one Codex uses when none is chosen.
@@ -228,6 +240,7 @@ export function createLive(o) {
       if (item.type === 'fileChange') for (const c of item.changes ?? []) onEvent({ type: 'item', role: 'tool', kind: 'file', body: { path: c.path, change: typeof c.kind === 'string' ? c.kind : c.kind?.type ?? 'update' } });
       if (item.type === 'mcpToolCall' || item.type === 'dynamicToolCall') onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: { id: item.id, output: clip(item.result ?? item.error ?? item.contentItems ?? '', 3000), error: Boolean(item.error) || item.success === false } });
       if (item.type === 'webSearch') onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: { id: item.id, output: '', error: false } });
+      if (item.type === 'collabAgentToolCall') onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: collabResult(item) });
       if (item.type === 'plan' && item.text?.trim()) onEvent({ type: 'item', role: 'assistant', kind: 'reasoning', body: clip(item.text, 4000) });
       // 2.7: a picture Codex made (image_gen): kept as a file (Codex's own savedPath, or written next to Orb's runs when
       // it only came inline), never as base64 in the conversation.
