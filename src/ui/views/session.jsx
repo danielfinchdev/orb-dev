@@ -2,13 +2,14 @@
 // files appear as the agent works, risky actions wait for a click (approval cards), messages written meanwhile correct the
 // agent on the fly or wait in a queue, and the context meter shows how full the conversation is. Task runs open here too.
 import { lazy, memo, Suspense, useEffect, useMemo, useState } from 'react';
-import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, RefreshCw, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Ellipsis, Gamepad2, Smartphone, Gauge, Shuffle, ScreenShare, TerminalSquare } from 'lucide-react';
+import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, RefreshCw, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Ellipsis, Gamepad2, Smartphone, Gauge, Shuffle, ScreenShare, SquareTerminal } from 'lucide-react';
 import { unlockCore } from '@/lib/core-access.js';
 import { toast } from 'sonner';
 import { Markdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
+import { renameChat } from '@/views/orb/inbox.jsx';
 import { Composer, useAutoScroll, BarClock, BarHeading, BarPause, MsgTime, CompactButton, COMPACT_AT } from './chat.jsx';
 import { BackToList } from '@/components/chat-bar.jsx';
 import { ContextSlot } from '@/components/context-slot.jsx';
@@ -23,7 +24,7 @@ import { stepText, bareTool } from '@/components/chat-live.jsx';
 import { readableInput, readableCommand } from '@/lib/tools.js';
 import { GeneratedImage, openImage } from '@/components/image-viewer.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge, Input, Textarea, Empty, Spinner } from '@/components/ui/basic.jsx';
+import { Badge, Textarea, Empty, Spinner } from '@/components/ui/basic.jsx';
 import { Select, Collapsible, CollapsibleTrigger, CollapsibleContent, Tip, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
 import { useStore, call, act, go, bridge, refresh, getState, fullPc, openGames } from '@/lib/store.js';
 import { AGENT, PERMISSION, REASONING, STATUS, DECISION, CAN_STEER as AGENT_CAN_STEER, CAN_COMPACT, options } from '@/lib/labels.js';
@@ -34,7 +35,7 @@ import { toBlocks, subagentState } from '@/lib/session-blocks.js';
 import { kindOf } from '../../core/attach-kind.mjs';
 import { reloadWait, markReloaded } from '@/lib/usage-reload.js';
 import { canCapture, captureFrame } from '@/lib/window-capture.js';
-import { UsageBar, windowLabel, resetText, toneOf } from '@/components/usage-bits.jsx';
+import { UsageBar, windowLabel, resetText, toneOf, shortTokens } from '@/components/usage-bits.jsx';
 
 // An icon that says what the tool does (reading, writing, searching, the web, a command…).
 function toolIcon(name = '') {
@@ -225,7 +226,6 @@ export function ApprovalCard({ sessionId, body, compact = false }) {
 // How full the agent's context window is (when the agent reports it).
 // 2.6: how full the conversation is, as a ring that fills up (no number); a click opens the panel with the context in
 // tokens and the limits of the plans working right now (the brain's and the agents' accounts: session, weekly…).
-const short = (n) => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
 function Ring({ pct, className }) {
   const r = 7; const c = 2 * Math.PI * r;
   return (
@@ -254,7 +254,7 @@ function UsagePanel({ context, pct }) {
   return (
     <div className="grid w-80 gap-3 p-2.5 text-[13px]" data-testid="usage-panel">
       <div className="grid gap-1.5">
-        <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">{t('session.usage.context')}</span><span className="ml-auto tabular-nums">{short(context.used)} / {short(context.size)} ({pct} %)</span>
+        <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">{t('session.usage.context')}</span><span className="ml-auto tabular-nums">{shortTokens(context.used)} / {shortTokens(context.size)} ({pct} %)</span>
           <Tip label={t('session.usage.reload')}><Button size="icon-sm" variant="ghost" className="size-6" onClick={reload} disabled={reloading || wait > 0} aria-label={t('session.usage.reload')} aria-busy={reloading} data-testid="usage-reload">{reloading ? <Spinner className="size-3" /> : <RefreshCw className="size-3.5" />}</Button></Tip></div>
         <UsageBar pct={pct} />
         <p className="text-muted-foreground text-xs leading-snug">{t('session.contextTip')}</p>
@@ -419,7 +419,8 @@ export function SessionView({ route }) {
     if (r?.steered) toast.success(t('session.steerSent'));
     else if (r?.queued) toast.success(s.kind === 'task' && !running ? t('session.resentTask') : t('session.queuedToast'));
   };
-  const rename = () => form(t('session.titleField'), { initial: { title: s.title }, body: (v, set) => <Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={80} />, ok: t('session.save'), onOk: (v) => call('sessions.update', { id: s.id, title: v.title.trim() || s.title }) });
+  // 3.8.2: the same «Renombrar» as the list's ⋯ (views/orb/inbox.jsx).
+  const rename = () => renameChat({ kind: 'session', id: s.id, title: s.title }, t);
   const fork = async () => { const copy = await act(call('sessions.fork', { id: s.id }), t('session.forked')); if (copy) { await refresh().catch(() => {}); go({ view: 'session', id: copy.id }); } };
   // 3.8.2: «Continuar con otro agente»: a copy with the agent chosen, which gets a summary of this conversation.
   const others = (app?.agentsAvailable ?? Object.keys(app?.config?.agents ?? {})).filter((a) => a !== s.agent && AGENT[a]);
@@ -455,7 +456,7 @@ export function SessionView({ route }) {
           <BubbleTip title={t('chats.more')}><DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={t('chats.more')} data-testid="session-more"><Ellipsis /></Button></DropdownMenuTrigger></BubbleTip>
           <DropdownMenuContent align="end" className="w-56">
             {bridge.mobile ? null : <DropdownMenuItem onSelect={() => act(bridge.openPath(s.cwd))} data-testid="open-folder"><FolderOpen />{t('session.openFolder')}</DropdownMenuItem>}
-            {fullPc() ? <DropdownMenuItem onSelect={() => setTerminal(!terminal)} data-testid="session-terminal"><TerminalSquare />{terminal ? t('terminal.hide') : t('terminal.show')}</DropdownMenuItem> : null}
+            {fullPc() ? <DropdownMenuItem onSelect={() => setTerminal(!terminal)} data-testid="session-terminal"><SquareTerminal />{terminal ? t('terminal.hide') : t('terminal.show')}</DropdownMenuItem> : null}
             <DropdownMenuItem onSelect={() => showDetails(s, task)} data-testid="details"><Info />{t('session.detailsShort')}</DropdownMenuItem>
             <DropdownMenuItem disabled={running} onSelect={fork} data-testid="fork"><GitFork />{t('session.fork')}</DropdownMenuItem>
             {others.length ? <DropdownMenuItem disabled={running} onSelect={switchAgent} data-testid="switch-agent"><Shuffle />{t('session.switchAgent')}</DropdownMenuItem> : null}

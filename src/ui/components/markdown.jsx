@@ -5,7 +5,7 @@
 // 3.8.2: formulas between $$ (one $ stays a dollar: amounts like «$5 and $10» read as before) and ```mermaid diagrams
 // (rich-blocks.jsx, each library loaded only when needed).
 import { memo } from 'react';
-import { TerminalSquare } from 'lucide-react';
+import { SquareTerminal } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import { remarkPlugins, richKind, isInlineMath, textOf } from '@/lib/markdown-plugins.js';
@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { useHighlight } from '@/lib/use-highlight.js';
 import { openImage } from './image-viewer.jsx';
+import { Tip } from './ui/overlay.jsx';
 // The whole window's fonts and code colours (Ajustes → Apariencia): loaded here, after app.css, which main.jsx imports first.
 import '../fonts.css';
 import '../code.css';
@@ -40,7 +41,7 @@ function PasteToTerminal({ code }) {
     if (pasteToTerminal(line)) return;
     navigator.clipboard?.writeText(line).then(() => toast.success(t('terminal.copied'))).catch(() => {});
   };
-  return <button type="button" className="text-muted-foreground hover:text-foreground absolute top-1.5 right-1.5 grid size-7 cursor-pointer place-items-center rounded-md opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 [&_svg]:size-3.5" title={t('terminal.paste')} aria-label={t('terminal.paste')} onClick={paste}><TerminalSquare /></button>;
+  return <Tip label={t('terminal.paste')}><button type="button" className="text-muted-foreground hover:text-foreground absolute top-1.5 right-1.5 grid size-7 cursor-pointer place-items-center rounded-md opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 [&_svg]:size-3.5" aria-label={t('terminal.paste')} onClick={paste}><SquareTerminal /></button></Tip>;
 }
 const languageOf = (code) => String([].concat(code?.properties?.className ?? []).find((c) => String(c).startsWith('language-')) ?? '').slice(9).toLowerCase();
 

@@ -42,7 +42,7 @@ export default {
   'msg.browser.recorded': 'Browser recording saved in the attachments: {name}.',
   'session.pointAdded': 'Element added to the message',
   'session.recordingSaved': 'Recording saved in the chat’s attachments',
-  'terminal.show': 'Terminal',
+  'terminal.show': 'Show terminal',
   'terminal.hide': 'Hide terminal',
   'terminal.tab': 'Terminal {n}',
   'terminal.ended': 'closed',

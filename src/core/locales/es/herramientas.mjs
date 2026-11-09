@@ -42,7 +42,7 @@ export default {
   'msg.browser.recorded': 'Grabación del navegador guardada en los adjuntos: {name}.',
   'session.pointAdded': 'Elemento añadido al mensaje',
   'session.recordingSaved': 'Grabación guardada en los adjuntos del chat',
-  'terminal.show': 'Terminal',
+  'terminal.show': 'Mostrar terminal',
   'terminal.hide': 'Ocultar terminal',
   'terminal.tab': 'Terminal {n}',
   'terminal.ended': 'cerrado',

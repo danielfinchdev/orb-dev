@@ -2,7 +2,7 @@
 // per terminal open in this folder; a line typed (or pasted from a command of the chat) runs only when the user presses
 // Enter. «Abrir fuera» opens the usual terminal of Ctrl+J in the same folder. This PC's window only.
 import { useEffect, useRef, useState } from 'react';
-import { Plus, X, SquareArrowOutUpRight, TerminalSquare } from 'lucide-react';
+import { Plus, X, SquareArrowOutUpRight, SquareTerminal } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Tip } from '@/components/ui/overlay.jsx';
 import { call, act, bridge } from '@/lib/store.js';
@@ -62,7 +62,7 @@ export function TerminalPanel({ dir, draft, onDraftTaken, onClose }) {
     <div className="mx-auto w-full max-w-3xl shrink-0 px-5 pb-2" data-testid="terminal-panel">
       <div className="bg-card overflow-hidden rounded-xl border">
         <div className="flex items-center gap-1 border-b px-2 py-1">
-          <TerminalSquare className="text-muted-foreground mx-1 size-4 shrink-0" />
+          <SquareTerminal className="text-muted-foreground mx-1 size-4 shrink-0" />
           {terms.map((x, i) => (
             <span key={x.id} className={cn('flex items-center gap-1 rounded-md px-2 py-0.5 text-xs', x.id === active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/60')}>
               <button type="button" className="cursor-pointer" onClick={() => setActive(x.id)}>{t('terminal.tab', { n: i + 1 })}{x.running ? '' : ` · ${t('terminal.ended')}`}</button>

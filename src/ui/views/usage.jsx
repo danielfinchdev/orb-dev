@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Gauge } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
-import { UsageBar, windowLabel, resetText } from '@/components/usage-bits.jsx';
+import { UsageBar, windowLabel, resetText, shortTokens } from '@/components/usage-bits.jsx';
 import { Card, Empty, Spinner } from '@/components/ui/basic.jsx';
 import { Tabs, TabsList, TabsTrigger, Tip } from '@/components/ui/overlay.jsx';
 import { useStore, call } from '@/lib/store.js';
@@ -15,7 +15,7 @@ import { useT, useLocale } from '@/lib/i18n.js';
 import { cn } from '@/lib/utils.js';
 
 const usd = (n, locale) => `$${Number(n ?? 0).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const tokens = (n) => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n ?? 0));
+const tokens = shortTokens;
 
 function Stat({ label, value, detail }) {
   return (

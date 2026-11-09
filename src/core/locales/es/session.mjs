@@ -73,7 +73,6 @@ export default {
   'session.steerSent': 'Corrección enviada. Se aplicará en el siguiente paso.',
   'session.resentTask': 'Enviado. La tarea vuelve a la cola.',
   'session.queuedToast': 'En cola. Se enviará al terminar el turno actual.',
-  'session.titleField': 'Título',
   'session.save': 'Guardar',
   'session.forked': 'Conversación bifurcada. La original se conserva.',
   'session.openFolder': 'Abrir la carpeta',
@@ -133,7 +132,7 @@ export default {
   'usage.empty': 'Sin uso en este periodo.',
   'usage.unavailable': 'No se pudo cargar el uso',
   'session.switchAgent': 'Continuar con otro agente',
-  'session.switchAgentDesc': 'Se abre un chat nuevo con un resumen de este. El original se conserva.',
+  'session.switchAgentDesc': 'Se abre una conversación nueva con un resumen de esta. La original se conserva.',
   'session.switchAgentOk': 'Continuar',
   'session.capture': 'Capturar ventana',
   'session.captureFailed': 'No se pudo capturar la ventana. Inténtalo de nuevo.'

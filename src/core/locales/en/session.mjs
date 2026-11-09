@@ -73,7 +73,6 @@ export default {
   'session.steerSent': 'Correction sent. It will be applied at the next step.',
   'session.resentTask': 'Sent. The task is back in the queue.',
   'session.queuedToast': 'Queued. It will be sent when the current turn ends.',
-  'session.titleField': 'Title',
   'session.save': 'Save',
   'session.forked': 'Conversation forked. The original is kept.',
   'session.openFolder': 'Open the folder',
@@ -133,7 +132,7 @@ export default {
   'usage.empty': 'No usage in this period.',
   'usage.unavailable': 'Usage could not be loaded',
   'session.switchAgent': 'Continue with another agent',
-  'session.switchAgentDesc': 'Opens a new chat with a summary of this one. The original is kept.',
+  'session.switchAgentDesc': 'Opens a new conversation with a summary of this one. The original is kept.',
   'session.switchAgentOk': 'Continue',
   'session.capture': 'Capture window',
   'session.captureFailed': 'The window could not be captured. Try again.'
