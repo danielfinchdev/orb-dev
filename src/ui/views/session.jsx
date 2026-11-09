@@ -32,7 +32,7 @@ import { baseName, cn } from '@/lib/utils.js';
 import { useT, t, useLocale, currentLocale } from '@/lib/i18n.js';
 import { sameBlock } from '@/lib/memo.js';
 import { toBlocks, subagentState } from '@/lib/session-blocks.js';
-import { kindOf } from '../../core/attach-kind.mjs';
+import { kindOf, playableType } from '../../core/attach-kind.mjs';
 import { reloadWait, markReloaded } from '@/lib/usage-reload.js';
 import { canCapture, captureFrame } from '@/lib/window-capture.js';
 import { UsageBar, windowLabel, resetText, toneOf, shortTokens } from '@/components/usage-bits.jsx';
@@ -118,7 +118,8 @@ const FILE_ICON = { add: FilePlus2, delete: FileMinus2 };
 const ATTACH_ICON = { image: ImageIcon, video: Film, audio: Music, pdf: FileText, document: FileText, archive: FileArchive, text: FileCode };
 function AttachIcon({ file, className }) { const I = ATTACH_ICON[kindOf(file)] ?? FileIcon; return <I className={className} />; }
 // 3.8.2: an attachment of a message. On the PC a picture opens in the image viewer and a PDF in the file viewer
-// (file-viewer.jsx, loaded when first opened); the rest, and everything on the phone, is its name.
+// (file-viewer.jsx, loaded when first opened); 3.8.3: so does audio or video the window can play. The rest, and
+// everything on the phone, is its name.
 const FileViewer = lazy(() => import('@/components/file-viewer.jsx'));
 function AttachChip({ file, sessionId }) {
   const t = useT();
@@ -126,7 +127,7 @@ function AttachChip({ file, sessionId }) {
   const kind = kindOf(file) === 'image' && !/\.(png|jpe?g|webp|gif)$/i.test(file) ? 'other' : kindOf(file);
   const chip = 'inline-flex items-center gap-1 rounded-md bg-white/15 px-2 py-0.5 text-xs';
   const label = <><AttachIcon file={file} className="size-3" />{baseName(file)}</>;
-  if (bridge.mobile || !['image', 'pdf'].includes(kind)) return <span className={chip}>{label}</span>;
+  if (bridge.mobile || !(['image', 'pdf'].includes(kind) || playableType(file))) return <span className={chip}>{label}</span>;
   return (
     <>
       <button type="button" className={cn(chip, 'cursor-pointer hover:bg-white/25')} onClick={() => (kind === 'image' ? openImage(file) : setOpen(true))} aria-label={t('viewer.open', { name: baseName(file) })} data-testid="attach-open">{label}</button>

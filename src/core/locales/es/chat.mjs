@@ -143,6 +143,8 @@ export default {
   'img.unavailable': 'La imagen ya no está disponible.',
   'img.title': 'Imagen',
   'viewer.pdf': 'Documento PDF',
+  'viewer.video': 'Vídeo',
+  'viewer.audio': 'Audio',
   'viewer.page': 'Página {n}',
   'viewer.open': 'Abrir {name}',
   'viewer.unavailable': 'No se puede abrir el archivo.',
