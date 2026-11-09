@@ -9,7 +9,9 @@ import path from 'node:path';
 import { AgentAuth } from '../src/engine/agent-auth.mjs';
 import { createSecretRequests, savedId } from '../src/engine/agent-secrets.mjs';
 import { parseArgs, trade, masker } from '../src/mcp/secret-run.mjs';
-import { allowed, needsUnlock, principalOf, METHODS } from '../src/core/permissions.mjs';
+import { allowed, needsUnlock, freshPurpose, principalOf, METHODS } from '../src/core/permissions.mjs';
+import { tempHome, startEngine } from './helpers.mjs';
+import { FRESH_ACTIONS } from '../src/ui/lib/core-access.js';
 
 const HELPER = fileURLToPath(new URL('../src/mcp/secret-run.mjs', import.meta.url));
 const VALUE = 'ghp_SecretoDePrueba123';
@@ -115,4 +117,26 @@ test('secretos: solo desde este PC, guardar o usar la guardada pide la contrase�
   m.push('xxabc'); m.push('defyy abcdef'); m.end();
   assert.equal(out, 'xx[secreto]yy [secreto]');
   assert.ok(path.isAbsolute(HELPER));
+});
+
+// 3.8.2 (security review, decision a): saving the secret in the vault or using the saved one asks for the master
+// password EVERY time: the window's 5-minute token does not open it, and the token for it opens it once.
+test('secretos: guardar o usar la guardada pide la contraseña cada vez (token de un solo uso)', async () => {
+  assert.equal(freshPurpose('secrets.answer', { save: true }), 'secretSave');
+  assert.equal(freshPurpose('secrets.answer', { saved: true }), 'secretSaved');
+  assert.equal(freshPurpose('secrets.answer', { value: 'x' }), null);
+  assert.ok(FRESH_ACTIONS.includes('secretSave') && FRESH_ACTIONS.includes('secretSaved'), 'la ventana no reutiliza su desbloqueo');
+  const t = tempHome();
+  const e = await startEngine(t.home);
+  const PASS = 'una frase larga de prueba';
+  try {
+    const { unlock } = await e.call('master.create', { password: PASS });
+    await assert.rejects(e.call('secrets.answer', { id: 1, value: 'x', save: true, unlock }), /contraseña maestra/, 'el token de 5 min no vale');
+    await assert.rejects(e.call('secrets.answer', { id: 1, saved: true, unlock }), /contraseña maestra/);
+    const other = (await e.call('master.unlock', { password: PASS, purpose: 'secretSave' })).unlock;
+    await assert.rejects(e.call('secrets.answer', { id: 1, saved: true, unlock: other }), /contraseña maestra/, 'el de guardar no sirve para usar');
+    const fresh = (await e.call('master.unlock', { password: PASS, purpose: 'secretSaved' })).unlock;
+    await assert.rejects(e.call('secrets.answer', { id: 1, saved: true, unlock: fresh }), /ya no está activa/, 'pasa la contraseña (no hay petición)');
+    await assert.rejects(e.call('secrets.answer', { id: 1, saved: true, unlock: fresh }), /contraseña maestra/, 'un token, una vez');
+  } finally { await e.stop(); t.cleanup(); }
 });

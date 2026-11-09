@@ -106,7 +106,15 @@ export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.v
 // (project-close.mjs), so a token that expires while the Recycle Bin works never leaves a delete half-way.
 // 3.8.2 (D1, D2): «Acceso total al PC» and «Usar mi móvil Android», given to a chat.
 export const FRESH_UNLOCK = Object.freeze({ 'projects.deleteCheck': 'deleteProject', 'sessions.grantTotal': 'fullAccess', 'sessions.grantAndroid': 'android' });
-export const FRESH_PURPOSES = Object.freeze([...new Set(Object.values(FRESH_UNLOCK))]);
+// 3.8.2 (security review): a secret an agent asked for, saved in the vault or taken from it, asks every time too (its
+// token is for that one action); the purpose depends on what the card does.
+export const SECRET_PURPOSES = Object.freeze({ save: 'secretSave', saved: 'secretSaved' });
+export const FRESH_PURPOSES = Object.freeze([...new Set([...Object.values(FRESH_UNLOCK), ...Object.values(SECRET_PURPOSES)])]);
+// The purpose a guarded call's token must carry (an action that asks every time), or null (the usual 5-minute token).
+export function freshPurpose(method, params) {
+  if (method === 'secrets.answer') return params?.saved === true ? SECRET_PURPOSES.saved : params?.save === true ? SECRET_PURPOSES.save : null;
+  return FRESH_UNLOCK[method] ?? null;
+}
 export function needsUnlock(method, params, current = {}) {
   if (UNLOCK_METHODS.has(method)) return true;
   // 3.8.2 (T3 3.4): a secret for an agent saved in the vault, or taken from it.

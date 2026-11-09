@@ -25,7 +25,8 @@ export const heldUnlock = (now = Date.now()) => (held && held.until - 5000 > now
 // 3.8.1: FRESH_ACTIONS ask for the password every time (src/core/permissions.mjs › FRESH_UNLOCK): a held unlock does
 // not count, and their token (for that action only) is not kept for the next one. 3.8.2: also giving a chat «Acceso
 // total al PC» or the Android phone.
-export const FRESH_ACTIONS = Object.freeze(['deleteProject', 'fullAccess', 'android']);
+// 3.8.2 (security review): saving a secret an agent asked for in the vault, or using the one saved, too.
+export const FRESH_ACTIONS = Object.freeze(['deleteProject', 'fullAccess', 'android', 'secretSave', 'secretSaved']);
 export async function unlockCore(action) {
   const fresh = FRESH_ACTIONS.includes(action);
   const have = fresh ? null : heldUnlock();

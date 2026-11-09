@@ -9,7 +9,7 @@ import { paths } from '../core/home.mjs';
 import { machineKeys } from '../core/machine-keys.mjs';
 import { Master, MasterError, IN_VAULT, mirrorTo, restoreMissing, checkPassword, MIN_LENGTH, UNLOCK_MS } from '../core/master.mjs';
 import { sealConnectors, connectorSecrets, refOf, secretId, ENV_NAME, bindMissing } from '../core/connector-secrets.mjs';
-import { needsUnlock, FRESH_UNLOCK, FRESH_PURPOSES } from '../core/permissions.mjs';
+import { needsUnlock, freshPurpose, FRESH_PURPOSES } from '../core/permissions.mjs';
 import { isRecoveryCode, hasRecovery } from '../core/backup.mjs';
 import { str } from './api-common.mjs';
 import { scrubVaultedSecrets, DONE_AT } from '../core/migrate-38.mjs';
@@ -76,7 +76,7 @@ export function checkUnlock(method, params) {
   const m = ctx.master;
   if (!m?.hasPassword()) throw userError(m?.state().lost ? 'msg.master.lost' : 'msg.master.createFirst', {}, { reason: 'unlock' });
   // 3.8.1: a token for one action (FRESH_UNLOCK) opens it once: it is used up here.
-  const purpose = FRESH_UNLOCK[method] ?? null;
+  const purpose = freshPurpose(method, params);
   if (!m.checkToken(params?.unlock, purpose, { consume: Boolean(purpose) })) throw userError('msg.master.needUnlock', {}, { reason: 'unlock' });
 }
 
