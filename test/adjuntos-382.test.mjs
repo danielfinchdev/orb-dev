@@ -71,6 +71,14 @@ test('attachments are copied into the chat folder (never into Orb data), with li
   assert.equal(placeAttachments(Array(12).fill(files[0]), project, { now: 99 }).length, 10);
 });
 
+// 3.8.2 (final review): the zip's limit is for all its files together, not for each one.
+test('a zip bomb of many entries stops at the total limit', () => {
+  const big = 'x'.repeat(1024 * 1024);
+  const z = zipEntries(zip({ 'a.html': big, 'b.html': big, 'c.html': big }), { maxOut: 2.5 * 1024 * 1024 });
+  const sizes = [...z.values()].map((read) => read().length);
+  assert.deepEqual(sizes, [1024 * 1024, 1024 * 1024, 0]);
+});
+
 test('PDF and office documents give their text; the original path always goes too', async (t) => {
   const { home, cleanup } = tempHome(); t.after(cleanup);
   const dir = path.join(home, 'docs'); fs.mkdirSync(dir);

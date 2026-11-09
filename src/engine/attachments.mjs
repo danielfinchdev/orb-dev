@@ -56,9 +56,12 @@ export function placeAttachments(files, cwd, { now = Date.now(), internalDir = c
 
 // ---- Text out of PDFs and office documents (no extra dependencies; the original is always there too) ----
 
-// The files of a zip (docx, xlsx, pptx, odt…): name → () => Buffer. Bounded, so a zip bomb cannot fill the memory.
+// The files of a zip (docx, xlsx, pptx, odt…): name → () => Buffer. Bounded, so a zip bomb cannot fill the memory: maxOut
+// is for all the files read together (3.8.2 final review: an epub or pptx of many entries each just under it, too).
 export function zipEntries(buf, { maxOut = 64 * 1024 * 1024 } = {}) {
   const out = new Map();
+  let left = maxOut;
+  const spend = (b) => { if (b.length > left) { left = 0; return Buffer.alloc(0); } left -= b.length; return b; };
   let eocd = -1;
   for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65_557); i--) if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
   if (eocd < 0) return out;
@@ -74,8 +77,9 @@ export function zipEntries(buf, { maxOut = 64 * 1024 * 1024 } = {}) {
       if (local + 30 > buf.length || buf.readUInt32LE(local) !== 0x04034b50) return Buffer.alloc(0);
       const start = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
       const data = buf.subarray(start, start + size);
-      if (method === 0) return data;
-      if (method === 8) { try { return zlib.inflateRawSync(data, { maxOutputLength: maxOut }); } catch { return Buffer.alloc(0); } }
+      if (left <= 0) return Buffer.alloc(0);
+      if (method === 0) return spend(data);
+      if (method === 8) { try { return spend(zlib.inflateRawSync(data, { maxOutputLength: left })); } catch { left = 0; return Buffer.alloc(0); } }
       return Buffer.alloc(0);
     });
   }
