@@ -19,6 +19,7 @@ import { quickRun } from '../agents/index.mjs';
 import { IS_WIN } from '../agents/common.mjs';
 import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, AAD, CLOCK_SKEW_MS, shortSecret, pairKdfOk } from '../core/mobile-crypto.mjs';
 import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
+import { streamFeed } from '../core/chat-stream.mjs';
 import { PROTOCOL, MIN_PROTOCOL, PAIR_PROTOCOL, versionOfProtocol, CODE_ALPHABET, shortCodeLabel } from '../core/link-payload.mjs';
 import { REMOTE_METHODS, principalOf } from '../core/permissions.mjs';
 import { isLegacy } from '../core/migrate-38.mjs';
@@ -343,7 +344,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const nonce = text.split('.')[0];
     if (!msg || msg.m !== expected) return null;
     const f = freshness(device.id, nonce, Number(msg.t));
-    return f === 'ok' ? { nonce } : f === 'clock' ? { clock: true } : null;
+    // 3.8.3: d: 1, a client that takes the streamed answer as deltas (src/core/chat-stream.mjs; older ones never say it).
+    return f === 'ok' ? { nonce, deltas: msg.d === 1 } : f === 'clock' ? { clock: true } : null;
   }
   // Only sent after the request opened with the device's own key (or the QR's), so only a paired phone learns it.
   const clockOff = (res) => send(res, 409, { error: tr('msg.remote.clock'), now: Date.now() });
@@ -410,7 +412,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       touch(device, req);
       res.writeHead(200, { ...HEADERS, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
       res.write(': hola\n\n');
-      const client = { res, device: device.id, key: keyOf(device), at: Date.now() };
+      const client = { res, device: device.id, key: keyOf(device), at: Date.now(), stream: auth.deltas ? streamFeed() : null };
       const mine = [...clients].filter((c) => c.device === device.id);
       if (mine.length >= STREAMS_PER_DEVICE) { try { mine[0].res.end(); } catch { /* closed */ } clients.delete(mine[0]); }
       clients.add(client);
@@ -802,7 +804,9 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       const value = { e: event, p: event === 'config:changed' ? null : withoutPaths(payload) };
       for (const c of clients) {
         if (c.res.writableLength > STREAM_BACKLOG) { try { c.res.destroy(); } catch { /* gone */ } clients.delete(c); continue; }
-        try { c.res.write(`data: ${sealText(c.key, value, AAD.event(c.device))}\n\n`); } catch { clients.delete(c); }
+        // 3.8.3: the streamed answer as deltas to a client that asked for them; the whole text to the others (3.8.1–3.8.2).
+        const own = c.stream && event === 'chat:state' ? { e: event, p: c.stream(value.p) } : value;
+        try { c.res.write(`data: ${sealText(c.key, own, AAD.event(c.device))}\n\n`); } catch { clients.delete(c); }
       }
     },
     start() {

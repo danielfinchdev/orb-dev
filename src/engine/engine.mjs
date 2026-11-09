@@ -15,6 +15,7 @@ import { PRODUCT } from '../core/product.mjs';
 import { DESKTOP, authorize } from '../core/permissions.mjs';
 
 import { stdioTransport } from './stdio.mjs';
+import { streamFeed } from '../core/chat-stream.mjs';
 import { attachHost, hostReply, hostCall } from './host.mjs';
 import { appMethods } from './api-app.mjs';
 import { locateHome, setupHome, switchHome, secretCopy, secretsCopy, adoptOldKeyNames, secretDir } from './desktop-home.mjs';
@@ -38,7 +39,9 @@ let remote = null; // phone access (src/engine/remote.mjs), when turned on
 let devControl = null; // 3.1: the developer's control line (src/engine/dev-control.mjs), only in Orb.dev
 // Every event goes to this PC's window, the linked phones and browsers (remote.mjs picks what they need) and the
 // developer's control line.
-const toWindow = (event, payload) => { try { transport.send({ type: 'event', event, payload }); } catch { /* window gone */ } };
+// 3.8.3: the assistant's streamed answer reaches the window as deltas (src/core/chat-stream.mjs).
+const windowStream = streamFeed();
+const toWindow = (event, payload) => { try { transport.send({ type: 'event', event, payload: event === 'chat:state' ? windowStream(payload) : payload }); } catch { /* window gone */ } };
 const emit = (event, payload) => {
   // 3.8.1: the agents' browser lives here: a task that ended closes its pages.
   if (event === 'agentBrowser:closeTask' && hostBrowser) { try { hostBrowser.closeTask(payload?.task); } catch { /* going away */ } return; }

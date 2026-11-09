@@ -96,7 +96,8 @@ if (!window.orb) {
     return answer(res, s, box.n);
   };
   // The envelope of a request whose body is not JSON (live events, pictures): in a header.
-  const authHeader = async (s, kind) => { const C = await crypto$(); return C.sealText(s.key, { t: stamp(), m: kind }, C.AAD.request(s.id)); };
+  // 3.8.3: the live events' one also says this client takes the streamed answer as deltas (d: 1, src/core/chat-stream.mjs).
+  const authHeader = async (s, kind) => { const C = await crypto$(); return C.sealText(s.key, { t: stamp(), m: kind, ...(kind === 'events' ? { d: 1 } : {}) }, C.AAD.request(s.id)); };
 
   // Live events over a streamed fetch (EventSource cannot send headers); reconnects with a growing pause.
   // 3.8 (F5b): the PC writes a ping every 25 s; nothing at all for TIMEOUTS.eventsIdle (the PC asleep, the Wi-Fi gone

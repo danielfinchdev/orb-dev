@@ -10,6 +10,7 @@ import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, baseSkin, plainSkin } from '../.
 export { plainSkin }; // 3.8.2: Profesional and the themes built on it (Cristal): no robot, no backdrop, no motion
 import { applyFeed, sinceOf } from '../../core/feed.mjs';
 import { frameBatch } from './batch.js';
+import { streamText } from '../../core/chat-stream.mjs';
 import { pendingShown } from './pending.js';
 export { pendingShown };
 
@@ -228,7 +229,18 @@ const chatStates = frameBatch((states) => setState((s) => {
   }
   return { chats, answers };
 }));
-export const chatStateSoon = (payload) => { liveAt.set(payload.conversation, Date.now()); chatStates.add(payload.conversation, payload); };
+// 3.8.3: while it streams, a state brings only the text added since the last one (src/core/chat-stream.mjs): it is made
+// whole here, from the text the window holds. One that does not follow it (the window reloaded meanwhile) is dropped and
+// the conversation's state is read again whole.
+const holding = new Map(); // conversation → the streamed text the window holds
+export const chatStateSoon = (payload) => {
+  const id = payload.conversation;
+  const text = streamText(holding.get(id), payload);
+  if (text == null) { holding.delete(id); liveAt.delete(id); refreshSoon(); return; }
+  if (payload.append != null) { const { append: _append, base: _base, ...rest } = payload; payload = { ...rest, partial: text }; }
+  if (payload.busy) holding.set(id, text); else holding.delete(id);
+  liveAt.set(id, Date.now()); chatStates.add(id, payload);
+};
 export const flushChatStates = () => chatStates.flush();
 
 // 3.8.3: a message the user just sent shows at once (T3 Code's optimistic messages), before the engine has saved it.
@@ -248,7 +260,9 @@ export const usePending = (where) => useStore((s) => { const list = (s.pending ?
 // connections): a conversation heard live in the last seconds keeps its live state.
 function snapshotChats(live, snapshot = []) {
   const recent = (id) => Date.now() - (liveAt.get(id) ?? 0) < 3000;
-  return [...live.filter((c) => recent(c.conversation)), ...snapshot.filter((c) => !recent(c.conversation))];
+  const taken = snapshot.filter((c) => !recent(c.conversation));
+  for (const c of taken) if (c.busy) holding.set(c.conversation, c.partial ?? ''); else holding.delete(c.conversation);
+  return [...live.filter((c) => recent(c.conversation)), ...taken];
 }
 
 // Whether «Iniciar test» is offered in the chat (decided once per opening of the app, the first time the chat shows).

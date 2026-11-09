@@ -223,6 +223,49 @@ test('avisos: solo servicios de avisos conocidos', async () => {
   assert.equal(C.open(p.key, await (await p.post('/api/me', p.box('me', { v: 3 }))).json(), C.AAD.response(p.id)).ok, true);
 });
 
+// 3.8.3: the streamed answer goes as deltas only to a client that asked for them (d: 1, the page of 3.8.3 on); a phone of
+// 3.8.1–3.8.2 still gets the whole text in each state, as before (src/core/chat-stream.mjs).
+test('respuesta en directo: deltas al cliente que los pide, el texto entero a los móviles anteriores', async () => {
+  const p = globalThis.phone1;
+  const open = async (extra) => {
+    const ctrl = new AbortController();
+    const auth = C.sealText(p.key, { t: Date.now(), m: 'events', ...extra }, C.AAD.request(p.id));
+    const res = await fetch(`${base}/api/events`, { headers: { 'X-Orb-Device': p.id, 'X-Orb-Auth': auth }, signal: ctrl.signal });
+    assert.equal(res.status, 200);
+    const got = { states: [], bytes: 0, ctrl };
+    (async () => {
+      const reader = res.body.getReader(); let buf = '';
+      try {
+        for (;;) {
+          const { value, done } = await reader.read(); if (done) return;
+          buf += Buffer.from(value).toString(); let i;
+          while ((i = buf.indexOf('\n\n')) >= 0) {
+            const line = buf.slice(0, i); buf = buf.slice(i + 2);
+            if (!line.startsWith('data: ')) continue;
+            const e = C.openText(p.key, line.slice(6), C.AAD.event(p.id));
+            if (e.e === 'chat:state') { got.states.push(e.p); got.bytes += line.length; }
+          }
+        }
+      } catch { /* aborted */ }
+    })();
+    return got;
+  };
+  const old = await open({}); const fresh = await open({ d: 1 });
+  const { streamText } = await import('../src/core/chat-stream.mjs');
+  const { conversation } = (await p.call('chat.send', { text: 'STREAM_LARGO para el móvil' })).result;
+  await until(() => old.states.some((s) => s.conversation === conversation && !s.busy) && fresh.states.some((s) => s.conversation === conversation && !s.busy), 'el final del turno en los dos', 30000);
+  const mine = (got) => got.states.filter((s) => s.conversation === conversation);
+  assert.ok(mine(old).every((s) => s.append === undefined && typeof s.partial === 'string'), 'el móvil anterior: siempre el texto entero');
+  assert.ok(mine(fresh).some((s) => s.append !== undefined), 'el nuevo: deltas');
+  let held = ''; const rebuilt = [];
+  for (const s of mine(fresh)) { held = streamText(held, s); assert.notEqual(held, null, 'cada delta sigue al anterior'); if (s.busy) rebuilt.push(held); }
+  const whole = mine(old).filter((s) => s.busy).map((s) => s.partial);
+  assert.deepEqual(rebuilt, whole, 'el mismo texto, estado a estado');
+  assert.ok(whole.at(-1).length > 1000, 'una respuesta larga');
+  assert.ok(fresh.bytes * 2 < old.bytes, `menos bytes con deltas (${fresh.bytes} frente a ${old.bytes})`);
+  old.ctrl.abort(); fresh.ctrl.abort();
+});
+
 test('eventos en directo cifrados y revocar el acceso', async () => {
   const p = globalThis.phone1;
   const ctrl = new AbortController();

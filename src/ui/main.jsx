@@ -410,7 +410,7 @@ function Root() {
       if (event === 'ui:navigate') go(payload);
       if (event === 'inbox:changed') loadOrbInboxSoon(120);
       // 3.6 (M3): the chat list follows what its conversations do (a new line comes with inbox:changed).
-      if (event === 'chat:state' && !payload?.partial) loadOrbInboxSoon(400);
+      if (event === 'chat:state' && !payload?.partial && payload?.append == null) loadOrbInboxSoon(400);
       if (event === 'engine:stopped') notify({ body: tNow('app.engineStopped'), tone: 'error' });
       // 3.8: core went missing while Orb ran: the engine starts again and brings it back (or says why it cannot).
       if (event === 'core:lost') coreLost = true;
