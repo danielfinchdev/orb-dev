@@ -138,6 +138,7 @@ export default {
   'sys.logs.done': 'Done',
   'sys.logs.revert': 'How to revert',
   'sys.logs.revertDefault': 'add a new entry that corrects it (logs only grow)',
+  'sys.logs.entryCut': 'entry cut: it is longer than what was asked',
   'sys.logs.status': 'Status / pending',
   'sys.logs.noPending': 'nothing pending',
   'sys.logs.task': 'Task #{id}: {title}',

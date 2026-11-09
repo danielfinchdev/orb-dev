@@ -11,7 +11,7 @@ import { useHome, ctx, tr } from '../core/context.mjs';
 import { isHome, CATEGORIES, PLATFORMS, AGENT_LABELS } from '../core/home.mjs';
 import { budgetConfig, waitReason, modelLimits } from '../core/budget.mjs';
 import { accountLabel, accountsOf } from '../core/accounts.mjs';
-import { oneLine } from '../core/safety.mjs';
+import { oneLine, redactSecrets } from '../core/safety.mjs';
 import { git, copyIntoWorkdir } from '../core/workspace.mjs';
 import { newProject } from '../core/projects.mjs';
 import { createSchedule, EVERY } from '../core/schedules.mjs';
@@ -28,7 +28,7 @@ const home = GRANT?.home ?? process.env.ORB_HOME;
 if (!home || !isHome(home)) { process.stderr.write('ORB_HOME no apunta a la carpeta de un asistente\n'); process.exit(1); }
 useHome(home);
 const { Board, AGENTS, STATUSES, assistantName, userName, ofUser } = await import('../core/board.mjs');
-const { readLog, writeLog, logFiles, findLog, ownLogFiles } = await import('../engine/logs.mjs');
+const { readLog, writeLog, logFiles, findLog, ownLogFiles, cutWords } = await import('../engine/logs.mjs');
 const board = new Board(undefined, { noKey: true }); // the MCP never holds the approval secret
 // 3.8: never on data of 3.7 the 3.8 migration could not update or finish (other users' rows and keys; the engine does not
 // run on them either).
@@ -242,6 +242,14 @@ function suggestBoard(a) {
   return `Consejo mostrado a ${USER} con el botón de la pizarra. Termina tu turno: cuando la tenga, te lo dirá.`;
 }
 
+// 3.8.3: the «Pedido de …» of an entry the assistant writes without one: what the user last asked in this conversation
+// (every such entry said «(coordinación de Orbe)»). Nothing outside a conversation.
+function lastRequest() {
+  if (!CONV) return '';
+  const body = board.chat(CONV, 40).filter((m) => m.role === 'usuario').at(-1)?.body;
+  return typeof body === 'string' && body.trim() ? cutWords(redactSecrets(body), 300) : '';
+}
+
 // 3.2: a task of the coordinator belongs to its conversation; a conversation without a project yet takes the task's.
 function createTask(a) {
   // A dependency hands its result to this task: only one of this conversation's own tasks.
@@ -383,12 +391,12 @@ const tools = [
         sensitivity: { type: 'array', items: { type: 'string', enum: ctx.config.sensitive }, description: `Si publica, envía, paga, borra o toca credenciales: espera la aprobación de ${USER}` },
         mode: { type: 'string', enum: ['carpeta', 'aislada'] }, readonly: { type: 'boolean', description: 'true si solo lee (investigar, revisar)' } } },
       run: (a) => ack(createTask(a)) },
-    { name: 'orb_read_log', description: `Lee una bitácora: la de un proyecto de esta conversación o la "general" (está en ${path.dirname(ctx.paths.generalLog)}). Devuelve las entradas más recientes completas. Sin project: lista las bitácoras.`, readOnly: true,
-      inputSchema: { type: 'object', properties: { project: str('Proyecto registrado o "general"'), archivo: str('Con "general": otro archivo .md de esa carpeta (p. ej. notas.md)'), chars: { type: 'integer', minimum: 1000, maximum: 40000 }, entera: { type: 'boolean' } } },
-      run: (a) => (a.project ? readLog(board, myLog(a.project), { chars: a.chars, whole: a.entera === true, file: a.archivo }) : listLogs()) },
+    { name: 'orb_read_log', description: `Lee una bitácora: la de un proyecto de esta conversación o la "general" (está en ${path.dirname(ctx.paths.generalLog)}). Devuelve las entradas más recientes, completas (8 si no pides otro número). Sin project: lista las bitácoras.`, readOnly: true,
+      inputSchema: { type: 'object', properties: { project: str('Proyecto registrado o "general"'), archivo: str('Con "general": otro archivo .md de esa carpeta (p. ej. notas.md)'), entradas: { type: 'integer', minimum: 1, maximum: 50, description: 'Cuántas entradas recientes (por defecto 8)' }, chars: { type: 'integer', minimum: 1000, maximum: 40000, description: 'Tope de caracteres (por defecto 12000)' }, entera: { type: 'boolean' } } },
+      run: (a) => (a.project ? readLog(board, myLog(a.project), { entries: a.entradas, chars: a.chars, whole: a.entera === true, file: a.archivo }) : listLogs()) },
     { name: 'orb_write_log', description: `Añade una entrada al FINAL de una bitácora (un proyecto de esta conversación o "general"), firmada y con el formato estándar. Nunca borra. Sin contraseñas ni datos personales. La general está en ${path.dirname(ctx.paths.generalLog)}${generalInCore ? ' (core): escribe en ella solo con esta herramienta' : ''}.`,
-      inputSchema: { type: 'object', required: ['project', 'tema', 'hecho'], properties: { project: str('Proyecto o "general"'), archivo: str('Con "general": otro archivo .md de esa carpeta (p. ej. notas.md)'), tema: str('Tema corto'), pedido: str('Qué se pidió'), hecho: str('Qué se decidió o hizo'), revertir: str('Cómo revertirlo'), estado: str('Estado / pendiente') } },
-      run: (a) => writeLog(board, myLog(a.project), a, brainAuthor()) },
+      inputSchema: { type: 'object', required: ['project', 'tema', 'hecho'], properties: { project: str('Proyecto o "general"'), archivo: str('Con "general": otro archivo .md de esa carpeta (p. ej. notas.md)'), tema: str('Tema corto'), pedido: str(`Qué pidió ${USER}, con sus palabras (si lo dejas vacío, se pone su último mensaje de esta conversación)`), hecho: str('Qué se decidió o hizo'), revertir: str('Cómo deshacerlo en concreto (qué archivo, commit o ajuste); «nada que revertir» si es solo una nota'), estado: str('Estado / pendiente') } },
+      run: (a) => writeLog(board, myLog(a.project), { ...a, pedido: a.pedido || lastRequest() }, brainAuthor()) },
     { name: 'orb_schedule', description: `Programa una tarea que se repite (p. ej. cada lunes a las 9 revisar dependencias) o que se hace una sola vez en una fecha. ${USER} la aprueba una vez en la app antes de que funcione sola.`,
       inputSchema: { type: 'object', required: ['project', 'title', 'description', 'every'], properties: {
         project: str('Proyecto registrado'), title: str('Título corto'), description: str('Encargo autocontenido y compacto'),

@@ -61,6 +61,29 @@ test('el coordinador solo se reconoce con su ticket del motor', async () => {
   } finally { boss.close(); fake.close(); worker.close(); user.close(); }
 });
 
+// 3.8.3 (what Orbe itself reported): «Pedido por» always said «(coordinación de Orbe)», and reading «the last entries»
+// cut by characters, bringing pieces of old ones.
+test('la bitácora: el pedido sale del último mensaje del usuario, y se leen entradas enteras, las que se pidan', async () => {
+  const conv = board.createConversation({ title: 'Pedido', project: 'web' }).id;
+  board.addChat('usuario', 'Haz la portada con el fondo azul', null, conv);
+  const boss = client(signed('claude', { orchestrator: true, browser: false, session: `asistente-${conv}`, conversation: conv }));
+  try {
+    await boss.rpc('initialize', {});
+    for (const n of [1, 2, 3]) assert.equal((await boss.call('orb_write_log', { project: 'web', tema: `Paso ${n}`, hecho: `hecho ${n} ${'z'.repeat(400)}` })).error, false);
+    assert.equal((await boss.call('orb_write_log', { project: 'web', tema: 'Con pedido', pedido: 'Lo que dijo', hecho: 'ok' })).error, false);
+    const all = (await boss.call('orb_read_log', { project: 'web' })).text;
+    assert.match(all, /### .* — Paso 1\n- Pedido [^:]+: Haz la portada con el fondo azul\n/, 'sin pedido: su último mensaje');
+    assert.match(all, /- Pedido [^:]+: Lo que dijo\n/);
+    const one = (await boss.call('orb_read_log', { project: 'web', entradas: 1 })).text;
+    assert.match(one, /^\(web: la entrada más reciente de \d+\)\n/);
+    assert.match(one, /### .* — Con pedido\n/);
+    assert.doesNotMatch(one, /Paso 3/, 'solo la última, entera');
+    const tight = (await boss.call('orb_read_log', { project: 'web', chars: 1000 })).text;
+    assert.doesNotMatch(tight, /\nzzz/, 'nunca un trozo suelto de una entrada anterior');
+    assert.match(tight, /— Con pedido/);
+  } finally { boss.close(); }
+});
+
 test('el coordinador crea proyectos, escribe bitácoras y no puede leer otra cosa que bitácoras', async () => {
   const boss = client(bossServer(null));
   try {

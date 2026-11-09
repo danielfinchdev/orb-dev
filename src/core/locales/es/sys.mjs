@@ -141,6 +141,7 @@ export default {
   'sys.logs.done': 'Hecho',
   'sys.logs.revert': 'Cómo revertir',
   'sys.logs.revertDefault': 'añadir una entrada nueva que lo corrija (las bitácoras solo crecen)',
+  'sys.logs.entryCut': 'entrada recortada: es más larga que lo pedido',
   'sys.logs.status': 'Estado / pendiente',
   'sys.logs.noPending': 'sin pendientes',
   'sys.logs.task': 'Tarea #{id}: {title}',
