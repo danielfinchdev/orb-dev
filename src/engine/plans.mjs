@@ -5,7 +5,9 @@
 //   fields are read: the tokens of the file never leave this function.
 // - Codex: account/read of its app-server (planType), as «Buscar y añadir» already did.
 // - Cursor: `cursor-agent about --format json` (subscriptionTier).
-// Kept in the board as plan:<account> = { agent, plan, label, at }, asked again at most every 12 hours.
+// Kept in the board as plan:<account> = { agent, plan, label, at }, asked again at most every 12 hours; an account whose
+// agent did not say its plan (plan_try:<account> newer than the plan) is not asked again on its own for a week (3.8.3:
+// Cursor was started at every Orb start for nothing). A login or «Buscar y añadir» asks at once (force).
 import fs from 'node:fs';
 import path from 'node:path';
 import { usableAccounts, accountDir } from '../core/accounts.mjs';
@@ -13,6 +15,7 @@ import { enabledAgents } from '../core/context.mjs';
 import { installed, executable } from '../agents/index.mjs';
 import { accountInfo as codexAccountInfo } from '../agents/codex.mjs';
 import { readOutput } from '../agents/common.mjs';
+import { NO_ANSWER_WAIT } from './catalog.mjs';
 
 const REFRESH_MS = 12 * 3_600_000;
 
@@ -54,13 +57,16 @@ async function askPlan(acc) {
 }
 
 // Asks every usable account of the installed agents (in the background; never throws).
-export async function refreshPlans(board, { force = false, log = () => {} } = {}) {
+// ask: how one account's plan is read (the tests pass their own).
+export async function refreshPlans(board, { force = false, log = () => {}, ask = askPlan } = {}) {
   for (const agent of enabledAgents().filter((a) => ['claude', 'codex', 'cursor'].includes(a) && installed(a))) {
     for (const acc of usableAccounts(agent)) {
       const prev = board.settingJson(`plan:${acc.id}`);
-      if (!force && prev?.at && Date.now() - Date.parse(prev.at) < REFRESH_MS) continue;
+      const now = Date.now(); const read = Date.parse(prev?.at ?? '') || 0; const tried = Number(board.setting(`plan_try:${acc.id}`) || 0);
+      if (!force && (now - read < REFRESH_MS || (tried > read && now - tried < NO_ANSWER_WAIT))) continue;
+      board.setting(`plan_try:${acc.id}`, String(now));
       try {
-        const plan = await askPlan(acc);
+        const plan = await ask(acc);
         if (plan) board.settingJson(`plan:${acc.id}`, { agent: acc.agent, plan, label: PLAN_LABELS[plan] ?? plan, at: new Date().toISOString() });
         log(`plan de ${acc.id}: ${plan ?? 'no se pudo leer'}`);
       } catch (error) { log(`plan de ${acc.id}: ${error.message}`); }

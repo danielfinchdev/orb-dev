@@ -25,7 +25,10 @@ export function levelsOf(catalog, agent, model, account = null) {
 // 2.7: the light models (fast and cheap) by their names; heavy ones by HEAVY_FAMILY; everything else is «balanced».
 const LIGHT = /haiku|mini\b|nano|flash|lite\b|small|spark/i;
 export const MODELS_EVERY = 12 * 3_600_000; // how often an agent is asked again for its models
-const RETRY_AFTER = 3_600_000; // after an agent that did not answer
+// 3.8.3: an agent that did not answer (Cursor without a login, a broken CLI) is not started again on its own for a week:
+// before, it was started at every Orb start and every hour the selector looked. «Comprobar», a new login or an install
+// ask again at once (force).
+export const NO_ANSWER_WAIT = 7 * 24 * 3_600_000;
 
 // Models an agent reported itself (the last list wins): its own names (label), which one it uses by default (default) and,
 // for an alias, the model it stands for (resolved). Returns whether the list changed (the window is told so).
@@ -62,7 +65,7 @@ export function rememberModels(board, agent, list, account = agent) {
 }
 
 // Asks an agent for its models in the background (one question at a time per agent). Without force, not when it answered
-// in the last 12 h, nor when it was asked in the last hour. Resolves with whether the list changed; never rejects.
+// in the last 12 h, nor in the week after it did not answer. Resolves with whether the list changed; never rejects.
 const asking = new Map();
 let serial = Promise.resolve();
 export function refreshModels(board, agent, { force = false, log = () => {}, account = agent } = {}) {
@@ -70,7 +73,8 @@ export function refreshModels(board, agent, { force = false, log = () => {}, acc
   const now = Date.now();
   const answered = Number(board.setting(`models_at:${account}`) || 0);
   const tried = Number(board.setting(`models_try:${account}`) || 0);
-  if (!force && (now - answered < MODELS_EVERY || now - tried < RETRY_AFTER)) return Promise.resolve(false);
+  const unanswered = tried > answered; // the last question got no list
+  if (!force && (now - answered < MODELS_EVERY || (unanswered && now - tried < NO_ANSWER_WAIT))) return Promise.resolve(false);
   if (!AGENT_IDS.includes(agent) || !ctx.config.agents?.[agent]?.enabled || !installed(agent)) return Promise.resolve(false);
   board.setting(`models_try:${account}`, String(now));
   // One agent at a time (each question starts that agent's program): never all of them at once at the first start.
