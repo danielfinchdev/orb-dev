@@ -140,7 +140,9 @@ export class Board {
   }
   settingJson(key, value) {
     if (value === undefined) { try { return JSON.parse(this.setting(key) || 'null'); } catch { return null; } }
-    this.setting(key, value === null ? '' : JSON.stringify(value));
+    // 3.8.3: null removes the row (it reads back as null, as before); an empty row left per key piled up for good.
+    if (value === null) this.run('DELETE FROM settings WHERE key = ?', key);
+    else this.setting(key, JSON.stringify(value));
   }
 
   // 3.1: the agents this PC can really run (turned on, installed and with an account). The engine keeps the list here

@@ -155,9 +155,9 @@ test('al terminar una tarea, Orb para el servidor que dejó en marcha en su carp
   const elsewhere = spawn(process.execPath, [path.join(other, 'server.js')], { stdio: 'ignore' });
   await wait(800);
   const events = [];
-  const self = { running: new Map(), board: { task: () => null, one: () => ({ at: since }), event: (...a) => events.push(a) } };
+  const self = { running: new Map(), cleaning: new Map(), log: () => {}, folderBusy: Scheduler.prototype.folderBusy, stopTaskPrograms: Scheduler.prototype.stopTaskPrograms, board: { task: () => null, one: () => ({ at: since }), event: (...a) => events.push(a) } };
   const saved = process.env.ORB_FAKE_AGENTS; delete process.env.ORB_FAKE_AGENTS;
-  try { Scheduler.prototype.stopLeftovers.call(self, { id: 9, workdir: dir }); } finally { process.env.ORB_FAKE_AGENTS = saved; }
+  try { await Scheduler.prototype.stopLeftovers.call(self, { id: 9, workdir: dir }); } finally { process.env.ORB_FAKE_AGENTS = saved; }
   const alive = (c) => { try { process.kill(c.pid, 0); return true; } catch { return false; } };
   // Stop-Process only starts the end of a process (TerminateProcess returns at once): on a busy PC a fixed half second
   // was sometimes too little. Its own exit says when it is gone.
@@ -186,9 +186,9 @@ test('parar por su número el servidor que arrancó la propia tarea no pregunta;
   const mine = spawn(process.execPath, [path.join(dir, 'server.js')], { stdio: 'ignore' });
   await wait(800);
   try {
-    assert.equal(Sessions.prototype.ownProcesses.call({}, `taskkill /PID ${mine.pid} /F`, dir, since), true, 'el suyo');
-    assert.equal(Sessions.prototype.ownProcesses.call({}, `taskkill /PID ${old.pid} /F`, dir, since), false, 'uno de antes de la tarea');
-    assert.equal(Sessions.prototype.ownProcesses.call({}, `taskkill /PID ${process.pid} /F`, dir, since), false, 'uno de fuera');
+    assert.equal(await Sessions.prototype.ownProcesses.call({}, `taskkill /PID ${mine.pid} /F`, dir, since), true, 'el suyo');
+    assert.equal(await Sessions.prototype.ownProcesses.call({}, `taskkill /PID ${old.pid} /F`, dir, since), false, 'uno de antes de la tarea');
+    assert.equal(await Sessions.prototype.ownProcesses.call({}, `taskkill /PID ${process.pid} /F`, dir, since), false, 'uno de fuera');
   } finally { old.kill(); mine.kill(); }
 });
 

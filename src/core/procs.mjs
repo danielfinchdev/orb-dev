@@ -9,7 +9,7 @@
 //   - or its parent is gone and its arguments are part of a command the task ran (the shell that started it has ended).
 // Only the process list (number, parent, start time, and the name and command line of the recent ones) is read.
 // Windows only: elsewhere nothing is found and nothing is stopped.
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import path from 'node:path';
 
 // What Orb may stop when a task ends: the usual runtimes and the shells and package runners that start them. Never a
@@ -64,28 +64,57 @@ export function taskProcesses(list, { since, roots = [], known = new Map(), keys
   return [...out.values()];
 }
 
+// 3.8.3: every PowerShell here runs asynchronously (spawn, not spawnSync). Each one takes ~0.8 s; run synchronously from
+// the engine's loop they froze the window, the phone and every chat while they ran.
+// Runs PowerShell with a script and resolves with its output ('' when it fails, times out or cannot start). Never rejects.
+export function powershell(script, { timeout = 20_000, env = process.env, maxBuffer = 32 * 1024 * 1024 } = {}) {
+  return new Promise((resolve) => {
+    let out = ''; let size = 0; let done = false;
+    const end = (value) => { if (done) return; done = true; clearTimeout(timer); resolve(value); };
+    let child;
+    try { child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, env, stdio: ['ignore', 'pipe', 'ignore'] }); } catch { resolve(''); return; }
+    const timer = setTimeout(() => { try { child.kill(); } catch { /* gone */ } end(''); }, timeout);
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (d) => { size += d.length; if (size > maxBuffer) { try { child.kill(); } catch { /* gone */ } end(''); } else out += d; });
+    child.on('error', () => end(''));
+    child.on('close', () => end(out));
+  });
+}
+
 // The processes of this PC now (Windows): every number with its parent and start time; name and command line only for
-// those created after `since`. null when the list cannot be read.
+// those created after `since`. Resolves with null when the list cannot be read. Never two listings at once: a call made
+// while one is running reuses it when that one covers its `since` (an earlier `since` returns more names, never fewer),
+// and otherwise waits for it to end before starting its own.
+let listing = null; // { since, promise }
 export function processList(since) {
-  if (process.platform !== 'win32') return null;
+  if (process.platform !== 'win32') return Promise.resolve(null);
+  if (listing && listing.since <= since) return listing.promise;
+  const prev = listing?.promise ?? Promise.resolve();
+  const current = { since, promise: prev.catch(() => null).then(() => readProcesses(since)) };
+  listing = current;
+  current.promise.finally(() => { if (listing === current) listing = null; }).catch(() => {});
+  return current.promise;
+}
+processList.calls = 0; // how many listings really ran (tests)
+
+async function readProcesses(since) {
+  processList.calls++;
   const script = "$since=[datetime]::Parse($env:ORB_PROCS_SINCE).ToUniversalTime(); "
     + 'Get-CimInstance Win32_Process | ForEach-Object { $at = $_.CreationDate; $u = if ($at) { $at.ToUniversalTime() } else { $null }; '
     + '$recent = $u -and $u -ge $since; [pscustomobject]@{ id = [int]$_.ProcessId; ppid = [int]$_.ParentProcessId; at = if ($u) { $u.ToString(\'o\') } else { $null }; '
     + 'name = if ($recent) { $_.Name } else { $null }; cmd = if ($recent) { $_.CommandLine } else { $null } } } | ConvertTo-Json -Compress';
-  const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', windowsHide: true, timeout: 20_000, maxBuffer: 32 * 1024 * 1024,
-    env: { ...process.env, ORB_PROCS_SINCE: new Date(since - 60_000).toISOString() } });
-  let rows; try { rows = JSON.parse(r.stdout || '[]'); } catch { return null; }
+  const stdout = await powershell(script, { env: { ...process.env, ORB_PROCS_SINCE: new Date(since - 60_000).toISOString() } });
+  let rows; try { rows = JSON.parse(stdout || 'null'); } catch { return null; }
+  if (rows == null) return null;
   return (Array.isArray(rows) ? rows : [rows]).map((p) => ({ id: Number(p.id), ppid: Number(p.ppid), at: Date.parse(p.at ?? '') || 0, name: p.name ?? null, cmd: p.cmd ?? null }));
 }
 
-// Stops these processes by their number (only those Orb may stop). Returns the numbers stopped.
-export function stopProcesses(procs) {
+// Stops these processes by their number (only those Orb may stop). Resolves with the numbers stopped.
+export async function stopProcesses(procs) {
   const ids = procs.filter((p) => STOPPABLE.test(p.name ?? '') && p.id !== process.pid).map((p) => p.id);
   if (!ids.length || process.platform !== 'win32') return [];
-  const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-    `foreach ($id in @(${ids.join(',')})) { $p = Get-Process -Id $id -ErrorAction SilentlyContinue; if ($p) { Stop-Process -Id $id -Force -ErrorAction SilentlyContinue; $id } }`],
-  { encoding: 'utf8', windowsHide: true, timeout: 20_000 });
-  return String(r.stdout ?? '').split(/\s+/).filter((x) => /^\d+$/.test(x)).map(Number);
+  const out = await powershell(`foreach ($id in @(${ids.join(',')})) { $p = Get-Process -Id $id -ErrorAction SilentlyContinue; if ($p) { Stop-Process -Id $id -Force -ErrorAction SilentlyContinue; $id } }`);
+  return out.split(/\s+/).filter((x) => /^\d+$/.test(x)).map(Number);
 }
 
 // Whether a process number is in use now.

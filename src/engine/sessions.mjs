@@ -5,7 +5,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { spawnSync } from 'node:child_process';
 import { ctx, tr, connectorKey } from '../core/context.mjs';
 import { AGENT_LABELS } from '../core/home.mjs';
 import { adapter, executable } from '../agents/index.mjs';
@@ -22,7 +21,7 @@ import { pickAccount, recordSpend } from '../core/budget.mjs';
 import { browserKey } from '../core/browser-key.mjs';
 import { androidAllowed } from './android.mjs';
 import { PERMISSIONS, plainAction, pidKills, unwrapShell } from '../core/guard.mjs';
-import { processList, taskProcesses } from '../core/procs.mjs';
+import { processList, taskProcesses, powershell } from '../core/procs.mjs';
 import { explainFailure } from '../core/agent-errors.mjs';
 import { rememberModels } from './catalog.mjs';
 import { changedFiles, logDirect } from './logs.mjs';
@@ -114,6 +113,10 @@ export function describeItem(item) {
   if (item.role === 'error') return oneLine(tr('msg.sessions.errorLine', { text: bodyText(b) }), 140);
   return null;
 }
+
+// 3.8.3: whether a permission request could be a task stopping its own processes by number (only then is the process list
+// asked, asynchronously, before showing the card).
+const mayBeOwnKill = (command) => process.platform === 'win32' && Boolean(pidKills(unwrapShell(command))?.length);
 
 export class Sessions {
   // emit(event, payload): pushes changes to the window. log(line): engine log.
@@ -334,15 +337,15 @@ export class Sessions {
         }
       }
       // 3.1: a task stopping its own test server by its number needs nobody: allowed at once, and said in its conversation.
-      if (run && s?.kind === 'task' && this.ownProcesses(r.title, s.cwd, run.startedAt, { roots: [this.lives.get(id)?.live.pid].filter(Boolean) }) && this.lives.get(id)?.live.respond(r.id, 'allow')) {
-        this.addItem(id, 'system', 'approval', { id: r.id, tool: r.tool, title: r.title, reason: tr('msg.sessions.ownProcess'), input: r.input, status: 'allowed' });
+      // 3.8.3: checked asynchronously (the process list takes ~0.8 s); the card appears only if it is not the task's own.
+      if (run && s?.kind === 'task' && mayBeOwnKill(r.title)) {
+        this.ownProcesses(r.title, s.cwd, run.startedAt, { roots: [this.lives.get(id)?.live.pid].filter(Boolean) }).catch(() => false).then((own) => {
+          if (own && this.lives.get(id)?.live.respond(r.id, 'allow')) this.addItem(id, 'system', 'approval', { id: r.id, tool: r.tool, title: r.title, reason: tr('msg.sessions.ownProcess'), input: r.input, status: 'allowed' });
+          else if (this.running.has(id)) this.askApproval(id, r, this.running.get(id));
+        }).catch((error) => this.log(`permiso: ${error.message}`));
         return;
       }
-      const item = this.addItem(id, 'system', 'approval', { id: r.id, tool: r.tool, title: r.title, reason: r.reason, input: r.input, ...(r.summary ? { summary: r.summary } : {}), status: 'pending' });
-      this.approvals.set(`${id}:${r.id}`, item.id);
-      if (run) run.last = describeItem(item);
-      this.emit('approval:changed', { session: id });
-      try { this.onApproval(this.get(id), item); } catch (error) { this.log(`aviso de aprobación: ${error.message}`); }
+      this.askApproval(id, r, run);
       return;
     }
     if (ev.type === 'approval_done') {
@@ -363,25 +366,32 @@ export class Sessions {
     if (ev.type === 'exit') { if (this.lives.get(id)?.live.isClosed?.()) { agentAuth.revokeSession(id); if (!this.running.has(id)) this.lives.delete(id); } }
   }
 
+  // A permission the user answers: its card in the conversation, and the notice.
+  askApproval(id, r, run) {
+    const item = this.addItem(id, 'system', 'approval', { id: r.id, tool: r.tool, title: r.title, reason: r.reason, input: r.input, ...(r.summary ? { summary: r.summary } : {}), status: 'pending' });
+    this.approvals.set(`${id}:${r.id}`, item.id);
+    if (run) run.last = describeItem(item);
+    this.emit('approval:changed', { session: id });
+    try { this.onApproval(this.get(id), item); } catch (error) { this.log(`aviso de aprobación: ${error.message}`); }
+  }
+
   // 3.1: whether a command only stops processes this task started itself: every number it names is a process launched
   // after the turn began from the task's own folder (Windows). Anything else (by name, someone else's process, a
-  // command cut short in the card) asks as always.
-  ownProcesses(command, cwd, since, { roots = [] } = {}) {
+  // command cut short in the card) asks as always. 3.8.3: asynchronous (resolves with true or false).
+  async ownProcesses(command, cwd, since, { roots = [] } = {}) {
     if (process.platform !== 'win32' || !cwd) return false;
     // 3.2.1: Codex sends the whole command wrapped in powershell -Command and may keep the number in a variable
     // (`$p = 11188; Stop-Process -Id $p`); pidKills unwraps and resolves that now, so the 400-char cap of 3.1 is gone.
     const pids = pidKills(unwrapShell(command));
     if (!pids?.length || pids.length > 8) return false;
-    const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-      `Get-CimInstance Win32_Process -Filter "${pids.map((p) => `ProcessId=${Number(p)}`).join(' OR ')}" | ForEach-Object { [pscustomobject]@{ id = $_.ProcessId; cmd = $_.CommandLine; at = $_.CreationDate.ToUniversalTime().ToString('o') } } | ConvertTo-Json -Compress`],
-      { encoding: 'utf8', windowsHide: true, timeout: 15_000 });
-    let found = []; try { const j = JSON.parse(r.stdout || '[]'); found = Array.isArray(j) ? j : [j]; } catch { return false; }
+    const out = await powershell(`Get-CimInstance Win32_Process -Filter "${pids.map((p) => `ProcessId=${Number(p)}`).join(' OR ')}" | ForEach-Object { [pscustomobject]@{ id = $_.ProcessId; cmd = $_.CommandLine; at = $_.CreationDate.ToUniversalTime().ToString('o') } } | ConvertTo-Json -Compress`, { timeout: 15_000 });
+    let found = []; try { const j = JSON.parse(out || '[]'); found = Array.isArray(j) ? j : [j]; } catch { return false; }
     const dir = path.resolve(cwd).toLowerCase();
     const byCmd = (pid) => found.some((p) => p.id === pid && String(p.cmd ?? '').toLowerCase().includes(dir) && Date.parse(p.at) >= since - 1000);
     // 3.2.1: a server started with a relative path does not name the folder in its command line (`node server.js`); it is
     // recognised instead as part of the task's process tree (descendant of the agent).
-    let tree = new Set();
-    if (roots.length) { const list = processList(since); if (list) for (const p of taskProcesses(list, { since, roots: roots.map(Number), dir, engine: process.pid })) tree.add(p.id); }
+    const tree = new Set();
+    if (roots.length && !pids.every(byCmd)) { const list = await processList(since); if (list) for (const p of taskProcesses(list, { since, roots: roots.map(Number), dir, engine: process.pid })) tree.add(p.id); }
     return pids.every((pid) => byCmd(pid) || tree.has(pid));
   }
 

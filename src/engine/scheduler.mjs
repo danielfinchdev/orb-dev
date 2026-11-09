@@ -35,6 +35,8 @@ import { liveSkills } from './api-extensions.mjs';
 import { skillsBrief } from '../core/extensions.mjs';
 import { processList, taskProcesses, stopProcesses, alive } from '../core/procs.mjs';
 
+// 3.8.3: how often the leftovers still pending (their folder was busy) are looked at again.
+const LEFTOVERS_RETRY_MS = Number(process.env.ORB_LEFTOVERS_RETRY_MS) || 15_000;
 const hhmm = (ms) => new Date(ms).toLocaleTimeString(localeOf(ctx.config.language), { hour: '2-digit', minute: '2-digit' });
 const STATUS_ES = { done: 'hecha', failed: 'fallida', blocked: 'bloqueada', cancelled: 'cancelada' };
 const label = (agent) => { try { return adapter(agent).label; } catch { return agent; } };
@@ -47,6 +49,7 @@ export class Scheduler {
   constructor(board, sessions, { log = () => {}, orchestrator = null, emit = () => {} } = {}) {
     this.board = board; this.sessions = sessions; this.log = log; this.orchestrator = orchestrator; this.emit = emit;
     this.running = new Map(); // task id -> { sessionId, agent }
+    this.cleaning = new Map(); // 3.8.3: task id -> the stop of its leftover programs still under way (a promise)
     this.mainSnapshot = new Map();
     // Tasks left "running" by a closed app: their process is gone. 2.3: they continue where they were (the agent resumes its
     // own conversation) when continuity.resumeAfterRestart is on; otherwise they are marked failed for the user to retry.
@@ -69,6 +72,9 @@ export class Scheduler {
     }
     try { this.pruneCheckpoints(); } catch (error) { this.log(`limpiar fotos: ${error.message}`); }
     try { this.pruneCopies(); } catch (error) { this.log(`limpiar copias: ${error.message}`); }
+    // 3.8.3: up to 3.8.2 every finished task left an empty «leftovers_pending» row, and the engine listed the PC's
+    // processes for each of them on every tick. Those rows mean nothing: they go.
+    try { board.run("DELETE FROM settings WHERE key LIKE 'leftovers_pending:%' AND value = ''"); } catch (error) { this.log(`limpiar restos vacíos: ${error.message}`); }
     try { this.refreshAvailable(true); } catch (error) { this.log(`agentes disponibles: ${error.message}`); }
   }
 
@@ -874,23 +880,31 @@ No hagas commit, merge, rebase ni cambies de rama: deja los cambios en los archi
   }
   // The copy (worktree) and its branch, once their work is in the folder. Only Orb's own copies under core\copias\aisladas.
   dropCopy(task, project) {
-    const inside = task.workdir && path.resolve(task.workdir).toLowerCase().startsWith(path.resolve(ctx.paths.worktrees).toLowerCase() + path.sep);
-    if (inside && fs.existsSync(task.workdir)) {
+    const { branch, workdir } = task;
+    const inside = workdir && path.resolve(workdir).toLowerCase().startsWith(path.resolve(ctx.paths.worktrees).toLowerCase() + path.sep);
+    const removeBranch = () => { if (branch) git(project.path, 'branch', '-D', branch); };
+    if (inside && fs.existsSync(workdir)) {
       // 3.2.1: the agent's own process and the programs it left can still hold the copy's folder open, so git cannot
       // remove it. Close them first; then let git try; if the folder is still locked, delete it with retries, and if even
       // that fails note it as an orphan so the next startup (pruneCopies) clears it.
       try { this.sessions.closeLive(task.session_id); } catch (error) { this.log(`cerrar proceso #${task.id}: ${error.message}`); }
-      try { this.stopLeftovers(task); } catch (error) { this.log(`parar restos #${task.id}: ${error.message}`); }
-      const r = git(project.path, 'worktree', 'remove', '--force', task.workdir);
-      if (r.status !== 0) {
-        this.log(`quitar copia #${task.id}: ${r.stderr.trim()}`);
-        try { fs.rmSync(task.workdir, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 }); git(project.path, 'worktree', 'prune'); } catch (error) {
-          this.log(`borrar copia #${task.id}: ${error.message}`);
-          this.board.settingJson(`orphan_copy:${task.id}`, { path: task.workdir, at: new Date().toISOString() });
+      const removeCopy = () => {
+        const r = git(project.path, 'worktree', 'remove', '--force', workdir);
+        if (r.status !== 0) {
+          this.log(`quitar copia #${task.id}: ${r.stderr.trim()}`);
+          try { fs.rmSync(workdir, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 }); git(project.path, 'worktree', 'prune'); } catch (error) {
+            this.log(`borrar copia #${task.id}: ${error.message}`);
+            this.board.settingJson(`orphan_copy:${task.id}`, { path: workdir, at: new Date().toISOString() });
+          }
         }
-      }
-    }
-    if (task.branch) git(project.path, 'branch', '-D', task.branch);
+        removeBranch(); // after the copy: git does not delete a branch a worktree still has checked out
+      };
+      // 3.8.3: the programs are stopped asynchronously; the folder and its branch go once that is over.
+      let stopping = this.cleaning.get(task.id) ?? null;
+      if (!stopping) { try { stopping = this.stopLeftovers(task); } catch (error) { this.log(`parar restos #${task.id}: ${error.message}`); } }
+      if (stopping) stopping.then(removeCopy).catch((error) => this.log(`quitar copia #${task.id}: ${error.message}`));
+      else removeCopy();
+    } else removeBranch();
     // Its copy is gone: a later run starts from the folder as it is then (a fresh base if it works in a copy again).
     this.board.settingJson(`isolated:${task.id}`, null);
     this.board.patch(task.id, { branch: null, workdir: project.path }, 'orb', 'task.copy_removed');
@@ -899,35 +913,63 @@ No hagas commit, merge, rebase ni cambies de rama: deja los cambios en los archi
   // 3.1: a task that started a dev server (vite, node server.js…) and left it running: it is stopped when the task ends,
   // so the next task or the user does not find the port taken. Windows only. Only programs of the usual runtimes, started
   // from the task's own folder after the task began, and only if no other task is still working in that folder.
+  // 3.8.3: asynchronous (the process list takes ~0.8 s): returns the promise of the stop, or null when there is nothing to
+  // do now. While it runs, the task's copy folder stays (dropCopy removes it once the stop is over).
   stopLeftovers(task, { roots = [] } = {}) {
-    if (process.platform !== 'win32' || !task.workdir || process.env.ORB_FAKE_AGENTS) return; // the test agents never start programs
+    if (process.platform !== 'win32' || !task.workdir || process.env.ORB_FAKE_AGENTS) return null; // the test agents never start programs
     // Another task still writing in the same folder: wait until it is over (its own leftovers might be among these), then
     // retry (retryLeftovers, from tick). This is how 3.1 behaved, but now it comes back instead of giving up.
-    const busy = [...this.running.keys()].some((id) => { const t = this.board.task(id); return t && t.id !== task.id && t.workdir && path.resolve(t.workdir) === path.resolve(task.workdir); });
-    if (busy) { this.board.settingJson?.(`leftovers_pending:${task.id}`, { workdir: task.workdir }); return; }
+    if (this.folderBusy(task)) { this.board.settingJson?.(`leftovers_pending:${task.id}`, { workdir: task.workdir }); return null; }
     this.board.settingJson?.(`leftovers_pending:${task.id}`, null);
-    const since = Date.parse(this.board.one("SELECT at FROM events WHERE task_id = ? AND kind = 'task.launched' ORDER BY id DESC LIMIT 1", task.id)?.at ?? '') || 0;
-    if (!since) return;
-    // The processes of this PC now; the task's own by their tree (descendants of the agent, or orphans whose parent was
-    // the agent and has since gone — a Start-Process child, the python3.13 the WindowsApps alias relaunches), and those
-    // whose command line names the task's folder (the 3.1 rule). Only the usual runtimes and the shells that start them.
-    const list = processList(since); if (!list) return;
-    const rootPids = [...new Set([...roots, Number(task.pid)].map(Number).filter((p) => p > 0))];
-    const found = taskProcesses(list, { since, roots: rootPids, dir: task.workdir, engine: process.pid });
-    const stopped = stopProcesses(found);
-    if (stopped.length) this.board.event(task.id, 'orb', 'task.cleanup', `paró ${stopped.length} programa(s) que la tarea dejó en marcha (${stopped.join(', ')})`);
+    return this.stopTaskPrograms([{ task, roots }]);
+  }
+  // Whether another running task works in the same folder as this one.
+  folderBusy(task) {
+    return [...this.running.keys()].some((id) => { const t = this.board.task(id); return t && t.id !== task.id && t.workdir && path.resolve(t.workdir) === path.resolve(task.workdir); });
+  }
+  // Stops the programs these tasks left running, with one process list for all of them.
+  stopTaskPrograms(items) {
+    const jobs = items.map(({ task, roots = [] }) => ({ task, roots, since: Date.parse(this.board.one("SELECT at FROM events WHERE task_id = ? AND kind = 'task.launched' ORDER BY id DESC LIMIT 1", task.id)?.at ?? '') || 0 })).filter((j) => j.since);
+    if (!jobs.length) return null;
+    const work = (async () => {
+      // The processes of this PC now; the task's own by their tree (descendants of the agent, or orphans whose parent was
+      // the agent and has since gone — a Start-Process child, the python3.13 the WindowsApps alias relaunches), and those
+      // whose command line names the task's folder (the 3.1 rule). Only the usual runtimes and the shells that start them.
+      const list = await processList(Math.min(...jobs.map((j) => j.since))); if (!list) return;
+      for (const { task, roots, since } of jobs) {
+        try {
+          const rootPids = [...new Set([...roots, Number(task.pid)].map(Number).filter((p) => p > 0))];
+          const found = taskProcesses(list, { since, roots: rootPids, dir: task.workdir, engine: process.pid });
+          const stopped = await stopProcesses(found);
+          if (stopped.length) this.board.event(task.id, 'orb', 'task.cleanup', `paró ${stopped.length} programa(s) que la tarea dejó en marcha (${stopped.join(', ')})`);
+        } catch (error) { this.log(`parar restos #${task.id}: ${error.message}`); }
+      }
+    })();
+    const done = work.catch((error) => this.log(`parar restos: ${error.message}`)).finally(() => {
+      for (const { task } of jobs) if (this.cleaning.get(task.id) === done) this.cleaning.delete(task.id);
+    });
+    for (const { task } of jobs) this.cleaning.set(task.id, done);
+    return done;
   }
 
   // 3.2.1: leftovers that could not be stopped at the time because another task was writing in the same folder: once that
-  // folder is free, they are stopped. Called from tick.
+  // folder is free, they are stopped. Called from tick. 3.8.3: only the rows really pending (never the empty ones), with one
+  // process list for all of them, never while a stop is under way and at most every LEFTOVERS_RETRY_MS.
   retryLeftovers() {
     if (process.platform !== 'win32' || process.env.ORB_FAKE_AGENTS) return;
-    for (const row of this.board.all("SELECT key FROM settings WHERE key LIKE 'leftovers_pending:%'")) {
+    if (this.cleaning.size || Date.now() - (this.leftoversAt ?? 0) < LEFTOVERS_RETRY_MS) return;
+    const ready = [];
+    for (const row of this.board.all("SELECT key FROM settings WHERE key LIKE 'leftovers_pending:%' AND value <> ''")) {
       const id = Number(row.key.slice('leftovers_pending:'.length));
       const task = this.board.task(id);
-      if (!task) { this.board.settingJson(row.key, null); continue; }
-      try { this.stopLeftovers(task); } catch (error) { this.log(`reintentar restos #${id}: ${error.message}`); }
+      if (!task?.workdir) { this.board.settingJson(row.key, null); continue; }
+      if (this.folderBusy(task)) continue;
+      this.board.settingJson(row.key, null);
+      ready.push({ task });
     }
+    if (!ready.length) return;
+    this.leftoversAt = Date.now();
+    this.stopTaskPrograms(ready);
   }
 
   // 3.1: what a task's last run cost: minutes, tokens and (Claude) dollars, from its conversation's usage reports.
