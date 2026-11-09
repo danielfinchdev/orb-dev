@@ -8,7 +8,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { Button } from './ui/button.jsx';
-import { useStore, go, endTour, getState } from '@/lib/store.js';
+import { useStore, go, endTour, getState, plainSkin } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
@@ -68,7 +68,7 @@ export function Tour() {
   const name = app.config.assistantName;
   const ui = app.config.ui ?? {};
   const still = ui.motion === 'minima' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  const noRobot = ui.skin === 'profesional';
+  const noRobot = plainSkin(ui.skin);
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState(null);
   const [side, setSide] = useState('center');

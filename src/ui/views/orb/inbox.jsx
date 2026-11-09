@@ -17,7 +17,7 @@ import { createProjectFlow } from '@/components/project-actions.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, DropdownMenuCheckboxItem, Collapsible, CollapsibleTrigger, CollapsibleContent, Dialog, DialogContent, DialogTitle, DialogDescription, Tip } from '@/components/ui/overlay.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Input } from '@/components/ui/basic.jsx';
-import { useStore, go, call, act, newChat, orbAct, loadOrbInbox, openOrbInfo, closeOrbInfo, getState, phoneLayout, fullPc, refreshSoon, setState } from '@/lib/store.js';
+import { useStore, go, call, act, newChat, orbAct, loadOrbInbox, openOrbInfo, closeOrbInfo, getState, phoneLayout, fullPc, refreshSoon, setState, plainSkin } from '@/lib/store.js';
 import { orbItems, orbProgress, groupOrb, shortTime } from '@/lib/inbox.js';
 import { sameItem } from '@/lib/memo.js';
 import { useDay } from '@/lib/use-day.js';
@@ -65,7 +65,7 @@ export function OrbAvatar({ item, size = 40 }) {
   const who = agents.length ? new Intl.ListFormat(locale, { type: 'conjunction' }).format(agents.map((a) => AGENT[a] ?? a)) : '';
   const body = item.project
     ? <ProjectIcon name={item.project} size={size} />
-    : skin === 'profesional'
+    : plainSkin(skin)
       ? <span className="bg-primary/12 text-primary grid place-items-center rounded-full" style={{ width: size, height: size }}><Sparkles className="size-1/2" /></span>
       : <Robot size={size} still mood={item.busy ? 'thinking' : 'idle'} />;
   return (

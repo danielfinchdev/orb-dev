@@ -107,7 +107,7 @@ export default {
   'help.tut.games.go': 'Open mini-games',
 
   'help.tut.looks.title': 'Appearance and themes',
-  'help.tut.looks.l1': 'In Settings › General, choose light, dark or system mode; the theme (Default, Vaporwave, Retro, Professional or Candy); fonts and code colours.',
+  'help.tut.looks.l1': 'In Settings › General, choose light, dark or system mode; the theme (Default, Vaporwave, Retro, Professional, Candy or Glass); fonts and code colours.',
   'help.tut.looks.l2': 'The Professional theme hides the robot and animations. "Animations: minimal" keeps the robot still in any theme.',
   'help.tut.looks.l3': 'Adjust the interface size in Settings or with Ctrl +, Ctrl − and Ctrl 0.',
   'help.tut.looks.go': 'Open Appearance',

@@ -23,7 +23,7 @@ import { Spinner } from '@/components/ui/basic.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { Switch, Tip, BubbleTip, Popover, PopoverTrigger, PopoverContent } from '@/components/ui/overlay.jsx';
-import { bridge, useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout } from '@/lib/store.js';
+import { bridge, useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout, plainSkin } from '@/lib/store.js';
 import { notify } from '@/lib/notify.js';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { pickGreeting, pickSubtitle, suggestionsFor } from '@/lib/greeting.js';
@@ -162,7 +162,7 @@ function useGreeting() {
   const [g] = useState(() => {
     const { app, tasks, projects } = getState();
     let last = {}; try { last = JSON.parse(localStorage.getItem('orb.greet') || '{}'); } catch { /* none */ }
-    const pick = pickGreeting({ tasks, project: app.activeProject?.name ?? null, first: !tasks.length && !projects.length, serious: app.config.ui?.skin === 'profesional', last: last.key });
+    const pick = pickGreeting({ tasks, project: app.activeProject?.name ?? null, first: !tasks.length && !projects.length, serious: plainSkin(app.config.ui?.skin), last: last.key });
     const sub = pickSubtitle({ last: last.sub });
     try { localStorage.setItem('orb.greet', JSON.stringify({ key: pick.key, sub })); } catch { /* storage unavailable */ }
     return { ...pick, sub };

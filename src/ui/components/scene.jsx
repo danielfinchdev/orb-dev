@@ -1,6 +1,6 @@
 // 2.6: the illustrated backdrop of each visual theme, behind the screens (themes.css draws and moves it; one frosted
 // pane over it keeps it out of focus so it never competes with the text). Nothing in the «profesional» theme.
-import { useStore } from '@/lib/store.js';
+import { useStore, plainSkin } from '@/lib/store.js';
 
 // ---- Vaporwave, day: stickers of old computers (thick ink outline, flat pastel fills; the offset shadow is CSS). ----
 const INK = { stroke: 'currentColor', strokeWidth: 4, strokeLinejoin: 'round', strokeLinecap: 'round' };
@@ -192,7 +192,7 @@ const SweetDefs = () => (
 
 export function Scene() {
   const skin = useStore((s) => s.app?.config?.ui?.skin) ?? 'orb';
-  if (skin === 'profesional') return null;
+  if (plainSkin(skin)) return null;
   return (
     <div className={`scene scene-${skin}`} aria-hidden="true" data-testid="scene">
       <div className="scene-blur">

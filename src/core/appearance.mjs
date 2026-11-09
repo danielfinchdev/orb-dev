@@ -4,8 +4,16 @@
 
 // Visual themes. Light / dark (ui.theme) still applies on top of each one.
 //   orb: the default (the robot and its sky); vaporwave; retro: arcade, space invaders; profesional: no robot and no
-//   animations, plain and sober; nube: soft candy colours and clouds.
-export const SKINS = ['orb', 'vaporwave', 'retro', 'profesional', 'nube'];
+//   animations, plain and sober; nube: soft candy colours and clouds; cristal (3.8.2): Profesional made of frosted glass.
+export const SKINS = ['orb', 'vaporwave', 'retro', 'profesional', 'nube', 'cristal'];
+
+// 3.8.2: a theme built on top of another one. «cristal» is Profesional (no robot, no sounds, no backdrop, no animation)
+// plus its own glass material: <html> wears data-skin="profesional" and data-material="cristal" (lib/store.js), so every
+// rule of Profesional applies and themes.css adds the glass under html[data-material="cristal"].
+export const SKIN_BASE = Object.freeze({ cristal: 'profesional' });
+export const baseSkin = (skin) => SKIN_BASE[skin] ?? skin;
+// The themes with no robot, no backdrop and no decorative motion.
+export const plainSkin = (skin) => baseSkin(skin) === 'profesional';
 
 // Interface font. outfit is the one Orb has always used.
 export const FONTS = ['outfit', 'inter', 'geist', 'plex', 'system'];

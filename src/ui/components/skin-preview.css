@@ -139,6 +139,21 @@ html.window-idle .skp-deco { animation-play-state: paused; }
 .skp[data-skin-preview="profesional"] .skp-mark { letter-spacing: 0.22em; font-size: 6.5px; }
 .skp[data-skin-preview="profesional"] .skp-mark i { background: currentColor; }
 
+/* ================================================================ CRISTAL (3.8.2): Profesional made of frosted glass:
+   a still colour field, translucent panes with a light edge, larger corners and the system blue. Inter. */
+.skp[data-skin-preview="cristal"] { --p-font: "Inter Variable", "Segoe UI", system-ui, sans-serif; --p-title: var(--p-font); --p-r: 4px;
+  --p-scene: radial-gradient(62% 56% at 6% 0%, oklch(0.86 0.07 252), transparent 70%), radial-gradient(56% 52% at 100% 16%, oklch(0.89 0.055 305), transparent 72%), radial-gradient(72% 60% at 52% 106%, oklch(0.89 0.05 200), transparent 70%), oklch(0.955 0.012 262);
+  --p-bg: oklch(0.955 0.012 262); --p-fg: oklch(0.2 0.02 265); --p-side: oklch(0.985 0.006 262 / 0.52); --p-card: oklch(1 0 0 / 0.62); --p-border: oklch(0.35 0.03 265 / 0.12); --p-primary: oklch(0.5 0.17 258);
+  --p-accent: oklch(1 0 0 / 0.72); --p-accent-fg: oklch(0.2 0.02 265); --p-bubble: oklch(0.93 0.035 256 / 0.88); --p-bubble-fg: oklch(0.2 0.02 265); --p-bar: oklch(0.985 0.006 262 / 0.6); --p-box-line: oklch(0.35 0.03 265 / 0.14);
+  --p-edge: inset 0 1px 0 rgb(255 255 255 / 0.75); --p-side-shadow: inset -1px 0 0 rgb(255 255 255 / 0.4); --p-card-shadow: var(--p-edge); --p-on-shadow: var(--p-edge); --p-bubble-shadow: var(--p-edge); --p-box-shadow: var(--p-edge), 0 4px 10px -6px rgb(20 30 80 / 0.35); }
+.dark .skp[data-skin-preview="cristal"] {
+  --p-scene: radial-gradient(62% 56% at 6% 0%, oklch(0.31 0.08 258), transparent 70%), radial-gradient(56% 52% at 100% 16%, oklch(0.29 0.075 305), transparent 72%), radial-gradient(72% 60% at 52% 106%, oklch(0.3 0.055 210), transparent 70%), oklch(0.17 0.016 266);
+  --p-bg: oklch(0.17 0.016 266); --p-fg: oklch(0.96 0.004 265); --p-side: oklch(0.2 0.016 266 / 0.5); --p-card: oklch(0.27 0.016 266 / 0.55); --p-border: oklch(1 0 0 / 0.09); --p-primary: oklch(0.72 0.14 252);
+  --p-accent: oklch(0.4 0.02 266 / 0.55); --p-accent-fg: oklch(0.97 0.004 265); --p-bubble: oklch(0.36 0.05 258 / 0.78); --p-bubble-fg: oklch(0.97 0.004 265); --p-bar: oklch(0.2 0.016 266 / 0.55); --p-box-line: oklch(1 0 0 / 0.12);
+  --p-edge: inset 0 1px 0 rgb(255 255 255 / 0.12); --p-side-shadow: none; --p-box-shadow: var(--p-edge), 0 4px 10px -6px rgb(0 0 0 / 0.6); }
+.skp[data-skin-preview="cristal"] .skp-mark { letter-spacing: 0.22em; font-size: 6.5px; }
+.skp[data-skin-preview="cristal"] .skp-mark i { background: currentColor; }
+
 /* ================================================================ NUBE (Candy): a pink-to-lilac page with a dotted
    pattern and pastel blobs, white rounded panels with soft pink shadows, pills, 3D jelly keys, and 3D sweets at the
    edges. Nunito, titles Fredoka. Night: the same sweets over a plum sky. */

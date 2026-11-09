@@ -108,7 +108,7 @@ export default {
   'help.tut.games.go': 'Abrir los minijuegos',
 
   'help.tut.looks.title': 'Apariencia y temas',
-  'help.tut.looks.l1': 'En Ajustes › General eliges modo claro, oscuro o el del sistema; el tema (Por defecto, Vaporwave, Retro, Profesional o Candy), las fuentes y los colores del código.',
+  'help.tut.looks.l1': 'En Ajustes › General eliges modo claro, oscuro o el del sistema; el tema (Por defecto, Vaporwave, Retro, Profesional, Candy o Cristal), las fuentes y los colores del código.',
   'help.tut.looks.l2': 'El tema Profesional no muestra el robot ni animaciones. «Animaciones: mínimas» deja el robot quieto en cualquier tema.',
   'help.tut.looks.l3': 'El tamaño de la interfaz se ajusta en Ajustes o con Ctrl +, Ctrl − y Ctrl 0.',
   'help.tut.looks.go': 'Abrir Apariencia',

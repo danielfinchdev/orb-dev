@@ -6,7 +6,8 @@ import { errorText } from './utils.js';
 import { bumpNav, navTicket, stillHere } from './nav.js';
 import { cleanRoute, backStep } from './phone-nav.js';
 import { t } from './i18n.js';
-import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from '../../core/appearance.mjs';
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, baseSkin, plainSkin } from '../../core/appearance.mjs';
+export { plainSkin }; // 3.8.2: Profesional and the themes built on it (Cristal): no robot, no backdrop, no motion
 import { applyFeed, sinceOf } from '../../core/feed.mjs';
 
 // The bridge to the PC: the desktop app's (src/ui/lib/tauri-bridge.js), or the phone's web bridge (src/ui/lib/web-bridge.js). Read when used, not when
@@ -265,7 +266,10 @@ export const isDark = () => document.documentElement.classList.contains('dark');
 export function applyAppearance(ui = {}) {
   const pick = (value, list) => (list.includes(value) ? value : list[0]);
   const root = document.documentElement.dataset;
-  root.skin = fullPc() ? pick(ui.skin, SKINS) : SKINS[0]; // 2.7: the phone always wears the default theme
+  const skin = fullPc() ? pick(ui.skin, SKINS) : SKINS[0]; // 2.7: the phone always wears the default theme
+  // 3.8.2: a theme built on another (cristal on profesional) wears its base's data-skin plus its own data-material.
+  root.skin = baseSkin(skin);
+  if (skin !== root.skin) root.material = skin; else delete root.material;
   root.font = pick(ui.font, FONTS);
   root.codeFont = pick(ui.codeFont, CODE_FONTS);
   root.codeTheme = pick(ui.codeTheme, CODE_THEMES);

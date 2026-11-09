@@ -209,6 +209,7 @@ export default {
   'appearance.skin.retro': 'Retro arcade',
   'appearance.skin.profesional': 'Profesional',
   'appearance.skin.nube': 'Candy',
+  'appearance.skin.cristal': 'Cristal',
   'appearance.font': 'Tipografía',
   'appearance.font.outfit': 'La del tema',
   'appearance.font.inter': 'Inter',

@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import QRCode from 'qrcode';
 import { DatabaseBackup, Settings, FlaskConical, FolderOpen, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink, ShieldBan, RotateCcw, Puzzle } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
-import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS } from '../../core/appearance.mjs';
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS, plainSkin } from '../../core/appearance.mjs';
 import { PRODUCT, AUTHOR } from '../../core/product.mjs';
 import { PANELS, savePanels } from './expert.jsx';
 import { PageHeader } from '@/components/page.jsx';
@@ -76,7 +76,7 @@ function AppearanceCard({ c }) {
   const [volume, setVolume] = useState(c.ui?.volume ?? 0.5);
   const set = (patch, ok = null) => save({ ui: patch }, ok);
   const opts = (list, prefix) => list.map((value) => ({ value, label: t(`${prefix}.${value}`) }));
-  const robot = ui.skin !== 'profesional';
+  const robot = !plainSkin(ui.skin);
   return (
     <Card>
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Palette className="text-primary size-5" /><div><CardTitle>{t('appearance.title')}</CardTitle><CardDescription>{t('appearance.desc')}</CardDescription></div></CardHeader>
