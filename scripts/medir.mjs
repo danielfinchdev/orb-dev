@@ -4,7 +4,7 @@
 //
 //   node scripts/medir.mjs [--exe src-tauri/target-e2e/release/Orb.exe] [--shell tauri|electron] [--runs 5] [--idle 30]
 //                          [--installer <setup.exe>] [--apk <file.apk>] [--out <results.json>] [--hidden] [--profile <dir>]
-//                          [--big] [--anim <s>] [--anim-only] [--quiet-scene] [--css <file>] [--ui <json>]
+//                          [--big] [--anim <s>] [--anim-only] [--quiet-scene] [--css <file>] [--ui <json>] [--js <file>] [--resize]
 //
 // Tauri: measures a build with the `e2e` cargo feature (npm run tauri:build:e2e), the only one that opens the window's
 // DevTools port (ORB_E2E_CDP_PORT; a normal build ignores it and every WEBVIEW2_* variable). --hidden keeps its window
@@ -44,7 +44,13 @@
 // theme's clouds) to see what the robot alone costs.
 // 3.8.1 (H4f): --css <file> adds that style sheet to each animation screen after it loads (to try a variant of an
 // animation, or to put the old one back, on the same build).
+// --js <file> runs that script in the page there too (a variant that needs code, not only styles).
 // --ui '{"skin":"vaporwave","theme":"oscuro"}' saves that interface setting first (another theme's backdrop).
+// 3.8.2 (phase 5): --resize sweeps the page's size as dragging a window's edge would (1360 → 900 px wide and back, and
+// the height with it, one size per frame for 4 s) on a new chat, the Tasks screen and the long conversation: the
+// requestAnimationFrame deltas (dropped frames), the long animation frames and the main thread's style / layout / script
+// meanwhile; with --profile, a trace of each sweep. The size is the page's (DevTools' device metrics), so it measures
+// what the interface does on a resize, not Windows' or WebView2's own part (that needs a visible window).
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -71,6 +77,8 @@ const animS = Number(arg('anim', animOnly ? 10 : 0));
 const quietScene = process.argv.includes('--quiet-scene');
 const extraCss = arg('css') ? fs.readFileSync(arg('css'), 'utf8') : null;
 const uiPatch = arg('ui') ? JSON.parse(arg('ui')) : null;
+const resize = process.argv.includes('--resize');
+const extraJs = arg('js') ? fs.readFileSync(arg('js'), 'utf8') : null;
 if (profileDir) fs.mkdirSync(profileDir, { recursive: true });
 if (!fs.existsSync(exe)) { console.error(`no existe ${exe} (compila antes o pasa --exe)`); process.exit(2); }
 
@@ -338,6 +346,7 @@ async function idleAnimations(run) {
     await page.waitForSelector(READY, { timeout: 30000 });
     if (quietScene) await page.addStyleTag({ content: '.scene *, .scene *::before, .scene *::after, .theme-band::before { animation-play-state: paused !important; }' });
     if (extraCss) await page.addStyleTag({ content: extraCss });
+    if (extraJs) await page.evaluate(extraJs);
     await wait(12000);
     if (hover) { await page.hover(hover).catch(() => {}); await wait(1500); }
     const perf = await page.context().newCDPSession(page); await perf.send('Performance.enable');
@@ -365,6 +374,76 @@ async function idleAnimations(run) {
     }
     await perf.detach().catch(() => {});
     console.error(`animaciones ${name}: ${JSON.stringify(results.animations[name])}`);
+  }
+  await page.evaluate(() => { localStorage.setItem('orb.route', JSON.stringify({ view: 'chat' })); location.reload(); }).catch(() => {});
+  await page.waitForSelector(READY, { timeout: 30000 }).catch(() => {}); await wait(1500);
+}
+
+// The compositor's layers and why each one exists (too many layers make every scrolled frame slow), and the elements
+// that can scroll (each one a layer of its own).
+async function layerReport(page, cdp) {
+  const layers = await new Promise((resolve) => { cdp.on('LayerTree.layerTreeDidChange', (e) => { if (e.layers) resolve(e.layers); }); cdp.send('LayerTree.enable'); setTimeout(() => resolve([]), 5000); });
+  const reasons = {}; const owners = {};
+  await cdp.send('DOM.enable').catch(() => {});
+  for (const l of layers) {
+    let why = [];
+    try { const r = await cdp.send('LayerTree.compositingReasons', { layerId: l.layerId }); why = r.compositingReasonIds ?? r.compositingReasons ?? []; } catch { /* gone */ }
+    for (const k of why) reasons[k] = (reasons[k] ?? 0) + 1;
+    let who = '?';
+    if (l.backendNodeId) { try { const { node } = await cdp.send('DOM.describeNode', { backendNodeId: l.backendNodeId }); const a = Object.fromEntries((node.attributes ?? []).reduce((acc, v, i, all) => (i % 2 ? acc : [...acc, [v, all[i + 1]]]), [])); who = `${node.localName}${a['data-testid'] ? `[${a['data-testid']}]` : a.class ? `.${a.class.split(' ').slice(0, 2).join('.')}` : ''}`; } catch { /* gone */ } }
+    const key = `${who} ← ${why.join('+') || '-'}`; owners[key] = (owners[key] ?? 0) + 1;
+  }
+  // the elements that can scroll (each one a layer of its own): which and how many
+  const scrollers = await page.evaluate(() => {
+    const out = {};
+    for (const el of document.querySelectorAll('*')) {
+      const cs = getComputedStyle(el); const x = /(auto|scroll|hidden)/.test(cs.overflowX) && el.scrollWidth > el.clientWidth; const y = /(auto|scroll|hidden)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight;
+      if (!x && !y) continue;
+      const k = `${el.localName}.${String(el.className?.baseVal ?? el.className).split(' ').slice(0, 2).join('.')} ${cs.overflowX}/${cs.overflowY} ${x ? 'x' : ''}${y ? 'y' : ''}`; out[k] = (out[k] ?? 0) + 1;
+    }
+    return out;
+  });
+  return { layers: layers.length, reasons, scrollers, owners: Object.fromEntries(Object.entries(owners).sort((a, b) => b[1] - a[1])) };
+}
+
+async function resizeSweeps(run) {
+  const { page } = run;
+  const longId = await page.evaluate(async () => (await window.orb.call('conversations.list')).find?.((c) => c.title === 'Conversación larga')?.id ?? null).catch(() => null);
+  const screens = { 'chat-nuevo': { view: 'chat' }, tareas: { view: 'tasks' }, ...(longId ? { 'chat-largo': { view: 'chat', id: longId } } : {}) };
+  results.resize = {};
+  for (const [name, route] of Object.entries(screens)) {
+    await page.evaluate((r) => { localStorage.setItem('orb.route', JSON.stringify(r)); location.reload(); }, route);
+    await page.waitForSelector(READY, { timeout: 30000 });
+    if (extraCss) await page.addStyleTag({ content: extraCss });
+    await wait(12000);
+    const cdp = await page.context().newCDPSession(page); await cdp.send('Performance.enable');
+    const { w0, h0 } = await page.evaluate(() => ({ w0: innerWidth, h0: innerHeight }));
+    // the page counts its frames meanwhile (a delta over 25 ms = at least one frame dropped) and its long animation frames
+    await page.evaluate(() => {
+      const st = (window.__sweep = { deltas: [], loaf: [], resizes: 0, run: true });
+      try { st.obs = new PerformanceObserver((l) => { for (const e of l.getEntries()) st.loaf.push({ ms: e.duration, blocking: e.blockingDuration, style: e.styleAndLayoutStart ? e.startTime + e.duration - e.styleAndLayoutStart : 0 }); }); st.obs.observe({ type: 'long-animation-frame' }); } catch { /* not supported */ }
+      addEventListener('resize', () => { st.resizes++; });
+      let last = null; const f = (t) => { if (last != null) st.deltas.push(t - last); last = t; if (st.run) requestAnimationFrame(f); }; requestAnimationFrame(f);
+    });
+    if (profileDir) await run.browser.startTracing(page, { path: path.join(profileDir, `resize-${name}.trace.json`), categories: ['devtools.timeline', 'disabled-by-default-devtools.timeline', 'disabled-by-default-devtools.timeline.frame', 'blink', 'cc', 'gpu', 'viz'] });
+    const th0 = await mainThread(cdp); const t0 = Date.now(); let steps = 0;
+    for (let i = 0; Date.now() - t0 < 4000; i++) {
+      const k = Math.abs(((i % 120) / 60) - 1); // 1 → 0 → 1 every 120 steps
+      await cdp.send('Emulation.setDeviceMetricsOverride', { width: Math.round(900 + (w0 - 900) * k), height: Math.round(600 + (h0 - 600) * k), deviceScaleFactor: 0, mobile: false });
+      steps++; await wait(16);
+    }
+    const th1 = await mainThread(cdp); const s = (Date.now() - t0) / 1000;
+    await cdp.send('Emulation.clearDeviceMetricsOverride').catch(() => {});
+    if (profileDir) await run.browser.stopTracing();
+    const st = await page.evaluate(() => { const x = window.__sweep; x.run = false; x.obs?.disconnect(); return { deltas: x.deltas, loaf: x.loaf, resizes: x.resizes }; });
+    const d = threadDelta(th0, th1);
+    results.resize[name] = { seconds: r1(s), sizes: steps, resizeEvents: st.resizes, perSecond: d ? { styleMs: r1(d.styleMs / s), layoutMs: r1(d.layoutMs / s), scriptMs: r1(d.scriptMs / s), taskMs: r1(d.taskMs / s) } : null, mainThreadBusyPct: d ? r1(d.taskMs / s / 10) : null,
+      frames: { n: st.deltas.length, p50: r1(pct(st.deltas, 50)), p95: r1(pct(st.deltas, 95)), max: r1(st.deltas.length ? Math.max(...st.deltas) : 0), dropped: st.deltas.filter((x) => x > 25).length },
+      longFrames: { n: st.loaf.length, totalMs: Math.round(st.loaf.reduce((a, b) => a + b.ms, 0)), maxMs: Math.round(st.loaf.reduce((a, b) => Math.max(a, b.ms), 0)), styleLayoutMs: Math.round(st.loaf.reduce((a, b) => a + b.style, 0)) },
+      ...(profileDir ? { trace: traceFrames(path.join(profileDir, `resize-${name}.trace.json`)) } : {}) };
+    if (profileDir) fs.writeFileSync(path.join(profileDir, `capas-${name}.json`), JSON.stringify(await layerReport(page, cdp), null, 1));
+    await cdp.detach().catch(() => {});
+    console.error(`redimensionar ${name}: ${JSON.stringify(results.resize[name])}`);
   }
   await page.evaluate(() => { localStorage.setItem('orb.route', JSON.stringify({ view: 'chat' })); location.reload(); }).catch(() => {});
   await page.waitForSelector(READY, { timeout: 30000 }).catch(() => {}); await wait(1500);
@@ -404,6 +483,7 @@ for (let i = 1; i <= RUNS; i++) {
   const busy = (a, b, k) => { const x = k ? a.byName[k]?.cpuSec ?? 0 : a.cpuSec; const y = k ? b.byName[k]?.cpuSec ?? 0 : b.cpuSec; return Math.round((1000 * (y - x)) / (b.at - a.at)) / 10; };
   results.cpuIdle = { seconds: Math.round((results.memory.idle.at - settled.at) / 1000), percentOfOneCore: busy(settled, results.memory.idle), byName: Object.fromEntries(Object.keys(results.memory.idle.byName).map((k) => [k, busy(settled, results.memory.idle, k)])) };
   if (animS > 0) await idleAnimations(run);
+  if (resize) await resizeSweeps(run);
   if (animOnly) { await quit(run); continue; }
   const click = async (sel) => { try { await page.click(sel, { timeout: 5000 }); await wait(700); return true; } catch { return false; } };
   const opened = [];
@@ -489,29 +569,7 @@ for (let i = 1; i <= RUNS; i++) {
       await run.browser.stopTracing();
       const { profile } = await cdp.send('Profiler.stop');
       fs.writeFileSync(path.join(profileDir, 'chat-largo.cpuprofile'), JSON.stringify(profile));
-      // the compositor's layers and why each one exists (too many layers make every scrolled frame slow)
-      const layers = await new Promise((resolve) => { cdp.on('LayerTree.layerTreeDidChange', (e) => { if (e.layers) resolve(e.layers); }); cdp.send('LayerTree.enable'); setTimeout(() => resolve([]), 5000); });
-      const reasons = {}; const owners = {};
-      await cdp.send('DOM.enable').catch(() => {});
-      for (const l of layers) {
-        let why = [];
-        try { const r = await cdp.send('LayerTree.compositingReasons', { layerId: l.layerId }); why = r.compositingReasonIds ?? r.compositingReasons ?? []; } catch { /* gone */ }
-        for (const k of why) reasons[k] = (reasons[k] ?? 0) + 1;
-        let who = '?';
-        if (l.backendNodeId) { try { const { node } = await cdp.send('DOM.describeNode', { backendNodeId: l.backendNodeId }); const a = Object.fromEntries((node.attributes ?? []).reduce((acc, v, i, all) => (i % 2 ? acc : [...acc, [v, all[i + 1]]]), [])); who = `${node.localName}${a['data-testid'] ? `[${a['data-testid']}]` : a.class ? `.${a.class.split(' ').slice(0, 2).join('.')}` : ''}`; } catch { /* gone */ } }
-        const key = `${who} ← ${why.join('+') || '-'}`; owners[key] = (owners[key] ?? 0) + 1;
-      }
-      // the elements that can scroll (each one a layer of its own): which and how many
-      const scrollers = await page.evaluate(() => {
-        const out = {};
-        for (const el of document.querySelectorAll('*')) {
-          const cs = getComputedStyle(el); const x = /(auto|scroll|hidden)/.test(cs.overflowX) && el.scrollWidth > el.clientWidth; const y = /(auto|scroll|hidden)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight;
-          if (!x && !y) continue;
-          const k = `${el.localName}.${String(el.className?.baseVal ?? el.className).split(' ').slice(0, 2).join('.')} ${cs.overflowX}/${cs.overflowY} ${x ? 'x' : ''}${y ? 'y' : ''}`; out[k] = (out[k] ?? 0) + 1;
-        }
-        return out;
-      });
-      fs.writeFileSync(path.join(profileDir, 'capas.json'), JSON.stringify({ layers: layers.length, reasons, scrollers, owners: Object.fromEntries(Object.entries(owners).sort((a, b) => b[1] - a[1])) }, null, 1));
+      fs.writeFileSync(path.join(profileDir, 'capas.json'), JSON.stringify(await layerReport(page, cdp), null, 1));
       await cdp.detach();
     }
   }
