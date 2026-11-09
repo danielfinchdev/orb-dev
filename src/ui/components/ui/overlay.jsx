@@ -76,11 +76,16 @@ export function Select({ value, onValueChange, options, placeholder, className, 
 // 3.8.2: the bubble stays inside the window (collisionPadding) and its tail never sits on a rounded corner (TAIL_PAD,
 // the largest --tip-radius of the themes): a bubble pushed against the window's edge hides its tail instead of looking cut.
 export const TAIL_PAD = 20;
+// Radix opens a tooltip on any focus; a focus that is not :focus-visible (given back by code after a pointer choice) is
+// stopped here (preventDefault skips Radix's own handler).
+const keyboardFocusOnly = (e) => { try { if (!e.currentTarget.matches(':focus-visible')) e.preventDefault(); } catch { /* old engine: as before */ } };
 export function BubbleTip({ title, text, children, side = 'bottom', align = 'center', wide = false, offset = 8, off = false }) {
   if (!title && !text) return children;
   return (
     <TooltipPrimitive.Root delayDuration={300} open={off ? false : undefined}>
-      <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
+      {/* Keyboard focus only: a menu chosen with the mouse hands the focus back to its button (⋯), and its bubble popped
+          up over the chat after every choice. */}
+      <TooltipPrimitive.Trigger asChild onFocus={keyboardFocusOnly}>{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
         {/* 3.2.1: a bubble only informs: clicks go through it to whatever it covers (it hid the project picker). */}
         <TooltipPrimitive.Content side={side} align={align} sideOffset={offset} collisionPadding={12} arrowPadding={TAIL_PAD} className={cn('orb-tip pointer-events-none z-50', wide ? 'max-w-80' : 'max-w-[17rem]')} data-testid="bubble-tip">
