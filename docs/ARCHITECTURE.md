@@ -1051,6 +1051,16 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   dies mid-turn), with `Sessions.closeLive` / `Lane.closeLive`, with the conversation and with the engine: nothing of an
   earlier run is valid (the hashes 3.8 kept in `settings` are deleted at start). There is no coordinator without a
   conversation.
+- **Secrets an agent asks for (3.8.2, `src/engine/agent-secrets.mjs`):** `orb_request_secret` (name + reason) shows a
+  private card in the chat on this PC only (`secrets.pending` / `secrets.answer` / `secrets.decline` are `pc` methods;
+  the `secret:request` event is not one a phone gets; the chat only says which name was asked for). The value typed
+  there never goes to the chat, the logs, the database or the agent: the engine issues a one-time grant (`once`) on the
+  agents' pipe, bound to that agent process, valid for 10 minutes, and the agent gets a handle for Orb's helper
+  `src/mcp/secret-run.mjs`, which trades it once and runs one command without a shell with the value in one environment
+  variable (`--env NAME`) or on its stdin (`--stdin`), replacing it with «[secreto]» in that command's output. «Guardar
+  en la bóveda» stores it in the vault as `agent/<NAME>`, and «Usar la guardada» reads it back; both need the master
+  password (`needsUnlock`). Locking Orb or changing the password cancels every pending request and revokes every handle
+  not yet traded.
 - **The user's connectors:** an agent gets `src/mcp/launch.mjs` and a ticket instead of the connector; the
   launcher gets the real command, arguments and keys from the engine and starts it (and stops its whole tree when the
   ticket is taken back). On Windows (`src/mcp/win-spawn.mjs`) an npm shim (`npx.cmd`, a global package's cmd-shim) runs

@@ -26,6 +26,7 @@ import { ofUserLabel, userLabel, userName, assistantName } from '../core/board.m
 import { adbStatus, ensureAdb, createAndroid } from './android.mjs';
 import { grantMethods } from './grants.mjs';
 import { agentAuth } from './agent-auth.mjs';
+import { createSecretRequests } from './agent-secrets.mjs';
 import { extensionMethods } from './api-extensions.mjs';
 import { layoutPlan, layoutApply, guardOutside } from './workspace-layout.mjs';
 import { modelCatalog, chooseModel, LEVELS, REASONING_LEVELS, levelsOf } from './catalog.mjs';
@@ -139,7 +140,10 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   const android = createAndroid({ board, log });
   const grants = grantMethods({ board, sessions, log, android });
   // The phone's tools of Orb's MCP server (src/mcp/server.mjs): for the conversation of the server's grant, as it is now.
+  // 3.8.2 (T3 3.4): the secrets an agent asks for (agent-secrets.mjs), answered only on this PC's card.
+  const secrets = createSecretRequests({ sessions, auth: agentAuth, master: () => ctx.master, emit, log });
   agentAuth.onCall = async ({ session }, method, args) => {
+    if (method === 'secret' && session) return secrets.request(sessions.get(session), args);
     if (method !== 'android' || !session) throw Object.assign(new Error(tr('msg.android.notAllowed')), { userFacing: true });
     const s = sessions.get(session);
     return android.tool(s, String(args.tool ?? ''), args.args);
@@ -745,7 +749,13 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...linkMethods(shared),
     ...inboxMethods(shared),
     ...data.methods,
-    ...masterMethods({ ...shared, onUnlocked, onLock: (why) => grants.revokeAll(why) }),
+    // 3.8.2: Orb locked (or a new password): the grants go, and so do the secrets typed for the agents.
+    ...masterMethods({ ...shared, onUnlocked, onLock: (why) => { secrets.wipe(); return grants.revokeAll(why); } }),
+    // 3.8.2 (T3 3.4): the private card of a secret an agent asked for (this PC only; saving or using a saved one asks for
+    // the master password: permissions.mjs › needsUnlock).
+    'secrets.pending': () => secrets.pending(),
+    'secrets.answer': ({ id, value, save, saved }) => secrets.answer({ id: int(id, 'petición'), value, save: save === true, saved: saved === true }),
+    'secrets.decline': ({ id }) => secrets.decline({ id: int(id, 'petición') }),
     ...extensionMethods(shared),
     ...appMethods({ home: ctx.home, version }), // 3.8.1: this PC's tools (terminal, editors, feedback…)
     ...musicMethods({ log }) // 3.8.2: the music's tracks, downloaded the first time (src/engine/music.mjs)

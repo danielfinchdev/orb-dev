@@ -77,6 +77,8 @@ export const METHODS = Object.freeze({
   // 3.8: the master password and the connectors' keys
   'master.state': 'pc', 'master.create': 'pc', 'master.unlock': 'pc', 'master.lock': 'pc', 'master.check': 'pc', 'master.change': 'pc', 'master.forgot': 'pc', 'master.reset': 'pc',
   'secrets.connector': 'pc', 'secrets.saveConnector': 'pc',
+  // 3.8.2 (T3 3.4): a secret an agent asked for, typed only on this PC's card (src/engine/agent-secrets.mjs)
+  'secrets.pending': 'pc', 'secrets.answer': 'pc', 'secrets.decline': 'pc',
   // 3.8.1: Ajustes › Skills y MCP (src/engine/api-extensions.mjs): what agents run comes in and out of core only here
   'extensions.list': 'pc', 'extensions.toggle': 'pc', 'extensions.import': 'pc', 'extensions.remove': 'pc', 'extensions.approve': 'pc',
   'extensions.reject': 'pc', 'extensions.edit': 'pc', 'extensions.adopt': 'pc', 'extensions.applyCheck': 'pc', 'extensions.apply': 'pc'
@@ -105,6 +107,8 @@ export const FRESH_UNLOCK = Object.freeze({ 'projects.deleteCheck': 'deleteProje
 export const FRESH_PURPOSES = Object.freeze([...new Set(Object.values(FRESH_UNLOCK))]);
 export function needsUnlock(method, params, current = {}) {
   if (UNLOCK_METHODS.has(method)) return true;
+  // 3.8.2 (T3 3.4): a secret for an agent saved in the vault, or taken from it.
+  if (method === 'secrets.answer') return params?.save === true || params?.saved === true;
   if (method !== 'config.save') return false;
   const patch = params?.patch ?? {};
   if (patch.backup && typeof patch.backup === 'object' && Object.hasOwn(patch.backup, 'folder')) return true;

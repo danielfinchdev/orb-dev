@@ -13,6 +13,7 @@ import { Composer, useAutoScroll, BarClock, BarHeading, BarPause, MsgTime, Compa
 import { BackToList } from '@/components/chat-bar.jsx';
 import { ContextSlot } from '@/components/context-slot.jsx';
 import { TaskChanges } from '@/components/task-changes.jsx';
+import { SecretCards } from '@/components/secret-card.jsx';
 import { NotificationBell } from '@/components/notification-center.jsx';
 import { useCatalog, modelsOf, modelLabel, ReasoningMenu } from '@/components/brain-picker.jsx';
 import { stepText, bareTool } from '@/components/chat-live.jsx';
@@ -481,6 +482,8 @@ export function SessionView({ route }) {
           </div>
         </div>
       ) : null}
+      {/* 3.8.2 (T3 3.4): a secret the agent asked for, typed only here (never in the chat). */}
+      <SecretCards sessionId={s.id} />
       <Composer value={text} onChange={setText} onSend={send} canSend={Boolean(text.trim() || images.length)} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
         placeholder={running ? (AGENT_CAN_STEER[s.agent] ? t('session.phSteer', { agent: AGENT[s.agent] }) : t('session.phWait', { agent: AGENT[s.agent] })) : s.kind === 'task' ? t('session.phTask') : t('session.ph', { agent: AGENT[s.agent] })}
         onPaste={(e) => { fromTransfer(e.clipboardData).then((f) => { if (f.length) addImages(f); }); }}
