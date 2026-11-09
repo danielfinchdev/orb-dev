@@ -540,7 +540,34 @@ export class Board {
 
   // A dependency counts as done only once its process is gone too, so its automatic commit already happened.
   // 3.1: and, for one that worked in its own copy alongside others, once its work is in the folder (integrate:<id>).
-  depsDone(task) { return task.depends_on.every((dep) => { const d = this.task(dep); return d?.status === 'done' && d.pid == null && !this.setting(`integrate:${d.id}`); }); }
+  depsDone(task) { return task.depends_on.every((dep) => this.depDone(this.task(dep))); }
+  depDone(d) { return d?.status === 'done' && d.pid == null && !this.setting(`integrate:${d.id}`); }
+  // 3.8.3: why a queued task has not started, for the user (every list of tasks, PC and phone) and the coordinator.
+  // → { kind: 'paused' } (the whole queue is paused) | { kind: 'deps', on: [{ id, status, held }] } (it waits for those)
+  //   | { kind: 'notice', text } (what the scheduler said: usage limit, no agent…) | null (its turn comes)
+  // A dependency that needs the user (held, failed, blocked) is said first: resuming the queue alone would not start it.
+  waitReason(task, paused = this.setting('paused') === '1') {
+    if (task?.status !== 'queued') return null;
+    const deps = task.depends_on.map((id) => this.task(id)).filter((d) => d && !this.depDone(d));
+    const on = (list) => ({ kind: 'deps', on: list.map((d) => ({ id: d.id, status: d.status, held: Boolean(this.heldInfo(d)) })) });
+    const stuck = deps.filter((d) => ['failed', 'blocked', 'cancelled'].includes(d.status));
+    if (stuck.length) return on(stuck);
+    if (paused) return { kind: 'paused' };
+    if (deps.length) return on(deps);
+    const notice = this.setting(`wait_notice:${task.id}`);
+    return notice ? { kind: 'notice', text: notice } : null;
+  }
+  // 3.8.3: a task Orb stopped after it ran, for the user to review (a mass deletion, a changed remote, a read-only task
+  // that wrote): blocked, with a «task.held» since its last launch. → { reasons, folder } or null. The reasons are the
+  // ones the scheduler wrote at the front of its result («ha eliminado 2714 archivos»).
+  heldInfo(task) {
+    if (task?.status !== 'blocked') return null;
+    const ev = this.one("SELECT detail FROM events WHERE task_id = ? AND kind = 'task.held' AND detail <> 'blocked' AND id > COALESCE((SELECT MAX(id) FROM events WHERE task_id = ? AND kind = 'task.launched'), 0) ORDER BY id DESC LIMIT 1", task.id, task.id);
+    if (!ev) return null;
+    const lead = tr('msg.scheduler.needsReview', { reasons: '' });
+    const first = String(ev.detail ?? '').split('. ')[0];
+    return { reasons: first.startsWith(lead) ? first.slice(lead.length) : first, folder: this.projectPathNow(task) ?? null };
+  }
   // 3.1: a blocked dependency stops its dependents too (until someone unblocks it): they are told, and they no longer hold
   // back the report of the request, which would otherwise never come.
   // Also one whose work could not be joined into the folder because the task joining it by hand did not finish.
@@ -715,6 +742,13 @@ export class Board {
   }
 
   // 3.2: conversation: the coordinator's, whose project is the one it works in (others may have set the app's folder).
+  // 3.8.3: a task's wait or hold in words for the agents' board (orb_board).
+  explainForAgents(t) {
+    const w = this.waitReason(t); const h = this.heldInfo(t);
+    const dep = (d) => `#${d.id} (${d.held ? `retenida: ${userName()} la tiene que aceptar o deshacer` : d.status})`;
+    return { ...(w ? { waiting: w.kind === 'paused' ? `cola en pausa: no empieza hasta que ${userName()} pulse «Reanudar»` : w.kind === 'deps' ? `espera a ${w.on.map(dep).join(', ')}` : w.text } : {}),
+      ...(h ? { held: `retenida para que ${userName()} la revise: ${h.reasons} en ${h.folder}` } : {}) };
+  }
   summary(agent, conversation = null) {
     const counts = Object.fromEntries(this.all('SELECT status, COUNT(*) AS n FROM tasks GROUP BY status').map((r) => [r.status, r.n]));
     const active = this.all("SELECT * FROM tasks WHERE status NOT IN ('done', 'cancelled') ORDER BY priority, id LIMIT 50").map(parse);
@@ -727,7 +761,8 @@ export class Board {
       categories: CATEGORIES.map((c) => `${c} — ${ctx.paths.categories[c]}`),
       projects: this.projects().map((p) => `${p.name} — ${p.path}`),
       counts,
-      active: active.map((t) => ({ id: t.id, project: t.project, title: t.title, agent: t.assigned_to ?? t.agent, launch: t.launch, status: t.status, depends_on: t.depends_on })),
+      // 3.8.3: why each queued one waits, and the ones held for the user's review (the coordinator explains them).
+      active: active.map((t) => ({ id: t.id, project: t.project, title: t.title, agent: t.assigned_to ?? t.agent, launch: t.launch, status: t.status, depends_on: t.depends_on, ...this.explainForAgents(t) })),
       unreadForYou: agent ? this.inbox(agent, false).length : undefined
     };
   }

@@ -417,7 +417,10 @@ class Lane {
     // A brain other than Claude gets its instructions at the start of the conversation (Claude has them as system prompt).
     const intro = fresh && this.liveAgent !== 'claude' ? `${persona(this.board)}\n\n` : '';
     const recent = fresh && lastAnswer ? this.recent() : '';
-    const prompt = fresh ? `${intro}${briefing(this.board, { project, recent })}\n\n## Mensaje ${ofUser()}\n${text}` : text;
+    // 3.8.3: with the task queue paused the coordinator is told so on every turn (it used to promise «te aviso cuando
+    // terminen» for tasks that could not start).
+    const paused = this.board.setting('paused') === '1' ? `\n\n(AVISO DEL SISTEMA: la cola de tareas está en pausa. Las tareas que crees no empezarán hasta que ${userName()} pulse «Reanudar»: díselo y no prometas avisar cuando terminen.)` : '';
+    const prompt = fresh ? `${intro}${briefing(this.board, { project, recent })}\n\n## Mensaje ${ofUser()}\n${text}${paused}` : `${text}${paused}`;
     this.board.updateConversation(this.id, { turns: (c.turns ?? 0) + 1 });
     // 3.1: 20 minutes for a coordinating turn (reviewing several finished tasks can take a while; 10 cut reports short).
     const timer = setTimeout(() => { this.say('system', tr('msg.orch.timeLimit')); Promise.resolve(this.live?.interrupt()).catch(() => {}); }, 20 * 60_000);
@@ -443,8 +446,18 @@ class Lane {
 
   // 2.6: when the assistant has handed out work and the agents are on it, it suggests a mini-game while waiting (once in
   // a while, not after every answer).
+  // 3.8.3: with the queue paused nothing is promised: the chat says the tasks wait for «Reanudar» (a card with the button),
+  // once in a while per conversation.
   suggestGames() {
     const working = this.board.one("SELECT COUNT(*) AS n FROM tasks WHERE conversation_id = ? AND status IN ('queued', 'running')", this.id).n;
+    if (working && this.board.setting('paused') === '1') {
+      const queued = this.board.one("SELECT COUNT(*) AS n FROM tasks WHERE conversation_id = ? AND status = 'queued'", this.id).n;
+      const key = `paused_told:${this.id}`;
+      if (!queued || Date.now() - Number(this.board.setting(key) ?? 0) < 10 * 60_000) return;
+      this.board.setting(key, String(Date.now()));
+      this.say('system', tr('msg.orch.queuePaused', { tasks: tr(queued === 1 ? 'msg.orch.tasksOne' : 'msg.orch.tasksOther', { n: queued }) }), { kind: 'paused' });
+      return;
+    }
     if (!working || Date.now() - Number(this.board.setting('games_suggested') ?? 0) < 30 * 60_000) return;
     this.board.setting('games_suggested', String(Date.now()));
     this.say('system', tr('msg.orch.playWhileWaiting', { tasks: tr(working === 1 ? 'msg.orch.tasksOne' : 'msg.orch.tasksOther', { n: working }) }), { kind: 'games' });

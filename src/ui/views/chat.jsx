@@ -21,6 +21,7 @@ import { confirm } from '@/components/dialogs.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { Spinner } from '@/components/ui/basic.jsx';
 import { Button } from '@/components/ui/button.jsx';
+import { WaitLabel, HeldCard, resumeQueue } from '@/components/task-state.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { Switch, Tip, BubbleTip, Popover, PopoverTrigger, PopoverContent } from '@/components/ui/overlay.jsx';
 import { bridge, useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout, plainSkin, addPending, movePending, dropPending, pendingShown, usePending } from '@/lib/store.js';
@@ -292,6 +293,8 @@ const Message = memo(function Message({ m, name, onChanges }) {
       {!fullPc() ? null : <Button size="xs" variant="soft" onClick={openGames} data-testid="chat-play"><Gamepad2 />{t('chat.playButton')}</Button>}
     </div>
   );
+  // 3.8.3: the tasks of this chat wait because the queue is paused: «Reanudar» right there (while it still is).
+  if (m.meta?.kind === 'paused') return <PausedLine body={m.body} />;
   // 3.1: a finished task says it in one line; what the agent reported (technical) unfolds on request.
   if (m.meta?.kind === 'task-end' && m.meta.result) return (
     <div className="bg-muted/70 text-muted-foreground mx-auto max-w-[88%] rounded-xl px-3.5 py-2 text-center text-[13px]">
@@ -388,9 +391,10 @@ function TaskApprovalLine({ m }) {
 // agent's own conversation and «Cancelar» stay a click away, as in the block they replace.
 function TaskLines({ conversation }) {
   const live = useLiveTasks();
-  const tasks = useStore((s) => (conversation == null ? [] : s.tasks.filter((x) => x.conversation_id === conversation && (x.status === 'running' || x.status === 'queued'))));
+  // 3.8.3: and the ones held for review (a mass deletion…), as a card with «Aceptar» and «Deshacer».
+  const tasks = useStore((s) => (conversation == null ? [] : s.tasks.filter((x) => x.conversation_id === conversation && (x.status === 'running' || x.status === 'queued' || x.held))));
   if (!tasks.length) return null;
-  return <div className="grid gap-2" data-testid="task-lines">{[...tasks].sort((a, b) => a.id - b.id).map((x) => <TaskLine key={x.id} task={x} live={liveOf(live, x.id)} />)}</div>;
+  return <div className="grid gap-2" data-testid="task-lines">{[...tasks].sort((a, b) => a.id - b.id).map((x) => (x.held ? <HeldCard key={x.id} task={x} link className="mx-auto w-full max-w-[92%]" /> : <TaskLine key={x.id} task={x} live={liveOf(live, x.id)} />))}</div>;
 }
 function TaskLine({ task, live }) {
   const t = useT();
@@ -405,7 +409,7 @@ function TaskLine({ task, live }) {
         <span className="font-semibold">{t('orbchats.taskN', { id: task.id })}</span>
         <span className="text-muted-foreground">{agent ? ` · ${AGENT[agent] ?? agent}` : ''} · </span>{now}
       </button>
-      {running ? <ProgressBar percent={live?.percent ?? null} quiet={live?.quietMin >= 5} className="w-16 shrink-0 sm:w-24" /> : <span className="text-muted-foreground shrink-0 text-xs">{t('orbchats.taskQueued')}</span>}
+      {running ? <ProgressBar percent={live?.percent ?? null} quiet={live?.quietMin >= 5} className="w-16 shrink-0 sm:w-24" /> : <WaitLabel task={task} />}
       {running && live?.startedAt ? <span className="text-muted-foreground shrink-0 text-xs tabular-nums">{elapsed(Date.now() - live.startedAt)}</span> : null}
       {live?.sessionId ? <BubbleTip title={t('comp.live.viewConv')}><Button size="icon-xs" variant="ghost" className="opacity-60 group-hover/task:opacity-100" aria-label={t('comp.live.viewConv')} onClick={() => go({ view: 'session', id: live.sessionId })}><MessageSquare /></Button></BubbleTip> : null}
       <BubbleTip title={t('comp.live.cancelTitle')}><Button size="icon-xs" variant="ghost" className="opacity-60 group-hover/task:opacity-100" aria-label={t('comp.live.cancelTitle')} onClick={cancel} data-testid="task-line-cancel"><Square className="size-3 fill-current" /></Button></BubbleTip>
@@ -415,6 +419,16 @@ function TaskLine({ task, live }) {
 
 // The title of a conversation in the middle of a bar, and under it, small, its project with its icon (direct
 // conversations, views/session.jsx).
+function PausedLine({ body }) {
+  const t = useT();
+  const paused = useStore((s) => Boolean(s.app?.paused));
+  return (
+    <div className="chat-actions bg-muted/70 text-muted-foreground mx-auto flex max-w-[88%] flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-xl px-3.5 py-2 text-center text-[13px]" data-testid="chat-paused">
+      <span>{body}</span>
+      {paused ? <Button size="xs" variant="soft" onClick={() => resumeQueue(t)} data-testid="chat-resume"><Play />{t('tasks.wait.resume')}</Button> : null}
+    </div>
+  );
+}
 // The bar's pause / resume of all of Orb's work (the chat's bar and an agent conversation's).
 export function BarPause() {
   const t = useT();

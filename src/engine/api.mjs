@@ -486,7 +486,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       // 3.2.1: the OK to the report also settles the tasks of that request Orb held «for your review» (a read-only check
       // that changed build files, for instance), which the report already explained: before, they stayed blocked for ever.
       const held = row.conversation_id ? board.all("SELECT id FROM tasks WHERE conversation_id = ? AND status = 'blocked' AND updated_at <= ?", row.conversation_id, row.at)
-        .map((r) => r.id).filter((tid) => board.one("SELECT 1 AS x FROM events WHERE task_id = ? AND kind = 'task.held' AND id > COALESCE((SELECT MAX(id) FROM events WHERE task_id = ? AND kind = 'task.launched'), 0)", tid, tid)) : [];
+        .map((r) => r.id).filter((tid) => board.heldInfo(board.task(tid))) : [];
       for (const tid of held) board.patch(tid, { status: 'done' }, 'usuario', 'task.review_accepted');
       const out = accept([...row.meta.tasks, ...held], row.meta.project);
       // 3.2: the OK closes the conversation when nothing of it is still open (written in again, it opens).
@@ -577,8 +577,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       // 3.8.1: a range of the settings' key (its index), not LIKE (which read every setting: one per accepted task, …).
       const undone = new Set(board.all("SELECT key FROM settings WHERE key >= 'undone:' AND key < 'undone;' AND value <> '' AND value <> 'null'").map((r) => Number(r.key.slice('undone:'.length))));
       // 3.8.1: the rows are new objects: changed in place (copying each task twice cost more than reading it).
+      const paused = board.setting('paused') === '1';
       return board.panelTasks(Math.min(Number(limit) || 150, 500)).map((task) => {
         delete task.approval_hash; delete task.approval_sig;
+        // 3.8.3: why a queued one waits and what a held one did (src/ui/components/task-state.jsx).
+        const waiting = board.waitReason(task, paused); if (waiting) task.waiting = waiting;
+        const held = board.heldInfo(task); if (held) task.held = held;
         task.description = cut(task.description); task.result = cut(task.result);
         if (undone.has(task.id)) task.undone = true;
         return task;
@@ -591,7 +595,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       // 3.2.1: «Deshecha» (undone: the files are as before the task), the model by its name («Haiku 4.5», not «haiku») and the
       // account that ran it by the name the user gave it («Codex Pro»).
       const who = d.assigned_to ?? d.agent; const acc = d.run_account ?? d.account ?? null;
-      return { ...d, accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
+      return { ...d, waiting: board.waitReason(d), held: board.heldInfo(d), accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
         undone: board.settingJson(`undone:${d.id}`), modelLabel: d.model ? modelLabelOf(who, acc ?? who, d.model) : null, accountLabel: acc && accountsOf(who).length > 1 ? accountLabel(acc) : null };
     },
     'tasks.create': (p) => board.createTask({
@@ -618,8 +622,23 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       if (cp?.before?.kind !== 'git' || !cp.after?.commit || !cp.before.repo || !fs.existsSync(cp.before.repo)) return { available: false, files: [], more: 0 };
       return { available: true, ...diffBetween(cp.before.repo, cp.before.commit, cp.after.commit) };
     },
-    'tasks.launchAnyway': ({ id }) => { const t = board.task(int(id, 'tarea')); if (t?.status !== 'queued') fail(tr('msg.api.onlyQueued')); board.setting(`budget_ok:${t.id}`, '1'); board.event(t.id, 'usuario', 'budget.authorised', 'lanzar aunque supere el límite de uso'); return true; },
-    'tasks.accept': ({ id }) => accept([int(id, 'tarea')]),
+    // 3.8.3: «Iniciar de todos modos» starts that task now, over the usage limit and also with the queue paused (only that
+    // one: scheduler.tick). One that waits for other tasks cannot: the answer says which. → { paused }
+    'tasks.launchAnyway': ({ id }) => {
+      const t = board.task(int(id, 'tarea')); if (t?.status !== 'queued') fail(tr('msg.api.onlyQueued'));
+      const why = board.waitReason(t);
+      if (why?.kind === 'deps') fail(tr('msg.api.waitsForDeps', { ids: why.on.map((d) => `#${d.id}`).join(', ') }));
+      board.setting(`budget_ok:${t.id}`, '1'); board.event(t.id, 'usuario', 'budget.authorised', 'lanzar ahora (aunque supere el límite de uso o la cola esté en pausa)');
+      board.changed('tasks');
+      return { paused: why?.kind === 'paused' };
+    },
+    // 3.8.3: a task held for review is accepted as it is (its result stays; the tasks waiting for it go on), as the OK
+    // to its report does.
+    'tasks.accept': ({ id }) => {
+      const tid = int(id, 'tarea');
+      if (board.heldInfo(board.task(tid))) board.patch(tid, { status: 'done' }, 'usuario', 'task.review_accepted');
+      return accept([tid]);
+    },
     'tasks.discardBranch': ({ id }) => scheduler.discardBranch(int(id, 'tarea')),
 
     'sessions.list': ({ archived }) => sessions.list({ archived: Boolean(archived) }),

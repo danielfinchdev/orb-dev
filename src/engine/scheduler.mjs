@@ -256,15 +256,20 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
     try { this.retryLeftovers(); } catch (error) { this.log(`reintentar restos: ${error.message}`); }
     try { this.deliverMessages(); } catch (error) { this.log(`mensajes: ${error.message}`); }
     try { this.wakeChats(); } catch (error) { this.log(`chats pospuestos: ${error.message}`); }
-    if (!ctx.config.autoRun || board.setting('paused') === '1') return;
-    try { this.resumeLimited(); } catch (error) { this.log(`continuar limitadas: ${error.message}`); }
-    try { runDue(board, this.log); } catch (error) { this.log(`programadas: ${error.message}`); }
-    try { this.integratePending(); } catch (error) { this.log(`unir copias: ${error.stack}`); }
+    // 3.8.3: with the queue paused, only a task the user started anyway («Iniciar de todos modos», budget_ok) goes.
+    const paused = !ctx.config.autoRun || board.setting('paused') === '1';
+    const only = paused ? new Set(board.all("SELECT key FROM settings WHERE key >= 'budget_ok:' AND key < 'budget_ok;' AND value = '1'").map((r) => Number(r.key.slice('budget_ok:'.length)))) : null;
+    if (only && !only.size) return;
+    if (!paused) {
+      try { this.resumeLimited(); } catch (error) { this.log(`continuar limitadas: ${error.message}`); }
+      try { runDue(board, this.log); } catch (error) { this.log(`programadas: ${error.message}`); }
+      try { this.integratePending(); } catch (error) { this.log(`unir copias: ${error.stack}`); }
+    }
     board.revalidateQueued(); board.warnBlockedByDeps();
     const enabled = enabledAgents();
     const order = [...new Set([...(ctx.config.agentOrder ?? []), ...enabled])];
     for (const task of board.readyTasks('auto')) {
-      if (this.running.has(task.id)) continue;
+      if (this.running.has(task.id) || (only && !only.has(task.id))) continue;
       // 3.1: a subtask whose parent is running is what that parent waits for (orb_wait_tasks): it does not wait for a free
       // slot, or with «one at a time» (or one per account) both would wait until the wait runs out.
       // With «Una tarea cada vez», only one of those subtasks at a time.
@@ -459,7 +464,7 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
     if (!cp?.before || cp.before.kind !== 'git') {
       if (!reasons.length) return '';
       const why = reasons.join(tr('msg.scheduler.and'));
-      this.board.addChat('system', tr('msg.scheduler.safetyStopped', { id: task.id, title: oneLine(task.title), reasons: why }), { task: task.id });
+      this.board.addChat('system', tr('msg.scheduler.safetyStopped', { id: task.id, title: oneLine(task.title), reasons: why, folder: this.board.projectPathNow(task) ?? task.project }), { task: task.id });
       return tr('msg.scheduler.needsReview', { reasons: why });
     }
     const snap = snapshotCommit(cp.before.repo, { always: true, message: `orb: foto después de la tarea #${task.id}` });
@@ -479,7 +484,7 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
     if (task.readonly && offending.length) reasons.push(tr('msg.scheduler.safetyReadonly', { n: offending.length }));
     if (!reasons.length) return '';
     const why = reasons.join(tr('msg.scheduler.and'));
-    this.board.addChat('system', tr('msg.scheduler.safetyStopped', { id: task.id, title: oneLine(task.title), reasons: why }), { task: task.id });
+    this.board.addChat('system', tr('msg.scheduler.safetyStopped', { id: task.id, title: oneLine(task.title), reasons: why, folder: this.board.projectPathNow(task) ?? task.project }), { task: task.id });
     return tr('msg.scheduler.needsReview', { reasons: why });
   }
 
