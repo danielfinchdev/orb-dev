@@ -185,6 +185,11 @@ what is built, sections 2.1–2.4 describe the shipped app.
 All values come from CSS variables in `app.css` (light `:root`, dark `.dark`), redefined per visual theme in
 `themes.css`. Never hard-code a colour in a component; use the role.
 
+The PC's «Cristal» theme (3.8.2) is not a set of its own: it is Profesional (`data-skin="profesional"`) plus a glass
+material (`data-material="cristal"`, `src/core/appearance.mjs › SKIN_BASE`), so a component styled with the roles works
+in it unchanged; blur is kept to the sidebar, the chat bar, the message box and menus/dialogs. It is unrelated to the
+Android glass of section 8, which is the Android app's own layout language.
+
 ### 3.1 Spacing (4 px grid)
 
 `2 · 4 · 6 · 8 · 12 · 16 · 20 · 24 · 32 · 40 · 56` px (Tailwind `0.5 1 1.5 2 3 4 5 6 8 10 14`).
