@@ -18,7 +18,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Input } from '@/components/ui/basic.jsx';
 import { useStore, go, call, act, newChat, orbAct, loadOrbInbox, openOrbInfo, closeOrbInfo, getState, phoneLayout, fullPc, refreshSoon, setState, plainSkin } from '@/lib/store.js';
-import { orbItems, orbProgress, groupOrb, shortTime } from '@/lib/inbox.js';
+import { orbItems, orbProgress, groupOrb, shortTime, avatarStack } from '@/lib/inbox.js';
 import { sameItem } from '@/lib/memo.js';
 import { useDay } from '@/lib/use-day.js';
 import { usePress } from '@/lib/use-press.js';
@@ -51,17 +51,16 @@ const conversationRef = (x) => ({ kind: x.kind === 'session' ? 'session' : 'conv
 // 3.8.1 (H1e): the chat's avatar. Big: its project's icon (its own picture or its coloured initials); without a project,
 // Orbe's head. In the corner: the marks of the agents that worked in it (lib/inbox.js › agentsOf: the brain or a direct
 // conversation's agent first, then its tasks' agents), stacked like avatars, the first on top; past three, two and
-// «+N». An agent Orb no longer knows gets the neutral mark.
+// «+N» (3.8.2: lib/inbox.js › avatarStack keeps any number inside the avatar, fewer marks on a small one). Hovering it
+// lists every agent. An agent Orb no longer knows gets the neutral mark.
 const STACK = 3;
 export function OrbAvatar({ item, size = 40 }) {
   const t = useT();
   const locale = useLocale();
   const skin = useStore((s) => s.app?.config?.ui?.skin);
-  const badge = Math.max(16, Math.round(size * 0.44));
   const agents = item.agents ?? (item.agent ? [item.agent] : []);
-  const shown = agents.length > STACK ? agents.slice(0, STACK - 1) : agents;
-  const more = agents.length - shown.length;
-  const step = Math.round(badge * 0.55);
+  const { badge, marks, more, moreRight, moreFont } = avatarStack(agents.length, size, STACK);
+  const shown = agents.slice(0, marks.length);
   const who = agents.length ? new Intl.ListFormat(locale, { type: 'conjunction' }).format(agents.map((a) => AGENT[a] ?? a)) : '';
   const body = item.project
     ? <ProjectIcon name={item.project} size={size} />
@@ -69,16 +68,16 @@ export function OrbAvatar({ item, size = 40 }) {
       ? <span className="bg-primary/12 text-primary grid place-items-center rounded-full" style={{ width: size, height: size }}><Sparkles className="size-1/2" /></span>
       : <Robot size={size} still mood={item.busy ? 'thinking' : 'idle'} />;
   return (
-    <span className="relative inline-grid shrink-0" style={{ width: size, height: size }} role="img" aria-label={who ? `${item.project ?? t('orbchats.noProject')} · ${who}` : (item.project ?? t('orbchats.noProject'))} data-testid="orb-avatar">
+    <span className="relative inline-grid shrink-0" style={{ width: size, height: size }} role="img" aria-label={who ? `${item.project ?? t('orbchats.noProject')} · ${who}` : (item.project ?? t('orbchats.noProject'))} title={who || undefined} data-testid="orb-avatar">
       {body}
       {agents.length ? (
         <span className={cn('orb-avatar-badges', item.busy && 'animate-pulse')} data-badges={agents.join(' ')}>
           {shown.map((a, i) => (
-            <span key={a} className="orb-avatar-badge" style={{ width: badge, height: badge, right: -3 + i * step, zIndex: STACK - i }} data-badge={a}>
+            <span key={a} className="orb-avatar-badge" style={{ width: badge, height: badge, right: marks[i], zIndex: STACK - i }} data-badge={a}>
               <AgentIcon agent={a} className="size-[64%]" />
             </span>
           ))}
-          {more ? <span className="orb-avatar-badge orb-avatar-more" style={{ width: badge, height: badge, right: -3 + (shown.length - 1) * step + Math.round(badge * 0.85), fontSize: Math.round(badge * 0.5) }} data-badge="more">+{more}</span> : null}
+          {more ? <span className="orb-avatar-badge orb-avatar-more" style={{ width: badge, height: badge, right: moreRight, zIndex: 0, fontSize: moreFont }} data-badge="more" data-more={more}>+{more}</span> : null}
         </span>
       ) : null}
     </span>

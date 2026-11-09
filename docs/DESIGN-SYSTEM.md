@@ -164,7 +164,7 @@ what is built, sections 2.1–2.4 describe the shipped app.
   chat there, project info), «Sin proyecto» last; completed chats behind «Ver completados». Each row: its avatar (3.8.1,
   `OrbAvatar`: big, the project's icon, or Orbe's head without a project; in the corner, on small round chips, the marks of
   the agents that worked in it: the conversation's brain or a direct conversation's agent first, then its tasks'
-  agents, overlapping like a stack of avatars with the first on top; past three, two marks and «+N»; never the
+  agents, overlapping like a stack of avatars with the first on top; past three, two marks and «+N» (3.8.2: `avatarStack` keeps the stack inside the avatar, one mark and «+N» on a small one; hovering lists every agent); never the
   orchestrator's icon; its label names them all, e.g. «app-movil · Claude y Codex»), title, time, its latest progress (`orbProgress` in
   `lib/inbox.js`: waiting for approval / a question / a permission first, then a running task, then how its last task
   ended, else its last line) and unread; right click or ⋯ (PC) and a long press (phone) open its menu: info, pin, mute,

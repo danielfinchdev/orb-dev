@@ -35,6 +35,24 @@ const OPEN_TASK = ['queued', 'running', 'awaiting_approval', 'limited'];
 // agents its tasks ran with (or were given to; «any» not yet assigned does not count), oldest task first. Its avatar's
 // corner shows their marks stacked.
 export const agentsOf = (brain, tasks = []) => [...new Set([brain, ...[...tasks].reverse().map((x) => x.assigned_to || x.agent)].filter((a) => a && a !== 'any'))];
+// 3.8.2: where the corner marks of a chat's avatar go (views/orb/inbox.jsx › OrbAvatar), so that any number of agents fits
+// inside the avatar, never past its left edge whatever its size: up to `max` marks; past that, fewer marks and a «+N»
+// chip for the rest, overlapped less so it reads. A small avatar shows fewer marks before the «+N» rather than spilling
+// out. Offsets are from the avatar's right edge (the first mark, on top, sits in the corner). → { badge, marks: [right…],
+// more (how many the «+N» stands for; 0: none), moreRight, moreFont }
+export function avatarStack(count, size, max = 3) {
+  const badge = Math.max(16, Math.round(size * 0.44));
+  const step = Math.round(badge * 0.55); const moreStep = Math.round(badge * 0.85);
+  const room = size + 6 - badge; // the stack may stick out 3 px on each side, as the first mark does in the corner
+  const fits = (k) => (k - 1) * step + (count > k ? moreStep : 0) <= room;
+  let shown = count > max ? max - 1 : count;
+  while (shown > 1 && !fits(shown)) shown--;
+  const more = count - shown;
+  const marks = Array.from({ length: shown }, (_, i) => -3 + i * step);
+  const moreRight = -3 + Math.max(0, shown - 1) * step + (shown ? moreStep : 0);
+  const moreFont = Math.round(badge * (String(more).length > 1 ? 0.4 : 0.5));
+  return { badge, marks, more, moreRight, moreFont };
+}
 export function orbItems({ inbox = null, conversations = [], sessions = [], tasks = [], chats = [], approvals = [], completed = [], skip = null } = {}) {
   const marks = new Map((Array.isArray(inbox?.items) ? inbox.items : []).map((x) => [x.key, x]));
   const byConv = new Map();

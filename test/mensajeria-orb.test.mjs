@@ -105,3 +105,23 @@ test('la zona Orb en la interfaz: su lista en la barra lateral y en «Chats», p
   const en = fs.readFileSync(path.join(ROOT, 'src', 'core', 'locales', 'en', 'orbchats.mjs'), 'utf8');
   for (const k of keys) { assert.ok(es.includes(`'${k}'`), `es sin ${k}`); assert.ok(en.includes(`'${k}'`), `en sin ${k}`); }
 });
+
+test('3.8.2: el avatar con 4 o más agentes: marcas apiladas y «+N» dentro del avatar, en cualquier tamaño, y la lista al pasar', () => {
+  for (const size of [28, 34, 40, 46]) {
+    for (let n = 1; n <= 12; n++) {
+      const s = M.avatarStack(n, size);
+      assert.equal(s.marks.length + s.more, n, `${n} agentes en ${size}px: ninguno se pierde`);
+      assert.ok(s.marks.length >= 1 && s.marks.length <= 3);
+      if (n <= 3 && size >= 34) assert.equal(s.more, 0, `${n} caben sin «+N» en ${size}px`);
+      if (n > 3) assert.ok(s.more >= 2, 'pasado tres, «+N» con al menos dos');
+      const left = Math.max(...s.marks.map((r) => r + s.badge), s.more ? s.moreRight + s.badge : 0);
+      assert.ok(left <= size + 3, `${n} agentes en ${size}px no salen por la izquierda (${left})`);
+      assert.ok(!s.more || s.moreRight - s.marks.at(-1) >= Math.round(s.badge * 0.8), '«+N» se lee: el último solo lo tapa un poco');
+      assert.ok(s.moreFont * String(`+${s.more}`).length * 0.62 <= s.badge, '«+N» cabe en su círculo');
+    }
+  }
+  const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'views', 'orb', 'inbox.jsx'), 'utf8');
+  const avatar = ui.slice(ui.indexOf('export function OrbAvatar'), ui.indexOf('// ---- what can be done with a chat'));
+  assert.match(avatar, /avatarStack\(agents\.length, size/);
+  assert.match(avatar, /title=\{who \|\| undefined\}/, 'al pasar el ratón, todos los agentes');
+});
