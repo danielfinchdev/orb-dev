@@ -39,6 +39,10 @@ export function TerminalPanel({ dir, draft, onDraftTaken, onClose }) {
   // A command pasted from the chat: into the input line, never run.
   useEffect(() => { if (draft) { setLine(draft); onDraftTaken?.(); input.current?.focus(); } }, [draft]); // eslint-disable-line react-hooks/exhaustive-deps
   const term = terms.find((x) => x.id === active) ?? null;
+  // Opened from the chat's ⋯ (its menu hands the focus back to ⋯ as it closes): the keys go to the terminal once its shell
+  // is ready, so the user can type straight away.
+  const focused = useRef(false);
+  useEffect(() => { if (term?.running && !focused.current) { focused.current = true; input.current?.focus(); } }, [term?.running]);
   useEffect(() => { const el = out.current; if (el) el.scrollTop = el.scrollHeight; }, [term?.out]);
   const send = async () => {
     if (!term) return;
