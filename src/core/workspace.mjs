@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { isSecretPath, porcelainPaths } from './safety.mjs';
+import { isSecretPath, porcelainPaths, redactSecrets } from './safety.mjs';
 import { PRODUCT } from './product.mjs';
 import { tr } from './context.mjs';
 
@@ -116,7 +116,7 @@ export function changedBetween(repo, before, after) {
 
 // 3.8.2: what a task changed, file by file, for the window's diff panel. Read only: one `git diff` between the checkpoint
 // before the task and the one after (commits, so line endings and the user's index never matter). Secret-looking paths
-// are left out (the snapshots already keep them out). Each file's patch and the whole answer are capped, and a binary file
+// are left out (the snapshots already keep them out) and secret-looking text in the patches is hidden. Each file's patch and the whole answer are capped, and a binary file
 // has no patch. → { files: [{ status, path, added, removed, binary, patch, cut }], more }
 export function diffBetween(repo, before, after, { maxFiles = 300, maxPatch = 200_000, maxTotal = 2_000_000 } = {}) {
   const range = ['--no-renames', '--no-color', '--no-ext-diff', before, after];
@@ -134,7 +134,9 @@ export function diffBetween(repo, before, after, { maxFiles = 300, maxPatch = 20
   const files = []; let total = 0;
   list.forEach((f, i) => {
     if (isSecretPath(f.path) || files.length >= maxFiles) return;
-    let patch = f.binary || !patches ? '' : patches[i];
+    // 3.8.2 (security review): a key written in an ordinary file (a token in a config.js) is hidden too, as in the chat:
+    // the diff also goes to a linked phone.
+    let patch = f.binary || !patches ? '' : redactSecrets(patches[i]);
     const cut = patch.length > maxPatch || total + patch.length > maxTotal;
     if (cut) patch = '';
     total += patch.length;

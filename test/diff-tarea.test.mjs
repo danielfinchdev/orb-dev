@@ -97,3 +97,18 @@ test('tasks.diff: nothing while a task has no checkpoint after it, and an unknow
   assert.equal((await call('tasks.diff', { id: task.id })).available, false);
   await assert.rejects(call('tasks.diff', { id: 999999 }), /no existe esa tarea/);
 });
+
+// 3.8.2 (security review): a token written in an ordinary file never travels in the diff (it also goes to the phone).
+test('diffBetween: a key in an ordinary file is hidden in its patch', () => {
+  const cp = takeCheckpoint(repo, `t-diff-key-${Date.now()}`, path.join(t.home, 'fotos'));
+  const KEY = 'ghp_' + 'A1b2C3d4E5f6G7h8I9j0K1l2';
+  fs.writeFileSync(path.join(repo, 'config.js'), `export const token = '${KEY}';
+`);
+  const after = snapshotCommit(repo, { always: true, message: 'key' });
+  const out = diffBetween(repo, cp.commit, after.commit);
+  const f = out.files.find((x) => x.path === 'config.js');
+  assert.ok(f && f.added === 1);
+  assert.ok(!JSON.stringify(out).includes(KEY), 'the key is not in the answer');
+  assert.match(f.patch, /secreto oculto/);
+  undoCheckpoint(cp, after);
+});
