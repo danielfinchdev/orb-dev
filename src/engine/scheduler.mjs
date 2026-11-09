@@ -24,6 +24,7 @@ import { git, prepareWorkdir, takeCheckpoint, changedBetween, undoCheckpoint, sn
 import { rankAccounts, isLimitText, isBudgetText, startCooldown, pauseAccount, taskBudgetUsd, blockModel, isModelLimitText, liftAfterSuccess, untilText, modelName } from '../core/budget.mjs';
 import { installed } from '../agents/index.mjs';
 import { runDue } from '../core/schedules.mjs';
+import { wakeSnoozed } from '../core/inbox.mjs';
 import { explainFailure } from '../core/agent-errors.mjs';
 import { usableAccounts, account as findAccount, accountLabel } from '../core/accounts.mjs';
 import { oneLine, redactSecrets, secretFiles, isSecretPath, stagedSecrets, MAX_DEP_RESULT } from '../core/safety.mjs';
@@ -229,6 +230,17 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
     }
   }
 
+  // 3.8.2: the snoozed chats whose time has come are back in the list, with a notice naming each.
+  wakeChats() {
+    const woken = wakeSnoozed(this.board);
+    if (!woken.length) return;
+    for (const { kind, id } of woken) {
+      const title = kind === 'session' ? this.board.one('SELECT title FROM sessions WHERE id = ?', id)?.title : this.board.conversation(Number(id))?.title;
+      if (title) this.board.notice(tr('msg.inbox.snoozeBack', { title }));
+    }
+    this.emit?.('inbox:changed', {});
+  }
+
   // Called every few seconds and after every change of the board.
   tick() {
     const { board } = this;
@@ -237,6 +249,7 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
     try { this.releaseClosed(); } catch (error) { this.log(`liberar tareas cerradas: ${error.message}`); }
     try { this.retryLeftovers(); } catch (error) { this.log(`reintentar restos: ${error.message}`); }
     try { this.deliverMessages(); } catch (error) { this.log(`mensajes: ${error.message}`); }
+    try { this.wakeChats(); } catch (error) { this.log(`chats pospuestos: ${error.message}`); }
     if (!ctx.config.autoRun || board.setting('paused') === '1') return;
     try { this.resumeLimited(); } catch (error) { this.log(`continuar limitadas: ${error.message}`); }
     try { runDue(board, this.log); } catch (error) { this.log(`programadas: ${error.message}`); }

@@ -24,8 +24,8 @@ export function itemOfConversation(board, conversation) {
 export const conversationOf = (board, kind, id) => (kind === 'conversation' ? board.one('SELECT id FROM conversations WHERE id = ? AND bot_id IS NULL AND group_id IS NULL', Number(id))?.id ?? null : null);
 
 // ---- the marks (a chat without a row: not pinned, no section, not muted, nothing read but the starting point)
-const DEFAULT = { pinned: false, pinOrder: null, section: null, muted: false, lastRead: 0 };
-const view = (r) => (r ? { pinned: Boolean(r.pinned), pinOrder: r.pin_order ?? null, section: r.section_id ?? null, muted: Boolean(r.muted), lastRead: Number(r.last_read) || 0 } : { ...DEFAULT });
+const DEFAULT = { pinned: false, pinOrder: null, section: null, muted: false, lastRead: 0, snoozedUntil: null };
+const view = (r) => (r ? { pinned: Boolean(r.pinned), pinOrder: r.pin_order ?? null, section: r.section_id ?? null, muted: Boolean(r.muted), lastRead: Number(r.last_read) || 0, snoozedUntil: r.snoozed_until ?? null } : { ...DEFAULT });
 export function marks(board) {
   const out = new Map();
   if (!has(board, 'inbox_items')) return out;
@@ -35,13 +35,29 @@ export function marks(board) {
 // No row: the marks of a chat nobody marked.
 export const noMark = () => ({ ...DEFAULT });
 export const mark = (board, kind, id) => view(board.one('SELECT * FROM inbox_items WHERE person_id = ? AND kind = ? AND item_id = ?', ME, kind, String(id)));
-const COLS = { pinned: 'pinned', pinOrder: 'pin_order', section: 'section_id', muted: 'muted', lastRead: 'last_read' };
+const COLS = { pinned: 'pinned', pinOrder: 'pin_order', section: 'section_id', muted: 'muted', lastRead: 'last_read', snoozedUntil: 'snoozed_until' };
 export function setMark(board, kind, id, fields) {
   const keys = Object.keys(fields).filter((k) => COLS[k]);
   const val = (k) => (typeof fields[k] === 'boolean' ? Number(fields[k]) : fields[k] ?? null);
   board.run('INSERT OR IGNORE INTO inbox_items (person_id, kind, item_id) VALUES (?, ?, ?)', ME, kind, String(id));
   if (keys.length) board.run(`UPDATE inbox_items SET ${keys.map((k) => `${COLS[k]} = ?`).join(', ')} WHERE person_id = ? AND kind = ? AND item_id = ?`, ...keys.map(val), ME, kind, String(id));
   return mark(board, kind, id);
+}
+
+// ---- snooze (3.8.2): a chat hidden from the list until a time. The scheduler's tick wakes the ones that are due:
+// their mark is cleared and they come back where their last activity puts them. Returns the woken items.
+export const SNOOZE_MAX_MS = 366 * 24 * 3600 * 1000;
+export function snoozeUntil(value, now = Date.now()) {
+  if (value == null || value === '') return null;
+  const at = Date.parse(String(value));
+  if (!Number.isFinite(at) || at <= now || at - now > SNOOZE_MAX_MS) return undefined;
+  return new Date(at).toISOString();
+}
+export function wakeSnoozed(board, now = new Date()) {
+  if (!has(board, 'inbox_items')) return [];
+  const due = board.all('SELECT kind, item_id FROM inbox_items WHERE person_id = ? AND snoozed_until IS NOT NULL AND snoozed_until <= ?', ME, now.toISOString());
+  if (due.length) board.run('UPDATE inbox_items SET snoozed_until = NULL WHERE person_id = ? AND snoozed_until IS NOT NULL AND snoozed_until <= ?', ME, now.toISOString());
+  return due.map((r) => ({ kind: r.kind, id: r.item_id }));
 }
 
 // ---- read state. Where the counting starts: the last line when the lists were first used (old chats are not all

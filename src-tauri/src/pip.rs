@@ -167,8 +167,28 @@ pub async fn handle(app: &AppHandle, req: BrowserRequest) -> Result<Value, Strin
   }
 }
 
-/// A button of the little window: «go to Orb» here, the rest to the engine (sizes, close until the next activity).
+/// 3.8.2 (T3 3.11): «point:<x>,<y>», a click of the user on the page's picture, as fractions of its width and height
+/// (0..=1, at most 4 decimals). → the request for the engine, or None when it is anything else.
+fn point_request(action: &str) -> Option<Value> {
+  let (x, y) = action.strip_prefix("point:")?.split_once(',')?;
+  let num = |s: &str| -> Option<f64> {
+    let ok = !s.is_empty() && s.len() <= 6 && s.bytes().all(|b| b.is_ascii_digit() || b == b'.');
+    let v: f64 = if ok { s.parse().ok()? } else { return None };
+    (0.0..=1.0).contains(&v).then_some(v)
+  };
+  Some(json!({ "action": "point", "x": num(x)?, "y": num(y)? }))
+}
+
+/// A button of the little window: «go to Orb» here, the rest to the engine (sizes, close until the next activity;
+/// 3.8.2: point at an element, start or stop recording).
 pub fn action(app: &AppHandle, action: &str) -> Result<(), String> {
+  if let Some(req) = point_request(action) {
+    let engine = crate::engine::get(app);
+    tauri::async_runtime::spawn(async move {
+      let _ = engine.request("pip", req, std::time::Duration::from_secs(5)).await;
+    });
+    return Ok(());
+  }
   match action {
     "app" => {
       if let Some(w) = app.get_webview_window("main") {
@@ -180,7 +200,7 @@ pub fn action(app: &AppHandle, action: &str) -> Result<(), String> {
       }
       Ok(())
     }
-    "normal" | "grande" | "pildora" | "cerrar" | "loaded" => {
+    "normal" | "grande" | "pildora" | "cerrar" | "loaded" | "grabar" | "parar" => {
       let engine = crate::engine::get(app);
       let a = action.to_string();
       tauri::async_runtime::spawn(async move {
@@ -189,5 +209,20 @@ pub fn action(app: &AppHandle, action: &str) -> Result<(), String> {
       Ok(())
     }
     _ => Err("acción no válida".into()),
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::point_request;
+  use serde_json::json;
+
+  #[test]
+  fn a_point_is_two_fractions_and_nothing_else() {
+    assert_eq!(point_request("point:0.5,0.25"), Some(json!({ "action": "point", "x": 0.5, "y": 0.25 })));
+    assert_eq!(point_request("point:0,1"), Some(json!({ "action": "point", "x": 0.0, "y": 1.0 })));
+    for bad in ["point:", "point:1.5,0.2", "point:-0.1,0.2", "point:0.1", "point:0.1,0.2,0.3", "point:1e-1,0.2", "point:0.12345,0.2", "point:NaN,0.2", "normal", "pointx:0.1,0.2"] {
+      assert_eq!(point_request(bad), None, "{bad}");
+    }
   }
 }

@@ -240,7 +240,8 @@ export function openDb(filename = ctx.paths?.db) {
   if (!filename) throw new Error(tr('sys.db.noHome'));
   if (filename !== ':memory:') fs.mkdirSync(path.dirname(filename), { recursive: true });
   const db = new DatabaseSync(filename);
-  db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 8000; PRAGMA foreign_keys = ON;');
+  // The wait first: switching to WAL needs the database, and another process (a migration) may hold it for a moment.
+  db.exec('PRAGMA busy_timeout = 8000; PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA);
   migrate(db);
   // 3.8: this home's database of 3.5–3.7 is archived and tidied once (after the older migrations above).
@@ -260,6 +261,8 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   ['tasks', 'level', 'TEXT'],
   // 2.7: the multiplatform group a project belongs to (tienda-android and tienda-ios share «tienda»).
   ['projects', 'grupo', 'TEXT'],
+  // 3.8.2: «Usar mi móvil Android», given to a chat with the master password (src/engine/grants.mjs).
+  ['sessions', 'android', 'INTEGER NOT NULL DEFAULT 0'],
   // 2.3.3: each phone has its own key (end-to-end encryption), the way it was paired and its notifications.
   ['devices', 'public_key', 'TEXT'], ['devices', 'route', 'TEXT'], ['devices', 'push', 'TEXT'],
   // 3.5 (Magic Link): what was linked (phone or browser), its last address and what it told about itself (version).
@@ -272,7 +275,11 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   // 3.8: the direct conversation (session) that claimed a manual task: only that one may work on it.
   ['tasks', 'claimed_session', 'TEXT'],
   // 3.8: the task a worker's message comes from (task_id is then the task it is for: its own, or a sibling's).
-  ['messages', 'from_task', 'INTEGER']];
+  ['messages', 'from_task', 'INTEGER'],
+  // 3.8.2: a chat snoozed until then (hidden from the list; the scheduler brings it back).
+  ['inbox_items', 'snoozed_until', 'TEXT'],
+  // 3.8.2: a schedule whose runs all go to one chat (made on its first run, or the one that asked for it).
+  ['schedules', 'same_chat', 'INTEGER NOT NULL DEFAULT 0'], ['schedules', 'conversation_id', 'INTEGER']];
 // (3.6-3.7's person_id columns and chat.uid are no longer added: only a 3.7 database has them, emptied by the 3.8
 // migration (src/core/migrate-38.mjs) and dropped in 3.9.)
 export function migrate(db) {

@@ -1,6 +1,7 @@
 // chat.*
 export default {
   'chat.dictate': "Dictate",
+  'chat.dictateFailed': "Couldn't open Windows voice typing. Try Win+H.",
   'chat.suggestion1': 'Create a project called “my-site” with a simple home page',
   'chat.suggestion2': 'How are the tasks going?',
   'chat.suggestion3': 'Review the project and suggest improvements',
@@ -141,6 +142,11 @@ export default {
   'img.open': 'View the image',
   'img.unavailable': 'The image is no longer available.',
   'img.title': 'Image',
+  'viewer.pdf': 'PDF document',
+  'viewer.page': 'Page {n}',
+  'viewer.open': 'Open {name}',
+  'viewer.unavailable': 'The file cannot be opened.',
+  'viewer.more': 'Showing the first {n} of {total} pages.',
   'img.markHint': 'Drag over the image to mark the area you want to change, or describe a change for the whole image.',
   'img.zoneHint': 'Only the marked area will change. Drag again to mark another.',
   'img.changePh': 'What would you like to change?',
@@ -205,6 +211,9 @@ export default {
   'games.soundOn': 'Mute the games',
   'games.soundOff': 'Turn the sound on',
   'games.soundAppOff': 'Sounds are turned off in Settings.',
+  'games.music': 'Game music',
+  'games.musicOn': 'Mute the music',
+  'games.musicOff': 'Turn the music on',
   // 2.6: notices with the robot (or at the top, without animations)
   'notice.done': 'Done',
   'notice.attention': 'Needs your attention',

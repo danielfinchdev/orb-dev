@@ -1,7 +1,7 @@
 // 2.6: mini-games while the agents work. A window with the list of games and the difficulty; the game in the middle with
 // its score and best score (kept on this PC). Opened from the gamepad of the top bar or from the assistant's message.
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { Gamepad2, RotateCcw, ArrowLeft, Trophy, Flag, Sparkles, Volume2, VolumeX } from 'lucide-react';
+import { Gamepad2, RotateCcw, ArrowLeft, Trophy, Flag, Sparkles, Volume2, VolumeX, Music } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription, BubbleTip } from '@/components/ui/overlay.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { useStore, setState } from '@/lib/store.js';
@@ -10,6 +10,7 @@ import { useT } from '@/lib/i18n.js';
 import { LEVELS, best, saveBest } from './kit.js';
 import { THUMBS } from './thumbs.jsx';
 import { sfx, arm, stopAll, isMuted, setMuted } from './sfx.js';
+import { available as musicAvailable, startGameMusic, stopGameMusic, setGameMusic } from '@/lib/music.js';
 
 // Each game is loaded only when it is played.
 const GAMES = [
@@ -39,10 +40,14 @@ export function GamesDialog() {
   const [mute, setMute] = useState(isMuted);
   const soundOn = appSounds && !mute;
   useEffect(() => (open ? arm() : undefined), [open]);
+  useEffect(() => { if (!open) stopGameMusic(); }, [open]);
+  useEffect(() => stopGameMusic, []);
   const toggleSound = () => { if (!appSounds) return; setMuted(soundOn); setMute(soundOn); if (!soundOn) sfx('select'); };
-  const close = () => { stopAll(); setState({ games: false }); setGame(null); setOver(null); };
-  const start = (id) => { stopAll(); sfx('start'); setGame(id); setScore(0); setOver(null); setRound((r) => r + 1); };
-  const back = () => { stopAll(); sfx('select'); setGame(null); setOver(null); };
+  // 3.8.2: each game's own music (Windows, lib/music.js), with its own mute, remembered (ui.gameMusic).
+  const music = useStore((s) => s.app?.config?.ui?.gameMusic !== false);
+  const close = () => { stopAll(); stopGameMusic(); setState({ games: false }); setGame(null); setOver(null); };
+  const start = (id) => { stopAll(); sfx('start'); setGame(id); setScore(0); setOver(null); setRound((r) => r + 1); startGameMusic(id); };
+  const back = () => { stopAll(); stopGameMusic(); sfx('select'); setGame(null); setOver(null); };
   // The end of a game: a new record gets a fanfare, otherwise a short falling tune after the game's own crash. Chess
   // and Jumper end with a tune of their own, so they only add the record one.
   const ended = (s) => {
@@ -68,6 +73,12 @@ export function GamesDialog() {
             <Button variant="ghost" size="icon-sm" onClick={toggleSound} aria-label={t('games.sound')} aria-pressed={soundOn} aria-disabled={!appSounds || undefined} data-testid="games-sound"
               className={cn(!soundOn && 'text-muted-foreground', !appSounds && 'opacity-60')}>{soundOn ? <Volume2 /> : <VolumeX />}</Button>
           </BubbleTip>
+          {musicAvailable() ? (
+            <BubbleTip title={t('games.music')} text={music ? t('games.musicOn') : t('games.musicOff')}>
+              <Button variant="ghost" size="icon-sm" onClick={() => setGameMusic(!music, game)} aria-label={t('games.music')} aria-pressed={music} data-testid="games-music"
+                className={cn('relative', !music && 'text-muted-foreground')}><Music />{music ? null : <span className="absolute h-[1.5px] w-5 rotate-45 rounded bg-current" aria-hidden="true" />}</Button>
+            </BubbleTip>
+          ) : null}
         </div>
         {/* Difficulty: chosen before playing, and changing it starts the game again. */}
         <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label={t('games.level')}>

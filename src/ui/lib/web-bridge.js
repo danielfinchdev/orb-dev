@@ -78,6 +78,9 @@ if (!window.orb) {
   const answer = async (res, s, nonce) => {
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) { unpaired(); throw new Error(data.error ?? await tl('app.notLinked')); }
+    // 3.8.2 (review F2.5b M6): the PC is there but needs attention (its data could not be updated: remote.mjs ›
+    // startAttention); said as such, never as «sin conexión».
+    if (res.status === 503 && typeof data.attention === 'string') throw Object.assign(new Error(await tl('app.pcAttentionBody')), { attention: data.attention });
     if (!res.ok) throw new Error(data.error ?? await tl('app.httpError', { n: res.status }));
     const C = await crypto$();
     let msg; try { msg = C.open(s.key, data, C.AAD.response(s.id)); } catch { throw new Error(await tl('app.badAnswer')); }
@@ -173,11 +176,15 @@ if (!window.orb) {
   const fingerprintOf = async (pc) => { const C = await crypto$(); try { const k = C.b64.dec(pc); return k.length === 32 ? C.fingerprint(k) : null; } catch { return null; } };
   // A link ready to ask for the password: the short code does not carry the Orb's key, the Orb gives it (GET /api/hello,
   // while its code is on screen). → the link with pc and fp (the person compares fp with the PC's screen before typing).
+  // 3.8.2: an address on the local network (plain http, not Tailscale's 100.64.0.0/10 or *.ts.net): when none answers,
+  // the usual cause is Windows' firewall on the PC, so the error says so (Ajustes no longer warns about it in advance).
+  const overLan = (u) => /^http:\/\//.test(u ?? '') && !/\.ts\.net(:|\/|$)|\/\/100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(u);
+  const offline = async (urls) => new Error(await tl((urls ?? []).some(overLan) ? 'app.linkOfflineWifi' : 'app.linkOffline'));
   const resolveLink = async (link) => {
     let p = link;
     if (!p.pc) {
       const r = await timedFetch(`${p.urls[0]}/api/hello`, { credentials: 'omit' }, TIMEOUTS.hello).catch(() => null);
-      if (!r) throw new Error(await tl('app.linkOffline'));
+      if (!r) throw await offline([p.urls[0]]);
       const d = await r.json().catch(() => ({}));
       if (!r.ok || typeof d?.pc !== 'string') throw new Error(await tl('app.linkNoShortCode'));
       // 3.5.1: only an Orb that ties the code to its own key (an older one, or an answer changed on the way: the QR).
@@ -206,7 +213,7 @@ if (!window.orb) {
       let r;
       try { r = await C.linkDevice({ base, pcPub, secret, via, name, kind, v: L.PROTOCOL, min: L.MIN_PROTOCOL, password: String(password ?? ''), now: stamp, fetch: fetchWithin(TIMEOUTS.pair) }); }
       catch (e) {
-        if (e.code === 'offline') { last = new Error(await tl('app.linkOffline')); continue; } // not reachable this way: the next address
+        if (e.code === 'offline') { last = await offline(p.urls); continue; } // not reachable this way: the next address
         if (e.code === 'badAnswer') throw new Error(await tl('app.badAnswer'));
         throw e; // the PC's own words (status, reason)
       }
@@ -215,7 +222,7 @@ if (!window.orb) {
       session = { id: r.id, key: r.key };
       return true;
     }
-    throw last ?? new Error(await tl('app.linkOffline'));
+    throw last ?? await offline(p.urls);
   };
 
   // Notifications (https only: Tailscale with HTTPS). On an iPhone they work once the app is on the home screen.
@@ -273,6 +280,8 @@ if (!window.orb) {
         if (!await record()) return { mobile: true, needsPairing: true, needsSetup: false, pairError, app: Boolean(host) };
         // 3.8: the PC is off, asleep, out of this network or Orb is closed: a calm screen that keeps trying (main.jsx),
         // never «No se pudo iniciar Orb».
+        // 3.8.2: the same calm screen when the PC answers that it needs attention, with that said instead.
+        if (e.attention) return { mobile: true, needsSetup: false, offline: true, attention: e.attention, pcName: saved?.name ?? null, seenAt: Number(localStorage.getItem('orb.visto') ?? 0) || null, app: Boolean(host) };
         if (isOffline(e)) return { mobile: true, needsSetup: false, offline: true, pcName: saved?.name ?? null, seenAt: Number(localStorage.getItem('orb.visto') ?? 0) || null, app: Boolean(host) };
       }
       const gap = r && !r.ok && (r.status === 426 || r.update) ? { has: L.PROTOCOL, need: L.PROTOCOL + 1 } : L.updateNeeded(me);
@@ -295,7 +304,8 @@ if (!window.orb) {
     setup: async () => { throw new Error(await tl('app.pcOnly')); },
     switchHome: async () => { throw new Error(await tl('app.pcOnly')); },
     pickFolder: async () => null,
-    pickImages,
+    // 3.8.2: a linked device still attaches pictures only (they are uploaded to the PC first, remote.mjs).
+    pickAttachments: pickImages,
     openPath: async () => { throw new Error(await tl('app.foldersPc')); },
     openExternal: async (url) => { if (/^https:\/\//.test(url)) window.open(url, '_blank', 'noopener'); },
     pathForFile: () => null

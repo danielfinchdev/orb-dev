@@ -83,7 +83,8 @@ const SCENE = {
   vaporwave: <><VaporwaveDay /><VaporwaveNight /></>,
   retro: <><RetroDay /><RetroNight /></>,
   profesional: null,
-  nube: <Candy />
+  nube: <Candy />,
+  cristal: null // its still colour field is --p-scene (skin-preview.css)
 };
 
 export function SkinPreview({ skin }) {

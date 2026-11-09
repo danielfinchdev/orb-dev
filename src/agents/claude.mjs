@@ -18,6 +18,14 @@ export const kind = 'sdk';
 export const caps = { images: true, steer: true, fork: true, approvals: true, models: true, context: true, compact: true };
 
 // The assistant's coordinator process never runs commands or edits (that is the agents' work).
+// 3.8.2: a subagent (Claude Code's Agent tool, «Task» in older versions): its type, what it was asked and its model, so
+// the conversation shows it as one row; the steps it takes name it as their parent (parent_tool_use_id).
+export function subagentOf(name, input) {
+  if (!['Agent', 'Task'].includes(name) || !input || typeof input !== 'object') return {};
+  const text = (v, n) => (typeof v === 'string' && v.trim() ? clip(v.trim(), n) : null);
+  return { agent: { name: text(input.subagent_type, 60) ?? 'general-purpose', description: text(input.description, 200), model: text(input.model, 60) } };
+}
+const stepOf = (m) => (m.parent_tool_use_id ? { parent: m.parent_tool_use_id } : {});
 export const COORDINATOR_DENIED = ['Bash', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit', 'WebFetch', 'WebSearch', 'Task', 'Skill'];
 // Lighter processes: only the project's own settings, and only the MCP servers Orb passes (strict-mcp-config).
 export const LEAN_SOURCES = ['project', 'local'];
@@ -132,7 +140,9 @@ export const answersOrb = (m) => !(m?.origin?.kind && m.origin.kind !== 'human')
 // 3.8.1: Claude loads the skills of core by itself (a plugin); agents without this get them in their brief.
 export const nativeSkills = true;
 
-export const permissionModeOf = (p) => (p === 'total' ? 'bypassPermissions' : p === 'editar' ? 'acceptEdits' : 'default');
+// 3.8.2: «total» is no longer bypassPermissions (which never calls canUseTool, so Orb's guard did not run): Claude asks
+// for what it would ask in «default» and the guard allows all but the protected set (src/core/guard.mjs).
+export const permissionModeOf = (p) => (p === 'editar' ? 'acceptEdits' : 'default');
 
 // options: exe, cwd, model, reasoning, permission, resumeId, newSessionId, forkSession, mcpServers, env, systemPrompt
 // (appended to Claude Code's own), tools ({ allowed, disallowed }), addDirs, budgetUsd, internalDir, log, onEvent, skills
@@ -157,7 +167,7 @@ export function createLive(o) {
     const paths = [toolInput?.file_path, toolInput?.path, toolInput?.notebook_path].filter(Boolean);
     // Glob and Grep patterns are checked too (where they reach).
     const patterns = [toolInput?.pattern, toolInput?.glob].filter((x) => typeof x === 'string' && x);
-    const verdict = decide({ permission, tool: toolName, command, paths, patterns: toolName === 'Grep' ? patterns.slice(1) : patterns, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang });
+    const verdict = decide({ permission, tool: toolName, command, paths, patterns: toolName === 'Grep' ? patterns.slice(1) : patterns, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()) });
     if (verdict.decision === 'allow') return { behavior: 'allow', updatedInput: toolInput };
     if (verdict.decision === 'deny') return { behavior: 'deny', message: `Orb no lo permite: ${verdict.reason}.` };
     // 3.1: summary: what the agent itself says the command is for (Claude's Bash tool asks it for a description).
@@ -181,12 +191,12 @@ export function createLive(o) {
       for (const part of m.message?.content ?? []) {
         if (part.type === 'text' && part.text?.trim()) { onEvent({ type: 'item', role: 'assistant', kind: 'text', body: part.text, sub }); if (!sub) turn?.addText(part.text); }
         if (part.type === 'thinking' && part.thinking?.trim()) onEvent({ type: 'item', role: 'assistant', kind: 'reasoning', body: clip(part.thinking, 4000) });
-        if (part.type === 'tool_use') onEvent({ type: 'item', role: 'tool', kind: 'tool', body: { id: part.id, name: String(part.name ?? '').replace(/^mcp__orb__/, 'orb:'), input: describeInput(part.input), sub } });
+        if (part.type === 'tool_use') onEvent({ type: 'item', role: 'tool', kind: 'tool', body: { id: part.id, name: String(part.name ?? '').replace(/^mcp__orb__/, 'orb:'), input: describeInput(part.input), sub, ...stepOf(m), ...subagentOf(part.name, part.input) } });
       }
     }
     if (m.type === 'user') {
       for (const part of Array.isArray(m.message?.content) ? m.message.content : []) {
-        if (part.type === 'tool_result') onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: { id: part.tool_use_id, output: clip(textOf(part.content), 3000), error: Boolean(part.is_error) } });
+        if (part.type === 'tool_result') onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: { id: part.tool_use_id, output: clip(textOf(part.content), 3000), error: Boolean(part.is_error), ...stepOf(m) } });
       }
     }
     if (m.type === 'rate_limit_event') {
@@ -215,17 +225,19 @@ export function createLive(o) {
   // 2.6: the plan's windows (session, weekly, weekly of a model) as /usage shows them: Claude only sends them by itself
   // near a limit, so they are asked after a turn, at most every 90 s (experimental SDK call: best effort, any version).
   let usageAt = 0;
-  const planUsage = () => {
+  // 3.8.2: force (the usage panel's «Recargar») asks now, whatever the 90 s; the engine limits how often (usage.refresh).
+  const planUsage = ({ force = false } = {}) => {
     const ask = query?.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET;
-    if (typeof ask !== 'function' || Date.now() - usageAt < 90_000) return;
+    if (typeof ask !== 'function' || (!force && Date.now() - usageAt < 90_000)) return Promise.resolve(false);
     usageAt = Date.now();
-    Promise.resolve(ask.call(query, { skipBehaviors: true })).then((u) => {
+    return Promise.resolve(ask.call(query, { skipBehaviors: true })).then((u) => {
       const r = u?.rate_limits;
-      if (!r) return;
+      if (!r) return false;
       const send = (window, w) => { if (w?.utilization == null) return; onEvent({ type: 'rate', status: 'allowed', resetAt: w.resets_at ? Date.parse(w.resets_at) || null : null, utilization: w.utilization / 100, window }); };
       for (const k of ['five_hour', 'seven_day', 'seven_day_opus', 'seven_day_sonnet']) send(k, r[k]);
       for (const m of r.model_scoped ?? []) if (m?.display_name) send(`seven_day_${String(m.display_name).toLowerCase().replace(/[^a-z0-9]+/g, '_')}`, m);
-    }).catch(() => {});
+      return true;
+    }).catch(() => false);
   };
 
   const start = async () => {
@@ -283,7 +295,8 @@ export function createLive(o) {
     if (o.tools?.allowed?.length) options.allowedTools = o.tools.allowed;
     const disallowed = [...(o.tools?.disallowed ?? []), ...(permission === 'leer' ? ['Bash', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit'] : permission === 'probar' ? ['Edit', 'Write', 'NotebookEdit', 'MultiEdit'] : [])];
     if (disallowed.length) options.disallowedTools = disallowed;
-    if (permission === 'total') options.allowDangerouslySkipPermissions = true;
+    // 3.8.2 (owner's decision D8): no Claude in Chrome (it drives the user's own Chrome); every agent's browser is Orb's
+    // (orb_browser_*), with Orb's browser rules. Under «Acceso total» the PC is used through the terminal.
     if (o.budgetUsd) options.maxBudgetUsd = o.budgetUsd;
     // 3.8.1: the skills of core that are on, as a plugin Orb makes (src/core/extensions.mjs › exposeSkills): Claude lists
     // them («orb-skills:<name>») and loads one when it fits. Checked with the real Claude Code (supportedCommands).
@@ -336,6 +349,7 @@ export function createLive(o) {
   live.setModel = async (model) => { o.model = model; try { await query?.setModel(model || undefined); } catch { /* next start */ } };
   live.setPermission = async (p) => { permission = p; try { await query?.setPermissionMode(permissionModeOf(p)); } catch { /* next start */ } };
   live.close = () => { if (closed && !query) return; closed = true; approvals.clear(); input.close(); try { query?.close(); } catch { /* gone */ } try { abort.abort(); } catch { /* gone */ } try { killTree(child); } catch { /* gone */ } };
+  live.refreshUsage = () => (closed ? Promise.resolve(false) : planUsage({ force: true }));
   live.isClosed = () => closed;
   return live;
 }

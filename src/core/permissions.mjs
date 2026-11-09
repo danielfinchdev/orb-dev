@@ -21,14 +21,21 @@ export const METHODS = Object.freeze({
   'app.state': 'remote', 'app.migrationState': 'pc', 'app.migrationRetry': 'pc', 'app.coreState': 'pc', 'app.coreRepair': 'pc', 'app.layoutPlan': 'pc', 'app.layoutApply': 'pc', 'config.save': 'pc', 'sidebar.complete': 'remote', 'control.pause': 'remote', 'control.resume': 'remote',
   // 3.8.1: this PC's tools, in the engine (src/engine/api-app.mjs)
   'app.openTerminal': 'pc', 'app.editors': 'pc', 'app.openIn': 'pc', 'app.runAction': 'pc', 'app.feedbackSend': 'pc', 'app.moreApps': 'pc',
+  // 3.8.2: the Windows app's music (src/engine/music.mjs)
+  'music.track': 'pc',
   'system.check': 'pc', 'installer.check': 'pc', 'installer.progress': 'pc', 'installer.start': 'pc',
-  'activity.list': 'remote', 'usage.get': 'remote', 'usage.now': 'remote', 'models.guide': 'remote', 'models.catalog': 'remote',
+  'activity.list': 'remote', 'usage.get': 'remote', 'usage.now': 'remote', 'usage.refresh': 'remote', 'usage.history': 'remote', 'models.guide': 'remote', 'models.catalog': 'remote',
   'mentions.options': 'remote', 'approvals.list': 'remote',
   // this PC's tools
-  'android.status': 'pc', 'android.install': 'pc', 'github.status': 'pc', 'github.contributions': 'pc', 'github.login': 'pc',
+  'android.status': 'pc', 'android.install': 'pc',
+  // 3.8.2: pairing a phone for the agents (Ajustes › Android, src/engine/android.mjs)
+  'android.pairStart': 'pc', 'android.pairState': 'pc', 'android.pairCancel': 'pc', 'android.pairCode': 'pc', 'android.devices': 'pc', 'android.disconnect': 'pc', 'android.forget': 'pc',
+  // 3.8.2 (T3 3.17): an Android emulator already installed on this PC
+  'android.emulators': 'pc', 'android.emulatorStart': 'pc',
+  'github.status': 'pc', 'github.contributions': 'pc', 'github.login': 'pc',
   'expert.tree': 'pc', 'expert.read': 'pc', 'expert.status': 'pc', 'expert.diff': 'pc', 'expert.log': 'pc', 'expert.system': 'pc',
   'actions.list': 'pc', 'actions.save': 'pc', 'actions.remove': 'pc',
-  'images.read': 'pc', 'images.mark': 'pc', 'images.save': 'pc',
+  'images.read': 'pc', 'images.mark': 'pc', 'images.save': 'pc', 'attachments.read': 'pc',
   // conversations with the assistant
   'conversations.list': 'remote', 'conversations.search': 'remote', 'conversations.update': 'remote', 'conversations.remove': 'pc',
   'chat.list': 'remote', 'chat.send': 'remote', 'chat.stop': 'remote', 'chat.compact': 'remote', 'chat.answer': 'remote', 'chat.accept': 'remote',
@@ -44,17 +51,19 @@ export const METHODS = Object.freeze({
   'logs.list': 'remote', 'logs.read': 'remote',
   // tasks
   'tasks.list': 'remote', 'tasks.live': 'remote', 'tasks.get': 'remote', 'tasks.create': 'remote', 'tasks.approve': 'remote',
-  'tasks.retry': 'remote', 'tasks.cancel': 'remote', 'tasks.reassign': 'remote', 'tasks.followup': 'remote', 'tasks.undo': 'remote',
-  'tasks.launchAnyway': 'remote', 'tasks.accept': 'remote', 'tasks.review': 'remote', 'tasks.discardBranch': 'pc',
+  'tasks.retry': 'remote', 'tasks.cancel': 'remote', 'tasks.reassign': 'remote', 'tasks.followup': 'remote', 'tasks.undo': 'remote', 'tasks.diff': 'remote',
+  'tasks.launchAnyway': 'remote', 'tasks.search': 'remote', 'tasks.accept': 'remote', 'tasks.review': 'remote', 'tasks.discardBranch': 'pc',
   // direct conversations with an agent and the tasks' sessions
   'sessions.list': 'remote', 'sessions.create': 'remote', 'sessions.items': 'remote', 'sessions.send': 'remote', 'sessions.queue': 'remote',
   'sessions.editQueued': 'remote', 'sessions.approve': 'remote', 'sessions.resume': 'remote', 'sessions.fork': 'remote', 'sessions.settle': 'remote',
   'sessions.stop': 'remote', 'sessions.compact': 'remote', 'sessions.update': 'remote', 'sessions.remove': 'pc',
+  // 3.8.2: «Acceso total al PC» and «Usar mi móvil Android» (src/engine/grants.mjs): given and taken back only here
+  'sessions.grantTotal': 'pc', 'sessions.grantAndroid': 'pc', 'sessions.revokeGrant': 'pc',
   // scheduled tasks
   'schedules.list': 'remote', 'schedules.create': 'remote', 'schedules.update': 'remote', 'schedules.run': 'remote', 'schedules.remove': 'pc',
   // the chat list (pins, sections, read marks)
   'inbox.list': 'remote', 'inbox.search': 'remote', 'inbox.pin': 'remote', 'inbox.unpin': 'remote', 'inbox.reorderPins': 'remote',
-  'inbox.mute': 'remote', 'inbox.markRead': 'remote', 'inbox.sections.list': 'remote', 'inbox.sections.create': 'remote',
+  'inbox.mute': 'remote', 'inbox.snooze': 'remote', 'inbox.markRead': 'remote', 'inbox.sections.list': 'remote', 'inbox.sections.create': 'remote',
   'inbox.sections.rename': 'remote', 'inbox.sections.delete': 'remote', 'inbox.sections.reorder': 'remote', 'inbox.sections.move': 'remote',
   // phone access and Magic Link
   'remote.status': 'pc', 'remote.enable': 'pc', 'remote.configure': 'pc', 'remote.pair': 'pc', 'remote.revoke': 'pc',
@@ -68,6 +77,10 @@ export const METHODS = Object.freeze({
   // 3.8: the master password and the connectors' keys
   'master.state': 'pc', 'master.create': 'pc', 'master.unlock': 'pc', 'master.lock': 'pc', 'master.check': 'pc', 'master.change': 'pc', 'master.forgot': 'pc', 'master.reset': 'pc',
   'secrets.connector': 'pc', 'secrets.saveConnector': 'pc',
+  // 3.8.2 (T3 3.4): a secret an agent asked for, typed only on this PC's card (src/engine/agent-secrets.mjs)
+  'secrets.pending': 'pc', 'secrets.answer': 'pc', 'secrets.decline': 'pc',
+  // 3.8.2 (T3 3.2): the user's terminal inside Orb (src/engine/user-terminal.mjs)
+  'terminal.list': 'pc', 'terminal.open': 'pc', 'terminal.write': 'pc', 'terminal.close': 'pc',
   // 3.8.1: Ajustes › Skills y MCP (src/engine/api-extensions.mjs): what agents run comes in and out of core only here
   'extensions.list': 'pc', 'extensions.toggle': 'pc', 'extensions.import': 'pc', 'extensions.remove': 'pc', 'extensions.approve': 'pc',
   'extensions.reject': 'pc', 'extensions.edit': 'pc', 'extensions.adopt': 'pc', 'extensions.applyCheck': 'pc', 'extensions.apply': 'pc'
@@ -83,15 +96,29 @@ export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter(
 // «Cosas que nadie toca»; 3.8.1: deleting a project (its folder) and removing a skill or an MCP server from core (or a
 // connector). current: the settings now (the engine's), to compare
 // with. Changing the password asks for the current one instead.
-export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'backup.previousKey', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'projects.deleteCheck', 'extensions.remove']));
+// 3.8.2: pairing a phone or starting an emulator (the agents may then reach it), and giving a chat «Acceso total al PC» or the phone (below: every
+// time).
+export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'backup.previousKey', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'projects.deleteCheck', 'extensions.remove',
+  'android.pairStart', 'android.pairCode', 'android.emulatorStart', 'sessions.grantTotal', 'sessions.grantAndroid']));
 // 3.8.1: the actions that ask for the master password EVERY time, even right after another unlock (the owner: deleting a
 // project «requiere master pass»): method → the purpose its token must carry (src/core/master.mjs › issue(purpose)).
 // projects.delete and projects.deleteAbort need no token: they take the one-off ticket projects.deleteCheck returned
 // (project-close.mjs), so a token that expires while the Recycle Bin works never leaves a delete half-way.
-export const FRESH_UNLOCK = Object.freeze({ 'projects.deleteCheck': 'deleteProject' });
-export const FRESH_PURPOSES = Object.freeze([...new Set(Object.values(FRESH_UNLOCK))]);
+// 3.8.2 (D1, D2): «Acceso total al PC» and «Usar mi móvil Android», given to a chat.
+export const FRESH_UNLOCK = Object.freeze({ 'projects.deleteCheck': 'deleteProject', 'sessions.grantTotal': 'fullAccess', 'sessions.grantAndroid': 'android' });
+// 3.8.2 (security review): a secret an agent asked for, saved in the vault or taken from it, asks every time too (its
+// token is for that one action); the purpose depends on what the card does.
+export const SECRET_PURPOSES = Object.freeze({ save: 'secretSave', saved: 'secretSaved' });
+export const FRESH_PURPOSES = Object.freeze([...new Set([...Object.values(FRESH_UNLOCK), ...Object.values(SECRET_PURPOSES)])]);
+// The purpose a guarded call's token must carry (an action that asks every time), or null (the usual 5-minute token).
+export function freshPurpose(method, params) {
+  if (method === 'secrets.answer') return params?.saved === true ? SECRET_PURPOSES.saved : params?.save === true ? SECRET_PURPOSES.save : null;
+  return FRESH_UNLOCK[method] ?? null;
+}
 export function needsUnlock(method, params, current = {}) {
   if (UNLOCK_METHODS.has(method)) return true;
+  // 3.8.2 (T3 3.4): a secret for an agent saved in the vault, or taken from it.
+  if (method === 'secrets.answer') return params?.save === true || params?.saved === true;
   if (method !== 'config.save') return false;
   const patch = params?.patch ?? {};
   if (patch.backup && typeof patch.backup === 'object' && Object.hasOwn(patch.backup, 'folder')) return true;

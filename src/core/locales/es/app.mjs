@@ -1,7 +1,7 @@
 // app.*
 export default {
   'app.linkTitle': "Enlazar con tu Orb",
-  'app.linkBody': "En tu Orb, abre Ajustes → Magic Link, pulsa «Mostrar el código QR» y escanéalo. Después escribe la contraseña maestra del PC.",
+  'app.linkBody': 'En tu Orb, abre Ajustes › Magic Link, pulsa «Mostrar código QR» y escanéalo. Después escribe la contraseña maestra del PC.',
   'app.linkScan': "Escanear el código QR",
   'app.linkManual': "Enlazar sin cámara",
   'app.linkPaste': "Enlace de tu Orb",
@@ -20,7 +20,6 @@ export default {
   'app.linkOffline': "No se pudo conectar con tu Orb. Comprueba que el móvil está en tu wifi o con Tailscale activo.",
   'app.linkNoShortCode': "Tu Orb no admite el código corto. Escanea el código QR o pega su enlace.",
   'app.scanPreparing': "Se está instalando el lector de códigos QR. Vuelve a intentarlo en unos segundos.",
-  'app.dictateUnavailable': "El dictado no está disponible en este móvil.",
   'app.sharedImage': "Imagen compartida: {path}",
   'app.noticeFrom': "{name} · Notificación",
   'app.pushDeniedApp': "Las notificaciones de Orb están desactivadas. Actívalas en los ajustes de Android.",
@@ -69,6 +68,9 @@ export default {
   "app.offlineTitleNamed": "{name} está apagado o no se puede alcanzar",
   "app.offlineBody": "Comprueba que el PC está encendido, con Orb abierto, y que el móvil está en la misma wifi o con Tailscale activo.",
   "app.offlineOldPc": "Si has actualizado esta app, actualiza también Orb en el PC: necesita Orb 3.8.1 o posterior.",
+  "app.pcAttentionTitle": "El PC necesita atención",
+  "app.pcAttentionTitleNamed": "{name} necesita atención",
+  "app.pcAttentionBody": "La actualización de los datos de Orb falló en el PC. Abre Orb en el PC para resolverlo; el móvil vuelve a conectarse solo.",
   "app.offlineRetry": "Reintentar",
   "app.newSecretTitle": "¿Empezar con una clave nueva?",
   "app.newSecretIntro": "Orb creará una clave nueva para este PC. Se volverán a pedir las aprobaciones y habrá que enlazar otra vez el móvil.",
@@ -99,5 +101,6 @@ export default {
   "app.crashHome": "Volver al inicio",
   "app.loadOfflineTitle": "Sin conexión",
   "app.loadOfflineBody": "No se pudo cargar esta pantalla. Comprueba la conexión y vuelve a intentarlo.",
-  "app.loadOfflineToast": "No se pudo abrir: sin conexión."
+  "app.loadOfflineToast": "No se pudo abrir: sin conexión.",
+  'app.linkOfflineWifi': 'No se pudo conectar con tu Orb por la red local. En el PC, permite Orb en el firewall de Windows para redes privadas.',
 };

@@ -199,6 +199,9 @@ export class Master {
   // → { ok: true } | the refusals of attempt() | { ok: false, reason: 'none' } (no password made, or its file is gone).
   // A right password also opens a data key this PC could not open by itself and wraps it for this PC again.
   verify(password, channel = 'pc') { return this.serial(() => this.job('verify', { password: typed(password), channel })); }
+  // Whether a value is the master password, with no try counted and nothing kept (an agent's secret card refuses it).
+  // → true | false (false too while the data key is closed).
+  isPassword(value) { return this.serial(() => this.job('same', { password: typed(value) })); }
 
   // ---- the window's unlock: a token for 5 minutes (kept in Rust), dropped when the window locks or closes.
   // purpose: a token for ONE action that always asks again (FRESH_UNLOCK in src/core/permissions.mjs): FRESH_MS.

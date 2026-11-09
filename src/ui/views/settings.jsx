@@ -3,9 +3,10 @@
 // Acerca de.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import QRCode from 'qrcode';
 import { DatabaseBackup, Settings, FlaskConical, FolderOpen, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink, ShieldBan, RotateCcw, Puzzle } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
-import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS } from '../../core/appearance.mjs';
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS, plainSkin } from '../../core/appearance.mjs';
 import { PRODUCT, AUTHOR } from '../../core/product.mjs';
 import { PANELS, savePanels } from './expert.jsx';
 import { PageHeader } from '@/components/page.jsx';
@@ -14,7 +15,7 @@ import { SkinPreview } from '@/components/skin-preview.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Kbd, PathText, Spinner } from '@/components/ui/basic.jsx';
-import { Select, Switch, Checkbox, Dialog, DialogContent, DialogTitle, BubbleTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
+import { Select, Switch, Checkbox, Dialog, DialogContent, DialogTitle, BubbleTip, InfoTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
 import { ModelGuide } from '@/components/model-guide.jsx';
 import { AGENT } from '@/lib/labels.js';
 import { useStore, call, act, bridge, setState, getState, applyTheme, applyAppearance, go, openTerminal, openSettings, closeSettings, fullPc, runTest } from '@/lib/store.js';
@@ -28,6 +29,8 @@ import { DataCards } from './data.jsx';
 import { ExtensionsPanel } from './extensions.jsx';
 import { unlockCore } from '@/lib/core-access.js';
 import { DEFAULT_PROTECTED } from '../../core/layout.mjs';
+import { TRACKS } from '../../core/music.mjs';
+import { available as musicAvailable, musicPrefs, setMusicVolume } from '@/lib/music.js';
 
 // unlock: the master password's token, for a change that needs it (src/core/permissions.mjs › needsUnlock).
 async function save(patch, ok = t('settings.saved'), unlock = null) {
@@ -37,8 +40,17 @@ async function save(patch, ok = t('settings.saved'), unlock = null) {
 }
 const num = (v) => Number(v) || 0;
 // The whole row is the switch's label: clicking its text toggles it too (the switch alone is a small target).
-function Row({ label, hint, children }) {
-  return <label className="-mx-2 flex cursor-pointer items-center justify-between gap-4 rounded-lg px-2 py-1.5 hover:bg-accent/40"><div><div className="text-sm">{label}</div>{hint ? <div className="text-muted-foreground text-xs">{hint}</div> : null}</div>{children}</label>;
+// info: the details that do not fit in the hint, behind an «ⓘ» next to the label (3.8.2).
+function Row({ label, hint, info, children }) {
+  return <label className="-mx-2 flex cursor-pointer items-center justify-between gap-4 rounded-lg px-2 py-1.5 hover:bg-accent/40"><div><div className="flex items-center gap-1.5 text-sm">{label}{info ? <InfoTip text={info} /> : null}</div>{hint ? <div className="text-muted-foreground text-xs">{hint}</div> : null}</div>{children}</label>;
+}
+// A text with keyboard shortcuts in it: each {name} of the text becomes its keys (3.8.2: one key per sentence, so it
+// translates whole, instead of a sentence cut in five).
+function WithKeys({ text, keys }) {
+  return text.split(/(\{\w+\})/).map((part, i) => {
+    const combo = /^\{(\w+)\}$/.test(part) ? keys[part.slice(1, -1)] : null;
+    return combo ? <span key={i} className="whitespace-nowrap">{combo.map((k, j) => <Kbd key={j} className={j ? 'ml-0.5' : undefined}>{k}</Kbd>)}</span> : part;
+  });
 }
 
 function AssistantCard({ c }) {
@@ -66,7 +78,7 @@ function AppearanceCard({ c }) {
   const [volume, setVolume] = useState(c.ui?.volume ?? 0.5);
   const set = (patch, ok = null) => save({ ui: patch }, ok);
   const opts = (list, prefix) => list.map((value) => ({ value, label: t(`${prefix}.${value}`) }));
-  const robot = ui.skin !== 'profesional';
+  const robot = !plainSkin(ui.skin);
   return (
     <Card>
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Palette className="text-primary size-5" /><div><CardTitle>{t('appearance.title')}</CardTitle><CardDescription>{t('appearance.desc')}</CardDescription></div></CardHeader>
@@ -93,6 +105,8 @@ function AppearanceCard({ c }) {
           <Field label={t('appearance.codeTheme')}><Select className="w-full" value={ui.codeTheme} onValueChange={(codeTheme) => set({ codeTheme })} options={opts(CODE_THEMES, 'appearance.codeTheme')} /></Field>
         </div>
         <pre className="code-sample hljs overflow-x-auto rounded-lg border p-3 text-[12.5px] leading-[1.55]" aria-label={t('appearance.codeSample')}><code><span className="hljs-keyword">const</span> <span className="hljs-variable">orb</span> = <span className="hljs-title function_">director</span>(<span className="hljs-string">'bolsillo'</span>, {'{ '}<span className="hljs-attr">fases</span>: <span className="hljs-number">3</span>{' }'}); <span className="hljs-comment">// Orbe</span></code></pre>
+        <Row label={t('appearance.usageLine')} hint={t('appearance.usageLineHint')}><Switch checked={ui.usageLine !== false} onCheckedChange={(usageLine) => set({ usageLine })} data-testid="usage-line-switch" /></Row>
+        {musicAvailable() ? <MusicVolume /> : null}
         {robot ? (
           <div className="grid gap-1">
             <Row label={t('settings.companion')} hint={t('settings.companionHint')}><Switch checked={ui.companion !== false} onCheckedChange={(companion) => set({ companion }, companion ? t('settings.companionOn') : t('settings.companionOff'))} /></Row>
@@ -165,7 +179,7 @@ function TasksCard({ c }) {
           <p className="text-muted-foreground text-xs leading-snug">{level == null ? t('settings.spendCustomHint') : t(`settings.spend${level}Hint`)}</p>
         </div>
         {/* 2.7: Orb chooses each task's model and reasoning (on by default), and the guide says what it uses for what. */}
-        <Row label={t('settings.autoModel')} hint={t('settings.autoModelHint')}><Switch checked={c.budget?.autoModel !== false} onCheckedChange={(autoModel) => save({ budget: { autoModel } })} data-testid="auto-model" /></Row>
+        <Row label={t('settings.autoModel')} info={t('settings.autoModelHint')}><Switch checked={c.budget?.autoModel !== false} onCheckedChange={(autoModel) => save({ budget: { autoModel } })} data-testid="auto-model" /></Row>
         <ModelGuide auto={c.budget?.autoModel !== false} />
         <Row label={t('settings.autoRun')} hint={t('settings.autoRunHint')}><Switch checked={v.autoRun} onCheckedChange={(autoRun) => { setV({ ...v, autoRun }); save({ autoRun }); }} /></Row>
         {/* 3.1: tasks work at the same time by default; this makes them wait for each other. */}
@@ -190,7 +204,7 @@ function TasksCard({ c }) {
         <div className="grid grid-cols-3 gap-3">
           <Field label={t('settings.stopAt')} hint={t('settings.stopAtHint')}><Input type="number" min={50} max={100} value={v.stopAt} onChange={(e) => setV({ ...v, stopAt: num(e.target.value) })} /></Field>
           <Field label={t('settings.maxPerTask')} hint={t('settings.maxPerTaskHint')}><Input type="number" min={0} max={20} value={v.maxPerTask} onChange={(e) => setV({ ...v, maxPerTask: num(e.target.value) })} /></Field>
-          <Field label={t('settings.approvalWait')} hint={t('settings.approvalWaitHint')}><Input type="number" min={0} max={240} value={v.approvalWait} onChange={(e) => setV({ ...v, approvalWait: num(e.target.value) })} data-testid="approval-wait" /></Field>
+          <Field label={t('settings.approvalWait')} hint={t('settings.approvalWaitHint')}><div className="flex items-center gap-2"><Input type="number" min={0} max={240} value={v.approvalWait} onChange={(e) => setV({ ...v, approvalWait: num(e.target.value) })} aria-label={`${t('settings.approvalWait')} (${t('settings.minutes')})`} data-testid="approval-wait" /><span className="text-muted-foreground text-xs">{t('settings.minutes')}</span></div></Field>
           {/* 3.2: how many conversations the assistant answers at the same time (the others wait their turn). */}
           <Field label={t('settings.parallelChats')} hint={t('settings.parallelChatsHint')}><Input type="number" min={1} max={6} value={v.parallelChats} onChange={(e) => setV({ ...v, parallelChats: num(e.target.value) })} data-testid="parallel-chats" /></Field>
         </div>
@@ -246,12 +260,76 @@ function UpdatesCard() {
   );
 }
 
-// Android's adb: downloaded by Orb into core\herramientas\adb (and in the agents' PATH).
+// 3.8.2 (D2): the pairing of «Emparejar móvil»: Android's QR (Depuración inalámbrica) that the engine waits for on the
+// network, or the six-digit code by hand. unlock: the master password's token (pairing gives the agents a way in).
+function PairPanel({ v, set }) {
+  const t = useT();
+  const [st, setSt] = useState(null); const [svg, setSvg] = useState('');
+  const start = async () => {
+    setSt(null); setSvg('');
+    const unlock = await unlockCore('androidPair'); if (!unlock) return;
+    const r = await act(call('android.pairStart', { unlock }));
+    if (r) { setSt(r); setSvg(await QRCode.toString(r.qr, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' })); }
+  };
+  useEffect(() => { if (!v.manual) start(); return () => { call('android.pairCancel').catch(() => {}); }; }, [v.manual]);
+  useEffect(() => {
+    if (st?.state !== 'waiting' && st?.state !== 'pairing') return undefined;
+    const id = setInterval(() => { call('android.pairState').then(setSt).catch(() => {}); }, 1500);
+    return () => clearInterval(id);
+  }, [st?.state]);
+  if (v.manual) return (
+    <div className="grid gap-3">
+      <p className="text-muted-foreground text-sm">{t('settings.android.manualSteps')}</p>
+      <Field label={t('settings.android.address')}><Input value={v.address} onChange={(e) => set({ address: e.target.value.trim() })} placeholder="192.168.1.20:37000" autoFocus data-testid="android-pair-address" /></Field>
+      <Field label={t('settings.android.code')}><Input value={v.code} inputMode="numeric" maxLength={6} onChange={(e) => set({ code: e.target.value.replace(/\D/g, '') })} data-testid="android-pair-code" /></Field>
+      <Field label={t('settings.android.connectAddress')} hint={t('settings.android.connectHint')}><Input value={v.connect} onChange={(e) => set({ connect: e.target.value.trim() })} placeholder="192.168.1.20:41000" /></Field>
+    </div>
+  );
+  const label = { waiting: 'settings.android.waiting', pairing: 'settings.android.pairing', done: 'settings.android.paired', expired: 'settings.android.expired' }[st?.state];
+  return (
+    <div className="grid justify-items-center gap-3">
+      {svg ? <div className="size-56 rounded-xl bg-white p-2 [&_svg]:size-full" data-testid="android-pair-qr" dangerouslySetInnerHTML={{ __html: svg }} /> : <div className="grid size-56 place-items-center"><Spinner /></div>}
+      <div className={cn('flex items-center gap-2 text-sm', st?.state === 'error' && 'text-destructive')} data-testid="android-pair-state">
+        {st?.state === 'waiting' || st?.state === 'pairing' ? <Spinner /> : null}{st?.state === 'error' ? st.error : label ? t(label) : null}
+      </div>
+      {st?.state === 'expired' || st?.state === 'error' ? <Button size="sm" variant="outline" onClick={start}>{t('settings.android.retry')}</Button> : null}
+      <Button size="sm" variant="ghost" onClick={() => set({ manual: true })} data-testid="android-pair-manual">{t('settings.android.manual')}</Button>
+    </div>
+  );
+}
+
+// Ajustes › Android: the phone the agents test apps on (paired here, used in a chat with «Usar mi móvil Android») and
+// Google's platform-tools, downloaded into core\herramientas\adb the first time.
 function AndroidCard() {
   const t = useT();
   const [st, setSt] = useState(null);
+  const [phones, setPhones] = useState([]);
+  const [emus, setEmus] = useState(null); // 3.8.2 (T3 3.17): { sdk, avds } of this PC's Android SDK
   const load = () => call('android.status').then(setSt).catch(() => setSt(null));
+  const loadPhones = () => call('android.devices').then(setPhones).catch(() => setPhones([]));
   useEffect(() => { load(); const id = setInterval(load, st?.state === 'downloading' ? 1500 : 15000); return () => clearInterval(id); }, [st?.state]);
+  useEffect(() => { loadPhones(); const id = setInterval(loadPhones, 15000); return () => clearInterval(id); }, []);
+  useEffect(() => { call('android.emulators').then(setEmus).catch(() => setEmus(null)); }, []);
+  // Starting one asks for the master password, as pairing a phone: the agents with the phone may then use it.
+  const startEmulator = async (avd) => {
+    const unlock = await unlockCore('androidEmulator'); if (!unlock) return;
+    const r = await act(call('android.emulatorStart', { avd, unlock }));
+    if (r) { toast(r); setTimeout(loadPhones, 30_000); }
+  };
+  const pair = async () => {
+    await form(t('settings.android.pair'), {
+      description: t('settings.android.pairSteps'), initial: { manual: false, address: '', code: '', connect: '' },
+      body: (v, set) => <PairPanel v={v} set={set} />,
+      ok: t('settings.android.pairButton'),
+      onOk: async (v) => {
+        if (!v.manual) return true;
+        const unlock = await unlockCore('androidPair'); if (!unlock) throw new Error(t('msg.master.needUnlock'));
+        return call('android.pairCode', { address: v.address, code: v.code, connect: v.connect || undefined, unlock });
+      }
+    });
+    loadPhones(); load();
+  };
+  const forget = async (p) => { if (await confirm(t('settings.android.forget'), t('settings.android.forgetBody'), { ok: t('settings.android.forget') })) { await act(call('android.forget', { serial: p.serial ?? undefined, host: p.host ?? undefined })); loadPhones(); } };
   if (!st) return null;
   const label = st.ready ? t('settings.android.ready') : st.state === 'downloading' ? t('settings.android.downloading') : st.state === 'error' ? t('settings.android.error', { error: st.error }) : t('settings.android.missing');
   return (
@@ -263,7 +341,31 @@ function AndroidCard() {
           {st.ready ? <BubbleTip title={t('settings.open')}><Button size="icon-sm" variant="ghost" onClick={() => act(bridge.openPath(st.dir))} aria-label={t('settings.open')}><FolderOpen /></Button></BubbleTip>
             : st.state !== 'downloading' ? <Button size="sm" variant="outline" onClick={async () => { setSt({ ...st, state: 'downloading' }); const r = await act(call('android.install')); if (r) setSt(r); else load(); }}>{t('settings.android.download')}</Button> : null}
         </div>
+        <div className="grid gap-1" data-testid="android-phones">
+          {phones.length ? phones.map((p) => (
+            <div key={`${p.guid ?? ''}${p.serial ?? p.host}`} className="flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2">
+              <Smartphone className="text-muted-foreground size-4 shrink-0" />
+              <div className="grid min-w-0 flex-1"><span className="truncate text-sm">{p.model ?? p.host}</span><span className={cn('text-xs', p.connected ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground')}>{t(p.connected ? 'settings.android.connected' : 'settings.android.offline')}</span></div>
+              {p.connected ? <Button size="sm" variant="ghost" onClick={async () => { await act(call('android.disconnect', { serial: p.serial })); loadPhones(); }}>{t('settings.android.disconnect')}</Button> : null}
+              <Button size="sm" variant="ghost" onClick={() => forget(p)}>{t('settings.android.forget')}</Button>
+            </div>
+          )) : <span className="text-muted-foreground text-sm">{t('settings.android.noDevices')}</span>}
+        </div>
+        {emus ? (
+          <div className="grid gap-1" data-testid="android-emulators">
+            <span className="text-muted-foreground mt-1 text-xs font-medium">{t('settings.android.emulators')}</span>
+            {!emus.sdk ? <span className="text-muted-foreground text-sm">{t('settings.android.noEmulator')}</span>
+              : emus.avds.length ? emus.avds.map((avd) => (
+                <div key={avd} className="flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2">
+                  <Smartphone className="text-muted-foreground size-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate text-sm">{avd.replace(/_/g, ' ')}</span>
+                  <Button size="sm" variant="ghost" onClick={() => startEmulator(avd)}>{t('settings.android.startEmulator')}</Button>
+                </div>
+              )) : <span className="text-muted-foreground text-sm">{t('settings.android.noAvds')}</span>}
+          </div>
+        ) : null}
       </CardContent>
+      <CardFooter><Button size="sm" onClick={pair} data-testid="android-pair"><Smartphone />{t('settings.android.pair')}</Button></CardFooter>
     </Card>
   );
 }
@@ -309,7 +411,8 @@ function MobileCard() {
   const route = (kind) => st.routes?.find((r) => r.kind === kind);
   const via = (kind) => {
     const r = route(kind);
-    const hint = r ? `${r.url}${r.secure ? ` · ${t('settings.mobileSecure')}` : ''}` : st.enabled && st[kind] ? t('settings.mobileUnavailable') : t(kind === 'wifi' ? 'settings.mobileWifiHint' : 'settings.mobileTsHint');
+    // 3.8.2: the local network shows its address; Tailscale, what it allows (its address is in the QR dialog).
+    const hint = st.enabled && st[kind] && !r ? t('settings.mobileUnavailable') : kind === 'wifi' ? (r?.url ?? t('settings.mobileWifiHint')) : t('settings.mobileTsHint');
     return (
       <Row label={t(kind === 'wifi' ? 'settings.mobileWifi' : 'settings.mobileTs')} hint={hint}>
         <Switch data-testid={`mobile-${kind}`} checked={st[kind]} onCheckedChange={(on) => configure({ [kind]: on })} />
@@ -320,11 +423,11 @@ function MobileCard() {
     <Card data-testid="mobile-card">
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Smartphone className="text-primary size-5" /><div><CardTitle>{t('settings.mobile')}</CardTitle><CardDescription>{t('settings.mobileDesc')}</CardDescription></div></CardHeader>
       <CardContent className="grid gap-4">
-        <Row label={t('settings.mobileAccess')} hint={st.running ? t('settings.mobileOn') : st.error ?? t('settings.disabled')}><Switch checked={st.enabled} onCheckedChange={async (enabled) => { const r = await act(call('remote.enable', { enabled })); if (r) setSt(r); }} /></Row>
+        <Row label={t('settings.mobileAccess')} hint={st.enabled && !st.running ? st.error : null}><Switch checked={st.enabled} onCheckedChange={async (enabled) => { const r = await act(call('remote.enable', { enabled })); if (r) setSt(r); }} /></Row>
         {st.enabled ? <div className="grid gap-1">{via('wifi')}{via('tailscale')}</div> : null}
         {st.enabled && st.error && st.running ? <p className="text-muted-foreground text-xs">{st.error}</p> : null}
-        {/* 3.5: the QR, the short code and the linked devices are in Magic Link, below. */}
-        {st.running && route('wifi') ? <p className="text-muted-foreground text-xs">{t('settings.mobileWifiNote')}</p> : null}
+        {/* 3.5: the QR, the short code and the linked devices are in Magic Link, below. 3.8.2: the firewall is mentioned
+            only when linking over the local network fails (app.linkOfflineWifi, on the device). */}
         {/* 3.5.1: what notifications show when locked. */}
         {st.enabled ? (
           <Row label={t('settings.mobilePreview')} hint={t(`settings.mobilePreview.${previewOf(st.preview)}Hint`)}>
@@ -437,9 +540,9 @@ function InterfaceCard({ c }) {
   const change = async (value) => setZoom(await act(bridge.zoom(Number(value))));
   return (
     <Card>
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><MonitorCog className="text-primary size-5" /><div><CardTitle>{t('settings.interface')}</CardTitle><CardDescription>{t('settings.interfaceDesc')} <Kbd>Ctrl</Kbd> <Kbd>J</Kbd>.</CardDescription></div></CardHeader>
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><MonitorCog className="text-primary size-5" /><div><CardTitle>{t('settings.interface')}</CardTitle><CardDescription><WithKeys text={t('settings.interfaceDesc')} keys={{ shortcut: ['Ctrl', 'J'] }} /></CardDescription></div></CardHeader>
       <CardContent className="grid gap-4">
-        <Field label={t('settings.sizeLabel')} hint={<>{t('settings.sizeHint1')} <Kbd>Ctrl</Kbd> <Kbd>+</Kbd> {t('settings.sizeHint2')} <Kbd>Ctrl</Kbd> <Kbd>-</Kbd> {t('settings.sizeHint3')} <Kbd>Ctrl</Kbd> <Kbd>0</Kbd> {t('settings.sizeHint4')} <Kbd>Ctrl</Kbd> {t('settings.sizeHint5')}</>}>
+        <Field label={t('settings.sizeLabel')} hint={<WithKeys text={t('settings.sizeHint')} keys={{ zoomIn: ['Ctrl', '+'], zoomOut: ['Ctrl', '-'], reset: ['Ctrl', '0'] }} />}>
           <div className="flex flex-wrap items-center gap-2">
             <Select className="w-44" value={preset} placeholder={zoom ? t('settings.custom', { pct: Math.round(zoom * 100) }) : '…'} onValueChange={change} options={SIZES} />
             <BubbleTip title={t('settings.zoomOut')}><Button size="icon-sm" variant="outline" aria-label={t('settings.zoomOut')} onClick={() => change(zoom - 0.1)}><ZoomOut /></Button></BubbleTip>
@@ -581,7 +684,24 @@ function MoreAppsCard() {
   );
 }
 
-// 3.6: «Acerca de»: the version, the developer's GitHub and the licence (they were at the foot of the sections list).
+// 3.8.2: the background music's volume (Windows; lib/music.js), heard while it is dragged and saved when let go.
+function MusicVolume() {
+  const t = useT();
+  const [v, setV] = useState(() => musicPrefs().volume);
+  const keep = () => setMusicVolume(v, { save: true });
+  return (
+    <div className="flex items-center justify-between gap-4 py-1 text-sm">
+      <span>{t('appearance.musicVolume')}</span>
+      <input type="range" min={0} max={1} step={0.05} value={v} aria-label={t('appearance.musicVolume')} className="accent-primary w-40 cursor-pointer" data-testid="music-volume"
+        onChange={(e) => { const n = Number(e.target.value); setV(n); setMusicVolume(n); }} onPointerUp={keep} onKeyUp={keep} />
+    </div>
+  );
+}
+
+// 3.8.2: the music's credits (src/core/music.mjs): all CC0, each with the page it comes from.
+const MUSIC_CREDITS = Object.values(TRACKS);
+
+// 3.6: «Acerca de»: the version, the developer's GitHub and the licence (3.8.2: also at the foot of the sections list).
 function AboutCard({ version }) {
   const t = useT();
   return (
@@ -592,6 +712,14 @@ function AboutCard({ version }) {
           <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary inline-flex cursor-pointer items-center gap-1.5 font-medium" data-testid="about-github"><ToolIcon tool="gh" className="size-4" />@{AUTHOR.github}<ExternalLink className="text-muted-foreground size-3.5" /></button>
         </div>
         <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">{t('about.license')}</span><span>MIT</span></div>
+        {musicAvailable() ? (
+          <details data-testid="about-music">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3"><span className="text-muted-foreground">{t('about.music')}</span><span>{t('about.musicSummary', { n: MUSIC_CREDITS.length })}</span></summary>
+            <ul className="text-muted-foreground mt-1 grid gap-0.5 text-xs">
+              {MUSIC_CREDITS.map((m) => <li key={m.id}><button type="button" onClick={() => bridge.openExternal(m.page)} className="hover:text-primary cursor-pointer text-left">{t('about.musicTrack', { title: m.title, author: m.author })} · {m.licence}</button></li>)}
+            </ul>
+          </details>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -688,6 +816,15 @@ export function SettingsDialog() {
                     </div>
                   );
                 })}
+              </div>
+              {/* 3.8.2: the developer's GitHub, the version and the licence at the foot of the list again (also in «Acerca de»). */}
+              <div className="grid gap-0.5 px-6 pt-3 pb-5 max-sm:px-3" data-testid="settings-foot">
+                <BubbleTip title={`@${AUTHOR.github}`} text={AUTHOR.url.replace('https://', '')} side="top" align="start">
+                  <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary flex w-fit cursor-pointer items-center gap-1.5 text-[13px] font-medium" aria-label={AUTHOR.url.replace('https://', '')} data-testid="settings-foot-github">
+                    <ToolIcon tool="gh" className="size-4" /><span className="max-sm:hidden">@{AUTHOR.github}</span>
+                  </button>
+                </BubbleTip>
+                <span className="text-muted-foreground text-xs max-sm:hidden" data-testid="settings-foot-version">{PRODUCT.name} {app.version} · {t('settings.footLicense')}</span>
               </div>
             </nav>
             <div key={section.id} className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 pt-6 pb-8">

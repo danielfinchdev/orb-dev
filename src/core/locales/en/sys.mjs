@@ -14,8 +14,7 @@ export default {
   'sys.dialog.pickFiles': 'Attach to the whiteboard',
   'sys.dialog.programs': 'Programs',
   'sys.dialog.allFiles': 'All files',
-  'sys.dialog.refImages': 'Reference images',
-  'sys.dialog.images': 'Images',
+  'sys.dialog.attach': 'Attach',
   'sys.main.notice': '{name} · Notification',
   'sys.main.noticePrivate': 'New message (unlock Windows to see it)',
   // Main process errors
@@ -133,6 +132,7 @@ export default {
   // Headers and fields of the logs (.md files the user reads)
   'sys.logs.generalHeader': '# {name}’s general log\n\n{name}’s memory: what was asked, what was done and what is pending across all projects.\nEntries are only added at the end; nothing written is ever deleted or edited. No passwords, tokens or personal data.\n',
   'sys.logs.projectHeader': '# Log — {name}\n\nWhat was decided and done in this project. Entries are only added at the end. No passwords, tokens or personal data.\n',
+  'sys.logs.importedRoot': 'Added from the project folder’s BITACORA.md ({date})',
   'sys.logs.request': 'Request {user}',
   'sys.logs.byAssistant': '(coordinated by {name})',
   'sys.logs.done': 'Done',
@@ -177,6 +177,7 @@ export default {
   // Scheduled tasks
   'sys.schedules.badEvery': 'every must be {list}',
   'sys.schedules.badTime': 'at_time must use the HH:MM format',
+  'sys.schedules.badDate': 'with once, at_time must be a future date and time YYYY-MM-DDTHH:MM',
   'sys.schedules.badWeekdays': 'weekdays: numbers from 0 (Sunday) to 6',
   // Agents
   'sys.agents.notSupported': 'not supported',
@@ -273,5 +274,30 @@ export default {
   'sys.projects.archived.finished': '{name}: finished',
   'sys.projects.archived.deleted': '{name}: deleted',
   'sys.sessions.imageHint': '(Note from Orb: if this message asks for a picture, make just one unless it asks for several. Any text inside the picture goes in the language of the message.)',
-  'sys.sessions.imageEditHint': '(Note from Orb: to change the picture, pass it as a reference image to the image generation tool and make one new picture with the change. Do not build it with scripts or by pasting pieces: it loses quality.)'
+  'sys.sessions.imageEditHint': '(Note from Orb: to change the picture, pass it as a reference image to the image generation tool and make one new picture with the change. Do not build it with scripts or by pasting pieces: it loses quality.)',
+  // 3.8.2: what the agent gets for each attachment (src/engine/attachments.mjs)
+  'sys.attach.preparing': 'Preparing the attachments',
+  'sys.attach.header': 'Attachments (copies in your folder; open them if you need them):',
+  'sys.attach.kind.image': 'image',
+  'sys.attach.kind.video': 'video',
+  'sys.attach.kind.audio': 'audio',
+  'sys.attach.kind.pdf': 'PDF',
+  'sys.attach.kind.document': 'document',
+  'sys.attach.kind.archive': 'archive',
+  'sys.attach.kind.text': 'text',
+  'sys.attach.kind.other': 'file',
+  'sys.attach.openImage': 'Open it to see it.',
+  'sys.attach.textAt': 'Extracted text ({n} characters): {path}',
+  'sys.attach.noText': 'The text could not be extracted: open it with your tools.',
+  'sys.attach.duration': 'Length: {time}.',
+  'sys.attach.framesSent': '{n} frames come with this message; they are also in {dir}',
+  'sys.attach.framesAt': 'Frames ({n}): {dir}',
+  'sys.attach.noFrames': 'No frames could be taken.',
+  'sys.attach.noFfmpeg': 'This PC has no ffmpeg to take frames.',
+  'sys.attach.transcriptAt': 'Audio transcript: {path}',
+  'sys.attach.noTranscript': 'No audio transcript: this PC has no local speech-to-text program.',
+  'sys.attach.readText': 'Plain text: read it directly.',
+  'sys.attach.archive': 'Archive: list its contents if you need them.',
+  'sys.attach.unknown': 'Orb does not convert it: use the path with your tools.',
+  'sys.attach.failed': 'Orb could not prepare it: use the path.',
 };

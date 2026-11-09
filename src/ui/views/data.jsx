@@ -11,7 +11,10 @@ import { notify } from '@/lib/notify.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { MasterCard } from '@/views/master.jsx';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
+import { AUTHOR } from '../../core/product.mjs';
 
+// 3.8.2: the details of going back to the previous key (what stops working, recovery codes), in the README.
+const KEY_DOCS = `https://github.com/${AUTHOR.repo}#going-back-to-the-previous-key`;
 const size = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
 
 // The recovery code: made here and shown once, to write down (copies made from then on open with it on another PC).
@@ -61,7 +64,8 @@ function BackupsCard() {
   // The way back after «Empezar con una clave nueva» ('anterior'), and back to the new key after that ('nueva').
   const way = st.previousKey === 'nueva' ? 'datos.newKey' : 'datos.previousKey';
   const previousKey = async () => {
-    if (!(await confirm(t(`${way}Title`), t(`${way}Body`), { ok: t(`${way}Use`) }))) return;
+    const body = <>{t(`${way}Body`)} <button type="button" className="text-primary cursor-pointer underline-offset-2 hover:underline" onClick={() => act(bridge.openExternal(KEY_DOCS))} data-testid="previous-key-more">{t('datos.moreInfo')}</button></>;
+    if (!(await confirm(t(`${way}Title`), body, { ok: t(`${way}Use`) }))) return;
     const unlock = await unlockCore('previousKey');
     if (!unlock) return;
     if (await act(call('backup.previousKey', { unlock }))) toast.success(t(`${way}Ready`), { duration: 15000 });
@@ -138,7 +142,7 @@ function LegacyCard() {
       <CardContent className="grid gap-1.5">
         {local > 0 && <p className="text-muted-foreground text-xs">{t('datos.legacyDesc', { size: size(st.bytes) })}</p>}
         {st.oldBackups > 0 && <p className="text-muted-foreground text-xs" data-testid="legacy-backups">{t('datos.legacyBackups', { n: st.oldBackups })}</p>}
-        <p className="text-warning-foreground dark:text-warning text-xs" data-testid="legacy-keys">{t('datos.legacyKeys')}</p>
+        <p className="text-warning-ink text-xs" data-testid="legacy-keys">{t('datos.legacyKeys')}</p>
       </CardContent>
       {local > 0 && <CardFooter><Button size="sm" variant="destructive" onClick={remove} disabled={busy} data-testid="legacy-delete">{busy ? <LoaderCircle className="animate-spin" /> : <Trash2 />}{t('datos.legacyDelete')}</Button></CardFooter>}
     </Card>

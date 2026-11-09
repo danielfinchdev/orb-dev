@@ -91,7 +91,8 @@ rules come from), `src/ui/app.css` (tokens), `src/ui/themes.css` (visual themes)
   in words once ("Uso bajo / medio / alto / muy alto"; no invented numbers); the **orchestrator**: its icon
   (`components/orchestrator-icon.jsx`, «branches from one point») + a small switch, only on a new conversation; tooltip
   «Orquestador: Orbe reparte el trabajo entre varios agentes» plus its state. Right side: the context meter (only when known),
-  dictation (Android), stop (while busy), send.
+  the microphone (Windows voice typing, Win+H; a computer browser's speech recognition; none on a phone), stop (while
+  busy), send.
 - On the phone the bottom row keeps one line: model picker shows the model only, the reasoning pill keeps its level, the orchestrator is an icon.
 
 ### 2.3 Settings (dialog on the PC, screens on the phone)
@@ -104,7 +105,7 @@ Six sections. Each section is a vertical stack of cards; each card = title, at m
 | Magic Link | `Radar` (wifi/radar style) | Dispositivos (access from the phone, link a device with QR, linked devices) |
 | Agentes y uso | `Cpu` | Agents and accounts, tasks and spending (the "ahorro ↔ uso" slider), conversation reset, test of the day |
 | Datos | `DatabaseBackup` | Backups (and their folder), recovery code, restore (moving to another PC: a backup restored there with the code), Carpeta core, Contraseña maestra, Datos de Orb 3.7 (after an update) |
-| Avanzado | `Wrench` | Herramientas (browser, MCP, Android), «Cosas que nadie toca», God mode |
+| Avanzado | `Wrench` | Herramientas (browser, MCP, Android), «Elementos protegidos», God mode |
 | Acerca de | `Info` | Version, Contribuye (support, report a problem), Más aplicaciones, licence |
 
 Your name and language live in General: one owner per PC, no users or profiles.
@@ -163,7 +164,7 @@ what is built, sections 2.1–2.4 describe the shipped app.
   chat there, project info), «Sin proyecto» last; completed chats behind «Ver completados». Each row: its avatar (3.8.1,
   `OrbAvatar`: big, the project's icon, or Orbe's head without a project; in the corner, on small round chips, the marks of
   the agents that worked in it: the conversation's brain or a direct conversation's agent first, then its tasks'
-  agents, overlapping like a stack of avatars with the first on top; past three, two marks and «+N»; never the
+  agents, overlapping like a stack of avatars with the first on top; past three, two marks and «+N» (3.8.2: `avatarStack` keeps the stack inside the avatar, one mark and «+N» on a small one; hovering lists every agent); never the
   orchestrator's icon; its label names them all, e.g. «app-movil · Claude y Codex»), title, time, its latest progress (`orbProgress` in
   `lib/inbox.js`: waiting for approval / a question / a permission first, then a running task, then how its last task
   ended, else its last line) and unread; right click or ⋯ (PC) and a long press (phone) open its menu: info, pin, mute,
@@ -183,6 +184,11 @@ what is built, sections 2.1–2.4 describe the shipped app.
 
 All values come from CSS variables in `app.css` (light `:root`, dark `.dark`), redefined per visual theme in
 `themes.css`. Never hard-code a colour in a component; use the role.
+
+The PC's «Cristal» theme (3.8.2) is not a set of its own: it is Profesional (`data-skin="profesional"`) plus a glass
+material (`data-material="cristal"`, `src/core/appearance.mjs › SKIN_BASE`), so a component styled with the roles works
+in it unchanged; blur is kept to the sidebar, the chat bar, the message box and menus/dialogs. It is unrelated to the
+Android glass of section 8, which is the Android app's own layout language.
 
 ### 3.1 Spacing (4 px grid)
 

@@ -130,7 +130,7 @@ async function suite(t, browser) {
 // agent's page is the only page left (a leak fails it). The refusals themselves are checked against the real WebView2 in
 // test/tauri-navegador.e2e.mjs.
 const EVENTS = ['Page.frameNavigated', 'Page.navigatedWithinDocument', 'Page.frameStartedLoading', 'Page.frameStoppedLoading', 'Page.loadEventFired', 'Page.javascriptDialogOpening', 'Page.screencastFrame', 'Runtime.executionContextsCleared', 'Runtime.executionContextDestroyed', 'Runtime.consoleAPICalled', 'Runtime.exceptionThrown', 'Log.entryAdded', 'Inspector.targetCrashed', 'Inspector.detached'];
-async function hostHarness({ frameMs = 0 } = {}) {
+async function hostHarness({ frameMs = 0, ...opts } = {}) {
   const { chromium } = await import('playwright-core');
   const pw = await chromium.launch({ executablePath: EXE, headless: true });
   const context = await pw.newContext({ viewport: { width: 1280, height: 800 } });
@@ -160,7 +160,7 @@ async function hostHarness({ frameMs = 0 } = {}) {
     if (method.startsWith('host.pip.')) { pip.push([method, params.mode ?? params.state?.agent ?? null]); return true; }
     throw new Error(`host: ${method} desconocido`);
   }
-  hb = createHostBrowser({ call, label: (a) => ({ claude: 'Claude', codex: 'Codex' })[a] ?? a });
+  hb = createHostBrowser({ call, label: (a) => ({ claude: 'Claude', codex: 'Codex' })[a] ?? a, ...opts });
   await hb.ready;
   const pageCount = () => context.pages().filter((p) => !p.isClosed()).length;
   return { pipe: hb.pipe, token: hb.token, hb, pages, popups, pip, frames, pageCount, async close() { hb.shutdown(); await pw.close(); } };
@@ -225,6 +225,43 @@ test('navegador del motor: la ventanita recibe los fotogramas de uno en uno aunq
     assert.ok(h.frames.delivered <= at + 1, 'en píldora no hay fotogramas');
     c.end();
   } finally { delete PAGES['/anima']; await h.close(); }
+});
+
+// 3.8.2 (T3 3.11): «Señalar elemento» and the recording, from the little window's buttons.
+test('navegador del motor: señalar un elemento y grabar lo que hace el agente', { skip }, async () => {
+  const pointed = []; const saved = [];
+  const h = await hostHarness({ onPointed: (p) => pointed.push(p), saveRecording: async (session, avi) => { saved.push({ session, avi }); return 'x.avi'; } });
+  PAGES['/boton'] = '<!doctype html><title>Botón</title><body style="margin:0"><button id="enviar" style="position:absolute;left:600px;top:380px;width:120px;height:40px">Enviar pedido</button><p id="enviar2">otro</p><script>let i=0;setInterval(()=>{document.title="t"+(i++)},50)</script>';
+  try {
+    const c = await connect(h.pipe, h.token, { agent: 'claude', session: 'conv-9', task: '' });
+    assert.equal((await c.act('open', { url: `${base}/boton` })).ok, true);
+    h.hb.pip('grabar');
+    assert.equal(h.hb.pip('point', { x: 660 / 1280, y: 400 / 800 }).pip, true);
+    await until(() => pointed.length === 1, 'el elemento señalado', 10000);
+    const [p] = pointed;
+    assert.equal(p.session, 'conv-9', 'la conversación es la de la página, no algo que diga la página');
+    assert.equal(p.selector, '#enviar'); assert.equal(p.tag, 'button'); assert.equal(p.text, 'Enviar pedido');
+    assert.equal(p.png.readUInt32BE(0), 0x89504e47, 'una imagen PNG');
+    assert.ok(p.png.readUInt32BE(16) <= 160 && p.png.readUInt32BE(20) <= 80, 'solo el elemento y un margen');
+    h.hb.pip('point', { x: 2, y: 0.5 }); // outside the picture: nothing
+    await c.act('scroll', { direction: 'down' });
+    await wait(1500);
+    h.hb.pip('parar');
+    await until(() => saved.length === 1, 'la grabación guardada', 10000);
+    const avi = saved[0].avi;
+    assert.equal(saved[0].session, 'conv-9');
+    assert.equal(avi.toString('latin1', 0, 4), 'RIFF'); assert.equal(avi.toString('latin1', 8, 12), 'AVI ');
+    assert.ok(avi.includes(Buffer.from('MJPG')) && avi.includes(Buffer.from('idx1')));
+    assert.equal(pointed.length, 1);
+    // 3.8.2 (phase 10b): Orb locking stops a recording (what it got is saved, as with «Parar»).
+    h.hb.pip('grabar');
+    await c.act('open', { url: `${base}/boton` }); // a new paint, so new pictures
+    await wait(1500);
+    await h.hb.lock();
+    await until(() => saved.length === 2, 'la grabación parada al bloquear', 10000);
+    assert.equal(await h.hb.lock(), null, 'sin grabación, bloquear no hace nada');
+    c.end();
+  } finally { delete PAGES['/boton']; await h.close(); }
 });
 
 test('navegador del motor: sin puerto de depuración; el navegador de Tauri solo se maneja por el canal del motor', () => {

@@ -89,12 +89,13 @@ export function mcpArgs(servers) {
 }
 
 // The guard decides every action, so Codex asks for anything that is not plainly safe ("untrusted"); the sandbox keeps
-// writes inside the folder. Read-only conversations cannot write at all; "total" runs without sandbox or questions.
+// writes inside the folder. Read-only conversations cannot write at all; "total" runs without sandbox (3.8.2: still asking the guard).
 function policy(permission) {
   // 2.6: read-only also asks Orb's guard (which denies anything that changes something) instead of trusting only the
   // sandbox: this is how a Codex brain coordinates.
   if (permission === 'leer') return { approvalPolicy: 'untrusted', sandbox: 'read-only' };
-  if (permission === 'total') return { approvalPolicy: 'never', sandbox: 'danger-full-access' };
+  // 3.8.2: «total» keeps asking Orb's guard (it allows all but the protected set); it only drops the sandbox.
+  if (permission === 'total') return { approvalPolicy: 'untrusted', sandbox: 'danger-full-access' };
   return { approvalPolicy: 'untrusted', sandbox: 'workspace-write' };
 }
 // 3.6: «Extra» (xhigh) goes through as it is: Orb only offers it for the models whose model/list says they take it.
@@ -105,10 +106,22 @@ const ITEM_TOOL = (item) => {
   if (item.type === 'mcpToolCall') return { name: `${item.server}:${item.tool}`, input: clip(item.arguments ?? '', 300) };
   if (item.type === 'webSearch') return { name: tr('sys.agents.tool.webSearch'), input: clip(item.query ?? item.action?.query ?? '', 300) };
   if (item.type === 'dynamicToolCall') return { name: item.tool, input: clip(item.arguments ?? '', 300) };
-  if (item.type === 'collabAgentToolCall') return { name: tr('sys.agents.tool.subagent', { tool: item.tool }), input: clip(item.prompt ?? '', 300) };
+  if (item.type === 'collabAgentToolCall') return { name: tr('sys.agents.tool.subagent', { tool: item.tool }), input: clip(item.prompt ?? '', 300), ...collabAgent(item) };
   if (item.type === 'imageGeneration') return { name: tr('sys.agents.tool.imageGen'), input: '' }; // 2.7
   return null;
 };
+
+// 3.8.2: a subagent Codex starts (collabAgentToolCall spawnAgent): its model and threads, so the conversation shows it as
+// one row; the state of its threads comes with each collab call's end (agentsStates: pendingInit, running, completed…).
+export function collabAgent(item) {
+  if (item?.type !== 'collabAgentToolCall' || item.tool !== 'spawnAgent') return {};
+  return { agent: { name: null, description: item.prompt ? clip(item.prompt, 200) : null, model: item.model ?? null, threads: Array.isArray(item.receiverThreadIds) ? item.receiverThreadIds.slice(0, 20) : [] } };
+}
+export function collabResult(item) {
+  const states = Object.fromEntries(Object.entries(item?.agentsStates ?? {}).slice(0, 20).map(([id, st]) => [id, String(st?.status ?? '')]));
+  const output = Object.values(item?.agentsStates ?? {}).map((st) => st?.message).filter((m) => typeof m === 'string' && m.trim()).join('\n\n');
+  return { id: item.id, output: clip(output, 3000), error: item.status === 'failed', states };
+}
 
 // 2.6: the answer of app-server's model/list as the brain selector wants it: the models Codex shows (hidden ones are left
 // out), with their own names, and which one Codex uses when none is chosen.
@@ -165,7 +178,7 @@ export function createLive(o) {
   const live = { sessionId: o.resumeId ?? null, caps, pid: null, get busy() { return Boolean(turn && !turn.done); } };
 
   const guardAsk = async ({ itemId, command, paths = [], tool, kind }) => {
-    const verdict = decide({ permission, tool, kind, command, paths, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang });
+    const verdict = decide({ permission, tool, kind, command, paths, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()) });
     if (verdict.decision !== 'ask') return verdict.decision;
     return approvals.ask({ id: itemId, tool, title: command || paths.join(', ') || tool, reason: verdict.reason, input: clip(command || paths.join(', '), 400) });
   };
@@ -227,6 +240,7 @@ export function createLive(o) {
       if (item.type === 'fileChange') for (const c of item.changes ?? []) onEvent({ type: 'item', role: 'tool', kind: 'file', body: { path: c.path, change: typeof c.kind === 'string' ? c.kind : c.kind?.type ?? 'update' } });
       if (item.type === 'mcpToolCall' || item.type === 'dynamicToolCall') onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: { id: item.id, output: clip(item.result ?? item.error ?? item.contentItems ?? '', 3000), error: Boolean(item.error) || item.success === false } });
       if (item.type === 'webSearch') onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: { id: item.id, output: '', error: false } });
+      if (item.type === 'collabAgentToolCall') onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: collabResult(item) });
       if (item.type === 'plan' && item.text?.trim()) onEvent({ type: 'item', role: 'assistant', kind: 'reasoning', body: clip(item.text, 4000) });
       // 2.7: a picture Codex made (image_gen): kept as a file (Codex's own savedPath, or written next to Orb's runs when
       // it only came inline), never as base64 in the conversation.
@@ -359,6 +373,11 @@ export function createLive(o) {
   live.setModel = (m) => { model = m || null; }; // applied on the next turn/start
   live.setPermission = (p) => { permission = p; };
   live.close = () => { if (closed && !child) return; closed = true; approvals.clear(); peer?.close(); killTree(child); };
+  // 3.8.2: the plan's windows now (the usage panel's «Recargar»), handled as if Codex had sent them.
+  live.refreshUsage = async () => {
+    if (closed || !peer) return false;
+    try { const r = await peer.request('account/rateLimits/read', {}, { timeoutMs: 8000 }); if (!r?.rateLimits) return false; onNotification('account/rateLimits/updated', { rateLimits: r.rateLimits }); return true; } catch { return false; }
+  };
   live.isClosed = () => closed;
   return live;
 }

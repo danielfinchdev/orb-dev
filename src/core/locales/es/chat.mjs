@@ -1,6 +1,7 @@
 // chat.*
 export default {
   'chat.dictate': "Dictar",
+  'chat.dictateFailed': 'No se pudo abrir el dictado de Windows. Prueba con Win+H.',
   'chat.suggestion1': 'Crea un proyecto «mi-web» con una página de inicio sencilla',
   'chat.suggestion2': '¿Cómo van las tareas?',
   'chat.suggestion3': 'Revisa el proyecto y propón mejoras',
@@ -141,6 +142,11 @@ export default {
   'img.open': 'Ver la imagen',
   'img.unavailable': 'La imagen ya no está disponible.',
   'img.title': 'Imagen',
+  'viewer.pdf': 'Documento PDF',
+  'viewer.page': 'Página {n}',
+  'viewer.open': 'Abrir {name}',
+  'viewer.unavailable': 'No se puede abrir el archivo.',
+  'viewer.more': 'Se muestran las primeras {n} páginas de {total}.',
   'img.markHint': 'Arrastra sobre la imagen para marcar la zona que quieres cambiar o describe un cambio para toda la imagen.',
   'img.zoneHint': 'Solo se cambiará la zona marcada. Arrastra de nuevo para marcar otra.',
   'img.changePh': '¿Qué quieres cambiar?',
@@ -205,6 +211,9 @@ export default {
   'games.soundOn': 'Silenciar los juegos',
   'games.soundOff': 'Activar el sonido',
   'games.soundAppOff': 'Los sonidos están desactivados en Ajustes.',
+  'games.music': 'Música del juego',
+  'games.musicOn': 'Silenciar la música',
+  'games.musicOff': 'Activar la música',
   // 2.6: avisos con el robot (o arriba, sin animaciones)
   'notice.done': 'Hecho',
   'notice.attention': 'Requiere tu atención',

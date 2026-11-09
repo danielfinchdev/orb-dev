@@ -8,7 +8,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { Button } from './ui/button.jsx';
-import { useStore, go, endTour, getState } from '@/lib/store.js';
+import { useStore, go, endTour, getState, plainSkin } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
@@ -22,7 +22,7 @@ export const TOUR_STEPS = [
   { id: 'reasoning', target: 'reasoning-picker', view: 'chat' },
   { id: 'orchestrator', target: 'orchestrator-check', view: 'chat', wrap: 'label' },
   { id: 'context', target: 'context-meter', view: 'chat', optional: true },
-  // 3.2.1: the whole bar (its text speaks of the title, the project, the notifications, pause and the games), not the last button.
+  // 3.2.1: the whole bar (its text speaks of the title, the project, the notifications, pause and ⋯ with the games), not the last button.
   { id: 'bar', target: 'orb-chat-bar', view: 'chat' },
   { id: 'newchat', target: 'chats-new', sidebar: true },
   { id: 'search', target: 'sidebar-search', sidebar: true },
@@ -68,7 +68,7 @@ export function Tour() {
   const name = app.config.assistantName;
   const ui = app.config.ui ?? {};
   const still = ui.motion === 'minima' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  const noRobot = ui.skin === 'profesional';
+  const noRobot = plainSkin(ui.skin);
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState(null);
   const [side, setSide] = useState('center');

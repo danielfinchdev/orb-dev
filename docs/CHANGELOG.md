@@ -1,11 +1,70 @@
 ## Download
 
-- **`Orb-3.8.1-instalador.exe`** (the Windows app): installs for your user, without administrator rights, and updates
+- **`Orb-3.8.2-instalador.exe`** (the Windows app): installs for your user, without administrator rights, and updates
   itself. It needs Microsoft Edge WebView2, which Windows 11 and an up-to-date Windows 10 already have (if it is
   missing, the installer gets it).
-- **`Orb-3.8.1-android.apk`**: the Orb app for Android. Link it to your PC with Magic Link.
+- **Android:** keep using the Orb 3.8.1 app ([`Orb-3.8.1-android.apk`](https://github.com/danielfinchdev/orb-dev/releases/tag/v3.8.1)); it works with Orb 3.8.2 on your PC. A new native Android app is planned for a later release.
 
 Windows 10/11. Since it isn't signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
+
+## What's new in 3.8.2
+
+**Full PC access, with your password.** In a chat without a project, the permission selector offers «Acceso total al
+PC»: the agent can work outside `C:\Orb`, use the terminal and Orb's browser. It asks for the master password, lasts
+until you set the chat back to «Solo lectura» and goes away when Orb locks. Orb's data, its secrets and your protected
+items stay closed. «Acceso total» in project chats now works the same way.
+
+**Test Android apps from Orb.** Orb brings its own adb (downloaded and checked the first time it is needed). Pair your
+phone over wireless debugging with a QR code in Settings › Android, or start an emulator already installed on the PC.
+In a chat with «Usar mi móvil Android», agents can install an APK, take screenshots, tap and type, read logcat and open
+the app.
+
+**Attach any file.** «Adjuntar» takes pictures, videos, PDFs, documents and more (up to 10 files of 100 MB each), and
+every agent can use them: videos arrive as frames, documents as their text. «Capturar ventana» attaches a picture of
+any window, and attached PDFs and pictures open inside Orb.
+
+**Dictation.** A microphone next to «Enviar» opens Windows voice typing.
+
+**Usage.** Reload your plans' usage from the usage panel, and open the new «Uso» page: cost and tokens by day, agent and
+model for the last 7, 30 or 90 days, and each plan's limits with an even-pace mark.
+
+**Chats.** Snooze a chat until a time, rename it from the list's ⋯ menu, continue a direct conversation with another
+agent, and type `/clear` or `/compact`. The chat bar keeps the bell and pause, and everything else moves to its ⋯ menu.
+Messages show their time on hover and the cost line can be hidden (Settings › Appearance). Formulas and Mermaid
+diagrams render in messages, and Claude and Codex subagents show as folding rows.
+
+**Tasks and schedules.** A finished task lists the files it changed, each with its diff. Schedules can run once at a
+date and time, or always in the same chat.
+
+**Search and Ctrl+K.** The sidebar search also finds tasks by what they say, and Ctrl+K opens a palette to jump to
+chats, tasks, projects and Orb's screens.
+
+**A terminal under the chat.** A direct conversation's ⋯ menu docks your own terminal under it, in its folder. Command
+blocks in the chat get «Pegar en el terminal», which fills the line and never runs it for you. Ctrl+J still opens your
+usual terminal.
+
+**The agents' browser.** Point at an element of the page to add it to your message, and record what the agent does as a
+video saved with the chat's attachments. Every agent, Codex included, uses Orb's browser, which keeps away from your
+protected sites; Claude in Chrome is no longer started.
+
+**Secrets on a private card.** An agent can ask for a token or a password. You type it on a card that only this PC
+shows; it reaches one command and never the chat, the logs or your phone, and you can keep it in the vault. Orb never
+asks for your master password there and refuses it if you type it.
+
+**«Cristal» theme and music.** A new glass theme built on Profesional, with no animations. On Windows, optional
+background music for studying or coding and music in each mini-game, off by default and downloaded the first time you
+press play.
+
+**Settings.** Clearer, shorter texts everywhere. GitHub, the version and the licence are back at the foot of the
+settings list. Linking a device now chooses phone or browser and Tailscale or local network inside the QR dialog.
+
+**Smaller things.** F5 reloads Orb. The first-run welcome opens maximised and without scroll bars. Dragging and resizing
+the window is smoother. Linked phones say «El PC necesita atención» when updating Orb's data failed on the PC instead of
+showing it offline. Tooltips stay whole at the window's edge, and chat avatars with four or more agents fit.
+
+**Fixes.** No more «(2)» copies of project logs, and a `BITACORA.md` that a project brings is merged once into its Orb
+log. Stronger permission guard (local network shares, drive aliases, elevation and copies of a protected folder's
+parent are blocked) and adb checked before every use.
 
 ## What's new in 3.8.1
 

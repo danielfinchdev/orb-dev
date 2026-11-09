@@ -102,12 +102,12 @@ export default {
   'help.tut.expert.go': 'Open God mode',
 
   'help.tut.games.title': 'Mini-games',
-  'help.tut.games.l1': 'While the agents work, the gamepad in the chat bar opens the mini-games: Snake, Tetris, Chess, Jumper, 2048, Bricks, Space Invaders and Pac-Man.',
+  'help.tut.games.l1': 'While the agents work, the ⋯ menu in the chat bar opens the mini-games: Snake, Tetris, Chess, Jumper, 2048, Bricks, Space Invaders and Pac-Man.',
   'help.tut.games.l2': 'Each has three difficulty levels and keeps your high score on this PC.',
   'help.tut.games.go': 'Open mini-games',
 
   'help.tut.looks.title': 'Appearance and themes',
-  'help.tut.looks.l1': 'In Settings › General, choose light, dark or system mode; the theme (Default, Vaporwave, Retro, Professional or Candy); fonts and code colours.',
+  'help.tut.looks.l1': 'In Settings › General, choose light, dark or system mode; the theme (Default, Vaporwave, Retro, Professional, Candy or Glass); fonts and code colours.',
   'help.tut.looks.l2': 'The Professional theme hides the robot and animations. "Animations: minimal" keeps the robot still in any theme.',
   'help.tut.looks.l3': 'Adjust the interface size in Settings or with Ctrl +, Ctrl − and Ctrl 0.',
   'help.tut.looks.go': 'Open Appearance',
@@ -195,7 +195,7 @@ export default {
   'help.tour.context.title': 'Context and quota',
   'help.tour.context.text': 'This ring fills up as the conversation grows. Click it to see tokens and your plans’ usage.',
   'help.tour.bar.title': 'Chat bar',
-  'help.tour.bar.text': 'At the top, the chat and its project: click it to see its info (model, tasks, export…). Notifications, pausing tasks and the mini-games, on the right.',
+  'help.tour.bar.text': 'At the top, the chat and its project: click it to see its info (model, tasks, export…). On the right, notifications, pausing tasks and the ⋯ menu with the other actions and the mini-games.',
   'help.tour.newchat.title': 'New chat',
   'help.tour.newchat.text': 'With «+» you start a new chat or a project. Each chat is a conversation of its own, with its title and project; you can have several at once.',
   'help.tour.tasks.title': 'Tasks',

@@ -163,7 +163,9 @@ test('todo va cifrado; repetir, retrasar o tocar un mensaje no sirve', async () 
 test('el móvil hace lo suyo y nada más (acciones del PC, acceso total, archivos del PC, imágenes)', async () => {
   const p = globalThis.phone1;
   await call('projects.create', { name: 'desde-el-pc' });
-  const total = await call('sessions.create', { agent: 'claude', project: 'desde-el-pc', permission: 'total' });
+  // 3.8.2 (D5): «Acceso total» only with the master password, from this PC.
+  const made = await call('sessions.create', { agent: 'claude', project: 'desde-el-pc' });
+  const total = await call('sessions.grantTotal', { id: made.id, unlock: (await call('master.unlock', { password: TEST_MASTER, purpose: 'fullAccess' })).unlock });
   const denied = async (method, params) => { const r = await p.call(method, params); assert.equal(r.ok, false, method); assert.equal(r.status, 403, method); };
   await denied('sessions.send', { id: total.id, text: 'hola' });
   for (const method of ['config.save', 'accounts.add', 'installer.start', 'remote.pair', 'remote.configure', 'projects.import', 'projects.createPr', 'agents.login', 'agents.loginCode', 'agents.install']) await denied(method, {});

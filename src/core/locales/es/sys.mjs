@@ -16,8 +16,7 @@ export default {
   'sys.dialog.pickFiles': 'Adjuntar a la pizarra',
   'sys.dialog.programs': 'Programas',
   'sys.dialog.allFiles': 'Todos los archivos',
-  'sys.dialog.refImages': 'Imágenes de referencia',
-  'sys.dialog.images': 'Imágenes',
+  'sys.dialog.attach': 'Adjuntar',
   'sys.main.notice': '{name} · Notificación',
   'sys.main.noticePrivate': 'Nuevo mensaje (desbloquea Windows para verlo)',
   // Errores del proceso principal (acaban en un toast)
@@ -136,6 +135,7 @@ export default {
   // Cabeceras y apartados de las bitácoras (archivos .md que lee quien usa la app)
   'sys.logs.generalHeader': '# Bitácora general de {name}\n\nMemoria de {name}: qué se pidió, qué se hizo y qué queda pendiente en todos los proyectos.\nSolo se añade al final; nunca se borra ni se edita lo escrito. Sin contraseñas, tokens ni datos personales.\n',
   'sys.logs.projectHeader': '# Bitácora — {name}\n\nLo decidido y lo hecho en este proyecto. Solo se añade al final. Sin contraseñas, tokens ni datos personales.\n',
+  'sys.logs.importedRoot': 'Añadido de BITACORA.md de la carpeta del proyecto ({date})',
   'sys.logs.request': 'Pedido {user}',
   'sys.logs.byAssistant': '(coordinación de {name})',
   'sys.logs.done': 'Hecho',
@@ -180,6 +180,7 @@ export default {
   // Tareas programadas
   'sys.schedules.badEvery': 'every debe ser {list}',
   'sys.schedules.badTime': 'at_time debe tener el formato HH:MM',
+  'sys.schedules.badDate': 'con once, at_time debe ser una fecha y hora futura AAAA-MM-DDTHH:MM',
   'sys.schedules.badWeekdays': 'weekdays: números del 0 (domingo) al 6',
   // Agentes
   'sys.agents.notSupported': 'no admitido',
@@ -277,5 +278,30 @@ export default {
   'sys.projects.archived.finished': '{name}: finalizado',
   'sys.projects.archived.deleted': '{name}: eliminado',
   'sys.sessions.imageHint': '(Nota de Orb: si este mensaje pide una imagen, genera una sola, salvo que pida varias expresamente. Los textos que vayan dentro de la imagen, en el idioma del mensaje.)',
-  'sys.sessions.imageEditHint': '(Nota de Orb: para cambiar la imagen, pásala como imagen de referencia a la herramienta de generar imágenes y genera una sola imagen nueva con el cambio. No la montes con scripts ni pegando trozos: pierde calidad.)'
+  'sys.sessions.imageEditHint': '(Nota de Orb: para cambiar la imagen, pásala como imagen de referencia a la herramienta de generar imágenes y genera una sola imagen nueva con el cambio. No la montes con scripts ni pegando trozos: pierde calidad.)',
+  // 3.8.2: lo que el agente recibe de cada adjunto (src/engine/attachments.mjs)
+  'sys.attach.preparing': 'Preparando los adjuntos',
+  'sys.attach.header': 'Adjuntos (copias en tu carpeta; ábrelos si los necesitas):',
+  'sys.attach.kind.image': 'imagen',
+  'sys.attach.kind.video': 'vídeo',
+  'sys.attach.kind.audio': 'audio',
+  'sys.attach.kind.pdf': 'PDF',
+  'sys.attach.kind.document': 'documento',
+  'sys.attach.kind.archive': 'archivo comprimido',
+  'sys.attach.kind.text': 'texto',
+  'sys.attach.kind.other': 'archivo',
+  'sys.attach.openImage': 'Ábrela para verla.',
+  'sys.attach.textAt': 'Texto extraído ({n} caracteres): {path}',
+  'sys.attach.noText': 'No se pudo extraer el texto: ábrelo con tus herramientas.',
+  'sys.attach.duration': 'Duración: {time}.',
+  'sys.attach.framesSent': '{n} fotogramas van con este mensaje; también están en {dir}',
+  'sys.attach.framesAt': 'Fotogramas ({n}): {dir}',
+  'sys.attach.noFrames': 'No se pudieron sacar fotogramas.',
+  'sys.attach.noFfmpeg': 'Este PC no tiene ffmpeg para sacar fotogramas.',
+  'sys.attach.transcriptAt': 'Transcripción del audio: {path}',
+  'sys.attach.noTranscript': 'Sin transcripción del audio: este PC no tiene un programa local de voz a texto.',
+  'sys.attach.readText': 'Es texto: léelo directamente.',
+  'sys.attach.archive': 'Archivo comprimido: lista su contenido si lo necesitas.',
+  'sys.attach.unknown': 'Orb no lo convierte: usa la ruta con tus herramientas.',
+  'sys.attach.failed': 'Orb no pudo prepararlo: usa la ruta.',
 };

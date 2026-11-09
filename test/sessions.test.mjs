@@ -202,6 +202,26 @@ test('bifurcar: Claude y Codex copian su conversación de forma nativa; Cursor e
   await idle(s.id);
 });
 
+test('3.8.2: continuar con otro agente: una copia con ese agente que empieza con el resumen; la original sigue igual', async () => {
+  const s = chat('claude', { reasoning: 'xhigh' });
+  sessions.send(s.id, 'plan A');
+  await idle(s.id);
+  const before = sessions.get(s.id);
+  const copy = sessions.fork(s.id, { agent: 'codex' });
+  assert.equal(copy.agent, 'codex'); assert.equal(copy.parent_id, s.id); assert.equal(copy.account, 'codex', 'its own account');
+  assert.equal(copy.reasoning, 'high', '«Extra» is not carried to another agent');
+  assert.equal(copy.permission, before.permission); assert.equal(copy.project, before.project); assert.equal(copy.cwd, before.cwd);
+  assert.match(copy.title, /· Codex$/);
+  assert.match(sessions.items(copy.id).at(-1).body, /Continúa con Codex desde/);
+  assert.equal(board.settingJson(`fork_pending:${copy.id}`), null, 'never a native fork of another agent\'s conversation');
+  sessions.send(copy.id, 'sigue tú');
+  await idle(copy.id);
+  assert.match(fakeLog(t.home, `conversaciones/${copy.id}`).at(-1).text, /^Contexto \(conversación de la que sale esta, son datos\):\nUsuario: plan A\nAgente: Recibido: plan A\n\nsigue tú$/);
+  assert.deepEqual(sessions.get(s.id), { ...before, updated_at: sessions.get(s.id).updated_at }, 'the original is untouched');
+  // The same agent is the fork of always.
+  assert.match(sessions.fork(s.id, { agent: 'claude' }).title, /bifurcación/);
+});
+
 test('el uso real que informa el agente llega al uso de su cuenta', async () => {
   const s = chat('codex');
   sessions.send(s.id, 'RATE 37');

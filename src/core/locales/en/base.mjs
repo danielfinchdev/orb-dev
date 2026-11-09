@@ -24,6 +24,18 @@ export default {
   'nav.memories': 'Memories',
   'nav.memoriesHint': 'Logs and activity: what Orb remembers.',
   'nav.feedback': 'Send feedback',
+  'nav.music': 'Background music',
+  'nav.musicHint': 'Free music to help you focus. Downloaded the first time.',
+  'nav.musicPlay': 'Play music',
+  'nav.musicPause': 'Pause music',
+  'nav.musicNext': 'Next track',
+  'nav.musicLoading': 'Downloading…',
+  'nav.musicNow': '“{title}” by {author}',
+  'nav.musicError': 'Couldn’t play the music. Check your connection and try again.',
   'nav.footerUnfold': 'Show with names',
-  'nav.footerFold': 'Icons only'
+  'nav.footerFold': 'Icons only',
+  'palette.title': 'Go to',
+  'palette.hint': 'Search chats, tasks, projects and actions.',
+  'palette.placeholder': 'Search or go to…',
+  'palette.places': 'Go to'
 };

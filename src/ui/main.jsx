@@ -22,13 +22,17 @@ import { UpdateCard, useUpdate, updateActions } from '@/components/update-card.j
 import { migrationView } from '@/lib/migration.js';
 import { Notices } from '@/components/notices.jsx';
 import { ActionShortcuts } from '@/components/project-tools.jsx';
+import { CommandPalette } from '@/components/command-palette.jsx';
 import { Scene } from '@/components/scene.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { useStore, setState, getState, refresh, refreshSoon, call, bridge, act, go, goBack, resetRoute, setViews, applyTheme, openTerminal, startTour, closeSettings, anyChatBusy, phoneLayout, loadOrbInbox, loadOrbInboxSoon } from '@/lib/store.js';
 import { restoreRoute, keyboardOpen } from '@/lib/phone-nav.js';
+import { listenPoints } from '@/lib/browser-points.js';
 import { startupPhase } from '@/lib/startup.js';
 import { watchIdle, lockMinutesOf } from '@/lib/idle-lock.js';
+import { startMusic, pauseAll } from '@/lib/music.js';
 import { dropUnlock } from '@/lib/core-access.js';
+import { isReloadKey, reloadOrb } from '@/lib/reload.js';
 import { isOffline, retryLoop } from '@/lib/net.js';
 import { ago } from '@/lib/utils.js';
 import { ErrorBoundary } from '@/components/error-boundary.jsx';
@@ -57,6 +61,7 @@ const ProjectsView = deferred(() => import('@/views/projects.jsx'), 'ProjectsVie
 const AgentsView = deferred(() => import('@/views/agents.jsx'), 'AgentsView');
 const MemoriesView = deferred(() => import('@/views/memories.jsx'), 'MemoriesView');
 const SchedulesView = deferred(() => import('@/views/schedules.jsx'), 'SchedulesView');
+const UsageView = deferred(() => import('@/views/usage.jsx'), 'UsageView');
 const ExpertView = deferred(() => import('@/views/expert.jsx'), 'ExpertView');
 const TutorialsView = deferred(() => import('@/views/tutorials.jsx'), 'TutorialsView');
 const WhiteboardView = deferred(() => import('@/views/whiteboard.jsx'), 'WhiteboardView');
@@ -93,8 +98,8 @@ const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
 const ChatsView = OrbChatsView;
 // 3.8: a route of a screen that is gone (a bot's, saved before or in an old notification) falls back to the chat.
 const VIEWS = bridge.mobile
-  ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
-  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView, expert: ExpertView };
+  ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, usage: UsageView, phone: PhoneView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
+  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, usage: UsageView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView, expert: ExpertView };
 setViews(Object.keys(VIEWS));
 const routeKey = (route) => `${route.view}:${route.id ?? ''}:${route.project ?? ''}`;
 
@@ -205,7 +210,7 @@ function Shell() {
       {/* 3.5: a browser linked with an Orb gets the PC's layout, not what only the PC itself does. */}
       {bridge.mobile ? null : <><UpdateCard /><OnceOpened when={settingsOpen} onFail={closeSettingsFailed}><SettingsDialog /></OnceOpened><OnceOpened when={gamesOpen} onFail={closeGamesFailed}><GamesDialog /></OnceOpened><RecoveryNotice /></>}
       <Notices />
-      {bridge.mobile ? null : <ActionShortcuts project={shortcutProject} />}
+      {bridge.mobile ? null : <><ActionShortcuts project={shortcutProject} /><CommandPalette /></>}
       <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile || Boolean(tour)} /></div>
       {tour ? <ErrorBoundary key={tour.key} onFail={closeTourFailed}><Suspense fallback={null}><Tour /></Suspense></ErrorBoundary> : null}
     </div>
@@ -321,6 +326,13 @@ function Root() {
     })();
     return () => { alive = false; };
   }, []);
+  // 3.8.2: F5 reloads Orb's window on the PC, on every screen (the engine goes on; unsent messages come back).
+  useEffect(() => {
+    if (!bridge.desktop) return undefined;
+    const key = (e) => { if (isReloadKey(e)) { e.preventDefault(); reloadOrb(getState().route); } };
+    window.addEventListener('keydown', key, true);
+    return () => window.removeEventListener('keydown', key, true);
+  }, []);
   // Ctrl+J: a terminal in the folder on screen (also from the menu Ver → Abrir terminal).
   useEffect(() => {
     if (phase !== 'app' || !bridge.openTerminal) return undefined;
@@ -329,6 +341,14 @@ function Root() {
     const off = bridge.on('ui:terminal', () => openTerminal());
     return () => { window.removeEventListener('keydown', key); off(); };
   }, [phase]);
+  // 3.8.2 (T3 3.11): the agents' browser, from its little window: an element pointed at opens its chat (its message box
+  // gets it) and a recording is said once saved. This PC's window only.
+  useEffect(() => {
+    if (phase !== 'app' || bridge.mobile) return undefined;
+    const offPoint = listenPoints(bridge, (id) => go({ view: 'session', id }));
+    const offRec = bridge.on('browser:recorded', () => toast.success(tNow('session.recordingSaved')));
+    return () => { offPoint(); offRec(); };
+  }, [phase]);
   // 3.8.1: Orb's lock screen (decision 20): Windows locked, the PC asleep, «Bloquear» or the minutes of Ajustes › Datos
   // without use (lib/idle-lock.js). The engine says so with 'master:locked' { screen: true }; the screen comes back,
   // without reloading, once the password is typed (the agents never stopped).
@@ -336,11 +356,14 @@ function Root() {
     if (bridge.mobile || !bridge.on) return undefined;
     return bridge.on('master:locked', (p) => {
       if (!p?.screen) return;
+      pauseAll(); // 3.8.2: the music stops with the lock and does not come back by itself (lib/music.js)
       dropUnlock();
       setMasterState((s) => ({ ...(s ?? {}), exists: true, locked: false, lost: false, screenLocked: true }));
       setPhase((now) => (now === 'app' ? 'unlock' : now));
     });
   }, []);
+  // 3.8.2: the background music (Windows): remembered as on, it comes back with the first click (lib/music.js).
+  useEffect(() => (phase === 'app' ? startMusic() : undefined), [phase]);
   useEffect(() => {
     if (phase !== 'app' || bridge.mobile) return undefined;
     return watchIdle({ minutes: () => lockMinutesOf(getState().app?.config), onIdle: () => { call('master.lock', { reason: 'idle' }).catch(() => {}); } });
@@ -471,10 +494,12 @@ function PcOffline({ info, onRelink }) {
   const t = useT();
   const [busy, setBusy] = useState(false);
   const [wait, setWait] = useState(null); // seconds to the next try
+  // 3.8.2 (review F2.5b M6): the PC answers but needs attention (its data could not be updated): said so, still retrying.
+  const [attention, setAttention] = useState(info?.attention ?? null);
   const loop = useRef(null);
   useEffect(() => {
     const l = retryLoop({
-      attempt: async () => { const r = await bridge.info(); if (r.offline) return false; location.reload(); return true; },
+      attempt: async () => { const r = await bridge.info(); if (r.offline) { setAttention(r.attention ?? null); return false; } location.reload(); return true; },
       onWait: (s, b) => { setWait(s); setBusy(b); },
       hidden: () => document.visibilityState === 'hidden'
     });
@@ -487,13 +512,22 @@ function PcOffline({ info, onRelink }) {
   }, []);
   const relink = async () => { if (await relinkPhone(info?.pcName)) { loop.current.stop(); onRelink(); } };
   return (
-    <div className="brand-sky flex h-full overflow-y-auto p-6 pt-20" data-testid="pc-offline">
+    <div className="brand-sky flex h-full overflow-y-auto p-6 pt-20" data-testid="pc-offline" data-attention={attention ?? undefined}>
       <div className="bg-card/95 m-auto grid w-full max-w-sm gap-3 rounded-3xl p-7 text-center shadow-2xl">
         <div className="-mt-16 flex justify-center"><Robot size={110} mood={busy ? 'thinking' : 'sleeping'} /></div>
-        <h1 className="text-xl">{info?.pcName ? t('app.offlineTitleNamed', { name: info.pcName }) : t('app.offlineTitle')}</h1>
-        <p className="text-muted-foreground text-sm">{t('app.offlineBody')}</p>
+        {attention ? (
+          <>
+            <h1 className="text-xl">{info?.pcName ? t('app.pcAttentionTitleNamed', { name: info.pcName }) : t('app.pcAttentionTitle')}</h1>
+            <p className="text-muted-foreground text-sm" data-testid="pc-attention">{t('app.pcAttentionBody')}</p>
+          </>
+        ) : (
+          <>
+            <h1 className="text-xl">{info?.pcName ? t('app.offlineTitleNamed', { name: info.pcName }) : t('app.offlineTitle')}</h1>
+            <p className="text-muted-foreground text-sm">{t('app.offlineBody')}</p>
+          </>
+        )}
         {/* 3.8.1, the Android app: a PC still on Orb 3.8.0 refuses it (another origin) and looks just like one turned off. */}
-        {window.__orbHost?.app ? <p className="text-muted-foreground text-sm" data-testid="pc-offline-old">{t('app.offlineOldPc')}</p> : null}
+        {window.__orbHost?.app && !attention ? <p className="text-muted-foreground text-sm" data-testid="pc-offline-old">{t('app.offlineOldPc')}</p> : null}
         {info?.seenAt ? <p className="text-muted-foreground text-xs">{t('app.offlineSeen', { when: ago(info.seenAt) })}</p> : null}
         <Button size="lg" disabled={busy} onClick={() => loop.current?.now({ reset: true })} data-testid="pc-offline-retry">{busy ? <Spinner /> : <RotateCw />}{t('app.offlineRetry')}</Button>
         <p className="text-muted-foreground min-h-4 text-xs" aria-live="polite">{wait ? t('app.offlineNext', { s: wait }) : ''}</p>

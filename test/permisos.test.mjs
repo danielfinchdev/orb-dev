@@ -395,7 +395,7 @@ test('guardia: la carpeta de datos de Orb por su ruta resuelta, sin falsos posit
   for (const command of [`sqlite3 "${db}" .tables`, `type ${db.toUpperCase().replace(/\\/g, '/')}`, 'cat ../core/datos/orb.db', `copy ..${path.sep}core${path.sep}datos${path.sep}orb.db-wal .`, `node -e "require('fs').writeFileSync('${db.replace(/\\/g, '/')}', '')"`,
     `echo x > ${path.join(internalDir, 'ejecuciones', 'a.log')}`]) {
     assert.equal(verdict(command), 'deny', command);
-    assert.equal(verdict(command, 'total'), 'ask', `total pregunta: ${command}`);
+    assert.equal(verdict(command, 'total'), 'deny', `3.8.2: total también lo deniega: ${command}`);
   }
   for (const tool of ['Read', 'Edit', 'Write']) assert.equal(decide({ permission: 'editar', tool, paths: ['../core/datos/control-desarrollo.json'], internalDir, cwd }).decision, 'deny', tool);
   // An isolated copy lives inside core and is the task's own folder.

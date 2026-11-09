@@ -70,8 +70,8 @@ export function MasterCreate({ onDone, upgrade = false }) {
     catch (error) { toast.error(errorText(error)); setBusy(false); }
   };
   return (
-    <div className="brand-sky flex h-full overflow-auto px-6 pt-24 pb-6">
-      <form onSubmit={submit} className="bg-card/95 text-card-foreground m-auto grid w-full max-w-[460px] gap-5 rounded-3xl border border-white/40 p-8 shadow-2xl backdrop-blur" data-testid="master-create">
+    <div className="brand-sky onboard">
+      <form onSubmit={submit} className="bg-card/95 text-card-foreground onboard-card m-auto grid w-full max-w-[460px] rounded-3xl border border-white/40 shadow-2xl backdrop-blur" data-testid="master-create">
         <div className="-mt-20 flex justify-center"><Robot size={120} mood={busy ? 'thinking' : 'hello'} /></div>
         <div className="text-center">
           <h1 className="text-2xl">{t('master.createTitle')}</h1>

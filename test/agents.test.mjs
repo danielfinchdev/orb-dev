@@ -56,7 +56,7 @@ test('Codex: el MCP de Orb va por -c con rutas de Windows escapadas para TOML', 
 });
 
 test('Claude: modo de permisos del SDK según el permiso de Orb', () => {
-  assert.equal(claude.permissionModeOf('total'), 'bypassPermissions');
+  assert.equal(claude.permissionModeOf('total'), 'default', '3.8.2: the guard runs in «total» too (canUseTool)');
   assert.equal(claude.permissionModeOf('editar'), 'acceptEdits');
   assert.equal(claude.permissionModeOf('preguntar'), 'default');
   assert.equal(claude.permissionModeOf('leer'), 'default');
@@ -189,7 +189,7 @@ test('Codex: solo lectura y acceso total cambian sandbox y aprobaciones; continu
   const total = openCodex({ permission: 'total' });
   await total.live.send({ text: 'haz' });
   const q = total.log().find((m) => m.method === 'thread/start').params;
-  assert.deepEqual([q.approvalPolicy, q.sandbox], ['never', 'danger-full-access']);
+  assert.deepEqual([q.approvalPolicy, q.sandbox], ['untrusted', 'danger-full-access'], '3.8.2: total still asks the guard');
   const resumed = openCodex({ resumeId: 'hilo-viejo' });
   assert.equal((await resumed.live.send({ text: 'sigue' })).final, 'Codex: sigue');
   assert.equal(resumed.log().find((m) => m.method === 'thread/resume').params.threadId, 'hilo-viejo');

@@ -115,8 +115,7 @@ const rowsUnder = (board, name) => ROW_TABLES.some((table) => board.one(`SELECT 
 function moveRows(board, from, to) {
   if (from === to) return;
   for (const table of ROW_TABLES) board.run(`UPDATE ${table} SET project = ? WHERE project = ?`, to, from);
-  const oldLog = board.projectLogFile(from); const newLog = board.projectLogFile(to);
-  try { if (oldLog !== newLog && fs.existsSync(oldLog) && !fs.existsSync(newLog)) fs.renameSync(oldLog, newLog); } catch { /* the log stays where it was */ }
+  try { board.moveProjectLog(from, to); } catch { /* the log stays where it was */ }
   for (const what of ROW_TABLES) board.changed(what);
 }
 // A name of their own for the rows of a project that leaves Orb (kind: 'finished' | 'deleted'), free in every table.

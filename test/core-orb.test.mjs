@@ -62,7 +62,7 @@ test('unir una copia con conflicto: la carpeta no se toca y se dice qué choca',
 });
 
 test('Cursor: las reglas del guardia y las herramientas de Orb solo durante el turno, respetando los archivos del usuario', () => {
-  assert.deepEqual(cursorRules('total'), []);
+  assert.deepEqual(cursorRules('total', undefined, { android: true }), [], '3.8.2: adb by hand only with the phone too');
   const editar = cursorRules('editar', 'C:\\Orb\\.orb');
   for (const rule of ['Shell(git push)', 'Shell(taskkill)', 'Shell(*Remove-Item*-Recurse*)', 'Shell(gh pr)', 'Shell(*git push*)', 'Shell(*git -C * push*)']) assert.ok(editar.includes(rule), rule);
   assert.ok(!editar.includes('Write(**)'));

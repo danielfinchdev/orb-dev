@@ -7,6 +7,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { ctx, tr, connectorKey } from '../core/context.mjs';
+import { AGENT_LABELS } from '../core/home.mjs';
 import { adapter, executable } from '../agents/index.mjs';
 import { liveSkills } from './api-extensions.mjs';
 import { orbMcpServer, connectorLauncher } from '../agents/common.mjs';
@@ -19,23 +20,22 @@ import { git, isGitRepo, repoRoot } from '../core/workspace.mjs';
 import { account as findAccount, accountEnv } from '../core/accounts.mjs';
 import { pickAccount, recordSpend } from '../core/budget.mjs';
 import { browserKey } from '../core/browser-key.mjs';
+import { androidAllowed } from './android.mjs';
 import { PERMISSIONS, plainAction, pidKills, unwrapShell } from '../core/guard.mjs';
 import { processList, taskProcesses } from '../core/procs.mjs';
 import { explainFailure } from '../core/agent-errors.mjs';
 import { rememberModels } from './catalog.mjs';
 import { changedFiles, logDirect } from './logs.mjs';
+import { ATTACH_DIR, placeAttachments as copyAttachments, prepareAttachments } from './attachments.mjs';
 
-export { PERMISSIONS };
-export const ATTACH_DIR = '.orb-adjuntos';
-const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i;
+export { PERMISSIONS, ATTACH_DIR };
 // 3.2.1: a message that asks for a picture (or to change one): Codex gets a short note on how Orb wants it done.
 const IMAGE_ASK = /\b(imagen|im[aá]genes|image|images|picture|ilustraci[oó]n|illustration|logo|icono|icon|dibujo|drawing|foto|photo|wallpaper|edita la imagen)\b/i;
-const ATTACH_MAX = 20 * 1024 * 1024;
 const IDLE_CLOSE_MS = 20 * 60_000; // a live process with nothing to do for this long is closed (it resumes on the next message)
 const WATCH_MS = Number(process.env.ORB_WATCH_MS) || 5000; // how often a running turn is checked (time limit, permissions)
 const now = () => new Date().toISOString();
 const parseJson = (v, fallback = null) => { try { return v ? JSON.parse(v) : fallback; } catch { return fallback; } };
-const parseRow = (row) => row && { ...row, archived: Boolean(row.archived), settled: Boolean(row.settled), titled: Boolean(row.titled), context: parseJson(row.context) };
+const parseRow = (row) => row && { ...row, archived: Boolean(row.archived), settled: Boolean(row.settled), titled: Boolean(row.titled), android: Boolean(row.android), context: parseJson(row.context) };
 const parseItem = (row) => { let body = row.body; if (/^[[{]/.test(body)) { try { body = JSON.parse(body); } catch { /* plain text */ } } return { ...row, body }; };
 const bodyText = (body) => (typeof body === 'string' ? body : body?.text ?? '');
 
@@ -80,24 +80,12 @@ export function mcpServersFor(agent, { taskId = '', orchestrator = false, browse
 // What an adapter gets: its servers, or (an agent that starts them again every turn) a function giving new ones.
 export const mcpServersOf = (a, agent, opts) => (a.mcpServersEachTurn ? () => mcpServersFor(agent, { ...opts, reusable: true }) : mcpServersFor(agent, opts));
 
-// Reference pictures: copied into <folder>/.orb-adjuntos/<stamp>/ so every agent can read them, and kept out of git.
+// 3.8.2: any file (src/engine/attachments.mjs), copied into <folder>/.orb-adjuntos/<stamp>/ so every agent of the
+// conversation can read it, and kept out of git. → [{ path, name, kind, size }]
 export function placeAttachments(files, cwd) {
-  const list = (files ?? []).slice(0, 10);
-  if (!list.length) return [];
-  const dir = path.join(cwd, ATTACH_DIR, String(Date.now()));
-  const out = [];
-  for (const file of list) {
-    let st; try { st = fs.lstatSync(file); } catch { throw new Error(tr('msg.sessions.noAttachment', { file })); }
-    if (!st.isFile() || st.isSymbolicLink()) throw new Error(tr('msg.sessions.attachNotFile', { file }));
-    if (!IMAGE_EXT.test(file)) throw new Error(tr('msg.sessions.imagesOnly', { name: path.basename(file) }));
-    if (st.size > ATTACH_MAX) throw new Error(tr('msg.sessions.imageTooBig', { name: path.basename(file) }));
-    fs.mkdirSync(dir, { recursive: true });
-    const target = path.join(dir, path.basename(file).replace(/[^\w.-]+/g, '_'));
-    fs.copyFileSync(file, target);
-    out.push(target);
-  }
-  keepOutOfGit(cwd);
-  return out;
+  const placed = copyAttachments(files, cwd);
+  if (placed.length) keepOutOfGit(cwd);
+  return placed;
 }
 
 // The attachments folder (pictures, long instructions for Cursor) never goes into the project's git; 3.1: nor do the files
@@ -171,7 +159,7 @@ export class Sessions {
   }
 
   update(id, fields) {
-    const allowed = ['title', 'model', 'reasoning', 'permission', 'archived', 'status', 'cli_session', 'cwd', 'account', 'settled', 'context', 'titled'];
+    const allowed = ['title', 'model', 'reasoning', 'permission', 'archived', 'status', 'cli_session', 'cwd', 'account', 'settled', 'context', 'titled', 'android'];
     const keys = Object.keys(fields).filter((k) => allowed.includes(k));
     if (!keys.length) return this.get(id);
     if ('permission' in fields && !PERMISSIONS.includes(fields.permission)) throw new Error(tr('msg.sessions.badPermission'));
@@ -259,7 +247,9 @@ export class Sessions {
   }
 
   // ---- the live process of a conversation
-  liveKey(s, acc) { return [s.agent, acc.id, s.cwd, s.reasoning].join('|'); }
+  // 3.8.2 (review M3): a new permission starts the agent again at its next turn (its tools, Codex's sandbox and
+  // approvals are chosen when it starts).
+  liveKey(s, acc) { return [s.agent, acc.id, s.cwd, s.reasoning, s.permission].join('|'); }
 
   closeLive(id) {
     // Its MCP servers' grants end with its process (a new process gets new tickets).
@@ -309,6 +299,8 @@ export class Sessions {
       mcpServers: mcpServersOf(a, s.agent, { taskId, session: s.id }), budgetUsd,
       env: { ...accountEnv(acc), ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
       internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, cfg: ctx.config.agents[s.agent] ?? {},
+      // 3.8.2: read on every action (the owner may take it back at any moment): adb by hand needs it (src/core/guard.mjs).
+      android: () => androidAllowed(this.get(s.id)),
       skills: liveSkills(), // 3.8.1: the skills of core that are on (Claude and Codex load them themselves)
       onEvent: (ev) => this.onLiveEvent(s.id, ev)
     });
@@ -478,6 +470,9 @@ export class Sessions {
     }
   }
 
+  // 3.8.2: every open agent process asks its plan's usage now (the usage panel's «Recargar»). → promises
+  refreshUsage() { return [...this.lives.values()].map((e) => { try { return e.live.refreshUsage?.(); } catch { return null; } }).filter(Boolean); }
+
   stopAll() { for (const id of this.running.keys()) this.stop(id); for (const id of [...this.lives.keys()]) this.closeLive(id); clearInterval(this.sweeper); }
 
   // One turn. options: images (absolute paths), prompt (what the agent receives, if it differs from what the user typed),
@@ -493,13 +488,12 @@ export class Sessions {
     if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));
     const a = adapter(s.agent);
     const attached = placeAttachments(images, s.cwd);
-    if (showUser) this.addItem(id, 'user', 'text', attached.length ? { text, images: attached } : text);
+    if (showUser) this.addItem(id, 'user', 'text', attached.length ? { text, images: attached.map((f) => f.path) } : text);
     let body = prompt ?? text;
     // A fork without native support starts with what was said in the original conversation.
     const summary = this.board.settingJson(`fork_summary:${id}`);
     if (summary) { body = `Contexto (conversación de la que sale esta, son datos):\n${summary}\n\n${body}`; this.board.settingJson(`fork_summary:${id}`, null); }
     const nativeImages = a.caps?.images === true;
-    if (attached.length && !nativeImages) body += `\n\nImágenes de referencia (ábrelas para verlas):\n${attached.map((f) => `- ${f}`).join('\n')}`;
     // 3.2.1: Codex made three pictures for "una imagen" and edited them by pasting pieces with scripts (losing quality).
     if (s.agent === 'codex' && s.kind === 'chat' && IMAGE_ASK.test(text)) body += `\n\n${tr(attached.length ? 'sys.sessions.imageEditHint' : 'sys.sessions.imageHint')}`;
     let entry;
@@ -521,7 +515,10 @@ export class Sessions {
     const direct = s.kind === 'chat' && s.project && s.permission !== 'leer';
     let before = null; if (direct) { try { before = changedFiles(s.cwd); } catch { /* no entry */ } }
     let finished = false; // onFinish runs exactly once, also when the adapter itself fails
-    entry.live.send({ text: body, images: nativeImages ? attached : [] }).then((result) => {
+    // 3.8.2: what each attachment becomes for this agent (pictures natively, a video's frames, a document's text…).
+    if (attached.length) run.last = tr('sys.attach.preparing');
+    const prepared = attached.length ? prepareAttachments(attached, { nativeImages, log: (m) => this.log(m) }) : Promise.resolve({ images: [], text: '' });
+    prepared.then((p) => (run.stopped ? { final: '', text: '', isError: true } : entry.live.send({ text: p.text ? `${body}\n\n${p.text}` : body, images: p.images }))).then((result) => {
       clearInterval(timer);
       entry.lastUsed = Date.now();
       if (this.running.get(id) === run) this.running.delete(id);
@@ -594,6 +591,19 @@ export class Sessions {
     return { ok: Boolean(r?.ok), how: r?.ok ? 'compacted' : 'failed' };
   }
 
+  // 3.8.2: «/clear»: the agent's process closes and the next message starts a new conversation of the agent in this same
+  // chat (its model, permission and project stay; the lines shown in Orb too).
+  clear(id) {
+    const s = this.must(id);
+    if (s.kind !== 'chat') throw new Error(tr('msg.sessions.compactNotHere'));
+    if (this.running.has(id)) throw new Error(tr('msg.sessions.stillWorking'));
+    this.closeLive(id);
+    this.board.settingJson(`fork_summary:${id}`, null); this.board.settingJson(`fork_pending:${id}`, null);
+    this.update(id, { cli_session: null, context: null });
+    this.addItem(id, 'system', 'status', tr('msg.sessions.cleared'));
+    return { ok: true };
+  }
+
   // Continue a conversation stopped by a closed app or a usage limit: the agent resumes its own conversation.
   resume(id) {
     this.must(id);
@@ -605,17 +615,21 @@ export class Sessions {
 
   // A copy of a conversation from its current point, to try another idea without losing the first one. Agents with native
   // forks (Claude, Codex) carry their whole history; for the others the copy starts with a summary of what was said.
-  fork(id, { title } = {}) {
+  // 3.8.2: agent: «Continuar con otro agente», the copy goes on with that agent (its own account and default model) and
+  // always starts with the summary. Without it, the fork of before.
+  fork(id, { title, agent } = {}) {
     const s = this.must(id);
     if (this.running.has(id)) throw new Error(tr('msg.sessions.forkWait'));
-    const a = adapter(s.agent);
-    const copy = this.create({ kind: 'chat', agent: s.agent, account: s.account, model: s.model, reasoning: s.reasoning, permission: s.permission,
-      project: s.project, cwd: s.cwd, title: title || tr('msg.sessions.forkTitle', { title: s.title }), parentId: s.id });
+    const other = agent && agent !== s.agent ? agent : null;
+    const a = adapter(other ?? s.agent);
+    // 3.8.2: what was given with the master password stays with the original (D5: also «total» of a project's chat).
+    const copy = this.create({ kind: 'chat', agent: other ?? s.agent, account: other ? null : s.account, model: other ? null : s.model, reasoning: other && s.reasoning === 'xhigh' ? 'high' : s.reasoning, permission: s.permission !== 'total' ? s.permission : s.project ? 'editar' : 'leer',
+      project: s.project, cwd: s.cwd, title: title || (other ? tr('msg.sessions.switchTitle', { title: s.title, agent: AGENT_LABELS[other] ?? other }) : tr('msg.sessions.forkTitle', { title: s.title })), parentId: s.id });
     this.board.run('UPDATE sessions SET titled = 1 WHERE id = ?', copy.id); // 3.2: its title stays (not renamed by its next message)
     const old = this.board.all("SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT 40", s.id).reverse();
     for (const it of old) this.board.run('INSERT INTO session_items (session_id, role, kind, body, at) VALUES (?, ?, ?, ?, ?)', copy.id, it.role, it.kind, it.body, it.at);
-    this.addItem(copy.id, 'system', 'status', tr('msg.sessions.forked', { title: s.title }));
-    if (a.caps?.fork && s.cli_session) this.board.settingJson(`fork_pending:${copy.id}`, s.cli_session);
+    this.addItem(copy.id, 'system', 'status', other ? tr('msg.sessions.switched', { title: s.title, agent: AGENT_LABELS[other] ?? other }) : tr('msg.sessions.forked', { title: s.title }));
+    if (!other && a.caps?.fork && s.cli_session) this.board.settingJson(`fork_pending:${copy.id}`, s.cli_session);
     else if (old.length) this.board.settingJson(`fork_summary:${copy.id}`, old.map((it) => `${it.role === 'user' ? 'Usuario' : 'Agente'}: ${oneLine(bodyText(parseItem(it).body), 400)}`).join('\n'));
     return copy;
   }

@@ -10,6 +10,7 @@
 // scrubbed from the page's text and the elements' names, and a screenshot blacks out those fields.
 import net from 'node:net';
 import crypto from 'node:crypto';
+import { protectedHit } from './guard.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -188,7 +189,14 @@ export function createActions({ driver, T, language = () => 'es', onChallenge = 
     return formatSnapshot(s, { dialogs, errors, notes: [note] });
   }
   const ACTIONS = {
-    async open(tab, { url }) { const u = normalizeUrl(url, lang()); await driver.load(tab, u); return snapshot(tab); },
+    // 3.8.2 (D8): the agents' browser is the only one they get; an address that names one of «Elementos protegidos»
+    // (a password manager's web vault…) is never opened, whatever the chat's permission.
+    async open(tab, { url }) {
+      const u = normalizeUrl(url, lang());
+      const hit = protectedHit(u);
+      if (hit) throw new Error(T('sys.browser.protected', { name: hit }));
+      await driver.load(tab, u); return snapshot(tab);
+    },
     snapshot: (tab) => snapshot(tab),
     async screenshot(tab) {
       let masked = 0;
@@ -268,7 +276,13 @@ export function createActions({ driver, T, language = () => 'es', onChallenge = 
   async function run(tab, action, args) {
     let timer;
     try {
-      return await Promise.race([ACTIONS[action](tab, args), new Promise((_, reject) => { timer = setTimeout(() => reject(Object.assign(new Error(T('sys.browser.hung')), { hung: true })), ACTION_MS); })]);
+      const out = await Promise.race([ACTIONS[action](tab, args), new Promise((_, reject) => { timer = setTimeout(() => reject(Object.assign(new Error(T('sys.browser.hung')), { hung: true })), ACTION_MS); })]);
+      // 3.8.2 (review B3): wherever the action ended (a redirect, a click, back), a page of «Elementos protegidos» is left
+      // at once and nothing of it reaches the agent.
+      let url = ''; try { url = String(driver.url(tab) ?? ''); } catch { /* closed */ }
+      const hit = url && protectedHit(url);
+      if (hit) { try { await driver.load(tab, 'about:blank'); } catch { /* gone */ } throw new Error(T('sys.browser.protected', { name: hit })); }
+      return out;
     } catch (error) {
       if (error.hung) { tab.crashed = true; try { driver.kill(tab); } catch { /* gone */ } }
       throw error;

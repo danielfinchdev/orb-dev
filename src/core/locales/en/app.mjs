@@ -1,7 +1,7 @@
 // app.*
 export default {
   'app.linkTitle': "Link with your Orb",
-  'app.linkBody': "On your Orb, open Settings → Magic Link, tap “Show the QR code” and scan it. Then type the PC's master password.",
+  'app.linkBody': 'On your Orb, open Settings › Magic Link, tap “Show QR code” and scan it. Then type the PC’s master password.',
   'app.linkScan': "Scan the QR code",
   'app.linkManual': "Link without the camera",
   'app.linkPaste': "Your Orb's link",
@@ -20,7 +20,6 @@ export default {
   'app.linkOffline': "Could not connect to your Orb. Check that the phone is on your Wi-Fi or has Tailscale on.",
   'app.linkNoShortCode': "Your Orb does not accept the short code. Scan the QR code or paste its link.",
   'app.scanPreparing': "The QR code reader is being installed. Try again in a few seconds.",
-  'app.dictateUnavailable': "Dictation is not available on this phone.",
   'app.sharedImage': "Shared picture: {path}",
   'app.noticeFrom': "{name} · Notification",
   'app.pushDeniedApp': "Orb's notifications are turned off. Turn them on in Android settings.",
@@ -69,6 +68,9 @@ export default {
   "app.offlineTitleNamed": "{name} is off or can't be reached",
   "app.offlineBody": "Check that the PC is on with Orb open, and that the phone is on the same Wi-Fi or has Tailscale on.",
   "app.offlineOldPc": "If you updated this app, update Orb on the PC too: it needs Orb 3.8.1 or later.",
+  "app.pcAttentionTitle": "The PC needs attention",
+  "app.pcAttentionTitleNamed": "{name} needs attention",
+  "app.pcAttentionBody": "Updating Orb's data failed on the PC. Open Orb on the PC to fix it; the phone connects again by itself.",
   "app.offlineRetry": "Try again",
   "app.newSecretTitle": "Start with a new key?",
   "app.newSecretIntro": "Orb will make a new key for this PC. Approvals will be asked again and the phone will have to be linked again.",
@@ -99,5 +101,6 @@ export default {
   "app.crashHome": "Back to start",
   "app.loadOfflineTitle": "No connection",
   "app.loadOfflineBody": "This screen could not be loaded. Check the connection and try again.",
-  "app.loadOfflineToast": "Could not open: no connection."
+  "app.loadOfflineToast": "Could not open: no connection.",
+  'app.linkOfflineWifi': 'Couldn’t connect to your Orb over the local network. On the PC, allow Orb through Windows Firewall for private networks.',
 };

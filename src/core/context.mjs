@@ -122,6 +122,12 @@ export function validateConfig(c) {
   const bool = (v, name) => { if (v !== undefined && typeof v !== 'boolean') throw new Error(tr('msg.ctx.boolean', { name })); };
   bool(c.continuity?.resumeAfterRestart, 'continuity.resumeAfterRestart'); bool(c.continuity?.resumeAtReset, 'continuity.resumeAtReset');
   bool(c.delegation?.enabled, 'delegation.enabled'); bool(c.delegation?.trusted, 'delegation.trusted');
+  // 3.8.2: the background music (Windows; src/ui/lib/music.js) and the games' own music (gameMusic: false = muted).
+  const music = c.ui?.music;
+  if (music !== undefined && (!music || typeof music !== 'object' || Array.isArray(music) || (music.on !== undefined && typeof music.on !== 'boolean')
+    || (music.volume !== undefined && !(typeof music.volume === 'number' && music.volume >= 0 && music.volume <= 1))
+    || (music.track !== undefined && (typeof music.track !== 'string' || music.track.length > 40)))) throw new Error(tr('msg.ctx.badAppearance', { name: 'ui.music' }));
+  bool(c.ui?.gameMusic, 'ui.gameMusic');
   bool(c.setupPending, 'setupPending'); // 3.8: the welcome is not over yet (src/ui/views/setup.jsx)
   bool(c.budget?.autoModel, 'budget.autoModel'); // 2.7: Orb chooses each task's model (true / missing) or the agents' defaults
   bool(c.ui?.tourDone, 'ui.tourDone');

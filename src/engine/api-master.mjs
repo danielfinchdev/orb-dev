@@ -9,7 +9,7 @@ import { paths } from '../core/home.mjs';
 import { machineKeys } from '../core/machine-keys.mjs';
 import { Master, MasterError, IN_VAULT, mirrorTo, restoreMissing, checkPassword, MIN_LENGTH, UNLOCK_MS } from '../core/master.mjs';
 import { sealConnectors, connectorSecrets, refOf, secretId, ENV_NAME, bindMissing } from '../core/connector-secrets.mjs';
-import { needsUnlock, FRESH_UNLOCK, FRESH_PURPOSES } from '../core/permissions.mjs';
+import { needsUnlock, freshPurpose, FRESH_PURPOSES } from '../core/permissions.mjs';
 import { isRecoveryCode, hasRecovery } from '../core/backup.mjs';
 import { str } from './api-common.mjs';
 import { scrubVaultedSecrets, DONE_AT } from '../core/migrate-38.mjs';
@@ -76,11 +76,15 @@ export function checkUnlock(method, params) {
   const m = ctx.master;
   if (!m?.hasPassword()) throw userError(m?.state().lost ? 'msg.master.lost' : 'msg.master.createFirst', {}, { reason: 'unlock' });
   // 3.8.1: a token for one action (FRESH_UNLOCK) opens it once: it is used up here.
-  const purpose = FRESH_UNLOCK[method] ?? null;
+  const purpose = freshPurpose(method, params);
   if (!m.checkToken(params?.unlock, purpose, { consume: Boolean(purpose) })) throw userError('msg.master.needUnlock', {}, { reason: 'unlock' });
 }
 
-export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => {} }) {
+// onLock(why): 3.8.2: Orb locked (or its password changed): what the master password gave the chats goes
+// (src/engine/grants.mjs › revokeAll).
+// onScreen(locked): 3.8.2 (security review): Orb's lock screen goes up (true) or down (false); also once at the start.
+export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => {}, onLock = () => {}, onScreen = () => {} }) {
+  const locked = (why) => { try { const r = onLock(why); if (r?.catch) r.catch((error) => log(`acceso: ${error.message}`)); } catch (error) { log(`acceso: ${error.message}`); } };
   const master = () => ctx.master ?? (ctx.master = openMaster(ctx.home, ctx.keys?.inVault ? IN_VAULT : ctx.secret ?? (() => { try { return fs.readFileSync(ctx.paths.key); } catch { return null; } })(), { log }));
   const opened = () => { migrateSecrets(board, master(), { log, emit }); try { onUnlocked(); } catch (error) { log(`secretos: ${error.message}`); } };
   const password = (v) => (typeof v === 'string' ? v : '');
@@ -97,7 +101,9 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
   // The agents keep working (the vault stays open: only the window's tokens go). Kept in memory: a reload of the window
   // finds it locked; a new start of Orb opens as usual (this PC's own key, as at every start).
   let screen = ctx.screenAtStart === true; // an engine restarted under the lock screen keeps it (the app says so)
-  const screenOff = () => { if (screen) { screen = false; emit('master:unlocked', {}); } };
+  const screenTold = (v) => { try { onScreen(v); } catch (error) { log(`pantalla de bloqueo: ${error.message}`); } };
+  screenTold(screen);
+  const screenOff = () => { if (screen) { screen = false; screenTold(false); emit('master:unlocked', {}); } };
   return {
     // canForget: «He olvidado la contraseña» can keep the secrets (this PC opened them and has a recovery code).
     'master.state': () => {
@@ -129,7 +135,9 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
     // goes and, with a master password, the window shows the lock screen (screen: true) until it is typed.
     'master.lock': ({ reason } = {}) => {
       const m = master(); m.lock();
+      locked(reason === 'idle' ? 'bloqueo (sin usar)' : reason === 'hand' ? 'bloqueo (a mano)' : 'bloqueo');
       const was = screen; screen = m.hasPassword();
+      if (screen) screenTold(true);
       if (screen && !was) log(`pantalla de bloqueo${reason === 'idle' ? ' (sin usar)' : ''}`);
       emit('master:locked', { screen });
       return true;
@@ -140,6 +148,7 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       let r; try { r = await master().change(password(current), password(next)); } catch (error) { throw asUser(error); }
       if (!r.ok) throw refused(r);
       log('contraseña maestra cambiada');
+      locked('contraseña cambiada');
       emit('master:locked', {}); screenOff();
       return master().issue();
     },
@@ -156,6 +165,7 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       const unlinked = unlinkAll('olvido');
       log(`contraseña maestra nueva con el código de recuperación (clave de datos nueva); ${unlinked} dispositivo(s) desenlazados`);
       board.notice(tr('msg.master.forgotDone', { n: unlinked }), 'warning');
+      locked('contraseña nueva');
       emit('master:locked', {}); screenOff();
       return { ...m.issue(), unlinked };
     },
@@ -169,6 +179,7 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       const unlinked = unlinkAll('empezar de cero');
       log(`secretos borrados y contraseña maestra nueva; ${unlinked} dispositivo(s) desenlazados`);
       board.notice(tr('msg.master.resetDone', { n: unlinked }), 'warning');
+      locked('secretos borrados');
       emit('master:locked', {}); screenOff();
       if (wasLocked) opened();
       return { ...m.issue(), unlinked };

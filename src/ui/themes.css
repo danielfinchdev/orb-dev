@@ -260,6 +260,117 @@ html[data-skin="profesional"] *:not([role="progressbar"] *) { transition-duratio
 html[data-skin="profesional"] *:hover { scale: none; }
 
 /* ================================================================================================================
+   CRISTAL (3.8.2): Profesional made of frosted glass, after the translucent materials of Apple's interfaces. <html>
+   wears data-skin="profesional" too (src/core/appearance.mjs › SKIN_BASE), so everything above applies: no robot, no
+   sounds, no backdrop scene and no animation. On top: a still colour field painted once on the page, translucent
+   surfaces with a light edge and a soft shadow, larger corners and the system blue.
+   Performance: backdrop-filter only on a few large surfaces that do not scroll (the sidebar, the chat's top bar, the
+   message box, menus, selects and dialogs); never on cards or list items, which are tinted glass with no blur. Nothing
+   moves, so at rest nothing is drawn again.
+   Contrast: text >= 4.5:1 and input borders >= 3:1 on every surface laid over the brightest and darkest point of the
+   field (test/cristal-382.test.mjs reads these tokens).
+   ================================================================================================================ */
+html[data-material="cristal"] {
+  --radius: 0.7rem;
+  --cr-base: oklch(0.955 0.012 262);
+  --cr-pool-1: oklch(0.86 0.07 252);
+  --cr-pool-2: oklch(0.89 0.055 305);
+  --cr-pool-3: oklch(0.89 0.05 200);
+  --background: oklch(0.955 0.012 262);
+  --foreground: oklch(0.2 0.02 265);
+  --card: oklch(1 0 0 / 0.62);
+  --card-foreground: oklch(0.2 0.02 265);
+  --popover: oklch(0.99 0.004 262 / 0.8);
+  --popover-foreground: oklch(0.2 0.02 265);
+  --primary: oklch(0.5 0.17 258);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(1 0 0 / 0.66);
+  --secondary-foreground: oklch(0.22 0.02 265);
+  --muted: oklch(0.97 0.006 262 / 0.7);
+  --muted-foreground: oklch(0.44 0.03 265);
+  --accent: oklch(1 0 0 / 0.72);
+  --accent-foreground: oklch(0.2 0.02 265);
+  --destructive: oklch(0.5 0.2 27);
+  --success: oklch(0.46 0.12 155);
+  --warning: oklch(0.47 0.11 65);
+  --warning-foreground: oklch(0.99 0 0);
+  --info: oklch(0.47 0.13 245);
+  --border: oklch(0.35 0.03 265 / 0.13);
+  --input: oklch(0.54 0.025 265);
+  --ring: oklch(0.6 0.15 256);
+  --sidebar: oklch(0.985 0.006 262 / 0.52);
+  --bubble: oklch(0.93 0.035 256 / 0.88);
+  --bubble-foreground: oklch(0.2 0.02 265);
+  /* The material: how it blurs what is behind, the light on its edge, its line and its shadow. */
+  --cr-blur: blur(24px) saturate(180%);
+  --cr-bar: oklch(0.985 0.006 262 / 0.6);
+  --cr-edge: inset 0 1px 0 rgb(255 255 255 / 0.75), inset 0 0 0 1px rgb(255 255 255 / 0.3);
+  --cr-line: oklch(0.35 0.03 265 / 0.12);
+  --cr-shadow: 0 1px 2px rgb(20 30 70 / 0.06), 0 14px 34px -18px rgb(20 30 80 / 0.32);
+  --cr-shadow-float: 0 2px 6px rgb(20 30 70 / 0.08), 0 24px 54px -20px rgb(20 30 80 / 0.42);
+}
+html.dark[data-material="cristal"] {
+  --cr-base: oklch(0.17 0.016 266);
+  --cr-pool-1: oklch(0.31 0.08 258);
+  --cr-pool-2: oklch(0.29 0.075 305);
+  --cr-pool-3: oklch(0.3 0.055 210);
+  --background: oklch(0.17 0.016 266);
+  --foreground: oklch(0.96 0.004 265);
+  --card: oklch(0.27 0.016 266 / 0.55);
+  --card-foreground: oklch(0.96 0.004 265);
+  --popover: oklch(0.22 0.016 266 / 0.84);
+  --popover-foreground: oklch(0.96 0.004 265);
+  --primary: oklch(0.72 0.14 252);
+  --primary-foreground: oklch(0.17 0.02 260);
+  --secondary: oklch(0.34 0.016 266 / 0.6);
+  --secondary-foreground: oklch(0.95 0.004 265);
+  --muted: oklch(0.3 0.016 266 / 0.6);
+  --muted-foreground: oklch(0.77 0.015 265);
+  --accent: oklch(0.4 0.02 266 / 0.55);
+  --accent-foreground: oklch(0.97 0.004 265);
+  --destructive: oklch(0.68 0.19 25);
+  --success: oklch(0.76 0.14 155);
+  --warning: oklch(0.82 0.13 75);
+  --warning-foreground: oklch(0.17 0.02 260);
+  --info: oklch(0.76 0.11 245);
+  --border: oklch(1 0 0 / 0.1);
+  --input: oklch(0.6 0.02 266);
+  --ring: oklch(0.64 0.13 252);
+  --sidebar: oklch(0.2 0.016 266 / 0.5);
+  --bubble: oklch(0.36 0.05 258 / 0.78);
+  --bubble-foreground: oklch(0.97 0.004 265);
+  --cr-bar: oklch(0.2 0.016 266 / 0.55);
+  --cr-edge: inset 0 1px 0 rgb(255 255 255 / 0.12), inset 0 0 0 1px rgb(255 255 255 / 0.06);
+  --cr-line: oklch(1 0 0 / 0.09);
+  --cr-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 14px 34px -18px rgb(0 0 0 / 0.6);
+  --cr-shadow-float: 0 2px 6px rgb(0 0 0 / 0.35), 0 24px 54px -20px rgb(0 0 0 / 0.7);
+}
+/* The colour field: painted once, never moves. */
+html[data-material="cristal"] body { background: radial-gradient(62% 56% at 6% 0%, var(--cr-pool-1), transparent 70%), radial-gradient(56% 52% at 100% 16%, var(--cr-pool-2), transparent 72%), radial-gradient(72% 60% at 52% 106%, var(--cr-pool-3), transparent 70%), var(--cr-base); }
+/* The sidebar: the blur sits on a layer of its own behind the content, so the sidebar does not become the containing
+   block of anything fixed inside it. */
+html[data-material="cristal"] aside.bg-sidebar { border-right-color: var(--cr-line); box-shadow: inset -1px 0 0 rgb(255 255 255 / 0.25); }
+html[data-material="cristal"] aside.bg-sidebar::before { content: ""; position: absolute; inset: 0; z-index: -1; backdrop-filter: var(--cr-blur); pointer-events: none; }
+/* The chat's top bar and the message box. */
+html[data-material="cristal"] .chat-bar { background-color: var(--cr-bar); backdrop-filter: var(--cr-blur); border-bottom-color: var(--cr-line); }
+html[data-material="cristal"] [data-slot="composer"] { backdrop-filter: var(--cr-blur); border-color: var(--cr-line); border-radius: 1.25rem; box-shadow: var(--cr-edge), var(--cr-shadow); }
+html[data-material="cristal"] [data-slot="composer"]:focus-within { box-shadow: var(--cr-edge), var(--cr-shadow-float), 0 0 0 3px color-mix(in oklch, var(--ring) 28%, transparent); }
+/* Cards and the user's bubble: tinted glass, no blur. */
+html[data-material="cristal"] [data-slot="card"] { border-color: var(--cr-line); box-shadow: var(--cr-edge), var(--cr-shadow); }
+html[data-material="cristal"] .bg-bubble { box-shadow: var(--cr-edge); }
+/* Menus, selects and dialogs float over the content: thick glass. */
+html[data-material="cristal"] :is([data-slot="menu-content"], [data-slot="select-content"], [data-slot="dialog-content"]) { backdrop-filter: var(--cr-blur); border-color: var(--cr-line); box-shadow: var(--cr-edge), var(--cr-shadow-float); }
+html[data-material="cristal"] [data-slot="dialog-overlay"] { background-color: rgb(10 14 30 / 0.22); }
+/* Buttons with a fill keep a faint light on their top edge. */
+html[data-material="cristal"] [data-slot="button"].bg-primary { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.22), 0 1px 2px rgb(20 30 80 / 0.18); }
+/* Less transparency asked by the system: solid surfaces, no blur. */
+@media (prefers-reduced-transparency: reduce) {
+  html[data-material="cristal"] { --card: var(--background); --popover: var(--background); --sidebar: var(--background); --cr-bar: var(--background); }
+  html[data-material="cristal"] :is(.chat-bar, [data-slot="composer"], [data-slot="menu-content"], [data-slot="select-content"], [data-slot="dialog-content"]),
+  html[data-material="cristal"] aside.bg-sidebar::before { backdrop-filter: none; }
+}
+
+/* ================================================================================================================
    NUBE (candy) — a candy game: a pink-to-lilac page with a fine dotted pattern, big white rounded panels with soft pink
    shadows, chunky plum capitals for the titles, glossy 3D «jelly key» buttons, pills everywhere, and 3D clouds, candies
    and lollipops floating at the edges. Nunito, titles Fredoka. Night: the same sweets over a plum sky.

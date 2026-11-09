@@ -149,6 +149,12 @@ pub fn act(w: &WebviewWindow, action: &str) -> Result<Value, String> {
         w.maximize().map_err(|e| e.to_string())?
       }
     }
+    // The first-run welcome opens maximised (never a test window that nobody sees: maximising would show it).
+    "maximize-on" => {
+      if !w.app_handle().state::<Ui>().hidden && !w.is_maximized().unwrap_or(false) {
+        w.maximize().map_err(|e| e.to_string())?
+      }
+    }
     "close" => w.close().map_err(|e| e.to_string())?,
     "fullscreen" => w.set_fullscreen(!w.is_fullscreen().unwrap_or(false)).map_err(|e| e.to_string())?,
     "state" => {}

@@ -145,3 +145,27 @@ test('3.6: una conversación directa con un agente se fija y se silencia como la
   await call('inbox.unpin', { kind: 'session', id: s.id });
   assert.equal((await call('inbox.list', { zone: 'orb' })).items.find((x) => x.kind === 'session' && String(x.id) === String(s.id))?.pinned, false);
 });
+
+test('3.8.2: snooze hides a chat until its time, keeps its other marks and the scheduler brings it back', async () => {
+  const c = conv('Snoozed chat');
+  orbSays(c, 'something new');
+  await call('inbox.pin', { kind: 'conversation', id: c });
+  const soon = new Date(Date.now() + 3600e3).toISOString();
+  const m = await call('inbox.snooze', { kind: 'conversation', id: c, until: soon });
+  assert.equal(m.snoozedUntil, soon); assert.equal(m.pinned, true, 'still pinned');
+  let list = await call('inbox.list', { zone: 'orb' });
+  assert.equal(item(list, 'conversation', c).snoozedUntil, soon);
+  assert.equal(list.unread, list.items.filter((x) => !x.muted && !x.snoozedUntil).reduce((n, x) => n + x.unread, 0), 'a snoozed chat does not count as unread');
+  await assert.rejects(call('inbox.snooze', { kind: 'conversation', id: c, until: '2000-01-01T00:00:00Z' }), 'not in the past');
+  await assert.rejects(call('inbox.snooze', { kind: 'conversation', id: c, until: 'mañana' }), 'not a time');
+  // The scheduler's tick wakes it once the time has passed.
+  board.run("UPDATE inbox_items SET snoozed_until = '2000-01-01T00:00:00.000Z' WHERE kind = 'conversation' AND item_id = ?", String(c));
+  const woke = [];
+  new Scheduler(board, null, { emit: (e) => woke.push(e) }).wakeChats();
+  assert.deepEqual(woke, ['inbox:changed']);
+  list = await call('inbox.list', { zone: 'orb' });
+  assert.equal(item(list, 'conversation', c).snoozedUntil, null); assert.equal(item(list, 'conversation', c).pinned, true);
+  // Back now by hand.
+  await call('inbox.snooze', { kind: 'conversation', id: c, until: soon });
+  assert.equal((await call('inbox.snooze', { kind: 'conversation', id: c, until: null })).snoozedUntil, null);
+});

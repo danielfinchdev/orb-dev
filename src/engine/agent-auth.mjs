@@ -13,30 +13,35 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
+// 3.8.2 (T3 3.4): the pipe of an id. Orb's secret helper (src/mcp/secret-run.mjs) rebuilds it from the handle it gets.
+export const pipeOf = (id) => (process.platform === 'win32' ? `\\\\.\\pipe\\orb-agentes-${id}` : path.join(os.tmpdir(), `orb-agentes-${id}.sock`));
 const RELEASE_WAIT_MS = 3000; // a server that restarts waits for the old connection to go
 const HELLO_WITHIN_MS = 10_000; // a connection that never says hello is closed
 
 export class AgentAuth {
-  constructor() { this.grants = new Map(); this.server = null; this.pipe = null; }
+  // onCall({ session, who }, method, args) → result: set by the engine (src/engine/api.mjs) for the 'call' requests.
+  constructor() { this.grants = new Map(); this.server = null; this.pipe = null; this.pipeId = null; this.onCall = null; }
 
   // The pipe's name (the server starts listening the first time it is needed).
   get address() { this.listen(); return this.pipe; }
   listen() {
     if (this.server) return;
-    const id = crypto.randomBytes(12).toString('hex');
-    this.pipe = process.platform === 'win32' ? `\\\\.\\pipe\\orb-agentes-${id}` : path.join(os.tmpdir(), `orb-agentes-${id}.sock`);
+    this.pipeId = crypto.randomBytes(12).toString('hex');
+    this.pipe = pipeOf(this.pipeId);
     this.server = net.createServer((socket) => this.serve(socket));
     this.server.on('error', () => { /* a client that goes away mid-hello */ });
     this.server.listen(this.pipe);
     this.server.unref();
   }
 
-  // grant: { session, reply, reusable } — reply is what the MCP process receives; session, which agent process it
-  // belongs to; reusable, traded again without the secret until revoked (Cursor's servers of one turn).
+  // grant: { session, reply, reusable, once } — reply is what the MCP process receives; session, which agent process it
+  // belongs to; reusable, traded again without the secret until revoked (Cursor's servers of one turn); once (3.8.2, a
+  // secret the user typed for one command of an agent), traded a single time and forgotten at once: it never holds the
+  // connection, answers no check and serves no call.
   issue(grant) {
     this.listen();
     const ticket = crypto.randomBytes(32).toString('hex');
-    this.grants.set(ticket, { session: grant.session == null ? null : String(grant.session), reply: grant.reply, reusable: Boolean(grant.reusable), holder: null, secret: null, acked: false });
+    this.grants.set(ticket, { session: grant.session == null ? null : String(grant.session), reply: grant.reply, reusable: Boolean(grant.reusable), once: Boolean(grant.once), holder: null, secret: null, acked: false });
     return ticket;
   }
   // The tickets of one agent process (its session id), when it closes: their servers lose their grant at once.
@@ -63,6 +68,7 @@ export class AgentAuth {
         for (let waited = 0; g && g.holder && !g.holder.destroyed && waited < RELEASE_WAIT_MS; waited += 50) { await new Promise((r) => setTimeout(r, 50)); g = this.grants.get(t); }
         const traded = g && g.acked && !g.reusable && !(typeof m.secret === 'string' && m.secret === g.secret);
         if (!g || (g.holder && !g.holder.destroyed) || traded || socket.destroyed) { send({ ok: false }); socket.end(); return; }
+        if (g.once) { this.grants.delete(t); clearTimeout(idle); send({ ok: true, ...g.reply }); g.reply = null; socket.end(); return; }
         ticket = t; g.holder = socket; clearTimeout(idle);
         g.secret ??= crypto.randomBytes(32).toString('hex');
         // reply: a function when it is made at each trade (a connector's one-time grant of the vault, sessions.mjs).
@@ -72,6 +78,16 @@ export class AgentAuth {
       const g = this.grants.get(ticket);
       if (m?.op === 'ack' && g?.holder === socket) g.acked = true;
       if (m?.op === 'check') send({ id: m.id, ok: g?.holder === socket });
+      // 3.8.2: a request of Orb's own MCP server for the engine (the phone's tools): only on the connection that holds a
+      // grant of Orb's board (never a connector's), for the conversation the engine gave it. Not awaited here, so the
+      // checks of the same connection are answered while it runs (an install can take minutes).
+      if (m?.op === 'call' && Number.isInteger(m.id) && g?.holder === socket) {
+        const ours = g.reply && typeof g.reply === 'object' && g.reply.who && !g.reply.who.boss;
+        Promise.resolve().then(() => {
+          if (!ours || !this.onCall) throw Object.assign(new Error('not allowed'), { userFacing: true });
+          return this.onCall({ session: g.session, who: g.reply.who }, String(m.method ?? ''), m.args && typeof m.args === 'object' ? m.args : {});
+        }).then((result) => send({ call: true, id: m.id, ok: true, result }), (error) => send({ call: true, id: m.id, ok: false, error: error?.userFacing ? error.message : 'error' }));
+      }
     };
     socket.on('data', (chunk) => {
       buf += chunk;

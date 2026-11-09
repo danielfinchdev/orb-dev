@@ -169,9 +169,16 @@ async fn app_pick_files(window: WebviewWindow, title: Option<String>) -> Result<
 }
 
 #[tauri::command]
-async fn app_pick_images(window: WebviewWindow) -> Result<Vec<String>, String> {
+async fn app_pick_attachments(window: WebviewWindow) -> Result<Vec<String>, String> {
   only_main(&window)?;
-  Ok(desktop::pick_images(&window).await)
+  Ok(desktop::pick_attachments(&window).await)
+}
+
+/// 3.8.2 (D3): the microphone of the message box opens Windows' own voice typing (Win+H) on the focused box.
+#[tauri::command]
+async fn app_dictate(window: WebviewWindow) -> Result<(), String> {
+  only_main(&window)?;
+  desktop::dictate(&window)
 }
 
 #[tauri::command]
@@ -320,6 +327,11 @@ pub fn run() {
     }));
   }
   let app = builder
+    // 3.8.2 (item 10): no raw input. tao listens to Windows' raw mouse and keyboard input (device events) while the
+    // window has the focus, and every report reaches the main thread: a 1000 Hz mouse sends a thousand a second, also
+    // while the window is being moved or resized (the main thread runs that loop). Orb never uses them; the page gets
+    // its own input from WebView2.
+    .device_event_filter(tauri::DeviceEventFilter::Always)
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_updater::Builder::new().build())
@@ -336,7 +348,8 @@ pub fn run() {
       app_pick_folder,
       app_pick_program,
       app_pick_files,
-      app_pick_images,
+      app_pick_attachments,
+      app_dictate,
       app_feedback_images,
       app_feedback_capture,
       app_open_path,

@@ -101,5 +101,14 @@ export default {
   'tasks.result': 'Resultado',
   'tasks.history': 'Historial ({n})',
   'tasks.undone': 'Deshecha',
-  'tasks.undoneNote': 'Se deshizo el {when}: los archivos volvieron a como estaban antes de la tarea.'
+  'tasks.undoneNote': 'Se deshizo el {when}: los archivos volvieron a como estaban antes de la tarea.',
+  'tasks.changes.title': 'Cambios',
+  'tasks.changes.filesOne': '{n} archivo',
+  'tasks.changes.filesOther': '{n} archivos',
+  'tasks.changes.more': '{n} archivos más sin mostrar.',
+  'tasks.changes.copyPath': 'Copiar ruta',
+  'tasks.changes.copied': 'Ruta copiada',
+  'tasks.changes.binary': 'Archivo binario.',
+  'tasks.changes.tooBig': 'Diferencia demasiado grande para mostrarla.',
+  'tasks.changes.noText': 'Sin diferencias de texto.'
 };

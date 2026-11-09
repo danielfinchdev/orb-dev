@@ -1,41 +1,41 @@
 // A direct conversation with one agent, live: the answer streams as it is written, commands and changed
 // files appear as the agent works, risky actions wait for a click (approval cards), messages written meanwhile correct the
 // agent on the fly or wait in a queue, and the context meter shows how full the conversation is. Task runs open here too.
-import { memo, useEffect, useMemo, useState } from 'react';
-import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight } from 'lucide-react';
+import { lazy, memo, Suspense, useEffect, useMemo, useState } from 'react';
+import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, RefreshCw, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Ellipsis, Gamepad2, Smartphone, Gauge, Shuffle, ScreenShare, SquareTerminal } from 'lucide-react';
+import { unlockCore } from '@/lib/core-access.js';
 import { toast } from 'sonner';
 import { Markdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
-import { Composer, useAutoScroll, BarClock, BarHeading, CompactButton, COMPACT_AT } from './chat.jsx';
+import { renameChat } from '@/views/orb/inbox.jsx';
+import { Composer, useAutoScroll, BarClock, BarHeading, BarPause, MsgTime, CompactButton, COMPACT_AT } from './chat.jsx';
 import { BackToList } from '@/components/chat-bar.jsx';
 import { ContextSlot } from '@/components/context-slot.jsx';
+import { TaskChanges } from '@/components/task-changes.jsx';
+import { SecretCards } from '@/components/secret-card.jsx';
+import { takePoints, onPoints } from '@/lib/browser-points.js';
+import { TerminalPanel } from '@/components/terminal-panel.jsx';
+import { onTerminalPaste } from '@/lib/terminal-paste.js';
 import { NotificationBell } from '@/components/notification-center.jsx';
 import { useCatalog, modelsOf, modelLabel, ReasoningMenu } from '@/components/brain-picker.jsx';
 import { stepText, bareTool } from '@/components/chat-live.jsx';
 import { readableInput, readableCommand } from '@/lib/tools.js';
-import { GeneratedImage } from '@/components/image-viewer.jsx';
+import { GeneratedImage, openImage } from '@/components/image-viewer.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge, Input, Textarea, Empty, Spinner } from '@/components/ui/basic.jsx';
-import { Select, Collapsible, CollapsibleTrigger, CollapsibleContent, Tip, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent } from '@/components/ui/overlay.jsx';
-import { useStore, call, act, go, bridge, refresh, getState } from '@/lib/store.js';
+import { Badge, Textarea, Empty, Spinner } from '@/components/ui/basic.jsx';
+import { Select, Collapsible, CollapsibleTrigger, CollapsibleContent, Tip, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
+import { useStore, call, act, go, bridge, refresh, getState, fullPc, openGames } from '@/lib/store.js';
 import { AGENT, PERMISSION, REASONING, STATUS, DECISION, CAN_STEER as AGENT_CAN_STEER, CAN_COMPACT, options } from '@/lib/labels.js';
 import { baseName, cn } from '@/lib/utils.js';
 import { useT, t, useLocale, currentLocale } from '@/lib/i18n.js';
 import { sameBlock } from '@/lib/memo.js';
-
-// Items → blocks: a tool call and its result become one block (the latest call with that id gets the result).
-function toBlocks(items, t) {
-  const blocks = []; const tools = new Map();
-  for (const it of items) {
-    if (it.kind === 'tool') { const b = { type: 'tool', key: it.id, call: it.body, result: null }; if (it.body?.id) tools.set(it.body.id, b); blocks.push(b); continue; }
-    if (it.kind === 'tool_result') { const b = it.body?.id ? tools.get(it.body.id) : null; if (b) b.result = it.body; else blocks.push({ type: 'tool', key: it.id, call: { name: t('session.result') }, result: it.body }); continue; }
-    if (it.kind === 'file') { const last = blocks.at(-1); if (last?.type === 'files') last.files.push(it.body); else blocks.push({ type: 'files', key: it.id, files: [it.body] }); continue; }
-    blocks.push({ type: 'item', key: it.id, item: it });
-  }
-  return blocks;
-}
+import { toBlocks, subagentState } from '@/lib/session-blocks.js';
+import { kindOf } from '../../core/attach-kind.mjs';
+import { reloadWait, markReloaded } from '@/lib/usage-reload.js';
+import { canCapture, captureFrame } from '@/lib/window-capture.js';
+import { UsageBar, windowLabel, resetText, toneOf, shortTokens } from '@/components/usage-bits.jsx';
 
 // An icon that says what the tool does (reading, writing, searching, the web, a command…).
 function toolIcon(name = '') {
@@ -80,6 +80,32 @@ function ToolBlock({ b }) {
   );
 }
 
+// 3.8.2: a subagent as one folding row: its name, model and state; unfolded, what it was asked, the steps it took and
+// its answer.
+const SUB_STATE = { running: 'bg-info animate-pulse', done: 'bg-success', failed: 'bg-destructive' };
+function SubagentBlock({ b }) {
+  const t = useT();
+  const a = b.call.agent;
+  const state = subagentState(b);
+  return (
+    <Collapsible className={cn('bg-card rounded-xl border text-[13px]', state === 'failed' && 'border-destructive/40')} data-testid="subagent">
+      <CollapsibleTrigger className="group flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left">
+        <ChevronRight className="text-muted-foreground size-3.5 transition-transform group-data-[state=open]:rotate-90" />
+        <Bot className="text-muted-foreground size-3.5" />
+        <span className="font-medium">{a.name ?? t('session.subagent')}</span>
+        {a.model ? <Badge variant="secondary" className="font-normal">{a.model}</Badge> : null}
+        <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs">{a.description ?? ''}</span>
+        {b.steps.length ? <span className="text-muted-foreground shrink-0 text-xs tabular-nums">{t('session.subagentSteps', { n: b.steps.length })}</span> : null}
+        <span className={cn('size-1.5 shrink-0 rounded-full', SUB_STATE[state])} role="img" aria-label={t(`session.subagentState.${state}`)} data-state={state} />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="grid gap-1.5 px-3 pb-3">
+        {b.steps.map((s) => (s.type === 'subagent' ? <SubagentBlock key={s.key} b={s} /> : <ToolBlock key={s.key} b={s} />))}
+        {b.result?.output ? <pre className="bg-muted max-h-80 overflow-auto rounded-lg px-3 py-2 font-mono text-xs whitespace-pre-wrap break-words">{b.result.output}</pre> : null}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 // 3.2.1: «Claude Code · claude-sonnet-5-5», «Codex · gpt-6-luna» (the line an agent writes when it starts) with the names
 // the rest of the app uses.
 function statusText(body, agent, catalog) {
@@ -88,12 +114,35 @@ function statusText(body, agent, catalog) {
 }
 
 const FILE_ICON = { add: FilePlus2, delete: FileMinus2 };
+// 3.8.2: an attachment's icon by what it is (src/core/attach-kind.mjs).
+const ATTACH_ICON = { image: ImageIcon, video: Film, audio: Music, pdf: FileText, document: FileText, archive: FileArchive, text: FileCode };
+function AttachIcon({ file, className }) { const I = ATTACH_ICON[kindOf(file)] ?? FileIcon; return <I className={className} />; }
+// 3.8.2: an attachment of a message. On the PC a picture opens in the image viewer and a PDF in the file viewer
+// (file-viewer.jsx, loaded when first opened); the rest, and everything on the phone, is its name.
+const FileViewer = lazy(() => import('@/components/file-viewer.jsx'));
+function AttachChip({ file, sessionId }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const kind = kindOf(file) === 'image' && !/\.(png|jpe?g|webp|gif)$/i.test(file) ? 'other' : kindOf(file);
+  const chip = 'inline-flex items-center gap-1 rounded-md bg-white/15 px-2 py-0.5 text-xs';
+  const label = <><AttachIcon file={file} className="size-3" />{baseName(file)}</>;
+  if (bridge.mobile || !['image', 'pdf'].includes(kind)) return <span className={chip}>{label}</span>;
+  return (
+    <>
+      <button type="button" className={cn(chip, 'cursor-pointer hover:bg-white/25')} onClick={() => (kind === 'image' ? openImage(file) : setOpen(true))} aria-label={t('viewer.open', { name: baseName(file) })} data-testid="attach-open">{label}</button>
+      {open ? <Suspense fallback={null}><FileViewer sessionId={sessionId} path={file} onClose={() => setOpen(false)} /></Suspense> : null}
+    </>
+  );
+}
+
 // The blocks are made again from the items whenever one arrives: a block whose content is the same is not drawn again
 // (nor while the agent's answer streams, which redraws the view many times a second): lib/memo.js › sameBlock.
 const Block = memo(function Block({ b, agent, brain, sessionId, project, catalog }) {
   const t = useT();
   const locale = useLocale();
+  const usageLine = useStore((st) => st.app?.config?.ui?.usageLine !== false);
   if (b.type === 'tool') return <ToolBlock b={b} />;
+  if (b.type === 'subagent') return <SubagentBlock b={b} />;
   if (b.type === 'item' && b.item.kind === 'approval') return <ApprovalCard sessionId={sessionId} body={b.item.body} />;
   if (b.type === 'item' && b.item.kind === 'opti_action') return <OptiOldCard body={b.item.body} />;
   if (b.type === 'item' && b.item.kind === 'image') return <div className="flex gap-3"><AgentIcon agent={agent} className="mt-1 size-5" /><GeneratedImage body={b.item.body} sessionId={sessionId} project={project} /></div>;
@@ -104,16 +153,19 @@ const Block = memo(function Block({ b, agent, brain, sessionId, project, catalog
     const images = typeof body === 'object' && body?.images ? body.images : [];
     const long = textBody.length > 1200 && /^Encargo de /.test(textBody);
     return (
-      <div className="bg-bubble text-bubble-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 break-words whitespace-pre-wrap">
+      <div className="msg-hover bg-bubble text-bubble-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 break-words whitespace-pre-wrap">
         {typeof body === 'object' && body?.steer ? <div className="mb-1 flex items-center gap-1 text-[11px] opacity-80"><CornerDownRight className="size-3" />{t('session.steered')}</div> : null}
         {long ? <Collapsible><CollapsibleTrigger className="cursor-pointer text-left underline-offset-2 hover:underline">{textBody.split('\n')[0]} ({t('session.seeFullTask')})</CollapsibleTrigger><CollapsibleContent className="mt-2 text-[13px] opacity-90">{textBody}</CollapsibleContent></Collapsible> : textBody}
-        {images.length ? <div className="mt-2 flex flex-wrap gap-1.5">{images.map((p) => <span key={p} className="inline-flex items-center gap-1 rounded-md bg-white/15 px-2 py-0.5 text-xs"><ImageIcon className="size-3" />{baseName(p)}</span>)}</div> : null}
+        {images.length ? <div className="mt-2 flex flex-wrap gap-1.5">{images.map((p) => <AttachChip key={p} file={p} sessionId={sessionId} />)}</div> : null}
+        <MsgTime at={it.at} hover />
       </div>
     );
   }
-  if (it.kind === 'text' && it.role === 'assistant') return <div className="flex gap-3"><AgentIcon agent={agent} className="mt-1 size-5" /><div className="min-w-0 flex-1"><Markdown>{body}</Markdown></div></div>;
+  if (it.kind === 'text' && it.role === 'assistant') return <div className="msg-hover flex gap-3"><AgentIcon agent={agent} className="mt-1 size-5" /><div className="min-w-0 flex-1"><Markdown>{body}</Markdown><div className="text-muted-foreground flow-root"><MsgTime at={it.at} hover /></div></div></div>;
   if (it.kind === 'reasoning') return <div className="text-muted-foreground border-l-2 pl-3 text-[13px] italic whitespace-pre-wrap line-clamp-4">{body}</div>;
   if (it.kind === 'usage') {
+    // 3.8.2: Ajustes › Apariencia can hide it (shown by default).
+    if (!usageLine) return null;
     const parts = [body?.costUsd != null ? `$${Number(body.costUsd).toFixed(3)}` : null, body?.inputTokens != null ? `${t('session.tokensIn', { n: (body.inputTokens + (body.cacheReadTokens ?? 0) + (body.cacheWriteTokens ?? 0)).toLocaleString(locale) })}${body.cacheReadTokens ? ` (${t('session.tokensCached', { n: body.cacheReadTokens.toLocaleString(locale) })})` : ''}` : null, body?.outputTokens != null ? t('session.tokensOut', { n: body.outputTokens.toLocaleString(locale) }) : null].filter(Boolean);
     return parts.length ? <div className="text-muted-foreground text-right text-[11px]">{parts.join(' · ')}</div> : null;
   }
@@ -174,8 +226,6 @@ export function ApprovalCard({ sessionId, body, compact = false }) {
 // How full the agent's context window is (when the agent reports it).
 // 2.6: how full the conversation is, as a ring that fills up (no number); a click opens the panel with the context in
 // tokens and the limits of the plans working right now (the brain's and the agents' accounts: session, weekly…).
-const toneOf = (pct) => (pct >= 85 ? 'text-destructive' : pct >= 60 ? 'text-warning' : 'text-primary');
-const short = (n) => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
 function Ring({ pct, className }) {
   const r = 7; const c = 2 * Math.PI * r;
   return (
@@ -185,37 +235,27 @@ function Ring({ pct, className }) {
     </svg>
   );
 }
-function UsageBar({ pct }) {
-  return <span className="bg-muted block h-1.5 overflow-hidden rounded-full"><span className={cn('block h-full rounded-full bg-current', toneOf(pct))} style={{ width: `${Math.min(100, Math.max(pct, 1))}%` }} /></span>;
-}
-// «five_hour», «seven_day_opus», «300min»… in words.
-function windowLabel(t, w) {
-  const s = String(w);
-  const model = s.match(/seven_day_(\w+)/)?.[1];
-  if (/five_hour|^300min$|^5h$/.test(s)) return t('session.usage.session');
-  if (model) return t('session.usage.weeklyOf', { model: model[0].toUpperCase() + model.slice(1) });
-  if (/seven_day|^10080min$/.test(s)) return t('session.usage.weekly');
-  const min = Number(s.match(/^(\d+)min$/)?.[1]);
-  if (min) return min % 1440 === 0 ? t('session.usage.days', { n: min / 1440 }) : t('session.usage.hours', { n: Math.round(min / 60) });
-  return s;
-}
-function resetText(t, locale, at) {
-  if (!at) return '';
-  const ms = at - Date.now();
-  if (ms <= 0) return t('session.usage.resetNow');
-  if (ms < 86_400_000) { const h = Math.floor(ms / 3_600_000); const m = Math.floor((ms % 3_600_000) / 60_000); return t('session.usage.resetIn', { time: h ? `${h} h ${m} min` : `${m} min` }); }
-  return t('session.usage.resetOn', { when: new Date(at).toLocaleString(locale, { weekday: 'short', hour: '2-digit', minute: '2-digit' }) });
-}
 function UsagePanel({ context, pct }) {
   const t = useT();
   const locale = useLocale();
   const version = useStore((s) => s.version);
   const [rows, setRows] = useState(null);
   useEffect(() => { let alive = true; call('usage.now').then((r) => alive && setRows(r)).catch(() => alive && setRows([])); return () => { alive = false; }; }, [version]);
+  // 3.8.2: «Recargar»: the agents ask their plan now; a spinner meanwhile, and again only after 20 s (lib/usage-reload.js).
+  const [reloading, setReloading] = useState(false);
+  const [wait, setWait] = useState(() => reloadWait());
+  useEffect(() => { if (!wait) return undefined; const id = setTimeout(() => setWait(reloadWait()), wait); return () => clearTimeout(id); }, [wait]);
+  const reload = async () => {
+    if (reloading || reloadWait()) return;
+    setReloading(true); markReloaded();
+    try { const r = await act(call('usage.refresh')); if (r) setRows(r); }
+    finally { setReloading(false); setWait(reloadWait()); }
+  };
   return (
     <div className="grid w-80 gap-3 p-2.5 text-[13px]" data-testid="usage-panel">
       <div className="grid gap-1.5">
-        <div className="flex items-baseline justify-between gap-3"><span className="text-muted-foreground">{t('session.usage.context')}</span><span className="tabular-nums">{short(context.used)} / {short(context.size)} ({pct} %)</span></div>
+        <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">{t('session.usage.context')}</span><span className="ml-auto tabular-nums">{shortTokens(context.used)} / {shortTokens(context.size)} ({pct} %)</span>
+          <Tip label={t('session.usage.reload')}><Button size="icon-sm" variant="ghost" className="size-6" onClick={reload} disabled={reloading || wait > 0} aria-label={t('session.usage.reload')} aria-busy={reloading} data-testid="usage-reload">{reloading ? <Spinner className="size-3" /> : <RefreshCw className="size-3.5" />}</Button></Tip></div>
         <UsageBar pct={pct} />
         <p className="text-muted-foreground text-xs leading-snug">{t('session.contextTip')}</p>
       </div>
@@ -234,6 +274,8 @@ function UsagePanel({ context, pct }) {
           }) : <p className="text-muted-foreground text-xs leading-snug">{t('session.usage.noData')}</p>}
         </div>
       ))}
+      {/* 3.8.2: the whole usage page (cost and tokens by day, agent and model). */}
+      <DropdownMenuItem className="border-t pt-2.5" onSelect={() => go({ view: 'usage' })} data-testid="usage-page"><Gauge />{t('usage.open')}</DropdownMenuItem>
     </div>
   );
 }
@@ -295,6 +337,22 @@ export function SessionView({ route }) {
   const [text, setText] = useState('');
   const [images, setImages] = useState([]);
   const PAGE = 200;
+  // 3.8.2 (T3 3.2): the user's terminal under the chat (this PC only), and a command pasted into it from the chat.
+  const [terminal, setTerminal] = useState(false);
+  const [termDraft, setTermDraft] = useState('');
+  useEffect(() => (fullPc() ? onTerminalPaste((line) => { setTerminal(true); setTermDraft(line); }) : undefined), [route.id]);
+  useEffect(() => { setTerminal(false); setTermDraft(''); }, [route.id]);
+  // 3.8.2 (T3 3.11): what the user pointed at in the agents' browser for this chat: its picture and a line, not sent yet.
+  useEffect(() => {
+    const take = () => {
+      const got = takePoints(route.id); if (!got.length) return;
+      setImages((prev) => [...new Set([...prev, ...got.map((p) => p.path)])].slice(0, 10));
+      setText((prev) => [prev.trim(), ...got.map((p) => p.text)].filter(Boolean).join('\n'));
+      toast.success(t('session.pointAdded'));
+    };
+    take();
+    return onPoints((id) => { if (id === String(route.id)) take(); });
+  }, [route.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     let alive = true;
     setItems([]); setPartial(''); setQueue([]);
@@ -341,26 +399,44 @@ export function SessionView({ route }) {
     if (older) { setItems((prev) => [...older, ...prev]); setMore(older.length >= PAGE); }
   };
   const addImages = (paths) => setImages((prev) => [...new Set([...prev, ...(paths ?? []).filter(Boolean)])].slice(0, 10));
-  // The files' real paths (a promise); the list is read before the event ends.
-  const fromTransfer = (dt) => Promise.all([...(dt?.files ?? [])].filter((f) => /^image\//.test(f.type)).map((f) => bridge.pathForFile(f))).then((p) => p.filter(Boolean));
+  const capture = async () => {
+    try {
+      const dataUrl = await captureFrame(); if (!dataUrl) return;
+      const saved = await act(call('images.mark', { dataUrl })); if (saved?.path) addImages([saved.path]);
+    } catch { toast.error(t('session.captureFailed')); }
+  };
+  // The files' real paths (a promise); the list is read before the event ends. 3.8.2: any file in Orb for Windows (a
+  // linked device attaches pictures only: they are uploaded to the PC first).
+  const fromTransfer = (dt) => Promise.all([...(dt?.files ?? [])].filter((f) => !bridge.mobile || /^image\//.test(f.type)).map((f) => bridge.pathForFile(f))).then((p) => p.filter(Boolean));
   // While the agent works, Enter corrects it on the fly (it reads the message at its next step) and Ctrl+Enter queues
   // the message for after the turn. Agents that cannot be corrected on the fly always queue.
   const send = async ({ alt = false } = {}) => {
     const msg = text.trim(); if (!msg && !images.length) return;
     const mode = running ? (alt ? 'queue' : 'auto') : 'auto';
-    const r = await act(call('sessions.send', { id: s.id, text: msg || t('session.lookAtImages'), images, mode }));
+    const r = await act(call('sessions.send', { id: s.id, text: msg || t('session.lookAtFiles'), images, mode }));
     if (r === undefined) return;
     setText(''); setImages([]);
     if (r?.steered) toast.success(t('session.steerSent'));
     else if (r?.queued) toast.success(s.kind === 'task' && !running ? t('session.resentTask') : t('session.queuedToast'));
   };
-  const rename = () => form(t('session.titleField'), { initial: { title: s.title }, body: (v, set) => <Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={80} />, ok: t('session.save'), onOk: (v) => call('sessions.update', { id: s.id, title: v.title.trim() || s.title }) });
+  // 3.8.2: the same «Renombrar» as the list's ⋯ (views/orb/inbox.jsx).
+  const rename = () => renameChat({ kind: 'session', id: s.id, title: s.title }, t);
   const fork = async () => { const copy = await act(call('sessions.fork', { id: s.id }), t('session.forked')); if (copy) { await refresh().catch(() => {}); go({ view: 'session', id: copy.id }); } };
+  // 3.8.2: «Continuar con otro agente»: a copy with the agent chosen, which gets a summary of this conversation.
+  const others = (app?.agentsAvailable ?? Object.keys(app?.config?.agents ?? {})).filter((a) => a !== s.agent && AGENT[a]);
+  const switchAgent = async () => {
+    const copy = await form(t('session.switchAgent'), {
+      description: t('session.switchAgentDesc'), initial: { agent: others[0] },
+      body: (v, set) => <Select className="w-full" value={v.agent} onValueChange={(agent) => set({ agent })} options={others.map((a) => ({ value: a, label: AGENT[a] }))} data-testid="switch-agent-pick" />,
+      ok: t('session.switchAgentOk'), onOk: (v) => call('sessions.fork', { id: s.id, agent: v.agent })
+    });
+    if (copy?.id) { await refresh().catch(() => {}); go({ view: 'session', id: copy.id }); }
+  };
   const editQueued = (q, patch) => act(call('sessions.editQueued', { id: s.id, queueId: q.id, ...patch }));
   // 3.6: «Compactar» in the composer's slot when the context is at 70 % or more and the agent can compact (Claude, Codex).
   const compactable = s.kind === 'chat' && CAN_COMPACT[s.agent] === true && (compacting || (!running && s.context?.size > 0 && s.context.used / s.context.size >= COMPACT_AT));
   const compact = async () => { setCompacting(true); try { await act(call('sessions.compact', { id: s.id })); } finally { setCompacting(false); } };
-  const pictures = images.map((p) => <Badge key={p} variant="secondary" className="gap-1.5 font-normal"><ImageIcon />{baseName(p)}<button className="cursor-pointer" onClick={() => setImages(images.filter((x) => x !== p))} aria-label={t('session.remove')}><X className="size-3" /></button></Badge>);
+  const pictures = images.map((p) => <Badge key={p} variant="secondary" className="gap-1.5 font-normal"><AttachIcon file={p} />{baseName(p)}<button className="cursor-pointer" onClick={() => setImages(images.filter((x) => x !== p))} aria-label={t('session.remove')}><X className="size-3" /></button></Badge>);
 
   return (
     <>
@@ -370,18 +446,28 @@ export function SessionView({ route }) {
         center={<BarHeading title={s.title} project={s.project} onRename={s.kind === 'chat' ? rename : null} renameLabel={t('session.renameTip')}
           extra={<span className="bar-title-agent"><AgentIcon agent={s.agent} className="size-3.5" />{who}{s.model ? ` · ${modelName(s.model)}` : ''}</span>} />}>
         <NotificationBell />
-        {bridge.mobile ? null : <Tip label={t('session.openFolder')}><Button variant="ghost" size="icon-sm" onClick={() => act(bridge.openPath(s.cwd))} aria-label={t('session.openFolder')}><FolderOpen /></Button></Tip>}
-        {s.kind === 'chat' ? (<>
-          <Tip label={t('session.detailsShort')}><Button variant="ghost" size="icon-sm" onClick={() => showDetails(s, task)} aria-label={t('session.detailsShort')} data-testid="details"><Info /></Button></Tip>
-          <BubbleTip title={t('session.fork')} text={t('session.forkTip')}><Button variant="ghost" size="icon-sm" disabled={running} onClick={fork} aria-label={t('session.fork')} data-testid="fork"><GitFork /></Button></BubbleTip>
-          <Tip label={s.archived ? t('session.restore') : t('session.archive')}><Button variant="ghost" size="icon-sm" aria-label={s.archived ? t('session.restore') : t('session.archive')} onClick={async () => { await act(call('sessions.update', { id: s.id, archived: !s.archived })); if (!s.archived) go('chat'); }}><Archive /></Button></Tip>
-          <Tip label={t('session.deleteTip')}><Button variant="danger" size="icon-sm" aria-label={t('session.deleteTip')} onClick={async () => { if (await confirm(t('session.deleteTitle'), t('session.deleteBody'), { ok: t('session.delete'), danger: true })) { await act(call('sessions.remove', { id: s.id })); go('chat'); } }}><Trash2 /></Button></Tip>
-        </>) : (<>
+        <BarPause />
+        {s.kind === 'chat' ? null : (<>
           {task ? <Badge variant={STATUS[task.status]?.[1]}>{STATUS[task.status]?.[0]}</Badge> : null}
-          <Tip label={t('session.detailsShort')}><Button variant="ghost" size="icon-sm" onClick={() => showDetails(s, task)} aria-label={t('session.detailsShort')}><Info /></Button></Tip>
-          <BubbleTip title={t('session.fork')} text={t('session.forkTaskTip')}><Button variant="ghost" size="icon-sm" disabled={running} onClick={fork} aria-label={t('session.fork')}><GitFork /></Button></BubbleTip>
           <Button variant="outline" size="sm" onClick={() => go({ view: 'tasks', id: s.task_id })}><ListTodo />{t('session.viewTask', { id: s.task_id })}</Button>
         </>)}
+        {/* 3.8.2: only the bell and pause stay on the bar; the folder, the details, fork, archive, delete and the games go into ⋯. */}
+        <DropdownMenu modal={false}>
+          <BubbleTip title={t('chats.more')}><DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={t('chats.more')} data-testid="session-more"><Ellipsis /></Button></DropdownMenuTrigger></BubbleTip>
+          <DropdownMenuContent align="end" className="w-56">
+            {bridge.mobile ? null : <DropdownMenuItem onSelect={() => act(bridge.openPath(s.cwd))} data-testid="open-folder"><FolderOpen />{t('session.openFolder')}</DropdownMenuItem>}
+            {fullPc() ? <DropdownMenuItem onSelect={() => setTerminal(!terminal)} data-testid="session-terminal"><SquareTerminal />{terminal ? t('terminal.hide') : t('terminal.show')}</DropdownMenuItem> : null}
+            <DropdownMenuItem onSelect={() => showDetails(s, task)} data-testid="details"><Info />{t('session.detailsShort')}</DropdownMenuItem>
+            <DropdownMenuItem disabled={running} onSelect={fork} data-testid="fork"><GitFork />{t('session.fork')}</DropdownMenuItem>
+            {others.length ? <DropdownMenuItem disabled={running} onSelect={switchAgent} data-testid="switch-agent"><Shuffle />{t('session.switchAgent')}</DropdownMenuItem> : null}
+            {s.kind === 'chat' ? <DropdownMenuItem onSelect={async () => { await act(call('sessions.update', { id: s.id, archived: !s.archived })); if (!s.archived) go('chat'); }} data-testid="archive"><Archive />{s.archived ? t('session.restore') : t('session.archive')}</DropdownMenuItem> : null}
+            {fullPc() ? <DropdownMenuItem onSelect={openGames} data-testid="bar-games"><Gamepad2 />{t('bar.games')}</DropdownMenuItem> : null}
+            {s.kind === 'chat' ? <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onSelect={async () => { if (await confirm(t('session.deleteTitle'), t('session.deleteBody'), { ok: t('session.delete'), danger: true })) { await act(call('sessions.remove', { id: s.id })); go('chat'); } }} data-testid="delete"><Trash2 />{t('session.deleteTip')}</DropdownMenuItem>
+            </> : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </PageHeader>
       <div ref={scroll.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
         <div className="lazy-lines mx-auto flex max-w-3xl flex-col gap-3.5 px-5 py-6">
@@ -390,6 +476,8 @@ export function SessionView({ route }) {
             : <Empty title={t('session.emptyTitle', { agent: AGENT[s.agent] })}>{t('session.workIn')} <span className="font-mono text-xs">{s.cwd}</span> {t('session.withPerm', { perm: PERMISSION[s.permission] })}</Empty>}
           {partial ? <div className="flex gap-3" data-testid="partial"><AgentIcon agent={s.agent} className="mt-1 size-5" /><div className="min-w-0 flex-1 opacity-90"><Markdown>{partial}</Markdown></div></div> : null}
           {running && !partial ? <div className="text-muted-foreground flex items-center gap-2 text-[13px]"><span className="bg-info size-2 animate-pulse rounded-full" />{t('session.agentWorking', { agent: AGENT[s.agent] })}</div> : null}
+          {/* 3.8.2: a task's conversation ends with the files it changed (nothing while it runs). */}
+          {task && !['running', 'queued'].includes(task.status) ? <TaskChanges taskId={task.id} version={`${task.status}:${task.updated_at}`} /> : null}
           {stalled ? (
             <div className="bg-card flex flex-wrap items-center gap-3 rounded-xl border px-3.5 py-3 text-[13px]">
               <span className="min-w-0 flex-1">{s.status === 'limited' ? t('session.stalledLimit') : t('session.stalledHalf')}</span>
@@ -415,23 +503,47 @@ export function SessionView({ route }) {
           </div>
         </div>
       ) : null}
+      {/* 3.8.2 (T3 3.4): a secret the agent asked for, typed only here (never in the chat). */}
+      <SecretCards sessionId={s.id} />
+      {terminal && fullPc() ? <TerminalPanel dir={s.cwd} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
       <Composer value={text} onChange={setText} onSend={send} canSend={Boolean(text.trim() || images.length)} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
         placeholder={running ? (AGENT_CAN_STEER[s.agent] ? t('session.phSteer', { agent: AGENT[s.agent] }) : t('session.phWait', { agent: AGENT[s.agent] })) : s.kind === 'task' ? t('session.phTask') : t('session.ph', { agent: AGENT[s.agent] })}
         onPaste={(e) => { fromTransfer(e.clipboardData).then((f) => { if (f.length) addImages(f); }); }}
         onDrop={(e) => { fromTransfer(e.dataTransfer).then(addImages); }}
         top={images.length || compactable ? <>{compactable ? <ContextSlot items={[{ key: 'compact', node: <CompactButton onCompact={compact} busy={compacting} /> }]} /> : null}<div className="flex min-w-0 flex-wrap items-center gap-2">{pictures}</div></> : null}
         bottom={<>
-          <Tip label={t('session.attach')}><Button variant="ghost" size="icon-sm" aria-label={t('session.attach')} onClick={async () => addImages(await bridge.pickImages())}><Paperclip /></Button></Tip>
+          <Tip label={t('session.attach')}><Button variant="ghost" size="icon-sm" aria-label={t('session.attach')} onClick={async () => addImages(await bridge.pickAttachments())} data-testid="attach"><Paperclip /></Button></Tip>
+          {/* 3.8.2: a window captured by the user (the system's picker), attached as a picture. PC only. */}
+          {fullPc() && canCapture() ? <Tip label={t('session.capture')}><Button variant="ghost" size="icon-sm" aria-label={t('session.capture')} onClick={capture} data-testid="capture-window"><ScreenShare /></Button></Tip> : null}
           {/* 3.2: the model, the permissions and the reasoning under the box, like the chat's brain (the bar keeps the title). */}
           {s.kind === 'chat' ? (<>
             {models.length ? <Select size="sm" value={s.model || models[0].value} title={t('session.model')} options={models} onValueChange={(model) => act(call('sessions.update', { id: s.id, model }), t('session.modelSet', { model: modelName(model) }))} data-testid="session-model" /> : null}
-            <Select size="sm" value={s.permission} title={s.project ? t('session.permissions') : t('session.noProjectReadOnly')} disabled={!s.project} options={options(PERMISSION).filter((o) => !bridge.mobile || o.value !== 'total')} onValueChange={async (permission) => {
-              if (permission === 'total' && !(await confirm(t('permission.total'), t('session.totalBody'), { ok: t('session.yes'), danger: true }))) return;
+            {/* 3.8.2 (D5): «Acceso total» of a project's chat also asks for the master password every time and goes when
+                Orb locks; taken back, the chat returns to its permission before, then takes the one chosen. */}
+            {s.project ? <Select size="sm" value={s.permission} title={t('session.permissions')} disabled={bridge.mobile && s.permission === 'total'} options={options(PERMISSION).filter((o) => !bridge.mobile || o.value !== 'total')} onValueChange={async (permission) => {
+              if (permission === 'total') { const unlock = await unlockCore('fullAccess'); if (unlock) act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged')); return; }
+              if (s.permission === 'total') { const back = await act(call('sessions.revokeGrant', { id: s.id, grant: 'total' })); if (!back || back.permission === permission) return; }
               act(call('sessions.update', { id: s.id, permission }), t('session.permissionsChanged'));
             }} data-testid="session-permission" />
+              /* 3.8.2 (D1): without a project, «Solo lectura» or «Acceso total al PC» (the master password every time; it goes
+                 when Orb locks). Never from the phone. */
+              : <Select size="sm" value={s.permission === 'total' ? 'total' : 'leer'} title={t('session.noProjectReadOnly')} disabled={bridge.mobile} options={[{ value: 'leer', label: PERMISSION.leer }, { value: 'total', label: t('session.fullPc') }]} onValueChange={async (permission) => {
+                if (permission !== 'total') { act(call('sessions.revokeGrant', { id: s.id, grant: 'total' }), t('session.permissionsChanged')); return; }
+                const unlock = await unlockCore('fullAccess');
+                if (unlock) act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged'));
+              }} data-testid="session-permission" />}
+            {s.permission === 'total' ? <Tip label={t('session.fullPcTip')}><span tabIndex={0} className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-amber-500/50 bg-amber-500/15 px-2.5 text-[13px] font-medium whitespace-nowrap text-amber-700 dark:text-amber-300" data-testid="session-fullpc"><ShieldAlert className="size-4" />{t('session.fullPcChip')}</span></Tip> : null}
+            {/* 3.8.2 (D2): «Usar mi móvil Android», in any chat (included in «Acceso total al PC»). */}
+            {!s.project && s.permission === 'total' ? null : bridge.mobile ? (s.android ? <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-500/50 bg-emerald-500/15 px-2.5 text-[13px] text-emerald-700 dark:text-emerald-300"><Smartphone className="size-4" />{t('session.androidChip')}</span> : null)
+              : <Tip label={s.android ? t('session.androidOn') : t('session.android')}><Button variant="ghost" size="sm" aria-label={t('session.android')} aria-pressed={Boolean(s.android)} className={cn('h-8 shrink-0', s.android && 'border border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300')} onClick={async () => {
+                if (s.android) { act(call('sessions.revokeGrant', { id: s.id, grant: 'android' })); return; }
+                const unlock = await unlockCore('android');
+                if (unlock) act(call('sessions.grantAndroid', { id: s.id, unlock }));
+              }} data-testid="session-android"><Smartphone />{s.android ? t('session.androidChip') : null}</Button></Tip>}
             <ReasoningMenu catalog={catalog} value={{ agent: s.agent, model: s.model ?? '', account: s.account, reasoning: s.reasoning ?? 'medium' }} onChange={(reasoning) => act(call('sessions.update', { id: s.id, reasoning }))} />
           </>) : null}
-          <Tip label={s.cwd}><span className="text-muted-foreground hidden min-w-0 items-center gap-1 truncate text-xs xl:flex"><FolderOpen className="size-3.5 shrink-0" />{s.project ?? baseName(s.cwd)}</span></Tip>
+          {/* 3.8.2: the folder as a chip of the same height, padding and gap as the model, permissions and reasoning ones. */}
+          <Tip label={s.cwd}><span tabIndex={0} className="border-input text-muted-foreground dark:bg-input/30 hidden h-8 min-w-0 items-center gap-1.5 rounded-lg border px-2.5 text-[13px] whitespace-nowrap shadow-xs outline-none focus-visible:ring-ring/40 focus-visible:ring-[3px] xl:inline-flex" data-testid="session-folder"><FolderOpen className="size-4 shrink-0" /><span className="truncate">{s.project ?? baseName(s.cwd)}</span></span></Tip>
           {s.context ? <span className="text-muted-foreground ml-auto text-xs"><ContextMeter context={s.context} /></span> : null}
         </>} />
     </>

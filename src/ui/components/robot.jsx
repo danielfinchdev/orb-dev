@@ -4,7 +4,7 @@
 // worried (sad brows), sleeping (eyes shut, breathing).
 // The «profesional» visual theme (Ajustes → Apariencia) has no robot and no mark in its place (2.6): nothing is drawn.
 import { Orb } from './orb.jsx';
-import { useStore } from '@/lib/store.js';
+import { useStore, plainSkin } from '@/lib/store.js';
 
 const POSE = { hello: 'wave' }; // the rest follows the mood (orb.jsx keeps pose and face coherent)
 
@@ -15,7 +15,7 @@ const POSE = { hello: 'wave' }; // the rest follows the mood (orb.jsx keeps pose
 export function Robot({ size = 48, mood = 'idle', className, title = 'Orb', still = false, head = size < 56, pose, live = false, active = false, gesture, onPoke, skin: given }) {
   const stored = useStore((s) => s.app?.config?.ui?.skin);
   const skin = given ?? stored;
-  if (skin === 'profesional') return null;
+  if (plainSkin(skin)) return null;
   return (
     <Orb pose={head ? 'head' : pose ?? POSE[mood] ?? 'stand'} size={head ? size : Math.round(size * 0.8)} mood={mood === 'hello' ? 'idle' : mood}
       title={title} still={still} live={live} active={active} greet={mood === 'hello'} gesture={gesture} onPoke={onPoke} className={className} />

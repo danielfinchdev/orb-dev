@@ -77,7 +77,7 @@ const desktopBridge = () => {
     setup: async () => post('/__setup'),
     light: false,
     switchHome: async () => null,
-    pickFolder: async () => 'C:\\Users\\ana\\Documents', pickImages: async () => [], pickFiles: async () => null, pickProgram: async () => null,
+    pickFolder: async () => 'C:\\Users\\ana\\Documents', pickAttachments: async () => [], pickFiles: async () => null, pickProgram: async () => null,
     openPath: async () => {}, openExternal: async () => {}, showBrowser: async () => ({ tabs: [] }), zoom: async () => 1, openTerminal: async () => 'Windows Terminal',
     windowControls: { act: async () => ({ maximized: false }), onState: () => () => {} },
     editors: async () => ({ cursor: false, vscode: true }), openIn: async () => null, runAction: async () => null, moreApps: async () => [], pathForFile: () => null,
@@ -395,7 +395,7 @@ try {
       await attempt(P, 'sidebar search', async () => { await P.fill('[data-testid=sidebar-search-input]', 'web'); await P.waitForTimeout(500); await shot(P, { area: 'menu', screen: 'sidebar-search', state: 'results', src: 'src/ui/components/sidebar.jsx (search)', desc: 'Sidebar search results for «web»' }); await P.fill('[data-testid=sidebar-search-input]', ''); });
       await attempt(P, 'sidebar filter', async () => { await P.click('[data-testid=sidebar-filter]'); await P.waitForTimeout(400); await shot(P, { area: 'menu', screen: 'sidebar-filter', state: 'open', src: 'src/ui/components/sidebar.jsx (filter)', desc: 'Sidebar filter popover' }); await P.keyboard.press('Escape'); });
       await attempt(P, 'sidebar collapsed', async () => { await P.click('[data-testid=sidebar-collapse]'); await shot(P, { area: 'menu', screen: 'sidebar', state: 'collapsed', src: 'src/ui/components/theme-toggle.jsx + components/page.jsx', desc: 'Sidebar folded away, the screen takes the whole width' }); await P.click('[data-testid=sidebar-expand]'); });
-      await attempt(P, 'games', async () => { await nav(P, { view: 'chat' }); await P.click('[data-testid=bar-games]'); await P.waitForSelector('[data-testid=games-dialog]'); await shot(P, { area: 'games', screen: 'games', state: 'list', src: 'src/ui/games/games.jsx', desc: 'Mini games dialog' });
+      await attempt(P, 'games', async () => { await nav(P, { view: 'chat' }); await P.click('[data-testid=orb-chat-more]'); await P.click('[data-testid=bar-games]'); await P.waitForSelector('[data-testid=games-dialog]'); await shot(P, { area: 'games', screen: 'games', state: 'list', src: 'src/ui/games/games.jsx', desc: 'Mini games dialog' });
         for (const g of ['snake', 'chess', 'tetris']) { await attempt(P, `game ${g}`, async () => { if (await P.getByRole('button', { name: 'Volver a los juegos' }).isVisible().catch(() => false)) await P.getByRole('button', { name: 'Volver a los juegos' }).click(); await P.click(`[data-testid=game-${g}]`); await P.waitForTimeout(1200); await shot(P, { area: 'games', screen: g, state: 'playing', src: `src/ui/games/${g}.jsx`, desc: `Game: ${g}` }); }); }
         await P.keyboard.press('Escape'); });
       await attempt(P, 'new schedule', async () => { await nav(P, { view: 'schedules' }); await P.click('[data-testid=new-schedule]'); await dialog(P); await shot(P, { area: 'dialog', screen: 'new-schedule', state: 'open', src: 'src/ui/views/schedules.jsx', desc: 'New scheduled task', scroll: true }); await P.keyboard.press('Escape'); });

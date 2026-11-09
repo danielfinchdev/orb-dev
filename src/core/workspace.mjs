@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { isSecretPath, porcelainPaths } from './safety.mjs';
+import { isSecretPath, porcelainPaths, redactSecrets } from './safety.mjs';
 import { PRODUCT } from './product.mjs';
 import { tr } from './context.mjs';
 
@@ -112,6 +112,37 @@ export function changedBetween(repo, before, after) {
   const parts = r.stdout.split('\0'); const out = [];
   for (let i = 0; i + 1 < parts.length; i += 2) if (parts[i]) out.push({ status: parts[i][0], path: parts[i + 1] });
   return out;
+}
+
+// 3.8.2: what a task changed, file by file, for the window's diff panel. Read only: one `git diff` between the checkpoint
+// before the task and the one after (commits, so line endings and the user's index never matter). Secret-looking paths
+// are left out (the snapshots already keep them out) and secret-looking text in the patches is hidden. Each file's patch and the whole answer are capped, and a binary file
+// has no patch. → { files: [{ status, path, added, removed, binary, patch, cut }], more }
+export function diffBetween(repo, before, after, { maxFiles = 300, maxPatch = 200_000, maxTotal = 2_000_000 } = {}) {
+  const range = ['--no-renames', '--no-color', '--no-ext-diff', before, after];
+  const stats = git(repo, 'diff', '--numstat', '-z', ...range);
+  if (stats.status !== 0) throw new Error(oneLineOf(stats.stderr) || 'git diff');
+  // --numstat -z: «added\tremoved\tpath\0» per file, in the same order as the patch below.
+  const list = stats.stdout.split('\0').filter(Boolean).map((row) => {
+    const [added, removed, ...rest] = row.split('\t');
+    return { path: rest.join('\t'), binary: added === '-', added: Number(added) || 0, removed: Number(removed) || 0 };
+  });
+  const status = new Map(changedBetween(repo, before, after).map((c) => [c.path, c.status]));
+  const whole = git(repo, 'diff', ...range);
+  const parts = whole.status === 0 ? whole.stdout.split(/^(?=diff --git )/m).filter((p) => p.startsWith('diff --git ')) : [];
+  const patches = parts.length === list.length ? parts : null; // never a patch next to the wrong file
+  const files = []; let total = 0;
+  list.forEach((f, i) => {
+    if (isSecretPath(f.path) || files.length >= maxFiles) return;
+    // 3.8.2 (security review): a key written in an ordinary file (a token in a config.js) is hidden too, as in the chat:
+    // the diff also goes to a linked phone.
+    let patch = f.binary || !patches ? '' : redactSecrets(patches[i]);
+    const cut = patch.length > maxPatch || total + patch.length > maxTotal;
+    if (cut) patch = '';
+    total += patch.length;
+    files.push({ status: status.get(f.path) ?? 'M', ...f, patch, cut });
+  });
+  return { files, more: list.filter((f) => !isSecretPath(f.path)).length - files.length };
 }
 
 // Undo a task in "carpeta" mode: only the files it changed go back to how they were before it. A file that somebody changed

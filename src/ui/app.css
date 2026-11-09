@@ -106,6 +106,13 @@
      status bar and clear of a notch, the welcome and linking screens too. On the PC these are 0. Overlays (sheets, the
      menu ☰, notifications) are outside #root and keep clear of it themselves. */
   #root { padding-top: env(safe-area-inset-top, 0px); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+  /* 3.8.2 (lag): a modal layer (dialog, menu, select) sets body { pointer-events: none } and, through react-remove-scroll,
+     body { --removed-body-scroll-bar-size }. Both are inherited: every element of the app was styled again on each open and
+     close, and each offscreen row or message with content-visibility was rebuilt (≈30 ms with 300 chats). #root states
+     its own values, so the change stops there; the page's own transparent cover (z-50, under the layers, which are
+     portaled after #root) keeps what is behind a modal layer from being hovered or clicked, as before. */
+  #root { pointer-events: auto; --removed-body-scroll-bar-size: 0px; }
+  body[style*="pointer-events: none"] > #root::after { content: ""; position: fixed; inset: 0; z-index: 50; }
   body { @apply bg-background text-foreground antialiased; font-family: var(--font-sans); font-size: 14.5px; overflow: hidden; }
   h1, h2, h3, h4 { font-weight: 500; letter-spacing: -0.01em; }
   ::selection { background: color-mix(in oklch, var(--primary) 30%, transparent); }
@@ -374,6 +381,11 @@ html[data-skin="retro"] .side-foot-toggle { border-width: 2px; border-color: var
 html[data-skin="retro"] .side-foot-version { font-family: var(--font-title); font-size: 10px; }
 html[data-skin="nube"] .side-foot-icon { border-radius: 999px; }
 /* 3.2: the bell and its list (notification-center.jsx), dressed as the help bubbles. */
+/* 3.8.2: warning text that reads on the page in every theme. Orb's light --warning is a pale amber meant as a fill (its
+   text is --warning-foreground, dark); the other themes' light --warning is a dark amber meant as text (their
+   --warning-foreground is white, so «text-warning-foreground» was white on white there). At night every --warning reads. */
+.text-warning-ink { color: var(--warning); }
+html[data-skin="orb"]:not(.dark) .text-warning-ink { color: var(--warning-foreground); }
 .notice-dot { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border-radius: 999px; background: var(--primary); box-shadow: 0 0 0 2px var(--background); }
 .notice-center { width: min(22rem, calc(100vw - 24px)); padding: 10px 10px 8px; }
 .notice-row { display: flex; gap: 10px; width: 100%; padding: 7px 8px; border-radius: 10px; text-align: left; color: var(--tip-title); }
@@ -425,6 +437,10 @@ html[data-skin="retro"] .wordmark, html[data-skin="nube"] .wordmark { margin-bot
 .orb.still { cursor: default; }
 /* 2.6: the time of each message, bottom right, as in a messaging app. */
 .msg-time { float: right; margin: 0.35rem 0 -0.25rem 0.75rem; font-size: 0.68rem; line-height: 1.4; font-variant-numeric: tabular-nums; opacity: 0.6; white-space: nowrap; }
+/* 3.8.2: in an agent's conversation the time shows while the pointer is over the message (always on touch screens). */
+.msg-time-hover { opacity: 0; transition: opacity 0.15s ease; }
+.msg-hover:hover .msg-time-hover, .msg-hover:focus-within .msg-time-hover { opacity: 0.6; }
+@media (hover: none) { .msg-time-hover { opacity: 0.6; } }
 /* 2.6: the «ahorro ↔ uso» slider of Ajustes › Tareas y usos: five steps on a soft track, «Recomendado» under the middle. */
 .spend-slider { width: 100%; height: 1.25rem; accent-color: var(--primary); cursor: pointer; background: transparent; }
 .spend-slider::-webkit-slider-runnable-track { height: 6px; border-radius: 999px; background: color-mix(in oklch, var(--foreground) 12%, transparent); }
@@ -544,3 +560,17 @@ html[data-motion="minima"] .context-slot-item { animation-name: slot-fade; }
 @media (max-width: 640px) {
   html:not(.glass) [data-slot="dialog-content"][data-sheet="bottom"] { top: auto; bottom: 0; left: 0; right: 0; translate: none; width: 100%; max-width: 100%; border-radius: 22px 22px 0 0; border-width: 1px 0 0; padding: 18px 14px calc(14px + env(safe-area-inset-bottom, 0px)); --tw-enter-scale: 1; --tw-exit-scale: 1; --tw-enter-translate-y: 100%; --tw-exit-translate-y: 100%; --tw-duration: 280ms; --tw-ease: var(--ease-drawer); }
 }
+
+/* 3.8.2: the first-run welcome (views/setup.jsx, master.jsx › MasterCreate), maximised: the room above the card (the
+   robot rises out of it), the card's padding and the gaps shrink with the window's height, so its screens fit with no
+   scroll bar. The scroll stays only for what truly cannot fit (the agents' install). */
+.onboard { display: flex; height: 100%; overflow: auto; padding: clamp(4.25rem, 11vh, 6rem) 1.5rem clamp(0.75rem, 2.5vh, 1.5rem); }
+.onboard-card { gap: clamp(0.7rem, 2.2vh, 1.25rem); padding: clamp(1.25rem, 3.6vh, 2rem); }
+/* Orb draws at 115 % (window.rs › ZOOM_BASE): a 1366 × 768 screen leaves ≈ 626 px of height, and the welcome needs ≈ 744.
+   On a short window the whole card (robot, texts, fields) is drawn smaller in a few steps, the same design at a smaller
+   size, so it still fits without a scroll bar. Only with a mouse (PC): a phone keeps its fields at full size. */
+@media (pointer: fine) and (max-height: 743px) { .onboard-card { zoom: 0.93; } }
+@media (pointer: fine) and (max-height: 700px) { .onboard-card { zoom: 0.87; } }
+@media (pointer: fine) and (max-height: 660px) { .onboard-card { zoom: 0.82; } }
+@media (pointer: fine) and (max-height: 625px) { .onboard-card { zoom: 0.76; } }
+@media (pointer: fine) and (max-height: 590px) { .onboard-card { zoom: 0.7; } }

@@ -58,7 +58,7 @@ export function LiveTask({ t: task, compact = false, actions = true }) {
         </> : null}
       </div>
       <ProgressBar percent={task.percent} quiet={quiet} />
-      <div className={cn('flex min-w-0 items-center gap-1.5 text-xs', quiet ? 'text-warning' : 'text-muted-foreground')}>
+      <div className={cn('flex min-w-0 items-center gap-1.5 text-xs', quiet ? 'text-warning-ink' : 'text-muted-foreground')}>
         {quiet ? <Hourglass className="size-3 shrink-0" /> : null}
         <span className="shrink-0 tabular-nums">{elapsed(Date.now() - task.startedAt)} · {t(task.steps === 1 ? 'comp.live.stepOne' : 'comp.live.stepOther', { n: task.steps })}</span>
         <span className="min-w-0 truncate">· {quiet ? t('comp.live.quiet', { min: task.quietMin, now }) : t('comp.live.now', { now })}</span>

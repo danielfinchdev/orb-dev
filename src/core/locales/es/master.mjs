@@ -70,7 +70,7 @@ export default {
   'master.keysDesc': 'Una por línea, como NOMBRE=valor. Se guardan cifradas y solo las recibe este conector, con el comando con el que se guardaron; los agentes no las ven.',
   'master.keysBad': 'Cada línea debe ser NOMBRE=valor (letras, números y _).',
   'master.keysSaved': 'Claves guardadas.',
-  'link.passNote': 'El móvil te pedirá tu contraseña maestra (no sale del móvil). Comprueba que muestra esta misma huella.',
+  'link.passNote': 'El dispositivo te pedirá la contraseña maestra. Comprueba que muestra esta huella.',
   'app.linkPassTitle': 'Contraseña maestra de tu PC',
   'app.linkPassTitleNamed': 'Enlazar con {name}',
   'app.linkPassBody': 'Es la que creaste al instalar Orb en el PC. No sale de este dispositivo: solo se comprueba que la conoces.',

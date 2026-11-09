@@ -273,11 +273,16 @@ test('lo que Orb guarda fuera del espacio (copias, claves) queda vetado a los ag
     assert.ok(isOrbData(path.join(copies, 'Orb-1234abcd', 'orb-x.orbbak'), internal, os.tmpdir()));
     assert.ok(isOrbData(path.join(keys, 'Orb-1234abcd.enc'), internal, os.tmpdir()));
     assert.ok(isOrbData(path.join(internal, 'datos', 'orb.db'), internal, os.tmpdir()));
-    assert.ok(!isOrbData(path.join(internal, 'herramientas', 'adb', 'adb.exe'), internal, os.tmpdir()), 'adb por su ruta completa');
+    // 3.8.2 (review A2): Orb's adb runs in the engine: readable, closed to everything else.
+    assert.ok(isOrbData(path.join(internal, 'herramientas', 'adb', 'adb.exe'), internal, os.tmpdir()), 'adb por su ruta completa');
+    assert.ok(!isOrbData(path.join(internal, 'herramientas', 'adb', 'adb.exe'), internal, os.tmpdir(), { read: true }), 'leerlo sí');
     assert.ok(!isOrbData(path.join(internal, 'copias', 'aisladas', 'x', 'a.txt'), internal, os.tmpdir()));
     const v = decide({ permission: 'editar', tool: 'Bash', command: `del /q "${path.join(copies, 'Orb-1234abcd')}\\*.orbbak"`, paths: [], patterns: [], internalDir: internal, cwd: os.tmpdir() });
     assert.equal(v.decision, 'deny');
-    assert.equal(decide({ permission: 'editar', tool: 'Bash', command: `"${path.join(internal, 'herramientas', 'adb', 'adb.exe')}" devices`, paths: [], patterns: [], internalDir: internal, cwd: os.tmpdir() }).decision, 'allow');
+    // 3.8.2 (review A2): Orb's own adb is never run by an agent, whatever the permission (agents use orb_android_*).
+    const adbRun = { tool: 'Bash', command: `"${path.join(internal, 'herramientas', 'adb', 'adb.exe')}" devices`, paths: [], patterns: [], internalDir: internal, cwd: os.tmpdir() };
+    assert.equal(decide({ ...adbRun, permission: 'editar' }).decision, 'deny');
+    assert.equal(decide({ ...adbRun, permission: 'total', android: true }).decision, 'deny');
     const rules = cursorRules('editar', internal);
     assert.ok(rules.includes(`Read(${copies}/**)`) && rules.includes(`Write(${keys}/**)`));
   } finally { setGuardedRoots([]); }

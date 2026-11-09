@@ -133,8 +133,16 @@ C:\Orb\                   (C:\Orb by default; always <chosen folder>\Orb, the sa
   each platform chosen plus `compartido\` and a `LEEME.md` (`createProject` with `platforms`). The 2.7–3.7 groups
   (`<name>-android`, `<name>-ios`… with `comun\<name>`) are no longer made; existing ones still work together.
 - **core** is never a project and cannot be linked as one; nothing else at the top is Orb's.
-- **adb**: at startup, if `core\herramientas\adb\adb.exe` is missing, the engine downloads Google's platform-tools there
-  (`src/engine/android.mjs`) and puts that folder first in the agents' PATH. Settings → Android shows the status.
+- **adb** (3.8.2): the first time it is needed (Settings → Android, or an agent's `orb_android_*` tool) the engine
+  downloads a pinned version of Google's platform-tools (size, Google's SHA-1 and a SHA-256 checked before unpacking)
+  into `core\herramientas\adb` (`src/engine/android.mjs`). It is not in the agents' PATH: agents reach the phone paired
+  in Settings → Android through Orb's tools, only in a chat with «Usar mi móvil Android» (`src/engine/grants.mjs`),
+  and run adb by hand only with «Acceso total» as well. adb's server stops when Orb locks or closes.
+  **Emulators** (3.8.2): when the Android SDK's emulator is already installed (`ANDROID_SDK_ROOT`, `ANDROID_HOME` or
+  Android Studio's folder; Orb never downloads it nor its system images), Settings → Android lists its AVDs
+  (`emulator -list-avds`) and starts one by its exact name with the master password; agents use
+  `orb_android_emulators` / `orb_android_emulator` under the same grant as the phone. The emulator starts without the
+  engine's `ORB_*` variables and is one more adb device (`emulator-5554`) for the other `orb_android_*` tools.
 - **Older folders**: `ensureLayout` (every start) moves Orb 3.7's own data into core (its other folders move only as the
   user chooses, section 36), creates whatever is missing and moves 2.3.0's `bitacoras\` into the log folder (if a file exists in both, the old entries are
   appended at the end). It only discards the empty logs that 2.3.0 created for the categories and configuration folders
@@ -557,6 +565,14 @@ as a **bounded excerpt**, not in full, and marked as "data, not instructions".
   outside git.
 - **Append-only** at the end, signed and with secrets masked (`redactSecrets`).
 - Written by the assistant (`orb_write_log`) and by the scheduler when each task closes (`logTask`).
+- 3.8.2, **one log system, Orb's**: `core\bitacora\GENERAL.md` (the user may keep their index, rules and annexes at its
+  top; Orb's entries are appended at its end) and `core\bitacora\proyectos\<project>.md` (a deleted project's log ends
+  in ` eliminado.md`). Orb never writes a `BITACORA.md` in a project folder nor a `bitacora_project.md`: agents are told
+  not to (scheduler brief) and a `BITACORA.md` a project brings when it is added is merged once at the end of its log
+  (`board.mergeRootLog`), whole, and removed from the folder only after the log is read back holding it (one git tracks
+  stays). A log that changes name (rename, finish, reopen, delete) is merged into a log that already has the new name
+  (`board.moveProjectLog`), never left beside it; the header-only `name (2).md` copies earlier builds left are removed at
+  start (`home.mjs › tidyProjectLogs`). «Memorias» shows the end of each log (the newest entries) and scrolls to them.
 - Files: `src/engine/logs.mjs` and the screen `src/ui/views/logs.jsx`.
 
 ## 20. GitHub
@@ -574,6 +590,14 @@ as a **bounded excerpt**, not in full, and marked as "data, not instructions".
   screenshot, scroll, wait and close.
 - It has none of your sessions, and pages cannot open dialogs.
 - A **mini window** at the top right shows what they do live.
+  - 3.8.2: **«Señalar elemento»**: the user clicks on the page's picture (`point:<x>,<y>`, two fractions checked by
+    `pip.rs`); the engine finds the element in Orb's isolated world (`browser-point.mjs`: a short CSS selector, at most
+    300 characters of its text) and photographs just that part of the view. Both go to that conversation's message box
+    on this PC (`browser:pointed`, window only); nothing is sent until the user sends it.
+  - 3.8.2: **«Grabar»**: the screencast keeps running while recording (also with the mini window hidden) and, on stop
+    (or after 3 minutes / 120 MB, when the page closes or when Orb locks), the frames become a 5 fps Motion-JPEG AVI
+    (`browser-record.mjs`, no encoder) saved among that chat's attachments. No new DevTools method:
+    `browser_rules.rs` is unchanged.
 - Files:
   - `src/core/browser-protocol.mjs` (the actions, page scripts and pipe every driver shares);
   - 3.8.1, Tauri: the browser lives in the engine (`src/engine/host-browser.mjs`, `agent-browser.mjs`, the DevTools
@@ -684,7 +708,8 @@ phone does not have the app open. On iPhone they work with Orb added to the home
   `withoutPaths` (no PC folders on the phone, section 28).
 - Every minute it checks whether the network changed (another wifi, another IP) and reopens access.
 - The first time it listens on the local network, Windows may ask about the firewall: private networks must be
-  allowed. If the PC's local IP changes, a phone linked over wifi falls back to `<computer>.local` or the other
+  allowed. Ajustes does not warn about it in advance (3.8.2): when a device cannot reach any local-network address
+  while linking, its error says so (`app.linkOfflineWifi`, `src/ui/lib/web-bridge.js`). If the PC's local IP changes, a phone linked over wifi falls back to `<computer>.local` or the other
   addresses from its QR; a fixed IP on the router avoids it.
 - Files: `src/engine/remote.mjs`, `src/engine/api-link.mjs`, `src/engine/webpush.mjs`, `src/core/mobile-crypto.mjs`,
   `src/core/link-payload.mjs`, `src/ui/lib/web-bridge.js`, `src/ui/views/magic-link.jsx` and the "Magic Link" and "This
@@ -909,6 +934,16 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   - Animated robot in `robot.jsx`.
 - **Mode** light, dark or system; interface **size** with Ctrl +, Ctrl - and Ctrl 0; **Ctrl J** opens a terminal in the
   folder.
+- **Integrated terminal** (3.8.2, `src/engine/user-terminal.mjs`, `components/terminal-panel.jsx`): a chat's ⋯ menu ›
+  «Mostrar terminal» docks the user's own terminal under it, in the chat's folder, with one tab per terminal (at most 4). It is
+  the user's, not an agent's (no guard), so it is this PC's window only (`terminal.*` are `pc` methods; `terminal:data`
+  is never sent to a phone) and never starts in core, Orb's data, the install folder or a protected folder. It runs
+  System32's Windows PowerShell (`/bin/sh` or `$SHELL` elsewhere) with pipes, not a pseudo-console, so no native module
+  is added: line-based commands work, full-screen programs (vim, less) do not; the engine's `ORB_*` variables never
+  reach it; a line with non-ASCII characters goes as UTF-8 in base64 (`Invoke-Expression`, same scope). A ```bash /
+  ```powershell block in the chat gets «Pegar en el terminal», which only fills the input line. Ctrl+J and the project
+  actions keep opening Windows Terminal / Warp / PowerShell in a window of their own; «Abrir en una ventana aparte»
+  calls that same `app.openTerminal`. Terminals close with the engine.
 - **Wording:** tone and vocabulary in [`WRITING-GUIDE.md`](WRITING-GUIDE.md).
 
 ### Performance (3.8.1)
@@ -971,6 +1006,45 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   plus the robot floating under the pointer with its dropped frames; `--quiet-scene` pauses the theme's backdrop; `--css <file>` adds a style sheet to try a variant on the same build; `--ui <json>` saves an interface setting first, e.g. another theme) and `scripts/medir-motor.mjs`
   (the engine alone: start, memory, call latency and the bytes of a refresh, whole and as feeds, also as a phone gets it).
 
+### What 3.8.2 adds to the chat and the lists
+
+Every piece below adds to what Orb had; where it overlaps, Orb's own flow stays as it was and the new one uses its
+menus, texts, permissions and themes.
+
+- **Chat bar** (`views/chat.jsx`, `views/session.jsx`): only the bell and pause stay on the bar; the rest lives in its
+  ⋯ menu (in a direct conversation: folder, terminal, details, fork, «Continuar con otro agente», archive, mini-games
+  and delete).
+  The list's ⋯ (`views/orb/inbox.jsx › useOrbActions`) gains «Renombrar» (the same `renameChat` the title uses) and
+  «Posponer»: `inbox.snooze` hides a chat (and its unread count) until a time; the scheduler's tick brings it back with
+  a notice (`scheduler.mjs › wakeSnoozed`); pinning and muting are unchanged.
+- **Attach any file** (`src/engine/attachments.mjs`, `src/core/attach-kind.mjs`): up to 10 files of 100 MB per message,
+  copied into `<chat folder>\.orb-adjuntos\<stamp>\` (never into core). Pictures go natively to Claude and Codex;
+  videos become frames (ffmpeg: Orb's pinned copy, the PATH's, or a pinned download the first time); documents and
+  PDFs, their extracted text; the rest, its path. On the PC an attached picture opens in the image viewer and a PDF in
+  `components/file-viewer.jsx` (pdf.js, `attachments.read`, PC only). «Capturar ventana» attaches one frame of a window
+  the user picks (`lib/window-capture.js`, `getDisplayMedia`; nothing reaches the agents' tools).
+- **Dictation** (`lib/mic.js`): the microphone between the usage ring and «Enviar» focuses the box and opens Windows
+  voice typing (Win+H sent by Rust). Hidden on phones; a linked PC browser keeps the browser's own dictation.
+- **Usage**: «Recargar el uso» in the ring's panel (`usage.refresh`, at most every 20 s in the window and the engine)
+  and the «Uso» page (`views/usage.jsx`, `usage.history`: cost and tokens by day, agent and model, and each plan window
+  with an even-pace mark). Shared pieces: `components/usage-bits.jsx`.
+- **Messages**: `$$…$$` formulas (KaTeX) and ```mermaid diagrams (`components/rich-blocks.jsx`, loaded on demand, no
+  eval: the CSP is unchanged); Claude and Codex subagents as folding rows (`lib/session-blocks.js`); `/clear` and
+  `/compact` typed alone (`src/core/slash.mjs`); the cost line can be hidden (Ajustes › Apariencia) and the time shows
+  on hover.
+- **Tasks**: «Cambios» lists the files a finished task changed with their diff (`tasks.diff`, read only, between the
+  task's undo checkpoints; `components/task-changes.jsx` and the expert mode share `components/diff-view.jsx`).
+  Schedules can run once or always in the same chat (`src/core/schedules.mjs`).
+- **Search**: the sidebar search also finds tasks by content (`tasks.search`); Ctrl+K on the PC
+  (`components/command-palette.jsx`, `lib/palette.js`) uses the same search (`lib/search.js`) plus Orb's places, and
+  opens only when nothing else took the key (project actions, the whiteboard, a dialog).
+- **«Cristal» theme** (`themes.css`, `src/core/appearance.mjs › SKIN_BASE`): Profesional plus a glass material
+  (`data-material="cristal"`); every Profesional rule applies, with blur only on the sidebar, chat bar, message box and
+  menus/dialogs, and `prefers-reduced-transparency` makes it opaque.
+- **Music** (Windows only; `src/engine/music.mjs`, `lib/music.js`): ♪ in the sidebar's foot and one track per
+  mini-game, off by default; CC0 tracks pinned by size and SHA-256 and downloaded the first time to
+  `core\herramientas\musica`; it stops when Orb locks or the window hides.
+
 ### Tutorials and guided tour
 
 - **Tutorials** (`src/ui/views/tutorials.jsx`, "Tutorials" menu entry, `tutorials` view): cards per topic
@@ -1008,7 +1082,8 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   `html.has-win-controls`. The top bars (`.app-titlebar` in `app.css`) move the window
   (double-click: maximize) and leave room for the buttons (`--wco-inset`, `.wco-pad`). Without the Windows bar there is
   no menu bar (the old `ui.menuBar` setting is dropped when orb.json loads); its shortcuts (zoom, Ctrl+J, F11) live in
-  `tauri-bridge.js`.
+  `tauri-bridge.js`. F5 reloads the window (`main.jsx`, `lib/reload.js`): the engine keeps running and the unsent text
+  of the message boxes comes back on the same screen.
 - **Contribute and More apps** (`src/engine/feedback.mjs`, `app.feedbackSend` / `app.moreApps`, in the engine because the
   window does not go out to the internet; the screenshot and the picked files come from the app): the developer's PayPal; feedback via FormSubmit (to the developer's inbox) with up to 3 PNG/JPEG
   screenshots of the window or from files; and the other apps with their latest version from GitHub Releases.
@@ -1033,6 +1108,18 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   dies mid-turn), with `Sessions.closeLive` / `Lane.closeLive`, with the conversation and with the engine: nothing of an
   earlier run is valid (the hashes 3.8 kept in `settings` are deleted at start). There is no coordinator without a
   conversation.
+- **Secrets an agent asks for (3.8.2, `src/engine/agent-secrets.mjs`):** `orb_request_secret` (name + reason) shows a
+  private card in the chat on this PC only (`secrets.pending` / `secrets.answer` / `secrets.decline` are `pc` methods;
+  the `secret:request` event is not one a phone gets; the chat only says which name was asked for). The value typed
+  there never goes to the chat, the logs, the database or the agent: the engine issues a one-time grant (`once`) on the
+  agents' pipe, bound to that agent process, valid for 10 minutes, and the agent gets a handle for Orb's helper
+  `src/mcp/secret-run.mjs`, which trades it once and runs one command without a shell with the value in one environment
+  variable (`--env NAME`) or on its stdin (`--stdin`), replacing it with «[secreto]» in that command's output. «Guardar
+  en la bóveda» stores it in the vault as `agent/<NAME>`, and «Usar la guardada» reads it back; both need the master
+  password (`needsUnlock`). Locking Orb or changing the password cancels every pending request and revokes every handle
+  not yet traded. The card always says that Orb never asks for the master password there, and
+  the engine refuses a value that is the master password: the vault checks it with its `same` job (`Master.isPassword`),
+  which counts no try and keeps nothing, and only while the data key is open.
 - **The user's connectors:** an agent gets `src/mcp/launch.mjs` and a ticket instead of the connector; the
   launcher gets the real command, arguments and keys from the engine and starts it (and stops its whole tree when the
   ticket is taken back). On Windows (`src/mcp/win-spawn.mjs`) an npm shim (`npx.cmd`, a global package's cmd-shim) runs
@@ -1060,8 +1147,8 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   warnings for pushes or mass deletions.
 - **Orb's data folder (`isOrbData` in `guard.mjs`):** matched by RESOLVED path (against the agent's folder, any case
   or separator, symlinks followed), not by names: a project may have its own `orb.db` or talk about `ORB_HOME`. Denied,
-  and in «total» it asks. Isolated copies (`core/copias/aisladas`) and the tools (`core/herramientas`, adb by its full
-  path) stay open; the logs moved into core (`core/bitacora`) are open to reading tools only (the user's rules for
+  also in «total» (3.8.2: it asked before). Isolated copies (`core/copias/aisladas`) and the tools (`core/herramientas`)
+  stay open; the logs moved into core (`core/bitacora`) are open to reading tools only (the user's rules for
   agents may point there; they are written through Orb's own tools, and a write or a command there is denied with a
   reason that names `orb_write_log`). 3.8.1: the skills (`core/skills`) are open to reading tools too; a command that
   only runs one of their scripts asks (anything else there is denied), and `core/preparacion` (what an agent makes for
@@ -1364,6 +1451,11 @@ finished (`unfinished`: also when orb.json cannot be written), the engine does n
 the phone access and the MCP server refuses it; the window shows «No se pudieron actualizar tus datos a Orb 3.8», what to
 do, the copy («Abrir carpeta»), «Reintentar», «Buscar actualización» (the app's updater) and the reason under «Detalles»
 (`app.migrationState`, `app.migrationRetry`, PC only; `committed` says whether going back to 3.7 would need the copy).
+3.8.2 (review F2.5b M6): meanwhile, with the phone access turned on, its addresses and port answer one fixed state
+(`remote.mjs › startAttention`): every `/api/` request gets 503 `{ attention: 'migration', error }` (with the Android
+app's CORS) and a page a short notice; no data, devices or keys are read. A linked phone shows «El PC necesita atención»
+instead of «Sin conexión» and keeps retrying (`main.jsx › PcOffline`); a successful «Reintentar» closes it before the
+real phone access opens on the same port.
 The migration writes only inside the data folder and the bridge's file (`insideData`); `ORB_BRIDGE_DIR` is for tests
 only, and under `node --test` without it there is no bridge. The engine tells the owner once («Orb 3.8 ya no tiene bots
 ni usuarios…», `data.migrated38`, and to revoke Home Assistant's token when 3.7 had one) and logs what was done. 30 days
@@ -1393,7 +1485,7 @@ in `src/core/home.mjs`; nothing else builds them.
   only): `bitacora\` (default: into `core\bitacora`, the general log's place by the owner's definition; logs merged,
   never overwritten; its row says that other tools may use the old path and that Orb will say which one to put in them.
   After the move a last screen names the exact new place of each of the user's own files in it, e.g.
-  `C:\Orb\core\bitacora\bitacora_project.md`, for `AGENTS.md`, `CLAUDE.md` and other tools outside Orb, with «Copiar
+  `C:\Orb\core\bitacora\notas.md`, for `AGENTS.md`, `CLAUDE.md` and other tools outside Orb, with «Copiar
   ruta» (`app.layoutApply › logsMoved`). A «Dejar donde está» remembered by 3.8.0, whose default was to keep it, is asked
   once more in 3.8.1, alone and with «Mover a core»; `carpetas.json › logsAsked` makes the answer final), `android\adb-tools\` (default:
   `core\herramientas\adb`) and each folder of `mcp-servers\`: 3.8.1, every server goes into `core\mcp` by default, also
@@ -1584,7 +1676,7 @@ channel's waits), making a new recovery code (`backup.recovery`: the code opens 
 3.7, unlinking a phone (`link.revoke`, `remote.revoke`), a connector's keys (`secrets.connector`,
 `secrets.saveConnector`), and in `config.save` (compared with the settings in force): choosing the backups' folder,
 writing a connector key in clear, changing a connector that has keys (its command, arguments or name, removing it or one
-of its keys) and taking an entry off «Cosas que nadie toca»; 3.8.1: deleting a project with its folder
+of its keys) and taking an entry off «Elementos protegidos»; 3.8.1: deleting a project with its folder
 (`projects.deleteCheck`; its end, `projects.delete` / `projects.deleteAbort`, takes the one-off ticket the check returned). Opening core in the Explorer too (`main.mjs` asks the engine
 `master.check` before `app:openPath` on core itself or on `core\secretos`, compared by real path; core's tool folders
 open as before; 3.8.1: the engine's `guardedCore`, used by `app.openIn`, `app.runAction` and `app.openTerminal`, guards

@@ -7,7 +7,7 @@
 // «Esperando tu aprobación», how its last task ended, else its last line) and the unread count. Right click or ⋯ (PC) and
 // a long press (phone) open the chat's menu: info, pin, mute, mark read, complete or reopen, delete.
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ListTodo, FolderKanban, CalendarClock, PenTool, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, Sparkles } from 'lucide-react';
+import { Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ListTodo, FolderKanban, CalendarClock, PenTool, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, Sparkles, PencilLine, AlarmClock, AlarmClockOff } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
@@ -15,9 +15,11 @@ import { AgentIcon } from '@/components/agent-icon.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { createProjectFlow } from '@/components/project-actions.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, DropdownMenuCheckboxItem, Collapsible, CollapsibleTrigger, CollapsibleContent, Dialog, DialogContent, DialogTitle, DialogDescription, Tip } from '@/components/ui/overlay.jsx';
-import { confirm } from '@/components/dialogs.jsx';
-import { useStore, go, call, act, newChat, orbAct, loadOrbInbox, openOrbInfo, closeOrbInfo, getState, phoneLayout, fullPc, refreshSoon, setState } from '@/lib/store.js';
-import { orbItems, orbProgress, groupOrb, shortTime } from '@/lib/inbox.js';
+import { confirm, form } from '@/components/dialogs.jsx';
+import { Input } from '@/components/ui/basic.jsx';
+import { useSearch } from '@/lib/search.js';
+import { useStore, go, call, act, newChat, orbAct, loadOrbInbox, openOrbInfo, closeOrbInfo, getState, phoneLayout, fullPc, refreshSoon, setState, plainSkin } from '@/lib/store.js';
+import { orbItems, orbProgress, groupOrb, shortTime, avatarStack, snoozeTimes } from '@/lib/inbox.js';
 import { sameItem } from '@/lib/memo.js';
 import { useDay } from '@/lib/use-day.js';
 import { usePress } from '@/lib/use-press.js';
@@ -50,34 +52,33 @@ const conversationRef = (x) => ({ kind: x.kind === 'session' ? 'session' : 'conv
 // 3.8.1 (H1e): the chat's avatar. Big: its project's icon (its own picture or its coloured initials); without a project,
 // Orbe's head. In the corner: the marks of the agents that worked in it (lib/inbox.js › agentsOf: the brain or a direct
 // conversation's agent first, then its tasks' agents), stacked like avatars, the first on top; past three, two and
-// «+N». An agent Orb no longer knows gets the neutral mark.
+// «+N» (3.8.2: lib/inbox.js › avatarStack keeps any number inside the avatar, fewer marks on a small one). Hovering it
+// lists every agent. An agent Orb no longer knows gets the neutral mark.
 const STACK = 3;
 export function OrbAvatar({ item, size = 40 }) {
   const t = useT();
   const locale = useLocale();
   const skin = useStore((s) => s.app?.config?.ui?.skin);
-  const badge = Math.max(16, Math.round(size * 0.44));
   const agents = item.agents ?? (item.agent ? [item.agent] : []);
-  const shown = agents.length > STACK ? agents.slice(0, STACK - 1) : agents;
-  const more = agents.length - shown.length;
-  const step = Math.round(badge * 0.55);
+  const { badge, marks, more, moreRight, moreFont } = avatarStack(agents.length, size, STACK);
+  const shown = agents.slice(0, marks.length);
   const who = agents.length ? new Intl.ListFormat(locale, { type: 'conjunction' }).format(agents.map((a) => AGENT[a] ?? a)) : '';
   const body = item.project
     ? <ProjectIcon name={item.project} size={size} />
-    : skin === 'profesional'
+    : plainSkin(skin)
       ? <span className="bg-primary/12 text-primary grid place-items-center rounded-full" style={{ width: size, height: size }}><Sparkles className="size-1/2" /></span>
       : <Robot size={size} still mood={item.busy ? 'thinking' : 'idle'} />;
   return (
-    <span className="relative inline-grid shrink-0" style={{ width: size, height: size }} role="img" aria-label={who ? `${item.project ?? t('orbchats.noProject')} · ${who}` : (item.project ?? t('orbchats.noProject'))} data-testid="orb-avatar">
+    <span className="relative inline-grid shrink-0" style={{ width: size, height: size }} role="img" aria-label={who ? `${item.project ?? t('orbchats.noProject')} · ${who}` : (item.project ?? t('orbchats.noProject'))} title={who || undefined} data-testid="orb-avatar">
       {body}
       {agents.length ? (
         <span className={cn('orb-avatar-badges', item.busy && 'animate-pulse')} data-badges={agents.join(' ')}>
           {shown.map((a, i) => (
-            <span key={a} className="orb-avatar-badge" style={{ width: badge, height: badge, right: -3 + i * step, zIndex: STACK - i }} data-badge={a}>
+            <span key={a} className="orb-avatar-badge" style={{ width: badge, height: badge, right: marks[i], zIndex: STACK - i }} data-badge={a}>
               <AgentIcon agent={a} className="size-[64%]" />
             </span>
           ))}
-          {more ? <span className="orb-avatar-badge orb-avatar-more" style={{ width: badge, height: badge, right: -3 + (shown.length - 1) * step + Math.round(badge * 0.85), fontSize: Math.round(badge * 0.5) }} data-badge="more">+{more}</span> : null}
+          {more ? <span className="orb-avatar-badge orb-avatar-more" style={{ width: badge, height: badge, right: moreRight, zIndex: 0, fontSize: moreFont }} data-badge="more" data-more={more}>+{more}</span> : null}
         </span>
       ) : null}
     </span>
@@ -89,8 +90,15 @@ export function useOrbActions(item) {
   const t = useT();
   if (!item) return [];
   // 3.6: a direct conversation with an agent: pinned and muted like the others; completed through the sidebar's mark.
+  const rename = { id: 'rename', icon: PencilLine, label: t('orbchats.rename'), run: () => renameChat(item, t) };
+  // 3.8.2: snooze until a time (the scheduler brings it back), or back now.
+  const snooze = item.snoozedUntil
+    ? { id: 'unsnooze', icon: AlarmClockOff, label: t('orbchats.unsnooze'), run: () => orbAct('inbox.snooze', { ...conversationRef(item), until: null }) }
+    : { id: 'snooze', icon: AlarmClock, label: t('orbchats.snooze'), run: () => snoozeChat(item, t) };
   if (item.kind === 'session') return [
+    rename,
     item.pinned ? { id: 'unpin', icon: PinOff, label: t('chats.unpin'), run: () => orbAct('inbox.unpin', conversationRef(item)) } : { id: 'pin', icon: Pin, label: t('chats.pin'), run: () => orbAct('inbox.pin', conversationRef(item)) },
+    snooze,
     item.muted ? { id: 'unmute', icon: Bell, label: t('chats.unmute'), run: () => orbAct('inbox.mute', { ...conversationRef(item), muted: false }) } : { id: 'mute', icon: BellOff, label: t('chats.mute'), run: () => orbAct('inbox.mute', { ...conversationRef(item), muted: true }) },
     item.done
       ? { id: 'reopen', icon: Undo2, label: t('orbchats.reopen'), run: () => act(call('sidebar.complete', { key: `s${item.id}`, done: false })).then(refreshSoon) }
@@ -99,7 +107,9 @@ export function useOrbActions(item) {
   const ref = conversationRef(item);
   return [
     { id: 'info', icon: Info, label: t('orbchats.info'), run: () => { openOrbItem(item); openOrbInfo({ type: 'chat' }); } },
+    rename,
     item.pinned ? { id: 'unpin', icon: PinOff, label: t('chats.unpin'), run: () => orbAct('inbox.unpin', ref) } : { id: 'pin', icon: Pin, label: t('chats.pin'), run: () => orbAct('inbox.pin', ref) },
+    snooze,
     item.muted ? { id: 'unmute', icon: Bell, label: t('chats.unmute'), run: () => orbAct('inbox.mute', { ...ref, muted: false }) } : { id: 'mute', icon: BellOff, label: t('chats.mute'), run: () => orbAct('inbox.mute', { ...ref, muted: true }) },
     ...(item.unread ? [{ id: 'read', icon: CheckCheck, label: t('chats.markRead'), run: () => orbAct('inbox.markRead', ref) }] : []),
     item.done
@@ -107,6 +117,49 @@ export function useOrbActions(item) {
       : { id: 'complete', icon: CircleCheck, label: t('orbchats.complete'), run: () => act(call('conversations.update', { id: item.id, done: true })).then(refreshSoon) },
     { id: 'delete', icon: Trash2, label: t('orbchats.delete'), danger: true, run: () => deleteChat(item, t) }
   ];
+}
+// 3.8.2: «Renombrar» from the list's ⋯ (and the chat's own ⋯): the same title a chat or an agent's conversation already has.
+export function renameChat(item, t) {
+  const method = item.kind === 'session' ? 'sessions.update' : 'conversations.update';
+  return form(t('chat.renameTitle'), {
+    initial: { title: item.title ?? '' },
+    body: (v, set) => <Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={80} data-testid="rename-input" />,
+    ok: t('session.save'),
+    onOk: async (v) => { const r = await call(method, { id: item.id, title: v.title.trim() || item.title }); refreshSoon(); loadOrbInbox(); return r; }
+  });
+}
+// 3.8.2: «Posponer»: a quick time or a date and time of the user's choice (local), sent as an ISO time.
+const localInput = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
+export function snoozeChat(item, t) {
+  const quick = snoozeTimes();
+  // The dialog opens with the focus on the time already chosen (it went to the first one, which looked chosen too).
+  const initialAt = localInput(quick[2]?.[1] ?? quick[1][1]);
+  return form(t('orbchats.snoozeTitle', { title: item.title }), {
+    description: t('orbchats.snoozeDesc'),
+    initial: { at: initialAt },
+    body: (v, set) => (
+      <>
+        <div className="grid gap-1" role="radiogroup">
+          {quick.map(([key, d]) => (
+            <button key={key} type="button" role="radio" aria-checked={v.at === localInput(d)} autoFocus={initialAt === localInput(d)} onClick={() => set({ at: localInput(d) })} data-testid={`snooze-${key}`}
+              className={cn('flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2 text-left text-[14px]', v.at === localInput(d) ? 'border-primary bg-primary/8' : 'hover:bg-accent/60')}>
+              <span>{t(`orbchats.${key}`)}</span>
+            </button>
+          ))}
+        </div>
+        <label className="grid gap-1.5 text-[13px] font-medium">{t('orbchats.snoozeCustom')}
+          <Input type="datetime-local" value={v.at} min={localInput(new Date())} onChange={(e) => set({ at: e.target.value })} data-testid="snooze-at" />
+        </label>
+      </>
+    ),
+    ok: t('orbchats.snooze'),
+    onOk: async (v) => {
+      const at = new Date(v.at);
+      if (!Number.isFinite(at.getTime()) || at.getTime() <= Date.now()) throw new Error(t('orbchats.snoozeBad'));
+      await orbAct('inbox.snooze', { ...conversationRef(item), until: at.toISOString() });
+      return true;
+    }
+  });
 }
 export async function deleteChat(item, t) {
   if (!(await confirm(t('orbchats.deleteTitle', { title: item.title }), t('orbchats.deleteBody'), { ok: t('orbchats.delete'), danger: true }))) return false;
@@ -184,14 +237,15 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet }) {
           </span>
           <span className="mt-0.5 flex items-center gap-1.5">
             {p.badge
-              ? <span className="bg-warning/18 text-warning-foreground dark:text-warning min-w-0 truncate rounded-md px-1.5 py-px text-[12px] font-medium" data-testid="orb-progress" data-tone={p.tone}>{p.text}</span>
+              ? <span className="bg-warning/18 text-warning-ink min-w-0 truncate rounded-md px-1.5 py-px text-[12px] font-medium" data-testid="orb-progress" data-tone={p.tone}>{p.text}</span>
               : (
-                <span className={cn('flex min-w-0 flex-1 items-center gap-1.5 truncate text-[13px]', p.tone === 'live' ? 'text-primary' : p.tone === 'error' ? 'text-destructive' : p.tone === 'warn' ? 'text-warning-foreground dark:text-warning' : 'text-muted-foreground')} data-testid="orb-progress" data-tone={p.tone}>
+                <span className={cn('flex min-w-0 flex-1 items-center gap-1.5 truncate text-[13px]', p.tone === 'live' ? 'text-primary' : p.tone === 'error' ? 'text-destructive' : p.tone === 'warn' ? 'text-warning-ink' : 'text-muted-foreground')} data-testid="orb-progress" data-tone={p.tone}>
                   {p.tone === 'live' ? <span className="bg-primary size-1.5 shrink-0 animate-pulse rounded-full" aria-hidden="true" /> : null}
                   <span className="min-w-0 truncate">{p.prefix ? <span className="text-foreground/70">{p.prefix}</span> : null}{p.text}</span>
                 </span>
               )}
             {p.badge ? <span className="flex-1" /> : null}
+            {item.snoozedUntil ? <AlarmClock className="text-muted-foreground size-3.5 shrink-0" aria-label={t('orbchats.snoozed', { when: new Date(item.snoozedUntil).toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' }) })} data-testid="chat-snoozed" /> : null}
             {item.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}
             {item.unread ? <span className={cn('min-w-5 shrink-0 rounded-full px-1.5 text-center text-[11px] leading-5 font-semibold tabular-nums', item.muted ? 'bg-muted-foreground/25 text-foreground/70' : 'bg-primary text-primary-foreground')} data-testid="chat-unread" aria-label={t('chats.unread', { n: item.unread })}>{item.unread > 99 ? '99+' : item.unread}</span> : null}
           </span>
@@ -285,7 +339,7 @@ function Places() {
   const config = useStore((s) => s.app?.config);
   const places = [['tasks', ListTodo, 'nav.tasks'], ['projects', FolderKanban, 'nav.projects'], ['schedules', CalendarClock, 'nav.schedules'], ['board', PenTool, 'nav.board']];
   const more = config?.expert?.enabled && fullPc() ? [['expert', SquareTerminal, 'nav.expert']] : [];
-  const cls = (on) => cn('press relative flex min-w-0 cursor-pointer flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-[11.5px] transition-colors', on ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground');
+  const cls = (on) => cn('press relative flex min-w-0 cursor-pointer flex-col items-center gap-0.5 rounded-lg px-0 py-1.5 text-[11.5px] transition-colors', on ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground');
   return (
     <nav className={cn('grid gap-0.5 px-2 pb-1', more.length ? 'grid-cols-5' : 'grid-cols-4')} aria-label={t('orbchats.places')} data-testid="orb-places">
       {places.map(([id, Icon, label]) => (
@@ -309,23 +363,9 @@ function Places() {
   );
 }
 
-// ---- search: titles and projects at once; from two letters, the messages too (inbox.search and, for the direct
-// conversations, conversations.search); «#12» finds that task.
-function useSearch(query) {
-  const [found, setFound] = useState(null);
-  useEffect(() => {
-    const q = query.trim(); if (q.length < 2) { setFound(null); return undefined; }
-    let alive = true;
-    const id = setTimeout(async () => {
-      const [inbox, direct] = await Promise.all([call('inbox.search', { zone: 'orb', q }).catch(() => null), call('conversations.search', { q }).catch(() => null)]);
-      if (alive) setFound({ messages: inbox?.messages ?? [], conversations: new Set([...(inbox?.items ?? []).map((x) => x.id), ...(direct?.conversations ?? [])]), sessions: new Set(direct?.sessions ?? []) });
-    }, 220);
-    return () => { alive = false; clearTimeout(id); };
-  }, [query]);
-  return found;
-}
+// ---- search: titles and projects at once; from two letters, the messages too (lib/search.js); «#12» finds that task.
 const FILTER0 = { state: 'all', agent: 'all' };
-function FilterMenu({ filter, setFilter, agents }) {
+function FilterMenu({ filter, setFilter, agents, snoozed = 0 }) {
   const t = useT();
   const changed = filter.state !== 'all' || filter.agent !== 'all';
   const pick = (k, v) => setFilter((f) => ({ ...f, [k]: f[k] === v ? 'all' : v }));
@@ -340,7 +380,7 @@ function FilterMenu({ filter, setFilter, agents }) {
       </Tip>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>{t('orbchats.filterState')}</DropdownMenuLabel>
-        {[['active', 'orbchats.stateActive'], ['attention', 'orbchats.stateAttention'], ['done', 'orbchats.stateDone']].map(([v, k]) => <DropdownMenuCheckboxItem key={v} checked={filter.state === v} onCheckedChange={() => pick('state', v)} onSelect={(e) => e.preventDefault()} data-testid={`filter-${v}`}>{t(k)}</DropdownMenuCheckboxItem>)}
+        {[['active', 'orbchats.stateActive'], ['attention', 'orbchats.stateAttention'], ['done', 'orbchats.stateDone'], ...(snoozed || filter.state === 'snoozed' ? [['snoozed', 'orbchats.stateSnoozed']] : [])].map(([v, k]) => <DropdownMenuCheckboxItem key={v} checked={filter.state === v} onCheckedChange={() => pick('state', v)} onSelect={(e) => e.preventDefault()} data-testid={`filter-${v}`}>{t(k)}{v === 'snoozed' && snoozed ? <span className="text-muted-foreground ml-auto tabular-nums">{snoozed}</span> : null}</DropdownMenuCheckboxItem>)}
         {agents.length > 1 ? <><DropdownMenuSeparator /><DropdownMenuLabel>{t('orbchats.filterAgent')}</DropdownMenuLabel>{agents.map((a) => <DropdownMenuCheckboxItem key={a} checked={filter.agent === a} onCheckedChange={() => pick('agent', a)} onSelect={(e) => e.preventDefault()}>{AGENT[a] ?? a}</DropdownMenuCheckboxItem>)}</> : null}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -379,7 +419,8 @@ export function OrbInbox({ page = false }) {
     const okAgent = (x) => filter.agent === 'all' || x.agent === filter.agent;
     return {
       chats: items.filter((x) => hit(x) && okAgent(x)).sort((a, b) => String(b.at ?? '').localeCompare(String(a.at ?? ''))).slice(0, 40),
-      tasks: tasks.filter((x) => `#${x.id}` === q || String(x.title).toLowerCase().includes(q)).slice(0, 12),
+      // 3.8.2: after the tasks found by their title or number, the ones whose brief or result say it (tasks.search).
+      tasks: (() => { const own = tasks.filter((x) => `#${x.id}` === q || String(x.title).toLowerCase().includes(q)).slice(0, 12); const ids = new Set(own.map((x) => x.id)); return [...own, ...(found?.tasks ?? []).filter((x) => !ids.has(x.id))].slice(0, 12); })(),
       projects: projects.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 10)
     };
   })();
@@ -391,7 +432,7 @@ export function OrbInbox({ page = false }) {
         <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') { setQuery(''); setFilter(FILTER0); } }} placeholder={t('orbchats.search')} aria-label={t('orbchats.search')} className={cn('placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent outline-none', phone ? 'text-[16px]' : 'text-[13.5px]')} data-testid="sidebar-search-input" />
         {query ? <button type="button" className="text-muted-foreground hover:text-foreground grid size-5 cursor-pointer place-items-center rounded" aria-label={t('comp.sidebar.clearSearch')} onClick={() => setQuery('')}><X className="size-3.5" /></button> : null}
       </label>
-      <FilterMenu filter={filter} setFilter={setFilter} agents={agents} />
+      <FilterMenu filter={filter} setFilter={setFilter} agents={agents} snoozed={parts.snoozed} />
       {phone ? null : <OrbNewMenu />}
     </div>
   );
@@ -415,7 +456,7 @@ export function OrbInbox({ page = false }) {
       })}</> : null}
       {results.tasks.length ? <><Sub>{t('orbchats.tasksFound')}</Sub>{results.tasks.map((x) => (
         <button key={x.id} type="button" onClick={() => go({ view: 'tasks', id: x.id })} className="hover:bg-accent/50 flex min-w-0 cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13.5px]" data-testid={`item-t${x.id}`}>
-          <ListTodo className="text-muted-foreground size-4 shrink-0" /><span className="min-w-0 flex-1 truncate">#{x.id} {x.title}</span><span className="text-muted-foreground shrink-0 text-[12px]">{STATUS[x.status]?.[0] ?? x.status}</span>
+          <ListTodo className="text-muted-foreground size-4 shrink-0" /><span className="min-w-0 flex-1"><span className="block truncate">#{x.id} {x.title}</span>{x.snippet ? <span className="text-muted-foreground block truncate text-[12.5px]" data-testid="task-hit-snippet">{x.snippet}</span> : null}</span><span className="text-muted-foreground shrink-0 text-[12px]">{STATUS[x.status]?.[0] ?? x.status}</span>
         </button>))}</> : null}
       {!results.projects.length && !results.chats.length && !results.tasks.length && !found?.messages?.length ? <p className="text-muted-foreground px-3 py-4 text-sm">{t('chats.noResults')}</p> : null}
     </div>

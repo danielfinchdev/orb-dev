@@ -6,7 +6,7 @@ import { X } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { Button } from './ui/button.jsx';
 import { BubbleTip } from './ui/overlay.jsx';
-import { bridge, go, useStore } from '@/lib/store.js';
+import { bridge, go, useStore, plainSkin } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
 import { play } from '@/lib/sounds.js';
 import { noticeOf } from './notices.jsx';
@@ -16,7 +16,7 @@ const moodOf = (body) => (/^(✅|↩️|👍)/.test(body) ? 'happy' : /^(❌|⛔
 
 export function Companion({ name, base, hidden: hiddenHere }) {
   const t = useT();
-  const hidden = useStore((s) => s.app?.config?.ui?.skin) === 'profesional' || hiddenHere;
+  const hidden = plainSkin(useStore((s) => s.app?.config?.ui?.skin)) || hiddenHere;
   const [bubble, setBubble] = useState(null);
   const [flash, setFlash] = useState(null);
   const [sleepy, setSleepy] = useState(false);

@@ -7,7 +7,11 @@
 //   leer       look only: reading and searching; anything that changes something is denied
 //   editar     (default) edit files and run commands in its folder; risky commands ask first
 //   preguntar  edit files; every command asks first (for when you want to watch closely)
-//   total      no checks at all (asked once when chosen; never from the phone)
+//   total      no questions (asked once when chosen; never from the phone). 3.8.2: in a chat without a project it is
+//              «Acceso total al PC» (the master password, dropped when Orb locks: src/engine/grants.mjs). Whatever the
+//              chat, «total» still goes through this guard: its boundary is the protected set (core but its open folders,
+//              the folders kept outside it, the folder Orb is installed in, «Elementos protegidos» and raising privileges),
+//              which is denied as in every other mode.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -146,8 +150,54 @@ const rootsOf = (dir) => [...new Set([norm(dir), norm(realOf(dir))])];
 const under = (rest) => (o) => o.every((part, i) => rest[i] === part);
 // read: true (every folder a reading tool may see), false, or the names of the ones that count (['skills']).
 const readable = (read) => (read === true ? READ_INTERNAL : Array.isArray(read) ? READ_INTERNAL.filter((o) => read.includes(o[0])) : []);
-const openInCore = (rest, read = false) => OPEN_INTERNAL.some(under(rest)) || readable(read).some(under(rest));
-const OPEN_TEXT = /^\\+(copias\\+aisladas|herramientas|preparacion)(\\|$|["'\s])/;
+// 3.8.2 (review A2): Orb's own adb (core\herramientas\adb) runs in the engine: a reading tool may look, nobody may write
+// there or run it (an agent's adb.exe or DLL left there would run with the engine's rights). The same for Orb's own
+// ffmpeg (core\herramientas\ffmpeg: it makes the frames of an attached video, src/engine/attachments.mjs).
+// 3.8.2: the same for the music Orb downloads (core\herramientas\musica, src/engine/music.mjs): what the window plays is
+// what Orb checked.
+const READ_ONLY_INTERNAL = [['herramientas', 'adb'], ['herramientas', 'ffmpeg'], ['herramientas', 'musica']];
+const openInCore = (rest, read = false) => (READ_ONLY_INTERNAL.some(under(rest)) ? read === true : OPEN_INTERNAL.some(under(rest)) || readable(read).some(under(rest)));
+const OPEN_TEXT = /^\\+(copias\\+aisladas|herramientas(?!\\+(adb|ffmpeg|musica)(\\|$|["'\s]))|preparacion)(\\|$|["'\s])/;
+const ADB_TEXT = /^\\+herramientas\\+(adb|ffmpeg|musica)(\\|$|["'\s])/;
+// 3.8.2 (review A1): a UNC path to this PC (\\localhost\C$\…, \\<its name>\C$\…, \\127.0.0.1\…, \\?\UNC\…, //localhost/…),
+// a \\?\C:\… or \\.\C:\… one, as the local path it names. → that path; null when it is not this PC's (another
+// computer's share, or not a UNC path); false when it is this PC's but cannot be told where (a share that is not a
+// drive's C$, \\?\Volume{…}, \\.\GLOBALROOT…): treated as closed.
+const localHosts = () => new Set(['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0', os.hostname().toLowerCase(),
+  ...Object.values(os.networkInterfaces()).flat().map((i) => String(i?.address ?? '').toLowerCase()).filter(Boolean)]);
+export function localPath(p) {
+  const s = String(p ?? '').replace(/\//g, '\\');
+  if (!s.startsWith('\\\\')) return null;
+  let m = /^\\\\[?.]\\([a-z]:)(\\.*)?$/i.exec(s);
+  if (m) return `${m[1]}${m[2] ?? '\\'}`;
+  m = /^\\\\(?:[?.]\\UNC\\)?([^\\]+)\\([^\\]+)(\\.*)?$/i.exec(s);
+  if (!m) return null;
+  const host = m[1].toLowerCase();
+  if ((host === '.' || host === '?') && /^pipe$/i.test(m[2])) return null; // a named pipe
+  const local = host === '.' || host === '?' || /^127\./.test(host) || /\.ipv6-literal\.net$/.test(host) || localHosts().has(host) || host.split('.')[0] === os.hostname().toLowerCase();
+  if (!local) return null;
+  const drive = /^([a-z])\$$/i.exec(m[2]);
+  return drive ? `${drive[1]}:${m[3] ?? '\\'}` : false;
+}
+// 3.8.2 (review A1): an existing path is also compared by what it is (volume and file id), so no other name of a closed
+// folder (a share, a mount point, a drive letter made by subst) reaches it.
+const ids = new Map();
+const idOf = (p) => { try { const s = fs.statSync(p, { bigint: true }); return s.ino ? `${s.dev}:${s.ino}` : null; } catch { return null; } };
+const rootId = (r) => { if (!ids.has(r)) { const id = idOf(r); if (!id) return null; ids.set(r, id); } return ids.get(r); };
+function closedById(full, internalDir, read) {
+  const core = rootId(path.resolve(internalDir));
+  const others = [...guardedAsGiven, ...(read === true ? [] : appAsGiven)].map(rootId).filter(Boolean);
+  if (!core && !others.length) return false;
+  let at = full; const rest = [];
+  for (let i = 0; i < 64; i++) {
+    const id = idOf(at);
+    if (id && id === core) return !openInCore(rest.slice().reverse(), read);
+    if (id && others.includes(id)) return true;
+    const up = path.dirname(at); if (up === at) break;
+    rest.push(path.basename(at).toLowerCase()); at = up;
+  }
+  return false;
+}
 const READ_TEXT = { bitacora: /^\\+bitacora(\\|$|["'\s])/, skills: /^\\+skills(\\|$|["'\s])/ };
 const readText = (read, after) => readable(read).some((o) => READ_TEXT[o[0]].test(after));
 let guardedRoots = []; let guardedAsGiven = [];
@@ -169,18 +219,23 @@ export const appRootsNow = () => [...appAsGiven];
 export function isOrbData(target, internalDir, cwd, { read = false } = {}) {
   if (!internalDir || !target) return false;
   let p = winPath(String(target).trim()).replace(/^~(?=[\\/]|$)/, os.homedir());
+  const local = localPath(p);
+  if (local === false) return true;
+  if (local) p = local;
   if (!path.isAbsolute(p) && !path.win32.isAbsolute(p)) { if (!cwd) return false; p = path.resolve(cwd, p); }
   const full = norm(realOf(p));
   const within = (root) => full === root || full.startsWith(`${root}\\`);
   const root = rootsOf(internalDir).find(within);
   if (root) return !openInCore(full.slice(root.length + 1).split('\\'), read);
   if (read !== true && appRoots.some(within)) return true;
-  return guardedRoots.some(within);
+  if (guardedRoots.some(within)) return true;
+  return closedById(realOf(p), internalDir, read);
 }
 // The words of a command that may be paths (a=b and --opt=b give b), without quotes.
 // 3.8: the folders a command may name through the environment (%APPDATA%, $env:APPDATA, $APPDATA, ${env:APPDATA}, ~ and the
 // like): written out, so the checks below see the real path (the copies of Orb's secrets live under %APPDATA%).
-const ENV_DIRS = ['APPDATA', 'LOCALAPPDATA', 'USERPROFILE', 'HOME', 'PROGRAMDATA', 'TEMP', 'TMP'];
+// 3.8.2 (review M2): HOMEDRIVE and HOMEPATH too (%HOMEDRIVE%%HOMEPATH% is the user's folder), and ANDROID_USER_HOME.
+const ENV_DIRS = ['APPDATA', 'LOCALAPPDATA', 'USERPROFILE', 'HOME', 'HOMEDRIVE', 'HOMEPATH', 'ANDROID_USER_HOME', 'PROGRAMDATA', 'TEMP', 'TMP'];
 export function expandEnv(command) {
   let t = String(command ?? '');
   for (const name of ENV_DIRS) {
@@ -284,7 +339,7 @@ function touchesOnce({ command: given, paths, patterns, internalDir, cwd, read =
     for (let i = t.indexOf(r); i >= 0; i = t.indexOf(r, i + 1)) {
       const after = t.slice(i + r.length);
       if (/^[^\\]/.test(after) && !/^["'\s;|&)]/.test(after)) continue; // .orbx is another folder
-      if (!coreRoots.includes(r) || !(OPEN_TEXT.test(after) || readText(read, after))) return true;
+      if (!coreRoots.includes(r) || !(OPEN_TEXT.test(after) || readText(read, after) || (read === true && ADB_TEXT.test(after)))) return true;
     }
   }
   if (pathWords(command).some((w) => isOrbData(w, internalDir, cwd, { read }))) return true;
@@ -353,11 +408,50 @@ export function protectedHit(text, list = protectedList()) {
 export const touchesProtected = (text, list) => protectedHit(text, list) !== null;
 // decide({ permission, tool, kind, command, paths, patterns, internalDir, cwd, lang }) → (cwd: the agent's folder, to
 // resolve relative paths; lang: language of the reasons, default 'es') { decision: 'allow' | 'ask' | 'deny', reason }
-// Orb's data folder: denied, and in «total» it asks (the user may want an agent to look, but it is never silent).
+// Orb's data folder: denied, whatever the permission (3.8.2: «total» too; it asked before).
 // 3.7: no agent ever raises its privileges, whatever its permission (also «total»): sudo, doas, pkexec, su or
 // run0.
-const ESCALATE = /\b(sudo|doas|pkexec|run0)\b|(^|[;&|(`]|\$\()\s*su(\s|$)|\/etc\/sudoers/i;
-export const escalates = (command) => ESCALATE.test(String(command ?? ''));
+// 3.8.2 (review M1): and Windows' ways: runas, gsudo, Start-Process (start, saps) -Verb RunAs, a ShellExecute with
+// "runas", psexec -s (SYSTEM) and nircmd elevate.
+const ESCALATE = /\b(sudo|doas|pkexec|run0|runas|gsudo)(\.exe)?\b|(^|[;&|(`]|\$\()\s*su(\s|$)|\/etc\/sudoers|\b(start-process|saps|start)\b[^|;&\n]*-verb\s*:?\s*["']?runas|["']runas["']|\bpsexec(64)?(\.exe)?\b[^|;&\n]*\s[-/][a-z]*s\b|\bnircmd(c)?(\.exe)?\s+elevate/i;
+export const escalates = (command) => ESCALATE.test(String(command ?? '')) || ESCALATE.test(unquoted(command));
+// 3.8.2 (review A1): a new name for a drive or a folder (subst, net use, New-PSDrive, a mapped share): another way to
+// reach a closed folder. Denied in every mode.
+const DRIVE_ALIAS = /\bsubst(\.exe)?\b|\bnet(\.exe)?\s+use\b|\b(new-psdrive|ndr)\b|\bmapnetworkdrive\b|wnetaddconnection/i;
+export const aliasesDrive = (command) => DRIVE_ALIAS.test(String(command ?? '')) || DRIVE_ALIAS.test(unquoted(command));
+// 3.8.2 (review M2): copying, moving or packing a folder that holds a closed one (the workspace holds core, the user's
+// folder holds .android) takes the closed one with it. The program of each part of the command (cp, Copy-Item, robocopy,
+// xcopy, tar, Compress-Archive, 7z, zip, rsync…) and every folder it names (resolved where that part runs) are looked at.
+const COPIERS = /^(cp|copy|cpi|copy-item|xcopy|robocopy|mv|move|mi|move-item|tar|bsdtar|compress-archive|7z|7za|7zr|zip|rar|winrar|rsync|scp|ditto)$/i;
+const COPY_TO = /^(cp|copy|cpi|copy-item|xcopy|mv|move|mi|move-item|rsync|scp|ditto)$/;
+function copiesClosedParent(command, internalDir, cwd) {
+  const closed = [...(internalDir ? rootsOf(internalDir) : []), ...guardedRoots];
+  if (!closed.length) return false;
+  const c = expandEnv(command);
+  if (/createfromdirectory/i.test(c) && pathWords(c).some((w) => holds(w, cwd, closed))) return true;
+  return workDirs(c, cwd).some((part) => {
+    const exe = String(part.words[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '');
+    if (!COPIERS.test(exe)) return false;
+    // What is copied (the sources), not where to: an option (-r, /E, /MIR…) is not a folder, the value of -Destination
+    // and, for a copy or a move, its last folder are where it goes; robocopy's source is its first folder.
+    const args = []; const ws = part.words.slice(1);
+    for (let i = 0; i < ws.length; i++) {
+      if (/^-(destination|d|t|target-directory)$/i.test(ws[i])) { i++; continue; }
+      if (/^-/.test(ws[i]) || /^\/[a-z0-9:]{1,8}$/i.test(ws[i])) continue;
+      args.push(ws[i]);
+    }
+    const lower = exe.toLowerCase();
+    const sources = lower === 'robocopy' ? args.slice(0, 1) : COPY_TO.test(lower) && args.length > 1 ? args.slice(0, -1) : args;
+    return sources.some((w) => holds(w, part.dir, closed));
+  });
+}
+function holds(word, dir, closed) {
+  let p = winPath(String(word)).replace(/^~(?=[\\/]|$)/, os.homedir());
+  const local = localPath(p); if (local === false) return true; if (local) p = local;
+  if (!path.isAbsolute(p) && !path.win32.isAbsolute(p)) { if (!dir) return false; p = path.resolve(dir, p); }
+  const full = norm(realOf(p));
+  return closed.some((r) => r === full || r.startsWith(`${full}\\`) || (/^[a-z]:$/.test(full) && r.startsWith(`${full}\\`)));
+}
 // 3.8.1: a command that makes a link (a junction, a symbolic or a hard link), in any shell or language: one that names core
 // (or runs inside it) is denied, so nothing in core\preparacion (or anywhere) can point into core and turn an allowed write
 // there into a write in core\skills, core\datos…
@@ -402,11 +496,16 @@ function runsSkillScript(command, internalDir, cwd) {
   const f = norm(realOf(full));
   return rootsOf(path.join(internalDir, 'skills')).some((skills) => f.startsWith(`${skills}\\`) && !f.slice(skills.length + 1).startsWith('.'));
 }
-export function decide({ permission = 'editar', tool, kind, command = '', paths = [], patterns = [], internalDir, cwd, lang = 'es' }) {
+// 3.8.2: a command that runs Android's adb (by name, by path, or Orb's copy in core\herramientas\adb), in any shell.
+// Hardening only, not a boundary (a script can build the name at run time): the adb server itself is stopped when Orb
+// locks (src/engine/android.mjs › stopServer).
+const RUNS_ADB = /(^|[\s;&|(`"'\\/=])adb(\.exe)?(?=$|[\s;&|)`"'])/i;
+export const runsAdb = (command) => RUNS_ADB.test(String(command ?? '')) || RUNS_ADB.test(unquoted(command));
+export function decide({ permission = 'editar', tool, kind, command = '', paths = [], patterns = [], internalDir, cwd, lang = 'es', android = false }) {
   const T = (k) => translate(lang, `msg.guard.${k}`);
   const cls = toolClass(tool, kind);
   const text = [command, ...paths, ...patterns].join(' ');
-  if (linkIntoCore(command, internalDir, cwd)) return { decision: permission === 'total' ? 'ask' : 'deny', reason: T('internalLink') };
+  if (linkIntoCore(command, internalDir, cwd)) return { decision: 'deny', reason: T('internalLink') };
   if (touchesInternal({ command, paths, patterns, internalDir, cwd, read: cls === 'read' })) {
     // 3.8.1: only the general log in core (what a reading tool may see): the reason says how to write to it.
     const logsOnly = cls !== 'read' && !touchesInternal({ command, paths, patterns, internalDir, cwd, read: ['bitacora'] });
@@ -414,11 +513,16 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
     // new version with orb_create_skill, which the user approves).
     const skillsOnly = cls !== 'read' && !logsOnly && !touchesInternal({ command, paths, patterns, internalDir, cwd, read: ['skills'] });
     if (skillsOnly && cls === 'exec' && permission !== 'leer' && !escalates(command) && !protectedHit(text) && runsSkillScript(command, internalDir, cwd)) return { decision: 'ask', reason: T('internalSkillsRun') };
-    return { decision: permission === 'total' ? 'ask' : 'deny', reason: T(logsOnly ? 'internalLogs' : skillsOnly ? 'internalSkills' : 'internal') };
+    return { decision: 'deny', reason: T(logsOnly ? 'internalLogs' : skillsOnly ? 'internalSkills' : 'internal') };
   }
   if (escalates(command)) return { decision: 'deny', reason: T('sudo') };
+  if (cls !== 'read' && aliasesDrive(command)) return { decision: 'deny', reason: T('driveAlias') };
+  if (cls !== 'read' && copiesClosedParent(command, internalDir, cwd)) return { decision: 'deny', reason: T('copyParent') };
   const hit = protectedHit(text);
   if (hit) return { decision: 'deny', reason: translate(lang, 'msg.guard.protected', { name: hit }) };
+  // 3.8.2: Android's adb by hand only with «Acceso total» and «Usar mi móvil Android» (android): otherwise the agent has
+  // Orb's own tools (orb_android_*), which check the grant on every call.
+  if (cls !== 'read' && cls !== 'orb' && runsAdb(command) && !(permission === 'total' && android)) return { decision: 'deny', reason: T('adb') };
   if (permission === 'total') return { decision: 'allow', reason: T('full') };
   if (cls === 'read' || cls === 'orb') return { decision: 'allow', reason: T('readOnlyTool') };
   if (permission === 'leer') return { decision: 'deny', reason: T('readOnlyChat') };

@@ -103,12 +103,12 @@ export default {
   'help.tut.expert.go': 'Abrir God mode',
 
   'help.tut.games.title': 'Minijuegos',
-  'help.tut.games.l1': 'Mientras los agentes trabajan, el mando de la barra del chat abre los minijuegos: Serpiente, Tetris, Ajedrez, Jumper, 2048, Ladrillos, Space Invaders y Pac-Man.',
+  'help.tut.games.l1': 'Mientras los agentes trabajan, el menú ⋯ de la barra del chat abre los minijuegos: Serpiente, Tetris, Ajedrez, Jumper, 2048, Ladrillos, Space Invaders y Pac-Man.',
   'help.tut.games.l2': 'Cada uno tiene tres niveles de dificultad y guarda tu récord en este PC.',
   'help.tut.games.go': 'Abrir los minijuegos',
 
   'help.tut.looks.title': 'Apariencia y temas',
-  'help.tut.looks.l1': 'En Ajustes › General eliges modo claro, oscuro o el del sistema; el tema (Por defecto, Vaporwave, Retro, Profesional o Candy), las fuentes y los colores del código.',
+  'help.tut.looks.l1': 'En Ajustes › General eliges modo claro, oscuro o el del sistema; el tema (Por defecto, Vaporwave, Retro, Profesional, Candy o Cristal), las fuentes y los colores del código.',
   'help.tut.looks.l2': 'El tema Profesional no muestra el robot ni animaciones. «Animaciones: mínimas» deja el robot quieto en cualquier tema.',
   'help.tut.looks.l3': 'El tamaño de la interfaz se ajusta en Ajustes o con Ctrl +, Ctrl − y Ctrl 0.',
   'help.tut.looks.go': 'Abrir Apariencia',
@@ -196,7 +196,7 @@ export default {
   'help.tour.context.title': 'Contexto y uso',
   'help.tour.context.text': 'Este círculo se llena con la conversación. Púlsalo para ver los tokens y el uso de tus planes.',
   'help.tour.bar.title': 'Barra del chat',
-  'help.tour.bar.text': 'Arriba, el chat y su proyecto: púlsalo para ver su información (modelo, tareas, exportar…). Las notificaciones, pausar las tareas y los minijuegos, a la derecha.',
+  'help.tour.bar.text': 'Arriba, el chat y su proyecto: púlsalo para ver su información (modelo, tareas, exportar…). A la derecha, las notificaciones, pausar las tareas y el menú ⋯ con las demás acciones y los minijuegos.',
   'help.tour.newchat.title': 'Nuevo chat',
   'help.tour.newchat.text': 'Con «+» empiezas un chat nuevo o un proyecto. Cada chat es una conversación propia, con su título y su proyecto; puedes tener varios a la vez.',
   'help.tour.tasks.title': 'Tareas',

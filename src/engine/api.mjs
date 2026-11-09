@@ -10,26 +10,31 @@ import path from 'node:path';
 import { ctx, saveConfig, tr } from '../core/context.mjs';
 import { AGENT_IDS, categoryOf, CATEGORIES, PLATFORMS } from '../core/home.mjs';
 import { accountsOf, accountDir, accountLabel, accounts as allAccounts } from '../core/accounts.mjs';
-import { usageReport, modelName } from '../core/budget.mjs';
+import { usageReport, usageHistory, modelName } from '../core/budget.mjs';
 import { brainOf } from './orchestrator.mjs';
 import { newProject, syncProjects, checkProjectName, renameProject } from '../core/projects.mjs';
 import { finishProject, finishedProjects, reopenProject, checkDelete, deleteProject, abortDelete } from '../core/project-close.mjs';
 import { PRODUCT } from '../core/product.mjs';
+import { slashCommand } from '../core/slash.mjs';
 import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../core/schedules.mjs';
 import { oneLine, redactSecrets, localStamp } from '../core/safety.mjs';
 import { quickRun } from '../agents/index.mjs';
-import { PERMISSIONS } from './sessions.mjs';
+import { PERMISSIONS, ATTACH_DIR } from './sessions.mjs';
 import { readLog, writeLog, logFiles } from './logs.mjs';
 import { expandMentions, mentionOptions } from './mentions.mjs';
 import { ofUserLabel, userLabel, userName, assistantName } from '../core/board.mjs';
-import { adbStatus, ensureAdb } from './android.mjs';
+import { adbStatus, ensureAdb, createAndroid } from './android.mjs';
+import { grantMethods } from './grants.mjs';
+import { agentAuth } from './agent-auth.mjs';
+import { createSecretRequests } from './agent-secrets.mjs';
+import { createTerminals } from './user-terminal.mjs';
 import { extensionMethods } from './api-extensions.mjs';
 import { layoutPlan, layoutApply, guardOutside } from './workspace-layout.mjs';
 import { modelCatalog, chooseModel, LEVELS, REASONING_LEVELS, levelsOf } from './catalog.mjs';
 import { titleFrom } from '../core/titles.mjs';
 import { autoTitle } from './titles.mjs';
 import { projectIcon, setProjectIcon, clearProjectIcon, renameProjectIcon } from './project-icons.mjs';
-import { git, slug } from '../core/workspace.mjs';
+import { git, slug, diffBetween } from '../core/workspace.mjs';
 import { authorize, PermissionError } from '../core/permissions.mjs';
 import { fld, fail, str, int, oneOf, images, DECISION } from './api-common.mjs';
 import { linkMethods } from './api-link.mjs';
@@ -38,8 +43,10 @@ import { dataApi } from './api-data.mjs';
 import { inboxMethods } from './api-inbox.mjs';
 import { masterMethods, checkUnlock } from './api-master.mjs';
 import { appMethods } from './api-app.mjs';
+import { musicMethods } from './music.mjs';
 import { sealConnectors } from '../core/connector-secrets.mjs';
 import { createFeeds } from './feeds.mjs';
+import { fold, snippet } from '../core/inbox.mjs';
 
 export { fail, str, int, oneOf } from './api-common.mjs';
 
@@ -51,7 +58,7 @@ const inst = lazy(() => import('./installer.mjs'));
 const exp = lazy(() => import('./expert.mjs'));
 const boards = lazy(() => import('./whiteboard.mjs'));
 
-export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef = { current: null }, onUnlocked = () => {} }) {
+export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef = { current: null }, onUnlocked = () => {}, onLocked = () => {} }) {
   const realHome = (() => { try { return fs.realpathSync(ctx.home); } catch { return ctx.home; } })();
   let catalogCache = null; // models.catalog, for a few seconds (see there)
   const insideHome = (p) => { const rel = path.relative(realHome, p); return Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel); };
@@ -130,7 +137,22 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   const coordinatorBusy = (name) => board.all('SELECT id FROM conversations WHERE project = ?', name).some((c) => orchestrator?.state(c.id)?.busy);
   // What the other parts of the API share.
   const shared = { board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, project, conversationId };
+  // 3.8.2: the phone the agents test apps on, and what the master password gives a chat (grants.mjs).
+  const android = createAndroid({ board, log });
+  const grants = grantMethods({ board, sessions, log, android });
+  // The phone's tools of Orb's MCP server (src/mcp/server.mjs): for the conversation of the server's grant, as it is now.
+  // 3.8.2 (T3 3.4): the secrets an agent asks for (agent-secrets.mjs), answered only on this PC's card.
+  const secrets = createSecretRequests({ sessions, auth: agentAuth, master: () => ctx.master, emit, log });
+  agentAuth.onCall = async ({ session }, method, args) => {
+    if (method === 'secret' && session) return secrets.request(sessions.get(session), args);
+    if (method !== 'android' || !session) throw Object.assign(new Error(tr('msg.android.notAllowed')), { userFacing: true });
+    const s = sessions.get(session);
+    return android.tool(s, String(args.tool ?? ''), args.args);
+  };
+  // 3.8.2 (T3 3.2): the user's terminal docked under a chat (user-terminal.mjs); Ctrl+J's own terminal is app.openTerminal.
+  const terminals = createTerminals({ emit, log });
   const data = dataApi(shared); // 3.6 (WS5): backups
+  let usageAskedAt = 0; // usage.refresh
 
   const methods = {
     'app.state': () => ({
@@ -290,7 +312,18 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
 
     // Android's tools, managed only from Ajustes (the skills and MCP servers of core: api-extensions.mjs).
     'android.status': () => adbStatus(),
-    'android.install': () => ensureAdb({ log, force: true }),
+    'android.install': () => ensureAdb({ log }),
+    'android.pairStart': () => android.pairStart(),
+    'android.pairState': () => android.pairState(),
+    'android.pairCancel': () => android.pairCancel(),
+    'android.pairCode': ({ address, code, connect }) => android.pairCode({ address: str(address, 'dirección', 80), code: str(code, 'código', 6), connect: str(connect, 'dirección', 80, { optional: true }) || null }),
+    'android.devices': () => android.devices(),
+    // 3.8.2 (T3 3.17): the emulators of this PC's Android SDK (never downloaded by Orb)
+    'android.emulators': () => android.emulators(),
+    'android.emulatorStart': ({ avd }) => android.emulatorStart({ avd: str(avd, 'emulador', 100) }),
+    'android.disconnect': ({ serial }) => android.disconnect({ serial: str(serial, 'móvil', 120) }),
+    'android.forget': ({ serial, host }) => android.forget({ serial: str(serial, 'móvil', 120, { optional: true }) || null, host: str(host, 'móvil', 120, { optional: true }) || null }),
+    ...grants.methods,
 
     'github.status': async () => (await gh()).status(),
     'github.contributions': async () => (await gh()).contributions(),
@@ -314,6 +347,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         try { methods['chat.settings']({ conversation: c.id, ...pick }, principal); } catch (error) { board.run('DELETE FROM conversations WHERE id = ?', c.id); board.changed('conversations'); throw error; }
         return orchestrator.ask(t, expandMentions(board, sessions, t), { conversation: c.id, project: proj });
       }
+      // 3.8.2: «/compact» and «/clear» typed alone in an existing chat are Orb's commands (src/core/slash.mjs).
+      const command = id ? slashCommand(t) : null;
+      if (command) return command === 'compact' ? orchestrator.compact(id) : orchestrator.clear(id);
       if (!id && (brainOf().agent || 'claude') === 'cursor') fail(tr('msg.api.cursorNoCoordinate'));
       return orchestrator.ask(t, expandMentions(board, sessions, t), { conversation: id, project: proj });
     },
@@ -361,6 +397,20 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const found = board.all(`SELECT DISTINCT s.id FROM sessions s LEFT JOIN session_items i ON i.session_id = s.id AND i.kind = 'text' WHERE s.kind = 'chat' AND (lower(s.title) LIKE ? ESCAPE '!' OR lower(i.body) LIKE ? ESCAPE '!') LIMIT 100`, like, like).map((r) => r.id);
       return { conversations, sessions: found };
     },
+    // 3.8.2: tasks by what they say (title, brief or result, without case or accents), for the sidebar's search and
+    // Ctrl+K. The newest first. → [{ id, title, status, project, snippet }]
+    'tasks.search': ({ q }) => {
+      const words = oneLine(String(q ?? ''), 100).trim();
+      if (words.length < 2) return [];
+      const needle = fold(words); const out = [];
+      for (const r of board.all('SELECT id, title, status, project, description, result FROM tasks ORDER BY id DESC LIMIT 5000')) {
+        const where = [r.title, r.description, r.result].find((x) => fold(x).includes(needle));
+        if (where == null) continue;
+        out.push({ id: r.id, title: r.title, status: r.status, project: r.project, snippet: where === r.title ? '' : redactSecrets(snippet(where, words)) });
+        if (out.length >= 30) break;
+      }
+      return out;
+    },
     // 2.7: pictures the agents make (Codex image_gen): shown in the conversation, a zone marked to change, saved in the
     // project. Read only from the agents' own picture folders, Orb's folder and the projects; written only into Orb's
     // folder (the marked copy) and <project>/imagenes.
@@ -369,6 +419,20 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const ext = path.extname(f).slice(1).toLowerCase();
       return { dataUrl: `data:${ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : ext === 'gif' ? 'image/gif' : 'image/png'};base64,${fs.readFileSync(f).toString('base64')}` };
     },
+    // 3.8.2: a PDF attached to a direct conversation, for the window's viewer: only from that conversation's attachments
+    // folder (.orb-adjuntos of its working folder), 25 MB at most.
+    'attachments.read': ({ session, path: file }) => {
+      const s = sessions.must(str(session, 'conversación', 64));
+      const real = (p) => { try { return fs.realpathSync(p); } catch { return fail(tr('msg.api.badAttachment')); } };
+      const dir = real(path.join(s.cwd, ATTACH_DIR)); const f = real(str(file, 'archivo', 1000));
+      // 3.8.2 (security review): the attachments folder itself, never a link or junction to another folder.
+      if (path.relative(path.join(real(s.cwd), ATTACH_DIR), dir) !== '') fail(tr('msg.api.badAttachment'));
+      const rel = path.relative(dir, f);
+      if (!rel || rel.startsWith('..') || path.isAbsolute(rel) || !/\.pdf$/i.test(f) || fs.statSync(f).size > 25 * 1024 * 1024) fail(tr('msg.api.badAttachment'));
+      return { kind: 'pdf', base64: fs.readFileSync(f).toString('base64') };
+    },
+    // A PNG made in the window, kept in Orb's folder to attach: the marked zone of a picture, or (3.8.2) a window the user
+    // captured from the composer.
     'images.mark': ({ dataUrl }) => {
       const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl ?? ''));
       if (!m || m[1].length > 34 * 1024 * 1024) fail(tr('msg.api.badImage'));
@@ -543,6 +607,14 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'tasks.reassign': ({ id, agent, model, reasoning }) => board.reassign(int(id, 'tarea'), { agent: oneOf(agent, [...AGENT_IDS, 'any'], 'agente'), model: str(model, 'modelo', 80, { optional: true }) || null, reasoning: oneOf(reasoning, ['low', 'medium', 'high'], 'razonamiento') }, 'usuario'),
     'tasks.followup': ({ id, text, images: files }) => scheduler.followup(int(id, 'tarea'), str(text, 'mensaje', 20000), images(files)),
     'tasks.undo': ({ id }) => scheduler.undo(int(id, 'tarea')),
+    // 3.8.2: what a finished task changed, with each file's diff (read only, against its undo checkpoint: «Deshacer» works
+    // as before). Nothing to show while it runs, after it was undone, or without git (a copy checkpoint).
+    'tasks.diff': ({ id }) => {
+      const task = board.task(int(id, 'tarea')) ?? fail(tr('msg.api.noTaskThat'));
+      const cp = board.settingJson(`checkpoint:${task.id}`);
+      if (cp?.before?.kind !== 'git' || !cp.after?.commit || !cp.before.repo || !fs.existsSync(cp.before.repo)) return { available: false, files: [], more: 0 };
+      return { available: true, ...diffBetween(cp.before.repo, cp.before.commit, cp.after.commit) };
+    },
     'tasks.launchAnyway': ({ id }) => { const t = board.task(int(id, 'tarea')); if (t?.status !== 'queued') fail(tr('msg.api.onlyQueued')); board.setting(`budget_ok:${t.id}`, '1'); board.event(t.id, 'usuario', 'budget.authorised', 'lanzar aunque supere el límite de uso'); return true; },
     'tasks.accept': ({ id }) => accept([int(id, 'tarea')]),
     'tasks.discardBranch': ({ id }) => scheduler.discardBranch(int(id, 'tarea')),
@@ -553,8 +625,10 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const cwd = proj ? proj.path : ctx.paths.projects;
       // Without a project the agent sits in the assistant's own folder (its database, secret and logs): it may only look.
       if (!proj && p.permission && p.permission !== 'leer') fail(tr('msg.api.readOnlyNoProject'));
+      // 3.8.2 (D5): «Acceso total» only through sessions.grantTotal (the master password), never at creation.
+      if (p.permission === 'total') fail(tr('msg.grants.totalNeedsPassword'));
       const created = sessions.create({ kind: 'chat', agent: oneOf(p.agent, AGENT_IDS, 'agente'), account: str(p.account, 'cuenta', 40, { optional: true }) || null, model: str(p.model, 'modelo', 80, { optional: true }) || null,
-        reasoning: oneOf(p.reasoning, REASONING_LEVELS, 'razonamiento', 'medium'), permission: proj ? oneOf(p.permission, PERMISSIONS, 'permiso', 'editar') : 'leer',
+        reasoning: oneOf(p.reasoning, REASONING_LEVELS, 'razonamiento', 'medium'), permission: proj ? oneOf(p.permission, PERMISSIONS.filter((x) => x !== 'total'), 'permiso', 'editar') : 'leer',
         project: proj?.name ?? null, cwd, title: str(p.title, 'título', 80, { optional: true }) || tr('msg.api.chatWith', { agent: p.agent }) });
       // 3.2: a title given here stays; without one, Orb names it from its first message.
       return p.title ? sessions.update(created.id, { titled: true }) : created;
@@ -574,6 +648,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         return { queued: true };
       }
       const t = str(text, 'mensaje', 20000);
+      const command = s.kind === 'chat' && !(files ?? []).length ? slashCommand(t) : null;
+      if (command) return command === 'compact' ? sessions.compact(s.id) : sessions.clear(s.id);
       // 3.2: a new direct conversation is named by Orb from its first message (at once a quick title, then a better one).
       if (s.kind === 'chat' && !s.titled) {
         const quick = titleFrom(t) || s.title;
@@ -586,13 +662,18 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'sessions.editQueued': ({ id, queueId, text, remove, move }) => sessions.editQueued(str(id, 'conversación', 64), int(queueId, 'mensaje'), { text: text === undefined ? undefined : str(text, 'mensaje', 20000), remove: Boolean(remove), move: oneOf(move, ['up', 'down'], 'mover', undefined) }),
     'sessions.approve': ({ id, request, decision }) => sessions.respond(str(id, 'conversación', 64), str(request, 'petición', 200), oneOf(decision, DECISION, 'decisión')),
     'sessions.resume': ({ id }) => sessions.resume(str(id, 'conversación', 64)),
-    'sessions.fork': ({ id, title }) => sessions.fork(str(id, 'conversación', 64), { title: str(title, 'título', 80, { optional: true }) || undefined }),
+    // 3.8.2: agent: go on with another agent (the copy gets a summary of the conversation; the original stays).
+    'sessions.fork': ({ id, title, agent }) => {
+      const other = oneOf(agent, AGENT_IDS, 'agente', undefined);
+      if (other && !(board.availableAgents() ?? AGENT_IDS).includes(other)) fail(tr('msg.api.agentUnavailable', { agent: other }));
+      return sessions.fork(str(id, 'conversación', 64), { title: str(title, 'título', 80, { optional: true }) || undefined, agent: other });
+    },
     'sessions.settle': ({ id, settled }) => sessions.update(sessions.must(str(id, 'conversación', 64)).id, { settled: settled !== false }),
     'approvals.list': () => sessions.allPendingApprovals(),
     'mentions.options': () => mentionOptions(board, sessions),
     'schedules.list': () => listSchedules(board).map((s) => ({ ...s, when: describeSchedule({ ...s, hours: s.at_time }) })),
     'schedules.create': (p) => createSchedule(board, { project: project(p.project).name, title: str(p.title, 'título', 120), description: str(p.description, 'descripción', 8000), agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente', 'any'), model: str(p.model, 'modelo', 80, { optional: true }) || null,
-      readonly: Boolean(p.readonly), every: oneOf(p.every, EVERY, 'frecuencia'), at_time: str(p.at_time, 'hora', 5, { optional: true }) || '09:00', weekdays: Array.isArray(p.weekdays) ? p.weekdays.map(Number) : [], hours: Number(p.hours) || 6 }, 'usuario'),
+      readonly: Boolean(p.readonly), every: oneOf(p.every, EVERY, 'frecuencia'), at_time: str(p.at_time, 'hora', 16, { optional: true }) || '09:00', weekdays: Array.isArray(p.weekdays) ? p.weekdays.map(Number) : [], hours: Number(p.hours) || 6, same_chat: p.same_chat === true }, 'usuario'),
     'schedules.update': ({ id, enabled, approve, title, description }) => updateSchedule(board, int(id, 'programada'), { enabled, approved: approve === true, title, description }),
     'schedules.remove': ({ id }) => removeSchedule(board, int(id, 'programada')),
     'schedules.run': ({ id }) => runSchedule(board, getSchedule(board, int(id, 'programada')) ?? fail(tr('msg.api.noScheduled')), 'usuario'),
@@ -614,6 +695,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         if (reasoning === 'xhigh') fail(tr('msg.api.reasoningUnavailable'));
         fields.reasoning = 'high';
       }
+      // 3.8.2 (D5): into or out of «total» only through grants.mjs (password, audit, lock).
+      if (permission !== undefined && (permission === 'total' || s.permission === 'total') && permission !== s.permission) fail(tr('msg.grants.totalNeedsPassword'));
       if (permission !== undefined) { fields.permission = oneOf(permission, PERMISSIONS, 'permiso'); if (!s.project && fields.permission !== 'leer') fail(tr('msg.api.readOnlyNoProject2')); }
       if (archived !== undefined) fields.archived = Boolean(archived);
       return sessions.update(s.id, fields);
@@ -630,8 +713,23 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     },
     // 3.2.1: only the accounts of the agents this PC can run (not every agent Orb knows).
     'usage.get': () => { const avail = board.availableAgents(); return usageReport(board).filter((u) => !avail || avail.includes(u.agent)); },
+    // 3.8.2: the usage page: what was spent in the last 7, 30 or 90 days, by day, agent and model (names as the selector
+    // shows them).
+    'usage.history': ({ days }) => {
+      const out = usageHistory(board, { days: oneOf(days, [7, 30, 90], 'días', 30) });
+      return { ...out, models: out.models.map(({ account, ...m }) => ({ ...m, label: m.model ? modelLabelOf(m.agent, account ?? m.agent, m.model) : null })) };
+    },
     // 2.6: the accounts working right now (the assistant's brain and the agents' running sessions), with the windows of
     // their plan the agents reported (session, weekly…), for the panel of the context ring.
+    // 3.8.2: «Recargar» in the usage panel: the open agents ask their plan now (at most every 20 s), then usage.now.
+    'usage.refresh': async () => {
+      if (Date.now() - usageAskedAt >= 20_000) {
+        usageAskedAt = Date.now();
+        const asks = [...sessions.refreshUsage(), ...orchestrator.refreshUsage()];
+        await Promise.race([Promise.allSettled(asks), new Promise((r) => { setTimeout(r, 10_000).unref?.(); })]);
+      }
+      return methods['usage.now']();
+    },
     'usage.now': () => {
       // 3.2: the brain of the conversations answering now (or the one new conversations use).
       const brain = orchestrator.info(null); const answering = orchestrator.states().find((x) => x.busy);
@@ -656,9 +754,22 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...linkMethods(shared),
     ...inboxMethods(shared),
     ...data.methods,
-    ...masterMethods({ ...shared, onUnlocked }),
+    // 3.8.2: Orb locked (or a new password): the grants go, and so do the secrets typed for the agents.
+    // 3.8.2 (security review): under the lock screen the user's terminals take nothing and show nothing (user-terminal.mjs).
+    ...masterMethods({ ...shared, onUnlocked, onLock: (why) => { secrets.wipe(); try { onLocked(); } catch (error) { log(`bloqueo: ${error.message}`); } return grants.revokeAll(why); }, onScreen: (v) => terminals.setLocked(v) }),
+    // 3.8.2 (T3 3.4): the private card of a secret an agent asked for (this PC only; saving or using a saved one asks for
+    // the master password: permissions.mjs › needsUnlock).
+    'secrets.pending': () => secrets.pending(),
+    'secrets.answer': ({ id, value, save, saved }) => secrets.answer({ id: int(id, 'petición'), value, save: save === true, saved: saved === true }),
+    'secrets.decline': ({ id }) => secrets.decline({ id: int(id, 'petición') }),
+    // 3.8.2 (T3 3.2): the user's terminal inside Orb (this PC only, never in core or a protected folder).
+    'terminal.list': () => terminals.list(),
+    'terminal.open': ({ dir }) => terminals.open({ dir: str(dir, 'carpeta', 1000) }),
+    'terminal.write': ({ id, text }) => terminals.write({ id: int(id, 'terminal'), text: typeof text === 'string' ? text : '' }),
+    'terminal.close': ({ id }) => terminals.close({ id: int(id, 'terminal') }),
     ...extensionMethods(shared),
-    ...appMethods({ home: ctx.home, version }) // 3.8.1: this PC's tools (terminal, editors, feedback…)
+    ...appMethods({ home: ctx.home, version }), // 3.8.1: this PC's tools (terminal, editors, feedback…)
+    ...musicMethods({ log }) // 3.8.2: the music's tracks, downloaded the first time (src/engine/music.mjs)
   };
   const feeds = createFeeds();
   return {
@@ -698,7 +809,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // 3.6: the daily backup (03:00 in the owner's zone), looked at from the engine's loop.
     dataTick: () => data.tick(),
     // Running tasks stay "running": the next start continues them (scheduler.finish does not close them while closing).
-    shutdown() { scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); log('motor detenido'); }
+    // 3.8.2: adb's server goes with Orb (no phone reachable from this PC while Orb is closed).
+    shutdown() { terminals.closeAll(); scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); android.stopServer().catch(() => {}); log('motor detenido'); }
   };
 }
 

@@ -3,16 +3,19 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { openDb, taskOptions, checkPolicy } from './db.mjs';
 import { ctx, tr } from './context.mjs';
-import { AGENT_IDS, AGENT_LABELS, folderName, projectLogHeader, isConfigName, categoryOf, CATEGORIES, folderKey, IGNORED_PROJECTS, FINISHED_PROJECTS, DELETING_PROJECTS } from './home.mjs';
+import { AGENT_IDS, AGENT_LABELS, folderName, projectLogHeader, isConfigName, categoryOf, CATEGORIES, folderKey, IGNORED_PROJECTS, FINISHED_PROJECTS, DELETING_PROJECTS, logBody } from './home.mjs';
 import { oneLine, MAX_DESCRIPTION } from './safety.mjs';
 import { contentHash, sign, verify, detectSensitivity, deletionAskedByUser, defaultApprovalKey } from './approval.mjs';
 import { PRODUCT } from './product.mjs';
+import { git, isGitRepo } from './workspace.mjs';
 
 export const AGENTS = AGENT_IDS;
 // limited (2.3): stopped by the account's usage limit; continues by itself when the limit resets (tasks.limited_until).
 export const STATUSES = ['queued', 'awaiting_approval', 'running', 'done', 'failed', 'blocked', 'cancelled', 'limited'];
 const FINISHED = new Set(['done', 'failed', 'cancelled']);
 const MODES = ['carpeta', 'aislada'];
+// 3.8.2: the largest BITACORA.md a project folder may bring into its log (mergeRootLog).
+const ROOT_LOG_MAX = 4 * 1024 * 1024;
 const now = () => new Date().toISOString();
 // A conversation's row as the rest of Orb reads it (titled as a boolean, its context meter parsed).
 // 3.8.1: both change the row SQLite just made (a new object each time) instead of copying it: copying the ~35 columns
@@ -169,6 +172,7 @@ export class Board {
     this.run(`INSERT INTO projects (name, path, notes, created_at) VALUES (?, ?, ?, ?)
               ON CONFLICT(name) DO UPDATE SET path = excluded.path, notes = excluded.notes`, name, checked, String(notes ?? '').slice(0, 2000), now());
     this.ensureProjectLog(name);
+    try { this.mergeRootLog(name, checked); } catch { /* the folder's log stays where it is: merged on a later add */ }
     // 3.8: a folder added (by hand, or by an agent) is listed again even if it was another user's project of 3.7.
     const ignored = this.settingJson(IGNORED_PROJECTS);
     if (Array.isArray(ignored) && ignored.includes(folderKey(checked))) this.settingJson(IGNORED_PROJECTS, ignored.filter((k) => k !== folderKey(checked)));
@@ -199,6 +203,42 @@ export class Board {
     const file = this.projectLogFile(name);
     if (!fs.existsSync(file)) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, projectLogHeader(name, ctx.config?.language)); }
     return file;
+  }
+  // 3.8.2: a project's log under another name (a rename, a project closed or reopened). When the new name already has a
+  // log, the old one is added at its end (a log only grows) and removed once the new file is read back holding it; one
+  // with nothing but its header just goes. Never a second file («name (2).md») beside the first.
+  moveProjectLog(from, to) {
+    const oldLog = this.projectLogFile(from); const newLog = this.projectLogFile(to);
+    if (oldLog === newLog || !fs.existsSync(oldLog)) return;
+    if (!fs.existsSync(newLog)) { fs.renameSync(oldLog, newLog); return; }
+    const body = logBody(fs.readFileSync(oldLog, 'utf8'));
+    const has = () => fs.readFileSync(newLog, 'utf8').replace(/\r\n/g, '\n').includes(body);
+    if (body && !has()) {
+      fs.appendFileSync(newLog, `\n${body}\n`);
+      if (!has()) return; // not verified: the old file stays
+    }
+    fs.rmSync(oldLog, { force: true });
+  }
+  // 3.8.2: one log system, Orb's (core\bitacora). A BITACORA.md a project brings in its folder (another tool's log) is
+  // added once at the end of the project's log, whole, and removed from the folder only after the log is read back
+  // holding it. One that git tracks is left in the folder (removing it would change the repository); it is not added a
+  // second time (its text is already in the log). → whether it was merged.
+  mergeRootLog(name, folder) {
+    const src = path.join(folder, 'BITACORA.md');
+    // 3.8.2 (final review): only a plain file of its own. Not a link nor a second name of another file (a hard link an
+    // agent made to core\datos would put Orb's data in a log agents read), and not a huge one.
+    let text; try { const st = fs.lstatSync(src); if (!st.isFile() || st.isSymbolicLink() || st.nlink > 1 || st.size > ROOT_LOG_MAX) return false; text = fs.readFileSync(src, 'utf8'); } catch { return false; }
+    const whole = text.replace(/\r\n/g, '\n').trim();
+    const file = this.ensureProjectLog(name);
+    const has = () => fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n').includes(whole);
+    if (whole && !has()) {
+      fs.appendFileSync(file, `\n## ${tr('sys.logs.importedRoot', { date: new Date().toISOString().slice(0, 10) })}\n\n${whole}\n`);
+      if (!has()) return false;
+    }
+    if (isGitRepo(folder) && git(folder, 'ls-files', '--error-unmatch', '--', 'BITACORA.md').status === 0) return true;
+    try { fs.rmSync(src); } catch { /* read-only or in use: left where it is, already merged */ }
+    this.event(null, 'orb', 'log.merged', `${name}: BITACORA.md`);
+    return true;
   }
 
   // Working folder of the session ("today we work on X"): every new task goes there.

@@ -48,6 +48,9 @@ const emit = (event, payload) => {
 };
 
 let api = null;
+// 3.8.2 (T3 3.11): where an element pointed at and a recording of the agents' browser go (browser-record.mjs), once the
+// sessions exist.
+let browserFiles = null;
 let hostBrowser = null; // 3.8.1 (D7): the agents' browser when the app's pages are driven from here (src/engine/host-browser.mjs)
 let logFile = null;
 const log = (line) => { try { if (logFile) { rotateIfBig(logFile); fs.appendFileSync(logFile, `${new Date().toISOString()} ${line}\n`); } } catch { /* never fatal */ } };
@@ -151,7 +154,9 @@ async function start(home, version, secret, browser, keep = null, userData = nul
     hostBrowser = createHostBrowser({
       log: (line) => log(line), language: () => ctx.config?.language ?? 'es', skin: () => ctx.config?.ui?.skin ?? 'orb',
       pipEnabled: () => ctx.config?.ui?.pip !== false && ctx.config?.browser?.enabled !== false,
-      label: (agent) => (agent === 'orb' ? ctx.config?.assistantName ?? PRODUCT.assistant : AGENTS[agent] ?? agent)
+      label: (agent) => (agent === 'orb' ? ctx.config?.assistantName ?? PRODUCT.assistant : AGENTS[agent] ?? agent),
+      onPointed: (p) => { browserFiles?.pointed(p).catch((error) => log(`navegador del agente: señalar: ${error.message}`)); },
+      saveRecording: (session, avi) => browserFiles?.saveRecording(session, avi) ?? null
     });
     await hostBrowser.ready;
   }
@@ -202,9 +207,8 @@ async function open({ home, version, repair = null }) {
   { const { guardOutside } = await import('./workspace-layout.mjs'); guardOutside({ mirror }); }
   // 3.8: the backups of 3.7 (inside the data folder, now core) go where backups go now, outside the workspace.
   try { const { adoptOldBackups } = await import('../core/backup.mjs'); const n = adoptOldBackups(home, ctx.config); if (n) log(`copias: ${n} copia(s) de 3.7 movidas fuera de core`); } catch (error) { log(`copias de 3.7: ${error.message}`); }
-  // Android's adb: in the PATH of every agent, downloaded in the background the first time.
-  const { addAdbToPath, ensureAdb } = await import('./android.mjs');
-  addAdbToPath(); ensureAdb({ log });
+  // 3.8.2: Android's adb is no longer in the agents' PATH nor downloaded at start: the first use downloads it
+  // (src/engine/android.mjs) and agents reach the phone through Orb's tools.
   const { Board } = await import('../core/board.mjs');
   // 3.8: a data folder of 3.5–3.7 is moved to 3.8 when its database opens (src/core/migrate-38.mjs). If that could not be
   // done (or its files and orb.json could not be finished), Orb does not run on those data (other users' conversations,
@@ -265,11 +269,17 @@ function coreBlocked({ home, version, repair }) {
 
 // While the data could not be updated: only the window's calls about it (and core is whole). → what start() returns.
 let migration = null; // { failed: true, reason, backup, data, committed }
+// 3.8.2 (review F2.5b M6): meanwhile a linked phone is told the PC needs attention (remote.mjs › startAttention) instead
+// of finding nothing there («sin conexión»). Closed before the engine runs on the updated data (the real phone access
+// takes the same port) and when it ends.
+let attention = null; // promise of { stop } or null
+const stopAttention = async () => { const a = attention; attention = null; await (await a)?.stop().catch(() => {}); };
 async function blocked(board, info) {
   const { migrationFailure, unfinished, isLegacy } = await import('../core/migrate-38.mjs');
   const f = migrationFailure();
   migration = { failed: true, reason: f?.reason ?? tr('data.migration38.blocked'), backup: f?.backup ?? null, data: ctx.paths.db, committed: f?.committed ?? !isLegacy(board.db) };
   log(`3.8: la migración no se pudo hacer; Orb no arranca sobre los datos de 3.7: ${migration.reason}`);
+  attention ??= import('./remote.mjs').then(({ startAttention }) => startAttention({ log })).catch((error) => { log(`móvil (atención): ${error.message}`); return null; });
   let retrying = null;
   const retry = async () => {
     try { board.db.close(); } catch { /* closed */ }
@@ -277,6 +287,7 @@ async function blocked(board, info) {
     const next = new Board();
     if (unfinished(next.db)) { await blocked(next, info); return migration; }
     migration = null;
+    await stopAttention();
     await run(next, info);
     return { failed: false };
   };
@@ -305,6 +316,7 @@ async function run(board, { home, version, restored, repair }) {
   board.run("DELETE FROM settings WHERE key = 'orchestrator_key_hash' OR key LIKE 'orchestrator_conv:%' OR key LIKE 'agent_id:%'");
   try { const released = board.releaseUnclaimed(); if (released.length) log(`tareas manuales sin conversación devueltas a la cola: ${released.join(', ')}`); } catch (error) { log(`liberar tareas manuales: ${error.message}`); }
   const sessions = new Sessions(board, { emit, log });
+  browserFiles = (await import('./browser-record.mjs')).browserSink({ sessions, toWindow, log });
   const { plainAction, looksEnglish } = await import('../core/guard.mjs');
   const { adapter } = await import('../agents/index.mjs');
   const { recordRate } = await import('../core/budget.mjs');
@@ -363,7 +375,9 @@ async function run(board, { home, version, restored, repair }) {
   const { settleWaitingKeys } = await import('./api-extensions.mjs');
   const onUnlocked = () => { settleWaitingKeys(board, log); if (ctx.config.mobile?.enabled) remote?.start().catch((error) => log(`móvil: ${error.message}`)); };
   if (ctx.master.unlocked()) settleWaitingKeys(board, log);
-  api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, onUnlocked });
+  // 3.8.2: Orb locked: the agents' browser stops recording (host-browser.mjs › lock).
+  const onLocked = () => { hostBrowser?.lock().catch?.((error) => log(`navegador del agente: grabación: ${error.message}`)); };
+  api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, onUnlocked, onLocked });
   remote = remoteRef.current = createRemote({ board, api, log, emit, version });
   // 3.1: only an unpacked Orb.dev started with ORB_DEV_CONTROL=1 (the app decides: src-tauri/src/lib.rs; never an installed Orb).
   if (process.env.ORB_DEV_CONTROL === '1') {
@@ -475,7 +489,7 @@ function shutdown() {
   try { api?.shutdown(); } catch { /* closing anyway */ }
   try { hostBrowser?.shutdown(); } catch { /* closing anyway */ }
   try { devControl?.stop(); } catch { /* closing anyway */ }
-  Promise.race([Promise.resolve(remote?.stop()).catch(() => {}), new Promise((r) => setTimeout(r, 4000))]).finally(() => setTimeout(() => process.exit(0), 300));
+  Promise.race([Promise.all([Promise.resolve(remote?.stop()).catch(() => {}), stopAttention()]), new Promise((r) => setTimeout(r, 4000))]).finally(() => setTimeout(() => process.exit(0), 300));
 }
 
 // 3.8.1: what an app without Node of its own (Tauri) asks the engine before and around the start, answered as
@@ -489,7 +503,7 @@ const APP_MESSAGES = {
   setup: (m) => ({ home: setupHome({ userData: String(m.userData ?? ''), base: m.base, assistantName: m.assistantName, userName: m.userName, language: m.language }) }),
   switchHome: (m) => ({ ok: switchHome({ userData: String(m.userData ?? ''), target: m.target }) }),
   // The little window of the agents' browser: its buttons and Ajustes › «Ver el navegador» (src/engine/host-browser.mjs).
-  pip: (m) => hostBrowser?.pip(String(m.action ?? '')) ?? null,
+  pip: (m) => hostBrowser?.pip(String(m.action ?? ''), { x: m.x, y: m.y }) ?? null,
   texts: (m) => {
     let lang = ctx.config?.language;
     if (!lang && typeof m.home === 'string' && m.home) { try { lang = loadConfig(m.home).language; } catch { /* Spanish */ } }

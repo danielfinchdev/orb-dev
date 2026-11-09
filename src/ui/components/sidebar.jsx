@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Bot, BookOpen, Bug, ChevronUp, ChevronDown, Settings, GraduationCap } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Bot, BookOpen, Bug, ChevronUp, ChevronDown, Settings, GraduationCap, Music, Pause, SkipForward, LoaderCircle } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { ThemeToggle, SidebarToggle } from './theme-toggle.jsx';
 import { useStore, go, bridge, openSettings } from '@/lib/store.js';
@@ -9,6 +9,8 @@ import { useT } from '@/lib/i18n.js';
 import { PRODUCT } from '../../core/product.mjs';
 import { BrowserSettingsMenu } from './browser-settings-menu.jsx';
 import { OrbInbox } from '@/views/orb/inbox.jsx';
+import { available as musicAvailable, musicState, subscribe as onMusic, toggleMusic, skipTrack } from '@/lib/music.js';
+import { trackOf } from '../../core/music.mjs';
 
 // The assistant's wordmark ORB·E, drawn its own way in each theme (app.css .wordmark): spaced capitals with a dot of the
 // theme's colour in Orb, a techno one underlined in Vaporwave…
@@ -89,12 +91,14 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
       </Tip>
       {open ? <div className="mb-1 flex flex-col gap-0.5">{items.map((i) => row(i) ?? <NavItem key={i.testid} icon={i.icon} label={i.label} active={i.active} onClick={i.onClick} testid={i.testid} />)}</div> : null}
       <div className="flex items-center gap-0.5">
-        {open ? null : items.map((i) => row(i) ?? (
-          <BubbleTip key={i.testid} title={i.label} text={i.hint} side="top">
+        {/* 3.8.2: the first icon sits at the window's left edge: its bubble starts at the icon instead of being cut there. */}
+        {open ? null : items.map((i, n) => row(i) ?? (
+          <BubbleTip key={i.testid} title={i.label} text={i.hint} side="top" align={n === 0 ? 'start' : 'center'}>
             <button type="button" onClick={i.onClick} aria-label={i.label} data-testid={i.testid} className={cn('side-foot-icon', i.active && 'is-active')}><i.icon className="size-4" /></button>
           </BubbleTip>
         ))}
         <span className="flex-1" />
+        {musicAvailable() ? <MusicButtons /> : null}
         {/* The bug: straight to «Enviar comentarios» (Ajustes › Acerca de), with the version next to it. */}
         {bridge.mobile ? null : (
           <BubbleTip title={t('nav.feedback')} side="top">
@@ -104,6 +108,28 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
         {version ? <span className="side-foot-version" data-testid="app-version">v{version}</span> : null}
       </div>
     </div>
+  );
+}
+
+// 3.8.2: the background music (Windows only, lib/music.js): play / pause, and the next track while it plays.
+function MusicButtons() {
+  const t = useT();
+  const [s, setS] = useState(musicState);
+  useEffect(() => onMusic(setS), []);
+  const now = trackOf(s.track);
+  const text = s.error ? t('nav.musicError') : s.loading ? t('nav.musicLoading') : s.playing && now ? t('nav.musicNow', { title: now.title, author: now.author }) : t('nav.musicHint');
+  return (
+    <>
+      {s.playing ? (
+        <BubbleTip title={t('nav.musicNext')} side="top">
+          <button type="button" onClick={skipTrack} aria-label={t('nav.musicNext')} data-testid="nav-music-next" className="side-foot-icon"><SkipForward className="size-4" /></button>
+        </BubbleTip>
+      ) : null}
+      <BubbleTip title={t('nav.music')} text={text} side="top">
+        <button type="button" onClick={toggleMusic} aria-label={s.playing || s.loading ? t('nav.musicPause') : t('nav.musicPlay')} aria-pressed={s.playing} data-testid="nav-music" data-music-button=""
+          className={cn('side-foot-icon', s.playing && 'is-active')}>{s.loading ? <LoaderCircle className="size-4 animate-spin" /> : s.playing ? <Pause className="size-4" /> : <Music className="size-4" />}</button>
+      </BubbleTip>
+    </>
   );
 }
 

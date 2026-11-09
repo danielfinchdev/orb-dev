@@ -70,7 +70,7 @@ export default {
   'master.keysDesc': 'One per line, as NAME=value. They are kept encrypted and only this connector gets them, with the command they were saved for; agents never see them.',
   'master.keysBad': 'Each line must be NAME=value (letters, digits and _).',
   'master.keysSaved': 'Keys saved.',
-  'link.passNote': 'The phone will ask for your master password (it never leaves the phone). Check that it shows this same fingerprint.',
+  'link.passNote': 'The device will ask for the master password. Check that it shows this fingerprint.',
   'app.linkPassTitle': "Your PC's master password",
   'app.linkPassTitleNamed': 'Link with {name}',
   'app.linkPassBody': 'The one you created when you installed Orb on the PC. It never leaves this device: it is only checked that you know it.',

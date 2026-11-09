@@ -8,6 +8,7 @@ import { useLiveTasks, liveOf, LiveTask, ProgressBar } from '@/components/live-t
 import { modelsOf } from '@/components/brain-picker.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
+import { TaskChanges } from '@/components/task-changes.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, Empty, Field, Input, Textarea } from '@/components/ui/basic.jsx';
 import { Tabs, TabsList, TabsTrigger, Select, Collapsible, CollapsibleTrigger, CollapsibleContent, BubbleTip } from '@/components/ui/overlay.jsx';
@@ -138,6 +139,8 @@ function TaskDetail({ id, live }) {
       </dl>
       <div className="grid gap-1.5 px-5"><div className="text-muted-foreground text-xs">{tr('tasks.brief')}</div><pre className="bg-muted max-h-72 overflow-auto rounded-lg px-3 py-2 font-sans text-[13px] whitespace-pre-wrap">{t.description}</pre></div>
       {t.result ? <div className="grid gap-1.5 px-5"><div className="text-muted-foreground text-xs">{tr('tasks.result')}</div><div className="rounded-lg border px-3.5 py-2.5 text-[13.5px]"><Markdown>{t.result}</Markdown></div></div> : null}
+      {/* 3.8.2: the files it changed, with their diff (read only: «Deshacer» above works as before). */}
+      {t.hasCheckpoint && t.status !== 'running' ? <TaskChanges taskId={t.id} version={`${t.status}:${t.updated_at}`} className="mx-5" /> : null}
       <Collapsible className="px-5">
         <CollapsibleTrigger className="text-muted-foreground group flex cursor-pointer items-center gap-1 text-xs"><ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" />{tr('tasks.history', { n: t.events.length })}</CollapsibleTrigger>
         <CollapsibleContent><ol className="mt-2 grid gap-1.5 text-xs">{t.events.slice().reverse().map((e, i) => <li key={i} className="grid grid-cols-[110px_1fr] gap-2"><span className="text-muted-foreground">{fmtTime(e.at)}</span><span><span className="font-medium">{e.kind}</span> <span className="text-muted-foreground">{AGENT[e.actor] ?? e.actor}</span>{e.detail ? <span className="text-muted-foreground block break-all">{e.detail}</span> : null}</span></li>)}</ol></CollapsibleContent>

@@ -892,3 +892,63 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   };
   return remote;
 }
+
+// 3.8.2 (review F2.5b M6): while the data of Orb 3.7 could not be updated (engine.mjs › blocked), the phone access cannot
+// start (its devices, keys and conversations are in those data), and a linked phone only saw «sin conexión». Instead, the
+// same addresses and port answer with one fixed state and nothing else: every /api/ request gets 503 { attention:
+// 'migration', error } (the app's origin with its CORS, so it can read it), any page a short notice. No data, no device
+// check, no keys: what it says is only that this Orb needs attention on the PC. The Tailscale https name is served too
+// when the tailnet has it (and turned off again on stop). → { stop(), routes } or null (phone access off, nothing bound).
+export async function startAttention({ log = () => {}, code = 'migration' } = {}) {
+  const m = ctx.config?.mobile ?? {};
+  if (!m.enabled) return null;
+  const port = m.port ?? 3131;
+  const { default: http } = await import('node:http');
+  const servers = []; const hosts = new Set(); let served = null;
+  const message = () => tr('msg.remote.attention');
+  const page = () => `<!doctype html><html lang="${ctx.config?.language === 'en' ? 'en' : 'es'}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Orb</title><body style="font:16px system-ui,sans-serif;margin:0;display:grid;place-items:center;min-height:100vh;padding:24px;box-sizing:border-box;text-align:center"><p style="max-width:28em">${message().replace(/[<>&"]/g, (c) => `&#${c.charCodeAt(0)};`)}</p></body></html>`;
+  const handle = (req, res) => {
+    req.resume();
+    const reply = (status, body, type, extra = {}) => { res.writeHead(status, { ...HEADERS, 'Content-Type': type, 'Cache-Control': 'no-store', 'Retry-After': '30', ...extra }); res.end(body); };
+    if (!privateSource(req.socket?.remoteAddress) || req.headers['tailscale-funnel-request']) return reply(403, JSON.stringify({ error: 'red no permitida' }), 'application/json; charset=utf-8');
+    if (!hosts.has(String(req.headers.host ?? '').toLowerCase())) return reply(421, JSON.stringify({ error: 'host no permitido' }), 'application/json; charset=utf-8');
+    const p = new URL(req.url, 'http://x').pathname;
+    const app = p.startsWith('/api/') ? appOrigin(req) : null;
+    const cors = app ? { 'Access-Control-Allow-Origin': app, ...APP_CORS } : {};
+    if (req.method === 'OPTIONS') return reply(app ? 204 : 403, '', 'text/plain', cors);
+    if (p.startsWith('/api/')) return reply(503, JSON.stringify({ attention: code, error: message() }), 'application/json; charset=utf-8', cors);
+    return reply(503, page(), TYPES['.html']);
+  };
+  const bind = (address) => new Promise((resolve) => {
+    const srv = http.createServer(handle);
+    srv.headersTimeout = 15_000; srv.requestTimeout = 30_000;
+    srv.once('error', (error) => { log(`móvil (atención): ${address}:${port}: ${error.message}`); resolve(false); });
+    srv.listen(port, address, () => { ownPorts.add(srv.address().port); servers.push(srv); resolve(true); });
+  });
+  const routes = [];
+  if (process.env.ORB_REMOTE_BIND === '127.0.0.1') {
+    if (await bind('127.0.0.1')) { hosts.add(`127.0.0.1:${port}`); routes.push(`http://127.0.0.1:${port}/`); }
+  } else {
+    if (m.wifi !== false) {
+      for (const address of lanAddresses()) if (await bind(address)) { hosts.add(`${address}:${port}`); routes.push(`http://${address}:${port}/`); }
+      const local = localName(); if (local && servers.length) hosts.add(`${local}:${port}`);
+    }
+    if (m.tailscale !== false) {
+      const ts = await tailscaleAddress().catch(() => null);
+      if (ts?.https && ts.dns && await bind('127.0.0.1')) {
+        const r = await quickRun(tailscaleExe(), ['serve', '--bg', `--https=${port}`, `http://127.0.0.1:${port}`], { timeoutMs: 30_000 }).catch(() => ({ ok: false }));
+        if (r.ok) { served = port; hosts.add(`${ts.dns}:${port}`); routes.push(`https://${ts.dns}:${port}/`); }
+      }
+      if (ts && served === null && await bind(ts.address)) { hosts.add(`${ts.address}:${port}`); if (ts.dns) hosts.add(`${ts.dns}:${port}`); routes.push(`http://${ts.address}:${port}/`); }
+    }
+  }
+  if (!servers.length) return null;
+  for (const r of routes) log(`acceso móvil en modo atención (${code}) en ${r}`);
+  return {
+    routes,
+    async stop() {
+      await Promise.all(servers.splice(0).map((s) => new Promise((resolve) => { try { s.close(() => resolve()); s.closeAllConnections?.(); } catch { resolve(); } setTimeout(resolve, 2000).unref?.(); })));
+      if (served !== null) { const at = served; served = null; await quickRun(tailscaleExe(), ['serve', `--https=${at}`, 'off'], { timeoutMs: 15_000 }).catch(() => {}); }
+    }
+  };
+}

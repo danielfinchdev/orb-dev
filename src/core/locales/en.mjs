@@ -32,6 +32,8 @@ import mensajeria from './en/mensajeria.mjs';
 import orbchats from './en/orbchats.mjs';
 import notes from './en/notes.mjs';
 import ext from './en/ext.mjs';
+import acceso from './en/acceso.mjs';
+import herramientas from './en/herramientas.mjs';
 
 export default {
   ...base,
@@ -66,5 +68,7 @@ export default {
   ...mensajeria,
   ...orbchats,
   ...notes,
-  ...ext
+  ...ext,
+  ...acceso,
+  ...herramientas
 };

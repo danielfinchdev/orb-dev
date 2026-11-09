@@ -4,6 +4,8 @@
 // small switch: on = with the assistant, who coordinates the agents; off = directly with the agent chosen).
 // 3.2: each conversation is its own (route.id), several at once.
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { routeKey, takeDraft } from '@/lib/reload.js';
+import { micMode } from '@/lib/mic.js';
 import { ArrowUp, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool, History, FlaskConical, Folder, Mic, Shrink, ListChecks, Ellipsis, Info, BellOff, MessageSquare } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown } from '@/components/markdown.jsx';
@@ -15,13 +17,13 @@ import { ChatBar, BackToList } from '@/components/chat-bar.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
 import { useOrbInbox, useOrbActions } from '@/views/orb/inbox.jsx';
 import { NotificationBell } from '@/components/notification-center.jsx';
-import { confirm, form } from '@/components/dialogs.jsx';
+import { confirm } from '@/components/dialogs.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
-import { Input, Spinner } from '@/components/ui/basic.jsx';
+import { Spinner } from '@/components/ui/basic.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { Switch, Tip, BubbleTip, Popover, PopoverTrigger, PopoverContent } from '@/components/ui/overlay.jsx';
-import { bridge, useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout } from '@/lib/store.js';
+import { bridge, useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout, plainSkin } from '@/lib/store.js';
 import { notify } from '@/lib/notify.js';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { pickGreeting, pickSubtitle, suggestionsFor } from '@/lib/greeting.js';
@@ -87,7 +89,7 @@ function useMentions(value, onChange, ta) {
 }
 
 // mentions: false hides the «@» picker. 3.6 (M2): the microphone also dictates in a computer's browser that has speech
-// recognition (not in the PC app, whose engine has none).
+// recognition (the PC app opens Windows' voice typing instead).
 const WebSpeech = typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition || null) : null;
 function webDictate(lang) {
   return new Promise((resolve, reject) => {
@@ -104,13 +106,23 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
   useEffect(() => { const el = ta.current; if (!el) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 260)}px`; }, [value]);
   const [dropping, setDropping] = useState(false);
   const m = useMentions(value, onChange, ta);
-  // Not in the desktop app (bridge.desktop: WebView2 has the API but no speech service, and no microphone).
-  const dictateWith = bridge.dictate ? (lang) => bridge.dictate(lang) : WebSpeech && !bridge.desktop ? webDictate : null;
-  // 3.5, the Android app: dictate with the phone's own speech recognition (what is said is added to the text).
+  // 3.8.2: what this box had when F5 reloaded the window comes back on the same screen (lib/reload.js).
+  const here = useStore((s) => routeKey(s.route));
+  useEffect(() => { if (!testid) return; const draft = takeDraft(testid, getState().route); if (draft && !value.trim()) onChange(draft); }, [testid, here]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 3.8.2 (D3): Windows' voice typing in Orb for Windows, nothing on a phone (its keyboard dictates), the browser's speech
+  // recognition in a computer's browser (lib/mic.js).
+  const mic = micMode({ desktop: Boolean(bridge.desktop), windowsDictation: Boolean(bridge.dictateWindows), androidApp: window.__orbHost?.app === true, mobile: Boolean(bridge.mobile),
+    coarse: typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches, webSpeech: Boolean(WebSpeech) });
   const [hearing, setHearing] = useState(false);
   const dictate = async () => {
+    // Windows writes what is said into the box that has the focus: the message box, with the cursor at the end.
+    if (mic === 'windows') {
+      const el = ta.current; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+      await act(bridge.dictateWindows().catch(() => { throw new Error(t('chat.dictateFailed')); }));
+      return;
+    }
     setHearing(true);
-    try { const said = await act(dictateWith(getState().app?.config?.language ?? 'es')); if (said) onChange(value.trim() ? `${value.trimEnd()} ${said}` : said); }
+    try { const said = await act(webDictate(getState().app?.config?.language ?? 'es')); if (said) onChange(value.trim() ? `${value.trimEnd()} ${said}` : said); }
     finally { setHearing(false); }
   };
   return (
@@ -135,7 +147,7 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
           className="placeholder:text-muted-foreground block w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[14.5px] leading-relaxed outline-none" />
         <div className="flex items-center gap-2 px-3 pb-3">
           <div className="flex min-w-0 flex-1 items-center gap-1.5" data-testid="composer-bottom">{bottom}</div>
-          {dictateWith ? <Tip label={t('chat.dictate')}><Button size="icon-sm" variant="ghost" className="rounded-full" onClick={dictate} disabled={disabled || hearing} aria-label={t('chat.dictate')} data-testid="dictate"><Mic className={hearing ? 'text-primary animate-pulse' : undefined} /></Button></Tip> : null}
+          {mic ? <Tip label={t('chat.dictate')}><Button size="icon-sm" variant="ghost" className="rounded-full" onClick={dictate} disabled={disabled || hearing} aria-label={t('chat.dictate')} data-testid="dictate"><Mic className={hearing ? 'text-primary animate-pulse' : undefined} /></Button></Tip> : null}
           {busy && onStop ? <Tip label={t('chat.stop')}><Button size="icon-sm" variant="secondary" onClick={onStop} aria-label={t('chat.stop')}><Square className="size-3.5 fill-current" /></Button></Tip> : null}
           <Button size="icon-sm" className="rounded-full" onClick={() => onSend({ alt: false })} disabled={disabled || !(canSend ?? value.trim())} aria-label={t('chat.send')} data-testid="send"><ArrowUp /></Button>
         </div>
@@ -150,7 +162,7 @@ function useGreeting() {
   const [g] = useState(() => {
     const { app, tasks, projects } = getState();
     let last = {}; try { last = JSON.parse(localStorage.getItem('orb.greet') || '{}'); } catch { /* none */ }
-    const pick = pickGreeting({ tasks, project: app.activeProject?.name ?? null, first: !tasks.length && !projects.length, serious: app.config.ui?.skin === 'profesional', last: last.key });
+    const pick = pickGreeting({ tasks, project: app.activeProject?.name ?? null, first: !tasks.length && !projects.length, serious: plainSkin(app.config.ui?.skin), last: last.key });
     const sub = pickSubtitle({ last: last.sub });
     try { localStorage.setItem('orb.greet', JSON.stringify({ key: pick.key, sub })); } catch { /* storage unavailable */ }
     return { ...pick, sub };
@@ -219,14 +231,15 @@ const msgFormat = (locale, day) => {
   if (!msgFormats.has(k)) msgFormats.set(k, new Intl.DateTimeFormat(locale, day ? { day: 'numeric', month: 'short' } : { hour: '2-digit', minute: '2-digit' }));
   return msgFormats.get(k);
 };
-function MsgTime({ at }) {
+// hover (3.8.2, an agent's conversation): shown while the pointer is over the message (or it has the focus).
+export function MsgTime({ at, hover = false }) {
   const locale = useLocale();
   useDay();
   if (!at) return null;
   const d = new Date(at); if (Number.isNaN(d.getTime())) return null;
   const today = d.toDateString() === new Date().toDateString();
   const time = msgFormat(locale, false).format(d);
-  return <time className="msg-time" dateTime={d.toISOString()}>{today ? time : `${msgFormat(locale, true).format(d)} ${time}`}</time>;
+  return <time className={hover ? 'msg-time msg-time-hover' : 'msg-time'} dateTime={d.toISOString()}>{today ? time : `${msgFormat(locale, true).format(d)} ${time}`}</time>;
 }
 
 // Memoised: the list (up to 120 lines) is not drawn again while the assistant streams its answer.
@@ -402,6 +415,14 @@ function TaskLine({ task, live }) {
 
 // The title of a conversation in the middle of a bar, and under it, small, its project with its icon (direct
 // conversations, views/session.jsx).
+// The bar's pause / resume of all of Orb's work (the chat's bar and an agent conversation's).
+export function BarPause() {
+  const t = useT();
+  const paused = useStore((s) => Boolean(s.app?.paused));
+  return paused
+    ? <BubbleTip title={t('bar.resume')} text={t('bar.resumeText')}><Button variant="soft" size="icon-sm" onClick={() => act(call('control.resume'), t('chat.resumed'))} aria-label={t('bar.resume')} data-testid="bar-resume"><Play /></Button></BubbleTip>
+    : <BubbleTip title={t('bar.pause')} text={t('bar.pauseText')}><Button variant="ghost" size="icon-sm" onClick={() => act(call('control.pause'), t('chat.paused'))} aria-label={t('bar.pause')} data-testid="bar-pause"><Pause /></Button></BubbleTip>;
+}
 export function BarHeading({ title, project, onRename, renameLabel, extra, showProject = true }) {
   const t = useT();
   return (
@@ -589,13 +610,12 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const infoOpen = useStore((s) => s.orbInfo?.type === 'chat') && !embedded;
   const headProject = conv ? conv.project ?? null : workProject?.name ?? null;
   const waitingYou = useStore((s) => id != null && s.tasks.some((x) => x.conversation_id === id && x.status === 'awaiting_approval'));
-  const rename = () => form(t('chat.renameTitle'), { initial: { title: conv.title }, body: (v, set) => <Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={80} data-testid="rename-input" />, ok: t('session.save'), onOk: async (v) => { const r = await call('conversations.update', { id: conv.id, title: v.title.trim() || conv.title }); refreshSoon(); return r; } });
   const chatActions = useOrbActions(conv ? { kind: 'conversation', id: conv.id, title: conv.title, done: conv.status === 'done', pinned: Boolean(item?.pinned), muted: Boolean(item?.muted), unread: 0 } : null);
 
   return (
     <>
       {/* 3.6 (M3): the bar of a messaging app: (phone: back to the list) the pill with Orbe, the title and, small, the
-          project and what it is doing; a click opens the chat's info. On the right: notifications, pause, games and ⋯. */}
+          project and what it is doing; a click opens the chat's info. On the right: notifications, pause and ⋯. */}
       <ChatBar back={embedded ? null : <BackToList to="chats" />} testid="orb-chat-bar" className="topbar-chat" title={<>
         <h1 className="sr-only">{conv?.title ?? t('orbchats.newChatTitle')}</h1>
         <button type="button" disabled={!conv || embedded} onClick={() => (infoOpen ? closeOrbInfo() : openOrbInfo({ type: 'chat' }))}
@@ -604,7 +624,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
           <Robot size={36} mood={chat.busy ? 'thinking' : 'idle'} still={!chat.busy} />
           <span className="min-w-0">
             <span className="flex items-center gap-1.5"><span className="truncate text-[15px] font-semibold" data-testid="bar-title-text">{conv?.title ?? t('orbchats.newChatTitle')}</span>{item?.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}</span>
-            <span className={cn('flex min-w-0 items-center gap-1 text-[12.5px]', chat.busy ? 'text-primary' : waitingYou ? 'text-warning-foreground dark:text-warning' : 'text-muted-foreground')} data-testid="orb-chat-status">
+            <span className={cn('flex min-w-0 items-center gap-1 text-[12.5px]', chat.busy ? 'text-primary' : waitingYou ? 'text-warning-ink' : 'text-muted-foreground')} data-testid="orb-chat-status">
               {headProject ? <ProjectIcon name={headProject} size={14} /> : <Folder className="size-3 shrink-0" aria-hidden="true" />}
               <span className="truncate">{headProject ?? t('orbchats.noProject')} · {chat.busy ? t('chats.working') : waitingYou ? t('orbchats.awaiting') : name}</span>
             </span>
@@ -613,18 +633,17 @@ export function ChatView({ route, onConversation, project: inProject }) {
       </>}>
         {/* The phone keeps the bar light: the bell is the system's notifications there, and «Pausar» goes into ⋯. */}
         {slim ? null : <NotificationBell />}
-        {slim ? null : app.paused
-          ? <BubbleTip title={t('bar.resume')} text={t('bar.resumeText')}><Button variant="soft" size="icon-sm" onClick={() => act(call('control.resume'), t('chat.resumed'))} aria-label={t('bar.resume')} data-testid="bar-resume"><Play /></Button></BubbleTip>
-          : <BubbleTip title={t('bar.pause')} text={t('bar.pauseText')}><Button variant="ghost" size="icon-sm" onClick={() => act(call('control.pause'), t('chat.paused'))} aria-label={t('bar.pause')} data-testid="bar-pause"><Pause /></Button></BubbleTip>}
-        {!fullPc() ? null : <BubbleTip title={t('bar.games')} text={t('bar.gamesText')}><Button variant="ghost" size="icon-sm" onClick={openGames} aria-label={t('bar.games')} data-testid="bar-games"><Gamepad2 /></Button></BubbleTip>}
-        {conv ? (
+        {slim ? null : <BarPause />}
+        {/* 3.8.2: only the bell and pause stay on the bar; the chat's actions and the games go into ⋯ (also in «Nuevo chat»). */}
+        {conv || fullPc() ? (
           <DropdownMenu modal={false}>
             <BubbleTip title={t('chats.more')}><DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={t('chats.more')} data-testid="orb-chat-more"><Ellipsis /></Button></DropdownMenuTrigger></BubbleTip>
             <DropdownMenuContent align="end" className="w-56">
-              {embedded ? null : <DropdownMenuItem onSelect={() => openOrbInfo({ type: 'chat' })} data-testid="more-info"><Info />{t('orbchats.info')}</DropdownMenuItem>}
-              <DropdownMenuItem onSelect={rename} data-testid="more-rename"><PencilLine />{t('orbchats.rename')}</DropdownMenuItem>
+              {conv && !embedded ? <DropdownMenuItem onSelect={() => openOrbInfo({ type: 'chat' })} data-testid="more-info"><Info />{t('orbchats.info')}</DropdownMenuItem> : null}
               {slim ? <DropdownMenuItem onSelect={() => (app.paused ? act(call('control.resume'), t('chat.resumed')) : act(call('control.pause'), t('chat.paused')))} data-testid={app.paused ? 'bar-resume' : 'bar-pause'}>{app.paused ? <Play /> : <Pause />}{app.paused ? t('bar.resume') : t('bar.pause')}</DropdownMenuItem> : null}
-              {chatActions.filter((a) => a.id !== 'info').map((a) => <div key={a.id}>{a.danger ? <DropdownMenuSeparator /> : null}<DropdownMenuItem variant={a.danger ? 'destructive' : undefined} onSelect={a.run} data-testid={`more-${a.id}`}><a.icon />{a.label}</DropdownMenuItem></div>)}
+              {chatActions.filter((a) => a.id !== 'info' && !a.danger).map((a) => <DropdownMenuItem key={a.id} onSelect={a.run} data-testid={`more-${a.id}`}><a.icon />{a.label}</DropdownMenuItem>)}
+              {fullPc() ? <DropdownMenuItem onSelect={openGames} data-testid="bar-games"><Gamepad2 />{t('bar.games')}</DropdownMenuItem> : null}
+              {chatActions.filter((a) => a.danger).map((a) => <div key={a.id}><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onSelect={a.run} data-testid={`more-${a.id}`}><a.icon />{a.label}</DropdownMenuItem></div>)}
             </DropdownMenuContent>
           </DropdownMenu>
         ) : null}
