@@ -19,7 +19,7 @@ import { slashCommand } from '../core/slash.mjs';
 import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../core/schedules.mjs';
 import { oneLine, redactSecrets, localStamp } from '../core/safety.mjs';
 import { quickRun } from '../agents/index.mjs';
-import { PERMISSIONS } from './sessions.mjs';
+import { PERMISSIONS, ATTACH_DIR } from './sessions.mjs';
 import { readLog, writeLog, logFiles } from './logs.mjs';
 import { expandMentions, mentionOptions } from './mentions.mjs';
 import { ofUserLabel, userLabel, userName, assistantName } from '../core/board.mjs';
@@ -393,6 +393,16 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const f = allowedImage(str(file, 'imagen', 1000));
       const ext = path.extname(f).slice(1).toLowerCase();
       return { dataUrl: `data:${ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : ext === 'gif' ? 'image/gif' : 'image/png'};base64,${fs.readFileSync(f).toString('base64')}` };
+    },
+    // 3.8.2: a PDF attached to a direct conversation, for the window's viewer: only from that conversation's attachments
+    // folder (.orb-adjuntos of its working folder), 25 MB at most.
+    'attachments.read': ({ session, path: file }) => {
+      const s = sessions.must(str(session, 'conversación', 64));
+      const real = (p) => { try { return fs.realpathSync(p); } catch { return fail(tr('msg.api.badAttachment')); } };
+      const dir = real(path.join(s.cwd, ATTACH_DIR)); const f = real(str(file, 'archivo', 1000));
+      const rel = path.relative(dir, f);
+      if (!rel || rel.startsWith('..') || path.isAbsolute(rel) || !/\.pdf$/i.test(f) || fs.statSync(f).size > 25 * 1024 * 1024) fail(tr('msg.api.badAttachment'));
+      return { kind: 'pdf', base64: fs.readFileSync(f).toString('base64') };
     },
     'images.mark': ({ dataUrl }) => {
       const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl ?? ''));

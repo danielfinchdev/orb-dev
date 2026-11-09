@@ -1,7 +1,7 @@
 // A direct conversation with one agent, live: the answer streams as it is written, commands and changed
 // files appear as the agent works, risky actions wait for a click (approval cards), messages written meanwhile correct the
 // agent on the fly or wait in a queue, and the context meter shows how full the conversation is. Task runs open here too.
-import { memo, useEffect, useMemo, useState } from 'react';
+import { lazy, memo, Suspense, useEffect, useMemo, useState } from 'react';
 import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, RefreshCw, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Ellipsis, Gamepad2, Smartphone } from 'lucide-react';
 import { unlockCore } from '@/lib/core-access.js';
 import { toast } from 'sonner';
@@ -16,7 +16,7 @@ import { NotificationBell } from '@/components/notification-center.jsx';
 import { useCatalog, modelsOf, modelLabel, ReasoningMenu } from '@/components/brain-picker.jsx';
 import { stepText, bareTool } from '@/components/chat-live.jsx';
 import { readableInput, readableCommand } from '@/lib/tools.js';
-import { GeneratedImage } from '@/components/image-viewer.jsx';
+import { GeneratedImage, openImage } from '@/components/image-viewer.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Input, Textarea, Empty, Spinner } from '@/components/ui/basic.jsx';
 import { Select, Collapsible, CollapsibleTrigger, CollapsibleContent, Tip, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
@@ -109,6 +109,24 @@ const FILE_ICON = { add: FilePlus2, delete: FileMinus2 };
 // 3.8.2: an attachment's icon by what it is (src/core/attach-kind.mjs).
 const ATTACH_ICON = { image: ImageIcon, video: Film, audio: Music, pdf: FileText, document: FileText, archive: FileArchive, text: FileCode };
 function AttachIcon({ file, className }) { const I = ATTACH_ICON[kindOf(file)] ?? FileIcon; return <I className={className} />; }
+// 3.8.2: an attachment of a message. On the PC a picture opens in the image viewer and a PDF in the file viewer
+// (file-viewer.jsx, loaded when first opened); the rest, and everything on the phone, is its name.
+const FileViewer = lazy(() => import('@/components/file-viewer.jsx'));
+function AttachChip({ file, sessionId }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const kind = kindOf(file) === 'image' && !/\.(png|jpe?g|webp|gif)$/i.test(file) ? 'other' : kindOf(file);
+  const chip = 'inline-flex items-center gap-1 rounded-md bg-white/15 px-2 py-0.5 text-xs';
+  const label = <><AttachIcon file={file} className="size-3" />{baseName(file)}</>;
+  if (bridge.mobile || !['image', 'pdf'].includes(kind)) return <span className={chip}>{label}</span>;
+  return (
+    <>
+      <button type="button" className={cn(chip, 'cursor-pointer hover:bg-white/25')} onClick={() => (kind === 'image' ? openImage(file) : setOpen(true))} aria-label={t('viewer.open', { name: baseName(file) })} data-testid="attach-open">{label}</button>
+      {open ? <Suspense fallback={null}><FileViewer sessionId={sessionId} path={file} onClose={() => setOpen(false)} /></Suspense> : null}
+    </>
+  );
+}
+
 // The blocks are made again from the items whenever one arrives: a block whose content is the same is not drawn again
 // (nor while the agent's answer streams, which redraws the view many times a second): lib/memo.js › sameBlock.
 const Block = memo(function Block({ b, agent, brain, sessionId, project, catalog }) {
@@ -130,7 +148,7 @@ const Block = memo(function Block({ b, agent, brain, sessionId, project, catalog
       <div className="msg-hover bg-bubble text-bubble-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 break-words whitespace-pre-wrap">
         {typeof body === 'object' && body?.steer ? <div className="mb-1 flex items-center gap-1 text-[11px] opacity-80"><CornerDownRight className="size-3" />{t('session.steered')}</div> : null}
         {long ? <Collapsible><CollapsibleTrigger className="cursor-pointer text-left underline-offset-2 hover:underline">{textBody.split('\n')[0]} ({t('session.seeFullTask')})</CollapsibleTrigger><CollapsibleContent className="mt-2 text-[13px] opacity-90">{textBody}</CollapsibleContent></Collapsible> : textBody}
-        {images.length ? <div className="mt-2 flex flex-wrap gap-1.5">{images.map((p) => <span key={p} className="inline-flex items-center gap-1 rounded-md bg-white/15 px-2 py-0.5 text-xs"><AttachIcon file={p} className="size-3" />{baseName(p)}</span>)}</div> : null}
+        {images.length ? <div className="mt-2 flex flex-wrap gap-1.5">{images.map((p) => <AttachChip key={p} file={p} sessionId={sessionId} />)}</div> : null}
         <MsgTime at={it.at} hover />
       </div>
     );

@@ -65,6 +65,7 @@ export default {
   "msg.api.badPreview": "la vista previa solo puede ser una dirección de este PC (http://localhost:puerto)",
   "msg.api.shortcutTaken": "el atajo {shortcut} ya lo usa otra acción de este proyecto",
   "msg.api.tooManyActions": "como mucho 20 acciones por proyecto",
+  "msg.api.badAttachment": "ese archivo no se puede abrir desde aquí",
   "msg.api.badImage": "esa imagen no se puede abrir desde aquí",
   "msg.api.iconTooBig": "la imagen es demasiado grande para un icono (máximo {kb} KB)",
   "msg.api.answerEmpty": "elige una opción o escribe tu respuesta",

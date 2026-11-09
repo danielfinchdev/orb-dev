@@ -65,6 +65,7 @@ export default {
   "msg.api.badPreview": "the preview can only be an address of this PC (http://localhost:port)",
   "msg.api.shortcutTaken": "another action of this project already uses {shortcut}",
   "msg.api.tooManyActions": "at most 20 actions per project",
+  "msg.api.badAttachment": "that file cannot be opened from here",
   "msg.api.badImage": "that image cannot be opened from here",
   "msg.api.iconTooBig": "the picture is too big for an icon (at most {kb} KB)",
   "msg.api.answerEmpty": "choose an option or write your answer",
