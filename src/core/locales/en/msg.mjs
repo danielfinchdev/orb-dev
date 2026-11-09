@@ -438,6 +438,7 @@ export default {
   "msg.schedules.needsApproval": " It was created by the assistant. Approve it in “Scheduled” to activate it.",
   "msg.schedules.noProject": "project {project} does not exist",
   "msg.schedules.noSchedule": "that scheduled task no longer exists",
+  "msg.schedules.once": "once, on {date} at {time}",
   "msg.schedules.runTitle": "{title} (scheduled)",
   "msg.schedules.weekly": "every {days} at {time}",
   "msg.sessions.accountGone": "account {account} no longer exists. Start a new conversation with another account",

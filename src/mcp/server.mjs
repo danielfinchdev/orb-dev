@@ -387,13 +387,13 @@ const tools = [
     { name: 'orb_write_log', description: `Añade una entrada al FINAL de una bitácora (un proyecto de esta conversación o "general"), firmada y con el formato estándar. Nunca borra. Sin contraseñas ni datos personales. La general está en ${path.dirname(ctx.paths.generalLog)}${generalInCore ? ' (core): escribe en ella solo con esta herramienta' : ''}.`,
       inputSchema: { type: 'object', required: ['project', 'tema', 'hecho'], properties: { project: str('Proyecto o "general"'), archivo: str('Con "general": otro archivo .md de esa carpeta (p. ej. notas.md)'), tema: str('Tema corto'), pedido: str('Qué se pidió'), hecho: str('Qué se decidió o hizo'), revertir: str('Cómo revertirlo'), estado: str('Estado / pendiente') } },
       run: (a) => writeLog(board, myLog(a.project), a, brainAuthor()) },
-    { name: 'orb_schedule', description: `Programa una tarea que se repite (p. ej. cada lunes a las 9 revisar dependencias). ${USER} la aprueba una vez en la app antes de que funcione sola.`,
+    { name: 'orb_schedule', description: `Programa una tarea que se repite (p. ej. cada lunes a las 9 revisar dependencias) o que se hace una sola vez en una fecha. ${USER} la aprueba una vez en la app antes de que funcione sola.`,
       inputSchema: { type: 'object', required: ['project', 'title', 'description', 'every'], properties: {
         project: str('Proyecto registrado'), title: str('Título corto'), description: str('Encargo autocontenido y compacto'),
         agent: { type: 'string', enum: [...AVAILABLE, 'any'] }, model: str('Modelo (opcional; requiere agent)'), readonly: { type: 'boolean' },
-        every: { type: 'string', enum: EVERY, description: 'hourly, every_hours (con hours), daily (con at_time) o weekly (con weekdays y at_time)' },
-        at_time: str('Hora HH:MM (daily y weekly)'), hours: { type: 'integer', minimum: 1, maximum: 168 }, weekdays: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 }, description: '0 domingo … 6 sábado' } } },
-      run: (a) => createSchedule(board, a, ME) },
+        every: { type: 'string', enum: EVERY, description: 'once (con at_time AAAA-MM-DDTHH:MM), hourly, every_hours (con hours), daily (con at_time) o weekly (con weekdays y at_time)' },
+        at_time: str('Hora HH:MM (daily y weekly); con once, fecha y hora AAAA-MM-DDTHH:MM'), same_chat: { type: 'boolean', description: 'true: cada ejecución va a esta conversación' }, hours: { type: 'integer', minimum: 1, maximum: 168 }, weekdays: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 }, description: '0 domingo … 6 sábado' } } },
+      run: (a) => createSchedule(board, { ...a, conversation_id: a.same_chat ? CONV : null }, ME) },
     // 2.7: a question with options, shown in the chat as a card the user answers with a click (or skips). It does not
     // wait: the answer comes as the user's next message.
     { name: 'orb_ask', description: `Pregunta a ${USER} con opciones (una tarjeta en el chat). Úsala cuando deba elegir entre 2-4 caminos claros. No espera: termina tu turno y su respuesta llegará como su próximo mensaje.`,

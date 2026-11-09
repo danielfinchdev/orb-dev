@@ -177,6 +177,7 @@ export default {
   // Scheduled tasks
   'sys.schedules.badEvery': 'every must be {list}',
   'sys.schedules.badTime': 'at_time must use the HH:MM format',
+  'sys.schedules.badDate': 'with once, at_time must be a future date and time YYYY-MM-DDTHH:MM',
   'sys.schedules.badWeekdays': 'weekdays: numbers from 0 (Sunday) to 6',
   // Agents
   'sys.agents.notSupported': 'not supported',

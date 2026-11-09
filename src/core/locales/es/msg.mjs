@@ -438,6 +438,7 @@ export default {
   "msg.schedules.needsApproval": " La ha creado el asistente. Apruébala en «Programadas» para activarla.",
   "msg.schedules.noProject": "no existe el proyecto {project}",
   "msg.schedules.noSchedule": "esa tarea programada ya no existe",
+  "msg.schedules.once": "una vez, el {date} a las {time}",
   "msg.schedules.runTitle": "{title} (programada)",
   "msg.schedules.weekly": "cada {days} a las {time}",
   "msg.sessions.accountGone": "la cuenta {account} ya no existe. Inicia una conversación nueva con otra cuenta",

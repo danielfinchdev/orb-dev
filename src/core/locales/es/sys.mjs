@@ -180,6 +180,7 @@ export default {
   // Tareas programadas
   'sys.schedules.badEvery': 'every debe ser {list}',
   'sys.schedules.badTime': 'at_time debe tener el formato HH:MM',
+  'sys.schedules.badDate': 'con once, at_time debe ser una fecha y hora futura AAAA-MM-DDTHH:MM',
   'sys.schedules.badWeekdays': 'weekdays: números del 0 (domingo) al 6',
   // Agentes
   'sys.agents.notSupported': 'no admitido',

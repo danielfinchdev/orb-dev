@@ -276,7 +276,9 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   // 3.8: the task a worker's message comes from (task_id is then the task it is for: its own, or a sibling's).
   ['messages', 'from_task', 'INTEGER'],
   // 3.8.2: a chat snoozed until then (hidden from the list; the scheduler brings it back).
-  ['inbox_items', 'snoozed_until', 'TEXT']];
+  ['inbox_items', 'snoozed_until', 'TEXT'],
+  // 3.8.2: a schedule whose runs all go to one chat (made on its first run, or the one that asked for it).
+  ['schedules', 'same_chat', 'INTEGER NOT NULL DEFAULT 0'], ['schedules', 'conversation_id', 'INTEGER']];
 // (3.6-3.7's person_id columns and chat.uid are no longer added: only a 3.7 database has them, emptied by the 3.8
 // migration (src/core/migrate-38.mjs) and dropped in 3.9.)
 export function migrate(db) {
