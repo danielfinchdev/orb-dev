@@ -6,7 +6,7 @@
 // The keys are also tied to the program they were given to (a hash of the connector's command and arguments, kept in the
 // vault): a command changed without the master password (orb.json edited by hand, by an agent) gets no keys.
 import crypto from 'node:crypto';
-import { connectorKey } from './context.mjs';
+import { connectorKey } from '../platform/config.mjs';
 
 export const REF = 'orb-secret:';
 export const isRef = (v) => typeof v === 'string' && v.startsWith(REF);

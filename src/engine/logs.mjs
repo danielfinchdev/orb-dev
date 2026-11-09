@@ -2,9 +2,10 @@
 // Append-only: nothing written is ever edited or removed. Entries are signed and secrets are redacted.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, tr } from '../core/context.mjs';
+import { ctx, tr } from '../platform/context.mjs';
 import { oneLine, redactSecrets, porcelainPaths } from '../core/safety.mjs';
-import { generalLogHeader, projectLogHeader, AGENT_LABELS } from '../core/home.mjs';
+import { generalLogHeader, projectLogHeader } from '../platform/journal-files.mjs';
+import { AGENT_LABELS } from '../platform/config-file.mjs';
 import { git, isGitRepo } from '../core/workspace.mjs';
 import { assistantName, ofUserLabel, userName } from '../core/board.mjs';
 import { checkDevTools, devToolsBrief } from './dev-tools.mjs';

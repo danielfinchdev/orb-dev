@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { tempHome } from './helpers.mjs';
-import { ctx } from '../src/core/context.mjs';
+import { ctx } from '../src/platform/context.mjs';
 
 const gitInit = (dir) => { for (const a of [['init', '-q'], ['config', 'user.name', 't'], ['config', 'user.email', 't@t'], ['config', 'core.autocrlf', 'false']]) spawnSync('git', ['-C', dir, ...a]); fs.writeFileSync(path.join(dir, 'x.txt'), 'uno\n'); spawnSync('git', ['-C', dir, 'add', '-A']); spawnSync('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'base']); };
 

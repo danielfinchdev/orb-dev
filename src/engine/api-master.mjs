@@ -4,9 +4,10 @@
 // phone unlinked); without the code the only way is «Borrar secretos y empezar de cero». The crypto lives in
 // src/core/master.mjs.
 import fs from 'node:fs';
-import { ctx, saveConfig, tr } from '../core/context.mjs';
-import { paths } from '../core/home.mjs';
-import { machineKeys } from '../core/machine-keys.mjs';
+import { ctx, tr } from '../platform/context.mjs';
+import { saveConfig } from '../platform/config.mjs';
+import { paths } from '../platform/paths.mjs';
+import { machineKeys } from '../platform/keys.mjs';
 import { Master, MasterError, IN_VAULT, mirrorTo, restoreMissing, checkPassword, MIN_LENGTH, UNLOCK_MS } from '../core/master.mjs';
 import { sealConnectors, connectorSecrets, refOf, secretId, ENV_NAME, bindMissing } from '../core/connector-secrets.mjs';
 import { needsUnlock, freshPurpose, FRESH_PURPOSES } from '../core/permissions.mjs';

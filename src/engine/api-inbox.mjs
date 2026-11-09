@@ -4,7 +4,7 @@
 // section, muted), the last message (short plain text, when, from whom: the user or Orbe), how many are unread and what
 // it is doing (working, paused, idle). Sorted: pinned (in their order), then the sections (in theirs), then the rest,
 // most recent first. The marks live in src/core/inbox.mjs; a new line tells the lists (inbox:changed).
-import { tr } from '../core/context.mjs';
+import { tr } from '../platform/context.mjs';
 import { userName } from '../core/board.mjs';
 import { oneLine } from '../core/safety.mjs';
 import * as I from '../core/inbox.mjs';

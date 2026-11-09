@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import { ctx } from '../src/core/context.mjs';
+import { ctx } from '../src/platform/context.mjs';
 import { isOrbData } from '../src/core/guard.mjs';
 import { kindOf, placeAttachments, prepareAttachments, extractText, zipEntries, probeInfo, evenTimes, extractFrames, ATTACH_DIR, ATTACH_MAX, FFMPEG } from '../src/engine/attachments.mjs';
 import { micMode } from '../src/ui/lib/mic.js';

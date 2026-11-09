@@ -12,7 +12,7 @@
 import crypto from 'node:crypto';
 import os from 'node:os';
 import { spawnAgent, JsonRpcPeer, killTree } from './live.mjs';
-import { tr } from '../core/context.mjs';
+import { tr } from '../platform/context.mjs';
 
 export const LOGIN_MAX_MS = 15 * 60_000; // the codes and links of both agents expire within 15 minutes
 const URL_WAIT_MS = 60_000;

@@ -18,7 +18,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import { spawn, spawnSync, execFile } from 'node:child_process';
-import { ctx, tr } from '../core/context.mjs';
+import { ctx, tr } from '../platform/context.mjs';
 import { isOrbData } from '../core/guard.mjs';
 
 // Platform-tools r37.0.2 (Google's repository2-3.xml, checked 2026-11-08). A newer version needs a new pin here.

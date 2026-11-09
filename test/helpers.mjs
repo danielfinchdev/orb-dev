@@ -6,8 +6,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { fork } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { createHome, loadConfig, writeJson, merge } from '../src/core/home.mjs';
-import { useHome } from '../src/core/context.mjs';
+import { createHome } from '../src/domain/workspace/home.mjs';
+import { loadConfig, merge } from '../src/platform/config-file.mjs';
+import { writeJson } from '../src/platform/paths.mjs';
+import { useHome } from '../src/platform/context.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const fake = (name) => path.join(ROOT, 'test', 'fixtures', name);

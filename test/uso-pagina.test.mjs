@@ -13,7 +13,7 @@ import { buildApi } from '../src/engine/api.mjs';
 import { DESKTOP, principalOf, METHODS } from '../src/core/permissions.mjs';
 import { usageHistory, recordSpend } from '../src/core/budget.mjs';
 import { localDay, ownerTz } from '../src/shared/tz.mjs';
-import { ctx } from '../src/core/context.mjs';
+import { ctx } from '../src/platform/context.mjs';
 import { paceOf, windowMs } from '../src/ui/lib/usage-pace.js';
 
 let t; let board; let api; let sessions;

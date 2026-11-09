@@ -7,8 +7,10 @@
 // rest.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, saveConfig, tr } from '../core/context.mjs';
-import { AGENT_IDS, categoryOf, CATEGORIES, PLATFORMS } from '../core/home.mjs';
+import { ctx, tr } from '../platform/context.mjs';
+import { saveConfig } from '../platform/config.mjs';
+import { AGENT_IDS } from '../platform/config-file.mjs';
+import { categoryOf, CATEGORIES, PLATFORMS } from '../platform/paths.mjs';
 import { accountsOf, accountDir, accountLabel, accounts as allAccounts } from '../core/accounts.mjs';
 import { usageReport, usageHistory, modelName } from '../core/budget.mjs';
 import { brainOf } from './orchestrator.mjs';

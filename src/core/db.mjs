@@ -2,7 +2,7 @@
 // sessions (direct conversations and task runs) with their items.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, tr } from './context.mjs';
+import { ctx, tr } from '../platform/context.mjs';
 import { titleFrom } from '../shared/titles.mjs';
 import { migrateTo38 } from './migrate-38.mjs';
 

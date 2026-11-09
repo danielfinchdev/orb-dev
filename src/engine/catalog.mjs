@@ -5,8 +5,8 @@
 // (Codex model/list, the ACP agents' model option).
 // heavy: models that use the quota faster (heavyModels of each agent, or a known heavy family); usage: how much of its
 // window each account has used, as the agent reports it.
-import { ctx } from '../core/context.mjs';
-import { AGENT_IDS, AGENT_LABELS } from '../core/home.mjs';
+import { ctx } from '../platform/context.mjs';
+import { AGENT_IDS, AGENT_LABELS } from '../platform/config-file.mjs';
 import { installed, discoverModels } from '../agents/index.mjs';
 import { usableAccounts } from '../core/accounts.mjs';
 import { usageReport, HEAVY_FAMILY, canLaunch, modelLimits } from '../core/budget.mjs';

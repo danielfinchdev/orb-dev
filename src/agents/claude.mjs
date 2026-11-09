@@ -9,7 +9,7 @@ import { spawn } from 'node:child_process';
 import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, describeInput, cleanEnv, within, discoverDir, killTree, mcpEnvByRef } from './common.mjs';
 import { Turn, Approvals } from './live.mjs';
 import { decide, describeAction } from '../core/guard.mjs';
-import { tr } from '../core/context.mjs';
+import { tr } from '../platform/context.mjs';
 import { logJson } from '../core/safety.mjs';
 
 export const id = 'claude';

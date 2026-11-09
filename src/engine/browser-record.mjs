@@ -2,7 +2,7 @@
 // at a steady rate, written as a Motion-JPEG AVI that Windows' own player opens; no encoder or extra program needed.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, tr } from '../core/context.mjs';
+import { ctx, tr } from '../platform/context.mjs';
 import { placeAttachments } from './attachments.mjs';
 
 export const RECORD_FPS = 5;

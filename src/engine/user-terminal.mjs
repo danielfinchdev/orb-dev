@@ -7,7 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { ctx, tr } from '../core/context.mjs';
+import { ctx, tr } from '../platform/context.mjs';
 import { isOrbData, protectedHit } from '../core/guard.mjs';
 import { killTree } from '../agents/common.mjs';
 

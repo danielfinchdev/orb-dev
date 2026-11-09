@@ -8,7 +8,7 @@
 // A principal is built only by the entry points (engine.mjs, remote.mjs, the MCP server), never from a call's
 // parameters: { channel, device? } or, for an agent, { channel: 'agent', agent, task, conversation }.
 // No engine imports: the MCP processes load this file too.
-import { tr } from './context.mjs';
+import { tr } from '../platform/context.mjs';
 import { isRef, touchesKeys } from './connector-secrets.mjs';
 
 export const CHANNELS = ['desktop', 'phone', 'browser', 'agent'];

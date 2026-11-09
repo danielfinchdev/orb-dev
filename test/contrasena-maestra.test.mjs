@@ -24,7 +24,7 @@ import * as C from '../src/shared/mobile-crypto.mjs';
 import * as K from '../src/core/backup.mjs';
 import { parseLinkPayload, passwordPageOk } from '../src/shared/link-payload.mjs';
 import { setGuardedRoots, decide } from '../src/core/guard.mjs';
-import { paths } from '../src/core/home.mjs';
+import { paths } from '../src/platform/paths.mjs';
 import { createPhone, TEST_MASTER } from './fixtures/phone-client.mjs';
 import { walkFiles } from '../src/core/backup.mjs';
 

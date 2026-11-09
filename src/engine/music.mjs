@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { ctx, tr } from '../core/context.mjs';
+import { ctx, tr } from '../platform/context.mjs';
 import { trackOf } from '../shared/music.mjs';
 import { fail } from './api-common.mjs';
 

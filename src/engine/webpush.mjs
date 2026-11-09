@@ -4,7 +4,7 @@
 // for push.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import { tr } from '../core/context.mjs';
+import { tr } from '../platform/context.mjs';
 
 const PUSH_HOSTS = [/(^|\.)fcm\.googleapis\.com$/, /(^|\.)android\.googleapis\.com$/, /(^|\.)push\.apple\.com$/, /(^|\.)push\.services\.mozilla\.com$/, /(^|\.)notify\.windows\.com$/];
 const SUBJECT = 'https://github.com/danielfinchdev/orb-dev';

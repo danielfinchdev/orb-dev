@@ -26,9 +26,10 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
-import { paths, homeKey, oldHomeKey, INTERNAL_DIR, BOTS_DIR, LEGACY } from './home.mjs';
-import { rewritePaths, coreHealth, inside } from './core-folder.mjs';
-import { tr } from './context.mjs';
+import { paths, homeKey, oldHomeKey, INTERNAL_DIR, BOTS_DIR, LEGACY } from '../platform/paths.mjs';
+import { rewritePaths, coreHealth } from './core-folder.mjs';
+import { inside } from '../platform/fsx.mjs';
+import { tr } from '../platform/context.mjs';
 import { ARCHIVE_DIR, forgetRun } from './migrate-38.mjs';
 import { KEPT as SECRET_FILES } from './master.mjs';
 import { LIVE_DIR, OLD_DIR } from './extensions.mjs';
@@ -55,7 +56,7 @@ const u32 = (n) => { const b = Buffer.alloc(4); b.writeUInt32BE(n); return b; };
 const tick = () => new Promise((r) => setImmediate(r));
 
 // ---- keys
-// `secret` in this file: this PC's backup key (src/core/machine-keys.mjs › backupKeyOf, from the vault with the app).
+// `secret` in this file: this PC's backup key (src/platform/keys.mjs › backupKeyOf, from the vault with the app).
 const machineKek = (key) => new Uint8Array(Buffer.from(key));
 // A recovery code typed with or without dashes and spaces, in any case, gives the same key; any other passphrase is used
 // as written (NFKC, trimmed).

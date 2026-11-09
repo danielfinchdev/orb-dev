@@ -9,7 +9,7 @@ import path from 'node:path';
 import { IS_WIN, firstFile, inPath, npmPrefixes, appDataDirs, userHome, clip, discoverDir } from './common.mjs';
 import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree, hidingEnvValues } from './live.mjs';
 import { decide } from '../core/guard.mjs';
-import { tr } from '../core/context.mjs';
+import { tr } from '../platform/context.mjs';
 
 // Who connects to the app-server (def. 11: the product's version, read from Orb's own package.json).
 const CLIENT = { name: 'orb_dev', title: 'Orb', version: (() => { try { return JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version; } catch { return '0.0.0'; } })() };

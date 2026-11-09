@@ -44,7 +44,7 @@ fn plain(p: &Path) -> String {
 
 /// The workspace's categories (src/shared/layout.mjs › CATEGORIES): only a project folder inside one of them can go.
 const CATEGORIES: [&str; 6] = ["windows", "linux", "ios", "android", "web", "multi"];
-/// Names inside a category that are never a project (src/core/home.mjs › isReservedInCategory): hidden folders, the
+/// Names inside a category that are never a project (src/platform/paths.mjs › isReservedInCategory): hidden folders, the
 /// Recycle Bin, node_modules and Orb 3.7's adb folder in android.
 fn reserved_in_category(category: &str, name: &str) -> bool {
   name.starts_with('.') || name == "node_modules" || name == "$recycle.bin" || (category == "android" && name == "adb-tools")

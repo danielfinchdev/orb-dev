@@ -5,7 +5,7 @@
 // progress to a log the engine watches and the app shows as a progress bar.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, tr } from '../core/context.mjs';
+import { ctx, tr } from '../platform/context.mjs';
 import { spawn } from 'node:child_process';
 import { ADAPTERS, quickRun } from '../agents/index.mjs';
 import { IS_WIN, cleanEnv, inPath, killTree } from '../agents/common.mjs';

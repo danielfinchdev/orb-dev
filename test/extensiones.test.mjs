@@ -177,7 +177,7 @@ test('una tarea de Cursor (sin skills propias) recibe la lista en su encargo', a
   const h = tempHome({ agents: { cursor: { enabled: true } } });
   skillAt(path.join(h.home, 'core', 'skills', 'facturas'), 'facturas');
   const { Scheduler } = await import('../src/engine/scheduler.mjs');
-  const { saveConfig } = await import('../src/core/context.mjs');
+  const { saveConfig } = await import('../src/platform/config.mjs');
   saveConfig({ skills: [{ name: 'facturas', enabled: true }] });
   const board = new Board();
   try {

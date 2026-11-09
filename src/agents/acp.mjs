@@ -8,7 +8,7 @@ import path from 'node:path';
 import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, readOutput, discoverDir, nodeRuntime } from './common.mjs';
 import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree, hidingEnvValues } from './live.mjs';
 import { decide } from '../core/guard.mjs';
-import { tr } from '../core/context.mjs';
+import { tr } from '../platform/context.mjs';
 
 // An npm-installed CLI on Windows is a .cmd shim that cannot be started without a shell: Orb runs `node <script>` instead,
 // reading the script from the package's "bin" (the same thing the shim does).

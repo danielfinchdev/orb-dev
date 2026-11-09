@@ -50,7 +50,7 @@ test('bubbles stay inside the window and the composer folder is a chip like the 
 });
 
 test('the cost line can be hidden in Apariencia and the message time shows on hover', async () => {
-  const { DEFAULT_CONFIG } = await import('../src/core/home.mjs');
+  const { DEFAULT_CONFIG } = await import('../src/platform/config-file.mjs');
   assert.equal(DEFAULT_CONFIG.ui.usageLine, true);
   assert.match(read('views', 'settings.jsx'), /<Switch checked=\{ui\.usageLine !== false\} onCheckedChange=\{\(usageLine\) => set\(\{ usageLine \}\)\}/);
   const session = read('views', 'session.jsx');

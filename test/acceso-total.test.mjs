@@ -17,7 +17,7 @@ import { tempHome, startEngine, until, fake } from './helpers.mjs';
 import { decide, runsAdb, setGuardedRoots, setAppRoots, localPath } from '../src/core/guard.mjs';
 import zlib from 'node:zlib';
 import { needsUnlock, FRESH_UNLOCK, METHODS } from '../src/core/permissions.mjs';
-import { useHome, ctx } from '../src/core/context.mjs';
+import { useHome, ctx } from '../src/platform/context.mjs';
 import { AgentAuth } from '../src/engine/agent-auth.mjs';
 import { redeem } from '../src/mcp/auth-client.mjs';
 import { cursorRules } from '../src/agents/cursor.mjs';

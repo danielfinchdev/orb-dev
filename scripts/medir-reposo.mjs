@@ -28,8 +28,10 @@ const SANDBOX = { ORB_NO_ADB: '1', ORB_NO_UPDATE: '1', ORB_BACKUP_ROOT: path.joi
 Object.assign(process.env, SANDBOX);
 delete process.env.ORB_FAKE_AGENTS;
 const url = (f) => `file:///${path.join(SRC, f).replace(/\\/g, '/')}`;
-const { createHome, loadConfig, writeJson, merge, paths } = await import(url('core/home.mjs'));
-const { useHome } = await import(url('core/context.mjs'));
+const { createHome } = await import(url('domain/workspace/home.mjs'));
+const { loadConfig, merge } = await import(url('platform/config-file.mjs'));
+const { writeJson, paths } = await import(url('platform/paths.mjs'));
+const { useHome } = await import(url('platform/context.mjs'));
 
 const pct = (xs, p) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.min(s.length - 1, Math.ceil((p / 100) * s.length) - 1)] : null; };
 const r1 = (x) => (x == null ? null : Math.round(x * 10) / 10);

@@ -33,8 +33,10 @@ const FAKE = path.join(ROOT, 'test', 'fixtures', 'fake-live.mjs');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-medir-motor-'));
 const SANDBOX = { ORB_NO_ADB: '1', ORB_NO_UPDATE: '1', ORB_FAKE_AGENTS: FAKE, ORB_BACKUP_ROOT: path.join(tmp, 'copias'), ORB_BRIDGE_DIR: path.join(tmp, 'puente'), ORB_MODELS_DELAY_MS: '600000' };
 Object.assign(process.env, SANDBOX);
-const { createHome, loadConfig, writeJson, merge, paths } = await import('../src/core/home.mjs');
-const { useHome } = await import('../src/core/context.mjs');
+const { createHome } = await import('../src/domain/workspace/home.mjs');
+const { loadConfig, merge } = await import('../src/platform/config-file.mjs');
+const { writeJson, paths } = await import('../src/platform/paths.mjs');
+const { useHome } = await import('../src/platform/context.mjs');
 
 const median = (xs) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor((s.length - 1) / 2)] : null; };
 const pct = (xs, p) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.min(s.length - 1, Math.ceil((p / 100) * s.length) - 1)] : null; };

@@ -2,8 +2,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { openDb, taskOptions, checkPolicy } from './db.mjs';
-import { ctx, tr } from './context.mjs';
-import { AGENT_IDS, AGENT_LABELS, folderName, projectLogHeader, isConfigName, categoryOf, CATEGORIES, folderKey, IGNORED_PROJECTS, FINISHED_PROJECTS, DELETING_PROJECTS, logBody } from './home.mjs';
+import { ctx, tr } from '../platform/context.mjs';
+import { AGENT_IDS, AGENT_LABELS } from '../platform/config-file.mjs';
+import { folderName, isConfigName, categoryOf, CATEGORIES, folderKey } from '../platform/paths.mjs';
+import { projectLogHeader, logBody } from '../platform/journal-files.mjs';
+import { IGNORED_PROJECTS, FINISHED_PROJECTS, DELETING_PROJECTS } from '../platform/state.mjs';
 import { oneLine, MAX_DESCRIPTION } from './safety.mjs';
 import { contentHash, sign, verify, detectSensitivity, deletionAskedByUser, defaultApprovalKey } from './approval.mjs';
 import { PRODUCT } from '../shared/product.mjs';

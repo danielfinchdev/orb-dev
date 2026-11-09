@@ -2,7 +2,7 @@
 // such as @tarea:12, @conversacion:<id> or @bitacora:<project>; before the message goes to the agent each token becomes a
 // short, bounded excerpt (not the whole thing: tokens cost money), marked as data.
 import { oneLine, redactSecrets } from '../core/safety.mjs';
-import { tr } from '../core/context.mjs';
+import { tr } from '../platform/context.mjs';
 import { readLog } from './logs.mjs';
 
 const TOKEN = /@(tarea|conversacion|bitacora):([\w.-]{1,64})/g;

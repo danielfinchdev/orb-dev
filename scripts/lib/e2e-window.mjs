@@ -33,7 +33,9 @@ export async function sandbox({ name, defaultExe = 'Orb.exe' }) {
   for (const ev of ['uncaughtException', 'unhandledRejection']) process.on(ev, (e) => { console.error(e?.stack ?? e); process.exit(1); });
   const SANDBOX = { ORB_NO_ADB: '1', ORB_NO_UPDATE: '1', ORB_FAKE_AGENTS: FAKE, ORB_BACKUP_ROOT: path.join(tmp, 'copias'), ORB_BRIDGE_DIR: path.join(tmp, 'puente'), ORB_USER_DATA: path.join(tmp, 'datos-app'), ORB_MODELS_DELAY_MS: '600000' };
   Object.assign(process.env, { ORB_BACKUP_ROOT: SANDBOX.ORB_BACKUP_ROOT, ORB_BRIDGE_DIR: SANDBOX.ORB_BRIDGE_DIR, ORB_NO_ADB: '1' });
-  const { createHome, loadConfig, writeJson, merge, paths } = await import('../../src/core/home.mjs');
+  const { createHome } = await import('../../src/domain/workspace/home.mjs');
+  const { loadConfig, merge } = await import('../../src/platform/config-file.mjs');
+  const { writeJson, paths } = await import('../../src/platform/paths.mjs');
 
   const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
   const { home } = createHome(base, { userName: 'Ana' });

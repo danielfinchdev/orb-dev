@@ -7,7 +7,7 @@
 // The folder stays out of git (.git/info/exclude, local only): it is the user's working material, not the project's code.
 import fs from 'node:fs';
 import path from 'node:path';
-import { tr } from '../core/context.mjs';
+import { tr } from '../platform/context.mjs';
 import { localText, sizeText } from '../core/safety.mjs';
 
 const MB = 1024 * 1024;

@@ -186,7 +186,7 @@ test('Tareas y Proyectos en el móvil: pestañas que no se cortan, filas legible
 
 test('«Cosas que nadie toca»: quitar uno de serie pide confirmación y se pueden restaurar', async () => {
   const { DEFAULT_PROTECTED } = await import('../src/shared/layout.mjs');
-  const home = await import('../src/core/home.mjs');
+  const home = await import('../src/platform/paths.mjs');
   assert.equal(home.DEFAULT_PROTECTED, DEFAULT_PROTECTED, 'una sola lista, también para la ventana');
   assert.ok(DEFAULT_PROTECTED.includes('vaultwarden'));
   const s = read('src/ui/views/settings.jsx');

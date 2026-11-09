@@ -5,8 +5,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { ctx, tr, connectorKey } from '../core/context.mjs';
-import { AGENT_LABELS } from '../core/home.mjs';
+import { ctx, tr } from '../platform/context.mjs';
+import { connectorKey } from '../platform/config.mjs';
+import { AGENT_LABELS } from '../platform/config-file.mjs';
 import { adapter, executable } from '../agents/index.mjs';
 import { liveSkills } from './api-extensions.mjs';
 import { orbMcpServer, connectorLauncher } from '../agents/common.mjs';

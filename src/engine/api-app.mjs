@@ -4,7 +4,7 @@
 // app can do (open a link or a folder; a terminal, an editor or an action, the program picked by the app) is asked to it
 // (src/engine/host.mjs).
 // This PC only (src/core/permissions.mjs). engine.mjs also answers them while core or the data are blocked.
-import { ctx, tr } from '../core/context.mjs';
+import { ctx, tr } from '../platform/context.mjs';
 import { fail } from './api-common.mjs';
 import { hostCall, localPath } from './host.mjs';
 import { findEditors } from './editors.mjs';

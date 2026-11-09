@@ -1,6 +1,6 @@
 // 3.8: the names of the workspace (C:\Orb by default) in one place, without Node, so the window shows the same folders
 // the engine creates. The workspace holds:
-//   core\                                    Orb's own folder, hidden (src/core/home.mjs › paths)
+//   core\                                    Orb's own folder, hidden (src/platform/paths.mjs › paths)
 //   windows\ linux\ ios\ android\ web\       one folder per project
 //   multi\<project>\{<platform>…, compartido}  a multiplatform project: one folder, one repository
 export const CORE_DIR = 'core';

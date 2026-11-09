@@ -9,7 +9,7 @@ import { Orchestrator } from '../src/engine/orchestrator.mjs';
 import { Scheduler } from '../src/engine/scheduler.mjs';
 import { buildApi } from '../src/engine/api.mjs';
 import { DESKTOP } from '../src/core/permissions.mjs';
-import { ctx } from '../src/core/context.mjs';
+import { ctx } from '../src/platform/context.mjs';
 
 let t; let board; let api;
 const events = [];

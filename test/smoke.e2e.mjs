@@ -11,7 +11,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { createHome, loadConfig, writeJson, merge } from '../src/core/home.mjs';
+import { createHome } from '../src/domain/workspace/home.mjs';
+import { loadConfig, merge } from '../src/platform/config-file.mjs';
+import { writeJson } from '../src/platform/paths.mjs';
 import { throughStart, sandboxEnv } from './fixtures/e2e-flows.mjs';
 import { launchOrb, E2E_EXE, isTestBuild } from './fixtures/launch-orb.mjs';
 

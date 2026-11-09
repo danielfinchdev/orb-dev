@@ -6,9 +6,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ctx } from '../core/context.mjs';
-import { planWorkspace, applyLayout, inside } from '../core/core-folder.mjs';
-import { paths, loadConfig, ensureLayout } from '../core/home.mjs';
+import { ctx } from '../platform/context.mjs';
+import { planWorkspace, applyLayout } from '../core/core-folder.mjs';
+import { inside } from '../platform/fsx.mjs';
+import { paths } from '../platform/paths.mjs';
+import { loadConfig } from '../platform/config-file.mjs';
+import { ensureLayout } from '../domain/workspace/home.mjs';
 import { setGuardedRoots, setAppRoots } from '../core/guard.mjs';
 import { rebindMoved } from '../core/connector-secrets.mjs';
 import { rebindMovedOrWait } from './api-extensions.mjs';

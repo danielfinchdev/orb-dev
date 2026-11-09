@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { tempHome, startEngine } from './helpers.mjs';
-import { useHome, ctx } from '../src/core/context.mjs';
+import { useHome, ctx } from '../src/platform/context.mjs';
 import { Board } from '../src/core/board.mjs';
 import * as K from '../src/core/backup.mjs';
 

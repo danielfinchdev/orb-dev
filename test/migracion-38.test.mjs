@@ -11,14 +11,14 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { pathToFileURL } from 'node:url';
 import { tempHome, ROOT, startEngine, until, wait } from './helpers.mjs';
-import { useHome, ctx } from '../src/core/context.mjs';
-import { writeJson } from '../src/core/home.mjs';
+import { useHome, ctx } from '../src/platform/context.mjs';
+import { writeJson } from '../src/platform/paths.mjs';
 import { openDb } from '../src/core/db.mjs';
 import { Board } from '../src/core/board.mjs';
 import { marks } from '../src/core/inbox.mjs';
 import { ARCHIVE_DIR, PRE_COPY, MARK, DROPPED_TABLES, ORIGINAL_CONFIG, LOCK_FILE, WORK_DIR, SCRUB_AFTER_MS, takeNotice, migrationFailure, isLegacy, unfinished, insideData, bridgeDir, scrub, scrubPreCopies, legacyData, deleteLegacyData } from '../src/core/migrate-38.mjs';
 import { syncProjects } from '../src/core/projects.mjs';
-import { IGNORED_PROJECTS } from '../src/core/home.mjs';
+import { IGNORED_PROJECTS } from '../src/platform/state.mjs';
 import { migrationView, folderOf } from '../src/ui/lib/migration.js';
 import { startupPhase } from '../src/ui/lib/startup.js';
 import * as C from '../src/shared/mobile-crypto.mjs';
@@ -594,7 +594,7 @@ test('B5: un proceso vivo con el bloqueo no deja migrar; al morir lo suelta; dos
   await once(holder, 'exit');
   // Its process gone, the system let the lock go. Two processes open the folder at once.
   const src = (f) => JSON.stringify(pathToFileURL(path.join(ROOT, 'src', 'core', f)).href);
-  const script = `import { useHome } from ${src('context.mjs')}; import { Board } from ${src('board.mjs')}; import { migrationFailure } from ${src('migrate-38.mjs')};
+  const script = `import { useHome } from ${src('../platform/context.mjs')}; import { Board } from ${src('board.mjs')}; import { migrationFailure } from ${src('migrate-38.mjs')};
 useHome(process.env.ORB_TEST_HOME); const b = new Board(); process.stdout.write(JSON.stringify({ failure: migrationFailure() })); b.db.close();`;
   const runOne = () => new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ['--input-type=module', '-e', script], { env: { ...process.env, ORB_TEST_HOME: t.home }, stdio: ['ignore', 'pipe', 'inherit'] });

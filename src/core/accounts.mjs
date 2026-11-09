@@ -5,8 +5,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ctx } from './context.mjs';
-import { AGENT_IDS } from './home.mjs';
+import { ctx } from '../platform/context.mjs';
+import { AGENT_IDS } from '../platform/config-file.mjs';
 
 export const MULTI = { claude: 'CLAUDE_CONFIG_DIR', codex: 'CODEX_HOME' }; // agents that support several accounts
 const userHome = () => process.env.USERPROFILE || os.homedir();

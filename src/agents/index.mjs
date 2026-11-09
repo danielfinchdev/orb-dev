@@ -8,7 +8,7 @@ import * as cursor from './cursor.mjs';
 import { acpAgent, ACP_SPECS } from './acp.mjs';
 import { cleanEnv, IS_WIN } from './common.mjs';
 import fs from 'node:fs';
-import { ctx, tr } from '../core/context.mjs';
+import { ctx, tr } from '../platform/context.mjs';
 import { startLogin } from './login.mjs';
 import { accountsOf, account, accountDir, accountEnv, defaultAccount, loginState as accountLogin, MULTI } from '../core/accounts.mjs';
 

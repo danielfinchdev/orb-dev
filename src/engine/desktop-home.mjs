@@ -4,7 +4,8 @@
 // (src/engine/engine.mjs), so the rules live once.
 import fs from 'node:fs';
 import path from 'node:path';
-import { createHome, isHome, writeJson, paths, homeKey, oldHomeKey, LEGACY } from '../core/home.mjs';
+import { createHome } from '../domain/workspace/home.mjs';
+import { isHome, writeJson, paths, homeKey, oldHomeKey, LEGACY } from '../platform/paths.mjs';
 import { PRODUCT } from '../shared/product.mjs';
 
 const location = (userData) => path.join(userData, 'ubicacion.json');

@@ -1,6 +1,7 @@
 // The phone access and Magic Link part of the engine's API (split out of api.mjs in 3.6): the phones and browsers
 // linked with this PC. This PC only (src/core/permissions.mjs).
-import { ctx, saveConfig } from '../core/context.mjs';
+import { ctx } from '../platform/context.mjs';
+import { saveConfig } from '../platform/config.mjs';
 import { PAIR_KINDS, PREVIEWS } from './remote.mjs';
 import { str, oneOf } from './api-common.mjs';
 

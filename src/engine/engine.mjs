@@ -5,9 +5,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { useHome, ctx, tr } from '../core/context.mjs';
-import { ensureLayout, paths } from '../core/home.mjs';
-import { keysOf, machineKeys } from '../core/machine-keys.mjs';
+import { useHome, ctx, tr } from '../platform/context.mjs';
+import { ensureLayout } from '../domain/workspace/home.mjs';
+import { paths } from '../platform/paths.mjs';
+import { keysOf, machineKeys } from '../platform/keys.mjs';
 import { IN_VAULT } from '../core/master.mjs';
 import { coreHealth } from '../core/core-folder.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
@@ -19,7 +20,8 @@ import { streamFeed } from '../shared/chat-stream.mjs';
 import { attachHost, hostReply, hostCall } from './host.mjs';
 import { appMethods } from './api-app.mjs';
 import { locateHome, setupHome, switchHome, secretCopy, secretsCopy, adoptOldKeyNames, secretDir } from './desktop-home.mjs';
-import { loadConfig, homeKey } from '../core/home.mjs';
+import { loadConfig } from '../platform/config-file.mjs';
+import { homeKey } from '../platform/paths.mjs';
 import es from '../shared/locales/es.mjs';
 import en from '../shared/locales/en.mjs';
 
@@ -148,7 +150,7 @@ async function start(home, version, secret, browser, keep = null, userData = nul
     if (!keys && !validSecret(secret) && [path.join(secretDir(home), 'clave.enc'), secretCopy(userData, home), enc2, copy2].some((f) => fs.existsSync(f))) throw new Error(tr('sys.engine.sealedSecret'));
   }
   // The approval secret comes from the app (kept encrypted by Windows); without it, the file fallback is used.
-  // A secret given (tests): the engine has it anyway, and makes the keys itself (src/core/machine-keys.mjs).
+  // A secret given (tests): the engine has it anyway, and makes the keys itself (src/platform/keys.mjs).
   if (validSecret(secret)) { ctx.secret = Buffer.from(secret, 'hex'); ctx.keys = keysOf(ctx.secret); } else if (keys) { ctx.secret = null; ctx.keys = keys; }
   // The agents' browser (browser 'host'): it lives here, with the app's hidden pages (src/engine/host-browser.mjs).
   if (browser === 'host' && !hostBrowser) {
@@ -238,7 +240,8 @@ function coreBlocked({ home, version, repair }) {
   const repairNow = async ({ passphrase = null, file = null, fresh = false, language = null } = {}) => {
     let next = { ok: true, missing: [] };
     if (fresh === true) {
-      const { paths: of, DEFAULT_CONFIG, writeJson, merge } = await import('../core/home.mjs');
+      const { paths: of, writeJson } = await import('../platform/paths.mjs');
+      const { DEFAULT_CONFIG, merge } = await import('../platform/config-file.mjs');
       const { setAsideBackups } = await import('../core/backup.mjs');
       try { const n = setAsideBackups(home); if (n) console.error(`core: ${n} copia(s) apartadas antes de empezar de nuevo`); } catch (error) { console.error(`core: apartar copias: ${error.message}`); }
       const cfg = of(home).config;

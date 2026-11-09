@@ -1,6 +1,6 @@
 // 3.6: the checks every part of the engine's API shares (split out of api.mjs, unchanged).
 import path from 'node:path';
-import { tr } from '../core/context.mjs';
+import { tr } from '../platform/context.mjs';
 
 // Names of the fields in the messages (Spanish as they were; the key is the Spanish word).
 export const fld = (name) => { const key = `msg.api.f.${String(name).replace(/ /g, '_')}`; const t = tr(key); return t === key ? name : t; };

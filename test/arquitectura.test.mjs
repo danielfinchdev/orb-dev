@@ -80,6 +80,6 @@ function cycles() {
 }
 
 // Cycles that existed before the restructuring and are still being untangled; none may be added.
-const KNOWN_CYCLES = ['core/core-folder.mjs | core/home.mjs'];
+const KNOWN_CYCLES = [];
 
 test('no import cycles beyond the known ones', () => assert.deepEqual(cycles().filter((c) => !KNOWN_CYCLES.includes(c)), []));

@@ -8,7 +8,7 @@
 // password) every one of them goes, the chats go back to «Solo lectura» and adb's server stops. Giving one asks for the
 // password every time (src/core/permissions.mjs › FRESH_UNLOCK): only this PC's window, never a phone or an agent.
 // Each grant and each take-back is written to the engine's log (motor.log) and shown in the chat.
-import { tr } from '../core/context.mjs';
+import { tr } from '../platform/context.mjs';
 import { fail, str, oneOf } from './api-common.mjs';
 
 export const GRANTS = ['total', 'android'];

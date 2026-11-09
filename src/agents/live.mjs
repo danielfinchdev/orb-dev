@@ -23,7 +23,7 @@
 // TurnResult: { final, text, isError, stopReason, usage, limit }
 import { spawn } from 'node:child_process';
 import { killTree, cleanEnv } from './common.mjs';
-import { tr } from '../core/context.mjs';
+import { tr } from '../platform/context.mjs';
 
 export const DECISIONS = ['allow', 'always', 'deny'];
 

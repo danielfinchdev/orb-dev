@@ -2,8 +2,9 @@
 // agents, signing in, and several subscriptions of the same agent. This PC only (src/core/permissions.mjs).
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, saveConfig, checkAccountHome, tr } from '../core/context.mjs';
-import { AGENT_IDS } from '../core/home.mjs';
+import { ctx, tr } from '../platform/context.mjs';
+import { saveConfig, checkAccountHome } from '../platform/config.mjs';
+import { AGENT_IDS } from '../platform/config-file.mjs';
 import { MULTI, newAccountId, findAccountFolders, accountsOf, accountDir } from '../core/accounts.mjs';
 import { accountInfo as codexAccountInfo } from '../agents/codex.mjs';
 import { clearCooldown } from '../core/budget.mjs';

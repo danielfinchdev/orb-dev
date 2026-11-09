@@ -6,8 +6,10 @@
 //   are on change (src/engine/sessions.mjs and orchestrator.mjs hand it to each agent they start).
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, saveConfig, tr } from '../core/context.mjs';
-import { CATEGORIES, loadConfig } from '../core/home.mjs';
+import { ctx, tr } from '../platform/context.mjs';
+import { saveConfig } from '../platform/config.mjs';
+import { CATEGORIES } from '../platform/paths.mjs';
+import { loadConfig } from '../platform/config-file.mjs';
 import { syncProjects } from '../core/projects.mjs';
 import { moveIntoCore } from '../core/core-folder.mjs';
 import { sealConnectors, rebindOrWait, settleRebinds, REBINDS } from '../core/connector-secrets.mjs';

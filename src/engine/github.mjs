@@ -4,12 +4,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { ctx, tr } from '../core/context.mjs';
+import { ctx, tr } from '../platform/context.mjs';
 import { firstFile, inPath, cleanEnv, IS_WIN } from '../agents/common.mjs';
 import { openConsole } from '../agents/index.mjs';
 import { git, isGitRepo, ORB_GIT } from '../core/workspace.mjs';
 import { secretFiles, isSecretPath, oneLine, stagedSecrets, secretsInDiff } from '../core/safety.mjs';
-import { folderName } from '../core/home.mjs';
+import { folderName } from '../platform/paths.mjs';
 import { checkCategory } from '../core/projects.mjs';
 import { ATTACH_DIR } from './sessions.mjs';
 

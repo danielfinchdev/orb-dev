@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { tempHome, fake, until } from './helpers.mjs';
-import { useHome } from '../src/core/context.mjs';
+import { useHome } from '../src/platform/context.mjs';
 import { createAndroid, sdkEmulator, parseAvds, emulatorEnv, AVD } from '../src/engine/android.mjs';
 import { allowed, needsUnlock, principalOf, METHODS } from '../src/core/permissions.mjs';
 

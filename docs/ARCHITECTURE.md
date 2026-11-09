@@ -182,7 +182,7 @@ On Windows, it then offers to install whatever is missing (section 24).
 
 **Files.**
 - Interface: `src/ui/views/setup.jsx`.
-- Creating and organizing the folder: `src/core/home.mjs` (`createHome`, `homeFor`, `ensureLayout`, `paths`, `categoryOf`, `DEFAULT_CONFIG`, `loadConfig`), `src/shared/layout.mjs` (the names), `src/core/core-folder.mjs` (core).
+- Creating and organizing the folder: `src/platform/paths.mjs` (`createHome`, `homeFor`, `ensureLayout`, `paths`, `categoryOf`, `DEFAULT_CONFIG`, `loadConfig`), `src/shared/layout.mjs` (the names), `src/core/core-folder.mjs` (core).
 - Projects by category: `src/core/projects.mjs` (`createProject`, `syncProjects`).
 - Remembering where it is: `src/engine/desktop-home.mjs` (`ubicacion.json` in the app data).
 
@@ -361,7 +361,7 @@ events: item · delta · session · approval · approval_done · context · rate
 
 **Adding a new ACP agent:**
 1. An entry in `ACP_SPECS` in `acp.mjs`: package, binary, ACP arguments, login files, how to install it and models.
-2. Its id in `AGENT_IDS` and `DEFAULT_CONFIG.agents` in `src/core/home.mjs`.
+2. Its id in `AGENT_IDS` and `DEFAULT_CONFIG.agents` in `src/platform/paths.mjs`.
 3. Its icon in `src/ui/components/agent-icon.jsx`.
 4. Its installer item in `src/engine/installer.mjs`.
 
@@ -920,7 +920,7 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   - dictionaries: one file per area in `src/shared/locales/es/` and `en/` (chat, session, tasks, agents,
     settings, setup, msg…), gathered by `es.mjs` and `en.mjs`;
   - interface: `src/ui/lib/i18n.js` (`useT()` and `useLocale()` in components, `t()` and `currentLocale()` outside them);
-  - engine: `tr()` from `src/core/context.mjs` (chat notices, errors and guard reasons in the chosen language).
+  - engine: `tr()` from `src/platform/context.mjs` (chat notices, errors and guard reasons in the chosen language).
 - **Adding a string:** write `t('screen.key')` in the component and add the key to **both** dictionaries. A test checks
   they match.
 - What goes to the agents (briefs, assistant instructions) is not translated: the reply language is set by
@@ -1488,7 +1488,7 @@ The workspace is `C:\Orb` by default (the welcome shows it already chosen; «Cam
 Orb's (section 2). A folder called Orb that already has other things (notes, projects, `personal\`, an older Orb's
 folders) is used as it is: nothing in it is overwritten or moved without the user's say. Only the categories' subfolders
 are projects: any other top-level folder is the user's and is never listed. All of Orb's own paths come from `paths()`
-in `src/core/home.mjs`; nothing else builds them.
+in `src/platform/paths.mjs`; nothing else builds them.
 
 - **Orb 3.7's own data** (`migrateWorkspace`, `src/core/core-folder.mjs`, called by `ensureLayout` at every start and by
   `createHome`, so before the database opens and before the 3.8 migration of the database, which then finds it in
@@ -1555,7 +1555,7 @@ in `src/core/home.mjs`; nothing else builds them.
   rewritten. **This PC's secret** (3.8.1, decision 20 d) is opened and kept in Rust (`src-tauri/vault/src/machine.rs`,
   inside Orb.exe's vault): sealed with DPAPI as `ORB2` in `core\datos\clave2.enc` and in a copy in the app's data folder
   (`%APPDATA%\Orb.dev\claves\<workspace>.v2.enc`) that puts core's back when core loses it. The engine asks for it once
-  per start (`src/core/master.mjs › openMachine`) and gets only the keys made from it (`src/core/machine-keys.mjs`: the
+  per start (`src/core/master.mjs › openMachine`) and gets only the keys made from it (`src/platform/keys.mjs`: the
   approvals' HMAC key and this PC's backup key); the vault keeps the secret for this PC's wrap of the data key. The app
   no longer offers sealing to the engine (no `host.seal`/`host.unseal`). Orb 3.8.0's key files (`clave.enc`, Electron's
   `v10`) are not read any more: when only they are there the start stops with `secretUnreadable` and its own message, and

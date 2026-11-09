@@ -14,8 +14,8 @@
 // Only file checks (no program is started): cheap enough for every briefing.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx } from '../core/context.mjs';
-import { categoryOf } from '../core/home.mjs';
+import { ctx } from '../platform/context.mjs';
+import { categoryOf } from '../platform/paths.mjs';
 import { sdkRoots } from './android.mjs';
 
 // Where each one is installed from (its official page; Orb downloads none of them).

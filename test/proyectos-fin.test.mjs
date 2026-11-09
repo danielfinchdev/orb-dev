@@ -12,8 +12,8 @@ import { createProject, syncProjects } from '../src/core/projects.mjs';
 import { createSchedule } from '../src/core/schedules.mjs';
 import { spawn } from 'node:child_process';
 import { finishProject, reopenProject, finishedProjects, deletableFolder, checkDelete, deleteProject, abortDelete, settleDeleting, deletingProjects, folderInUse, TICKET_MS } from '../src/core/project-close.mjs';
-import { paths } from '../src/core/home.mjs';
-import { ctx } from '../src/core/context.mjs';
+import { paths } from '../src/platform/paths.mjs';
+import { ctx } from '../src/platform/context.mjs';
 import { readLog } from '../src/engine/logs.mjs';
 import { METHODS, UNLOCK_METHODS, needsUnlock } from '../src/core/permissions.mjs';
 

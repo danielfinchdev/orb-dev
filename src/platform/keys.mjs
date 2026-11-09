@@ -4,8 +4,24 @@
 // the secret is the plain core\datos\clave.bin, or one the engine was given, and they are made here the same way.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import path from 'node:path';
 import { ctx } from './context.mjs';
-import { paths, readKey } from './home.mjs';
+import { paths } from './paths.mjs';
+
+// This PC's secret without the app: core\datos\clave.bin, made the first time it is needed.
+export function readKey(home) {
+  const file = paths(home).key;
+  try {
+    const key = fs.readFileSync(file);
+    // 3.5: on Linux this file is the secret itself: readable by its owner only, also when copied from elsewhere.
+    if (key.length >= 32) { if (process.platform !== 'win32') { try { if ((fs.statSync(file).mode & 0o077) !== 0) fs.chmodSync(file, 0o600); } catch { /* best effort */ } } return key; }
+  } catch { /* created below */ }
+  const key = crypto.randomBytes(32);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, key, { mode: 0o600 });
+  return key;
+}
+
 
 export const approvalKeyOf = (secret) => crypto.createHmac('sha256', secret).update('orb-approval-v2').digest();
 export const backupKeyOf = (secret) => Buffer.from(crypto.hkdfSync('sha256', Buffer.from(secret), Buffer.from('orb-backup'), Buffer.from('machine-v1'), 32));

@@ -13,7 +13,7 @@ import * as cursor from '../src/agents/cursor.mjs';
 import { cleanEnv, mcpEnvByRef, killTree } from '../src/agents/common.mjs';
 import { spawn } from 'node:child_process';
 import { ADAPTERS, adapter } from '../src/agents/index.mjs';
-import { AGENT_IDS } from '../src/core/home.mjs';
+import { AGENT_IDS } from '../src/platform/config-file.mjs';
 
 let dir; const lives = [];
 before(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-agentes-')); });

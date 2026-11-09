@@ -11,7 +11,7 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { isSecretPath, porcelainPaths, redactSecrets } from './safety.mjs';
 import { PRODUCT } from '../shared/product.mjs';
-import { tr } from './context.mjs';
+import { tr } from '../platform/context.mjs';
 
 // Never throws and never returns null output: if git cannot start or times out, status is -1 and stderr carries the reason.
 export const git = (cwd, ...args) => gitEnv(cwd, {}, ...args);

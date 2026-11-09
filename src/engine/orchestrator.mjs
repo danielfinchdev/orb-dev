@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { ctx, tr } from '../core/context.mjs';
+import { ctx, tr } from '../platform/context.mjs';
 import { AGENTS, assistantName, userName, ofUser } from '../core/board.mjs';
 import { executable, installed, adapter } from '../agents/index.mjs';
 import * as claude from '../agents/claude.mjs';
@@ -17,7 +17,7 @@ import { accountEnv } from '../core/accounts.mjs';
 import { briefing } from './logs.mjs';
 import { rememberModels } from './catalog.mjs';
 import { recordRate, pickAccount, recordSpend } from '../core/budget.mjs';
-import { AGENT_LABELS } from '../core/home.mjs';
+import { AGENT_LABELS } from '../platform/config-file.mjs';
 
 // The models an agent takes for a task: the configured ones and the ones the agent itself listed (2.6, models:<agent>).
 // Each one with its name when the agent gave it (e.g. «opus = Opus 5.5 (claude-opus-5-5)»), so the brain picks the right id.

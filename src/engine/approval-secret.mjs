@@ -1,6 +1,6 @@
 // This PC's secret (the approval secret) lives in Rust since 3.8.1 (decision 20 d): Orb.exe's vault opens and seals it
 // (src-tauri/vault/src/machine.rs: ORB2 in core\datos\clave2.enc and its copy outside the workspace) and the engine only
-// gets the keys made from it (src/core/machine-keys.mjs). What stays here: the names of those files, the file Ajustes ›
+// gets the keys made from it (src/platform/keys.mjs). What stays here: the names of those files, the file Ajustes ›
 // Datos writes to go back to an earlier key, and the no-sharing open the engine also uses to hold its workspace.
 import fs from 'node:fs';
 import path from 'node:path';

@@ -16,8 +16,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { translate } from '../shared/i18n.mjs';
-import { ctx } from './context.mjs';
-import { DEFAULT_PROTECTED } from './home.mjs';
+import { ctx } from '../platform/context.mjs';
+import { DEFAULT_PROTECTED } from '../platform/paths.mjs';
 
 //   probar     (3.1, read-only tasks: reviews, verification) read and run commands (tests, the build, a dev server to
 //              open in the browser), but change no file; risky commands ask first
@@ -115,7 +115,7 @@ export function riskOf(command, lang = 'es') {
   return null;
 }
 
-// 3.8: Orb's data folder (core, src/core/home.mjs › paths().internal) is never an agent's business: what a tool
+// 3.8: Orb's data folder (core, src/platform/paths.mjs › paths().internal) is never an agent's business: what a tool
 // names or a command mentions is resolved (against the agent's folder) and refused when it falls inside it. The isolated
 // copies (core\copias\aisladas) are where isolated tasks work, and core\herramientas holds the tools agents run (adb by
 // its full path), so those stay open. The same goes for what Orb keeps about the workspace outside it (setGuardedRoots:

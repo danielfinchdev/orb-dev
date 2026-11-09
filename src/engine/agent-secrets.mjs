@@ -6,7 +6,7 @@
 // from that command's output. A handle is bound to that agent process (closed, it goes), expires after a few minutes and
 // goes with everything still waiting when Orb locks or its password changes (wipe).
 // The card and its answer are this PC's only (permissions.mjs: secrets.* 'pc'; the event is not one a phone gets).
-import { tr } from '../core/context.mjs';
+import { tr } from '../platform/context.mjs';
 import { ENV_NAME } from '../core/connector-secrets.mjs';
 import { oneLine } from '../core/safety.mjs';
 

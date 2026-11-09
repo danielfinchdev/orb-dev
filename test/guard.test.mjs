@@ -176,7 +176,7 @@ test('la tarjeta de aprobación dice en una línea qué quiere hacer el agente',
 // «Cosas que nadie toca» (config.protected): by default the password managers' folders and containers (DEFAULT_PROTECTED),
 // whatever the permission, and the user's own list replaces it.
 test('lo protegido (de serie, los gestores de contraseñas) no se toca nunca, ni con acceso total', async () => {
-  const { ctx } = await import('../src/core/context.mjs');
+  const { ctx } = await import('../src/platform/context.mjs');
   const before = ctx.config;
   try {
     ctx.config = { ...(before ?? {}), protected: undefined };

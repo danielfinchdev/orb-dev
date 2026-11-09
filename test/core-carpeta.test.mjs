@@ -11,7 +11,9 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { tempHome, startEngine, wait } from './helpers.mjs';
 import { coreView } from '../src/ui/lib/core-access.js';
-import { createHome, isHome, paths, loadConfig } from '../src/core/home.mjs';
+import { createHome } from '../src/domain/workspace/home.mjs';
+import { isHome, paths } from '../src/platform/paths.mjs';
+import { loadConfig } from '../src/platform/config-file.mjs';
 import { migrateWorkspace, planWorkspace, applyLayout, coreHealth, MOVE_STATE, CONFLICTS_DIR, LAYOUT_FILE } from '../src/core/core-folder.mjs';
 import { git } from '../src/core/workspace.mjs';
 

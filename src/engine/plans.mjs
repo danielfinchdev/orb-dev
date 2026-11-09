@@ -11,7 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { usableAccounts, accountDir } from '../core/accounts.mjs';
-import { enabledAgents } from '../core/context.mjs';
+import { enabledAgents } from '../platform/config.mjs';
 import { installed, executable } from '../agents/index.mjs';
 import { accountInfo as codexAccountInfo } from '../agents/codex.mjs';
 import { readOutput } from '../agents/common.mjs';

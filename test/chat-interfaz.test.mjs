@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { tempHome } from './helpers.mjs';
-import { ctx } from '../src/core/context.mjs';
+import { ctx } from '../src/platform/context.mjs';
 import { Board, tagWords } from '../src/core/board.mjs';
 import { Orchestrator, answerOf } from '../src/engine/orchestrator.mjs';
 import { buildApi } from '../src/engine/api.mjs';

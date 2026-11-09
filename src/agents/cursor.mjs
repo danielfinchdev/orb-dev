@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { IS_WIN, firstFile, inPath, appDataDirs, userHome, clip, describeInput, readOutput, mcpEnvByRef } from './common.mjs';
 import { Turn, spawnAgent, killTree } from './live.mjs';
-import { tr } from '../core/context.mjs';
+import { tr } from '../platform/context.mjs';
 import { isModelLimitText, parseReset, untilText } from '../core/budget.mjs';
 import { guardedRootsNow, appRootsNow } from '../core/guard.mjs';
 

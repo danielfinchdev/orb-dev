@@ -1,25 +1,12 @@
-// Process-wide context: which assistant folder this process serves and its configuration.
-// The engine, the MCP server and the tests call useHome() once; every core module reads ctx.
+// Saving and checking the user's settings (orb.json) from the app: one list of what may be edited and one validation.
 import fs from 'node:fs';
 import path from 'node:path';
-import { paths, loadConfig, writeJson, merge, AGENT_IDS, relabelEmptyLogs } from './home.mjs';
-import { translate } from '../shared/i18n.mjs';
-import { inside as insideOf } from './core-folder.mjs';
+import { ctx, tr } from './context.mjs';
+import { paths, writeJson } from './paths.mjs';
+import { merge, AGENT_IDS } from './config-file.mjs';
+import { relabelEmptyLogs } from './journal-files.mjs';
+import { inside as insideOf } from './fsx.mjs';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from '../shared/appearance.mjs';
-
-// secret: this PC's secret when the engine was handed it (tests; with the app it stays in Rust). keys: the keys made
-// from it (src/core/machine-keys.mjs; inVault: from the app's vault). master: the master password and Orb's own secrets (3.8,
-// src/core/master.mjs), opened by the engine.
-export const ctx = { home: null, paths: null, config: null, secret: null, keys: null, master: null };
-
-// Message in the language of the settings (Spanish until a configuration is loaded).
-export const tr = (key, vars) => translate(ctx.config?.language ?? 'es', key, vars);
-
-
-export function useHome(home) {
-  ctx.home = home; ctx.paths = paths(home); ctx.config = loadConfig(home);
-  return ctx;
-}
 
 // Settings saved from the app. Only known top-level keys are accepted.
 // A connector's name as it goes into environment variable names (case does not count on Windows).

@@ -11,7 +11,7 @@ import { Board } from '../src/core/board.mjs';
 import { createProject } from '../src/core/projects.mjs';
 import { METHODS, REMOTE_METHODS, CHANNELS, PermissionError, principalOf, allowed, authorize, ownsTask } from '../src/core/permissions.mjs';
 import { guardCall, shapeResult, withoutPaths } from '../src/engine/remote.mjs';
-import { ctx } from '../src/core/context.mjs';
+import { ctx } from '../src/platform/context.mjs';
 import crypto from 'node:crypto';
 import { Sessions, mcpServersFor } from '../src/engine/sessions.mjs';
 import { AgentAuth, agentAuth } from '../src/engine/agent-auth.mjs';

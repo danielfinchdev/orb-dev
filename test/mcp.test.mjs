@@ -10,7 +10,7 @@ import { Board } from '../src/core/board.mjs';
 import { createProject } from '../src/core/projects.mjs';
 import { mcpServersFor } from '../src/engine/sessions.mjs';
 import { agentAuth } from '../src/engine/agent-auth.mjs';
-import { ctx } from '../src/core/context.mjs';
+import { ctx } from '../src/platform/context.mjs';
 import { browserKey } from '../src/core/browser-key.mjs';
 
 let t; let board;
@@ -277,7 +277,7 @@ test('Cursor recibe tickets nuevos en cada turno y se revocan al terminarlo', as
 // F2.6c (P10): two connectors whose names give the same environment variable would swap tickets: refused when saved,
 // and never both handed to an agent.
 test('conectores con nombres que chocan en las variables de entorno', async () => {
-  const { validateConfig } = await import('../src/core/context.mjs');
+  const { validateConfig } = await import('../src/platform/config.mjs');
   const { mcpServersFor } = await import('../src/engine/sessions.mjs');
   const base = structuredClone(ctx.config);
   for (const pair of [['git-hub', 'git_hub'], ['GitHub', 'github']]) {

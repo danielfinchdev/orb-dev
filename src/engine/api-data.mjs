@@ -2,9 +2,9 @@
 // time zone) runs from the engine's loop (tick). Moving to another PC is a backup restored there with the recovery code. This PC's window only: no phone calls these.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, tr } from '../core/context.mjs';
-import { paths } from '../core/home.mjs';
-import { machineKeys } from '../core/machine-keys.mjs';
+import { ctx, tr } from '../platform/context.mjs';
+import { paths } from '../platform/paths.mjs';
+import { machineKeys } from '../platform/keys.mjs';
 import { BACK_FILE } from './approval-secret.mjs';
 import * as K from '../core/backup.mjs';
 import { legacyData, deleteLegacyData } from '../core/migrate-38.mjs';
@@ -18,7 +18,7 @@ const fail = (message) => { const e = new Error(message); e.userFacing = true; t
 export const DAILY_HOUR = 3;
 
 export function dataApi({ board, emit = () => {}, log = () => {}, version = null }) {
-  const secret = () => machineKeys().backup; // this PC's backup key (src/core/machine-keys.mjs)
+  const secret = () => machineKeys().backup; // this PC's backup key (src/platform/keys.mjs)
   const folder = () => K.backupDir(ctx.home, ctx.config);
   const opts = () => ({ includeProjects: ctx.config.backup?.projects === true, includeAccounts: ctx.config.backup?.accounts === true });
   // A copy named by the list (its file name) or, from the desktop, any .orbbak (restore on a new machine).

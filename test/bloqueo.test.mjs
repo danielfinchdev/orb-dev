@@ -11,8 +11,9 @@ import { startupPhase } from '../src/ui/lib/startup.js';
 import { guardedCore } from '../src/engine/desktop-home.mjs';
 import { guardOutside, privateDir } from '../src/engine/workspace-layout.mjs';
 import { isOrbData, decide } from '../src/core/guard.mjs';
-import { paths } from '../src/core/home.mjs';
-import { ctx, saveConfig } from '../src/core/context.mjs';
+import { paths } from '../src/platform/paths.mjs';
+import { ctx } from '../src/platform/context.mjs';
+import { saveConfig } from '../src/platform/config.mjs';
 
 test('sin usar Orb los minutos elegidos: se bloquea una vez; cualquier uso vuelve a contar desde cero', () => {
   let clock = 0; const listeners = {}; const docListeners = {};
