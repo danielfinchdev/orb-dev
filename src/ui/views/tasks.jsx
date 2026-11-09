@@ -133,6 +133,7 @@ function TaskDetail({ id, live }) {
       {/* 3.8.3: held for review: what it did and where, with «Aceptar» and «Deshacer»; a paused queue, with «Reanudar». */}
       {t.held ? <HeldCard task={t} className="mx-5" /> : null}
       {t.status === 'queued' && t.waiting?.kind === 'paused' ? <PausedNote className="mx-5" /> : null}
+      {t.status === 'queued' && t.waiting?.kind === 'manual' ? <div className="bg-muted/50 mx-5 rounded-xl border px-3.5 py-2.5 text-[13px]" data-testid="task-wait-manual">{tr('tasks.wait.manualNote')}</div> : null}
       {t.status === 'queued' && t.waiting?.kind === 'deps' ? <div className="bg-muted/50 mx-5 rounded-xl border px-3.5 py-2.5 text-[13px]" data-testid="task-wait-deps">{waitText(tr, t)}</div> : null}
       {t.status === 'running' && live ? <div className="bg-muted/50 mx-5 rounded-xl border px-3.5 py-3" data-testid="task-live"><LiveTask t={live} actions={false} /></div> : null}
       {t.undone ? <div className="bg-muted/50 mx-5 flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[13px]"><Undo2 className="text-muted-foreground size-4" />{tr('tasks.undoneNote', { when: fmtTime(t.undone.at) })}</div> : null}

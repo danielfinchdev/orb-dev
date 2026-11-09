@@ -2,6 +2,7 @@
 // lines, the task list and its detail; PC and phone). The engine says why (tasks.list › waiting / held,
 // src/core/board.mjs › waitReason / heldInfo):
 //   waiting.kind  paused  the whole queue is paused: «En pausa» with «Reanudar» at hand
+//                 manual  Ajustes › «Iniciar las tareas automáticamente» is off: «Inicio manual»
 //                 deps    it waits for other tasks: «Espera a #3», and which of them needs the user
 //                 notice  the scheduler said why (usage limit, no agent available…)
 //   held          { reasons, folder }: what it did that needs a look («ha eliminado 2714 archivos») and where, with
@@ -17,6 +18,7 @@ import { useT } from '@/lib/i18n.js';
 export function waitText(t, task) {
   const w = task?.waiting;
   if (w?.kind === 'paused') return t('tasks.wait.paused');
+  if (w?.kind === 'manual') return t('tasks.wait.manual');
   if (w?.kind === 'deps' && w.on?.length) {
     const ids = w.on.map((d) => `#${d.id}`).join(', ');
     const held = w.on.find((d) => d.held); const stuck = w.on.find((d) => ['failed', 'blocked', 'cancelled'].includes(d.status));

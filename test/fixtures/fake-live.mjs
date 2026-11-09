@@ -4,6 +4,8 @@
 //
 //   ESCRIBE            writes hecho-por-<agente>.txt in its folder
 //   CREA_TAREA <p>     creates a task in project <p> through Orb's real MCP server (orb_create_task)
+//   CREA_BORRADO <p>   (3.8.3) the same, a task that deletes every file of its folder (ZAP_TODO): Orb holds it for review
+//   ZAP_TODO         deletes every file and folder of its folder but the hidden ones
 //   NAVEGA <url>       uses the agents' browser through the MCP (orb_browser_*) and writes navegador.txt
 //   NAVEGA_GUION <file.json>   (3.8.1) runs [["orb_browser_…", {args}], ["sleep", {ms}]…] through the MCP and writes each
 //                      answer to navegador-guion.json (a screenshot as «captura: <base64 length>»)
@@ -144,12 +146,18 @@ function createFakeLive(agent, label, caps, o) {
     item('tool', 'tool_result', { id: `t${seq}`, output: 'a.txt', error: false });
     if (agent === 'codex') item('tool', 'file', { path: 'a.txt', change: 'update' });
     if (/ESCRIBE/.test(scan) && !/Task Review/.test(scan)) fs.writeFileSync(path.join(o.cwd, `hecho-por-${agent}.txt`), 'hola\n');
+    if (/ZAP_TODO/.test(scan) && !/Task Review/.test(scan)) for (const e of fs.readdirSync(o.cwd)) if (!e.startsWith('.')) fs.rmSync(path.join(o.cwd, e), { recursive: true, force: true });
     const notes = [];
     const proj = scan.match(/CREA_TAREA (\S+)/);
     if (proj) {
       const out = await mcpCall(orb, 'orb_create_task', { project: proj[1], title: 'Tarea del asistente', description: 'ESCRIBE un archivo de prueba', agent: 'claude' });
       item('tool', 'tool', { id: `t${++seq}`, name: 'orb:orb_create_task', input: proj[1] });
       item('tool', 'tool_result', { id: `t${seq}`, output: out.slice(0, 300), error: false });
+    }
+    const wipe = scan.match(/CREA_BORRADO (\S+)/);
+    if (wipe) {
+      await mcpCall(orb, 'orb_create_task', { project: wipe[1], title: 'Ordena la carpeta', description: 'ZAP_TODO lo viejo', agent: 'claude' });
+      item('tool', 'tool', { id: `t${++seq}`, name: 'orb:orb_create_task', input: wipe[1] });
     }
     const pair = scan.match(/CREA_PAREJA (\S+)/);
     if (pair) {

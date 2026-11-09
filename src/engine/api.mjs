@@ -633,7 +633,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       if (why?.kind === 'deps') fail(tr('msg.api.waitsForDeps', { ids: why.on.map((d) => `#${d.id}`).join(', ') }));
       board.setting(`budget_ok:${t.id}`, '1'); board.event(t.id, 'usuario', 'budget.authorised', 'lanzar ahora (aunque supere el límite de uso o la cola esté en pausa)');
       board.changed('tasks');
-      return { paused: why?.kind === 'paused' };
+      return { paused: why?.kind === 'paused' || why?.kind === 'manual' };
     },
     // 3.8.3: a task held for review is accepted as it is (its result stays; the tasks waiting for it go on), as the OK
     // to its report does.

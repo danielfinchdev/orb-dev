@@ -543,7 +543,8 @@ export class Board {
   depsDone(task) { return task.depends_on.every((dep) => this.depDone(this.task(dep))); }
   depDone(d) { return d?.status === 'done' && d.pid == null && !this.setting(`integrate:${d.id}`); }
   // 3.8.3: why a queued task has not started, for the user (every list of tasks, PC and phone) and the coordinator.
-  // → { kind: 'paused' } (the whole queue is paused) | { kind: 'deps', on: [{ id, status, held }] } (it waits for those)
+  // → { kind: 'paused' } (the whole queue is paused) | { kind: 'manual' } (Ajustes: tasks do not start by themselves)
+  //   | { kind: 'deps', on: [{ id, status, held }] } (it waits for those)
   //   | { kind: 'notice', text } (what the scheduler said: usage limit, no agent…) | null (its turn comes)
   // A dependency that needs the user (held, failed, blocked) is said first: resuming the queue alone would not start it.
   waitReason(task, paused = this.setting('paused') === '1') {
@@ -553,6 +554,7 @@ export class Board {
     const stuck = deps.filter((d) => ['failed', 'blocked', 'cancelled'].includes(d.status));
     if (stuck.length) return on(stuck);
     if (paused) return { kind: 'paused' };
+    if (ctx.config?.autoRun === false && task.launch === 'auto') return { kind: 'manual' };
     if (deps.length) return on(deps);
     const notice = this.setting(`wait_notice:${task.id}`);
     return notice ? { kind: 'notice', text: notice } : null;
@@ -746,7 +748,7 @@ export class Board {
   explainForAgents(t) {
     const w = this.waitReason(t); const h = this.heldInfo(t);
     const dep = (d) => `#${d.id} (${d.held ? `retenida: ${userName()} la tiene que aceptar o deshacer` : d.status})`;
-    return { ...(w ? { waiting: w.kind === 'paused' ? `cola en pausa: no empieza hasta que ${userName()} pulse «Reanudar»` : w.kind === 'deps' ? `espera a ${w.on.map(dep).join(', ')}` : w.text } : {}),
+    return { ...(w ? { waiting: w.kind === 'paused' ? `cola en pausa: no empieza hasta que ${userName()} pulse «Reanudar»` : w.kind === 'manual' ? `${userName()} inicia las tareas a mano (Ajustes): no empieza sola` : w.kind === 'deps' ? `espera a ${w.on.map(dep).join(', ')}` : w.text } : {}),
       ...(h ? { held: `retenida para que ${userName()} la revise: ${h.reasons} en ${h.folder}` } : {}) };
   }
   summary(agent, conversation = null) {

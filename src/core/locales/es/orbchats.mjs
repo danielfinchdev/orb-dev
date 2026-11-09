@@ -26,6 +26,8 @@ export default {
   'orbchats.running': 'Tarea #{id} en curso · {title}',
   'orbchats.queuedOne': 'Una tarea en cola',
   'orbchats.queued': '{n} tareas en cola',
+  'orbchats.pausedOne': 'Una tarea en pausa',
+  'orbchats.paused': '{n} tareas en pausa',
   'orbchats.done': 'Completada · {title}',
   'orbchats.failed': 'No se pudo completar · {title}',
   'orbchats.cancelled': 'Cancelada · {title}',

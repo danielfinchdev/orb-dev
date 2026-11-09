@@ -93,14 +93,17 @@ export function orbItems({ inbox = null, conversations = [], sessions = [], task
 const FINISHED = { done: ['orbchats.done', 'done'], failed: ['orbchats.failed', 'error'], blocked: ['orbchats.failed', 'error'], cancelled: ['orbchats.cancelled', 'muted'], limited: ['orbchats.limited', 'warn'] };
 export function orbProgress(item, t, { assistant = 'Orbe' } = {}) {
   const tasks = item?.tasks ?? [];
-  if (tasks.some((x) => x.status === 'awaiting_approval')) return { text: t('orbchats.awaiting'), tone: 'warn', badge: true };
+  // 3.8.3: a task held for review after it ran (tasks.list › held) waits for the user's OK too.
+  if (tasks.some((x) => x.status === 'awaiting_approval' || x.held)) return { text: t('orbchats.awaiting'), tone: 'warn', badge: true };
   if (item?.asks) return { text: t('orbchats.permission'), tone: 'warn', badge: true };
   if (item?.asking) return { text: t('orbchats.asking'), tone: 'warn', badge: true };
   const run = tasks.find((x) => x.status === 'running');
   if (run) return { text: t('orbchats.running', { id: run.id, title: run.title }), tone: 'live' };
   if (item?.busy) return { text: t('chats.working'), tone: 'live' };
-  const queued = tasks.filter((x) => x.status === 'queued').length;
-  if (queued) return { text: queued === 1 ? t('orbchats.queuedOne') : t('orbchats.queued', { n: queued }), tone: 'muted' };
+  const queued = tasks.filter((x) => x.status === 'queued');
+  // 3.8.3: with the queue paused they say so (tasks.list › waiting), not just «en cola».
+  if (queued.length && queued.every((x) => x.waiting?.kind === 'paused')) return { text: queued.length === 1 ? t('orbchats.pausedOne') : t('orbchats.paused', { n: queued.length }), tone: 'warn' };
+  if (queued.length) return { text: queued.length === 1 ? t('orbchats.queuedOne') : t('orbchats.queued', { n: queued.length }), tone: 'muted' };
   if (item?.stalled) return { text: t('orbchats.stalled'), tone: 'warn' };
   const m = item?.lastMessage;
   const last = tasks[0];

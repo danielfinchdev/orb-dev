@@ -60,6 +60,10 @@ test('el avance de cada fila: primero lo que espera al usuario, luego lo que tra
   assert.deepEqual(M.orbProgress({ ...base, tasks: [{ id: 3, status: 'running', title: 'Enlaces' }] }, t), { text: 'orbchats.running{"id":3,"title":"Enlaces"}', tone: 'live' });
   assert.equal(M.orbProgress({ ...base, busy: true }, t).text, 'chats.working');
   assert.equal(M.orbProgress({ ...base, tasks: [{ status: 'queued' }, { status: 'queued' }] }, t).text, 'orbchats.queued{"n":2}');
+  // 3.8.3: with the queue paused they say so; a task held for review waits for the user like one to approve.
+  assert.deepEqual(M.orbProgress({ ...base, tasks: [{ status: 'queued', waiting: { kind: 'paused' } }] }, t), { text: 'orbchats.pausedOne', tone: 'warn' });
+  assert.equal(M.orbProgress({ ...base, tasks: [{ status: 'queued', waiting: { kind: 'paused' } }, { status: 'queued', waiting: { kind: 'deps', on: [] } }] }, t).text, 'orbchats.queued{"n":2}');
+  assert.equal(M.orbProgress({ ...base, tasks: [{ status: 'blocked', held: { reasons: 'x', folder: 'y' } }] }, t).text, 'orbchats.awaiting');
   // A finished task newer than the last line says how it ended; an older one leaves the last line.
   const done = { id: 5, status: 'done', title: 'Formulario', updated_at: at(10) };
   assert.deepEqual(M.orbProgress({ ...base, tasks: [done], lastMessage: { at: at(20), text: 'x', from: { type: 'orbe' } } }, t), { text: 'orbchats.done{"title":"Formulario"}', tone: 'done' });

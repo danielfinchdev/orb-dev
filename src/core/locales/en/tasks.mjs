@@ -68,6 +68,8 @@ export default {
   'tasks.wait.paused': 'Paused',
   'tasks.wait.pausedNote': 'The task queue is paused: no task starts until you resume it.',
   'tasks.wait.resume': 'Resume',
+  'tasks.wait.manual': 'Manual start',
+  'tasks.wait.manualNote': 'Tasks do not start by themselves (Settings › Start tasks automatically). Click “Start anyway” to start this one.',
   'tasks.wait.deps': 'Waits for {ids}',
   'tasks.wait.depsHeld': 'Waits for {ids}: #{id} needs your approval',
   'tasks.wait.depsStuck': 'Waits for {ids}: #{id} is stopped',

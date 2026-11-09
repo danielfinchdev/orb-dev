@@ -12,7 +12,7 @@ import { Board } from '../src/core/board.mjs';
 import { Orchestrator } from '../src/engine/orchestrator.mjs';
 import { buildApi } from '../src/engine/api.mjs';
 import { DESKTOP } from '../src/core/permissions.mjs';
-import { tr } from '../src/core/context.mjs';
+import { ctx, tr } from '../src/core/context.mjs';
 
 const home = tempHome();
 after(() => home.cleanup());
@@ -43,6 +43,9 @@ test('why a queued task waits: a dependency that needs the user first, then the 
   assert.deepEqual(board.waitReason(board.task(c.id)), { kind: 'paused' });
   board.setting('paused', '0');
   assert.equal(board.waitReason(board.task(c.id)), null, 'its turn comes');
+  // Ajustes › «Iniciar las tareas automáticamente» off: said too (it used to wait silently as well).
+  ctx.config.autoRun = false;
+  try { assert.deepEqual(board.waitReason(board.task(c.id)), { kind: 'manual' }); assert.match(board.explainForAgents(board.task(c.id)).waiting, /a mano/); } finally { ctx.config.autoRun = true; }
   board.setting(`wait_notice:${c.id}`, 'límite de uso de Claude hasta las 18:00');
   assert.deepEqual(board.waitReason(board.task(c.id)), { kind: 'notice', text: 'límite de uso de Claude hasta las 18:00' });
   // A dependency still working: «Espera a #n».
@@ -129,4 +132,22 @@ test('motor: con la cola en pausa, «Iniciar de todos modos» inicia esa tarea y
   assert.equal((await call('tasks.get', { id: two.id })).status, 'queued', 'the rest of the queue stays paused');
   await call('control.resume');
   await until(async () => (await call('tasks.get', { id: two.id })).status === 'done', 'reanudada, la otra también', 20000);
+});
+
+test('motor: una tarea que borra muchos archivos queda por aprobar, con la carpeta, y se acepta desde ahí', async () => {
+  t = tempHome();
+  engine = await startEngine(t.home);
+  const { call } = engine;
+  await call('projects.create', { name: 'limpieza' });
+  const dir = (await call('projects.list')).find((x) => x.name === 'limpieza').path;
+  for (let i = 0; i < 12; i++) fs.writeFileSync(path.join(dir, `viejo-${i}.txt`), `${i}\n`);
+  const task = await call('tasks.create', { project: 'limpieza', title: 'Ordena', description: 'ZAP_TODO lo viejo', agent: 'claude' });
+  await until(async () => (await call('tasks.get', { id: task.id })).status === 'blocked', 'retenida', 20000);
+  const got = await call('tasks.get', { id: task.id });
+  assert.match(got.held.reasons, /eliminado 12 archivos/);
+  assert.equal(got.held.folder.toLowerCase(), dir.toLowerCase());
+  assert.ok((await call('tasks.list')).find((x) => x.id === task.id).held, 'the list says so («Por aprobar»)');
+  assert.ok((await call('chat.list')).some((m) => m.body.includes('eliminado 12 archivos') && m.body.includes(dir)), 'the notice names the folder');
+  await call('tasks.accept', { id: task.id });
+  assert.equal((await call('tasks.get', { id: task.id })).status, 'done');
 });

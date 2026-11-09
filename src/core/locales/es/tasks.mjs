@@ -69,6 +69,8 @@ export default {
   'tasks.wait.paused': 'En pausa',
   'tasks.wait.pausedNote': 'La cola de tareas está en pausa: ninguna tarea empieza hasta que la reanudes.',
   'tasks.wait.resume': 'Reanudar',
+  'tasks.wait.manual': 'Inicio manual',
+  'tasks.wait.manualNote': 'Las tareas no se inician solas (Ajustes › Iniciar las tareas automáticamente). Pulsa «Iniciar de todos modos» para iniciar esta.',
   'tasks.wait.deps': 'Espera a {ids}',
   'tasks.wait.depsHeld': 'Espera a {ids}: #{id} está por aprobar',
   'tasks.wait.depsStuck': 'Espera a {ids}: #{id} está detenida',

@@ -25,6 +25,8 @@ export default {
   'orbchats.running': 'Task #{id} in progress · {title}',
   'orbchats.queuedOne': 'One task queued',
   'orbchats.queued': '{n} tasks queued',
+  'orbchats.pausedOne': 'One task paused',
+  'orbchats.paused': '{n} tasks paused',
   'orbchats.done': 'Completed · {title}',
   'orbchats.failed': 'Could not be completed · {title}',
   'orbchats.cancelled': 'Cancelled · {title}',
