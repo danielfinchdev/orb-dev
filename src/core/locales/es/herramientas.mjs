@@ -12,7 +12,7 @@ export default {
   'settings.android.noEmulator': 'Emulador de Android no instalado',
   'settings.android.noAvds': 'Ningún emulador creado',
   'settings.android.startEmulator': 'Arrancar',
-  'master.ask.androidEmulator': 'Para arrancar un emulador Android.',
+  'master.ask.androidEmulator': 'Para arrancar un emulador de Android.',
   'secrets.title': '{agent} pide la clave {name}',
   'secrets.value': 'Valor de la clave',
   'secrets.save': 'Guardar en la bóveda',
