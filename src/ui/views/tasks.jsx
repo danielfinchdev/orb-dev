@@ -122,7 +122,8 @@ function TaskDetail({ id, live }) {
         {t.status === 'queued' ? <A onClick={async () => { const r = await act(call('tasks.launchAnyway', { id: t.id })); if (r) toast.success(tr(r.paused ? 'tasks.launchAnyway.paused' : 'tasks.launchAnyway.done')); }}><Zap />{tr('tasks.launchAnyway')}</A> : null}
         {['failed', 'blocked', 'cancelled', 'limited'].includes(t.status) ? <A onClick={() => act(call('tasks.retry', { id: t.id }), tr('tasks.retry.done'))}><RotateCw />{t.status === 'limited' ? tr('tasks.continueNow') : tr('tasks.retry')}</A> : null}
         {!['running', 'done'].includes(t.status) ? <A onClick={reassign}><Shuffle />{tr('tasks.reassign.btn')}</A> : null}
-        {t.hasCheckpoint && t.status !== 'running' ? <A onClick={async () => { if (await confirm(tr('tasks.undo.title'), tr('tasks.undo.body'), { ok: tr('tasks.undo.ok'), danger: true })) act(call('tasks.undo', { id: t.id })); }}><Undo2 />{tr('tasks.undo.btn')}</A> : null}
+        {/* (A held task has «Deshacer» on its card below, next to «Aceptar».) */}
+        {t.hasCheckpoint && t.status !== 'running' && !t.held ? <A onClick={async () => { if (await confirm(tr('tasks.undo.title'), tr('tasks.undo.body'), { ok: tr('tasks.undo.ok'), danger: true })) act(call('tasks.undo', { id: t.id })); }}><Undo2 />{tr('tasks.undo.btn')}</A> : null}
         {t.branch && t.status === 'done' ? (<>
           <A onClick={async () => { if (await confirm(tr('tasks.merge'), tr('tasks.merge.body', { branch: t.branch }), { ok: tr('tasks.merge.ok') })) act(call('projects.merge', { name: t.project, branch: t.branch }), tr('tasks.merge.done')); }}><GitMerge />{tr('tasks.merge')}</A>
           <A onClick={createPr}><GitPullRequest />{tr('tasks.pr.title')}</A>
