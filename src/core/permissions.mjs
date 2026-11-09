@@ -30,6 +30,8 @@ export const METHODS = Object.freeze({
   'android.status': 'pc', 'android.install': 'pc',
   // 3.8.2: pairing a phone for the agents (Ajustes › Android, src/engine/android.mjs)
   'android.pairStart': 'pc', 'android.pairState': 'pc', 'android.pairCancel': 'pc', 'android.pairCode': 'pc', 'android.devices': 'pc', 'android.disconnect': 'pc', 'android.forget': 'pc',
+  // 3.8.2 (T3 3.17): an Android emulator already installed on this PC
+  'android.emulators': 'pc', 'android.emulatorStart': 'pc',
   'github.status': 'pc', 'github.contributions': 'pc', 'github.login': 'pc',
   'expert.tree': 'pc', 'expert.read': 'pc', 'expert.status': 'pc', 'expert.diff': 'pc', 'expert.log': 'pc', 'expert.system': 'pc',
   'actions.list': 'pc', 'actions.save': 'pc', 'actions.remove': 'pc',
@@ -90,10 +92,10 @@ export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter(
 // «Cosas que nadie toca»; 3.8.1: deleting a project (its folder) and removing a skill or an MCP server from core (or a
 // connector). current: the settings now (the engine's), to compare
 // with. Changing the password asks for the current one instead.
-// 3.8.2: pairing a phone (the agents may then reach it), and giving a chat «Acceso total al PC» or the phone (below: every
+// 3.8.2: pairing a phone or starting an emulator (the agents may then reach it), and giving a chat «Acceso total al PC» or the phone (below: every
 // time).
 export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'backup.previousKey', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'projects.deleteCheck', 'extensions.remove',
-  'android.pairStart', 'android.pairCode', 'sessions.grantTotal', 'sessions.grantAndroid']));
+  'android.pairStart', 'android.pairCode', 'android.emulatorStart', 'sessions.grantTotal', 'sessions.grantAndroid']));
 // 3.8.1: the actions that ask for the master password EVERY time, even right after another unlock (the owner: deleting a
 // project «requiere master pass»): method → the purpose its token must carry (src/core/master.mjs › issue(purpose)).
 // projects.delete and projects.deleteAbort need no token: they take the one-off ticket projects.deleteCheck returned

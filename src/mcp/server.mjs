@@ -488,6 +488,9 @@ if (!BOSS && SIGNED_SESSION) tools.push(
   androidTool('key', 'Pulsa una tecla del sistema: HOME, BACK, ENTER, DEL, TAB, APP_SWITCH, MENU, DPAD_UP/DOWN/LEFT/RIGHT, VOLUME_UP/DOWN…', { key: { type: 'string' } }, ['key']),
   androidTool('logcat', 'Lee el registro del móvil (logcat), acotado: lines (máx. 500), level (V, D, I, W, E, F), package (solo esa app), grep (texto a buscar).', { lines: { type: 'integer' }, level: { type: 'string' }, package: { type: 'string' }, grep: { type: 'string' } }, [], { readOnly: true }),
   androidTool('uninstall', 'Desinstala una app que instalaste tú en este chat con orb_android_install. Otra app: pídeselo al usuario.', { package: { type: 'string' } }, ['package']),
+  // 3.8.2 (T3 3.17): an emulator of the Android SDK already installed on this PC is one more device (emulator-5554…).
+  { name: 'orb_android_emulators', description: `Lista los emuladores Android (AVD) que ${USER} ya tiene creados en este PC. Mismo permiso que el móvil.`, inputSchema: { type: 'object', properties: {} }, readOnly: true, run: async () => (await android('emulators')).text },
+  { name: 'orb_android_emulator', description: 'Arranca un emulador Android existente por su nombre (ver orb_android_emulators). Tarda en arrancar: comprueba con orb_android_devices cuándo aparece (emulator-5554) y úsalo con serial.', inputSchema: { type: 'object', required: ['avd'], properties: { avd: { type: 'string' } } }, run: async (a) => (await android('emulator', a)).text },
   androidTool('shell', `Ejecuta un comando de adb shell en el móvil. Solo con «Acceso total» y «Usar mi móvil Android» en este chat; si no, usa las otras herramientas orb_android_*.`, { command: { type: 'string' } }, ['command'])
 );
 

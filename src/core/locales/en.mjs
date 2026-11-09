@@ -33,6 +33,7 @@ import orbchats from './en/orbchats.mjs';
 import notes from './en/notes.mjs';
 import ext from './en/ext.mjs';
 import acceso from './en/acceso.mjs';
+import herramientas from './en/herramientas.mjs';
 
 export default {
   ...base,
@@ -68,5 +69,6 @@ export default {
   ...orbchats,
   ...notes,
   ...ext,
-  ...acceso
+  ...acceso,
+  ...herramientas
 };

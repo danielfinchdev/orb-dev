@@ -17,7 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import zlib from 'node:zlib';
-import { spawnSync, execFile } from 'node:child_process';
+import { spawn, spawnSync, execFile } from 'node:child_process';
 import { ctx, tr } from '../core/context.mjs';
 import { isOrbData } from '../core/guard.mjs';
 
@@ -140,6 +140,40 @@ export function runAdb(file, args, { timeout = 30_000, maxBuffer = 24 * 1024 * 1
   });
 }
 
+// --- Android emulators (3.8.2, T3 3.17) -------------------------------------------------------------------------------
+// Only the Android SDK's emulator already installed on this PC (Android Studio's): Orb never downloads the emulator nor
+// its system images. An emulator that runs is one more device for adb (emulator-5554…), so the agents use it with the
+// same orb_android_* tools and the same grant as the phone.
+export function sdkEmulator(env = process.env, platform = process.platform) {
+  const home = env.USERPROFILE || env.HOME || '';
+  const roots = [env.ANDROID_SDK_ROOT, env.ANDROID_HOME,
+    platform === 'win32' && env.LOCALAPPDATA ? path.join(env.LOCALAPPDATA, 'Android', 'Sdk') : null,
+    platform === 'darwin' && home ? path.join(home, 'Library', 'Android', 'sdk') : null,
+    platform === 'linux' && home ? path.join(home, 'Android', 'Sdk') : null];
+  for (const root of roots.filter((r) => r && path.isAbsolute(r))) {
+    const file = path.join(root, 'emulator', platform === 'win32' ? 'emulator.exe' : 'emulator');
+    try { if (fs.statSync(file).isFile()) return file; } catch { /* not here */ }
+  }
+  return null;
+}
+export const AVD = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+// `emulator -list-avds`: one name per line (its INFO/WARNING lines have spaces and are left out).
+export const parseAvds = (text) => [...new Set(String(text ?? '').split(/\r?\n/).map((l) => l.trim()).filter((l) => AVD.test(l)))].slice(0, 50);
+// The emulator runs without the engine's own variables (its pipes and tickets) and with the user's own .android.
+export const emulatorEnv = (env = process.env) => Object.fromEntries(Object.entries(env).filter(([k]) => !/^ORB_/i.test(k) && k.toUpperCase() !== 'ANDROID_USER_HOME'));
+const asScript = (file, args) => (/\.(mjs|js)$/i.test(file) ? [process.execPath, [file, ...args]] : [file, args]); // the tests' fake emulator
+const listAvds = (file) => new Promise((resolve) => {
+  const [cmd, args] = asScript(file, ['-list-avds']);
+  execFile(cmd, args, { windowsHide: true, timeout: 30_000, maxBuffer: 1024 * 1024, env: emulatorEnv() }, (_error, stdout) => resolve(String(stdout ?? '')));
+});
+// Started on its own (its window outlives the engine), never through a shell.
+const startEmulator = (file, avd) => new Promise((resolve, reject) => {
+  const [cmd, args] = asScript(file, ['-avd', avd]);
+  const child = spawn(cmd, args, { detached: true, stdio: 'ignore', env: emulatorEnv() });
+  child.once('error', reject);
+  child.once('spawn', () => { child.unref(); resolve(true); });
+});
+
 // --- What adb says, read ----------------------------------------------------------------------------------------------
 
 // The pairing QR Android's «Emparejar con código QR» reads. Special characters of the format escaped (\ ; , : ").
@@ -251,7 +285,7 @@ const userError = (key, vars) => Object.assign(new Error(tr(key, vars)), { userF
 
 // The engine's phone. board: settings (the devices Orb paired, what each chat installed); exe(): adb's path (the tests: a
 // fake adb script); ensure(): the download.
-export function createAndroid({ board, log = () => {}, exe = adbPath, ensure = () => ensureAdb({ log }), verify = () => verifyAdb(), now = () => Date.now(), pollMs = 1500, pairMs = 120_000 } = {}) {
+export function createAndroid({ board, log = () => {}, exe = adbPath, emulator = () => sdkEmulator(),ensure = () => ensureAdb({ log }), verify = () => verifyAdb(), now = () => Date.now(), pollMs = 1500, pairMs = 120_000 } = {}) {
   let pairing = null; // { name, password, qr, state, error, until, device, timer }
   const off = () => exe === adbPath && adbDisabled(); // tests and ORB_NO_ADB: Orb's own adb never runs
   // 3.8.2 (review A2): every adb binary runs only as Orb downloaded it (verify); only the tests' fake adb script does not.
@@ -436,6 +470,13 @@ export function createAndroid({ board, log = () => {}, exe = adbPath, ensure = (
       board?.settingJson(installedKey(s), installedBy(s).filter((p) => p !== pkg));
       return { text: tr('msg.android.uninstalled', { pkg }) };
     },
+    // 3.8.2 (T3 3.17): the emulators of this PC's Android SDK.
+    async emulators() {
+      const { sdk, avds } = await api.emulators();
+      if (!sdk) return { text: tr('msg.android.noEmulator') };
+      return { text: avds.length ? tr('msg.android.avds', { list: avds.join(', ') }) : tr('msg.android.noAvds') };
+    },
+    async emulator(s, a) { return { text: await api.emulatorStart({ avd: a.avd }) }; },
     async shell(s, a) {
       if (!shellAllowed(s)) throw userError('msg.android.shellNeedsTotal');
       const cmd = String(a.command ?? '');
@@ -491,6 +532,23 @@ export function createAndroid({ board, log = () => {}, exe = adbPath, ensure = (
       remember(list.filter((d) => !gone.includes(d)));
       log(`android: olvidado ${serial ?? host}`);
       return true;
+    },
+    // 3.8.2 (T3 3.17): the AVDs of this PC's SDK (Ajustes › Android and orb_android_emulators). → { sdk, avds }
+    async emulators() {
+      const file = emulator();
+      if (!file) return { sdk: false, avds: [] };
+      return { sdk: true, avds: parseAvds(await listAvds(file)) };
+    },
+    // Starts one of them (an existing AVD, by its exact name). → what to tell the agent or the window
+    async emulatorStart({ avd }) {
+      const name = String(avd ?? '');
+      if (!AVD.test(name)) throw userError('msg.android.badAvd');
+      const { sdk, avds } = await api.emulators();
+      if (!sdk) throw userError('msg.android.noEmulator');
+      if (!avds.includes(name)) throw userError('msg.android.noSuchAvd', { name });
+      try { await startEmulator(emulator(), name); } catch (error) { throw userError('msg.android.emulatorFailed', { error: error.message }); }
+      log(`android: emulador ${name} arrancado`);
+      return tr('msg.android.emulatorStarted', { name });
     },
     // An agent's tool: the chat must hold the phone right now (it can be taken back at any moment).
     async tool(s, name, args = {}) {

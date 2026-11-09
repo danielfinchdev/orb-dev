@@ -304,10 +304,18 @@ function AndroidCard() {
   const t = useT();
   const [st, setSt] = useState(null);
   const [phones, setPhones] = useState([]);
+  const [emus, setEmus] = useState(null); // 3.8.2 (T3 3.17): { sdk, avds } of this PC's Android SDK
   const load = () => call('android.status').then(setSt).catch(() => setSt(null));
   const loadPhones = () => call('android.devices').then(setPhones).catch(() => setPhones([]));
   useEffect(() => { load(); const id = setInterval(load, st?.state === 'downloading' ? 1500 : 15000); return () => clearInterval(id); }, [st?.state]);
   useEffect(() => { loadPhones(); const id = setInterval(loadPhones, 15000); return () => clearInterval(id); }, []);
+  useEffect(() => { call('android.emulators').then(setEmus).catch(() => setEmus(null)); }, []);
+  // Starting one asks for the master password, as pairing a phone: the agents with the phone may then use it.
+  const startEmulator = async (avd) => {
+    const unlock = await unlockCore('androidEmulator'); if (!unlock) return;
+    const r = await act(call('android.emulatorStart', { avd, unlock }));
+    if (r) { toast(r); setTimeout(loadPhones, 30_000); }
+  };
   const pair = async () => {
     await form(t('settings.android.pair'), {
       description: t('settings.android.pairSteps'), initial: { manual: false, address: '', code: '', connect: '' },
@@ -343,6 +351,19 @@ function AndroidCard() {
             </div>
           )) : <span className="text-muted-foreground text-sm">{t('settings.android.noDevices')}</span>}
         </div>
+        {emus ? (
+          <div className="grid gap-1" data-testid="android-emulators">
+            <span className="text-muted-foreground mt-1 text-xs font-medium">{t('settings.android.emulators')}</span>
+            {!emus.sdk ? <span className="text-muted-foreground text-sm">{t('settings.android.noEmulator')}</span>
+              : emus.avds.length ? emus.avds.map((avd) => (
+                <div key={avd} className="flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2">
+                  <Smartphone className="text-muted-foreground size-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate text-sm">{avd.replace(/_/g, ' ')}</span>
+                  <Button size="sm" variant="ghost" onClick={() => startEmulator(avd)}>{t('settings.android.startEmulator')}</Button>
+                </div>
+              )) : <span className="text-muted-foreground text-sm">{t('settings.android.noAvds')}</span>}
+          </div>
+        ) : null}
       </CardContent>
       <CardFooter><Button size="sm" onClick={pair} data-testid="android-pair"><Smartphone />{t('settings.android.pair')}</Button></CardFooter>
     </Card>

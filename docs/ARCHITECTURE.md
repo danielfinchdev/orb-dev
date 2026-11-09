@@ -138,6 +138,11 @@ C:\Orb\                   (C:\Orb by default; always <chosen folder>\Orb, the sa
   into `core\herramientas\adb` (`src/engine/android.mjs`). It is not in the agents' PATH: agents reach the phone paired
   in Settings → Android through Orb's tools, only in a chat with «Usar mi móvil Android» (`src/engine/grants.mjs`),
   and run adb by hand only with «Acceso total» as well. adb's server stops when Orb locks or closes.
+  **Emulators** (3.8.2): when the Android SDK's emulator is already installed (`ANDROID_SDK_ROOT`, `ANDROID_HOME` or
+  Android Studio's folder; Orb never downloads it nor its system images), Settings → Android lists its AVDs
+  (`emulator -list-avds`) and starts one by its exact name with the master password; agents use
+  `orb_android_emulators` / `orb_android_emulator` under the same grant as the phone. The emulator starts without the
+  engine's `ORB_*` variables and is one more adb device (`emulator-5554`) for the other `orb_android_*` tools.
 - **Older folders**: `ensureLayout` (every start) moves Orb 3.7's own data into core (its other folders move only as the
   user chooses, section 36), creates whatever is missing and moves 2.3.0's `bitacoras\` into the log folder (if a file exists in both, the old entries are
   appended at the end). It only discards the empty logs that 2.3.0 created for the categories and configuration folders
