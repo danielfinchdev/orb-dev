@@ -1,5 +1,5 @@
 // Bitácoras: the assistant's memory (general log and one per project). Read-only here: only the assistant appends.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BookOpen, Copy, Maximize2, NotebookText } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/page.jsx';
@@ -18,6 +18,10 @@ export function LogsView({ route, bare = false }) {
   const [selected, setSelected] = useState(route.name ?? 'general');
   const [whole, setWhole] = useState(false);
   const [body, setText] = useState(null);
+  // 3.8.2: entries are appended at the end (the general log keeps the user's index and rules at its top): the view opens
+  // on the newest ones.
+  const scroller = useRef(null);
+  useEffect(() => { const el = scroller.current; if (el && body != null) el.scrollTop = el.scrollHeight; }, [body]);
   useEffect(() => { call('logs.list').then(setLogs).catch(() => {}); }, [version]);
   useEffect(() => { setText(null); call('logs.read', { project: selected, whole }).then(setText).catch((e) => setText(e.message)); }, [selected, whole, version]);
   const partial = body?.startsWith('(');
@@ -40,7 +44,7 @@ export function LogsView({ route, bare = false }) {
             {partial && !whole ? <Button size="sm" variant="ghost" onClick={() => setWhole(true)}><Maximize2 />{t('logs.whole')}</Button> : null}
             <Button size="sm" variant="ghost" onClick={() => navigator.clipboard.writeText(body ?? '').then(() => toast.success(t('logs.copied')))}><Copy />{t('logs.copy')}</Button>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-2 text-[14px] md:pb-24">{body == null ? <Spinner /> : <Markdown>{body}</Markdown>}</div>
+          <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-5 pb-2 text-[14px] md:pb-24" data-testid="log-body">{body == null ? <Spinner /> : <Markdown>{body}</Markdown>}</div>
         </Card>
       </div>
     </>

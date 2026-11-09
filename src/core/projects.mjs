@@ -98,8 +98,7 @@ export function renameProject(board, { name, to }, actor) {
     throw error;
   }
   // The log keeps its entries (logs are only ever added to): the file just follows the new name.
-  const oldLog = board.projectLogFile(project.name); const newLog = board.projectLogFile(next);
-  try { if (oldLog !== newLog && fs.existsSync(oldLog) && !fs.existsSync(newLog)) fs.renameSync(oldLog, newLog); } catch { /* a new log starts */ }
+  try { board.moveProjectLog(project.name, next); } catch { /* a new log starts */ }
   board.ensureProjectLog(next);
   board.event(null, actor, 'project.renamed', `${project.name} -> ${next}`);
   for (const what of ['projects', 'tasks', 'conversations', 'sessions']) board.changed(what);

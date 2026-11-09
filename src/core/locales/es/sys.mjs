@@ -135,6 +135,7 @@ export default {
   // Cabeceras y apartados de las bitácoras (archivos .md que lee quien usa la app)
   'sys.logs.generalHeader': '# Bitácora general de {name}\n\nMemoria de {name}: qué se pidió, qué se hizo y qué queda pendiente en todos los proyectos.\nSolo se añade al final; nunca se borra ni se edita lo escrito. Sin contraseñas, tokens ni datos personales.\n',
   'sys.logs.projectHeader': '# Bitácora — {name}\n\nLo decidido y lo hecho en este proyecto. Solo se añade al final. Sin contraseñas, tokens ni datos personales.\n',
+  'sys.logs.importedRoot': 'Añadido de BITACORA.md de la carpeta del proyecto ({date})',
   'sys.logs.request': 'Pedido {user}',
   'sys.logs.byAssistant': '(coordinación de {name})',
   'sys.logs.done': 'Hecho',

@@ -237,11 +237,29 @@ export function ensureLayout(home, config = null, { wait = true } = {}) {
   for (const dir of [p.data, p.runs, p.logs, p.projectLogs, p.mcp, p.skills, p.tools, p.secrets, ...Object.values(p.categories)]) fs.mkdirSync(dir, { recursive: true });
   const old = path.join(home, OLD_LOGS_DIR);
   if (fs.existsSync(old)) { try { moveLogs(old, p.logs); } catch { /* left as it is; tried again on the next start */ } }
+  tidyProjectLogs(p.projectLogs);
   if (!fs.existsSync(p.generalLog)) {
     let c = config; if (!c) { try { c = loadConfig(home); } catch { c = DEFAULT_CONFIG; } }
     fs.writeFileSync(p.generalLog, generalLogHeader(c));
   }
   return protectCore(home, { wait });
+}
+
+// A log's entries without its header (the title line and the paragraph under it).
+export const logBody = (text) => String(text ?? '').replace(/\r\n/g, '\n').replace(/^#[^\n]*\n\n(?:[^\n]+\n)*/, '').trim();
+
+// 3.8.2: the copies «name (2).md» earlier builds left in proyectos (a project registered as «name (2)» by 3.7 got a log
+// of its own, then took its name back while «name.md» was there): one that holds nothing but its header goes (the log
+// of a project with that name is made again when it is needed). One with entries is never touched. → how many went.
+export function tidyProjectLogs(dir) {
+  let names = []; try { names = fs.readdirSync(dir); } catch { return 0; }
+  let n = 0;
+  for (const f of names) {
+    if (!/ \(\d+\)\.md$/i.test(f)) continue;
+    const file = path.join(dir, f);
+    try { const text = fs.readFileSync(file, 'utf8'); if (/^# /.test(text) && !logBody(text)) { fs.rmSync(file); n++; } } catch { /* in use or not a file: left */ }
+  }
+  return n;
 }
 
 // Moves a log folder into another: a file that exists in both keeps the new one and gets the old entries at its end.

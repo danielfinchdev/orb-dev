@@ -132,6 +132,7 @@ export default {
   // Headers and fields of the logs (.md files the user reads)
   'sys.logs.generalHeader': '# {name}’s general log\n\n{name}’s memory: what was asked, what was done and what is pending across all projects.\nEntries are only added at the end; nothing written is ever deleted or edited. No passwords, tokens or personal data.\n',
   'sys.logs.projectHeader': '# Log — {name}\n\nWhat was decided and done in this project. Entries are only added at the end. No passwords, tokens or personal data.\n',
+  'sys.logs.importedRoot': 'Added from the project folder’s BITACORA.md ({date})',
   'sys.logs.request': 'Request {user}',
   'sys.logs.byAssistant': '(coordinated by {name})',
   'sys.logs.done': 'Done',

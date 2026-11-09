@@ -24,7 +24,7 @@ export function findLog(board, project) {
   return found;
 }
 
-// 3.8.1: the user's own files beside the general log (the one their rules for agents name, e.g. bitacora_project.md):
+// 3.8.1: the user's own files beside the general log (e.g. notes they keep there):
 // agents read them and append to them through Orb (the logs live in core, closed to their own tools but reading). Only
 // regular .md files at the top of the logs' folder, by name.
 export function ownLogFiles() {
