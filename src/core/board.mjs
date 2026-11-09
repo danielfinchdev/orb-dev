@@ -14,6 +14,8 @@ export const AGENTS = AGENT_IDS;
 export const STATUSES = ['queued', 'awaiting_approval', 'running', 'done', 'failed', 'blocked', 'cancelled', 'limited'];
 const FINISHED = new Set(['done', 'failed', 'cancelled']);
 const MODES = ['carpeta', 'aislada'];
+// 3.8.2: the largest BITACORA.md a project folder may bring into its log (mergeRootLog).
+const ROOT_LOG_MAX = 4 * 1024 * 1024;
 const now = () => new Date().toISOString();
 // A conversation's row as the rest of Orb reads it (titled as a boolean, its context meter parsed).
 // 3.8.1: both change the row SQLite just made (a new object each time) instead of copying it: copying the ~35 columns
@@ -223,7 +225,9 @@ export class Board {
   // second time (its text is already in the log). → whether it was merged.
   mergeRootLog(name, folder) {
     const src = path.join(folder, 'BITACORA.md');
-    let text; try { if (!fs.statSync(src).isFile()) return false; text = fs.readFileSync(src, 'utf8'); } catch { return false; }
+    // 3.8.2 (final review): only a plain file of its own. Not a link nor a second name of another file (a hard link an
+    // agent made to core\datos would put Orb's data in a log agents read), and not a huge one.
+    let text; try { const st = fs.lstatSync(src); if (!st.isFile() || st.isSymbolicLink() || st.nlink > 1 || st.size > ROOT_LOG_MAX) return false; text = fs.readFileSync(src, 'utf8'); } catch { return false; }
     const whole = text.replace(/\r\n/g, '\n').trim();
     const file = this.ensureProjectLog(name);
     const has = () => fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n').includes(whole);

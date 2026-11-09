@@ -92,6 +92,25 @@ test('una BITACORA.md que git sigue se une pero se queda, y no se añade dos vec
   assert.equal(read('versionada.md').split('- en git').length, 2, 'merged once');
 });
 
+// 3.8.2 (final review): a BITACORA.md that is a second name of another file (a hard link to Orb's data) or a huge one is
+// never copied into the log agents read, and is left where it is.
+test('una BITACORA.md enlazada a otro archivo o enorme no pasa a la bitácora', () => {
+  const folder = path.join(ctx.paths.categories.web, 'enlazada'); fs.mkdirSync(folder, { recursive: true });
+  const hidden = path.join(ctx.paths.data, 'prueba-secreta.txt'); fs.mkdirSync(ctx.paths.data, { recursive: true });
+  fs.writeFileSync(hidden, 'DATO-INTERNO-DE-ORB\n');
+  fs.linkSync(hidden, path.join(folder, 'BITACORA.md'));
+  board.addProject({ name: 'enlazada', path: folder }, 'usuario', { fromUser: true });
+  assert.equal(board.mergeRootLog('enlazada', folder), false);
+  assert.ok(!read('enlazada.md').includes('DATO-INTERNO-DE-ORB'), 'not in the log');
+  assert.ok(fs.existsSync(path.join(folder, 'BITACORA.md')) && fs.existsSync(hidden), 'nothing removed');
+  const big = path.join(ctx.paths.categories.web, 'enorme'); fs.mkdirSync(big, { recursive: true });
+  fs.writeFileSync(path.join(big, 'BITACORA.md'), `# B\n\n${'x'.repeat(4 * 1024 * 1024)}\n`);
+  board.addProject({ name: 'enorme', path: big }, 'usuario', { fromUser: true });
+  assert.ok(fs.existsSync(path.join(big, 'BITACORA.md')), 'too big: left');
+  assert.ok(!read('enorme.md').includes('xxxx'));
+  fs.rmSync(hidden, { force: true });
+});
+
 test('Memorias lee el final de GENERAL.md: las últimas «Entradas de Orb» aunque arriba estén el índice y las normas', () => {
   const top = `# Bitácora general\n\n## Índice\n${'- proyecto\n'.repeat(400)}\n## Normas\n${'### Norma\ntexto\n'.repeat(300)}\n## Entradas de Orb\n`;
   fs.writeFileSync(ctx.paths.generalLog, top + entry('primera de Orb') + entry('última de Orb'));
