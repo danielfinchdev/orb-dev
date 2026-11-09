@@ -9,7 +9,7 @@ import { ctx, tr } from '../core/context.mjs';
 import { AGENTS, assistantName, userName, ofUser } from '../core/board.mjs';
 import { executable, installed, adapter } from '../agents/index.mjs';
 import * as claude from '../agents/claude.mjs';
-import { rotateIfBig, oneLine } from '../core/safety.mjs';
+import { runLog, oneLine } from '../core/safety.mjs';
 import { titleFrom } from '../core/titles.mjs';
 import { mcpServersOf } from './sessions.mjs';
 import { agentAuth } from './agent-auth.mjs';
@@ -310,8 +310,7 @@ class Lane {
     const dirs = [...Object.values(ctx.paths.categories), ...(ctx.config.projectRoots ?? []), ...visible.map((p) => p.path)].filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
     fs.mkdirSync(cwd, { recursive: true });
     fs.mkdirSync(ctx.paths.runs, { recursive: true });
-    rotateIfBig(this.orch.logFile);
-    const writeLog = (line) => { try { fs.appendFileSync(this.orch.logFile, `[${this.id}] ${String(line).replace(/\r?\n/g, ' ')}\n`); } catch { /* log unavailable */ } };
+    const writeLog = runLog(this.orch.logFile, { prefix: `[${this.id}] ` });
     // Claude keeps the conversation id Orb gives it; the other agents report theirs (event 'session').
     const newId = c.session_id || !isClaude ? null : crypto.randomUUID();
     if (newId) this.board.updateConversation(this.id, { session_id: newId, turns: 0 });

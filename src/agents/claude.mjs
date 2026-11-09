@@ -10,6 +10,7 @@ import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, describeInput, 
 import { Turn, Approvals } from './live.mjs';
 import { decide, describeAction } from '../core/guard.mjs';
 import { tr } from '../core/context.mjs';
+import { logJson } from '../core/safety.mjs';
 
 export const id = 'claude';
 export const label = 'Claude Code';
@@ -305,7 +306,7 @@ export function createLive(o) {
     (async () => {
       // 3.0: the streamed pieces of each answer are not written to the run log one by one (a disk write per token); the
       // whole message that follows them is.
-      try { for await (const m of query) { if (m?.type !== 'stream_event') log(JSON.stringify(m).slice(0, 4000)); handle(m); } }
+      try { for await (const m of query) { if (m?.type !== 'stream_event') log(logJson(m)); handle(m); } }
       catch (error) {
         log(`fin con error: ${error?.stack ?? error}`);
         if (turn && !turn.done) turn.finish({ isError: true, final: closed ? tr('sys.agents.stopped') : tr('sys.agents.exitedWith', { name: label, error: error?.message ?? error }) });

@@ -14,6 +14,29 @@ export function rotateIfBig(file, max = 10 * 1024 * 1024) {
   } catch { return false; }
 }
 
+// 3.8.3: the writer of a run log (asistente.log, a conversation's registro.jsonl): one line per call, secrets hidden,
+// and at most two generations of `max` bytes. The size is checked again every 200 lines, not only when the agent starts
+// (the assistant's conversation lives for days).
+export function runLog(file, { prefix = '', max } = {}) {
+  rotateIfBig(file, max);
+  let lines = 0;
+  return (line) => {
+    try {
+      if (++lines % 200 === 0) rotateIfBig(file, max);
+      fs.appendFileSync(file, `${prefix}${redactSecrets(String(line)).replace(/\r?\n/g, ' ')}\n`);
+    } catch { /* log unavailable */ }
+  };
+}
+// One message of an agent for a run log: always whole JSON (up to 3.8.2 the line was cut at 4 KB and could not be read),
+// with each long string (a file read, a tool's output) shortened instead, and the whole kept under `max` characters.
+export function logJson(value, { maxString = 4000, max = 64_000 } = {}) {
+  const cut = (n) => (_key, v) => (typeof v === 'string' && v.length > n ? `${v.slice(0, n)}… [+${v.length - n}]` : v);
+  try {
+    for (const n of [maxString, 500, 80]) { const line = JSON.stringify(value, cut(n)); if (line.length <= max) return line; }
+  } catch { /* a value JSON cannot hold */ }
+  return JSON.stringify({ type: value?.type ?? null, subtype: value?.subtype ?? null, omitted: 'too long for the log' });
+}
+
 // One line, bounded: for anything an agent or a creator controls that ends up in BITACORA.md or a notice.
 export const oneLine = (value, max = 120) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 

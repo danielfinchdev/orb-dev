@@ -14,7 +14,7 @@ import { createProject, syncProjects } from '../src/core/projects.mjs';
 import { detectSensitivity, verify } from '../src/core/approval.mjs';
 import { canLaunch, parseReset, startCooldown, isLimitText } from '../src/core/budget.mjs';
 import { takeCheckpoint, snapshotCommit, undoCheckpoint, prepareWorkdir, git } from '../src/core/workspace.mjs';
-import { isSecretPath, redactSecrets } from '../src/core/safety.mjs';
+import { isSecretPath, redactSecrets, logJson, runLog } from '../src/core/safety.mjs';
 
 let t; let board; let project;
 before(() => { t = tempHome(); board = new Board(); project = createProject(board, { name: 'web' }, 'usuario'); });
@@ -330,4 +330,30 @@ test('los archivos secretos nunca entran en commits y los secretos se ocultan en
   for (const f of ['.env', 'config/.env.local', 'id_rsa', 'cert.pem', 'datos/clave.bin', 'BITACORA.md', 'x/credentials.json']) assert.ok(isSecretPath(f), f);
   assert.ok(!isSecretPath('.env.example'));
   assert.equal(redactSecrets('token ghp_abcdefghijklmnopqrstu y sk-1234567890abc'), 'token [secreto oculto] y [secreto oculto]');
+});
+
+// 3.8.3: asistente.log cut each agent message at 4 KB, so its lines could not be read as JSON.
+test('el registro del asistente guarda cada mensaje entero y legible, sin secretos y con tamaño acotado', () => {
+  const big = { type: 'user', message: { content: [{ type: 'tool_result', content: 'x'.repeat(50_000) }] }, session_id: 'abc' };
+  const line = logJson(big);
+  const back = JSON.parse(line);
+  assert.equal(back.session_id, 'abc', 'the fields after a long one survive');
+  assert.ok(line.length < 10_000 && /… \[\+46000\]/.test(back.message.content[0].content), 'the long string is shortened, saying how much');
+  const huge = { type: 'assistant', parts: Array.from({ length: 5000 }, (_, i) => `parte ${i} ${'y'.repeat(40)}`) };
+  assert.ok(logJson(huge).length <= 64_000, 'never over the cap');
+  assert.doesNotThrow(() => JSON.parse(logJson(huge)));
+  const loop = { type: 'x' }; loop.self = loop;
+  assert.deepEqual(JSON.parse(logJson(loop)), { type: 'x', subtype: null, omitted: 'too long for the log' });
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-runlog-'));
+  try {
+    const file = path.join(dir, 'asistente.log');
+    const write = runLog(file, { prefix: '[7] ', max: 2000 });
+    write(`{"text":"clave ghp_abcdefghijklmnopqrstu"}\nsegunda`);
+    const first = fs.readFileSync(file, 'utf8');
+    assert.equal(first, '[7] {"text":"clave [secreto oculto]"} segunda\n', 'one line, secrets hidden');
+    for (let i = 0; i < 400; i++) write('z'.repeat(50));
+    assert.ok(fs.statSync(file).size < 2000 + 200 * 60, 'rotated while it runs, not only at the start');
+    assert.ok(fs.existsSync(`${file}.1`));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

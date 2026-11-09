@@ -14,7 +14,7 @@ import { agentAuth } from './agent-auth.mjs';
 import { connectorLaunch } from '../core/connector-secrets.mjs';
 import { connectorSafe } from '../core/extensions.mjs';
 import { CURSOR_FILES } from '../agents/cursor.mjs';
-import { rotateIfBig, oneLine } from '../core/safety.mjs';
+import { runLog, oneLine } from '../core/safety.mjs';
 import { git, isGitRepo, repoRoot } from '../core/workspace.mjs';
 import { account as findAccount, accountEnv } from '../core/accounts.mjs';
 import { pickAccount, recordSpend } from '../core/budget.mjs';
@@ -284,8 +284,7 @@ export class Sessions {
     const dir = path.join(ctx.paths.runs, s.kind === 'task' && s.task_id ? String(s.task_id) : path.join('conversaciones', s.id));
     fs.mkdirSync(dir, { recursive: true });
     const logFile = path.join(dir, 'registro.jsonl');
-    rotateIfBig(logFile);
-    const writeLog = (line) => { try { fs.appendFileSync(logFile, `${String(line).replace(/\r?\n/g, ' ')}\n`); } catch { /* log unavailable */ } };
+    const writeLog = runLog(logFile);
     // A fork waiting to happen: the agent copies the original conversation natively (Claude, Codex).
     const forkFrom = this.board.settingJson(`fork_pending:${s.id}`);
     if (forkFrom) this.board.settingJson(`fork_pending:${s.id}`, null);
