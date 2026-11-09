@@ -327,6 +327,11 @@ pub fn run() {
     }));
   }
   let app = builder
+    // 3.8.2 (item 10): no raw input. tao listens to Windows' raw mouse and keyboard input (device events) while the
+    // window has the focus, and every report reaches the main thread: a 1000 Hz mouse sends a thousand a second, also
+    // while the window is being moved or resized (the main thread runs that loop). Orb never uses them; the page gets
+    // its own input from WebView2.
+    .device_event_filter(tauri::DeviceEventFilter::Always)
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_updater::Builder::new().build())
