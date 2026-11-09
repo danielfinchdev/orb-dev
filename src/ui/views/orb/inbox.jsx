@@ -17,6 +17,7 @@ import { createProjectFlow } from '@/components/project-actions.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, DropdownMenuCheckboxItem, Collapsible, CollapsibleTrigger, CollapsibleContent, Dialog, DialogContent, DialogTitle, DialogDescription, Tip } from '@/components/ui/overlay.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Input } from '@/components/ui/basic.jsx';
+import { useSearch } from '@/lib/search.js';
 import { useStore, go, call, act, newChat, orbAct, loadOrbInbox, openOrbInfo, closeOrbInfo, getState, phoneLayout, fullPc, refreshSoon, setState, plainSkin } from '@/lib/store.js';
 import { orbItems, orbProgress, groupOrb, shortTime, avatarStack, snoozeTimes } from '@/lib/inbox.js';
 import { sameItem } from '@/lib/memo.js';
@@ -360,21 +361,7 @@ function Places() {
   );
 }
 
-// ---- search: titles and projects at once; from two letters, the messages too (inbox.search and, for the direct
-// conversations, conversations.search); «#12» finds that task.
-function useSearch(query) {
-  const [found, setFound] = useState(null);
-  useEffect(() => {
-    const q = query.trim(); if (q.length < 2) { setFound(null); return undefined; }
-    let alive = true;
-    const id = setTimeout(async () => {
-      const [inbox, direct] = await Promise.all([call('inbox.search', { zone: 'orb', q }).catch(() => null), call('conversations.search', { q }).catch(() => null)]);
-      if (alive) setFound({ messages: inbox?.messages ?? [], conversations: new Set([...(inbox?.items ?? []).map((x) => x.id), ...(direct?.conversations ?? [])]), sessions: new Set(direct?.sessions ?? []) });
-    }, 220);
-    return () => { alive = false; clearTimeout(id); };
-  }, [query]);
-  return found;
-}
+// ---- search: titles and projects at once; from two letters, the messages too (lib/search.js); «#12» finds that task.
 const FILTER0 = { state: 'all', agent: 'all' };
 function FilterMenu({ filter, setFilter, agents, snoozed = 0 }) {
   const t = useT();
@@ -430,7 +417,8 @@ export function OrbInbox({ page = false }) {
     const okAgent = (x) => filter.agent === 'all' || x.agent === filter.agent;
     return {
       chats: items.filter((x) => hit(x) && okAgent(x)).sort((a, b) => String(b.at ?? '').localeCompare(String(a.at ?? ''))).slice(0, 40),
-      tasks: tasks.filter((x) => `#${x.id}` === q || String(x.title).toLowerCase().includes(q)).slice(0, 12),
+      // 3.8.2: after the tasks found by their title or number, the ones whose brief or result say it (tasks.search).
+      tasks: (() => { const own = tasks.filter((x) => `#${x.id}` === q || String(x.title).toLowerCase().includes(q)).slice(0, 12); const ids = new Set(own.map((x) => x.id)); return [...own, ...(found?.tasks ?? []).filter((x) => !ids.has(x.id))].slice(0, 12); })(),
       projects: projects.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 10)
     };
   })();
@@ -466,7 +454,7 @@ export function OrbInbox({ page = false }) {
       })}</> : null}
       {results.tasks.length ? <><Sub>{t('orbchats.tasksFound')}</Sub>{results.tasks.map((x) => (
         <button key={x.id} type="button" onClick={() => go({ view: 'tasks', id: x.id })} className="hover:bg-accent/50 flex min-w-0 cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13.5px]" data-testid={`item-t${x.id}`}>
-          <ListTodo className="text-muted-foreground size-4 shrink-0" /><span className="min-w-0 flex-1 truncate">#{x.id} {x.title}</span><span className="text-muted-foreground shrink-0 text-[12px]">{STATUS[x.status]?.[0] ?? x.status}</span>
+          <ListTodo className="text-muted-foreground size-4 shrink-0" /><span className="min-w-0 flex-1"><span className="block truncate">#{x.id} {x.title}</span>{x.snippet ? <span className="text-muted-foreground block truncate text-[12.5px]" data-testid="task-hit-snippet">{x.snippet}</span> : null}</span><span className="text-muted-foreground shrink-0 text-[12px]">{STATUS[x.status]?.[0] ?? x.status}</span>
         </button>))}</> : null}
       {!results.projects.length && !results.chats.length && !results.tasks.length && !found?.messages?.length ? <p className="text-muted-foreground px-3 py-4 text-sm">{t('chats.noResults')}</p> : null}
     </div>

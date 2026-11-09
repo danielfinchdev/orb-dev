@@ -44,6 +44,7 @@ import { appMethods } from './api-app.mjs';
 import { musicMethods } from './music.mjs';
 import { sealConnectors } from '../core/connector-secrets.mjs';
 import { createFeeds } from './feeds.mjs';
+import { fold, snippet } from '../core/inbox.mjs';
 
 export { fail, str, int, oneOf } from './api-common.mjs';
 
@@ -385,6 +386,20 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const conversations = board.all(`SELECT DISTINCT c.id FROM conversations c LEFT JOIN chat m ON m.conversation_id = c.id AND m.role IN ('usuario', 'orb') WHERE c.bot_id IS NULL AND c.group_id IS NULL AND (lower(c.title) LIKE ? ESCAPE '!' OR lower(m.body) LIKE ? ESCAPE '!') LIMIT 100`, like, like).map((r) => r.id);
       const found = board.all(`SELECT DISTINCT s.id FROM sessions s LEFT JOIN session_items i ON i.session_id = s.id AND i.kind = 'text' WHERE s.kind = 'chat' AND (lower(s.title) LIKE ? ESCAPE '!' OR lower(i.body) LIKE ? ESCAPE '!') LIMIT 100`, like, like).map((r) => r.id);
       return { conversations, sessions: found };
+    },
+    // 3.8.2: tasks by what they say (title, brief or result, without case or accents), for the sidebar's search and
+    // Ctrl+K. The newest first. → [{ id, title, status, project, snippet }]
+    'tasks.search': ({ q }) => {
+      const words = oneLine(String(q ?? ''), 100).trim();
+      if (words.length < 2) return [];
+      const needle = fold(words); const out = [];
+      for (const r of board.all('SELECT id, title, status, project, description, result FROM tasks ORDER BY id DESC LIMIT 5000')) {
+        const where = [r.title, r.description, r.result].find((x) => fold(x).includes(needle));
+        if (where == null) continue;
+        out.push({ id: r.id, title: r.title, status: r.status, project: r.project, snippet: where === r.title ? '' : redactSecrets(snippet(where, words)) });
+        if (out.length >= 30) break;
+      }
+      return out;
     },
     // 2.7: pictures the agents make (Codex image_gen): shown in the conversation, a zone marked to change, saved in the
     // project. Read only from the agents' own picture folders, Orb's folder and the projects; written only into Orb's

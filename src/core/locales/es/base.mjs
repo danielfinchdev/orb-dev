@@ -33,5 +33,9 @@ export default {
   'nav.musicNow': '«{title}», de {author}',
   'nav.musicError': 'No se pudo reproducir. Comprueba la conexión e inténtalo de nuevo.',
   'nav.footerUnfold': 'Mostrar con nombres',
-  'nav.footerFold': 'Solo iconos'
+  'nav.footerFold': 'Solo iconos',
+  'palette.title': 'Ir a',
+  'palette.hint': 'Busca chats, tareas, proyectos y acciones.',
+  'palette.placeholder': 'Buscar o ir a…',
+  'palette.places': 'Ir a'
 };

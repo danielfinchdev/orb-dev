@@ -22,6 +22,7 @@ import { UpdateCard, useUpdate, updateActions } from '@/components/update-card.j
 import { migrationView } from '@/lib/migration.js';
 import { Notices } from '@/components/notices.jsx';
 import { ActionShortcuts } from '@/components/project-tools.jsx';
+import { CommandPalette } from '@/components/command-palette.jsx';
 import { Scene } from '@/components/scene.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { useStore, setState, getState, refresh, refreshSoon, call, bridge, act, go, goBack, resetRoute, setViews, applyTheme, openTerminal, startTour, closeSettings, anyChatBusy, phoneLayout, loadOrbInbox, loadOrbInboxSoon } from '@/lib/store.js';
@@ -207,7 +208,7 @@ function Shell() {
       {/* 3.5: a browser linked with an Orb gets the PC's layout, not what only the PC itself does. */}
       {bridge.mobile ? null : <><UpdateCard /><OnceOpened when={settingsOpen} onFail={closeSettingsFailed}><SettingsDialog /></OnceOpened><OnceOpened when={gamesOpen} onFail={closeGamesFailed}><GamesDialog /></OnceOpened><RecoveryNotice /></>}
       <Notices />
-      {bridge.mobile ? null : <ActionShortcuts project={shortcutProject} />}
+      {bridge.mobile ? null : <><ActionShortcuts project={shortcutProject} /><CommandPalette /></>}
       <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile || Boolean(tour)} /></div>
       {tour ? <ErrorBoundary key={tour.key} onFail={closeTourFailed}><Suspense fallback={null}><Tour /></Suspense></ErrorBoundary> : null}
     </div>

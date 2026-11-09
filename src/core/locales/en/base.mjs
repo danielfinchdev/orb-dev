@@ -33,5 +33,9 @@ export default {
   'nav.musicNow': '“{title}” by {author}',
   'nav.musicError': 'Couldn’t play the music. Check your connection and try again.',
   'nav.footerUnfold': 'Show with names',
-  'nav.footerFold': 'Icons only'
+  'nav.footerFold': 'Icons only',
+  'palette.title': 'Go to',
+  'palette.hint': 'Search chats, tasks, projects and actions.',
+  'palette.placeholder': 'Search or go to…',
+  'palette.places': 'Go to'
 };
