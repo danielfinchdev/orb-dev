@@ -343,7 +343,7 @@ async function idleAnimations(run) {
   if (uiPatch) await page.evaluate((ui) => window.orb.call('config.save', { patch: { ui } }), uiPatch);
   for (const [name, { hover, ...route }] of Object.entries(screens)) {
     await page.evaluate((r) => { localStorage.setItem('orb.route', JSON.stringify(r)); location.reload(); }, route);
-    await page.waitForSelector(READY, { timeout: 30000 });
+    await page.waitForSelector(READY, { state: 'attached', timeout: 30000 }); // attached: in Profesional and Cristal the button has no robot, so no size
     if (quietScene) await page.addStyleTag({ content: '.scene *, .scene *::before, .scene *::after, .theme-band::before { animation-play-state: paused !important; }' });
     if (extraCss) await page.addStyleTag({ content: extraCss });
     if (extraJs) await page.evaluate(extraJs);
