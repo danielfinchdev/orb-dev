@@ -106,6 +106,13 @@
      status bar and clear of a notch, the welcome and linking screens too. On the PC these are 0. Overlays (sheets, the
      menu ☰, notifications) are outside #root and keep clear of it themselves. */
   #root { padding-top: env(safe-area-inset-top, 0px); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+  /* 3.8.2 (lag): a modal layer (dialog, menu, select) sets body { pointer-events: none } and, through react-remove-scroll,
+     body { --removed-body-scroll-bar-size }. Both are inherited: every element of the app was styled again on each open and
+     close, and each offscreen row or message with content-visibility was rebuilt (≈30 ms with 300 chats). #root states
+     its own values, so the change stops there; the page's own transparent cover (z-50, under the layers, which are
+     portaled after #root) keeps what is behind a modal layer from being hovered or clicked, as before. */
+  #root { pointer-events: auto; --removed-body-scroll-bar-size: 0px; }
+  body[style*="pointer-events: none"] > #root::after { content: ""; position: fixed; inset: 0; z-index: 50; }
   body { @apply bg-background text-foreground antialiased; font-family: var(--font-sans); font-size: 14.5px; overflow: hidden; }
   h1, h2, h3, h4 { font-weight: 500; letter-spacing: -0.01em; }
   ::selection { background: color-mix(in oklch, var(--primary) 30%, transparent); }
