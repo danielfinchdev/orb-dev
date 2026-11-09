@@ -152,7 +152,15 @@ class Lane {
   get board() { return this.orch.board; }
   conv() { return this.board.conversation(this.id); }
   state() { return { conversation: this.id, busy: this.busy, since: this.busy ? this.since : null, partial: this.partial, tools: this.tools, queued: this.queue.length, waiting: !this.busy && this.queue.length > 0, context: this.conv()?.context ?? null }; }
-  push() { if (this.pushTimer) { clearTimeout(this.pushTimer); this.pushTimer = null; } this.orch.emit('chat:state', this.state()); }
+  // 3.8.3: the state that ends a turn carries the line it wrote (answer), so the window swaps the streamed text for it in
+  // the same frame instead of showing nothing until it reads the conversation again.
+  push() {
+    if (this.pushTimer) { clearTimeout(this.pushTimer); this.pushTimer = null; }
+    const state = this.state();
+    if (this.answerId != null && !this.busy) { const row = this.board.chatRow(this.answerId); if (row) state.answer = row.meta?.kind === 'report' ? { ...row, meta: { ...row.meta, accepted: (row.meta.tasks ?? []).length > 0 && row.meta.tasks.every((id) => this.board.isAccepted(id)) } } : row; }
+    this.answerId = null;
+    this.orch.emit('chat:state', state);
+  }
   // 3.0: the streamed answer goes to the window at most every 80 ms (each push sends the whole partial answer, and the
   // window and the phones redraw on each one); anything else still pushes at once.
   pushSoon() { if (!this.pushTimer) { this.pushTimer = setTimeout(() => this.push(), 80); this.pushTimer.unref?.(); } }
@@ -419,7 +427,7 @@ class Lane {
     // A turn that only asked (orb_ask) and said nothing more: the card alone.
     const asked = this.asked();
     // 3.1: a failed answer to an engine notice is tried again (next()): no error line for each try.
-    if (!(ok && !answer && asked) && (ok || !internal)) this.say(ok ? 'orb' : 'system', answer || tr('msg.orch.cannotAnswerCheck', { logFile: this.orch.logFile }), ok ? meta : null);
+    if (!(ok && !answer && asked) && (ok || !internal)) this.answerId = this.say(ok ? 'orb' : 'system', answer || tr('msg.orch.cannotAnswerCheck', { logFile: this.orch.logFile }), ok ? meta : null)?.id ?? null;
     this.flushQuestions();
     this.busy = false; this.partial = ''; this.tools = []; this.push();
     if (ok) this.suggestGames();

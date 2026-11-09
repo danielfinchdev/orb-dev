@@ -3,12 +3,12 @@
 // it, the brain (agent and model), the reasoning (brain button) and, for a new conversation, the orchestrator (icon and a
 // small switch: on = with the assistant, who coordinates the agents; off = directly with the agent chosen).
 // 3.2: each conversation is its own (route.id), several at once.
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { routeKey, takeDraft } from '@/lib/reload.js';
 import { micMode } from '@/lib/mic.js';
 import { ArrowUp, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool, History, FlaskConical, Folder, Mic, Shrink, ListChecks, Ellipsis, Info, BellOff, MessageSquare } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
-import { Markdown } from '@/components/markdown.jsx';
+import { Markdown, StreamingMarkdown } from '@/components/markdown.jsx';
 import { ExtensionRequestCard } from './extensions.jsx';
 import { ProjectPicker } from '@/components/project-actions.jsx';
 import { useLiveTasks, liveOf, ProgressBar, elapsed } from '@/components/live-tasks.jsx';
@@ -23,7 +23,7 @@ import { Spinner } from '@/components/ui/basic.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { Switch, Tip, BubbleTip, Popover, PopoverTrigger, PopoverContent } from '@/components/ui/overlay.jsx';
-import { bridge, useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout, plainSkin } from '@/lib/store.js';
+import { bridge, useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout, plainSkin, addPending, movePending, dropPending, pendingShown, usePending } from '@/lib/store.js';
 import { notify } from '@/lib/notify.js';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { pickGreeting, pickSubtitle, suggestionsFor } from '@/lib/greeting.js';
@@ -462,6 +462,23 @@ function OrchestratorSwitch({ on, onChange, name, cursor, locked = false }) {
   );
 }
 
+// 3.8.3: the answer being written, the only part of the conversation that follows each streamed piece (drawn once per
+// frame: lib/store.js › chatStateSoon); its finished blocks are not parsed again (StreamingMarkdown).
+function LiveAnswer({ id, name }) {
+  const t = useT();
+  const chat = useStore((s) => chatOf(s, id)) ?? {};
+  return (
+    <div className="flex gap-3">
+      <Robot size={32} mood={chat.partial ? 'talking' : 'thinking'} className="mt-0.5" />
+      <div className="chat-glass min-w-0 flex-1">
+        <div className="text-muted-foreground mb-1 text-xs">{name}</div>
+        {chat.partial ? <StreamingMarkdown>{chat.partial}</StreamingMarkdown> : null}
+        {chat.waiting ? <div className="text-muted-foreground text-[13px]" data-testid="chat-waiting-turn">{t('chat.waitingTurn')}</div> : <LiveActivity chat={chat} />}
+      </div>
+    </div>
+  );
+}
+
 // 3.2: onConversation / project: inside God mode, a new conversation stays there (in its project) instead of navigating.
 export function ChatView({ route, onConversation, project: inProject }) {
   const t = useT();
@@ -480,7 +497,9 @@ export function ChatView({ route, onConversation, project: inProject }) {
     return () => window.removeEventListener('orb:shared', take);
   }, []);
   const name = app.config.assistantName;
-  const chat = chatOf(app, id) ?? {};
+  // 3.8.3: only what this view draws from the conversation's live state (the streamed text is LiveAnswer's): a streamed
+  // piece does not redraw the whole view.
+  const chat = useStore((s) => { const c = chatOf(s, id); return { busy: Boolean(c?.busy), waiting: Boolean(c?.waiting), used: c?.context?.used ?? null, size: c?.context?.size ?? null }; });
   // 3.8: on a phone, the brain and «Orquestador» of a NEW conversation are chosen for that conversation alone (the ones
   // new conversations start with are a setting of the PC).
   const [draft, setDraft] = useState(null);
@@ -517,7 +536,11 @@ export function ChatView({ route, onConversation, project: inProject }) {
     return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', run); };
   }, [id, unread, rows.length]);
   const showTest = useStore((s) => s.testToday) === true && id == null;
-  const scroll = useAutoScroll([rows.length, chat.partial, chat.busy, id]);
+  // 3.8.3: the line the turn just wrote, from the state that ended it (until the conversation is read again), and the
+  // messages the user sent that the engine has not saved yet: no wait and no gap on screen.
+  const answer = useStore((s) => (id == null ? null : s.answers?.[id] ?? null));
+  const pending = usePending(id == null ? 'new' : `chat:${id}`);
+  const scroll = useAutoScroll([rows.length, chat.busy, id, pending.length, answer?.id]);
   const catalog = useCatalog();
   const brain = conv
     ? { agent: conv.agent ?? 'claude', model: conv.model ?? '', account: conv.account ?? conv.agent, reasoning: conv.reasoning ?? 'medium' }
@@ -540,8 +563,10 @@ export function ChatView({ route, onConversation, project: inProject }) {
     const msg = text.trim(); if (!msg || sending) return;
     setText('');
     dismissTest();
+    const mine = addPending(id == null ? 'new' : `chat:${id}`, msg, lastId);
     if (id != null) {
-      if ((await act(call('chat.send', { text: msg, conversation: id }))) === undefined) setText(msg);
+      // The send failed: the message goes back to the box (unless something else was written there meanwhile).
+      if ((await act(call('chat.send', { text: msg, conversation: id }))) === undefined) { dropPending(mine); setText((now) => (now.trim() ? now : msg)); }
       else call('chat.list', { conversation: id }).then((r) => { if (getState().route?.id === id) setRows((prev) => keepSame(prev, r)); }).catch(() => {});
       return;
     }
@@ -553,7 +578,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
         // 3.2: the first message makes the conversation (in the working folder): then the screen is that conversation.
         const chosen = local && draft ? Object.fromEntries(['agent', 'model', 'reasoning'].filter((k) => draft[k] !== undefined).map((k) => [k, draft[k]])) : {};
         const r = await act(call('chat.send', { text: msg, ...(inProject ? { project: inProject } : {}), ...(Object.keys(chosen).length ? { brain: chosen } : {}) }));
-        if (!r) { if (!moved()) setText(msg); return; }
+        if (!r) { dropPending(mine); if (!moved()) setText(msg); return; }
+        movePending(mine, `chat:${r.conversation}`);
         await refresh().catch(() => {});
         if (moved()) { leftBehind({ view: 'chat', id: r.conversation }, getState().conversations.find((c) => c.id === r.conversation)?.title ?? msg.slice(0, 60)); return; }
         if (onConversation) onConversation(r.conversation); else go({ view: 'chat', id: r.conversation });
@@ -562,8 +588,9 @@ export function ChatView({ route, onConversation, project: inProject }) {
         // (3.2.1: in God mode, in the project chosen there).
         const project = inProject ?? app.activeProject?.name ?? null;
         const s = await act(call('sessions.create', { agent: brain.agent, account: brain.account && brain.account !== brain.agent ? brain.account : undefined, model: brain.model || undefined, reasoning: brain.reasoning, project, permission: project ? 'editar' : 'leer' }));
-        if (!s) { if (!moved()) setText(msg); return; }
-        await act(call('sessions.send', { id: s.id, text: msg }));
+        if (!s) { dropPending(mine); if (!moved()) setText(msg); return; }
+        movePending(mine, `session:${s.id}`);
+        if ((await act(call('sessions.send', { id: s.id, text: msg }))) === undefined) dropPending(mine);
         await refresh().catch(() => {});
         if (!stillHere(ticket)) { leftBehind({ view: 'session', id: s.id }, s.title); return; }
         go({ view: 'session', id: s.id });
@@ -594,9 +621,15 @@ export function ChatView({ route, onConversation, project: inProject }) {
     }
     settings({ agent: b.agent, model: b.model, account: b.account });
   };
-  const lines = [...older, ...rows];
+  const saved = [...older, ...rows];
+  // The answer that ended the turn goes after the lines until a new read of the conversation brings it.
+  const lastId = saved.at(-1)?.id ?? 0;
+  const lines = answer && answer.id > lastId ? [...saved, answer] : saved;
+  const unsaved = pendingShown(pending, lines.filter((m) => m.role === 'usuario').map((m) => ({ id: m.id, text: m.body })));
+  useEffect(() => { for (const p of pending) if (!unsaved.includes(p)) dropPending(p.id); }, [pending, unsaved]);
   // 3.6: «Compactar» when the conversation's context is at 70 % or more (never while it answers).
-  const context = chat.context ?? conv?.context ?? null;
+  const live = useMemo(() => (chat.size ? { used: chat.used, size: chat.size } : null), [chat.used, chat.size]);
+  const context = live ?? conv?.context ?? null;
   const [compacting, setCompacting] = useState(false);
   const compactable = id != null && !chat.waiting && (compacting || (!chat.busy && context?.size > 0 && context.used / context.size >= COMPACT_AT));
   const compact = async () => {
@@ -661,17 +694,9 @@ export function ChatView({ route, onConversation, project: inProject }) {
               <div className="mt-3 flex max-w-xl flex-wrap justify-center gap-2">{suggestionsFor(workProject?.name).map((s) => <Button key={s} variant="outline" size="sm" className="h-auto max-w-full shrink rounded-full py-1.5 whitespace-normal" onClick={() => setText(t(s))}>{t(s)}</Button>)}</div>
             </div>
           ) : lines.map((m) => <Message key={m.id} m={m} name={name} onChanges={askChanges} />)}
+          {unsaved.map((p) => <Message key={p.id} m={{ id: p.id, role: 'usuario', body: p.text, at: p.at }} name={name} onChanges={askChanges} />)}
           <TaskLines conversation={id} />
-          {chat.busy || chat.waiting || sending ? (
-            <div className="flex gap-3">
-              <Robot size={32} mood={chat.partial ? 'talking' : 'thinking'} className="mt-0.5" />
-              <div className="chat-glass min-w-0 flex-1">
-                <div className="text-muted-foreground mb-1 text-xs">{name}</div>
-                {chat.partial ? <Markdown>{chat.partial}</Markdown> : null}
-                {chat.waiting ? <div className="text-muted-foreground text-[13px]" data-testid="chat-waiting-turn">{t('chat.waitingTurn')}</div> : <LiveActivity chat={chat} />}
-              </div>
-            </div>
-          ) : null}
+          {chat.busy || chat.waiting || sending ? <LiveAnswer id={id} name={name} /> : null}
         </div>
       </div>
       <Composer value={text} onChange={setText} onSend={send} onStop={id != null ? () => act(call('chat.stop', { conversation: id })) : undefined} busy={chat.busy} disabled={sending} testid="chat-input"

@@ -9,6 +9,9 @@ import { t } from './i18n.js';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, baseSkin, plainSkin } from '../../core/appearance.mjs';
 export { plainSkin }; // 3.8.2: Profesional and the themes built on it (Cristal): no robot, no backdrop, no motion
 import { applyFeed, sinceOf } from '../../core/feed.mjs';
+import { frameBatch } from './batch.js';
+import { pendingShown } from './pending.js';
+export { pendingShown };
 
 // The bridge to the PC: the desktop app's (src/ui/lib/tauri-bridge.js), or the phone's web bridge (src/ui/lib/web-bridge.js). Read when used, not when
 // this module loads: the bundler may load this module before the phone's bridge has defined window.orb.
@@ -28,7 +31,9 @@ function firstOpenToday() {
   const day = new Date().toLocaleDateString('sv');
   try { if (localStorage.getItem('orb.testDay') === day) return false; localStorage.setItem('orb.testDay', day); return true; } catch { return false; }
 }
-let state = { version: 0, ready: false, info: null, app: null, sessions: [], projects: [], tasks: [], conversations: [], route: { view: 'chat' }, settings: null, testToday: null };
+// chats: 3.8.3, what each conversation with the assistant is doing now (answering, its streamed text, its steps), kept
+// apart from `app` so a streamed piece redraws only what shows it; answers: the line each one wrote last (by id).
+let state = { version: 0, ready: false, info: null, app: null, chats: [], answers: {}, sessions: [], projects: [], tasks: [], conversations: [], route: { view: 'chat' }, settings: null, testToday: null };
 const listeners = new Set();
 const emit = () => { for (const fn of listeners) fn(); };
 export const getState = () => state;
@@ -161,7 +166,8 @@ export const refresh = oneAtATime(async () => {
   try { [app, sessions, projects, tasks, conversations] = await Promise.all([call('app.state'), listOf('sessions.list'), listOf('projects.list', {}, (p) => p.name), listOf('tasks.list', { limit: 200 }), listOf('conversations.list')]); }
   catch (error) { for (const m of REFRESHED) feeds[m] = null; throw error; } // what did arrive is not shown: the next refresh asks for it whole
   // version: views refetch their own data when it moves. A list missing (an answer that came too late) stays as it was.
-  setState((s) => ({ app, sessions: sessions ?? s.sessions, projects: projects ?? s.projects, tasks: tasks ?? s.tasks, conversations: conversations ?? s.conversations, ready: true, version: s.version + 1 }));
+  const { chats, ...rest } = app;
+  setState((s) => ({ app: rest, chats: snapshotChats(s.chats, chats), sessions: sessions ?? s.sessions, projects: projects ?? s.projects, tasks: tasks ?? s.tasks, conversations: conversations ?? s.conversations, ready: true, version: s.version + 1 }));
   const { projects: all } = getState();
   // 3.2: the projects' icons, again only when the list of projects changes (or one is set by hand: loadProjectIcons).
   const names = all.map((p) => p.name).join('|');
@@ -207,9 +213,43 @@ export async function newChat(project) {
   if (project !== undefined && (project ?? '') !== (state.app?.activeProject?.name ?? '')) await act(call('projects.setActive', { name: project ?? '' }));
   go({ view: 'chat' });
 }
-// 3.2: what a conversation with the assistant is doing now (answering, its streamed text, its steps), from app.chats.
-export const chatOf = (app, id) => (id == null ? null : (app?.chats ?? []).find((c) => c.conversation === Number(id)) ?? null);
-export const anyChatBusy = (app) => (app?.chats ?? []).some((c) => c.busy);
+// 3.2: what a conversation with the assistant is doing now (answering, its streamed text, its steps).
+export const chatOf = (s, id) => (id == null ? null : (s.chats ?? []).find((c) => c.conversation === Number(id)) ?? null);
+export const anyChatBusy = (s) => (s.chats ?? []).some((c) => c.busy);
+// The engine's live states of the conversations (chat:state), drawn once per frame (only the newest of each counts; a
+// window hidden before that frame still gets them: lib/batch.js). A state that ends a turn brings the line it wrote.
+const liveAt = new Map(); // conversation → when its last live state arrived
+const chatStates = frameBatch((states) => setState((s) => {
+  let chats = s.chats; let answers = s.answers;
+  for (const p of states.values()) {
+    const others = chats.filter((c) => c.conversation !== p.conversation);
+    chats = p.busy || p.waiting ? [...others, p] : others;
+    if (p.answer) answers = { ...answers, [p.conversation]: p.answer };
+  }
+  return { chats, answers };
+}));
+export const chatStateSoon = (payload) => { liveAt.set(payload.conversation, Date.now()); chatStates.add(payload.conversation, payload); };
+export const flushChatStates = () => chatStates.flush();
+
+// 3.8.3: a message the user just sent shows at once (T3 Code's optimistic messages), before the engine has saved it.
+// where: 'chat:<id>', 'session:<id>' or 'new' (a new chat, until the engine says which conversation it made); after: the
+// last line on screen when it was sent. It goes when its saved line appears after that one (pendingShown) or the send fails.
+let pendingSeq = 0;
+export function addPending(where, text, after = 0) {
+  const p = { id: `pendiente-${++pendingSeq}`, where, text: String(text), after: Number(after) || 0, at: new Date().toISOString() };
+  setState((s) => ({ pending: [...(s.pending ?? []), p] }));
+  return p.id;
+}
+export const movePending = (id, where) => setState((s) => ({ pending: (s.pending ?? []).map((p) => (p.id === id ? { ...p, where } : p)) }));
+export const dropPending = (id) => setState((s) => ({ pending: (s.pending ?? []).filter((p) => p.id !== id) }));
+const NONE = [];
+export const usePending = (where) => useStore((s) => { const list = (s.pending ?? NONE).filter((p) => p.where === where); return list.length ? list : NONE; });
+// A refresh's snapshot of the states is older than a live state that came meanwhile (on a phone they come by different
+// connections): a conversation heard live in the last seconds keeps its live state.
+function snapshotChats(live, snapshot = []) {
+  const recent = (id) => Date.now() - (liveAt.get(id) ?? 0) < 3000;
+  return [...live.filter((c) => recent(c.conversation)), ...snapshot.filter((c) => !recent(c.conversation))];
+}
 
 // Whether «Iniciar test» is offered in the chat (decided once per opening of the app, the first time the chat shows).
 export function initTestOfTheDay() { if (state.testToday === null) setState({ testToday: firstOpenToday() }); }

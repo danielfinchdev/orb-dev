@@ -25,7 +25,7 @@ import { ActionShortcuts } from '@/components/project-tools.jsx';
 import { CommandPalette } from '@/components/command-palette.jsx';
 import { Scene } from '@/components/scene.jsx';
 import { Robot } from '@/components/robot.jsx';
-import { useStore, setState, getState, refresh, refreshSoon, call, bridge, act, go, goBack, resetRoute, setViews, applyTheme, openTerminal, startTour, closeSettings, anyChatBusy, phoneLayout, loadOrbInbox, loadOrbInboxSoon } from '@/lib/store.js';
+import { useStore, setState, getState, refresh, refreshSoon, call, bridge, act, go, goBack, resetRoute, setViews, applyTheme, openTerminal, startTour, closeSettings, anyChatBusy, chatStateSoon, flushChatStates, phoneLayout, loadOrbInbox, loadOrbInboxSoon } from '@/lib/store.js';
 import { restoreRoute, keyboardOpen } from '@/lib/phone-nav.js';
 import { listenPoints } from '@/lib/browser-points.js';
 import { startupPhase } from '@/lib/startup.js';
@@ -37,7 +37,6 @@ import { isOffline, retryLoop } from '@/lib/net.js';
 import { ago } from '@/lib/utils.js';
 import { ErrorBoundary } from '@/components/error-boundary.jsx';
 import { lazyScreen } from '@/lib/lazy.js';
-import { frameBatch } from '@/lib/batch.js';
 import { AGENT } from '@/lib/labels.js';
 import { WindowControls } from '@/components/window-controls.jsx';
 import { useT, t as tNow } from '@/lib/i18n.js';
@@ -173,8 +172,8 @@ function Shell() {
   const shortcutProject = projects.find((p) => p.name === (route.view === 'expert' ? expertProject : app.activeProject?.name)) ?? null;
   useEffect(() => { if (!drawer) return undefined; const esc = (e) => { if (e.key === 'Escape') setDrawer(false); }; window.addEventListener('keydown', esc); return () => window.removeEventListener('keydown', esc); }, [drawer]);
   // 3.2: the robot thinks while the assistant answers in any conversation (and talks while one streams its answer).
-  const busy = anyChatBusy(app);
-  const mood = busy ? ((app.chats ?? []).some((c) => c.partial) ? 'talking' : 'thinking') : 'idle';
+  // 3.8.3: a word, not the states themselves: a streamed piece does not redraw the whole window.
+  const mood = useStore((s) => (anyChatBusy(s) ? (s.chats.some((c) => c.partial) ? 'talking' : 'thinking') : 'idle'));
   AGENT.orb = app.config.assistantName;
   // 2.6: the guided tour, once, the first time the app opens after the setup (never on the phone); later from Tutoriales.
   const tour = useStore((s) => s.tour);
@@ -217,15 +216,7 @@ function Shell() {
   );
 }
 
-// The conversations' states that arrived since the last frame, drawn together (only the newest one of each counts). A
-// window hidden before that frame still gets them (lib/batch.js: 100 ms at the latest, and at once when it hides or shows).
-const chatStates = frameBatch((states) => setState((s) => {
-  let chats = s.app?.chats ?? [];
-  for (const p of states.values()) { const others = chats.filter((c) => c.conversation !== p.conversation); chats = p.busy || p.waiting ? [...others, p] : others; }
-  return { app: { ...s.app, chats } };
-}));
-document.addEventListener('visibilitychange', chatStates.flush);
-const chatStateSoon = (payload) => chatStates.add(payload.conversation, payload);
+document.addEventListener('visibilitychange', flushChatStates);
 
 let coreLost = false;
 // The linking screen's own «back» (AppLink): true when it took the press.

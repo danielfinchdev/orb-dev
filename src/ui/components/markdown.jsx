@@ -9,6 +9,7 @@ import { SquareTerminal } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import { remarkPlugins, richKind, isInlineMath, textOf } from '@/lib/markdown-plugins.js';
+import { splitBlocks } from '@/lib/md-blocks.js';
 import { MathBlock, MermaidBlock } from './rich-blocks.jsx';
 import { bridge, fullPc } from '@/lib/store.js';
 import { pasteToTerminal, oneCommand, SHELL_LANGUAGES } from '@/lib/terminal-paste.js';
@@ -67,9 +68,20 @@ const components = {
 
 const FENCE_WITH_LANGUAGE = /(^|\n)[ \t]*(```|~~~)[ \t]*[\w#+.-]/;
 
+// The Markdown of one text, without a box of its own (react-markdown draws its elements straight into the parent).
+const Parsed = memo(function Parsed({ text }) {
+  const hl = useHighlight(FENCE_WITH_LANGUAGE.test(text));
+  return <ReactMarkdown skipHtml components={components} remarkPlugins={remarkPlugins} rehypePlugins={hl?.rehypePlugins} urlTransform={urlTransform}>{text}</ReactMarkdown>;
+});
+
 // Memoised on its text: a message drawn again (the list refreshed, the view re-rendered) is not parsed again.
 export const Markdown = memo(function Markdown({ children, className }) {
-  const text = String(children ?? '');
-  const hl = useHighlight(FENCE_WITH_LANGUAGE.test(text));
-  return <div className={cn('prose-chat', className)}><ReactMarkdown skipHtml components={components} remarkPlugins={remarkPlugins} rehypePlugins={hl?.rehypePlugins} urlTransform={urlTransform}>{text}</ReactMarkdown></div>;
+  return <div className={cn('prose-chat', className)}><Parsed text={String(children ?? '')} /></div>;
 });
+
+// 3.8.3: an answer still streaming: block by block (lib/md-blocks.js), so the finished blocks keep what they drew and only
+// the last one is parsed again with each piece. The same elements, in the same box, as Markdown draws for the whole text.
+export function StreamingMarkdown({ children, className }) {
+  const blocks = splitBlocks(children);
+  return <div className={cn('prose-chat', className)}>{blocks.map((text, i) => <Parsed key={i} text={text} />)}</div>;
+}

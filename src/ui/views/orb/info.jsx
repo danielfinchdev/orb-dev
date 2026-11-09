@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Badge, Input, Spinner } from '@/components/ui/basic.jsx';
 import { Switch, BubbleTip } from '@/components/ui/overlay.jsx';
 import { InfoFrame, List, Row } from '@/components/info-frame.jsx';
-import { useStore, call, act, go, setState, newChat, orbAct, closeOrbInfo, openOrbInfo, refreshSoon, phoneLayout, fullPc } from '@/lib/store.js';
+import { useStore, call, act, go, setState, newChat, orbAct, closeOrbInfo, openOrbInfo, refreshSoon, phoneLayout, fullPc, chatOf } from '@/lib/store.js';
 import { notify } from '@/lib/notify.js';
 import { STATUS } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
@@ -70,13 +70,13 @@ function ChatInfo({ conv }) {
   const name = useStore((s) => s.app?.config?.assistantName ?? 'Orbe');
   const you = useStore((s) => s.app?.config?.userName?.trim()) || t('orbchats.exportYou');
   const tasks = useStore((s) => s.tasks.filter((x) => x.conversation_id === conv.id));
-  const chat = useStore((s) => (s.app?.chats ?? []).find((c) => c.conversation === conv.id) ?? null);
+  const liveContext = useStore((s) => chatOf(s, conv.id)?.context ?? null); // compared field by field: not redrawn per streamed piece
   const item = useOrbItems().find((x) => x.key === `conversation:${conv.id}`) ?? null;
   const [busy, setBusy] = useState(null);
   const ref = { kind: 'conversation', id: conv.id };
   const brain = { agent: conv.agent ?? 'claude', model: conv.model ?? '', account: conv.account ?? conv.agent, reasoning: conv.reasoning ?? 'medium' };
   const settings = async (patch) => { const r = await act(call('chat.settings', { ...patch, conversation: conv.id })); if (r) refreshSoon(); };
-  const context = chat?.context ?? conv.context ?? null;
+  const context = liveContext ?? conv.context ?? null;
   const pct = context?.size ? Math.min(100, Math.round((context.used / context.size) * 100)) : null;
   const started = (() => {
     const d = new Date(conv.created_at ?? ''); if (Number.isNaN(d.getTime())) return '';

@@ -5,7 +5,7 @@ import { lazy, memo, Suspense, useEffect, useMemo, useState } from 'react';
 import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, RefreshCw, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Ellipsis, Gamepad2, Smartphone, Gauge, Shuffle, ScreenShare, SquareTerminal } from 'lucide-react';
 import { unlockCore } from '@/lib/core-access.js';
 import { toast } from 'sonner';
-import { Markdown } from '@/components/markdown.jsx';
+import { Markdown, StreamingMarkdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
@@ -26,7 +26,7 @@ import { GeneratedImage, openImage } from '@/components/image-viewer.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Textarea, Empty, Spinner } from '@/components/ui/basic.jsx';
 import { Select, Collapsible, CollapsibleTrigger, CollapsibleContent, Tip, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
-import { useStore, call, act, go, bridge, refresh, getState, fullPc, openGames } from '@/lib/store.js';
+import { useStore, call, act, go, bridge, refresh, getState, fullPc, openGames, addPending, dropPending, pendingShown, usePending } from '@/lib/store.js';
 import { AGENT, PERMISSION, REASONING, STATUS, DECISION, CAN_STEER as AGENT_CAN_STEER, CAN_COMPACT, options } from '@/lib/labels.js';
 import { baseName, cn } from '@/lib/utils.js';
 import { useT, t, useLocale, currentLocale } from '@/lib/i18n.js';
@@ -323,6 +323,31 @@ async function showDetails(s, task) {
   });
 }
 
+// 3.8.3: the text the agent is writing now, the only part of the conversation that follows each streamed piece: the
+// pieces of a frame are drawn together, and its finished blocks are not parsed again (StreamingMarkdown). It empties
+// when the agent's text arrives as an item (in the same frame the item is drawn) or the turn ends.
+function LivePartial({ id, agent, running }) {
+  const t = useT();
+  const [partial, setPartial] = useState('');
+  useEffect(() => {
+    let buffer = ''; let frame = null;
+    const flush = () => { frame = null; if (!buffer) return; const add = buffer; buffer = ''; setPartial((p) => (p + add).slice(-6000)); };
+    const offDelta = bridge.on('session:delta', (d) => {
+      if (d.id !== id) return;
+      buffer += d.text;
+      frame ??= document.hidden ? setTimeout(flush, 100) : requestAnimationFrame(flush);
+    });
+    const offItem = bridge.on('session:item', (it) => { if (it.session_id === id && it.role === 'assistant' && it.kind === 'text') { buffer = ''; setPartial(''); } });
+    return () => { offDelta(); offItem(); if (frame != null) { cancelAnimationFrame(frame); clearTimeout(frame); } };
+  }, [id]);
+  useEffect(() => { if (!running) setPartial(''); }, [running]);
+  if (partial) return <div className="flex gap-3" data-testid="partial"><AgentIcon agent={agent} className="mt-1 size-5" /><div className="min-w-0 flex-1 opacity-90"><StreamingMarkdown>{partial}</StreamingMarkdown></div></div>;
+  return running ? <div className="text-muted-foreground flex items-center gap-2 text-[13px]"><span className="bg-info size-2 animate-pulse rounded-full" />{t('session.agentWorking', { agent: AGENT[agent] })}</div> : null;
+}
+
+// What the user wrote, as the engine keeps it (a text, or { text, images }).
+const userText = (it) => (typeof it.body === 'string' ? it.body : it.body?.text ?? '');
+
 export function SessionView({ route }) {
   const t = useT();
   const sessions = useStore((s) => s.sessions);
@@ -332,7 +357,6 @@ export function SessionView({ route }) {
   const s = sessions.find((x) => x.id === route.id) ?? archived;
   const [items, setItems] = useState([]);
   const [more, setMore] = useState(false);
-  const [partial, setPartial] = useState('');
   const [queue, setQueue] = useState([]);
   const [text, setText] = useState('');
   const [images, setImages] = useState([]);
@@ -355,7 +379,7 @@ export function SessionView({ route }) {
   }, [route.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     let alive = true;
-    setItems([]); setPartial(''); setQueue([]);
+    setItems([]); setQueue([]);
     if (!sessions.some((x) => x.id === route.id)) call('sessions.list', { archived: true }).then((all) => alive && setArchived(all.find((x) => x.id === route.id) ?? null)).catch(() => {});
     // Merged with what arrived live meanwhile: on the phone the live events come by another connection and can get here
     // before this answer (a live copy of an item is the newer one).
@@ -368,16 +392,18 @@ export function SessionView({ route }) {
     const offItem = bridge.on('session:item', (it) => {
       if (it.session_id !== route.id) return;
       setItems((prev) => { const i = prev.findIndex((p) => p.id === it.id); if (i >= 0) { const next = prev.slice(); next[i] = it; return next; } return [...prev, it]; });
-      if (it.role === 'assistant' && it.kind === 'text') setPartial('');
     });
-    const offDelta = bridge.on('session:delta', (d) => { if (d.id === route.id) setPartial((p) => (p + d.text).slice(-6000)); });
     const offQueue = bridge.on('session:queue', (q) => { if (q.id === route.id) setQueue(q.queue); });
-    return () => { alive = false; offItem(); offDelta(); offQueue(); };
+    return () => { alive = false; offItem(); offQueue(); };
   }, [route.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const tb = useT(); // H4a B2: «Resultado» in the language on screen
   const blocks = useMemo(() => toBlocks(items, tb), [items, tb]);
-  const scroll = useAutoScroll([blocks.length, items.at(-1)?.id, partial.length > 0, Math.floor(partial.length / 200)]);
-  useEffect(() => { if (s && s.status !== 'running') setPartial(''); }, [s?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 3.8.3: what the user sent and the engine has not saved yet shows at once (lib/store.js › addPending).
+  const pending = usePending(`session:${route.id}`);
+  const unsaved = pendingShown(pending, items.filter((it) => it.role === 'user' && it.kind === 'text').map((it) => ({ id: it.id, text: userText(it) })));
+  useEffect(() => { for (const p of pending) if (!unsaved.includes(p)) dropPending(p.id); }, [pending, unsaved]);
+  // (The streamed text grows the lines' height: the ResizeObserver of useAutoScroll follows it.)
+  const scroll = useAutoScroll([blocks.length, items.at(-1)?.id, unsaved.length]);
   const catalog = useCatalog();
   const [compacting, setCompacting] = useState(false);
   if (!s) return <Empty title={t('session.gone')} className="flex-1" />;
@@ -413,9 +439,14 @@ export function SessionView({ route }) {
   const send = async ({ alt = false } = {}) => {
     const msg = text.trim(); if (!msg && !images.length) return;
     const mode = running ? (alt ? 'queue' : 'auto') : 'auto';
-    const r = await act(call('sessions.send', { id: s.id, text: msg || t('session.lookAtFiles'), images, mode }));
-    if (r === undefined) return;
+    const said = msg || t('session.lookAtFiles'); const sentImages = images;
+    // 3.8.3: the box empties at once and, when the agent is free (the message starts a turn), the message shows at once;
+    // while it works the message may go to the queue instead, which shows it when the engine says so.
     setText(''); setImages([]);
+    const mine = running ? null : addPending(`session:${s.id}`, said, items.at(-1)?.id ?? 0);
+    const r = await act(call('sessions.send', { id: s.id, text: said, images: sentImages, mode }));
+    if (r === undefined || r?.queued) { if (mine) dropPending(mine); }
+    if (r === undefined) { setText((now) => (now.trim() ? now : msg)); setImages((now) => (now.length ? now : sentImages)); return; }
     if (r?.steered) toast.success(t('session.steerSent'));
     else if (r?.queued) toast.success(s.kind === 'task' && !running ? t('session.resentTask') : t('session.queuedToast'));
   };
@@ -472,10 +503,10 @@ export function SessionView({ route }) {
       <div ref={scroll.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
         <div className="lazy-lines mx-auto flex max-w-3xl flex-col gap-3.5 px-5 py-6">
           {more ? <Button variant="ghost" size="sm" className="self-center" onClick={loadOlder}><ChevronUp />{t('session.older')}</Button> : null}
-          {blocks.length ? blocks.map((b) => <Block key={b.key} b={b} agent={s.agent} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />)
+          {blocks.length || unsaved.length ? blocks.map((b) => <Block key={b.key} b={b} agent={s.agent} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />)
             : <Empty title={t('session.emptyTitle', { agent: AGENT[s.agent] })}>{t('session.workIn')} <span className="font-mono text-xs">{s.cwd}</span> {t('session.withPerm', { perm: PERMISSION[s.permission] })}</Empty>}
-          {partial ? <div className="flex gap-3" data-testid="partial"><AgentIcon agent={s.agent} className="mt-1 size-5" /><div className="min-w-0 flex-1 opacity-90"><Markdown>{partial}</Markdown></div></div> : null}
-          {running && !partial ? <div className="text-muted-foreground flex items-center gap-2 text-[13px]"><span className="bg-info size-2 animate-pulse rounded-full" />{t('session.agentWorking', { agent: AGENT[s.agent] })}</div> : null}
+          {unsaved.map((p) => <Block key={p.id} b={{ type: 'item', key: p.id, item: { id: p.id, session_id: s.id, role: 'user', kind: 'text', body: p.text, at: p.at } }} agent={s.agent} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />)}
+          <LivePartial key={s.id} id={s.id} agent={s.agent} running={running} />
           {/* 3.8.2: a task's conversation ends with the files it changed (nothing while it runs). */}
           {task && !['running', 'queued'].includes(task.status) ? <TaskChanges taskId={task.id} version={`${task.status}:${task.updated_at}`} /> : null}
           {stalled ? (

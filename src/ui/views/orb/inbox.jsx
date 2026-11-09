@@ -39,7 +39,9 @@ export function useOrbItems() {
   const conversations = useStore((s) => s.conversations);
   const sessions = useStore((s) => s.sessions);
   const tasks = useStore((s) => s.tasks);
-  const chats = useStore((s) => s.app?.chats);
+  // 3.8.3: only which conversations are answering (a streamed piece does not redraw the list).
+  const liveKey = useStore((s) => s.chats.filter((c) => c.busy || c.waiting).map((c) => c.conversation).join(','));
+  const chats = useMemo(() => (liveKey ? liveKey.split(',').map((c) => ({ conversation: Number(c), busy: true })) : []), [liveKey]);
   const approvals = useStore((s) => s.app?.approvals);
   const completed = useStore((s) => s.app?.completed);
   return useMemo(() => orbItems({ inbox, conversations, sessions, tasks, chats, approvals, completed }).map((x) => ({ ...x, agentName: AGENT[x.agent] ?? x.agent })),
