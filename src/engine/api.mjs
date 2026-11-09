@@ -32,7 +32,7 @@ import { modelCatalog, chooseModel, LEVELS, REASONING_LEVELS, levelsOf } from '.
 import { titleFrom } from '../core/titles.mjs';
 import { autoTitle } from './titles.mjs';
 import { projectIcon, setProjectIcon, clearProjectIcon, renameProjectIcon } from './project-icons.mjs';
-import { git, slug } from '../core/workspace.mjs';
+import { git, slug, diffBetween } from '../core/workspace.mjs';
 import { authorize, PermissionError } from '../core/permissions.mjs';
 import { fld, fail, str, int, oneOf, images, DECISION } from './api-common.mjs';
 import { linkMethods } from './api-link.mjs';
@@ -578,6 +578,14 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'tasks.reassign': ({ id, agent, model, reasoning }) => board.reassign(int(id, 'tarea'), { agent: oneOf(agent, [...AGENT_IDS, 'any'], 'agente'), model: str(model, 'modelo', 80, { optional: true }) || null, reasoning: oneOf(reasoning, ['low', 'medium', 'high'], 'razonamiento') }, 'usuario'),
     'tasks.followup': ({ id, text, images: files }) => scheduler.followup(int(id, 'tarea'), str(text, 'mensaje', 20000), images(files)),
     'tasks.undo': ({ id }) => scheduler.undo(int(id, 'tarea')),
+    // 3.8.2: what a finished task changed, with each file's diff (read only, against its undo checkpoint: «Deshacer» works
+    // as before). Nothing to show while it runs, after it was undone, or without git (a copy checkpoint).
+    'tasks.diff': ({ id }) => {
+      const task = board.task(int(id, 'tarea')) ?? fail(tr('msg.api.noTaskThat'));
+      const cp = board.settingJson(`checkpoint:${task.id}`);
+      if (cp?.before?.kind !== 'git' || !cp.after?.commit || !cp.before.repo || !fs.existsSync(cp.before.repo)) return { available: false, files: [], more: 0 };
+      return { available: true, ...diffBetween(cp.before.repo, cp.before.commit, cp.after.commit) };
+    },
     'tasks.launchAnyway': ({ id }) => { const t = board.task(int(id, 'tarea')); if (t?.status !== 'queued') fail(tr('msg.api.onlyQueued')); board.setting(`budget_ok:${t.id}`, '1'); board.event(t.id, 'usuario', 'budget.authorised', 'lanzar aunque supere el límite de uso'); return true; },
     'tasks.accept': ({ id }) => accept([int(id, 'tarea')]),
     'tasks.discardBranch': ({ id }) => scheduler.discardBranch(int(id, 'tarea')),

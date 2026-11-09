@@ -101,5 +101,14 @@ export default {
   'tasks.result': 'Result',
   'tasks.history': 'History ({n})',
   'tasks.undone': 'Undone',
-  'tasks.undoneNote': 'Undone on {when}: the files are back as they were before the task.'
+  'tasks.undoneNote': 'Undone on {when}: the files are back as they were before the task.',
+  'tasks.changes.title': 'Changes',
+  'tasks.changes.filesOne': '{n} file',
+  'tasks.changes.filesOther': '{n} files',
+  'tasks.changes.more': '{n} more files not shown.',
+  'tasks.changes.copyPath': 'Copy path',
+  'tasks.changes.copied': 'Path copied',
+  'tasks.changes.binary': 'Binary file.',
+  'tasks.changes.tooBig': 'Diff too large to show.',
+  'tasks.changes.noText': 'No text changes.'
 };

@@ -14,6 +14,7 @@ import { useStore, call, act, go, bridge, setState, getState } from '@/lib/store
 import { AGENT } from '@/lib/labels.js';
 import { cn, errorText } from '@/lib/utils.js';
 import { useHighlight } from '@/lib/use-highlight.js';
+import { DiffLines } from '@/components/diff-view.jsx';
 import { t, useT, useLocale } from '@/lib/i18n.js';
 import { stepText } from '@/components/chat-live.jsx';
 import { activityLabel, activityDetail } from '@/lib/activity.js';
@@ -98,46 +99,10 @@ function CodeView({ text, path }) {
     </div>
   );
 }
-// A diff's kinds of line. After "diff --git" come header lines (index, ---, +++…) until the first hunk ("@@") or the
-// "+++" line, so a removed line that starts with "--" is still a removed line.
-const MAX_DIFF_HIGHLIGHT = 8000; // lines; past that the diff is shown plain (it is coloured line by line)
-function diffRows(text, hl) {
-  const out = [];
-  let header = false; let lang = null;
-  const all = text.split('\n');
-  const colour = hl && all.length <= MAX_DIFF_HIGHLIGHT;
-  for (const l of all) {
-    if (l.startsWith('diff --git ')) { header = true; lang = hl?.languageFor(/ b\/(.+)$/.exec(l)?.[1]); out.push({ kind: 'meta', l }); continue; }
-    if (header) {
-      const m = /^(?:---|\+\+\+) [ab]\/(.+)$/.exec(l); if (m && hl) lang = hl.languageFor(m[1]) ?? lang;
-      if (l.startsWith('+++ ')) header = false;
-      if (l.startsWith('@@')) { header = false; out.push({ kind: 'hunk', l }); continue; }
-      out.push({ kind: 'meta', l }); continue;
-    }
-    if (l.startsWith('@@')) { out.push({ kind: 'hunk', l }); continue; }
-    if (l.startsWith('\\')) { out.push({ kind: 'meta', l }); continue; } // "\ No newline at end of file"
-    const signed = l[0] === '+' || l[0] === '-' || l[0] === ' ';
-    const body = signed ? l.slice(1) : l;
-    const kind = l[0] === '+' ? 'add' : l[0] === '-' ? 'del' : 'ctx';
-    out.push({ kind, sign: signed ? l[0] : '', code: colour ? hl.highlightLine(body, lang, createElement) : body ? [body] : [] });
-  }
-  return out;
-}
-const ROW = { add: 'code-add', del: 'code-del', hunk: 'code-hunk', meta: 'code-meta-line', ctx: '' };
 function DiffView({ text }) {
   const t = useT();
-  const hl = useHighlight(Boolean(text));
-  const rows = useMemo(() => (text ? diffRows(text, hl) : []), [text, hl]);
   if (!text) return <Empty icon={FileDiff} title={t('expert.noChanges')}>{t('expert.noChangesBody')}</Empty>;
-  return (
-    <div className="code-surface min-h-full w-max min-w-full py-2 text-[12.5px] leading-[1.55]" data-testid="expert-diff">
-      {rows.map((r, i) => (
-        <div key={i} className={cn('px-3 whitespace-pre', ROW[r.kind])}>
-          {r.code ? <><span className="code-sign">{r.sign}</span>{r.code.length ? r.code : (r.sign ? null : ' ')}</> : (r.l || ' ')}
-        </div>
-      ))}
-    </div>
-  );
+  return <DiffLines text={text} className="min-h-full" testid="expert-diff" />;
 }
 // 3.2.1: a picture of the project is shown as a picture (it said «binary file, cannot be shown as text»).
 const IMAGE = /\.(png|jpe?g|webp|gif)$/i;
