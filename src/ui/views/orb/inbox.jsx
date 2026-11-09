@@ -339,7 +339,7 @@ function Places() {
   const config = useStore((s) => s.app?.config);
   const places = [['tasks', ListTodo, 'nav.tasks'], ['projects', FolderKanban, 'nav.projects'], ['schedules', CalendarClock, 'nav.schedules'], ['board', PenTool, 'nav.board']];
   const more = config?.expert?.enabled && fullPc() ? [['expert', SquareTerminal, 'nav.expert']] : [];
-  const cls = (on) => cn('press relative flex min-w-0 cursor-pointer flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-[11.5px] transition-colors', on ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground');
+  const cls = (on) => cn('press relative flex min-w-0 cursor-pointer flex-col items-center gap-0.5 rounded-lg px-0 py-1.5 text-[11.5px] transition-colors', on ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground');
   return (
     <nav className={cn('grid gap-0.5 px-2 pb-1', more.length ? 'grid-cols-5' : 'grid-cols-4')} aria-label={t('orbchats.places')} data-testid="orb-places">
       {places.map(([id, Icon, label]) => (
