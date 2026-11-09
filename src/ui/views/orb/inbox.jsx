@@ -169,6 +169,10 @@ export async function deleteChat(item, t) {
   if (!ok) return false;
   const r = getState().route;
   if (r.view === 'chat' && r.id === item.id) { closeOrbInfo(); go({ view: phoneLayout() ? 'chats' : 'chat' }); }
+  // 3.8.3: gone from the list as soon as the engine agrees (it waited for the refresh that follows); the reads after it
+  // bring the same.
+  const key = `conversation:${item.id}`;
+  setState((s) => ({ conversations: s.conversations.filter((c) => c.id !== item.id), ...(s.orbInbox?.items ? { orbInbox: { ...s.orbInbox, items: s.orbInbox.items.filter((x) => x.key !== key) } } : {}) }));
   refreshSoon(); loadOrbInbox();
   return true;
 }
