@@ -58,7 +58,7 @@ const inst = lazy(() => import('./installer.mjs'));
 const exp = lazy(() => import('./expert.mjs'));
 const boards = lazy(() => import('./whiteboard.mjs'));
 
-export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef = { current: null }, onUnlocked = () => {} }) {
+export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef = { current: null }, onUnlocked = () => {}, onLocked = () => {} }) {
   const realHome = (() => { try { return fs.realpathSync(ctx.home); } catch { return ctx.home; } })();
   let catalogCache = null; // models.catalog, for a few seconds (see there)
   const insideHome = (p) => { const rel = path.relative(realHome, p); return Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel); };
@@ -756,7 +756,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...data.methods,
     // 3.8.2: Orb locked (or a new password): the grants go, and so do the secrets typed for the agents.
     // 3.8.2 (security review): under the lock screen the user's terminals take nothing and show nothing (user-terminal.mjs).
-    ...masterMethods({ ...shared, onUnlocked, onLock: (why) => { secrets.wipe(); return grants.revokeAll(why); }, onScreen: (v) => terminals.setLocked(v) }),
+    ...masterMethods({ ...shared, onUnlocked, onLock: (why) => { secrets.wipe(); try { onLocked(); } catch (error) { log(`bloqueo: ${error.message}`); } return grants.revokeAll(why); }, onScreen: (v) => terminals.setLocked(v) }),
     // 3.8.2 (T3 3.4): the private card of a secret an agent asked for (this PC only; saving or using a saved one asks for
     // the master password: permissions.mjs › needsUnlock).
     'secrets.pending': () => secrets.pending(),

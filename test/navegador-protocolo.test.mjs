@@ -253,6 +253,13 @@ test('navegador del motor: señalar un elemento y grabar lo que hace el agente',
     assert.equal(avi.toString('latin1', 0, 4), 'RIFF'); assert.equal(avi.toString('latin1', 8, 12), 'AVI ');
     assert.ok(avi.includes(Buffer.from('MJPG')) && avi.includes(Buffer.from('idx1')));
     assert.equal(pointed.length, 1);
+    // 3.8.2 (phase 10b): Orb locking stops a recording (what it got is saved, as with «Parar»).
+    h.hb.pip('grabar');
+    await c.act('open', { url: `${base}/boton` }); // a new paint, so new pictures
+    await wait(1500);
+    await h.hb.lock();
+    await until(() => saved.length === 2, 'la grabación parada al bloquear', 10000);
+    assert.equal(await h.hb.lock(), null, 'sin grabación, bloquear no hace nada');
     c.end();
   } finally { delete PAGES['/boton']; await h.close(); }
 });

@@ -375,7 +375,9 @@ async function run(board, { home, version, restored, repair }) {
   const { settleWaitingKeys } = await import('./api-extensions.mjs');
   const onUnlocked = () => { settleWaitingKeys(board, log); if (ctx.config.mobile?.enabled) remote?.start().catch((error) => log(`móvil: ${error.message}`)); };
   if (ctx.master.unlocked()) settleWaitingKeys(board, log);
-  api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, onUnlocked });
+  // 3.8.2: Orb locked: the agents' browser stops recording (host-browser.mjs › lock).
+  const onLocked = () => { hostBrowser?.lock().catch?.((error) => log(`navegador del agente: grabación: ${error.message}`)); };
+  api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, onUnlocked, onLocked });
   remote = remoteRef.current = createRemote({ board, api, log, emit, version });
   // 3.1: only an unpacked Orb.dev started with ORB_DEV_CONTROL=1 (the app decides: src-tauri/src/lib.rs; never an installed Orb).
   if (process.env.ORB_DEV_CONTROL === '1') {

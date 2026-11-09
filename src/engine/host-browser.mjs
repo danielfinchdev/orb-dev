@@ -178,6 +178,9 @@ export function createHostBrowser({ call = hostCall, language = () => 'es', skin
       else if (action === 'loaded') sendState();
       return { ...browser.state(), pip: shown };
     },
+    // Orb locked: the recording stops (what it got is saved in its chat, as with «Parar»); nothing is recorded behind the
+    // lock screen.
+    lock: () => stopRecording(),
     shutdown() { clearTimeout(frameTimer); if (recording) { clearTimeout(recording.timer); recording = null; } browser.shutdown(); hide(); }
   };
 }
