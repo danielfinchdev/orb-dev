@@ -291,3 +291,32 @@ test('review M2: restored on another PC with the recovery code, the code keeps w
     assert.equal(K.isRecoveryCode(path.join(t.base, 'mismo-pc'), pcA, code), true, 'en el mismo PC, tal cual');
   } finally { t.cleanup(); }
 });
+
+test('3.8.2: a copy reports its progress up to the end, and what a copy cut short left is cleaned only when it is old and Orb’s own', async () => {
+  const s = seed();
+  try {
+    const seen = [];
+    const { file } = await K.createBackup({ home: s.home, secret: s.secret, kind: 'preupdate', version: 'test', progress: (x) => seen.push(x) });
+    assert.ok(seen.length >= 3, `progreso: ${seen.join(' ')}`);
+    assert.ok(seen.every((x, i) => x >= 0 && x <= 1 && (i === 0 || x >= seen[i - 1])), `progreso no creciente: ${seen.join(' ')}`);
+    assert.ok(seen.at(-1) > 0.9, `progreso final: ${seen.at(-1)}`);
+    assert.ok((await K.verifyBackup(file, { secret: s.secret })).files >= 5);
+    const dir = path.dirname(file);
+    assert.deepEqual(fs.readdirSync(dir).filter((n) => n.startsWith('.preparando-')), [], 'la copia no deja su carpeta');
+    // What a copy cut short leaves (its stage with files, its unfinished file), and what is not Orb's.
+    const stale = path.join(dir, '.preparando-1yGvmE'); fs.mkdirSync(path.join(stale, 'core', 'datos'), { recursive: true }); fs.writeFileSync(path.join(stale, 'core', 'datos', 'orb.db'), 'x');
+    const partial = path.join(dir, 'orb-20261109-172444Z-preupdate.orbbak.1234.tmp'); fs.writeFileSync(partial, 'x');
+    const young = path.join(dir, '.preparando-AbC123'); fs.mkdirSync(young);
+    const others = ['.preparando-de-dani', 'notas.tmp', '.preparandoX-123456'].map((n) => path.join(dir, n));
+    fs.mkdirSync(others[0]); fs.writeFileSync(others[1], 'x'); fs.mkdirSync(others[2]);
+    const fileNamedLikeStage = path.join(dir, '.preparando-Zz9999'); fs.writeFileSync(fileNamedLikeStage, 'x');
+    const old = (Date.now() - 2 * 60 * 60_000) / 1000;
+    for (const f of [stale, partial, fileNamedLikeStage, ...others]) fs.utimesSync(f, old, old);
+    const now = Date.now() + 2 * 60 * 60_000; // birth times cannot be set: the clock moves instead (the young one is made "now")
+    fs.utimesSync(young, now / 1000, now / 1000);
+    assert.equal(await K.cleanStaleStages(dir, { now }), 2);
+    assert.ok(!fs.existsSync(stale) && !fs.existsSync(partial));
+    for (const f of [young, fileNamedLikeStage, ...others, file]) assert.ok(fs.existsSync(f), `no debía irse: ${path.basename(f)}`);
+    assert.equal(await K.cleanStaleStages(path.join(dir, 'no-existe')), 0);
+  } finally { s.board.db.close(); s.cleanup(); }
+});

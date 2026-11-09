@@ -269,32 +269,31 @@ const insideOf = (root, p) => { const r = path.relative(root, p); return Boolean
 
 // Copies what goes in to `stage` (a mini Orb folder) and returns the manifest.
 const archiveDirs = (internal) => { try { return fs.readdirSync(internal).filter((n) => n === ARCHIVE_DIR || n.startsWith(`${ARCHIVE_DIR}-`)).map((n) => path.join(internal, n)); } catch { return []; } };
-async function stageFiles(home, stage, { secret, includeProjects = false, includeAccounts = false, log = () => {} }) {
+// What goes in is listed first and copied after (progress: 0..1 over the files); each file is read once, written to the
+// stage and hashed from those same bytes, and each folder made once: the fewest disk calls (review 3.8.2: on a busy
+// engine every call waits its turn, and the pre-update copy of a few hundred files took minutes).
+async function stageFiles(home, stage, { secret, includeProjects = false, includeAccounts = false, log = () => {}, progress = () => {} }) {
   const p = paths(home);
   const files = [];
-  const put = async (src, archive) => {
-    const dest = path.join(stage, ...archive.split('/'));
-    await fsp.mkdir(path.dirname(dest), { recursive: true });
-    await fsp.copyFile(src, dest);
-    files.push(archive);
-  };
+  const jobs = [];
+  const put = (src, archive) => { jobs.push([src, archive]); };
   // The database, consistent while the engine writes (VACUUM INTO from its own connection).
   const dbOut = path.join(stage, INTERNAL_DIR, 'datos', 'orb.db');
   await fsp.mkdir(path.dirname(dbOut), { recursive: true });
+  const dbName = `${INTERNAL_DIR}/datos/orb.db`;
   if (fs.existsSync(p.db)) {
     const db = new DatabaseSync(p.db);
     try { db.exec('PRAGMA busy_timeout = 8000'); db.prepare('VACUUM INTO ?').run(dbOut); } finally { db.close(); }
-    files.push(`${INTERNAL_DIR}/datos/orb.db`);
   }
-  if (fs.existsSync(p.config)) await put(p.config, archiveName(home, p.config));
-  for (const name of DATA_FILES) { const f = path.join(p.data, name); if (fs.existsSync(f)) await put(f, `${INTERNAL_DIR}/datos/${name}`); }
+  if (fs.existsSync(p.config)) put(p.config, archiveName(home, p.config));
+  for (const name of DATA_FILES) { const f = path.join(p.data, name); if (fs.existsSync(f)) put(f, `${INTERNAL_DIR}/datos/${name}`); }
   // 3.8: the master password's files (core\secretos): the secrets stay sealed with the data key, which opens with the
   // master password (any PC) or this PC's secret. The count of wrong passwords stays on this PC.
-  for (const name of SECRET_FILES) { const f = path.join(p.secrets, name); if (fs.existsSync(f)) await put(f, archiveName(home, f)); }
-  for (const f of walkFiles(p.logs)) await put(f, archiveName(home, f));
+  for (const name of SECRET_FILES) { const f = path.join(p.secrets, name); if (fs.existsSync(f)) put(f, archiveName(home, f)); }
+  for (const f of walkFiles(p.logs)) put(f, archiveName(home, f));
   // 3.8.1: every server and every skill of core (not the links the agents load, core\skills\.activas, nor the versions
   // before the last change, .anterior: made again or not needed).
-  for (const dir of [p.mcp, p.skills]) for (const f of walkFiles(dir, (n) => NO_COPY.has(n) || n === LIVE_DIR || n === OLD_DIR)) await put(f, archiveName(home, f));
+  for (const dir of [p.mcp, p.skills]) for (const f of walkFiles(dir, (n) => NO_COPY.has(n) || n === LIVE_DIR || n === OLD_DIR)) put(f, archiveName(home, f));
   // The projects: their whiteboards always, the whole folder only if asked (without dependencies and build output).
   let projects = [];
   if (fs.existsSync(dbOut)) {
@@ -303,21 +302,29 @@ async function stageFiles(home, stage, { secret, includeProjects = false, includ
   }
   for (const pr of projects) {
     const inside = insideOf(home, pr.path);
-    if (includeProjects && inside) { for (const f of walkFiles(pr.path, (n) => NO_COPY.has(n))) await put(f, rel(home, f)); continue; }
+    if (includeProjects && inside) { for (const f of walkFiles(pr.path, (n) => NO_COPY.has(n))) put(f, rel(home, f)); continue; }
     const board = path.join(pr.path, 'pizarra');
     if (!fs.existsSync(board)) continue;
-    for (const f of walkFiles(board)) await put(f, inside ? rel(home, f) : `${INTERNAL_DIR}/pizarras-de-fuera/${String(pr.name).replace(/[^\w.-]+/g, '_')}/${path.relative(board, f).split(path.sep).join('/')}`);
+    for (const f of walkFiles(board)) put(f, inside ? rel(home, f) : `${INTERNAL_DIR}/pizarras-de-fuera/${String(pr.name).replace(/[^\w.-]+/g, '_')}/${path.relative(board, f).split(path.sep).join('/')}`);
   }
-  if (includeAccounts) for (const f of walkFiles(path.join(p.internal, 'cuentas'))) await put(f, archiveName(home, f));
+  if (includeAccounts) for (const f of walkFiles(path.join(p.internal, 'cuentas'))) put(f, archiveName(home, f));
   // 3.8: the archives of 3.7 (one per migration), never with sign-in folders (an archive of an early 3.8 build may have some).
-  for (const dir of archiveDirs(p.internal)) for (const f of walkFiles(dir, (n) => n === 'cuentas')) await put(f, archiveName(home, f));
+  for (const dir of archiveDirs(p.internal)) for (const f of walkFiles(dir, (n) => n === 'cuentas')) put(f, archiveName(home, f));
   const manifest = { format: FORMAT, files: [] };
   let bytes = 0;
-  for (const name of files) {
-    const full = path.join(stage, ...name.split('/'));
-    const data = await fsp.readFile(full);
-    bytes += data.length;
-    manifest.files.push({ p: name, s: data.length, h: sha256(data) });
+  const entry = (name, data) => { files.push(name); bytes += data.length; manifest.files.push({ p: name, s: data.length, h: sha256(data) }); };
+  if (fs.existsSync(dbOut)) entry(dbName, await fsp.readFile(dbOut));
+  const made = new Set([path.dirname(dbOut)]);
+  for (let i = 0; i < jobs.length; i++) {
+    const [src, archive] = jobs[i];
+    const dest = path.join(stage, ...archive.split('/'));
+    const dir = path.dirname(dest);
+    if (!made.has(dir)) { await fsp.mkdir(dir, { recursive: true }); made.add(dir); }
+    let data;
+    try { data = await fsp.readFile(src); } catch (error) { if (error.code === 'ENOENT') continue; throw error; } // gone meanwhile (a rotated log)
+    await fsp.writeFile(dest, data);
+    entry(archive, data);
+    progress((i + 1) / jobs.length);
     await tick();
   }
   log(`copia: ${files.length} archivos, ${bytes} bytes`);
@@ -347,7 +354,7 @@ class Sealer {
 }
 
 // Writes the .orbbak of a staged folder. keys: { secret (machine), recovery ({kdf, kek}) or passphrase }.
-async function writeOrbbak(out, stage, manifest, { secret, recovery = null, passphrase = null, meta }) {
+async function writeOrbbak(out, stage, manifest, { secret, recovery = null, passphrase = null, meta, progress = () => {} }) {
   const bodyKey = crypto.randomBytes(32);
   const id = crypto.randomBytes(16).toString('hex');
   const manifestBytes = Buffer.from(JSON.stringify(manifest));
@@ -368,7 +375,8 @@ async function writeOrbbak(out, stage, manifest, { secret, recovery = null, pass
     const s = new Sealer(fh, new Uint8Array(bodyKey), sha256(headerBytes));
     const entry = async (name, size) => { const h = Buffer.from(JSON.stringify({ p: name, s: size })); await s.push(Buffer.concat([u32(h.length), h])); };
     await entry('manifest.json', manifestBytes.length); await s.push(manifestBytes);
-    for (const f of manifest.files) {
+    for (const [i, f] of manifest.files.entries()) {
+      progress(i / manifest.files.length);
       await entry(f.p, f.s);
       const rh = await fsp.open(path.join(stage, ...f.p.split('/')), 'r');
       try { const buf = Buffer.alloc(CHUNK); let pos = 0; for (;;) { const { bytesRead } = await rh.read(buf, 0, CHUNK, pos); if (!bytesRead) break; pos += bytesRead; await s.push(buf.subarray(0, bytesRead)); } }
@@ -383,22 +391,51 @@ async function writeOrbbak(out, stage, manifest, { secret, recovery = null, pass
 }
 
 // A backup now. → { file, header }. kind: manual | daily | preupdate | premigration.
-export async function createBackup({ home, secret = null, kind = 'manual', version = null, folder = null, passphrase = null, includeProjects = false, includeAccounts = false, log = () => {}, now = new Date() } = {}) {
+// progress(0..1): copying what goes in is the first half, sealing it the second.
+export async function createBackup({ home, secret = null, kind = 'manual', version = null, folder = null, passphrase = null, includeProjects = false, includeAccounts = false, log = () => {}, progress = () => {}, now = new Date() } = {}) {
   if (!KINDS.includes(kind)) throw new BackupError('badKind');
   const dir = folder ?? backupDir(home);
   await fsp.mkdir(dir, { recursive: true });
   const id = orbIdOf(home);
   const stage = await fsp.mkdtemp(path.join(dir, '.preparando-'));
   try {
-    const { manifest } = await stageFiles(home, stage, { secret, includeProjects, includeAccounts, log });
+    // ORB_TEST_SLOW_BACKUP_MS (tests only): a copy that takes that long, as one on a busy PC (test/tauri-instalar.e2e.mjs).
+    const slow = Number(process.env.ORB_TEST_SLOW_BACKUP_MS ?? 0);
+    if (slow > 0) await new Promise((r) => setTimeout(r, slow));
+    const { manifest } = await stageFiles(home, stage, { secret, includeProjects, includeAccounts, log, progress: (x) => progress(x / 2) });
     const recovery = passphrase ? null : (secret ? recoveryOf(home, secret) : null);
     const file = path.join(dir, `orb-${stamp(now)}-${kind}${EXT}`);
-    const header = await writeOrbbak(file, stage, manifest, { secret, recovery, passphrase,
+    const header = await writeOrbbak(file, stage, manifest, { secret, recovery, passphrase, progress: (x) => progress(0.5 + x / 2),
       meta: { orbId: id.orbId, incarnation: id.incarnation, version, created: now.toISOString(), kind, move: false } });
+    progress(1);
     try { rememberBackup(home, file, header); } catch (error) { log(`copia: no se pudo anotar la última: ${error.message}`); }
     log(`copia hecha: ${path.basename(file)}`);
     return { file, header };
   } finally { await fsp.rm(stage, { recursive: true, force: true, maxRetries: 5 }); }
+}
+
+// What an interrupted copy leaves in a backup folder (Orb closed or the engine ended mid-copy, as when a new version
+// installs): its stage (.preparando-XXXXXX, fs.mkdtemp) and its unfinished file (<name>.orbbak.<pid>.tmp). Only those
+// names, only folders and files (never a link), and only older than `age` (another Orb's copy in a shared folder may be
+// under way). → how many were removed.
+const STAGE = /^\.preparando-[A-Za-z0-9]{6}$/;
+const PARTIAL = /^orb-[\w-]+\.orbbak\.\d+\.tmp$/;
+export async function cleanStaleStages(dir, { age = 60 * 60_000, now = Date.now() } = {}) {
+  let names; try { names = await fsp.readdir(dir); } catch { return 0; }
+  let n = 0;
+  for (const name of names) {
+    const stage = STAGE.test(name);
+    if (!stage && !PARTIAL.test(name)) continue;
+    const full = path.join(dir, name);
+    try {
+      const st = await fsp.lstat(full);
+      if (st.isSymbolicLink() || (stage ? !st.isDirectory() : !st.isFile())) continue;
+      if (now - Math.max(st.mtimeMs, st.birthtimeMs || 0) < age) continue;
+      await fsp.rm(full, { recursive: stage, force: true, maxRetries: 3 });
+      n++;
+    } catch { /* in use or gone: next start */ }
+  }
+  return n;
 }
 
 // ---- reading

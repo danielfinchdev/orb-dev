@@ -35,7 +35,11 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
     if (running) return running;
     running = (async () => {
       try {
-        const r = await K.createBackup({ home: ctx.home, secret: secret(), kind, version, folder: folder(), log, ...opts(), ...extra });
+        await cleaned;
+        // Its progress as whole percents (the app shows the pre-update one on the update card: src-tauri/src/updater.rs).
+        let said = -1;
+        const progress = (x) => { const percent = Math.min(100, Math.floor(x * 100)); if (percent !== said) { said = percent; emit('backup:progress', { kind, percent }); } };
+        const r = await K.createBackup({ home: ctx.home, secret: secret(), kind, version, folder: folder(), log, progress, ...opts(), ...extra });
         const gone = await K.pruneBackups(folder()).catch(() => []);
         board.setting('backup_last', JSON.stringify({ at: r.header.created, kind, file: path.basename(r.file), ok: true }));
         emit('backup:done', { kind, file: path.basename(r.file), size: fs.statSync(r.file).size, pruned: gone.length });
@@ -48,6 +52,12 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
     })();
     return running;
   };
+
+  // What a copy cut short left in the backup folders (Orb closed mid-copy, or a new version installed while one was
+  // being made) goes at the start, before any copy of this engine begins.
+  const cleaned = Promise.resolve().then(() => Promise.all([...new Set([folder(), K.defaultBackupDir(ctx.home)])].map((d) => K.cleanStaleStages(d))))
+    .then((counts) => { const n = counts.reduce((a, b) => a + b, 0); if (n) log(`copia: quitados ${n} restos de copias sin terminar`); })
+    .catch(() => {});
 
   // The daily copy: once a day after 03:00 in the owner's zone (a PC that was off at 03:00 makes it when it starts).
   // Not in the first minutes after starting (the engine has more urgent things then; a short run makes none).
