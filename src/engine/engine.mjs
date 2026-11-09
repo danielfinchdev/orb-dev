@@ -48,6 +48,9 @@ const emit = (event, payload) => {
 };
 
 let api = null;
+// 3.8.2 (T3 3.11): where an element pointed at and a recording of the agents' browser go (browser-record.mjs), once the
+// sessions exist.
+let browserFiles = null;
 let hostBrowser = null; // 3.8.1 (D7): the agents' browser when the app's pages are driven from here (src/engine/host-browser.mjs)
 let logFile = null;
 const log = (line) => { try { if (logFile) { rotateIfBig(logFile); fs.appendFileSync(logFile, `${new Date().toISOString()} ${line}\n`); } } catch { /* never fatal */ } };
@@ -151,7 +154,9 @@ async function start(home, version, secret, browser, keep = null, userData = nul
     hostBrowser = createHostBrowser({
       log: (line) => log(line), language: () => ctx.config?.language ?? 'es', skin: () => ctx.config?.ui?.skin ?? 'orb',
       pipEnabled: () => ctx.config?.ui?.pip !== false && ctx.config?.browser?.enabled !== false,
-      label: (agent) => (agent === 'orb' ? ctx.config?.assistantName ?? PRODUCT.assistant : AGENTS[agent] ?? agent)
+      label: (agent) => (agent === 'orb' ? ctx.config?.assistantName ?? PRODUCT.assistant : AGENTS[agent] ?? agent),
+      onPointed: (p) => { browserFiles?.pointed(p).catch((error) => log(`navegador del agente: señalar: ${error.message}`)); },
+      saveRecording: (session, avi) => browserFiles?.saveRecording(session, avi) ?? null
     });
     await hostBrowser.ready;
   }
@@ -311,6 +316,7 @@ async function run(board, { home, version, restored, repair }) {
   board.run("DELETE FROM settings WHERE key = 'orchestrator_key_hash' OR key LIKE 'orchestrator_conv:%' OR key LIKE 'agent_id:%'");
   try { const released = board.releaseUnclaimed(); if (released.length) log(`tareas manuales sin conversación devueltas a la cola: ${released.join(', ')}`); } catch (error) { log(`liberar tareas manuales: ${error.message}`); }
   const sessions = new Sessions(board, { emit, log });
+  browserFiles = (await import('./browser-record.mjs')).browserSink({ sessions, toWindow, log });
   const { plainAction, looksEnglish } = await import('../core/guard.mjs');
   const { adapter } = await import('../agents/index.mjs');
   const { recordRate } = await import('../core/budget.mjs');
@@ -495,7 +501,7 @@ const APP_MESSAGES = {
   setup: (m) => ({ home: setupHome({ userData: String(m.userData ?? ''), base: m.base, assistantName: m.assistantName, userName: m.userName, language: m.language }) }),
   switchHome: (m) => ({ ok: switchHome({ userData: String(m.userData ?? ''), target: m.target }) }),
   // The little window of the agents' browser: its buttons and Ajustes › «Ver el navegador» (src/engine/host-browser.mjs).
-  pip: (m) => hostBrowser?.pip(String(m.action ?? '')) ?? null,
+  pip: (m) => hostBrowser?.pip(String(m.action ?? ''), { x: m.x, y: m.y }) ?? null,
   texts: (m) => {
     let lang = ctx.config?.language;
     if (!lang && typeof m.home === 'string' && m.home) { try { lang = loadConfig(m.home).language; } catch { /* Spanish */ } }

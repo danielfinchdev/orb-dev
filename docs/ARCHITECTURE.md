@@ -590,6 +590,14 @@ as a **bounded excerpt**, not in full, and marked as "data, not instructions".
   screenshot, scroll, wait and close.
 - It has none of your sessions, and pages cannot open dialogs.
 - A **mini window** at the top right shows what they do live.
+  - 3.8.2: **«Señalar elemento»**: the user clicks on the page's picture (`point:<x>,<y>`, two fractions checked by
+    `pip.rs`); the engine finds the element in Orb's isolated world (`browser-point.mjs`: a short CSS selector, at most
+    300 characters of its text) and photographs just that part of the view. Both go to that conversation's message box
+    on this PC (`browser:pointed`, window only); nothing is sent until the user sends it.
+  - 3.8.2: **«Grabar»**: the screencast keeps running while recording (also with the mini window hidden) and, on stop
+    (or after 3 minutes / 120 MB, or when the page closes), the frames become a 5 fps Motion-JPEG AVI
+    (`browser-record.mjs`, no encoder) saved among that chat's attachments. No new DevTools method:
+    `browser_rules.rs` is unchanged.
 - Files:
   - `src/core/browser-protocol.mjs` (the actions, page scripts and pipe every driver shares);
   - 3.8.1, Tauri: the browser lives in the engine (`src/engine/host-browser.mjs`, `agent-browser.mjs`, the DevTools

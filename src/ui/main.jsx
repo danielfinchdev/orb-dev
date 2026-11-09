@@ -27,6 +27,7 @@ import { Scene } from '@/components/scene.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { useStore, setState, getState, refresh, refreshSoon, call, bridge, act, go, goBack, resetRoute, setViews, applyTheme, openTerminal, startTour, closeSettings, anyChatBusy, phoneLayout, loadOrbInbox, loadOrbInboxSoon } from '@/lib/store.js';
 import { restoreRoute, keyboardOpen } from '@/lib/phone-nav.js';
+import { listenPoints } from '@/lib/browser-points.js';
 import { startupPhase } from '@/lib/startup.js';
 import { watchIdle, lockMinutesOf } from '@/lib/idle-lock.js';
 import { startMusic, pauseAll } from '@/lib/music.js';
@@ -339,6 +340,14 @@ function Root() {
     window.addEventListener('keydown', key);
     const off = bridge.on('ui:terminal', () => openTerminal());
     return () => { window.removeEventListener('keydown', key); off(); };
+  }, [phase]);
+  // 3.8.2 (T3 3.11): the agents' browser, from its little window: an element pointed at opens its chat (its message box
+  // gets it) and a recording is said once saved. This PC's window only.
+  useEffect(() => {
+    if (phase !== 'app' || bridge.mobile) return undefined;
+    const offPoint = listenPoints(bridge, (id) => go({ view: 'session', id }));
+    const offRec = bridge.on('browser:recorded', () => toast.success(tNow('session.recordingSaved')));
+    return () => { offPoint(); offRec(); };
   }, [phase]);
   // 3.8.1: Orb's lock screen (decision 20): Windows locked, the PC asleep, «Bloquear» or the minutes of Ajustes › Datos
   // without use (lib/idle-lock.js). The engine says so with 'master:locked' { screen: true }; the screen comes back,

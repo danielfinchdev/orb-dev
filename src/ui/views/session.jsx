@@ -14,6 +14,7 @@ import { BackToList } from '@/components/chat-bar.jsx';
 import { ContextSlot } from '@/components/context-slot.jsx';
 import { TaskChanges } from '@/components/task-changes.jsx';
 import { SecretCards } from '@/components/secret-card.jsx';
+import { takePoints, onPoints } from '@/lib/browser-points.js';
 import { NotificationBell } from '@/components/notification-center.jsx';
 import { useCatalog, modelsOf, modelLabel, ReasoningMenu } from '@/components/brain-picker.jsx';
 import { stepText, bareTool } from '@/components/chat-live.jsx';
@@ -334,6 +335,17 @@ export function SessionView({ route }) {
   const [text, setText] = useState('');
   const [images, setImages] = useState([]);
   const PAGE = 200;
+  // 3.8.2 (T3 3.11): what the user pointed at in the agents' browser for this chat: its picture and a line, not sent yet.
+  useEffect(() => {
+    const take = () => {
+      const got = takePoints(route.id); if (!got.length) return;
+      setImages((prev) => [...new Set([...prev, ...got.map((p) => p.path)])].slice(0, 10));
+      setText((prev) => [prev.trim(), ...got.map((p) => p.text)].filter(Boolean).join('\n'));
+      toast.success(t('session.pointAdded'));
+    };
+    take();
+    return onPoints((id) => { if (id === String(route.id)) take(); });
+  }, [route.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     let alive = true;
     setItems([]); setPartial(''); setQueue([]);

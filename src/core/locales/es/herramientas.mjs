@@ -32,5 +32,12 @@ export default {
   'msg.secrets.noSaved': 'No hay ninguna clave guardada con ese nombre.',
   'msg.secrets.badValue': 'Escribe la clave (máx. 8 KB).',
   'msg.secrets.declined': 'El usuario ha rechazado dar la clave {name}. No la pidas otra vez en este turno.',
-  'msg.secrets.locked': 'Orb se ha bloqueado: la petición de {name} se ha cancelado.'
+  'msg.secrets.locked': 'Orb se ha bloqueado: la petición de {name} se ha cancelado.',
+  'pip.point': 'Señalar elemento',
+  'pip.pointHint': 'Haz clic en un elemento para enviarlo al chat',
+  'pip.record': 'Grabar',
+  'pip.stopRecording': 'Detener grabación',
+  'msg.browser.recorded': 'Grabación del navegador guardada en los adjuntos: {name}.',
+  'session.pointAdded': 'Elemento añadido al mensaje',
+  'session.recordingSaved': 'Grabación guardada en los adjuntos del chat'
 };

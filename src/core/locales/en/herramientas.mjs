@@ -32,5 +32,12 @@ export default {
   'msg.secrets.noSaved': 'There’s no saved secret with that name.',
   'msg.secrets.badValue': 'Type the secret (8 KB max.).',
   'msg.secrets.declined': 'The user declined to give the secret {name}. Don’t ask for it again this turn.',
-  'msg.secrets.locked': 'Orb locked: the request for {name} was cancelled.'
+  'msg.secrets.locked': 'Orb locked: the request for {name} was cancelled.',
+  'pip.point': 'Point at an element',
+  'pip.pointHint': 'Click an element to send it to the chat',
+  'pip.record': 'Record',
+  'pip.stopRecording': 'Stop recording',
+  'msg.browser.recorded': 'Browser recording saved in the attachments: {name}.',
+  'session.pointAdded': 'Element added to the message',
+  'session.recordingSaved': 'Recording saved in the chat’s attachments'
 };
