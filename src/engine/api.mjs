@@ -425,6 +425,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const s = sessions.must(str(session, 'conversación', 64));
       const real = (p) => { try { return fs.realpathSync(p); } catch { return fail(tr('msg.api.badAttachment')); } };
       const dir = real(path.join(s.cwd, ATTACH_DIR)); const f = real(str(file, 'archivo', 1000));
+      // 3.8.2 (security review): the attachments folder itself, never a link or junction to another folder.
+      if (path.relative(path.join(real(s.cwd), ATTACH_DIR), dir) !== '') fail(tr('msg.api.badAttachment'));
       const rel = path.relative(dir, f);
       if (!rel || rel.startsWith('..') || path.isAbsolute(rel) || !/\.pdf$/i.test(f) || fs.statSync(f).size > 25 * 1024 * 1024) fail(tr('msg.api.badAttachment'));
       return { kind: 'pdf', base64: fs.readFileSync(f).toString('base64') };

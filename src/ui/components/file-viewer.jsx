@@ -25,7 +25,7 @@ export default function FileViewer({ sessionId, path, onClose }) {
     (async () => {
       try {
         const [{ base64 }, pdfjs] = await Promise.all([call('attachments.read', { session: sessionId, path }), loadPdf()]);
-        doc = await pdfjs.getDocument({ data: bytesOf(base64), useWasm: false, disableFontFace: true, enableXfa: false }).promise;
+        doc = await pdfjs.getDocument({ data: bytesOf(base64), useWasm: false, isEvalSupported: false, disableFontFace: true, enableXfa: false }).promise;
         if (!alive) return;
         setState({ status: 'ready', pages: doc.numPages });
         const width = Math.min(900, (box.current?.clientWidth || 800) - 16);

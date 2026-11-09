@@ -40,7 +40,7 @@ test('mermaid strict, libraries loaded lazily, no eval and the CSP unchanged', (
   assert.match(rich, /import\('mermaid'\)/); assert.match(rich, /import\('katex'\)/);
   assert.doesNotMatch(rich, /^import .*(mermaid|katex)/m, 'not in the main bundle');
   const viewer = fs.readFileSync(path.join(ROOT, 'src/ui/components/file-viewer.jsx'), 'utf8');
-  assert.match(viewer, /useWasm: false/); assert.doesNotMatch(viewer, /^import .*pdfjs/m);
+  assert.match(viewer, /useWasm: false/); assert.match(viewer, /isEvalSupported: false/); assert.doesNotMatch(viewer, /^import .*pdfjs/m);
   const csp = JSON.parse(fs.readFileSync(path.join(ROOT, 'src-tauri/tauri.conf.json'), 'utf8')).app.security.csp;
   assert.match(csp, /script-src 'self';/); assert.doesNotMatch(csp, /unsafe-eval|wasm-unsafe-eval|media-src/);
 });
@@ -60,6 +60,14 @@ test('attachments.read: a PDF of that conversation\'s attachments only, and only
   const outside = path.join(s.cwd, 'other.pdf'); fs.writeFileSync(outside, '%PDF');
   await assert.rejects(api.call('attachments.read', { session: s.id, path: outside }, DESKTOP), 'outside the attachments folder');
   await assert.rejects(api.call('attachments.read', { session: s.id, path: path.join(dir, '..', '..', 'x.pdf') }, DESKTOP));
+  // 3.8.2 (security review): an attachments folder that is a junction to another folder reads nothing there.
+  const elsewhere = path.join(t.home, 'otra'); fs.mkdirSync(elsewhere, { recursive: true });
+  fs.writeFileSync(path.join(elsewhere, 'key.pdf'), '%PDF-1.4 other');
+  const aside = `${dir}-aparte`; fs.renameSync(dir, aside);
+  fs.symlinkSync(elsewhere, dir, 'junction');
+  try { await assert.rejects(api.call('attachments.read', { session: s.id, path: path.join(dir, 'key.pdf') }, DESKTOP), /./, 'not through a junction'); }
+  finally { fs.rmSync(dir, { recursive: true, force: true }); fs.renameSync(aside, dir); }
+  assert.ok(fs.existsSync(path.join(elsewhere, 'key.pdf')));
   const { METHODS } = await import('../src/core/permissions.mjs');
   assert.equal(METHODS['attachments.read'], 'pc', 'never from a linked phone');
 });
