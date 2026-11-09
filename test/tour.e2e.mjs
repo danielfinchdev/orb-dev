@@ -22,7 +22,7 @@ fs.mkdirSync(OUT, { recursive: true });
 for (const f of fs.readdirSync(OUT)) if (/\.(png|md)$/.test(f)) fs.rmSync(path.join(OUT, f));
 const RENDERER = path.join(ROOT, 'src', 'renderer');
 if (!fs.existsSync(path.join(RENDERER, 'index.html'))) throw new Error('compila antes la interfaz (npm run build)');
-const SKINS = ['orb', 'vaporwave', 'retro', 'profesional', 'nube']; // src/core/appearance.mjs
+const SKINS = ['orb', 'vaporwave', 'retro', 'profesional', 'nube']; // src/shared/appearance.mjs
 const ONLY = process.env.TOUR_ONLY ? new Set(process.env.TOUR_ONLY.split(',')) : null; // e.g. TOUR_ONLY=pc,phone (debugging)
 
 // ---- the engine

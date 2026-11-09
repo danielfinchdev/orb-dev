@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { X, Download, RotateCw } from 'lucide-react';
 import { bridge, act } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
-import { AUTHOR } from '../../core/product.mjs';
+import { AUTHOR } from '../../shared/product.mjs';
 
 const SHOWN = new Set(['available', 'downloading', 'downloaded', 'installing']);
 const HIDDEN_KEY = 'orb.update.hidden';

@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHome, loadConfig, writeJson, merge } from '../src/core/home.mjs';
-import { SKINS } from '../src/core/appearance.mjs';
+import { SKINS } from '../src/shared/appearance.mjs';
 import { throughStart, sandboxEnv } from './fixtures/e2e-flows.mjs';
 import { launchOrb } from './fixtures/launch-orb.mjs';
 

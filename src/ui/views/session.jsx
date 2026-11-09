@@ -33,7 +33,7 @@ import { baseName, cn } from '@/lib/utils.js';
 import { useT, t, useLocale, currentLocale } from '@/lib/i18n.js';
 import { sameBlock } from '@/lib/memo.js';
 import { toBlocks, subagentState } from '@/lib/session-blocks.js';
-import { kindOf, playableType } from '../../core/attach-kind.mjs';
+import { kindOf, playableType } from '../../shared/attach-kind.mjs';
 import { reloadWait, markReloaded } from '@/lib/usage-reload.js';
 import { canCapture, captureFrame } from '@/lib/window-capture.js';
 import { UsageBar, windowLabel, resetText, toneOf, shortTokens } from '@/components/usage-bits.jsx';
@@ -115,7 +115,7 @@ function statusText(body, agent, catalog) {
 }
 
 const FILE_ICON = { add: FilePlus2, delete: FileMinus2 };
-// 3.8.2: an attachment's icon by what it is (src/core/attach-kind.mjs).
+// 3.8.2: an attachment's icon by what it is (src/shared/attach-kind.mjs).
 const ATTACH_ICON = { image: ImageIcon, video: Film, audio: Music, pdf: FileText, document: FileText, archive: FileArchive, text: FileCode };
 function AttachIcon({ file, className }) { const I = ATTACH_ICON[kindOf(file)] ?? FileIcon; return <I className={className} />; }
 // 3.8.2: an attachment of a message. On the PC a picture opens in the image viewer and a PDF in the file viewer

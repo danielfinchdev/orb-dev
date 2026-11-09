@@ -28,7 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { CATEGORIES } from './layout.mjs';
+import { CATEGORIES } from '../shared/layout.mjs';
 
 export const SKILL_FILE = 'SKILL.md';
 export const LIVE_DIR = '.activas'; // in core\skills: what the agents load (exposeSkills)

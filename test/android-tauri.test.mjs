@@ -8,8 +8,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT } from './helpers.mjs';
-import * as C from '../src/core/mobile-crypto.mjs';
-import { buildNote, backgroundCall, actionRoute } from '../src/core/notes.mjs';
+import * as C from '../src/shared/mobile-crypto.mjs';
+import { buildNote, backgroundCall, actionRoute } from '../src/shared/notes.mjs';
 
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const KT = 'src-tauri/gen/android/app/src/main/java/dev/orb/app';

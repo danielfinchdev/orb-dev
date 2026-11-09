@@ -1,5 +1,5 @@
 // 3.5, the Android app (3.8.1: Tauri's Android app, src-tauri/gen/android; src/ui/lib/app-bridge.js): what it reads from
-// a QR or a typed code (src/ui/lib/link-payload.js), which bridge the page gets, which addresses it may use, and that the
+// a QR or a typed code (src/shared/link-payload.mjs), which bridge the page gets, which addresses it may use, and that the
 // phone access lets the app's own page (another origin: http://tauri.localhost) in, with every message still sealed with
 // the phone's key.
 import { test, before, after } from 'node:test';
@@ -9,8 +9,8 @@ import path from 'node:path';
 import http from 'node:http';
 import { fork } from 'node:child_process';
 import { tempHome, ROOT, until } from './helpers.mjs';
-import * as C from '../src/core/mobile-crypto.mjs';
-import { parseLinkPayload, parseManual, orderBases, allowedBase, isPrivateHost, pairingSecret, pickBridge, normalAddress } from '../src/ui/lib/link-payload.js';
+import * as C from '../src/shared/mobile-crypto.mjs';
+import { parseLinkPayload, parseManual, orderBases, allowedBase, isPrivateHost, pairingSecret, pickBridge, normalAddress } from '../src/shared/link-payload.mjs';
 
 const PC = C.b64.enc(C.newKeyPair().pub);
 const keyOf = (fn) => { try { fn(); } catch (e) { return e.key ?? e.message; } return null; };

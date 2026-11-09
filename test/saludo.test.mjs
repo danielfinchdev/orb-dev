@@ -2,8 +2,8 @@
 // un texto que existe en los dos idiomas.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import es from '../src/core/locales/es.mjs';
-import en from '../src/core/locales/en.mjs';
+import es from '../src/shared/locales/es.mjs';
+import en from '../src/shared/locales/en.mjs';
 import { pickGreeting, pickSubtitle, greetingFor } from '../src/ui/lib/greeting.js';
 
 const seq = (...values) => { let i = 0; return () => values[i++ % values.length]; };

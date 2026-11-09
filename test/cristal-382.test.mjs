@@ -7,9 +7,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SKINS, baseSkin, plainSkin } from '../src/core/appearance.mjs';
-import es from '../src/core/locales/es/settings.mjs';
-import en from '../src/core/locales/en/settings.mjs';
+import { SKINS, baseSkin, plainSkin } from '../src/shared/appearance.mjs';
+import es from '../src/shared/locales/es/settings.mjs';
+import en from '../src/shared/locales/en/settings.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (...p) => fs.readFileSync(path.join(ROOT, 'src', 'ui', ...p), 'utf8');

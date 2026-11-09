@@ -1,5 +1,5 @@
 // 3.8: the master password (src/core/master.mjs, src/engine/api-master.mjs) and Magic Link with it (src/engine/remote.mjs,
-// src/core/mobile-crypto.mjs › linkDevice). The data key round trip, the waits after wrong passwords (and failing closed
+// src/shared/mobile-crypto.mjs › linkDevice). The data key round trip, the waits after wrong passwords (and failing closed
 // when they cannot be counted), only THE data key opens (a planted or deleted maestra.json changes nothing), the
 // secrets of earlier versions moved out of the database and orb.json, connectors' keys tied to their command, the guarded
 // methods, linking a phone without the password ever leaving it (a passive observer learns nothing, a wrong password
@@ -20,9 +20,9 @@ import { sealConnectors, connectorLaunch, isRef, keysHeld, touchesKeys } from '.
 import { tradeGrant } from '../src/mcp/vault-client.mjs';
 import { needsUnlock } from '../src/core/permissions.mjs';
 import { passwordStrength, MASTER_MIN } from '../src/ui/lib/core-access.js';
-import * as C from '../src/core/mobile-crypto.mjs';
+import * as C from '../src/shared/mobile-crypto.mjs';
 import * as K from '../src/core/backup.mjs';
-import { parseLinkPayload, passwordPageOk } from '../src/core/link-payload.mjs';
+import { parseLinkPayload, passwordPageOk } from '../src/shared/link-payload.mjs';
 import { setGuardedRoots, decide } from '../src/core/guard.mjs';
 import { paths } from '../src/core/home.mjs';
 import { createPhone, TEST_MASTER } from './fixtures/phone-client.mjs';
@@ -303,7 +303,7 @@ test('el motor: secretos de 3.7 fuera de la base y de orb.json, acciones protegi
   t.cleanup();
 });
 
-// The phone's side of linking, by hand (src/core/mobile-crypto.mjs › linkDevice), keeping what travels: what someone who
+// The phone's side of linking, by hand (src/shared/mobile-crypto.mjs › linkDevice), keeping what travels: what someone who
 // watched the Wi-Fi (and photographed the QR) would have.
 async function linkByHand(base, q, password) {
   const kp = C.newKeyPair(); const pcPub = C.b64.dec(q.pc); const pub = C.b64.enc(kp.pub);

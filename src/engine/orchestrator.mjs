@@ -10,7 +10,7 @@ import { AGENTS, assistantName, userName, ofUser } from '../core/board.mjs';
 import { executable, installed, adapter } from '../agents/index.mjs';
 import * as claude from '../agents/claude.mjs';
 import { runLog, oneLine } from '../core/safety.mjs';
-import { titleFrom } from '../core/titles.mjs';
+import { titleFrom } from '../shared/titles.mjs';
 import { mcpServersOf } from './sessions.mjs';
 import { agentAuth } from './agent-auth.mjs';
 import { accountEnv } from '../core/accounts.mjs';

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT } from './helpers.mjs';
-import { PROTOCOL, MIN_PROTOCOL, PAIR_PROTOCOL, updateNeeded } from '../src/ui/lib/link-payload.js';
+import { PROTOCOL, MIN_PROTOCOL, PAIR_PROTOCOL, updateNeeded } from '../src/shared/link-payload.mjs';
 
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 

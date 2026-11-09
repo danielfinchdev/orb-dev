@@ -25,7 +25,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { paths, LEGACY, moveLogs, CATEGORIES, CORE_DIR, LOGS_DIR, MCP_DIR } from './home.mjs';
-import { translate } from './i18n.mjs';
+import { translate } from '../shared/i18n.mjs';
 import { isMcpProject, startCommand, linkOut } from './extensions.mjs';
 
 export const MOVE_STATE = 'migracion-carpetas.json'; // in core while the moves are not finished and their paths rewritten

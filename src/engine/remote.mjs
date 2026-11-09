@@ -3,10 +3,10 @@
 // - Tailscale: https through `tailscale serve` when the tailnet has HTTPS (installable app and notifications), or plain
 //   http on the Tailscale address otherwise.
 // A phone is paired by scanning a one-time QR on the PC. The phone makes its own key and from then on every message is
-// encrypted end to end (src/core/mobile-crypto.mjs): whoever sees the traffic (the Wi-Fi, a proxy) reads nothing, and a
+// encrypted end to end (src/shared/mobile-crypto.mjs): whoever sees the traffic (the Wi-Fi, a proxy) reads nothing, and a
 // copied link or QR is useless. The PC can revoke any phone. What a phone may do is a subset of the PC's actions.
 import { isMuted, itemOfConversation } from '../core/inbox.mjs';
-import { buildNote, actionRoute } from '../core/notes.mjs';
+import { buildNote, actionRoute } from '../shared/notes.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -17,10 +17,10 @@ import { ctx, tr } from '../core/context.mjs';
 import { oneLine } from '../core/safety.mjs';
 import { quickRun } from '../agents/index.mjs';
 import { IS_WIN } from '../agents/common.mjs';
-import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, AAD, CLOCK_SKEW_MS, shortSecret, pairKdfOk } from '../core/mobile-crypto.mjs';
+import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, AAD, CLOCK_SKEW_MS, shortSecret, pairKdfOk } from '../shared/mobile-crypto.mjs';
 import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
-import { streamFeed } from '../core/chat-stream.mjs';
-import { PROTOCOL, MIN_PROTOCOL, PAIR_PROTOCOL, versionOfProtocol, CODE_ALPHABET, shortCodeLabel } from '../core/link-payload.mjs';
+import { streamFeed } from '../shared/chat-stream.mjs';
+import { PROTOCOL, MIN_PROTOCOL, PAIR_PROTOCOL, versionOfProtocol, CODE_ALPHABET, shortCodeLabel } from '../shared/link-payload.mjs';
 import { REMOTE_METHODS, principalOf } from '../core/permissions.mjs';
 import { isLegacy } from '../core/migrate-38.mjs';
 import { ownPorts } from './host.mjs';
@@ -344,7 +344,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const nonce = text.split('.')[0];
     if (!msg || msg.m !== expected) return null;
     const f = freshness(device.id, nonce, Number(msg.t));
-    // 3.8.3: d: 1, a client that takes the streamed answer as deltas (src/core/chat-stream.mjs; older ones never say it).
+    // 3.8.3: d: 1, a client that takes the streamed answer as deltas (src/shared/chat-stream.mjs; older ones never say it).
     return f === 'ok' ? { nonce, deltas: msg.d === 1 } : f === 'clock' ? { clock: true } : null;
   }
   // Only sent after the request opened with the device's own key (or the QR's), so only a paired phone learns it.
@@ -473,7 +473,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     return send(res, 200, { v: PROTOCOL, short: 3, pc: b64.enc(own().pub), fp: pcFingerprint(), name: orbName(), urls: (state.routes ?? []).map((r) => r.url) });
   }
 
-  // Linking (3.8, two steps; src/core/mobile-crypto.mjs › linkDevice has the phone's side). Phones and browsers alike.
+  // Linking (3.8, two steps; src/shared/mobile-crypto.mjs › linkDevice has the phone's side). Phones and browsers alike.
   //   start   the phone sends its public key and a proof sealed with the key of this QR (the one-time code never travels),
   //           or of the short code typed by hand (via: 'code3'); the PC answers, sealed with that same key, a session id
   //           and the salt and cost of the master password's verifier.
@@ -622,7 +622,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     deliverNote({ conversation: payload.conversation ?? null, line: { id: payload.id ?? null, role: payload.role, body: payload.body, meta: payload.meta ?? null } });
   }
 
-  // ---- 3.6 (messaging, M4): notifications as a messaging app's (src/core/notes.mjs builds them).
+  // ---- 3.6 (messaging, M4): notifications as a messaging app's (src/shared/notes.mjs builds them).
   const NOTE_TOKEN_MS = 24 * 3_600_000;
   const noteTokens = new Map(); // one-time token → { device, call: [method, params], group, until }
   const noteWords = () => ({ hidden: tr('msg.remote.pushHidden'), reply: tr('msg.notes.reply'), allow: tr('msg.notes.allow'), deny: tr('msg.notes.deny'), open: tr('msg.notes.open') });

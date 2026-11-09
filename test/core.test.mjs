@@ -7,7 +7,7 @@ import os from 'node:os';
 import { tempHome } from './helpers.mjs';
 import { createHome, folderName, isHome, ensureLayout, projectLogHeader, loadConfig } from '../src/core/home.mjs';
 import { applyLayout } from '../src/core/core-folder.mjs';
-import { PRODUCT } from '../src/core/product.mjs';
+import { PRODUCT } from '../src/shared/product.mjs';
 import { ctx, saveConfig } from '../src/core/context.mjs';
 import { Board, checkProjectPath } from '../src/core/board.mjs';
 import { createProject, syncProjects } from '../src/core/projects.mjs';

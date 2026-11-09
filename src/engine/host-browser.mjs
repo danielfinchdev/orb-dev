@@ -18,7 +18,7 @@ import { createCdpBrowser } from './agent-browser.mjs';
 import { cdpDriver } from './browser-cdp.mjs';
 import { pointAt } from './browser-point.mjs';
 import { RECORD_FPS, RECORD_MAX_MS, RECORD_MAX_BYTES, resample, mjpegAvi } from './browser-record.mjs';
-import { translate } from '../core/i18n.mjs';
+import { translate } from '../shared/i18n.mjs';
 
 const FRAME_MS = 250;
 const MODES = ['normal', 'grande', 'pildora'];

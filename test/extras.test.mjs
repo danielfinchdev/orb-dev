@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { terminalPlan } from '../src/engine/terminal.mjs';
-import { explainFailure } from '../src/core/agent-errors.mjs';
+import { explainFailure } from '../src/shared/agent-errors.mjs';
 
 test('Ctrl+J: Warp si está instalado, si no Windows Terminal o PowerShell; se puede forzar uno', () => {
   const dir = 'D:\\Orb\\mi;web';

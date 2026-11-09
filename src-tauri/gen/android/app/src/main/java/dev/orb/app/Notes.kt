@@ -17,7 +17,7 @@ import org.json.JSONObject
 import java.util.UUID
 
 /**
- * The chats' notifications (src/core/notes.mjs builds them on the PC; src/ui/lib/app-bridge.js hands them here), as a
+ * The chats' notifications (src/shared/notes.mjs builds them on the PC; src/ui/lib/app-bridge.js hands them here), as a
  * messaging app's: the white «o•» (ic_stat_orb), Orbe's picture, one per chat with its last lines, and its buttons.
  *
  * A button that the page worked out a call for («Aprobar» / «Rechazar» a permission, «Responder» with the text typed in
@@ -44,7 +44,7 @@ object Notes {
   private const val MAX_PENDING = 200
   private const val MAX_AGE_MS = 24L * 60 * 60 * 1000
   const val REPLY_KEY = "orb-reply"
-  // src/core/notes.mjs › NOTE_IDS
+  // src/shared/notes.mjs › NOTE_IDS
   const val FIRST_ID = 20_000
   const val ID_COUNT = 10_000
   private const val COLOR = 0xFF5B6EE8.toInt()

@@ -15,7 +15,7 @@
 // hooks: onActivity(tab, action) before each action; onUpdate(tab) when its address, title or loading change;
 // onRelease(tab) when its turn ends; onClose(tab). The little live window (PiP) uses them (host-browser.mjs).
 import crypto from 'node:crypto';
-import { translate } from '../core/i18n.mjs';
+import { translate } from '../shared/i18n.mjs';
 import { MAX_TABS, createActions, servePipe } from '../core/browser-protocol.mjs';
 import { attachPage, cdpDriver } from './browser-cdp.mjs';
 

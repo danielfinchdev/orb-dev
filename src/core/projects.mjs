@@ -6,7 +6,7 @@ import path from 'node:path';
 import { ctx, tr } from './context.mjs';
 import { folderName, isReservedName, isReservedInCategory, isCategory, categoryOf, folderKey, IGNORED_PROJECTS, FINISHED_PROJECTS, CATEGORIES, DEFAULT_CATEGORY, PLATFORMS, MULTI, SHARED_DIR } from './home.mjs';
 import { git, ORB_GIT } from './workspace.mjs';
-import { projectNameProblem } from './product.mjs';
+import { projectNameProblem } from '../shared/product.mjs';
 import { settleDeleting, deletingProjects } from './project-close.mjs';
 
 export const checkCategory = (category) => {

@@ -42,8 +42,7 @@ const UI_SHARED = (r) => layerOf(r) === 'shared' || layerOf(r) === 'ui';
 const PENDING = new Set([
   'mcp/secret-run.mjs -> engine/agent-auth.mjs', 'mcp/server.mjs -> engine/logs.mjs',
 ]);
-const PURE_CORE = new Set(['attach-kind', 'product', 'layout', 'music', 'notes', 'i18n', 'link-payload', 'appearance', 'feed', 'chat-stream', 'mobile-crypto'].map((n) => `core/${n}.mjs`));
-const pending = (edge) => PENDING.has(edge) || (edge.startsWith('ui/') && PURE_CORE.has(edge.split(' -> ')[1]));
+const pending = (edge) => PENDING.has(edge);
 
 test('every file belongs to a known layer', () => {
   const unknown = [...graph.keys()].filter((r) => r.includes('/') && !ALLOWED[layerOf(r)]);

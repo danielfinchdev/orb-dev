@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { translate } from '../core/i18n.mjs';
+import { translate } from '../shared/i18n.mjs';
 
 export const TERMINALS = { auto: 'Automática', warp: 'Warp', wt: 'Windows Terminal', powershell: 'PowerShell', cmd: 'Símbolo del sistema (CMD)' };
 // 3.7 (Linux): the usual terminals, in the order «Automática» tries them (x-terminal-emulator is the one the system chose

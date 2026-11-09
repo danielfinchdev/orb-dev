@@ -16,7 +16,7 @@ import { bridge, call, getState } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
 import { toast } from 'sonner';
 import { errorText } from '@/lib/utils.js';
-import { PRODUCT } from '../../core/product.mjs';
+import { PRODUCT } from '../../shared/product.mjs';
 import { MasterCreate } from './master.jsx';
 import { LayoutReview } from './layout.jsx';
 

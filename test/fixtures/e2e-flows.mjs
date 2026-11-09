@@ -5,7 +5,7 @@
 //   mandatory) and, on Windows after the welcome, «Preparando tu PC» (views/setup.jsx › Prepare).
 // - createMaster: the master password screen: both fields, the box «Si la olvidas…», continue.
 // - pairBrowser: a phone's or a computer's browser opened from the QR: the PC's master password before it links
-//   (main.jsx › BrowserPair; the two-step /api/pair of src/core/mobile-crypto.mjs › linkDevice).
+//   (main.jsx › BrowserPair; the two-step /api/pair of src/shared/mobile-crypto.mjs › linkDevice).
 // Works with any Playwright Page (Orb's window over CDP, a headless browser).
 import assert from 'node:assert/strict';
 import path from 'node:path';

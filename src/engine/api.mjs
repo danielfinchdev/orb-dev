@@ -14,13 +14,13 @@ import { usageReport, usageHistory, modelName } from '../core/budget.mjs';
 import { brainOf } from './orchestrator.mjs';
 import { newProject, syncProjects, checkProjectName, renameProject } from '../core/projects.mjs';
 import { finishProject, finishedProjects, reopenProject, checkDelete, deleteProject, abortDelete } from '../core/project-close.mjs';
-import { PRODUCT } from '../core/product.mjs';
-import { slashCommand } from '../core/slash.mjs';
+import { PRODUCT } from '../shared/product.mjs';
+import { slashCommand } from '../shared/slash.mjs';
 import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../core/schedules.mjs';
 import { oneLine, redactSecrets, localStamp } from '../core/safety.mjs';
 import { quickRun } from '../agents/index.mjs';
 import { PERMISSIONS, ATTACH_DIR } from './sessions.mjs';
-import { playableType } from '../core/attach-kind.mjs';
+import { playableType } from '../shared/attach-kind.mjs';
 import { checkDevTools } from './dev-tools.mjs';
 import { readLog, writeLog, logFiles } from './logs.mjs';
 import { expandMentions, mentionOptions } from './mentions.mjs';
@@ -33,7 +33,7 @@ import { createTerminals } from './user-terminal.mjs';
 import { extensionMethods } from './api-extensions.mjs';
 import { layoutPlan, layoutApply, guardOutside } from './workspace-layout.mjs';
 import { modelCatalog, chooseModel, LEVELS, REASONING_LEVELS, levelsOf } from './catalog.mjs';
-import { titleFrom } from '../core/titles.mjs';
+import { titleFrom } from '../shared/titles.mjs';
 import { autoTitle } from './titles.mjs';
 import { projectIcon, setProjectIcon, clearProjectIcon, renameProjectIcon } from './project-icons.mjs';
 import { git, slug, diffBetween } from '../core/workspace.mjs';
@@ -349,7 +349,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         try { methods['chat.settings']({ conversation: c.id, ...pick }, principal); } catch (error) { board.run('DELETE FROM conversations WHERE id = ?', c.id); board.changed('conversations'); throw error; }
         return orchestrator.ask(t, expandMentions(board, sessions, t), { conversation: c.id, project: proj });
       }
-      // 3.8.2: «/compact» and «/clear» typed alone in an existing chat are Orb's commands (src/core/slash.mjs).
+      // 3.8.2: «/compact» and «/clear» typed alone in an existing chat are Orb's commands (src/shared/slash.mjs).
       const command = id ? slashCommand(t) : null;
       if (command) return command === 'compact' ? orchestrator.compact(id) : orchestrator.clear(id);
       if (!id && (brainOf().agent || 'claude') === 'cursor') fail(tr('msg.api.cursorNoCoordinate'));

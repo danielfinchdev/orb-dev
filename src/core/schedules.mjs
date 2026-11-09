@@ -7,7 +7,7 @@
 import { oneLine } from './safety.mjs';
 import { ctx, tr } from './context.mjs';
 import { AGENT_IDS as AGENTS } from './home.mjs';
-import { nextLocalRun, systemTz, ownerTz } from './tz.mjs';
+import { nextLocalRun, systemTz, ownerTz } from '../shared/tz.mjs';
 
 export const EVERY = ['once', 'hourly', 'every_hours', 'daily', 'weekly'];
 const ONCE_AT = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T([01]\d|2[0-3]):[0-5]\d$/;

@@ -1,8 +1,8 @@
-// 3.6: time zones (src/core/tz.mjs). A PC in UTC runs Leo's schedules at his wall time in Europe/Madrid, also
+// 3.6: time zones (src/shared/tz.mjs). A PC in UTC runs Leo's schedules at his wall time in Europe/Madrid, also
 // across both daylight-saving changes; 02:30 on the spring-forward night fires at 03:00.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { zonedToUtc, utcToZoned, nextLocalRun, isValidTz, offsetAt, localDay } from '../src/core/tz.mjs';
+import { zonedToUtc, utcToZoned, nextLocalRun, isValidTz, offsetAt, localDay } from '../src/shared/tz.mjs';
 
 const MAD = 'Europe/Madrid';
 const iso = (d) => d.toISOString();

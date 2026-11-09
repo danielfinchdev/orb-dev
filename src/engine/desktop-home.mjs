@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHome, isHome, writeJson, paths, homeKey, oldHomeKey, LEGACY } from '../core/home.mjs';
-import { PRODUCT } from '../core/product.mjs';
+import { PRODUCT } from '../shared/product.mjs';
 
 const location = (userData) => path.join(userData, 'ubicacion.json');
 

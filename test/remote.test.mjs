@@ -9,9 +9,9 @@ import path from 'node:path';
 import { fork } from 'node:child_process';
 import http from 'node:http';
 import { tempHome, ROOT, until } from './helpers.mjs';
-import * as C from '../src/core/mobile-crypto.mjs';
+import * as C from '../src/shared/mobile-crypto.mjs';
 import { privateSource } from '../src/engine/remote.mjs';
-import { parseLinkPayload, normalCode, normalAddress } from '../src/core/link-payload.mjs';
+import { parseLinkPayload, normalCode, normalAddress } from '../src/shared/link-payload.mjs';
 import { createPhone, TEST_MASTER } from './fixtures/phone-client.mjs';
 
 let unlock = null;
@@ -51,7 +51,7 @@ function phone() {
   return me;
 }
 const qr = async (kind) => { const { url, pc } = await call('remote.pair', kind ? { kind } : {}); const h = new URLSearchParams(new URL(url).hash.slice(1)); return { code: h.get('vincular'), pc: C.b64.dec(h.get('pc')), fp: pc, url }; };
-// 3.8: two steps, the second with the master password's proof (src/core/mobile-crypto.mjs › linkDevice, by hand).
+// 3.8: two steps, the second with the master password's proof (src/shared/mobile-crypto.mjs › linkDevice, by hand).
 const postPair = (body) => fetch(`${base}/api/pair`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 const pair = async (p, q, { password = TEST_MASTER, ...opts } = {}) => {
   const res = await postPair(p.pairBody(q.code, q.pc, opts));
@@ -224,7 +224,7 @@ test('avisos: solo servicios de avisos conocidos', async () => {
 });
 
 // 3.8.3: the streamed answer goes as deltas only to a client that asked for them (d: 1, the page of 3.8.3 on); a phone of
-// 3.8.1–3.8.2 still gets the whole text in each state, as before (src/core/chat-stream.mjs).
+// 3.8.1–3.8.2 still gets the whole text in each state, as before (src/shared/chat-stream.mjs).
 test('respuesta en directo: deltas al cliente que los pide, el texto entero a los móviles anteriores', async () => {
   const p = globalThis.phone1;
   const open = async (extra) => {
@@ -251,7 +251,7 @@ test('respuesta en directo: deltas al cliente que los pide, el texto entero a lo
     return got;
   };
   const old = await open({}); const fresh = await open({ d: 1 });
-  const { streamText } = await import('../src/core/chat-stream.mjs');
+  const { streamText } = await import('../src/shared/chat-stream.mjs');
   const { conversation } = (await p.call('chat.send', { text: 'STREAM_LARGO para el móvil' })).result;
   await until(() => old.states.some((s) => s.conversation === conversation && !s.busy) && fresh.states.some((s) => s.conversation === conversation && !s.busy), 'el final del turno en los dos', 30000);
   const mine = (got) => got.states.filter((s) => s.conversation === conversation);

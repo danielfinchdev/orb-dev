@@ -111,9 +111,9 @@ How it is made:
     and format as 3.8.0), «Share with Orb» (`ShareIntent.kt`), the QR (Google's code scanner, no camera permission),
     dictation, minimize, and the notifications;
   - `Notes.kt` (the notifications and `NoteReceiver`, which answers a button without opening the app) and `PcCall.kt`
-    (that call to the PC, encrypted by `src-tauri/src/phone_crypto.rs`, the same as `src/core/mobile-crypto.mjs`);
+    (that call to the PC, encrypted by `src-tauri/src/phone_crypto.rs`, the same as `src/shared/mobile-crypto.mjs`);
   - `MainActivity.kt`: the launch screen, edge to edge, and back handed to the page.
-- The page's side is `src/ui/lib/app-bridge.js` and what it reads from the QR, `src/ui/lib/link-payload.js`.
+- The page's side is `src/ui/lib/app-bridge.js` and what it reads from the QR, `src/shared/link-payload.mjs`.
 
 ## Still missing
 

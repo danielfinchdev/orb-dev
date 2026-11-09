@@ -1,4 +1,4 @@
-// 3.8.2 (item 13, decision D4): the music's tracks (src/core/music.mjs), downloaded the first time one is played and
+// 3.8.2 (item 13, decision D4): the music's tracks (src/shared/music.mjs), downloaded the first time one is played and
 // kept in core\herramientas\musica, read-only for agents (src/core/guard.mjs). A track is used only when its file is
 // exactly the pinned one (size and SHA-256), checked on every read: a file changed or left there by anyone else is
 // thrown away and downloaded again. The window plays it from the bytes this returns (src/ui/lib/music.js).
@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { ctx, tr } from '../core/context.mjs';
-import { trackOf } from '../core/music.mjs';
+import { trackOf } from '../shared/music.mjs';
 import { fail } from './api-common.mjs';
 
 export const musicDir = () => path.join(ctx.paths.tools, 'musica');

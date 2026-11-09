@@ -1,4 +1,4 @@
-// 3.8.2: «/clear» and «/compact» typed alone in a chat are Orb's commands (src/core/slash.mjs); anything else is a
+// 3.8.2: «/clear» and «/compact» typed alone in a chat are Orb's commands (src/shared/slash.mjs); anything else is a
 // message for the agent as before.
 import { tempHome } from './helpers.mjs';
 import { test, before, after } from 'node:test';
@@ -9,7 +9,7 @@ import { Orchestrator } from '../src/engine/orchestrator.mjs';
 import { Scheduler } from '../src/engine/scheduler.mjs';
 import { buildApi } from '../src/engine/api.mjs';
 import { DESKTOP } from '../src/core/permissions.mjs';
-import { slashCommand } from '../src/core/slash.mjs';
+import { slashCommand } from '../src/shared/slash.mjs';
 
 let t; let board; let api; let sessions;
 const call = (method, params = {}) => api.call(method, params, DESKTOP);

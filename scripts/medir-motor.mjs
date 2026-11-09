@@ -142,16 +142,16 @@ async function latency(e) {
 }
 
 // 3.8.1 (H4c): what one refresh of the window moves (its five calls plus the chat list, which it loads again on every
-// refresh), the old way (whole replies) and as feeds (src/core/feed.mjs): bytes of the JSON, the same reply sealed for a
+// refresh), the old way (whole replies) and as feeds (src/shared/feed.mjs): bytes of the JSON, the same reply sealed for a
 // phone (shapeResult without paths, then XChaCha20 and base64, as remote.mjs › reply) and the time of the whole refresh.
 // Feeds: the first refresh (whole lists), refreshes where nothing changed, and refreshes after one task changed (a
 // blocked task retried / cancelled in turn, autoRun off: nothing else moves).
 const PER_REFRESH = [...REFRESH, ['inbox.list', { zone: 'orb' }]];
 const FEED_KEYS = { 'projects.list': (p) => p.name, 'inbox.list': (x) => x.key };
 async function feeds(e) {
-  const { applyFeed, sinceOf } = await import('../src/core/feed.mjs');
+  const { applyFeed, sinceOf } = await import('../src/shared/feed.mjs');
   const { shapeResult } = await import('../src/engine/remote.mjs');
-  const { seal } = await import('../src/core/mobile-crypto.mjs');
+  const { seal } = await import('../src/shared/mobile-crypto.mjs');
   const crypto = await import('node:crypto');
   const key = crypto.randomBytes(32);
   const phoneBytes = (m, r) => JSON.stringify(seal(key, { r: 'x'.repeat(32), ok: true, result: shapeResult(m, r) }, 'medir')).length;

@@ -104,7 +104,7 @@ same structure for everyone:
 > (`ORB_USER_DATA`).
 
 > **Names.** The program is **Orb** (`Orb.exe`); its robot, **Orb·e**; **Orb.dev** is only the development build (this
-> repository). They live in `src/core/product.mjs`. Up to 2.3.3 the program was called "Orb.dev": that is why its Windows
+> repository). They live in `src/shared/product.mjs`. Up to 2.3.3 the program was called "Orb.dev": that is why its Windows
 > data (where the folder is, interface size) is still in `%APPDATA%\Orb.dev` and an updated install is still in
 > `%LOCALAPPDATA%\Programs\Orb.dev`. Anyone who had the default name "Orb" becomes Orb·e when updating
 > (`loadConfig`, `version` 4); a name chosen by hand stays.
@@ -127,7 +127,7 @@ C:\Orb\                   (C:\Orb by default; always <chosen folder>\Orb, the sa
   multi\<project>\        a multiplatform project: one repository, a folder per platform and compartido\
 ```
 
-- **Categories** (`windows`, `linux`, `ios`, `android`, `web`, `multi`; `src/core/layout.mjs`): projects are their
+- **Categories** (`windows`, `linux`, `ios`, `android`, `web`, `multi`; `src/shared/layout.mjs`): projects are their
   subfolders. When creating or cloning a project you pick the category (web by default); the assistant sets it in
   `orb_create_project`. **Multiplatform** (`multi`): one folder and one git repository, `multi\<name>\<platform>\` for
   each platform chosen plus `compartido\` and a `LEEME.md` (`createProject` with `platforms`). The 2.7–3.7 groups
@@ -182,7 +182,7 @@ On Windows, it then offers to install whatever is missing (section 24).
 
 **Files.**
 - Interface: `src/ui/views/setup.jsx`.
-- Creating and organizing the folder: `src/core/home.mjs` (`createHome`, `homeFor`, `ensureLayout`, `paths`, `categoryOf`, `DEFAULT_CONFIG`, `loadConfig`), `src/core/layout.mjs` (the names), `src/core/core-folder.mjs` (core).
+- Creating and organizing the folder: `src/core/home.mjs` (`createHome`, `homeFor`, `ensureLayout`, `paths`, `categoryOf`, `DEFAULT_CONFIG`, `loadConfig`), `src/shared/layout.mjs` (the names), `src/core/core-folder.mjs` (core).
 - Projects by category: `src/core/projects.mjs` (`createProject`, `syncProjects`).
 - Remembering where it is: `src/engine/desktop-home.mjs` (`ubicacion.json` in the app data).
 
@@ -330,7 +330,7 @@ who a new conversation is with:
   Once the user joins it («Unir», `projects.merge`) or discards it (`tasks.discardBranch`), its copy and branch are
   removed and the task's `branch` is emptied (`dropCopy`), so copies do not pile up and Tasks stops offering them.
 
-**Failures explained.** `src/core/agent-errors.mjs` translates the failure:
+**Failures explained.** `src/shared/agent-errors.mjs` translates the failure:
 - plan without access, not signed in (including "API key is missing"), model not available, no network or missing program.
 - If the task was for "any agent", it moves to another one.
 
@@ -643,7 +643,7 @@ only):
   the browser does not send it to any server; the other addresses include `<computer>.local`, for when the wifi address
   changes). `link.qr` also returns `payload` (`{ v, urls, pc, code, name, expiresAt }`), the PC fingerprint and a
   **short code** of 8 letters and digits (`ABCD-EFGH`) to type along with the address. Parsing what the phone scans or
-  types: `src/core/link-payload.mjs` (pure, shared by the page and the Android app).
+  types: `src/shared/link-payload.mjs` (pure, shared by the page and the Android app).
 - With the short code, the phone requests `GET /api/hello` (the PC's public key, fingerprint, name and addresses; only
   while a code is on screen) and stretches the code with scrypt, tied to the PC's key (`mobile-crypto.mjs ›
   shortSecret`). It works out the fingerprint itself and asks to confirm it against the PC's screen before the password.
@@ -662,7 +662,7 @@ only):
 - **Home network only:** any connection not coming from 127/8, 10/8, 172.16/12, 192.168/16, 100.64/10 or the Tailscale
   IPv6 is rejected (`privateSource`), as are those arriving through Tailscale Funnel.
 
-**Encryption** (`src/core/mobile-crypto.mjs`, the same code on the PC and on the phone):
+**Encryption** (`src/shared/mobile-crypto.mjs`, the same code on the PC and on the phone):
 - The PC has a fixed X25519 key (kept in the master password's vault, section 37); its public part goes in the QR.
 - The phone creates its own key and sends only its public part and a proof sealed with a key derived from the code.
   **The code never travels**: a photographed or copied QR is useless once used, and a link without the phone is
@@ -704,7 +704,7 @@ Push: encrypted for that phone (RFC 8291) and signed with the PC's VAPID key (RF
 cost. It notifies each new message in the Orb chat (replies, tasks waiting for approval, finished or failed) when that
 phone does not have the app open. On iPhone they work with Orb added to the home screen. `mobile.preview` (`all`,
 `chat` by default, `none`; `remote.configure`) sets what a notification shows on a locked phone
-(`src/core/notes.mjs › buildNote`). The Android app shows its own notifications ([`ANDROID.md`](ANDROID.md)).
+(`src/shared/notes.mjs › buildNote`). The Android app shows its own notifications ([`ANDROID.md`](ANDROID.md)).
 
 **Inside** (`src/engine/remote.mjs`):
 - One http server per address: each private local IP (no virtual adapters) and the Tailscale one, or 127.0.0.1 behind
@@ -718,8 +718,8 @@ phone does not have the app open. On iPhone they work with Orb added to the home
   allowed. Ajustes does not warn about it in advance (3.8.2): when a device cannot reach any local-network address
   while linking, its error says so (`app.linkOfflineWifi`, `src/ui/lib/web-bridge.js`). If the PC's local IP changes, a phone linked over wifi falls back to `<computer>.local` or the other
   addresses from its QR; a fixed IP on the router avoids it.
-- Files: `src/engine/remote.mjs`, `src/engine/api-link.mjs`, `src/engine/webpush.mjs`, `src/core/mobile-crypto.mjs`,
-  `src/core/link-payload.mjs`, `src/ui/lib/web-bridge.js`, `src/ui/views/magic-link.jsx` and the "Magic Link" and "This
+- Files: `src/engine/remote.mjs`, `src/engine/api-link.mjs`, `src/engine/webpush.mjs`, `src/shared/mobile-crypto.mjs`,
+  `src/shared/link-payload.mjs`, `src/ui/lib/web-bridge.js`, `src/ui/views/magic-link.jsx` and the "Magic Link" and "This
   phone" cards in `src/ui/views/settings.jsx`. Tests: `test/remote.test.mjs`, `test/webpush.test.mjs`,
   `test/link-ui.test.mjs`, `test/movil-ui.test.mjs`, `test/android.test.mjs`, `test/contrasena-maestra.test.mjs` and
   `test/mobile.e2e.mjs`.
@@ -916,8 +916,8 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
 
 - The app is in Spain Spanish and English (Settings → Language, applied immediately).
 - Files:
-  - base: `src/core/i18n.mjs` (`translate`, `createT`, `localeOf`);
-  - dictionaries: one file per area in `src/core/locales/es/` and `en/` (chat, session, tasks, agents,
+  - base: `src/shared/i18n.mjs` (`translate`, `createT`, `localeOf`);
+  - dictionaries: one file per area in `src/shared/locales/es/` and `en/` (chat, session, tasks, agents,
     settings, setup, msg…), gathered by `es.mjs` and `en.mjs`;
   - interface: `src/ui/lib/i18n.js` (`useT()` and `useLocale()` in components, `t()` and `currentLocale()` outside them);
   - engine: `tr()` from `src/core/context.mjs` (chat notices, errors and guard reasons in the chosen language).
@@ -976,7 +976,7 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
 - **Refreshes as changes:** the lists of every refresh (`tasks.list`, `conversations.list`, `sessions.list`,
   `projects.list` and the chat list's `inbox.list`) take an optional `since: { epoch, v }`. The engine keeps one `Feed`
   per kind of caller (this PC; linked devices in a small cache of their own, so they never push the PC's feeds out),
-  method and the parameters that change the list, normalised (any other is ignored) (`src/core/feed.mjs`,
+  method and the parameters that change the list, normalised (any other is ignored) (`src/shared/feed.mjs`,
   `src/engine/feeds.mjs`): each row carries the version at which its JSON
   last changed, and gone rows, the order of the keys and the rest of the reply (`meta`) carry one too, so a caller gets
   only what moved since its version (`{ feed, epoch, v, base, rows, gone?, order?, meta? }`), or the whole list (`full`)
@@ -1024,7 +1024,7 @@ menus, texts, permissions and themes.
   The list's ⋯ (`views/orb/inbox.jsx › useOrbActions`) gains «Renombrar» (the same `renameChat` the title uses) and
   «Posponer»: `inbox.snooze` hides a chat (and its unread count) until a time; the scheduler's tick brings it back with
   a notice (`scheduler.mjs › wakeSnoozed`); pinning and muting are unchanged.
-- **Attach any file** (`src/engine/attachments.mjs`, `src/core/attach-kind.mjs`): up to 10 files of 100 MB per message,
+- **Attach any file** (`src/engine/attachments.mjs`, `src/shared/attach-kind.mjs`): up to 10 files of 100 MB per message,
   copied into `<chat folder>\.orb-adjuntos\<stamp>\` (never into core). Pictures go natively to Claude and Codex;
   videos become frames (ffmpeg: Orb's pinned copy, the PATH's, or a pinned download the first time); documents and
   PDFs, their extracted text; the rest, its path. On the PC an attached picture opens in the image viewer and a PDF in
@@ -1037,7 +1037,7 @@ menus, texts, permissions and themes.
   with an even-pace mark). Shared pieces: `components/usage-bits.jsx`.
 - **Messages**: `$$…$$` formulas (KaTeX) and ```mermaid diagrams (`components/rich-blocks.jsx`, loaded on demand, no
   eval: the CSP is unchanged); Claude and Codex subagents as folding rows (`lib/session-blocks.js`); `/clear` and
-  `/compact` typed alone (`src/core/slash.mjs`); the cost line can be hidden (Ajustes › Apariencia) and the time shows
+  `/compact` typed alone (`src/shared/slash.mjs`); the cost line can be hidden (Ajustes › Apariencia) and the time shows
   on hover.
 - **Tasks**: «Cambios» lists the files a finished task changed with their diff (`tasks.diff`, read only, between the
   task's undo checkpoints; `components/task-changes.jsx` and the expert mode share `components/diff-view.jsx`).
@@ -1045,7 +1045,7 @@ menus, texts, permissions and themes.
 - **Search**: the sidebar search also finds tasks by content (`tasks.search`); Ctrl+K on the PC
   (`components/command-palette.jsx`, `lib/palette.js`) uses the same search (`lib/search.js`) plus Orb's places, and
   opens only when nothing else took the key (project actions, the whiteboard, a dialog).
-- **«Cristal» theme** (`themes.css`, `src/core/appearance.mjs › SKIN_BASE`): Profesional plus a glass material
+- **«Cristal» theme** (`themes.css`, `src/shared/appearance.mjs › SKIN_BASE`): Profesional plus a glass material
   (`data-material="cristal"`); every Profesional rule applies, with blur only on the sidebar, chat bar, message box and
   menus/dialogs, and `prefers-reduced-transparency` makes it opaque.
 - **Music** (Windows only; `src/engine/music.mjs`, `lib/music.js`): ♪ in the sidebar's foot and one track per
@@ -1057,7 +1057,7 @@ menus, texts, permissions and themes.
 - **Tutorials** (`src/ui/views/tutorials.jsx`, "Tutorials" menu entry, `tutorials` view): cards per topic
   (`TUTORIALS`: id, icon, number of lines and the screen its button leads to with `go()` / `openSettings()`), keyboard
   shortcuts and FAQs in collapsibles, all filtered by the search box (ignoring accents and case). The strings are in
-  `src/core/locales/{es,en}/help.mjs` (`help.tut.<id>.title`, `.l1…`, `.go`; `help.key.<n>.k/.v`; `help.faq.<n>.q/.a`).
+  `src/shared/locales/{es,en}/help.mjs` (`help.tut.<id>.title`, `.l1…`, `.go`; `help.key.<n>.k/.v`; `help.faq.<n>.q/.a`).
   To add a tutorial: an entry in `TUTORIALS` and its keys in both languages.
 - **Guided tour** (`src/ui/components/tour.jsx`): the full-body robot (the one from the notices) walks through the app
   step by step. `TOUR_STEPS` lists each step with the `data-testid` of the control it highlights (a `.tour-spot` ring
@@ -1077,7 +1077,7 @@ menus, texts, permissions and themes.
 - **Window over the app** (`SettingsDialog` in `src/ui/views/settings.jsx`), with sections on the left (`SECTIONS`) and,
   at the bottom, the developer's GitHub and the version. It opens with `openSettings(section)` from
   `src/ui/lib/store.js`; `go('settings')` opens it too. On the phone there is no Settings ("This phone").
-- **Appearance** (`src/core/appearance.mjs`): `ui.skin` (orb, vaporwave, retro, profesional, nube), `ui.font`,
+- **Appearance** (`src/shared/appearance.mjs`): `ui.skin` (orb, vaporwave, retro, profesional, nube), `ui.font`,
   `ui.codeFont` and `ui.codeTheme`. `applyAppearance()` puts them on `<html>` as `data-skin`, `data-font`,
   `data-code-font` and `data-code-theme`, and the CSS reads them: `src/ui/themes.css` (themes; "professional" removes
   the robot in `robot.jsx`, the floating robot, decorative animations and sounds), `src/ui/fonts.css` (typefaces, latin
@@ -1355,7 +1355,7 @@ belongs to the conversation that asked for it: its report goes back there.
   `addChat(role, body, meta, conversation)` infers the conversation from `meta.task` when not given.
 - Engine: `src/engine/orchestrator.mjs`. `Orchestrator` keeps one `Lane` per conversation (queue, live process, live
   text); up to `orchestrator.parallel` (3 by default) reply at once and the rest wait their turn.
-- Titles: `src/core/titles.mjs` (a quick one taken from the first message) and `src/engine/titles.mjs` (the lightest
+- Titles: `src/shared/titles.mjs` (a quick one taken from the first message) and `src/engine/titles.mjs` (the lightest
   model of the conversation's agent writes one of 2 to 5 words; not with the test agents).
 - Project icons: `src/engine/project-icons.mjs` (the one chosen in Orb, stored in `core/iconos`; otherwise, the
   favicon or app icon found in the folder) and `src/ui/components/project-icon.jsx` (with no icon, its initials in a
@@ -1618,7 +1618,7 @@ workspace), `test/multiplataforma.test.mjs` and `test/migracion-38.test.mjs` (th
 One password, made once, protects what Orb keeps for itself and the actions that could hurt. Code: `src-tauri/vault`
 (the orb-vault crate: the crypto, the files, the waits, the unlock tokens), `src/core/master.mjs` (the engine's client of
 it, same API as before), `src/engine/api-master.mjs` (the API and the guard), `src/core/connector-secrets.mjs`,
-`src/core/mobile-crypto.mjs` (linking), `src/ui/views/master.jsx` and `src/ui/lib/core-access.js`.
+`src/shared/mobile-crypto.mjs` (linking), `src/ui/views/master.jsx` and `src/ui/lib/core-access.js`.
 
 **Where the secrets live (3.8.1).** In Rust, not in the engine. Orb.exe runs the vault (`src-tauri/src/vault_host.rs`)
 and gives each engine process its own named pipe (`ORB_VAULT_PIPE`; first instance, this user's SID only, no remote
@@ -1728,7 +1728,7 @@ it, and its token opens nothing else).
 **Backups** carry `core\secretos` (never `intentos.json`): the database and orb.json no longer hold any secret in clear,
 and the vault inside opens with the password (or the PC secret the backup also carries, as before for approvals).
 
-**Magic Link with the password** (protocol 4, `src/core/link-payload.mjs`). The password never leaves the phone:
+**Magic Link with the password** (protocol 4, `src/shared/link-payload.mjs`). The password never leaves the phone:
 - When the password is made (or changed, forgotten, reset) the PC keeps a **verifier** in the vault: the public half of
   an X25519 key whose private half comes from the password (scrypt N = 2^16, r = 8, p = 1 with its own salt, then HKDF:
   `mobile-crypto.mjs › verifierFromSeed`). A password made before the verifier existed gets it the next time it is typed

@@ -17,7 +17,7 @@ import path from 'node:path';
 import { fork, spawnSync } from 'node:child_process';
 import { tempHome, ROOT, until } from './helpers.mjs';
 import { TEST_MASTER } from './fixtures/e2e-flows.mjs';
-import * as C from '../src/core/mobile-crypto.mjs';
+import * as C from '../src/shared/mobile-crypto.mjs';
 
 const OUT = path.join(ROOT, 'test-results'); fs.mkdirSync(OUT, { recursive: true });
 const WWW = path.join(ROOT, 'src', 'renderer-android');

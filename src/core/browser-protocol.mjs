@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { browserKey } from './browser-key.mjs';
-import { translate } from './i18n.mjs';
+import { translate } from '../shared/i18n.mjs';
 
 export const VIEW = { width: 1280, height: 800 };
 export const MAX_TABS = 4;

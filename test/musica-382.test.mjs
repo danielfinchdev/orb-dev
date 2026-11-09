@@ -11,7 +11,7 @@ import { ctx, validateConfig } from '../src/core/context.mjs';
 import { isOrbData } from '../src/core/guard.mjs';
 import { DEFAULT_CONFIG, merge } from '../src/core/home.mjs';
 import { METHODS } from '../src/core/permissions.mjs';
-import { BACKGROUND, GAMES, TRACKS, trackOf, DEFAULT_VOLUME, musicAllowed, musicPrefs, gameMusicOn, nextTrack, gameTrack } from '../src/core/music.mjs';
+import { BACKGROUND, GAMES, TRACKS, trackOf, DEFAULT_VOLUME, musicAllowed, musicPrefs, gameMusicOn, nextTrack, gameTrack } from '../src/shared/music.mjs';
 import { trackBytes, musicDir, musicMethods } from '../src/engine/music.mjs';
 
 const read = (...p) => fs.readFileSync(path.join(ROOT, 'src', 'ui', ...p), 'utf8');

@@ -10,7 +10,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { tempHome, startEngine, until } from './helpers.mjs';
 import { createPhone, TEST_MASTER } from './fixtures/phone-client.mjs';
-import * as C from '../src/core/mobile-crypto.mjs';
+import * as C from '../src/shared/mobile-crypto.mjs';
 import { Board } from '../src/core/board.mjs';
 
 let A; let t; let port; let dir; let pushLog; let conv;

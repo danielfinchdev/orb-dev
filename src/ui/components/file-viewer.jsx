@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from './ui/over
 import { Spinner } from './ui/basic.jsx';
 import { call } from '@/lib/store.js';
 import { baseName } from '@/lib/utils.js';
-import { playableType } from '../../core/attach-kind.mjs';
+import { playableType } from '../../shared/attach-kind.mjs';
 import { useT } from '@/lib/i18n.js';
 
 const MAX_PAGES = 60;

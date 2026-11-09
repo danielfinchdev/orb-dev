@@ -6,11 +6,11 @@ import { useStore, go, bridge, openSettings, anyChatBusy } from '@/lib/store.js'
 import { Tip, BubbleTip } from './ui/overlay.jsx';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
-import { PRODUCT } from '../../core/product.mjs';
+import { PRODUCT } from '../../shared/product.mjs';
 import { BrowserSettingsMenu } from './browser-settings-menu.jsx';
 import { OrbInbox } from '@/views/orb/inbox.jsx';
 import { available as musicAvailable, musicState, subscribe as onMusic, toggleMusic, skipTrack } from '@/lib/music.js';
-import { trackOf } from '../../core/music.mjs';
+import { trackOf } from '../../shared/music.mjs';
 
 // The assistant's wordmark ORB·E, drawn its own way in each theme (app.css .wordmark): spaced capitals with a dot of the
 // theme's colour in Orb, a techno one underlined in Vaporwave…

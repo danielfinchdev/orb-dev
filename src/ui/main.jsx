@@ -566,7 +566,7 @@ function MigrationFailed({ state }) {
 }
 
 // 3.8: the PC's master password, the second step of linking (the app after scanning, a browser opened from the QR). It
-// never leaves the phone (src/core/mobile-crypto.mjs › linkDevice proves it is known) and is never kept. fp: the PC's
+// never leaves the phone (src/shared/mobile-crypto.mjs › linkDevice proves it is known) and is never kept. fp: the PC's
 // 3.8.1 (Tauri, review D-fix M2): «Empezar con una clave nueva» says what is lost (startError: recovery, master = the
 // recovery code and the master password exist in core). Without a recovery code the backups made until now will not
 // open any more: the word EMPEZAR must be typed.

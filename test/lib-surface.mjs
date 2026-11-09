@@ -6,7 +6,7 @@ import path from 'node:path';
 import { ROOT } from './helpers.mjs';
 import { METHODS, UNLOCK_METHODS, FRESH_UNLOCK } from '../src/core/permissions.mjs';
 import { DEFAULT_CONFIG } from '../src/core/home.mjs';
-import { PROTOCOL, MIN_PROTOCOL, PAIR_PROTOCOL } from '../src/core/link-payload.mjs';
+import { PROTOCOL, MIN_PROTOCOL, PAIR_PROTOCOL } from '../src/shared/link-payload.mjs';
 import { openDb } from '../src/core/db.mjs';
 
 const sources = (dir) => { const out = []; const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) walk(f); else if (/\.(mjs|js)$/.test(e.name)) out.push(f); } }; walk(path.join(ROOT, dir)); return out; };

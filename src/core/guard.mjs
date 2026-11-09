@@ -15,7 +15,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { translate } from './i18n.mjs';
+import { translate } from '../shared/i18n.mjs';
 import { ctx } from './context.mjs';
 import { DEFAULT_PROTECTED } from './home.mjs';
 

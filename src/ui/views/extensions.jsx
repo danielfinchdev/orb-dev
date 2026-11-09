@@ -15,7 +15,7 @@ import { useStore, call, act, bridge, getState } from '@/lib/store.js';
 import { t, useT } from '@/lib/i18n.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { connectorKeys } from './master.jsx';
-import { CATEGORIES } from '../../core/layout.mjs';
+import { CATEGORIES } from '../../shared/layout.mjs';
 
 // Where one came from, in a word (orb.json › source).
 const SOURCE = { orb: 'ext.source.orb', importado: 'ext.source.imported', creado: 'ext.source.created', usuario: 'ext.source.user' };

@@ -18,7 +18,7 @@ import { Master } from '../src/core/master.mjs';
 import { Board } from '../src/core/board.mjs';
 import { mcpServersFor } from '../src/engine/sessions.mjs';
 import { createProject } from '../src/core/projects.mjs';
-import { translate } from '../src/core/i18n.mjs';
+import { translate } from '../src/shared/i18n.mjs';
 import { METHODS, UNLOCK_METHODS, needsUnlock } from '../src/core/permissions.mjs';
 import * as codex from '../src/agents/codex.mjs';
 import * as claude from '../src/agents/claude.mjs';

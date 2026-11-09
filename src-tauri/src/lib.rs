@@ -6,7 +6,7 @@
 mod mobile;
 #[cfg(mobile)]
 pub use mobile::run;
-// The phone's end-to-end encryption, the same as src/core/mobile-crypto.mjs (Android's notification buttons use it).
+// The phone's end-to-end encryption, the same as src/shared/mobile-crypto.mjs (Android's notification buttons use it).
 mod phone_crypto;
 
 /// Everything below is the desktop app only (one #[cfg(desktop)] per item, so the items keep their paths).
@@ -39,7 +39,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tauri::{AppHandle, Manager, RunEvent, WebviewWindow};
 
-// %APPDATA%\Orb.dev: the app's data folder of every Orb since 2.3 (src/core/product.mjs › dataDir), also under Tauri, so
+// %APPDATA%\Orb.dev: the app's data folder of every Orb since 2.3 (src/shared/product.mjs › dataDir), also under Tauri, so
 // the location of the workspace, the interface's size and the copies of the keys stay where they are.
 const DATA_DIR: &str = "Orb.dev";
 /// The app, for what runs outside Tauri's own callbacks (desktop.rs › guard_against_electron).

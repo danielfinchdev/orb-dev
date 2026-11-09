@@ -6,7 +6,7 @@ import { ctx, tr } from './context.mjs';
 import { AGENT_IDS, AGENT_LABELS, folderName, projectLogHeader, isConfigName, categoryOf, CATEGORIES, folderKey, IGNORED_PROJECTS, FINISHED_PROJECTS, DELETING_PROJECTS, logBody } from './home.mjs';
 import { oneLine, MAX_DESCRIPTION } from './safety.mjs';
 import { contentHash, sign, verify, detectSensitivity, deletionAskedByUser, defaultApprovalKey } from './approval.mjs';
-import { PRODUCT } from './product.mjs';
+import { PRODUCT } from '../shared/product.mjs';
 import { git, isGitRepo } from './workspace.mjs';
 
 export const AGENTS = AGENT_IDS;

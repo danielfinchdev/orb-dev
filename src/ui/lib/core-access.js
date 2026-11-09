@@ -8,7 +8,7 @@
 //   coreView: what the screen «Falta la carpeta core» shows (views/core-missing.jsx), kept apart so it can be tested
 //     without a window. state: app.coreState ({ missing, home, reason, backup, error, folder }).
 //   layoutTitle / layoutOptions: the rows of «Ordenar carpetas» (views/layout.jsx; app.layoutPlan's items).
-import { CATEGORIES } from '../../core/layout.mjs';
+import { CATEGORIES } from '../../shared/layout.mjs';
 
 let held = null; // { unlock, until }
 let asker = null; // (action) => Promise<{ unlock, until } | null>

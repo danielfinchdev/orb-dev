@@ -6,8 +6,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { translate } from '../core/i18n.mjs';
-import { AUTHOR } from '../core/product.mjs';
+import { translate } from '../shared/i18n.mjs';
+import { AUTHOR } from '../shared/product.mjs';
 
 const FORM_ALIAS = '1ee33dd306d01e9d63121af2b9fd1a2a'; // the same FormSubmit inbox as Open Control Edge
 export const MAX_IMAGES = 3;

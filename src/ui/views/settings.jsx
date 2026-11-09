@@ -6,8 +6,8 @@ import { toast } from 'sonner';
 import QRCode from 'qrcode';
 import { DatabaseBackup, Settings, FlaskConical, FolderOpen, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink, ShieldBan, RotateCcw, Puzzle } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
-import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS, plainSkin } from '../../core/appearance.mjs';
-import { PRODUCT, AUTHOR } from '../../core/product.mjs';
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS, plainSkin } from '../../shared/appearance.mjs';
+import { PRODUCT, AUTHOR } from '../../shared/product.mjs';
 import { PANELS, savePanels } from './expert.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
@@ -21,15 +21,15 @@ import { AGENT } from '@/lib/labels.js';
 import { useStore, call, act, bridge, setState, getState, applyTheme, applyAppearance, go, openTerminal, openSettings, closeSettings, fullPc, runTest } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { t, useT, useLocale } from '@/lib/i18n.js';
-import { LANGUAGES } from '../../core/i18n.mjs';
+import { LANGUAGES } from '../../shared/i18n.mjs';
 import { useUpdate, updateActions, notesUrl } from '@/components/update-card.jsx';
 import { play } from '@/lib/sounds.js';
 import { MagicLinkPanel, SubSection } from './magic-link.jsx';
 import { DataCards } from './data.jsx';
 import { ExtensionsPanel } from './extensions.jsx';
 import { unlockCore } from '@/lib/core-access.js';
-import { DEFAULT_PROTECTED } from '../../core/layout.mjs';
-import { TRACKS } from '../../core/music.mjs';
+import { DEFAULT_PROTECTED } from '../../shared/layout.mjs';
+import { TRACKS } from '../../shared/music.mjs';
 import { available as musicAvailable, musicPrefs, setMusicVolume } from '@/lib/music.js';
 
 // unlock: the master password's token, for a change that needs it (src/core/permissions.mjs › needsUnlock).
@@ -715,7 +715,7 @@ function MusicVolume() {
   );
 }
 
-// 3.8.2: the music's credits (src/core/music.mjs): all CC0, each with the page it comes from.
+// 3.8.2: the music's credits (src/shared/music.mjs): all CC0, each with the page it comes from.
 const MUSIC_CREDITS = Object.values(TRACKS);
 
 // 3.6: «Acerca de»: the version, the developer's GitHub and the licence (3.8.2: also at the foot of the sections list).

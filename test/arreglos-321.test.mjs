@@ -8,7 +8,7 @@ import { tempHome } from './helpers.mjs';
 import { ctx, saveConfig } from '../src/core/context.mjs';
 import { Board, eventKey, eventText } from '../src/core/board.mjs';
 import { createProject, renameProject } from '../src/core/projects.mjs';
-import { projectNameProblem } from '../src/core/product.mjs';
+import { projectNameProblem } from '../src/shared/product.mjs';
 import { isSecretPath, looksSecretText, secretsInDiff, localStamp, localText, sizeText } from '../src/core/safety.mjs';
 import { deletionAskedByUser, filesToDelete } from '../src/core/approval.mjs';
 import { git } from '../src/core/workspace.mjs';

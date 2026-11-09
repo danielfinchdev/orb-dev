@@ -3,8 +3,8 @@
 // createPhone({ name, kind, password }) → { connect({ qr } | { code, address }), call(id, method, params), on(event, fn),
 // peers(), raw(id), stop() }; id null: the first link. 3.8: password, the PC's master password it links with (the PC of a
 // test makes it with TEST_MASTER). onFetch: the fetch its linking goes through (a test records the exchange).
-import * as C from '../../src/core/mobile-crypto.mjs';
-import { parseLinkPayload, normalAddress, normalCode, PROTOCOL, MIN_PROTOCOL } from '../../src/core/link-payload.mjs';
+import * as C from '../../src/shared/mobile-crypto.mjs';
+import { parseLinkPayload, normalAddress, normalCode, PROTOCOL, MIN_PROTOCOL } from '../../src/shared/link-payload.mjs';
 
 const err = (message, extra = {}) => Object.assign(new Error(message), extra);
 export const TEST_MASTER = 'contraseña maestra de prueba';
@@ -65,7 +65,7 @@ export function createPhone({ name = 'Móvil de prueba', kind = 'phone', passwor
     } catch { /* closed */ }
     p.online = false;
   }
-  // The same exchange as the page (src/core/mobile-crypto.mjs › linkDevice): the password never leaves this phone.
+  // The same exchange as the page (src/shared/mobile-crypto.mjs › linkDevice): the password never leaves this phone.
   async function pairAt(base, pcPub, code, via) {
     const secret = via === 'code3' ? await C.shortSecretAsync(normalCode(code), C.b64.enc(pcPub)) : code;
     let r;

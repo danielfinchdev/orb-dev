@@ -7,7 +7,7 @@ import { createRoot } from 'react-dom/client';
 import { Maximize2, Minimize2, ChevronUp, ChevronDown, X, AppWindow, LoaderCircle, Crosshair, Circle, Square } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { cn } from '@/lib/utils.js';
-import { createT } from '../core/i18n.mjs';
+import { createT } from '../shared/i18n.mjs';
 
 const host = (url) => { try { return new URL(url).host; } catch { return url; } };
 // 3.8.2 (T3 3.11): where a click fell on the page's picture (shown with object-contain), as fractions of the picture

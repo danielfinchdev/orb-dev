@@ -1,5 +1,5 @@
 // The vault's crypto, byte for byte what Orb 3.8 / 3.8.1 wrote from Node (src/core/master.mjs before this crate, and
-// src/core/mobile-crypto.mjs for the phones' side), so every file already on disk opens the same:
+// src/shared/mobile-crypto.mjs for the phones' side), so every file already on disk opens the same:
 //   seal        base64(nonce(24) ‖ XChaCha20-Poly1305(key, nonce, aad, plain))
 //   keyId       base64(HMAC-SHA256(dek, "orb-key-id")[..16])
 //   check       base64(HMAC-SHA256(kek, "orb-master-check-v1"))

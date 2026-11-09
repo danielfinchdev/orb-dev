@@ -62,9 +62,9 @@ test('a turn stopped before its process started does not start it', async () => 
   assert.equal(o.state(conversation).busy, false);
 });
 
-// 3.8.3: the streamed answer as deltas (src/core/chat-stream.mjs): the window and a 3.8.3 phone get only what was added.
+// 3.8.3: the streamed answer as deltas (src/shared/chat-stream.mjs): the window and a 3.8.3 phone get only what was added.
 test('stream deltas: only the added text, whole again on a new block or turn, and a lost place is noticed', async () => {
-  const { streamFeed, streamText } = await import('../src/core/chat-stream.mjs');
+  const { streamFeed, streamText } = await import('../src/shared/chat-stream.mjs');
   const feed = streamFeed();
   const st = (partial, busy = true, conversation = 1) => ({ conversation, busy, partial, tools: [], queued: 0 });
   const sent = [st('Hola'), st('Hola, qué'), st('Hola, qué tal'), st('Hola, qué tal'), st('Otro bloque'), st('Otro bloque y más'), st('', false), st('Nuevo turno')].map(feed);

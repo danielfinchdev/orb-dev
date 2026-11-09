@@ -1,4 +1,4 @@
-/* Visual themes (Ajustes → Apariencia → Tema visual): src/core/appearance.mjs lists them and lib/store.js puts the chosen one
+/* Visual themes (Ajustes → Apariencia → Tema visual): src/shared/appearance.mjs lists them and lib/store.js puts the chosen one
    on <html> as data-skin. «orb» is the default and has no rules here (app.css is the orb theme). Each theme redefines the
    tokens of app.css for light (html[data-skin]) and dark (html.dark[data-skin]: the light / dark switch still applies on
    top), plus its own touches: typography, cards, buttons, the message box, the decoration of the top bars (transparent
@@ -261,7 +261,7 @@ html[data-skin="profesional"] *:hover { scale: none; }
 
 /* ================================================================================================================
    CRISTAL (3.8.2): Profesional made of frosted glass, after the translucent materials of Apple's interfaces. <html>
-   wears data-skin="profesional" too (src/core/appearance.mjs › SKIN_BASE), so everything above applies: no robot, no
+   wears data-skin="profesional" too (src/shared/appearance.mjs › SKIN_BASE), so everything above applies: no robot, no
    sounds, no backdrop scene and no animation. On top: a still colour field painted once on the page, translucent
    surfaces with a light edge and a soft shadow, larger corners and the system blue.
    Performance: backdrop-filter only on a few large surfaces that do not scroll (the sidebar, the chat's top bar, the

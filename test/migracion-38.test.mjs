@@ -21,7 +21,7 @@ import { syncProjects } from '../src/core/projects.mjs';
 import { IGNORED_PROJECTS } from '../src/core/home.mjs';
 import { migrationView, folderOf } from '../src/ui/lib/migration.js';
 import { startupPhase } from '../src/ui/lib/startup.js';
-import * as C from '../src/core/mobile-crypto.mjs';
+import * as C from '../src/shared/mobile-crypto.mjs';
 import { newVapidKeys } from '../src/engine/webpush.mjs';
 import { createBackup, restoreInto } from '../src/core/backup.mjs';
 import { createRemote } from '../src/engine/remote.mjs';
@@ -838,7 +838,7 @@ test('3.8.2 (M6): el móvil dice «El PC necesita atención» cuando el PC respo
   assert.match(screen, /setAttention\(r\.attention \?\? null\)/, 'sigue reintentando y pasa sola a la app cuando el PC se arregla');
   assert.match(screen, /t\('app\.pcAttentionBody'\)/);
   for (const lang of ['es', 'en']) {
-    const text = fs.readFileSync(path.join(ROOT, 'src', 'core', 'locales', lang, 'app.mjs'), 'utf8');
+    const text = fs.readFileSync(path.join(ROOT, 'src', 'shared', 'locales', lang, 'app.mjs'), 'utf8');
     for (const k of ['app.pcAttentionTitle', 'app.pcAttentionTitleNamed', 'app.pcAttentionBody']) assert.ok(text.includes(`"${k}"`), `${lang}: ${k}`);
   }
   const engine = fs.readFileSync(path.join(ROOT, 'src', 'engine', 'engine.mjs'), 'utf8');

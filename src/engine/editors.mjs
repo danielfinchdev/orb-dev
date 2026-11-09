@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { findTerminals, linuxTerminal, spawnDetached, LINUX_TERMINALS } from './terminal.mjs';
-import { translate } from '../core/i18n.mjs';
+import { translate } from '../shared/i18n.mjs';
 
 const exists = (file) => Boolean(file) && fs.existsSync(file);
 function inPath(names, env) {

@@ -7,7 +7,7 @@ import path from 'node:path';
 import { tempHome } from './helpers.mjs';
 import { Board } from '../src/core/board.mjs';
 import { migrate } from '../src/core/db.mjs';
-import { titleFrom, cleanTitle } from '../src/core/titles.mjs';
+import { titleFrom, cleanTitle } from '../src/shared/titles.mjs';
 import { ctx } from '../src/core/context.mjs';
 import { projectIcon, setProjectIcon, clearProjectIcon } from '../src/engine/project-icons.mjs';
 import { Orchestrator } from '../src/engine/orchestrator.mjs';

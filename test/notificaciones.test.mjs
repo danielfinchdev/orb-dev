@@ -1,9 +1,9 @@
-// 3.6 (mensajería, paso M4): los avisos del móvil como los de una app de mensajería (src/core/notes.mjs): el dibujo de
+// 3.6 (mensajería, paso M4): los avisos del móvil como los de una app de mensajería (src/shared/notes.mjs): el dibujo de
 // Orbe, el nombre del chat, el texto según la privacidad elegida, uno por chat, silenciados sin aviso, y las acciones
 // (Responder, Aprobar, Rechazar). Y el service worker que los muestra.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildNote, collapse, actionRoute, routeOf, chatKey, noteId, lineKind, NOTE_IDS } from '../src/core/notes.mjs';
+import { buildNote, collapse, actionRoute, routeOf, chatKey, noteId, lineKind, NOTE_IDS } from '../src/shared/notes.mjs';
 import { SERVICE_WORKER } from '../src/engine/remote.mjs';
 
 const orbChat = { kind: 'conversation', id: 12, name: 'Arreglar el login' };

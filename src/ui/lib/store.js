@@ -6,11 +6,11 @@ import { errorText } from './utils.js';
 import { bumpNav, navTicket, stillHere } from './nav.js';
 import { cleanRoute, backStep } from './phone-nav.js';
 import { t } from './i18n.js';
-import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, baseSkin, plainSkin } from '../../core/appearance.mjs';
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, baseSkin, plainSkin } from '../../shared/appearance.mjs';
 export { plainSkin }; // 3.8.2: Profesional and the themes built on it (Cristal): no robot, no backdrop, no motion
-import { applyFeed, sinceOf } from '../../core/feed.mjs';
+import { applyFeed, sinceOf } from '../../shared/feed.mjs';
 import { frameBatch } from './batch.js';
-import { streamText } from '../../core/chat-stream.mjs';
+import { streamText } from '../../shared/chat-stream.mjs';
 import { pendingShown } from './pending.js';
 export { pendingShown };
 
@@ -137,7 +137,7 @@ export async function orbAct(method, params, okText) { const r = await act(call(
 export const openOrbInfo = (info) => setState({ orbInfo: info });
 export const closeOrbInfo = () => setState({ orbInfo: null });
 
-// 3.8.1 (H4c): the lists of every refresh come as changes since what this window holds (src/core/feed.mjs): only the
+// 3.8.1 (H4c): the lists of every refresh come as changes since what this window holds (src/shared/feed.mjs): only the
 // rows that moved travel (also to the phone, over its encrypted link), and a list where nothing moved keeps the same
 // array, so the screens that read it draw nothing again. One call of each at a time (oneAtATime): a late answer to an
 // older request never undoes a newer one. An engine of before 3.8.1 answers whole (applyFeed takes it as it comes).
@@ -229,7 +229,7 @@ const chatStates = frameBatch((states) => setState((s) => {
   }
   return { chats, answers };
 }));
-// 3.8.3: while it streams, a state brings only the text added since the last one (src/core/chat-stream.mjs): it is made
+// 3.8.3: while it streams, a state brings only the text added since the last one (src/shared/chat-stream.mjs): it is made
 // whole here, from the text the window holds. One that does not follow it (the window reloaded meanwhile) is dropped and
 // the conversation's state is read again whole.
 const holding = new Map(); // conversation → the streamed text the window holds

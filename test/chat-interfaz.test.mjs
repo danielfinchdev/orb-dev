@@ -18,7 +18,7 @@ import { readableCommand, readableInput, prettyModel } from '../src/ui/lib/tools
 import { activityLabel, activityDetail } from '../src/ui/lib/activity.js';
 import { cutWords } from '../src/ui/lib/text.js';
 import { pickGreeting, suggestionsFor } from '../src/ui/lib/greeting.js';
-import { createT } from '../src/core/i18n.mjs';
+import { createT } from '../src/shared/i18n.mjs';
 
 const home = tempHome();
 after(() => home.cleanup());
@@ -180,6 +180,6 @@ test('10 y 6: saludo y sugerencias acordes a lo que pasa', () => {
 });
 
 test('12: «una tarea» / «2 tareas», nunca «tarea(s)»', () => {
-  const es = fs.readFileSync(path.join(import.meta.dirname, '..', 'src', 'core', 'locales', 'es', 'msg.mjs'), 'utf8');
+  const es = fs.readFileSync(path.join(import.meta.dirname, '..', 'src', 'shared', 'locales', 'es', 'msg.mjs'), 'utf8');
   assert.doesNotMatch(es.match(/"msg\.orch\.playWhileWaiting": "[^"]*"/)[0], /\(s\)/);
 });

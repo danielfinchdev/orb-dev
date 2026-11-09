@@ -105,8 +105,8 @@ test('la zona Orb en la interfaz: su lista en la barra lateral y en «Chats», p
   assert.match(chat, /<TaskLines conversation=\{id\} \/>/);
   // Every key used by the new screens exists in both languages.
   const keys = new Set([...read('views', 'orb', 'inbox.jsx').matchAll(/t\('(orbchats\.[\w.]+)'/g), ...read('views', 'orb', 'info.jsx').matchAll(/t\('(orbchats\.[\w.]+)'/g), ...chat.matchAll(/t\('(orbchats\.[\w.]+)'/g)].map((m) => m[1]));
-  const es = fs.readFileSync(path.join(ROOT, 'src', 'core', 'locales', 'es', 'orbchats.mjs'), 'utf8');
-  const en = fs.readFileSync(path.join(ROOT, 'src', 'core', 'locales', 'en', 'orbchats.mjs'), 'utf8');
+  const es = fs.readFileSync(path.join(ROOT, 'src', 'shared', 'locales', 'es', 'orbchats.mjs'), 'utf8');
+  const en = fs.readFileSync(path.join(ROOT, 'src', 'shared', 'locales', 'en', 'orbchats.mjs'), 'utf8');
   for (const k of keys) { assert.ok(es.includes(`'${k}'`), `es sin ${k}`); assert.ok(en.includes(`'${k}'`), `en sin ${k}`); }
 });
 

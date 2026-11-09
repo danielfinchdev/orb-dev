@@ -8,7 +8,7 @@ import { machineKeys } from '../core/machine-keys.mjs';
 import { BACK_FILE } from './approval-secret.mjs';
 import * as K from '../core/backup.mjs';
 import { legacyData, deleteLegacyData } from '../core/migrate-38.mjs';
-import { utcToZoned, localDay, ownerTz } from '../core/tz.mjs';
+import { utcToZoned, localDay, ownerTz } from '../shared/tz.mjs';
 import { refused } from './api-master.mjs';
 
 // A backup's Orb version older than 3.8 (one without a version is not counted).

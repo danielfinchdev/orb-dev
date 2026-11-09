@@ -7,8 +7,8 @@
 // That real figure is the main guard (stop at budget.stopAt, 92% by default); the launch counts are only a safety net
 // with roomier limits, so the app no longer stops working long before the subscription would.
 import { ctx, tr } from './context.mjs';
-import { localeOf } from './i18n.mjs';
-import { localDay, ownerTz } from './tz.mjs';
+import { localeOf } from '../shared/i18n.mjs';
+import { localDay, ownerTz } from '../shared/tz.mjs';
 import { account as findAccount, accounts, accountsOf, usableAccounts } from './accounts.mjs';
 
 export const budgetConfig = () => {

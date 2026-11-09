@@ -4,9 +4,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import es from '../src/core/locales/es.mjs';
-import en from '../src/core/locales/en.mjs';
-import { translate, createT, localeOf } from '../src/core/i18n.mjs';
+import es from '../src/shared/locales/es.mjs';
+import en from '../src/shared/locales/en.mjs';
+import { translate, createT, localeOf } from '../src/shared/i18n.mjs';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src');
 const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)]));

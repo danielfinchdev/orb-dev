@@ -10,7 +10,7 @@ import { clearCooldown } from '../core/budget.mjs';
 import { oneLine } from '../core/safety.mjs';
 import { statusAll, status as agentStatus, openLogin, startAccountLogin, forgetInstalled, executable } from '../agents/index.mjs';
 import { sendCode as loginSendCode, cancelLogin, loginInfo, allLogins } from '../agents/login.mjs';
-import { translate } from '../core/i18n.mjs';
+import { translate } from '../shared/i18n.mjs';
 import { refreshModels, refreshAllModels } from './catalog.mjs';
 import { fail, str, oneOf } from './api-common.mjs';
 

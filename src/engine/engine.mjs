@@ -11,17 +11,17 @@ import { keysOf, machineKeys } from '../core/machine-keys.mjs';
 import { IN_VAULT } from '../core/master.mjs';
 import { coreHealth } from '../core/core-folder.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
-import { PRODUCT } from '../core/product.mjs';
+import { PRODUCT } from '../shared/product.mjs';
 import { DESKTOP, authorize } from '../core/permissions.mjs';
 
 import { stdioTransport } from './stdio.mjs';
-import { streamFeed } from '../core/chat-stream.mjs';
+import { streamFeed } from '../shared/chat-stream.mjs';
 import { attachHost, hostReply, hostCall } from './host.mjs';
 import { appMethods } from './api-app.mjs';
 import { locateHome, setupHome, switchHome, secretCopy, secretsCopy, adoptOldKeyNames, secretDir } from './desktop-home.mjs';
 import { loadConfig, homeKey } from '../core/home.mjs';
-import es from '../core/locales/es.mjs';
-import en from '../core/locales/en.mjs';
+import es from '../shared/locales/es.mjs';
+import en from '../shared/locales/en.mjs';
 
 // A plain process with JSON lines on stdin/stdout (the app starts the bundled node.exe with ORB_ENGINE_STDIO=1;
 // src/engine/stdio.mjs), or a Node child with an IPC channel (the tests).
@@ -39,7 +39,7 @@ let remote = null; // phone access (src/engine/remote.mjs), when turned on
 let devControl = null; // 3.1: the developer's control line (src/engine/dev-control.mjs), only in Orb.dev
 // Every event goes to this PC's window, the linked phones and browsers (remote.mjs picks what they need) and the
 // developer's control line.
-// 3.8.3: the assistant's streamed answer reaches the window as deltas (src/core/chat-stream.mjs).
+// 3.8.3: the assistant's streamed answer reaches the window as deltas (src/shared/chat-stream.mjs).
 const windowStream = streamFeed();
 const toWindow = (event, payload) => { try { transport.send({ type: 'event', event, payload: event === 'chat:state' ? windowStream(payload) : payload }); } catch { /* window gone */ } };
 const emit = (event, payload) => {

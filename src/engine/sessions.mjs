@@ -22,7 +22,7 @@ import { browserKey } from '../core/browser-key.mjs';
 import { androidAllowed } from './android.mjs';
 import { PERMISSIONS, plainAction, pidKills, unwrapShell } from '../core/guard.mjs';
 import { processList, taskProcesses, powershell } from '../core/procs.mjs';
-import { explainFailure } from '../core/agent-errors.mjs';
+import { explainFailure } from '../shared/agent-errors.mjs';
 import { rememberModels } from './catalog.mjs';
 import { changedFiles, logDirect } from './logs.mjs';
 import { ATTACH_DIR, placeAttachments as copyAttachments, prepareAttachments } from './attachments.mjs';

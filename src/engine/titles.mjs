@@ -3,7 +3,7 @@
 // a few seconds. If it cannot, the quick one stays.
 import { ctx } from '../core/context.mjs';
 import { account, defaultAccount, accountEnv } from '../core/accounts.mjs';
-import { cleanTitle } from '../core/titles.mjs';
+import { cleanTitle } from '../shared/titles.mjs';
 import { adapter, executable, installed } from '../agents/index.mjs';
 import { chooseModel } from './catalog.mjs';
 

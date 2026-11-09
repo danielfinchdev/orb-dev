@@ -11,7 +11,7 @@ import { notify } from '@/lib/notify.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { MasterCard } from '@/views/master.jsx';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
-import { AUTHOR } from '../../core/product.mjs';
+import { AUTHOR } from '../../shared/product.mjs';
 
 // 3.8.2: the details of going back to the previous key (what stops working, recovery codes), in the README.
 const KEY_DOCS = `https://github.com/${AUTHOR.repo}#going-back-to-the-previous-key`;

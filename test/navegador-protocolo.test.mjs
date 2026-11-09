@@ -11,7 +11,7 @@ import http from 'node:http';
 import { browserKey } from '../src/core/browser-key.mjs';
 import { createActions, servePipe, KEYS, dialogsHook } from '../src/core/browser-protocol.mjs';
 import { createHostBrowser } from '../src/engine/host-browser.mjs';
-import { translate } from '../src/core/i18n.mjs';
+import { translate } from '../src/shared/i18n.mjs';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const until = async (fn, what, ms = 15000) => { const end = Date.now() + ms; while (Date.now() < end) { try { const v = await fn(); if (v) return v; } catch { /* not yet */ } await wait(100); } throw new Error(`timeout: ${what}`); };

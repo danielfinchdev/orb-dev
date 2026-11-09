@@ -3,9 +3,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { paths, loadConfig, writeJson, merge, AGENT_IDS, relabelEmptyLogs } from './home.mjs';
-import { translate } from './i18n.mjs';
+import { translate } from '../shared/i18n.mjs';
 import { inside as insideOf } from './core-folder.mjs';
-import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from './appearance.mjs';
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from '../shared/appearance.mjs';
 
 // secret: this PC's secret when the engine was handed it (tests; with the app it stays in Rust). keys: the keys made
 // from it (src/core/machine-keys.mjs; inVault: from the app's vault). master: the master password and Orb's own secrets (3.8,
@@ -114,7 +114,7 @@ export function validateConfig(c) {
   // 3.8.1: the skills of core\skills that are on (src/core/extensions.mjs).
   if (c.skills !== undefined && (!Array.isArray(c.skills) || c.skills.length > 500 || c.skills.some((s) => !/^[a-z0-9][a-z0-9-]{0,62}$/.test(s?.name ?? '') || typeof s.enabled !== 'boolean' || (s.source !== undefined && typeof s.source !== 'string')))) throw new Error(tr('msg.ctx.badAppearance', { name: 'skills' }));
   if (!['sistema', 'claro', 'oscuro'].includes(c.ui?.theme ?? 'sistema')) throw new Error(tr('msg.ctx.badTheme'));
-  // 2.4: visual theme, fonts and colours of code (src/core/appearance.mjs).
+  // 2.4: visual theme, fonts and colours of code (src/shared/appearance.mjs).
   for (const [key, list] of [['skin', SKINS], ['font', FONTS], ['codeFont', CODE_FONTS], ['codeTheme', CODE_THEMES]]) {
     if (c.ui?.[key] !== undefined && !list.includes(c.ui[key])) throw new Error(tr('msg.ctx.badAppearance', { name: `ui.${key}` }));
   }

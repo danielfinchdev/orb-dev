@@ -75,7 +75,7 @@ pub fn valid_method(method: &str) -> bool {
 }
 
 /// A text of the app (sys.main.*, sys.dialog.*, sent by the engine in the language of the settings) with its {vars}. A
-/// missing key shows as the key itself, as src/core/i18n.mjs does.
+/// missing key shows as the key itself, as src/shared/i18n.mjs does.
 pub fn translate(texts: &HashMap<String, String>, key: &str, vars: &[(&str, String)]) -> String {
   let mut text = texts.get(key).cloned().unwrap_or_else(|| key.to_string());
   for (name, value) in vars {

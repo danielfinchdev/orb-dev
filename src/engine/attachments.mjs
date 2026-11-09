@@ -10,7 +10,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { ctx, tr } from '../core/context.mjs';
 import { isOrbData } from '../core/guard.mjs';
 import { fingerprints } from './android.mjs';
-import { kindOf } from '../core/attach-kind.mjs';
+import { kindOf } from '../shared/attach-kind.mjs';
 
 export { kindOf };
 

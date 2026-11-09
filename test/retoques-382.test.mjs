@@ -59,7 +59,7 @@ test('the cost line can be hidden in Apariencia and the message time shows on ho
   assert.equal([...session.matchAll(/<MsgTime at=\{it\.at\} hover \/>/g)].length, 2);
   assert.match(read('app.css'), /\.msg-hover:hover \.msg-time-hover/);
   for (const lang of ['es', 'en']) {
-    const { default: dict } = await import(`../src/core/locales/${lang}/settings.mjs`);
+    const { default: dict } = await import(`../src/shared/locales/${lang}/settings.mjs`);
     assert.ok(dict['appearance.usageLine'] && dict['appearance.usageLineHint'], lang);
   }
 });
@@ -114,6 +114,6 @@ test('the foot of the Ajustes list shows GitHub, the version and the MIT licence
   assert.match(foot, /bridge\.openExternal\(AUTHOR\.url\)/);
   assert.match(foot, /\{PRODUCT\.name\} \{app\.version\} · \{t\('settings\.footLicense'\)\}/);
   assert.match(settings, /data-testid="about-github"/, '«Acerca de» keeps them');
-  const es = (await import('../src/core/locales/es/settings.mjs')).default; const en = (await import('../src/core/locales/en/settings.mjs')).default;
+  const es = (await import('../src/shared/locales/es/settings.mjs')).default; const en = (await import('../src/shared/locales/en/settings.mjs')).default;
   assert.equal(es['settings.footLicense'], 'Licencia MIT'); assert.equal(en['settings.footLicense'], 'MIT licence');
 });

@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from './context.mjs';
-import { titleFrom } from './titles.mjs';
+import { titleFrom } from '../shared/titles.mjs';
 import { migrateTo38 } from './migrate-38.mjs';
 
 // node:sqlite may print an ExperimentalWarning; it would pollute the MCP stdout/stderr and the logs.

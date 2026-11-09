@@ -25,7 +25,7 @@ import crypto from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { ctx, validateConfig, tr } from './context.mjs';
 import { paths, configFrom, writeJson, categoryOf, folderKey, IGNORED_PROJECTS, BOTS_DIR } from './home.mjs';
-import { isValidTz } from './tz.mjs';
+import { isValidTz } from '../shared/tz.mjs';
 import { ME } from './inbox.mjs';
 import { redactSecrets } from './safety.mjs';
 import { isRef, refOf, secretId } from './connector-secrets.mjs';

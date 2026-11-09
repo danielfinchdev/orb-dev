@@ -22,7 +22,7 @@ export async function timedFetch(url, init = {}, ms = TIMEOUTS.call, get = globa
   finally { clearTimeout(timer); }
 }
 
-// A fetch bound to one time limit (what src/core/mobile-crypto.mjs › linkDevice takes as its fetch).
+// A fetch bound to one time limit (what src/shared/mobile-crypto.mjs › linkDevice takes as its fetch).
 export const fetchWithin = (ms, get = globalThis.fetch) => (url, init) => timedFetch(url, init, ms, get);
 
 // The PC could not be reached (network down, PC off, Orb closed, too slow): not an answer of the PC.

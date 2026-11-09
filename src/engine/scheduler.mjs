@@ -17,8 +17,8 @@ const groupNote = (board, project) => {
 export const contractNote = (cwd, task) => (!task.readonly && cwd && fs.existsSync(path.join(cwd, 'CONTRATO.md'))
   ? '\n- Hay un CONTRATO.md en la carpeta: léelo al empezar y respeta exactamente sus nombres (archivos, ids, clases, data-*, funciones, datos comunes como armas o niveles, y teclas). Antes de terminar, comprueba que lo tuyo coincide; si el contrato no basta o tienes que cambiar algo de él, avisa con orb_send_message a la otra pieza y dilo en tu result.'
   : '');
-import { localeOf } from '../core/i18n.mjs';
-import { PRODUCT } from '../core/product.mjs';
+import { localeOf } from '../shared/i18n.mjs';
+import { PRODUCT } from '../shared/product.mjs';
 import { assistantName, ofUser, eventKey, userName } from '../core/board.mjs';
 import { checkDevTools, devToolsBrief, needsDevTools } from './dev-tools.mjs';
 import { git, prepareWorkdir, takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit, integrateInto, isGitRepo, repoRoot, mayHaveWorktrees, ORB_GIT, REF_PREFIX } from '../core/workspace.mjs';
@@ -26,7 +26,7 @@ import { rankAccounts, isLimitText, isBudgetText, startCooldown, pauseAccount, t
 import { installed } from '../agents/index.mjs';
 import { runDue } from '../core/schedules.mjs';
 import { wakeSnoozed } from '../core/inbox.mjs';
-import { explainFailure } from '../core/agent-errors.mjs';
+import { explainFailure } from '../shared/agent-errors.mjs';
 import { usableAccounts, account as findAccount, accountLabel } from '../core/accounts.mjs';
 import { oneLine, redactSecrets, secretFiles, isSecretPath, stagedSecrets, MAX_DEP_RESULT } from '../core/safety.mjs';
 import { ATTACH_DIR } from './sessions.mjs';
