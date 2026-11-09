@@ -40,6 +40,7 @@ import { dataApi } from './api-data.mjs';
 import { inboxMethods } from './api-inbox.mjs';
 import { masterMethods, checkUnlock } from './api-master.mjs';
 import { appMethods } from './api-app.mjs';
+import { musicMethods } from './music.mjs';
 import { sealConnectors } from '../core/connector-secrets.mjs';
 import { createFeeds } from './feeds.mjs';
 
@@ -691,7 +692,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...data.methods,
     ...masterMethods({ ...shared, onUnlocked, onLock: (why) => grants.revokeAll(why) }),
     ...extensionMethods(shared),
-    ...appMethods({ home: ctx.home, version }) // 3.8.1: this PC's tools (terminal, editors, feedback…)
+    ...appMethods({ home: ctx.home, version }), // 3.8.1: this PC's tools (terminal, editors, feedback…)
+    ...musicMethods({ log }) // 3.8.2: the music's tracks, downloaded the first time (src/engine/music.mjs)
   };
   const feeds = createFeeds();
   return {

@@ -55,6 +55,9 @@ export default {
   'settings.mobile': 'Acceso desde otros dispositivos',
   'about.developer': 'Desarrollador',
   'about.license': 'Licencia',
+  'about.music': 'Música',
+  'about.musicSummary': '{n} pistas libres (CC0)',
+  'about.musicTrack': '«{title}», de {author}',
   // Textos que apuntaban a las secciones de antes
   'help.faq.10.a': 'El tema Profesional no muestra el robot ni animaciones; cámbialo en Ajustes › General, donde también se activa o desactiva el robot flotante.',
   // Pie de la barra lateral en un navegador enlazado: el engranaje abre este dispositivo y Magic Link

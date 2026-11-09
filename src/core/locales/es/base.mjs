@@ -24,6 +24,14 @@ export default {
   'nav.memories': 'Memorias',
   'nav.memoriesHint': 'Bitácoras y actividad: lo que Orb recuerda.',
   'nav.feedback': 'Enviar comentarios',
+  'nav.music': 'Música de fondo',
+  'nav.musicHint': 'Música libre para concentrarte. Se descarga la primera vez.',
+  'nav.musicPlay': 'Reproducir música',
+  'nav.musicPause': 'Pausar música',
+  'nav.musicNext': 'Siguiente pista',
+  'nav.musicLoading': 'Descargando…',
+  'nav.musicNow': '«{title}», de {author}',
+  'nav.musicError': 'No se pudo reproducir. Comprueba la conexión e inténtalo de nuevo.',
   'nav.footerUnfold': 'Mostrar con nombres',
   'nav.footerFold': 'Solo iconos'
 };

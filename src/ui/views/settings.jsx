@@ -29,6 +29,8 @@ import { DataCards } from './data.jsx';
 import { ExtensionsPanel } from './extensions.jsx';
 import { unlockCore } from '@/lib/core-access.js';
 import { DEFAULT_PROTECTED } from '../../core/layout.mjs';
+import { TRACKS } from '../../core/music.mjs';
+import { available as musicAvailable, musicPrefs, setMusicVolume } from '@/lib/music.js';
 
 // unlock: the master password's token, for a change that needs it (src/core/permissions.mjs › needsUnlock).
 async function save(patch, ok = t('settings.saved'), unlock = null) {
@@ -104,6 +106,7 @@ function AppearanceCard({ c }) {
         </div>
         <pre className="code-sample hljs overflow-x-auto rounded-lg border p-3 text-[12.5px] leading-[1.55]" aria-label={t('appearance.codeSample')}><code><span className="hljs-keyword">const</span> <span className="hljs-variable">orb</span> = <span className="hljs-title function_">director</span>(<span className="hljs-string">'bolsillo'</span>, {'{ '}<span className="hljs-attr">fases</span>: <span className="hljs-number">3</span>{' }'}); <span className="hljs-comment">// Orbe</span></code></pre>
         <Row label={t('appearance.usageLine')} hint={t('appearance.usageLineHint')}><Switch checked={ui.usageLine !== false} onCheckedChange={(usageLine) => set({ usageLine })} data-testid="usage-line-switch" /></Row>
+        {musicAvailable() ? <MusicVolume /> : null}
         {robot ? (
           <div className="grid gap-1">
             <Row label={t('settings.companion')} hint={t('settings.companionHint')}><Switch checked={ui.companion !== false} onCheckedChange={(companion) => set({ companion }, companion ? t('settings.companionOn') : t('settings.companionOff'))} /></Row>
@@ -660,6 +663,23 @@ function MoreAppsCard() {
   );
 }
 
+// 3.8.2: the background music's volume (Windows; lib/music.js), heard while it is dragged and saved when let go.
+function MusicVolume() {
+  const t = useT();
+  const [v, setV] = useState(() => musicPrefs().volume);
+  const keep = () => setMusicVolume(v, { save: true });
+  return (
+    <div className="flex items-center justify-between gap-4 py-1 text-sm">
+      <span>{t('appearance.musicVolume')}</span>
+      <input type="range" min={0} max={1} step={0.05} value={v} aria-label={t('appearance.musicVolume')} className="accent-primary w-40 cursor-pointer" data-testid="music-volume"
+        onChange={(e) => { const n = Number(e.target.value); setV(n); setMusicVolume(n); }} onPointerUp={keep} onKeyUp={keep} />
+    </div>
+  );
+}
+
+// 3.8.2: the music's credits (src/core/music.mjs): all CC0, each with the page it comes from.
+const MUSIC_CREDITS = Object.values(TRACKS);
+
 // 3.6: «Acerca de»: the version, the developer's GitHub and the licence (3.8.2: also at the foot of the sections list).
 function AboutCard({ version }) {
   const t = useT();
@@ -671,6 +691,14 @@ function AboutCard({ version }) {
           <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary inline-flex cursor-pointer items-center gap-1.5 font-medium" data-testid="about-github"><ToolIcon tool="gh" className="size-4" />@{AUTHOR.github}<ExternalLink className="text-muted-foreground size-3.5" /></button>
         </div>
         <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">{t('about.license')}</span><span>MIT</span></div>
+        {musicAvailable() ? (
+          <details data-testid="about-music">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3"><span className="text-muted-foreground">{t('about.music')}</span><span>{t('about.musicSummary', { n: MUSIC_CREDITS.length })}</span></summary>
+            <ul className="text-muted-foreground mt-1 grid gap-0.5 text-xs">
+              {MUSIC_CREDITS.map((m) => <li key={m.id}><button type="button" onClick={() => bridge.openExternal(m.page)} className="hover:text-primary cursor-pointer text-left">{t('about.musicTrack', { title: m.title, author: m.author })} · {m.licence}</button></li>)}
+            </ul>
+          </details>
+        ) : null}
       </CardContent>
     </Card>
   );

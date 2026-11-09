@@ -153,10 +153,12 @@ const readable = (read) => (read === true ? READ_INTERNAL : Array.isArray(read) 
 // 3.8.2 (review A2): Orb's own adb (core\herramientas\adb) runs in the engine: a reading tool may look, nobody may write
 // there or run it (an agent's adb.exe or DLL left there would run with the engine's rights). The same for Orb's own
 // ffmpeg (core\herramientas\ffmpeg: it makes the frames of an attached video, src/engine/attachments.mjs).
-const READ_ONLY_INTERNAL = [['herramientas', 'adb'], ['herramientas', 'ffmpeg']];
+// 3.8.2: the same for the music Orb downloads (core\herramientas\musica, src/engine/music.mjs): what the window plays is
+// what Orb checked.
+const READ_ONLY_INTERNAL = [['herramientas', 'adb'], ['herramientas', 'ffmpeg'], ['herramientas', 'musica']];
 const openInCore = (rest, read = false) => (READ_ONLY_INTERNAL.some(under(rest)) ? read === true : OPEN_INTERNAL.some(under(rest)) || readable(read).some(under(rest)));
-const OPEN_TEXT = /^\\+(copias\\+aisladas|herramientas(?!\\+(adb|ffmpeg)(\\|$|["'\s]))|preparacion)(\\|$|["'\s])/;
-const ADB_TEXT = /^\\+herramientas\\+(adb|ffmpeg)(\\|$|["'\s])/;
+const OPEN_TEXT = /^\\+(copias\\+aisladas|herramientas(?!\\+(adb|ffmpeg|musica)(\\|$|["'\s]))|preparacion)(\\|$|["'\s])/;
+const ADB_TEXT = /^\\+herramientas\\+(adb|ffmpeg|musica)(\\|$|["'\s])/;
 // 3.8.2 (review A1): a UNC path to this PC (\\localhost\C$\…, \\<its name>\C$\…, \\127.0.0.1\…, \\?\UNC\…, //localhost/…),
 // a \\?\C:\… or \\.\C:\… one, as the local path it names. → that path; null when it is not this PC's (another
 // computer's share, or not a UNC path); false when it is this PC's but cannot be told where (a share that is not a

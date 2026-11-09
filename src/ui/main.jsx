@@ -28,6 +28,7 @@ import { useStore, setState, getState, refresh, refreshSoon, call, bridge, act, 
 import { restoreRoute, keyboardOpen } from '@/lib/phone-nav.js';
 import { startupPhase } from '@/lib/startup.js';
 import { watchIdle, lockMinutesOf } from '@/lib/idle-lock.js';
+import { startMusic, pauseAll } from '@/lib/music.js';
 import { dropUnlock } from '@/lib/core-access.js';
 import { isReloadKey, reloadOrb } from '@/lib/reload.js';
 import { isOffline, retryLoop } from '@/lib/net.js';
@@ -344,11 +345,14 @@ function Root() {
     if (bridge.mobile || !bridge.on) return undefined;
     return bridge.on('master:locked', (p) => {
       if (!p?.screen) return;
+      pauseAll(); // 3.8.2: the music stops with the lock and does not come back by itself (lib/music.js)
       dropUnlock();
       setMasterState((s) => ({ ...(s ?? {}), exists: true, locked: false, lost: false, screenLocked: true }));
       setPhase((now) => (now === 'app' ? 'unlock' : now));
     });
   }, []);
+  // 3.8.2: the background music (Windows): remembered as on, it comes back with the first click (lib/music.js).
+  useEffect(() => (phase === 'app' ? startMusic() : undefined), [phase]);
   useEffect(() => {
     if (phase !== 'app' || bridge.mobile) return undefined;
     return watchIdle({ minutes: () => lockMinutesOf(getState().app?.config), onIdle: () => { call('master.lock', { reason: 'idle' }).catch(() => {}); } });

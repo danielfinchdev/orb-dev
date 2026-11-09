@@ -55,6 +55,9 @@ export default {
   'settings.mobile': 'Access from other devices',
   'about.developer': 'Developer',
   'about.license': 'Licence',
+  'about.music': 'Music',
+  'about.musicSummary': '{n} free tracks (CC0)',
+  'about.musicTrack': '“{title}” by {author}',
   // Texts that pointed to the old sections
   'help.faq.10.a': 'The Professional theme hides the robot and animations; change it in Settings › General, where the floating robot is also turned on or off.',
   // Pie de la barra lateral en un navegador enlazado: el engranaje abre este dispositivo y Magic Link

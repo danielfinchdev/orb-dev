@@ -206,6 +206,9 @@ export default {
   'games.soundOn': 'Silenciar los juegos',
   'games.soundOff': 'Activar el sonido',
   'games.soundAppOff': 'Los sonidos están desactivados en Ajustes.',
+  'games.music': 'Música del juego',
+  'games.musicOn': 'Silenciar la música',
+  'games.musicOff': 'Activar la música',
   // 2.6: avisos con el robot (o arriba, sin animaciones)
   'notice.done': 'Hecho',
   'notice.attention': 'Requiere tu atención',

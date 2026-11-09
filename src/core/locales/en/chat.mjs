@@ -206,6 +206,9 @@ export default {
   'games.soundOn': 'Mute the games',
   'games.soundOff': 'Turn the sound on',
   'games.soundAppOff': 'Sounds are turned off in Settings.',
+  'games.music': 'Game music',
+  'games.musicOn': 'Mute the music',
+  'games.musicOff': 'Turn the music on',
   // 2.6: notices with the robot (or at the top, without animations)
   'notice.done': 'Done',
   'notice.attention': 'Needs your attention',

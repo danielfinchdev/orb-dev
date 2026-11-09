@@ -210,6 +210,7 @@ export default {
   'appearance.skin.profesional': 'Professional',
   'appearance.skin.nube': 'Candy',
   'appearance.skin.cristal': 'Glass',
+  'appearance.musicVolume': 'Music volume',
   'appearance.font': 'Font',
   'appearance.font.outfit': 'Theme font',
   'appearance.font.inter': 'Inter',
