@@ -101,7 +101,9 @@ const collect = (page) => page.evaluate(() => {
 // The answer showed and the assistant is no longer working.
 const idle = (page, nth) => until(() => page.evaluate((n) => (document.querySelector('[data-testid=chat-lines]')?.textContent ?? '').split('ZORRO').length - 1 >= n && !document.querySelector('[data-testid=chat-activity]'), nth), 'el asistente terminó', 60000, 100);
 
-async function send(page, text, nth, { typing = false } = {}) {
+const zorros = (page) => page.evaluate(() => (document.querySelector('[data-testid=chat-lines]')?.textContent ?? '').split('ZORRO').length - 1);
+async function send(page, text, { typing = false } = {}) {
+  const nth = (await zorros(page)) + 1; // the answers already on screen, and this one
   const box = page.locator('[data-testid=chat-input]');
   await box.click(); await box.fill(text);
   await watch(page, text, nth);
@@ -140,11 +142,11 @@ for (let i = 1; i <= RUNS; i++) {
   const { page } = run;
   await throughStart(page, { ready: '[data-testid=sidebar-home]', timeout: 120000 });
   await wait(4000); // the start settles
-  await page.click('[data-testid=sidebar-home]').catch(() => {});
+  await page.click('[data-testid=chats-new]'); await page.click('[data-testid=new-conversation]');
   await page.locator('[data-testid=chat-input]').waitFor({ timeout: 20000 });
-  const nuevo = await send(page, `STREAM_LARGO hola ${i}a`, 1);
-  const abierto = await send(page, `STREAM_LARGO hola ${i}b`, 2);
-  const escribiendo = await send(page, `STREAM_LARGO hola ${i}c`, 3, { typing: true });
+  const nuevo = await send(page, `STREAM_LARGO hola ${i}a`);
+  const abierto = await send(page, `STREAM_LARGO hola ${i}b`);
+  const escribiendo = await send(page, `STREAM_LARGO hola ${i}c`, { typing: true });
   results.runs.push({ run: i, nuevo, abierto, escribiendo });
   console.error(`vuelta ${i}: ${JSON.stringify(results.runs.at(-1))}`);
   await quit(run);
