@@ -38,7 +38,7 @@ before(() => {
 const signed = (agent, opts = {}) => mcpServersFor(agent, opts).orb;
 const bossServer = (conv) => signed('claude', { orchestrator: true, browser: false, session: `asistente-${conv}`, conversation: conv });
 const claims = (env = {}, ticket = '') => ({ command: process.execPath, args: [path.join(ROOT, 'src', 'mcp', 'server.mjs'), '--ticket-env=ORB_TICKET_orb'], env: { ...env, ORB_AUTH_PIPE: agentAuth.address, ORB_TICKET_orb: ticket } });
-after(() => { try { board.db.close(); } catch { /* closed */ } t.cleanup(); });
+after(() => { orchestrator.closing = true; orchestrator.stopAll(); try { board.db.close(); } catch { /* closed */ } t.cleanup(); });
 
 test('cada método de la API tiene su línea en la tabla, y ninguna línea sobra', () => {
   const names = api.methodNames().sort();

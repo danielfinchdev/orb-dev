@@ -260,8 +260,10 @@ class Lane {
     if (this.busy || this.inflight || !this.queue.length) return;
     // 3.2: several conversations at once, up to a limit: the others wait their turn (the window says so).
     if (this.orch.busyCount() >= this.orch.maxBusy) { this.push(); return; }
-    this.busy = true; this.since = Date.now(); this.usedAt = Date.now(); this.partial = ''; this.said = []; this.tools = []; this.push();
+    // 3.8.3: the message leaves the queue before the window hears «busy»: it used to flash «1 en cola» for the very message
+    // being answered.
     const item = this.queue.shift(); this.current = item; item.requeued = false;
+    this.busy = true; this.since = Date.now(); this.usedAt = Date.now(); this.partial = ''; this.said = []; this.tools = []; this.push();
     const { text, meta } = item;
     const generation = this.generation;
     let outcome = null;
@@ -385,6 +387,12 @@ class Lane {
 
   // → { ok, limit } (undefined when stopped meanwhile).
   async run(text, allowRetry, meta = null, { internal = false } = {}) {
+    // 3.8.3: the message that started this turn gets its reply (chat.send) first; starting the agent's process, reading
+    // the logs for the briefing and the rest come right after, in the next turn of the event loop. The order holds: the
+    // lane is already busy, so anything sent meanwhile waits in its queue.
+    const generation = this.generation;
+    await new Promise((resolve) => setImmediate(resolve));
+    if (generation !== this.generation || this.orch.closing) return undefined; // stopped (or Orb closing) meanwhile
     const o = ctx.config.orchestrator ?? {};
     let c = this.conv();
     if (!c) { this.busy = false; this.partial = ''; this.tools = []; return { ok: true }; } // deleted meanwhile
@@ -411,7 +419,6 @@ class Lane {
     const recent = fresh && lastAnswer ? this.recent() : '';
     const prompt = fresh ? `${intro}${briefing(this.board, { project, recent })}\n\n## Mensaje ${ofUser()}\n${text}` : text;
     this.board.updateConversation(this.id, { turns: (c.turns ?? 0) + 1 });
-    const generation = this.generation;
     // 3.1: 20 minutes for a coordinating turn (reviewing several finished tasks can take a while; 10 cut reports short).
     const timer = setTimeout(() => { this.say('system', tr('msg.orch.timeLimit')); Promise.resolve(this.live?.interrupt()).catch(() => {}); }, 20 * 60_000);
     const live = this.live;
