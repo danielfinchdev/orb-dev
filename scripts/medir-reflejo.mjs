@@ -48,8 +48,8 @@ for (let i = 1; i <= RUNS; i++) {
   const before = await rows();
   await page.click('[data-testid=orb-chat-more]');
   await page.click('[data-testid=more-delete]');
-  await page.locator('[role=dialog] button.bg-destructive, [role=dialog] [data-variant=destructive]').first().waitFor({ timeout: 10000 }).catch(() => {});
-  row.deleteMs = r1(await timed(page, () => { const b = [...document.querySelectorAll('[role=dialog] button')].at(-1); b.click(); },
+  await page.locator('[role=dialog] button.bg-destructive').first().waitFor({ timeout: 10000 });
+  row.deleteMs = r1(await timed(page, () => { document.querySelector('[role=dialog] button.bg-destructive').click(); },
     new Function(`return () => document.querySelectorAll('[data-testid^="orb-row-"]').length < ${before}`)())); // eslint-disable-line no-new-func
   await wait(800);
 

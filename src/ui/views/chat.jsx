@@ -22,7 +22,7 @@ import { confirm } from '@/components/dialogs.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { Spinner } from '@/components/ui/basic.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { WaitLabel, HeldCard, resumeQueue } from '@/components/task-state.jsx';
+import { WaitLabel, HeldCard, resumeQueue, setQueuePaused } from '@/components/task-state.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { Switch, Tip, BubbleTip, Popover, PopoverTrigger, PopoverContent } from '@/components/ui/overlay.jsx';
 import { bridge, useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout, plainSkin, addPending, movePending, dropPending, pendingShown, usePending } from '@/lib/store.js';
@@ -444,8 +444,8 @@ export function BarPause() {
   const t = useT();
   const paused = useStore((s) => Boolean(s.app?.paused));
   return paused
-    ? <BubbleTip title={t('bar.resume')} text={t('bar.resumeText')}><Button variant="soft" size="icon-sm" onClick={() => act(call('control.resume'), t('chat.resumed'))} aria-label={t('bar.resume')} data-testid="bar-resume"><Play /></Button></BubbleTip>
-    : <BubbleTip title={t('bar.pause')} text={t('bar.pauseText')}><Button variant="ghost" size="icon-sm" onClick={() => act(call('control.pause'), t('chat.paused'))} aria-label={t('bar.pause')} data-testid="bar-pause"><Pause /></Button></BubbleTip>;
+    ? <BubbleTip title={t('bar.resume')} text={t('bar.resumeText')}><Button variant="soft" size="icon-sm" onClick={() => setQueuePaused(false, t)} aria-label={t('bar.resume')} data-testid="bar-resume"><Play /></Button></BubbleTip>
+    : <BubbleTip title={t('bar.pause')} text={t('bar.pauseText')}><Button variant="ghost" size="icon-sm" onClick={() => setQueuePaused(true, t)} aria-label={t('bar.pause')} data-testid="bar-pause"><Pause /></Button></BubbleTip>;
 }
 export function BarHeading({ title, project, onRename, renameLabel, extra, showProject = true }) {
   const t = useT();
@@ -697,7 +697,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
             <BubbleTip title={t('chats.more')}><DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={t('chats.more')} data-testid="orb-chat-more"><Ellipsis /></Button></DropdownMenuTrigger></BubbleTip>
             <DropdownMenuContent align="end" className="w-56">
               {conv && !embedded ? <DropdownMenuItem onSelect={() => openOrbInfo({ type: 'chat' })} data-testid="more-info"><Info />{t('orbchats.info')}</DropdownMenuItem> : null}
-              {slim ? <DropdownMenuItem onSelect={() => (app.paused ? act(call('control.resume'), t('chat.resumed')) : act(call('control.pause'), t('chat.paused')))} data-testid={app.paused ? 'bar-resume' : 'bar-pause'}>{app.paused ? <Play /> : <Pause />}{app.paused ? t('bar.resume') : t('bar.pause')}</DropdownMenuItem> : null}
+              {slim ? <DropdownMenuItem onSelect={() => setQueuePaused(!app.paused, t)} data-testid={app.paused ? 'bar-resume' : 'bar-pause'}>{app.paused ? <Play /> : <Pause />}{app.paused ? t('bar.resume') : t('bar.pause')}</DropdownMenuItem> : null}
               {chatActions.filter((a) => a.id !== 'info' && !a.danger).map((a) => <DropdownMenuItem key={a.id} onSelect={a.run} data-testid={`more-${a.id}`}><a.icon />{a.label}</DropdownMenuItem>)}
               {fullPc() ? <DropdownMenuItem onSelect={openGames} data-testid="bar-games"><Gamepad2 />{t('bar.games')}</DropdownMenuItem> : null}
               {chatActions.filter((a) => a.danger).map((a) => <div key={a.id}><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onSelect={a.run} data-testid={`more-${a.id}`}><a.icon />{a.label}</DropdownMenuItem></div>)}

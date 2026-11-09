@@ -10,7 +10,7 @@
 import { ShieldAlert, Play, Undo2, Check, ExternalLink } from 'lucide-react';
 import { Button } from './ui/button.jsx';
 import { confirm } from './dialogs.jsx';
-import { call, act, go } from '@/lib/store.js';
+import { call, act, go, setState } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
@@ -28,7 +28,14 @@ export function waitText(t, task) {
   return t('orbchats.taskQueued');
 }
 
-export const resumeQueue = (t) => act(call('control.resume'), t('chat.resumed'));
+// 3.8.3: pausing or resuming the queue shows at once when the engine says yes (it took ~270 ms: the refresh after the
+// engine's notice); the next refresh brings the same value.
+export async function setQueuePaused(paused, t) {
+  const ok = await act(call(paused ? 'control.pause' : 'control.resume'), t(paused ? 'chat.paused' : 'chat.resumed'));
+  if (ok) setState((s) => ({ app: { ...s.app, paused } }));
+  return ok;
+}
+export const resumeQueue = (t) => setQueuePaused(false, t);
 
 // A queued task's state, small: the reason and, when the queue is paused, «Reanudar».
 export function WaitLabel({ task, className }) {
