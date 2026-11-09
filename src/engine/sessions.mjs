@@ -7,6 +7,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { ctx, tr, connectorKey } from '../core/context.mjs';
+import { AGENT_LABELS } from '../core/home.mjs';
 import { adapter, executable } from '../agents/index.mjs';
 import { liveSkills } from './api-extensions.mjs';
 import { orbMcpServer, connectorLauncher } from '../agents/common.mjs';
@@ -614,18 +615,21 @@ export class Sessions {
 
   // A copy of a conversation from its current point, to try another idea without losing the first one. Agents with native
   // forks (Claude, Codex) carry their whole history; for the others the copy starts with a summary of what was said.
-  fork(id, { title } = {}) {
+  // 3.8.2: agent: «Continuar con otro agente», the copy goes on with that agent (its own account and default model) and
+  // always starts with the summary. Without it, the fork of before.
+  fork(id, { title, agent } = {}) {
     const s = this.must(id);
     if (this.running.has(id)) throw new Error(tr('msg.sessions.forkWait'));
-    const a = adapter(s.agent);
+    const other = agent && agent !== s.agent ? agent : null;
+    const a = adapter(other ?? s.agent);
     // 3.8.2: what was given with the master password stays with the original (D5: also «total» of a project's chat).
-    const copy = this.create({ kind: 'chat', agent: s.agent, account: s.account, model: s.model, reasoning: s.reasoning, permission: s.permission !== 'total' ? s.permission : s.project ? 'editar' : 'leer',
-      project: s.project, cwd: s.cwd, title: title || tr('msg.sessions.forkTitle', { title: s.title }), parentId: s.id });
+    const copy = this.create({ kind: 'chat', agent: other ?? s.agent, account: other ? null : s.account, model: other ? null : s.model, reasoning: other && s.reasoning === 'xhigh' ? 'high' : s.reasoning, permission: s.permission !== 'total' ? s.permission : s.project ? 'editar' : 'leer',
+      project: s.project, cwd: s.cwd, title: title || (other ? tr('msg.sessions.switchTitle', { title: s.title, agent: AGENT_LABELS[other] ?? other }) : tr('msg.sessions.forkTitle', { title: s.title })), parentId: s.id });
     this.board.run('UPDATE sessions SET titled = 1 WHERE id = ?', copy.id); // 3.2: its title stays (not renamed by its next message)
     const old = this.board.all("SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT 40", s.id).reverse();
     for (const it of old) this.board.run('INSERT INTO session_items (session_id, role, kind, body, at) VALUES (?, ?, ?, ?, ?)', copy.id, it.role, it.kind, it.body, it.at);
-    this.addItem(copy.id, 'system', 'status', tr('msg.sessions.forked', { title: s.title }));
-    if (a.caps?.fork && s.cli_session) this.board.settingJson(`fork_pending:${copy.id}`, s.cli_session);
+    this.addItem(copy.id, 'system', 'status', other ? tr('msg.sessions.switched', { title: s.title, agent: AGENT_LABELS[other] ?? other }) : tr('msg.sessions.forked', { title: s.title }));
+    if (!other && a.caps?.fork && s.cli_session) this.board.settingJson(`fork_pending:${copy.id}`, s.cli_session);
     else if (old.length) this.board.settingJson(`fork_summary:${copy.id}`, old.map((it) => `${it.role === 'user' ? 'Usuario' : 'Agente'}: ${oneLine(bodyText(parseItem(it).body), 400)}`).join('\n'));
     return copy;
   }

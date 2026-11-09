@@ -86,3 +86,16 @@ test('Ctrl+K: places without a query; with one, chats, messages, tasks and proje
   assert.deepEqual(paletteGroups({ q: 'ajus', cmds, items, found: null, tasks: [], projects: [] }), [{ id: 'go', rows: [cmds[1]] }]);
   assert.equal(paletteGroups({ q: '#3', cmds, items: [], found: null, tasks: [{ id: 3, title: 'x' }], projects: [] })[0].rows[0].id, 3);
 });
+
+// (The same harness.) 3.8.2: «Continuar con otro agente» from the window: only an agent this PC can run.
+test('sessions.fork with another agent: only an available one; without it, the fork of before', async () => {
+  const s = await call('sessions.create', { agent: 'claude', permission: 'leer', title: 'Base' });
+  board.settingJson('agents_available', ['claude']);
+  await assert.rejects(call('sessions.fork', { id: s.id, agent: 'codex' }));
+  await assert.rejects(call('sessions.fork', { id: s.id, agent: 'nadie' }));
+  board.settingJson('agents_available', ['claude', 'codex']);
+  assert.equal((await call('sessions.fork', { id: s.id, agent: 'codex' })).agent, 'codex');
+  const plain = await call('sessions.fork', { id: s.id });
+  assert.equal(plain.agent, 'claude'); assert.match(plain.title, /bifurcación/);
+  board.settingJson('agents_available', null);
+});

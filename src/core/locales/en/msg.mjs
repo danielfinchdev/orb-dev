@@ -456,6 +456,8 @@ export default {
   "msg.sessions.forkTitle": "{title} · fork",
   "msg.sessions.forkWait": "wait for the current response to finish before forking the conversation",
   "msg.sessions.forked": "Conversation forked from “{title}”. Changes made here do not affect the original conversation.",
+  "msg.sessions.switchTitle": "{title} · {agent}",
+  "msg.sessions.switched": "Continued with {agent} from “{title}”. It gets a summary of the conversation; the original is kept.",
   "msg.sessions.attachTooBig": "{name} exceeds the {max} MB limit",
   "msg.sessions.attachOrbData": "{name} is an internal Orb file and cannot be attached",
   "msg.sessions.noAttachment": "attachment {file} does not exist",

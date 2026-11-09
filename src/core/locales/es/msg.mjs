@@ -456,6 +456,8 @@ export default {
   "msg.sessions.forkTitle": "{title} · bifurcación",
   "msg.sessions.forkWait": "espera a que termine la respuesta actual para bifurcar la conversación",
   "msg.sessions.forked": "Conversación bifurcada de «{title}». Los cambios aquí no afectan a la conversación original.",
+  "msg.sessions.switchTitle": "{title} · {agent}",
+  "msg.sessions.switched": "Continúa con {agent} desde «{title}». Recibe un resumen de la conversación; la original se conserva.",
   "msg.sessions.attachTooBig": "{name} supera el límite de {max} MB",
   "msg.sessions.attachOrbData": "{name} es un archivo interno de Orb y no se puede adjuntar",
   "msg.sessions.noAttachment": "no existe el adjunto {file}",

@@ -131,5 +131,8 @@ export default {
   'usage.withinPace': 'Even pace: {pace}%',
   'usage.aheadOfPace': 'Ahead of even pace ({pace}%)',
   'usage.empty': 'No usage in this period.',
-  'usage.unavailable': 'Usage could not be loaded'
+  'usage.unavailable': 'Usage could not be loaded',
+  'session.switchAgent': 'Continue with another agent',
+  'session.switchAgentDesc': 'Opens a new chat with a summary of this one. The original is kept.',
+  'session.switchAgentOk': 'Continue'
 };

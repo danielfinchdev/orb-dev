@@ -131,5 +131,8 @@ export default {
   'usage.withinPace': 'Ritmo uniforme: {pace} %',
   'usage.aheadOfPace': 'Por encima del ritmo uniforme ({pace} %)',
   'usage.empty': 'Sin uso en este periodo.',
-  'usage.unavailable': 'No se pudo cargar el uso'
+  'usage.unavailable': 'No se pudo cargar el uso',
+  'session.switchAgent': 'Continuar con otro agente',
+  'session.switchAgentDesc': 'Se abre un chat nuevo con un resumen de este. El original se conserva.',
+  'session.switchAgentOk': 'Continuar'
 };
