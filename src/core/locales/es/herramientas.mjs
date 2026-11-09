@@ -56,5 +56,6 @@ export default {
   'msg.terminal.tooMany': 'Hay demasiados terminales abiertos. Cierra uno.',
   'msg.terminal.gone': 'Este terminal ya está cerrado.',
   'msg.terminal.ended': 'El terminal ha terminado. Abre uno nuevo.',
+  'msg.terminal.locked': 'Orb está bloqueado: escribe la contraseña para usar el terminal.',
   'msg.terminal.badLine': 'Comando no válido o demasiado largo.'
 };

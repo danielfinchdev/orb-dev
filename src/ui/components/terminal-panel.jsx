@@ -30,7 +30,11 @@ export function TerminalPanel({ dir, draft, onDraftTaken, onClose }) {
     }).catch(() => {});
     const offData = bridge.on('terminal:data', ({ id, data }) => setTerms((p) => p.map((x) => (x.id === id ? { ...x, out: (x.out + data).slice(-KEEP) } : x))));
     const offExit = bridge.on('terminal:exit', ({ id }) => setTerms((p) => p.map((x) => (x.id === id ? { ...x, running: false } : x))));
-    return () => { alive = false; offData(); offExit(); };
+    // Orb's lock screen: the output goes from the window (the engine keeps it and sends nothing) and comes back after the
+    // password.
+    const offLock = bridge.on('master:locked', (e) => { if (e?.screen) setTerms((p) => p.map((x) => ({ ...x, out: '' }))); });
+    const offUnlock = bridge.on('master:unlocked', () => call('terminal.list').then((all) => { if (alive) setTerms((p) => p.map((x) => ({ ...x, ...((all ?? []).find((y) => y.id === x.id) ?? {}) }))); }).catch(() => {}));
+    return () => { alive = false; offData(); offExit(); offLock(); offUnlock(); };
   }, [dir]); // eslint-disable-line react-hooks/exhaustive-deps
   // A command pasted from the chat: into the input line, never run.
   useEffect(() => { if (draft) { setLine(draft); onDraftTaken?.(); input.current?.focus(); } }, [draft]); // eslint-disable-line react-hooks/exhaustive-deps

@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { tempHome, until } from './helpers.mjs';
+import { tempHome, until, startEngine } from './helpers.mjs';
 import { useHome, ctx } from '../src/core/context.mjs';
 import { terminalDir, shellPlan, createTerminals, MAX_TERMINALS, MAX_LINE } from '../src/engine/user-terminal.mjs';
 import { allowed, principalOf, METHODS } from '../src/core/permissions.mjs';
@@ -76,4 +76,46 @@ test('terminal integrado: un comando del chat se pega, no se ejecuta', () => {
   assert.equal(oneCommand('# instala\n$ npm install\nPS C:\\x> npm test\n\nREM nada'), 'npm install; npm test');
   assert.equal(stripAnsi('\x1b[32mok\x1b[0m\r\nfin\rX'), 'ok\r\nfinX');
   assert.ok(SHELL_LANGUAGES.has('powershell') && !SHELL_LANGUAGES.has('js'));
+});
+
+// 3.8.2 (security review, decision b): under Orb's lock screen what runs keeps running, but nothing is typed, opened or
+// closed and its output is neither sent nor listed; after the password it is all there.
+test('terminal integrado: con Orb bloqueado sigue vivo, sin entrada y sin salida visible', async () => {
+  const t = tempHome();
+  try {
+    useHome(t.home);
+    const project = path.join(t.home, 'web', 'tienda'); fs.mkdirSync(project, { recursive: true });
+    const events = [];
+    const terms = createTerminals({ emit: (e, p) => events.push([e, p]), plan: () => ({ ...shellPlan(), cmd: process.execPath, args: ['-e', FAKE_SHELL], init: '' }) });
+    const one = terms.open({ dir: project });
+    const output = () => events.filter(([e, p]) => e === 'terminal:data' && p.id === one.id).map(([, p]) => p.data).join('');
+    await until(() => /listo 0/.test(output()), 'arranca', 10_000);
+    terms.write({ id: one.id, text: 'antes' });
+    await until(() => /eco: antes/.test(output()), 'eco', 10_000);
+    terms.setLocked(true);
+    assert.throws(() => terms.write({ id: one.id, text: 'durante' }), /bloqueado/);
+    assert.throws(() => terms.open({ dir: project }), /bloqueado/);
+    assert.throws(() => terms.close({ id: one.id }), /bloqueado/);
+    assert.equal(terms.list()[0].out, '', 'nada que leer con la pantalla de bloqueo');
+    assert.equal(terms.list()[0].running, true, 'el proceso sigue');
+    const sent = events.length;
+    terms.setLocked(false);
+    assert.equal(terms.write({ id: terms.list()[0].id, text: 'despues' }), true);
+    await until(() => /eco: despues/.test(output()), 'vuelve a escribir', 10_000);
+    assert.ok(events.length > sent);
+    terms.closeAll();
+  } finally { t.cleanup(); }
+  // The engine: the lock screen locks them, the password opens them.
+  const t2 = tempHome();
+  const e = await startEngine(t2.home);
+  try {
+    await e.call('master.create', { password: 'una frase larga de prueba' });
+    const core = path.join(t2.home, 'core');
+    await assert.rejects(e.call('terminal.open', { dir: core }), /datos de Orb|no existe/);
+    await e.call('master.lock', { reason: 'hand' });
+    await assert.rejects(e.call('terminal.open', { dir: core }), /bloqueado/);
+    await assert.rejects(e.call('terminal.write', { id: 1, text: 'ls' }), /bloqueado/);
+    await e.call('master.unlock', { password: 'una frase larga de prueba' });
+    await assert.rejects(e.call('terminal.open', { dir: core }), /datos de Orb|no existe/);
+  } finally { await e.stop(); t2.cleanup(); }
 });

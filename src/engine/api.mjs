@@ -753,7 +753,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...inboxMethods(shared),
     ...data.methods,
     // 3.8.2: Orb locked (or a new password): the grants go, and so do the secrets typed for the agents.
-    ...masterMethods({ ...shared, onUnlocked, onLock: (why) => { secrets.wipe(); return grants.revokeAll(why); } }),
+    // 3.8.2 (security review): under the lock screen the user's terminals take nothing and show nothing (user-terminal.mjs).
+    ...masterMethods({ ...shared, onUnlocked, onLock: (why) => { secrets.wipe(); return grants.revokeAll(why); }, onScreen: (v) => terminals.setLocked(v) }),
     // 3.8.2 (T3 3.4): the private card of a secret an agent asked for (this PC only; saving or using a saved one asks for
     // the master password: permissions.mjs › needsUnlock).
     'secrets.pending': () => secrets.pending(),

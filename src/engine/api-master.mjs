@@ -82,7 +82,8 @@ export function checkUnlock(method, params) {
 
 // onLock(why): 3.8.2: Orb locked (or its password changed): what the master password gave the chats goes
 // (src/engine/grants.mjs › revokeAll).
-export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => {}, onLock = () => {} }) {
+// onScreen(locked): 3.8.2 (security review): Orb's lock screen goes up (true) or down (false); also once at the start.
+export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => {}, onLock = () => {}, onScreen = () => {} }) {
   const locked = (why) => { try { const r = onLock(why); if (r?.catch) r.catch((error) => log(`acceso: ${error.message}`)); } catch (error) { log(`acceso: ${error.message}`); } };
   const master = () => ctx.master ?? (ctx.master = openMaster(ctx.home, ctx.keys?.inVault ? IN_VAULT : ctx.secret ?? (() => { try { return fs.readFileSync(ctx.paths.key); } catch { return null; } })(), { log }));
   const opened = () => { migrateSecrets(board, master(), { log, emit }); try { onUnlocked(); } catch (error) { log(`secretos: ${error.message}`); } };
@@ -100,7 +101,9 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
   // The agents keep working (the vault stays open: only the window's tokens go). Kept in memory: a reload of the window
   // finds it locked; a new start of Orb opens as usual (this PC's own key, as at every start).
   let screen = ctx.screenAtStart === true; // an engine restarted under the lock screen keeps it (the app says so)
-  const screenOff = () => { if (screen) { screen = false; emit('master:unlocked', {}); } };
+  const screenTold = (v) => { try { onScreen(v); } catch (error) { log(`pantalla de bloqueo: ${error.message}`); } };
+  screenTold(screen);
+  const screenOff = () => { if (screen) { screen = false; screenTold(false); emit('master:unlocked', {}); } };
   return {
     // canForget: «He olvidado la contraseña» can keep the secrets (this PC opened them and has a recovery code).
     'master.state': () => {
@@ -134,6 +137,7 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       const m = master(); m.lock();
       locked(reason === 'idle' ? 'bloqueo (sin usar)' : reason === 'hand' ? 'bloqueo (a mano)' : 'bloqueo');
       const was = screen; screen = m.hasPassword();
+      if (screen) screenTold(true);
       if (screen && !was) log(`pantalla de bloqueo${reason === 'idle' ? ' (sin usar)' : ''}`);
       emit('master:locked', { screen });
       return true;

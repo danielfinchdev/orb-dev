@@ -41,20 +41,27 @@ export function shellPlan(platform = process.platform, env = process.env) {
 }
 
 // emit(event, payload): to this PC's window only (engine.mjs › toWindow). plan(): the shell (the tests pass node).
+// 3.8.2 (security review, decision b): while Orb's lock screen is up (setLocked), what runs keeps running (a dev server
+// is not killed) but nothing can be typed, opened or closed, and its output is neither sent nor listed: it is kept and
+// shows again after the password.
 export function createTerminals({ emit = () => {}, log = () => {}, plan = () => shellPlan() } = {}) {
-  let seq = 0;
+  let seq = 0; let locked = false;
   const open = new Map(); // id -> { id, cwd, child, out }
-  const view = (t) => ({ id: t.id, cwd: t.cwd, running: t.child.exitCode === null && !t.child.killed, out: t.out });
+  const view = (t) => ({ id: t.id, cwd: t.cwd, running: t.child.exitCode === null && !t.child.killed, out: locked ? '' : t.out });
   const userError = (key) => Object.assign(new Error(tr(key)), { userFacing: true });
-  const must = (id) => { const t = open.get(Number(id)); if (!t) throw userError('msg.terminal.gone'); return t; };
+  const unlocked = () => { if (locked) throw userError('msg.terminal.locked'); };
+  const must = (id) => { unlocked(); const t = open.get(Number(id)); if (!t) throw userError('msg.terminal.gone'); return t; };
   return {
+    setLocked(value) { locked = Boolean(value); },
+    get locked() { return locked; },
     open({ dir }) {
+      unlocked();
       const cwd = terminalDir(dir);
       if (open.size >= MAX_TERMINALS) throw userError('msg.terminal.tooMany');
       const p = plan();
       const child = spawn(p.cmd, p.args, { cwd, env: p.env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
       const t = { id: ++seq, cwd, child, out: '', encode: p.line ?? ((x) => x) };
-      const data = (chunk) => { const text = String(chunk); t.out = (t.out + text).slice(-KEEP); emit('terminal:data', { id: t.id, data: text }); };
+      const data = (chunk) => { const text = String(chunk); t.out = (t.out + text).slice(-KEEP); if (!locked) emit('terminal:data', { id: t.id, data: text }); };
       child.stdout.setEncoding('utf8').on('data', data);
       child.stderr.setEncoding('utf8').on('data', data);
       child.stdin.on('error', () => {});
