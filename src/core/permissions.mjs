@@ -79,6 +79,8 @@ export const METHODS = Object.freeze({
   'secrets.connector': 'pc', 'secrets.saveConnector': 'pc',
   // 3.8.2 (T3 3.4): a secret an agent asked for, typed only on this PC's card (src/engine/agent-secrets.mjs)
   'secrets.pending': 'pc', 'secrets.answer': 'pc', 'secrets.decline': 'pc',
+  // 3.8.2 (T3 3.2): the user's terminal inside Orb (src/engine/user-terminal.mjs)
+  'terminal.list': 'pc', 'terminal.open': 'pc', 'terminal.write': 'pc', 'terminal.close': 'pc',
   // 3.8.1: Ajustes › Skills y MCP (src/engine/api-extensions.mjs): what agents run comes in and out of core only here
   'extensions.list': 'pc', 'extensions.toggle': 'pc', 'extensions.import': 'pc', 'extensions.remove': 'pc', 'extensions.approve': 'pc',
   'extensions.reject': 'pc', 'extensions.edit': 'pc', 'extensions.adopt': 'pc', 'extensions.applyCheck': 'pc', 'extensions.apply': 'pc'

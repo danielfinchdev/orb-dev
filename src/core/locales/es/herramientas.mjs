@@ -39,5 +39,22 @@ export default {
   'pip.stopRecording': 'Detener grabación',
   'msg.browser.recorded': 'Grabación del navegador guardada en los adjuntos: {name}.',
   'session.pointAdded': 'Elemento añadido al mensaje',
-  'session.recordingSaved': 'Grabación guardada en los adjuntos del chat'
+  'session.recordingSaved': 'Grabación guardada en los adjuntos del chat',
+  'terminal.show': 'Terminal',
+  'terminal.hide': 'Ocultar terminal',
+  'terminal.tab': 'Terminal {n}',
+  'terminal.ended': 'cerrado',
+  'terminal.new': 'Nuevo terminal',
+  'terminal.close': 'Cerrar terminal',
+  'terminal.outside': 'Abrir en una ventana aparte',
+  'terminal.placeholder': 'Escribe un comando y pulsa Intro',
+  'terminal.input': 'Comando',
+  'terminal.paste': 'Pegar en el terminal',
+  'terminal.copied': 'Comando copiado',
+  'msg.terminal.badFolder': 'La carpeta no existe.',
+  'msg.terminal.protectedFolder': 'El terminal no se abre en los datos de Orb ni en carpetas protegidas.',
+  'msg.terminal.tooMany': 'Hay demasiados terminales abiertos. Cierra uno.',
+  'msg.terminal.gone': 'Este terminal ya está cerrado.',
+  'msg.terminal.ended': 'El terminal ha terminado. Abre uno nuevo.',
+  'msg.terminal.badLine': 'Comando no válido o demasiado largo.'
 };

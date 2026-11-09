@@ -934,6 +934,16 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   - Animated robot in `robot.jsx`.
 - **Mode** light, dark or system; interface **size** with Ctrl +, Ctrl - and Ctrl 0; **Ctrl J** opens a terminal in the
   folder.
+- **Integrated terminal** (3.8.2, `src/engine/user-terminal.mjs`, `components/terminal-panel.jsx`): a chat's ⋯ menu ›
+  «Terminal» docks the user's own terminal under it, in the chat's folder, with one tab per terminal (at most 4). It is
+  the user's, not an agent's (no guard), so it is this PC's window only (`terminal.*` are `pc` methods; `terminal:data`
+  is never sent to a phone) and never starts in core, Orb's data, the install folder or a protected folder. It runs
+  System32's Windows PowerShell (`/bin/sh` or `$SHELL` elsewhere) with pipes, not a pseudo-console, so no native module
+  is added: line-based commands work, full-screen programs (vim, less) do not; the engine's `ORB_*` variables never
+  reach it; a line with non-ASCII characters goes as UTF-8 in base64 (`Invoke-Expression`, same scope). A ```bash /
+  ```powershell block in the chat gets «Pegar en el terminal», which only fills the input line. Ctrl+J and the project
+  actions keep opening Windows Terminal / Warp / PowerShell in a window of their own; «Abrir en una ventana aparte»
+  calls that same `app.openTerminal`. Terminals close with the engine.
 - **Wording:** tone and vocabulary in [`WRITING-GUIDE.md`](WRITING-GUIDE.md).
 
 ### Performance (3.8.1)

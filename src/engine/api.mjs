@@ -27,6 +27,7 @@ import { adbStatus, ensureAdb, createAndroid } from './android.mjs';
 import { grantMethods } from './grants.mjs';
 import { agentAuth } from './agent-auth.mjs';
 import { createSecretRequests } from './agent-secrets.mjs';
+import { createTerminals } from './user-terminal.mjs';
 import { extensionMethods } from './api-extensions.mjs';
 import { layoutPlan, layoutApply, guardOutside } from './workspace-layout.mjs';
 import { modelCatalog, chooseModel, LEVELS, REASONING_LEVELS, levelsOf } from './catalog.mjs';
@@ -148,6 +149,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     const s = sessions.get(session);
     return android.tool(s, String(args.tool ?? ''), args.args);
   };
+  // 3.8.2 (T3 3.2): the user's terminal docked under a chat (user-terminal.mjs); Ctrl+J's own terminal is app.openTerminal.
+  const terminals = createTerminals({ emit, log });
   const data = dataApi(shared); // 3.6 (WS5): backups
   let usageAskedAt = 0; // usage.refresh
 
@@ -756,6 +759,11 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'secrets.pending': () => secrets.pending(),
     'secrets.answer': ({ id, value, save, saved }) => secrets.answer({ id: int(id, 'petición'), value, save: save === true, saved: saved === true }),
     'secrets.decline': ({ id }) => secrets.decline({ id: int(id, 'petición') }),
+    // 3.8.2 (T3 3.2): the user's terminal inside Orb (this PC only, never in core or a protected folder).
+    'terminal.list': () => terminals.list(),
+    'terminal.open': ({ dir }) => terminals.open({ dir: str(dir, 'carpeta', 1000) }),
+    'terminal.write': ({ id, text }) => terminals.write({ id: int(id, 'terminal'), text: typeof text === 'string' ? text : '' }),
+    'terminal.close': ({ id }) => terminals.close({ id: int(id, 'terminal') }),
     ...extensionMethods(shared),
     ...appMethods({ home: ctx.home, version }), // 3.8.1: this PC's tools (terminal, editors, feedback…)
     ...musicMethods({ log }) // 3.8.2: the music's tracks, downloaded the first time (src/engine/music.mjs)
@@ -799,7 +807,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     dataTick: () => data.tick(),
     // Running tasks stay "running": the next start continues them (scheduler.finish does not close them while closing).
     // 3.8.2: adb's server goes with Orb (no phone reachable from this PC while Orb is closed).
-    shutdown() { scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); android.stopServer().catch(() => {}); log('motor detenido'); }
+    shutdown() { terminals.closeAll(); scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); android.stopServer().catch(() => {}); log('motor detenido'); }
   };
 }
 

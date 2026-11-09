@@ -5,10 +5,13 @@
 // 3.8.2: formulas between $$ (one $ stays a dollar: amounts like «$5 and $10» read as before) and ```mermaid diagrams
 // (rich-blocks.jsx, each library loaded only when needed).
 import { memo } from 'react';
+import { TerminalSquare } from 'lucide-react';
+import { toast } from 'sonner';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import { remarkPlugins, richKind, isInlineMath, textOf } from '@/lib/markdown-plugins.js';
 import { MathBlock, MermaidBlock } from './rich-blocks.jsx';
-import { bridge } from '@/lib/store.js';
+import { bridge, fullPc } from '@/lib/store.js';
+import { pasteToTerminal, oneCommand, SHELL_LANGUAGES } from '@/lib/terminal-paste.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { useHighlight } from '@/lib/use-highlight.js';
@@ -27,6 +30,20 @@ export function localImagePath(href) {
 }
 const urlTransform = (url) => (localImagePath(url) ? url : defaultUrlTransform(url));
 
+// 3.8.2 (T3 3.2): a block of terminal commands (```bash, powershell…) gets «Pegar en el terminal» on the PC: the command
+// goes to the input line of the terminal under the chat (it never runs until the user presses Enter); with no terminal
+// there, it is copied.
+function PasteToTerminal({ code }) {
+  const t = useT();
+  const paste = () => {
+    const line = oneCommand(code);
+    if (pasteToTerminal(line)) return;
+    navigator.clipboard?.writeText(line).then(() => toast.success(t('terminal.copied'))).catch(() => {});
+  };
+  return <button type="button" className="text-muted-foreground hover:text-foreground absolute top-1.5 right-1.5 grid size-7 cursor-pointer place-items-center rounded-md opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 [&_svg]:size-3.5" title={t('terminal.paste')} aria-label={t('terminal.paste')} onClick={paste}><TerminalSquare /></button>;
+}
+const languageOf = (code) => String([].concat(code?.properties?.className ?? []).find((c) => String(c).startsWith('language-')) ?? '').slice(9).toLowerCase();
+
 // A picture in the text is shown as its description; the word for it follows the language (the Markdown is memoised).
 function ImageAlt({ alt }) { const t = useT(); return <span className="text-muted-foreground">[{alt || t('comp.markdown.image')}]</span>; }
 
@@ -40,6 +57,8 @@ const components = {
     const kind = richKind(node?.children?.[0]);
     if (kind === 'math') return <MathBlock tex={textOf(node.children[0])} display />;
     if (kind === 'mermaid') return <MermaidBlock code={textOf(node.children[0]).replace(/\n$/, '')} />;
+    const code = node?.children?.[0];
+    if (fullPc() && SHELL_LANGUAGES.has(languageOf(code))) return <div className="group relative"><pre {...props}>{children}</pre><PasteToTerminal code={textOf(code)} /></div>;
     return <pre {...props}>{children}</pre>;
   },
   code: ({ node, children, className, ...props }) => (isInlineMath(node) ? <MathBlock tex={textOf(node)} /> : <code className={className} {...props}>{children}</code>)

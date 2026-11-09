@@ -39,5 +39,22 @@ export default {
   'pip.stopRecording': 'Stop recording',
   'msg.browser.recorded': 'Browser recording saved in the attachments: {name}.',
   'session.pointAdded': 'Element added to the message',
-  'session.recordingSaved': 'Recording saved in the chat’s attachments'
+  'session.recordingSaved': 'Recording saved in the chat’s attachments',
+  'terminal.show': 'Terminal',
+  'terminal.hide': 'Hide terminal',
+  'terminal.tab': 'Terminal {n}',
+  'terminal.ended': 'closed',
+  'terminal.new': 'New terminal',
+  'terminal.close': 'Close terminal',
+  'terminal.outside': 'Open in a separate window',
+  'terminal.placeholder': 'Type a command and press Enter',
+  'terminal.input': 'Command',
+  'terminal.paste': 'Paste in the terminal',
+  'terminal.copied': 'Command copied',
+  'msg.terminal.badFolder': 'The folder doesn’t exist.',
+  'msg.terminal.protectedFolder': 'The terminal doesn’t open in Orb’s data or in protected folders.',
+  'msg.terminal.tooMany': 'Too many terminals are open. Close one.',
+  'msg.terminal.gone': 'This terminal is already closed.',
+  'msg.terminal.ended': 'The terminal has ended. Open a new one.',
+  'msg.terminal.badLine': 'Invalid or too long command.'
 };
