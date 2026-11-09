@@ -3,7 +3,7 @@
 - **`Orb-3.8.2-instalador.exe`** (the Windows app): installs for your user, without administrator rights, and updates
   itself. It needs Microsoft Edge WebView2, which Windows 11 and an up-to-date Windows 10 already have (if it is
   missing, the installer gets it).
-- **`Orb-3.8.2-android.apk`**: the Orb app for Android. Link it to your PC with Magic Link.
+- **Android:** keep using the Orb 3.8.1 app ([`Orb-3.8.1-android.apk`](https://github.com/danielfinchdev/orb-dev/releases/tag/v3.8.1)); it works with Orb 3.8.2 on your PC. A new native Android app is planned for a later release.
 
 Windows 10/11. Since it isn't signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
 

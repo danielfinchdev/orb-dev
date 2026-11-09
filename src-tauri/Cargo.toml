@@ -1,6 +1,6 @@
 [package]
 name = "orb"
-version = "3.8.1"
+version = "3.8.2"
 description = "Orb: one app for your AI coding agents"
 authors = ["Orb"]
 license = "MIT"
