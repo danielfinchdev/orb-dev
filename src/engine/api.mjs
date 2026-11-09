@@ -15,6 +15,7 @@ import { brainOf } from './orchestrator.mjs';
 import { newProject, syncProjects, checkProjectName, renameProject } from '../core/projects.mjs';
 import { finishProject, finishedProjects, reopenProject, checkDelete, deleteProject, abortDelete } from '../core/project-close.mjs';
 import { PRODUCT } from '../core/product.mjs';
+import { slashCommand } from '../core/slash.mjs';
 import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../core/schedules.mjs';
 import { oneLine, redactSecrets, localStamp } from '../core/safety.mjs';
 import { quickRun } from '../agents/index.mjs';
@@ -335,6 +336,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         try { methods['chat.settings']({ conversation: c.id, ...pick }, principal); } catch (error) { board.run('DELETE FROM conversations WHERE id = ?', c.id); board.changed('conversations'); throw error; }
         return orchestrator.ask(t, expandMentions(board, sessions, t), { conversation: c.id, project: proj });
       }
+      // 3.8.2: «/compact» and «/clear» typed alone in an existing chat are Orb's commands (src/core/slash.mjs).
+      const command = id ? slashCommand(t) : null;
+      if (command) return command === 'compact' ? orchestrator.compact(id) : orchestrator.clear(id);
       if (!id && (brainOf().agent || 'claude') === 'cursor') fail(tr('msg.api.cursorNoCoordinate'));
       return orchestrator.ask(t, expandMentions(board, sessions, t), { conversation: id, project: proj });
     },
@@ -597,6 +601,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         return { queued: true };
       }
       const t = str(text, 'mensaje', 20000);
+      const command = s.kind === 'chat' && !(files ?? []).length ? slashCommand(t) : null;
+      if (command) return command === 'compact' ? sessions.compact(s.id) : sessions.clear(s.id);
       // 3.2: a new direct conversation is named by Orb from its first message (at once a quick title, then a better one).
       if (s.kind === 'chat' && !s.titled) {
         const quick = titleFrom(t) || s.title;

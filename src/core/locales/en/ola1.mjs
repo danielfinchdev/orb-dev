@@ -30,6 +30,8 @@ export default {
   'msg.sessions.cannotCompact': '{label} cannot compact the conversation.',
   'msg.sessions.compacting': 'Compacting the conversation',
   'msg.sessions.compacted': 'Conversation compacted. It continues from a summary; the history is kept.',
+  'msg.sessions.cleared': 'New conversation. The agent starts from scratch; the history is kept.',
+  'msg.orch.cleared': 'New conversation. The next answer starts from scratch; the history is kept.',
   'msg.sessions.compactFailed': '{label} could not compact the conversation. You can keep writing as usual.',
   'msg.api.reasoningXhigh': 'extra',
   'msg.api.reasoningUnavailable': 'This model does not support Extra reasoning.',

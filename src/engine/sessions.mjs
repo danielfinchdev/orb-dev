@@ -590,6 +590,19 @@ export class Sessions {
     return { ok: Boolean(r?.ok), how: r?.ok ? 'compacted' : 'failed' };
   }
 
+  // 3.8.2: «/clear»: the agent's process closes and the next message starts a new conversation of the agent in this same
+  // chat (its model, permission and project stay; the lines shown in Orb too).
+  clear(id) {
+    const s = this.must(id);
+    if (s.kind !== 'chat') throw new Error(tr('msg.sessions.compactNotHere'));
+    if (this.running.has(id)) throw new Error(tr('msg.sessions.stillWorking'));
+    this.closeLive(id);
+    this.board.settingJson(`fork_summary:${id}`, null); this.board.settingJson(`fork_pending:${id}`, null);
+    this.update(id, { cli_session: null, context: null });
+    this.addItem(id, 'system', 'status', tr('msg.sessions.cleared'));
+    return { ok: true };
+  }
+
   // Continue a conversation stopped by a closed app or a usage limit: the agent resumes its own conversation.
   resume(id) {
     this.must(id);

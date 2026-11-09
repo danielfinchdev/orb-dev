@@ -184,6 +184,13 @@ class Lane {
     return { ok: true, how };
   }
   forget() { this.closeLive(); this.board.updateConversation(this.id, { session_id: null, turns: 0, context: null }); }
+  // 3.8.2: «/clear»: the coordinator starts a new conversation of its agent in this same chat (the lines stay).
+  clear() {
+    if (this.busy || this.inflight || this.queue.length) throw new Error(tr('msg.orch.compactBusy'));
+    this.forget();
+    this.say('system', tr('msg.orch.cleared'), { kind: 'cleared' });
+    return { ok: true };
+  }
 
   // The chat is free at once, but the agent's turn takes a moment to wind down: a new message waits for it in next()
   // (sending it now would find the agent still busy). A turn that does not end goes with its process (resume keeps the
@@ -549,6 +556,7 @@ export class Orchestrator {
   compact(id) { if (!this.board.conversation(id)) throw new Error(tr('msg.board.noConversation')); return this.lane(id).compact(); }
   stopAll() { for (const l of this.lanes.values()) l.stop({ quiet: true }); }
   forget(id) { this.lane(id).forget(); }
+  clear(id) { if (!this.board.conversation(id)) throw new Error(tr('msg.board.noConversation')); return this.lane(id).clear(); }
   closeLive() { for (const l of this.lanes.values()) l.closeLive(); }
   // A conversation removed: its process and its waiting messages go.
   drop(id) {
