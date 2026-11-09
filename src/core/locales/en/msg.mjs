@@ -280,6 +280,7 @@ export default {
   "msg.home.absolute": "the folder must be an absolute path",
   "msg.home.noFolder": "the folder does not exist: {base}",
   "msg.home.notFolder": "not a folder: {base}",
+  "msg.inbox.snoozeBack": "Chat “{title}” is back.",
   "msg.installer.alreadyRunning": "an installation is already in progress. Wait for it to finish",
   "msg.installer.chooseOne": "choose at least one program",
   "msg.installer.done": "completed",

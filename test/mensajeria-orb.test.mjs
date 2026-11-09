@@ -125,3 +125,23 @@ test('3.8.2: el avatar con 4 o más agentes: marcas apiladas y «+N» dentro del
   assert.match(avatar, /avatarStack\(agents\.length, size/);
   assert.match(avatar, /title=\{who \|\| undefined\}/, 'al pasar el ratón, todos los agentes');
 });
+
+test('3.8.2: a snoozed chat is only under the «snoozed» filter; the quick snooze times', () => {
+  const items = [
+    { key: 'conversation:1', kind: 'conversation', id: 1, title: 'a', project: null, at: at(1), pinned: true, pinOrder: 1, snoozedUntil: at(-60) },
+    { key: 'conversation:2', kind: 'conversation', id: 2, title: 'b', project: null, at: at(2), snoozedUntil: at(-60), done: true },
+    { key: 'conversation:3', kind: 'conversation', id: 3, title: 'c', project: null, at: at(3) }
+  ];
+  const g = M.groupOrb(items);
+  assert.deepEqual(g.pinned, []); assert.deepEqual(g.groups.flatMap((x) => x.items.map((y) => y.id)), [3]);
+  assert.equal(g.hidden, 0, 'a snoozed completed chat is not counted as hidden'); assert.equal(g.snoozed, 2);
+  const s = M.groupOrb(items, { filter: { state: 'snoozed', agent: 'all' } });
+  assert.deepEqual([...s.pinned, ...s.groups.flatMap((x) => x.items)].map((x) => x.id), [1, 2]);
+  const times = (d) => Object.fromEntries(M.snoozeTimes(d).map(([k, v]) => [k, v]));
+  const morning = times(new Date(2026, 10, 4, 10, 30)); // a Wednesday
+  assert.equal(morning.snoozeEvening.getHours(), 18); assert.equal(morning.snoozeTomorrow.getDate(), 5);
+  assert.equal(morning.snoozeMonday.getDay(), 1); assert.equal(morning.snoozeMonday.getDate(), 9);
+  assert.equal(morning.snooze1h.getHours(), 11);
+  assert.equal(times(new Date(2026, 10, 4, 19)).snoozeEvening, undefined, 'no «this evening» after 17:00');
+  assert.equal(times(new Date(2026, 10, 9, 8)).snoozeMonday.getDate(), 16, 'on a Monday: the next one');
+});

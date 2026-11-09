@@ -7,7 +7,7 @@
 // «Esperando tu aprobación», how its last task ended, else its last line) and the unread count. Right click or ⋯ (PC) and
 // a long press (phone) open the chat's menu: info, pin, mute, mark read, complete or reopen, delete.
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ListTodo, FolderKanban, CalendarClock, PenTool, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, Sparkles, PencilLine } from 'lucide-react';
+import { Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ListTodo, FolderKanban, CalendarClock, PenTool, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, Sparkles, PencilLine, AlarmClock, AlarmClockOff } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
@@ -18,7 +18,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Input } from '@/components/ui/basic.jsx';
 import { useStore, go, call, act, newChat, orbAct, loadOrbInbox, openOrbInfo, closeOrbInfo, getState, phoneLayout, fullPc, refreshSoon, setState, plainSkin } from '@/lib/store.js';
-import { orbItems, orbProgress, groupOrb, shortTime, avatarStack } from '@/lib/inbox.js';
+import { orbItems, orbProgress, groupOrb, shortTime, avatarStack, snoozeTimes } from '@/lib/inbox.js';
 import { sameItem } from '@/lib/memo.js';
 import { useDay } from '@/lib/use-day.js';
 import { usePress } from '@/lib/use-press.js';
@@ -90,9 +90,14 @@ export function useOrbActions(item) {
   if (!item) return [];
   // 3.6: a direct conversation with an agent: pinned and muted like the others; completed through the sidebar's mark.
   const rename = { id: 'rename', icon: PencilLine, label: t('orbchats.rename'), run: () => renameChat(item, t) };
+  // 3.8.2: snooze until a time (the scheduler brings it back), or back now.
+  const snooze = item.snoozedUntil
+    ? { id: 'unsnooze', icon: AlarmClockOff, label: t('orbchats.unsnooze'), run: () => orbAct('inbox.snooze', { ...conversationRef(item), until: null }) }
+    : { id: 'snooze', icon: AlarmClock, label: t('orbchats.snooze'), run: () => snoozeChat(item, t) };
   if (item.kind === 'session') return [
     rename,
     item.pinned ? { id: 'unpin', icon: PinOff, label: t('chats.unpin'), run: () => orbAct('inbox.unpin', conversationRef(item)) } : { id: 'pin', icon: Pin, label: t('chats.pin'), run: () => orbAct('inbox.pin', conversationRef(item)) },
+    snooze,
     item.muted ? { id: 'unmute', icon: Bell, label: t('chats.unmute'), run: () => orbAct('inbox.mute', { ...conversationRef(item), muted: false }) } : { id: 'mute', icon: BellOff, label: t('chats.mute'), run: () => orbAct('inbox.mute', { ...conversationRef(item), muted: true }) },
     item.done
       ? { id: 'reopen', icon: Undo2, label: t('orbchats.reopen'), run: () => act(call('sidebar.complete', { key: `s${item.id}`, done: false })).then(refreshSoon) }
@@ -103,6 +108,7 @@ export function useOrbActions(item) {
     { id: 'info', icon: Info, label: t('orbchats.info'), run: () => { openOrbItem(item); openOrbInfo({ type: 'chat' }); } },
     rename,
     item.pinned ? { id: 'unpin', icon: PinOff, label: t('chats.unpin'), run: () => orbAct('inbox.unpin', ref) } : { id: 'pin', icon: Pin, label: t('chats.pin'), run: () => orbAct('inbox.pin', ref) },
+    snooze,
     item.muted ? { id: 'unmute', icon: Bell, label: t('chats.unmute'), run: () => orbAct('inbox.mute', { ...ref, muted: false }) } : { id: 'mute', icon: BellOff, label: t('chats.mute'), run: () => orbAct('inbox.mute', { ...ref, muted: true }) },
     ...(item.unread ? [{ id: 'read', icon: CheckCheck, label: t('chats.markRead'), run: () => orbAct('inbox.markRead', ref) }] : []),
     item.done
@@ -119,6 +125,37 @@ export function renameChat(item, t) {
     body: (v, set) => <Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={80} data-testid="rename-input" />,
     ok: t('session.save'),
     onOk: async (v) => { const r = await call(method, { id: item.id, title: v.title.trim() || item.title }); refreshSoon(); loadOrbInbox(); return r; }
+  });
+}
+// 3.8.2: «Posponer»: a quick time or a date and time of the user's choice (local), sent as an ISO time.
+const localInput = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
+export function snoozeChat(item, t) {
+  const quick = snoozeTimes();
+  return form(t('orbchats.snoozeTitle', { title: item.title }), {
+    description: t('orbchats.snoozeDesc'),
+    initial: { at: localInput(quick[2]?.[1] ?? quick[1][1]) },
+    body: (v, set) => (
+      <>
+        <div className="grid gap-1" role="radiogroup">
+          {quick.map(([key, d]) => (
+            <button key={key} type="button" role="radio" aria-checked={v.at === localInput(d)} onClick={() => set({ at: localInput(d) })} data-testid={`snooze-${key}`}
+              className={cn('flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2 text-left text-[14px]', v.at === localInput(d) ? 'border-primary bg-primary/8' : 'hover:bg-accent/60')}>
+              <span>{t(`orbchats.${key}`)}</span>
+            </button>
+          ))}
+        </div>
+        <label className="grid gap-1.5 text-[13px] font-medium">{t('orbchats.snoozeCustom')}
+          <Input type="datetime-local" value={v.at} min={localInput(new Date())} onChange={(e) => set({ at: e.target.value })} data-testid="snooze-at" />
+        </label>
+      </>
+    ),
+    ok: t('orbchats.snooze'),
+    onOk: async (v) => {
+      const at = new Date(v.at);
+      if (!Number.isFinite(at.getTime()) || at.getTime() <= Date.now()) throw new Error(t('orbchats.snoozeBad'));
+      await orbAct('inbox.snooze', { ...conversationRef(item), until: at.toISOString() });
+      return true;
+    }
   });
 }
 export async function deleteChat(item, t) {
@@ -205,6 +242,7 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet }) {
                 </span>
               )}
             {p.badge ? <span className="flex-1" /> : null}
+            {item.snoozedUntil ? <AlarmClock className="text-muted-foreground size-3.5 shrink-0" aria-label={t('orbchats.snoozed', { when: new Date(item.snoozedUntil).toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' }) })} data-testid="chat-snoozed" /> : null}
             {item.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}
             {item.unread ? <span className={cn('min-w-5 shrink-0 rounded-full px-1.5 text-center text-[11px] leading-5 font-semibold tabular-nums', item.muted ? 'bg-muted-foreground/25 text-foreground/70' : 'bg-primary text-primary-foreground')} data-testid="chat-unread" aria-label={t('chats.unread', { n: item.unread })}>{item.unread > 99 ? '99+' : item.unread}</span> : null}
           </span>
@@ -338,7 +376,7 @@ function useSearch(query) {
   return found;
 }
 const FILTER0 = { state: 'all', agent: 'all' };
-function FilterMenu({ filter, setFilter, agents }) {
+function FilterMenu({ filter, setFilter, agents, snoozed = 0 }) {
   const t = useT();
   const changed = filter.state !== 'all' || filter.agent !== 'all';
   const pick = (k, v) => setFilter((f) => ({ ...f, [k]: f[k] === v ? 'all' : v }));
@@ -353,7 +391,7 @@ function FilterMenu({ filter, setFilter, agents }) {
       </Tip>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>{t('orbchats.filterState')}</DropdownMenuLabel>
-        {[['active', 'orbchats.stateActive'], ['attention', 'orbchats.stateAttention'], ['done', 'orbchats.stateDone']].map(([v, k]) => <DropdownMenuCheckboxItem key={v} checked={filter.state === v} onCheckedChange={() => pick('state', v)} onSelect={(e) => e.preventDefault()} data-testid={`filter-${v}`}>{t(k)}</DropdownMenuCheckboxItem>)}
+        {[['active', 'orbchats.stateActive'], ['attention', 'orbchats.stateAttention'], ['done', 'orbchats.stateDone'], ...(snoozed || filter.state === 'snoozed' ? [['snoozed', 'orbchats.stateSnoozed']] : [])].map(([v, k]) => <DropdownMenuCheckboxItem key={v} checked={filter.state === v} onCheckedChange={() => pick('state', v)} onSelect={(e) => e.preventDefault()} data-testid={`filter-${v}`}>{t(k)}{v === 'snoozed' && snoozed ? <span className="text-muted-foreground ml-auto tabular-nums">{snoozed}</span> : null}</DropdownMenuCheckboxItem>)}
         {agents.length > 1 ? <><DropdownMenuSeparator /><DropdownMenuLabel>{t('orbchats.filterAgent')}</DropdownMenuLabel>{agents.map((a) => <DropdownMenuCheckboxItem key={a} checked={filter.agent === a} onCheckedChange={() => pick('agent', a)} onSelect={(e) => e.preventDefault()}>{AGENT[a] ?? a}</DropdownMenuCheckboxItem>)}</> : null}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -404,7 +442,7 @@ export function OrbInbox({ page = false }) {
         <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') { setQuery(''); setFilter(FILTER0); } }} placeholder={t('orbchats.search')} aria-label={t('orbchats.search')} className={cn('placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent outline-none', phone ? 'text-[16px]' : 'text-[13.5px]')} data-testid="sidebar-search-input" />
         {query ? <button type="button" className="text-muted-foreground hover:text-foreground grid size-5 cursor-pointer place-items-center rounded" aria-label={t('comp.sidebar.clearSearch')} onClick={() => setQuery('')}><X className="size-3.5" /></button> : null}
       </label>
-      <FilterMenu filter={filter} setFilter={setFilter} agents={agents} />
+      <FilterMenu filter={filter} setFilter={setFilter} agents={agents} snoozed={parts.snoozed} />
       {phone ? null : <OrbNewMenu />}
     </div>
   );

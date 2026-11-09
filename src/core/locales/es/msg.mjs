@@ -280,6 +280,7 @@ export default {
   "msg.home.absolute": "la carpeta debe ser una ruta absoluta",
   "msg.home.noFolder": "la carpeta no existe: {base}",
   "msg.home.notFolder": "no es una carpeta: {base}",
+  "msg.inbox.snoozeBack": "Vuelve el chat «{title}».",
   "msg.installer.alreadyRunning": "ya hay una instalación en curso. Espera a que termine",
   "msg.installer.chooseOne": "elige al menos un programa",
   "msg.installer.done": "completado",
