@@ -6,6 +6,10 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
+import crypto from 'node:crypto';
+import { Master, FREE_TRIES } from '../src/core/master.mjs';
 import { AgentAuth } from '../src/engine/agent-auth.mjs';
 import { createSecretRequests, savedId } from '../src/engine/agent-secrets.mjs';
 import { parseArgs, trade, masker } from '../src/mcp/secret-run.mjs';
@@ -15,6 +19,7 @@ import { FRESH_ACTIONS } from '../src/ui/lib/core-access.js';
 
 const HELPER = fileURLToPath(new URL('../src/mcp/secret-run.mjs', import.meta.url));
 const VALUE = 'ghp_SecretoDePrueba123';
+const MASTER = 'contraseña-maestra-de-prueba';
 // The helper runs as its own process (async: the agents' pipe lives in this test's process).
 const helper = (args) => new Promise((resolve) => { execFile(process.execPath, [HELPER, ...args], { encoding: 'utf8', timeout: 20_000 }, (error, stdout, stderr) => resolve({ status: error ? (typeof error.code === 'number' ? error.code : -1) : 0, stdout, stderr })); });
 
@@ -22,7 +27,7 @@ function setup({ askMs, handleMs } = {}) {
   const auth = new AgentAuth();
   const items = []; const lines = []; const events = [];
   const vault = new Map(); let unlocked = true;
-  const master = { unlocked: () => unlocked, get: (id) => { if (!unlocked) throw new Error('locked'); return vault.get(id) ?? null; }, set: (id, v) => { if (!unlocked) throw new Error('locked'); vault.set(id, v); } };
+  const master = { unlocked: () => unlocked, get: (id) => { if (!unlocked) throw new Error('locked'); return vault.get(id) ?? null; }, set: (id, v) => { if (!unlocked) throw new Error('locked'); vault.set(id, v); }, isPassword: async (v) => v === MASTER };
   const sessions = { addItem: (...a) => items.push(a) };
   const secrets = createSecretRequests({ sessions, auth, master: () => master, emit: (e, p) => events.push([e, p]), log: (l) => lines.push(l), askMs, handleMs });
   return { auth, secrets, items, lines, events, vault, lock: () => { unlocked = false; } };
@@ -39,14 +44,18 @@ test('secretos: tarjeta privada, identificador de un solo uso y nada en el chat 
   assert.deepEqual({ ...card, id: undefined }, { id: undefined, session: 's1', agent: 'claude', name: 'GITHUB_TOKEN', reason: 'Para publicar la release', saved: false });
   assert.equal(events[0][0], 'secret:request');
   // Typed on the card (and saved in the vault, which the window does only after the master password).
-  assert.throws(() => secrets.answer({ id: card.id, value: '' }), /Escribe la clave/);
-  assert.equal(secrets.answer({ id: card.id, value: VALUE, save: true }), true);
+  await assert.rejects(secrets.answer({ id: card.id, value: '' }), /Escribe la clave/);
+  // Orb never asks for its master password here: the card refuses it (checked in the vault, nothing kept).
+  await assert.rejects(secrets.answer({ id: card.id, value: MASTER, save: true }), /contraseña maestra/);
+  assert.equal(vault.get(savedId('GITHUB_TOKEN')), undefined);
+  assert.equal(secrets.pending().length, 1, 'la petición sigue esperando');
+  assert.equal(await secrets.answer({ id: card.id, value: VALUE, save: true }), true);
   assert.equal(vault.get(savedId('GITHUB_TOKEN')), VALUE);
   const r = await asked;
   assert.equal(r.name, 'GITHUB_TOKEN'); assert.match(r.handle, /^orbsec1\.[0-9a-f]{24}\.[0-9a-f]{64}$/);
   assert.ok(!JSON.stringify(r).includes(VALUE), 'el agente recibe un identificador, nunca el valor');
   assert.ok(!JSON.stringify([items, lines, events]).includes(VALUE), 'ni en el chat, ni en el registro, ni en los eventos');
-  assert.throws(() => secrets.answer({ id: card.id, value: VALUE }), /ya no está activa/, 'una petición se responde una vez');
+  await assert.rejects(secrets.answer({ id: card.id, value: VALUE }), /ya no está activa/, 'una petición se responde una vez');
   // The helper: the value goes to the command's own variable and is hidden in its output; the handle works once.
   const run = await helper([r.handle, '--env', 'GITHUB_TOKEN', '--', process.execPath, '-e', 'console.log("v=" + process.env.GITHUB_TOKEN + " largo=" + process.env.GITHUB_TOKEN.length)']);
   assert.equal(run.status, 0, run.stderr);
@@ -58,13 +67,13 @@ test('secretos: tarjeta privada, identificador de un solo uso y nada en el chat 
   const second = secrets.request(chat, { name: 'GITHUB_TOKEN', reason: 'otra vez' });
   const [card2] = secrets.pending();
   assert.equal(card2.saved, true);
-  secrets.answer({ id: card2.id, saved: true });
+  await secrets.answer({ id: card2.id, saved: true });
   const r2 = await second;
   const viaStdin = await helper([r2.handle, '--stdin', '--', process.execPath, '-e', 'process.stdin.on("data", (d) => process.stdout.write("leído " + d))']);
   assert.equal(viaStdin.status, 0, viaStdin.stderr);
   assert.match(viaStdin.stdout, /leído \[secreto\]/);
   const third = secrets.request(chat, { name: 'OTRA', reason: 'x' });
-  assert.throws(() => secrets.answer({ id: secrets.pending()[0].id, saved: true }), /ninguna clave guardada/);
+  await assert.rejects(secrets.answer({ id: secrets.pending()[0].id, saved: true }), /ninguna clave guardada/);
   secrets.decline({ id: secrets.pending()[0].id });
   assert.match(await third, /rechazado/);
 });
@@ -76,7 +85,7 @@ test('secretos: sin respuesta, demasiadas y al bloquear Orb no queda nada que ca
   const waiting = [1, 2, 3].map(() => s.secrets.request(chat, { name: 'TOKEN', reason: 'x' }));
   await assert.rejects(async () => s.secrets.request(chat, { name: 'TOKEN', reason: 'x' }), /varias claves/);
   // One answered (its handle given, not used yet), the rest waiting: Orb locks.
-  s.secrets.answer({ id: s.secrets.pending()[0].id, value: VALUE });
+  await s.secrets.answer({ id: s.secrets.pending()[0].id, value: VALUE });
   const given = await waiting[0];
   s.secrets.wipe();
   for (const w of waiting.slice(1)) assert.match(await w, /bloqueado/);
@@ -85,14 +94,14 @@ test('secretos: sin respuesta, demasiadas y al bloquear Orb no queda nada que ca
   // An expired handle neither.
   const e = setup({ handleMs: 30 });
   const late = e.secrets.request(chat, { name: 'TOKEN', reason: 'x' });
-  e.secrets.answer({ id: e.secrets.pending()[0].id, value: VALUE });
+  await e.secrets.answer({ id: e.secrets.pending()[0].id, value: VALUE });
   const h = await late;
   await new Promise((ok) => setTimeout(ok, 120));
   assert.equal(await trade(h.handle), null, 'caducado');
   // A handle of another agent process goes when that process closes.
   const p = setup();
   const own = p.secrets.request(chat, { name: 'TOKEN', reason: 'x' });
-  p.secrets.answer({ id: p.secrets.pending()[0].id, value: VALUE });
+  await p.secrets.answer({ id: p.secrets.pending()[0].id, value: VALUE });
   const ph = await own;
   p.auth.revokeSession('s1');
   assert.equal(await trade(ph.handle), null);
@@ -139,4 +148,20 @@ test('secretos: guardar o usar la guardada pide la contraseña cada vez (token d
     await assert.rejects(e.call('secrets.answer', { id: 1, saved: true, unlock: fresh }), /ya no está activa/, 'pasa la contraseña (no hay petición)');
     await assert.rejects(e.call('secrets.answer', { id: 1, saved: true, unlock: fresh }), /contraseña maestra/, 'un token, una vez');
   } finally { await e.stop(); t.cleanup(); }
+});
+
+// 3.8.2 (phase 10b): the card refuses the master password. The vault checks it without counting a wrong try (a secret
+// that is not the password must not bring the unlock's waits) and only while its data key is open.
+test('secretos: la bóveda dice si un valor es la contraseña maestra sin contar intentos', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-secreto-'));
+  try {
+    const PASS = 'una frase larga de prueba';
+    const m = new Master(dir, { secret: crypto.randomBytes(32) });
+    m.openWithMachine();
+    assert.equal(await m.isPassword(PASS), false, 'sin contraseña creada');
+    await m.create(PASS);
+    for (let i = 0; i < FREE_TRIES + 2; i++) assert.equal(await m.isPassword(`otro-valor-${i}`), false);
+    assert.equal(await m.isPassword(PASS), true);
+    assert.equal((await m.verify(PASS)).ok, true, 'ningún intento contado: la contraseña sigue entrando sin esperas');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

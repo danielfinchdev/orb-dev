@@ -128,7 +128,7 @@ impl Session<'_> {
         if op == "close" {
           self.vaults.remove(&req["h"].as_u64().unwrap_or(0));
           Ok(json!(true))
-        } else if matches!(op, "create" | "verify" | "change" | "forgot" | "reset") {
+        } else if matches!(op, "create" | "verify" | "same" | "change" | "forgot" | "reset") {
           return self.start_job(op, req, h);
         } else {
           let now = self.now(req);
@@ -386,6 +386,25 @@ fn verify(h: &Handle, p: &Locked, channel: &str, now: u64) -> Answer {
   Ok(tried.to_json())
 }
 
+/// Whether a value is the master password, with no try counted and nothing changed (src/core/master.mjs › isPassword).
+/// Only while the data key is open: it is no way round the waits of a locked vault.
+fn same(h: &Handle, p: &Locked) -> Answer {
+  let (m, costs) = {
+    let v = h.vault.lock().unwrap();
+    if !v.has_password() || !v.unlocked() {
+      return Ok(json!(false));
+    }
+    (v.master_file(), v.costs())
+  };
+  let Some(kek) = kek_for(&m, p, costs) else {
+    return Ok(json!(false));
+  };
+  let Some(m) = m else {
+    return Ok(json!(false));
+  };
+  Ok(json!(h.vault.lock().unwrap().key_for_kek(&m, kek.as_slice()).is_some()))
+}
+
 fn checked(p: &Locked) -> Result<(), Code> {
   check_password(p.as_str().ok_or(Code::Short)?)
 }
@@ -408,6 +427,7 @@ fn slow(op: &str, req: &Value, h: &Handle, now: impl Fn() -> u64) -> Answer {
       };
       verify(h, &password(req, "password"), channel, now())
     }
+    "same" => same(h, &password(req, "password")),
     "change" => {
       let next = password(req, "next");
       checked(&next)?;

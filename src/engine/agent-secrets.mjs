@@ -17,6 +17,11 @@ const PER_SESSION = 3; // requests waiting at once in one chat
 export const savedId = (name) => `agent/${name}`; // the vault's id of a saved one
 export const handleOf = (pipeId, ticket) => `orbsec1.${pipeId}.${ticket}`; // read back by src/mcp/secret-run.mjs
 
+// Whether a typed value is the master password (checked in the vault, no try counted, nothing kept).
+async function isMaster(m, value) {
+  if (!m?.isPassword) return false;
+  try { return (await m.isPassword(value)) === true; } catch { return false; }
+}
 const userError = (key, vars) => Object.assign(new Error(tr(key, vars)), { userFacing: true });
 
 // sessions: the engine's (get, addItem); auth: agent-auth.mjs's instance; master(): the vault (ctx.master).
@@ -58,7 +63,7 @@ export function createSecretRequests({ sessions, auth, master, emit = () => {}, 
     // The window's list (also after a reload).
     pending: () => [...pending.values()].map(view),
     // The user's answer on the card: a value typed now (and saved, if asked), or the one saved in the vault.
-    answer({ id, value, save = false, saved = false }) {
+    async answer({ id, value, save = false, saved = false }) {
       const r = must(id);
       let secret;
       if (saved) {
@@ -67,6 +72,9 @@ export function createSecretRequests({ sessions, auth, master, emit = () => {}, 
       } else {
         secret = typeof value === 'string' ? value : '';
         if (!secret || secret.length > MAX_VALUE) throw userError('msg.secrets.badValue');
+        // Orb never asks for its master password on this card: a card that gets it (a tricked user) refuses it.
+        if (await isMaster(master(), secret)) throw userError('msg.secrets.isMaster');
+        if (pending.get(r.id) !== r) throw userError('msg.secrets.gone');
         if (save) master().set(savedId(r.name), secret);
       }
       const ticket = auth.issue({ session: r.session, reply: { secret }, once: true });
