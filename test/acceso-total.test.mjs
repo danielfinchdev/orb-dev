@@ -57,7 +57,7 @@ test('guard «total»: todo menos lo protegido (core, lo guardado fuera, la carp
     try { fs.symlinkSync(core, link, 'junction'); } catch { /* no junctions here */ }
     if (fs.existsSync(link)) {
       assert.equal(v({ ...base, tool: 'Write', paths: [path.join(link, 'datos', 'orb.db')] }), 'deny', 'por una unión de carpetas');
-      assert.equal(v({ ...base, tool: 'Bash', command: 'type enlace\\datos\\orb.db', cwd: out }), 'deny');
+      assert.equal(v({ ...base, tool: 'Bash', command: `${WIN ? 'type' : 'cat'} ${path.join('enlace', 'datos', 'orb.db')}`, cwd: out }), 'deny');
     }
     // 8.3: the short name of the workspace (Windows, when the volume makes them).
     if (WIN) {
@@ -353,8 +353,9 @@ test('revisión 3.8.2 (A1, M1, M2): UNC al propio PC, unidades nuevas, elevar y 
     setGuardedRoots([path.join(t.home, 'personal'), android]);
     const db = path.join(core, 'datos', 'orb.db');
     const drive = db.slice(0, 1); const rest = db.slice(2);
-    // A1: the same file through a share of this PC, in every mode (reading too).
-    const uncs = [`\\\\localhost\\${drive}$${rest}`, `\\\\${os.hostname()}\\${drive}$${rest}`, `\\\\127.0.0.1\\${drive}$${rest}`, `\\\\?\\UNC\\localhost\\${drive}$${rest}`, `//localhost/${drive}$${rest.replace(/\\/g, '/')}`, `\\\\?\\${db}`, `\\\\.\\${db}`];
+    // A1: the same file through a share of this PC, in every mode (reading too). Drive shares (C$) and \\?\C:\ names
+    // exist only on Windows: elsewhere the path has no drive letter to build them from.
+    const uncs = !WIN ? [] : [`\\\\localhost\\${drive}$${rest}`, `\\\\${os.hostname()}\\${drive}$${rest}`, `\\\\127.0.0.1\\${drive}$${rest}`, `\\\\?\\UNC\\localhost\\${drive}$${rest}`, `//localhost/${drive}$${rest.replace(/\\/g, '/')}`, `\\\\?\\${db}`, `\\\\.\\${db}`];
     for (const u of uncs) {
       assert.equal(String(localPath(u)).toLowerCase().replace(/\//g, '\\'), db.toLowerCase(), u);
       for (const permission of ['leer', 'editar', 'total']) {
