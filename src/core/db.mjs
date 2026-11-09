@@ -240,7 +240,8 @@ export function openDb(filename = ctx.paths?.db) {
   if (!filename) throw new Error(tr('sys.db.noHome'));
   if (filename !== ':memory:') fs.mkdirSync(path.dirname(filename), { recursive: true });
   const db = new DatabaseSync(filename);
-  db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 8000; PRAGMA foreign_keys = ON;');
+  // The wait first: switching to WAL needs the database, and another process (a migration) may hold it for a moment.
+  db.exec('PRAGMA busy_timeout = 8000; PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA);
   migrate(db);
   // 3.8: this home's database of 3.5–3.7 is archived and tidied once (after the older migrations above).
