@@ -547,6 +547,10 @@ html[data-skin="retro"] .tour-bubble { width: 25rem; }
 }
 html[data-motion="minima"] :is(.animate-in, .animate-out) { --tw-enter-translate-x: 0; --tw-enter-translate-y: 0; --tw-enter-scale: 1; --tw-exit-translate-x: 0; --tw-exit-translate-y: 0; --tw-exit-scale: 1; }
 
+/* 3.8.3: the message box grows with its text in CSS (no layout read per key; views/chat.jsx › Composer): two lines at
+   least (its rows), 260 px at most, then it scrolls. */
+@supports (field-sizing: content) { .composer-text { field-sizing: content; min-height: calc(2lh + 1rem); max-height: 260px; } }
+
 /* 3.6: the composer's contextual action slot (components/context-slot.jsx, DESIGN-SYSTEM §2.2): one suggestion at a
    time, in with a 150 ms fade and a 2 px rise, out with a fade; reduced motion keeps the fade only. */
 .context-slot { display: inline-flex; min-width: 0; }

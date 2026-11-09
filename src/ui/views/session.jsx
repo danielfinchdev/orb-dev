@@ -10,6 +10,7 @@ import { PageHeader } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { renameChat } from '@/views/orb/inbox.jsx';
+import { useDraft } from '@/lib/draft.js';
 import { Composer, useAutoScroll, BarClock, BarHeading, BarPause, MsgTime, CompactButton, COMPACT_AT } from './chat.jsx';
 import { BackToList } from '@/components/chat-bar.jsx';
 import { ContextSlot } from '@/components/context-slot.jsx';
@@ -359,7 +360,7 @@ export function SessionView({ route }) {
   const [items, setItems] = useState([]);
   const [more, setMore] = useState(false);
   const [queue, setQueue] = useState([]);
-  const [text, setText] = useState('');
+  const draft = useDraft();
   const [images, setImages] = useState([]);
   const PAGE = 200;
   // 3.8.2 (T3 3.2): the user's terminal under the chat (this PC only), and a command pasted into it from the chat.
@@ -372,7 +373,7 @@ export function SessionView({ route }) {
     const take = () => {
       const got = takePoints(route.id); if (!got.length) return;
       setImages((prev) => [...new Set([...prev, ...got.map((p) => p.path)])].slice(0, 10));
-      setText((prev) => [prev.trim(), ...got.map((p) => p.text)].filter(Boolean).join('\n'));
+      draft.set((prev) => [prev.trim(), ...got.map((p) => p.text)].filter(Boolean).join('\n'));
       toast.success(t('session.pointAdded'));
     };
     take();
@@ -438,16 +439,16 @@ export function SessionView({ route }) {
   // While the agent works, Enter corrects it on the fly (it reads the message at its next step) and Ctrl+Enter queues
   // the message for after the turn. Agents that cannot be corrected on the fly always queue.
   const send = async ({ alt = false } = {}) => {
-    const msg = text.trim(); if (!msg && !images.length) return;
+    const msg = draft.get().trim(); if (!msg && !images.length) return;
     const mode = running ? (alt ? 'queue' : 'auto') : 'auto';
     const said = msg || t('session.lookAtFiles'); const sentImages = images;
     // 3.8.3: the box empties at once and, when the agent is free (the message starts a turn), the message shows at once;
     // while it works the message may go to the queue instead, which shows it when the engine says so.
-    setText(''); setImages([]);
+    draft.set(''); setImages([]);
     const mine = running ? null : addPending(`session:${s.id}`, said, items.at(-1)?.id ?? 0);
     const r = await act(call('sessions.send', { id: s.id, text: said, images: sentImages, mode }));
     if (r === undefined || r?.queued) { if (mine) dropPending(mine); }
-    if (r === undefined) { setText((now) => (now.trim() ? now : msg)); setImages((now) => (now.length ? now : sentImages)); return; }
+    if (r === undefined) { draft.set((now) => (now.trim() ? now : msg)); setImages((now) => (now.length ? now : sentImages)); return; }
     if (r?.steered) toast.success(t('session.steerSent'));
     else if (r?.queued) toast.success(s.kind === 'task' && !running ? t('session.resentTask') : t('session.queuedToast'));
   };
@@ -538,7 +539,7 @@ export function SessionView({ route }) {
       {/* 3.8.2 (T3 3.4): a secret the agent asked for, typed only here (never in the chat). */}
       <SecretCards sessionId={s.id} />
       {terminal && fullPc() ? <TerminalPanel dir={s.cwd} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
-      <Composer value={text} onChange={setText} onSend={send} canSend={Boolean(text.trim() || images.length)} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
+      <Composer draft={draft} onSend={send} attached={images.length > 0} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
         placeholder={running ? (AGENT_CAN_STEER[s.agent] ? t('session.phSteer', { agent: AGENT[s.agent] }) : t('session.phWait', { agent: AGENT[s.agent] })) : s.kind === 'task' ? t('session.phTask') : t('session.ph', { agent: AGENT[s.agent] })}
         onPaste={(e) => { fromTransfer(e.clipboardData).then((f) => { if (f.length) addImages(f); }); }}
         onDrop={(e) => { fromTransfer(e.dataTransfer).then(addImages); }}

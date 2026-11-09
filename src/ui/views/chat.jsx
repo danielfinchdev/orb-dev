@@ -5,6 +5,7 @@
 // 3.2: each conversation is its own (route.id), several at once.
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { routeKey, takeDraft } from '@/lib/reload.js';
+import { useDraft, useDraftValue } from '@/lib/draft.js';
 import { micMode } from '@/lib/mic.js';
 import { ArrowUp, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool, History, FlaskConical, Folder, Mic, Shrink, ListChecks, Ellipsis, Info, BellOff, MessageSquare } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
@@ -101,15 +102,21 @@ function webDictate(lang) {
     r.start();
   });
 }
-export function Composer({ value, onChange, onSend, onStop, busy, placeholder, top, bottom, notice, disabled, onPaste, onDrop, testid, canSend, mentions = true }) {
+// 3.8.3: the text lives in a draft (lib/draft.js) that only this box follows: a key redraws the box, not the view around
+// it. attached: something besides text can be sent (pictures). The box grows with its text in CSS (field-sizing), with
+// no layout read per key; where the browser lacks it, measured once per change.
+const FIELD_SIZING = typeof CSS !== 'undefined' && CSS.supports?.('field-sizing', 'content');
+export function Composer({ draft, onSend, onStop, busy, placeholder, top, bottom, notice, disabled, onPaste, onDrop, testid, attached = false, mentions = true }) {
   const t = useT();
   const ta = useRef(null);
-  useEffect(() => { const el = ta.current; if (!el) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 260)}px`; }, [value]);
+  const value = useDraftValue(draft);
+  const onChange = draft.set;
+  useEffect(() => { const el = ta.current; if (!el || FIELD_SIZING) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 260)}px`; }, [value]);
   const [dropping, setDropping] = useState(false);
   const m = useMentions(value, onChange, ta);
   // 3.8.2: what this box had when F5 reloaded the window comes back on the same screen (lib/reload.js).
   const here = useStore((s) => routeKey(s.route));
-  useEffect(() => { if (!testid) return; const draft = takeDraft(testid, getState().route); if (draft && !value.trim()) onChange(draft); }, [testid, here]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!testid) return; const saved = takeDraft(testid, getState().route); if (saved && !draft.get().trim()) draft.set(saved); }, [testid, here]); // eslint-disable-line react-hooks/exhaustive-deps
   // 3.8.2 (D3): Windows' voice typing in Orb for Windows, nothing on a phone (its keyboard dictates), the browser's speech
   // recognition in a computer's browser (lib/mic.js).
   const mic = micMode({ desktop: Boolean(bridge.desktop), windowsDictation: Boolean(bridge.dictateWindows), androidApp: window.__orbHost?.app === true, mobile: Boolean(bridge.mobile),
@@ -145,12 +152,12 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
         <textarea ref={ta} data-testid={testid} value={value} disabled={disabled} rows={2} placeholder={placeholder} onPaste={onPaste}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => { if (mentions && m.onKey(e)) return; if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); onSend({ alt: e.ctrlKey || e.metaKey }); } }}
-          className="placeholder:text-muted-foreground block w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[14.5px] leading-relaxed outline-none" />
+          className="composer-text placeholder:text-muted-foreground block w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[14.5px] leading-relaxed outline-none" />
         <div className="flex items-center gap-2 px-3 pb-3">
           <div className="flex min-w-0 flex-1 items-center gap-1.5" data-testid="composer-bottom">{bottom}</div>
           {mic ? <Tip label={t('chat.dictate')}><Button size="icon-sm" variant="ghost" className="rounded-full" onClick={dictate} disabled={disabled || hearing} aria-label={t('chat.dictate')} data-testid="dictate"><Mic className={hearing ? 'text-primary animate-pulse' : undefined} /></Button></Tip> : null}
           {busy && onStop ? <Tip label={t('chat.stop')}><Button size="icon-sm" variant="secondary" onClick={onStop} aria-label={t('chat.stop')}><Square className="size-3.5 fill-current" /></Button></Tip> : null}
-          <Button size="icon-sm" className="rounded-full" onClick={() => onSend({ alt: false })} disabled={disabled || !(canSend ?? value.trim())} aria-label={t('chat.send')} data-testid="send"><ArrowUp /></Button>
+          <Button size="icon-sm" className="rounded-full" onClick={() => onSend({ alt: false })} disabled={disabled || !(value.trim() || attached)} aria-label={t('chat.send')} data-testid="send"><ArrowUp /></Button>
         </div>
       </div>
     </div>
@@ -504,11 +511,11 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const id = route?.id ?? null;
   const conv = useStore((s) => (id == null ? null : s.conversations.find((c) => c.id === id) ?? null));
   const [rows, setRows] = useState([]);
-  const [text, setText] = useState('');
+  const box = useDraft();
   // 3.5, the Android app: what was shared from another app («Compartir con Orb») is waiting in the text box to be sent.
   useEffect(() => {
     if (!bridge.takeShared) return undefined;
-    const take = () => { const got = bridge.takeShared(); if (got) setText((prev) => (prev.trim() ? `${prev.trimEnd()}\n${got}` : got)); };
+    const take = () => { const got = bridge.takeShared(); if (got) box.set((prev) => (prev.trim() ? `${prev.trimEnd()}\n${got}` : got)); };
     take();
     window.addEventListener('orb:shared', take);
     return () => window.removeEventListener('orb:shared', take);
@@ -532,7 +539,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   // A long conversation shows its last 160 lines; the earlier ones, on request.
   const [older, setOlder] = useState([]);
   const [more, setMore] = useState(false);
-  const askChanges = useCallback((ids) => setText(t('chat.changesFor', { ids: ids.map((x) => `#${x}`).join(', ') })), [t]);
+  const askChanges = useCallback((ids) => box.set(t('chat.changesFor', { ids: ids.map((x) => `#${x}`).join(', ') })), [t, box]);
   const [loading, setLoading] = useState(false);
   const loadOlder = async () => {
     const first = (older[0] ?? rows[0])?.id; if (loading || !first) return; setLoading(true);
@@ -577,13 +584,13 @@ export function ChatView({ route, onConversation, project: inProject }) {
   // the message is (one click away).
   const leftBehind = (target, title) => notify({ title: t('chat.startedIn', { title }), body: t('chat.startedInBody'), tone: 'info', go: target, action: { label: t('notice.open'), onClick: () => go(target) } });
   const send = async () => {
-    const msg = text.trim(); if (!msg || sending) return;
-    setText('');
+    const msg = box.get().trim(); if (!msg || sending) return;
+    box.set('');
     dismissTest();
     const mine = addPending(id == null ? 'new' : `chat:${id}`, msg, lastId);
     if (id != null) {
       // The send failed: the message goes back to the box (unless something else was written there meanwhile).
-      if ((await act(call('chat.send', { text: msg, conversation: id }))) === undefined) { dropPending(mine); setText((now) => (now.trim() ? now : msg)); }
+      if ((await act(call('chat.send', { text: msg, conversation: id }))) === undefined) { dropPending(mine); box.set((now) => (now.trim() ? now : msg)); }
       else call('chat.list', { conversation: id }).then((r) => { if (getState().route?.id === id) setRows((prev) => keepSame(prev, r)); }).catch(() => {});
       return;
     }
@@ -595,7 +602,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
         // 3.2: the first message makes the conversation (in the working folder): then the screen is that conversation.
         const chosen = local && draft ? Object.fromEntries(['agent', 'model', 'reasoning'].filter((k) => draft[k] !== undefined).map((k) => [k, draft[k]])) : {};
         const r = await act(call('chat.send', { text: msg, ...(inProject ? { project: inProject } : {}), ...(Object.keys(chosen).length ? { brain: chosen } : {}) }));
-        if (!r) { dropPending(mine); if (!moved()) setText(msg); return; }
+        if (!r) { dropPending(mine); if (!moved()) box.set(msg); return; }
         movePending(mine, `chat:${r.conversation}`);
         await refresh().catch(() => {});
         if (moved()) { leftBehind({ view: 'chat', id: r.conversation }, getState().conversations.find((c) => c.id === r.conversation)?.title ?? msg.slice(0, 60)); return; }
@@ -605,7 +612,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
         // (3.2.1: in God mode, in the project chosen there).
         const project = inProject ?? app.activeProject?.name ?? null;
         const s = await act(call('sessions.create', { agent: brain.agent, account: brain.account && brain.account !== brain.agent ? brain.account : undefined, model: brain.model || undefined, reasoning: brain.reasoning, project, permission: project ? 'editar' : 'leer' }));
-        if (!s) { dropPending(mine); if (!moved()) setText(msg); return; }
+        if (!s) { dropPending(mine); if (!moved()) box.set(msg); return; }
         movePending(mine, `session:${s.id}`);
         if ((await act(call('sessions.send', { id: s.id, text: msg }))) === undefined) dropPending(mine);
         await refresh().catch(() => {});
@@ -708,7 +715,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
                 <h2 className="hero-title mt-2 text-2xl" data-testid="chat-greeting">{userName ? t(greeting.key, { ...greeting, user: userName, name }) : t('chat.hello', { name })}</h2>
                 <p className="text-muted-foreground max-w-md">{t(greeting.sub)}</p>
               </div>
-              <div className="mt-3 flex max-w-xl flex-wrap justify-center gap-2">{suggestionsFor(workProject?.name).map((s) => <Button key={s} variant="outline" size="sm" className="h-auto max-w-full shrink rounded-full py-1.5 whitespace-normal" onClick={() => setText(t(s))}>{t(s)}</Button>)}</div>
+              <div className="mt-3 flex max-w-xl flex-wrap justify-center gap-2">{suggestionsFor(workProject?.name).map((s) => <Button key={s} variant="outline" size="sm" className="h-auto max-w-full shrink rounded-full py-1.5 whitespace-normal" onClick={() => box.set(t(s))}>{t(s)}</Button>)}</div>
             </div>
           ) : lines.map((m) => <Message key={m.id} m={m} name={name} onChanges={askChanges} />)}
           {unsaved.map((p) => <Message key={p.id} m={{ id: p.id, role: 'usuario', body: p.text, at: p.at }} name={name} onChanges={askChanges} />)}
@@ -716,7 +723,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
           {chat.busy || chat.waiting || sending ? <LiveAnswer id={id} name={name} /> : null}
         </div>
       </div>
-      <Composer value={text} onChange={setText} onSend={send} onStop={id != null ? () => act(call('chat.stop', { conversation: id })) : undefined} busy={chat.busy} disabled={sending} testid="chat-input"
+      <Composer draft={box} onSend={send} onStop={id != null ? () => act(call('chat.stop', { conversation: id })) : undefined} busy={chat.busy} disabled={sending} testid="chat-input"
         placeholder={chat.busy ? t('chat.placeholderBusy', { name }) : orchestrate ? t('chat.placeholder', { name }) : t('chat.placeholderDirect', { agent: AGENT[brain.agent] ?? brain.agent })}
         top={<>
           {/* 3.2.1: in God mode a new conversation takes the project chosen at the top of God mode. */}

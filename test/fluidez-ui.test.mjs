@@ -93,3 +93,36 @@ test('el chat pinta el mensaje propio al instante y la respuesta final en el mis
   assert.match(chat, /answer && answer\.id > lastId \? \[\.\.\.saved, answer\]/, 'la ventana la pinta sin esperar a leer la conversación');
   assert.match(chat, /<StreamingMarkdown>/); assert.match(session, /<StreamingMarkdown>/);
 });
+
+// 3.8.3 (fix C): typing redraws the message box alone; the view around it reads the text only when it sends.
+test('el texto del cuadro vive en su borrador: la vista no se redibuja con cada tecla', async () => {
+  const { createDraft } = await import('../src/ui/lib/draft.js');
+  const d = createDraft();
+  const seen = []; const off = d.subscribe(() => seen.push(d.get()));
+  d.set('h'); d.set('ho'); d.set((v) => `${v}la`); d.set('hola');
+  assert.deepEqual(seen, ['h', 'ho', 'hola'], 'one notice per change, none for the same text');
+  off(); d.set(''); assert.equal(seen.length, 3);
+  assert.equal(d.get(), '');
+  const chat = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'views', 'chat.jsx'), 'utf8');
+  const session = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'views', 'session.jsx'), 'utf8');
+  for (const [name, src] of [['chat', chat], ['session', session]]) {
+    assert.doesNotMatch(src, /\[text, setText\] = useState/, `${name}: no text state in the view`);
+    assert.match(src, /<Composer draft=\{/, `${name}: the box gets its draft`);
+  }
+  assert.match(chat, /const value = useDraftValue\(draft\)/, 'only the Composer follows the text');
+});
+
+// 3.8.3 (fix C): the moving backdrop and the robot's blinking run on the compositor (transform / opacity only).
+test('las nubes y los ojos del robot se mueven sin repintar: sin filtro por fotograma ni SVG animado', () => {
+  const themes = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'themes.css'), 'utf8');
+  const app = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'app.css'), 'utf8');
+  const orb = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'components', 'orb.jsx'), 'utf8');
+  const baked = themes.match(/^\.orb-cloud\.baked \{([^}]*)\}/m)?.[1] ?? '';
+  assert.match(baked, /filter: none/); assert.match(baked, /var\(--orb-cloud-art\)/);
+  assert.match(themes, /^html\.dark \.orb-cloud\.baked \{ background: var\(--orb-cloud-art-dark\) 0 0 \/ 100% 100% no-repeat; \}/m, 'dark: the whole background, not just the image');
+  assert.match(themes, /@keyframes cloud-drift \{ from \{ transform: [^}]*\} to \{ transform: [^}]*\} \}/);
+  assert.match(orb, /<span className=\{cn\('orb-eye', i === 1 && 'orb-eye-r'\)\}>/, 'each eye is an HTML box');
+  assert.doesNotMatch(orb, /<g className=\{cn\('orb-eye'/);
+  assert.match(app, /\.orb:not\(\.still\) \.orb-eye \{ will-change: transform; \}/);
+  assert.match(app, /@keyframes orb-talk \{ from \{ transform: scaleY\(1\); \} to \{ transform: scaleY\(\.7\); \} \}/, 'talking stays the same');
+});
