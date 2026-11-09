@@ -595,7 +595,7 @@ as a **bounded excerpt**, not in full, and marked as "data, not instructions".
     300 characters of its text) and photographs just that part of the view. Both go to that conversation's message box
     on this PC (`browser:pointed`, window only); nothing is sent until the user sends it.
   - 3.8.2: **«Grabar»**: the screencast keeps running while recording (also with the mini window hidden) and, on stop
-    (or after 3 minutes / 120 MB, or when the page closes), the frames become a 5 fps Motion-JPEG AVI
+    (or after 3 minutes / 120 MB, when the page closes or when Orb locks), the frames become a 5 fps Motion-JPEG AVI
     (`browser-record.mjs`, no encoder) saved among that chat's attachments. No new DevTools method:
     `browser_rules.rs` is unchanged.
 - Files:
@@ -935,7 +935,7 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
 - **Mode** light, dark or system; interface **size** with Ctrl +, Ctrl - and Ctrl 0; **Ctrl J** opens a terminal in the
   folder.
 - **Integrated terminal** (3.8.2, `src/engine/user-terminal.mjs`, `components/terminal-panel.jsx`): a chat's ⋯ menu ›
-  «Terminal» docks the user's own terminal under it, in the chat's folder, with one tab per terminal (at most 4). It is
+  «Mostrar terminal» docks the user's own terminal under it, in the chat's folder, with one tab per terminal (at most 4). It is
   the user's, not an agent's (no guard), so it is this PC's window only (`terminal.*` are `pc` methods; `terminal:data`
   is never sent to a phone) and never starts in core, Orb's data, the install folder or a protected folder. It runs
   System32's Windows PowerShell (`/bin/sh` or `$SHELL` elsewhere) with pipes, not a pseudo-console, so no native module
@@ -1005,6 +1005,45 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   idle animations: main thread, renderer and GPU CPU and, with `--profile`, frames per second and GPU ms per frame,
   plus the robot floating under the pointer with its dropped frames; `--quiet-scene` pauses the theme's backdrop; `--css <file>` adds a style sheet to try a variant on the same build; `--ui <json>` saves an interface setting first, e.g. another theme) and `scripts/medir-motor.mjs`
   (the engine alone: start, memory, call latency and the bytes of a refresh, whole and as feeds, also as a phone gets it).
+
+### What 3.8.2 adds to the chat and the lists
+
+Every piece below adds to what Orb had; where it overlaps, Orb's own flow stays as it was and the new one uses its
+menus, texts, permissions and themes.
+
+- **Chat bar** (`views/chat.jsx`, `views/session.jsx`): only the bell and pause stay on the bar; the rest lives in its
+  ⋯ menu (in a direct conversation: folder, terminal, details, fork, «Continuar con otro agente», archive, mini-games
+  and delete).
+  The list's ⋯ (`views/orb/inbox.jsx › useOrbActions`) gains «Renombrar» (the same `renameChat` the title uses) and
+  «Posponer»: `inbox.snooze` hides a chat (and its unread count) until a time; the scheduler's tick brings it back with
+  a notice (`scheduler.mjs › wakeSnoozed`); pinning and muting are unchanged.
+- **Attach any file** (`src/engine/attachments.mjs`, `src/core/attach-kind.mjs`): up to 10 files of 100 MB per message,
+  copied into `<chat folder>\.orb-adjuntos\<stamp>\` (never into core). Pictures go natively to Claude and Codex;
+  videos become frames (ffmpeg: Orb's pinned copy, the PATH's, or a pinned download the first time); documents and
+  PDFs, their extracted text; the rest, its path. On the PC an attached picture opens in the image viewer and a PDF in
+  `components/file-viewer.jsx` (pdf.js, `attachments.read`, PC only). «Capturar ventana» attaches one frame of a window
+  the user picks (`lib/window-capture.js`, `getDisplayMedia`; nothing reaches the agents' tools).
+- **Dictation** (`lib/mic.js`): the microphone between the usage ring and «Enviar» focuses the box and opens Windows
+  voice typing (Win+H sent by Rust). Hidden on phones; a linked PC browser keeps the browser's own dictation.
+- **Usage**: «Recargar el uso» in the ring's panel (`usage.refresh`, at most every 20 s in the window and the engine)
+  and the «Uso» page (`views/usage.jsx`, `usage.history`: cost and tokens by day, agent and model, and each plan window
+  with an even-pace mark). Shared pieces: `components/usage-bits.jsx`.
+- **Messages**: `$$…$$` formulas (KaTeX) and ```mermaid diagrams (`components/rich-blocks.jsx`, loaded on demand, no
+  eval: the CSP is unchanged); Claude and Codex subagents as folding rows (`lib/session-blocks.js`); `/clear` and
+  `/compact` typed alone (`src/core/slash.mjs`); the cost line can be hidden (Ajustes › Apariencia) and the time shows
+  on hover.
+- **Tasks**: «Cambios» lists the files a finished task changed with their diff (`tasks.diff`, read only, between the
+  task's undo checkpoints; `components/task-changes.jsx` and the expert mode share `components/diff-view.jsx`).
+  Schedules can run once or always in the same chat (`src/core/schedules.mjs`).
+- **Search**: the sidebar search also finds tasks by content (`tasks.search`); Ctrl+K on the PC
+  (`components/command-palette.jsx`, `lib/palette.js`) uses the same search (`lib/search.js`) plus Orb's places, and
+  opens only when nothing else took the key (project actions, the whiteboard, a dialog).
+- **«Cristal» theme** (`themes.css`, `src/core/appearance.mjs › SKIN_BASE`): Profesional plus a glass material
+  (`data-material="cristal"`); every Profesional rule applies, with blur only on the sidebar, chat bar, message box and
+  menus/dialogs, and `prefers-reduced-transparency` makes it opaque.
+- **Music** (Windows only; `src/engine/music.mjs`, `lib/music.js`): ♪ in the sidebar's foot and one track per
+  mini-game, off by default; CC0 tracks pinned by size and SHA-256 and downloaded the first time to
+  `core\herramientas\musica`; it stops when Orb locks or the window hides.
 
 ### Tutorials and guided tour
 
@@ -1078,7 +1117,9 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   variable (`--env NAME`) or on its stdin (`--stdin`), replacing it with «[secreto]» in that command's output. «Guardar
   en la bóveda» stores it in the vault as `agent/<NAME>`, and «Usar la guardada» reads it back; both need the master
   password (`needsUnlock`). Locking Orb or changing the password cancels every pending request and revokes every handle
-  not yet traded.
+  not yet traded. The card always says that Orb never asks for the master password there, and
+  the engine refuses a value that is the master password: the vault checks it with its `same` job (`Master.isPassword`),
+  which counts no try and keeps nothing, and only while the data key is open.
 - **The user's connectors:** an agent gets `src/mcp/launch.mjs` and a ticket instead of the connector; the
   launcher gets the real command, arguments and keys from the engine and starts it (and stops its whole tree when the
   ticket is taken back). On Windows (`src/mcp/win-spawn.mjs`) an npm shim (`npx.cmd`, a global package's cmd-shim) runs
