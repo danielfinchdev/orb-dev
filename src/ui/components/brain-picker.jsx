@@ -92,7 +92,7 @@ function BrainGroups({ catalog, value, onChange }) {
         {/* 2.7: each model says what it is for (fast, balanced, most capable), so no one has to know the names. */}
         <span className={cn('grid min-w-0 flex-1', !withAgent && 'pl-5')}>
           <span className="truncate">{withAgent ? `${a.label} · ` : ''}{labelOf(a, m, t)}</span>
-          {m.limitedUntil ? <span className="text-warning truncate text-[11px] leading-tight">{t('brain.noUsage', { when: untilShort(m.limitedUntil, locale) })}</span>
+          {m.limitedUntil ? <span className="text-warning-ink truncate text-[11px] leading-tight">{t('brain.noUsage', { when: untilShort(m.limitedUntil, locale) })}</span>
             : m.tier ? <span className="text-muted-foreground truncate text-[11px] leading-tight">{t(`brain.tier.${m.tier}`)}</span> : null}
         </span>
         {m.heavy ? <Flame className="text-warning! size-3.5" aria-label={t('brain.heavy')} /> : null}

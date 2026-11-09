@@ -381,6 +381,11 @@ html[data-skin="retro"] .side-foot-toggle { border-width: 2px; border-color: var
 html[data-skin="retro"] .side-foot-version { font-family: var(--font-title); font-size: 10px; }
 html[data-skin="nube"] .side-foot-icon { border-radius: 999px; }
 /* 3.2: the bell and its list (notification-center.jsx), dressed as the help bubbles. */
+/* 3.8.2: warning text that reads on the page in every theme. Orb's light --warning is a pale amber meant as a fill (its
+   text is --warning-foreground, dark); the other themes' light --warning is a dark amber meant as text (their
+   --warning-foreground is white, so «text-warning-foreground» was white on white there). At night every --warning reads. */
+.text-warning-ink { color: var(--warning); }
+html[data-skin="orb"]:not(.dark) .text-warning-ink { color: var(--warning-foreground); }
 .notice-dot { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border-radius: 999px; background: var(--primary); box-shadow: 0 0 0 2px var(--background); }
 .notice-center { width: min(22rem, calc(100vw - 24px)); padding: 10px 10px 8px; }
 .notice-row { display: flex; gap: 10px; width: 100%; padding: 7px 8px; border-radius: 10px; text-align: left; color: var(--tip-title); }

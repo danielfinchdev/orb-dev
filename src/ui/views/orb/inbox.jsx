@@ -235,9 +235,9 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet }) {
           </span>
           <span className="mt-0.5 flex items-center gap-1.5">
             {p.badge
-              ? <span className="bg-warning/18 text-warning-foreground dark:text-warning min-w-0 truncate rounded-md px-1.5 py-px text-[12px] font-medium" data-testid="orb-progress" data-tone={p.tone}>{p.text}</span>
+              ? <span className="bg-warning/18 text-warning-ink min-w-0 truncate rounded-md px-1.5 py-px text-[12px] font-medium" data-testid="orb-progress" data-tone={p.tone}>{p.text}</span>
               : (
-                <span className={cn('flex min-w-0 flex-1 items-center gap-1.5 truncate text-[13px]', p.tone === 'live' ? 'text-primary' : p.tone === 'error' ? 'text-destructive' : p.tone === 'warn' ? 'text-warning-foreground dark:text-warning' : 'text-muted-foreground')} data-testid="orb-progress" data-tone={p.tone}>
+                <span className={cn('flex min-w-0 flex-1 items-center gap-1.5 truncate text-[13px]', p.tone === 'live' ? 'text-primary' : p.tone === 'error' ? 'text-destructive' : p.tone === 'warn' ? 'text-warning-ink' : 'text-muted-foreground')} data-testid="orb-progress" data-tone={p.tone}>
                   {p.tone === 'live' ? <span className="bg-primary size-1.5 shrink-0 animate-pulse rounded-full" aria-hidden="true" /> : null}
                   <span className="min-w-0 truncate">{p.prefix ? <span className="text-foreground/70">{p.prefix}</span> : null}{p.text}</span>
                 </span>

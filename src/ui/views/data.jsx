@@ -142,7 +142,7 @@ function LegacyCard() {
       <CardContent className="grid gap-1.5">
         {local > 0 && <p className="text-muted-foreground text-xs">{t('datos.legacyDesc', { size: size(st.bytes) })}</p>}
         {st.oldBackups > 0 && <p className="text-muted-foreground text-xs" data-testid="legacy-backups">{t('datos.legacyBackups', { n: st.oldBackups })}</p>}
-        <p className="text-warning-foreground dark:text-warning text-xs" data-testid="legacy-keys">{t('datos.legacyKeys')}</p>
+        <p className="text-warning-ink text-xs" data-testid="legacy-keys">{t('datos.legacyKeys')}</p>
       </CardContent>
       {local > 0 && <CardFooter><Button size="sm" variant="destructive" onClick={remove} disabled={busy} data-testid="legacy-delete">{busy ? <LoaderCircle className="animate-spin" /> : <Trash2 />}{t('datos.legacyDelete')}</Button></CardFooter>}
     </Card>
