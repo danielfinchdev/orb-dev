@@ -9,7 +9,14 @@ import fs from 'node:fs';
 import readline from 'node:readline';
 
 const log = (m) => { if (process.env.FAKE_LOG) fs.appendFileSync(process.env.FAKE_LOG, `${JSON.stringify(m)}\n`); };
-const write = (m) => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...m })}\n`);
+// FAKE_ONE_CHUNK: everything written in one go (the answer to turn/start and the whole turn), as a busy pipe delivers it.
+let pending = null;
+const write = (m) => {
+  const line = `${JSON.stringify({ jsonrpc: '2.0', ...m })}\n`;
+  if (process.env.FAKE_ONE_CHUNK !== '1') return void process.stdout.write(line);
+  if (pending == null) { pending = ''; setImmediate(() => { const out = pending; pending = null; process.stdout.write(out); }); }
+  pending += line;
+};
 const notify = (method, params) => write({ method, params });
 log({ argv: process.argv.slice(2), codexHome: process.env.CODEX_HOME ?? null });
 let threadId = null; let n = 0; const waiting = new Map(); let wake = null;

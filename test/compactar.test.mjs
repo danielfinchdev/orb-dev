@@ -128,6 +128,17 @@ test('Codex: el fin del turno de la compactación, aunque llegue tarde, no termi
   assert.equal((await live.send({ text: 'sigue' })).final, 'Codex: sigue');
 });
 
+// 3.8.3: the Ubuntu CI hang. A turn whose end was read together with the answer to turn/start left a stale turn id, and
+// the next turn's end was taken for another turn's: that turn never ended.
+test('Codex: un turno que termina en el mismo trozo que su respuesta no deja colgado el siguiente', async () => {
+  const { live } = openCodex({ FAKE_ONE_CHUNK: '1' });
+  const within = (p, what) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error(`colgado: ${what}`)), 10000).unref())]);
+  assert.equal((await within(live.send({ text: 'hola' }), 'primer turno')).final, 'Codex: hola');
+  assert.equal((await within(live.send({ text: 'sigue' }), 'segundo turno')).final, 'Codex: sigue');
+  assert.deepEqual(await within(live.compact(), 'compactar'), { ok: true, error: null });
+  assert.equal((await within(live.send({ text: 'otra' }), 'tras compactar')).final, 'Codex: otra');
+});
+
 test('Codex sin thread/compact/start: falla con su mensaje y la sesión sigue viva', async () => {
   const { live } = openCodex({ FAKE_NO_COMPACT: '1' });
   await live.send({ text: 'hola' });
