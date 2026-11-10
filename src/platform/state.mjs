@@ -34,7 +34,7 @@ export const STATE_KEYS = Object.freeze({
     // a session's (a direct conversation with an agent or a task's run)
     'fork_pending:': 'session', 'fork_summary:': 'session', 'grant_prev:': 'session',
     // a conversation's with the assistant
-    'pending_questions:': 'conversation', 'report_queue:': 'conversation', 'inbox_since:': 'conversation',
+    'pending_questions:': 'conversation', 'report_queue:': 'conversation', 'inbox_since:': 'conversation', 'assistant_cwd:': 'conversation',
     // a project's
     'actions:': 'project', 'wb_seen:': 'project',
     // older versions' (deleted when the engine starts or by the 3.8 migration)

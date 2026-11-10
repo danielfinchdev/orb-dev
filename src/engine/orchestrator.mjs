@@ -3,6 +3,7 @@
 // Claude session stays open between messages (streamed answer, no restart per message) and is renewed when its context
 // fills up (the board and the logs keep the state). 3.2: one per conversation, several at once.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { ctx, tr } from '../platform/context.mjs';
@@ -19,6 +20,25 @@ import { briefing } from '../domain/journal/journal.mjs';
 import { rememberModels } from './usage/catalog.mjs';
 import { recordRate, pickAccount, recordSpend } from '../domain/usage/budget.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
+import { isOrbData } from '../domain/security/guard.mjs';
+
+// 3.8.3 (permissions proposal, row 14): the assistant's own folder is outside core. Claude Code lets a reading tool look
+// inside its working folder (and the extra folders) without asking Orb's guard, so with its folder in core\ejecuciones it
+// could read the run logs and, a step away, core\datos\orb.db. An empty folder of its own under the system's temporary
+// folder instead (one per workspace); everything else it reads goes through the guard.
+export const assistantDir = (home = ctx.home) => path.join(os.tmpdir(), 'orb-asistente', crypto.createHash('sha256').update(path.resolve(String(home ?? '')).toLowerCase()).digest('hex').slice(0, 12));
+// 3.8.3: the reading tools always go through Orb's guard (canUseTool): only Orb's own tools are pre-allowed.
+export const ASSISTANT_ALLOWED = ['mcp__orb'];
+// The extra folders the assistant may read without asking: never core, one inside it or one that holds it (nor another
+// closed folder: isOrbData).
+const realDir = (p) => { try { return fs.realpathSync.native(p); } catch { return path.resolve(p); } };
+const normDir = (p) => realDir(p).toLowerCase().replace(/[\\/]+$/, '');
+const insideOrHolds = (dir, internalDir) => {
+  if (!internalDir) return false;
+  const a = normDir(dir); const b = normDir(internalDir);
+  return a === b || b.startsWith(`${a}\\`) || a.startsWith(`${b}\\`);
+};
+export const safeAddDirs = (dirs, internalDir) => dirs.filter((d) => !insideOrHolds(d, internalDir) && !isOrbData(d, internalDir, null, { read: true }));
 
 // The models an agent takes for a task: the configured ones and the ones the agent itself listed (2.6, models:<agent>).
 // Each one with its name when the agent gave it (e.g. «opus = Opus 5.5 (claude-opus-5-5)»), so the brain picks the right id.
@@ -302,17 +322,21 @@ class Lane {
     const agent = c.agent || o.agent || 'claude';
     const acc = this.account(c);
     const isClaude = agent === 'claude';
-    const cwd = ctx.paths.runs;
+    const cwd = assistantDir();
     const visible = this.board.projects();
     const model = c.model || (isClaude ? 'claude-sonnet-5-5' : null);
     const key = [agent, cwd, model, c.reasoning, acc.id, ...visible.map((p) => p.path)].join('|');
     if (this.live && this.liveKey === key && !this.live.isClosed()) return;
     this.closeLive();
-    const dirs = [...Object.values(ctx.paths.categories), ...(ctx.config.projectRoots ?? []), ...visible.map((p) => p.path)].filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
+    const dirs = safeAddDirs([...Object.values(ctx.paths.categories), ...(ctx.config.projectRoots ?? []), ...visible.map((p) => p.path)].filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } }), ctx.paths.internal);
     fs.mkdirSync(cwd, { recursive: true });
     fs.mkdirSync(ctx.paths.runs, { recursive: true });
     const writeLog = runLog(this.orch.logFile, { prefix: `[${this.id}] ` });
     // Claude keeps the conversation id Orb gives it; the other agents report theirs (event 'session').
+    // 3.8.3: a conversation started in the old folder (core\ejecuciones) cannot be resumed from the new one (Claude keeps
+    // conversations by folder): it starts afresh with the briefing and its last lines, as after a long pause.
+    if (c.session_id && this.board.setting(`assistant_cwd:${this.id}`) !== cwd) { this.board.updateConversation(this.id, { session_id: null, turns: 0, context: null }); c.session_id = null; }
+    this.board.setting(`assistant_cwd:${this.id}`, cwd);
     const newId = c.session_id || !isClaude ? null : crypto.randomUUID();
     if (newId) this.board.updateConversation(this.id, { session_id: newId, turns: 0 });
     this.liveAgent = agent; this.liveAccount = acc.id;
@@ -322,11 +346,11 @@ class Lane {
     const a = adapter(agent);
     this.live = a.createLive({
       exe: executable(agent), cwd, model, reasoning: c.reasoning || 'medium',
-      permission: 'leer', resumeId: c.session_id || null, newSessionId: isClaude ? newId : null,
+      permission: 'leer', projectDir: null, resumeId: c.session_id || null, newSessionId: isClaude ? newId : null,
       mcpServers: mcpServersOf(a, agent, { orchestrator: true, browser: false, session: `asistente-${this.id}`, conversation: this.id }),
       env: { ...accountEnv(acc), ORB_AGENT: 'orb' },
       ...(isClaude ? { systemPrompt: persona(this.board) } : {}),
-      tools: isClaude ? { allowed: ['mcp__orb', 'Read', 'Glob', 'Grep'], disallowed: claude.COORDINATOR_DENIED } : undefined,
+      tools: isClaude ? { allowed: ASSISTANT_ALLOWED, disallowed: claude.COORDINATOR_DENIED } : undefined,
       addDirs: [...new Set(dirs)].filter((d) => d !== cwd).slice(0, 40), internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog,
       // 3.8.1 (review H1c B10): no skills of core here: the coordinator has Skill denied; the agents of its tasks get them.
       onEvent: (ev) => this.onEvent(ev)
