@@ -10,7 +10,7 @@ import { tempHome } from './helpers.mjs';
 import { ctx } from '../src/platform/context.mjs';
 import { Board, tagWords } from '../src/domain/tasks/board.mjs';
 import { Orchestrator, answerOf } from '../src/engine/orchestrator.mjs';
-import { buildApi } from '../src/engine/api.mjs';
+import { buildApi } from '../src/engine/api/index.mjs';
 import { DESKTOP } from '../src/domain/security/permissions.mjs';
 import { plainAction, looksEnglish, deleteTarget } from '../src/domain/security/guard.mjs';
 import { bumpNav, navTicket, stillHere } from '../src/ui/lib/nav.js';

@@ -1,6 +1,6 @@
 // 3.6 (messaging, step M3): the pure pieces of the chat list (no React, no store): the unread count, the short time of a
 // row, the rows themselves (conversations with Orbe and direct ones with an agent), their progress line and their
-// grouping. The data comes from inbox.list (src/engine/api-inbox.mjs). Tested in test/mensajeria-orb.test.mjs.
+// grouping. The data comes from inbox.list (src/engine/api/inbox.mjs). Tested in test/mensajeria-orb.test.mjs.
 import { timeZone } from './clock.js';
 
 // What is unread (muted chats do not count), for the badges.

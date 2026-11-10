@@ -8,11 +8,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { exclusiveOpen } from '../src/engine/approval-secret.mjs';
+import { exclusiveOpen } from '../src/engine/security/approval-secret.mjs';
 
 test('the engine lock: held while the process lives, never aged or deleted, free when it is killed', { skip: process.platform !== 'win32' }, async () => {
   const file = path.join(os.tmpdir(), `orb-motor-prueba-${process.pid}.lock`);
-  const mod = new URL('../src/engine/approval-secret.mjs', import.meta.url).href;
+  const mod = new URL('../src/engine/security/approval-secret.mjs', import.meta.url).href;
   const child = spawn(process.execPath, ['--input-type=module', '-e', `const { exclusiveOpen } = await import(${JSON.stringify(mod)}); const fd = exclusiveOpen(${JSON.stringify(file)}); console.log(fd > 0 ? 'held' : 'no'); setInterval(() => {}, 1000);`], { stdio: ['ignore', 'pipe', 'inherit'] });
   try {
     const first = await new Promise((resolve) => child.stdout.once('data', (d) => resolve(String(d).trim())));

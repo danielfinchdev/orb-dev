@@ -13,7 +13,7 @@ import { isOrbData } from '../src/domain/security/guard.mjs';
 import { DEFAULT_CONFIG, merge } from '../src/platform/config-file.mjs';
 import { METHODS } from '../src/domain/security/permissions.mjs';
 import { BACKGROUND, GAMES, TRACKS, trackOf, DEFAULT_VOLUME, musicAllowed, musicPrefs, gameMusicOn, nextTrack, gameTrack } from '../src/shared/music.mjs';
-import { trackBytes, musicDir, musicMethods } from '../src/engine/music.mjs';
+import { trackBytes, musicDir, musicMethods } from '../src/engine/host/music.mjs';
 
 const read = (...p) => fs.readFileSync(path.join(ROOT, 'src', 'ui', ...p), 'utf8');
 const sha = (buf) => crypto.createHash('sha256').update(buf).digest('hex');

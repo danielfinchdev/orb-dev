@@ -181,7 +181,7 @@ export class Master {
   openWithMachine() { return this.call('openMachine'); }
   sealForMachine() { return this.call('sealMachine'); }
 
-  // The first password (the welcome, or the first start of 3.8). Never a second time (src/engine/api-master.mjs).
+  // The first password (the welcome, or the first start of 3.8). Never a second time (src/engine/api/master.mjs).
   create(password) { return this.serial(async () => { const p = checkPassword(password); await this.job('create', { password: p }); return true; }); }
 
   // ---- the waits. channel: 'pc' (this PC's window), 'pair' (a phone linking), 'recovery' (the backups' recovery code).

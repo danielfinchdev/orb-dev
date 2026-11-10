@@ -1,5 +1,5 @@
 // 3.7 (WS5): the agents' browser speaks one pipe protocol. 3.8.1 (D2, D7): the suite runs against the engine's browser
-// with its DevTools driver (src/engine/host-browser.mjs, agent-browser.mjs, browser-cdp.mjs), with a stand-in for the
+// with its DevTools driver (src/engine/browser/host-browser.mjs, agent-browser.mjs, browser-cdp.mjs), with a stand-in for the
 // app's side (Rust's browser.rs) over pages of the local Edge, headless.
 // Secret fields never leave the page.
 import { test, before, after } from 'node:test';
@@ -10,7 +10,7 @@ import path from 'node:path';
 import http from 'node:http';
 import { browserKey } from '../src/engine/browser/browser-key.mjs';
 import { createActions, servePipe, KEYS, dialogsHook } from '../src/engine/browser/browser-protocol.mjs';
-import { createHostBrowser } from '../src/engine/host-browser.mjs';
+import { createHostBrowser } from '../src/engine/browser/host-browser.mjs';
 import { translate } from '../src/shared/i18n.mjs';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -123,7 +123,7 @@ async function suite(t, browser) {
   } finally { c.end(); }
 }
 
-// ---- 3.8.1 (D2, D7): the engine's browser as under Tauri (src/engine/host-browser.mjs). The app's side, which Rust does
+// ---- 3.8.1 (D2, D7): the engine's browser as under Tauri (src/engine/browser/host-browser.mjs). The app's side, which Rust does
 // with hidden WebView2 windows (src-tauri/src/browser.rs), is played here by pages of a headless Edge: the same host.*
 // calls and browserEvent messages, the DevTools events Rust listens to, and Orb's own events. Rust refuses a new window
 // before it exists; Edge cannot, so this stand-in closes it as soon as it appears and counts it: the test checks that the

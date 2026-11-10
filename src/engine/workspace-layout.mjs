@@ -14,7 +14,7 @@ import { loadConfig } from '../platform/config-file.mjs';
 import { ensureLayout } from '../domain/workspace/home.mjs';
 import { setGuardedRoots, setAppRoots } from '../domain/security/guard.mjs';
 import { rebindMoved } from '../domain/security/connector-secrets.mjs';
-import { rebindMovedOrWait } from './api-extensions.mjs';
+import { rebindMovedOrWait } from './api/extensions.mjs';
 import { backupRoot, backupDir } from '../domain/data/backup.mjs';
 
 export function layoutPlan() {
@@ -46,7 +46,7 @@ export async function layoutApply(choices, { emit = () => {}, log = () => {}, bo
 export const PRIVATE_DIR = 'personal';
 export const privateDir = (home) => path.join(home, PRIVATE_DIR);
 // Where adb keeps the keys it pairs phones with and the phones it knows: the user's .android folder and an
-// ANDROID_USER_HOME, whole (3.8.2 review M2). Orb's own adb uses one inside core\datos (src/engine/android.mjs).
+// ANDROID_USER_HOME, whole (3.8.2 review M2). Orb's own adb uses one inside core\datos (src/engine/host/android.mjs).
 export const adbHomes = () => [...new Set([path.join(os.homedir(), '.android'), process.env.ANDROID_USER_HOME].filter((d) => d && path.isAbsolute(d)))];
 let keys = null; // the folder of the app's copies of the sealed secrets, when the app gives it
 export function guardOutside({ mirror } = {}) {

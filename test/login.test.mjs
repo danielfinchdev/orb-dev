@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { tempHome, startEngine, until, fake } from './helpers.mjs';
 import { plainText, findUrl, findCode, failureOf, startLogin, waitLogin, sendCode, cancelLogin, loginInfo } from '../src/agents/login.mjs';
-import { agentInstallCommand, installAgent, agentInstallState } from '../src/engine/installer.mjs';
+import { agentInstallCommand, installAgent, agentInstallState } from '../src/engine/host/installer.mjs';
 
 const t = tempHome();
 process.on('exit', () => t.cleanup());

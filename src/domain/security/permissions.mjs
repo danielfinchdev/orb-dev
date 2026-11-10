@@ -1,6 +1,6 @@
 // Who may do what. One PC, one owner; three kinds of caller:
 //   desktop  this PC's Orb window, and the engine itself: every method.
-//   phone    a linked phone or browser (Magic Link, src/engine/remote.mjs): only the methods marked 'remote' in
+//   phone    a linked phone or browser (Magic Link, src/engine/transport/remote.mjs): only the methods marked 'remote' in
 //   browser  METHODS. Settings, accounts, backups, Magic Link, this PC's tools and anything that deletes outside a
 //            conversation stay on the PC.
 //   agent    an agent's tools (src/mcp/server.mjs): no API method at all; its tools act only on its own signed
@@ -19,16 +19,16 @@ const REMOTE = new Set(['phone', 'browser']);
 export const METHODS = Object.freeze({
   // the app and its settings
   'app.state': 'remote', 'app.migrationState': 'pc', 'app.migrationRetry': 'pc', 'app.coreState': 'pc', 'app.coreRepair': 'pc', 'app.layoutPlan': 'pc', 'app.layoutApply': 'pc', 'config.save': 'pc', 'sidebar.complete': 'remote', 'control.pause': 'remote', 'control.resume': 'remote',
-  // 3.8.1: this PC's tools, in the engine (src/engine/api-app.mjs)
+  // 3.8.1: this PC's tools, in the engine (src/engine/api/app.mjs)
   'app.openTerminal': 'pc', 'app.editors': 'pc', 'app.openIn': 'pc', 'app.runAction': 'pc', 'app.feedbackSend': 'pc', 'app.moreApps': 'pc',
-  // 3.8.2: the Windows app's music (src/engine/music.mjs)
+  // 3.8.2: the Windows app's music (src/engine/host/music.mjs)
   'music.track': 'pc',
   'system.check': 'pc', 'installer.check': 'pc', 'installer.progress': 'pc', 'installer.start': 'pc',
   'activity.list': 'remote', 'usage.get': 'remote', 'usage.now': 'remote', 'usage.refresh': 'remote', 'usage.history': 'remote', 'models.guide': 'remote', 'models.catalog': 'remote',
   'mentions.options': 'remote', 'approvals.list': 'remote',
   // this PC's tools
   'android.status': 'pc', 'android.install': 'pc',
-  // 3.8.2: pairing a phone for the agents (Ajustes › Android, src/engine/android.mjs)
+  // 3.8.2: pairing a phone for the agents (Ajustes › Android, src/engine/host/android.mjs)
   'android.pairStart': 'pc', 'android.pairState': 'pc', 'android.pairCancel': 'pc', 'android.pairCode': 'pc', 'android.devices': 'pc', 'android.disconnect': 'pc', 'android.forget': 'pc',
   // 3.8.2 (T3 3.17): an Android emulator already installed on this PC
   'android.emulators': 'pc', 'android.emulatorStart': 'pc', 'devtools.check': 'pc',
@@ -57,7 +57,7 @@ export const METHODS = Object.freeze({
   'sessions.list': 'remote', 'sessions.create': 'remote', 'sessions.items': 'remote', 'sessions.send': 'remote', 'sessions.queue': 'remote',
   'sessions.editQueued': 'remote', 'sessions.approve': 'remote', 'sessions.resume': 'remote', 'sessions.fork': 'remote', 'sessions.settle': 'remote',
   'sessions.stop': 'remote', 'sessions.compact': 'remote', 'sessions.update': 'remote', 'sessions.remove': 'pc',
-  // 3.8.2: «Acceso total al PC» and «Usar mi móvil Android» (src/engine/grants.mjs): given and taken back only here
+  // 3.8.2: «Acceso total al PC» and «Usar mi móvil Android» (src/engine/security/grants.mjs): given and taken back only here
   'sessions.grantTotal': 'pc', 'sessions.grantAndroid': 'pc', 'sessions.revokeGrant': 'pc',
   // scheduled tasks
   'schedules.list': 'remote', 'schedules.create': 'remote', 'schedules.update': 'remote', 'schedules.run': 'remote', 'schedules.remove': 'pc',
@@ -77,18 +77,18 @@ export const METHODS = Object.freeze({
   // 3.8: the master password and the connectors' keys
   'master.state': 'pc', 'master.create': 'pc', 'master.unlock': 'pc', 'master.lock': 'pc', 'master.check': 'pc', 'master.change': 'pc', 'master.forgot': 'pc', 'master.reset': 'pc',
   'secrets.connector': 'pc', 'secrets.saveConnector': 'pc',
-  // 3.8.2 (T3 3.4): a secret an agent asked for, typed only on this PC's card (src/engine/agent-secrets.mjs)
+  // 3.8.2 (T3 3.4): a secret an agent asked for, typed only on this PC's card (src/engine/security/agent-secrets.mjs)
   'secrets.pending': 'pc', 'secrets.answer': 'pc', 'secrets.decline': 'pc',
-  // 3.8.2 (T3 3.2): the user's terminal inside Orb (src/engine/user-terminal.mjs)
+  // 3.8.2 (T3 3.2): the user's terminal inside Orb (src/engine/host/user-terminal.mjs)
   'terminal.list': 'pc', 'terminal.open': 'pc', 'terminal.write': 'pc', 'terminal.close': 'pc',
-  // 3.8.1: Ajustes › Skills y MCP (src/engine/api-extensions.mjs): what agents run comes in and out of core only here
+  // 3.8.1: Ajustes › Skills y MCP (src/engine/api/extensions.mjs): what agents run comes in and out of core only here
   'extensions.list': 'pc', 'extensions.toggle': 'pc', 'extensions.import': 'pc', 'extensions.remove': 'pc', 'extensions.approve': 'pc',
   'extensions.reject': 'pc', 'extensions.edit': 'pc', 'extensions.adopt': 'pc', 'extensions.applyCheck': 'pc', 'extensions.apply': 'pc'
 });
 // What a linked phone or browser may call (the rest is this PC's).
 export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter((m) => METHODS[m] === 'remote')));
 
-// 3.8: what this PC's window may only do right after the master password (a token of 5 minutes, src/engine/api-master.mjs):
+// 3.8: what this PC's window may only do right after the master password (a token of 5 minutes, src/engine/api/master.mjs):
 // restoring a backup, checking one or making a new recovery code (the code opens the backups, and a check would try codes),
 // deleting the data of Orb 3.7, unlinking a phone, seeing or changing a connector's keys, opening core (the app asks
 // master.check) and, in config.save, choosing where the backups go, writing a connector's keys in clear, changing a

@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { newVapidKeys, checkSubscription, encryptPayload } from '../src/engine/webpush.mjs';
+import { newVapidKeys, checkSubscription, encryptPayload } from '../src/engine/transport/webpush.mjs';
 
 // What the phone's browser does with what it receives (RFC 8291, the receiving side).
 function decrypt(body, uaEcdh, auth) {

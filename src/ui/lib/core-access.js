@@ -2,7 +2,7 @@
 // dialog that asks for the password (components/master-dialogs.jsx) registers itself with setMasterAsker.
 //   unlockCore: every guarded action of the window (opening core, restoring a backup, choosing where backups go,
 //     deleting the data of Orb 3.7, a connector's keys, unlinking a phone) asks here first. → the unlock token the engine
-//     wants with that call (src/engine/api-master.mjs), or null when the user cancelled. One unlock lasts 5 minutes, or
+//     wants with that call (src/engine/api/master.mjs), or null when the user cancelled. One unlock lasts 5 minutes, or
 //     until the window locks or closes (the engine says 'master:locked').
 //   passwordStrength: the hint under a new password.
 //   coreView: what the screen «Falta la carpeta core» shows (views/core-missing.jsx), kept apart so it can be tested

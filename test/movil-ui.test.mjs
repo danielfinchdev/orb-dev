@@ -242,7 +242,7 @@ test('M4: el flujo de eventos del móvil detecta una conexión colgada y vuelve 
   assert.match(web, /setTimeout\(\(\) => \{ idle = true; ctrl\.abort\(\); \}, TIMEOUTS\.eventsIdle\)/);
   assert.match(web, /if \(idle\) seen\(false\);/);
   assert.match(web, /if \(ok && session && !live && !connecting\) connect\(\);/, 'al volver el PC, los eventos también');
-  assert.match(read('src/engine/remote.mjs'), /res\.write\(': ping\\n\\n'\)[^\n]*25_000/);
+  assert.match(read('src/engine/transport/remote.mjs'), /res\.write\(': ping\\n\\n'\)[^\n]*25_000/);
 });
 
 test('M5: los avisos del móvil se ofrecen al enlazar y dicen la verdad (en la app, solo con la app viva en segundo plano)', () => {

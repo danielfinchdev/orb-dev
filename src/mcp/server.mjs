@@ -488,7 +488,7 @@ if (PIPE && PIPE_TOKEN) tools.push(
   { name: 'orb_browser_close', description: 'Cierra el navegador del agente cuando ya no lo necesites.', inputSchema: { type: 'object', properties: {} }, run: () => browser('close') }
 );
 
-// 3.8.2 (D2): the owner's Android phone, paired in Ajustes › Android, through the engine (src/engine/android.mjs). The
+// 3.8.2 (D2): the owner's Android phone, paired in Ajustes › Android, through the engine (src/engine/host/android.mjs). The
 // engine checks on every call that this conversation holds «Usar mi móvil Android» (or «Acceso total al PC»); the
 // conversation is the one of this process's grant, never an argument.
 const android = (tool, args = {}) => AUTH.call('android', { tool, args });
@@ -512,7 +512,7 @@ if (!BOSS && SIGNED_SESSION) tools.push(
   androidTool('shell', `Ejecuta un comando de adb shell en el móvil. Solo con «Acceso total» y «Usar mi móvil Android» en este chat; si no, usa las otras herramientas orb_android_*.`, { command: { type: 'string' } }, ['command'])
 );
 
-// 3.8.2 (T3 3.4): a secret the user types on a private card of this PC (src/engine/agent-secrets.mjs). The agent gets a
+// 3.8.2 (T3 3.4): a secret the user types on a private card of this PC (src/engine/security/agent-secrets.mjs). The agent gets a
 // one-time handle for Orb's helper (secret-run.mjs), never the value.
 const SECRET_HELPER = path.join(path.dirname(fileURLToPath(import.meta.url)), 'secret-run.mjs');
 const secretText = (r) => (typeof r === 'string' ? r : `Clave ${r.name} lista: un solo uso, caduca en ${r.minutes} min. Úsala en un comando así (sin mostrarla):

@@ -545,7 +545,7 @@ export const sizes = () => [{ value: '0.87', label: t('settings.size.small') }, 
 function InterfaceCard({ c }) {
   const t = useT();
   const [zoom, setZoom] = useState(null);
-  // 3.7: on Linux, its usual terminals (src/engine/terminal.mjs LINUX_TERMINALS) instead of Windows' ones.
+  // 3.7: on Linux, its usual terminals (src/engine/host/terminal.mjs LINUX_TERMINALS) instead of Windows' ones.
   const linux = window.orb?.platform === 'linux';
   const terminals = linux ? { auto: t('settings.term.auto'), warp: 'Warp', 'x-terminal-emulator': t('settings.term.system'), 'gnome-terminal': 'GNOME Terminal', konsole: 'Konsole', 'xfce4-terminal': 'Xfce Terminal', kitty: 'kitty', alacritty: 'Alacritty', xterm: 'XTerm' }
     : window.orb?.platform && window.orb.platform !== 'win32' ? { auto: t('settings.term.auto'), warp: 'Warp' }
@@ -608,7 +608,7 @@ export function PhoneView() {
   );
 }
 
-// Contribute: a contribution through PayPal and feedback straight to the developer's inbox (src/engine/feedback.mjs).
+// Contribute: a contribution through PayPal and feedback straight to the developer's inbox (src/engine/host/feedback.mjs).
 function SupportCard() {
   const t = useT();
   return (

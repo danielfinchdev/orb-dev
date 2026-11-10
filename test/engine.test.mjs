@@ -30,7 +30,7 @@ test('2.7: lo que solo informa (carpeta de trabajo) pasa como notificación, no 
 });
 
 test('3.2: el plan Pro Lite de Codex se reconoce con su nombre', async () => {
-  const { codexPlan, PLAN_LABELS } = await import('../src/engine/plans.mjs');
+  const { codexPlan, PLAN_LABELS } = await import('../src/engine/usage/plans.mjs');
   assert.equal(codexPlan('prolite'), 'prolite');
   assert.equal(codexPlan('Pro Lite'), 'prolite');
   assert.equal(PLAN_LABELS.prolite, 'Pro Lite');
@@ -276,7 +276,7 @@ test('3.2: acciones del proyecto: se guardan con su atajo y su vista previa, y s
 });
 
 test('3.2: una acción se abre en una ventana de terminal en la carpeta del proyecto, sin pasar por cmd.exe', async () => {
-  const { actionPlan } = await import('../src/engine/editors.mjs');
+  const { actionPlan } = await import('../src/engine/host/editors.mjs');
   const found = { wt: 'C:\\wt.exe', powershell: 'C:\\ps.exe', cmd: 'C:\\cmd.exe' };
   const wt = actionPlan('npm test; npm run dev', 'D:\\Orb\\web\\a;b', found, 'auto', 'win32');
   assert.equal(wt.cmd, 'C:\\wt.exe');

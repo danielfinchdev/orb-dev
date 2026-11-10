@@ -1,4 +1,4 @@
-// 3.8: the master password (src/domain/security/master.mjs, src/engine/api-master.mjs) and Magic Link with it (src/engine/remote.mjs,
+// 3.8: the master password (src/domain/security/master.mjs, src/engine/api/master.mjs) and Magic Link with it (src/engine/transport/remote.mjs,
 // src/shared/mobile-crypto.mjs › linkDevice). The data key round trip, the waits after wrong passwords (and failing closed
 // when they cannot be counted), only THE data key opens (a planted or deleted maestra.json changes nothing), the
 // secrets of earlier versions moved out of the database and orb.json, connectors' keys tied to their command, the guarded

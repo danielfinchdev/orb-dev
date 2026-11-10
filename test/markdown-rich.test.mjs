@@ -11,7 +11,7 @@ import { ROOT, tempHome } from './helpers.mjs';
 import { remarkPlugins, richKind, isInlineMath, textOf } from '../src/ui/lib/markdown-plugins.js';
 import { Board } from '../src/domain/tasks/board.mjs';
 import { Sessions } from '../src/engine/sessions.mjs';
-import { buildApi } from '../src/engine/api.mjs';
+import { buildApi } from '../src/engine/api/index.mjs';
 import { DESKTOP } from '../src/domain/security/permissions.mjs';
 
 const tree = (md) => { const p = unified().use(remarkParse); for (const x of remarkPlugins) Array.isArray(x) ? p.use(x[0], x[1]) : p.use(x); return p.use(remarkRehype).runSync(p.parse(md)); };

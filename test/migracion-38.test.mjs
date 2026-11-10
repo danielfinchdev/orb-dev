@@ -22,9 +22,9 @@ import { IGNORED_PROJECTS } from '../src/platform/state.mjs';
 import { migrationView, folderOf } from '../src/ui/lib/migration.js';
 import { startupPhase } from '../src/ui/lib/startup.js';
 import * as C from '../src/shared/mobile-crypto.mjs';
-import { newVapidKeys } from '../src/engine/webpush.mjs';
+import { newVapidKeys } from '../src/engine/transport/webpush.mjs';
 import { createBackup, restoreInto } from '../src/domain/data/backup.mjs';
-import { createRemote } from '../src/engine/remote.mjs';
+import { createRemote } from '../src/engine/transport/remote.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
 const homes = [];
@@ -824,7 +824,7 @@ test('M6: la pantalla de bloqueo dice la verdad, abre la carpeta de la copia y o
 });
 
 test('F3b M5: Ajustes › Datos cuenta las copias de antes de la 3.8 (guardan las claves de la 3.7)', async () => {
-  const { before38 } = await import('../src/engine/api-data.mjs');
+  const { before38 } = await import('../src/engine/api/data.mjs');
   for (const v of ['3.7.2', '3.7', '2.6.0', '3.0.1']) assert.equal(before38(v), true, v);
   for (const v of ['3.8.0', '3.8.1', '3.10.0', '4.0.0', null, undefined, '', 'x']) assert.equal(before38(v), false, String(v));
 });

@@ -23,7 +23,7 @@ import { redeem } from '../src/mcp/auth-client.mjs';
 import { cursorRules } from '../src/agents/cursor.mjs';
 import { createActions } from '../src/engine/browser/browser-protocol.mjs';
 import { permissionModeOf } from '../src/agents/claude.mjs';
-import { pairingQr, newPairing, parseMdns, parseDevices, pairedGuid, apkPackage, verifyAdb, fingerprints, inputText, ensureAdb, checkArchive, createAndroid, androidAllowed, shellAllowed, adbStatus } from '../src/engine/android.mjs';
+import { pairingQr, newPairing, parseMdns, parseDevices, pairedGuid, apkPackage, verifyAdb, fingerprints, inputText, ensureAdb, checkArchive, createAndroid, androidAllowed, shellAllowed, adbStatus } from '../src/engine/host/android.mjs';
 
 const WIN = process.platform === 'win32';
 const v = (args) => decide({ lang: 'es', ...args }).decision;

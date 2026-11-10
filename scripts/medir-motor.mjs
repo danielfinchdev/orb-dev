@@ -152,7 +152,7 @@ const PER_REFRESH = [...REFRESH, ['inbox.list', { zone: 'orb' }]];
 const FEED_KEYS = { 'projects.list': (p) => p.name, 'inbox.list': (x) => x.key };
 async function feeds(e) {
   const { applyFeed, sinceOf } = await import('../src/shared/feed.mjs');
-  const { shapeResult } = await import('../src/engine/remote.mjs');
+  const { shapeResult } = await import('../src/engine/transport/remote.mjs');
   const { seal } = await import('../src/shared/mobile-crypto.mjs');
   const crypto = await import('node:crypto');
   const key = crypto.randomBytes(32);

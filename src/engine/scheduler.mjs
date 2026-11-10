@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from '../platform/context.mjs';
 import { enabledAgents } from '../platform/config.mjs';
-import { chooseModel } from './catalog.mjs';
+import { chooseModel } from './usage/catalog.mjs';
 import { groupOf } from '../domain/projects/projects.mjs';
 
 // 2.7: a task of a multiplatform project knows its sister projects and the shared folder (API, design, texts, images).
@@ -35,7 +35,7 @@ import { redactSecrets, secretFiles, isSecretPath, stagedSecrets } from '../shar
 import { ATTACH_DIR } from './sessions.mjs';
 import { logTask } from '../domain/journal/journal.mjs';
 import { adapter } from '../agents/index.mjs';
-import { liveSkills } from './api-extensions.mjs';
+import { liveSkills } from './api/extensions.mjs';
 import { skillsBrief } from '../domain/extensions/extensions.mjs';
 import { processList, taskProcesses, stopProcesses, alive } from '../platform/proc-list.mjs';
 

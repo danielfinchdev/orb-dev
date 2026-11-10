@@ -16,7 +16,7 @@ import { mcpServersOf } from './sessions.mjs';
 import { agentAuth } from '../domain/security/agent-auth.mjs';
 import { accountEnv } from '../domain/usage/accounts.mjs';
 import { briefing } from '../domain/journal/journal.mjs';
-import { rememberModels } from './catalog.mjs';
+import { rememberModels } from './usage/catalog.mjs';
 import { recordRate, pickAccount, recordSpend } from '../domain/usage/budget.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
 
@@ -50,7 +50,7 @@ export function persona(board = null) {
   const c = ctx.config; const me = assistantName();
   const boss = userName(); const ofBoss = ofUser();
   const accountsOf = (a) => (c.accounts ?? []).filter((x) => x.agent === a && x.enabled !== false);
-  // 3.1: only the agents this PC can run, each with its accounts and their plans (engine/plans.mjs).
+  // 3.1: only the agents this PC can run, each with its accounts and their plans (engine/usage/plans.mjs).
   const available = AGENTS.filter((a) => c.agents[a]?.enabled && accountsOf(a).length && installed(a));
   const planOf = (x) => board?.settingJson?.(`plan:${x.id}`)?.label;
   const accountsLine = (a) => { const list = accountsOf(a); const named = list.map((x) => `${x.label}${planOf(x) ? ` (plan ${planOf(x)})` : ''}`); return list.length > 1 ? ` Cuentas: ${named.join(', ')} (el trabajo se reparte solo entre ellas según su uso).` : planOf(list[0]) ? ` Plan ${planOf(list[0])}.` : ''; };

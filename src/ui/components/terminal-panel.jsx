@@ -1,4 +1,4 @@
-// 3.8.2 (T3 3.2): the user's terminal docked under a chat, in that chat's folder (src/engine/user-terminal.mjs). One tab
+// 3.8.2 (T3 3.2): the user's terminal docked under a chat, in that chat's folder (src/engine/host/user-terminal.mjs). One tab
 // per terminal open in this folder; a line typed (or pasted from a command of the chat) runs only when the user presses
 // Enter. «Abrir fuera» opens the usual terminal of Ctrl+J in the same folder. This PC's window only.
 import { useEffect, useRef, useState } from 'react';

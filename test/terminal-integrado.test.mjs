@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { tempHome, until, startEngine } from './helpers.mjs';
 import { useHome, ctx } from '../src/platform/context.mjs';
-import { terminalDir, shellPlan, createTerminals, MAX_TERMINALS, MAX_LINE } from '../src/engine/user-terminal.mjs';
+import { terminalDir, shellPlan, createTerminals, MAX_TERMINALS, MAX_LINE } from '../src/engine/host/user-terminal.mjs';
 import { allowed, principalOf, METHODS } from '../src/domain/security/permissions.mjs';
 import { oneCommand, stripAnsi, pasteToTerminal, onTerminalPaste, SHELL_LANGUAGES } from '../src/ui/lib/terminal-paste.js';
 

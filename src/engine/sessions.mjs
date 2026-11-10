@@ -9,7 +9,7 @@ import { ctx, tr } from '../platform/context.mjs';
 import { connectorKey } from '../platform/config.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
 import { adapter, executable } from '../agents/index.mjs';
-import { liveSkills } from './api-extensions.mjs';
+import { liveSkills } from './api/extensions.mjs';
 import { orbMcpServer, connectorLauncher } from '../agents/common.mjs';
 import { agentAuth } from '../domain/security/agent-auth.mjs';
 import { connectorLaunch } from '../domain/security/connector-secrets.mjs';
@@ -21,13 +21,13 @@ import { git, isGitRepo, repoRoot } from '../platform/git.mjs';
 import { account as findAccount, accountEnv } from '../domain/usage/accounts.mjs';
 import { pickAccount, recordSpend } from '../domain/usage/budget.mjs';
 import { browserKey } from './browser/browser-key.mjs';
-import { androidAllowed } from './android.mjs';
+import { androidAllowed } from './host/android.mjs';
 import { PERMISSIONS, plainAction, pidKills, unwrapShell } from '../domain/security/guard.mjs';
 import { processList, taskProcesses, powershell } from '../platform/proc-list.mjs';
 import { explainFailure } from '../shared/agent-errors.mjs';
-import { rememberModels } from './catalog.mjs';
+import { rememberModels } from './usage/catalog.mjs';
 import { changedFiles, logDirect } from '../domain/journal/journal.mjs';
-import { ATTACH_DIR, placeAttachments as copyAttachments, prepareAttachments } from './attachments.mjs';
+import { ATTACH_DIR, placeAttachments as copyAttachments, prepareAttachments } from './host/attachments.mjs';
 
 export { PERMISSIONS, ATTACH_DIR };
 // 3.2.1: a message that asks for a picture (or to change one): Codex gets a short note on how Orb wants it done.
@@ -81,7 +81,7 @@ export function mcpServersFor(agent, { taskId = '', orchestrator = false, browse
 // What an adapter gets: its servers, or (an agent that starts them again every turn) a function giving new ones.
 export const mcpServersOf = (a, agent, opts) => (a.mcpServersEachTurn ? () => mcpServersFor(agent, { ...opts, reusable: true }) : mcpServersFor(agent, opts));
 
-// 3.8.2: any file (src/engine/attachments.mjs), copied into <folder>/.orb-adjuntos/<stamp>/ so every agent of the
+// 3.8.2: any file (src/engine/host/attachments.mjs), copied into <folder>/.orb-adjuntos/<stamp>/ so every agent of the
 // conversation can read it, and kept out of git. → [{ path, name, kind, size }]
 export function placeAttachments(files, cwd) {
   const placed = copyAttachments(files, cwd);

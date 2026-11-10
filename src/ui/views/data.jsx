@@ -1,5 +1,5 @@
 // 3.6: Ajustes › Datos (the owner, on this PC): encrypted backups (every day at 03:00, or now), the recovery code that
-// opens them on another PC, restoring one, and moving this Orb to another PC. src/engine/api-data.mjs does the work.
+// opens them on another PC, restoring one, and moving this Orb to another PC. src/engine/api/data.mjs does the work.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { HardDriveDownload, KeyRound, RotateCcw, LoaderCircle, ShieldCheck, TriangleAlert, Copy, FolderOpen, Archive, Trash2, FolderLock } from 'lucide-react';

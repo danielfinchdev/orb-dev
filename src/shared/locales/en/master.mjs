@@ -1,4 +1,4 @@
-// 3.8: the master password (views/master.jsx, src/engine/api-master.mjs) and linking a phone with it.
+// 3.8: the master password (views/master.jsx, src/engine/api/master.mjs) and linking a phone with it.
 export default {
   'master.createTitle': 'Create your master password',
   'master.createIntro': "It protects what matters most in Orb: the keys of your linked phones and of your connectors. Orb asks for it to link a phone and before sensitive actions, such as restoring a backup or opening the core folder.",

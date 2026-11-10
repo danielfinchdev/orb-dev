@@ -8,7 +8,7 @@
 //   editar     (default) edit files and run commands in its folder; risky commands ask first
 //   preguntar  edit files; every command asks first (for when you want to watch closely)
 //   total      no questions (asked once when chosen; never from the phone). 3.8.2: in a chat without a project it is
-//              «Acceso total al PC» (the master password, dropped when Orb locks: src/engine/grants.mjs). Whatever the
+//              «Acceso total al PC» (the master password, dropped when Orb locks: src/engine/security/grants.mjs). Whatever the
 //              chat, «total» still goes through this guard: its boundary is the protected set (core but its open folders,
 //              the folders kept outside it, the folder Orb is installed in, «Elementos protegidos» and raising privileges),
 //              which is denied as in every other mode.
@@ -152,8 +152,8 @@ const under = (rest) => (o) => o.every((part, i) => rest[i] === part);
 const readable = (read) => (read === true ? READ_INTERNAL : Array.isArray(read) ? READ_INTERNAL.filter((o) => read.includes(o[0])) : []);
 // 3.8.2 (review A2): Orb's own adb (core\herramientas\adb) runs in the engine: a reading tool may look, nobody may write
 // there or run it (an agent's adb.exe or DLL left there would run with the engine's rights). The same for Orb's own
-// ffmpeg (core\herramientas\ffmpeg: it makes the frames of an attached video, src/engine/attachments.mjs).
-// 3.8.2: the same for the music Orb downloads (core\herramientas\musica, src/engine/music.mjs): what the window plays is
+// ffmpeg (core\herramientas\ffmpeg: it makes the frames of an attached video, src/engine/host/attachments.mjs).
+// 3.8.2: the same for the music Orb downloads (core\herramientas\musica, src/engine/host/music.mjs): what the window plays is
 // what Orb checked.
 const READ_ONLY_INTERNAL = [['herramientas', 'adb'], ['herramientas', 'ffmpeg'], ['herramientas', 'musica']];
 const openInCore = (rest, read = false) => (READ_ONLY_INTERNAL.some(under(rest)) ? read === true : OPEN_INTERNAL.some(under(rest)) || readable(read).some(under(rest)));
@@ -498,7 +498,7 @@ function runsSkillScript(command, internalDir, cwd) {
 }
 // 3.8.2: a command that runs Android's adb (by name, by path, or Orb's copy in core\herramientas\adb), in any shell.
 // Hardening only, not a boundary (a script can build the name at run time): the adb server itself is stopped when Orb
-// locks (src/engine/android.mjs › stopServer).
+// locks (src/engine/host/android.mjs › stopServer).
 const RUNS_ADB = /(^|[\s;&|(`"'\\/=])adb(\.exe)?(?=$|[\s;&|)`"'])/i;
 export const runsAdb = (command) => RUNS_ADB.test(String(command ?? '')) || RUNS_ADB.test(unquoted(command));
 export function decide({ permission = 'editar', tool, kind, command = '', paths = [], patterns = [], internalDir, cwd, lang = 'es', android = false }) {

@@ -9,11 +9,11 @@ import { Board } from '../src/domain/tasks/board.mjs';
 import { Sessions } from '../src/engine/sessions.mjs';
 import { Orchestrator } from '../src/engine/orchestrator.mjs';
 import { Scheduler } from '../src/engine/scheduler.mjs';
-import { buildApi } from '../src/engine/api.mjs';
+import { buildApi } from '../src/engine/api/index.mjs';
 import { DESKTOP, principalOf, METHODS } from '../src/domain/security/permissions.mjs';
 import { git } from '../src/platform/git.mjs';
 import { takeCheckpoint, snapshotCommit, diffBetween, undoCheckpoint } from '../src/domain/tasks/checkpoints.mjs';
-import { shapeResult } from '../src/engine/remote.mjs';
+import { shapeResult } from '../src/engine/transport/remote.mjs';
 
 let t; let board; let api; let sessions; let repo;
 const call = (method, params = {}, who = DESKTOP) => api.call(method, params, who);

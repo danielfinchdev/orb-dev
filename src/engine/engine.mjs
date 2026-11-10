@@ -16,10 +16,10 @@ import { oneLine } from '../shared/text.mjs';
 import { PRODUCT } from '../shared/product.mjs';
 import { DESKTOP, authorize } from '../domain/security/permissions.mjs';
 
-import { stdioTransport } from './stdio.mjs';
+import { stdioTransport } from './transport/stdio.mjs';
 import { streamFeed } from '../shared/chat-stream.mjs';
-import { attachHost, hostReply, hostCall } from './host.mjs';
-import { appMethods } from './api-app.mjs';
+import { attachHost, hostReply, hostCall } from './host/host.mjs';
+import { appMethods } from './api/app.mjs';
 import { locateHome, setupHome, switchHome, secretCopy, secretsCopy, adoptOldKeyNames, secretDir } from './desktop-home.mjs';
 import { loadConfig } from '../platform/config-file.mjs';
 import { homeKey } from '../platform/paths.mjs';
@@ -27,18 +27,18 @@ import es from '../shared/locales/es.mjs';
 import en from '../shared/locales/en.mjs';
 
 // A plain process with JSON lines on stdin/stdout (the app starts the bundled node.exe with ORB_ENGINE_STDIO=1;
-// src/engine/stdio.mjs), or a Node child with an IPC channel (the tests).
+// src/engine/transport/stdio.mjs), or a Node child with an IPC channel (the tests).
 const transport = (() => {
   if (process.env.ORB_ENGINE_STDIO === '1') return stdioTransport({ onClose: () => shutdown() });
   if (process.send) return { send: (m) => process.send(m), on: (fn) => process.on('message', fn) };
   throw new Error('el motor debe arrancarse desde la app');
 })();
-// The engine's own calls to the app (open a link or a folder, start a program outside the engine): src/engine/host.mjs.
+// The engine's own calls to the app (open a link or a folder, start a program outside the engine): src/engine/host/host.mjs.
 attachHost((m) => transport.send(m));
-// This PC's tools that need no window (src/engine/api-app.mjs), set when the engine starts: also answered while core or
+// This PC's tools that need no window (src/engine/api/app.mjs), set when the engine starts: also answered while core or
 // the data are blocked.
 let tools = {};
-let remote = null; // phone access (src/engine/remote.mjs), when turned on
+let remote = null; // phone access (src/engine/transport/remote.mjs), when turned on
 let devControl = null; // 3.1: the developer's control line (src/engine/dev-control.mjs), only in Orb.dev
 // Every event goes to this PC's window, the linked phones and browsers (remote.mjs picks what they need) and the
 // developer's control line.
@@ -57,7 +57,7 @@ let api = null;
 // 3.8.2 (T3 3.11): where an element pointed at and a recording of the agents' browser go (browser-record.mjs), once the
 // sessions exist.
 let browserFiles = null;
-let hostBrowser = null; // 3.8.1 (D7): the agents' browser when the app's pages are driven from here (src/engine/host-browser.mjs)
+let hostBrowser = null; // 3.8.1 (D7): the agents' browser when the app's pages are driven from here (src/engine/browser/host-browser.mjs)
 let logFile = null;
 const log = (line) => writeTimed(logFile, line);
 process.on('uncaughtException', (error) => log(`uncaughtException: ${error?.stack ?? error}`));
@@ -73,7 +73,7 @@ let held = null;
 const HOME_WAIT_TRIES = Number(process.env.ORB_HOME_WAIT ?? 20); // seconds the workspace's folder is waited for at the start
 async function holdWorkspace(home) {
   if (held) return;
-  const { exclusiveOpen } = await import('./approval-secret.mjs');
+  const { exclusiveOpen } = await import('./security/approval-secret.mjs');
   const file = path.join(os.tmpdir(), `orb-motor-${homeKey(home)}.lock`);
   // 3.8.1 (review D10 B7): held for a moment (the engine before this one still ending, an antivirus looking at it): tried
   // again for about 2 s before saying another app has it.
@@ -147,15 +147,15 @@ async function start(home, version, secret, browser, keep = null, userData = nul
     }
     // An app that cannot open a sealed secret (in core or its copy outside, which would be put back): never a new plain
     // key instead, or this workspace's approvals and backups would no longer open.
-    const { enc2, copy2 } = (await import('./approval-secret.mjs')).secret2Files(secretDir(home), secretCopy(userData, home));
+    const { enc2, copy2 } = (await import('./security/approval-secret.mjs')).secret2Files(secretDir(home), secretCopy(userData, home));
     if (!keys && !validSecret(secret) && [path.join(secretDir(home), 'clave.enc'), secretCopy(userData, home), enc2, copy2].some((f) => fs.existsSync(f))) throw new Error(tr('sys.engine.sealedSecret'));
   }
   // The approval secret comes from the app (kept encrypted by Windows); without it, the file fallback is used.
   // A secret given (tests): the engine has it anyway, and makes the keys itself (src/platform/keys.mjs).
   if (validSecret(secret)) { ctx.secret = Buffer.from(secret, 'hex'); ctx.keys = keysOf(ctx.secret); } else if (keys) { ctx.secret = null; ctx.keys = keys; }
-  // The agents' browser (browser 'host'): it lives here, with the app's hidden pages (src/engine/host-browser.mjs).
+  // The agents' browser (browser 'host'): it lives here, with the app's hidden pages (src/engine/browser/host-browser.mjs).
   if (browser === 'host' && !hostBrowser) {
-    const { createHostBrowser } = await import('./host-browser.mjs');
+    const { createHostBrowser } = await import('./browser/host-browser.mjs');
     const AGENTS = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor' };
     hostBrowser = createHostBrowser({
       log: (line) => log(line), language: () => ctx.config?.language ?? 'es', skin: () => ctx.config?.ui?.skin ?? 'orb',
@@ -214,7 +214,7 @@ async function open({ home, version, repair = null }) {
   // 3.8: the backups of 3.7 (inside the data folder, now core) go where backups go now, outside the workspace.
   try { const { adoptOldBackups } = await import('../domain/data/backup.mjs'); const n = adoptOldBackups(home, ctx.config); if (n) log(`copias: ${n} copia(s) de 3.7 movidas fuera de core`); } catch (error) { log(`copias de 3.7: ${error.message}`); }
   // 3.8.2: Android's adb is no longer in the agents' PATH nor downloaded at start: the first use downloads it
-  // (src/engine/android.mjs) and agents reach the phone through Orb's tools.
+  // (src/engine/host/android.mjs) and agents reach the phone through Orb's tools.
   const { Board } = await import('../domain/tasks/board.mjs');
   // 3.8: a data folder of 3.5–3.7 is moved to 3.8 when its database opens (src/domain/data/legacy/migrate-38.mjs). If that could not be
   // done (or its files and orb.json could not be finished), Orb does not run on those data (other users' conversations,
@@ -286,7 +286,7 @@ async function blocked(board, info) {
   const f = migrationFailure();
   migration = { failed: true, reason: f?.reason ?? tr('data.migration38.blocked'), backup: f?.backup ?? null, data: ctx.paths.db, committed: f?.committed ?? !isLegacy(board.db) };
   log(`3.8: la migración no se pudo hacer; Orb no arranca sobre los datos de 3.7: ${migration.reason}`);
-  attention ??= import('./remote.mjs').then(({ startAttention }) => startAttention({ log })).catch((error) => { log(`móvil (atención): ${error.message}`); return null; });
+  attention ??= import('./transport/remote.mjs').then(({ startAttention }) => startAttention({ log })).catch((error) => { log(`móvil (atención): ${error.message}`); return null; });
   let retrying = null;
   const retry = async () => {
     try { board.db.close(); } catch { /* closed */ }
@@ -317,13 +317,13 @@ async function run(board, { home, version, restored, repair }) {
   const { Sessions } = await import('./sessions.mjs');
   const { Orchestrator } = await import('./orchestrator.mjs');
   const { Scheduler } = await import('./scheduler.mjs');
-  const { buildApi } = await import('./api.mjs');
+  const { buildApi } = await import('./api/index.mjs');
   // 3.8: who each agent's MCP process is lives only in this process's memory (agent-auth.mjs); the signatures that
   // earlier versions kept in the database are gone at start (they sign nothing).
   board.run("DELETE FROM settings WHERE key = 'orchestrator_key_hash' OR key LIKE 'orchestrator_conv:%' OR key LIKE 'agent_id:%'");
   try { const released = board.releaseUnclaimed(); if (released.length) log(`tareas manuales sin conversación devueltas a la cola: ${released.join(', ')}`); } catch (error) { log(`liberar tareas manuales: ${error.message}`); }
   const sessions = new Sessions(board, { emit, log });
-  browserFiles = (await import('./browser-record.mjs')).browserSink({ sessions, toWindow, log });
+  browserFiles = (await import('./browser/browser-record.mjs')).browserSink({ sessions, toWindow, log });
   const { plainAction, looksEnglish } = await import('../domain/security/guard.mjs');
   const { adapter } = await import('../agents/index.mjs');
   const { recordRate } = await import('../domain/usage/budget.mjs');
@@ -368,18 +368,18 @@ async function run(board, { home, version, restored, repair }) {
   };
   const orchestrator = new Orchestrator(board, { emit, log, title });
   const scheduler = new Scheduler(board, sessions, { log, orchestrator, emit });
-  const { createRemote } = await import('./remote.mjs');
+  const { createRemote } = await import('./transport/remote.mjs');
   const remoteRef = { current: null };
   // 3.7: Monitoreo del equipo and Opti Bot are gone: their settings and conversation are tidied once (engine/retired.mjs).
   { const { tidyRetired } = await import('../domain/data/legacy/retired.mjs'); tidyRetired(board, log); }
   // 3.8: the master password and Orb's own secrets (src/domain/security/master.mjs): opened with this PC's secret, or locked until
   // the password is typed (another PC, another Windows user). What earlier versions kept in clear moves into it now.
-  const { openMaster, migrateSecrets } = await import('./api-master.mjs');
+  const { openMaster, migrateSecrets } = await import('./api/master.mjs');
   ctx.master = openMaster(home, masterSecret(home), { mirror, log, notice: (text) => board.notice(text, 'warning') });
   try { migrateSecrets(board, ctx.master, { log, emit }); } catch (error) { log(`secretos: ${error.message}`); }
   // Unlocked later (the password on another PC): the phone access opens then.
-  // 3.8.1: also the keys of a connector Orb moved while it was locked (src/engine/api-extensions.mjs › rebindMovedOrWait).
-  const { settleWaitingKeys } = await import('./api-extensions.mjs');
+  // 3.8.1: also the keys of a connector Orb moved while it was locked (src/engine/api/extensions.mjs › rebindMovedOrWait).
+  const { settleWaitingKeys } = await import('./api/extensions.mjs');
   const onUnlocked = () => { settleWaitingKeys(board, log); if (ctx.config.mobile?.enabled) remote?.start().catch((error) => log(`móvil: ${error.message}`)); };
   if (ctx.master.unlocked()) settleWaitingKeys(board, log);
   // 3.8.2: Orb locked: the agents' browser stops recording (host-browser.mjs › lock).
@@ -412,7 +412,7 @@ async function run(board, { home, version, restored, repair }) {
   try { (await import('../domain/projects/project-close.mjs')).settleDeleting(board, home, { all: true }); } catch (error) { log(`eliminar proyecto: ${error.message}`); }
   syncProjects(board);
   // 3.8.1: the skills of core that are on, ready for the agents (core\skills\.activas).
-  try { (await import('./api-extensions.mjs')).refreshSkills(); } catch (error) { log(`skills: ${error.message}`); }
+  try { (await import('./api/extensions.mjs')).refreshSkills(); } catch (error) { log(`skills: ${error.message}`); }
   let ticking = false; let lastSync = Date.now();
   const loop = () => {
     if (ticking) return; ticking = true;
@@ -461,12 +461,12 @@ async function run(board, { home, version, restored, repair }) {
   loop();
   // 2.6: the models of every installed agent, asked to the agents themselves a moment after starting (each one at most
   // once every 12 h), so the brain selector names them before any conversation.
-  const { refreshAllModels } = await import('./catalog.mjs');
+  const { refreshAllModels } = await import('./usage/catalog.mjs');
   setTimeout(() => { refreshAllModels(board, { log }).catch(() => {}); }, Number(process.env.ORB_MODELS_DELAY_MS ?? 3000)).unref?.();
   // 3.1: the plan of every account (Claude Pro, ChatGPT Plus, Cursor Pro…), so the usage limits fit what is paid for.
   // Not with the test agents: a fake engine must not start the real CLIs.
   if (!process.env.ORB_FAKE_AGENTS) {
-    const { refreshPlans } = await import('./plans.mjs');
+    const { refreshPlans } = await import('./usage/plans.mjs');
     setTimeout(() => { refreshPlans(board, { log }).catch(() => {}); }, Number(process.env.ORB_MODELS_DELAY_MS ?? 3000) + 2000).unref?.();
   }
   // 2.6: the reports the assistant still owed when the app was closed come back.
@@ -509,7 +509,7 @@ const APP_MESSAGES = {
   locate: (m) => ({ home: locateHome({ userData: String(m.userData ?? ''), packaged: m.packaged === true, separateData: m.separateData === true, documents: m.documents ?? null, profile: m.profile ?? null }) }),
   setup: (m) => ({ home: setupHome({ userData: String(m.userData ?? ''), base: m.base, assistantName: m.assistantName, userName: m.userName, language: m.language }) }),
   switchHome: (m) => ({ ok: switchHome({ userData: String(m.userData ?? ''), target: m.target }) }),
-  // The little window of the agents' browser: its buttons and Ajustes › «Ver el navegador» (src/engine/host-browser.mjs).
+  // The little window of the agents' browser: its buttons and Ajustes › «Ver el navegador» (src/engine/browser/host-browser.mjs).
   pip: (m) => hostBrowser?.pip(String(m.action ?? ''), { x: m.x, y: m.y }) ?? null,
   texts: (m) => {
     let lang = ctx.config?.language;

@@ -1,4 +1,4 @@
-// 3.8.2: what an attached file is, by its extension. Shared by the engine (src/engine/attachments.mjs) and the
+// 3.8.2: what an attached file is, by its extension. Shared by the engine (src/engine/host/attachments.mjs) and the
 // interface (the attachment's icon), so it imports nothing.
 const EXT = {
   image: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'tif', 'tiff', 'heic', 'heif', 'avif', 'svg', 'ico'],

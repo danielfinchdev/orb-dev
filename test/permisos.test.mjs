@@ -10,7 +10,7 @@ import { tempHome, ROOT } from './helpers.mjs';
 import { Board } from '../src/domain/tasks/board.mjs';
 import { createProject } from '../src/domain/projects/projects.mjs';
 import { METHODS, REMOTE_METHODS, CHANNELS, PermissionError, principalOf, allowed, authorize, ownsTask } from '../src/domain/security/permissions.mjs';
-import { guardCall, shapeResult, withoutPaths } from '../src/engine/remote.mjs';
+import { guardCall, shapeResult, withoutPaths } from '../src/engine/transport/remote.mjs';
 import { ctx } from '../src/platform/context.mjs';
 import crypto from 'node:crypto';
 import { Sessions, mcpServersFor } from '../src/engine/sessions.mjs';
@@ -18,7 +18,7 @@ import { AgentAuth, agentAuth } from '../src/domain/security/agent-auth.mjs';
 import { decide } from '../src/domain/security/guard.mjs';
 import { Orchestrator } from '../src/engine/orchestrator.mjs';
 import { Scheduler } from '../src/engine/scheduler.mjs';
-import { buildApi } from '../src/engine/api.mjs';
+import { buildApi } from '../src/engine/api/index.mjs';
 
 let t; let board; let api; let scheduler; let sessions; let orchestrator;
 const phone = principalOf({ device: { id: 'm1', kind: 'phone' } });

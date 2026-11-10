@@ -10,7 +10,7 @@ import { fork } from 'node:child_process';
 import http from 'node:http';
 import { tempHome, ROOT, until } from './helpers.mjs';
 import * as C from '../src/shared/mobile-crypto.mjs';
-import { privateSource } from '../src/engine/remote.mjs';
+import { privateSource } from '../src/engine/transport/remote.mjs';
 import { parseLinkPayload, normalCode, normalAddress } from '../src/shared/link-payload.mjs';
 import { createPhone, TEST_MASTER } from './fixtures/phone-client.mjs';
 

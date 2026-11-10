@@ -276,7 +276,7 @@ export default {
   'sys.projects.archived.deleted': '{name}: deleted',
   'sys.sessions.imageHint': '(Note from Orb: if this message asks for a picture, make just one unless it asks for several. Any text inside the picture goes in the language of the message.)',
   'sys.sessions.imageEditHint': '(Note from Orb: to change the picture, pass it as a reference image to the image generation tool and make one new picture with the change. Do not build it with scripts or by pasting pieces: it loses quality.)',
-  // 3.8.2: what the agent gets for each attachment (src/engine/attachments.mjs)
+  // 3.8.2: what the agent gets for each attachment (src/engine/host/attachments.mjs)
   'sys.attach.preparing': 'Preparing the attachments',
   'sys.attach.header': 'Attachments (copies in your folder; open them if you need them):',
   'sys.attach.kind.image': 'image',

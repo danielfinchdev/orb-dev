@@ -1,5 +1,5 @@
 // A stand-in for Android's adb (3.8.2): the tests never run the real one, nor reach a phone. It answers the commands
-// src/engine/android.mjs sends and writes each one (its arguments, one JSON line) to FAKE_ADB_LOG.
+// src/engine/host/android.mjs sends and writes each one (its arguments, one JSON line) to FAKE_ADB_LOG.
 //   FAKE_ADB_DIR   its state: mdns.txt (what `adb mdns services` lists), installed (an app was installed)
 //   FAKE_ADB_CODE  the pairing password or code it accepts (any, when not set)
 import fs from 'node:fs';

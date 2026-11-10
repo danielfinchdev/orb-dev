@@ -1,4 +1,4 @@
-// 3.7 (WS5): what the agents' browser does (3.8.1: the engine's, src/engine/agent-browser.mjs, over the DevTools
+// 3.7 (WS5): what the agents' browser does (3.8.1: the engine's, src/engine/browser/agent-browser.mjs, over the DevTools
 // protocol). It speaks a line-JSON pipe with the MCP server of each agent
 // (src/mcp/server.mjs: orb_browser_*).
 //

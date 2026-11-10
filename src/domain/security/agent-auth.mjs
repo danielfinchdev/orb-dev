@@ -19,7 +19,7 @@ const RELEASE_WAIT_MS = 3000; // a server that restarts waits for the old connec
 const HELLO_WITHIN_MS = 10_000; // a connection that never says hello is closed
 
 export class AgentAuth {
-  // onCall({ session, who }, method, args) → result: set by the engine (src/engine/api.mjs) for the 'call' requests.
+  // onCall({ session, who }, method, args) → result: set by the engine (src/engine/api/index.mjs) for the 'call' requests.
   constructor() { this.grants = new Map(); this.server = null; this.pipe = null; this.pipeId = null; this.onCall = null; }
 
   // The pipe's name (the server starts listening the first time it is needed).

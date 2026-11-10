@@ -1,4 +1,4 @@
-// 3.8: the master password (views/master.jsx, src/engine/api-master.mjs) and linking a phone with it.
+// 3.8: the master password (views/master.jsx, src/engine/api/master.mjs) and linking a phone with it.
 export default {
   'master.createTitle': 'Crea tu contraseña maestra',
   'master.createIntro': 'Protege lo más delicado de Orb: las claves de tus móviles enlazados y de tus conectores. Te la pediremos al enlazar un móvil y antes de acciones sensibles, como restaurar una copia o abrir la carpeta core.',

@@ -1,5 +1,5 @@
 // 2.6: the models of every agent, asked to the agent itself (src/agents/*.mjs discoverModels) and kept for the brain
-// selector (src/engine/catalog.mjs): what each agent's listing looks like, the throttle (once every 12 h), «Comprobar»
+// selector (src/engine/usage/catalog.mjs): what each agent's listing looks like, the throttle (once every 12 h), «Comprobar»
 // forcing it, and the catalog naming a non-Claude agent's models and its default.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,8 +10,8 @@ import { Board } from '../src/domain/tasks/board.mjs';
 import { cursorModels } from '../src/agents/cursor.mjs';
 import { codexModels } from '../src/agents/codex.mjs';
 import { acpAgent, acpModels } from '../src/agents/acp.mjs';
-import { rememberModels, refreshModels, modelCatalog, MODELS_EVERY, NO_ANSWER_WAIT } from '../src/engine/catalog.mjs';
-import { refreshPlans } from '../src/engine/plans.mjs';
+import { rememberModels, refreshModels, modelCatalog, MODELS_EVERY, NO_ANSWER_WAIT } from '../src/engine/usage/catalog.mjs';
+import { refreshPlans } from '../src/engine/usage/plans.mjs';
 
 const t = tempHome({ agents: { cursor: { enabled: true } } });
 const asked = path.join(t.base, 'preguntas.log');

@@ -4,8 +4,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { jpegSize, resample, mjpegAvi, RECORD_FPS } from '../src/engine/browser-record.mjs';
-import { pointScript, clipOf } from '../src/engine/browser-point.mjs';
+import { jpegSize, resample, mjpegAvi, RECORD_FPS } from '../src/engine/browser/browser-record.mjs';
+import { pointScript, clipOf } from '../src/engine/browser/browser-point.mjs';
 import { pointLine } from '../src/ui/lib/browser-points.js';
 
 // A tiny JPEG header: SOI, an APP0 segment and SOF0 with its size.
@@ -46,7 +46,7 @@ test('señalar: el guion es JavaScript válido, el recorte cabe en la vista y la
 });
 
 test('fase 10: lo privado nunca viaja a un móvil enlazado y browser_rules.rs no se relaja', () => {
-  const remote = fs.readFileSync(new URL('../src/engine/remote.mjs', import.meta.url), 'utf8');
+  const remote = fs.readFileSync(new URL('../src/engine/transport/remote.mjs', import.meta.url), 'utf8');
   const events = /const EVENTS = new Set\(\[([\s\S]*?)\]\);/.exec(remote)[1];
   for (const e of ['secret:', 'browser:', 'terminal:']) assert.ok(!events.includes(e), `${e} no va al móvil`);
   const rules = fs.readFileSync(new URL('../src-tauri/src/browser_rules.rs', import.meta.url), 'utf8');

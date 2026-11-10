@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { tempHome, fake, until } from './helpers.mjs';
 import { useHome } from '../src/platform/context.mjs';
-import { createAndroid, sdkEmulator, parseAvds, emulatorEnv, AVD } from '../src/engine/android.mjs';
+import { createAndroid, sdkEmulator, parseAvds, emulatorEnv, AVD } from '../src/engine/host/android.mjs';
 import { allowed, needsUnlock, principalOf, METHODS } from '../src/domain/security/permissions.mjs';
 
 test('emuladores: solo el emulador del SDK ya instalado, por su nombre exacto y con el permiso del móvil', async () => {

@@ -12,7 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { DESKTOP } from '../domain/security/permissions.mjs';
-import { ownPorts } from './host.mjs';
+import { ownPorts } from './host/host.mjs';
 
 export function startDevControl({ api, board, sessions, log = () => {}, home, internalDir }) {
   const token = crypto.randomBytes(24).toString('hex');

@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildNote, collapse, actionRoute, routeOf, chatKey, noteId, lineKind, NOTE_IDS } from '../src/shared/notes.mjs';
-import { SERVICE_WORKER } from '../src/engine/remote.mjs';
+import { SERVICE_WORKER } from '../src/engine/transport/remote.mjs';
 
 const orbChat = { kind: 'conversation', id: 12, name: 'Arreglar el login' };
 const msg = (body, extra = {}) => ({ id: 40, role: 'orb', body, meta: { ...extra } });

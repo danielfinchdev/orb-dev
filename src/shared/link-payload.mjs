@@ -96,7 +96,7 @@ export function passwordPageOk({ protocol, hostname } = {}, { app = false } = {}
   return Boolean(m && Number(m[1]) >= 64 && Number(m[1]) <= 127);
 }
 
-// The secret both sides derive the pairing key from (src/ui/lib/web-bridge.js on the phone, src/engine/remote.mjs on the
+// The secret both sides derive the pairing key from (src/ui/lib/web-bridge.js on the phone, src/engine/transport/remote.mjs on the
 // PC): the QR's code as is, the short one marked.
 export const pairingSecret = (p) => (p.via === 'code' ? `corto:${normalCode(p.code)}` : p.code);
 

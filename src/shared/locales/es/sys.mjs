@@ -280,7 +280,7 @@ export default {
   'sys.projects.archived.deleted': '{name}: eliminado',
   'sys.sessions.imageHint': '(Nota de Orb: si este mensaje pide una imagen, genera una sola, salvo que pida varias expresamente. Los textos que vayan dentro de la imagen, en el idioma del mensaje.)',
   'sys.sessions.imageEditHint': '(Nota de Orb: para cambiar la imagen, pásala como imagen de referencia a la herramienta de generar imágenes y genera una sola imagen nueva con el cambio. No la montes con scripts ni pegando trozos: pierde calidad.)',
-  // 3.8.2: lo que el agente recibe de cada adjunto (src/engine/attachments.mjs)
+  // 3.8.2: lo que el agente recibe de cada adjunto (src/engine/host/attachments.mjs)
   'sys.attach.preparing': 'Preparando los adjuntos',
   'sys.attach.header': 'Adjuntos (copias en tu carpeta; ábrelos si los necesitas):',
   'sys.attach.kind.image': 'imagen',

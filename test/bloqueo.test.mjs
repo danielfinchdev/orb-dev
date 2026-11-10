@@ -1,5 +1,5 @@
 // 3.8.1: Orb's lock screen after a while without use (src/ui/lib/idle-lock.js, master.lock/master.state in
-// src/engine/api-master.mjs, lib/startup.js), opening core's data only with the master password (desktop-home.mjs ›
+// src/engine/api/master.mjs, lib/startup.js), opening core's data only with the master password (desktop-home.mjs ›
 // guardedCore, decision 19 f) and the owner's private folder kept from the agents (workspace-layout.mjs, decision 19 g).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

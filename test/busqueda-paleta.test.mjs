@@ -10,7 +10,7 @@ import { Board } from '../src/domain/tasks/board.mjs';
 import { Sessions } from '../src/engine/sessions.mjs';
 import { Orchestrator } from '../src/engine/orchestrator.mjs';
 import { Scheduler } from '../src/engine/scheduler.mjs';
-import { buildApi } from '../src/engine/api.mjs';
+import { buildApi } from '../src/engine/api/index.mjs';
 import { DESKTOP, principalOf, METHODS } from '../src/domain/security/permissions.mjs';
 import { isPaletteKey, paletteGroups } from '../src/ui/lib/palette.js';
 

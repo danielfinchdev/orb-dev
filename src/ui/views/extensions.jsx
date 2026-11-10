@@ -1,4 +1,4 @@
-// 3.8.1: Ajustes › Skills y MCP (src/engine/api-extensions.mjs): every skill and MCP server of core (on or off, where it
+// 3.8.1: Ajustes › Skills y MCP (src/engine/api/extensions.mjs): every skill and MCP server of core (on or off, where it
 // came from, its folder, removing it after the master password), «Importar» (a folder or a git repository: it comes in
 // off), what agents made and wait for the user («Activar» / «Descartar»), the connectors of the PC (a package run with
 // npx…) and the projects that are MCP servers («Usar», «Mover a core»). A server of core is improved in a project

@@ -261,7 +261,7 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   ['tasks', 'level', 'TEXT'],
   // 2.7: the multiplatform group a project belongs to (tienda-android and tienda-ios share «tienda»).
   ['projects', 'grupo', 'TEXT'],
-  // 3.8.2: «Usar mi móvil Android», given to a chat with the master password (src/engine/grants.mjs).
+  // 3.8.2: «Usar mi móvil Android», given to a chat with the master password (src/engine/security/grants.mjs).
   ['sessions', 'android', 'INTEGER NOT NULL DEFAULT 0'],
   // 2.3.3: each phone has its own key (end-to-end encryption), the way it was paired and its notifications.
   ['devices', 'public_key', 'TEXT'], ['devices', 'route', 'TEXT'], ['devices', 'push', 'TEXT'],

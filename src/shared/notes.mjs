@@ -1,6 +1,6 @@
 // 3.6 (messaging, M4): a notification as in a messaging app. Orbe's picture, the chat's name as the title, the text as the
 // owner chose for the lock screen (Ajustes › Magic Link), one notification per chat (new lines join it) and its actions:
-// «Responder», and «Aprobar» / «Rechazar» on an agent's permission request. Pure: the engine (src/engine/remote.mjs)
+// «Responder», and «Aprobar» / «Rechazar» on an agent's permission request. Pure: the engine (src/engine/transport/remote.mjs)
 // gives it the chat and the line; the phone's browser (service worker) and the Android app
 // (src/ui/lib/app-bridge.js) show what comes out.
 //

@@ -9,7 +9,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { ctx } from '../src/platform/context.mjs';
 import { isOrbData } from '../src/domain/security/guard.mjs';
-import { kindOf, placeAttachments, prepareAttachments, extractText, zipEntries, probeInfo, evenTimes, extractFrames, ATTACH_DIR, ATTACH_MAX, FFMPEG } from '../src/engine/attachments.mjs';
+import { kindOf, placeAttachments, prepareAttachments, extractText, zipEntries, probeInfo, evenTimes, extractFrames, ATTACH_DIR, ATTACH_MAX, FFMPEG } from '../src/engine/host/attachments.mjs';
 import { micMode } from '../src/ui/lib/mic.js';
 import { reloadWait, markReloaded, RELOAD_GAP_MS } from '../src/ui/lib/usage-reload.js';
 import { Sessions } from '../src/engine/sessions.mjs';
@@ -206,7 +206,7 @@ test('«Recargar» in the usage panel: spinner, 20 s between reloads, the agents
   const panel = session.slice(session.indexOf('function UsagePanel'), session.indexOf('export function ContextMeter'));
   assert.match(panel, /disabled=\{reloading \|\| wait > 0\} aria-label=\{t\('session\.usage\.reload'\)\} aria-busy=\{reloading\} data-testid="usage-reload">\{reloading \? <Spinner/);
   assert.match(panel, /call\('usage\.refresh'\)/);
-  const api = src('engine', 'api.mjs');
+  const api = src('engine', 'api', 'index.mjs');
   assert.match(api, /'usage\.refresh': async \(\) => \{\s*if \(Date\.now\(\) - usageAskedAt >= 20_000\)/);
   assert.match(src('domain', 'security', 'permissions.mjs'), /'usage\.refresh': 'remote'/);
   // Every open agent process is asked; one without the call (or failing) is skipped.

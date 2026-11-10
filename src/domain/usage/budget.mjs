@@ -17,7 +17,7 @@ export const budgetConfig = () => {
 };
 // Limits of an account: its own entry in budget.agents, else its agent's, else the defaults.
 const agentOf = (id) => findAccount(id)?.agent ?? id;
-// 3.1: the limits are set for a Pro-like plan and scale with the account's real plan (engine/plans.mjs): a Max 20x or a
+// 3.1: the limits are set for a Pro-like plan and scale with the account's real plan (engine/usage/plans.mjs): a Max 20x or a
 // ChatGPT Pro takes much more work before its real usage is known; a free or Go plan, less and no heavy models.
 const PLAN_FACTOR = {
   claude: { free: 0.5, pro: 1, max5: 4, max20: 12, team: 2, enterprise: 4 },

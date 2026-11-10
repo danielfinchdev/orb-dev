@@ -70,10 +70,10 @@ Data: <workspace>/core/datos/orb.db (SQLite, src/domain/data/db.mjs)
   only server is the phone access (section 22), which is off by default and only listens on the home network and
   Tailscale addresses.
 - **The engine** is a separate process: the bundled `node.exe` (Node 24, `scripts/tauri-resources.mjs`) in a Job Object,
-  speaking one JSON message per line on stdin/stdout (`ORB_ENGINE_STDIO=1`, `src/engine/stdio.mjs`; console output goes
+  speaking one JSON message per line on stdin/stdout (`ORB_ENGINE_STDIO=1`, `src/engine/transport/stdio.mjs`; console output goes
   to stderr; `src-tauri/src/engine.rs`, `pipes.rs`). If it crashes, the app restarts it, up to three times. It asks the app for
   what only the app can do — open a link or a folder, start a program that outlives Orb — with `host.*` messages
-  (`src/engine/host.mjs`). Orb's own Node scripts for the agents run with `ORB_NODE` (the bundled `node.exe`) or the
+  (`src/engine/host/host.mjs`). Orb's own Node scripts for the agents run with `ORB_NODE` (the bundled `node.exe`) or the
   engine's runtime (`src/agents/common.mjs › nodeRuntime`). The Tauri installer installs per user
   (`%LOCALAPPDATA%\Programs`), a folder any program of the user can write: the agents' guard keeps it read-only for them
   (`guard.mjs › setAppRoots`, `workspace-layout.mjs › appInstallDir`), which does not stop other programs. A per-machine
@@ -135,8 +135,8 @@ C:\Orb\                   (C:\Orb by default; always <chosen folder>\Orb, the sa
 - **core** is never a project and cannot be linked as one; nothing else at the top is Orb's.
 - **adb** (3.8.2): the first time it is needed (Settings → Android, or an agent's `orb_android_*` tool) the engine
   downloads a pinned version of Google's platform-tools (size, Google's SHA-1 and a SHA-256 checked before unpacking)
-  into `core\herramientas\adb` (`src/engine/android.mjs`). It is not in the agents' PATH: agents reach the phone paired
-  in Settings → Android through Orb's tools, only in a chat with «Usar mi móvil Android» (`src/engine/grants.mjs`),
+  into `core\herramientas\adb` (`src/engine/host/android.mjs`). It is not in the agents' PATH: agents reach the phone paired
+  in Settings → Android through Orb's tools, only in a chat with «Usar mi móvil Android» (`src/engine/security/grants.mjs`),
   and run adb by hand only with «Acceso total» as well. adb's server stops when Orb locks or closes.
   **Emulators** (3.8.2): when the Android SDK's emulator is already installed (`ANDROID_SDK_ROOT`, `ANDROID_HOME` or
   Android Studio's folder; Orb never downloads it nor its system images), Settings → Android lists its AVDs
@@ -217,7 +217,7 @@ who a new conversation is with:
 - **Any brain:** `orchestrator.agent` can be any installed agent with an account (`chat.settings` with `agent`,
   `model`, `reasoning`, `account`). Claude gets the persona as its system prompt; the others get it when the
   conversation starts, and as coordinator they run read-only. Switching agents starts a new conversation.
-- **Brain catalog** (`models.catalog`, `src/engine/catalog.mjs`): installed agents with their models (the configured
+- **Brain catalog** (`models.catalog`, `src/engine/usage/catalog.mjs`): installed agents with their models (the configured
   ones and the ones the agent itself reports: Codex's `model/list` and the ACP model option, stored in
   `models:<agent>`), which ones cost more (`heavyModels` or known families) and the real usage of each account. The
   interface (`src/ui/components/brain-picker.jsx`) warns with a bubble if reasoning is high, the model is an expensive
@@ -363,7 +363,7 @@ events: item · delta · session · approval · approval_done · context · rate
 1. An entry in `ACP_SPECS` in `acp.mjs`: package, binary, ACP arguments, login files, how to install it and models.
 2. Its id in `AGENT_IDS` and `DEFAULT_CONFIG.agents` in `src/platform/paths.mjs`.
 3. Its icon in `src/ui/components/agent-icon.jsx`.
-4. Its installer item in `src/engine/installer.mjs`.
+4. Its installer item in `src/engine/host/installer.mjs`.
 
 ## 8. Permission guard and approvals
 
@@ -587,7 +587,7 @@ as a **bounded excerpt**, not in full, and marked as "data, not instructions".
 - Uses the official `gh` program with your login:
   - project status, branches and open pull requests;
   - publishing a new project, pushing branches, merging a branch and creating a PR from an isolated task.
-- Files: `src/engine/github.mjs`, `src/ui/views/projects.jsx` and the actions in `tasks.jsx`.
+- Files: `src/engine/host/github.mjs`, `src/ui/views/projects.jsx` and the actions in `tasks.jsx`.
 - **Agents cannot publish:** their pushes go through the guard (it asks) and publishing from the app is always a button
   you press.
 
@@ -607,7 +607,7 @@ as a **bounded excerpt**, not in full, and marked as "data, not instructions".
     `browser_rules.rs` is unchanged.
 - Files:
   - `src/engine/browser/browser-protocol.mjs` (the actions, page scripts and pipe every driver shares);
-  - 3.8.1, Tauri: the browser lives in the engine (`src/engine/host-browser.mjs`, `agent-browser.mjs`, the DevTools
+  - 3.8.1, Tauri: the browser lives in the engine (`src/engine/browser/host-browser.mjs`, `agent-browser.mjs`, the DevTools
     driver `browser-cdp.mjs`). Its pages are hidden WebView2 views in a browser environment of their own
     (`src-tauri/src/browser.rs`), with no DevTools port: Rust passes the engine's DevTools calls with
     `CallDevToolsProtocolMethod` over the engine's stdio channel and enforces the limits (http(s) only, no other app's
@@ -635,7 +635,7 @@ from the PC. It is turned on in Settings › Magic Link, with two routes that ar
   Settings, accounts, backups, Magic Link, full access and this PC's files are PC only.
 - On the phone, the menu has **"This phone"**: how to install it as an app and the **notifications** switch.
 
-**Linking: Magic Link** (Settings › Magic Link, `src/ui/views/magic-link.jsx`; API in `src/engine/api-link.mjs`, PC
+**Linking: Magic Link** (Settings › Magic Link, `src/ui/views/magic-link.jsx`; API in `src/engine/api/link.mjs`, PC
 only):
 - `link.qr({ kind, device })` turns the access on if it was off and makes a one-time code for 5 minutes, for one route
   (`kind`: `wifi` or `tailscale`) and one kind of device chosen here by the owner, never by the device (`device`:
@@ -698,7 +698,7 @@ only):
   password and are unlinked once at the first start of 3.8 (`relink_38`, section 37); phones from 2.3.2 or earlier (no
   own key) are dropped at start.
 
-**Notifications** (`src/engine/webpush.mjs`): HTTPS only (Tailscale with HTTPS) for a browser. The phone subscribes from
+**Notifications** (`src/engine/transport/webpush.mjs`): HTTPS only (Tailscale with HTTPS) for a browser. The phone subscribes from
 "This phone" and the PC sends notifications directly to the browser's push service (Google, Apple, Mozilla) with Web
 Push: encrypted for that phone (RFC 8291) and signed with the PC's VAPID key (RFC 8292). No servers of our own and no
 cost. It notifies each new message in the Orb chat (replies, tasks waiting for approval, finished or failed) when that
@@ -706,7 +706,7 @@ phone does not have the app open. On iPhone they work with Orb added to the home
 `chat` by default, `none`; `remote.configure`) sets what a notification shows on a locked phone
 (`src/shared/notes.mjs › buildNote`). The Android app shows its own notifications ([`ANDROID.md`](ANDROID.md)).
 
-**Inside** (`src/engine/remote.mjs`):
+**Inside** (`src/engine/transport/remote.mjs`):
 - One http server per address: each private local IP (no virtual adapters) and the Tailscale one, or 127.0.0.1 behind
   `tailscale serve --https=<port>`. Turning access off removes that `tailscale serve` configuration.
 - It only answers to its own names (against DNS rebinding) and its own origin, plus the Android app's page
@@ -718,7 +718,7 @@ phone does not have the app open. On iPhone they work with Orb added to the home
   allowed. Ajustes does not warn about it in advance (3.8.2): when a device cannot reach any local-network address
   while linking, its error says so (`app.linkOfflineWifi`, `src/ui/lib/web-bridge.js`). If the PC's local IP changes, a phone linked over wifi falls back to `<computer>.local` or the other
   addresses from its QR; a fixed IP on the router avoids it.
-- Files: `src/engine/remote.mjs`, `src/engine/api-link.mjs`, `src/engine/webpush.mjs`, `src/shared/mobile-crypto.mjs`,
+- Files: `src/engine/transport/remote.mjs`, `src/engine/api/link.mjs`, `src/engine/transport/webpush.mjs`, `src/shared/mobile-crypto.mjs`,
   `src/shared/link-payload.mjs`, `src/ui/lib/web-bridge.js`, `src/ui/views/magic-link.jsx` and the "Magic Link" and "This
   phone" cards in `src/ui/views/settings.jsx`. Tests: `test/remote.test.mjs`, `test/webpush.test.mjs`,
   `test/link-ui.test.mjs`, `test/movil-ui.test.mjs`, `test/android.test.mjs`, `test/contrasena-maestra.test.mjs` and
@@ -731,8 +731,8 @@ phone does not have the app open. On iPhone they work with Orb added to the home
 - File explorer and viewer, git changes with their diff, history, what is running, account usage, machine load and
   activity, around the chat. PC only.
 - It is turned on in Settings › Advanced › God mode; the panels can only be ticked with the mode on.
-- Files: `src/engine/expert.mjs` and `src/ui/views/expert.jsx`.
-- **"Open in":** the project in Cursor or VS Code (only the installed ones) or in Explorer (`src/engine/editors.mjs`,
+- Files: `src/engine/host/expert.mjs` and `src/ui/views/expert.jsx`.
+- **"Open in":** the project in Cursor or VS Code (only the installed ones) or in Explorer (`src/engine/host/editors.mjs`,
   `app.openIn`; programs are launched directly, never through cmd.exe, and by the app — `host.openEditor`,
   `host.openTerminal`, `host.runAction`: the engine names the kind and the folder, the app picks the program by its
   absolute path — so they outlive Orb). core itself and `core\secretos` open in Explorer only with a fresh unlock of the
@@ -782,7 +782,7 @@ launched hidden, with its output read by Orb, and it stores the session in the a
   runs hidden, without admin rights and for at most 15 minutes.
 
 **Files.**
-- `src/engine/installer.mjs`: `ITEMS`, `check()` and the PowerShell script.
+- `src/engine/host/installer.mjs`: `ITEMS`, `check()` and the PowerShell script.
 - Each adapter's `detect()` and `loginState()` (for example, the Codex session is in `~/.codex/auth.json`).
 - `src/domain/usage/accounts.mjs`: several accounts per agent; each one has its login folder and its usage.
 
@@ -791,7 +791,7 @@ launched hidden, with its output read by Orb, and it stores the session in the a
 3.8.1, the owner's definition: **`core\skills` holds every skill and `core\mcp` every MCP server** (the ones Orb installs
 and the ones the user writes). Agents never write in core; the only way in is through the user (Settings, «Importar»)
 or an agent's request the user approves. `src/domain/extensions/extensions.mjs` does the work (no engine imports: the engine, the
-agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-extensions.mjs` is its API (PC only).
+agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api/extensions.mjs` is its API (PC only).
 
 - **What there is** (`listExtensions`): each folder of `core\skills` with its `SKILL.md` (frontmatter `name` and
   `description`, the Agent Skills format) and each folder of `core\mcp` with the command that starts it (`startCommand`:
@@ -941,7 +941,7 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   - Animated robot in `robot.jsx`.
 - **Mode** light, dark or system; interface **size** with Ctrl +, Ctrl - and Ctrl 0; **Ctrl J** opens a terminal in the
   folder.
-- **Integrated terminal** (3.8.2, `src/engine/user-terminal.mjs`, `components/terminal-panel.jsx`): a chat's ⋯ menu ›
+- **Integrated terminal** (3.8.2, `src/engine/host/user-terminal.mjs`, `components/terminal-panel.jsx`): a chat's ⋯ menu ›
   «Mostrar terminal» docks the user's own terminal under it, in the chat's folder, with one tab per terminal (at most 4). It is
   the user's, not an agent's (no guard), so it is this PC's window only (`terminal.*` are `pc` methods; `terminal:data`
   is never sent to a phone) and never starts in core, Orb's data, the install folder or a protected folder. It runs
@@ -1024,7 +1024,7 @@ menus, texts, permissions and themes.
   The list's ⋯ (`views/orb/inbox.jsx › useOrbActions`) gains «Renombrar» (the same `renameChat` the title uses) and
   «Posponer»: `inbox.snooze` hides a chat (and its unread count) until a time; the scheduler's tick brings it back with
   a notice (`scheduler.mjs › wakeSnoozed`); pinning and muting are unchanged.
-- **Attach any file** (`src/engine/attachments.mjs`, `src/shared/attach-kind.mjs`): up to 10 files of 100 MB per message,
+- **Attach any file** (`src/engine/host/attachments.mjs`, `src/shared/attach-kind.mjs`): up to 10 files of 100 MB per message,
   copied into `<chat folder>\.orb-adjuntos\<stamp>\` (never into core). Pictures go natively to Claude and Codex;
   videos become frames (ffmpeg: Orb's pinned copy, the PATH's, or a pinned download the first time); documents and
   PDFs, their extracted text; the rest, its path. On the PC an attached picture opens in the image viewer and a PDF in
@@ -1048,7 +1048,7 @@ menus, texts, permissions and themes.
 - **«Cristal» theme** (`themes.css`, `src/shared/appearance.mjs › SKIN_BASE`): Profesional plus a glass material
   (`data-material="cristal"`); every Profesional rule applies, with blur only on the sidebar, chat bar, message box and
   menus/dialogs, and `prefers-reduced-transparency` makes it opaque.
-- **Music** (Windows only; `src/engine/music.mjs`, `lib/music.js`): ♪ in the sidebar's foot and one track per
+- **Music** (Windows only; `src/engine/host/music.mjs`, `lib/music.js`): ♪ in the sidebar's foot and one track per
   mini-game, off by default; CC0 tracks pinned by size and SHA-256 and downloaded the first time to
   `core\herramientas\musica`; it stops when Orb locks or the window hides.
 
@@ -1091,7 +1091,7 @@ menus, texts, permissions and themes.
   no menu bar (the old `ui.menuBar` setting is dropped when orb.json loads); its shortcuts (zoom, Ctrl+J, F11) live in
   `tauri-bridge.js`. F5 reloads the window (`main.jsx`, `lib/reload.js`): the engine keeps running and the unsent text
   of the message boxes comes back on the same screen.
-- **Contribute and More apps** (`src/engine/feedback.mjs`, `app.feedbackSend` / `app.moreApps`, in the engine because the
+- **Contribute and More apps** (`src/engine/host/feedback.mjs`, `app.feedbackSend` / `app.moreApps`, in the engine because the
   window does not go out to the internet; the screenshot and the picked files come from the app): the developer's PayPal; feedback via FormSubmit (to the developer's inbox) with up to 3 PNG/JPEG
   screenshots of the window or from files; and the other apps with their latest version from GitHub Releases.
 
@@ -1115,7 +1115,7 @@ menus, texts, permissions and themes.
   dies mid-turn), with `Sessions.closeLive` / `Lane.closeLive`, with the conversation and with the engine: nothing of an
   earlier run is valid (the hashes 3.8 kept in `settings` are deleted at start). There is no coordinator without a
   conversation.
-- **Secrets an agent asks for (3.8.2, `src/engine/agent-secrets.mjs`):** `orb_request_secret` (name + reason) shows a
+- **Secrets an agent asks for (3.8.2, `src/engine/security/agent-secrets.mjs`):** `orb_request_secret` (name + reason) shows a
   private card in the chat on this PC only (`secrets.pending` / `secrets.answer` / `secrets.decline` are `pc` methods;
   the `secret:request` event is not one a phone gets; the chat only says which name was asked for). The value typed
   there never goes to the chat, the logs, the database or the agent: the engine issues a one-time grant (`once`) on the
@@ -1312,7 +1312,7 @@ that is not installed is never assigned and every agent can close its task.
 - **Only available agents** (`Scheduler.refreshAvailable` → setting `agents_available`; `Board.checkAvailable`): Orbe,
   the `orb_*` tools, the app and scheduled tasks only offer and accept agents that are enabled, installed and have an
   account. A queued task for an agent that disappears moves to any agent (except sensitive ones).
-- **Accounts and plans** (`engine/plans.mjs`): each account's plan is read from the agent itself (Claude:
+- **Accounts and plans** (`engine/usage/plans.mjs`): each account's plan is read from the agent itself (Claude:
   `.credentials.json`, only `subscriptionType`/`rateLimitTier`; Codex: `account/read`; Cursor: `about`). `budget.mjs`
   scales task limits by plan (`PLAN_FACTOR`); the real usage Claude and Codex report still rules. Tasks that write code
   never get a light model (`chooseModel({ writes })`).
@@ -1409,9 +1409,9 @@ this PC's (`config.orchestrator`). The state it gets (`app.state`, `remote.mjs �
 (`home`, `paths`, the working project's path), and its notifications and their buttons follow the same rule as its
 calls (`validDevice`: a phone or a browser, used in the last 30 days, the owner's).
 
-**Files.** `src/domain/security/permissions.mjs` (the table, `principalOf`, `authorize`, `ownsTask`); `src/engine/api.mjs ›
+**Files.** `src/domain/security/permissions.mjs` (the table, `principalOf`, `authorize`, `ownsTask`); `src/engine/api/index.mjs ›
 call` checks every call before the method runs and refuses one that does not say who makes it (the engine and
-dev-control pass `DESKTOP`; the methods get the principal as their second argument); `src/engine/remote.mjs` builds a device's principal and also checks
+dev-control pass `DESKTOP`; the methods get the principal as their second argument); `src/engine/transport/remote.mjs` builds a device's principal and also checks
 `REMOTE_METHODS` itself (`guardCall`, with the pictures and the full-access rules); `src/mcp/server.mjs` builds the
 agent's `WHO` from its signature (`identity()`, `stillSigned()`).
 
@@ -1617,7 +1617,7 @@ workspace), `test/multiplataforma.test.mjs` and `test/migracion-38.test.mjs` (th
 
 One password, made once, protects what Orb keeps for itself and the actions that could hurt. Code: `src-tauri/vault`
 (the orb-vault crate: the crypto, the files, the waits, the unlock tokens), `src/domain/security/master.mjs` (the engine's client of
-it, same API as before), `src/engine/api-master.mjs` (the API and the guard), `src/domain/security/connector-secrets.mjs`,
+it, same API as before), `src/engine/api/master.mjs` (the API and the guard), `src/domain/security/connector-secrets.mjs`,
 `src/shared/mobile-crypto.mjs` (linking), `src/ui/views/master.jsx` and `src/ui/lib/core-access.js`.
 
 **Where the secrets live (3.8.1).** In Rust, not in the engine. Orb.exe runs the vault (`src-tauri/src/vault_host.rs`)

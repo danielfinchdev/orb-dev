@@ -1,4 +1,4 @@
-// 3.8.1 (H1c): skills and MCP servers live in core (src/domain/extensions/extensions.mjs, src/engine/api-extensions.mjs): what Orb
+// 3.8.1 (H1c): skills and MCP servers live in core (src/domain/extensions/extensions.mjs, src/engine/api/extensions.mjs): what Orb
 // lists and checks, how the skills that are on reach the agents (a plugin for Claude, an extra root for Codex, the brief
 // for the others), importing from a folder (off until turned on), removing after the master password, an agent's
 // request (a folder in core\preparacion, the user's approval of exactly those files) and improving a server of core in a

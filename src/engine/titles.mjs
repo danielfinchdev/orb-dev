@@ -5,7 +5,7 @@ import { ctx } from '../platform/context.mjs';
 import { account, defaultAccount, accountEnv } from '../domain/usage/accounts.mjs';
 import { cleanTitle } from '../shared/titles.mjs';
 import { adapter, executable, installed } from '../agents/index.mjs';
-import { chooseModel } from './catalog.mjs';
+import { chooseModel } from './usage/catalog.mjs';
 
 const TIMEOUT_MS = 60_000;
 
