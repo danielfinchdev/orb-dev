@@ -1,6 +1,6 @@
 [package]
 name = "orb-vault"
-version = "3.8.2"
+version = "3.8.3"
 description = "Orb's master password and secrets, kept out of the engine (src/domain/security/master.mjs talks to it)"
 authors = ["Orb"]
 license = "MIT"
