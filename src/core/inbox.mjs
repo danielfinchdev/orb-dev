@@ -1,7 +1,7 @@
 // 3.6 (messaging lists): the marks on the chats of the list (the conversations with Orbe and the direct ones with an
 // agent) and what the list shows of each chat: its last message, how many are unread (tables inbox_items and
 // inbox_sections). No engine imports: plain data.
-import { oneLine } from './safety.mjs';
+import { oneLine } from '../shared/text.mjs';
 
 // 3.6: session = a direct conversation with an agent: it can be pinned and muted like the others. 3.8: the list of the
 // bots is gone; the rows of a 3.7 database with kind «bot» or «group» (zone «bots») are left out until the 3.8

@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { isSecretPath, porcelainPaths, redactSecrets } from './safety.mjs';
+import { isSecretPath, porcelainPaths, redactSecrets } from '../shared/secrets-scan.mjs';
 import { PRODUCT } from '../shared/product.mjs';
 import { tr } from '../platform/context.mjs';
 

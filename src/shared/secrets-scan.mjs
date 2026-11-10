@@ -1,56 +1,5 @@
-// Small helpers that keep the daemon alive and its outputs clean: log rotation, secret redaction, text normalisation.
-import fs from 'node:fs';
-
-export const MAX_DESCRIPTION = 12000;
-export const MAX_DEP_RESULT = 4000; // 3.1: a dependency's whole summary (1500 cut the "how to test it" part)
-
-// Keeps one previous generation (file.1) once a log passes `max` bytes.
-export function rotateIfBig(file, max = 10 * 1024 * 1024) {
-  try {
-    if (fs.statSync(file).size <= max) return false;
-    fs.rmSync(`${file}.1`, { force: true });
-    fs.renameSync(file, `${file}.1`);
-    return true;
-  } catch { return false; }
-}
-
-// 3.8.3: the writer of a run log (asistente.log, a conversation's registro.jsonl): one line per call, secrets hidden,
-// and at most two generations of `max` bytes. The size is checked again every 200 lines, not only when the agent starts
-// (the assistant's conversation lives for days).
-export function runLog(file, { prefix = '', max } = {}) {
-  rotateIfBig(file, max);
-  let lines = 0;
-  return (line) => {
-    try {
-      if (++lines % 200 === 0) rotateIfBig(file, max);
-      fs.appendFileSync(file, `${prefix}${redactSecrets(String(line)).replace(/\r?\n/g, ' ')}\n`);
-    } catch { /* log unavailable */ }
-  };
-}
-// One message of an agent for a run log: always whole JSON (up to 3.8.2 the line was cut at 4 KB and could not be read),
-// with each long string (a file read, a tool's output) shortened instead, and the whole kept under `max` characters.
-export function logJson(value, { maxString = 4000, max = 64_000 } = {}) {
-  const cut = (n) => (_key, v) => (typeof v === 'string' && v.length > n ? `${v.slice(0, n)}… [+${v.length - n}]` : v);
-  try {
-    for (const n of [maxString, 500, 80]) { const line = JSON.stringify(value, cut(n)); if (line.length <= max) return line; }
-  } catch { /* a value JSON cannot hold */ }
-  return JSON.stringify({ type: value?.type ?? null, subtype: value?.subtype ?? null, omitted: 'too long for the log' });
-}
-
-// One line, bounded: for anything an agent or a creator controls that ends up in BITACORA.md or a notice.
-export const oneLine = (value, max = 120) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
-
-// 3.2.1: times written for people (names of backups, PIZARRA.md) in the PC's local time, not UTC.
-const pad = (n) => String(n).padStart(2, '0');
-export const localStamp = (d = new Date()) => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-export const localText = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-// A size people can read: KB below 1 MB (never "0 MB" for 445 KB), MB with one decimal below 10 MB.
-export function sizeText(bytes) {
-  const b = Math.max(0, Number(bytes) || 0);
-  if (b < 1048576) return `${Math.max(b ? 1 : 0, Math.round(b / 1024))} KB`;
-  const mb = b / 1048576;
-  return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`;
-}
+// Secrets in text, file names and diffs: hiding them in what is logged or shown, and finding them before a commit.
+// Pure: the caller runs git (stagedSecrets takes it).
 
 const SECRET_PATTERNS = [
   /-----BEGIN [A-Z ]*(?:PRIVATE KEY|CERTIFICATE|PGP[A-Z ]*)-----[\s\S]*?(?:-----END [A-Z ]*-----|$)/g,

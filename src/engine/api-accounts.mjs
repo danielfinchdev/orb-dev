@@ -8,7 +8,7 @@ import { AGENT_IDS } from '../platform/config-file.mjs';
 import { MULTI, newAccountId, findAccountFolders, accountsOf, accountDir } from '../core/accounts.mjs';
 import { accountInfo as codexAccountInfo } from '../agents/codex.mjs';
 import { clearCooldown } from '../core/budget.mjs';
-import { oneLine } from '../core/safety.mjs';
+import { oneLine } from '../shared/text.mjs';
 import { statusAll, status as agentStatus, openLogin, startAccountLogin, forgetInstalled, executable } from '../agents/index.mjs';
 import { sendCode as loginSendCode, cancelLogin, loginInfo, allLogins } from '../agents/login.mjs';
 import { translate } from '../shared/i18n.mjs';

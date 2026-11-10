@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { tr } from '../platform/context.mjs';
-import { localText, sizeText } from '../core/safety.mjs';
+import { localText, sizeText } from '../shared/text.mjs';
 
 const MB = 1024 * 1024;
 const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp',

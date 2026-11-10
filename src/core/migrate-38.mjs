@@ -30,7 +30,7 @@ import { configFrom } from '../platform/config-file.mjs';
 import { IGNORED_PROJECTS } from '../platform/state.mjs';
 import { isValidTz } from '../shared/tz.mjs';
 import { ME } from './inbox.mjs';
-import { redactSecrets } from './safety.mjs';
+import { redactSecrets } from '../shared/secrets-scan.mjs';
 import { isRef, refOf, secretId } from './connector-secrets.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');

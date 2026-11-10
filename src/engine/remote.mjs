@@ -14,7 +14,7 @@ import { execFile } from 'node:child_process';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { ctx, tr } from '../platform/context.mjs';
-import { oneLine } from '../core/safety.mjs';
+import { oneLine } from '../shared/text.mjs';
 import { quickRun } from '../agents/index.mjs';
 import { IS_WIN } from '../agents/common.mjs';
 import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, AAD, CLOCK_SKEW_MS, shortSecret, pairKdfOk } from '../shared/mobile-crypto.mjs';

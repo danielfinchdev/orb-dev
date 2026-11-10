@@ -11,7 +11,8 @@ import { paths } from '../platform/paths.mjs';
 import { keysOf, machineKeys } from '../platform/keys.mjs';
 import { IN_VAULT } from '../core/master.mjs';
 import { coreHealth } from '../core/core-folder.mjs';
-import { rotateIfBig, oneLine } from '../core/safety.mjs';
+import { writeTimed } from '../platform/log.mjs';
+import { oneLine } from '../shared/text.mjs';
 import { PRODUCT } from '../shared/product.mjs';
 import { DESKTOP, authorize } from '../core/permissions.mjs';
 
@@ -58,7 +59,7 @@ let api = null;
 let browserFiles = null;
 let hostBrowser = null; // 3.8.1 (D7): the agents' browser when the app's pages are driven from here (src/engine/host-browser.mjs)
 let logFile = null;
-const log = (line) => { try { if (logFile) { rotateIfBig(logFile); fs.appendFileSync(logFile, `${new Date().toISOString()} ${line}\n`); } } catch { /* never fatal */ } };
+const log = (line) => writeTimed(logFile, line);
 process.on('uncaughtException', (error) => log(`uncaughtException: ${error?.stack ?? error}`));
 process.on('unhandledRejection', (error) => log(`unhandledRejection: ${error?.stack ?? error}`));
 

@@ -6,7 +6,7 @@
 // most recent first. The marks live in src/core/inbox.mjs; a new line tells the lists (inbox:changed).
 import { tr } from '../platform/context.mjs';
 import { userName } from '../core/board.mjs';
-import { oneLine } from '../core/safety.mjs';
+import { oneLine } from '../shared/text.mjs';
 import * as I from '../core/inbox.mjs';
 import { fail, str, int, oneOf } from './api-common.mjs';
 

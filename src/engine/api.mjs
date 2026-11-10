@@ -19,7 +19,8 @@ import { finishProject, finishedProjects, reopenProject, checkDelete, deleteProj
 import { PRODUCT } from '../shared/product.mjs';
 import { slashCommand } from '../shared/slash.mjs';
 import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../core/schedules.mjs';
-import { oneLine, redactSecrets, localStamp } from '../core/safety.mjs';
+import { oneLine, localStamp } from '../shared/text.mjs';
+import { redactSecrets } from '../shared/secrets-scan.mjs';
 import { quickRun } from '../agents/index.mjs';
 import { PERMISSIONS, ATTACH_DIR } from './sessions.mjs';
 import { playableType } from '../shared/attach-kind.mjs';

@@ -18,7 +18,8 @@ import { createProject, syncProjects } from '../src/core/projects.mjs';
 import { detectSensitivity, verify } from '../src/core/approval.mjs';
 import { canLaunch, parseReset, startCooldown, isLimitText } from '../src/core/budget.mjs';
 import { takeCheckpoint, snapshotCommit, undoCheckpoint, prepareWorkdir, git } from '../src/core/workspace.mjs';
-import { isSecretPath, redactSecrets, logJson, runLog } from '../src/core/safety.mjs';
+import { isSecretPath, redactSecrets } from '../src/shared/secrets-scan.mjs';
+import { logJson, runLog } from '../src/platform/log.mjs';
 
 let t; let board; let project;
 before(() => { t = tempHome(); board = new Board(); project = createProject(board, { name: 'web' }, 'usuario'); });

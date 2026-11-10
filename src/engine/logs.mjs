@@ -3,7 +3,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from '../platform/context.mjs';
-import { oneLine, redactSecrets, porcelainPaths } from '../core/safety.mjs';
+import { oneLine } from '../shared/text.mjs';
+import { redactSecrets, porcelainPaths } from '../shared/secrets-scan.mjs';
 import { generalLogHeader, projectLogHeader } from '../platform/journal-files.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
 import { git, isGitRepo } from '../core/workspace.mjs';

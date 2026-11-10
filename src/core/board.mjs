@@ -7,7 +7,7 @@ import { AGENT_IDS, AGENT_LABELS } from '../platform/config-file.mjs';
 import { folderName, isConfigName, categoryOf, CATEGORIES, folderKey } from '../platform/paths.mjs';
 import { projectLogHeader, logBody } from '../platform/journal-files.mjs';
 import { IGNORED_PROJECTS, FINISHED_PROJECTS, DELETING_PROJECTS } from '../platform/state.mjs';
-import { oneLine, MAX_DESCRIPTION } from './safety.mjs';
+import { oneLine, MAX_DESCRIPTION } from '../shared/text.mjs';
 import { contentHash, sign, verify, detectSensitivity, deletionAskedByUser, defaultApprovalKey } from './approval.mjs';
 import { PRODUCT } from '../shared/product.mjs';
 import { git, isGitRepo } from './workspace.mjs';

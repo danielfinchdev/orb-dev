@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
-import { isSecretPath, redactSecrets } from '../core/safety.mjs';
+import { isSecretPath, redactSecrets } from '../shared/secrets-scan.mjs';
 import { tr } from '../platform/context.mjs';
 
 const MAX_ENTRIES = 600;

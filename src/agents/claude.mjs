@@ -10,7 +10,7 @@ import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, describeInput, 
 import { Turn, Approvals } from './live.mjs';
 import { decide, describeAction } from '../core/guard.mjs';
 import { tr } from '../platform/context.mjs';
-import { logJson } from '../core/safety.mjs';
+import { logJson } from '../platform/log.mjs';
 
 export const id = 'claude';
 export const label = 'Claude Code';
