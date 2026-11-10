@@ -2,6 +2,7 @@
 // the composer's folder chip, the cost line setting and the message's time, F5, the first run maximised and the foot of
 // Ajustes). The screens are read as source, like mensajeria-orb.test.mjs; the pure helpers are run.
 import { test } from 'node:test';
+import { settingsSource } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -52,7 +53,7 @@ test('bubbles stay inside the window and the composer folder is a chip like the 
 test('the cost line can be hidden in Apariencia and the message time shows on hover', async () => {
   const { DEFAULT_CONFIG } = await import('../src/platform/config-file.mjs');
   assert.equal(DEFAULT_CONFIG.ui.usageLine, true);
-  assert.match(read('views', 'settings.jsx'), /<Switch checked=\{ui\.usageLine !== false\} onCheckedChange=\{\(usageLine\) => set\(\{ usageLine \}\)\}/);
+  assert.match(settingsSource(), /<Switch checked=\{ui\.usageLine !== false\} onCheckedChange=\{\(usageLine\) => set\(\{ usageLine \}\)\}/);
   const session = read('views', 'session.jsx');
   assert.match(session, /useStore\(\(st\) => st\.app\?\.config\?\.ui\?\.usageLine !== false\)/);
   assert.match(session, /if \(it\.kind === 'usage'\) \{[\s\S]{0,120}if \(!usageLine\) return null;/);
@@ -109,7 +110,7 @@ test('the first-run welcome opens maximised and fits the window', () => {
 });
 
 test('the foot of the Ajustes list shows GitHub, the version and the MIT licence again', async () => {
-  const settings = read('views', 'settings.jsx');
+  const settings = settingsSource();
   const foot = settings.slice(settings.indexOf('data-testid="settings-foot"'), settings.indexOf('</nav>'));
   assert.match(foot, /bridge\.openExternal\(AUTHOR\.url\)/);
   assert.match(foot, /\{PRODUCT\.name\} \{app\.version\} · \{t\('settings\.footLicense'\)\}/);

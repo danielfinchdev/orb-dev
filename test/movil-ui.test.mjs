@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { ROOT } from './helpers.mjs';
+import { ROOT, settingsSource } from './helpers.mjs';
 import { cleanRoute, restoreRoute, backStep, keyboardOpen, PHONE_TABS } from '../src/ui/lib/phone-nav.js';
 import { timedFetch, fetchWithin, isOffline, retryDelay, retryLoop, TIMEOUTS } from '../src/ui/lib/net.js';
 
@@ -189,7 +189,7 @@ test('«Cosas que nadie toca»: quitar uno de serie pide confirmación y se pued
   const home = await import('../src/platform/paths.mjs');
   assert.equal(home.DEFAULT_PROTECTED, DEFAULT_PROTECTED, 'una sola lista, también para la ventana');
   assert.ok(DEFAULT_PROTECTED.includes('vaultwarden'));
-  const s = read('src/ui/views/settings.jsx');
+  const s = settingsSource();
   assert.match(s, /if \(isDefault\(x\) && !await confirm\(t\('settings\.protectedRemoveTitle', \{ name: x \}\)/);
   assert.match(s, /store\(\[\.\.\.list, \.\.\.missing\]\)/);
   assert.match(s, /settings\.protectedDefaults/);
@@ -248,7 +248,7 @@ test('M4: el flujo de eventos del móvil detecta una conexión colgada y vuelve 
 test('M5: los avisos del móvil se ofrecen al enlazar y dicen la verdad (en la app, solo con la app viva en segundo plano)', () => {
   assert.match(read('src/ui/lib/app-bridge.js'), /whenClosed: \(\) => false/);
   assert.match(read('src/ui/lib/web-bridge.js'), /whenClosed: \(\) => true/);
-  assert.match(read('src/ui/views/settings.jsx'), /p\.whenClosed\?\.\(\) === false \? 'settings\.phonePushHintApp' : 'settings\.phonePushHint'/);
+  assert.match(settingsSource(), /p\.whenClosed\?\.\(\) === false \? 'settings\.phonePushHintApp' : 'settings\.phonePushHint'/);
   const main = read('src/ui/main.jsx');
   assert.equal((main.match(/offerNotify\(\); location\.reload\(\);/g) ?? []).length, 2, 'la app y el navegador, tras enlazar');
   // 3.8.1: in the flow above the tabs, never a toast over a screen's buttons; and after updating from 3.8.0 (no choice saved).

@@ -3,6 +3,7 @@
 // with its own preview, and its tokens keep the text readable (WCAG AA) on every surface over the brightest and the
 // darkest point of its colour field, in light and dark. The CSS is read as source.
 import { test } from 'node:test';
+import { settingsSource } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -31,7 +32,8 @@ test('Cristal is registered as a theme built on Profesional', () => {
   assert.match(read('components', 'skin-preview.jsx'), /cristal: null/);
   assert.match(read('components', 'skin-preview.css'), /\.skp\[data-skin-preview="cristal"\]/);
   // No robot, no scene, no companion: the same checks as Profesional.
-  for (const f of [['components', 'robot.jsx'], ['components', 'scene.jsx'], ['components', 'companion.jsx'], ['views', 'settings.jsx']]) assert.match(read(...f), /plainSkin\(/, f.join('/'));
+  for (const f of [['components', 'robot.jsx'], ['components', 'scene.jsx'], ['components', 'companion.jsx']]) assert.match(read(...f), /plainSkin\(/, f.join('/'));
+  assert.match(settingsSource(), /plainSkin\(/, 'views/settings');
 });
 
 test('Profesional is left as it was', () => {

@@ -54,7 +54,7 @@ import { RecoveryNotice } from '@/views/data.jsx';
 // they come from the PC over the network). A load that fails can be tried again (lib/lazy.js, ErrorBoundary).
 const later = [];
 const deferred = (load, name) => { const Screen = lazyScreen(load, name); later.push(Screen.preload); return Screen; };
-const loadSettings = () => import('@/views/settings.jsx');
+const loadSettings = () => import('@/views/settings/index.jsx');
 const TasksView = deferred(() => import('@/views/tasks.jsx'), 'TasksView');
 const ProjectsView = deferred(() => import('@/views/projects.jsx'), 'ProjectsView');
 const AgentsView = deferred(() => import('@/views/agents.jsx'), 'AgentsView');

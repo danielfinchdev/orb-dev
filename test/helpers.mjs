@@ -73,3 +73,6 @@ export function fakeLog(home, run) {
   let text = ''; try { text = fs.readFileSync(file, 'utf8'); } catch { return []; }
   return text.split('\n').filter((l) => l.startsWith('{"fake"')).map((l) => JSON.parse(l));
 }
+
+// 3.8.3: Ajustes is a folder of files (src/ui/views/settings/); tests that read its source read them all, in order.
+export const settingsSource = () => ['index', 'rows', 'general', 'devices', 'about'].map((f) => fs.readFileSync(path.join(ROOT, 'src', 'ui', 'views', 'settings', `${f}.jsx`), 'utf8')).join('\n');
