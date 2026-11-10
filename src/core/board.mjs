@@ -137,6 +137,7 @@ export class Board {
     try { const out = fn(); this.db.exec('COMMIT'); return out; } catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
 
+  // Orb's internal state (the settings table; every key is registered in src/platform/state.mjs › STATE_KEYS).
   setting(key, value) {
     if (value === undefined) return this.one('SELECT value FROM settings WHERE key = ?', key)?.value;
     this.run('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', key, String(value));
