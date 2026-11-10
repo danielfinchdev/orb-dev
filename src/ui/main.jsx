@@ -25,7 +25,7 @@ import { ActionShortcuts } from '@/components/project-tools.jsx';
 import { CommandPalette } from '@/components/command-palette.jsx';
 import { Scene } from '@/components/scene.jsx';
 import { Robot } from '@/components/robot.jsx';
-import { useStore, setState, getState, refresh, refreshSoon, call, bridge, act, go, goBack, resetRoute, setViews, applyTheme, openTerminal, startTour, closeSettings, anyChatBusy, chatStateSoon, flushChatStates, phoneLayout, loadOrbInbox, loadOrbInboxSoon } from '@/lib/store.js';
+import { useStore, setState, getState, refresh, refreshSoon, call, bridge, act, go, goBack, resetRoute, setViews, applyTheme, openTerminal, startTour, closeSettings, anyChatBusy, flushChatStates, phoneLayout, loadOrbInbox } from '@/lib/store.js';
 import { restoreRoute, keyboardOpen } from '@/lib/phone-nav.js';
 import { listenPoints } from '@/lib/browser-points.js';
 import { startupPhase } from '@/lib/startup.js';
@@ -48,6 +48,7 @@ import { OrbInfoHost } from '@/views/orb/info.jsx';
 import { UpdateNeeded } from '@/components/update-needed.jsx';
 import { NoteOpener } from '@/lib/notes.js';
 import { RecoveryNotice } from '@/views/data.jsx';
+import { useEngineEvents } from '@/app/engine-events.js';
 
 // 3.8.1 (H4a): the screens other than the chats load the first time they open, so the app starts with less to read; once
 // it is up, they load in the background while the window is idle (opening one later is instant; on a phone's browser
@@ -218,7 +219,6 @@ function Shell() {
 
 document.addEventListener('visibilitychange', flushChatStates);
 
-let coreLost = false;
 // The linking screen's own «back» (AppLink): true when it took the press.
 const linkBack = { current: null };
 // 3.8 (F5b): after linking, the phone's notifications (off until turned on) are offered, saying what they do. 3.8.1: in the
@@ -397,26 +397,7 @@ function Root() {
   // Screens without a top bar of their own (welcome, loading, error): a strip at the top still moves the window (the
   // PC's only: on a phone it would only take the taps at the top of the screen).
   const strip = bridge.mobile ? null : <div className="app-titlebar fixed inset-x-0 top-0 z-40 h-14" aria-hidden="true" />;
-  useEffect(() => {
-    if (phase !== 'app') return undefined;
-    return bridge.on('*', (event, payload) => {
-      if (event === 'board:changed' || event === 'session:update' || event === 'session:removed' || event === 'config:changed' || event === 'approval:changed') refreshSoon();
-      // 3.2: what one conversation is doing now (answering, waiting its turn or idle again). 3.8.1 (H4a): an answer
-      // streams in many small pieces; the screen takes them once per frame (the newest state of each conversation).
-      if (event === 'chat:state' && payload?.conversation != null) chatStateSoon(payload);
-      // 2.7: what only informs (working folder, brain in use, schedule created…) passes by as a notification.
-      // 3.2: through lib/notify.js: one at a time, never repeated, kept under the bell.
-      if (event === 'notice' && payload?.body) notify({ body: payload.body, tone: payload.tone });
-      if (event === 'ui:navigate') go(payload);
-      if (event === 'inbox:changed') loadOrbInboxSoon(120);
-      // 3.6 (M3): the chat list follows what its conversations do (a new line comes with inbox:changed).
-      if (event === 'chat:state' && !payload?.partial && payload?.append == null) loadOrbInboxSoon(400);
-      if (event === 'engine:stopped') notify({ body: tNow('app.engineStopped'), tone: 'error' });
-      // 3.8: core went missing while Orb ran: the engine starts again and brings it back (or says why it cannot).
-      if (event === 'core:lost') coreLost = true;
-      if (event === 'engine:restarted') { if (coreLost) { location.reload(); return; } notify({ body: tNow('app.engineRestarted'), tone: 'warning' }); refreshSoon(); }
-    });
-  }, [phase]);
+  useEngineEvents(phase);
   // 3.8.1: the main screen's first frame, marked for scripts/medir.mjs (the same mark under every app, read whenever the
   // measurement reaches the page).
   useEffect(() => {
