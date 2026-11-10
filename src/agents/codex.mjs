@@ -200,8 +200,11 @@ export function createLive(o) {
   const guardAsk = async ({ itemId, command, paths = [], tool, kind }) => {
     const verdict = decide({ permission, tool, kind, command, paths, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()), projectDir: o.projectDir, userAsked: o.userAsked?.() ?? [] });
     if (verdict.auto) onEvent({ type: 'auto', title: command || paths.join(', ') || tool, reason: verdict.reason });
-    if (verdict.decision !== 'ask') return verdict.decision;
-    return approvals.ask({ id: itemId, tool, title: command || paths.join(', ') || tool, reason: verdict.reason, input: clip(command || paths.join(', '), 400) });
+    const d = verdict.decision !== 'ask' ? verdict.decision : await approvals.ask({ id: itemId, tool, title: command || paths.join(', ') || tool, reason: verdict.reason, input: clip(command || paths.join(', '), 400) });
+    // 3.8.3: Codex's protocol carries no reason with a decline; Claude gets one in canUseTool. Said here as a steer,
+    // so the agent does not try the same thing in another spelling (the denied reason is the guard's, a user's has none).
+    if (d === 'deny') live.steer?.({ text: tr('sys.agents.deniedHint', { title: clip(command || paths.join(', ') || tool, 200), reason: verdict.decision === 'deny' ? `: ${verdict.reason}` : '' }) });
+    return d;
   };
 
   const onRequest = async (method, p) => {

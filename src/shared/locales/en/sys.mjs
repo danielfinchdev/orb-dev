@@ -209,6 +209,7 @@ export default {
   'sys.agents.permissions': 'Permissions',
   'sys.agents.morePermissions': '{name} is requesting more permissions',
   'sys.agents.morePermissionsWhy': 'it wants to leave its folder or use the network',
+  'sys.agents.deniedHint': 'NOTICE FROM ORB: «{title}» was not allowed{reason}. Do not retry it another way: find another path or explain what you need.',
   'sys.agents.tool.read': 'Read',
   'sys.agents.tool.edit': 'Edit',
   'sys.agents.tool.delete': 'Delete',

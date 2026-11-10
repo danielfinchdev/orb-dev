@@ -245,7 +245,7 @@ export default {
   "msg.guard.internalSkills": "cambia una skill de core (las skills no se editan: para una versión nueva usa orb_create_skill con mejorar, y la aprueba el usuario)",
   "msg.guard.internalSkillsRun": "ejecuta un script de una skill de core",
   "msg.guard.internalLink": "crea un enlace (una unión de carpetas) dentro de la carpeta core o hacia ella",
-  "msg.guard.internalLogs": "toca la bitácora general de core (se lee con Read u orb_read_log y se escribe con orb_write_log)",
+  "msg.guard.internalLogs": "toca la bitácora general de core: los agentes no la escriben (Orbe anota tu result al terminar; solo el coordinador usa orb_write_log). No insistas: ponlo en tu result",
   "msg.guard.agentConfig": "cambia los ajustes de agentes del proyecto (.claude o .cursor), que usarán los agentes siguientes",
   "msg.guard.protected": "toca algo protegido ({name}), que nunca se toca",
   "msg.guard.plain.stop": "cerrar un programa que está en marcha",

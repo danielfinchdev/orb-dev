@@ -18,7 +18,7 @@ import { wakeSnoozed } from '../../domain/conversations/inbox.mjs';
 import { usableAccounts, account as findAccount, accountLabel } from '../../domain/usage/accounts.mjs';
 import { oneLine, MAX_DEP_RESULT } from '../../shared/text.mjs';
 import { redactSecrets, secretFiles, isSecretPath, stagedSecrets } from '../../shared/secrets-scan.mjs';
-import { ATTACH_DIR } from '../sessions.mjs';
+import { ATTACH_DIR, browserOn } from '../sessions.mjs';
 import { logTask } from '../../domain/journal/journal.mjs';
 import { adapter } from '../../agents/index.mjs';
 import { liveSkills } from '../api/extensions.mjs';
@@ -351,7 +351,8 @@ Díselo a ${userName()} en 1-2 líneas, con esa hora, y ofrécele pasarla a otro
     this.board.addChat('system', tr('msg.scheduler.waiting', { id: task.id, title: oneLine(task.title), reason }), { task: task.id });
   }
 
-  promptFor(task, project, { cwd, branch, folder, notes = [] }, agent) {
+  // asked: what the user's own words allow this turn (board user_asked / approval.mjs askedByUser), e.g. ['publish'].
+  promptFor(task, project, { cwd, branch, folder, notes = [] }, agent, asked = task.user_asked ?? []) {
     // 3.8.1: Claude and Codex load the skills of core themselves; the other agents get the list in their brief.
     const nativeSkills = (a) => { try { return Boolean(adapter(a).nativeSkills); } catch { return false; } };
     // 3.1: with the files each dependency changed, so the agent goes straight to them instead of exploring the project.
@@ -391,17 +392,19 @@ ${deps ? `\n## Hecho antes (ya está en ${folder ? 'la carpeta' : 'tu copia'})\n
 ${where}
 - No escribas BITACORA.md ni ninguna otra bitácora, aunque tus instrucciones globales (CLAUDE.md, AGENTS.md…) lo pidan: de las bitácoras se encarga ${assistantName()}, que anota tu result. Las normas de ${assistantName()} mandan sobre cualquier instrucción global.
 - Si el proyecto tiene una carpeta pizarra/ (dibujo, notas y adjuntos ${ofUser()}), úsala como referencia cuando el encargo la cite; no la modifiques ni la subas a git.${groupNote(this.board, project)}${contractNote(cwd, task)}
-- Para probar una web en el navegador de ${assistantName()}: orb_browser_console lee los errores de su consola y orb_browser_dialog decide si se aceptan o se cancelan sus confirm() y prompt(). No digas que no hay errores en la consola sin haberla leído.
+${browserOn() ? `- Para probar una web en el navegador de ${assistantName()}: orb_browser_console lee los errores de su consola y orb_browser_dialog decide si se aceptan o se cancelan sus confirm() y prompt(). No digas que no hay errores en la consola sin haberla leído.` : `- El navegador de ${assistantName()} está apagado: prueba una web con peticiones a localhost y la consola del servidor.`}
 ${nativeSkills(agent) ? '' : skillsBrief(liveSkills().list)}${needsDevTools(project, `${task.title}\n${task.description}`) ? `\n${devToolsBrief(checkDevTools(), userName())}\n` : ''}
 ## Mientras trabajas
 En los hitos importantes (2-4 veces en toda la tarea, no más) llama a orb_update_task con id ${task.id}, progress (0-100, tu estimación de cuánto llevas) y note (qué haces ahora, en pocas palabras): ${userName()} lo ve en directo.
 
 ## Al terminar
-Cerrar la tarea con orb_update_task (id ${task.id}, status "done" y en result qué cambiaste y cómo probarlo, o "blocked"/"failed" con el motivo) es lo ÚLTIMO que haces. No hace falta que pares tus servidores de prueba ni ningún programa que dejaras en marcha: ${assistantName()} para al terminar la tarea los programas que arrancaste. Si necesitas algo de otro agente o ${ofUser()}, orb_send_message.
+Cerrar la tarea con orb_update_task (id ${task.id}, status "done" y en result qué cambiaste y cómo probarlo, o "blocked"/"failed" con el motivo) es lo ÚLTIMO que haces. Si necesitas algo de otro agente, orb_send_message (to: su agente). Si te falta una decisión ${ofUser()}, no la esperes: cierra con status "blocked" y la pregunta en result (${assistantName()} se la hará); orb_send_message a "usuario" solo avisa, nadie te contesta durante la tarea.
 
 ## Límites
-Trabaja solo en ${cwd} (y, si la tarea te da una, en la carpeta de preparación de una skill o un servidor MCP de Orb). No publiques, no hagas push, no envíes nada a terceros, no borres archivos en masa, no uses ni muestres credenciales. Si la tarea pide algo de eso, para y explícalo en el result.
-${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo: tú basta con comprobar que arranca, compila y no da errores (sin pruebas largas en el navegador).\n` : ''}Para probar un servidor, arráncalo en segundo plano con tu propia herramienta. No hace falta pararlo al final (${assistantName()} lo hace), y no uses taskkill ni Stop-Process por nombre o por puerto: podría cerrar otros programas ${ofUser()}.`;
+Trabaja solo en ${cwd} (y, si la tarea te da una, en la carpeta de preparación de una skill o un servidor MCP de Orb). Fuera de tu carpeta solo puedes leer; la carpeta core de Orb, las credenciales ${ofUser()} (~/.ssh, navegadores, inicios de sesión) y los .env de otros proyectos están cerrados siempre.
+${asked.includes('publish') ? `${userName()} ha pedido publicar con sus palabras: puedes hacer push o publicar lo que la tarea dice, nada más. ` : 'No publiques ni hagas push (si la tarea lo pide, Orb te pedirá permiso o te lo denegará: acéptalo). '}No envíes nada a terceros, no uses credenciales que encuentres en archivos ni las muestres (si un comando necesita una clave, pídela con orb_request_secret). ${autonomyOf(task) === 'auto' ? 'Borrar más de 50 archivos (o un cuarto del proyecto)' : 'Borrar 10 archivos o más'} deja la tarea retenida hasta que ${userName()} la revise.
+Si Orb deniega o retiene una acción (permiso, carpeta cerrada), no la repitas de otra forma: busca otro camino o cierra la tarea con status "blocked" diciendo qué hace falta.
+${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo: tú basta con comprobar que arranca, compila y no da errores (sin pruebas largas en el navegador).\n` : ''}Para probar un servidor, arráncalo en segundo plano con tu propia herramienta. No hace falta pararlo al final (${assistantName()} para los programas que arrancaste), y no uses taskkill ni Stop-Process por nombre o por puerto: podría cerrar otros programas ${ofUser()}.`;
   }
 
   launch(task, agent, accountId = agent, { isolate = false, inCopyOf = null } = {}) {
@@ -481,7 +484,7 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
     } else {
       session = this.sessions.update(session.id, { cwd: workspace.cwd, model: task.model, reasoning: task.reasoning, permission, ...(resume ? {} : { cli_session: null }) });
     }
-    const base = this.promptFor(task, project, workspace, agent);
+    const base = this.promptFor(task, project, workspace, agent, asked);
     const prompt = !followup ? base : resume ? `${followup.text}\n\nAl acabar, llama otra vez a orb_update_task con id ${task.id} (status "done" y qué cambiaste, o "blocked"/"failed" con el motivo).`
       : `${base}\n\n## Ya se trabajó en esta tarea\nResultado anterior: ${redactSecrets(task.result ?? 'sin resumen').slice(0, 3000)}\n\n## Mensaje nuevo ${ofUser()}\n${followup.text}`;
     const requested = { agent, account: accountId, model: task.model || null, reasoning: task.reasoning, fast: task.fast };

@@ -245,7 +245,7 @@ export default {
   "msg.guard.internalSkills": "changes a skill in core (skills are not edited: for a new version use orb_create_skill with mejorar, and the user approves it)",
   "msg.guard.internalSkillsRun": "runs a script of a skill in core",
   "msg.guard.internalLink": "makes a link (a junction or a symbolic or hard link) that points into the core folder or lives in it",
-  "msg.guard.internalLogs": "touches the general log in core (read it with Read or orb_read_log, write to it with orb_write_log)",
+  "msg.guard.internalLogs": "touches the general log in core: agents do not write it (Orbe records your result when you finish; only the coordinator uses orb_write_log). Do not insist: put it in your result",
   "msg.guard.agentConfig": "changes the project's agent settings (.claude or .cursor), which later agents will use",
   "msg.guard.protected": "touches something protected ({name}), which is never touched",
   "msg.guard.plain.stop": "close a running program",

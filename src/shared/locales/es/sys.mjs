@@ -212,6 +212,7 @@ export default {
   'sys.agents.permissions': 'Permisos',
   'sys.agents.morePermissions': '{name} solicita más permisos',
   'sys.agents.morePermissionsWhy': 'solicita salir de su carpeta o usar la red',
+  'sys.agents.deniedHint': 'AVISO DE ORB: no se ha permitido «{title}»{reason}. No lo repitas de otra forma: busca otro camino o explica qué necesitas.',
   // Nombres de las herramientas que usan los agentes (conversaciones)
   'sys.agents.tool.read': 'Leer',
   'sys.agents.tool.edit': 'Editar',

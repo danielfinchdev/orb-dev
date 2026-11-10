@@ -74,7 +74,7 @@ export function devToolsBrief(list = checkDevTools(), user = 'el usuario') {
   const line = (t) => {
     const gone = t.missing.length ? ` (el PATH o una variable apunta a ${t.missing.join(', ')}, que no existe)` : '';
     if (t.path) return `- ${t.label}: instalado en ${t.path}.`;
-    if (t.inCore) return `- ${t.label}: no disponible para los agentes (está dentro de core, en ${t.inCore}, donde no podéis entrar)${gone}. Si hace falta, dile a ${user} que lo instale fuera de la carpeta de Orb (${t.url}).`;
+    if (t.inCore) return `- ${t.label}: no disponible para los agentes (está dentro de core, en ${t.inCore}, donde no puedes entrar)${gone}. Si hace falta, dile a ${user} que lo instale fuera de la carpeta de Orb (${t.url}).`;
     return `- ${t.label}: no instalado${gone}. Si hace falta, díselo a ${user}: se instala desde ${t.url}, fuera de la carpeta de Orb. No lo busques en core.`;
   };
   return `## Herramientas de desarrollo de este PC (las acaba de comprobar Orb: esto manda sobre lo que digan las bitácoras o notas anteriores)\n${list.map(line).join('\n')}`;
