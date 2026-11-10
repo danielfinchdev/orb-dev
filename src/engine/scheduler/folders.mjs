@@ -16,7 +16,7 @@ export class FoldersPart {
     return this.pendingJoins().some(({ task, info }) => task?.project === project.name && task.status === 'done' && !task.pid && !info?.by);
   }
   pendingJoins() {
-    return this.board.all("SELECT key, value FROM settings WHERE key LIKE 'integrate:%' AND value <> ''").map((row) => {
+    return this.board.all("SELECT key, value FROM settings WHERE key >= 'integrate:' AND key < 'integrate;' AND value <> ''").map((row) => {
       let info = null; try { info = JSON.parse(row.value); } catch { /* broken: dropped below */ }
       const id = Number(row.key.slice('integrate:'.length));
       return { id, info, task: this.board.task(id) };
@@ -81,7 +81,15 @@ No hagas commit, merge, rebase ni cambies de rama: deja los cambios en los archi
   // The task that joins a conflicting copy by hand: once it is done, the copy goes and the dependents may start.
   joinedBy(task, info) {
     const by = this.board.task(info.by);
-    if (!by || by.status !== 'done' || by.pid) return;
+    // 3.8.3 (repaso): a join task that failed, was cancelled or is gone used to leave the copy pending for ever (its
+    // dependents never started). The work stays in its branch for a «Unir» by hand; the pending join is closed.
+    if (!by || ['cancelled', 'failed'].includes(by.status)) {
+      this.board.settingJson(`integrate:${task.id}`, null); if (by) this.board.setting(`join_task:${by.id}`, '');
+      this.board.event(task.id, 'orb', 'integrate.skipped', by ? `la tarea #${by.id} que la unía terminó en ${by.status}` : `la tarea #${info.by} que la unía ya no existe`);
+      this.board.notice(tr('msg.scheduler.joinGaveUp', { id: task.id, join: info.by, branch: task.branch ?? '?' }), 'warning');
+      return;
+    }
+    if (by.status !== 'done' || by.pid) return;
     const project = this.board.project(task.project);
     if (project) this.dropCopy(task, project);
     this.board.settingJson(`integrate:${task.id}`, null);

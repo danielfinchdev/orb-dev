@@ -21,6 +21,18 @@ const mimeOf = (file) => MIME[path.extname(file).slice(1).toLowerCase()] ?? 'app
 const kindOf = (mime) => (mime.startsWith('image/') ? 'image' : mime.startsWith('video/') ? 'video' : mime.startsWith('audio/') ? 'audio' : 'file');
 const safeName = (name) => String(name ?? '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/^\.+/, '').trim().slice(0, 120) || 'archivo';
 const readJson = (file, fallback) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; } };
+// 3.8.3 (repaso): the drawing is the only copy of the user's work. Written whole or not at all (beside, then renamed
+// over), and a file that is there but cannot be read is kept aside as *.roto-<stamp> instead of being replaced by an
+// empty drawing at the next autosave.
+const writeAtomic = (file, data) => { const tmp = `${file}.${process.pid}.tmp`; try { fs.writeFileSync(tmp, data); fs.renameSync(tmp, file); } catch (error) { fs.rmSync(tmp, { force: true }); throw error; } };
+const readScene = (dir) => {
+  const file = path.join(dir, 'pizarra.excalidraw');
+  if (!fs.existsSync(file)) return { scene: null, damaged: false };
+  const scene = readJson(file, undefined);
+  if (scene && typeof scene === 'object') return { scene, damaged: false };
+  try { fs.renameSync(file, `${file}.roto-${new Date().toISOString().replace(/[:.]/g, '-')}`); } catch { /* left as it is */ }
+  return { scene: null, damaged: true };
+};
 
 // 3.2.1: the "Contiene" line of PIZARRA.md: every kind of element (texts and frames too), singular or plural as it
 // should be, and "empty" only when there is nothing at all. PIZARRA.md is read by the agents, so it stays in Spanish.
@@ -83,14 +95,14 @@ export function whiteboard(board) {
       '', '## Adjuntos (carpeta pizarra/adjuntos)', ...(att.length ? att.map((a) => `- ${a.name} (${a.kind}, ${sizeText(a.size)})${a.note ? `: ${a.note.replace(/\n+/g, ' ')}` : ''}`) : ['- (ninguno)']), ''].join('\n');
   }
   const writeSummary = (project, dir) => {
-    const scene = readJson(path.join(dir, 'pizarra.excalidraw'), null);
-    fs.writeFileSync(path.join(dir, 'PIZARRA.md'), summary(project, dir, scene?.elements ?? []));
+    const { scene } = readScene(dir);
+    writeAtomic(path.join(dir, 'PIZARRA.md'), summary(project, dir, scene?.elements ?? []));
   };
 
   return {
     load({ project: name }) {
       const { dir } = folder(name);
-      const scene = readJson(path.join(dir, 'pizarra.excalidraw'), null);
+      const { scene, damaged } = readScene(dir);
       const files = {};
       const imgs = path.join(dir, 'imagenes');
       if (fs.existsSync(imgs)) for (const f of fs.readdirSync(imgs)) {
@@ -98,7 +110,7 @@ export function whiteboard(board) {
         if (!/^[\w-]{1,100}$/.test(id) || fs.statSync(file).size > 25 * MB) continue;
         files[id] = { id, mimeType: mimeOf(f), dataURL: `data:${mimeOf(f)};base64,${fs.readFileSync(file).toString('base64')}`, created: fs.statSync(file).mtimeMs };
       }
-      return { elements: Array.isArray(scene?.elements) ? scene.elements : [], appState: scene?.appState ?? {}, files, attachments: attachments(dir), updatedAt: scene ? fs.statSync(path.join(dir, 'pizarra.excalidraw')).mtime.toISOString() : null };
+      return { elements: Array.isArray(scene?.elements) ? scene.elements : [], appState: scene?.appState ?? {}, files, attachments: attachments(dir), updatedAt: scene ? fs.statSync(path.join(dir, 'pizarra.excalidraw')).mtime.toISOString() : null, ...(damaged ? { damaged: true } : {}) };
     },
     // The drawing (only the pictures not saved yet travel with it) and, now and then, its picture.
     save({ project: name, elements, appState = {}, files = {}, png }) {
@@ -108,7 +120,7 @@ export function whiteboard(board) {
         appState: { viewBackgroundColor: typeof appState.viewBackgroundColor === 'string' ? appState.viewBackgroundColor.slice(0, 40) : undefined, gridSize: Number(appState.gridSize) || null, gridModeEnabled: appState.gridModeEnabled === true }, files: {} });
       if (json.length > 40 * MB) throw new Error(tr('msg.board.tooBig'));
       ensure(place);
-      fs.writeFileSync(path.join(dir, 'pizarra.excalidraw'), json);
+      writeAtomic(path.join(dir, 'pizarra.excalidraw'), json);
       for (const [id, f] of Object.entries(files && typeof files === 'object' ? files : {}).slice(0, 50)) {
         const m = /^data:([\w/+.-]+);base64,(.+)$/s.exec(String(f?.dataURL ?? ''));
         if (!/^[\w-]{1,100}$/.test(id) || !m || m[2].length > 34 * MB) continue;
@@ -118,7 +130,7 @@ export function whiteboard(board) {
       }
       if (typeof png === 'string' && png.length < 40 * MB) {
         const data = png.replace(/^data:image\/png;base64,/, '');
-        if (data) fs.writeFileSync(path.join(dir, 'pizarra.png'), Buffer.from(data, 'base64'));
+        if (data) writeAtomic(path.join(dir, 'pizarra.png'), Buffer.from(data, 'base64'));
         else fs.rmSync(path.join(dir, 'pizarra.png'), { force: true }); // nothing drawn: no picture
       }
       writeSummary(project, dir);

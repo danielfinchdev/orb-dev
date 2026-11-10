@@ -107,6 +107,10 @@ PUBLICAR: tú nunca haces push, pull requests ni publicas nada. ${globalAutonomy
 Al crear tareas, responde en 2-4 líneas qué hará cada agente. Nunca muestres claves ni contraseñas.`;
 }
 
+// A turn that failed because the agent no longer has the conversation (deleted, old, another machine): no answer at
+// all, and the agent's words say so. Not a usage limit, not a tool error with an answer.
+export const staleConversation = (result) => Boolean(result?.isError && !result.limit && !result.text && /resum|no conversation|not found|malformed|thread|session/i.test(result.final ?? ''));
+
 // The brain new conversations start with: Ajustes' (orb.json «orchestrator»).
 export const brainOf = () => ctx.config.orchestrator ?? {};
 
@@ -439,14 +443,20 @@ class Lane {
     const prompt = fresh ? `${intro}${briefing(this.board, { project, recent })}\n\n## Mensaje ${ofUser()}\n${text}${paused}` : `${text}${paused}`;
     this.board.updateConversation(this.id, { turns: (c.turns ?? 0) + 1 });
     // 3.1: 20 minutes for a coordinating turn (reviewing several finished tasks can take a while; 10 cut reports short).
-    const timer = setTimeout(() => { this.say('system', tr('msg.orch.timeLimit')); Promise.resolve(this.live?.interrupt()).catch(() => {}); }, 20 * 60_000);
-    const live = this.live;
+    // 3.8.3 (repaso): a turn that ignores the interrupt goes with its process after the same grace as «Detener» (the
+    // lane stayed busy for ever otherwise, and three such lanes left every conversation unanswered).
+    const live = this.live; const run = this.inflight;
+    const timer = setTimeout(() => {
+      this.say('system', tr('msg.orch.timeLimit')); Promise.resolve().then(() => live?.interrupt()).catch(() => {});
+      setTimeout(() => { if (this.inflight === run && this.live === live) this.closeLive(); }, STOP_GRACE_MS).unref?.();
+    }, 20 * 60_000);
     let result;
     try { result = await live.send({ text: prompt }); } finally { clearTimeout(timer); }
     try { recordSpend(this.board, { account: this.liveAccount, conversation: this.id, usage: result?.usage ?? {} }); } catch { /* usage only */ }
     if (generation !== this.generation) return undefined; // stopped: nothing to publish
-    // A stale conversation id fails before any answer: forget it and try once more with a fresh conversation.
-    if (result.isError && allowRetry && !result.text && !fresh) { this.forget(); return this.run(text, false, meta, { internal }); }
+    // A stale conversation id fails before any answer: forget it and try once more with a fresh conversation. 3.8.3
+    // (repaso): only for that failure; a usage limit or any other error used to drop the coordinator's memory for nothing.
+    if (staleConversation(result) && allowRetry && !fresh) { this.forget(); return this.run(text, false, meta, { internal }); }
     const answer = answerOf(result, this.said);
     this.said = [];
     const ok = !result.isError;

@@ -401,6 +401,7 @@ export default {
   "msg.scheduler.quietAsk": "AVISO DE ORB: llevas {min} min sin dar señales en la tarea #{id}. Si ya has terminado, llama a orb_update_task con status \"done\" y el resultado. Si estás bloqueado, termina con status \"blocked\" y el motivo. Si sigues trabajando, continúa.",
   "msg.scheduler.joined": "Tarea #{id} «{title}»: su trabajo, hecho a la vez que otras tareas, ya está en la carpeta de {name} ({n} archivo(s)).",
   "msg.scheduler.joinTitle": "Unir el trabajo de la tarea #{id} «{title}»",
+  "msg.scheduler.joinGaveUp": "La tarea #{join}, que unía el trabajo de la tarea #{id} en la carpeta, no terminó. Ese trabajo sigue en su rama ({branch}): únelo con «Unir» cuando quieras.",
   "msg.scheduler.joinConflict": "La tarea #{id} y otra tarea cambiaron lo mismo ({list}). La tarea #{join} une los dos trabajos en la carpeta.",
   "msg.scheduler.reassignedUnavailable": "Tarea #{id} «{title}»: {name} no está disponible en este PC. Pasa a otro agente disponible.",
   "msg.scheduler.noTask": "no existe la tarea #{id}",

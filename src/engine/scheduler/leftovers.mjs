@@ -54,7 +54,7 @@ export class LeftoversPart {
     if (process.platform !== 'win32' || process.env.ORB_FAKE_AGENTS) return;
     if (this.cleaning.size || Date.now() - (this.leftoversAt ?? 0) < LEFTOVERS_RETRY_MS) return;
     const ready = [];
-    for (const row of this.board.all("SELECT key FROM settings WHERE key LIKE 'leftovers_pending:%' AND value <> ''")) {
+    for (const row of this.board.all("SELECT key FROM settings WHERE key >= 'leftovers_pending:' AND key < 'leftovers_pending;' AND value <> ''")) {
       const id = Number(row.key.slice('leftovers_pending:'.length));
       const task = this.board.task(id);
       if (!task?.workdir) { this.board.settingJson(row.key, null); continue; }

@@ -434,7 +434,9 @@ async function run(board, { home, version, restored, repair }) {
     } catch (error) { log(`tick: ${error.stack}`); } finally { ticking = false; }
   };
   setInterval(loop, 1500);
-  board.onChange((what) => { if (what === 'tasks') setImmediate(loop); });
+  // 3.8.3 (repaso): one tick per burst of changes (finishing a task patches it 6-10 times; each used to queue a full tick).
+  let kicked = false;
+  board.onChange((what) => { if (what === 'tasks' && !kicked) { kicked = true; setImmediate(() => { kicked = false; loop(); }); } });
   log(`motor arrancado (versión ${version}) en ${home}`);
   if (repair?.restored?.recoveryOther || restored?.recoveryOther) board.notice(tr('sys.engine.recoveryRestored'), 'warning');
   if (repair?.restored) board.notice(tr('data.core.restored', { created: String(repair.restored.created ?? '').slice(0, 16).replace('T', ' ') }), 'warning');

@@ -188,7 +188,7 @@ export class Sessions {
   remove(id) {
     if (this.running.has(id)) throw new Error(tr('msg.sessions.stopFirst'));
     const s = this.must(id); if (s.kind === 'task') throw new Error(tr('msg.sessions.taskSession'));
-    this.closeLive(id);
+    this.closeLive(id); this.asked.delete(id);
     this.board.run('DELETE FROM session_items WHERE session_id = ?', id);
     this.board.run('DELETE FROM session_queue WHERE session_id = ?', id);
     this.board.run('DELETE FROM sessions WHERE id = ?', id);
@@ -524,9 +524,9 @@ export class Sessions {
     const s = this.must(id);
     // 3.8.3: what this turn may do because the user's own words asked for it: a task's comes from the scheduler (the
     // request it came from); a chat's, from the message the user typed now (a turn Orb sends by itself keeps the last).
+    if (this.running.has(id)) throw new Error(tr('msg.sessions.stillWorking')); // before: a refused send must not change what the running turn may do
     if (Array.isArray(asked)) this.asked.set(id, asked);
     else if (showUser && s.kind !== 'task') this.asked.set(id, askedByUser(text));
-    if (this.running.has(id)) throw new Error(tr('msg.sessions.stillWorking'));
     if (!String(text ?? '').trim() && !images.length) throw new Error(tr('msg.sessions.writeMessage'));
     // 3.8.1: its project is being deleted (project-close.mjs): no new turn in a folder that is going away.
     if (s.kind !== 'task' && s.project && this.board.isDeleting(s.project)) throw new Error(tr('msg.projects.deleting', { name: s.project }));

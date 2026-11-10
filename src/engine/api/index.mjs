@@ -812,6 +812,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // linked device). A call without one is refused (never this PC by default).
     async call(method, params, principal) {
       if (!principal) throw new PermissionError(method);
+      // A linked device is refused before the method is looked up: the error must not tell it which methods exist.
+      if (principal.channel !== 'desktop') authorize(principal, method);
       const fn = Object.hasOwn(methods, method) ? methods[method] : null;
       if (!fn) fail(tr('msg.api.unknownAction', { method }));
       if (params === null || typeof params !== 'object' || Array.isArray(params)) fail(tr('msg.api.badParams'));

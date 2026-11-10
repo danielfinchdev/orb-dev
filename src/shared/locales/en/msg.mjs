@@ -401,6 +401,7 @@ export default {
   "msg.scheduler.quietAsk": "ORB NOTICE: you have given no sign of life on task #{id} for {min} min. If you have finished, call orb_update_task with status \"done\" and the result. If you are stuck, finish with status \"blocked\" and the reason. If you are still working, carry on.",
   "msg.scheduler.joined": "Task #{id} “{title}”: its work, done alongside other tasks, is now in the folder of {name} ({n} file(s)).",
   "msg.scheduler.joinTitle": "Join the work of task #{id} “{title}”",
+  "msg.scheduler.joinGaveUp": "Task #{join}, which was joining task #{id}'s work into the folder, did not finish. That work is still on its branch ({branch}): join it with «Join» whenever you want.",
   "msg.scheduler.joinConflict": "Task #{id} and another task changed the same thing ({list}). Task #{join} joins both pieces of work in the folder.",
   "msg.scheduler.reassignedUnavailable": "Task #{id} “{title}”: {name} is not available on this PC. It goes to another available agent.",
   "msg.scheduler.noTask": "task #{id} does not exist",
