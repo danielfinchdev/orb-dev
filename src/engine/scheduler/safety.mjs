@@ -14,11 +14,12 @@ import { autonomyOf } from '../../domain/security/guard.mjs';
 export const GENERATED = /(^|\/)(node_modules|dist|build|out|target|\.gradle|\.dart_tool|\.next|\.nuxt|\.svelte-kit|\.turbo|\.cache|\.vite|\.parcel-cache|\.expo|coverage|\.venv|venv|__pycache__|\.pytest_cache|\.mypy_cache|Pods|DerivedData|(bin|obj)\/(Debug|Release))(\/|$)/i;
 // 3.8.3: when a task's deletions hold it for the user's review. paths: what it deleted; total: the project's files before
 // it (both without generated folders). «Auto» (owner's decision): more than 50 files or more than a quarter of the
-// project; «Preguntar»: 10 or more, as before. → { held, deleted, total, share } (share: true when the quarter decided).
+// project (the quarter only from 10 files on); «Preguntar»: 10 or more, as before. → { held, deleted, total, share } (share: true when the quarter decided).
 export function deletionHold(paths, total, autonomy) {
   const deleted = paths.filter((p) => !GENERATED.test(p)).length;
   if (autonomy !== 'auto') return { held: deleted >= 10, deleted, total, share: false };
-  const byShare = total > 0 && deleted / total > 0.25;
+  // 3.8.3 (security review): the quarter counts from 10 files on, so deleting 1 of 3 files in a tiny project holds nothing.
+  const byShare = deleted >= 10 && total > 0 && deleted / total > 0.25;
   return { held: deleted > 50 || byShare, deleted, total, share: byShare && deleted <= 50 };
 }
 
