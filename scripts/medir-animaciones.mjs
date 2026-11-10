@@ -116,6 +116,11 @@ for (const skin of SKINS) {
       await wait(300);
       fs.mkdirSync(shots, { recursive: true });
       await page.screenshot({ path: path.join(shots, `${skin}-${mode}.png`) });
+      // 3.8.3: and the bars' art over it (its moving pieces too: Retro's invaders, Nube's sweets), stopped the same way.
+      await page.addStyleTag({ content: '.theme-band { visibility: visible !important; } .theme-band * { visibility: hidden !important; } .theme-band .band-art, .theme-band .band-art * { visibility: visible !important; }' });
+      await page.evaluate(() => { for (const a of document.getAnimations()) { if (a.effect?.target?.closest?.('.scene, .theme-band')) { a.pause(); a.currentTime = 20000; } } });
+      await wait(300);
+      await page.screenshot({ path: path.join(shots, `${skin}-${mode}-banda.png`) });
     }
     results.runs.push(row);
     console.error(JSON.stringify(row));

@@ -463,9 +463,17 @@ html.dark:not([data-skin="orb"]) .bg-warning.text-white { color: oklch(0.2 0.03 
 .theme-band { position: relative; isolation: isolate; }
 .theme-band::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--band-art, none); opacity: var(--band-art-opacity, 1); }
 .side-band::before { background: var(--side-art, none); opacity: 1; }
+/* 3.8.3: the band's moving pieces run on the compositor (transform / opacity only), never as background-position, which
+   restyles and repaints the band on the main thread every frame. Retro at night: its two poses drawn whole, one in
+   ::before and one in ::after, shown in turn (opacity in steps). Nube: each row of sweets in its own layer
+   (components/page.jsx › BandArt), slid by transform. Their art keeps the alignment to the window that
+   background-attachment: fixed gives the still art (fixed does not follow a moved layer): BandArt gives each band its
+   place in the window (--band-x / --band-y), and the art is offset by it. Only the chat's bar shows them (the phone's
+   tabs, at the bottom, are below where that art is). */
+.band-art { display: none; }
 html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) .theme-band { z-index: 10; background: none; border-bottom-color: transparent; backdrop-filter: none; }
 /* The top bar's drawing: in the middle, clear of the title, of the bar's buttons and of the window's buttons. */
-.topbar.theme-band::before { mask-image: linear-gradient(90deg, transparent 150px, #000 290px, #000 calc(100% - 330px), transparent calc(100% - 190px)); }
+.topbar.theme-band::before, .topbar.theme-band::after, .topbar.theme-band > .band-art { mask-image: linear-gradient(90deg, transparent 150px, #000 290px, #000 calc(100% - 330px), transparent calc(100% - 190px)); }
 /* Only the chat's bar (no title, just a few buttons on the right) has room for a drawing: the other screens' bars carry
    a title with a line under it, so they take just the band's shading, like the sidebar's head. */
 .topbar.theme-band:not(.topbar-chat)::before { background: var(--side-art, none); opacity: 1; mask-image: none; animation: none !important; }
@@ -480,10 +488,10 @@ html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) .theme
    per theme and mode; test-results/contraste-temas.mjs checks the text over the brightest and darkest piece of each scene. */
 .scene-frost { inset: 0; background: color-mix(in oklch, var(--background) var(--frost-tint, 50%), transparent); backdrop-filter: var(--frost-filter, blur(5px)); }
 html.dark .scene { --frost-tint: 50%; --frost-filter: blur(7px) brightness(0.7); }
-@media (prefers-reduced-motion: reduce) { .scene *, .scene *::before, .scene *::after, .theme-band::before { animation: none !important; } }
-html[data-motion="minima"] .scene *, html[data-motion="minima"] .scene *::before, html[data-motion="minima"] .scene *::after, html[data-motion="minima"] .theme-band::before { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .scene *, .scene *::before, .scene *::after, .theme-band::before, .theme-band::after, .band-art > * { animation: none !important; } }
+html[data-motion="minima"] .scene *, html[data-motion="minima"] .scene *::before, html[data-motion="minima"] .scene *::after, html[data-motion="minima"] .theme-band::before, html[data-motion="minima"] .theme-band::after, html[data-motion="minima"] .band-art > * { animation: none !important; }
 /* 2.6: with the window in the background (or minimised) the scene stands still: nothing to repaint under the blur. */
-html.window-idle .scene *, html.window-idle .scene *::before, html.window-idle .scene *::after, html.window-idle .theme-band::before { animation-play-state: paused !important; }
+html.window-idle .scene *, html.window-idle .scene *::before, html.window-idle .scene *::after, html.window-idle .theme-band::before, html.window-idle .theme-band::after, html.window-idle .band-art > * { animation-play-state: paused !important; }
 /* Text set straight on the scene — the assistant's messages and the greeting of a new chat — reads on a soft pane of
    the card's colour (the system's notes have theirs), gentle and in the theme's own shape. Nothing in orb / profesional. */
 html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) .chat-glass { background-color: color-mix(in oklch, var(--card) 76%, transparent); border-radius: calc(var(--radius) + 6px); padding: 0.55rem 0.9rem 0.7rem; }
@@ -591,8 +599,9 @@ html.dark[data-skin="vaporwave"] {
 .scene-vaporwave .scene-blur { background: var(--vw-page); --scene-opacity: 1; }
 html:not(.dark) .scene-vaporwave :is(.vw-stars, .vw-shoot, .vw-cloud, .vw-glow, .vw-sun, .vw-mount, .vw-city, .vw-floor, .vw-beam) { display: none; }
 html.dark .scene-vaporwave .vw-sticker { display: none; }
-.vw-sticker { color: var(--vw-ink); filter: drop-shadow(4px 4px 0 var(--vw-ink)); animation: vw-bob ease-in-out infinite alternate; transform-origin: 50% 50%; }
-.vw-sticker svg { display: block; width: 100%; height: auto; overflow: visible; }
+/* 3.8.3: its hard shadow is drawn with the drawing (see .cd-candy). */
+.vw-sticker { color: var(--vw-ink); animation: vw-bob ease-in-out infinite alternate; transform-origin: 50% 50%; }
+.vw-sticker svg { display: block; width: 100%; height: auto; overflow: visible; filter: drop-shadow(4px 4px 0 var(--vw-ink)); }
 @keyframes vw-bob { from { transform: translateY(0) rotate(var(--r, 0deg)); } to { transform: translateY(-12px) rotate(calc(var(--r, 0deg) + 5deg)); } }
 /* Night: the sunset. */
 html.dark .scene-vaporwave .scene-blur { background: var(--vw-night); }
@@ -694,9 +703,22 @@ html.dark[data-skin="retro"] {
   --rt-glow: drop-shadow(0 0 4px rgb(57 255 20 / 0.9)) drop-shadow(0 0 10px rgb(57 255 20 / 0.5));
 }
 /* The chat bar of the day: the chevrons sit whole at the right, just before the bar's buttons (no fade over them). */
-html[data-skin="retro"]:not(.dark) .topbar-chat.theme-band::before { mask-image: linear-gradient(90deg, transparent 150px, #000 150px, #000 calc(100% - var(--wco-inset) - 150px), transparent calc(100% - var(--wco-inset) - 150px)); }
-@media (prefers-reduced-motion: no-preference) { html.dark[data-skin="retro"]:not([data-motion="minima"]) .theme-band::before { animation: rt-band-march 2.4s steps(1, end) infinite; } }
-@keyframes rt-band-march { 0%, 100% { background-position: 0 0, 0 11px, 0 0, 0 0; } 50% { background-position: 0 0, 12px 11px, 0 0, 0 0; } }
+html[data-skin="retro"]:not(.dark) .topbar-chat.theme-band::before, html[data-skin="retro"]:not(.dark) .topbar-chat.theme-band > .band-art { mask-image: linear-gradient(90deg, transparent 150px, #000 150px, #000 calc(100% - var(--wco-inset) - 150px), transparent calc(100% - var(--wco-inset) - 150px)); }
+html.dark[data-skin="retro"] .theme-band:not(.side-band, .topbar:not(.topbar-chat))::after {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0;
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px),
+    var(--rt-band-invaders) 12px 11px / 132px 34px repeat-x fixed,
+    radial-gradient(circle at 20px 10px, var(--rt-star) 0 1px, transparent 1.5px) 0 0 / 97px 56px fixed,
+    radial-gradient(circle at 60px 40px, var(--rt-star) 0 1px, transparent 1.5px) 0 0 / 143px 56px fixed;
+}
+@media (prefers-reduced-motion: no-preference) {
+  html.dark[data-skin="retro"]:not([data-motion="minima"]) .theme-band:not(.side-band, .topbar:not(.topbar-chat))::before { animation: rt-band-a 2.4s steps(1, end) infinite; }
+  html.dark[data-skin="retro"]:not([data-motion="minima"]) .theme-band:not(.side-band, .topbar:not(.topbar-chat))::after { animation: rt-band-b 2.4s steps(1, end) infinite; }
+}
+/* The invaders step 12 px and back, as before: one pose for the first half, the other for the second. */
+@keyframes rt-band-a { 0%, 100% { opacity: 0.7; } 50% { opacity: 0; } }
+@keyframes rt-band-b { 0%, 100% { opacity: 0; } 50% { opacity: 0.7; } }
 .scene-retro .scene-blur { background: var(--rt-page); --scene-opacity: 1; }
 html.dark .scene-retro { --frost-filter: blur(7px) brightness(0.65); } /* the yellow invaders glow a little less */
 /* Day pieces: the big chevron corner and the flat shapes; hidden at night. Night pieces hidden by day. */
@@ -778,10 +800,8 @@ html.dark[data-skin="retro"] body { background-image: repeating-linear-gradient(
 html[data-skin="nube"] {
   --cd-a: #ffcfe4; --cd-b: #ecd4ff; --cd-c: #d9d2ff; --cd-shine: rgb(255 255 255 / 0.7);
   --side-art: linear-gradient(to bottom, var(--cd-shine), transparent 48%);
-  --band-art:
-    linear-gradient(to bottom, var(--cd-shine), transparent 48%),
-    radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.9) 0 3px, transparent 4px) 40px 16px / 190px 56px repeat-x fixed,
-    radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.7) 0 2px, transparent 3px) 120px 34px / 230px 56px repeat-x fixed;
+  /* The shine; its two rows of sweets (white, like the shine, so their order does not change the picture) are BandArt. */
+  --band-art: linear-gradient(to bottom, var(--cd-shine), transparent 48%);
   --cd-page: radial-gradient(circle, rgb(255 255 255 / 0.6) 1px, transparent 1.6px) 0 0 / 14px 14px, linear-gradient(160deg, #ffd9ec 0%, #ecd9ff 55%, #d9e4ff 100%);
   --cd-pink: #ffc4dc; --cd-lilac: #dccbff; --cd-mint: #bdeedd; --cd-peach: #ffd9b8; --cd-sky: #c6e3ff;
   --cd-key: oklch(0.42 0.19 352); --cd-shadow: rgb(236 110 180 / 0.32); --cd-glow: rgb(255 140 200 / 0.4);
@@ -796,17 +816,29 @@ html.dark[data-skin="nube"] {
   --cd-frame: color-mix(in oklch, var(--primary) 70%, transparent); --cd-pad: color-mix(in oklch, var(--primary) 35%, transparent);
   --cd-toy-opacity: 0.55; --cd-toy-shadow: rgb(0 0 0 / 0.5);
 }
-/* 3.8.1 (H4f): background-position is painted on the main thread, so it steps every ~0.5 px (≈13 times a second; the
-   sweets crawl 5–6 px a second) instead of repainting the band 60 times a second for moves too small to see. */
-@media (prefers-reduced-motion: no-preference) { html[data-skin="nube"]:not([data-motion="minima"]) .theme-band::before { animation: cd-band 36s steps(460) infinite; } }
-@keyframes cd-band { from { background-position: 0 0, 40px 16px, 120px 34px; } to { background-position: 0 0, 230px 16px, -110px 34px; } }
+/* 3.8.3: the rows of sweets crawl 5–6 px a second as before (one tile in 36 s, the first right, the second left), now by
+   transform on the compositor: smooth, with no restyle or repaint of the band. Each row starts where its fixed
+   background was (40px 16px and 120px 34px from the window's corner; the layer starts 240px left of the bar). */
+html[data-skin="nube"] .theme-band:not(.side-band, .topbar:not(.topbar-chat)) > .band-art { display: block; position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+html[data-skin="nube"] .band-art > * { position: absolute; top: 0; left: -240px; width: calc(100% + 480px); height: 100%; }
+html[data-skin="nube"] .band-art > :first-child { background: radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.9) 0 3px, transparent 4px) calc(280px - var(--band-x, 0px)) calc(16px - var(--band-y, 0px)) / 190px 56px repeat-x; }
+html[data-skin="nube"] .band-art > :last-child { background: radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.7) 0 2px, transparent 3px) calc(360px - var(--band-x, 0px)) calc(34px - var(--band-y, 0px)) / 230px 56px repeat-x; }
+@media (prefers-reduced-motion: no-preference) {
+  html[data-skin="nube"]:not([data-motion="minima"]) .band-art > :first-child { animation: cd-band-a 36s linear infinite; }
+  html[data-skin="nube"]:not([data-motion="minima"]) .band-art > :last-child { animation: cd-band-b 36s linear infinite; }
+}
+@keyframes cd-band-a { to { transform: translateX(190px); } }
+@keyframes cd-band-b { to { transform: translateX(-230px); } }
 .scene-nube .scene-blur { --scene-opacity: 1; background: var(--cd-page); }
 /* The blobs: soft-edged ellipses of one pastel each, breathing and drifting very slowly. */
 .cd-blob { border-radius: 50%; opacity: 0.7; background: radial-gradient(closest-side, var(--c), color-mix(in srgb, var(--c) 60%, transparent) 55%, transparent); animation: cd-drift ease-in-out infinite alternate; }
 @keyframes cd-drift { from { transform: translate(0, 0) scale(1); } to { transform: translate(var(--dx, 40px), var(--dy, -30px)) scale(1.12); } }
 /* The sweets: each an SVG shaded with radial gradients, with a soft pink shadow under it, bobbing and tilting a little. */
-.cd-candy { opacity: var(--cd-toy-opacity); filter: drop-shadow(0 12px 10px var(--cd-toy-shadow)); animation: cd-bob ease-in-out infinite alternate; transform-origin: 50% 60%; }
-.cd-candy svg { display: block; width: 100%; height: auto; overflow: visible; }
+/* 3.8.3: the shadow belongs to the drawing (its svg), so it is painted once into the moving layer, which the compositor
+   only moves; on the moving layer itself the GPU drew the blur again every frame. Same picture: the same shadow, turned
+   with the sweet as before. */
+.cd-candy { opacity: var(--cd-toy-opacity); animation: cd-bob ease-in-out infinite alternate; transform-origin: 50% 60%; }
+.cd-candy svg { display: block; width: 100%; height: auto; overflow: visible; filter: drop-shadow(0 12px 10px var(--cd-toy-shadow)); }
 @keyframes cd-bob { from { transform: translateY(0) rotate(var(--r, 0deg)); } to { transform: translateY(-14px) rotate(calc(var(--r, 0deg) + 4deg)); } }
 /* Candy UI: white panels with a big radius and a soft pink shadow (cards, dialogs, the message box); the main button
    a glossy 3D key with a darker edge below and bold capitals; outline buttons as white pills with pink text; the chosen
@@ -878,4 +910,4 @@ html[data-skin="nube"] [data-slot="composer"] { border: 2px solid transparent; b
 html[data-skin="nube"] [data-slot="composer"]:focus-within { border-color: var(--cd-frame); box-shadow: 0 0 16px var(--cd-glow), 0 18px 40px -18px var(--cd-shadow); }
 /* 3.2: in a conversation the bar shows its title in the middle: the theme's art keeps to the sides so it never sits behind
    the words (in every theme, also Retro's own mask above). */
-html[data-skin] .topbar-chat.theme-band:has(.bar-title)::before { mask-image: linear-gradient(90deg, transparent 150px, #000 230px, #000 calc(50% - 240px), transparent calc(50% - 180px), transparent calc(50% + 180px), #000 calc(50% + 240px), #000 calc(100% - var(--wco-inset, 0px) - 230px), transparent calc(100% - var(--wco-inset, 0px) - 170px)); }
+html[data-skin] .topbar-chat.theme-band:has(.bar-title)::before, html[data-skin] .topbar-chat.theme-band:has(.bar-title)::after, html[data-skin] .topbar-chat.theme-band:has(.bar-title) > .band-art { mask-image: linear-gradient(90deg, transparent 150px, #000 230px, #000 calc(50% - 240px), transparent calc(50% - 180px), transparent calc(50% + 180px), #000 calc(50% + 240px), #000 calc(100% - var(--wco-inset, 0px) - 230px), transparent calc(100% - var(--wco-inset, 0px) - 170px)); }

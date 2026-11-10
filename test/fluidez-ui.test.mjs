@@ -127,3 +127,28 @@ test('las nubes y los ojos del robot se mueven sin repintar: sin filtro por foto
   assert.match(app, /\.orb:not\(\.still\) \.orb-eye \{ will-change: transform; \}/);
   assert.match(app, /@keyframes orb-talk \{ from \{ transform: scaleY\(1\); \} to \{ transform: scaleY\(\.7\); \} \}/, 'talking stays the same');
 });
+
+// 3.8.3: the bands' moving pieces and the stickers' shadows run on the compositor: no keyframes of background-position
+// (a restyle and a repaint every frame) and no filter on a moving layer (the blur drawn again every frame).
+test('las bandas y las pegatinas se mueven solo con transform y opacity', () => {
+  const themes = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'themes.css'), 'utf8');
+  for (const [, name, body] of themes.matchAll(/@keyframes ([\w-]+) \{([\s\S]*?\})\s*\}/g)) {
+    if (/^(rt-band|cd-band)/.test(name)) assert.doesNotMatch(body, /background-position/, name);
+  }
+  assert.match(themes, /@keyframes rt-band-a \{ 0%, 100% \{ opacity: 0\.7; \} 50% \{ opacity: 0; \} \}/);
+  assert.match(themes, /@keyframes rt-band-b \{ 0%, 100% \{ opacity: 0; \} 50% \{ opacity: 0\.7; \} \}/);
+  assert.match(themes, /@keyframes cd-band-a \{ to \{ transform: translateX\(190px\); \} \}/, 'one tile of 190 px in 36 s, as before');
+  assert.match(themes, /@keyframes cd-band-b \{ to \{ transform: translateX\(-230px\); \} \}/, 'one tile of 230 px the other way');
+  for (const moving of ['cd-candy', 'vw-sticker']) {
+    const rule = themes.split('\n').find((l) => l.startsWith(`.${moving} {`)) ?? '';
+    assert.match(rule, /animation:/); assert.doesNotMatch(rule, /filter/, `${moving}: its shadow is in its drawing`);
+    assert.match(themes.split('\n').find((l) => l.startsWith(`.${moving} svg {`)) ?? '', /filter: drop-shadow/);
+  }
+  // Every stop and pause rule covers the new pieces too.
+  for (const rule of themes.match(/^.*\.theme-band::before[^{]*\{ animation(-play-state)?: (none|paused) !important; \}.*$/gm) ?? []) {
+    assert.match(rule, /\.theme-band::after/); assert.match(rule, /\.band-art > \*/);
+  }
+  const page = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'components', 'page.jsx'), 'utf8');
+  assert.match(page, /export function BandArt\(\)/);
+  assert.match(fs.readFileSync(path.join(ROOT, 'src', 'ui', 'components', 'chat-bar.jsx'), 'utf8'), /<BandArt \/>/);
+});

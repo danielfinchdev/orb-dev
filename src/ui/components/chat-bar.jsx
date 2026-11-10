@@ -3,6 +3,7 @@
 import { ChevronLeft } from 'lucide-react';
 import { Button } from './ui/button.jsx';
 import { SidebarToggle } from './theme-toggle.jsx';
+import { BandArt } from './page.jsx';
 import { useStore, go, phoneLayout } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
@@ -15,6 +16,7 @@ export function ChatBar({ back, title, children, testid = 'chat-bar', className 
       {back}{folded && !phone ? <SidebarToggle collapsed className="-ml-1" /> : null}
       <div className="no-drag flex min-w-0 flex-1 items-center">{title}</div>
       <div className="no-drag flex shrink-0 items-center gap-1">{children}</div>
+      <BandArt />
     </header>
   );
 }
