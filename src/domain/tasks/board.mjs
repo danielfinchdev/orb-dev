@@ -1,33 +1,20 @@
 // The shared board: projects, tasks with dependencies and approvals, events, messages between agents and the assistant's chat.
-import fs from 'node:fs';
-import path from 'node:path';
 import { openDb, taskOptions, checkPolicy } from '../data/db.mjs';
 import { ctx, tr } from '../../platform/context.mjs';
-import { AGENT_IDS, AGENT_LABELS } from '../../platform/config-file.mjs';
-import { folderName, isConfigName, categoryOf, CATEGORIES, folderKey } from '../../platform/paths.mjs';
-import { projectLogHeader, logBody } from '../../platform/journal-files.mjs';
-import { IGNORED_PROJECTS, FINISHED_PROJECTS, DELETING_PROJECTS } from '../../platform/state.mjs';
+import { CATEGORIES } from '../../platform/paths.mjs';
 import { oneLine, MAX_DESCRIPTION } from '../../shared/text.mjs';
 import { contentHash, sign, verify, detectSensitivity, deletionAskedByUser, defaultApprovalKey } from '../security/approval.mjs';
-import { PRODUCT } from '../../shared/product.mjs';
-import { git, isGitRepo } from '../../platform/git.mjs';
+import { BoardProjects } from './board-projects.mjs';
+import { BoardConversations } from './board-conversations.mjs';
+import { now, real, same, inside } from './board-common.mjs';
+import { AGENTS, assistantName, checkProjectPath, userName } from './board-common.mjs';
+export { AGENTS, assistantName, checkProjectPath, userName } from './board-common.mjs';
 
-export const AGENTS = AGENT_IDS;
+
 // limited (2.3): stopped by the account's usage limit; continues by itself when the limit resets (tasks.limited_until).
 export const STATUSES = ['queued', 'awaiting_approval', 'running', 'done', 'failed', 'blocked', 'cancelled', 'limited'];
 const FINISHED = new Set(['done', 'failed', 'cancelled']);
 const MODES = ['carpeta', 'aislada'];
-// 3.8.2: the largest BITACORA.md a project folder may bring into its log (mergeRootLog).
-const ROOT_LOG_MAX = 4 * 1024 * 1024;
-const now = () => new Date().toISOString();
-// A conversation's row as the rest of Orb reads it (titled as a boolean, its context meter parsed).
-// 3.8.1: both change the row SQLite just made (a new object each time) instead of copying it: copying the ~35 columns
-// of every task of the lists cost more than the query.
-const conversationRow = (r) => {
-  let context = null; try { context = r.context ? JSON.parse(r.context) : null; } catch { /* none */ }
-  r.titled = Boolean(r.titled); r.context = context;
-  return r;
-};
 const parse = (task) => {
   if (!task) return task;
   const { reasoning, fast } = taskOptions({ reasoning: task.reasoning ?? undefined, fast: task.fast == null ? undefined : Boolean(task.fast) });
@@ -37,13 +24,11 @@ const parse = (task) => {
 };
 
 // The user's name as the assistant writes it ("el usuario" when not set).
-export const userName = () => ctx.config?.userName?.trim() || 'el usuario';
 // "de Ana" / "del usuario" (Spanish contracts de + el).
 export const ofUser = () => (ctx.config?.userName?.trim() ? `de ${ctx.config.userName.trim()}` : 'del usuario');
 // The same two for what the user reads in the app (chat notices), in the language of the settings.
 export const userLabel = () => ctx.config?.userName?.trim() || tr('msg.board.theUser');
 export const ofUserLabel = () => (ctx.config?.userName?.trim() ? tr('msg.board.ofName', { name: ctx.config.userName.trim() }) : tr('msg.board.ofTheUser'));
-export const assistantName = () => ctx.config?.assistantName?.trim() || PRODUCT.assistant;
 // 3.2.1: the tags of a sensitive task in words («elimina datos»), never the internal ones («destructive»).
 export const tagWords = (tags) => [...new Set(tags)].map((tag) => { const key = `sensitive.${tag}`; const w = tr(key); return w === key ? tag : w; }).join(', ');
 
@@ -67,10 +52,6 @@ const WORKER_STATUSES = ['done', 'failed', 'blocked'];
 // a running task is cancelled from the app because that also stops its process.
 // 3.1: the coordinator may also cancel a running task (or one waiting for its usage to reset): the engine stops its process.
 const ORCHESTRATOR_TO = { queued: ['failed', 'blocked', 'cancelled', 'queued'], cancelled: ['queued', 'blocked', 'failed', 'running', 'limited'] };
-const real = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(String(p)); } };
-// Equal strings need no disk access (revalidateQueued compares every queued task's folder on each tick).
-const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase() || real(a).toLowerCase() === real(b).toLowerCase();
-const inside = (root, p) => { const rel = path.relative(root, p); return Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel); };
 
 // Validated model id for an agent: one of its configured models, or any well-formed id when the list is empty (CLI default).
 // 2.6: listed = the models the agent itself reported (models:<agent>), also valid.
@@ -84,27 +65,6 @@ export function checkModel(agent, model, listed = []) {
   return model;
 }
 
-// Projects live in the categories of the workspace (each subfolder of windows, linux, ios, android, web or multi is one). Agents (MCP) may only register folders there or in the
-// extra roots of the settings; the user can also link any outside folder from the app (fromUser). Never a drive root, the
-// workspace itself, Orb's own folders (core, and the ones of older versions), a category folder itself (inside the
-// folder a project is always <category>\<project>) or a folder that contains the assistant's.
-export function checkProjectPath(target, { fromUser = false } = {}) {
-  let r; try { r = fs.realpathSync(target); } catch { throw new Error(tr('msg.board.pathMissing', { target })); }
-  if (!fs.statSync(r).isDirectory()) throw new Error(tr('msg.board.pathNotFolder', { target }));
-  if (path.parse(r).root.toLowerCase() === r.toLowerCase()) throw new Error(tr('msg.board.driveRoot'));
-  const home = real(ctx.home);
-  if (same(r, home)) throw new Error(tr('msg.board.isHome', { name: assistantName() }));
-  if (inside(r, home)) throw new Error(tr('msg.board.containsHome', { name: assistantName() }));
-  if (inside(home, r)) {
-    const first = path.relative(home, r).split(path.sep)[0];
-    if (isConfigName(first)) throw new Error(tr('msg.board.internalFolder', { name: assistantName(), first }));
-    if (!categoryOf(home, r)) throw new Error(tr('msg.board.notInCategory', { name: assistantName(), list: CATEGORIES.join(', '), target }));
-  } else if (!fromUser) {
-    const roots = [home, ...(ctx.config.projectRoots ?? []).map(real)];
-    if (!roots.some((root) => inside(root, r))) throw new Error(tr('sys.board.outside', { name: assistantName(), home, target, user: userName() }));
-  }
-  return r;
-}
 
 export class Board {
   // approvalKey: HMAC key that signs approvals (only the app's user actions sign; the scheduler verifies).
@@ -162,104 +122,6 @@ export class Board {
   event(taskId, actor, kind, detail = '') {
     this.run('INSERT INTO events (task_id, actor, kind, detail, at) VALUES (?, ?, ?, ?, ?)', taskId ?? null, String(actor), kind, String(detail).slice(0, 4000), now());
     this.changed('events');
-  }
-
-  // ---- projects
-  // Agents (MCP) can only create projects; moving one to another folder is a user action (fromUser).
-  addProject({ name, path: folder, notes = '' }, actor, { fromUser = false } = {}) {
-    name = oneLine(name, 60);
-    if (!name || !folder) throw new Error(tr('sys.board.nameAndPath'));
-    const existing = this.project(name);
-    if (existing && !same(existing.path, folder) && !fromUser) throw new Error(tr('sys.board.projectElsewhere', { name: existing.name }));
-    const checked = existing && same(existing.path, folder) ? existing.path : checkProjectPath(folder, { fromUser });
-    // One folder, one project: the same folder under another name is the project that already exists.
-    const twin = !existing && this.projects().find((p) => same(p.path, checked));
-    if (twin) return twin;
-    this.run(`INSERT INTO projects (name, path, notes, created_at) VALUES (?, ?, ?, ?)
-              ON CONFLICT(name) DO UPDATE SET path = excluded.path, notes = excluded.notes`, name, checked, String(notes ?? '').slice(0, 2000), now());
-    this.ensureProjectLog(name);
-    try { this.mergeRootLog(name, checked); } catch { /* the folder's log stays where it is: merged on a later add */ }
-    // 3.8: a folder added (by hand, or by an agent) is listed again even if it was another user's project of 3.7.
-    const ignored = this.settingJson(IGNORED_PROJECTS);
-    if (Array.isArray(ignored) && ignored.includes(folderKey(checked))) this.settingJson(IGNORED_PROJECTS, ignored.filter((k) => k !== folderKey(checked)));
-    // 3.8.1: and a finished one added again by hand (or by an agent) is open again.
-    const finished = this.settingJson(FINISHED_PROJECTS);
-    if (Array.isArray(finished) && finished.some((x) => x?.key === folderKey(checked))) this.settingJson(FINISHED_PROJECTS, finished.filter((x) => x?.key !== folderKey(checked)));
-    this.event(null, actor, 'project.saved', `${name} -> ${checked}`);
-    this.changed('projects');
-    return this.project(name);
-  }
-  project(name) { return this.one('SELECT * FROM projects WHERE name = ?', String(name ?? '')); }
-  // 3.8.1: between the check of «Eliminar proyecto» and its end (project-close.mjs): nothing of it starts.
-  isDeleting(name) { const list = this.settingJson(DELETING_PROJECTS); return Array.isArray(list) && list.some((x) => x?.name === name); }
-  projects() { return this.all('SELECT * FROM projects ORDER BY name'); }
-  removeProject(name, actor) {
-    const project = this.project(name); if (!project) throw new Error(tr('msg.board.noProject', { name }));
-    const open = this.one("SELECT COUNT(*) AS n FROM tasks WHERE project = ? AND status IN ('queued', 'awaiting_approval', 'running')", project.name).n;
-    if (open) throw new Error(tr('msg.board.projectOpenTasks', { open }));
-    this.run('DELETE FROM projects WHERE name = ?', project.name);
-    if (this.setting('active_project') === project.name) this.setting('active_project', '');
-    this.event(null, actor, 'project.removed', `${project.name} (la carpeta no se borra)`);
-    this.changed('projects');
-  }
-
-  // Each project has its log in <home>/bitacora/proyectos/<name>.md: outside the repo, so it never ends up in git.
-  projectLogFile(name) { return path.join(ctx.paths.projectLogs, `${folderName(name, 'proyecto')}.md`); }
-  ensureProjectLog(name) {
-    const file = this.projectLogFile(name);
-    if (!fs.existsSync(file)) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, projectLogHeader(name, ctx.config?.language)); }
-    return file;
-  }
-  // 3.8.2: a project's log under another name (a rename, a project closed or reopened). When the new name already has a
-  // log, the old one is added at its end (a log only grows) and removed once the new file is read back holding it; one
-  // with nothing but its header just goes. Never a second file («name (2).md») beside the first.
-  moveProjectLog(from, to) {
-    const oldLog = this.projectLogFile(from); const newLog = this.projectLogFile(to);
-    if (oldLog === newLog || !fs.existsSync(oldLog)) return;
-    if (!fs.existsSync(newLog)) { fs.renameSync(oldLog, newLog); return; }
-    const body = logBody(fs.readFileSync(oldLog, 'utf8'));
-    const has = () => fs.readFileSync(newLog, 'utf8').replace(/\r\n/g, '\n').includes(body);
-    if (body && !has()) {
-      fs.appendFileSync(newLog, `\n${body}\n`);
-      if (!has()) return; // not verified: the old file stays
-    }
-    fs.rmSync(oldLog, { force: true });
-  }
-  // 3.8.2: one log system, Orb's (core\bitacora). A BITACORA.md a project brings in its folder (another tool's log) is
-  // added once at the end of the project's log, whole, and removed from the folder only after the log is read back
-  // holding it. One that git tracks is left in the folder (removing it would change the repository); it is not added a
-  // second time (its text is already in the log). → whether it was merged.
-  mergeRootLog(name, folder) {
-    const src = path.join(folder, 'BITACORA.md');
-    // 3.8.2 (final review): only a plain file of its own. Not a link nor a second name of another file (a hard link an
-    // agent made to core\datos would put Orb's data in a log agents read), and not a huge one.
-    let text; try { const st = fs.lstatSync(src); if (!st.isFile() || st.isSymbolicLink() || st.nlink > 1 || st.size > ROOT_LOG_MAX) return false; text = fs.readFileSync(src, 'utf8'); } catch { return false; }
-    const whole = text.replace(/\r\n/g, '\n').trim();
-    const file = this.ensureProjectLog(name);
-    const has = () => fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n').includes(whole);
-    if (whole && !has()) {
-      fs.appendFileSync(file, `\n## ${tr('sys.logs.importedRoot', { date: new Date().toISOString().slice(0, 10) })}\n\n${whole}\n`);
-      if (!has()) return false;
-    }
-    if (isGitRepo(folder) && git(folder, 'ls-files', '--error-unmatch', '--', 'BITACORA.md').status === 0) return true;
-    try { fs.rmSync(src); } catch { /* read-only or in use: left where it is, already merged */ }
-    this.event(null, 'orb', 'log.merged', `${name}: BITACORA.md`);
-    return true;
-  }
-
-  // Working folder of the session ("today we work on X"): every new task goes there.
-  activeName() { return this.setting('active_project') || ''; }
-  activeProject() { const name = this.activeName(); return name ? this.project(name) ?? null : null; }
-  setActiveProject(name, actor) {
-    if (!name) { this.setting('active_project', ''); this.event(null, actor, 'project.active', 'ninguno'); this.changed('projects'); return null; }
-    const project = this.project(name); if (!project) throw new Error(tr('sys.board.unknownProject', { name }));
-    // 3.2: the same folder again (the assistant sets it on each request) says nothing: the notice came out again and again.
-    if (this.activeName() === project.name) return project;
-    this.setting('active_project', project.name);
-    this.event(null, actor, 'project.active', `${project.name} -> ${project.path}`);
-    this.notice(tr('msg.board.activeFolder', { name: project.name, path: project.path }), 'info');
-    this.changed('projects');
-    return project;
   }
 
   // ---- tasks
@@ -618,120 +480,6 @@ export class Board {
       .map((t) => this.patch(t.id, { status: 'queued', assigned_to: null, pid: null }, 'orb', 'task.updated', 'running').id);
   }
 
-  // ---- messages between agents, the assistant and the user
-  // from_task: the sender's own task (a worker); task_id: the task the message is about or for.
-  send({ from, to, body, task_id, from_task = null }) {
-    if (!body) throw new Error(tr('sys.board.bodyRequired'));
-    if (![...AGENTS, 'all', 'usuario', 'orb'].includes(to)) throw new Error(tr('sys.board.badRecipient', { to, list: AGENTS.join(', ') }));
-    body = String(body).slice(0, 8000);
-    // 3.2.1: the agent by its name («Cursor», not «cursor»).
-    const who = from === 'orb' ? assistantName() : AGENT_LABELS[from] ?? from;
-    if (to === 'usuario') this.addChat('system', `💬 ${who}${task_id ? tr('msg.board.taskRef', { id: task_id }) : ''}: ${body}`, task_id ? { task: Number(task_id) } : null);
-    const { lastInsertRowid } = this.run('INSERT INTO messages (from_agent, to_agent, task_id, from_task, body, at) VALUES (?, ?, ?, ?, ?, ?)', String(from), to, task_id ?? null, from_task ?? null, body, now());
-    this.changed('messages');
-    return { id: Number(lastInsertRowid), from, to, task_id: task_id ?? null };
-  }
-
-  // visible(m): which of them this reader may see (an agent's MCP: only its own tasks' and conversation's); only those
-  // are returned and marked as read. 3.8: reader, whose read marks they are (a worker's are its task's, «claude#3», so two
-  // tasks of one agent do not take each other's messages); mine(m), a message it sent itself (left out).
-  inbox(agent, markRead = true, visible = () => true, { reader = agent, mine = (m) => m.from_agent === agent } = {}) {
-    const rows = this.all(`SELECT m.* FROM messages m WHERE (m.to_agent = ? OR m.to_agent = 'all')
-      AND NOT EXISTS (SELECT 1 FROM message_reads r WHERE r.message_id = m.id AND r.agent = ?) ORDER BY m.id LIMIT 1000`, agent, reader).filter((m) => !mine(m) && visible(m)).slice(0, 100);
-    if (markRead) for (const m of rows) this.run('INSERT OR IGNORE INTO message_reads (message_id, agent) VALUES (?, ?)', m.id, reader);
-    return rows;
-  }
-
-  // ---- 3.2: the conversations with the assistant (each with its title, project, brain and its agent's conversation id)
-  conversation(id) {
-    const r = id == null ? null : this.one('SELECT * FROM conversations WHERE id = ?', Number(id));
-    return r ? conversationRow(r) : null;
-  }
-  conversations({ limit = 300 } = {}) {
-    return this.all('SELECT * FROM conversations WHERE bot_id IS NULL AND group_id IS NULL ORDER BY updated_at DESC, id DESC LIMIT ?', Math.min(Math.max(Number(limit) || 300, 1), 2000)).map(conversationRow);
-  }
-  createConversation({ title = '', project = null, agent = 'claude', account = null, model = null, reasoning = 'medium' } = {}) {
-    if (project && !this.project(project)) throw new Error(tr('sys.board.unknownProject', { name: project }));
-    const at = now();
-    const { lastInsertRowid } = this.run('INSERT INTO conversations (title, titled, project, agent, account, model, reasoning, created_at, updated_at) VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?)',
-      oneLine(title || tr('msg.board.newConversation'), 80), project ? this.project(project).name : null, agent, account || null, model || null, reasoning || 'medium', at, at);
-    this.changed('conversations');
-    return this.conversation(Number(lastInsertRowid));
-  }
-  updateConversation(id, fields) {
-    const allowed = ['title', 'titled', 'project', 'agent', 'account', 'model', 'reasoning', 'session_id', 'turns', 'context', 'status', 'done_at', 'updated_at'];
-    const keys = Object.keys(fields).filter((k) => allowed.includes(k));
-    if (!keys.length) return this.conversation(id);
-    const value = (k) => (k === 'context' ? (fields[k] == null ? null : JSON.stringify(fields[k])) : k === 'titled' ? Number(Boolean(fields[k])) : k === 'title' ? oneLine(String(fields[k]), 80) : fields[k] ?? null);
-    this.run(`UPDATE conversations SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`, ...keys.map(value), Number(id));
-    this.changed('conversations');
-    return this.conversation(id);
-  }
-  // Done (the user gave the OK and nothing of it is still open, or put away by hand) or open again.
-  setConversationDone(id, done = true) {
-    const c = this.conversation(id); if (!c) return null;
-    if ((c.status === 'done') === Boolean(done)) return c;
-    // Opened again counts as activity: the day-long quiet before it would complete it again at once.
-    return this.updateConversation(c.id, { status: done ? 'done' : 'open', done_at: done ? now() : null, ...(done ? {} : { updated_at: now() }) });
-  }
-  // The project of a conversation. 3.2: when the user chooses it (asDefault), also the default for the next new
-  // conversation (the global working folder). 3.8.3: the assistant choosing a project for its conversation (a task, a
-  // new project, orb_set_project) no longer moves the user's working folder too: a test project ended up as the
-  // «Proyecto de trabajo» of every new chat.
-  setConversationProject(id, name, actor, { asDefault = false } = {}) {
-    const c = this.conversation(id); if (!c) throw new Error(tr('msg.board.noConversation'));
-    const project = name ? this.project(name) : null;
-    if (name && !project) throw new Error(tr('sys.board.unknownProject', { name }));
-    if ((c.project ?? null) !== (project?.name ?? null)) this.updateConversation(c.id, { project: project?.name ?? null });
-    if (asDefault) this.setActiveProject(project?.name ?? '', actor);
-    return project;
-  }
-  // The conversation a task belongs to: its own, or the one of the task it comes from (a subtask, a review, a join).
-  conversationOfTask(taskId) {
-    let task = this.task(taskId);
-    for (let i = 0; task && i < 8; i++) {
-      if (task.conversation_id) return task.conversation_id;
-      const from = task.parent_id ?? task.review_of ?? null;
-      task = from ? this.task(from) : null;
-    }
-    return null;
-  }
-  // The tasks of a conversation that are not over yet (they keep it open).
-  openTasksOf(conversationId) {
-    return this.one("SELECT COUNT(*) AS n FROM tasks WHERE conversation_id = ? AND status IN ('queued', 'awaiting_approval', 'running', 'limited')", Number(conversationId)).n;
-  }
-
-  // ---- the assistant's chat and the activity feed
-  // meta: extra data of a chat line, e.g. { kind: 'report', tasks: [ids] } for the assistant's report that waits for the user's OK.
-  // 3.2: conversation: the one the line belongs to; when not given, the one of the task the line is about (meta.task).
-  addChat(role, body, meta = null, conversation = undefined) {
-    const conv = conversation !== undefined ? conversation : meta?.task ? this.conversationOfTask(meta.task) : null;
-    const at = now();
-    const { lastInsertRowid } = this.run('INSERT INTO chat (role, body, meta, at, conversation_id) VALUES (?, ?, ?, ?, ?)', role, String(body), meta ? JSON.stringify(meta) : null, at, conv ?? null);
-    if (conv && role !== 'notice') this.run('UPDATE conversations SET updated_at = ? WHERE id = ?', at, Number(conv));
-    // 3.6 (messaging lists): which conversation got which line (the lists count unread lines).
-    this.changed('chat', conv != null && role !== 'notice' ? { conversation: Number(conv), line: Number(lastInsertRowid), role } : null);
-    return { id: Number(lastInsertRowid), conversation: conv ?? null };
-  }
-  // 2.7: a notice that only informs (the working folder changed, the brain in use, a schedule created…): the window shows
-  // it as a passing notification instead of a grey line in the chat. tone: info | success | warning. Kept in the table
-  // (role 'notice') so the engine sees it whichever process wrote it, but left out of the chat.
-  notice(body, tone = 'info') { return this.addChat('notice', body, { tone }); }
-  // Changes the extra data of a chat message (e.g. an approval card that was answered).
-  patchChatMeta(id, meta) { this.run('UPDATE chat SET meta = ? WHERE id = ?', JSON.stringify(meta), Number(id)); this.changed('chat'); }
-  // The chat lines of a conversation (not the notices), oldest first: the last `limit`, or only those before a line id.
-  // conversation null: the lines of no conversation (about tasks made outside one: by hand, by a schedule).
-  chat(conversation, limit = 200, { before = null } = {}) {
-    const where = conversation == null ? 'conversation_id IS NULL' : 'conversation_id = ?';
-    return this.all(`SELECT * FROM (SELECT * FROM chat WHERE role != 'notice' AND ${where}${before ? ' AND id < ?' : ''} ORDER BY id DESC LIMIT ?) ORDER BY id`, ...(conversation == null ? [] : [Number(conversation)]), ...(before ? [Number(before)] : []), limit)
-      .map((r) => { let meta = null; try { meta = r.meta ? JSON.parse(r.meta) : null; } catch { /* ignore */ } return { ...r, meta }; });
-  }
-  // One chat line by its id (any conversation), with its extra data.
-  chatRow(id) {
-    const r = this.one('SELECT * FROM chat WHERE id = ?', Number(id)); if (!r) return null;
-    let meta = null; try { meta = r.meta ? JSON.parse(r.meta) : null; } catch { /* ignore */ }
-    return { ...r, meta };
-  }
   // ---- the end of the loop: the user gives the OK to finished work
   isAccepted(taskId) { return this.setting(`accepted:${Number(taskId)}`) === '1'; }
   accept(taskIds, actor) {
@@ -786,3 +534,6 @@ export class Board {
 
   isFinished(status) { return FINISHED.has(status); }
 }
+
+// The parts of the class kept in their own files (the same descriptors class methods have).
+for (const part of [BoardProjects, BoardConversations]) for (const key of Object.getOwnPropertyNames(part.prototype)) if (key !== 'constructor') Object.defineProperty(Board.prototype, key, Object.getOwnPropertyDescriptor(part.prototype, key));
