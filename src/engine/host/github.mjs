@@ -95,7 +95,11 @@ export function commitAll(project, message) {
   // 3.2.1: also what the files say (a key pasted into any file), not only their names.
   const inText = stagedSecrets(project.path, git);
   if (inText.length) { git(project.path, 'reset', '-q'); throw new Error(tr('msg.github.secretInText', { files: inText.slice(0, 5).join(', ') })); }
-  const r = git(project.path, 'commit', '-q', '-m', msg);
+  // The user's own identity when git has one; without it (no global user.name/email) git refuses to commit, so the
+  // commit goes in as Orb's, like the first commit of a created project.
+  const known = (key) => git(project.path, 'config', '--get', key).stdout.trim() !== '';
+  const who = known('user.name') && known('user.email') ? [] : ORB_GIT;
+  const r = git(project.path, ...who, 'commit', '-q', '-m', msg);
   if (r.status !== 0) throw new Error(oneLine(r.stderr || r.stdout, 300));
   return { files: staged.length };
 }
