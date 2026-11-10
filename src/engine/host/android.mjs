@@ -17,7 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import zlib from 'node:zlib';
-import { spawn, spawnSync, execFile } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
 import { ctx, tr } from '../../platform/context.mjs';
 import { sdkRoots } from '../../platform/dev-tools.mjs';
 import { isOrbData } from '../../domain/security/guard.mjs';
@@ -105,9 +105,9 @@ async function download(pin, log, fetchImpl) {
     // Linux usually has unzip; PowerShell as the last resort on Windows. (The archive is Google's, checked above.)
     const system32 = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32'); // full paths: nothing in PATH can stand in
     const tar = process.platform === 'win32' ? path.join(system32, 'tar.exe') : 'tar';
-    let r = spawnSync(tar, ['-xf', zip, '-C', out], { windowsHide: true, timeout: 120_000 });
-    if (r.status !== 0 && process.platform === 'win32') r = spawnSync(path.join(system32, 'WindowsPowerShell', 'v1.0', 'powershell.exe'), ['-NoProfile', '-NonInteractive', '-Command', 'Expand-Archive -LiteralPath $env:ORB_ZIP -DestinationPath $env:ORB_OUT -Force'], { windowsHide: true, timeout: 180_000, env: { ...process.env, ORB_ZIP: zip, ORB_OUT: out } });
-    else if (r.status !== 0) r = spawnSync('unzip', ['-q', '-o', zip, '-d', out], { timeout: 120_000 });
+    let r = await runQuiet(tar, ['-xf', zip, '-C', out], { timeout: 120_000 });
+    if (r.status !== 0 && process.platform === 'win32') r = await runQuiet(path.join(system32, 'WindowsPowerShell', 'v1.0', 'powershell.exe'), ['-NoProfile', '-NonInteractive', '-Command', 'Expand-Archive -LiteralPath $env:ORB_ZIP -DestinationPath $env:ORB_OUT -Force'], { timeout: 180_000, env: { ...process.env, ORB_ZIP: zip, ORB_OUT: out } });
+    else if (r.status !== 0) r = await runQuiet('unzip', ['-q', '-o', zip, '-d', out], { timeout: 120_000 });
     const from = path.join(out, 'platform-tools');
     if (!fs.existsSync(path.join(from, exe('adb')))) throw new Error(tr('sys.android.noAdb'));
     fs.mkdirSync(ctx.paths.adb, { recursive: true });
@@ -130,6 +130,10 @@ async function download(pin, log, fetchImpl) {
 // 3.8.2 (review M2): Orb's adb keeps its pairing keys and known phones in core\datos\android (ANDROID_USER_HOME), closed to
 // agents, instead of the user's .android (also closed: src/engine/workspace-layout.mjs › adbHomes).
 export const adbHome = () => path.join(ctx.paths.data, 'android');
+// A program run to the end without blocking the engine (the unpacking of a download took 2-3 minutes of frozen loop).
+const runQuiet = (file, args, { timeout = 120_000, env = process.env } = {}) => new Promise((resolve) => {
+  execFile(file, args, { windowsHide: true, timeout, maxBuffer: 16 * 1024 * 1024, env }, (error) => resolve({ status: error ? (typeof error.code === 'number' ? error.code : 1) : 0 }));
+});
 export function runAdb(file, args, { timeout = 30_000, maxBuffer = 24 * 1024 * 1024 } = {}) {
   const script = /\.(mjs|js)$/i.test(file);
   let env = process.env;
@@ -284,14 +288,17 @@ export function createAndroid({ board, log = () => {}, exe = adbPath, emulator =
   let pairing = null; // { name, password, qr, state, error, until, device, timer }
   const off = () => exe === adbPath && adbDisabled(); // tests and ORB_NO_ADB: Orb's own adb never runs
   // 3.8.2 (review A2): every adb binary runs only as Orb downloaded it (verify); only the tests' fake adb script does not.
-  const trusted = () => /\.(mjs|js)$/i.test(exe()) || verify();
+  // 3.8.3 (repaso): hashing the whole folder (15 MB) on every adb call, twice per tool, froze the engine; the check is
+  // kept for a minute (agents cannot write in core\herramientas) and asked again after a new download.
+  let trust = { at: 0, ok: false };
+  const trusted = () => { if (/\.(mjs|js)$/i.test(exe())) return true; if (Date.now() - trust.at < 60_000) return trust.ok; trust = { at: Date.now(), ok: verify() }; return trust.ok; };
   const usable = () => !off() && fs.existsSync(exe()) && trusted();
   const ready = async () => {
     if (off()) throw userError('msg.android.noAdb', { error: 'ORB_NO_ADB' });
     // 3.8.2 (review A2): Orb's own adb runs only as it was downloaded (verify, every time); otherwise ensure() fetches it again.
     const good = () => fs.existsSync(exe()) && trusted();
     if (good()) return exe();
-    const st = await ensure();
+    const st = await ensure(); trust.at = 0;
     if (good()) return exe();
     throw userError('msg.android.noAdb', { error: st?.error ?? '' });
   };

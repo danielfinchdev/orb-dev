@@ -331,7 +331,7 @@ export function servePipe({ token, T, log = () => {}, pages, actions, before = (
           continue;
         }
         const { id: reqId, action, args = {} } = msg ?? {};
-        if (action === 'close') { const tab = pages.get(key); if (tab) pages.close(tab); send({ id: reqId, ok: true, result: tab ? 'Navegador cerrado.' : 'No había navegador abierto.' }); continue; }
+        if (action === 'close') { const tab = pages.get(key); if (tab) { if (held === tab) { held.users--; held = null; } pages.close(tab); } send({ id: reqId, ok: true, result: tab ? 'Navegador cerrado.' : 'No había navegador abierto.' }); continue; }
         if (typeof action !== 'string' || !actions.has(action) || !args || typeof args !== 'object') { send({ id: reqId, ok: false, error: T('sys.browser.badAction') }); continue; }
         if (pending >= MAX_PENDING) { send({ id: reqId, ok: false, error: T('sys.browser.busy') }); continue; }
         pending++;

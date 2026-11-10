@@ -228,7 +228,7 @@ export function createLive(o) {
       try {
         fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text);
         prompt = `Tus instrucciones completas están en el archivo ${file}. Léelo entero y síguelo como si fuera este mensaje.`;
-        current.promise.finally(() => fs.rmSync(file, { force: true }));
+        current.promise.finally(() => { try { fs.rmSync(file, { force: true }); } catch { /* still open: left to the temp folder */ } });
       } catch { /* sent as is */ }
     }
     // 3.1: Orb's tools (orb_update_task, messages, the browser) through the project's .cursor/mcp.json, approved for this
@@ -236,10 +236,10 @@ export function createLive(o) {
     // (a dev server) no longer keeps the CLI waiting for ever after its answer (--background-shell-timeout).
     let restore = Object.assign(() => {}, { env: {} });
     const servers = (typeof o.mcpServers === 'function' ? o.mcpServers() : o.mcpServers) ?? {};
-    current.promise.finally(() => servers.release?.());
+    current.promise.finally(() => { try { servers.release?.(); } catch (error) { log(`liberar MCP: ${error.message}`); } });
     try { restore = prepareCursorFolder(o.cwd, { mcpServers: servers, deny: cursorRules(permission, o.internalDir, { android: Boolean(o.android?.()) }) }); }
     catch (error) { log(`preparar .cursor: ${error.message}`); }
-    current.promise.finally(() => restore());
+    current.promise.finally(() => { try { restore(); } catch (error) { log(`restaurar .cursor: ${error.message}`); } });
     const args = [...o.exe.pre, '-p', '--output-format', 'stream-json', '--stream-partial-output', '--trust', '--workspace', o.cwd, '--approve-mcps', '--background-shell-timeout', '60'];
     if (permission === 'leer') args.push('--mode', 'ask'); else args.push('--force');
     // 2.6: «Auto» is Cursor's own choice per request (--model auto), not the model in use in Cursor.

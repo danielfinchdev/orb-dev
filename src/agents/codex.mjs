@@ -45,6 +45,7 @@ export async function accountInfo(exe, dir, { timeoutMs = 20000 } = {}) {
   try {
     child = spawnAgent(exe.cmd, [...exe.pre, 'app-server'], { cwd: os.tmpdir(), env: { CODEX_HOME: dir }, log: () => {} });
     peer = new JsonRpcPeer(child, { onNotification: () => {}, onRequest: async () => ({}), log: () => {} });
+    child.on('error', () => peer.close()); // a program that cannot start fails the requests instead of crashing the engine
     await peer.request('initialize', { clientInfo: CLIENT, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs });
     peer.notify('initialized', {});
     const r = await peer.request('account/read', { refreshToken: false }, { timeoutMs });
@@ -368,7 +369,8 @@ export function createLive(o) {
       // A start that fails (no reply, thread not found) closes this live: the next message gets a fresh process.
       started ??= start().catch((error) => { live.close(); throw error; });
       await started;
-      const res = await peer.request('turn/start', { threadId, input: input(text, images), ...(model ? { model } : {}), effort: effort(o.reasoning) });
+      // The answer is only the acknowledgement of the turn; a server that never gives it would leave the turn open for ever.
+      const res = await peer.request('turn/start', { threadId, input: input(text, images), ...(model ? { model } : {}), effort: effort(o.reasoning) }, { timeoutMs: 120_000 });
       // 3.8.3: a turn that ended at once (its turn/completed read in the same piece of output as this answer, before this
       // line runs) keeps no id: a stale one made the next turn's turn/completed look like another turn's, and that turn
       // never ended (the Ubuntu CI hang).

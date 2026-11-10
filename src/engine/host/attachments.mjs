@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import crypto from 'node:crypto';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
 import { ctx, tr } from '../../platform/context.mjs';
 import { isOrbData } from '../../domain/security/guard.mjs';
 import { fingerprints } from './android.mjs';
@@ -184,9 +184,10 @@ export const looksLikeText = (s) => {
 };
 
 // The text of a PDF or a document. → string ('' when there is none or it cannot be read)
+const EXTRACT_MAX = 20 * 1024 * 1024; // bigger documents are handed over as files only (reading them froze the engine)
 export function extractText(file) {
   const ext = path.extname(file).slice(1).toLowerCase();
-  let buf; try { buf = fs.readFileSync(file); } catch { return ''; }
+  let buf; try { if (fs.statSync(file).size > EXTRACT_MAX) return ''; buf = fs.readFileSync(file); } catch { return ''; }
   let text = '';
   try {
     if (ext === 'pdf') text = pdfText(buf);
@@ -244,7 +245,7 @@ async function downloadFfmpeg(pin, fetchImpl, log) {
     const zip = path.join(work, 'ffmpeg.zip'); fs.writeFileSync(zip, buf);
     const out = path.join(work, 'x'); fs.mkdirSync(out);
     const system32 = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32');
-    spawnSync(path.join(system32, 'tar.exe'), ['-xf', zip, '-C', out, pin.member], { windowsHide: true, timeout: 180_000 });
+    await new Promise((resolve) => execFile(path.join(system32, 'tar.exe'), ['-xf', zip, '-C', out, pin.member], { windowsHide: true, timeout: 180_000 }, () => resolve())); // never blocks the engine
     const got = path.join(out, ...pin.member.split('/'));
     if (!fs.existsSync(got) || crypto.createHash('sha256').update(fs.readFileSync(got)).digest('hex') !== pin.exeSha256) throw new Error('exe');
     fs.rmSync(ffmpegDir(), { recursive: true, force: true });

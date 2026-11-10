@@ -20,9 +20,11 @@ const parse = (task) => {
   if (!task) return task;
   const { reasoning, fast } = taskOptions({ reasoning: task.reasoning ?? undefined, fast: task.fast == null ? undefined : Boolean(task.fast) });
   task.mode ??= 'carpeta'; task.readonly = Boolean(task.readonly); task.reasoning = reasoning; task.fast = fast;
-  task.depends_on = JSON.parse(task.depends_on); task.sensitivity = JSON.parse(task.sensitivity);
+  // A corrupt column in one row must not break every list (3.8.3 repaso): it reads as empty.
+  const list = (v) => { try { const j = JSON.parse(v ?? '[]'); return Array.isArray(j) ? j : []; } catch { return []; } };
+  task.depends_on = list(task.depends_on); task.sensitivity = list(task.sensitivity);
   // 3.8.3: «Auto» or «Preguntar» (null: the global level now) and what the user asked for in so many words.
-  task.user_asked = (() => { try { const j = JSON.parse(task.user_asked ?? '[]'); return Array.isArray(j) ? j : []; } catch { return []; } })();
+  task.user_asked = list(task.user_asked);
   return task;
 };
 

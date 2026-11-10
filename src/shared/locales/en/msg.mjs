@@ -246,6 +246,7 @@ export default {
   "msg.guard.internalSkillsRun": "runs a script of a skill in core",
   "msg.guard.internalLink": "makes a link (a junction or a symbolic or hard link) that points into the core folder or lives in it",
   "msg.guard.internalLogs": "touches the general log in core: agents do not write it (Orbe records your result when you finish; only the coordinator uses orb_write_log). Do not insist: put it in your result",
+  "msg.guard.gitRuns": "changes git settings that run programs (filters, hooks, fsmonitor, credentials): Orb would run them too when taking its snapshots",
   "msg.guard.agentConfig": "changes the project's agent settings (.claude or .cursor), which later agents will use",
   "msg.guard.protected": "touches something protected ({name}), which is never touched",
   "msg.guard.plain.stop": "close a running program",

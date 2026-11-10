@@ -27,11 +27,13 @@ export const userHome = () => process.env.USERPROFILE || os.homedir();
 
 // Every AppData that can hold the agents: this user's, and copies moved to another drive to free space on C: (an
 // <drive>:\AppData, <drive>:\<folder>\AppData or <drive>:\<folder>\<folder>\AppData with Roaming or Local inside, such as
-// D:\ComputerApps\AppData), where PATH may still point to the old place. Found once a minute at most.
+// D:\ComputerApps\AppData), where PATH may still point to the old place. Found once per process (a spun-down disk or a
+// network drive froze the engine for seconds every minute); forgetAppData() asks again (Ajustes › Agentes).
 const SKIP_DIRS = /^(\$.*|\..*|windows|program files.*|programdata|users|system volume information|recovery|perflogs|node_modules|msocache|intel|amd|nvidia|wpsystem|windowsapps|xboxgames)$/i;
 let appDataCache = null;
+export const forgetAppData = () => { appDataCache = null; };
 export function appDataDirs() {
-  if (appDataCache && Date.now() - appDataCache.at < 60_000) return appDataCache.list;
+  if (appDataCache) return appDataCache.list;
   const home = userHome();
   const list = [{ roaming: process.env.APPDATA ?? path.join(home, 'AppData', 'Roaming'), local: process.env.LOCALAPPDATA ?? path.join(home, 'AppData', 'Local') }];
   if (IS_WIN) {

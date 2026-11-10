@@ -617,7 +617,6 @@ function unitOf(name) {
 export function applyPendingRestore(home, { onlyMissing = false } = {}) {
   const ready = pendingDir(home);
   let info; try { info = JSON.parse(fs.readFileSync(path.join(ready, 'listo.json'), 'utf8')); } catch { return null; }
-  fs.rmSync(path.join(ready, 'listo.json'), { force: true });
   const aside = path.join(paths(home).internal, `antes-de-restaurar-${stamp()}`);
   const units = new Set();
   for (const f of walkFiles(ready)) units.add(unitOf(rel(ready, f)));
@@ -630,10 +629,24 @@ export function applyPendingRestore(home, { onlyMissing = false } = {}) {
   for (const extra of units.has(`${INTERNAL_DIR}/datos/orb.db`) || !onlyMissing ? ['orb.db-wal', 'orb.db-shm'] : []) {
     const f = path.join(paths(home).data, extra); if (fs.existsSync(f)) move(f, path.join(aside, INTERNAL_DIR, 'datos', extra));
   }
-  for (const u of [...units].sort()) {
-    const target = homePath(home, u);
-    if (fs.existsSync(target)) move(target, path.join(aside, ...u.split('/')));
-    move(path.join(ready, ...u.split('/')), target);
+  // 3.8.3 (repaso): whole or not at all. A unit that cannot be moved (a file locked by another program) puts back what
+  // was moved so far, keeps the copy for a later try and leaves core as it was; before, core stayed half replaced and
+  // the restore was silently forgotten.
+  const done = [];
+  try {
+    for (const u of [...units].sort()) {
+      const target = homePath(home, u);
+      const had = fs.existsSync(target);
+      if (had) move(target, path.join(aside, ...u.split('/')));
+      done.push({ u, target, had });
+      move(path.join(ready, ...u.split('/')), target);
+    }
+  } catch (error) {
+    for (const { u, target, had } of done.reverse()) {
+      try { if (fs.existsSync(target)) move(target, path.join(ready, ...u.split('/'))); if (had) move(path.join(aside, ...u.split('/')), target); } catch { /* best effort */ }
+    }
+    try { fs.renameSync(path.join(ready, 'listo.json'), path.join(ready, 'listo.fallido.json')); } catch { /* left for the user */ }
+    throw new Error(`restaurar: ${error.message} (la copia sigue en ${ready}; core como estaba)`);
   }
   fs.rmSync(ready, { recursive: true, force: true });
   // 3.8: a database of 3.7 restored now is migrated again with an archive and a copy of its own.

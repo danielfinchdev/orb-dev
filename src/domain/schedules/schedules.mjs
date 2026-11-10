@@ -12,7 +12,7 @@ import { nextLocalRun, systemTz, ownerTz } from '../../shared/tz.mjs';
 export const EVERY = ['once', 'hourly', 'every_hours', 'daily', 'weekly'];
 const ONCE_AT = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T([01]\d|2[0-3]):[0-5]\d$/;
 const now = () => new Date();
-const parseRow = (r) => r && { ...r, enabled: Boolean(r.enabled), approved: Boolean(r.approved), readonly: Boolean(r.readonly), same_chat: Boolean(r.same_chat), weekdays: JSON.parse(r.weekdays || '[]') };
+const parseRow = (r) => r && { ...r, enabled: Boolean(r.enabled), approved: Boolean(r.approved), readonly: Boolean(r.readonly), same_chat: Boolean(r.same_chat), weekdays: (() => { try { const j = JSON.parse(r.weekdays || '[]'); return Array.isArray(j) ? j : []; } catch { return []; } })() };
 
 // every: hourly | every_hours (N hours, in `hours`) | daily (at at_time) | weekly (weekdays 0-6, Sunday = 0, at at_time).
 // 3.6: the wall time is the owner's (tz; default this machine's), right across daylight-saving changes.

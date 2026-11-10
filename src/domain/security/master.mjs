@@ -105,7 +105,9 @@ function connect() {
 function request(msg) {
   const c = channel ?? connect();
   const out = Buffer.from(`${JSON.stringify(msg)}\n`);
-  try { let off = 0; while (off < out.length) off += fs.writeSync(c.write ?? c.read, out, off); } finally { wipe(out); }
+  try { let off = 0; while (off < out.length) off += fs.writeSync(c.write ?? c.read, out, off); }
+  catch (error) { channel = null; throw Object.assign(new Error('secretos: la bóveda se ha cerrado'), { code: 'noVault', cause: error }); } // the next request connects again
+  finally { wipe(out); }
   for (;;) {
     const nl = c.rest.indexOf(10);
     if (nl >= 0) {

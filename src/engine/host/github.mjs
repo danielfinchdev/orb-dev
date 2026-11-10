@@ -3,7 +3,7 @@
 // from a button the user clicks and confirms; agents have no access to these functions.
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
 import { ctx, tr } from '../../platform/context.mjs';
 import { firstFile, inPath, cleanEnv, IS_WIN } from '../../platform/proc.mjs';
 import { openConsole } from '../../agents/index.mjs';
@@ -60,13 +60,19 @@ export async function contributions() {
 
 export function login() { const exe = ghExe(); if (!exe) throw new Error(tr('msg.github.ghMissingShort')); openConsole(exe, ['auth', 'login', '--web', '--git-protocol', 'https']); }
 
+// git for the card, without blocking the engine (3.8.3 repaso: five synchronous calls per open card, up to a second on a
+// big repository). Never throws: a failure is an empty answer.
+const gitAsync = (cwd, ...args) => new Promise((resolve) => {
+  execFile('git', ['-C', cwd, '-c', 'core.fsmonitor=false', ...args], { encoding: 'utf8', windowsHide: true, maxBuffer: 32 * 1024 * 1024, timeout: 30_000, env: cleanEnv() }, (error, stdout) => resolve({ stdout: error ? '' : stdout ?? '' }));
+});
 export async function projectInfo(project) {
   if (!isGitRepo(project.path)) return { git: false };
-  const branch = git(project.path, 'rev-parse', '--abbrev-ref', 'HEAD').stdout.trim();
-  const remote = git(project.path, 'remote', 'get-url', 'origin').stdout.trim() || null;
-  const branches = git(project.path, 'for-each-ref', '--format=%(refname:short)', 'refs/heads').stdout.split(/\r?\n/).filter(Boolean).slice(0, 100);
-  const changes = git(project.path, 'status', '--porcelain', '-uall').stdout.split(/\r?\n/).filter(Boolean).length;
-  const ahead = remote ? git(project.path, 'rev-list', '--count', '@{upstream}..HEAD').stdout.trim() : '';
+  const [b, r, refs, st] = await Promise.all([gitAsync(project.path, 'rev-parse', '--abbrev-ref', 'HEAD'), gitAsync(project.path, 'remote', 'get-url', 'origin'), gitAsync(project.path, 'for-each-ref', '--format=%(refname:short)', 'refs/heads'), gitAsync(project.path, 'status', '--porcelain', '-uall')]);
+  const branch = b.stdout.trim();
+  const remote = r.stdout.trim() || null;
+  const branches = refs.stdout.split(/\r?\n/).filter(Boolean).slice(0, 100);
+  const changes = st.stdout.split(/\r?\n/).filter(Boolean).length;
+  const ahead = remote ? (await gitAsync(project.path, 'rev-list', '--count', '@{upstream}..HEAD')).stdout.trim() : '';
   let prs = [];
   if (remote && /github\.com/i.test(remote) && ghExe()) {
     const r = await gh(['pr', 'list', '--state', 'open', '--limit', '20', '--json', 'number,title,headRefName,url,isDraft'], { cwd: project.path, timeoutMs: 30_000 });

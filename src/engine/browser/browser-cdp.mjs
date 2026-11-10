@@ -88,7 +88,7 @@ export function cdpDriver(T) {
         // An HTTP error status (404, 500…) still renders the server's page: the agent sees it, as it does a page that asked
         // for an HTTP sign-in (the app cancels the prompt and the server's 401 page shows). Anything else never loaded.
         if (failure && !/ERR_HTTP_RESPONSE_CODE_FAILURE|ERR_INVALID_AUTH_CREDENTIALS/.test(failure)) throw new Error(T('sys.browser.openFailed', { url, error: failure.replace(/^.*?(ERR_\w+).*$/s, '$1') }));
-        if (r.loaderId) await Promise.race([done, settle(LOAD_MS)]); // a jump inside the same page has no load
+        if (r.loaderId) { let t; try { await Promise.race([done, new Promise((res) => { t = setTimeout(res, LOAD_MS); })]); } finally { clearTimeout(t); } } // a jump inside the same page has no load; no timer left behind
       } finally { off(); }
     },
     async world(tab, code) {

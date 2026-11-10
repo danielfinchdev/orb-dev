@@ -127,8 +127,7 @@ export function createHostBrowser({ call = hostCall, language = () => 'es', skin
     recording = null; clearTimeout(r.timer);
     sendState(); casting();
     if (!r.frames.length) return null;
-    const avi = mjpegAvi(resample(r.frames, RECORD_FPS), RECORD_FPS);
-    try { return await saveRecording(sessionOf(r.tab), avi); } catch (error) { log(`navegador del agente: grabación: ${error.message}`); return null; }
+    try { return await saveRecording(sessionOf(r.tab), mjpegAvi(resample(r.frames, RECORD_FPS), RECORD_FPS)); } catch (error) { log(`navegador del agente: grabación: ${error.message}`); return null; } // building the file can fail too
   }
   const driver = cdpDriver((key, vars) => translate(language() === 'en' ? 'en' : 'es', key, vars));
   async function point(x, y) {

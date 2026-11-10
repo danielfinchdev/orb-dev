@@ -1,18 +1,23 @@
 // git for Orb: one way to run it (never throws; a failure or a timeout is status -1 with the reason in stderr), Orb's
 // branch and ref prefixes, and quick questions about a repository. Synchronous (src/engine moves to async in 3.8.4).
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { porcelainPaths } from '../shared/secrets-scan.mjs';
+import { cleanEnv } from './proc.mjs';
 import { PRODUCT } from '../shared/product.mjs';
 
 // Never throws and never returns null output: if git cannot start or times out, status is -1 and stderr carries the reason.
+// 3.8.3 (repaso): Orb's git runs in a project an agent wrote. Its hooks (`worktree add` runs post-checkout) and fsmonitor
+// never run as the engine, and the engine's own environment (cleanEnv: no secrets of the app) is not handed to them.
+const SAFE = ['-c', 'core.fsmonitor=false', '-c', `core.hooksPath=${path.join(os.tmpdir(), 'orb-sin-hooks')}`];
 export const git = (cwd, ...args) => gitEnv(cwd, {}, ...args);
 export const gitEnv = (cwd, env, ...args) => {
-  const res = spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024, timeout: 120_000, env: { ...process.env, ...env } });
+  const res = spawnSync('git', ['-C', cwd, ...SAFE, ...args], { encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024, timeout: 120_000, env: cleanEnv(env) });
   return { status: res.status ?? -1, stdout: res.stdout ?? '', stderr: res.stderr || res.error?.message || '' };
 };
-export const gitBuffer = (cwd, ...args) => spawnSync('git', ['-C', cwd, ...args], { windowsHide: true, maxBuffer: 512 * 1024 * 1024, timeout: 120_000 });
+export const gitBuffer = (cwd, ...args) => spawnSync('git', ['-C', cwd, ...SAFE, ...args], { windowsHide: true, maxBuffer: 512 * 1024 * 1024, timeout: 120_000, env: cleanEnv() });
 export const slug = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'tarea';
 // Branches and hidden refs of this app use their own prefix, so they never collide with other tools in a shared repository.
 export const BRANCH_PREFIX = 'orb';

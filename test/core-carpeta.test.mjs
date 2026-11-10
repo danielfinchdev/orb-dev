@@ -75,7 +75,7 @@ function orb37() {
   db.prepare('INSERT INTO tasks (id, workdir, n) VALUES (7, ?, 1)').run(copy);
   db.prepare("INSERT INTO chat (role, body, meta) VALUES ('orb', ?, ?)").run(`Mira ${old('imagenes', 'foto.png')}`, JSON.stringify({ images: [old('imagenes', 'foto.png')], log: path.join(home, 'bitacora', 'GENERAL.md') }));
   // What the user wrote stays as written: a path they typed is theirs; Orb's own image (in .orb) follows the move.
-  db.prepare("INSERT INTO chat (role, body, meta) VALUES ('user', ?, ?)").run(`lee ${path.join(home, 'bitacora', 'GENERAL.md')} y ${old('imagenes', 'foto.png')}`, null);
+  db.prepare("INSERT INTO chat (role, body, meta) VALUES ('usuario', ?, ?)").run(`lee ${path.join(home, 'bitacora', 'GENERAL.md')} y ${old('imagenes', 'foto.png')}`, null);
   db.prepare('INSERT INTO projects (name, path) VALUES (?, ?), (?, ?)').run('tienda', project, 'bitacora-web', path.join(home, 'web', 'bitacora-web'));
   db.close();
   return { home, project, copy };
@@ -115,7 +115,7 @@ test('un espacio de 3.7: sus datos pasan a core solos; bitacora, adb-tools y mcp
   const chat = db.prepare("SELECT body, meta FROM chat WHERE role = 'orb'").get();
   assert.equal(chat.body, `Mira ${path.join(q.core, 'imagenes', 'foto.png')}`);
   assert.deepEqual(JSON.parse(chat.meta), { images: [path.join(q.core, 'imagenes', 'foto.png')], log: q.generalLog });
-  assert.equal(db.prepare("SELECT body FROM chat WHERE role = 'user'").get().body, `lee ${path.join(home, 'bitacora', 'GENERAL.md')} y ${path.join(q.core, 'imagenes', 'foto.png')}`, 'lo que escribió el usuario no se reescribe (la imagen de Orb sí)');
+  assert.equal(db.prepare("SELECT body FROM chat WHERE role = 'usuario'").get().body, `lee ${path.join(home, 'bitacora', 'GENERAL.md')} y ${path.join(q.core, 'imagenes', 'foto.png')}`, 'lo que escribió el usuario no se reescribe (la imagen de Orb sí)');
   assert.equal(db.prepare("SELECT path FROM projects WHERE name = 'bitacora-web'").get().path, path.join(home, 'web', 'bitacora-web'));
   db.close();
   // The isolated copy is still a working git worktree of its project, at its new place.

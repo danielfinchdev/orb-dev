@@ -322,7 +322,7 @@ export function keepBackupsOutside(home) {
 
 // What the user wrote stays as written: in these columns (when the row is the user's) only Orb's own .orb paths change
 // (an image Orb attached), never a path the user typed.
-const USER_TEXT = { chat: { body: "role = 'user'" }, session_items: { body: "role = 'user'" }, session_queue: { text: '1' } };
+const USER_TEXT = { chat: { body: "role = 'usuario'" }, session_items: { body: "role = 'user'" }, session_queue: { text: '1' } };
 
 // Every text column of every table. → rows changed.
 export function rewriteDb(file, home, moves = legacyMoves(home)) {

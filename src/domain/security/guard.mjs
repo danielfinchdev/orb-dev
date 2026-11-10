@@ -58,6 +58,8 @@ const RISKY = [
   [new RegExp(`${GIT}(push|remote\\s+(add|set-url|remove)|send-pack|http-push|subtree\\s+push)\\b`, 'i'), 'msg.guard.push'],
   // 3.8.3 (security review): a push under another name (git -c alias.p=push p, git config alias.up push).
   [/\balias\.[\w.-]+\s*[= ]\s*["']?!?\s*(?:git\s+)?(push|send-pack)\b/i, 'msg.guard.push'],
+  // 3.8.3 (repaso): git settings that make git run a program (Orb's own snapshots run git in the project): they ask.
+  [new RegExp(`${GIT}config\\b[^|;&]*\\b(filter\\.[\\w.-]+\\.(clean|smudge|process)|core\\.(fsmonitor|hooksPath|sshCommand|pager|editor|askpass|gitProxy)|credential\\.[\\w.-]*helper|diff\\.[\\w.-]+\\.(command|textconv)|merge\\.[\\w.-]+\\.driver|url\\.[^\\s]*\\.insteadOf)\\b`, 'i'), 'msg.guard.gitRuns'],
   [/\bgh(\.exe)?\s+(repo|pr|release|api|gist|secret)\b/i, 'msg.guard.github'],
   [/\b(npm|pnpm|yarn)(\.cmd)?\s+publish\b|\bcargo\s+publish\b|\btwine\s+upload\b/i, 'msg.guard.publish'],
   // 3.8.3 (security review): images, packages and sites published by their own tools.
@@ -86,7 +88,7 @@ const RISKY = [
   [/\b(docker|podman)\s+(rm|rmi|system\s+prune|volume\s+rm)\b/i, 'msg.guard.docker'],
   // 3.8.3 (security review): Orb's snapshots (refs/orb) and what keeps them alive: «Deshacer» rests on them, so they are
   // never dropped without asking (in «Auto» too).
-  [/refs[\\/]+orb\b|\breflog\s+(expire|delete)\b|\bgc\b[^|;&]*--prune|\bgit(\.exe)?\s+prune\b/i, 'msg.guard.checkpoint']
+  [new RegExp(`(?<!(?:status|log|diff|show|branch|rev-parse|ls-files|for-each-ref|describe|blame|cat-file|rev-list|merge-base|name-rev)\\s[^|;&]*)refs[\\\\/]+orb\\b|\\breflog\\s+(expire|delete)\\b|\\bgc\\b[^|;&]*--prune|\\bgit(\\.exe)?\\s+prune\\b`, 'i'), 'msg.guard.checkpoint']
 ];
 
 // 3.1: data sent only to this PC (an agent testing its own local API: curl -X POST localhost:3000…) never leaves it.
@@ -662,7 +664,10 @@ export function writesOutside(command, cwd, roots) {
       if (at > 0 && !insideProject(part.words[at + 1] ?? '', part.dir, roots) && !GIT_LOOK.test(part.words[at + 2] ?? '')) return { what: part.words[at + 1] ?? 'git -C' };
     }
     if (!WRITERS.test(exe)) continue;
-    for (const t of targetsOf(exe, part.words.slice(1))) if (!insideProject(t, part.dir, roots)) return { what: t };
+    // 3.8.3 (repaso): a target that is a shell variable (`Set-Content $f`, `Out-File -FilePath $out`) cannot be placed; in a
+    // part that runs inside the project it is taken as unknown, not as outside (the user could not act on «$f»). Not for
+    // what deletes or moves (`rm -rf $dir`): those still ask.
+    for (const t of targetsOf(exe, part.words.slice(1))) { if (here && !DELETERS.test(exe) && /[$%]/.test(t)) continue; if (!insideProject(t, part.dir, roots)) return { what: t }; }
   }
   return null;
 }
@@ -709,7 +714,8 @@ function deletesProjectOrGit(command, cwd, projectDir) {
     // A move's destination (`mv src/a.js .`) is not what goes away.
     const gone = /^(mv|move|move-item|mi)$/i.test(exe) && all.length > 1 ? all.slice(0, -1) : all;
     return all.some((t, i) => {
-      if (/(^|[\\/])\.git([\\/]|$)/i.test(bare(t))) return true;
+      // A stale lock of git's own (index.lock after a crash) is the usual fix, not an attack on the checkpoints.
+      if (/(^|[\\/])\.git([\\/]|$)/i.test(bare(t)) && !/(^|[\\/])\.git[\\/][^\\/]*\.lock$/i.test(bare(t))) return true;
       if (!gone.includes(t) || i >= gone.length) return false;
       const full = resolveTarget(t, part.dir);
       if (!full || !top) return false;

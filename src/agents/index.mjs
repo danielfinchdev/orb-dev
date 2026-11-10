@@ -6,7 +6,7 @@ import * as claude from './claude.mjs';
 import * as codex from './codex.mjs';
 import * as cursor from './cursor.mjs';
 import { acpAgent, ACP_SPECS } from './acp.mjs';
-import { cleanEnv, IS_WIN } from '../platform/proc.mjs';
+import { cleanEnv, IS_WIN, forgetAppData } from '../platform/proc.mjs';
 import fs from 'node:fs';
 import { ctx, tr } from '../platform/context.mjs';
 import { startLogin } from './login.mjs';
@@ -29,7 +29,7 @@ export function installed(agent) {
   found.set(agent, { ok, at: Date.now() });
   return ok;
 }
-export const forgetInstalled = () => found.clear();
+export const forgetInstalled = () => { found.clear(); forgetAppData(); };
 const loginState = (acc) => (MULTI[acc.agent] ? accountLogin(acc) : adapter(acc.agent).loginState());
 
 export function executable(agent) {
