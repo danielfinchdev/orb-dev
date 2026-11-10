@@ -20,6 +20,11 @@ import { git, gitEnv, gitBuffer, slug, BRANCH_PREFIX, REF_PREFIX, ORB_GIT, isGit
 // files are hashed again (not taken from the stat cache, which may hold the normalized form of a file now written with
 // other line endings), so «Deshacer» gives back LF, CRLF or mixed endings exactly. The attributes (.gitattributes) still apply.
 export const RAW_GIT = ['-c', 'core.autocrlf=false', '-c', 'core.safecrlf=false'];
+// The raw snapshots keep their own index next to git's (`.git/orb/index-raw`, per worktree): its stat cache holds the
+// raw blobs, so the next raw snapshot hashes again only the files that changed since the last one. Hashing every
+// tracked file again (`add --renormalize`) happens once per repository, the first time; measured on 10 000 files of
+// 4 KB: 5,9 s → 0,6 s per snapshot, and the engine is synchronous while it takes one.
+export const RAW_INDEX = 'orb/index-raw';
 export function snapshotCommit(repo, { raw = false, always: wanted = false, message = 'orb: punto de partida (lo que había en la carpeta principal sin commitear; no es trabajo del agente)' } = {}) {
   const changed = changedPaths(repo); if (changed === null) return null;
   // A repository without any commit yet (git init and nothing more): the snapshot is a first commit with no parent, and it
@@ -27,23 +32,39 @@ export function snapshotCommit(repo, { raw = false, always: wanted = false, mess
   const head = git(repo, 'rev-parse', '--verify', '--quiet', 'HEAD').stdout.trim();
   const always = wanted || !head;
   if (!changed.length && !always) return null;
-  const realIndex = path.resolve(repo, git(repo, 'rev-parse', '--git-path', 'index').stdout.trim());
+  const gitPath = (p) => path.resolve(repo, git(repo, 'rev-parse', '--git-path', p).stdout.trim());
+  const realIndex = gitPath('index');
+  const rawIndex = raw ? gitPath(RAW_INDEX) : null;
   const tmp = path.join(os.tmpdir(), `orb-index-${process.pid}-${crypto.randomBytes(4).toString('hex')}`);
   try {
-    if (fs.existsSync(realIndex)) fs.copyFileSync(realIndex, tmp);
     const env = { GIT_INDEX_FILE: tmp };
     const cfg = raw ? RAW_GIT : [];
-    if (gitEnv(repo, env, ...cfg, 'add', '-A').status !== 0) return null;
-    if (raw && gitEnv(repo, env, ...cfg, 'add', '--renormalize', '--', '.').status !== 0) return null;
+    // Fill the temporary index: from the last raw snapshot's index when there is one (only changed files are read), else
+    // from the user's index plus a full renormalization. A raw index git cannot use any more is dropped and rebuilt.
+    const stage = (seed) => {
+      fs.rmSync(tmp, { force: true });
+      if (seed && fs.existsSync(seed)) fs.copyFileSync(seed, tmp);
+      if (gitEnv(repo, env, ...cfg, 'add', '-A').status !== 0) return false;
+      return !raw || seed === rawIndex || gitEnv(repo, env, ...cfg, 'add', '--renormalize', '--', '.').status === 0;
+    };
+    const warm = raw && fs.existsSync(rawIndex);
+    if (!(warm && stage(rawIndex))) { if (warm) fs.rmSync(rawIndex, { force: true }); if (!stage(realIndex)) return null; }
     // Remove anything secret-looking from the snapshot (also files already tracked by mistake) and verify.
     const listed = () => gitEnv(repo, env, 'ls-files', '-z').stdout.split('\0').filter(Boolean);
     for (const file of listed().filter(isSecretPath)) gitEnv(repo, env, 'rm', '-q', '--cached', '--ignore-unmatch', '--', file);
     if (listed().some(isSecretPath)) return null;
     const tree = gitEnv(repo, env, 'write-tree').stdout.trim(); if (!tree) return null;
+    if (raw) keepRawIndex(tmp, rawIndex);
     if (head && tree === git(repo, 'rev-parse', 'HEAD^{tree}').stdout.trim() && !always) return null;
     const commit = gitEnv(repo, env, ...ORB_GIT, 'commit-tree', tree, ...(head ? ['-p', head] : []), '-m', message).stdout.trim();
     return commit ? { commit, files: changed.length } : null;
   } finally { fs.rmSync(tmp, { force: true }); }
+}
+// Whole or not at all (another snapshot may be reading it): written beside and renamed over. Losing it only costs time.
+function keepRawIndex(tmp, rawIndex) {
+  const part = `${rawIndex}.${process.pid}.${crypto.randomBytes(4).toString('hex')}`;
+  try { fs.mkdirSync(path.dirname(rawIndex), { recursive: true }); fs.copyFileSync(tmp, part); fs.renameSync(part, rawIndex); }
+  catch { fs.rmSync(part, { force: true }); }
 }
 
 // ---- checkpoints of the "carpeta" mode
