@@ -37,6 +37,7 @@ import { canCapture, captureFrame } from '@/lib/window-capture.js';
 import { useAutoScroll, Composer } from '@/components/conversation/composer.jsx';
 import { BarClock, MsgTime, BarPause, BarHeading, COMPACT_AT, CompactButton } from '@/components/conversation/bar.jsx';
 import { ContextMeter } from '@/components/conversation/context-meter.jsx';
+import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
 
 // An icon that says what the tool does (reading, writing, searching, the web, a command…).
 function toolIcon(name = '') {
@@ -483,11 +484,12 @@ export function SessionView({ route }) {
             {models.length ? <Select size="sm" value={s.model || models[0].value} title={t('session.model')} options={models} onValueChange={(model) => act(call('sessions.update', { id: s.id, model }), t('session.modelSet', { model: modelName(model) }))} data-testid="session-model" /> : null}
             {/* 3.8.2 (D5): «Acceso total» of a project's chat also asks for the master password every time and goes when
                 Orb locks; taken back, the chat returns to its permission before, then takes the one chosen. */}
-            {s.project ? <Select size="sm" value={s.permission} title={t('session.permissions')} disabled={bridge.mobile && s.permission === 'total'} options={options(PERMISSION).filter((o) => !bridge.mobile || o.value !== 'total')} onValueChange={async (permission) => {
+            {/* 3.8.3: «Auto» / «Preguntar» at one click, the other levels under «⋯» (the phone may switch between them, never to «total»). */}
+            {s.project ? <AutonomySwitch value={s.permission} testid="session-permission" disabled={bridge.mobile && s.permission === 'total'} more={options(PERMISSION).filter((o) => o.value !== 'auto' && o.value !== 'editar' && (!bridge.mobile || o.value !== 'total'))} onChange={async (permission) => {
               if (permission === 'total') { const unlock = await unlockCore('fullAccess'); if (unlock) act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged')); return; }
               if (s.permission === 'total') { const back = await act(call('sessions.revokeGrant', { id: s.id, grant: 'total' })); if (!back || back.permission === permission) return; }
-              act(call('sessions.update', { id: s.id, permission }), t('session.permissionsChanged'));
-            }} data-testid="session-permission" />
+              act(call('sessions.update', { id: s.id, permission }), permission === 'auto' ? t('session.autoOn') : permission === 'editar' ? t('session.askOn') : t('session.permissionsChanged'));
+            }} />
               /* 3.8.2 (D1): without a project, «Solo lectura» or «Acceso total al PC» (the master password every time; it goes
                  when Orb locks). Never from the phone. */
               : <Select size="sm" value={s.permission === 'total' ? 'total' : 'leer'} title={t('session.noProjectReadOnly')} disabled={bridge.mobile} options={[{ value: 'leer', label: PERMISSION.leer }, { value: 'total', label: t('session.fullPc') }]} onValueChange={async (permission) => {

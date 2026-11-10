@@ -118,6 +118,7 @@ export function validateConfig(c) {
   bool(c.setupPending, 'setupPending'); // 3.8: the welcome is not over yet (src/ui/views/setup.jsx)
   bool(c.budget?.autoModel, 'budget.autoModel'); // 2.7: Orb chooses each task's model (true / missing) or the agents' defaults
   bool(c.ui?.tourDone, 'ui.tourDone');
+  bool(c.ui?.autoNoticed, 'ui.autoNoticed'); // 3.8.3: the one notice about «Auto» was shown
   bool(c.ui?.recoveryNoticed, 'ui.recoveryNoticed'); // 3.6: the one notice about the recovery code was shown // 2.6: the guided tour was seen (or skipped) in this assistant folder
   if (c.delegation?.maxPerTask !== undefined) int(c.delegation.maxPerTask, 0, 20, 'delegation.maxPerTask');
   // 3.1: «Una tarea cada vez» (no parallel work, not even in isolated copies) and how long a task's permission waits for

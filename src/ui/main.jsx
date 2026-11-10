@@ -48,6 +48,7 @@ import { OrbInfoHost } from '@/views/orb/info.jsx';
 import { UpdateNeeded } from '@/components/update-needed.jsx';
 import { NoteOpener } from '@/lib/notes.js';
 import { RecoveryNotice } from '@/views/data.jsx';
+import { AutoNotice } from '@/components/autonomy-switch.jsx';
 import { useEngineEvents } from '@/app/engine-events.js';
 
 // 3.8.1 (H4a): the screens other than the chats load the first time they open, so the app starts with less to read; once
@@ -208,7 +209,7 @@ function Shell() {
       {/* The floating robot only where there is room for it: never over forms or conversations (it covered the switches of
           Ajustes and took their clicks), and those views leave room at the bottom so nothing stays under it. */}
       {/* 3.5: a browser linked with an Orb gets the PC's layout, not what only the PC itself does. */}
-      {bridge.mobile ? null : <><UpdateCard /><OnceOpened when={settingsOpen} onFail={closeSettingsFailed}><SettingsDialog /></OnceOpened><OnceOpened when={gamesOpen} onFail={closeGamesFailed}><GamesDialog /></OnceOpened><RecoveryNotice /></>}
+      {bridge.mobile ? null : <><UpdateCard /><OnceOpened when={settingsOpen} onFail={closeSettingsFailed}><SettingsDialog /></OnceOpened><OnceOpened when={gamesOpen} onFail={closeGamesFailed}><GamesDialog /></OnceOpened><RecoveryNotice /><AutoNotice /></>}
       <Notices />
       {bridge.mobile ? null : <><ActionShortcuts project={shortcutProject} /><CommandPalette /></>}
       <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile || Boolean(tour)} /></div>

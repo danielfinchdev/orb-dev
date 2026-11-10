@@ -11,7 +11,7 @@ import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardF
 import { Select, Switch, Checkbox, BubbleTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
 import { ModelGuide } from '@/components/model-guide.jsx';
 import { AGENT } from '@/lib/labels.js';
-import { act, bridge, go, openTerminal, closeSettings, fullPc, runTest } from '@/lib/store.js';
+import { act, call, refresh, bridge, go, openTerminal, closeSettings, fullPc, runTest } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { t, useT } from '@/lib/i18n.js';
 import { LANGUAGES } from '../../../shared/i18n.mjs';
@@ -20,6 +20,7 @@ import { unlockCore } from '@/lib/core-access.js';
 import { DEFAULT_PROTECTED } from '../../../shared/layout.mjs';
 import { available as musicAvailable, musicPrefs, setMusicVolume } from '@/lib/music.js';
 import { save, num, Row, WithKeys, sizes } from './rows.jsx';
+import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
 
 export function AssistantCard({ c }) {
   const t = useT();
@@ -110,6 +111,18 @@ export function ChatCard({ c }) {
         {accounts.length > 1 ? <Field label={t('settings.brainAccount')}><Select className="w-full" value={v.account} onValueChange={(account) => setV({ ...v, account })} options={accounts.map((a) => ({ value: a.id, label: a.label }))} /></Field> : null}
       </CardContent>
       <CardFooter><Button size="sm" onClick={() => save({ orchestrator: v })}>{t('settings.save')}</Button></CardFooter>
+    </Card>
+  );
+}
+
+// 3.8.3: the agents' permission level for everything that does not choose its own (new chats, the assistant's tasks).
+export function PermissionsCard({ c }) {
+  const t = useT();
+  const mode = c.permissions?.mode === 'preguntar' ? 'editar' : 'auto';
+  return (
+    <Card>
+      <CardHeader><CardTitle>{t('settings.autonomy')}</CardTitle><CardDescription>{t('settings.autonomyHint')}</CardDescription></CardHeader>
+      <CardContent><AutonomySwitch value={mode} testid="settings-autonomy" onChange={(p) => act(call('permissions.setMode', { mode: p === 'auto' ? 'auto' : 'preguntar' }), p === 'auto' ? t('session.autoOn') : t('session.askOn')).then(() => refresh())} /></CardContent>
     </Card>
   );
 }

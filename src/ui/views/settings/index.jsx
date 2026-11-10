@@ -12,7 +12,7 @@ import { t, useT } from '@/lib/i18n.js';
 import { MagicLinkPanel, SubSection } from '../magic-link.jsx';
 import { DataCards } from '../data.jsx';
 import { ExtensionsPanel } from '../extensions.jsx';
-import { AssistantCard, AppearanceCard, ChatCard, TasksCard, TestCard, FolderCard, ProtectedCard, InterfaceCard, ExpertCard } from './general.jsx';
+import { AssistantCard, AppearanceCard, ChatCard, PermissionsCard, TasksCard, TestCard, FolderCard, ProtectedCard, InterfaceCard, ExpertCard } from './general.jsx';
 import { AndroidCard, MobileCard, BrowserCard } from './devices.jsx';
 // «Este móvil», the phone's screen of its own (main.jsx loads it from here, with the dialog).
 export { PhoneView } from './devices.jsx';
@@ -27,7 +27,7 @@ const SECTIONS = [
   // Who can enter this Orb: the linked phones and browsers.
   { id: 'magiclink', icon: Radar, groups: ['dispositivos'],
     cards: () => <MagicLinkPanel grouped phoneAccess={<MobileCard />} /> },
-  { id: 'agentes', icon: Cpu, cards: (c) => <><ChatCard c={c} /><TasksCard c={c} />{bridge.mobile ? null : <TestCard />}</> },
+  { id: 'agentes', icon: Cpu, cards: (c) => <><ChatCard c={c} /><PermissionsCard c={c} /><TasksCard c={c} />{bridge.mobile ? null : <TestCard />}</> },
   // 3.8.1: every skill and MCP server of core (src/ui/views/extensions.jsx); this PC only.
   { id: 'extensiones', icon: Puzzle, pcOnly: true, cards: () => <ExtensionsPanel /> },
   { id: 'datos', icon: DatabaseBackup, cards: () => <DataCards /> },

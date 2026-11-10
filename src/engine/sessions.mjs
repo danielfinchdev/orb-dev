@@ -683,15 +683,13 @@ export class Sessions {
 }
 
 // 3.8.3: «Auto» arrives on in an install that already had chats, once: the chats with a project that were at «Editar
-// archivos» (the old default) move to «Auto» like the new ones, and one notice says so and how to go back (one click under
-// the chat's box, or Ajustes › Agentes for everything). A chat the owner had set to «Preguntar antes», «Solo lectura» or
+// archivos» (the old default) move to «Auto» like the new ones; the window says so once, with «Usar Preguntar» at hand
+// (src/ui/components/autonomy-switch.jsx › AutoNotice). A chat the owner had set to «Preguntar antes», «Solo lectura» or
 // «Revisar y probar» keeps it. Nothing changes when the owner already chose «Preguntar» for everything.
 export function adoptAuto(board) {
   if (board.setting('auto_mode_383')) return 0;
   board.setting('auto_mode_383', new Date().toISOString());
   if (globalAutonomy() !== 'auto') return 0;
-  const old = board.one('SELECT COUNT(*) AS n FROM sessions').n + board.one('SELECT COUNT(*) AS n FROM tasks').n;
   const moved = board.run("UPDATE sessions SET permission = 'auto' WHERE kind = 'chat' AND project IS NOT NULL AND permission = 'editar'").changes;
-  if (old) board.notice(tr('msg.auto.notice'), 'info');
   return moved;
 }

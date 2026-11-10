@@ -33,6 +33,7 @@ import { ContextSlot } from '@/components/context-slot.jsx';
 import { cn } from '@/lib/utils.js';
 import { DECISION, AGENT, STATUS } from '@/lib/labels.js';
 import { useT } from '@/lib/i18n.js';
+import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
 import { keepSame } from '@/lib/memo.js';
 import { useAutoScroll, Composer } from '@/components/conversation/composer.jsx';
 import { MsgTime, BarPause, COMPACT_AT, CompactButton } from '@/components/conversation/bar.jsx';
@@ -380,7 +381,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
         // «Orquestador» off: the user hands out the work, and the conversation is directly with the agent chosen below
         // (3.2.1: in God mode, in the project chosen there).
         const project = inProject ?? app.activeProject?.name ?? null;
-        const s = await act(call('sessions.create', { agent: brain.agent, account: brain.account && brain.account !== brain.agent ? brain.account : undefined, model: brain.model || undefined, reasoning: brain.reasoning, project, permission: project ? 'editar' : 'leer' }));
+        const s = await act(call('sessions.create', { agent: brain.agent, account: brain.account && brain.account !== brain.agent ? brain.account : undefined, model: brain.model || undefined, reasoning: brain.reasoning, project, ...(project ? {} : { permission: 'leer' }) }));
         if (!s) { dropPending(mine); if (!moved()) box.set(msg); return; }
         movePending(mine, `session:${s.id}`);
         if ((await act(call('sessions.send', { id: s.id, text: msg }))) === undefined) dropPending(mine);
@@ -508,6 +509,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
         bottom={<>
           <BrainPicker catalog={catalog} value={brain} onChange={pickBrain} className="min-w-0 shrink" />
           <ReasoningMenu catalog={catalog} value={brain} onChange={(reasoning) => settings({ reasoning })} />
+          {/* 3.8.3: «Auto» / «Preguntar» for the tasks the assistant creates and the new chats (the global level, also from the phone). */}
+          <AutonomySwitch value={app?.config?.permissions?.mode === 'preguntar' ? 'editar' : 'auto'} testid="chat-autonomy" onChange={(p) => act(call('permissions.setMode', { mode: p === 'auto' ? 'auto' : 'preguntar' }), p === 'auto' ? t('session.autoOn') : t('session.askOn')).then(() => refresh())} />
           {/* 3.2: whether a NEW conversation is with the assistant or directly with the agent chosen; a conversation keeps
               the way it started. 3.6: an icon and a small switch; the tooltip explains it. */}
           <OrchestratorSwitch on={orchestrate} onChange={toggleOrchestrator} name={name} cursor={brain.agent === 'cursor'} locked={id != null} />
