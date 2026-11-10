@@ -3,7 +3,8 @@ import { openDb, taskOptions, checkPolicy } from '../data/db.mjs';
 import { ctx, tr } from '../../platform/context.mjs';
 import { CATEGORIES } from '../../platform/paths.mjs';
 import { oneLine, MAX_DESCRIPTION } from '../../shared/text.mjs';
-import { contentHash, sign, verify, detectSensitivity, deletionAskedByUser, defaultApprovalKey } from '../security/approval.mjs';
+import { contentHash, sign, verify, detectSensitivity, deletionAskedByUser, askedByUser, defaultApprovalKey } from '../security/approval.mjs';
+import { AUTONOMY, globalAutonomy, autonomyOf } from '../security/guard.mjs';
 import { BoardProjects } from './board-projects.mjs';
 import { BoardConversations } from './board-conversations.mjs';
 import { now, real, same, inside } from './board-common.mjs';
@@ -20,6 +21,8 @@ const parse = (task) => {
   const { reasoning, fast } = taskOptions({ reasoning: task.reasoning ?? undefined, fast: task.fast == null ? undefined : Boolean(task.fast) });
   task.mode ??= 'carpeta'; task.readonly = Boolean(task.readonly); task.reasoning = reasoning; task.fast = fast;
   task.depends_on = JSON.parse(task.depends_on); task.sensitivity = JSON.parse(task.sensitivity);
+  // 3.8.3: «Auto» or «Preguntar» (null: the global level now) and what the user asked for in so many words.
+  task.user_asked = (() => { try { const j = JSON.parse(task.user_asked ?? '[]'); return Array.isArray(j) ? j : []; } catch { return []; } })();
   return task;
 };
 
@@ -157,7 +160,7 @@ export class Board {
   // readonly: the task only reads (research, review): it may run at the same time as others in the same folder.
   // 3.2: conversation_id: the conversation that asked for it (its report goes back there); a subtask, a review or a join
   // task belongs to the one of the task it comes from.
-  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false, internal = false, conversation_id = null }, actor) {
+  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false, internal = false, conversation_id = null, autonomy }, actor) {
     if (!MODES.includes(mode)) throw new Error(tr('sys.board.badMode'));
     const proj = this.project(project);
     if (!proj) throw new Error(tr('sys.board.unknownProject', { name: project }));
@@ -190,6 +193,11 @@ export class Board {
     if (unknown.length) throw new Error(tr('sys.board.badSensitivity', { list: unknown.join(', ') }));
     ({ reasoning, fast } = taskOptions({ reasoning, fast }));
     const policy = checkPolicy({ agent, model, reasoning, fast });
+    // 3.8.3: the task's level: a subtask takes its parent's, the user may choose it (the API), anything else takes the
+    // global one now (Ajustes › Agentes; an agent never chooses it).
+    const parentTask = parent_id ? this.task(parent_id) : null;
+    const mine = parentTask?.autonomy ?? (actor === 'usuario' && AUTONOMY.includes(autonomy) ? autonomy : globalAutonomy());
+    const auto = mine === 'auto';
     // Approval does not depend on the creator declaring it: a task made by a worker always waits for the user,
     // and a keyword net adds the tags the creator forgot.
     const tags = [...new Set(sensitivity)]; const reasons = [];
@@ -208,21 +216,36 @@ export class Board {
       tags.splice(tags.indexOf('destructive'), 1); found = found.filter((tag) => tag !== 'destructive');
       askedNote = eventKey('msg.board.askedByUser', { words: { k: 'msg.board.deleteWords' } });
     }
+    // 3.8.3 («Auto»): the words that only meant «inside the project» no longer wait (keys and passwords the code uses,
+    // deleting inside the folder: the checkpoint undoes it), nor high reasoning (the usage limits cover the cost). A push,
+    // a payment, an email or a folder that moved still wait; a push the user's current request asked for does not.
+    let asked = [];
+    if (auto) {
+      const quiet = ['credential_access', 'destructive'];
+      if (actor === 'orb' && !internal) { asked = askedByUser(this.currentRequest(convId)); if (asked.includes('publish')) quiet.push('publish'); }
+      if (actor === 'usuario') { asked = askedByUser(`${title}\n${description}`); if (asked.includes('publish')) quiet.push('publish'); }
+      for (const t of quiet) { const i = tags.indexOf(t); if (i >= 0) tags.splice(i, 1); }
+      found = found.filter((t) => !quiet.includes(t));
+      if (asked.includes('publish')) askedNote = eventKey('msg.board.askedByUser', { words: { k: 'msg.board.publishWords' } });
+    }
     if (found.length) reasons.push(tr('msg.board.reasonKeywords', { words: tagWords(found) }));
-    if (policy.approval) { tags.push('razonamiento_alto'); reasons.push(tr('msg.board.reasonHighReasoning', { who: model ?? agent })); }
+    if (policy.approval && !auto) { tags.push('razonamiento_alto'); reasons.push(tr('msg.board.reasonHighReasoning', { who: model ?? agent })); }
     // A subtask an agent delegates from its own task (orb_delegate) goes straight to the queue when the user trusts
     // delegation, the parent task came from the assistant or the user, nothing looks risky and the parent has not used
     // its quota of subtasks. Anything else made by an agent waits for the user, as always.
-    const parent = parent_id ? this.task(parent_id) : null;
+    const parent = parentTask;
     const d = ctx.config.delegation ?? {};
-    const trusted = parent && d.enabled !== false && d.trusted !== false && !tags.length && ['orb', 'usuario'].includes(parent.created_by)
-      && this.one('SELECT COUNT(*) AS n FROM tasks WHERE parent_id = ?', parent.id).n < (d.maxPerTask ?? 4);
+    const quota = parent && this.one('SELECT COUNT(*) AS n FROM tasks WHERE parent_id = ?', parent.id).n < (d.maxPerTask ?? 4);
+    // 3.8.3 («Auto»): a subtask in the same project goes straight to the queue (with the same quota); one for another
+    // project still waits.
+    const trusted = parent && d.enabled !== false && !tags.length && quota
+      && (auto ? parent.project === proj.name : d.trusted !== false && ['orb', 'usuario'].includes(parent.created_by));
     if (actor !== 'orb' && actor !== 'usuario' && !trusted) { tags.push('creada_por_agente'); reasons.push(tr('msg.board.reasonByAgent', { actor, name: assistantName() })); }
     const status = tags.length ? 'awaiting_approval' : 'queued';
     const at = now();
-    const { lastInsertRowid } = this.run(`INSERT INTO tasks (project, title, description, agent, account, model, reasoning, fast, launch, priority, depends_on, sensitivity, status, created_by, project_path, created_at, updated_at, mode, readonly, parent_id, review_of, schedule_id, level, conversation_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, proj.name, title, String(description), agent, account || null, model, reasoning, Number(fast), launch, Math.min(Math.max(Number(priority) || 2, 1), 3),
-      JSON.stringify(depends_on.map(Number)), JSON.stringify([...new Set(tags)]), status, String(actor), proj.path, at, at, mode, Number(Boolean(readonly)), parent_id ? Number(parent_id) : null, review_of ? Number(review_of) : null, schedule_id ? Number(schedule_id) : null, ['simple', 'normal', 'complejo'].includes(level) ? level : null, convId ?? null);
+    const { lastInsertRowid } = this.run(`INSERT INTO tasks (project, title, description, agent, account, model, reasoning, fast, launch, priority, depends_on, sensitivity, status, created_by, project_path, created_at, updated_at, mode, readonly, parent_id, review_of, schedule_id, level, conversation_id, autonomy, user_asked)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, proj.name, title, String(description), agent, account || null, model, reasoning, Number(fast), launch, Math.min(Math.max(Number(priority) || 2, 1), 3),
+      JSON.stringify(depends_on.map(Number)), JSON.stringify([...new Set(tags)]), status, String(actor), proj.path, at, at, mode, Number(Boolean(readonly)), parent_id ? Number(parent_id) : null, review_of ? Number(review_of) : null, schedule_id ? Number(schedule_id) : null, ['simple', 'normal', 'complejo'].includes(level) ? level : null, convId ?? null, mine, asked.length ? JSON.stringify(asked) : null);
     const id = Number(lastInsertRowid);
     this.event(id, actor, 'task.created', status);
     if (askedNote) this.event(id, 'orb', 'note', askedNote);
@@ -308,7 +331,7 @@ export class Board {
     }
     if (Object.keys(reassign).length) {
       const after = { agent: reassign.agent ?? task.agent, model: 'model' in reassign ? reassign.model : task.model, reasoning: reassign.reasoning ?? task.reasoning, fast: 'fast' in reassign ? Boolean(reassign.fast) : task.fast };
-      if (checkPolicy(after).approval && !task.sensitivity.includes('razonamiento_alto')) reassign.sensitivity = JSON.stringify([...task.sensitivity, 'razonamiento_alto']);
+      if (checkPolicy(after).approval && autonomyOf(task) !== 'auto' && !task.sensitivity.includes('razonamiento_alto')) reassign.sensitivity = JSON.stringify([...task.sensitivity, 'razonamiento_alto']);
     }
     if (status && !STATUSES.includes(status)) throw new Error(tr('sys.board.badStatus', { status }));
     if (status === 'awaiting_approval') throw new Error(tr('sys.board.systemOnly'));
@@ -361,9 +384,9 @@ export class Board {
       const nextModel = nextAgent === 'any' ? null : checkModel(nextAgent, model || null, this.settingJson(`models:${nextAgent}`));
       const { reasoning: nextReasoning } = taskOptions({ reasoning: reasoning || task.reasoning, fast: false });
       const policy = checkPolicy({ agent: nextAgent, model: nextModel, reasoning: nextReasoning, fast: false });
-      const tags = policy.approval ? [...new Set([...task.sensitivity, 'razonamiento_alto'])] : task.sensitivity.filter((t) => t !== 'razonamiento_alto');
+      const tags = policy.approval && autonomyOf(task) !== 'auto' ? [...new Set([...task.sensitivity, 'razonamiento_alto'])] : task.sensitivity.filter((t) => t !== 'razonamiento_alto');
       const fields = { agent: nextAgent, model: nextModel, reasoning: nextReasoning, fast: 0, assigned_to: nextAgent === 'any' ? null : nextAgent, sensitivity: JSON.stringify(tags), ...this.clearApproval() };
-      if (['queued', 'awaiting_approval'].includes(task.status)) fields.status = policy.approval ? 'awaiting_approval' : 'queued';
+      if (['queued', 'awaiting_approval'].includes(task.status)) fields.status = tags.includes('razonamiento_alto') ? 'awaiting_approval' : 'queued';
       const out = this.patch(id, fields, actor, 'task.reassigned', task.status);
       this.event(id, actor, 'note', `modelo cambiado: ${task.assigned_to ?? task.agent}/${task.model ?? 'predeterminado'} → ${nextAgent}/${nextModel ?? 'predeterminado'} · ${nextReasoning}`);
       if (out.status === 'queued' && out.sensitivity.length) return this.signNow(out, actor);

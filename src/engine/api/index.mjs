@@ -23,6 +23,7 @@ import { oneLine, localStamp } from '../../shared/text.mjs';
 import { redactSecrets } from '../../shared/secrets-scan.mjs';
 import { quickRun } from '../../agents/index.mjs';
 import { PERMISSIONS, ATTACH_DIR } from '../sessions.mjs';
+import { globalAutonomy, permissionOfAutonomy, AUTONOMY } from '../../domain/security/guard.mjs';
 import { playableType } from '../../shared/attach-kind.mjs';
 import { checkDevTools } from '../../platform/dev-tools.mjs';
 import { readLog, writeLog, logFiles } from '../../domain/journal/journal.mjs';
@@ -657,7 +658,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       // 3.8.2 (D5): «Acceso total» only through sessions.grantTotal (the master password), never at creation.
       if (p.permission === 'total') fail(tr('msg.grants.totalNeedsPassword'));
       const created = sessions.create({ kind: 'chat', agent: oneOf(p.agent, AGENT_IDS, 'agente'), account: str(p.account, 'cuenta', 40, { optional: true }) || null, model: str(p.model, 'modelo', 80, { optional: true }) || null,
-        reasoning: oneOf(p.reasoning, REASONING_LEVELS, 'razonamiento', 'medium'), permission: proj ? oneOf(p.permission, PERMISSIONS.filter((x) => x !== 'total'), 'permiso', 'editar') : 'leer',
+        reasoning: oneOf(p.reasoning, REASONING_LEVELS, 'razonamiento', 'medium'), permission: proj ? oneOf(p.permission, PERMISSIONS.filter((x) => x !== 'total'), 'permiso', permissionOfAutonomy(globalAutonomy())) : 'leer',
         project: proj?.name ?? null, cwd, title: str(p.title, 'título', 80, { optional: true }) || tr('msg.api.chatWith', { agent: p.agent }) });
       // 3.2: a title given here stays; without one, Orb names it from its first message.
       return p.title ? sessions.update(created.id, { titled: true }) : created;
@@ -731,6 +732,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return sessions.update(s.id, fields);
     },
     'sessions.remove': ({ id }) => sessions.remove(str(id, 'conversación', 64)),
+    // 3.8.3: the agents' level for everything that has none of its own (new chats, the tasks the assistant creates):
+    // «Auto» or «Preguntar». Also from a linked phone (only these two values; «Acceso total» never comes this way).
+    'permissions.setMode': ({ mode }) => { const m = oneOf(mode, AUTONOMY, 'modo'); const c = saveConfig({ permissions: { mode: m } }); emit('config:changed', c); return { mode: m }; },
 
     'logs.list': () => logFiles(board).map(([name, file]) => { let size = 0; try { size = fs.statSync(file).size; } catch { /* empty */ } return { name, size }; }),
     'logs.read': ({ project: name, whole }) => readLog(board, str(name, 'bitácora', 200), { whole: Boolean(whole), chars: 40000 }),

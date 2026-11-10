@@ -10,6 +10,7 @@
 // Each grant and each take-back is written to the engine's log (motor.log) and shown in the chat.
 import { tr } from '../../platform/context.mjs';
 import { fail, str, oneOf } from '../api/common.mjs';
+import { globalAutonomy, permissionOfAutonomy } from '../../domain/security/guard.mjs';
 
 export const GRANTS = ['total', 'android'];
 
@@ -29,7 +30,7 @@ export function grantMethods({ board, sessions, log = () => {}, android = null }
   // 3.8.2 (review M3): what the chat is doing goes with what it lost: its running turn stops and its agent process (and
   // every shell it started under it) is closed; the next message starts it again with the new permission.
   const halt = (s) => { try { sessions.stop(s.id); } catch { /* not running */ } try { sessions.closeLive(s.id); } catch { /* not open */ } };
-  const before = (s) => { const k = `grant_prev:${s.id}`; const p = board.settingJson(k); board.settingJson(k, null); return s.project ? (['leer', 'probar', 'editar', 'preguntar'].includes(p) ? p : 'editar') : 'leer'; };
+  const before = (s) => { const k = `grant_prev:${s.id}`; const p = board.settingJson(k); board.settingJson(k, null); return s.project ? (['leer', 'probar', 'editar', 'preguntar', 'auto'].includes(p) ? p : permissionOfAutonomy(globalAutonomy())) : 'leer'; };
   // Every grant of every chat goes (Orb locked). → how many chats lost one.
   async function revokeAll(why = 'bloqueo') {
     const rows = board.all("SELECT id FROM sessions WHERE kind = 'chat' AND (permission = 'total' OR android = 1)");

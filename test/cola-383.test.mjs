@@ -135,7 +135,7 @@ test('motor: con la cola en pausa, «Iniciar de todos modos» inicia esa tarea y
 });
 
 test('motor: una tarea que borra muchos archivos queda por aprobar, con la carpeta, y se acepta desde ahí', async () => {
-  t = tempHome();
+  t = tempHome({ permissions: { mode: 'preguntar' } }); // 3.8.3: «Preguntar» (10 deletions hold it; «Auto»: test/modo-auto.test.mjs)
   engine = await startEngine(t.home);
   const { call } = engine;
   await call('projects.create', { name: 'limpieza' });

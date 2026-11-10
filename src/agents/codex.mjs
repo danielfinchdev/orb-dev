@@ -99,6 +99,17 @@ function policy(permission) {
   if (permission === 'total') return { approvalPolicy: 'untrusted', sandbox: 'danger-full-access' };
   return { approvalPolicy: 'untrusted', sandbox: 'workspace-write' };
 }
+// 3.8.3 (owner's decision): in «Auto» Codex's sandbox lets its commands use the network (npm install, downloads) without a
+// card; writes stay inside the folder and every command still goes through Orb's guard («untrusted»).
+export function sandboxConfig(permission) {
+  return permission === 'auto' ? { 'sandbox_workspace_write.network_access': true } : {};
+}
+// Whether a Codex permissions request asks for the network and nothing else (no folder, no other grant).
+export function onlyNetwork(perms) {
+  if (!perms || typeof perms !== 'object') return false;
+  const keys = Object.keys(perms).filter((k) => perms[k] != null && !(Array.isArray(perms[k]) && !perms[k].length));
+  return keys.length > 0 && keys.every((k) => /^network/i.test(k));
+}
 // 3.6: «Extra» (xhigh) goes through as it is: Orb only offers it for the models whose model/list says they take it.
 const effort = (r) => r || 'medium';
 
@@ -179,7 +190,8 @@ export function createLive(o) {
   const live = { sessionId: o.resumeId ?? null, caps, pid: null, get busy() { return Boolean(turn && !turn.done); } };
 
   const guardAsk = async ({ itemId, command, paths = [], tool, kind }) => {
-    const verdict = decide({ permission, tool, kind, command, paths, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()) });
+    const verdict = decide({ permission, tool, kind, command, paths, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()), projectDir: o.projectDir, userAsked: o.userAsked?.() ?? [] });
+    if (verdict.auto) onEvent({ type: 'auto', title: command || paths.join(', ') || tool, reason: verdict.reason });
     if (verdict.decision !== 'ask') return verdict.decision;
     return approvals.ask({ id: itemId, tool, title: command || paths.join(', ') || tool, reason: verdict.reason, input: clip(command || paths.join(', '), 400) });
   };
@@ -202,6 +214,8 @@ export function createLive(o) {
       return { decision: d === 'deny' ? { denied: { rejection: 'El usuario no lo ha permitido.' } } : 'approved' };
     }
     if (method === 'item/permissions/requestApproval') {
+      // 3.8.3: in «Auto», asking only for the network (an older Codex that ignores the sandbox setting above): granted.
+      if (permission === 'auto' && onlyNetwork(p.permissions)) return { permissions: p.permissions, scope: 'session' };
       // Asking for more than the sandbox gives (another folder, network…): the user decides.
       const d = await approvals.ask({ id: p.itemId, tool: tr('sys.agents.permissions'), title: p.reason || tr('sys.agents.morePermissions', { name: 'Codex' }), reason: tr('sys.agents.morePermissionsWhy'), input: clip(p.permissions, 400) });
       return { permissions: d === 'deny' ? {} : p.permissions, scope: d === 'always' ? 'session' : 'turn' };
@@ -312,7 +326,7 @@ export function createLive(o) {
     // 3.8.1: the skills of core that are on (src/domain/extensions/extensions.mjs › exposeSkills), one more root where Codex looks for
     // skills, before the thread starts (checked with the real app-server: skills/list shows them). Older versions: none.
     if (o.skills?.list?.length) await peer.request('skills/extraRoots/set', { extraRoots: [o.skills.root] }, { timeoutMs: 15000 }).catch((error) => log(`skills: ${error?.message ?? error}`));
-    const common = { cwd: o.cwd, model, ...policy(permission), config: { model_reasoning_effort: effort(o.reasoning), service_tier: 'default' } };
+    const common = { cwd: o.cwd, model, ...policy(permission), config: { model_reasoning_effort: effort(o.reasoning), service_tier: 'default', ...sandboxConfig(permission) } };
     let res;
     if (o.resumeId && o.forkSession) res = await peer.request('thread/fork', { threadId: o.resumeId, ...common }, { timeoutMs: 60000 });
     else if (o.resumeId) res = await peer.request('thread/resume', { threadId: o.resumeId, ...common }, { timeoutMs: 60000 });

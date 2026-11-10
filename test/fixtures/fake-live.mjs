@@ -32,6 +32,9 @@
 //   AVISA_HERMANA <texto>   (3.8) writes to the first task its brief lists among the others of its conversation, as the
 //                      brief says (to: its agent, task_id: its number)
 //   LEE <ruta>         (3.6, one per line) reads a file: the real guard decides
+//   GUARDIA_EDITA <ruta>   (3.8.3, one per line) writes <ruta> (relative to its folder) as an Edit tool would: the real
+//                      guard decides, with the same project folder and user's words the real adapters pass
+//   GUARDIA_BORRA <carpeta>   (3.8.3, one per line) runs «rm -rf <carpeta>» through the real guard and deletes it if allowed
 //   ORB_FAKE_SCRIPT=<file.json>     (3.6, screenshots) [{ "when": "text", "reply": "…", "calls": [["tool", {args}]] }]: a
 //                      message containing «when» gets that natural reply (and makes those Orb tool calls, silently),
 //                      so the screenshots show real-looking conversations instead of the test keywords.
@@ -247,13 +250,32 @@ function createFakeLive(agent, label, caps, o) {
     // 3.6: LEE <ruta> (one per line): reading a file, as the real guard decides it.
     for (const m of scan.matchAll(/^LEE (.+)$/gm)) {
       const file = m[1].trim();
-      const verdict = decide({ permission, tool: 'Read', paths: [file], internalDir: o.internalDir });
-      record({ read: file, decision: verdict.decision, addDirs: o.addDirs ?? [] });
+      const verdict = decide({ permission, tool: 'Read', paths: [file], internalDir: o.internalDir, cwd: o.cwd, projectDir: o.projectDir, userAsked: o.userAsked?.() ?? [] });
+      record({ read: file, decision: verdict.decision, addDirs: o.addDirs ?? [], allowedTools: o.tools?.allowed ?? null });
       notes.push(`LEE ${verdict.decision}`);
+    }
+    // 3.8.3: an edit and a deletion as the real adapters ask the guard (a card when it asks, the work when it allows).
+    const guarded = async (action) => {
+      const verdict = decide({ permission, ...action, internalDir: o.internalDir, cwd: o.cwd, projectDir: o.projectDir, userAsked: o.userAsked?.() ?? [] });
+      if (verdict.auto) onEvent({ type: 'auto', title: action.command || action.paths?.join(', '), reason: verdict.reason });
+      let decision = verdict.decision;
+      if (decision === 'ask') decision = await approvals.ask({ id: `permiso-${++seq}`, tool: action.tool, title: action.command || action.paths.join(', '), reason: verdict.reason, input: action.command || action.paths.join(', ') });
+      record({ guard: action.command || action.paths, decision: verdict.decision, answer: decision });
+      return decision !== 'deny';
+    };
+    for (const m of scan.matchAll(/^GUARDIA_EDITA (.+)$/gm)) {
+      const file = path.resolve(o.cwd, m[1].trim());
+      if (await guarded({ tool: 'Edit', paths: [file] })) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, 'editado por Auto\n'); notes.push('EDITA ok'); } else notes.push('EDITA denegado');
+      if (current.done) return;
+    }
+    for (const m of scan.matchAll(/^GUARDIA_BORRA (.+)$/gm)) {
+      const dir = m[1].trim();
+      if (await guarded({ tool: 'Bash', command: `rm -rf ${dir}` })) { fs.rmSync(path.resolve(o.cwd, dir), { recursive: true, force: true }); notes.push('BORRA ok'); } else notes.push('BORRA denegado');
+      if (current.done) return;
     }
     if (/PIDE_PERMISO/.test(scan)) {
       const command = 'git push origin main';
-      const verdict = decide({ permission, tool: 'Bash', command, internalDir: o.internalDir });
+      const verdict = decide({ permission, tool: 'Bash', command, internalDir: o.internalDir, cwd: o.cwd, projectDir: o.projectDir, userAsked: o.userAsked?.() ?? [] });
       let decision = verdict.decision;
       if (decision === 'ask') decision = await approvals.ask({ id: `permiso-${++seq}`, tool: 'Bash', title: command, reason: verdict.reason, input: command });
       notes.push(decision === 'deny' ? (verdict.decision === 'deny' ? 'denegado por el guardia' : 'permiso denegado') : `permiso concedido (${verdict.decision === 'allow' ? 'sin preguntar' : decision})`);

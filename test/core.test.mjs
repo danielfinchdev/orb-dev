@@ -23,7 +23,8 @@ import { isSecretPath, redactSecrets } from '../src/shared/secrets-scan.mjs';
 import { logJson, runLog } from '../src/platform/log.mjs';
 
 let t; let board; let project;
-before(() => { t = tempHome(); board = new Board(); project = createProject(board, { name: 'web' }, 'usuario'); });
+// 3.8.3: «Preguntar» (the approval rules of before); «Auto» is checked in test/modo-auto.test.mjs.
+before(() => { t = tempHome({ permissions: { mode: 'preguntar' } }); board = new Board(); project = createProject(board, { name: 'web' }, 'usuario'); });
 after(() => t.cleanup());
 
 test('el primer arranque crea la carpeta del asistente con todo lo necesario', () => {

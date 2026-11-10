@@ -10,7 +10,7 @@ import { clip, describeInput, mcpEnvByRef } from './common.mjs';
 import { Turn, spawnAgent, killTree } from './live.mjs';
 import { tr } from '../platform/context.mjs';
 import { isModelLimitText, parseReset, untilText } from '../domain/usage/budget.mjs';
-import { guardedRootsNow, appRootsNow } from '../domain/security/guard.mjs';
+import { guardedRootsNow, appRootsNow, personalRootsNow } from '../domain/security/guard.mjs';
 
 export const id = 'cursor';
 export const label = 'Cursor';
@@ -153,6 +153,8 @@ export function cursorRules(permission, internalDir, { android = false } = {}) {
     for (const dir of [...['datos', 'ejecuciones', path.join('copias', 'fotos'), 'secretos'].map((sub) => path.join(internalDir, sub)), ...guardedRootsNow()]) {
       for (const p of [dir, dir.replace(/\\/g, '/')]) deny.push(`Read(${p}/**)`, `Write(${p}/**)`);
     }
+    // 3.8.3: the owner's personal credentials (keys, browsers, the agents' logins), in every mode.
+    for (const dir of personalRootsNow()) for (const p of [dir, dir.replace(/\\/g, '/')]) deny.push(`Read(${p})`, `Read(${p}/**)`, `Write(${p})`, `Write(${p}/**)`);
     // 3.8.1: the folder Orb is installed in: readable, never written.
     for (const dir of appRootsNow()) for (const p of [dir, dir.replace(/\\/g, '/')]) deny.push(`Write(${p}/**)`);
   }

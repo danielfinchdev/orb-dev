@@ -29,6 +29,10 @@ export const DEFAULT_CONFIG = Object.freeze({
   // nobody answers in this time is denied and the agent goes on another way (0 = wait for ever).
   oneAtATime: false,
   approvalWaitMinutes: 10,
+  // 3.8.3: the agents' permission level for chats and tasks (Ajustes › Agentes; each chat may change its own): 'auto' works
+  // without questions inside the project folder (undo instead of asking), 'preguntar' asks before risky commands and
+  // before writing outside it (src/domain/security/guard.mjs).
+  permissions: { mode: 'auto' },
   agentOrder: ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot'],
   agents: {
     // Claude Code accepts the aliases sonnet/opus/haiku, so the list keeps working when new versions come out.

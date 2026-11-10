@@ -119,7 +119,7 @@ test('el reloj de una tarea no cuenta el rato que espera tu permiso', () => {
 });
 
 test('lo que pediste con tus palabras no vuelve a pedir aprobación; lo que no pediste, sí', async () => {
-  const h = tempHome();
+  const h = tempHome({ permissions: { mode: 'preguntar' } }); // 3.8.3: «Preguntar»
   try {
     const { Board, eventText } = await import('../src/domain/tasks/board.mjs');
     const board = new Board();

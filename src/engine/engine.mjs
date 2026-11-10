@@ -314,7 +314,7 @@ async function blocked(board, info) {
 }
 
 async function run(board, { home, version, restored, repair }) {
-  const { Sessions } = await import('./sessions.mjs');
+  const { Sessions, adoptAuto } = await import('./sessions.mjs');
   const { Orchestrator } = await import('./orchestrator.mjs');
   const { Scheduler } = await import('./scheduler/index.mjs');
   const { buildApi } = await import('./api/index.mjs');
@@ -323,6 +323,8 @@ async function run(board, { home, version, restored, repair }) {
   board.run("DELETE FROM settings WHERE key = 'orchestrator_key_hash' OR key LIKE 'orchestrator_conv:%' OR key LIKE 'agent_id:%'");
   try { const released = board.releaseUnclaimed(); if (released.length) log(`tareas manuales sin conversación devueltas a la cola: ${released.join(', ')}`); } catch (error) { log(`liberar tareas manuales: ${error.message}`); }
   const sessions = new Sessions(board, { emit, log });
+  // 3.8.3: «Auto» on for an install that had chats already (once, with a notice).
+  try { const moved = adoptAuto(board); if (moved) log(`modo Auto: ${moved} chat(s) pasan de «Editar archivos» a «Auto»`); } catch (error) { log(`modo Auto: ${error.message}`); }
   browserFiles = (await import('./browser/browser-record.mjs')).browserSink({ sessions, toWindow, log });
   const { plainAction, looksEnglish } = await import('../domain/security/guard.mjs');
   const { adapter } = await import('../agents/index.mjs');

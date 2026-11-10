@@ -259,6 +259,9 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   ['tasks', 'parent_id', 'INTEGER'], ['tasks', 'limited_until', 'TEXT'], ['tasks', 'review_of', 'INTEGER'], ['tasks', 'schedule_id', 'INTEGER'],
   // 2.7: how hard the task is (simple / normal / complejo), for Orb to choose its model and reasoning.
   ['tasks', 'level', 'TEXT'],
+  // 3.8.3: the task's permission level («auto» or «preguntar»; null = the global one) and what the user's own message asked
+  // for (JSON list: ["publish"]), src/domain/tasks/board.mjs › createTask.
+  ['tasks', 'autonomy', 'TEXT'], ['tasks', 'user_asked', 'TEXT'],
   // 2.7: the multiplatform group a project belongs to (tienda-android and tienda-ios share «tienda»).
   ['projects', 'grupo', 'TEXT'],
   // 3.8.2: «Usar mi móvil Android», given to a chat with the master password (src/engine/security/grants.mjs).

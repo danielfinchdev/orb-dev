@@ -7,6 +7,11 @@
 //   leer       look only: reading and searching; anything that changes something is denied
 //   editar     (default) edit files and run commands in its folder; risky commands ask first
 //   preguntar  edit files; every command asks first (for when you want to watch closely)
+//   auto       (3.8.3, the default) work without questions inside the project folder (its folder, core\preparacion and the
+//              system's temporary folders): editing, deleting, wiping build folders, rewriting git history there, since the
+//              task's checkpoint undoes it. Still asks for what leaves the folder or the PC: publishing (unless the user's own
+//              message asked for it: userAsked), sending data, writing outside the project, the system, other processes.
+//              Wiping a disk is denied.
 //   total      no questions (asked once when chosen; never from the phone). 3.8.2: in a chat without a project it is
 //              «Acceso total al PC» (the master password, dropped when Orb locks: src/engine/security/grants.mjs). Whatever the
 //              chat, «total» still goes through this guard: its boundary is the protected set (core but its open folders,
@@ -17,11 +22,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { translate } from '../../shared/i18n.mjs';
 import { ctx } from '../../platform/context.mjs';
-import { DEFAULT_PROTECTED } from '../../platform/paths.mjs';
+import { DEFAULT_PROTECTED, STAGING_DIR } from '../../platform/paths.mjs';
 
 //   probar     (3.1, read-only tasks: reviews, verification) read and run commands (tests, the build, a dev server to
 //              open in the browser), but change no file; risky commands ask first
-export const PERMISSIONS = ['leer', 'probar', 'editar', 'preguntar', 'total'];
+export const PERMISSIONS = ['leer', 'probar', 'editar', 'preguntar', 'auto', 'total'];
+// 3.8.3: the two levels of the chat's switch (the others stay under «más opciones»): «Auto» and «Preguntar» (editar).
+export const AUTONOMY = ['auto', 'preguntar'];
+export const permissionOfAutonomy = (mode) => (mode === 'preguntar' ? 'editar' : 'auto');
 // What a tool does, whatever the agent calls it (Claude tool names, Codex items, ACP kinds).
 const READ = /^(read|glob|grep|ls|search|find|view|notebookread|webfetch|websearch|fetch|think|todowrite|todoread|task|agent|exitplanmode|skill|toolsearch|listmcpresources|readmcpresource|bashoutput|monitor)$/i;
 const EDIT = /^(edit|write|multiedit|notebookedit|filechange|applypatch|edit_file|write_file|replace|move|delete|create)$/i;
@@ -61,7 +69,9 @@ const RISKY = [
   [/\b(curl|wget)\b[^|;&]*\s(-X\s*(POST|PUT|DELETE|PATCH)|--data|-d\s|-F\s|--upload-file|-T\s)/i, 'msg.guard.sendData'],
   [/\b(invoke-webrequest|invoke-restmethod|iwr|irm)\b[^|;&]*-method\s+(post|put|delete|patch)/i, 'msg.guard.sendData'],
   [/\brm\s+(?:-{1,2}\S+\s+)*(-[a-z]*r|--recursive)|\b(remove-item|ri|rd|rmdir|del|erase)\b[^|;&]*\s-r(e(c(u(r(se?)?)?)?)?)?\b|\brd\s+\/s\b|\brmdir\s+\/s\b|\bdel\s+\/[sq]/i, 'msg.guard.deleteFolders'],
-  [/\b(schtasks|reg\s+(add|delete)|set-executionpolicy|shutdown|restart-computer|stop-computer|format\s+[a-z]:|diskpart|bcdedit|netsh|sc\s+(create|delete|config)|setx|sudo|runas|net\s+(user|localgroup)|new-service|set-service)\b/i, 'msg.guard.system'],
+  // 3.8.3: wiping a disk or the boot setup: denied in «Auto», asked in every other mode (also «total»).
+  [/\bformat(\.com)?\s+\/?[a-z]:(?![\w\\/])|\b(diskpart|bcdedit|clear-disk|initialize-disk|format-volume|remove-partition)\b|\bcipher(\.exe)?\s+\/w\b/i, 'msg.guard.diskWipe'],
+  [/\b(schtasks|reg\s+(add|delete|import)|set-executionpolicy|shutdown|restart-computer|stop-computer|netsh|sc\s+(create|delete|config)|setx|sudo|runas|net\s+(user|localgroup)|new-service|set-service|winget\s+(install|uninstall|upgrade)|choco\s+(install|uninstall|upgrade)|scoop\s+(install|uninstall)|msiexec|install-package)\b/i, 'msg.guard.system'],
   [/\b(taskkill|stop-process|kill\s+(-9|-kill|-s\s+kill|-sigkill)|pkill|killall)\b/i, 'msg.guard.killProcesses'],
   [/\b(ssh|scp|sftp|rsync)\s/i, 'msg.guard.ssh'],
   [new RegExp(`${GIT}(reset\\s+--(hard|merge)\\b|clean\\s+(?:-\\S+\\s+)*(-[a-z]*f|--force)|checkout\\s+(--\\s|\\.(?=\\s|$))|restore\\b(?![^|;&]*--staged)|stash\\s+(drop|clear)\\b|branch\\s+-D\\b|rebase\\b|filter-branch\\b)`, 'i'), 'msg.guard.gitRewrite'],
@@ -105,15 +115,22 @@ const onlyLocal = (c) => {
   }
   return requests > 0;
 };
-export function riskOf(command, lang = 'es') {
-  const c = String(command ?? '');
+// 3.8.3: what kind of risk each rule is (the «Auto» table of the permissions proposal decides by kind).
+const CATEGORY = { push: 'publish', github: 'publish', publish: 'publish', pipeToShell: 'pipeToShell', sendData: 'sendData', deleteFolders: 'deleteFolders',
+  diskWipe: 'diskWipe', system: 'system', killProcesses: 'killProcesses', ssh: 'ssh', gitRewrite: 'gitRewrite', docker: 'docker' };
+// Every risk a command carries, in the order of RISKY: [{ category, reason }].
+export function risksOf(command, lang = 'es') {
+  const c = String(command ?? ''); const out = [];
   for (const [re, why] of RISKY) {
     if (!re.test(c)) continue;
     if (why === 'msg.guard.sendData' && onlyLocal(c)) continue;
-    return translate(lang, why);
+    const category = CATEGORY[why.slice('msg.guard.'.length)];
+    if (!out.some((r) => r.category === category)) out.push({ category, reason: translate(lang, why) });
   }
-  return null;
+  return out;
 }
+export function riskOf(command, lang = 'es') { return risksOf(command, lang)[0]?.reason ?? null; }
+export const riskCategories = (command) => risksOf(command).map((r) => r.category);
 
 // 3.8: Orb's data folder (core, src/platform/paths.mjs › paths().internal) is never an agent's business: what a tool
 // names or a command mentions is resolved (against the agent's folder) and refused when it falls inside it. The isolated
@@ -186,7 +203,7 @@ const idOf = (p) => { try { const s = fs.statSync(p, { bigint: true }); return s
 const rootId = (r) => { if (!ids.has(r)) { const id = idOf(r); if (!id) return null; ids.set(r, id); } return ids.get(r); };
 function closedById(full, internalDir, read) {
   const core = rootId(path.resolve(internalDir));
-  const others = [...guardedAsGiven, ...(read === true ? [] : appAsGiven)].map(rootId).filter(Boolean);
+  const others = [...guardedAsGiven, ...personalAsGiven, ...(read === true ? [] : appAsGiven)].map(rootId).filter(Boolean);
   if (!core && !others.length) return false;
   let at = full; const rest = [];
   for (let i = 0; i < 64; i++) {
@@ -216,6 +233,33 @@ export function setAppRoots(list) {
   appRoots = [...new Set(appAsGiven.flatMap(rootsOf))];
 }
 export const appRootsNow = () => [...appAsGiven];
+// 3.8.3 (permissions proposal, «siempre bloqueado»): the owner's personal credentials, closed like core in every mode
+// (also «total»), for reading too: SSH and GPG keys, the browsers' profiles (saved passwords, cookies), the agents' own
+// logins (Claude Code, Codex, Cursor, GitHub CLI), git's stored credentials, Windows' credential store and the app data of
+// Orb itself (its sealed secrets' copies). The agents' CLIs read their own login themselves, never through a tool.
+export function defaultPersonalRoots(env = process.env, home = os.homedir()) {
+  const roaming = env.APPDATA || path.join(home, 'AppData', 'Roaming');
+  const local = env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+  return [
+    path.join(home, '.ssh'), path.join(home, '.gnupg'), path.join(home, '.git-credentials'),
+    path.join(home, '.claude', '.credentials.json'), path.join(home, '.codex', 'auth.json'), path.join(home, '.cursor', 'cli-config.json'),
+    path.join(home, '.config', 'gh', 'hosts.yml'), path.join(roaming, 'GitHub CLI', 'hosts.yml'), path.join(roaming, 'Cursor', 'User', 'globalStorage'),
+    path.join(local, 'Google', 'Chrome', 'User Data'), path.join(local, 'Microsoft', 'Edge', 'User Data'), path.join(local, 'BraveSoftware', 'Brave-Browser', 'User Data'),
+    path.join(local, 'Vivaldi', 'User Data'), path.join(roaming, 'Opera Software'), path.join(roaming, 'Mozilla', 'Firefox'),
+    path.join(roaming, 'Microsoft', 'Credentials'), path.join(local, 'Microsoft', 'Credentials'), path.join(roaming, 'Microsoft', 'Protect'), path.join(local, 'Microsoft', 'Vault'),
+    path.join(roaming, 'dev.orb.app'), path.join(local, 'dev.orb.app'), path.join(roaming, 'Orb.dev'), path.join(local, 'Orb.dev')
+  ];
+}
+let personalRoots = []; let personalAsGiven = [];
+export function setPersonalRoots(list) {
+  personalAsGiven = [...new Set((list ?? []).filter((d) => typeof d === 'string' && path.isAbsolute(d)).map((d) => path.resolve(d)))];
+  personalRoots = [...new Set(personalAsGiven.flatMap(rootsOf))];
+}
+export const personalRootsNow = () => [...personalAsGiven];
+setPersonalRoots(defaultPersonalRoots());
+// Windows' credential store and DPAPI by command (cmdkey /list, vaultcmd, PowerShell's CredentialManager, Unprotect).
+const CRED_CMD = /\b(cmdkey|vaultcmd)(\.exe)?\b|\bget-storedcredential\b|protecteddata\]::unprotect|\bcredread\w*\b|\bcredenumerate\w*\b/i;
+export const readsCredentialStore = (command) => CRED_CMD.test(String(command ?? '')) || CRED_CMD.test(String(command ?? '').replace(/['"`^]/g, ''));
 export function isOrbData(target, internalDir, cwd, { read = false } = {}) {
   if (!internalDir || !target) return false;
   let p = winPath(String(target).trim()).replace(/^~(?=[\\/]|$)/, os.homedir());
@@ -228,7 +272,7 @@ export function isOrbData(target, internalDir, cwd, { read = false } = {}) {
   const root = rootsOf(internalDir).find(within);
   if (root) return !openInCore(full.slice(root.length + 1).split('\\'), read);
   if (read !== true && appRoots.some(within)) return true;
-  if (guardedRoots.some(within)) return true;
+  if (guardedRoots.some(within) || personalRoots.some(within)) return true;
   return closedById(realOf(p), internalDir, read);
 }
 // The words of a command that may be paths (a=b and --opt=b give b), without quotes.
@@ -335,7 +379,7 @@ function touchesOnce({ command: given, paths, patterns, internalDir, cwd, read =
   // The folder written out anywhere in the command (in a script's string too), with either separator or case.
   const t = String(command ?? '').replace(/\//g, '\\').toLowerCase();
   const coreRoots = rootsOf(internalDir);
-  for (const r of [...coreRoots, ...guardedRoots, ...(read === true ? [] : appRoots)]) {
+  for (const r of [...coreRoots, ...guardedRoots, ...personalRoots, ...(read === true ? [] : appRoots)]) {
     for (let i = t.indexOf(r); i >= 0; i = t.indexOf(r, i + 1)) {
       const after = t.slice(i + r.length);
       if (/^[^\\]/.test(after) && !/^["'\s;|&)]/.test(after)) continue; // .orbx is another folder
@@ -348,7 +392,7 @@ function touchesOnce({ command: given, paths, patterns, internalDir, cwd, read =
   // name), is resolved there. (An agent whose own folder is inside core, a run's: its plain words are not looked at.)
   const start = cwd ? norm(realOf(cwd)) : null;
   const startInCore = Boolean(start) && coreRoots.some((root) => start === root || start.startsWith(`${root}\\`));
-  const roots = [...coreRoots, ...guardedRoots, ...(read === true ? [] : appRoots)];
+  const roots = [...coreRoots, ...guardedRoots, ...personalRoots, ...(read === true ? [] : appRoots)];
   for (const part of workDirs(command, cwd)) {
     if (part.moved && part.dir && isOrbData(part.dir, internalDir, null, { read })) return true;
     for (const w of part.words) {
@@ -425,7 +469,7 @@ export const aliasesDrive = (command) => DRIVE_ALIAS.test(String(command ?? ''))
 const COPIERS = /^(cp|copy|cpi|copy-item|xcopy|robocopy|mv|move|mi|move-item|tar|bsdtar|compress-archive|7z|7za|7zr|zip|rar|winrar|rsync|scp|ditto)$/i;
 const COPY_TO = /^(cp|copy|cpi|copy-item|xcopy|mv|move|mi|move-item|rsync|scp|ditto)$/;
 function copiesClosedParent(command, internalDir, cwd) {
-  const closed = [...(internalDir ? rootsOf(internalDir) : []), ...guardedRoots];
+  const closed = [...(internalDir ? rootsOf(internalDir) : []), ...guardedRoots, ...personalRoots];
   if (!closed.length) return false;
   const c = expandEnv(command);
   if (/createfromdirectory/i.test(c) && pathWords(c).some((w) => holds(w, cwd, closed))) return true;
@@ -501,43 +545,170 @@ function runsSkillScript(command, internalDir, cwd) {
 // locks (src/engine/host/android.mjs › stopServer).
 const RUNS_ADB = /(^|[\s;&|(`"'\\/=])adb(\.exe)?(?=$|[\s;&|)`"'])/i;
 export const runsAdb = (command) => RUNS_ADB.test(String(command ?? '')) || RUNS_ADB.test(unquoted(command));
-export function decide({ permission = 'editar', tool, kind, command = '', paths = [], patterns = [], internalDir, cwd, lang = 'es', android = false }) {
+
+// ---- 3.8.3: inside or outside the project («Auto» and «Preguntar»).
+// The project: the folder of the chat or the task (or its isolated copy), core\preparacion (what an agent makes for the
+// user to turn on) and the system's temporary folders. Compared by RESOLVED path (links and junctions followed, 8.3 names
+// made long, a UNC path to this PC made local, `..` and case folded): a junction inside the project that points elsewhere
+// is outside. null: no project known (no inside/outside rule applies).
+const tempRoots = () => [os.tmpdir(), process.env.TEMP, process.env.TMP].filter((d) => d && path.isAbsolute(d));
+export function projectRoots({ projectDir, internalDir } = {}) {
+  if (!projectDir) return null;
+  return [...new Set([projectDir, ...(internalDir ? [path.join(internalDir, STAGING_DIR)] : []), ...tempRoots()].flatMap(rootsOf))];
+}
+// Where a word of a command (or a tool's path) really is: a normalized real path, or null when it cannot be told (a
+// variable left unexpanded, another computer's share, a relative path with no folder to resolve it against).
+export function resolveTarget(word, dir) {
+  let p = winPath(String(word ?? '').trim()).replace(/^~(?=[\\/]|$)/, os.homedir());
+  if (!p) return null;
+  const local = localPath(p);
+  if (local === false) return null;
+  if (local) p = local;
+  else if (p.startsWith('\\\\') || p.startsWith('//')) return null;
+  if (/[$%]/.test(p)) return null; // a variable the shell would expand
+  if (!path.isAbsolute(p) && !path.win32.isAbsolute(p)) { if (!dir) return null; p = path.resolve(dir, p); }
+  return norm(realOf(p));
+}
+export function insideProject(word, dir, roots) {
+  if (!roots) return true;
+  const full = resolveTarget(word, dir);
+  return Boolean(full) && roots.some((r) => full === r || full.startsWith(`${r}\\`));
+}
+// Programs that write, move or delete what they name; for a copy only its destination counts (reading elsewhere is fine).
+const WRITERS = /^(rm|rmdir|rd|del|erase|remove-item|ri|mv|move|move-item|mi|cp|copy|copy-item|cpi|xcopy|robocopy|mkdir|md|new-item|ni|touch|set-content|add-content|out-file|tee|tee-object|rename-item|ren|rename|clear-content|clc|truncate|unlink|shred|chmod|chown|icacls|attrib|takeown|ln|mklink)$/i;
+const COPY_DEST = /^(cp|copy|copy-item|cpi|xcopy)$/i;
+// Programs that only look: a part of a command that runs in a folder outside the project with one of these is fine.
+const LOOKERS = /^(ls|dir|cat|type|more|less|head|tail|wc|get-childitem|gci|get-content|gc|get-item|gi|select-string|sls|rg|grep|findstr|find|tree|pwd|echo|write-output|write-host|test-path|resolve-path|get-location|where|which|stat|file|du|cd|chdir|pushd|popd|set-location|sl|push-location|pop-location)$/i;
+const GIT_LOOK = /^(status|log|diff|show|branch|rev-parse|ls-files|remote|describe|blame|config|fetch)$/i;
+const targetsOf = (exe, ws) => {
+  const args = []; let dest = null;
+  for (let i = 0; i < ws.length; i++) {
+    if (/^-(destination|d|t|target-directory)$/i.test(ws[i]) && COPY_DEST.test(exe)) { dest = ws[i + 1] ?? null; i++; continue; }
+    if (/^-(value|encoding|itemtype|type|filter|include|exclude|erroraction|ea|newname)$/i.test(ws[i])) { i++; continue; }
+    if (/^-/.test(ws[i]) || /^\/[a-z0-9:]{1,8}$/i.test(ws[i])) continue;
+    args.push(ws[i]);
+  }
+  if (COPY_DEST.test(exe)) return dest ? [dest] : args.length > 1 ? args.slice(-1) : [];
+  if (/^robocopy$/i.test(exe)) return args.slice(1, 2);
+  return args;
+};
+// The first thing a command writes, or a part of it runs, outside the project: { what } or null. Hardening, not a
+// boundary (a script can write anywhere): what it names and where each of its parts runs.
+export function writesOutside(command, cwd, roots) {
+  if (!roots) return null;
+  const c = expandEnv(unwrapShell(command));
+  for (const m of c.matchAll(/(?<![0-9&])>>?\s*("[^"]+"|'[^']+'|[^\s|&;<>]+)/g)) {
+    const t = unq(m[1]);
+    if (t && !NULLISH.test(t) && !insideProject(t, cwd, roots)) return { what: t };
+  }
+  for (const part of workDirs(c, cwd)) {
+    if (!part.words.length) continue;
+    const exe = String(part.words[0]).replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
+    const here = Boolean(part.dir) && insideProject(part.dir, null, roots);
+    const sub = part.words.find((w, i) => i > 0 && !w.startsWith('-')) ?? '';
+    if (!here && !LOOKERS.test(exe) && !(exe === 'git' && GIT_LOOK.test(sub))) return { what: part.dir ?? exe };
+    if (exe === 'git') {
+      const at = part.words.indexOf('-C');
+      if (at > 0 && !insideProject(part.words[at + 1] ?? '', part.dir, roots) && !GIT_LOOK.test(part.words[at + 2] ?? '')) return { what: part.words[at + 1] ?? 'git -C' };
+    }
+    if (!WRITERS.test(exe)) continue;
+    for (const t of targetsOf(exe, part.words.slice(1))) if (!insideProject(t, part.dir, roots)) return { what: t };
+  }
+  return null;
+}
+// 3.8.3 (always blocked): another project's secrets (.env, keys, certificates): readable inside the current project (they
+// are needed to program it), never elsewhere. .env.example and the like are not secrets.
+const SECRET_FILE = /(^|[\\/])(\.env(\.(?!example$|sample$|template$|dist$)[\w.-]+)?|[^\\/]+\.(pem|key|p12|pfx|jks|keystore)|id_(rsa|dsa|ecdsa|ed25519)(\.\w+)?)$/i;
+export const isSecretFile = (p) => SECRET_FILE.test(String(p ?? '').replace(/["']/g, '').replace(/[\\/]+$/, ''));
+function otherSecret({ command, paths, patterns, cwd, roots }) {
+  const abs = (w) => path.isAbsolute(winPath(w)) || path.win32.isAbsolute(winPath(w)) || /^~[\\/]/.test(w) || String(w).startsWith('\\\\');
+  // The word, or where it really leads (a link inside the project named config.txt that points at another project's .env).
+  const out = (w, dir) => { const f = resolveTarget(w, dir); return (isSecretFile(w) || (f && isSecretFile(f))) && (roots ? !insideProject(w, dir, roots) : abs(w) || Boolean(f && isSecretFile(f))); };
+  if ([...paths, ...patterns].some((p) => out(p, cwd))) return true;
+  const c = expandEnv(command);
+  if (pathWords(c).some((w) => out(w, cwd))) return true;
+  return workDirs(c, cwd).some((part) => part.words.some((w) => !/^-/.test(w) && out(w, part.dir)));
+}
+
+// decide's answer when «Auto» lets through something «Preguntar» would have asked: auto: true, so the chat says so.
+const autoAllow = (reason) => ({ decision: 'allow', reason, auto: true });
+// Whether what an action names is one of the owner's personal credentials (only to word the reason).
+function namesPersonal({ command, paths, patterns, cwd }) {
+  const t = expandEnv(unquoted(command)).replace(/\//g, '\\').toLowerCase();
+  if (personalRoots.some((r) => t.includes(r))) return true;
+  return [...paths, ...patterns, ...pathWords(expandEnv(command))].some((w) => { const f = resolveTarget(w, cwd); return Boolean(f) && personalRoots.some((r) => f === r || f.startsWith(`${r}\\`)); });
+}
+// decide({ permission, tool, kind, command, paths, patterns, internalDir, cwd, lang, android, projectDir, userAsked })
+// 3.8.3: projectDir: the project's folder (the chat's or the task's, or its isolated copy; null in a chat without a
+// project; not given: cwd). userAsked: what the user's own message for this turn or task asked for in so many words
+// (['publish']: «súbelo», «haz push»), never taken from an agent's text (src/domain/security/approval.mjs › askedByUser).
+export function decide({ permission = 'editar', tool, kind, command = '', paths = [], patterns = [], internalDir, cwd, lang = 'es', android = false, projectDir, userAsked = [] }) {
   const T = (k) => translate(lang, `msg.guard.${k}`);
   const cls = toolClass(tool, kind);
   const text = [command, ...paths, ...patterns].join(' ');
+  const auto = permission === 'auto';
   if (linkIntoCore(command, internalDir, cwd)) return { decision: 'deny', reason: T('internalLink') };
   if (touchesInternal({ command, paths, patterns, internalDir, cwd, read: cls === 'read' })) {
+    // 3.8.3: the owner's personal credentials (keys, browsers, the agents' logins): their own reason.
+    if (namesPersonal({ command, paths, patterns, cwd })) return { decision: 'deny', reason: T('credentials') };
     // 3.8.1: only the general log in core (what a reading tool may see): the reason says how to write to it.
     const logsOnly = cls !== 'read' && !touchesInternal({ command, paths, patterns, internalDir, cwd, read: ['bitacora'] });
     // 3.8.1: only the skills of core: a command (one of their scripts) asks first; changing them, never (an agent makes a
-    // new version with orb_create_skill, which the user approves).
+    // new version with orb_create_skill, which the user approves). 3.8.3: «Auto» runs it (the user turned the skill on).
     const skillsOnly = cls !== 'read' && !logsOnly && !touchesInternal({ command, paths, patterns, internalDir, cwd, read: ['skills'] });
-    if (skillsOnly && cls === 'exec' && permission !== 'leer' && !escalates(command) && !protectedHit(text) && runsSkillScript(command, internalDir, cwd)) return { decision: 'ask', reason: T('internalSkillsRun') };
+    if (skillsOnly && cls === 'exec' && permission !== 'leer' && !escalates(command) && !protectedHit(text) && runsSkillScript(command, internalDir, cwd)) return auto ? autoAllow(T('internalSkillsRun')) : { decision: 'ask', reason: T('internalSkillsRun') };
     return { decision: 'deny', reason: T(logsOnly ? 'internalLogs' : skillsOnly ? 'internalSkills' : 'internal') };
   }
   if (escalates(command)) return { decision: 'deny', reason: T('sudo') };
+  if (readsCredentialStore(command)) return { decision: 'deny', reason: T('credentials') };
   if (cls !== 'read' && aliasesDrive(command)) return { decision: 'deny', reason: T('driveAlias') };
   if (cls !== 'read' && copiesClosedParent(command, internalDir, cwd)) return { decision: 'deny', reason: T('copyParent') };
   const hit = protectedHit(text);
   if (hit) return { decision: 'deny', reason: translate(lang, 'msg.guard.protected', { name: hit }) };
+  const roots = projectRoots({ projectDir: projectDir === undefined ? cwd : projectDir, internalDir });
+  // 3.8.3: another project's .env, keys or certificates: never (in every mode).
+  if (cls !== 'orb' && cls !== 'mcp' && otherSecret({ command, paths, patterns, cwd, roots })) return { decision: 'deny', reason: T('otherSecret') };
   // 3.8.2: Android's adb by hand only with «Acceso total» and «Usar mi móvil Android» (android): otherwise the agent has
   // Orb's own tools (orb_android_*), which check the grant on every call.
   if (cls !== 'read' && cls !== 'orb' && runsAdb(command) && !(permission === 'total' && android)) return { decision: 'deny', reason: T('adb') };
+  const risks = cls === 'exec' ? risksOf(command, lang) : [];
+  const wipe = risks.find((r) => r.category === 'diskWipe');
+  // 3.8.3: wiping a disk: denied in «Auto», asked in the others (also «total»).
+  if (wipe && permission !== 'leer') return auto ? { decision: 'deny', reason: wipe.reason } : { decision: 'ask', reason: wipe.reason };
   if (permission === 'total') return { decision: 'allow', reason: T('full') };
   if (cls === 'read' || cls === 'orb') return { decision: 'allow', reason: T('readOnlyTool') };
   if (permission === 'leer') return { decision: 'deny', reason: T('readOnlyChat') };
   if (permission === 'probar' && cls === 'edit') return { decision: 'deny', reason: T('testOnly') };
   if (cls === 'edit' && paths.some(isAgentConfig)) return { decision: 'ask', reason: T('agentConfig') };
-  if (cls === 'edit') return { decision: 'allow', reason: T('edits') };
+  // 3.8.3: writing outside the project asks first in «Auto», «Preguntar» and «Preguntar todo».
+  const outsideReason = (what) => translate(lang, 'msg.guard.outside', { what: String(what).slice(0, 120) });
+  if (cls === 'edit') {
+    const away = paths.find((p) => !insideProject(p, cwd, roots));
+    if (away !== undefined) return { decision: 'ask', reason: outsideReason(away) };
+    return { decision: 'allow', reason: T('edits') };
+  }
   if (cls === 'exec') {
-    const risk = riskOf(command, lang);
-    if (risk) return { decision: 'ask', reason: risk };
+    const away = permission === 'probar' ? null : writesOutside(command, cwd, roots);
+    if (auto) {
+      // «Auto»: inside the project, deleting folders and rewriting git history go ahead (the checkpoint undoes them);
+      // publishing only when the user's own message asked for it; the rest of the risky commands ask as before.
+      const passes = (r) => ((r.category === 'deleteFolders' || r.category === 'gitRewrite') ? Boolean(roots) && !away
+        : r.category === 'publish' ? (userAsked ?? []).includes('publish') : false);
+      const asking = risks.find((r) => !passes(r));
+      if (asking) return { decision: 'ask', reason: asking.reason };
+      if (AGENT_CONFIG_IN.test(command)) return { decision: 'ask', reason: T('agentConfig') };
+      if (away) return { decision: 'ask', reason: outsideReason(away.what) };
+      if (risks.length) return autoAllow(risks[0].category === 'publish' ? T('publishAsked') : risks[0].reason);
+      return { decision: 'allow', reason: T('normalCommand') };
+    }
+    if (risks.length) return { decision: 'ask', reason: risks[0].reason };
     if (AGENT_CONFIG_IN.test(command)) return { decision: 'ask', reason: T('agentConfig') };
     // 3.2.1: a read-only task must not write files. Running the tests or the build is fine, but a command that redirects
     // into a project file (echo >> BITACORA.md, Set-Content, Out-File…) outside a build folder asks first: with nobody to
     // answer, a task's permission times out and is denied, so the write never happens.
     if (permission === 'probar' && writesProjectFile(command)) return { decision: 'ask', reason: T('testWrite') };
     if (permission === 'preguntar') return { decision: 'ask', reason: T('runs') };
+    if (away) return { decision: 'ask', reason: outsideReason(away.what) };
     return { decision: 'allow', reason: T('normalCommand') };
   }
   if (cls === 'mcp') return { decision: 'allow', reason: T('connector') };
@@ -646,3 +817,8 @@ export function describeAction({ tool, command, paths = [], title, lang = 'es' }
   if (paths.length) return `${tool ?? translate(lang, 'msg.guard.tool')}: ${paths.slice(0, 3).join(', ')}`;
   return String(title ?? tool ?? translate(lang, 'msg.guard.action')).slice(0, 400);
 }
+
+// 3.8.3: the permission level everyone gets unless a chat or a task says otherwise (Ajustes › Agentes, orb.json
+// permissions.mode): «auto» by default, «preguntar» when the owner chose it. A task without its own level takes this one.
+export const globalAutonomy = () => (ctx.config?.permissions?.mode === 'preguntar' ? 'preguntar' : 'auto');
+export const autonomyOf = (task) => (AUTONOMY.includes(task?.autonomy) ? task.autonomy : globalAutonomy());

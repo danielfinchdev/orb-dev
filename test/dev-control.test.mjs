@@ -8,7 +8,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { tempHome, startEngine, until, ROOT } from './helpers.mjs';
 
-const t = tempHome();
+const t = tempHome({ permissions: { mode: 'preguntar' } }); // 3.8.3: «Preguntar» (its approvals)
 const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'orb-control-')), 'control.json');
 let engine; let off;
 after(async () => { await engine?.stop(); await off?.stop(); t.cleanup(); });

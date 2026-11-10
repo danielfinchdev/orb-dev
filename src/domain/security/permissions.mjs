@@ -57,6 +57,8 @@ export const METHODS = Object.freeze({
   'sessions.list': 'remote', 'sessions.create': 'remote', 'sessions.items': 'remote', 'sessions.send': 'remote', 'sessions.queue': 'remote',
   'sessions.editQueued': 'remote', 'sessions.approve': 'remote', 'sessions.resume': 'remote', 'sessions.fork': 'remote', 'sessions.settle': 'remote',
   'sessions.stop': 'remote', 'sessions.compact': 'remote', 'sessions.update': 'remote', 'sessions.remove': 'pc',
+  // 3.8.3: «Auto» / «Preguntar» for everything (Ajustes › Agentes and the assistant's chat), also from the phone
+  'permissions.setMode': 'remote',
   // 3.8.2: «Acceso total al PC» and «Usar mi móvil Android» (src/engine/security/grants.mjs): given and taken back only here
   'sessions.grantTotal': 'pc', 'sessions.grantAndroid': 'pc', 'sessions.revokeGrant': 'pc',
   // scheduled tasks

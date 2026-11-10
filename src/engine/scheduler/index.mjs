@@ -30,6 +30,8 @@ import { FoldersPart } from './folders.mjs';
 import { LeftoversPart } from './leftovers.mjs';
 import { ReportsPart } from './reports.mjs';
 import { ReviewsPart } from './reviews.mjs';
+import { autonomyOf, permissionOfAutonomy } from '../../domain/security/guard.mjs';
+import { askedByUser } from '../../domain/security/approval.mjs';
 export { contractNote } from './common.mjs';
 
 export class Scheduler {
@@ -467,10 +469,17 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
     // A conversation continues only on the same account (another account is another login with its own history).
     const resume = Boolean(followup && session && session.agent === agent && (session.account ?? session.agent) === accountId && (session.cli_session || this.sessions.lives.has(session.id))
       && path.resolve(session.cwd) === path.resolve(workspace.cwd)); // 3.1: a conversation only continues in its own folder
+    // 3.8.3: the task's level («Auto» or «Preguntar»; a read-only one only reviews and tests). In «Auto» it may publish
+    // when the user's own words asked for it: the request the task came from, an approval of a task marked «publicar»,
+    // or the user's own follow-up message.
+    const autonomy = autonomyOf(task);
+    const permission = task.readonly ? 'probar' : permissionOfAutonomy(autonomy);
+    const asked = autonomy === 'auto' && !task.readonly ? [...new Set([...(task.user_asked ?? []), ...(task.sensitivity.includes('publish') && task.sensitivity.length && board.approvalOk(task) ? ['publish'] : []),
+      ...(followup && !followup.implicit ? askedByUser(followup.text) : [])])] : [];
     if (!session || session.agent !== agent || (session.account ?? session.agent) !== accountId) {
-      session = this.sessions.create({ kind: 'task', agent, account: accountId, model: task.model, reasoning: task.reasoning, permission: task.readonly ? 'probar' : 'editar', project: project.name, cwd: workspace.cwd, title: `#${task.id} ${task.title}`, taskId: task.id });
+      session = this.sessions.create({ kind: 'task', agent, account: accountId, model: task.model, reasoning: task.reasoning, permission, project: project.name, cwd: workspace.cwd, title: `#${task.id} ${task.title}`, taskId: task.id });
     } else {
-      session = this.sessions.update(session.id, { cwd: workspace.cwd, model: task.model, reasoning: task.reasoning, permission: task.readonly ? 'probar' : 'editar', ...(resume ? {} : { cli_session: null }) });
+      session = this.sessions.update(session.id, { cwd: workspace.cwd, model: task.model, reasoning: task.reasoning, permission, ...(resume ? {} : { cli_session: null }) });
     }
     const base = this.promptFor(task, project, workspace, agent);
     const prompt = !followup ? base : resume ? `${followup.text}\n\nAl acabar, llama otra vez a orb_update_task con id ${task.id} (status "done" y qué cambiaste, o "blocked"/"failed" con el motivo).`
@@ -481,7 +490,7 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
     try {
       board.patch(task.id, { status: 'running', assigned_to: agent, run_account: accountId, branch: workspace.branch, workdir: workspace.workdir, session_id: session.id, result: null }, 'orb', 'task.launched', 'queued');
       run = this.sessions.send(session.id, followup ? followup.text : `Encargo de ${assistantName()}:\n\n${prompt}`, {
-        prompt, images: followup?.images ?? [], runDir, taskId: task.id, budgetUsd: taskBudgetUsd(accountId, task.model),
+        prompt, images: followup?.images ?? [], runDir, taskId: task.id, asked, budgetUsd: taskBudgetUsd(accountId, task.model),
         onFinish: (info) => this.finish(task.id, info)
       });
     } catch (error) {

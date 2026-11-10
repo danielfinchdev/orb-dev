@@ -22,7 +22,8 @@ import { account as findAccount, accountEnv } from '../domain/usage/accounts.mjs
 import { pickAccount, recordSpend } from '../domain/usage/budget.mjs';
 import { browserKey } from './browser/browser-key.mjs';
 import { androidAllowed } from './host/android.mjs';
-import { PERMISSIONS, plainAction, pidKills, unwrapShell } from '../domain/security/guard.mjs';
+import { PERMISSIONS, plainAction, pidKills, unwrapShell, globalAutonomy, permissionOfAutonomy } from '../domain/security/guard.mjs';
+import { askedByUser } from '../domain/security/approval.mjs';
 import { processList, taskProcesses, powershell } from '../platform/proc-list.mjs';
 import { explainFailure } from '../shared/agent-errors.mjs';
 import { rememberModels } from './usage/catalog.mjs';
@@ -128,6 +129,7 @@ export class Sessions {
     this.lives = new Map();     // session id -> { live, key, lastUsed, logFile }
     this.deltas = new Map();    // 3.8.3: session id -> { text, timer }: the streamed text not sent to the window yet
     this.approvals = new Map(); // `${session}:${request}` -> item id of its card
+    this.asked = new Map();     // 3.8.3: session id -> what the user's own message of this turn asked for (['publish'])
     this.onApproval = () => {}; // set by the engine: a notice in the chat when a task waits for a click
     this.onApprovalDone = () => {}; // set by the engine: that notice shows how it ended (allowed, denied, nobody answered)
     this.onApprovalExpired = () => {};
@@ -148,7 +150,7 @@ export class Sessions {
   get(id) { return parseRow(this.board.one('SELECT * FROM sessions WHERE id = ?', String(id))); }
   must(id) { const s = this.get(id); if (!s) throw new Error(tr('msg.sessions.noConversation')); return s; }
 
-  create({ kind = 'chat', agent, account = null, model = null, reasoning = 'medium', permission = 'editar', project = null, cwd, title, taskId = null, parentId = null }) {
+  create({ kind = 'chat', agent, account = null, model = null, reasoning = 'medium', permission = permissionOfAutonomy(globalAutonomy()), project = null, cwd, title, taskId = null, parentId = null }) {
     adapter(agent);
     if (account && findAccount(account) && findAccount(account).agent !== agent) throw new Error(tr('msg.sessions.accountNotOf', { account, agent }));
     const acc = pickAccount(this.board, { agent, preferred: account });
@@ -305,6 +307,10 @@ export class Sessions {
       mcpServers: mcpServersOf(a, s.agent, { taskId, session: s.id }), budgetUsd,
       env: { ...accountEnv(acc), ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
       internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, cfg: ctx.config.agents[s.agent] ?? {},
+      // 3.8.3: the project's folder for the guard's inside/outside rules (none in a chat without a project), and what the
+      // user's own message of the turn asked for (read on every action: «súbelo» lets «Auto» push).
+      projectDir: s.project ? s.cwd : null,
+      userAsked: () => this.asked.get(s.id) ?? [],
       // 3.8.2: read on every action (the owner may take it back at any moment): adb by hand needs it (src/domain/security/guard.mjs).
       android: () => androidAllowed(this.get(s.id)),
       skills: liveSkills(), // 3.8.1: the skills of core that are on (Claude and Codex load them themselves)
@@ -337,6 +343,15 @@ export class Sessions {
     if (ev.type === 'item') {
       const item = this.addItem(id, ev.role, ev.kind, ev.body);
       if (run) { const what = describeItem(item); if (what) run.last = what; if (ev.kind === 'tool' || ev.kind === 'file') run.steps++; }
+      return;
+    }
+    // 3.8.3: something «Auto» let through that «Preguntar» would have asked: one quiet line in the chat (and the task's
+    // activity), so nothing passes unsaid.
+    if (ev.type === 'auto') {
+      const what = plainAction(ev.title ?? '', { lang: ctx.config.language });
+      this.addItem(id, 'system', 'status', tr('msg.sessions.autoAllowed', { what, why: ev.reason ?? '' }));
+      const s = this.get(id);
+      if (s?.kind === 'task' && s.task_id) try { this.board.event(s.task_id, 'orb', 'auto.allowed', `${what}: ${ev.reason ?? ''}`.slice(0, 400)); } catch { /* the task may be gone */ }
       return;
     }
     if (ev.type === 'session') { if (ev.id && this.get(id)?.cli_session !== ev.id) this.update(id, { cli_session: ev.id }); return; }
@@ -505,8 +520,12 @@ export class Sessions {
 
   // One turn. options: images (absolute paths), prompt (what the agent receives, if it differs from what the user typed),
   // timeoutMs, budgetUsd, taskId, showUser, onFinish({ code, state, stderr, logFile, stopped, timedOut, limit }).
-  send(id, text, { images = [], prompt, timeoutMs = (ctx.config.timeoutMinutes ?? 60) * 60_000, budgetUsd, taskId, onFinish, showUser = true } = {}) {
+  send(id, text, { images = [], prompt, timeoutMs = (ctx.config.timeoutMinutes ?? 60) * 60_000, budgetUsd, taskId, onFinish, showUser = true, asked } = {}) {
     const s = this.must(id);
+    // 3.8.3: what this turn may do because the user's own words asked for it: a task's comes from the scheduler (the
+    // request it came from); a chat's, from the message the user typed now (a turn Orb sends by itself keeps the last).
+    if (Array.isArray(asked)) this.asked.set(id, asked);
+    else if (showUser && s.kind !== 'task') this.asked.set(id, askedByUser(text));
     if (this.running.has(id)) throw new Error(tr('msg.sessions.stillWorking'));
     if (!String(text ?? '').trim() && !images.length) throw new Error(tr('msg.sessions.writeMessage'));
     // 3.8.1: its project is being deleted (project-close.mjs): no new turn in a folder that is going away.
@@ -651,7 +670,7 @@ export class Sessions {
     const other = agent && agent !== s.agent ? agent : null;
     const a = adapter(other ?? s.agent);
     // 3.8.2: what was given with the master password stays with the original (D5: also «total» of a project's chat).
-    const copy = this.create({ kind: 'chat', agent: other ?? s.agent, account: other ? null : s.account, model: other ? null : s.model, reasoning: other && s.reasoning === 'xhigh' ? 'high' : s.reasoning, permission: s.permission !== 'total' ? s.permission : s.project ? 'editar' : 'leer',
+    const copy = this.create({ kind: 'chat', agent: other ?? s.agent, account: other ? null : s.account, model: other ? null : s.model, reasoning: other && s.reasoning === 'xhigh' ? 'high' : s.reasoning, permission: s.permission !== 'total' ? s.permission : s.project ? permissionOfAutonomy(globalAutonomy()) : 'leer',
       project: s.project, cwd: s.cwd, title: title || (other ? tr('msg.sessions.switchTitle', { title: s.title, agent: AGENT_LABELS[other] ?? other }) : tr('msg.sessions.forkTitle', { title: s.title })), parentId: s.id });
     this.board.run('UPDATE sessions SET titled = 1 WHERE id = ?', copy.id); // 3.2: its title stays (not renamed by its next message)
     const old = this.board.all("SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT 40", s.id).reverse();
@@ -661,4 +680,18 @@ export class Sessions {
     else if (old.length) this.board.settingJson(`fork_summary:${copy.id}`, old.map((it) => `${it.role === 'user' ? 'Usuario' : 'Agente'}: ${oneLine(bodyText(parseItem(it).body), 400)}`).join('\n'));
     return copy;
   }
+}
+
+// 3.8.3: «Auto» arrives on in an install that already had chats, once: the chats with a project that were at «Editar
+// archivos» (the old default) move to «Auto» like the new ones, and one notice says so and how to go back (one click under
+// the chat's box, or Ajustes › Agentes for everything). A chat the owner had set to «Preguntar antes», «Solo lectura» or
+// «Revisar y probar» keeps it. Nothing changes when the owner already chose «Preguntar» for everything.
+export function adoptAuto(board) {
+  if (board.setting('auto_mode_383')) return 0;
+  board.setting('auto_mode_383', new Date().toISOString());
+  if (globalAutonomy() !== 'auto') return 0;
+  const old = board.one('SELECT COUNT(*) AS n FROM sessions').n + board.one('SELECT COUNT(*) AS n FROM tasks').n;
+  const moved = board.run("UPDATE sessions SET permission = 'auto' WHERE kind = 'chat' AND project IS NOT NULL AND permission = 'editar'").changes;
+  if (old) board.notice(tr('msg.auto.notice'), 'info');
+  return moved;
 }

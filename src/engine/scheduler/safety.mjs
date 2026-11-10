@@ -8,6 +8,19 @@ import { git, REF_PREFIX } from '../../platform/git.mjs';
 import { takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit } from '../../domain/tasks/checkpoints.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { remotesOf } from './common.mjs';
+import { autonomyOf } from '../../domain/security/guard.mjs';
+
+// 3.8.3: folders a build or a package manager makes again by itself: deleting them is never what holds a task back.
+export const GENERATED = /(^|\/)(node_modules|dist|build|out|target|\.gradle|\.dart_tool|\.next|\.nuxt|\.svelte-kit|\.turbo|\.cache|\.vite|\.parcel-cache|\.expo|coverage|\.venv|venv|__pycache__|\.pytest_cache|\.mypy_cache|Pods|DerivedData|(bin|obj)\/(Debug|Release))(\/|$)/i;
+// 3.8.3: when a task's deletions hold it for the user's review. paths: what it deleted; total: the project's files before
+// it (both without generated folders). «Auto» (owner's decision): more than 50 files or more than a quarter of the
+// project; «Preguntar»: 10 or more, as before. → { held, deleted, total, share } (share: true when the quarter decided).
+export function deletionHold(paths, total, autonomy) {
+  const deleted = paths.filter((p) => !GENERATED.test(p)).length;
+  if (autonomy !== 'auto') return { held: deleted >= 10, deleted, total, share: false };
+  const byShare = total > 0 && deleted / total > 0.25;
+  return { held: deleted > 50 || byShare, deleted, total, share: byShare && deleted <= 50 };
+}
 
 export class SafetyPart {
   // ---- "carpeta" mode: checkpoint before, so the user can undo exactly what the task changed.
@@ -70,8 +83,11 @@ export class SafetyPart {
     const changed = changedBetween(cp.before.repo, cp.before.commit, snap.commit);
     this.board.event(task.id, 'orb', 'files.changed', changed.length ? changed.slice(0, 60).map((c) => `${c.status} ${c.path}`).join(', ') + (changed.length > 60 ? ` … y ${changed.length - 60} más` : '') : 'ningún archivo');
     if (cp.remotes != null && remotesOf(cp.before.repo) !== cp.remotes) reasons.push(tr('msg.scheduler.safetyRemote'));
-    const deleted = changed.filter((c) => c.status === 'D').length;
-    if (deleted >= 10) reasons.push(tr('msg.scheduler.safetyDeleted', { deleted }));
+    const gone = changed.filter((c) => c.status === 'D').map((c) => c.path);
+    const autonomy = task.readonly ? 'preguntar' : autonomyOf(task);
+    const before = autonomy === 'auto' && gone.length ? git(cp.before.repo, 'ls-tree', '-r', '--name-only', cp.before.commit).stdout.split('\n').filter((p) => p && !GENERATED.test(p)).length : 0;
+    const hold = deletionHold(gone, before, autonomy);
+    if (hold.held) reasons.push(hold.share ? tr('msg.scheduler.safetyDeletedShare', { deleted: hold.deleted, total: hold.total, pct: Math.round((hold.deleted / hold.total) * 100) }) : tr('msg.scheduler.safetyDeleted', { deleted: hold.deleted }));
     // 3.1/3.2.1: a read-only task that runs the tests or the build may leave new outputs (reports, builds) in a build
     // folder: those do not count, but creating or changing any other file does (it should not have written anything).
     const BUILD = /(^|\/)(dist|build|out|coverage|\.vite|\.next|\.turbo|\.cache|node_modules)(\/|$)/i;

@@ -124,6 +124,7 @@
   "models.catalog": "remote",
   "models.guide": "remote",
   "music.track": "pc",
+  "permissions.setMode": "remote",
   "projects.branch": "remote",
   "projects.clearIcon": "pc",
   "projects.clone": "pc",
@@ -337,6 +338,7 @@
   "orchestrator.reasoning",
   "orchestrator.renewAt",
   "perAgent",
+  "permissions.mode",
   "policy.banned",
   "policy.fast",
   "policy.highNeedsApproval",
@@ -424,7 +426,7 @@
   "table sessions: CREATE TABLE sessions ( id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('chat', 'task')), agent TEXT NOT NULL, model TEXT, reasoning TEXT, permission TEXT NOT NULL DEFAULT 'editar', project TEXT, cwd TEXT NOT NULL, task_id INTEGER, account TEXT, title TEXT NOT NULL, cli_session TEXT, status TEXT NOT NULL DEFAULT 'idle', archived INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL , titled INTEGER NOT NULL DEFAULT 0, context TEXT, settled INTEGER NOT NULL DEFAULT 0, parent_id TEXT, android INTEGER NOT NULL DEFAULT 0)",
   "table settings: CREATE TABLE settings ( key TEXT PRIMARY KEY, value TEXT NOT NULL )",
   "table sqlite_sequence: CREATE TABLE sqlite_sequence(name,seq)",
-  "table tasks: CREATE TABLE tasks ( id INTEGER PRIMARY KEY AUTOINCREMENT, project TEXT NOT NULL, title TEXT NOT NULL, description TEXT NOT NULL, agent TEXT NOT NULL DEFAULT 'any', model TEXT, reasoning TEXT CHECK (reasoning IN ('low', 'medium', 'high', 'xhigh')), fast INTEGER CHECK (fast IN (0, 1)), launch TEXT NOT NULL DEFAULT 'auto', priority INTEGER NOT NULL DEFAULT 2, depends_on TEXT NOT NULL DEFAULT '[]', sensitivity TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL, approved_by TEXT, approval_hash TEXT, approval_sig TEXT, created_by TEXT NOT NULL, assigned_to TEXT, branch TEXT, workdir TEXT, project_path TEXT, mode TEXT NOT NULL DEFAULT 'carpeta', readonly INTEGER NOT NULL DEFAULT 0, pid INTEGER, session_id TEXT, account TEXT, run_account TEXT, result TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL , parent_id INTEGER, limited_until TEXT, review_of INTEGER, schedule_id INTEGER, level TEXT, conversation_id INTEGER, claimed_session TEXT)",
+  "table tasks: CREATE TABLE tasks ( id INTEGER PRIMARY KEY AUTOINCREMENT, project TEXT NOT NULL, title TEXT NOT NULL, description TEXT NOT NULL, agent TEXT NOT NULL DEFAULT 'any', model TEXT, reasoning TEXT CHECK (reasoning IN ('low', 'medium', 'high', 'xhigh')), fast INTEGER CHECK (fast IN (0, 1)), launch TEXT NOT NULL DEFAULT 'auto', priority INTEGER NOT NULL DEFAULT 2, depends_on TEXT NOT NULL DEFAULT '[]', sensitivity TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL, approved_by TEXT, approval_hash TEXT, approval_sig TEXT, created_by TEXT NOT NULL, assigned_to TEXT, branch TEXT, workdir TEXT, project_path TEXT, mode TEXT NOT NULL DEFAULT 'carpeta', readonly INTEGER NOT NULL DEFAULT 0, pid INTEGER, session_id TEXT, account TEXT, run_account TEXT, result TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL , parent_id INTEGER, limited_until TEXT, review_of INTEGER, schedule_id INTEGER, level TEXT, autonomy TEXT, user_asked TEXT, conversation_id INTEGER, claimed_session TEXT)",
   "table usage_ledger: CREATE TABLE usage_ledger ( id INTEGER PRIMARY KEY, at TEXT, day TEXT, person_id TEXT, account_id TEXT, bot_id INTEGER, conversation_id INTEGER, session_id TEXT, task_id INTEGER, turns INTEGER, tokens_in INTEGER, tokens_out INTEGER, usd REAL )"
  ]
 }

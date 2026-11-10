@@ -144,7 +144,9 @@ export const nativeSkills = true;
 
 // 3.8.2: «total» is no longer bypassPermissions (which never calls canUseTool, so Orb's guard did not run): Claude asks
 // for what it would ask in «default» and the guard allows all but the protected set (src/domain/security/guard.mjs).
-export const permissionModeOf = (p) => (p === 'editar' ? 'acceptEdits' : 'default');
+// 3.8.3: «Auto» too: Claude Code accepts edits inside its folder by itself; anything else (commands, writes outside it)
+// still reaches canUseTool, so Orb's guard decides.
+export const permissionModeOf = (p) => (p === 'editar' || p === 'auto' ? 'acceptEdits' : 'default');
 
 // 3.8.3: Orb's own tools always in the prompt (Claude Code's alwaysLoad), never behind its tool search: Orbe reported
 // spending three steps fetching orb_* tools before each use. The other servers (the user's connectors) stay deferrable.
@@ -173,7 +175,9 @@ export function createLive(o) {
     const paths = [toolInput?.file_path, toolInput?.path, toolInput?.notebook_path].filter(Boolean);
     // Glob and Grep patterns are checked too (where they reach).
     const patterns = [toolInput?.pattern, toolInput?.glob].filter((x) => typeof x === 'string' && x);
-    const verdict = decide({ permission, tool: toolName, command, paths, patterns: toolName === 'Grep' ? patterns.slice(1) : patterns, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()) });
+    const verdict = decide({ permission, tool: toolName, command, paths, patterns: toolName === 'Grep' ? patterns.slice(1) : patterns, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()), projectDir: o.projectDir, userAsked: o.userAsked?.() ?? [] });
+    // 3.8.3: what «Auto» lets through that «Preguntar» would have asked is said in the chat (one quiet line).
+    if (verdict.auto) onEvent({ type: 'auto', title: typeof toolInput?.description === 'string' && toolInput.description.trim() ? toolInput.description : describeAction({ tool: toolName, command, paths, lang: o.lang }), reason: verdict.reason });
     if (verdict.decision === 'allow') return { behavior: 'allow', updatedInput: toolInput };
     if (verdict.decision === 'deny') return { behavior: 'deny', message: `Orb no lo permite: ${verdict.reason}.` };
     // 3.1: summary: what the agent itself says the command is for (Claude's Bash tool asks it for a description).

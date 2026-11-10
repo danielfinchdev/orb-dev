@@ -20,6 +20,8 @@ export const STATE_KEYS = Object.freeze({
     'extension_requests', 'extension_edits', 'connector_rebinds', 'pending_questions', 'projects_ignored', 'projects_finished',
     'projects_deleting', 'migrated_3_8', 'migrated_3_8_at', 'migrated_3_8_notice', 'migrated_3_8_scrubbed', 'migrated_3_8_files',
     'migrated_3_8_config',
+    // 3.8.3: «Auto» turned on for this install once (src/engine/sessions.mjs › adoptAuto)
+    'auto_mode_383',
   ]),
   prefixes: Object.freeze({
     // a task's (by its id)

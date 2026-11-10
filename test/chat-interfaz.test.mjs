@@ -20,7 +20,8 @@ import { cutWords } from '../src/ui/lib/text.js';
 import { pickGreeting, suggestionsFor } from '../src/ui/lib/greeting.js';
 import { createT } from '../src/shared/i18n.mjs';
 
-const home = tempHome();
+// 3.8.3: these cases check «Preguntar» (the keyword net and its approvals); «Auto» is test/modo-auto.test.mjs.
+const home = tempHome({ permissions: { mode: 'preguntar' } });
 after(() => home.cleanup());
 const tick = () => new Promise((r) => setImmediate(r));
 

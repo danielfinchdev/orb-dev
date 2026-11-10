@@ -21,7 +21,7 @@ import { cutWords, agentAuthor, changedFiles, logDirect } from '../src/domain/jo
 
 const GHP = `ghp_${'a1B2c3D4e5'.repeat(4)}`;
 let t; let board;
-before(() => { t = tempHome(); board = new Board(); });
+before(() => { t = tempHome({ permissions: { mode: 'preguntar' } }); board = new Board(); });
 after(() => { try { board.db.close(); } catch { /* closed */ } t.cleanup(); });
 
 test('60: los secretos se buscan también por contenido, y los *.env por nombre', () => {
