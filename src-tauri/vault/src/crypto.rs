@@ -73,14 +73,14 @@ pub fn key_id(dek: &[u8]) -> String {
 pub fn check_of(kek: &[u8]) -> [u8; 32] {
   hmac(kek, b"orb-master-check-v1")
 }
-/// The key that signs approvals, made from this PC's secret (src/core/machine-keys.mjs › approvalKeyOf).
+/// The key that signs approvals, made from this PC's secret (src/platform/keys.mjs › approvalKeyOf).
 pub fn approval_key(secret: &[u8]) -> Locked {
   let mut k = hmac(secret, b"orb-approval-v2");
   let out = Locked::from_slice(&k);
   zeroize::Zeroize::zeroize(&mut k);
   out
 }
-/// The key that wraps this PC's backups and its recovery wrap (src/core/machine-keys.mjs › backupKeyOf).
+/// The key that wraps this PC's backups and its recovery wrap (src/platform/keys.mjs › backupKeyOf).
 pub fn backup_key(secret: &[u8]) -> Locked {
   let mut out = Locked::zeroed(32);
   Hkdf::<Sha256>::new(Some(b"orb-backup"), secret).expand(b"machine-v1", out.as_mut_slice()).expect("32 bytes");

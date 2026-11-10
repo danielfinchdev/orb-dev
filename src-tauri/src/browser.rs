@@ -438,6 +438,12 @@ mod imp {
       let _ = post(Box::new(move || {
         if let Some(f) = PENDING.with(|p| p.borrow_mut().remove(&id)) {
           f.call(Err("navegador: tiempo agotado al abrir".into()));
+          // Nobody else waits and the environment is still being made: it never answered (a locked data folder, a
+          // broken runtime). Forgotten, so the next page tries again instead of queueing behind it for ever.
+          let stuck = PENDING.with(|p| p.borrow().is_empty()) && ENV.with(|e| matches!(*e.borrow(), Env::Creating(_)));
+          if stuck {
+            env_done(Err("navegador: el entorno no respondió".into()));
+          }
         }
       }));
     });

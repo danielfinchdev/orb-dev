@@ -121,8 +121,14 @@ fn write_json(file: &Path, value: &Value) -> std::io::Result<()> {
   }
   let tmp = PathBuf::from(format!("{}.{}.tmp", file.display(), std::process::id()));
   let text = format!("{}\n", serde_json::to_string_pretty(value).unwrap_or_default());
-  std::fs::write(&tmp, text)?;
-  std::fs::rename(&tmp, file).inspect_err(|_| drop(std::fs::remove_file(&tmp)))
+  // Written and flushed before it takes the old file's place: a power cut never leaves an empty or half-written vault.
+  let written = (|| {
+    use std::io::Write;
+    let mut f = std::fs::File::create(&tmp)?;
+    f.write_all(text.as_bytes())?;
+    f.sync_all()
+  })();
+  written.and_then(|_| std::fs::rename(&tmp, file)).inspect_err(|_| drop(std::fs::remove_file(&tmp)))
 }
 fn wrapped(v: &Option<Value>) -> Option<&str> {
   v.as_ref()?.get("wrapped")?.as_str().filter(|s| !s.is_empty())
@@ -345,8 +351,12 @@ impl Vault {
   pub fn items(&mut self) -> Result<Items, Code> {
     let dek = self.dek.as_ref().ok_or(Code::Locked)?;
     if matches!(self.cache, Cache::Unread) {
-      self.cache = match read_json(&self.file(VAULT)).and_then(|v| str_of(&v, "box").filter(|b| !b.is_empty()).map(String::from)) {
+      let file = self.file(VAULT);
+      self.cache = match read_json(&file).and_then(|v| str_of(&v, "box").filter(|b| !b.is_empty()).map(String::from)) {
         Some(b) => Cache::Sealed(b),
+        // 3.8.3 (repaso): a file that is there but cannot be read (cut short, not JSON, no box) is damaged, not empty:
+        // taken for empty, the next write replaced every secret with a fresh empty box.
+        None if std::fs::metadata(&file).is_ok() => return Err(Code::Damaged),
         None => Cache::Empty,
       };
     }
@@ -624,6 +634,27 @@ impl Vault {
 #[cfg(test)]
 mod tests {
   use super::*;
+  #[test]
+  fn an_unreadable_vault_file_is_damaged_not_empty() {
+    let dir = std::env::temp_dir().join(format!("orb-vault-roto-{}-{}", std::process::id(), b64url(crypto::random(4).as_slice())));
+    let mut v = Vault::new(dir.clone(), None, Costs { test: true });
+    assert_eq!(v.open_with_machine(), Ok(true), "a fresh workspace gets a key");
+    v.set("github", json!({ "token": "x" })).unwrap();
+    let file = v.file(VAULT);
+    let good = std::fs::read(&file).unwrap();
+    std::fs::write(&file, &good[..good.len() / 2]).unwrap(); // cut short by a crash
+    v.cache = Cache::Unread;
+    assert!(matches!(v.items(), Err(Code::Damaged)));
+    assert!(matches!(v.set("otro", json!(1)), Err(Code::Damaged)), "nothing is written over it");
+    assert_eq!(std::fs::read(&file).unwrap(), &good[..good.len() / 2], "the file is left for the user");
+    std::fs::write(&file, &good).unwrap();
+    v.cache = Cache::Unread;
+    assert_eq!(v.get("github").unwrap()["token"], "x");
+    std::fs::remove_file(&file).unwrap();
+    v.cache = Cache::Unread;
+    assert!(v.items().unwrap().0.is_empty(), "no file at all is empty");
+    let _ = std::fs::remove_dir_all(&dir);
+  }
   #[test]
   fn dates_like_javascript() {
     assert_eq!(iso(Date::parse("2026-11-07T10:00:00.000Z")), "2026-11-07T10:00:00.000Z");

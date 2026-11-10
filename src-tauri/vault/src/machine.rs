@@ -552,7 +552,7 @@ mod tests {
     fs::remove_dir_all(k.base.join("core")).unwrap();
     assert_eq!(hex(&load(&k.dir, &k.copy, &ok(), false).unwrap()), s, "core deleted: the copy outside brings it back");
     assert_eq!(read(&k.enc2()), format!("ORB2{s}"));
-    // The keys the engine gets, as Node made them (src/core/machine-keys.mjs; vectors from Node's crypto).
+    // The keys the engine gets, as Node made them (src/platform/keys.mjs; vectors from Node's crypto).
     let one = Locked::from_slice(&[1u8; 32]);
     assert_eq!(crypto::b64(crypto::approval_key(one.as_slice()).as_slice()), "1eT6E7LGzx0Tt52NY7o7WxB0F1x62JosMHVCdAoVuBQ=");
     assert_eq!(crypto::b64(crypto::backup_key(one.as_slice()).as_slice()), "M/PB84cc6NvkNWcInMGjTOtymMK73IJ2hq4H1SKkvOU=");

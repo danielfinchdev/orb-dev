@@ -213,7 +213,13 @@ pub fn shrink_event(method: &str, json: &str) -> Option<Value> {
   let limit = if method == "Page.screencastFrame" { MAX_FRAME * 14 / 10 + 4096 } else { MAX_EVENT_JSON };
   if json.len() > limit {
     // Too big to read: of the console only that there was an error (its level is the first field CDP writes).
-    let head = &json[..json.len().min(256)];
+    // Cut at a character boundary: byte 256 may be inside a multibyte character of the page's own text, and a panic
+    // here unwinds through a WebView2 callback (an abort of Orb).
+    let mut end = json.len().min(256);
+    while !json.is_char_boundary(end) {
+      end -= 1;
+    }
+    let head = &json[..end];
     let level = ["error", "assert", "warning"].into_iter().find(|l| head.contains(&format!("\"type\":\"{l}\"")) || head.contains(&format!("\"level\":\"{l}\"")));
     return match (method, level) {
       ("Runtime.consoleAPICalled", Some(l)) => Some(json!({ "type": l, "args": [{ "value": format!("(mensaje de {} KB, no leído)", json.len() / 1024) }] })),
@@ -508,6 +514,11 @@ mod tests {
     assert_eq!(e["type"], "error");
     assert!(e["args"][0]["value"].as_str().unwrap().contains("no leído"));
     assert_eq!(shrink_event("Runtime.consoleAPICalled", &big.replacen("error", "log", 1)), None);
+    // A page's own text with multibyte characters around byte 256: cut at a character, never a panic (3.8.3 repaso).
+    for pad in 0..4 {
+      let wide = format!(r#"{{"type":"error","args":[{{"type":"string","value":"{}{}"}}]}}"#, "x".repeat(pad), "ñ".repeat(MAX_EVENT_JSON));
+      assert_eq!(shrink_event("Runtime.consoleAPICalled", &wide).unwrap()["type"], "error");
+    }
     assert_eq!(shrink_event("Page.navigatedWithinDocument", &format!(r#"{{"frameId":"F","url":"https://a/{}"}}"#, "x".repeat(MAX_EVENT_JSON))), None);
     // Read: only what the driver uses, texts and addresses cut.
     let e = shrink_event("Runtime.consoleAPICalled", &json!({ "type": "warning", "args": [{ "value": "a".repeat(5000) }, { "description": "Error: b" }], "stackTrace": { "callFrames": [{ "url": format!("https://x/{}", "u".repeat(5000)), "lineNumber": 4, "secret": 1 }] }, "executionContextId": 9 }).to_string()).unwrap();

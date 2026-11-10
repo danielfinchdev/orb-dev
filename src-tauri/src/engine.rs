@@ -288,6 +288,16 @@ impl Engine {
     let id = self.next.fetch_add(1, Ordering::SeqCst) + 1;
     let (tx, rx) = oneshot::channel();
     self.pending.lock().unwrap().insert(id, tx);
+    // Whatever way this future ends (an answer, its own timeout, or dropped by call()'s outer timeout), its entry goes.
+    struct Unpend<'a>(&'a Mutex<HashMap<u64, oneshot::Sender<Reply>>>, u64);
+    impl Drop for Unpend<'_> {
+      fn drop(&mut self) {
+        if let Ok(mut p) = self.0.lock() {
+          p.remove(&self.1);
+        }
+      }
+    }
+    let _unpend = Unpend(&self.pending, id);
     let mut message = match fields {
       Value::Object(m) => m,
       _ => Map::new(),
