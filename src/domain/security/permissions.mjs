@@ -105,7 +105,9 @@ export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.v
 // projects.delete and projects.deleteAbort need no token: they take the one-off ticket projects.deleteCheck returned
 // (project-close.mjs), so a token that expires while the Recycle Bin works never leaves a delete half-way.
 // 3.8.2 (D1, D2): «Acceso total al PC» and «Usar mi móvil Android», given to a chat.
-export const FRESH_UNLOCK = Object.freeze({ 'projects.deleteCheck': 'deleteProject', 'sessions.grantTotal': 'fullAccess', 'sessions.grantAndroid': 'android' });
+// 3.8.3 (owner's decision): «Acceso total» and «Usar mi móvil Android» take the usual 5-minute unlock (UNLOCK_METHODS), not
+// the password every time; they still go when Orb locks (src/engine/security/grants.mjs).
+export const FRESH_UNLOCK = Object.freeze({ 'projects.deleteCheck': 'deleteProject' });
 // 3.8.2 (security review): a secret an agent asked for, saved in the vault or taken from it, asks every time too (its
 // token is for that one action); the purpose depends on what the card does.
 export const SECRET_PURPOSES = Object.freeze({ save: 'secretSave', saved: 'secretSaved' });

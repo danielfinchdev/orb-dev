@@ -100,10 +100,12 @@ test('navegador de los agentes (D8): no abre direcciones de «Elementos protegid
   assert.doesNotMatch(fs.readFileSync(new URL('../src/agents/claude.mjs', import.meta.url), 'utf8'), /chrome: null/);
 });
 
-test('permisos: dar acceso total o el móvil pide la contraseña cada vez, solo desde este PC', () => {
+// 3.8.3 (owner's decision): the usual 5-minute unlock is enough for «Acceso total» and the phone (no password every time).
+test('permisos: dar acceso total o el móvil pide la contraseña maestra (el desbloqueo de 5 minutos), solo desde este PC', () => {
   for (const m of ['sessions.grantTotal', 'sessions.grantAndroid', 'sessions.revokeGrant', 'android.pairStart', 'android.pairCode', 'android.devices']) assert.equal(METHODS[m], 'pc', m);
-  assert.equal(FRESH_UNLOCK['sessions.grantTotal'], 'fullAccess');
-  assert.equal(FRESH_UNLOCK['sessions.grantAndroid'], 'android');
+  assert.equal(FRESH_UNLOCK['sessions.grantTotal'], undefined);
+  assert.equal(FRESH_UNLOCK['sessions.grantAndroid'], undefined);
+  assert.ok(needsUnlock('sessions.grantTotal', {}) && needsUnlock('sessions.grantAndroid', {}));
   assert.ok(needsUnlock('android.pairStart', {}) && needsUnlock('android.pairCode', {}));
   assert.equal(needsUnlock('sessions.revokeGrant', {}), false, 'retirarlo no pide nada');
   assert.ok(androidAllowed({ kind: 'chat', android: true, permission: 'editar', project: 'web' }));
@@ -114,7 +116,7 @@ test('permisos: dar acceso total o el móvil pide la contraseña cada vez, solo 
   assert.ok(shellAllowed({ kind: 'chat', android: true, permission: 'total', project: 'web' }));
 });
 
-test('acceso total y móvil: contraseña cada vez, se guardan al reiniciar, se pierden al bloquear y quedan en el registro', async () => {
+test('acceso total y móvil: con la contraseña (5 min), se guardan al reiniciar, se pierden al bloquear y quedan en el registro', async () => {
   const t = tempHome();
   let e = await startEngine(t.home);
   const PASS = 'una frase larga de prueba';
@@ -124,21 +126,19 @@ test('acceso total y móvil: contraseña cada vez, se guardan al reiniciar, se p
     assert.equal(s.permission, 'leer');
     await assert.rejects(e.call('sessions.grantTotal', { id: s.id }), /contraseña maestra/);
     const { unlock } = await e.call('master.create', { password: PASS });
-    await assert.rejects(e.call('sessions.grantTotal', { id: s.id, unlock }), /contraseña maestra/, 'un desbloqueo de otra acción no vale');
     await assert.rejects(e.call('sessions.update', { id: s.id, permission: 'total' }), /./, 'no por la puerta de los permisos');
-    const fresh = (await e.call('master.unlock', { password: PASS, purpose: 'fullAccess' })).unlock;
-    assert.equal((await e.call('sessions.grantTotal', { id: s.id, unlock: fresh })).permission, 'total');
-    await assert.rejects(e.call('sessions.grantTotal', { id: s.id, unlock: fresh }), /contraseña maestra/, 'un token, una vez');
+    await assert.rejects(e.call('sessions.grantTotal', { id: s.id, unlock: 'falso' }), /contraseña maestra/, 'un desbloqueo falso no vale');
+    assert.equal((await e.call('sessions.grantTotal', { id: s.id, unlock })).permission, 'total', 'el desbloqueo de 5 minutos basta');
     const p = await e.call('sessions.create', { agent: 'claude', project: 'web' });
-    const fresh2 = (await e.call('master.unlock', { password: PASS, purpose: 'fullAccess' })).unlock;
+    const fresh2 = unlock; // the same 5-minute unlock
     // 3.8.2 (D5): a project's chat gets «Acceso total» the same way (never by sessions.update or at creation).
     await e.call('sessions.update', { id: p.id, permission: 'probar' });
     await assert.rejects(e.call('sessions.update', { id: p.id, permission: 'total' }), /contraseña maestra/);
     await assert.rejects(e.call('sessions.create', { agent: 'claude', project: 'web', permission: 'total' }), /contraseña maestra/);
     assert.equal((await e.call('sessions.grantTotal', { id: p.id, unlock: fresh2 })).permission, 'total');
     await assert.rejects(e.call('sessions.update', { id: p.id, permission: 'editar' }), /contraseña maestra/, 'salir de total, solo retirándolo');
-    assert.equal((await e.call('sessions.fork', { id: p.id })).permission, 'editar', 'la copia no lo hereda');
-    const fresh3 = (await e.call('master.unlock', { password: PASS, purpose: 'android' })).unlock;
+    assert.equal((await e.call('sessions.fork', { id: p.id })).permission, 'auto', 'la copia no lo hereda (vuelve al nivel de todos: Auto)');
+    const fresh3 = (await e.call('master.unlock', { password: PASS })).unlock;
     assert.equal((await e.call('sessions.grantAndroid', { id: p.id, unlock: fresh3 })).android, true, 'el móvil, en cualquier chat');
     // A copy of the chat does not take what the password gave.
     const copy = await e.call('sessions.fork', { id: s.id });
@@ -158,7 +158,7 @@ test('acceso total y móvil: contraseña cada vez, se guardan al reiniciar, se p
     const items = await e.call('sessions.items', { id: s.id });
     assert.ok(items.some((i) => /Acceso total retirado/.test(typeof i.body === 'string' ? i.body : '')), 'se dice en el chat');
     // Taking it back by hand needs nothing, and is said too.
-    const fresh4 = (await e.call('master.unlock', { password: PASS, purpose: 'android' })).unlock;
+    const fresh4 = (await e.call('master.unlock', { password: PASS })).unlock;
     await e.call('sessions.grantAndroid', { id: p.id, unlock: fresh4 });
     assert.equal((await e.call('sessions.revokeGrant', { id: p.id, grant: 'android' })).android, false);
     const log = fs.readFileSync(path.join(t.home, 'core', 'ejecuciones', 'motor.log'), 'utf8');

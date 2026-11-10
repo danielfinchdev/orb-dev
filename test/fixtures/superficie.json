@@ -234,9 +234,7 @@
   "sessions.grantTotal"
  ],
  "freshUnlock": {
-  "projects.deleteCheck": "deleteProject",
-  "sessions.grantTotal": "fullAccess",
-  "sessions.grantAndroid": "android"
+  "projects.deleteCheck": "deleteProject"
  },
  "protocol": {
   "PROTOCOL": 4,
