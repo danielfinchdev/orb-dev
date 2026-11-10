@@ -133,9 +133,9 @@ export function TypingMarkdown({ text, done = false, tail = null, start = null, 
 
 // The saved answer of the assistant or an agent. Just after its live answer was typed on screen, it goes on typing from
 // where that one was (quickly: the turn has ended); otherwise (history, a reload, a chat opened later) drawn whole.
-export const TypedMarkdown = memo(function TypedMarkdown({ children, className }) {
+export const TypedMarkdown = memo(function TypedMarkdown({ children, className, tail }) {
   const body = String(children ?? '');
-  const [from] = useState(() => takeShown(body));
+  const [from] = useState(() => takeShown(body, tail));
   if (!from) return <Markdown className={className}>{body}</Markdown>;
   return <TypingMarkdown text={body} done start={from.start} tail={from.tail} className={className} />;
 });
@@ -143,6 +143,7 @@ export const TypedMarkdown = memo(function TypedMarkdown({ children, className }
 // Screen readers: one polite live region for the whole window; each block of an answer is read once, when it is whole
 // (the last one when the turn ends), as plain words.
 const announced = new Map(); // tail key → blocks already read
+const reading = new Map(); // tail key → how many answers on screen use it
 let region = null;
 function say(text) {
   if (typeof document === 'undefined' || !text) return;
@@ -152,6 +153,14 @@ function say(text) {
 }
 const plainWords = (md) => md.replace(/^ {0,3}(`{3,}|~{3,}).*$/gm, '').replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_~`#>|]+/g, ' ').replace(/\s+/g, ' ').trim();
 function useAnnounce(tail, blocks, complete) {
+  // A live answer that never completes (its saved message did not take its place) must not leave its count behind, or
+  // the next answer of that chat would skip its first blocks for screen readers. The saved message mounts in the same
+  // commit as the live one unmounts, so the count is only dropped once nobody uses the key any more.
+  useEffect(() => {
+    if (tail == null) return undefined;
+    reading.set(tail, (reading.get(tail) ?? 0) + 1);
+    return () => { const n = (reading.get(tail) ?? 1) - 1; if (n > 0) reading.set(tail, n); else { reading.delete(tail); setTimeout(() => { if (!reading.has(tail)) announced.delete(tail); }, 1000); } };
+  }, [tail]);
   useEffect(() => {
     if (tail == null || !blocks) return;
     const whole = complete ? blocks.length : blocks.length - 1;

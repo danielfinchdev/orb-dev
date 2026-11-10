@@ -102,6 +102,9 @@ export function createReveal({ reduced = false, start = 0 } = {}) {
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 const cells = (line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').length;
 const TABLE_RULE = /^ {0,3}\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
+const RICH_FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*(mermaid|math)\b/i;
+const MATH_FENCE = /^ {0,3}\$\$\s*$/;
+const BLOCK_MARK = /^ {0,3}(#{1,6}|[-*+]|\d+[.)]|>|--)\s*$/;
 export function safeMarkdown(text, complete = false) {
   if (complete || !text) return text;
   const lines = text.split('\n');
@@ -112,8 +115,20 @@ export function safeMarkdown(text, complete = false) {
     if (fence) { if (f && f[1][0] === fence[0] && f[1].length >= fence.length && !lines[i].slice(f[0].length).trim()) fence = null; }
     else if (f) { fence = f[1]; fenceLine = i; }
   }
-  if (fence) return fenceLine === lines.length - 1 ? lines.slice(0, -1).join('\n') : text;
+  if (fence) {
+    if (fenceLine === lines.length - 1) return lines.slice(0, -1).join('\n');
+    // A diagram or a formula still being written is plain code until its fence closes: drawing it (mermaid, KaTeX)
+    // on every frame with a half-written source is heavy main-thread work for a picture that is wrong anyway.
+    if (RICH_FENCE.test(lines[fenceLine])) { lines[fenceLine] = lines[fenceLine].match(FENCE)[0]; return lines.join('\n'); }
+    return text;
+  }
+  // A `$` block left open: the same, as code until it closes.
+  const dollars = lines.reduce((n, l, i) => (MATH_FENCE.test(l) ? [...n, i] : n), []);
+  if (dollars.length % 2) { lines[dollars[dollars.length - 1]] = '```'; return lines.join('\n'); }
   let last = lines[lines.length - 1];
+  // A block marker alone on the last line («#», «-», «1.», «>»): nothing to draw yet (an empty heading or list item would
+  // flash); it shows with its first word.
+  if (BLOCK_MARK.test(last)) return lines.slice(0, -1).join('\n');
   // A table at the end: its header waits for the line under it (which makes it a table); a row still being written is
   // drawn without its open cell.
   if (/^ {0,3}\|/.test(last)) {
@@ -138,6 +153,9 @@ export function safeMarkdown(text, complete = false) {
     // A mark at the very end (nothing after it yet) is just hidden.
     if (last.trimEnd().endsWith(mark)) last = last.trimEnd().slice(0, -mark.length).trimEnd(); else { last = last.trimEnd(); tail += mark; }
   }
+  // A single star (italics) left open, not one of a list («- item») or a bold pair: closed for now, as the bold.
+  const singles = (plain.replace(/\*\*/g, '').match(/(?<!^\s*)\*(?!\s)|(?<=\S)\*/g) ?? []).length;
+  if (singles % 2 && !/^ {0,3}\* /.test(last)) { if (last.trimEnd().endsWith('*')) last = last.trimEnd().slice(0, -1).trimEnd(); else tail = `*${tail}`; }
   lines[lines.length - 1] = last + tail;
   return lines.join('\n');
 }
@@ -170,13 +188,15 @@ export function onFrame(step) {
 // reload or the history are drawn whole. → { start, tail } or null.
 const tails = new Map(); // key → { text (shown), at }
 export function noteShown(key, text) { if (key != null) tails.set(key, { text, at: Date.now() }); }
-export function takeShown(body) {
+// key: the conversation's own key; only its tail is considered (a message of another chat that starts with the same
+// words must not go on typing from it, nor take its place from the live answer).
+export function takeShown(body, key) {
   const now = Date.now();
   const text = String(body ?? '');
-  for (const [key, tail] of tails) {
-    if (now - tail.at > 10000) { tails.delete(key); continue; }
-    if (!tail.text) continue;
-    if (text.startsWith(tail.text)) { tails.delete(key); return { start: tail.text.length, tail: key }; }
+  for (const [k, tail] of tails) {
+    if (now - tail.at > 10000) { tails.delete(k); continue; }
+    if (!tail.text || (key != null && k !== key)) continue;
+    if (text.startsWith(tail.text)) { tails.delete(k); return { start: tail.text.length, tail: k }; }
   }
   return null;
 }

@@ -128,3 +128,24 @@ test('el mensaje guardado sigue escribiendo desde donde iba el texto en vivo, so
   assert.deepEqual(takeShown('Hola, esto es la respuesta entera.'), { start: 13, tail: 'chat:7' });
   assert.equal(takeShown('Hola, esto es la respuesta entera.'), null, 'solo una vez (el historial y una recarga, enteros)');
 });
+
+// 3.8.3 (repaso): a diagram or formula is plain code until its fence closes (drawing a half-written one on every frame
+// was heavy main-thread work); single-star italics and a lone block marker do not flash; the hand-over is per chat.
+test('Markdown a medias (repaso): diagramas y fórmulas como código hasta cerrar; cursiva y marcas de bloque sin parpadeo', () => {
+  assert.equal(safeMarkdown('ver:\n```mermaid\ngraph TD; A-->B'), 'ver:\n```\ngraph TD; A-->B', 'un diagrama abierto es código sin lenguaje');
+  assert.equal(safeMarkdown('```mermaid\ngraph TD; A-->B\n```\nlisto'), '```mermaid\ngraph TD; A-->B\n```\nlisto', 'cerrado, se dibuja');
+  assert.equal(safeMarkdown('```math\nE = mc'), '```\nE = mc');
+  assert.equal(safeMarkdown('fórmula:\n$$\nE = mc^2'), 'fórmula:\n```\nE = mc^2', 'un $$ abierto, también');
+  assert.equal(safeMarkdown('$$\nE = mc^2\n$$\nvale'), '$$\nE = mc^2\n$$\nvale');
+  assert.equal(safeMarkdown('es *importan'), 'es *importan*');
+  assert.equal(safeMarkdown('es *'), 'es');
+  assert.equal(safeMarkdown('- item con *énfasis*'), '- item con *énfasis*', 'una lista con cursiva cerrada no cambia');
+  assert.equal(safeMarkdown('2 * 3 = 6'), '2 * 3 = 6', 'un asterisco con espacios es un asterisco');
+  assert.equal(safeMarkdown('Título:\n#'), 'Título:', 'una cabecera vacía no parpadea');
+  assert.equal(safeMarkdown('Lista:\n-'), 'Lista:'); assert.equal(safeMarkdown('Lista:\n1.'), 'Lista:'); assert.equal(safeMarkdown('cita:\n>'), 'cita:');
+  assert.equal(safeMarkdown('Lista:\n- uno'), 'Lista:\n- uno');
+  // The saved message of another chat that starts with the same words does not take this chat's place.
+  noteShown('chat:1', 'Perfecto,');
+  assert.equal(takeShown('Perfecto, ya está.', 'chat:2'), null);
+  assert.deepEqual(takeShown('Perfecto, ya está.', 'chat:1'), { start: 9, tail: 'chat:1' });
+});

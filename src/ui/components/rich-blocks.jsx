@@ -36,6 +36,7 @@ export function MermaidBlock({ code }) {
   useEffect(() => {
     let alive = true;
     const run = async () => {
+      if (!alive) return; // the block changed or went while this one waited its turn
       const mermaid = await loadMermaid();
       const theme = isDark() ? 'dark' : 'default';
       if (mermaidTheme !== theme) { mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme, fontFamily: 'inherit', htmlLabels: false, flowchart: { htmlLabels: false } }); mermaidTheme = theme; }

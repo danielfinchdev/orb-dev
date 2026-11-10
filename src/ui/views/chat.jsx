@@ -57,7 +57,7 @@ function useGreeting(project) {
 }
 
 // Memoised: the list (up to 120 lines) is not drawn again while the assistant streams its answer.
-const Message = memo(function Message({ m, name, onChanges }) {
+const Message = memo(function Message({ m, name, onChanges, tail }) {
   const t = useT();
   if (m.meta?.kind === 'question') return <QuestionCard m={m} />;
   // 2.7: for a big request, the assistant's advice to define it on the Pizarra, with the way there.
@@ -80,7 +80,7 @@ const Message = memo(function Message({ m, name, onChanges }) {
         <Robot size={32} still className="mt-0.5" />
         <div className="chat-glass min-w-0 flex-1">
           <div className="text-muted-foreground mb-1 text-xs">{name}</div>
-          <TypedMarkdown>{m.body}</TypedMarkdown>
+          <TypedMarkdown tail={tail}>{m.body}</TypedMarkdown>
           {report ? (
             <div className="chat-actions mt-2.5 flex flex-wrap items-center gap-2" data-testid="report-actions">
               {report.accepted ? <Badge variant="success"><Check />{t('chat.accepted', { ids: report.tasks.map((id) => `#${id}`).join(', ') })}</Badge> : (<>
@@ -301,12 +301,20 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const local = Boolean(bridge.mobile) && id == null;
   const defaults = { ...(app.assistant ?? {}), ...(local ? draft ?? {} : {}) };
   useEffect(() => { setRows([]); setOlder([]); setMore(false); }, [id]);
+  // The list: at once when the chat opens; a change elsewhere (`version` moves on every board change, several times a
+  // second while agents work) fetches it again a moment later, once per burst. Only the newest answer is kept.
+  const seq = useRef(0);
+  const fetchList = useCallback(() => {
+    const my = ++seq.current;
+    call('chat.list', { conversation: id }).then((r) => { if (my === seq.current && getState().route?.id === id) { setRows((prev) => keepSame(prev, r)); setMore(r.length >= 160); } }).catch(() => {});
+  }, [id]);
+  useEffect(() => { seq.current++; if (id != null) fetchList(); }, [id, fetchList]);
+  const firstVersion = useRef(version);
   useEffect(() => {
-    if (id == null) return undefined;
-    let alive = true;
-    call('chat.list', { conversation: id }).then((r) => { if (alive) { setRows((prev) => keepSame(prev, r)); setMore(r.length >= 160); } }).catch(() => {});
-    return () => { alive = false; };
-  }, [id, version]);
+    if (id == null || version === firstVersion.current) return undefined;
+    const h = setTimeout(fetchList, 250);
+    return () => clearTimeout(h);
+  }, [id, version, fetchList]);
   // A long conversation shows its last 160 lines; the earlier ones, on request.
   const [older, setOlder] = useState([]);
   const [more, setMore] = useState(false);
@@ -362,7 +370,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
     if (id != null) {
       // The send failed: the message goes back to the box (unless something else was written there meanwhile).
       if ((await act(call('chat.send', { text: msg, conversation: id }))) === undefined) { dropPending(mine); box.set((now) => (now.trim() ? now : msg)); }
-      else call('chat.list', { conversation: id }).then((r) => { if (getState().route?.id === id) setRows((prev) => keepSame(prev, r)); }).catch(() => {});
+      else fetchList();
       return;
     }
     setSending(true);
@@ -488,7 +496,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
               </div>
               <div className="mt-3 flex max-w-xl flex-wrap justify-center gap-2">{suggestionsFor(workProject?.name).map((s) => <Button key={s} variant="outline" size="sm" className="h-auto max-w-full shrink rounded-full py-1.5 whitespace-normal" onClick={() => box.set(t(s))}>{t(s)}</Button>)}</div>
             </div>
-          ) : lines.map((m) => <Message key={m.id} m={m} name={name} onChanges={askChanges} />)}
+          ) : lines.map((m) => <Message key={m.id} m={m} name={name} onChanges={askChanges} tail={`chat:${id}`} />)}
           {unsaved.map((p) => <Message key={p.id} m={{ id: p.id, role: 'usuario', body: p.text, at: p.at }} name={name} onChanges={askChanges} />)}
           <TaskLines conversation={id} />
           {chat.busy || chat.waiting || sending ? <LiveAnswer id={id} name={name} /> : null}

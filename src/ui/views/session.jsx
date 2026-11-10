@@ -164,7 +164,7 @@ const Block = memo(function Block({ b, agent, brain, sessionId, project, catalog
       </div>
     );
   }
-  if (it.kind === 'text' && it.role === 'assistant') return <div className="msg-hover flex gap-3"><AgentIcon agent={agent} className="mt-1 size-5" /><div className="min-w-0 flex-1"><TypedMarkdown>{body}</TypedMarkdown><div className="text-muted-foreground flow-root"><MsgTime at={it.at} hover /></div></div></div>;
+  if (it.kind === 'text' && it.role === 'assistant') return <div className="msg-hover flex gap-3"><AgentIcon agent={agent} className="mt-1 size-5" /><div className="min-w-0 flex-1"><TypedMarkdown tail={`session:${sessionId}`}>{body}</TypedMarkdown><div className="text-muted-foreground flow-root"><MsgTime at={it.at} hover /></div></div></div>;
   if (it.kind === 'reasoning') return <div className="text-muted-foreground border-l-2 pl-3 text-[13px] italic whitespace-pre-wrap line-clamp-4">{body}</div>;
   if (it.kind === 'usage') {
     // 3.8.2: Ajustes › Apariencia can hide it (shown by default).
@@ -268,7 +268,7 @@ function LivePartial({ id, agent, running }) {
     const flush = () => { frame = null; if (!buffer) return; const add = buffer; buffer = ''; setPartial((p) => (p + add).slice(-6000)); };
     const offDelta = bridge.on('session:delta', (d) => {
       if (d.id !== id) return;
-      buffer += d.text;
+      buffer += String(d.text ?? '');
       frame ??= document.hidden ? setTimeout(flush, 100) : requestAnimationFrame(flush);
     });
     const offItem = bridge.on('session:item', (it) => { if (it.session_id === id && it.role === 'assistant' && it.kind === 'text') { buffer = ''; setPartial(''); } });

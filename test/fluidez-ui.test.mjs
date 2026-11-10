@@ -92,7 +92,8 @@ test('el chat pinta el mensaje propio al instante y la respuesta final en el mis
   assert.match(orch, /state\.answer = /, 'el estado que cierra el turno lleva la línea escrita');
   assert.match(chat, /answer && answer\.id > lastId \? \[\.\.\.saved, answer\]/, 'la ventana la pinta sin esperar a leer la conversación');
   assert.match(chat, /<TypingMarkdown text={chat.partial} tail=/); assert.match(session, /<TypingMarkdown text={partial} tail=/);
-  assert.match(chat, /<TypedMarkdown>{m.body}/); assert.match(session, /<TypedMarkdown>{body}/);
+  // Keyed by conversation: another chat's saved message never goes on from this one's live answer.
+  assert.match(chat, /<TypedMarkdown tail=\{tail\}>\{m\.body\}/); assert.match(chat, /<Message [^>]*tail=\{`chat:\$\{id\}`\}/); assert.match(session, /<TypedMarkdown tail=\{`session:\$\{sessionId\}`\}>\{body\}/);
 });
 
 // 3.8.3 (fix C): typing redraws the message box alone; the view around it reads the text only when it sends.

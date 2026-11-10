@@ -328,10 +328,9 @@ function Root() {
   // Ctrl+J: a terminal in the folder on screen (also from the menu Ver → Abrir terminal).
   useEffect(() => {
     if (phase !== 'app' || !bridge.openTerminal) return undefined;
-    const key = (e) => { if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === 'KeyJ') { e.preventDefault(); openTerminal(); } };
-    window.addEventListener('keydown', key);
-    const off = bridge.on('ui:terminal', () => openTerminal());
-    return () => { window.removeEventListener('keydown', key); off(); };
+    // The key itself is read by the desktop bridge (tauri-bridge.js), which fires ui:terminal: listening here too opened
+    // two terminals per press.
+    return bridge.on('ui:terminal', () => openTerminal());
   }, [phase]);
   // 3.8.2 (T3 3.11): the agents' browser, from its little window: an element pointed at opens its chat (its message box
   // gets it) and a recording is said once saved. This PC's window only.
