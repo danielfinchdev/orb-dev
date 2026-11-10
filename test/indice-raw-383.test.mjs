@@ -15,7 +15,7 @@ import { DESKTOP } from '../src/domain/security/permissions.mjs';
 import { git } from '../src/platform/git.mjs';
 import { takeCheckpoint, snapshotCommit, changedBetween, fullSnapshot } from '../src/domain/tasks/checkpoints.mjs';
 
-let t; let board; let api; let sessions; let n = 0;
+let t; let board; let api; let sessions; let orchestrator; let n = 0;
 const call = (method, params = {}) => api.call(method, params, DESKTOP);
 const OLD = new Date(Math.floor(Date.now() / 1000) * 1000 - 3_600_000); // a whole second, an hour ago
 
@@ -24,7 +24,7 @@ before(() => {
   board = new Board();
   const emit = () => {};
   sessions = new Sessions(board, { emit });
-  const orchestrator = new Orchestrator(board, { emit });
+  orchestrator = new Orchestrator(board, { emit });
   const scheduler = new Scheduler(board, sessions, { orchestrator, emit });
   api = buildApi({ board, sessions, orchestrator, scheduler, emit, log: () => {}, version: 'test', remoteRef: { current: null, link: null } });
 });
@@ -96,4 +96,17 @@ test('Deshacer lo apunta en la bitácora del proyecto, para que el siguiente age
   assert.match(log, new RegExp(`Tarea #${task.id} deshecha`));
   assert.match(log, /a\.txt/); assert.match(log, /ya no está en la carpeta/);
   assert.ok(fs.existsSync(repo));
+});
+
+// Real use (3.8.3 final): after «Deshacer», Orbe told Dani «no sé por qué desaparecieron los archivos de la primera
+// tarea»: nobody had told it. The undo shows in that conversation and travels with the user's next message to Orbe.
+test('Deshacer se ve en la conversación de la tarea y Orbe lo sabe en su siguiente turno', async () => {
+  const { task } = hiddenTask();
+  const conv = board.createConversation({ title: 'Web', project: task.project });
+  board.run('UPDATE tasks SET conversation_id = ? WHERE id = ?', conv.id, task.id);
+  await call('tasks.undo', { id: task.id });
+  assert.ok(board.chat(conv.id).some((l) => l.role === 'system' && l.body.includes(`#${task.id}`)), 'una línea en su conversación');
+  const note = orchestrator.takeNotes(conv.id);
+  assert.match(note, new RegExp(`«Deshacer» en la tarea #${task.id} `));
+  assert.equal(orchestrator.takeNotes(conv.id), '', 'una sola vez');
 });

@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
-import { eventKey } from '../../domain/tasks/board.mjs';
+import { eventKey, userName } from '../../domain/tasks/board.mjs';
 import { git, REF_PREFIX } from '../../platform/git.mjs';
 import { takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit, fullSnapshot, missedBy } from '../../domain/tasks/checkpoints.mjs';
 import { oneLine } from '../../shared/text.mjs';
@@ -140,7 +140,15 @@ export class SafetyPart {
     }
     this.board.changed('tasks');
     const n = (key, count) => tr(`msg.scheduler.${key}.${count === 1 ? 'one' : 'other'}`, { n: count });
-    this.board.notice(tr('msg.scheduler.undone', { id: task.id, restored: n('undoneRestored', out.restored.length), removed: n('undoneRemoved', out.removed.length), skipped: out.skipped.length ? tr('msg.scheduler.undoneSkipped', { n: out.skipped.length, list: oneLine(out.skipped.join(', '), 200) }) : '' }), 'success');
+    const said = tr('msg.scheduler.undone', { id: task.id, restored: n('undoneRestored', out.restored.length), removed: n('undoneRemoved', out.removed.length), skipped: out.skipped.length ? tr('msg.scheduler.undoneSkipped', { n: out.skipped.length, list: oneLine(out.skipped.join(', '), 200) }) : '' });
+    // 3.8.3 (uso real final): in the task's conversation (a line, and a note for the assistant's next turn there), so
+    // neither the user nor Orbe wonders later where its files went; a task of no conversation, a passing notice.
+    const conv = this.board.conversationOfTask(task.id);
+    if (conv) {
+      this.board.addChat('system', said, { task: task.id, kind: 'undone' }, conv);
+      const key = `orch_note:${conv}`; const notes = this.board.settingJson(key) ?? [];
+      this.board.settingJson(key, [...notes, `${userName()} pulsó «Deshacer» en la tarea #${task.id} «${oneLine(task.title)}»: la carpeta volvió a como estaba antes de ella (restaurados ${out.restored.length}, quitados ${out.removed.length}: ${oneLine([...out.restored, ...out.removed].join(', '), 300) || 'ninguno'}). Por eso sus archivos ya no están; no es un fallo. Lo que dice la bitácora de esa tarea ya no vale.`].slice(-5));
+    } else this.board.notice(said, 'success');
     return out;
   }
 

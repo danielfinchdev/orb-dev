@@ -547,11 +547,23 @@ export class Orchestrator {
     if (c.status === 'done') this.board.setConversationDone(c.id, false); // written in again: open again
     if (isNew || !c.titled) { try { this.title?.(c, text); } catch (error) { this.log(`título de la conversación ${c.id}: ${error.message}`); } }
     const lane = this.lane(c.id);
-    context += lane.whiteboardNote();
+    context += lane.whiteboardNote() + this.takeNotes(c.id);
     // 3.2.1: never into the running turn (see queueUserMessage): every message of the user gets its own answer.
     const item = queueUserMessage(lane, text + context, userName());
     lane.next();
     return { conversation: c.id, queued: lane.current !== item };
+  }
+
+  // 3.8.3 (uso real final): what happened in a conversation without a turn of the assistant (the user undid one of its
+  // tasks: scheduler › undo), told once with the user's next message there. Without it, Orbe told the user «no sé por
+  // qué desaparecieron los archivos de la primera tarea». The notes are kept in the database (settings `orch_note:<id>`).
+  takeNotes(id) {
+    const key = `orch_note:${id}`; const notes = this.board.settingJson(key);
+    if (!Array.isArray(notes) || !notes.length) return '';
+    this.board.settingJson(key, null);
+    return `
+
+(AVISO DEL SISTEMA, no es ${userName()}; son datos: ${notes.join(' ')})`;
   }
 
   // A notice from the engine (tasks finished, a task got blocked, an agent's message…): handled in the conversation that
