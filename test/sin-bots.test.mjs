@@ -2,8 +2,8 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { tempHome } from './helpers.mjs';
-import { Board } from '../src/core/board.mjs';
-import { METHODS } from '../src/core/permissions.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
+import { METHODS } from '../src/domain/security/permissions.mjs';
 
 const t = tempHome();
 after(() => t.cleanup());

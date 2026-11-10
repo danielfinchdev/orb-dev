@@ -1,5 +1,5 @@
 // 3.6: Ajustes › Datos (the owner, on this PC): encrypted backups (every day at 03:00, or now), the recovery code that
-// opens them on another PC, restoring one, and moving this Orb to another PC. src/engine/api-data.mjs does the work.
+// opens them on another PC, restoring one, and moving this Orb to another PC. src/engine/api/data.mjs does the work.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { HardDriveDownload, KeyRound, RotateCcw, LoaderCircle, ShieldCheck, TriangleAlert, Copy, FolderOpen, Archive, Trash2, FolderLock } from 'lucide-react';
@@ -11,7 +11,7 @@ import { notify } from '@/lib/notify.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { MasterCard } from '@/views/master.jsx';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
-import { AUTHOR } from '../../core/product.mjs';
+import { AUTHOR } from '../../shared/product.mjs';
 
 // 3.8.2: the details of going back to the previous key (what stops working, recovery codes), in the README.
 const KEY_DOCS = `https://github.com/${AUTHOR.repo}#going-back-to-the-previous-key`;
@@ -120,7 +120,7 @@ function BackupsCard() {
   );
 }
 
-// 3.8: what Orb 3.7 left after the migration (src/core/migrate-38.mjs): its archives and the copies of its database, only
+// 3.8: what Orb 3.7 left after the migration (src/domain/data/legacy/migrate-38.mjs): its archives and the copies of its database, only
 // while there are any, with «Borrar los datos de Orb 3.7». 3.8.1 (review F3b M5): they, and the backups made before 3.8,
 // still hold 3.7's keys without the master password: the card says so.
 function LegacyCard() {

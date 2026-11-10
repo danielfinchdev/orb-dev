@@ -9,9 +9,9 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import { tempHome, startEngine, until, ROOT } from './helpers.mjs';
 import { createPhone, TEST_MASTER } from './fixtures/phone-client.mjs';
-import * as C from '../src/core/mobile-crypto.mjs';
-import { kindForPairing, plainHttpBrowser, pushPreview, phoneConfig } from '../src/engine/remote.mjs';
-import { buildNote } from '../src/core/notes.mjs';
+import * as C from '../src/shared/mobile-crypto.mjs';
+import { kindForPairing, plainHttpBrowser, pushPreview, phoneConfig } from '../src/engine/transport/remote.mjs';
+import { buildNote } from '../src/shared/notes.mjs';
 
 const env = { ORB_REMOTE_BIND: '127.0.0.1', ORB_WOL_DRY: '1' };
 let srv; let tSrv; let port; let base;

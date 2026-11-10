@@ -1,18 +1,19 @@
 // 3.8.2, phase 6 (item 13, decision D4): the music. The manifest (every track CC0 with its page, size and SHA-256), the
 // download (mocked: never the network) into core\herramientas\musica, read-only for agents, the gating to the Windows
 // app, the settings it keeps (off by default; the games' mute) and the buttons, read as source.
-import { tempHome, ROOT } from './helpers.mjs';
+import { tempHome, ROOT, settingsSource } from './helpers.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { ctx, validateConfig } from '../src/core/context.mjs';
-import { isOrbData } from '../src/core/guard.mjs';
-import { DEFAULT_CONFIG, merge } from '../src/core/home.mjs';
-import { METHODS } from '../src/core/permissions.mjs';
-import { BACKGROUND, GAMES, TRACKS, trackOf, DEFAULT_VOLUME, musicAllowed, musicPrefs, gameMusicOn, nextTrack, gameTrack } from '../src/core/music.mjs';
-import { trackBytes, musicDir, musicMethods } from '../src/engine/music.mjs';
+import { ctx } from '../src/platform/context.mjs';
+import { validateConfig } from '../src/platform/config.mjs';
+import { isOrbData } from '../src/domain/security/guard.mjs';
+import { DEFAULT_CONFIG, merge } from '../src/platform/config-file.mjs';
+import { METHODS } from '../src/domain/security/permissions.mjs';
+import { BACKGROUND, GAMES, TRACKS, trackOf, DEFAULT_VOLUME, musicAllowed, musicPrefs, gameMusicOn, nextTrack, gameTrack } from '../src/shared/music.mjs';
+import { trackBytes, musicDir, musicMethods } from '../src/engine/host/music.mjs';
 
 const read = (...p) => fs.readFileSync(path.join(ROOT, 'src', 'ui', ...p), 'utf8');
 const sha = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
@@ -47,7 +48,7 @@ test('the music plays only in the Windows app', () => {
   // Every button and setting hangs from it.
   assert.match(read('components', 'sidebar.jsx'), /\{musicAvailable\(\) \? <MusicButtons \/> : null\}/);
   assert.match(read('games', 'games.jsx'), /\{musicAvailable\(\) \? \(\s*<BubbleTip title=\{t\('games\.music'\)\}/);
-  const settings = read('views', 'settings.jsx');
+  const settings = settingsSource();
   assert.match(settings, /\{musicAvailable\(\) \? <MusicVolume \/> : null\}/);
   assert.match(settings, /\{musicAvailable\(\) \? \(\s*<details data-testid="about-music">/, 'the credits in «Acerca de»');
 });

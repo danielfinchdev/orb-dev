@@ -1,7 +1,7 @@
 {
   "name": "orb-dev",
   "productName": "Orb",
-  "version": "3.8.2",
+  "version": "3.8.3",
   "description": "Orb: one app for your AI coding agents (Claude Code, Codex, Cursor, Gemini, OpenCode, Qwen, Copilot). Its assistant plans the work, writes a clear brief for each agent and brings back checked results.",
   "private": true,
   "type": "module",
@@ -13,7 +13,7 @@
     "start": "tauri dev",
     "start:control": "vite build && node scripts/start-control.mjs",
     "check": "node scripts/check.mjs",
-    "test": "vite build --logLevel warn && node scripts/vault-build.mjs && node --test test/*.test.mjs",
+    "test": "vite build --logLevel warn && node scripts/vault-build.mjs && node --test --test-timeout=180000 test/*.test.mjs",
     "vault": "node scripts/vault-build.mjs",
     "test:app": "node test/app.e2e.mjs",
     "icon": "node scripts/icono.mjs",

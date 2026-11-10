@@ -2,13 +2,13 @@
 // dialog that asks for the password (components/master-dialogs.jsx) registers itself with setMasterAsker.
 //   unlockCore: every guarded action of the window (opening core, restoring a backup, choosing where backups go,
 //     deleting the data of Orb 3.7, a connector's keys, unlinking a phone) asks here first. → the unlock token the engine
-//     wants with that call (src/engine/api-master.mjs), or null when the user cancelled. One unlock lasts 5 minutes, or
+//     wants with that call (src/engine/api/master.mjs), or null when the user cancelled. One unlock lasts 5 minutes, or
 //     until the window locks or closes (the engine says 'master:locked').
 //   passwordStrength: the hint under a new password.
 //   coreView: what the screen «Falta la carpeta core» shows (views/core-missing.jsx), kept apart so it can be tested
 //     without a window. state: app.coreState ({ missing, home, reason, backup, error, folder }).
 //   layoutTitle / layoutOptions: the rows of «Ordenar carpetas» (views/layout.jsx; app.layoutPlan's items).
-import { CATEGORIES } from '../../core/layout.mjs';
+import { CATEGORIES } from '../../shared/layout.mjs';
 
 let held = null; // { unlock, until }
 let asker = null; // (action) => Promise<{ unlock, until } | null>
@@ -22,11 +22,12 @@ export const heldUnlock = (now = Date.now()) => (held && held.until - 5000 > now
 // action: 'open' | 'restore' | 'backupFolder' | 'recovery' | 'legacy' | 'secrets' | 'connector' | 'protected' | 'unlink' |
 // 'deleteProject' | 'removeExtension' | 'previousKey' | 'androidPair' | 'androidEmulator' | 'fullAccess' | 'android' |
 // 'secretSave' | 'secretSaved'.
-// 3.8.1: FRESH_ACTIONS ask for the password every time (src/core/permissions.mjs › FRESH_UNLOCK): a held unlock does
+// 3.8.1: FRESH_ACTIONS ask for the password every time (src/domain/security/permissions.mjs › FRESH_UNLOCK): a held unlock does
 // not count, and their token (for that action only) is not kept for the next one. 3.8.2: also giving a chat «Acceso
 // total al PC» or the Android phone.
 // 3.8.2 (security review): saving a secret an agent asked for in the vault, or using the one saved, too.
-export const FRESH_ACTIONS = Object.freeze(['deleteProject', 'fullAccess', 'android', 'secretSave', 'secretSaved']);
+// 3.8.3 (owner's decision): «Acceso total» and the Android phone take the usual 5-minute unlock again.
+export const FRESH_ACTIONS = Object.freeze(['deleteProject', 'secretSave', 'secretSaved']);
 export async function unlockCore(action) {
   const fresh = FRESH_ACTIONS.includes(action);
   const have = fresh ? null : heldUnlock();
@@ -36,7 +37,7 @@ export async function unlockCore(action) {
   return fresh ? r?.unlock ?? null : keepUnlock(r);
 }
 
-// The master password's shortest length (src/core/master.mjs › MIN_LENGTH; the engine checks it too).
+// The master password's shortest length (src/domain/security/master.mjs › MIN_LENGTH; the engine checks it too).
 export const MASTER_MIN = 10;
 // 0 (too short) … 4 (strong): length first, then kinds of characters, and a few common patterns count less.
 export function passwordStrength(password, min = MASTER_MIN) {

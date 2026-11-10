@@ -22,8 +22,8 @@
 //   { type: 'exit', code, stderr }            the process ended
 // TurnResult: { final, text, isError, stopReason, usage, limit }
 import { spawn } from 'node:child_process';
-import { killTree, cleanEnv } from './common.mjs';
-import { tr } from '../core/context.mjs';
+import { killTree, cleanEnv } from '../platform/proc.mjs';
+import { tr } from '../platform/context.mjs';
 
 export const DECISIONS = ['allow', 'always', 'deny'];
 
@@ -62,7 +62,7 @@ export class JsonRpcPeer {
     child.stdout.on('data', (chunk) => {
       this.buffer += chunk;
       let nl;
-      while ((nl = this.buffer.indexOf('\n')) >= 0) { const line = this.buffer.slice(0, nl).trim(); this.buffer = this.buffer.slice(nl + 1); if (line) this.handle(line); }
+      while ((nl = this.buffer.indexOf('\n')) >= 0) { const line = this.buffer.slice(0, nl).trim(); this.buffer = this.buffer.slice(nl + 1); if (line) { try { this.handle(line); } catch (error) { this.log(`mensaje del agente: ${error.stack}`); } } } // a handler that throws must not drop the lines after it (turn/completed among them)
       if (this.buffer.length > 16 * 1024 * 1024) this.buffer = ''; // a runaway line must not eat the memory
     });
     child.stdin.on('error', () => {});

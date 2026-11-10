@@ -12,9 +12,9 @@ export function migrationView(state, update) {
   const folder = folderOf(s.backup ?? s.data);
   if (!update || update.state === 'off') return { body, folder, update: null };
   const st = update.state;
-  const action = st === 'available' ? 'update' : st === 'downloaded' ? 'restart' : st === 'downloading' ? null : 'check';
+  const action = st === 'available' ? 'update' : st === 'downloaded' ? 'restart' : st === 'downloading' || st === 'installing' ? null : 'check';
   return {
     body, folder,
-    update: { action, busy: st === 'checking' || st === 'downloading', percent: st === 'downloading' ? update.percent ?? 0 : null, none: st === 'none', version: update.version ?? null, portable: Boolean(update.portable), error: update.error ?? null }
+    update: { action, busy: st === 'checking' || st === 'downloading' || st === 'installing', percent: st === 'downloading' ? update.percent ?? 0 : null, none: st === 'none', version: update.version ?? null, portable: Boolean(update.portable), error: update.error ?? null }
   };
 }

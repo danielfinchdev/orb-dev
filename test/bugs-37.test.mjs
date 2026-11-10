@@ -6,10 +6,10 @@ import { tempHome } from './helpers.mjs';
 test('el gasto se apunta en el día del dueño (su zona horaria), no en el de UTC', async () => {
   const t = tempHome();
   try {
-    const { Board } = await import('../src/core/board.mjs');
-    const { ctx } = await import('../src/core/context.mjs');
-    const { localDay } = await import('../src/core/tz.mjs');
-    const { recordSpend } = await import('../src/core/budget.mjs');
+    const { Board } = await import('../src/domain/tasks/board.mjs');
+    const { ctx } = await import('../src/platform/context.mjs');
+    const { localDay } = await import('../src/shared/tz.mjs');
+    const { recordSpend } = await import('../src/domain/usage/budget.mjs');
     const board = new Board();
     // A zone where it is almost always another day than in UTC at some hour: whatever the time, the two must agree.
     for (const tz of ['Pacific/Kiritimati', 'Pacific/Pago_Pago', 'Europe/Madrid']) {

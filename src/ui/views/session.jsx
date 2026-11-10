@@ -2,15 +2,15 @@
 // files appear as the agent works, risky actions wait for a click (approval cards), messages written meanwhile correct the
 // agent on the fly or wait in a queue, and the context meter shows how full the conversation is. Task runs open here too.
 import { lazy, memo, Suspense, useEffect, useMemo, useState } from 'react';
-import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, RefreshCw, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Ellipsis, Gamepad2, Smartphone, Gauge, Shuffle, ScreenShare, SquareTerminal } from 'lucide-react';
+import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Ellipsis, Gamepad2, Smartphone, Shuffle, ScreenShare, SquareTerminal } from 'lucide-react';
 import { unlockCore } from '@/lib/core-access.js';
 import { toast } from 'sonner';
-import { Markdown } from '@/components/markdown.jsx';
+import { TypingMarkdown, TypedMarkdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { renameChat } from '@/views/orb/inbox.jsx';
-import { Composer, useAutoScroll, BarClock, BarHeading, BarPause, MsgTime, CompactButton, COMPACT_AT } from './chat.jsx';
+import { useDraft } from '@/lib/draft.js';
 import { BackToList } from '@/components/chat-bar.jsx';
 import { ContextSlot } from '@/components/context-slot.jsx';
 import { TaskChanges } from '@/components/task-changes.jsx';
@@ -24,18 +24,20 @@ import { stepText, bareTool } from '@/components/chat-live.jsx';
 import { readableInput, readableCommand } from '@/lib/tools.js';
 import { GeneratedImage, openImage } from '@/components/image-viewer.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge, Textarea, Empty, Spinner } from '@/components/ui/basic.jsx';
+import { Badge, Textarea, Empty } from '@/components/ui/basic.jsx';
 import { Select, Collapsible, CollapsibleTrigger, CollapsibleContent, Tip, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
-import { useStore, call, act, go, bridge, refresh, getState, fullPc, openGames } from '@/lib/store.js';
+import { useStore, call, act, go, bridge, refresh, getState, fullPc, openGames, addPending, dropPending, pendingShown, usePending } from '@/lib/store.js';
 import { AGENT, PERMISSION, REASONING, STATUS, DECISION, CAN_STEER as AGENT_CAN_STEER, CAN_COMPACT, options } from '@/lib/labels.js';
 import { baseName, cn } from '@/lib/utils.js';
 import { useT, t, useLocale, currentLocale } from '@/lib/i18n.js';
 import { sameBlock } from '@/lib/memo.js';
 import { toBlocks, subagentState } from '@/lib/session-blocks.js';
-import { kindOf } from '../../core/attach-kind.mjs';
-import { reloadWait, markReloaded } from '@/lib/usage-reload.js';
+import { kindOf, playableType } from '../../shared/attach-kind.mjs';
 import { canCapture, captureFrame } from '@/lib/window-capture.js';
-import { UsageBar, windowLabel, resetText, toneOf, shortTokens } from '@/components/usage-bits.jsx';
+import { useAutoScroll, Composer } from '@/components/conversation/composer.jsx';
+import { BarClock, MsgTime, BarPause, BarHeading, COMPACT_AT, CompactButton } from '@/components/conversation/bar.jsx';
+import { ContextMeter } from '@/components/conversation/context-meter.jsx';
+import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
 
 // An icon that says what the tool does (reading, writing, searching, the web, a command…).
 function toolIcon(name = '') {
@@ -114,11 +116,12 @@ function statusText(body, agent, catalog) {
 }
 
 const FILE_ICON = { add: FilePlus2, delete: FileMinus2 };
-// 3.8.2: an attachment's icon by what it is (src/core/attach-kind.mjs).
+// 3.8.2: an attachment's icon by what it is (src/shared/attach-kind.mjs).
 const ATTACH_ICON = { image: ImageIcon, video: Film, audio: Music, pdf: FileText, document: FileText, archive: FileArchive, text: FileCode };
 function AttachIcon({ file, className }) { const I = ATTACH_ICON[kindOf(file)] ?? FileIcon; return <I className={className} />; }
 // 3.8.2: an attachment of a message. On the PC a picture opens in the image viewer and a PDF in the file viewer
-// (file-viewer.jsx, loaded when first opened); the rest, and everything on the phone, is its name.
+// (file-viewer.jsx, loaded when first opened); 3.8.3: so does audio or video the window can play. The rest, and
+// everything on the phone, is its name.
 const FileViewer = lazy(() => import('@/components/file-viewer.jsx'));
 function AttachChip({ file, sessionId }) {
   const t = useT();
@@ -126,7 +129,7 @@ function AttachChip({ file, sessionId }) {
   const kind = kindOf(file) === 'image' && !/\.(png|jpe?g|webp|gif)$/i.test(file) ? 'other' : kindOf(file);
   const chip = 'inline-flex items-center gap-1 rounded-md bg-white/15 px-2 py-0.5 text-xs';
   const label = <><AttachIcon file={file} className="size-3" />{baseName(file)}</>;
-  if (bridge.mobile || !['image', 'pdf'].includes(kind)) return <span className={chip}>{label}</span>;
+  if (bridge.mobile || !(['image', 'pdf'].includes(kind) || playableType(file))) return <span className={chip}>{label}</span>;
   return (
     <>
       <button type="button" className={cn(chip, 'cursor-pointer hover:bg-white/25')} onClick={() => (kind === 'image' ? openImage(file) : setOpen(true))} aria-label={t('viewer.open', { name: baseName(file) })} data-testid="attach-open">{label}</button>
@@ -161,7 +164,7 @@ const Block = memo(function Block({ b, agent, brain, sessionId, project, catalog
       </div>
     );
   }
-  if (it.kind === 'text' && it.role === 'assistant') return <div className="msg-hover flex gap-3"><AgentIcon agent={agent} className="mt-1 size-5" /><div className="min-w-0 flex-1"><Markdown>{body}</Markdown><div className="text-muted-foreground flow-root"><MsgTime at={it.at} hover /></div></div></div>;
+  if (it.kind === 'text' && it.role === 'assistant') return <div className="msg-hover flex gap-3"><AgentIcon agent={agent} className="mt-1 size-5" /><div className="min-w-0 flex-1"><TypedMarkdown tail={`session:${sessionId}`}>{body}</TypedMarkdown><div className="text-muted-foreground flow-root"><MsgTime at={it.at} hover /></div></div></div>;
   if (it.kind === 'reasoning') return <div className="text-muted-foreground border-l-2 pl-3 text-[13px] italic whitespace-pre-wrap line-clamp-4">{body}</div>;
   if (it.kind === 'usage') {
     // 3.8.2: Ajustes › Apariencia can hide it (shown by default).
@@ -223,76 +226,6 @@ export function ApprovalCard({ sessionId, body, compact = false }) {
   );
 }
 
-// How full the agent's context window is (when the agent reports it).
-// 2.6: how full the conversation is, as a ring that fills up (no number); a click opens the panel with the context in
-// tokens and the limits of the plans working right now (the brain's and the agents' accounts: session, weekly…).
-function Ring({ pct, className }) {
-  const r = 7; const c = 2 * Math.PI * r;
-  return (
-    <svg viewBox="0 0 18 18" className={cn('size-[18px] -rotate-90', className)} aria-hidden="true">
-      <circle cx="9" cy="9" r={r} fill="none" stroke="currentColor" strokeOpacity="0.18" strokeWidth="2.5" />
-      <circle cx="9" cy="9" r={r} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - Math.max(pct, 2) / 100)} className="transition-[stroke-dashoffset] duration-500" />
-    </svg>
-  );
-}
-function UsagePanel({ context, pct }) {
-  const t = useT();
-  const locale = useLocale();
-  const version = useStore((s) => s.version);
-  const [rows, setRows] = useState(null);
-  useEffect(() => { let alive = true; call('usage.now').then((r) => alive && setRows(r)).catch(() => alive && setRows([])); return () => { alive = false; }; }, [version]);
-  // 3.8.2: «Recargar»: the agents ask their plan now; a spinner meanwhile, and again only after 20 s (lib/usage-reload.js).
-  const [reloading, setReloading] = useState(false);
-  const [wait, setWait] = useState(() => reloadWait());
-  useEffect(() => { if (!wait) return undefined; const id = setTimeout(() => setWait(reloadWait()), wait); return () => clearTimeout(id); }, [wait]);
-  const reload = async () => {
-    if (reloading || reloadWait()) return;
-    setReloading(true); markReloaded();
-    try { const r = await act(call('usage.refresh')); if (r) setRows(r); }
-    finally { setReloading(false); setWait(reloadWait()); }
-  };
-  return (
-    <div className="grid w-80 gap-3 p-2.5 text-[13px]" data-testid="usage-panel">
-      <div className="grid gap-1.5">
-        <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">{t('session.usage.context')}</span><span className="ml-auto tabular-nums">{shortTokens(context.used)} / {shortTokens(context.size)} ({pct} %)</span>
-          <Tip label={t('session.usage.reload')}><Button size="icon-sm" variant="ghost" className="size-6" onClick={reload} disabled={reloading || wait > 0} aria-label={t('session.usage.reload')} aria-busy={reloading} data-testid="usage-reload">{reloading ? <Spinner className="size-3" /> : <RefreshCw className="size-3.5" />}</Button></Tip></div>
-        <UsageBar pct={pct} />
-        <p className="text-muted-foreground text-xs leading-snug">{t('session.contextTip')}</p>
-      </div>
-      {rows === null ? <Spinner className="size-3" /> : rows.map((u) => (
-        <div key={u.account} className="grid gap-2 border-t pt-3">
-          <div className="flex items-center gap-2 font-medium"><AgentIcon agent={u.agent} className="size-4" />{AGENT[u.agent] ?? u.agent}{u.label && u.label !== (AGENT[u.agent] ?? u.agent) ? <span className="text-muted-foreground truncate font-normal">· {u.label}</span> : null}{u.brain ? <Badge variant="outline" className="ml-auto">{t('session.usage.brain')}</Badge> : null}</div>
-          {u.windows.length ? u.windows.map((w) => {
-            const p = Math.round((w.utilization ?? 0) * 100);
-            return (
-              <div key={w.window} className="grid gap-1">
-                <div className="flex items-baseline justify-between gap-3"><span className="truncate">{windowLabel(t, w.window)}</span><span className="tabular-nums">{p} %</span></div>
-                <UsageBar pct={p} />
-                {w.resetAt ? <span className="text-muted-foreground text-xs">{resetText(t, locale, w.resetAt)}</span> : null}
-              </div>
-            );
-          }) : <p className="text-muted-foreground text-xs leading-snug">{t('session.usage.noData')}</p>}
-        </div>
-      ))}
-      {/* 3.8.2: the whole usage page (cost and tokens by day, agent and model). */}
-      <DropdownMenuItem className="border-t pt-2.5" onSelect={() => go({ view: 'usage' })} data-testid="usage-page"><Gauge />{t('usage.open')}</DropdownMenuItem>
-    </div>
-  );
-}
-export function ContextMeter({ context, className }) {
-  const t = useT();
-  if (!context?.size) return null;
-  const pct = Math.min(100, Math.round((context.used / context.size) * 100));
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button type="button" className={cn('hover:bg-accent inline-grid size-7 cursor-pointer place-items-center rounded-full', toneOf(pct), className)} aria-label={t('session.usage.open', { pct })} data-testid="context-meter"><Ring pct={pct} /></button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" side="top" className="w-auto p-0"><UsagePanel context={context} pct={pct} /></DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
 // Details of a conversation (2.3): where it works, git, where it comes from, its task.
 // The account of a conversation by its name, only when its agent has more than one (otherwise the agent's name says it).
 const accountName = (accounts = [], s) => (accounts.filter((a) => a.agent === s.agent).length > 1 ? accounts.find((a) => a.id === (s.account ?? s.agent))?.label ?? null : null);
@@ -323,6 +256,32 @@ async function showDetails(s, task) {
   });
 }
 
+// 3.8.3: the text the agent is writing now, the only part of the conversation that follows each streamed piece: the
+// pieces of a frame are drawn together and typed on screen (TypingMarkdown; the saved item goes on from there), and its
+// finished blocks are not parsed again. It empties
+// when the agent's text arrives as an item (in the same frame the item is drawn) or the turn ends.
+function LivePartial({ id, agent, running }) {
+  const t = useT();
+  const [partial, setPartial] = useState('');
+  useEffect(() => {
+    let buffer = ''; let frame = null;
+    const flush = () => { frame = null; if (!buffer) return; const add = buffer; buffer = ''; setPartial((p) => (p + add).slice(-6000)); };
+    const offDelta = bridge.on('session:delta', (d) => {
+      if (d.id !== id) return;
+      buffer += String(d.text ?? '');
+      frame ??= document.hidden ? setTimeout(flush, 100) : requestAnimationFrame(flush);
+    });
+    const offItem = bridge.on('session:item', (it) => { if (it.session_id === id && it.role === 'assistant' && it.kind === 'text') { buffer = ''; setPartial(''); } });
+    return () => { offDelta(); offItem(); if (frame != null) { cancelAnimationFrame(frame); clearTimeout(frame); } };
+  }, [id]);
+  useEffect(() => { if (!running) setPartial(''); }, [running]);
+  if (partial) return <div className="flex gap-3" data-testid="partial"><AgentIcon agent={agent} className="mt-1 size-5" /><div className="min-w-0 flex-1 opacity-90"><TypingMarkdown text={partial} tail={`session:${id}`} /></div></div>;
+  return running ? <div className="text-muted-foreground flex items-center gap-2 text-[13px]"><span className="bg-info size-2 animate-pulse rounded-full" />{t('session.agentWorking', { agent: AGENT[agent] })}</div> : null;
+}
+
+// What the user wrote, as the engine keeps it (a text, or { text, images }).
+const userText = (it) => (typeof it.body === 'string' ? it.body : it.body?.text ?? '');
+
 export function SessionView({ route }) {
   const t = useT();
   const sessions = useStore((s) => s.sessions);
@@ -332,9 +291,8 @@ export function SessionView({ route }) {
   const s = sessions.find((x) => x.id === route.id) ?? archived;
   const [items, setItems] = useState([]);
   const [more, setMore] = useState(false);
-  const [partial, setPartial] = useState('');
   const [queue, setQueue] = useState([]);
-  const [text, setText] = useState('');
+  const draft = useDraft();
   const [images, setImages] = useState([]);
   const PAGE = 200;
   // 3.8.2 (T3 3.2): the user's terminal under the chat (this PC only), and a command pasted into it from the chat.
@@ -347,7 +305,7 @@ export function SessionView({ route }) {
     const take = () => {
       const got = takePoints(route.id); if (!got.length) return;
       setImages((prev) => [...new Set([...prev, ...got.map((p) => p.path)])].slice(0, 10));
-      setText((prev) => [prev.trim(), ...got.map((p) => p.text)].filter(Boolean).join('\n'));
+      draft.set((prev) => [prev.trim(), ...got.map((p) => p.text)].filter(Boolean).join('\n'));
       toast.success(t('session.pointAdded'));
     };
     take();
@@ -355,7 +313,7 @@ export function SessionView({ route }) {
   }, [route.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     let alive = true;
-    setItems([]); setPartial(''); setQueue([]);
+    setItems([]); setQueue([]);
     if (!sessions.some((x) => x.id === route.id)) call('sessions.list', { archived: true }).then((all) => alive && setArchived(all.find((x) => x.id === route.id) ?? null)).catch(() => {});
     // Merged with what arrived live meanwhile: on the phone the live events come by another connection and can get here
     // before this answer (a live copy of an item is the newer one).
@@ -368,16 +326,18 @@ export function SessionView({ route }) {
     const offItem = bridge.on('session:item', (it) => {
       if (it.session_id !== route.id) return;
       setItems((prev) => { const i = prev.findIndex((p) => p.id === it.id); if (i >= 0) { const next = prev.slice(); next[i] = it; return next; } return [...prev, it]; });
-      if (it.role === 'assistant' && it.kind === 'text') setPartial('');
     });
-    const offDelta = bridge.on('session:delta', (d) => { if (d.id === route.id) setPartial((p) => (p + d.text).slice(-6000)); });
     const offQueue = bridge.on('session:queue', (q) => { if (q.id === route.id) setQueue(q.queue); });
-    return () => { alive = false; offItem(); offDelta(); offQueue(); };
+    return () => { alive = false; offItem(); offQueue(); };
   }, [route.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const tb = useT(); // H4a B2: «Resultado» in the language on screen
   const blocks = useMemo(() => toBlocks(items, tb), [items, tb]);
-  const scroll = useAutoScroll([blocks.length, items.at(-1)?.id, partial.length > 0, Math.floor(partial.length / 200)]);
-  useEffect(() => { if (s && s.status !== 'running') setPartial(''); }, [s?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 3.8.3: what the user sent and the engine has not saved yet shows at once (lib/store.js › addPending).
+  const pending = usePending(`session:${route.id}`);
+  const unsaved = pendingShown(pending, items.filter((it) => it.role === 'user' && it.kind === 'text').map((it) => ({ id: it.id, text: userText(it) })));
+  useEffect(() => { for (const p of pending) if (!unsaved.includes(p)) dropPending(p.id); }, [pending, unsaved]);
+  // (The streamed text grows the lines' height: the ResizeObserver of useAutoScroll follows it.)
+  const scroll = useAutoScroll([blocks.length, items.at(-1)?.id, unsaved.length]);
   const catalog = useCatalog();
   const [compacting, setCompacting] = useState(false);
   if (!s) return <Empty title={t('session.gone')} className="flex-1" />;
@@ -411,11 +371,16 @@ export function SessionView({ route }) {
   // While the agent works, Enter corrects it on the fly (it reads the message at its next step) and Ctrl+Enter queues
   // the message for after the turn. Agents that cannot be corrected on the fly always queue.
   const send = async ({ alt = false } = {}) => {
-    const msg = text.trim(); if (!msg && !images.length) return;
+    const msg = draft.get().trim(); if (!msg && !images.length) return;
     const mode = running ? (alt ? 'queue' : 'auto') : 'auto';
-    const r = await act(call('sessions.send', { id: s.id, text: msg || t('session.lookAtFiles'), images, mode }));
-    if (r === undefined) return;
-    setText(''); setImages([]);
+    const said = msg || t('session.lookAtFiles'); const sentImages = images;
+    // 3.8.3: the box empties at once and, when the agent is free (the message starts a turn), the message shows at once;
+    // while it works the message may go to the queue instead, which shows it when the engine says so.
+    draft.set(''); setImages([]);
+    const mine = running ? null : addPending(`session:${s.id}`, said, items.at(-1)?.id ?? 0);
+    const r = await act(call('sessions.send', { id: s.id, text: said, images: sentImages, mode }));
+    if (r === undefined || r?.queued) { if (mine) dropPending(mine); }
+    if (r === undefined) { draft.set((now) => (now.trim() ? now : msg)); setImages((now) => (now.length ? now : sentImages)); return; }
     if (r?.steered) toast.success(t('session.steerSent'));
     else if (r?.queued) toast.success(s.kind === 'task' && !running ? t('session.resentTask') : t('session.queuedToast'));
   };
@@ -472,10 +437,10 @@ export function SessionView({ route }) {
       <div ref={scroll.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
         <div className="lazy-lines mx-auto flex max-w-3xl flex-col gap-3.5 px-5 py-6">
           {more ? <Button variant="ghost" size="sm" className="self-center" onClick={loadOlder}><ChevronUp />{t('session.older')}</Button> : null}
-          {blocks.length ? blocks.map((b) => <Block key={b.key} b={b} agent={s.agent} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />)
+          {blocks.length || unsaved.length ? blocks.map((b) => <Block key={b.key} b={b} agent={s.agent} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />)
             : <Empty title={t('session.emptyTitle', { agent: AGENT[s.agent] })}>{t('session.workIn')} <span className="font-mono text-xs">{s.cwd}</span> {t('session.withPerm', { perm: PERMISSION[s.permission] })}</Empty>}
-          {partial ? <div className="flex gap-3" data-testid="partial"><AgentIcon agent={s.agent} className="mt-1 size-5" /><div className="min-w-0 flex-1 opacity-90"><Markdown>{partial}</Markdown></div></div> : null}
-          {running && !partial ? <div className="text-muted-foreground flex items-center gap-2 text-[13px]"><span className="bg-info size-2 animate-pulse rounded-full" />{t('session.agentWorking', { agent: AGENT[s.agent] })}</div> : null}
+          {unsaved.map((p) => <Block key={p.id} b={{ type: 'item', key: p.id, item: { id: p.id, session_id: s.id, role: 'user', kind: 'text', body: p.text, at: p.at } }} agent={s.agent} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />)}
+          <LivePartial key={s.id} id={s.id} agent={s.agent} running={running} />
           {/* 3.8.2: a task's conversation ends with the files it changed (nothing while it runs). */}
           {task && !['running', 'queued'].includes(task.status) ? <TaskChanges taskId={task.id} version={`${task.status}:${task.updated_at}`} /> : null}
           {stalled ? (
@@ -506,7 +471,7 @@ export function SessionView({ route }) {
       {/* 3.8.2 (T3 3.4): a secret the agent asked for, typed only here (never in the chat). */}
       <SecretCards sessionId={s.id} />
       {terminal && fullPc() ? <TerminalPanel dir={s.cwd} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
-      <Composer value={text} onChange={setText} onSend={send} canSend={Boolean(text.trim() || images.length)} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
+      <Composer draft={draft} onSend={send} attached={images.length > 0} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
         placeholder={running ? (AGENT_CAN_STEER[s.agent] ? t('session.phSteer', { agent: AGENT[s.agent] }) : t('session.phWait', { agent: AGENT[s.agent] })) : s.kind === 'task' ? t('session.phTask') : t('session.ph', { agent: AGENT[s.agent] })}
         onPaste={(e) => { fromTransfer(e.clipboardData).then((f) => { if (f.length) addImages(f); }); }}
         onDrop={(e) => { fromTransfer(e.dataTransfer).then(addImages); }}
@@ -520,11 +485,12 @@ export function SessionView({ route }) {
             {models.length ? <Select size="sm" value={s.model || models[0].value} title={t('session.model')} options={models} onValueChange={(model) => act(call('sessions.update', { id: s.id, model }), t('session.modelSet', { model: modelName(model) }))} data-testid="session-model" /> : null}
             {/* 3.8.2 (D5): «Acceso total» of a project's chat also asks for the master password every time and goes when
                 Orb locks; taken back, the chat returns to its permission before, then takes the one chosen. */}
-            {s.project ? <Select size="sm" value={s.permission} title={t('session.permissions')} disabled={bridge.mobile && s.permission === 'total'} options={options(PERMISSION).filter((o) => !bridge.mobile || o.value !== 'total')} onValueChange={async (permission) => {
+            {/* 3.8.3: «Auto» / «Preguntar» at one click, the other levels under «⋯» (the phone may switch between them, never to «total»). */}
+            {s.project ? <AutonomySwitch value={s.permission} testid="session-permission" disabled={bridge.mobile && s.permission === 'total'} more={options(PERMISSION).filter((o) => o.value !== 'auto' && o.value !== 'editar' && (!bridge.mobile || o.value !== 'total'))} onChange={async (permission) => {
               if (permission === 'total') { const unlock = await unlockCore('fullAccess'); if (unlock) act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged')); return; }
               if (s.permission === 'total') { const back = await act(call('sessions.revokeGrant', { id: s.id, grant: 'total' })); if (!back || back.permission === permission) return; }
-              act(call('sessions.update', { id: s.id, permission }), t('session.permissionsChanged'));
-            }} data-testid="session-permission" />
+              act(call('sessions.update', { id: s.id, permission }), permission === 'auto' ? t('session.autoOn') : permission === 'editar' ? t('session.askOn') : t('session.permissionsChanged'));
+            }} />
               /* 3.8.2 (D1): without a project, «Solo lectura» or «Acceso total al PC» (the master password every time; it goes
                  when Orb locks). Never from the phone. */
               : <Select size="sm" value={s.permission === 'total' ? 'total' : 'leer'} title={t('session.noProjectReadOnly')} disabled={bridge.mobile} options={[{ value: 'leer', label: PERMISSION.leer }, { value: 'total', label: t('session.fullPc') }]} onValueChange={async (permission) => {

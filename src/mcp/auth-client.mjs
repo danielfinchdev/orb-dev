@@ -1,4 +1,4 @@
-// The MCP side of src/engine/agent-auth.mjs: trades this server's ticket for its grant on the engine's pipe and keeps
+// The MCP side of src/domain/security/agent-auth.mjs: trades this server's ticket for its grant on the engine's pipe and keeps
 // the connection, so the engine can tell on every call whether the grant still holds. The ticket comes in an environment
 // variable whose name is given on the command line (--ticket-env=NAME: one per server, so they never clash).
 // F2.6c: the grant comes with a reconnect secret (only in this process's memory): a connection that drops while the grant

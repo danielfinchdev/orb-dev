@@ -53,12 +53,14 @@ export function Notices() {
   useEffect(() => { if (notice && popup && popup !== notice.key) setNotice(null); }, [popup, notice]);
   const close = () => { popupClosed(notice?.key); setNotice(null); };
   useEffect(() => () => clearTimeout(timer.current), []);
+  const later = useRef(null);
   // 3.1: a permission notice goes as soon as the permission is answered (here, in the task or by nobody in time).
   useEffect(() => bridge.on('approval:changed', () => {
     // Only when its own task no longer waits (another task may still have one pending).
     const answered = (n) => n?.kind === 'task-approval' && !(getState().app?.approvals ?? []).some((a) => a.session_id === n.session);
-    setTimeout(() => setNotice((n) => (answered(n) ? null : n)), 800);
+    clearTimeout(later.current); later.current = setTimeout(() => setNotice((n) => (answered(n) ? null : n)), 800);
   }), []);
+  useEffect(() => () => clearTimeout(later.current), []);
   // 3.0: while this robot is on screen, the one of the corner (companion.jsx) steps aside: never two robots at once.
   useEffect(() => { setState({ noticeShown: Boolean(notice && !quiet) }); }, [notice, quiet]);
   if (!notice || quiet) return null;

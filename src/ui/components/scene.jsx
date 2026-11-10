@@ -119,6 +119,41 @@ const SHAPES = [
 // redraw moves all of them.
 const CLOUD_FPS = 30;
 const ORB_CLOUDS = [{ dur: 90, delay: -10 }, { dur: 70, delay: -45 }, { dur: 110, delay: -70 }];
+// 3.8.3: each cloud is a picture with its 8 px blur already in it (drawn once, one per mode), not a CSS filter: the GPU
+// applied a filter on a moving layer again on every frame the compositor drew (≈6 % of the GPU process at rest). The
+// picture is the same soft ellipse (the gradient of themes.css › .orb-cloud) blurred the same, with room for the blur
+// around it (3 × 8 px); the layer only slides. Without a canvas (never in Orb's window) the CSS cloud is drawn instead.
+const CLOUD = { w: 260, h: 72, blur: 8 };
+const CLOUD_PAD = CLOUD.blur * 3;
+const CLOUD_TINTS = { light: [255, 255, 255, 0.75, 0.3], dark: [160, 170, 255, 0.18, 0.06] };
+let cloudArt;
+function cloudPictures() {
+  if (cloudArt !== undefined) return cloudArt;
+  cloudArt = null;
+  try {
+    const scale = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+    const art = {};
+    for (const [mode, [r, g, b, inner, mid]] of Object.entries(CLOUD_TINTS)) {
+      const shape = document.createElement('canvas'); shape.width = Math.round(CLOUD.w * scale); shape.height = Math.round(CLOUD.h * scale);
+      const s = shape.getContext('2d');
+      // radial-gradient(closest-side, inner, mid 60%, transparent): a circle stretched into the box's ellipse; it fades
+      // to the same colour at alpha 0 (what CSS interpolates to, premultiplied).
+      s.setTransform(shape.width / 2 / (shape.height / 2), 0, 0, 1, shape.width / 2, shape.height / 2);
+      const radius = shape.height / 2;
+      const fill = s.createRadialGradient(0, 0, 0, 0, 0, radius);
+      fill.addColorStop(0, `rgb(${r} ${g} ${b} / ${inner})`); fill.addColorStop(0.6, `rgb(${r} ${g} ${b} / ${mid})`); fill.addColorStop(1, `rgb(${r} ${g} ${b} / 0)`);
+      s.fillStyle = fill; s.fillRect(-radius, -radius, radius * 2, radius * 2);
+      const pad = Math.round(CLOUD_PAD * scale);
+      const out = document.createElement('canvas'); out.width = shape.width + pad * 2; out.height = shape.height + pad * 2;
+      const o = out.getContext('2d');
+      o.filter = `blur(${CLOUD.blur * scale}px)`;
+      o.drawImage(shape, pad, pad);
+      art[mode] = `url(${out.toDataURL('image/png')})`;
+    }
+    cloudArt = art;
+  } catch { /* no canvas: the CSS cloud */ }
+  return cloudArt;
+}
 // Candy: the pastel blobs (colour, place, size, how far they drift, how long) and the 3D sweets floating at the edges.
 const BLOBS = [
   { c: 'pink', left: '-8%', top: '-12%', w: 620, h: 480, dx: 50, dy: 30, dur: 34, delay: -6 },
@@ -193,10 +228,11 @@ const SweetDefs = () => (
 export function Scene() {
   const skin = useStore((s) => s.app?.config?.ui?.skin) ?? 'orb';
   if (plainSkin(skin)) return null;
+  const clouds = skin === 'orb' ? cloudPictures() : null;
   return (
-    <div className={`scene scene-${skin}`} aria-hidden="true" data-testid="scene">
+    <div className={`scene scene-${skin}`} aria-hidden="true" data-testid="scene" style={clouds ? { '--orb-cloud-art': clouds.light, '--orb-cloud-art-dark': clouds.dark } : undefined}>
       <div className="scene-blur">
-        {skin === 'orb' ? ORB_CLOUDS.map((c, i) => <div key={i} className="orb-cloud" style={{ top: `${18 + i * 26}%`, animationDuration: `${c.dur}s`, animationDelay: `${c.delay}s`, animationTimingFunction: `steps(${c.dur * CLOUD_FPS})` }} />) : null}
+        {skin === 'orb' ? ORB_CLOUDS.map((c, i) => <div key={i} className={clouds ? 'orb-cloud baked' : 'orb-cloud'} style={{ top: `${18 + i * 26}%`, animationDuration: `${c.dur}s`, animationDelay: `${c.delay}s`, animationTimingFunction: `steps(${c.dur * CLOUD_FPS})` }} />) : null}
         {skin === 'vaporwave' ? (<>
           <div className="vw-stars" /><div className="vw-shoot a" /><div className="vw-shoot b" />
           <div className="vw-beam a" /><div className="vw-beam b" /><div className="vw-beam c" /><div className="vw-beam d" />

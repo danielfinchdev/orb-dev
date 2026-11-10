@@ -2,9 +2,9 @@
 // un texto que existe en los dos idiomas.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import es from '../src/core/locales/es.mjs';
-import en from '../src/core/locales/en.mjs';
-import { pickGreeting, pickSubtitle } from '../src/ui/lib/greeting.js';
+import es from '../src/shared/locales/es.mjs';
+import en from '../src/shared/locales/en.mjs';
+import { pickGreeting, pickSubtitle, greetingFor } from '../src/ui/lib/greeting.js';
 
 const seq = (...values) => { let i = 0; return () => values[i++ % values.length]; };
 const many = (opts) => Array.from({ length: 400 }, () => pickGreeting(opts).key);
@@ -29,4 +29,14 @@ test('Saludo: cada frase posible existe en es y en', () => {
   for (const h of [3, 7, 10, 15, 22]) for (const d of [10, 11, 16]) keys.add(pickGreeting({ now: new Date(2026, 9, d, h), random: () => 0.6 }).key);
   for (const k of keys) assert.ok(es[k] && en[k], `falta ${k}`);
   for (let i = 0; i < 20; i++) { const s = pickSubtitle(); assert.ok(es[s] && en[s], s); }
+});
+
+// 3.8.3 (diagnosis): «Seguimos con «orb-bots»» stayed after choosing «Sin proyecto» for the new chat.
+test('el saludo que nombra el proyecto sigue al proyecto elegido para el chat nuevo', () => {
+  const g = { key: 'greet.project', project: 'orb-bots', sub: 'chat.intro', plain: { key: 'greet.morning' } };
+  assert.equal(greetingFor(g, 'orb-bots'), g);
+  assert.deepEqual(greetingFor(g, 'web'), { ...g, project: 'web' }, 'otro proyecto: lo nombra');
+  assert.deepEqual(greetingFor(g, null), { key: 'greet.morning', sub: 'chat.intro' }, 'sin proyecto: un saludo sin proyecto');
+  const other = { key: 'greet.morning', sub: 'greet.sub.1', plain: null };
+  assert.equal(greetingFor(other, null), other, 'los demás saludos no cambian');
 });

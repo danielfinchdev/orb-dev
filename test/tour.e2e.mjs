@@ -22,7 +22,7 @@ fs.mkdirSync(OUT, { recursive: true });
 for (const f of fs.readdirSync(OUT)) if (/\.(png|md)$/.test(f)) fs.rmSync(path.join(OUT, f));
 const RENDERER = path.join(ROOT, 'src', 'renderer');
 if (!fs.existsSync(path.join(RENDERER, 'index.html'))) throw new Error('compila antes la interfaz (npm run build)');
-const SKINS = ['orb', 'vaporwave', 'retro', 'profesional', 'nube']; // src/core/appearance.mjs
+const SKINS = ['orb', 'vaporwave', 'retro', 'profesional', 'nube']; // src/shared/appearance.mjs
 const ONLY = process.env.TOUR_ONLY ? new Set(process.env.TOUR_ONLY.split(',')) : null; // e.g. TOUR_ONLY=pc,phone (debugging)
 
 // ---- the engine
@@ -187,7 +187,7 @@ const SRC = {
   chat: ['Orb chat', 'src/ui/views/chat.jsx'], session: ['direct conversation with an agent', 'src/ui/views/session.jsx'],
   tasks: ['Tasks', 'src/ui/views/tasks.jsx'], projects: ['Projects', 'src/ui/views/projects.jsx'], agents: ['Agents (accounts, usage)', 'src/ui/views/agents.jsx'],
   logs: ['Bitácoras (project logs)', 'src/ui/views/memories.jsx + logs.jsx'], activity: ['Activity', 'src/ui/views/memories.jsx + activity.jsx'],
-  schedules: ['Scheduled tasks', 'src/ui/views/schedules.jsx'], phone: ['This phone / mobile access', 'src/ui/views/settings.jsx (PhoneView)'],
+  schedules: ['Scheduled tasks', 'src/ui/views/schedules.jsx'], phone: ['This phone / mobile access', 'src/ui/views/settings/index.jsx (PhoneView)'],
   tutorials: ['Tutorials and help', 'src/ui/views/tutorials.jsx'], board: ['Whiteboard (Pizarra)', 'src/ui/views/whiteboard.jsx'],
   expert: ['God mode (expert)', 'src/ui/views/expert.jsx'],
   link: ['Magic Link', 'src/ui/views/magic-link.jsx'],
@@ -217,7 +217,7 @@ async function settings(page, state) {
       const item = page.locator(`[data-testid=settings-nav-${id}]`);
       if (!(await item.count())) { misses.push(`settings ${id} ${state} (${themeOf(meta.get(page))}, ${meta.get(page).device}): this section is not shown here`); return; }
       await item.click();
-      await shot(page, { area: 'settings', screen: id, state, src: 'src/ui/views/settings.jsx (SettingsDialog)', desc: `Settings › ${label} — ${state}`, scroll: true });
+      await shot(page, { area: 'settings', screen: id, state, src: 'src/ui/views/settings/index.jsx (SettingsDialog)', desc: `Settings › ${label} — ${state}`, scroll: true });
     });
   }
   await page.keyboard.press('Escape');
@@ -411,7 +411,7 @@ try {
         await setLook(P, { ...look, skin });
         await views(P, ['chat', 'tasks', 'projects'], st, { scroll: false });
         await attempt(P, `conversation ${skin}`, async () => { await nav(P, { view: 'chat', id: conv.id }); await shot(P, { area: 'orb', screen: 'chat', state: 'conversation', src: 'src/ui/views/chat.jsx + themes.css', desc: `Orb chat, conversation, skin ${skin}` }); });
-        await attempt(P, `settings ${skin}`, async () => { await P.evaluate(() => window.__orbFire('ui:navigate', { view: 'settings', section: 'apariencia' })); await P.waitForSelector('[data-testid=settings-dialog]'); await P.click('[data-testid=settings-nav-general]'); await P.click('[data-testid=settings-sub-apariencia]'); await shot(P, { area: 'settings', screen: 'apariencia', state: st, src: 'src/ui/views/settings.jsx + components/skin-preview.jsx', desc: `Settings › Appearance, skin ${skin}` }); await P.keyboard.press('Escape'); });
+        await attempt(P, `settings ${skin}`, async () => { await P.evaluate(() => window.__orbFire('ui:navigate', { view: 'settings', section: 'apariencia' })); await P.waitForSelector('[data-testid=settings-dialog]'); await P.click('[data-testid=settings-nav-general]'); await P.click('[data-testid=settings-sub-apariencia]'); await shot(P, { area: 'settings', screen: 'apariencia', state: st, src: 'src/ui/views/settings/index.jsx + components/skin-preview.jsx', desc: `Settings › Appearance, skin ${skin}` }); await P.keyboard.press('Escape'); });
       }
       await setLook(P, { ...look, skin: 'orb' });
     }

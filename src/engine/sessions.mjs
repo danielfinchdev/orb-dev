@@ -5,28 +5,30 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { spawnSync } from 'node:child_process';
-import { ctx, tr, connectorKey } from '../core/context.mjs';
-import { AGENT_LABELS } from '../core/home.mjs';
+import { ctx, tr } from '../platform/context.mjs';
+import { connectorKey } from '../platform/config.mjs';
+import { AGENT_LABELS } from '../platform/config-file.mjs';
 import { adapter, executable } from '../agents/index.mjs';
-import { liveSkills } from './api-extensions.mjs';
+import { liveSkills } from './api/extensions.mjs';
 import { orbMcpServer, connectorLauncher } from '../agents/common.mjs';
-import { agentAuth } from './agent-auth.mjs';
-import { connectorLaunch } from '../core/connector-secrets.mjs';
-import { connectorSafe } from '../core/extensions.mjs';
+import { agentAuth } from '../domain/security/agent-auth.mjs';
+import { connectorLaunch } from '../domain/security/connector-secrets.mjs';
+import { connectorSafe } from '../domain/extensions/extensions.mjs';
 import { CURSOR_FILES } from '../agents/cursor.mjs';
-import { rotateIfBig, oneLine } from '../core/safety.mjs';
-import { git, isGitRepo, repoRoot } from '../core/workspace.mjs';
-import { account as findAccount, accountEnv } from '../core/accounts.mjs';
-import { pickAccount, recordSpend } from '../core/budget.mjs';
-import { browserKey } from '../core/browser-key.mjs';
-import { androidAllowed } from './android.mjs';
-import { PERMISSIONS, plainAction, pidKills, unwrapShell } from '../core/guard.mjs';
-import { processList, taskProcesses } from '../core/procs.mjs';
-import { explainFailure } from '../core/agent-errors.mjs';
-import { rememberModels } from './catalog.mjs';
-import { changedFiles, logDirect } from './logs.mjs';
-import { ATTACH_DIR, placeAttachments as copyAttachments, prepareAttachments } from './attachments.mjs';
+import { runLog } from '../platform/log.mjs';
+import { oneLine } from '../shared/text.mjs';
+import { git, isGitRepo, repoRoot } from '../platform/git.mjs';
+import { account as findAccount, accountEnv } from '../domain/usage/accounts.mjs';
+import { pickAccount, recordSpend } from '../domain/usage/budget.mjs';
+import { browserKey } from './browser/browser-key.mjs';
+import { androidAllowed } from './host/android.mjs';
+import { PERMISSIONS, plainAction, pidKills, unwrapShell, globalAutonomy, permissionOfAutonomy } from '../domain/security/guard.mjs';
+import { askedByUser } from '../domain/security/approval.mjs';
+import { processList, taskProcesses, powershell } from '../platform/proc-list.mjs';
+import { explainFailure } from '../shared/agent-errors.mjs';
+import { rememberModels } from './usage/catalog.mjs';
+import { changedFiles, logDirect } from '../domain/journal/journal.mjs';
+import { ATTACH_DIR, placeAttachments as copyAttachments, prepareAttachments } from './host/attachments.mjs';
 
 export { PERMISSIONS, ATTACH_DIR };
 // 3.2.1: a message that asks for a picture (or to change one): Codex gets a short note on how Orb wants it done.
@@ -80,7 +82,7 @@ export function mcpServersFor(agent, { taskId = '', orchestrator = false, browse
 // What an adapter gets: its servers, or (an agent that starts them again every turn) a function giving new ones.
 export const mcpServersOf = (a, agent, opts) => (a.mcpServersEachTurn ? () => mcpServersFor(agent, { ...opts, reusable: true }) : mcpServersFor(agent, opts));
 
-// 3.8.2: any file (src/engine/attachments.mjs), copied into <folder>/.orb-adjuntos/<stamp>/ so every agent of the
+// 3.8.2: any file (src/engine/host/attachments.mjs), copied into <folder>/.orb-adjuntos/<stamp>/ so every agent of the
 // conversation can read it, and kept out of git. → [{ path, name, kind, size }]
 export function placeAttachments(files, cwd) {
   const placed = copyAttachments(files, cwd);
@@ -115,13 +117,19 @@ export function describeItem(item) {
   return null;
 }
 
+// 3.8.3: whether a permission request could be a task stopping its own processes by number (only then is the process list
+// asked, asynchronously, before showing the card).
+const mayBeOwnKill = (command) => process.platform === 'win32' && Boolean(pidKills(unwrapShell(command))?.length);
+
 export class Sessions {
   // emit(event, payload): pushes changes to the window. log(line): engine log.
   constructor(board, { emit = () => {}, log = () => {} } = {}) {
     this.board = board; this.emit = emit; this.log = log;
     this.running = new Map();   // session id -> the running turn { agent, startedAt, lastAt, steps, last, stopped, live }
     this.lives = new Map();     // session id -> { live, key, lastUsed, logFile }
+    this.deltas = new Map();    // 3.8.3: session id -> { text, timer }: the streamed text not sent to the window yet
     this.approvals = new Map(); // `${session}:${request}` -> item id of its card
+    this.asked = new Map();     // 3.8.3: session id -> what the user's own message of this turn asked for (['publish'])
     this.onApproval = () => {}; // set by the engine: a notice in the chat when a task waits for a click
     this.onApprovalDone = () => {}; // set by the engine: that notice shows how it ended (allowed, denied, nobody answered)
     this.onApprovalExpired = () => {};
@@ -142,7 +150,7 @@ export class Sessions {
   get(id) { return parseRow(this.board.one('SELECT * FROM sessions WHERE id = ?', String(id))); }
   must(id) { const s = this.get(id); if (!s) throw new Error(tr('msg.sessions.noConversation')); return s; }
 
-  create({ kind = 'chat', agent, account = null, model = null, reasoning = 'medium', permission = 'editar', project = null, cwd, title, taskId = null, parentId = null }) {
+  create({ kind = 'chat', agent, account = null, model = null, reasoning = 'medium', permission = permissionOfAutonomy(globalAutonomy()), project = null, cwd, title, taskId = null, parentId = null }) {
     adapter(agent);
     if (account && findAccount(account) && findAccount(account).agent !== agent) throw new Error(tr('msg.sessions.accountNotOf', { account, agent }));
     const acc = pickAccount(this.board, { agent, preferred: account });
@@ -159,6 +167,7 @@ export class Sessions {
   }
 
   update(id, fields) {
+    this.flushDelta(id); // what was streamed goes before the change (the turn's end) it came before
     const allowed = ['title', 'model', 'reasoning', 'permission', 'archived', 'status', 'cli_session', 'cwd', 'account', 'settled', 'context', 'titled', 'android'];
     const keys = Object.keys(fields).filter((k) => allowed.includes(k));
     if (!keys.length) return this.get(id);
@@ -179,7 +188,7 @@ export class Sessions {
   remove(id) {
     if (this.running.has(id)) throw new Error(tr('msg.sessions.stopFirst'));
     const s = this.must(id); if (s.kind === 'task') throw new Error(tr('msg.sessions.taskSession'));
-    this.closeLive(id);
+    this.closeLive(id); this.asked.delete(id);
     this.board.run('DELETE FROM session_items WHERE session_id = ?', id);
     this.board.run('DELETE FROM session_queue WHERE session_id = ?', id);
     this.board.run('DELETE FROM sessions WHERE id = ?', id);
@@ -279,8 +288,7 @@ export class Sessions {
     const dir = path.join(ctx.paths.runs, s.kind === 'task' && s.task_id ? String(s.task_id) : path.join('conversaciones', s.id));
     fs.mkdirSync(dir, { recursive: true });
     const logFile = path.join(dir, 'registro.jsonl');
-    rotateIfBig(logFile);
-    const writeLog = (line) => { try { fs.appendFileSync(logFile, `${String(line).replace(/\r?\n/g, ' ')}\n`); } catch { /* log unavailable */ } };
+    const writeLog = runLog(logFile);
     // A fork waiting to happen: the agent copies the original conversation natively (Claude, Codex).
     const forkFrom = this.board.settingJson(`fork_pending:${s.id}`);
     if (forkFrom) this.board.settingJson(`fork_pending:${s.id}`, null);
@@ -299,7 +307,11 @@ export class Sessions {
       mcpServers: mcpServersOf(a, s.agent, { taskId, session: s.id }), budgetUsd,
       env: { ...accountEnv(acc), ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
       internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, cfg: ctx.config.agents[s.agent] ?? {},
-      // 3.8.2: read on every action (the owner may take it back at any moment): adb by hand needs it (src/core/guard.mjs).
+      // 3.8.3: the project's folder for the guard's inside/outside rules (none in a chat without a project), and what the
+      // user's own message of the turn asked for (read on every action: «súbelo» lets «Auto» push).
+      projectDir: s.project ? s.cwd : null,
+      userAsked: () => this.asked.get(s.id) ?? [],
+      // 3.8.2: read on every action (the owner may take it back at any moment): adb by hand needs it (src/domain/security/guard.mjs).
       android: () => androidAllowed(this.get(s.id)),
       skills: liveSkills(), // 3.8.1: the skills of core that are on (Claude and Codex load them themselves)
       onEvent: (ev) => this.onLiveEvent(s.id, ev)
@@ -308,16 +320,40 @@ export class Sessions {
     return entry;
   }
 
+  // 3.8.3: the streamed text goes to the window (and to each linked phone, ciphered for each) in pieces of up to 50 ms, not
+  // one event per token; anything else the agent does sends what was pending first, so the order stays the same.
+  queueDelta(id, text) {
+    const d = this.deltas.get(id);
+    if (d) { d.text += text; return; }
+    const timer = setTimeout(() => this.flushDelta(id), 50); timer.unref?.();
+    this.deltas.set(id, { text, timer });
+  }
+  flushDelta(id) {
+    const d = this.deltas.get(id); if (!d) return;
+    clearTimeout(d.timer); this.deltas.delete(id);
+    this.emit('session:delta', { id, text: d.text });
+  }
+
   onLiveEvent(id, ev) {
     const run = this.running.get(id);
     if (run) run.lastAt = Date.now();
+    if (ev.type === 'delta') { this.queueDelta(id, ev.text); return; }
+    this.flushDelta(id);
     if (ev.type === 'models') { const s = this.get(id); if (s) rememberModels(this.board, s.agent, ev.list, s.account ?? s.agent); return; }
     if (ev.type === 'item') {
       const item = this.addItem(id, ev.role, ev.kind, ev.body);
       if (run) { const what = describeItem(item); if (what) run.last = what; if (ev.kind === 'tool' || ev.kind === 'file') run.steps++; }
       return;
     }
-    if (ev.type === 'delta') { this.emit('session:delta', { id, text: ev.text }); return; }
+    // 3.8.3: something «Auto» let through that «Preguntar» would have asked: one quiet line in the chat (and the task's
+    // activity), so nothing passes unsaid.
+    if (ev.type === 'auto') {
+      const what = plainAction(ev.title ?? '', { lang: ctx.config.language });
+      this.addItem(id, 'system', 'status', tr('msg.sessions.autoAllowed', { what, why: ev.reason ?? '' }));
+      const s = this.get(id);
+      if (s?.kind === 'task' && s.task_id) try { this.board.event(s.task_id, 'orb', 'auto.allowed', `${what}: ${ev.reason ?? ''}`.slice(0, 400)); } catch { /* the task may be gone */ }
+      return;
+    }
     if (ev.type === 'session') { if (ev.id && this.get(id)?.cli_session !== ev.id) this.update(id, { cli_session: ev.id }); return; }
     if (ev.type === 'approval') {
       const r = ev.request;
@@ -334,15 +370,15 @@ export class Sessions {
         }
       }
       // 3.1: a task stopping its own test server by its number needs nobody: allowed at once, and said in its conversation.
-      if (run && s?.kind === 'task' && this.ownProcesses(r.title, s.cwd, run.startedAt, { roots: [this.lives.get(id)?.live.pid].filter(Boolean) }) && this.lives.get(id)?.live.respond(r.id, 'allow')) {
-        this.addItem(id, 'system', 'approval', { id: r.id, tool: r.tool, title: r.title, reason: tr('msg.sessions.ownProcess'), input: r.input, status: 'allowed' });
+      // 3.8.3: checked asynchronously (the process list takes ~0.8 s); the card appears only if it is not the task's own.
+      if (run && s?.kind === 'task' && mayBeOwnKill(r.title)) {
+        this.ownProcesses(r.title, s.cwd, run.startedAt, { roots: [this.lives.get(id)?.live.pid].filter(Boolean) }).catch(() => false).then((own) => {
+          if (own && this.lives.get(id)?.live.respond(r.id, 'allow')) this.addItem(id, 'system', 'approval', { id: r.id, tool: r.tool, title: r.title, reason: tr('msg.sessions.ownProcess'), input: r.input, status: 'allowed' });
+          else if (this.running.has(id)) this.askApproval(id, r, this.running.get(id));
+        }).catch((error) => this.log(`permiso: ${error.message}`));
         return;
       }
-      const item = this.addItem(id, 'system', 'approval', { id: r.id, tool: r.tool, title: r.title, reason: r.reason, input: r.input, ...(r.summary ? { summary: r.summary } : {}), status: 'pending' });
-      this.approvals.set(`${id}:${r.id}`, item.id);
-      if (run) run.last = describeItem(item);
-      this.emit('approval:changed', { session: id });
-      try { this.onApproval(this.get(id), item); } catch (error) { this.log(`aviso de aprobación: ${error.message}`); }
+      this.askApproval(id, r, run);
       return;
     }
     if (ev.type === 'approval_done') {
@@ -363,25 +399,32 @@ export class Sessions {
     if (ev.type === 'exit') { if (this.lives.get(id)?.live.isClosed?.()) { agentAuth.revokeSession(id); if (!this.running.has(id)) this.lives.delete(id); } }
   }
 
+  // A permission the user answers: its card in the conversation, and the notice.
+  askApproval(id, r, run) {
+    const item = this.addItem(id, 'system', 'approval', { id: r.id, tool: r.tool, title: r.title, reason: r.reason, input: r.input, ...(r.summary ? { summary: r.summary } : {}), status: 'pending' });
+    this.approvals.set(`${id}:${r.id}`, item.id);
+    if (run) run.last = describeItem(item);
+    this.emit('approval:changed', { session: id });
+    try { this.onApproval(this.get(id), item); } catch (error) { this.log(`aviso de aprobación: ${error.message}`); }
+  }
+
   // 3.1: whether a command only stops processes this task started itself: every number it names is a process launched
   // after the turn began from the task's own folder (Windows). Anything else (by name, someone else's process, a
-  // command cut short in the card) asks as always.
-  ownProcesses(command, cwd, since, { roots = [] } = {}) {
+  // command cut short in the card) asks as always. 3.8.3: asynchronous (resolves with true or false).
+  async ownProcesses(command, cwd, since, { roots = [] } = {}) {
     if (process.platform !== 'win32' || !cwd) return false;
     // 3.2.1: Codex sends the whole command wrapped in powershell -Command and may keep the number in a variable
     // (`$p = 11188; Stop-Process -Id $p`); pidKills unwraps and resolves that now, so the 400-char cap of 3.1 is gone.
     const pids = pidKills(unwrapShell(command));
     if (!pids?.length || pids.length > 8) return false;
-    const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-      `Get-CimInstance Win32_Process -Filter "${pids.map((p) => `ProcessId=${Number(p)}`).join(' OR ')}" | ForEach-Object { [pscustomobject]@{ id = $_.ProcessId; cmd = $_.CommandLine; at = $_.CreationDate.ToUniversalTime().ToString('o') } } | ConvertTo-Json -Compress`],
-      { encoding: 'utf8', windowsHide: true, timeout: 15_000 });
-    let found = []; try { const j = JSON.parse(r.stdout || '[]'); found = Array.isArray(j) ? j : [j]; } catch { return false; }
+    const out = await powershell(`Get-CimInstance Win32_Process -Filter "${pids.map((p) => `ProcessId=${Number(p)}`).join(' OR ')}" | ForEach-Object { [pscustomobject]@{ id = $_.ProcessId; cmd = $_.CommandLine; at = $_.CreationDate.ToUniversalTime().ToString('o') } } | ConvertTo-Json -Compress`, { timeout: 15_000 });
+    let found = []; try { const j = JSON.parse(out || '[]'); found = Array.isArray(j) ? j : [j]; } catch { return false; }
     const dir = path.resolve(cwd).toLowerCase();
     const byCmd = (pid) => found.some((p) => p.id === pid && String(p.cmd ?? '').toLowerCase().includes(dir) && Date.parse(p.at) >= since - 1000);
     // 3.2.1: a server started with a relative path does not name the folder in its command line (`node server.js`); it is
     // recognised instead as part of the task's process tree (descendant of the agent).
-    let tree = new Set();
-    if (roots.length) { const list = processList(since); if (list) for (const p of taskProcesses(list, { since, roots: roots.map(Number), dir, engine: process.pid })) tree.add(p.id); }
+    const tree = new Set();
+    if (roots.length && !pids.every(byCmd)) { const list = await processList(since); if (list) for (const p of taskProcesses(list, { since, roots: roots.map(Number), dir, engine: process.pid })) tree.add(p.id); }
     return pids.every((pid) => byCmd(pid) || tree.has(pid));
   }
 
@@ -477,9 +520,13 @@ export class Sessions {
 
   // One turn. options: images (absolute paths), prompt (what the agent receives, if it differs from what the user typed),
   // timeoutMs, budgetUsd, taskId, showUser, onFinish({ code, state, stderr, logFile, stopped, timedOut, limit }).
-  send(id, text, { images = [], prompt, timeoutMs = (ctx.config.timeoutMinutes ?? 60) * 60_000, budgetUsd, taskId, onFinish, showUser = true } = {}) {
+  send(id, text, { images = [], prompt, timeoutMs = (ctx.config.timeoutMinutes ?? 60) * 60_000, budgetUsd, taskId, onFinish, showUser = true, asked } = {}) {
     const s = this.must(id);
-    if (this.running.has(id)) throw new Error(tr('msg.sessions.stillWorking'));
+    // 3.8.3: what this turn may do because the user's own words asked for it: a task's comes from the scheduler (the
+    // request it came from); a chat's, from the message the user typed now (a turn Orb sends by itself keeps the last).
+    if (this.running.has(id)) throw new Error(tr('msg.sessions.stillWorking')); // before: a refused send must not change what the running turn may do
+    if (Array.isArray(asked)) this.asked.set(id, asked);
+    else if (showUser && s.kind !== 'task') this.asked.set(id, askedByUser(text));
     if (!String(text ?? '').trim() && !images.length) throw new Error(tr('msg.sessions.writeMessage'));
     // 3.8.1: its project is being deleted (project-close.mjs): no new turn in a folder that is going away.
     if (s.kind !== 'task' && s.project && this.board.isDeleting(s.project)) throw new Error(tr('msg.projects.deleting', { name: s.project }));
@@ -623,7 +670,7 @@ export class Sessions {
     const other = agent && agent !== s.agent ? agent : null;
     const a = adapter(other ?? s.agent);
     // 3.8.2: what was given with the master password stays with the original (D5: also «total» of a project's chat).
-    const copy = this.create({ kind: 'chat', agent: other ?? s.agent, account: other ? null : s.account, model: other ? null : s.model, reasoning: other && s.reasoning === 'xhigh' ? 'high' : s.reasoning, permission: s.permission !== 'total' ? s.permission : s.project ? 'editar' : 'leer',
+    const copy = this.create({ kind: 'chat', agent: other ?? s.agent, account: other ? null : s.account, model: other ? null : s.model, reasoning: other && s.reasoning === 'xhigh' ? 'high' : s.reasoning, permission: s.permission !== 'total' ? s.permission : s.project ? permissionOfAutonomy(globalAutonomy()) : 'leer',
       project: s.project, cwd: s.cwd, title: title || (other ? tr('msg.sessions.switchTitle', { title: s.title, agent: AGENT_LABELS[other] ?? other }) : tr('msg.sessions.forkTitle', { title: s.title })), parentId: s.id });
     this.board.run('UPDATE sessions SET titled = 1 WHERE id = ?', copy.id); // 3.2: its title stays (not renamed by its next message)
     const old = this.board.all("SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT 40", s.id).reverse();
@@ -633,4 +680,16 @@ export class Sessions {
     else if (old.length) this.board.settingJson(`fork_summary:${copy.id}`, old.map((it) => `${it.role === 'user' ? 'Usuario' : 'Agente'}: ${oneLine(bodyText(parseItem(it).body), 400)}`).join('\n'));
     return copy;
   }
+}
+
+// 3.8.3: «Auto» arrives on in an install that already had chats, once: the chats with a project that were at «Editar
+// archivos» (the old default) move to «Auto» like the new ones; the window says so once, with «Usar Preguntar» at hand
+// (src/ui/components/autonomy-switch.jsx › AutoNotice). A chat the owner had set to «Preguntar antes», «Solo lectura» or
+// «Revisar y probar» keeps it. Nothing changes when the owner already chose «Preguntar» for everything.
+export function adoptAuto(board) {
+  if (board.setting('auto_mode_383')) return 0;
+  board.setting('auto_mode_383', new Date().toISOString());
+  if (globalAutonomy() !== 'auto') return 0;
+  const moved = board.run("UPDATE sessions SET permission = 'auto' WHERE kind = 'chat' AND project IS NOT NULL AND permission = 'editar'").changes;
+  return moved;
 }

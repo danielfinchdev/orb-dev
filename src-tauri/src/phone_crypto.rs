@@ -1,4 +1,4 @@
-// The phone's end-to-end encryption with the PC, the same as src/core/mobile-crypto.mjs (the session key, seal and open
+// The phone's end-to-end encryption with the PC, the same as src/shared/mobile-crypto.mjs (the session key, seal and open
 // of a JSON message). Android's notification buttons («Aprobar», «Rechazar», «Responder») answer the PC with it while the
 // app is closed: Notes.kt › NoteReceiver (through PcCall.kt) reads this phone's keys from the Keystore and calls the JNI
 // functions at the end.
@@ -107,7 +107,7 @@ mod jni_api {
 mod tests {
   use super::*;
 
-  // Made with src/core/mobile-crypto.mjs (test/android-tauri.test.mjs checks the same values from the JS side).
+  // Made with src/shared/mobile-crypto.mjs (test/android-tauri.test.mjs checks the same values from the JS side).
   const PHONE_PRIV: &str = "oKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKA";
   const PC_PRIV: &str = "sbGxsbGxsbGxsbGxsbGxsbGxsbGxsbGxsbGxsbGxsbE";
   const PHONE_PUB: &str = "8LT9i-SANJKTq2HwUF67W6_M34pBJ94iHm7z2yDgPSk";

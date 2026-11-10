@@ -143,9 +143,12 @@ try {
   await win.waitForSelector('text=Aceptado');
   assert.equal((await call('tasks.get', { id: task.id })).accepted, true);
 
-  // ---- a risky task typed by the user still waits for its explicit approval
+  // ---- 3.8.3 («Auto»): a push the user asked for with their own words starts at once (the task carries the request);
+  // what the user did not ask for in words (a payment) still waits for its explicit approval.
   step = 'aprobaciones';
-  const risky = await call('tasks.create', { project: 'webviaproject', title: 'Publicar', description: 'haz push a producción', agent: 'codex' });
+  const asked = await call('tasks.create', { project: 'webviaproject', title: 'Publicar', description: 'haz push a producción', agent: 'codex' });
+  assert.equal(asked.status, 'queued'); assert.deepEqual(asked.user_asked, ['publish']);
+  const risky = await call('tasks.create', { project: 'webviaproject', title: 'Cobrar', description: 'haz el pago de la factura con la tarjeta', agent: 'codex' });
   assert.equal(risky.status, 'awaiting_approval');
 
   // ---- tasks view, undo

@@ -1,4 +1,4 @@
-// The agents' browser (src/engine/host-browser.mjs): real pages the agents drive through Orb's MCP tools, each one a
+// The agents' browser (src/engine/browser/host-browser.mjs): real pages the agents drive through Orb's MCP tools, each one a
 // WebView2 in a hidden window that is never shown, made here directly with WebView2 (not as Tauri windows, so they have
 // no Tauri IPC, no custom protocol and nothing of Orb's window):
 //   - a browser environment of its own: another data folder (…\navegador-agente), so another browser process; Orb's window
@@ -438,6 +438,12 @@ mod imp {
       let _ = post(Box::new(move || {
         if let Some(f) = PENDING.with(|p| p.borrow_mut().remove(&id)) {
           f.call(Err("navegador: tiempo agotado al abrir".into()));
+          // Nobody else waits and the environment is still being made: it never answered (a locked data folder, a
+          // broken runtime). Forgotten, so the next page tries again instead of queueing behind it for ever.
+          let stuck = PENDING.with(|p| p.borrow().is_empty()) && ENV.with(|e| matches!(*e.borrow(), Env::Creating(_)));
+          if stuck {
+            env_done(Err("navegador: el entorno no respondió".into()));
+          }
         }
       }));
     });
@@ -648,7 +654,7 @@ mod imp {
         &mut token,
       )?;
       // WebView2's own dialogs are off; «leave this page?» never blocks the agent (the rest are answered in the page:
-      // src/core/browser-protocol.mjs › dialogsHook; one that slips through is cancelled).
+      // src/engine/browser/browser-protocol.mjs › dialogsHook; one that slips through is cancelled).
       core.add_ScriptDialogOpening(
         &ScriptDialogOpeningEventHandler::create(Box::new(|_, args| {
           let Some(a) = args else { return Ok(()) };

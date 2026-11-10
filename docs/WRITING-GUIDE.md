@@ -1,6 +1,6 @@
 # App copy
 
-How to write the text people see in Orb (`src/core/locales/es` and `en`). Spanish is written first; English is
+How to write the text people see in Orb (`src/shared/locales/es` and `en`). Spanish is written first; English is
 translated afterwards with the same tone. The examples below are the Spanish originals, since that is the source copy.
 
 ## Names

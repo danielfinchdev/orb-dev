@@ -10,10 +10,11 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { PassThrough } from 'node:stream';
 import { spawn } from 'node:child_process';
-import { stdioTransport, encode, decode } from '../src/engine/stdio.mjs';
-import { checkHostRequest } from '../src/engine/host.mjs';
-import { writeJson, loadConfig, merge, homeKey } from '../src/core/home.mjs';
-import { METHODS } from '../src/core/permissions.mjs';
+import { stdioTransport, encode, decode } from '../src/engine/transport/stdio.mjs';
+import { checkHostRequest } from '../src/engine/host/host.mjs';
+import { writeJson, homeKey } from '../src/platform/paths.mjs';
+import { loadConfig, merge } from '../src/platform/config-file.mjs';
+import { METHODS } from '../src/domain/security/permissions.mjs';
 
 test('stdio: one JSON message per line, and nothing else ever reaches stdout', async () => {
   assert.equal(encode({ a: 'uno\ndos' }), '{"a":"uno\\ndos"}\n');

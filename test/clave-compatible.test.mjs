@@ -7,8 +7,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { openMachine } from '../src/core/master.mjs';
-import { keysOf } from '../src/core/machine-keys.mjs';
+import { openMachine } from '../src/domain/security/master.mjs';
+import { keysOf } from '../src/platform/keys.mjs';
 
 const bases = [];
 after(() => { for (const b of bases) fs.rmSync(b, { recursive: true, force: true, maxRetries: 5 }); });

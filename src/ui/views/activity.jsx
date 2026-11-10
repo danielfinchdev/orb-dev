@@ -18,7 +18,7 @@ export function ActivityView({ bare = false }) {
   const version = useStore((s) => s.version);
   const [q, setQ] = useState('');
   const [rows, setRows] = useState([]);
-  useEffect(() => { const h = setTimeout(() => call('activity.list', { q, limit: 500 }).then(setRows).catch(() => {}), 200); return () => clearTimeout(h); }, [q, version]);
+  useEffect(() => { let alive = true; const h = setTimeout(() => call('activity.list', { q, limit: 500 }).then((r) => { if (alive) setRows(r); }).catch(() => {}), 200); return () => { alive = false; clearTimeout(h); }; }, [q, version]); // a slow older answer never lands over a newer one
   const copy = () => navigator.clipboard.writeText(rows.map((r) => `${r.at}\t${r.actor}\t${r.kind}\t${r.task_id ? `#${r.task_id} ` : ''}${r.detail}`).join('\n')).then(() => toast.success(t('activity.copied')));
   return (
     <>

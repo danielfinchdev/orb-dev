@@ -25,7 +25,7 @@ import { ActionShortcuts } from '@/components/project-tools.jsx';
 import { CommandPalette } from '@/components/command-palette.jsx';
 import { Scene } from '@/components/scene.jsx';
 import { Robot } from '@/components/robot.jsx';
-import { useStore, setState, getState, refresh, refreshSoon, call, bridge, act, go, goBack, resetRoute, setViews, applyTheme, openTerminal, startTour, closeSettings, anyChatBusy, phoneLayout, loadOrbInbox, loadOrbInboxSoon } from '@/lib/store.js';
+import { useStore, setState, getState, refresh, refreshSoon, call, bridge, act, go, goBack, resetRoute, setViews, applyTheme, openTerminal, startTour, closeSettings, anyChatBusy, flushChatStates, phoneLayout, loadOrbInbox } from '@/lib/store.js';
 import { restoreRoute, keyboardOpen } from '@/lib/phone-nav.js';
 import { listenPoints } from '@/lib/browser-points.js';
 import { startupPhase } from '@/lib/startup.js';
@@ -37,7 +37,6 @@ import { isOffline, retryLoop } from '@/lib/net.js';
 import { ago } from '@/lib/utils.js';
 import { ErrorBoundary } from '@/components/error-boundary.jsx';
 import { lazyScreen } from '@/lib/lazy.js';
-import { frameBatch } from '@/lib/batch.js';
 import { AGENT } from '@/lib/labels.js';
 import { WindowControls } from '@/components/window-controls.jsx';
 import { useT, t as tNow } from '@/lib/i18n.js';
@@ -49,13 +48,15 @@ import { OrbInfoHost } from '@/views/orb/info.jsx';
 import { UpdateNeeded } from '@/components/update-needed.jsx';
 import { NoteOpener } from '@/lib/notes.js';
 import { RecoveryNotice } from '@/views/data.jsx';
+import { AutoNotice } from '@/components/autonomy-switch.jsx';
+import { useEngineEvents } from '@/app/engine-events.js';
 
 // 3.8.1 (H4a): the screens other than the chats load the first time they open, so the app starts with less to read; once
 // it is up, they load in the background while the window is idle (opening one later is instant; on a phone's browser
 // they come from the PC over the network). A load that fails can be tried again (lib/lazy.js, ErrorBoundary).
 const later = [];
 const deferred = (load, name) => { const Screen = lazyScreen(load, name); later.push(Screen.preload); return Screen; };
-const loadSettings = () => import('@/views/settings.jsx');
+const loadSettings = () => import('@/views/settings/index.jsx');
 const TasksView = deferred(() => import('@/views/tasks.jsx'), 'TasksView');
 const ProjectsView = deferred(() => import('@/views/projects.jsx'), 'ProjectsView');
 const AgentsView = deferred(() => import('@/views/agents.jsx'), 'AgentsView');
@@ -173,8 +174,8 @@ function Shell() {
   const shortcutProject = projects.find((p) => p.name === (route.view === 'expert' ? expertProject : app.activeProject?.name)) ?? null;
   useEffect(() => { if (!drawer) return undefined; const esc = (e) => { if (e.key === 'Escape') setDrawer(false); }; window.addEventListener('keydown', esc); return () => window.removeEventListener('keydown', esc); }, [drawer]);
   // 3.2: the robot thinks while the assistant answers in any conversation (and talks while one streams its answer).
-  const busy = anyChatBusy(app);
-  const mood = busy ? ((app.chats ?? []).some((c) => c.partial) ? 'talking' : 'thinking') : 'idle';
+  // 3.8.3: a word, not the states themselves: a streamed piece does not redraw the whole window.
+  const mood = useStore((s) => (anyChatBusy(s) ? (s.chats.some((c) => c.partial) ? 'talking' : 'thinking') : 'idle'));
   AGENT.orb = app.config.assistantName;
   // 2.6: the guided tour, once, the first time the app opens after the setup (never on the phone); later from Tutoriales.
   const tour = useStore((s) => s.tour);
@@ -208,7 +209,7 @@ function Shell() {
       {/* The floating robot only where there is room for it: never over forms or conversations (it covered the switches of
           Ajustes and took their clicks), and those views leave room at the bottom so nothing stays under it. */}
       {/* 3.5: a browser linked with an Orb gets the PC's layout, not what only the PC itself does. */}
-      {bridge.mobile ? null : <><UpdateCard /><OnceOpened when={settingsOpen} onFail={closeSettingsFailed}><SettingsDialog /></OnceOpened><OnceOpened when={gamesOpen} onFail={closeGamesFailed}><GamesDialog /></OnceOpened><RecoveryNotice /></>}
+      {bridge.mobile ? null : <><UpdateCard /><OnceOpened when={settingsOpen} onFail={closeSettingsFailed}><SettingsDialog /></OnceOpened><OnceOpened when={gamesOpen} onFail={closeGamesFailed}><GamesDialog /></OnceOpened><RecoveryNotice /><AutoNotice /></>}
       <Notices />
       {bridge.mobile ? null : <><ActionShortcuts project={shortcutProject} /><CommandPalette /></>}
       <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile || Boolean(tour)} /></div>
@@ -217,17 +218,8 @@ function Shell() {
   );
 }
 
-// The conversations' states that arrived since the last frame, drawn together (only the newest one of each counts). A
-// window hidden before that frame still gets them (lib/batch.js: 100 ms at the latest, and at once when it hides or shows).
-const chatStates = frameBatch((states) => setState((s) => {
-  let chats = s.app?.chats ?? [];
-  for (const p of states.values()) { const others = chats.filter((c) => c.conversation !== p.conversation); chats = p.busy || p.waiting ? [...others, p] : others; }
-  return { app: { ...s.app, chats } };
-}));
-document.addEventListener('visibilitychange', chatStates.flush);
-const chatStateSoon = (payload) => chatStates.add(payload.conversation, payload);
+document.addEventListener('visibilitychange', flushChatStates);
 
-let coreLost = false;
 // The linking screen's own «back» (AppLink): true when it took the press.
 const linkBack = { current: null };
 // 3.8 (F5b): after linking, the phone's notifications (off until turned on) are offered, saying what they do. 3.8.1: in the
@@ -336,10 +328,9 @@ function Root() {
   // Ctrl+J: a terminal in the folder on screen (also from the menu Ver → Abrir terminal).
   useEffect(() => {
     if (phase !== 'app' || !bridge.openTerminal) return undefined;
-    const key = (e) => { if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === 'KeyJ') { e.preventDefault(); openTerminal(); } };
-    window.addEventListener('keydown', key);
-    const off = bridge.on('ui:terminal', () => openTerminal());
-    return () => { window.removeEventListener('keydown', key); off(); };
+    // The key itself is read by the desktop bridge (tauri-bridge.js), which fires ui:terminal: listening here too opened
+    // two terminals per press.
+    return bridge.on('ui:terminal', () => openTerminal());
   }, [phase]);
   // 3.8.2 (T3 3.11): the agents' browser, from its little window: an element pointed at opens its chat (its message box
   // gets it) and a recording is said once saved. This PC's window only.
@@ -406,26 +397,7 @@ function Root() {
   // Screens without a top bar of their own (welcome, loading, error): a strip at the top still moves the window (the
   // PC's only: on a phone it would only take the taps at the top of the screen).
   const strip = bridge.mobile ? null : <div className="app-titlebar fixed inset-x-0 top-0 z-40 h-14" aria-hidden="true" />;
-  useEffect(() => {
-    if (phase !== 'app') return undefined;
-    return bridge.on('*', (event, payload) => {
-      if (event === 'board:changed' || event === 'session:update' || event === 'session:removed' || event === 'config:changed' || event === 'approval:changed') refreshSoon();
-      // 3.2: what one conversation is doing now (answering, waiting its turn or idle again). 3.8.1 (H4a): an answer
-      // streams in many small pieces; the screen takes them once per frame (the newest state of each conversation).
-      if (event === 'chat:state' && payload?.conversation != null) chatStateSoon(payload);
-      // 2.7: what only informs (working folder, brain in use, schedule created…) passes by as a notification.
-      // 3.2: through lib/notify.js: one at a time, never repeated, kept under the bell.
-      if (event === 'notice' && payload?.body) notify({ body: payload.body, tone: payload.tone });
-      if (event === 'ui:navigate') go(payload);
-      if (event === 'inbox:changed') loadOrbInboxSoon(120);
-      // 3.6 (M3): the chat list follows what its conversations do (a new line comes with inbox:changed).
-      if (event === 'chat:state' && !payload?.partial) loadOrbInboxSoon(400);
-      if (event === 'engine:stopped') notify({ body: tNow('app.engineStopped'), tone: 'error' });
-      // 3.8: core went missing while Orb ran: the engine starts again and brings it back (or says why it cannot).
-      if (event === 'core:lost') coreLost = true;
-      if (event === 'engine:restarted') { if (coreLost) { location.reload(); return; } notify({ body: tNow('app.engineRestarted'), tone: 'warning' }); refreshSoon(); }
-    });
-  }, [phase]);
+  useEngineEvents(phase);
   // 3.8.1: the main screen's first frame, marked for scripts/medir.mjs (the same mark under every app, read whenever the
   // measurement reaches the page).
   useEffect(() => {
@@ -537,7 +509,7 @@ function PcOffline({ info, onRelink }) {
   );
 }
 
-// 3.8: the data of Orb 3.7 could not be updated (src/core/migrate-38.mjs): what to do, where the copy is («Abrir
+// 3.8: the data of Orb 3.7 could not be updated (src/domain/data/legacy/migrate-38.mjs): what to do, where the copy is («Abrir
 // carpeta»), «Reintentar», a new version of Orb (the way out when the cause is Orb's own) and the reason under «Detalles».
 function MigrationFailed({ state }) {
   const t = useT();
@@ -575,7 +547,7 @@ function MigrationFailed({ state }) {
 }
 
 // 3.8: the PC's master password, the second step of linking (the app after scanning, a browser opened from the QR). It
-// never leaves the phone (src/core/mobile-crypto.mjs › linkDevice proves it is known) and is never kept. fp: the PC's
+// never leaves the phone (src/shared/mobile-crypto.mjs › linkDevice proves it is known) and is never kept. fp: the PC's
 // 3.8.1 (Tauri, review D-fix M2): «Empezar con una clave nueva» says what is lost (startError: recovery, master = the
 // recovery code and the master password exist in core). Without a recovery code the backups made until now will not
 // open any more: the word EMPEZAR must be typed.

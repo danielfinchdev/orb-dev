@@ -1,14 +1,17 @@
 // App state shared by every view: what the engine knows (assistant, projects, tasks, conversations) plus the current
-// route. A tiny external store read with useSyncExternalStore; engine events trigger a debounced refresh.
-import { useRef, useSyncExternalStore } from 'react';
+// route. The state container itself is state.js; engine events trigger a debounced refresh.
 import { toast } from 'sonner';
 import { errorText } from './utils.js';
 import { bumpNav, navTicket, stillHere } from './nav.js';
 import { cleanRoute, backStep } from './phone-nav.js';
 import { t } from './i18n.js';
-import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, baseSkin, plainSkin } from '../../core/appearance.mjs';
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, baseSkin, plainSkin } from '../../shared/appearance.mjs';
 export { plainSkin }; // 3.8.2: Profesional and the themes built on it (Cristal): no robot, no backdrop, no motion
-import { applyFeed, sinceOf } from '../../core/feed.mjs';
+import { applyFeed, sinceOf } from '../../shared/feed.mjs';
+import { frameBatch } from './batch.js';
+import { streamText } from '../../shared/chat-stream.mjs';
+import { pendingShown } from './pending.js';
+export { pendingShown };
 
 // The bridge to the PC: the desktop app's (src/ui/lib/tauri-bridge.js), or the phone's web bridge (src/ui/lib/web-bridge.js). Read when used, not when
 // this module loads: the bundler may load this module before the phone's bridge has defined window.orb.
@@ -28,32 +31,8 @@ function firstOpenToday() {
   const day = new Date().toLocaleDateString('sv');
   try { if (localStorage.getItem('orb.testDay') === day) return false; localStorage.setItem('orb.testDay', day); return true; } catch { return false; }
 }
-let state = { version: 0, ready: false, info: null, app: null, sessions: [], projects: [], tasks: [], conversations: [], route: { view: 'chat' }, settings: null, testToday: null };
-const listeners = new Set();
-const emit = () => { for (const fn of listeners) fn(); };
-export const getState = () => state;
-export function setState(patch) { state = { ...state, ...(typeof patch === 'function' ? patch(state) : patch) }; emit(); }
-const subscribe = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
-// 3.0: a component draws again only when what it selects changes (before, every change of the store redrew every
-// component). A selector that builds a new object or array each time is compared one level deep, so it stays stable.
-const same = (a, b) => {
-  if (Object.is(a, b)) return true;
-  if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) !== Array.isArray(b)) return false;
-  const ka = Object.keys(a); if (ka.length !== Object.keys(b).length) return false;
-  return ka.every((k) => Object.prototype.hasOwnProperty.call(b, k) && Object.is(a[k], b[k]));
-};
-const whole = (s) => s;
-export function useStore(select = whole) {
-  const last = useRef(null);
-  const snapshot = () => {
-    const prev = last.current;
-    if (prev && prev.state === state && prev.select === select) return prev.value;
-    const value = select(state);
-    last.current = { state, select, value: prev && same(prev.value, value) ? prev.value : value };
-    return last.current.value;
-  };
-  return useSyncExternalStore(subscribe, snapshot);
-}
+import { getState, setState, useStore, uiLanguage } from './state.js';
+export { getState, setState, useStore, uiLanguage };
 
 // Ajustes is a window over the current view: open on a section (general, apariencia, contribuye…) or close it.
 // settingsAt: each open (also of the same part again) scrolls that part into view (SettingsDialog).
@@ -66,7 +45,7 @@ export function setSidebarCollapsed(collapsed) {
   setState({ sidebarCollapsed: collapsed });
   try { localStorage.setItem('orb.sidebar', collapsed ? 'plegada' : 'abierta'); } catch { /* this session only */ }
 }
-try { if (localStorage.getItem('orb.sidebar') === 'plegada') state = { ...state, sidebarCollapsed: true }; } catch { /* storage unavailable */ }
+try { if (localStorage.getItem('orb.sidebar') === 'plegada') setState({ sidebarCollapsed: true }); } catch { /* storage unavailable */ }
 export function closeSettings() { setState({ settings: null }); }
 // 2.6: the guided tour (components/tour.jsx): the robot walks through the app, on the first launch after the setup and
 // from Tutoriales. Ajustes closes so the tour can point at the screens; done or skipped, ui.tourDone is saved in the
@@ -85,7 +64,7 @@ export function go(route) {
   let next = cleanRoute(route, { views, phone: phoneLayout() }) ?? { view: phoneLayout() ? 'chats' : 'chat' };
   if (next.view === 'settings') { openSettings(next.section); return; }
   // 3.8 (F5b): a task opened from a chat remembers it, so that «back» on the phone returns there (phone-nav.js › backStep).
-  const here = state.route;
+  const here = getState().route;
   if (next.view === 'tasks' && next.id != null && !next.from && (here?.view === 'chat' || here?.view === 'session')) next = { ...next, from: { view: here.view, ...(here.id != null ? { id: here.id } : {}) } };
   bumpNav(); // even to the same screen («Nuevo chat» while on a new chat): the user chose where to be
   setState({ route: next });
@@ -98,7 +77,7 @@ const KEEPS_ID = new Set(['session', 'chat']);
 // 3.8: Android's back (or a phone browser's): one level up (lib/phone-nav.js › backStep). → the step taken, or what the
 // caller must do ({ close }: what is open over the screen; { exit }: the first screen).
 export function goBack({ overlay = false } = {}) {
-  const step = backStep({ route: state.route, overlay, phone: phoneLayout() });
+  const step = backStep({ route: getState().route, overlay, phone: phoneLayout() });
   if (step?.go) go(step.go);
   return step;
 }
@@ -131,7 +110,7 @@ export async function orbAct(method, params, okText) { const r = await act(call(
 export const openOrbInfo = (info) => setState({ orbInfo: info });
 export const closeOrbInfo = () => setState({ orbInfo: null });
 
-// 3.8.1 (H4c): the lists of every refresh come as changes since what this window holds (src/core/feed.mjs): only the
+// 3.8.1 (H4c): the lists of every refresh come as changes since what this window holds (src/shared/feed.mjs): only the
 // rows that moved travel (also to the phone, over its encrypted link), and a list where nothing moved keeps the same
 // array, so the screens that read it draw nothing again. One call of each at a time (oneAtATime): a late answer to an
 // older request never undoes a newer one. An engine of before 3.8.1 answers whole (applyFeed takes it as it comes).
@@ -161,7 +140,8 @@ export const refresh = oneAtATime(async () => {
   try { [app, sessions, projects, tasks, conversations] = await Promise.all([call('app.state'), listOf('sessions.list'), listOf('projects.list', {}, (p) => p.name), listOf('tasks.list', { limit: 200 }), listOf('conversations.list')]); }
   catch (error) { for (const m of REFRESHED) feeds[m] = null; throw error; } // what did arrive is not shown: the next refresh asks for it whole
   // version: views refetch their own data when it moves. A list missing (an answer that came too late) stays as it was.
-  setState((s) => ({ app, sessions: sessions ?? s.sessions, projects: projects ?? s.projects, tasks: tasks ?? s.tasks, conversations: conversations ?? s.conversations, ready: true, version: s.version + 1 }));
+  const { chats, ...rest } = app;
+  setState((s) => ({ app: rest, chats: snapshotChats(s.chats, chats), sessions: sessions ?? s.sessions, projects: projects ?? s.projects, tasks: tasks ?? s.tasks, conversations: conversations ?? s.conversations, ready: true, version: s.version + 1 }));
   const { projects: all } = getState();
   // 3.2: the projects' icons, again only when the list of projects changes (or one is set by hand: loadProjectIcons).
   const names = all.map((p) => p.name).join('|');
@@ -173,7 +153,6 @@ export const refresh = oneAtATime(async () => {
   document.documentElement.lang = uiLanguage(getState()) === 'en' ? 'en' : 'es';
 });
 // The app's language (Ajustes › General).
-export const uiLanguage = (s) => s.app?.config?.language || 'es';
 
 let iconsFor = null;
 export function loadProjectIcons(names = iconsFor) {
@@ -204,16 +183,63 @@ export async function act(promise, okText) {
 // 3.2: «Nuevo chat»: the screen of a new conversation (it is made with its first message), in that project when one is
 // given (it becomes the working folder) or in the current one.
 export async function newChat(project) {
-  if (project !== undefined && (project ?? '') !== (state.app?.activeProject?.name ?? '')) await act(call('projects.setActive', { name: project ?? '' }));
+  if (project !== undefined && (project ?? '') !== (getState().app?.activeProject?.name ?? '')) await act(call('projects.setActive', { name: project ?? '' }));
   go({ view: 'chat' });
 }
-// 3.2: what a conversation with the assistant is doing now (answering, its streamed text, its steps), from app.chats.
-export const chatOf = (app, id) => (id == null ? null : (app?.chats ?? []).find((c) => c.conversation === Number(id)) ?? null);
-export const anyChatBusy = (app) => (app?.chats ?? []).some((c) => c.busy);
+// 3.2: what a conversation with the assistant is doing now (answering, its streamed text, its steps).
+export const chatOf = (s, id) => (id == null ? null : (s.chats ?? []).find((c) => c.conversation === Number(id)) ?? null);
+export const anyChatBusy = (s) => (s.chats ?? []).some((c) => c.busy);
+// The engine's live states of the conversations (chat:state), drawn once per frame (only the newest of each counts; a
+// window hidden before that frame still gets them: lib/batch.js). A state that ends a turn brings the line it wrote.
+const liveAt = new Map(); // conversation → when its last live state arrived
+const chatStates = frameBatch((states) => setState((s) => {
+  let chats = s.chats; let answers = s.answers;
+  for (const p of states.values()) {
+    const others = chats.filter((c) => c.conversation !== p.conversation);
+    chats = p.busy || p.waiting ? [...others, p] : others;
+    if (p.answer) answers = { ...answers, [p.conversation]: p.answer };
+  }
+  return { chats, answers };
+}));
+// 3.8.3: while it streams, a state brings only the text added since the last one (src/shared/chat-stream.mjs): it is made
+// whole here, from the text the window holds. One that does not follow it (the window reloaded meanwhile) is dropped and
+// the conversation's state is read again whole.
+const holding = new Map(); // conversation → the streamed text the window holds
+export const chatStateSoon = (payload) => {
+  const id = payload.conversation;
+  const text = streamText(holding.get(id), payload);
+  if (text == null) { holding.delete(id); liveAt.delete(id); refreshSoon(); return; }
+  if (payload.append != null) { const { append: _append, base: _base, ...rest } = payload; payload = { ...rest, partial: text }; }
+  if (payload.busy) holding.set(id, text); else holding.delete(id);
+  liveAt.set(id, Date.now()); chatStates.add(id, payload);
+};
+export const flushChatStates = () => chatStates.flush();
+
+// 3.8.3: a message the user just sent shows at once (T3 Code's optimistic messages), before the engine has saved it.
+// where: 'chat:<id>', 'session:<id>' or 'new' (a new chat, until the engine says which conversation it made); after: the
+// last line on screen when it was sent. It goes when its saved line appears after that one (pendingShown) or the send fails.
+let pendingSeq = 0;
+export function addPending(where, text, after = 0) {
+  const p = { id: `pendiente-${++pendingSeq}`, where, text: String(text), after: Number(after) || 0, at: new Date().toISOString() };
+  setState((s) => ({ pending: [...(s.pending ?? []), p] }));
+  return p.id;
+}
+export const movePending = (id, where) => setState((s) => ({ pending: (s.pending ?? []).map((p) => (p.id === id ? { ...p, where } : p)) }));
+export const dropPending = (id) => setState((s) => ({ pending: (s.pending ?? []).filter((p) => p.id !== id) }));
+const NONE = [];
+export const usePending = (where) => useStore((s) => { const list = (s.pending ?? NONE).filter((p) => p.where === where); return list.length ? list : NONE; });
+// A refresh's snapshot of the states is older than a live state that came meanwhile (on a phone they come by different
+// connections): a conversation heard live in the last seconds keeps its live state.
+function snapshotChats(live, snapshot = []) {
+  const recent = (id) => Date.now() - (liveAt.get(id) ?? 0) < 3000;
+  const taken = snapshot.filter((c) => !recent(c.conversation));
+  for (const c of taken) if (c.busy) holding.set(c.conversation, c.partial ?? ''); else holding.delete(c.conversation);
+  return [...live.filter((c) => recent(c.conversation)), ...taken];
+}
 
 // Whether «Iniciar test» is offered in the chat (decided once per opening of the app, the first time the chat shows).
-export function initTestOfTheDay() { if (state.testToday === null) setState({ testToday: firstOpenToday() }); }
-export const dismissTest = () => { if (state.testToday) setState({ testToday: false }); };
+export function initTestOfTheDay() { if (getState().testToday === null) setState({ testToday: firstOpenToday() }); }
+export const dismissTest = () => { if (getState().testToday) setState({ testToday: false }); };
 // «Iniciar test»: a new conversation with «Orquestador» on and the test request (t('test.prompt')), to check that the
 // whole chain works: the assistant plans, the agents build a web page and it is opened to try it.
 export { navTicket, stillHere };
@@ -222,11 +248,11 @@ export async function runTest(prompt) {
   const ticket = navTicket();
   const ok = await act((async () => {
     // Cursor cannot coordinate the agents: the test runs with Claude as the brain.
-    await call('chat.settings', state.app?.assistant?.agent === 'cursor' ? { agent: 'claude', model: '', orchestrate: true } : { orchestrate: true });
+    await call('chat.settings', getState().app?.assistant?.agent === 'cursor' ? { agent: 'claude', model: '', orchestrate: true } : { orchestrate: true });
     // 3.2.1: a project of its own (prueba-orb-<date>, never one of the user's) and «decide tú»: the test ran into three
     // questions (which project, the whiteboard, the plan) before any task started.
     const day = new Date().toLocaleDateString('sv').replace(/-/g, '');
-    const taken = new Set((state.projects ?? []).map((p) => String(p.name).toLowerCase()));
+    const taken = new Set((getState().projects ?? []).map((p) => String(p.name).toLowerCase()));
     let name = `prueba-orb-${day}`; for (let i = 2; taken.has(name.toLowerCase()); i++) name = `prueba-orb-${day}-${i}`;
     const project = await call('projects.create', { name, category: 'web', notes: t('test.projectNotes') });
     return call('chat.send', { text: t('test.wrap', { prompt, project: project.name }), project: project.name });
@@ -238,7 +264,7 @@ export async function runTest(prompt) {
 
 // Ctrl+J: a terminal in the folder of what is on screen (a conversation's project, the active project) or the assistant's.
 export function terminalFolder() {
-  const { route, sessions, projects, app } = state;
+  const { route, sessions, projects, app } = getState();
   const session = route.view === 'session' ? sessions.find((s) => s.id === route.id) : null;
   const named = (name) => projects.find((p) => p.name === name)?.path;
   return session?.cwd ?? (route.project && named(route.project)) ?? app?.activeProject?.path ?? app?.home ?? null;

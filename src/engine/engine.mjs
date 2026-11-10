@@ -5,40 +5,46 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { useHome, ctx, tr } from '../core/context.mjs';
-import { ensureLayout, paths } from '../core/home.mjs';
-import { keysOf, machineKeys } from '../core/machine-keys.mjs';
-import { IN_VAULT } from '../core/master.mjs';
-import { coreHealth } from '../core/core-folder.mjs';
-import { rotateIfBig, oneLine } from '../core/safety.mjs';
-import { PRODUCT } from '../core/product.mjs';
-import { DESKTOP, authorize } from '../core/permissions.mjs';
+import { useHome, ctx, tr } from '../platform/context.mjs';
+import { ensureLayout } from '../domain/workspace/home.mjs';
+import { paths } from '../platform/paths.mjs';
+import { keysOf, machineKeys } from '../platform/keys.mjs';
+import { IN_VAULT } from '../domain/security/master.mjs';
+import { coreHealth } from '../domain/workspace/core-folder.mjs';
+import { writeTimed } from '../platform/log.mjs';
+import { oneLine } from '../shared/text.mjs';
+import { PRODUCT } from '../shared/product.mjs';
+import { DESKTOP, authorize } from '../domain/security/permissions.mjs';
 
-import { stdioTransport } from './stdio.mjs';
-import { attachHost, hostReply, hostCall } from './host.mjs';
-import { appMethods } from './api-app.mjs';
+import { stdioTransport } from './transport/stdio.mjs';
+import { streamFeed } from '../shared/chat-stream.mjs';
+import { attachHost, hostReply, hostCall } from './host/host.mjs';
+import { appMethods } from './api/app.mjs';
 import { locateHome, setupHome, switchHome, secretCopy, secretsCopy, adoptOldKeyNames, secretDir } from './desktop-home.mjs';
-import { loadConfig, homeKey } from '../core/home.mjs';
-import es from '../core/locales/es.mjs';
-import en from '../core/locales/en.mjs';
+import { loadConfig } from '../platform/config-file.mjs';
+import { homeKey } from '../platform/paths.mjs';
+import es from '../shared/locales/es.mjs';
+import en from '../shared/locales/en.mjs';
 
 // A plain process with JSON lines on stdin/stdout (the app starts the bundled node.exe with ORB_ENGINE_STDIO=1;
-// src/engine/stdio.mjs), or a Node child with an IPC channel (the tests).
+// src/engine/transport/stdio.mjs), or a Node child with an IPC channel (the tests).
 const transport = (() => {
   if (process.env.ORB_ENGINE_STDIO === '1') return stdioTransport({ onClose: () => shutdown() });
   if (process.send) return { send: (m) => process.send(m), on: (fn) => process.on('message', fn) };
   throw new Error('el motor debe arrancarse desde la app');
 })();
-// The engine's own calls to the app (open a link or a folder, start a program outside the engine): src/engine/host.mjs.
+// The engine's own calls to the app (open a link or a folder, start a program outside the engine): src/engine/host/host.mjs.
 attachHost((m) => transport.send(m));
-// This PC's tools that need no window (src/engine/api-app.mjs), set when the engine starts: also answered while core or
+// This PC's tools that need no window (src/engine/api/app.mjs), set when the engine starts: also answered while core or
 // the data are blocked.
 let tools = {};
-let remote = null; // phone access (src/engine/remote.mjs), when turned on
+let remote = null; // phone access (src/engine/transport/remote.mjs), when turned on
 let devControl = null; // 3.1: the developer's control line (src/engine/dev-control.mjs), only in Orb.dev
 // Every event goes to this PC's window, the linked phones and browsers (remote.mjs picks what they need) and the
 // developer's control line.
-const toWindow = (event, payload) => { try { transport.send({ type: 'event', event, payload }); } catch { /* window gone */ } };
+// 3.8.3: the assistant's streamed answer reaches the window as deltas (src/shared/chat-stream.mjs).
+const windowStream = streamFeed();
+const toWindow = (event, payload) => { try { transport.send({ type: 'event', event, payload: event === 'chat:state' ? windowStream(payload) : payload }); } catch { /* window gone */ } };
 const emit = (event, payload) => {
   // 3.8.1: the agents' browser lives here: a task that ended closes its pages.
   if (event === 'agentBrowser:closeTask' && hostBrowser) { try { hostBrowser.closeTask(payload?.task); } catch { /* going away */ } return; }
@@ -51,9 +57,9 @@ let api = null;
 // 3.8.2 (T3 3.11): where an element pointed at and a recording of the agents' browser go (browser-record.mjs), once the
 // sessions exist.
 let browserFiles = null;
-let hostBrowser = null; // 3.8.1 (D7): the agents' browser when the app's pages are driven from here (src/engine/host-browser.mjs)
+let hostBrowser = null; // 3.8.1 (D7): the agents' browser when the app's pages are driven from here (src/engine/browser/host-browser.mjs)
 let logFile = null;
-const log = (line) => { try { if (logFile) { rotateIfBig(logFile); fs.appendFileSync(logFile, `${new Date().toISOString()} ${line}\n`); } } catch { /* never fatal */ } };
+const log = (line) => writeTimed(logFile, line);
 process.on('uncaughtException', (error) => log(`uncaughtException: ${error?.stack ?? error}`));
 process.on('unhandledRejection', (error) => log(`unhandledRejection: ${error?.stack ?? error}`));
 
@@ -67,7 +73,7 @@ let held = null;
 const HOME_WAIT_TRIES = Number(process.env.ORB_HOME_WAIT ?? 20); // seconds the workspace's folder is waited for at the start
 async function holdWorkspace(home) {
   if (held) return;
-  const { exclusiveOpen } = await import('./approval-secret.mjs');
+  const { exclusiveOpen } = await import('./security/approval-secret.mjs');
   const file = path.join(os.tmpdir(), `orb-motor-${homeKey(home)}.lock`);
   // 3.8.1 (review D10 B7): held for a moment (the engine before this one still ending, an antivirus looking at it): tried
   // again for about 2 s before saying another app has it.
@@ -84,7 +90,7 @@ async function holdWorkspace(home) {
 
 let mirror = null; // 3.8: the copy of core\secretos outside the workspace (the app's data folder), when the app gives one
 const validSecret = (s) => typeof s === 'string' && /^[0-9a-f]{64}$/.test(s);
-// 3.8.1, Tauri (decision 20 d): this PC's secret is opened by the app's vault (src/core/master.mjs › openMachine, in Rust:
+// 3.8.1, Tauri (decision 20 d): this PC's secret is opened by the app's vault (src/domain/security/master.mjs › openMachine, in Rust:
 // src-tauri/vault/src/machine.rs, Windows' DPAPI) and stays there; the engine gets only the keys made from it (ctx.keys).
 // Never a new secret behind the user's back: a key that cannot be read now is tried again a few times and then the start
 // stops (code 'secretBusy': the window offers «Reintentar»); sealed keys that none opens, or only Orb 3.8.0's key files
@@ -97,7 +103,7 @@ const KEY_NOTICES = { previousOpens: 'sys.engine.previousOpens', previousBack: '
 // Whether this start switched keys (the way back): the recovery code made with the other key no longer opens (below).
 let switchedKey = false;
 async function secretFromApp(home, userData, newSecret) {
-  const { openMachine } = await import('../core/master.mjs');
+  const { openMachine } = await import('../domain/security/master.mjs');
   for (let attempt = 1; ; attempt++) {
     try {
       const keys = openMachine({ dir: secretDir(home), copy: secretCopy(userData, home), allowNew: newSecret === true });
@@ -136,20 +142,20 @@ async function start(home, version, secret, browser, keep = null, userData = nul
     // scheduled copies go out without the code and «He olvidado la contraseña» cannot check it. Said (review D10 M6).
     if (switchedKey && keys) {
       switchedKey = false;
-      const B = await import('../core/backup.mjs');
+      const B = await import('../domain/data/backup.mjs');
       if (fs.existsSync(path.join(paths(home).data, 'copia-clave.json')) && !B.hasRecovery(home, keys.backup) && !keyNotices.includes('sys.engine.recoveryOtherKey')) keyNotices.push('sys.engine.recoveryOtherKey');
     }
     // An app that cannot open a sealed secret (in core or its copy outside, which would be put back): never a new plain
     // key instead, or this workspace's approvals and backups would no longer open.
-    const { enc2, copy2 } = (await import('./approval-secret.mjs')).secret2Files(secretDir(home), secretCopy(userData, home));
+    const { enc2, copy2 } = (await import('./security/approval-secret.mjs')).secret2Files(secretDir(home), secretCopy(userData, home));
     if (!keys && !validSecret(secret) && [path.join(secretDir(home), 'clave.enc'), secretCopy(userData, home), enc2, copy2].some((f) => fs.existsSync(f))) throw new Error(tr('sys.engine.sealedSecret'));
   }
   // The approval secret comes from the app (kept encrypted by Windows); without it, the file fallback is used.
-  // A secret given (tests): the engine has it anyway, and makes the keys itself (src/core/machine-keys.mjs).
+  // A secret given (tests): the engine has it anyway, and makes the keys itself (src/platform/keys.mjs).
   if (validSecret(secret)) { ctx.secret = Buffer.from(secret, 'hex'); ctx.keys = keysOf(ctx.secret); } else if (keys) { ctx.secret = null; ctx.keys = keys; }
-  // The agents' browser (browser 'host'): it lives here, with the app's hidden pages (src/engine/host-browser.mjs).
+  // The agents' browser (browser 'host'): it lives here, with the app's hidden pages (src/engine/browser/host-browser.mjs).
   if (browser === 'host' && !hostBrowser) {
-    const { createHostBrowser } = await import('./host-browser.mjs');
+    const { createHostBrowser } = await import('./browser/host-browser.mjs');
     const AGENTS = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor' };
     hostBrowser = createHostBrowser({
       log: (line) => log(line), language: () => ctx.config?.language ?? 'es', skin: () => ctx.config?.ui?.skin ?? 'orb',
@@ -163,7 +169,7 @@ async function start(home, version, secret, browser, keep = null, userData = nul
   if (hostBrowser) ctx.browser = { pipe: hostBrowser.pipe, token: hostBrowser.token };
   if (typeof keep === 'string' && path.isAbsolute(keep)) mirror = keep;
   tools = appMethods({ home, version });
-  // 3.8: the folders of Orb 3.7 move into core (src/core/core-folder.mjs); then, if core or part of it is gone (deleted
+  // 3.8: the folders of Orb 3.7 move into core (src/domain/workspace/core-folder.mjs); then, if core or part of it is gone (deleted
   // by mistake while Orb was closed, or noticed by the watcher in run()), what is missing comes back from the newest
   // backup, which lives outside the workspace. Without a backup, or with one this PC cannot open, the window shows why
   // and what can be done (coreBlocked). All of it before the database opens.
@@ -171,13 +177,13 @@ async function start(home, version, secret, browser, keep = null, userData = nul
   // a little before saying it is not there.
   for (let i = 0; !fs.existsSync(home) && i < HOME_WAIT_TRIES; i++) await new Promise((r) => setTimeout(r, 1000));
   if (!fs.existsSync(home)) throw new Error(tr('sys.engine.notHome', { home }));
-  const { migrateWorkspace } = await import('../core/core-folder.mjs');
+  const { migrateWorkspace } = await import('../domain/workspace/core-folder.mjs');
   migrateWorkspace(home); // a folder some program is using: nothing moves and the start fails with a clear message
   // The first 3.8 builds named this workspace's backups' folder after its whole path: taken over once.
-  { const { adoptOldBackupRoot } = await import('../core/backup.mjs'); try { adoptOldBackupRoot(home); } catch (error) { console.error(`copias: ${error.message}`); } }
+  { const { adoptOldBackupRoot } = await import('../domain/data/backup.mjs'); try { adoptOldBackupRoot(home); } catch (error) { console.error(`copias: ${error.message}`); } }
   // 3.8: the master password's files come back first from their copy outside core (newer than any backup).
-  { const { restoreMissing } = await import('../core/master.mjs'); try { restoreMissing(paths(home).secrets, mirror); } catch (error) { console.error(`secretos: ${error.message}`); } }
-  const { repairCore } = await import('../core/backup.mjs');
+  { const { restoreMissing } = await import('../domain/security/master.mjs'); try { restoreMissing(paths(home).secrets, mirror); } catch (error) { console.error(`secretos: ${error.message}`); } }
+  const { repairCore } = await import('../domain/data/backup.mjs');
   const repair = await repairCore(home, { secret: secretOf(home) });
   if (!repair.ok) return coreBlocked({ home, version, repair });
   return open({ home, version, repair });
@@ -193,11 +199,11 @@ async function open({ home, version, repair = null }) {
   const hidden = ensureLayout(home, null, { wait: false });
   if (process.platform === 'win32') hidden?.then?.((ok) => { if (!ok) console.error('core: no se pudo ocultar la carpeta (attrib)'); });
   // 3.8: a backups' folder inside the workspace (allowed by 3.7) is not used any more: dropped from the settings.
-  { const { keepBackupsOutside } = await import('../core/core-folder.mjs'); try { keepBackupsOutside(home); } catch (error) { console.error(`copias: ${error.message}`); } }
+  { const { keepBackupsOutside } = await import('../domain/workspace/core-folder.mjs'); try { keepBackupsOutside(home); } catch (error) { console.error(`copias: ${error.message}`); } }
   useHome(home);
   // 3.6: a backup restored from Ajustes › Datos replaces the data now, before the database
   // opens (what was there goes to core/antes-de-restaurar-<fecha>). This PC's secret stays (never in a backup).
-  const { applyPendingRestore } = await import('../core/backup.mjs');
+  const { applyPendingRestore } = await import('../domain/data/backup.mjs');
   let restored = null;
   try { restored = applyPendingRestore(home); } catch (error) { console.error(`restaurar: ${error.message}`); }
   if (restored) useHome(home);
@@ -206,16 +212,16 @@ async function open({ home, version, repair = null }) {
   // 3.8: the backups' folders and the copies of the sealed secrets are kept from the agents like core.
   { const { guardOutside } = await import('./workspace-layout.mjs'); guardOutside({ mirror }); }
   // 3.8: the backups of 3.7 (inside the data folder, now core) go where backups go now, outside the workspace.
-  try { const { adoptOldBackups } = await import('../core/backup.mjs'); const n = adoptOldBackups(home, ctx.config); if (n) log(`copias: ${n} copia(s) de 3.7 movidas fuera de core`); } catch (error) { log(`copias de 3.7: ${error.message}`); }
+  try { const { adoptOldBackups } = await import('../domain/data/backup.mjs'); const n = adoptOldBackups(home, ctx.config); if (n) log(`copias: ${n} copia(s) de 3.7 movidas fuera de core`); } catch (error) { log(`copias de 3.7: ${error.message}`); }
   // 3.8.2: Android's adb is no longer in the agents' PATH nor downloaded at start: the first use downloads it
-  // (src/engine/android.mjs) and agents reach the phone through Orb's tools.
-  const { Board } = await import('../core/board.mjs');
-  // 3.8: a data folder of 3.5–3.7 is moved to 3.8 when its database opens (src/core/migrate-38.mjs). If that could not be
+  // (src/engine/host/android.mjs) and agents reach the phone through Orb's tools.
+  const { Board } = await import('../domain/tasks/board.mjs');
+  // 3.8: a data folder of 3.5–3.7 is moved to 3.8 when its database opens (src/domain/data/legacy/migrate-38.mjs). If that could not be
   // done (or its files and orb.json could not be finished), Orb does not run on those data (other users' conversations,
   // schedules, devices, accounts and connectors): no scheduler, agents or phone access; the window shows why, where the
   // copy is, «Reintentar» and «Buscar actualización» (blocked below).
   const board = new Board();
-  const { unfinished } = await import('../core/migrate-38.mjs');
+  const { unfinished } = await import('../domain/data/legacy/migrate-38.mjs');
   if (repair?.restored) log(`core: faltaba ${repair.missing.join(', ')}; restaurado de la copia ${repair.restored.from} (${repair.restored.units.join(', ')})`);
   if (unfinished(board.db)) return blocked(board, { home, version, restored, repair });
   return run(board, { home, version, restored, repair });
@@ -225,24 +231,25 @@ async function open({ home, version, repair = null }) {
 let core = null; // { missing: true, home, reason, backup, error, folder }
 function coreBlocked({ home, version, repair }) {
   core = { missing: true, home, reason: repair.reason, backup: repair.backup ?? null, error: repair.error ?? null, folder: null };
-  import('../core/backup.mjs').then((K) => { if (core) core.folder = K.defaultBackupDir(home); }).catch(() => {});
+  import('../domain/data/backup.mjs').then((K) => { if (core) core.folder = K.defaultBackupDir(home); }).catch(() => {});
   console.error(`core: falta ${repair.missing.join(', ')} y no se pudo restaurar (${repair.reason})`);
   let busy = null;
   // passphrase: the recovery code of the copy; file: another copy (.orbbak); fresh: go on without a copy (core made
   // again with the default settings in the window's language; the projects stay in their folders). The copies there
-  // were are put aside where nothing deletes them (src/core/backup.mjs › setAsideBackups): they may hold the only
+  // were are put aside where nothing deletes them (src/domain/data/backup.mjs › setAsideBackups): they may hold the only
   // history the user has.
   const repairNow = async ({ passphrase = null, file = null, fresh = false, language = null } = {}) => {
     let next = { ok: true, missing: [] };
     if (fresh === true) {
-      const { paths: of, DEFAULT_CONFIG, writeJson, merge } = await import('../core/home.mjs');
-      const { setAsideBackups } = await import('../core/backup.mjs');
+      const { paths: of, writeJson } = await import('../platform/paths.mjs');
+      const { DEFAULT_CONFIG, merge } = await import('../platform/config-file.mjs');
+      const { setAsideBackups } = await import('../domain/data/backup.mjs');
       try { const n = setAsideBackups(home); if (n) console.error(`core: ${n} copia(s) apartadas antes de empezar de nuevo`); } catch (error) { console.error(`core: apartar copias: ${error.message}`); }
       const cfg = of(home).config;
       fs.mkdirSync(path.dirname(cfg), { recursive: true });
       if (!fs.existsSync(cfg)) writeJson(cfg, merge(DEFAULT_CONFIG, { language: language === 'en' ? 'en' : 'es' }));
     } else {
-      const { repairCore } = await import('../core/backup.mjs');
+      const { repairCore } = await import('../domain/data/backup.mjs');
       next = await repairCore(home, { secret: secretOf(home), passphrase: typeof passphrase === 'string' && passphrase ? passphrase.slice(0, 200) : null,
         file: typeof file === 'string' && /\.orbbak$/i.test(file) && path.isAbsolute(file) && fs.existsSync(file) ? file : null });
       if (!next.ok) { core = { ...core, reason: next.reason, backup: next.backup ?? core.backup, error: next.error ?? null }; return core; }
@@ -275,15 +282,15 @@ let migration = null; // { failed: true, reason, backup, data, committed }
 let attention = null; // promise of { stop } or null
 const stopAttention = async () => { const a = attention; attention = null; await (await a)?.stop().catch(() => {}); };
 async function blocked(board, info) {
-  const { migrationFailure, unfinished, isLegacy } = await import('../core/migrate-38.mjs');
+  const { migrationFailure, unfinished, isLegacy } = await import('../domain/data/legacy/migrate-38.mjs');
   const f = migrationFailure();
   migration = { failed: true, reason: f?.reason ?? tr('data.migration38.blocked'), backup: f?.backup ?? null, data: ctx.paths.db, committed: f?.committed ?? !isLegacy(board.db) };
   log(`3.8: la migración no se pudo hacer; Orb no arranca sobre los datos de 3.7: ${migration.reason}`);
-  attention ??= import('./remote.mjs').then(({ startAttention }) => startAttention({ log })).catch((error) => { log(`móvil (atención): ${error.message}`); return null; });
+  attention ??= import('./transport/remote.mjs').then(({ startAttention }) => startAttention({ log })).catch((error) => { log(`móvil (atención): ${error.message}`); return null; });
   let retrying = null;
   const retry = async () => {
     try { board.db.close(); } catch { /* closed */ }
-    const { Board } = await import('../core/board.mjs');
+    const { Board } = await import('../domain/tasks/board.mjs');
     const next = new Board();
     if (unfinished(next.db)) { await blocked(next, info); return migration; }
     migration = null;
@@ -307,19 +314,21 @@ async function blocked(board, info) {
 }
 
 async function run(board, { home, version, restored, repair }) {
-  const { Sessions } = await import('./sessions.mjs');
+  const { Sessions, adoptAuto } = await import('./sessions.mjs');
   const { Orchestrator } = await import('./orchestrator.mjs');
-  const { Scheduler } = await import('./scheduler.mjs');
-  const { buildApi } = await import('./api.mjs');
+  const { Scheduler } = await import('./scheduler/index.mjs');
+  const { buildApi } = await import('./api/index.mjs');
   // 3.8: who each agent's MCP process is lives only in this process's memory (agent-auth.mjs); the signatures that
   // earlier versions kept in the database are gone at start (they sign nothing).
   board.run("DELETE FROM settings WHERE key = 'orchestrator_key_hash' OR key LIKE 'orchestrator_conv:%' OR key LIKE 'agent_id:%'");
   try { const released = board.releaseUnclaimed(); if (released.length) log(`tareas manuales sin conversación devueltas a la cola: ${released.join(', ')}`); } catch (error) { log(`liberar tareas manuales: ${error.message}`); }
   const sessions = new Sessions(board, { emit, log });
-  browserFiles = (await import('./browser-record.mjs')).browserSink({ sessions, toWindow, log });
-  const { plainAction, looksEnglish } = await import('../core/guard.mjs');
+  // 3.8.3: «Auto» on for an install that had chats already (once, with a notice).
+  try { const moved = adoptAuto(board); if (moved) log(`modo Auto: ${moved} chat(s) pasan de «Editar archivos» a «Auto»`); } catch (error) { log(`modo Auto: ${error.message}`); }
+  browserFiles = (await import('./browser/browser-record.mjs')).browserSink({ sessions, toWindow, log });
+  const { plainAction, looksEnglish } = await import('../domain/security/guard.mjs');
   const { adapter } = await import('../agents/index.mjs');
-  const { recordRate } = await import('../core/budget.mjs');
+  const { recordRate } = await import('../domain/usage/budget.mjs');
   // The real usage the agents report (Claude and Codex): the budget guard uses it instead of guessing.
   sessions.onRate = (accountId, rate) => recordRate(board, accountId, rate);
   // A task waiting for a click: a line in the assistant's chat so the user sees it wherever they are (also the phone).
@@ -361,18 +370,18 @@ async function run(board, { home, version, restored, repair }) {
   };
   const orchestrator = new Orchestrator(board, { emit, log, title });
   const scheduler = new Scheduler(board, sessions, { log, orchestrator, emit });
-  const { createRemote } = await import('./remote.mjs');
+  const { createRemote } = await import('./transport/remote.mjs');
   const remoteRef = { current: null };
   // 3.7: Monitoreo del equipo and Opti Bot are gone: their settings and conversation are tidied once (engine/retired.mjs).
-  { const { tidyRetired } = await import('./retired.mjs'); tidyRetired(board, log); }
-  // 3.8: the master password and Orb's own secrets (src/core/master.mjs): opened with this PC's secret, or locked until
+  { const { tidyRetired } = await import('../domain/data/legacy/retired.mjs'); tidyRetired(board, log); }
+  // 3.8: the master password and Orb's own secrets (src/domain/security/master.mjs): opened with this PC's secret, or locked until
   // the password is typed (another PC, another Windows user). What earlier versions kept in clear moves into it now.
-  const { openMaster, migrateSecrets } = await import('./api-master.mjs');
+  const { openMaster, migrateSecrets } = await import('./api/master.mjs');
   ctx.master = openMaster(home, masterSecret(home), { mirror, log, notice: (text) => board.notice(text, 'warning') });
   try { migrateSecrets(board, ctx.master, { log, emit }); } catch (error) { log(`secretos: ${error.message}`); }
   // Unlocked later (the password on another PC): the phone access opens then.
-  // 3.8.1: also the keys of a connector Orb moved while it was locked (src/engine/api-extensions.mjs › rebindMovedOrWait).
-  const { settleWaitingKeys } = await import('./api-extensions.mjs');
+  // 3.8.1: also the keys of a connector Orb moved while it was locked (src/engine/api/extensions.mjs › rebindMovedOrWait).
+  const { settleWaitingKeys } = await import('./api/extensions.mjs');
   const onUnlocked = () => { settleWaitingKeys(board, log); if (ctx.config.mobile?.enabled) remote?.start().catch((error) => log(`móvil: ${error.message}`)); };
   if (ctx.master.unlocked()) settleWaitingKeys(board, log);
   // 3.8.2: Orb locked: the agents' browser stops recording (host-browser.mjs › lock).
@@ -400,12 +409,12 @@ async function run(board, { home, version, restored, repair }) {
   };
   board.onChange(changed);
   let dataVersion = board.one('PRAGMA data_version').data_version;
-  const { syncProjects } = await import('../core/projects.mjs');
+  const { syncProjects } = await import('../domain/projects/projects.mjs');
   // 3.8.1: a project delete the app left half-way (closed between the check and the end) is finished or undone.
-  try { (await import('../core/project-close.mjs')).settleDeleting(board, home, { all: true }); } catch (error) { log(`eliminar proyecto: ${error.message}`); }
+  try { (await import('../domain/projects/project-close.mjs')).settleDeleting(board, home, { all: true }); } catch (error) { log(`eliminar proyecto: ${error.message}`); }
   syncProjects(board);
   // 3.8.1: the skills of core that are on, ready for the agents (core\skills\.activas).
-  try { (await import('./api-extensions.mjs')).refreshSkills(); } catch (error) { log(`skills: ${error.message}`); }
+  try { (await import('./api/extensions.mjs')).refreshSkills(); } catch (error) { log(`skills: ${error.message}`); }
   let ticking = false; let lastSync = Date.now();
   const loop = () => {
     if (ticking) return; ticking = true;
@@ -425,16 +434,18 @@ async function run(board, { home, version, restored, repair }) {
     } catch (error) { log(`tick: ${error.stack}`); } finally { ticking = false; }
   };
   setInterval(loop, 1500);
-  board.onChange((what) => { if (what === 'tasks') setImmediate(loop); });
+  // 3.8.3 (repaso): one tick per burst of changes (finishing a task patches it 6-10 times; each used to queue a full tick).
+  let kicked = false;
+  board.onChange((what) => { if (what === 'tasks' && !kicked) { kicked = true; setImmediate(() => { kicked = false; loop(); }); } });
   log(`motor arrancado (versión ${version}) en ${home}`);
   if (repair?.restored?.recoveryOther || restored?.recoveryOther) board.notice(tr('sys.engine.recoveryRestored'), 'warning');
   if (repair?.restored) board.notice(tr('data.core.restored', { created: String(repair.restored.created ?? '').slice(0, 16).replace('T', ' ') }), 'warning');
   // Review D10 B9: «two keys» is said once for each clave.enc of Orb 3.8.0, not at every start.
   for (const key of keyNotices.splice(0)) board.notice(tr(key, { name: PRODUCT.name }), 'warning');
   if (restored) { log(`copia restaurada: ${restored.from} (lo anterior está en ${restored.aside})`); board.notice(tr('data.backup.restored', { created: String(restored.header?.created ?? '').slice(0, 16).replace('T', ' ') }), 'success'); }
-  // 3.8: a data folder of 3.5–3.7 was moved to 3.8 when its database opened (src/core/migrate-38.mjs): said once.
+  // 3.8: a data folder of 3.5–3.7 was moved to 3.8 when its database opened (src/domain/data/legacy/migrate-38.mjs): said once.
   {
-    const { takeNotice } = await import('../core/migrate-38.mjs');
+    const { takeNotice } = await import('../domain/data/legacy/migrate-38.mjs');
     const m = takeNotice(board);
     if (m) {
       log(`3.8: datos de 3.7 migrados: ${m.bots} bots y ${m.conversations} conversaciones de bots, ${m.users.length} usuarios (${m.users.join(', ') || 'ninguno'}) archivados en ${m.archive}; copia de la base en ${m.backup}`);
@@ -442,7 +453,7 @@ async function run(board, { home, version, restored, repair }) {
     }
     // 30 days later, the copies of the database of 3.7 lose its secrets (PIN hashes, devices' keys, Home Assistant's token).
     try {
-      const { scrubPreCopies } = await import('../core/migrate-38.mjs');
+      const { scrubPreCopies } = await import('../domain/data/legacy/migrate-38.mjs');
       const n = scrubPreCopies(board.db);
       if (n) { log(`3.8: claves quitadas de ${n} copia(s) de la base de datos de 3.7`); board.notice(tr('data.migration38.scrubbed'), 'info'); }
     } catch (error) { log(`3.8: limpiar la copia de 3.7: ${error.message}`); }
@@ -454,12 +465,12 @@ async function run(board, { home, version, restored, repair }) {
   loop();
   // 2.6: the models of every installed agent, asked to the agents themselves a moment after starting (each one at most
   // once every 12 h), so the brain selector names them before any conversation.
-  const { refreshAllModels } = await import('./catalog.mjs');
+  const { refreshAllModels } = await import('./usage/catalog.mjs');
   setTimeout(() => { refreshAllModels(board, { log }).catch(() => {}); }, Number(process.env.ORB_MODELS_DELAY_MS ?? 3000)).unref?.();
   // 3.1: the plan of every account (Claude Pro, ChatGPT Plus, Cursor Pro…), so the usage limits fit what is paid for.
   // Not with the test agents: a fake engine must not start the real CLIs.
   if (!process.env.ORB_FAKE_AGENTS) {
-    const { refreshPlans } = await import('./plans.mjs');
+    const { refreshPlans } = await import('./usage/plans.mjs');
     setTimeout(() => { refreshPlans(board, { log }).catch(() => {}); }, Number(process.env.ORB_MODELS_DELAY_MS ?? 3000) + 2000).unref?.();
   }
   // 2.6: the reports the assistant still owed when the app was closed come back.
@@ -502,7 +513,7 @@ const APP_MESSAGES = {
   locate: (m) => ({ home: locateHome({ userData: String(m.userData ?? ''), packaged: m.packaged === true, separateData: m.separateData === true, documents: m.documents ?? null, profile: m.profile ?? null }) }),
   setup: (m) => ({ home: setupHome({ userData: String(m.userData ?? ''), base: m.base, assistantName: m.assistantName, userName: m.userName, language: m.language }) }),
   switchHome: (m) => ({ ok: switchHome({ userData: String(m.userData ?? ''), target: m.target }) }),
-  // The little window of the agents' browser: its buttons and Ajustes › «Ver el navegador» (src/engine/host-browser.mjs).
+  // The little window of the agents' browser: its buttons and Ajustes › «Ver el navegador» (src/engine/browser/host-browser.mjs).
   pip: (m) => hostBrowser?.pip(String(m.action ?? ''), { x: m.x, y: m.y }) ?? null,
   texts: (m) => {
     let lang = ctx.config?.language;
@@ -532,7 +543,7 @@ transport.on(async (msg) => {
   if (msg.type !== 'call') return;
   try {
     if (!api) throw new Error(tr('sys.engine.notStarted', { name: PRODUCT.name }));
-    // This PC's window: every method (src/core/permissions.mjs).
+    // This PC's window: every method (src/domain/security/permissions.mjs).
     const result = await api.call(String(msg.method), msg.params ?? {}, DESKTOP);
     transport.send({ type: 'reply', id: msg.id, ok: true, result: result === undefined ? null : result });
   } catch (error) {

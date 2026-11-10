@@ -45,7 +45,7 @@ pub async fn pick_files(window: &WebviewWindow, title: Option<String>) -> Vec<St
   paths(dialog(window, title, "sys.dialog.pickFiles").blocking_pick_files(), 20)
 }
 
-/// 3.8.2: files for an agent's message, of any kind: up to 10 (the engine checks each one, src/engine/attachments.mjs).
+/// 3.8.2: files for an agent's message, of any kind: up to 10 (the engine checks each one, src/engine/host/attachments.mjs).
 pub async fn pick_attachments(window: &WebviewWindow) -> Vec<String> {
   paths(dialog(window, None, "sys.dialog.attach").blocking_pick_files(), 10)
 }
@@ -78,7 +78,7 @@ pub fn dictate(_window: &WebviewWindow) -> Result<(), String> {
   Err("dictation unavailable".into())
 }
 
-/// A PNG or JPEG of at most 5 MB, by its first bytes (not its extension), as src/engine/feedback.mjs › readImage.
+/// A PNG or JPEG of at most 5 MB, by its first bytes (not its extension), as src/engine/host/feedback.mjs › readImage.
 pub fn read_image(file: &Path) -> Option<Value> {
   use base64::Engine as _;
   let meta = std::fs::metadata(file).ok()?;

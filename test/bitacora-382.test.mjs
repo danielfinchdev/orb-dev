@@ -6,12 +6,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { tempHome } from './helpers.mjs';
-import { ensureLayout, projectLogHeader, tidyProjectLogs } from '../src/core/home.mjs';
-import { ctx } from '../src/core/context.mjs';
-import { Board } from '../src/core/board.mjs';
-import { createProject, renameProject, syncProjects } from '../src/core/projects.mjs';
-import { finishProject, reopenProject, finishedProjects } from '../src/core/project-close.mjs';
-import { readLog } from '../src/engine/logs.mjs';
+import { ensureLayout } from '../src/domain/workspace/home.mjs';
+import { projectLogHeader, tidyProjectLogs } from '../src/platform/journal-files.mjs';
+import { ctx } from '../src/platform/context.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
+import { createProject, renameProject, syncProjects } from '../src/domain/projects/projects.mjs';
+import { finishProject, reopenProject, finishedProjects } from '../src/domain/projects/project-close.mjs';
+import { readLog, lastEntries } from '../src/domain/journal/journal.mjs';
 
 let t; let board;
 before(() => { t = tempHome(); board = new Board(); });
@@ -117,4 +118,18 @@ test('Memorias lee el final de GENERAL.md: las últimas «Entradas de Orb» aunq
   const shown = readLog(board, 'general');
   assert.match(shown, /última de Orb$/m);
   assert.ok(shown.trim().endsWith('- Hecho: última de Orb'));
+});
+
+// 3.8.3: «the last entries» are whole entries, never the end of an older one; the newest comes even when it is long.
+test('lastEntries: entradas enteras y en orden, las que se pidan y quepan; la más nueva siempre', () => {
+  const e = (n, body = 'texto') => `### 2026-11-0${n} 10:00 — Orbe — Tema ${n}\n- Hecho: ${body}\n`;
+  const text = `# Bitácora\n\n## Índice\nalgo\n\n${e(1)}\n${e(2, 'y'.repeat(500))}\n${e(3)}\n${e(4)}`;
+  assert.deepEqual(lastEntries(text, { entries: 2 }), { text: `${e(3).trim()}\n\n${e(4).trim()}`, shown: 2, total: 4 });
+  const fit = lastEntries(text, { entries: 8, max: 300 });
+  assert.equal(fit.shown, 2, 'the long second one does not fit: it is left out whole');
+  assert.ok(!fit.text.includes('yyy') && !fit.text.includes('Índice'));
+  const long = lastEntries(`${e(1)}\n${e(2, 'x'.repeat(5000))}`, { entries: 3, max: 1000 });
+  assert.equal(long.shown, 1);
+  assert.match(long.text, /^### 2026-11-02[\s\S]*\n… \(entrada recortada/);
+  assert.equal(lastEntries('sin entradas', { max: 100 }).shown, 0);
 });

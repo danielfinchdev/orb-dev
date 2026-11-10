@@ -3,7 +3,7 @@ import { Download } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { bridge } from '@/lib/store.js';
-import { AUTHOR } from '../../core/product.mjs';
+import { AUTHOR } from '../../shared/product.mjs';
 import { useT } from '@/lib/i18n.js';
 
 export function UpdateNeeded({ info }) {

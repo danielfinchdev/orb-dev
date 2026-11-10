@@ -1,5 +1,6 @@
 // Tasks: the board. Filters, approvals, details and every action on a task (undo, retry, model, merge, pull request, OK).
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { Check, X, Zap, RotateCw, Square, Shuffle, Undo2, MessageSquare, GitMerge, GitPullRequest, Trash2, ListTodo, ThumbsUp, ChevronRight, ScanSearch, Hourglass, GitBranch } from 'lucide-react';
 import { PageHeader, PageBody, BackButton } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
@@ -9,6 +10,7 @@ import { modelsOf } from '@/components/brain-picker.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { TaskChanges } from '@/components/task-changes.jsx';
+import { HeldCard, PausedNote, waitText } from '@/components/task-state.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, Empty, Field, Input, Textarea } from '@/components/ui/basic.jsx';
 import { Tabs, TabsList, TabsTrigger, Select, Collapsible, CollapsibleTrigger, CollapsibleContent, BubbleTip } from '@/components/ui/overlay.jsx';
@@ -19,14 +21,19 @@ import { t, useT } from '@/lib/i18n.js';
 
 const FILTERS = [
   ['encurso', 'tasks.filter.active', (x) => ['running', 'queued'].includes(x.status)], // working now or waiting its turn
-  ['aprobar', 'tasks.filter.approve', (x) => x.status === 'awaiting_approval'],
+  // 3.8.3: also the tasks Orb held for review after they ran (a mass deletion…): they wait for the user's OK too.
+  ['aprobar', 'tasks.filter.approve', (x) => x.status === 'awaiting_approval' || Boolean(x.held)],
   ['hechas', 'tasks.filter.done', (x) => x.status === 'done'],
-  ['incidencias', 'tasks.filter.problems', (x) => ['failed', 'blocked', 'limited'].includes(x.status)],
+  ['incidencias', 'tasks.filter.problems', (x) => ['failed', 'blocked', 'limited'].includes(x.status) && !x.held],
   ['todas', 'tasks.filter.all', () => true]
 ];
 const verdictLabel = (v) => (['correcto', 'con fallos'].includes(v) ? t(`tasks.verdict.${v}`) : v);
 // 3.2.1: an undone task reads «Deshecha» (its files are back as they were), not «Completada».
-const StatusBadge = ({ status, undone }) => (undone ? <Badge variant="secondary" data-testid="task-undone"><Undo2 />{t('tasks.undone')}</Badge> : <Badge variant={STATUS[status]?.[1]}>{STATUS[status]?.[0] ?? status}</Badge>);
+// 3.8.3: a held one reads «Por aprobar»; a queued one says why it waits («En pausa», «Espera a #3»).
+const StatusBadge = ({ status, undone, task }) => (undone ? <Badge variant="secondary" data-testid="task-undone"><Undo2 />{t('tasks.undone')}</Badge>
+  : task?.held ? <Badge variant="warning" data-testid="task-held-badge">{t('tasks.held.badge')}</Badge>
+    : status === 'queued' && task?.waiting ? <Badge variant={task.waiting.kind === 'paused' ? 'warning' : STATUS.queued[1]} title={task.waiting.text}>{waitText(t, task)}</Badge>
+      : <Badge variant={STATUS[status]?.[1]}>{STATUS[status]?.[0] ?? status}</Badge>);
 
 // Who reviews (Task Review, Security Review): automatic (another provider with quota) or an installed agent.
 const reviewers = async () => (await call('agents.status')).filter((a) => a.enabled && a.installed);
@@ -102,7 +109,7 @@ function TaskDetail({ id, live }) {
       <div className="flex items-start gap-3 px-5">
         <AgentIcon agent={who} className="mt-1 size-5" />
         <div className="min-w-0 flex-1"><div className="text-muted-foreground text-xs">{tr('tasks.taskNo', { id: t.id, project: t.project })}</div><h2 className="text-[17px] leading-snug">{t.title}</h2></div>
-        {t.accepted ? <Badge variant="success"><ThumbsUp />{tr('tasks.accepted')}</Badge> : null}<StatusBadge status={t.status} undone={Boolean(t.undone)} />
+        {t.accepted ? <Badge variant="success"><ThumbsUp />{tr('tasks.accepted')}</Badge> : null}<StatusBadge status={t.status} undone={Boolean(t.undone)} task={t} />
       </div>
       <div className="flex flex-wrap gap-2 px-5">
         {t.status === 'awaiting_approval' ? (<>
@@ -112,10 +119,11 @@ function TaskDetail({ id, live }) {
         {t.status === 'done' && !t.accepted && !t.undone ? <Button size="sm" onClick={() => act(call('tasks.accept', { id: t.id }), tr('tasks.accepted'))}><ThumbsUp />{tr('tasks.giveOk')}</Button> : null}
         {t.status === 'done' && !t.review_of ? <BubbleTip title={tr('tasks.review.btn')} text={tr('projects.reviewTip')}><A onClick={() => askReview({ task: t })} data-testid="task-review"><ScanSearch />{tr('tasks.review.btn')}</A></BubbleTip> : null}
         {t.session_id ? <A onClick={() => go({ view: 'session', id: t.session_id })}><MessageSquare />{tr('tasks.agentChat')}</A> : null}
-        {t.status === 'queued' ? <A onClick={() => act(call('tasks.launchAnyway', { id: t.id }), tr('tasks.launchAnyway.done'))}><Zap />{tr('tasks.launchAnyway')}</A> : null}
+        {t.status === 'queued' ? <A onClick={async () => { const r = await act(call('tasks.launchAnyway', { id: t.id })); if (r) toast.success(tr(r.paused ? 'tasks.launchAnyway.paused' : 'tasks.launchAnyway.done')); }}><Zap />{tr('tasks.launchAnyway')}</A> : null}
         {['failed', 'blocked', 'cancelled', 'limited'].includes(t.status) ? <A onClick={() => act(call('tasks.retry', { id: t.id }), tr('tasks.retry.done'))}><RotateCw />{t.status === 'limited' ? tr('tasks.continueNow') : tr('tasks.retry')}</A> : null}
         {!['running', 'done'].includes(t.status) ? <A onClick={reassign}><Shuffle />{tr('tasks.reassign.btn')}</A> : null}
-        {t.hasCheckpoint && t.status !== 'running' ? <A onClick={async () => { if (await confirm(tr('tasks.undo.title'), tr('tasks.undo.body'), { ok: tr('tasks.undo.ok'), danger: true })) act(call('tasks.undo', { id: t.id })); }}><Undo2 />{tr('tasks.undo.btn')}</A> : null}
+        {/* (A held task has «Deshacer» on its card below, next to «Aceptar».) */}
+        {t.hasCheckpoint && t.status !== 'running' && !t.held ? <A onClick={async () => { if (await confirm(tr('tasks.undo.title'), tr('tasks.undo.body'), { ok: tr('tasks.undo.ok'), danger: true })) act(call('tasks.undo', { id: t.id })); }}><Undo2 />{tr('tasks.undo.btn')}</A> : null}
         {t.branch && t.status === 'done' ? (<>
           <A onClick={async () => { if (await confirm(tr('tasks.merge'), tr('tasks.merge.body', { branch: t.branch }), { ok: tr('tasks.merge.ok') })) act(call('projects.merge', { name: t.project, branch: t.branch }), tr('tasks.merge.done')); }}><GitMerge />{tr('tasks.merge')}</A>
           <A onClick={createPr}><GitPullRequest />{tr('tasks.pr.title')}</A>
@@ -123,6 +131,11 @@ function TaskDetail({ id, live }) {
         </>) : null}
         {!['done', 'cancelled'].includes(t.status) ? <Button size="sm" variant="danger" onClick={async () => { if (await confirm(tr('tasks.cancel.title'), t.status === 'running' ? tr('tasks.cancel.running') : tr('tasks.cancel.ask'), { ok: tr('tasks.cancel.title'), cancel: tr('tasks.cancel.back'), danger: true })) act(call('tasks.cancel', { id: t.id }), tr('tasks.cancel.done')); }}><Square />{tr('tasks.cancel')}</Button> : null}
       </div>
+      {/* 3.8.3: held for review: what it did and where, with «Aceptar» and «Deshacer»; a paused queue, with «Reanudar». */}
+      {t.held ? <HeldCard task={t} className="mx-5" /> : null}
+      {t.status === 'queued' && t.waiting?.kind === 'paused' ? <PausedNote className="mx-5" /> : null}
+      {t.status === 'queued' && t.waiting?.kind === 'manual' ? <div className="bg-muted/50 mx-5 rounded-xl border px-3.5 py-2.5 text-[13px]" data-testid="task-wait-manual">{tr('tasks.wait.manualNote')}</div> : null}
+      {t.status === 'queued' && t.waiting?.kind === 'deps' ? <div className="bg-muted/50 mx-5 rounded-xl border px-3.5 py-2.5 text-[13px]" data-testid="task-wait-deps">{waitText(tr, t)}</div> : null}
       {t.status === 'running' && live ? <div className="bg-muted/50 mx-5 rounded-xl border px-3.5 py-3" data-testid="task-live"><LiveTask t={live} actions={false} /></div> : null}
       {t.undone ? <div className="bg-muted/50 mx-5 flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[13px]"><Undo2 className="text-muted-foreground size-4" />{tr('tasks.undoneNote', { when: fmtTime(t.undone.at) })}</div> : null}
       {t.status === 'limited' && t.limited_until ? <div className="bg-warning/10 border-warning/40 mx-5 flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[13px]"><Hourglass className="text-warning size-4" />{tr('tasks.limitedNote', { when: fmtTime(t.limited_until) })}</div> : null}
@@ -196,12 +209,12 @@ export function TasksView({ route }) {
                   {phone ? (
                     <div className="min-w-0 flex-1">
                       <div className="line-clamp-2 text-[14px] leading-snug">{t.title}</div>
-                      <div className="mt-1 flex min-w-0 items-center gap-2"><StatusBadge status={t.status} undone={t.undone} /><span className="text-muted-foreground truncate text-xs">{t.project} · {ago(t.updated_at)}</span></div>
+                      <div className="mt-1 flex min-w-0 items-center gap-2"><StatusBadge status={t.status} undone={t.undone} task={t} /><span className="text-muted-foreground truncate text-xs">{t.project} · {ago(t.updated_at)}</span></div>
                       {progress}
                     </div>
                   ) : (<>
                     <div className="min-w-0 flex-1"><div className="truncate text-[14px]">{t.title}</div><div className="text-muted-foreground truncate text-xs">#{t.id} · {t.project} · {AGENT[t.assigned_to ?? t.agent] ?? t.agent} · {ago(t.updated_at)}</div>{progress}</div>
-                    <StatusBadge status={t.status} undone={t.undone} />
+                    <StatusBadge status={t.status} undone={t.undone} task={t} />
                   </>)}
                 </button>
               );

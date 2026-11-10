@@ -1,16 +1,17 @@
 // 2.6: the models of every agent, asked to the agent itself (src/agents/*.mjs discoverModels) and kept for the brain
-// selector (src/engine/catalog.mjs): what each agent's listing looks like, the throttle (once every 12 h), «Comprobar»
+// selector (src/engine/usage/catalog.mjs): what each agent's listing looks like, the throttle (once every 12 h), «Comprobar»
 // forcing it, and the catalog naming a non-Claude agent's models and its default.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { tempHome, fake, until, startEngine } from './helpers.mjs';
-import { Board } from '../src/core/board.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
 import { cursorModels } from '../src/agents/cursor.mjs';
 import { codexModels } from '../src/agents/codex.mjs';
 import { acpAgent, acpModels } from '../src/agents/acp.mjs';
-import { rememberModels, refreshModels, modelCatalog, MODELS_EVERY } from '../src/engine/catalog.mjs';
+import { rememberModels, refreshModels, modelCatalog, MODELS_EVERY, NO_ANSWER_WAIT } from '../src/engine/usage/catalog.mjs';
+import { refreshPlans } from '../src/engine/usage/plans.mjs';
 
 const t = tempHome({ agents: { cursor: { enabled: true } } });
 const asked = path.join(t.base, 'preguntas.log');
@@ -76,7 +77,7 @@ test('refreshModels: pregunta al agente una vez cada 12 h; «Comprobar» (force)
   assert.equal(await refreshModels(board, 'codex'), false);
   assert.deepEqual(questions(), ['codex'], 'dentro de las 12 h no se pregunta otra vez');
   // Twelve hours later it asks again (same list: nothing changes, but it was asked).
-  board.setting('models_at:codex', String(Date.now() - MODELS_EVERY - 1000)); board.setting('models_try:codex', String(Date.now() - MODELS_EVERY - 1000));
+  const before = String(Date.now() - MODELS_EVERY - 1000); board.setting('models_at:codex', before); board.setting('models_try:codex', before);
   assert.equal(await refreshModels(board, 'codex'), false);
   assert.deepEqual(questions(), ['codex', 'codex']);
   await refreshModels(board, 'codex', { force: true });
@@ -85,6 +86,46 @@ test('refreshModels: pregunta al agente una vez cada 12 h; «Comprobar» (force)
   await Promise.all([refreshModels(board, 'cursor', { force: true }), refreshModels(board, 'cursor', { force: true })]);
   assert.equal(questions().filter((a) => a === 'cursor').length, 1);
   assert.equal(await refreshModels(board, 'gemini', { force: true }), false, 'un agente apagado no se pregunta');
+});
+
+// 3.8.3: Cursor without a login answered nothing and was started again at every Orb start (and every hour).
+test('un agente que no dice sus modelos no se vuelve a arrancar solo en una semana; «Comprobar» sí pregunta', async () => {
+  const board = new Board();
+  fs.rmSync(asked, { force: true });
+  board.setting('models_at:cursor', ''); board.setting('models_try:cursor', '');
+  process.env.ORB_FAKE_SILENT_MODELS = 'cursor';
+  try {
+    assert.equal(await refreshModels(board, 'cursor'), false);
+    assert.deepEqual(questions(), ['cursor']);
+    assert.equal(await refreshModels(board, 'cursor'), false);
+    board.setting('models_try:cursor', String(Date.now() - 2 * 3_600_000));
+    assert.equal(await refreshModels(board, 'cursor'), false);
+    assert.deepEqual(questions(), ['cursor'], 'ni al arrancar otra vez ni horas después');
+    board.setting('models_try:cursor', String(Date.now() - NO_ANSWER_WAIT - 1000));
+    await refreshModels(board, 'cursor');
+    assert.deepEqual(questions(), ['cursor', 'cursor'], 'pasada la semana, una vez');
+    await refreshModels(board, 'cursor', { force: true });
+    assert.equal(questions().length, 3, '«Comprobar» pregunta siempre');
+  } finally { delete process.env.ORB_FAKE_SILENT_MODELS; board.setting('models_try:cursor', ''); }
+});
+
+test('el plan que el agente no dice no se vuelve a pedir en cada arranque; el que sí dice, cada 12 h', async () => {
+  const board = new Board();
+  const calls = [];
+  const silent = async (acc) => { calls.push(acc.id); return null; };
+  const cursor = () => calls.filter((x) => x === 'cursor').length;
+  await refreshPlans(board, { ask: silent });
+  assert.equal(cursor(), 1, 'la primera vez se pregunta');
+  await refreshPlans(board, { ask: silent });
+  assert.equal(cursor(), 1, 'el arranque siguiente no vuelve a arrancar el agente');
+  await refreshPlans(board, { ask: silent, force: true });
+  assert.equal(cursor(), 2, 'al iniciar sesión (force) sí');
+  board.setting('plan_try:cursor', String(Date.now() - NO_ANSWER_WAIT - 1000));
+  await refreshPlans(board, { ask: async (acc) => { calls.push(acc.id); return acc.id === 'cursor' ? 'pro' : null; } });
+  assert.equal(cursor(), 3, 'pasada la semana, otra vez');
+  assert.equal(board.settingJson('plan:cursor')?.plan, 'pro');
+  await refreshPlans(board, { ask: silent });
+  assert.equal(cursor(), 3, 'con el plan leído, no antes de 12 h');
 });
 
 test('el catálogo nombra los modelos de un agente que no es Claude y su predeterminado', () => {

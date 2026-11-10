@@ -1,15 +1,17 @@
 // Claude Code adapter. 2.3: a live session through the official Claude Agent SDK, driving the
 // Claude Code the user installed (pathToClaudeCodeExecutable): its login, its subscription, nothing is copied. One process
 // per conversation stays open between turns; answers stream as they are written; every action that needs permission goes
-// through the guard (src/core/guard.mjs) and, when it must ask, to an approval card in the app.
+// through the guard (src/domain/security/guard.mjs) and, when it must ask, to an approval card in the app.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, describeInput, cleanEnv, within, discoverDir, killTree, mcpEnvByRef } from './common.mjs';
+import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, cleanEnv, within, discoverDir, killTree } from '../platform/proc.mjs';
+import { clip, describeInput, mcpEnvByRef } from './common.mjs';
 import { Turn, Approvals } from './live.mjs';
-import { decide, describeAction } from '../core/guard.mjs';
-import { tr } from '../core/context.mjs';
+import { decide, describeAction } from '../domain/security/guard.mjs';
+import { tr } from '../platform/context.mjs';
+import { logJson } from '../platform/log.mjs';
 
 export const id = 'claude';
 export const label = 'Claude Code';
@@ -141,8 +143,21 @@ export const answersOrb = (m) => !(m?.origin?.kind && m.origin.kind !== 'human')
 export const nativeSkills = true;
 
 // 3.8.2: «total» is no longer bypassPermissions (which never calls canUseTool, so Orb's guard did not run): Claude asks
-// for what it would ask in «default» and the guard allows all but the protected set (src/core/guard.mjs).
-export const permissionModeOf = (p) => (p === 'editar' ? 'acceptEdits' : 'default');
+// for what it would ask in «default» and the guard allows all but the protected set (src/domain/security/guard.mjs).
+// 3.8.3: «Auto» too: Claude Code accepts edits inside its folder by itself; anything else (commands, writes outside it)
+// still reaches canUseTool, so Orb's guard decides.
+// Glob and Grep patterns are checked too (where they reach): Glob's pattern and Grep's glob (its pattern is a regular
+// expression, not a path). 3.8.3 (security review): from the folder the tool searches (its path), not the agent's.
+export function toolPatterns(toolName, toolInput) {
+  const base = typeof toolInput?.path === 'string' && toolInput.path ? toolInput.path : null;
+  const at = (p) => (base && !path.isAbsolute(p) && !path.win32.isAbsolute(p) && !/^~[\\/]/.test(p) ? path.join(base, p) : p);
+  return (toolName === 'Grep' ? [toolInput?.glob] : [toolInput?.pattern, toolInput?.glob]).filter((x) => typeof x === 'string' && x).map(at);
+}
+export const permissionModeOf =(p) => (p === 'editar' || p === 'auto' ? 'acceptEdits' : 'default');
+
+// 3.8.3: Orb's own tools always in the prompt (Claude Code's alwaysLoad), never behind its tool search: Orbe reported
+// spending three steps fetching orb_* tools before each use. The other servers (the user's connectors) stay deferrable.
+export const orbAlwaysLoaded = (servers) => (servers?.orb ? { ...servers, orb: { ...servers.orb, alwaysLoad: true } } : servers);
 
 // options: exe, cwd, model, reasoning, permission, resumeId, newSessionId, forkSession, mcpServers, env, systemPrompt
 // (appended to Claude Code's own), tools ({ allowed, disallowed }), addDirs, budgetUsd, internalDir, log, onEvent, skills
@@ -165,9 +180,10 @@ export function createLive(o) {
   const canUseTool = async (toolName, toolInput, ctx = {}) => {
     const command = toolInput?.command ?? '';
     const paths = [toolInput?.file_path, toolInput?.path, toolInput?.notebook_path].filter(Boolean);
-    // Glob and Grep patterns are checked too (where they reach).
-    const patterns = [toolInput?.pattern, toolInput?.glob].filter((x) => typeof x === 'string' && x);
-    const verdict = decide({ permission, tool: toolName, command, paths, patterns: toolName === 'Grep' ? patterns.slice(1) : patterns, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()) });
+    const patterns = toolPatterns(toolName, toolInput);
+    const verdict = decide({ permission, tool: toolName, command, paths, patterns, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()), projectDir: o.projectDir, userAsked: o.userAsked?.() ?? [] });
+    // 3.8.3: what «Auto» lets through that «Preguntar» would have asked is said in the chat (one quiet line).
+    if (verdict.auto) onEvent({ type: 'auto', title: typeof toolInput?.description === 'string' && toolInput.description.trim() ? toolInput.description : describeAction({ tool: toolName, command, paths, lang: o.lang }), reason: verdict.reason });
     if (verdict.decision === 'allow') return { behavior: 'allow', updatedInput: toolInput };
     if (verdict.decision === 'deny') return { behavior: 'deny', message: `Orb no lo permite: ${verdict.reason}.` };
     // 3.1: summary: what the agent itself says the command is for (Claude's Bash tool asks it for a description).
@@ -262,7 +278,7 @@ export function createLive(o) {
       includePartialMessages: true,
       settingSources: risky.length ? [] : LEAN_SOURCES,
       extraArgs: { 'strict-mcp-config': null },
-      mcpServers: mcp.servers,
+      mcpServers: orbAlwaysLoaded(mcp.servers),
       additionalDirectories: o.addDirs ?? [],
       abortController: abort,
       canUseTool,
@@ -272,7 +288,7 @@ export function createLive(o) {
       // folder (other conversations) would run with their environment. (Managed policy hooks still apply.)
       // 3.8.1: nor the commands a skill or a slash command runs when it loads (!`…` in its text): checked with the real
       // Claude Code, they ran without asking canUseTool. (A skill's allowed-tools skipped it too: the skills of core reach
-      // Claude without it, src/core/extensions.mjs › exposeSkills.)
+      // Claude without it, src/domain/extensions/extensions.mjs › exposeSkills.)
       settings: { fastMode: false, disableAllHooks: true, disableSkillShellExecution: true },
       // 3.8 (F2.6c): nor its permission rules: an allow rule there (Bash, Edit…) would let Claude act without asking Orb's
       // guard (canUseTool), past «leer», «probar» and «Cosas que nadie toca». Only policy rules count (checked with the
@@ -298,14 +314,14 @@ export function createLive(o) {
     // 3.8.2 (owner's decision D8): no Claude in Chrome (it drives the user's own Chrome); every agent's browser is Orb's
     // (orb_browser_*), with Orb's browser rules. Under «Acceso total» the PC is used through the terminal.
     if (o.budgetUsd) options.maxBudgetUsd = o.budgetUsd;
-    // 3.8.1: the skills of core that are on, as a plugin Orb makes (src/core/extensions.mjs › exposeSkills): Claude lists
+    // 3.8.1: the skills of core that are on, as a plugin Orb makes (src/domain/extensions/extensions.mjs › exposeSkills): Claude lists
     // them («orb-skills:<name>») and loads one when it fits. Checked with the real Claude Code (supportedCommands).
     if (o.skills?.list?.length) options.plugins = [{ type: 'local', path: o.skills.plugin }];
     query = sdkQuery({ prompt: input, options });
     (async () => {
       // 3.0: the streamed pieces of each answer are not written to the run log one by one (a disk write per token); the
       // whole message that follows them is.
-      try { for await (const m of query) { if (m?.type !== 'stream_event') log(JSON.stringify(m).slice(0, 4000)); handle(m); } }
+      try { for await (const m of query) { if (m?.type !== 'stream_event') log(logJson(m)); handle(m); } }
       catch (error) {
         log(`fin con error: ${error?.stack ?? error}`);
         if (turn && !turn.done) turn.finish({ isError: true, final: closed ? tr('sys.agents.stopped') : tr('sys.agents.exitedWith', { name: label, error: error?.message ?? error }) });

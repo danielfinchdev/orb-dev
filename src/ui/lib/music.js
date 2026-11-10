@@ -1,6 +1,6 @@
 // 3.8.2 (item 13): the music of the Windows app. Background music for studying or coding (the button at the foot of the
-// sidebar) and one track per minigame (src/ui/games/games.jsx). The tracks and their licences are src/core/music.mjs;
-// the engine downloads each the first time it is played and hands its bytes over ('music.track', src/engine/music.mjs).
+// sidebar) and one track per minigame (src/ui/games/games.jsx). The tracks and their licences are src/shared/music.mjs;
+// the engine downloads each the first time it is played and hands its bytes over ('music.track', src/engine/host/music.mjs).
 //
 // - Only on the Windows app: never on the phone or in a linked browser (available()).
 // - Off by default and never starts by itself: it plays after a click. Whether it was on is remembered (ui.music.on);
@@ -9,7 +9,7 @@
 //   back when the window is shown, only if it was playing). A game's music pauses the background music meanwhile.
 // - Nothing runs while it is off: no element, no timer, no listener but visibilitychange.
 import { bridge, call, getState, setState, fullPc } from './store.js';
-import { musicAllowed, musicPrefs as prefsOf, gameMusicOn as gameOnOf, nextTrack, gameTrack } from '../../core/music.mjs';
+import { musicAllowed, musicPrefs as prefsOf, gameMusicOn as gameOnOf, nextTrack, gameTrack } from '../../shared/music.mjs';
 
 export const available = () => musicAllowed({ mobile: bridge.mobile, desktop: bridge.desktop, platform: bridge.platform }) && fullPc();
 const ui = () => getState().app?.config?.ui ?? {};

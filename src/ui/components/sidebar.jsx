@@ -2,15 +2,15 @@ import { useEffect, useState } from 'react';
 import { Bot, BookOpen, Bug, ChevronUp, ChevronDown, Settings, GraduationCap, Music, Pause, SkipForward, LoaderCircle } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { ThemeToggle, SidebarToggle } from './theme-toggle.jsx';
-import { useStore, go, bridge, openSettings } from '@/lib/store.js';
+import { useStore, go, bridge, openSettings, anyChatBusy } from '@/lib/store.js';
 import { Tip, BubbleTip } from './ui/overlay.jsx';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
-import { PRODUCT } from '../../core/product.mjs';
+import { PRODUCT } from '../../shared/product.mjs';
 import { BrowserSettingsMenu } from './browser-settings-menu.jsx';
 import { OrbInbox } from '@/views/orb/inbox.jsx';
 import { available as musicAvailable, musicState, subscribe as onMusic, toggleMusic, skipTrack } from '@/lib/music.js';
-import { trackOf } from '../../core/music.mjs';
+import { trackOf } from '../../shared/music.mjs';
 
 // The assistant's wordmark ORB·E, drawn its own way in each theme (app.css .wordmark): spaced capitals with a dot of the
 // theme's colour in Orb, a techno one underlined in Vaporwave…
@@ -136,6 +136,7 @@ function MusicButtons() {
 export function Sidebar({ mood }) {
   const t = useT();
   const app = useStore((s) => s.app);
+  const chatBusy = useStore(anyChatBusy);
   const route = useStore((s) => s.route);
   const conversations = useStore((s) => s.conversations) ?? [];
   const settingsOpen = useStore((s) => Boolean(s.settings));
@@ -154,7 +155,7 @@ export function Sidebar({ mood }) {
         <Tip label={t('nav.backToChat', { name })} side="bottom" align="start">
           <button type="button" className="no-drag relative shrink-0 cursor-pointer rounded-full" onClick={() => go(lastChat(route, conversations))} aria-label={t('nav.backToChat', { name })} data-testid="sidebar-home">
             <Robot size={34} mood={mood} title={name} live active={working} />
-            {(app.chats ?? []).some((c) => c.busy) ? <span className="bg-primary absolute right-0 bottom-0 size-2 animate-pulse rounded-full" /> : null}
+            {chatBusy ? <span className="bg-primary absolute right-0 bottom-0 size-2 animate-pulse rounded-full" /> : null}
           </button>
         </Tip>
         {/* 2.6: with the default name, the drawn wordmark (Orb·E); a name of one's own, as it is written. */}

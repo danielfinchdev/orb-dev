@@ -9,12 +9,12 @@ import { call, getState, act, bridge, useStore, refresh } from '@/lib/store.js';
 import { baseName } from '@/lib/utils.js';
 import { GithubIcon } from '@/components/agent-icon.jsx';
 import { t, useT } from '@/lib/i18n.js';
-import { projectNameProblem } from '../../core/product.mjs';
-import { CATEGORIES, PLATFORMS, MULTI, SHARED_DIR, DEFAULT_CATEGORY } from '../../core/layout.mjs';
+import { projectNameProblem } from '../../shared/product.mjs';
+import { CATEGORIES, PLATFORMS, MULTI, SHARED_DIR, DEFAULT_CATEGORY } from '../../shared/layout.mjs';
 
 const home = () => getState().app?.home ?? '';
 const sep = () => (home().includes('\\') ? '\\' : '/');
-// Projects of Orb's folder live in one of its categories (windows, linux, ios, android, web, multi: src/core/layout.mjs).
+// Projects of Orb's folder live in one of its categories (windows, linux, ios, android, web, multi: src/shared/layout.mjs).
 export { CATEGORIES };
 const CategoryField = ({ v, set }) => (
   <Field label={t('comp.projects.category')} hint={t('comp.projects.categoryHint')}>

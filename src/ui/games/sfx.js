@@ -3,9 +3,10 @@
 // keeps playing on its own. The same switch and volume as the robot's voice (Ajustes › Sonidos: config.ui.sounds and
 // ui.volume) plus the games' own mute (this window only), never with the window in the background and never piling up.
 import { getState } from '@/lib/store.js';
+import { quietAudioContext } from '@/lib/audio-context.js';
 
 const KEY = 'orb.juegos.sonido';
-let ctx = null; let out = null; let noiseBuf = null;
+let ctx = null; let out = null; let noiseBuf = null; let ready = () => false;
 const voices = new Set(); // what is sounding or scheduled, so it can all be cut at once
 const last = new Map(); // when each effect last played, to keep fast repeats from piling up
 let muted = (() => { try { return localStorage.getItem(KEY) === '0'; } catch { return false; } })();
@@ -18,17 +19,19 @@ export function setMuted(v) {
   if (muted) stopAll();
 }
 
+// 3.8.3: made without its device and given it asynchronously (lib/audio-context.js): the window never waits for it.
 function audio() {
   if (!ctx) {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return null;
-    try { ctx = new AC(); } catch { return null; }
+    const made = quietAudioContext();
+    if (!made) return null;
+    ctx = made.ctx; ready = made.ready;
     // A soft low-pass and a little compression keep the square waves round and every effect at a similar loudness.
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4200;
     const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -20; comp.ratio.value = 4;
     out = ctx.createGain();
     out.connect(lp); lp.connect(comp); comp.connect(ctx.destination);
   }
+  if (!ready()) return null; // its device is still on its way: this effect is skipped
   if (ctx.state === 'suspended') ctx.resume().catch(() => {});
   out.gain.value = 0.16 * app().volume;
   return ctx;

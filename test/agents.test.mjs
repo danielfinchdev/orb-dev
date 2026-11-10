@@ -10,10 +10,11 @@ import path from 'node:path';
 import * as claude from '../src/agents/claude.mjs';
 import * as codex from '../src/agents/codex.mjs';
 import * as cursor from '../src/agents/cursor.mjs';
-import { cleanEnv, mcpEnvByRef, killTree } from '../src/agents/common.mjs';
+import { cleanEnv, killTree } from '../src/platform/proc.mjs';
+import { mcpEnvByRef } from '../src/agents/common.mjs';
 import { spawn } from 'node:child_process';
 import { ADAPTERS, adapter } from '../src/agents/index.mjs';
-import { AGENT_IDS } from '../src/core/home.mjs';
+import { AGENT_IDS } from '../src/platform/config-file.mjs';
 
 let dir; const lives = [];
 before(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-agentes-')); });
@@ -338,4 +339,14 @@ test('el entorno de los agentes no lleva secretos del proceso', () => {
   assert.equal(env.GITHUB_TOKEN, undefined); assert.equal(env.ANTHROPIC_API_KEY, undefined); assert.equal(env.ORB_ORCH_KEY, undefined);
   assert.equal(env.ORB_AGENT, 'codex'); assert.ok(env.PATH ?? env.Path);
   delete process.env.GITHUB_TOKEN; delete process.env.ANTHROPIC_API_KEY; delete process.env.ORB_ORCH_KEY;
+});
+
+// 3.8.3 (what Orbe itself reported): Orb's tools came deferred behind Claude Code's tool search, three steps per use.
+test('Claude: las herramientas de Orb van siempre cargadas; los conectores del usuario, no', () => {
+  const servers = { orb: { command: 'node', args: ['orb.mjs'], env: { A: '${A}' } }, notas: { command: 'notas' } };
+  const out = claude.orbAlwaysLoaded(servers);
+  assert.deepEqual(out.orb, { ...servers.orb, alwaysLoad: true });
+  assert.equal(out.notas.alwaysLoad, undefined);
+  assert.equal(servers.orb.alwaysLoad, undefined, 'the caller\'s object is not changed');
+  assert.deepEqual(claude.orbAlwaysLoaded({ notas: servers.notas }), { notas: servers.notas });
 });

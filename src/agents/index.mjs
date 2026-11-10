@@ -6,11 +6,11 @@ import * as claude from './claude.mjs';
 import * as codex from './codex.mjs';
 import * as cursor from './cursor.mjs';
 import { acpAgent, ACP_SPECS } from './acp.mjs';
-import { cleanEnv, IS_WIN } from './common.mjs';
+import { cleanEnv, IS_WIN, forgetAppData } from '../platform/proc.mjs';
 import fs from 'node:fs';
-import { ctx, tr } from '../core/context.mjs';
+import { ctx, tr } from '../platform/context.mjs';
 import { startLogin } from './login.mjs';
-import { accountsOf, account, accountDir, accountEnv, defaultAccount, loginState as accountLogin, MULTI } from '../core/accounts.mjs';
+import { accountsOf, account, accountDir, accountEnv, defaultAccount, loginState as accountLogin, MULTI } from '../domain/usage/accounts.mjs';
 
 export const ADAPTERS = { claude, codex, cursor, ...Object.fromEntries(Object.entries(ACP_SPECS).map(([id, spec]) => [id, acpAgent(id, spec)])) };
 // Tests: ORB_FAKE_AGENTS points to a module whose fakeAdapter(id) replaces every agent (no real program or account).
@@ -29,7 +29,7 @@ export function installed(agent) {
   found.set(agent, { ok, at: Date.now() });
   return ok;
 }
-export const forgetInstalled = () => found.clear();
+export const forgetInstalled = () => { found.clear(); forgetAppData(); };
 const loginState = (acc) => (MULTI[acc.agent] ? accountLogin(acc) : adapter(acc.agent).loginState());
 
 export function executable(agent) {

@@ -14,7 +14,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { tempHome, until, wait, startEngine } from './helpers.mjs';
-import { integrateInto, git, snapshotCommit } from '../src/core/workspace.mjs';
+import { integrateInto, snapshotCommit } from '../src/domain/tasks/checkpoints.mjs';
+import { git } from '../src/platform/git.mjs';
 import { cursorRules, prepareCursorFolder } from '../src/agents/cursor.mjs';
 import { Sessions } from '../src/engine/sessions.mjs';
 
@@ -118,9 +119,9 @@ test('el reloj de una tarea no cuenta el rato que espera tu permiso', () => {
 });
 
 test('lo que pediste con tus palabras no vuelve a pedir aprobación; lo que no pediste, sí', async () => {
-  const h = tempHome();
+  const h = tempHome({ permissions: { mode: 'preguntar' } }); // 3.8.3: «Preguntar»
   try {
-    const { Board, eventText } = await import('../src/core/board.mjs');
+    const { Board, eventText } = await import('../src/domain/tasks/board.mjs');
     const board = new Board();
     const dir = path.join(h.home, 'web', 'notas'); fs.mkdirSync(dir, { recursive: true });
     board.addProject({ name: 'notas', path: dir }, 'usuario');
@@ -142,7 +143,7 @@ test('lo que pediste con tus palabras no vuelve a pedir aprobación; lo que no p
 });
 
 test('al terminar una tarea, Orb para el servidor que dejó en marcha en su carpeta (y no los de antes ni los de otras carpetas)', { skip: process.platform !== 'win32' }, async () => {
-  const { Scheduler } = await import('../src/engine/scheduler.mjs');
+  const { Scheduler } = await import('../src/engine/scheduler/index.mjs');
   const { spawn } = await import('node:child_process');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-restos-'));
   const other = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-otro-'));
@@ -155,9 +156,9 @@ test('al terminar una tarea, Orb para el servidor que dejó en marcha en su carp
   const elsewhere = spawn(process.execPath, [path.join(other, 'server.js')], { stdio: 'ignore' });
   await wait(800);
   const events = [];
-  const self = { running: new Map(), board: { task: () => null, one: () => ({ at: since }), event: (...a) => events.push(a) } };
+  const self = { running: new Map(), cleaning: new Map(), log: () => {}, folderBusy: Scheduler.prototype.folderBusy, stopTaskPrograms: Scheduler.prototype.stopTaskPrograms, board: { task: () => null, one: () => ({ at: since }), event: (...a) => events.push(a) } };
   const saved = process.env.ORB_FAKE_AGENTS; delete process.env.ORB_FAKE_AGENTS;
-  try { Scheduler.prototype.stopLeftovers.call(self, { id: 9, workdir: dir }); } finally { process.env.ORB_FAKE_AGENTS = saved; }
+  try { await Scheduler.prototype.stopLeftovers.call(self, { id: 9, workdir: dir }); } finally { process.env.ORB_FAKE_AGENTS = saved; }
   const alive = (c) => { try { process.kill(c.pid, 0); return true; } catch { return false; } };
   // Stop-Process only starts the end of a process (TerminateProcess returns at once): on a busy PC a fixed half second
   // was sometimes too little. Its own exit says when it is gone.
@@ -172,7 +173,7 @@ test('al terminar una tarea, Orb para el servidor que dejó en marcha en su carp
 });
 
 test('parar por su número el servidor que arrancó la propia tarea no pregunta; cualquier otro proceso, sí', { skip: process.platform !== 'win32' }, async () => {
-  const { pidKills } = await import('../src/core/guard.mjs');
+  const { pidKills } = await import('../src/domain/security/guard.mjs');
   assert.deepEqual(pidKills('taskkill //PID 9824 //T //F; sleep 1; netstat -ano | grep ":5199 " | grep LISTEN | wc -l'), [9824]);
   assert.deepEqual(pidKills('Stop-Process -Id 12 -Force'), [12]);
   assert.deepEqual(pidKills('Stop-Process -Id 17624 -Confirm:$false; Start-Sleep 1; netstat -ano | Select-String ":5175 .*LISTENING"'), [17624], 'visto en una prueba real');
@@ -186,9 +187,9 @@ test('parar por su número el servidor que arrancó la propia tarea no pregunta;
   const mine = spawn(process.execPath, [path.join(dir, 'server.js')], { stdio: 'ignore' });
   await wait(800);
   try {
-    assert.equal(Sessions.prototype.ownProcesses.call({}, `taskkill /PID ${mine.pid} /F`, dir, since), true, 'el suyo');
-    assert.equal(Sessions.prototype.ownProcesses.call({}, `taskkill /PID ${old.pid} /F`, dir, since), false, 'uno de antes de la tarea');
-    assert.equal(Sessions.prototype.ownProcesses.call({}, `taskkill /PID ${process.pid} /F`, dir, since), false, 'uno de fuera');
+    assert.equal(await Sessions.prototype.ownProcesses.call({}, `taskkill /PID ${mine.pid} /F`, dir, since), true, 'el suyo');
+    assert.equal(await Sessions.prototype.ownProcesses.call({}, `taskkill /PID ${old.pid} /F`, dir, since), false, 'uno de antes de la tarea');
+    assert.equal(await Sessions.prototype.ownProcesses.call({}, `taskkill /PID ${process.pid} /F`, dir, since), false, 'uno de fuera');
   } finally { old.kill(); mine.kill(); }
 });
 

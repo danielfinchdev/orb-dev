@@ -6,8 +6,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { fork } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { createHome, loadConfig, writeJson, merge } from '../src/core/home.mjs';
-import { useHome } from '../src/core/context.mjs';
+import { createHome } from '../src/domain/workspace/home.mjs';
+import { loadConfig, merge } from '../src/platform/config-file.mjs';
+import { writeJson } from '../src/platform/paths.mjs';
+import { useHome } from '../src/platform/context.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const fake = (name) => path.join(ROOT, 'test', 'fixtures', name);
@@ -71,3 +73,6 @@ export function fakeLog(home, run) {
   let text = ''; try { text = fs.readFileSync(file, 'utf8'); } catch { return []; }
   return text.split('\n').filter((l) => l.startsWith('{"fake"')).map((l) => JSON.parse(l));
 }
+
+// 3.8.3: Ajustes is a folder of files (src/ui/views/settings/); tests that read its source read them all, in order.
+export const settingsSource = () => ['index', 'rows', 'general', 'devices', 'about'].map((f) => fs.readFileSync(path.join(ROOT, 'src', 'ui', 'views', 'settings', `${f}.jsx`), 'utf8')).join('\n');

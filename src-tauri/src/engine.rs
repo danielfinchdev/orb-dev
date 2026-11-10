@@ -288,6 +288,16 @@ impl Engine {
     let id = self.next.fetch_add(1, Ordering::SeqCst) + 1;
     let (tx, rx) = oneshot::channel();
     self.pending.lock().unwrap().insert(id, tx);
+    // Whatever way this future ends (an answer, its own timeout, or dropped by call()'s outer timeout), its entry goes.
+    struct Unpend<'a>(&'a Mutex<HashMap<u64, oneshot::Sender<Reply>>>, u64);
+    impl Drop for Unpend<'_> {
+      fn drop(&mut self) {
+        if let Ok(mut p) = self.0.lock() {
+          p.remove(&self.1);
+        }
+      }
+    }
+    let _unpend = Unpend(&self.pending, id);
     let mut message = match fields {
       Value::Object(m) => m,
       _ => Map::new(),
@@ -334,6 +344,18 @@ impl Engine {
       Status::Failed(e) => Err(e),
       _ => Ok(()),
     }
+  }
+
+  /// Orb is not closing after all (the installer of a new version could not be started after the engine was stopped
+  /// for it): the engine starts again, as after a crash.
+  pub async fn resume(self: Arc<Self>) {
+    self.quitting.store(false, Ordering::SeqCst);
+    if self.is_running() {
+      return;
+    }
+    self.restarts.store(0, Ordering::SeqCst);
+    self.status.send_replace(if self.home().is_some() { Status::Starting } else { Status::Booting });
+    self.boot(Some(None)).await;
   }
 
   /// A call of the window (or of the app: app.state before closing): waits until the engine has started. `timeout` is
@@ -393,6 +415,9 @@ impl Engine {
           crate::window::set_title(&self.app, payload.get("assistantName").and_then(Value::as_str));
           let me = self.clone();
           tauri::async_runtime::spawn(async move { me.refresh_texts().await });
+        }
+        if event == "backup:progress" {
+          crate::updater::backup_progress(&self.app, &payload);
         }
         self.emit_event(&event, payload);
       }

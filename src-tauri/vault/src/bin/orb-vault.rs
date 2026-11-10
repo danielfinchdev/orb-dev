@@ -1,4 +1,4 @@
-// The tests' vault (npm test; src/core/master.mjs starts it when no app runs the engine): the same code as Orb.exe's,
+// The tests' vault (npm test; src/domain/security/master.mjs starts it when no app runs the engine): the same code as Orb.exe's,
 // for one engine process. orb-vault --channel <pipe or folder> --grants <pipe or socket> [--test]
 // --test: the tests' cheap scrypt costs and the caller's clock (a test moves time forward); never in Orb.exe.
 // It ends when its engine closes the channel, or when none comes within a minute.

@@ -1,4 +1,4 @@
-// What the engine asks the app to do (src/engine/host.mjs): open a link or a folder with the system; open a terminal, an
+// What the engine asks the app to do (src/engine/host/host.mjs): open a link or a folder with the system; open a terminal, an
 // editor or a project's action (programs that must outlive Orb: started here, outside the engine's Job Object, the
 // program picked here: tools.rs). Every request is checked
 // again here (protocol::check_host, the same rules as the engine's). And the agents' browser and its little window

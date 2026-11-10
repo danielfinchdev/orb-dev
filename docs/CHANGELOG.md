@@ -1,11 +1,50 @@
 ## Download
 
-- **`Orb-3.8.2-instalador.exe`** (the Windows app): installs for your user, without administrator rights, and updates
+- **`Orb-3.8.3-instalador.exe`** (the Windows app): installs for your user, without administrator rights, and updates
   itself. It needs Microsoft Edge WebView2, which Windows 11 and an up-to-date Windows 10 already have (if it is
   missing, the installer gets it).
-- **Android:** keep using the Orb 3.8.1 app ([`Orb-3.8.1-android.apk`](https://github.com/danielfinchdev/orb-dev/releases/tag/v3.8.1)); it works with Orb 3.8.2 on your PC. A new native Android app is planned for a later release.
+- **Android:** keep using the Orb 3.8.1 app ([`Orb-3.8.1-android.apk`](https://github.com/danielfinchdev/orb-dev/releases/tag/v3.8.1)); it works with Orb 3.8.3 on your PC. A new native Android app is planned for a later release.
 
 Windows 10/11. Since it isn't signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
+
+**Updating from 3.8.2:** if «Reiniciar e instalar» seems stuck, close Orb and run the installer above; from 3.8.3 on,
+updating from the app no longer waits on the backup.
+
+## What's new in 3.8.3
+
+A stability release: no lag, smoother animations, fewer interruptions.
+
+**No more lag.** The engine no longer blocks while idle (a background check started a PowerShell process every 1.5 s
+for each finished task). Your messages show at once, answers start sooner and typing stays smooth while an answer
+streams.
+
+**Answers type themselves.** Orbe's and the agents' answers appear as if typed, at a pace that follows the stream,
+without cutting words, accents or emoji. Old chats open complete; «menos movimiento» shows text at once.
+
+**«Auto» mode.** A new «Auto / Preguntar» switch. In Auto, agents work freely inside the project (edit, delete,
+install, local git), with a snapshot first so «Deshacer» brings everything back. Orb still asks before publishing or
+pushing (unless your message asks for it), writing outside the project, sending data out or changing the system, and
+always blocks Orb's own data, your credentials and other projects' secrets. Tasks no longer wait for approval just
+because they mention words like «token».
+
+**Queue and approvals explain themselves.** Queued tasks say why they wait («En pausa · Reanudar», «Espera a #3»),
+held tasks show what they did with «Aceptar» and «Deshacer», and «Iniciar de todos modos» works while paused.
+
+**Smoother animations.** Clouds, the robot's eyes, Retro, Nube and Vaporwave scenes now run on the compositor: same
+look, much less work for the window. No animation was removed.
+
+**Fixes.**
+- Updating from the app never hangs on the pre-update backup.
+- Music plays again, and the attachment viewer plays audio and video.
+- Orb checks whether Flutter, the Android SDK and Java are really installed and says so.
+- Cursor is no longer relaunched on every start; the chat no longer switches project by itself.
+- Logs keep long lines whole; journals are read by whole entries.
+- A corrupted secrets file is reported instead of being overwritten.
+- Many fixes for stuck tasks, lanes and joins, and for agents' instructions that contradicted each other.
+- Security hardening of the guard (Windows path tricks, hidden pushes, git hooks and filters).
+
+**Under the hood.** The code is reorganised into clear layers (`docs/ARCHITECTURE.md`), with tests that keep the
+structure and every public method in place.
 
 ## What's new in 3.8.2
 

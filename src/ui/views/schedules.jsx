@@ -87,7 +87,7 @@ export function SchedulesView() {
                   {!s.approved ? <Button size="sm" onClick={() => act(call('schedules.update', { id: s.id, approve: true }), t('schedules.approve.done')).then(load)}><Check />{t('schedules.approve')}</Button>
                     : spent(s) ? null : <Switch checked={s.enabled} onCheckedChange={(enabled) => act(call('schedules.update', { id: s.id, enabled })).then(load)} aria-label={t('schedules.enabled')} />}
                   <BubbleTip title={t('schedules.runNow')}><Button size="icon-sm" variant="ghost" aria-label={t('schedules.runNow')} onClick={() => act(call('schedules.run', { id: s.id }), t('schedules.run.done')).then(load)}><Play /></Button></BubbleTip>
-                  {/* 3.8: deleting a schedule is this PC's (src/core/permissions.mjs). */}
+                  {/* 3.8: deleting a schedule is this PC's (src/domain/security/permissions.mjs). */}
                   {bridge.mobile ? null : <BubbleTip title={t('schedules.remove')}><Button size="icon-sm" variant="danger" aria-label={t('schedules.remove')} onClick={async () => { if (await confirm(t('schedules.remove.title'), t('schedules.remove.body', { title: s.title }), { ok: t('schedules.remove'), danger: true })) act(call('schedules.remove', { id: s.id })).then(load); }}><Trash2 /></Button></BubbleTip>}
                 </div>
               </CardContent>

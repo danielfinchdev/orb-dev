@@ -42,15 +42,15 @@ fn plain(p: &Path) -> String {
   s.strip_prefix(NO_PREFIX).unwrap_or(&s).to_lowercase()
 }
 
-/// The workspace's categories (src/core/layout.mjs › CATEGORIES): only a project folder inside one of them can go.
+/// The workspace's categories (src/shared/layout.mjs › CATEGORIES): only a project folder inside one of them can go.
 const CATEGORIES: [&str; 6] = ["windows", "linux", "ios", "android", "web", "multi"];
-/// Names inside a category that are never a project (src/core/home.mjs › isReservedInCategory): hidden folders, the
+/// Names inside a category that are never a project (src/platform/paths.mjs › isReservedInCategory): hidden folders, the
 /// Recycle Bin, node_modules and Orb 3.7's adb folder in android.
 fn reserved_in_category(category: &str, name: &str) -> bool {
   name.starts_with('.') || name == "node_modules" || name == "$recycle.bin" || (category == "android" && name == "adb-tools")
 }
 
-/// The folder the engine named, checked again here as src/core/project-close.mjs › deletableFolder: a real folder of this
+/// The folder the engine named, checked again here as src/domain/projects/project-close.mjs › deletableFolder: a real folder of this
 /// PC (not a link or a junction), exactly two levels inside the workspace (<category>\<name>), by its real path, in one
 /// of the workspace's own category folders (never core, its data or its secrets) and not a reserved name. → that real
 /// path.
@@ -114,7 +114,7 @@ pub fn put_back(dir: &Path) -> bool {
 }
 
 /// Some program is using the folder (its working folder, an open file): Windows does not let it be renamed. Tried with a
-/// rename beside it and back, as src/core/project-close.mjs › folderInUse. The folder never stays under the probe's
+/// rename beside it and back, as src/domain/projects/project-close.mjs › folderInUse. The folder never stays under the probe's
 /// name without saying where it is.
 pub fn folder_in_use(dir: &Path) -> InUse {
   if !put_back(dir) {

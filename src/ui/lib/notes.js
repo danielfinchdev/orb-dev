@@ -1,12 +1,12 @@
 // 3.6 (messaging, M4): what the window does with a notification that was tapped (the phone's browser: its service
-// worker, src/engine/remote.mjs; the Android app: lib/app-bridge.js). It opens the exact chat and, when «Aprobar» could
+// worker, src/engine/transport/remote.mjs; the Android app: lib/app-bridge.js). It opens the exact chat and, when «Aprobar» could
 // not be done right there (a task whose exact version is approved here), asks here.
 // Opened once the app is on screen (NoteOpener): what arrives before waits.
 import { useEffect } from 'react';
 import { call, act, go } from './store.js';
 import { t } from './i18n.js';
 
-// Open what a notification is for: { route, approve? } (approve: the permission or task to approve, from src/core/notes.mjs).
+// Open what a notification is for: { route, approve? } (approve: the permission or task to approve, from src/shared/notes.mjs).
 export async function openFromNote({ route, approve } = {}) {
   if (!route?.view) return;
   go(route);

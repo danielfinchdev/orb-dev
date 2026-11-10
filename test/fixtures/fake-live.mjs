@@ -4,6 +4,8 @@
 //
 //   ESCRIBE            writes hecho-por-<agente>.txt in its folder
 //   CREA_TAREA <p>     creates a task in project <p> through Orb's real MCP server (orb_create_task)
+//   CREA_BORRADO <p>   (3.8.3) the same, a task that deletes every file of its folder (ZAP_TODO): Orb holds it for review
+//   ZAP_TODO         deletes every file and folder of its folder but the hidden ones
 //   NAVEGA <url>       uses the agents' browser through the MCP (orb_browser_*) and writes navegador.txt
 //   NAVEGA_GUION <file.json>   (3.8.1) runs [["orb_browser_…", {args}], ["sleep", {ms}]…] through the MCP and writes each
 //                      answer to navegador-guion.json (a screenshot as «captura: <base64 length>»)
@@ -22,6 +24,7 @@
 //   DUERME             works for 30 s (until it is stopped)
 //   PARA_LENTO         once stopped, the turn takes 0.8 s to end (as the real Claude does)
 //   TABLA_MARKDOWN     answers in GFM: a table, a task list and strikethrough
+//   STREAM_LARGO       (3.8.3) streams a long Markdown answer for ~5 s, starting with «ZORRO»
 //   CIERRA_Y_CUELGA    closes its task (orb_update_task done) and then never ends its turn
 //   MANDA_MENSAJE <agente> <texto>   sends a message to another agent through Orb (orb_send_message)
 //   CREA_PAREJA <p>    (3.8, the coordinator) creates two read-only tasks in <p>: «Escucha» (claude, ESPERA_CORRECCION)
@@ -29,6 +32,9 @@
 //   AVISA_HERMANA <texto>   (3.8) writes to the first task its brief lists among the others of its conversation, as the
 //                      brief says (to: its agent, task_id: its number)
 //   LEE <ruta>         (3.6, one per line) reads a file: the real guard decides
+//   GUARDIA_EDITA <ruta>   (3.8.3, one per line) writes <ruta> (relative to its folder) as an Edit tool would: the real
+//                      guard decides, with the same project folder and user's words the real adapters pass
+//   GUARDIA_BORRA <carpeta>   (3.8.3, one per line) runs «rm -rf <carpeta>» through the real guard and deletes it if allowed
 //   ORB_FAKE_SCRIPT=<file.json>     (3.6, screenshots) [{ "when": "text", "reply": "…", "calls": [["tool", {args}]] }]: a
 //                      message containing «when» gets that natural reply (and makes those Orb tool calls, silently),
 //                      so the screenshots show real-looking conversations instead of the test keywords.
@@ -43,7 +49,7 @@ import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { Turn, Approvals } from '../../src/agents/live.mjs';
-import { decide } from '../../src/core/guard.mjs';
+import { decide } from '../../src/domain/security/guard.mjs';
 
 const SCRIPT = (() => { try { return process.env.ORB_FAKE_SCRIPT ? JSON.parse(fs.readFileSync(process.env.ORB_FAKE_SCRIPT, 'utf8')) : []; } catch { return []; } })();
 
@@ -94,6 +100,8 @@ export function fakeAdapter(id, real) {
       // 2.7: models of every kind (light, balanced, most capable), to test how Orb chooses for each task.
       if (process.env.ORB_FAKE_TIERED === '1' && id === 'claude') return [{ id: 'claude-haiku-4-5', label: 'Haiku 4.5' }, { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5', default: true }, { id: 'claude-sonnet-5', label: 'Sonnet 5' }, { id: 'claude-opus-5-5', label: 'Opus 5.5' }, { id: 'claude-opus-4-8', label: 'Opus 4.8' }, { id: 'claude-fable-5-1', label: 'Fable 5.1' }];
       if (process.env.ORB_FAKE_MODELS_LOG) { try { fs.appendFileSync(process.env.ORB_FAKE_MODELS_LOG, `${id}\n`); } catch { /* log unavailable */ } }
+      // 3.8.3: an agent that answers nothing (Cursor without a login).
+      if (String(process.env.ORB_FAKE_SILENT_MODELS ?? '').split(',').includes(id)) return null;
       // 3.6: the first model of each takes the «Extra» reasoning too (xhigh); the others the usual three.
       return [1, 2, 3].map((n) => ({ id: `fake-${id}-${n}`, label: `Modelo de prueba ${n}`, ...(n === 1 ? { default: true, efforts: ['low', 'medium', 'high', 'xhigh'] } : {}) }));
     }
@@ -143,12 +151,18 @@ function createFakeLive(agent, label, caps, o) {
     item('tool', 'tool_result', { id: `t${seq}`, output: 'a.txt', error: false });
     if (agent === 'codex') item('tool', 'file', { path: 'a.txt', change: 'update' });
     if (/ESCRIBE/.test(scan) && !/Task Review/.test(scan)) fs.writeFileSync(path.join(o.cwd, `hecho-por-${agent}.txt`), 'hola\n');
+    if (/ZAP_TODO/.test(scan) && !/Task Review/.test(scan)) for (const e of fs.readdirSync(o.cwd)) if (!e.startsWith('.')) fs.rmSync(path.join(o.cwd, e), { recursive: true, force: true });
     const notes = [];
     const proj = scan.match(/CREA_TAREA (\S+)/);
     if (proj) {
       const out = await mcpCall(orb, 'orb_create_task', { project: proj[1], title: 'Tarea del asistente', description: 'ESCRIBE un archivo de prueba', agent: 'claude' });
       item('tool', 'tool', { id: `t${++seq}`, name: 'orb:orb_create_task', input: proj[1] });
       item('tool', 'tool_result', { id: `t${seq}`, output: out.slice(0, 300), error: false });
+    }
+    const wipe = scan.match(/CREA_BORRADO (\S+)/);
+    if (wipe) {
+      await mcpCall(orb, 'orb_create_task', { project: wipe[1], title: 'Ordena la carpeta', description: 'ZAP_TODO lo viejo', agent: 'claude' });
+      item('tool', 'tool', { id: `t${++seq}`, name: 'orb:orb_create_task', input: wipe[1] });
     }
     const pair = scan.match(/CREA_PAREJA (\S+)/);
     if (pair) {
@@ -236,13 +250,32 @@ function createFakeLive(agent, label, caps, o) {
     // 3.6: LEE <ruta> (one per line): reading a file, as the real guard decides it.
     for (const m of scan.matchAll(/^LEE (.+)$/gm)) {
       const file = m[1].trim();
-      const verdict = decide({ permission, tool: 'Read', paths: [file], internalDir: o.internalDir });
-      record({ read: file, decision: verdict.decision, addDirs: o.addDirs ?? [] });
+      const verdict = decide({ permission, tool: 'Read', paths: [file], internalDir: o.internalDir, cwd: o.cwd, projectDir: o.projectDir, userAsked: o.userAsked?.() ?? [] });
+      record({ read: file, decision: verdict.decision, addDirs: o.addDirs ?? [], allowedTools: o.tools?.allowed ?? null });
       notes.push(`LEE ${verdict.decision}`);
+    }
+    // 3.8.3: an edit and a deletion as the real adapters ask the guard (a card when it asks, the work when it allows).
+    const guarded = async (action) => {
+      const verdict = decide({ permission, ...action, internalDir: o.internalDir, cwd: o.cwd, projectDir: o.projectDir, userAsked: o.userAsked?.() ?? [] });
+      if (verdict.auto) onEvent({ type: 'auto', title: action.command || action.paths?.join(', '), reason: verdict.reason });
+      let decision = verdict.decision;
+      if (decision === 'ask') decision = await approvals.ask({ id: `permiso-${++seq}`, tool: action.tool, title: action.command || action.paths.join(', '), reason: verdict.reason, input: action.command || action.paths.join(', ') });
+      record({ guard: action.command || action.paths, decision: verdict.decision, answer: decision });
+      return decision !== 'deny';
+    };
+    for (const m of scan.matchAll(/^GUARDIA_EDITA (.+)$/gm)) {
+      const file = path.resolve(o.cwd, m[1].trim());
+      if (await guarded({ tool: 'Edit', paths: [file] })) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, 'editado por Auto\n'); notes.push('EDITA ok'); } else notes.push('EDITA denegado');
+      if (current.done) return;
+    }
+    for (const m of scan.matchAll(/^GUARDIA_BORRA (.+)$/gm)) {
+      const dir = m[1].trim();
+      if (await guarded({ tool: 'Bash', command: `rm -rf ${dir}` })) { fs.rmSync(path.resolve(o.cwd, dir), { recursive: true, force: true }); notes.push('BORRA ok'); } else notes.push('BORRA denegado');
+      if (current.done) return;
     }
     if (/PIDE_PERMISO/.test(scan)) {
       const command = 'git push origin main';
-      const verdict = decide({ permission, tool: 'Bash', command, internalDir: o.internalDir });
+      const verdict = decide({ permission, tool: 'Bash', command, internalDir: o.internalDir, cwd: o.cwd, projectDir: o.projectDir, userAsked: o.userAsked?.() ?? [] });
       let decision = verdict.decision;
       if (decision === 'ask') decision = await approvals.ask({ id: `permiso-${++seq}`, tool: 'Bash', title: command, reason: verdict.reason, input: command });
       notes.push(decision === 'deny' ? (verdict.decision === 'deny' ? 'denegado por el guardia' : 'permiso denegado') : `permiso concedido (${verdict.decision === 'allow' ? 'sin preguntar' : decision})`);
@@ -274,6 +307,16 @@ function createFakeLive(agent, label, caps, o) {
     if (/ESPERA_CORRECCION/.test(scan) && !steers.length) await sleep(10_000, { untilSteer: true });
     if (/DUERME/.test(scan)) await sleep(30_000);
     if (current.done) return;
+    // 3.8.3: a long answer streamed as a real agent does (pieces of 12 characters every 15 ms, ~5 s), to measure the
+    // window while it streams (scripts/medir-fluidez.mjs). It starts with «ZORRO» so the measurement can find it.
+    if (/STREAM_LARGO/.test(scan)) {
+      const para = 'Revisa el componente, ajusta los estilos y comprueba que las pruebas siguen en verde antes de seguir.';
+      const block = (i) => (i % 4 === 3 ? `\`\`\`js\nconst paso = ${i};\nconsole.log(paso);\n\`\`\`` : i % 4 === 1 ? `- punto ${i}: ${para}\n- otro punto ${i}` : `**Paso ${i}.** ${para} ${para}`);
+      const reply = ['ZORRO: este es el plan.', ...Array.from({ length: 12 }, (_, i) => block(i)), 'Fin del plan.'].join('\n\n');
+      for (const piece of reply.match(/[\s\S]{1,12}/g) ?? []) { if (current.done) return; onEvent({ type: 'delta', text: piece }); await sleep(15); }
+      item('assistant', 'text', reply); current.addText(reply);
+      return current.finish({ usage: { inputTokens: 10, outputTokens: 5 }, stopReason: 'end_turn' });
+    }
     // 3.1: an answer in GFM (a plan as a table, strikethrough, task list), as the real agents write them.
     if (/TABLA_MARKDOWN/.test(scan)) {
       const reply = 'Te propongo este plan:\n\n| # | Tarea | Agente | Depende de |\n|---|---|---|---|\n| 1 | Base: servidor localhost, escena 3D (Three.js), espacio, Sol y Tierra con rotación | codex | — |\n| 2 | Texto «Hello World» con textura de globos y letras destruibles | cursor | 1 |\n| 3 | Barra de inventario y armas: rayo láser, bombas, meteoritos | claude | 1 |\n| 4 | Revisión y pruebas con un modelo distinto | gemini | 2, 3 |\n\n- [x] Proyecto creado\n- [ ] Lanzar las tareas\n\n~~Una sola tarea~~ Cuatro tareas.';

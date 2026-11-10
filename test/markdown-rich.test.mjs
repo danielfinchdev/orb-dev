@@ -1,5 +1,5 @@
 // 3.8.2: formulas ($$) and Mermaid diagrams in the messages, and the PDF viewer of attachments. A single $ is still a
-// dollar, other code blocks render as before, Mermaid runs with securityLevel 'strict' and the window's CSP is unchanged.
+// dollar, other code blocks render as before, Mermaid runs with securityLevel 'strict' and the window's CSP allows no eval.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -9,10 +9,10 @@ import remarkParse from 'remark-parse';
 import remarkRehype from 'remark-rehype';
 import { ROOT, tempHome } from './helpers.mjs';
 import { remarkPlugins, richKind, isInlineMath, textOf } from '../src/ui/lib/markdown-plugins.js';
-import { Board } from '../src/core/board.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
 import { Sessions } from '../src/engine/sessions.mjs';
-import { buildApi } from '../src/engine/api.mjs';
-import { DESKTOP } from '../src/core/permissions.mjs';
+import { buildApi } from '../src/engine/api/index.mjs';
+import { DESKTOP } from '../src/domain/security/permissions.mjs';
 
 const tree = (md) => { const p = unified().use(remarkParse); for (const x of remarkPlugins) Array.isArray(x) ? p.use(x[0], x[1]) : p.use(x); return p.use(remarkRehype).runSync(p.parse(md)); };
 const codes = (node, out = []) => { if (node.tagName === 'code') out.push(node); for (const c of node.children ?? []) codes(c, out); return out; };
@@ -34,7 +34,7 @@ test('```mermaid is a diagram; any other code block is untouched; GFM still work
   assert.match(html, /"tagName":"table"/); assert.match(html, /"tagName":"del"/);
 });
 
-test('mermaid strict, libraries loaded lazily, no eval and the CSP unchanged', () => {
+test('mermaid strict, libraries loaded lazily, no eval, also in the CSP', () => {
   const rich = fs.readFileSync(path.join(ROOT, 'src/ui/components/rich-blocks.jsx'), 'utf8');
   assert.match(rich, /securityLevel: 'strict'/); assert.match(rich, /trust: false/);
   assert.match(rich, /import\('mermaid'\)/); assert.match(rich, /import\('katex'\)/);
@@ -42,7 +42,21 @@ test('mermaid strict, libraries loaded lazily, no eval and the CSP unchanged', (
   const viewer = fs.readFileSync(path.join(ROOT, 'src/ui/components/file-viewer.jsx'), 'utf8');
   assert.match(viewer, /useWasm: false/); assert.match(viewer, /isEvalSupported: false/); assert.doesNotMatch(viewer, /^import .*pdfjs/m);
   const csp = JSON.parse(fs.readFileSync(path.join(ROOT, 'src-tauri/tauri.conf.json'), 'utf8')).app.security.csp;
-  assert.match(csp, /script-src 'self';/); assert.doesNotMatch(csp, /unsafe-eval|wasm-unsafe-eval|media-src/);
+  assert.match(csp, /script-src 'self';/); assert.doesNotMatch(csp, /unsafe-eval|wasm-unsafe-eval/);
+});
+
+// 3.8.3: the music (src/ui/lib/music.js) and the audio/video viewer play from blob: URLs. Without media-src the CSP fell
+// back to default-src 'self', play() failed and the music never sounded. Only blob: is added, in both CSPs, nothing else.
+test('media plays from blob: URLs only, in the app CSP and the page meta', () => {
+  const app = JSON.parse(fs.readFileSync(path.join(ROOT, 'src-tauri/tauri.conf.json'), 'utf8')).app.security.csp;
+  const meta = /Content-Security-Policy" content="([^"]+)"/.exec(fs.readFileSync(path.join(ROOT, 'src/ui/index.html'), 'utf8'))[1];
+  for (const csp of [app, meta]) {
+    const media = csp.split(';').map((d) => d.trim()).filter((d) => d.startsWith('media-src'));
+    assert.deepEqual(media, ['media-src blob:'], csp);
+    assert.match(csp, /default-src 'self';/);
+  }
+  const music = fs.readFileSync(path.join(ROOT, 'src/ui/lib/music.js'), 'utf8');
+  assert.match(music, /URL\.createObjectURL/, 'the music is a blob: URL');
 });
 
 let t; let board; let api; let sessions;
@@ -68,6 +82,16 @@ test('attachments.read: a PDF of that conversation\'s attachments only, and only
   try { await assert.rejects(api.call('attachments.read', { session: s.id, path: path.join(dir, 'key.pdf') }, DESKTOP), /./, 'not through a junction'); }
   finally { fs.rmSync(dir, { recursive: true, force: true }); fs.renameSync(aside, dir); }
   assert.ok(fs.existsSync(path.join(elsewhere, 'key.pdf')));
-  const { METHODS } = await import('../src/core/permissions.mjs');
+  // 3.8.3: audio and video the window can play, with their type; other media stay a name.
+  const clip = path.join(dir, 'demo.mp4'); fs.writeFileSync(clip, 'mp4');
+  const v = await api.call('attachments.read', { session: s.id, path: clip }, DESKTOP);
+  assert.deepEqual([v.kind, v.mime, Buffer.from(v.base64, 'base64').toString()], ['video', 'video/mp4', 'mp4']);
+  const song = path.join(dir, 'voz.ogg'); fs.writeFileSync(song, 'ogg');
+  assert.deepEqual(await api.call('attachments.read', { session: s.id, path: song }, DESKTOP).then((r) => [r.kind, r.mime]), ['audio', 'audio/ogg']);
+  const avi = path.join(dir, 'old.avi'); fs.writeFileSync(avi, 'avi');
+  await assert.rejects(api.call('attachments.read', { session: s.id, path: avi }, DESKTOP), /./, 'not playable in the window');
+  const big = path.join(dir, 'big.webm'); fs.writeFileSync(big, ''); fs.truncateSync(big, 25 * 1024 * 1024 + 1);
+  await assert.rejects(api.call('attachments.read', { session: s.id, path: big }, DESKTOP), /./, 'over 25 MB');
+  const { METHODS } = await import('../src/domain/security/permissions.mjs');
   assert.equal(METHODS['attachments.read'], 'pc', 'never from a linked phone');
 });

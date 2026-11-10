@@ -103,6 +103,11 @@ pub fn create_main(app: &AppHandle, user_data: &std::path::Path, webview_data: P
     WindowEvent::Resized(_) => send_state(&w),
     WindowEvent::CloseRequested { api, .. } => {
       if close_now(&w) {
+        // The agents' little window is only ever hidden: left alone it would keep the process alive, invisible and
+        // impossible to reopen (the single-instance handler finds no main window).
+        if let Some(pip) = w.app_handle().get_webview_window("pip") {
+          let _ = pip.destroy();
+        }
         return;
       }
       api.prevent_close();

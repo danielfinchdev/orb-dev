@@ -1,4 +1,4 @@
-// 3.8.2 (T3 3.4): the private card of a secret an agent asked for (orb_request_secret, src/engine/agent-secrets.mjs).
+// 3.8.2 (T3 3.4): the private card of a secret an agent asked for (orb_request_secret, src/engine/security/agent-secrets.mjs).
 // Only in this PC's window: the value typed here goes to the engine once and never shows in the chat; saving it in the
 // vault, or using the one saved, asks for the master password.
 import { useEffect, useState } from 'react';

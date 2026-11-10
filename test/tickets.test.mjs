@@ -7,7 +7,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { AgentAuth } from '../src/engine/agent-auth.mjs';
+import { AgentAuth } from '../src/domain/security/agent-auth.mjs';
 import { redeem } from '../src/mcp/auth-client.mjs';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));

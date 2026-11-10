@@ -1,4 +1,4 @@
-// 3.8.1 (H1c): skills and MCP servers live in core (src/core/extensions.mjs, src/engine/api-extensions.mjs): what Orb
+// 3.8.1 (H1c): skills and MCP servers live in core (src/domain/extensions/extensions.mjs, src/engine/api/extensions.mjs): what Orb
 // lists and checks, how the skills that are on reach the agents (a plugin for Claude, an extra root for Codex, the brief
 // for the others), importing from a folder (off until turned on), removing after the master password, an agent's
 // request (a folder in core\preparacion, the user's approval of exactly those files) and improving a server of core in a
@@ -11,15 +11,15 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import { tempHome, startEngine, ROOT, fake, until } from './helpers.mjs';
-import * as X from '../src/core/extensions.mjs';
-import { decide } from '../src/core/guard.mjs';
-import { rebindMoved, bindingOf, rebindOrWait, settleRebinds } from '../src/core/connector-secrets.mjs';
-import { Master } from '../src/core/master.mjs';
-import { Board } from '../src/core/board.mjs';
+import * as X from '../src/domain/extensions/extensions.mjs';
+import { decide } from '../src/domain/security/guard.mjs';
+import { rebindMoved, bindingOf, rebindOrWait, settleRebinds } from '../src/domain/security/connector-secrets.mjs';
+import { Master } from '../src/domain/security/master.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
 import { mcpServersFor } from '../src/engine/sessions.mjs';
-import { createProject } from '../src/core/projects.mjs';
-import { translate } from '../src/core/i18n.mjs';
-import { METHODS, UNLOCK_METHODS, needsUnlock } from '../src/core/permissions.mjs';
+import { createProject } from '../src/domain/projects/projects.mjs';
+import { translate } from '../src/shared/i18n.mjs';
+import { METHODS, UNLOCK_METHODS, needsUnlock } from '../src/domain/security/permissions.mjs';
 import * as codex from '../src/agents/codex.mjs';
 import * as claude from '../src/agents/claude.mjs';
 
@@ -176,8 +176,8 @@ test('Ajustes › Skills y MCP: importar (inactivo), activar, llega a los agente
 test('una tarea de Cursor (sin skills propias) recibe la lista en su encargo', async () => {
   const h = tempHome({ agents: { cursor: { enabled: true } } });
   skillAt(path.join(h.home, 'core', 'skills', 'facturas'), 'facturas');
-  const { Scheduler } = await import('../src/engine/scheduler.mjs');
-  const { saveConfig } = await import('../src/core/context.mjs');
+  const { Scheduler } = await import('../src/engine/scheduler/index.mjs');
+  const { saveConfig } = await import('../src/platform/config.mjs');
   saveConfig({ skills: [{ name: 'facturas', enabled: true }] });
   const board = new Board();
   try {

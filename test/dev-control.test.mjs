@@ -8,7 +8,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { tempHome, startEngine, until, ROOT } from './helpers.mjs';
 
-const t = tempHome();
+const t = tempHome({ permissions: { mode: 'preguntar' } }); // 3.8.3: «Preguntar» (its approvals)
 const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'orb-control-')), 'control.json');
 let engine; let off;
 after(async () => { await engine?.stop(); await off?.stop(); t.cleanup(); });
@@ -28,7 +28,7 @@ test('con ella: estado, aprobar una tarea y la clave obligatoria', async () => {
   const pointer = JSON.parse(fs.readFileSync(file, 'utf8'));
   assert.ok(!pointer.token && !JSON.stringify(pointer).includes('token'), 'el archivo de la carpeta temporal no lleva la clave');
   assert.match(pointer.keyFile, /[\\/]core[\\/]datos[\\/]/, 'la clave vive en los datos privados de Orb');
-  const { decide } = await import('../src/core/guard.mjs');
+  const { decide } = await import('../src/domain/security/guard.mjs');
   assert.equal(decide({ tool: 'Read', paths: [pointer.keyFile], internalDir: path.join(t.home, 'core') }).decision, 'deny', 'ningún agente puede leerla');
   const info = JSON.parse(fs.readFileSync(pointer.keyFile, 'utf8'));
   assert.match(info.url, /^http:\/\/127\.0\.0\.1:\d+$/);

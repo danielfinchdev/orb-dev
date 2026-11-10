@@ -176,12 +176,13 @@ function RunningPanel() {
   const t = useT();
   const tasks = useStore((s) => s.tasks).filter((t) => t.status === 'running');
   const sessions = useStore((s) => s.sessions).filter((s) => s.status === 'running' && s.kind === 'chat');
-  const chat = useStore((s) => (s.app.chats ?? []).find((c) => c.busy) ?? null); // 3.2: a conversation answering now
+  // 3.2: a conversation answering now (3.8.3: whether it writes and its last step, not each streamed piece).
+  const chat = useStore((s) => { const c = s.chats.find((x) => x.busy); const last = Array.isArray(c?.tools) ? c.tools.at(-1) : null; return c ? { busy: true, partial: Boolean(c.partial), step: last && typeof last === 'object' ? stepText(t, last) : '' } : null; });
   const name = useStore((s) => s.app.config.assistantName);
   if (!tasks.length && !sessions.length && !chat?.busy) return <p className="text-muted-foreground px-3 py-2 text-xs">{t('expert.nothingRunning')}</p>;
   return (
     <div className="pb-1">
-      {chat?.busy ? <div className="flex items-center gap-2 px-3 py-1 text-[12.5px]"><span className="bg-primary size-1.5 animate-pulse rounded-full" />{t(chat.partial ? 'expert.writing' : 'expert.thinking', { name })}{chat.tools?.length && typeof chat.tools.at(-1) === 'object' ? <span className="text-muted-foreground truncate">· {stepText(t, chat.tools.at(-1))}</span> : null}</div> : null}
+      {chat?.busy ? <div className="flex items-center gap-2 px-3 py-1 text-[12.5px]"><span className="bg-primary size-1.5 animate-pulse rounded-full" />{t(chat.partial ? 'expert.writing' : 'expert.thinking', { name })}{chat.step ? <span className="text-muted-foreground truncate">· {chat.step}</span> : null}</div> : null}
       {tasks.map((t) => <button key={t.id} type="button" onClick={() => go({ view: 'tasks', id: t.id })} className="hover:bg-accent/60 flex w-full cursor-pointer items-center gap-2 px-3 py-1 text-left text-[12.5px]"><AgentIcon agent={t.assigned_to ?? t.agent} className="size-3.5" /><span className="min-w-0 flex-1 truncate">#{t.id} {t.title}</span><span className="text-muted-foreground text-[11px]">{t.project}</span></button>)}
       {sessions.map((s) => <button key={s.id} type="button" onClick={() => go({ view: 'session', id: s.id })} className="hover:bg-accent/60 flex w-full cursor-pointer items-center gap-2 px-3 py-1 text-left text-[12.5px]"><AgentIcon agent={s.agent} className="size-3.5" /><span className="min-w-0 flex-1 truncate">{s.title}</span><span className="text-muted-foreground text-[11px]">{AGENT[s.agent]}</span></button>)}
     </div>

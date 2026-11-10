@@ -1,6 +1,6 @@
 // The programs the engine may ask for by kind (host.openTerminal, host.openEditor, host.runAction): the app picks them
 // itself, from the places they install to on this PC, always as absolute paths (a bare name would also be looked for in
-// the folder it starts in, where a project could plant one). The same choices as src/engine/terminal.mjs and
+// the folder it starts in, where a project could plant one). The same choices as src/engine/host/terminal.mjs and
 // editors.mjs (Ctrl+J, God mode's editors, a project's actions); Ajustes → Interfaz can force a terminal.
 use std::path::{Path, PathBuf};
 

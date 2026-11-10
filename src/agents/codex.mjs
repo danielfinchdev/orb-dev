@@ -6,10 +6,11 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { IS_WIN, firstFile, inPath, npmPrefixes, appDataDirs, userHome, clip, discoverDir } from './common.mjs';
+import { IS_WIN, firstFile, inPath, npmPrefixes, appDataDirs, userHome, discoverDir } from '../platform/proc.mjs';
+import { clip } from './common.mjs';
 import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree, hidingEnvValues } from './live.mjs';
-import { decide } from '../core/guard.mjs';
-import { tr } from '../core/context.mjs';
+import { decide } from '../domain/security/guard.mjs';
+import { tr } from '../platform/context.mjs';
 
 // Who connects to the app-server (def. 11: the product's version, read from Orb's own package.json).
 const CLIENT = { name: 'orb_dev', title: 'Orb', version: (() => { try { return JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version; } catch { return '0.0.0'; } })() };
@@ -44,6 +45,7 @@ export async function accountInfo(exe, dir, { timeoutMs = 20000 } = {}) {
   try {
     child = spawnAgent(exe.cmd, [...exe.pre, 'app-server'], { cwd: os.tmpdir(), env: { CODEX_HOME: dir }, log: () => {} });
     peer = new JsonRpcPeer(child, { onNotification: () => {}, onRequest: async () => ({}), log: () => {} });
+    child.on('error', () => peer.close()); // a program that cannot start fails the requests instead of crashing the engine
     await peer.request('initialize', { clientInfo: CLIENT, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs });
     peer.notify('initialized', {});
     const r = await peer.request('account/read', { refreshToken: false }, { timeoutMs });
@@ -97,6 +99,25 @@ function policy(permission) {
   // 3.8.2: «total» keeps asking Orb's guard (it allows all but the protected set); it only drops the sandbox.
   if (permission === 'total') return { approvalPolicy: 'untrusted', sandbox: 'danger-full-access' };
   return { approvalPolicy: 'untrusted', sandbox: 'workspace-write' };
+}
+// 3.8.3 (owner's decision): in «Auto» Codex's sandbox lets its commands use the network (npm install, downloads) without a
+// card; writes stay inside the folder and every command still goes through Orb's guard («untrusted»).
+export function sandboxConfig(permission) {
+  return permission === 'auto' ? { 'sandbox_workspace_write.network_access': true } : {};
+}
+// 3.8.3 (security review): why the guard would deny a command Codex started on its own, in any mode (what is always
+// closed: core, the owner's keys, another project's secrets…; not what the chat's level alone refuses). null: it would not.
+export function deniedRun(command, o = {}) {
+  const c = Array.isArray(command) ? command.join(' ') : String(command ?? '');
+  if (!c.trim()) return null;
+  const verdict = decide({ permission: 'total', tool: 'Bash', kind: 'execute', command: c, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()), projectDir: o.projectDir });
+  return verdict.decision === 'deny' ? verdict.reason : null;
+}
+// Whether a Codex permissions request asks for the network and nothing else (no folder, no other grant).
+export function onlyNetwork(perms) {
+  if (!perms || typeof perms !== 'object') return false;
+  const keys = Object.keys(perms).filter((k) => perms[k] != null && !(Array.isArray(perms[k]) && !perms[k].length));
+  return keys.length > 0 && keys.every((k) => /^network/i.test(k));
 }
 // 3.6: «Extra» (xhigh) goes through as it is: Orb only offers it for the models whose model/list says they take it.
 const effort = (r) => r || 'medium';
@@ -178,9 +199,13 @@ export function createLive(o) {
   const live = { sessionId: o.resumeId ?? null, caps, pid: null, get busy() { return Boolean(turn && !turn.done); } };
 
   const guardAsk = async ({ itemId, command, paths = [], tool, kind }) => {
-    const verdict = decide({ permission, tool, kind, command, paths, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()) });
-    if (verdict.decision !== 'ask') return verdict.decision;
-    return approvals.ask({ id: itemId, tool, title: command || paths.join(', ') || tool, reason: verdict.reason, input: clip(command || paths.join(', '), 400) });
+    const verdict = decide({ permission, tool, kind, command, paths, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()), projectDir: o.projectDir, userAsked: o.userAsked?.() ?? [] });
+    if (verdict.auto) onEvent({ type: 'auto', title: command || paths.join(', ') || tool, reason: verdict.reason });
+    const d = verdict.decision !== 'ask' ? verdict.decision : await approvals.ask({ id: itemId, tool, title: command || paths.join(', ') || tool, reason: verdict.reason, input: clip(command || paths.join(', '), 400) });
+    // 3.8.3: Codex's protocol carries no reason with a decline; Claude gets one in canUseTool. Said here as a steer,
+    // so the agent does not try the same thing in another spelling (the denied reason is the guard's, a user's has none).
+    if (d === 'deny') live.steer?.({ text: tr('sys.agents.deniedHint', { title: clip(command || paths.join(', ') || tool, 200), reason: verdict.decision === 'deny' ? `: ${verdict.reason}` : '' }) });
+    return d;
   };
 
   const onRequest = async (method, p) => {
@@ -201,6 +226,8 @@ export function createLive(o) {
       return { decision: d === 'deny' ? { denied: { rejection: 'El usuario no lo ha permitido.' } } : 'approved' };
     }
     if (method === 'item/permissions/requestApproval') {
+      // 3.8.3: in «Auto», asking only for the network (an older Codex that ignores the sandbox setting above): granted.
+      if (permission === 'auto' && onlyNetwork(p.permissions)) return { permissions: p.permissions, scope: 'session' };
       // Asking for more than the sandbox gives (another folder, network…): the user decides.
       const d = await approvals.ask({ id: p.itemId, tool: tr('sys.agents.permissions'), title: p.reason || tr('sys.agents.morePermissions', { name: 'Codex' }), reason: tr('sys.agents.morePermissionsWhy'), input: clip(p.permissions, 400) });
       return { permissions: d === 'deny' ? {} : p.permissions, scope: d === 'always' ? 'session' : 'turn' };
@@ -215,6 +242,11 @@ export function createLive(o) {
     if (method === 'item/agentMessage/delta') { onEvent({ type: 'delta', text: p.delta }); return; }
     if (method === 'item/started') {
       const tool = ITEM_TOOL(p.item); if (tool) onEvent({ type: 'item', role: 'tool', kind: 'tool', body: { id: p.item.id, ...tool } });
+      // 3.8.3 (security review): Codex runs the commands it deems safe (cat, type, rg…) without asking, so they never
+      // reach the guard. One the guard would deny (reading core, the owner's keys, another project's .env) stops the
+      // turn at once, before a next step can send what it read out (in «Auto» Codex has the network).
+      const why = p.item?.type === 'commandExecution' ? deniedRun(p.item.command, o) : null;
+      if (why) { onEvent({ type: 'item', role: 'system', kind: 'status', body: tr('msg.sessions.autoStopped', { why }) }); live.interrupt?.(); }
       return;
     }
     // 3.6: the end of a compaction (thread/compact/start): the item of the summary or the thread's own notice. 3.8.1: the
@@ -308,10 +340,10 @@ export function createLive(o) {
     child.on('error', (error) => { closed = true; if (turn && !turn.done) turn.finish({ isError: true, final: tr('sys.agents.startFailed', { name: 'Codex', error: error.message }) }); });
     await peer.request('initialize', { clientInfo: CLIENT, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
     peer.notify('initialized', {});
-    // 3.8.1: the skills of core that are on (src/core/extensions.mjs › exposeSkills), one more root where Codex looks for
+    // 3.8.1: the skills of core that are on (src/domain/extensions/extensions.mjs › exposeSkills), one more root where Codex looks for
     // skills, before the thread starts (checked with the real app-server: skills/list shows them). Older versions: none.
     if (o.skills?.list?.length) await peer.request('skills/extraRoots/set', { extraRoots: [o.skills.root] }, { timeoutMs: 15000 }).catch((error) => log(`skills: ${error?.message ?? error}`));
-    const common = { cwd: o.cwd, model, ...policy(permission), config: { model_reasoning_effort: effort(o.reasoning), service_tier: 'default' } };
+    const common = { cwd: o.cwd, model, ...policy(permission), config: { model_reasoning_effort: effort(o.reasoning), service_tier: 'default', ...sandboxConfig(permission) } };
     let res;
     if (o.resumeId && o.forkSession) res = await peer.request('thread/fork', { threadId: o.resumeId, ...common }, { timeoutMs: 60000 });
     else if (o.resumeId) res = await peer.request('thread/resume', { threadId: o.resumeId, ...common }, { timeoutMs: 60000 });
@@ -337,8 +369,12 @@ export function createLive(o) {
       // A start that fails (no reply, thread not found) closes this live: the next message gets a fresh process.
       started ??= start().catch((error) => { live.close(); throw error; });
       await started;
-      const res = await peer.request('turn/start', { threadId, input: input(text, images), ...(model ? { model } : {}), effort: effort(o.reasoning) });
-      turnId = res?.turn?.id ?? null;
+      // The answer is only the acknowledgement of the turn; a server that never gives it would leave the turn open for ever.
+      const res = await peer.request('turn/start', { threadId, input: input(text, images), ...(model ? { model } : {}), effort: effort(o.reasoning) }, { timeoutMs: 120_000 });
+      // 3.8.3: a turn that ended at once (its turn/completed read in the same piece of output as this answer, before this
+      // line runs) keeps no id: a stale one made the next turn's turn/completed look like another turn's, and that turn
+      // never ended (the Ubuntu CI hang).
+      if (!current.done) turnId = res?.turn?.id ?? null;
     } catch (error) {
       current.finish({ isError: true, final: /malformed|resume|not found/i.test(error.message) ? tr('sys.agents.resumeFailed', { name: 'Codex', error: error.message }) : `Codex: ${error.message}` });
     }

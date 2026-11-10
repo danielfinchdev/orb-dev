@@ -85,7 +85,7 @@ if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.
         return () => { off.then((un) => un()).catch(() => {}); };
       }
     },
-    // This PC's tools live in the engine (src/engine/api-app.mjs).
+    // This PC's tools live in the engine (src/engine/api/app.mjs).
     openTerminal: (folder) => engine('app.openTerminal', { dir: folder ?? null }),
     editors: () => engine('app.editors'),
     openIn: (which, folder, unlock) => engine('app.openIn', { which, dir: folder, unlock: text(unlock) }),

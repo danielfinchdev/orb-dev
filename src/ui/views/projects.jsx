@@ -66,7 +66,7 @@ function ContributionGraph() {
   );
 }
 
-// 3.8.1: the end of a project (src/core/project-close.mjs). Finished: it leaves Orb, its folder stays («Finalizados»
+// 3.8.1: the end of a project (src/domain/projects/project-close.mjs). Finished: it leaves Orb, its folder stays («Finalizados»
 // brings it back). Deleted: its folder goes to the Recycle Bin (the app), behind the master password, only on the PC.
 // When the Recycle Bin cannot take it: a folder some program is using offers only «Reintentar»; otherwise «Reintentar»
 // or «Borrar para siempre» after a stronger warning. Cancelling gives the project back as it was.

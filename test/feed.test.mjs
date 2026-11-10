@@ -1,13 +1,13 @@
-// 3.8.1 (H4c): the lists of every refresh as changes (src/core/feed.mjs, src/engine/feeds.mjs). Parity: whatever the
+// 3.8.1 (H4c): the lists of every refresh as changes (src/shared/feed.mjs, src/engine/feeds.mjs). Parity: whatever the
 // order of changes and however far behind a caller is, applying the feed replies gives exactly the whole list (and a row
 // that did not change keeps its object); older callers (no `since`) and older engines (plain replies) keep working; the
 // phone's path stripping gives the same rows either way.
 import { tempHome, startEngine } from './helpers.mjs';
 import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { Feed, applyFeed, sinceOf, FEED_FORMAT } from '../src/core/feed.mjs';
+import { Feed, applyFeed, sinceOf, FEED_FORMAT } from '../src/shared/feed.mjs';
 import { createFeeds, compactTask } from '../src/engine/feeds.mjs';
-import { shapeResult } from '../src/engine/remote.mjs';
+import { shapeResult } from '../src/engine/transport/remote.mjs';
 
 // A small random generator with a seed (the same run every time).
 const rng = (seed) => () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };

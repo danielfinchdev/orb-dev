@@ -5,10 +5,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { tempHome } from './helpers.mjs';
-import { Board } from '../src/core/board.mjs';
-import { migrate } from '../src/core/db.mjs';
-import { titleFrom, cleanTitle } from '../src/core/titles.mjs';
-import { ctx } from '../src/core/context.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
+import { migrate } from '../src/domain/data/db.mjs';
+import { titleFrom, cleanTitle } from '../src/shared/titles.mjs';
+import { ctx } from '../src/platform/context.mjs';
 import { projectIcon, setProjectIcon, clearProjectIcon } from '../src/engine/project-icons.mjs';
 import { Orchestrator } from '../src/engine/orchestrator.mjs';
 
@@ -95,12 +95,28 @@ test('una subtarea se comprueba contra el proyecto de su conversación, aunque o
   const a = board.createConversation({ title: 'A', project: 'xa' });
   const task = board.createTask({ project: 'xa', title: 'Base', description: 'Haz la base', agent: 'any', conversation_id: a.id }, 'orb');
   const b = board.createConversation({ title: 'B' });
-  board.setConversationProject(b.id, 'xb', 'orb'); // the other conversation moves the app's working folder
+  board.setConversationProject(b.id, 'xb', 'usuario', { asDefault: true }); // the user moves the app's working folder there
   assert.equal(board.activeProject().name, 'xb');
   const sub = board.createTask({ project: 'xa', title: 'Parte', description: 'Haz una parte', agent: 'any', parent_id: task.id }, 'claude');
   assert.equal(sub.conversation_id, a.id, 'la subtarea se crea en su conversación');
   const review = board.createTask({ project: 'xa', title: 'Revisión', description: 'Revisa', agent: 'any', review_of: task.id, readonly: true }, 'orb');
   assert.equal(review.conversation_id, a.id, 'y la revisión también');
+});
+
+// 3.8.3 (diagnosis): the assistant fixed a test project for its conversation and it became the working project of
+// every new chat too.
+test('el asistente fija el proyecto de su conversación sin cambiar el proyecto de trabajo del usuario', () => {
+  const board = new Board();
+  for (const name of ['ya', 'yb']) { const dir = path.join(ctx.paths.categories.web, name); fs.mkdirSync(dir, { recursive: true }); board.addProject({ name, path: dir }, 'usuario'); }
+  const mine = board.createConversation({ title: 'Mía' });
+  board.setConversationProject(mine.id, 'ya', 'usuario', { asDefault: true });
+  const other = board.createConversation({ title: 'Otra' });
+  board.setConversationProject(other.id, 'yb', 'orb');
+  assert.equal(board.conversation(other.id).project, 'yb', 'la conversación sí cambia');
+  assert.equal(board.activeProject().name, 'ya', 'el proyecto de trabajo sigue siendo el que eligió el usuario');
+  board.setConversationProject(other.id, '', 'orb');
+  assert.equal(board.conversation(other.id).project, null);
+  assert.equal(board.activeProject().name, 'ya');
 });
 
 test('una conversación vuelta a abrir no se completa sola enseguida; una con su informe sin OK, tampoco', () => {

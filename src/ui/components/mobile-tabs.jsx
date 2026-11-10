@@ -3,7 +3,7 @@
 // (Agentes, Ajustes, Modo experto, minijuegos, the themes) is not here.
 import { MessagesSquare, ListTodo, FolderKanban, Ellipsis } from 'lucide-react';
 import { PageHeader } from './page.jsx';
-import { useStore, go } from '@/lib/store.js';
+import { useStore, go, anyChatBusy } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { MoreContent } from './mobile-menu.jsx';
@@ -17,11 +17,11 @@ export const tabOf = (view) => TAB_OF[view] ?? 'more';
 export function MobileTabs() {
   const t = useT();
   const route = useStore((s) => s.route);
-  const app = useStore((s) => s.app);
+  const chatBusy = useStore(anyChatBusy);
   const tasks = useStore((s) => s.tasks);
   const sessions = useStore((s) => s.sessions);
   const approvals = tasks.filter((x) => x.status === 'awaiting_approval').length;
-  const working = sessions.some((s) => s.kind === 'chat' && s.status === 'running') || (app.chats ?? []).some((c) => c.busy);
+  const working = sessions.some((s) => s.kind === 'chat' && s.status === 'running') || chatBusy;
   const orbUnread = useStore((s) => unreadOf(s.orbInbox));
   const current = tabOf(route.view);
   const tabs = [

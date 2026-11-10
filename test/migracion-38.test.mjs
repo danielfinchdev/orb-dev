@@ -1,4 +1,4 @@
-// 3.8: a data folder of 3.5–3.7 opened by Orb 3.8 is moved once (src/core/migrate-38.mjs): a copy of the database and a
+// 3.8: a data folder of 3.5–3.7 opened by Orb 3.8 is moved once (src/domain/data/legacy/migrate-38.mjs): a copy of the database and a
 // readable archive first, then the bots, replicas, links, other users and their settings go; the owner's data stay and
 // become plain single-owner rows. Run twice, it does nothing more; a new 3.8 database is left alone. The phone access
 // never serves another user's device (also before the migration) and never opens on a database it could not migrate.
@@ -11,20 +11,20 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { pathToFileURL } from 'node:url';
 import { tempHome, ROOT, startEngine, until, wait } from './helpers.mjs';
-import { useHome, ctx } from '../src/core/context.mjs';
-import { writeJson } from '../src/core/home.mjs';
-import { openDb } from '../src/core/db.mjs';
-import { Board } from '../src/core/board.mjs';
-import { marks } from '../src/core/inbox.mjs';
-import { ARCHIVE_DIR, PRE_COPY, MARK, DROPPED_TABLES, ORIGINAL_CONFIG, LOCK_FILE, WORK_DIR, SCRUB_AFTER_MS, takeNotice, migrationFailure, isLegacy, unfinished, insideData, bridgeDir, scrub, scrubPreCopies, legacyData, deleteLegacyData } from '../src/core/migrate-38.mjs';
-import { syncProjects } from '../src/core/projects.mjs';
-import { IGNORED_PROJECTS } from '../src/core/home.mjs';
+import { useHome, ctx } from '../src/platform/context.mjs';
+import { writeJson } from '../src/platform/paths.mjs';
+import { openDb } from '../src/domain/data/db.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
+import { marks } from '../src/domain/conversations/inbox.mjs';
+import { ARCHIVE_DIR, PRE_COPY, MARK, DROPPED_TABLES, ORIGINAL_CONFIG, LOCK_FILE, WORK_DIR, SCRUB_AFTER_MS, takeNotice, migrationFailure, isLegacy, unfinished, insideData, bridgeDir, scrub, scrubPreCopies, legacyData, deleteLegacyData } from '../src/domain/data/legacy/migrate-38.mjs';
+import { syncProjects } from '../src/domain/projects/projects.mjs';
+import { IGNORED_PROJECTS } from '../src/platform/state.mjs';
 import { migrationView, folderOf } from '../src/ui/lib/migration.js';
 import { startupPhase } from '../src/ui/lib/startup.js';
-import * as C from '../src/core/mobile-crypto.mjs';
-import { newVapidKeys } from '../src/engine/webpush.mjs';
-import { createBackup, restoreInto } from '../src/core/backup.mjs';
-import { createRemote } from '../src/engine/remote.mjs';
+import * as C from '../src/shared/mobile-crypto.mjs';
+import { newVapidKeys } from '../src/engine/transport/webpush.mjs';
+import { createBackup, restoreInto } from '../src/domain/data/backup.mjs';
+import { createRemote } from '../src/engine/transport/remote.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
 const homes = [];
@@ -141,7 +141,7 @@ function files37(t, ids = {}) {
 const names = (board, type) => board.all('SELECT name FROM sqlite_master WHERE type = ?', type).map((r) => r.name);
 const archived = (t, ...p) => path.join(t.home, 'core', ARCHIVE_DIR, ...p);
 const readJson = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
-// The same workspace as Orb 3.7 had it: .orb, orb.json, bitacora and mcp-servers at the top (src/core/core-folder.mjs
+// The same workspace as Orb 3.7 had it: .orb, orb.json, bitacora and mcp-servers at the top (src/domain/workspace/core-folder.mjs
 // moves them into core when the engine starts, before the 3.8 migration of the database).
 function asOrb37(home) {
   const core = path.join(home, 'core');
@@ -593,8 +593,8 @@ test('B5: un proceso vivo con el bloqueo no deja migrar; al morir lo suelta; dos
   } finally { delete process.env.ORB_MIGRATION_LOCK_MS; holder.kill(); }
   await once(holder, 'exit');
   // Its process gone, the system let the lock go. Two processes open the folder at once.
-  const src = (f) => JSON.stringify(pathToFileURL(path.join(ROOT, 'src', 'core', f)).href);
-  const script = `import { useHome } from ${src('context.mjs')}; import { Board } from ${src('board.mjs')}; import { migrationFailure } from ${src('migrate-38.mjs')};
+  const src = (f) => JSON.stringify(pathToFileURL(path.join(ROOT, 'src', f)).href);
+  const script = `import { useHome } from ${src('platform/context.mjs')}; import { Board } from ${src('domain/tasks/board.mjs')}; import { migrationFailure } from ${src('domain/data/legacy/migrate-38.mjs')};
 useHome(process.env.ORB_TEST_HOME); const b = new Board(); process.stdout.write(JSON.stringify({ failure: migrationFailure() })); b.db.close();`;
   const runOne = () => new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ['--input-type=module', '-e', script], { env: { ...process.env, ORB_TEST_HOME: t.home }, stdio: ['ignore', 'pipe', 'inherit'] });
@@ -824,7 +824,7 @@ test('M6: la pantalla de bloqueo dice la verdad, abre la carpeta de la copia y o
 });
 
 test('F3b M5: Ajustes › Datos cuenta las copias de antes de la 3.8 (guardan las claves de la 3.7)', async () => {
-  const { before38 } = await import('../src/engine/api-data.mjs');
+  const { before38 } = await import('../src/engine/api/data.mjs');
   for (const v of ['3.7.2', '3.7', '2.6.0', '3.0.1']) assert.equal(before38(v), true, v);
   for (const v of ['3.8.0', '3.8.1', '3.10.0', '4.0.0', null, undefined, '', 'x']) assert.equal(before38(v), false, String(v));
 });
@@ -838,7 +838,7 @@ test('3.8.2 (M6): el móvil dice «El PC necesita atención» cuando el PC respo
   assert.match(screen, /setAttention\(r\.attention \?\? null\)/, 'sigue reintentando y pasa sola a la app cuando el PC se arregla');
   assert.match(screen, /t\('app\.pcAttentionBody'\)/);
   for (const lang of ['es', 'en']) {
-    const text = fs.readFileSync(path.join(ROOT, 'src', 'core', 'locales', lang, 'app.mjs'), 'utf8');
+    const text = fs.readFileSync(path.join(ROOT, 'src', 'shared', 'locales', lang, 'app.mjs'), 'utf8');
     for (const k of ['app.pcAttentionTitle', 'app.pcAttentionTitleNamed', 'app.pcAttentionBody']) assert.ok(text.includes(`"${k}"`), `${lang}: ${k}`);
   }
   const engine = fs.readFileSync(path.join(ROOT, 'src', 'engine', 'engine.mjs'), 'utf8');

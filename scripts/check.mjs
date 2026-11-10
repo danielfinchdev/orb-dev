@@ -13,11 +13,11 @@ for (const f of files) {
   if (r.status !== 0) { failed++; console.error(`✖ ${f}\n${r.stderr}`); }
 }
 console.log(failed ? `${failed} archivo(s) con errores` : `✔ ${files.length} archivos sin errores de sintaxis`);
-// The product's name lives in src/core/product.mjs, package.json and src-tauri/tauri.conf.json: all must say the same.
-const { PRODUCT } = await import(new URL('../src/core/product.mjs', import.meta.url));
+// The product's name lives in src/shared/product.mjs, package.json and src-tauri/tauri.conf.json: all must say the same.
+const { PRODUCT } = await import(new URL('../src/shared/product.mjs', import.meta.url));
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const tauri = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json', 'utf8'));
 const mismatch = [['package.json productName', pkg.productName, PRODUCT.name], ['tauri.conf.json productName', tauri.productName, PRODUCT.name], ['tauri.conf.json identifier', tauri.identifier, PRODUCT.appId]].filter(([, a, b]) => a !== b);
-for (const [k, a, b] of mismatch) { failed++; console.error(`✖ ${k} = ${a}, pero src/core/product.mjs dice ${b}`); }
+for (const [k, a, b] of mismatch) { failed++; console.error(`✖ ${k} = ${a}, pero src/shared/product.mjs dice ${b}`); }
 if (!mismatch.length) console.log(`✔ nombre del producto: ${PRODUCT.name} (${PRODUCT.appId})`);
 process.exit(failed ? 1 : 0);

@@ -210,9 +210,16 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
    takes them away at the end of a sway or a pulse, where both are back at rest); still, it costs no frames at all. */
 .orb[data-float] .orb-body { animation: orb-float 4.2s ease-in-out infinite; will-change: transform; }
 .orb-img { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.orb-face, .orb-gaze { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.orb-gaze, .orb-eyes { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .orb-eyes { transition: transform .35s ease; }
-.orb-eye { transform-box: fill-box; transform-origin: center; transition: transform .12s ease, opacity .2s; }
+/* 3.8.3: each eye is an HTML box (orb.jsx) placed on the artwork's eye and tilted like it; .orb-eye fills it and is what
+   blinks and talks (scaleY around the eye's centre), a transform the compositor runs alone. */
+.orb-eye-at { position: absolute; }
+.orb-eye { position: absolute; inset: 0; transform-origin: center; transition: transform .12s ease, opacity .2s; }
+/* A robot that moves keeps its eyes' layers, so each blink only moves them (no paint); still robots (hundreds in the
+   lists) never blink and get none. */
+.orb:not(.still) .orb-eye { will-change: transform; }
+.orb-face { display: block; width: 100%; height: 100%; overflow: visible; }
 .orb-pill { fill: var(--eye); }
 .orb-arc, .orb-shut, .orb-brow { fill: none; stroke: var(--eye); stroke-linecap: round; display: none; }
 .orb-visor { position: absolute; inset: 0; mask-size: 100% 100%; -webkit-mask-size: 100% 100%; pointer-events: none; overflow: clip; }
@@ -540,6 +547,10 @@ html[data-skin="retro"] .tour-bubble { width: 25rem; }
 }
 html[data-motion="minima"] :is(.animate-in, .animate-out) { --tw-enter-translate-x: 0; --tw-enter-translate-y: 0; --tw-enter-scale: 1; --tw-exit-translate-x: 0; --tw-exit-translate-y: 0; --tw-exit-scale: 1; }
 
+/* 3.8.3: the message box grows with its text in CSS (no layout read per key; views/chat.jsx › Composer): two lines at
+   least (its rows), 260 px at most, then it scrolls. */
+@supports (field-sizing: content) { .composer-text { field-sizing: content; min-height: calc(2lh + 1rem); max-height: 260px; } }
+
 /* 3.6: the composer's contextual action slot (components/context-slot.jsx, DESIGN-SYSTEM §2.2): one suggestion at a
    time, in with a 150 ms fade and a 2 px rise, out with a fade; reduced motion keeps the fade only. */
 .context-slot { display: inline-flex; min-width: 0; }
@@ -574,3 +585,11 @@ html[data-motion="minima"] .context-slot-item { animation-name: slot-fade; }
 @media (pointer: fine) and (max-height: 660px) { .onboard-card { zoom: 0.82; } }
 @media (pointer: fine) and (max-height: 625px) { .onboard-card { zoom: 0.76; } }
 @media (pointer: fine) and (max-height: 590px) { .onboard-card { zoom: 0.7; } }
+
+/* 3.8.3: an answer being typed (components/markdown.jsx › TypingMarkdown): each new paragraph, item or block fades in as
+   it starts (opacity only, so the compositor runs it). Less motion: the text shows at once and nothing fades. */
+@keyframes type-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: no-preference) {
+  html:not([data-motion="minima"]) .prose-chat.typing > :last-child,
+  html:not([data-motion="minima"]) .prose-chat.typing > :is(ul, ol):last-child > li:last-child { animation: type-in 240ms ease-out; }
+}

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { folderInUse, putBack } from '../src/core/project-close.mjs';
+import { folderInUse, putBack } from '../src/domain/projects/project-close.mjs';
 
 const base = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-sonda-'));
 after(() => fs.rmSync(base, { recursive: true, force: true }));

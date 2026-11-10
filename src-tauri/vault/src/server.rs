@@ -1,6 +1,6 @@
 // The engine's requests to the vault, one JSON object per line on a channel only the engine holds (transport.rs), one
 // answer per line: { ok: true, r, changed?, notices? } or { ok: false, code }. Synchronous on the engine's side (the
-// engine keeps its own API as it was: src/core/master.mjs); what takes time (scrypt) runs as a job the engine polls, so
+// engine keeps its own API as it was: src/domain/security/master.mjs); what takes time (scrypt) runs as a job the engine polls, so
 // its event loop never waits for a password check and the quick requests are answered meanwhile.
 // Every buffer that carried a password or a secret (the request line, the parsed request, the answer) is wiped after use.
 use crate::crypto::{self, b64url, unb64};
@@ -254,7 +254,7 @@ fn quick(op: &str, req: &Value, v: &mut Vault, now: u64, server: &Server) -> Ans
   }
 }
 
-/// A phone's key confirmation (src/engine/remote.mjs › finishPair): K from the code, ECDH(phone, PC) and ECDH(verifier,
+/// A phone's key confirmation (src/engine/transport/remote.mjs › finishPair): K from the code, ECDH(phone, PC) and ECDH(verifier,
 /// PC), with the waits of the 'pair' channel. The verifier and K never leave the vault. → the attempt's answer, with the
 /// PC's own MAC when right.
 fn pair_finish(req: &Value, v: &mut Vault, now: u64) -> Answer {
@@ -290,7 +290,7 @@ fn pair_finish(req: &Value, v: &mut Vault, now: u64) -> Answer {
 }
 
 /// A connector's keys for its launcher only (src/mcp/launch.mjs): a one-time grant on the grants' pipe. Only while they
-/// are still tied to the program the connector starts (its binding, src/core/connector-secrets.mjs).
+/// are still tied to the program the connector starts (its binding, src/domain/security/connector-secrets.mjs).
 fn grant(req: &Value, v: &mut Vault, now: u64, server: &Server) -> Answer {
   let bind = s(req, "bind");
   let vars = req.get("vars").and_then(Value::as_object);
@@ -321,7 +321,7 @@ fn password(req: &Value, k: &str) -> Locked {
   Locked::from_slice(s(req, k).as_bytes())
 }
 
-/// What may be checked as a password at all (src/core/master.mjs › keyFor).
+/// What may be checked as a password at all (src/domain/security/master.mjs › keyFor).
 fn plausible(p: &Locked) -> bool {
   !p.is_empty() && p.as_str().is_some_and(|t| t.chars().count() <= vault::MAX_LENGTH * 4)
 }
@@ -357,7 +357,7 @@ fn wrap(h: &Handle, p: &Locked, created: Option<String>, now: u64) -> Answer {
   Ok(json!({ "ok": true }))
 }
 
-/// One check of a password on a channel, with its waits (src/core/master.mjs › verify).
+/// One check of a password on a channel, with its waits (src/domain/security/master.mjs › verify).
 fn verify(h: &Handle, p: &Locked, channel: &str, now: u64) -> Answer {
   let (m, costs) = {
     let v = h.vault.lock().unwrap();
@@ -386,7 +386,7 @@ fn verify(h: &Handle, p: &Locked, channel: &str, now: u64) -> Answer {
   Ok(tried.to_json())
 }
 
-/// Whether a value is the master password, with no try counted and nothing changed (src/core/master.mjs › isPassword).
+/// Whether a value is the master password, with no try counted and nothing changed (src/domain/security/master.mjs › isPassword).
 /// Only while the data key is open: it is no way round the waits of a locked vault.
 fn same(h: &Handle, p: &Locked) -> Answer {
   let (m, costs) = {

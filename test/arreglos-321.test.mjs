@@ -5,21 +5,23 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { tempHome } from './helpers.mjs';
-import { ctx, saveConfig } from '../src/core/context.mjs';
-import { Board, eventKey, eventText } from '../src/core/board.mjs';
-import { createProject, renameProject } from '../src/core/projects.mjs';
-import { projectNameProblem } from '../src/core/product.mjs';
-import { isSecretPath, looksSecretText, secretsInDiff, localStamp, localText, sizeText } from '../src/core/safety.mjs';
-import { deletionAskedByUser, filesToDelete } from '../src/core/approval.mjs';
-import { git } from '../src/core/workspace.mjs';
-import { commitAll, unpushedSecrets } from '../src/engine/github.mjs';
-import { Scheduler, contractNote } from '../src/engine/scheduler.mjs';
+import { ctx } from '../src/platform/context.mjs';
+import { saveConfig } from '../src/platform/config.mjs';
+import { Board, eventKey, eventText } from '../src/domain/tasks/board.mjs';
+import { createProject, renameProject } from '../src/domain/projects/projects.mjs';
+import { projectNameProblem } from '../src/shared/product.mjs';
+import { isSecretPath, looksSecretText, secretsInDiff } from '../src/shared/secrets-scan.mjs';
+import { localStamp, localText, sizeText } from '../src/shared/text.mjs';
+import { deletionAskedByUser, filesToDelete } from '../src/domain/security/approval.mjs';
+import { git } from '../src/platform/git.mjs';
+import { commitAll, unpushedSecrets } from '../src/engine/host/github.mjs';
+import { Scheduler, contractNote } from '../src/engine/scheduler/index.mjs';
 import { drawingContents } from '../src/engine/whiteboard.mjs';
-import { cutWords, agentAuthor, changedFiles, logDirect } from '../src/engine/logs.mjs';
+import { cutWords, agentAuthor, changedFiles, logDirect } from '../src/domain/journal/journal.mjs';
 
 const GHP = `ghp_${'a1B2c3D4e5'.repeat(4)}`;
 let t; let board;
-before(() => { t = tempHome(); board = new Board(); });
+before(() => { t = tempHome({ permissions: { mode: 'preguntar' } }); board = new Board(); });
 after(() => { try { board.db.close(); } catch { /* closed */ } t.cleanup(); });
 
 test('60: los secretos se buscan también por contenido, y los *.env por nombre', () => {
@@ -43,9 +45,8 @@ test('60: los secretos se buscan también por contenido, y los *.env por nombre'
 });
 
 test('60: «Guardar cambios» no hace commit de una clave escrita en cualquier archivo; el .gitignore nuevo cubre *.env y dist/', () => {
-  // The CI machines have no git identity of their own.
-  for (const k of ['GIT_AUTHOR_NAME', 'GIT_COMMITTER_NAME']) process.env[k] ??= 'Prueba';
-  for (const k of ['GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_EMAIL']) process.env[k] ??= 'prueba@orb.local';
+  // No GIT_AUTHOR_* here: git runs with a clean environment, so on a machine without a git identity (the CI runners)
+  // the commit has to work by itself.
   const p = createProject(board, { name: 'secretos' }, 'usuario');
   const ignore = fs.readFileSync(path.join(p.path, '.gitignore'), 'utf8');
   assert.match(ignore, /^\*\.env$/m); assert.match(ignore, /^dist\/$/m);

@@ -3,12 +3,11 @@
 // it, the brain (agent and model), the reasoning (brain button) and, for a new conversation, the orchestrator (icon and a
 // small switch: on = with the assistant, who coordinates the agents; off = directly with the agent chosen).
 // 3.2: each conversation is its own (route.id), several at once.
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { routeKey, takeDraft } from '@/lib/reload.js';
-import { micMode } from '@/lib/mic.js';
-import { ArrowUp, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool, History, FlaskConical, Folder, Mic, Shrink, ListChecks, Ellipsis, Info, BellOff, MessageSquare } from 'lucide-react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useDraft } from '@/lib/draft.js';
+import { Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, ChevronRight, PenTool, History, FlaskConical, Folder, ListChecks, Ellipsis, Info, BellOff, MessageSquare } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
-import { Markdown } from '@/components/markdown.jsx';
+import { Markdown, TypingMarkdown, TypedMarkdown } from '@/components/markdown.jsx';
 import { ExtensionRequestCard } from './extensions.jsx';
 import { ProjectPicker } from '@/components/project-actions.jsx';
 import { useLiveTasks, liveOf, ProgressBar, elapsed } from '@/components/live-tasks.jsx';
@@ -19,231 +18,46 @@ import { useOrbInbox, useOrbActions } from '@/views/orb/inbox.jsx';
 import { NotificationBell } from '@/components/notification-center.jsx';
 import { confirm } from '@/components/dialogs.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
-import { Spinner } from '@/components/ui/basic.jsx';
 import { Button } from '@/components/ui/button.jsx';
+import { WaitLabel, HeldCard, resumeQueue, setQueuePaused } from '@/components/task-state.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
-import { Switch, Tip, BubbleTip, Popover, PopoverTrigger, PopoverContent } from '@/components/ui/overlay.jsx';
-import { bridge, useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout, plainSkin } from '@/lib/store.js';
+import { Switch, BubbleTip } from '@/components/ui/overlay.jsx';
+import { bridge, useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout, plainSkin, addPending, movePending, dropPending, pendingShown, usePending } from '@/lib/store.js';
 import { notify } from '@/lib/notify.js';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
-import { pickGreeting, pickSubtitle, suggestionsFor } from '@/lib/greeting.js';
+import { pickGreeting, pickSubtitle, suggestionsFor, greetingFor } from '@/lib/greeting.js';
 import { LiveActivity, QuestionCard } from '@/components/chat-live.jsx';
-import { ContextMeter } from './session.jsx';
 import { OrchestratorIcon } from '@/components/orchestrator-icon.jsx';
 import { BrainPicker, ReasoningMenu, UsageBubble, useCatalog, useUsageBubble } from '@/components/brain-picker.jsx';
 import { ContextSlot } from '@/components/context-slot.jsx';
 import { cn } from '@/lib/utils.js';
 import { DECISION, AGENT, STATUS } from '@/lib/labels.js';
-import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
+import { useT } from '@/lib/i18n.js';
+import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
 import { keepSame } from '@/lib/memo.js';
-import { timeZone } from '@/lib/clock.js';
-import { useDay } from '@/lib/use-day.js';
+import { useAutoScroll, Composer } from '@/components/conversation/composer.jsx';
+import { MsgTime, BarPause, COMPACT_AT, CompactButton } from '@/components/conversation/bar.jsx';
+import { ContextMeter } from '@/components/conversation/context-meter.jsx';
 
 
-// A conversation stays at its bottom while the user has not scrolled up (`stick`): when a line arrives (deps) and,
-// 3.8.1 (H4a), whenever the lines change height (older messages drawn late by content-visibility, markdown, pictures)
-// or the area does (the composer grows): a ResizeObserver on the scrolling area and on its lines.
-export function useAutoScroll(deps) {
-  const node = useRef(null);
-  const stick = useRef(true);
-  const observer = useRef(null);
-  const toBottom = useCallback(() => { const el = node.current; if (el && stick.current) el.scrollTop = el.scrollHeight; }, []);
-  useEffect(toBottom, deps); // eslint-disable-line react-hooks/exhaustive-deps
-  const ref = useCallback((el) => {
-    observer.current?.disconnect(); observer.current = null;
-    node.current = el;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const o = new ResizeObserver(toBottom);
-    o.observe(el); if (el.firstElementChild) o.observe(el.firstElementChild);
-    observer.current = o;
-  }, [toBottom]);
-  const onScroll = () => { const el = node.current; if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 140; };
-  return { ref, onScroll };
-}
-
-// "@" picker: while typing @word, a list of tasks, conversations and logs to attach as context (token @tarea:12…).
-function useMentions(value, onChange, ta) {
-  const [options, setOptions] = useState(null);
-  const [index, setIndex] = useState(0);
-  const caret = ta.current?.selectionStart ?? value.length;
-  const match = /(^|\s)@([\wÀ-ɏ-]*)$/.exec(value.slice(0, caret));
-  const query = match ? match[2].toLowerCase() : null;
-  useEffect(() => { if (query !== null && !options) call('mentions.options').then(setOptions).catch(() => setOptions([])); }, [query !== null]); // eslint-disable-line react-hooks/exhaustive-deps
-  const fold = (x) => String(x ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-  const list = query === null ? [] : (options ?? []).filter((o) => fold(`${o.label} ${o.hint ?? ''}`).includes(fold(query))).slice(0, 8);
-  useEffect(() => setIndex(0), [query]);
-  const pick = (o) => {
-    const before = value.slice(0, caret).replace(/@[\wÀ-ɏ-]*$/, `${o.token} `);
-    onChange(before + value.slice(caret));
-    requestAnimationFrame(() => { const el = ta.current; if (el) { el.focus(); el.selectionStart = el.selectionEnd = before.length; } });
-  };
-  const onKey = (e) => {
-    if (!list.length) return false;
-    if (e.key === 'ArrowDown') { e.preventDefault(); setIndex((i) => (i + 1) % list.length); return true; }
-    if (e.key === 'ArrowUp') { e.preventDefault(); setIndex((i) => (i - 1 + list.length) % list.length); return true; }
-    if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pick(list[index]); return true; }
-    if (e.key === 'Escape') { e.preventDefault(); onChange(value.slice(0, caret).replace(/@[\wÀ-ɏ-]*$/, '') + value.slice(caret)); return true; }
-    return false;
-  };
-  return { list, index, pick, onKey };
-}
-
-// mentions: false hides the «@» picker. 3.6 (M2): the microphone also dictates in a computer's browser that has speech
-// recognition (the PC app opens Windows' voice typing instead).
-const WebSpeech = typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition || null) : null;
-function webDictate(lang) {
-  return new Promise((resolve, reject) => {
-    const r = new WebSpeech(); r.lang = lang === 'en' ? 'en-US' : 'es-ES'; r.interimResults = false; r.maxAlternatives = 1;
-    r.onresult = (e) => resolve(e.results?.[0]?.[0]?.transcript ?? '');
-    r.onerror = (e) => reject(new Error(e.error === 'not-allowed' ? tNow('chats.dictateDenied') : tNow('chats.dictateOff')));
-    r.onend = () => resolve('');
-    r.start();
-  });
-}
-export function Composer({ value, onChange, onSend, onStop, busy, placeholder, top, bottom, notice, disabled, onPaste, onDrop, testid, canSend, mentions = true }) {
-  const t = useT();
-  const ta = useRef(null);
-  useEffect(() => { const el = ta.current; if (!el) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 260)}px`; }, [value]);
-  const [dropping, setDropping] = useState(false);
-  const m = useMentions(value, onChange, ta);
-  // 3.8.2: what this box had when F5 reloaded the window comes back on the same screen (lib/reload.js).
-  const here = useStore((s) => routeKey(s.route));
-  useEffect(() => { if (!testid) return; const draft = takeDraft(testid, getState().route); if (draft && !value.trim()) onChange(draft); }, [testid, here]); // eslint-disable-line react-hooks/exhaustive-deps
-  // 3.8.2 (D3): Windows' voice typing in Orb for Windows, nothing on a phone (its keyboard dictates), the browser's speech
-  // recognition in a computer's browser (lib/mic.js).
-  const mic = micMode({ desktop: Boolean(bridge.desktop), windowsDictation: Boolean(bridge.dictateWindows), androidApp: window.__orbHost?.app === true, mobile: Boolean(bridge.mobile),
-    coarse: typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches, webSpeech: Boolean(WebSpeech) });
-  const [hearing, setHearing] = useState(false);
-  const dictate = async () => {
-    // Windows writes what is said into the box that has the focus: the message box, with the cursor at the end.
-    if (mic === 'windows') {
-      const el = ta.current; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
-      await act(bridge.dictateWindows().catch(() => { throw new Error(t('chat.dictateFailed')); }));
-      return;
-    }
-    setHearing(true);
-    try { const said = await act(webDictate(getState().app?.config?.language ?? 'es')); if (said) onChange(value.trim() ? `${value.trimEnd()} ${said}` : said); }
-    finally { setHearing(false); }
-  };
-  return (
-    <div className="composer-dock shrink-0 px-5 pb-5">
-      <div data-slot="composer" className={cn('bg-card relative mx-auto max-w-3xl rounded-2xl border shadow-sm transition-shadow focus-within:shadow-md focus-within:ring-[3px] focus-within:ring-ring/25', dropping && 'ring-primary ring-2')}
-        onDragOver={onDrop ? (e) => { e.preventDefault(); setDropping(true); } : undefined} onDragLeave={() => setDropping(false)} onDrop={onDrop ? (e) => { e.preventDefault(); setDropping(false); onDrop(e); } : undefined}>
-        {mentions && m.list.length ? null : notice}
-        {mentions && m.list.length ? (
-          <div className="bg-popover text-popover-foreground absolute right-3 bottom-full left-3 z-20 mb-2 overflow-hidden rounded-xl border shadow-lg" data-testid="mention-list">
-            <div className="text-muted-foreground border-b px-3 py-1.5 text-[11px]">{t('chat.mentionHeader')}</div>
-            {m.list.map((o, i) => (
-              <button key={o.token} onMouseDown={(e) => { e.preventDefault(); m.pick(o); }} className={cn('flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-[13px]', i === m.index ? 'bg-accent' : 'hover:bg-accent/60')}>
-                {o.icon ?? <AtSign className="text-muted-foreground size-3.5 shrink-0" />}<span className="min-w-0 flex-1 truncate">{o.label}</span><span className="text-muted-foreground shrink-0 text-[11px]">{o.hint}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
-        {top ? <div className="flex min-w-0 items-center gap-2 px-3 pt-3" data-testid="composer-top">{top}</div> : null}
-        <textarea ref={ta} data-testid={testid} value={value} disabled={disabled} rows={2} placeholder={placeholder} onPaste={onPaste}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => { if (mentions && m.onKey(e)) return; if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); onSend({ alt: e.ctrlKey || e.metaKey }); } }}
-          className="placeholder:text-muted-foreground block w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[14.5px] leading-relaxed outline-none" />
-        <div className="flex items-center gap-2 px-3 pb-3">
-          <div className="flex min-w-0 flex-1 items-center gap-1.5" data-testid="composer-bottom">{bottom}</div>
-          {mic ? <Tip label={t('chat.dictate')}><Button size="icon-sm" variant="ghost" className="rounded-full" onClick={dictate} disabled={disabled || hearing} aria-label={t('chat.dictate')} data-testid="dictate"><Mic className={hearing ? 'text-primary animate-pulse' : undefined} /></Button></Tip> : null}
-          {busy && onStop ? <Tip label={t('chat.stop')}><Button size="icon-sm" variant="secondary" onClick={onStop} aria-label={t('chat.stop')}><Square className="size-3.5 fill-current" /></Button></Tip> : null}
-          <Button size="icon-sm" className="rounded-full" onClick={() => onSend({ alt: false })} disabled={disabled || !(canSend ?? value.trim())} aria-label={t('chat.send')} data-testid="send"><ArrowUp /></Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// 2.6: the system's date and time on the left of the chat's top bar (app.css .bar-clock, in the theme's title type).
 // 2.7: a different greeting each time the chat opens (lib/greeting.js); the last one is remembered so it does not repeat.
-function useGreeting() {
+// 3.8.3: one that names the project («Seguimos con «orb-bots»») follows the project chosen for the new chat afterwards:
+// it names the new one, or gives way to one without a project (picked at the same time) after «Sin proyecto».
+function useGreeting(project) {
   const [g] = useState(() => {
     const { app, tasks, projects } = getState();
     let last = {}; try { last = JSON.parse(localStorage.getItem('orb.greet') || '{}'); } catch { /* none */ }
-    const pick = pickGreeting({ tasks, project: app.activeProject?.name ?? null, first: !tasks.length && !projects.length, serious: plainSkin(app.config.ui?.skin), last: last.key });
+    const ask = { tasks, first: !tasks.length && !projects.length, serious: plainSkin(app.config.ui?.skin), last: last.key };
+    const pick = pickGreeting({ ...ask, project: app.activeProject?.name ?? null });
     const sub = pickSubtitle({ last: last.sub });
     try { localStorage.setItem('orb.greet', JSON.stringify({ key: pick.key, sub })); } catch { /* storage unavailable */ }
-    return { ...pick, sub };
+    return { ...pick, sub, plain: pick.key === 'greet.project' ? pickGreeting({ ...ask, project: null }) : null };
   });
-  return g;
-}
-
-// 2.7: with the pointer on it, the seconds too; a click opens the month's calendar in a bubble (MonthCalendar).
-export function BarClock() {
-  const t = useT();
-  const locale = useLocale();
-  const [now, setNow] = useState(() => new Date());
-  const [hover, setHover] = useState(false);
-  const [open, setOpen] = useState(false);
-  const seconds = hover || open;
-  useEffect(() => { const id = setInterval(() => setNow(new Date()), seconds ? 1000 : 15_000); setNow(new Date()); return () => clearInterval(id); }, [seconds]);
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button type="button" className="bar-clock" data-testid="bar-clock" aria-label={t('chat.calendarOpen')} onPointerEnter={() => setHover(true)} onPointerLeave={() => setHover(false)} onFocus={() => setHover(true)} onBlur={() => setHover(false)}>
-          <span className="bar-clock-time">{now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', ...(seconds ? { second: '2-digit' } : {}) })}</span>
-          <span className="bar-clock-date">{now.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}</span>
-        </button>
-      </PopoverTrigger>
-      <PopoverContent side="bottom" align="start" className="orb-cal" data-testid="bar-calendar"><MonthCalendar today={now} /></PopoverContent>
-    </Popover>
-  );
-}
-// A month at a glance: the days of the week from the language's first day (Monday in Spanish), today marked, arrows to
-// move between months and a button back to today.
-function MonthCalendar({ today }) {
-  const t = useT();
-  const locale = useLocale();
-  const [shown, setShown] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
-  const first = (() => { try { const w = new Intl.Locale(locale).getWeekInfo?.() ?? new Intl.Locale(locale).weekInfo; return (w?.firstDay ?? 1) % 7; } catch { return 1; } })();
-  const year = shown.getFullYear(); const month = shown.getMonth();
-  const lead = (new Date(year, month, 1).getDay() - first + 7) % 7;
-  const days = new Date(year, month + 1, 0).getDate();
-  const cells = [...Array(lead).fill(null), ...Array.from({ length: days }, (_, i) => i + 1)];
-  while (cells.length % 7) cells.push(null);
-  const names = Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 7 + ((first + i) % 7)).toLocaleDateString(locale, { weekday: 'narrow' })); // 7 Jan 2024 was a Sunday
-  const isToday = (d) => d && year === today.getFullYear() && month === today.getMonth() && d === today.getDate();
-  const thisMonth = year === today.getFullYear() && month === today.getMonth();
-  const move = (n) => setShown(new Date(year, month + n, 1));
-  return (
-    <div className="grid gap-2">
-      <div className="flex items-center gap-1">
-        <span className="orb-cal-title flex-1 truncate px-1 text-[14px] font-semibold" aria-live="polite" data-testid="bar-calendar-title">{shown.toLocaleDateString(locale, { month: 'long', year: 'numeric' })}</span>
-        <button type="button" className="orb-cal-nav" onClick={() => move(-1)} aria-label={t('chat.calendarPrev')}><ChevronLeft className="size-4" /></button>
-        <button type="button" className="orb-cal-nav" onClick={() => move(1)} aria-label={t('chat.calendarNext')} data-testid="bar-calendar-next"><ChevronRight className="size-4" /></button>
-      </div>
-      <div className="grid grid-cols-7 gap-0.5 text-center" role="grid" aria-label={shown.toLocaleDateString(locale, { month: 'long', year: 'numeric' })}>
-        {names.map((n, i) => <span key={`h${i}`} className="orb-cal-head" role="columnheader">{n}</span>)}
-        {cells.map((d, i) => <span key={i} role="gridcell" aria-current={isToday(d) ? 'date' : undefined} className={cn('orb-cal-day', !d && 'invisible', isToday(d) && 'is-today', (first + i) % 7 === 0 || (first + i) % 7 === 6 ? 'is-weekend' : '')}>{d ?? ''}</span>)}
-      </div>
-      {thisMonth ? null : <button type="button" className="orb-cal-today" onClick={() => setShown(new Date(today.getFullYear(), today.getMonth(), 1))}>{t('chat.calendarToday')}</button>}
-    </div>
-  );
-}
-// The time a message was written, small at its bottom right (the day too when it is not today). One formatter per
-// language and time zone (toLocale…String builds one on every call, for every message). The message is memoised: the
-// time follows the day by itself (lib/clock.js: after midnight, today's messages get their day; a new zone, new times).
-const msgFormats = new Map();
-const msgFormat = (locale, day) => {
-  const k = `${locale}|${day}|${timeZone()}`;
-  if (!msgFormats.has(k)) msgFormats.set(k, new Intl.DateTimeFormat(locale, day ? { day: 'numeric', month: 'short' } : { hour: '2-digit', minute: '2-digit' }));
-  return msgFormats.get(k);
-};
-// hover (3.8.2, an agent's conversation): shown while the pointer is over the message (or it has the focus).
-export function MsgTime({ at, hover = false }) {
-  const locale = useLocale();
-  useDay();
-  if (!at) return null;
-  const d = new Date(at); if (Number.isNaN(d.getTime())) return null;
-  const today = d.toDateString() === new Date().toDateString();
-  const time = msgFormat(locale, false).format(d);
-  return <time className={hover ? 'msg-time msg-time-hover' : 'msg-time'} dateTime={d.toISOString()}>{today ? time : `${msgFormat(locale, true).format(d)} ${time}`}</time>;
+  return greetingFor(g, project);
 }
 
 // Memoised: the list (up to 120 lines) is not drawn again while the assistant streams its answer.
-const Message = memo(function Message({ m, name, onChanges }) {
+const Message = memo(function Message({ m, name, onChanges, tail }) {
   const t = useT();
   if (m.meta?.kind === 'question') return <QuestionCard m={m} />;
   // 2.7: for a big request, the assistant's advice to define it on the Pizarra, with the way there.
@@ -266,7 +80,7 @@ const Message = memo(function Message({ m, name, onChanges }) {
         <Robot size={32} still className="mt-0.5" />
         <div className="chat-glass min-w-0 flex-1">
           <div className="text-muted-foreground mb-1 text-xs">{name}</div>
-          <Markdown>{m.body}</Markdown>
+          <TypedMarkdown tail={tail}>{m.body}</TypedMarkdown>
           {report ? (
             <div className="chat-actions mt-2.5 flex flex-wrap items-center gap-2" data-testid="report-actions">
               {report.accepted ? <Badge variant="success"><Check />{t('chat.accepted', { ids: report.tasks.map((id) => `#${id}`).join(', ') })}</Badge> : (<>
@@ -292,6 +106,8 @@ const Message = memo(function Message({ m, name, onChanges }) {
       {!fullPc() ? null : <Button size="xs" variant="soft" onClick={openGames} data-testid="chat-play"><Gamepad2 />{t('chat.playButton')}</Button>}
     </div>
   );
+  // 3.8.3: the tasks of this chat wait because the queue is paused: «Reanudar» right there (while it still is).
+  if (m.meta?.kind === 'paused') return <PausedLine body={m.body} />;
   // 3.1: a finished task says it in one line; what the agent reported (technical) unfolds on request.
   if (m.meta?.kind === 'task-end' && m.meta.result) return (
     <div className="bg-muted/70 text-muted-foreground mx-auto max-w-[88%] rounded-xl px-3.5 py-2 text-center text-[13px]">
@@ -388,9 +204,10 @@ function TaskApprovalLine({ m }) {
 // agent's own conversation and «Cancelar» stay a click away, as in the block they replace.
 function TaskLines({ conversation }) {
   const live = useLiveTasks();
-  const tasks = useStore((s) => (conversation == null ? [] : s.tasks.filter((x) => x.conversation_id === conversation && (x.status === 'running' || x.status === 'queued'))));
+  // 3.8.3: and the ones held for review (a mass deletion…), as a card with «Aceptar» and «Deshacer».
+  const tasks = useStore((s) => (conversation == null ? [] : s.tasks.filter((x) => x.conversation_id === conversation && (x.status === 'running' || x.status === 'queued' || x.held))));
   if (!tasks.length) return null;
-  return <div className="grid gap-2" data-testid="task-lines">{[...tasks].sort((a, b) => a.id - b.id).map((x) => <TaskLine key={x.id} task={x} live={liveOf(live, x.id)} />)}</div>;
+  return <div className="grid gap-2" data-testid="task-lines">{[...tasks].sort((a, b) => a.id - b.id).map((x) => (x.held ? <HeldCard key={x.id} task={x} link className="mx-auto w-full max-w-[92%]" /> : <TaskLine key={x.id} task={x} live={liveOf(live, x.id)} />))}</div>;
 }
 function TaskLine({ task, live }) {
   const t = useT();
@@ -405,7 +222,7 @@ function TaskLine({ task, live }) {
         <span className="font-semibold">{t('orbchats.taskN', { id: task.id })}</span>
         <span className="text-muted-foreground">{agent ? ` · ${AGENT[agent] ?? agent}` : ''} · </span>{now}
       </button>
-      {running ? <ProgressBar percent={live?.percent ?? null} quiet={live?.quietMin >= 5} className="w-16 shrink-0 sm:w-24" /> : <span className="text-muted-foreground shrink-0 text-xs">{t('orbchats.taskQueued')}</span>}
+      {running ? <ProgressBar percent={live?.percent ?? null} quiet={live?.quietMin >= 5} className="w-16 shrink-0 sm:w-24" /> : <WaitLabel task={task} />}
       {running && live?.startedAt ? <span className="text-muted-foreground shrink-0 text-xs tabular-nums">{elapsed(Date.now() - live.startedAt)}</span> : null}
       {live?.sessionId ? <BubbleTip title={t('comp.live.viewConv')}><Button size="icon-xs" variant="ghost" className="opacity-60 group-hover/task:opacity-100" aria-label={t('comp.live.viewConv')} onClick={() => go({ view: 'session', id: live.sessionId })}><MessageSquare /></Button></BubbleTip> : null}
       <BubbleTip title={t('comp.live.cancelTitle')}><Button size="icon-xs" variant="ghost" className="opacity-60 group-hover/task:opacity-100" aria-label={t('comp.live.cancelTitle')} onClick={cancel} data-testid="task-line-cancel"><Square className="size-3 fill-current" /></Button></BubbleTip>
@@ -415,37 +232,14 @@ function TaskLine({ task, live }) {
 
 // The title of a conversation in the middle of a bar, and under it, small, its project with its icon (direct
 // conversations, views/session.jsx).
-// The bar's pause / resume of all of Orb's work (the chat's bar and an agent conversation's).
-export function BarPause() {
+function PausedLine({ body }) {
   const t = useT();
   const paused = useStore((s) => Boolean(s.app?.paused));
-  return paused
-    ? <BubbleTip title={t('bar.resume')} text={t('bar.resumeText')}><Button variant="soft" size="icon-sm" onClick={() => act(call('control.resume'), t('chat.resumed'))} aria-label={t('bar.resume')} data-testid="bar-resume"><Play /></Button></BubbleTip>
-    : <BubbleTip title={t('bar.pause')} text={t('bar.pauseText')}><Button variant="ghost" size="icon-sm" onClick={() => act(call('control.pause'), t('chat.paused'))} aria-label={t('bar.pause')} data-testid="bar-pause"><Pause /></Button></BubbleTip>;
-}
-export function BarHeading({ title, project, onRename, renameLabel, extra, showProject = true }) {
-  const t = useT();
   return (
-    <div className="bar-title" data-testid="bar-title">
-      {onRename ? <BubbleTip title={renameLabel}><button type="button" className="bar-title-main" onClick={onRename} data-testid="bar-title-text">{title}</button></BubbleTip> : <span className="bar-title-main">{title}</span>}
-      {showProject || extra ? (
-        <span className="bar-title-sub" data-testid="bar-title-project">
-          {showProject ? <>{project ? <ProjectIcon name={project} className="size-3.5" /> : <Folder className="size-3 shrink-0" aria-hidden="true" />}<span className="truncate">{project ?? t('bar.noProject')}</span></> : null}{extra}
-        </span>
-      ) : null}
+    <div className="chat-actions bg-muted/70 text-muted-foreground mx-auto flex max-w-[88%] flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-xl px-3.5 py-2 text-center text-[13px]" data-testid="chat-paused">
+      <span>{body}</span>
+      {paused ? <Button size="xs" variant="soft" onClick={() => resumeQueue(t)} data-testid="chat-resume"><Play />{t('tasks.wait.resume')}</Button> : null}
     </div>
-  );
-}
-
-// 3.6: the share of the context at which the composer suggests «Compactar» (DESIGN-SYSTEM §2.2).
-export const COMPACT_AT = 0.7;
-// «Compactar» in the contextual slot: the conversation goes on from a summary; nothing of the history is lost.
-export function CompactButton({ onCompact, busy }) {
-  const t = useT();
-  return (
-    <BubbleTip title={t('compact.title')} text={t('compact.tip')} side="top">
-      <Button size="xs" variant="soft" onClick={onCompact} disabled={busy} data-testid="chat-compact">{busy ? <Spinner /> : <Shrink />}{busy ? t('compact.busy') : t('compact.button')}</Button>
-    </BubbleTip>
   );
 }
 // The orchestrator in the composer: its icon and a small switch; the tooltip explains it. A conversation keeps the way it
@@ -462,6 +256,24 @@ function OrchestratorSwitch({ on, onChange, name, cursor, locked = false }) {
   );
 }
 
+// 3.8.3: the answer being written, the only part of the conversation that follows each streamed piece (drawn once per
+// frame: lib/store.js › chatStateSoon); it is typed on screen (TypingMarkdown) and its finished blocks are not parsed
+// again. The saved message that replaces it goes on typing from there (TypedMarkdown).
+function LiveAnswer({ id, name }) {
+  const t = useT();
+  const chat = useStore((s) => chatOf(s, id)) ?? {};
+  return (
+    <div className="flex gap-3">
+      <Robot size={32} mood={chat.partial ? 'talking' : 'thinking'} className="mt-0.5" />
+      <div className="chat-glass min-w-0 flex-1">
+        <div className="text-muted-foreground mb-1 text-xs">{name}</div>
+        {chat.partial ? <TypingMarkdown text={chat.partial} tail={`chat:${id}`} /> : null}
+        {chat.waiting ? <div className="text-muted-foreground text-[13px]" data-testid="chat-waiting-turn">{t('chat.waitingTurn')}</div> : <LiveActivity chat={chat} />}
+      </div>
+    </div>
+  );
+}
+
 // 3.2: onConversation / project: inside God mode, a new conversation stays there (in its project) instead of navigating.
 export function ChatView({ route, onConversation, project: inProject }) {
   const t = useT();
@@ -470,33 +282,43 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const id = route?.id ?? null;
   const conv = useStore((s) => (id == null ? null : s.conversations.find((c) => c.id === id) ?? null));
   const [rows, setRows] = useState([]);
-  const [text, setText] = useState('');
+  const box = useDraft();
   // 3.5, the Android app: what was shared from another app («Compartir con Orb») is waiting in the text box to be sent.
   useEffect(() => {
     if (!bridge.takeShared) return undefined;
-    const take = () => { const got = bridge.takeShared(); if (got) setText((prev) => (prev.trim() ? `${prev.trimEnd()}\n${got}` : got)); };
+    const take = () => { const got = bridge.takeShared(); if (got) box.set((prev) => (prev.trim() ? `${prev.trimEnd()}\n${got}` : got)); };
     take();
     window.addEventListener('orb:shared', take);
     return () => window.removeEventListener('orb:shared', take);
   }, []);
   const name = app.config.assistantName;
-  const chat = chatOf(app, id) ?? {};
+  // 3.8.3: only what this view draws from the conversation's live state (the streamed text is LiveAnswer's): a streamed
+  // piece does not redraw the whole view.
+  const chat = useStore((s) => { const c = chatOf(s, id); return { busy: Boolean(c?.busy), waiting: Boolean(c?.waiting), used: c?.context?.used ?? null, size: c?.context?.size ?? null }; });
   // 3.8: on a phone, the brain and «Orquestador» of a NEW conversation are chosen for that conversation alone (the ones
   // new conversations start with are a setting of the PC).
   const [draft, setDraft] = useState(null);
   const local = Boolean(bridge.mobile) && id == null;
   const defaults = { ...(app.assistant ?? {}), ...(local ? draft ?? {} : {}) };
   useEffect(() => { setRows([]); setOlder([]); setMore(false); }, [id]);
+  // The list: at once when the chat opens; a change elsewhere (`version` moves on every board change, several times a
+  // second while agents work) fetches it again a moment later, once per burst. Only the newest answer is kept.
+  const seq = useRef(0);
+  const fetchList = useCallback(() => {
+    const my = ++seq.current;
+    call('chat.list', { conversation: id }).then((r) => { if (my === seq.current && getState().route?.id === id) { setRows((prev) => keepSame(prev, r)); setMore(r.length >= 160); } }).catch(() => {});
+  }, [id]);
+  useEffect(() => { seq.current++; if (id != null) fetchList(); }, [id, fetchList]);
+  const firstVersion = useRef(version);
   useEffect(() => {
-    if (id == null) return undefined;
-    let alive = true;
-    call('chat.list', { conversation: id }).then((r) => { if (alive) { setRows((prev) => keepSame(prev, r)); setMore(r.length >= 160); } }).catch(() => {});
-    return () => { alive = false; };
-  }, [id, version]);
+    if (id == null || version === firstVersion.current) return undefined;
+    const h = setTimeout(fetchList, 250);
+    return () => clearTimeout(h);
+  }, [id, version, fetchList]);
   // A long conversation shows its last 160 lines; the earlier ones, on request.
   const [older, setOlder] = useState([]);
   const [more, setMore] = useState(false);
-  const askChanges = useCallback((ids) => setText(t('chat.changesFor', { ids: ids.map((x) => `#${x}`).join(', ') })), [t]);
+  const askChanges = useCallback((ids) => box.set(t('chat.changesFor', { ids: ids.map((x) => `#${x}`).join(', ') })), [t, box]);
   const [loading, setLoading] = useState(false);
   const loadOlder = async () => {
     const first = (older[0] ?? rows[0])?.id; if (loading || !first) return; setLoading(true);
@@ -517,19 +339,23 @@ export function ChatView({ route, onConversation, project: inProject }) {
     return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', run); };
   }, [id, unread, rows.length]);
   const showTest = useStore((s) => s.testToday) === true && id == null;
-  const scroll = useAutoScroll([rows.length, chat.partial, chat.busy, id]);
+  // 3.8.3: the line the turn just wrote, from the state that ended it (until the conversation is read again), and the
+  // messages the user sent that the engine has not saved yet: no wait and no gap on screen.
+  const answer = useStore((s) => (id == null ? null : s.answers?.[id] ?? null));
+  const pending = usePending(id == null ? 'new' : `chat:${id}`);
+  const scroll = useAutoScroll([rows.length, chat.busy, id, pending.length, answer?.id]);
   const catalog = useCatalog();
   const brain = conv
     ? { agent: conv.agent ?? 'claude', model: conv.model ?? '', account: conv.account ?? conv.agent, reasoning: conv.reasoning ?? 'medium' }
     : { agent: defaults.agent ?? 'claude', model: defaults.model ?? '', account: defaults.account, reasoning: defaults.reasoning ?? 'medium' };
   const orchestrate = conv ? true : defaults.orchestrate !== false;
   const bubble = useUsageBubble(catalog, brain);
-  const greeting = useGreeting();
   const userName = useStore((st) => st.app?.config?.userName?.trim() || '');
   const [sending, setSending] = useState(false);
   // 3.2.1: in God mode, a new conversation goes to the project chosen there, and the bar says that one.
   const projects = useStore((s) => s.projects);
   const workProject = inProject ? projects.find((p) => p.name === inProject) ?? { name: inProject } : app.activeProject ?? null;
+  const greeting = useGreeting(workProject?.name ?? null);
 
   // 3.2.1: inside God mode, the project chosen there right now (the answer to a first message may come after a change).
   const projectNow = useRef(inProject); projectNow.current = inProject;
@@ -537,12 +363,14 @@ export function ChatView({ route, onConversation, project: inProject }) {
   // the message is (one click away).
   const leftBehind = (target, title) => notify({ title: t('chat.startedIn', { title }), body: t('chat.startedInBody'), tone: 'info', go: target, action: { label: t('notice.open'), onClick: () => go(target) } });
   const send = async () => {
-    const msg = text.trim(); if (!msg || sending) return;
-    setText('');
+    const msg = box.get().trim(); if (!msg || sending) return;
+    box.set('');
     dismissTest();
+    const mine = addPending(id == null ? 'new' : `chat:${id}`, msg, lastId);
     if (id != null) {
-      if ((await act(call('chat.send', { text: msg, conversation: id }))) === undefined) setText(msg);
-      else call('chat.list', { conversation: id }).then((r) => { if (getState().route?.id === id) setRows((prev) => keepSame(prev, r)); }).catch(() => {});
+      // The send failed: the message goes back to the box (unless something else was written there meanwhile).
+      if ((await act(call('chat.send', { text: msg, conversation: id }))) === undefined) { dropPending(mine); box.set((now) => (now.trim() ? now : msg)); }
+      else fetchList();
       return;
     }
     setSending(true);
@@ -553,7 +381,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
         // 3.2: the first message makes the conversation (in the working folder): then the screen is that conversation.
         const chosen = local && draft ? Object.fromEntries(['agent', 'model', 'reasoning'].filter((k) => draft[k] !== undefined).map((k) => [k, draft[k]])) : {};
         const r = await act(call('chat.send', { text: msg, ...(inProject ? { project: inProject } : {}), ...(Object.keys(chosen).length ? { brain: chosen } : {}) }));
-        if (!r) { if (!moved()) setText(msg); return; }
+        if (!r) { dropPending(mine); if (!moved()) box.set(msg); return; }
+        movePending(mine, `chat:${r.conversation}`);
         await refresh().catch(() => {});
         if (moved()) { leftBehind({ view: 'chat', id: r.conversation }, getState().conversations.find((c) => c.id === r.conversation)?.title ?? msg.slice(0, 60)); return; }
         if (onConversation) onConversation(r.conversation); else go({ view: 'chat', id: r.conversation });
@@ -561,9 +390,10 @@ export function ChatView({ route, onConversation, project: inProject }) {
         // «Orquestador» off: the user hands out the work, and the conversation is directly with the agent chosen below
         // (3.2.1: in God mode, in the project chosen there).
         const project = inProject ?? app.activeProject?.name ?? null;
-        const s = await act(call('sessions.create', { agent: brain.agent, account: brain.account && brain.account !== brain.agent ? brain.account : undefined, model: brain.model || undefined, reasoning: brain.reasoning, project, permission: project ? 'editar' : 'leer' }));
-        if (!s) { if (!moved()) setText(msg); return; }
-        await act(call('sessions.send', { id: s.id, text: msg }));
+        const s = await act(call('sessions.create', { agent: brain.agent, account: brain.account && brain.account !== brain.agent ? brain.account : undefined, model: brain.model || undefined, reasoning: brain.reasoning, project, ...(project ? {} : { permission: 'leer' }) }));
+        if (!s) { dropPending(mine); if (!moved()) box.set(msg); return; }
+        movePending(mine, `session:${s.id}`);
+        if ((await act(call('sessions.send', { id: s.id, text: msg }))) === undefined) dropPending(mine);
         await refresh().catch(() => {});
         if (!stillHere(ticket)) { leftBehind({ view: 'session', id: s.id }, s.title); return; }
         go({ view: 'session', id: s.id });
@@ -594,9 +424,15 @@ export function ChatView({ route, onConversation, project: inProject }) {
     }
     settings({ agent: b.agent, model: b.model, account: b.account });
   };
-  const lines = [...older, ...rows];
+  const saved = [...older, ...rows];
+  // The answer that ended the turn goes after the lines until a new read of the conversation brings it.
+  const lastId = saved.at(-1)?.id ?? 0;
+  const lines = answer && answer.id > lastId ? [...saved, answer] : saved;
+  const unsaved = pendingShown(pending, lines.filter((m) => m.role === 'usuario').map((m) => ({ id: m.id, text: m.body })));
+  useEffect(() => { for (const p of pending) if (!unsaved.includes(p)) dropPending(p.id); }, [pending, unsaved]);
   // 3.6: «Compactar» when the conversation's context is at 70 % or more (never while it answers).
-  const context = chat.context ?? conv?.context ?? null;
+  const live = useMemo(() => (chat.size ? { used: chat.used, size: chat.size } : null), [chat.used, chat.size]);
+  const context = live ?? conv?.context ?? null;
   const [compacting, setCompacting] = useState(false);
   const compactable = id != null && !chat.waiting && (compacting || (!chat.busy && context?.size > 0 && context.used / context.size >= COMPACT_AT));
   const compact = async () => {
@@ -640,7 +476,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
             <BubbleTip title={t('chats.more')}><DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={t('chats.more')} data-testid="orb-chat-more"><Ellipsis /></Button></DropdownMenuTrigger></BubbleTip>
             <DropdownMenuContent align="end" className="w-56">
               {conv && !embedded ? <DropdownMenuItem onSelect={() => openOrbInfo({ type: 'chat' })} data-testid="more-info"><Info />{t('orbchats.info')}</DropdownMenuItem> : null}
-              {slim ? <DropdownMenuItem onSelect={() => (app.paused ? act(call('control.resume'), t('chat.resumed')) : act(call('control.pause'), t('chat.paused')))} data-testid={app.paused ? 'bar-resume' : 'bar-pause'}>{app.paused ? <Play /> : <Pause />}{app.paused ? t('bar.resume') : t('bar.pause')}</DropdownMenuItem> : null}
+              {slim ? <DropdownMenuItem onSelect={() => setQueuePaused(!app.paused, t)} data-testid={app.paused ? 'bar-resume' : 'bar-pause'}>{app.paused ? <Play /> : <Pause />}{app.paused ? t('bar.resume') : t('bar.pause')}</DropdownMenuItem> : null}
               {chatActions.filter((a) => a.id !== 'info' && !a.danger).map((a) => <DropdownMenuItem key={a.id} onSelect={a.run} data-testid={`more-${a.id}`}><a.icon />{a.label}</DropdownMenuItem>)}
               {fullPc() ? <DropdownMenuItem onSelect={openGames} data-testid="bar-games"><Gamepad2 />{t('bar.games')}</DropdownMenuItem> : null}
               {chatActions.filter((a) => a.danger).map((a) => <div key={a.id}><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onSelect={a.run} data-testid={`more-${a.id}`}><a.icon />{a.label}</DropdownMenuItem></div>)}
@@ -658,23 +494,15 @@ export function ChatView({ route, onConversation, project: inProject }) {
                 <h2 className="hero-title mt-2 text-2xl" data-testid="chat-greeting">{userName ? t(greeting.key, { ...greeting, user: userName, name }) : t('chat.hello', { name })}</h2>
                 <p className="text-muted-foreground max-w-md">{t(greeting.sub)}</p>
               </div>
-              <div className="mt-3 flex max-w-xl flex-wrap justify-center gap-2">{suggestionsFor(workProject?.name).map((s) => <Button key={s} variant="outline" size="sm" className="h-auto max-w-full shrink rounded-full py-1.5 whitespace-normal" onClick={() => setText(t(s))}>{t(s)}</Button>)}</div>
+              <div className="mt-3 flex max-w-xl flex-wrap justify-center gap-2">{suggestionsFor(workProject?.name).map((s) => <Button key={s} variant="outline" size="sm" className="h-auto max-w-full shrink rounded-full py-1.5 whitespace-normal" onClick={() => box.set(t(s))}>{t(s)}</Button>)}</div>
             </div>
-          ) : lines.map((m) => <Message key={m.id} m={m} name={name} onChanges={askChanges} />)}
+          ) : lines.map((m) => <Message key={m.id} m={m} name={name} onChanges={askChanges} tail={`chat:${id}`} />)}
+          {unsaved.map((p) => <Message key={p.id} m={{ id: p.id, role: 'usuario', body: p.text, at: p.at }} name={name} onChanges={askChanges} />)}
           <TaskLines conversation={id} />
-          {chat.busy || chat.waiting || sending ? (
-            <div className="flex gap-3">
-              <Robot size={32} mood={chat.partial ? 'talking' : 'thinking'} className="mt-0.5" />
-              <div className="chat-glass min-w-0 flex-1">
-                <div className="text-muted-foreground mb-1 text-xs">{name}</div>
-                {chat.partial ? <Markdown>{chat.partial}</Markdown> : null}
-                {chat.waiting ? <div className="text-muted-foreground text-[13px]" data-testid="chat-waiting-turn">{t('chat.waitingTurn')}</div> : <LiveActivity chat={chat} />}
-              </div>
-            </div>
-          ) : null}
+          {chat.busy || chat.waiting || sending ? <LiveAnswer id={id} name={name} /> : null}
         </div>
       </div>
-      <Composer value={text} onChange={setText} onSend={send} onStop={id != null ? () => act(call('chat.stop', { conversation: id })) : undefined} busy={chat.busy} disabled={sending} testid="chat-input"
+      <Composer draft={box} onSend={send} onStop={id != null ? () => act(call('chat.stop', { conversation: id })) : undefined} busy={chat.busy} disabled={sending} testid="chat-input"
         placeholder={chat.busy ? t('chat.placeholderBusy', { name }) : orchestrate ? t('chat.placeholder', { name }) : t('chat.placeholderDirect', { agent: AGENT[brain.agent] ?? brain.agent })}
         top={<>
           {/* 3.2.1: in God mode a new conversation takes the project chosen at the top of God mode. */}
@@ -690,6 +518,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
         bottom={<>
           <BrainPicker catalog={catalog} value={brain} onChange={pickBrain} className="min-w-0 shrink" />
           <ReasoningMenu catalog={catalog} value={brain} onChange={(reasoning) => settings({ reasoning })} />
+          {/* 3.8.3: «Auto» / «Preguntar» for the tasks the assistant creates and the new chats (the global level, also from the phone). */}
+          <AutonomySwitch value={app?.config?.permissions?.mode === 'preguntar' ? 'editar' : 'auto'} testid="chat-autonomy" onChange={(p) => act(call('permissions.setMode', { mode: p === 'auto' ? 'auto' : 'preguntar' }), p === 'auto' ? t('session.autoOn') : t('session.askOn')).then(() => refresh())} />
           {/* 3.2: whether a NEW conversation is with the assistant or directly with the agent chosen; a conversation keeps
               the way it started. 3.6: an icon and a small switch; the tooltip explains it. */}
           <OrchestratorSwitch on={orchestrate} onChange={toggleOrchestrator} name={name} cursor={brain.agent === 'cursor'} locked={id != null} />

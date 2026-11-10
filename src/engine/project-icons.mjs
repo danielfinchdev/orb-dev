@@ -2,8 +2,8 @@
 // or app icon, found in its folder), else none (the window draws a badge with its initials in a colour of its own).
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, tr } from '../core/context.mjs';
-import { folderName } from '../core/home.mjs';
+import { ctx, tr } from '../platform/context.mjs';
+import { folderName } from '../platform/paths.mjs';
 
 const MAX_BYTES = 512 * 1024;
 const TYPES = { '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' };

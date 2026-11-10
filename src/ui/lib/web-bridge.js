@@ -1,11 +1,11 @@
 // When the interface runs in a phone's browser there is no desktop bridge: this one talks to the PC over HTTP
-// (/api/call, live events on /api/events), every message encrypted end to end (src/core/mobile-crypto.mjs). It must be
+// (/api/call, live events on /api/events), every message encrypted end to end (src/shared/mobile-crypto.mjs). It must be
 // imported before anything else. Not imported statically: i18n.js needs the store, which reads window.orb when it loads
 // (and this file defines it); the encryption code is loaded only on the phone.
-import * as L from './link-payload.js'; // tiny and pure: what a QR or a typed code says (also the Android app's)
+import * as L from '../../shared/link-payload.mjs'; // tiny and pure: what a QR or a typed code says (also the Android app's)
 import { timedFetch, fetchWithin, isOffline, TIMEOUTS } from './net.js';
 const tl = async (key, vars) => (await import('./i18n.js')).t(key, vars);
-const crypto$ = () => import('../../core/mobile-crypto.mjs');
+const crypto$ = () => import('../../shared/mobile-crypto.mjs');
 // 3.5: the Android app (src/ui/lib/app-bridge.js, loaded first) gives this bridge its own host: where the Orb is (the
 // page is not served by it), a key store backed by the Android Keystore, and the app's extras. In a browser, this page.
 const host = window.__orbHost ?? null;
@@ -96,7 +96,8 @@ if (!window.orb) {
     return answer(res, s, box.n);
   };
   // The envelope of a request whose body is not JSON (live events, pictures): in a header.
-  const authHeader = async (s, kind) => { const C = await crypto$(); return C.sealText(s.key, { t: stamp(), m: kind }, C.AAD.request(s.id)); };
+  // 3.8.3: the live events' one also says this client takes the streamed answer as deltas (d: 1, src/shared/chat-stream.mjs).
+  const authHeader = async (s, kind) => { const C = await crypto$(); return C.sealText(s.key, { t: stamp(), m: kind, ...(kind === 'events' ? { d: 1 } : {}) }, C.AAD.request(s.id)); };
 
   // Live events over a streamed fetch (EventSource cannot send headers); reconnects with a growing pause.
   // 3.8 (F5b): the PC writes a ping every 25 s; nothing at all for TIMEOUTS.eventsIdle (the PC asleep, the Wi-Fi gone
@@ -161,7 +162,7 @@ if (!window.orb) {
   });
 
   // Pairing from the QR: #vincular=<one-time code>&pc=<the PC's public key> (or what the app scanned or was typed in,
-  // src/ui/lib/link-payload.js). The code never travels: the phone proves it read it by sealing its own public key with
+  // src/shared/link-payload.mjs). The code never travels: the phone proves it read it by sealing its own public key with
   // a key derived from it. 3.8: the link waits for the PC's master password (main.jsx asks for it: pairPending), and a
   // page that came in plain http over the Wi-Fi never asks for it (insecure).
   let pending = null;
@@ -197,7 +198,7 @@ if (!window.orb) {
     return { ...p, fp };
   };
   // password: the PC's master password. It never leaves this page: the PC's verifier and the exchange of
-  // src/core/mobile-crypto.mjs › linkDevice prove it is known. A refusal says why (reason: 'password' wrong, the code
+  // src/shared/mobile-crypto.mjs › linkDevice prove it is known. A refusal says why (reason: 'password' wrong, the code
   // still good; 'newCode' too many, 'wait'; status 426: update).
   const pairWith = async (link, { password = '' } = {}) => {
     const C = await crypto$();

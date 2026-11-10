@@ -1,12 +1,13 @@
 // New version of Orb: a card in the top-right corner, under the header (it never covers the menu or the message box), with «Descargar e instalar», the download progress
-// and «Reiniciar e instalar». The state comes from the app (src-tauri/src/updater.rs); the phone has no updates.
+// and «Reiniciar e instalar» (then the backup's progress and the installer opening). The state comes from the app
+// (src-tauri/src/updater.rs); the phone has no updates.
 import { useEffect, useState } from 'react';
 import { X, Download, RotateCw } from 'lucide-react';
 import { bridge, act } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
-import { AUTHOR } from '../../core/product.mjs';
+import { AUTHOR } from '../../shared/product.mjs';
 
-const SHOWN = new Set(['available', 'downloading', 'downloaded']);
+const SHOWN = new Set(['available', 'downloading', 'downloaded', 'installing']);
 const HIDDEN_KEY = 'orb.update.hidden';
 export const notesUrl = (version) => `https://github.com/${AUTHOR.repo}/releases/tag/v${version}`;
 
@@ -39,25 +40,30 @@ export function UpdateCard() {
       <button onClick={hide} className="absolute top-3 right-3 grid size-7 cursor-pointer place-items-center rounded-full hover:bg-white/15" aria-label={t('update.close')}><X className="size-4" /></button>
       <div className="px-6 text-[15px] font-semibold">{t('update.title', { version: st.version })}</div>
       <p className="mt-2 text-[13px] leading-snug text-white/90">
-        {st.state === 'downloaded' ? t('update.ready', { version: st.version }) : st.portable ? t('update.availablePortable') : t('update.available')}
+        {st.state === 'downloaded' ? t('update.ready', { version: st.version }) : st.state === 'installing' ? t('update.installing', { version: st.version }) : st.portable ? t('update.availablePortable') : t('update.available')}
       </p>
-      {st.state === 'downloading' ? (
+      {st.state === 'downloading' || st.state === 'installing' ? (
         <div className="mt-4 grid gap-1.5" data-testid="update-progress">
           <div className="h-2 overflow-hidden rounded-full bg-white/25"><div className="h-full rounded-full bg-white transition-[width]" style={{ width: `${st.percent ?? 0}%` }} /></div>
-          <div className="text-xs text-white/85">{t('update.downloading', { percent: st.percent ?? 0 })}</div>
+          <div className="text-xs text-white/85" aria-live="polite">
+            {st.state === 'downloading' ? t('update.downloading', { percent: st.percent ?? 0 }) : st.step === 'backup' ? t('update.backingUp', { percent: st.percent ?? 0 }) : t('update.opening')}
+          </div>
         </div>
       ) : st.state === 'downloaded' ? (
-        <>
-          <button data-testid="update-restart" onClick={updateActions.restart} className="mt-4 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/70 px-4 py-2.5 text-[15px] font-medium hover:bg-white/15"><RotateCw className="size-4" />{t('update.restart')}</button>
-          <button onClick={hide} className="mt-2 cursor-pointer text-xs text-white/85 underline-offset-2 hover:underline">{t('update.later')}</button>
-        </>
+        <button data-testid="update-restart" onClick={updateActions.restart} className="mt-4 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/70 px-4 py-2.5 text-[15px] font-medium hover:bg-white/15"><RotateCw className="size-4" />{t('update.restart')}</button>
       ) : (
         <>
-          <button data-testid="update-now" onClick={() => updateActions.update(st)} className="mt-4 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/70 px-4 py-2.5 text-[15px] font-medium hover:bg-white/15"><Download className="size-4" />{st.portable ? t('update.download') : t('update.update')}</button>
-          {st.error ? <p className="mt-2 text-xs text-white/90">{st.error === 'install' ? t('update.installFailed') : t('update.failed', { error: st.error })}</p> : null}
+          <button data-testid="update-now" onClick={() => updateActions.update(st)} className="mt-4 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/70 px-4 py-2.5 text-[15px] font-medium hover:bg-white/15"><Download className="size-4" />{st.portable ? t('update.download') : st.error === 'install' ? t('update.downloadAgain') : t('update.update')}</button>
+          {st.error ? <p className="mt-2 text-xs text-white/90" role="alert">{st.error === 'install' ? t('update.installFailed') : t('update.failed', { error: st.error })}</p> : null}
         </>
       )}
-      <button onClick={() => act(bridge.openExternal(notesUrl(st.version)))} className="mt-3 cursor-pointer text-xs text-white/90 underline underline-offset-2">{t('update.notes')}</button>
+      {/* The links under the button, side by side and apart: «Más tarde» (only when ready to install), «Novedades», and
+          after an installer that could not be opened, the release page. */}
+      <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-white/90" data-testid="update-links">
+        {st.state === 'downloaded' ? <button onClick={hide} className="cursor-pointer underline underline-offset-2 hover:text-white">{t('update.later')}</button> : null}
+        <button onClick={() => act(bridge.openExternal(notesUrl(st.version)))} className="cursor-pointer underline underline-offset-2 hover:text-white">{t('update.notes')}</button>
+        {st.error === 'install' && st.url ? <button onClick={() => act(bridge.openExternal(st.url))} className="cursor-pointer underline underline-offset-2 hover:text-white">{t('update.web')}</button> : null}
+      </div>
     </div>
   );
 }

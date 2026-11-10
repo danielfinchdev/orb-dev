@@ -1,5 +1,5 @@
 // Builds the tests' copy of the vault (src-tauri/vault, the orb-vault binary) before `npm test`: the engine's secrets
-// live in Rust (src/core/master.mjs starts it when no app runs the engine). cargo from PATH, or from CARGO_HOME
+// live in Rust (src/domain/security/master.mjs starts it when no app runs the engine). cargo from PATH, or from CARGO_HOME
 // (C:\orb-project\herramientas\cargo on the owner's PC). Quick when nothing changed.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';

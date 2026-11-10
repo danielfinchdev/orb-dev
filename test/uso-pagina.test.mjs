@@ -5,15 +5,15 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { Board } from '../src/core/board.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
 import { Sessions } from '../src/engine/sessions.mjs';
 import { Orchestrator } from '../src/engine/orchestrator.mjs';
-import { Scheduler } from '../src/engine/scheduler.mjs';
-import { buildApi } from '../src/engine/api.mjs';
-import { DESKTOP, principalOf, METHODS } from '../src/core/permissions.mjs';
-import { usageHistory, recordSpend } from '../src/core/budget.mjs';
-import { localDay, ownerTz } from '../src/core/tz.mjs';
-import { ctx } from '../src/core/context.mjs';
+import { Scheduler } from '../src/engine/scheduler/index.mjs';
+import { buildApi } from '../src/engine/api/index.mjs';
+import { DESKTOP, principalOf, METHODS } from '../src/domain/security/permissions.mjs';
+import { usageHistory, recordSpend } from '../src/domain/usage/budget.mjs';
+import { localDay, ownerTz } from '../src/shared/tz.mjs';
+import { ctx } from '../src/platform/context.mjs';
 import { paceOf, windowMs } from '../src/ui/lib/usage-pace.js';
 
 let t; let board; let api; let sessions;
@@ -70,7 +70,7 @@ test('an even pace through a window: only for windows of known length with a res
 });
 
 test('the usage panel is the same, with its reload button, and links to the page; the page is a screen of its own', () => {
-  const session = read('views', 'session.jsx');
+  const session = read('components', 'conversation', 'context-meter.jsx');
   const panel = session.slice(session.indexOf('function UsagePanel'), session.indexOf('export function ContextMeter'));
   assert.match(panel, /call\('usage\.now'\)/); assert.match(panel, /call\('usage\.refresh'\)/); assert.match(panel, /data-testid="usage-reload"/);
   assert.match(panel, /go\(\{ view: 'usage' \}\)/);

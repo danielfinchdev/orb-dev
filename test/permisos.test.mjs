@@ -1,4 +1,4 @@
-// 3.8: who may do what (src/core/permissions.mjs). This PC: everything. A linked phone or browser: only the methods the
+// 3.8: who may do what (src/domain/security/permissions.mjs). This PC: everything. A linked phone or browser: only the methods the
 // table marks 'remote'. An agent: no API method; its MCP tools act only on its own signed conversation or task, and an
 // agent Orb did not sign (or with a forged conversation) gets nothing.
 import { test, before, after } from 'node:test';
@@ -7,18 +7,18 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import { tempHome, ROOT } from './helpers.mjs';
-import { Board } from '../src/core/board.mjs';
-import { createProject } from '../src/core/projects.mjs';
-import { METHODS, REMOTE_METHODS, CHANNELS, PermissionError, principalOf, allowed, authorize, ownsTask } from '../src/core/permissions.mjs';
-import { guardCall, shapeResult, withoutPaths } from '../src/engine/remote.mjs';
-import { ctx } from '../src/core/context.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
+import { createProject } from '../src/domain/projects/projects.mjs';
+import { METHODS, REMOTE_METHODS, CHANNELS, PermissionError, principalOf, allowed, authorize, ownsTask } from '../src/domain/security/permissions.mjs';
+import { guardCall, shapeResult, withoutPaths } from '../src/engine/transport/remote.mjs';
+import { ctx } from '../src/platform/context.mjs';
 import crypto from 'node:crypto';
 import { Sessions, mcpServersFor } from '../src/engine/sessions.mjs';
-import { AgentAuth, agentAuth } from '../src/engine/agent-auth.mjs';
-import { decide } from '../src/core/guard.mjs';
+import { AgentAuth, agentAuth } from '../src/domain/security/agent-auth.mjs';
+import { decide } from '../src/domain/security/guard.mjs';
 import { Orchestrator } from '../src/engine/orchestrator.mjs';
-import { Scheduler } from '../src/engine/scheduler.mjs';
-import { buildApi } from '../src/engine/api.mjs';
+import { Scheduler } from '../src/engine/scheduler/index.mjs';
+import { buildApi } from '../src/engine/api/index.mjs';
 
 let t; let board; let api; let scheduler; let sessions; let orchestrator;
 const phone = principalOf({ device: { id: 'm1', kind: 'phone' } });
@@ -38,7 +38,7 @@ before(() => {
 const signed = (agent, opts = {}) => mcpServersFor(agent, opts).orb;
 const bossServer = (conv) => signed('claude', { orchestrator: true, browser: false, session: `asistente-${conv}`, conversation: conv });
 const claims = (env = {}, ticket = '') => ({ command: process.execPath, args: [path.join(ROOT, 'src', 'mcp', 'server.mjs'), '--ticket-env=ORB_TICKET_orb'], env: { ...env, ORB_AUTH_PIPE: agentAuth.address, ORB_TICKET_orb: ticket } });
-after(() => { try { board.db.close(); } catch { /* closed */ } t.cleanup(); });
+after(() => { orchestrator.closing = true; orchestrator.stopAll(); try { board.db.close(); } catch { /* closed */ } t.cleanup(); });
 
 test('cada método de la API tiene su línea en la tabla, y ninguna línea sobra', () => {
   const names = api.methodNames().sort();
@@ -259,6 +259,15 @@ test('MCP: listas, bitácoras, mensajes y proyectos, confinados a lo suyo', asyn
     const summary = (await worker.call('orb_board')).text;
     assert.match(summary, /TAREA-A/); assert.doesNotMatch(summary, /OTRO-PROYECTO|MISMO-PROYECTO/);
     assert.doesNotMatch((await boss.call('orb_board')).text, /OTRO-PROYECTO/);
+    // 3.8.3: the counts of the whole PC and of what it lists, named apart, so they add up with the list.
+    const board1 = JSON.parse((await boss.call('orb_board')).text);
+    const listed = board1.active.length;
+    assert.equal(Object.values(board1.counts.enLaLista).reduce((x, y) => x + y, 0), listed);
+    assert.ok(Object.values(board1.counts.todoElPc).reduce((x, y) => x + y, 0) >= listed);
+    assert.ok(board1.active.every((x) => 'conversation' in x), 'each one says its conversation');
+    // Real use (3.8.3 final): Orbe saw «1 bloqueada» in the PC's counts, could not open it and offered to investigate it.
+    // Now the summary says where the tasks it cannot list are, and how the user reaches them.
+    assert.match(board1.fueraDeLaLista ?? '', /otras conversaciones/); assert.match(board1.fueraDeLaLista, /Tareas/);
     // Logs: its conversation's projects and the general one.
     assert.equal((await boss.call('orb_write_log', { project: 'tienda', tema: 'Plan', hecho: 'hecho' })).error, false);
     assert.equal((await boss.call('orb_write_log', { project: 'general', tema: 'Plan', hecho: 'hecho' })).error, false);

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { tempHome } from './helpers.mjs';
-import { tree, readFile, gitStatus, gitDiff, gitLog, systemStats } from '../src/engine/expert.mjs';
+import { tree, readFile, gitStatus, gitDiff, gitLog, systemStats } from '../src/engine/host/expert.mjs';
 
 let t; let proj;
 const g = (cwd, ...args) => execFileSync('git', ['-C', cwd, '-c', 'user.name=T', '-c', 'user.email=t@t', ...args], { stdio: 'pipe' });

@@ -15,8 +15,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fork, execFileSync } from 'node:child_process';
 import { tempHome, ROOT, until } from './helpers.mjs';
-import { Board } from '../src/core/board.mjs';
-import { openDb } from '../src/core/db.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
+import { openDb } from '../src/domain/data/db.mjs';
 import { pairBrowser, TEST_MASTER } from './fixtures/e2e-flows.mjs';
 
 const OUT = path.join(ROOT, 'test-results', 'mensajeria-orb'); fs.mkdirSync(OUT, { recursive: true });

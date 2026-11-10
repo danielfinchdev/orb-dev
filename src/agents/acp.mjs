@@ -5,10 +5,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, readOutput, discoverDir, nodeRuntime } from './common.mjs';
+import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, readOutput, discoverDir, nodeRuntime } from '../platform/proc.mjs';
+import { clip } from './common.mjs';
 import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree, hidingEnvValues } from './live.mjs';
-import { decide } from '../core/guard.mjs';
-import { tr } from '../core/context.mjs';
+import { decide } from '../domain/security/guard.mjs';
+import { tr } from '../platform/context.mjs';
 
 // An npm-installed CLI on Windows is a .cmd shim that cannot be started without a shell: Orb runs `node <script>` instead,
 // reading the script from the package's "bin" (the same thing the shim does).
@@ -116,7 +117,8 @@ export function acpAgent(id, spec) {
         const tc = p.toolCall ?? {};
         const command = tc.rawInput?.command ? [].concat(tc.rawInput.command).join(' ') : '';
         const paths = (tc.locations ?? []).map((l) => l.path).filter(Boolean);
-        const verdict = decide({ permission, tool: tc.name ?? tc.title, kind: tc.kind, command, paths, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()) });
+        const verdict = decide({ permission, tool: tc.name ?? tc.title, kind: tc.kind, command, paths, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()), projectDir: o.projectDir, userAsked: o.userAsked?.() ?? [] });
+        if (verdict.auto) onEvent({ type: 'auto', title: command || tc.title || paths.join(', '), reason: verdict.reason });
         let d = verdict.decision;
         if (d === 'ask') d = await approvals.ask({ id: tc.toolCallId ?? `p-${Date.now()}`, tool: tc.title ?? tc.kind ?? tr('sys.agents.tool.action'), title: command || tc.title || paths.join(', '), reason: verdict.reason, input: clip(tc.rawInput ?? tc.title, 400) });
         // In order of preference (not in the order the agent lists its options): "always" must pick allow_always even

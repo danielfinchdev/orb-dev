@@ -45,7 +45,7 @@ test('3.2: cada «Nuevo chat» es una conversación propia, con título y proyec
 });
 
 test('Security Review: auditoría de solo lectura del proyecto, sin esperar aprobación', async () => {
-  t = tempHome();
+  t = tempHome({ permissions: { mode: 'preguntar' } }); // 3.8.3: «Preguntar»
   engine = await startEngine(t.home);
   const { call } = engine;
   await call('projects.create', { name: 'web' });

@@ -1,7 +1,7 @@
 [package]
 name = "orb-vault"
-version = "3.8.2"
-description = "Orb's master password and secrets, kept out of the engine (src/core/master.mjs talks to it)"
+version = "3.8.3"
+description = "Orb's master password and secrets, kept out of the engine (src/domain/security/master.mjs talks to it)"
 authors = ["Orb"]
 license = "MIT"
 edition = "2021"
@@ -11,7 +11,7 @@ rust-version = "1.85"
 name = "orb_vault"
 path = "src/lib.rs"
 
-# The tests' copy of the vault: npm test starts it for every engine and test file (src/core/master.mjs › connect);
+# The tests' copy of the vault: npm test starts it for every engine and test file (src/domain/security/master.mjs › connect);
 # Orb.exe runs the same code in its own process (src-tauri/src/vault_host.rs).
 [[bin]]
 name = "orb-vault"

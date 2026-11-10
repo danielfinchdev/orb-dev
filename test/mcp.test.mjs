@@ -6,12 +6,12 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import { tempHome, ROOT } from './helpers.mjs';
-import { Board } from '../src/core/board.mjs';
-import { createProject } from '../src/core/projects.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
+import { createProject } from '../src/domain/projects/projects.mjs';
 import { mcpServersFor } from '../src/engine/sessions.mjs';
-import { agentAuth } from '../src/engine/agent-auth.mjs';
-import { ctx } from '../src/core/context.mjs';
-import { browserKey } from '../src/core/browser-key.mjs';
+import { agentAuth } from '../src/domain/security/agent-auth.mjs';
+import { ctx } from '../src/platform/context.mjs';
+import { browserKey } from '../src/engine/browser/browser-key.mjs';
 
 let t; let board;
 // An agent's "orb" MCP server exactly as the engine hands it (with its ticket), or one started with only what its
@@ -59,6 +59,44 @@ test('el coordinador solo se reconoce con su ticket del motor', async () => {
     const bad = await worker.call('orb_update_task', { id: 1, status: 'done', model: 'x' });
     assert.match(bad.text, /argumentos no permitidos/);
   } finally { boss.close(); fake.close(); worker.close(); user.close(); }
+});
+
+// 3.8.3 (what Orbe itself reported): «Pedido por» always said «(coordinación de Orbe)», and reading «the last entries»
+// cut by characters, bringing pieces of old ones.
+test('la bitácora: el pedido sale del último mensaje del usuario, y se leen entradas enteras, las que se pidan', async () => {
+  const conv = board.createConversation({ title: 'Pedido', project: 'web' }).id;
+  board.addChat('usuario', 'Haz la portada con el fondo azul', null, conv);
+  const boss = client(signed('claude', { orchestrator: true, browser: false, session: `asistente-${conv}`, conversation: conv }));
+  try {
+    await boss.rpc('initialize', {});
+    for (const n of [1, 2, 3]) assert.equal((await boss.call('orb_write_log', { project: 'web', tema: `Paso ${n}`, hecho: `hecho ${n} ${'z'.repeat(400)}` })).error, false);
+    assert.equal((await boss.call('orb_write_log', { project: 'web', tema: 'Con pedido', pedido: 'Lo que dijo', hecho: 'ok' })).error, false);
+    const all = (await boss.call('orb_read_log', { project: 'web' })).text;
+    assert.match(all, /### .* — Paso 1\n- Pedido [^:]+: Haz la portada con el fondo azul\n/, 'sin pedido: su último mensaje');
+    assert.match(all, /- Pedido [^:]+: Lo que dijo\n/);
+    const one = (await boss.call('orb_read_log', { project: 'web', entradas: 1 })).text;
+    assert.match(one, /^\(web: la entrada más reciente de \d+\)\n/);
+    assert.match(one, /### .* — Con pedido\n/);
+    assert.doesNotMatch(one, /Paso 3/, 'solo la última, entera');
+    const tight = (await boss.call('orb_read_log', { project: 'web', chars: 1000 })).text;
+    assert.doesNotMatch(tight, /\nzzz/, 'nunca un trozo suelto de una entrada anterior');
+    assert.match(tight, /— Con pedido/);
+  } finally { boss.close(); }
+});
+
+// 3.8.3 (what Orbe itself reported): orb_create_task offered accounts of agents that are not on this PC.
+test('crear tareas solo ofrece los agentes y las cuentas que este PC puede usar', async () => {
+  const before = board.setting('agents_available');
+  board.settingJson('agents_available', ['claude', 'codex']);
+  const boss = client(bossServer());
+  try {
+    await boss.rpc('initialize', {});
+    const tool = (await boss.rpc('tools/list', {})).result.tools.find((x) => x.name === 'orb_create_task');
+    assert.deepEqual(tool.inputSchema.properties.agent.enum, ['claude', 'codex', 'any']);
+    const offered = tool.inputSchema.properties.account.description;
+    assert.match(offered, /claude/);
+    for (const gone of ['gemini', 'opencode', 'qwen', 'copilot', 'cursor']) assert.doesNotMatch(offered, new RegExp(gone), gone);
+  } finally { boss.close(); board.setting('agents_available', before ?? ''); }
 });
 
 test('el coordinador crea proyectos, escribe bitácoras y no puede leer otra cosa que bitácoras', async () => {
@@ -239,7 +277,7 @@ test('Cursor recibe tickets nuevos en cada turno y se revocan al terminarlo', as
 // F2.6c (P10): two connectors whose names give the same environment variable would swap tickets: refused when saved,
 // and never both handed to an agent.
 test('conectores con nombres que chocan en las variables de entorno', async () => {
-  const { validateConfig } = await import('../src/core/context.mjs');
+  const { validateConfig } = await import('../src/platform/config.mjs');
   const { mcpServersFor } = await import('../src/engine/sessions.mjs');
   const base = structuredClone(ctx.config);
   for (const pair of [['git-hub', 'git_hub'], ['GitHub', 'github']]) {

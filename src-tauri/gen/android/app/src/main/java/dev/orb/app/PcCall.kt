@@ -7,7 +7,7 @@ import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.net.URL
 
-/** The end-to-end encryption of src/core/mobile-crypto.mjs, in Rust (src-tauri/src/phone_crypto.rs). */
+/** The end-to-end encryption of src/shared/mobile-crypto.mjs, in Rust (src-tauri/src/phone_crypto.rs). */
 object PhoneCrypto {
   init {
     System.loadLibrary("orb_lib")

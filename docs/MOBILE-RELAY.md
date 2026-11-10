@@ -15,7 +15,7 @@ internet that only passes messages along. No ports need to be opened on the rout
   `…workers.dev` address (no custom domain needed).
 - **Connection:** the Orb engine opens a WebSocket to the relay when "From anywhere" is turned on. The phone opens the
   web app served by the relay (HTTPS) and another WebSocket; the relay pairs the two by the PC's identifier.
-- **End-to-end encryption:** the same protocol as 2.3.3 (`src/core/mobile-crypto.mjs`): the PC's key in the QR, each
+- **End-to-end encryption:** the same protocol as 2.3.3 (`src/shared/mobile-crypto.mjs`): the PC's key in the QR, each
   phone's own key, messages sealed with XChaCha20-Poly1305. The relay only sees messages it cannot read, the PC's
   identifier and the traffic size.
 - **The web app:** the relay serves the same phone UI (its files are signed by the PC, so the relay cannot change it

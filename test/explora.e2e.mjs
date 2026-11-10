@@ -7,8 +7,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createHome, loadConfig, writeJson, merge } from '../src/core/home.mjs';
-import { SKINS } from '../src/core/appearance.mjs';
+import { createHome } from '../src/domain/workspace/home.mjs';
+import { loadConfig, merge } from '../src/platform/config-file.mjs';
+import { writeJson } from '../src/platform/paths.mjs';
+import { SKINS } from '../src/shared/appearance.mjs';
 import { throughStart, sandboxEnv } from './fixtures/e2e-flows.mjs';
 import { launchOrb } from './fixtures/launch-orb.mjs';
 

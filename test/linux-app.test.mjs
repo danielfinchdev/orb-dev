@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { terminalPlan, linuxTerminal, externalEnv, terminalChoices, LINUX_TERMINALS } from '../src/engine/terminal.mjs';
-import { actionPlan, findEditors } from '../src/engine/editors.mjs';
+import { terminalPlan, linuxTerminal, externalEnv, terminalChoices, LINUX_TERMINALS } from '../src/engine/host/terminal.mjs';
+import { actionPlan, findEditors } from '../src/engine/host/editors.mjs';
 import { ROOT } from './helpers.mjs';
 
 const found = { warp: null, linux: 'x-terminal-emulator', installed: ['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xterm'] };

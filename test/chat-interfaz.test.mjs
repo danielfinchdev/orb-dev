@@ -7,20 +7,21 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { tempHome } from './helpers.mjs';
-import { ctx } from '../src/core/context.mjs';
-import { Board, tagWords } from '../src/core/board.mjs';
+import { ctx } from '../src/platform/context.mjs';
+import { Board, tagWords } from '../src/domain/tasks/board.mjs';
 import { Orchestrator, answerOf } from '../src/engine/orchestrator.mjs';
-import { buildApi } from '../src/engine/api.mjs';
-import { DESKTOP } from '../src/core/permissions.mjs';
-import { plainAction, looksEnglish, deleteTarget } from '../src/core/guard.mjs';
+import { buildApi } from '../src/engine/api/index.mjs';
+import { DESKTOP } from '../src/domain/security/permissions.mjs';
+import { plainAction, looksEnglish, deleteTarget } from '../src/domain/security/guard.mjs';
 import { bumpNav, navTicket, stillHere } from '../src/ui/lib/nav.js';
 import { readableCommand, readableInput, prettyModel } from '../src/ui/lib/tools.js';
 import { activityLabel, activityDetail } from '../src/ui/lib/activity.js';
 import { cutWords } from '../src/ui/lib/text.js';
 import { pickGreeting, suggestionsFor } from '../src/ui/lib/greeting.js';
-import { createT } from '../src/core/i18n.mjs';
+import { createT } from '../src/shared/i18n.mjs';
 
-const home = tempHome();
+// 3.8.3: these cases check «Preguntar» (the keyword net and its approvals); «Auto» is test/modo-auto.test.mjs.
+const home = tempHome({ permissions: { mode: 'preguntar' } });
 after(() => home.cleanup());
 const tick = () => new Promise((r) => setImmediate(r));
 
@@ -180,6 +181,6 @@ test('10 y 6: saludo y sugerencias acordes a lo que pasa', () => {
 });
 
 test('12: «una tarea» / «2 tareas», nunca «tarea(s)»', () => {
-  const es = fs.readFileSync(path.join(import.meta.dirname, '..', 'src', 'core', 'locales', 'es', 'msg.mjs'), 'utf8');
+  const es = fs.readFileSync(path.join(import.meta.dirname, '..', 'src', 'shared', 'locales', 'es', 'msg.mjs'), 'utf8');
   assert.doesNotMatch(es.match(/"msg\.orch\.playWhileWaiting": "[^"]*"/)[0], /\(s\)/);
 });

@@ -22,7 +22,7 @@ pub const ORB2: &[u8] = b"ORB2";
 const ENTROPY: &[u8] = b"orb.clave.v2";
 const MAX_BLOB: usize = 16 * 1024;
 /// After «Empezar con una clave nueva»: the sealed keys that did not open then. When Windows opens one of them again the
-/// user is offered to go back to it (Ajustes › Datos writes BACK_FILE: src/engine/api-data.mjs › backup.previousKey).
+/// user is offered to go back to it (Ajustes › Datos writes BACK_FILE: src/engine/api/data.mjs › backup.previousKey).
 pub const PREVIOUS_FILE: &str = "clave-anterior.json";
 pub const BACK_FILE: &str = "clave-volver.json";
 
@@ -552,7 +552,7 @@ mod tests {
     fs::remove_dir_all(k.base.join("core")).unwrap();
     assert_eq!(hex(&load(&k.dir, &k.copy, &ok(), false).unwrap()), s, "core deleted: the copy outside brings it back");
     assert_eq!(read(&k.enc2()), format!("ORB2{s}"));
-    // The keys the engine gets, as Node made them (src/core/machine-keys.mjs; vectors from Node's crypto).
+    // The keys the engine gets, as Node made them (src/platform/keys.mjs; vectors from Node's crypto).
     let one = Locked::from_slice(&[1u8; 32]);
     assert_eq!(crypto::b64(crypto::approval_key(one.as_slice()).as_slice()), "1eT6E7LGzx0Tt52NY7o7WxB0F1x62JosMHVCdAoVuBQ=");
     assert_eq!(crypto::b64(crypto::backup_key(one.as_slice()).as_slice()), "M/PB84cc6NvkNWcInMGjTOtymMK73IJ2hq4H1SKkvOU=");

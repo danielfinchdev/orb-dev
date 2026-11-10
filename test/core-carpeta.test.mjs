@@ -1,4 +1,4 @@
-// 3.8: the workspace (C:\Orb by default) keeps Orb's own things in core (src/core/core-folder.mjs). A new one is core and
+// 3.8: the workspace (C:\Orb by default) keeps Orb's own things in core (src/domain/workspace/core-folder.mjs). A new one is core and
 // the six categories, nothing else. Of a workspace of Orb 3.7, Orb's own data (.orb, orb.json) moves into core once,
 // before the database opens, with its paths (orb.json, database, isolated copies) pointed into core; its bitacora,
 // android\adb-tools and mcp-servers move only as the user chooses (planWorkspace / applyLayout). A move that stopped
@@ -11,9 +11,11 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { tempHome, startEngine, wait } from './helpers.mjs';
 import { coreView } from '../src/ui/lib/core-access.js';
-import { createHome, isHome, paths, loadConfig } from '../src/core/home.mjs';
-import { migrateWorkspace, planWorkspace, applyLayout, coreHealth, MOVE_STATE, CONFLICTS_DIR, LAYOUT_FILE } from '../src/core/core-folder.mjs';
-import { git } from '../src/core/workspace.mjs';
+import { createHome } from '../src/domain/workspace/home.mjs';
+import { isHome, paths } from '../src/platform/paths.mjs';
+import { loadConfig } from '../src/platform/config-file.mjs';
+import { migrateWorkspace, planWorkspace, applyLayout, coreHealth, MOVE_STATE, CONFLICTS_DIR, LAYOUT_FILE } from '../src/domain/workspace/core-folder.mjs';
+import { git } from '../src/platform/git.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
 const bases = [];
@@ -28,7 +30,7 @@ test('un espacio nuevo: core (oculta, sin atributo de sistema) y las seis catego
   assert.deepEqual(fs.readdirSync(home).sort(), ['android', 'core', 'ios', 'linux', 'multi', 'web', 'windows']);
   const p = paths(home);
   for (const f of [p.config, p.key, p.generalLog]) assert.ok(fs.statSync(f).isFile(), f);
-  // 3.8.1: core\skills is back (every skill; the agents get the ones that are on: src/core/extensions.mjs).
+  // 3.8.1: core\skills is back (every skill; the agents get the ones that are on: src/domain/extensions/extensions.mjs).
   for (const d of [p.data, p.runs, p.worktrees, p.checkpoints, p.projectLogs, p.mcp, p.skills, p.tools, p.secrets]) assert.ok(fs.statSync(d).isDirectory(), d);
   assert.equal(p.skills, path.join(home, 'core', 'skills'));
   assert.ok(!fs.existsSync(p.staging), 'core\preparacion solo cuando un agente prepara algo');
@@ -73,7 +75,7 @@ function orb37() {
   db.prepare('INSERT INTO tasks (id, workdir, n) VALUES (7, ?, 1)').run(copy);
   db.prepare("INSERT INTO chat (role, body, meta) VALUES ('orb', ?, ?)").run(`Mira ${old('imagenes', 'foto.png')}`, JSON.stringify({ images: [old('imagenes', 'foto.png')], log: path.join(home, 'bitacora', 'GENERAL.md') }));
   // What the user wrote stays as written: a path they typed is theirs; Orb's own image (in .orb) follows the move.
-  db.prepare("INSERT INTO chat (role, body, meta) VALUES ('user', ?, ?)").run(`lee ${path.join(home, 'bitacora', 'GENERAL.md')} y ${old('imagenes', 'foto.png')}`, null);
+  db.prepare("INSERT INTO chat (role, body, meta) VALUES ('usuario', ?, ?)").run(`lee ${path.join(home, 'bitacora', 'GENERAL.md')} y ${old('imagenes', 'foto.png')}`, null);
   db.prepare('INSERT INTO projects (name, path) VALUES (?, ?), (?, ?)').run('tienda', project, 'bitacora-web', path.join(home, 'web', 'bitacora-web'));
   db.close();
   return { home, project, copy };
@@ -113,7 +115,7 @@ test('un espacio de 3.7: sus datos pasan a core solos; bitacora, adb-tools y mcp
   const chat = db.prepare("SELECT body, meta FROM chat WHERE role = 'orb'").get();
   assert.equal(chat.body, `Mira ${path.join(q.core, 'imagenes', 'foto.png')}`);
   assert.deepEqual(JSON.parse(chat.meta), { images: [path.join(q.core, 'imagenes', 'foto.png')], log: q.generalLog });
-  assert.equal(db.prepare("SELECT body FROM chat WHERE role = 'user'").get().body, `lee ${path.join(home, 'bitacora', 'GENERAL.md')} y ${path.join(q.core, 'imagenes', 'foto.png')}`, 'lo que escribió el usuario no se reescribe (la imagen de Orb sí)');
+  assert.equal(db.prepare("SELECT body FROM chat WHERE role = 'usuario'").get().body, `lee ${path.join(home, 'bitacora', 'GENERAL.md')} y ${path.join(q.core, 'imagenes', 'foto.png')}`, 'lo que escribió el usuario no se reescribe (la imagen de Orb sí)');
   assert.equal(db.prepare("SELECT path FROM projects WHERE name = 'bitacora-web'").get().path, path.join(home, 'web', 'bitacora-web'));
   db.close();
   // The isolated copy is still a working git worktree of its project, at its new place.

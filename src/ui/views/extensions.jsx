@@ -1,9 +1,9 @@
-// 3.8.1: Ajustes › Skills y MCP (src/engine/api-extensions.mjs): every skill and MCP server of core (on or off, where it
+// 3.8.1: Ajustes › Skills y MCP (src/engine/api/extensions.mjs): every skill and MCP server of core (on or off, where it
 // came from, its folder, removing it after the master password), «Importar» (a folder or a git repository: it comes in
 // off), what agents made and wait for the user («Activar» / «Descartar»), the connectors of the PC (a package run with
 // npx…) and the projects that are MCP servers («Usar», «Mover a core»). A server of core is improved in a project
 // («Editar en un proyecto», then «Aplicar cambios»). PC only. Turning on what an agent made always goes through a dialog
-// that lists every file that will be turned on (the quarantine's copy, src/core/extensions.mjs) and opens its folder.
+// that lists every file that will be turned on (the quarantine's copy, src/domain/extensions/extensions.mjs) and opens its folder.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Check, Download, Ellipsis, FolderOpen, KeyRound, PencilLine, Plus, Puzzle, Server, Trash2, Upload, X } from 'lucide-react';
@@ -15,7 +15,7 @@ import { useStore, call, act, bridge, getState } from '@/lib/store.js';
 import { t, useT } from '@/lib/i18n.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { connectorKeys } from './master.jsx';
-import { CATEGORIES } from '../../core/layout.mjs';
+import { CATEGORIES } from '../../shared/layout.mjs';
 
 // Where one came from, in a word (orb.json › source).
 const SOURCE = { orb: 'ext.source.orb', importado: 'ext.source.imported', creado: 'ext.source.created', usuario: 'ext.source.user' };

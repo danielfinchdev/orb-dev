@@ -1,18 +1,21 @@
-// 3.8: the workspace's folders seen from the window (src/core/core-folder.mjs does the work):
+// 3.8: the workspace's folders seen from the window (src/domain/workspace/core-folder.mjs does the work):
 //   - layoutPlan / layoutApply: the folders Orb 3.7 kept at the top (bitacora, android\adb-tools, mcp-servers\*) and,
 //     3.8.1, the projects 3.8.0 made of MCP servers; what the user chose for each; nothing moves before layoutApply.
 //   - guardOutside: what Orb keeps about the workspace outside it (the backups' folders, the copies of its sealed
-//     secrets) is named to the guard (src/core/guard.mjs), so agents leave it alone like core.
+//     secrets) is named to the guard (src/domain/security/guard.mjs), so agents leave it alone like core.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ctx } from '../core/context.mjs';
-import { planWorkspace, applyLayout, inside } from '../core/core-folder.mjs';
-import { paths, loadConfig, ensureLayout } from '../core/home.mjs';
-import { setGuardedRoots, setAppRoots } from '../core/guard.mjs';
-import { rebindMoved } from '../core/connector-secrets.mjs';
-import { rebindMovedOrWait } from './api-extensions.mjs';
-import { backupRoot, backupDir } from '../core/backup.mjs';
+import { ctx } from '../platform/context.mjs';
+import { planWorkspace, applyLayout } from '../domain/workspace/core-folder.mjs';
+import { inside } from '../platform/fsx.mjs';
+import { paths } from '../platform/paths.mjs';
+import { loadConfig } from '../platform/config-file.mjs';
+import { ensureLayout } from '../domain/workspace/home.mjs';
+import { setGuardedRoots, setAppRoots } from '../domain/security/guard.mjs';
+import { rebindMoved } from '../domain/security/connector-secrets.mjs';
+import { rebindMovedOrWait } from './api/extensions.mjs';
+import { backupRoot, backupDir } from '../domain/data/backup.mjs';
 
 export function layoutPlan() {
   const { items, pending } = planWorkspace(ctx.home);
@@ -43,7 +46,7 @@ export async function layoutApply(choices, { emit = () => {}, log = () => {}, bo
 export const PRIVATE_DIR = 'personal';
 export const privateDir = (home) => path.join(home, PRIVATE_DIR);
 // Where adb keeps the keys it pairs phones with and the phones it knows: the user's .android folder and an
-// ANDROID_USER_HOME, whole (3.8.2 review M2). Orb's own adb uses one inside core\datos (src/engine/android.mjs).
+// ANDROID_USER_HOME, whole (3.8.2 review M2). Orb's own adb uses one inside core\datos (src/engine/host/android.mjs).
 export const adbHomes = () => [...new Set([path.join(os.homedir(), '.android'), process.env.ANDROID_USER_HOME].filter((d) => d && path.isAbsolute(d)))];
 let keys = null; // the folder of the app's copies of the sealed secrets, when the app gives it
 export function guardOutside({ mirror } = {}) {

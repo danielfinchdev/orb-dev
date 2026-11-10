@@ -5,8 +5,8 @@
 // plugin «orb-native» (OrbNativePlugin.kt). Does nothing outside the app (the desktop or a phone's browser). Must be
 // imported before web-bridge.js.
 import { invoke, addPluginListener } from '@tauri-apps/api/core';
-import * as L from './link-payload.js';
-import * as N from '../../core/notes.mjs';
+import * as L from '../../shared/link-payload.mjs';
+import * as N from '../../shared/notes.mjs';
 
 // Only the Android build (vite --mode android) inside Tauri: the desktop app is Tauri too, with its own bridge.
 const native = import.meta.env.MODE === 'android' && Boolean(window.__TAURI_INTERNALS__);
@@ -92,7 +92,7 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
       orb.takeShared = () => { const s = shared; shared = null; return s; };
       orb.hasShared = () => shared != null;
       // 3.6 (messaging, M4): the chats' notifications as a messaging app's. The Orb builds each one
-      // (src/core/notes.mjs: the sender's picture, the chat's name, the text as chosen for the lock screen, muted chats
+      // (src/shared/notes.mjs: the sender's picture, the chat's name, the text as chosen for the lock screen, muted chats
       // none) and sends it as «note» over the live connection; shown while the app is in the background (there is no
       // push service: they arrive while Android keeps the app alive). One per chat: new lines join it. 3.8.1: «Responder»
       // (with the text typed there), «Aprobar» and «Rechazar» are answered by the app itself without opening it, also

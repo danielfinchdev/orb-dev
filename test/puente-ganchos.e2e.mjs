@@ -18,7 +18,7 @@ import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { writeJson } from '../src/core/home.mjs';
+import { writeJson } from '../src/platform/paths.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LOCAL = process.env.LOCALAPPDATA;

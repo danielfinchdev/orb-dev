@@ -151,7 +151,7 @@ what is built, sections 2.1–2.4 describe the shipped app.
 - **Phone.** Opens on the chat list; ☰ top left (user, Ajustes and the places that are not tabs); tabs Chats · Tareas ·
   Proyectos; a floating button to create. Android in the glass language: the chat header is a glass pill over the
   colour field.
-- **Built (M4): notifications as a messaging app's.** `src/core/notes.mjs` builds each one: Orb's icon as the
+- **Built (M4): notifications as a messaging app's.** `src/shared/notes.mjs` builds each one: Orb's icon as the
   picture, the chat's name as the title, the text as chosen in Ajustes › Magic Link (`none`: not even who), one notification per
   chat (new lines join it: the last five and the count), muted chats silent. They cover Orb chats, agent approvals and
   tasks. Actions: «Responder» (inline on Android; opens the chat in a browser), «Aprobar» / «Rechazar» on a card. A card is answered there only when it is not sensitive and its text shows; a sensitive card, a task (its
@@ -186,7 +186,7 @@ All values come from CSS variables in `app.css` (light `:root`, dark `.dark`), r
 `themes.css`. Never hard-code a colour in a component; use the role.
 
 The PC's «Cristal» theme (3.8.2) is not a set of its own: it is Profesional (`data-skin="profesional"`) plus a glass
-material (`data-material="cristal"`, `src/core/appearance.mjs › SKIN_BASE`), so a component styled with the roles works
+material (`data-material="cristal"`, `src/shared/appearance.mjs › SKIN_BASE`), so a component styled with the roles works
 in it unchanged; blur is kept to the sidebar, the chat bar, the message box and menus/dialogs. It is unrelated to the
 Android glass of section 8, which is the Android app's own layout language.
 

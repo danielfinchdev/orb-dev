@@ -6,7 +6,7 @@
 mod mobile;
 #[cfg(mobile)]
 pub use mobile::run;
-// The phone's end-to-end encryption, the same as src/core/mobile-crypto.mjs (Android's notification buttons use it).
+// The phone's end-to-end encryption, the same as src/shared/mobile-crypto.mjs (Android's notification buttons use it).
 mod phone_crypto;
 
 /// Everything below is the desktop app only (one #[cfg(desktop)] per item, so the items keep their paths).
@@ -39,7 +39,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tauri::{AppHandle, Manager, RunEvent, WebviewWindow};
 
-// %APPDATA%\Orb.dev: the app's data folder of every Orb since 2.3 (src/core/product.mjs › dataDir), also under Tauri, so
+// %APPDATA%\Orb.dev: the app's data folder of every Orb since 2.3 (src/shared/product.mjs › dataDir), also under Tauri, so
 // the location of the workspace, the interface's size and the copies of the keys stay where they are.
 const DATA_DIR: &str = "Orb.dev";
 /// The app, for what runs outside Tauri's own callbacks (desktop.rs › guard_against_electron).
@@ -288,6 +288,19 @@ pub fn run() {
   // ORB_USER_DATA: separate app data (tests, measurements); never the real profile then.
   let separate = std::env::var_os("ORB_USER_DATA").filter(|v| !v.is_empty()).map(PathBuf::from);
   let separate_for_errors = separate.clone();
+  // A test build never runs on the real profile and workspace, also when the installer of an update test opens it
+  // again (test/tauri-instalar.e2e.mjs).
+  #[cfg(feature = "e2e")]
+  if separate.is_none() {
+    // A line in %TEMP% for the test to see it was opened (the installer opens it with the user's own environment).
+    use std::io::Write as _;
+    let exe = std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_default();
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(std::env::temp_dir().join("orb-e2e-sin-datos.log")) {
+      let _ = writeln!(f, "{exe}");
+    }
+    eprintln!("Orb (e2e build): ORB_USER_DATA is required");
+    std::process::exit(3);
+  }
   // Orb on Electron (an earlier version still installed) open on the same data: never two at once.
   if separate.is_none() {
     if let Some(dir) = std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join(DATA_DIR)) {

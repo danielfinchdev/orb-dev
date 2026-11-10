@@ -1,5 +1,5 @@
 // 3.8.1: Orb's lock screen after a while without use (src/ui/lib/idle-lock.js, master.lock/master.state in
-// src/engine/api-master.mjs, lib/startup.js), opening core's data only with the master password (desktop-home.mjs ›
+// src/engine/api/master.mjs, lib/startup.js), opening core's data only with the master password (desktop-home.mjs ›
 // guardedCore, decision 19 f) and the owner's private folder kept from the agents (workspace-layout.mjs, decision 19 g).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,9 +10,10 @@ import { watchIdle, lockMinutesOf, DEFAULT_LOCK_MINUTES } from '../src/ui/lib/id
 import { startupPhase } from '../src/ui/lib/startup.js';
 import { guardedCore } from '../src/engine/desktop-home.mjs';
 import { guardOutside, privateDir } from '../src/engine/workspace-layout.mjs';
-import { isOrbData, decide } from '../src/core/guard.mjs';
-import { paths } from '../src/core/home.mjs';
-import { ctx, saveConfig } from '../src/core/context.mjs';
+import { isOrbData, decide } from '../src/domain/security/guard.mjs';
+import { paths } from '../src/platform/paths.mjs';
+import { ctx } from '../src/platform/context.mjs';
+import { saveConfig } from '../src/platform/config.mjs';
 
 test('sin usar Orb los minutos elegidos: se bloquea una vez; cualquier uso vuelve a contar desde cero', () => {
   let clock = 0; const listeners = {}; const docListeners = {};

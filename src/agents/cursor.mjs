@@ -5,18 +5,19 @@
 // On Windows the CLI is installed as %LOCALAPPDATA%\cursor-agent\versions\<v>\ with its own node.exe and index.js.
 import fs from 'node:fs';
 import path from 'node:path';
-import { IS_WIN, firstFile, inPath, appDataDirs, userHome, clip, describeInput, readOutput, mcpEnvByRef } from './common.mjs';
+import { IS_WIN, firstFile, inPath, appDataDirs, userHome, readOutput } from '../platform/proc.mjs';
+import { clip, describeInput, mcpEnvByRef } from './common.mjs';
 import { Turn, spawnAgent, killTree } from './live.mjs';
-import { tr } from '../core/context.mjs';
-import { isModelLimitText, parseReset, untilText } from '../core/budget.mjs';
-import { guardedRootsNow, appRootsNow } from '../core/guard.mjs';
+import { tr } from '../platform/context.mjs';
+import { isModelLimitText, parseReset, untilText } from '../domain/usage/budget.mjs';
+import { guardedRootsNow, appRootsNow, personalRootsNow } from '../domain/security/guard.mjs';
 
 export const id = 'cursor';
 export const label = 'Cursor';
 export const kind = 'cli-stream';
 export const caps = { images: false, steer: false, fork: false, approvals: false, models: true, context: false };
 // F2.6c: Cursor starts its MCP servers again every turn, so they get new tickets every turn (o.mcpServers is then a
-// function), taken back when the turn ends (src/engine/agent-auth.mjs).
+// function), taken back when the turn ends (src/domain/security/agent-auth.mjs).
 export const mcpServersEachTurn = true;
 
 // In this user's Local AppData or in one moved to another drive (appDataDirs).
@@ -152,6 +153,8 @@ export function cursorRules(permission, internalDir, { android = false } = {}) {
     for (const dir of [...['datos', 'ejecuciones', path.join('copias', 'fotos'), 'secretos'].map((sub) => path.join(internalDir, sub)), ...guardedRootsNow()]) {
       for (const p of [dir, dir.replace(/\\/g, '/')]) deny.push(`Read(${p}/**)`, `Write(${p}/**)`);
     }
+    // 3.8.3: the owner's personal credentials (keys, browsers, the agents' logins), in every mode.
+    for (const dir of personalRootsNow()) for (const p of [dir, dir.replace(/\\/g, '/')]) deny.push(`Read(${p})`, `Read(${p}/**)`, `Write(${p})`, `Write(${p}/**)`);
     // 3.8.1: the folder Orb is installed in: readable, never written.
     for (const dir of appRootsNow()) for (const p of [dir, dir.replace(/\\/g, '/')]) deny.push(`Write(${p}/**)`);
   }
@@ -225,7 +228,7 @@ export function createLive(o) {
       try {
         fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text);
         prompt = `Tus instrucciones completas están en el archivo ${file}. Léelo entero y síguelo como si fuera este mensaje.`;
-        current.promise.finally(() => fs.rmSync(file, { force: true }));
+        current.promise.finally(() => { try { fs.rmSync(file, { force: true }); } catch { /* still open: left to the temp folder */ } });
       } catch { /* sent as is */ }
     }
     // 3.1: Orb's tools (orb_update_task, messages, the browser) through the project's .cursor/mcp.json, approved for this
@@ -233,10 +236,10 @@ export function createLive(o) {
     // (a dev server) no longer keeps the CLI waiting for ever after its answer (--background-shell-timeout).
     let restore = Object.assign(() => {}, { env: {} });
     const servers = (typeof o.mcpServers === 'function' ? o.mcpServers() : o.mcpServers) ?? {};
-    current.promise.finally(() => servers.release?.());
+    current.promise.finally(() => { try { servers.release?.(); } catch (error) { log(`liberar MCP: ${error.message}`); } });
     try { restore = prepareCursorFolder(o.cwd, { mcpServers: servers, deny: cursorRules(permission, o.internalDir, { android: Boolean(o.android?.()) }) }); }
     catch (error) { log(`preparar .cursor: ${error.message}`); }
-    current.promise.finally(() => restore());
+    current.promise.finally(() => { try { restore(); } catch (error) { log(`restaurar .cursor: ${error.message}`); } });
     const args = [...o.exe.pre, '-p', '--output-format', 'stream-json', '--stream-partial-output', '--trust', '--workspace', o.cwd, '--approve-mcps', '--background-shell-timeout', '60'];
     if (permission === 'leer') args.push('--mode', 'ask'); else args.push('--force');
     // 2.6: «Auto» is Cursor's own choice per request (--model auto), not the model in use in Cursor.
