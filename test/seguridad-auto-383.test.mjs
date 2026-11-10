@@ -11,6 +11,8 @@ import { decide, isSecretFile } from '../src/domain/security/guard.mjs';
 import { deletionHold } from '../src/engine/scheduler/safety.mjs';
 
 const WIN = process.platform === 'win32';
+// A command as the host's shell writes it: a backslash is a folder separator only on Windows (bash reads it as an escape).
+const sh = (command) => (WIN ? command : command.replace(/\\/g, '/'));
 let base; let proj; let other; let internal; let oldTemp; let oldTmp;
 before(() => {
   base = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'orb-auto-rev-')));
@@ -20,7 +22,7 @@ before(() => {
   fs.writeFileSync(path.join(internal, 'datos', 'orb.db'), ''); fs.writeFileSync(path.join(internal, 'ejecuciones', 'log.txt'), 'chat');
   oldTemp = process.env.TEMP; oldTmp = process.env.TMP; process.env.TEMP = process.env.TMP = path.join(base, 'tmp');
 });
-after(() => { process.env.TEMP = oldTemp; process.env.TMP = oldTmp; try { fs.rmSync(base, { recursive: true, force: true }); } catch { /* temp */ } });
+after(() => { for (const [k, v] of [['TEMP', oldTemp], ['TMP', oldTmp]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } try { fs.rmSync(base, { recursive: true, force: true }); } catch { /* temp */ } });
 
 const ask = (permission, action, extra = {}) => decide({ permission, internalDir: internal, cwd: proj, projectDir: proj, ...action, ...extra });
 const expectAll = (rows, modes = ['editar', 'auto']) => {
@@ -53,8 +55,8 @@ test('revisión Auto: puntos y espacios finales y flujos alternativos (Windows l
 test('revisión Auto: comodines y revisiones de git que llegan al .env de otro proyecto', () => {
   expectAll([
     ['cat ../otro/.en?', { tool: 'Bash', command: 'cat ../otro/.en?' }, 'deny'],
-    ['type ..\\otro\\.env*', { tool: 'Bash', command: 'type ..\\otro\\.env*' }, 'deny'],
-    ['Get-Content ..\\otro\\*', { tool: 'Bash', command: 'Get-Content ..\\otro\\*' }, 'deny'],
+    ['type ..\\otro\\.env*', { tool: 'Bash', command: sh('type ..\\otro\\.env*') }, 'deny'],
+    ['Get-Content ..\\otro\\*', { tool: 'Bash', command: sh('Get-Content ..\\otro\\*') }, 'deny'],
     ['git show de un .env de otro repositorio', { tool: 'Bash', command: 'git -C ../otro show HEAD:.env' }, 'deny'],
     ['git cat-file de un .env de otro repositorio', { tool: 'Bash', command: 'cd ../otro && git cat-file -p HEAD:config/.env.local' }, 'deny'],
     // What stays open: wildcards inside the project, listing names elsewhere, .js files elsewhere, git show of code.

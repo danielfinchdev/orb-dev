@@ -17,7 +17,12 @@ import { cursorRules } from '../src/agents/cursor.mjs';
 import { tempHome } from './helpers.mjs';
 
 const WIN = process.platform === 'win32';
+// A command as the host's shell writes it: a backslash is a folder separator only on Windows (bash reads it as an escape).
+const sh = (command) => (WIN ? command : command.replace(/\\/g, '/'));
 let base; let proj; let other; let internal; let oldTemp; let oldTmp;
+// Linux has no TEMP/TMP: assigning undefined stores the string 'undefined', and os.tmpdir() then returns it.
+const restoreEnv = (key, value) => { if (value === undefined) delete process.env[key]; else process.env[key] = value; };
+const restoreTemp = () => { restoreEnv('TEMP', oldTemp); restoreEnv('TMP', oldTmp); };
 before(() => {
   base = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'orb-auto-')));
   proj = path.join(base, 'proyectos', 'web'); other = path.join(base, 'proyectos', 'otro'); internal = path.join(base, 'Orb', 'core');
@@ -27,7 +32,7 @@ before(() => {
   // The system's temporary folders count as the project: here they are a folder of their own, so «outside» can live in %TEMP% too.
   oldTemp = process.env.TEMP; oldTmp = process.env.TMP; process.env.TEMP = process.env.TMP = path.join(base, 'tmp');
 });
-after(() => { process.env.TEMP = oldTemp; process.env.TMP = oldTmp; try { fs.rmSync(base, { recursive: true, force: true }); } catch { /* temp */ } });
+after(() => { restoreTemp(); try { fs.rmSync(base, { recursive: true, force: true }); } catch { /* temp */ } });
 
 const ask = (permission, action, extra = {}) => decide({ permission, internalDir: internal, cwd: proj, projectDir: proj, ...action, ...extra });
 
@@ -73,7 +78,7 @@ test('Auto: la tabla de la propuesta, en «Preguntar» y en «Auto» (y lo que n
     ['format D:', { tool: 'Bash', command: 'format D: /q' }, { editar: 'ask', auto: 'deny', total: 'ask' }],
     ['ajustes de Claude del proyecto', { tool: 'Edit', paths: [path.join(proj, '.claude', 'settings.json')] }, { editar: 'ask', auto: 'ask', total: 'allow' }],
     ['escribir fuera con >', { tool: 'Bash', command: `echo x > "${path.join(other, 'f.txt')}"` }, { editar: 'ask', auto: 'ask', total: 'allow' }],
-    ['copiar al otro proyecto', { tool: 'Bash', command: 'copy src\\a.js ..\\otro\\' }, { editar: 'ask', auto: 'ask', total: 'allow' }],
+    ['copiar al otro proyecto', { tool: 'Bash', command: sh('copy src\\a.js ..\\otro\\') }, { editar: 'ask', auto: 'ask', total: 'allow' }],
     ['copiar del otro proyecto (leer fuera está bien)', { tool: 'Bash', command: 'cp ../otro/README.md docs/' }, { editar: 'allow', auto: 'allow', total: 'allow' }],
     ['npm install en otra carpeta', { tool: 'Bash', command: 'cd ../otro && npm install' }, { editar: 'ask', auto: 'ask', total: 'allow' }],
     ['mirar otra carpeta', { tool: 'Bash', command: 'cd ../otro && ls && git status' }, { editar: 'allow', auto: 'allow', total: 'allow' }],
@@ -88,7 +93,7 @@ test('Auto: la tabla de la propuesta, en «Preguntar» y en «Auto» (y lo que n
     ['cat ~/.ssh/id_ed25519', { tool: 'Bash', command: 'cat ~/.ssh/id_ed25519' }, { editar: 'deny', auto: 'deny', total: 'deny' }],
     ['las contraseñas de Chrome', { tool: 'Read', paths: [path.join(process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local'), 'Google', 'Chrome', 'User Data', 'Default', 'Login Data')] }, { editar: 'deny', auto: 'deny', total: 'deny' }],
     ['el login de Claude Code', { tool: 'Read', paths: [path.join(home, '.claude', '.credentials.json')] }, { editar: 'deny', auto: 'deny', total: 'deny' }],
-    ['el login de Codex por comando', { tool: 'Bash', command: 'type %USERPROFILE%\\.codex\\auth.json' }, { editar: 'deny', auto: 'deny', total: 'deny' }],
+    ['el login de Codex por comando', { tool: 'Bash', command: WIN ? 'type %USERPROFILE%\\.codex\\auth.json' : 'cat ~/.codex/auth.json' }, { editar: 'deny', auto: 'deny', total: 'deny' }],
     ['el almacén de credenciales de Windows', { tool: 'Bash', command: 'cmdkey /list' }, { editar: 'deny', auto: 'deny', total: 'deny' }],
   ];
   for (const [what, action, expected, extra] of rows) {
@@ -156,10 +161,10 @@ test('Auto: qué escribe fuera un comando y qué es un secreto', () => {
   const roots = projectRoots({ projectDir: proj, internalDir: internal });
   assert.equal(writesOutside('npm run build', proj, roots), null);
   assert.ok(writesOutside('mv src/a.js ../otro/', proj, roots));
-  assert.ok(writesOutside('Move-Item ..\\otro\\x.js src\\', proj, roots), 'mover desde fuera también borra fuera');
-  assert.equal(writesOutside('Copy-Item ..\\otro\\x.js -Destination src\\', proj, roots), null);
-  assert.ok(writesOutside('Copy-Item src\\a.js -Destination ..\\otro', proj, roots));
-  assert.ok(writesOutside('powershell -Command "Set-Content -Path ..\\otro\\x.txt -Value hola"', proj, roots), 'dentro de powershell -Command');
+  assert.ok(writesOutside(sh('Move-Item ..\\otro\\x.js src\\'), proj, roots), 'mover desde fuera también borra fuera');
+  assert.equal(writesOutside(sh('Copy-Item ..\\otro\\x.js -Destination src\\'), proj, roots), null);
+  assert.ok(writesOutside(sh('Copy-Item src\\a.js -Destination ..\\otro'), proj, roots));
+  assert.ok(writesOutside(sh('powershell -Command "Set-Content -Path ..\\otro\\x.txt -Value hola"'), proj, roots), 'dentro de powershell -Command');
   for (const f of ['.env', '.env.local', 'C:\\x\\.env.production', 'cert.pem', 'id_rsa', 'id_ed25519.pub', 'clave.key', 'app.keystore']) assert.ok(isSecretFile(f), f);
   for (const f of ['.env.example', '.env.sample', 'env.js', 'keyboard.js', 'monkey.ts', 'README.md']) assert.equal(isSecretFile(f), false, f);
   const personal = defaultPersonalRoots({ APPDATA: 'C:\\U\\AppData\\Roaming', LOCALAPPDATA: 'C:\\U\\AppData\\Local' }, 'C:\\U');
@@ -262,7 +267,7 @@ test('Auto en los agentes: Claude acepta ediciones, Codex con red, Cursor igual 
 // read orb.db.
 test('motor en Auto: editar y borrar sin tarjetas, «Deshacer» lo devuelve; push solo si lo pediste; orb.db cerrado', async () => {
   const { startEngine, until } = await import('./helpers.mjs');
-  process.env.TEMP = oldTemp; process.env.TMP = oldTmp; // a real profile in %TEMP%, as the other engine tests
+  restoreTemp(); // a real profile in %TEMP%, as the other engine tests
   const t = tempHome();
   const fakeLog = path.join(t.base, 'fake.jsonl');
   const engine = await startEngine(t.home, { env: { ORB_FAKE_LOG: fakeLog } });
