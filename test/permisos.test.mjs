@@ -265,6 +265,9 @@ test('MCP: listas, bitácoras, mensajes y proyectos, confinados a lo suyo', asyn
     assert.equal(Object.values(board1.counts.enLaLista).reduce((x, y) => x + y, 0), listed);
     assert.ok(Object.values(board1.counts.todoElPc).reduce((x, y) => x + y, 0) >= listed);
     assert.ok(board1.active.every((x) => 'conversation' in x), 'each one says its conversation');
+    // Real use (3.8.3 final): Orbe saw «1 bloqueada» in the PC's counts, could not open it and offered to investigate it.
+    // Now the summary says where the tasks it cannot list are, and how the user reaches them.
+    assert.match(board1.fueraDeLaLista ?? '', /otras conversaciones/); assert.match(board1.fueraDeLaLista, /Tareas/);
     // Logs: its conversation's projects and the general one.
     assert.equal((await boss.call('orb_write_log', { project: 'tienda', tema: 'Plan', hecho: 'hecho' })).error, false);
     assert.equal((await boss.call('orb_write_log', { project: 'general', tema: 'Plan', hecho: 'hecho' })).error, false);

@@ -127,6 +127,11 @@ function boardSummary() {
   out.active = out.active.filter((t) => listsTask(t, projects));
   const here = {}; for (const t of out.active) here[t.status] = (here[t.status] ?? 0) + 1;
   out.counts = { todoElPc: out.counts, enLaLista: here };
+  // 3.8.3 (uso real final): the active tasks it cannot list (other conversations' or projects'): it saw «1 bloqueada» in
+  // the PC's counts, could not open it and offered to investigate it. Now it is told where they are and who reaches them.
+  const ACTIVE = ['queued', 'awaiting_approval', 'running', 'limited', 'blocked', 'failed'];
+  const hidden = ACTIVE.reduce((n, k) => n + Math.max(0, (out.counts.todoElPc[k] ?? 0) - (here[k] ?? 0)), 0);
+  if (BOSS && hidden) out.fueraDeLaLista = `${hidden} tarea(s) sin terminar de otras conversaciones o proyectos: no puedes verlas ni cambiarlas desde aquí (no propongas investigarlas). ${USER} las ve en la vista Tareas; se gestionan desde la conversación que las creó.`;
   out.unreadForYou = board.inbox(ME, false, mayRead, INBOX).length;
   return out;
 }
