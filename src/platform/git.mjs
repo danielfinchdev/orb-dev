@@ -11,7 +11,8 @@ import { PRODUCT } from '../shared/product.mjs';
 // Never throws and never returns null output: if git cannot start or times out, status is -1 and stderr carries the reason.
 // 3.8.3 (repaso): Orb's git runs in a project an agent wrote. Its hooks (`worktree add` runs post-checkout) and fsmonitor
 // never run as the engine, and the engine's own environment (cleanEnv: no secrets of the app) is not handed to them.
-const SAFE = ['-c', 'core.fsmonitor=false', '-c', `core.hooksPath=${path.join(os.tmpdir(), 'orb-sin-hooks')}`];
+// (3.8.3, second review: the hooks folder is the null device, never a folder: %TEMP% is open to agents in «Auto».)
+const SAFE = ['-c', 'core.fsmonitor=false', '-c', `core.hooksPath=${os.devNull}`];
 export const git = (cwd, ...args) => gitEnv(cwd, {}, ...args);
 export const gitEnv = (cwd, env, ...args) => {
   const res = spawnSync('git', ['-C', cwd, ...SAFE, ...args], { encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024, timeout: 120_000, env: cleanEnv(env) });

@@ -108,7 +108,7 @@ export function changedBetween(repo, before, after) {
 // are left out (the snapshots already keep them out) and secret-looking text in the patches is hidden. Each file's patch and the whole answer are capped, and a binary file
 // has no patch. → { files: [{ status, path, added, removed, binary, patch, cut }], more }
 export function diffBetween(repo, before, after, { maxFiles = 300, maxPatch = 200_000, maxTotal = 2_000_000 } = {}) {
-  const range = ['--no-renames', '--no-color', '--no-ext-diff', before, after];
+  const range = ['--no-renames', '--no-color', '--no-ext-diff', '--no-textconv', before, after]; // never a program of the project
   const stats = git(repo, 'diff', '--numstat', '-z', ...range);
   if (stats.status !== 0) throw new Error(oneLineOf(stats.stderr) || 'git diff');
   // --numstat -z: «added\tremoved\tpath\0» per file, in the same order as the patch below.

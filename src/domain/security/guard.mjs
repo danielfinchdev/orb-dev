@@ -54,12 +54,13 @@ export function toolClass(tool, kind) {
 // GIT: "git" plus its global options (-C dir, -c key=value, --no-pager…) before the subcommand.
 // 3.8.3 (security review): also git.exe and "…\git.exe" (the end of a quoted path).
 const GIT = String.raw`\bgit(?:\.exe)?["']?(?:\s+-\S+(?:\s+[^-\s]\S*)?)*\s+`;
+const ORB_REF = /refs[\\/]+orb\b/i;
 const RISKY = [
   [new RegExp(`${GIT}(push|remote\\s+(add|set-url|remove)|send-pack|http-push|subtree\\s+push)\\b`, 'i'), 'msg.guard.push'],
   // 3.8.3 (security review): a push under another name (git -c alias.p=push p, git config alias.up push).
   [/\balias\.[\w.-]+\s*[= ]\s*["']?!?\s*(?:git\s+)?(push|send-pack)\b/i, 'msg.guard.push'],
   // 3.8.3 (repaso): git settings that make git run a program (Orb's own snapshots run git in the project): they ask.
-  [new RegExp(`${GIT}config\\b[^|;&]*\\b(filter\\.[\\w.-]+\\.(clean|smudge|process)|core\\.(fsmonitor|hooksPath|sshCommand|pager|editor|askpass|gitProxy)|credential\\.[\\w.-]*helper|diff\\.[\\w.-]+\\.(command|textconv)|merge\\.[\\w.-]+\\.driver|url\\.[^\\s]*\\.insteadOf)\\b`, 'i'), 'msg.guard.gitRuns'],
+  [new RegExp(`${GIT}config\\b[^|;&]*\\b(filter\\.[\\w.-]+\\.(clean|smudge|process)|core\\.(fsmonitor|hooksPath|sshCommand|pager|editor|askpass|gitProxy)|credential\\.[\\w.-]*helper|diff\\.[\\w.-]+\\.(command|textconv)|merge\\.[\\w.-]+\\.driver|url\\.[^\\s]*\\.insteadOf|include(?:If\\.\\S+)?\\.path|diff\\.external|gpg\\.(?:[\\w-]+\\.)?program)\\b`, 'i'), 'msg.guard.gitRuns'],
   [/\bgh(\.exe)?\s+(repo|pr|release|api|gist|secret)\b/i, 'msg.guard.github'],
   [/\b(npm|pnpm|yarn)(\.cmd)?\s+publish\b|\bcargo\s+publish\b|\btwine\s+upload\b/i, 'msg.guard.publish'],
   // 3.8.3 (security review): images, packages and sites published by their own tools.
@@ -88,8 +89,15 @@ const RISKY = [
   [/\b(docker|podman)\s+(rm|rmi|system\s+prune|volume\s+rm)\b/i, 'msg.guard.docker'],
   // 3.8.3 (security review): Orb's snapshots (refs/orb) and what keeps them alive: «Deshacer» rests on them, so they are
   // never dropped without asking (in «Auto» too).
-  [new RegExp(`(?<!(?:status|log|diff|show|branch|rev-parse|ls-files|for-each-ref|describe|blame|cat-file|rev-list|merge-base|name-rev)\\s[^|;&]*)refs[\\\\/]+orb\\b|\\breflog\\s+(expire|delete)\\b|\\bgc\\b[^|;&]*--prune|\\bgit(\\.exe)?\\s+prune\\b`, 'i'), 'msg.guard.checkpoint']
+  // 3.8.3 (second review): naming them asks unless the whole command only reads them (risksOf › readsOrbRefs).
+  [ORB_REF, 'msg.guard.checkpoint'],
+  [/\breflog\s+(expire|delete)\b|\bgc\b[^|;&]*--prune|\bgit(\.exe)?\s+prune\b/i, 'msg.guard.checkpoint']
 ];
+// 3.8.3 (second review): one git command that only reads, and nothing else on the line (no ; | & new line, no $(…),
+// backtick or PowerShell (…) that could run a second command): `git for-each-ref --format="%(refname)" refs/orb`.
+// The repaso's look-behind let `git update-ref -m "status x" -d refs/orb/…` and `for-each-ref … | update-ref --stdin` through.
+const ORB_REF_READ = new RegExp(String.raw`^\s*git(?:\.exe)?(?:\s+-C\s+(?:"[^"$(]*"|'[^']*'|[^\s"'$(]+))?\s+(?:status|log|diff|show|rev-parse|ls-files|for-each-ref|describe|blame|cat-file|rev-list|merge-base|name-rev)\b(?:[^|;&\n\r` + '`' + String.raw`$(<>]|%\()*$`, 'i');
+const readsOrbRefs = (command) => ORB_REF_READ.test(unwrapShell(command));
 
 // 3.1: data sent only to this PC (an agent testing its own local API: curl -X POST localhost:3000…) never leaves it.
 // An allow-list, not a block-list: the WHOLE command must be requests to this PC and nothing else. Every line or step is
@@ -130,7 +138,7 @@ const onlyLocal = (c) => {
 };
 // 3.8.3: what kind of risk each rule is (the «Auto» table of the permissions proposal decides by kind).
 const CATEGORY = { push: 'publish', github: 'publish', publish: 'publish', pipeToShell: 'pipeToShell', sendData: 'sendData', deleteFolders: 'deleteFolders',
-  diskWipe: 'diskWipe', system: 'system', killProcesses: 'killProcesses', ssh: 'ssh', gitRewrite: 'gitRewrite', docker: 'docker', checkpoint: 'checkpoint' };
+  diskWipe: 'diskWipe', system: 'system', killProcesses: 'killProcesses', ssh: 'ssh', gitRewrite: 'gitRewrite', docker: 'docker', checkpoint: 'checkpoint', gitRuns: 'gitRuns' };
 // Every risk a command carries, in the order of RISKY: [{ category, reason }].
 export function risksOf(command, lang = 'es') {
   const c = String(command ?? ''); const out = [];
@@ -140,6 +148,7 @@ export function risksOf(command, lang = 'es') {
     const v = variants.find((x) => re.test(x));
     if (v === undefined) continue;
     if (why === 'msg.guard.sendData' && onlyLocal(v)) continue;
+    if (re === ORB_REF && readsOrbRefs(c)) continue;
     const category = CATEGORY[why.slice('msg.guard.'.length)];
     if (!out.some((r) => r.category === category)) out.push({ category, reason: translate(lang, why) });
   }
@@ -667,10 +676,32 @@ export function writesOutside(command, cwd, roots) {
     // 3.8.3 (repaso): a target that is a shell variable (`Set-Content $f`, `Out-File -FilePath $out`) cannot be placed; in a
     // part that runs inside the project it is taken as unknown, not as outside (the user could not act on «$f»). Not for
     // what deletes or moves (`rm -rf $dir`): those still ask.
-    for (const t of targetsOf(exe, part.words.slice(1))) { if (here && !DELETERS.test(exe) && /[$%]/.test(t)) continue; if (!insideProject(t, part.dir, roots)) return { what: t }; }
+    // 3.8.3 (second review): only a variable of the command's own ($f, $_.FullName), never the shell's folders ($PROFILE,
+    // $env:X, [Environment]::GetFolderPath…), and only when every path the command names is inside the project
+    // (`$f = "C:\Users\…\.gitconfig"; Add-Content $f` or `gci ~ | % { Add-Content $_.FullName }` still ask).
+    for (const t of targetsOf(exe, part.words.slice(1))) { if (here && !DELETERS.test(exe) && ownVariable(t, c, part.dir, roots)) continue; if (!insideProject(t, part.dir, roots)) return { what: t }; }
   }
   return null;
 }
+const SHELL_PLACES = /\$(?:profile|home|pshome|pwd|env:|\{|executioncontext|myinvocation|psscriptroot)|%[\w~]|\[(?:system\.)?(?:environment|io\.path|io\.directory)\]|getfolderpath|psdrive|join-path|split-path|resolve-path|convert-path|get-location|\.\.(?:[\\/]|$)/i;
+const ownVariable = (t, command, dir, roots) => /^["']?\$[\w:.]+["']?$/.test(t) && !SHELL_PLACES.test(command) && pathWords(command).every((w) => insideProject(w, dir, roots));
+// 3.8.3 (second review): git's own settings and hooks of the project (.git/config, .git/hooks/…, .git/info/attributes).
+// Written by hand they do what `git config filter.x.clean …` does (gitRuns): Orb's snapshots run git in the project
+// as the engine, and a filter or merge driver there runs as the engine. They ask like the git config forms.
+const GIT_RUNS_FILE = /(^|[\\/])\.git[\\/]+(?:(?:worktrees|modules)[\\/]+.+[\\/]+)?(?:config(?:\.worktree)?|hooks(?:[\\/].*)?|info[\\/]+attributes)$/i;
+export const isGitRunsFile = (p, dir) => { const f = resolveTarget(p, dir); return GIT_RUNS_FILE.test(lastName(p)) || Boolean(f && GIT_RUNS_FILE.test(f)); };
+function writesGitRunsFile(command, cwd) {
+  const c = expandEnv(unwrapShell(command));
+  for (const m of c.matchAll(/(?<![0-9&])>>?\s*("[^"]+"|'[^']+'|[^\s|&;<>]+)/g)) if (isGitRunsFile(unq(m[1]), cwd)) return true;
+  return workDirs(c, cwd).some((part) => {
+    const exe = String(part.words[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
+    if (WRITERS.test(exe)) return !DELETERS.test(exe) && targetsOf(exe, part.words.slice(1)).some((t) => isGitRunsFile(bare(t), part.dir));
+    // Any other program that names them (sed -i, [IO.File]::WriteAllText, node -e …), except one that only looks and git
+    // itself (its config forms are the gitRuns rule).
+    return !LOOKERS.test(exe) && exe !== 'git' && GIT_RUNS_TEXT.test(part.words.join(' '));
+  });
+}
+const GIT_RUNS_TEXT = /(^|[\\/\s"'`(=,])\.git[\\/]+(?:config|hooks|info[\\/]+attributes)(?![\w.-])/i;
 // 3.8.3 (always blocked): another project's secrets (.env, keys, certificates): readable inside the current project (they
 // are needed to program it), never elsewhere. .env.example and the like are not secrets.
 const SECRET_FILE = /(^|[\\/])(\.env(\.(?!example$|sample$|template$|dist$)[\w.-]+)?|[^\\/]+\.(pem|key|p12|pfx|jks|keystore)|id_(rsa|dsa|ecdsa|ed25519)(\.\w+)?)$/i;
@@ -772,6 +803,7 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
   // Orb's own tools (orb_android_*), which check the grant on every call.
   if (cls !== 'read' && cls !== 'orb' && runsAdb(command) && !(permission === 'total' && android)) return { decision: 'deny', reason: T('adb') };
   const risks = cls === 'exec' ? risksOf(command, lang) : [];
+  if (cls === 'exec' && !risks.some((r) => r.category === 'gitRuns') && writesGitRunsFile(command, cwd)) risks.push({ category: 'gitRuns', reason: T('gitRuns') });
   const wipe = risks.find((r) => r.category === 'diskWipe');
   // 3.8.3: wiping a disk: denied in «Auto», asked in the others (also «total»).
   if (wipe && permission !== 'leer') return auto ? { decision: 'deny', reason: wipe.reason } : { decision: 'ask', reason: wipe.reason };
@@ -780,6 +812,7 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
   if (permission === 'leer') return { decision: 'deny', reason: T('readOnlyChat') };
   if (permission === 'probar' && cls === 'edit') return { decision: 'deny', reason: T('testOnly') };
   if (cls === 'edit' && paths.some(isAgentConfig)) return { decision: 'ask', reason: T('agentConfig') };
+  if (cls === 'edit' && paths.some((p) => isGitRunsFile(p, cwd))) return { decision: 'ask', reason: T('gitRuns') };
   // 3.8.3: writing outside the project asks first in «Auto», «Preguntar» and «Preguntar todo».
   const outsideReason = (what) => translate(lang, 'msg.guard.outside', { what: String(what).slice(0, 120) });
   if (cls === 'edit') {
