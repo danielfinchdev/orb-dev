@@ -29,6 +29,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      # The Windows runners' system drive (where %TEMP% is) is many times slower than their work drive: the database
+      # tests (VACUUM, fsync, copies) took 10-25 s each there instead of under 2 s, and the migration file passed or
+      # hit its 180 s limit depending on the run. Their temp folders go on the work drive.
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+          "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
       - run: npm ci
       - run: npm run check
       - run: npm test
