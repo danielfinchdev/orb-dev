@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { tempHome, wait } from './helpers.mjs';
 import { Board } from '../src/domain/tasks/board.mjs';
-import { Scheduler } from '../src/engine/scheduler.mjs';
+import { Scheduler } from '../src/engine/scheduler/index.mjs';
 import { processList } from '../src/platform/proc-list.mjs';
 import { createProject } from '../src/domain/projects/projects.mjs';
 

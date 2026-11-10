@@ -17,7 +17,7 @@ import { Sessions, mcpServersFor } from '../src/engine/sessions.mjs';
 import { AgentAuth, agentAuth } from '../src/domain/security/agent-auth.mjs';
 import { decide } from '../src/domain/security/guard.mjs';
 import { Orchestrator } from '../src/engine/orchestrator.mjs';
-import { Scheduler } from '../src/engine/scheduler.mjs';
+import { Scheduler } from '../src/engine/scheduler/index.mjs';
 import { buildApi } from '../src/engine/api/index.mjs';
 
 let t; let board; let api; let scheduler; let sessions; let orchestrator;

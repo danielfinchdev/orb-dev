@@ -143,7 +143,7 @@ test('lo que pediste con tus palabras no vuelve a pedir aprobación; lo que no p
 });
 
 test('al terminar una tarea, Orb para el servidor que dejó en marcha en su carpeta (y no los de antes ni los de otras carpetas)', { skip: process.platform !== 'win32' }, async () => {
-  const { Scheduler } = await import('../src/engine/scheduler.mjs');
+  const { Scheduler } = await import('../src/engine/scheduler/index.mjs');
   const { spawn } = await import('node:child_process');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-restos-'));
   const other = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-otro-'));

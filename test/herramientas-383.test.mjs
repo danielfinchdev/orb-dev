@@ -10,7 +10,7 @@ import { checkDevTools, devToolsBrief, needsDevTools, INSTALL_URL } from '../src
 import { ctx } from '../src/platform/context.mjs';
 import { Board } from '../src/domain/tasks/board.mjs';
 import { briefing } from '../src/domain/journal/journal.mjs';
-import { Scheduler } from '../src/engine/scheduler.mjs';
+import { Scheduler } from '../src/engine/scheduler/index.mjs';
 import { METHODS } from '../src/domain/security/permissions.mjs';
 
 const h = tempHome();

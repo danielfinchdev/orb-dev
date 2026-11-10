@@ -15,7 +15,7 @@ import { localStamp, localText, sizeText } from '../src/shared/text.mjs';
 import { deletionAskedByUser, filesToDelete } from '../src/domain/security/approval.mjs';
 import { git } from '../src/platform/git.mjs';
 import { commitAll, unpushedSecrets } from '../src/engine/host/github.mjs';
-import { Scheduler, contractNote } from '../src/engine/scheduler.mjs';
+import { Scheduler, contractNote } from '../src/engine/scheduler/index.mjs';
 import { drawingContents } from '../src/engine/whiteboard.mjs';
 import { cutWords, agentAuthor, changedFiles, logDirect } from '../src/domain/journal/journal.mjs';
 

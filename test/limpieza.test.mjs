@@ -14,7 +14,7 @@ test('al arrancar, pruneCopies borra las copias huérfanas y respeta las de una 
   const h = tempHome();
   try {
     const { Board } = await import('../src/domain/tasks/board.mjs');
-    const { Scheduler } = await import('../src/engine/scheduler.mjs');
+    const { Scheduler } = await import('../src/engine/scheduler/index.mjs');
     const board = new Board();
     const dir = path.join(h.home, 'web', 'proy'); fs.mkdirSync(dir, { recursive: true }); gitInit(dir);
     board.addProject({ name: 'proy', path: dir }, 'usuario');
@@ -36,7 +36,7 @@ test('hallazgo 25: una tarea de solo lectura que escribe BITACORA.md la deja com
   const h = tempHome();
   try {
     const { Board } = await import('../src/domain/tasks/board.mjs');
-    const { Scheduler } = await import('../src/engine/scheduler.mjs');
+    const { Scheduler } = await import('../src/engine/scheduler/index.mjs');
     const board = new Board();
     const dir = path.join(h.home, 'web', 'ro'); fs.mkdirSync(dir, { recursive: true }); gitInit(dir);
     board.addProject({ name: 'ro', path: dir }, 'usuario');
@@ -58,7 +58,7 @@ test('3.8.1: al arrancar se conserva la copia aislada de una tarea terminada sin
   const h = tempHome();
   try {
     const { Board } = await import('../src/domain/tasks/board.mjs');
-    const { Scheduler } = await import('../src/engine/scheduler.mjs');
+    const { Scheduler } = await import('../src/engine/scheduler/index.mjs');
     const { mayHaveWorktrees } = await import('../src/platform/git.mjs');
     const board = new Board();
     // the repository lives outside; the project is a junction to one of its subfolders

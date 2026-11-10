@@ -316,7 +316,7 @@ async function blocked(board, info) {
 async function run(board, { home, version, restored, repair }) {
   const { Sessions } = await import('./sessions.mjs');
   const { Orchestrator } = await import('./orchestrator.mjs');
-  const { Scheduler } = await import('./scheduler.mjs');
+  const { Scheduler } = await import('./scheduler/index.mjs');
   const { buildApi } = await import('./api/index.mjs');
   // 3.8: who each agent's MCP process is lives only in this process's memory (agent-auth.mjs); the signatures that
   // earlier versions kept in the database are gone at start (they sign nothing).

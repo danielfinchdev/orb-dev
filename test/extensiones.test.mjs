@@ -176,7 +176,7 @@ test('Ajustes › Skills y MCP: importar (inactivo), activar, llega a los agente
 test('una tarea de Cursor (sin skills propias) recibe la lista en su encargo', async () => {
   const h = tempHome({ agents: { cursor: { enabled: true } } });
   skillAt(path.join(h.home, 'core', 'skills', 'facturas'), 'facturas');
-  const { Scheduler } = await import('../src/engine/scheduler.mjs');
+  const { Scheduler } = await import('../src/engine/scheduler/index.mjs');
   const { saveConfig } = await import('../src/platform/config.mjs');
   saveConfig({ skills: [{ name: 'facturas', enabled: true }] });
   const board = new Board();

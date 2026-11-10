@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { Board } from '../src/domain/tasks/board.mjs';
 import { Sessions } from '../src/engine/sessions.mjs';
 import { Orchestrator } from '../src/engine/orchestrator.mjs';
-import { Scheduler } from '../src/engine/scheduler.mjs';
+import { Scheduler } from '../src/engine/scheduler/index.mjs';
 import { buildApi } from '../src/engine/api/index.mjs';
 import { DESKTOP } from '../src/domain/security/permissions.mjs';
 import { slashCommand } from '../src/shared/slash.mjs';

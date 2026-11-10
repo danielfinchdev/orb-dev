@@ -300,7 +300,7 @@ test('un repositorio recién creado con git init, sin ningún commit, también s
 });
 
 test('las fotos para deshacer no se acumulan: se van las de tareas terminadas hace más de 30 días y las que nadie usa', async () => {
-  const { Scheduler } = await import('../src/engine/scheduler.mjs');
+  const { Scheduler } = await import('../src/engine/scheduler/index.mjs');
   const photo = (name) => { const dir = path.join(ctx.paths.checkpoints, name); fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, 'a.txt'), '1'); return dir; };
   const live = board.createTask({ project: 'web', title: 'En cola', description: 'algo', agent: 'claude' }, 'usuario');
   const liveCopy = photo(`t${live.id}-1`);

@@ -265,7 +265,7 @@ who a new conversation is with:
 
 **Files.**
 - Assistant rules: `src/engine/orchestrator.mjs`, in `persona()` (`ENCARGOS COMPACTOS`).
-- What each agent receives: `src/engine/scheduler.mjs`, in `promptFor()`. It includes:
+- What each agent receives: `src/engine/scheduler/index.mjs`, in `promptFor()`. It includes:
   - the brief;
   - what was done before (at most `MAX_DEP_RESULT` characters per dependency);
   - the latest log notes (about 3000 characters);
@@ -307,7 +307,7 @@ who a new conversation is with:
 3. Prepares where they work.
 4. When each one finishes: saves the result, runs the safety checks, writes to the log and notifies.
 
-**Files.** `src/engine/scheduler.mjs`:
+**Files.** `src/engine/scheduler/index.mjs`:
 - `tick`: each round.
 - `launch`: launching a task.
 - `finishNow`: closing a task.
@@ -519,7 +519,7 @@ the list of problems and what to fix first.
 - **Automatic Task Review** (Settings) reviews every finished task before the report.
 
 **Files.**
-- `src/engine/scheduler.mjs`:
+- `src/engine/scheduler/index.mjs`:
   - `reviewer()` picks the reviewer;
   - `createReview()` reviews a task;
   - `reviewProject()` reviews a project;

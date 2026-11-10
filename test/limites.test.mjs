@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { Board } from '../src/domain/tasks/board.mjs';
 import { parseReset, startCooldown, canLaunch, recordRate, modelLimitUntil, liftAfterSuccess, clearCooldown, waitReason, usageReport, untilText, cooldownUntil } from '../src/domain/usage/budget.mjs';
 import { chooseModel, modelCatalog } from '../src/engine/usage/catalog.mjs';
-import { Scheduler } from '../src/engine/scheduler.mjs';
+import { Scheduler } from '../src/engine/scheduler/index.mjs';
 
 const home = tempHome({ agents: { cursor: { enabled: true } } });
 after(() => home.cleanup());

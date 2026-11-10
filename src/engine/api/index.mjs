@@ -303,7 +303,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'projects.merge': async ({ name, branch }) => {
       const p = project(name); const b = str(branch, 'rama', 120);
       const out = (await gh()).mergeBranch(p, b);
-      // 3.8.1: the task that owned the branch lets its copy and branch go (src/engine/scheduler.mjs › branchMerged).
+      // 3.8.1: the task that owned the branch lets its copy and branch go (src/engine/scheduler/index.mjs › branchMerged).
       try { scheduler.branchMerged(p.name, b); } catch (error) { log(`tras unir ${b}: ${error.message}`); }
       return out;
     },
