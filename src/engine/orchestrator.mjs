@@ -522,7 +522,8 @@ export class Orchestrator {
   }
 
   // A message of the user: in its conversation (a new one when none is given). → { conversation }
-  ask(text, context = '', { conversation = null, project } = {}) {
+  // meta: { answer: true, own } for the answer to a question card (src/engine/api › chat.answer).
+  ask(text, context = '', { conversation = null, project, meta = null } = {}) {
     text = String(text ?? '').trim();
     if (!text) throw new Error(tr('msg.orch.writeMessage'));
     if (text.length > 20000) throw new Error(tr('msg.orch.tooLong'));
@@ -530,7 +531,7 @@ export class Orchestrator {
     if (conversation && !c) throw new Error(tr('msg.board.noConversation'));
     const isNew = !c;
     if (!c) c = this.startConversation({ text, project });
-    this.board.addChat('usuario', text, null, c.id);
+    this.board.addChat('usuario', text, meta, c.id);
     if (c.status === 'done') this.board.setConversationDone(c.id, false); // written in again: open again
     if (isNew || !c.titled) { try { this.title?.(c, text); } catch (error) { this.log(`título de la conversación ${c.id}: ${error.message}`); } }
     const lane = this.lane(c.id);

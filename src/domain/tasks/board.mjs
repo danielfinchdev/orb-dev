@@ -237,9 +237,10 @@ export class Board {
     const d = ctx.config.delegation ?? {};
     const quota = parent && this.one('SELECT COUNT(*) AS n FROM tasks WHERE parent_id = ?', parent.id).n < (d.maxPerTask ?? 4);
     // 3.8.3 («Auto»): a subtask in the same project goes straight to the queue (with the same quota); one for another
-    // project still waits.
-    const trusted = parent && d.enabled !== false && !tags.length && quota
-      && (auto ? parent.project === proj.name : d.trusted !== false && ['orb', 'usuario'].includes(parent.created_by));
+    // project still waits. 3.8.3 (security review): only under a task of the user or the assistant, as before: a subtask's
+    // own subtasks wait (otherwise each level brought 4 more without a click, and each one's deletions are held apart).
+    const trusted = parent && d.enabled !== false && !tags.length && quota && ['orb', 'usuario'].includes(parent.created_by)
+      && (auto ? parent.project === proj.name : d.trusted !== false);
     if (actor !== 'orb' && actor !== 'usuario' && !trusted) { tags.push('creada_por_agente'); reasons.push(tr('msg.board.reasonByAgent', { actor, name: assistantName() })); }
     const status = tags.length ? 'awaiting_approval' : 'queued';
     const at = now();
@@ -257,11 +258,13 @@ export class Board {
 
   // The user's current request in a conversation: their messages since the assistant's answer before the last one (the
   // request, the plan the assistant proposed and the user's «sí»). 3.2: only that conversation's (with several at once,
-  // another one's words do not count).
+  // another one's words do not count). 3.8.3 (security review): of an answer to a question card, only what the user typed
+  // (the question and its options are the assistant's words, and an agent's words never ask for anything).
   currentRequest(convId) {
     const inConv = convId ? ' AND conversation_id = ?' : ' AND conversation_id IS NULL';
     const lastAnswer = this.one(`SELECT id AS n FROM chat WHERE role = 'orb'${inConv} ORDER BY id DESC LIMIT 1 OFFSET 1`, ...(convId ? [convId] : []))?.n ?? 0;
-    return this.all(`SELECT body FROM chat WHERE role = 'usuario' AND id > ?${inConv} ORDER BY id DESC LIMIT 5`, lastAnswer, ...(convId ? [convId] : [])).map((r) => r.body).join('\n');
+    const own = (r) => { try { const m = JSON.parse(r.meta ?? 'null'); return m?.answer ? String(m.own ?? '') : r.body; } catch { return r.body; } };
+    return this.all(`SELECT body, meta FROM chat WHERE role = 'usuario' AND id > ?${inConv} ORDER BY id DESC LIMIT 5`, lastAnswer, ...(convId ? [convId] : [])).map(own).join('\n');
   }
 
   // expect: only apply if the task is still in that status (compare-and-set); throws if someone else moved it first.

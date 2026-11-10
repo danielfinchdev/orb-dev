@@ -484,7 +484,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const answer = skip ? '' : [...picked, ...(own ? [own] : [])].join(' · ');
       board.patchChatMeta(row.id, { ...row.meta, status: skip ? 'skipped' : 'answered', answer });
       const text = skip ? tr('msg.api.questionSkipped', { question: row.meta.question }) : tr('msg.api.questionAnswer', { question: row.meta.question, answer });
-      return orchestrator.ask(text, '', { conversation: row.conversation_id });
+      // 3.8.3 (security review): the question and its options are the assistant's words: only what the user typed counts
+      // as the user asking for something («Auto» publishes or deletes on the user's own words, board.currentRequest).
+      return orchestrator.ask(text, '', { conversation: row.conversation_id, meta: { answer: true, own: skip ? '' : own } });
     },
     'chat.accept': ({ id }) => {
       const row = board.chatRow(int(id, 'mensaje'));
