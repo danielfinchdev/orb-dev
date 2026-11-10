@@ -14,6 +14,8 @@ import { DataCards } from '../data.jsx';
 import { ExtensionsPanel } from '../extensions.jsx';
 import { AssistantCard, AppearanceCard, ChatCard, TasksCard, TestCard, FolderCard, ProtectedCard, InterfaceCard, ExpertCard } from './general.jsx';
 import { AndroidCard, MobileCard, BrowserCard } from './devices.jsx';
+// «Este móvil», the phone's screen of its own (main.jsx loads it from here, with the dialog).
+export { PhoneView } from './devices.jsx';
 import { UpdatesCard, SupportCard, FeedbackCard, MoreAppsCard, AboutCard } from './about.jsx';
 
 
