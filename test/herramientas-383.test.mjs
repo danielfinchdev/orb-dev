@@ -18,11 +18,15 @@ after(() => h.cleanup());
 const make = (...parts) => { const f = path.join(h.base, ...parts); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, ''); return f; };
 const byId = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
 const core = () => ctx.paths.core;
+// The check as this host runs it (its PATH separator and file names): the files are real ones on this disk, so a
+// Windows check of them only means something on Windows.
+const PLATFORM = process.platform; const WIN = PLATFORM === 'win32';
+const FLUTTER = WIN ? 'flutter.bat' : 'flutter'; const JAVA = WIN ? 'java.exe' : 'java';
 
 test('nothing installed, a dead PATH entry and a copy inside core: said as they are', () => {
   const dead = path.join(core(), 'herramientas', 'flutter', 'bin'); // the PATH entry of the 8 Nov note; gone
-  const env = { PATH: [dead, path.join(h.base, 'nada')].join(';'), USERPROFILE: path.join(h.base, 'perfil'), LOCALAPPDATA: path.join(h.base, 'local'), JAVA_HOME: path.join(h.base, 'jdk-borrado') };
-  const t = byId(checkDevTools({ env, platform: 'win32', core: core() }));
+  const env = { PATH: [dead, path.join(h.base, 'nada')].join(path.delimiter), USERPROFILE: path.join(h.base, 'perfil'), LOCALAPPDATA: path.join(h.base, 'local'), JAVA_HOME: path.join(h.base, 'jdk-borrado') };
+  const t = byId(checkDevTools({ env, platform: PLATFORM, core: core() }));
   assert.equal(t.flutter.path, null); assert.deepEqual(t.flutter.missing, [dead]);
   assert.equal(t.androidSdk.path, null); assert.equal(t.java.path, null); assert.deepEqual(t.java.missing, [env.JAVA_HOME]);
   const text = devToolsBrief(Object.values(t), 'Dani');
@@ -32,22 +36,24 @@ test('nothing installed, a dead PATH entry and a copy inside core: said as they 
   assert.match(text, /No lo busques en core/);
   assert.doesNotMatch(text, /Flutter: instalado/);
   // A copy inside core (outside its open herramientas): the agents cannot use it.
-  const inCore = path.dirname(make(path.relative(h.base, path.join(core(), 'datos', 'flutter', 'bin', 'flutter.bat'))));
-  const again = byId(checkDevTools({ env: { ...env, PATH: inCore }, platform: 'win32', core: core() }));
+  const inCore = path.dirname(make(path.relative(h.base, path.join(core(), 'datos', 'flutter', 'bin', FLUTTER))));
+  const again = byId(checkDevTools({ env: { ...env, PATH: inCore }, platform: PLATFORM, core: core() }));
   assert.equal(again.flutter.path, null); assert.equal(again.flutter.inCore, inCore);
   assert.match(devToolsBrief(Object.values(again)), /no disponible para los agentes \(está dentro de core/);
   // In core\herramientas (open to agents, guard.mjs): it counts.
-  const open = path.dirname(make(path.relative(h.base, path.join(core(), 'herramientas', 'flutter', 'bin', 'flutter.bat'))));
-  assert.equal(byId(checkDevTools({ env: { ...env, PATH: open }, platform: 'win32', core: core() })).flutter.path, open);
+  const open = path.dirname(make(path.relative(h.base, path.join(core(), 'herramientas', 'flutter', 'bin', FLUTTER))));
+  assert.equal(byId(checkDevTools({ env: { ...env, PATH: open }, platform: PLATFORM, core: core() })).flutter.path, open);
 });
 
 test('installed in their own places: found, with the folder that has them', () => {
-  const flutter = path.dirname(make('src', 'flutter', 'bin', 'flutter.bat'));
-  const local = path.join(h.base, 'local2'); fs.mkdirSync(path.join(local, 'Android', 'Sdk', 'platform-tools'), { recursive: true });
-  const java = path.dirname(make('jdk', 'bin', 'java.exe'));
-  const env = { PATH: [flutter, java].join(';'), USERPROFILE: path.join(h.base, 'perfil'), LOCALAPPDATA: local };
-  const t = byId(checkDevTools({ env, platform: 'win32', core: core() }));
-  assert.equal(t.flutter.path, flutter); assert.equal(t.androidSdk.path, path.join(local, 'Android', 'Sdk')); assert.equal(t.java.path, java);
+  const flutter = path.dirname(make('src', 'flutter', 'bin', FLUTTER));
+  const local = path.join(h.base, 'local2'); const profile = path.join(h.base, WIN ? 'perfil' : 'perfil2');
+  const sdkHome = WIN ? local : profile; // %LOCALAPPDATA%\Android\Sdk on Windows, ~/Android/Sdk elsewhere (sdkRoots)
+  fs.mkdirSync(path.join(sdkHome, 'Android', 'Sdk', 'platform-tools'), { recursive: true });
+  const java = path.dirname(make('jdk', 'bin', JAVA));
+  const env = { PATH: [flutter, java].join(path.delimiter), USERPROFILE: profile, LOCALAPPDATA: local };
+  const t = byId(checkDevTools({ env, platform: PLATFORM, core: core() }));
+  assert.equal(t.flutter.path, flutter); assert.equal(t.androidSdk.path, path.join(sdkHome, 'Android', 'Sdk')); assert.equal(t.java.path, java);
   assert.match(devToolsBrief(Object.values(t)), /Flutter: instalado en .*flutter.bin\./);
   assert.equal(METHODS['devtools.check'], 'pc', 'Ajustes › Android, this PC only');
 });
