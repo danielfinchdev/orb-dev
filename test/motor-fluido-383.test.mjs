@@ -7,7 +7,7 @@ import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { tempHome, wait } from './helpers.mjs';
 import { Board } from '../src/core/board.mjs';
 import { Scheduler } from '../src/engine/scheduler.mjs';
-import { processList } from '../src/core/procs.mjs';
+import { processList } from '../src/platform/proc-list.mjs';
 import { createProject } from '../src/core/projects.mjs';
 
 const t = tempHome();

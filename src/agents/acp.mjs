@@ -5,7 +5,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, readOutput, discoverDir, nodeRuntime } from './common.mjs';
+import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, readOutput, discoverDir, nodeRuntime } from '../platform/proc.mjs';
+import { clip } from './common.mjs';
 import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree, hidingEnvValues } from './live.mjs';
 import { decide } from '../core/guard.mjs';
 import { tr } from '../platform/context.mjs';

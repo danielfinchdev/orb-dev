@@ -9,7 +9,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { ctx, tr } from '../platform/context.mjs';
 import { isOrbData, protectedHit } from '../core/guard.mjs';
-import { killTree } from '../agents/common.mjs';
+import { killTree } from '../platform/proc.mjs';
 
 export const MAX_TERMINALS = 4;
 export const MAX_LINE = 4000;

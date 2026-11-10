@@ -3,7 +3,7 @@
 // relaunches, an orphaned bash whose agent has gone) and never touches a process that was already there.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { taskProcesses, startedBy, STOPPABLE } from '../src/core/procs.mjs';
+import { taskProcesses, startedBy, STOPPABLE } from '../src/platform/proc-list.mjs';
 
 const since = 1_000_000;
 const AGENT = 100; const ENGINE = 1;

@@ -5,8 +5,8 @@
 // engine takes the ticket back (its agent's process closed) or goes away.
 import { spawn } from 'node:child_process';
 import { redeem, ticketFromArgs } from './auth-client.mjs';
-import { killTree } from '../agents/common.mjs';
-import { winPlan } from './win-spawn.mjs';
+import { killTree } from '../platform/proc.mjs';
+import { winPlan } from '../platform/proc-win.mjs';
 import { tradeGrant } from './vault-client.mjs';
 
 const auth = await redeem(process.env.ORB_AUTH_PIPE, ticketFromArgs(), { reconnect: false }); // its connection closing is its grant ending
@@ -19,7 +19,7 @@ Object.assign(env, launch.env ?? {});
 // 3.8.1: the keys kept in the vault come straight from it (a one-time grant), never through the engine.
 Object.assign(env, await tradeGrant(launch.vault));
 
-// Windows: npm shims run as their script with node, an .exe directly, anything else through cmd.exe escaped (win-spawn).
+// Windows: npm shims run as their script with node, an .exe directly, anything else through cmd.exe escaped (src/platform/proc-win.mjs).
 const args = (launch.args ?? []).map(String);
 let child;
 try {

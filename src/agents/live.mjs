@@ -22,7 +22,7 @@
 //   { type: 'exit', code, stderr }            the process ended
 // TurnResult: { final, text, isError, stopReason, usage, limit }
 import { spawn } from 'node:child_process';
-import { killTree, cleanEnv } from './common.mjs';
+import { killTree, cleanEnv } from '../platform/proc.mjs';
 import { tr } from '../platform/context.mjs';
 
 export const DECISIONS = ['allow', 'always', 'deny'];

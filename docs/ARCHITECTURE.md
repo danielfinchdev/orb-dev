@@ -1129,7 +1129,7 @@ menus, texts, permissions and themes.
   which counts no try and keeps nothing, and only while the data key is open.
 - **The user's connectors:** an agent gets `src/mcp/launch.mjs` and a ticket instead of the connector; the
   launcher gets the real command, arguments and keys from the engine and starts it (and stops its whole tree when the
-  ticket is taken back). On Windows (`src/mcp/win-spawn.mjs`) an npm shim (`npx.cmd`, a global package's cmd-shim) runs
+  ticket is taken back). On Windows (`src/platform/proc-win.mjs`) an npm shim (`npx.cmd`, a global package's cmd-shim) runs
   as its script with node and an `.exe` directly, so arguments such as `C:\dir\`, `%VAR%` or quotes arrive intact; any
   other batch file goes through cmd.exe with MSVCRT and double cmd escaping. A program is looked up only in the PATH
   (never the current folder, the project): not found is an error. Connector names that would share an environment

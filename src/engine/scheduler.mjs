@@ -36,7 +36,7 @@ import { logTask } from './logs.mjs';
 import { adapter } from '../agents/index.mjs';
 import { liveSkills } from './api-extensions.mjs';
 import { skillsBrief } from '../core/extensions.mjs';
-import { processList, taskProcesses, stopProcesses, alive } from '../core/procs.mjs';
+import { processList, taskProcesses, stopProcesses, alive } from '../platform/proc-list.mjs';
 
 // 3.8.3: how often the leftovers still pending (their folder was busy) are looked at again.
 const LEFTOVERS_RETRY_MS = Number(process.env.ORB_LEFTOVERS_RETRY_MS) || 15_000;

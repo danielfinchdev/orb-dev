@@ -14,7 +14,7 @@ import { usableAccounts, accountDir } from '../core/accounts.mjs';
 import { enabledAgents } from '../platform/config.mjs';
 import { installed, executable } from '../agents/index.mjs';
 import { accountInfo as codexAccountInfo } from '../agents/codex.mjs';
-import { readOutput } from '../agents/common.mjs';
+import { readOutput } from '../platform/proc.mjs';
 import { NO_ANSWER_WAIT } from './catalog.mjs';
 
 const REFRESH_MS = 12 * 3_600_000;

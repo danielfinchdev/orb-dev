@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { winPlan, resolveWin, cmdArg } from '../src/mcp/win-spawn.mjs';
+import { winPlan, resolveWin, cmdArg } from '../src/platform/proc-win.mjs';
 
 const WIN = process.platform === 'win32';
 const ARGS = ['C:\\some dir\\', 'C:\\x\\', '100%PATH%x', '%USERNAME%', 'a"b', 'say "hi"', 'x & y', '(paren)', '^caret', '!bang!', 'a"&echo HACK&"', '', 'with\\\\"quote', '\\\\server\\share\\', 'tab\there', 'a;b,c=d', 'ñandú ✓'];

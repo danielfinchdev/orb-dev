@@ -3,14 +3,14 @@
 //   node secret-run.mjs <handle> --env NAME -- program args…    the secret in the variable NAME of that program only
 //   node secret-run.mjs <handle> --stdin -- program args…       the secret on the program's standard input
 // The handle (orbsec1.<pipe>.<ticket>) is traded once on the engine's agents' pipe (src/engine/agent-auth.mjs, a grant
-// `once`); the program runs without a shell (src/mcp/win-spawn.mjs on Windows) and every copy of the secret in its output
+// `once`); the program runs without a shell (src/platform/proc-win.mjs on Windows) and every copy of the secret in its output
 // is replaced by «[secreto]». Exit code: the program's, or 2 when the handle is no good.
 import { spawn } from 'node:child_process';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pipeOf } from '../engine/agent-auth.mjs';
-import { winPlan } from './win-spawn.mjs';
+import { winPlan } from '../platform/proc-win.mjs';
 
 const HANDLE = /^orbsec1\.([0-9a-f]{24})\.([0-9a-f]{64})$/;
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;

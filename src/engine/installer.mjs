@@ -8,7 +8,7 @@ import path from 'node:path';
 import { ctx, tr } from '../platform/context.mjs';
 import { spawn } from 'node:child_process';
 import { ADAPTERS, quickRun } from '../agents/index.mjs';
-import { IS_WIN, cleanEnv, inPath, killTree } from '../agents/common.mjs';
+import { IS_WIN, cleanEnv, inPath, killTree } from '../platform/proc.mjs';
 
 const winget = (id) => `winget install --id ${id} -e --source winget --accept-package-agreements --accept-source-agreements --silent --disable-interactivity`;
 

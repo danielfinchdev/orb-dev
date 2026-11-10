@@ -6,7 +6,7 @@ import * as claude from './claude.mjs';
 import * as codex from './codex.mjs';
 import * as cursor from './cursor.mjs';
 import { acpAgent, ACP_SPECS } from './acp.mjs';
-import { cleanEnv, IS_WIN } from './common.mjs';
+import { cleanEnv, IS_WIN } from '../platform/proc.mjs';
 import fs from 'node:fs';
 import { ctx, tr } from '../platform/context.mjs';
 import { startLogin } from './login.mjs';
