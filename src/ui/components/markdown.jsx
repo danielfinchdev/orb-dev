@@ -4,14 +4,15 @@
 // Code blocks that say their language (```js) are coloured with the theme of Ajustes → Apariencia (code.css).
 // 3.8.2: formulas between $$ (one $ stays a dollar: amounts like «$5 and $10» read as before) and ```mermaid diagrams
 // (rich-blocks.jsx, each library loaded only when needed).
-import { memo } from 'react';
+import { memo, useEffect, useMemo, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import { SquareTerminal } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import { remarkPlugins, richKind, isInlineMath, textOf } from '@/lib/markdown-plugins.js';
 import { splitBlocks } from '@/lib/md-blocks.js';
+import { createReveal, safeMarkdown, wantsStill, onFrame, noteShown, takeShown } from '@/lib/typing.js';
 import { MathBlock, MermaidBlock } from './rich-blocks.jsx';
-import { bridge, fullPc } from '@/lib/store.js';
+import { bridge, fullPc, getState } from '@/lib/store.js';
 import { pasteToTerminal, oneCommand, SHELL_LANGUAGES } from '@/lib/terminal-paste.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
@@ -84,4 +85,78 @@ export const Markdown = memo(function Markdown({ children, className }) {
 export function StreamingMarkdown({ children, className }) {
   const blocks = splitBlocks(children);
   return <div className={cn('prose-chat', className)}>{blocks.map((text, i) => <Parsed key={i} text={text} />)}</div>;
+}
+
+// 3.8.3: an answer being typed (lib/typing.js): the text on screen follows the streamed one at a steady pace, a character
+// at a time, block by block like StreamingMarkdown (only the last block is parsed again, never the list of messages).
+//   text     everything received so far        done      the turn has ended (what is left shows quickly)
+//   tail     the conversation's key: what is on screen is noted, so the saved message goes on from there (TypedMarkdown)
+//   start    how much is already on screen (a new answer starts at 0; one already long when it mounts —a chat opened
+//            while it streams— shows at once, and only what comes after is typed)
+// One frame loop for all (typing.js › onFrame). If drawing the last block gets slow (a long code block), it is drawn every
+// few frames instead of every frame, so typing never slows the window. Less motion (system or «Movimiento: mínimo»): the
+// text shows at once. Screen readers hear each block once it is whole (announce), not every character.
+const FIRST_TYPED = 400;
+export function TypingMarkdown({ text, done = false, tail = null, start = null, className, ...props }) {
+  const [rev] = useState(() => createReveal({ reduced: wantsStill(getState().app?.config?.ui?.motion), start: start ?? (String(text ?? '').length > FIRST_TYPED ? String(text).length : 0) }));
+  const [, draw] = useReducer((x) => x + 1, 0);
+  const cost = useRef({ at: 0, ms: 0 });
+  rev.setTarget(String(text ?? ''), done);
+  const shown = rev.shown;
+  const complete = done && shown >= rev.target.length;
+  useEffect(() => {
+    if (rev.shown >= rev.target.length) return undefined;
+    let since = 0;
+    const off = onFrame((dt) => {
+      since += dt;
+      const before = rev.shown;
+      rev.advance(document.hidden ? 1e9 : dt);
+      const end = rev.shown >= rev.target.length;
+      if (rev.shown !== before && (end || since >= (cost.current.ms > 4 ? cost.current.ms * 2 : 0))) { since = 0; cost.current.at = performance.now(); draw(); }
+      if (end) off();
+    });
+    return off;
+  }, [text, done]);
+  useLayoutEffect(() => {
+    if (cost.current.at) { const ms = performance.now() - cost.current.at; cost.current = { at: 0, ms: cost.current.ms * 0.7 + ms * 0.3 }; }
+    if (tail != null) noteShown(tail, rev.target.slice(0, rev.shown));
+  });
+  const blocks = splitBlocks(rev.target.slice(0, shown));
+  const all = useMemo(() => (tail == null ? null : splitBlocks(rev.target)), [tail, rev.target]);
+  useAnnounce(tail, all, complete);
+  return (
+    <div className={cn('prose-chat', !complete && 'typing', className)} aria-busy={!complete || undefined} {...props}>
+      {blocks.map((b, i) => <Parsed key={i} text={i === blocks.length - 1 ? safeMarkdown(b, complete) : b} />)}
+    </div>
+  );
+}
+
+// The saved answer of the assistant or an agent. Just after its live answer was typed on screen, it goes on typing from
+// where that one was (quickly: the turn has ended); otherwise (history, a reload, a chat opened later) drawn whole.
+export const TypedMarkdown = memo(function TypedMarkdown({ children, className }) {
+  const body = String(children ?? '');
+  const [from] = useState(() => takeShown(body));
+  if (!from) return <Markdown className={className}>{body}</Markdown>;
+  return <TypingMarkdown text={body} done start={from.start} tail={from.tail} className={className} />;
+});
+
+// Screen readers: one polite live region for the whole window; each block of an answer is read once, when it is whole
+// (the last one when the turn ends), as plain words.
+const announced = new Map(); // tail key → blocks already read
+let region = null;
+function say(text) {
+  if (typeof document === 'undefined' || !text) return;
+  if (!region) { region = document.createElement('div'); region.className = 'sr-only'; region.setAttribute('aria-live', 'polite'); region.setAttribute('data-testid', 'typing-announcer'); document.body.append(region); }
+  const p = document.createElement('p'); p.textContent = text; region.append(p);
+  while (region.childNodes.length > 6) region.firstChild.remove();
+}
+const plainWords = (md) => md.replace(/^ {0,3}(`{3,}|~{3,}).*$/gm, '').replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_~`#>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+function useAnnounce(tail, blocks, complete) {
+  useEffect(() => {
+    if (tail == null || !blocks) return;
+    const whole = complete ? blocks.length : blocks.length - 1;
+    const had = announced.get(tail) ?? 0;
+    for (let i = had; i < whole; i++) say(plainWords(blocks[i]));
+    if (complete) announced.delete(tail); else if (whole > had) announced.set(tail, whole);
+  });
 }

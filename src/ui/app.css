@@ -585,3 +585,11 @@ html[data-motion="minima"] .context-slot-item { animation-name: slot-fade; }
 @media (pointer: fine) and (max-height: 660px) { .onboard-card { zoom: 0.82; } }
 @media (pointer: fine) and (max-height: 625px) { .onboard-card { zoom: 0.76; } }
 @media (pointer: fine) and (max-height: 590px) { .onboard-card { zoom: 0.7; } }
+
+/* 3.8.3: an answer being typed (components/markdown.jsx › TypingMarkdown): each new paragraph, item or block fades in as
+   it starts (opacity only, so the compositor runs it). Less motion: the text shows at once and nothing fades. */
+@keyframes type-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: no-preference) {
+  html:not([data-motion="minima"]) .prose-chat.typing > :last-child,
+  html:not([data-motion="minima"]) .prose-chat.typing > :is(ul, ol):last-child > li:last-child { animation: type-in 240ms ease-out; }
+}

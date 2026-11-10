@@ -5,7 +5,7 @@ import { lazy, memo, Suspense, useEffect, useMemo, useState } from 'react';
 import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Ellipsis, Gamepad2, Smartphone, Shuffle, ScreenShare, SquareTerminal } from 'lucide-react';
 import { unlockCore } from '@/lib/core-access.js';
 import { toast } from 'sonner';
-import { Markdown, StreamingMarkdown } from '@/components/markdown.jsx';
+import { TypingMarkdown, TypedMarkdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
@@ -164,7 +164,7 @@ const Block = memo(function Block({ b, agent, brain, sessionId, project, catalog
       </div>
     );
   }
-  if (it.kind === 'text' && it.role === 'assistant') return <div className="msg-hover flex gap-3"><AgentIcon agent={agent} className="mt-1 size-5" /><div className="min-w-0 flex-1"><Markdown>{body}</Markdown><div className="text-muted-foreground flow-root"><MsgTime at={it.at} hover /></div></div></div>;
+  if (it.kind === 'text' && it.role === 'assistant') return <div className="msg-hover flex gap-3"><AgentIcon agent={agent} className="mt-1 size-5" /><div className="min-w-0 flex-1"><TypedMarkdown>{body}</TypedMarkdown><div className="text-muted-foreground flow-root"><MsgTime at={it.at} hover /></div></div></div>;
   if (it.kind === 'reasoning') return <div className="text-muted-foreground border-l-2 pl-3 text-[13px] italic whitespace-pre-wrap line-clamp-4">{body}</div>;
   if (it.kind === 'usage') {
     // 3.8.2: Ajustes › Apariencia can hide it (shown by default).
@@ -257,7 +257,8 @@ async function showDetails(s, task) {
 }
 
 // 3.8.3: the text the agent is writing now, the only part of the conversation that follows each streamed piece: the
-// pieces of a frame are drawn together, and its finished blocks are not parsed again (StreamingMarkdown). It empties
+// pieces of a frame are drawn together and typed on screen (TypingMarkdown; the saved item goes on from there), and its
+// finished blocks are not parsed again. It empties
 // when the agent's text arrives as an item (in the same frame the item is drawn) or the turn ends.
 function LivePartial({ id, agent, running }) {
   const t = useT();
@@ -274,7 +275,7 @@ function LivePartial({ id, agent, running }) {
     return () => { offDelta(); offItem(); if (frame != null) { cancelAnimationFrame(frame); clearTimeout(frame); } };
   }, [id]);
   useEffect(() => { if (!running) setPartial(''); }, [running]);
-  if (partial) return <div className="flex gap-3" data-testid="partial"><AgentIcon agent={agent} className="mt-1 size-5" /><div className="min-w-0 flex-1 opacity-90"><StreamingMarkdown>{partial}</StreamingMarkdown></div></div>;
+  if (partial) return <div className="flex gap-3" data-testid="partial"><AgentIcon agent={agent} className="mt-1 size-5" /><div className="min-w-0 flex-1 opacity-90"><TypingMarkdown text={partial} tail={`session:${id}`} /></div></div>;
   return running ? <div className="text-muted-foreground flex items-center gap-2 text-[13px]"><span className="bg-info size-2 animate-pulse rounded-full" />{t('session.agentWorking', { agent: AGENT[agent] })}</div> : null;
 }
 

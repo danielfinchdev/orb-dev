@@ -91,7 +91,8 @@ test('el chat pinta el mensaje propio al instante y la respuesta final en el mis
   assert.match(session, /addPending\(`session:\$\{s\.id\}`/, 'conversación directa: mensaje optimista');
   assert.match(orch, /state\.answer = /, 'el estado que cierra el turno lleva la línea escrita');
   assert.match(chat, /answer && answer\.id > lastId \? \[\.\.\.saved, answer\]/, 'la ventana la pinta sin esperar a leer la conversación');
-  assert.match(chat, /<StreamingMarkdown>/); assert.match(session, /<StreamingMarkdown>/);
+  assert.match(chat, /<TypingMarkdown text={chat.partial} tail=/); assert.match(session, /<TypingMarkdown text={partial} tail=/);
+  assert.match(chat, /<TypedMarkdown>{m.body}/); assert.match(session, /<TypedMarkdown>{body}/);
 });
 
 // 3.8.3 (fix C): typing redraws the message box alone; the view around it reads the text only when it sends.

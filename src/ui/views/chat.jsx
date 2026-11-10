@@ -7,7 +7,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDraft } from '@/lib/draft.js';
 import { Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, ChevronRight, PenTool, History, FlaskConical, Folder, ListChecks, Ellipsis, Info, BellOff, MessageSquare } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
-import { Markdown, StreamingMarkdown } from '@/components/markdown.jsx';
+import { Markdown, TypingMarkdown, TypedMarkdown } from '@/components/markdown.jsx';
 import { ExtensionRequestCard } from './extensions.jsx';
 import { ProjectPicker } from '@/components/project-actions.jsx';
 import { useLiveTasks, liveOf, ProgressBar, elapsed } from '@/components/live-tasks.jsx';
@@ -80,7 +80,7 @@ const Message = memo(function Message({ m, name, onChanges }) {
         <Robot size={32} still className="mt-0.5" />
         <div className="chat-glass min-w-0 flex-1">
           <div className="text-muted-foreground mb-1 text-xs">{name}</div>
-          <Markdown>{m.body}</Markdown>
+          <TypedMarkdown>{m.body}</TypedMarkdown>
           {report ? (
             <div className="chat-actions mt-2.5 flex flex-wrap items-center gap-2" data-testid="report-actions">
               {report.accepted ? <Badge variant="success"><Check />{t('chat.accepted', { ids: report.tasks.map((id) => `#${id}`).join(', ') })}</Badge> : (<>
@@ -257,7 +257,8 @@ function OrchestratorSwitch({ on, onChange, name, cursor, locked = false }) {
 }
 
 // 3.8.3: the answer being written, the only part of the conversation that follows each streamed piece (drawn once per
-// frame: lib/store.js › chatStateSoon); its finished blocks are not parsed again (StreamingMarkdown).
+// frame: lib/store.js › chatStateSoon); it is typed on screen (TypingMarkdown) and its finished blocks are not parsed
+// again. The saved message that replaces it goes on typing from there (TypedMarkdown).
 function LiveAnswer({ id, name }) {
   const t = useT();
   const chat = useStore((s) => chatOf(s, id)) ?? {};
@@ -266,7 +267,7 @@ function LiveAnswer({ id, name }) {
       <Robot size={32} mood={chat.partial ? 'talking' : 'thinking'} className="mt-0.5" />
       <div className="chat-glass min-w-0 flex-1">
         <div className="text-muted-foreground mb-1 text-xs">{name}</div>
-        {chat.partial ? <StreamingMarkdown>{chat.partial}</StreamingMarkdown> : null}
+        {chat.partial ? <TypingMarkdown text={chat.partial} tail={`chat:${id}`} /> : null}
         {chat.waiting ? <div className="text-muted-foreground text-[13px]" data-testid="chat-waiting-turn">{t('chat.waitingTurn')}</div> : <LiveActivity chat={chat} />}
       </div>
     </div>
