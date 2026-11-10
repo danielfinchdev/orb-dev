@@ -22,7 +22,7 @@ export const heldUnlock = (now = Date.now()) => (held && held.until - 5000 > now
 // action: 'open' | 'restore' | 'backupFolder' | 'recovery' | 'legacy' | 'secrets' | 'connector' | 'protected' | 'unlink' |
 // 'deleteProject' | 'removeExtension' | 'previousKey' | 'androidPair' | 'androidEmulator' | 'fullAccess' | 'android' |
 // 'secretSave' | 'secretSaved'.
-// 3.8.1: FRESH_ACTIONS ask for the password every time (src/core/permissions.mjs › FRESH_UNLOCK): a held unlock does
+// 3.8.1: FRESH_ACTIONS ask for the password every time (src/domain/security/permissions.mjs › FRESH_UNLOCK): a held unlock does
 // not count, and their token (for that action only) is not kept for the next one. 3.8.2: also giving a chat «Acceso
 // total al PC» or the Android phone.
 // 3.8.2 (security review): saving a secret an agent asked for in the vault, or using the one saved, too.
@@ -36,7 +36,7 @@ export async function unlockCore(action) {
   return fresh ? r?.unlock ?? null : keepUnlock(r);
 }
 
-// The master password's shortest length (src/core/master.mjs › MIN_LENGTH; the engine checks it too).
+// The master password's shortest length (src/domain/security/master.mjs › MIN_LENGTH; the engine checks it too).
 export const MASTER_MIN = 10;
 // 0 (too short) … 4 (strong): length first, then kinds of characters, and a few common patterns count less.
 export function passwordStrength(password, min = MASTER_MIN) {

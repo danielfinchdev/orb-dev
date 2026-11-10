@@ -8,10 +8,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { ROOT } from './helpers.mjs';
-import * as X from '../src/core/extensions.mjs';
+import * as X from '../src/domain/extensions/extensions.mjs';
 import * as claude from '../src/agents/claude.mjs';
-import { decide } from '../src/core/guard.mjs';
-import { moveIntoCore } from '../src/core/core-folder.mjs';
+import { decide } from '../src/domain/security/guard.mjs';
+import { moveIntoCore } from '../src/domain/workspace/core-folder.mjs';
 import { cleanEnv } from '../src/platform/proc.mjs';
 
 const tmp = [];

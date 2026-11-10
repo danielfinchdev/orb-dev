@@ -1,16 +1,16 @@
 // The shared board: projects, tasks with dependencies and approvals, events, messages between agents and the assistant's chat.
 import fs from 'node:fs';
 import path from 'node:path';
-import { openDb, taskOptions, checkPolicy } from './db.mjs';
-import { ctx, tr } from '../platform/context.mjs';
-import { AGENT_IDS, AGENT_LABELS } from '../platform/config-file.mjs';
-import { folderName, isConfigName, categoryOf, CATEGORIES, folderKey } from '../platform/paths.mjs';
-import { projectLogHeader, logBody } from '../platform/journal-files.mjs';
-import { IGNORED_PROJECTS, FINISHED_PROJECTS, DELETING_PROJECTS } from '../platform/state.mjs';
-import { oneLine, MAX_DESCRIPTION } from '../shared/text.mjs';
-import { contentHash, sign, verify, detectSensitivity, deletionAskedByUser, defaultApprovalKey } from './approval.mjs';
-import { PRODUCT } from '../shared/product.mjs';
-import { git, isGitRepo } from './workspace.mjs';
+import { openDb, taskOptions, checkPolicy } from '../data/db.mjs';
+import { ctx, tr } from '../../platform/context.mjs';
+import { AGENT_IDS, AGENT_LABELS } from '../../platform/config-file.mjs';
+import { folderName, isConfigName, categoryOf, CATEGORIES, folderKey } from '../../platform/paths.mjs';
+import { projectLogHeader, logBody } from '../../platform/journal-files.mjs';
+import { IGNORED_PROJECTS, FINISHED_PROJECTS, DELETING_PROJECTS } from '../../platform/state.mjs';
+import { oneLine, MAX_DESCRIPTION } from '../../shared/text.mjs';
+import { contentHash, sign, verify, detectSensitivity, deletionAskedByUser, defaultApprovalKey } from '../security/approval.mjs';
+import { PRODUCT } from '../../shared/product.mjs';
+import { git, isGitRepo } from '../../platform/git.mjs';
 
 export const AGENTS = AGENT_IDS;
 // limited (2.3): stopped by the account's usage limit; continues by itself when the limit resets (tasks.limited_until).

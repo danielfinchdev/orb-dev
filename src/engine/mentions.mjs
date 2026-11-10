@@ -4,7 +4,7 @@
 import { oneLine } from '../shared/text.mjs';
 import { redactSecrets } from '../shared/secrets-scan.mjs';
 import { tr } from '../platform/context.mjs';
-import { readLog } from './logs.mjs';
+import { readLog } from '../domain/journal/journal.mjs';
 
 const TOKEN = /@(tarea|conversacion|bitacora):([\w.-]{1,64})/g;
 const MAX_EACH = 2500;

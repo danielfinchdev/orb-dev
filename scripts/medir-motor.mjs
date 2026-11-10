@@ -54,8 +54,8 @@ useHome(home);
 const t0 = Date.now();
 let longId = null;
 {
-  const { Board } = await import('../src/core/board.mjs');
-  const { syncProjects } = await import('../src/core/projects.mjs');
+  const { Board } = await import('../src/domain/tasks/board.mjs');
+  const { syncProjects } = await import('../src/domain/projects/projects.mjs');
   for (let p = 1; p <= N.projects; p++) fs.mkdirSync(path.join(home, 'web', `proyecto-${p}`), { recursive: true });
   const board = new Board();
   syncProjects(board);

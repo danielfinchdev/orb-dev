@@ -2,7 +2,7 @@
 //   the engine's   one connection, only for the engine: on Windows a named pipe with a random name, one instance (made
 //                  with FILE_FLAG_FIRST_PIPE_INSTANCE, so nobody can have made it first), this Windows user only, no remote
 //                  clients, and (Orb.exe) only the engine's process id; the engine opens it as a plain file and talks to
-//                  it synchronously (src/core/master.mjs). Elsewhere (the tests on Linux) two FIFOs in a private folder.
+//                  it synchronously (src/domain/security/master.mjs). Elsewhere (the tests on Linux) two FIFOs in a private folder.
 //   the grants'    connectors' launchers trade a grant for their keys (grants.rs): a pipe (a Unix socket elsewhere) with
 //                  as many instances as needed, this Windows user only.
 use crate::grants::Grants;

@@ -6,12 +6,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { tempHome } from './helpers.mjs';
-import { checkDevTools, devToolsBrief, needsDevTools, INSTALL_URL } from '../src/engine/dev-tools.mjs';
+import { checkDevTools, devToolsBrief, needsDevTools, INSTALL_URL } from '../src/platform/dev-tools.mjs';
 import { ctx } from '../src/platform/context.mjs';
-import { Board } from '../src/core/board.mjs';
-import { briefing } from '../src/engine/logs.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
+import { briefing } from '../src/domain/journal/journal.mjs';
 import { Scheduler } from '../src/engine/scheduler.mjs';
-import { METHODS } from '../src/core/permissions.mjs';
+import { METHODS } from '../src/domain/security/permissions.mjs';
 
 const h = tempHome();
 after(() => h.cleanup());

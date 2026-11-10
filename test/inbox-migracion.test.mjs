@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { tempHome } from './helpers.mjs';
-import { openDb } from '../src/core/db.mjs';
+import { openDb } from '../src/domain/data/db.mjs';
 
 const home = tempHome();
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-inbox-mig-'));

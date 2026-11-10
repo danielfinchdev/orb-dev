@@ -8,8 +8,8 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import http from 'node:http';
-import { browserKey } from '../src/core/browser-key.mjs';
-import { createActions, servePipe, KEYS, dialogsHook } from '../src/core/browser-protocol.mjs';
+import { browserKey } from '../src/engine/browser/browser-key.mjs';
+import { createActions, servePipe, KEYS, dialogsHook } from '../src/engine/browser/browser-protocol.mjs';
 import { createHostBrowser } from '../src/engine/host-browser.mjs';
 import { translate } from '../src/shared/i18n.mjs';
 

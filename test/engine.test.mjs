@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { tempHome, until, startEngine, fakeLog } from './helpers.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import { git } from '../src/core/workspace.mjs';
+import { git } from '../src/platform/git.mjs';
 
 let t; let engine; let call; let taskDone; let events;
 

@@ -4,8 +4,8 @@
 import { tempHome, until, fakeLog } from './helpers.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { Board } from '../src/core/board.mjs';
-import { createProject } from '../src/core/projects.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
+import { createProject } from '../src/domain/projects/projects.mjs';
 import { Sessions } from '../src/engine/sessions.mjs';
 
 let t; let board; let sessions; let project; const rates = []; const emitted = [];
@@ -266,7 +266,7 @@ test('una conversación no se borra mientras trabaja; la de una tarea se borra c
 // F2.6c (P8): an agent process that dies mid-turn takes its MCP tickets with it at once (a process it left behind could
 // otherwise trade them while the task is still marked as running).
 test('si el proceso del agente muere a mitad de turno, sus tickets se revocan', async () => {
-  const { agentAuth } = await import('../src/engine/agent-auth.mjs');
+  const { agentAuth } = await import('../src/domain/security/agent-auth.mjs');
   const ticket = agentAuth.issue({ session: 'muere-1', reply: {} });
   sessions.lives.set('muere-1', { live: { isClosed: () => true, close() {} }, lastUsed: Date.now() });
   sessions.running.set('muere-1', { agent: 'claude', startedAt: Date.now() });

@@ -13,7 +13,7 @@ const gitInit = (dir) => { for (const a of [['init', '-q'], ['config', 'user.nam
 test('al arrancar, pruneCopies borra las copias huérfanas y respeta las de una tarea viva', async () => {
   const h = tempHome();
   try {
-    const { Board } = await import('../src/core/board.mjs');
+    const { Board } = await import('../src/domain/tasks/board.mjs');
     const { Scheduler } = await import('../src/engine/scheduler.mjs');
     const board = new Board();
     const dir = path.join(h.home, 'web', 'proy'); fs.mkdirSync(dir, { recursive: true }); gitInit(dir);
@@ -35,7 +35,7 @@ test('al arrancar, pruneCopies borra las copias huérfanas y respeta las de una 
 test('hallazgo 25: una tarea de solo lectura que escribe BITACORA.md la deja como estaba y queda para revisar', async () => {
   const h = tempHome();
   try {
-    const { Board } = await import('../src/core/board.mjs');
+    const { Board } = await import('../src/domain/tasks/board.mjs');
     const { Scheduler } = await import('../src/engine/scheduler.mjs');
     const board = new Board();
     const dir = path.join(h.home, 'web', 'ro'); fs.mkdirSync(dir, { recursive: true }); gitInit(dir);
@@ -57,9 +57,9 @@ test('hallazgo 25: una tarea de solo lectura que escribe BITACORA.md la deja com
 test('3.8.1: al arrancar se conserva la copia aislada de una tarea terminada sin unir, también si el proyecto es una unión a una subcarpeta del repositorio', async () => {
   const h = tempHome();
   try {
-    const { Board } = await import('../src/core/board.mjs');
+    const { Board } = await import('../src/domain/tasks/board.mjs');
     const { Scheduler } = await import('../src/engine/scheduler.mjs');
-    const { mayHaveWorktrees } = await import('../src/core/workspace.mjs');
+    const { mayHaveWorktrees } = await import('../src/platform/git.mjs');
     const board = new Board();
     // the repository lives outside; the project is a junction to one of its subfolders
     const mono = path.join(h.base, 'mono'); const sub = path.join(mono, 'apps', 'a'); fs.mkdirSync(sub, { recursive: true }); gitInit(mono);
@@ -86,7 +86,7 @@ test('3.8.1: al arrancar se conserva la copia aislada de una tarea terminada sin
 test('3.8.1: mayHaveWorktrees lo sabe por los archivos (sin git): sin repositorio, sin copias y con una copia', async () => {
   const h = tempHome();
   try {
-    const { mayHaveWorktrees } = await import('../src/core/workspace.mjs');
+    const { mayHaveWorktrees } = await import('../src/platform/git.mjs');
     const plain = path.join(h.home, 'web', 'sin-git'); fs.mkdirSync(plain, { recursive: true });
     const repo = path.join(h.home, 'web', 'con-git'); fs.mkdirSync(repo, { recursive: true }); gitInit(repo);
     const inner = path.join(repo, 'sub'); fs.mkdirSync(inner);

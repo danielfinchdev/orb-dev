@@ -1,12 +1,12 @@
 // 3.8: the connectors' keys (the `env` of each MCP server in Ajustes › Conectores) live in the master password's vault
-// (src/core/master.mjs), never in orb.json. orb.json keeps a reference in their place («orb-secret:mcp/<connector>/<name>»):
+// (src/domain/security/master.mjs), never in orb.json. orb.json keeps a reference in their place («orb-secret:mcp/<connector>/<name>»):
 // the engine puts the real value back only when it hands the connector to its launcher (src/engine/sessions.mjs). The
 // reference names where the value is, but the value is always looked up by the connector's own name and the variable's,
 // so a reference copied into another connector does not take that one's key.
 // The keys are also tied to the program they were given to (a hash of the connector's command and arguments, kept in the
 // vault): a command changed without the master password (orb.json edited by hand, by an agent) gets no keys.
 import crypto from 'node:crypto';
-import { connectorKey } from '../platform/config.mjs';
+import { connectorKey } from '../../platform/config.mjs';
 
 export const REF = 'orb-secret:';
 export const isRef = (v) => typeof v === 'string' && v.startsWith(REF);
@@ -82,7 +82,7 @@ export function connectorSecrets(master, server) {
   }));
 }
 
-// 3.8: a change of the settings that touches what the keys protect (src/core/permissions.mjs › needsUnlock): a connector
+// 3.8: a change of the settings that touches what the keys protect (src/domain/security/permissions.mjs › needsUnlock): a connector
 // with keys removed or renamed, its command or arguments changed, or one of its keys dropped.
 export function touchesKeys(current = [], next = []) {
   for (const c of current ?? []) {

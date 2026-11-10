@@ -9,10 +9,10 @@ import remarkParse from 'remark-parse';
 import remarkRehype from 'remark-rehype';
 import { ROOT, tempHome } from './helpers.mjs';
 import { remarkPlugins, richKind, isInlineMath, textOf } from '../src/ui/lib/markdown-plugins.js';
-import { Board } from '../src/core/board.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
 import { Sessions } from '../src/engine/sessions.mjs';
 import { buildApi } from '../src/engine/api.mjs';
-import { DESKTOP } from '../src/core/permissions.mjs';
+import { DESKTOP } from '../src/domain/security/permissions.mjs';
 
 const tree = (md) => { const p = unified().use(remarkParse); for (const x of remarkPlugins) Array.isArray(x) ? p.use(x[0], x[1]) : p.use(x); return p.use(remarkRehype).runSync(p.parse(md)); };
 const codes = (node, out = []) => { if (node.tagName === 'code') out.push(node); for (const c of node.children ?? []) codes(c, out); return out; };
@@ -92,6 +92,6 @@ test('attachments.read: a PDF of that conversation\'s attachments only, and only
   await assert.rejects(api.call('attachments.read', { session: s.id, path: avi }, DESKTOP), /./, 'not playable in the window');
   const big = path.join(dir, 'big.webm'); fs.writeFileSync(big, ''); fs.truncateSync(big, 25 * 1024 * 1024 + 1);
   await assert.rejects(api.call('attachments.read', { session: s.id, path: big }, DESKTOP), /./, 'over 25 MB');
-  const { METHODS } = await import('../src/core/permissions.mjs');
+  const { METHODS } = await import('../src/domain/security/permissions.mjs');
   assert.equal(METHODS['attachments.read'], 'pc', 'never from a linked phone');
 });

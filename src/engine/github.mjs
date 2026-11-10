@@ -7,11 +7,11 @@ import { spawn } from 'node:child_process';
 import { ctx, tr } from '../platform/context.mjs';
 import { firstFile, inPath, cleanEnv, IS_WIN } from '../platform/proc.mjs';
 import { openConsole } from '../agents/index.mjs';
-import { git, isGitRepo, ORB_GIT } from '../core/workspace.mjs';
+import { git, isGitRepo, ORB_GIT } from '../platform/git.mjs';
 import { secretFiles, isSecretPath, stagedSecrets, secretsInDiff } from '../shared/secrets-scan.mjs';
 import { oneLine } from '../shared/text.mjs';
 import { folderName } from '../platform/paths.mjs';
-import { checkCategory } from '../core/projects.mjs';
+import { checkCategory } from '../domain/projects/projects.mjs';
 import { ATTACH_DIR } from './sessions.mjs';
 
 export function ghExe() {

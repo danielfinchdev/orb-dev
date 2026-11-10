@@ -10,7 +10,7 @@ import { cleanEnv, IS_WIN } from '../platform/proc.mjs';
 import fs from 'node:fs';
 import { ctx, tr } from '../platform/context.mjs';
 import { startLogin } from './login.mjs';
-import { accountsOf, account, accountDir, accountEnv, defaultAccount, loginState as accountLogin, MULTI } from '../core/accounts.mjs';
+import { accountsOf, account, accountDir, accountEnv, defaultAccount, loginState as accountLogin, MULTI } from '../domain/usage/accounts.mjs';
 
 export const ADAPTERS = { claude, codex, cursor, ...Object.fromEntries(Object.entries(ACP_SPECS).map(([id, spec]) => [id, acpAgent(id, spec)])) };
 // Tests: ORB_FAKE_AGENTS points to a module whose fakeAdapter(id) replaces every agent (no real program or account).

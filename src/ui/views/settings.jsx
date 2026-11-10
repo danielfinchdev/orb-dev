@@ -32,7 +32,7 @@ import { DEFAULT_PROTECTED } from '../../shared/layout.mjs';
 import { TRACKS } from '../../shared/music.mjs';
 import { available as musicAvailable, musicPrefs, setMusicVolume } from '@/lib/music.js';
 
-// unlock: the master password's token, for a change that needs it (src/core/permissions.mjs › needsUnlock).
+// unlock: the master password's token, for a change that needs it (src/domain/security/permissions.mjs › needsUnlock).
 async function save(patch, ok = t('settings.saved'), unlock = null) {
   const config = await act(call('config.save', { patch, ...(unlock ? { unlock } : {}) }), ok);
   if (config) { setState({ app: { ...getState().app, config } }); applyTheme(config.ui?.theme); applyAppearance(config.ui); }
@@ -494,7 +494,7 @@ function BrowserCard({ c }) {
   );
 }
 
-// «Cosas que nadie toca» (config.protected, src/core/guard.mjs › protectedHit): names, paths or containers no agent
+// «Cosas que nadie toca» (config.protected, src/domain/security/guard.mjs › protectedHit): names, paths or containers no agent
 // touches. Chips to remove, a field to add; saved at once. 3.8: taking off one of the defaults (a password manager) asks
 // first, and «Restaurar los de serie» brings back the ones missing (adding needs no password).
 function ProtectedCard({ c }) {

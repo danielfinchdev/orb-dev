@@ -23,15 +23,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { ctx, tr } from '../platform/context.mjs';
-import { validateConfig } from '../platform/config.mjs';
-import { paths, writeJson, categoryOf, folderKey, BOTS_DIR } from '../platform/paths.mjs';
-import { configFrom } from '../platform/config-file.mjs';
-import { IGNORED_PROJECTS } from '../platform/state.mjs';
-import { isValidTz } from '../shared/tz.mjs';
-import { ME } from './inbox.mjs';
-import { redactSecrets } from '../shared/secrets-scan.mjs';
-import { isRef, refOf, secretId } from './connector-secrets.mjs';
+import { ctx, tr } from '../../../platform/context.mjs';
+import { validateConfig } from '../../../platform/config.mjs';
+import { paths, writeJson, categoryOf, folderKey, BOTS_DIR } from '../../../platform/paths.mjs';
+import { configFrom } from '../../../platform/config-file.mjs';
+import { IGNORED_PROJECTS } from '../../../platform/state.mjs';
+import { isValidTz } from '../../../shared/tz.mjs';
+import { ME } from '../../conversations/inbox.mjs';
+import { redactSecrets } from '../../../shared/secrets-scan.mjs';
+import { isRef, refOf, secretId } from '../../security/connector-secrets.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
 export const MARK = 'migrated_3_8';
@@ -780,7 +780,7 @@ export function scrubPreCopies(db, { home = ctx.home, now = Date.now() } = {}) {
   return files.length;
 }
 
-// 3.8, with the master password: what is in the vault (src/core/master.mjs) does not stay in clear anywhere else. The
+// 3.8, with the master password: what is in the vault (src/domain/security/master.mjs) does not stay in clear anywhere else. The
 // owner's connectors' keys in the archived orb.json (archivo-3.7*/orb-3.7.json) become references, and the phones' keys
 // (remote_keys) leave the copies of the database (secure_delete and VACUUM, so no free page keeps them), right after
 // they are in the vault rather than 30 days later. inVault(id): whether the vault holds that secret. → files changed.

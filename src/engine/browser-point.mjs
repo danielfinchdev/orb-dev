@@ -2,7 +2,7 @@
 // picture; the engine finds what is there (in Orb's isolated world of the page, never the page's own scripts' world)
 // and takes a small picture of it, which go to that chat's message box (the user decides whether to send them).
 // What the page says is data: a short CSS selector, at most 300 characters of its text.
-import { VIEW } from '../core/browser-protocol.mjs';
+import { VIEW } from './browser/browser-protocol.mjs';
 
 const PAD = 8;
 

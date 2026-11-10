@@ -10,12 +10,12 @@
 // scrubbed from the page's text and the elements' names, and a screenshot blacks out those fields.
 import net from 'node:net';
 import crypto from 'node:crypto';
-import { protectedHit } from './guard.mjs';
+import { protectedHit } from '../../domain/security/guard.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { browserKey } from './browser-key.mjs';
-import { translate } from '../shared/i18n.mjs';
+import { translate } from '../../shared/i18n.mjs';
 
 export const VIEW = { width: 1280, height: 800 };
 export const MAX_TABS = 4;

@@ -1,4 +1,4 @@
-// 3.8: who may do what (src/core/permissions.mjs). This PC: everything. A linked phone or browser: only the methods the
+// 3.8: who may do what (src/domain/security/permissions.mjs). This PC: everything. A linked phone or browser: only the methods the
 // table marks 'remote'. An agent: no API method; its MCP tools act only on its own signed conversation or task, and an
 // agent Orb did not sign (or with a forged conversation) gets nothing.
 import { test, before, after } from 'node:test';
@@ -7,15 +7,15 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import { tempHome, ROOT } from './helpers.mjs';
-import { Board } from '../src/core/board.mjs';
-import { createProject } from '../src/core/projects.mjs';
-import { METHODS, REMOTE_METHODS, CHANNELS, PermissionError, principalOf, allowed, authorize, ownsTask } from '../src/core/permissions.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
+import { createProject } from '../src/domain/projects/projects.mjs';
+import { METHODS, REMOTE_METHODS, CHANNELS, PermissionError, principalOf, allowed, authorize, ownsTask } from '../src/domain/security/permissions.mjs';
 import { guardCall, shapeResult, withoutPaths } from '../src/engine/remote.mjs';
 import { ctx } from '../src/platform/context.mjs';
 import crypto from 'node:crypto';
 import { Sessions, mcpServersFor } from '../src/engine/sessions.mjs';
-import { AgentAuth, agentAuth } from '../src/engine/agent-auth.mjs';
-import { decide } from '../src/core/guard.mjs';
+import { AgentAuth, agentAuth } from '../src/domain/security/agent-auth.mjs';
+import { decide } from '../src/domain/security/guard.mjs';
 import { Orchestrator } from '../src/engine/orchestrator.mjs';
 import { Scheduler } from '../src/engine/scheduler.mjs';
 import { buildApi } from '../src/engine/api.mjs';

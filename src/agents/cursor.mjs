@@ -9,15 +9,15 @@ import { IS_WIN, firstFile, inPath, appDataDirs, userHome, readOutput } from '..
 import { clip, describeInput, mcpEnvByRef } from './common.mjs';
 import { Turn, spawnAgent, killTree } from './live.mjs';
 import { tr } from '../platform/context.mjs';
-import { isModelLimitText, parseReset, untilText } from '../core/budget.mjs';
-import { guardedRootsNow, appRootsNow } from '../core/guard.mjs';
+import { isModelLimitText, parseReset, untilText } from '../domain/usage/budget.mjs';
+import { guardedRootsNow, appRootsNow } from '../domain/security/guard.mjs';
 
 export const id = 'cursor';
 export const label = 'Cursor';
 export const kind = 'cli-stream';
 export const caps = { images: false, steer: false, fork: false, approvals: false, models: true, context: false };
 // F2.6c: Cursor starts its MCP servers again every turn, so they get new tickets every turn (o.mcpServers is then a
-// function), taken back when the turn ends (src/engine/agent-auth.mjs).
+// function), taken back when the turn ends (src/domain/security/agent-auth.mjs).
 export const mcpServersEachTurn = true;
 
 // In this user's Local AppData or in one moved to another drive (appDataDirs).

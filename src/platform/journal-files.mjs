@@ -1,5 +1,5 @@
 // The logs' files (bitácoras) as files: their headers in the settings' language, moving a log folder into another and
-// tidying copies left by older versions. What the logs say is src/engine/logs.mjs's business.
+// tidying copies left by older versions. What the logs say is src/domain/journal/journal.mjs's business.
 import fs from 'node:fs';
 import path from 'node:path';
 import { translate } from '../shared/i18n.mjs';

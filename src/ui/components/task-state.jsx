@@ -1,6 +1,6 @@
 // 3.8.3: why a task waits, and the card of a task Orb held for review, the same wherever a task shows (the chat's task
 // lines, the task list and its detail; PC and phone). The engine says why (tasks.list › waiting / held,
-// src/core/board.mjs › waitReason / heldInfo):
+// src/domain/tasks/board.mjs › waitReason / heldInfo):
 //   waiting.kind  paused  the whole queue is paused: «En pausa» with «Reanudar» at hand
 //                 manual  Ajustes › «Iniciar las tareas automáticamente» is off: «Inicio manual»
 //                 deps    it waits for other tasks: «Espera a #3», and which of them needs the user

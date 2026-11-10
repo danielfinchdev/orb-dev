@@ -21,12 +21,12 @@ export const CONFIG_FILE = 'orb.json';
 //   windows\ linux\ ios\ android\ web\ multi\   categories: every subfolder of one of them is a project
 // Orb 3.7 kept .orb, orb.json, bitacora, mcp-servers and android\adb-tools at the top (LEGACY). .orb and orb.json are
 // Orb's own data and move into core when the engine starts; the others move only when the user says so in the window
-// (src/core/core-folder.mjs › planWorkspace). A bitacora or adb-tools left at the top is used where it is (paths).
+// (src/domain/workspace/core-folder.mjs › planWorkspace). A bitacora or adb-tools left at the top is used where it is (paths).
 export { CORE_DIR, CATEGORIES, PLATFORMS, MULTI, SHARED_DIR, DEFAULT_CATEGORY, DEFAULT_PROTECTED } from '../shared/layout.mjs';
 export const INTERNAL_DIR = CORE_DIR;
 export const LOGS_DIR = 'bitacora';
 export const MCP_DIR = 'mcp';
-export const SKILLS_DIR = 'skills'; // 3.8.1: every skill (src/core/extensions.mjs)
+export const SKILLS_DIR = 'skills'; // 3.8.1: every skill (src/domain/extensions/extensions.mjs)
 export const STAGING_DIR = 'preparacion'; // 3.8.1: what an agent makes before the user turns it on (the only part of core agents write)
 export const OLD_LOGS_DIR = 'bitacoras'; // 2.3.0 and older
 // 3.5–3.7: the bots' memories. 3.8: no bots; an old bots\ folder is never taken for a project (the 3.8 migration archives it).

@@ -11,22 +11,22 @@ import { AGENT_LABELS } from '../platform/config-file.mjs';
 import { adapter, executable } from '../agents/index.mjs';
 import { liveSkills } from './api-extensions.mjs';
 import { orbMcpServer, connectorLauncher } from '../agents/common.mjs';
-import { agentAuth } from './agent-auth.mjs';
-import { connectorLaunch } from '../core/connector-secrets.mjs';
-import { connectorSafe } from '../core/extensions.mjs';
+import { agentAuth } from '../domain/security/agent-auth.mjs';
+import { connectorLaunch } from '../domain/security/connector-secrets.mjs';
+import { connectorSafe } from '../domain/extensions/extensions.mjs';
 import { CURSOR_FILES } from '../agents/cursor.mjs';
 import { runLog } from '../platform/log.mjs';
 import { oneLine } from '../shared/text.mjs';
-import { git, isGitRepo, repoRoot } from '../core/workspace.mjs';
-import { account as findAccount, accountEnv } from '../core/accounts.mjs';
-import { pickAccount, recordSpend } from '../core/budget.mjs';
-import { browserKey } from '../core/browser-key.mjs';
+import { git, isGitRepo, repoRoot } from '../platform/git.mjs';
+import { account as findAccount, accountEnv } from '../domain/usage/accounts.mjs';
+import { pickAccount, recordSpend } from '../domain/usage/budget.mjs';
+import { browserKey } from './browser/browser-key.mjs';
 import { androidAllowed } from './android.mjs';
-import { PERMISSIONS, plainAction, pidKills, unwrapShell } from '../core/guard.mjs';
+import { PERMISSIONS, plainAction, pidKills, unwrapShell } from '../domain/security/guard.mjs';
 import { processList, taskProcesses, powershell } from '../platform/proc-list.mjs';
 import { explainFailure } from '../shared/agent-errors.mjs';
 import { rememberModels } from './catalog.mjs';
-import { changedFiles, logDirect } from './logs.mjs';
+import { changedFiles, logDirect } from '../domain/journal/journal.mjs';
 import { ATTACH_DIR, placeAttachments as copyAttachments, prepareAttachments } from './attachments.mjs';
 
 export { PERMISSIONS, ATTACH_DIR };
@@ -305,7 +305,7 @@ export class Sessions {
       mcpServers: mcpServersOf(a, s.agent, { taskId, session: s.id }), budgetUsd,
       env: { ...accountEnv(acc), ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
       internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, cfg: ctx.config.agents[s.agent] ?? {},
-      // 3.8.2: read on every action (the owner may take it back at any moment): adb by hand needs it (src/core/guard.mjs).
+      // 3.8.2: read on every action (the owner may take it back at any moment): adb by hand needs it (src/domain/security/guard.mjs).
       android: () => androidAllowed(this.get(s.id)),
       skills: liveSkills(), // 3.8.1: the skills of core that are on (Claude and Codex load them themselves)
       onEvent: (ev) => this.onLiveEvent(s.id, ev)

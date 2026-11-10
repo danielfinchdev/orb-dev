@@ -1,6 +1,6 @@
 // 3.7: Opti Bot (2.7–3.6) is gone, tidied once when the engine starts. Nothing of the user's is deleted: its conversation
 // stays as an archived chat (its proposals still waiting say they expired). (Its «monitor» settings leave orb.json with
-// the 3.8 migration, src/core/migrate-38.mjs.)
+// the 3.8 migration, src/domain/data/legacy/migrate-38.mjs.)
 
 // Opti Bot's conversation and its pending cards. → { session, expired } (what was tidied; null when nothing).
 export function retireOpti(board) {

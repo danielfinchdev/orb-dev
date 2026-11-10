@@ -22,9 +22,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { tr } from '../platform/context.mjs';
-import { CATEGORIES, folderKey, isReservedInCategory } from '../platform/paths.mjs';
-import { FINISHED_PROJECTS, DELETING_PROJECTS } from '../platform/state.mjs';
+import { tr } from '../../platform/context.mjs';
+import { CATEGORIES, folderKey, isReservedInCategory } from '../../platform/paths.mjs';
+import { FINISHED_PROJECTS, DELETING_PROJECTS } from '../../platform/state.mjs';
 
 // FINISHED_PROJECTS (a setting): [{ name, path, key (folderKey), category, at, schedules (the ones it paused),
 //   archived (the name its rows wait under), missingSince (its folder not found since then) }]

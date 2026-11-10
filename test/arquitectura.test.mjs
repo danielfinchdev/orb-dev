@@ -25,22 +25,20 @@ for (const f of files) {
   graph.set(rel(f), deps);
 }
 
-// Which layers each layer may import (its own included). `core` is what is left of the old mixed folder.
+// Which layers each layer may import (its own included).
 const ALLOWED = {
   shared: ['shared'],
   platform: ['shared', 'platform'],
-  core: ['shared', 'platform', 'core'],
-  domain: ['shared', 'platform', 'core', 'domain'],
-  agents: ['shared', 'platform', 'core', 'domain', 'agents'],
-  mcp: ['shared', 'platform', 'core', 'domain', 'mcp', 'agents'],
-  engine: ['shared', 'platform', 'core', 'domain', 'agents', 'engine', 'mcp'],
+  domain: ['shared', 'platform', 'domain'],
+  agents: ['shared', 'platform', 'domain', 'agents'],
+  mcp: ['shared', 'platform', 'domain', 'mcp', 'agents'],
+  engine: ['shared', 'platform', 'domain', 'agents', 'engine'],
   ui: ['shared', 'ui'],
 };
 // The window's code may use only these files outside src/ui (pure, no Node).
 const UI_SHARED = (r) => layerOf(r) === 'shared' || layerOf(r) === 'ui';
 // Imports that break the rules and are still being moved (the list only shrinks).
 const PENDING = new Set([
-  'mcp/secret-run.mjs -> engine/agent-auth.mjs', 'mcp/server.mjs -> engine/logs.mjs',
 ]);
 const pending = (edge) => PENDING.has(edge);
 

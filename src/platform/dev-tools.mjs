@@ -7,17 +7,24 @@
 // %LOCALAPPDATA%\Android\Sdk; Flutter in a folder of the user such as %USERPROFILE%\flutter or C:\src\flutter, as its own
 // guide says), so every agent and the user's own terminal can run them and reinstalling or repairing Orb never takes them
 // away (the clean install of 8 Nov emptied core, Flutter with it). Not in core: it is closed to agents except
-// core\herramientas (src/core/guard.mjs › OPEN_INTERNAL), which is for the small tools Orb downloads itself (adb, ffmpeg,
+// core\herramientas (src/domain/security/guard.mjs › OPEN_INTERNAL), which is for the small tools Orb downloads itself (adb, ffmpeg,
 // the music); a tool found there still counts, since agents can run it. Not loose at the top of Orb's folder either (each
 // folder there is a category or a project).
 //
 // Only file checks (no program is started): cheap enough for every briefing.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx } from '../platform/context.mjs';
-import { categoryOf } from '../platform/paths.mjs';
-import { sdkRoots } from './android.mjs';
+import { ctx } from './context.mjs';
+import { categoryOf } from './paths.mjs';
 
+// 3.8.3: where the Android SDK may be (its variables, then Android Studio's default folder); android.mjs uses it too.
+export function sdkRoots(env = process.env, platform = process.platform) {
+  const home = env.USERPROFILE || env.HOME || '';
+  return [env.ANDROID_SDK_ROOT, env.ANDROID_HOME,
+    platform === 'win32' && env.LOCALAPPDATA ? path.join(env.LOCALAPPDATA, 'Android', 'Sdk') : null,
+    platform === 'darwin' && home ? path.join(home, 'Library', 'Android', 'sdk') : null,
+    platform === 'linux' && home ? path.join(home, 'Android', 'Sdk') : null].filter((r) => r && path.isAbsolute(r));
+}
 // Where each one is installed from (its official page; Orb downloads none of them).
 export const INSTALL_URL = Object.freeze({
   flutter: 'https://docs.flutter.dev/get-started/install',

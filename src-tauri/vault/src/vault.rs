@@ -1,4 +1,4 @@
-// The master password and Orb's own secrets, the same files and rules Orb 3.8 kept from Node (src/core/master.mjs tells
+// The master password and Orb's own secrets, the same files and rules Orb 3.8 kept from Node (src/domain/security/master.mjs tells
 // the whole story; this is its body now, out of the engine):
 //   maestra.json     the data key wrapped by scrypt(password) (its own salt and cost; a check HMAC)
 //   maestra-pc.json  the data key wrapped by a key from this PC's secret (says, authenticated, whether a password exists)
@@ -185,7 +185,7 @@ impl Drop for Items {
   }
 }
 
-/// What an attempt says (src/core/master.mjs › attempt).
+/// What an attempt says (src/domain/security/master.mjs › attempt).
 #[derive(Debug, PartialEq)]
 pub enum Tried {
   Ok,
@@ -232,7 +232,7 @@ pub struct Vault {
   /// A password (or the recovery code's step) was just checked right in this session: one window token may be issued
   /// (review final B5: a token is never made out of nothing).
   pub may_issue: bool,
-  /// Something in the folder changed (the engine copies it outside core: src/core/master.mjs › mirrorTo).
+  /// Something in the folder changed (the engine copies it outside core: src/domain/security/master.mjs › mirrorTo).
   pub changed: bool,
   /// Channels that just reached another FREE_TRIES wrong tries in a row (the engine tells the owner).
   pub notices: Vec<(String, u64)>,

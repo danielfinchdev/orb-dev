@@ -1,5 +1,5 @@
-// 3.8.1: Ajustes › Skills y MCP in the engine's API (this PC's window only: src/core/permissions.mjs). The work is in
-// src/core/extensions.mjs; here: the list, turning one on or off, importing (a folder or a git repository), removing
+// 3.8.1: Ajustes › Skills y MCP in the engine's API (this PC's window only: src/domain/security/permissions.mjs). The work is in
+// src/domain/extensions/extensions.mjs; here: the list, turning one on or off, importing (a folder or a git repository), removing
 // (after the master password: it deletes from core), the agents' requests (approve or discard, from the chat card or
 // Ajustes), and improving a server of core in a project («Editar en un proyecto» / «Aplicar cambios»).
 //   liveSkills: what the agents get (the plugin folder, the extra root and the list), made again when the skills that
@@ -10,15 +10,15 @@ import { ctx, tr } from '../platform/context.mjs';
 import { saveConfig } from '../platform/config.mjs';
 import { CATEGORIES } from '../platform/paths.mjs';
 import { loadConfig } from '../platform/config-file.mjs';
-import { syncProjects } from '../core/projects.mjs';
-import { moveIntoCore } from '../core/core-folder.mjs';
-import { sealConnectors, rebindOrWait, settleRebinds, REBINDS } from '../core/connector-secrets.mjs';
+import { syncProjects } from '../domain/projects/projects.mjs';
+import { moveIntoCore } from '../domain/workspace/core-folder.mjs';
+import { sealConnectors, rebindOrWait, settleRebinds, REBINDS } from '../domain/security/connector-secrets.mjs';
 import { oneOf, str } from './api-common.mjs';
 import {
   listExtensions, skillsWith, mcpWith, importExtension, removeExtension, exposeSkills, activateRequest, editInProject,
   applyEdit, prepareApply, isMcpProject, startCommand, checkSkill, allowDraft, discardRequest, installFor,
   ExtensionError, REQUESTS, EDITS, MCP_NAME, SKILL_NAME, cleanExtensionLeftovers
-} from '../core/extensions.mjs';
+} from '../domain/extensions/extensions.mjs';
 
 // ---- what the agents load (core\skills\.activas), made again when the skills that are on change
 let live = null; let liveKey = null;
@@ -126,7 +126,7 @@ export function extensionMethods({ board, emit, log }) {
       log(`extensiones: importado ${r.kind} ${r.name} (${from ? 'carpeta' : url})`);
       return { kind: r.kind, name: r.name, list: list() };
     },
-    // Guarded (the master password, src/core/permissions.mjs): a skill or a server leaves core, folder and all; a connector
+    // Guarded (the master password, src/domain/security/permissions.mjs): a skill or a server leaves core, folder and all; a connector
     // of the PC, its entry and keys.
     'extensions.remove': ({ kind, name: raw }) => {
       const k = oneOf(kind, KINDS, 'tipo');

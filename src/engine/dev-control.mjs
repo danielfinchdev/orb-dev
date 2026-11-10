@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { DESKTOP } from '../core/permissions.mjs';
+import { DESKTOP } from '../domain/security/permissions.mjs';
 import { ownPorts } from './host.mjs';
 
 export function startDevControl({ api, board, sessions, log = () => {}, home, internalDir }) {

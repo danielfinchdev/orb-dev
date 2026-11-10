@@ -1,4 +1,4 @@
-// 3.6 (WS5): the engine's data methods: encrypted backups (src/core/backup.mjs). The daily copy at 03:00 (the owner's
+// 3.6 (WS5): the engine's data methods: encrypted backups (src/domain/data/backup.mjs). The daily copy at 03:00 (the owner's
 // time zone) runs from the engine's loop (tick). Moving to another PC is a backup restored there with the recovery code. This PC's window only: no phone calls these.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -6,8 +6,8 @@ import { ctx, tr } from '../platform/context.mjs';
 import { paths } from '../platform/paths.mjs';
 import { machineKeys } from '../platform/keys.mjs';
 import { BACK_FILE } from './approval-secret.mjs';
-import * as K from '../core/backup.mjs';
-import { legacyData, deleteLegacyData } from '../core/migrate-38.mjs';
+import * as K from '../domain/data/backup.mjs';
+import { legacyData, deleteLegacyData } from '../domain/data/legacy/migrate-38.mjs';
 import { utcToZoned, localDay, ownerTz } from '../shared/tz.mjs';
 import { refused } from './api-master.mjs';
 

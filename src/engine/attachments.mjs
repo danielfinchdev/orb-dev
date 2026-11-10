@@ -8,7 +8,7 @@ import zlib from 'node:zlib';
 import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { ctx, tr } from '../platform/context.mjs';
-import { isOrbData } from '../core/guard.mjs';
+import { isOrbData } from '../domain/security/guard.mjs';
 import { fingerprints } from './android.mjs';
 import { kindOf } from '../shared/attach-kind.mjs';
 

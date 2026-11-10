@@ -14,7 +14,7 @@ import { stdioTransport, encode, decode } from '../src/engine/stdio.mjs';
 import { checkHostRequest } from '../src/engine/host.mjs';
 import { writeJson, homeKey } from '../src/platform/paths.mjs';
 import { loadConfig, merge } from '../src/platform/config-file.mjs';
-import { METHODS } from '../src/core/permissions.mjs';
+import { METHODS } from '../src/domain/security/permissions.mjs';
 
 test('stdio: one JSON message per line, and nothing else ever reaches stdout', async () => {
   assert.equal(encode({ a: 'uno\ndos' }), '{"a":"uno\\ndos"}\n');

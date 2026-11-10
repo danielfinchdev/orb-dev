@@ -6,7 +6,7 @@ import path from 'node:path';
 import { ctx, tr } from '../platform/context.mjs';
 import { enabledAgents } from '../platform/config.mjs';
 import { chooseModel } from './catalog.mjs';
-import { groupOf } from '../core/projects.mjs';
+import { groupOf } from '../domain/projects/projects.mjs';
 
 // 2.7: a task of a multiplatform project knows its sister projects and the shared folder (API, design, texts, images).
 const groupNote = (board, project) => {
@@ -20,22 +20,23 @@ export const contractNote = (cwd, task) => (!task.readonly && cwd && fs.existsSy
   : '');
 import { localeOf } from '../shared/i18n.mjs';
 import { PRODUCT } from '../shared/product.mjs';
-import { assistantName, ofUser, eventKey, userName } from '../core/board.mjs';
-import { checkDevTools, devToolsBrief, needsDevTools } from './dev-tools.mjs';
-import { git, prepareWorkdir, takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit, integrateInto, isGitRepo, repoRoot, mayHaveWorktrees, ORB_GIT, REF_PREFIX } from '../core/workspace.mjs';
-import { rankAccounts, isLimitText, isBudgetText, startCooldown, pauseAccount, taskBudgetUsd, blockModel, isModelLimitText, liftAfterSuccess, untilText, modelName } from '../core/budget.mjs';
+import { assistantName, ofUser, eventKey, userName } from '../domain/tasks/board.mjs';
+import { checkDevTools, devToolsBrief, needsDevTools } from '../platform/dev-tools.mjs';
+import { git, isGitRepo, repoRoot, mayHaveWorktrees, ORB_GIT, REF_PREFIX } from '../platform/git.mjs';
+import { prepareWorkdir, takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit, integrateInto } from '../domain/tasks/checkpoints.mjs';
+import { rankAccounts, isLimitText, isBudgetText, startCooldown, pauseAccount, taskBudgetUsd, blockModel, isModelLimitText, liftAfterSuccess, untilText, modelName } from '../domain/usage/budget.mjs';
 import { installed } from '../agents/index.mjs';
-import { runDue } from '../core/schedules.mjs';
-import { wakeSnoozed } from '../core/inbox.mjs';
+import { runDue } from '../domain/schedules/schedules.mjs';
+import { wakeSnoozed } from '../domain/conversations/inbox.mjs';
 import { explainFailure } from '../shared/agent-errors.mjs';
-import { usableAccounts, account as findAccount, accountLabel } from '../core/accounts.mjs';
+import { usableAccounts, account as findAccount, accountLabel } from '../domain/usage/accounts.mjs';
 import { oneLine, MAX_DEP_RESULT } from '../shared/text.mjs';
 import { redactSecrets, secretFiles, isSecretPath, stagedSecrets } from '../shared/secrets-scan.mjs';
 import { ATTACH_DIR } from './sessions.mjs';
-import { logTask } from './logs.mjs';
+import { logTask } from '../domain/journal/journal.mjs';
 import { adapter } from '../agents/index.mjs';
 import { liveSkills } from './api-extensions.mjs';
-import { skillsBrief } from '../core/extensions.mjs';
+import { skillsBrief } from '../domain/extensions/extensions.mjs';
 import { processList, taskProcesses, stopProcesses, alive } from '../platform/proc-list.mjs';
 
 // 3.8.3: how often the leftovers still pending (their folder was busy) are looked at again.

@@ -118,8 +118,8 @@ fs.writeFileSync(path.join(SANDBOX.ORB_USER_DATA, 'ubicacion.json'), JSON.string
 useHome(home);
 const LONG = 400; // messages in the long conversation
 {
-  const { Board } = await import('../src/core/board.mjs');
-  const { syncProjects } = await import('../src/core/projects.mjs');
+  const { Board } = await import('../src/domain/tasks/board.mjs');
+  const { syncProjects } = await import('../src/domain/projects/projects.mjs');
   const PROJECTS = big ? 50 : 6;
   for (let p = 1; p <= PROJECTS; p++) fs.mkdirSync(path.join(home, 'web', `proyecto-${p}`), { recursive: true });
   const board = new Board();

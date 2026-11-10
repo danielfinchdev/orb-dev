@@ -9,11 +9,11 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import crypto from 'node:crypto';
-import { Master, FREE_TRIES } from '../src/core/master.mjs';
-import { AgentAuth } from '../src/engine/agent-auth.mjs';
+import { Master, FREE_TRIES } from '../src/domain/security/master.mjs';
+import { AgentAuth } from '../src/domain/security/agent-auth.mjs';
 import { createSecretRequests, savedId, MASTER_CHECKS, MASTER_CHECKS_MS } from '../src/engine/agent-secrets.mjs';
 import { parseArgs, trade, masker } from '../src/mcp/secret-run.mjs';
-import { allowed, needsUnlock, freshPurpose, principalOf, METHODS } from '../src/core/permissions.mjs';
+import { allowed, needsUnlock, freshPurpose, principalOf, METHODS } from '../src/domain/security/permissions.mjs';
 import { tempHome, startEngine } from './helpers.mjs';
 import { FRESH_ACTIONS } from '../src/ui/lib/core-access.js';
 

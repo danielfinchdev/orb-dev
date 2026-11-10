@@ -1,7 +1,7 @@
 // Every action the window can ask the engine for. Parameters are validated here (the window is trusted UI, but its
 // inputs come from people and agents' text, so nothing is passed on unchecked). Actions marked as the user's ("usuario")
 // are the only ones that sign approvals or publish.
-// The dispatcher checks every call first (src/core/permissions.mjs: this PC may call anything, a linked phone or browser
+// The dispatcher checks every call first (src/domain/security/permissions.mjs: this PC may call anything, a linked phone or browser
 // only what is marked for it) and the methods live in several files: here the conversations, chat, tasks, sessions,
 // projects, schedules, logs, whiteboard and usage; api-link.mjs, api-accounts.mjs, api-inbox.mjs and api-data.mjs the
 // rest.
@@ -11,26 +11,26 @@ import { ctx, tr } from '../platform/context.mjs';
 import { saveConfig } from '../platform/config.mjs';
 import { AGENT_IDS } from '../platform/config-file.mjs';
 import { categoryOf, CATEGORIES, PLATFORMS } from '../platform/paths.mjs';
-import { accountsOf, accountDir, accountLabel, accounts as allAccounts } from '../core/accounts.mjs';
-import { usageReport, usageHistory, modelName } from '../core/budget.mjs';
+import { accountsOf, accountDir, accountLabel, accounts as allAccounts } from '../domain/usage/accounts.mjs';
+import { usageReport, usageHistory, modelName } from '../domain/usage/budget.mjs';
 import { brainOf } from './orchestrator.mjs';
-import { newProject, syncProjects, checkProjectName, renameProject } from '../core/projects.mjs';
-import { finishProject, finishedProjects, reopenProject, checkDelete, deleteProject, abortDelete } from '../core/project-close.mjs';
+import { newProject, syncProjects, checkProjectName, renameProject } from '../domain/projects/projects.mjs';
+import { finishProject, finishedProjects, reopenProject, checkDelete, deleteProject, abortDelete } from '../domain/projects/project-close.mjs';
 import { PRODUCT } from '../shared/product.mjs';
 import { slashCommand } from '../shared/slash.mjs';
-import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../core/schedules.mjs';
+import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../domain/schedules/schedules.mjs';
 import { oneLine, localStamp } from '../shared/text.mjs';
 import { redactSecrets } from '../shared/secrets-scan.mjs';
 import { quickRun } from '../agents/index.mjs';
 import { PERMISSIONS, ATTACH_DIR } from './sessions.mjs';
 import { playableType } from '../shared/attach-kind.mjs';
-import { checkDevTools } from './dev-tools.mjs';
-import { readLog, writeLog, logFiles } from './logs.mjs';
+import { checkDevTools } from '../platform/dev-tools.mjs';
+import { readLog, writeLog, logFiles } from '../domain/journal/journal.mjs';
 import { expandMentions, mentionOptions } from './mentions.mjs';
-import { ofUserLabel, userLabel, userName, assistantName } from '../core/board.mjs';
+import { ofUserLabel, userLabel, userName, assistantName } from '../domain/tasks/board.mjs';
 import { adbStatus, ensureAdb, createAndroid } from './android.mjs';
 import { grantMethods } from './grants.mjs';
-import { agentAuth } from './agent-auth.mjs';
+import { agentAuth } from '../domain/security/agent-auth.mjs';
 import { createSecretRequests } from './agent-secrets.mjs';
 import { createTerminals } from './user-terminal.mjs';
 import { extensionMethods } from './api-extensions.mjs';
@@ -39,8 +39,9 @@ import { modelCatalog, chooseModel, LEVELS, REASONING_LEVELS, levelsOf } from '.
 import { titleFrom } from '../shared/titles.mjs';
 import { autoTitle } from './titles.mjs';
 import { projectIcon, setProjectIcon, clearProjectIcon, renameProjectIcon } from './project-icons.mjs';
-import { git, slug, diffBetween } from '../core/workspace.mjs';
-import { authorize, PermissionError } from '../core/permissions.mjs';
+import { git, slug } from '../platform/git.mjs';
+import { diffBetween } from '../domain/tasks/checkpoints.mjs';
+import { authorize, PermissionError } from '../domain/security/permissions.mjs';
 import { fld, fail, str, int, oneOf, images, DECISION } from './api-common.mjs';
 import { linkMethods } from './api-link.mjs';
 import { accountMethods } from './api-accounts.mjs';
@@ -49,9 +50,9 @@ import { inboxMethods } from './api-inbox.mjs';
 import { masterMethods, checkUnlock } from './api-master.mjs';
 import { appMethods } from './api-app.mjs';
 import { musicMethods } from './music.mjs';
-import { sealConnectors } from '../core/connector-secrets.mjs';
+import { sealConnectors } from '../domain/security/connector-secrets.mjs';
 import { createFeeds } from './feeds.mjs';
-import { fold, snippet } from '../core/inbox.mjs';
+import { fold, snippet } from '../domain/conversations/inbox.mjs';
 
 export { fail, str, int, oneOf } from './api-common.mjs';
 
@@ -180,7 +181,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'app.coreState': () => null,
     'app.coreRepair': () => ({ missing: false }),
     // 3.8: the folders Orb 3.7 kept at the top of the workspace: what would happen to each, and the user's choice
-    // (nothing moves before it; src/core/core-folder.mjs).
+    // (nothing moves before it; src/domain/workspace/core-folder.mjs).
     'app.layoutPlan': () => layoutPlan(),
     'app.layoutApply': ({ choices }) => layoutApply(choices, { emit, log, board }),
     'conversations.list': () => conversationList(),
@@ -231,7 +232,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     }, 'usuario').name),
     'projects.import': ({ name, folder }) => board.addProject({ name: checkProjectName(str(name, 'nombre', 60)), path: str(folder, 'carpeta', 1000) }, 'usuario', { fromUser: true }),
     'projects.remove': ({ name }) => board.removeProject(project(name).name, 'usuario'),
-    // 3.2.1: a new name (and folder) for a project with nothing working in it (core/projects.mjs renameProject).
+    // 3.2.1: a new name (and folder) for a project with nothing working in it (domain/projects/projects.mjs renameProject).
     'projects.rename': ({ name, to }) => {
       const from = project(name).name;
       const p = renameProject(board, { name: from, to: str(to, 'nombre', 60) }, 'usuario');
@@ -239,7 +240,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return p;
     },
     'projects.setActive': ({ name }) => board.setActiveProject(name ? project(name).name : '', 'usuario'),
-    // 3.8.1: the end of a project (src/core/project-close.mjs). Finished: it leaves Orb, its folder stays (listed in
+    // 3.8.1: the end of a project (src/domain/projects/project-close.mjs). Finished: it leaves Orb, its folder stays (listed in
     // «Finalizados» to reopen it). Deleted: its folder goes too. The app: projects.deleteCheck (the master password; from
     // then on nothing of the project starts, and it returns a one-off ticket), the Recycle Bin, then projects.delete with
     // that ticket (trashed; or, when the Recycle Bin could not take it and the user chose so, the engine deletes it for
@@ -819,7 +820,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       if (/^(config\.save|agents\.(status|check)|accounts\.(add|update|remove))$/.test(method)) { try { scheduler.refreshAvailable(true); } catch { /* next tick */ } }
       return out;
     },
-    // The method names (test/permisos.test.mjs checks each one has its line in src/core/permissions.mjs).
+    // The method names (test/permisos.test.mjs checks each one has its line in src/domain/security/permissions.mjs).
     methodNames: () => Object.keys(methods),
     // New chat lines since the last call, sent to the window as 'chat:new' (corner robot, robot notices) or 'notice' (toasts).
     notifyNewChat() {

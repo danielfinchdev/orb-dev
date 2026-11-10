@@ -1,19 +1,19 @@
-// 3.8: the master password in the engine's API (this PC's window only: src/core/permissions.mjs). It is made at the welcome
+// 3.8: the master password in the engine's API (this PC's window only: src/domain/security/permissions.mjs). It is made at the welcome
 // (or at the first start of 3.8), unlocks the window's guarded actions for 5 minutes (a token in memory, dropped when the
 // window locks or closes) and can be changed. Forgotten, a new one needs the backups' recovery code (a new data key, every
 // phone unlinked); without the code the only way is «Borrar secretos y empezar de cero». The crypto lives in
-// src/core/master.mjs.
+// src/domain/security/master.mjs.
 import fs from 'node:fs';
 import { ctx, tr } from '../platform/context.mjs';
 import { saveConfig } from '../platform/config.mjs';
 import { paths } from '../platform/paths.mjs';
 import { machineKeys } from '../platform/keys.mjs';
-import { Master, MasterError, IN_VAULT, mirrorTo, restoreMissing, checkPassword, MIN_LENGTH, UNLOCK_MS } from '../core/master.mjs';
-import { sealConnectors, connectorSecrets, refOf, secretId, ENV_NAME, bindMissing } from '../core/connector-secrets.mjs';
-import { needsUnlock, freshPurpose, FRESH_PURPOSES } from '../core/permissions.mjs';
-import { isRecoveryCode, hasRecovery } from '../core/backup.mjs';
+import { Master, MasterError, IN_VAULT, mirrorTo, restoreMissing, checkPassword, MIN_LENGTH, UNLOCK_MS } from '../domain/security/master.mjs';
+import { sealConnectors, connectorSecrets, refOf, secretId, ENV_NAME, bindMissing } from '../domain/security/connector-secrets.mjs';
+import { needsUnlock, freshPurpose, FRESH_PURPOSES } from '../domain/security/permissions.mjs';
+import { isRecoveryCode, hasRecovery } from '../domain/data/backup.mjs';
 import { str } from './api-common.mjs';
-import { scrubVaultedSecrets, DONE_AT } from '../core/migrate-38.mjs';
+import { scrubVaultedSecrets, DONE_AT } from '../domain/data/legacy/migrate-38.mjs';
 
 const userError = (key, vars, extra = {}) => Object.assign(new Error(tr(key, vars)), { userFacing: true, status: 403, ...extra });
 const WORDS = { short: 'msg.master.short', long: 'msg.master.long', exists: 'msg.master.exists', lost: 'msg.master.lost', locked: 'msg.master.locked', damaged: 'msg.master.damaged', none: 'msg.master.none' };

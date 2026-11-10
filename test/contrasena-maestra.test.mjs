@@ -1,4 +1,4 @@
-// 3.8: the master password (src/core/master.mjs, src/engine/api-master.mjs) and Magic Link with it (src/engine/remote.mjs,
+// 3.8: the master password (src/domain/security/master.mjs, src/engine/api-master.mjs) and Magic Link with it (src/engine/remote.mjs,
 // src/shared/mobile-crypto.mjs › linkDevice). The data key round trip, the waits after wrong passwords (and failing closed
 // when they cannot be counted), only THE data key opens (a planted or deleted maestra.json changes nothing), the
 // secrets of earlier versions moved out of the database and orb.json, connectors' keys tied to their command, the guarded
@@ -15,18 +15,18 @@ import crypto from 'node:crypto';
 import http from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import { tempHome, startEngine, until } from './helpers.mjs';
-import { Master, FILES, FREE_TRIES, UNLOCK_MS, mirrorTo, restoreMissing, kdfOk, PAIR_ID } from '../src/core/master.mjs';
-import { sealConnectors, connectorLaunch, isRef, keysHeld, touchesKeys } from '../src/core/connector-secrets.mjs';
+import { Master, FILES, FREE_TRIES, UNLOCK_MS, mirrorTo, restoreMissing, kdfOk, PAIR_ID } from '../src/domain/security/master.mjs';
+import { sealConnectors, connectorLaunch, isRef, keysHeld, touchesKeys } from '../src/domain/security/connector-secrets.mjs';
 import { tradeGrant } from '../src/mcp/vault-client.mjs';
-import { needsUnlock } from '../src/core/permissions.mjs';
+import { needsUnlock } from '../src/domain/security/permissions.mjs';
 import { passwordStrength, MASTER_MIN } from '../src/ui/lib/core-access.js';
 import * as C from '../src/shared/mobile-crypto.mjs';
-import * as K from '../src/core/backup.mjs';
+import * as K from '../src/domain/data/backup.mjs';
 import { parseLinkPayload, passwordPageOk } from '../src/shared/link-payload.mjs';
-import { setGuardedRoots, decide } from '../src/core/guard.mjs';
+import { setGuardedRoots, decide } from '../src/domain/security/guard.mjs';
 import { paths } from '../src/platform/paths.mjs';
 import { createPhone, TEST_MASTER } from './fixtures/phone-client.mjs';
-import { walkFiles } from '../src/core/backup.mjs';
+import { walkFiles } from '../src/domain/data/backup.mjs';
 
 const PASS = 'una frase larga de prueba';
 // 3.8.1: what a connector's launcher gets: its plain values and the vault's keys, traded straight with the vault.
@@ -227,7 +227,7 @@ test('el motor: secretos de 3.7 fuera de la base y de orb.json, acciones protegi
   const t = tempHome({ mcpServers: [{ name: 'github', command: 'npx', args: [], env: { GITHUB_TOKEN: 'ghp_DE_PRUEBA_123' } }] });
   // A database of 3.7 kept the PC's key for the phones in clear.
   const priv = C.newKeyPair().priv;
-  { const { Board } = await import('../src/core/board.mjs'); const b = new Board(); b.settingJson('remote_keys', { priv: C.b64.enc(priv), vapid: { publicKey: 'pub', privateKey: 'VAPID_PRIVADA_X' } }); b.db.close(); }
+  { const { Board } = await import('../src/domain/tasks/board.mjs'); const b = new Board(); b.settingJson('remote_keys', { priv: C.b64.enc(priv), vapid: { publicKey: 'pub', privateKey: 'VAPID_PRIVADA_X' } }); b.db.close(); }
   const hex = secretA.toString('hex');
   let e = await startEngine(t.home, { secret: hex });
   try {
@@ -464,7 +464,7 @@ test('cambiar la contraseña mantiene los móviles; olvidarla pide el código de
 
 test('los móviles enlazados antes de 3.8 se desenlazan una vez al arrancar, con aviso', async () => {
   const t = tempHome();
-  { const { Board } = await import('../src/core/board.mjs'); const b = new Board();
+  { const { Board } = await import('../src/domain/tasks/board.mjs'); const b = new Board();
     const add = (id, meta) => b.run('INSERT INTO devices (id, name, token_hash, created_at, last_seen, public_key, route, kind, meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', id, `Móvil ${id}`, `clave:${id}`, new Date().toISOString(), new Date().toISOString(), C.b64.enc(C.newKeyPair().pub), 'wifi', 'phone', meta);
     add('11111111-1111-1111-1111-111111111111', JSON.stringify({ v: 3 })); add('22222222-2222-2222-2222-222222222222', null);
     b.db.close(); }

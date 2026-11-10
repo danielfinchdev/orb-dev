@@ -1,5 +1,5 @@
 // 3.8.1: Ajustes › Skills y MCP (views/extensions.jsx), the chat card of an agent's request, and the errors of
-// src/core/extensions.mjs.
+// src/domain/extensions/extensions.mjs.
 export default {
   'ext.title': 'Skills y servidores MCP',
   'ext.desc': 'Solo se usa lo activado. Lo importado empieza desactivado.',

@@ -10,7 +10,7 @@
 // Cursor was started at every Orb start for nothing). A login or «Buscar y añadir» asks at once (force).
 import fs from 'node:fs';
 import path from 'node:path';
-import { usableAccounts, accountDir } from '../core/accounts.mjs';
+import { usableAccounts, accountDir } from '../domain/usage/accounts.mjs';
 import { enabledAgents } from '../platform/config.mjs';
 import { installed, executable } from '../agents/index.mjs';
 import { accountInfo as codexAccountInfo } from '../agents/codex.mjs';

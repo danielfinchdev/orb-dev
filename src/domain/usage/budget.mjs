@@ -6,9 +6,9 @@
 // 2.3, balance: Claude and Codex now report how much of their real window is used and when it resets (live sessions).
 // That real figure is the main guard (stop at budget.stopAt, 92% by default); the launch counts are only a safety net
 // with roomier limits, so the app no longer stops working long before the subscription would.
-import { ctx, tr } from '../platform/context.mjs';
-import { localeOf } from '../shared/i18n.mjs';
-import { localDay, ownerTz } from '../shared/tz.mjs';
+import { ctx, tr } from '../../platform/context.mjs';
+import { localeOf } from '../../shared/i18n.mjs';
+import { localDay, ownerTz } from '../../shared/tz.mjs';
 import { account as findAccount, accounts, accountsOf, usableAccounts } from './accounts.mjs';
 
 export const budgetConfig = () => {

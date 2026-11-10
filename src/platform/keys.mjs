@@ -1,6 +1,6 @@
 // The keys made from this PC's secret (3.8.1, decision 20 d): one signs the approvals, the other wraps this PC's backups
 // and its recovery wrap. With the app the secret stays in Rust (src-tauri/vault/src/machine.rs) and the engine is handed
-// only these two keys (ctx.keys, from src/core/master.mjs › openMachine). Without the app (tests, a run from the code)
+// only these two keys (ctx.keys, from src/domain/security/master.mjs › openMachine). Without the app (tests, a run from the code)
 // the secret is the plain core\datos\clave.bin, or one the engine was given, and they are made here the same way.
 import crypto from 'node:crypto';
 import fs from 'node:fs';

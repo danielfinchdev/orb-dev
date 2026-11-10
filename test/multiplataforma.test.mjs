@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { tempHome, startEngine } from './helpers.mjs';
-import { git } from '../src/core/workspace.mjs';
+import { git } from '../src/platform/git.mjs';
 
 let t; let engine; let call;
 before(async () => { t = tempHome(); engine = await startEngine(t.home); ({ call } = engine); });

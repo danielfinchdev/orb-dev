@@ -1,12 +1,12 @@
 // 3.8.2 (owner's decisions D1, D2): what a chat may do beyond its permission, given with the master password.
-//   «Acceso total al PC»     a chat without a project (3.8.2 D5: and «Acceso total» of a chat with a project, the same way): permission «total» (src/core/guard.mjs: still never core, the
+//   «Acceso total al PC»     a chat without a project (3.8.2 D5: and «Acceso total» of a chat with a project, the same way): permission «total» (src/domain/security/guard.mjs: still never core, the
 //                            folders kept outside it, Orb's install folder, «Elementos protegidos» or sudo). Claude in
 //                            Chrome when the installed Claude Code has it (src/agents/claude.mjs).
 //   «Usar mi móvil Android»  any chat: Orb's orb_android_* tools (src/engine/android.mjs). «Acceso total al PC» includes it.
 // Both last until the owner takes them back, also across a reload or a new start of Orb, but never past a lock: when Orb
 // locks (minutes without use, «Bloquear ahora», Windows' lock screen or the PC sleeping: master.lock; also a new
 // password) every one of them goes, the chats go back to «Solo lectura» and adb's server stops. Giving one asks for the
-// password every time (src/core/permissions.mjs › FRESH_UNLOCK): only this PC's window, never a phone or an agent.
+// password every time (src/domain/security/permissions.mjs › FRESH_UNLOCK): only this PC's window, never a phone or an agent.
 // Each grant and each take-back is written to the engine's log (motor.log) and shown in the chat.
 import { tr } from '../platform/context.mjs';
 import { fail, str, oneOf } from './api-common.mjs';

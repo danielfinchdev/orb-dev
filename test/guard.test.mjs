@@ -1,10 +1,10 @@
-// The guard of the live sessions (src/core/guard.mjs): for every action of every agent, allow, ask (an approval card) or
+// The guard of the live sessions (src/domain/security/guard.mjs): for every action of every agent, allow, ask (an approval card) or
 // deny, in each of the five permission modes. One table of cases, plus how tool names of each agent are classified.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import os from 'node:os';
-import { decide, toolClass, riskOf, describeAction, plainAction, pidKills, writesProjectFile, PERMISSIONS } from '../src/core/guard.mjs';
+import { decide, toolClass, riskOf, describeAction, plainAction, pidKills, writesProjectFile, PERMISSIONS } from '../src/domain/security/guard.mjs';
 
 const internal = path.join(os.tmpdir(), 'Orb', '.orb');
 

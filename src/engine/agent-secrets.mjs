@@ -7,7 +7,7 @@
 // goes with everything still waiting when Orb locks or its password changes (wipe).
 // The card and its answer are this PC's only (permissions.mjs: secrets.* 'pc'; the event is not one a phone gets).
 import { tr } from '../platform/context.mjs';
-import { ENV_NAME } from '../core/connector-secrets.mjs';
+import { ENV_NAME } from '../domain/security/connector-secrets.mjs';
 import { oneLine } from '../shared/text.mjs';
 
 export const ASK_MS = 5 * 60_000; // how long the agent waits for the user

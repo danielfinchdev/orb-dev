@@ -4,10 +4,10 @@
 // up work: while its last task is still open, the next run waits.
 // 3.8.2: «once» runs a single time at a date and time (at_time holds its local 'YYYY-MM-DDTHH:mm') and then turns
 // itself off; «same_chat» sends every run to one chat, so its results and the talk about them stay together.
-import { oneLine } from '../shared/text.mjs';
-import { ctx, tr } from '../platform/context.mjs';
-import { AGENT_IDS as AGENTS } from '../platform/config-file.mjs';
-import { nextLocalRun, systemTz, ownerTz } from '../shared/tz.mjs';
+import { oneLine } from '../../shared/text.mjs';
+import { ctx, tr } from '../../platform/context.mjs';
+import { AGENT_IDS as AGENTS } from '../../platform/config-file.mjs';
+import { nextLocalRun, systemTz, ownerTz } from '../../shared/tz.mjs';
 
 export const EVERY = ['once', 'hourly', 'every_hours', 'daily', 'weekly'];
 const ONCE_AT = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T([01]\d|2[0-3]):[0-5]\d$/;

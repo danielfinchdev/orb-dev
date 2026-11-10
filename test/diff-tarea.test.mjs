@@ -1,17 +1,18 @@
 // 3.8.2: «Cambios» of a finished task: the files it changed with their diff, read from its undo checkpoint
-// (src/core/workspace.mjs › diffBetween, tasks.diff). Reading them never changes the folder nor what «Deshacer» does.
+// (src/domain/tasks/checkpoints.mjs › diffBetween, tasks.diff). Reading them never changes the folder nor what «Deshacer» does.
 import { tempHome } from './helpers.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { Board } from '../src/core/board.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
 import { Sessions } from '../src/engine/sessions.mjs';
 import { Orchestrator } from '../src/engine/orchestrator.mjs';
 import { Scheduler } from '../src/engine/scheduler.mjs';
 import { buildApi } from '../src/engine/api.mjs';
-import { DESKTOP, principalOf, METHODS } from '../src/core/permissions.mjs';
-import { git, takeCheckpoint, snapshotCommit, diffBetween, undoCheckpoint } from '../src/core/workspace.mjs';
+import { DESKTOP, principalOf, METHODS } from '../src/domain/security/permissions.mjs';
+import { git } from '../src/platform/git.mjs';
+import { takeCheckpoint, snapshotCommit, diffBetween, undoCheckpoint } from '../src/domain/tasks/checkpoints.mjs';
 import { shapeResult } from '../src/engine/remote.mjs';
 
 let t; let board; let api; let sessions; let repo;

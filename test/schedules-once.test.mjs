@@ -1,11 +1,11 @@
 // 3.8.2: scheduled tasks that run once at a date and time, and the ones whose runs all go to the same chat
-// (src/core/schedules.mjs). The repeating ones keep working as before.
+// (src/domain/schedules/schedules.mjs). The repeating ones keep working as before.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { tempHome } from './helpers.mjs';
-import { Board } from '../src/core/board.mjs';
-import { createProject } from '../src/core/projects.mjs';
-import { createSchedule, runSchedule, runDue, getSchedule, nextRun, describe } from '../src/core/schedules.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
+import { createProject } from '../src/domain/projects/projects.mjs';
+import { createSchedule, runSchedule, runDue, getSchedule, nextRun, describe } from '../src/domain/schedules/schedules.mjs';
 
 let t; let board;
 before(() => { t = tempHome(); board = new Board(); createProject(board, { name: 'web', category: 'web' }, 'usuario'); });

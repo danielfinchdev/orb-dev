@@ -1,5 +1,5 @@
 // 3.8: starts one of the user's MCP connectors for an agent. The agent's config names only this script and a ticket
-// (src/engine/agent-auth.mjs); the connector's real command and arguments come from the engine here, and its keys from the
+// (src/domain/security/agent-auth.mjs); the connector's real command and arguments come from the engine here, and its keys from the
 // vault (a one-time grant the engine got for it), so they are
 // never on a command line, in the agent's environment (its shell) or in a session log. The connector stops when the
 // engine takes the ticket back (its agent's process closed) or goes away.

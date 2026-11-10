@@ -1,4 +1,4 @@
-// Who may do what (src/core/permissions.mjs).
+// Who may do what (src/domain/security/permissions.mjs).
 export default {
   'msg.authz.denied': 'No tienes acceso a esto.',
   'msg.authz.messageNeedsTask': 'Un mensaje a otro agente debe ser sobre una de tus tareas (task_id).',

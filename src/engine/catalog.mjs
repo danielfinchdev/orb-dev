@@ -8,8 +8,8 @@
 import { ctx } from '../platform/context.mjs';
 import { AGENT_IDS, AGENT_LABELS } from '../platform/config-file.mjs';
 import { installed, discoverModels } from '../agents/index.mjs';
-import { usableAccounts } from '../core/accounts.mjs';
-import { usageReport, HEAVY_FAMILY, canLaunch, modelLimits } from '../core/budget.mjs';
+import { usableAccounts } from '../domain/usage/accounts.mjs';
+import { usageReport, HEAVY_FAMILY, canLaunch, modelLimits } from '../domain/usage/budget.mjs';
 import { cursorShownName } from '../agents/cursor.mjs';
 const MODEL_ID = /^[A-Za-z0-9][\w.:\-/[\]=,@]{0,79}$/;
 // 3.6: the reasoning levels Orb offers (Bajo, Medio, Alto, Extra); Extra only for the models that take it.

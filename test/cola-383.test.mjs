@@ -8,10 +8,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { tempHome, until, startEngine } from './helpers.mjs';
-import { Board } from '../src/core/board.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
 import { Orchestrator } from '../src/engine/orchestrator.mjs';
 import { buildApi } from '../src/engine/api.mjs';
-import { DESKTOP } from '../src/core/permissions.mjs';
+import { DESKTOP } from '../src/domain/security/permissions.mjs';
 import { ctx, tr } from '../src/platform/context.mjs';
 
 const home = tempHome();

@@ -9,9 +9,9 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { ctx } from '../src/platform/context.mjs';
 import { validateConfig } from '../src/platform/config.mjs';
-import { isOrbData } from '../src/core/guard.mjs';
+import { isOrbData } from '../src/domain/security/guard.mjs';
 import { DEFAULT_CONFIG, merge } from '../src/platform/config-file.mjs';
-import { METHODS } from '../src/core/permissions.mjs';
+import { METHODS } from '../src/domain/security/permissions.mjs';
 import { BACKGROUND, GAMES, TRACKS, trackOf, DEFAULT_VOLUME, musicAllowed, musicPrefs, gameMusicOn, nextTrack, gameTrack } from '../src/shared/music.mjs';
 import { trackBytes, musicDir, musicMethods } from '../src/engine/music.mjs';
 

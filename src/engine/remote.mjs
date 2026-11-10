@@ -5,7 +5,7 @@
 // A phone is paired by scanning a one-time QR on the PC. The phone makes its own key and from then on every message is
 // encrypted end to end (src/shared/mobile-crypto.mjs): whoever sees the traffic (the Wi-Fi, a proxy) reads nothing, and a
 // copied link or QR is useless. The PC can revoke any phone. What a phone may do is a subset of the PC's actions.
-import { isMuted, itemOfConversation } from '../core/inbox.mjs';
+import { isMuted, itemOfConversation } from '../domain/conversations/inbox.mjs';
 import { buildNote, actionRoute } from '../shared/notes.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -21,8 +21,8 @@ import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal
 import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
 import { streamFeed } from '../shared/chat-stream.mjs';
 import { PROTOCOL, MIN_PROTOCOL, PAIR_PROTOCOL, versionOfProtocol, CODE_ALPHABET, shortCodeLabel } from '../shared/link-payload.mjs';
-import { REMOTE_METHODS, principalOf } from '../core/permissions.mjs';
-import { isLegacy } from '../core/migrate-38.mjs';
+import { REMOTE_METHODS, principalOf } from '../domain/security/permissions.mjs';
+import { isLegacy } from '../domain/data/legacy/migrate-38.mjs';
 import { ownPorts } from './host.mjs';
 
 const RENDERER = path.resolve(process.env.ORB_RENDERER || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'renderer'));
@@ -49,7 +49,7 @@ export function phoneConfig(c) {
   };
 }
 
-// What a phone or a browser may call: the methods src/core/permissions.mjs marks 'remote'. Never by the kind a device
+// What a phone or a browser may call: the methods src/domain/security/permissions.mjs marks 'remote'. Never by the kind a device
 // says it is, and nothing with total access.
 // 3.5.1: what the owner may choose when making a QR (the kind of device it is for).
 export const PAIR_KINDS = ['phone', 'browser'];
@@ -265,7 +265,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   const tooOld = (v) => Number.isFinite(Number(v)) && Number(v) > 0 && Number(v) < MIN_PROTOCOL;
 
   // This PC's own keys: X25519 for the phones, VAPID for notifications. Made once. 3.8: kept in the master password's
-  // vault (src/core/master.mjs; the database of 3.7 had them in clear: moved by api-master.mjs › migrateSecrets), read
+  // vault (src/domain/security/master.mjs; the database of 3.7 had them in clear: moved by api-master.mjs › migrateSecrets), read
   // when first needed. Without the vault open (another PC: the password was not typed yet) the access does not start.
   let ownKeys = null;
   const own = () => {
@@ -458,7 +458,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const why = guardCall(board, method, params, { uploadsDir: uploads() });
     if (why) return deny(why);
     try {
-      // What this device may call (src/core/permissions.mjs), and the settings without paths or secrets (phoneConfig).
+      // What this device may call (src/domain/security/permissions.mjs), and the settings without paths or secrets (phoneConfig).
       const result = shapeResult(method, (await api.call(method, params, principal)) ?? null);
       return reply(res, device, msg.nonce, { ok: true, result });
     }
@@ -479,7 +479,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   //           and the salt and cost of the master password's verifier.
   //   finish  the phone's MAC over the exchange, keyed with the code, ECDH(phone, PC) and ECDH(password key, PC): right
   //           only when it knew the password, which never travels. The PC answers with its own MAC (only the real PC can).
-  // A wrong password does not use the code up: five per code, then a new code; and the waits of src/core/master.mjs (the
+  // A wrong password does not use the code up: five per code, then a new code; and the waits of src/domain/security/master.mjs (the
   // 'pair' channel) for all of them together.
   async function pair(req, res) {
     const who = ipOf(req) || '?';

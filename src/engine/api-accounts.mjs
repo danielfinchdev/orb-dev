@@ -1,13 +1,13 @@
 // The agents and accounts part of the engine's API (split out of api.mjs in 3.6, unchanged): checking and installing the
-// agents, signing in, and several subscriptions of the same agent. This PC only (src/core/permissions.mjs).
+// agents, signing in, and several subscriptions of the same agent. This PC only (src/domain/security/permissions.mjs).
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from '../platform/context.mjs';
 import { saveConfig, checkAccountHome } from '../platform/config.mjs';
 import { AGENT_IDS } from '../platform/config-file.mjs';
-import { MULTI, newAccountId, findAccountFolders, accountsOf, accountDir } from '../core/accounts.mjs';
+import { MULTI, newAccountId, findAccountFolders, accountsOf, accountDir } from '../domain/usage/accounts.mjs';
 import { accountInfo as codexAccountInfo } from '../agents/codex.mjs';
-import { clearCooldown } from '../core/budget.mjs';
+import { clearCooldown } from '../domain/usage/budget.mjs';
 import { oneLine } from '../shared/text.mjs';
 import { statusAll, status as agentStatus, openLogin, startAccountLogin, forgetInstalled, executable } from '../agents/index.mjs';
 import { sendCode as loginSendCode, cancelLogin, loginInfo, allLogins } from '../agents/login.mjs';

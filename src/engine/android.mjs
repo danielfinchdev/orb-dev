@@ -7,7 +7,7 @@
 // 3.8.2: adb is no longer in the agents' PATH and is no longer downloaded at every start: agents reach the phone only
 // through Orb's tools (orb_android_*, src/mcp/server.mjs → the engine, here), which check on every call that the chat
 // holds «Usar mi móvil Android» (or «Acceso total al PC»). adb by hand (a command) is refused by the guard unless the
-// chat has «Acceso total» and the phone (src/core/guard.mjs › runsAdb).
+// chat has «Acceso total» and the phone (src/domain/security/guard.mjs › runsAdb).
 //
 // Pairing (Ajustes › Android › Emparejar móvil): Android's «Depuración inalámbrica» pairs with a QR
 // (WIFI:T:ADB;S:<name>;P:<password>;;): the phone, once it read it, announces a pairing service with that name on the
@@ -19,7 +19,8 @@ import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import { spawn, spawnSync, execFile } from 'node:child_process';
 import { ctx, tr } from '../platform/context.mjs';
-import { isOrbData } from '../core/guard.mjs';
+import { sdkRoots } from '../platform/dev-tools.mjs';
+import { isOrbData } from '../domain/security/guard.mjs';
 
 // Platform-tools r37.0.2 (Google's repository2-3.xml, checked 2026-11-08). A newer version needs a new pin here.
 export const PLATFORM_TOOLS = Object.freeze({
@@ -144,14 +145,6 @@ export function runAdb(file, args, { timeout = 30_000, maxBuffer = 24 * 1024 * 1
 // Only the Android SDK's emulator already installed on this PC (Android Studio's): Orb never downloads the emulator nor
 // its system images. An emulator that runs is one more device for adb (emulator-5554…), so the agents use it with the
 // same orb_android_* tools and the same grant as the phone.
-// 3.8.3: where the Android SDK may be (its variables, then Android Studio's default folder); shared with dev-tools.mjs.
-export function sdkRoots(env = process.env, platform = process.platform) {
-  const home = env.USERPROFILE || env.HOME || '';
-  return [env.ANDROID_SDK_ROOT, env.ANDROID_HOME,
-    platform === 'win32' && env.LOCALAPPDATA ? path.join(env.LOCALAPPDATA, 'Android', 'Sdk') : null,
-    platform === 'darwin' && home ? path.join(home, 'Library', 'Android', 'sdk') : null,
-    platform === 'linux' && home ? path.join(home, 'Android', 'Sdk') : null].filter((r) => r && path.isAbsolute(r));
-}
 export function sdkEmulator(env = process.env, platform = process.platform) {
   for (const root of sdkRoots(env, platform)) {
     const file = path.join(root, 'emulator', platform === 'win32' ? 'emulator.exe' : 'emulator');

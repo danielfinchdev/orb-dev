@@ -9,7 +9,7 @@ import path from 'node:path';
 import { IS_WIN, firstFile, inPath, npmPrefixes, appDataDirs, userHome, discoverDir } from '../platform/proc.mjs';
 import { clip } from './common.mjs';
 import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree, hidingEnvValues } from './live.mjs';
-import { decide } from '../core/guard.mjs';
+import { decide } from '../domain/security/guard.mjs';
 import { tr } from '../platform/context.mjs';
 
 // Who connects to the app-server (def. 11: the product's version, read from Orb's own package.json).
@@ -309,7 +309,7 @@ export function createLive(o) {
     child.on('error', (error) => { closed = true; if (turn && !turn.done) turn.finish({ isError: true, final: tr('sys.agents.startFailed', { name: 'Codex', error: error.message }) }); });
     await peer.request('initialize', { clientInfo: CLIENT, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
     peer.notify('initialized', {});
-    // 3.8.1: the skills of core that are on (src/core/extensions.mjs › exposeSkills), one more root where Codex looks for
+    // 3.8.1: the skills of core that are on (src/domain/extensions/extensions.mjs › exposeSkills), one more root where Codex looks for
     // skills, before the thread starts (checked with the real app-server: skills/list shows them). Older versions: none.
     if (o.skills?.list?.length) await peer.request('skills/extraRoots/set', { extraRoots: [o.skills.root] }, { timeoutMs: 15000 }).catch((error) => log(`skills: ${error?.message ?? error}`));
     const common = { cwd: o.cwd, model, ...policy(permission), config: { model_reasoning_effort: effort(o.reasoning), service_tier: 'default' } };

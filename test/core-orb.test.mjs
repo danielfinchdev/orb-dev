@@ -14,7 +14,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { tempHome, until, wait, startEngine } from './helpers.mjs';
-import { integrateInto, git, snapshotCommit } from '../src/core/workspace.mjs';
+import { integrateInto, snapshotCommit } from '../src/domain/tasks/checkpoints.mjs';
+import { git } from '../src/platform/git.mjs';
 import { cursorRules, prepareCursorFolder } from '../src/agents/cursor.mjs';
 import { Sessions } from '../src/engine/sessions.mjs';
 
@@ -120,7 +121,7 @@ test('el reloj de una tarea no cuenta el rato que espera tu permiso', () => {
 test('lo que pediste con tus palabras no vuelve a pedir aprobación; lo que no pediste, sí', async () => {
   const h = tempHome();
   try {
-    const { Board, eventText } = await import('../src/core/board.mjs');
+    const { Board, eventText } = await import('../src/domain/tasks/board.mjs');
     const board = new Board();
     const dir = path.join(h.home, 'web', 'notas'); fs.mkdirSync(dir, { recursive: true });
     board.addProject({ name: 'notas', path: dir }, 'usuario');
@@ -172,7 +173,7 @@ test('al terminar una tarea, Orb para el servidor que dejó en marcha en su carp
 });
 
 test('parar por su número el servidor que arrancó la propia tarea no pregunta; cualquier otro proceso, sí', { skip: process.platform !== 'win32' }, async () => {
-  const { pidKills } = await import('../src/core/guard.mjs');
+  const { pidKills } = await import('../src/domain/security/guard.mjs');
   assert.deepEqual(pidKills('taskkill //PID 9824 //T //F; sleep 1; netstat -ano | grep ":5199 " | grep LISTEN | wc -l'), [9824]);
   assert.deepEqual(pidKills('Stop-Process -Id 12 -Force'), [12]);
   assert.deepEqual(pidKills('Stop-Process -Id 17624 -Confirm:$false; Start-Sleep 1; netstat -ano | Select-String ":5175 .*LISTENING"'), [17624], 'visto en una prueba real');

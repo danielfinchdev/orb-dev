@@ -1,4 +1,4 @@
-// 3.8: a data folder of 3.5–3.7 opened by Orb 3.8 is moved once (src/core/migrate-38.mjs): a copy of the database and a
+// 3.8: a data folder of 3.5–3.7 opened by Orb 3.8 is moved once (src/domain/data/legacy/migrate-38.mjs): a copy of the database and a
 // readable archive first, then the bots, replicas, links, other users and their settings go; the owner's data stay and
 // become plain single-owner rows. Run twice, it does nothing more; a new 3.8 database is left alone. The phone access
 // never serves another user's device (also before the migration) and never opens on a database it could not migrate.
@@ -13,17 +13,17 @@ import { pathToFileURL } from 'node:url';
 import { tempHome, ROOT, startEngine, until, wait } from './helpers.mjs';
 import { useHome, ctx } from '../src/platform/context.mjs';
 import { writeJson } from '../src/platform/paths.mjs';
-import { openDb } from '../src/core/db.mjs';
-import { Board } from '../src/core/board.mjs';
-import { marks } from '../src/core/inbox.mjs';
-import { ARCHIVE_DIR, PRE_COPY, MARK, DROPPED_TABLES, ORIGINAL_CONFIG, LOCK_FILE, WORK_DIR, SCRUB_AFTER_MS, takeNotice, migrationFailure, isLegacy, unfinished, insideData, bridgeDir, scrub, scrubPreCopies, legacyData, deleteLegacyData } from '../src/core/migrate-38.mjs';
-import { syncProjects } from '../src/core/projects.mjs';
+import { openDb } from '../src/domain/data/db.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
+import { marks } from '../src/domain/conversations/inbox.mjs';
+import { ARCHIVE_DIR, PRE_COPY, MARK, DROPPED_TABLES, ORIGINAL_CONFIG, LOCK_FILE, WORK_DIR, SCRUB_AFTER_MS, takeNotice, migrationFailure, isLegacy, unfinished, insideData, bridgeDir, scrub, scrubPreCopies, legacyData, deleteLegacyData } from '../src/domain/data/legacy/migrate-38.mjs';
+import { syncProjects } from '../src/domain/projects/projects.mjs';
 import { IGNORED_PROJECTS } from '../src/platform/state.mjs';
 import { migrationView, folderOf } from '../src/ui/lib/migration.js';
 import { startupPhase } from '../src/ui/lib/startup.js';
 import * as C from '../src/shared/mobile-crypto.mjs';
 import { newVapidKeys } from '../src/engine/webpush.mjs';
-import { createBackup, restoreInto } from '../src/core/backup.mjs';
+import { createBackup, restoreInto } from '../src/domain/data/backup.mjs';
 import { createRemote } from '../src/engine/remote.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
@@ -141,7 +141,7 @@ function files37(t, ids = {}) {
 const names = (board, type) => board.all('SELECT name FROM sqlite_master WHERE type = ?', type).map((r) => r.name);
 const archived = (t, ...p) => path.join(t.home, 'core', ARCHIVE_DIR, ...p);
 const readJson = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
-// The same workspace as Orb 3.7 had it: .orb, orb.json, bitacora and mcp-servers at the top (src/core/core-folder.mjs
+// The same workspace as Orb 3.7 had it: .orb, orb.json, bitacora and mcp-servers at the top (src/domain/workspace/core-folder.mjs
 // moves them into core when the engine starts, before the 3.8 migration of the database).
 function asOrb37(home) {
   const core = path.join(home, 'core');
@@ -593,8 +593,8 @@ test('B5: un proceso vivo con el bloqueo no deja migrar; al morir lo suelta; dos
   } finally { delete process.env.ORB_MIGRATION_LOCK_MS; holder.kill(); }
   await once(holder, 'exit');
   // Its process gone, the system let the lock go. Two processes open the folder at once.
-  const src = (f) => JSON.stringify(pathToFileURL(path.join(ROOT, 'src', 'core', f)).href);
-  const script = `import { useHome } from ${src('../platform/context.mjs')}; import { Board } from ${src('board.mjs')}; import { migrationFailure } from ${src('migrate-38.mjs')};
+  const src = (f) => JSON.stringify(pathToFileURL(path.join(ROOT, 'src', f)).href);
+  const script = `import { useHome } from ${src('platform/context.mjs')}; import { Board } from ${src('domain/tasks/board.mjs')}; import { migrationFailure } from ${src('domain/data/legacy/migrate-38.mjs')};
 useHome(process.env.ORB_TEST_HOME); const b = new Board(); process.stdout.write(JSON.stringify({ failure: migrationFailure() })); b.db.close();`;
   const runOne = () => new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ['--input-type=module', '-e', script], { env: { ...process.env, ORB_TEST_HOME: t.home }, stdio: ['ignore', 'pipe', 'inherit'] });

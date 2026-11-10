@@ -24,11 +24,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
-import { paths, LEGACY, CATEGORIES, CORE_DIR, LOGS_DIR, MCP_DIR } from '../platform/paths.mjs';
-import { moveLogs } from '../platform/journal-files.mjs';
-import { inside } from '../platform/fsx.mjs';
-import { translate } from '../shared/i18n.mjs';
-import { isMcpProject, startCommand, linkOut } from './extensions.mjs';
+import { paths, LEGACY, CATEGORIES, CORE_DIR, LOGS_DIR, MCP_DIR } from '../../platform/paths.mjs';
+import { moveLogs } from '../../platform/journal-files.mjs';
+import { inside } from '../../platform/fsx.mjs';
+import { translate } from '../../shared/i18n.mjs';
+import { isMcpProject, startCommand, linkOut } from '../extensions/extensions.mjs';
 
 export const MOVE_STATE = 'migracion-carpetas.json'; // in core while the moves are not finished and their paths rewritten
 export const CONFLICTS_DIR = 'conflictos-migracion'; // in core: an old file that differed from the one already in core
@@ -387,7 +387,7 @@ export function repairWorktrees(dir) {
 }
 
 // Whether core is whole: { ok, missing: ['core' | 'config' | 'db'] }. A database that was never made (a workspace
-// created a moment ago) also reads as missing: the engine decides with the backups (src/core/backup.mjs › repairCore).
+// created a moment ago) also reads as missing: the engine decides with the backups (src/domain/data/backup.mjs › repairCore).
 export function coreHealth(home) {
   const p = paths(home);
   if (!isDir(p.core)) return { ok: false, missing: ['core'] };

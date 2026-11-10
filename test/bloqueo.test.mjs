@@ -10,7 +10,7 @@ import { watchIdle, lockMinutesOf, DEFAULT_LOCK_MINUTES } from '../src/ui/lib/id
 import { startupPhase } from '../src/ui/lib/startup.js';
 import { guardedCore } from '../src/engine/desktop-home.mjs';
 import { guardOutside, privateDir } from '../src/engine/workspace-layout.mjs';
-import { isOrbData, decide } from '../src/core/guard.mjs';
+import { isOrbData, decide } from '../src/domain/security/guard.mjs';
 import { paths } from '../src/platform/paths.mjs';
 import { ctx } from '../src/platform/context.mjs';
 import { saveConfig } from '../src/platform/config.mjs';

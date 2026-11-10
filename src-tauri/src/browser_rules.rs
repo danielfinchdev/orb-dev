@@ -5,7 +5,7 @@
 use serde_json::{json, Value};
 use std::time::{Duration, Instant};
 
-/// At most this many pages at once (src/core/browser-protocol.mjs › MAX_TABS is 4; one more of margin while a page that
+/// At most this many pages at once (src/engine/browser/browser-protocol.mjs › MAX_TABS is 4; one more of margin while a page that
 /// made room is still closing).
 pub const MAX_PAGES: usize = 5;
 /// The little window's sizes, in logical pixels (as Electron's: normal, big, a pill).

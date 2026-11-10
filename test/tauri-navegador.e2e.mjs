@@ -59,7 +59,7 @@ fs.writeFileSync(path.join(USER_DATA, 'ubicacion.json'), JSON.stringify({ home }
 useHome(home);
 const project = path.join(home, 'web', 'navegador');
 fs.mkdirSync(project, { recursive: true });
-{ const { Board } = await import('../src/core/board.mjs'); const { syncProjects } = await import('../src/core/projects.mjs'); const b = new Board(); syncProjects(b); b.db.close(); }
+{ const { Board } = await import('../src/domain/tasks/board.mjs'); const { syncProjects } = await import('../src/domain/projects/projects.mjs'); const b = new Board(); syncProjects(b); b.db.close(); }
 
 // ---- the test site
 const DOWNLOAD = `orb-e2e-${process.pid}-${Date.now()}.zip`;

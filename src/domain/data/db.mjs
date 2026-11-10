@@ -2,9 +2,9 @@
 // sessions (direct conversations and task runs) with their items.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, tr } from '../platform/context.mjs';
-import { titleFrom } from '../shared/titles.mjs';
-import { migrateTo38 } from './migrate-38.mjs';
+import { ctx, tr } from '../../platform/context.mjs';
+import { titleFrom } from '../../shared/titles.mjs';
+import { migrateTo38 } from './legacy/migrate-38.mjs';
 
 // node:sqlite may print an ExperimentalWarning; it would pollute the MCP stdout/stderr and the logs.
 const emitWarning = process.emitWarning;
@@ -185,7 +185,7 @@ CREATE INDEX IF NOT EXISTS usage_day ON usage_ledger (day, account_id, person_id
 -- 3.6 (messaging lists): the marks on a chat of the lists (a conversation with Orbe or a direct one): pinned and its
 -- order, the section it is in (kept while pinned: unpinning puts it back), muted, and the last chat line read (0: none
 -- yet, the starting point in settings «inbox_since:<key>» counts instead). person_id: the key of the lists' owner
--- (src/core/inbox.mjs › ME since 3.8; a person's id in 3.6-3.7, which the 3.8 migration rewrites).
+-- (src/domain/conversations/inbox.mjs › ME since 3.8; a person's id in 3.6-3.7, which the 3.8 migration rewrites).
 CREATE TABLE IF NOT EXISTS inbox_items (
   person_id TEXT NOT NULL,
   kind TEXT NOT NULL CHECK (kind IN ('bot', 'group', 'conversation', 'session')),
@@ -281,7 +281,7 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   // 3.8.2: a schedule whose runs all go to one chat (made on its first run, or the one that asked for it).
   ['schedules', 'same_chat', 'INTEGER NOT NULL DEFAULT 0'], ['schedules', 'conversation_id', 'INTEGER']];
 // (3.6-3.7's person_id columns and chat.uid are no longer added: only a 3.7 database has them, emptied by the 3.8
-// migration (src/core/migrate-38.mjs) and dropped in 3.9.)
+// migration (src/domain/data/legacy/migrate-38.mjs) and dropped in 3.9.)
 export function migrate(db) {
   // 3.2: whether a direct conversation already has its title (Orb names a new one from its first message); the ones made
   // before keep theirs.

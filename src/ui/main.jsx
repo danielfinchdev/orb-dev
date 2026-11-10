@@ -528,7 +528,7 @@ function PcOffline({ info, onRelink }) {
   );
 }
 
-// 3.8: the data of Orb 3.7 could not be updated (src/core/migrate-38.mjs): what to do, where the copy is («Abrir
+// 3.8: the data of Orb 3.7 could not be updated (src/domain/data/legacy/migrate-38.mjs): what to do, where the copy is («Abrir
 // carpeta»), «Reintentar», a new version of Orb (the way out when the cause is Orb's own) and the reason under «Detalles».
 function MigrationFailed({ state }) {
   const t = useT();

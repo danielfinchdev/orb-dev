@@ -2,15 +2,15 @@
 // Append-only: nothing written is ever edited or removed. Entries are signed and secrets are redacted.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, tr } from '../platform/context.mjs';
-import { oneLine } from '../shared/text.mjs';
-import { redactSecrets, porcelainPaths } from '../shared/secrets-scan.mjs';
-import { generalLogHeader, projectLogHeader } from '../platform/journal-files.mjs';
-import { AGENT_LABELS } from '../platform/config-file.mjs';
-import { git, isGitRepo } from '../core/workspace.mjs';
-import { assistantName, ofUserLabel, userName } from '../core/board.mjs';
-import { checkDevTools, devToolsBrief } from './dev-tools.mjs';
-import { groupOf } from '../core/projects.mjs';
+import { ctx, tr } from '../../platform/context.mjs';
+import { oneLine } from '../../shared/text.mjs';
+import { redactSecrets, porcelainPaths } from '../../shared/secrets-scan.mjs';
+import { generalLogHeader, projectLogHeader } from '../../platform/journal-files.mjs';
+import { AGENT_LABELS } from '../../platform/config-file.mjs';
+import { git, isGitRepo } from '../../platform/git.mjs';
+import { assistantName, ofUserLabel, userName } from '../tasks/board.mjs';
+import { checkDevTools, devToolsBrief } from '../../platform/dev-tools.mjs';
+import { groupOf } from '../projects/projects.mjs';
 
 
 export const stamp = (d = new Date()) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };

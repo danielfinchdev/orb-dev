@@ -3,7 +3,7 @@
 // sistema) se queda igual.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openDb, migrate } from '../src/core/db.mjs';
+import { openDb, migrate } from '../src/domain/data/db.mjs';
 
 test('avisos antiguos: las líneas grises de siempre pasan a avisos y nada más cambia', () => {
   const db = openDb(':memory:');

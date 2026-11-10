@@ -1,4 +1,4 @@
-// 3.8.1: the end of a project (src/core/project-close.mjs): «Finalizar proyecto» (it leaves Orb, its folder stays, the
+// 3.8.1: the end of a project (src/domain/projects/project-close.mjs): «Finalizar proyecto» (it leaves Orb, its folder stays, the
 // sync does not bring it back, «Reabrir» lists it again) and «Eliminar proyecto» (its folder goes; the master password
 // and this PC only; never anything but a project folder of a category, also through a junction or a link).
 import { test, before, after } from 'node:test';
@@ -7,15 +7,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { tempHome, startEngine } from './helpers.mjs';
-import { Board } from '../src/core/board.mjs';
-import { createProject, syncProjects } from '../src/core/projects.mjs';
-import { createSchedule } from '../src/core/schedules.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
+import { createProject, syncProjects } from '../src/domain/projects/projects.mjs';
+import { createSchedule } from '../src/domain/schedules/schedules.mjs';
 import { spawn } from 'node:child_process';
-import { finishProject, reopenProject, finishedProjects, deletableFolder, checkDelete, deleteProject, abortDelete, settleDeleting, deletingProjects, folderInUse, TICKET_MS } from '../src/core/project-close.mjs';
+import { finishProject, reopenProject, finishedProjects, deletableFolder, checkDelete, deleteProject, abortDelete, settleDeleting, deletingProjects, folderInUse, TICKET_MS } from '../src/domain/projects/project-close.mjs';
 import { paths } from '../src/platform/paths.mjs';
 import { ctx } from '../src/platform/context.mjs';
-import { readLog } from '../src/engine/logs.mjs';
-import { METHODS, UNLOCK_METHODS, needsUnlock } from '../src/core/permissions.mjs';
+import { readLog } from '../src/domain/journal/journal.mjs';
+import { METHODS, UNLOCK_METHODS, needsUnlock } from '../src/domain/security/permissions.mjs';
 
 let t; let board;
 before(() => { t = tempHome(); board = new Board(); });

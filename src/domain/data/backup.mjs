@@ -15,10 +15,10 @@
 //
 // What goes in: the database (VACUUM INTO, so it is consistent while the engine runs), orb.json, the logs (general and
 // project), the MCP servers and the skills (core\mcp, core\skills, without their dependencies), the whiteboards of the projects, the app's
-// secret, the recovery wrap, the master password's sealed files (core/secretos, 3.8), the archives of 3.7 (core/archivo-3.7 and dated ones, src/core/migrate-38.mjs; never sign-in
+// secret, the recovery wrap, the master password's sealed files (core/secretos, 3.8), the archives of 3.7 (core/archivo-3.7 and dated ones, src/domain/data/legacy/migrate-38.mjs; never sign-in
 // folders). Optional: the project folders and the agents' login folders (off). 3.8: the names inside are relative to the
 // workspace (core/datos/orb.db, core/bitacora/…); a copy made by 3.7 (.orb/…, orb.json, bitacora/… at the top) restores
-// into core (legacyName) and the paths of its orb.json and database are pointed into core (src/core/core-folder.mjs ›
+// into core (legacyName) and the paths of its orb.json and database are pointed into core (src/domain/workspace/core-folder.mjs ›
 // rewritePaths).
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
@@ -26,13 +26,13 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
-import { paths, homeKey, oldHomeKey, INTERNAL_DIR, BOTS_DIR, LEGACY } from '../platform/paths.mjs';
-import { rewritePaths, coreHealth } from './core-folder.mjs';
-import { inside } from '../platform/fsx.mjs';
-import { tr } from '../platform/context.mjs';
-import { ARCHIVE_DIR, forgetRun } from './migrate-38.mjs';
-import { KEPT as SECRET_FILES } from './master.mjs';
-import { LIVE_DIR, OLD_DIR } from './extensions.mjs';
+import { paths, homeKey, oldHomeKey, INTERNAL_DIR, BOTS_DIR, LEGACY } from '../../platform/paths.mjs';
+import { rewritePaths, coreHealth } from '../workspace/core-folder.mjs';
+import { inside } from '../../platform/fsx.mjs';
+import { tr } from '../../platform/context.mjs';
+import { ARCHIVE_DIR, forgetRun } from './legacy/migrate-38.mjs';
+import { KEPT as SECRET_FILES } from '../security/master.mjs';
+import { LIVE_DIR, OLD_DIR } from '../extensions/extensions.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
 

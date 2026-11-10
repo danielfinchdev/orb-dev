@@ -6,12 +6,12 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import { tempHome, ROOT } from './helpers.mjs';
-import { Board } from '../src/core/board.mjs';
-import { createProject } from '../src/core/projects.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
+import { createProject } from '../src/domain/projects/projects.mjs';
 import { mcpServersFor } from '../src/engine/sessions.mjs';
-import { agentAuth } from '../src/engine/agent-auth.mjs';
+import { agentAuth } from '../src/domain/security/agent-auth.mjs';
 import { ctx } from '../src/platform/context.mjs';
-import { browserKey } from '../src/core/browser-key.mjs';
+import { browserKey } from '../src/engine/browser/browser-key.mjs';
 
 let t; let board;
 // An agent's "orb" MCP server exactly as the engine hands it (with its ticket), or one started with only what its

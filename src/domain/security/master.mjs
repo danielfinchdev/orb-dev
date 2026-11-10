@@ -58,7 +58,7 @@ export function checkPassword(password) {
 const typed = (password) => (typeof password === 'string' ? password.normalize('NFC') : '');
 
 // ---- the channel to Rust (one per process)
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 const wipe = (buf) => { try { buf.fill(0); } catch { /* not a buffer */ } };
 let channel = null;
@@ -204,7 +204,7 @@ export class Master {
   isPassword(value) { return this.serial(() => this.job('same', { password: typed(value) })); }
 
   // ---- the window's unlock: a token for 5 minutes (kept in Rust), dropped when the window locks or closes.
-  // purpose: a token for ONE action that always asks again (FRESH_UNLOCK in src/core/permissions.mjs): FRESH_MS.
+  // purpose: a token for ONE action that always asks again (FRESH_UNLOCK in src/domain/security/permissions.mjs): FRESH_MS.
   issue(purpose = null) { return this.call('issue', { purpose: purpose ?? null }); }
   checkToken(token, purpose = null, { consume = false } = {}) {
     if (typeof token !== 'string' || token.length > 200) return false;

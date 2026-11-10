@@ -98,7 +98,7 @@ export function validateConfig(c) {
     if (typeof s.command !== 'string' || !s.command.trim()) throw new Error(tr('msg.ctx.connectorCommand', { name: s.name }));
     if (s.args && (!Array.isArray(s.args) || s.args.some((x) => typeof x !== 'string'))) throw new Error(tr('msg.ctx.connectorArgs', { name: s.name }));
   }
-  // 3.8.1: the skills of core\skills that are on (src/core/extensions.mjs).
+  // 3.8.1: the skills of core\skills that are on (src/domain/extensions/extensions.mjs).
   if (c.skills !== undefined && (!Array.isArray(c.skills) || c.skills.length > 500 || c.skills.some((s) => !/^[a-z0-9][a-z0-9-]{0,62}$/.test(s?.name ?? '') || typeof s.enabled !== 'boolean' || (s.source !== undefined && typeof s.source !== 'string')))) throw new Error(tr('msg.ctx.badAppearance', { name: 'skills' }));
   if (!['sistema', 'claro', 'oscuro'].includes(c.ui?.theme ?? 'sistema')) throw new Error(tr('msg.ctx.badTheme'));
   // 2.4: visual theme, fonts and colours of code (src/shared/appearance.mjs).
@@ -125,7 +125,7 @@ export function validateConfig(c) {
   bool(c.oneAtATime, 'oneAtATime');
   // 3.5: «Cosas que nadie toca»: up to 50 names, paths or containers (2-200 characters each).
   if (c.protected !== undefined && (!Array.isArray(c.protected) || c.protected.length > 50 || c.protected.some((x) => typeof x !== 'string' || x.trim().length < 2 || x.length > 200))) throw new Error(tr('msg.ctx.badAppearance', { name: 'protected' }));
-  // 3.6: backups (src/core/backup.mjs): on/off, another folder (absolute), and whether project folders and the agents'
+  // 3.6: backups (src/domain/data/backup.mjs): on/off, another folder (absolute), and whether project folders and the agents'
   // login folders go in too (both off). tz: the owner's time zone (the daily backup, the day of the usage ledger).
   if (c.backup !== undefined) {
     if (!c.backup || typeof c.backup !== 'object' || Array.isArray(c.backup)) throw new Error(tr('msg.ctx.badAppearance', { name: 'backup' }));

@@ -8,7 +8,7 @@
 // A principal is built only by the entry points (engine.mjs, remote.mjs, the MCP server), never from a call's
 // parameters: { channel, device? } or, for an agent, { channel: 'agent', agent, task, conversation }.
 // No engine imports: the MCP processes load this file too.
-import { tr } from '../platform/context.mjs';
+import { tr } from '../../platform/context.mjs';
 import { isRef, touchesKeys } from './connector-secrets.mjs';
 
 export const CHANNELS = ['desktop', 'phone', 'browser', 'agent'];
@@ -101,7 +101,7 @@ export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter(
 export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'backup.previousKey', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'projects.deleteCheck', 'extensions.remove',
   'android.pairStart', 'android.pairCode', 'android.emulatorStart', 'sessions.grantTotal', 'sessions.grantAndroid']));
 // 3.8.1: the actions that ask for the master password EVERY time, even right after another unlock (the owner: deleting a
-// project «requiere master pass»): method → the purpose its token must carry (src/core/master.mjs › issue(purpose)).
+// project «requiere master pass»): method → the purpose its token must carry (src/domain/security/master.mjs › issue(purpose)).
 // projects.delete and projects.deleteAbort need no token: they take the one-off ticket projects.deleteCheck returned
 // (project-close.mjs), so a token that expires while the Recycle Bin works never leaves a delete half-way.
 // 3.8.2 (D1, D2): «Acceso total al PC» and «Usar mi móvil Android», given to a chat.

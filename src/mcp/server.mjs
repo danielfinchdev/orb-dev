@@ -1,5 +1,5 @@
 // MCP server (stdio) of the assistant: the shared board of every agent (Claude, Codex, Cursor and the ACP agents). Every
-// agent process gets its own instance with a ticket (src/engine/agent-auth.mjs): the engine trades it for who this
+// agent process gets its own instance with a ticket (src/domain/security/agent-auth.mjs): the engine trades it for who this
 // process is (agent, task, conversation, the coordinator), which assistant folder and the browser's key, and confirms it
 // still holds on every call. Nothing in the environment or the database can make it someone else.
 import fs from 'node:fs';
@@ -10,16 +10,17 @@ import { fileURLToPath } from 'node:url';
 import { useHome, ctx, tr } from '../platform/context.mjs';
 import { isHome, CATEGORIES, PLATFORMS } from '../platform/paths.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
-import { budgetConfig, waitReason, modelLimits } from '../core/budget.mjs';
-import { accountLabel, accountsOf, usableAccounts } from '../core/accounts.mjs';
+import { budgetConfig, waitReason, modelLimits } from '../domain/usage/budget.mjs';
+import { accountLabel, accountsOf, usableAccounts } from '../domain/usage/accounts.mjs';
 import { oneLine } from '../shared/text.mjs';
 import { redactSecrets } from '../shared/secrets-scan.mjs';
-import { git, copyIntoWorkdir } from '../core/workspace.mjs';
-import { newProject } from '../core/projects.mjs';
-import { createSchedule, EVERY } from '../core/schedules.mjs';
-import { mustOwnTask, ownsTask } from '../core/permissions.mjs';
+import { git } from '../platform/git.mjs';
+import { copyIntoWorkdir } from '../domain/tasks/checkpoints.mjs';
+import { newProject } from '../domain/projects/projects.mjs';
+import { createSchedule, EVERY } from '../domain/schedules/schedules.mjs';
+import { mustOwnTask, ownsTask } from '../domain/security/permissions.mjs';
 import { redeem, ticketFromArgs } from './auth-client.mjs';
-import { draftExtension, requestActivation, fileList, REQUESTS, OPEN_PER_CONVERSATION, openRequestsOf } from '../core/extensions.mjs';
+import { draftExtension, requestActivation, fileList, REQUESTS, OPEN_PER_CONVERSATION, openRequestsOf } from '../domain/extensions/extensions.mjs';
 
 const AUTH = await redeem(process.env.ORB_AUTH_PIPE, ticketFromArgs());
 // An agent that stopped expanding ${VAR} in its MCP config would leave every tool «not signed»: said in its log.
@@ -29,12 +30,12 @@ const GRANT = AUTH?.reply ?? null;
 const home = GRANT?.home ?? process.env.ORB_HOME;
 if (!home || !isHome(home)) { process.stderr.write('ORB_HOME no apunta a la carpeta de un asistente\n'); process.exit(1); }
 useHome(home);
-const { Board, AGENTS, STATUSES, assistantName, userName, ofUser } = await import('../core/board.mjs');
-const { readLog, writeLog, logFiles, findLog, ownLogFiles, cutWords } = await import('../engine/logs.mjs');
+const { Board, AGENTS, STATUSES, assistantName, userName, ofUser } = await import('../domain/tasks/board.mjs');
+const { readLog, writeLog, logFiles, findLog, ownLogFiles, cutWords } = await import('../domain/journal/journal.mjs');
 const board = new Board(undefined, { noKey: true }); // the MCP never holds the approval secret
 // 3.8: never on data of 3.7 the 3.8 migration could not update or finish (other users' rows and keys; the engine does not
 // run on them either).
-{ const { unfinished } = await import('../core/migrate-38.mjs'); if (unfinished(board.db)) { process.stderr.write(`${tr('data.migration38.blocked')}
+{ const { unfinished } = await import('../domain/data/legacy/migrate-38.mjs'); if (unfinished(board.db)) { process.stderr.write(`${tr('data.migration38.blocked')}
 `); process.exit(1); } }
 
 // Who the engine says this process is (sessions.mjs › mcpServersFor), never what its environment claims: an agent that
@@ -51,7 +52,7 @@ const { me: ME, task: SIGNED_TASK, session: SIGNED_SESSION, conversation: SIGNED
 const BOSS = ME === 'orb';
 // 3.2: the coordinator's conversation: its questions, the tasks it creates and its project belong to that conversation.
 const CONV = BOSS ? SIGNED_CONV : null;
-// What this process may act on (src/core/permissions.mjs › ownsTask): the coordinator, its conversation's tasks; a
+// What this process may act on (src/domain/security/permissions.mjs › ownsTask): the coordinator, its conversation's tasks; a
 // worker, its task and the subtasks it delegated; a direct conversation, the manual task it claimed. Not signed: nothing
 // (every tool is refused below).
 const WHO = Object.freeze({ signed: SIGNED, boss: BOSS, conversation: CONV, task: SIGNED_TASK ?? null, session: SIGNED_SESSION, agent: ME });
@@ -192,7 +193,7 @@ function askUser(a) {
   return `Pregunta mostrada a ${USER}. Termina tu turno ahora (una línea como mucho, sin repetir las opciones): su respuesta llegará como su próximo mensaje.`;
 }
 
-// 3.8.1: what this agent made for core (src/core/extensions.mjs). The requests live in the database (agents never write
+// 3.8.1: what this agent made for core (src/domain/extensions/extensions.mjs). The requests live in the database (agents never write
 // it): who made each one, so only that agent asks for it to be turned on.
 const myScopeOf = () => ({ agent: ME, task: TASK_ID, conversation: BOSS ? CONV : TASK_ID ? scopeOf(TASK_ID) : null, session: SIGNED_SESSION ?? null });
 const requests = () => { const r = board.settingJson(REQUESTS); return Array.isArray(r) ? r : []; };
@@ -357,7 +358,7 @@ const tools = [
     // 3.1: a worker's message carries its own task when it names none, so Orb knows who sent it (and does not hand it
     // back to the same task).
     run: (a) => sendMessage(a) },
-  // 3.8.1: a skill or an MCP server made from the chat (src/core/extensions.mjs): a folder in core\preparacion to write,
+  // 3.8.1: a skill or an MCP server made from the chat (src/domain/extensions/extensions.mjs): a folder in core\preparacion to write,
   // then the user turns it on from the app. Nothing of core is written otherwise.
   { name: 'orb_create_skill', description: `Prepara una skill nueva de Orb (o una versión mejorada de una que ya existe, con mejorar: true) cuando ${USER} la pida. Devuelve la carpeta donde escribir su SKILL.md (con name y description en el encabezado) y sus archivos de apoyo. Al terminar llama a orb_request_activation: ${USER} la revisa y la activa desde la app.`,
     inputSchema: { type: 'object', required: ['name', 'description'], properties: { name: str('Nombre: minúsculas, números y guiones (p. ej. revisar-facturas)'), description: str('Qué hace y cuándo usarla, en una o dos frases (los agentes la eligen por esto)'), mejorar: { type: 'boolean', description: 'true para preparar una versión nueva de una skill que ya está en Orb (parte de su copia actual)' } } },

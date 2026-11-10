@@ -648,7 +648,7 @@ mod imp {
         &mut token,
       )?;
       // WebView2's own dialogs are off; «leave this page?» never blocks the agent (the rest are answered in the page:
-      // src/core/browser-protocol.mjs › dialogsHook; one that slips through is cancelled).
+      // src/engine/browser/browser-protocol.mjs › dialogsHook; one that slips through is cancelled).
       core.add_ScriptDialogOpening(
         &ScriptDialogOpeningEventHandler::create(Box::new(|_, args| {
           let Some(a) = args else { return Ok(()) };

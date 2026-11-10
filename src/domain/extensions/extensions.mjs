@@ -9,7 +9,7 @@
 //     (.claude-plugin\plugin.json + skills\<name>, a copy of core\skills\<name> for each skill that is on, never a junction,
 //     its SKILL.md with a frontmatter Orb writes: only name and description). Claude gets it as a plugin (SDK `plugins`), Codex as an extra root of skills (app-server
 //     `skills/extraRoots/set`); the other agents get the list (name, description, path of its SKILL.md) in their brief.
-//     Agents read core\skills (src/core/guard.mjs); nobody but Orb writes there.
+//     Agents read core\skills (src/domain/security/guard.mjs); nobody but Orb writes there.
 //   - Bringing one in (importExtension): from a folder (copied) or a git repository (cloned, https only), checked
 //     (checkSkill / checkMcp: SKILL.md with a valid name and description, or a server Orb knows how to start; no links
 //     out, a size limit), always off until the user turns it on.
@@ -28,7 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { CATEGORIES } from '../shared/layout.mjs';
+import { CATEGORIES } from '../../shared/layout.mjs';
 
 export const SKILL_FILE = 'SKILL.md';
 export const LIVE_DIR = '.activas'; // in core\skills: what the agents load (exposeSkills)

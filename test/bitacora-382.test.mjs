@@ -9,10 +9,10 @@ import { tempHome } from './helpers.mjs';
 import { ensureLayout } from '../src/domain/workspace/home.mjs';
 import { projectLogHeader, tidyProjectLogs } from '../src/platform/journal-files.mjs';
 import { ctx } from '../src/platform/context.mjs';
-import { Board } from '../src/core/board.mjs';
-import { createProject, renameProject, syncProjects } from '../src/core/projects.mjs';
-import { finishProject, reopenProject, finishedProjects } from '../src/core/project-close.mjs';
-import { readLog, lastEntries } from '../src/engine/logs.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
+import { createProject, renameProject, syncProjects } from '../src/domain/projects/projects.mjs';
+import { finishProject, reopenProject, finishedProjects } from '../src/domain/projects/project-close.mjs';
+import { readLog, lastEntries } from '../src/domain/journal/journal.mjs';
 
 let t; let board;
 before(() => { t = tempHome(); board = new Board(); });

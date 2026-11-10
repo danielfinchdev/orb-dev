@@ -62,7 +62,7 @@ src/ui/** + tauri-bridge.js             src-tauri/src/*.rs               src/eng
                                                                          └─ remote.mjs       phone access (Magic Link)
 Agents (processes)  ◄── adapters src/agents/*.mjs (live) ──┘
    └─ each agent loads Orb's MCP server: src/mcp/server.mjs (the shared board)
-Data: <workspace>/core/datos/orb.db (SQLite, src/core/db.mjs)
+Data: <workspace>/core/datos/orb.db (SQLite, src/domain/data/db.mjs)
 ```
 
 - **There is no web server for the window.** The window talks to the engine through the app's own commands (Tauri's
@@ -143,7 +143,7 @@ C:\Orb\                   (C:\Orb by default; always <chosen folder>\Orb, the sa
   (`emulator -list-avds`) and starts one by its exact name with the master password; agents use
   `orb_android_emulators` / `orb_android_emulator` under the same grant as the phone. The emulator starts without the
   engine's `ORB_*` variables and is one more adb device (`emulator-5554`) for the other `orb_android_*` tools.
-- **Development tools** (3.8.3, `src/engine/dev-tools.mjs`): Flutter, the Android SDK and a JDK live in their own
+- **Development tools** (3.8.3, `src/platform/dev-tools.mjs`): Flutter, the Android SDK and a JDK live in their own
   standard places outside Orb's folder (Android Studio's `%LOCALAPPDATA%\Android\Sdk`; Flutter in a folder of the user),
   so agents and the user's terminal run them and reinstalling Orb never removes them. Orb downloads none of them; it
   checks the files (no program started), lists them in Settings → Android with a link to install each, and gives the
@@ -154,7 +154,7 @@ C:\Orb\                   (C:\Orb by default; always <chosen folder>\Orb, the sa
   user chooses, section 36), creates whatever is missing and moves 2.3.0's `bitacoras\` into the log folder (if a file exists in both, the old entries are
   appended at the end). It only discards the empty logs that 2.3.0 created for the categories and configuration folders
   it mistook for projects; those "projects" go away on their own (`syncProjects`).
-- **The end of a project** (3.8.1, Proyectos › right click, a long press or «…» on the row; `src/core/project-close.mjs`):
+- **The end of a project** (3.8.1, Proyectos › right click, a long press or «…» on the row; `src/domain/projects/project-close.mjs`):
   «Finalizar proyecto» (also from the phone: `projects.finish`) cancels its pending tasks, puts its tasks, conversations
   and direct conversations in «Completadas», pauses its schedules and takes it out of Orb while its folder stays;
   `projects_finished` (a setting) keeps it out of `syncProjects` (one whose folder is missing stays there for 30 days:
@@ -182,8 +182,8 @@ On Windows, it then offers to install whatever is missing (section 24).
 
 **Files.**
 - Interface: `src/ui/views/setup.jsx`.
-- Creating and organizing the folder: `src/platform/paths.mjs` (`createHome`, `homeFor`, `ensureLayout`, `paths`, `categoryOf`, `DEFAULT_CONFIG`, `loadConfig`), `src/shared/layout.mjs` (the names), `src/core/core-folder.mjs` (core).
-- Projects by category: `src/core/projects.mjs` (`createProject`, `syncProjects`).
+- Creating and organizing the folder: `src/platform/paths.mjs` (`createHome`, `homeFor`, `ensureLayout`, `paths`, `categoryOf`, `DEFAULT_CONFIG`, `loadConfig`), `src/shared/layout.mjs` (the names), `src/domain/workspace/core-folder.mjs` (core).
+- Projects by category: `src/domain/projects/projects.mjs` (`createProject`, `syncProjects`).
 - Remembering where it is: `src/engine/desktop-home.mjs` (`ubicacion.json` in the app data).
 
 **Inside.**
@@ -270,7 +270,7 @@ who a new conversation is with:
   - what was done before (at most `MAX_DEP_RESULT` characters per dependency);
   - the latest log notes (about 3000 characters);
   - where it works and how to report.
-- Size limit: `MAX_DESCRIPTION` in `src/core/board.mjs`.
+- Size limit: `MAX_DESCRIPTION` in `src/domain/tasks/board.mjs`.
 
 ## 5. The task board
 
@@ -282,8 +282,8 @@ who a new conversation is with:
   from (`schedule_id`).
 
 **Files.**
-- Logic: `src/core/board.mjs`.
-- Database: `src/core/db.mjs` (tables `tasks`, `events`, `messages`, `chat`, `sessions`, `session_items`,
+- Logic: `src/domain/tasks/board.mjs`.
+- Database: `src/domain/data/db.mjs` (tables `tasks`, `events`, `messages`, `chat`, `sessions`, `session_items`,
   `session_queue`, `schedules` and `settings`).
 - Screen: `src/ui/views/tasks.jsx` (list, detail, actions and Task Review).
 
@@ -292,7 +292,7 @@ who a new conversation is with:
   - it contains risky words (publish, delete, credentials, payments);
   - it uses high reasoning;
   - or it was created by an agent without trusted delegation.
-- Approving signs a hash of what you saw (`src/core/approval.mjs`, HMAC with the encrypted key). If the task changes,
+- Approving signs a hash of what you saw (`src/domain/security/approval.mjs`, HMAC with the encrypted key). If the task changes,
   the signature stops being valid and it asks for approval again (`revalidateQueued`).
 
 **How to rework it.**
@@ -383,7 +383,7 @@ events: item · delta · session · approval · approval_done · context · rate
 | `total` | No checks. Only from the PC and with confirmation |
 
 **Files.**
-- Decision: `src/core/guard.mjs` (`decide`, `RISKY` and `riskOf`).
+- Decision: `src/domain/security/guard.mjs` (`decide`, `RISKY` and `riskOf`).
 - Each adapter calls it at its permission point: `canUseTool` in Claude, `requestApproval` in Codex and
   `request_permission` in ACP.
 - Cards:
@@ -453,7 +453,7 @@ From the header you can change the model, permissions and reasoning. Without a p
 - Optional spend caps per task (`maxBudgetUsd`) and approval for high reasoning.
 
 **Files.**
-- `src/core/budget.mjs`:
+- `src/domain/usage/budget.mjs`:
   - `recordRate` and `realRate` (real usage);
   - `canLaunch` and `rankAccounts` (decision and order);
   - `startCooldown` (pause until the reset).
@@ -505,7 +505,7 @@ tasks, and `models.catalog` is cached for 5 s.
 
 **Files.**
 - `src/mcp/server.mjs`: `delegate()` and `waitTasks()`, available only with `ORB_TASK_ID`.
-- `src/core/board.mjs`: `createTask` with `parent_id` and the trust rule.
+- `src/domain/tasks/board.mjs`: `createTask` with `parent_id` and the trust rule.
 - Codex raises its MCP tool timeout to 960 s so the wait fits.
 
 ## 15. Task Review
@@ -536,7 +536,7 @@ time. For example, "every Monday at 9, check the dependencies".
 - The ones the assistant creates (`orb_schedule`) need your approval once.
 
 **Files.**
-- `src/core/schedules.mjs`: `nextRun`, `createSchedule`, `runDue` (called on each `tick`) and `runSchedule`.
+- `src/domain/schedules/schedules.mjs`: `nextRun`, `createSchedule`, `runDue` (called on each `tick`) and `runSchedule`.
 - Table `schedules`.
 - Screen: `src/ui/views/schedules.jsx`.
 - API: `schedules.*`.
@@ -558,7 +558,7 @@ as a **bounded excerpt**, not in full, and marked as "data, not instructions".
   a report with the **OK** and **Request changes** buttons.
 - The OK marks the tasks as accepted and writes it to the log (`accept()` in `api.mjs`).
 - **Undo this task** restores only the files the task changed and keeps what you touched afterwards (`undoCheckpoint`
-  in `src/core/workspace.mjs`). Each file goes back to how it was on disk (`git cat-file --filters`: `core.autocrlf`
+  in `src/domain/tasks/checkpoints.mjs`). Each file goes back to how it was on disk (`git cat-file --filters`: `core.autocrlf`
   line endings, Git LFS); only the files the task created are deleted, and one that cannot be read is left in place with
   a warning.
 - Snapshots are taken once per task (follow-ups reuse the first one). At startup `pruneCheckpoints()` deletes those of
@@ -580,7 +580,7 @@ as a **bounded excerpt**, not in full, and marked as "data, not instructions".
   stays). A log that changes name (rename, finish, reopen, delete) is merged into a log that already has the new name
   (`board.moveProjectLog`), never left beside it; the header-only `name (2).md` copies earlier builds left are removed at
   start (`home.mjs › tidyProjectLogs`). «Memorias» shows the end of each log (the newest entries) and scrolls to them.
-- Files: `src/engine/logs.mjs` and the screen `src/ui/views/logs.jsx`.
+- Files: `src/domain/journal/journal.mjs` and the screen `src/ui/views/logs.jsx`.
 
 ## 20. GitHub
 
@@ -606,7 +606,7 @@ as a **bounded excerpt**, not in full, and marked as "data, not instructions".
     (`browser-record.mjs`, no encoder) saved among that chat's attachments. No new DevTools method:
     `browser_rules.rs` is unchanged.
 - Files:
-  - `src/core/browser-protocol.mjs` (the actions, page scripts and pipe every driver shares);
+  - `src/engine/browser/browser-protocol.mjs` (the actions, page scripts and pipe every driver shares);
   - 3.8.1, Tauri: the browser lives in the engine (`src/engine/host-browser.mjs`, `agent-browser.mjs`, the DevTools
     driver `browser-cdp.mjs`). Its pages are hidden WebView2 views in a browser environment of their own
     (`src-tauri/src/browser.rs`), with no DevTools port: Rust passes the engine's DevTools calls with
@@ -617,7 +617,7 @@ as a **bounded excerpt**, not in full, and marked as "data, not instructions".
     second) is closed and the agent told. The mini window is `src-tauri/src/pip.rs`, fed by a screencast with one frame
     in flight;
   - the tools in `src/mcp/server.mjs`;
-  - `src/core/browser-key.mjs`.
+  - `src/engine/browser/browser-key.mjs`.
 
 ## 22. Mobile
 
@@ -631,7 +631,7 @@ from the PC. It is turned on in Settings › Magic Link, with two routes that ar
 | **Tailscale** | `https://<pc>.<tailnet>.ts.net:3131/` (with `tailscale serve`) or `http://<Tailscale IP>:3131/` if the tailnet has no HTTPS | Using it away from home; with HTTPS it installs as an app and gets notifications |
 
 - From the phone you can chat and approve, answer permissions, edit the queue, continue and fork, request Task Review,
-  manage scheduled tasks and give the OK: the methods `src/core/permissions.mjs` marks `'remote'` (section 34).
+  manage scheduled tasks and give the OK: the methods `src/domain/security/permissions.mjs` marks `'remote'` (section 34).
   Settings, accounts, backups, Magic Link, full access and this PC's files are PC only.
 - On the phone, the menu has **"This phone"**: how to install it as an app and the **notifications** switch.
 
@@ -784,13 +784,13 @@ launched hidden, with its output read by Orb, and it stores the session in the a
 **Files.**
 - `src/engine/installer.mjs`: `ITEMS`, `check()` and the PowerShell script.
 - Each adapter's `detect()` and `loginState()` (for example, the Codex session is in `~/.codex/auth.json`).
-- `src/core/accounts.mjs`: several accounts per agent; each one has its login folder and its usage.
+- `src/domain/usage/accounts.mjs`: several accounts per agent; each one has its login folder and its usage.
 
 ## 25. Skills and MCP servers
 
 3.8.1, the owner's definition: **`core\skills` holds every skill and `core\mcp` every MCP server** (the ones Orb installs
 and the ones the user writes). Agents never write in core; the only way in is through the user (Settings, «Importar»)
-or an agent's request the user approves. `src/core/extensions.mjs` does the work (no engine imports: the engine, the
+or an agent's request the user approves. `src/domain/extensions/extensions.mjs` does the work (no engine imports: the engine, the
 agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-extensions.mjs` is its API (PC only).
 
 - **What there is** (`listExtensions`): each folder of `core\skills` with its `SKILL.md` (frontmatter `name` and
@@ -898,7 +898,7 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   old one kept in `.anterior`, and its connector starts what the folder says now (its keys follow:
   `connector-secrets.mjs › rebindMoved`). The same works through an agent with `orb_create_mcp` + `mejorar: true`.
 - **Keys**: a connector's keys (its `env`) live in the master password's vault, never in orb.json, which keeps a
-  reference (`orb-secret:mcp/<connector>/<NAME>`, `src/core/connector-secrets.mjs`); the engine puts the value back only
+  reference (`orb-secret:mcp/<connector>/<NAME>`, `src/domain/security/connector-secrets.mjs`); the engine puts the value back only
   for the connector's launcher. They are tied to the connector's command: when Orb itself moves a server (into
   `core\mcp`, «Mover a core», «Aplicar cambios») the keys are tied to the new command (`rebindMoved`, only when they were
   tied to the old one: a command changed by someone else stays held). With the vault locked (no machine secret, the
@@ -1041,7 +1041,7 @@ menus, texts, permissions and themes.
   on hover.
 - **Tasks**: «Cambios» lists the files a finished task changed with their diff (`tasks.diff`, read only, between the
   task's undo checkpoints; `components/task-changes.jsx` and the expert mode share `components/diff-view.jsx`).
-  Schedules can run once or always in the same chat (`src/core/schedules.mjs`).
+  Schedules can run once or always in the same chat (`src/domain/schedules/schedules.mjs`).
 - **Search**: the sidebar search also finds tasks by content (`tasks.search`); Ctrl+K on the PC
   (`components/command-palette.jsx`, `lib/palette.js`) uses the same search (`lib/search.js`) plus Orb's places, and
   opens only when nothing else took the key (project actions, the whiteboard, a dialog).
@@ -1100,7 +1100,7 @@ menus, texts, permissions and themes.
 - **Window:** `sandbox` and context isolation, CSP without `eval`, Markdown is rendered without HTML and every call is
   checked by the app (Rust) and the engine.
 - **Approval key:** encrypted by Windows (DPAPI). The engine receives it only in memory and the MCP never has it.
-- **Agent identity (`src/engine/agent-auth.mjs`):** who an agent's MCP process is lives only in the engine's
+- **Agent identity (`src/domain/security/agent-auth.mjs`):** who an agent's MCP process is lives only in the engine's
   memory, never in the database or a file an agent could write. `mcpServersFor` (`sessions.mjs`) gives every MCP
   server of an agent process a ticket (random, new for every process) and the engine's local pipe (`ORB_AUTH_PIPE`).
   The server trades the ticket for its grant when it starts (`src/mcp/auth-client.mjs`): who it is (agent, task,
@@ -1296,7 +1296,7 @@ are not overridden: they are the PC owner's.
    - the API actions (`api.mjs`: name and parameters);
    - the events (`session:item`, `session:delta`, `session:queue`, `approval:changed`, `chat:state`, `board:changed`);
    - the `db.mjs` tables (add columns with `ADDED`, never delete them).
-3. Give every new API method its line in `METHODS` (`src/core/permissions.mjs`, section 34): `'remote'` if the phone
+3. Give every new API method its line in `METHODS` (`src/domain/security/permissions.mjs`, section 34): `'remote'` if the phone
    may use it, `'pc'` otherwise.
 4. New strings with `t()` in both languages.
 5. A test in `test/` with the fake agent (`fake-live.mjs` recognizes keywords like `LIMITE`, `PIDE_PERMISO`,
@@ -1349,8 +1349,8 @@ in the side menu and can be resumed whenever you want. The assistant can reply i
 belongs to the conversation that asked for it: its report goes back there.
 
 **Files.**
-- Data: table `conversations` (`src/core/db.mjs`); `chat.conversation_id` and `tasks.conversation_id`. Board
-  (`src/core/board.mjs`): `createConversation`, `updateConversation`, `setConversationDone`, `setConversationProject`,
+- Data: table `conversations` (`src/domain/data/db.mjs`); `chat.conversation_id` and `tasks.conversation_id`. Board
+  (`src/domain/tasks/board.mjs`): `createConversation`, `updateConversation`, `setConversationDone`, `setConversationProject`,
   `conversationOfTask` (the task's own, or that of the task it comes from: subtask, review, merge) and `openTasksOf`.
   `addChat(role, body, meta, conversation)` infers the conversation from `meta.task` when not given.
 - Engine: `src/engine/orchestrator.mjs`. `Orchestrator` keeps one `Lane` per conversation (queue, live process, live
@@ -1386,7 +1386,7 @@ belongs to the conversation that asked for it: its report goes back there.
 
 ## 34. Permissions
 
-**What it does.** One PC, one owner. Who may do what is decided in one place, `src/core/permissions.mjs`, for three
+**What it does.** One PC, one owner. Who may do what is decided in one place, `src/domain/security/permissions.mjs`, for three
 kinds of caller:
 - **This PC** (its Orb window, dev-control and the engine itself): every method.
 - **A linked phone or browser** (Magic Link): only the methods the table `METHODS` marks `'remote'` (view chats, tasks
@@ -1409,7 +1409,7 @@ this PC's (`config.orchestrator`). The state it gets (`app.state`, `remote.mjs �
 (`home`, `paths`, the working project's path), and its notifications and their buttons follow the same rule as its
 calls (`validDevice`: a phone or a browser, used in the last 30 days, the owner's).
 
-**Files.** `src/core/permissions.mjs` (the table, `principalOf`, `authorize`, `ownsTask`); `src/engine/api.mjs ›
+**Files.** `src/domain/security/permissions.mjs` (the table, `principalOf`, `authorize`, `ownsTask`); `src/engine/api.mjs ›
 call` checks every call before the method runs and refuses one that does not say who makes it (the engine and
 dev-control pass `DESKTOP`; the methods get the principal as their second argument); `src/engine/remote.mjs` builds a device's principal and also checks
 `REMOTE_METHODS` itself (`guardCall`, with the pictures and the full-access rules); `src/mcp/server.mjs` builds the
@@ -1423,7 +1423,7 @@ does not open on a database the 3.8 migration (§35) could not finish.
 
 ## 35. From 3.7 to 3.8 (migration)
 
-`src/core/migrate-38.mjs`, run once by `openDb` on this home's database (after the older migrations), so before the
+`src/domain/data/legacy/migrate-38.mjs`, run once by `openDb` on this home's database (after the older migrations), so before the
 engine opens the phone access, and again after a 3.7 backup is restored. Setting `migrated_3_8` marks it done; a new
 3.8 database only gets the mark. One process at a time: an exclusive transaction on `core/datos/migracion-3.8.lock.db`
 (the system lets it go when the process ends, however it ends; removed once the run is done).
@@ -1490,7 +1490,7 @@ folders) is used as it is: nothing in it is overwritten or moved without the use
 are projects: any other top-level folder is the user's and is never listed. All of Orb's own paths come from `paths()`
 in `src/platform/paths.mjs`; nothing else builds them.
 
-- **Orb 3.7's own data** (`migrateWorkspace`, `src/core/core-folder.mjs`, called by `ensureLayout` at every start and by
+- **Orb 3.7's own data** (`migrateWorkspace`, `src/domain/workspace/core-folder.mjs`, called by `ensureLayout` at every start and by
   `createHome`, so before the database opens and before the 3.8 migration of the database, which then finds it in
   `core\datos`): `.orb` → `core`, `orb.json` → `core\orb.json`. Only a folder that has them is taken for a 3.7
   workspace. They are Orb's, so they move without asking.
@@ -1537,7 +1537,7 @@ in `src/platform/paths.mjs`; nothing else builds them.
   update (the screen says so). The app reads the sealed secret from `.orb\datos` until the engine has
   moved it, and never writes into core before the move. 3.7's `bots\` stays at the top for the 3.8 migration of the
   database, which archives it.
-- **Backups outside the workspace** (`src/core/backup.mjs`): `%LOCALAPPDATA%\Orb\copias\<workspace>` on Windows
+- **Backups outside the workspace** (`src/domain/data/backup.mjs`): `%LOCALAPPDATA%\Orb\copias\<workspace>` on Windows
   (`~/.local/share/Orb/copias/<workspace>` elsewhere; `<workspace>` is `homeKey`: the folder's name and 8 hex of the
   sha256 of its whole path in any case, e.g. `orb-1a2b3c4d`, so two workspaces never share it and a long path never makes
   a long name; what the first 3.8 builds kept under the old name, `C-Orb`, is taken over once): per user, never roaming
@@ -1555,7 +1555,7 @@ in `src/platform/paths.mjs`; nothing else builds them.
   rewritten. **This PC's secret** (3.8.1, decision 20 d) is opened and kept in Rust (`src-tauri/vault/src/machine.rs`,
   inside Orb.exe's vault): sealed with DPAPI as `ORB2` in `core\datos\clave2.enc` and in a copy in the app's data folder
   (`%APPDATA%\Orb.dev\claves\<workspace>.v2.enc`) that puts core's back when core loses it. The engine asks for it once
-  per start (`src/core/master.mjs › openMachine`) and gets only the keys made from it (`src/platform/keys.mjs`: the
+  per start (`src/domain/security/master.mjs › openMachine`) and gets only the keys made from it (`src/platform/keys.mjs`: the
   approvals' HMAC key and this PC's backup key); the vault keeps the secret for this PC's wrap of the data key. The app
   no longer offers sealing to the engine (no `host.seal`/`host.unseal`). Orb 3.8.0's key files (`clave.enc`, Electron's
   `v10`) are not read any more: when only they are there the start stops with `secretUnreadable` and its own message, and
@@ -1616,8 +1616,8 @@ workspace), `test/multiplataforma.test.mjs` and `test/migracion-38.test.mjs` (th
 ## 37. The master password and Magic Link
 
 One password, made once, protects what Orb keeps for itself and the actions that could hurt. Code: `src-tauri/vault`
-(the orb-vault crate: the crypto, the files, the waits, the unlock tokens), `src/core/master.mjs` (the engine's client of
-it, same API as before), `src/engine/api-master.mjs` (the API and the guard), `src/core/connector-secrets.mjs`,
+(the orb-vault crate: the crypto, the files, the waits, the unlock tokens), `src/domain/security/master.mjs` (the engine's client of
+it, same API as before), `src/engine/api-master.mjs` (the API and the guard), `src/domain/security/connector-secrets.mjs`,
 `src/shared/mobile-crypto.mjs` (linking), `src/ui/views/master.jsx` and `src/ui/lib/core-access.js`.
 
 **Where the secrets live (3.8.1).** In Rust, not in the engine. Orb.exe runs the vault (`src-tauri/src/vault_host.rs`)
@@ -1684,7 +1684,7 @@ by `src/ui/lib/startup.js` (core, the 3.7 migration, the password, a pending wel
 `setupPending` in orb.json until its last step, so one closed halfway resumes where it stopped, and the «updated to
 3.8» wording shows only when the data came from 3.7 (`master.state().upgraded`).
 
-**Guarded actions.** `needsUnlock` (`src/core/permissions.mjs`) lists them: restoring a backup, checking one
+**Guarded actions.** `needsUnlock` (`src/domain/security/permissions.mjs`) lists them: restoring a backup, checking one
 (`backup.verify`, which would otherwise test recovery codes for free; a code typed there also has the `recovery`
 channel's waits), making a new recovery code (`backup.recovery`: the code opens every backup), deleting the data of Orb
 3.7, unlinking a phone (`link.revoke`, `remote.revoke`), a connector's keys (`secrets.connector`,

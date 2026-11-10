@@ -3,11 +3,11 @@
 // the user creates by hand inside a category shows up too. Orb's own folder (core) is never a project.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, tr } from '../platform/context.mjs';
-import { folderName, isReservedName, isReservedInCategory, isCategory, categoryOf, folderKey, CATEGORIES, DEFAULT_CATEGORY, PLATFORMS, MULTI, SHARED_DIR } from '../platform/paths.mjs';
-import { IGNORED_PROJECTS, FINISHED_PROJECTS } from '../platform/state.mjs';
-import { git, ORB_GIT } from './workspace.mjs';
-import { projectNameProblem } from '../shared/product.mjs';
+import { ctx, tr } from '../../platform/context.mjs';
+import { folderName, isReservedName, isReservedInCategory, isCategory, categoryOf, folderKey, CATEGORIES, DEFAULT_CATEGORY, PLATFORMS, MULTI, SHARED_DIR } from '../../platform/paths.mjs';
+import { IGNORED_PROJECTS, FINISHED_PROJECTS } from '../../platform/state.mjs';
+import { git, ORB_GIT } from '../../platform/git.mjs';
+import { projectNameProblem } from '../../shared/product.mjs';
 import { settleDeleting, deletingProjects } from './project-close.mjs';
 
 export const checkCategory = (category) => {

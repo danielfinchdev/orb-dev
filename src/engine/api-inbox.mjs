@@ -3,11 +3,11 @@
 // Each item: what it is (kind conversation | session, id), its title and avatar, its marks (pinned and its order,
 // section, muted), the last message (short plain text, when, from whom: the user or Orbe), how many are unread and what
 // it is doing (working, paused, idle). Sorted: pinned (in their order), then the sections (in theirs), then the rest,
-// most recent first. The marks live in src/core/inbox.mjs; a new line tells the lists (inbox:changed).
+// most recent first. The marks live in src/domain/conversations/inbox.mjs; a new line tells the lists (inbox:changed).
 import { tr } from '../platform/context.mjs';
-import { userName } from '../core/board.mjs';
+import { userName } from '../domain/tasks/board.mjs';
 import { oneLine } from '../shared/text.mjs';
-import * as I from '../core/inbox.mjs';
+import * as I from '../domain/conversations/inbox.mjs';
 import { fail, str, int, oneOf } from './api-common.mjs';
 
 export function inboxMethods({ board, emit, orchestrator }) {

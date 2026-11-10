@@ -1,4 +1,4 @@
-// 3.6: encrypted backups (src/core/backup.mjs and the backup.* calls). A copy holds the database (conversations,
+// 3.6: encrypted backups (src/domain/data/backup.mjs and the backup.* calls). A copy holds the database (conversations,
 // settings…), orb.json, the logs and the app's secret; a changed chunk does not open; on a
 // clean machine it opens only with the recovery code; restoring swaps the data at the next start of the engine.
 import './helpers.mjs';
@@ -10,8 +10,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { tempHome, startEngine } from './helpers.mjs';
 import { useHome, ctx } from '../src/platform/context.mjs';
-import { Board } from '../src/core/board.mjs';
-import * as K from '../src/core/backup.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
+import * as K from '../src/domain/data/backup.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
 

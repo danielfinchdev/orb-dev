@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { tempHome, fake, until, startEngine } from './helpers.mjs';
-import { Board } from '../src/core/board.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
 import { cursorModels } from '../src/agents/cursor.mjs';
 import { codexModels } from '../src/agents/codex.mjs';
 import { acpAgent, acpModels } from '../src/agents/acp.mjs';

@@ -120,7 +120,7 @@ function BackupsCard() {
   );
 }
 
-// 3.8: what Orb 3.7 left after the migration (src/core/migrate-38.mjs): its archives and the copies of its database, only
+// 3.8: what Orb 3.7 left after the migration (src/domain/data/legacy/migrate-38.mjs): its archives and the copies of its database, only
 // while there are any, with «Borrar los datos de Orb 3.7». 3.8.1 (review F3b M5): they, and the backups made before 3.8,
 // still hold 3.7's keys without the master password: the card says so.
 function LegacyCard() {

@@ -4,8 +4,8 @@
 // forge an approval. Without the app (tests, or a system without that sealing) it comes from <home>/core/datos/clave.bin.
 // The MCP server never gets the secret: it cannot sign, and it treats unverifiable approvals as missing (safe side).
 import crypto from 'node:crypto';
-import { ctx } from '../platform/context.mjs';
-import { machineKeys } from '../platform/keys.mjs';
+import { ctx } from '../../platform/context.mjs';
+import { machineKeys } from '../../platform/keys.mjs';
 
 let cached = null;
 export function defaultApprovalKey() {

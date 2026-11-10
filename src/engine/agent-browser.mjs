@@ -1,5 +1,5 @@
 // 3.8.1 (D2, D7): the agents' browser, living in the engine: its pages, the control pipe the MCP servers
-// of the agents speak (src/core/browser-protocol.mjs › servePipe, with the key of each conversation) and the DevTools
+// of the agents speak (src/engine/browser/browser-protocol.mjs › servePipe, with the key of each conversation) and the DevTools
 // driver (src/engine/browser-cdp.mjs).
 //
 // Where the pages come from is the app's business (windows):
@@ -16,7 +16,7 @@
 // onRelease(tab) when its turn ends; onClose(tab). The little live window (PiP) uses them (host-browser.mjs).
 import crypto from 'node:crypto';
 import { translate } from '../shared/i18n.mjs';
-import { MAX_TABS, createActions, servePipe } from '../core/browser-protocol.mjs';
+import { MAX_TABS, createActions, servePipe } from './browser/browser-protocol.mjs';
 import { attachPage, cdpDriver } from './browser-cdp.mjs';
 
 export const IDLE_MS = 10 * 60_000; // a page no turn uses goes after this

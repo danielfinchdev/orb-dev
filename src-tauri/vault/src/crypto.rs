@@ -1,4 +1,4 @@
-// The vault's crypto, byte for byte what Orb 3.8 / 3.8.1 wrote from Node (src/core/master.mjs before this crate, and
+// The vault's crypto, byte for byte what Orb 3.8 / 3.8.1 wrote from Node (src/domain/security/master.mjs before this crate, and
 // src/shared/mobile-crypto.mjs for the phones' side), so every file already on disk opens the same:
 //   seal        base64(nonce(24) ‖ XChaCha20-Poly1305(key, nonce, aad, plain))
 //   keyId       base64(HMAC-SHA256(dek, "orb-key-id")[..16])
@@ -210,7 +210,7 @@ mod tests {
     raw[30] ^= 1;
     assert!(unseal(key.as_slice(), &b64(&raw), "aad").is_none());
   }
-  // Vectors made with Node (crypto.hkdfSync, crypto.createHmac, crypto.scrypt) as src/core/master.mjs did.
+  // Vectors made with Node (crypto.hkdfSync, crypto.createHmac, crypto.scrypt) as src/domain/security/master.mjs did.
   #[test]
   fn same_as_node() {
     let k = [7u8; 32];

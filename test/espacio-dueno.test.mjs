@@ -12,12 +12,12 @@ import { startEngine, until } from './helpers.mjs';
 import { createHome } from '../src/domain/workspace/home.mjs';
 import { paths, writeJson, homeKey, isHome } from '../src/platform/paths.mjs';
 import { loadConfig, merge } from '../src/platform/config-file.mjs';
-import { planWorkspace, applyLayout, rewriteDb, LAYOUT_FILE, keepBackupsOutside } from '../src/core/core-folder.mjs';
-import * as K from '../src/core/backup.mjs';
-import { setGuardedRoots, isOrbData, decide } from '../src/core/guard.mjs';
+import { planWorkspace, applyLayout, rewriteDb, LAYOUT_FILE, keepBackupsOutside } from '../src/domain/workspace/core-folder.mjs';
+import * as K from '../src/domain/data/backup.mjs';
+import { setGuardedRoots, isOrbData, decide } from '../src/domain/security/guard.mjs';
 import { cursorRules } from '../src/agents/cursor.mjs';
-import { scrubVaultedSecrets, ARCHIVE_DIR, ORIGINAL_CONFIG, PRE_COPY } from '../src/core/migrate-38.mjs';
-import { refOf } from '../src/core/connector-secrets.mjs';
+import { scrubVaultedSecrets, ARCHIVE_DIR, ORIGINAL_CONFIG, PRE_COPY } from '../src/domain/data/legacy/migrate-38.mjs';
+import { refOf } from '../src/domain/security/connector-secrets.mjs';
 import { layoutOptions } from '../src/ui/lib/core-access.js';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
@@ -294,7 +294,7 @@ test('lo que Orb guarda fuera del espacio (copias, claves) queda vetado a los ag
 // read-only for the agents: its node.exe and engine code run with all of Orb's secrets.
 test('la carpeta de instalación de Orb: los agentes pueden leerla, nunca escribir ni ejecutar lo que nombra', async () => {
   const { appInstallDir } = await import('../src/engine/workspace-layout.mjs');
-  const { setAppRoots } = await import('../src/core/guard.mjs');
+  const { setAppRoots } = await import('../src/domain/security/guard.mjs');
   const base = newBase();
   const install = path.join(base, 'Programs', 'Orb'); put(path.join(install, 'node', 'node.exe')); put(path.join(install, 'app', 'src', 'mcp', 'server.mjs'));
   assert.equal(appInstallDir({ ORB_NODE: path.join(install, 'node', 'node.exe') }), install);

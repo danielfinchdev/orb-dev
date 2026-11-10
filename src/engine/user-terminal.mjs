@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { ctx, tr } from '../platform/context.mjs';
-import { isOrbData, protectedHit } from '../core/guard.mjs';
+import { isOrbData, protectedHit } from '../domain/security/guard.mjs';
 import { killTree } from '../platform/proc.mjs';
 
 export const MAX_TERMINALS = 4;

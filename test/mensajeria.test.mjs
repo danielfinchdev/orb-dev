@@ -1,14 +1,14 @@
-// 3.6: la lista de chats como una app de mensajería (src/engine/api-inbox.mjs, src/core/inbox.mjs): los chats, con sus
+// 3.6: la lista de chats como una app de mensajería (src/engine/api-inbox.mjs, src/domain/conversations/inbox.mjs): los chats, con sus
 // fijados, secciones, silencio y no leídos, y la búsqueda.
 import { tempHome } from './helpers.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { Board } from '../src/core/board.mjs';
+import { Board } from '../src/domain/tasks/board.mjs';
 import { Sessions } from '../src/engine/sessions.mjs';
 import { Orchestrator } from '../src/engine/orchestrator.mjs';
 import { Scheduler } from '../src/engine/scheduler.mjs';
 import { buildApi } from '../src/engine/api.mjs';
-import { DESKTOP } from '../src/core/permissions.mjs';
+import { DESKTOP } from '../src/domain/security/permissions.mjs';
 import { ctx } from '../src/platform/context.mjs';
 
 let t; let board; let api;

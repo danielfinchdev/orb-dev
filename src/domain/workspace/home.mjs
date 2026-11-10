@@ -7,12 +7,12 @@ import { translate } from '../../shared/i18n.mjs';
 import { paths, isHome, homeFor, writeJson, OLD_LOGS_DIR } from '../../platform/paths.mjs';
 import { DEFAULT_CONFIG, merge, loadConfig } from '../../platform/config-file.mjs';
 import { moveLogs, tidyProjectLogs, generalLogHeader } from '../../platform/journal-files.mjs';
-import { migrateWorkspace, protectCore } from '../../core/core-folder.mjs';
+import { migrateWorkspace, protectCore } from './core-folder.mjs';
 
 // First run: <base>\Orb with core, the categories, config, secret and the general log. An existing workspace is reused as
 // it is; a folder called Orb with other things in it (projects, notes, the folders of an older Orb) keeps them: nothing
 // in it is overwritten or moved. Only Orb 3.7's own data (.orb, orb.json) moves into core; its logs, MCP servers and
-// Android tools stay where they are until the user decides in the window (src/core/core-folder.mjs › planWorkspace).
+// Android tools stay where they are until the user decides in the window (src/domain/workspace/core-folder.mjs › planWorkspace).
 export function createHome(base, { assistantName = PRODUCT.assistant, userName = '', language = 'es' } = {}) {
   const T = (key, vars) => translate(language, key, vars);
   if (!base || !path.isAbsolute(base)) throw new Error(T('msg.home.absolute'));
@@ -31,10 +31,10 @@ export function createHome(base, { assistantName = PRODUCT.assistant, userName =
   return { home, created: true };
 }
 
-// Every start: Orb 3.7's own data moves into core (src/core/core-folder.mjs), and the fixed folders (core's, the six
+// Every start: Orb 3.7's own data moves into core (src/domain/workspace/core-folder.mjs), and the fixed folders (core's, the six
 // categories) exist. Folders made by 2.3.0 and older are put in order: their "bitacoras" moves into the log
 // folder, dropping only the empty logs 2.3.0 wrote for the category and configuration folders it took for projects.
-// Nothing with content is deleted. core is hidden again (src/core/core-folder.mjs › protectCore; wait false: without
+// Nothing with content is deleted. core is hidden again (src/domain/workspace/core-folder.mjs › protectCore; wait false: without
 // waiting for it, as the engine starts: the promise of whether it worked is returned).
 export function ensureLayout(home, config = null, { wait = true } = {}) {
   migrateWorkspace(home);

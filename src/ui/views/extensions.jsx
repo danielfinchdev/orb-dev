@@ -3,7 +3,7 @@
 // off), what agents made and wait for the user («Activar» / «Descartar»), the connectors of the PC (a package run with
 // npx…) and the projects that are MCP servers («Usar», «Mover a core»). A server of core is improved in a project
 // («Editar en un proyecto», then «Aplicar cambios»). PC only. Turning on what an agent made always goes through a dialog
-// that lists every file that will be turned on (the quarantine's copy, src/core/extensions.mjs) and opens its folder.
+// that lists every file that will be turned on (the quarantine's copy, src/domain/extensions/extensions.mjs) and opens its folder.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Check, Download, Ellipsis, FolderOpen, KeyRound, PencilLine, Plus, Puzzle, Server, Trash2, Upload, X } from 'lucide-react';

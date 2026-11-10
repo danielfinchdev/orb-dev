@@ -46,7 +46,7 @@ import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { Turn, Approvals } from '../../src/agents/live.mjs';
-import { decide } from '../../src/core/guard.mjs';
+import { decide } from '../../src/domain/security/guard.mjs';
 
 const SCRIPT = (() => { try { return process.env.ORB_FAKE_SCRIPT ? JSON.parse(fs.readFileSync(process.env.ORB_FAKE_SCRIPT, 'utf8')) : []; } catch { return []; } })();
 

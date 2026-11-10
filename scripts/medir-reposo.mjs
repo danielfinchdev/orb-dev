@@ -44,8 +44,8 @@ const OFF = Object.fromEntries(['claude', 'codex', 'cursor', 'gemini', 'opencode
 writeJson(paths(home).config, merge(loadConfig(home), { ui: { tourDone: true }, agents: OFF, autoRun: false }));
 useHome(home);
 {
-  const { Board } = await import(url('core/board.mjs'));
-  const { syncProjects } = await import(url('core/projects.mjs'));
+  const { Board } = await import(url('domain/tasks/board.mjs'));
+  const { syncProjects } = await import(url('domain/projects/projects.mjs'));
   fs.mkdirSync(path.join(home, 'web', 'proyecto-1'), { recursive: true });
   const board = new Board();
   syncProjects(board);

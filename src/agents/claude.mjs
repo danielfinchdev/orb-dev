@@ -1,7 +1,7 @@
 // Claude Code adapter. 2.3: a live session through the official Claude Agent SDK, driving the
 // Claude Code the user installed (pathToClaudeCodeExecutable): its login, its subscription, nothing is copied. One process
 // per conversation stays open between turns; answers stream as they are written; every action that needs permission goes
-// through the guard (src/core/guard.mjs) and, when it must ask, to an approval card in the app.
+// through the guard (src/domain/security/guard.mjs) and, when it must ask, to an approval card in the app.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,7 +9,7 @@ import { spawn } from 'node:child_process';
 import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, cleanEnv, within, discoverDir, killTree } from '../platform/proc.mjs';
 import { clip, describeInput, mcpEnvByRef } from './common.mjs';
 import { Turn, Approvals } from './live.mjs';
-import { decide, describeAction } from '../core/guard.mjs';
+import { decide, describeAction } from '../domain/security/guard.mjs';
 import { tr } from '../platform/context.mjs';
 import { logJson } from '../platform/log.mjs';
 
@@ -143,7 +143,7 @@ export const answersOrb = (m) => !(m?.origin?.kind && m.origin.kind !== 'human')
 export const nativeSkills = true;
 
 // 3.8.2: «total» is no longer bypassPermissions (which never calls canUseTool, so Orb's guard did not run): Claude asks
-// for what it would ask in «default» and the guard allows all but the protected set (src/core/guard.mjs).
+// for what it would ask in «default» and the guard allows all but the protected set (src/domain/security/guard.mjs).
 export const permissionModeOf = (p) => (p === 'editar' ? 'acceptEdits' : 'default');
 
 // 3.8.3: Orb's own tools always in the prompt (Claude Code's alwaysLoad), never behind its tool search: Orbe reported
@@ -278,7 +278,7 @@ export function createLive(o) {
       // folder (other conversations) would run with their environment. (Managed policy hooks still apply.)
       // 3.8.1: nor the commands a skill or a slash command runs when it loads (!`…` in its text): checked with the real
       // Claude Code, they ran without asking canUseTool. (A skill's allowed-tools skipped it too: the skills of core reach
-      // Claude without it, src/core/extensions.mjs › exposeSkills.)
+      // Claude without it, src/domain/extensions/extensions.mjs › exposeSkills.)
       settings: { fastMode: false, disableAllHooks: true, disableSkillShellExecution: true },
       // 3.8 (F2.6c): nor its permission rules: an allow rule there (Bash, Edit…) would let Claude act without asking Orb's
       // guard (canUseTool), past «leer», «probar» and «Cosas que nadie toca». Only policy rules count (checked with the
@@ -304,7 +304,7 @@ export function createLive(o) {
     // 3.8.2 (owner's decision D8): no Claude in Chrome (it drives the user's own Chrome); every agent's browser is Orb's
     // (orb_browser_*), with Orb's browser rules. Under «Acceso total» the PC is used through the terminal.
     if (o.budgetUsd) options.maxBudgetUsd = o.budgetUsd;
-    // 3.8.1: the skills of core that are on, as a plugin Orb makes (src/core/extensions.mjs › exposeSkills): Claude lists
+    // 3.8.1: the skills of core that are on, as a plugin Orb makes (src/domain/extensions/extensions.mjs › exposeSkills): Claude lists
     // them («orb-skills:<name>») and loads one when it fits. Checked with the real Claude Code (supportedCommands).
     if (o.skills?.list?.length) options.plugins = [{ type: 'local', path: o.skills.plugin }];
     query = sdkQuery({ prompt: input, options });

@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { ctx } from '../src/platform/context.mjs';
-import { isOrbData } from '../src/core/guard.mjs';
+import { isOrbData } from '../src/domain/security/guard.mjs';
 import { kindOf, placeAttachments, prepareAttachments, extractText, zipEntries, probeInfo, evenTimes, extractFrames, ATTACH_DIR, ATTACH_MAX, FFMPEG } from '../src/engine/attachments.mjs';
 import { micMode } from '../src/ui/lib/mic.js';
 import { reloadWait, markReloaded, RELOAD_GAP_MS } from '../src/ui/lib/usage-reload.js';
@@ -208,7 +208,7 @@ test('«Recargar» in the usage panel: spinner, 20 s between reloads, the agents
   assert.match(panel, /call\('usage\.refresh'\)/);
   const api = src('engine', 'api.mjs');
   assert.match(api, /'usage\.refresh': async \(\) => \{\s*if \(Date\.now\(\) - usageAskedAt >= 20_000\)/);
-  assert.match(src('core', 'permissions.mjs'), /'usage\.refresh': 'remote'/);
+  assert.match(src('domain', 'security', 'permissions.mjs'), /'usage\.refresh': 'remote'/);
   // Every open agent process is asked; one without the call (or failing) is skipped.
   const asked = [];
   const lives = new Map([

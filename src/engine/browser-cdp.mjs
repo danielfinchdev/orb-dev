@@ -1,12 +1,12 @@
 // 3.8.1 (D2, D7): what the agents' browser does with one of its pages over the DevTools protocol, for the shared actions
-// of src/core/browser-protocol.mjs: the driver interface browser-protocol.mjs expects. Under Tauri the pages are hidden WebView2 windows driven by Rust (CallDevToolsProtocolMethod, no
+// of src/engine/browser/browser-protocol.mjs: the driver interface browser-protocol.mjs expects. Under Tauri the pages are hidden WebView2 windows driven by Rust (CallDevToolsProtocolMethod, no
 // DevTools port: src/engine/host-browser.mjs); in the tests, pages of a headless Edge.
 //
 // attachPage(page, tab) takes a page ({ id, send, on, close }: src/engine/agent-browser.mjs) and keeps on the tab what the
 // actions read: its main frame, address, title, whether it is loading, its console errors and warnings (and what the app
 // refused: a download, a sign-in prompt, an address that is not a web page), and the isolated world Orb's scripts run in
 // (the page's DOM, none of its JavaScript). Then cdpDriver(T) does the rest.
-import { VIEW, allowed, dialogsHook, TAKE_DIALOGS } from '../core/browser-protocol.mjs';
+import { VIEW, allowed, dialogsHook, TAKE_DIALOGS } from './browser/browser-protocol.mjs';
 
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
 export const WORLD_NAME = 'orb-agent';

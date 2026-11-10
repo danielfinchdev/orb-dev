@@ -15,9 +15,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { translate } from '../shared/i18n.mjs';
-import { ctx } from '../platform/context.mjs';
-import { DEFAULT_PROTECTED } from '../platform/paths.mjs';
+import { translate } from '../../shared/i18n.mjs';
+import { ctx } from '../../platform/context.mjs';
+import { DEFAULT_PROTECTED } from '../../platform/paths.mjs';
 
 //   probar     (3.1, read-only tasks: reviews, verification) read and run commands (tests, the build, a dev server to
 //              open in the browser), but change no file; risky commands ask first
@@ -127,7 +127,7 @@ export function riskOf(command, lang = 'es') {
 // The logs moved into core (core\bitacora) are open to a READING tool (the user's rules for agents may point there);
 // they are written only through Orb's own tools. 3.8.1: the skills (core\skills) too: agents read them (their SKILL.md
 // and files); a command that runs one of their scripts asks first, and nobody writes there. What an agent makes for the
-// user to turn on goes in core\preparacion, open like the isolated copies (src/core/extensions.mjs).
+// user to turn on goes in core\preparacion, open like the isolated copies (src/domain/extensions/extensions.mjs).
 const OPEN_INTERNAL = [['copias', 'aisladas'], ['herramientas'], ['preparacion']];
 const READ_INTERNAL = [['bitacora'], ['skills']];
 const norm = (p) => path.resolve(p).replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();

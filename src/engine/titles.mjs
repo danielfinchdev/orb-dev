@@ -2,7 +2,7 @@
 // once; then the lightest model of the conversation's own agent (its account, read-only, no tools) writes a concise one in
 // a few seconds. If it cannot, the quick one stays.
 import { ctx } from '../platform/context.mjs';
-import { account, defaultAccount, accountEnv } from '../core/accounts.mjs';
+import { account, defaultAccount, accountEnv } from '../domain/usage/accounts.mjs';
 import { cleanTitle } from '../shared/titles.mjs';
 import { adapter, executable, installed } from '../agents/index.mjs';
 import { chooseModel } from './catalog.mjs';

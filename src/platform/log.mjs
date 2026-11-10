@@ -1,5 +1,5 @@
 // Orb's own logs (motor.log, a run's asistente.log or registro.jsonl): rotation, one line per call, secrets hidden.
-// The logs people read (bitácoras) are another thing: src/engine/logs.mjs.
+// The logs people read (bitácoras) are another thing: src/domain/journal/journal.mjs.
 import fs from 'node:fs';
 import { redactSecrets } from '../shared/secrets-scan.mjs';
 

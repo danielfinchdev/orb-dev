@@ -14,14 +14,14 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { tempHome, startEngine, until, fake } from './helpers.mjs';
-import { decide, runsAdb, setGuardedRoots, setAppRoots, localPath } from '../src/core/guard.mjs';
+import { decide, runsAdb, setGuardedRoots, setAppRoots, localPath } from '../src/domain/security/guard.mjs';
 import zlib from 'node:zlib';
-import { needsUnlock, FRESH_UNLOCK, METHODS } from '../src/core/permissions.mjs';
+import { needsUnlock, FRESH_UNLOCK, METHODS } from '../src/domain/security/permissions.mjs';
 import { useHome, ctx } from '../src/platform/context.mjs';
-import { AgentAuth } from '../src/engine/agent-auth.mjs';
+import { AgentAuth } from '../src/domain/security/agent-auth.mjs';
 import { redeem } from '../src/mcp/auth-client.mjs';
 import { cursorRules } from '../src/agents/cursor.mjs';
-import { createActions } from '../src/core/browser-protocol.mjs';
+import { createActions } from '../src/engine/browser/browser-protocol.mjs';
 import { permissionModeOf } from '../src/agents/claude.mjs';
 import { pairingQr, newPairing, parseMdns, parseDevices, pairedGuid, apkPackage, verifyAdb, fingerprints, inputText, ensureAdb, checkArchive, createAndroid, androidAllowed, shellAllowed, adbStatus } from '../src/engine/android.mjs';
 

@@ -1,7 +1,7 @@
 // 3.8.2 (item 13, owner's decision D4): the music Orb can play on Windows: background music for studying or coding (the
 // play / pause button at the foot of the sidebar) and one track per minigame. None of it is in the installer: each
 // track is downloaded the first time it is played (src/engine/music.mjs) into core\herramientas\musica (read-only for
-// agents, src/core/guard.mjs) and checked against its size and SHA-256 here before it is kept or played.
+// agents, src/domain/security/guard.mjs) and checked against its size and SHA-256 here before it is kept or played.
 //
 // Only free music: every track is CC0 1.0 (public domain dedication), checked by hand on its page (the «License(s)»
 // field of OpenGameArt.org) on 2026-11-09. CC0 asks for no attribution; Orb credits the authors anyway (Ajustes ›
