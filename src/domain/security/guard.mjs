@@ -699,14 +699,18 @@ function otherSecret({ command, paths, patterns, cwd, roots, names = false }) {
 
 // 3.8.3 (security review): a deletion that takes the project folder itself, a folder that holds it, its .git (where Orb's
 // snapshots live) or everything at its top (`*`, which in PowerShell takes .git too): «Deshacer» could not bring it back.
-const DELETERS = /^(rm|rmdir|rd|del|erase|remove-item|ri|unlink|shred)$/i;
+const DELETERS = /^(rm|rmdir|rd|del|erase|remove-item|ri|unlink|shred|mv|move|move-item|mi|rename-item|rni|ren|rename)$/i;
 function deletesProjectOrGit(command, cwd, projectDir) {
   const top = projectDir ? resolveTarget(projectDir) : null;
   return workDirs(expandEnv(unwrapShell(command)), cwd).some((part) => {
     const exe = String(part.words[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '');
     if (!DELETERS.test(exe)) return false;
-    return targetsOf(exe, part.words.slice(1)).some((t) => {
+    const all = targetsOf(exe, part.words.slice(1));
+    // A move's destination (`mv src/a.js .`) is not what goes away.
+    const gone = /^(mv|move|move-item|mi)$/i.test(exe) && all.length > 1 ? all.slice(0, -1) : all;
+    return all.some((t, i) => {
       if (/(^|[\\/])\.git([\\/]|$)/i.test(bare(t))) return true;
+      if (!gone.includes(t) || i >= gone.length) return false;
       const full = resolveTarget(t, part.dir);
       if (!full || !top) return false;
       if (full === top || top.startsWith(`${full}\\`)) return true;
@@ -788,10 +792,9 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
       if (asking) return { decision: 'ask', reason: asking.reason };
       // 3.8.3 (security review): what the checkpoint cannot bring back still asks: the project folder itself or its .git
       // (where the snapshots live), and git clean -x (ignored files, .env among them, are never in the snapshot).
-      if (risks.some((r) => r.category === 'deleteFolders' || r.category === 'gitRewrite')) {
-        if (deletesProjectOrGit(command, cwd, project)) return { decision: 'ask', reason: T('checkpoint') };
-        if (cleansIgnored(command)) return { decision: 'ask', reason: T('ignoredFiles') };
-      }
+      // Moving or renaming them too (`mv .git x` leaves no repository to undo from), whatever the command's risks.
+      if (deletesProjectOrGit(command, cwd, project)) return { decision: 'ask', reason: T('checkpoint') };
+      if (risks.some((r) => r.category === 'gitRewrite') && cleansIgnored(command)) return { decision: 'ask', reason: T('ignoredFiles') };
       if (AGENT_CONFIG_IN.test(command)) return { decision: 'ask', reason: T('agentConfig') };
       if (away) return { decision: 'ask', reason: outsideReason(away.what) };
       if (risks.length) return autoAllow(risks[0].category === 'publish' ? T('publishAsked') : risks[0].reason);

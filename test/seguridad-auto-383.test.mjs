@@ -122,12 +122,14 @@ test('revisión Auto: lo que «Deshacer» no puede devolver no pasa sin pregunta
     ['borrar el proyecto desde fuera', { tool: 'Bash', command: 'cd .. && rm -rf web' }],
     ['Remove-Item * -Recurse -Force en el proyecto', { tool: 'Bash', command: 'Remove-Item * -Recurse -Force' }],
     ['git clean -x (lo ignorado no está en la foto)', { tool: 'Bash', command: 'git clean -fdx' }],
+    ['mover .git', { tool: 'Bash', command: 'mv .git .git-viejo' }],
+    ['renombrar .git', { tool: 'Bash', command: 'Rename-Item .git x' }],
     ['borrar las fotos de Orb', { tool: 'Bash', command: 'git update-ref -d refs/orb/tarea-3' }],
     ['podar el historial', { tool: 'Bash', command: 'git reflog expire --expire=now --all && git gc --prune=now' }]
   ];
   for (const [what, action] of rows) assert.equal(ask('auto', action).decision, 'ask', what);
   // still free in «Auto»
-  for (const command of ['rm -rf dist', 'rm -rf node_modules src/old', 'git clean -fd', 'git reset --hard', 'Remove-Item -Recurse -Force .\\build']) assert.equal(ask('auto', { tool: 'Bash', command }).decision, 'allow', command);
+  for (const command of ['mv a.js b.js', 'mv src/a.js .', 'rm .gitignore', 'rm -rf dist', 'rm -rf node_modules src/old', 'git clean -fd', 'git reset --hard', 'Remove-Item -Recurse -Force .\\build']) assert.equal(ask('auto', { tool: 'Bash', command }).decision, 'allow', command);
 });
 
 test('revisión Auto: la regla del 25 % solo cuenta a partir de 10 archivos de código borrados', () => {
