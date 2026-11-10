@@ -1,4 +1,4 @@
-// The agents' browser (src/engine/host-browser.mjs): real pages the agents drive through Orb's MCP tools, each one a
+// The agents' browser (src/engine/browser/host-browser.mjs): real pages the agents drive through Orb's MCP tools, each one a
 // WebView2 in a hidden window that is never shown, made here directly with WebView2 (not as Tauri windows, so they have
 // no Tauri IPC, no custom protocol and nothing of Orb's window):
 //   - a browser environment of its own: another data folder (…\navegador-agente), so another browser process; Orb's window

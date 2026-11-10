@@ -22,7 +22,7 @@ pub const ORB2: &[u8] = b"ORB2";
 const ENTROPY: &[u8] = b"orb.clave.v2";
 const MAX_BLOB: usize = 16 * 1024;
 /// After «Empezar con una clave nueva»: the sealed keys that did not open then. When Windows opens one of them again the
-/// user is offered to go back to it (Ajustes › Datos writes BACK_FILE: src/engine/api-data.mjs › backup.previousKey).
+/// user is offered to go back to it (Ajustes › Datos writes BACK_FILE: src/engine/api/data.mjs › backup.previousKey).
 pub const PREVIOUS_FILE: &str = "clave-anterior.json";
 pub const BACK_FILE: &str = "clave-volver.json";
 

@@ -1,6 +1,6 @@
 // The pure parts of the bridge between the window, Rust and the engine, kept apart so `cargo test` covers them: the JSON
-// lines of the engine's stdio channel (src/engine/stdio.mjs), the window's method names, the app's texts, the
-// interface's zoom, the WebView2 arguments and the checks of what the engine asks the app to do (src/engine/host.mjs ›
+// lines of the engine's stdio channel (src/engine/transport/stdio.mjs), the window's method names, the app's texts, the
+// interface's zoom, the WebView2 arguments and the checks of what the engine asks the app to do (src/engine/host/host.mjs ›
 // checkHostRequest: the same rules).
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -196,7 +196,7 @@ fn choice(params: &Value) -> String {
 
 /// A web page over https, a page of this PC (a project's preview) or Warp's link to open a tab in a folder; existing
 /// folders of this PC only, never a file to run; a terminal, an editor or an action by kind; the secret (64 hex characters
-/// to seal, a base64 blob of at most 16 KB to open). The same rules as src/engine/host.mjs › checkHostRequest.
+/// to seal, a base64 blob of at most 16 KB to open). The same rules as src/engine/host/host.mjs › checkHostRequest.
 pub fn check_host(method: &str, params: &Value, is_dir: impl Fn(&Path) -> bool) -> Result<HostRequest, String> {
   let text = |k: &str| params.get(k).and_then(Value::as_str).unwrap_or("").to_string();
   let folder = |k: &str, error: &str| {

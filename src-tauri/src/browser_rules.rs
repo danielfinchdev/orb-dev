@@ -62,7 +62,7 @@ pub fn url_allowed(url: &str, main_frame: bool) -> bool {
   }
 }
 
-/// The DevTools methods the engine's driver uses (src/engine/browser-cdp.mjs), and nothing else: no Browser.* or
+/// The DevTools methods the engine's driver uses (src/engine/browser/browser-cdp.mjs), and nothing else: no Browser.* or
 /// Target.* (other pages, downloads, closing the browser), no Network.*/Fetch.*/Storage.* (cookies, headers), no
 /// Page.setDownloadBehavior.
 const CDP_METHODS: [&str; 25] = [
@@ -206,7 +206,7 @@ fn cut(s: &str, n: usize) -> String {
   s.chars().take(n).collect()
 }
 
-/// A page's DevTools event as the engine gets it (src/engine/browser-cdp.mjs reads only these fields), or nothing:
+/// A page's DevTools event as the engine gets it (src/engine/browser/browser-cdp.mjs reads only these fields), or nothing:
 /// too big to read (only a console error's existence is kept), a console line that is not an error or a warning, and
 /// texts and addresses cut short. `json`: WebView2's ParameterObjectAsJson.
 pub fn shrink_event(method: &str, json: &str) -> Option<Value> {
@@ -274,7 +274,7 @@ pub fn user_agent(default: &str) -> String {
     .join(" ")
 }
 
-/// The fields each DevTools method may carry (what the engine's driver sends: src/engine/browser-cdp.mjs,
+/// The fields each DevTools method may carry (what the engine's driver sends: src/engine/browser/browser-cdp.mjs,
 /// host-browser.mjs), and their limits: Rust is the boundary even if the engine were not (review D7–D8 M5). No world with
 /// universal access, no navigation of another frame, nothing bigger than the 1280×800 view at scale 1, no capture
 /// beyond the view, no script run at once on every document.

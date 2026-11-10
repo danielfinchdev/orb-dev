@@ -1,6 +1,6 @@
 // The little always-on-top window of the agents' browser (src/ui/pip.html), as Electron's: in the top-right corner of the
 // screen Orb is on, never in the taskbar, never taking the focus. The engine decides when it shows and what it says
-// (src/engine/host-browser.mjs: host.pip.show / hide / state / frame); its buttons come back here (pip_action) and go to
+// (src/engine/browser/host-browser.mjs: host.pip.show / hide / state / frame); its buttons come back here (pip_action) and go to
 // the engine, except «go to Orb», done here. It lives in Orb's own WebView2 environment (same data folder and arguments
 // as the main window, which WebView2 requires), with its own capability: it may only listen to its events and call
 // pip_action.

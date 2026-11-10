@@ -254,7 +254,7 @@ fn quick(op: &str, req: &Value, v: &mut Vault, now: u64, server: &Server) -> Ans
   }
 }
 
-/// A phone's key confirmation (src/engine/remote.mjs › finishPair): K from the code, ECDH(phone, PC) and ECDH(verifier,
+/// A phone's key confirmation (src/engine/transport/remote.mjs › finishPair): K from the code, ECDH(phone, PC) and ECDH(verifier,
 /// PC), with the waits of the 'pair' channel. The verifier and K never leave the vault. → the attempt's answer, with the
 /// PC's own MAC when right.
 fn pair_finish(req: &Value, v: &mut Vault, now: u64) -> Answer {
