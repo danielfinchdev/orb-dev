@@ -1,4 +1,4 @@
-// 3.8.3 (restructuring): the layers' import rules (docs/architecture.md). A cheap check over the import graph of src:
+// 3.8.3 (restructuring): the layers' import rules (docs/ARCHITECTURE.md, section 0). A cheap check over the import graph of src:
 // each layer imports only the layers below it, and no new import cycle appears.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
