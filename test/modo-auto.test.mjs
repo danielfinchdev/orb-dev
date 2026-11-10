@@ -168,7 +168,8 @@ test('Auto: qué escribe fuera un comando y qué es un secreto', () => {
   for (const f of ['.env', '.env.local', 'C:\\x\\.env.production', 'cert.pem', 'id_rsa', 'id_ed25519.pub', 'clave.key', 'app.keystore']) assert.ok(isSecretFile(f), f);
   for (const f of ['.env.example', '.env.sample', 'env.js', 'keyboard.js', 'monkey.ts', 'README.md']) assert.equal(isSecretFile(f), false, f);
   const personal = defaultPersonalRoots({ APPDATA: 'C:\\U\\AppData\\Roaming', LOCALAPPDATA: 'C:\\U\\AppData\\Local' }, 'C:\\U');
-  for (const p of ['C:\\U\\.ssh', 'C:\\U\\.claude\\.credentials.json', 'C:\\U\\.codex\\auth.json', 'C:\\U\\AppData\\Local\\Google\\Chrome\\User Data', 'C:\\U\\AppData\\Roaming\\Microsoft\\Credentials']) assert.ok(personal.includes(p), p);
+  // Built with path.join like the code, so the expectation holds on Linux CI too (identical strings on Windows).
+  for (const p of [path.join('C:\\U', '.ssh'), path.join('C:\\U', '.claude', '.credentials.json'), path.join('C:\\U', '.codex', 'auth.json'), path.join('C:\\U\\AppData\\Local', 'Google', 'Chrome', 'User Data'), path.join('C:\\U\\AppData\\Roaming', 'Microsoft', 'Credentials')]) assert.ok(personal.includes(p), p);
 });
 
 test('Auto: lo que pide el usuario con sus palabras (solo órdenes, no lo negado)', () => {
