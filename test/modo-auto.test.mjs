@@ -229,7 +229,7 @@ test('Auto: una tarea se retiene por borrar más de 50 archivos o más del 25 %,
 });
 
 test('Orbe: sus herramientas de lectura pasan por el guardia y no lee core', async () => {
-  const { ASSISTANT_ALLOWED, assistantDir, safeAddDirs } = await import('../src/engine/orchestrator.mjs');
+  const { ASSISTANT_ALLOWED, assistantDir } = await import('../src/engine/orchestrator.mjs');
   assert.deepEqual(ASSISTANT_ALLOWED, ['mcp__orb'], 'Read, Glob y Grep ya no se saltan canUseTool');
   const cwd = assistantDir(path.join(base, 'Orb'));
   assert.ok(!cwd.toLowerCase().startsWith(internal.toLowerCase()), 'su carpeta no está en core');
@@ -238,7 +238,9 @@ test('Orbe: sus herramientas de lectura pasan por el guardia y no lee core', asy
   }
   assert.equal(decide({ permission: 'leer', tool: 'Grep', patterns: [path.join(internal, 'datos')], internalDir: internal, cwd, projectDir: null }).decision, 'deny');
   assert.equal(decide({ permission: 'leer', tool: 'Read', paths: [path.join(proj, 'src', 'a.js')], internalDir: internal, cwd, projectDir: null }).decision, 'allow', 'leer proyectos, sin fricción');
-  assert.deepEqual(safeAddDirs([proj, path.join(base, 'Orb'), internal, path.join(internal, 'datos')], internal), [proj], 'ni core ni lo que lo contiene como carpeta extra');
+  // 3.8.3 (security review): no extra folders, which Claude Code would read without asking the guard (other projects' .env).
+  assert.match(fs.readFileSync(new URL('../src/engine/orchestrator.mjs', import.meta.url), 'utf8'), /addDirs: \[\],/);
+  assert.equal(decide({ permission: 'leer', tool: 'Read', paths: [path.join(other, '.env')], internalDir: internal, cwd, projectDir: null }).decision, 'deny', 'el .env de un proyecto, también para Orbe');
 });
 
 test('Auto en los agentes: Claude acepta ediciones, Codex con red, Cursor igual que Preguntar', () => {

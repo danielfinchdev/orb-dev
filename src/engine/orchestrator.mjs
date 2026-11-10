@@ -20,7 +20,6 @@ import { briefing } from '../domain/journal/journal.mjs';
 import { rememberModels } from './usage/catalog.mjs';
 import { recordRate, pickAccount, recordSpend } from '../domain/usage/budget.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
-import { isOrbData } from '../domain/security/guard.mjs';
 
 // 3.8.3 (permissions proposal, row 14): the assistant's own folder is outside core. Claude Code lets a reading tool look
 // inside its working folder (and the extra folders) without asking Orb's guard, so with its folder in core\ejecuciones it
@@ -29,16 +28,8 @@ import { isOrbData } from '../domain/security/guard.mjs';
 export const assistantDir = (home = ctx.home) => path.join(os.tmpdir(), 'orb-asistente', crypto.createHash('sha256').update(path.resolve(String(home ?? '')).toLowerCase()).digest('hex').slice(0, 12));
 // 3.8.3: the reading tools always go through Orb's guard (canUseTool): only Orb's own tools are pre-allowed.
 export const ASSISTANT_ALLOWED = ['mcp__orb'];
-// The extra folders the assistant may read without asking: never core, one inside it or one that holds it (nor another
-// closed folder: isOrbData).
-const realDir = (p) => { try { return fs.realpathSync.native(p); } catch { return path.resolve(p); } };
-const normDir = (p) => realDir(p).toLowerCase().replace(/[\\/]+$/, '');
-const insideOrHolds = (dir, internalDir) => {
-  if (!internalDir) return false;
-  const a = normDir(dir); const b = normDir(internalDir);
-  return a === b || b.startsWith(`${a}\\`) || a.startsWith(`${b}\\`);
-};
-export const safeAddDirs = (dirs, internalDir) => dirs.filter((d) => !insideOrHolds(d, internalDir) && !isOrbData(d, internalDir, null, { read: true }));
+// 3.8.3 (security review): and no extra folders (additionalDirectories): Claude Code reads inside those without asking
+// canUseTool either, so every project's .env and keys were open to it. Projects are read through the guard like the rest.
 
 // The models an agent takes for a task: the configured ones and the ones the agent itself listed (2.6, models:<agent>).
 // Each one with its name when the agent gave it (e.g. «opus = Opus 5.5 (claude-opus-5-5)»), so the brain picks the right id.
@@ -328,7 +319,6 @@ class Lane {
     const key = [agent, cwd, model, c.reasoning, acc.id, ...visible.map((p) => p.path)].join('|');
     if (this.live && this.liveKey === key && !this.live.isClosed()) return;
     this.closeLive();
-    const dirs = safeAddDirs([...Object.values(ctx.paths.categories), ...(ctx.config.projectRoots ?? []), ...visible.map((p) => p.path)].filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } }), ctx.paths.internal);
     fs.mkdirSync(cwd, { recursive: true });
     fs.mkdirSync(ctx.paths.runs, { recursive: true });
     const writeLog = runLog(this.orch.logFile, { prefix: `[${this.id}] ` });
@@ -351,7 +341,7 @@ class Lane {
       env: { ...accountEnv(acc), ORB_AGENT: 'orb' },
       ...(isClaude ? { systemPrompt: persona(this.board) } : {}),
       tools: isClaude ? { allowed: ASSISTANT_ALLOWED, disallowed: claude.COORDINATOR_DENIED } : undefined,
-      addDirs: [...new Set(dirs)].filter((d) => d !== cwd).slice(0, 40), internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog,
+      addDirs: [], internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog,
       // 3.8.1 (review H1c B10): no skills of core here: the coordinator has Skill denied; the agents of its tasks get them.
       onEvent: (ev) => this.onEvent(ev)
     });
