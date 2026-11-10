@@ -104,6 +104,14 @@ function policy(permission) {
 export function sandboxConfig(permission) {
   return permission === 'auto' ? { 'sandbox_workspace_write.network_access': true } : {};
 }
+// 3.8.3 (security review): why the guard would deny a command Codex started on its own, in any mode (what is always
+// closed: core, the owner's keys, another project's secrets…; not what the chat's level alone refuses). null: it would not.
+export function deniedRun(command, o = {}) {
+  const c = Array.isArray(command) ? command.join(' ') : String(command ?? '');
+  if (!c.trim()) return null;
+  const verdict = decide({ permission: 'total', tool: 'Bash', kind: 'execute', command: c, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()), projectDir: o.projectDir });
+  return verdict.decision === 'deny' ? verdict.reason : null;
+}
 // Whether a Codex permissions request asks for the network and nothing else (no folder, no other grant).
 export function onlyNetwork(perms) {
   if (!perms || typeof perms !== 'object') return false;
@@ -230,6 +238,11 @@ export function createLive(o) {
     if (method === 'item/agentMessage/delta') { onEvent({ type: 'delta', text: p.delta }); return; }
     if (method === 'item/started') {
       const tool = ITEM_TOOL(p.item); if (tool) onEvent({ type: 'item', role: 'tool', kind: 'tool', body: { id: p.item.id, ...tool } });
+      // 3.8.3 (security review): Codex runs the commands it deems safe (cat, type, rg…) without asking, so they never
+      // reach the guard. One the guard would deny (reading core, the owner's keys, another project's .env) stops the
+      // turn at once, before a next step can send what it read out (in «Auto» Codex has the network).
+      const why = p.item?.type === 'commandExecution' ? deniedRun(p.item.command, o) : null;
+      if (why) { onEvent({ type: 'item', role: 'system', kind: 'status', body: tr('msg.sessions.autoStopped', { why }) }); live.interrupt?.(); }
       return;
     }
     // 3.6: the end of a compaction (thread/compact/start): the item of the summary or the thread's own notice. 3.8.1: the

@@ -139,3 +139,22 @@ test('revisión Auto: la regla del 25 % solo cuenta a partir de 10 archivos de c
   assert.ok(deletionHold(Array.from({ length: 51 }, (_, i) => `f${i}.js`), 10000, 'auto').held, 'más de 50');
   assert.ok(deletionHold(Array.from({ length: 10 }, (_, i) => `f${i}.js`), 0, 'preguntar').held, 'Preguntar: 10');
 });
+
+test('revisión Auto: el glob de Grep y el patrón de Glob se miran desde la carpeta donde buscan', async () => {
+  const { toolPatterns } = await import('../src/agents/claude.mjs');
+  const pats = toolPatterns('Grep', { pattern: 'KEY', path: other, glob: '.env' });
+  assert.deepEqual(pats, [path.join(other, '.env')], 'el patrón de Grep (una expresión) no cuenta; su glob, desde su carpeta');
+  assert.equal(ask('auto', { tool: 'Grep', paths: [other], patterns: pats }).decision, 'deny');
+  assert.deepEqual(toolPatterns('Glob', { pattern: 'src/*.js' }), ['src/*.js'], 'sin carpeta: desde la del agente');
+  assert.equal(ask('auto', { tool: 'Grep', paths: [proj], patterns: toolPatterns('Grep', { pattern: 'x', path: proj, glob: '*.js' }) }).decision, 'allow');
+});
+
+test('revisión Auto: Codex para el turno si ejecuta por su cuenta algo cerrado (lo que no pasa por el guardia)', async () => {
+  const { deniedRun } = await import('../src/agents/codex.mjs');
+  const o = { internalDir: internal, cwd: proj, projectDir: proj };
+  assert.ok(deniedRun(`powershell -Command "Get-Content '${path.join(internal, 'datos', 'orb.db')}'"`, o), 'core');
+  assert.ok(deniedRun('cat ~/.ssh/id_rsa', o), 'las claves del dueño');
+  assert.ok(deniedRun(['cat', '../otro/.env'], o), 'el .env de otro proyecto');
+  // What only the level refuses (a read-only chat running a command) or asks does not stop anything.
+  for (const c of ['cat src/a.js', 'rg TODO', 'git push', 'rm -rf ../otro']) assert.equal(deniedRun(c, { ...o, permission: 'leer' }), null, c);
+});
