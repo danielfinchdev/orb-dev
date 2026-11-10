@@ -123,6 +123,20 @@ export function logTask(board, task, { revert }) {
 `);
 }
 
+// 3.8.3 (uso real final): «Deshacer» leaves an entry too. Without it the next agent read in the log what the task had
+// made and found the files gone («index.html no existía, a pesar de la bitácora de la tarea #11»).
+export function logUndone(board, task, { restored = [], removed = [], skipped = [] }) {
+  const file = board.ensureProjectLog(task.project);
+  const list = (xs) => cutWords(xs.join(', '), 400) || '—';
+  fs.appendFileSync(file, `
+### ${stamp()} — ${assistantName()} — ${tr('sys.logs.undoneTitle', { id: task.id, title: oneLine(task.title) })}
+- ${tr('sys.logs.request', { user: ofUserLabel() })}: ${tr('sys.logs.undoneAsk', { user: userName() })}
+- ${tr('sys.logs.done')}: ${tr('sys.logs.undoneDone', { id: task.id, restored: list(restored), removed: list(removed) })}${skipped.length ? tr('sys.logs.undoneSkipped', { list: list(skipped) }) : ''}
+- ${tr('sys.logs.revert')}: ${tr('sys.logs.undoneRevert', { id: task.id })}
+- ${tr('sys.logs.status')}: ${tr('sys.logs.undoneStatus', { id: task.id })}
+`);
+}
+
 // 3.2.1: a direct conversation (without the assistant) that changes files of its project leaves an entry too, so the
 // assistant later knows where each file came from. What changed is read from git: the files whose state is new or
 // different after the turn (a project without git leaves no entry).

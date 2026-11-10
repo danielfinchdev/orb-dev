@@ -9,6 +9,7 @@ import { takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit, fullSna
 import { oneLine } from '../../shared/text.mjs';
 import { remotesOf } from './common.mjs';
 import { autonomyOf } from '../../domain/security/guard.mjs';
+import { logUndone } from '../../domain/journal/journal.mjs';
 
 // 3.8.3: folders a build or a package manager makes again by itself: deleting them is never what holds a task back.
 export const GENERATED = /(^|\/)(node_modules|dist|build|out|target|\.gradle|\.dart_tool|\.next|\.nuxt|\.svelte-kit|\.turbo|\.cache|\.vite|\.parcel-cache|\.expo|coverage|\.venv|venv|__pycache__|\.pytest_cache|\.mypy_cache|Pods|DerivedData|(bin|obj)\/(Debug|Release))(\/|$)/i;
@@ -128,6 +129,7 @@ export class SafetyPart {
         }
       } finally { this.holding.delete(task.project); }
     } else out = undoCheckpoint(cp.before, {});
+    try { logUndone(this.board, task, out); } catch (error) { this.log?.(`bitácora deshacer #${task.id}: ${error.message}`); }
     this.board.event(task.id, 'usuario', 'task.undone', `restaurados ${out.restored.length}, quitados ${out.removed.length}, sin tocar ${out.skipped.length}`);
     // 3.2.1: the task stays «Deshecha» (its result can no longer be accepted) and its photo goes: a second undo over a folder
     // that changed since would restore something else. Running it again (retry, a message to its agent) takes a new one.

@@ -86,3 +86,14 @@ test('la pasada completa no para el bucle de eventos del motor', async () => {
   assert.equal(git(repo, 'show', `${snap.commit}:b.txt`).stdout, 'DOS\n');
   assert.ok(ticks > 0, 'the loop ran while git read the files');
 });
+
+// Real use (3.8.3 final): after «Deshacer» the next agent read in the project's log that the task had made index.html
+// and found no such file («index.html no existía, a pesar de la bitácora de la tarea #11»). The undo is logged too.
+test('Deshacer lo apunta en la bitácora del proyecto, para que el siguiente agente no se líe', async () => {
+  const { repo, task } = hiddenTask();
+  await call('tasks.undo', { id: task.id });
+  const log = fs.readFileSync(board.ensureProjectLog(board.task(task.id).project), 'utf8');
+  assert.match(log, new RegExp(`Tarea #${task.id} deshecha`));
+  assert.match(log, /a\.txt/); assert.match(log, /ya no está en la carpeta/);
+  assert.ok(fs.existsSync(repo));
+});
