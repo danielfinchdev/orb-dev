@@ -52,13 +52,20 @@ export function toolClass(tool, kind) {
 // Commands that may be fine but need a human look: publishing, downloading and running things from the internet, wiping
 // files, touching the system. Matched on the whole command line (PowerShell and bash spellings).
 // GIT: "git" plus its global options (-C dir, -c key=value, --no-pager…) before the subcommand.
-const GIT = String.raw`\bgit(?:\s+-\S+(?:\s+[^-\s]\S*)?)*\s+`;
+// 3.8.3 (security review): also git.exe and "…\git.exe" (the end of a quoted path).
+const GIT = String.raw`\bgit(?:\.exe)?["']?(?:\s+-\S+(?:\s+[^-\s]\S*)?)*\s+`;
 const RISKY = [
-  [new RegExp(`${GIT}(push|remote\\s+(add|set-url|remove))\\b`, 'i'), 'msg.guard.push'],
-  [/\bgh\s+(repo|pr|release|api|gist|secret)\b/i, 'msg.guard.github'],
-  [/\b(npm|pnpm|yarn)\s+publish\b|\bcargo\s+publish\b|\btwine\s+upload\b/i, 'msg.guard.publish'],
+  [new RegExp(`${GIT}(push|remote\\s+(add|set-url|remove)|send-pack|http-push|subtree\\s+push)\\b`, 'i'), 'msg.guard.push'],
+  // 3.8.3 (security review): a push under another name (git -c alias.p=push p, git config alias.up push).
+  [/\balias\.[\w.-]+\s*[= ]\s*["']?!?\s*(?:git\s+)?(push|send-pack)\b/i, 'msg.guard.push'],
+  [/\bgh(\.exe)?\s+(repo|pr|release|api|gist|secret)\b/i, 'msg.guard.github'],
+  [/\b(npm|pnpm|yarn)(\.cmd)?\s+publish\b|\bcargo\s+publish\b|\btwine\s+upload\b/i, 'msg.guard.publish'],
+  // 3.8.3 (security review): images, packages and sites published by their own tools.
+  [/\b(docker|podman)(\.exe)?\s+push\b|\bnuget(\.exe)?\s+push\b|\bvercel(\.cmd)?(\s+(deploy|--prod)\b|\s*$|\s*[;&|])|\b(netlify|firebase|wrangler|flyctl|fly)(\.cmd)?\s+(deploy|publish)\b|\bgh-pages\b/i, 'msg.guard.publish'],
   [/\b(curl|wget|invoke-webrequest|invoke-restmethod|iwr|irm)\b[^|;&]*\|\s*(iex|invoke-expression|sh|bash|pwsh|powershell)\b/i, 'msg.guard.pipeToShell'],
   [/\b(iex|invoke-expression)\b[^|;&]*\b(irm|iwr|invoke-webrequest|invoke-restmethod)\b|[$<]\(\s*(curl|wget)\b/i, 'msg.guard.pipeToShell'],
+  // 3.8.3 (security review): a command hidden in base64 and run (iex of FromBase64String, base64 -d | sh).
+  [/frombase64string[\s\S]*\b(iex|invoke-expression|scriptblock)\b|\b(iex|invoke-expression|scriptblock)\b[\s\S]*frombase64string|\bbase64(\.exe)?\s+(-d|-D|--decode)\b[^;&]*\|\s*(sh|bash|zsh|dash|pwsh|powershell|iex|invoke-expression)\b/i, 'msg.guard.pipeToShell'],
   // -EncodedCommand and its short forms hide the command: PowerShell's own option followed by its base64 text. 3.1: not any
   // " -e" later in the line (powershell -Command "node -e '…'" was taken for it in a real run).
   // (-Command / -File end PowerShell's own options: what follows is the script, whatever it says.)
@@ -66,8 +73,9 @@ const RISKY = [
   [/\b(powershell|pwsh)(\.exe)?["']?(\s+[-/–—](?!e\b|ec\b|en\w*\b|c\b|command\b|f\b|file\b)\w+(\s+(?![-/–—])("[^"]*"|'[^']*'|\S+))?)*\s+[-/–—]e(c|n\w*)?\s+["']?[A-Za-z0-9+/]{4,}={0,2}/i, 'msg.guard.pipeToShell'],
   // …and hidden in the arguments of a new PowerShell process (Start-Process powershell -ArgumentList "-enc …").
   [/\b(powershell|pwsh)(\.exe)?\b[^|;&]*-argumentlist\s+["'][^"']*[-/–—]e(c|n\w*)?\s+[A-Za-z0-9+/]{4,}/i, 'msg.guard.pipeToShell'],
-  [/\b(curl|wget)\b[^|;&]*\s(-X\s*(POST|PUT|DELETE|PATCH)|--data|-d\s|-F\s|--upload-file|-T\s)/i, 'msg.guard.sendData'],
-  [/\b(invoke-webrequest|invoke-restmethod|iwr|irm)\b[^|;&]*-method\s+(post|put|delete|patch)/i, 'msg.guard.sendData'],
+  // 3.8.3 (security review): also curl --json/--form/--request, wget's --post-*/--body-*/--method and -Method:Post, -InFile.
+  [/\b(curl|wget)\b[^|;&]*\s(-X\s*(POST|PUT|DELETE|PATCH)|--request[\s=]*["']?(POST|PUT|DELETE|PATCH)|--data|--json|--form|-d\s|-F\s|--upload-file|-T\s|--post-(data|file)|--body-(data|file)|--method[\s=]*["']?(POST|PUT|DELETE|PATCH))/i, 'msg.guard.sendData'],
+  [/\b(invoke-webrequest|invoke-restmethod|iwr|irm)\b[^|;&]*(-method\s*:?\s*["']?(post|put|delete|patch)|\s-infile\b)/i, 'msg.guard.sendData'],
   [/\brm\s+(?:-{1,2}\S+\s+)*(-[a-z]*r|--recursive)|\b(remove-item|ri|rd|rmdir|del|erase)\b[^|;&]*\s-r(e(c(u(r(se?)?)?)?)?)?\b|\brd\s+\/s\b|\brmdir\s+\/s\b|\bdel\s+\/[sq]/i, 'msg.guard.deleteFolders'],
   // 3.8.3: wiping a disk or the boot setup: denied in «Auto», asked in every other mode (also «total»).
   [/\bformat(\.com)?\s+\/?[a-z]:(?![\w\\/])|\b(diskpart|bcdedit|clear-disk|initialize-disk|format-volume|remove-partition)\b|\bcipher(\.exe)?\s+\/w\b/i, 'msg.guard.diskWipe'],
@@ -75,7 +83,10 @@ const RISKY = [
   [/\b(taskkill|stop-process|kill\s+(-9|-kill|-s\s+kill|-sigkill)|pkill|killall)\b/i, 'msg.guard.killProcesses'],
   [/\b(ssh|scp|sftp|rsync)\s/i, 'msg.guard.ssh'],
   [new RegExp(`${GIT}(reset\\s+--(hard|merge)\\b|clean\\s+(?:-\\S+\\s+)*(-[a-z]*f|--force)|checkout\\s+(--\\s|\\.(?=\\s|$))|restore\\b(?![^|;&]*--staged)|stash\\s+(drop|clear)\\b|branch\\s+-D\\b|rebase\\b|filter-branch\\b)`, 'i'), 'msg.guard.gitRewrite'],
-  [/\b(docker|podman)\s+(rm|rmi|system\s+prune|volume\s+rm)\b/i, 'msg.guard.docker']
+  [/\b(docker|podman)\s+(rm|rmi|system\s+prune|volume\s+rm)\b/i, 'msg.guard.docker'],
+  // 3.8.3 (security review): Orb's snapshots (refs/orb) and what keeps them alive: «Deshacer» rests on them, so they are
+  // never dropped without asking (in «Auto» too).
+  [/refs[\\/]+orb\b|\breflog\s+(expire|delete)\b|\bgc\b[^|;&]*--prune|\bgit(\.exe)?\s+prune\b/i, 'msg.guard.checkpoint']
 ];
 
 // 3.1: data sent only to this PC (an agent testing its own local API: curl -X POST localhost:3000…) never leaves it.
@@ -89,7 +100,7 @@ const NET_TOOL = /^(curl|curl\.exe|wget|wget\.exe|iwr|irm|invoke-webrequest|invo
 const REROUTE = (a) => /^-x$/.test(a) || /^(--(resolve|connect-to|proxy\S*|preproxy|socks\S*|doh-url|haproxy\S*)|-proxy\S*)(=|$)/i.test(a);
 const URL_OPT = /^(-uri|--url)$/i;
 const VALUE_OPT = (a) => /^-[HdFXwoTuAbemrzD]$/.test(a)
-  || /^(--(header|data\S*|form\S*|request|write-out|output|upload-file|user|user-agent|referer|cookie\S*|max-time|connect-timeout|retry\S*)|-(method|body|contenttype|headers|outfile|infile|timeoutsec|erroraction|maximumredirection))$/i.test(a);
+  || /^(--(header|data\S*|form\S*|json|request|write-out|output|upload-file|user|user-agent|referer|cookie\S*|max-time|connect-timeout|retry\S*)|-(method|body|contenttype|headers|outfile|infile|timeoutsec|erroraction|maximumredirection))$/i.test(a);
 const words = (s) => (s.match(/"(?:[^"\\]|\\.)*"|'[^']*'|\S+/g) ?? []).map((w) => w.replace(/^(["'])([\s\S]*)\1$/, '$2'));
 const onlyLocal = (c) => {
   if (/[|`]|\$\(|<\(/.test(c.replace(/&&|\|\|/g, ';').replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, (q) => q.replace(/\|/g, '')))) return false;
@@ -117,13 +128,16 @@ const onlyLocal = (c) => {
 };
 // 3.8.3: what kind of risk each rule is (the «Auto» table of the permissions proposal decides by kind).
 const CATEGORY = { push: 'publish', github: 'publish', publish: 'publish', pipeToShell: 'pipeToShell', sendData: 'sendData', deleteFolders: 'deleteFolders',
-  diskWipe: 'diskWipe', system: 'system', killProcesses: 'killProcesses', ssh: 'ssh', gitRewrite: 'gitRewrite', docker: 'docker' };
+  diskWipe: 'diskWipe', system: 'system', killProcesses: 'killProcesses', ssh: 'ssh', gitRewrite: 'gitRewrite', docker: 'docker', checkpoint: 'checkpoint' };
 // Every risk a command carries, in the order of RISKY: [{ category, reason }].
 export function risksOf(command, lang = 'es') {
   const c = String(command ?? ''); const out = [];
+  // 3.8.3 (security review): also without its quotes and cmd's ^ (git "push", g^it pu^sh run as git push).
+  const variants = [...new Set([c, unquoted(c)])];
   for (const [re, why] of RISKY) {
-    if (!re.test(c)) continue;
-    if (why === 'msg.guard.sendData' && onlyLocal(c)) continue;
+    const v = variants.find((x) => re.test(x));
+    if (v === undefined) continue;
+    if (why === 'msg.guard.sendData' && onlyLocal(v)) continue;
     const category = CATEGORY[why.slice('msg.guard.'.length)];
     if (!out.some((r) => r.category === category)) out.push({ category, reason: translate(lang, why) });
   }
@@ -147,11 +161,15 @@ export const riskCategories = (command) => risksOf(command).map((r) => r.categor
 // user to turn on goes in core\preparacion, open like the isolated copies (src/domain/extensions/extensions.mjs).
 const OPEN_INTERNAL = [['copias', 'aisladas'], ['herramientas'], ['preparacion']];
 const READ_INTERNAL = [['bitacora'], ['skills']];
-const norm = (p) => path.resolve(p).replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
+// 3.8.3 (security review): Windows drops the trailing dots and spaces of each name and reads `name:stream` as a stream of
+// that file or folder (`core.\datos`, `core \datos`, `core::$INDEX_ALLOCATION\datos` are core\datos; `.env::$DATA` is .env):
+// a path is compared without them. A drive (`C:`) stays as it is.
+const winClean = (p) => (process.platform !== 'win32' ? p : String(p).split('\\').map((s, i) => (i === 0 || /^\.\.?$/.test(s) || /^[a-z]:$/i.test(s) ? s : (s.replace(/:.*$/, '').replace(/[. ]+$/, '') || s))).join('\\'));
+const norm = (p) => winClean(path.resolve(p).replace(/\//g, '\\')).replace(/\\+$/, '').toLowerCase();
 // 3.8.1: where a path really is: links and junctions followed, also for a file not made yet (its nearest existing parent
 // is resolved), so a junction made earlier (in a project or in core\preparacion) cannot send a write into core.
 const realOf = (p) => {
-  let at = path.resolve(p); const rest = [];
+  let at = winClean(path.resolve(p)); const rest = [];
   for (let i = 0; i < 64; i++) {
     try { return path.join(fs.realpathSync.native(at), ...rest.reverse()); } catch { /* not there: its parent */ }
     // A link whose target is not there (yet): where it points.
@@ -159,7 +177,7 @@ const realOf = (p) => {
     const up = path.dirname(at); if (up === at) break;
     rest.push(path.basename(at)); at = up;
   }
-  return path.resolve(p);
+  return winClean(path.resolve(p));
 };
 // A folder as given and where it really is (links followed, and the long name of an 8.3 one such as C:\Users\RUNNER~1, which
 // a TEMP or a user name longer than eight letters gives): what a path is compared with, since realOf gives the long one.
@@ -368,6 +386,9 @@ function globReaches(word, dir, roots) {
     return true;
   });
 }
+// What follows a closed folder's name in a command: the end of that name (a separator, the end, a quote…), or what Windows
+// drops from it (`core.\`, `core \`, `core::$INDEX_ALLOCATION\`, 3.8.3 security review). Not `.orbx` or `core2`.
+const sameFolder = (after) => /^($|[\\"'\s;|&)])/.test(after) || /^[. ]*(:[^\\"'\s;|&)]*)?($|[\\"';|&)])/.test(after);
 function touchesInternal(args) {
   const variants = [...new Set([args.command, unquoted(args.command), unescaped(args.command)].map((c) => String(c ?? '')))];
   return variants.some((command) => touchesOnce({ ...args, command }));
@@ -382,7 +403,7 @@ function touchesOnce({ command: given, paths, patterns, internalDir, cwd, read =
   for (const r of [...coreRoots, ...guardedRoots, ...personalRoots, ...(read === true ? [] : appRoots)]) {
     for (let i = t.indexOf(r); i >= 0; i = t.indexOf(r, i + 1)) {
       const after = t.slice(i + r.length);
-      if (/^[^\\]/.test(after) && !/^["'\s;|&)]/.test(after)) continue; // .orbx is another folder
+      if (!sameFolder(after)) continue; // .orbx is another folder
       if (!coreRoots.includes(r) || !(OPEN_TEXT.test(after) || readText(read, after) || (read === true && ADB_TEXT.test(after)))) return true;
     }
   }
@@ -496,6 +517,35 @@ function holds(word, dir, closed) {
   const full = norm(realOf(p));
   return closed.some((r) => r === full || r.startsWith(`${full}\\`) || (/^[a-z]:$/.test(full) && r.startsWith(`${full}\\`)));
 }
+// 3.8.3 (security review): searching the contents of a folder that holds a closed one (Grep over C:\Orb or the user's
+// folder, rg/grep -r/findstr /s, Get-ChildItem -Recurse into a reader) reads the closed one too. Reading tools: their
+// folder (Grep, or the agent's folder when none is given); commands: what each part names, or the folder it runs in.
+const LISTERS = /^(get-childitem|gci|dir|ls)$/i;
+const READ_PIPE = /\|\s*(select-string|sls|get-content|gc|cat|type|findstr|grep|rg|copy-item|cpi)\b/i;
+const RECURSE = /^-r(e(c(u(r(se?)?)?)?)?)?$/i;
+function searchesClosedParent({ tool, cls, command, paths, cwd, internalDir }) {
+  const closed = [...(internalDir ? rootsOf(internalDir) : []), ...guardedRoots, ...personalRoots];
+  if (!closed.length) return false;
+  if (cls === 'read') {
+    if (!/^(grep|search)$/i.test(String(tool ?? '').replace(/^mcp__[^_]+__/, ''))) return false;
+    return (paths.length ? paths : [cwd]).some((p) => p && holds(p, cwd, closed));
+  }
+  if (cls !== 'exec') return false;
+  const c = expandEnv(command);
+  return workDirs(c, cwd).some((part) => {
+    const exe = String(part.words[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.(exe|cmd)$/i, '').toLowerCase();
+    const args = part.words.slice(1);
+    const recursive = ['rg', 'ag', 'ack'].includes(exe)
+      || (['grep', 'egrep', 'fgrep'].includes(exe) && args.some((a) => /^(-[a-zA-Z]*[rR][a-zA-Z]*|--recursive|--dereference-recursive)$/.test(a)))
+      || (exe === 'findstr' && args.some((a) => /^\/s$/i.test(a)))
+      || (['select-string', 'sls'].includes(exe) && args.some((a) => RECURSE.test(a)))
+      || (LISTERS.test(exe) && args.some((a) => RECURSE.test(a) || /^\/s$/i.test(a)) && READ_PIPE.test(c))
+      || (exe === 'git' && args[0] === 'grep' && args.includes('--no-index'));
+    if (!recursive) return false;
+    const named = args.filter((a) => !/^-/.test(a) && !/^\/[a-z]$/i.test(a));
+    return [...named, ...(part.dir ? [part.dir] : [])].some((w) => holds(w, part.dir, closed));
+  });
+}
 // 3.8.1: a command that makes a link (a junction, a symbolic or a hard link), in any shell or language: one that names core
 // (or runs inside it) is denied, so nothing in core\preparacion (or anywhere) can point into core and turn an allowed write
 // there into a write in core\skills, core\datos…
@@ -506,7 +556,7 @@ function linkIntoCore(command, internalDir, cwd) {
   const [root, realRoot = root] = rootsOf(internalDir);
   const inCore = (p) => { const f = norm(realOf(p)); return [root, realRoot].some((r) => f === r || f.startsWith(`${r}\\`)); };
   const t = expandEnv(command).replace(/\//g, '\\').toLowerCase();
-  const named = (r) => { for (let i = t.indexOf(r); i >= 0; i = t.indexOf(r, i + 1)) if (/^($|[\\"'\s;|&)])/.test(t.slice(i + r.length))) return true; return false; };
+  const named = (r) => { for (let i = t.indexOf(r); i >= 0; i = t.indexOf(r, i + 1)) if (sameFolder(t.slice(i + r.length))) return true; return false; };
   if (named(root) || named(realRoot)) return true;
   if (cwd && inCore(cwd)) return true;
   if (pathWords(expandEnv(command)).some((w) => { const p = path.isAbsolute(w) || path.win32.isAbsolute(w) ? w : cwd ? path.resolve(cwd, w) : null; return p ? inCore(p) : false; })) return true;
@@ -619,17 +669,54 @@ export function writesOutside(command, cwd, roots) {
 // 3.8.3 (always blocked): another project's secrets (.env, keys, certificates): readable inside the current project (they
 // are needed to program it), never elsewhere. .env.example and the like are not secrets.
 const SECRET_FILE = /(^|[\\/])(\.env(\.(?!example$|sample$|template$|dist$)[\w.-]+)?|[^\\/]+\.(pem|key|p12|pfx|jks|keystore)|id_(rsa|dsa|ecdsa|ed25519)(\.\w+)?)$/i;
-export const isSecretFile = (p) => SECRET_FILE.test(String(p ?? '').replace(/["']/g, '').replace(/[\\/]+$/, ''));
-function otherSecret({ command, paths, patterns, cwd, roots }) {
+// 3.8.3 (security review): the last name as Windows opens it (`.env.`, `.env `, `.env::$DATA` and `id_rsa:x` are the file).
+const lastName = (p) => String(p ?? '').replace(/["']/g, '').replace(/[\\/]+$/, '')
+  .replace(/(^|[\\/])([^\\/:]*):[^\\/]*$/, (m, sep, name) => (!sep && /^[a-z]$/i.test(name) ? m : `${sep}${name}`)).replace(/(?<=[^\\/.])[. ]+$/, '');
+export const isSecretFile = (p) => SECRET_FILE.test(lastName(p));
+// 3.8.3 (security review): a wildcard that may open a secret (`.en?`, `.env*`, `*` in PowerShell, which shows hidden files).
+const SECRET_SAMPLES = ['.env', '.env.local', 'id_rsa', 'id_ed25519', 'x.pem', 'x.key', 'x.pfx', 'x.p12'];
+const globSecret = (w) => { const name = String(w ?? '').replace(/["']/g, '').replace(/[\\/]+$/, '').split(/[\\/]/).pop(); return GLOB.test(name) && SECRET_SAMPLES.some((s) => globRe(name).test(s)); };
+// Programs that only list names (a wildcard there shows no file's content).
+const NAME_ONLY = /^(ls|dir|get-childitem|gci|tree|find|test-path|resolve-path|du|stat|where|which)$/i;
+function otherSecret({ command, paths, patterns, cwd, roots, names = false }) {
   const abs = (w) => path.isAbsolute(winPath(w)) || path.win32.isAbsolute(winPath(w)) || /^~[\\/]/.test(w) || String(w).startsWith('\\\\');
+  const away = (w, dir) => (roots ? !insideProject(w, dir, roots) : abs(w));
   // The word, or where it really leads (a link inside the project named config.txt that points at another project's .env).
-  const out = (w, dir) => { const f = resolveTarget(w, dir); return (isSecretFile(w) || (f && isSecretFile(f))) && (roots ? !insideProject(w, dir, roots) : abs(w) || Boolean(f && isSecretFile(f))); };
+  const out = (w, dir) => { const f = resolveTarget(w, dir); return (isSecretFile(w) || (f && isSecretFile(f)) || (!names && globSecret(w))) && (roots ? !insideProject(w, dir, roots) : abs(w) || Boolean(f && isSecretFile(f))); };
   if ([...paths, ...patterns].some((p) => out(p, cwd))) return true;
   const c = expandEnv(command);
-  if (pathWords(c).some((w) => out(w, cwd))) return true;
-  return workDirs(c, cwd).some((part) => part.words.some((w) => !/^-/.test(w) && out(w, part.dir)));
+  if (pathWords(c).some((w) => !globSecret(w) && out(w, cwd))) return true;
+  return workDirs(c, cwd).some((part) => {
+    const exe = String(part.words[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '');
+    // git show / cat-file of a secret at a revision (HEAD:.env) of a repository outside the project.
+    if (/^git$/i.test(exe)) {
+      const at = part.words.indexOf('-C'); const repo = at > 0 ? part.words[at + 1] ?? '' : '.';
+      if (part.words.some((w) => /^[^\s:\\/]*:(?![\\/])./.test(w) && isSecretFile(w.slice(w.indexOf(':') + 1))) && away(repo, part.dir)) return true;
+    }
+    return part.words.some((w, i) => !/^-/.test(w) && (globSecret(w) ? i > 0 && !NAME_ONLY.test(exe) && away(w, part.dir) : out(w, part.dir)));
+  });
 }
 
+// 3.8.3 (security review): a deletion that takes the project folder itself, a folder that holds it, its .git (where Orb's
+// snapshots live) or everything at its top (`*`, which in PowerShell takes .git too): «Deshacer» could not bring it back.
+const DELETERS = /^(rm|rmdir|rd|del|erase|remove-item|ri|unlink|shred)$/i;
+function deletesProjectOrGit(command, cwd, projectDir) {
+  const top = projectDir ? resolveTarget(projectDir) : null;
+  return workDirs(expandEnv(unwrapShell(command)), cwd).some((part) => {
+    const exe = String(part.words[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '');
+    if (!DELETERS.test(exe)) return false;
+    return targetsOf(exe, part.words.slice(1)).some((t) => {
+      if (/(^|[\\/])\.git([\\/]|$)/i.test(bare(t))) return true;
+      const full = resolveTarget(t, part.dir);
+      if (!full || !top) return false;
+      if (full === top || top.startsWith(`${full}\\`)) return true;
+      const name = full.split('\\').pop();
+      return GLOB.test(name) && full.slice(0, -name.length - 1) === top && globRe(name).test('.git');
+    });
+  });
+}
+// git clean with -x or -X: it deletes ignored files, which the snapshot never holds (.env, local databases, uploads).
+const cleansIgnored = (command) => new RegExp(`${GIT}clean\\b[^|;&]*\\s-[a-zA-Z]*[xX]`, 'i').test(unquoted(command));
 // decide's answer when «Auto» lets through something «Preguntar» would have asked: auto: true, so the chat says so.
 const autoAllow = (reason) => ({ decision: 'allow', reason, auto: true });
 // Whether what an action names is one of the owner's personal credentials (only to word the reason).
@@ -663,11 +750,14 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
   if (readsCredentialStore(command)) return { decision: 'deny', reason: T('credentials') };
   if (cls !== 'read' && aliasesDrive(command)) return { decision: 'deny', reason: T('driveAlias') };
   if (cls !== 'read' && copiesClosedParent(command, internalDir, cwd)) return { decision: 'deny', reason: T('copyParent') };
+  if (searchesClosedParent({ tool, cls, command, paths, cwd, internalDir })) return { decision: 'deny', reason: T('searchParent') };
   const hit = protectedHit(text);
   if (hit) return { decision: 'deny', reason: translate(lang, 'msg.guard.protected', { name: hit }) };
-  const roots = projectRoots({ projectDir: projectDir === undefined ? cwd : projectDir, internalDir });
+  const project = projectDir === undefined ? cwd : projectDir;
+  const roots = projectRoots({ projectDir: project, internalDir });
   // 3.8.3: another project's .env, keys or certificates: never (in every mode).
-  if (cls !== 'orb' && cls !== 'mcp' && otherSecret({ command, paths, patterns, cwd, roots })) return { decision: 'deny', reason: T('otherSecret') };
+  const names = /^(glob|ls)$/i.test(String(tool ?? '').replace(/^mcp__[^_]+__/, ''));
+  if (cls !== 'orb' && cls !== 'mcp' && otherSecret({ command, paths, patterns, cwd, roots, names })) return { decision: 'deny', reason: T('otherSecret') };
   // 3.8.2: Android's adb by hand only with «Acceso total» and «Usar mi móvil Android» (android): otherwise the agent has
   // Orb's own tools (orb_android_*), which check the grant on every call.
   if (cls !== 'read' && cls !== 'orb' && runsAdb(command) && !(permission === 'total' && android)) return { decision: 'deny', reason: T('adb') };
@@ -696,6 +786,12 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
         : r.category === 'publish' ? (userAsked ?? []).includes('publish') : false);
       const asking = risks.find((r) => !passes(r));
       if (asking) return { decision: 'ask', reason: asking.reason };
+      // 3.8.3 (security review): what the checkpoint cannot bring back still asks: the project folder itself or its .git
+      // (where the snapshots live), and git clean -x (ignored files, .env among them, are never in the snapshot).
+      if (risks.some((r) => r.category === 'deleteFolders' || r.category === 'gitRewrite')) {
+        if (deletesProjectOrGit(command, cwd, project)) return { decision: 'ask', reason: T('checkpoint') };
+        if (cleansIgnored(command)) return { decision: 'ask', reason: T('ignoredFiles') };
+      }
       if (AGENT_CONFIG_IN.test(command)) return { decision: 'ask', reason: T('agentConfig') };
       if (away) return { decision: 'ask', reason: outsideReason(away.what) };
       if (risks.length) return autoAllow(risks[0].category === 'publish' ? T('publishAsked') : risks[0].reason);
