@@ -16,7 +16,11 @@ import { git, gitEnv, gitBuffer, slug, BRANCH_PREFIX, REF_PREFIX, ORB_GIT, isGit
 // Built with a temporary index, so the user's own index and files are never touched. Secret-looking files stay out, and that is
 // checked on the result: if one is still inside, no snapshot is made. Returns { commit, files } (files = paths not in HEAD as-is),
 // or null on failure. always=false returns null when there is nothing uncommitted.
-export function snapshotCommit(repo, { always: wanted = false, message = 'orb: punto de partida (lo que había en la carpeta principal sin commitear; no es trabajo del agente)' } = {}) {
+// 3.8.3: raw (the checkpoints): every file as it is on disk, byte for byte. core.autocrlf is off for it, and the tracked
+// files are hashed again (not taken from the stat cache, which may hold the normalized form of a file now written with
+// other line endings), so «Deshacer» gives back LF, CRLF or mixed endings exactly. The attributes (.gitattributes) still apply.
+export const RAW_GIT = ['-c', 'core.autocrlf=false', '-c', 'core.safecrlf=false'];
+export function snapshotCommit(repo, { raw = false, always: wanted = false, message = 'orb: punto de partida (lo que había en la carpeta principal sin commitear; no es trabajo del agente)' } = {}) {
   const changed = changedPaths(repo); if (changed === null) return null;
   // A repository without any commit yet (git init and nothing more): the snapshot is a first commit with no parent, and it
   // is always made, since checkpoints and isolated copies need something to start from.
@@ -28,7 +32,9 @@ export function snapshotCommit(repo, { always: wanted = false, message = 'orb: p
   try {
     if (fs.existsSync(realIndex)) fs.copyFileSync(realIndex, tmp);
     const env = { GIT_INDEX_FILE: tmp };
-    if (gitEnv(repo, env, 'add', '-A').status !== 0) return null;
+    const cfg = raw ? RAW_GIT : [];
+    if (gitEnv(repo, env, ...cfg, 'add', '-A').status !== 0) return null;
+    if (raw && gitEnv(repo, env, ...cfg, 'add', '--renormalize', '--', '.').status !== 0) return null;
     // Remove anything secret-looking from the snapshot (also files already tracked by mistake) and verify.
     const listed = () => gitEnv(repo, env, 'ls-files', '-z').stdout.split('\0').filter(Boolean);
     for (const file of listed().filter(isSecretPath)) gitEnv(repo, env, 'rm', '-q', '--cached', '--ignore-unmatch', '--', file);
@@ -46,10 +52,10 @@ export function snapshotCommit(repo, { always: wanted = false, message = 'orb: p
 export function takeCheckpoint(dir, name, backups) {
   if (isGitRepo(dir)) {
     const top = repoRoot(dir);
-    const snap = snapshotCommit(top, { always: true, message: `orb: foto ${name}` });
+    const snap = snapshotCommit(top, { raw: true, always: true, message: `orb: foto ${name}` });
     if (!snap) throw new Error(tr('msg.workspace.noSnapshot'));
     git(top, 'update-ref', `${REF_PREFIX}/${name}`, snap.commit);
-    return { kind: 'git', repo: top, ref: `${REF_PREFIX}/${name}`, commit: snap.commit };
+    return { kind: 'git', repo: top, ref: `${REF_PREFIX}/${name}`, commit: snap.commit, raw: true };
   }
   const target = path.join(backups, name);
   fs.rmSync(target, { recursive: true, force: true });
@@ -112,17 +118,19 @@ export function diffBetween(repo, before, after, { maxFiles = 300, maxPatch = 20
 export function undoCheckpoint(before, after) {
   const restored = []; const removed = []; const skipped = [];
   if (before.kind === 'git') {
-    const repo = before.repo;
+    const repo = before.repo; const cfg = before.raw ? RAW_GIT : []; // 3.8.3: a raw checkpoint is read and compared raw
     for (const { status, path: rel } of changedBetween(repo, before.commit, after.commit)) {
       const file = path.join(repo, rel);
       const nowExists = fs.existsSync(file);
       const blobAfter = git(repo, 'rev-parse', '--verify', '--quiet', `${after.commit}:${rel}`).stdout.trim();
-      const blobNow = nowExists ? git(repo, 'hash-object', '--', file).stdout.trim() : '';
-      if (blobNow !== blobAfter) { skipped.push(rel); continue; } // changed again after the task: the user decides
+      // (The snapshot after may have been taken either way: an older one, normalized.)
+      const same = nowExists ? [cfg, ...(cfg.length ? [[]] : [])].some((c) => git(repo, ...c, 'hash-object', '--', file).stdout.trim() === blobAfter) : blobAfter === '';
+      if (!same) { skipped.push(rel); continue; } // changed again after the task: the user decides
       // Only a file the task created is removed; whatever else cannot be read back is left alone and reported.
       if (status === 'A') { if (nowExists) { fs.rmSync(file, { force: true }); removed.push(rel); } continue; }
-      // --filters: the file as it was on disk (line endings of core.autocrlf, Git LFS), not git's stored form.
-      const old = gitBuffer(repo, 'cat-file', '--filters', `${before.commit}:${rel}`);
+      // --filters: the file as it was on disk (the attributes' line endings, Git LFS), not git's stored form; a raw
+      // checkpoint holds it byte for byte (core.autocrlf off).
+      const old = gitBuffer(repo, ...cfg, 'cat-file', '--filters', `${before.commit}:${rel}`);
       if (old.status === 0) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, old.stdout); restored.push(rel); }
       else skipped.push(rel);
     }

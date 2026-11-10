@@ -76,7 +76,7 @@ export class SafetyPart {
       this.board.addChat('system', tr('msg.scheduler.safetyStopped', { id: task.id, title: oneLine(task.title), reasons: why, folder: this.board.projectPathNow(task) ?? task.project }), { task: task.id });
       return tr('msg.scheduler.needsReview', { reasons: why });
     }
-    const snap = snapshotCommit(cp.before.repo, { always: true, message: `orb: foto después de la tarea #${task.id}` });
+    const snap = snapshotCommit(cp.before.repo, { raw: Boolean(cp.before.raw), always: true, message: `orb: foto después de la tarea #${task.id}` });
     if (!snap) return '';
     git(cp.before.repo, 'update-ref', `${REF_PREFIX}/t${task.id}-despues`, snap.commit);
     cp.after = { kind: 'git', repo: cp.before.repo, commit: snap.commit };
@@ -107,7 +107,7 @@ export class SafetyPart {
     if (!cp?.before && this.board.settingJson(`undone:${task.id}`)) throw new Error(tr('msg.scheduler.alreadyUndone', { id: task.id }));
     if (!cp?.before) throw new Error(tr('msg.scheduler.noPhoto'));
     let after = cp.after;
-    if (cp.before.kind === 'git' && !after) { const snap = snapshotCommit(cp.before.repo, { always: true, message: 'orb: foto para deshacer' }); if (!snap) throw new Error(tr('msg.scheduler.cannotReadFolder')); after = { commit: snap.commit }; }
+    if (cp.before.kind === 'git' && !after) { const snap = snapshotCommit(cp.before.repo, { raw: Boolean(cp.before.raw), always: true, message: 'orb: foto para deshacer' }); if (!snap) throw new Error(tr('msg.scheduler.cannotReadFolder')); after = { commit: snap.commit }; }
     const out = undoCheckpoint(cp.before, after ?? {});
     this.board.event(task.id, 'usuario', 'task.undone', `restaurados ${out.restored.length}, quitados ${out.removed.length}, sin tocar ${out.skipped.length}`);
     // 3.2.1: the task stays «Deshecha» (its result can no longer be accepted) and its photo goes: a second undo over a folder
