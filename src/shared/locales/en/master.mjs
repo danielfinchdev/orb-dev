@@ -87,7 +87,7 @@ export default {
   'msg.master.exists': 'You already have a master password. To change it, go to Settings › Data.',
   'msg.master.lost': 'The file of your master password is missing. Restore a backup, or use «I forgot the password».',
   'msg.master.locked': 'Orb is locked: type your master password.',
-  'msg.master.damaged': "Orb's keys could not be opened.",
+  'msg.master.damaged': "Orb's keys could not be opened: their files are damaged or incomplete (it happens, for example, after a power cut). Orb leaves them as they are, and your projects and conversations are fine. To get them back, restore a backup in Settings › Data. Without a backup, go to Settings › Data › «I forgot the password» › «Delete secrets and start from scratch»: your connectors' keys are lost (you will type them again) and your phones are unlinked (you will link them again).",
   'msg.master.none': 'You have not created the master password yet.',
   'msg.master.createFirst': 'Create the master password first.',
   'msg.master.needUnlock': 'This action needs your master password.',

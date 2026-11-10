@@ -87,7 +87,7 @@ export default {
   'msg.master.exists': 'Ya tienes una contraseña maestra. Para cambiarla, ve a Ajustes › Datos.',
   'msg.master.lost': 'Falta el archivo de tu contraseña maestra. Restaura una copia, o usa «He olvidado la contraseña».',
   'msg.master.locked': 'Orb está bloqueado: escribe tu contraseña maestra.',
-  'msg.master.damaged': 'No se han podido abrir las claves de Orb.',
+  'msg.master.damaged': 'No se han podido abrir las claves de Orb: sus archivos están dañados o incompletos (pasa, por ejemplo, tras un apagón). Orb no los toca, y tus proyectos y conversaciones están bien. Para recuperarlas, restaura una copia de seguridad en Ajustes › Datos. Si no tienes copia, en Ajustes › Datos › «He olvidado la contraseña» › «Borrar secretos y empezar de cero»: se pierden las claves de tus conectores (tendrás que volver a escribirlas) y se desenlazan tus móviles (tendrás que enlazarlos otra vez).',
   'msg.master.none': 'Todavía no has creado la contraseña maestra.',
   'msg.master.createFirst': 'Crea primero la contraseña maestra.',
   'msg.master.needUnlock': 'Esta acción necesita tu contraseña maestra.',
