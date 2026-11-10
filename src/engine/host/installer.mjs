@@ -148,7 +148,7 @@ const userHomeDir = () => process.env.USERPROFILE || process.env.HOME || '';
 // The command for an agent on this system: { cmd, args } (fixed text only), or an error in words.
 export function agentInstallCommand(agent, { platform = process.platform, npm = null } = {}) {
   const win = platform === 'win32';
-  const powershell = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  const powershell = path.win32.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   const ps = (script) => ({ cmd: powershell, args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', `$ProgressPreference = 'SilentlyContinue'; [Console]::OutputEncoding = [Text.Encoding]::UTF8; ${script}`] });
   if (agent === 'claude') return win ? ps('irm https://claude.ai/install.ps1 | iex') : { cmd: 'bash', args: ['-c', 'curl -fsSL https://claude.ai/install.sh | bash'] };
   if (agent === 'codex') {
