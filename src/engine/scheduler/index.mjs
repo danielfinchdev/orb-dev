@@ -289,6 +289,7 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
       // In its folder only one task that writes at a time (read-only tasks may run alongside); isolated copies run in parallel.
       const project = board.project(task.project);
       if (!project) continue;
+      if (this.holding?.has(task.project)) continue; // «Deshacer» is reading or restoring that folder (safety.mjs)
       // 3.1: a subtask of a task that works in its own copy works in that same copy: the parent waits for it there and
       // its work goes into the folder with the parent's.
       const parent = task.parent_id ? board.task(task.parent_id) : null;

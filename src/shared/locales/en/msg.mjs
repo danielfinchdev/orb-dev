@@ -426,6 +426,7 @@ export default {
   "msg.scheduler.timedOut": "The working time limit ({min} min) has been exceeded. The work done is still in the folder, waiting for review. {summary}",
   "msg.scheduler.undoRunning": "the task is in progress. Cancel it before undoing it",
   "msg.scheduler.undone": "↩️ Task #{id} has been undone: {restored}, {removed}{skipped}.",
+  "msg.scheduler.undoBusy": "Orb is already undoing in that project; wait a moment.",
   "msg.scheduler.undoneSkipped": "; left as they are because of later changes: {list}",
   "msg.scheduler.waiting": "Task #{id} “{title}” is on hold: {reason}. It will start automatically when possible, or you can assign it to another agent.",
   "msg.schedules.badEvery": "invalid frequency",

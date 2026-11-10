@@ -426,6 +426,7 @@ export default {
   "msg.scheduler.timedOut": "Se ha superado el tiempo máximo de trabajo ({min} min). El trabajo hecho sigue en la carpeta: queda para revisar. {summary}",
   "msg.scheduler.undoRunning": "la tarea está en curso. Cancélala antes de deshacerla",
   "msg.scheduler.undone": "↩️ Se ha deshecho la tarea #{id}: {restored}, {removed}{skipped}.",
+  "msg.scheduler.undoBusy": "Orb ya está deshaciendo en ese proyecto; espera un momento.",
   "msg.scheduler.undoneSkipped": "; sin tocar por cambios posteriores: {list}",
   "msg.scheduler.waiting": "La tarea #{id} «{title}» está en espera: {reason}. Se iniciará automáticamente cuando sea posible, o puedes asignarla a otro agente.",
   "msg.schedules.badEvery": "frecuencia no válida",

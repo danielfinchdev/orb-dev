@@ -5,7 +5,7 @@ import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { eventKey } from '../../domain/tasks/board.mjs';
 import { git, REF_PREFIX } from '../../platform/git.mjs';
-import { takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit } from '../../domain/tasks/checkpoints.mjs';
+import { takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit, fullSnapshot, missedBy } from '../../domain/tasks/checkpoints.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { remotesOf } from './common.mjs';
 import { autonomyOf } from '../../domain/security/guard.mjs';
@@ -76,10 +76,11 @@ export class SafetyPart {
       this.board.addChat('system', tr('msg.scheduler.safetyStopped', { id: task.id, title: oneLine(task.title), reasons: why, folder: this.board.projectPathNow(task) ?? task.project }), { task: task.id });
       return tr('msg.scheduler.needsReview', { reasons: why });
     }
+    const at = Date.now(); // a file older than this that the snapshot missed was hidden from it (missedBy)
     const snap = snapshotCommit(cp.before.repo, { raw: Boolean(cp.before.raw), always: true, message: `orb: foto después de la tarea #${task.id}` });
     if (!snap) return '';
     git(cp.before.repo, 'update-ref', `${REF_PREFIX}/t${task.id}-despues`, snap.commit);
-    cp.after = { kind: 'git', repo: cp.before.repo, commit: snap.commit };
+    cp.after = { kind: 'git', repo: cp.before.repo, commit: snap.commit, at };
     this.board.settingJson(`checkpoint:${task.id}`, cp);
     const changed = changedBetween(cp.before.repo, cp.before.commit, snap.commit);
     this.board.event(task.id, 'orb', 'files.changed', changed.length ? changed.slice(0, 60).map((c) => `${c.status} ${c.path}`).join(', ') + (changed.length > 60 ? ` … y ${changed.length - 60} más` : '') : 'ningún archivo');
@@ -100,15 +101,33 @@ export class SafetyPart {
     return tr('msg.scheduler.needsReview', { reasons: why });
   }
 
-  undo(taskId) {
+  // 3.8.3 (uso real final): «Deshacer» does not trust the fast snapshots (checkpoints.mjs › fullSnapshot): it reads every
+  // file again first, off the event loop, and also gives back what the task changed while hiding it from the snapshot
+  // after it. Meanwhile no task starts in that project (holding) and a second undo of the same task is refused.
+  async undo(taskId) {
     const task = this.board.task(taskId); if (!task) throw new Error(tr('msg.scheduler.noTask', { id: taskId }));
     if (this.running.has(task.id)) throw new Error(tr('msg.scheduler.undoRunning'));
     const cp = this.board.settingJson(`checkpoint:${task.id}`);
     if (!cp?.before && this.board.settingJson(`undone:${task.id}`)) throw new Error(tr('msg.scheduler.alreadyUndone', { id: task.id }));
     if (!cp?.before) throw new Error(tr('msg.scheduler.noPhoto'));
-    let after = cp.after;
-    if (cp.before.kind === 'git' && !after) { const snap = snapshotCommit(cp.before.repo, { raw: Boolean(cp.before.raw), always: true, message: 'orb: foto para deshacer' }); if (!snap) throw new Error(tr('msg.scheduler.cannotReadFolder')); after = { commit: snap.commit }; }
-    const out = undoCheckpoint(cp.before, after ?? {});
+    this.holding ??= new Set();
+    if (this.holding.has(task.project)) throw new Error(tr('msg.scheduler.undoBusy'));
+    let out;
+    if (cp.before.kind === 'git') {
+      this.holding.add(task.project);
+      try {
+        const full = await fullSnapshot(cp.before.repo, { message: 'orb: foto para deshacer (todo releído)' });
+        if (!full) throw new Error(tr('msg.scheduler.cannotReadFolder'));
+        const after = cp.after?.commit ? cp.after : full;
+        out = undoCheckpoint(cp.before, after);
+        const missed = after === full ? [] : missedBy(cp.before.repo, after, full);
+        if (missed.length) {
+          const more = undoCheckpoint(cp.before, full, { only: new Set(missed.map((c) => c.path)) });
+          for (const k of ['restored', 'removed', 'skipped']) out[k].push(...more[k]);
+          this.board.event(task.id, 'orb', 'checkpoint.missed', oneLine(`cambiados sin dejar rastro en su fecha: ${missed.map((c) => c.path).join(', ')}`, 400));
+        }
+      } finally { this.holding.delete(task.project); }
+    } else out = undoCheckpoint(cp.before, {});
     this.board.event(task.id, 'usuario', 'task.undone', `restaurados ${out.restored.length}, quitados ${out.removed.length}, sin tocar ${out.skipped.length}`);
     // 3.2.1: the task stays «Deshecha» (its result can no longer be accepted) and its photo goes: a second undo over a folder
     // that changed since would restore something else. Running it again (retry, a message to its agent) takes a new one.
@@ -121,5 +140,26 @@ export class SafetyPart {
     const n = (key, count) => tr(`msg.scheduler.${key}.${count === 1 ? 'one' : 'other'}`, { n: count });
     this.board.notice(tr('msg.scheduler.undone', { id: task.id, restored: n('undoneRestored', out.restored.length), removed: n('undoneRemoved', out.removed.length), skipped: out.skipped.length ? tr('msg.scheduler.undoneSkipped', { n: out.skipped.length, list: oneLine(out.skipped.join(', '), 200) }) : '' }), 'success');
     return out;
+  }
+
+  // 3.8.3 (uso real final): before the user accepts a task Orb held for review, its diff comes from a full snapshot (every
+  // file read again, off the event loop), not the fast one after it: a held task sits still, so the folder now is what
+  // accepting keeps. Done once per held result (after.full); the next fast snapshot starts from that index too.
+  async recheckHeld(task) {
+    const key = `checkpoint:${task.id}`; const cp = this.board.settingJson(key);
+    if (cp?.before?.kind !== 'git' || !cp.after?.commit || cp.after.full || !fs.existsSync(cp.before.repo)) return;
+    this.holding ??= new Set();
+    if (this.holding.has(task.project)) return;
+    this.holding.add(task.project);
+    try {
+      const at = Date.now();
+      const full = await fullSnapshot(cp.before.repo, { message: `orb: foto después de la tarea #${task.id} (todo releído)` });
+      const now = this.board.settingJson(key);
+      if (!full || now?.after?.commit !== cp.after.commit) return; // undone or run again meanwhile
+      const missed = missedBy(cp.before.repo, cp.after, full);
+      if (missed.length) this.board.event(task.id, 'orb', 'checkpoint.missed', oneLine(`cambiados sin dejar rastro en su fecha: ${missed.map((c) => c.path).join(', ')}`, 400));
+      git(cp.before.repo, 'update-ref', `${REF_PREFIX}/t${task.id}-despues`, full.commit);
+      this.board.settingJson(key, { ...now, after: { ...now.after, commit: full.commit, at, full: true } });
+    } finally { this.holding.delete(task.project); }
   }
 }

@@ -1,9 +1,9 @@
 // git for Orb: one way to run it (never throws; a failure or a timeout is status -1 with the reason in stderr), Orb's
-// branch and ref prefixes, and quick questions about a repository. Synchronous (src/engine moves to async in 3.8.4).
+// branch and ref prefixes, and quick questions about a repository. Synchronous (src/engine moves to async in 3.8.4), but for gitAsync.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { porcelainPaths } from '../shared/secrets-scan.mjs';
 import { cleanEnv } from './proc.mjs';
 import { PRODUCT } from '../shared/product.mjs';
@@ -18,6 +18,19 @@ export const gitEnv = (cwd, env, ...args) => {
   const res = spawnSync('git', ['-C', cwd, ...SAFE, ...args], { encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024, timeout: 120_000, env: cleanEnv(env) });
   return { status: res.status ?? -1, stdout: res.stdout ?? '', stderr: res.stderr || res.error?.message || '' };
 };
+// 3.8.3 (uso real final): the same git off the event loop, for the rare passes that read a whole repository (seconds on
+// a big one: «Deshacer», the diff of a task held for review). Same answer shape; never throws.
+export const gitAsync = (cwd, env, ...args) => new Promise((resolve) => {
+  let child;
+  try { child = spawn('git', ['-C', cwd, ...SAFE, ...args], { windowsHide: true, env: cleanEnv(env) }); }
+  catch (error) { resolve({ status: -1, stdout: '', stderr: error.message }); return; }
+  const out = []; const err = []; let size = 0;
+  const timer = setTimeout(() => child.kill(), 300_000);
+  child.stdout.on('data', (d) => { size += d.length; if (size <= 64 * 1024 * 1024) out.push(d); });
+  child.stderr.on('data', (d) => err.push(d));
+  child.on('error', (error) => { clearTimeout(timer); resolve({ status: -1, stdout: '', stderr: error.message }); });
+  child.on('close', (code) => { clearTimeout(timer); resolve({ status: code ?? -1, stdout: Buffer.concat(out).toString('utf8'), stderr: Buffer.concat(err).toString('utf8') }); });
+});
 export const gitBuffer = (cwd, ...args) => spawnSync('git', ['-C', cwd, ...SAFE, ...args], { windowsHide: true, maxBuffer: 512 * 1024 * 1024, timeout: 120_000, env: cleanEnv() });
 export const slug = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'tarea';
 // Branches and hidden refs of this app use their own prefix, so they never collide with other tools in a shared repository.

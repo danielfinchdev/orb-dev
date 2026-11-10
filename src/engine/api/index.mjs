@@ -626,8 +626,10 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'tasks.undo': ({ id }) => scheduler.undo(int(id, 'tarea')),
     // 3.8.2: what a finished task changed, with each file's diff (read only, against its undo checkpoint: «Deshacer» works
     // as before). Nothing to show while it runs, after it was undone, or without git (a copy checkpoint).
-    'tasks.diff': ({ id }) => {
+    'tasks.diff': async ({ id }) => {
       const task = board.task(int(id, 'tarea')) ?? fail(tr('msg.api.noTaskThat'));
+      // 3.8.3: a held task's diff is read from every file again (safety.mjs › recheckHeld): what accepting it keeps.
+      if (board.heldInfo(task)) await scheduler.recheckHeld(task);
       const cp = board.settingJson(`checkpoint:${task.id}`);
       if (cp?.before?.kind !== 'git' || !cp.after?.commit || !cp.before.repo || !fs.existsSync(cp.before.repo)) return { available: false, files: [], more: 0 };
       return { available: true, ...diffBetween(cp.before.repo, cp.before.commit, cp.after.commit) };
