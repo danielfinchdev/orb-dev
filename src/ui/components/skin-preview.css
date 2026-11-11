@@ -179,7 +179,7 @@ html.window-idle .skp-deco { animation-play-state: paused; }
 .skp-cd-blob.a { --c: var(--p-blob-a); left: -5%; top: -30%; width: 70%; height: 90%; }
 .skp-cd-blob.b { --c: var(--p-blob-b); left: 10%; top: 50%; width: 55%; height: 80%; }
 .skp-cd-blob.c { --c: var(--p-blob-c); left: 60%; top: 45%; width: 60%; height: 90%; }
-.skp[data-skin-preview="nube"] .skp-deco { opacity: var(--p-toy); filter: drop-shadow(0 1.5px 0 var(--p-toy-shadow)); }
+.skp[data-skin-preview="nube"] .skp-deco { opacity: var(--p-toy); }
 .skp-cd-donut { right: 3px; top: 17px; width: 17px; --r: -12deg; }
 .skp-cd-lolli { right: 4px; bottom: 23px; width: 10px; --r: -14deg; }
 .skp-cd-drop { left: calc(31% + 6px); bottom: 29px; width: 9px; --r: -6deg; }

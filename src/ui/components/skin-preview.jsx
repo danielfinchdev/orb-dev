@@ -46,23 +46,26 @@ const Candy = () => (
     <i className="skp-cd-blob a" /><i className="skp-cd-blob b" /><i className="skp-cd-blob c" />
     <svg viewBox="0 0 100 100" className="skp-deco skp-cd-donut" aria-hidden="true">
       <defs><Sweet id="skp-cd-peach" hi="#ffe4c8" body="#ffb46e" lo="#e07a2e" /></defs>
+      <circle cx="50" cy="59" r="42" style={{ fill: 'var(--p-toy-shadow)' }} />
       <circle cx="50" cy="50" r="42" fill="url(#skp-cd-peach)" />
       <path d="M50 14C72 14 86 30 86 50C86 70 72 86 50 86C28 86 14 70 14 50C14 30 28 14 50 14ZM50 36A14 14 0 1 0 50 64A14 14 0 1 0 50 36Z" fill="url(#skp-cd-pink)" fillRule="evenodd" />
       <ellipse cx="34" cy="24" rx="9" ry="4" fill="#fff" opacity="0.6" transform="rotate(-35 34 24)" />
     </svg>
     <svg viewBox="0 0 100 130" className="skp-deco skp-cd-lolli" aria-hidden="true">
       <defs><Sweet id="skp-cd-pink" hi="#ffc9e3" body="#ff7cc0" lo="#d6338e" /></defs>
+      <circle cx="50" cy="53" r="34" style={{ fill: 'var(--p-toy-shadow)' }} />
       <rect x="46" y="62" width="8" height="66" rx="4" fill="#fdf3fa" /><circle cx="50" cy="38" r="34" fill="url(#skp-cd-pink)" />
       <path d="M50 38a4 4 0 0 1 4 4a8 8 0 0 1 -8 8a12 12 0 0 1 -12 -12a16 16 0 0 1 16 -16a20 20 0 0 1 20 20a24 24 0 0 1 -24 24a28 28 0 0 1 -28 -28" fill="none" stroke="#fff" strokeOpacity="0.85" strokeWidth="6" strokeLinecap="round" />
       <ellipse cx="36" cy="20" rx="9" ry="5" fill="#fff" opacity="0.6" transform="rotate(-30 36 20)" />
     </svg>
     <svg viewBox="0 0 100 100" className="skp-deco skp-cd-drop" aria-hidden="true">
       <defs><Sweet id="skp-cd-mint" hi="#d2f5e7" body="#7fd9bd" lo="#3fa98a" /></defs>
-      <ellipse cx="50" cy="86" rx="33" ry="8" fill="#3fa98a" opacity="0.5" /><path d="M18 86C14 40 30 18 50 18C70 18 86 40 82 86Z" fill="url(#skp-cd-mint)" />
+      <ellipse cx="50" cy="86" rx="33" ry="8" fill="#3fa98a" opacity="0.5" /><path d="M18 86C14 40 30 18 50 18C70 18 86 40 82 86Z" transform="translate(0 17)" style={{ fill: 'var(--p-toy-shadow)' }} /><path d="M18 86C14 40 30 18 50 18C70 18 86 40 82 86Z" fill="url(#skp-cd-mint)" />
       {[[32, 40], [60, 30], [70, 58], [40, 66], [52, 50]].map(([x, y]) => <circle key={x + y} cx={x} cy={y} r="3" fill="#fff" opacity="0.75" />)}
     </svg>
     <svg viewBox="0 0 100 60" className="skp-deco skp-cd-bean" aria-hidden="true">
       <defs><Sweet id="skp-cd-lilac" hi="#e6d4ff" body="#b98cff" lo="#7d4fd6" /></defs>
+      <path d="M20 15C35 -2 70 2 85 18C98 32 88 55 65 55C45 55 40 45 25 48C8 50 5 30 20 15Z" transform="translate(0 14)" style={{ fill: 'var(--p-toy-shadow)' }} />
       <path d="M20 15C35 -2 70 2 85 18C98 32 88 55 65 55C45 55 40 45 25 48C8 50 5 30 20 15Z" fill="url(#skp-cd-lilac)" /><ellipse cx="38" cy="16" rx="11" ry="4" fill="#fff" opacity="0.55" transform="rotate(-15 38 16)" />
     </svg>
   </>
