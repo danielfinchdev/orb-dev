@@ -40,7 +40,8 @@ test('pc.screenshot is a phone method and returns only the file name, with a not
   const r = await phone.call(a.id, 'pc.screenshot', { path: 'C:\\x', anything: 1 });
   assert.match(r.path, SHOT_NAME);
   shot = r.path;
-  await until(() => A.events.some((e) => e.event === 'notice' && e.payload.tone === 'warning' && /Pixel/.test(e.payload.body)), 'aviso');
+  await until(() => A.events.some((e) => e.event === 'notice' && e.payload.tone === 'warning' && e.payload.always === true && /Pixel.* a las \d/.test(e.payload.body)), 'aviso');
+  assert.ok(fs.existsSync(path.join(t.home, 'core', 'capturas-movil', shot)) || fs.readdirSync(t.home, { recursive: true }).some((f) => f.endsWith(path.join('capturas-movil', shot))));
 });
 
 test('the device that took it downloads it sealed and bound to the name', async () => {
@@ -57,8 +58,8 @@ test('the device that took it downloads it sealed and bound to the name', async 
 
 test('another device, an unregistered file and bad names get nothing', async () => {
   assert.equal((await get(b, shot)).status, 404);
-  // a normal upload sits in the same folder but was never registered for download
-  const dir = fs.readdirSync(t.home, { recursive: true }).map((f) => path.join(t.home, f)).find((f) => f.endsWith(shot));
+  // a file in the captures folder that was never registered for download
+  const dir = fs.readdirSync(t.home, { recursive: true }).map((f) => path.join(t.home, f)).find((f) => f.endsWith(path.join('capturas-movil', shot)));
   const loose = `${Date.now()}-deadbeef.jpg`; fs.writeFileSync(path.join(path.dirname(dir), loose), JPEG);
   assert.equal((await get(a, loose)).status, 404);
   const bad = ['../x.jpg', '..%2fx.jpg', '%2e%2e%2f%2e%2e%2fsecreto.jpg', '..%5cx.jpg', 'C%3A%5Cwindows%5Cwin.ini', '/etc/passwd', shot.toUpperCase(), shot.replace('.jpg', '.png'), `${shot}%00`, 'x'.repeat(300), '%EF%BC%8E%EF%BC%8E.jpg', ''];
@@ -74,10 +75,22 @@ test('a repeated header, another name inside it or the wrong purpose are refused
   const auth = header(a, { name: shot });
   assert.equal((await get(a, shot, { auth })).status, 200);
   assert.equal((await get(a, shot, { auth })).status, 401);
-  assert.equal((await get(a, shot, { auth: header(a, { name: '1-aaaaaaaa.jpg' }) })).status, 401);
-  assert.equal((await get(a, shot, { auth: header(a, {}) })).status, 401);
+  assert.equal((await get(a, shot, { auth: header(a, { name: '1-aaaaaaaa.jpg' }) })).status, 400); // not 401: that means «unlinked»
+  assert.equal((await get(a, shot, { auth: header(a, {}) })).status, 400);
   assert.equal((await get(a, shot, { auth: C.sealText(a.key, { t: Date.now(), m: 'events', name: shot }, C.AAD.request(a.id)) })).status, 401);
   assert.equal((await get(a, shot, { auth: C.sealText(a.key, { t: Date.now() - 3_600_000, m: 'download', name: shot }, C.AAD.request(a.id)) })).status, 409);
+});
+
+test('a linked browser cannot take a screenshot; the capture sits in its own folder, never in uploads', async () => {
+  const browser = createPhone({ name: 'Navegador', kind: 'browser' });
+  try {
+    const pq = await browser.connect({ qr: (await A.call('link.qr', { device: 'browser' })).url });
+    const r = await browser.raw(pq.id);
+    await assert.rejects(browser.call(r.id, 'pc.screenshot', {}), /solo se puede pedir desde la app del móvil/);
+  } finally { browser.stop(); }
+  const files = fs.readdirSync(t.home, { recursive: true });
+  assert.ok(files.some((f) => f.endsWith(path.join('capturas-movil', shot))));
+  assert.ok(!files.some((f) => f.endsWith(path.join('adjuntos-movil', shot))));
 });
 
 test('the capture module: Windows only, one every 5 s, one at a time, size cap', async () => {
@@ -104,19 +117,28 @@ test('the capture module: Windows only, one every 5 s, one at a time, size cap',
     await until(() => release, 'ejecutor');
     await assert.rejects(slow(dir), /Espera un momento/);
     release(); await first;
+    // old captures are swept before a new one; at most 60 per hour
+    const old = path.join(dir, '1-0123abcd.jpg'); fs.writeFileSync(old, JPEG); const past = new Date(Date.now() - 11 * 60_000); fs.utimesSync(old, past, past);
+    clock += 6000;
+    const fresh = await createScreenshot({ platform: 'win32', now: () => Date.now(), run: async (out) => fs.writeFileSync(out, JPEG) })(dir);
+    assert.ok(!fs.existsSync(old) && fs.existsSync(path.join(dir, fresh)));
+    let c2 = 5_000_000; const many = createScreenshot({ platform: 'win32', now: () => c2, run: async (out) => fs.writeFileSync(out, JPEG) });
+    for (let i = 0; i < 60; i++) { await many(dir); c2 += 6000; }
+    await assert.rejects(many(dir), /Demasiadas capturas seguidas/);
+    c2 += 3_600_000; await many(dir);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('the default runner asks the app (host.screenshot) with the path, and no script is involved', async () => {
   const sent = [];
-  const out = path.join(os.tmpdir(), 'adjuntos-movil', '1-0123abcd.jpg');
+  const out = path.join(os.tmpdir(), 'capturas-movil', '1-0123abcd.jpg');
   await runHostScreenshot(out, async (...args) => { sent.push(args); return { bytes: 1 }; });
   assert.deepEqual(sent, [['host.screenshot', { path: out }, 20_000]]);
   await assert.rejects(runHostScreenshot('x', async () => { throw Object.assign(new Error('host: sin app'), { code: 'noApp' }); }), /necesita la app de Orb abierta/);
   const src = fs.readFileSync(path.join(ROOT, 'src', 'engine', 'host', 'screenshot.mjs'), 'utf8');
   assert.doesNotMatch(src, /powershell|execFile|child_process/i);
   assert.ok(HOST_METHODS.includes('host.screenshot'));
-  const dir = path.join(os.tmpdir(), 'adjuntos-movil');
+  const dir = path.join(os.tmpdir(), 'capturas-movil');
   const good = path.join(dir, '1731000000000-0123abcd.jpg');
   assert.deepEqual(checkHostRequest('host.screenshot', { path: good }, { isDir: () => true }), { path: good });
   for (const p of [path.join(dir, 'x.jpg'), path.join(dir, '1-0123ABCD.jpg'), path.join(os.tmpdir(), '1-0123abcd.jpg'), path.join(dir, '..', '1-0123abcd.jpg'), 'relativa/1-0123abcd.jpg']) {
@@ -135,4 +157,10 @@ test('the download vector is deterministic and opens only with its own AAD', () 
   assert.equal(binary.bytes.slice(0, 48), binary.nonce);
   assert.ok(negatives.length >= 2);
   for (const n of negatives) { assert.equal(n.throws, true); assert.throws(() => C.openBytes(key, bytes, n.aad)); }
+});
+
+test('the UI passes the notice flag on and notify() skips the repeat filter for it', () => {
+  const read = (...p) => fs.readFileSync(path.join(ROOT, ...p), 'utf8');
+  assert.match(read('src', 'ui', 'app', 'engine-events.js'), /always: payload\.always === true/);
+  assert.match(read('src', 'ui', 'lib', 'notify.js'), /n\.always === true \? null : notices\.find/);
 });

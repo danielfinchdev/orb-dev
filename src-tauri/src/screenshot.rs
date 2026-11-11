@@ -1,7 +1,9 @@
 // A picture of the whole desktop (every monitor) for the linked phone, taken natively: antivirus engines block the
 // PowerShell/System.Drawing way (AMSI flags such a script as malicious), and a script was never needed for this.
 // GDI copies the screen, WIC encodes it to JPEG in memory, and the file is created only when everything worked.
-use serde_json::{json, Value};
+#[cfg(windows)]
+use serde_json::json;
+use serde_json::Value;
 use std::path::PathBuf;
 
 /// The JPEG is never bigger than this: the phone's sealed download has the same ceiling.
@@ -145,6 +147,15 @@ fn encode(w: u32, h: u32, bgr: &[u8]) -> Result<Vec<u8>, String> {
   use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_INPROC_SERVER, STREAM_SEEK_CUR};
   use windows::Win32::System::Variant::{VARIANT, VT_R4};
   let e = |e: windows::core::Error| e.to_string();
+  // The output buffer is one byte over the cap: running out of room there means the picture is too big, not a failure.
+  // STG_E_MEDIUMFULL / ERROR_DISK_FULL as HRESULT.
+  let full = |err: windows::core::Error| {
+    if matches!(err.code().0 as u32, 0x8003_0070 | 0x8007_0070) {
+      "la captura es demasiado grande".to_string()
+    } else {
+      err.to_string()
+    }
+  };
   unsafe {
     let factory: IWICImagingFactory = CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER).map_err(e)?;
     // One byte over the cap so that "too big" is told apart from the encoder failing.
@@ -174,9 +185,9 @@ fn encode(w: u32, h: u32, bgr: &[u8]) -> Result<Vec<u8>, String> {
       return Err("formato de píxel no admitido".into());
     }
     let stride = (w as usize * 3 + 3) & !3;
-    frame.WritePixels(h, stride as u32, bgr).map_err(e)?;
-    frame.Commit().map_err(e)?;
-    encoder.Commit().map_err(e)?;
+    frame.WritePixels(h, stride as u32, bgr).map_err(full)?;
+    frame.Commit().map_err(full)?;
+    encoder.Commit().map_err(full)?;
     let mut pos = 0u64;
     stream.Seek(0, STREAM_SEEK_CUR, Some(&mut pos)).map_err(e)?;
     let len = pos as usize;
@@ -195,7 +206,7 @@ mod tests {
   #[ignore]
   fn captures_the_virtual_screen_as_jpeg() {
     use windows::Win32::UI::WindowsAndMessaging::*;
-    let dir = std::env::temp_dir().join(format!("orb-shot-test-{}", std::process::id())).join("adjuntos-movil");
+    let dir = std::env::temp_dir().join(format!("orb-shot-test-{}", std::process::id())).join("capturas-movil");
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("1-0123abcd.jpg");
     let started = std::time::Instant::now();

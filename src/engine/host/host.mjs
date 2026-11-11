@@ -66,7 +66,7 @@ export function checkHostRequest(method, params, { isDir } = {}) {
   if (method === 'host.openPath') return { path: folder(p.path) };
   if (method === 'host.screenshot') {
     const d = path.dirname(String(p.path ?? ''));
-    if (!localPath(p.path) || !/^\d{1,16}-[0-9a-f]{8}\.jpg$/.test(path.basename(p.path)) || path.basename(d) !== 'adjuntos-movil' || (isDir && !isDir(d))) throw new Error('ruta de captura no válida');
+    if (!localPath(p.path) || !/^\d{1,16}-[0-9a-f]{8}\.jpg$/.test(path.basename(p.path)) || path.basename(d) !== 'capturas-movil' || (isDir && !isDir(d))) throw new Error('ruta de captura no válida');
     return { path: p.path };
   }
   if (method === 'host.openTerminal') return { dir: folder(p.dir, 'carpeta no válida'), choice: TERMINAL_CHOICES.includes(p.choice) ? p.choice : 'auto' };

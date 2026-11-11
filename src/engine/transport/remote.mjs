@@ -19,7 +19,7 @@ import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal
 import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
 import { streamFeed } from '../../shared/chat-stream.mjs';
 import { PROTOCOL, MIN_PROTOCOL, PAIR_PROTOCOL, versionOfProtocol, CODE_ALPHABET, shortCodeLabel } from '../../shared/link-payload.mjs';
-import { SHOT_NAME } from '../host/screenshot.mjs';
+import { SHOT_NAME, SHOT_DIR, SHOT_TTL_MS, sweepShots } from '../host/screenshot.mjs';
 import { principalOf, REMOTE_METHODS } from '../../domain/security/permissions.mjs';
 import { isLegacy } from '../../domain/data/legacy/migrate-38.mjs';
 import { ownPorts } from '../host/host.mjs';
@@ -56,14 +56,17 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   // Screenshots the phone may download: name -> { device, expires }. Only what pc.screenshot made for that device is ever
   // served, so a download can never reach any other file of the uploads folder.
   const downloads = new Map();
-  const DOWNLOAD_MS = 10 * 60_000; const DOWNLOADS_PER_DEVICE = 20;
+  const DOWNLOAD_MS = SHOT_TTL_MS; const DOWNLOADS_PER_DEVICE = 20;
+  const shots = () => path.join(ctx.paths.internal, SHOT_DIR);
+  const dropShot = (name) => fs.promises.rm(path.join(shots(), name), { force: true }).catch(() => {});
   function allowDownload(deviceId, name) {
     if (typeof deviceId !== 'string' || !SHOT_NAME.test(name)) return null;
     const t = Date.now();
-    for (const [k, v] of downloads) if (v.expires <= t) downloads.delete(k);
+    for (const [k, v] of downloads) if (v.expires <= t) { downloads.delete(k); dropShot(k); }
     const mineNow = [...downloads].filter(([, v]) => v.device === deviceId);
-    for (const [k] of mineNow.slice(0, Math.max(0, mineNow.length - DOWNLOADS_PER_DEVICE + 1))) downloads.delete(k);
+    for (const [k] of mineNow.slice(0, Math.max(0, mineNow.length - DOWNLOADS_PER_DEVICE + 1))) { downloads.delete(k); dropShot(k); }
     downloads.set(name, { device: deviceId, expires: t + DOWNLOAD_MS });
+    setTimeout(() => { downloads.delete(name); dropShot(name); }, DOWNLOAD_MS + 1000).unref?.(); // the file goes with its registry entry
     return board.one('SELECT name FROM devices WHERE id = ?', deviceId)?.name ?? null;
   }
   // What this Orb says of itself on every hello and /api/me.
@@ -414,12 +417,13 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     if (auth.clock) return clockOff(res);
     const name = url.searchParams.get('name') ?? '';
     // the sealed message names the file too: a captured header cannot be replayed for another one
-    if (!SHOT_NAME.test(name) || auth.name !== name) return send(res, 401, { error: tr('msg.remote.notLinked') });
+    // 400, not 401: the app takes a 401 as «this device was unlinked»
+    if (!SHOT_NAME.test(name) || auth.name !== name) return send(res, 400, { error: tr('msg.remote.badJson') });
     const entry = downloads.get(name);
     const miss = () => send(res, 404, { error: 'no encontrado' });
     if (entry && entry.expires <= Date.now()) downloads.delete(name);
     if (!entry || entry.device !== device.id || entry.expires <= Date.now()) return miss();
-    const dir = path.resolve(uploads());
+    const dir = path.resolve(shots());
     const file = path.resolve(path.join(dir, name));
     if (path.dirname(file) !== dir) return miss();
     try {
@@ -606,6 +610,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     state = { running: routes.length > 0, routes, hosts, origins, local: localUrl, lan: lanAddresses().join(','), error: routes.length ? (errors[0] ?? null) : (errors.join(' ') || tr('msg.remote.noNetwork')) };
     for (const r of routes) log(`acceso móvil (${r.kind}) en ${r.url}`);
     pruneUploads().catch(() => {});
+    sweepShots(shots()).catch(() => {});
     return state;
   }
   // closing waits until every server and its open connections are really gone (2 s at most), so a restart on the same

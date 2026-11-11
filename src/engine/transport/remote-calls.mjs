@@ -27,7 +27,7 @@ export function guardCall(board, method, params, { allowed = REMOTE_METHODS, upl
   if (params.images !== undefined) {
     if (!uploadsDir) return tr('msg.remote.ownImages');
     const dir = uploadsDir + path.sep;
-    if (!Array.isArray(params.images) || params.images.some((f) => typeof f !== 'string' || !path.resolve(f).startsWith(dir))) return tr('msg.remote.ownImages');
+    if (!Array.isArray(params.images) || params.images.some((f) => typeof f !== 'string' || !path.resolve(f).startsWith(dir) || !IMAGE_NAME.test(path.basename(f)))) return tr('msg.remote.ownImages');
   }
   return null;
 }
@@ -86,7 +86,8 @@ export const UPLOAD_TYPES = Object.freeze(['png', 'jpg', 'webp', 'gif', 'pdf', '
 const TEXT_KINDS = new Set(['txt', 'md', 'csv', 'json']);
 // What an upload really is, from its first bytes (never from a name): a picture, a PDF or plain UTF-8 text; null for
 // anything else. `hint` is the extension the client says (only to tell md/csv/json apart inside plain text).
-// Text that starts like a program or markup (MZ, #!, <…) is refused so nothing executable or renderable is kept.
+// Text that starts like a script or markup (#!, <…) is refused so nothing renderable is kept; real executables carry
+// NUL/control bytes and are refused above.
 export function sniffUpload(b, hint = '') {
   if (b.length < 4) return null;
   if (b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'png';
@@ -99,7 +100,7 @@ export function sniffUpload(b, hint = '') {
   // eslint-disable-next-line no-control-regex
   if (/[\x00-\x08\x0b\x0e-\x1f\x7f]/.test(text)) return null;
   const head = text.replace(/^﻿/, '').trimStart();
-  if (/^(MZ|#!|<|%!)/.test(head)) return null;
+  if (/^(#!|<)/.test(head)) return null;
   const want = String(hint).toLowerCase();
   if (want === 'json') { try { JSON.parse(text); return 'json'; } catch { return 'txt'; } }
   return TEXT_KINDS.has(want) ? want : 'txt';

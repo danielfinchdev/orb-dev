@@ -8,7 +8,7 @@ import { tempHome, startEngine, until } from './helpers.mjs';
 import { createPhone, TEST_MASTER } from './fixtures/phone-client.mjs';
 import * as C from '../src/shared/mobile-crypto.mjs';
 import { guardCall, sniffUpload } from '../src/engine/transport/remote-calls.mjs';
-import { createDedupe } from '../src/engine/api/dedupe.mjs';
+import { createDedupe, conversationKey } from '../src/engine/api/dedupe.mjs';
 import { REMOTE_METHODS } from '../src/domain/security/permissions.mjs';
 
 let A; let t; let port; let phone; let peer; let raw;
@@ -78,7 +78,7 @@ test('subida: PDF y texto sí; ejecutables, HTML y SVG no (415); un PDF no pasa 
   assert.match((await upload(Buffer.from('a,b\n1,2\n'), 'datos.csv')).result.path, /\.csv$/);
   assert.match((await upload(Buffer.from('{"a":1}'), 'x.json')).result.path, /\.json$/);
   assert.match((await upload(Buffer.from('{no json'), 'x.json')).result.path, /\.txt$/, 'JSON roto: texto plano');
-  for (const bad of ['MZ ejecutable', '<!doctype html><script>1</script>', '<svg xmlns="http://www.w3.org/2000/svg"/>', '#!/bin/sh\nrm -rf /', '\x7fELF\x02\x01\x01']) {
+  for (const bad of ['<!doctype html><script>1</script>', '<svg xmlns="http://www.w3.org/2000/svg"/>', '#!/bin/sh\nrm -rf /', '\x7fELF\x02\x01\x01']) {
     const r = await upload(Buffer.from(bad), 'a.txt');
     assert.equal(r.ok, false, bad); assert.equal(r.status, 415, bad);
   }
@@ -91,6 +91,27 @@ test('sniffUpload distingue por los primeros bytes, no por el nombre', () => {
   assert.equal(sniffUpload(Buffer.from('%PDF-1.7 ...'), 'png'), 'pdf');
   assert.equal(sniffUpload(Buffer.from('hola'), 'exe'), 'txt');
   assert.equal(sniffUpload(Buffer.from('MZ\u0090\u0000\u0003\u0000')), null);
+  assert.equal(sniffUpload(Buffer.from('MZ Industries: informe de ventas\n')), 'txt', 'a text that starts with MZ is only text');
+  assert.equal(sniffUpload(Buffer.from('%!PS-Adobe es solo texto aquí')), 'txt');
+  assert.equal(sniffUpload(Buffer.from('#!/bin/sh\nls')), null);
+  assert.equal(sniffUpload(Buffer.from('<html></html>')), null);
+});
+
+test('guardCall: images must be pictures inside the uploads folder, by name too', () => {
+  const dir = path.join(t.home, 'core', 'adjuntos-movil');
+  const board = { one: () => null };
+  const pdf = path.join(dir, '1731000000000-0123abcd.pdf'); const png = path.join(dir, '1731000000000-0123abcd.png');
+  for (const [method, extra] of [['sessions.send', { id: '1', text: 'x' }], ['tasks.followup', { id: 1, text: 'x' }]]) {
+    assert.equal(guardCall(board, method, { ...extra, images: [png] }, { uploadsDir: dir }), null);
+    assert.notEqual(guardCall(board, method, { ...extra, images: [pdf] }, { uploadsDir: dir }), null, `${method} pdf`);
+    assert.notEqual(guardCall(board, method, { ...extra, images: [path.join(dir, 'notas.txt')] }, { uploadsDir: dir }), null);
+  }
+});
+
+test('the dedupe key is stable for a conversation', () => {
+  assert.equal(conversationKey(null), 'new'); assert.equal(conversationKey(undefined), 'new');
+  assert.equal(conversationKey('7'), '7'); assert.equal(conversationKey(7), '7'); assert.equal(conversationKey('007'), '7');
+  assert.equal(conversationKey('abc'), 'abc');
 });
 
 test('clientId: chat.send y sessions.send no duplican un reintento; sin clientId sí envían de nuevo', async () => {

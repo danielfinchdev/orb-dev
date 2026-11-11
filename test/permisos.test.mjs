@@ -525,7 +525,7 @@ test('móvil: sin acceso total y sin imágenes que no subió él', async () => {
   assert.match(guardCall(board, 'chat.send', { text: 'x', images: [path.join(t.home, 'core', 'orb.json')] }, { uploadsDir }), /imágenes subidas/);
   assert.match(guardCall(board, 'chat.send', { text: 'x', images: [path.join(uploadsDir, '..', 'datos', 'orb.db')] }, { uploadsDir }), /imágenes subidas/);
   assert.match(guardCall(board, 'chat.send', { text: 'x', images: [path.join(uploadsDir, 'foto.png')] }), /imágenes subidas/, 'sin carpeta de subidas, ninguna');
-  assert.equal(guardCall(board, 'chat.send', { text: 'x', images: [path.join(uploadsDir, 'foto.png')] }, { uploadsDir }), null);
+  assert.equal(guardCall(board, 'chat.send', { text: 'x', images: [path.join(uploadsDir, '1731000000000-0123abcd.png')] }, { uploadsDir }), null);
 });
 
 // M4: the phone chooses the brain of one conversation; the one new conversations start with is the PC's.

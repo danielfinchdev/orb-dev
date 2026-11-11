@@ -2,26 +2,46 @@
 // linked with this PC. This PC only (src/domain/security/permissions.mjs).
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 import { ctx, tr } from '../../platform/context.mjs';
-import { createScreenshot } from '../host/screenshot.mjs';
+import { createScreenshot, sweepShots, SHOT_DIR } from '../host/screenshot.mjs';
+import { PermissionError } from '../../domain/security/permissions.mjs';
 import { saveConfig } from '../../platform/config.mjs';
 import { PAIR_KINDS, PREVIEWS } from '../transport/remote.mjs';
 import { str, oneOf } from './common.mjs';
 
-// Engine tests (they run with the fake agents) never touch the real screen: they copy a prepared JPEG instead.
-const fakeShot = () => (process.env.ORB_FAKE_AGENTS && process.env.ORB_FAKE_SCREENSHOT
-  ? (out) => fs.promises.copyFile(process.env.ORB_FAKE_SCREENSHOT, out) : undefined);
+// Engine tests (they run with the fake agents) never touch the real screen: they copy a prepared JPEG instead. The
+// hook needs the fake-agents mode and only accepts a real JPEG inside the temp folder. Residual risk: whoever controls
+// this process's environment could still make a capture "show" a JPEG from the temp folder, which they could read anyway.
+const fakeShot = () => {
+  const src = process.env.ORB_FAKE_AGENTS && process.env.ORB_FAKE_SCREENSHOT;
+  if (!src) return undefined;
+  return async (out) => {
+    const full = path.resolve(src); const tmp = path.resolve(os.tmpdir()) + path.sep;
+    const rel = path.relative(tmp, full);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) throw new Error('fake screenshot outside the temp folder');
+    const head = Buffer.alloc(2); const fh = await fs.promises.open(full, 'r');
+    try { await fh.read(head, 0, 2, 0); } finally { await fh.close(); }
+    if (head[0] !== 0xff || head[1] !== 0xd8) throw new Error('fake screenshot is not a JPEG');
+    await fs.promises.copyFile(full, out);
+  };
+};
 
 export function linkMethods({ emit, remoteRef, log }) {
   const capture = createScreenshot({ run: fakeShot() });
+  const shotsDir = () => path.join(ctx.paths.internal, SHOT_DIR);
+  sweepShots(shotsDir()).catch(() => {}); // leftovers of an engine that stopped before they expired
   return {
-    // The phone asks for a picture of the PC's screen. It is stored with the phone's uploads and only that phone may
-    // download it; the PC always shows a notice so nobody is watched without knowing. Parameters are ignored.
+    // The phone asks for a picture of the PC's screen. It is stored in its own folder (never with the uploads) and only
+    // that phone may download it; the PC always shows a notice (never silenced as a repeat) so nobody is watched
+    // without knowing. Only the phone app may ask: a linked browser may not. Parameters are ignored.
     'pc.screenshot': async (_params, principal) => {
-      const name = await capture(path.join(ctx.paths.internal, 'adjuntos-movil'));
+      if (principal?.channel !== 'phone' && principal?.channel !== 'desktop') throw Object.assign(new PermissionError('pc.screenshot'), { message: tr('msg.screenshot.phoneOnly') });
+      const name = await capture(shotsDir());
       const device = principal?.device ? remoteRef.current?.allowDownload(principal.device, name) : null;
       log(`móvil: captura de pantalla${device ? ` (${device})` : ''}`);
-      emit('notice', { body: device ? tr('msg.screenshot.taken', { device }) : tr('msg.screenshot.takenAnon'), tone: 'warning' });
+      const time = new Date().toLocaleTimeString(ctx.config?.language === 'en' ? 'en-GB' : 'es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      emit('notice', { body: device ? tr('msg.screenshot.taken', { device, time }) : tr('msg.screenshot.takenAnon', { time }), tone: 'warning', always: true });
       return { path: name };
     },
     // ---- phone access

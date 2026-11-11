@@ -19,7 +19,7 @@ export function useEngineEvents(phase) {
       if (event === 'chat:state' && payload?.conversation != null) chatStateSoon(payload);
       // what only informs (working folder, brain in use, schedule created…) passes by as a notification.
       // through lib/notify.js: one at a time, never repeated, kept under the bell.
-      if (event === 'notice' && payload?.body) notify({ body: payload.body, tone: payload.tone });
+      if (event === 'notice' && payload?.body) notify({ body: payload.body, tone: payload.tone, always: payload.always === true });
       // the phone read its notices; its ids are not the bell's, so the whole bell counts as seen.
       if (event === 'notes:read') markNoticesSeen();
       if (event === 'ui:navigate') go(payload);

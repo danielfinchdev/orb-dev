@@ -16,7 +16,7 @@ import { autoTitle } from '../titles.mjs';
 import { git } from '../../platform/git.mjs';
 import { diffBetween } from '../../domain/tasks/checkpoints.mjs';
 import { fail, str, int, oneOf, images, DECISION } from './common.mjs';
-import { createDedupe } from './dedupe.mjs';
+import { createDedupe, conversationKey } from './dedupe.mjs';
 import { fold } from '../../domain/conversations/inbox.mjs';
 
 export function workMethods({ trash, project, cut, accept, taskRejected, modelLabelOf, grants, board, sessions, scheduler, log }) {
@@ -184,6 +184,6 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
   // clientId: a retry of the same message gets the first result instead of a second message.
   const sent = createDedupe();
   const send = methods['sessions.send'];
-  methods['sessions.send'] = (params) => sent.once(`session:${params.id}`, params.clientId, () => send(params));
+  methods['sessions.send'] = (params, principal) => (params == null ? send(params, principal) : sent.once(`session:${principal?.device ?? 'desktop'}:${conversationKey(params.id)}`, params.clientId, () => send(params, principal)));
   return methods;
 }

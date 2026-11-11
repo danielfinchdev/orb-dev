@@ -4,6 +4,9 @@ const CLIENT_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 export const clientIdOf = (value) => (typeof value === 'string' && CLIENT_ID.test(value) ? value : null);
 
+// A conversation id as one stable text, whatever shape the client sent it in.
+export const conversationKey = (x) => (x == null ? 'new' : Number.isFinite(Number(x)) && String(x).trim() !== '' ? String(Number(x)) : String(x));
+
 export function createDedupe({ ttl = 10 * 60_000, max = 500, clock = Date.now } = {}) {
   const seen = new Map(); // key -> { at, result }
   const prune = () => {
