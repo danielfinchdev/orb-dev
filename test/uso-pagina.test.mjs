@@ -59,6 +59,20 @@ test('usage.history: 7, 30 or 90 days, with the models by name; also from a link
   assert.equal((await call('usage.history', {}, phone)).days.length, 30, '30 by default');
 });
 
+test('usage.history: 30 distinct days also late in the evening after clocks go back', () => {
+  const tz = ctx.config.tz; ctx.config.tz = 'Europe/Madrid';
+  try {
+    // 12 Nov 2026 23:30 in Madrid (UTC+1); 24 h steps back crossed 25 Oct twice and returned 29 days.
+    const out = usageHistory(board, { days: 30, now: new Date(Date.UTC(2026, 10, 12, 22, 30)) });
+    assert.equal(out.days.length, 30);
+    assert.equal(new Set(out.days.map((x) => x.day)).size, 30);
+    assert.equal(out.from, '2026-10-14'); assert.equal(out.to, '2026-11-12');
+    // and across the spring change too
+    const spring = usageHistory(board, { days: 7, now: new Date(Date.UTC(2026, 2, 31, 0, 30)) });
+    assert.deepEqual(spring.days.map((x) => x.day), ['2026-03-25', '2026-03-26', '2026-03-27', '2026-03-28', '2026-03-29', '2026-03-30', '2026-03-31']);
+  } finally { ctx.config.tz = tz; }
+});
+
 test('an even pace through a window: only for windows of known length with a reset ahead', () => {
   const now = Date.UTC(2026, 10, 9, 12);
   assert.equal(windowMs('five_hour'), 5 * 3_600_000); assert.equal(windowMs('seven_day_opus'), 7 * 86_400_000); assert.equal(windowMs('90min'), 90 * 60_000); assert.equal(windowMs('monthly'), null);

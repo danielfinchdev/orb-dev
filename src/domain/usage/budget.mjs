@@ -298,7 +298,10 @@ export function recordSpend(board, { account = null, conversation = null, sessio
 // and by model. From usage_ledger: the agent is the account's; the model, the one of the chat or task the turn was in.
 export function usageHistory(board, { days = 30, now = new Date() } = {}) {
   const tz = ownerTz(ctx.config);
-  const list = Array.from({ length: days }, (_, i) => localDay(new Date(now.getTime() - (days - 1 - i) * 86_400_000), tz));
+  // Step back by calendar days from today's local date, not by 24 h: in the 30 days after clocks go back, 24 h steps
+  // from a late-evening `now` land twice on the same local day and the page showed 29 days.
+  const [y, m, d] = localDay(now, tz).split('-').map(Number);
+  const list = Array.from({ length: days }, (_, i) => new Date(Date.UTC(y, m - 1, d - (days - 1 - i))).toISOString().slice(0, 10));
   const agentOf = new Map(accounts().map((a) => [a.id, a.agent]));
   const rows = board.all(`SELECT u.day, u.account_id AS account, u.turns, u.tokens_in AS tin, u.tokens_out AS tout, u.usd,
       COALESCE(s.agent, t.assigned_to, t.agent, c.agent) AS agent, COALESCE(s.model, t.model, c.model) AS model
