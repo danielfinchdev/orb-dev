@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    // Same package as the 3.8.1 (Tauri) app so this one installs over it and keeps its link (pending the owner's OK).
+    // Same package as the 3.8.1 (Tauri) app so this one installs over it and keeps its link (decided by the owner on 2026-11-11).
     namespace = "dev.orb.app"
     compileSdk = 36
 
@@ -47,6 +47,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.tink.android)
+    // Only org.bouncycastle.crypto.generators.SCrypt is used (Android has no scrypt); R8 strips the rest of the library.
+    implementation(libs.bouncycastle.bcprov)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
