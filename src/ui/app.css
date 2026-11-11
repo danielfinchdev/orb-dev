@@ -21,7 +21,7 @@
   body[style*="pointer-events: none"] > #root::after { content: ""; position: fixed; inset: 0; z-index: 50; }
   body { @apply bg-background text-foreground antialiased; font-family: var(--font-sans); font-size: 14.5px; overflow: hidden; }
   /* Órbita compact scale on the Orb theme (see the compact variant in tokens.css). rem is untouched so Tailwind spacing and the webview zoom are unaffected. */
-  @media (pointer: fine) { html[data-skin="orb"] body { font-size: 13px; } }
+  @media (pointer: fine) { html:is([data-skin="orb"], [data-skin="profesional"]) body { font-size: 13px; } }
   h1, h2, h3, h4 { font-weight: 500; letter-spacing: -0.01em; }
   ::selection { background: color-mix(in oklch, var(--primary) 30%, transparent); }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -91,7 +91,7 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
 .screen-loading { animation: screen-loading-in var(--dur-base) ease .4s both; }
 @keyframes screen-loading-in { from { opacity: 0; } to { opacity: 1; } }
 .prose-chat { line-height: 1.6; overflow-wrap: anywhere; }
-@media (pointer: fine) { html[data-skin="orb"] .prose-chat { font-size: 14.5px; line-height: 1.43; } }
+@media (pointer: fine) { html:is([data-skin="orb"], [data-skin="profesional"]) .prose-chat { font-size: 14.5px; line-height: 1.43; } }
 .prose-chat p { margin: 0 0 .6em; } .prose-chat p:last-child { margin-bottom: 0; }
 .prose-chat ul, .prose-chat ol { margin: .3em 0 .6em; padding-left: 1.3em; } .prose-chat ul { list-style: disc; } .prose-chat ol { list-style: decimal; }
 .prose-chat li { margin: .15em 0; }

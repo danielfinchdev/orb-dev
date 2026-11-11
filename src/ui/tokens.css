@@ -2,7 +2,7 @@
 @custom-variant dark (&:is(.dark *));
 /* Órbita compact scale (13 px interface, 14.5 px chat): desktop pointers only, and only the themes already restyled as
    Órbita (the others keep their sizes until they are). The phone keeps its larger sizes and its 16 px fields. */
-@custom-variant compact { @media (pointer: fine) { html[data-skin="orb"] & { @slot; } } }
+@custom-variant compact { @media (pointer: fine) { html:is([data-skin="orb"], [data-skin="profesional"]) & { @slot; } } }
 
 /* Orb theme tokens, the base every other theme overrides: cool neutrals at hue 268 and a periwinkle primary.
    The -soft tokens are tinted fills for status chips; --primary-text and the status colours are meant as text on them,
@@ -90,7 +90,7 @@
 
 /* The other themes do not set the Órbita-only tokens: without this they would wear the Orb values. Derived from each
    theme's own colours so a component that uses them keeps that theme's look (text on a tint = the plain colour). */
-html[data-skin]:not([data-skin="orb"]) {
+html[data-skin]:not([data-skin="orb"], [data-skin="profesional"]) {
   --primary-text: var(--primary);
   --primary-soft: color-mix(in oklch, var(--primary) 12%, var(--card));
   --faint-foreground: var(--muted-foreground);
