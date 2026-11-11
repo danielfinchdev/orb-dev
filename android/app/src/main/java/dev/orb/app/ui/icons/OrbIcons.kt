@@ -84,4 +84,15 @@ object OrbIcons {
         lucide("activity", "M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2")
     }
     val LogOut by lazy { lucide("log-out", "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4", "m16 17 5-5-5-5", "M21 12H9") }
+    val Send by lazy {
+        lucide(
+            "send",
+            "M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z",
+            "m21.854 2.147-10.94 10.939",
+        )
+    }
+    val Square by lazy { lucide("square", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z") }
+    val ArrowDown by lazy { lucide("arrow-down", "M12 5v14", "m19 12-7 7-7-7") }
+    val ChevronDown by lazy { lucide("chevron-down", "m6 9 6 6 6-6") }
+    val MoreVertical by lazy { lucide("ellipsis-vertical", circle(12f, 12f, 1f), circle(12f, 5f, 1f), circle(12f, 19f, 1f)) }
 }

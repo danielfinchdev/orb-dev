@@ -31,6 +31,14 @@ import dev.orb.app.AppContainer
 import androidx.compose.runtime.LaunchedEffect
 import dev.orb.app.ui.chats.ChatTexts
 import dev.orb.app.ui.chats.SearchScreen
+import dev.orb.app.ui.chats.OrbeChatScreen
+import dev.orb.app.ui.chats.OrbeChatViewModel
+import dev.orb.app.ui.theme.OrbMotion
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.navigation.toRoute
 import dev.orb.app.ui.chats.SearchViewModel
 import dev.orb.app.ui.shell.MainShell
 import dev.orb.app.ui.shell.ShellActions
@@ -75,7 +83,14 @@ private fun OrbNav(container: AppContainer, start: Any) {
     val nav = rememberNavController()
     var appearance by rememberSaveable { mutableStateOf(false) }
     if (appearance) AppearanceSheet(container.themePrefs, onDismiss = { appearance = false })
-    NavHost(navController = nav, startDestination = start, modifier = Modifier.systemBarsPadding()) {
+    NavHost(
+        navController = nav, startDestination = start, modifier = Modifier.systemBarsPadding(),
+        // A short slide with a fade: the chat opens from the side the list sits on.
+        enterTransition = { slideInHorizontally(OrbMotion.standard(OrbMotion.Medium)) { it / 5 } + fadeIn(OrbMotion.standard(OrbMotion.Medium)) },
+        exitTransition = { slideOutHorizontally(OrbMotion.standard(OrbMotion.Medium)) { -it / 8 } + fadeOut(OrbMotion.standard(OrbMotion.Short)) },
+        popEnterTransition = { slideInHorizontally(OrbMotion.standard(OrbMotion.Medium)) { -it / 8 } + fadeIn(OrbMotion.standard(OrbMotion.Medium)) },
+        popExitTransition = { slideOutHorizontally(OrbMotion.standard(OrbMotion.Medium)) { it / 5 } + fadeOut(OrbMotion.standard(OrbMotion.Short)) },
+    ) {
         composable<Welcome> {
             val vm = viewModel<WelcomeViewModel>(factory = viewModelFactory {
                 initializer { WelcomeViewModel(container.linker, container.deviceName, onLinked = container::linkWith) }
@@ -113,7 +128,18 @@ private fun OrbNav(container: AppContainer, start: Any) {
             }
         }
         composable<NewChat> { Placeholder(ChatTexts.NEW_CHAT_SOON, onBack = { nav.popBackStack() }) }
-        composable<ChatRoute> { Placeholder(ChatTexts.CHAT_SOON, onBack = { nav.popBackStack() }) }
+        composable<ChatRoute> { entry ->
+            val route = entry.toRoute<ChatRoute>()
+            val conversation = route.id.toLongOrNull()
+            val backend = remember { container.orbeChatBackend() }
+            if (route.kind == "conversation" && conversation != null && backend != null) {
+                val vm = viewModel<OrbeChatViewModel>(key = "orbe:$conversation", factory = viewModelFactory { initializer { OrbeChatViewModel(backend, conversation) } })
+                OrbeChatScreen(vm, onBack = { nav.popBackStack() })
+            } else {
+                // Direct chats with an agent come with their own screen.
+                Placeholder(ChatTexts.CHAT_SOON, onBack = { nav.popBackStack() })
+            }
+        }
         composable<LinkTest> {
             val backend = remember { container.linkTestBackend() }
             if (backend != null) {

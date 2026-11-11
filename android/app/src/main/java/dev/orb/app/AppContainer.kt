@@ -142,6 +142,9 @@ class AppContainer(private val app: Application) {
 
     fun chatsBackend(): ChatsBackend? = _runtime.value?.let { RuntimeChatsBackend(this, it) }
 
+    /** One Orbe conversation; null until a PC is linked. */
+    fun orbeChatBackend(): dev.orb.app.ui.chats.OrbeChatBackend? = _runtime.value?.let { dev.orb.app.ui.chats.RuntimeOrbeChatBackend(this, it) }
+
     private companion object {
         const val SESSION_KEY = "orb.movil"
     }
