@@ -19,3 +19,6 @@ export const images = (list) => {
   if (!Array.isArray(list) || list.length > 10 || list.some((f) => typeof f !== 'string' || !path.isAbsolute(f))) fail(tr('msg.api.badAttachments'));
   return list;
 };
+
+// Loads a module the first time it is needed; a failed load is not kept, so the next call tries again.
+export const lazy = (load) => { let p = null; return () => (p ??= load().catch((error) => { p = null; throw error; })); };

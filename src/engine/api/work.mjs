@@ -1,0 +1,183 @@
+// Window actions of models, tasks, direct sessions and schedules.
+import fs from 'node:fs';
+import { ctx, tr } from '../../platform/context.mjs';
+import { AGENT_IDS } from '../../platform/config-file.mjs';
+import { accountsOf, accountLabel } from '../../domain/usage/accounts.mjs';
+import { slashCommand } from '../../shared/slash.mjs';
+import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../../domain/schedules/schedules.mjs';
+import { oneLine } from '../../shared/text.mjs';
+import { PERMISSIONS } from '../sessions.mjs';
+import { globalAutonomy, permissionOfAutonomy } from '../../domain/security/guard.mjs';
+import { checkDevTools } from '../../platform/dev-tools.mjs';
+import { expandMentions, mentionOptions } from '../mentions.mjs';
+import { modelCatalog, chooseModel, LEVELS, REASONING_LEVELS, levelsOf } from '../usage/catalog.mjs';
+import { titleFrom } from '../../shared/titles.mjs';
+import { autoTitle } from '../titles.mjs';
+import { git } from '../../platform/git.mjs';
+import { diffBetween } from '../../domain/tasks/checkpoints.mjs';
+import { fail, str, int, oneOf, images, DECISION } from './common.mjs';
+import { fold } from '../../domain/conversations/inbox.mjs';
+
+export function workMethods({ project, cut, accept, taskRejected, modelLabelOf, grants, board, sessions, scheduler, log }) {
+  const methods = {
+
+    // the list of every view, sent on each refresh: long texts cut (the whole task is tasks.get) and no approval
+    // signatures (only the detail needs them).
+    // Flutter, the Android SDK and a JDK as they really are on this PC (Ajustes › Android; engine/dev-tools.mjs).
+    'devtools.check': () => checkDevTools(),
+    'tasks.list': ({ limit }) => {
+      // a range of the settings' key (its index), not LIKE (which would read every setting: one per accepted task, …).
+      const undone = new Set(board.all("SELECT key FROM settings WHERE key >= 'undone:' AND key < 'undone;' AND value <> '' AND value <> 'null'").map((r) => Number(r.key.slice('undone:'.length))));
+      // the rows are new objects: changed in place (copying each task twice would cost more than reading it).
+      const paused = board.setting('paused') === '1';
+      return board.panelTasks(Math.min(Number(limit) || 150, 500)).map((task) => {
+        delete task.approval_hash; delete task.approval_sig;
+        // why a queued one waits and what a held one did (src/ui/components/task-state.jsx).
+        const waiting = board.waitReason(task, paused); if (waiting) task.waiting = waiting;
+        const held = board.heldInfo(task); if (held) task.held = held;
+        task.description = cut(task.description); task.result = cut(task.result);
+        if (undone.has(task.id)) task.undone = true;
+        return task;
+      });
+    },
+    'tasks.live': () => scheduler.live(),
+    'tasks.get': ({ id }) => {
+      const d = board.taskDetail(int(id, 'tarea'));
+      const children = board.all('SELECT id, title, status, agent, assigned_to, model FROM tasks WHERE parent_id = ? OR review_of = ? ORDER BY id', d.id, d.id);
+      // «Deshecha» (undone: the files are as before the task), the model by its name («Haiku 4.5», not «haiku») and the
+      // account that ran it by the name the user gave it («Codex Pro»).
+      const who = d.assigned_to ?? d.agent; const acc = d.run_account ?? d.account ?? null;
+      return { ...d, waiting: board.waitReason(d), held: board.heldInfo(d), accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
+        undone: board.settingJson(`undone:${d.id}`), modelLabel: d.model ? modelLabelOf(who, acc ?? who, d.model) : null, accountLabel: acc && accountsOf(who).length > 1 ? accountLabel(acc) : null };
+    },
+    'tasks.create': (p) => board.createTask({
+      project: project(p.project).name, title: str(p.title, 'título', 200), description: str(p.description, 'descripción', 12000),
+      agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente', 'any'), model: str(p.model, 'modelo', 80, { optional: true }) || null,
+      reasoning: oneOf(p.reasoning, ['low', 'medium', 'high'], 'razonamiento', 'medium'), mode: oneOf(p.mode, ['carpeta', 'aislada'], 'modo', 'carpeta'),
+      readonly: Boolean(p.readonly), account: str(p.account, 'cuenta', 40, { optional: true }) || null, level: oneOf(p.level, ['simple', 'normal', 'complejo'], 'nivel', null), depends_on: Array.isArray(p.depends_on) ? p.depends_on.map((d) => int(d, 'dependencia')) : []
+    }, 'usuario'),
+    'tasks.approve': ({ id, decision, hash }) => {
+      const out = board.approve(int(id, 'tarea'), decision === 'approved' ? 'approved' : 'rejected', 'usuario', str(hash, 'huella', 100));
+      if (out?.status === 'cancelled') { try { taskRejected(out); } catch (error) { log?.(`rechazo #${out.id}: ${error.message}`); } }
+      return out;
+    },
+    'tasks.retry': ({ id }) => board.retry(int(id, 'tarea'), 'usuario'),
+    'tasks.cancel': ({ id }) => scheduler.cancel(int(id, 'tarea'), 'usuario'),
+    'tasks.reassign': ({ id, agent, model, reasoning }) => board.reassign(int(id, 'tarea'), { agent: oneOf(agent, [...AGENT_IDS, 'any'], 'agente'), model: str(model, 'modelo', 80, { optional: true }) || null, reasoning: oneOf(reasoning, ['low', 'medium', 'high'], 'razonamiento') }, 'usuario'),
+    'tasks.followup': ({ id, text, images: files }) => scheduler.followup(int(id, 'tarea'), str(text, 'mensaje', 20000), images(files)),
+    'tasks.undo': ({ id }) => scheduler.undo(int(id, 'tarea')),
+    // what a finished task changed, with each file's diff (read only, against its undo checkpoint: «Deshacer» works
+    // the same). Nothing to show while it runs, after it was undone, or without git (a copy checkpoint).
+    'tasks.diff': async ({ id }) => {
+      const task = board.task(int(id, 'tarea')) ?? fail(tr('msg.api.noTaskThat'));
+      // a held task's diff is read from every file again (safety.mjs › recheckHeld): what accepting it keeps.
+      if (board.heldInfo(task)) await scheduler.recheckHeld(task);
+      const cp = board.settingJson(`checkpoint:${task.id}`);
+      if (cp?.before?.kind !== 'git' || !cp.after?.commit || !cp.before.repo || !fs.existsSync(cp.before.repo)) return { available: false, files: [], more: 0 };
+      return { available: true, ...diffBetween(cp.before.repo, cp.before.commit, cp.after.commit) };
+    },
+    // «Iniciar de todos modos» starts that task now, over the usage limit and also with the queue paused (only that
+    // one: scheduler.tick). One that waits for other tasks cannot: the answer says which. → { paused }
+    'tasks.launchAnyway': ({ id }) => {
+      const t = board.task(int(id, 'tarea')); if (t?.status !== 'queued') fail(tr('msg.api.onlyQueued'));
+      const why = board.waitReason(t);
+      if (why?.kind === 'deps') fail(tr('msg.api.waitsForDeps', { ids: why.on.map((d) => `#${d.id}`).join(', ') }));
+      board.setting(`budget_ok:${t.id}`, '1'); board.event(t.id, 'usuario', 'budget.authorised', 'lanzar ahora (aunque supere el límite de uso o la cola esté en pausa)');
+      board.changed('tasks');
+      return { paused: why?.kind === 'paused' || why?.kind === 'manual' };
+    },
+    // a task held for review is accepted as it is (its result stays; the tasks waiting for it go on), as the OK
+    // to its report does.
+    'tasks.accept': ({ id }) => {
+      const tid = int(id, 'tarea');
+      if (board.heldInfo(board.task(tid))) board.patch(tid, { status: 'done' }, 'usuario', 'task.review_accepted');
+      return accept([tid]);
+    },
+    'tasks.discardBranch': ({ id }) => scheduler.discardBranch(int(id, 'tarea')),
+
+    'sessions.list': ({ archived }) => sessions.list({ archived: Boolean(archived) }),
+    'sessions.create': (p) => {
+      const proj = p.project ? project(p.project) : null;
+      const cwd = proj ? proj.path : ctx.paths.projects;
+      // Without a project the agent sits in the assistant's own folder (its database, secret and logs): it may only look.
+      if (!proj && p.permission && p.permission !== 'leer') fail(tr('msg.api.readOnlyNoProject'));
+      // «Acceso total» only through sessions.grantTotal (the master password), never at creation.
+      if (p.permission === 'total') fail(tr('msg.grants.totalNeedsPassword'));
+      const created = sessions.create({ kind: 'chat', agent: oneOf(p.agent, AGENT_IDS, 'agente'), account: str(p.account, 'cuenta', 40, { optional: true }) || null, model: str(p.model, 'modelo', 80, { optional: true }) || null,
+        reasoning: oneOf(p.reasoning, REASONING_LEVELS, 'razonamiento', 'medium'), permission: proj ? oneOf(p.permission, PERMISSIONS.filter((x) => x !== 'total'), 'permiso', permissionOfAutonomy(globalAutonomy())) : 'leer',
+        project: proj?.name ?? null, cwd, title: str(p.title, 'título', 80, { optional: true }) || tr('msg.api.chatWith', { agent: p.agent }) });
+      // a title given here stays; without one, Orb names it from its first message.
+      return p.title ? sessions.update(created.id, { titled: true }) : created;
+    },
+    'sessions.items': ({ id, after, before, limit }) => sessions.items(str(id, 'conversación', 64), { after: Number(after) || 0, before: Number(before) || 0, limit: Number(limit) || 200 }),
+    // A message to a conversation: a new turn, or (while it works) steer the running turn or wait in its queue.
+    // mode: 'auto' (steer when the agent can, else queue), 'steer' or 'queue'.
+    'sessions.send': ({ id, text, images: files, mode }) => {
+      const s = sessions.must(str(id, 'conversación', 64));
+      if (s.kind === 'task') {
+        // A running task: the message reaches its agent at once when it can (steer); otherwise after its turn.
+        if (sessions.isRunning(s.id) && oneOf(mode, ['auto', 'steer', 'queue'], 'modo', 'auto') !== 'queue' && !(files ?? []).length) {
+          const out = sessions.message(s.id, str(text, 'mensaje', 20000), { mode: 'steer' });
+          if (out.steered) return out;
+        }
+        scheduler.followup(s.task_id, str(text, 'mensaje', 20000), images(files));
+        return { queued: true };
+      }
+      const t = str(text, 'mensaje', 20000);
+      const command = s.kind === 'chat' && !(files ?? []).length ? slashCommand(t) : null;
+      if (command) return command === 'compact' ? sessions.compact(s.id) : sessions.clear(s.id);
+      // a new direct conversation is named by Orb from its first message (at once a quick title, then a better one).
+      if (s.kind === 'chat' && !s.titled) {
+        const quick = titleFrom(t) || s.title;
+        sessions.update(s.id, { title: quick, titled: true });
+        autoTitle(board, { agent: s.agent, account: s.account, text: t }).then((better) => { if (better && sessions.get(s.id)?.title === quick) sessions.update(s.id, { title: better }); }).catch(() => {});
+      }
+      return sessions.message(s.id, t, { images: images(files), mode: oneOf(mode, ['auto', 'steer', 'queue'], 'modo', 'auto'), context: expandMentions(board, sessions, t) });
+    },
+    'sessions.queue': ({ id }) => sessions.queue(str(id, 'conversación', 64)),
+    'sessions.editQueued': ({ id, queueId, text, remove, move }) => sessions.editQueued(str(id, 'conversación', 64), int(queueId, 'mensaje'), { text: text === undefined ? undefined : str(text, 'mensaje', 20000), remove: Boolean(remove), move: oneOf(move, ['up', 'down'], 'mover', undefined) }),
+    'sessions.approve': ({ id, request, decision }) => sessions.respond(str(id, 'conversación', 64), str(request, 'petición', 200), oneOf(decision, DECISION, 'decisión')),
+    'sessions.resume': ({ id }) => sessions.resume(str(id, 'conversación', 64)),
+    // agent: go on with another agent (the copy gets a summary of the conversation; the original stays).
+    'sessions.fork': ({ id, title, agent }) => {
+      const other = oneOf(agent, AGENT_IDS, 'agente', undefined);
+      if (other && !(board.availableAgents() ?? AGENT_IDS).includes(other)) fail(tr('msg.api.agentUnavailable', { agent: other }));
+      return sessions.fork(str(id, 'conversación', 64), { title: str(title, 'título', 80, { optional: true }) || undefined, agent: other });
+    },
+    'sessions.settle': ({ id, settled }) => sessions.update(sessions.must(str(id, 'conversación', 64)).id, { settled: settled !== false }),
+    'approvals.list': () => sessions.allPendingApprovals(),
+    'mentions.options': () => mentionOptions(board, sessions),
+    'schedules.list': () => listSchedules(board).map((s) => ({ ...s, when: describeSchedule({ ...s, hours: s.at_time }) })),
+    'schedules.create': (p) => createSchedule(board, { project: project(p.project).name, title: str(p.title, 'título', 120), description: str(p.description, 'descripción', 8000), agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente', 'any'), model: str(p.model, 'modelo', 80, { optional: true }) || null,
+      readonly: Boolean(p.readonly), every: oneOf(p.every, EVERY, 'frecuencia'), at_time: str(p.at_time, 'hora', 16, { optional: true }) || '09:00', weekdays: Array.isArray(p.weekdays) ? p.weekdays.map(Number) : [], hours: Number(p.hours) || 6, same_chat: p.same_chat === true }, 'usuario'),
+    'schedules.update': ({ id, enabled, approve, title, description }) => updateSchedule(board, int(id, 'programada'), { enabled, approved: approve === true, title, description }),
+    'schedules.remove': ({ id }) => removeSchedule(board, int(id, 'programada')),
+    'schedules.run': ({ id }) => runSchedule(board, getSchedule(board, int(id, 'programada')) ?? fail(tr('msg.api.noScheduled')), 'usuario'),
+    'tasks.review': ({ id, agent, focus }) => scheduler.createReview(board.task(int(id, 'tarea')) ?? fail(tr('msg.api.noTaskThat')), { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }) }),
+    'projects.review': ({ name, agent, focus }) => scheduler.reviewProject(project(name).name, { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }) }),
+    'projects.securityReview': ({ name, agent }) => scheduler.securityReview(project(name).name, { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null) }),
+    // «Compactar» in a direct conversation: the agent's own compaction (Claude /compact, Codex thread/compact/start).
+    'sessions.compact': ({ id }) => sessions.compact(sessions.must(str(id, 'conversación', 64)).id),
+    'sessions.stop': ({ id }) => { const s = sessions.must(str(id, 'conversación', 64)); if (s.kind === 'task') return scheduler.cancel(s.task_id, 'usuario'); return sessions.stop(s.id); },
+    'sessions.update': ({ id, title, model, reasoning, permission, archived }) => {
+      const s = sessions.must(str(id, 'conversación', 64));
+      if (s.kind === 'task' && (model !== undefined || permission !== undefined || reasoning !== undefined)) fail(tr('msg.api.taskModelFromTask'));
+      const fields = {};
+      if (title !== undefined) fields.title = oneLine(str(title, 'título', 80), 80);
+      if (model !== undefined) fields.model = str(model, 'modelo', 80, { optional: true }) || null;
+      if (reasoning !== undefined) fields.reasoning = oneOf(reasoning, REASONING_LEVELS, 'razonamiento');
+      // «Extra» only with a model that takes it (the conversation's, or the one chosen now).
+      if ((fields.reasoning ?? s.reasoning) === 'xhigh' && (reasoning !== undefined || model !== undefined) && !levelsOf(modelCatalog(board), s.agent, fields.model !== undefined ? fields.model : s.model, s.account).includes('xhigh')) {
+        if (reasoning === 'xhigh') fail(tr('msg.api.reasoningUnavailable'));
+        fields.reasoning = 'high';
+      }
+      // into or out of «total» only through grants.mjs (password, audit log, lock).
+      if (permission !== undefined && (permission === 'total' || s.permission === 'total') && permission !== s.permission) fail(tr('msg.grants.totalNeedsPassword'));
+      if (permission !== undefined) { fields.permission = oneOf(permission, PERMISSIONS, 'permiso'); if (!s.project && fields.permission !== 'leer') fail(tr('msg.api.readOnlyNoProject2')); }
+      if (archived !== undefined) fields.archived = Boolean(archived);
+      return sessions.update(s.id, fields);
+    },
+    'sessions.remove': ({ id }) => sessions.remove(str(id, 'conversación', 64)),
+  };
+  return methods;
+}
