@@ -31,6 +31,7 @@
     "android:build": "node scripts/android-build.mjs",
     "android:build:debug": "node scripts/android-build.mjs --debug",
     "android:native": "node scripts/android-native.mjs",
+    "android:e2e": "node --test test/android-native.e2e.mjs",
     "android:vectors": "node scripts/android-vectors.mjs"
   },
   "engines": {
