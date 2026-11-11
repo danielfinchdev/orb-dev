@@ -222,6 +222,218 @@
         "peer": "ff",
         "secret": "f12f59031bae093b8575957f3e10cc799c437778e5d6cf4ea04542135c3dcd11"
       }
+    ],
+    "lowOrder": [
+      {
+        "name": "u=0",
+        "peerPub": "0000000000000000000000000000000000000000000000000000000000000000",
+        "priv": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+        "code": "abc_DEF-123",
+        "sharedSecret": {
+          "throws": true
+        },
+        "pairingKey": {
+          "throws": true
+        },
+        "sessionKey": {
+          "throws": true
+        }
+      },
+      {
+        "name": "u=1",
+        "peerPub": "0100000000000000000000000000000000000000000000000000000000000000",
+        "priv": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+        "code": "abc_DEF-123",
+        "sharedSecret": {
+          "throws": true
+        },
+        "pairingKey": {
+          "throws": true
+        },
+        "sessionKey": {
+          "throws": true
+        }
+      },
+      {
+        "name": "u=p-1",
+        "peerPub": "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+        "priv": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+        "code": "abc_DEF-123",
+        "sharedSecret": {
+          "throws": true
+        },
+        "pairingKey": {
+          "throws": true
+        },
+        "sessionKey": {
+          "throws": true
+        }
+      },
+      {
+        "name": "u=p",
+        "peerPub": "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+        "priv": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+        "code": "abc_DEF-123",
+        "sharedSecret": {
+          "throws": true
+        },
+        "pairingKey": {
+          "throws": true
+        },
+        "sessionKey": {
+          "throws": true
+        }
+      },
+      {
+        "name": "u=p+1",
+        "peerPub": "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+        "priv": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+        "code": "abc_DEF-123",
+        "sharedSecret": {
+          "throws": true
+        },
+        "pairingKey": {
+          "throws": true
+        },
+        "sessionKey": {
+          "throws": true
+        }
+      },
+      {
+        "name": "order-8 point a",
+        "peerPub": "e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b800",
+        "priv": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+        "code": "abc_DEF-123",
+        "sharedSecret": {
+          "throws": true
+        },
+        "pairingKey": {
+          "throws": true
+        },
+        "sessionKey": {
+          "throws": true
+        }
+      },
+      {
+        "name": "order-8 point b",
+        "peerPub": "5f9c95bca3508c24b1d0b1559c83ef5b04445cc4581c8e86d8224eddd09f1157",
+        "priv": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+        "code": "abc_DEF-123",
+        "sharedSecret": {
+          "throws": true
+        },
+        "pairingKey": {
+          "throws": true
+        },
+        "sessionKey": {
+          "throws": true
+        }
+      },
+      {
+        "name": "u=0 (msb set)",
+        "peerPub": "0000000000000000000000000000000000000000000000000000000000000080",
+        "priv": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+        "code": "abc_DEF-123",
+        "sharedSecret": {
+          "throws": true
+        },
+        "pairingKey": {
+          "throws": true
+        },
+        "sessionKey": {
+          "throws": true
+        }
+      },
+      {
+        "name": "u=1 (msb set)",
+        "peerPub": "0100000000000000000000000000000000000000000000000000000000000080",
+        "priv": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+        "code": "abc_DEF-123",
+        "sharedSecret": {
+          "throws": true
+        },
+        "pairingKey": {
+          "throws": true
+        },
+        "sessionKey": {
+          "throws": true
+        }
+      },
+      {
+        "name": "u=p-1 (msb set)",
+        "peerPub": "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "priv": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+        "code": "abc_DEF-123",
+        "sharedSecret": {
+          "throws": true
+        },
+        "pairingKey": {
+          "throws": true
+        },
+        "sessionKey": {
+          "throws": true
+        }
+      },
+      {
+        "name": "u=p (msb set)",
+        "peerPub": "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "priv": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+        "code": "abc_DEF-123",
+        "sharedSecret": {
+          "throws": true
+        },
+        "pairingKey": {
+          "throws": true
+        },
+        "sessionKey": {
+          "throws": true
+        }
+      },
+      {
+        "name": "u=p+1 (msb set)",
+        "peerPub": "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "priv": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+        "code": "abc_DEF-123",
+        "sharedSecret": {
+          "throws": true
+        },
+        "pairingKey": {
+          "throws": true
+        },
+        "sessionKey": {
+          "throws": true
+        }
+      },
+      {
+        "name": "order-8 point a (msb set)",
+        "peerPub": "e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b880",
+        "priv": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+        "code": "abc_DEF-123",
+        "sharedSecret": {
+          "throws": true
+        },
+        "pairingKey": {
+          "throws": true
+        },
+        "sessionKey": {
+          "throws": true
+        }
+      },
+      {
+        "name": "order-8 point b (msb set)",
+        "peerPub": "5f9c95bca3508c24b1d0b1559c83ef5b04445cc4581c8e86d8224eddd09f11d7",
+        "priv": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+        "code": "abc_DEF-123",
+        "sharedSecret": {
+          "throws": true
+        },
+        "pairingKey": {
+          "throws": true
+        },
+        "sessionKey": {
+          "throws": true
+        }
+      }
     ]
   },
   "keys": {

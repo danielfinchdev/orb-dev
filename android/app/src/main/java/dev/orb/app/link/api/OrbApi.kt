@@ -3,6 +3,7 @@ package dev.orb.app.link.api
 import dev.orb.app.link.net.LinkClient
 import dev.orb.app.link.net.LinkError
 import dev.orb.app.link.net.LinkException
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -120,6 +121,9 @@ object ApiMethods {
     val SESSIONS_TRASH = m("sessions.trash", requiresPc = "3.8.4")
     val SESSIONS_RESTORE = m("sessions.restore", requiresPc = "3.8.4")
     val PROJECTS_MERGE_PR = m("projects.mergePr", requiresPc = "3.8.4")
+    val PROJECTS_PRS = m("projects.prs", requiresPc = "3.8.4")
+    val PROJECTS_PR = m("projects.pr", requiresPc = "3.8.4")
+    val NOTES_MARK_READ = m("notes.markRead", requiresPc = "3.8.4")
 
     val all: List<ApiMethod> get() = registry.toList()
 }
@@ -365,6 +369,17 @@ class OrbApi(private val pc: PcCaller, private val newId: () -> String = { UUID.
         }
         return run(ApiMethods.PROJECTS_MERGE_PR, params)
     }
+
+    /** The open pull requests of a project. */
+    suspend fun projectsPrs(name: String): Result<JsonElement> = run(ApiMethods.PROJECTS_PRS, buildJsonObject { put("name", name) })
+
+    /** One pull request of a project (state, checks, files). */
+    suspend fun projectsPr(name: String, number: Int): Result<JsonElement> =
+        run(ApiMethods.PROJECTS_PR, buildJsonObject { put("name", name); put("number", number) })
+
+    /** Marks notes as read: the given [ids], or all of them when [ids] is null. */
+    suspend fun notesMarkRead(ids: List<String>? = null): Result<JsonElement> =
+        run(ApiMethods.NOTES_MARK_READ, buildJsonObject { if (ids != null) put("ids", JsonArray(ids.map { JsonPrimitive(it) })) })
 
     private fun idOf(id: String) = buildJsonObject { put("id", id) }
 

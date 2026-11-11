@@ -78,6 +78,9 @@ class Pairing(
         Result.success(block())
     } catch (e: PairingException) {
         Result.failure(e)
+    } catch (e: LinkCryptoException) {
+        // Crypto that refuses outside the explicit steps (heavy short-code scrypt, a code the keys cannot be derived from).
+        Result.failure(PairingException(if (e.code == "kdfTooHeavy") PairError.KdfTooHeavy else PairError.OldQr))
     }
 
     private suspend fun send(request: Request, ms: Long, urls: List<String>): Response = try {
@@ -191,7 +194,8 @@ class Pairing(
         } catch (e: OutOfMemoryError) {
             fail(PairError.KdfTooHeavy)
         } catch (e: LinkCryptoException) {
-            fail(PairError.BadAnswer)
+            // The pre-check in LinkCrypto and the OOM net above are the same answer for the person.
+            fail(if (e.code == "kdfTooHeavy") PairError.KdfTooHeavy else PairError.BadAnswer)
         }
         val transcript = try { LinkCrypto.pakeTranscript(via, pair.pub, pcPub, sid, kdf) } catch (e: LinkCryptoException) { fail(PairError.BadAnswer) }
         val k = try {

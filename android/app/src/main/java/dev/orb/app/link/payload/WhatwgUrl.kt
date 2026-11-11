@@ -92,12 +92,11 @@ internal object WhatwgUrl {
 
     private fun parseDomainHost(raw: String): String? {
         val decoded = percentDecodeUtf8Strict(raw) ?: return null
-        var ascii = if (decoded.all { it.code < 128 }) {
-            decoded.lowercase()
-        } else {
-            // No ALLOW_UNASSIGNED / USE_STD3 flags: IDN throws on anything dubious, so we reject rather than accept more.
-            try { IDN.toASCII(decoded).lowercase() } catch (e: IllegalArgumentException) { return null }
-        }
+        // The PC maps hosts with UTS46; java.net.IDN is IDNA2003 and disagrees on joiners, deviation characters and
+        // full-width forms. Any host still non-ASCII after percent-decoding is refused instead of guessed at: the link
+        // rules only ever need ASCII hosts (IPs, ts.net, .local names), and refusing is the safe side of a mismatch.
+        if (decoded.any { it.code >= 128 }) return null
+        var ascii = decoded.lowercase()
         if (ascii.isEmpty()) return null
         if (ascii.any { it.code <= 0x20 || it.code == 0x7F || it in FORBIDDEN_HOST }) return null
         // A label already in punycode must be valid punycode that round-trips; the PC rejects invalid ones.

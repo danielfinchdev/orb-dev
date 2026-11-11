@@ -135,6 +135,14 @@ class PairingTest {
     }
 
     @Test
+    fun `the heap pre-check maps to the same typed error`() = runBlocking {
+        val e = env(verifierOf = { _, _ -> throw dev.orb.app.link.crypto.LinkCryptoException("kdfTooHeavy") })
+        e.pc.setupPairing(FakePc.PairSetup(code, password, kdf, "qr"))
+        val err = (e.pairing.link(e.pairing.resolve(qr(e)).getOrThrow(), password, "Pixel").exceptionOrNull() as PairingException).error
+        assertEquals(PairError.KdfTooHeavy, err)
+    }
+
+    @Test
     fun `a pc asking for a cost under the floor is refused as a bad answer`() = runBlocking {
         val e = env()
         val weak = PairKdf(1L shl 10, 8, 1, B64.enc(ByteArray(16)))

@@ -100,6 +100,30 @@ class LinkCryptoVectorsTest {
         }
     }
 
+    // The JS throws for every low-order or non-canonical peer. Kotlin must never return a value where the JS throws.
+    @Test fun lowOrderPeers() {
+        val cases = v.o("x25519").a("lowOrder").objs()
+        assertTrue(cases.size >= 14)
+        for (c in cases) {
+            val priv = c.bytes("priv")
+            val peer = c.bytes("peerPub")
+            val code = c.s("code")
+            val name = c.s("name")
+            val calls = mapOf<String, () -> ByteArray>(
+                "sharedSecret" to { LinkCrypto.sharedSecret(priv, peer) },
+                "pairingKey" to { LinkCrypto.pairingKey(priv, peer, code) },
+                "sessionKey" to { LinkCrypto.sessionKey(priv, peer) },
+            )
+            for ((fn, call) in calls) {
+                val js = c.o(fn)
+                val got = try { hex(call()) } catch (e: LinkCryptoException) { null }
+                if (js.throws()) assertEquals("$name $fn: JS throws, Kotlin must too", null, got)
+                else assertEquals("$name $fn", js.s("value"), got)
+                hit("x25519.lowOrder")
+            }
+        }
+    }
+
     @Test fun keys() {
         val k = v.o("keys")
         for (p in k.a("pairing").objs()) {
@@ -199,7 +223,7 @@ class LinkCryptoVectorsTest {
             // double 1e21 (1.0E21): valid JSON that the PC parses to the same number, so it is normalised here.
             assertEquals("serialization of ${c.s("valueId")}", plaintext, Json.encodeToString(JsonElement.serializer(), value).replace("1.0E21", "1e+21"))
             val box = c.o("box")
-            val ct = LinkCrypto.sealWithNonce(key, nonce, plaintext.toByteArray(Charsets.UTF_8), aad)
+            val ct = sealWithNonce(key, nonce, plaintext.toByteArray(Charsets.UTF_8), aad)
             assertEquals(box.s("c"), B64.enc(ct))
             assertEquals(box.s("n"), B64.enc(nonce))
             assertEquals(c.s("bytes"), hex(nonce + ct))
@@ -222,7 +246,7 @@ class LinkCryptoVectorsTest {
         val b = s.o("binary")
         val bKey = b.bytes("key")
         val bPlain = b.bytes("plaintext")
-        val bCt = LinkCrypto.sealWithNonce(bKey, b.bytes("nonce"), bPlain, b.s("aad"))
+        val bCt = sealWithNonce(bKey, b.bytes("nonce"), bPlain, b.s("aad"))
         assertEquals(b.s("bytes"), hex(b.bytes("nonce") + bCt))
         assertArrayEquals(bPlain, LinkCrypto.openBytes(bKey, b.bytes("bytes"), b.s("aad")))
         val freshBytes = LinkCrypto.sealBytes(bKey, bPlain, b.s("aad"))

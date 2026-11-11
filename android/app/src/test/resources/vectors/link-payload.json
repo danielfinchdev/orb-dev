@@ -390,6 +390,164 @@
       "throws": true,
       "message": "app.linkInsecure",
       "key": "app.linkInsecure"
+    },
+    {
+      "input": "http://evil.com\\@10.0.0.1/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": "http://a@b@10.0.0.1/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://10.0.0.1:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://10.0.0.1:3131@8.8.8.8/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": "http://%31%30.0.0.1/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://10.0.0.1:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://012.0.0.1/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://10.0.0.1:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://0300.0250.1.1/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://192.168.1.1:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://１０．０．０．１/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://10.0.0.1:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://nas.local./#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": "http://[::ffff:10.0.0.1]/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": "http://[::fd00:1]/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": "http://[fdff::]/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://[fdff::]:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://10.0.0.1:65536/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "throws": true,
+      "message": "app.linkBadQr",
+      "key": "app.linkBadQr"
+    },
+    {
+      "input": "http://xn--.example/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": "http://xn--a.example/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": "http://xn--zzzzzzzzzzzz.example/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": "http://xn--nas-9ra.local/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://xn--nas-9ra.local:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://nas.lo‍cal/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "throws": true,
+      "message": "app.linkBadQr",
+      "key": "app.linkBadQr"
     }
   ],
   "parseManual": [
@@ -583,6 +741,215 @@
       "throws": true,
       "message": "app.linkNoCode",
       "key": "app.linkNoCode"
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://evil.com\\@10.0.0.1"
+      },
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://a@b@10.0.0.1"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "http://10.0.0.1:3131"
+        ],
+        "pc": null,
+        "code": "ABCDEFGH",
+        "name": null,
+        "role": null,
+        "via": "code"
+      }
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://10.0.0.1:3131@8.8.8.8"
+      },
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://%31%30.0.0.1"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "http://10.0.0.1:3131"
+        ],
+        "pc": null,
+        "code": "ABCDEFGH",
+        "name": null,
+        "role": null,
+        "via": "code"
+      }
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://012.0.0.1"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "http://10.0.0.1:3131"
+        ],
+        "pc": null,
+        "code": "ABCDEFGH",
+        "name": null,
+        "role": null,
+        "via": "code"
+      }
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://0300.0250.1.1"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "http://192.168.1.1:3131"
+        ],
+        "pc": null,
+        "code": "ABCDEFGH",
+        "name": null,
+        "role": null,
+        "via": "code"
+      }
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://１０．０．０．１"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "http://10.0.0.1:3131"
+        ],
+        "pc": null,
+        "code": "ABCDEFGH",
+        "name": null,
+        "role": null,
+        "via": "code"
+      }
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://nas.local."
+      },
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://[::ffff:10.0.0.1]"
+      },
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://[::fd00:1]"
+      },
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://[fdff::]"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "http://[fdff::]:3131"
+        ],
+        "pc": null,
+        "code": "ABCDEFGH",
+        "name": null,
+        "role": null,
+        "via": "code"
+      }
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://10.0.0.1:65536"
+      },
+      "throws": true,
+      "message": "app.linkBadAddress",
+      "key": "app.linkBadAddress"
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://xn--.example"
+      },
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://xn--a.example"
+      },
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://xn--zzzzzzzzzzzz.example"
+      },
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://xn--nas-9ra.local"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "http://xn--nas-9ra.local:3131"
+        ],
+        "pc": null,
+        "code": "ABCDEFGH",
+        "name": null,
+        "role": null,
+        "via": "code"
+      }
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://nas.lo‍cal"
+      },
+      "throws": true,
+      "message": "app.linkBadAddress",
+      "key": "app.linkBadAddress"
     }
   ],
   "orderBases": [
@@ -663,6 +1030,74 @@
   ],
   "allowedBase": [
     {
+      "input": "http://evil.com\\@10.0.0.1",
+      "value": false
+    },
+    {
+      "input": "http://a@b@10.0.0.1",
+      "value": true
+    },
+    {
+      "input": "http://10.0.0.1:3131@8.8.8.8",
+      "value": false
+    },
+    {
+      "input": "http://%31%30.0.0.1",
+      "value": true
+    },
+    {
+      "input": "http://012.0.0.1",
+      "value": true
+    },
+    {
+      "input": "http://0300.0250.1.1",
+      "value": true
+    },
+    {
+      "input": "http://１０．０．０．１",
+      "value": true
+    },
+    {
+      "input": "http://nas.local.",
+      "value": false
+    },
+    {
+      "input": "http://[::ffff:10.0.0.1]",
+      "value": false
+    },
+    {
+      "input": "http://[::fd00:1]",
+      "value": false
+    },
+    {
+      "input": "http://[fdff::]",
+      "value": true
+    },
+    {
+      "input": "http://10.0.0.1:65536",
+      "value": false
+    },
+    {
+      "input": "http://xn--.example",
+      "value": false
+    },
+    {
+      "input": "http://xn--a.example",
+      "value": false
+    },
+    {
+      "input": "http://xn--zzzzzzzzzzzz.example",
+      "value": false
+    },
+    {
+      "input": "http://xn--nas-9ra.local",
+      "value": true
+    },
+    {
+      "input": "http://nas.lo‍cal",
+      "value": false
+    },
+    {
       "input": "https://example.com",
       "value": true
     },
@@ -708,6 +1143,46 @@
     }
   ],
   "isPrivateHost": [
+    {
+      "input": "evil.com\\",
+      "value": false
+    },
+    {
+      "input": "10.0.0.1:3131@8.8.8.8",
+      "value": false
+    },
+    {
+      "input": "012.0.0.1",
+      "value": false
+    },
+    {
+      "input": "０.０.０.０",
+      "value": false
+    },
+    {
+      "input": "nas.local.",
+      "value": false
+    },
+    {
+      "input": "::ffff:10.0.0.1",
+      "value": false
+    },
+    {
+      "input": "::fd00:1",
+      "value": false
+    },
+    {
+      "input": "fdff::",
+      "value": true
+    },
+    {
+      "input": "nas.lo‍cal",
+      "value": false
+    },
+    {
+      "input": "xn--",
+      "value": true
+    },
     {
       "input": "100.64.0.1",
       "value": true
@@ -870,6 +1345,78 @@
     }
   ],
   "normalAddress": [
+    {
+      "input": "http://evil.com\\@10.0.0.1",
+      "value": "http://evil.com:3131"
+    },
+    {
+      "input": "http://a@b@10.0.0.1",
+      "value": "http://10.0.0.1:3131"
+    },
+    {
+      "input": "http://10.0.0.1:3131@8.8.8.8",
+      "value": "http://8.8.8.8:3131"
+    },
+    {
+      "input": "http://%31%30.0.0.1",
+      "value": "http://10.0.0.1:3131"
+    },
+    {
+      "input": "http://012.0.0.1",
+      "value": "http://10.0.0.1:3131"
+    },
+    {
+      "input": "http://0300.0250.1.1",
+      "value": "http://192.168.1.1:3131"
+    },
+    {
+      "input": "http://１０．０．０．１",
+      "value": "http://10.0.0.1:3131"
+    },
+    {
+      "input": "http://nas.local.",
+      "value": "http://nas.local.:3131"
+    },
+    {
+      "input": "http://[::ffff:10.0.0.1]",
+      "value": "http://[::ffff:a00:1]:3131"
+    },
+    {
+      "input": "http://[::fd00:1]",
+      "value": "http://[::fd00:1]:3131"
+    },
+    {
+      "input": "http://[fdff::]",
+      "value": "http://[fdff::]:3131"
+    },
+    {
+      "input": "http://10.0.0.1:65536",
+      "throws": true,
+      "message": "app.linkBadAddress",
+      "key": "app.linkBadAddress"
+    },
+    {
+      "input": "http://xn--.example",
+      "value": "http://xn--.example:3131"
+    },
+    {
+      "input": "http://xn--a.example",
+      "value": "http://xn--a.example:3131"
+    },
+    {
+      "input": "http://xn--zzzzzzzzzzzz.example",
+      "value": "http://xn--zzzzzzzzzzzz.example:3131"
+    },
+    {
+      "input": "http://xn--nas-9ra.local",
+      "value": "http://xn--nas-9ra.local:3131"
+    },
+    {
+      "input": "http://nas.lo‍cal",
+      "throws": true,
+      "message": "app.linkBadAddress",
+      "key": "app.linkBadAddress"
+    },
     {
       "input": "100.64.1.2",
       "value": "http://100.64.1.2:3131"

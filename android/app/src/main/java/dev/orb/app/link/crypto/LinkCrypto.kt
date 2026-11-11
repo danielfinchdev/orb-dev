@@ -1,7 +1,5 @@
 package dev.orb.app.link.crypto
 
-import androidx.annotation.VisibleForTesting
-import com.google.crypto.tink.aead.internal.InsecureNonceXChaCha20Poly1305
 import com.google.crypto.tink.subtle.Hkdf
 import com.google.crypto.tink.subtle.X25519
 import com.google.crypto.tink.subtle.XChaCha20Poly1305
@@ -13,13 +11,14 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.bouncycastle.crypto.generators.SCrypt
+import java.math.BigDecimal
 import java.security.GeneralSecurityException
 import java.security.MessageDigest
 import java.text.Normalizer
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
-/** Every failure of the link crypto. `code` is stable (`badAnswer`, `badMessage`, `badBase64`, `badKey`) so callers can map it. */
+/** Every failure of the link crypto. `code` is stable (`badAnswer`, `badMessage`, `badBase64`, `badKey`, `badString`, `kdfTooHeavy`) so callers can map it. */
 class LinkCryptoException(val code: String, cause: Throwable? = null) : Exception(code, cause)
 
 /** A sealed message: nonce and ciphertext, both base64url. */
@@ -33,15 +32,23 @@ data class KdfCost(val N: Long, val r: Long, val p: Long)
 /** The scrypt cost the PC asks for during linking. `salt` stays the base64url text: the transcript binds that exact string. */
 data class PairKdf(val N: Long, val r: Long, val p: Long, val salt: String) {
     companion object {
-        /** Null when the shape is wrong (missing or non-numeric field, fractional number, salt not a string). */
+        private val JSON_NUMBER = Regex("-?(0|[1-9][0-9]*)([.][0-9]+)?([eE][+-]?[0-9]+)?")
+
+        /** Null when the shape is wrong (missing or non-numeric field, fractional or out-of-Int-range number, salt not a string). */
         fun fromJson(el: JsonElement?): PairKdf? {
             val o = el as? JsonObject ?: return null
             fun num(k: String): Long? {
                 val p = o[k] as? JsonPrimitive ?: return null
                 if (p.isString || p is JsonNull) return null
-                val d = p.content.toDoubleOrNull() ?: return null
-                // Integers only (like Number.isInteger), within what a double holds exactly.
-                return if (d == Math.floor(d) && Math.abs(d) <= 9.007199254740992E15) d.toLong() else null
+                val text = p.content
+                // Only a JSON number literal: toDoubleOrNull would also take "65536d", "NaN" or hex floats.
+                if (!JSON_NUMBER.matches(text)) return null
+                val bd = try { BigDecimal(text) } catch (_: NumberFormatException) { return null }
+                if (bd.signum() == 0) return 0L
+                val s = bd.stripTrailingZeros()
+                // Whole numbers only (like Number.isInteger) and inside Int range, checked before any expansion.
+                if (s.scale() > 0 || s.precision() - s.scale() > 10) return null
+                return try { s.intValueExact().toLong() } catch (_: ArithmeticException) { null }
             }
             val salt = o["salt"] as? JsonPrimitive
             if (salt == null || !salt.isString) return null
@@ -76,7 +83,18 @@ object LinkCrypto {
     private const val TAG_LEN = 16
     private val json = Json
 
-    private fun utf8(s: String) = s.toByteArray(Charsets.UTF_8)
+    // Strict on purpose: toByteArray turns a lone surrogate into '?', the JS into U+FFFD, so the two sides would derive
+    // different keys. Refusing is safe; every string that feeds a key or a MAC goes through here.
+    private fun utf8(s: String): ByteArray {
+        var i = 0
+        while (i < s.length) {
+            val c = s[i]
+            if (Character.isHighSurrogate(c) && i + 1 < s.length && Character.isLowSurrogate(s[i + 1])) i += 2
+            else if (Character.isSurrogate(c)) throw LinkCryptoException("badString")
+            else i++
+        }
+        return s.toByteArray(Charsets.UTF_8)
+    }
 
     // ---------------------------------------------------------------- keys
 
@@ -101,12 +119,28 @@ object LinkCrypto {
     fun sessionKey(priv: ByteArray, peerPub: ByteArray): ByteArray =
         derive(priv, peerPub, "orb-movil", "orb movil sesion v1")
 
-    private fun scrypt(password: ByteArray, salt: ByteArray, n: Int, r: Int, p: Int): ByteArray =
-        SCrypt.generate(password, salt, n, r, p, 32)
+    /** Heap the JVM could still hand out: the ceiling minus what is in use. */
+    internal fun availableHeap(): Long {
+        val rt = Runtime.getRuntime()
+        return rt.maxMemory() - (rt.totalMemory() - rt.freeMemory())
+    }
+
+    // Room for scrypt's V (128*r*N) plus its small working buffers and whatever else runs meanwhile.
+    private const val SCRYPT_MARGIN = 8L shl 20
+
+    private fun scrypt(password: ByteArray, salt: ByteArray, n: Int, r: Int, p: Int, available: () -> Long): ByteArray {
+        val need = 128L * r * n + 128L * r * p + SCRYPT_MARGIN
+        if (need > available()) throw LinkCryptoException("kdfTooHeavy")
+        return try {
+            SCrypt.generate(password, salt, n, r, p, 32)
+        } catch (e: OutOfMemoryError) {
+            throw LinkCryptoException("kdfTooHeavy")
+        }
+    }
 
     /** The typed short code stretched with scrypt and tied to the PC key it was typed for. Blocking, ~16 MB. */
-    fun shortSecret(code: String, pcPubB64: String): String =
-        "corto3:" + B64.enc(scrypt(utf8(code), utf8("orb-corto-v3:$pcPubB64"), 1 shl 14, 8, 1))
+    fun shortSecret(code: String, pcPubB64: String, available: () -> Long = ::availableHeap): String =
+        "corto3:" + B64.enc(scrypt(utf8(code), utf8("orb-corto-v3:$pcPubB64"), 1 shl 14, 8, 1, available))
 
     suspend fun shortSecretAsync(code: String, pcPubB64: String): String =
         withContext(Dispatchers.Default) { shortSecret(code, pcPubB64) }
@@ -138,12 +172,13 @@ object LinkCrypto {
     /**
      * The verifier key from the master password. Heavy: scrypt allocates 128*r*N bytes (64 MB at the PC's default
      * 2^16, 256 MB at the 2^18 ceiling); call [verifierOfAsync] from a coroutine.
-     * @throws LinkCryptoException `badAnswer` when the PC's cost is outside what [pairKdfOk] allows.
+     * @throws LinkCryptoException `badAnswer` when the PC's cost is outside what [pairKdfOk] allows, `kdfTooHeavy` when
+     * the heap cannot hold it (checked before allocating), `badString` for a password with a lone surrogate.
      */
-    fun verifierOf(password: String?, kdf: PairKdf): KeyPair {
+    fun verifierOf(password: String?, kdf: PairKdf, available: () -> Long = ::availableHeap): KeyPair {
         if (!pairKdfOk(kdf)) throw LinkCryptoException("badAnswer")
         val pw = utf8(Normalizer.normalize(password ?: "", Normalizer.Form.NFC))
-        return verifierFromSeed(scrypt(pw, B64.dec(kdf.salt), kdf.N.toInt(), kdf.r.toInt(), kdf.p.toInt()))
+        return verifierFromSeed(scrypt(pw, B64.dec(kdf.salt), kdf.N.toInt(), kdf.r.toInt(), kdf.p.toInt(), available))
     }
 
     suspend fun verifierOfAsync(password: String?, kdf: PairKdf): KeyPair =
@@ -244,11 +279,6 @@ object LinkCrypto {
             throw LinkCryptoException("badMessage", e)
         }
     }
-
-    /** Test hook: ciphertext (tag included, no nonce prefix) under a chosen nonce. Reusing a nonce breaks the cipher: never in production. */
-    @VisibleForTesting
-    internal fun sealWithNonce(key: ByteArray, nonce: ByteArray, plaintext: ByteArray, aad: String): ByteArray =
-        wrap { InsecureNonceXChaCha20Poly1305(key).encrypt(nonce, plaintext, utf8(aad)) }
 
     // ---------------------------------------------------------------- helpers
 

@@ -62,7 +62,31 @@ function x25519Vectors() {
     const r = rec(() => hex(C.sharedSecret(PRIVS[a], pubOf(b))));
     shared.push({ priv: a, peer: b, ...(r.throws ? { throws: true } : { secret: r.value }) });
   }
-  return { keys, shared };
+  return { keys, shared, lowOrder: lowOrderVectors() };
+}
+
+// Peers of small order and non-canonical encodings. The oracle records what the real code does for each (a value or a
+// throw) for the shared secret and for both derived keys; Kotlin must match or be stricter, never accept more.
+function lowOrderVectors() {
+  const le = (n) => Uint8Array.from({ length: 32 }, (_, i) => Number((n >> BigInt(8 * i)) & 0xffn));
+  const P = 2n ** 255n - 19n;
+  const peers = [
+    ['u=0', le(0n)], ['u=1', le(1n)], ['u=p-1', le(P - 1n)], ['u=p', le(P)], ['u=p+1', le(P + 1n)],
+    ['order-8 point a', unhex('e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b800')],
+    ['order-8 point b', unhex('5f9c95bca3508c24b1d0b1559c83ef5b04445cc4581c8e86d8224eddd09f1157')]
+  ];
+  // The same points with the unused top bit set (RFC 7748 says to mask it, so they must behave like the originals).
+  for (const [name, u] of [...peers]) { const m = Uint8Array.from(u); m[31] |= 0x80; peers.push([`${name} (msb set)`, m]); }
+  const code = 'abc_DEF-123';
+  return peers.map(([name, u]) => {
+    const one = (fn) => { const r = rec(() => hex(fn())); return r.throws ? { throws: true } : { value: r.value }; };
+    return {
+      name, peerPub: hex(u), priv: hex(PRIVS.seq), code,
+      sharedSecret: one(() => C.sharedSecret(PRIVS.seq, u)),
+      pairingKey: one(() => C.pairingKey(PRIVS.seq, u, code)),
+      sessionKey: one(() => C.sessionKey(PRIVS.seq, u))
+    };
+  });
 }
 
 function keyVectors() {
@@ -208,6 +232,13 @@ async function buildCrypto() {
 }
 
 // ---------------------------------------------------------------- link payload
+// Hostile and odd URL forms. The JS is the oracle for every one of them; Kotlin may only be stricter where the test
+// names the case explicitly (non-ASCII hosts).
+const HOSTILE = [
+  'http://evil.com\\@10.0.0.1', 'http://a@b@10.0.0.1', 'http://10.0.0.1:3131@8.8.8.8', 'http://%31%30.0.0.1', 'http://012.0.0.1',
+  'http://0300.0250.1.1', 'http://１０．０．０．１', 'http://nas.local.', 'http://[::ffff:10.0.0.1]', 'http://[::fd00:1]', 'http://[fdff::]',
+  'http://10.0.0.1:65536', 'http://xn--.example', 'http://xn--a.example', 'http://xn--zzzzzzzzzzzz.example', 'http://xn--nas-9ra.local', 'http://nas.lo\u200dcal'
+];
 function buildLink() {
   const PC = b64.enc(pubOf('seq'));
   const call = (fn, input) => ({ input, ...rec(() => fn(input)) });
@@ -228,14 +259,16 @@ function buildLink() {
     '', '   ', null,
     { v: 2, url: 'http://192.168.0.9:3131', pc: PC, code: 'k' }, { urls: ['ftp://x', 'http://192.168.0.9:3131'], pc: PC, code: 'k', name: 'N' },
     { v: '3', urls: ['http://192.168.0.9:3131'], pc: PC, code: 'k' }, { urls: ['http://192.168.0.9:3131'], pc: 5, code: 'k' }, { urls: [], pc: PC, code: 'k' },
-    { urls: ['http://8.8.8.8'], pc: PC, code: 'k' }
+    { urls: ['http://8.8.8.8'], pc: PC, code: 'k' },
+    ...HOSTILE.map((u) => `${u}/#vincular=z&pc=${PC}`)
   ].map((i) => call(L.parseLinkPayload, i));
 
   const manual = [
     { text: `  http://10.0.0.5:3131/#vincular=z&pc=${PC}  ` }, { code: 'abcd-efgh', address: '100.64.1.2' }, { code: '', address: '100.64.1.2' },
     { code: 'ABCDEFGH', address: '' }, { code: 'ABCDEFGH', address: '1.1.1.1' }, { code: 'ABCDE', address: '100.64.1.2' }, { code: 'abcdefgh', address: 'casa.tail.ts.net' },
     { code: 'abcdefgh', address: 'https://orb.example.com' }, { code: 'abcdefgh', address: 'http://192.168.1.5:4000/' }, { code: 'abcdefgh', address: '[fd12::1]' },
-    { code: 'oO0o1234abcdefgh9999', address: '10.0.0.1' }, { text: '   ', code: 'abcdefgh', address: '10.0.0.1' }, { text: 'hola' }, {}, undefined
+    { code: 'oO0o1234abcdefgh9999', address: '10.0.0.1' }, { text: '   ', code: 'abcdefgh', address: '10.0.0.1' }, { text: 'hola' }, {}, undefined,
+    ...HOSTILE.map((address) => ({ code: 'abcdefgh', address }))
   ].map((i) => call(L.parseManual, i));
 
   const orderBases = [
@@ -244,14 +277,14 @@ function buildLink() {
     ['HTTP://PC.TS.NET', 'http://a.local', 'https://z.example.com'], [], null, ['', '   ', 5, 'http://10.0.0.1'], ['http://[fd12::1]:3131', 'http://100.64.0.1']
   ].map((i) => call(L.orderBases, i));
 
-  const baseInputs = ['https://example.com', 'http://example.com', 'ftp://192.168.1.1', 'http://192.168.1.1:3131', 'http://[::1]:3131', 'http://100.64.0.1', 'http://100.128.0.1', 'nonsense', '', 'HTTP://LOCALHOST', 'http://pc.TS.NET'];
+  const baseInputs = [...HOSTILE, 'https://example.com', 'http://example.com', 'ftp://192.168.1.1', 'http://192.168.1.1:3131', 'http://[::1]:3131', 'http://100.64.0.1', 'http://100.128.0.1', 'nonsense', '', 'HTTP://LOCALHOST', 'http://pc.TS.NET'];
   const allowedBase = baseInputs.map((i) => call(L.allowedBase, i));
 
-  const hosts = ['100.64.0.1', '100.127.255.254', '100.63.255.255', '100.128.0.0', '10.1.2.3', '172.16.0.1', '172.15.255.255', '172.31.9.9', '172.32.0.1', '192.168.0.10', '192.169.0.1', '127.0.0.1', '127.255.255.255',
+  const hosts = ['evil.com\\', '10.0.0.1:3131@8.8.8.8', '012.0.0.1', '０.０.０.０', 'nas.local.', '::ffff:10.0.0.1', '::fd00:1', 'fdff::', 'nas.lo\u200dcal', 'xn--', '100.64.0.1', '100.127.255.254', '100.63.255.255', '100.128.0.0', '10.1.2.3', '172.16.0.1', '172.15.255.255', '172.31.9.9', '172.32.0.1', '192.168.0.10', '192.169.0.1', '127.0.0.1', '127.255.255.255',
     'localhost', 'LOCALHOST', 'pc.tail1234.ts.net', 'home-server', 'nas.local', 'a.lan', 'x.home.arpa', '::1', '[::1]', 'fd12:3456::1', 'fc00::1', 'fe80::1', 'fec0::1', '2001:db8::1',
     '8.8.8.8', 'example.com', '300.1.1.1', '1.2.3', '12345', '1.2.3.4.5', '', null, 'a_b', 'ts.net', 'UPPER-CASE', '0.0.0.0', '169.254.1.1'].map((i) => call(L.isPrivateHost, i));
 
-  const addrs = ['100.64.1.2', '100.64.1.2:3131', 'casa.tail.ts.net', 'http://100.64.1.2', 'https://pc.tail.ts.net/', 'HTTPS://PC.TS.NET:8443/x?y#z', ' 10.0.0.1 ', '', '   ', null, '[fd12::1]', '[fd12::1]:4000',
+  const addrs = [...HOSTILE, '100.64.1.2', '100.64.1.2:3131', 'casa.tail.ts.net', 'http://100.64.1.2', 'https://pc.tail.ts.net/', 'HTTPS://PC.TS.NET:8443/x?y#z', ' 10.0.0.1 ', '', '   ', null, '[fd12::1]', '[fd12::1]:4000',
     'http://[::1]', 'http://host:80', 'https://host:443', 'http://host:99999', 'http://', 'http://exa mple.com', 'http://用户.example', 'http://192.168.1.1:3131/', 'http://192.168.1.1.', 'http://0x7f.1', 'http://2130706433', 'http://user:pw@host'].map((i) => call(L.normalAddress, i));
 
   const secrets = [{ via: 'qr', code: 'abc_DEF-123' }, { via: 'code', code: 'abcd-efgh' }, { via: 'code', code: 'oO0o1234' }, { via: 'code', code: 'a'.repeat(20) }, { via: 'code', code: null }]

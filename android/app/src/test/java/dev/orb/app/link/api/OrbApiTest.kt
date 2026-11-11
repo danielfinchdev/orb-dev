@@ -36,7 +36,8 @@ class OrbApiTest {
         assertEquals("not in REMOTE_METHODS of the PC", emptyList<String>(), unknown)
         // the newer ones must really be absent today, or they would not need the flag
         for (m in ApiMethods.all.filter { it.requiresPc != null }) assertFalse(m.name, m.name in remote)
-        assertEquals(setOf("pc.screenshot", "conversations.trash", "conversations.restore", "sessions.trash", "sessions.restore", "projects.mergePr"),
+        assertEquals(setOf("pc.screenshot", "conversations.trash", "conversations.restore", "sessions.trash", "sessions.restore", "projects.mergePr",
+            "projects.prs", "projects.pr", "notes.markRead"),
             ApiMethods.all.filter { it.requiresPc != null }.map { it.name }.toSet())
         assertEquals("no method is listed twice", ApiMethods.all.size, ApiMethods.all.map { it.name }.toSet().size)
     }
@@ -114,6 +115,28 @@ class OrbApiTest {
             api.projectsMergePr("orb", 13, null, Confirmed(ConfirmAction.MergePr, "orb#12"))
             fail()
         } catch (e: IllegalArgumentException) { /* expected */ }
+    }
+
+    @Test
+    fun `pr reads and notes markRead are hidden on an older pc and send their params on a newer one`() = runBlocking {
+        val old = Recorder()
+        val oldApi = OrbApi(old)
+        for (m in listOf("projects.prs", "projects.pr", "notes.markRead")) assertFalse(m, oldApi.available(ApiMethods.all.first { it.name == m }))
+        assertTrue(oldApi.projectsPrs("orb").isFailure)
+        assertTrue(oldApi.notesMarkRead().isFailure)
+        assertEquals(0, old.calls.size)
+
+        val rec = Recorder(listed = setOf("projects.prs", "projects.pr", "notes.markRead"))
+        val api = OrbApi(rec)
+        api.projectsPrs("orb")
+        api.projectsPr("orb", 7)
+        api.notesMarkRead()
+        api.notesMarkRead(listOf("a", "b"))
+        assertEquals(listOf("projects.prs", "projects.pr", "notes.markRead", "notes.markRead"), rec.calls.map { it.first })
+        assertEquals("orb", rec.calls[0].second["name"]!!.jsonPrimitive.content)
+        assertEquals("7", rec.calls[1].second["number"]!!.jsonPrimitive.content)
+        assertTrue(rec.calls[2].second["ids"] == null)
+        assertEquals(listOf("a", "b"), rec.calls[3].second["ids"]!!.jsonArray.map { it.jsonPrimitive.content })
     }
 
     @Test

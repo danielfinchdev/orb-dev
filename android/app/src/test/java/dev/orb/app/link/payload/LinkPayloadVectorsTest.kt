@@ -49,25 +49,58 @@ class LinkPayloadVectorsTest {
         put("via", p.via.wire)
     }
 
+    /**
+     * Cases where Kotlin is deliberately STRICTER than the JS oracle. The JS maps hosts with UTS46 and accepts what
+     * java.net.IDN (IDNA2003) cannot reproduce exactly, so Kotlin refuses every host that is non-ASCII after
+     * percent-decoding, and every `xn--` label that is not valid punycode (node accepts some of them). For these inputs
+     * the expected outcome is a rejection, never the JS value. Any other disagreement is a failure: nothing is skipped.
+     */
+    private class Stricter(val key: String?, val value: JsonElement?)
+    private val rejectBadAddress = Stricter(LinkErrors.BAD_ADDRESS, null)
+    private val rejectBadQr = Stricter(LinkErrors.BAD_QR, null)
+    private val stricterHosts = listOf(
+        "http://用户.example", // CJK host: IDNA2003 vs UTS46
+        "http://１０．０．０．１", // full-width 10.0.0.1, UTS46 maps it to an IPv4
+        "http://xn--.example", "http://xn--a.example", "http://xn--zzzzzzzzzzzz.example", // node accepts these invalid labels
+    )
+
+    /** The text of the URL a case feeds in, whatever the function's input shape. */
+    private fun urlOf(c: JsonObject): String? {
+        val i = c["input"]
+        return when (i) {
+            is JsonObject -> i["address"]?.jsonPrimitive?.content
+            null, JsonNull -> null
+            else -> i.jsonPrimitive.content
+        }?.substringBefore("/#vincular")
+    }
+
     /** Runs [block] for every case of [name] and compares with the vector; returns the number of cases checked. */
-    private fun check(name: String, block: (JsonObject) -> JsonElement): Int {
+    private fun check(name: String, stricter: Stricter? = null, block: (JsonObject) -> JsonElement): Int {
         val list = cases(name)
         assertTrue("no cases for $name", list.isNotEmpty())
         val failures = ArrayList<String>()
+        var stricterSeen = 0
         for (c in list) {
             val label = "$name ${c["input"]}"
+            val strict = stricter != null && urlOf(c) in stricterHosts
+            if (strict) stricterSeen++
             try {
                 val got = block(c)
-                if (c["throws"]?.jsonPrimitive?.content == "true") failures += "$label: expected throw ${c["message"]}, got $got"
+                if (strict) {
+                    if (got != stricter!!.value) failures += "$label: Kotlin must be stricter here, expected ${stricter.value ?: "a rejection"}, got $got"
+                } else if (c["throws"]?.jsonPrimitive?.content == "true") failures += "$label: expected throw ${c["message"]}, got $got"
                 else if (got != c["value"]) failures += "$label: expected ${c["value"]}, got $got"
             } catch (e: LinkPayloadException) {
-                if (c["throws"]?.jsonPrimitive?.content != "true") failures += "$label: unexpected ${e.message}"
+                if (strict) {
+                    if (e.key != stricter!!.key) failures += "$label: stricter key ${e.key} != ${stricter.key}"
+                } else if (c["throws"]?.jsonPrimitive?.content != "true") failures += "$label: unexpected ${e.message}"
                 else {
                     if (e.message != c["message"]?.jsonPrimitive?.content) failures += "$label: message ${e.message} != ${c["message"]}"
                     if (e.key != c["key"]?.jsonPrimitive?.content) failures += "$label: key ${e.key} != ${c["key"]}"
                 }
             }
         }
+        if (stricter != null) println("link-payload vectors: $name -> $stricterSeen cases where Kotlin is stricter")
         println("link-payload vectors: $name -> ${list.size} cases checked")
         assertTrue("$name failed:\n" + failures.joinToString("\n"), failures.isEmpty())
         return list.size
@@ -83,7 +116,7 @@ class LinkPayloadVectorsTest {
     }
 
     @Test fun parseLinkPayloadVectors() {
-        check("parseLinkPayload") { c ->
+        check("parseLinkPayload", rejectBadQr) { c ->
             val input = c["input"]
             val p = when (input) {
                 is JsonObject -> parseLinkPayload(input)
@@ -95,7 +128,7 @@ class LinkPayloadVectorsTest {
     }
 
     @Test fun parseManualVectors() {
-        check("parseManual") { c ->
+        check("parseManual", rejectBadAddress) { c ->
             val i = c["input"] as? JsonObject
             payloadJson(parseManual(str(i?.get("text")), str(i?.get("code")), str(i?.get("address"))))
         }
@@ -109,7 +142,7 @@ class LinkPayloadVectorsTest {
     }
 
     @Test fun allowedBaseVectors() {
-        check("allowedBase") { c -> JsonPrimitive(allowedBase(str(c["input"]))) }
+        check("allowedBase", Stricter(null, JsonPrimitive(false))) { c -> JsonPrimitive(allowedBase(str(c["input"]))) }
     }
 
     @Test fun isPrivateHostVectors() {
@@ -117,7 +150,7 @@ class LinkPayloadVectorsTest {
     }
 
     @Test fun normalAddressVectors() {
-        check("normalAddress") { c -> JsonPrimitive(normalAddress(str(c["input"]))) }
+        check("normalAddress", rejectBadAddress) { c -> JsonPrimitive(normalAddress(str(c["input"]))) }
     }
 
     @Test fun pairingSecretVectors() {
