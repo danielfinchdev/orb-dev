@@ -86,7 +86,7 @@ test('a linked browser cannot take a screenshot; the capture sits in its own fol
   try {
     const pq = await browser.connect({ qr: (await A.call('link.qr', { device: 'browser' })).url });
     const r = await browser.raw(pq.id);
-    await assert.rejects(browser.call(r.id, 'pc.screenshot', {}), /solo se puede pedir desde la app del móvil/);
+    await assert.rejects(browser.call(r.id, 'pc.screenshot', {}), /solo se puede pedir desde un móvil enlazado/);
   } finally { browser.stop(); }
   const files = fs.readdirSync(t.home, { recursive: true });
   assert.ok(files.some((f) => f.endsWith(path.join('capturas-movil', shot))));

@@ -29,7 +29,7 @@ export default {
   'app.window.maximize': 'Maximise',
   'app.window.restore': 'Restore',
   'app.window.close': 'Close',
-  'app.trashAdded': 'The phone “{device}” sent “{title}” to the trash.',
+  'app.trashAdded': 'The linked device “{device}” sent “{title}” to the trash.',
   'app.trashUndo': 'Undo',
   'app.engineStopped': 'Orb has stopped several times. Close the app and open it again.',
   'app.engineRestarted': 'Orb restarted after an error. Tasks in progress were marked as failed; you can retry them.',

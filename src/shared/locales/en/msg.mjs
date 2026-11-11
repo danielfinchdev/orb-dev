@@ -387,7 +387,7 @@ export default {
   "msg.remote.totalPcOnly": "full access can only be granted from the PC",
   "msg.screenshot.windowsOnly": "PC screenshots only work on Windows.",
   "msg.screenshot.wait": "Wait a moment before taking another screenshot.",
-  "msg.screenshot.phoneOnly": "A PC screenshot can only be requested from the phone app.",
+  "msg.screenshot.phoneOnly": "A PC screenshot can only be requested from a linked phone.",
   "msg.screenshot.tooMany": "Too many screenshots in a row. Wait a while.",
   "msg.screenshot.failed": "The PC screenshot could not be taken.",
   "msg.screenshot.noApp": "The screenshot needs the Orb app open on the PC.",
