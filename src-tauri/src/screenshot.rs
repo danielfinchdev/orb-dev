@@ -30,6 +30,19 @@ fn capture_blocking(path: &std::path::Path) -> Result<Value, String> {
   }
   let com = unsafe { windows::Win32::System::Com::CoInitializeEx(None, windows::Win32::System::Com::COINIT_MULTITHREADED) };
   let _guard = Com(com.is_ok());
+  // Real pixels on scaled displays: a thread that is not DPI-aware would read virtualised (smaller) screen metrics.
+  // The previous context is put back when the capture ends, since pool threads are shared.
+  struct Dpi(windows::Win32::UI::HiDpi::DPI_AWARENESS_CONTEXT);
+  impl Drop for Dpi {
+    fn drop(&mut self) {
+      if !self.0 .0.is_null() {
+        unsafe { windows::Win32::UI::HiDpi::SetThreadDpiAwarenessContext(self.0) };
+      }
+    }
+  }
+  let _dpi = Dpi(unsafe {
+    windows::Win32::UI::HiDpi::SetThreadDpiAwarenessContext(windows::Win32::UI::HiDpi::DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
+  });
   let (w, h, bgr) = grab()?;
   let jpeg = encode(w, h, &bgr)?;
   if jpeg.len() > MAX_BYTES {
@@ -191,6 +204,8 @@ mod tests {
     let head = std::fs::read(&file).map(|b| b[..2].to_vec());
     let _ = std::fs::remove_dir_all(dir.parent().unwrap());
     let r = r.unwrap();
+    // The expected size is read per-monitor aware too, as the capture does.
+    unsafe { windows::Win32::UI::HiDpi::SetThreadDpiAwarenessContext(windows::Win32::UI::HiDpi::DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
     let (sw, sh) = unsafe { (GetSystemMetrics(SM_CXVIRTUALSCREEN), GetSystemMetrics(SM_CYVIRTUALSCREEN)) };
     eprintln!("screenshot: {r} in {ms} ms");
     assert_eq!(head.unwrap(), vec![0xFF, 0xD8]);
