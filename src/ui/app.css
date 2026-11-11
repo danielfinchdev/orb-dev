@@ -88,7 +88,7 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
 .lazy-lines > :nth-last-child(n+13) { content-visibility: auto; contain-intrinsic-size: auto 120px; overflow-clip-margin: 16px; }
 .lazy-row { content-visibility: auto; contain-intrinsic-size: auto 56px; overflow-clip-margin: 8px; }
 /* A screen whose file is still on its way (main.jsx › Loading): the spinner only after a moment, never a flash. */
-.screen-loading { animation: screen-loading-in .2s ease .4s both; }
+.screen-loading { animation: screen-loading-in var(--dur-base) ease .4s both; }
 @keyframes screen-loading-in { from { opacity: 0; } to { opacity: 1; } }
 .prose-chat { line-height: 1.6; overflow-wrap: anywhere; }
 @media (pointer: fine) { html[data-skin="orb"] .prose-chat { font-size: 14px; line-height: 1.43; } }
@@ -443,13 +443,14 @@ html[data-skin="retro"] .tour-bubble { width: 25rem; }
 }
 @media (prefers-reduced-motion: no-preference) {
   html:not([data-motion="minima"]) :is([data-slot="button"], .press):not(:disabled):active { transform: scale(0.97); }
-  .mobile-tab-icon { transition: background-color 150ms ease, color 150ms ease, transform 120ms var(--ease-out); }
+  .mobile-tab-icon { transition: background-color 150ms ease, color 150ms ease, transform var(--dur-fast) var(--ease-out); }
   html:not([data-motion="minima"]) .mobile-tab:active .mobile-tab-icon { transform: scale(0.94); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .animate-in, .animate-out { --tw-enter-translate-x: 0; --tw-enter-translate-y: 0; --tw-enter-scale: 1; --tw-exit-translate-x: 0; --tw-exit-translate-y: 0; --tw-exit-scale: 1; }
+  /* Radix/shadcn put the animation on «data-[state=open]:animate-in», so the class is matched by substring too. */
+  :is(.animate-in, .animate-out, [class*=":animate-in"], [class*=":animate-out"]) { --tw-enter-translate-x: 0; --tw-enter-translate-y: 0; --tw-enter-scale: 1; --tw-exit-translate-x: 0; --tw-exit-translate-y: 0; --tw-exit-scale: 1; --tw-animation-duration: var(--dur-fast); }
 }
-html[data-motion="minima"] :is(.animate-in, .animate-out) { --tw-enter-translate-x: 0; --tw-enter-translate-y: 0; --tw-enter-scale: 1; --tw-exit-translate-x: 0; --tw-exit-translate-y: 0; --tw-exit-scale: 1; }
+html[data-motion="minima"] :is(.animate-in, .animate-out, [class*=":animate-in"], [class*=":animate-out"]) { --tw-enter-translate-x: 0; --tw-enter-translate-y: 0; --tw-enter-scale: 1; --tw-exit-translate-x: 0; --tw-exit-translate-y: 0; --tw-exit-scale: 1; --tw-animation-duration: var(--dur-fast); }
 
 /* the message box grows with its text in CSS (no layout read per key; views/chat.jsx › Composer): two lines at
    least (its rows), 260 px at most, then it scrolls. */
@@ -459,7 +460,7 @@ html[data-motion="minima"] :is(.animate-in, .animate-out) { --tw-enter-translate
    time, in with a 150 ms fade and a 2 px rise, out with a fade; reduced motion keeps the fade only. */
 .context-slot { display: inline-flex; min-width: 0; }
 .context-slot-item { display: inline-flex; min-width: 0; animation: slot-in 150ms var(--ease-out) both; }
-.context-slot.is-leaving .context-slot-item { opacity: 0; transition: opacity 120ms var(--ease-out); }
+.context-slot.is-leaving .context-slot-item { opacity: 0; transition: opacity var(--dur-fast) var(--ease-out); }
 @keyframes slot-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
 @keyframes slot-fade { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .context-slot-item { animation-name: slot-fade; } }
