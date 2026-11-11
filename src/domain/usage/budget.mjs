@@ -13,7 +13,7 @@ import { account as findAccount, accounts, accountsOf, usableAccounts } from './
 
 export const budgetConfig = () => {
   const b = ctx.config?.budget ?? {};
-  return { windowHours: b.windowHours ?? 5, stopAt: b.stopAt ?? 0.92, agents: b.agents ?? {} };
+  return { windowHours: b.windowHours ?? 5, stopAt: b.stopAt ?? 0.92, weeklyStopAt: b.weeklyStopAt ?? 0.85, agents: b.agents ?? {} };
 };
 // Limits of an account: its own entry in budget.agents, else its agent's, else the defaults.
 const agentOf = (id) => findAccount(id)?.agent ?? id;
@@ -170,6 +170,18 @@ export function modelName(board, id, model) {
   return model;
 }
 
+// The brake on the account's real usage only ({ ok: false, reason, … } or null), without the launch counts: the assistant's
+// own turns use this one, since its answers are not task launches.
+export function usageBrake(board, id) {
+  const real = realRate(board, id);
+  if (real?.utilization != null && real.utilization >= budgetConfig().stopAt) return { ok: false, resetAt: real.resetAt ?? undefined, reason: tr('msg.budget.realUsed', { name: nameOf(id), pct: Math.round(real.utilization * 100), reset: real.resetAt ? tr('msg.budget.realUsedReset', { time: hhmm(real.resetAt) }) : '' }) };
+  // The weekly window of the whole account stops earlier than the 5-hour one: a week cannot be won back by waiting a few hours.
+  // A window of one model (seven_day_opus, seven_day_<any model name>…) is excluded, as recordRate does.
+  const weekly = rateWindows(board, id).find((w) => w.utilization != null && windowMinutes(w.window) === 10080 && !/^seven_day_/.test(String(w.window)) && w.utilization >= budgetConfig().weeklyStopAt);
+  if (weekly) return { ok: false, paused: weekly.resetAt ?? undefined, reason: tr('msg.budget.realUsed', { name: nameOf(id), pct: Math.round(weekly.utilization * 100), reset: weekly.resetAt ? tr('msg.budget.realUsedReset', { time: untilText(weekly.resetAt) }) : '' }) };
+  return null;
+}
+
 // Can this task be launched on this account right now? { ok, reason } — reason in plain words, in the user's language.
 export function canLaunch(board, id, model) {
   const until = cooldownUntil(board, id);
@@ -177,8 +189,8 @@ export function canLaunch(board, id, model) {
   if (until) return { ok: false, paused: until, reason: why ? tr('msg.budget.paused', { name: nameOf(id), time: untilText(until), why }) : tr('msg.budget.noQuota', { name: nameOf(id), time: untilText(until) }) };
   const modelUntil = modelLimitUntil(board, id, model);
   if (modelUntil) return { ok: false, paused: modelUntil, reason: tr('msg.budget.modelNoQuota', { name: nameOf(id), model: modelName(board, id, model), time: untilText(modelUntil) }) };
-  const real = realRate(board, id);
-  if (real?.utilization != null && real.utilization >= budgetConfig().stopAt) return { ok: false, reason: tr('msg.budget.realUsed', { name: nameOf(id), pct: Math.round(real.utilization * 100), reset: real.resetAt ? tr('msg.budget.realUsedReset', { time: hhmm(real.resetAt) }) : '' }) };
+  const real = usageBrake(board, id);
+  if (real) return real;
   const r = rules(id, board); const used = windowUsage(board, id); const h = budgetConfig().windowHours;
   if (used.tasks >= r.maxTasks) return { ok: false, reason: tr('msg.budget.maxTasks', { name: nameOf(id), tasks: used.tasks, h, max: r.maxTasks }) };
   if (isHeavy(id, model) && used.heavy >= r.maxHeavy) return { ok: false, reason: tr('msg.budget.maxHeavy', { name: nameOf(id), heavy: used.heavy, h, max: r.maxHeavy }) };

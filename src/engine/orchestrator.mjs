@@ -18,7 +18,8 @@ import { agentAuth } from '../domain/security/agent-auth.mjs';
 import { accountEnv } from '../domain/usage/accounts.mjs';
 import { briefing } from '../domain/journal/journal.mjs';
 import { rememberModels } from './usage/catalog.mjs';
-import { recordRate, pickAccount, recordSpend } from '../domain/usage/budget.mjs';
+import { recordRate, pickAccount, recordSpend, usageBrake } from '../domain/usage/budget.mjs';
+import { maxFixRounds } from '../domain/tasks/rounds.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
 import { globalAutonomy } from '../domain/security/guard.mjs';
 import { browserOn } from './sessions.mjs';
@@ -68,6 +69,14 @@ export function persona(board = null) {
   const planOf = (x) => board?.settingJson?.(`plan:${x.id}`)?.label;
   const accountsLine = (a) => { const list = accountsOf(a); const named = list.map((x) => `${x.label}${planOf(x) ? ` (plan ${planOf(x)})` : ''}`); return list.length > 1 ? ` Cuentas: ${named.join(', ')} (el trabajo se reparte solo entre ellas según su uso).` : planOf(list[0]) ? ` Plan ${planOf(list[0])}.` : ''; };
   const models = available.map((a) => `- ${a}: ${c.agents[a].strengths}. Modelos: ${knownModels(board, a).join(', ') || 'el predeterminado de su programa'}${c.agents[a].heavyModels?.length ? ` (caros: ${c.agents[a].heavyModels.join(', ')})` : ''}.${accountsLine(a)}`).join('\n');
+  // A separate verification only pays off for non-trivial requests on spend level 2+; below that the building task checks itself.
+  const spendLevel = c.budget?.profile ?? 2; const fixRounds = maxFixRounds(c);
+  const smallLine = spendLevel >= 2 ? 'UNA tarea, para el agente más capaz disponible, y su verificación si no es simple.' : 'UNA tarea, para el agente más capaz disponible, que se comprueba ella misma.';
+  const testLine = spendLevel >= 2 ? 'la prueba a fondo en el navegador es de la verificación.' : 'no hay prueba a fondo aparte en este nivel de gasto.';
+  const verifyLine = spendLevel >= 2
+    ? `- Salvo que el pedido sea simple (un cambio pequeño, un texto, una pregunta), cierra con una tarea de VERIFICACIÓN readonly (depends_on: todas las piezas), con Claude o Codex (son los más rápidos probando con el navegador de ${me}; Cursor, mejor para construir): instala, compila y arranca el proyecto de verdad y, si es una web, ${browserOn() ? `la abre con orb_browser_open y la usa como lo haría ${boss}` : 'la prueba con peticiones a localhost y la consola del servidor (el navegador de Orb está apagado)'}. En su result: VEREDICTO: CORRECTO o CON FALLOS y los fallos concretos. Si hay fallos, una tarea de corrección y otra verificación (como mucho ${fixRounds} rondas de corrección por pedido: después no crees más tareas, cuenta a ${boss} qué sigue fallando y pregúntale con orb_ask si seguís).`
+    : `- No crees una tarea de verificación aparte: la propia tarea que construye hace la comprobación rápida (arranca, compila, sin errores en la consola) y la cuenta en su informe. Si algo falla, como mucho ${fixRounds} rondas de corrección por pedido: después no crees más tareas, cuenta a ${boss} qué sigue fallando y pregúntale con orb_ask si seguís.`;
+  const normalLine = spendLevel >= 2 ? '- Lo normal: 1 tarea (o base corta + 2-3 piezas) + 1 verificación si el pedido no es simple.' : '- Lo normal: 1 tarea (o base corta + 2-3 piezas), sin verificación aparte.';
   return `Eres ${me}, el asistente que coordina a los agentes de IA ${ofBoss}. Hablas en ${c.language === 'en' ? 'inglés' : 'español'}, cercano y breve, sin jerga técnica innecesaria.
 EL CICLO: ${boss} te pide algo → tú lo conviertes en tareas y coordinas a los agentes → ellos trabajan → cuando terminan, tú revisas los resultados → informas a ${boss} → ${boss} da el OK (o pide cambios y vuelve a empezar). Nunca des por terminado un pedido sin ese informe.\nTU PAPEL: ${boss} es quien dirige; tú eres su jefe de proyecto. ${boss} habla contigo y tú das encargos claros a los agentes disponibles en este PC (${available.join(', ') || 'ninguno'}), vigilas que cumplan y le informas con lo esencial. Nunca encargues nada a un agente que no esté en esa lista: no se puede ejecutar. Si ${boss} pide un agente que no está, díselo y propón uno de la lista con orb_ask; no lo sustituyas en silencio ni lo imites eligiendo en Cursor un modelo de otro proveedor (Gemini, GPT, Claude… en Cursor gastan un uso aparte de su plan y suelen estar agotados): en Cursor usa su modelo predeterminado salvo que ${boss} pida uno concreto.
 SOLO COORDINAS: no programas, no editas, no ejecutas comandos. El trabajo lo hacen los agentes mediante tareas. Puedes LEER archivos del proyecto (Read, Grep, Glob) para escribir encargos precisos: lee lo justo, no el proyecto entero.
@@ -78,12 +87,12 @@ PREGUNTAS CON OPCIONES: cuando ${boss} deba elegir entre 2-4 caminos claros (enf
 2. ESCRIBE BUENOS ENCARGOS: objetivo, contexto, archivos o zona, pasos, criterio de terminado y qué no tocar. El agente no ve este chat: cada description debe bastar por sí sola.
 HAZ LO QUE SE PIDE, NI MÁS NI MENOS: no añadas funciones que ${boss} no ha pedido (cada extra gasta uso, alarga el trabajo y puede necesitar su aprobación, por ejemplo si borra o publica). Si crees que algo más vendría bien, proponlo en una línea del informe.
 3. PLANIFICA PARA QUE SALGA BIEN Y RÁPIDO (cada traspaso entre agentes cuesta contexto y tiempo; menos tareas es mejor):
-- Algo pequeño o mediano (una página, un componente, un arreglo): UNA tarea, para el agente más capaz disponible, y su verificación.
+- Algo pequeño o mediano (una página, un componente, un arreglo): ${smallLine}
 - Algo grande que se construye desde cero (una web o un juego con varias partes): primero una BASE CORTA (nivel "normal", pocos minutos): la estructura del proyecto, que ya arranque, los archivos de cada parte con sus funciones de entrada vacías y un CONTRATO.md que fije todo lo que comparten las piezas con sus nombres exactos: archivos y su dueño; cada id, clase y data-* que una pieza crea y otra usa (y quién lo crea); los datos comunes (lista de armas, niveles, teclas y qué hace cada una) en un archivo de datos que escribe la base y las piezas importan; y las funciones de entrada con sus parámetros. Pide en el encargo de cada pieza que lo respete al pie de la letra. Después, las PIEZAS A LA VEZ (depends_on: la base): 2-3 tareas, cada una dueña de sus archivos según el contrato, nivel según su dificultad. Así trabajan varios agentes a la vez en lugar de esperar a una base enorme.
 - Para que de verdad trabajen a la vez, cada pieza a un agente o una cuenta distintos (cada cuenta hace una tarea cada vez): por ejemplo, Claude una pieza y cada cuenta de Codex otra. Si otra tarea ya escribe en la carpeta, cada pieza trabaja en su propia copia y ${me} une los trabajos al terminar (si dos tocan lo mismo, lanza una tarea que los une).
-- Cierra SIEMPRE con una tarea de VERIFICACIÓN readonly (depends_on: todas las piezas), con Claude o Codex (son los más rápidos probando con el navegador de ${me}; Cursor, mejor para construir): instala, compila y arranca el proyecto de verdad y, si es una web, ${browserOn() ? `la abre con orb_browser_open y la usa como lo haría ${boss}` : 'la prueba con peticiones a localhost y la consola del servidor (el navegador de Orb está apagado)'}. En su result: VEREDICTO: CORRECTO o CON FALLOS y los fallos concretos. Si hay fallos, una tarea de corrección y otra verificación.
-- Lo normal: 1 tarea (o base corta + 2-3 piezas) + 1 verificación.
-- No se prueba dos veces: en los encargos que construyen, pide solo una comprobación rápida (arranca, compila y no hay errores en la consola); la prueba a fondo en el navegador es de la verificación.
+${verifyLine}
+${normalLine}
+- No se prueba dos veces: en los encargos que construyen, pide solo una comprobación rápida (arranca, compila y no hay errores en la consola); ${testLine}
 - Si ${boss} pide expresamente varios agentes o modelos, cúmplelo con esta misma forma: base corta, piezas repartidas entre ellos y la verificación con otro.
 DELEGAR: los agentes también pueden repartirse subtareas (orb_delegate); tú ves el árbol en el tablero.
 AGENTES DISPONIBLES:
@@ -248,20 +257,23 @@ class Lane {
     this.queue.unshift(item);
   }
 
+  // A notice the assistant will not answer: the user gets what it said (the tasks and their results), with the report buttons.
+  // braked: the usage brake's verdict when that is why (no tries were made), else the retries ran out.
+  giveUp(item, braked = null) {
+    this.orch.keep(item, false);
+    const lines = String(item.text).split('\n').filter((l) => /^- #\d+/.test(l)).join('\n');
+    const why = braked ? 'Braked' : '';
+    // A report: its tasks and results, with the OK buttons. Any other notice (an agent's message, a blocked task): what
+    // it said, so it is not lost either.
+    if (lines) this.say('orb', tr(`msg.orch.noticeFallback${why}`, { name: assistantName(), lines, reason: braked?.reason ?? '' }), item.meta ?? null);
+    else this.say('system', tr(`msg.orch.noticeFallbackOther${why}`, { name: assistantName(), reason: braked?.reason ?? '', text: String(item.text).replace(/^AVISO DEL SISTEMA[^:]*:\s*/, '').slice(0, 1200) }));
+  }
   // 3.1: a notice whose turn failed: again in 1, 3 and 6 minutes (or when the brain's usage limit resets); after that, the
   // user gets what it said (the tasks and their results) without the assistant, with the buttons of a report.
   retryLater(item, outcome) {
     item.attempts = (item.attempts ?? 0) + 1;
     const MAX = 4;
-    if (item.attempts >= MAX) {
-      this.orch.keep(item, false);
-      const lines = String(item.text).split('\n').filter((l) => /^- #\d+/.test(l)).join('\n');
-      // A report: its tasks and results, with the OK buttons. Any other notice (an agent's message, a blocked task): what
-      // it said, so it is not lost either.
-      if (lines) this.say('orb', tr('msg.orch.noticeFallback', { name: assistantName(), lines }), item.meta ?? null);
-      else this.say('system', tr('msg.orch.noticeFallbackOther', { name: assistantName(), text: String(item.text).replace(/^AVISO DEL SISTEMA[^:]*:\s*/, '').slice(0, 1200) }));
-      return;
-    }
+    if (item.attempts >= MAX) { this.giveUp(item); return; }
     this.orch.keep(item, true);
     const waitMs = outcome.limit?.resetAt && outcome.limit.resetAt > Date.now() ? outcome.limit.resetAt - Date.now() + 60_000 : [60_000, 180_000, 360_000][item.attempts - 1] ?? 360_000;
     if (item.attempts === 1) this.board.notice(tr('msg.orch.noticeRetry', { name: assistantName(), min: Math.max(1, Math.round(waitMs / 60_000)) }), 'warning');
@@ -274,13 +286,36 @@ class Lane {
     timer.unref?.();
   }
 
+  // The real-usage brake of this conversation's account (null when it may run). Launch counts don't apply: answers are not tasks.
+  // A deleted conversation or a failing check never brakes: the turn then goes on as before.
+  brake() {
+    try { const c = this.conv(); return c ? usageBrake(this.board, this.account(c).id) : null; } catch { return null; }
+  }
+  // One chat line per conversation and reset window, so the user knows automatic work is paused. The reset comes in whole
+  // seconds or as ISO with fractions depending on the source: rounded to 10 minutes so the same window keeps one key.
+  warnBrake(check) {
+    const at = Number(new Date(check.paused ?? check.resetAt ?? NaN));
+    const window = Number.isFinite(at) ? `r${Math.round(at / 600_000)}` : `h${Math.floor(Date.now() / 3_600_000)}`;
+    const key = `brake_told:${this.id}`;
+    if (this.board.setting(key) === window) return;
+    this.board.setting(key, window);
+    this.say('system', tr('msg.orch.brakeUser', { reason: check.reason }), { kind: 'brake' });
+  }
+
   next() {
     if (this.busy || this.inflight || !this.queue.length) return;
     // 3.2: several conversations at once, up to a limit: the others wait their turn (the window says so).
     if (this.orch.busyCount() >= this.orch.maxBusy) { this.push(); return; }
     // 3.8.3: the message leaves the queue before the window hears «busy»: it used to flash «1 en cola» for the very message
     // being answered.
-    const item = this.queue.shift(); this.current = item; item.requeued = false;
+    const item = this.queue.shift();
+    // The usage brake also covers the assistant's own turns. An automatic notice gets no turn (nobody is watching and it would
+    // burn the window silently): the user sees what it said right away, a report with its OK buttons, as when its retries run
+    // out. A message the user typed still runs, but the chat says automatic work is paused.
+    const braked = this.brake();
+    if (braked && item.internal) { this.giveUp(item, braked); this.push(); this.next(); return; }
+    if (braked) this.warnBrake(braked);
+    this.current = item; item.requeued = false;
     this.busy = true; this.since = Date.now(); this.usedAt = Date.now(); this.partial = ''; this.said = []; this.tools = []; this.push();
     const { text, meta } = item;
     const generation = this.generation;
@@ -509,6 +544,8 @@ export class Orchestrator {
   busyCount() { let n = 0; for (const l of this.lanes.values()) if (l.busy) n++; return n; }
   get busy() { return this.busyCount() > 0; }
   lane(id) { const key = Number(id); let l = this.lanes.get(key); if (!l) { l = new Lane(this, key); this.lanes.set(key, l); } return l; }
+  // Whether this conversation's assistant is held by the usage brake now (it would not answer an automatic notice).
+  braked(id) { return Boolean(this.lane(id).brake()); }
   // What each conversation is doing now (only the ones that are answering or waiting their turn).
   states() { return [...this.lanes.values()].filter((l) => l.busy || l.queue.length).map((l) => l.state()); }
   state(id) { return this.lanes.get(Number(id))?.state() ?? { conversation: Number(id), busy: false, partial: '', tools: [], queued: 0, waiting: false, context: this.board.conversation(id)?.context ?? null }; }

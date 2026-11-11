@@ -75,6 +75,8 @@ Une su trabajo a mano en la carpeta del proyecto (${project.path}): mira qué ca
 No hagas commit, merge, rebase ni cambies de rama: deja los cambios en los archivos.` }, 'orb');
     board.settingJson(`integrate:${task.id}`, { ...info, by: join.id }); board.setting(`integrate_error_at:${task.id}`, '');
     board.setting(`join_task:${join.id}`, '1');
+    // Kept for good (join_task is cleared when the join ends): the engine made it, so it is not one of the assistant's rounds.
+    board.setting(`engine_task:${join.id}`, '1');
     board.event(task.id, 'orb', 'integrate.conflict', `conflicto en ${out.conflicts.slice(0, 20).join(', ')}: lo une la tarea #${join.id}`);
     board.notice(tr('msg.scheduler.joinConflict', { id: task.id, join: join.id, list: oneLine(out.conflicts.slice(0, 5).join(', '), 200) }), 'warning');
   }

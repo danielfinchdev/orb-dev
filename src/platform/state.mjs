@@ -26,7 +26,7 @@ export const STATE_KEYS = Object.freeze({
   prefixes: Object.freeze({
     // a task's (by its id)
     'accepted:': 'task', 'auto_retry:': 'task', 'budget_ok:': 'task', 'checkpoint:': 'task', 'followup:': 'task', 'integrate:': 'task',
-    'integrate_error:': 'task', 'integrate_error_at:': 'task', 'isolated:': 'task', 'join_task:': 'task', 'leftovers_pending:': 'task',
+    'integrate_error:': 'task', 'integrate_error_at:': 'task', 'isolated:': 'task', 'join_task:': 'task', 'engine_task:': 'task', 'leftovers_pending:': 'task',
     'orphan_copy:': 'task', 'pause_offer:': 'task', 'progress:': 'task', 'quiet_notice:': 'task', 'readonly_bitacora:': 'task',
     'resumed_run:': 'task', 'review:': 'task', 'unblock_asked:': 'task', 'undone:': 'task', 'wait_notice:': 'task',
     // an account's or an agent's
@@ -36,7 +36,7 @@ export const STATE_KEYS = Object.freeze({
     // a session's (a direct conversation with an agent or a task's run)
     'fork_pending:': 'session', 'fork_summary:': 'session', 'grant_prev:': 'session',
     // a conversation's with the assistant
-    'pending_questions:': 'conversation', 'report_queue:': 'conversation', 'inbox_since:': 'conversation', 'assistant_cwd:': 'conversation',
+    'pending_questions:': 'conversation', 'report_queue:': 'conversation', 'inbox_since:': 'conversation', 'assistant_cwd:': 'conversation', 'brake_told:': 'conversation',
     // a project's
     'actions:': 'project', 'wb_seen:': 'project',
     // older versions' (deleted when the engine starts or by the 3.8 migration)

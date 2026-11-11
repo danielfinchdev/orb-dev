@@ -341,6 +341,8 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
     const conversation = this.board.conversationOfTask(task.id);
     const others = (this.board.availableAgents() ?? []).filter((a) => a !== task.agent);
     if (!conversation || !others.length) return;
+    // The assistant itself is braked (the same account usually): it could not answer, and the chat already says the task waits.
+    if (this.orchestrator.braked?.(conversation)) return;
     this.board.setting(`pause_offer:${task.id}`, String(until));
     this.orchestrator.internal(`AVISO DEL SISTEMA (no es ${userName()}): la tarea #${task.id} «${oneLine(task.title)}» (${task.agent}${task.model ? ` · ${modelName(this.board, task.account ?? task.agent, task.model)}` : ''}) no puede empezar: ${reason}. Esperará hasta ${untilText(until)}.
 Díselo a ${userName()} en 1-2 líneas, con esa hora, y ofrécele pasarla a otro agente disponible (${others.join(', ')}) con orb_ask. Si acepta, reasígnala con orb_update_task (id ${task.id}, agent). No encargues más trabajo a esa cuenta mientras esté en pausa.`, null, null, { conversation, project: task.project });
