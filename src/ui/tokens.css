@@ -1,5 +1,8 @@
 /* The shadcn/ui tokens, the dark variant and the Tailwind theme mapping. Imported by app.css. */
 @custom-variant dark (&:is(.dark *));
+/* Órbita compact scale (13 px interface, 14 px chat): desktop pointers only, and only the themes already restyled as
+   Órbita (the others keep their sizes until they are). The phone keeps its larger sizes and its 16 px fields. */
+@custom-variant compact { @media (pointer: fine) { html[data-skin="orb"] & { @slot; } } }
 
 /* Orb theme tokens, the base every other theme overrides: cool neutrals at hue 268 and a periwinkle primary.
    The -soft tokens are tinted fills for status chips; --primary-text and the status colours are meant as text on them,
