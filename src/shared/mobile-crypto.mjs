@@ -179,5 +179,7 @@ export const AAD = {
   request: (id) => `orb:peticion:${id}`,
   response: (id) => `orb:respuesta:${id}`,
   event: (id) => `orb:evento:${id}`,
-  upload: (id) => `orb:imagen:${id}`
+  upload: (id) => `orb:imagen:${id}`,
+  // binds the file name, so one download can never be served in place of another
+  download: (id, name) => `orb:descarga:${id}:${name}`
 };

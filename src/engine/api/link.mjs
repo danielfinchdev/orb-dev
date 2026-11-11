@@ -1,12 +1,29 @@
 // The phone access and Magic Link part of the engine's API: the phones and browsers
 // linked with this PC. This PC only (src/domain/security/permissions.mjs).
-import { ctx } from '../../platform/context.mjs';
+import path from 'node:path';
+import fs from 'node:fs';
+import { ctx, tr } from '../../platform/context.mjs';
+import { createScreenshot } from '../host/screenshot.mjs';
 import { saveConfig } from '../../platform/config.mjs';
 import { PAIR_KINDS, PREVIEWS } from '../transport/remote.mjs';
 import { str, oneOf } from './common.mjs';
 
-export function linkMethods({ emit, remoteRef }) {
+// Engine tests (they run with the fake agents) never touch the real screen: they copy a prepared JPEG instead.
+const fakeShot = () => (process.env.ORB_FAKE_AGENTS && process.env.ORB_FAKE_SCREENSHOT
+  ? (out) => fs.promises.copyFile(process.env.ORB_FAKE_SCREENSHOT, out) : undefined);
+
+export function linkMethods({ emit, remoteRef, log }) {
+  const capture = createScreenshot({ run: fakeShot() });
   return {
+    // The phone asks for a picture of the PC's screen. It is stored with the phone's uploads and only that phone may
+    // download it; the PC always shows a notice so nobody is watched without knowing. Parameters are ignored.
+    'pc.screenshot': async (_params, principal) => {
+      const name = await capture(path.join(ctx.paths.internal, 'adjuntos-movil'));
+      const device = principal?.device ? remoteRef.current?.allowDownload(principal.device, name) : null;
+      log(`móvil: captura de pantalla${device ? ` (${device})` : ''}`);
+      emit('notice', { body: device ? tr('msg.screenshot.taken', { device }) : tr('msg.screenshot.takenAnon'), tone: 'warning' });
+      return { path: name };
+    },
     // ---- phone access
     'remote.status': () => remoteRef.current.status(),
     'remote.enable': async ({ enabled }) => {

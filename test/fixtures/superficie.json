@@ -127,6 +127,7 @@
   "models.guide": "remote",
   "music.track": "pc",
   "notes.markRead": "remote",
+  "pc.screenshot": "remote",
   "permissions.setMode": "remote",
   "projects.branch": "remote",
   "projects.clearIcon": "pc",

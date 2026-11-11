@@ -15,10 +15,11 @@ import crypto from 'node:crypto';
 import { ctx, tr } from '../../platform/context.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { quickRun } from '../../agents/index.mjs';
-import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, AAD, CLOCK_SKEW_MS, shortSecret, pairKdfOk } from '../../shared/mobile-crypto.mjs';
+import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, sealBytes, AAD, CLOCK_SKEW_MS, shortSecret, pairKdfOk } from '../../shared/mobile-crypto.mjs';
 import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
 import { streamFeed } from '../../shared/chat-stream.mjs';
 import { PROTOCOL, MIN_PROTOCOL, PAIR_PROTOCOL, versionOfProtocol, CODE_ALPHABET, shortCodeLabel } from '../../shared/link-payload.mjs';
+import { SHOT_NAME } from '../host/screenshot.mjs';
 import { principalOf, REMOTE_METHODS } from '../../domain/security/permissions.mjs';
 import { isLegacy } from '../../domain/data/legacy/migrate-38.mjs';
 import { ownPorts } from '../host/host.mjs';
@@ -52,6 +53,19 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   // The phones' pictures (a phone may only attach the ones uploaded from a linked device). Older data kept them in a
   // subfolder per person: those may still be inside, and pruneUploads clears them with the rest.
   const uploads = () => path.join(ctx.paths.internal, 'adjuntos-movil');
+  // Screenshots the phone may download: name -> { device, expires }. Only what pc.screenshot made for that device is ever
+  // served, so a download can never reach any other file of the uploads folder.
+  const downloads = new Map();
+  const DOWNLOAD_MS = 10 * 60_000; const DOWNLOADS_PER_DEVICE = 20;
+  function allowDownload(deviceId, name) {
+    if (typeof deviceId !== 'string' || !SHOT_NAME.test(name)) return null;
+    const t = Date.now();
+    for (const [k, v] of downloads) if (v.expires <= t) downloads.delete(k);
+    const mineNow = [...downloads].filter(([, v]) => v.device === deviceId);
+    for (const [k] of mineNow.slice(0, Math.max(0, mineNow.length - DOWNLOADS_PER_DEVICE + 1))) downloads.delete(k);
+    downloads.set(name, { device: deviceId, expires: t + DOWNLOAD_MS });
+    return board.one('SELECT name FROM devices WHERE id = ?', deviceId)?.name ?? null;
+  }
   // What this Orb says of itself on every hello and /api/me.
   const versions = () => ({ v: PROTOCOL, min: MIN_PROTOCOL, version });
   const metaV = (d) => Number(parseMeta(d).v ?? 2);
@@ -214,6 +228,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       req.on('close', () => { clearInterval(ping); clients.delete(client); });
       return undefined;
     }
+    if (req.method === 'GET' && p === '/api/download') return download(req, res, device, url);
     if (req.method !== 'POST') return send(res, 404, { error: 'no encontrado' });
     if (p === '/api/upload') return upload(req, res, device);
 
@@ -391,6 +406,29 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       return reply(res, device, auth.nonce, { ok: true, result: { path: path.basename(file) } }); // its name: the PC knows where
     } catch (error) { log(`móvil: subida: ${error.message}`); return reply(res, device, auth.nonce, { ok: false, error: tr('msg.remote.cannotSaveImage') }); }
     finally { uploading--; }
+  }
+  // A screenshot made for this phone, sealed with the key of the link and bound to its name (AAD.download).
+  async function download(req, res, device, url) {
+    const auth = openHeader(req, device, 'download');
+    if (!auth) return send(res, 401, { error: tr('msg.remote.notLinked') });
+    if (auth.clock) return clockOff(res);
+    const name = url.searchParams.get('name') ?? '';
+    // the sealed message names the file too: a captured header cannot be replayed for another one
+    if (!SHOT_NAME.test(name) || auth.name !== name) return send(res, 401, { error: tr('msg.remote.notLinked') });
+    const entry = downloads.get(name);
+    const miss = () => send(res, 404, { error: 'no encontrado' });
+    if (entry && entry.expires <= Date.now()) downloads.delete(name);
+    if (!entry || entry.device !== device.id || entry.expires <= Date.now()) return miss();
+    const dir = path.resolve(uploads());
+    const file = path.resolve(path.join(dir, name));
+    if (path.dirname(file) !== dir) return miss();
+    try {
+      const st = await fs.promises.stat(file);
+      if (!st.isFile()) return miss();
+      if (st.size > UPLOAD_MAX) return send(res, 413, { error: tr('sys.remote.tooLarge') });
+      const bytes = await fs.promises.readFile(file);
+      return send(res, 200, Buffer.from(sealBytes(keyOf(device), new Uint8Array(bytes), AAD.download(device.id, name))), 'application/octet-stream');
+    } catch { return miss(); }
   }
   // Old pictures go (7 days), and the oldest ones too while the folder would pass its quota.
   // The oldest first (older per-person subfolders too).
@@ -633,6 +671,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       clients.clear(); await closeAll(); pairing = null; state = { running: false, routes: [], error: null };
       await unserve();
     },
+    allowDownload,
     status() {
       let pc = null; try { pc = pcFingerprint(); } catch { /* the vault is locked */ }
       return { enabled: Boolean(ctx.config.mobile?.enabled), running: Boolean(state.running), routes: state.routes ?? [], error: state.error ?? null, pc,
