@@ -53,7 +53,11 @@ export function toolClass(tool, kind) {
 // files, touching the system. Matched on the whole command line (PowerShell and bash spellings).
 // GIT: "git" plus its global options (-C dir, -c key=value, --no-pager…) before the subcommand.
 // 3.8.3 (security review): also git.exe and "…\git.exe" (the end of a quoted path).
-const GIT = String.raw`\bgit(?:\.exe)?["']?(?:\s+-\S+(?:\s+[^-\s]\S*)?)*\s+`;
+// An option value may be quoted and hold spaces (-C "D:\my web", -c "user.name=a b", --git-dir="x y").
+// A lone quote only counts as a plain character when it has no closing partner, so each token has one parse
+// (two overlapping branches made this exponential on inputs like -x"""""""…).
+const GIT_TOK = String.raw`(?:"[^"]*"|'[^']*'|[^\s"']|"(?![^"]*")|'(?![^']*'))`;
+const GIT = String.raw`\bgit(?:\.exe)?["']?(?:\s+-${GIT_TOK}+(?:\s+(?=[^-\s])${GIT_TOK}+)?)*\s+`;
 const ORB_REF = /refs[\\/]+orb\b/i;
 const RISKY = [
   [new RegExp(`${GIT}(push|remote\\s+(add|set-url|remove)|send-pack|http-push|subtree\\s+push)\\b`, 'i'), 'msg.guard.push'],
@@ -143,7 +147,9 @@ const CATEGORY = { push: 'publish', github: 'publish', publish: 'publish', pipeT
 export function risksOf(command, lang = 'es') {
   const c = String(command ?? ''); const out = [];
   // 3.8.3 (security review): also without its quotes and cmd's ^ (git "push", g^it pu^sh run as git push).
-  const variants = [...new Set([c, unquoted(c)])];
+  // And with escaped quotes (\" ` ") turned into a plain char: an escaped quote is no opening quote, and stripping
+  // quotes alone would break a real pair ("x y") that precedes it.
+  const variants = [...new Set([c, unquoted(c), c.replace(/\\["']|`["']/g, '_')])];
   for (const [re, why] of RISKY) {
     const v = variants.find((x) => re.test(x));
     if (v === undefined) continue;
@@ -363,7 +369,8 @@ export function workDirs(command, cwd) {
         if (/^(\/d|-[a-z]+|--)$/i.test(a)) continue;
         target = a; break;
       }
-      if (target === null) continue; // cd alone: cmd prints the folder, PowerShell may go home (never into core)
+      // cd alone: bash and PowerShell go to the home folder, so later relative paths must resolve there.
+      if (target === null) target = '~';
       const next = resolveDir(target);
       if (/^(pushd|push-location)$/i.test(cmd)) stack.push(dir);
       prev = dir; dir = next;
@@ -380,7 +387,29 @@ const unescaped = (c) => unquoted(c).replace(/(?<=[A-Za-z0-9_.-])\\(?=[A-Za-z0-9
 // A word with a wildcard (`pers*`, `C:/Orb/*/x`, `p?rsonal`) that could expand into a closed folder (core, the owner's
 // personal folder, the copies outside): its segments, resolved from the folder it runs in, matched against each root's.
 const GLOB = /[*?[]/;
-const globRe = (seg) => new RegExp(`^${seg.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.').replace(/\[!/g, '[^')}$`, 'i');
+const globRe = (seg) => {
+  // Bash and JS read brackets differently (`[]o]` is {']','o'} in bash but an empty class in JS, `[[:alpha:]]` is
+  // a POSIX class), so a bracket expression becomes "any one character": it may over-match (more asks), never under-match.
+  const s = String(seg); let re = '';
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '[') {
+      let j = i + 1;
+      if (s[j] === '!' || s[j] === '^') j++;
+      if (s[j] === ']') j++; // a ] right after the opening is a member, not the end
+      let end = -1;
+      for (; j < s.length; j++) {
+        if (s[j] === '[' && s[j + 1] === ':') { const k = s.indexOf(':]', j + 2); if (k !== -1) { j = k + 1; continue; } }
+        if (s[j] === ']') { end = j; break; }
+      }
+      if (end !== -1) { re += '.'; i = end; continue; }
+      re += '\\[';
+    } else if (ch === '*') re += '.*';
+    else if (ch === '?') re += '.';
+    else re += ch.replace(/[.+^${}()|\\\]]/g, '\\$&');
+  }
+  return new RegExp(`^${re}$`, 'i');
+};
 function globReaches(word, dir, roots) {
   const w = winPath(String(word ?? '')).replace(/^~(?=[\\/]|$)/, os.homedir());
   if (!GLOB.test(w)) return false;
