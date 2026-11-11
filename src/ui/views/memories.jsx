@@ -1,6 +1,6 @@
 // «Memorias»: what Orb remembers, in one place: the logs (bitácoras, its memory of each project) and the activity
 // (every event of the board). Each one keeps its own route (logs, activity), so links to them still work.
-import { BookOpen } from 'lucide-react';
+import { NotebookPen } from 'lucide-react';
 import { PageHeader } from '@/components/page.jsx';
 import { go } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
@@ -14,7 +14,7 @@ export function MemoriesView({ route }) {
   const tabs = [['logs', t('memories.logs')], ['activity', t('memories.activity')]];
   return (
     <>
-      <PageHeader icon={<BookOpen className="text-primary size-5" />} title={t('memories.title')} meta={t(tab === 'logs' ? 'logs.meta' : 'activity.meta')}>
+      <PageHeader icon={<NotebookPen className="text-primary size-5" />} title={t('memories.title')} meta={t(tab === 'logs' ? 'logs.meta' : 'activity.meta')}>
         <div className="bg-muted inline-flex rounded-lg p-[3px]" role="tablist" data-testid="memories-tabs">
           {tabs.map(([id, label]) => (
             <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => go({ view: id })} data-testid={`memories-${id}`}

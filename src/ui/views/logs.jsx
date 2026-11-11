@@ -1,6 +1,6 @@
 // Bitácoras: the assistant's memory (general log and one per project). Read-only here: only the assistant appends.
 import { useEffect, useRef, useState } from 'react';
-import { BookOpen, Copy, Maximize2, NotebookText } from 'lucide-react';
+import { NotebookPen, Copy, Maximize2, NotebookText } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/page.jsx';
 import { Markdown } from '@/components/markdown.jsx';
@@ -27,7 +27,7 @@ export function LogsView({ route, bare = false }) {
   const partial = body?.startsWith('(');
   return (
     <>
-      {bare ? null : <PageHeader icon={<BookOpen className="text-primary size-5" />} title={t('logs.title')} meta={t('logs.meta')} />}
+      {bare ? null : <PageHeader icon={<NotebookPen className="text-primary size-5" />} title={t('logs.title')} meta={t('logs.meta')} />}
       <div className="grid min-h-0 flex-1 grid-cols-[240px_1fr] gap-4 overflow-hidden px-5 py-5">
         <Card className="gap-0.5 overflow-y-auto p-2">
           {logs.map((l) => (

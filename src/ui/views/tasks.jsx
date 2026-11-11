@@ -1,7 +1,7 @@
 // Tasks: the board. Filters, approvals, details and every action on a task (undo, retry, model, merge, pull request, OK).
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Check, X, Zap, RotateCw, Square, Shuffle, Undo2, MessageSquare, GitMerge, GitPullRequest, Trash2, ListTodo, ThumbsUp, ChevronRight, ScanSearch, Hourglass, GitBranch } from 'lucide-react';
+import { Check, X, Zap, RotateCw, Square, Shuffle, Undo2, MessageSquare, GitMerge, GitPullRequest, Trash2, ClipboardCheck, ThumbsUp, ChevronRight, ScanSearch, Hourglass, GitBranch } from 'lucide-react';
 import { PageHeader, PageBody, BackButton } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { Markdown } from '@/components/markdown.jsx';
@@ -71,7 +71,7 @@ function TaskDetail({ id, live }) {
   const version = useStore((s) => s.version);
   const [t, setT] = useState(null);
   useEffect(() => { let alive = true; call('tasks.get', { id }).then((r) => alive && setT(r)).catch(() => alive && setT(null)); return () => { alive = false; }; }, [id, version]);
-  if (!t) return <Card><Empty title={tr('tasks.pick')} icon={ListTodo} /></Card>;
+  if (!t) return <Card><Empty title={tr('tasks.pick')} icon={ClipboardCheck} /></Card>;
   const who = t.assigned_to ?? t.agent;
   const A = (props) => <Button size="sm" variant="outline" {...props} />;
   const reassign = async () => {
@@ -190,7 +190,7 @@ export function TasksView({ route }) {
   const open = (t) => (phone ? go({ ...list, id: t.id }) : setSelected(t.id));
   return (
     <>
-      <PageHeader icon={<ListTodo className="text-primary size-5" />} title={route.project ? tr('tasks.titleProject', { project: route.project }) : tr('nav.tasks')} meta={tr('tasks.meta')}>
+      <PageHeader icon={<ClipboardCheck className="text-primary size-5" />} title={route.project ? tr('tasks.titleProject', { project: route.project }) : tr('nav.tasks')} meta={tr('tasks.meta')}>
         {route.project ? <Button size="sm" variant="ghost" onClick={() => go('tasks')}><X />{tr('tasks.allProjects')}</Button> : null}
       </PageHeader>
       <PageBody className="md:pb-28">
@@ -218,9 +218,9 @@ export function TasksView({ route }) {
                   </>)}
                 </button>
               );
-            }) : <Empty icon={ListTodo} title={filter === 'aprobar' ? tr('tasks.empty.approve') : tr('tasks.empty.none')}>{tr('tasks.empty.hint')}</Empty>}
+            }) : <Empty icon={ClipboardCheck} title={filter === 'aprobar' ? tr('tasks.empty.approve') : tr('tasks.empty.none')}>{tr('tasks.empty.hint')}</Empty>}
           </Card>
-          {phone ? null : selected ? <TaskDetail id={selected} live={liveOf(live, selected)} /> : <Card><Empty icon={ListTodo} title={tr('tasks.pick')}>{tr('tasks.pickHint')}</Empty></Card>}
+          {phone ? null : selected ? <TaskDetail id={selected} live={liveOf(live, selected)} /> : <Card><Empty icon={ClipboardCheck} title={tr('tasks.pick')}>{tr('tasks.pickHint')}</Empty></Card>}
         </div>
       </PageBody>
     </>

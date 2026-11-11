@@ -7,7 +7,7 @@
 // «Esperando tu aprobación», how its last task ended, else its last line) and the unread count. Right click or ⋯ (PC) and
 // a long press (phone) open the chat's menu: info, pin, mute, mark read, complete or reopen, delete.
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ListTodo, FolderKanban, CalendarClock, PenTool, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, Sparkles, PencilLine, AlarmClock, AlarmClockOff } from 'lucide-react';
+import { ListTodo, Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ClipboardCheck, FolderGit2, CalendarSync, Presentation, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, Sparkles, PencilLine, AlarmClock, AlarmClockOff } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
@@ -343,7 +343,7 @@ function Places() {
   const approvals = useStore((s) => s.tasks.filter((x) => x.status === 'awaiting_approval').length);
   const running = useStore((s) => s.tasks.filter((x) => x.status === 'running').length);
   const config = useStore((s) => s.app?.config);
-  const places = [['tasks', ListTodo, 'nav.tasks'], ['projects', FolderKanban, 'nav.projects'], ['schedules', CalendarClock, 'nav.schedules'], ['board', PenTool, 'nav.board']];
+  const places = [['tasks', ClipboardCheck, 'nav.tasks'], ['projects', FolderGit2, 'nav.projects'], ['schedules', CalendarSync, 'nav.schedules'], ['board', Presentation, 'nav.board']];
   const more = config?.expert?.enabled && fullPc() ? [['expert', SquareTerminal, 'nav.expert']] : [];
   const cls = (on) => cn('press relative flex min-w-0 cursor-pointer flex-col items-center gap-0.5 rounded-lg px-0 py-1.5 text-[11.5px] transition-colors', on ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground');
   return (

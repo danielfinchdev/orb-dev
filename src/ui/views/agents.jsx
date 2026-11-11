@@ -1,6 +1,6 @@
 // Agents: which CLIs are installed, their login, models and how much of each subscription window is used.
 import { useEffect, useState } from 'react';
-import { Bot, RefreshCw, LogIn, ChevronRight, ChevronDown, ExternalLink, UserPlus, Trash2, FolderOpen, ScanSearch, Copy, Download, SquareTerminal, X } from 'lucide-react';
+import { Orbit, RefreshCw, LogIn, ChevronRight, ChevronDown, ExternalLink, UserPlus, Trash2, FolderOpen, ScanSearch, Copy, Download, SquareTerminal, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCatalog } from '@/components/brain-picker.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
@@ -331,7 +331,7 @@ export function AgentsView() {
   useEffect(() => { call('usage.get').then(setUsage).catch(() => {}); }, [version]);
   return (
     <>
-      <PageHeader icon={<Bot className="text-primary size-5" />} title={t('agents.title')} meta={t('agents.meta')}>
+      <PageHeader icon={<Orbit className="text-primary size-5" />} title={t('agents.title')} meta={t('agents.meta')}>
         <Button size="sm" variant="outline" onClick={() => { setAgents(null); load(true); }}><RefreshCw />{t('agents.checkAll')}</Button>
       </PageHeader>
       <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 py-5">

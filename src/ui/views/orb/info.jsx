@@ -8,7 +8,7 @@
 // A project: its initials or icon, name and folder, «Nuevo chat aquí»; Chats, Tareas, Programadas, Pizarra, Bitácora,
 // Compartir (with two or more users), Ajustes del proyecto (Proyectos) and, on the PC with God mode on, «Abrir en God mode».
 import { useEffect, useState } from 'react';
-import { Folder, ChevronRight, Sparkles, Bell, ListTodo, Paperclip, Shrink, Download, Pin, PinOff, CircleCheck, Undo2, Trash2, Pencil, MessageSquarePlus, MessagesSquare, CalendarClock, PenTool, BookOpen, Settings2, SquareTerminal } from 'lucide-react';
+import { ListTodo, Folder, ChevronRight, Sparkles, Bell, ClipboardCheck, Paperclip, Shrink, Download, Pin, PinOff, CircleCheck, Undo2, Trash2, Pencil, MessageSquarePlus, MessagesSquare, CalendarSync, Presentation, NotebookPen, Settings2, SquareTerminal } from 'lucide-react';
 import { BrainIcon } from '@/components/brain-icon.jsx';
 import { OrchestratorIcon } from '@/components/orchestrator-icon.jsx';
 import { Robot } from '@/components/robot.jsx';
@@ -162,10 +162,10 @@ function ProjectInfo({ name }) {
       </div>
       <List testid="project-info-rows">
         <Row icon={MessagesSquare} label={t('orbchats.chats')} value={String(chats)} testid="project-info-chats" />
-        <Row icon={ListTodo} label={t('orbchats.pTasks')} value={open ? t('orbchats.pOpen', { n: open }) : String(total)} onClick={() => leave({ view: 'tasks', project: name })} testid="project-info-tasks" />
-        <Row icon={CalendarClock} label={t('orbchats.pSchedules')} onClick={() => active({ view: 'schedules' })} testid="project-info-schedules" />
-        <Row icon={PenTool} label={t('orbchats.pBoard')} onClick={() => active({ view: 'board' })} testid="project-info-board" />
-        <Row icon={BookOpen} label={t('orbchats.pLog')} onClick={() => leave({ view: 'logs', name })} testid="project-info-log" />
+        <Row icon={ClipboardCheck} label={t('orbchats.pTasks')} value={open ? t('orbchats.pOpen', { n: open }) : String(total)} onClick={() => leave({ view: 'tasks', project: name })} testid="project-info-tasks" />
+        <Row icon={CalendarSync} label={t('orbchats.pSchedules')} onClick={() => active({ view: 'schedules' })} testid="project-info-schedules" />
+        <Row icon={Presentation} label={t('orbchats.pBoard')} onClick={() => active({ view: 'board' })} testid="project-info-board" />
+        <Row icon={NotebookPen} label={t('orbchats.pLog')} onClick={() => leave({ view: 'logs', name })} testid="project-info-log" />
       </List>
       <List>
         <Row icon={Settings2} label={t('orbchats.pSettings')} onClick={() => leave({ view: 'projects', name })} testid="project-info-settings" />

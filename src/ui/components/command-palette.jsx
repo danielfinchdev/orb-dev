@@ -2,7 +2,7 @@
 // to the sidebar's search (the same search, lib/search.js) and never takes the key from what already uses it: a project
 // action with Ctrl+K, the whiteboard's own Ctrl+K or an open dialog keep it.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, MessageSquarePlus, FolderPlus, ListTodo, FolderKanban, CalendarClock, PenTool, BookOpen, Bot, GraduationCap, SquareTerminal, Settings, MessageSquare, FileText, CornerDownLeft, Gauge } from 'lucide-react';
+import { FolderKanban, ListTodo, Search, MessageSquarePlus, FolderPlus, ClipboardCheck, FolderGit2, CalendarSync, Presentation, NotebookPen, Orbit, LifeBuoy, SquareTerminal, Settings, MessageSquare, FileText, CornerDownLeft, Gauge } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/overlay.jsx';
 import { Kbd } from '@/components/ui/basic.jsx';
 import { useOrbItems, openOrbItem, newProjectChat } from '@/views/orb/inbox.jsx';
@@ -18,14 +18,14 @@ function commands(t, config) {
   return [
     { key: 'new-chat', icon: MessageSquarePlus, label: t('nav.newChat'), run: () => newChat() },
     { key: 'new-project', icon: FolderPlus, label: t('comp.projects.newTitle'), run: newProjectChat },
-    { key: 'tasks', icon: ListTodo, label: t('nav.tasks'), run: () => go({ view: 'tasks' }) },
-    { key: 'projects', icon: FolderKanban, label: t('nav.projects'), run: () => go({ view: 'projects' }) },
-    { key: 'schedules', icon: CalendarClock, label: t('nav.schedules'), run: () => go({ view: 'schedules' }) },
-    { key: 'board', icon: PenTool, label: t('nav.board'), run: () => go({ view: 'board' }) },
-    { key: 'logs', icon: BookOpen, label: t('nav.memories'), run: () => go({ view: 'logs' }) },
-    { key: 'agents', icon: Bot, label: t('nav.agents'), run: () => go({ view: 'agents' }) },
+    { key: 'tasks', icon: ClipboardCheck, label: t('nav.tasks'), run: () => go({ view: 'tasks' }) },
+    { key: 'projects', icon: FolderGit2, label: t('nav.projects'), run: () => go({ view: 'projects' }) },
+    { key: 'schedules', icon: CalendarSync, label: t('nav.schedules'), run: () => go({ view: 'schedules' }) },
+    { key: 'board', icon: Presentation, label: t('nav.board'), run: () => go({ view: 'board' }) },
+    { key: 'logs', icon: NotebookPen, label: t('nav.memories'), run: () => go({ view: 'logs' }) },
+    { key: 'agents', icon: Orbit, label: t('nav.agents'), run: () => go({ view: 'agents' }) },
     { key: 'usage', icon: Gauge, label: t('usage.title'), run: () => go({ view: 'usage' }) },
-    { key: 'tutorials', icon: GraduationCap, label: t('nav.tutorials'), run: () => go({ view: 'tutorials' }) },
+    { key: 'tutorials', icon: LifeBuoy, label: t('nav.tutorials'), run: () => go({ view: 'tutorials' }) },
     ...(config?.expert?.enabled && fullPc() ? [{ key: 'expert', icon: SquareTerminal, label: t('nav.expert'), run: () => go({ view: 'expert' }) }] : []),
     { key: 'settings', icon: Settings, label: t('nav.settings'), run: () => openSettings() }
   ];

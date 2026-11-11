@@ -1,6 +1,6 @@
 // Projects: the folders inside the assistant's folder (plus any linked one), with git and GitHub actions.
 import { useEffect, useState } from 'react';
-import { FolderKanban, FolderPlus, FolderOpen, Pin, MessageSquare, BookOpen, Unlink, GitBranch, Save, Upload, RefreshCw, GitPullRequest, Folder, ScanSearch, ShieldCheck, PencilLine, Ellipsis, CircleCheckBig, Trash2, Undo2 } from 'lucide-react';
+import { FolderGit2, FolderPlus, FolderOpen, Pin, MessageSquare, NotebookPen, Unlink, GitBranch, Save, Upload, RefreshCw, GitPullRequest, Folder, ScanSearch, ShieldCheck, PencilLine, Ellipsis, CircleCheckBig, Trash2, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader, PageBody, BackButton } from '@/components/page.jsx';
 import { confirm, choose, form } from '@/components/dialogs.jsx';
@@ -185,7 +185,7 @@ function ProjectDetail({ p, onRenamed }) {
         <Button size="sm" variant="outline" onClick={async () => { await act(call('projects.setActive', { name: p.name })); go('chat'); }}><MessageSquare />{t('projects.chatHere')}</Button>
         <BubbleTip title={t('projects.review')} text={t('projects.reviewTip')}><Button size="sm" variant="outline" onClick={() => askReview({ project: p.name })} data-testid="project-review"><ScanSearch />{t('projects.review')}</Button></BubbleTip>
         <BubbleTip title={t('projects.security')} text={t('projects.securityTip')}><Button size="sm" variant="outline" onClick={() => askSecurityReview({ project: p.name })} data-testid="project-security"><ShieldCheck />{t('projects.security')}</Button></BubbleTip>
-        <Button size="sm" variant="outline" onClick={() => go({ view: 'logs', name: p.name })}><BookOpen />{t('projects.log')}</Button>
+        <Button size="sm" variant="outline" onClick={() => go({ view: 'logs', name: p.name })}><NotebookPen />{t('projects.log')}</Button>
         <BubbleTip title={t('projects.rename.title')} text={p.open ? t('projects.rename.busy') : undefined}><span><Button size="sm" variant="outline" disabled={Boolean(p.open)} onClick={rename} data-testid="project-rename"><PencilLine />{t('projects.rename.title')}</Button></span></BubbleTip>
         {!p.inHome ? <Button size="sm" variant="danger" onClick={async () => { if (await confirm(t('projects.unlink.title'), t('projects.unlink.body', { name: p.name }), { ok: t('projects.unlink.ok'), danger: true })) act(call('projects.remove', { name: p.name }), t('projects.unlink.done')); }}><Unlink />{t('projects.unlink.ok')}</Button> : null}
       </CardContent>
@@ -236,7 +236,7 @@ export function ProjectsView({ route }) {
   );
   return (
     <>
-      <PageHeader icon={<FolderKanban className="text-primary size-5" />} title={t('projects.title')} meta={app.home && !bridge.mobile ? t('projects.meta', { home: app.home }) : t('projects.metaRemote')}>
+      <PageHeader icon={<FolderGit2 className="text-primary size-5" />} title={t('projects.title')} meta={app.home && !bridge.mobile ? t('projects.meta', { home: app.home }) : t('projects.metaRemote')}>
         {bridge.mobile ? null : <><Button size="sm" variant="ghost" onClick={async () => pick(await cloneRepoFlow())}><GithubIcon />{t('projects.clone')}</Button>
         <Button size="sm" variant="ghost" onClick={async () => pick(await linkFolderFlow())}><FolderOpen />{t('projects.link')}</Button></>}
         <Button size="sm" onClick={async () => pick(await createProjectFlow())}><FolderPlus />{t('projects.create')}</Button>
@@ -263,7 +263,7 @@ export function ProjectsView({ route }) {
                     {list.map((p) => <ProjectRow key={p.name} p={p} selected={selected} phone={phone} onOpen={open} />)}
                   </div>
                 ) : null;
-              }) : <Empty icon={FolderKanban} title={t('projects.empty.title')}>{app.home ? t('projects.empty.hint', { home: app.home }) : t('projects.empty.hintRemote')}</Empty>}
+              }) : <Empty icon={FolderGit2} title={t('projects.empty.title')}>{app.home ? t('projects.empty.hint', { home: app.home }) : t('projects.empty.hintRemote')}</Empty>}
             </Card>
             {phone ? null : current ? <ProjectDetail key={current.name} p={current} onRenamed={setSelected} /> : <Card><Empty icon={Folder} title={t('projects.pick')} /></Card>}
           </div>

@@ -3,7 +3,7 @@
 // the assistant reads it (PIZARRA.md and the drawing as a picture) when it plans the project's work.
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { PenTool, Paperclip, FolderOpen, Trash2, FileText, Film, Music, PanelRightClose, PanelRightOpen, Check, CloudUpload } from 'lucide-react';
+import { Presentation, Paperclip, FolderOpen, Trash2, FileText, Film, Music, PanelRightClose, PanelRightOpen, Check, CloudUpload } from 'lucide-react';
 import { PageHeader } from '@/components/page.jsx';
 import { ProjectPicker } from '@/components/project-actions.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -35,10 +35,10 @@ export function WhiteboardView() {
   const project = projects.find((p) => p.name === app.activeProject?.name) ?? null;
   return (
     <>
-      <PageHeader icon={<PenTool className="text-primary size-5" />} title={t('wb.title')} meta={project ? t('wb.meta', { project: project.name, assistant: app.config.assistantName }) : t('wb.metaNone')}>
+      <PageHeader icon={<Presentation className="text-primary size-5" />} title={t('wb.title')} meta={project ? t('wb.meta', { project: project.name, assistant: app.config.assistantName }) : t('wb.metaNone')}>
         <ProjectPicker />
       </PageHeader>
-      {project ? <Whiteboard key={project.name} project={project.name} /> : <Empty icon={PenTool} title={t('wb.pickTitle')} className="m-auto">{t('wb.pickBody')}</Empty>}
+      {project ? <Whiteboard key={project.name} project={project.name} /> : <Empty icon={Presentation} title={t('wb.pickTitle')} className="m-auto">{t('wb.pickBody')}</Empty>}
     </>
   );
 }

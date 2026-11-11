@@ -2,7 +2,7 @@
 // (same approvals, quota and agents); one the assistant proposed needs your approval once before it runs by itself.
 // «Una sola vez» (a date and time; it turns off after running) and «Ejecutar siempre en el mismo chat».
 import { useEffect, useState } from 'react';
-import { CalendarClock, Plus, Play, Trash2, Check, MessageSquare } from 'lucide-react';
+import { CalendarSync, Plus, Play, Trash2, Check, MessageSquare } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { form, confirm } from '@/components/dialogs.jsx';
@@ -67,7 +67,7 @@ export function SchedulesView() {
   const create = async () => { if (await newSchedule()) load(); };
   return (
     <>
-      <PageHeader icon={<CalendarClock className="text-primary size-5" />} title={t('schedules.title')} meta={t('schedules.meta')}>
+      <PageHeader icon={<CalendarSync className="text-primary size-5" />} title={t('schedules.title')} meta={t('schedules.meta')}>
         <Button size="sm" onClick={create} data-testid="new-schedule"><Plus />{t('schedules.newBtn')}</Button>
       </PageHeader>
       <PageBody>

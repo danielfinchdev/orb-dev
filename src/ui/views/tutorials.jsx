@@ -2,7 +2,7 @@
 // keyboard shortcuts and the frequently asked questions, all searchable; and the button that replays the robot's guided
 // tour (components/tour.jsx). Texts: help.* in the locales.
 import { useState } from 'react';
-import { GraduationCap, Search, Rocket, MessageSquare, Brain, MessageSquarePlus, ListTodo, FolderKanban, Bot, Gauge, CalendarClock, BookOpen, Smartphone, SquareTerminal, Gamepad2, Palette, ShieldCheck, PenTool, Keyboard, CircleHelp, ChevronRight, Play, ArrowRight } from 'lucide-react';
+import { LifeBuoy, Search, Rocket, MessageSquare, Brain, MessageSquarePlus, ClipboardCheck, FolderGit2, Orbit, Gauge, CalendarSync, NotebookPen, Smartphone, SquareTerminal, Gamepad2, Palette, ShieldCheck, Presentation, Keyboard, CircleHelp, ChevronRight, Play, ArrowRight } from 'lucide-react';
 import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -18,13 +18,13 @@ const TUTORIALS = [
   { id: 'chat', icon: MessageSquare, lines: 4, go: () => go('chat') },
   { id: 'brain', icon: Brain, lines: 5, go: () => go('chat') },
   { id: 'newchat', icon: MessageSquarePlus, lines: 4, go: () => newChat() },
-  { id: 'tasks', icon: ListTodo, lines: 6, go: () => go('tasks') },
-  { id: 'sidebar', icon: FolderKanban, lines: 4, go: () => go('projects') },
-  { id: 'board', icon: PenTool, lines: 3, go: () => go('board') },
-  { id: 'agents', icon: Bot, lines: 4, go: () => go('agents'), pc: true },
+  { id: 'tasks', icon: ClipboardCheck, lines: 6, go: () => go('tasks') },
+  { id: 'sidebar', icon: FolderGit2, lines: 4, go: () => go('projects') },
+  { id: 'board', icon: Presentation, lines: 3, go: () => go('board') },
+  { id: 'agents', icon: Orbit, lines: 4, go: () => go('agents'), pc: true },
   { id: 'usage', icon: Gauge, lines: 3, go: () => openSettings('tareas'), pc: true },
-  { id: 'schedules', icon: CalendarClock, lines: 3, go: () => go('schedules') },
-  { id: 'logs', icon: BookOpen, lines: 3, go: () => go('logs') },
+  { id: 'schedules', icon: CalendarSync, lines: 3, go: () => go('schedules') },
+  { id: 'logs', icon: NotebookPen, lines: 3, go: () => go('logs') },
   { id: 'phone', icon: Smartphone, lines: 3, go: () => openSettings('movil'), pc: true },
   { id: 'expert', icon: SquareTerminal, lines: 2, go: () => openSettings('experto'), pc: true },
   { id: 'games', icon: Gamepad2, lines: 2, go: () => openGames(), pc: true },
@@ -88,7 +88,7 @@ export function TutorialsView() {
   );
   return (
     <>
-      <PageHeader icon={<GraduationCap className="text-primary size-5" />} title={t('help.title')} meta={t('help.meta')}>
+      <PageHeader icon={<LifeBuoy className="text-primary size-5" />} title={t('help.title')} meta={t('help.meta')}>
         <div className="relative"><Search className="text-muted-foreground absolute top-2.5 left-2.5 size-4" /><Input className="h-8 w-64 pl-8" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('help.search')} aria-label={t('help.search')} data-testid="help-search" /></div>
       </PageHeader>
       <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 py-5" data-testid="tutorials-view">
@@ -105,7 +105,7 @@ export function TutorialsView() {
           )}
           {nothing ? <Empty icon={Search} title={t('help.noResults', { q: q.trim() })} /> : null}
           {tutorials.length ? (
-            <Section icon={GraduationCap} title={t('help.sec.tutorials')}>
+            <Section icon={LifeBuoy} title={t('help.sec.tutorials')}>
               <div className="grid items-start gap-4 lg:grid-cols-2">{tutorials.map((item) => <Tutorial key={item.id} item={item} t={t} name={name} />)}</div>
             </Section>
           ) : null}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bot, BookOpen, Bug, ChevronUp, ChevronDown, Settings, GraduationCap, Music, Pause, SkipForward, LoaderCircle } from 'lucide-react';
+import { Orbit, NotebookPen, MessageSquareWarning, ChevronUp, ChevronDown, Settings, LifeBuoy, Headphones, Pause, SkipForward, LoaderCircle } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { ThemeToggle, SidebarToggle } from './theme-toggle.jsx';
 import { useStore, go, bridge, openSettings, anyChatBusy } from '@/lib/store.js';
@@ -74,10 +74,10 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
   // browser does not have is left out (Agentes, the bug), never swapped for other icons. Its gear opens this device.
   const items = [
     { icon: Settings, label: t('nav.settings'), active: settingsOpen || is('phone'), onClick: () => openSettings(), testid: 'nav-settings' },
-    ...(bridge.mobile ? [] : [{ icon: Bot, label: t('nav.agents'), active: is('agents'), onClick: () => go('agents'), testid: 'nav-agents' }]),
-    { icon: BookOpen, label: t('nav.memories'), hint: t('nav.memoriesHint'), active: memories, onClick: () => go('logs'), testid: 'nav-memories' },
+    ...(bridge.mobile ? [] : [{ icon: Orbit, label: t('nav.agents'), active: is('agents'), onClick: () => go('agents'), testid: 'nav-agents' }]),
+    { icon: NotebookPen, label: t('nav.memories'), hint: t('nav.memoriesHint'), active: memories, onClick: () => go('logs'), testid: 'nav-memories' },
     // how the app works, the FAQ and the button that replays the guided tour.
-    { icon: GraduationCap, label: t('nav.tutorials'), active: is('tutorials'), onClick: () => go('tutorials'), testid: 'nav-tutorials' }
+    { icon: LifeBuoy, label: t('nav.tutorials'), active: is('tutorials'), onClick: () => go('tutorials'), testid: 'nav-tutorials' }
   ];
   const toggle = open ? t('nav.footerFold') : t('nav.footerUnfold');
   // A linked browser's gear opens this device's settings (browser-settings-menu.jsx).
@@ -102,7 +102,7 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
         {/* The bug: straight to «Enviar comentarios» (Ajustes › Acerca de), with the version next to it. */}
         {bridge.mobile ? null : (
           <BubbleTip title={t('nav.feedback')} side="top">
-            <button type="button" onClick={() => openSettings('contribuye')} aria-label={t('nav.feedback')} data-testid="nav-feedback" className="side-foot-icon"><Bug className="size-4" /></button>
+            <button type="button" onClick={() => openSettings('contribuye')} aria-label={t('nav.feedback')} data-testid="nav-feedback" className="side-foot-icon"><MessageSquareWarning className="size-4" /></button>
           </BubbleTip>
         )}
         {version ? <span className="side-foot-version" data-testid="app-version">v{version}</span> : null}
@@ -127,7 +127,7 @@ function MusicButtons() {
       ) : null}
       <BubbleTip title={t('nav.music')} text={text} side="top">
         <button type="button" onClick={toggleMusic} aria-label={s.playing || s.loading ? t('nav.musicPause') : t('nav.musicPlay')} aria-pressed={s.playing} data-testid="nav-music" data-music-button=""
-          className={cn('side-foot-icon', s.playing && 'is-active')}>{s.loading ? <LoaderCircle className="size-4 animate-spin" /> : s.playing ? <Pause className="size-4" /> : <Music className="size-4" />}</button>
+          className={cn('side-foot-icon', s.playing && 'is-active')}>{s.loading ? <LoaderCircle className="size-4 animate-spin" /> : s.playing ? <Pause className="size-4" /> : <Headphones className="size-4" />}</button>
       </BubbleTip>
     </>
   );

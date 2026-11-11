@@ -5,7 +5,7 @@
 // each conversation is its own (route.id), several at once.
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDraft } from '@/lib/draft.js';
-import { Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, ChevronRight, PenTool, History, FlaskConical, Folder, ListChecks, Ellipsis, Info, BellOff, MessageSquare } from 'lucide-react';
+import { Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, ChevronRight, Presentation, History, FlaskConical, Folder, ListChecks, Ellipsis, Info, BellOff, MessageSquare } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown, TypingMarkdown, TypedMarkdown } from '@/components/markdown.jsx';
 import { ExtensionRequestCard } from './extensions.jsx';
@@ -67,7 +67,7 @@ const Message = memo(function Message({ m, name, onChanges, tail }) {
       <div className="chat-glass min-w-0 flex-1" data-testid="board-suggestion">
         <div className="text-muted-foreground mb-1 text-xs">{name}</div>
         <Markdown>{m.body}</Markdown>
-        <div className="chat-actions mt-2.5"><Button size="sm" onClick={() => go('board')} data-testid="open-board"><PenTool />{t('chat.openBoard')}</Button></div>
+        <div className="chat-actions mt-2.5"><Button size="sm" onClick={() => go('board')} data-testid="open-board"><Presentation />{t('chat.openBoard')}</Button></div>
         <div className="text-muted-foreground flow-root"><MsgTime at={m.at} /></div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 // the phone (browser and Android app): the menu ☰ at the top left of every screen opens a drawer from the left edge
 // with the other screens and the phone's own settings. The bottom tabs are the main screens. The PC keeps its sidebar.
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { Menu, X, CalendarClock, PenTool, BookOpen, GraduationCap, Smartphone, Moon } from 'lucide-react';
+import { Menu, X, CalendarSync, Presentation, NotebookPen, LifeBuoy, Smartphone, Moon } from 'lucide-react';
 import { useState } from 'react';
 import { NavItem } from './sidebar.jsx';
 import { Switch } from './ui/overlay.jsx';
@@ -24,10 +24,10 @@ export function MoreContent() {
   return (
     <>
       <Group>
-        <NavItem icon={CalendarClock} label={t('nav.schedules')} onClick={() => go('schedules')} testid="nav-schedules" />
-        <NavItem icon={PenTool} label={t('nav.board')} onClick={() => go('board')} testid="nav-board" />
-        <NavItem icon={BookOpen} label={t('nav.memories')} onClick={() => go('logs')} testid="nav-memories" />
-        <NavItem icon={GraduationCap} label={t('nav.tutorials')} onClick={() => go('tutorials')} testid="nav-tutorials" />
+        <NavItem icon={CalendarSync} label={t('nav.schedules')} onClick={() => go('schedules')} testid="nav-schedules" />
+        <NavItem icon={Presentation} label={t('nav.board')} onClick={() => go('board')} testid="nav-board" />
+        <NavItem icon={NotebookPen} label={t('nav.memories')} onClick={() => go('logs')} testid="nav-memories" />
+        <NavItem icon={LifeBuoy} label={t('nav.tutorials')} onClick={() => go('tutorials')} testid="nav-tutorials" />
       </Group>
       <Group label={t('nav.settings')}>
         <NavItem icon={Smartphone} label={t('nav.phone')} onClick={() => go({ view: 'phone' })} testid="nav-phone" />

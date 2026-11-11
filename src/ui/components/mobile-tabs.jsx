@@ -1,7 +1,7 @@
 // the phone: a simpler app. The sections are tabs at the bottom (Chats, Tareas, Proyectos; the rest is in
 // the menu ☰ of each screen's bar, components/mobile-menu.jsx) instead of the sidebar. What only makes sense on the PC
 // (Agentes, Ajustes, Modo experto, minijuegos, the themes) is not here.
-import { MessagesSquare, ListTodo, FolderKanban, Ellipsis } from 'lucide-react';
+import { MessagesSquare, ClipboardCheck, FolderGit2, Ellipsis } from 'lucide-react';
 import { PageHeader } from './page.jsx';
 import { useStore, go, anyChatBusy } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
@@ -26,8 +26,8 @@ export function MobileTabs() {
   const current = tabOf(route.view);
   const tabs = [
     { id: 'chats', icon: MessagesSquare, label: t('nav.chats'), testid: 'nav-chats', count: orbUnread, tone: 'primary', dot: working },
-    { id: 'tasks', icon: ListTodo, label: t('nav.tasks'), testid: 'nav-tasks', count: approvals },
-    { id: 'projects', icon: FolderKanban, label: t('nav.projects'), testid: 'nav-projects' }
+    { id: 'tasks', icon: ClipboardCheck, label: t('nav.tasks'), testid: 'nav-tasks', count: approvals },
+    { id: 'projects', icon: FolderGit2, label: t('nav.projects'), testid: 'nav-projects' }
   ];
   return (
     <nav className="mobile-tabs theme-band bg-sidebar grid shrink-0 grid-cols-3 border-t" aria-label={t('app.menu')} data-testid="mobile-tabs">
