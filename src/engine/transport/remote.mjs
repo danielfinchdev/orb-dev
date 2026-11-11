@@ -5,242 +5,36 @@
 // A phone is paired by scanning a one-time QR on the PC. The phone makes its own key and from then on every message is
 // encrypted end to end (src/shared/mobile-crypto.mjs): whoever sees the traffic (the Wi-Fi, a proxy) reads nothing, and a
 // copied link or QR is useless. The PC can revoke any phone. What a phone may do is a subset of the PC's actions.
+// Parts: remote-common.mjs (constants), remote-calls.mjs (call guard and result shaping), remote-net.mjs (addresses, Tailscale,
+// attention server), remote-web.mjs (service worker, headers).
 import { isMuted, itemOfConversation } from '../../domain/conversations/inbox.mjs';
 import { buildNote, actionRoute } from '../../shared/notes.mjs';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
 import crypto from 'node:crypto';
-import { fileURLToPath } from 'node:url';
 import { ctx, tr } from '../../platform/context.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { quickRun } from '../../agents/index.mjs';
-import { IS_WIN } from '../../platform/proc.mjs';
 import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, AAD, CLOCK_SKEW_MS, shortSecret, pairKdfOk } from '../../shared/mobile-crypto.mjs';
 import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
 import { streamFeed } from '../../shared/chat-stream.mjs';
 import { PROTOCOL, MIN_PROTOCOL, PAIR_PROTOCOL, versionOfProtocol, CODE_ALPHABET, shortCodeLabel } from '../../shared/link-payload.mjs';
-import { REMOTE_METHODS, principalOf } from '../../domain/security/permissions.mjs';
+import { principalOf } from '../../domain/security/permissions.mjs';
 import { isLegacy } from '../../domain/data/legacy/migrate-38.mjs';
 import { ownPorts } from '../host/host.mjs';
+import { RENDERER, SESSION_DAYS, PAIR_MINUTES, UPLOAD_MAX, UPLOADS_TOTAL, UPLOADS_DAYS, STREAM_BACKLOG, STREAMS_PER_DEVICE, NETWORK_CHECK_MS, now, PAIR_KINDS, PAIR_FAILS_MAX, PAIR_PASSWORD_TRIES } from './remote-common.mjs';
+import { phoneConfig, guardCall, pushPreview, UPLOAD_NAME, withoutPaths, shapeResult } from './remote-calls.mjs';
+import { privateSource, orbNameOf, ipOf, kindOf, kindForPairing, localName, plainHttpBrowser, parseMeta, metaVOf, APP_CORS, appOrigin, tailscaleExe, tailscaleAddress, lanAddresses } from './remote-net.mjs';
+import { TYPES, HEADERS, SERVICE_WORKER } from './remote-web.mjs';
 
-const RENDERER = path.resolve(process.env.ORB_RENDERER || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'renderer'));
-const SESSION_DAYS = 30; // a phone unused for this long has to be paired again
-const PAIR_MINUTES = 5;
-const UPLOAD_MAX = 10 * 1024 * 1024;
-const UPLOADS_TOTAL = 300 * 1024 * 1024; // phone pictures kept at most (oldest go first), and never older than 7 days
-const UPLOADS_DAYS = 7;
-const STREAM_BACKLOG = 1024 * 1024; // a live-event stream that stops reading is dropped instead of filling the memory
-const STREAMS_PER_DEVICE = 3;
-const NETWORK_CHECK_MS = 60_000; // the Wi-Fi address can change (another network, DHCP): checked every minute
-const now = () => new Date().toISOString();
+export { PAIR_KINDS, PAIR_PASSWORD_TRIES } from './remote-common.mjs';
+export { PREVIEWS, guardCall, phoneConfig, pushPreview, shapeResult, withoutPaths } from './remote-calls.mjs';
+export { SERVICE_WORKER } from './remote-web.mjs';
+export { kindForPairing, lanAddresses, localName, orbNameOf, plainHttpBrowser, privateSource, startAttention, tailscaleAddress } from './remote-net.mjs';
 
-// The settings a phone gets: what the interface shows, without connector commands and secrets, login folders or paths
-// of the agents' programs.
-export function phoneConfig(c) {
-  if (!c || typeof c !== 'object') return c;
-  return {
-    ...c,
-    mcpServers: (c.mcpServers ?? []).map((m) => ({ name: m.name, enabled: m.enabled, agents: m.agents })),
-    accounts: (c.accounts ?? []).map(({ home: _home, ...a }) => a),
-    agents: Object.fromEntries(Object.entries(c.agents ?? {}).map(([k, a]) => { const { path: _path, ...rest } = a ?? {}; return [k, rest]; })),
-    projectRoots: [], mobile: { enabled: c.mobile?.enabled, preview: pushPreview(c) }
-  };
-}
-
-// What a phone or a browser may call: the methods src/domain/security/permissions.mjs marks 'remote'. Never by the kind a device
-// says it is, and nothing with total access.
-// what the owner may choose when making a QR (the kind of device it is for).
-export const PAIR_KINDS = ['phone', 'browser'];
 const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'session:item', 'session:update', 'session:removed', 'config:changed', 'session:delta', 'session:queue', 'approval:changed',
   // a chat list changed
   'inbox:changed']);
-const PAIR_FAILS_MAX = 20; // wrong attempts (all addresses together) that cancel the code on screen
-// wrong master passwords one code allows (they do not use it up); then a new code is needed.
-export const PAIR_PASSWORD_TRIES = 5;
-
-// The checks of a call coming from a phone or a browser: null when it may run, or why not. `uploadsDir`: the pictures
-// that may go with it.
-export function guardCall(board, method, params, { allowed = REMOTE_METHODS, uploadsDir = null } = {}) {
-  if (!allowed.has(method)) return tr('msg.remote.pcOnly');
-  if (params.permission === 'total') return tr('msg.remote.totalPcOnly');
-  // A conversation the PC gave total access to is driven from the PC only.
-  if (method.startsWith('sessions.') && method !== 'sessions.stop' && params.id !== undefined && board.one('SELECT permission FROM sessions WHERE id = ?', String(params.id))?.permission === 'total') return tr('msg.remote.totalConvPcOnly');
-  // Pictures from a phone are only the ones it uploaded itself (never other files of the PC).
-  if (params.images !== undefined) {
-    if (!uploadsDir) return tr('msg.remote.ownImages');
-    const dir = uploadsDir + path.sep;
-    if (!Array.isArray(params.images) || params.images.some((f) => typeof f !== 'string' || !path.resolve(f).startsWith(dir))) return tr('msg.remote.ownImages');
-  }
-  return null;
-}
-// what a notification shows on a locked phone: 'all', 'chat' (the default) or 'none' (only «Tienes un mensaje
-// nuevo»). 'all' and 'chat' show the same (there are no bots' messages to hide).
-export const PREVIEWS = ['all', 'chat', 'none'];
-export const pushPreview = (config) => (PREVIEWS.includes(config?.mobile?.preview) ? config.mobile.preview : 'chat');
-// no folder of this PC reaches a phone or browser. A value that is one whole absolute path (a project's folder, a
-// task's copy, a conversation's cwd…) goes as its place inside the assistant folder («proyectos/web/tienda»), or just
-// its last part when it is outside; in any other text (a chat message, an activity line, an error, a key), only the assistant folder's own
-// path is cut, written in any case and with either separator. F2.6c: free text is never replaced whole (a message that
-// starts with C:\ keeps its words). (Other paths an agent wrote in its text go as they are.)
-const ABSOLUTE = /^(?:[A-Za-z]:[\\/]|\\\\|\/(?:Users|home|root|mnt|media|var|tmp|opt|private|Volumes|srv|data)\/)/;
-const UPLOAD_NAME = /^\d+-[0-9a-f]{8}\.(png|jpg|webp|gif)$/;
-// Fields of free text (what people and agents write): never replaced whole, only the assistant folder is cut.
-const TEXT_FIELD = /^(body|text|title|description|message|note|notes|result|summary|content|prompt|question|answer|label|reason|error|detail|final|output|input|brief|elements)$/i;
-// A whole value that is one path (a single line, no sentence in it), in any other field.
-const isPath = (v) => ABSOLUTE.test(v) && v.length <= 400 && !/[\r\n]|[.,;:!?]\s/.test(v);
-function placeOf(file) {
-  const rel = ctx.home ? path.relative(ctx.home, file) : '';
-  return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel.split(/[\\/]+/).join('/') : file.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || '…'; // either separator: a Windows path on any system
-}
-// The assistant folder inside a text: «<home>\x» → «x», the folder alone → «…» (in JSON its \ are doubled: matched too).
-const homePattern = () => {
-  if (!ctx.home) return null;
-  const parts = path.resolve(ctx.home).split(/[\\/]+/).filter(Boolean).map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const SEP = '[\\\\/]+';
-  return new RegExp(`${/^[\\/]/.test(path.resolve(ctx.home)) ? SEP : ''}${parts.join(SEP)}(?:(${SEP})|(?![\\w-]|\\.\\w))`, 'gi');
-};
-const cutHome = (text, re) => (re ? text.replace(re, (m, sep) => (sep ? '' : '…')) : text);
-export function withoutPaths(value, depth = 0, key = '', re = homePattern()) {
-  if (typeof value === 'string') return !TEXT_FIELD.test(key) && isPath(value) ? placeOf(value) : cutHome(value, re);
-  if (!value || typeof value !== 'object') return value;
-  if (depth > 12) { try { return JSON.parse(cutHome(JSON.stringify(value), re)); } catch { return null; } }
-  if (Array.isArray(value)) return value.map((v) => withoutPaths(v, depth + 1, key, re));
-  return Object.fromEntries(Object.entries(value).map(([k, v]) => [cutHome(k, re), withoutPaths(v, depth + 1, k, re)]));
-}
-
-// What a call from outside gets back: the settings without secrets, and no folder of this PC (its home, the assistant's
-// paths; any other path as its place in the assistant folder).
-export function shapeResult(method, result) {
-  // F2.6c: the whiteboard comes back to the PC as it went (whiteboard.save): only its attachments are cut.
-  if (method === 'whiteboard.load' && result) return { ...result, attachments: withoutPaths(result.attachments) };
-  if (method !== 'app.state' || !result) return withoutPaths(result);
-  const { home: _home, paths: _paths, ...rest } = result;
-  const activeProject = rest.activeProject ? (({ path: _path, ...p }) => p)(rest.activeProject) : rest.activeProject;
-  return withoutPaths({ ...rest, activeProject, config: phoneConfig(rest.config) });
-}
-
-// only the home network, Tailscale and this PC itself may talk to Orb: 127.0.0.0/8, 10/8, 172.16/12, 192.168/16,
-// 100.64/10 (Tailscale) and, in IPv6, ::1 and Tailscale's fd7a:115c:a1e0::/48.
-export function privateSource(address) {
-  let ip = String(address ?? '').toLowerCase();
-  if (ip.startsWith('::ffff:')) ip = ip.slice(7);
-  if (ip === '::1') return true;
-  if (/^fd7a:115c:a1e0:/.test(ip)) return true;
-  const m = ip.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/); if (!m) return false;
-  const [a, b] = [Number(m[1]), Number(m[2])];
-  return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
-}
-// The name another device sees for this Orb: the one set in Ajustes, or the computer's name.
-export const orbNameOf = (config) => oneLine(String(config?.mobile?.name || os.hostname() || config?.assistantName || 'Orb'), 60);
-const ipOf = (req) => String(req.socket?.remoteAddress ?? '').replace(/^::ffff:/, '');
-const kindOf = (proof) => (PAIR_KINDS.includes(proof?.kind) ? proof.kind : /iphone|ipad|android/i.test(String(proof?.name ?? '')) ? 'phone' : 'browser');
-// the kind of a new device: the one the QR was made for. A QR made without saying takes what a phone or a browser
-// says it is (they have the same rights). Another Orb or an Orb Terminal is never linked (null).
-export function kindForPairing(issued, claimed) {
-  if (claimed === 'orb' || claimed === 'terminal') return null;
-  if (PAIR_KINDS.includes(issued)) return issued;
-  return PAIR_KINDS.includes(claimed) ? claimed : 'phone';
-}
-// «<computer>.local» when the computer's name is a valid host name (letters, digits and dashes).
-export const localName = (host = os.hostname()) => { const h = String(host ?? '').toLowerCase().replace(/\.local$/, ''); return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(h) ? `${h}.local` : null; };
-const isLoopback = (ip) => /^(127\.|::1$)/.test(String(ip ?? '').replace(/^::ffff:/, ''));
-// whether a pairing comes from a browser's page over plain http on the home network: not a program (no Origin: another
-// Orb), not the Android app, not this PC (or Tailscale's https, which arrives through loopback), not the
-// Tailscale address. Never otherwise: the master password is typed in that page.
-export function plainHttpBrowser({ origin, app = false, localAddress, routes = [] }) {
-  if (!origin || app) return false;
-  const local = String(localAddress ?? '').replace(/^::ffff:/, '');
-  if (isLoopback(local)) return false;
-  const r = (routes ?? []).find((x) => x.address === local);
-  return !(r && r.kind === 'tailscale');
-}
-const parseMeta = (d) => { try { return d?.meta ? JSON.parse(d.meta) : {}; } catch { return {}; } };
-const metaVOf = (d) => Number(parseMeta(d).v ?? 2);
-// the Android app's page is not served by this PC but by the app itself: it may call the API, where everything is
-// still sealed with the phone's own key, and its WebView has to be told so (CORS). Tauri: http://tauri.localhost
-// only. The Capacitor app's origins (localhost, capacitor://) are not accepted: a page on this PC's localhost, such
-// as an agent's, would pass for the app.
-const APP_ORIGINS = new Set(['http://tauri.localhost', 'https://tauri.localhost']);
-const APP_CORS = { 'Access-Control-Allow-Methods': 'GET, POST', 'Access-Control-Allow-Headers': 'Content-Type, X-Orb-Device, X-Orb-Auth', 'Access-Control-Allow-Private-Network': 'true', 'Access-Control-Max-Age': '600', Vary: 'Origin' };
-const appOrigin = (req) => { const o = String(req.headers.origin ?? '').toLowerCase(); return APP_ORIGINS.has(o) ? o : null; };
-
-const inCgnat = (ip) => { const [x, y] = String(ip).split('.').map(Number); return x === 100 && y >= 64 && y <= 127; };
-const isPrivate = (ip) => { const [a, b] = String(ip).split('.').map(Number); return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168); };
-const tailscaleExe = () => (IS_WIN ? path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Tailscale', 'tailscale.exe') : 'tailscale');
-
-// This PC's Tailscale IPv4 and MagicDNS name, as Tailscale itself reports them, and whether the tailnet hands out HTTPS
-// certificates. The 100.64.0.0/10 range is also used by operators' shared NAT and other VPNs, so an address there is
-// only trusted when Tailscale confirms it or the network adapter is Tailscale's.
-// `tailscale status --json` is long (quickRun keeps only the first 2000 characters): read in full, without the peers.
-const tailscaleStatus = () => new Promise((resolve) => {
-  execFile(tailscaleExe(), ['status', '--json', '--peers=false'], { windowsHide: true, timeout: 8000, maxBuffer: 4 * 1024 * 1024 }, (error, stdout) => resolve({ ok: !error, out: String(stdout ?? '') }));
-});
-
-export async function tailscaleAddress() {
-  const r = await tailscaleStatus();
-  if (r.ok) {
-    try {
-      const st = JSON.parse(r.out); const self = st?.Self;
-      const address = (self?.TailscaleIPs ?? []).find((ip) => /^\d+\.\d+\.\d+\.\d+$/.test(ip) && inCgnat(ip));
-      const dns = self?.DNSName ? String(self.DNSName).replace(/\.$/, '').toLowerCase() : null;
-      if (address) return { address, dns, https: Boolean(dns && (st.CertDomains ?? []).map((d) => String(d).toLowerCase()).includes(dns)) };
-    } catch { /* fall back to the adapter */ }
-  }
-  for (const [name, list] of Object.entries(os.networkInterfaces())) {
-    if (!/tailscale/i.test(name)) continue;
-    const a = (list ?? []).find((x) => x.family === 'IPv4' && !x.internal && inCgnat(x.address));
-    if (a) return { address: a.address, dns: null, https: false };
-  }
-  return null;
-}
-
-// This PC's addresses on the local network (home Wi-Fi or cable): private IPv4 only, without virtual adapters (WSL,
-// Hyper-V, VirtualBox, Docker…) or VPNs. The Wi-Fi or Ethernet one first: it is the one the QR shows.
-export function lanAddresses() {
-  const out = [];
-  for (const [name, list] of Object.entries(os.networkInterfaces())) {
-    // also Linux's container and VM bridges (br-…, veth…, virbr…, lxc…): a server with Docker has several.
-    if (/vethernet|virtualbox|vmware|hyper-v|wsl|docker|loopback|tailscale|zerotier|bluetooth|vpn|tap|tun|^br-|^veth|^virbr|^lxc|^lxd|^cni|^flannel|^podman/i.test(name)) continue;
-    for (const a of list ?? []) if (a.family === 'IPv4' && !a.internal && isPrivate(a.address)) out.push({ name, address: a.address });
-  }
-  const rank = (n) => (/wi-?fi|wlan|wireless|inal[aá]mbrica/i.test(n) ? 0 : /ethernet|^eth|^en/i.test(n) ? 1 : 2);
-  return out.sort((x, y) => rank(x.name) - rank(y.name)).map((a) => a.address);
-}
-
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
-const HEADERS = {
-  'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer', 'Cross-Origin-Opener-Policy': 'same-origin',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; manifest-src 'self'; worker-src 'self'",
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
-};
-
-// The installed app's service worker: shows the notifications the PC sends and opens the app when one is tapped.
-// one notification per chat (tag): new lines join it (the last five, and how many in the title);
-// the sender's picture (icon); «Responder» opens the chat; «Aprobar» / «Rechazar» answer the card right there with a
-// one-time token of this device (POST /api/note-action); a card whose text is hidden opens the chat. Tapping opens the
-// exact chat (an open window is told: postMessage { orbOpen }; else /#abrir=…).
-export const SERVICE_WORKER = `self.addEventListener('install',()=>self.skipWaiting());
-self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
-self.addEventListener('fetch',()=>{});
-self.addEventListener('push',e=>{let d={};try{d=e.data?e.data.json():{}}catch{}
-e.waitUntil((async()=>{const tag=d.tag||'orb';let lines=[],count=0;
-try{for(const n of await self.registration.getNotifications({tag})){const x=n.data||{};lines=x.lines||[];count=x.count||0;n.close()}}catch{}
-lines=lines.concat([d.body||'']).slice(-5);count+=1;
-const body=d.hidden?(d.body||''):lines.join('\\n');const title=(d.title||'Orb')+(count>1?' ('+count+')':'');
-return self.registration.showNotification(title,{body,tag,renotify:true,icon:d.icon||'/icon.png',badge:'/icon.png',
-actions:(d.actions||[]).slice(0,2).map(a=>({action:a.id,title:a.title})),
-data:{url:d.url||'/',route:d.route||null,lines,count,acts:d.acts||{},card:d.card||null,actions:d.actions||[]}})})())});
-const openApp=(route,approve)=>{const o={route:route||null,approve:approve||null};
-return self.clients.matchAll({type:'window',includeUncontrolled:true}).then(l=>{for(const c of l){if('focus' in c){c.postMessage({orbOpen:o});return c.focus()}}
-return self.clients.openWindow(route?'/#abrir='+encodeURIComponent(JSON.stringify(o)):'/')})};
-self.addEventListener('notificationclick',e=>{e.notification.close();const d=e.notification.data||{};const a=e.action||'';
-const def=(d.actions||[]).find(x=>x.id===a);
-if((a==='allow'||a==='deny')&&d.acts&&d.acts[a]&&!(def&&def.open)){
-e.waitUntil(fetch('/api/note-action',{method:'POST',credentials:'omit',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:d.acts[a]})})
-.then(r=>r.ok?r.json():null).then(x=>{if(!x||!x.ok)return openApp(d.route)}).catch(()=>openApp(d.route)));return}
-e.waitUntil(openApp(d.route,a==='allow'&&def&&def.open?d.card:null))});`;
 
 export function createRemote({ board, api, log, emit = () => {}, version = null }) {
   let servers = []; // http servers (one per address)
@@ -895,64 +689,4 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     }
   };
   return remote;
-}
-
-// while the data of Orb 3.7 could not be updated (engine.mjs › blocked), the phone access cannot
-// start (its devices, keys and conversations are in those data), and a linked phone only saw «sin conexión». Instead, the
-// same addresses and port answer with one fixed state and nothing else: every /api/ request gets 503 { attention:
-// 'migration', error } (the app's origin with its CORS, so it can read it), any page a short notice. No data, no device
-// check, no keys: what it says is only that this Orb needs attention on the PC. The Tailscale https name is served too
-// when the tailnet has it (and turned off again on stop). → { stop(), routes } or null (phone access off, nothing bound).
-export async function startAttention({ log = () => {}, code = 'migration' } = {}) {
-  const m = ctx.config?.mobile ?? {};
-  if (!m.enabled) return null;
-  const port = m.port ?? 3131;
-  const { default: http } = await import('node:http');
-  const servers = []; const hosts = new Set(); let served = null;
-  const message = () => tr('msg.remote.attention');
-  const page = () => `<!doctype html><html lang="${ctx.config?.language === 'en' ? 'en' : 'es'}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Orb</title><body style="font:16px system-ui,sans-serif;margin:0;display:grid;place-items:center;min-height:100vh;padding:24px;box-sizing:border-box;text-align:center"><p style="max-width:28em">${message().replace(/[<>&"]/g, (c) => `&#${c.charCodeAt(0)};`)}</p></body></html>`;
-  const handle = (req, res) => {
-    req.resume();
-    const reply = (status, body, type, extra = {}) => { res.writeHead(status, { ...HEADERS, 'Content-Type': type, 'Cache-Control': 'no-store', 'Retry-After': '30', ...extra }); res.end(body); };
-    if (!privateSource(req.socket?.remoteAddress) || req.headers['tailscale-funnel-request']) return reply(403, JSON.stringify({ error: 'red no permitida' }), 'application/json; charset=utf-8');
-    if (!hosts.has(String(req.headers.host ?? '').toLowerCase())) return reply(421, JSON.stringify({ error: 'host no permitido' }), 'application/json; charset=utf-8');
-    const p = new URL(req.url, 'http://x').pathname;
-    const app = p.startsWith('/api/') ? appOrigin(req) : null;
-    const cors = app ? { 'Access-Control-Allow-Origin': app, ...APP_CORS } : {};
-    if (req.method === 'OPTIONS') return reply(app ? 204 : 403, '', 'text/plain', cors);
-    if (p.startsWith('/api/')) return reply(503, JSON.stringify({ attention: code, error: message() }), 'application/json; charset=utf-8', cors);
-    return reply(503, page(), TYPES['.html']);
-  };
-  const bind = (address) => new Promise((resolve) => {
-    const srv = http.createServer(handle);
-    srv.headersTimeout = 15_000; srv.requestTimeout = 30_000;
-    srv.once('error', (error) => { log(`móvil (atención): ${address}:${port}: ${error.message}`); resolve(false); });
-    srv.listen(port, address, () => { ownPorts.add(srv.address().port); servers.push(srv); resolve(true); });
-  });
-  const routes = [];
-  if (process.env.ORB_REMOTE_BIND === '127.0.0.1') {
-    if (await bind('127.0.0.1')) { hosts.add(`127.0.0.1:${port}`); routes.push(`http://127.0.0.1:${port}/`); }
-  } else {
-    if (m.wifi !== false) {
-      for (const address of lanAddresses()) if (await bind(address)) { hosts.add(`${address}:${port}`); routes.push(`http://${address}:${port}/`); }
-      const local = localName(); if (local && servers.length) hosts.add(`${local}:${port}`);
-    }
-    if (m.tailscale !== false) {
-      const ts = await tailscaleAddress().catch(() => null);
-      if (ts?.https && ts.dns && await bind('127.0.0.1')) {
-        const r = await quickRun(tailscaleExe(), ['serve', '--bg', `--https=${port}`, `http://127.0.0.1:${port}`], { timeoutMs: 30_000 }).catch(() => ({ ok: false }));
-        if (r.ok) { served = port; hosts.add(`${ts.dns}:${port}`); routes.push(`https://${ts.dns}:${port}/`); }
-      }
-      if (ts && served === null && await bind(ts.address)) { hosts.add(`${ts.address}:${port}`); if (ts.dns) hosts.add(`${ts.dns}:${port}`); routes.push(`http://${ts.address}:${port}/`); }
-    }
-  }
-  if (!servers.length) return null;
-  for (const r of routes) log(`acceso móvil en modo atención (${code}) en ${r}`);
-  return {
-    routes,
-    async stop() {
-      await Promise.all(servers.splice(0).map((s) => new Promise((resolve) => { try { s.close(() => resolve()); s.closeAllConnections?.(); } catch { resolve(); } setTimeout(resolve, 2000).unref?.(); })));
-      if (served !== null) { const at = served; served = null; await quickRun(tailscaleExe(), ['serve', `--https=${at}`, 'off'], { timeoutMs: 15_000 }).catch(() => {}); }
-    }
-  };
 }
