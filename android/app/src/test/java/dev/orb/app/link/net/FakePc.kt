@@ -93,6 +93,10 @@ class FakePc(private val clock: Clock) : Interceptor {
     val openStreams = AtomicInteger(0)
     val maxOpenStreams = AtomicInteger(0)
     val streamsOpened = AtomicInteger(0)
+
+    /** Runs when an `/api/events` request reaches the fake PC, before the stream is opened. */
+    @Volatile
+    var onEventsRequest: (() -> Unit)? = null
     private var sink: BufferedSink? = null
 
     fun emit(e: String, p: JsonElement) = line("data: ${LinkCrypto.sealText(key, buildJsonObject { put("e", e); put("p", p) }, Aad.event(deviceId))}\n\n")
@@ -218,6 +222,7 @@ class FakePc(private val clock: Clock) : Interceptor {
             }
             return Response.Builder().request(req).protocol(Protocol.HTTP_1_1).code(503).message("x").body(broken).build()
         }
+        onEventsRequest?.invoke()
         eventsAsked = msg["d"].let { (it as? JsonPrimitive)?.content == "1" }
         val pipe = Pipe(1 shl 20)
         val out = pipe.sink.buffer()

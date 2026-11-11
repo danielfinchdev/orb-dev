@@ -120,4 +120,16 @@ class LinkEventsTest {
         c.resume()
         eventually(what = "reopened") { r.pc.streamsOpened.get() == 2 }
     }
+
+    @Test
+    fun `a pause that lands while the stream is being opened leaves nothing open`() = live { r, c, _ ->
+        // The background pause arrives exactly when the PC receives the events request, the narrowest window.
+        r.pc.onEventsRequest = { c.pause() }
+        c.start()
+        eventually(what = "stream asked") { r.pc.streamsOpened.get() == 1 }
+        eventually(what = "closed") { r.pc.openStreams.get() == 0 }
+        Thread.sleep(700)
+        assertEquals(1, r.pc.streamsOpened.get())
+        assertEquals(0, r.pc.openStreams.get())
+    }
 }

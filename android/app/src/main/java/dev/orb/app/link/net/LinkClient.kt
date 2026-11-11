@@ -11,6 +11,7 @@ import dev.orb.app.link.payload.updateNeeded
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
@@ -149,7 +150,19 @@ class LinkClient(
     private val streamCall = AtomicReference<Call?>(null)
 
     // A stream's response has no overall limit: only the headers must arrive in [headersMs], then the idle watchdog rules.
-    private suspend fun openStream(request: Request, headersMs: Long): Response = coroutineScope {
+    private suspend fun openStream(request: Request, headersMs: Long): Response {
+        // coroutineScope drops its result when the parent is cancelled as it completes; the response would then never be
+        // closed and the connection (the stream) would stay open in the background.
+        val opened = AtomicReference<Response?>(null)
+        try {
+            return openStreamScoped(request, headersMs, opened)
+        } catch (e: CancellationException) {
+            opened.get()?.close()
+            throw e
+        }
+    }
+
+    private suspend fun openStreamScoped(request: Request, headersMs: Long, opened: AtomicReference<Response?>): Response = coroutineScope {
         val client = http.newBuilder()
             .callTimeout(0, TimeUnit.MILLISECONDS)
             .readTimeout(timeouts.eventsIdle * 2, TimeUnit.MILLISECONDS) // backstop only; the watchdog is ours
@@ -161,7 +174,7 @@ class LinkClient(
         streamCall.set(call)
         val timedOut = AtomicBoolean(false)
         val guard = launch { delay(headersMs); timedOut.set(true); call.cancel() }
-        try { call.await { timedOut.get() } } finally { guard.cancel() }
+        try { call.await { timedOut.get() }.also { opened.set(it) } } finally { guard.cancel() }
     }
 
     private fun markReachable(base: String) {
@@ -453,8 +466,12 @@ class LinkClient(
 
     // One stream; the coroutine is registered so pause() and reconnectEvents() can cancel it. Never two at once.
     private suspend fun runStream(): End = coroutineScope {
-        val job = launch { streamBody() }
+        // The job is registered before it can run, then `paused` is re-read: pause() sets the flag and then cancels the
+        // registered job, so either it sees this job or we see the flag. Otherwise a pause landing between the
+        // supervisor's check and the registration would leave a stream open in the background.
+        val job = launch(start = CoroutineStart.LAZY) { streamBody() }
         streamJob.set(job)
+        if (paused.value) job.cancel() else job.start()
         job.join()
         streamJob.compareAndSet(job, null)
         lastEnd
