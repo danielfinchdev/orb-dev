@@ -15,14 +15,17 @@ sealed class SseLine {
     data class Data(val text: String) : SseLine()
 }
 
-class SseReader(private val source: BufferedSource) {
+/** [maxBytes] caps one line and one event: the stream is authenticated only after it is opened, so it is bounded anyway. */
+class SseReader(private val source: BufferedSource, private val maxBytes: Long = 8L * 1024 * 1024) {
     private val data = StringBuilder()
 
     /** The next thing on the wire, or null at the end of the stream. Blocks. */
     @Throws(IOException::class)
     fun next(): SseLine? {
         while (true) {
-            val line = source.readUtf8Line() ?: return null
+            if (source.exhausted()) return null
+            // Throws EOFException when the line is longer than the cap (or the stream ends mid-line).
+            val line = source.readUtf8LineStrict(maxBytes)
             when {
                 line.isEmpty() -> {
                     if (data.isNotEmpty()) {
@@ -37,6 +40,7 @@ class SseReader(private val source: BufferedSource) {
                 line.startsWith("data:") -> {
                     // One optional space after the colon, like the phone client's `l.slice(6)` on «data: ».
                     data.append(if (line.startsWith("data: ")) line.substring(6) else line.substring(5))
+                    if (data.length > maxBytes) throw IOException("event too large")
                 }
                 // event:, id:, retry: are not used by the PC.
             }

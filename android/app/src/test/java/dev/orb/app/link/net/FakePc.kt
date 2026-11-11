@@ -78,7 +78,7 @@ class FakePc(private val clock: Clock) : Interceptor {
     /** When (by the clock) each request arrived, including the ones that failed before reaching the PC. */
     val tries = CopyOnWriteArrayList<Long>()
 
-    enum class Reply { Good, WrongNonce, WrongAad, Unsealed, Unlinked401, Attention503, Tampered }
+    enum class Reply { Huge, Good, WrongNonce, WrongAad, Unsealed, Unlinked401, Attention503, Tampered }
 
     @Volatile var reply = Reply.Good
     @Volatile var meResult: JsonObject = buildJsonObject { put("device", "Pixel"); put("name", "Orb de Dani"); put("v", 4); put("min", 2); put("version", "3.8.4") }
@@ -120,6 +120,8 @@ class FakePc(private val clock: Clock) : Interceptor {
 
     private fun sealedReply(req: okhttp3.Request, nonce: String, value: JsonObject): Response {
         return when (reply) {
+            Reply.Huge -> Response.Builder().request(req).protocol(Protocol.HTTP_1_1).code(500).message("x")
+                .body("x".repeat(2_000_000).toResponseBody("application/json".toMediaType())).build()
             Reply.Unsealed -> json(req, 200, JsonObject(value + ("r" to JsonPrimitive(nonce))))
             Reply.Unlinked401 -> json(req, 401, buildJsonObject { put("error", "no vinculado") })
             Reply.Attention503 -> json(req, 503, buildJsonObject { put("attention", "migration"); put("error", "atencion") })
@@ -201,6 +203,21 @@ class FakePc(private val clock: Clock) : Interceptor {
             "clock" -> return clockOff(req)
             "replay" -> return json(req, 401, buildJsonObject { put("error", "no vinculado") })
         }
+        eventsRequests.incrementAndGet()
+        if (eventsMode == EventsMode.ClockOff409) return clockOff(req)
+        if (eventsMode == EventsMode.BrokenBody503) {
+            // The connection drops while the client reads the answer's body.
+            val broken = object : ResponseBody() {
+                override fun contentType() = "application/json".toMediaType()
+                override fun contentLength() = -1L
+                override fun source(): BufferedSource = object : okio.Source {
+                    override fun read(sink: Buffer, byteCount: Long): Long = throw java.io.IOException("reset")
+                    override fun timeout() = okio.Timeout.NONE
+                    override fun close() {}
+                }.buffer()
+            }
+            return Response.Builder().request(req).protocol(Protocol.HTTP_1_1).code(503).message("x").body(broken).build()
+        }
         eventsAsked = msg["d"].let { (it as? JsonPrimitive)?.content == "1" }
         val pipe = Pipe(1 shl 20)
         val out = pipe.sink.buffer()
@@ -223,6 +240,10 @@ class FakePc(private val clock: Clock) : Interceptor {
     }
 
     @Volatile var eventsAsked = false
+
+    enum class EventsMode { Normal, ClockOff409, BrokenBody503 }
+    @Volatile var eventsMode = EventsMode.Normal
+    val eventsRequests = AtomicInteger(0)
 
     // ------------------------------------------------------------------ pairing
 

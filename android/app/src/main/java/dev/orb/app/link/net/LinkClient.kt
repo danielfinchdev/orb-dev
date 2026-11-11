@@ -61,6 +61,11 @@ class LinkClient(
     private val onSessionChanged: (LinkSession) -> Unit = {},
     // The clock offset learnt while linking (the PC's time in its 409), so the first request is already stamped right.
     initialSkewMs: Long = 0,
+    // A sealed answer may be big (a diff, a log); anything else the PC says in plain JSON is small.
+    private val maxAnswerBytes: Long = 32L * 1024 * 1024,
+    private val maxEventBytes: Long = 8L * 1024 * 1024,
+    // Type names of unexpected problems only; never a message, a key or a body.
+    private val onProblem: (String) -> Unit = {},
 ) {
     @Volatile
     private var session: LinkSession = session
@@ -149,6 +154,7 @@ class LinkClient(
             .callTimeout(0, TimeUnit.MILLISECONDS)
             .readTimeout(timeouts.eventsIdle * 2, TimeUnit.MILLISECONDS) // backstop only; the watchdog is ours
             .connectTimeout(minOf(headersMs, timeouts.connect), TimeUnit.MILLISECONDS)
+            .retryOnConnectionFailure(false)
             .followRedirects(false).followSslRedirects(false)
             .build()
         val call = client.newCall(request)
@@ -192,8 +198,9 @@ class LinkClient(
     }
 
     private suspend fun bodyOf(res: Response): String = try {
-        res.text(io)
+        res.text(io, if (res.isSuccessful) maxAnswerBytes else MAX_PLAIN_BODY)
     } catch (e: NetFailure) {
+        if (e.tooLarge) throw LinkException(LinkError.BadAnswer)
         markOffline()
         throw LinkException(if (e.timeout) LinkError.Timeout else LinkError.Offline)
     }
@@ -201,8 +208,10 @@ class LinkClient(
     // The 409 answer's «now», if it has one: the phone's clock is off.
     private fun fixClock(data: JsonObject): Boolean {
         val now = data["now"].num() ?: return false
-        skew.set(now.toLong() - clock.nowMs())
-        return true
+        val next = now.toLong() - clock.nowMs()
+        val changed = next != skew.get()
+        skew.set(next)
+        return changed
     }
 
     private fun refused(status: Int, data: JsonObject) = LinkException(LinkError.Refused(status, data["error"].str() ?: "http $status", data["reason"].str()))
@@ -236,7 +245,10 @@ class LinkClient(
             val opened = reached.response.use { res ->
                 if (res.code == 409 && !retried) {
                     val data = parseObject(bodyOf(res))
-                    if (!fixClock(data)) throw refused(409, data)
+                    // Any numeric «now» is retried once, even when another request fixed the clock first.
+                    val hasNow = data["now"].num() != null
+                    fixClock(data)
+                    if (!hasNow) throw refused(409, data)
                     retried = true
                     null
                 } else {
@@ -356,6 +368,10 @@ class LinkClient(
     @Volatile
     private var resetBackoff = false
 
+    // The clock was just fixed by a 409 on the stream: one quick retry per connection attempt, never a loop.
+    @Volatile
+    private var fastRetry = false
+
     @Volatile
     private var lastEnd = End.Failed
 
@@ -397,19 +413,29 @@ class LinkClient(
 
     private suspend fun supervise() {
         var attempt = 0
+        var fastUsed = false
         while (true) {
             paused.first { !it }
-            if (resetBackoff) { resetBackoff = false; attempt = 0; wake.tryReceive() }
+            if (resetBackoff) { resetBackoff = false; attempt = 0; fastUsed = false; wake.tryReceive() }
             if (_connection.value !is ConnectionState.Online) _connection.value = ConnectionState.Connecting
-            val me = me()
             var end = End.Failed
-            if (me.isSuccess) {
-                if (!paused.value) {
-                    end = runStream()
-                    if (end == End.Ended || end == End.Idle) attempt = 0
+            fastRetry = false
+            try {
+                val me = me()
+                if (me.isSuccess) {
+                    if (!paused.value) {
+                        end = runStream()
+                        if (end == End.Ended || end == End.Idle) { attempt = 0; fastUsed = false }
+                    }
+                } else if ((me.exceptionOrNull() as? LinkException)?.error.let { it == LinkError.NotLinked || it is LinkError.Update }) {
+                    end = End.Terminal
                 }
-            } else if ((me.exceptionOrNull() as? LinkException)?.error.let { it == LinkError.NotLinked || it is LinkError.Update }) {
-                end = End.Terminal
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Whatever it was, the link keeps trying: it must never die silently in a launched coroutine.
+                onProblem(e.javaClass.simpleName)
+                end = End.Failed
             }
             if (end == End.Terminal) {
                 // Unlinked or too old: nothing to retry until the person acts (a new link, an update) and calls resume().
@@ -418,7 +444,7 @@ class LinkClient(
             }
             if (paused.value) continue
             if (resetBackoff) continue
-            val wait = backoff(attempt++)
+            val wait = if (fastRetry && !fastUsed) { fastUsed = true; FAST_RETRY_MS } else backoff(attempt++).coerceAtLeast(MIN_PAUSE_MS)
             val st = _connection.value
             if (st is ConnectionState.Offline) _connection.value = ConnectionState.Offline(clock.nowMs() + wait, lastSeen)
             withTimeoutOrNull(wait) { wake.receive() }
@@ -453,8 +479,8 @@ class LinkClient(
                     return
                 }
                 res.code == 409 -> {
-                    fixClock(parseObject(bodyOf(res)))
-                    resetBackoff = true
+                    // Speed up only when the clock really was off, like web-bridge.js; a middlebox saying 409 gets the normal pause.
+                    if (fixClock(parseObject(bodyOf(res)))) fastRetry = true
                     return
                 }
                 res.code == 503 -> {
@@ -464,7 +490,10 @@ class LinkClient(
                 !res.isSuccessful -> return
             }
             val body = res.body ?: return
-            lastEnd = readEvents(SseReader(body.source()), res)
+            lastEnd = readEvents(SseReader(body.source(), maxEventBytes), res)
+        } catch (e: LinkException) {
+            // The connection dropped (or the body was absurd) while reading an answer: a failed attempt, not a crash.
+            lastEnd = End.Failed
         } finally {
             streamCall.getAndSet(null)?.cancel()
             res.close()
@@ -494,7 +523,7 @@ class LinkClient(
                     _connection.value = ConnectionState.Offline(null, lastSeen)
                     return@coroutineScope End.Idle
                 }
-                val line = got.getOrNull() ?: return@coroutineScope End.Ended
+                val line = got.getOrNull() ?: return@coroutineScope if (got.exceptionOrNull() != null) End.Failed else End.Ended
                 if (line is SseLine.Data) deliver(line.text)
             }
             @Suppress("UNREACHABLE_CODE")
@@ -518,5 +547,10 @@ class LinkClient(
             return
         }
         _events.tryEmit(LinkEvent(name, payload))
+    }
+
+    private companion object {
+        const val FAST_RETRY_MS = 1_000L
+        const val MIN_PAUSE_MS = 100L
     }
 }

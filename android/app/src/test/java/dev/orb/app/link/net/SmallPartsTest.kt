@@ -136,4 +136,17 @@ class SmallPartsTest {
         assertNotNull(back.name)
         assertTrue("the private key never reaches a log", !s.toString().contains(B64.enc(priv)))
     }
+
+    @Test
+    fun `the sse reader refuses a line or an event over the cap`() {
+        fun fails(text: String): Boolean = try {
+            val r = SseReader(Buffer().writeUtf8(text), maxBytes = 16)
+            while (r.next() != null) { /* drain */ }
+            false
+        } catch (e: java.io.IOException) { true }
+        assertTrue(fails("data: " + "x".repeat(100) + "\n\n"))
+        assertTrue("many small lines add up", fails("data: 0123456789\ndata: 0123456789\n\n"))
+        assertTrue("no newline within the cap", fails("x".repeat(100)))
+        assertTrue(!fails("data: ok\n\n"))
+    }
 }

@@ -15,6 +15,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okio.Buffer
 import java.io.IOException
 import java.io.InterruptedIOException
 import kotlin.coroutines.resume
@@ -24,7 +25,10 @@ internal val JSON_TYPE = "application/json".toMediaType()
 internal val BYTES_TYPE = "application/octet-stream".toMediaType()
 
 /** The request failed before any answer: [timeout] tells «no answer in time» (the PC may have got it) from «not reached». */
-internal class NetFailure(val timeout: Boolean, cause: Throwable?) : IOException("net failure", cause)
+internal class NetFailure(val timeout: Boolean, cause: Throwable?, val tooLarge: Boolean = false) : IOException("net failure", cause)
+
+/** Plain JSON answers (errors, 409, pairing) are tiny; a bigger one is not the PC. */
+internal const val MAX_PLAIN_BODY = 1_000_000L
 
 internal fun String.toJsonBody() = toRequestBody(JSON_TYPE)
 
@@ -32,6 +36,8 @@ internal fun String.toJsonBody() = toRequestBody(JSON_TYPE)
 internal fun OkHttpClient.forRequest(ms: Long, connectMs: Long): OkHttpClient = newBuilder()
     .callTimeout(ms, java.util.concurrent.TimeUnit.MILLISECONDS)
     .connectTimeout(minOf(ms, connectMs), java.util.concurrent.TimeUnit.MILLISECONDS)
+    // OkHttp would silently re-send a POST after a dropped connection with the same nonce: the PC sees a replay (401).
+    .retryOnConnectionFailure(false)
     .followRedirects(false).followSslRedirects(false)
     .build()
 
@@ -52,11 +58,20 @@ internal suspend fun Call.await(timedOut: () -> Boolean = { false }): Response =
     cont.invokeOnCancellation { cancel() }
 }
 
-/** The whole body as text, inside the request's time limit. A broken read is a failure like a failed request. */
-internal suspend fun Response.text(io: CoroutineDispatcher): String = withContext(io) {
+/**
+ * The whole body as text, inside the request's time limit, read in chunks and refused past [max] bytes (data from an
+ * unauthenticated peer must not be able to exhaust memory). A broken read is a failure like a failed request.
+ */
+internal suspend fun Response.text(io: CoroutineDispatcher, max: Long = MAX_PLAIN_BODY): String = withContext(io) {
+    val b = body ?: return@withContext ""
+    if (b.contentLength() > max) throw NetFailure(false, null, tooLarge = true)
     try {
-        body?.string().orEmpty()
+        val src = b.source()
+        val buf = Buffer()
+        while (src.read(buf, 8192) != -1L) if (buf.size > max) throw NetFailure(false, null, tooLarge = true)
+        buf.readString(b.contentType()?.charset(Charsets.UTF_8) ?: Charsets.UTF_8)
     } catch (e: IOException) {
+        if (e is NetFailure) throw e
         throw NetFailure(isTimeout(e), e)
     }
 }

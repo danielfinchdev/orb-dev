@@ -305,4 +305,57 @@ class LinkClientTest {
         assertEquals(LinkError.Refused(401, "caducado", null), c.noteAction("old").error())
         assertTrue(c.connection.value !is ConnectionState.Unlinked)
     }
+
+    @Test
+    fun `an answer far bigger than a plain error body is a bad answer, not memory`() = runTest {
+        val r = rig()
+        r.pc.reply = FakePc.Reply.Huge
+        assertEquals(LinkError.BadAnswer, client(r).call("app.state").error())
+    }
+
+    @Test
+    fun `a body that breaks while reading a 503 on the stream does not stop the link`() = runTest {
+        val r = rig()
+        r.pc.eventsMode = FakePc.EventsMode.BrokenBody503
+        val c = client(r)
+        c.start()
+        runCurrent()
+        assertEquals(1, r.pc.eventsRequests.get())
+        advanceTimeBy(3_001)
+        assertEquals("it kept trying", 2, r.pc.eventsRequests.get())
+        c.stop()
+    }
+
+    @Test
+    fun `repeated 409 on the stream never loops faster than the pauses`() = runTest {
+        val r = rig()
+        r.pc.pcOffset = 3_600_000 // me() fixes the clock; the stream then keeps saying 409
+        r.pc.eventsMode = FakePc.EventsMode.ClockOff409
+        val c = client(r)
+        c.start()
+        runCurrent()
+        advanceTimeBy(30_000)
+        // 3 s, then 6 s, 12 s... (the clock did not change, so no quick retry): 4 attempts at 0, 3, 9, 21 s
+        assertEquals(4, r.pc.eventsRequests.get())
+        c.stop()
+    }
+
+    @Test
+    fun `a nonce is not re-sent by the http stack after a dropped connection`() = kotlinx.coroutines.runBlocking {
+        val server = okhttp3.mockwebserver.MockWebServer()
+        server.enqueue(okhttp3.mockwebserver.MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.DISCONNECT_AFTER_REQUEST))
+        server.enqueue(okhttp3.mockwebserver.MockResponse().setBody("{}"))
+        server.start()
+        try {
+            val base = "http://127.0.0.1:${server.port}"
+            val r = Rig(listOf(base))
+            val c = LinkClient(r.session, okhttp3.OkHttpClient(), r.clock, kotlinx.coroutines.CoroutineScope(Dispatchers.Default))
+            val err = c.call("chat.send").error()
+            assertTrue(err is LinkError.Offline || err is LinkError.Timeout)
+            assertEquals("one request, never re-sent with the same nonce", 1, server.requestCount)
+            assertTrue(c.connection.value !is ConnectionState.Unlinked)
+        } finally {
+            server.shutdown()
+        }
+    }
 }
