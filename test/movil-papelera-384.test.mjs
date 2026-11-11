@@ -16,7 +16,7 @@ import { guardCall } from '../src/engine/transport/remote-calls.mjs';
 import { TRASH_DAYS } from '../src/domain/conversations/trash.mjs';
 import { openDb } from '../src/domain/data/db.mjs';
 
-let t; let board; let api; let sessions;
+let t; let board; let api; let sessions; let orchestrator; let events = [];
 const call = (method, params = {}, who = DESKTOP) => api.call(method, params, who);
 const phone = principalOf({ device: { id: 'p1', kind: 'phone' } });
 const DAY = 24 * 3_600_000;
@@ -28,9 +28,9 @@ const addItem = (id, body) => board.run("INSERT INTO session_items (session_id, 
 before(() => {
   t = tempHome();
   board = new Board();
-  const emit = () => {};
+  const emit = (name, payload) => events.push([name, payload]);
   sessions = new Sessions(board, { emit });
-  const orchestrator = new Orchestrator(board, { emit });
+  orchestrator = new Orchestrator(board, { emit });
   const scheduler = new Scheduler(board, sessions, { orchestrator, emit });
   fs.mkdirSync(path.join(t.home, 'web', 'tienda'), { recursive: true });
   board.addProject({ name: 'tienda', path: path.join(t.home, 'web', 'tienda') }, 'usuario', { fromUser: true });
@@ -188,4 +188,84 @@ test('migration adds trashed_at to an old database without losing rows', () => {
     assert.equal(db.prepare("SELECT trashed_at FROM conversations WHERE title = 'vieja'").get().trashed_at, null);
     db.close();
   } finally { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
+});
+
+// A lane whose coordinator is a counter: nothing real is launched.
+const fakeLane = (c) => { const lane = orchestrator.lane(c); const turns = []; lane.run = async (text) => { turns.push(text); return { ok: true }; }; return turns; };
+const settle = () => new Promise((r) => setTimeout(r, 30));
+
+test('a message without a chat never lands in the newest chat when that one is in the trash', async () => {
+  newConversation('Visible', 'hola');
+  const hidden = newConversation('Oculto', 'reciente');
+  await call('conversations.trash', { id: hidden.id }, phone);
+  const picked = orchestrator.conversationFor(null);
+  assert.notEqual(picked, hidden.id);
+  assert.equal(board.conversation(picked).trashed_at, null);
+  assert.notEqual(orchestrator.conversationFor('tienda'), hidden.id);
+});
+
+test('a task report for a chat in the trash waits; restoring answers it; removing empties what was held', async () => {
+  const c = newConversation('Con informe', 'haz algo');
+  const turns = fakeLane(c.id);
+  await call('conversations.trash', { id: c.id }, phone);
+  orchestrator.internal('informe de la tarea', 'Terminó', null, { conversation: c.id });
+  await settle();
+  assert.equal(turns.length, 0);
+  assert.equal(orchestrator.lane(c.id).queue.length, 1);
+  assert.ok((board.settingJson('orchestrator_pending') ?? []).some((q) => q.conversation === c.id));
+  await call('conversations.restore', { id: c.id }, phone);
+  await settle();
+  assert.equal(turns.length, 1);
+
+  const d = newConversation('Se purga', 'x');
+  fakeLane(d.id);
+  await call('conversations.trash', { id: d.id }, phone);
+  orchestrator.internal('otro informe', null, null, { conversation: d.id });
+  board.setting(`report_queue:c${d.id}`, '[1]');
+  board.run('UPDATE conversations SET trashed_at = ? WHERE id = ?', new Date(Date.now() - (TRASH_DAYS + 1) * DAY).toISOString(), d.id);
+  assert.ok(api.purgeTrash() >= 1);
+  assert.equal((board.settingJson('orchestrator_pending') ?? []).some((q) => q.conversation === d.id), false);
+  assert.equal(orchestrator.lanes.has(d.id), false);
+  assert.ok(!board.setting(`report_queue:c${d.id}`));
+});
+
+test('the user cannot write into a chat in the trash, but can read it', async () => {
+  const c = newConversation('Papelera escritura', 'hola');
+  const q = board.addChat('orb', 'pregunta', { kind: 'question', status: 'pending', question: '¿?', options: [{ label: 'a' }] }, c.id);
+  await call('conversations.trash', { id: c.id }, phone);
+  const qid = typeof q === 'object' ? q.id : q;
+  const inTrash = /papelera/i;
+  await assert.rejects(call('chat.answer', { id: qid, choices: ['a'] }), inTrash);
+  await assert.rejects(call('conversations.update', { id: c.id, title: 'x' }), inTrash);
+  await assert.rejects(call('chat.compact', { conversation: c.id }), inTrash);
+  await assert.rejects(call('chat.settings', { conversation: c.id, reasoning: 'low' }), inTrash);
+  assert.ok(Array.isArray(await call('chat.list', { conversation: c.id })));
+  const s = sessions.create({ kind: 'chat', agent: 'claude', title: 'Directo', permission: 'leer', cwd: t.home });
+  await call('sessions.trash', { id: s.id }, phone);
+  for (const m of ['sessions.queue', 'sessions.editQueued', 'sessions.approve', 'sessions.fork', 'sessions.update', 'sessions.settle']) {
+    await assert.rejects(call(m, { id: s.id, queueId: 1, request: 'r', decision: 'allow', settled: true }), inTrash, m);
+  }
+  assert.ok(Array.isArray(await call('sessions.items', { id: s.id })));
+  await call('sessions.restore', { id: s.id }, phone);
+  await call('conversations.restore', { id: c.id }, phone);
+  assert.equal((await call('conversations.update', { id: c.id, title: 'ok' })).title, 'ok');
+});
+
+test('trash:added is emitted for a phone and not for the PC; trash.list returns both kinds and is remote', async () => {
+  assert.equal(METHODS['trash.list'], 'remote');
+  assert.ok(REMOTE_METHODS.has('trash.list'));
+  const c = newConversation('Aviso', 'a');
+  const s = sessions.create({ kind: 'chat', agent: 'claude', title: 'Aviso directo', permission: 'leer', cwd: t.home });
+  const d = newConversation('Desde el PC', 'b');
+  events.length = 0;
+  await call('conversations.trash', { id: d.id });
+  assert.equal(events.filter(([n]) => n === 'trash:added').length, 0);
+  await call('conversations.trash', { id: c.id }, phone);
+  await call('sessions.trash', { id: s.id }, phone);
+  const added = events.filter(([n]) => n === 'trash:added').map(([, p]) => p);
+  assert.deepEqual(added.map((a) => [a.kind, a.id, a.title]), [['conversation', c.id, 'Aviso'], ['session', s.id, 'Aviso directo']]);
+  assert.ok(Date.parse(added[0].undo) > Date.now());
+  const list = await call('trash.list', {}, phone);
+  assert.ok(list.some((x) => x.kind === 'conversation' && x.id === c.id));
+  assert.ok(list.some((x) => x.kind === 'session' && x.id === s.id && x.undo && x.trashedAt));
 });

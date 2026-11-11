@@ -225,6 +225,9 @@ class Lane {
 
   next() {
     if (this.busy || this.inflight || !this.queue.length) return;
+    // A trashed chat never starts a turn: what reaches it (a task report, a notice) waits here and in
+    // orchestrator_pending, and conversations.restore calls kick() to answer it. Purging drops both.
+    if (this.conv()?.trashed_at) return;
     // several conversations at once, up to a limit: the others wait their turn (the window says so).
     if (this.orch.busyCount() >= this.orch.maxBusy) { this.push(); return; }
     // the message leaves the queue before the window hears «busy»: otherwise «1 en cola» would flash for the very message
@@ -499,6 +502,7 @@ export class Orchestrator {
     if (text.length > 20000) throw new Error(tr('msg.orch.tooLong'));
     let c = conversation ? this.board.conversation(conversation) : null;
     if (conversation && !c) throw new Error(tr('msg.board.noConversation'));
+    if (c?.trashed_at) throw new Error(tr('msg.trash.inTrash'));
     const isNew = !c;
     if (!c) c = this.startConversation({ text, project });
     this.board.addChat('usuario', text, meta, c.id);
@@ -540,8 +544,8 @@ export class Orchestrator {
   // For work that belongs to no conversation (or made by a schedule): the latest conversation of that project
   // (without a project, the latest one), or a new one for it.
   conversationFor(project) {
-    const found = project ? this.board.one('SELECT id FROM conversations WHERE project = ? COLLATE NOCASE AND bot_id IS NULL AND group_id IS NULL ORDER BY updated_at DESC, id DESC LIMIT 1', project)?.id
-      : this.board.one('SELECT id FROM conversations WHERE bot_id IS NULL AND group_id IS NULL ORDER BY updated_at DESC, id DESC LIMIT 1')?.id;
+    const found = project ? this.board.one('SELECT id FROM conversations WHERE project = ? COLLATE NOCASE AND bot_id IS NULL AND group_id IS NULL AND trashed_at IS NULL ORDER BY updated_at DESC, id DESC LIMIT 1', project)?.id
+      : this.board.one('SELECT id FROM conversations WHERE bot_id IS NULL AND group_id IS NULL AND trashed_at IS NULL ORDER BY updated_at DESC, id DESC LIMIT 1')?.id;
     if (found) return found;
     const o = brainOf();
     const c = this.board.createConversation({ title: project ? tr('msg.orch.workOf', { project }) : tr('msg.board.newConversation'), project: project && this.board.project(project) ? project : null,
@@ -566,7 +570,7 @@ export class Orchestrator {
     for (const q of list) {
       if (!q?.id || queued.has(q.id) || typeof q.text !== 'string') continue;
       // Saved without its conversation: the latest one.
-      const id = (q.conversation && this.board.conversation(q.conversation)?.id) || this.board.one('SELECT id FROM conversations WHERE bot_id IS NULL AND group_id IS NULL ORDER BY updated_at DESC LIMIT 1')?.id || this.conversationFor(null);
+      const id = (q.conversation && this.board.conversation(q.conversation)?.id) || this.board.one('SELECT id FROM conversations WHERE bot_id IS NULL AND group_id IS NULL AND trashed_at IS NULL ORDER BY updated_at DESC LIMIT 1')?.id || this.conversationFor(null);
       const item = { ...q, conversation: id, internal: true };
       this.lane(id).queue.push(item);
       if (!q.conversation) this.keep(item, true);

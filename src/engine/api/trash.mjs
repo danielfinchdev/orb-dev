@@ -29,6 +29,38 @@ export function trashTools({ board, sessions, orchestrator, scheduler, emit, log
   const assertNotTrashed = (id) => { if (board.conversation(id)?.trashed_at) fail(tr('msg.trash.inTrash')); };
   const assertSessionNotTrashed = (s) => { if (s?.trashed_at) fail(tr('msg.trash.inTrash')); };
 
+  // Who sent a chat to the trash from a linked device: the PC tells its user, who can undo it (the phone's «Undo»
+  // only lives on the phone's screen).
+  const announce = (principal, kind, id, title, undo) => {
+    if (!principal || principal.channel === 'desktop') return;
+    const device = board.one('SELECT name FROM devices WHERE id = ?', principal.device)?.name ?? '';
+    emit('trash:added', { kind, id, title, undo: undo ? undoUntil(undo) : null, device });
+  };
+
+  // Writes by the user into a chat in the trash are refused in one place (the API's call()), so a method cannot be
+  // forgotten; reading and restoring stay open. Params naming a chat line (answer, accept) are resolved to its chat.
+  const WRITES = {
+    'chat.answer': (p) => board.chatRow(Number(p.id))?.conversation_id,
+    'chat.accept': (p) => board.chatRow(Number(p.id))?.conversation_id,
+    'chat.compact': (p) => p.conversation,
+    'chat.settings': (p) => p.conversation,
+    'conversations.update': (p) => p.id,
+  };
+  const SESSION_WRITES = new Set(['sessions.queue', 'sessions.editQueued', 'sessions.approve', 'sessions.fork', 'sessions.update', 'sessions.settle']);
+  function guard(method, params) {
+    try {
+      if (Object.hasOwn(WRITES, method)) {
+        const id = WRITES[method](params);
+        if (id != null) assertNotTrashed(Number(id));
+      } else if (SESSION_WRITES.has(method)) {
+        assertSessionNotTrashed(sessions.get(String(params.id)));
+      }
+    } catch (error) {
+      if (error?.message === tr('msg.trash.inTrash')) throw error;
+      // anything else is the method's own validation to report
+    }
+  }
+
   const chatSession = (id) => {
     const s = sessions.must(str(id, 'conversación', 64));
     if (s.kind === 'task') throw new Error(tr('msg.sessions.taskSession'));
@@ -36,16 +68,19 @@ export function trashTools({ board, sessions, orchestrator, scheduler, emit, log
   };
 
   const methods = {
-    'conversations.trash': ({ id }) => {
+    'conversations.trash': ({ id }, principal) => {
       const c = conversationId(id);
       let at = board.conversation(c).trashed_at;
       if (!at) {
-        // the turn in progress stops; its tasks go on (only a final delete cancels them)
-        orchestrator.stop(c);
+        // Stamped before stopping: the stopped turn puts its notice back in the queue and the lane must not restart
+        // it. The tasks of the chat that are already running go on (only a final delete cancels them); their report
+        // lands in the lane's queue without waking the coordinator until the chat is restored.
         at = new Date().toISOString();
         board.run('UPDATE conversations SET trashed_at = ? WHERE id = ?', at, c);
+        orchestrator.stop(c);
         board.changed('conversations');
         told({ kind: 'conversation', id: c, conversation: c });
+        announce(principal, 'conversation', c, board.conversation(c).title, at);
       }
       return { undo: undoUntil(at) };
     },
@@ -55,12 +90,14 @@ export function trashTools({ board, sessions, orchestrator, scheduler, emit, log
       if (row.trashed_at) {
         if (expired(row.trashed_at)) fail(tr('msg.board.noConversation'));
         board.run('UPDATE conversations SET trashed_at = NULL WHERE id = ?', c);
+        // what arrived while it was in the trash is answered now, as if it had just come in
+        orchestrator.kick();
         board.changed('conversations');
         told({ kind: 'conversation', id: c, conversation: c });
       }
       return board.conversation(c);
     },
-    'sessions.trash': ({ id }) => {
+    'sessions.trash': ({ id }, principal) => {
       const s = chatSession(id);
       let at = s.trashed_at;
       if (!at) {
@@ -70,6 +107,7 @@ export function trashTools({ board, sessions, orchestrator, scheduler, emit, log
         board.changed('sessions');
         emit('session:removed', { id: s.id });
         told({ kind: 'session', id: s.id });
+        announce(principal, 'session', s.id, s.title, at);
       }
       return { undo: undoUntil(at) };
     },
@@ -83,6 +121,16 @@ export function trashTools({ board, sessions, orchestrator, scheduler, emit, log
         told({ kind: 'session', id: s.id });
       }
       return sessions.get(s.id);
+    },
+    // what can still be restored, oldest first to expire; for the phone's and the new window's trash view
+    'trash.list': () => {
+      const now = Date.now();
+      const chats = board.all('SELECT id, title, trashed_at FROM conversations WHERE trashed_at IS NOT NULL AND bot_id IS NULL AND group_id IS NULL')
+        .map((r) => ({ kind: 'conversation', id: r.id, title: r.title, trashedAt: r.trashed_at }));
+      const direct = board.all("SELECT id, title, trashed_at FROM sessions WHERE trashed_at IS NOT NULL AND kind <> 'task'")
+        .map((r) => ({ kind: 'session', id: r.id, title: r.title, trashedAt: r.trashed_at }));
+      return [...chats, ...direct].filter((x) => !expired(x.trashedAt, now)).sort((a, b) => Date.parse(b.trashedAt) - Date.parse(a.trashedAt))
+        .map((x) => ({ ...x, undo: undoUntil(x.trashedAt) }));
     },
   };
 
@@ -107,5 +155,5 @@ export function trashTools({ board, sessions, orchestrator, scheduler, emit, log
     try { purge(nowMs); } catch (error) { log(`papelera: ${error.message}`); }
   }
 
-  return { methods, removeConversation, assertNotTrashed, assertSessionNotTrashed, purge, purgeIfDue };
+  return { methods, removeConversation, assertNotTrashed, assertSessionNotTrashed, guard, purge, purgeIfDue };
 }

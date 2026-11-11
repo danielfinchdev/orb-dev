@@ -335,6 +335,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       authorize(principal, method);
       // and, for what the master password guards, a fresh unlock of this PC's window (src/engine/api/master.mjs).
       checkUnlock(method, params);
+      trash.guard(method, params);
       let out = await fn(params, principal);
       // the lists of every refresh, as changes since what the caller holds (src/engine/feeds.mjs).
       if (params.since !== undefined) out = feeds.reply(method, params, out, principal);

@@ -213,6 +213,7 @@
   "terminal.list": "pc",
   "terminal.open": "pc",
   "terminal.write": "pc",
+  "trash.list": "remote",
   "usage.get": "remote",
   "usage.history": "remote",
   "usage.now": "remote",
@@ -401,7 +402,8 @@
   "session:removed",
   "session:update",
   "terminal:data",
-  "terminal:exit"
+  "terminal:exit",
+  "trash:added"
  ],
  "schema": [
   "index chat_conversation: CREATE INDEX chat_conversation ON chat (conversation_id, id)",

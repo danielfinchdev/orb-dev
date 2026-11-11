@@ -1,7 +1,7 @@
 // The engine's events the window follows (src/shared catalog in test/fixtures/superficie.json): what refreshes the
 // state, what streams into a conversation, what passes by as a notice and what reloads the window.
 import { useEffect } from 'react';
-import { bridge, go, refreshSoon, chatStateSoon, loadOrbInboxSoon } from '@/lib/store.js';
+import { bridge, call, go, refreshSoon, chatStateSoon, loadOrbInboxSoon } from '@/lib/store.js';
 import { notify, markNoticesSeen } from '@/lib/notify.js';
 import { t as tNow } from '@/lib/i18n.js';
 
@@ -22,6 +22,12 @@ export function useEngineEvents(phase) {
       if (event === 'notice' && payload?.body) notify({ body: payload.body, tone: payload.tone, always: payload.always === true });
       // the phone read its notices; its ids are not the bell's, so the whole bell counts as seen.
       if (event === 'notes:read') markNoticesSeen();
+      // a linked phone sent a chat to the trash: this PC shows it with an «Undo» (the trash is kept for days)
+      if (event === 'trash:added' && payload?.id != null) {
+        const method = payload.kind === 'session' ? 'sessions.restore' : 'conversations.restore';
+        notify({ body: tNow('app.trashAdded', { device: payload.device || '?', title: payload.title || '' }), tone: 'warning', always: true,
+          action: { label: tNow('app.trashUndo'), onClick: () => { call(method, { id: payload.id }).then(() => refreshSoon()).catch((error) => notify({ body: String(error?.message ?? error), tone: 'error' })); } } }, { ms: 15000 });
+      }
       if (event === 'ui:navigate') go(payload);
       if (event === 'inbox:changed') loadOrbInboxSoon(120);
       // the chat list follows what its conversations do (a new line comes with inbox:changed).
