@@ -1,4 +1,5 @@
 // Small shadcn/ui primitives: card, badge, input, textarea, label, separator, kbd.
+import { Children, Fragment, cloneElement, isValidElement, useId } from 'react';
 import { cva } from 'class-variance-authority';
 import { cn } from '@/lib/utils.js';
 import { BubbleTip } from './overlay.jsx';
@@ -38,7 +39,13 @@ export function Label({ className, ...props }) { return <label data-slot="label"
 export function Field({ label, hint, children, className }) {
   // min-w-0: a field in a grid or flex row may shrink below its control's one-line text (which then cuts) instead of widening the row.
   // content-start: fields side by side keep their label and control at the same height even when only one has a hint.
-  return <div className={cn('grid min-w-0 content-start gap-1.5', className)}><Label>{label}</Label>{children}{hint ? <p className="text-muted-foreground text-xs leading-snug">{hint}</p> : null}</div>;
+  const uid = useId();
+  // Only a lone element child can be the control; its own id wins, and anything else (several nodes, a fragment, text) is left untouched.
+  const only = Children.count(children) === 1 && isValidElement(children) && children.type !== Fragment ? children : null;
+  const controlId = only ? (only.props.id ?? `${uid}-c`) : undefined;
+  const hintId = hint ? `${uid}-h` : undefined;
+  const control = only ? cloneElement(only, { id: controlId, ...(hintId ? { 'aria-describedby': [only.props['aria-describedby'], hintId].filter(Boolean).join(' ') } : null) }) : children;
+  return <div className={cn('grid min-w-0 content-start gap-1.5', className)}><Label htmlFor={controlId}>{label}</Label>{control}{hint ? <p id={hintId} className="text-muted-foreground text-xs leading-snug">{hint}</p> : null}</div>;
 }
 // A file path on one line: cut in the middle so its start and its end stay readable, the whole path in a bubble.
 export function PathText({ path, className, tail = 20 }) {
