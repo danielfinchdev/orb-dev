@@ -19,10 +19,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.orb.app.ui.AppearanceTexts
 import dev.orb.app.ui.connectionText
 
 @Composable
-fun HomeScreen(vm: HomeViewModel, onLinkTest: () -> Unit, onUnlinked: () -> Unit) {
+fun HomeScreen(vm: HomeViewModel, onLinkTest: () -> Unit, onAppearance: () -> Unit, onUnlinked: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
     var confirming by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(state.unlinked) { if (state.unlinked) onUnlinked() }
@@ -30,6 +31,7 @@ fun HomeScreen(vm: HomeViewModel, onLinkTest: () -> Unit, onUnlinked: () -> Unit
         Text(state.pcName ?: "Orb", style = MaterialTheme.typography.headlineSmall)
         Text(connectionText(state.connection))
         Button(onClick = onLinkTest) { Text("Prueba de conexión") }
+        OutlinedButton(onClick = onAppearance) { Text(AppearanceTexts.BUTTON) }
         OutlinedButton(onClick = { confirming = true }, enabled = !state.unlinking) { Text("Desvincular") }
     }
     if (confirming) {

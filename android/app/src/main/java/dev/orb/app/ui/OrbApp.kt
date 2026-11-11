@@ -3,9 +3,16 @@ package dev.orb.app.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.orb.app.ui.settings.AppearanceSheet
+import dev.orb.app.ui.theme.OrbBackground
+import dev.orb.app.ui.theme.OrbTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -31,11 +38,12 @@ import kotlinx.serialization.Serializable
 @Serializable data object Home
 @Serializable data object LinkTest
 
-// Plain Material theme on purpose: the final design is not approved yet.
 @Composable
 fun OrbApp(container: AppContainer) {
-    MaterialTheme {
-        Surface(modifier = Modifier.fillMaxSize()) {
+    val theme by container.themePrefs.settings.collectAsStateWithLifecycle()
+    OrbTheme(theme) {
+        // Transparent so Cristal's colour field shows through; Surface still provides the content colour.
+        OrbBackground { Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
             // The saved link is read off the main thread; until it is known there is nothing to show.
             val linked by produceState<Boolean?>(null, container) { value = container.startup.await() }
             if (linked == null) {
@@ -45,13 +53,15 @@ fun OrbApp(container: AppContainer) {
                 val start: Any = remember { if (container.runtime.value != null) Home else Welcome }
                 OrbNav(container, start)
             }
-        }
+        } }
     }
 }
 
 @Composable
 private fun OrbNav(container: AppContainer, start: Any) {
     val nav = rememberNavController()
+    var appearance by rememberSaveable { mutableStateOf(false) }
+    if (appearance) AppearanceSheet(container.themePrefs, onDismiss = { appearance = false })
     NavHost(navController = nav, startDestination = start, modifier = Modifier.systemBarsPadding()) {
         composable<Welcome> {
             val vm = viewModel<WelcomeViewModel>(factory = viewModelFactory {
@@ -64,6 +74,7 @@ private fun OrbNav(container: AppContainer, start: Any) {
             HomeScreen(
                 vm,
                 onLinkTest = { nav.navigate(LinkTest) },
+                onAppearance = { appearance = true },
                 onUnlinked = { nav.navigate(Welcome) { popUpTo(Home) { inclusive = true } } },
             )
         }

@@ -22,6 +22,8 @@ import dev.orb.app.link.payload.LinkPayload
 import dev.orb.app.ui.LinkTestBackend
 import dev.orb.app.ui.Linker
 import dev.orb.app.ui.RuntimeBackend
+import dev.orb.app.ui.theme.SharedPrefsStore
+import dev.orb.app.ui.theme.ThemePrefs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -49,6 +51,8 @@ class AppContainer(private val app: Application) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val http: OkHttpClient = OkHttpClient.Builder().build()
     val log = EventLog()
+    /** How the app looks; not a secret, kept in plain preferences. */
+    val themePrefs = ThemePrefs(SharedPrefsStore(app.getSharedPreferences("orb.theme", android.content.Context.MODE_PRIVATE)))
     val deviceName: String = Build.MODEL?.takeIf { it.isNotBlank() } ?: "Android"
 
     private val keys = KeystoreCacheKey(app)

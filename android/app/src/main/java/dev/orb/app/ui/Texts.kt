@@ -58,3 +58,20 @@ fun connectionText(s: ConnectionState): String = when (s) {
     ConnectionState.Unlinked -> "Desvinculado: el PC no reconoce este móvil"
     is ConnectionState.Attention -> "El PC necesita atención (${s.code})"
 }
+
+/** Texts of the appearance sheet. */
+object AppearanceTexts {
+    const val TITLE = "Apariencia"
+    const val BUTTON = "Apariencia"
+    const val FOLLOW_PC = "Igual que el PC"
+    const val ORBITA = "Órbita"
+    const val CRISTAL = "Órbita – Cristal"
+    const val DYNAMIC = "Colores del fondo"
+    const val DYNAMIC_HINT = "Usa los colores de tu fondo de pantalla"
+    const val DYNAMIC_UNAVAILABLE = "Necesita Android 12 o más reciente"
+    const val LIGHT = "Claro"
+    const val DARK = "Oscuro"
+    const val SYSTEM = "Sistema"
+    const val THEME_GROUP = "Tema"
+    const val MODE_GROUP = "Modo"
+}
