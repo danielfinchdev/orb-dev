@@ -15,7 +15,7 @@ export function CardFooter({ className, ...props }) { return <div className={cn(
 const badgeVariants = cva('inline-flex items-center justify-center rounded-full border px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none', {
   variants: {
     variant: {
-      default: 'border-transparent bg-primary/12 text-primary',
+      default: 'border-transparent bg-primary/12 text-primary-text',
       secondary: 'border-transparent bg-secondary text-secondary-foreground',
       outline: 'text-foreground',
       success: 'border-transparent bg-success/14 text-success',

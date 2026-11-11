@@ -25,7 +25,7 @@
   --accent-foreground: oklch(0.22 0.02 268);
   --destructive: oklch(0.53 0.19 25);
   --destructive-soft: oklch(0.958 0.026 25);
-  --success: oklch(0.5 0.13 155);
+  --success: oklch(0.45 0.13 155);
   --success-soft: oklch(0.955 0.035 155);
   --warning: oklch(0.52 0.12 65);
   --warning-soft: oklch(0.962 0.045 85);
@@ -71,6 +71,17 @@
   --sidebar: oklch(0.175 0.01 268);
   --bubble: oklch(0.72 0.14 264);
   --bubble-foreground: oklch(0.2 0.06 264);
+}
+
+/* The other themes do not set the Órbita-only tokens: without this they would wear the Orb values. Derived from each
+   theme's own colours so a component that uses them keeps that theme's look (text on a tint = the plain colour). */
+html[data-skin]:not([data-skin="orb"]) {
+  --primary-text: var(--primary);
+  --primary-soft: color-mix(in oklch, var(--primary) 12%, var(--card));
+  --faint-foreground: var(--muted-foreground);
+  --success-soft: color-mix(in oklch, var(--success) 14%, var(--card));
+  --warning-soft: color-mix(in oklch, var(--warning) 18%, var(--card));
+  --destructive-soft: color-mix(in oklch, var(--destructive) 12%, var(--card));
 }
 
 @theme inline {
