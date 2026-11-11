@@ -408,7 +408,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   // «Orquestador» on moves the brain to Claude (or Codex) and says so, instead of doing nothing.
   const coordinator = ['claude', 'codex'].find((a) => catalog?.some((x) => x.id === a)) ?? null;
   const toggleOrchestrator = async (checked) => {
-    if (!checked && !(await confirm(t('chat.freeMode'), t('chat.freeModeBody', { name }), { ok: t('chat.freeModeOk') }))) return;
+    if (!checked && !(await confirm(t('chat.freeMode'), t('chat.freeModeBody', { name }), { ok: t('chat.freeModeOk'), danger: true }))) return;
     if (checked && brain.agent === 'cursor') {
       if (!coordinator) { notify({ title: t('chat.orchestratorNoBrain', { name }), tone: 'warning' }); return; }
       if (await settings({ orchestrate: true, agent: coordinator, model: '' })) notify({ title: t('chat.orchestratorSwitched', { name, agent: AGENT[coordinator] }), tone: 'info' });

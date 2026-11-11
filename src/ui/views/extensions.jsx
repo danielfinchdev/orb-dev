@@ -32,7 +32,7 @@ export function ExtensionsPanel() {
   // A server that needs packages is turned on only after saying so (Orb downloads them without running their scripts).
   const toggle = async (kind, name, enabled, row = null) => {
     if (enabled && row?.needsInstall) {
-      if (!await confirm(t('ext.installTitle', { name }), t('ext.installBody'), { ok: t('ext.activate') })) return;
+      if (!await confirm(t('ext.installTitle', { name }), t('ext.installBody'), { ok: t('ext.activate'), danger: true })) return;
       const id = toast.loading(t('ext.installing'));
       try { await run(call('extensions.toggle', { kind, name, enabled, install: true }), t('ext.turnedOn', { name })); } finally { toast.dismiss(id); }
       return;
@@ -242,7 +242,7 @@ async function applyFlow(name, run) {
   const n = check.added.length + check.changed.length + check.removed.length;
   if (!n) { toast.info(t('ext.applyNothing')); return; }
   const lines = [...check.added.map((f) => `+ ${f}`), ...check.changed.map((f) => `~ ${f}`), ...check.removed.map((f) => `− ${f}`)].slice(0, 12).join('\n');
-  if (!await confirm(t('ext.applyTitle', { name }), `${t('ext.applyBody', { path: check.path, n })}\n\n${lines}${n > 12 ? `\n${t('ext.andMore', { n: n - 12 })}` : ''}`, { ok: t('ext.apply') })) return;
+  if (!await confirm(t('ext.applyTitle', { name }), `${t('ext.applyBody', { path: check.path, n })}\n\n${lines}${n > 12 ? `\n${t('ext.andMore', { n: n - 12 })}` : ''}`, { ok: t('ext.apply'), danger: true })) return;
   const done = await run(call('extensions.apply', { name, id: check.id }), t('ext.applied', { name }));
   if (!done) return;
   // the project's copy stays «en edición» until it goes: keep editing, or delete it (Proyectos'
@@ -253,7 +253,7 @@ async function applyFlow(name, run) {
   if (next === 'delete') { const { deleteProjectFlow } = await import('./projects.jsx'); await deleteProjectFlow(project, t); run(Promise.resolve(null)); }
 }
 async function adoptFlow(p, run) {
-  if (!await confirm(t('ext.adoptTitle', { name: p.name }), t('ext.adoptBody', { path: p.dir }), { ok: t('ext.moveToCore') })) return;
+  if (!await confirm(t('ext.adoptTitle', { name: p.name }), t('ext.adoptBody', { path: p.dir }), { ok: t('ext.moveToCore'), danger: true })) return;
   const r = await run(call('extensions.adopt', { project: p.name }));
   if (r?.moved) toast.success(t('ext.adopted', { name: p.name }), { description: t('ext.adoptedAt', { path: r.moved.to }), duration: 12000 });
 }

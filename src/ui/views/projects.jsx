@@ -71,7 +71,7 @@ function ContributionGraph() {
 // When the Recycle Bin cannot take it: a folder some program is using offers only «Reintentar»; otherwise «Reintentar»
 // or «Borrar para siempre» after a stronger warning. Cancelling gives the project back as it was.
 async function finishFlow(p, t) {
-  if (!(await confirm(t('projects.finish.title'), t('projects.finish.body', { name: p.name }), { ok: t('projects.finish.ok') }))) return;
+  if (!(await confirm(t('projects.finish.title'), t('projects.finish.body', { name: p.name }), { ok: t('projects.finish.ok'), danger: true }))) return;
   if ((await act(call('projects.finish', { name: p.name }), t('projects.finish.done'))) !== undefined) await refresh().catch(() => {});
 }
 export async function deleteProjectFlow(p, t) {
@@ -201,7 +201,7 @@ function ProjectDetail({ p, onRenamed }) {
           </dl>
           <div className="flex flex-wrap gap-2">
             {info.changes ? <Button size="sm" variant="outline" onClick={commit}><Save />{t('projects.commitBtn')}</Button> : null}
-            {info.remote ? <Button size="sm" variant="outline" onClick={async () => { if (await confirm(t('projects.push.title'), t('projects.push.body', { branch: info.branch, remote: info.remote }), { ok: t('projects.push.ok') })) { await act(call('projects.push', { name: p.name, branch: info.branch }), t('projects.push.done')); load(); } }}><Upload />{t('projects.pushBtn')}</Button>
+            {info.remote ? <Button size="sm" variant="outline" onClick={async () => { if (await confirm(t('projects.push.title'), t('projects.push.body', { branch: info.branch, remote: info.remote }), { ok: t('projects.push.ok'), danger: true })) { await act(call('projects.push', { name: p.name, branch: info.branch }), t('projects.push.done')); load(); } }}><Upload />{t('projects.pushBtn')}</Button>
               : <Button size="sm" variant="outline" onClick={publish}><GithubIcon />{t('projects.publish.title')}</Button>}
           </div>
           {info.branches?.length > 1 ? <div className="flex flex-wrap gap-1.5">{info.branches.map((b) => <Badge key={b} variant="secondary" className="font-mono font-normal">{b}</Badge>)}</div> : null}

@@ -65,7 +65,7 @@ function BackupsCard() {
   const way = st.previousKey === 'nueva' ? 'datos.newKey' : 'datos.previousKey';
   const previousKey = async () => {
     const body = <>{t(`${way}Body`)} <button type="button" className="text-primary cursor-pointer underline-offset-2 hover:underline" onClick={() => act(bridge.openExternal(KEY_DOCS))} data-testid="previous-key-more">{t('datos.moreInfo')}</button></>;
-    if (!(await confirm(t(`${way}Title`), body, { ok: t(`${way}Use`) }))) return;
+    if (!(await confirm(t(`${way}Title`), body, { ok: t(`${way}Use`), danger: true }))) return;
     const unlock = await unlockCore('previousKey');
     if (!unlock) return;
     if (await act(call('backup.previousKey', { unlock }))) toast.success(t(`${way}Ready`), { duration: 15000 });
