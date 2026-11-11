@@ -120,6 +120,9 @@ export class Scheduler {
     let dirs = []; try { dirs = fs.readdirSync(ctx.paths.checkpoints, { withFileTypes: true }); } catch { return; }
     for (const d of dirs) {
       const dir = path.join(ctx.paths.checkpoints, d.name);
+      // The end-of-task map sits beside its copy (<copy>.estado.json) and goes with it.
+      const owner = /^(t\d+-\d+)\.estado\.json(\.tmp)?$/.exec(d.name)?.[1];
+      if (owner && d.isFile()) { if (!keep.has(path.resolve(path.join(ctx.paths.checkpoints, owner)).toLowerCase())) fs.rmSync(dir, { force: true }); continue; }
       if (!d.isDirectory() || !/^t\d+-\d+$/.test(d.name) || keep.has(path.resolve(dir).toLowerCase())) continue;
       try { fs.rmSync(dir, { recursive: true, force: true }); } catch (error) { this.log(`limpiar ${d.name}: ${error.message}`); }
     }

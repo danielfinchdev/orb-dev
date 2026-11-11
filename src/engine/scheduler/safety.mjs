@@ -5,7 +5,7 @@ import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { eventKey, userName } from '../../domain/tasks/board.mjs';
 import { git, REF_PREFIX } from '../../platform/git.mjs';
-import { takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit, fullSnapshot, missedBy } from '../../domain/tasks/checkpoints.mjs';
+import { treeState, saveTreeState, stateFileOf, dropTreeState, takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit, fullSnapshot, missedBy } from '../../domain/tasks/checkpoints.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { remotesOf } from './common.mjs';
 import { autonomyOf } from '../../domain/security/guard.mjs';
@@ -71,6 +71,17 @@ export class SafetyPart {
       this.board.settingJson(`readonly_bitacora:${task.id}`, null);
     }
     const cp = this.board.settingJson(`checkpoint:${task.id}`);
+    if (cp?.before?.kind === 'copia' && fs.existsSync(cp.before.dir)) {
+      // No git: remember when the task ended and how every file stands, so undo leaves alone what the user changes afterwards.
+      // The end time is saved right now (undo works with it alone, by mtime); the per-file map is a background walk that
+      // can take long on a big folder, so it only adds precision and is written only if no later round replaced this mark.
+      const at = Date.now(); const key = `checkpoint:${task.id}`; const state = stateFileOf(cp.before.copy);
+      this.board.settingJson(key, { ...cp, after: { kind: 'copia', at, state } });
+      treeState(cp.before.dir).then(async (files) => {
+        if (this.board.settingJson(key)?.after?.at !== at) return;
+        await saveTreeState(state, at, files);
+      }).catch((error) => this.log?.(`estado final #${task.id}: ${error.message}`));
+    }
     if (!cp?.before || cp.before.kind !== 'git') {
       if (!reasons.length) return '';
       const why = reasons.join(tr('msg.scheduler.and'));
@@ -128,13 +139,14 @@ export class SafetyPart {
           this.board.event(task.id, 'orb', 'checkpoint.missed', oneLine(`cambiados sin dejar rastro en su fecha: ${missed.map((c) => c.path).join(', ')}`, 400));
         }
       } finally { this.holding.delete(task.project); }
-    } else out = undoCheckpoint(cp.before, {});
+    } else out = undoCheckpoint(cp.before, cp.after ?? {});
     try { logUndone(this.board, task, out); } catch (error) { this.log?.(`bitácora deshacer #${task.id}: ${error.message}`); }
     this.board.event(task.id, 'usuario', 'task.undone', `restaurados ${out.restored.length}, quitados ${out.removed.length}, sin tocar ${out.skipped.length}`);
     // 3.2.1: the task stays «Deshecha» (its result can no longer be accepted) and its photo goes: a second undo over a folder
     // that changed since would restore something else. Running it again (retry, a message to its agent) takes a new one.
     this.board.settingJson(`undone:${task.id}`, { at: new Date().toISOString(), restored: out.restored.length, removed: out.removed.length });
     this.board.settingJson(`checkpoint:${task.id}`, null);
+    if (cp.before.kind === 'copia' && cp.before.copy) dropTreeState(cp.before.copy);
     if (cp.before.kind === 'git' && cp.before.repo && fs.existsSync(cp.before.repo)) {
       for (const ref of git(cp.before.repo, 'for-each-ref', '--format=%(refname)', REF_PREFIX).stdout.split('\n').filter((r) => r.startsWith(`${REF_PREFIX}/t${task.id}-`))) git(cp.before.repo, 'update-ref', '-d', ref);
     }
