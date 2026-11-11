@@ -388,6 +388,7 @@ export default {
   "msg.screenshot.windowsOnly": "La captura del PC solo funciona en Windows.",
   "msg.screenshot.wait": "Espera un momento antes de otra captura.",
   "msg.screenshot.failed": "No se pudo hacer la captura del PC.",
+  "msg.screenshot.noApp": "La captura necesita la app de Orb abierta en el PC.",
   "msg.screenshot.tooBig": "La captura del PC es demasiado grande.",
   "msg.screenshot.taken": "El móvil «{device}» ha hecho una captura de la pantalla",
   "msg.screenshot.takenAnon": "El móvil ha hecho una captura de la pantalla",

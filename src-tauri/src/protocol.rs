@@ -168,6 +168,7 @@ pub fn node_vars<I: IntoIterator<Item = String>>(names: I) -> Vec<String> {
 pub enum HostRequest {
   OpenUrl(String),
   OpenPath(PathBuf),
+  Screenshot(PathBuf),
   OpenTerminal { dir: PathBuf, choice: String },
   OpenEditor { which: String, dir: PathBuf },
   RunAction { command: String, dir: PathBuf, choice: String },
@@ -194,6 +195,29 @@ fn choice(params: &Value) -> String {
   if TERMINAL_CHOICES.contains(&c) { c } else { "auto" }.to_string()
 }
 
+/// Where a screenshot may be written: `<ms>-<8 hex>.jpg` directly inside an existing `adjuntos-movil` folder, with no
+/// `..` or other special component. Nothing else, so the engine (or whatever sits behind it) cannot make the app write
+/// elsewhere. Whether the file already exists is checked by the writer itself (create_new).
+fn screenshot_path(p: &str, is_dir: &impl Fn(&Path) -> bool) -> Result<PathBuf, String> {
+  let err = || "ruta de captura no válida".to_string();
+  if !local_path(p) {
+    return Err(err());
+  }
+  let path = PathBuf::from(p);
+  let name = path.file_name().and_then(|n| n.to_str()).ok_or_else(err)?;
+  let (ms, hex) = name.strip_suffix(".jpg").and_then(|n| n.split_once('-')).ok_or_else(err)?;
+  let good = (1..=16).contains(&ms.len())
+    && ms.bytes().all(|b| b.is_ascii_digit())
+    && hex.len() == 8
+    && hex.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
+  let dir = path.parent().ok_or_else(err)?;
+  let plain = path.components().all(|c| matches!(c, std::path::Component::Prefix(_) | std::path::Component::RootDir | std::path::Component::Normal(_)));
+  if !good || !plain || p.contains("..") || dir.file_name().and_then(|n| n.to_str()) != Some("adjuntos-movil") || !is_dir(dir) {
+    return Err(err());
+  }
+  Ok(path)
+}
+
 /// A web page over https, a page of this PC (a project's preview) or Warp's link to open a tab in a folder; existing
 /// folders of this PC only, never a file to run; a terminal, an editor or an action by kind; the secret (64 hex characters
 /// to seal, a base64 blob of at most 16 KB to open). The same rules as src/engine/host/host.mjs › checkHostRequest.
@@ -218,6 +242,7 @@ pub fn check_host(method: &str, params: &Value, is_dir: impl Fn(&Path) -> bool) 
       Ok(HostRequest::OpenUrl(u.to_string()))
     }
     "host.openPath" => Ok(HostRequest::OpenPath(folder("path", "solo carpetas")?)),
+    "host.screenshot" => Ok(HostRequest::Screenshot(screenshot_path(&text("path"), &is_dir)?)),
     "host.openTerminal" => Ok(HostRequest::OpenTerminal { dir: folder("dir", "carpeta no válida")?, choice: choice(params) }),
     "host.openEditor" => {
       let which = text("which");
@@ -357,6 +382,29 @@ mod tests {
       Ok(HostRequest::RunAction { command: "npm run dev".into(), dir: dir.clone(), choice: "wt".into() })
     );
     assert!(ok("host.runAction", json!({"command": "  ", "dir": dir})).is_err());
+    // Screenshots: only <ms>-<8 hex>.jpg inside an existing adjuntos-movil folder.
+    let shots = PathBuf::from("C:\\datos\\adjuntos-movil");
+    let shot_dir = |p: &Path| p == Path::new("C:\\datos\\adjuntos-movil");
+    let shot = |p: &str| check_host("host.screenshot", &json!({ "path": p }), shot_dir);
+    assert_eq!(shot("C:\\datos\\adjuntos-movil\\1731000000000-0123abcd.jpg"), Ok(HostRequest::Screenshot(shots.join("1731000000000-0123abcd.jpg"))));
+    for p in [
+      "C:\\datos\\adjuntos-movil\\x.jpg",
+      "C:\\datos\\adjuntos-movil\\1-0123ABCD.jpg",
+      "C:\\datos\\adjuntos-movil\\1-0123abc.jpg",
+      "C:\\datos\\adjuntos-movil\\1-0123abcd.png",
+      "C:\\datos\\adjuntos-movil\\12345678901234567-0123abcd.jpg",
+      "C:\\datos\\adjuntos-movil\\..\\1-0123abcd.jpg",
+      "C:\\datos\\adjuntos-movil\\sub\\1-0123abcd.jpg",
+      "C:\\datos\\otra\\1-0123abcd.jpg",
+      "C:\\1-0123abcd.jpg",
+      "\\\\servidor\\adjuntos-movil\\1-0123abcd.jpg",
+      "adjuntos-movil\\1-0123abcd.jpg",
+      "",
+    ] {
+      assert!(shot(p).is_err(), "{p}");
+    }
+    assert!(check_host("host.screenshot", &json!({}), shot_dir).is_err());
+    assert!(check_host("host.screenshot", &json!({ "path": "C:\\datos\\adjuntos-movil\\1-0123abcd.jpg" }), |_: &Path| false).is_err());
     assert!(ok("host.runAction", json!({"command": "x", "dir": "C:\\no-existe"})).is_err());
     assert!(ok("host.spawnDetached", json!({"cmd": "cmd.exe", "args": [], "cwd": dir})).is_err());
     // This PC's secret is the vault's (orb-vault › machine.rs): the engine cannot ask to seal or open it.

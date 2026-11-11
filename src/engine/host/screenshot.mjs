@@ -1,43 +1,25 @@
-// Screenshot of the whole desktop (every monitor) for the linked phone. PowerShell starts only when a capture is asked
-// for, never at start-up or at rest, and its script is fixed: the output path travels in the environment, so nothing
-// that came from the phone is ever part of a command.
+// Screenshot of the whole desktop (every monitor) for the linked phone. It is taken by the app in native code
+// (src-tauri/src/screenshot.rs): antivirus software blocks the script way, so no script or child process is involved
+// here, and the path handed to the app is one this module builds itself, never anything that came from the phone.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { execFile } from 'node:child_process';
 import { tr } from '../../platform/context.mjs';
 import { UPLOAD_MAX } from '../transport/remote-common.mjs';
+import { hostCall } from './host.mjs';
 
 export const SHOT_NAME = /^\d+-[0-9a-f]{8}\.jpg$/;
 const MIN_GAP_MS = 5000;
 const TIMEOUT_MS = 20_000;
 
-const SCRIPT = [
-  "$ErrorActionPreference = 'Stop'",
-  'Add-Type -AssemblyName System.Windows.Forms, System.Drawing',
-  '$v = [System.Windows.Forms.SystemInformation]::VirtualScreen',
-  '$bmp = New-Object System.Drawing.Bitmap $v.Width, $v.Height',
-  '$g = [System.Drawing.Graphics]::FromImage($bmp)',
-  '$g.CopyFromScreen($v.Left, $v.Top, 0, 0, $bmp.Size)',
-  "$codec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' }",
-  '$q = New-Object System.Drawing.Imaging.EncoderParameters 1',
-  '$q.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter ([System.Drawing.Imaging.Encoder]::Quality), 80L',
-  '$bmp.Save($env:ORB_SHOT_OUT, $codec, $q)',
-  '$g.Dispose(); $bmp.Dispose()'
-].join('; ');
-
 // The real runner; tests inject their own.
-function runPowerShell(out) {
-  const root = process.env.SystemRoot || 'C:\Windows';
-  const exe = path.join(root, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-  return new Promise((resolve, reject) => {
-    execFile(exe, ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', SCRIPT],
-      { windowsHide: true, timeout: TIMEOUT_MS, env: { ...process.env, ORB_SHOT_OUT: out } }, (error) => (error ? reject(error) : resolve()));
-  });
+export async function runHostScreenshot(out, call = hostCall) {
+  try { await call('host.screenshot', { path: out }, TIMEOUT_MS); }
+  catch (error) { throw error?.code === 'noApp' ? Object.assign(new Error(tr('msg.screenshot.noApp')), { clear: true }) : error; }
 }
 
 // run(outPath) must write a JPEG at outPath. Returns a function (dir) => Promise<name>.
-export function createScreenshot({ run = runPowerShell, platform = process.platform, now = Date.now } = {}) {
+export function createScreenshot({ run = runHostScreenshot, platform = process.platform, now = Date.now } = {}) {
   let busy = false;
   let last = 0;
   return async function capture(dir) {
@@ -55,7 +37,7 @@ export function createScreenshot({ run = runPowerShell, platform = process.platf
       return name;
     } catch (error) {
       await fs.promises.rm(file, { force: true }).catch(() => {});
-      throw error.clear ? error : new Error(tr('msg.screenshot.failed')); // a PowerShell failure's text is never shown
+      throw error.clear ? error : new Error(tr('msg.screenshot.failed')); // the app's failure text is never shown
     } finally { busy = false; }
   };
 }

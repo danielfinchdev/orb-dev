@@ -9,7 +9,8 @@ import { execFileSync } from 'node:child_process';
 import { tempHome, startEngine, until, ROOT } from './helpers.mjs';
 import { createPhone, TEST_MASTER } from './fixtures/phone-client.mjs';
 import * as C from '../src/shared/mobile-crypto.mjs';
-import { createScreenshot, SHOT_NAME } from '../src/engine/host/screenshot.mjs';
+import { HOST_METHODS, checkHostRequest } from '../src/engine/host/host.mjs';
+import { createScreenshot, runHostScreenshot, SHOT_NAME } from '../src/engine/host/screenshot.mjs';
 import { REMOTE_METHODS } from '../src/domain/security/permissions.mjs';
 
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('captura de prueba'), Buffer.from([0xff, 0xd9])]);
@@ -106,12 +107,22 @@ test('the capture module: Windows only, one every 5 s, one at a time, size cap',
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('the PowerShell script is fixed, hidden and never runs at import time', () => {
+test('the default runner asks the app (host.screenshot) with the path, and no script is involved', async () => {
+  const sent = [];
+  const out = path.join(os.tmpdir(), 'adjuntos-movil', '1-0123abcd.jpg');
+  await runHostScreenshot(out, async (...args) => { sent.push(args); return { bytes: 1 }; });
+  assert.deepEqual(sent, [['host.screenshot', { path: out }, 20_000]]);
+  await assert.rejects(runHostScreenshot('x', async () => { throw Object.assign(new Error('host: sin app'), { code: 'noApp' }); }), /necesita la app de Orb abierta/);
   const src = fs.readFileSync(path.join(ROOT, 'src', 'engine', 'host', 'screenshot.mjs'), 'utf8');
-  assert.match(src, /-NoProfile/); assert.match(src, /-NonInteractive/); assert.match(src, /windowsHide: true/);
-  assert.doesNotMatch(src, /SCRIPT\s*=\s*`/); // no template literal: nothing is interpolated into the script
-  // importing the module (done above) executed nothing: the only spawn is inside runPowerShell
-  assert.equal((src.match(/execFile\(/g) ?? []).length, 1);
+  assert.doesNotMatch(src, /powershell|execFile|child_process/i);
+  assert.ok(HOST_METHODS.includes('host.screenshot'));
+  const dir = path.join(os.tmpdir(), 'adjuntos-movil');
+  const good = path.join(dir, '1731000000000-0123abcd.jpg');
+  assert.deepEqual(checkHostRequest('host.screenshot', { path: good }, { isDir: () => true }), { path: good });
+  for (const p of [path.join(dir, 'x.jpg'), path.join(dir, '1-0123ABCD.jpg'), path.join(os.tmpdir(), '1-0123abcd.jpg'), path.join(dir, '..', '1-0123abcd.jpg'), 'relativa/1-0123abcd.jpg']) {
+    assert.throws(() => checkHostRequest('host.screenshot', { path: p }, { isDir: () => true }), undefined, p);
+  }
+  assert.throws(() => checkHostRequest('host.screenshot', { path: good }, { isDir: () => false }));
 });
 
 test('the download vector is deterministic and opens only with its own AAD', () => {

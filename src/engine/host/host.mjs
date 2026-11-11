@@ -13,7 +13,7 @@
 import path from 'node:path';
 
 export const BROWSER_METHODS = Object.freeze(['host.browser.open', 'host.browser.cdp', 'host.browser.close', 'host.pip.show', 'host.pip.hide', 'host.pip.state', 'host.pip.frame']);
-export const HOST_METHODS = Object.freeze(['host.openUrl', 'host.openPath', 'host.openTerminal', 'host.openEditor', 'host.runAction', ...BROWSER_METHODS]);
+export const HOST_METHODS = Object.freeze(['host.openUrl', 'host.openPath', 'host.openTerminal', 'host.openEditor', 'host.runAction', 'host.screenshot', ...BROWSER_METHODS]);
 let send = null; let next = 0; const pending = new Map();
 // the ports of this engine's own servers (the phone's access, dev-control). The agents' browser never
 // opens them on this PC's loopback (Rust refuses them: browser_rules.rs › url_allowed).
@@ -64,6 +64,11 @@ export function checkHostRequest(method, params, { isDir } = {}) {
     return { url: u.toString() };
   }
   if (method === 'host.openPath') return { path: folder(p.path) };
+  if (method === 'host.screenshot') {
+    const d = path.dirname(String(p.path ?? ''));
+    if (!localPath(p.path) || !/^\d{1,16}-[0-9a-f]{8}\.jpg$/.test(path.basename(p.path)) || path.basename(d) !== 'adjuntos-movil' || (isDir && !isDir(d))) throw new Error('ruta de captura no válida');
+    return { path: p.path };
+  }
   if (method === 'host.openTerminal') return { dir: folder(p.dir, 'carpeta no válida'), choice: TERMINAL_CHOICES.includes(p.choice) ? p.choice : 'auto' };
   if (method === 'host.openEditor') {
     if (!['cursor', 'vscode'].includes(p.which)) throw new Error('editor no válido');

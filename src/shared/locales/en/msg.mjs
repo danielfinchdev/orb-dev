@@ -388,6 +388,7 @@ export default {
   "msg.screenshot.windowsOnly": "PC screenshots only work on Windows.",
   "msg.screenshot.wait": "Wait a moment before taking another screenshot.",
   "msg.screenshot.failed": "The PC screenshot could not be taken.",
+  "msg.screenshot.noApp": "The screenshot needs the Orb app open on the PC.",
   "msg.screenshot.tooBig": "The PC screenshot is too large.",
   "msg.screenshot.taken": "The phone «{device}» took a screenshot of the screen",
   "msg.screenshot.takenAnon": "The phone took a screenshot of the screen",

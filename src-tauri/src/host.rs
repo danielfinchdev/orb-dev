@@ -36,6 +36,7 @@ pub async fn handle(app: &AppHandle, method: &str, params: &Value) -> Result<Val
       app.opener().open_path(path.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())?;
       json!(true)
     }
+    HostRequest::Screenshot(path) => crate::screenshot::capture(path).await?,
     HostRequest::OpenTerminal { dir, choice } => {
       let found = tools::find_terminals(&finder());
       let (name, plan) = tools::terminal_plan(&choice, &dir, &found).map_err(|n| t("sys.terminal.notInstalled", &[("name", n.into())]))?;
