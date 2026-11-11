@@ -81,8 +81,8 @@ html[data-skin="retro"] :is([data-slot="dialog-title"], [data-slot="card-title"]
 /* Buttons: written [ LIKE THIS ] (the brackets are decoration with no accessible text), flat, with no shadow; the pressed
    one moves a pixel. Chosen things are inverse video. */
 html[data-skin="retro"] [data-slot="button"] { text-transform: uppercase; letter-spacing: 0.03em; transition: background-color var(--dur-fast), color var(--dur-fast); }
-html[data-skin="retro"] [data-slot="button"]:not(.size-7, .size-8, .size-9, .underline-offset-4, :has(> svg:only-child))::before { content: "[" / ""; margin-right: -0.2rem; }
-html[data-skin="retro"] [data-slot="button"]:not(.size-7, .size-8, .size-9, .underline-offset-4, :has(> svg:only-child))::after { content: "]" / ""; margin-left: -0.2rem; }
+html[data-skin="retro"] [data-slot="button"]:not(.size-7, .size-8, .size-9, .underline-offset-4)::before { content: "[" / ""; margin-right: -0.2rem; }
+html[data-skin="retro"] [data-slot="button"]:not(.size-7, .size-8, .size-9, .underline-offset-4)::after { content: "]" / ""; margin-left: -0.2rem; }
 html[data-skin="retro"] [data-slot="button"]:is(.bg-primary, .bg-destructive) { border: 2px solid transparent; box-shadow: none; text-shadow: none; }
 html[data-skin="retro"] [data-slot="button"].bg-primary { border-color: var(--primary); color: var(--primary-foreground); }
 html[data-skin="retro"] [data-slot="button"].bg-primary:hover:not(:disabled) { background-color: color-mix(in oklch, var(--primary) 82%, white); }
