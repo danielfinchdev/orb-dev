@@ -1,5 +1,5 @@
 ; Orb's installer hooks (tauri.conf.json > bundle.windows.nsis.installerHooks): from Orb 3.8.0 (Electron) to 3.8.1 (Tauri)
-; without uninstalling anything by hand (docs/ARCHITECTURE.md > Updates).
+; without uninstalling anything by hand (docs/architecture/29-packaging-versions-and-ci.md > Updates).
 ;  - Before installing: if Orb on Electron is installed for this user, its own uninstaller runs silently and is waited
 ;    for. It stops a running Orb 3.8.0 and removes its program folder, its shortcuts, its AppUserModelID and its
 ;    uninstall entry. Never the data: %APPDATA%\Orb.dev (the workspace's location, the copies of the keys, Local State)

@@ -12,7 +12,7 @@ the root [`README.md`](../README.md) (the repository's front page) and the issue
 
 | Document | What it covers |
 |---|---|
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | How Orb works, feature by feature: what it does, which files implement it and how to change it. |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | How Orb works, feature by feature: an index of the sections in [`architecture/`](architecture/), each saying what a feature does, which files implement it and how to change it. |
 | [`CHANGELOG.md`](CHANGELOG.md) | What each version brings. It is also the text of each GitHub release. |
 | [`ANDROID.md`](ANDROID.md) | The Android app: linking, features and how to build it. |
 

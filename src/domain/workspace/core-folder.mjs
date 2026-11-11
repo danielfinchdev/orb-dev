@@ -398,8 +398,8 @@ export function coreHealth(home) {
 }
 
 // core hidden in the Explorer on Windows (hidden only: a system attribute would make the user's own backup tools skip
-// it); elsewhere nothing (the workspace is the user's). No access rules: see docs/ARCHITECTURE.md (core) for why a deny
-// ACE was left out.
+// it); elsewhere nothing (the workspace is the user's). No access rules: see
+// docs/architecture/36-the-workspace-and-core.md for why a deny ACE was left out.
 // wait false: attrib runs on its own (the engine's start waited ~25 ms for it on every start) and a promise of
 // whether it worked comes back instead (it never says «hidden» before attrib has said so).
 export function protectCore(home, { wait = true } = {}) {

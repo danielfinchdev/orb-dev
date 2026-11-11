@@ -68,7 +68,8 @@ export const fingerprint = (pub) => Array.from(sha256(pub).slice(0, 6), (b) => b
 //           tell), then the PC (only the real PC, which has its private key and the verifier, can answer).
 // A passive observer (even one who saw the QR) cannot compute ECDH(phone, PC), so the exchange tells it nothing about the
 // password. A fake PC (a forged QR, or someone in the middle of a typed short code who also breaks the code) gets one MAC
-// to attack offline, slowed by scrypt; it never sees the password (docs/ARCHITECTURE.md §37: OPAQUE would close that too).
+// to attack offline, slowed by scrypt; it never sees the password (OPAQUE would close that too:
+// docs/architecture/37-the-master-password-and-magic-link.md).
 export const PAIR_KDF = Object.freeze({ N: 2 ** 16, r: 8, p: 1 });
 const TEST_RUN = () => Boolean(globalThis.process?.env?.NODE_TEST_CONTEXT);
 // The cost a PC may ask for: never cheaper than 2^15 (a fake PC could make the offline attack cheap) and never one that
