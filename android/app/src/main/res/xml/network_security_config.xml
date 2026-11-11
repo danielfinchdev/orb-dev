@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Orb talks to your own Orb only: https (tailscale serve) or plain http inside your Tailscale network (100.64.0.0/10,
+     *.ts.net) or your home Wi-Fi (10/8, 172.16/12, 192.168/16). Android cannot list IP ranges here and the WebView only
+     follows the base setting, so plain http is allowed below and the app itself refuses any plain-http address that is
+     not private (src/ui/lib/link-payload.js › allowedBase, checked when linking). Everything is also encrypted end to
+     end with this phone's own key. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
