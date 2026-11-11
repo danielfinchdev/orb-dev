@@ -1,72 +1,91 @@
 /* Per-theme tokens and touches: Vaporwave, Retro, Profesional, Cristal and Nube. Imported in order by ../themes.css. */
 /* ================================================================================================================
-   VAPORWAVE — a pastel sunset in the day, a neon night. Pink, lilac and cyan; the grid of the ground, a striped sun and
-   palms. Chunky Windows-95 windows (cards and the message box with a hard offset shadow). Space Grotesk, titles Orbitron.
+   VAPORWAVE — Órbita Vaporwave: a Windows-95 desktop in pastel by day, neon glass by night, over a
+   sunset with a striped sun and a grid ground. Space Grotesk to read, Tiny5 and Silkscreen by day and Orbitron by night for titles.
    ================================================================================================================ */
 html[data-skin="vaporwave"] {
-  --radius: 0.25rem;
-  --background: oklch(0.92 0.045 178);
-  --foreground: oklch(0.24 0.06 300);
-  --card: oklch(0.975 0.006 300);
-  --card-foreground: oklch(0.24 0.06 300);
-  --popover: oklch(0.975 0.006 300);
-  --popover-foreground: oklch(0.24 0.06 300);
-  --primary: oklch(0.5 0.22 345);
+  --radius: 0px;
+  --background: oklch(0.9 0.045 320);
+  --foreground: oklch(0.22 0.06 300);
+  --card: oklch(0.885 0.028 300);
+  --card-foreground: oklch(0.22 0.06 300);
+  --popover: oklch(0.885 0.028 300);
+  --popover-foreground: oklch(0.22 0.06 300);
+  --primary: oklch(0.5 0.21 345);
   --primary-foreground: oklch(0.99 0.01 330);
-  --secondary: oklch(0.93 0.08 95);
-  --secondary-foreground: oklch(0.35 0.08 70);
-  --muted: oklch(0.9 0.012 300);
-  --muted-foreground: oklch(0.42 0.07 300);
-  --accent: oklch(0.9 0.06 300);
-  --accent-foreground: oklch(0.33 0.12 300);
-  --destructive: oklch(0.51 0.2 22);
-  --success: oklch(0.46 0.11 170);
+  --primary-soft: oklch(0.93 0.055 345);
+  --primary-text: oklch(0.44 0.2 345);
+  --secondary: oklch(0.86 0.032 300);
+  --secondary-foreground: oklch(0.22 0.06 300);
+  --muted: oklch(0.86 0.032 300);
+  --muted-foreground: oklch(0.35 0.07 300);
+  --faint-foreground: oklch(0.4 0.07 300);
+  --accent: oklch(0.83 0.042 300);
+  --accent-foreground: oklch(0.22 0.06 300);
+  --destructive: oklch(0.5 0.2 22);
+  --destructive-soft: oklch(0.95 0.035 22);
+  --success: oklch(0.45 0.11 170);
+  --success-soft: oklch(0.93 0.05 170);
   --warning: oklch(0.47 0.12 55);
-  --warning-ink: oklch(0.47 0.12 55);
+  --warning-ink: oklch(0.45 0.12 55);
+  --warning-soft: oklch(0.95 0.06 85);
   --warning-foreground: oklch(0.99 0 0);
   --info: oklch(0.46 0.13 235);
-  --border: oklch(0.72 0.03 300);
-  --input: oklch(0.52 0.06 300);
-  --ring: oklch(0.6 0.2 345);
-  --sidebar: oklch(0.93 0.008 300);
-  --bubble: oklch(0.5 0.22 345);
-  --bubble-foreground: oklch(0.99 0.01 330);
-  /* the welcome backdrop (.brand-sky) */
-  --vw-sky: linear-gradient(180deg, #ffd9f2 0%, #f1c8ff 26%, #c9b6ff 44%, #ff9fd0 56%, #ffc79e 62%, #f6e6ff 62%, #ffe4f5 100%);
-  --vw-glow: rgb(255 120 190 / 0.4);
-  --vw-sun: linear-gradient(180deg, #fff09a 0%, #ffb3a7 55%, #ff74b6 100%);
-  --vw-line: rgb(214 58 157 / 0.42);
+  --border: oklch(0.66 0.05 300);
+  --input: oklch(0.5 0.07 300);
+  --ring: oklch(0.45 0.2 300);
+  --sidebar: oklch(0.885 0.028 300);
+  /* The user's message is a pastel pink Win95 panel with dark text, not a saturated block. */
+  --bubble: oklch(0.9 0.07 345);
+  --bubble-foreground: oklch(0.22 0.06 300);
+  --chart-empty: oklch(0.72 0.06 300);
+  /* the welcome backdrop (.brand-sky): sunset, striped sun and grid */
+  --vw-sky: linear-gradient(180deg, oklch(0.9 0.07 340) 0%, oklch(0.86 0.08 305) 26%, oklch(0.84 0.08 265) 44%, oklch(0.83 0.11 350) 56%, oklch(0.87 0.1 40) 62%, oklch(0.9 0.06 330) 62%, oklch(0.93 0.04 310) 100%);
+  --vw-glow: oklch(0.8 0.15 350 / 0.4);
+  --vw-sun: linear-gradient(180deg, oklch(0.95 0.13 100) 0%, oklch(0.82 0.13 40) 55%, oklch(0.7 0.2 350) 100%);
+  --vw-line: oklch(0.62 0.2 345 / 0.5);
 }
 html.dark[data-skin="vaporwave"] {
-  --background: oklch(0.17 0.05 290);
-  --foreground: oklch(0.95 0.02 320);
-  --card: oklch(0.21 0.06 292);
-  --card-foreground: oklch(0.95 0.02 320);
-  --popover: oklch(0.23 0.065 292);
-  --popover-foreground: oklch(0.95 0.02 320);
-  --primary: oklch(0.74 0.19 350);
-  --primary-foreground: oklch(0.17 0.05 290);
-  --secondary: oklch(0.27 0.07 292);
-  --secondary-foreground: oklch(0.93 0.03 320);
-  --muted: oklch(0.25 0.06 292);
-  --muted-foreground: oklch(0.8 0.06 310);
-  --accent: oklch(0.3 0.08 285);
-  --accent-foreground: oklch(0.88 0.1 200);
-  --destructive: oklch(0.66 0.2 18);
-  --success: oklch(0.8 0.15 170);
-  --warning: oklch(0.84 0.14 80);
-  --warning-ink: oklch(0.84 0.14 80);
-  --info: oklch(0.8 0.12 205);
-  --border: oklch(0.34 0.08 295);
-  --input: oklch(0.52 0.12 305);
-  --ring: oklch(0.78 0.13 205);
-  --sidebar: oklch(0.15 0.045 288);
-  --bubble: oklch(0.5 0.2 335);
-  --bubble-foreground: oklch(0.99 0 0);
-  --vw-sky: linear-gradient(180deg, #12082e 0%, #2b1055 28%, #7a1f7a 46%, #d53a9d 56%, #ff9a5a 62%, #2a0a45 62%, #12052a 100%);
-  --vw-glow: rgb(255 90 170 / 0.5);
-  --vw-sun: linear-gradient(180deg, #ffe66d 0%, #ff8f8f 55%, #ff3fa4 100%);
-  --vw-line: rgb(255 79 200 / 0.6);
+  --background: oklch(0.15 0.05 290);
+  --foreground: oklch(0.96 0.02 320);
+  --card: oklch(0.19 0.06 292);
+  --card-foreground: oklch(0.96 0.02 320);
+  --popover: oklch(0.2 0.06 292);
+  --popover-foreground: oklch(0.96 0.02 320);
+  --primary: oklch(0.75 0.19 350);
+  --primary-foreground: oklch(0.16 0.05 290);
+  --primary-soft: oklch(0.31 0.11 340);
+  --primary-text: oklch(0.83 0.15 350);
+  --secondary: oklch(0.24 0.07 292);
+  --secondary-foreground: oklch(0.96 0.02 320);
+  --muted: oklch(0.24 0.07 292);
+  --muted-foreground: oklch(0.86 0.05 315);
+  --faint-foreground: oklch(0.79 0.06 310);
+  --accent: oklch(0.29 0.08 290);
+  --accent-foreground: oklch(0.96 0.02 320);
+  --destructive: oklch(0.74 0.18 18);
+  --destructive-soft: oklch(0.3 0.09 18);
+  --success: oklch(0.82 0.15 170);
+  --success-soft: oklch(0.29 0.07 170);
+  --warning: oklch(0.85 0.14 85);
+  --warning-ink: oklch(0.85 0.14 85);
+  --warning-soft: oklch(0.3 0.07 70);
+  --warning-foreground: oklch(0.2 0.04 70);
+  --info: oklch(0.82 0.12 205);
+  --border: oklch(0.38 0.1 300);
+  --input: oklch(0.62 0.15 320);
+  --ring: oklch(0.82 0.13 205);
+  /* almost the page colour: the sidebar and the night sky meet without a seam (its neon edge is thin and violet) */
+  --sidebar: oklch(0.16 0.05 290);
+  /* a dusky magenta: neon on a big block tires the eyes at night */
+  --bubble: oklch(0.38 0.13 335);
+  --bubble-foreground: oklch(0.97 0.012 330);
+  /* the empty boxes of the charts: a violet that shows on the dark card */
+  --chart-empty: oklch(0.42 0.1 295);
+  --vw-sky: linear-gradient(180deg, oklch(0.13 0.05 285) 0%, oklch(0.2 0.1 300) 28%, oklch(0.33 0.17 330) 46%, oklch(0.5 0.22 355) 56%, oklch(0.62 0.2 20) 62%, oklch(0.12 0.06 295) 62%, oklch(0.1 0.05 290) 100%);
+  --vw-glow: oklch(0.7 0.25 345 / 0.5);
+  --vw-sun: linear-gradient(180deg, oklch(0.93 0.16 95) 0%, oklch(0.75 0.19 30) 50%, oklch(0.65 0.26 350) 100%);
+  --vw-line: oklch(0.72 0.24 345 / 0.75);
 }
 /* The welcome backdrop: sky, the sun on the horizon (62 %) and the grid of the ground, which fades into the distance. */
 html[data-skin="vaporwave"] .brand-sky { position: relative; isolation: isolate; background: radial-gradient(70vmin 42vmin at 50% 62%, var(--vw-glow), transparent 70%), var(--vw-sky); }

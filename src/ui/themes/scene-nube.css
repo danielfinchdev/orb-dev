@@ -122,7 +122,6 @@ html[data-skin="vaporwave"][data-font="outfit"] { --font-sans: "Space Grotesk Va
 html[data-skin="retro"][data-font="outfit"] { --font-sans: "IBM Plex Mono", "Cascadia Code", Consolas, monospace; }
 html[data-skin="nube"][data-font="outfit"] { --font-sans: "Nunito Variable", "Segoe UI", system-ui, sans-serif; }
 html[data-skin="profesional"][data-font="outfit"] { --font-sans: "Inter Variable", "Segoe UI", system-ui, sans-serif; }
-html[data-skin="vaporwave"] :is(h1, h2, h3, [data-slot="card-title"], .hero-title):not(.prose-chat *) { font-family: "Orbitron Variable", "Space Grotesk Variable", var(--font-sans); font-weight: 700; letter-spacing: 0.04em; }
 html[data-skin="nube"] :is(h1, h2, h3, [data-slot="card-title"], .hero-title):not(.prose-chat *) { font-family: "Fredoka Variable", var(--font-sans); font-weight: 700; }
 /* The big greeting of the chat in the theme's own colours. */
 html.dark[data-skin="vaporwave"] .hero-title { background: linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; }
@@ -130,9 +129,8 @@ html[data-skin="nube"] .hero-title { background: linear-gradient(90deg, #f05aa6,
 
 /* ---- Over a backdrop, the message box is frosted glass framed in the theme's own way; the chat's notes (the system's
    bubbles) are the card's colour, nearly solid: the reading column under them already blurs the scene. ---- */
-html:is([data-skin="vaporwave"], [data-skin="retro"]) [data-slot="composer"] { backdrop-filter: blur(16px) saturate(1.25); }
+html[data-skin="retro"] [data-slot="composer"] { backdrop-filter: blur(16px) saturate(1.25); }
 html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) main :is(.bg-muted\/70, .bg-muted\/50) { background-color: color-mix(in oklch, var(--card) 82%, transparent); }
-html.dark[data-skin="vaporwave"] [data-slot="composer"] { border: 1.5px solid transparent; background: linear-gradient(color-mix(in oklch, var(--card) 86%, transparent), color-mix(in oklch, var(--card) 86%, transparent)) padding-box, linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe) border-box; box-shadow: 0 0 24px -6px rgb(255 79 200 / 0.55); }
 /* Text set straight on the scene (the assistant's messages, the greeting, the names): a faint halo of the page's colour
    under it, so a bright piece of the art drifting by never eats into the letters. */
 html.dark:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) main :is(.prose-chat, .hero-title + p, .text-muted-foreground.text-xs) { text-shadow: 0 1px 2px color-mix(in oklch, var(--background) 85%, transparent), 0 0 8px color-mix(in oklch, var(--background) 70%, transparent); }
@@ -144,10 +142,6 @@ html[data-skin="retro"] .chat-actions [data-slot="button"]:is(.bg-primary, .bord
 html[data-skin="retro"] .chat-actions [data-slot="button"].border { box-shadow: 2px 2px 0 var(--rt-off); }
 html[data-skin="retro"] .chat-actions [data-slot="button"]:is(.bg-primary, .border):active { translate: 1px 1px; box-shadow: 1px 1px 0 var(--rt-ink); }
 html[data-skin="retro"] .chat-actions [data-slot="button"].bg-primary\/10 { font-weight: 600; }
-html[data-skin="vaporwave"]:not(.dark) .chat-actions [data-slot="button"].bg-primary { font-weight: 600; box-shadow: inset 1px 1px 0 rgb(255 255 255 / 0.55), inset -1px -1px 0 rgb(0 0 0 / 0.28), 2px 2px 0 var(--vw-ink); }
-html[data-skin="vaporwave"]:not(.dark) .chat-actions [data-slot="button"].border { font-weight: 500; box-shadow: inset 1px 1px 0 var(--vw-hi), inset -1px -1px 0 var(--vw-lo), 1px 1px 0 var(--vw-ink); }
-html.dark[data-skin="vaporwave"] .chat-actions [data-slot="button"].bg-primary { box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 50%, transparent), 0 0 10px -3px color-mix(in oklch, var(--primary) 60%, transparent); }
-html.dark[data-skin="vaporwave"] .chat-actions [data-slot="button"].border { box-shadow: none; }
 html[data-skin="nube"] .chat-actions [data-slot="button"].bg-primary { border-width: 1.5px; box-shadow: 0 2px 0 var(--cd-key); }
 html[data-skin="nube"] .chat-actions [data-slot="button"].bg-primary:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 1px 0 var(--cd-key); }
 html[data-skin="nube"] .chat-actions [data-slot="button"].border { border-width: 1.5px; box-shadow: 0 2px 0 var(--cd-drop); }

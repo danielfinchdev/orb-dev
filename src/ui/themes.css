@@ -7,6 +7,8 @@
    over the brightest and darkest piece of each scene (test-results/contraste-temas.mjs).
    These rules are outside any layer on purpose: they win over Tailwind's utilities without !important. */
 @import "@fontsource/press-start-2p/latin-400.css";
+@import "@fontsource/tiny5/latin-400.css";
+@import "@fontsource/silkscreen/latin-400.css";
 
 @import "./themes/skins.css";
 @import "./themes/scene.css";
