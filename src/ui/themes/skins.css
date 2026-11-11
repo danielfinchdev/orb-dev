@@ -438,4 +438,6 @@ html[data-skin="nube"] .brand-sky {
 
 /* Every new theme, at night: the little yellow counters (pending approvals) carry dark text, white on yellow is unreadable. */
 html.dark:not([data-skin="orb"]) .bg-warning.text-white { color: oklch(0.2 0.03 80); }
+/* Orb at night: the destructive colour is light, so the white label of a solid destructive button gives way to a dark one. */
+html.dark[data-skin="orb"] .bg-destructive.text-white { color: oklch(0.2 0.05 22); }
 

@@ -79,6 +79,8 @@ html[data-skin="nube"] [data-testid="update-card"] { background-image: linear-gr
 html[data-skin="nube"] .bg-warning.rounded-full { box-shadow: 0 2px 0 oklch(0.42 0.12 60); font-weight: 800; }
 
 /* ---- Typography of each theme: used while the interface font is the default (a font chosen by hand wins). ---- */
+/* Orb: Inter for the interface and Outfit for the titles, only while the default font is selected. */
+html[data-skin="orb"][data-font="outfit"] { --font-sans: "Inter Variable", "Segoe UI", system-ui, sans-serif; --font-title: "Outfit Variable", var(--font-sans); }
 html[data-skin="vaporwave"][data-font="outfit"] { --font-sans: "Space Grotesk Variable", "Segoe UI", system-ui, sans-serif; }
 html[data-skin="retro"][data-font="outfit"] { --font-sans: "IBM Plex Mono", "Cascadia Code", Consolas, monospace; }
 html[data-skin="nube"][data-font="outfit"] { --font-sans: "Nunito Variable", "Segoe UI", system-ui, sans-serif; }
