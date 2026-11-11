@@ -21,6 +21,12 @@ abstract class CacheDao {
     @Query("SELECT * FROM snapshots WHERE key = :key")
     abstract fun observeSnapshot(key: String): Flow<SnapshotEntity?>
 
+    @Query("SELECT COUNT(*) FROM conversations")
+    abstract fun observeConversationCount(): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM messages")
+    abstract fun observeMessageCount(): Flow<Int>
+
     @Query("SELECT MAX(at) FROM sync_marks")
     abstract fun observeLastSyncedAt(): Flow<Long?>
 

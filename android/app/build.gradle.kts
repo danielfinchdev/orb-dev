@@ -28,6 +28,9 @@ android {
 
     buildTypes {
         debug {
+            // Installs next to the daily app (dev.orb.app) so the two never share data or keys.
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
             ndk { abiFilters += "x86_64" }
         }
         release {
@@ -62,6 +65,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.process)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
     // No okhttp-sse on purpose: it hides SSE comments, and the silence watchdog must count the PC's ": ping" lines.
