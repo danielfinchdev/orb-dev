@@ -154,7 +154,7 @@ export function Sidebar({ mood }) {
         {/* the robot goes back to the conversation in progress (the last one opened). */}
         <Tip label={t('nav.backToChat', { name })} side="bottom" align="start">
           <button type="button" className="no-drag relative shrink-0 cursor-pointer rounded-full" onClick={() => go(lastChat(route, conversations))} aria-label={t('nav.backToChat', { name })} data-testid="sidebar-home">
-            <Robot size={34} mood={mood} title={name} live active={working} />
+            <Robot size={34} mark={28} mood={mood} title={name} live active={working} />
             {chatBusy ? <span className="bg-primary absolute right-0 bottom-0 size-2 animate-pulse rounded-full" /> : null}
           </button>
         </Tip>

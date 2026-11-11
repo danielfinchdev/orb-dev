@@ -4,7 +4,8 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { Gamepad2, RotateCcw, ArrowLeft, Trophy, Flag, Sparkles, Volume2, VolumeX, Music } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription, BubbleTip } from '@/components/ui/overlay.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { useStore, setState } from '@/lib/store.js';
+import { useStore, setState, plainSkin } from '@/lib/store.js';
+import { OrbMark } from '@/components/orb-mark.jsx';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { LEVELS, best, saveBest } from './kit.js';
@@ -30,6 +31,7 @@ const STAGE = 'from-primary/12 via-primary/6 to-transparent dark:from-primary/22
 export function GamesDialog() {
   const t = useT();
   const open = useStore((s) => s.games);
+  const skin = useStore((s) => s.app?.config?.ui?.skin);
   const [game, setGame] = useState(null);
   const [level, setLevel] = useState('normal');
   const [round, setRound] = useState(0);
@@ -126,7 +128,7 @@ export function GamesDialog() {
               {over ? (
                 <div className="bg-background/60 absolute inset-0 grid place-items-center rounded-2xl backdrop-blur-sm" data-testid="game-over">
                   <div className="bg-card text-card-foreground animate-in fade-in-0 zoom-in-95 grid min-w-56 justify-items-center gap-3 rounded-2xl border p-6 text-center shadow-xl duration-300">
-                    <span className={cn('grid size-12 place-items-center rounded-full', over.record ? 'bg-warning/15 text-warning-ink' : 'bg-primary/12 text-primary')}>{over.record ? <Sparkles className="size-6" /> : <Flag className="size-6" />}</span>
+                    <span className={cn('grid size-12 place-items-center rounded-full', over.record ? 'bg-warning/15 text-warning-ink' : 'bg-primary/12 text-primary')}>{over.record ? (plainSkin(skin) ? <OrbMark size={24} /> : <Sparkles className="size-6" />) : <Flag className="size-6" />}</span>
                     <div className="text-lg leading-tight font-medium">{over.record ? t('games.newRecord') : t('games.over')}</div>
                     <div className="grid gap-0.5">
                       <div className="text-3xl font-semibold tabular-nums">{over.score}</div>

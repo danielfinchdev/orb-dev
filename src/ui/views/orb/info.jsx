@@ -91,7 +91,7 @@ function ChatInfo({ conv }) {
   return (
     <InfoFrame title={t('orbchats.info')} onClose={closeOrbInfo}>
       <div className="grid justify-items-center gap-1.5 pb-1 text-center" data-testid="orb-info">
-        <Robot size={phoneLayout() ? 92 : 80} mood="idle" still head />
+        <Robot size={phoneLayout() ? 92 : 80} mark={48} mood="idle" still head />
         <h3 className="mt-1 max-w-full text-xl font-semibold text-balance" data-testid="info-name">{conv.title}</h3>
         <p className="text-muted-foreground text-[13px]">{started}</p>
         <Button size="sm" variant="outline" className="mt-1" onClick={rename} data-testid="info-rename"><Pencil />{t('orbchats.rename')}</Button>

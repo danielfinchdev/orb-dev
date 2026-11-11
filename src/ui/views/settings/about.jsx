@@ -6,7 +6,8 @@ import { PRODUCT, AUTHOR } from '../../../shared/product.mjs';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
 import { Select } from '@/components/ui/overlay.jsx';
-import { act, bridge } from '@/lib/store.js';
+import { act, bridge, useStore, plainSkin } from '@/lib/store.js';
+import { OrbMark } from '@/components/orb-mark.jsx';
 import { cn } from '@/lib/utils.js';
 import { t, useT, useLocale } from '@/lib/i18n.js';
 import { useUpdate, updateActions, notesUrl } from '@/components/update-card.jsx';
@@ -141,9 +142,10 @@ const MUSIC_CREDITS = Object.values(TRACKS);
 // «Acerca de»: the version, the developer's GitHub and the licence (also at the foot of the sections list).
 export function AboutCard({ version }) {
   const t = useT();
+  const plain = plainSkin(useStore((s) => s.app?.config?.ui?.skin));
   return (
     <Card data-testid="settings-about">
-      <CardHeader className="flex-row items-center gap-3"><img src="./icon-o.png" alt="" className="size-10 shrink-0 rounded-[22%]" data-testid="about-icon" /><div><CardTitle>{PRODUCT.name} {version}</CardTitle></div></CardHeader>
+      <CardHeader className="flex-row items-center gap-3">{plain ? <span className="shrink-0" data-testid="about-icon"><OrbMark size={40} /></span> : <img src="./icon-o.png" alt="" className="size-10 shrink-0 rounded-[22%]" data-testid="about-icon" />}<div><CardTitle>{PRODUCT.name} {version}</CardTitle></div></CardHeader>
       <CardContent className="grid gap-1 text-sm">
         <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">{t('about.developer')}</span>
           <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary inline-flex cursor-pointer items-center gap-1.5 font-medium" data-testid="about-github"><ToolIcon tool="gh" className="size-4" />@{AUTHOR.github}<ExternalLink className="text-muted-foreground size-3.5" /></button>

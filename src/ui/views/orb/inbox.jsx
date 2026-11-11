@@ -7,10 +7,11 @@
 // «Esperando tu aprobación», how its last task ended, else its last line) and the unread count. Right click or ⋯ (PC) and
 // a long press (phone) open the chat's menu: info, pin, mute, mark read, complete or reopen, delete.
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ClipboardCheck, FolderGit2, CalendarSync, Presentation, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, Sparkles, PencilLine, AlarmClock, AlarmClockOff } from 'lucide-react';
+import { Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ClipboardCheck, FolderGit2, CalendarSync, Presentation, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, PencilLine, AlarmClock, AlarmClockOff } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
+import { OrbMark } from '@/components/orb-mark.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { createProjectFlow } from '@/components/project-actions.jsx';
@@ -68,7 +69,7 @@ export function OrbAvatar({ item, size = 40 }) {
   const body = item.project
     ? <ProjectIcon name={item.project} size={size} />
     : plainSkin(skin)
-      ? <span className="bg-primary/12 text-primary grid place-items-center rounded-full" style={{ width: size, height: size }}><Sparkles className="size-1/2" /></span>
+      ? <span className="grid place-items-center" style={{ width: size, height: size }}><OrbMark size={Math.round(size * 0.7)} /></span>
       : <Robot size={size} still mood={item.busy ? 'thinking' : 'idle'} />;
   return (
     <span className="relative inline-grid shrink-0" style={{ width: size, height: size }} role="img" aria-label={who ? `${item.project ?? t('orbchats.noProject')} · ${who}` : (item.project ?? t('orbchats.noProject'))} title={who || undefined} data-testid="orb-avatar">

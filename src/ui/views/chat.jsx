@@ -457,7 +457,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
         <button type="button" disabled={!conv || embedded} onClick={() => (infoOpen ? closeOrbInfo() : openOrbInfo({ type: 'chat' }))}
           className={cn('press flex min-w-0 items-center gap-2.5 rounded-xl py-1 pr-3 pl-1 text-left', conv && !embedded && 'cursor-pointer', infoOpen ? 'bg-accent' : conv && !embedded ? 'hover:bg-accent/60' : '')}
           aria-expanded={conv ? infoOpen : undefined} aria-label={conv ? t('chats.openInfo', { name: conv.title }) : undefined} data-testid="orb-chat-head">
-          <Robot size={36} mood={chat.busy ? 'thinking' : 'idle'} still={!chat.busy} />
+          <Robot size={36} mark={28} mood={chat.busy ? 'thinking' : 'idle'} still={!chat.busy} />
           <span className="min-w-0">
             <span className="flex items-center gap-1.5"><span className="truncate text-[15px] font-semibold" data-testid="bar-title-text">{conv?.title ?? t('orbchats.newChatTitle')}</span>{item?.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}</span>
             <span className={cn('flex min-w-0 items-center gap-1 text-[12.5px]', chat.busy ? 'text-primary' : waitingYou ? 'text-warning-ink' : 'text-muted-foreground')} data-testid="orb-chat-status">
@@ -489,7 +489,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
           {more ? <Button variant="ghost" size="sm" className="text-muted-foreground mx-auto" onClick={loadOlder} disabled={loading} data-testid="chat-older"><History />{t('chat.older')}</Button> : null}
           {id == null && !sending ? (
             <div className="flex flex-col items-center gap-3 pt-10 text-center">
-              <Robot size={130} mood="hello" live />
+              <Robot size={130} mark={56} mood="hello" live />
               <div className="chat-glass chat-hero flex flex-col items-center gap-3">
                 <h2 className="hero-title mt-2 text-2xl" data-testid="chat-greeting">{userName ? t(greeting.key, { ...greeting, user: userName, name }) : t('chat.hello', { name })}</h2>
                 <p className="text-muted-foreground max-w-md">{t(greeting.sub)}</p>
