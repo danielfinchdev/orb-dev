@@ -442,7 +442,7 @@ private fun ReportCard(m: ChatMessage, r: MsgCard.Report, online: Boolean, sendi
     }
 }
 
-/** An agent asks to run something: «Permitir una vez», «Siempre» or «Denegar» (A04). */
+/** An agent asks to run something: «Denegar», «Permitir» or «Permitir siempre aquí» (A04). */
 @Composable
 private fun PermissionCard(m: ChatMessage, p: MsgCard.Permission, online: Boolean, sending: Boolean, actions: CardActions, modifier: Modifier) {
     val pending = p.status == "pending"
@@ -466,11 +466,13 @@ private fun PermissionCard(m: ChatMessage, p: MsgCard.Permission, online: Boolea
         }
         if (pending) {
             if (!online) Text(ChatTexts.NEEDS_PC_TO_ANSWER, color = OrbTheme.colors.text2, style = MaterialTheme.typography.bodySmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                Button(onClick = { actions.decideRequest(m, "allow") }, enabled = online && !sending) { Text(ChatTexts.ALLOW_ONCE) }
-                OutlinedButton(onClick = { actions.decideRequest(m, "always") }, enabled = online && !sending) { Text(ChatTexts.ALLOW_ALWAYS) }
-                OutlinedButton(onClick = { actions.decideRequest(m, "deny") }, enabled = online && !sending) { Text(ChatTexts.DENY) }
+            // Same layout as the direct chat: the main action on the right, «always» apart so it is never hit by mistake.
+            val enabled = online && !sending
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton({ actions.decideRequest(m, "deny") }, Modifier.weight(1f).heightIn(min = 48.dp), enabled = enabled) { Text(ChatTexts.DENY) }
+                Button({ actions.decideRequest(m, "allow") }, Modifier.weight(1f).heightIn(min = 48.dp), enabled = enabled) { Text(ChatTexts.PERMIT) }
             }
+            TextButton({ actions.decideRequest(m, "always") }, Modifier.fillMaxWidth().heightIn(min = 48.dp), enabled = enabled) { Text(ChatTexts.PERMIT_ALWAYS) }
         } else {
             Text(
                 when (p.status) {
@@ -499,8 +501,9 @@ private fun TaskCard(m: ChatMessage, task: Long, state: OrbeChatState, actions: 
         if (waiting) {
             if (!state.online) Text(ChatTexts.NEEDS_PC_TO_ANSWER, color = OrbTheme.colors.text2, style = MaterialTheme.typography.bodySmall)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                OutlinedButton(onClick = { actions.rejectTask(task) }, enabled = state.online) { Text(ChatTexts.REJECT) }
-                Button(onClick = { actions.askApproval(task) }, enabled = state.online) { Text(ChatTexts.APPROVE) }
+                val enabled = state.online && -task !in state.busyCards
+                OutlinedButton(onClick = { actions.rejectTask(task) }, Modifier.heightIn(min = 48.dp), enabled = enabled) { Text(ChatTexts.REJECT) }
+                Button(onClick = { actions.askApproval(task) }, Modifier.heightIn(min = 48.dp), enabled = enabled) { Text(ChatTexts.APPROVE) }
             }
         } else if (status != null) {
             Text(ChatTexts.taskStatus(status), color = OrbTheme.colors.text2, style = MaterialTheme.typography.labelLarge)
@@ -518,9 +521,9 @@ fun ApprovalDialog(ask: ApprovalAsk, onConfirm: () -> Unit, onDismiss: () -> Uni
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(d.title, fontWeight = FontWeight.SemiBold)
-                if (!d.agent.isNullOrBlank()) Text(agentName(d.agent) ?: d.agent, color = OrbTheme.colors.text2)
+                if (!d.agent.isNullOrBlank()) Text(ChatTexts.agentWithModel(agentName(d.agent) ?: d.agent, d.model), color = OrbTheme.colors.text2)
                 if (!d.project.isNullOrBlank()) Text(d.project, fontFamily = FontFamily.Monospace, fontSize = 12.5.sp, color = OrbTheme.colors.text2)
-                if (d.reasons.isNotEmpty()) Text(d.reasons.joinToString(", "), color = OrbTheme.colors.text2)
+                if (d.reasons.isNotEmpty()) Text(d.reasons.joinToString(", ") { ChatTexts.reason(it) }, color = OrbTheme.colors.text2)
                 Text(ChatTexts.ON_PC_NOTE, color = OrbTheme.colors.text3, style = MaterialTheme.typography.bodySmall)
             }
         },

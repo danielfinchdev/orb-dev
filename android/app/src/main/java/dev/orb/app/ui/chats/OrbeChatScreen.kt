@@ -309,7 +309,7 @@ internal fun Composer(
                 ) { stopping ->
                     if (stopping) {
                         IconButton(
-                            onClick = onStop, modifier = Modifier.size(40.dp).clip(CircleShape).background(scheme.onSurface),
+                            onClick = onStop, modifier = Modifier.size(44.dp).clip(CircleShape).background(scheme.onSurface),
                         ) { Icon(OrbIcons.Square, ChatTexts.STOP, Modifier.size(16.dp), tint = scheme.surface) }
                     } else {
                         IconButton(
@@ -318,7 +318,7 @@ internal fun Composer(
                                 if (busy && busyChoices.isNotEmpty()) busyChoices.first().send(t) else onSend(t)
                             },
                             enabled = canSend,
-                            modifier = Modifier.size(40.dp).clip(CircleShape).background(if (canSend) scheme.primary else scheme.surfaceContainerHighest),
+                            modifier = Modifier.size(44.dp).clip(CircleShape).background(if (canSend) scheme.primary else scheme.surfaceContainerHighest),
                         ) { Icon(OrbIcons.Send, ChatTexts.SEND, Modifier.size(18.dp), tint = if (canSend) scheme.onPrimary else OrbTheme.colors.text3) }
                     }
                 }

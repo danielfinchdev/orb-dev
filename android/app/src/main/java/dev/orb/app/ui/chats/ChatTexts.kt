@@ -186,8 +186,6 @@ object ChatTexts {
     const val APPROVE = "Aprobar"
     const val REJECT = "Rechazar"
     const val APPROVE_TASK_TITLE = "Aprobar la tarea"
-    const val ALLOW_ONCE = "Permitir una vez"
-    const val ALLOW_ALWAYS = "Siempre"
     const val DENY = "Denegar"
     const val SEE_DETAILS = "Ver detalles"
     const val HIDE_DETAILS = "Ocultar detalles"
@@ -270,9 +268,25 @@ object ChatTexts {
     fun withOrbe(project: String?) = if (project == null) "con Orbe" else "$project · con Orbe"
     fun withAgent(project: String?, agent: String?) = (project?.let { "$it · " } ?: "") + "con ${agent ?: "un agente"}"
 
+    /** The agent with its model, as the PC's approval window writes it: «Claude (opus)». */
+    fun agentWithModel(agent: String, model: String?): String = if (model.isNullOrBlank()) agent else "$agent ($model)"
+
+    /** Why a task waits for approval, in words (the codes are the PC's own). */
+    fun reason(code: String): String = when (code) {
+        "external_write" -> "escribe fuera del proyecto"
+        "publish" -> "publica"
+        "financial" -> "pagos"
+        "credential_access" -> "credenciales"
+        "destructive" -> "elimina datos"
+        "razonamiento_alto" -> "razonamiento alto"
+        "creada_por_agente" -> "creada por un agente"
+        "ruta_cambiada" -> "carpeta modificada"
+        else -> code
+    }
+
     fun taskStatus(s: String?): String = when (s) {
         "running" -> "Trabajando"
-        "done" -> "Hecha"
+        "done" -> "Completada"
         "failed" -> "Fallida"
         "blocked" -> "Bloqueada"
         "cancelled" -> "Cancelada"

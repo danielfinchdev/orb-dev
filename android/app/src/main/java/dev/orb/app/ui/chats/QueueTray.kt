@@ -98,7 +98,7 @@ fun QueueTray(
 
 @Composable
 private fun TrayButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, enabled: Boolean, onClick: () -> Unit) {
-    IconButton(onClick, Modifier.size(36.dp), enabled = enabled) {
+    IconButton(onClick, Modifier.size(44.dp), enabled = enabled) {
         Icon(icon, description, Modifier.size(18.dp), tint = if (enabled) OrbTheme.colors.text2 else OrbTheme.colors.text3.copy(alpha = 0.4f))
     }
 }
