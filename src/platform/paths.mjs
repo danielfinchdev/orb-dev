@@ -15,6 +15,7 @@ export const CONFIG_FILE = 'orb.json';
 //     bitacora\                 the general log and one per project (bitacora\proyectos)
 //     mcp\                      every MCP server (each subfolder is one; Ajustes › Skills y MCP)
 //     skills\                   every skill (each subfolder, with its SKILL.md); .activas: what the agents load
+//     normas\                   one .md per text rule (persona, task brief); closed to agents like the rest of core
 //     preparacion\              what an agent makes (a skill or a server) until the user turns it on
 //     herramientas\adb\         what Orb downloads to build and test (Android's adb and fastboot)
 //     secretos\                 the secrets sealed with the master password
@@ -27,7 +28,8 @@ export const INTERNAL_DIR = CORE_DIR;
 export const LOGS_DIR = 'bitacora';
 export const MCP_DIR = 'mcp';
 export const SKILLS_DIR = 'skills'; // every skill (src/domain/extensions/extensions.mjs)
-export const STAGING_DIR = 'preparacion'; // what an agent makes before the user turns it on (the only part of core agents write)
+export const RULES_DIR = 'normas'; // one .md per text rule the assistant and its agents follow (src/domain/rules)
+export const STAGING_DIR ='preparacion'; // what an agent makes before the user turns it on (the only part of core agents write)
 export const OLD_LOGS_DIR = 'bitacoras'; // layout of Orb 2.3.0 and older
 // the bots' memories of Orb 3.5–3.7. There are no bots now; an old bots\ folder is never taken for a project (the 3.8 migration archives it).
 export const BOTS_DIR = 'bots';
@@ -64,7 +66,7 @@ export function paths(home) {
   return {
     home, core, internal: core, config: path.join(core, CONFIG_FILE), data, db: path.join(data, 'orb.db'), key: path.join(data, 'clave.bin'),
     logs, generalLog: path.join(logs, 'GENERAL.md'), projectLogs: path.join(logs, 'proyectos'),
-    mcp: path.join(core, MCP_DIR), skills: path.join(core, SKILLS_DIR), staging: path.join(core, STAGING_DIR), tools, adb: isDirSync(keptAdb) ? keptAdb : path.join(tools, 'adb'), secrets: path.join(core, 'secretos'),
+    mcp: path.join(core, MCP_DIR), skills: path.join(core, SKILLS_DIR), rules: path.join(core, RULES_DIR), staging: path.join(core, STAGING_DIR), tools, adb: isDirSync(keptAdb) ? keptAdb : path.join(tools, 'adb'), secrets: path.join(core, 'secretos'),
     projects: home, categories: Object.fromEntries(CATEGORIES.map((c) => [c, path.join(home, c)])),
     runs: path.join(core, 'ejecuciones'),
     copies, worktrees: path.join(copies, 'aisladas'), checkpoints: path.join(copies, 'fotos')

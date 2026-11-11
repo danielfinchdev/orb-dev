@@ -209,6 +209,8 @@ async function open({ home, version, repair = null }) {
   if (restored) useHome(home);
   logFile = path.join(ctx.paths.runs, 'motor.log');
   fs.mkdirSync(ctx.paths.runs, { recursive: true });
+  // the shipped text rules (core\normas) are there before the first prompt is built; a failure never stops the engine
+  try { const { ensureDefaultRules, setRulesLogger } = await import('../domain/rules/rules.mjs'); setRulesLogger(log); ensureDefaultRules(); } catch (error) { log(`normas: ${error.message}`); }
   // the backups' folders and the copies of the sealed secrets are kept from the agents like core.
   { const { guardOutside } = await import('./workspace-layout.mjs'); guardOutside({ mirror }); }
   // the backups of 3.7 (inside the data folder, now core) go where backups go now, outside the workspace.

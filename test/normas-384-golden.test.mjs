@@ -13,6 +13,7 @@ import { Scheduler } from '../src/engine/scheduler/index.mjs';
 import { persona } from '../src/engine/orchestrator.mjs';
 import { briefing } from '../src/domain/journal/journal.mjs';
 import { checkDevTools, devToolsBrief } from '../src/platform/dev-tools.mjs';
+import { ensureDefaultRules } from '../src/domain/rules/rules.mjs';
 
 const DIR = path.join(ROOT, 'test', 'fixtures', 'normas-golden');
 const WRITE = process.env.ORB_GOLDEN_WRITE === '1';
@@ -22,6 +23,7 @@ const marks = [];
 before(() => {
   h = tempHome();
   board = new Board();
+  ensureDefaultRules(); // the prompts come from the shipped rule files, as in a running engine
   sched = new Scheduler(board, {}, { log: () => {} });
   const real = (p) => { try { return fs.realpathSync.native(p); } catch { return p; } };
   marks.push(h.home, h.base, real(h.home), real(h.base));

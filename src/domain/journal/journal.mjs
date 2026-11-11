@@ -8,7 +8,8 @@ import { redactSecrets, porcelainPaths } from '../../shared/secrets-scan.mjs';
 import { generalLogHeader, projectLogHeader } from '../../platform/journal-files.mjs';
 import { AGENT_LABELS } from '../../platform/config-file.mjs';
 import { git, isGitRepo } from '../../platform/git.mjs';
-import { assistantName, ofUserLabel, userName } from '../tasks/board.mjs';
+import { assistantName, ofUser, ofUserLabel, userName } from '../tasks/board.mjs';
+import { ruleSet } from '../rules/rules.mjs';
 import { checkDevTools, devToolsBrief } from '../../platform/dev-tools.mjs';
 import { groupOf } from '../projects/projects.mjs';
 
@@ -194,6 +195,8 @@ export function briefing(board, { project, recent = '' } = {}) {
   // the development tools as they really are now (after the logs: an old note may say otherwise).
   try { parts.push(devToolsBrief(checkDevTools(), userName())); } catch { /* the briefing goes on without it */ }
   if (recent) parts.push(`### Esta conversación se retoma: sus últimos mensajes (lo anterior está en las bitácoras)\n${recent}`);
-  parts.push('Para el estado de las tareas usa orb_board.');
+  // the closing line is a rule of core/normas (it may be paused)
+  const closing = ruleSet('orb', { vars: { orb: assistantName(), usuario: userName(), del_usuario: ofUser() } }).rule('contexto-al-abrir-un-chat');
+  if (closing) parts.push(closing);
   return parts.join('\n\n');
 }
