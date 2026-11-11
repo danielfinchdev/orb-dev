@@ -1,4 +1,4 @@
-// 3.8.2 (T3 3.4): an agent asks for a secret (an API token, a password for one command) with orb_request_secret. The
+// an agent asks for a secret (an API token, a password for one command) with orb_request_secret. The
 // window of this PC shows a private card in that chat; the user types the value there (or uses one saved in the vault,
 // or saves the one typed, both with the master password). The value never goes to the chat, the logs, the bitácora, the
 // database or a phone: the agent gets a one-time handle, and Orb's helper (src/mcp/secret-run.mjs) trades it on the
@@ -14,7 +14,7 @@ export const ASK_MS = 5 * 60_000; // how long the agent waits for the user
 export const HANDLE_MS = 10 * 60_000; // how long a handle may be traded
 export const MAX_VALUE = 8 * 1024;
 const PER_SESSION = 3; // requests waiting at once in one chat
-// 3.8.2 (final review): the master-password check of a typed value counts no try in the vault, so the card would be an
+// the master-password check of a typed value counts no try in the vault, so the card would be an
 // oracle with no waits for whoever could answer cards (an injected script in the window, with an agent asking again and
 // again). At most this many values checked in that time; then the card says to wait.
 export const MASTER_CHECKS = 6;

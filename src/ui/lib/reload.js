@@ -1,4 +1,4 @@
-// 3.8.2: F5 reloads Orb's window (the page only: the engine keeps running in its own process, the screen on view comes
+// F5 reloads Orb's window (the page only: the engine keeps running in its own process, the screen on view comes
 // back through main.jsx's saved route). What was typed and not sent in a message box comes back too: it is kept in this
 // window's sessionStorage just before the reload and handed once to the same box on the same screen.
 const KEY = 'orb.reload-drafts';

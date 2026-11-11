@@ -1,4 +1,4 @@
-// help.*: the Tutorials screen (tutorials, shortcuts and FAQ) and the robot's guided tour (2.6). Same keys as es/help.mjs.
+// help.*: the Tutorials screen (tutorials, shortcuts and FAQ) and the robot's guided tour. Same keys as es/help.mjs.
 export default {
   'help.title': 'Tutorials',
   'help.meta': 'Step-by-step guides and frequently asked questions',
@@ -216,12 +216,12 @@ export default {
   'help.tour.settings.text': 'General, Magic Link, Agents and usage, Skills and MCP, Data, Advanced and About.',
   'help.tour.end.title': 'You’re all set',
   'help.tour.end.text': 'Pick a project, tell me what you need and let’s get started.',
-  // 3.2: conversaciones, menú lateral, buscador y globito
+  // conversaciones, menú lateral, buscador y globito
   'help.tour.search.title': 'Search',
   'help.tour.search.text': 'Find any conversation, task or project, also by what was said. With the filter, only what is in progress or needs you.',
   'help.tour.conversations.title': 'Your chats',
   'help.tour.conversations.text': 'Grouped by project, with the latest of each one: a task in progress, something waiting for your approval… Right-click to pin, mute or complete them.',
-  // 3.2: sidebar foot
+  // sidebar foot
   'help.tour.feedback.title': 'Send feedback',
   'help.tour.feedback.text': 'If something fails or you think of an improvement, tell me from here. Next to it, Orb\'s version.'
 };

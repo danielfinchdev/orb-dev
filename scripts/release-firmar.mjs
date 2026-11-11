@@ -1,10 +1,9 @@
-// Publishing a Windows release, on the owner's PC only (review D9 A1/M1): the updater key never goes to GitHub Actions,
+// Publishing a Windows release, on the owner's PC only: the updater key never goes to GitHub Actions,
 // which only builds and tests (.github/workflows/release.yml).
 //   npm run release:firmar -- [<version>] [--setup <Orb_x.y.z_x64-setup.exe>] [--run <id>] [--draft] [--dry-run]
 // 0. The version must be newer than every published release (and than 3.8.0).
 // 1. The installer: the one release.yml built for that version (its artifact orb-windows-<version>) from a run of the
-//    tip of main: the newest successful push run, or --run (a push or a manual run, also of main). Checked (review D10
-//    M2): the run's commit is main's tip now and package.json there says <version>; a local one (--setup) only from a
+//    tip of main: the newest successful push run, or --run (a push or a manual run, also of main). Checked: the run's commit is main's tip now and package.json there says <version>; a local one (--setup) only from a
 //    clean checkout whose HEAD is main's tip. Its Orb.exe (extracted with 7-Zip) must trust the updater key of
 //    tauri.conf.json and hold nothing of a test build (scripts/tauri-check-release.mjs).
 // 2. Signed with the updater key (TAURI_SIGNING_PRIVATE_KEY_PATH, default C:\orb-project\claves\orb-updater.key; its

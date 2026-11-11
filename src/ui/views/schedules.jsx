@@ -1,6 +1,6 @@
 // Programadas: tasks that repeat on their own ("cada lunes a las 9 revisa las dependencias"). Each run is a normal task
 // (same approvals, quota and agents); one the assistant proposed needs your approval once before it runs by itself.
-// 3.8.2: «Una sola vez» (a date and time; it turns off after running) and «Ejecutar siempre en el mismo chat».
+// «Una sola vez» (a date and time; it turns off after running) and «Ejecutar siempre en el mismo chat».
 import { useEffect, useState } from 'react';
 import { CalendarClock, Plus, Play, Trash2, Check, MessageSquare } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/page.jsx';
@@ -24,7 +24,7 @@ export async function newSchedule(preset = {}) {
   const { projects, app } = getState();
   const list = projects ?? [];
   if (!list.length) { toast.error(t('schedules.noProject')); return null; }
-  // 3.2.1: only the agents this PC can run (the engine refuses a schedule for another one).
+  // only the agents this PC can run (the engine refuses a schedule for another one).
   const agents = app?.agentsAvailable ?? Object.keys(app?.config?.agents ?? {});
   return form(t('schedules.new.title'), {
     description: t('schedules.new.desc'),
@@ -87,7 +87,7 @@ export function SchedulesView() {
                   {!s.approved ? <Button size="sm" onClick={() => act(call('schedules.update', { id: s.id, approve: true }), t('schedules.approve.done')).then(load)}><Check />{t('schedules.approve')}</Button>
                     : spent(s) ? null : <Switch checked={s.enabled} onCheckedChange={(enabled) => act(call('schedules.update', { id: s.id, enabled })).then(load)} aria-label={t('schedules.enabled')} />}
                   <BubbleTip title={t('schedules.runNow')}><Button size="icon-sm" variant="ghost" aria-label={t('schedules.runNow')} onClick={() => act(call('schedules.run', { id: s.id }), t('schedules.run.done')).then(load)}><Play /></Button></BubbleTip>
-                  {/* 3.8: deleting a schedule is this PC's (src/domain/security/permissions.mjs). */}
+                  {/* deleting a schedule is this PC's (src/domain/security/permissions.mjs). */}
                   {bridge.mobile ? null : <BubbleTip title={t('schedules.remove')}><Button size="icon-sm" variant="danger" aria-label={t('schedules.remove')} onClick={async () => { if (await confirm(t('schedules.remove.title'), t('schedules.remove.body', { title: s.title }), { ok: t('schedules.remove'), danger: true })) act(call('schedules.remove', { id: s.id })).then(load); }}><Trash2 /></Button></BubbleTip>}
                 </div>
               </CardContent>

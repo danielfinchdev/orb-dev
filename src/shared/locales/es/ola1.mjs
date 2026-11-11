@@ -1,4 +1,4 @@
-// 3.6, ola 1 de diseño: el compositor (hueco de acción, razonamiento y orquestador), Ajustes en seis secciones
+// El compositor (hueco de acción, razonamiento y orquestador), Ajustes en seis secciones
 // y la compactación de conversaciones. Va la última: también corrige algunos textos anteriores.
 export default {
   // Razonamiento: botón del cerebro con su menú

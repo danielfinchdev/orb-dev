@@ -1,4 +1,4 @@
-// 2.7: the Pizarra: an Excalidraw canvas per project to draw, write and point at things, and a panel on the right for
+// the Pizarra: an Excalidraw canvas per project to draw, write and point at things, and a panel on the right for
 // attachments (photos, videos, documents) with a note each. Everything is saved in <project>/pizarra as it changes, and
 // the assistant reads it (PIZARRA.md and the drawing as a picture) when it plans the project's work.
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';

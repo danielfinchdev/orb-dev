@@ -51,13 +51,13 @@ export function phoneConfig(c) {
 
 // What a phone or a browser may call: the methods src/domain/security/permissions.mjs marks 'remote'. Never by the kind a device
 // says it is, and nothing with total access.
-// 3.5.1: what the owner may choose when making a QR (the kind of device it is for).
+// what the owner may choose when making a QR (the kind of device it is for).
 export const PAIR_KINDS = ['phone', 'browser'];
 const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'session:item', 'session:update', 'session:removed', 'config:changed', 'session:delta', 'session:queue', 'approval:changed',
-  // 3.6 (messaging lists): a chat list changed
+  // a chat list changed
   'inbox:changed']);
 const PAIR_FAILS_MAX = 20; // wrong attempts (all addresses together) that cancel the code on screen
-// 3.8: wrong master passwords one code allows (they do not use it up); then a new code is needed.
+// wrong master passwords one code allows (they do not use it up); then a new code is needed.
 export const PAIR_PASSWORD_TRIES = 5;
 
 // The checks of a call coming from a phone or a browser: null when it may run, or why not. `uploadsDir`: the pictures
@@ -75,11 +75,11 @@ export function guardCall(board, method, params, { allowed = REMOTE_METHODS, upl
   }
   return null;
 }
-// 3.5.1: what a notification shows on a locked phone: 'all', 'chat' (the default) or 'none' (only «Tienes un mensaje
-// nuevo»). 3.8: 'all' and 'chat' show the same (the bots' messages, hidden with 'chat', are gone).
+// what a notification shows on a locked phone: 'all', 'chat' (the default) or 'none' (only «Tienes un mensaje
+// nuevo»). 'all' and 'chat' show the same (there are no bots' messages to hide).
 export const PREVIEWS = ['all', 'chat', 'none'];
 export const pushPreview = (config) => (PREVIEWS.includes(config?.mobile?.preview) ? config.mobile.preview : 'chat');
-// 3.8: no folder of this PC reaches a phone or browser. A value that is one whole absolute path (a project's folder, a
+// no folder of this PC reaches a phone or browser. A value that is one whole absolute path (a project's folder, a
 // task's copy, a conversation's cwd…) goes as its place inside the assistant folder («proyectos/web/tienda»), or just
 // its last part when it is outside; in any other text (a chat message, an activity line, an error, a key), only the assistant folder's own
 // path is cut, written in any case and with either separator. F2.6c: free text is never replaced whole (a message that
@@ -121,7 +121,7 @@ export function shapeResult(method, result) {
   return withoutPaths({ ...rest, activeProject, config: phoneConfig(rest.config) });
 }
 
-// 3.5: only the home network, Tailscale and this PC itself may talk to Orb: 127.0.0.0/8, 10/8, 172.16/12, 192.168/16,
+// only the home network, Tailscale and this PC itself may talk to Orb: 127.0.0.0/8, 10/8, 172.16/12, 192.168/16,
 // 100.64/10 (Tailscale) and, in IPv6, ::1 and Tailscale's fd7a:115c:a1e0::/48.
 export function privateSource(address) {
   let ip = String(address ?? '').toLowerCase();
@@ -136,19 +136,19 @@ export function privateSource(address) {
 export const orbNameOf = (config) => oneLine(String(config?.mobile?.name || os.hostname() || config?.assistantName || 'Orb'), 60);
 const ipOf = (req) => String(req.socket?.remoteAddress ?? '').replace(/^::ffff:/, '');
 const kindOf = (proof) => (PAIR_KINDS.includes(proof?.kind) ? proof.kind : /iphone|ipad|android/i.test(String(proof?.name ?? '')) ? 'phone' : 'browser');
-// 3.5.1: the kind of a new device: the one the QR was made for. A QR made without saying takes what a phone or a browser
-// says it is (they have the same rights). 3.8: another Orb or an Orb Terminal is never linked (null).
+// the kind of a new device: the one the QR was made for. A QR made without saying takes what a phone or a browser
+// says it is (they have the same rights). Another Orb or an Orb Terminal is never linked (null).
 export function kindForPairing(issued, claimed) {
   if (claimed === 'orb' || claimed === 'terminal') return null;
   if (PAIR_KINDS.includes(issued)) return issued;
   return PAIR_KINDS.includes(claimed) ? claimed : 'phone';
 }
-// 3.6 (A11): «<computer>.local» when the computer's name is a valid host name (letters, digits and dashes).
+// «<computer>.local» when the computer's name is a valid host name (letters, digits and dashes).
 export const localName = (host = os.hostname()) => { const h = String(host ?? '').toLowerCase().replace(/\.local$/, ''); return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(h) ? `${h}.local` : null; };
 const isLoopback = (ip) => /^(127\.|::1$)/.test(String(ip ?? '').replace(/^::ffff:/, ''));
-// 3.5.1: whether a pairing comes from a browser's page over plain http on the home network: not a program (no Origin: another
+// whether a pairing comes from a browser's page over plain http on the home network: not a program (no Origin: another
 // Orb), not the Android app, not this PC (or Tailscale's https, which arrives through loopback), not the
-// Tailscale address. 3.8: never (the setting that allowed it is gone: the master password is typed in that page).
+// Tailscale address. Never otherwise: the master password is typed in that page.
 export function plainHttpBrowser({ origin, app = false, localAddress, routes = [] }) {
   if (!origin || app) return false;
   const local = String(localAddress ?? '').replace(/^::ffff:/, '');
@@ -158,10 +158,10 @@ export function plainHttpBrowser({ origin, app = false, localAddress, routes = [
 }
 const parseMeta = (d) => { try { return d?.meta ? JSON.parse(d.meta) : {}; } catch { return {}; } };
 const metaVOf = (d) => Number(parseMeta(d).v ?? 2);
-// 3.5: the Android app's page is not served by this PC but by the app itself: it may call the API, where everything is
-// still sealed with the phone's own key, and its WebView has to be told so (CORS). 3.8.1 (Tauri): http://tauri.localhost
-// only. The Capacitor app's origins (localhost, capacitor://) are gone (review D8 B1: a page on this PC's localhost, such
-// as an agent's, would pass for the app; the phone is reinstalled with 3.8.1, definition item 18).
+// the Android app's page is not served by this PC but by the app itself: it may call the API, where everything is
+// still sealed with the phone's own key, and its WebView has to be told so (CORS). Tauri: http://tauri.localhost
+// only. The Capacitor app's origins (localhost, capacitor://) are not accepted: a page on this PC's localhost, such
+// as an agent's, would pass for the app.
 const APP_ORIGINS = new Set(['http://tauri.localhost', 'https://tauri.localhost']);
 const APP_CORS = { 'Access-Control-Allow-Methods': 'GET, POST', 'Access-Control-Allow-Headers': 'Content-Type, X-Orb-Device, X-Orb-Auth', 'Access-Control-Allow-Private-Network': 'true', 'Access-Control-Max-Age': '600', Vary: 'Origin' };
 const appOrigin = (req) => { const o = String(req.headers.origin ?? '').toLowerCase(); return APP_ORIGINS.has(o) ? o : null; };
@@ -201,7 +201,7 @@ export async function tailscaleAddress() {
 export function lanAddresses() {
   const out = [];
   for (const [name, list] of Object.entries(os.networkInterfaces())) {
-    // 3.5: also Linux's container and VM bridges (br-…, veth…, virbr…, lxc…): a server with Docker has several.
+    // also Linux's container and VM bridges (br-…, veth…, virbr…, lxc…): a server with Docker has several.
     if (/vethernet|virtualbox|vmware|hyper-v|wsl|docker|loopback|tailscale|zerotier|bluetooth|vpn|tap|tun|^br-|^veth|^virbr|^lxc|^lxd|^cni|^flannel|^podman/i.test(name)) continue;
     for (const a of list ?? []) if (a.family === 'IPv4' && !a.internal && isPrivate(a.address)) out.push({ name, address: a.address });
   }
@@ -217,7 +217,7 @@ const HEADERS = {
 };
 
 // The installed app's service worker: shows the notifications the PC sends and opens the app when one is tapped.
-// 3.6 (messaging, M4): one notification per chat (tag): new lines join it (the last five, and how many in the title);
+// one notification per chat (tag): new lines join it (the last five, and how many in the title);
 // the sender's picture (icon); «Responder» opens the chat; «Aprobar» / «Rechazar» answer the card right there with a
 // one-time token of this device (POST /api/note-action); a card whose text is hidden opens the chat. Tapping opens the
 // exact chat (an open window is told: postMessage { orbOpen }; else /#abrir=…).
@@ -255,16 +255,16 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   const clients = new Set(); // live-event streams: { res, device, key }
   const seen = new Map(); // device id -> Map(nonce -> expiry): requests already answered (replays are refused)
   const keys = new Map(); // device id -> session key
-  // The phones' pictures (a phone may only attach the ones uploaded from a linked device). 3.6-3.7 kept them in a
-  // subfolder per person: those are still inside, and pruneUploads clears them with the rest.
+  // The phones' pictures (a phone may only attach the ones uploaded from a linked device). Older data kept them in a
+  // subfolder per person: those may still be inside, and pruneUploads clears them with the rest.
   const uploads = () => path.join(ctx.paths.internal, 'adjuntos-movil');
-  // What this Orb says of itself on every hello and /api/me (3.6, protocol 3).
+  // What this Orb says of itself on every hello and /api/me.
   const versions = () => ({ v: PROTOCOL, min: MIN_PROTOCOL, version });
   const metaV = (d) => Number(parseMeta(d).v ?? 2);
-  // 3.6: a client too old for this Orb is told to update (in its own words: «Actualiza …»).
+  // a client too old for this Orb is told to update (in its own words: «Actualiza …»).
   const tooOld = (v) => Number.isFinite(Number(v)) && Number(v) > 0 && Number(v) < MIN_PROTOCOL;
 
-  // This PC's own keys: X25519 for the phones, VAPID for notifications. Made once. 3.8: kept in the master password's
+  // This PC's own keys: X25519 for the phones, VAPID for notifications. Made once. Kept in the master password's
   // vault (src/domain/security/master.mjs; the database of 3.7 had them in clear: moved by api-master.mjs › migrateSecrets), read
   // when first needed. Without the vault open (another PC: the password was not typed yet) the access does not start.
   let ownKeys = null;
@@ -284,7 +284,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   const pcFingerprint = () => own().fp;
   // Phones paired by 2.3.2 and older (a reusable token, no key of their own) cannot use the encrypted channel: they go.
   board.run('DELETE FROM devices WHERE public_key IS NULL');
-  // 3.8: a phone or browser linked before 3.8 never proved the master password: at the first start of 3.8 they all go,
+  // a phone or browser linked before 3.8 never proved the master password: at the first start of 3.8 they all go,
   // and the owner is told to link them again (once).
   if (!board.setting('relink_38')) {
     const old = board.all('SELECT id, meta FROM devices').filter((d) => metaVOf(d) < PAIR_PROTOCOL);
@@ -298,7 +298,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     res.end(type.startsWith('application/json') ? JSON.stringify(body) : body);
   };
 
-  // A device served: a phone or a browser, used in the last 30 days, without a person. 3.8: a linked Orb or an Orb
+  // A device served: a phone or a browser, used in the last 30 days, without a person. A linked Orb or an Orb
   // Terminal of before, or any device paired in 3.6–3.7 that still has a person (the 3.8 migration clears the owner's and
   // removes the rest), is never served.
   const validDevice = (d) => Boolean(d?.public_key && (!d.kind || PAIR_KINDS.includes(d.kind))
@@ -324,7 +324,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const at = Date.now();
     for (const [n, exp] of m) if (exp < at) m.delete(n);
     if (m.has(nonce)) return 'replay';
-    // 3.0: a busy phone (thousands of requests in 10 min) is not mistaken for a replay and unpaired: the oldest nonces
+    // a busy phone (thousands of requests in 10 min) is not mistaken for a replay and unpaired: the oldest nonces
     // make room (a Map keeps insertion order).
     while (m.size >= 5000) m.delete(m.keys().next().value);
     m.set(nonce, at + 2 * CLOCK_SKEW_MS);
@@ -344,7 +344,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const nonce = text.split('.')[0];
     if (!msg || msg.m !== expected) return null;
     const f = freshness(device.id, nonce, Number(msg.t));
-    // 3.8.3: d: 1, a client that takes the streamed answer as deltas (src/shared/chat-stream.mjs; older ones never say it).
+    // d: 1, a client that takes the streamed answer as deltas (src/shared/chat-stream.mjs; older ones never say it).
     return f === 'ok' ? { nonce, deltas: msg.d === 1 } : f === 'clock' ? { clock: true } : null;
   }
   // Only sent after the request opened with the device's own key (or the QR's), so only a paired phone learns it.
@@ -386,7 +386,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   }
 
   async function handle(req, res) {
-    // 3.5: only the home network, Tailscale and this PC (never the internet: Tailscale Funnel requests are refused too).
+    // only the home network, Tailscale and this PC (never the internet: Tailscale Funnel requests are refused too).
     if (!privateSource(req.socket?.remoteAddress) || req.headers['tailscale-funnel-request']) { req.resume(); return send(res, 403, { error: 'red no permitida' }); }
     if (!hostOk(req)) return send(res, 421, { error: 'host no permitido' });
     const url = new URL(req.url, 'http://x');
@@ -399,7 +399,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     if (!originOk(req)) return send(res, 403, { error: 'origen no permitido' });
 
     if (req.method === 'POST' && p === '/api/pair') return pair(req, res);
-    // 3.6 (M4): «Aprobar» / «Rechazar» from a notification of the phone's browser (its service worker has no keys).
+    // «Aprobar» / «Rechazar» from a notification of the phone's browser (its service worker has no keys).
     if (req.method === 'POST' && p === '/api/note-action') return noteAction(req, res);
 
     const device = deviceOf(req);
@@ -432,7 +432,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     touch(device, req);
 
     if (what === 'me') {
-      // 3.6: this device's name here, and the versions of both sides (the client says its own).
+      // this device's name here, and the versions of both sides (the client says its own).
       const cv = Number(msg.body?.v);
       if (Number.isFinite(cv) && cv > 0 && cv !== metaV(device)) board.run('UPDATE devices SET meta = ? WHERE id = ?', JSON.stringify({ ...parseMeta(device), v: cv }), device.id);
       if (tooOld(cv)) return reply(res, device, msg.nonce, { ok: false, status: 426, update: 'me', error: tr('msg.link.updateClient', { has: versionOfProtocol(cv), need: versionOfProtocol(MIN_PROTOCOL) }) });
@@ -451,7 +451,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const params = msg.body?.params && typeof msg.body.params === 'object' ? msg.body.params : {};
     const deny = (error) => reply(res, device, msg.nonce, { ok: false, status: 403, error });
     const principal = principalOf({ device });
-    // 2.6: which account the assistant spends is chosen on the PC (the brain's agent and model, also from the phone).
+    // which account the assistant spends is chosen on the PC (the brain's agent and model, also from the phone).
     if (method === 'chat.settings' && params.account !== undefined) delete params.account;
     // F2.6c: a picture it uploaded comes back by the name /api/upload gave it (never a path of the PC).
     if (Array.isArray(params.images)) params.images = params.images.map((f) => (typeof f === 'string' && UPLOAD_NAME.test(f) ? path.join(uploads(), f) : f));
@@ -465,15 +465,15 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     catch (error) { return reply(res, device, msg.nonce, { ok: false, error: withoutPaths(oneLine(error?.message ?? String(error), 1000)), ...(error?.reason ? { reason: error.reason, status: error.status ?? 403 } : error?.status === 403 ? { status: 403 } : {}) }); }
   }
 
-  // 3.5: what a device that has only the short code needs to know (only while a code is on screen). urls: the other
+  // what a device that has only the short code needs to know (only while a code is on screen). urls: the other
   // addresses of this same PC (Wi-Fi, Tailscale, name.local).
   function helloInfo(res) {
     if (!pairing || Date.now() > pairing.expires) return send(res, 404, { error: tr('msg.link.noCode') });
-    // short: 3 (3.5.1): the short code is tied to this key (src/ui/lib/web-bridge.js refuses an Orb without it).
+    // short: 3: the short code is tied to this key (src/ui/lib/web-bridge.js refuses an Orb without it).
     return send(res, 200, { v: PROTOCOL, short: 3, pc: b64.enc(own().pub), fp: pcFingerprint(), name: orbName(), urls: (state.routes ?? []).map((r) => r.url) });
   }
 
-  // Linking (3.8, two steps; src/shared/mobile-crypto.mjs › linkDevice has the phone's side). Phones and browsers alike.
+  // Linking (two steps; src/shared/mobile-crypto.mjs › linkDevice has the phone's side). Phones and browsers alike.
   //   start   the phone sends its public key and a proof sealed with the key of this QR (the one-time code never travels),
   //           or of the short code typed by hand (via: 'code3'); the PC answers, sealed with that same key, a session id
   //           and the salt and cost of the master password's verifier.
@@ -494,33 +494,33 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     };
     let body; try { body = await readJson(req, 10_000); } catch { return fail(); }
     if (!pairing || Date.now() > pairing.expires || !body || typeof body.pub !== 'string') return fail();
-    // 3.5.1: a page served over the home Wi-Fi in plain http could have been changed on the way (and, 3.8, the master
+    // a page served over the home Wi-Fi in plain http could have been changed on the way (and the master
     // password is typed in it): a browser links only over https (Tailscale), the Tailscale address or this PC itself. The
     // Android app brings its own code and checks the key, so it may.
     if (plainBrowser(req)) return send(res, 403, { error: tr('msg.link.httpBrowser') });
     let devPub; try { devPub = b64.dec(body.pub); } catch { return fail(); }
     if (devPub.length !== 32) return fail();
     if (body.step === 'finish') return finishPair(res, body, devPub, fail, who);
-    // The short code: code3 (3.5.1, stretched and tied to this key).
+    // The short code: code3 (stretched and tied to this key).
     const secretOf = body.via === 'code3' ? pairing.short3 : pairing.code;
     const codeKey = pairingKey(own().priv, devPub, secretOf);
     let proof; try { proof = open(codeKey, body.proof, AAD.pair); } catch { return fail(); }
     if (!proof || proof.pub !== body.pub) return fail();
     // The QR was right but the phone's clock is off: it tries again with the PC's time (the QR is not used up).
     if (!(Math.abs(Date.now() - Number(proof.t)) <= CLOCK_SKEW_MS)) return clockOff(res);
-    // 3.6: a device too old for this Orb is told to update first (the QR is not used up). 3.8: linking needs protocol 4
+    // a device too old for this Orb is told to update first (the QR is not used up). Linking needs protocol 4
     // and its two steps (the master password); an app of 3.7 is told to update.
     if (!(Number(proof.v) >= PAIR_PROTOCOL) || body.step !== 'start') return send(res, 426, { error: tr('msg.link.updatePair', { need: versionOfProtocol(PAIR_PROTOCOL) }), update: 'pair' });
-    // 3.5.1: what the device is was chosen when the QR was made: that kind wins over what the device says (kindForPairing;
+    // what the device is was chosen when the QR was made: that kind wins over what the device says (kindForPairing;
     // one made for no kind takes the device's word). Another Orb or an Orb Terminal is refused (the QR stays).
-    // 3.8: another Orb is never linked.
+    // another Orb is never linked.
     const kind = kindForPairing(pairing.device, typeof proof.kind === 'string' ? proof.kind : kindOf({ name: proof.name }));
     if (!kind) return send(res, 403, { error: tr('msg.link.notForOrb') });
     const m = ctx.master;
     if (!m?.hasPassword()) return send(res, 403, { error: tr('msg.link.noMaster'), reason: 'noMaster' });
     const until = m.waitOf('pair');
     if (until) return send(res, 429, { error: tr('msg.link.passWait', { s: Math.max(1, Math.ceil((until - Date.now()) / 1000)) }), reason: 'wait' });
-    // 3.8.1: the verifier itself stays in the vault (Rust); only its salt and cost come out, for the phone.
+    // the verifier itself stays in the vault (Rust); only its salt and cost come out, for the phone.
     let vkdf = null; try { vkdf = m.pairInfo(); } catch { vkdf = null; }
     if (!vkdf || !pairKdfOk(vkdf)) return send(res, 403, { error: tr('msg.link.noVerifier'), reason: 'noVerifier' });
     // One exchange per device key, a few at a time, while the code lives.
@@ -537,7 +537,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const x = typeof body.sid === 'string' ? issued.pending.get(body.sid) : null;
     if (!x || x.pub !== body.pub) return fail();
     issued.pending.delete(body.sid); // one try per exchange
-    // 3.8.1: the key confirmation is checked in the vault (Rust), with the verifier and this PC's key there: K never
+    // the key confirmation is checked in the vault (Rust), with the verifier and this PC's key there: K never
     // reaches the engine. The PC's own MAC comes back for the id this device will get.
     const id = crypto.randomUUID();
     let r;
@@ -564,7 +564,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     return send(res, 200, { id, mac: r.pcMac, box: seal(key, { id, name: ctx.config.assistantName, orb: orbName(), ...versions(), pc: pcFingerprint() }, AAD.paired(id)) });
   }
 
-  // 3.5.1: a request from a browser's page that came over plain http on the home network (not this PC, not Tailscale's
+  // a request from a browser's page that came over plain http on the home network (not this PC, not Tailscale's
   // https through loopback, not the Tailscale address).
   const plainBrowser = (req) => plainHttpBrowser({ origin: req.headers.origin, app: Boolean(appOrigin(req)), localAddress: req.socket?.localAddress, routes: state.routes });
 
@@ -593,7 +593,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     finally { uploading--; }
   }
   // Old pictures go (7 days), and the oldest ones too while the folder would pass its quota.
-  // The oldest first (3.6-3.7's per-person subfolders too).
+  // The oldest first (older per-person subfolders too).
   async function pruneUploads(incoming = 0) {
     const list = [];
     const walk = async (dir, depth) => {
@@ -616,13 +616,13 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
 
   // Notifications: a new message in the assistant's chat (an answer, a task that needs approval, finished or failed work)
   // goes to the phones that turned them on and do not have the app open right now.
-  // 3.6 (M4): as a messaging app's (deliverNote): the chat's name and picture, one per chat, its actions; muted: none.
+  // as a messaging app's (deliverNote): the chat's name and picture, one per chat, its actions; muted: none.
   function notify(payload) {
     if (!payload || payload.role === 'usuario') return;
     deliverNote({ conversation: payload.conversation ?? null, line: { id: payload.id ?? null, role: payload.role, body: payload.body, meta: payload.meta ?? null } });
   }
 
-  // ---- 3.6 (messaging, M4): notifications as a messaging app's (src/shared/notes.mjs builds them).
+  // ---- notifications as a messaging app's (src/shared/notes.mjs builds them).
   const NOTE_TOKEN_MS = 24 * 3_600_000;
   const noteTokens = new Map(); // one-time token → { device, call: [method, params], group, until }
   const noteWords = () => ({ hidden: tr('msg.remote.pushHidden'), reply: tr('msg.notes.reply'), allow: tr('msg.notes.allow'), deny: tr('msg.notes.deny'), open: tr('msg.notes.open') });
@@ -653,7 +653,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     }
     return out;
   }
-  // One line of a chat, to every linked device (the preview and the mute of Ajustes); the apps open now get it as a
+  // One line of a chat, to every linked device (the preview and the mute of Ajustes); the apps open get it as a
   // sealed «note» event (the Android app shows it while in the background), the others a Web Push.
   function deliverNote({ conversation = null, line }) {
     let chat; try { chat = chatOf(conversation); } catch { chat = null; }
@@ -701,7 +701,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   }
 
   // ---- listening: one http server per address; the Tailscale https name goes through `tailscale serve` to loopback.
-  // 3.8.1: node:http is loaded when the access starts (~18 ms the engine's start no longer waits for).
+  // node:http is loaded when the access starts (~18 ms the engine's start does not wait for).
   const listen = async (address, port) => { const { default: http } = await import('node:http'); return new Promise((resolve) => {
     const srv = http.createServer((req, res) => { handle(req, res).catch((error) => { log(`móvil: ${error.stack}`); try { send(res, 500, { error: tr('msg.remote.internalError') }); } catch { /* sent */ } }); });
     srv.headersTimeout = 15_000; srv.requestTimeout = 60_000;    srv.once('error', (error) => resolve({ error }));
@@ -742,7 +742,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
           if (mine !== generation) return gaveUp();
           if (await bind(address)) { hosts.push(`${address}:${port}`); origins.push(`http://${address}:${port}`); if (!routes.some((r) => r.kind === 'wifi')) routes.push({ kind: 'wifi', url: `http://${address}:${port}/`, secure: false, address }); }
         }
-        // 3.6 (A11): this computer's name on the home network (<name>.local, answered by the system's mDNS), so a phone
+        // this computer's name on the home network (<name>.local, answered by the system's mDNS), so a phone
         // still finds it when the Wi-Fi address changes.
         const local = localName();
         if (local && routes.some((r) => r.kind === 'wifi')) { hosts.push(`${local}:${port}`); origins.push(`http://${local}:${port}`); localUrl = `http://${local}:${port}/`; }
@@ -770,7 +770,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     pruneUploads().catch(() => {});
     return state;
   }
-  // 2.7: closing waits until every server and its open connections are really gone (2 s at most), so a restart on the same
+  // closing waits until every server and its open connections are really gone (2 s at most), so a restart on the same
   // port never answers through a half-closed old one: a phone's request could hang on it for ~20 s and then fail (the
   // «reabrir el acceso» test failed now and then for that).
   function closeAll() {
@@ -779,7 +779,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     return Promise.all(closing);
   }
 
-  // ---- 3.5 Magic Link: the linked phones and browsers.
+  // ---- Magic Link: the linked phones and browsers.
   const onlineIds = () => new Set([...clients].map((c) => c.device));
   function deviceView(d, on = onlineIds()) {
     return { id: d.id, name: d.name, kind: d.kind ?? kindOf({ name: d.name }), createdAt: d.created_at, lastSeen: d.last_seen ?? null, ip: d.ip ?? null, v: metaV(d),
@@ -804,16 +804,16 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       const value = { e: event, p: event === 'config:changed' ? null : withoutPaths(payload) };
       for (const c of clients) {
         if (c.res.writableLength > STREAM_BACKLOG) { try { c.res.destroy(); } catch { /* gone */ } clients.delete(c); continue; }
-        // 3.8.3: the streamed answer as deltas to a client that asked for them; the whole text to the others (3.8.1–3.8.2).
+        // the streamed answer as deltas to a client that asked for them; the whole text to the others.
         const own = c.stream && event === 'chat:state' ? { e: event, p: c.stream(value.p) } : value;
         try { c.res.write(`data: ${sealText(c.key, own, AAD.event(c.device))}\n\n`); } catch { clients.delete(c); }
       }
     },
     start() {
       if (servers.length) return Promise.resolve(state);
-      // 3.8: never on a database of 3.5–3.7 the 3.8 migration could not finish yet (its devices may be other users').
+      // never on a database of 3.5–3.7 that the 3.8 migration could not finish yet (its devices may be other users').
       if (isLegacy(board.db)) { const e = new Error(tr('msg.remote.notMigrated')); e.userFacing = true; return Promise.reject(e); }
-      // 3.8: and never while the vault with this PC's keys is locked (it opens with the master password).
+      // and never while the vault with this PC's keys is locked (it opens with the master password).
       try { own(); } catch (error) { return Promise.reject(error); }
       starting ??= startNow().finally(() => { starting = null; });
       // The Wi-Fi address changes with the network (or comes back after it was gone): the servers follow it.
@@ -842,9 +842,9 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     },
     // A one-time QR for 5 minutes, for one of the ways in (Wi-Fi or Tailscale). The code and this PC's key travel in the
     // URL fragment (#), which the browser never sends to any server.
-    // 3.5 (protocol v2): the fragment also names this Orb and its other addresses (Wi-Fi, Tailscale, name.local); and a
+    // the fragment also names this Orb and its other addresses (Wi-Fi, Tailscale, name.local); and a
     // short code (8 letters and digits) can be typed by hand instead, together with the address.
-    // 3.5.1: device: what it is for (phone or browser), chosen here by the owner, never by the device.
+    // device: what it is for (phone or browser), chosen here by the owner, never by the device.
     pair(kind, { device = null } = {}) {
       if (!state.running) throw new Error(tr('msg.remote.enableFirst'));
       const route = state.routes.find((r) => r.kind === kind) ?? state.routes[0];
@@ -854,7 +854,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       pairing = { code, short, short3: shortSecret(short, b64.enc(own().pub)), expires: Date.now() + PAIR_MINUTES * 60_000, route: route.kind, fails: 0, passFails: 0, pending: new Map(),
         device: forKind };
       const others = state.routes.filter((r) => r !== route).map((r) => r.url);
-      // 3.6 (A11): the name of this computer on the home network (name.local) too, for when the Wi-Fi address changes.
+      // the name of this computer on the home network (name.local) too, for when the Wi-Fi address changes.
       if (state.local && !others.includes(state.local) && route.url !== state.local) others.push(state.local);
       const frag = new URLSearchParams({ vincular: code, pc: b64.enc(own().pub), v: String(PROTOCOL), n: orbName() });
       if (others.length) frag.set('a', others.join(','));
@@ -874,7 +874,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     },
     devices,
     fingerprint: () => pcFingerprint(),
-    // 3.8: «He olvidado la contraseña»: every linked phone and browser goes (they link again with the new password), and
+    // «He olvidado la contraseña»: every linked phone and browser goes (they link again with the new password), and
     // the keys are read again (a new vault makes new ones). → how many went.
     revokeAll() {
       const list = board.all('SELECT id, name FROM devices');
@@ -897,7 +897,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   return remote;
 }
 
-// 3.8.2 (review F2.5b M6): while the data of Orb 3.7 could not be updated (engine.mjs › blocked), the phone access cannot
+// while the data of Orb 3.7 could not be updated (engine.mjs › blocked), the phone access cannot
 // start (its devices, keys and conversations are in those data), and a linked phone only saw «sin conexión». Instead, the
 // same addresses and port answer with one fixed state and nothing else: every /api/ request gets 503 { attention:
 // 'migration', error } (the app's origin with its CORS, so it can read it), any page a short notice. No data, no device

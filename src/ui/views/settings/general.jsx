@@ -95,7 +95,7 @@ export function AppearanceCard({ c }) {
   );
 }
 
-// 2.6: the brain (agent, model, reasoning) and the Orquestador switch are chosen under the chat's message box; here only
+// the brain (agent, model, reasoning) and the Orquestador switch are chosen under the chat's message box; here only
 // what is not there: how long a conversation lasts and, with several accounts of the brain's agent, which one it uses.
 export function ChatCard({ c }) {
   const t = useT();
@@ -115,7 +115,7 @@ export function ChatCard({ c }) {
   );
 }
 
-// 3.8.3: the agents' permission level for everything that does not choose its own (new chats, the assistant's tasks).
+// the agents' permission level for everything that does not choose its own (new chats, the assistant's tasks).
 export function PermissionsCard({ c }) {
   const t = useT();
   const mode = c.permissions?.mode === 'preguntar' ? 'editar' : 'auto';
@@ -136,7 +136,7 @@ export function TasksCard({ c }) {
     delegation: c.delegation?.enabled !== false, trusted: c.delegation?.trusted !== false, maxPerTask: c.delegation?.maxPerTask ?? 4,
     oneAtATime: c.oneAtATime === true, approvalWait: c.approvalWaitMinutes ?? 10, parallelChats: c.orchestrator?.parallel ?? 3 });
   const cap = (a, k, val) => setV({ ...v, caps: { ...v.caps, [a]: { ...v.caps[a], [k]: num(val) } } });
-  // 2.6: one slider from maximum saving to maximum use sets every limit at once (and how careful the assistant is with
+  // one slider from maximum saving to maximum use sets every limit at once (and how careful the assistant is with
   // the quota); the limits themselves stay in «Opciones avanzadas» for whoever wants to tune them by hand.
   const [profile, setProfile] = useState(c.budget.profile === undefined ? 2 : c.budget.profile);
   const [advanced, setAdvanced] = useState(false);
@@ -159,11 +159,11 @@ export function TasksCard({ c }) {
           <div className="spend-ticks" aria-hidden="true">{[0, 1, 2, 3, 4].map((i) => <span key={i} className={cn(i === 2 && 'spend-ticks-rec')}>{i === 2 ? t('settings.spendRecommended') : ''}</span>)}</div>
           <p className="text-muted-foreground text-xs leading-snug">{level == null ? t('settings.spendCustomHint') : t(`settings.spend${level}Hint`)}</p>
         </div>
-        {/* 2.7: Orb chooses each task's model and reasoning (on by default), and the guide says what it uses for what. */}
+        {/* Orb chooses each task's model and reasoning (on by default), and the guide says what it uses for what. */}
         <Row label={t('settings.autoModel')} info={t('settings.autoModelHint')}><Switch checked={c.budget?.autoModel !== false} onCheckedChange={(autoModel) => save({ budget: { autoModel } })} data-testid="auto-model" /></Row>
         <ModelGuide auto={c.budget?.autoModel !== false} />
         <Row label={t('settings.autoRun')} hint={t('settings.autoRunHint')}><Switch checked={v.autoRun} onCheckedChange={(autoRun) => { setV({ ...v, autoRun }); save({ autoRun }); }} /></Row>
-        {/* 3.1: tasks work at the same time by default; this makes them wait for each other. */}
+        {/* tasks work at the same time by default; this makes them wait for each other. */}
         <Row label={t('settings.oneAtATime')} hint={t('settings.oneAtATimeHint')}><Switch checked={v.oneAtATime} onCheckedChange={(oneAtATime) => { setV({ ...v, oneAtATime }); save({ oneAtATime }); }} data-testid="one-at-a-time" /></Row>
         <Row label={t('settings.resumeRestart')} hint={t('settings.resumeRestartHint')}><Switch checked={v.resumeAfterRestart} onCheckedChange={(resumeAfterRestart) => { setV({ ...v, resumeAfterRestart }); save({ continuity: { resumeAfterRestart } }); }} /></Row>
         <Row label={t('settings.resumeReset')} hint={t('settings.resumeResetHint')}><Switch checked={v.resumeAtReset} onCheckedChange={(resumeAtReset) => { setV({ ...v, resumeAtReset }); save({ continuity: { resumeAtReset } }); }} /></Row>
@@ -186,7 +186,7 @@ export function TasksCard({ c }) {
           <Field label={t('settings.stopAt')} hint={t('settings.stopAtHint')}><Input type="number" min={50} max={100} value={v.stopAt} onChange={(e) => setV({ ...v, stopAt: num(e.target.value) })} /></Field>
           <Field label={t('settings.maxPerTask')} hint={t('settings.maxPerTaskHint')}><Input type="number" min={0} max={20} value={v.maxPerTask} onChange={(e) => setV({ ...v, maxPerTask: num(e.target.value) })} /></Field>
           <Field label={t('settings.approvalWait')} hint={t('settings.approvalWaitHint')}><div className="flex items-center gap-2"><Input type="number" min={0} max={240} value={v.approvalWait} onChange={(e) => setV({ ...v, approvalWait: num(e.target.value) })} aria-label={`${t('settings.approvalWait')} (${t('settings.minutes')})`} data-testid="approval-wait" /><span className="text-muted-foreground text-xs">{t('settings.minutes')}</span></div></Field>
-          {/* 3.2: how many conversations the assistant answers at the same time (the others wait their turn). */}
+          {/* how many conversations the assistant answers at the same time (the others wait their turn). */}
           <Field label={t('settings.parallelChats')} hint={t('settings.parallelChatsHint')}><Input type="number" min={1} max={6} value={v.parallelChats} onChange={(e) => setV({ ...v, parallelChats: num(e.target.value) })} data-testid="parallel-chats" /></Field>
         </div>
         <div className="grid gap-2">
@@ -212,7 +212,7 @@ const SPEND_PRESETS = [
   { maxParallel: 6, perAgent: 2, timeoutMinutes: 120, stopAt: 0.99, maxTasks: 50, maxHeavy: 20, high: false, maxPerTask: 10, trusted: true, review: true }
 ];
 
-// 3.0: the test request, always here (in the chat it shows only on the first opening of the day).
+// the test request, always here (in the chat it shows only on the first opening of the day).
 export function TestCard() {
   const t = useT();
   return (
@@ -243,7 +243,7 @@ export function FolderCard({ c, home }) {
 }
 
 // «Cosas que nadie toca» (config.protected, src/domain/security/guard.mjs › protectedHit): names, paths or containers no agent
-// touches. Chips to remove, a field to add; saved at once. 3.8: taking off one of the defaults (a password manager) asks
+// touches. Chips to remove, a field to add; saved at once. Taking off one of the defaults (a password manager) asks
 // first, and «Restaurar los de serie» brings back the ones missing (adding needs no password).
 export function ProtectedCard({ c }) {
   const t = useT();
@@ -252,7 +252,7 @@ export function ProtectedCard({ c }) {
   const store = async (items) => {
     const seen = new Set();
     const clean = items.map((x) => String(x ?? '').trim()).filter((x) => x.length >= 2 && !seen.has(x.toLowerCase()) && seen.add(x.toLowerCase()));
-    // 3.8: taking something off the list asks for the master password first.
+    // taking something off the list asks for the master password first.
     const unlock = list.some((x) => !clean.includes(x)) ? await unlockCore('protected') : null;
     if (list.some((x) => !clean.includes(x)) && !unlock) return undefined;
     return save({ protected: clean.slice(0, 50) }, t('settings.protectedSaved'), unlock);
@@ -291,7 +291,7 @@ export function ProtectedCard({ c }) {
 export function InterfaceCard({ c }) {
   const t = useT();
   const [zoom, setZoom] = useState(null);
-  // 3.7: on Linux, its usual terminals (src/engine/host/terminal.mjs LINUX_TERMINALS) instead of Windows' ones.
+  // on Linux, its usual terminals (src/engine/host/terminal.mjs LINUX_TERMINALS) instead of Windows' ones.
   const linux = window.orb?.platform === 'linux';
   const terminals = linux ? { auto: t('settings.term.auto'), warp: 'Warp', 'x-terminal-emulator': t('settings.term.system'), 'gnome-terminal': 'GNOME Terminal', konsole: 'Konsole', 'xfce4-terminal': 'Xfce Terminal', kitty: 'kitty', alacritty: 'Alacritty', xterm: 'XTerm' }
     : window.orb?.platform && window.orb.platform !== 'win32' ? { auto: t('settings.term.auto'), warp: 'Warp' }
@@ -343,7 +343,7 @@ export function ExpertCard({ c }) {
   );
 }
 
-// 3.8.2: the background music's volume (Windows; lib/music.js), heard while it is dragged and saved when let go.
+// the background music's volume (Windows; lib/music.js), heard while it is dragged and saved when let go.
 function MusicVolume() {
   const t = useT();
   const [v, setV] = useState(() => musicPrefs().volume);

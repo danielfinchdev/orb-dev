@@ -3,7 +3,7 @@
 //
 // - The PC has a fixed X25519 key; its public half travels in the pairing QR, so the phone knows it is talking to that PC.
 // - Pairing: the phone makes its own X25519 key and proves it read the QR (one-time code + PC key) without sending the code.
-//   3.8: and that its owner knows the PC's master password, without sending that either (linkDevice below).
+// and that its owner knows the PC's master password, without sending that either (linkDevice below).
 // - Every message afterwards is sealed with XChaCha20-Poly1305 under a key only that phone and the PC can derive. The
 //   additional data names the device and the direction, so a message cannot be replayed as another kind or for another
 //   phone; requests carry a timestamp and the PC refuses a nonce it has already seen.
@@ -47,7 +47,7 @@ export const pairingKey = (priv, peerPub, code) => derive(priv, peerPub, `orb-vi
 // The key of every later message between this phone and this PC.
 export const sessionKey = (priv, peerPub) => derive(priv, peerPub, 'orb-movil', 'orb movil sesion v1');
 
-// 3.5.1: the short code typed by hand is stretched with scrypt and tied to the key the other side says it has, so a
+// the short code typed by hand is stretched with scrypt and tied to the key the other side says it has, so a
 // stranger in the middle who swaps the key cannot try every code fast enough. Both sides derive the same secret; the
 // answer to the pairing is sealed with it too, so the device knows the other side really had the code.
 const SHORT_KDF = { N: 2 ** 14, r: 8, p: 1, dkLen: 32 };
@@ -58,7 +58,7 @@ export const shortSecretAsync = async (code, pcPubB64) => `corto3:${b64.enc(awai
 // A short, readable fingerprint of a public key (shown on the PC and the phone to compare by eye).
 export const fingerprint = (pub) => Array.from(sha256(pub).slice(0, 6), (b) => b.toString(16).padStart(2, '0')).join('').match(/.{4}/g).join('-');
 
-// ---- 3.8: linking needs the PC's master password, and the password never leaves the phone.
+// ---- linking needs the PC's master password, and the password never leaves the phone.
 // The PC keeps a verifier: the public half of an X25519 key whose private half comes from the password (scrypt with the
 // verifier's own salt, then HKDF). Linking is two steps on /api/pair:
 //   start   the phone proves it has the code (as before) and gets back, sealed with the code's key, a session id and the

@@ -1,4 +1,4 @@
-// 2.6: Tutoriales. How the app works, in cards by subject (each with a button to the screen it talks about), the
+// Tutoriales. How the app works, in cards by subject (each with a button to the screen it talks about), the
 // keyboard shortcuts and the frequently asked questions, all searchable; and the button that replays the robot's guided
 // tour (components/tour.jsx). Texts: help.* in the locales.
 import { useState } from 'react';
@@ -75,7 +75,7 @@ export function TutorialsView() {
   const [q, setQ] = useState('');
   const query = fold(q.trim());
   const hit = (...parts) => !query || parts.some((p) => fold(p).includes(query));
-  // 2.7: the phone leaves out what it does not have (agents, settings, expert mode, games, themes).
+  // the phone leaves out what it does not have (agents, settings, expert mode, games, themes).
   const tutorials = TUTORIALS.filter((item) => !(bridge.mobile && PC_ONLY.has(item.id))).filter((item) => hit(t(`help.tut.${item.id}.title`, { name }), ...range(item.lines).map((n) => t(`help.tut.${item.id}.l${n}`, { name }))));
   const keys = bridge.mobile ? [] : range(KEYS).filter((n) => hit(t(`help.key.${n}.k`), t(`help.key.${n}.v`)));
   const faqs = range(FAQS).filter((n) => hit(t(`help.faq.${n}.q`, { name }), t(`help.faq.${n}.a`, { name })));

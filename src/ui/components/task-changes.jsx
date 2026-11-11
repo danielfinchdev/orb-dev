@@ -1,4 +1,4 @@
-// 3.8.2: «Cambios» of a finished task: the files it changed, each one folding out to its diff (tasks.diff, read only,
+// «Cambios» of a finished task: the files it changed, each one folding out to its diff (tasks.diff, read only,
 // from the task's undo checkpoint). Shown in the task's detail and at the end of its agent's conversation; nothing when
 // there is nothing to show (running, undone, a folder without git).
 import { useEffect, useState } from 'react';

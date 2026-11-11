@@ -20,14 +20,14 @@ export function Companion({ name, base, hidden: hiddenHere }) {
   const [bubble, setBubble] = useState(null);
   const [flash, setFlash] = useState(null);
   const [sleepy, setSleepy] = useState(false);
-  // 3.0: out of sight until the pointer comes near the corner (its last bubble waits there), and never while the robot
+  // out of sight until the pointer comes near the corner (its last bubble waits there), and never while the robot
   // of the notices is on screen, so two robots never show at once.
   const [near, setNear] = useState(false);
   const noticeShown = useStore((s) => s.noticeShown);
   const timers = useRef({});
   useEffect(() => bridge.on('chat:new', (payload) => {
     const body = String(payload?.body ?? '');
-    // 3.1: something that waits for the user (a permission, an approval) sounds like a warning too, whatever its text.
+    // something that waits for the user (a permission, an approval) sounds like a warning too, whatever its text.
     const mood = ['task-approval', 'approval', 'attention'].includes(payload?.meta?.kind) ? 'worried' : moodOf(body);
     play(mood === 'happy' ? 'done' : mood === 'worried' ? 'uhoh' : payload.role === 'orb' ? 'talk' : null, body, { force: mood === 'worried' });
     setFlash(mood); clearTimeout(timers.current.flash); timers.current.flash = setTimeout(() => setFlash(null), 3500);

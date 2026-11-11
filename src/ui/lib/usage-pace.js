@@ -1,4 +1,4 @@
-// 3.8.2: an even pace through a plan's window (the usage page): how much of it would be used by now if it were spent
+// an even pace through a plan's window (the usage page): how much of it would be used by now if it were spent
 // evenly from its start to its reset. Only for windows whose length is known (the session of 5 h, the week, «<n>min»).
 export function windowMs(name) {
   const s = String(name ?? '');

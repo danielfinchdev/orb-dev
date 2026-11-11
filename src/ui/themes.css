@@ -463,7 +463,7 @@ html.dark:not([data-skin="orb"]) .bg-warning.text-white { color: oklch(0.2 0.03 
 .theme-band { position: relative; isolation: isolate; }
 .theme-band::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--band-art, none); opacity: var(--band-art-opacity, 1); }
 .side-band::before { background: var(--side-art, none); opacity: 1; }
-/* 3.8.3: the band's moving pieces run on the compositor (transform / opacity only), never as background-position, which
+/* the band's moving pieces run on the compositor (transform / opacity only), never as background-position, which
    restyles and repaints the band on the main thread every frame. Retro at night: its two poses drawn whole, one in
    ::before and one in ::after, shown in turn (opacity in steps). Nube: each row of sweets in its own layer
    (components/page.jsx › BandArt), slid by transform. Their art keeps the alignment to the window that
@@ -490,7 +490,7 @@ html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) .theme
 html.dark .scene { --frost-tint: 50%; --frost-filter: blur(7px) brightness(0.7); }
 @media (prefers-reduced-motion: reduce) { .scene *, .scene *::before, .scene *::after, .theme-band::before, .theme-band::after, .band-art > * { animation: none !important; } }
 html[data-motion="minima"] .scene *, html[data-motion="minima"] .scene *::before, html[data-motion="minima"] .scene *::after, html[data-motion="minima"] .theme-band::before, html[data-motion="minima"] .theme-band::after, html[data-motion="minima"] .band-art > * { animation: none !important; }
-/* 2.6: with the window in the background (or minimised) the scene stands still: nothing to repaint under the blur. */
+/* with the window in the background (or minimised) the scene stands still: nothing to repaint under the blur. */
 html.window-idle .scene *, html.window-idle .scene *::before, html.window-idle .scene *::after, html.window-idle .theme-band::before, html.window-idle .theme-band::after, html.window-idle .band-art > * { animation-play-state: paused !important; }
 /* Text set straight on the scene — the assistant's messages and the greeting of a new chat — reads on a soft pane of
    the card's colour (the system's notes have theirs), gentle and in the theme's own shape. Nothing in orb / profesional. */
@@ -540,7 +540,7 @@ html[data-skin="nube"] .win-control.win-close:hover { background-color: var(--pr
 /* ---- Orb: the bar stays as it is; behind the chat, the robot's periwinkle sky with a few soft clouds drifting. ---- */
 .scene-orb .scene-blur { background: radial-gradient(60% 50% at 30% 0%, #c3cbff, transparent 70%), radial-gradient(50% 60% at 90% 100%, #a7b1f6, transparent 70%); --scene-opacity: 0.5; }
 html.dark .scene-orb .scene-blur { background: radial-gradient(60% 50% at 30% 0%, #2b3270, transparent 70%), radial-gradient(50% 60% at 90% 100%, #1d2257, transparent 70%); --scene-opacity: 0.75; }
-/* Orb's wash is soft already: the pane only smooths the clouds. 3.8.1 (H4d): so each cloud carries that blur itself
+/* Orb's wash is soft already: the pane only smooths the clouds. so each cloud carries that blur itself
    (the same 8 px; a blur of a moving piece is the moving blurred piece) and the pane only tints. A backdrop-filter over
    the whole screen had to blur everything under it again on every frame the clouds moved (≈6 ms of GPU per frame on
    the Tasks screen); a cloud's own blur is drawn once into its layer and slides.
@@ -599,7 +599,7 @@ html.dark[data-skin="vaporwave"] {
 .scene-vaporwave .scene-blur { background: var(--vw-page); --scene-opacity: 1; }
 html:not(.dark) .scene-vaporwave :is(.vw-stars, .vw-shoot, .vw-cloud, .vw-glow, .vw-sun, .vw-mount, .vw-city, .vw-floor, .vw-beam) { display: none; }
 html.dark .scene-vaporwave .vw-sticker { display: none; }
-/* 3.8.3: its hard shadow is drawn with the drawing (see .cd-candy). */
+/* its hard shadow is drawn with the drawing (see .cd-candy). */
 .vw-sticker { color: var(--vw-ink); animation: vw-bob ease-in-out infinite alternate; transform-origin: 50% 50%; }
 .vw-sticker svg { display: block; width: 100%; height: auto; overflow: visible; filter: drop-shadow(4px 4px 0 var(--vw-ink)); }
 @keyframes vw-bob { from { transform: translateY(0) rotate(var(--r, 0deg)); } to { transform: translateY(-12px) rotate(calc(var(--r, 0deg) + 5deg)); } }
@@ -626,7 +626,7 @@ html.dark .scene-vaporwave .scene-blur { background: var(--vw-night); }
 .vw-mount.front { background: var(--vw-mount); height: 12%; clip-path: polygon(0 100%, 9% 62%, 18% 80%, 27% 50%, 36% 76%, 45% 58%, 53% 84%, 62% 52%, 71% 78%, 80% 44%, 89% 72%, 100% 56%, 100% 100%); }
 .vw-city { left: 0; right: 0; bottom: 27.5%; height: 11%; color: #0a0318; }
 .vw-city svg { display: block; width: 100%; height: 100%; }
-/* 3.8.1 (H4f): the grid rushes on the compositor: it is drawn once on a ::before one tile (60 px) taller than the floor,
+/* the grid rushes on the compositor: it is drawn once on a ::before one tile (60 px) taller than the floor,
    which slides down a tile and starts again (the same picture as moving the background 60 px, without repainting the
    whole floor on every frame). */
 .vw-floor { left: -50%; right: -50%; bottom: -10%; height: 40%; transform-origin: 50% 0; transform: perspective(260px) rotateX(62deg); overflow: hidden;
@@ -716,7 +716,7 @@ html.dark[data-skin="retro"] .theme-band:not(.side-band, .topbar:not(.topbar-cha
   html.dark[data-skin="retro"]:not([data-motion="minima"]) .theme-band:not(.side-band, .topbar:not(.topbar-chat))::before { animation: rt-band-a 2.4s steps(1, end) infinite; }
   html.dark[data-skin="retro"]:not([data-motion="minima"]) .theme-band:not(.side-band, .topbar:not(.topbar-chat))::after { animation: rt-band-b 2.4s steps(1, end) infinite; }
 }
-/* The invaders step 12 px and back, as before: one pose for the first half, the other for the second. */
+/* The invaders step 12 px and back: one pose for the first half, the other for the second. */
 @keyframes rt-band-a { 0%, 100% { opacity: 0.7; } 50% { opacity: 0; } }
 @keyframes rt-band-b { 0%, 100% { opacity: 0; } 50% { opacity: 0.7; } }
 .scene-retro .scene-blur { background: var(--rt-page); --scene-opacity: 1; }
@@ -816,7 +816,7 @@ html.dark[data-skin="nube"] {
   --cd-frame: color-mix(in oklch, var(--primary) 70%, transparent); --cd-pad: color-mix(in oklch, var(--primary) 35%, transparent);
   --cd-toy-opacity: 0.55; --cd-toy-shadow: rgb(0 0 0 / 0.5);
 }
-/* 3.8.3: the rows of sweets crawl 5–6 px a second as before (one tile in 36 s, the first right, the second left), now by
+/* the rows of sweets crawl 5–6 px a second (one tile in 36 s, the first right, the second left), by
    transform on the compositor: smooth, with no restyle or repaint of the band. Each row starts where its fixed
    background was (40px 16px and 120px 34px from the window's corner; the layer starts 240px left of the bar). */
 html[data-skin="nube"] .theme-band:not(.side-band, .topbar:not(.topbar-chat)) > .band-art { display: block; position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
@@ -834,7 +834,7 @@ html[data-skin="nube"] .band-art > :last-child { background: radial-gradient(cir
 .cd-blob { border-radius: 50%; opacity: 0.7; background: radial-gradient(closest-side, var(--c), color-mix(in srgb, var(--c) 60%, transparent) 55%, transparent); animation: cd-drift ease-in-out infinite alternate; }
 @keyframes cd-drift { from { transform: translate(0, 0) scale(1); } to { transform: translate(var(--dx, 40px), var(--dy, -30px)) scale(1.12); } }
 /* The sweets: each an SVG shaded with radial gradients, with a soft pink shadow under it, bobbing and tilting a little. */
-/* 3.8.3: the shadow belongs to the drawing (its svg), so it is painted once into the moving layer, which the compositor
+/* the shadow belongs to the drawing (its svg), so it is painted once into the moving layer, which the compositor
    only moves; on the moving layer itself the GPU drew the blur again every frame. Same picture: the same shadow, turned
    with the sweet as before. */
 .cd-candy { opacity: var(--cd-toy-opacity); animation: cd-bob ease-in-out infinite alternate; transform-origin: 50% 60%; }
@@ -908,6 +908,6 @@ html[data-skin="nube"] .chat-actions [data-slot="button"].bg-primary:active { tr
 html[data-skin="nube"] .chat-actions [data-slot="button"].border { border-width: 1.5px; font-weight: 600; box-shadow: 0 2px 0 var(--cd-pad); }
 html[data-skin="nube"] [data-slot="composer"] { border: 2px solid transparent; background-color: color-mix(in oklch, var(--card) 88%, transparent); border-radius: 1.6rem; box-shadow: 0 18px 40px -18px var(--cd-shadow); }
 html[data-skin="nube"] [data-slot="composer"]:focus-within { border-color: var(--cd-frame); box-shadow: 0 0 16px var(--cd-glow), 0 18px 40px -18px var(--cd-shadow); }
-/* 3.2: in a conversation the bar shows its title in the middle: the theme's art keeps to the sides so it never sits behind
+/* in a conversation the bar shows its title in the middle: the theme's art keeps to the sides so it never sits behind
    the words (in every theme, also Retro's own mask above). */
 html[data-skin] .topbar-chat.theme-band:has(.bar-title)::before, html[data-skin] .topbar-chat.theme-band:has(.bar-title)::after, html[data-skin] .topbar-chat.theme-band:has(.bar-title) > .band-art { mask-image: linear-gradient(90deg, transparent 150px, #000 230px, #000 calc(50% - 240px), transparent calc(50% - 180px), transparent calc(50% + 180px), #000 calc(50% + 240px), #000 calc(100% - var(--wco-inset, 0px) - 230px), transparent calc(100% - var(--wco-inset, 0px) - 170px)); }

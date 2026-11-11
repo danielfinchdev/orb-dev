@@ -1,4 +1,4 @@
-// 3.8.2: «Uso», the whole usage page (reached from the usage panel of the context ring and from Ctrl+K): cost and tokens
+// «Uso», the whole usage page (reached from the usage panel of the context ring and from Ctrl+K): cost and tokens
 // by day, agent and model in the last 7, 30 or 90 days (usage.history), and each account's plan limits with the mark of
 // an even pace (usage.get). The panel stays as it was; this page only adds detail.
 import { useEffect, useMemo, useState } from 'react';

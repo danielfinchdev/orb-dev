@@ -1,6 +1,6 @@
-// 3.5: Magic Link, in Ajustes on the PC. «Enlazar dispositivo» shows a QR and a short code (5 minutes, one use) for a
-// phone or a browser (3.8.2: in a dialog); and the list of linked devices, each with whether it is on, when it was last seen, rename and
-// close its session. 3.8: the phone asks for the master password to link, and unlinking one asks for it here.
+// Magic Link, in Ajustes on the PC. «Enlazar dispositivo» shows a QR and a short code (5 minutes, one use) for a
+// phone or a browser (in a dialog); and the list of linked devices, each with whether it is on, when it was last seen, rename and
+// close its session. The phone asks for the master password to link, and unlinking one asks for it here.
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { QrCode, Smartphone, Globe, Pencil, Trash2, Copy, Check, LoaderCircle, ShieldCheck, TriangleAlert, ChevronDown, ExternalLink, KeyRound } from 'lucide-react';
@@ -30,8 +30,8 @@ function Segmented({ label, value, options, onChange, testid }) {
   );
 }
 
-// The QR with its short code and how long it lasts (5 minutes, one use). 3.5.1: what it is for (a phone or a browser) is
-// decided here, the device cannot change it. 3.8.2: «Enlazar dispositivo» opens it in a dialog, where both that and the
+// The QR with its short code and how long it lasts (5 minutes, one use). what it is for (a phone or a browser) is
+// decided here, the device cannot change it. «Enlazar dispositivo» opens it in a dialog, where both that and the
 // way in (Tailscale first, or the local network) are chosen; the card itself only says what to do.
 const PAIR_FOR = ['phone', 'browser'];
 const PAIR_VIA = ['tailscale', 'wifi'];
@@ -85,7 +85,7 @@ function PairDialog({ open: want, onClose }) {
               {qr.device === 'phone' && qr.kind === 'wifi' && !qr.secure ? <div className="text-muted-foreground text-xs" data-testid="link-android-note">{t('link.preferHttps')}</div> : null}
               <div className="text-sm">{t('link.expires')} <span className="font-medium tabular-nums" data-testid="link-countdown">{countdown(qr.expiresAt, now)}</span></div>
             </div>
-            {/* 3.6: reaching this PC from outside home, explained where it is needed: when linking a phone. */}
+            {/* reaching this PC from outside home, explained where it is needed: when linking a phone. */}
             {qr.device === 'phone' ? <OutsideGuide /> : null}
           </div>
         ) : (
@@ -145,7 +145,7 @@ function DevicesCard({ devices, reload, onPair }) {
                 <div className="flex min-w-0 items-center gap-2"><Dot on={d.online} /><span className="truncate text-sm font-medium">{d.name}</span></div>
                 <div className="text-muted-foreground truncate text-xs">{[t(`link.kind.${d.kind}`), d.online ? t('link.onNow') : d.lastSeen ? `${t('link.offline')} · ${t('link.seen', { when: ago(d.lastSeen) })}` : t('link.never')].filter(Boolean).join(' · ')}</div>
               </div>
-              {/* 3.8.2: over the local network, a device that no longer connects (the PC's address changed) is linked again. */}
+              {/* over the local network, a device that no longer connects (the PC's address changed) is linked again. */}
               {!d.online && d.lastSeen && d.route === 'wifi' ? <Button size="xs" variant="outline" onClick={() => onPair({ device: d.kind === 'browser' ? 'browser' : 'phone', via: 'wifi' })} data-testid="link-relink">{t('link.relink')}</Button> : null}
               <BubbleTip title={t('link.rename')}><Button size="icon-sm" variant="ghost" aria-label={t('link.rename')} onClick={() => rename(d)}><Pencil /></Button></BubbleTip>
               <BubbleTip title={t('link.revoke')}><Button size="icon-sm" variant="danger" aria-label={t('link.revoke')} onClick={() => revoke(d)} data-testid="link-revoke"><Trash2 /></Button></BubbleTip>
@@ -157,7 +157,7 @@ function DevicesCard({ devices, reload, onPair }) {
   );
 }
 
-// 3.6: a part of a settings section, with its heading (Ajustes › Datos › Copias…); id: the anchor the menu jumps to.
+// a part of a settings section, with its heading (Ajustes › Datos › Copias…); id: the anchor the menu jumps to.
 // Without a title (a phone's own screen), only its cards.
 export function SubSection({ id, title, children }) {
   if (!title) return children;

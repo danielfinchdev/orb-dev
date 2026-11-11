@@ -6,11 +6,11 @@ import { AGENT_IDS } from '../../platform/config-file.mjs';
 import { isConfigName, categoryOf, CATEGORIES } from '../../platform/paths.mjs';
 import { PRODUCT } from '../../shared/product.mjs';
 
-// 3.8.2: the largest BITACORA.md a project folder may bring into its log (mergeRootLog).
+// the largest BITACORA.md a project folder may bring into its log (mergeRootLog).
 export const ROOT_LOG_MAX = 4 * 1024 * 1024;
 export const now = () => new Date().toISOString();
 // A conversation's row as the rest of Orb reads it (titled as a boolean, its context meter parsed).
-// 3.8.1: both change the row SQLite just made (a new object each time) instead of copying it: copying the ~35 columns
+// both change the row SQLite just made (a new object each time) instead of copying it: copying the ~35 columns
 // of every task of the lists cost more than the query.
 export const conversationRow = (r) => {
   let context = null; try { context = r.context ? JSON.parse(r.context) : null; } catch { /* none */ }

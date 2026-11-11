@@ -7,7 +7,7 @@ import { Button } from './ui/button.jsx';
 import { SidebarToggle } from './theme-toggle.jsx';
 import { MobileMenu } from './mobile-menu.jsx';
 
-// 3.8.3: the moving pieces of a theme's band (themes.css › .band-art; only Nube's rows of sweets for now), in layers the
+// the moving pieces of a theme's band (themes.css › .band-art; only Nube's rows of sweets for now), in layers the
 // compositor slides. Its art stays aligned to the window like the band's still art (background-attachment: fixed): the
 // band's place in the window is given to it here (--band-x / --band-y), read again only when the band or the window
 // change size (never per frame). Hidden (display: none) in every other theme.
@@ -34,15 +34,15 @@ export function BandArt() {
 }
 
 export function PageHeader({ icon, title, meta, center, children, className, back }) {
-  // 2.6: with the sidebar folded away, the button that brings it back starts the bar.
+  // with the sidebar folded away, the button that brings it back starts the bar.
   const folded = useStore((s) => s.sidebarCollapsed);
-  // 3.6, the phone: the menu ☰ starts every bar (3.8: the status bar's room is the page's own, app.css › #root).
+  // the phone: the menu ☰ starts every bar (the status bar's room is the page's own, app.css › #root).
   const phone = phoneLayout();
-  // 3.6 (M3): a screen that takes the whole phone (a conversation) has its back arrow there instead.
+  // a screen that takes the whole phone (a conversation) has its back arrow there instead.
   const menu = phone ? back ?? <MobileMenu /> : null;
-  // 3.2: something in the very middle of the bar (the chat's working folder): three columns, the sides of equal width,
+  // something in the very middle of the bar (the chat's working folder): three columns, the sides of equal width,
   // so it stays centred whatever is on each side.
-  // 3.2.1: by the width of the bar itself, not of the window (a container query): the chat inside God mode is narrow in
+  // by the width of the bar itself, not of the window (a container query): the chat inside God mode is narrow in
   // a wide window. And the sides never shrink below what they hold: the middle gives way and is cut with «…» instead of
   // drawing over the clock or the buttons.
   if (center) return (
@@ -75,7 +75,7 @@ export function PageHeader({ icon, title, meta, center, children, className, bac
   );
 }
 
-// 3.8, the phone: the back arrow of a screen opened from a list (a task, a project), in place of the menu ☰.
+// the phone: the back arrow of a screen opened from a list (a task, a project), in place of the menu ☰.
 export function BackButton({ to, label }) {
   const t = useT();
   return <Button size="icon" variant="ghost" className="-ml-2 shrink-0" onClick={() => go(to)} aria-label={label ?? t('comp.backToList')} data-testid="page-back"><ChevronLeft className="size-6" /></Button>;

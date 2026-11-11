@@ -135,10 +135,10 @@ export function MoreAppsCard() {
   );
 }
 
-// 3.8.2: the music's credits (src/shared/music.mjs): all CC0, each with the page it comes from.
+// the music's credits (src/shared/music.mjs): all CC0, each with the page it comes from.
 const MUSIC_CREDITS = Object.values(TRACKS);
 
-// 3.6: «Acerca de»: the version, the developer's GitHub and the licence (3.8.2: also at the foot of the sections list).
+// «Acerca de»: the version, the developer's GitHub and the licence (also at the foot of the sections list).
 export function AboutCard({ version }) {
   const t = useT();
   return (

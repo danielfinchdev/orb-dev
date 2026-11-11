@@ -1,4 +1,4 @@
-// 3.8: the master password and the secrets Orb keeps for itself. 3.8.1: all of it lives in Rust (the orb-vault crate,
+// the master password and the secrets Orb keeps for itself. All of it lives in Rust (the orb-vault crate,
 // src-tauri/vault): this is only the engine's side of the channel, with the API the engine, the backups and the tests
 // have always used. The engine never holds the data key, this PC's wrap key or a key made from a password: it asks for
 // concrete operations (open or seal one secret, check a password, hand a connector's keys to its launcher).
@@ -129,7 +129,7 @@ const failed = (reply) => (CODES.has(reply.code) ? new MasterError(reply.code) :
 // Whether a maestra.json's cost is one Orb accepts (a planted file can neither make it cheap nor hang it).
 export function kdfOk(kdf) { const r = request({ op: 'kdfOk', kdf: kdf ?? null }); return r.ok && r.r === true; }
 
-// 3.8.1 (decision 20 d): this PC's secret is opened in Rust (src-tauri/vault/src/machine.rs) from core\datos\clave2.enc
+// This PC's secret is opened in Rust (src-tauri/vault/src/machine.rs) from core\datos\clave2.enc
 // or its copy outside (copy: claves\<key>.enc; ORB2 beside it as .v2.enc). It stays there, for this PC's wrap of the data
 // key (new Master(dir, { secret: IN_VAULT })); the engine gets only the keys made from it. fake, reveal: the tests' vault
 // only (its sealing knobs; the secret said back). → { approval, backup, warns: [{ code, detail }] }, or throws with code
@@ -183,7 +183,7 @@ export class Master {
   openWithMachine() { return this.call('openMachine'); }
   sealForMachine() { return this.call('sealMachine'); }
 
-  // The first password (the welcome, or the first start of 3.8). Never a second time (src/engine/api/master.mjs).
+  // The first password (the welcome, or the first start). Never a second time (src/engine/api/master.mjs).
   create(password) { return this.serial(async () => { const p = checkPassword(password); await this.job('create', { password: p }); return true; }); }
 
   // ---- the waits. channel: 'pc' (this PC's window), 'pair' (a phone linking), 'recovery' (the backups' recovery code).

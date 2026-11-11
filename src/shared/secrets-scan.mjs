@@ -36,7 +36,7 @@ export function porcelainPaths(z) {
   }
   return out;
 }
-// 3.2.1: secrets by content, not only by file name (a key pasted into config-prueba.env or notas.txt). The same patterns
+// secrets by content, not only by file name (a key pasted into config-prueba.env or notas.txt). The same patterns
 // as redactSecrets, plus a "KEY = value" assignment whose value looks like a real key (letters and digits, 16+ characters,
 // no code around it), so TOKEN_LIMIT = 123456789012 or apiKey: process.env.API_KEY do not count.
 const CONTENT_PATTERNS = SECRET_PATTERNS.map((re) => new RegExp(re.source, re.flags.replace('g', '')));

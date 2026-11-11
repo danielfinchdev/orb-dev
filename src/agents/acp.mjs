@@ -64,7 +64,7 @@ const textOfContent = (content) => (Array.isArray(content) ? content : [content]
   return '';
 }).filter(Boolean).join('\n');
 
-// 2.6: the models an ACP agent offers in its answer to session/new (or session/load): the "model" config option
+// the models an ACP agent offers in its answer to session/new (or session/load): the "model" config option
 // (options, maybe in groups, and its current value) or the older models field (availableModels, currentModelId).
 export function acpModels(res) {
   const opt = (res?.configOptions ?? []).find((c) => c?.category === 'model' || c?.id === 'model');
@@ -179,7 +179,7 @@ export function acpAgent(id, spec) {
       const modes = res?.modes?.availableModes ?? [];
       const ro = permission === 'leer' && modes.find((m) => /plan|read|ask/i.test(`${m.id} ${m.name}`));
       if (ro) peer.request('session/set_mode', { sessionId, modeId: ro.id }).catch(() => {});
-      // 2.6: the models this agent offers, for the brain selector.
+      // the models this agent offers, for the brain selector.
       const modelOpt = (res?.configOptions ?? []).find((c) => c.category === 'model' || c.id === 'model');
       const offered = acpModels(res);
       if (offered.length) onEvent({ type: 'models', list: offered });
@@ -221,7 +221,7 @@ export function acpAgent(id, spec) {
     return live;
   }
 
-  // 2.6: the models before any conversation: the program in ACP mode, a hello and an empty session (no prompt, nothing is
+  // the models before any conversation: the program in ACP mode, a hello and an empty session (no prompt, nothing is
   // spent), whose answer lists them; then it is closed. Agents with a listing command of their own (listArgs, such as
   // `opencode models`) use it when the session does not say.
   async function discoverModels(exe, cfg = {}, env = {}) {

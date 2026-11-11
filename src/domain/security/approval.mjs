@@ -15,7 +15,7 @@ export function defaultApprovalKey() {
 }
 
 // What the user approves: changing any of this invalidates the approval.
-// 3.8.3: and the task's permission level when it is «Preguntar», and what the user's own message asked for (a task that
+// and the task's permission level when it is «Preguntar», and what the user's own message asked for (a task that
 // may push because the user said «súbelo»): added only when set, so the approvals signed before keep matching.
 export function contentHash(task) {
   const extra = [];
@@ -43,7 +43,7 @@ const KEYWORDS = [
   ['financial', /\b(pago\w*|pagar|compra\w*|comprar|transferencia\w*|payment\w*)\b/i],
   ['external_write', /\b(env[ií]a\w*\s+(un\s+|el\s+)?(correo|email|mensaje)|send\s+(an?\s+)?(email|message)|tweet\w*)\b/i]
 ];
-// 3.2.1: the one rule for deletions the user asked for (the same whether the assistant marked the task as destructive or
+// the one rule for deletions the user asked for (the same whether the assistant marked the task as destructive or
 // the keyword net found it): no separate approval when the user's current request asks to delete (a clause that is not
 // negated) and names every file the task's deleting sentences name. A task that names no file (an app "where notes can be
 // deleted") only needs the request to ask for it. Anything else waits for the click.
@@ -71,7 +71,7 @@ export function detectSensitivity(text) {
   return KEYWORDS.filter(([, re]) => re.test(clean)).map(([tag]) => tag);
 }
 
-// 3.8.3 («Auto»): what the user's OWN message asks for in so many words, which «Auto» then does without another click:
+// «Auto»: what the user's OWN message asks for in so many words, which «Auto» then does without another click:
 // ['publish'] for «súbelo», «haz push», «publica», «despliega»… (not negated). Only ever called with the user's text (a
 // chat turn the user typed, or board.currentRequest), never with an agent's: an agent cannot grant itself a push.
 // Only orders to the agent (imperatives and «git push»), so «añade notificaciones push» or «un botón para publicar» do not

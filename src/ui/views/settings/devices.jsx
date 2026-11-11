@@ -14,7 +14,7 @@ import { t, useT } from '@/lib/i18n.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { save, Row, PREVIEWS, previewOf } from './rows.jsx';
 
-// 3.8.2 (D2): the pairing of «Emparejar móvil»: Android's QR (Depuración inalámbrica) that the engine waits for on the
+// the pairing of «Emparejar móvil»: Android's QR (Depuración inalámbrica) that the engine waits for on the
 // network, or the six-digit code by hand. unlock: the master password's token (pairing gives the agents a way in).
 function PairPanel({ v, set }) {
   const t = useT();
@@ -58,8 +58,8 @@ export function AndroidCard() {
   const t = useT();
   const [st, setSt] = useState(null);
   const [phones, setPhones] = useState([]);
-  const [emus, setEmus] = useState(null); // 3.8.2 (T3 3.17): { sdk, avds } of this PC's Android SDK
-  const [tools, setTools] = useState(null); // 3.8.3: Flutter, the Android SDK and a JDK as they are (engine/dev-tools.mjs)
+  const [emus, setEmus] = useState(null); // { sdk, avds } of this PC's Android SDK
+  const [tools, setTools] = useState(null); // Flutter, the Android SDK and a JDK as they are (engine/dev-tools.mjs)
   const load = () => call('android.status').then(setSt).catch(() => setSt(null));
   const loadPhones = () => call('android.devices').then(setPhones).catch(() => setPhones([]));
   useEffect(() => { load(); const id = setInterval(load, st?.state === 'downloading' ? 1500 : 15000); return () => clearInterval(id); }, [st?.state]);
@@ -141,7 +141,7 @@ export function AndroidCard() {
   );
 }
 
-// Phone access: on/off and the addresses (wifi, Tailscale). 3.5: the QR and the linked devices are in Magic Link.
+// Phone access: on/off and the addresses (wifi, Tailscale). the QR and the linked devices are in Magic Link.
 export function MobileCard() {
   const t = useT();
   const [st, setSt] = useState(null);
@@ -152,7 +152,7 @@ export function MobileCard() {
   const route = (kind) => st.routes?.find((r) => r.kind === kind);
   const via = (kind) => {
     const r = route(kind);
-    // 3.8.2: the local network shows its address; Tailscale, what it allows (its address is in the QR dialog).
+    // the local network shows its address; Tailscale, what it allows (its address is in the QR dialog).
     const hint = st.enabled && st[kind] && !r ? t('settings.mobileUnavailable') : kind === 'wifi' ? (r?.url ?? t('settings.mobileWifiHint')) : t('settings.mobileTsHint');
     return (
       <Row label={t(kind === 'wifi' ? 'settings.mobileWifi' : 'settings.mobileTs')} hint={hint}>
@@ -167,9 +167,9 @@ export function MobileCard() {
         <Row label={t('settings.mobileAccess')} hint={st.enabled && !st.running ? st.error : null}><Switch checked={st.enabled} onCheckedChange={async (enabled) => { const r = await act(call('remote.enable', { enabled })); if (r) setSt(r); }} /></Row>
         {st.enabled ? <div className="grid gap-1">{via('wifi')}{via('tailscale')}</div> : null}
         {st.enabled && st.error && st.running ? <p className="text-muted-foreground text-xs">{st.error}</p> : null}
-        {/* 3.5: the QR, the short code and the linked devices are in Magic Link, below. 3.8.2: the firewall is mentioned
+        {/* the QR, the short code and the linked devices are in Magic Link, below. the firewall is mentioned
             only when linking over the local network fails (app.linkOfflineWifi, on the device). */}
-        {/* 3.5.1: what notifications show when locked. */}
+        {/* what notifications show when locked. */}
         {st.enabled ? (
           <Row label={t('settings.mobilePreview')} hint={t(`settings.mobilePreview.${previewOf(st.preview)}Hint`)}>
             <Select value={previewOf(st.preview)} onValueChange={(preview) => configure({ preview })} data-testid="mobile-preview" title={t('settings.mobilePreview')}

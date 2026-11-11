@@ -1,4 +1,4 @@
-// 3.8.1: Ajustes › Skills y MCP in the engine's API (this PC's window only: src/domain/security/permissions.mjs). The work is in
+// Ajustes › Skills y MCP in the engine's API (this PC's window only: src/domain/security/permissions.mjs). The work is in
 // src/domain/extensions/extensions.mjs; here: the list, turning one on or off, importing (a folder or a git repository), removing
 // (after the master password: it deletes from core), the agents' requests (approve or discard, from the chat card or
 // Ajustes), and improving a server of core in a project («Editar en un proyecto» / «Aplicar cambios»).
@@ -45,9 +45,9 @@ const fail = (key, vars) => { throw new ExtensionError(key, vars, tr); };
 
 export function extensionMethods({ board, emit, log }) {
   const requests = () => { const r = board.settingJson(REQUESTS); return Array.isArray(r) ? r : []; };
-  // 3.8.1 (review H1c B3): the MCP processes change this list too: read and written in one write transaction.
+  // the MCP processes change this list too: read and written in one write transaction.
   const updateRequests = (fn) => { board.transaction(() => board.settingJson(REQUESTS, fn(requests()).slice(-50))); board.changed('settings'); };
-  // B2: and what nothing points to any more goes, once per start.
+  // and what nothing points to any more goes, once per start.
   try { const all = requests(); const keep = cleanExtensionLeftovers(ctx.paths.core, all); if (keep.length !== all.length) updateRequests((list) => list.filter((r) => keep.some((k) => k.id === r.id))); } catch (error) { log(`extensiones: limpieza: ${error.message}`); }
   const edits = () => { const e = board.settingJson(EDITS); return e && typeof e === 'object' && !Array.isArray(e) ? e : {}; };
   const list = () => listExtensions(ctx.paths.core, ctx.config, { projects: board.projects(), requests: requests(), edits: edits() });
@@ -197,7 +197,7 @@ export function extensionMethods({ board, emit, log }) {
       emit('config:changed', ctx.config);
       syncProjects(board);
       log(`extensiones: proyecto ${p.name} movido a ${to}`);
-      // 3.8.1 (review H1c M8): where it is now (the window says so: a program outside Orb may use the old path).
+      // where it is now (the window says so: a program outside Orb may use the old path).
       return { list: list(), moved: { from: p.path, to } };
     },
     // What «Aplicar cambios» would change (the window asks before): the project's version is copied into the quarantine

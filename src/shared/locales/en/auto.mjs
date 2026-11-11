@@ -1,4 +1,4 @@
-// 3.8.3: the «Auto» permission level (src/domain/security/guard.mjs) and its switch in the chats and in Settings.
+// the «Auto» permission level (src/domain/security/guard.mjs) and its switch in the chats and in Settings.
 export default {
   'msg.guard.diskWipe': 'wipes or formats a disk, or changes how the PC boots',
   'msg.guard.credentials': 'touches personal credentials (SSH keys, browsers, the agents’ logins or the Windows credential store), which Orb doesn’t allow',

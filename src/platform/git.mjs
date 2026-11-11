@@ -11,9 +11,9 @@ import { cleanEnv } from './proc.mjs';
 import { PRODUCT } from '../shared/product.mjs';
 
 // Never throws and never returns null output: if git cannot start or times out, status is -1 and stderr carries the reason.
-// 3.8.3 (repaso): Orb's git runs in a project an agent wrote. Its hooks (`worktree add` runs post-checkout) and fsmonitor
+// Orb's git runs in a project an agent wrote. Its hooks (`worktree add` runs post-checkout) and fsmonitor
 // never run as the engine, and the engine's own environment (cleanEnv: no secrets of the app) is not handed to them.
-// (3.8.3, second review: the hooks folder is the null device, never a folder: %TEMP% is open to agents in «Auto».)
+// (the hooks folder is the null device, never a folder: %TEMP% is open to agents in «Auto».)
 const SAFE = ['-c', 'core.fsmonitor=false', '-c', `core.hooksPath=${os.devNull}`];
 export const git = (cwd, ...args) => gitEnv(cwd, {}, ...args);
 export const gitEnv = (cwd, env, ...args) => {
@@ -63,7 +63,7 @@ export const isGitRepo = (dir) => git(dir, 'rev-parse', '--is-inside-work-tree')
 export const repoRoot = (dir) => git(dir, 'rev-parse', '--show-toplevel').stdout.trim().replace(/\//g, path.sep);
 export const isGitRepoAsync = async (dir) => (await gitAsync(dir, {}, 'rev-parse', '--is-inside-work-tree')).stdout.trim() === 'true';
 export const repoRootAsync = async (dir) => (await gitAsync(dir, {}, 'rev-parse', '--show-toplevel')).stdout.trim().replace(/\//g, path.sep);
-// 3.8.1: whether the repository a folder belongs to may have linked worktrees, told from its files alone (each git call is
+// whether the repository a folder belongs to may have linked worktrees, told from its files alone (each git call is
 // a process: ~40 ms on Windows, and the engine's start asked two per project). false: no repository, or one whose .git
 // folder has no linked worktree; true: it has some, or it cannot be told this way (a .git file: the folder is itself a
 // worktree or a submodule; GIT_DIR set; a file that cannot be read for another reason than not being there).

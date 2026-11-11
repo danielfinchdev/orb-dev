@@ -1,4 +1,4 @@
-// 2.7, the phone: a simpler app. The sections are tabs at the bottom (3.6 M3: Chats, Tareas, Proyectos; the rest is in
+// the phone: a simpler app. The sections are tabs at the bottom (Chats, Tareas, Proyectos; the rest is in
 // the menu ☰ of each screen's bar, components/mobile-menu.jsx) instead of the sidebar. What only makes sense on the PC
 // (Agentes, Ajustes, Modo experto, minijuegos, the themes) is not here.
 import { MessagesSquare, ListTodo, FolderKanban, Ellipsis } from 'lucide-react';
@@ -10,7 +10,7 @@ import { MoreContent } from './mobile-menu.jsx';
 import { unreadOf } from '@/lib/inbox.js';
 
 // Which tab a screen belongs to.
-// 3.6 (M3): Chats · Tareas · Proyectos (a conversation belongs to Chats).
+// Chats · Tareas · Proyectos (a conversation belongs to Chats).
 const TAB_OF = { chat: 'chats', session: 'chats', new: 'chats', chats: 'chats', tasks: 'tasks', projects: 'projects' };
 export const tabOf = (view) => TAB_OF[view] ?? 'more';
 
@@ -49,7 +49,7 @@ export function MobileTabs() {
   );
 }
 
-// «Más» (3.6: its content is the menu ☰'s; the screen stays for an old saved route or link).
+// «Más» (its content is the menu ☰'s; the screen stays for an old saved route or link).
 export function MoreView() {
   const t = useT();
   return (

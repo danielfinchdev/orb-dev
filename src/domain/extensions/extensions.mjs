@@ -1,4 +1,4 @@
-// 3.8.1: skills and MCP servers live in core (the owner's definition: core\skills holds every skill, core\mcp every MCP
+// skills and MCP servers live in core (the owner's definition: core\skills holds every skill, core\mcp every MCP
 // server, the ones Orb installs and the ones the user writes). No engine imports: the engine, the agents' MCP server
 // (src/mcp/server.mjs), «Ordenar carpetas» (core-folder.mjs) and the tests use it.
 //   - What is there: listExtensions (Ajustes › Skills y MCP): each skill (its SKILL.md: name, description) and each server
@@ -112,8 +112,8 @@ export function startCommand(dir) {
   for (const rel of PY_FILES) if (has(rel)) return { command: process.platform === 'win32' ? 'python' : 'python3', args: [path.join(dir, rel)] };
   return null;
 }
-// A folder that is an MCP server: its package.json or pyproject (or requirements.txt) names the MCP SDK. 3.8.1 (review
-// H1c B13): a name with «mcp» in it is not enough («Mover a core» is offered only to real servers).
+// A folder that is an MCP server: its package.json or pyproject (or requirements.txt) names the MCP SDK. A name
+// with «mcp» in it is not enough («Mover a core» is offered only to real servers).
 export function isMcpProject(dir) {
   const read = (f) => { try { return fs.readFileSync(path.join(dir, f), 'utf8'); } catch { return ''; } };
   let pkg = null; try { pkg = JSON.parse(read('package.json')); } catch { /* not node */ }
@@ -840,7 +840,7 @@ export async function activateRequest(core, config, request, { tr = null, instal
   if (request.kind === 'skill') return { to, patch: { skills: skillsWith(config, request.name, { enabled: true, source: request.update ? (config.skills ?? []).find((s) => s.name === request.name)?.source ?? 'creado' : 'creado' }) } };
   return { to, patch: { mcpServers: refreshStart(core, config, request.name, { enabled: true, source: request.update ? null : 'creado' }) ?? config.mcpServers ?? [] } };
 }
-// 3.8.1 (review H1c B2): at every start, what nothing points to any more goes: folders of core\preparacion and of the
+// at every start, what nothing points to any more goes: folders of core\preparacion and of the
 // quarantine that no request names (after an hour: an import or a draft may be on its way), and requests still being
 // written or waiting for the user after 30 days (with their folders). → the requests to keep.
 export const STALE_DAYS = 30;

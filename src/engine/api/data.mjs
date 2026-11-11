@@ -1,4 +1,4 @@
-// 3.6 (WS5): the engine's data methods: encrypted backups (src/domain/data/backup.mjs). The daily copy at 03:00 (the owner's
+// the engine's data methods: encrypted backups (src/domain/data/backup.mjs). The daily copy at 03:00 (the owner's
 // time zone) runs from the engine's loop (tick). Moving to another PC is a backup restored there with the recovery code. This PC's window only: no phone calls these.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,7 +11,7 @@ import { legacyData, deleteLegacyData } from '../../domain/data/legacy/migrate-3
 import { utcToZoned, localDay, ownerTz } from '../../shared/tz.mjs';
 import { refused } from './master.mjs';
 
-// A backup's Orb version older than 3.8 (one without a version is not counted).
+// A backup made by an Orb older than 3.8, which kept keys without the master password (one without a version is not counted).
 export const before38 = (v) => { const m = /^(\d+)\.(\d+)/.exec(String(v ?? '')); return Boolean(m) && (Number(m[1]) < 3 || (Number(m[1]) === 3 && Number(m[2]) < 8)); };
 
 const fail = (message) => { const e = new Error(message); e.userFacing = true; throw e; };
@@ -86,7 +86,7 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
     'backup.list': async () => (await K.listBackups(folder())).map(({ file, ...b }) => ({ ...b, path: file })),
     // kind: manual (Ajustes › Datos) or preupdate (the app, before installing a new version).
     'backup.now': ({ kind }) => run(['preupdate', 'premigration'].includes(kind) ? kind : 'manual'),
-    // 3.8: guarded (the master password), and a recovery code typed here has the waits of any password: no trying codes.
+    // guarded (the master password), and a recovery code typed here has the waits of any password: no trying codes.
     'backup.verify': async ({ file, passphrase }) => {
       const full = fileOf(file); const p = pass(passphrase);
       const check = () => K.verifyBackup(full, { secret: secret(), passphrase: p });
@@ -108,7 +108,7 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
       return { ok: true, files: r.files, created: r.header.created, restartNeeded: true };
     },
     // The recovery code: a new one is made and shown once (the user writes it down); copies from now on open with it.
-    // 3.8.1 (Tauri): after «Empezar con una clave nueva», Windows opens the key from before again: go back to it at the
+    // after «Empezar con una clave nueva», Windows opens the key from before again: go back to it at the
     // next start (src-tauri/vault/src/machine.rs › previous_key). Guarded like the recovery code.
     'backup.previousKey': () => {
       if (!ctx.previousKey) fail(tr('data.backup.err.noPreviousKey'));
@@ -121,8 +121,8 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
       K.setRecovery(ctx.home, secret(), value);
       return { code: code ? null : value, at: new Date().toISOString() };
     },
-    // 3.8: what Orb 3.7 left (the archives and the copies of its database), and «Borrar los datos de Orb 3.7».
-    // oldBackups (review F3b M5): the copies made before Orb 3.8 still hold 3.7's keys without the master password.
+    // what Orb 3.7 left (the archives and the copies of its database), and «Borrar los datos de Orb 3.7».
+    // oldBackups: the copies made before Orb 3.8 still hold 3.7's keys without the master password.
     'legacy.status': async () => {
       const d = legacyData(ctx.home);
       const oldBackups = (await K.listBackups(folder())).filter((b) => !b.damaged && before38(b.version)).length;

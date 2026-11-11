@@ -1,4 +1,4 @@
-// 3.8.2: Ctrl+K on the PC: jump to a chat, a task, a project or a place of Orb, or start something, by typing. It adds
+// Ctrl+K on the PC: jump to a chat, a task, a project or a place of Orb, or start something, by typing. It adds
 // to the sidebar's search (the same search, lib/search.js) and never takes the key from what already uses it: a project
 // action with Ctrl+K, the whiteboard's own Ctrl+K or an open dialog keep it.
 import { useEffect, useMemo, useRef, useState } from 'react';

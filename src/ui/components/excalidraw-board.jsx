@@ -1,4 +1,4 @@
-// 2.7: the Pizarra's canvas: Excalidraw itself (MIT), loaded only when the Pizarra opens (it is big). Its fonts are served
+// the Pizarra's canvas: Excalidraw itself (MIT), loaded only when the Pizarra opens (it is big). Its fonts are served
 // from the app (vite.config.mjs copies them to excalidraw/fonts), so it works without internet.
 import { useEffect, useMemo, useRef } from 'react';
 import { Excalidraw, exportToBlob, MainMenu } from '@excalidraw/excalidraw';

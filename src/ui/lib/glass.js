@@ -1,4 +1,4 @@
-// 3.6: the Android app's «glass» look (docs/DESIGN-SYSTEM.md › Android glass). Loaded only by the Android build
+// the Android app's «glass» look (docs/DESIGN-SYSTEM.md › Android glass). Loaded only by the Android build
 // (`vite build --mode android`, see main.jsx): the PC window and a phone's browser never get it. It turns on the layer
 // (html.glass) and, on a modest phone, its light version (html.glass-lite): the same translucent surfaces, but no
 // backdrop blur at all, which is what costs frames in an Android WebView. The CSS also drops the blur by itself when the

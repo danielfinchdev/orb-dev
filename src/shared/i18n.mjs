@@ -1,4 +1,4 @@
-// Translations (2.3): the app speaks Spanish (Spain) and English. One shared module for the interface (React) and the
+// Translations: the app speaks Spanish (Spain) and English. One shared module for the interface (React) and the
 // engine (chat notices, errors the user reads). Keys are short dotted names; a missing key falls back to Spanish, and a
 // missing Spanish text falls back to the key itself (so a forgotten key is visible, never a crash).
 //   t('nav.tasks')                         → 'Tareas' / 'Tasks'

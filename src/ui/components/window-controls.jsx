@@ -1,4 +1,4 @@
-// 2.6: the window's minimise / maximise / close, drawn by the app (no Windows buttons): top right, as tall as the top bars,
+// the window's minimise / maximise / close, drawn by the app (no Windows buttons): top right, as tall as the top bars,
 // over every screen (also the welcome and the dialogs), styled like the rest of the bar in each theme (themes.css:
 // .win-controls). Only in the PC app: a browser (the phone) has its own.
 import { useEffect, useState } from 'react';

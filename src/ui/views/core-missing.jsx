@@ -1,4 +1,4 @@
-// 3.8: «Falta la carpeta core»: core (or its settings) is gone and Orb could not bring it back by itself from the newest
+// «Falta la carpeta core»: core (or its settings) is gone and Orb could not bring it back by itself from the newest
 // backup (none, one this PC cannot open without its recovery code, or a damaged one). The engine waits
 // (engine.mjs › coreBlocked): restore with the code, pick another backup, or go on without one: offered when there is no
 // usable copy, and behind «No tengo el código» when a copy only needs its code (the copies there were are kept aside).

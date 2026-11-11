@@ -6,7 +6,7 @@ import { call, applyTheme, isDark, act, setState, getState, bridge, setSidebarCo
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
-// 2.6: fold the sidebar away / bring it back (wide windows; narrow ones already have it as a drawer).
+// fold the sidebar away / bring it back (wide windows; narrow ones already have it as a drawer).
 export function SidebarToggle({ className, collapsed = false }) {
   const t = useT();
   const label = collapsed ? t('comp.sidebar.expand') : t('comp.sidebar.collapse');

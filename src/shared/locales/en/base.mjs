@@ -20,7 +20,7 @@ export default {
   'nav.folders': 'Projects',
   'nav.loose': 'No project',
   'nav.noProject': 'No project',
-  // 3.2: sidebar foot
+  // sidebar foot
   'nav.memories': 'Memories',
   'nav.memoriesHint': 'Logs and activity: what Orb remembers.',
   'nav.feedback': 'Send feedback',

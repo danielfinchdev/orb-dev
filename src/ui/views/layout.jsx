@@ -1,7 +1,7 @@
-// 3.8: «Ordenar carpetas»: the folders an earlier Orb kept at the top of the workspace (bitacora, android\adb-tools,
+// «Ordenar carpetas»: the folders an earlier Orb kept at the top of the workspace (bitacora, android\adb-tools,
 // each server in mcp-servers) and what to do with each. Nothing moves until «Aplicar» (src/domain/workspace/core-folder.mjs ›
 // applyLayout); a folder some program is using stops it all with a clear message and «Reintentar». Shown after the
-// welcome and when an updated Orb finds them (main.jsx, phase 'layout'). 3.8.1: when the logs went into core, a last
+// welcome and when an updated Orb finds them (main.jsx, phase 'layout'). When the logs went into core, a last
 // screen says once where they are now (other tools, like the user's AGENTS.md or CLAUDE.md, must point there).
 import { useState } from 'react';
 import { ArrowRight, Copy, RotateCw } from 'lucide-react';
@@ -64,7 +64,7 @@ export function LayoutReview({ plan, onDone }) {
   );
 }
 
-// The logs (and 3.8.1, the MCP servers) are in their new place now: exactly where, and what to change outside Orb.
+// The logs (and the MCP servers) are in their new place now: exactly where, and what to change outside Orb.
 function Path({ p, testid }) {
   const t = useT();
   return (

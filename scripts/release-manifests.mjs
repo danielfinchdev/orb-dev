@@ -1,4 +1,4 @@
-// The update manifests of a Windows release (D9), next to the installer `tauri build` made:
+// The update manifests of a Windows release, next to the installer `tauri build` made:
 //   - latest.json: what Orb on Tauri (3.8.1 and later) reads (tauri-plugin-updater): the version, the installer's
 //     address and its minisign signature (the .sig made with Orb's updater key: TAURI_SIGNING_PRIVATE_KEY).
 //   - latest.yml: what Orb 3.8.0 (Electron, electron-updater) reads, pointing at the same installer with its sha512 and

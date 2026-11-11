@@ -1,4 +1,4 @@
-// 3.8.2 (T3 3.11): what the user pointed at in the agents' browser (its little window, «Señalar elemento»): the engine
+// what the user pointed at in the agents' browser (its little window, «Señalar elemento»): the engine
 // says so with 'browser:pointed' { session, path, text } (this PC's window only). The chat it belongs to opens and its
 // message box gets the picture and a line with the element; nothing is sent until the user sends it.
 const waiting = new Map(); // session id -> [{ path, text }]

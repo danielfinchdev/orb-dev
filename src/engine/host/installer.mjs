@@ -21,7 +21,7 @@ export const ITEMS = [
   { id: 'cursor', label: 'Cursor CLI', why: 'agente de Cursor', install: "irm 'https://cursor.com/install?win32=true' | iex" },
   { id: 'gh', label: 'GitHub CLI', why: 'publicar y crear pull requests con tu cuenta', install: winget('GitHub.cli'), needsWinget: true },
   { id: 'tailscale', label: 'Tailscale', why: 'usar el asistente desde el móvil de forma privada', install: winget('Tailscale.Tailscale'), needsWinget: true, optional: true },
-  // 2.3: more agents (ACP). Optional: each one with its own account (Google, GitHub…), signed in with its own program.
+  // more agents (ACP). Optional: each one with its own account (Google, GitHub…), signed in with its own program.
   { id: 'gemini', label: 'Gemini CLI', why: 'agente de Google: contexto enorme, investigar y revisar', install: 'npm install -g @google/gemini-cli', after: ['node'], optional: true },
   { id: 'copilot', label: 'GitHub Copilot CLI', why: 'agente de GitHub, con tu suscripción de Copilot', install: 'npm install -g @github/copilot', after: ['node'], optional: true },
   { id: 'opencode', label: 'OpenCode', why: 'agente abierto con muchos proveedores y modelos', install: 'npm install -g opencode-ai', after: ['node'], optional: true },

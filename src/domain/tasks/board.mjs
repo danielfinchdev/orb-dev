@@ -12,7 +12,7 @@ import { AGENTS, assistantName, checkProjectPath, userName } from './board-commo
 export { AGENTS, assistantName, checkProjectPath, userName } from './board-common.mjs';
 
 
-// limited (2.3): stopped by the account's usage limit; continues by itself when the limit resets (tasks.limited_until).
+// limited: stopped by the account's usage limit; continues by itself when the limit resets (tasks.limited_until).
 export const STATUSES = ['queued', 'awaiting_approval', 'running', 'done', 'failed', 'blocked', 'cancelled', 'limited'];
 const FINISHED = new Set(['done', 'failed', 'cancelled']);
 const MODES = ['carpeta', 'aislada'];
@@ -20,10 +20,10 @@ const parse = (task) => {
   if (!task) return task;
   const { reasoning, fast } = taskOptions({ reasoning: task.reasoning ?? undefined, fast: task.fast == null ? undefined : Boolean(task.fast) });
   task.mode ??= 'carpeta'; task.readonly = Boolean(task.readonly); task.reasoning = reasoning; task.fast = fast;
-  // A corrupt column in one row must not break every list (3.8.3 repaso): it reads as empty.
+  // A corrupt column in one row must not break every list: it reads as empty.
   const list = (v) => { try { const j = JSON.parse(v ?? '[]'); return Array.isArray(j) ? j : []; } catch { return []; } };
   task.depends_on = list(task.depends_on); task.sensitivity = list(task.sensitivity);
-  // 3.8.3: «Auto» or «Preguntar» (null: the global level now) and what the user asked for in so many words.
+  // «Auto» or «Preguntar» (null: the global level now) and what the user asked for in so many words.
   task.user_asked = list(task.user_asked);
   return task;
 };
@@ -34,10 +34,10 @@ export const ofUser = () => (ctx.config?.userName?.trim() ? `de ${ctx.config.use
 // The same two for what the user reads in the app (chat notices), in the language of the settings.
 export const userLabel = () => ctx.config?.userName?.trim() || tr('msg.board.theUser');
 export const ofUserLabel = () => (ctx.config?.userName?.trim() ? tr('msg.board.ofName', { name: ctx.config.userName.trim() }) : tr('msg.board.ofTheUser'));
-// 3.2.1: the tags of a sensitive task in words («elimina datos»), never the internal ones («destructive»).
+// the tags of a sensitive task in words («elimina datos»), never the internal ones («destructive»).
 export const tagWords = (tags) => [...new Set(tags)].map((tag) => { const key = `sensitive.${tag}`; const w = tr(key); return w === key ? tag : w; }).join(', ');
 
-// 3.2.1: an event's text stored as a key (eventKey) is told in the app's language when it is read (Actividad, a task's
+// an event's text stored as a key (eventKey) is told in the app's language when it is read (Actividad, a task's
 // history), not fixed in the language of the moment it happened. A var { k, v } is itself a key; old texts stay as they are.
 const EVENT_KEY = '@t:';
 export const eventKey = (key, vars = {}) => `${EVENT_KEY}${JSON.stringify({ k: key, v: vars })}`;
@@ -55,11 +55,11 @@ export function eventText(detail) {
 const WORKER_STATUSES = ['done', 'failed', 'blocked'];
 // Orchestrator transitions through MCP. Nothing leaves "done"; "awaiting_approval" only leaves through the app (approve/reject);
 // a running task is cancelled from the app because that also stops its process.
-// 3.1: the coordinator may also cancel a running task (or one waiting for its usage to reset): the engine stops its process.
+// the coordinator may also cancel a running task (or one waiting for its usage to reset): the engine stops its process.
 const ORCHESTRATOR_TO = { queued: ['failed', 'blocked', 'cancelled', 'queued'], cancelled: ['queued', 'blocked', 'failed', 'running', 'limited'] };
 
 // Validated model id for an agent: one of its configured models, or any well-formed id when the list is empty (CLI default).
-// 2.6: listed = the models the agent itself reported (models:<agent>), also valid.
+// listed = the models the agent itself reported (models:<agent>), also valid.
 export function checkModel(agent, model, listed = []) {
   if (!model) return null;
   const configured = ctx.config.agents[agent]?.models ?? [];
@@ -86,7 +86,7 @@ export class Board {
   all(sql, ...params) { return this.stmt(sql).all(...params); }
   one(sql, ...params) { return this.stmt(sql).get(...params); }
   run(sql, ...params) { return this.stmt(sql).run(...params); }
-  // 3.8.1: each query is compiled once and kept (the lists of the window run the same few hundred queries on every
+  // each query is compiled once and kept (the lists of the window run the same few hundred queries on every
   // refresh; compiling one costs more than running it). Bounded: SQL built with a variable number of fields or
   // placeholders could otherwise grow it without end. SQLite compiles a kept statement again by itself when the schema
   // changes.
@@ -109,12 +109,12 @@ export class Board {
   }
   settingJson(key, value) {
     if (value === undefined) { try { return JSON.parse(this.setting(key) || 'null'); } catch { return null; } }
-    // 3.8.3: null removes the row (it reads back as null, as before); an empty row left per key piled up for good.
+    // null removes the row (it reads back as null, as before); an empty row left per key piled up for good.
     if (value === null) this.run('DELETE FROM settings WHERE key = ?', key);
     else this.setting(key, JSON.stringify(value));
   }
 
-  // 3.1: the agents this PC can really run (turned on, installed and with an account). The engine keeps the list here
+  // the agents this PC can really run (turned on, installed and with an account). The engine keeps the list here
   // (agents_available), so the MCP processes, the app and the scheduler all check against the same thing. null: not known
   // yet (a board without an engine, e.g. the first instant): nothing is refused.
   availableAgents() { const list = this.settingJson('agents_available'); return Array.isArray(list) ? list : null; }
@@ -160,22 +160,22 @@ export class Board {
 
   // mode: "carpeta" (default: the project folder, in turn with the other writing tasks) or "aislada" (own branch and copy).
   // readonly: the task only reads (research, review): it may run at the same time as others in the same folder.
-  // 3.2: conversation_id: the conversation that asked for it (its report goes back there); a subtask, a review or a join
+  // conversation_id: the conversation that asked for it (its report goes back there); a subtask, a review or a join
   // task belongs to the one of the task it comes from.
   createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false, internal = false, conversation_id = null, autonomy }, actor) {
     if (!MODES.includes(mode)) throw new Error(tr('sys.board.badMode'));
     const proj = this.project(project);
     if (!proj) throw new Error(tr('sys.board.unknownProject', { name: project }));
-    // 3.8.1: a project being deleted takes nothing new (project-close.mjs › checkDelete).
+    // a project being deleted takes nothing new (project-close.mjs › checkDelete).
     if (this.isDeleting(proj.name)) throw new Error(tr('msg.projects.deleting', { name: proj.name }));
     const convId = (conversation_id ? this.conversation(conversation_id)?.id : null) ?? (parent_id ? this.conversationOfTask(parent_id) : review_of ? this.conversationOfTask(review_of) : null);
     // A subtask or a review is checked against the project of its own conversation, not the folder another one set.
     const conversation = convId ? this.conversation(convId) : null;
-    // The folder the work must stay in: the conversation's project (3.2: several conversations work at once, each in its
+    // The folder the work must stay in: the conversation's project (several conversations work at once, each in its
     // own), else the working folder of the app.
     const active = conversation ? (conversation.project ? this.project(conversation.project) : null) : this.activeProject();
-    // 2.7: the projects of a multiplatform group work together: a task may go to a sister of the active project.
-    // 3.1: internal: a task the engine itself needs in that project (joining a copy), whatever project is active now.
+    // the projects of a multiplatform group work together: a task may go to a sister of the active project.
+    // internal: a task the engine itself needs in that project (joining a copy), whatever project is active now.
     if (!internal && active && proj.name !== active.name && actor !== 'usuario' && !(active.grupo && proj.grupo === active.grupo)) throw new Error(tr('sys.board.otherFolder', { name: active.name, path: active.path, user: userName() }));
     if (!title || !description) throw new Error(tr('sys.board.titleAndDesc'));
     title = oneLine(title);
@@ -195,7 +195,7 @@ export class Board {
     if (unknown.length) throw new Error(tr('sys.board.badSensitivity', { list: unknown.join(', ') }));
     ({ reasoning, fast } = taskOptions({ reasoning, fast }));
     const policy = checkPolicy({ agent, model, reasoning, fast });
-    // 3.8.3: the task's level: a subtask takes its parent's, the user may choose it (the API), anything else takes the
+    // the task's level: a subtask takes its parent's, the user may choose it (the API), anything else takes the
     // global one now (Ajustes › Agentes; an agent never chooses it).
     const parentTask = parent_id ? this.task(parent_id) : null;
     const mine = parentTask?.autonomy ?? (actor === 'usuario' && AUTONOMY.includes(autonomy) ? autonomy : globalAutonomy());
@@ -203,12 +203,12 @@ export class Board {
     // Approval does not depend on the creator declaring it: a task made by a worker always waits for the user,
     // and a keyword net adds the tags the creator forgot.
     const tags = [...new Set(sensitivity)]; const reasons = [];
-    // 3.0: fixedBrief: a read-only brief written by Orb itself (Security Review), whose checklist names «secretos» and
+    // fixedBrief: a read-only brief written by Orb itself (Security Review), whose checklist names «secretos» and
     // «credenciales» on purpose; only for code paths of the engine (the API does not pass it).
     let askedNote = null;
     let found = [];
     if (!tags.length && !(fixedBrief && readonly)) { found = detectSensitivity(`${title}\n${description}`); tags.push(...found); }
-    // 3.1: what the user asked for in their own words is already their decision. 3.2.1: one rule, whether the assistant
+    // what the user asked for in their own words is already their decision. One rule, whether the assistant
     // marked the task as destructive or the keyword net found it (approval.mjs deletionAskedByUser): the user's current
     // request asks to delete and names the files the task deletes. Narrow on purpose:
     // - only «destructive» (credentials, payments, publishing and sending stay behind the click whatever was said);
@@ -218,7 +218,7 @@ export class Board {
       tags.splice(tags.indexOf('destructive'), 1); found = found.filter((tag) => tag !== 'destructive');
       askedNote = eventKey('msg.board.askedByUser', { words: { k: 'msg.board.deleteWords' } });
     }
-    // 3.8.3 («Auto»): the words that only meant «inside the project» no longer wait (keys and passwords the code uses,
+    // «Auto»: the words that only mean «inside the project» do not wait (keys and passwords the code uses,
     // deleting inside the folder: the checkpoint undoes it), nor high reasoning (the usage limits cover the cost). A push,
     // a payment, an email or a folder that moved still wait; a push the user's current request asked for does not.
     let asked = [];
@@ -238,8 +238,8 @@ export class Board {
     const parent = parentTask;
     const d = ctx.config.delegation ?? {};
     const quota = parent && this.one('SELECT COUNT(*) AS n FROM tasks WHERE parent_id = ?', parent.id).n < (d.maxPerTask ?? 4);
-    // 3.8.3 («Auto»): a subtask in the same project goes straight to the queue (with the same quota); one for another
-    // project still waits. 3.8.3 (security review): only under a task of the user or the assistant, as before: a subtask's
+    // «Auto»: a subtask in the same project goes straight to the queue (with the same quota); one for another
+    // project still waits. Only under a task of the user or the assistant: a subtask's
     // own subtasks wait (otherwise each level brought 4 more without a click, and each one's deletions are held apart).
     const trusted = parent && d.enabled !== false && !tags.length && quota && ['orb', 'usuario'].includes(parent.created_by)
       && (auto ? parent.project === proj.name : d.trusted !== false);
@@ -259,8 +259,8 @@ export class Board {
   }
 
   // The user's current request in a conversation: their messages since the assistant's answer before the last one (the
-  // request, the plan the assistant proposed and the user's «sí»). 3.2: only that conversation's (with several at once,
-  // another one's words do not count). 3.8.3 (security review): of an answer to a question card, only what the user typed
+  // request, the plan the assistant proposed and the user's «sí»). Only that conversation's (with several at once,
+  // another one's words do not count). Of an answer to a question card, only what the user typed
   // (the question and its options are the assistant's words, and an agent's words never ask for anything).
   currentRequest(convId) {
     const inConv = convId ? ' AND conversation_id = ?' : ' AND conversation_id IS NULL';
@@ -433,10 +433,10 @@ export class Board {
   }
 
   // A dependency counts as done only once its process is gone too, so its automatic commit already happened.
-  // 3.1: and, for one that worked in its own copy alongside others, once its work is in the folder (integrate:<id>).
+  // and, for one that worked in its own copy alongside others, once its work is in the folder (integrate:<id>).
   depsDone(task) { return task.depends_on.every((dep) => this.depDone(this.task(dep))); }
   depDone(d) { return d?.status === 'done' && d.pid == null && !this.setting(`integrate:${d.id}`); }
-  // 3.8.3: why a queued task has not started, for the user (every list of tasks, PC and phone) and the coordinator.
+  // why a queued task has not started, for the user (every list of tasks, PC and phone) and the coordinator.
   // → { kind: 'paused' } (the whole queue is paused) | { kind: 'manual' } (Ajustes: tasks do not start by themselves)
   //   | { kind: 'deps', on: [{ id, status, held }] } (it waits for those)
   //   | { kind: 'notice', text } (what the scheduler said: usage limit, no agent…) | null (its turn comes)
@@ -453,7 +453,7 @@ export class Board {
     const notice = this.setting(`wait_notice:${task.id}`);
     return notice ? { kind: 'notice', text: notice } : null;
   }
-  // 3.8.3: a task Orb stopped after it ran, for the user to review (a mass deletion, a changed remote, a read-only task
+  // a task Orb stopped after it ran, for the user to review (a mass deletion, a changed remote, a read-only task
   // that wrote): blocked, with a «task.held» since its last launch. → { reasons, folder } or null. The reasons are the
   // ones the scheduler wrote at the front of its result («ha eliminado 2714 archivos»).
   heldInfo(task) {
@@ -464,7 +464,7 @@ export class Board {
     const first = String(ev.detail ?? '').split('. ')[0];
     return { reasons: first.startsWith(lead) ? first.slice(lead.length) : first, folder: this.projectPathNow(task) ?? null };
   }
-  // 3.1: a blocked dependency stops its dependents too (until someone unblocks it): they are told, and they no longer hold
+  // a blocked dependency stops its dependents too (until someone unblocks it): they are told, and they no longer hold
   // back the report of the request, which would otherwise never come.
   // Also one whose work could not be joined into the folder because the task joining it by hand did not finish.
   failedDeps(task) {
@@ -501,7 +501,7 @@ export class Board {
     });
   }
 
-  // 3.8: manual tasks an agent took before 3.8 (running, claimed by no direct conversation) go back to the queue: only
+  // manual tasks an agent took (running, claimed by no direct conversation) go back to the queue: only
   // the conversation that claimed a manual task may work on it, and these have none. Called when the engine starts.
   releaseUnclaimed() {
     return this.all("SELECT id FROM tasks WHERE status = 'running' AND launch = 'manual' AND claimed_session IS NULL")
@@ -526,8 +526,8 @@ export class Board {
     return this.all('SELECT e.*, t.title FROM events e LEFT JOIN tasks t ON t.id = e.task_id ORDER BY e.id DESC LIMIT ?', limit).map((e) => ({ ...e, detail: eventText(e.detail) }));
   }
 
-  // 3.2: conversation: the coordinator's, whose project is the one it works in (others may have set the app's folder).
-  // 3.8.3: a task's wait or hold in words for the agents' board (orb_board).
+  // conversation: the coordinator's, whose project is the one it works in (others may have set the app's folder).
+  // a task's wait or hold in words for the agents' board (orb_board).
   explainForAgents(t) {
     const w = this.waitReason(t); const h = this.heldInfo(t);
     const dep = (d) => `#${d.id} (${d.held ? `retenida: ${userName()} la tiene que aceptar o deshacer` : d.status})`;
@@ -546,7 +546,7 @@ export class Board {
       categories: CATEGORIES.map((c) => `${c} — ${ctx.paths.categories[c]}`),
       projects: this.projects().map((p) => `${p.name} — ${p.path}`),
       counts,
-      // 3.8.3: why each queued one waits, and the ones held for the user's review (the coordinator explains them).
+      // why each queued one waits, and the ones held for the user's review (the coordinator explains them).
       active: active.map((t) => ({ id: t.id, project: t.project, title: t.title, agent: t.assigned_to ?? t.agent, launch: t.launch, status: t.status, depends_on: t.depends_on, conversation: t.conversation_id ?? null, ...this.explainForAgents(t) })),
       unreadForYou: agent ? this.inbox(agent, false).length : undefined
     };

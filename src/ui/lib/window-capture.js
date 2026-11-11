@@ -1,6 +1,6 @@
-// 3.8.2: «Capturar ventana» of the composer (PC only). The user picks a window or a screen in the system's own picker,
+// «Capturar ventana» of the composer (PC only). The user picks a window or a screen in the system's own picker,
 // Orb keeps one frame of it as a PNG and stops the capture at once; the picture is attached like any other file. Only
-// the user's click starts it: an agent never gets the screen (D7). Nothing in Rust: the window's web view has
+// the user's click starts it: an agent never gets the screen. Nothing in Rust: the window's web view has
 // getDisplayMedia, and where it does not, the button is not shown.
 export const canCapture = (nav = globalThis.navigator) => typeof nav?.mediaDevices?.getDisplayMedia === 'function';
 

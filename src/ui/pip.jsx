@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils.js';
 import { createT } from '../shared/i18n.mjs';
 
 const host = (url) => { try { return new URL(url).host; } catch { return url; } };
-// 3.8.2 (T3 3.11): where a click fell on the page's picture (shown with object-contain), as fractions of the picture
+// where a click fell on the page's picture (shown with object-contain), as fractions of the picture
 // (4 decimals, as the app expects: src-tauri/src/pip.rs › point_request). → [x, y] or null (outside the picture).
 function pictureFraction(e) {
   const img = e.currentTarget; const box = img.getBoundingClientRect();
@@ -55,7 +55,7 @@ function Pip() {
           <div className="truncate text-xs text-white/90">{who}{state.action ? <span className="text-white/50"> · {state.action}</span> : null}</div>
           <div className="flex items-center gap-1 truncate text-[10.5px] text-white/45">{state.loading ? <LoaderCircle className="size-2.5 animate-spin" /> : null}{host(state.url) || t('pip.noPage')}</div>
         </div>
-        {/* 3.8.2 (T3 3.11): point at an element (it goes to the chat's message box) and record what the agent does. */}
+        {/* point at an element (it goes to the chat's message box) and record what the agent does. */}
         <IconButton label={t('pip.point')} onClick={() => setPointing(!pointing)}><Crosshair className={pointing ? 'text-sky-300' : undefined} /></IconButton>
         {state.recording ? <IconButton label={t('pip.stopRecording')} onClick={() => act('parar')}><Square className="fill-red-500 text-red-500" /></IconButton>
           : <IconButton label={t('pip.record')} onClick={() => act('grabar')}><Circle /></IconButton>}

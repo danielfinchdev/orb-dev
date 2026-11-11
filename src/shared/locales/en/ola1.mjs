@@ -1,4 +1,4 @@
-// 3.6, design wave 1: the composer (action slot, reasoning and orchestrator), Settings in six sections
+// The composer (action slot, reasoning and orchestrator), Settings in six sections
 // and compacting conversations. Loaded last: it also corrects some earlier texts.
 export default {
   // Reasoning: the brain button and its menu

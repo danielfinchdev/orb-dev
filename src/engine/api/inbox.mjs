@@ -1,4 +1,4 @@
-// 3.6 (messaging lists): the chat list, as a messaging app shows it: the conversations with Orbe, grouped by project,
+// the chat list, as a messaging app shows it: the conversations with Orbe, grouped by project,
 // and the marks of the direct conversations with an agent.
 // Each item: what it is (kind conversation | session, id), its title and avatar, its marks (pinned and its order,
 // section, muted), the last message (short plain text, when, from whom: the user or Orbe), how many are unread and what
@@ -35,7 +35,7 @@ export function inboxMethods({ board, emit, orchestrator }) {
     const user = userName();
     const out = [];
     const add = (kind, id, base, conversation) => {
-      // 3.8.1: marks() holds every row; a chat without one has the default marks (no query each).
+      // marks() holds every row; a chat without one has the default marks (no query each).
       const m = marks.get(I.keyOf(kind, id)) ?? I.noMark();
       const last = I.describeLine(lines.get(Number(conversation)) ?? null, { userName: user });
       out.push({ key: I.keyOf(kind, id), kind, id: Number(id), conversation: conversation ?? null, ...base,
@@ -49,7 +49,7 @@ export function inboxMethods({ board, emit, orchestrator }) {
       add('conversation', c.id, { title: c.title, project: c.project ?? null, done: c.status === 'done', avatar: c.project ? { type: 'project', project: c.project } : { type: 'orbe' },
         state: busy ? 'working' : paused ? 'paused' : 'idle', at: c.updated_at }, c.id);
     }
-    // 3.6: the marks of the direct conversations with an agent (pinned, muted); their rows are built by the window.
+    // the marks of the direct conversations with an agent (pinned, muted); their rows are built by the window.
     for (const [key, m] of marks) {
       if (!key.startsWith('session:')) continue;
       const id = key.slice(8);
@@ -112,7 +112,7 @@ export function inboxMethods({ board, emit, orchestrator }) {
       told(it); return I.mark(board, it.kind, it.id);
     },
     'inbox.reorderPins': ({ zone, order }) => { const z = zoneOf(zone); const out = I.reorderPins(board, z, keyList(order)); told({ zone: z }); return out; },
-    // 3.8.2: hidden from the list until `until` (an ISO time, at most a year ahead); until null: back now.
+    // hidden from the list until `until` (an ISO time, at most a year ahead); until null: back now.
     'inbox.snooze': (p) => {
       const it = itemOf(p);
       const until = I.snoozeUntil(p.until);

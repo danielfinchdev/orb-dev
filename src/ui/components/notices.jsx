@@ -1,4 +1,4 @@
-// 2.6: when something happens (tasks finished, the assistant's report ready, something that needs you), the whole robot
+// when something happens (tasks finished, the assistant's report ready, something that needs you), the whole robot
 // comes in at the bottom right with a bubble that says so. Without animations (Ajustes), in the «profesional» theme or on
 // the phone, a notice at the top instead: green when all went well, orange when something needs attention.
 import { useEffect, useRef, useState } from 'react';
@@ -31,9 +31,9 @@ export function Notices() {
   const quiet = ui?.motion === 'minima' || plainSkin(ui?.skin) || bridge.mobile || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   useEffect(() => bridge.on('chat:new', (payload) => {
     const found = noticeOf(payload); if (!found) return;
-    // 3.2: «chat» is the conversation the notice belongs to.
+    // «chat» is the conversation the notice belongs to.
     const n = found.go === 'chat' && payload?.conversation != null ? { ...found, go: { view: 'chat', id: payload.conversation } } : found;
-    // 2.6: less often, so it never gets in the way: not for what is already on screen (the report while in its
+    // less often, so it never gets in the way: not for what is already on screen (the report while in its
     // conversation), and good news at most once a minute; what needs the user always comes.
     const route = getState().route;
     if (found.go === 'chat' && route?.view === 'chat' && (payload?.conversation == null || route.id === payload.conversation) && document.hasFocus()) return;
@@ -41,7 +41,7 @@ export function Notices() {
     last.current = Date.now();
     const title = t(n.level === 'ok' ? 'notice.done' : 'notice.attention');
     const text = cutWords(clean(payload.body), 240);
-    // 3.2: kept for the bell, never twice in a row and one on screen at a time (lib/notify.js).
+    // kept for the bell, never twice in a row and one on screen at a time (lib/notify.js).
     const ms = n.level === 'ok' ? 6000 : 10000;
     const shown = notify({ title, body: text, tone: n.level === 'ok' ? 'success' : 'warning', go: n.go, action: quiet ? { label: t('notice.open'), onClick: () => go(n.go) } : undefined }, { toast: quiet, ms });
     if (quiet || !shown.show) return;
@@ -54,14 +54,14 @@ export function Notices() {
   const close = () => { popupClosed(notice?.key); setNotice(null); };
   useEffect(() => () => clearTimeout(timer.current), []);
   const later = useRef(null);
-  // 3.1: a permission notice goes as soon as the permission is answered (here, in the task or by nobody in time).
+  // a permission notice goes as soon as the permission is answered (here, in the task or by nobody in time).
   useEffect(() => bridge.on('approval:changed', () => {
     // Only when its own task no longer waits (another task may still have one pending).
     const answered = (n) => n?.kind === 'task-approval' && !(getState().app?.approvals ?? []).some((a) => a.session_id === n.session);
     clearTimeout(later.current); later.current = setTimeout(() => setNotice((n) => (answered(n) ? null : n)), 800);
   }), []);
   useEffect(() => () => clearTimeout(later.current), []);
-  // 3.0: while this robot is on screen, the one of the corner (companion.jsx) steps aside: never two robots at once.
+  // while this robot is on screen, the one of the corner (companion.jsx) steps aside: never two robots at once.
   useEffect(() => { setState({ noticeShown: Boolean(notice && !quiet) }); }, [notice, quiet]);
   if (!notice || quiet) return null;
   const ok = notice.level === 'ok';

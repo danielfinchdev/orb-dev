@@ -1,4 +1,4 @@
-// 2.7: which model is for what, in plain words: for each agent, what Orb uses for a simple, a normal and a complex task
+// which model is for what, in plain words: for each agent, what Orb uses for a simple, a normal and a complex task
 // (with the «ahorro ↔ uso» slider as it is now), and its models by kind. Answers «¿cuál uso?» for whoever does not know
 // the names (engine: models.guide → catalog.chooseModel).
 import { useEffect, useState } from 'react';
@@ -21,7 +21,7 @@ export function ModelGuide({ auto }) {
   if (!guide?.length) return null;
   return (
     <div className={cn('grid gap-2.5', !auto && 'opacity-60')} data-testid="model-guide">
-      {/* 3.8.2: what the table means, behind an «ⓘ» next to its title. */}
+      {/* what the table means, behind an «ⓘ» next to its title. */}
       <div className="flex items-center gap-1.5 text-sm font-medium">{t('guide.title')}<InfoTip text={auto ? t('guide.hint') : t('guide.hintOff')} /></div>
       {guide.map((a) => (
         <div key={a.id} className="grid gap-2 rounded-xl border p-3" data-testid={`model-guide-${a.id}`}>
@@ -38,7 +38,7 @@ export function ModelGuide({ auto }) {
               );
             })}
           </div>
-          {/* 3.2.1: read-only tasks (reviews, verifications) may use the light model: said here, so the table is the real rule. */}
+          {/* read-only tasks (reviews, verifications) may use the light model: said here, so the table is the real rule. */}
           {a.readPicks && LEVELS.some(([level]) => a.readPicks[level]?.label !== a.picks[level]?.label) ? (
             <div className="text-muted-foreground text-[11.5px] leading-snug" data-testid={`model-guide-read-${a.id}`}>
               {t('guide.readOnly', { list: LEVELS.map(([level]) => `${t(`guide.level.${level}`)}: ${a.readPicks[level]?.label ?? t('guide.agentOwn')} (${t('guide.reasoning', { level: t(`guide.r.${a.readPicks[level]?.reasoning ?? 'medium'}`) })})`).join(' · ') })}

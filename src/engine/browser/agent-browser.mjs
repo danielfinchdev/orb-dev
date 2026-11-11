@@ -1,4 +1,4 @@
-// 3.8.1 (D2, D7): the agents' browser, living in the engine: its pages, the control pipe the MCP servers
+// the agents' browser, living in the engine: its pages, the control pipe the MCP servers
 // of the agents speak (src/engine/browser/browser-protocol.mjs › servePipe, with the key of each conversation) and the DevTools
 // driver (src/engine/browser/browser-cdp.mjs).
 //
@@ -65,7 +65,7 @@ export function createCdpBrowser({ windows, language = () => 'es', log = () => {
   return {
     pipe: served.pipe, token, ready: served.ready,
     tabs: () => [...tabs.values()],
-    // 3.2.1: when a task ends Orb closes the pages it opened.
+    // when a task ends Orb closes the pages it opened.
     closeTask(task) { const id = String(task ?? ''); if (!id) return; for (const t of [...tabs.values()]) if (String(t.task ?? '') === id) closeTab(t); },
     state: () => ({ tabs: [...tabs.values()].map((t) => ({ agent: t.agent, task: t.task, url: t.url, title: t.title })) }),
     shutdown() {

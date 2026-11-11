@@ -3,7 +3,7 @@
 // no windows of its own. What the phone adds lives in Kotlin (gen/android/app/src/main/java/dev/orb/app): the plugin
 // «orb-native» (the Keystore, «Compartir con Orb», back, QR, dictation and notifications), reached from the page through
 // src/ui/lib/app-bridge.js. Its commands are allowed only to the app's own window (capabilities/mobile.json).
-// The WebView only ever shows Orb's own page (review Android A2): any other address is refused there (Wry would load it
+// The WebView only ever shows Orb's own page: any other address is refused there (Wry would load it
 // in place of Orb, with Tauri's IPC); links out go to the phone's browser (OrbNativePlugin › open_url).
 #[cfg(mobile)]
 use tauri::plugin::{Builder, TauriPlugin};

@@ -7,7 +7,7 @@ import { quietAudioContext } from './audio-context.js';
 
 let ctx = null, out = null, ready = () => false, lastKey = 0, busyUntil = 0;
 const settings = () => { const ui = getState().app?.config?.ui ?? {}; return { on: ui.sounds !== false, volume: ui.volume ?? 0.5 }; };
-// 3.8.3: the context is made at the first key or click (instantly, without its device: lib/audio-context.js), so its
+// the context is made at the first key or click (instantly, without its device: lib/audio-context.js), so its
 // device is ready before Orb's first answer speaks.
 const warm = () => { if (!ctx && settings().on && document.documentElement.dataset.skin !== 'profesional') audio(); };
 window.addEventListener('keydown', () => { lastKey = Date.now(); warm(); }, { capture: true, passive: true });

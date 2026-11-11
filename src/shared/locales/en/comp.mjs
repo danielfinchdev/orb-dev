@@ -83,7 +83,7 @@ export default {
   'comp.sidebar.resize': 'Drag to change the menu’s width',
   'comp.sidebar.viewAll': 'View all ({n})',
   'comp.sidebar.waitApproval': 'Awaiting your approval',
-  // 3.2: conversaciones, menú lateral, buscador y globito
+  // conversaciones, menú lateral, buscador y globito
   'comp.sidebar.clearSearch': 'Clear the search',
-  // 3.2: en singular
+  // en singular
 };

@@ -104,7 +104,7 @@ function DiffView({ text }) {
   if (!text) return <Empty icon={FileDiff} title={t('expert.noChanges')}>{t('expert.noChangesBody')}</Empty>;
   return <DiffLines text={text} className="min-h-full" testid="expert-diff" />;
 }
-// 3.2.1: a picture of the project is shown as a picture (it said «binary file, cannot be shown as text»).
+// a picture of the project is shown as a picture (it said «binary file, cannot be shown as text»).
 const IMAGE = /\.(png|jpe?g|webp|gif)$/i;
 function ImagePreview({ file, name }) {
   const t = useT();
@@ -176,7 +176,7 @@ function RunningPanel() {
   const t = useT();
   const tasks = useStore((s) => s.tasks).filter((t) => t.status === 'running');
   const sessions = useStore((s) => s.sessions).filter((s) => s.status === 'running' && s.kind === 'chat');
-  // 3.2: a conversation answering now (3.8.3: whether it writes and its last step, not each streamed piece).
+  // a conversation answering now (whether it writes and its last step, not each streamed piece).
   const chat = useStore((s) => { const c = s.chats.find((x) => x.busy); const last = Array.isArray(c?.tools) ? c.tools.at(-1) : null; return c ? { busy: true, partial: Boolean(c.partial), step: last && typeof last === 'object' ? stepText(t, last) : '' } : null; });
   const name = useStore((s) => s.app.config.assistantName);
   if (!tasks.length && !sessions.length && !chat?.busy) return <p className="text-muted-foreground px-3 py-2 text-xs">{t('expert.nothingRunning')}</p>;
@@ -257,7 +257,7 @@ export function ExpertView() {
   const panels = app.config.expert?.panels ?? {};
   const on = (id) => panels[id] !== false;
   const [project, setProject] = useState(app.activeProject?.name ?? projects[0]?.name ?? '');
-  // 3.2: the chat of God mode is a conversation of that project (the latest still open, or a new one in it).
+  // the chat of God mode is a conversation of that project (the latest still open, or a new one in it).
   const conversations = useStore((s) => s.conversations) ?? [];
   const latest = (name) => conversations.find((c) => c.project === name && c.status === 'open')?.id ?? null;
   const [conversation, setConversation] = useState(() => latest(app.activeProject?.name ?? projects[0]?.name ?? ''));
@@ -280,13 +280,13 @@ export function ExpertView() {
     <>
       <div className="m-auto max-w-sm p-6 lg:hidden"><Empty icon={Monitor} title={t('expert.tooNarrow')}>{t('expert.tooNarrowBody')}</Empty></div>
       <div className="hidden min-h-0 flex-1 flex-col lg:flex" data-testid="expert-view">
-        {/* 3.8.1: the bar is a container: it leaves room for the window's buttons (wco-pad) and, the narrower it is, the more
+        {/* the bar is a container: it leaves room for the window's buttons (wco-pad) and, the narrower it is, the more
             of its buttons show only their icon (with a tooltip), so nothing ever slides under the minimise / close. */}
         <header className="topbar theme-band app-titlebar wco-pad @container/bar flex h-14 shrink-0 items-center gap-2 overflow-hidden border-b px-3" data-testid="expert-bar">
           {folded ? <SidebarToggle collapsed /> : null}
           <SquareTerminal className="text-primary size-4 shrink-0" /><span className="hidden shrink-0 text-[15px] whitespace-nowrap @2xl/bar:inline">{t('nav.expert')}</span>
           <Select size="sm" value={project} onValueChange={setProject} title={t('expert.project')} className="ml-2 w-40 min-w-24 shrink @4xl/bar:w-56" placeholder={t('expert.pickProject')} options={projects.map((p) => ({ value: p.name, label: p.name }))} />
-          {/* 3.2: the project in an editor, and its actions (commands of the user's own, with their shortcut). */}
+          {/* the project in an editor, and its actions (commands of the user's own, with their shortcut). */}
           <OpenInMenu project={info} labelClassName="hidden @6xl/bar:inline" />
           <ActionsMenu project={info} labelClassName="hidden @4xl/bar:inline" />
           <div className="flex-1" />
@@ -302,7 +302,7 @@ export function ExpertView() {
             </aside>
           ) : null}
           <div className="flex min-w-0 flex-1 flex-col">
-            {/* 3.2.1: the tabs give way (their names cut with «…») instead of running off the edge with a scroll bar. */}
+            {/* the tabs give way (their names cut with «…») instead of running off the edge with a scroll bar. */}
             <div className="bg-sidebar flex h-9 shrink-0 items-end gap-px overflow-x-auto border-b px-1 [scrollbar-width:none]">
               {[{ id: 'chat', label: app.config.assistantName, icon: MessageSquare }, ...tabs].map((tb) => (
                 <div key={tb.id} className={cn('group flex h-8 max-w-52 cursor-pointer items-center gap-1.5 rounded-t-md border border-b-0 px-3 text-[12.5px]', tb.id === 'chat' || tb.id === current ? 'shrink-0' : 'min-w-20 shrink', current === tb.id ? 'bg-background text-foreground' : 'text-muted-foreground hover:text-foreground border-transparent')} onClick={() => setCurrent(tb.id)} title={tb.path}>

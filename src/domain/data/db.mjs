@@ -244,51 +244,51 @@ export function openDb(filename = ctx.paths?.db) {
   db.exec('PRAGMA busy_timeout = 8000; PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA);
   migrate(db);
-  // 3.8: this home's database of 3.5–3.7 is archived and tidied once (after the older migrations above).
+  // this home's database of 3.5–3.7 is archived and tidied once (after the older migrations above).
   if (filename !== ':memory:' && ctx.paths?.db && path.resolve(filename) === path.resolve(ctx.paths.db)) migrateTo38(db);
   return db;
 }
 
 // Columns added after a database was created (each one only if it is missing).
 // tasks.account: account chosen on purpose for the task (optional); tasks.run_account: account it last ran on.
-// 2.3: sessions.context (how full the context is, JSON), sessions.settled (done, moved down in the menu), sessions.parent_id
+// sessions.context (how full the context is, JSON), sessions.settled (done, moved down in the menu), sessions.parent_id
 // (forked from), tasks.parent_id (subtask of), tasks.limited_until (waiting for the usage limit to reset), tasks.review_of
 // (a Task Review of that task), tasks.schedule_id (created by a schedule).
 const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], ['sessions', 'account', 'TEXT'], ['chat', 'meta', 'TEXT'],
   ['sessions', 'context', 'TEXT'], ['sessions', 'settled', 'INTEGER NOT NULL DEFAULT 0'], ['sessions', 'parent_id', 'TEXT'],
   ['tasks', 'parent_id', 'INTEGER'], ['tasks', 'limited_until', 'TEXT'], ['tasks', 'review_of', 'INTEGER'], ['tasks', 'schedule_id', 'INTEGER'],
-  // 2.7: how hard the task is (simple / normal / complejo), for Orb to choose its model and reasoning.
+  // how hard the task is (simple / normal / complejo), for Orb to choose its model and reasoning.
   ['tasks', 'level', 'TEXT'],
-  // 3.8.3: the task's permission level («auto» or «preguntar»; null = the global one) and what the user's own message asked
+  // the task's permission level («auto» or «preguntar»; null = the global one) and what the user's own message asked
   // for (JSON list: ["publish"]), src/domain/tasks/board.mjs › createTask.
   ['tasks', 'autonomy', 'TEXT'], ['tasks', 'user_asked', 'TEXT'],
-  // 2.7: the multiplatform group a project belongs to (tienda-android and tienda-ios share «tienda»).
+  // the multiplatform group a project belongs to (tienda-android and tienda-ios share «tienda»).
   ['projects', 'grupo', 'TEXT'],
-  // 3.8.2: «Usar mi móvil Android», given to a chat with the master password (src/engine/security/grants.mjs).
+  // «Usar mi móvil Android», given to a chat with the master password (src/engine/security/grants.mjs).
   ['sessions', 'android', 'INTEGER NOT NULL DEFAULT 0'],
-  // 2.3.3: each phone has its own key (end-to-end encryption), the way it was paired and its notifications.
+  // each phone has its own key (end-to-end encryption), the way it was paired and its notifications.
   ['devices', 'public_key', 'TEXT'], ['devices', 'route', 'TEXT'], ['devices', 'push', 'TEXT'],
-  // 3.5 (Magic Link): what was linked (phone or browser), its last address and what it told about itself (version).
+  // Magic Link: what was linked (phone or browser), its last address and what it told about itself (version).
   ['devices', 'kind', 'TEXT'], ['devices', 'ip', 'TEXT'], ['devices', 'meta', 'TEXT'],
-  // 3.2: the conversation a chat line belongs to and the one that asked for a task.
+  // the conversation a chat line belongs to and the one that asked for a task.
   ['chat', 'conversation_id', 'INTEGER'], ['tasks', 'conversation_id', 'INTEGER'],
   // 3.5–3.7: a bot's own conversation (bot_id) and a group's (group_id). 3.8 has none (the 3.8 migration archives them);
   // the conversations are still read with «bot_id IS NULL AND group_id IS NULL» until 3.9 drops the columns.
   ['conversations', 'bot_id', 'INTEGER'], ['conversations', 'group_id', 'INTEGER'],
-  // 3.8: the direct conversation (session) that claimed a manual task: only that one may work on it.
+  // the direct conversation (session) that claimed a manual task: only that one may work on it.
   ['tasks', 'claimed_session', 'TEXT'],
-  // 3.8: the task a worker's message comes from (task_id is then the task it is for: its own, or a sibling's).
+  // the task a worker's message comes from (task_id is then the task it is for: its own, or a sibling's).
   ['messages', 'from_task', 'INTEGER'],
-  // 3.8.2: a chat snoozed until then (hidden from the list; the scheduler brings it back).
+  // a chat snoozed until then (hidden from the list; the scheduler brings it back).
   ['inbox_items', 'snoozed_until', 'TEXT'],
-  // 3.8.2: a schedule whose runs all go to one chat (made on its first run, or the one that asked for it).
+  // a schedule whose runs all go to one chat (made on its first run, or the one that asked for it).
   ['schedules', 'same_chat', 'INTEGER NOT NULL DEFAULT 0'], ['schedules', 'conversation_id', 'INTEGER']];
 // (3.6-3.7's person_id columns and chat.uid are no longer added: only a 3.7 database has them, emptied by the 3.8
 // migration (src/domain/data/legacy/migrate-38.mjs) and dropped in 3.9.)
 export function migrate(db) {
-  // 3.2: whether a direct conversation already has its title (Orb names a new one from its first message); the ones made
+  // whether a direct conversation already has its title (Orb names a new one from its first message); the ones made
   // before keep theirs.
-  // 3.7: two processes may open a new or older database at the same moment (the engine and a bot's MCP server): the
+  // two processes may open a new or older database at the same moment (the engine and a bot's MCP server): the
   // other one adding the column first is not an error.
   const addColumn = (sql) => { try { db.exec(sql); return true; } catch (error) { if (/duplicate column name/i.test(String(error?.message))) return false; throw error; } };
   if (!db.prepare('PRAGMA table_info(sessions)').all().some((c) => c.name === 'titled')) {
@@ -298,7 +298,7 @@ export function migrate(db) {
     const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
     if (!has) addColumn(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }
-  // 3.0: indexes for lookups that run on every refresh of an open task or at start (on columns that may have just been
+  // indexes for lookups that run on every refresh of an open task or at start (on columns that may have just been
   // added above, so not in SCHEMA).
   db.exec(`CREATE INDEX IF NOT EXISTS messages_task ON messages (task_id, id);
     CREATE INDEX IF NOT EXISTS tasks_parent ON tasks (parent_id);
@@ -309,7 +309,7 @@ export function migrate(db) {
     -- 3.8.1: the assistant's questions that wait for the user (the chat list asks on every refresh; without it, the whole
     -- chat table was read each time).
     CREATE INDEX IF NOT EXISTS chat_questions ON chat (conversation_id) WHERE meta LIKE '%"kind":"question"%';`);
-  // 3.6: the direct conversations with an agent get marks too (pinned, muted): an inbox_items made before that only took
+  // the direct conversations with an agent get marks too (pinned, muted): an inbox_items made before that only took
   // bots, groups and conversations is rebuilt with the wider check (same rows).
   // Inside a write lock and checked again there: the engine and the MCP servers may open the database at the same moment.
   const inboxSql = () => db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'inbox_items'").get()?.sql;
@@ -326,15 +326,15 @@ export function migrate(db) {
     } catch (error) { db.exec('ROLLBACK'); throw error; }
   }
   migrateConversations(db);
-  // 2.7.3: the notices saved as grey system lines before 2.7 (working folder, mode, brain, new conversation…) become
-  // notices too, so the old ones leave the chat like the new ones. Only system lines with those exact openings. 3.0: once
+  // the notices saved as grey system lines before 2.7 (working folder, mode, brain, new conversation…) become
+  // notices too, so the old ones leave the chat like the new ones. Only system lines with those exact openings. Once
   // per database (no grey line of those is written any more), not at every start of the engine and of each MCP server.
   if (db.prepare("SELECT value FROM settings WHERE key = 'notices_migrated'").get()) return;
   const where = OLD_NOTICES.map(() => 'body LIKE ?').join(' OR ');
   db.prepare(`UPDATE chat SET role = 'notice' WHERE role = 'system' AND (${where})`).run(...OLD_NOTICES);
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('notices_migrated', '1')").run();
 }
-// 3.2: the chat before 3.2 was one long line cut by «Nueva conversación» notices. Once per database, each piece with
+// the chat before 3.2 was one long line cut by «Nueva conversación» notices. Once per database, each piece with
 // something the user wrote becomes a conversation of its own (the pieces without, such as the lines of a task that ended
 // later, join the one before); the tasks the assistant created go with the conversation they were asked in, and the
 // assistant's live conversation continues in the last one. Nothing is deleted.

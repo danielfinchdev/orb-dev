@@ -1,4 +1,4 @@
-// 3.8.2 (fase 3): «Acceso total al PC», «Usar mi móvil Android» y el emparejamiento del móvil (Ajustes › Android).
+// «Acceso total al PC», «Usar mi móvil Android» y el emparejamiento del móvil (Ajustes › Android).
 export default {
   'msg.guard.adb': 'ejecuta adb; usa las herramientas orb_android_* (adb a mano solo con «Acceso total» y «Usar mi móvil Android»)',
   'msg.guard.driveAlias': 'crea otro nombre para una unidad o carpeta (subst, net use, New-PSDrive), que Orb no permite',

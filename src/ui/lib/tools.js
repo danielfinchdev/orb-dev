@@ -1,4 +1,4 @@
-// 3.2.1: the agents' tool calls as people read them: no internal names («mcp__opti__opti_propose», «ToolSearch»), no raw
+// the agents' tool calls as people read them: no internal names («mcp__opti__opti_propose», «ToolSearch»), no raw
 // JSON, and commands without the escaping they come with («C:\\WINDOWS\\…», '"'"').
 
 // The command inside «"…\powershell.exe" -Command '…'» (Codex shows the whole call), with its quoting undone, and Windows

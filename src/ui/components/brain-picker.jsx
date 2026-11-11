@@ -1,4 +1,4 @@
-// 2.6: what the chat runs on, chosen under the message box: the brain (agent + model, one list grouped by agent), the
+// what the chat runs on, chosen under the message box: the brain (agent + model, one list grouped by agent), the
 // reasoning and, for a direct chat, the permissions. A bubble warns when the account's usage runs high.
 import { useEffect, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Flame, Lightbulb, Star, X } from 'lucide-react';
@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { keepIfSame } from '@/lib/memo.js';
 
-// The installed agents with their models (engine: models.catalog), read again when the settings change. 3.8.1 (H4a): the
+// The installed agents with their models (engine: models.catalog), read again when the settings change. The
 // same catalog stays the same object (the memoised blocks of a direct conversation compare it by reference, and the app's
 // version changes several times a second while an agent works).
 export function useCatalog() {
@@ -23,9 +23,9 @@ export function useCatalog() {
   return catalog;
 }
 
-// 3.0: an account with its own plan has its own models (Codex Go and Pro); the others use the agent's list.
+// an account with its own plan has its own models (Codex Go and Pro); the others use the agent's list.
 export const modelsOf = (a, account) => (account && a?.accountModels?.[account]) || a?.models || [];
-// 3.2.1: a model's name as the selector shows it, wherever the id comes from (an alias like «sonnet», the full id the
+// a model's name as the selector shows it, wherever the id comes from (an alias like «sonnet», the full id the
 // agent reports like «claude-sonnet-5-5» or «gpt-6-luna»); never the raw id.
 export function modelLabel(catalog, agent, id) {
   if (!id) return '';
@@ -36,7 +36,7 @@ export function modelLabel(catalog, agent, id) {
     ?? (/^(sonnet|opus|haiku)$/.test(low) ? all.find((m) => m.id.toLowerCase().includes(low)) : null);
   return hit?.label ?? prettyModel(id);
 }
-// 3.2.1: the models the account has no usage of now (Cursor's API models after «usage limit») go last, dimmed.
+// the models the account has no usage of now (Cursor's API models after «usage limit») go last, dimmed.
 const usableFirst = (list) => [...list].sort((x, y) => Number(Boolean(x.limitedUntil)) - Number(Boolean(y.limitedUntil)));
 const untilShort = (ms, locale) => { const d = new Date(ms); return ms - Date.now() > 20 * 3_600_000 ? d.toLocaleDateString(locale, { day: 'numeric', month: 'short' }) : d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }); };
 const modelOf = (catalog, value) => modelsOf(catalog?.find((a) => a.id === value.agent), value.account).find((m) => m.id === (value.model ?? '')) ?? null;
@@ -49,9 +49,9 @@ export function BrainPicker({ catalog, value, onChange, className }) {
   const agent = catalog?.find((a) => a.id === value.agent);
   const model = modelOf(catalog, value);
   // On the button, the agent's default reads as the model it stands for (Codex · GPT-6-Luna), without «Predeterminado».
-  // 3.6: with no model chosen and none the agent names, just the agent («Claude»), never «predeterminado».
+  // with no model chosen and none the agent names, just the agent («Claude»), never «predeterminado».
   const label = !value.model ? (model?.defaultOf ?? '') : model && agent ? labelOf(agent, model, t) : modelLabel(catalog, value.agent, value.model);
-  // 3.1: with several accounts of one agent (Codex Go and Codex Pro), the button names the account in use.
+  // with several accounts of one agent (Codex Go and Codex Pro), the button names the account in use.
   const who = agent?.accounts?.length > 1 ? agent.accounts.find((x) => x.id === value.account)?.label ?? agent.label : agent?.label;
   return (
     <DropdownMenu>
@@ -59,13 +59,13 @@ export function BrainPicker({ catalog, value, onChange, className }) {
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm" className={cn('max-w-64 gap-1.5', className)} data-testid="brain-picker" aria-label={t('brain.title')}>
             <AgentIcon agent={value.agent} className="size-4" />
-            {/* 3.6: on a phone, the model only (the icon says the agent), so the row stays on one line. */}
+            {/* on a phone, the model only (the icon says the agent), so the row stays on one line. */}
             <span className="truncate">{label ? <><span className="max-sm:hidden">{who ?? value.agent} · </span>{label}</> : <span className="max-sm:hidden">{who ?? value.agent}</span>}</span>
             <ChevronDown className="size-3.5 opacity-60" />
           </Button>
         </DropdownMenuTrigger>
       </BubbleTip>
-      {/* 3.2.1: closing the menu does not put the focus back on its button: that opened the bubble, which then covered
+      {/* closing the menu does not put the focus back on its button: that opened the bubble, which then covered
           the project picker next to it. */}
       <DropdownMenuContent align="start" className="max-h-[60vh] w-72 overflow-y-auto" onCloseAutoFocus={(e) => e.preventDefault()}>
         {!catalog?.length ? <div className="text-muted-foreground px-2 py-1.5 text-xs">{t('brain.none')}</div> : <BrainGroups catalog={catalog} value={value} onChange={onChange} />}
@@ -74,7 +74,7 @@ export function BrainPicker({ catalog, value, onChange, className }) {
   );
 }
 
-// 2.6: the list folded, so it stays short: «Recomendados» first (the assistant's Claude models and Codex's usual one),
+// the list folded, so it stays short: «Recomendados» first (the assistant's Claude models and Codex's usual one),
 // then one group per agent; one group open at a time. The group of the brain in use says which model it is.
 function BrainGroups({ catalog, value, onChange }) {
   const t = useT();
@@ -89,7 +89,7 @@ function BrainGroups({ catalog, value, onChange }) {
     return (
       <DropdownMenuItem key={key} onSelect={() => onChange({ agent: a.id, model: m.id, account })} className={cn(m.limitedUntil && 'opacity-55')} data-testid={`brain-${acc?.id ?? a.id}-${m.id || 'default'}${withAgent ? '-rec' : ''}`}>
         {withAgent ? <AgentIcon agent={a.id} className="ml-5 size-3.5" /> : null}
-        {/* 2.7: each model says what it is for (fast, balanced, most capable), so no one has to know the names. */}
+        {/* each model says what it is for (fast, balanced, most capable), so no one has to know the names. */}
         <span className={cn('grid min-w-0 flex-1', !withAgent && 'pl-5')}>
           <span className="truncate">{withAgent ? `${a.label} · ` : ''}{labelOf(a, m, t)}</span>
           {m.limitedUntil ? <span className="text-warning-ink truncate text-[11px] leading-tight">{t('brain.noUsage', { when: untilShort(m.limitedUntil, locale) })}</span>
@@ -114,7 +114,7 @@ function BrainGroups({ catalog, value, onChange }) {
       <DropdownMenuSeparator />
     </> : null}
     {catalog.map((a) => {
-      // 3.1: one group per account when the agent has several (Codex Go, Codex Pro), each with its own models.
+      // one group per account when the agent has several (Codex Go, Codex Pro), each with its own models.
       if (a.accounts?.length > 1) return a.accounts.map((acc) => {
         const own = usableFirst(modelsOf(a, acc.id)); const models = own.length ? own : [{ id: '', label: t('brain.defaultOf', { agent: acc.label }) }];
         const current = value.agent === a.id && value.account === acc.id ? models.find((m) => m.id === (value.model ?? '')) : null;
@@ -136,7 +136,7 @@ function BrainGroups({ catalog, value, onChange }) {
   </>);
 }
 
-// 3.6: the reasoning levels Orb offers; «Extra» (xhigh) only for the models whose agent says they take it.
+// the reasoning levels Orb offers; «Extra» (xhigh) only for the models whose agent says they take it.
 export const REASONING_LEVELS = ['low', 'medium', 'high', 'xhigh'];
 const USUAL_LEVELS = ['low', 'medium', 'high'];
 export function levelsFor(catalog, value) {
@@ -144,7 +144,7 @@ export function levelsFor(catalog, value) {
   return m?.efforts?.length ? REASONING_LEVELS.filter((l) => m.efforts.includes(l)) : USUAL_LEVELS;
 }
 
-// 3.6 (DESIGN-SYSTEM §2.2): the reasoning as a brain button that opens Bajo · Medio · Alto · Extra (the levels the model
+// the reasoning (DESIGN-SYSTEM §2.2) as a brain button that opens Bajo · Medio · Alto · Extra (the levels the model
 // takes), the current one ticked. Each option says its relative usage under its name and, on hover, the usual tasks for
 // it. value: { agent, model, account, reasoning }; levels: to give the list instead of reading it from the catalog.
 export function ReasoningMenu({ catalog, value, onChange, levels, disabled }) {
@@ -156,7 +156,7 @@ export function ReasoningMenu({ catalog, value, onChange, levels, disabled }) {
     <DropdownMenu>
       <BubbleTip title={t('reasoning.title', { level: name })} text={t('reasoning.titleText')} side="top">
         <DropdownMenuTrigger asChild>
-          {/* 3.6: a pill with the brain and the chosen level («Alto»), as tall as the model picker. */}
+          {/* a pill with the brain and the chosen level («Alto»), as tall as the model picker. */}
           <Button variant="outline" size="sm" className="shrink-0 gap-1.5" disabled={disabled} aria-label={t('reasoning.title', { level: name })} data-testid="reasoning-picker" data-level={current}>
             <BrainIcon className="size-4" /><span data-testid="reasoning-level">{name}</span>
           </Button>
@@ -179,7 +179,7 @@ export function ReasoningMenu({ catalog, value, onChange, levels, disabled }) {
   );
 }
 
-// 3.6: four small bars, as many filled as the level uses (Bajo 1 … Extra 4); the words are in the option's bubble.
+// four small bars, as many filled as the level uses (Bajo 1 … Extra 4); the words are in the option's bubble.
 const METER = { low: 1, medium: 2, high: 3, xhigh: 4 };
 function UsageMeter({ level }) {
   const n = METER[level] ?? 2;
@@ -190,7 +190,7 @@ function UsageMeter({ level }) {
   );
 }
 
-// 3.2: why the account may run out soon (or null). Only from its real usage (what the agent reports): 75 % or more, or
+// why the account may run out soon (or null). Only from its real usage (what the agent reports): 75 % or more, or
 // 50 % with a choice that spends more (a heavy model or high reasoning). Without that figure, nothing: the model alone
 // is no reason to warn (the bubble came out far too often).
 export function usageWarning(catalog, value, t) {
@@ -226,7 +226,7 @@ export function UsageBubble({ text, onClose }) {
   );
 }
 
-// 3.2: shown for 3 seconds and, once shown, not again for that account for a while (45 min, remembered on this PC); it
+// shown for 3 seconds and, once shown, not again for that account for a while (45 min, remembered on this PC); it
 // stays in the bell (lib/notify.js).
 const SHOW_MS = 3000;
 const QUIET_MS = 45 * 60_000;

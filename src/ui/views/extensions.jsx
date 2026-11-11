@@ -1,4 +1,4 @@
-// 3.8.1: Ajustes › Skills y MCP (src/engine/api/extensions.mjs): every skill and MCP server of core (on or off, where it
+// Ajustes › Skills y MCP (src/engine/api/extensions.mjs): every skill and MCP server of core (on or off, where it
 // came from, its folder, removing it after the master password), «Importar» (a folder or a git repository: it comes in
 // off), what agents made and wait for the user («Activar» / «Descartar»), the connectors of the PC (a package run with
 // npx…) and the projects that are MCP servers («Usar», «Mover a core»). A server of core is improved in a project
@@ -245,7 +245,7 @@ async function applyFlow(name, run) {
   if (!await confirm(t('ext.applyTitle', { name }), `${t('ext.applyBody', { path: check.path, n })}\n\n${lines}${n > 12 ? `\n${t('ext.andMore', { n: n - 12 })}` : ''}`, { ok: t('ext.apply') })) return;
   const done = await run(call('extensions.apply', { name, id: check.id }), t('ext.applied', { name }));
   if (!done) return;
-  // 3.8.1 (review H1c M6): the project's copy stays «en edición» until it goes: keep editing, or delete it (Proyectos'
+  // the project's copy stays «en edición» until it goes: keep editing, or delete it (Proyectos'
   // own deletion, with the master password; the row stops saying so by itself).
   const project = (getState().projects ?? []).find((p) => String(p.path).toLowerCase() === String(check.path).toLowerCase());
   if (!project || bridge.mobile || !bridge.deleteProject) return;

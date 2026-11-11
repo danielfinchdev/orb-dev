@@ -1,4 +1,4 @@
-// 3.6 (messaging, step M3): the chat list (docs/DESIGN-SYSTEM.md › 2.5, mockup mensajeria.html ?z=orb). On the PC it is
+// the chat list (docs/DESIGN-SYSTEM.md › 2.5, mockup mensajeria.html ?z=orb). On the PC it is
 // the left pane; on the phone the «Chats» tab. From the top: search (titles, projects, the
 // messages and «#12» for a task) with its filter, «+» (Nuevo chat, Nuevo proyecto), the zone's other places (PC: Tareas,
 // Proyectos, Programadas, Pizarra, and «Más» with God mode when it is on), the pinned
@@ -39,7 +39,7 @@ export function useOrbItems() {
   const conversations = useStore((s) => s.conversations);
   const sessions = useStore((s) => s.sessions);
   const tasks = useStore((s) => s.tasks);
-  // 3.8.3: only which conversations are answering (a streamed piece does not redraw the list).
+  // only which conversations are answering (a streamed piece does not redraw the list).
   const liveKey = useStore((s) => s.chats.filter((c) => c.busy || c.waiting).map((c) => c.conversation).join(','));
   const chats = useMemo(() => (liveKey ? liveKey.split(',').map((c) => ({ conversation: Number(c), busy: true })) : []), [liveKey]);
   const approvals = useStore((s) => s.app?.approvals);
@@ -51,10 +51,10 @@ export const openOrbItem = (x) => go(x.kind === 'session' ? { view: 'session', i
 const isOpen = (route, x) => (x.kind === 'session' ? route.view === 'session' : route.view === 'chat') && route.id === x.id;
 const conversationRef = (x) => ({ kind: x.kind === 'session' ? 'session' : 'conversation', id: x.id });
 
-// 3.8.1 (H1e): the chat's avatar. Big: its project's icon (its own picture or its coloured initials); without a project,
+// the chat's avatar. Big: its project's icon (its own picture or its coloured initials); without a project,
 // Orbe's head. In the corner: the marks of the agents that worked in it (lib/inbox.js › agentsOf: the brain or a direct
 // conversation's agent first, then its tasks' agents), stacked like avatars, the first on top; past three, two and
-// «+N» (3.8.2: lib/inbox.js › avatarStack keeps any number inside the avatar, fewer marks on a small one). Hovering it
+// «+N» (lib/inbox.js › avatarStack keeps any number inside the avatar, fewer marks on a small one). Hovering it
 // lists every agent. An agent Orb no longer knows gets the neutral mark.
 const STACK = 3;
 export function OrbAvatar({ item, size = 40 }) {
@@ -91,9 +91,9 @@ export function OrbAvatar({ item, size = 40 }) {
 export function useOrbActions(item) {
   const t = useT();
   if (!item) return [];
-  // 3.6: a direct conversation with an agent: pinned and muted like the others; completed through the sidebar's mark.
+  // a direct conversation with an agent: pinned and muted like the others; completed through the sidebar's mark.
   const rename = { id: 'rename', icon: PencilLine, label: t('orbchats.rename'), run: () => renameChat(item, t) };
-  // 3.8.2: snooze until a time (the scheduler brings it back), or back now.
+  // snooze until a time (the scheduler brings it back), or back now.
   const snooze = item.snoozedUntil
     ? { id: 'unsnooze', icon: AlarmClockOff, label: t('orbchats.unsnooze'), run: () => orbAct('inbox.snooze', { ...conversationRef(item), until: null }) }
     : { id: 'snooze', icon: AlarmClock, label: t('orbchats.snooze'), run: () => snoozeChat(item, t) };
@@ -120,7 +120,7 @@ export function useOrbActions(item) {
     { id: 'delete', icon: Trash2, label: t('orbchats.delete'), danger: true, run: () => deleteChat(item, t) }
   ];
 }
-// 3.8.2: «Renombrar» from the list's ⋯ (and the chat's own ⋯): the same title a chat or an agent's conversation already has.
+// «Renombrar» from the list's ⋯ (and the chat's own ⋯): the same title a chat or an agent's conversation already has.
 export function renameChat(item, t) {
   const method = item.kind === 'session' ? 'sessions.update' : 'conversations.update';
   return form(t('chat.renameTitle'), {
@@ -130,7 +130,7 @@ export function renameChat(item, t) {
     onOk: async (v) => { const r = await call(method, { id: item.id, title: v.title.trim() || item.title }); refreshSoon(); loadOrbInbox(); return r; }
   });
 }
-// 3.8.2: «Posponer»: a quick time or a date and time of the user's choice (local), sent as an ISO time.
+// «Posponer»: a quick time or a date and time of the user's choice (local), sent as an ISO time.
 const localInput = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
 export function snoozeChat(item, t) {
   const quick = snoozeTimes();
@@ -169,7 +169,7 @@ export async function deleteChat(item, t) {
   if (!ok) return false;
   const r = getState().route;
   if (r.view === 'chat' && r.id === item.id) { closeOrbInfo(); go({ view: phoneLayout() ? 'chats' : 'chat' }); }
-  // 3.8.3: gone from the list as soon as the engine agrees (it waited for the refresh that follows); the reads after it
+  // gone from the list as soon as the engine agrees (it waited for the refresh that follows); the reads after it
   // bring the same.
   const key = `conversation:${item.id}`;
   setState((s) => ({ conversations: s.conversations.filter((c) => c.id !== item.id), ...(s.orbInbox?.items ? { orbInbox: { ...s.orbInbox, items: s.orbInbox.items.filter((x) => x.key !== key) } } : {}) }));
@@ -292,7 +292,7 @@ function ProjectHead({ group, open, phone }) {
   );
 }
 
-// 3.8.1 (H4a): a long list draws its first rows at once and the rest right after, a step each time the window is idle:
+// a long list draws its first rows at once and the rest right after, a step each time the window is idle:
 // the app's first screen does not wait for hundreds of rows nobody sees yet.
 function useGrowing(total, first = 40, step = 80) {
   const [n, setN] = useState(first);
@@ -425,7 +425,7 @@ export function OrbInbox({ page = false }) {
     const okAgent = (x) => filter.agent === 'all' || x.agent === filter.agent;
     return {
       chats: items.filter((x) => hit(x) && okAgent(x)).sort((a, b) => String(b.at ?? '').localeCompare(String(a.at ?? ''))).slice(0, 40),
-      // 3.8.2: after the tasks found by their title or number, the ones whose brief or result say it (tasks.search).
+      // after the tasks found by their title or number, the ones whose brief or result say it (tasks.search).
       tasks: (() => { const own = tasks.filter((x) => `#${x.id}` === q || String(x.title).toLowerCase().includes(q)).slice(0, 12); const ids = new Set(own.map((x) => x.id)); return [...own, ...(found?.tasks ?? []).filter((x) => !ids.has(x.id))].slice(0, 12); })(),
       projects: projects.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 10)
     };

@@ -1,4 +1,4 @@
-// 3.8.1: the end of a project (Proyectos › right click, or «…»):
+// the end of a project (Proyectos › right click, or «…»):
 //   - finishProject: everything of it is closed (its pending tasks cancelled, its tasks, conversations and direct
 //     conversations in «Completadas», its schedules paused) and it leaves Orb's lists, while its folder stays where it
 //     is. FINISHED_PROJECTS remembers it, so the project sync (projects.mjs › syncProjects) does not bring it back;

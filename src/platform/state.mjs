@@ -1,12 +1,12 @@
 // Orb's internal state in the settings table of orb.db (not the user's settings: those are orb.json). The keys used
 // across modules are named here.
 
-// 3.8: the folders of other users' projects of 3.7 that stay in the categories, which Orb no longer lists (JSON list of
+// the folders of other users' projects of 3.7 that stay in the categories, which Orb no longer lists (JSON list of
 // folderKey; the 3.8 migration writes it, adding one of them by hand takes it out).
 export const IGNORED_PROJECTS = 'projects_ignored';
-// 3.8.1: the projects the user finished (src/domain/projects/project-close.mjs): their folders stay, Orb no longer lists them.
+// the projects the user finished (src/domain/projects/project-close.mjs): their folders stay, Orb no longer lists them.
 export const FINISHED_PROJECTS = 'projects_finished';
-// 3.8.1: the projects being deleted (between the engine's check and the end of the Recycle Bin: project-close.mjs).
+// the projects being deleted (between the engine's check and the end of the Recycle Bin: project-close.mjs).
 export const DELETING_PROJECTS = 'projects_deleting';
 
 // Every key of the settings table the code uses, by exact name or by prefix (the part after it names a task, an
@@ -20,7 +20,7 @@ export const STATE_KEYS = Object.freeze({
     'extension_requests', 'extension_edits', 'connector_rebinds', 'pending_questions', 'projects_ignored', 'projects_finished',
     'projects_deleting', 'migrated_3_8', 'migrated_3_8_at', 'migrated_3_8_notice', 'migrated_3_8_scrubbed', 'migrated_3_8_files',
     'migrated_3_8_config',
-    // 3.8.3: «Auto» turned on for this install once (src/engine/sessions.mjs › adoptAuto)
+    // «Auto» turned on for this install once (src/engine/sessions.mjs › adoptAuto)
     'auto_mode_383',
   ]),
   prefixes: Object.freeze({

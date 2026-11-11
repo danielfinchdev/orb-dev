@@ -16,7 +16,7 @@ export const checkCategory = (category) => {
   return c;
 };
 
-// 3.2.1: the name is the folder's name: refused (with the reason) when the folder could not keep it as it is.
+// the name is the folder's name: refused (with the reason) when the folder could not keep it as it is.
 export function checkProjectName(name) {
   const problem = projectNameProblem(name);
   if (problem) throw new Error(tr(problem, { name: String(name ?? '').trim() }));
@@ -24,7 +24,7 @@ export function checkProjectName(name) {
 }
 
 
-// 3.8: a multiplatform project (category multi) is one folder and one repository: a subfolder per platform and
+// a multiplatform project (category multi) is one folder and one repository: a subfolder per platform and
 // compartido\ for what they share (API, design, texts, images), with a LEEME.md that says so. `platforms`: the ones it
 // has (at least one; web if none).
 export function createProject(board, { name, notes = '', category, platforms = [] }, actor) {
@@ -56,7 +56,7 @@ export function createProject(board, { name, notes = '', category, platforms = [
   return board.addProject({ name: clean, path: folder, notes }, actor);
 }
 
-// 3.2.1: renames a project and, when it is a project folder of a category, its folder too (name = folder). Only when
+// renames a project and, when it is a project folder of a category, its folder too (name = folder). Only when
 // nothing of it is working (no open tasks, no running conversation): the folder moves first and, if the database update
 // fails, it moves back. Its tasks, conversations, direct conversations, schedules, working folder, whiteboard marks and
 // log file follow it. A linked folder outside Orb's folder keeps its place: only the name changes.
@@ -131,11 +131,11 @@ export function groupOf(board, project) {
 }
 
 // Keeps the project list in step with the categories: new subfolders become projects, and projects whose folder inside the
-// assistant's folder was deleted, or that are not a project folder of a category (2.3.0 took the categories and Orb's own
-// folders for projects), are dropped unless they still have open tasks. Linked outside folders are left alone.
-// 3.8: the folders of other users' projects of 3.7 (IGNORED_PROJECTS) are not listed; 3.8.1: nor the finished ones.
+// assistant's folder was deleted, or that are not a project folder of a category (the categories and Orb's own
+// folders are not projects), are dropped unless they still have open tasks. Linked outside folders are left alone.
+// the folders of other users' projects of 3.7 (IGNORED_PROJECTS) are not listed, nor the finished ones.
 const FINISHED_GONE_MS = 30 * 24 * 3_600_000;
-// 3.8.1: what the last pass found with nothing to change, per board: the engine looks every 5 s (and each list asked for
+// what the last pass found with nothing to change, per board: the engine looks every 5 s (and each list asked for
 // every 2 s), and the real path of every folder (folderKey) costs a disk lookup per part of the path (~65 ms with 50
 // projects). The same projects, folders, existence and lists as then: nothing can have changed, nothing is looked up.
 // What the fingerprint cannot see (a folder of the path that starts pointing elsewhere with the same names) is looked
@@ -164,7 +164,7 @@ export function syncProjects(board) {
   const norm = (folder) => { let k = keys.get(folder); if (k === undefined) { k = folderKey(folder); keys.set(folder, k); } return k; };
   const ignoredList = board.settingJson(IGNORED_PROJECTS);
   const ignored = new Set(Array.isArray(ignoredList) ? ignoredList : []);
-  // 3.8.1: the finished projects (project-close.mjs) are not brought back. One whose folder is not found leaves that list
+  // the finished projects (project-close.mjs) are not brought back. One whose folder is not found leaves that list
   // only after FINISHED_GONE_MS (a folder renamed for a while, a disk unplugged: it is still finished when it is back).
   const finishedList = board.settingJson(FINISHED_PROJECTS);
   const finished = Array.isArray(finishedList) ? finishedList.filter((x) => x && typeof x.key === 'string') : [];
@@ -177,7 +177,7 @@ export function syncProjects(board) {
   });
   if (finishedDirty) board.settingJson(FINISHED_PROJECTS, finishedNow);
   for (const x of finished) ignored.add(x.key);
-  // 3.8.1: a delete left half-way is settled; one under way keeps its project (its folder may already be in the Recycle
+  // a delete left half-way is settled; one under way keeps its project (its folder may already be in the Recycle
   // Bin) until the engine finishes it.
   settleDeleting(board, home);
   const deleting = new Set(deletingProjects(board).map((x) => x.name));

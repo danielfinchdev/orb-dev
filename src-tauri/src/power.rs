@@ -1,4 +1,4 @@
-// 3.8: the window's unlock of the master password ends when Windows locks, the session is disconnected (console or
+// The window's unlock of the master password ends when Windows locks, the session is disconnected (console or
 // remote), the PC sleeps or Windows shuts down (Electron's powerMonitor 'lock-screen' / 'suspend' / 'shutdown'). Orb's
 // main window hears Windows' session changes (WTSRegisterSessionNotification → WM_WTSSESSION_CHANGE) and power
 // broadcasts (WM_POWERBROADCAST) through a subclass of its window procedure, also while hidden, and asks the engine for
@@ -31,7 +31,7 @@ pub fn locks(msg: u32, wparam: usize) -> bool {
 }
 
 static APP: std::sync::OnceLock<AppHandle> = std::sync::OnceLock::new();
-/// Locked until known otherwise (review D-fix B5): the state Windows gives when Orb starts, then its session changes.
+/// Locked until known otherwise: the state Windows gives when Orb starts, then its session changes.
 static LOCKED: AtomicBool = AtomicBool::new(true);
 /// Windows' session changes could not be heard: whether it is locked is never known, so notices are always private.
 static DEAF: AtomicBool = AtomicBool::new(false);

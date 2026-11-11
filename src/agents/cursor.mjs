@@ -49,14 +49,14 @@ export function loginState() {
 }
 export const loginCommand = (exe) => ({ cmd: exe.cmd, args: [...exe.pre, 'login'] });
 
-// 2.6: the models of the account, as `cursor-agent --list-models` prints them ("<id> - <name>", the one in use marked
+// the models of the account, as `cursor-agent --list-models` prints them ("<id> - <name>", the one in use marked
 // "(current)", Cursor's own choice "(default)"). Cursor offers every model in many variants (effort, thinking, fast): only
 // one per model is kept, in Cursor's order — the plain one Cursor names without a variant, else the medium one — under its
 // name without the variant words. "default" marks the one Cursor uses when Orb passes no --model.
 const VARIANT_ID = /-(?:fast|thinking|none|minimal|low|medium|high|xhigh|extra-high|max)$/;
 const VARIANT_WORDS = /\s+(?:no thinking|thinking|extra high|high|medium|low|max|none|minimal|fast)$/i;
 const baseOf = (s, re) => { let prev; do { prev = s; s = s.replace(re, ''); } while (s !== prev); return s; };
-// 3.2.1: the name of the model Cursor says it opened, without the effort words («Claude Opus 5 300K High No Thinking» →
+// the name of the model Cursor says it opened, without the effort words («Claude Opus 5 300K High No Thinking» →
 // «Claude Opus 5 300K»).
 export const cursorShownName = (name) => baseOf(String(name ?? '').replace(/\s+/g, ' ').trim(), VARIANT_WORDS);
 export function cursorModels(text) {
@@ -91,7 +91,7 @@ export const ARGV_PROMPT_MAX = 20000;
 const IDLE_AFTER_ANSWER_MS = Number(process.env.ORB_CURSOR_IDLE_MS) || 180_000;
 
 // Cursor's tool calls arrive as { tool_call: { <name>ToolCall: { args, result } } }.
-// 3.2.1: Cursor looks up an MCP tool before calling it (getMcpToolsToolCall): an inner step, not shown. A call to an MCP
+// Cursor looks up an MCP tool before calling it (getMcpToolsToolCall): an inner step, not shown. A call to an MCP
 // tool (mcpToolCall) shows the tool by a readable name (Orb's own tools) and what it does, never its raw arguments.
 function toolOf(call) {
   const [key, value] = Object.entries(call ?? {})[0] ?? [];
@@ -119,7 +119,7 @@ export function mcpToolLabel(server, tool, args = {}) {
   return { name: `Orb: ${t.replace(/^orb_/, '').replace(/_/g, ' ')}`, input: '' };
 }
 
-// 3.1: Cursor cannot ask Orb before acting (its CLI has no callback), so Orb's guard reaches it as Cursor's own deny rules,
+// Cursor cannot ask Orb before acting (its CLI has no callback), so Orb's guard reaches it as Cursor's own deny rules,
 // which win even over --force. The risky commands of guard.mjs (what would ask first for the other agents) are refused
 // outright here, and so are the assistant's private folders. Cursor matches a rule on the whole command, its first word
 // or its start ("git push" also covers "git push -f"), case-sensitive: common spellings of PowerShell names are listed.
@@ -140,22 +140,22 @@ const RISKY_ANYWHERE = ['git push', 'git -C * push', 'git remote add', 'git remo
   'rm -rf', 'rm -fr', 'taskkill', 'Stop-Process', 'stop-process', 'Invoke-Expression', 'invoke-expression', 'Set-ExecutionPolicy',
   'schtasks', 'Restart-Computer', 'Stop-Computer', 'reg add', 'reg delete', 'diskpart', 'bcdedit', '-EncodedCommand', '-encodedcommand'];
 export function cursorRules(permission, internalDir, { android = false } = {}) {
-  // 3.8.2: «total» drops the risky-command rules, never the protected folders below (Cursor cannot ask Orb's guard).
+  // «total» drops the risky-command rules, never the protected folders below (Cursor cannot ask Orb's guard).
   const deny = permission === 'total' ? [] : [...RISKY_SHELL.map((c) => `Shell(${c})`), ...RISKY_ANYWHERE.map((c) => `Shell(*${c}*)`)];
-  // 3.8.2: adb by hand only with «total» and «Usar mi móvil Android» (the phone itself goes through Orb's tools, which check the chat's grant).
+  // adb by hand only with «total» and «Usar mi móvil Android» (the phone itself goes through Orb's tools, which check the chat's grant).
   if (!(permission === 'total' && android)) deny.push('Shell(adb)', 'Shell(adb *)', 'Shell(adb.exe *)', 'Shell(*adb.exe*)');
   // «Preguntar antes»: every command would ask; Cursor cannot ask, so it runs none.
   if (permission === 'preguntar') deny.push('Shell(*)');
   // «Revisar y probar»: commands yes, changing files no.
   if (permission === 'probar') deny.push('Write(**)');
   if (internalDir) {
-    // 3.8: and what Orb keeps about the workspace outside it (its backups, the copies of its sealed secrets).
+    // and what Orb keeps about the workspace outside it (its backups, the copies of its sealed secrets).
     for (const dir of [...['datos', 'ejecuciones', path.join('copias', 'fotos'), 'secretos'].map((sub) => path.join(internalDir, sub)), ...guardedRootsNow()]) {
       for (const p of [dir, dir.replace(/\\/g, '/')]) deny.push(`Read(${p}/**)`, `Write(${p}/**)`);
     }
-    // 3.8.3: the owner's personal credentials (keys, browsers, the agents' logins), in every mode.
+    // the owner's personal credentials (keys, browsers, the agents' logins), in every mode.
     for (const dir of personalRootsNow()) for (const p of [dir, dir.replace(/\\/g, '/')]) deny.push(`Read(${p})`, `Read(${p}/**)`, `Write(${p})`, `Write(${p}/**)`);
-    // 3.8.1: the folder Orb is installed in: readable, never written.
+    // the folder Orb is installed in: readable, never written.
     for (const dir of appRootsNow()) for (const p of [dir, dir.replace(/\\/g, '/')]) deny.push(`Write(${p}/**)`);
   }
   return [...new Set(deny)];
@@ -194,7 +194,7 @@ export function prepareCursorFolder(cwd, { mcpServers = {}, deny = [] } = {}) {
     Object.assign(env, values);
     if (Object.keys(servers).length) put('mcp.json', (cur) => ({ ...cur, mcpServers: servers }));
     // Cursor validates the file strictly: permissions needs both lists, allow too (found in a real run: «Required»).
-    // 3.8 (F2.6c): without the project's own allow rules while Orb runs it (a task could have left them for the next
+    // without the project's own allow rules while Orb runs it (a task could have left them for the next
     // agents), and without the project's hooks (.cursor/hooks.json), which would run with this agent's environment.
     if (deny.length) put('cli.json', (cur) => ({ ...cur, permissions: { ...(cur.permissions ?? {}), allow: [], deny: [...new Set([...(cur.permissions?.deny ?? []), ...deny])] } }));
     if (fs.existsSync(path.join(dir, 'hooks.json'))) put('hooks.json', () => ({ version: 1, hooks: {} }));
@@ -231,9 +231,9 @@ export function createLive(o) {
         current.promise.finally(() => { try { fs.rmSync(file, { force: true }); } catch { /* still open: left to the temp folder */ } });
       } catch { /* sent as is */ }
     }
-    // 3.1: Orb's tools (orb_update_task, messages, the browser) through the project's .cursor/mcp.json, approved for this
+    // Orb's tools (orb_update_task, messages, the browser) through the project's .cursor/mcp.json, approved for this
     // run (--approve-mcps), and the guard as deny rules; both only for this turn. A command left running in the background
-    // (a dev server) no longer keeps the CLI waiting for ever after its answer (--background-shell-timeout).
+    // (a dev server) does not keep the CLI waiting for ever after its answer (--background-shell-timeout).
     let restore = Object.assign(() => {}, { env: {} });
     const servers = (typeof o.mcpServers === 'function' ? o.mcpServers() : o.mcpServers) ?? {};
     current.promise.finally(() => { try { servers.release?.(); } catch (error) { log(`liberar MCP: ${error.message}`); } });
@@ -242,7 +242,7 @@ export function createLive(o) {
     current.promise.finally(() => { try { restore(); } catch (error) { log(`restaurar .cursor: ${error.message}`); } });
     const args = [...o.exe.pre, '-p', '--output-format', 'stream-json', '--stream-partial-output', '--trust', '--workspace', o.cwd, '--approve-mcps', '--background-shell-timeout', '60'];
     if (permission === 'leer') args.push('--mode', 'ask'); else args.push('--force');
-    // 2.6: «Auto» is Cursor's own choice per request (--model auto), not the model in use in Cursor.
+    // «Auto» is Cursor's own choice per request (--model auto), not the model in use in Cursor.
     if (model) args.push('--model', model);
     if (live.sessionId) args.push('--resume', live.sessionId);
     args.push(prompt);
@@ -250,7 +250,7 @@ export function createLive(o) {
     child = spawnAgent(o.exe.cmd, args, { cwd: o.cwd, env: { ...o.env, ...restore.env }, log });
     live.pid = child.pid;
     let buffer = ''; let streamed = '';
-    // 3.2.1: a usage limit in what Cursor said (its result, or its error output when the CLI exits with it). Cursor's API
+    // a usage limit in what Cursor said (its result, or its error output when the CLI exits with it). Cursor's API
     // models (Gemini, GPT, Claude… inside Cursor) have their own monthly usage: that limit is only the model's, reported as
     // such (a «rate» of that model, so only it waits), and the error is shown in the user's language.
     const usedModel = model && model !== 'auto' ? model : null;
@@ -263,7 +263,7 @@ export function createLive(o) {
       return { resetAt: null, ...(onlyModel ? { model: usedModel } : {}), text: clip(text, 1000) };
     };
     let modelLabel = null;
-    // 3.1: the CLI can stay open after its last answer without ever sending "result" (it waited on a background shell or
+    // the CLI can stay open after its last answer without ever sending "result" (it waited on a background shell or
     // its own shutdown). Once it has said something and has no tool running, a long silence is that: the turn is over.
     const open = new Set();
     let idle = null;
@@ -288,7 +288,7 @@ export function createLive(o) {
       if (ev.type === 'system' && ev.subtype === 'init') { if (ev.model) modelLabel = String(ev.model); onEvent({ type: 'item', role: 'system', kind: 'status', body: `${label} · ${ev.model ?? ''}`.trim() }); }
       if (ev.type === 'assistant') {
         const t = (ev.message?.content ?? []).map((c) => c.text ?? '').join('');
-        // With --stream-partial-output the text arrives in pieces (they carry timestamp_ms), then once complete. 3.2.1: the
+        // With --stream-partial-output the text arrives in pieces (they carry timestamp_ms), then once complete. The
         // complete one carries timestamp_ms too, with the model call's id (model_call_id): taken as a piece, every text came
         // out twice («Voy a leer…Voy a leer…»).
         const complete = !ev.timestamp_ms || Boolean(ev.model_call_id) || (streamed && t === streamed);
@@ -311,7 +311,7 @@ export function createLive(o) {
         const final = typeof ev.result === 'string' && ev.result ? ev.result : current.text;
         const limit = isError ? limitOf(final) : null;
         if (isError && !limit) onEvent({ type: 'item', role: 'error', kind: 'text', body: clip(final || 'error', 3000) });
-        // 3.2.1: the tokens Cursor reports with its result (newer CLIs), so its tasks count their usage like the others.
+        // the tokens Cursor reports with its result (newer CLIs), so its tasks count their usage like the others.
         const u = ev.usage ?? {};
         const usage = { durationMs: ev.duration_ms ?? null, inputTokens: u.inputTokens ?? null, outputTokens: u.outputTokens ?? null, cacheReadTokens: u.cacheReadTokens ?? null, cacheWriteTokens: u.cacheWriteTokens ?? null };
         if (ev.duration_ms || u.inputTokens != null) onEvent({ type: 'item', role: 'system', kind: 'usage', body: usage });
@@ -330,7 +330,7 @@ export function createLive(o) {
       const stderr = child.stderrText();
       if (!current.done) {
         const msg = current.text || tr('sys.agents.exitedCode', { name: 'Cursor', code, detail: stderr.trim().split('\n').slice(-3).join(' ') }).trim();
-        // 3.2.1: the CLI ends with the usage limit on its error output (ActionRequiredError), not as a result.
+        // the CLI ends with the usage limit on its error output (ActionRequiredError), not as a result.
         const limit = code !== 0 ? limitOf(stderr) : null;
         if (code !== 0 && !current.text && !limit) onEvent({ type: 'item', role: 'error', kind: 'text', body: clip(msg, 3000) });
         current.finish({ isError: code !== 0, final: limit && current.text ? `${current.text}\n${limit.text}` : msg, limit });

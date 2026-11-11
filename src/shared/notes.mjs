@@ -1,4 +1,4 @@
-// 3.6 (messaging, M4): a notification as in a messaging app. Orbe's picture, the chat's name as the title, the text as the
+// a notification as in a messaging app. Orbe's picture, the chat's name as the title, the text as the
 // owner chose for the lock screen (Ajustes › Magic Link), one notification per chat (new lines join it) and its actions:
 // «Responder», and «Aprobar» / «Rechazar» on an agent's permission request. Pure: the engine (src/engine/transport/remote.mjs)
 // gives it the chat and the line; the phone's browser (service worker) and the Android app
@@ -97,7 +97,7 @@ export function actionRoute(note, actionId, { text = null } = {}) {
   return open;
 }
 
-// 3.8.1 (Android, Tauri): the call a notification's button makes by itself, without opening the app (the app's
+// the call a notification's button makes by itself, without opening the app (the app's
 // NoteReceiver sends it to the PC natively): { method, params, text? } (text: the parameter the typed reply goes in), or
 // null when the button must open the app (actionRoute then decides there).
 export function backgroundCall(note, actionId) {

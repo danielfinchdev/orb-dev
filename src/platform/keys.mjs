@@ -1,4 +1,4 @@
-// The keys made from this PC's secret (3.8.1, decision 20 d): one signs the approvals, the other wraps this PC's backups
+// The keys made from this PC's secret: one signs the approvals, the other wraps this PC's backups
 // and its recovery wrap. With the app the secret stays in Rust (src-tauri/vault/src/machine.rs) and the engine is handed
 // only these two keys (ctx.keys, from src/domain/security/master.mjs › openMachine). Without the app (tests, a run from the code)
 // the secret is the plain core\datos\clave.bin, or one the engine was given, and they are made here the same way.
@@ -13,7 +13,7 @@ export function readKey(home) {
   const file = paths(home).key;
   try {
     const key = fs.readFileSync(file);
-    // 3.5: on Linux this file is the secret itself: readable by its owner only, also when copied from elsewhere.
+    // on Linux this file is the secret itself: readable by its owner only, also when copied from elsewhere.
     if (key.length >= 32) { if (process.platform !== 'win32') { try { if ((fs.statSync(file).mode & 0o077) !== 0) fs.chmodSync(file, 0o600); } catch { /* best effort */ } } return key; }
   } catch { /* created below */ }
   const key = crypto.randomBytes(32);

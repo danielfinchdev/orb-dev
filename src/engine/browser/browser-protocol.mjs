@@ -1,4 +1,4 @@
-// 3.7 (WS5): what the agents' browser does (3.8.1: the engine's, src/engine/browser/agent-browser.mjs, over the DevTools
+// what the agents' browser does (the engine's, src/engine/browser/agent-browser.mjs, over the DevTools
 // protocol). It speaks a line-JSON pipe with the MCP server of each agent
 // (src/mcp/server.mjs: orb_browser_*).
 //
@@ -6,7 +6,7 @@
 // the secret fields that never leave the page), the actions built on a small «driver» (what each browser knows how to do
 // with one of its pages) and the pipe server (the key check, one action at a time per page, a queue limit).
 //
-// Secrets (3.7): SNAPSHOT never returns the value of a password field or of a one-time-code field. Those values are also
+// Secrets: SNAPSHOT never returns the value of a password field or of a one-time-code field. Those values are also
 // scrubbed from the page's text and the elements' names, and a screenshot blacks out those fields.
 import net from 'node:net';
 import crypto from 'node:crypto';
@@ -120,7 +120,7 @@ export const MASK_ON = `(() => {${SECRETS}
 })()`;
 export const MASK_OFF = `(() => { const m = globalThis.__orbMask; if (m) m.remove(); globalThis.__orbMask = null; return true; })()`;
 
-// 3.2.1: the page's alert/confirm/prompt (an off-screen page cannot show them) replaced in the page itself: they answer
+// the page's alert/confirm/prompt (an off-screen page cannot show them) replaced in the page itself: they answer
 // what the agent chose (orb_browser_dialog) and are noted for it to read. Installed again on each page; the answer of the
 // tab is carried over.
 export const dialogsHook = (answer) => `(() => {
@@ -189,7 +189,7 @@ export function createActions({ driver, T, language = () => 'es', onChallenge = 
     return formatSnapshot(s, { dialogs, errors, notes: [note] });
   }
   const ACTIONS = {
-    // 3.8.2 (D8): the agents' browser is the only one they get; an address that names one of «Elementos protegidos»
+    // the agents' browser is the only one they get; an address that names one of «Elementos protegidos»
     // (a password manager's web vault…) is never opened, whatever the chat's permission.
     async open(tab, { url }) {
       const u = normalizeUrl(url, lang());
@@ -253,7 +253,7 @@ export function createActions({ driver, T, language = () => 'es', onChallenge = 
       await settle(end - Date.now());
       return snapshot(tab);
     },
-    // 3.2.1: how the next alert/confirm/prompt of the page is answered (until changed), and the ones it already showed.
+    // how the next alert/confirm/prompt of the page is answered (until changed), and the ones it already showed.
     async dialog(tab, { accept = true, text = '' }) {
       if (typeof text !== 'string' || text.length > 2000) throw new Error(T('sys.browser.textLimit'));
       tab.dialogAnswer = { accept: accept !== false, text };
@@ -262,7 +262,7 @@ export function createActions({ driver, T, language = () => 'es', onChallenge = 
       return [`A partir de ahora, confirm() y prompt() de esta página se ${tab.dialogAnswer.accept ? `aceptan${text ? ` (prompt responde ${JSON.stringify(text.slice(0, 100))})` : ''}` : 'cancelan'}. alert() se cierra solo.`,
         seen.length ? `Diálogos que ya mostró:\n${seen.map(dialogLine).join('\n')}` : 'Aún no ha mostrado ninguno desde la última lectura.'].join('\n');
     },
-    // 3.2.1: the page's console errors and warnings since the last reading (clear: false keeps them for the next one).
+    // the page's console errors and warnings since the last reading (clear: false keeps them for the next one).
     async console(tab, { clear = true }) {
       const list = tab.console.slice();
       if (clear !== false) tab.console.length = 0;
@@ -277,7 +277,7 @@ export function createActions({ driver, T, language = () => 'es', onChallenge = 
     let timer;
     try {
       const out = await Promise.race([ACTIONS[action](tab, args), new Promise((_, reject) => { timer = setTimeout(() => reject(Object.assign(new Error(T('sys.browser.hung')), { hung: true })), ACTION_MS); })]);
-      // 3.8.2 (review B3): wherever the action ended (a redirect, a click, back), a page of «Elementos protegidos» is left
+      // wherever the action ended (a redirect, a click, back), a page of «Elementos protegidos» is left
       // at once and nothing of it reaches the agent.
       let url = ''; try { url = String(driver.url(tab) ?? ''); } catch { /* closed */ }
       const hit = url && protectedHit(url);

@@ -143,7 +143,7 @@ async function latency(e) {
   return res;
 }
 
-// 3.8.1 (H4c): what one refresh of the window moves (its five calls plus the chat list, which it loads again on every
+// what one refresh of the window moves (its five calls plus the chat list, which it loads again on every
 // refresh), the old way (whole replies) and as feeds (src/shared/feed.mjs): bytes of the JSON, the same reply sealed for a
 // phone (shapeResult without paths, then XChaCha20 and base64, as remote.mjs › reply) and the time of the whole refresh.
 // Feeds: the first refresh (whole lists), refreshes where nothing changed, and refreshes after one task changed (a

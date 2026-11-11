@@ -1,11 +1,11 @@
 // First run: the assistant's name, what to call the user and where its folder goes (C:\Orb unless the user picks another
 // place). Everything lives in that folder.
-// 3.7: the 3.5.1 welcome again (the owner's wish). Done without asking: this PC's language and time zone in the settings,
-// backups on (the default). 3.8: then, when the folder has folders of an earlier Orb, what to do with them
+// The same welcome for everyone, including an updated Orb (the owner's wish). Done without asking: this PC's language and time zone in the settings,
+// backups on (the default). Then, when the folder has folders of an earlier Orb, what to do with them
 // (views/layout.jsx: nothing moves without the user's choice), and the master password (views/master.jsx).
 // config.setupPending is on from the folder's creation to the last step: a welcome closed halfway goes on where it
 // stopped (resume: { step, plan, name }, lib/startup.js), never with the words of an Orb updated from 3.7.
-// 3.8.2: maximised, and .onboard / .onboard-card (app.css) shrink the spacing with the window's height.
+// maximised, and .onboard / .onboard-card (app.css) shrink the spacing with the window's height.
 import { useEffect, useState } from 'react';
 import { FolderOpen, ArrowRight, LogIn } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
@@ -27,13 +27,13 @@ export function Setup({ onDone, resume = null }) {
   const t = useT();
   const [name, setName] = useState(resume?.name || PRODUCT.assistant);
   const [user, setUser] = useState('');
-  // 3.8: C:\Orb already chosen (app:info › defaultBase); «Cambiar ubicación…» picks another place.
+  // C:\Orb already chosen (app:info › defaultBase); «Cambiar ubicación…» picks another place.
   const [base, setBase] = useState(() => getState().info?.defaultBase ?? null);
   const [busy, setBusy] = useState(false);
   const [mood, setMood] = useState('happy');
   const [step, setStep] = useState(resume?.step ?? 'datos'); // datos → carpetas (folders of an earlier Orb, if any) → maestra (the master password) → equipo (Windows: install what is missing) → app
   const [plan, setPlan] = useState(resume?.plan ?? null);
-  // 3.8.2: the welcome opens maximised (its screens fit without scrolling; only the agents' install may scroll).
+  // the welcome opens maximised (its screens fit without scrolling; only the agents' install may scroll).
   useEffect(() => { bridge.windowControls?.act('maximize-on').catch(() => {}); }, []);
   const shown = name.trim() || PRODUCT.assistant;
   const sep = base?.includes('\\') ? '\\' : '/';
@@ -106,7 +106,7 @@ export function Prepare({ name, onDone, onAgents = null }) {
         <Installer bar={false} onProgress={setProgress} />
         <div className="grid gap-2">
           <Button size="lg" onClick={onDone} data-testid="setup-continue">{t('setup.continue')}<ArrowRight /></Button>
-          {/* 3.8 (F5b): where to sign in to the agents, one click away. */}
+          {/* where to sign in to the agents, one click away. */}
           {onAgents ? <Button variant="ghost" onClick={onAgents} data-testid="setup-agents"><LogIn />{t('setup.signIn')}</Button> : null}
         </div>
       </div>

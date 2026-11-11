@@ -1,4 +1,4 @@
-// 3.5: the Android app («Orb»; 3.8.1: Tauri's Android app, src-tauri/gen/android). The same interface; this file gives
+// the Android app («Orb»; Tauri's Android app, src-tauri/gen/android). The same interface; this file gives
 // web-bridge.js what is different there: the page is the app's own (not served by the Orb), so it says where the linked
 // Orb is, keeps this phone's keys in the Android Keystore, and adds the phone's extras: scan the QR with the camera,
 // dictate, «Share with Orb» from other apps, Android's back button and notifications. They live in the app's Kotlin
@@ -40,9 +40,9 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
   window.__orbHost = {
     app: true,
     // The phone's keys and the Orb's addresses: encrypted with a key of the Android Keystore that never leaves the phone
-    // (the same key and file as Orb 3.8.0's app: updating keeps the link).
+    // (the same key and file as the previous app: updating keeps the link).
     store: {
-      // The Keystore busy for a moment (review Android B1): tried again; never taken for «not linked» on the first error.
+      // The Keystore busy for a moment: tried again; never taken for «not linked» on the first error.
       get: async () => {
         for (let i = 0; ; i++) {
           try { const r = await nat('secure_get', { key: KEY }); return r?.value ? JSON.parse(r.value) : null; }
@@ -60,7 +60,7 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
         try { const r = await nat('scan_qr'); return r?.value ?? null; }
         catch (e) { if (said(e).includes('preparing')) throw new Error(await tl('app.scanPreparing')); throw new Error(said(e).trim()); }
       };
-      // Link with what was scanned or typed: the QR's text, a pasted link, or the short code and the address. 3.8: read
+      // Link with what was scanned or typed: the QR's text, a pasted link, or the short code and the address. Read
       // first (checkLink: { name, fp, short }; a typed short code asks the Orb for its key now, and the person compares its
       // fingerprint with the PC's screen before the password), then linked with the PC's master password ({ password })
       // and the very key that was shown.
@@ -78,7 +78,7 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
         return true;
       };
       orb.unlink = async () => { pieces.unpaired(); return true; };
-      // 3.8: Android's back button or gesture (Tauri's app plugin hands it over: main.jsx goes back inside the app) and,
+      // Android's back button or gesture (Tauri's app plugin hands it over: main.jsx goes back inside the app) and,
       // on the first screen, the app goes to the background instead of closing.
       orb.onBack = (fn) => {
         let handle = null; let gone = false;
@@ -86,15 +86,15 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
         return () => { gone = true; handle?.unregister?.(); };
       };
       orb.minimize = async () => { try { await nat('minimize'); } catch { /* stays */ } };
-      // A link out of Orb opens in the phone's browser (review Android A2): the app's WebView only ever shows Orb's page
+      // A link out of Orb opens in the phone's browser: the app's WebView only ever shows Orb's page
       // (src-tauri/src/mobile.rs › on_navigation), so window.open would do nothing.
       orb.openExternal = async (url) => { if (/^https:\/\//.test(String(url ?? ''))) await nat('open_url', { url: String(url) }).catch(console.error); };
       orb.takeShared = () => { const s = shared; shared = null; return s; };
       orb.hasShared = () => shared != null;
-      // 3.6 (messaging, M4): the chats' notifications as a messaging app's. The Orb builds each one
+      // the chats' notifications as a messaging app's. The Orb builds each one
       // (src/shared/notes.mjs: the sender's picture, the chat's name, the text as chosen for the lock screen, muted chats
       // none) and sends it as «note» over the live connection; shown while the app is in the background (there is no
-      // push service: they arrive while Android keeps the app alive). One per chat: new lines join it. 3.8.1: «Responder»
+      // push service: they arrive while Android keeps the app alive). One per chat: new lines join it. «Responder»
       // (with the text typed there), «Aprobar» and «Rechazar» are answered by the app itself without opening it, also
       // after it was closed (Notes.kt › NoteReceiver, with the call worked out here: notes.mjs › backgroundCall); the
       // other buttons and a tap open the app, which does it here.
@@ -156,9 +156,9 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
         ios: () => false,
         whenClosed: () => false, // no push service: only while Android keeps the app alive in the background
         enabled: () => localStorage.getItem(NOTIFY) === '1',
-        // Never answered here (a new install, or updated from 3.8.0, whose choice stayed with its old origin).
+        // Never answered here (a new install, or updated from an app whose choice stayed with its old origin).
         undecided: () => localStorage.getItem(NOTIFY) === null,
-        // Turned on without asking when Android already allows Orb's notifications (the person allowed them in 3.8.0).
+        // Turned on without asking when Android already allows Orb's notifications (the person allowed them earlier).
         async adopt() {
           const r = await nat('notify_permission', { ask: false }).catch(() => null);
           if (!r?.granted) return false;

@@ -1,4 +1,4 @@
-// 2.6: the mini-games' sound effects, all synthesized here with Web Audio (no audio files, nothing to license, zero
+// the mini-games' sound effects, all synthesized here with Web Audio (no audio files, nothing to license, zero
 // bytes of assets): little 8-bit tones, noise bursts and short arpeggios, each a one-shot under a second, so nothing ever
 // keeps playing on its own. The same switch and volume as the robot's voice (Ajustes › Sonidos: config.ui.sounds and
 // ui.volume) plus the games' own mute (this window only), never with the window in the background and never piling up.
@@ -19,7 +19,7 @@ export function setMuted(v) {
   if (muted) stopAll();
 }
 
-// 3.8.3: made without its device and given it asynchronously (lib/audio-context.js): the window never waits for it.
+// made without its device and given it asynchronously (lib/audio-context.js): the window never waits for it.
 function audio() {
   if (!ctx) {
     const made = quietAudioContext();

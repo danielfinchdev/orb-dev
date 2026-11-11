@@ -263,7 +263,7 @@ export default {
   'apps.offline': 'The latest version could not be checked.',
   'apps.details': 'View on GitHub',
   'apps.download': 'Download',
-  // 3.2: conversations at once
+  // conversations at once
   'settings.parallelChats': 'Conversations at once',
   'settings.parallelChatsHint': '1 to 6. The rest wait their turn.',
   'guide.readOnly': 'Reviews and checks: {list}',

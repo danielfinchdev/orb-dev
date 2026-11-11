@@ -15,7 +15,7 @@ export const accounts = () => (ctx.config.accounts ?? []).filter((a) => AGENT_ID
 export const account = (id) => accounts().find((a) => a.id === id) ?? null;
 export const accountsOf = (agent) => accounts().filter((a) => a.agent === agent);
 // Accounts that can take work: the account and its agent are enabled.
-// 3.0: an account whose own folder is gone (moved, renamed, deleted) gets no work: the agent would fail on every task.
+// an account whose own folder is gone (moved, renamed, deleted) gets no work: the agent would fail on every task.
 export const usableAccounts = (agent) => accountsOf(agent).filter((a) => a.enabled !== false && ctx.config.agents[agent]?.enabled && (!a.home || fs.existsSync(a.home)));
 
 // The folder where the CLI keeps this account's login.
@@ -43,7 +43,7 @@ export function loginState(acc) {
   return fs.existsSync(dir) ? 'desconocido' : 'no';
 }
 
-// 2.7: «Buscar en este PC»: folders with a saved login of this agent that are not accounts yet (another CODEX_HOME or
+// «Buscar en este PC»: folders with a saved login of this agent that are not accounts yet (another CODEX_HOME or
 // CLAUDE_CONFIG_DIR made before, an older Orb folder…). Only folder names are walked and only the presence of the login
 // file is checked: nothing is opened or read. Typical places: the user's folder, AppData and the roots of the local
 // drives, a few levels deep, within a time and size budget.

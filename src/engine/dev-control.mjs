@@ -1,4 +1,4 @@
-// 3.1, development only: a control line from the developer's terminal to Orb.dev's engine, so the app can be watched and
+// a control line from the developer's terminal to Orb.dev's engine, so the app can be watched and
 // driven (tasks, chat, permissions, approvals) without clicking in its window. It exists only when the app runs unpacked
 // AND it was started with ORB_DEV_CONTROL=1 (the app never passes it to an installed Orb). Local only (127.0.0.1), and
 // every request needs the random key written, with the port, to a file only this user can read (ORB_DEV_CONTROL_FILE, or
@@ -47,7 +47,7 @@ export function startDevControl({ api, board, sessions, log = () => {}, home, in
         let raw = ''; for await (const chunk of req) { raw += chunk; if (raw.length > 1_000_000) throw new Error('petición demasiado grande'); }
         const { method, params } = JSON.parse(raw || '{}');
         log(`control de desarrollo: ${method}`);
-        // 3.8.1: what starts a program on this PC outside the approvals (a terminal, an editor, a project's action) is the
+        // what starts a program on this PC outside the approvals (a terminal, an editor, a project's action) is the
         // window's alone: this line's key lives in %TEMP%, which the agents can read.
         if (/^app\.(openTerminal|openIn|runAction)$/.test(String(method))) return send(res, 403, { ok: false, error: 'no disponible desde el control de desarrollo' });
         return send(res, 200, { ok: true, result: (await api.call(String(method), params ?? {}, DESKTOP)) ?? null });

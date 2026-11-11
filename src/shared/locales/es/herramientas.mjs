@@ -1,4 +1,4 @@
-// 3.8.2 (fase 10): terminal integrado, claves que pide un agente, señalar y grabar en el navegador de los agentes y
+// terminal integrado, claves que pide un agente, señalar y grabar en el navegador de los agentes y
 // emuladores Android.
 export default {
   'msg.android.noEmulator': 'Este PC no tiene el emulador de Android. Instálalo desde Android Studio.',

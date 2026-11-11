@@ -1,4 +1,4 @@
-// 3.8.2 (T3 3.2): a command from the chat into the user's terminal under it (components/terminal-panel.jsx). It is only
+// a command from the chat into the user's terminal under it (components/terminal-panel.jsx). It is only
 // pasted in its input line: the user reads it and presses Enter (Orb never runs it on its own).
 const targets = new Set();
 

@@ -1,4 +1,4 @@
-// 3.8.2: the logic of Ctrl+K (components/command-palette.jsx), apart so the tests can run it.
+// the logic of Ctrl+K (components/command-palette.jsx), apart so the tests can run it.
 const fold = (s) => String(s ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
 // Ctrl+K (⌘K) alone.

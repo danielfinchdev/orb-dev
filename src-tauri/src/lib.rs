@@ -44,7 +44,7 @@ use tauri::{AppHandle, Manager, RunEvent, WebviewWindow};
 const DATA_DIR: &str = "Orb.dev";
 /// The app, for what runs outside Tauri's own callbacks (desktop.rs › guard_against_electron).
 static APP: std::sync::OnceLock<AppHandle> = std::sync::OnceLock::new();
-/// The window that stops an earlier Orb could not be made (review D10 B13): written to the engine's log once it exists.
+/// The window that stops an earlier Orb could not be made: written to the engine's log once it exists.
 static GUARD_FAILED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 fn only_main(window: &WebviewWindow) -> Result<(), String> {
@@ -88,7 +88,7 @@ async fn app_info(window: WebviewWindow) -> Result<Value, String> {
   // Why the start failed, when the window offers something for it (secretBusy, secretUnreadable).
   let start_error = match &status {
     // With «Empezar con una clave nueva» the window says what is lost: whether a recovery code and a master password
-    // exist in this workspace's core (review D-fix M2), and whether it keeps secrets (review D10 B6: without the master
+    // exist in this workspace's core, and whether it keeps secrets (without the master
     // password they go with the old key).
     engine::Status::Failed(e) => engine.start_code().map(|code| {
       let core = home.as_ref().map(|h| std::path::Path::new(h).join("core"));
@@ -97,7 +97,7 @@ async fn app_info(window: WebviewWindow) -> Result<Value, String> {
     }),
     _ => None,
   };
-  // 3.8: the workspace goes to C:\Orb unless the user picks another place (the welcome shows it already chosen).
+  // The workspace goes to C:\Orb unless the user picks another place (the welcome shows it already chosen).
   let base = std::env::var("ORB_DEFAULT_BASE").unwrap_or_else(|_| format!("{}\\", std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into())));
   Ok(json!({ "version": app.package_info().version.to_string(), "home": home, "needsSetup": home.is_none(), "platform": "win32", "defaultBase": base, "startError": start_error }))
 }
@@ -174,7 +174,7 @@ async fn app_pick_attachments(window: WebviewWindow) -> Result<Vec<String>, Stri
   Ok(desktop::pick_attachments(&window).await)
 }
 
-/// 3.8.2 (D3): the microphone of the message box opens Windows' own voice typing (Win+H) on the focused box.
+/// The microphone of the message box opens Windows' own voice typing (Win+H) on the focused box.
 #[tauri::command]
 async fn app_dictate(window: WebviewWindow) -> Result<(), String> {
   only_main(&window)?;
@@ -280,7 +280,7 @@ fn engine_paths(app: &AppHandle) -> (PathBuf, PathBuf) {
 pub fn run() {
   // Before any webview or the engine exists: no WEBVIEW2_* from the environment (a DevTools port, another data folder)
   // reaches Orb's window, nor the engine and what it starts (protocol::webview2_vars).
-  // Names that are not valid Unicode count too (review D4 B9): looked at as text, removed by their own name.
+  // Names that are not valid Unicode count too: looked at as text, removed by their own name.
   for name in protocol::env_matching(protocol::webview2_vars::<Vec<String>>) {
     // SAFETY: still single-threaded: nothing else reads the environment yet.
     unsafe { std::env::remove_var(name) };
@@ -305,7 +305,7 @@ pub fn run() {
   if separate.is_none() {
     if let Some(dir) = std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join(DATA_DIR)) {
       // An earlier Orb opened from now on quits by itself, bringing this one to the front (desktop.rs). Made before the
-      // check below (review D10 B11): an Electron starting in between is either seen by the check or meets this window.
+      // check below: an Electron starting in between is either seen by the check or meets this window.
       let guarded = desktop::guard_against_electron(&dir, || {
         if let Some(app) = APP.get() {
           let a = app.clone();
@@ -319,7 +319,7 @@ pub fn run() {
         }
       });
       if !guarded {
-        // Review D10 B13: an earlier Orb opened later would not see this one (said in the log of this start).
+        // An earlier Orb opened later would not see this one (said in the log of this start).
         GUARD_FAILED.store(true, std::sync::atomic::Ordering::SeqCst);
       }
       if desktop::electron_running(&dir) {
@@ -340,7 +340,7 @@ pub fn run() {
     }));
   }
   let app = builder
-    // 3.8.2 (item 10): no raw input. tao listens to Windows' raw mouse and keyboard input (device events) while the
+    // No raw input. tao listens to Windows' raw mouse and keyboard input (device events) while the
     // window has the focus, and every report reaches the main thread: a 1000 Hz mouse sends a thousand a second, also
     // while the window is being moved or resized (the main thread runs that loop). Orb never uses them; the page gets
     // its own input from WebView2.

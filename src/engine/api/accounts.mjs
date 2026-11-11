@@ -1,4 +1,4 @@
-// The agents and accounts part of the engine's API (split out of api.mjs in 3.6, unchanged): checking and installing the
+// The agents and accounts part of the engine's API: checking and installing the
 // agents, signing in, and several subscriptions of the same agent. This PC only (src/domain/security/permissions.mjs).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,7 +15,7 @@ import { translate } from '../../shared/i18n.mjs';
 import { refreshModels, refreshAllModels } from '../usage/catalog.mjs';
 import { fail, str, oneOf } from './common.mjs';
 
-// 3.8.1: the installer is loaded the first time an install is asked for (not at the engine's start).
+// the installer is loaded the first time an install is asked for (not at the engine's start).
 let installerModule = null;
 const inst = () => (installerModule ??= import('../host/installer.mjs').catch((error) => { installerModule = null; throw error; }));
 
@@ -30,7 +30,7 @@ export function accountMethods({ board, emit, log }) {
       return statusAll({ refresh: Boolean(refresh) });
     },
     'agents.check': ({ agent }) => { const a = oneOf(agent, AGENT_IDS, 'agente'); forgetInstalled(); refreshModels(board, a, { force: true, log }); return agentStatus(a, { refresh: true }); },
-    // 3.5 «Solo Orb»: Claude Code and Codex sign in without a console: { id, url, code?, opened, needsCode, mode } and
+    // «Solo Orb»: Claude Code and Codex sign in without a console: { id, url, code?, opened, needsCode, mode } and
     // 'agents:login' events until it ends (src/agents/login.mjs). console: true opens the old console (Windows only), the
     // way left for a sign-in the CLI cannot do without a terminal. Cursor and the ACP agents keep their console.
     'agents.login': async ({ account: id, agent, mode, console: inConsole }) => {
@@ -56,7 +56,7 @@ export function accountMethods({ board, emit, log }) {
     'agents.loginCode': ({ id, code }) => { try { return loginSendCode(str(id, 'inicio de sesión', 80), str(code, 'código', 2000)); } catch (error) { fail(error.message); } },
     'agents.loginCancel': ({ id }) => cancelLogin(str(id, 'inicio de sesión', 80)),
     'agents.loginState': ({ id }) => (id ? loginInfo(str(id, 'inicio de sesión', 80)) : allLogins()),
-    // 3.5: install or update Claude Code or Codex with one button, hidden and for this user only (installer.mjs).
+    // install or update Claude Code or Codex with one button, hidden and for this user only (installer.mjs).
     'agents.install': async ({ agent }) => {
       const installer = await inst();
       const a = oneOf(agent, installer.AGENT_INSTALL, 'agente');
@@ -78,7 +78,7 @@ export function accountMethods({ board, emit, log }) {
       const dir = str(home, 'carpeta', 1000, { optional: true }) || path.join(ctx.paths.internal, 'cuentas', id);
       if (!path.isAbsolute(dir)) fail(tr('msg.api.accountAbs'));
       try { checkAccountHome(dir, ctx.config, board.projects().map((p) => p.path)); } catch (error) { fail(error.message); }
-      // 3.0: the folder of an account this agent already has (also the default one, ~/.codex, through a link or another
+      // the folder of an account this agent already has (also the default one, ~/.codex, through a link or another
       // spelling) would count the same subscription twice: its quota and its parallel runs.
       const real = (p) => { try { return fs.realpathSync.native(p).toLowerCase(); } catch { return path.resolve(p).toLowerCase(); } };
       if (accountsOf(agent).some((a) => real(accountDir(a)) === real(dir))) fail(tr('msg.ctx.sameHome'));
@@ -87,7 +87,7 @@ export function accountMethods({ board, emit, log }) {
       emit('config:changed', c);
       return c.accounts.find((a) => a.id === id);
     },
-    // 2.7: saved logins of this agent elsewhere on the PC that are not accounts yet (only presence is checked).
+    // saved logins of this agent elsewhere on the PC that are not accounts yet (only presence is checked).
     'accounts.scan': async ({ agent }) => {
       agent = oneOf(agent, AGENT_IDS, 'agente');
       if (!MULTI[agent]) fail(tr('msg.api.oneAccountOnly', { agent }));
@@ -97,7 +97,7 @@ export function accountMethods({ board, emit, log }) {
       // folder found (the most recent is kept), is not offered. Each one gets its plan (Go, Plus, Pro…) for its name.
       let exe = null; try { exe = executable('codex'); } catch { /* not installed: offered as found */ }
       if (!exe) return found;
-      // 3.0: three questions at a time (each one starts Codex for a moment), every account and folder compared.
+      // three questions at a time (each one starts Codex for a moment), every account and folder compared.
       const limited = async (items, fn, n = 3) => { const out = new Array(items.length); let next = 0; await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (next < items.length) { const i = next++; out[i] = await fn(items[i]); } })); return out; };
       const mine = await limited(accountsOf('codex'), (a) => codexAccountInfo(exe, accountDir(a)));
       const theirs = await limited(found, (f) => codexAccountInfo(exe, f.dir));
@@ -122,7 +122,7 @@ export function accountMethods({ board, emit, log }) {
       const c = saveConfig({ accounts: ctx.config.accounts.filter((a) => a.id !== acc.id) }); emit('config:changed', c);
       return true;
     },
-    // 3.2.1: the user lifts an account's usage pause (and its models without usage) by hand.
+    // the user lifts an account's usage pause (and its models without usage) by hand.
     'accounts.clearCooldown': ({ account: id }) => {
       const acc = str(id, 'cuenta', 40);
       if (!ctx.config.accounts.some((a) => a.id === acc)) fail(tr('msg.api.noAccount'));

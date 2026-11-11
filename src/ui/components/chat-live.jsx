@@ -1,4 +1,4 @@
-// 2.7: two pieces of the assistant's chat. LiveActivity: what the assistant is doing right now («Leyendo claude.mjs ·
+// two pieces of the assistant's chat. LiveActivity: what the assistant is doing right now («Leyendo claude.mjs ·
 // 1 min 3 s»), with the steps of the turn when unfolded. QuestionCard: a question with options (orb_ask) answered with a
 // click, the number keys or own words, or skipped.
 import { useEffect, useRef, useState } from 'react';
@@ -16,7 +16,7 @@ const KIND = [
   [/^(webfetch|websearch|fetch|web_search|browse)/i, 'web'], [/^orb_create_task$/, 'task'], [/^orb_(board|list_tasks|get_task|wait_tasks)$/, 'board'],
   [/^orb_read_log$/, 'readLog'], [/^orb_write_log$/, 'writeLog'], [/^orb_ask$/, 'ask'], [/^orb_(set_project|create_project|add_project)$/, 'project'],
   [/^orb_schedule$/, 'schedule'], [/^orb_browser_/, 'browser'], [/^orb_(send_message|read_messages)$/, 'messages'], [/^(todowrite|todo)/i, 'plan'], [/^(task|agent|delegate)/i, 'delegate'],
-  // 3.2.1: the agent looking up its own tools; opti_* in Opti Bot's old conversation
+  // the agent looking up its own tools; opti_* in Opti Bot's old conversation
   [/^tool_?search$/i, 'tools'], [/^opti_propose$/, 'propose'], [/^opti_/, 'pc']
 ];
 const WITH_TARGET = new Set(['read', 'search', 'run', 'edit', 'web']);

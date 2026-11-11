@@ -1,5 +1,5 @@
 // Registry of the agents the assistant can drive, plus detection, version and login checks for the "Agentes" screen.
-// 2.3: Claude Code (Agent SDK), Codex (app-server) and Cursor (CLI in streaming) plus every ACP agent of acp.mjs.
+// Claude Code (Agent SDK), Codex (app-server) and Cursor (CLI in streaming) plus every ACP agent of acp.mjs.
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import * as claude from './claude.mjs';
@@ -53,7 +53,7 @@ export function quickRun(cmd, args, { timeoutMs = 15000, env } = {}) {
   });
 }
 
-// 2.6: the models an installed agent offers, asked to the agent itself (each adapter's discoverModels, with the login of
+// the models an installed agent offers, asked to the agent itself (each adapter's discoverModels, with the login of
 // its first usable account). Resolves with [{ id, label, default?, resolved? }] or null (not installed, no way to ask, the
 // agent did not answer). Never throws.
 export async function discoverModels(agent, accountId = null) {
@@ -97,7 +97,7 @@ export function openLogin(accountId) {
   openConsole(cmd, args, accountEnv(acc));
 }
 
-// 3.5 «Solo Orb»: the sign-in of Claude Code and Codex without a console (src/agents/login.mjs). Resolves with
+// «Solo Orb»: the sign-in of Claude Code and Codex without a console (src/agents/login.mjs). Resolves with
 // { id, url, code?, opened, needsCode, mode }; how it ends comes as 'agents:login' events. The other agents (Cursor, the
 // ACP ones) keep their own console sign-in: { console: true }. mode: 'web' (the default) or 'device'.
 export async function startAccountLogin(accountId, { mode, emit = () => {}, onEnd = null } = {}) {

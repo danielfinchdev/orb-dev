@@ -1,5 +1,5 @@
-// 3.8.2 (owner's decisions D1, D2): what a chat may do beyond its permission, given with the master password.
-//   «Acceso total al PC»     a chat without a project (3.8.2 D5: and «Acceso total» of a chat with a project, the same way): permission «total» (src/domain/security/guard.mjs: still never core, the
+// what a chat may do beyond its permission, given with the master password.
+//   «Acceso total al PC»     a chat without a project (and «Acceso total» of a chat with a project, the same way): permission «total» (src/domain/security/guard.mjs: still never core, the
 //                            folders kept outside it, Orb's install folder, «Elementos protegidos» or sudo). Claude in
 //                            Chrome when the installed Claude Code has it (src/agents/claude.mjs).
 //   «Usar mi móvil Android»  any chat: Orb's orb_android_* tools (src/engine/host/android.mjs). «Acceso total al PC» includes it.
@@ -24,10 +24,10 @@ export function grantMethods({ board, sessions, log = () => {}, android = null }
     log(`acceso: ${what} · chat ${s.id} «${String(s.title ?? '').slice(0, 60)}» · ${why}`);
     try { sessions.addItem(s.id, 'system', 'status', tr(`msg.grants.${what}`)); } catch { /* the chat went */ }
   };
-  // 3.8.2 (D5): «total» of a chat with a project follows the same rules; taken back, it returns to the permission it had
+  // «total» of a chat with a project follows the same rules; taken back, it returns to the permission it had
   // (kept in settings), or «Editar archivos»; a chat without a project returns to «Solo lectura».
   const holdsTotal = (s) => s.permission === 'total';
-  // 3.8.2 (review M3): what the chat is doing goes with what it lost: its running turn stops and its agent process (and
+  // what the chat is doing goes with what it lost: its running turn stops and its agent process (and
   // every shell it started under it) is closed; the next message starts it again with the new permission.
   const halt = (s) => { try { sessions.stop(s.id); } catch { /* not running */ } try { sessions.closeLive(s.id); } catch { /* not open */ } };
   const before = (s) => { const k = `grant_prev:${s.id}`; const p = board.settingJson(k); board.settingJson(k, null); return s.project ? (['leer', 'probar', 'editar', 'preguntar', 'auto'].includes(p) ? p : permissionOfAutonomy(globalAutonomy())) : 'leer'; };

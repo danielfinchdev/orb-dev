@@ -1,4 +1,4 @@
-// 3.6: encrypted backups of an Orb (.orbbak), their check, their restore and their retention. No engine imports: the
+// encrypted backups of an Orb (.orbbak), their check, their restore and their retention. No engine imports: the
 // engine (backup.* calls and the 03:00 copy) and the tests use it directly.
 //
 // File format (.orbbak, format 1):
@@ -7,7 +7,7 @@
 // header: { format, id, orbId, incarnation, version, created, kind, move, cipher, chunk, kdf:{alg:'scrypt',N,r,p,salt},
 //   wrapped:{ machine?, passphrase? }, manifest_hash, counts }
 // The body key is random. It is wrapped by this machine's backup key (made from this PC's secret, which never goes into
-// a backup: 3.8.1, decision 20 d) and, when the
+// a backup) and, when the
 // user set a recovery code, by that code through scrypt; with the code a backup opens on a clean machine. Every chunk's
 // additional data names the header (its sha256), the chunk's index and whether it is the last one: a changed, swapped,
 // cut or extended chunk does not open. The body is a plain stream of entries (u32 length · {p,s} · bytes); the first
@@ -15,8 +15,8 @@
 //
 // What goes in: the database (VACUUM INTO, so it is consistent while the engine runs), orb.json, the logs (general and
 // project), the MCP servers and the skills (core\mcp, core\skills, without their dependencies), the whiteboards of the projects, the app's
-// secret, the recovery wrap, the master password's sealed files (core/secretos, 3.8), the archives of 3.7 (core/archivo-3.7 and dated ones, src/domain/data/legacy/migrate-38.mjs; never sign-in
-// folders). Optional: the project folders and the agents' login folders (off). 3.8: the names inside are relative to the
+// secret, the recovery wrap, the master password's sealed files (core/secretos), the archives of 3.7 (core/archivo-3.7 and dated ones, src/domain/data/legacy/migrate-38.mjs; never sign-in
+// folders). Optional: the project folders and the agents' login folders (off). The names inside are relative to the
 // workspace (core/datos/orb.db, core/bitacora/…); a copy made by 3.7 (.orb/…, orb.json, bitacora/… at the top) restores
 // into core (legacyName) and the paths of its orb.json and database are pointed into core (src/domain/workspace/core-folder.mjs ›
 // rewritePaths).
@@ -40,7 +40,7 @@ export const MAGIC = Buffer.from('ORBBAK1\n');
 export const FORMAT = 1;
 export const CHUNK = 1 << 20;
 export const EXT = '.orbbak';
-// (A copy of kind «move», made by Orb 3.7's «Mover a otro PC», still lists and restores; none is made any more.)
+// (A copy of kind «move», made by Orb 3.7's «Mover a otro PC», still lists and restores; none is made now.)
 export const KINDS = ['manual', 'daily', 'preupdate', 'premigration'];
 const SCRYPT = { N: 2 ** 15, r: 8, p: 1 };
 const MAX_HEADER = 64 * 1024;
@@ -97,7 +97,7 @@ export function recoveryOf(home, secret) {
   try { return { kdf: raw.kdf, kek: unwrap(machineKek(secret), raw.kek, 'orbbak:recovery'), at: raw.at }; } catch { return null; }
 }
 export const hasRecovery = (home, secret) => Boolean(recoveryOf(home, secret));
-// 3.8: whether a code is this machine's recovery code (what «He olvidado la contraseña» asks for). → true | false, or
+// whether a code is this machine's recovery code (what «He olvidado la contraseña» asks for). → true | false, or
 // null when this machine has none set.
 export function isRecoveryCode(home, secret, code) {
   const rec = recoveryOf(home, secret);
@@ -126,7 +126,7 @@ export function knownOrbId(home) {
 }
 
 // ---- where the copies go
-// 3.8: outside the workspace, so that deleting core (or the whole workspace) does not take its copies with it:
+// outside the workspace, so that deleting core (or the whole workspace) does not take its copies with it:
 // %LOCALAPPDATA%\Orb\copias\<workspace> on Windows (per user, never roaming: copies can be big; no administrator; the
 // uninstaller leaves it), ~/.local/share/Orb/copias/<workspace> elsewhere. The user may pick another folder (Ajustes ›
 // Datos), never inside the workspace. Wherever they go, the newest copy is noted in the default folder (ultima.json), which is
@@ -139,7 +139,7 @@ export function backupRoot() {
   return path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'Orb', 'copias');
 }
 export const defaultBackupDir = (home) => path.join(backupRoot(), homeKey(home));
-// A chosen folder inside the workspace (3.7 allowed one) is not used: deleting the workspace would take the copies.
+// A chosen folder inside the workspace (a 3.7 setting) is not used: deleting the workspace would take the copies.
 export const backupDir = (home, config = null) => (config?.backup?.folder && path.isAbsolute(config.backup.folder) && !inside(home, config.backup.folder) ? config.backup.folder : defaultBackupDir(home));
 // Up to 3.7 the copies lived inside the data folder (now core\copias-seguridad).
 export const oldBackupDir = (home) => path.join(paths(home).core, 'copias-seguridad');
@@ -192,7 +192,7 @@ export function setAsideBackups(home, config = null) {
   fs.rmSync(path.join(defaultBackupDir(home), LAST), { force: true });
   return n;
 }
-// The first 3.8 builds named this workspace's folder after its whole path (home.mjs › oldHomeKey): taken over once.
+// A folder named after the workspace's whole path by earlier builds (home.mjs › oldHomeKey) is taken over once.
 export function adoptOldBackupRoot(home) {
   const from = path.join(backupRoot(), oldHomeKey(home)); const to = defaultBackupDir(home);
   if (sameDir(from, to) || !fs.existsSync(from) || fs.existsSync(to)) return false;
@@ -249,8 +249,8 @@ export const walkFiles = (dir, skip = () => false) => {
 };
 const NO_COPY = new Set(['node_modules', '.git', '.venv', '__pycache__', 'dist', 'build', '.next', '.cache']);
 const DATA_FILES = ['copia-clave.json', 'orb-id.json'];
-// Backups made before 3.8.1 carry this PC's secret in clear (core/datos/clave.bin): they are not restored any more (the
-// engine never holds that secret: decision 20 d). Their names, as 3.8 and 3.7 wrote them.
+// Older backups carry this PC's secret in clear (core/datos/clave.bin): they are not restored (the
+// engine never holds that secret). Their names, as 3.8 and 3.7 wrote them.
 const OLD_KEYS = new Set([`${INTERNAL_DIR}/datos/clave.bin`, `${LEGACY.internal}/datos/clave.bin`]);
 export const oldKeyEntry = (name) => OLD_KEYS.has(String(name));
 const rel = (home, file) => path.relative(home, file).split(path.sep).join('/');
@@ -271,7 +271,7 @@ const insideOf = (root, p) => { const r = path.relative(root, p); return Boolean
 // Copies what goes in to `stage` (a mini Orb folder) and returns the manifest.
 const archiveDirs = (internal) => { try { return fs.readdirSync(internal).filter((n) => n === ARCHIVE_DIR || n.startsWith(`${ARCHIVE_DIR}-`)).map((n) => path.join(internal, n)); } catch { return []; } };
 // What goes in is listed first and copied after (progress: 0..1 over the files); each file is read once, written to the
-// stage and hashed from those same bytes, and each folder made once: the fewest disk calls (review 3.8.2: on a busy
+// stage and hashed from those same bytes, and each folder made once: the fewest disk calls (on a busy
 // engine every call waits its turn, and the pre-update copy of a few hundred files took minutes).
 async function stageFiles(home, stage, { secret, includeProjects = false, includeAccounts = false, log = () => {}, progress = () => {} }) {
   const p = paths(home);
@@ -288,11 +288,11 @@ async function stageFiles(home, stage, { secret, includeProjects = false, includ
   }
   if (fs.existsSync(p.config)) put(p.config, archiveName(home, p.config));
   for (const name of DATA_FILES) { const f = path.join(p.data, name); if (fs.existsSync(f)) put(f, `${INTERNAL_DIR}/datos/${name}`); }
-  // 3.8: the master password's files (core\secretos): the secrets stay sealed with the data key, which opens with the
+  // the master password's files (core\secretos): the secrets stay sealed with the data key, which opens with the
   // master password (any PC) or this PC's secret. The count of wrong passwords stays on this PC.
   for (const name of SECRET_FILES) { const f = path.join(p.secrets, name); if (fs.existsSync(f)) put(f, archiveName(home, f)); }
   for (const f of walkFiles(p.logs)) put(f, archiveName(home, f));
-  // 3.8.1: every server and every skill of core (not the links the agents load, core\skills\.activas, nor the versions
+  // every server and every skill of core (not the links the agents load, core\skills\.activas, nor the versions
   // before the last change, .anterior: made again or not needed).
   for (const dir of [p.mcp, p.skills]) for (const f of walkFiles(dir, (n) => NO_COPY.has(n) || n === LIVE_DIR || n === OLD_DIR)) put(f, archiveName(home, f));
   // The projects: their whiteboards always, the whole folder only if asked (without dependencies and build output).
@@ -309,7 +309,7 @@ async function stageFiles(home, stage, { secret, includeProjects = false, includ
     for (const f of walkFiles(board)) put(f, inside ? rel(home, f) : `${INTERNAL_DIR}/pizarras-de-fuera/${String(pr.name).replace(/[^\w.-]+/g, '_')}/${path.relative(board, f).split(path.sep).join('/')}`);
   }
   if (includeAccounts) for (const f of walkFiles(path.join(p.internal, 'cuentas'))) put(f, archiveName(home, f));
-  // 3.8: the archives of 3.7 (one per migration), never with sign-in folders (an archive of an early 3.8 build may have some).
+  // the archives of 3.7 (one per migration), never with sign-in folders (an archive of an early build may have some).
   for (const dir of archiveDirs(p.internal)) for (const f of walkFiles(dir, (n) => n === 'cuentas')) put(f, archiveName(home, f));
   const manifest = { format: FORMAT, files: [] };
   let bytes = 0;
@@ -582,7 +582,7 @@ export async function stageRestore(home, file, keys = {}) {
       const d = new DatabaseSync(db);
       try { const ok = d.prepare('PRAGMA integrity_check').get(); if (Object.values(ok)[0] !== 'ok') throw new BackupError('damaged'); d.prepare('SELECT COUNT(*) AS n FROM sqlite_master').get(); } finally { d.close(); }
     }
-    // Review M2: the recovery wrap is sealed with the backup key of the PC that made the copy, and this PC's secret never
+    // The recovery wrap is sealed with the backup key of the PC that made the copy, and this PC's secret never
     // travels: on another PC it would not open (the code would stop working and the scheduled copies would go out
     // without it). With the code used for this restore it is sealed again for this PC; without it, this PC's own wrap
     // stays (the copy's is not put back) and the user is told to make a new code.
@@ -611,8 +611,8 @@ function unitOf(name) {
 
 // Called by the engine before the database is opened: a restore that is ready replaces what it holds;
 // what was there before goes to core/antes-de-restaurar-<fecha>. → null, or { from, header, aside, units }.
-// onlyMissing (3.8, a core deleted or damaged: repairCore): only what is not there any more is put back; what is still
-// there (a newer database, the logs) stays as it is. This PC's sealed secret is never part of a backup (3.8.1): the one
+// onlyMissing (a core deleted or damaged: repairCore): only what is not there any more is put back; what is still
+// there (a newer database, the logs) stays as it is. This PC's sealed secret is never part of a backup: the one
 // on disk stays.
 export function applyPendingRestore(home, { onlyMissing = false } = {}) {
   const ready = pendingDir(home);
@@ -629,7 +629,7 @@ export function applyPendingRestore(home, { onlyMissing = false } = {}) {
   for (const extra of units.has(`${INTERNAL_DIR}/datos/orb.db`) || !onlyMissing ? ['orb.db-wal', 'orb.db-shm'] : []) {
     const f = path.join(paths(home).data, extra); if (fs.existsSync(f)) move(f, path.join(aside, INTERNAL_DIR, 'datos', extra));
   }
-  // 3.8.3 (repaso): whole or not at all. A unit that cannot be moved (a file locked by another program) puts back what
+  // whole or not at all. A unit that cannot be moved (a file locked by another program) puts back what
   // was moved so far, keeps the copy for a later try and leaves core as it was; before, core stayed half replaced and
   // the restore was silently forgotten.
   const done = [];
@@ -649,14 +649,14 @@ export function applyPendingRestore(home, { onlyMissing = false } = {}) {
     throw new Error(`restaurar: ${error.message} (la copia sigue en ${ready}; core como estaba)`);
   }
   fs.rmSync(ready, { recursive: true, force: true });
-  // 3.8: a database of 3.7 restored now is migrated again with an archive and a copy of its own.
+  // a database of 3.7 restored now is migrated again with an archive and a copy of its own.
   if (units.has(`${INTERNAL_DIR}/datos/orb.db`)) forgetRun(home);
   // A copy made by 3.7: the paths of its orb.json and database point into core.
   if (info.legacy) rewritePaths(home);
   return { from: info.from, header: info.header, aside, units: [...units], recoveryOther: info.recoveryOther === true };
 }
 
-// ---- 3.8: core missing or damaged (src/engine/engine.mjs, before the database opens)
+// ---- core missing or damaged (src/engine/engine.mjs, before the database opens)
 // What is missing is put back from the newest copy of this workspace that opens (backupCandidates, newest first: one
 // that this PC cannot open by itself, or a damaged one, gives way to the next), or from `file`. Without core's orb.json
 // and no copy, Orb cannot go on by itself (the window offers to start again or to pick a copy); a database that is not

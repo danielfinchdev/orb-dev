@@ -1,4 +1,4 @@
-// 3.8.3: a Web Audio context that never makes the window wait. Built the usual way, `new AudioContext()` asks the audio
+// a Web Audio context that never makes the window wait. Built the usual way, `new AudioContext()` asks the audio
 // service for its output device synchronously: measured in the e2e build, 0.5–2 s of a frozen window when it happened
 // while an answer streamed (the robot's first «voice» comes exactly then). Built with no output device it is instant,
 // and the default device is attached asynchronously (setSinkId). Until then `ready` is false and callers skip their

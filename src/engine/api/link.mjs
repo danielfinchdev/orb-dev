@@ -1,4 +1,4 @@
-// The phone access and Magic Link part of the engine's API (split out of api.mjs in 3.6): the phones and browsers
+// The phone access and Magic Link part of the engine's API: the phones and browsers
 // linked with this PC. This PC only (src/domain/security/permissions.mjs).
 import { ctx } from '../../platform/context.mjs';
 import { saveConfig } from '../../platform/config.mjs';
@@ -15,7 +15,7 @@ export function linkMethods({ emit, remoteRef }) {
       return remoteRef.current.status();
     },
     // The ways in: home Wi-Fi and/or Tailscale (the servers reopen with the new choice).
-    // preview (3.5.1): what notifications show on a locked phone ('all', 'chat' or 'none').
+    // preview: what notifications show on a locked phone ('all', 'chat' or 'none').
     'remote.configure': async ({ wifi, tailscale, preview }) => {
       const patch = {};
       if (typeof wifi === 'boolean') patch.wifi = wifi;
@@ -28,9 +28,9 @@ export function linkMethods({ emit, remoteRef }) {
     },
     'remote.pair': ({ kind }) => remoteRef.current.pair(oneOf(kind, ['wifi', 'tailscale'], 'vía', undefined)),
     'remote.revoke': ({ id }) => remoteRef.current.revoke(str(id, 'dispositivo', 64)),
-    // ---- 3.5 Magic Link
+    // ---- Magic Link
     // A QR (and a short code) to link a phone or a browser. Turns the access on if it was off.
-    // 3.5.1: device: what it is for (phone or browser), chosen here, never by the device.
+    // device: what it is for (phone or browser), chosen here, never by the device.
     'link.qr': async ({ kind, device }) => {
       const via = oneOf(kind, ['wifi', 'tailscale'], 'vía', undefined);
       const forKind = device == null || device === '' ? null : oneOf(device, PAIR_KINDS, 'dispositivo');

@@ -45,7 +45,7 @@ export async function status() {
   return { installed: true, loggedIn: auth.ok, user: user?.ok ? user.out : null, where: exe };
 }
 
-// 2.7: the user's contribution calendar of the last year (the green squares of their GitHub profile), from GitHub itself
+// the user's contribution calendar of the last year (the green squares of their GitHub profile), from GitHub itself
 // through gh (GraphQL contributionsCollection). Real numbers only: nothing is filled in when gh cannot answer.
 export async function contributions() {
   const exe = ghExe(); if (!exe) return null;
@@ -93,7 +93,7 @@ export async function commitAll(project, message) {
   await git(project.path, 'add', '-A', '--', '.', `:(exclude)${ATTACH_DIR}`);
   const staged = (await git(project.path, 'diff', '--cached', '--name-only', '-z')).stdout.split('\0').filter(Boolean);
   if (staged.some(isSecretPath)) { await git(project.path, 'reset', '-q'); throw new Error(tr('msg.github.looksSecretNone')); }
-  // 3.2.1: also what the files say (a key pasted into any file), not only their names.
+  // also what the files say (a key pasted into any file), not only their names.
   let inText;
   try { inText = await stagedSecretsAsync(project.path, git); } catch { await git(project.path, 'reset', '-q'); throw new Error(tr('msg.github.gitIncomplete')); }
   if (inText.length) { await git(project.path, 'reset', '-q'); throw new Error(tr('msg.github.secretInText', { files: inText.slice(0, 5).join(', ') })); }
@@ -115,7 +115,7 @@ export async function mergeBranch(project, branch) {
   return { ok: true };
 }
 
-// 3.2.1: nothing that looks like a key leaves the PC. Checks the commits of the branch that no remote has yet (all of them
+// nothing that looks like a key leaves the PC. Checks the commits of the branch that no remote has yet (all of them
 // for a repository without remotes): files named like secrets and added lines that look like keys.
 export async function unpushedSecrets(dir, branch = 'HEAD', { max } = {}) {
   const g = async (...args) => { const r = await gitAsyncWith(dir, { timeout: 120_000, ...(max ? { max } : {}) }, ...args); if (r.cut || r.timedOut) throw new Error(tr('msg.github.gitIncomplete')); return r; };
@@ -163,7 +163,7 @@ export async function clone(repo, name, category) {
   const exe = ghExe();
   const r = exe ? await run(exe, ['repo', 'clone', String(repo).trim(), folder], { timeoutMs: 600_000 })
     : await run('git', ['clone', '--', /^https:/.test(repo) ? repo : `https://github.com/${repo}.git`, folder], { timeoutMs: 600_000 });
-  // 3.2.1: the usual case (a wrong name or a private repository of someone else) in the user's words, not gh's.
+  // the usual case (a wrong name or a private repository of someone else) in the user's words, not gh's.
   if (!r.ok && /could not resolve to a repository|repository not found|not found|HTTP 404|does not exist/i.test(`${r.err} ${r.out}`)) {
     fs.rmSync(folder, { recursive: true, force: true });
     throw new Error(tr('msg.github.cloneNotFound', { repo: oneLine(repo, 200) }));

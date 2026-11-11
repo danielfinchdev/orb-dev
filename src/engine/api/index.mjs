@@ -57,7 +57,7 @@ import { fold, snippet } from '../../domain/conversations/inbox.mjs';
 
 export { fail, str, int, oneOf } from './common.mjs';
 
-// 3.8.1: what only some calls need is loaded the first time one of them comes (the engine's start does not wait for it).
+// what only some calls need is loaded the first time one of them comes (the engine's start does not wait for it).
 // A failed load is not kept (a file locked for a moment): the next call tries again.
 const lazy = (load) => { let p = null; return () => (p ??= load().catch((error) => { p = null; throw error; })); };
 const gh = lazy(() => import('../host/github.mjs'));
@@ -79,7 +79,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   let lastChat = board.one('SELECT MAX(id) AS id FROM chat')?.id ?? 0;
   const conversationId = (id) => { const c = board.conversation(int(id, 'conversación')); if (!c) fail(tr('msg.board.noConversation')); return c.id; };
   let whiteboardOf = null; const wb = async () => (whiteboardOf ??= (await boards()).whiteboard(board));
-  // 2.7: a picture the window may show: an image file inside Orb's folder, a project, or an agent account's own folder
+  // a picture the window may show: an image file inside Orb's folder, a project, or an agent account's own folder
   // (Codex keeps what it makes in <CODEX_HOME>/generated_images). 25 MB at most.
   const allowedImage = (file) => {
     const real = (() => { try { return fs.realpathSync(file); } catch { return fail(tr('msg.api.badImage')); } })();
@@ -91,8 +91,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     return real;
   };
 
-  // 3.2.1: a task the user rejects says so in its conversation, and the assistant hears it (it used to keep saying the
-  // task was waiting for approval). If other tasks of the request already finished, their report now comes with it.
+  // a task the user rejects says so in its conversation, and the assistant hears it (otherwise it would keep saying the
+  // task was waiting for approval). If other tasks of the request already finished, their report comes with it.
   const taskRejected = (task) => {
     const conv = board.conversationOfTask(task.id);
     const line = tr('msg.api.taskRejected', { id: task.id, title: oneLine(task.title, 120) });
@@ -100,7 +100,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     if ((board.settingJson(`report_queue:c${conv}`) ?? []).length) { board.addChat('system', line, { task: task.id }, conv); scheduler?.queueReport?.(task); return; }
     orchestrator.internal(`AVISO DEL SISTEMA (no es ${userName()}): ${userName()} ha rechazado la tarea #${task.id} «${oneLine(task.title)}». No se hará y no se ha tocado ningún archivo. No la vuelvas a crear salvo que te lo pida. Díselo en una línea y sigue con el resto del pedido, si lo hay.`, line, null, { conversation: conv, project: task.project });
   };
-  // 3.2.1: a model by the name the selector shows (its agent's list, or the account's own), else the agent's own name for it.
+  // a model by the name the selector shows (its agent's list, or the account's own), else the agent's own name for it.
   const modelLabelOf = (agent, account, id) => {
     try {
       const entry = (catalogCache?.value ?? modelCatalog(board)).find((a) => a.id === agent);
@@ -117,7 +117,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   let lastSync = 0;
   const syncSoon = () => { if (Date.now() - lastSync > 2000) { lastSync = Date.now(); syncProjects(board); } };
   const withAccepted = (m) => (m.meta?.kind === 'report' ? { ...m, meta: { ...m.meta, accepted: m.meta.tasks.length > 0 && m.meta.tasks.every((id) => board.isAccepted(id)) } } : m);
-  // 3.2: the conversations for the sidebar, with how their tasks go, whether the assistant is answering in them now and
+  // the conversations for the sidebar, with how their tasks go, whether the assistant is answering in them now and
   // whether a question of its waits for the user (three queries for all of them, not three each).
   const conversationList = () => {
     const counts = {};
@@ -127,17 +127,17 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     return board.conversations().map((c) => ({ id: c.id, title: c.title, project: c.project, agent: c.agent, account: c.account, model: c.model, reasoning: c.reasoning, status: c.status,
       created_at: c.created_at, updated_at: c.updated_at, done_at: c.done_at, context: c.context ?? null, tasks: counts[c.id] ?? {}, busy: Boolean(live.get(c.id)?.busy), waiting: Boolean(live.get(c.id)?.waiting), asking: asking.has(c.id) }));
   };
-  // 3.2: a conversation is done when the user gave the OK to its work and none of its tasks is still open.
+  // a conversation is done when the user gave the OK to its work and none of its tasks is still open.
   const settleConversation = (id) => { if (id && board.conversation(id)?.status === 'open' && !board.openTasksOf(id) && !orchestrator.state(id).busy) board.setConversationDone(id, true); };
 
   // The user's OK closes the loop: tasks marked accepted, a line in the chat and an entry in the project's log.
   const accept = (ids, project) => {
-    // 3.2.1: an undone task has no result left to accept.
+    // an undone task has no result left to accept.
     const done = board.accept(ids.filter((id) => !board.settingJson(`undone:${id}`)), 'usuario');
     if (!done.length) fail(tr('msg.api.noDoneTasks'));
     const name = userLabel();
     board.notice(tr(done.length > 1 ? 'msg.api.okMany' : 'msg.api.okOne', { who: ofUserLabel(), ids: done.map((t) => `#${t.id}`).join(', ') }), 'success');
-    // 3.2.1: signed as Orb with whose OK it is (not «Orbe (app)»), and the general log gets each cycle too (it only had the
+    // signed as Orb with whose OK it is (not «Orbe (app)»), and the general log gets each cycle too (not only the
     // assistant's first entry of the day).
     const entry = { tema: tr('sys.logs.okTopic', { ids: done.map((t) => `#${t.id}`).join(', ') }), pedido: tr('sys.logs.okRequest'), hecho: tr('sys.logs.okDone', { user: name, list: done.map((t) => `#${t.id} ${oneLine(t.title, 80)}`).join('; ') }), estado: tr('sys.logs.okStatus') };
     const author = `${PRODUCT.name} (${tr('sys.logs.okBy', { user: name })})`;
@@ -146,15 +146,15 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     try { writeLog(board, 'general', { ...entry, tema: tr('sys.logs.okGeneralTopic', { project: where, ids: done.map((t) => `#${t.id}`).join(', ') }) }, author); } catch (error) { log(`bitácora general del OK: ${error.message}`); }
     return done.map((t) => t.id);
   };
-  // 3.8.1: a coordinator in the middle of a turn in a conversation of the project (it could create a task right after).
+  // a coordinator in the middle of a turn in a conversation of the project (it could create a task right after).
   const coordinatorBusy = (name) => board.all('SELECT id FROM conversations WHERE project = ?', name).some((c) => orchestrator?.state(c.id)?.busy);
   // What the other parts of the API share.
   const shared = { board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, project, conversationId };
-  // 3.8.2: the phone the agents test apps on, and what the master password gives a chat (grants.mjs).
+  // the phone the agents test apps on, and what the master password gives a chat (grants.mjs).
   const android = createAndroid({ board, log });
   const grants = grantMethods({ board, sessions, log, android });
   // The phone's tools of Orb's MCP server (src/mcp/server.mjs): for the conversation of the server's grant, as it is now.
-  // 3.8.2 (T3 3.4): the secrets an agent asks for (agent-secrets.mjs), answered only on this PC's card.
+  // the secrets an agent asks for (agent-secrets.mjs), answered only on this PC's card.
   const secrets = createSecretRequests({ sessions, auth: agentAuth, master: () => ctx.master, emit, log });
   agentAuth.onCall = async ({ session }, method, args) => {
     if (method === 'secret' && session) return secrets.request(sessions.get(session), args);
@@ -162,9 +162,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     const s = sessions.get(session);
     return android.tool(s, String(args.tool ?? ''), args.args);
   };
-  // 3.8.2 (T3 3.2): the user's terminal docked under a chat (user-terminal.mjs); Ctrl+J's own terminal is app.openTerminal.
+  // the user's terminal docked under a chat (user-terminal.mjs); Ctrl+J's own terminal is app.openTerminal.
   const terminals = createTerminals({ emit, log });
-  const data = dataApi(shared); // 3.6 (WS5): backups
+  const data = dataApi(shared); // backups
   let usageAskedAt = 0; // usage.refresh
 
   const methods = {
@@ -173,26 +173,26 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       config: ctx.config, paused: board.setting('paused') === '1', activeProject: board.activeProject(),
       approvals: sessions.allPendingApprovals().map((a) => ({ id: a.id, session_id: a.session_id, body: { title: a.body?.title, reason: a.body?.reason }, session: a.session })),
       counts: Object.fromEntries(board.all('SELECT status, COUNT(*) AS n FROM tasks GROUP BY status').map((r) => [r.status, r.n])),
-      // 3.2: what each conversation with the assistant is doing now (only the ones answering or waiting their turn).
+      // what each conversation with the assistant is doing now (only the ones answering or waiting their turn).
       chats: orchestrator.states(), assistant: orchestrator.info(null),
-      // 2.6: the tasks («t<id>») and direct conversations («s<id>») the user put away in «Completadas» of the sidebar;
-      // 3.2: kept, the finished tasks the user brought back (a finished task goes to «Completadas» by itself).
+      // the tasks («t<id>») and direct conversations («s<id>») the user put away in «Completadas» of the sidebar;
+      // kept, the finished tasks the user brought back (a finished task goes to «Completadas» by itself).
       completed: board.settingJson('sidebar_completed') ?? [], kept: board.settingJson('sidebar_kept') ?? [],
-      // 3.2.1: the agents this PC can run now (installed, on, with an account): the lists of the window offer only these.
+      // the agents this PC can run now (installed, on, with an account): the lists of the window offer only these.
       agentsAvailable: board.availableAgents()
     }),
-    // 3.8: the data of 3.7 were updated (or never were 3.7): engine.mjs answers these two itself while they could not be.
+    // the data-migration state (3.7 data updated, or never 3.7): engine.mjs answers these two itself while they could not be.
     'app.migrationState': () => ({ failed: false }),
     'app.migrationRetry': () => ({ failed: false }),
-    // 3.8: core is whole (engine.mjs › coreBlocked answers these two while it is not).
+    // core is whole (engine.mjs › coreBlocked answers these two while it is not).
     'app.coreState': () => null,
     'app.coreRepair': () => ({ missing: false }),
-    // 3.8: the folders Orb 3.7 kept at the top of the workspace: what would happen to each, and the user's choice
+    // the folders Orb 3.7 kept at the top of the workspace: what would happen to each, and the user's choice
     // (nothing moves before it; src/domain/workspace/core-folder.mjs).
     'app.layoutPlan': () => layoutPlan(),
     'app.layoutApply': ({ choices }) => layoutApply(choices, { emit, log, board }),
     'conversations.list': () => conversationList(),
-    // 3.2: completed by hand (or open again): a task («t<id>»), a direct conversation («s<id>») or a conversation with the
+    // completed by hand (or open again): a task («t<id>»), a direct conversation («s<id>») or a conversation with the
     // assistant («c<id>»).
     'sidebar.complete': ({ key, done }) => {
       const k = str(key, 'elemento', 100);
@@ -210,7 +210,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return { ok: true };
     },
     'config.save': ({ patch, unlock }) => {
-      // 3.8: a connector's keys never reach orb.json: they go into the vault and orb.json keeps references. With the window
+      // a connector's keys never reach orb.json: they go into the vault and orb.json keeps references. With the window
       // unlocked (a change that needs it: checkUnlock), the keys are tied to the connectors' commands as they are now.
       const p = patch ?? {};
       const sealed = Array.isArray(p.mcpServers) ? sealConnectors(ctx.master, p.mcpServers, { trusted: Boolean(ctx.master?.checkToken(unlock)) }) : null;
@@ -228,18 +228,18 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'projects.list': () => {
       syncSoon();
       const active = board.activeName();
-      // 3.8.1: the open tasks of every project in one query (it was one per project).
+      // the open tasks of every project in one query (not one per project).
       const open = new Map(board.all("SELECT project, COUNT(*) AS n FROM tasks WHERE status IN ('queued', 'awaiting_approval', 'running') GROUP BY project").map((r) => [r.project, r.n]));
       return board.projects().map((p) => ({ ...p, inHome: insideHome(p.path), category: categoryOf(realHome, p.path), active: active === p.name, open: open.get(p.name) ?? 0 }));
     },
-    // 3.8: category multi (or several platforms) = one multiplatform project with a folder per platform.
+    // category multi (or several platforms) = one multiplatform project with a folder per platform.
     'projects.create': ({ name, notes, category, platforms }) => board.project(newProject(board, {
       name: str(name, 'nombre', 60), notes: str(notes, 'notas', 2000, { optional: true }), category: oneOf(category, CATEGORIES, 'categoría', undefined),
       platforms: Array.isArray(platforms) ? platforms.slice(0, PLATFORMS.length).map((c) => oneOf(c, PLATFORMS, 'plataforma')) : []
     }, 'usuario').name),
     'projects.import': ({ name, folder }) => board.addProject({ name: checkProjectName(str(name, 'nombre', 60)), path: str(folder, 'carpeta', 1000) }, 'usuario', { fromUser: true }),
     'projects.remove': ({ name }) => board.removeProject(project(name).name, 'usuario'),
-    // 3.2.1: a new name (and folder) for a project with nothing working in it (domain/projects/projects.mjs renameProject).
+    // a new name (and folder) for a project with nothing working in it (domain/projects/projects.mjs renameProject).
     'projects.rename': ({ name, to }) => {
       const from = project(name).name;
       const p = renameProject(board, { name: from, to: str(to, 'nombre', 60) }, 'usuario');
@@ -247,7 +247,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return p;
     },
     'projects.setActive': ({ name }) => board.setActiveProject(name ? project(name).name : '', 'usuario'),
-    // 3.8.1: the end of a project (src/domain/projects/project-close.mjs). Finished: it leaves Orb, its folder stays (listed in
+    // the end of a project (src/domain/projects/project-close.mjs). Finished: it leaves Orb, its folder stays (listed in
     // «Finalizados» to reopen it). Deleted: its folder goes too. The app: projects.deleteCheck (the master password; from
     // then on nothing of the project starts, and it returns a one-off ticket), the Recycle Bin, then projects.delete with
     // that ticket (trashed; or, when the Recycle Bin could not take it and the user chose so, the engine deletes it for
@@ -267,7 +267,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const stop = (n) => {
         for (const t of board.all("SELECT id FROM tasks WHERE project = ? AND status = 'running'", n)) { try { scheduler.cancel(t.id, 'usuario'); } catch { /* finished meanwhile */ } }
         for (const s of board.all('SELECT id FROM sessions WHERE project = ?', n)) { sessions.stop(s.id); sessions.closeLive(s.id); }
-        // 3.8.1 (H1b-d note): and its tasks' isolated copies (core\copias\aisladas) go with it, never left for ever.
+        // and its tasks' isolated copies (core\copias\aisladas) go with it, never left behind for ever.
         for (const t of board.all('SELECT * FROM tasks WHERE project = ? AND workdir IS NOT NULL', n)) { try { scheduler.dropCopy(t, p); } catch (error) { log(`borrar copia #${t.id}: ${error.message}`); } }
       };
       const out = deleteProject(board, ctx.home, p.name, 'usuario', { ticket: typeof ticket === 'string' ? ticket : '', trashed: trashed === true, stop });
@@ -275,12 +275,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return out;
     },
     'projects.deleteAbort': ({ name, ticket }) => abortDelete(board, str(name, 'proyecto', 200), typeof ticket === 'string' ? ticket : ''),
-    // 3.2: the projects' icons (their favicon or app icon, or one chosen here) for the sidebar: { name: dataUrl | null }.
+    // the projects' icons (their favicon or app icon, or one chosen here) for the sidebar: { name: dataUrl | null }.
     'projects.icons': () => Object.fromEntries(board.projects().map((x) => [x.name, projectIcon(x)])),
     'projects.setIcon': ({ name, path: file }) => { const p = project(name); const icon = setProjectIcon(p, str(file, 'imagen', 1000)); board.changed('projects'); return icon; },
-    // 3.2: only the current branch (the hover card of a conversation): one quick git call, nothing from the network.
+    // only the current branch (the hover card of a conversation): one quick git call, nothing from the network.
     'projects.branch': ({ name }) => { const p = project(name); const r = git(p.path, 'rev-parse', '--abbrev-ref', 'HEAD'); return { branch: r.status === 0 ? r.stdout.trim() || null : null }; },
-    // 3.2, God mode: the project's actions (commands of the user's own, run in a terminal window from the bar or with their
+    // God mode: the project's actions (commands of the user's own, run in a terminal window from the bar or with their
     // shortcut). Kept per project; at most 20.
     'actions.list': ({ project: name }) => board.settingJson(`actions:${project(name).name.toLowerCase()}`) ?? [],
     'actions.save': ({ project: name, action: a }) => {
@@ -315,7 +315,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'projects.merge': async ({ name, branch }) => {
       const p = project(name); const b = str(branch, 'rama', 120); const g = await gh();
       const out = await holding(p.name, () => g.mergeBranch(p, b));
-      // 3.8.1: the task that owned the branch lets its copy and branch go (src/engine/scheduler/index.mjs › branchMerged).
+      // the task that owned the branch lets its copy and branch go (src/engine/scheduler/index.mjs › branchMerged).
       try { await scheduler.branchMerged(p.name, b); } catch (error) { log(`tras unir ${b}: ${error.message}`); }
       return out;
     },
@@ -336,7 +336,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'android.pairCancel': () => android.pairCancel(),
     'android.pairCode': ({ address, code, connect }) => android.pairCode({ address: str(address, 'dirección', 80), code: str(code, 'código', 6), connect: str(connect, 'dirección', 80, { optional: true }) || null }),
     'android.devices': () => android.devices(),
-    // 3.8.2 (T3 3.17): the emulators of this PC's Android SDK (never downloaded by Orb)
+    // the emulators of this PC's Android SDK (never downloaded by Orb)
     'android.emulators': () => android.emulators(),
     'android.emulatorStart': ({ avd }) => android.emulatorStart({ avd: str(avd, 'emulador', 100) }),
     'android.disconnect': ({ serial }) => android.disconnect({ serial: str(serial, 'móvil', 120) }),
@@ -347,12 +347,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'github.contributions': async () => (await gh()).contributions(),
     'github.login': async () => (await gh()).login(),
 
-    // 3.2: a conversation's lines (the last 160, or 120 more before a line).
+    // a conversation's lines (the last 160, or 120 more before a line).
     // Without a conversation: the lines of none (tasks made by hand or by a schedule), which the window shows as notices.
     'chat.list': ({ conversation, before }) => board.chat(conversation == null ? null : conversationId(conversation), before ? 120 : 160, { before: before ? int(before, 'mensaje') : null }).map(withAccepted),
     // A message to a conversation with the assistant; without one, it starts a new conversation (in the project given, or
     // the working folder). → { conversation }
-    // brain ({ agent, model, reasoning }): 3.8, a new conversation started from a phone with the brain chosen there (the
+    // brain ({ agent, model, reasoning }): a new conversation started from a phone with the brain chosen there (the
     // one new conversations start with is this PC's setting).
     'chat.send': ({ text, conversation, project: name, brain }, principal) => {
       const t = str(text, 'mensaje', 20000);
@@ -365,17 +365,17 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         try { methods['chat.settings']({ conversation: c.id, ...pick }, principal); } catch (error) { board.run('DELETE FROM conversations WHERE id = ?', c.id); board.changed('conversations'); throw error; }
         return orchestrator.ask(t, expandMentions(board, sessions, t), { conversation: c.id, project: proj });
       }
-      // 3.8.2: «/compact» and «/clear» typed alone in an existing chat are Orb's commands (src/shared/slash.mjs).
+      // «/compact» and «/clear» typed alone in an existing chat are Orb's commands (src/shared/slash.mjs).
       const command = id ? slashCommand(t) : null;
       if (command) return command === 'compact' ? orchestrator.compact(id) : orchestrator.clear(id);
       if (!id && (brainOf().agent || 'claude') === 'cursor') fail(tr('msg.api.cursorNoCoordinate'));
       return orchestrator.ask(t, expandMentions(board, sessions, t), { conversation: id, project: proj });
     },
     'chat.stop': ({ conversation }) => orchestrator.stop(conversationId(conversation)),
-    // 3.6: «Compactar»: the conversation's coordinator compacts its own context (or starts afresh with the briefing and
+    // «Compactar»: the conversation's coordinator compacts its own context (or starts afresh with the briefing and
     // its last lines when its agent cannot). → { ok, how: 'compacted' | 'renewed' }
     'chat.compact': ({ conversation }) => orchestrator.compact(conversationId(conversation)),
-    // 3.2: rename, change the project of a conversation, mark it done or open it again.
+    // rename, change the project of a conversation, mark it done or open it again.
     'conversations.update': ({ id, title, project: name, done }) => {
       const c = conversationId(id);
       if (title !== undefined) board.updateConversation(c, { title: oneLine(str(title, 'título', 80), 80), titled: true });
@@ -387,7 +387,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'conversations.remove': ({ id }) => {
       const c = conversationId(id);
       orchestrator.drop(c);
-      // 3.8: its tasks still to do (queued, waiting or working) stop with it: they would go on in the scope of the tasks
+      // its tasks still to do (queued, waiting or working) stop with it: they would go on in the scope of the tasks
       // of no conversation, sharing messages with the manual and scheduled ones. The finished ones stay in Tareas.
       for (const t of board.all('SELECT id, status FROM tasks WHERE conversation_id = ?', c)) {
         if (!board.isFinished(t.status)) { try { scheduler.cancel(t.id, 'usuario'); } catch { /* finished meanwhile */ } }
@@ -399,7 +399,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       board.changed('conversations');
       return { ok: true };
     },
-    // 3.2: the search of the sidebar: conversations (with the assistant and direct) whose title or messages have the words.
+    // the search of the sidebar: conversations (with the assistant and direct) whose title or messages have the words.
     'conversations.search': ({ q }) => {
       const words = String(q ?? '').trim().toLowerCase().slice(0, 100);
       if (words.length < 2) return { conversations: [], sessions: [] };
@@ -415,7 +415,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const found = board.all(`SELECT DISTINCT s.id FROM sessions s LEFT JOIN session_items i ON i.session_id = s.id AND i.kind = 'text' WHERE s.kind = 'chat' AND (lower(s.title) LIKE ? ESCAPE '!' OR lower(i.body) LIKE ? ESCAPE '!') LIMIT 100`, like, like).map((r) => r.id);
       return { conversations, sessions: found };
     },
-    // 3.8.2: tasks by what they say (title, brief or result, without case or accents), for the sidebar's search and
+    // tasks by what they say (title, brief or result, without case or accents), for the sidebar's search and
     // Ctrl+K. The newest first. → [{ id, title, status, project, snippet }]
     'tasks.search': ({ q }) => {
       const words = oneLine(String(q ?? ''), 100).trim();
@@ -429,7 +429,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       }
       return out;
     },
-    // 2.7: pictures the agents make (Codex image_gen): shown in the conversation, a zone marked to change, saved in the
+    // pictures the agents make (Codex image_gen): shown in the conversation, a zone marked to change, saved in the
     // project. Read only from the agents' own picture folders, Orb's folder and the projects; written only into Orb's
     // folder (the marked copy) and <project>/imagenes.
     'images.read': ({ path: file }) => {
@@ -437,21 +437,21 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const ext = path.extname(f).slice(1).toLowerCase();
       return { dataUrl: `data:${ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : ext === 'gif' ? 'image/gif' : 'image/png'};base64,${fs.readFileSync(f).toString('base64')}` };
     },
-    // 3.8.2: a PDF attached to a direct conversation, for the window's viewer: only from that conversation's attachments
+    // a PDF attached to a direct conversation, for the window's viewer: only from that conversation's attachments
     // folder (.orb-adjuntos of its working folder), 25 MB at most.
     'attachments.read': ({ session, path: file }) => {
       const s = sessions.must(str(session, 'conversación', 64));
       const real = (p) => { try { return fs.realpathSync(p); } catch { return fail(tr('msg.api.badAttachment')); } };
       const dir = real(path.join(s.cwd, ATTACH_DIR)); const f = real(str(file, 'archivo', 1000));
-      // 3.8.2 (security review): the attachments folder itself, never a link or junction to another folder.
+      // the attachments folder itself, never a link or junction to another folder.
       if (path.relative(path.join(real(s.cwd), ATTACH_DIR), dir) !== '') fail(tr('msg.api.badAttachment'));
       const rel = path.relative(dir, f);
-      // 3.8.3: and the audio and video the window can play (the CSP lets media come only from blob: URLs).
+      // and the audio and video the window can play (the CSP lets media come only from blob: URLs).
       const mime = /\.pdf$/i.test(f) ? 'application/pdf' : playableType(f);
       if (!rel || rel.startsWith('..') || path.isAbsolute(rel) || !mime || fs.statSync(f).size > 25 * 1024 * 1024) fail(tr('msg.api.badAttachment'));
       return { kind: mime === 'application/pdf' ? 'pdf' : mime.split('/')[0], mime, base64: fs.readFileSync(f).toString('base64') };
     },
-    // A PNG made in the window, kept in Orb's folder to attach: the marked zone of a picture, or (3.8.2) a window the user
+    // A PNG made in the window, kept in Orb's folder to attach: the marked zone of a picture, or a window the user
     // captured from the composer.
     'images.mark': ({ dataUrl }) => {
       const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl ?? ''));
@@ -464,7 +464,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const f = allowedImage(str(file, 'imagen', 1000));
       const p = project(name);
       const dir = path.join(p.path, 'imagenes'); fs.mkdirSync(dir, { recursive: true });
-      // 3.2.1: a name people can read: the first words of what was asked for (or "imagen" and the date), not Codex's
+      // a name people can read: the first words of what was asked for (or "imagen" and the date), not Codex's
       // internal "exec-6ac8e3e7-….png".
       const ext = path.extname(f).toLowerCase() || '.png';
       const words = slug(oneLine(str(title, 'título', 300, { optional: true }) ?? '', 300).split(/\s+/).slice(0, 6).join(' '));
@@ -476,14 +476,14 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       fs.copyFileSync(f, path.join(dir, base));
       return { path: path.join(dir, base), name: base };
     },
-    // 2.7: the Pizarra of each project (src/engine/whiteboard.mjs), saved in <project>/pizarra.
+    // the Pizarra of each project (src/engine/whiteboard.mjs), saved in <project>/pizarra.
     'whiteboard.load': async ({ project }) => (await wb()).load({ project: str(project, 'proyecto', 200) }),
     'whiteboard.save': async ({ project, elements, appState, files, png }) => (await wb()).save({ project: str(project, 'proyecto', 200), elements, appState, files, png }),
     'whiteboard.attach': async ({ project, paths }) => (await wb()).attach({ project: str(project, 'proyecto', 200), paths }),
     'whiteboard.note': async ({ project, file, note }) => (await wb()).note({ project: str(project, 'proyecto', 200), file: str(file, 'archivo', 200), note }),
     'whiteboard.remove': async ({ project, file }) => (await wb()).remove({ project: str(project, 'proyecto', 200), file: str(file, 'archivo', 200) }),
     'whiteboard.folder': async ({ project }) => (await wb()).folder({ project: str(project, 'proyecto', 200) }),
-    // 2.7: the answer to a question card (orb_ask): the options picked and/or own words, or skipped. The card keeps it and
+    // the answer to a question card (orb_ask): the options picked and/or own words, or skipped. The card keeps it and
     // the assistant gets it as the user's next message, in the conversation of the question.
     'chat.answer': ({ id, choices, other, skip }) => {
       const row = board.chatRow(int(id, 'mensaje'));
@@ -495,27 +495,27 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const answer = skip ? '' : [...picked, ...(own ? [own] : [])].join(' · ');
       board.patchChatMeta(row.id, { ...row.meta, status: skip ? 'skipped' : 'answered', answer });
       const text = skip ? tr('msg.api.questionSkipped', { question: row.meta.question }) : tr('msg.api.questionAnswer', { question: row.meta.question, answer });
-      // 3.8.3 (security review): the question and its options are the assistant's words: only what the user typed counts
+      // the question and its options are the assistant's words: only what the user typed counts
       // as the user asking for something («Auto» publishes or deletes on the user's own words, board.currentRequest).
       return orchestrator.ask(text, '', { conversation: row.conversation_id, meta: { answer: true, own: skip ? '' : own } });
     },
     'chat.accept': ({ id }) => {
       const row = board.chatRow(int(id, 'mensaje'));
       if (row?.meta?.kind !== 'report') fail(tr('msg.api.notReport'));
-      // 3.2.1: the OK to the report also settles the tasks of that request Orb held «for your review» (a read-only check
-      // that changed build files, for instance), which the report already explained: before, they stayed blocked for ever.
+      // the OK to the report also settles the tasks of that request Orb held «for your review» (a read-only check
+      // that changed build files, for instance), which the report already explained: left alone, they would stay blocked for ever.
       const held = row.conversation_id ? board.all("SELECT id FROM tasks WHERE conversation_id = ? AND status = 'blocked' AND updated_at <= ?", row.conversation_id, row.at)
         .map((r) => r.id).filter((tid) => board.heldInfo(board.task(tid))) : [];
       for (const tid of held) board.patch(tid, { status: 'done' }, 'usuario', 'task.review_accepted');
       const out = accept([...row.meta.tasks, ...held], row.meta.project);
-      // 3.2: the OK closes the conversation when nothing of it is still open (written in again, it opens).
+      // the OK closes the conversation when nothing of it is still open (written in again, it opens).
       settleConversation(row.conversation_id);
       return out;
     },
-    // The assistant's brain (2.6: any installed agent and model, with its reasoning and account). 3.2: of a conversation
+    // The assistant's brain (any installed agent and model, with its reasoning and account). Of a conversation
     // (conversation given) and, always, the one new conversations start with; orchestrate: whether a new conversation is
     // with the assistant (on) or directly with the agent chosen (off: the user hands out the work).
-    // 3.8: a linked phone or browser changes only that conversation's brain; the one new conversations start with (and
+    // a linked phone or browser changes only that conversation's brain; the one new conversations start with (and
     // «orchestrate») is a setting of this PC.
     'chat.settings': ({ conversation, agent, model, reasoning, orchestrate, account: acc }, principal) => {
       const remote = principal?.channel !== 'desktop';
@@ -534,7 +534,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       if (model !== undefined) {
         const m = String(model ?? '');
         if (brain === 'claude' && m && !o.models.some((x) => x.id === m) && !/^(sonnet|opus|haiku)$/.test(m)) {
-          // 2.6: a model Claude Code itself offers (discovered) joins the assistant's models, so the settings stay valid.
+          // a model Claude Code itself offers (discovered) joins the assistant's models, so the settings stay valid.
           const offered = (board.settingJson('models:claude') ?? []).find((x) => x.id === m);
           if (!offered || !/^[\w.:-]{1,80}$/.test(m)) fail(tr('msg.api.modelUnavailable'));
           if (!remote) patch.models = [...o.models, { id: m, label: offered.label }];
@@ -543,7 +543,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         patch.model = m || (brain === 'claude' ? 'claude-sonnet-5-5' : '');
       } else if (patch.agent && patch.agent !== (base.agent ?? 'claude')) patch.model = brain === 'claude' ? 'claude-sonnet-5-5' : '';
       if (reasoning !== undefined) patch.reasoning = oneOf(reasoning, REASONING_LEVELS, 'razonamiento');
-      // 3.6: «Extra» (xhigh) only with a model that takes it; changing to a model without it leaves «Alto».
+      // «Extra» (xhigh) only with a model that takes it; changing to a model without it leaves «Alto».
       if ((patch.reasoning ?? base.reasoning) === 'xhigh' && (reasoning !== undefined || patch.model !== undefined || patch.agent !== undefined)) {
         if (!levelsOf(modelCatalog(board), brain, patch.model ?? base.model, patch.account ?? base.account).includes('xhigh')) {
           if (reasoning === 'xhigh') fail(tr('msg.api.reasoningUnavailable'));
@@ -569,19 +569,19 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       if ((patch.model !== undefined && patch.model !== before.model) || (patch.agent && patch.agent !== (before.agent ?? 'claude')) || (patch.reasoning && patch.reasoning !== before.reasoning)) board.notice(tr('msg.api.assistantBrain', { name: assistantName(), agent: info.agentLabel, label: info.modelLabel, reasoning: level }), 'info');
       return info;
     },
-    // 2.6: the brains to choose from (agent + model), which ones spend the quota faster and how used each account is.
+    // the brains to choose from (agent + model), which ones spend the quota faster and how used each account is.
     // Kept for a few seconds: the window asks again on every change of the board (while the agents work, many a second).
-    // 2.7: the guide of Ajustes › Tareas y usos: each agent's models by kind (light, balanced, most capable) and what Orb
+    // the guide of Ajustes › Tareas y usos: each agent's models by kind (light, balanced, most capable) and what Orb
     // would choose for a simple, normal and complex task with the current slider.
     'models.guide': () => modelCatalog(board).map((a) => ({
       id: a.id, label: a.label,
       tiers: Object.fromEntries(['light', 'balanced', 'heavy'].map((tier) => [tier, a.models.filter((m) => m.id && m.tier === tier).map((m) => m.label)])),
       picks: Object.fromEntries(LEVELS.map((level) => { const p = chooseModel(board, a.id, level, a.accounts[0]?.id ?? a.id, { writes: true }); return [level, { label: p.label, tier: p.tier, reasoning: p.reasoning }]; })),
-      // 3.2.1: what the read-only tasks (reviews and verifications) really get: they may use the light model.
+      // what the read-only tasks (reviews and verifications) really get: they may use the light model.
       readPicks: Object.fromEntries(LEVELS.map((level) => { const p = chooseModel(board, a.id, level, a.accounts[0]?.id ?? a.id, { writes: false }); return [level, { label: p.label, tier: p.tier, reasoning: p.reasoning }]; }))
     })),
     'models.catalog': () => {
-      // 3.2: with the accounts' real usage in the key: the usage bubble reads it from here and must not see an old figure.
+      // with the accounts' real usage in the key: the usage bubble reads it from here and must not see an old figure.
       const rates = board.all("SELECT key, value FROM settings WHERE key LIKE 'rate:%'").map((r) => `${r.key}=${r.value.length}:${r.value.slice(0, 40)}`);
       const key = JSON.stringify([ctx.config.orchestrator, ctx.config.agentOrder, Object.keys(ctx.config.agents).map((a) => ctx.config.agents[a]?.enabled), board.setting('models_rev'), rates]);
       if (catalogCache && catalogCache.key === key && Date.now() - catalogCache.at < 5000) return catalogCache.value;
@@ -590,18 +590,18 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return value;
     },
 
-    // 3.0: the list of every view, sent on each refresh: long texts cut (the whole task is tasks.get) and no approval
+    // the list of every view, sent on each refresh: long texts cut (the whole task is tasks.get) and no approval
     // signatures (only the detail needs them).
-    // 3.8.3: Flutter, the Android SDK and a JDK as they really are on this PC (Ajustes › Android; engine/dev-tools.mjs).
+    // Flutter, the Android SDK and a JDK as they really are on this PC (Ajustes › Android; engine/dev-tools.mjs).
     'devtools.check': () => checkDevTools(),
     'tasks.list': ({ limit }) => {
-      // 3.8.1: a range of the settings' key (its index), not LIKE (which read every setting: one per accepted task, …).
+      // a range of the settings' key (its index), not LIKE (which would read every setting: one per accepted task, …).
       const undone = new Set(board.all("SELECT key FROM settings WHERE key >= 'undone:' AND key < 'undone;' AND value <> '' AND value <> 'null'").map((r) => Number(r.key.slice('undone:'.length))));
-      // 3.8.1: the rows are new objects: changed in place (copying each task twice cost more than reading it).
+      // the rows are new objects: changed in place (copying each task twice would cost more than reading it).
       const paused = board.setting('paused') === '1';
       return board.panelTasks(Math.min(Number(limit) || 150, 500)).map((task) => {
         delete task.approval_hash; delete task.approval_sig;
-        // 3.8.3: why a queued one waits and what a held one did (src/ui/components/task-state.jsx).
+        // why a queued one waits and what a held one did (src/ui/components/task-state.jsx).
         const waiting = board.waitReason(task, paused); if (waiting) task.waiting = waiting;
         const held = board.heldInfo(task); if (held) task.held = held;
         task.description = cut(task.description); task.result = cut(task.result);
@@ -613,7 +613,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'tasks.get': ({ id }) => {
       const d = board.taskDetail(int(id, 'tarea'));
       const children = board.all('SELECT id, title, status, agent, assigned_to, model FROM tasks WHERE parent_id = ? OR review_of = ? ORDER BY id', d.id, d.id);
-      // 3.2.1: «Deshecha» (undone: the files are as before the task), the model by its name («Haiku 4.5», not «haiku») and the
+      // «Deshecha» (undone: the files are as before the task), the model by its name («Haiku 4.5», not «haiku») and the
       // account that ran it by the name the user gave it («Codex Pro»).
       const who = d.assigned_to ?? d.agent; const acc = d.run_account ?? d.account ?? null;
       return { ...d, waiting: board.waitReason(d), held: board.heldInfo(d), accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
@@ -635,17 +635,17 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'tasks.reassign': ({ id, agent, model, reasoning }) => board.reassign(int(id, 'tarea'), { agent: oneOf(agent, [...AGENT_IDS, 'any'], 'agente'), model: str(model, 'modelo', 80, { optional: true }) || null, reasoning: oneOf(reasoning, ['low', 'medium', 'high'], 'razonamiento') }, 'usuario'),
     'tasks.followup': ({ id, text, images: files }) => scheduler.followup(int(id, 'tarea'), str(text, 'mensaje', 20000), images(files)),
     'tasks.undo': ({ id }) => scheduler.undo(int(id, 'tarea')),
-    // 3.8.2: what a finished task changed, with each file's diff (read only, against its undo checkpoint: «Deshacer» works
-    // as before). Nothing to show while it runs, after it was undone, or without git (a copy checkpoint).
+    // what a finished task changed, with each file's diff (read only, against its undo checkpoint: «Deshacer» works
+    // the same). Nothing to show while it runs, after it was undone, or without git (a copy checkpoint).
     'tasks.diff': async ({ id }) => {
       const task = board.task(int(id, 'tarea')) ?? fail(tr('msg.api.noTaskThat'));
-      // 3.8.3: a held task's diff is read from every file again (safety.mjs › recheckHeld): what accepting it keeps.
+      // a held task's diff is read from every file again (safety.mjs › recheckHeld): what accepting it keeps.
       if (board.heldInfo(task)) await scheduler.recheckHeld(task);
       const cp = board.settingJson(`checkpoint:${task.id}`);
       if (cp?.before?.kind !== 'git' || !cp.after?.commit || !cp.before.repo || !fs.existsSync(cp.before.repo)) return { available: false, files: [], more: 0 };
       return { available: true, ...diffBetween(cp.before.repo, cp.before.commit, cp.after.commit) };
     },
-    // 3.8.3: «Iniciar de todos modos» starts that task now, over the usage limit and also with the queue paused (only that
+    // «Iniciar de todos modos» starts that task now, over the usage limit and also with the queue paused (only that
     // one: scheduler.tick). One that waits for other tasks cannot: the answer says which. → { paused }
     'tasks.launchAnyway': ({ id }) => {
       const t = board.task(int(id, 'tarea')); if (t?.status !== 'queued') fail(tr('msg.api.onlyQueued'));
@@ -655,7 +655,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       board.changed('tasks');
       return { paused: why?.kind === 'paused' || why?.kind === 'manual' };
     },
-    // 3.8.3: a task held for review is accepted as it is (its result stays; the tasks waiting for it go on), as the OK
+    // a task held for review is accepted as it is (its result stays; the tasks waiting for it go on), as the OK
     // to its report does.
     'tasks.accept': ({ id }) => {
       const tid = int(id, 'tarea');
@@ -670,12 +670,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const cwd = proj ? proj.path : ctx.paths.projects;
       // Without a project the agent sits in the assistant's own folder (its database, secret and logs): it may only look.
       if (!proj && p.permission && p.permission !== 'leer') fail(tr('msg.api.readOnlyNoProject'));
-      // 3.8.2 (D5): «Acceso total» only through sessions.grantTotal (the master password), never at creation.
+      // «Acceso total» only through sessions.grantTotal (the master password), never at creation.
       if (p.permission === 'total') fail(tr('msg.grants.totalNeedsPassword'));
       const created = sessions.create({ kind: 'chat', agent: oneOf(p.agent, AGENT_IDS, 'agente'), account: str(p.account, 'cuenta', 40, { optional: true }) || null, model: str(p.model, 'modelo', 80, { optional: true }) || null,
         reasoning: oneOf(p.reasoning, REASONING_LEVELS, 'razonamiento', 'medium'), permission: proj ? oneOf(p.permission, PERMISSIONS.filter((x) => x !== 'total'), 'permiso', permissionOfAutonomy(globalAutonomy())) : 'leer',
         project: proj?.name ?? null, cwd, title: str(p.title, 'título', 80, { optional: true }) || tr('msg.api.chatWith', { agent: p.agent }) });
-      // 3.2: a title given here stays; without one, Orb names it from its first message.
+      // a title given here stays; without one, Orb names it from its first message.
       return p.title ? sessions.update(created.id, { titled: true }) : created;
     },
     'sessions.items': ({ id, after, before, limit }) => sessions.items(str(id, 'conversación', 64), { after: Number(after) || 0, before: Number(before) || 0, limit: Number(limit) || 200 }),
@@ -695,7 +695,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const t = str(text, 'mensaje', 20000);
       const command = s.kind === 'chat' && !(files ?? []).length ? slashCommand(t) : null;
       if (command) return command === 'compact' ? sessions.compact(s.id) : sessions.clear(s.id);
-      // 3.2: a new direct conversation is named by Orb from its first message (at once a quick title, then a better one).
+      // a new direct conversation is named by Orb from its first message (at once a quick title, then a better one).
       if (s.kind === 'chat' && !s.titled) {
         const quick = titleFrom(t) || s.title;
         sessions.update(s.id, { title: quick, titled: true });
@@ -707,7 +707,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'sessions.editQueued': ({ id, queueId, text, remove, move }) => sessions.editQueued(str(id, 'conversación', 64), int(queueId, 'mensaje'), { text: text === undefined ? undefined : str(text, 'mensaje', 20000), remove: Boolean(remove), move: oneOf(move, ['up', 'down'], 'mover', undefined) }),
     'sessions.approve': ({ id, request, decision }) => sessions.respond(str(id, 'conversación', 64), str(request, 'petición', 200), oneOf(decision, DECISION, 'decisión')),
     'sessions.resume': ({ id }) => sessions.resume(str(id, 'conversación', 64)),
-    // 3.8.2: agent: go on with another agent (the copy gets a summary of the conversation; the original stays).
+    // agent: go on with another agent (the copy gets a summary of the conversation; the original stays).
     'sessions.fork': ({ id, title, agent }) => {
       const other = oneOf(agent, AGENT_IDS, 'agente', undefined);
       if (other && !(board.availableAgents() ?? AGENT_IDS).includes(other)) fail(tr('msg.api.agentUnavailable', { agent: other }));
@@ -725,7 +725,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'tasks.review': ({ id, agent, focus }) => scheduler.createReview(board.task(int(id, 'tarea')) ?? fail(tr('msg.api.noTaskThat')), { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }) }),
     'projects.review': ({ name, agent, focus }) => scheduler.reviewProject(project(name).name, { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }) }),
     'projects.securityReview': ({ name, agent }) => scheduler.securityReview(project(name).name, { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null) }),
-    // 3.6: «Compactar» in a direct conversation: the agent's own compaction (Claude /compact, Codex thread/compact/start).
+    // «Compactar» in a direct conversation: the agent's own compaction (Claude /compact, Codex thread/compact/start).
     'sessions.compact': ({ id }) => sessions.compact(sessions.must(str(id, 'conversación', 64)).id),
     'sessions.stop': ({ id }) => { const s = sessions.must(str(id, 'conversación', 64)); if (s.kind === 'task') return scheduler.cancel(s.task_id, 'usuario'); return sessions.stop(s.id); },
     'sessions.update': ({ id, title, model, reasoning, permission, archived }) => {
@@ -735,19 +735,19 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       if (title !== undefined) fields.title = oneLine(str(title, 'título', 80), 80);
       if (model !== undefined) fields.model = str(model, 'modelo', 80, { optional: true }) || null;
       if (reasoning !== undefined) fields.reasoning = oneOf(reasoning, REASONING_LEVELS, 'razonamiento');
-      // 3.6: «Extra» only with a model that takes it (the conversation's, or the one chosen now).
+      // «Extra» only with a model that takes it (the conversation's, or the one chosen now).
       if ((fields.reasoning ?? s.reasoning) === 'xhigh' && (reasoning !== undefined || model !== undefined) && !levelsOf(modelCatalog(board), s.agent, fields.model !== undefined ? fields.model : s.model, s.account).includes('xhigh')) {
         if (reasoning === 'xhigh') fail(tr('msg.api.reasoningUnavailable'));
         fields.reasoning = 'high';
       }
-      // 3.8.2 (D5): into or out of «total» only through grants.mjs (password, audit, lock).
+      // into or out of «total» only through grants.mjs (password, audit log, lock).
       if (permission !== undefined && (permission === 'total' || s.permission === 'total') && permission !== s.permission) fail(tr('msg.grants.totalNeedsPassword'));
       if (permission !== undefined) { fields.permission = oneOf(permission, PERMISSIONS, 'permiso'); if (!s.project && fields.permission !== 'leer') fail(tr('msg.api.readOnlyNoProject2')); }
       if (archived !== undefined) fields.archived = Boolean(archived);
       return sessions.update(s.id, fields);
     },
     'sessions.remove': ({ id }) => sessions.remove(str(id, 'conversación', 64)),
-    // 3.8.3: the agents' level for everything that has none of its own (new chats, the tasks the assistant creates):
+    // the agents' level for everything that has none of its own (new chats, the tasks the assistant creates):
     // «Auto» or «Preguntar». Also from a linked phone (only these two values; «Acceso total» never comes this way).
     'permissions.setMode': ({ mode }) => { const m = oneOf(mode, AUTONOMY, 'modo'); const c = saveConfig({ permissions: { mode: m } }); emit('config:changed', c); return { mode: m }; },
 
@@ -759,17 +759,17 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const needle = String(q ?? '').toLowerCase().trim();
       return (needle ? rows.filter((r) => `${r.actor} ${r.kind} ${r.detail} ${r.title ?? ''}`.toLowerCase().includes(needle)) : rows).map((r) => ({ ...r, detail: redactSecrets(r.detail) }));
     },
-    // 3.2.1: only the accounts of the agents this PC can run (not every agent Orb knows).
+    // only the accounts of the agents this PC can run (not every agent Orb knows).
     'usage.get': () => { const avail = board.availableAgents(); return usageReport(board).filter((u) => !avail || avail.includes(u.agent)); },
-    // 3.8.2: the usage page: what was spent in the last 7, 30 or 90 days, by day, agent and model (names as the selector
+    // the usage page: what was spent in the last 7, 30 or 90 days, by day, agent and model (names as the selector
     // shows them).
     'usage.history': ({ days }) => {
       const out = usageHistory(board, { days: oneOf(days, [7, 30, 90], 'días', 30) });
       return { ...out, models: out.models.map(({ account, ...m }) => ({ ...m, label: m.model ? modelLabelOf(m.agent, account ?? m.agent, m.model) : null })) };
     },
-    // 2.6: the accounts working right now (the assistant's brain and the agents' running sessions), with the windows of
+    // the accounts working right now (the assistant's brain and the agents' running sessions), with the windows of
     // their plan the agents reported (session, weekly…), for the panel of the context ring.
-    // 3.8.2: «Recargar» in the usage panel: the open agents ask their plan now (at most every 20 s), then usage.now.
+    // «Recargar» in the usage panel: the open agents ask their plan now (at most every 20 s), then usage.now.
     'usage.refresh': async () => {
       if (Date.now() - usageAskedAt >= 20_000) {
         usageAskedAt = Date.now();
@@ -779,7 +779,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return methods['usage.now']();
     },
     'usage.now': () => {
-      // 3.2: the brain of the conversations answering now (or the one new conversations use).
+      // the brain of the conversations answering now (or the one new conversations use).
       const brain = orchestrator.info(null); const answering = orchestrator.states().find((x) => x.busy);
       const brainAccount = answering ? board.conversation(answering.conversation)?.account ?? brain.account : brain.account;
       const busy = board.all("SELECT DISTINCT account, agent FROM sessions WHERE status = 'running' AND account IS NOT NULL");
@@ -802,22 +802,22 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...linkMethods(shared),
     ...inboxMethods(shared),
     ...data.methods,
-    // 3.8.2: Orb locked (or a new password): the grants go, and so do the secrets typed for the agents.
-    // 3.8.2 (security review): under the lock screen the user's terminals take nothing and show nothing (user-terminal.mjs).
+    // Orb locked (or a new password): the grants go, and so do the secrets typed for the agents.
+    // under the lock screen the user's terminals take nothing and show nothing (user-terminal.mjs).
     ...masterMethods({ ...shared, onUnlocked, onLock: (why) => { secrets.wipe(); try { onLocked(); } catch (error) { log(`bloqueo: ${error.message}`); } return grants.revokeAll(why); }, onScreen: (v) => terminals.setLocked(v) }),
-    // 3.8.2 (T3 3.4): the private card of a secret an agent asked for (this PC only; saving or using a saved one asks for
+    // the private card of a secret an agent asked for (this PC only; saving or using a saved one asks for
     // the master password: permissions.mjs › needsUnlock).
     'secrets.pending': () => secrets.pending(),
     'secrets.answer': ({ id, value, save, saved }) => secrets.answer({ id: int(id, 'petición'), value, save: save === true, saved: saved === true }),
     'secrets.decline': ({ id }) => secrets.decline({ id: int(id, 'petición') }),
-    // 3.8.2 (T3 3.2): the user's terminal inside Orb (this PC only, never in core or a protected folder).
+    // the user's terminal inside Orb (this PC only, never in core or a protected folder).
     'terminal.list': () => terminals.list(),
     'terminal.open': ({ dir }) => terminals.open({ dir: str(dir, 'carpeta', 1000) }),
     'terminal.write': ({ id, text }) => terminals.write({ id: int(id, 'terminal'), text: typeof text === 'string' ? text : '' }),
     'terminal.close': ({ id }) => terminals.close({ id: int(id, 'terminal') }),
     ...extensionMethods(shared),
-    ...appMethods({ home: ctx.home, version }), // 3.8.1: this PC's tools (terminal, editors, feedback…)
-    ...musicMethods({ log }) // 3.8.2: the music's tracks, downloaded the first time (src/engine/host/music.mjs)
+    ...appMethods({ home: ctx.home, version }), // this PC's tools (terminal, editors, feedback…)
+    ...musicMethods({ log }) // the music's tracks, downloaded the first time (src/engine/host/music.mjs)
   };
   const feeds = createFeeds();
   return {
@@ -831,12 +831,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       if (!fn) fail(tr('msg.api.unknownAction', { method }));
       if (params === null || typeof params !== 'object' || Array.isArray(params)) fail(tr('msg.api.badParams'));
       authorize(principal, method);
-      // 3.8: and, for what the master password guards, a fresh unlock of this PC's window (src/engine/api/master.mjs).
+      // and, for what the master password guards, a fresh unlock of this PC's window (src/engine/api/master.mjs).
       checkUnlock(method, params);
       let out = await fn(params, principal);
-      // 3.8.1 (H4c): the lists of every refresh, as changes since what the caller holds (src/engine/feeds.mjs).
+      // the lists of every refresh, as changes since what the caller holds (src/engine/feeds.mjs).
       if (params.since !== undefined) out = feeds.reply(method, params, out, principal);
-      // 3.1: an agent turned on or off, checked again, or an account added or removed: the list of available agents is
+      // an agent turned on or off, checked again, or an account added or removed: the list of available agents is
       // updated at once (the next task may already be for it).
       if (/^(config\.save|agents\.(status|check)|accounts\.(add|update|remove))$/.test(method)) { try { scheduler.refreshAvailable(true); } catch { /* next tick */ } }
       return out;
@@ -848,18 +848,18 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const rows = board.all('SELECT id, role, body, meta, conversation_id FROM chat WHERE id > ? ORDER BY id LIMIT 20', lastChat);
       if (!rows.length) return;
       lastChat = rows[rows.length - 1].id;
-      for (const r of rows) if (r.role === 'notice') { let m = null; try { m = JSON.parse(r.meta); } catch { /* plain */ } emit('notice', { body: oneLine(r.body, 300), tone: m?.tone ?? 'info' }); } // 2.7: a passing notification, not a chat line
+      for (const r of rows) if (r.role === 'notice') { let m = null; try { m = JSON.parse(r.meta); } catch { /* plain */ } emit('notice', { body: oneLine(r.body, 300), tone: m?.tone ?? 'info' }); } // a passing notification, not a chat line
       else if (r.role !== 'usuario') {
         let meta = null; try { meta = r.meta ? JSON.parse(r.meta) : null; } catch { /* plain */ }
-        // 3.2: a plain line of no conversation (a task made by hand or by a schedule) passes by as a notification.
+        // a plain line of no conversation (a task made by hand or by a schedule) passes by as a notification.
         if (r.role === 'system' && r.conversation_id == null && !meta?.kind) emit('notice', { body: oneLine(r.body, 300), tone: 'info' });
         else emit('chat:new', { role: r.role, body: oneLine(r.body, 240), meta, conversation: r.conversation_id ?? null });
       }
     },
-    // 3.6: the daily backup (03:00 in the owner's zone), looked at from the engine's loop.
+    // the daily backup (03:00 in the owner's zone), looked at from the engine's loop.
     dataTick: () => data.tick(),
     // Running tasks stay "running": the next start continues them (scheduler.finish does not close them while closing).
-    // 3.8.2: adb's server goes with Orb (no phone reachable from this PC while Orb is closed).
+    // adb's server goes with Orb (no phone reachable from this PC while Orb is closed).
     // Returns what is still to be waited for: a task being closed or a copy being joined finishes writing its state first.
     shutdown() { terminals.closeAll(); scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); android.stopServer().catch(() => {}); log('motor detenido'); return scheduler.drain().catch(() => {}); }
   };

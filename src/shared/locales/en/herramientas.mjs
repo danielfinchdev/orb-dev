@@ -1,4 +1,4 @@
-// 3.8.2 (phase 10): integrated terminal, secrets an agent asks for, pointing and recording in the agents' browser and
+// integrated terminal, secrets an agent asks for, pointing and recording in the agents' browser and
 // Android emulators.
 export default {
   'msg.android.noEmulator': 'This PC doesn’t have the Android emulator. Install it from Android Studio.',

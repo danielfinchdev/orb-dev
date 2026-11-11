@@ -4,7 +4,7 @@
 // dropped, pasted or picked in the page (window.orb.pathForFile: the page hands the File to WebView2 with
 // chrome.webview.postMessageWithAdditionalObjects and WebView2 gives Rust its path, as Electron's webUtils did). The page's
 // own drag and drop keeps working (Tauri's drop handler stays off).
-// And what Electron's window never had (review D10 B20): in the published app WebView2's browser shortcuts are off (F5,
+// And what Electron's window never had: in the published app WebView2's browser shortcuts are off (F5,
 // Ctrl+R and Ctrl+Shift+R would reload the interface and lose what is being written; Ctrl+P prints, Ctrl+F, Alt+←…; the
 // page's own keys — Ctrl+J, F11, Ctrl ±0 — still reach it), pinch zoom is off (Orb has its own zoom), and the right-click
 // menu only keeps editing (cut, copy, paste, select all, undo, redo, emoji, spelling): no Back, Reload, Save as, Print.

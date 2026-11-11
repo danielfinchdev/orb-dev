@@ -1,4 +1,4 @@
-// 3.8.1: Settings › Skills and MCP (views/extensions.jsx), the chat card of an agent's request, and the errors of
+// Settings › Skills and MCP (views/extensions.jsx), the chat card of an agent's request, and the errors of
 // src/domain/extensions/extensions.mjs.
 export default {
   'ext.title': 'Skills and MCP servers',

@@ -1,5 +1,5 @@
 // The search of the chats' list and of Ctrl+K: from two letters, the messages of the chats (inbox.search and, for the
-// direct conversations, conversations.search) and, 3.8.2, what the tasks say (tasks.search).
+// direct conversations, conversations.search) and what the tasks say (tasks.search).
 import { useEffect, useState } from 'react';
 import { call } from '@/lib/store.js';
 

@@ -12,7 +12,7 @@ export class BoardConversations {
     if (!body) throw new Error(tr('sys.board.bodyRequired'));
     if (![...AGENTS, 'all', 'usuario', 'orb'].includes(to)) throw new Error(tr('sys.board.badRecipient', { to, list: AGENTS.join(', ') }));
     body = String(body).slice(0, 8000);
-    // 3.2.1: the agent by its name («Cursor», not «cursor»).
+    // the agent by its name («Cursor», not «cursor»).
     const who = from === 'orb' ? assistantName() : AGENT_LABELS[from] ?? from;
     if (to === 'usuario') this.addChat('system', `💬 ${who}${task_id ? tr('msg.board.taskRef', { id: task_id }) : ''}: ${body}`, task_id ? { task: Number(task_id) } : null);
     const { lastInsertRowid } = this.run('INSERT INTO messages (from_agent, to_agent, task_id, from_task, body, at) VALUES (?, ?, ?, ?, ?, ?)', String(from), to, task_id ?? null, from_task ?? null, body, now());
@@ -21,7 +21,7 @@ export class BoardConversations {
   }
 
   // visible(m): which of them this reader may see (an agent's MCP: only its own tasks' and conversation's); only those
-  // are returned and marked as read. 3.8: reader, whose read marks they are (a worker's are its task's, «claude#3», so two
+  // are returned and marked as read. reader: whose read marks they are (a worker's are its task's, «claude#3», so two
   // tasks of one agent do not take each other's messages); mine(m), a message it sent itself (left out).
   inbox(agent, markRead = true, visible = () => true, { reader = agent, mine = (m) => m.from_agent === agent } = {}) {
     const rows = this.all(`SELECT m.* FROM messages m WHERE (m.to_agent = ? OR m.to_agent = 'all')
@@ -30,7 +30,7 @@ export class BoardConversations {
     return rows;
   }
 
-  // ---- 3.2: the conversations with the assistant (each with its title, project, brain and its agent's conversation id)
+  // ---- the conversations with the assistant (each with its title, project, brain and its agent's conversation id)
   conversation(id) {
     const r = id == null ? null : this.one('SELECT * FROM conversations WHERE id = ?', Number(id));
     return r ? conversationRow(r) : null;
@@ -62,9 +62,9 @@ export class BoardConversations {
     // Opened again counts as activity: the day-long quiet before it would complete it again at once.
     return this.updateConversation(c.id, { status: done ? 'done' : 'open', done_at: done ? now() : null, ...(done ? {} : { updated_at: now() }) });
   }
-  // The project of a conversation. 3.2: when the user chooses it (asDefault), also the default for the next new
-  // conversation (the global working folder). 3.8.3: the assistant choosing a project for its conversation (a task, a
-  // new project, orb_set_project) no longer moves the user's working folder too: a test project ended up as the
+  // The project of a conversation. When the user chooses it (asDefault), also the default for the next new
+  // conversation (the global working folder). The assistant choosing a project for its conversation (a task, a
+  // new project, orb_set_project) does not move the user's working folder too: otherwise a test project ends up as the
   // «Proyecto de trabajo» of every new chat.
   setConversationProject(id, name, actor, { asDefault = false } = {}) {
     const c = this.conversation(id); if (!c) throw new Error(tr('msg.board.noConversation'));
@@ -91,17 +91,17 @@ export class BoardConversations {
 
   // ---- the assistant's chat and the activity feed
   // meta: extra data of a chat line, e.g. { kind: 'report', tasks: [ids] } for the assistant's report that waits for the user's OK.
-  // 3.2: conversation: the one the line belongs to; when not given, the one of the task the line is about (meta.task).
+  // conversation: the one the line belongs to; when not given, the one of the task the line is about (meta.task).
   addChat(role, body, meta = null, conversation = undefined) {
     const conv = conversation !== undefined ? conversation : meta?.task ? this.conversationOfTask(meta.task) : null;
     const at = now();
     const { lastInsertRowid } = this.run('INSERT INTO chat (role, body, meta, at, conversation_id) VALUES (?, ?, ?, ?, ?)', role, String(body), meta ? JSON.stringify(meta) : null, at, conv ?? null);
     if (conv && role !== 'notice') this.run('UPDATE conversations SET updated_at = ? WHERE id = ?', at, Number(conv));
-    // 3.6 (messaging lists): which conversation got which line (the lists count unread lines).
+    // messaging lists: which conversation got which line (the lists count unread lines).
     this.changed('chat', conv != null && role !== 'notice' ? { conversation: Number(conv), line: Number(lastInsertRowid), role } : null);
     return { id: Number(lastInsertRowid), conversation: conv ?? null };
   }
-  // 2.7: a notice that only informs (the working folder changed, the brain in use, a schedule created…): the window shows
+  // a notice that only informs (the working folder changed, the brain in use, a schedule created…): the window shows
   // it as a passing notification instead of a grey line in the chat. tone: info | success | warning. Kept in the table
   // (role 'notice') so the engine sees it whichever process wrote it, but left out of the chat.
   notice(body, tone = 'info') { return this.addChat('notice', body, { tone }); }

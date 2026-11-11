@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 3.1, development only: the terminal side of Orb.dev's control line (src/engine/dev-control.mjs). It reads the port and
+// Development only: the terminal side of Orb.dev's control line (src/engine/dev-control.mjs). It reads the port and
 // key from ORB_DEV_CONTROL_FILE (or %TEMP%\orb-dev-control.json), written by an Orb.dev started with ORB_DEV_CONTROL=1.
 //   node scripts/orb-dev.mjs vigilar               one line per thing that happens (for a monitor): tasks, chat, permissions
 //   node scripts/orb-dev.mjs estado                tasks, pending permissions and the latest chat lines
@@ -66,7 +66,7 @@ try {
     }
     console.log(`${hhmm()} desconectado (Orb.dev se cerró)`);
   } else if (cmd === 'enviar') {
-    // 3.2: «enviar c3 texto» writes in conversation 3; without it, a new conversation starts.
+    // «enviar c3 texto» writes in conversation 3; without it, a new conversation starts.
     const conv = /^c(\d+)$/.exec(args[0] ?? '');
     const r = await call('chat.send', { text: (conv ? args.slice(1) : args).join(' '), ...(conv ? { conversation: Number(conv[1]) } : {}) });
     console.log(`enviado (conversación c${r.conversation})`);

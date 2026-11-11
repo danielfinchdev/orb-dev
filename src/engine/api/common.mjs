@@ -1,4 +1,4 @@
-// 3.6: the checks every part of the engine's API shares (split out of api.mjs, unchanged).
+// the checks every part of the engine's API shares.
 import path from 'node:path';
 import { tr } from '../../platform/context.mjs';
 

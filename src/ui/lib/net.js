@@ -1,4 +1,4 @@
-// 3.8: the phone's requests to the PC never wait for the system's own network timeout (minutes on Android when an
+// the phone's requests to the PC never wait for the system's own network timeout (minutes on Android when an
 // address of the PC no longer answers): each one has its own limit, and a request that could not reach the PC is told
 // apart from one the PC refused (pure: test/movil-ui.test.mjs).
 
@@ -32,7 +32,7 @@ export const isOffline = (e) => Boolean(e?.offline);
 // The pause before trying again while the PC cannot be reached: 3 s, 6 s, 12 s… up to 30 s.
 export const retryDelay = (attempt) => Math.min(30_000, 3_000 * 2 ** Math.max(0, attempt));
 
-// 3.8 (F5b): the tries of the «PC apagado» screen. One at a time (a try asked while another runs is dropped), a growing
+// the tries of the «PC apagado» screen. One at a time (a try asked while another runs is dropped), a growing
 // pause between them (retryDelay), none while the app is hidden (the phone's screen off, another app on top: it tries
 // again when the app comes back). attempt(): true when the PC answered. onWait(seconds | null, busy): what to show.
 // timers: setInterval / clearInterval (the tests pass their own). → { now({ reset }), pause(), stop() }

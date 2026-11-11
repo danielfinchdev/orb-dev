@@ -13,8 +13,8 @@ import { useT, useLocale } from '@/lib/i18n.js';
 import { timeZone } from '@/lib/clock.js';
 import { useDay } from '@/lib/use-day.js';
 
-// 2.6: the system's date and time on the left of the chat's top bar (app.css .bar-clock, in the theme's title type).
-// 2.7: with the pointer on it, the seconds too; a click opens the month's calendar in a bubble (MonthCalendar).
+// the system's date and time on the left of the chat's top bar (app.css .bar-clock, in the theme's title type).
+// with the pointer on it, the seconds too; a click opens the month's calendar in a bubble (MonthCalendar).
 export function BarClock() {
   const t = useT();
   const locale = useLocale();
@@ -75,7 +75,7 @@ const msgFormat = (locale, day) => {
   if (!msgFormats.has(k)) msgFormats.set(k, new Intl.DateTimeFormat(locale, day ? { day: 'numeric', month: 'short' } : { hour: '2-digit', minute: '2-digit' }));
   return msgFormats.get(k);
 };
-// hover (3.8.2, an agent's conversation): shown while the pointer is over the message (or it has the focus).
+// hover (an agent's conversation): shown while the pointer is over the message (or it has the focus).
 export function MsgTime({ at, hover = false }) {
   const locale = useLocale();
   useDay();
@@ -108,7 +108,7 @@ export function BarHeading({ title, project, onRename, renameLabel, extra, showP
   );
 }
 
-// 3.6: the share of the context at which the composer suggests «Compactar» (DESIGN-SYSTEM §2.2).
+// the share of the context at which the composer suggests «Compactar» (DESIGN-SYSTEM §2.2).
 export const COMPACT_AT = 0.7;
 // «Compactar» in the contextual slot: the conversation goes on from a summary; nothing of the history is lost.
 export function CompactButton({ onCompact, busy }) {

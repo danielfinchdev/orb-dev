@@ -1,4 +1,4 @@
-// 3.8.1: a connector's keys come to its launcher (launch.mjs) straight from the vault (src-tauri/vault › grants.rs), not
+// a connector's keys come to its launcher (launch.mjs) straight from the vault (src-tauri/vault › grants.rs), not
 // through the engine: the engine's grant is a one-time name, traded here once, within a minute, for the keys.
 // → the keys ({ NAME: value }), or {} when the grant is no good (used, late, or the vault is gone).
 import net from 'node:net';

@@ -1,4 +1,4 @@
-// 3.7: Opti Bot (2.7–3.6) is gone, tidied once when the engine starts. Nothing of the user's is deleted: its conversation
+// Opti Bot (2.7–3.6) is gone, tidied once when the engine starts. Nothing of the user's is deleted: its conversation
 // stays as an archived chat (its proposals still waiting say they expired). (Its «monitor» settings leave orb.json with
 // the 3.8 migration, src/domain/data/legacy/migrate-38.mjs.)
 

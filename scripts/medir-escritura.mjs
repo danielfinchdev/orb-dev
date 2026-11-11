@@ -1,4 +1,4 @@
-// 3.8.3: how an answer is typed on screen (src/ui/lib/typing.js), measured in the window itself (a build with the `e2e`
+// how an answer is typed on screen (src/ui/lib/typing.js), measured in the window itself (a build with the `e2e`
 // cargo feature: the only one with a DevTools port). Throwaway workspace and app-data folder in %TEMP% with the fake agents
 // (their STREAM_LARGO answer streams ~2 KB of Markdown for a few seconds); never the real C:\Orb, %APPDATA%\Orb* or the
 // installed app. The window is shown (frames are only drawn for a visible window).

@@ -22,7 +22,7 @@ const CategoryField = ({ v, set }) => (
   </Field>
 );
 
-// 3.8: a multiplatform project (multi) is one folder and one repository: a subfolder per platform it has (at least one)
+// a multiplatform project (multi) is one folder and one repository: a subfolder per platform it has (at least one)
 // and «compartido» for what they share.
 const PlatformsField = ({ v, set }) => (
   <Field label={t('comp.projects.platforms')} hint={t('comp.projects.platformsHint')}>
@@ -89,7 +89,7 @@ export async function cloneRepoFlow() {
 }
 
 // The working project of the assistant's chat: pick one, create one, link a folder, or clear it to pick another.
-// 3.2: conversation: the project of that conversation (otherwise, the working folder new conversations start in).
+// conversation: the project of that conversation (otherwise, the working folder new conversations start in).
 export function ProjectPicker({ conversation = null }) {
   const t = useT();
   const projects = useStore((s) => s.projects);
@@ -112,7 +112,7 @@ export function ProjectPicker({ conversation = null }) {
               <Folder /><span className="flex-1 truncate">{p.name}</span>{active?.name === p.name ? <Check className="text-primary!" /> : null}
             </DropdownMenuItem>
           )) : <div className="text-muted-foreground px-2 py-1.5 text-xs">{t('comp.projects.none')}</div>}
-          {/* 2.6: without a folder (it was a section of its own in the sidebar). */}
+          {/* without a folder. */}
           <DropdownMenuItem onSelect={() => setActive('')} data-testid="project-none">
             <FolderX /><span className="grid flex-1 leading-tight"><span className="truncate">{t('nav.loose')}</span><span className="text-muted-foreground text-xs">{t('comp.projects.noneHint')}</span></span>{!active ? <Check className="text-primary!" /> : null}
           </DropdownMenuItem>

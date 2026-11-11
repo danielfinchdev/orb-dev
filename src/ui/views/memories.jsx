@@ -1,4 +1,4 @@
-// 3.2: «Memorias»: what Orb remembers, in one place: the logs (bitácoras, its memory of each project) and the activity
+// «Memorias»: what Orb remembers, in one place: the logs (bitácoras, its memory of each project) and the activity
 // (every event of the board). Each one keeps its own route (logs, activity), so links to them still work.
 import { BookOpen } from 'lucide-react';
 import { PageHeader } from '@/components/page.jsx';

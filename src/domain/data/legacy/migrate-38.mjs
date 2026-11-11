@@ -1,4 +1,4 @@
-// 3.8: the one-time move of a 3.5–3.7 data folder to Orb 3.8, which has no bots, replicas, links between Orbs, Orb
+// the one-time move of a 3.5–3.7 data folder to Orb 3.8, which has no bots, replicas, links between Orbs, Orb
 // Terminal, several users, lent accounts or shared projects. Run by db.mjs when this home's database opens (any process;
 // one at a time: an exclusive transaction on core/datos/migracion-3.8.lock.db, released by the system if the process dies).
 //   1. orb.json as it was (core/datos/migracion-3.8/orb-3.7.json, written once: everything else is built from it; never in
@@ -262,7 +262,7 @@ function preCopy(db, p, run, ops) {
   if (fs.existsSync(file)) {
     if (run.print === print && checkCopy(file, expected)) return run;
   }
-  // Review F2.5b A2.4: the copy and the migration need about twice the database; without that room nothing is touched.
+  // The copy and the migration need about twice the database; without that room nothing is touched.
   { const need = 2 * dbBytes(p) + 64 * 1024 * 1024; const free = freeBytes(p.data); if (free !== null && free < need) throw userError(tr('data.migration38.noSpace', { need: Math.ceil(need / 1048576), free: Math.floor(free / 1048576) })); }
   if (fs.existsSync(file)) {
     // Not trusted (empty, cut) or outdated: kept aside until the run is done, never deleted now.
@@ -536,7 +536,7 @@ function migrateRows(db, who) {
     const ids = who.others; const inOthers = `person_id IN (${marks(ids)})`;
     const own = (t) => cols(db, t).includes('person_id');
     if (own('conversations')) forConversations(all(db, `SELECT id FROM conversations WHERE ${inOthers}`, ...ids).map((r) => r.id));
-    // Their lines left in the owner's conversations keep their place, without their text (review F2.5b B6: the original
+    // Their lines left in the owner's conversations keep their place, without their text (the original
     // is in their archive, chat-suelto.json).
     if (own('chat')) run(`UPDATE chat SET body = ?, person_id = NULL WHERE ${inOthers}`, tr('data.migration38.otherUserLine'), ...ids);
     if (own('sessions')) {
@@ -762,7 +762,7 @@ export function scrubPreCopies(db, { home = ctx.home, now = Date.now() } = {}) {
   if (!Number.isFinite(at) || setting(db, SCRUBBED) || unfinished(db) || now - at < SCRUB_AFTER_MS) return null;
   const all = legacyData(home).copies;
   // A copy set aside as broken (.roto-*: cut or unreadable, never used) may still hold those secrets: it goes now
-  // (review F2.5b M7); a .db copy is cleaned and kept.
+  // a .db copy is cleaned and kept.
   for (const file of all.filter((f) => path.basename(f).includes('.roto-'))) { try { fs.rmSync(file, { force: true }); } catch { /* busy: the next start */ } }
   const files = all.filter((f) => f.endsWith('.db'));
   for (const file of files) {

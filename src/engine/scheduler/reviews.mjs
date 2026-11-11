@@ -24,7 +24,7 @@ export class ReviewsPart {
     if (!agent) throw new Error(tr('msg.scheduler.noReviewer'));
     // Same agent: another model, so it is a second pair of eyes and not the same one twice.
     const models = ctx.config.agents[agent]?.models ?? [];
-    // A task without a model ran with the agent's default one (Sonnet for Claude): that is the model to avoid. 2.7: with
+    // A task without a model ran with the agent's default one (Sonnet for Claude): that is the model to avoid. With
     // Orb choosing models the task may have run with another one, so neither of them reviews it.
     const avoid = new Set([task.model, ctx.config.agents[agent]?.defaultModel].filter(Boolean));
     const model = agent === task.assigned_to ? models.find((m) => !avoid.has(m)) ?? null : null;
@@ -60,7 +60,7 @@ En result pon, en este orden: VEREDICTO: CORRECTO o CON FALLOS; la lista de prob
     return review;
   }
 
-  // 3.0: Security Review: a security audit of the whole project, read-only, by an agent with quota (another provider than
+  // Security Review: a security audit of the whole project, read-only, by an agent with quota (another provider than
   // the one that did the last work, when there is one). It reports; it never changes or "fixes" anything.
   securityReview(projectName, { actor = 'usuario', agent: wanted = null } = {}) {
     const { project, agent } = this.reviewerFor(projectName, wanted);
@@ -79,7 +79,7 @@ En result pon, en este orden: VEREDICTO: SEGURO o CON RIESGOS; los hallazgos por
     return review;
   }
 
-  // Deletes the isolated copy and branch of a finished task (the user decided not to keep it). 3.8.1: through dropCopy,
+  // Deletes the isolated copy and branch of a finished task (the user decided not to keep it). It goes through dropCopy,
   // which also empties the task's branch, so Tareas stops offering «Unir / PR / Descartar» for a branch that is gone.
   async discardBranch(taskId) {
     const task = this.board.task(taskId); if (!task?.branch) throw new Error(tr('msg.scheduler.noBranch'));
@@ -91,8 +91,8 @@ En result pon, en este orden: VEREDICTO: SEGURO o CON RIESGOS; los hallazgos por
     await this.dropCopy(task, project);
     return { ok: true };
   }
-  // 3.8.1: a task's branch joined into its project's folder («Unir»): its copy and branch are not needed any more (they
-  // used to stay for good, one per isolated task joined).
+  // a task's branch joined into its project's folder («Unir»): its copy and branch are not needed any more (otherwise they
+  // would stay for good, one per isolated task joined).
   async branchMerged(projectName, branch) {
     const project = this.board.project(projectName);
     const row = project && this.board.one('SELECT id FROM tasks WHERE project = ? AND branch = ? ORDER BY id DESC LIMIT 1', project.name, branch);

@@ -1,4 +1,4 @@
-// greet.*: the empty chat's greeting (2.7), picked in src/ui/lib/greeting.js. {user} is the person's name, {name} the
+// greet.*: the empty chat's greeting, picked in src/ui/lib/greeting.js. {user} is the person's name, {name} the
 // assistant's.
 export default {
   // By the time and the day

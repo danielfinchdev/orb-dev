@@ -1,4 +1,4 @@
-// help.*: la pantalla Tutoriales (tutoriales, atajos y preguntas frecuentes) y el tutorial guiado del robot (2.6).
+// help.*: la pantalla Tutoriales (tutoriales, atajos y preguntas frecuentes) y el tutorial guiado del robot.
 // {name} es el nombre del asistente. Los tutoriales llevan help.tut.<id>.title, .l1… y, si tienen botón, .go.
 export default {
   'help.title': 'Tutoriales',
@@ -217,12 +217,12 @@ export default {
   'help.tour.settings.text': 'General, Magic Link, Agentes y uso, Skills y MCP, Datos, Avanzado y Acerca de.',
   'help.tour.end.title': 'Todo listo',
   'help.tour.end.text': 'Elige un proyecto, cuéntame qué necesitas y empezamos.',
-  // 3.2: conversaciones, menú lateral, buscador y globito
+  // conversaciones, menú lateral, buscador y globito
   'help.tour.search.title': 'Buscar',
   'help.tour.search.text': 'Encuentra cualquier conversación, tarea o proyecto, también por lo que se dijo. Con el filtro, solo lo que está en curso o requiere tu atención.',
   'help.tour.conversations.title': 'Tus chats',
   'help.tour.conversations.text': 'Agrupados por proyecto, con lo último de cada uno: una tarea en curso, algo que espera tu aprobación… Con clic derecho los fijas, silencias o completas.',
-  // 3.2: pie del menú
+  // pie del menú
   'help.tour.feedback.title': 'Enviar comentarios',
   'help.tour.feedback.text': 'Si algo falla o se te ocurre una mejora, cuéntamelo desde aquí. Al lado, la versión de Orb.'
 };

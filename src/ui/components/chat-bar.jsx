@@ -1,4 +1,4 @@
-// 3.6 (messaging): the bar of a conversation (views/chat.jsx): (phone: the back arrow) the header pill, which opens the
+// the bar of a conversation (views/chat.jsx): (phone: the back arrow) the header pill, which opens the
 // chat's info, and its buttons on the right.
 import { ChevronLeft } from 'lucide-react';
 import { Button } from './ui/button.jsx';

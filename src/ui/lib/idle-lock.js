@@ -1,4 +1,4 @@
-// 3.8.1: Orb locks itself after a while without use (decision 20 of the owner): the PC's window shows the lock screen
+// Orb locks itself after a while without use (decision 20 of the owner): the PC's window shows the lock screen
 // (views/master.jsx › MasterLocked) until the master password is typed; the agents keep working. The minutes come from
 // Ajustes › Datos (config.ui.lockMinutes, 15 by default). No JSX here: the tests load it in Node.
 //   watchIdle({ minutes, onIdle, target, now, every }) → stop(). Any key, click, touch, wheel or pointer move on target

@@ -1,4 +1,4 @@
-// 3.8.3: the permission switch under a chat's box: «Auto» (works on its own inside the project folder, undo instead of
+// the permission switch under a chat's box: «Auto» (works on its own inside the project folder, undo instead of
 // asking) or «Preguntar» (asks before anything risky), and «⋯» with the other levels (read only, review and test, ask for
 // everything, full access). value: the chat's permission ('auto', 'editar', …); onChange(permission). more: the extra
 // levels [{ value, label }] (none: no «⋯»). Same height, border and radius as the model and reasoning chips next to it.
@@ -51,7 +51,7 @@ export function AutonomySwitch({ value, onChange, more = [], disabled = false, t
   );
 }
 
-// 3.8.3: the one notice that «Auto» is on (also for an install that had chats, which moved to «Auto»), once per workspace
+// the one notice that «Auto» is on (also for an install that had chats, which moved to «Auto»), once per workspace
 // (orb.json › ui.autoNoticed), with «Usar Preguntar» one click away. Not on the phone, nor before the first-run tour ends.
 export function AutoNotice() {
   const ready = useStore((s) => Boolean(s.app?.config) && s.app.config.ui?.autoNoticed !== true && s.app.config.ui?.tourDone === true);

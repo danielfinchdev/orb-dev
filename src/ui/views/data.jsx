@@ -1,4 +1,4 @@
-// 3.6: Ajustes › Datos (the owner, on this PC): encrypted backups (every day at 03:00, or now), the recovery code that
+// Ajustes › Datos (the owner, on this PC): encrypted backups (every day at 03:00, or now), the recovery code that
 // opens them on another PC, restoring one, and moving this Orb to another PC. src/engine/api/data.mjs does the work.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -13,12 +13,12 @@ import { MasterCard } from '@/views/master.jsx';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
 import { AUTHOR } from '../../shared/product.mjs';
 
-// 3.8.2: the details of going back to the previous key (what stops working, recovery codes), in the README.
+// the details of going back to the previous key (what stops working, recovery codes), in the README.
 const KEY_DOCS = `https://github.com/${AUTHOR.repo}#going-back-to-the-previous-key`;
 const size = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
 
 // The recovery code: made here and shown once, to write down (copies made from then on open with it on another PC).
-// 3.8: after the master password (the code opens the backups and «He olvidado la contraseña»).
+// after the master password (the code opens the backups and «He olvidado la contraseña»).
 export async function newRecoveryCode() {
   const unlock = await unlockCore('recovery');
   if (!unlock) return null;
@@ -70,7 +70,7 @@ function BackupsCard() {
     if (!unlock) return;
     if (await act(call('backup.previousKey', { unlock }))) toast.success(t(`${way}Ready`), { duration: 15000 });
   };
-  // 3.8: where the copies go: outside Orb's folder by default; another folder (never inside core) or back to the default.
+  // where the copies go: outside Orb's folder by default; another folder (never inside core) or back to the default.
   const setFolder = async (folder) => { const unlock = await unlockCore('backupFolder'); if (!unlock) return; if (await act(call('config.save', { patch: { backup: { folder } }, unlock }), t('datos.folderChanged'))) load(); };
   const pickFolder = async () => { const f = await bridge.pickFolder?.(t('datos.pickFolder')); if (f) setFolder(f); };
   const pickFile = async () => {
@@ -88,7 +88,7 @@ function BackupsCard() {
           <span data-testid="backup-last">{st.last ? (st.last.ok ? t('datos.lastOk', { when: when(st.last.at) }) : t('datos.lastFailed', { when: when(st.last.at), error: st.last.error ?? '' })) : t('datos.none')}</span>
           {!st.recovery ? <span className="text-warning flex items-center gap-1"><TriangleAlert className="size-3.5" />{t('datos.noCode')}</span> : <span className="flex items-center gap-1"><ShieldCheck className="text-success size-3.5" />{t('datos.withCode')}</span>}
         </div>
-        {/* 3.8.1 (Tauri): after «Empezar con una clave nueva», Windows opens the key from before again: the way back (and
+        {/* after «Empezar con una clave nueva», Windows opens the key from before again: the way back (and
             the way back to the new key after that). */}
         {st.previousKey ? (
           <div className="grid gap-2 rounded-lg border px-3 py-2.5 text-[13px]" data-testid="previous-key">
@@ -120,8 +120,8 @@ function BackupsCard() {
   );
 }
 
-// 3.8: what Orb 3.7 left after the migration (src/domain/data/legacy/migrate-38.mjs): its archives and the copies of its database, only
-// while there are any, with «Borrar los datos de Orb 3.7». 3.8.1 (review F3b M5): they, and the backups made before 3.8,
+// what Orb 3.7 left after the migration (src/domain/data/legacy/migrate-38.mjs): its archives and the copies of its database, only
+// while there are any, with «Borrar los datos de Orb 3.7». they, and the backups made before 3.8,
 // still hold 3.7's keys without the master password: the card says so.
 function LegacyCard() {
   const t = useT();
@@ -149,7 +149,7 @@ function LegacyCard() {
   );
 }
 
-// 3.8: core, Orb's own folder (hidden): what it holds and «Abrir core» (after the master password: unlockCore; the main
+// core, Orb's own folder (hidden): what it holds and «Abrir core» (after the master password: unlockCore; the main
 // process checks the token with the engine before opening it).
 function CoreCard() {
   const t = useT();
@@ -167,7 +167,7 @@ function CoreCard() {
 
 export function DataCards() { return <><MasterCard /><BackupsCard /><CoreCard /><LegacyCard /></>; }
 
-// 3.6: backups are on from the first day, sealed with this PC's key. A few days later, once, a quiet suggestion to make
+// backups are on from the first day, sealed with this PC's key. A few days later, once, a quiet suggestion to make
 // the recovery code (Ajustes › Datos), so a copy also opens on another PC. Never on a phone.
 export const RECOVERY_AFTER_MS = 3 * 86_400_000;
 const firstSeen = () => {

@@ -1,4 +1,4 @@
-// Claude Code adapter. 2.3: a live session through the official Claude Agent SDK, driving the
+// Claude Code adapter: a live session through the official Claude Agent SDK, driving the
 // Claude Code the user installed (pathToClaudeCodeExecutable): its login, its subscription, nothing is copied. One process
 // per conversation stays open between turns; answers stream as they are written; every action that needs permission goes
 // through the guard (src/domain/security/guard.mjs) and, when it must ask, to an approval card in the app.
@@ -20,7 +20,7 @@ export const kind = 'sdk';
 export const caps = { images: true, steer: true, fork: true, approvals: true, models: true, context: true, compact: true };
 
 // The assistant's coordinator process never runs commands or edits (that is the agents' work).
-// 3.8.2: a subagent (Claude Code's Agent tool, «Task» in older versions): its type, what it was asked and its model, so
+// a subagent (Claude Code's Agent tool, «Task» in older versions): its type, what it was asked and its model, so
 // the conversation shows it as one row; the steps it takes name it as their parent (parent_tool_use_id).
 export function subagentOf(name, input) {
   if (!['Agent', 'Task'].includes(name) || !input || typeof input !== 'object') return {};
@@ -32,7 +32,7 @@ export const COORDINATOR_DENIED = ['Bash', 'Edit', 'Write', 'NotebookEdit', 'Mul
 // Lighter processes: only the project's own settings, and only the MCP servers Orb passes (strict-mcp-config).
 export const LEAN_SOURCES = ['project', 'local'];
 
-// 3.8 (F2.6c): what in a project's .claude/settings*.json would let one agent change the next ones (a task can write that
+// what in a project's .claude/settings*.json would let one agent change the next ones (a task can write that
 // folder; the next agent may be another conversation's): programs Claude runs by itself (apiKeyHelper ran from a trusted
 // project's settings in a real run, even with an API key set; the other *Helper, aws*/gcp* refresh, processWrapper,
 // fileSuggestion, status lines), the environment of its commands and MCP servers (env: NODE_OPTIONS, PATH) and plugins.
@@ -75,7 +75,7 @@ export function loginState() {
 }
 
 export const loginCommand = (exe) => ({ cmd: exe.cmd, args: [...exe.pre] });
-// 3.5: signs in without a console (src/agents/login.mjs: `claude auth login`, hidden).
+// signs in without a console (src/agents/login.mjs: `claude auth login`, hidden).
 export const windowlessLogin = true;
 
 const textOf = (content) => Array.isArray(content) ? content.map((c) => c.text ?? (c.type === 'image' ? '[imagen]' : '')).join('\n') : String(content ?? '');
@@ -108,7 +108,7 @@ function userMessage(text, images = []) {
   return { type: 'user', message: { role: 'user', content }, parent_tool_use_id: null, origin: { kind: 'human' } };
 }
 
-// 2.6: the models this Claude Code offers (the SDK's supportedModels: what /model shows), before any conversation. The
+// the models this Claude Code offers (the SDK's supportedModels: what /model shows), before any conversation. The
 // process starts with an input that never sends a message, so nothing is spent; it is closed once it has answered.
 // The "default" row is not a model of its own: it marks which one Claude uses by default (resolvedModel).
 export async function discoverModels(exe, cfg = {}, env = {}) {
@@ -126,7 +126,7 @@ export async function discoverModels(exe, cfg = {}, env = {}) {
     return rows.filter((m) => m?.value && m.value !== 'default').map((m) => {
       const isDefault = !marked && usual && (m.resolvedModel ?? m.value) === usual;
       if (isDefault) marked = true;
-      // 3.6: the reasoning levels the model takes (Orb offers low, medium, high and, when the model has it, xhigh).
+      // the reasoning levels the model takes (Orb offers low, medium, high and, when the model has it, xhigh).
       const efforts = Array.isArray(m.supportedEffortLevels) ? m.supportedEffortLevels.filter((e) => ['low', 'medium', 'high', 'xhigh'].includes(e)) : null;
       return { id: m.value, label: m.displayName || m.value, ...(m.resolvedModel && m.resolvedModel !== m.value ? { resolved: m.resolvedModel } : {}), ...(isDefault ? { default: true } : {}), ...(efforts?.length ? { efforts } : {}) };
     });
@@ -136,18 +136,18 @@ export async function discoverModels(exe, cfg = {}, env = {}) {
 // The SDK's error kinds, in plain words.
 const RESULT_KEY = { error_during_execution: 'sys.agents.result.duringExecution', error_max_turns: 'sys.agents.result.maxTurns', error_max_budget_usd: 'sys.agents.result.maxBudget', error_max_structured_output_retries: 'sys.agents.result.structuredOutput' };
 
-// 3.2.1: whether a result answers a message of Orb's (sent with origin «human»), not a notice Claude handles by itself.
+// whether a result answers a message of Orb's (sent with origin «human»), not a notice Claude handles by itself.
 export const answersOrb = (m) => !(m?.origin?.kind && m.origin.kind !== 'human');
 
-// 3.8.1: Claude loads the skills of core by itself (a plugin); agents without this get them in their brief.
+// Claude loads the skills of core by itself (a plugin); agents without this get them in their brief.
 export const nativeSkills = true;
 
-// 3.8.2: «total» is no longer bypassPermissions (which never calls canUseTool, so Orb's guard did not run): Claude asks
+// «total» does not use bypassPermissions: that mode never calls canUseTool, so Orb's guard would not run. Claude asks
 // for what it would ask in «default» and the guard allows all but the protected set (src/domain/security/guard.mjs).
-// 3.8.3: «Auto» too: Claude Code accepts edits inside its folder by itself; anything else (commands, writes outside it)
+// «Auto» too: Claude Code accepts edits inside its folder by itself; anything else (commands, writes outside it)
 // still reaches canUseTool, so Orb's guard decides.
 // Glob and Grep patterns are checked too (where they reach): Glob's pattern and Grep's glob (its pattern is a regular
-// expression, not a path). 3.8.3 (security review): from the folder the tool searches (its path), not the agent's.
+// expression, not a path). Relative patterns are resolved from the folder the tool searches (its path), not the agent's.
 export function toolPatterns(toolName, toolInput) {
   const base = typeof toolInput?.path === 'string' && toolInput.path ? toolInput.path : null;
   const at = (p) => (base && !path.isAbsolute(p) && !path.win32.isAbsolute(p) && !/^~[\\/]/.test(p) ? path.join(base, p) : p);
@@ -155,13 +155,13 @@ export function toolPatterns(toolName, toolInput) {
 }
 export const permissionModeOf =(p) => (p === 'editar' || p === 'auto' ? 'acceptEdits' : 'default');
 
-// 3.8.3: Orb's own tools always in the prompt (Claude Code's alwaysLoad), never behind its tool search: Orbe reported
+// Orb's own tools always in the prompt (Claude Code's alwaysLoad), never behind its tool search: Orbe reported
 // spending three steps fetching orb_* tools before each use. The other servers (the user's connectors) stay deferrable.
 export const orbAlwaysLoaded = (servers) => (servers?.orb ? { ...servers, orb: { ...servers.orb, alwaysLoad: true } } : servers);
 
 // options: exe, cwd, model, reasoning, permission, resumeId, newSessionId, forkSession, mcpServers, env, systemPrompt
 // (appended to Claude Code's own), tools ({ allowed, disallowed }), addDirs, budgetUsd, internalDir, log, onEvent, skills
-// (3.8.1: { plugin, root, list }, the skills of core that are on)
+// ({ plugin, root, list }, the skills of core that are on)
 export function createLive(o) {
   const onEvent = o.onEvent ?? (() => {});
   const log = o.log ?? (() => {});
@@ -182,11 +182,11 @@ export function createLive(o) {
     const paths = [toolInput?.file_path, toolInput?.path, toolInput?.notebook_path].filter(Boolean);
     const patterns = toolPatterns(toolName, toolInput);
     const verdict = decide({ permission, tool: toolName, command, paths, patterns, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()), projectDir: o.projectDir, userAsked: o.userAsked?.() ?? [] });
-    // 3.8.3: what «Auto» lets through that «Preguntar» would have asked is said in the chat (one quiet line).
+    // what «Auto» lets through that «Preguntar» would have asked is said in the chat (one quiet line).
     if (verdict.auto) onEvent({ type: 'auto', title: typeof toolInput?.description === 'string' && toolInput.description.trim() ? toolInput.description : describeAction({ tool: toolName, command, paths, lang: o.lang }), reason: verdict.reason });
     if (verdict.decision === 'allow') return { behavior: 'allow', updatedInput: toolInput };
     if (verdict.decision === 'deny') return { behavior: 'deny', message: `Orb no lo permite: ${verdict.reason}.` };
-    // 3.1: summary: what the agent itself says the command is for (Claude's Bash tool asks it for a description).
+    // summary: what the agent itself says the command is for (Claude's Bash tool asks it for a description).
     const answer = await approvals.ask({ id: ctx.toolUseID ?? `${toolName}-${Date.now()}`, tool: toolName, title: describeAction({ tool: toolName, command, paths, lang: o.lang }), reason: verdict.reason, input: describeInput(toolInput), summary: typeof toolInput?.description === 'string' ? toolInput.description.slice(0, 200) : undefined });
     if (answer === 'deny') return { behavior: 'deny', message: 'El usuario no lo ha permitido. Busca otra forma o explica qué necesitas.' };
     return { behavior: 'allow', updatedInput: toolInput, ...(answer === 'always' && ctx.suggestions ? { updatedPermissions: ctx.suggestions } : {}) };
@@ -195,7 +195,7 @@ export function createLive(o) {
   const handle = (m) => {
     if (m.session_id && m.session_id !== live.sessionId) { live.sessionId = m.session_id; onEvent({ type: 'session', id: m.session_id }); }
     if (m.type === 'system' && m.subtype === 'init') onEvent({ type: 'item', role: 'system', kind: 'status', body: `${label} · ${m.model ?? ''}`.trim() });
-    // 3.6: how a compaction went (/compact): the status line says whether it worked, the boundary how much was left.
+    // how a compaction went (/compact): the status line says whether it worked, the boundary how much was left.
     if (m.type === 'system' && m.subtype === 'status' && m.compact_result) compactResult = { ok: m.compact_result === 'success', error: m.compact_error ?? null };
     if (m.type === 'system' && m.subtype === 'compact_boundary') { compactResult ??= { ok: true, error: null }; onEvent({ type: 'compacted', before: m.compact_metadata?.pre_tokens ?? null, after: m.compact_metadata?.post_tokens ?? null }); }
     if (m.type === 'stream_event' && !m.parent_tool_use_id) {
@@ -221,7 +221,7 @@ export function createLive(o) {
       onEvent({ type: 'rate', status: r.status, resetAt, utilization: r.utilization ?? null, window: r.rateLimitType ?? null });
       if (r.status === 'rejected') { onEvent({ type: 'limit', resetAt, message: tr('sys.agents.limit', { name: 'Claude' }) }); if (turn) turn.limit = { resetAt }; }
     }
-    // 3.2.1: a result that does not answer Orb's message (origin «task-notification»: Claude first handles a notice left by
+    // a result that does not answer Orb's message (origin «task-notification»: Claude first handles a notice left by
     // the conversation it resumes, such as a background command of the previous session) does not end Orb's turn. Taking
     // it as the answer, a task resumed after a close passed as done in seconds while Claude was still working.
     if (m.type === 'result' && !answersOrb(m)) { log(`resultado de ${m.origin.kind}: no es la respuesta al mensaje de Orb`); return; }
@@ -238,10 +238,10 @@ export function createLive(o) {
       planUsage();
     }
   };
-  // 2.6: the plan's windows (session, weekly, weekly of a model) as /usage shows them: Claude only sends them by itself
+  // the plan's windows (session, weekly, weekly of a model) as /usage shows them: Claude only sends them by itself
   // near a limit, so they are asked after a turn, at most every 90 s (experimental SDK call: best effort, any version).
   let usageAt = 0;
-  // 3.8.2: force (the usage panel's «Recargar») asks now, whatever the 90 s; the engine limits how often (usage.refresh).
+  // force (the usage panel's «Recargar») asks now, whatever the 90 s; the engine limits how often (usage.refresh).
   const planUsage = ({ force = false } = {}) => {
     const ask = query?.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET;
     if (typeof ask !== 'function' || (!force && Date.now() - usageAt < 90_000)) return Promise.resolve(false);
@@ -261,7 +261,7 @@ export function createLive(o) {
     // The SDK hands mcpServers to Claude Code as --mcp-config <json>: the values go in Claude Code's environment and the
     // config only names them (Claude Code expands ${VAR} in --mcp-config, as in .mcp.json).
     const mcp = mcpEnvByRef(o.mcpServers, (name) => `\${${name}}`);
-    // 3.8 (F2.6c): a project whose settings would run programs or change the environment is started without its settings
+    // a project whose settings would run programs or change the environment is started without its settings
     // files; its CLAUDE.md still reaches Claude, through the system prompt.
     const risky = o.cwd ? projectSettingsRisk(o.cwd) : [];
     const notes = risky.length ? projectNotes(o.cwd) : '';
@@ -284,21 +284,21 @@ export function createLive(o) {
       canUseTool,
       permissionMode: permissionModeOf(permission),
       stderr: (d) => log(`stderr: ${d}`),
-      // 3.8: no hooks of the project's .claude/settings*.json: a task could leave one there that later agents in the same
+      // no hooks of the project's .claude/settings*.json: a task could leave one there that later agents in the same
       // folder (other conversations) would run with their environment. (Managed policy hooks still apply.)
-      // 3.8.1: nor the commands a skill or a slash command runs when it loads (!`…` in its text): checked with the real
+      // nor the commands a skill or a slash command runs when it loads (!`…` in its text): checked with the real
       // Claude Code, they ran without asking canUseTool. (A skill's allowed-tools skipped it too: the skills of core reach
       // Claude without it, src/domain/extensions/extensions.mjs › exposeSkills.)
       settings: { fastMode: false, disableAllHooks: true, disableSkillShellExecution: true },
-      // 3.8 (F2.6c): nor its permission rules: an allow rule there (Bash, Edit…) would let Claude act without asking Orb's
+      // nor its permission rules: an allow rule there (Bash, Edit…) would let Claude act without asking Orb's
       // guard (canUseTool), past «leer», «probar» and «Cosas que nadie toca». Only policy rules count (checked with the
-      // real Claude Code: a trusted project's "allow": ["Bash"] no longer skips the guard, and CLAUDE.md still loads).
+      // real Claude Code: a trusted project's "allow": ["Bash"] does not skip the guard, and CLAUDE.md still loads).
       managedSettings: { allowManagedPermissionRulesOnly: true },
-      // 3.2.1: spawn Claude Code ourselves so Orb knows its process (live.pid) and can stop its whole tree when the task
+      // spawn Claude Code ourselves so Orb knows its process (live.pid) and can stop its whole tree when the task
       // ends — otherwise its background shells (bash.exe) can outlive the turn, holding an isolated copy's folder open and
       // leaving test servers behind. The signal is forwarded by the SDK after its own graceful stdin-close window.
       spawnClaudeCodeProcess: (opts) => {
-        child = spawn(opts.command, opts.args, { cwd: opts.cwd, env: opts.env, signal: opts.signal, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], detached: !IS_WIN }); // 3.5: own process group on Linux (killTree)
+        child = spawn(opts.command, opts.args, { cwd: opts.cwd, env: opts.env, signal: opts.signal, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], detached: !IS_WIN }); // own process group on Linux (killTree)
         live.pid = child.pid ?? null;
         try { child.stderr?.setEncoding('utf8'); child.stderr?.on('data', (d) => log(`stderr: ${d}`)); child.stderr?.on('error', () => {}); } catch { /* best effort */ }
         return child;
@@ -311,15 +311,15 @@ export function createLive(o) {
     if (o.tools?.allowed?.length) options.allowedTools = o.tools.allowed;
     const disallowed = [...(o.tools?.disallowed ?? []), ...(permission === 'leer' ? ['Bash', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit'] : permission === 'probar' ? ['Edit', 'Write', 'NotebookEdit', 'MultiEdit'] : [])];
     if (disallowed.length) options.disallowedTools = disallowed;
-    // 3.8.2 (owner's decision D8): no Claude in Chrome (it drives the user's own Chrome); every agent's browser is Orb's
+    // no Claude in Chrome (it drives the user's own Chrome); every agent's browser is Orb's
     // (orb_browser_*), with Orb's browser rules. Under «Acceso total» the PC is used through the terminal.
     if (o.budgetUsd) options.maxBudgetUsd = o.budgetUsd;
-    // 3.8.1: the skills of core that are on, as a plugin Orb makes (src/domain/extensions/extensions.mjs › exposeSkills): Claude lists
+    // the skills of core that are on, as a plugin Orb makes (src/domain/extensions/extensions.mjs › exposeSkills): Claude lists
     // them («orb-skills:<name>») and loads one when it fits. Checked with the real Claude Code (supportedCommands).
     if (o.skills?.list?.length) options.plugins = [{ type: 'local', path: o.skills.plugin }];
     query = sdkQuery({ prompt: input, options });
     (async () => {
-      // 3.0: the streamed pieces of each answer are not written to the run log one by one (a disk write per token); the
+      // the streamed pieces of each answer are not written to the run log one by one (a disk write per token); the
       // whole message that follows them is.
       try { for await (const m of query) { if (m?.type !== 'stream_event') log(logJson(m)); handle(m); } }
       catch (error) {
@@ -346,7 +346,7 @@ export function createLive(o) {
   // A message for the running turn: Claude reads it at its next step (between tool calls) and it stays the same turn
   // ('now' would interrupt the turn instead).
   live.steer = ({ text }) => { if (closed || !turn || turn.done) return false; input.push({ ...userMessage(text), priority: 'next' }); return true; };
-  // 3.6: Claude Code's own compaction (/compact): the conversation is summarised and goes on from the summary, with the
+  // Claude Code's own compaction (/compact): the conversation is summarised and goes on from the summary, with the
   // same session id. → { ok, error }
   live.compact = async ({ instructions = '' } = {}) => {
     if (closed) throw new Error(tr('sys.agents.sessionClosed', { name: label }));

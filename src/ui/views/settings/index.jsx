@@ -1,5 +1,5 @@
 // Settings: the assistant, its brain, how tasks run, usage caps, skills and MCP servers and the assistant's folder.
-// 3.6 (DESIGN-SYSTEM §2.3): six sections — General, Magic Link (Dispositivos), Agentes y uso, Datos, Avanzado and
+// DESIGN-SYSTEM §2.3: six sections — General, Magic Link (Dispositivos), Agentes y uso, Datos, Avanzado and
 // Acerca de.
 import { useEffect } from 'react';
 import { DatabaseBackup, Wrench, SlidersHorizontal, Radar, Cpu, Info, Puzzle } from 'lucide-react';
@@ -28,7 +28,7 @@ const SECTIONS = [
   { id: 'magiclink', icon: Radar, groups: ['dispositivos'],
     cards: () => <MagicLinkPanel grouped phoneAccess={<MobileCard />} /> },
   { id: 'agentes', icon: Cpu, cards: (c) => <><ChatCard c={c} /><PermissionsCard c={c} /><TasksCard c={c} />{bridge.mobile ? null : <TestCard />}</> },
-  // 3.8.1: every skill and MCP server of core (src/ui/views/extensions.jsx); this PC only.
+  // every skill and MCP server of core (src/ui/views/extensions.jsx); this PC only.
   { id: 'extensiones', icon: Puzzle, pcOnly: true, cards: () => <ExtensionsPanel /> },
   { id: 'datos', icon: DatabaseBackup, cards: () => <DataCards /> },
   { id: 'avanzado', icon: Wrench, groups: () => ['herramientas', ...(fullPc() ? ['experto'] : [])],
@@ -37,7 +37,7 @@ const SECTIONS = [
   { id: 'acerca', icon: Info, groups: ['contribuye', 'apps'],
     cards: (c, app) => <><AboutCard version={app.version} /><SubSection id="contribuye" title={t('settings.group.contribuye')}><SupportCard /><FeedbackCard /></SubSection><SubSection id="apps" title={t('settings.group.apps')}><MoreAppsCard /></SubSection></> }
 ];
-// The names of before 3.6 (links in tutorials, notices and the sidebar) → [section, part].
+// The names used before the six-section layout (links in tutorials, notices and the sidebar) → [section, part].
 const ALIASES = { conexiones: ['magiclink', 'dispositivos'], movil: ['magiclink', 'dispositivos'], apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'],
   herramientas: ['avanzado', 'herramientas'], mcp: ['extensiones'], skills: ['extensiones'], experto: ['avanzado', 'experto'], monitor: ['avanzado', 'herramientas'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
 export function resolveSection(open) {
@@ -106,7 +106,7 @@ export function SettingsDialog() {
                   );
                 })}
               </div>
-              {/* 3.8.2: the developer's GitHub, the version and the licence at the foot of the list again (also in «Acerca de»). */}
+              {/* the developer's GitHub, the version and the licence at the foot of the list again (also in «Acerca de»). */}
               <div className="grid gap-0.5 px-6 pt-3 pb-5 max-sm:px-3" data-testid="settings-foot">
                 <BubbleTip title={`@${AUTHOR.github}`} text={AUTHOR.url.replace('https://', '')} side="top" align="start">
                   <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary flex w-fit cursor-pointer items-center gap-1.5 text-[13px] font-medium" aria-label={AUTHOR.url.replace('https://', '')} data-testid="settings-foot-github">

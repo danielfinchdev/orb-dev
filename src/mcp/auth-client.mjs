@@ -39,7 +39,7 @@ export async function redeem(pipe, ticket, { attempts = 20, helloMs = HELLO_MS, 
       return ended ? false : link.check(checkMs);
     },
     onClose: (fn) => { if (ended) fn(); else closers.push(fn); },
-    // 3.8.2: a request for the engine (the phone's tools). → its result; throws its error.
+    // a request for the engine (the phone's tools). → its result; throws its error.
     call: async (method, args = {}, ms = 330_000) => {
       if (ended) throw new Error('closed');
       if (link.socket.destroyed) await new Promise((r) => setTimeout(r, 200));

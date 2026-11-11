@@ -1,11 +1,11 @@
-// 3.2.1: the programs a task started (its test servers, the shells that launched them), found by the process tree and
+// the programs a task started (its test servers, the shells that launched them), found by the process tree and
 // not only by their command line. A server started with a relative path (`node server.js`, `python -m http.server 8000`)
 // does not name the task's folder, Windows' Python alias relaunches itself as another program (python.exe →
 // python3.13.exe), and a shell that ran `Start-Process` ends at once, leaving its child with a parent that no longer exists.
 //
 // A process belongs to the task when it was created after the task started and:
 //   - its parent is the agent's own process, or another process of the task (alive, or seen earlier and gone now);
-//   - or its command line names the task's folder (the rule of 3.1);
+//   - or its command line names the task's folder (the folder rule);
 //   - or its parent is gone and its arguments are part of a command the task ran (the shell that started it has ended).
 // Only the process list (number, parent, start time, and the name and command line of the recent ones) is read.
 // Windows only: elsewhere nothing is found and nothing is stopped.
@@ -15,7 +15,7 @@ import path from 'node:path';
 // What Orb may stop when a task ends: the usual runtimes and the shells and package runners that start them. Never a
 // browser, an editor or anything else a task may have opened for the user.
 export const STOPPABLE = /^(node|nodejs|python[\d.]*|pythonw[\d.]*|py|pyw|deno|bun|php|php-cgi|ruby|rubyw|java|javaw|dotnet|bash|sh|cmd|powershell|pwsh|npm|npx|pnpm|yarn|uv|uvx|uvicorn|flask|esbuild)(\.exe)?$/i;
-// The 3.1 rule (folder named in the command line) only ever stopped runtimes: shells found that way could be the user's.
+// The folder rule (folder named in the command line) only ever stopped runtimes: shells found that way could be the user's.
 const RUNTIME = /^(node|python[\d.]*|pythonw[\d.]*|py|deno|bun|php|ruby|java|dotnet)(\.exe)?$/i;
 const SLACK_MS = 1000; // clocks of the engine and of Windows' process list
 
@@ -64,8 +64,8 @@ export function taskProcesses(list, { since, roots = [], known = new Map(), keys
   return [...out.values()];
 }
 
-// 3.8.3: every PowerShell here runs asynchronously (spawn, not spawnSync). Each one takes ~0.8 s; run synchronously from
-// the engine's loop they froze the window, the phone and every chat while they ran.
+// every PowerShell here runs asynchronously (spawn, not spawnSync). Each one takes ~0.8 s; run synchronously from
+// the engine's loop they would freeze the window, the phone and every chat while they ran.
 // Runs PowerShell with a script and resolves with its output ('' when it fails, times out or cannot start). Never rejects.
 export function powershell(script, { timeout = 20_000, env = process.env, maxBuffer = 32 * 1024 * 1024 } = {}) {
   return new Promise((resolve) => {

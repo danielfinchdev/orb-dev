@@ -24,7 +24,7 @@ function open(dialog) {
 function close(id, value) { setState((s) => { const d = (s.dialogs ?? []).find((x) => x.id === id); d?.resolve(value); return { dialogs: (s.dialogs ?? []).filter((x) => x.id !== id) }; }); }
 
 export const confirm = (title, description, { ok = t('comp.dialogs.ok'), cancel = t('comp.dialogs.cancel'), danger = false } = {}) => open({ kind: 'confirm', title, description, ok, cancel, danger });
-// 3.7: one of a few answers (each { value, label, hint?, variant? }); resolves with the value chosen, or null when closed.
+// one of a few answers (each { value, label, hint?, variant? }); resolves with the value chosen, or null when closed.
 // With hints, each answer is a full-width button with its one line under it (the first one is the default).
 // cancel: false when one of the answers already is «leave it as it is».
 export const choose = (title, description, options, { testid, cancel = true } = {}) => open({ kind: 'choice', title, description, options, testid, cancel });

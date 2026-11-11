@@ -1,4 +1,4 @@
-// 2.6: what the mini-games share: the game loop, the keys, the theme's colours (with helpers to tint and mix them on a
+// what the mini-games share: the game loop, the keys, the theme's colours (with helpers to tint and mix them on a
 // canvas), particles, the best scores (this PC only) and a sharp canvas.
 import { useEffect, useRef } from 'react';
 

@@ -1,4 +1,4 @@
-// 3.2: the bell of the top bar. Everything Orb notified (lib/notify.js), newest first, with a dot while there are new
+// the bell of the top bar. Everything Orb notified (lib/notify.js), newest first, with a dot while there are new
 // ones; a notice with somewhere to go opens it.
 import { useState } from 'react';
 import { Bell, CircleCheck, CircleX, Info, TriangleAlert } from 'lucide-react';

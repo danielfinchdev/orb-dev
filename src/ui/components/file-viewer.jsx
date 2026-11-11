@@ -1,7 +1,7 @@
-// 3.8.2: a PDF attached to a direct conversation, read inside Orb (pdf.js, loaded only when one is opened; its worker is
+// a PDF attached to a direct conversation, read inside Orb (pdf.js, loaded only when one is opened; its worker is
 // bundled with the app, no WebAssembly and no eval, so the window's CSP stays as it is). Pages are drawn one after
 // another into canvases; very long documents stop at MAX_PAGES with a note.
-// 3.8.3: an audio or video attachment the window can play (core/attach-kind.mjs › playableType) plays here, from a blob:
+// an audio or video attachment the window can play (core/attach-kind.mjs › playableType) plays here, from a blob:
 // URL (the only media source the CSP allows), released when the viewer closes.
 import { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from './ui/overlay.jsx';

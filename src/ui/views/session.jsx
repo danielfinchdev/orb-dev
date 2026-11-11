@@ -49,7 +49,7 @@ function toolIcon(name = '') {
   return Wrench;
 }
 
-// 3.2.1: a tool's name as people read it: the tools of Orb (and of Opti Bot, in its old conversation) by what they do («Creando una tarea»), the
+// a tool's name as people read it: the tools of Orb (and of Opti Bot, in its old conversation) by what they do («Creando una tarea»), the
 // agents' own (Read, Bash…) as they are, never «mcp__opti__opti_propose» or «ToolSearch».
 function toolName(t, name) {
   const bare = bareTool(name);
@@ -82,7 +82,7 @@ function ToolBlock({ b }) {
   );
 }
 
-// 3.8.2: a subagent as one folding row: its name, model and state; unfolded, what it was asked, the steps it took and
+// a subagent as one folding row: its name, model and state; unfolded, what it was asked, the steps it took and
 // its answer.
 const SUB_STATE = { running: 'bg-info animate-pulse', done: 'bg-success', failed: 'bg-destructive' };
 function SubagentBlock({ b }) {
@@ -108,7 +108,7 @@ function SubagentBlock({ b }) {
   );
 }
 
-// 3.2.1: «Claude Code · claude-sonnet-5-5», «Codex · gpt-6-luna» (the line an agent writes when it starts) with the names
+// «Claude Code · claude-sonnet-5-5», «Codex · gpt-6-luna» (the line an agent writes when it starts) with the names
 // the rest of the app uses.
 function statusText(body, agent, catalog) {
   const m = /^(.+?) · ([\w.:\-/[\]]+)$/.exec(String(body ?? ''));
@@ -116,11 +116,11 @@ function statusText(body, agent, catalog) {
 }
 
 const FILE_ICON = { add: FilePlus2, delete: FileMinus2 };
-// 3.8.2: an attachment's icon by what it is (src/shared/attach-kind.mjs).
+// an attachment's icon by what it is (src/shared/attach-kind.mjs).
 const ATTACH_ICON = { image: ImageIcon, video: Film, audio: Music, pdf: FileText, document: FileText, archive: FileArchive, text: FileCode };
 function AttachIcon({ file, className }) { const I = ATTACH_ICON[kindOf(file)] ?? FileIcon; return <I className={className} />; }
-// 3.8.2: an attachment of a message. On the PC a picture opens in the image viewer and a PDF in the file viewer
-// (file-viewer.jsx, loaded when first opened); 3.8.3: so does audio or video the window can play. The rest, and
+// an attachment of a message. On the PC a picture opens in the image viewer and a PDF in the file viewer
+// (file-viewer.jsx, loaded when first opened); so does audio or video the window can play. The rest, and
 // everything on the phone, is its name.
 const FileViewer = lazy(() => import('@/components/file-viewer.jsx'));
 function AttachChip({ file, sessionId }) {
@@ -167,7 +167,7 @@ const Block = memo(function Block({ b, agent, brain, sessionId, project, catalog
   if (it.kind === 'text' && it.role === 'assistant') return <div className="msg-hover flex gap-3"><AgentIcon agent={agent} className="mt-1 size-5" /><div className="min-w-0 flex-1"><TypedMarkdown tail={`session:${sessionId}`}>{body}</TypedMarkdown><div className="text-muted-foreground flow-root"><MsgTime at={it.at} hover /></div></div></div>;
   if (it.kind === 'reasoning') return <div className="text-muted-foreground border-l-2 pl-3 text-[13px] italic whitespace-pre-wrap line-clamp-4">{body}</div>;
   if (it.kind === 'usage') {
-    // 3.8.2: Ajustes › Apariencia can hide it (shown by default).
+    // Ajustes › Apariencia can hide it (shown by default).
     if (!usageLine) return null;
     const parts = [body?.costUsd != null ? `$${Number(body.costUsd).toFixed(3)}` : null, body?.inputTokens != null ? `${t('session.tokensIn', { n: (body.inputTokens + (body.cacheReadTokens ?? 0) + (body.cacheWriteTokens ?? 0)).toLocaleString(locale) })}${body.cacheReadTokens ? ` (${t('session.tokensCached', { n: body.cacheReadTokens.toLocaleString(locale) })})` : ''}` : null, body?.outputTokens != null ? t('session.tokensOut', { n: body.outputTokens.toLocaleString(locale) }) : null].filter(Boolean);
     return parts.length ? <div className="text-muted-foreground text-right text-[11px]">{parts.join(' · ')}</div> : null;
@@ -177,7 +177,7 @@ const Block = memo(function Block({ b, agent, brain, sessionId, project, catalog
   return <div className="text-muted-foreground text-center text-xs">{typeof body === 'string' ? body : JSON.stringify(body)}</div>;
 }, (prev, next) => sameBlock(prev.b, next.b) && prev.agent === next.agent && prev.brain === next.brain && prev.sessionId === next.sessionId && prev.project === next.project && prev.catalog === next.catalog);
 
-// 3.7: a proposal Opti Bot left in its conversation before «Monitoreo del equipo» was removed (2.7–3.6): read only, as it
+// a proposal Opti Bot left in its conversation before «Monitoreo del equipo» was removed: read only, as it
 // ended.
 const OLD_STATUS = { done: ['done', 'success'], running: ['expired', 'secondary'], pending: ['expired', 'secondary'], failed: ['failed', 'secondary'], cancelled: ['failed', 'secondary'], denied: ['denied', 'secondary'], expired: ['expired', 'secondary'] };
 function OptiOldCard({ body = {} }) {
@@ -226,7 +226,7 @@ export function ApprovalCard({ sessionId, body, compact = false }) {
   );
 }
 
-// Details of a conversation (2.3): where it works, git, where it comes from, its task.
+// Details of a conversation: where it works, git, where it comes from, its task.
 // The account of a conversation by its name, only when its agent has more than one (otherwise the agent's name says it).
 const accountName = (accounts = [], s) => (accounts.filter((a) => a.agent === s.agent).length > 1 ? accounts.find((a) => a.id === (s.account ?? s.agent))?.label ?? null : null);
 
@@ -256,7 +256,7 @@ async function showDetails(s, task) {
   });
 }
 
-// 3.8.3: the text the agent is writing now, the only part of the conversation that follows each streamed piece: the
+// the text the agent is writing now, the only part of the conversation that follows each streamed piece: the
 // pieces of a frame are drawn together and typed on screen (TypingMarkdown; the saved item goes on from there), and its
 // finished blocks are not parsed again. It empties
 // when the agent's text arrives as an item (in the same frame the item is drawn) or the turn ends.
@@ -295,12 +295,12 @@ export function SessionView({ route }) {
   const draft = useDraft();
   const [images, setImages] = useState([]);
   const PAGE = 200;
-  // 3.8.2 (T3 3.2): the user's terminal under the chat (this PC only), and a command pasted into it from the chat.
+  // the user's terminal under the chat (this PC only), and a command pasted into it from the chat.
   const [terminal, setTerminal] = useState(false);
   const [termDraft, setTermDraft] = useState('');
   useEffect(() => (fullPc() ? onTerminalPaste((line) => { setTerminal(true); setTermDraft(line); }) : undefined), [route.id]);
   useEffect(() => { setTerminal(false); setTermDraft(''); }, [route.id]);
-  // 3.8.2 (T3 3.11): what the user pointed at in the agents' browser for this chat: its picture and a line, not sent yet.
+  // what the user pointed at in the agents' browser for this chat: its picture and a line, not sent yet.
   useEffect(() => {
     const take = () => {
       const got = takePoints(route.id); if (!got.length) return;
@@ -332,7 +332,7 @@ export function SessionView({ route }) {
   }, [route.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const tb = useT(); // H4a B2: «Resultado» in the language on screen
   const blocks = useMemo(() => toBlocks(items, tb), [items, tb]);
-  // 3.8.3: what the user sent and the engine has not saved yet shows at once (lib/store.js › addPending).
+  // what the user sent and the engine has not saved yet shows at once (lib/store.js › addPending).
   const pending = usePending(`session:${route.id}`);
   const unsaved = pendingShown(pending, items.filter((it) => it.role === 'user' && it.kind === 'text').map((it) => ({ id: it.id, text: userText(it) })));
   useEffect(() => { for (const p of pending) if (!unsaved.includes(p)) dropPending(p.id); }, [pending, unsaved]);
@@ -343,14 +343,14 @@ export function SessionView({ route }) {
   if (!s) return <Empty title={t('session.gone')} className="flex-1" />;
   const task = s.task_id ? tasks.find((x) => x.id === s.task_id) : null;
   const running = s.status === 'running';
-  // 2.7: the agent's real models by their names (the catalog), and the conversation's own model even if it is not listed
+  // the agent's real models by their names (the catalog), and the conversation's own model even if it is not listed
   // (the selector showed an empty box when it was not among the options).
   const listed = modelsOf(catalog?.find((a) => a.id === s.agent), s.account).filter((m) => m.id);
   const models = [...(listed.length ? listed.map((m) => ({ value: m.id, label: m.label })) : (app?.config?.agents?.[s.agent]?.models ?? []).map((m) => ({ value: m, label: m })))];
   if (s.model && !models.some((m) => m.value === s.model)) models.unshift({ value: s.model, label: modelLabel(catalog, s.agent, s.model) });
   const modelName = (id) => models.find((m) => m.value === id)?.label ?? modelLabel(catalog, s.agent, id);
   const stalled = ['interrupted', 'limited'].includes(s.status) && s.kind === 'chat';
-  // 3.2.1: with several accounts of the agent (Codex Go, Codex Pro), the one this conversation uses, by its name.
+  // with several accounts of the agent (Codex Go, Codex Pro), the one this conversation uses, by its name.
   const who = accountName(app?.config?.accounts, s) ?? AGENT[s.agent];
 
   const loadOlder = async () => {
@@ -365,7 +365,7 @@ export function SessionView({ route }) {
       const saved = await act(call('images.mark', { dataUrl })); if (saved?.path) addImages([saved.path]);
     } catch { toast.error(t('session.captureFailed')); }
   };
-  // The files' real paths (a promise); the list is read before the event ends. 3.8.2: any file in Orb for Windows (a
+  // The files' real paths (a promise); the list is read before the event ends. any file in Orb for Windows (a
   // linked device attaches pictures only: they are uploaded to the PC first).
   const fromTransfer = (dt) => Promise.all([...(dt?.files ?? [])].filter((f) => !bridge.mobile || /^image\//.test(f.type)).map((f) => bridge.pathForFile(f))).then((p) => p.filter(Boolean));
   // While the agent works, Enter corrects it on the fly (it reads the message at its next step) and Ctrl+Enter queues
@@ -374,7 +374,7 @@ export function SessionView({ route }) {
     const msg = draft.get().trim(); if (!msg && !images.length) return;
     const mode = running ? (alt ? 'queue' : 'auto') : 'auto';
     const said = msg || t('session.lookAtFiles'); const sentImages = images;
-    // 3.8.3: the box empties at once and, when the agent is free (the message starts a turn), the message shows at once;
+    // the box empties at once and, when the agent is free (the message starts a turn), the message shows at once;
     // while it works the message may go to the queue instead, which shows it when the engine says so.
     draft.set(''); setImages([]);
     const mine = running ? null : addPending(`session:${s.id}`, said, items.at(-1)?.id ?? 0);
@@ -384,10 +384,10 @@ export function SessionView({ route }) {
     if (r?.steered) toast.success(t('session.steerSent'));
     else if (r?.queued) toast.success(s.kind === 'task' && !running ? t('session.resentTask') : t('session.queuedToast'));
   };
-  // 3.8.2: the same «Renombrar» as the list's ⋯ (views/orb/inbox.jsx).
+  // the same «Renombrar» as the list's ⋯ (views/orb/inbox.jsx).
   const rename = () => renameChat({ kind: 'session', id: s.id, title: s.title }, t);
   const fork = async () => { const copy = await act(call('sessions.fork', { id: s.id }), t('session.forked')); if (copy) { await refresh().catch(() => {}); go({ view: 'session', id: copy.id }); } };
-  // 3.8.2: «Continuar con otro agente»: a copy with the agent chosen, which gets a summary of this conversation.
+  // «Continuar con otro agente»: a copy with the agent chosen, which gets a summary of this conversation.
   const others = (app?.agentsAvailable ?? Object.keys(app?.config?.agents ?? {})).filter((a) => a !== s.agent && AGENT[a]);
   const switchAgent = async () => {
     const copy = await form(t('session.switchAgent'), {
@@ -398,14 +398,14 @@ export function SessionView({ route }) {
     if (copy?.id) { await refresh().catch(() => {}); go({ view: 'session', id: copy.id }); }
   };
   const editQueued = (q, patch) => act(call('sessions.editQueued', { id: s.id, queueId: q.id, ...patch }));
-  // 3.6: «Compactar» in the composer's slot when the context is at 70 % or more and the agent can compact (Claude, Codex).
+  // «Compactar» in the composer's slot when the context is at 70 % or more and the agent can compact (Claude, Codex).
   const compactable = s.kind === 'chat' && CAN_COMPACT[s.agent] === true && (compacting || (!running && s.context?.size > 0 && s.context.used / s.context.size >= COMPACT_AT));
   const compact = async () => { setCompacting(true); try { await act(call('sessions.compact', { id: s.id })); } finally { setCompacting(false); } };
   const pictures = images.map((p) => <Badge key={p} variant="secondary" className="gap-1.5 font-normal"><AttachIcon file={p} />{baseName(p)}<button className="cursor-pointer" onClick={() => setImages(images.filter((x) => x !== p))} aria-label={t('session.remove')}><X className="size-3" /></button></Badge>);
 
   return (
     <>
-      {/* 3.2: like the chat's: the clock on the left, the conversation's title (and under it its project and agent) in the
+      {/* like the chat's: the clock on the left, the conversation's title (and under it its project and agent) in the
           middle, its controls on the right. */}
       <PageHeader className="topbar-chat" title={<BarClock />} back={<BackToList to={s.kind === 'chat' ? 'chats' : 'tasks'} />}
         center={<BarHeading title={s.title} project={s.project} onRename={s.kind === 'chat' ? rename : null} renameLabel={t('session.renameTip')}
@@ -416,7 +416,7 @@ export function SessionView({ route }) {
           {task ? <Badge variant={STATUS[task.status]?.[1]}>{STATUS[task.status]?.[0]}</Badge> : null}
           <Button variant="outline" size="sm" onClick={() => go({ view: 'tasks', id: s.task_id })}><ListTodo />{t('session.viewTask', { id: s.task_id })}</Button>
         </>)}
-        {/* 3.8.2: only the bell and pause stay on the bar; the folder, the details, fork, archive, delete and the games go into ⋯. */}
+        {/* only the bell and pause stay on the bar; the folder, the details, fork, archive, delete and the games go into ⋯. */}
         <DropdownMenu modal={false}>
           <BubbleTip title={t('chats.more')}><DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={t('chats.more')} data-testid="session-more"><Ellipsis /></Button></DropdownMenuTrigger></BubbleTip>
           <DropdownMenuContent align="end" className="w-56">
@@ -441,7 +441,7 @@ export function SessionView({ route }) {
             : <Empty title={t('session.emptyTitle', { agent: AGENT[s.agent] })}>{t('session.workIn')} <span className="font-mono text-xs">{s.cwd}</span> {t('session.withPerm', { perm: PERMISSION[s.permission] })}</Empty>}
           {unsaved.map((p) => <Block key={p.id} b={{ type: 'item', key: p.id, item: { id: p.id, session_id: s.id, role: 'user', kind: 'text', body: p.text, at: p.at } }} agent={s.agent} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />)}
           <LivePartial key={s.id} id={s.id} agent={s.agent} running={running} />
-          {/* 3.8.2: a task's conversation ends with the files it changed (nothing while it runs). */}
+          {/* a task's conversation ends with the files it changed (nothing while it runs). */}
           {task && !['running', 'queued'].includes(task.status) ? <TaskChanges taskId={task.id} version={`${task.status}:${task.updated_at}`} /> : null}
           {stalled ? (
             <div className="bg-card flex flex-wrap items-center gap-3 rounded-xl border px-3.5 py-3 text-[13px]">
@@ -468,7 +468,7 @@ export function SessionView({ route }) {
           </div>
         </div>
       ) : null}
-      {/* 3.8.2 (T3 3.4): a secret the agent asked for, typed only here (never in the chat). */}
+      {/* a secret the agent asked for, typed only here (never in the chat). */}
       <SecretCards sessionId={s.id} />
       {terminal && fullPc() ? <TerminalPanel dir={s.cwd} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
       <Composer draft={draft} onSend={send} attached={images.length > 0} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
@@ -478,20 +478,20 @@ export function SessionView({ route }) {
         top={images.length || compactable ? <>{compactable ? <ContextSlot items={[{ key: 'compact', node: <CompactButton onCompact={compact} busy={compacting} /> }]} /> : null}<div className="flex min-w-0 flex-wrap items-center gap-2">{pictures}</div></> : null}
         bottom={<>
           <Tip label={t('session.attach')}><Button variant="ghost" size="icon-sm" aria-label={t('session.attach')} onClick={async () => addImages(await bridge.pickAttachments())} data-testid="attach"><Paperclip /></Button></Tip>
-          {/* 3.8.2: a window captured by the user (the system's picker), attached as a picture. PC only. */}
+          {/* a window captured by the user (the system's picker), attached as a picture. PC only. */}
           {fullPc() && canCapture() ? <Tip label={t('session.capture')}><Button variant="ghost" size="icon-sm" aria-label={t('session.capture')} onClick={capture} data-testid="capture-window"><ScreenShare /></Button></Tip> : null}
-          {/* 3.2: the model, the permissions and the reasoning under the box, like the chat's brain (the bar keeps the title). */}
+          {/* the model, the permissions and the reasoning under the box, like the chat's brain (the bar keeps the title). */}
           {s.kind === 'chat' ? (<>
             {models.length ? <Select size="sm" value={s.model || models[0].value} title={t('session.model')} options={models} onValueChange={(model) => act(call('sessions.update', { id: s.id, model }), t('session.modelSet', { model: modelName(model) }))} data-testid="session-model" /> : null}
-            {/* 3.8.2 (D5): «Acceso total» of a project's chat also asks for the master password every time and goes when
+            {/* «Acceso total» of a project's chat also asks for the master password every time and goes when
                 Orb locks; taken back, the chat returns to its permission before, then takes the one chosen. */}
-            {/* 3.8.3: «Auto» / «Preguntar» at one click, the other levels under «⋯» (the phone may switch between them, never to «total»). */}
+            {/* «Auto» / «Preguntar» at one click, the other levels under «⋯» (the phone may switch between them, never to «total»). */}
             {s.project ? <AutonomySwitch value={s.permission} testid="session-permission" disabled={bridge.mobile && s.permission === 'total'} more={options(PERMISSION).filter((o) => o.value !== 'auto' && o.value !== 'editar' && (!bridge.mobile || o.value !== 'total'))} onChange={async (permission) => {
               if (permission === 'total') { const unlock = await unlockCore('fullAccess'); if (unlock) act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged')); return; }
               if (s.permission === 'total') { const back = await act(call('sessions.revokeGrant', { id: s.id, grant: 'total' })); if (!back || back.permission === permission) return; }
               act(call('sessions.update', { id: s.id, permission }), permission === 'auto' ? t('session.autoOn') : permission === 'editar' ? t('session.askOn') : t('session.permissionsChanged'));
             }} />
-              /* 3.8.2 (D1): without a project, «Solo lectura» or «Acceso total al PC» (the master password every time; it goes
+              /* without a project, «Solo lectura» or «Acceso total al PC» (the master password every time; it goes
                  when Orb locks). Never from the phone. */
               : <Select size="sm" value={s.permission === 'total' ? 'total' : 'leer'} title={t('session.noProjectReadOnly')} disabled={bridge.mobile} options={[{ value: 'leer', label: PERMISSION.leer }, { value: 'total', label: t('session.fullPc') }]} onValueChange={async (permission) => {
                 if (permission !== 'total') { act(call('sessions.revokeGrant', { id: s.id, grant: 'total' }), t('session.permissionsChanged')); return; }
@@ -499,7 +499,7 @@ export function SessionView({ route }) {
                 if (unlock) act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged'));
               }} data-testid="session-permission" />}
             {s.permission === 'total' ? <Tip label={t('session.fullPcTip')}><span tabIndex={0} className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-amber-500/50 bg-amber-500/15 px-2.5 text-[13px] font-medium whitespace-nowrap text-amber-700 dark:text-amber-300" data-testid="session-fullpc"><ShieldAlert className="size-4" />{t('session.fullPcChip')}</span></Tip> : null}
-            {/* 3.8.2 (D2): «Usar mi móvil Android», in any chat (included in «Acceso total al PC»). */}
+            {/* «Usar mi móvil Android», in any chat (included in «Acceso total al PC»). */}
             {!s.project && s.permission === 'total' ? null : bridge.mobile ? (s.android ? <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-500/50 bg-emerald-500/15 px-2.5 text-[13px] text-emerald-700 dark:text-emerald-300"><Smartphone className="size-4" />{t('session.androidChip')}</span> : null)
               : <Tip label={s.android ? t('session.androidOn') : t('session.android')}><Button variant="ghost" size="sm" aria-label={t('session.android')} aria-pressed={Boolean(s.android)} className={cn('h-8 shrink-0', s.android && 'border border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300')} onClick={async () => {
                 if (s.android) { act(call('sessions.revokeGrant', { id: s.id, grant: 'android' })); return; }
@@ -508,7 +508,7 @@ export function SessionView({ route }) {
               }} data-testid="session-android"><Smartphone />{s.android ? t('session.androidChip') : null}</Button></Tip>}
             <ReasoningMenu catalog={catalog} value={{ agent: s.agent, model: s.model ?? '', account: s.account, reasoning: s.reasoning ?? 'medium' }} onChange={(reasoning) => act(call('sessions.update', { id: s.id, reasoning }))} />
           </>) : null}
-          {/* 3.8.2: the folder as a chip of the same height, padding and gap as the model, permissions and reasoning ones. */}
+          {/* the folder as a chip of the same height, padding and gap as the model, permissions and reasoning ones. */}
           <Tip label={s.cwd}><span tabIndex={0} className="border-input text-muted-foreground dark:bg-input/30 hidden h-8 min-w-0 items-center gap-1.5 rounded-lg border px-2.5 text-[13px] whitespace-nowrap shadow-xs outline-none focus-visible:ring-ring/40 focus-visible:ring-[3px] xl:inline-flex" data-testid="session-folder"><FolderOpen className="size-4 shrink-0" /><span className="truncate">{s.project ?? baseName(s.cwd)}</span></span></Tip>
           {s.context ? <span className="text-muted-foreground ml-auto text-xs"><ContextMeter context={s.context} /></span> : null}
         </>} />

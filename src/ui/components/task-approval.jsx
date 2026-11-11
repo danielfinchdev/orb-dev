@@ -1,4 +1,4 @@
-// 3.2.1: approving or rejecting a task that waits for the user, the same from Tareas and from the chat's notice. Approving
+// approving or rejecting a task that waits for the user, the same from Tareas and from the chat's notice. Approving
 // always shows what is approved (title, agent, folder and why it asks) and signs exactly that version (previewHash).
 import { confirm } from './dialogs.jsx';
 import { call, act } from '@/lib/store.js';

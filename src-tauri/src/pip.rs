@@ -167,7 +167,7 @@ pub async fn handle(app: &AppHandle, req: BrowserRequest) -> Result<Value, Strin
   }
 }
 
-/// 3.8.2 (T3 3.11): «point:<x>,<y>», a click of the user on the page's picture, as fractions of its width and height
+/// «point:<x>,<y>», a click of the user on the page's picture, as fractions of its width and height
 /// (0..=1, at most 4 decimals). → the request for the engine, or None when it is anything else.
 fn point_request(action: &str) -> Option<Value> {
   let (x, y) = action.strip_prefix("point:")?.split_once(',')?;
@@ -180,7 +180,7 @@ fn point_request(action: &str) -> Option<Value> {
 }
 
 /// A button of the little window: «go to Orb» here, the rest to the engine (sizes, close until the next activity;
-/// 3.8.2: point at an element, start or stop recording).
+/// point at an element, start or stop recording).
 pub fn action(app: &AppHandle, action: &str) -> Result<(), String> {
   if let Some(req) = point_request(action) {
     let engine = crate::engine::get(app);

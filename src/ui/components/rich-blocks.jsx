@@ -1,4 +1,4 @@
-// 3.8.2: what the Markdown of a message draws beyond text and code: formulas (LaTeX between $$, with KaTeX) and diagrams
+// what the Markdown of a message draws beyond text and code: formulas (LaTeX between $$, with KaTeX) and diagrams
 // (```mermaid blocks). Both libraries load only when a message has one (their own chunks). Mermaid runs with
 // securityLevel 'strict' (no HTML labels, no clicks, its SVG sanitised); neither needs eval, so the window's CSP stays
 // as it is. A formula or diagram that does not parse is shown as the code it was.

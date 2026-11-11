@@ -1,4 +1,4 @@
-// 3.8.3: what each visual theme's moving backdrop costs at rest, and how fast a key shows over it, measured in the window
+// what each visual theme's moving backdrop costs at rest, and how fast a key shows over it, measured in the window
 // itself (a build with the `e2e` cargo feature: the only one with a DevTools port). Throwaway workspace and app-data
 // folder in %TEMP% (never the real C:\Orb, %APPDATA%\Orb* or the installed app); the window is shown, since frames are
 // only drawn for a visible window. One start per theme and mode (the theme is set in the workspace before the start).
@@ -116,7 +116,7 @@ for (const skin of SKINS) {
       await wait(300);
       fs.mkdirSync(shots, { recursive: true });
       await page.screenshot({ path: path.join(shots, `${skin}-${mode}.png`) });
-      // 3.8.3: and the bars' art over it (its moving pieces too: Retro's invaders, Nube's sweets), stopped the same way.
+      // and the bars' art over it (its moving pieces too: Retro's invaders, Nube's sweets), stopped the same way.
       await page.addStyleTag({ content: '.theme-band { visibility: visible !important; } .theme-band * { visibility: hidden !important; } .theme-band .band-art, .theme-band .band-art * { visibility: visible !important; }' });
       await page.evaluate(() => { for (const a of document.getAnimations()) { if (a.effect?.target?.closest?.('.scene, .theme-band')) { a.pause(); a.currentTime = 20000; } } });
       await wait(300);

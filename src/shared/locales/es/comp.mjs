@@ -83,7 +83,7 @@ export default {
   'comp.sidebar.resize': 'Arrastra para cambiar el ancho del menú',
   'comp.sidebar.viewAll': 'Ver todo ({n})',
   'comp.sidebar.waitApproval': 'Esperan tu aprobación',
-  // 3.2: conversaciones, menú lateral, buscador y globito
+  // conversaciones, menú lateral, buscador y globito
   'comp.sidebar.clearSearch': 'Borrar la búsqueda',
-  // 3.2: en singular
+  // en singular
 };

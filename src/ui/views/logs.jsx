@@ -10,7 +10,7 @@ import { useStore, call } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
-// 3.2: bare: inside «Memorias» (its header is that screen's).
+// bare: inside «Memorias» (its header is that screen's).
 export function LogsView({ route, bare = false }) {
   const t = useT();
   const version = useStore((s) => s.version);
@@ -18,7 +18,7 @@ export function LogsView({ route, bare = false }) {
   const [selected, setSelected] = useState(route.name ?? 'general');
   const [whole, setWhole] = useState(false);
   const [body, setText] = useState(null);
-  // 3.8.2: entries are appended at the end (the general log keeps the user's index and rules at its top): the view opens
+  // entries are appended at the end (the general log keeps the user's index and rules at its top): the view opens
   // on the newest ones.
   const scroller = useRef(null);
   useEffect(() => { const el = scroller.current; if (el && body != null) el.scrollTop = el.scrollHeight; }, [body]);

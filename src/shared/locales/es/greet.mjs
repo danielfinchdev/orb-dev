@@ -1,4 +1,4 @@
-// greet.*: el saludo del chat vacío (2.7), elegido en src/ui/lib/greeting.js. {user} es el nombre de la persona, {name}
+// greet.*: el saludo del chat vacío, elegido en src/ui/lib/greeting.js. {user} es el nombre de la persona, {name}
 // el del asistente.
 export default {
   // Según la hora y el día

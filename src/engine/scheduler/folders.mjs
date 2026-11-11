@@ -8,7 +8,7 @@ import { integrateIntoAsync } from '../../domain/tasks/checkpoints.mjs';
 import { oneLine } from '../../shared/text.mjs';
 
 export class FoldersPart {
-  // ---- 3.1: work done alongside others, joined into the project folder
+  // ---- work done alongside others, joined into the project folder
   // Whether a task's work is waiting to be joined into this project's folder (it then holds the folder like a writer).
   integrating(project) {
     // Not one a task is joining by hand (info.by): that task is the writer.
@@ -117,8 +117,8 @@ No hagas commit, merge, rebase ni cambies de rama: deja los cambios en los archi
   // The task that joins a conflicting copy by hand: once it is done, the copy goes and the dependents may start.
   joinedBy(task, info) {
     const by = this.board.task(info.by);
-    // 3.8.3 (repaso): a join task that failed, was cancelled or is gone used to leave the copy pending for ever (its
-    // dependents never started). The work stays in its branch for a «Unir» by hand; the pending join is closed.
+    // a join task that failed, was cancelled or is gone would leave the copy pending for ever (its
+    // dependents would never start). The work stays in its branch for a «Unir» by hand; the pending join is closed.
     if (!by || ['cancelled', 'failed'].includes(by.status)) {
       this.board.settingJson(`integrate:${task.id}`, null); if (by) this.board.setting(`join_task:${by.id}`, '');
       this.board.event(task.id, 'orb', 'integrate.skipped', by ? `la tarea #${by.id} que la unía terminó en ${by.status}` : `la tarea #${info.by} que la unía ya no existe`);
@@ -141,7 +141,7 @@ No hagas commit, merge, rebase ni cambies de rama: deja los cambios en los archi
     const removeBranch = async () => { if (branch) await g('branch', '-D', branch); };
     let removal;
     if (inside && fs.existsSync(workdir)) {
-      // 3.2.1: the agent's own process and the programs it left can still hold the copy's folder open, so git cannot
+      // the agent's own process and the programs it left can still hold the copy's folder open, so git cannot
       // remove it. Close them first; then let git try; if the folder is still locked, delete it with retries, and if even
       // that fails note it as an orphan so the next startup (pruneCopies) clears it.
       try { this.sessions.closeLive(task.session_id); } catch (error) { this.log(`cerrar proceso #${task.id}: ${error.message}`); }
@@ -156,7 +156,7 @@ No hagas commit, merge, rebase ni cambies de rama: deja los cambios en los archi
         }
         await removeBranch(); // after the copy: git does not delete a branch a worktree still has checked out
       };
-      // 3.8.3: the programs are stopped asynchronously; the folder and its branch go once that is over.
+      // the programs are stopped asynchronously; the folder and its branch go once that is over.
       let stopping = this.cleaning.get(task.id) ?? null;
       if (!stopping) { try { stopping = this.stopLeftovers(task); } catch (error) { this.log(`parar restos #${task.id}: ${error.message}`); } }
       removal = (stopping ? stopping.then(removeCopy) : removeCopy()).catch((error) => this.log(`quitar copia #${task.id}: ${error.message}`));

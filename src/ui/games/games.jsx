@@ -1,4 +1,4 @@
-// 2.6: mini-games while the agents work. A window with the list of games and the difficulty; the game in the middle with
+// mini-games while the agents work. A window with the list of games and the difficulty; the game in the middle with
 // its score and best score (kept on this PC). Opened from the gamepad of the top bar or from the assistant's message.
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Gamepad2, RotateCcw, ArrowLeft, Trophy, Flag, Sparkles, Volume2, VolumeX, Music } from 'lucide-react';
@@ -43,7 +43,7 @@ export function GamesDialog() {
   useEffect(() => { if (!open) stopGameMusic(); }, [open]);
   useEffect(() => stopGameMusic, []);
   const toggleSound = () => { if (!appSounds) return; setMuted(soundOn); setMute(soundOn); if (!soundOn) sfx('select'); };
-  // 3.8.2: each game's own music (Windows, lib/music.js), with its own mute, remembered (ui.gameMusic).
+  // each game's own music (Windows, lib/music.js), with its own mute, remembered (ui.gameMusic).
   const music = useStore((s) => s.app?.config?.ui?.gameMusic !== false);
   const close = () => { stopAll(); stopGameMusic(); setState({ games: false }); setGame(null); setOver(null); };
   const start = (id) => { stopAll(); sfx('start'); setGame(id); setScore(0); setOver(null); setRound((r) => r + 1); startGameMusic(id); };

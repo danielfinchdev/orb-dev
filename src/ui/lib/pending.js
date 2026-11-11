@@ -1,4 +1,4 @@
-// 3.8.3: the messages the user just sent, shown before the engine has saved them (lib/store.js › addPending). No React,
+// the messages the user just sent, shown before the engine has saved them (lib/store.js › addPending). No React,
 // no store (test/fluidez-ui.test.mjs).
 
 // The pending messages of a screen that its lines do not hold yet (lines: [{ id, text }] of what the user wrote). A line

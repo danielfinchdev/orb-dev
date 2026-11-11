@@ -2,10 +2,10 @@
 // - Every agent has a maximum of launches per rolling window, and expensive models a smaller one.
 // - When an agent answers "usage/session limit", it goes into cooldown until its reset and nothing else is sent to it.
 // - Tasks with agent "any" go to the least used agent that still has room, so work is balanced across subscriptions.
-// Since 2.0 every count is per account (a subscription): two Codex accounts have two separate windows.
-// 2.3, balance: Claude and Codex now report how much of their real window is used and when it resets (live sessions).
+// Every count is per account (a subscription): two Codex accounts have two separate windows.
+// balance: Claude and Codex report how much of their real window is used and when it resets (live sessions).
 // That real figure is the main guard (stop at budget.stopAt, 92% by default); the launch counts are only a safety net
-// with roomier limits, so the app no longer stops working long before the subscription would.
+// with roomier limits, so the app does not stop working long before the subscription would.
 import { ctx, tr } from '../../platform/context.mjs';
 import { localeOf } from '../../shared/i18n.mjs';
 import { localDay, ownerTz } from '../../shared/tz.mjs';
@@ -17,11 +17,11 @@ export const budgetConfig = () => {
 };
 // Limits of an account: its own entry in budget.agents, else its agent's, else the defaults.
 const agentOf = (id) => findAccount(id)?.agent ?? id;
-// 3.1: the limits are set for a Pro-like plan and scale with the account's real plan (engine/usage/plans.mjs): a Max 20x or a
+// the limits are set for a Pro-like plan and scale with the account's real plan (engine/usage/plans.mjs): a Max 20x or a
 // ChatGPT Pro takes much more work before its real usage is known; a free or Go plan, less and no heavy models.
 const PLAN_FACTOR = {
   claude: { free: 0.5, pro: 1, max5: 4, max20: 12, team: 2, enterprise: 4 },
-  // 3.2: Pro Lite (ChatGPT's smaller Pro), between Plus and Pro.
+  // Pro Lite (ChatGPT's smaller Pro), between Plus and Pro.
   codex: { free: 0.5, go: 0.75, plus: 1, edu: 1, team: 1.5, business: 1.5, prolite: 2.5, pro: 5, enterprise: 3 },
   cursor: { free: 0.5, pro: 1, business: 1.5, proplus: 2, ultra: 6 }
 };
@@ -34,7 +34,7 @@ const rules = (id, board = null) => {
   if (!f) return base;
   return { ...base, maxTasks: Math.max(1, Math.round(base.maxTasks * f)), maxHeavy: NO_HEAVY.has(plan) ? 0 : Math.round(base.maxHeavy * f), plan };
 };
-// Models that use the quota faster: the agent's heavyModels and, 2.7, any of a known heavy family (Opus, Fable, Pro…), so
+// Models that use the quota faster: the agent's heavyModels and any of a known heavy family (Opus, Fable, Pro…), so
 // a model Orb picks by its full name (claude-opus-5-5) counts as heavy too, not only the alias «opus».
 export const HEAVY_FAMILY = /opus|fable|(^|[-_.])pro($|[-_.])|ultra|max\b|xhigh|o3\b|o1\b/i;
 export const isHeavy = (id, model) => Boolean(model && (rules(id).heavyModels.includes(model) || HEAVY_FAMILY.test(model)));
@@ -61,7 +61,7 @@ export function cooldownUntil(board, id) {
   return until > Date.now() ? until : 0;
 }
 
-// 3.2.1: a limit of one model only (Cursor's API models: «Switch to a different model … to continue with Gemini») stops that
+// a limit of one model only (Cursor's API models: «Switch to a different model … to continue with Gemini») stops that
 // model on that account, never the whole account: the other models (Cursor's own, Auto) keep working.
 export const MODEL_LIMIT_RE = /switch to a different model|continue with this model|to continue with \w|limit (of|for) this model|model'?s? (usage )?limit/i;
 export const isModelLimitText = (text) => MODEL_LIMIT_RE.test(String(text ?? ''));
@@ -89,7 +89,7 @@ export function modelLimits(board, id) {
   return out;
 }
 
-// 3.2.1: the user lifts a pause by hand (Agentes › Uso de cada cuenta), also the models without usage of that account.
+// the user lifts a pause by hand (Agentes › Uso de cada cuenta), also the models without usage of that account.
 export function clearCooldown(board, id, { models = true } = {}) {
   board.setting(`cooldown:${id}`, ''); board.setting(`cooldown_reason:${id}`, ''); board.setting(`cooldown_at:${id}`, '');
   if (models) for (const r of board.all("SELECT key FROM settings WHERE key LIKE ? AND value <> ''", `model_limit:${id}:%`)) board.setting(r.key, '');
@@ -97,7 +97,7 @@ export function clearCooldown(board, id, { models = true } = {}) {
   board.changed?.('settings');
 }
 
-// 3.2.1: a task of that account that ends well proves the account (and the model it used) works again: a usage pause set
+// a task of that account that ends well proves the account (and the model it used) works again: a usage pause set
 // before that task started is lifted. Not a pause for another reason (plan, login): those have their own way out.
 export function liftAfterSuccess(board, id, model, launchedAt) {
   const since = Date.parse(launchedAt ?? '') || 0;
@@ -111,7 +111,7 @@ export function liftAfterSuccess(board, id, model, launchedAt) {
   return lifted;
 }
 
-// 3.2.1: the earliest moment this account can take a task with this model, when it is paused (0 when it is not).
+// the earliest moment this account can take a task with this model, when it is paused (0 when it is not).
 export function blockedUntil(board, id, model = null) {
   return Math.max(cooldownUntil(board, id), modelLimitUntil(board, id, model));
 }
@@ -119,12 +119,12 @@ export function blockedUntil(board, id, model = null) {
 // The real usage an account reported last (live sessions): { utilization 0-1, resetAt, window, status, at }.
 export function recordRate(board, id, rate) {
   if (!id || !rate) return;
-  // 3.2.1: one model without usage (Cursor's API models): only that model waits; nothing else of the account changes.
+  // one model without usage (Cursor's API models): only that model waits; nothing else of the account changes.
   if (rate.model) { if (rate.status === 'rejected') blockModel(board, id, rate.model, rate.text ?? '', rate.resetAt ?? null); return; }
   const prev = board.settingJson(`rate:${id}`) ?? {};
   // Keep the most worrying window: a weekly window at 95% matters more than a 5-hour one at 10%.
   const next = { utilization: rate.utilization ?? prev.utilization ?? null, resetAt: rate.resetAt ?? prev.resetAt ?? null, window: rate.window ?? prev.window ?? null, status: rate.status ?? prev.status ?? null, at: Date.now() };
-  // 2.6: every window is kept too (session, weekly, weekly of one model…), for the usage panel next to the message box.
+  // every window is kept too (session, weekly, weekly of one model…), for the usage panel next to the message box.
   if (rate.window && rate.utilization != null) {
     const all = Object.fromEntries(Object.entries(board.settingJson(`rates:${id}`) ?? {}).filter(([, w]) => (!w.resetAt || w.resetAt > Date.now()) && Date.now() - (w.at ?? 0) < 7 * 86_400_000));
     all[String(rate.window).slice(0, 40)] = { utilization: rate.utilization, resetAt: rate.resetAt ?? null, status: rate.status ?? null, at: Date.now() };
@@ -152,7 +152,7 @@ export function realRate(board, id) {
 }
 
 const hhmm = (ms) => new Date(ms).toLocaleTimeString(localeOf(ctx.config?.language), { hour: '2-digit', minute: '2-digit' });
-// 3.2.1: the hour, and the day too when it is not within the next 20 h (a monthly cycle that ends on the 20th): «16:42» or
+// the hour, and the day too when it is not within the next 20 h (a monthly cycle that ends on the 20th): «16:42» or
 // «00:00 del mar, 20 oct», so it reads right after «hasta las» / «a las» (until / at).
 export function untilText(ms, now = Date.now()) {
   if (ms - now <= 20 * 3_600_000) return hhmm(ms);
@@ -208,7 +208,7 @@ export function usageReport(board) {
   return accounts().map((acc) => {
     const r = rules(acc.id, board); const used = windowUsage(board, acc.id);
     const real = realRate(board, acc.id);
-    // 3.2.1: why it is paused (usage, or a reason such as no login) and the models without usage of this account.
+    // why it is paused (usage, or a reason such as no login) and the models without usage of this account.
     const models = Object.entries(modelLimits(board, acc.id)).map(([model, until]) => ({ model, label: modelName(board, acc.id, model), until }));
     return { account: acc.id, agent: acc.agent, label: acc.label, plan: planOf(board, acc.id)?.label ?? null, used: used.tasks, max: r.maxTasks, heavy: used.heavy, maxHeavy: r.maxHeavy, cooldownUntil: cooldownUntil(board, acc.id) || null, cooldownReason: board.setting(`cooldown_reason:${acc.id}`) || null,
       modelLimits: models, windowHours: budgetConfig().windowHours, stopAt: budgetConfig().stopAt,
@@ -216,7 +216,7 @@ export function usageReport(board) {
   });
 }
 
-// 3.2.1: why a task for this agent (and account, and model) would wait now, when every account it could use is paused or
+// why a task for this agent (and account, and model) would wait now, when every account it could use is paused or
 // out of usage; '' when one of them can take it. For the assistant, right when it hands the task out.
 export function waitReason(board, agent, { account = null, model = null } = {}) {
   if (!agent || agent === 'any') return '';
@@ -231,7 +231,7 @@ export const isLimitText = (text) => LIMIT_RE.test(String(text ?? ''));
 export const isBudgetText = (text) => /budget/i.test(String(text ?? '')) && !/session limit|usage limit/i.test(String(text ?? ''));
 
 // "resets 5:10am", "resets at 17:30", "reset in 2 hours" → epoch ms; otherwise a full window from now.
-// 3.2.1: also a date (Cursor: «will reset when your monthly cycle ends on 10/20/2026», US order; or 2026-10-20): the start of
+// also a date (Cursor: «will reset when your monthly cycle ends on 10/20/2026», US order; or 2026-10-20): the start of
 // that day, local time, if it is still ahead (at most two months).
 export function parseReset(text, now = new Date()) {
   const s = String(text ?? '');
@@ -294,7 +294,7 @@ export function recordSpend(board, { account = null, conversation = null, sessio
   return { day };
 }
 
-// 3.8.2: what was spent in the last `days` days, for the usage page: by day (every day, also the empty ones), by agent
+// what was spent in the last `days` days, for the usage page: by day (every day, also the empty ones), by agent
 // and by model. From usage_ledger: the agent is the account's; the model, the one of the chat or task the turn was in.
 export function usageHistory(board, { days = 30, now = new Date() } = {}) {
   const tz = ownerTz(ctx.config);

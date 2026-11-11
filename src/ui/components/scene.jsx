@@ -1,4 +1,4 @@
-// 2.6: the illustrated backdrop of each visual theme, behind the screens (themes.css draws and moves it; one frosted
+// the illustrated backdrop of each visual theme, behind the screens (themes.css draws and moves it; one frosted
 // pane over it keeps it out of focus so it never competes with the text). Nothing in the «profesional» theme.
 import { useStore, plainSkin } from '@/lib/store.js';
 
@@ -113,13 +113,13 @@ const SHAPES = [
   { el: <ThinSparkle />, c: '#f08a4b', left: '3%', bottom: '18%', w: 56, r: 0, dur: 10, delay: -6 }
 ];
 
-// 3.8.1 (H4f): the clouds drift about half a pixel per frame at 60 fps (a 1360 px window), so they step 30 times a second
+// the clouds drift about half a pixel per frame at 60 fps (a 1360 px window), so they step 30 times a second
 // instead (steps of dur × CLOUD_FPS: about 1 px, under their 8 px blur nothing tells it from a glide) and the compositor
 // draws half the frames. Whole-second durations and delays keep the three clouds' steps on the same instants: one
 // redraw moves all of them.
 const CLOUD_FPS = 30;
 const ORB_CLOUDS = [{ dur: 90, delay: -10 }, { dur: 70, delay: -45 }, { dur: 110, delay: -70 }];
-// 3.8.3: each cloud is a picture with its 8 px blur already in it (drawn once, one per mode), not a CSS filter: the GPU
+// each cloud is a picture with its 8 px blur already in it (drawn once, one per mode), not a CSS filter: the GPU
 // applied a filter on a moving layer again on every frame the compositor drew (≈6 % of the GPU process at rest). The
 // picture is the same soft ellipse (the gradient of themes.css › .orb-cloud) blurred the same, with room for the blur
 // around it (3 × 8 px); the layer only slides. Without a canvas (never in Orb's window) the CSS cloud is drawn instead.

@@ -1,4 +1,4 @@
-// 3.8.1 (H4c): the lists the window asks for on every refresh, as changes (src/shared/feed.mjs). A call of one of these
+// the lists the window asks for on every refresh, as changes (src/shared/feed.mjs). A call of one of these
 // methods with `since` gets a feed reply; without it, the plain reply of before (older Orbs and phone apps).
 // tasks.list goes compact in a feed: without the texts and fields no list shows (the brief and the result, the folders,
 // the approval…); a task's screen reads them from tasks.get. The plain reply keeps every field.

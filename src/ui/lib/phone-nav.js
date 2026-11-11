@@ -1,4 +1,4 @@
-// 3.8: where the app may go and where it goes back to (pure: no React, no store; test/movil-ui.test.mjs).
+// where the app may go and where it goes back to (pure: no React, no store; test/movil-ui.test.mjs).
 // - cleanRoute: a route of a screen that no longer exists (the bots' of 3.7, Orb Server's, a typo) never opens a blank or
 //   broken screen: the bots' fall back to the chats (an old notification, a saved route) and the rest to nothing (the
 //   caller picks the home screen).
@@ -19,7 +19,7 @@ export function cleanRoute(route, { views, phone = false } = {}) {
   const r = asRoute(route);
   if (!r) return null;
   if (r.view === 'settings') return r; // a window over the screen, not a screen
-  if (GONE.test(r.view)) return { view: phone ? 'chats' : 'chat' }; // F2.3 M1: never the old bot's id
+  if (GONE.test(r.view)) return { view: phone ? 'chats' : 'chat' }; // never the old bot's id
   if (views && !views.includes(r.view)) return null;
   return r;
 }

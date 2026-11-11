@@ -1,4 +1,4 @@
-// The Tauri builds that must never be mixed up (review D4 B4):
+// The Tauri builds that must never be mixed up:
 //   node scripts/tauri-check-release.mjs              after `tauri build`: the release Orb.exe must not be a test build
 //                                                     (no DevTools port, hidden window, local update feed or timing marks: their names are not in it;
 //                                                     nor the test updater key) and trusts the updater key of tauri.conf.json;
@@ -21,7 +21,7 @@ if (process.argv.includes('--build-e2e')) {
   const conf = path.join(env.CARGO_TARGET_DIR, 'e2e.conf.json');
   fs.mkdirSync(env.CARGO_TARGET_DIR, { recursive: true });
   // And it trusts only the TEST key (test/fixtures/actualizador-prueba.key), never Orb's: what the tests sign is never
-  // valid for a real Orb (review D9 M2).
+  // valid for a real Orb.
   fs.writeFileSync(conf, JSON.stringify({ plugins: { updater: { dangerousInsecureTransportProtocol: true, pubkey: TEST_PUBKEY() } } }));
   const r = spawnSync('npx', ['tauri', 'build', '--features', 'e2e', '--no-bundle', '--config', `"${conf}"`], { cwd: ROOT, env, stdio: 'inherit', shell: true });
   process.exit(r.status ?? 1);
@@ -29,7 +29,7 @@ if (process.argv.includes('--build-e2e')) {
 
 // What makes an Orb.exe unfit to publish: the test build's names, the test updater key, or not trusting the updater key
 // in src-tauri/tauri.conf.json (an old build from before a key rotation). Also used on the installer CI built
-// (scripts/release-firmar.mjs, review D10 M2).
+// (scripts/release-firmar.mjs).
 export function releaseProblems(bytes, pubkey = JSON.parse(fs.readFileSync(path.join(ROOT, 'src-tauri', 'tauri.conf.json'), 'utf8')).plugins.updater.pubkey) {
   const found = MARKS.filter((m) => bytes.includes(Buffer.from(m)));
   if (bytes.includes(Buffer.from(TEST_PUBKEY()))) found.push('la clave pública de PRUEBA');

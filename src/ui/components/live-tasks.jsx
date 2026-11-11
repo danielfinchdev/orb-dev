@@ -68,7 +68,7 @@ export function LiveTask({ t: task, compact = false, actions = true }) {
   );
 }
 
-// The block above the assistant's message box: what is running now. 3.2.1: in a conversation, only its own tasks (a new,
+// The block above the assistant's message box: what is running now. In a conversation, only its own tasks (a new,
 // empty chat shows none: each conversation has its tasks); without a conversation given, all of them.
 export function LiveTasksStrip({ conversation }) {
   const t = useT();

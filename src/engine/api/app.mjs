@@ -1,4 +1,4 @@
-// 3.8.1: this PC's tools that need no window: a terminal in a folder
+// this PC's tools that need no window: a terminal in a folder
 // (Ctrl+J), the project in an editor or the File Explorer, a project's action in a terminal of its own, the feedback mail
 // and the author's other apps. In the engine they work the same under any app; what only the
 // app can do (open a link or a folder; a terminal, an editor or an action, the program picked by the app) is asked to it
@@ -29,7 +29,7 @@ export function appMethods({ home, version }) {
       if (!target) fail(tr('sys.main.noFolderYet'));
       return hostCall('host.openTerminal', { dir: target, choice: choice() });
     },
-    // 3.2, God mode: which editors this PC has (only those are offered), and the project opened in one of them.
+    // God mode: which editors this PC has (only those are offered), and the project opened in one of them.
     'app.editors': () => { const e = findEditors(); return { cursor: Boolean(e.cursor), vscode: Boolean(e.vscode) }; },
     // core itself and its secrets open in the File Explorer only with a fresh unlock of the master password (unlock), as
     // the window's own «Abrir carpeta» (app:openPath).

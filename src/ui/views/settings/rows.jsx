@@ -12,11 +12,11 @@ export async function save(patch, ok = t('settings.saved'), unlock = null) {
 }
 export const num = (v) => Number(v) || 0;
 // The whole row is the switch's label: clicking its text toggles it too (the switch alone is a small target).
-// info: the details that do not fit in the hint, behind an «ⓘ» next to the label (3.8.2).
+// info: the details that do not fit in the hint, behind an «ⓘ» next to the label.
 export function Row({ label, hint, info, children }) {
   return <label className="-mx-2 flex cursor-pointer items-center justify-between gap-4 rounded-lg px-2 py-1.5 hover:bg-accent/40"><div><div className="flex items-center gap-1.5 text-sm">{label}{info ? <InfoTip text={info} /> : null}</div>{hint ? <div className="text-muted-foreground text-xs">{hint}</div> : null}</div>{children}</label>;
 }
-// A text with keyboard shortcuts in it: each {name} of the text becomes its keys (3.8.2: one key per sentence, so it
+// A text with keyboard shortcuts in it: each {name} of the text becomes its keys (one key per sentence, so it
 // translates whole, instead of a sentence cut in five).
 export function WithKeys({ text, keys }) {
   return text.split(/(\{\w+\})/).map((part, i) => {
@@ -27,7 +27,7 @@ export function WithKeys({ text, keys }) {
 
 // Interface: its size on this PC (also Ctrl + / Ctrl - / Ctrl 0) and the terminal that Ctrl+J opens.
 export const sizes = () => [{ value: '0.87', label: t('settings.size.small') }, { value: '1', label: t('settings.size.normal') }, { value: '1.15', label: t('settings.size.large') }];
-// What a notification shows on a locked phone. 3.8: «all» (before, the bots' messages too) shows the same as «chat»:
+// What a notification shows on a locked phone. «all» (the bots' messages too) shows the same as «chat»:
 // it is offered no more and reads as «chat».
 export const PREVIEWS = ['chat', 'none'];
 export const previewOf = (v) => (v === 'none' ? 'none' : 'chat');

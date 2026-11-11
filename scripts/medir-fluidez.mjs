@@ -1,4 +1,4 @@
-// 3.8.3: how a conversation feels, measured in the window itself (a build with the `e2e` cargo feature: the only one
+// how a conversation feels, measured in the window itself (a build with the `e2e` cargo feature: the only one
 // with a DevTools port). Everything runs on a throwaway workspace and app-data folder in %TEMP% with the fake agents
 // (their STREAM_LARGO answer streams ~2 KB of Markdown for ~3 s, as a real agent does): never the real C:\Orb,
 // %APPDATA%\Orb* or the installed app. The window is shown (frames are only drawn for a visible window).

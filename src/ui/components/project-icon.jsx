@@ -1,4 +1,4 @@
-// 3.2: a project's icon: its own (its favicon or app icon, or one chosen in Orb; engine/project-icons.mjs) or, without
+// a project's icon: its own (its favicon or app icon, or one chosen in Orb; engine/project-icons.mjs) or, without
 // one, a badge with its initials in a colour that is always the same for that name.
 import { useStore } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
@@ -12,7 +12,7 @@ export function initials(name) {
   return text.toUpperCase();
 }
 
-// 3.6 (M3): size: in px, for the bigger ones (the chat list, a project's info); the .project-icon rule is not a utility,
+// size: in px, for the bigger ones (the chat list, a project's info); the .project-icon rule is not a utility,
 // so a size class would not win over it.
 export function ProjectIcon({ name, className, size }) {
   const icon = useStore((s) => s.projectIcons?.[name] ?? null);

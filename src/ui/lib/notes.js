@@ -1,4 +1,4 @@
-// 3.6 (messaging, M4): what the window does with a notification that was tapped (the phone's browser: its service
+// what the window does with a notification that was tapped (the phone's browser: its service
 // worker, src/engine/transport/remote.mjs; the Android app: lib/app-bridge.js). It opens the exact chat and, when «Aprobar» could
 // not be done right there (a task whose exact version is approved here), asks here.
 // Opened once the app is on screen (NoteOpener): what arrives before waits.

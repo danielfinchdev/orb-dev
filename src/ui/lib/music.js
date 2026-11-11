@@ -1,4 +1,4 @@
-// 3.8.2 (item 13): the music of the Windows app. Background music for studying or coding (the button at the foot of the
+// the music of the Windows app. Background music for studying or coding (the button at the foot of the
 // sidebar) and one track per minigame (src/ui/games/games.jsx). The tracks and their licences are src/shared/music.mjs;
 // the engine downloads each the first time it is played and hands its bytes over ('music.track', src/engine/host/music.mjs).
 //

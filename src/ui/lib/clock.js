@@ -1,4 +1,4 @@
-// 3.8.1 (H4a): the day and the time zone the dates on screen are written for (no React: lib/use-day.js is the hook).
+// the day and the time zone the dates on screen are written for (no React: lib/use-day.js is the hook).
 // Memoised pieces (a message's time, the chat list's rows) are not drawn again by themselves: they follow the day,
 // which changes at midnight and when the system's time zone changes with the app open (a trip), and the date formatters
 // kept for speed are made again for the new zone (an Intl.DateTimeFormat keeps the zone it was made with). Checked

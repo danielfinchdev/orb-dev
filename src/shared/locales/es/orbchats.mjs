@@ -1,4 +1,4 @@
-// 3.6, mensajería (paso M3): la zona Orb como una app de mensajería: la lista de chats con Orbe por proyecto (con el
+// Mensajería: la zona Orb como una app de mensajería: la lista de chats con Orbe por proyecto (con el
 // último avance de cada uno), la conversación (cabecera, tareas en una línea, tarjetas de aprobación) y la información
 // del chat y del proyecto.
 export default {

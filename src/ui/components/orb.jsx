@@ -2,7 +2,7 @@
 // with the eyes drawn back on top so they can blink, wink, look around, smile or give way to code scrolling inside the
 // visor. The same character everywhere: the head alone at small sizes, or one of the four poses of the whole robot.
 // Now and then it does something on its own (only the one marked `live`, and never while the window is hidden).
-// 3.8.1 (H4e): it floats (and its chest light pulses) only while something happens: thinking, talking, a mood, agents
+// it floats (and its chest light pulses) only while something happens: thinking, talking, a mood, agents
 // working (`active`), the pointer over it, saying hello, and now and then at random; otherwise it stands still and only
 // blinks, so nothing keeps the compositor drawing 60 frames a second for it.
 // Click it: it boops; click it a lot and it laughs (with its little sounds, lib/sounds.js). Ajustes → «Animaciones:
@@ -24,7 +24,7 @@ const POSE_OF = { thinking: 'think', happy: 'point' };
 const OWN = new Set(Object.values(POSE_OF));
 const coherent = (pose, face) => POSE_OF[face] ?? (OWN.has(pose) ? 'stand' : pose);
 const LENGTH = { wink: 900, look: 1800, code: 3200, tilt: 2200, hop: 800, boop: 380, laugh: 1600 };
-// 3.8.1 (H4e): the moods that keep it floating (sleeping breathes instead; idle stands still), and how long a moment of
+// the moods that keep it floating (sleeping breathes instead; idle stands still), and how long a moment of
 // floating lasts (a random one, or hello): two sways of orb-float (4.2 s each, app.css).
 const MOVING = new Set(['thinking', 'talking', 'happy', 'worried']);
 const MOMENT = 8400;
@@ -42,7 +42,7 @@ const CODE = Array.from({ length: 14 }, (_, i) => {
 
 const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-// 3.8.1 (H4d): whether a robot that moves is on screen. One IntersectionObserver for all of them: a robot out of view (a
+// whether a robot that moves is on screen. One IntersectionObserver for all of them: a robot out of view (a
 // screen scrolled away, a hidden sidebar) or in a hidden window has its animations paused (data-away, app.css) and no
 // blinking or gestures scheduled, so nothing keeps the compositor drawing frames for what nobody can see. Still robots
 // (the lists) are not watched: they never move.
@@ -93,7 +93,7 @@ export function Orb({ pose = 'head', size = 34, mood = 'idle', live: wantsLive =
     return () => clearTimeout(t);
   }, [still, seen]);
 
-  // Spontaneous gestures: one every 30–90 s (3.8.1, H4e: was 9–20 s), only for the live robot, only when nothing else is
+  // Spontaneous gestures: one every 30–90 s, only for the live robot, only when nothing else is
   // going on: a wink, a look around, code on the visor, a peek, a hop or a moment of floating.
   useEffect(() => {
     if (!live || still || busy || !seen || reduced()) return;
@@ -106,7 +106,7 @@ export function Orb({ pose = 'head', size = 34, mood = 'idle', live: wantsLive =
   // Hello: a moment of floating when it appears.
   useEffect(() => { if (greet && !still) float(); }, [greet]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 3.8.1 (H4e): floating and the chest light's pulse, only while something happens. Both start where they rest (the
+  // floating and the chest light's pulse, only while something happens. Both start where they rest (the
   // first frame of orb-float and orb-led is the still pose), so starting never jumps; when it is over, each finishes the
   // sway or pulse it is in and stops at its end (animationiteration), which is the still pose again. Out of view, in a
   // hidden window, with reduced motion or when nothing runs (another move replaced it, «mínimas»), it stops at once:
@@ -186,7 +186,7 @@ export function Orb({ pose = 'head', size = 34, mood = 'idle', live: wantsLive =
           ) : null}
           <span className="orb-glint" />
         </span>
-        {/* 3.8.3: each eye is its own little picture inside an HTML box (placed and tilted like the artwork's eye): blinking
+        {/* each eye is its own little picture inside an HTML box (placed and tilted like the artwork's eye): blinking
             and talking scale that box, which the compositor does alone. They used to scale an SVG group, which the main
             thread redrew, glow filter included, on every frame of every blink and all through an answer. The glow is the
             same SVG filter, applied to the unscaled box around the eye (in CSS px), so a shut eye glows as it did. */}

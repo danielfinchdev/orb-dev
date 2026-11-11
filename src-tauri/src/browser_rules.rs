@@ -1,6 +1,6 @@
 // The pure rules of the agents' browser (browser.rs), kept apart so `cargo test` covers them: which addresses its pages
 // may load, which DevTools methods the engine may call on them, its user agent, and the checks of the engine's host.browser.*
-// and host.pip.* requests. The limits of Orb's agents' browser (as in 3.8.0): only http(s) pages, no
+// and host.pip.* requests. The limits of Orb's agents' browser: only http(s) pages, no
 // other scheme (file:, an app's own protocol, Orb's own pages), and nothing beyond what the shared actions need.
 use serde_json::{json, Value};
 use std::time::{Duration, Instant};
@@ -23,8 +23,8 @@ fn orb_host(host: &str) -> bool {
   ORB_HOSTS.iter().any(|o| h == *o || h.ends_with(&format!(".{o}")))
 }
 
-/// The ports of the engine's own servers (the phone's access, dev-control), as the engine said at the last page it opened
-/// (review D8 B1): an agent's page never reaches them on this PC's loopback.
+/// The ports of the engine's own servers (the phone's access, dev-control), as the engine said at the last page it opened:
+/// an agent's page never reaches them on this PC's loopback.
 static OWN_PORTS: std::sync::Mutex<Vec<u16>> = std::sync::Mutex::new(Vec::new());
 pub fn set_own_ports(params: &Value) {
   let ports: Vec<u16> = params.get("blockPorts").and_then(Value::as_array).map(|a| a.iter().filter_map(|p| p.as_u64().and_then(|p| u16::try_from(p).ok())).take(16).collect()).unwrap_or_default();
@@ -41,7 +41,7 @@ fn own_port(u: &tauri::Url) -> bool {
   let Some(port) = u.port_or_known_default().filter(|p| OWN_PORTS.lock().unwrap().contains(p)) else { return false };
   u.host_str().is_some_and(|h| loopback(h) || resolves_here(h, port))
 }
-/// Review final B2: a name that resolves to this PC (localtest.me, *.nip.io, a hosts entry, ::ffff:127.0.0.1) is loopback
+/// A name that resolves to this PC (localtest.me, *.nip.io, a hosts entry, ::ffff:127.0.0.1) is loopback
 /// too. Looked up only for Orb's own ports; a name that does not resolve now cannot be reached either.
 fn resolves_here(host: &str, port: u16) -> bool {
   use std::net::ToSocketAddrs;
@@ -117,7 +117,7 @@ const MAX_TEXT: usize = 1000;
 const MAX_URL: usize = 2048;
 pub const MAX_TITLE: usize = 300;
 
-/// How many of a page's events may reach the engine (review D7–D8 A1): about 100 a second with bursts of 200; the rest
+/// How many of a page's events may reach the engine: about 100 a second with bursts of 200; the rest
 /// are dropped and counted (said once a second: Orb.dropped). A page's title at most every 250 ms. Screencast frames
 /// are not counted (the engine acknowledges each one: at most a few a second).
 pub struct EventGate {
@@ -281,7 +281,7 @@ pub fn user_agent(default: &str) -> String {
 }
 
 /// The fields each DevTools method may carry (what the engine's driver sends: src/engine/browser/browser-cdp.mjs,
-/// host-browser.mjs), and their limits: Rust is the boundary even if the engine were not (review D7–D8 M5). No world with
+/// host-browser.mjs), and their limits: Rust is the boundary even if the engine were not. No world with
 /// universal access, no navigation of another frame, nothing bigger than the 1280×800 view at scale 1, no capture
 /// beyond the view, no script run at once on every document.
 fn check_params(method: &str, p: &Value) -> Result<(), String> {
@@ -452,7 +452,7 @@ mod tests {
       assert_eq!(ok("Page.navigate", json!({ "url": url })), Err("ERR_BLOCKED_BY_CLIENT".into()), "{url}");
     }
     assert!(ok("Page.enable", json!([1])).is_err());
-    // Their fields too (review D7–D8 M5).
+    // Their fields too.
     assert!(ok("Page.createIsolatedWorld", json!({ "frameId": "F", "worldName": "orb" })).is_ok());
     assert!(ok("Page.createIsolatedWorld", json!({ "frameId": "F", "grantUniveralAccess": true })).is_err());
     assert!(ok("Page.navigate", json!({ "url": "https://ejemplo.com", "frameId": "otro" })).is_err());
@@ -514,7 +514,7 @@ mod tests {
     assert_eq!(e["type"], "error");
     assert!(e["args"][0]["value"].as_str().unwrap().contains("no leído"));
     assert_eq!(shrink_event("Runtime.consoleAPICalled", &big.replacen("error", "log", 1)), None);
-    // A page's own text with multibyte characters around byte 256: cut at a character, never a panic (3.8.3 repaso).
+    // A page's own text with multibyte characters around byte 256: cut at a character, never a panic.
     for pad in 0..4 {
       let wide = format!(r#"{{"type":"error","args":[{{"type":"string","value":"{}{}"}}]}}"#, "x".repeat(pad), "ñ".repeat(MAX_EVENT_JSON));
       assert_eq!(shrink_event("Runtime.consoleAPICalled", &wide).unwrap()["type"], "error");

@@ -4,7 +4,7 @@ import { t, currentLocale } from './i18n.js';
 
 export const cn = (...inputs) => twMerge(clsx(inputs));
 
-// Error text from the bridge without Electron's "Error invoking remote method…" prefix. 3.2.1: starting with a capital
+// Error text from the bridge without Electron's "Error invoking remote method…" prefix. Starting with a capital
 // letter (the engine's messages start in lower case so they can also go inside a sentence).
 const capital = (s) => s.replace(/^(\P{L}*)(\p{Ll})/u, (m, lead, ch) => lead + ch.toLocaleUpperCase());
 export const errorText = (error) => capital(String(error?.message ?? error).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''));

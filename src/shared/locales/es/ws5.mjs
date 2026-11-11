@@ -1,4 +1,4 @@
-// 3.6: copias de seguridad y zonas horarias.
+// copias de seguridad y zonas horarias.
 export default {
   'data.backup.restored': 'Copia de seguridad restaurada (del {created}).',
   'data.core.restored': 'Faltaba la carpeta core (o parte de ella): Orb ha recuperado lo que faltaba de la copia del {created}. Lo que cambió después de esa copia no está.',

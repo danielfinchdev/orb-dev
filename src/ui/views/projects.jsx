@@ -22,7 +22,7 @@ function GithubCard() {
   const load = () => { setGh(null); call('github.status').then(setGh).catch((e) => setGh({ error: e.message })); };
   useEffect(load, []);
   return (
-    // 3.2.1: in a narrow window the state and its buttons go under the text (the text was left with a word per line).
+    // in a narrow window the state and its buttons go under the text (the text was left with a word per line).
     <Card className="flex-row flex-wrap items-center gap-x-3 gap-y-2 px-5 py-3.5">
       <GithubIcon className="size-5 shrink-0" />
       <div className="min-w-[12rem] flex-1">
@@ -39,7 +39,7 @@ function GithubCard() {
   );
 }
 
-// 2.7: the green squares of the user's GitHub profile (last year), right under the GitHub card. Real data from GitHub;
+// the green squares of the user's GitHub profile (last year), right under the GitHub card. Real data from GitHub;
 // the day under the pointer is told below the grid (no browser tooltips).
 function ContributionGraph() {
   const t = useT();
@@ -66,7 +66,7 @@ function ContributionGraph() {
   );
 }
 
-// 3.8.1: the end of a project (src/domain/projects/project-close.mjs). Finished: it leaves Orb, its folder stays («Finalizados»
+// the end of a project (src/domain/projects/project-close.mjs). Finished: it leaves Orb, its folder stays («Finalizados»
 // brings it back). Deleted: its folder goes to the Recycle Bin (the app), behind the master password, only on the PC.
 // When the Recycle Bin cannot take it: a folder some program is using offers only «Reintentar»; otherwise «Reintentar»
 // or «Borrar para siempre» after a stronger warning. Cancelling gives the project back as it was.
@@ -150,7 +150,7 @@ function FinishedList({ list, onReopened }) {
 function ProjectDetail({ p, onRenamed }) {
   const t = useT();
   const [info, setInfo] = useState(null);
-  // 3.2.1: a new name for the project (and its folder, when it is one of Orb's), only with nothing working in it.
+  // a new name for the project (and its folder, when it is one of Orb's), only with nothing working in it.
   const rename = async () => {
     const r = await form(t('projects.rename.title'), { description: p.inHome ? t('projects.rename.desc') : t('projects.rename.descLinked'), initial: { name: p.name },
       body: (v, set) => <Field label={t('projects.rename.label')}><Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} maxLength={60} /></Field>,
@@ -175,7 +175,7 @@ function ProjectDetail({ p, onRenamed }) {
     <Card className="gap-5">
       <CardHeader className="flex-row items-start gap-3">
         <Folder className="text-primary mt-0.5 size-5 shrink-0" />
-        {/* 3.8: the phone shows where it is in Orb's words (category › folder), never the PC's path. */}
+        {/* the phone shows where it is in Orb's words (category › folder), never the PC's path. */}
         <div className="min-w-0 flex-1"><CardTitle className="flex items-center gap-2 text-[17px]">{p.name}</CardTitle>{bridge.mobile ? <CardDescription className="mt-1 text-xs break-words">{t(`comp.projects.category.${p.category ?? 'other'}`)} › {baseName(p.path)}</CardDescription> : <CardDescription className="mt-1 font-mono text-xs break-all">{p.path}</CardDescription>}</div>
         {p.active ? <Badge><Pin />{t('projects.workProject')}</Badge> : null}
       </CardHeader>
@@ -224,7 +224,7 @@ export function ProjectsView({ route }) {
   const showing = finished.length ? tab : 'active';
   const [selected, setSelected] = useState(route.name ?? (phone ? null : app.activeProject?.name ?? projects[0]?.name ?? null));
   const current = projects.find((p) => p.name === selected) ?? null;
-  // 3.8, the phone: a project opens on a screen of its own (the back arrow, or Android's back, returns to the list).
+  // the phone: a project opens on a screen of its own (the back arrow, or Android's back, returns to the list).
   const open = (name) => (phone ? go({ view: 'projects', name }) : setSelected(name));
   const pick = (p) => p && open(p.name);
   const shown = phone && route.name ? projects.find((p) => p.name === route.name) : null;

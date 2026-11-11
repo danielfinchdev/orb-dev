@@ -1,4 +1,4 @@
-// 3.8.3: a message box's text, kept outside the view that owns the box. Typing redraws the box alone (Composer reads it
+// a message box's text, kept outside the view that owns the box. Typing redraws the box alone (Composer reads it
 // with useDraftValue); the view reads it only when it sends (draft.get()) and writes it when it fills the box
 // (draft.set: a suggestion, a shared text, a failed message coming back). Before, the text lived in the view's state
 // and every key redrew the whole conversation around the box.

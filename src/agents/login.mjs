@@ -1,4 +1,4 @@
-// 3.5 «Solo Orb»: the agents' own sign-in without a console window. The official CLI runs hidden with its output piped;
+// «Solo Orb»: the agents' own sign-in without a console window. The official CLI runs hidden with its output piped;
 // Orb reads the sign-in link (and the one-time code, when there is one) from it, the app shows them and opens the link in
 // the browser, and the CLI saves the login in the account's folder as always (Orb never sees a token).
 //   Claude Code: `claude auth login --claudeai`. It prints the link («If the browser didn't open, visit: <url>»), opens

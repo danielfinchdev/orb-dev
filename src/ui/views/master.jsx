@@ -1,4 +1,4 @@
-// 3.8: the master password in the window. MasterCreate: the welcome's step after the folder, and the one screen an Orb
+// the master password in the window. MasterCreate: the welcome's step after the folder, and the one screen an Orb
 // updated to 3.8 shows once (it cannot be skipped). MasterLocked: this PC cannot open Orb's keys by itself (another PC,
 // another Windows user) or its file is missing. The dialog that asks for it before a guarded action (registered with
 // lib/core-access.js), the card of Ajustes › Datos (change it, «He olvidado la contraseña»: with the backups' recovery
@@ -125,7 +125,7 @@ export async function forgotFlow({ canForget = false } = {}) {
 }
 
 // This PC cannot open the keys by itself (the password opens them), or the password's file is missing (lost: no
-// password to type; the recovery code, or starting from scratch). 3.8.1: also Orb's lock screen (screenLocked: Windows
+// password to type; the recovery code, or starting from scratch). also Orb's lock screen (screenLocked: Windows
 // locked, the PC asleep, «Bloquear» or Orb unused for a while; the agents keep working meanwhile).
 export function MasterLocked({ onDone, state = null }) {
   const t = useT();
@@ -155,7 +155,7 @@ export function MasterLocked({ onDone, state = null }) {
 }
 
 // Before a guarded action: the password, once every 5 minutes. → { unlock, until } or null.
-// 3.8.1: an action that asks every time (fresh: deleting a project) says so instead, and its token is for it alone.
+// an action that asks every time (fresh: deleting a project) says so instead, and its token is for it alone.
 setMasterAsker((action, { fresh = false } = {}) => form(tNow('master.askTitle'), {
   description: `${tNow(`master.ask.${action}`)} ${fresh ? tNow('master.askEveryTime') : tNow('master.askNote', { n: 5 })}`,
   initial: { password: '' },
@@ -202,7 +202,7 @@ export function MasterCard() {
   );
 }
 
-// 3.8.1: after how long without use Orb locks itself (config.ui.lockMinutes; 15 by default).
+// after how long without use Orb locks itself (config.ui.lockMinutes; 15 by default).
 function LockMinutes() {
   const t = useT();
   const config = useStore((s) => s.app?.config);

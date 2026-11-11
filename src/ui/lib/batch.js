@@ -1,4 +1,4 @@
-// 3.8.1 (H4a): many small updates drawn together. What arrives under the same key before the next frame replaces the
+// many small updates drawn together. What arrives under the same key before the next frame replaces the
 // earlier one (only the newest counts); the batch is handed over on the next frame, or after `wait` ms at the latest:
 // a window hidden (minimised, covered, a phone's app in the background) draws no frames, and the batch must not wait
 // for it to be seen again. flush() hands it over at once (main.jsx calls it when the window hides or shows).

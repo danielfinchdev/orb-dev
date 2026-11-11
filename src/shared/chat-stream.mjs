@@ -1,12 +1,12 @@
-// 3.8.3: the assistant's streamed answer as deltas. Up to 3.8.2 every live state of a conversation (chat:state, every
-// 80 ms while it writes) carried the whole partial answer, so the bytes sent grew with the square of its length. Now each
+// the assistant's streamed answer as deltas. Sending the whole partial answer in every live state of a conversation
+// (chat:state, every 80 ms while it writes) would make the bytes sent grow with the square of its length, so each
 // receiver that understands deltas gets only what was added since the state it last got:
 //
 //   { ...state, partial }            the whole text (the first state of a turn, or a text that does not continue the last)
 //   { ...state, append, base }       the text from position `base` on (what the receiver holds is kept up to `base`)
 //
 // The PC's window always takes deltas (engine.mjs). A linked phone or browser asks for them when it opens its event stream
-// (remote.mjs, `d: 1` in its sealed header); one that does not (3.8.1–3.8.2) gets the whole text, as before.
+// (remote.mjs, `d: 1` in its sealed header); one that does not gets the whole text.
 // Shared by the engine and the interface, so it imports nothing.
 
 // One per receiver: → (state) => the state to send it.

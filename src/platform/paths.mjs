@@ -8,7 +8,7 @@ import { CORE_DIR, CATEGORIES } from '../shared/layout.mjs';
 
 export const CONFIG_FILE = 'orb.json';
 
-// Layout of the workspace (3.8): always <chosen folder>\Orb, the same for every user (C:\Orb by default):
+// Layout of the workspace: always <chosen folder>\Orb, the same for every user (C:\Orb by default):
 //   core\                       Orb's own folder, hidden: everything Orb needs to work
 //     orb.json                  settings
 //     datos\                    database, secret, identity; ejecuciones\ task runs; copias\ isolated copies and undo points
@@ -26,10 +26,10 @@ export { CORE_DIR, CATEGORIES, PLATFORMS, MULTI, SHARED_DIR, DEFAULT_CATEGORY, D
 export const INTERNAL_DIR = CORE_DIR;
 export const LOGS_DIR = 'bitacora';
 export const MCP_DIR = 'mcp';
-export const SKILLS_DIR = 'skills'; // 3.8.1: every skill (src/domain/extensions/extensions.mjs)
-export const STAGING_DIR = 'preparacion'; // 3.8.1: what an agent makes before the user turns it on (the only part of core agents write)
-export const OLD_LOGS_DIR = 'bitacoras'; // 2.3.0 and older
-// 3.5–3.7: the bots' memories. 3.8: no bots; an old bots\ folder is never taken for a project (the 3.8 migration archives it).
+export const SKILLS_DIR = 'skills'; // every skill (src/domain/extensions/extensions.mjs)
+export const STAGING_DIR = 'preparacion'; // what an agent makes before the user turns it on (the only part of core agents write)
+export const OLD_LOGS_DIR = 'bitacoras'; // layout of Orb 2.3.0 and older
+// the bots' memories of Orb 3.5–3.7. There are no bots now; an old bots\ folder is never taken for a project (the 3.8 migration archives it).
 export const BOTS_DIR = 'bots';
 // Where Orb 3.7 kept what now lives in core (relative to the workspace).
 export const LEGACY = Object.freeze({ internal: '.orb', config: CONFIG_FILE, logs: 'bitacora', mcp: 'mcp-servers', adb: ['android', 'adb-tools'] });
@@ -50,7 +50,7 @@ export function paths(home) {
   const core = path.join(home, CORE_DIR);
   const data = path.join(core, 'datos');
   // A log folder or Android tools left at the top (kept by the user, or not decided about yet) are used there.
-  // 3.8.1: the logs at the top are the general log only when the user kept them there, or before deciding while core has
+  // the logs at the top are the general log only when the user kept them there, or before deciding while core has
   // no general log of its own (a 3.7 workspace). Once they moved into core (or a workspace that always had them there),
   // a bitacora that shows up at the top again (a tool outside Orb writing to the old path) never takes core's place
   // («Ordenar carpetas» offers to merge it into core).

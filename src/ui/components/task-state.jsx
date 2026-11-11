@@ -1,4 +1,4 @@
-// 3.8.3: why a task waits, and the card of a task Orb held for review, the same wherever a task shows (the chat's task
+// why a task waits, and the card of a task Orb held for review, the same wherever a task shows (the chat's task
 // lines, the task list and its detail; PC and phone). The engine says why (tasks.list › waiting / held,
 // src/domain/tasks/board.mjs › waitReason / heldInfo):
 //   waiting.kind  paused  the whole queue is paused: «En pausa» with «Reanudar» at hand
@@ -28,7 +28,7 @@ export function waitText(t, task) {
   return t('orbchats.taskQueued');
 }
 
-// 3.8.3: pausing or resuming the queue shows at once when the engine says yes (it took ~270 ms: the refresh after the
+// pausing or resuming the queue shows at once when the engine says yes (it took ~270 ms: the refresh after the
 // engine's notice); the next refresh brings the same value.
 export async function setQueuePaused(paused, t) {
   const ok = await act(call(paused ? 'control.pause' : 'control.resume'), t(paused ? 'chat.paused' : 'chat.resumed'));

@@ -1,4 +1,4 @@
-// 3.8.2 (T3 3.11): «Señalar elemento» in the little window of the agents' browser. The user clicks on the page's
+// «Señalar elemento» in the little window of the agents' browser. The user clicks on the page's
 // picture; the engine finds what is there (in Orb's isolated world of the page, never the page's own scripts' world)
 // and takes a small picture of it, which go to that chat's message box (the user decides whether to send them).
 // What the page says is data: a short CSS selector, at most 300 characters of its text.

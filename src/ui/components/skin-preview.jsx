@@ -1,4 +1,4 @@
-// 2.7: the thumbnail of each visual theme in Ajustes › Apariencia › Tema. A tiny window drawn with CSS and inline SVG
+// the thumbnail of each visual theme in Ajustes › Apariencia › Tema. A tiny window drawn with CSS and inline SVG
 // (skin-preview.css): the sidebar with the theme's wordmark, the «new chat» button and three menu lines, the top bar
 // with the window's buttons, the assistant's message, the user's bubble and the message box, over the theme's own
 // backdrop and decorations (the stickers and the sunset of vaporwave, the chevrons and the invaders of retro, the sweets

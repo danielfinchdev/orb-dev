@@ -1,10 +1,10 @@
-// New versions (D9), as Orb 3.8.0 did: Orb looks at the latest release when it opens (after 15 s)
+// New versions, as Orb 3.8.0 did: Orb looks at the latest release when it opens (after 15 s)
 // and every 4 hours; the user decides with «Descargar e instalar» (downloaded in the background, with its progress), and
 // «Reiniciar e instalar» (or closing Orb) runs the installer. Before a new version touches the data the engine makes a
 // backup (backup.now, kind preupdate), started once when the download ends; a failure is only logged.
-// 3.8.2 (the 3.8.1 → 3.8.2 update of 2026-11-09 «did nothing»): that backup never holds the update back. «Reiniciar e
-// instalar» shows its progress on the card (state 'installing') and waits for it at most INSTALL_WAIT, once (it used to
-// wait for the one under way for 3 minutes and then start a second wait of 3 more, the card unchanged); then the
+// That backup never holds the update back. «Reiniciar e
+// instalar» shows its progress on the card (state 'installing') and waits for it at most INSTALL_WAIT, once (not a
+// second wait on top of the one under way, with the card unchanged); then the
 // installer runs, or the card says it could not and offers to download it again.
 //   - tauri-plugin-updater: latest.json of the GitHub release (plugins.updater.endpoints), the installer signed with
 //     Orb's updater key (minisign, plugins.updater.pubkey) and checked before it runs, the version it was signed for
@@ -31,7 +31,7 @@ const BACKUP_WAIT: Duration = Duration::from_secs(10 * 60);
 /// «Reiniciar e instalar» waits at most this long for that backup, with its progress on the card; then it installs
 /// without it (logged: the daily copy is there).
 const INSTALL_WAIT: Duration = Duration::from_secs(45);
-/// Closing Orb waits at most this long for it (review D10 B14: no invisible Orb for minutes; reopened meanwhile,
+/// Closing Orb waits at most this long for it (no invisible Orb for minutes; reopened meanwhile,
 /// «nothing happens»), and then installs as well.
 const EXIT_WAIT: Duration = Duration::from_secs(20);
 
@@ -56,7 +56,7 @@ pub struct Updates {
   /// The release found by the last check, and its installer once downloaded.
   found: Mutex<Option<Update>>,
   bytes: Mutex<Option<Vec<u8>>>,
-  /// The pre-update backup: one at a time and once per version (review D9 M6); everyone waits on this one.
+  /// The pre-update backup: one at a time and once per version; everyone waits on this one.
   backup: tokio::sync::watch::Sender<Backup>,
   installing: std::sync::atomic::AtomicBool,
 }
@@ -206,7 +206,7 @@ pub async fn download(app: &AppHandle) -> State {
     return st;
   }
   let Some(update) = u.found.lock().unwrap().clone() else { return st };
-  // Only from Orb's own releases (review D9 B1): the signature already guarantees what is installed; this keeps the
+  // Only from Orb's own releases: the signature already guarantees what is installed; this keeps the
   // download itself on GitHub over https (a local test feed: its own address).
   if feed().is_none() && !official_download(update.download_url.as_str()) {
     return set(app, |s| {

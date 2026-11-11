@@ -1,4 +1,4 @@
-// 3.2: every notification passes here. One on screen at a time, the same one never twice in a row, and all of them kept
+// every notification passes here. One on screen at a time, the same one never twice in a row, and all of them kept
 // for the bell of the top bar (components/notification-center.jsx), with a dot while there are new ones.
 import { toast } from 'sonner';
 import { getState, setState } from './store.js';

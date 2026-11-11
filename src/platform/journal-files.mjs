@@ -8,7 +8,7 @@ import { paths, isReservedName, isCategory } from './paths.mjs';
 // A log's entries without its header (the title line and the paragraph under it).
 export const logBody = (text) => String(text ?? '').replace(/\r\n/g, '\n').replace(/^#[^\n]*\n\n(?:[^\n]+\n)*/, '').trim();
 
-// 3.8.2: the copies «name (2).md» earlier builds left in proyectos (a project registered as «name (2)» by 3.7 got a log
+// the copies «name (2).md» earlier builds left in proyectos (a project registered as «name (2)» by 3.7 got a log
 // of its own, then took its name back while «name.md» was there): one that holds nothing but its header goes (the log
 // of a project with that name is made again when it is needed). One with entries is never touched. → how many went.
 export function tidyProjectLogs(dir) {

@@ -1,5 +1,5 @@
-// 3.8: the master password in the engine's API (this PC's window only: src/domain/security/permissions.mjs). It is made at the welcome
-// (or at the first start of 3.8), unlocks the window's guarded actions for 5 minutes (a token in memory, dropped when the
+// the master password in the engine's API (this PC's window only: src/domain/security/permissions.mjs). It is made at the welcome
+// (or at the first start after upgrading from 3.7), unlocks the window's guarded actions for 5 minutes (a token in memory, dropped when the
 // window locks or closes) and can be changed. Forgotten, a new one needs the backups' recovery code (a new data key, every
 // phone unlinked); without the code the only way is «Borrar secretos y empezar de cero». The crypto lives in
 // src/domain/security/master.mjs.
@@ -63,7 +63,7 @@ export function migrateSecrets(board, master = ctx.master, { log = () => {}, emi
   if (sealed) { const c = saveConfig({ mcpServers: sealed }); emit('config:changed', c); moved.push('mcpServers'); }
   else if (bindMissing(master, ctx.config.mcpServers ?? [])) moved.push('mcpBindings');
   if (moved.length) log(`secretos: ${moved.join(', ')} cifrados con la clave de datos`);
-  // And they leave the archive of 3.7 and the copies of its database now (not 30 days later).
+  // Plaintext secrets also leave the archive of 3.7 and the copies of its database at once (not 30 days later).
   try {
     const n = scrubVaultedSecrets(ctx.home, { inVault: (id) => { try { return master.get(id) != null; } catch { return false; } } });
     if (n) log(`secretos: quitados en claro de ${n} archivo(s) de 3.7`);
@@ -76,14 +76,14 @@ export function checkUnlock(method, params) {
   if (!needsUnlock(method, params, ctx.config)) return;
   const m = ctx.master;
   if (!m?.hasPassword()) throw userError(m?.state().lost ? 'msg.master.lost' : 'msg.master.createFirst', {}, { reason: 'unlock' });
-  // 3.8.1: a token for one action (FRESH_UNLOCK) opens it once: it is used up here.
+  // a token for one action (FRESH_UNLOCK) opens it once: it is used up here.
   const purpose = freshPurpose(method, params);
   if (!m.checkToken(params?.unlock, purpose, { consume: Boolean(purpose) })) throw userError('msg.master.needUnlock', {}, { reason: 'unlock' });
 }
 
-// onLock(why): 3.8.2: Orb locked (or its password changed): what the master password gave the chats goes
+// onLock(why): Orb locked (or its password changed): what the master password gave the chats goes
 // (src/engine/security/grants.mjs › revokeAll).
-// onScreen(locked): 3.8.2 (security review): Orb's lock screen goes up (true) or down (false); also once at the start.
+// onScreen(locked): Orb's lock screen goes up (true) or down (false); also once at the start.
 export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => {}, onLock = () => {}, onScreen = () => {} }) {
   const locked = (why) => { try { const r = onLock(why); if (r?.catch) r.catch((error) => log(`acceso: ${error.message}`)); } catch (error) { log(`acceso: ${error.message}`); } };
   const master = () => ctx.master ?? (ctx.master = openMaster(ctx.home, ctx.keys?.inVault ? IN_VAULT : ctx.secret ?? (() => { try { return fs.readFileSync(ctx.paths.key); } catch { return null; } })(), { log }));
@@ -97,7 +97,7 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
     try { n = board.one('SELECT COUNT(*) AS n FROM devices').n; if (remoteRef.current) remoteRef.current.revokeAll(); else board.run('DELETE FROM devices'); } catch (error) { log(`${why}: móviles: ${error.message}`); }
     return n;
   };
-  // 3.8.1: Orb's own lock screen (decision 20 of the owner): after the minutes of Ajustes › Datos without use, when
+  // Orb's own lock screen (the owner's decision): after the minutes of Ajustes › Datos without use, when
   // Windows locks or the PC sleeps (Rust's power.rs calls master.lock), or by hand, the window shows only the password.
   // The agents keep working (the vault stays open: only the window's tokens go). Kept in memory: a reload of the window
   // finds it locked; a new start of Orb opens as usual (this PC's own key, as at every start).
@@ -110,10 +110,10 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
     'master.state': () => {
       const m = master();
       let recovery = false; try { recovery = hasRecovery(ctx.home, machineSecret()); } catch { recovery = false; }
-      // upgraded: the data came from Orb 3.7 (the first start of 3.8 asks for the password with its own words).
+      // upgraded: the data came from Orb 3.7 (the first start after upgrading asks for the password with its own words).
       return { ...m.state(), canForget: m.unlocked() && recovery, minLength: MIN_LENGTH, unlockMinutes: UNLOCK_MS / 60_000, screenLocked: screen && m.hasPassword(), upgraded: Boolean(board.setting(DONE_AT)) };
     },
-    // The first one (the welcome, or the first start of 3.8): no current one to ask for. → a token (the window is unlocked).
+    // The first one (the welcome, or the first start after upgrading from 3.7): no current one to ask for. → a token (the window is unlocked).
     'master.create': async ({ password: p }) => {
       const m = master(); const wasLocked = !m.unlocked();
       try { await m.create(password(p)); } catch (error) { throw asUser(error); }

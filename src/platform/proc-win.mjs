@@ -1,4 +1,4 @@
-// 3.8: how the connector launcher (launch.mjs) starts a connector on Windows with its arguments intact. A connector is
+// how the connector launcher (launch.mjs) starts a connector on Windows with its arguments intact. A connector is
 // usually an npm shim (npx.cmd, a global package's foo.cmd) or an .exe (uvx). A .cmd only runs through cmd.exe, which
 // rewrites its arguments (%VAR% expands even inside quotes, a trailing \ eats the closing quote, & | ( ) split the line),
 // so a shim is not run at all: its real script runs with its node, as the shim itself would. Only an unknown batch file

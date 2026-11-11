@@ -1,9 +1,9 @@
-// 3.6 (messaging lists): the marks on the chats of the list (the conversations with Orbe and the direct ones with an
+// Messaging lists: the marks on the chats of the list (the conversations with Orbe and the direct ones with an
 // agent) and what the list shows of each chat: its last message, how many are unread (tables inbox_items and
 // inbox_sections). No engine imports: plain data.
 import { oneLine } from '../../shared/text.mjs';
 
-// 3.6: session = a direct conversation with an agent: it can be pinned and muted like the others. 3.8: the list of the
+// session = a direct conversation with an agent: it can be pinned and muted like the others. The list of the
 // bots is gone; the rows of a 3.7 database with kind «bot» or «group» (zone «bots») are left out until the 3.8
 // migration removes them.
 export const KINDS = ['conversation', 'session'];
@@ -11,7 +11,7 @@ export const ZONES = ['orb'];
 export const zoneOf = (kind) => (KINDS.includes(kind) ? 'orb' : null);
 export const keyOf = (kind, id) => `${kind}:${id}`;
 const has = (board, table) => { try { return Boolean(board.one("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", table)); } catch { return false; } };
-// 3.8: one owner. The tables' person_id (part of their key since 3.6) holds this fixed key; a 3.7 database's rows (a
+// one owner. The tables' person_id (part of their key since 3.6) holds this fixed key; a 3.7 database's rows (a
 // person's id) are rewritten to it by the 3.8 migration.
 export const ME = 'owner';
 
@@ -44,7 +44,7 @@ export function setMark(board, kind, id, fields) {
   return mark(board, kind, id);
 }
 
-// ---- snooze (3.8.2): a chat hidden from the list until a time. The scheduler's tick wakes the ones that are due:
+// ---- snooze: a chat hidden from the list until a time. The scheduler's tick wakes the ones that are due:
 // their mark is cleared and they come back where their last activity puts them. Returns the woken items.
 export const SNOOZE_MAX_MS = 366 * 24 * 3600 * 1000;
 export function snoozeUntil(value, now = Date.now()) {
@@ -76,7 +76,7 @@ export function unread(board, conversation, lastRead) {
   const from = Math.max(Number(lastRead) || 0, since(board));
   return board.one("SELECT COUNT(*) AS n FROM chat WHERE conversation_id = ? AND id > ? AND role NOT IN ('notice', 'usuario')", Number(conversation), from)?.n ?? 0;
 }
-// 3.8.1: the same for many conversations in one query: [[conversation, lastRead]] → Map conversation → unread.
+// the same for many conversations in one query: [[conversation, lastRead]] → Map conversation → unread.
 export function unreadMany(board, list) {
   const start = since(board);
   const pairs = JSON.stringify(list.filter(([c]) => c != null).map(([c, lastRead]) => [Number(c), Math.max(Number(lastRead) || 0, start)]));
@@ -148,7 +148,7 @@ export function describeLine(r, { userName = '' } = {}) {
   else from = { type: 'system' };
   return { id: r.id, text: plain(r.body), at: r.at, from, kind: lineKind(r, meta) };
 }
-// The last line of each of these conversations (3.8.1: in one query; it was one per conversation): Map id → row.
+// The last line of each of these conversations (in one query): Map id → row.
 export function lastLines(board, conversations) {
   const out = new Map();
   const ids = JSON.stringify(conversations.map(Number).filter(Number.isFinite));

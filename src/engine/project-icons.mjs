@@ -1,4 +1,4 @@
-// 3.2: each project's icon for the sidebar and the conversations: one the user chose, else the project's own (its favicon
+// each project's icon for the sidebar and the conversations: one the user chose, else the project's own (its favicon
 // or app icon, found in its folder), else none (the window draws a badge with its initials in a colour of its own).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -35,7 +35,7 @@ function readIcon(file) {
   return dataUrl;
 }
 
-// 3.2.1: a renamed project keeps the icon chosen for it.
+// a renamed project keeps the icon chosen for it.
 export function renameProjectIcon(from, to) {
   const next = ownFiles(to);
   ownFiles(from).forEach((f, i) => { try { if (f !== next[i] && fs.existsSync(f) && !fs.existsSync(next[i])) fs.renameSync(f, next[i]); } catch { /* keeps the old one */ } });

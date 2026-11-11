@@ -20,7 +20,7 @@ export default {
   'nav.folders': 'Proyectos',
   'nav.loose': 'Sin proyecto',
   'nav.noProject': 'Sin proyecto',
-  // 3.2: pie del menú
+  // pie del menú
   'nav.memories': 'Memorias',
   'nav.memoriesHint': 'Bitácoras y actividad: lo que Orb recuerda.',
   'nav.feedback': 'Enviar comentarios',

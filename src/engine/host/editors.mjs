@@ -1,4 +1,4 @@
-// 3.2, God mode: open the project in Cursor or VS Code (when installed; the File Explorer is always there), and run one
+// open the project in Cursor or VS Code (when installed; the File Explorer is always there), and run one
 // of the project's actions in a terminal window of its own (the user sees its output and can stop it).
 // Programs are started directly, never through cmd.exe, so & ^ % in a folder name are never re-read.
 import fs from 'node:fs';

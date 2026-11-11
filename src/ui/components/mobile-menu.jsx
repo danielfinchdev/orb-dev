@@ -1,4 +1,4 @@
-// 3.6, the phone (browser and Android app): the menu ☰ at the top left of every screen opens a drawer from the left edge
+// the phone (browser and Android app): the menu ☰ at the top left of every screen opens a drawer from the left edge
 // with the other screens and the phone's own settings. The bottom tabs are the main screens. The PC keeps its sidebar.
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { Menu, X, CalendarClock, PenTool, BookOpen, GraduationCap, Smartphone, Moon } from 'lucide-react';
@@ -16,7 +16,7 @@ const Group = ({ label, children, testid }) => (
   </section>
 );
 
-// What used to be «Más»: the screens that are not tabs, then this phone's settings.
+// «Más»: the screens that are not tabs, then this phone's settings.
 export function MoreContent() {
   const t = useT();
   const [dark, setDark] = useState(isDark);

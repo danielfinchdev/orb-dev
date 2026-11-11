@@ -1,4 +1,4 @@
-// 3.2: the title of a new conversation, written by Orb. The quick one from the first message (core/titles.mjs) shows at
+// the title of a new conversation, written by Orb. The quick one from the first message (core/titles.mjs) shows at
 // once; then the lightest model of the conversation's own agent (its account, read-only, no tools) writes a concise one in
 // a few seconds. If it cannot, the quick one stays.
 import { ctx } from '../platform/context.mjs';

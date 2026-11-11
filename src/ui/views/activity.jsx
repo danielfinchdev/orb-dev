@@ -11,7 +11,7 @@ import { fmtTime } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { activityLabel, activityDetail } from '@/lib/activity.js';
 
-// 3.2: bare: inside «Memorias»: the search and copy go above the list instead of in a header of its own.
+// bare: inside «Memorias»: the search and copy go above the list instead of in a header of its own.
 export function ActivityView({ bare = false }) {
   const t = useT();
   const locale = useLocale();
@@ -33,7 +33,7 @@ export function ActivityView({ bare = false }) {
             <div key={r.id} onClick={() => r.task_id && go({ view: 'tasks', id: r.task_id })} className={`grid grid-cols-[120px_110px_1fr] gap-3 border-b px-4 py-2.5 text-[13px] last:border-b-0 ${r.task_id ? 'hover:bg-accent/50 cursor-pointer' : ''}`}>
               <span className="text-muted-foreground">{fmtTime(r.at)}</span>
               <span className="truncate">{AGENT[r.actor] ?? r.actor}</span>
-              {/* 3.2.1: each event in words; the raw one on hover and in «Copiar». */}
+              {/* each event in words; the raw one on hover and in «Copiar». */}
               <span className="min-w-0" title={`${r.kind}${r.detail ? ` ${r.detail}` : ''}`}><span className="font-medium">{activityLabel(t, r.kind)}</span>{r.task_id ? <span className="text-muted-foreground"> · #{r.task_id} {r.title ?? ''}</span> : null}{activityDetail(t, r, locale, AGENT) ? <span className="text-muted-foreground block break-words">{activityDetail(t, r, locale, AGENT)}</span> : null}</span>
             </div>
           )) : <Empty icon={History} title={t('activity.empty')} />}

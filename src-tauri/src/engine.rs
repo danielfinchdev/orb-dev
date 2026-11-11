@@ -159,10 +159,10 @@ impl Engine {
       .env("ORB_NODE", &self.cfg.node)
       .env("ORB_MCP_SCRIPT", self.cfg.src.join("mcp").join("server.mjs"))
       .env("ORB_RENDERER", self.cfg.src.join("renderer"))
-      // ORB_DEV_CONTROL (3.1): only a build from the code started with ORB_DEV_CONTROL=1, whatever the environment says.
+      // ORB_DEV_CONTROL: only a build from the code started with ORB_DEV_CONTROL=1, whatever the environment says.
       .env("ORB_DEV_CONTROL", if self.cfg.dev_control { "1" } else { "0" })
       .current_dir(&self.cfg.src);
-    // 3.8.1: the vault's channel for this engine only (vault_host.rs): without it the engine does not start.
+    // The vault's channel for this engine only (vault_host.rs): without it the engine does not start.
     let (vault_name, serve_vault) = crate::vault_host::channel()?;
     cmd.env("ORB_VAULT_PIPE", &vault_name);
     #[cfg(windows)]
@@ -258,7 +258,7 @@ impl Engine {
     // hostSecret: this PC's secret is opened by the vault in this app (orb-vault › machine.rs, DPAPI); the engine asks it
     // and gets only the keys made from it.
     // The agents' browser lives in the engine, with this app's hidden pages (browser 'host': browser.rs).
-    // screenLocked (review final B1): an engine that restarts while Orb's lock screen is up (a crash) comes back locked.
+    // screenLocked: an engine that restarts while Orb's lock screen is up (a crash) comes back locked.
     let start = json!({ "type": "start", "screenLocked": self.screen_locked(), "home": self.home(), "version": self.cfg.version, "secret": null, "hostSecret": true, "newSecret": new_secret, "browser": "host", "userData": self.cfg.user_data });
     if !self.send(&start) {
       let e = self.t_name("sys.main.engineOff");
@@ -403,7 +403,7 @@ impl Engine {
         });
       }
       Incoming::Event { event, payload } => {
-        // 3.8.1: Orb's own lock screen (idle, or Windows locked): notices stop showing the agents' text.
+        // Orb's own lock screen (idle, or Windows locked): notices stop showing the agents' text.
         if let Some(locked) = protocol::screen_lock_of(&event, &payload) {
           self.screen_locked.store(locked, Ordering::SeqCst);
         }

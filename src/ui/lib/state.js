@@ -2,7 +2,7 @@
 // store.js (the actions) so the translations (i18n.js) can read the language without importing the actions back.
 import { useRef, useSyncExternalStore } from 'react';
 
-// chats: 3.8.3, what each conversation with the assistant is doing now (answering, its streamed text, its steps), kept
+// chats: what each conversation with the assistant is doing now (answering, its streamed text, its steps), kept
 // apart from `app` so a streamed piece redraws only what shows it; answers: the line each one wrote last (by id).
 let state = { version: 0, ready: false, info: null, app: null, chats: [], answers: {}, sessions: [], projects: [], tasks: [], conversations: [], route: { view: 'chat' }, settings: null, testToday: null };
 const listeners = new Set();
@@ -10,7 +10,7 @@ const emit = () => { for (const fn of listeners) fn(); };
 export const getState = () => state;
 export function setState(patch) { state = { ...state, ...(typeof patch === 'function' ? patch(state) : patch) }; emit(); }
 const subscribe = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
-// 3.0: a component draws again only when what it selects changes (before, every change of the store redrew every
+// a component draws again only when what it selects changes (before, every change of the store redrew every
 // component). A selector that builds a new object or array each time is compared one level deep, so it stays stable.
 const same = (a, b) => {
   if (Object.is(a, b)) return true;

@@ -32,7 +32,7 @@ export function NavItem({ icon: Icon, iconEl, label, active, onClick, children, 
   );
 }
 
-// 2.6: the sidebar's width, dragged from its edge (a double click goes back to the usual one), remembered in this window.
+// the sidebar's width, dragged from its edge (a double click goes back to the usual one), remembered in this window.
 const SIDEBAR_DEFAULT = 256; const SIDEBAR_MIN = 216; const SIDEBAR_MAX = 440; const WIDTH_KEY = 'orb.anchoMenu';
 function useSidebarWidth() {
   const [width, setRaw] = useState(() => { try { const n = Number(localStorage.getItem(WIDTH_KEY)); return n >= SIDEBAR_MIN && n <= SIDEBAR_MAX ? n : SIDEBAR_DEFAULT; } catch { return SIDEBAR_DEFAULT; } });
@@ -58,25 +58,25 @@ function useSidebarWidth() {
   return { width, setWidth, startResize };
 }
 
-// What is unfolded (3.2: the foot of the sidebar), remembered in this window.
+// What is unfolded (the foot of the sidebar), remembered in this window.
 function useRemembered(key, initial) {
   const [open, setOpen] = useState(() => { try { return { ...initial, ...JSON.parse(localStorage.getItem(key) || '{}') }; } catch { return initial; } });
   const set = (name, value) => setOpen((o) => { const next = { ...o, [name]: value }; try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* storage unavailable */ } return next; });
   return [open, set];
 }
 
-// 3.2: the foot of the sidebar. Folded (by default) only the icons, each with its bubble, and on the right the bug to send
+// the foot of the sidebar. Folded (by default) only the icons, each with its bubble, and on the right the bug to send
 // feedback with Orb's version; unfolded, the list with names. The little arrow on the line above unfolds and folds it.
 function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
   const t = useT();
   const memories = is('logs') || is('activity');
-  // 3.6: the same slots and icons on the PC and in a linked browser (Ajustes, Agentes, Memorias, Tutoriales); what a
+  // the same slots and icons on the PC and in a linked browser (Ajustes, Agentes, Memorias, Tutoriales); what a
   // browser does not have is left out (Agentes, the bug), never swapped for other icons. Its gear opens this device.
   const items = [
     { icon: Settings, label: t('nav.settings'), active: settingsOpen || is('phone'), onClick: () => openSettings(), testid: 'nav-settings' },
     ...(bridge.mobile ? [] : [{ icon: Bot, label: t('nav.agents'), active: is('agents'), onClick: () => go('agents'), testid: 'nav-agents' }]),
     { icon: BookOpen, label: t('nav.memories'), hint: t('nav.memoriesHint'), active: memories, onClick: () => go('logs'), testid: 'nav-memories' },
-    // 2.6: how the app works, the FAQ and the button that replays the guided tour.
+    // how the app works, the FAQ and the button that replays the guided tour.
     { icon: GraduationCap, label: t('nav.tutorials'), active: is('tutorials'), onClick: () => go('tutorials'), testid: 'nav-tutorials' }
   ];
   const toggle = open ? t('nav.footerFold') : t('nav.footerUnfold');
@@ -91,7 +91,7 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
       </Tip>
       {open ? <div className="mb-1 flex flex-col gap-0.5">{items.map((i) => row(i) ?? <NavItem key={i.testid} icon={i.icon} label={i.label} active={i.active} onClick={i.onClick} testid={i.testid} />)}</div> : null}
       <div className="flex items-center gap-0.5">
-        {/* 3.8.2: the first icon sits at the window's left edge: its bubble starts at the icon instead of being cut there. */}
+        {/* the first icon sits at the window's left edge: its bubble starts at the icon instead of being cut there. */}
         {open ? null : items.map((i, n) => row(i) ?? (
           <BubbleTip key={i.testid} title={i.label} text={i.hint} side="top" align={n === 0 ? 'start' : 'center'}>
             <button type="button" onClick={i.onClick} aria-label={i.label} data-testid={i.testid} className={cn('side-foot-icon', i.active && 'is-active')}><i.icon className="size-4" /></button>
@@ -111,7 +111,7 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
   );
 }
 
-// 3.8.2: the background music (Windows only, lib/music.js): play / pause, and the next track while it plays.
+// the background music (Windows only, lib/music.js): play / pause, and the next track while it plays.
 function MusicButtons() {
   const t = useT();
   const [s, setS] = useState(musicState);
@@ -140,39 +140,39 @@ export function Sidebar({ mood }) {
   const route = useStore((s) => s.route);
   const conversations = useStore((s) => s.conversations) ?? [];
   const settingsOpen = useStore((s) => Boolean(s.settings));
-  // 3.8.1 (H4e): while an agent works on a task the robot floats (its face stays as the conversations say).
+  // while an agent works on a task the robot floats (its face stays as the conversations say).
   const working = useStore((s) => s.tasks.some((x) => x.status === 'running'));
   const name = app.config.assistantName;
   const [sections, setSection] = useRemembered('orb.secciones', { footer: false });
   const { width, setWidth, startResize } = useSidebarWidth();
   const is = (view) => route.view === view;
   return (
-    // 3.6 (M3): the chat list of a messaging app, with the places' labels under the search: at least 340 px.
+    // the chat list of a messaging app, with the places' labels under the search: at least 340 px.
     <aside className="bg-sidebar relative flex h-full shrink-0 flex-col border-r" style={{ width: Math.max(width, 340) }}>
       {bridge.mobile ? null : <div className="sidebar-resize" role="separator" aria-orientation="vertical" aria-label={t('comp.sidebar.resize')} onPointerDown={startResize} onDoubleClick={() => setWidth(SIDEBAR_DEFAULT)} data-testid="sidebar-resize" />}
       <div className="theme-band side-band app-titlebar flex h-14 shrink-0 items-center gap-2 border-b px-4">
-        {/* 3.0: the robot goes back to the conversation in progress (3.2: the last one opened). */}
+        {/* the robot goes back to the conversation in progress (the last one opened). */}
         <Tip label={t('nav.backToChat', { name })} side="bottom" align="start">
           <button type="button" className="no-drag relative shrink-0 cursor-pointer rounded-full" onClick={() => go(lastChat(route, conversations))} aria-label={t('nav.backToChat', { name })} data-testid="sidebar-home">
             <Robot size={34} mood={mood} title={name} live active={working} />
             {chatBusy ? <span className="bg-primary absolute right-0 bottom-0 size-2 animate-pulse rounded-full" /> : null}
           </button>
         </Tip>
-        {/* 2.6: with the default name, the drawn wordmark (Orb·E); a name of one's own, as it is written. */}
+        {/* with the default name, the drawn wordmark (Orb·E); a name of one's own, as it is written. */}
         <div className="flex min-w-0 flex-1 items-center">{name === PRODUCT.assistant ? <Wordmark /> : <div className="truncate text-[15px] font-medium">{name}</div>}</div>
         <div className="flex shrink-0 items-center gap-0.5">
           <ThemeToggle />
           <SidebarToggle />
         </div>
       </div>
-      {/* 3.6 (M3): the chat list of a messaging app (views/orb/inbox.jsx). */}
+      {/* the chat list of a messaging app (views/orb/inbox.jsx). */}
       <div className="flex min-h-0 flex-1 flex-col pt-2"><OrbInbox /></div>
       <SidebarFooter version={app.version} is={is} settingsOpen={settingsOpen} open={sections.footer === true} onOpen={(v) => setSection('footer', v)} />
     </aside>
   );
 }
 
-// 3.2: the robot of the sidebar goes back to the conversation on screen, or the latest one still open (or a new one).
+// the robot of the sidebar goes back to the conversation on screen, or the latest one still open (or a new one).
 function lastChat(route, conversations) {
   if (route.view === 'chat') return route;
   const open = conversations.find((c) => c.status === 'open');

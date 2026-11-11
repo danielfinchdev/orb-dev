@@ -35,7 +35,7 @@ useHome(home);
 const { Board, AGENTS, STATUSES, assistantName, userName, ofUser } = await import('../domain/tasks/board.mjs');
 const { readLog, writeLog, logFiles, findLog, ownLogFiles, cutWords } = await import('../domain/journal/journal.mjs');
 const board = new Board(undefined, { noKey: true }); // the MCP never holds the approval secret
-// 3.8: never on data of 3.7 the 3.8 migration could not update or finish (other users' rows and keys; the engine does not
+// never on data of 3.7 the 3.8 migration could not update or finish (other users' rows and keys; the engine does not
 // run on them either).
 { const { unfinished } = await import('../domain/data/legacy/migrate-38.mjs'); if (unfinished(board.db)) { process.stderr.write(`${tr('data.migration38.blocked')}
 `); process.exit(1); } }
@@ -52,7 +52,7 @@ function identity() {
 }
 const { me: ME, task: SIGNED_TASK, session: SIGNED_SESSION, conversation: SIGNED_CONV, signed: SIGNED } = identity();
 const BOSS = ME === 'orb';
-// 3.2: the coordinator's conversation: its questions, the tasks it creates and its project belong to that conversation.
+// the coordinator's conversation: its questions, the tasks it creates and its project belong to that conversation.
 const CONV = BOSS ? SIGNED_CONV : null;
 // What this process may act on (src/domain/security/permissions.mjs › ownsTask): the coordinator, its conversation's tasks; a
 // worker, its task and the subtasks it delegated; a direct conversation, the manual task it claimed. Not signed: nothing
@@ -85,7 +85,7 @@ const scopeOf = (id) => board.conversationOfTask(id) ?? null;
 const myScope = () => (BOSS ? CONV : TASK_ID ? scopeOf(TASK_ID) : undefined);
 // A message for one task (a worker naming a sibling, the coordinator naming a worker's task), not about the sender's own.
 const forOneTask = (m) => m.task_id != null && (m.from_task ?? null) !== m.task_id;
-// 3.8: a worker reads what is about its own tasks and, of its conversation, what goes to all or to its agent without
+// a worker reads what is about its own tasks and, of its conversation, what goes to all or to its agent without
 // naming another task; the coordinator, everything of its conversation; a direct conversation, its claimed task's.
 const mayRead = (m) => (m.task_id == null ? BOSS : ownsTask(board, WHO, m.task_id)
   || (BOSS && scopeOf(m.task_id) === myScope())
@@ -107,9 +107,9 @@ function sendMessage(a) {
   if (owner && !['orb', 'usuario', 'all'].includes(a.to) && owner !== a.to) refuse('msg.authz.wrongAgent', { id: task, agent: owner });
   return board.send({ ...a, task_id: task, from: ME, from_task: TASK_ID });
 }
-// 3.8.1: the general log in core (moved there, or a new workspace) or kept at the top by the user (home.mjs › paths).
+// the general log in core (moved there, or a new workspace) or kept at the top by the user (home.mjs › paths).
 const generalInCore = (() => { const rel = path.relative(ctx.paths.core, ctx.paths.generalLog); return Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel); })();
-// 3.8: the logs of the projects its conversation works on, and the general one.
+// the logs of the projects its conversation works on, and the general one.
 function myLog(project) {
   const [name] = findLog(board, project);
   if (name !== 'general' && !convProjects().has(name.toLowerCase())) refuse('msg.authz.notYourLog', { name });
@@ -123,12 +123,12 @@ function listLogs() {
 }
 function boardSummary() {
   const out = board.summary(null, CONV); const projects = convProjects();
-  // Only the tasks it may list. 3.8.3: the counts of the whole PC came beside them unlabelled («3 en cola» with one task
-  // listed: Orbe reported the board did not add up); now both, named, and each listed task says its conversation.
+  // Only the tasks it may list. Showing the counts of the whole PC unlabelled («3 en cola» with one task listed) would
+  // look like the board does not add up, so both are named and each listed task says its conversation.
   out.active = out.active.filter((t) => listsTask(t, projects));
   const here = {}; for (const t of out.active) here[t.status] = (here[t.status] ?? 0) + 1;
   out.counts = { todoElPc: out.counts, enLaLista: here };
-  // 3.8.3 (uso real final): the active tasks it cannot list (other conversations' or projects'): it saw «1 bloqueada» in
+  // the active tasks it cannot list (other conversations' or projects'): it saw «1 bloqueada» in
   // the PC's counts, could not open it and offered to investigate it. Now it is told where they are and who reaches them.
   const ACTIVE = ['queued', 'awaiting_approval', 'running', 'limited', 'blocked', 'failed'];
   const hidden = ACTIVE.reduce((n, k) => n + Math.max(0, (out.counts.todoElPc[k] ?? 0) - (here[k] ?? 0)), 0);
@@ -139,7 +139,7 @@ function boardSummary() {
 const PIPE = WHO.signed ? GRANT?.browser?.pipe : null; const PIPE_TOKEN = GRANT?.browser?.token;
 const QUESTIONS = CONV ? `pending_questions:${CONV}` : 'pending_questions';
 const NAME = assistantName(); const USER = userName();
-// 3.2.1: the author of the assistant's own log entries with the brain of its conversation («Orbe (Claude · claude-opus-5-5)»;
+// the author of the assistant's own log entries with the brain of its conversation («Orbe (Claude · claude-opus-5-5)»;
 // it was «Orbe ()» with the default model).
 const brainAuthor = () => {
   const c = CONV ? board.conversation(CONV) : null;
@@ -147,7 +147,7 @@ const brainAuthor = () => {
   const model = c?.model || ctx.config.orchestrator?.model || '';
   return `${NAME} (${[AGENT_LABELS[agent] ?? agent, model].filter(Boolean).join(' · ')})`;
 };
-// 3.1: only the agents this PC can run (installed, turned on, with an account) are offered; the board refuses the rest.
+// only the agents this PC can run (installed, turned on, with an account) are offered; the board refuses the rest.
 const AVAILABLE = board.availableAgents() ?? AGENTS;
 
 const INSTRUCTIONS = `${NAME} es el tablero común de los agentes ${ofUser()} disponibles en este PC (${AVAILABLE.join(', ') || 'ninguno'}). Tú eres "${ME}".
@@ -191,7 +191,7 @@ function giveFiles({ task_id, files, from_task }) {
   return out;
 }
 
-// 2.7: the coordinator's question with options. It waits in the board (pending_questions) and the assistant puts it in the
+// the coordinator's question with options. It waits in the board (pending_questions) and the assistant puts it in the
 // chat right after its answer of this turn, so the card comes below what it said.
 function askUser(a) {
   const clean = (s, n) => oneLine(String(s ?? ''), n).trim();
@@ -203,7 +203,7 @@ function askUser(a) {
   return `Pregunta mostrada a ${USER}. Termina tu turno ahora (una línea como mucho, sin repetir las opciones): su respuesta llegará como su próximo mensaje.`;
 }
 
-// 3.8.1: what this agent made for core (src/domain/extensions/extensions.mjs). The requests live in the database (agents never write
+// what this agent made for core (src/domain/extensions/extensions.mjs). The requests live in the database (agents never write
 // it): who made each one, so only that agent asks for it to be turned on.
 const myScopeOf = () => ({ agent: ME, task: TASK_ID, conversation: BOSS ? CONV : TASK_ID ? scopeOf(TASK_ID) : null, session: SIGNED_SESSION ?? null });
 const requests = () => { const r = board.settingJson(REQUESTS); return Array.isArray(r) ? r : []; };
@@ -223,10 +223,10 @@ function draft(kind, a) {
     if (ready?.status === 'drafting' && ready.allowed) return draftReply(ready);
     if (ready?.status === 'asking') return `Sigue esperando a que ${USER} lo permita. Termina tu turno; cuando lo permita, vuelve a llamar a orb_create_${kind} con mejorar: true.`;
   }
-  // 3.8.1 (review H1c B2): a few open at once per conversation.
+  // a few open at once per conversation.
   if (openRequestsOf(requests(), myScopeOf().conversation) >= OPEN_PER_CONVERSATION) return `Esta conversación ya tiene ${OPEN_PER_CONVERSATION} skills o servidores a medias o esperando a ${USER}. Termina o descarta alguno antes de crear otro.`;
   const req = draftExtension(ctx.paths.core, { kind, name: a.name, description: a.description, language: a.lenguaje === 'python' ? 'python' : 'node', update, by: myScopeOf(), config: ctx.config, tr });
-  // 3.8.1 (review H1c B3): the engine changes this list too: read and written in one write transaction.
+  // the engine changes this list too: read and written in one write transaction.
   board.transaction(() => board.settingJson(REQUESTS, [...requests(), req].slice(-50)));
   if (req.status === 'asking') {
     const what = tr('ext.card.mcpKeys', { agent: ME, name: req.name });
@@ -249,7 +249,7 @@ function askActivation(a) {
   return `Pedido a ${USER}: le sale una tarjeta para revisarlo y activarlo. Orb ha guardado una copia de lo que hay ahora: lo que cambies en la carpeta a partir de aquí no se activa (si hace falta, vuelve a pedirlo).`;
 }
 
-// 2.7: the advice to use the Pizarra, as a card with its button, below the answer of this turn (like orb_ask).
+// the advice to use the Pizarra, as a card with its button, below the answer of this turn (like orb_ask).
 function suggestBoard(a) {
   const message = oneLine(String(a.message ?? ''), 600).trim();
   if (!message) throw new Error(tr('sys.mcp.boardNeedsText'));
@@ -258,7 +258,7 @@ function suggestBoard(a) {
   return `Consejo mostrado a ${USER} con el botón de la pizarra. Termina tu turno: cuando la tenga, te lo dirá.`;
 }
 
-// 3.8.3: the «Pedido de …» of an entry the assistant writes without one: what the user last asked in this conversation
+// the «Pedido de …» of an entry the assistant writes without one: what the user last asked in this conversation
 // (every such entry said «(coordinación de Orbe)»). Nothing outside a conversation.
 function lastRequest() {
   if (!CONV) return '';
@@ -266,7 +266,7 @@ function lastRequest() {
   return typeof body === 'string' && body.trim() ? cutWords(redactSecrets(body), 300) : '';
 }
 
-// 3.2: a task of the coordinator belongs to its conversation; a conversation without a project yet takes the task's.
+// a task of the coordinator belongs to its conversation; a conversation without a project yet takes the task's.
 function createTask(a) {
   // A dependency hands its result to this task: only one of this conversation's own tasks.
   for (const dep of Array.isArray(a.depends_on) ? a.depends_on : []) seeTask(dep);
@@ -276,7 +276,7 @@ function createTask(a) {
   }
   const task = board.createTask({ ...a, level: a.nivel, conversation_id: CONV }, ME);
   if (CONV && !board.conversation(CONV)?.project) { try { board.setConversationProject(CONV, task.project, ME); } catch { /* the task is made anyway */ } }
-  // 3.2.1: an agent whose accounts are all paused (usage limit) or out of usage: the coordinator learns it at once, so it
+  // an agent whose accounts are all paused (usage limit) or out of usage: the coordinator learns it at once, so it
   // tells the user and offers another agent instead of leaving the task waiting for hours without a word.
   const waits = waitReason(board, task.agent, { account: task.account, model: task.model });
   return waits ? { ...task, waits } : task;
@@ -308,28 +308,28 @@ async function waitTasks({ ids, timeout_s = 600 }) {
   return ids.map((id) => board.task(id)).filter(Boolean).map((t) => ({ id: t.id, status: t.status, result: done.has(t.status) ? oneLine(t.result, 3000) : 'todavía en marcha: vuelve a esperar o sigue con otra cosa' }));
 }
 
-// 2.6: with the models each agent listed itself (models:<agent>), not only the configured aliases.
+// with the models each agent listed itself (models:<agent>), not only the configured aliases.
 const modelsOf = (a) => {
-  // 3.2.1: not the models the account has no usage of now (Cursor's API models after «usage limit»).
+  // not the models the account has no usage of now (Cursor's API models after «usage limit»).
   const blocked = modelLimits(board, a);
   const listed = (board.settingJson(`models:${a}`) ?? []).filter((m) => !blocked[m.id]);
   const named = listed.map((m) => (m.label && m.label !== m.id ? `${m.id} (${m.label})` : m.id));
   return [...new Set([...named, ...(ctx.config.agents[a]?.models ?? []).filter((id) => !listed.some((m) => m.id === id || m.resolved === id))])].slice(0, 24);
 };
-// 3.1: short answers save every agent tokens on each call: a write answers what changed, not the whole task back (whose
+// short answers save every agent tokens on each call: a write answers what changed, not the whole task back (whose
 // description can be thousands of characters), and the detail of a task brings its latest history, trimmed.
 const ack = (t) => t && { ok: true, id: t.id, title: t.title, status: t.status, agent: t.assigned_to ?? t.agent, ...(t.depends_on?.length ? { depends_on: t.depends_on } : {}),
   ...(t.waits ? { espera: `${t.waits}. No empezará hasta entonces: díselo a ${USER} y ofrécele pasarla a otro agente disponible (orb_update_task con agent).` } : {}) };
 function taskBrief(id) {
   const d = board.taskDetail(id);
-  // 3.2.1: with the account that ran it by its name (Codex Go, Codex Pro), not its id.
+  // with the account that ran it by its name (Codex Go, Codex Pro), not its id.
   return { id: d.id, project: d.project, title: d.title, description: d.description, status: d.status, agent: d.assigned_to ?? d.agent, account: d.run_account ? accountLabel(d.run_account) : null, model: d.model, mode: d.mode, readonly: d.readonly,
     branch: d.branch, depends_on: d.depends_on, result: d.result,
     events: d.events.slice(-30).map((e) => ({ ...e, detail: oneLine(e.detail, 300) })),
     messages: d.messages.slice(-20).map((m) => ({ ...m, body: oneLine(m.body, 600) })),
     dependencies: d.dependencies.map((x) => x && { ...x, result: oneLine(x.result, 1500) }) };
 }
-// 3.8.3: the accounts of the agents this PC can run (Orbe was offered gemini, opencode, qwen and copilot accounts that
+// the accounts of the agents this PC can run (Orbe was offered gemini, opencode, qwen and copilot accounts that
 // do not exist here: every agent has a default one in the settings).
 const myAccounts = () => { try { return AVAILABLE.flatMap((a) => usableAccounts(a)); } catch { return []; } };
 const modelsHelp = () => AVAILABLE.map((a) => `${a}: ${modelsOf(a).join(', ') || 'predeterminado'}`).join(' | ');
@@ -369,10 +369,10 @@ const tools = [
   ] : []),
   { name: 'orb_send_message', description: `Envía un mensaje a otro agente o a "all" sobre una de tus tareas (task_id), a "orb" o a "usuario" (${USER}).`,
     inputSchema: { type: 'object', required: ['to', 'body'], properties: { to: str(`${AVAILABLE.join(', ')}, all, orb o usuario`), body: str('Mensaje'), task_id: { type: 'integer' } } },
-    // 3.1: a worker's message carries its own task when it names none, so Orb knows who sent it (and does not hand it
+    // a worker's message carries its own task when it names none, so Orb knows who sent it (and does not hand it
     // back to the same task).
     run: (a) => sendMessage(a) },
-  // 3.8.1: a skill or an MCP server made from the chat (src/domain/extensions/extensions.mjs): a folder in core\preparacion to write,
+  // a skill or an MCP server made from the chat (src/domain/extensions/extensions.mjs): a folder in core\preparacion to write,
   // then the user turns it on from the app. Nothing of core is written otherwise.
   { name: 'orb_create_skill', description: `Prepara una skill nueva de Orb (o una versión mejorada de una que ya existe, con mejorar: true) cuando ${USER} la pida. Devuelve la carpeta donde escribir su SKILL.md (con name y description en el encabezado) y sus archivos de apoyo. Al terminar llama a orb_request_activation: ${USER} la revisa y la activa desde la app.`,
     inputSchema: { type: 'object', required: ['name', 'description'], properties: { name: str('Nombre: minúsculas, números y guiones (p. ej. revisar-facturas)'), description: str('Qué hace y cuándo usarla, en una o dos frases (los agentes la eligen por esto)'), mejorar: { type: 'boolean', description: 'true para preparar una versión nueva de una skill que ya está en Orb (parte de su copia actual)' } } },
@@ -426,7 +426,7 @@ const tools = [
         every: { type: 'string', enum: EVERY, description: 'once (con at_time AAAA-MM-DDTHH:MM), hourly, every_hours (con hours), daily (con at_time) o weekly (con weekdays y at_time)' },
         at_time: str('Hora HH:MM (daily y weekly); con once, fecha y hora AAAA-MM-DDTHH:MM'), same_chat: { type: 'boolean', description: 'true: cada ejecución va a esta conversación' }, hours: { type: 'integer', minimum: 1, maximum: 168 }, weekdays: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 }, description: '0 domingo … 6 sábado' } } },
       run: (a) => createSchedule(board, { ...a, conversation_id: a.same_chat ? CONV : null }, ME) },
-    // 2.7: a question with options, shown in the chat as a card the user answers with a click (or skips). It does not
+    // a question with options, shown in the chat as a card the user answers with a click (or skips). It does not
     // wait: the answer comes as the user's next message.
     { name: 'orb_ask', description: `Pregunta a ${USER} con opciones (una tarjeta en el chat). Úsala cuando deba elegir entre 2-4 caminos claros. No espera: termina tu turno y su respuesta llegará como su próximo mensaje.`,
       inputSchema: { type: 'object', required: ['question', 'options'], properties: {
@@ -434,7 +434,7 @@ const tools = [
         options: { type: 'array', minItems: 2, maxItems: 4, items: { type: 'object', required: ['label'], properties: { label: str('Opción (1-6 palabras); la recomendada primero, con «(Recomendado)»'), description: str('Qué implica, en una frase') } } },
         multi: { type: 'boolean', description: 'true si puede elegir varias' } } },
       run: (a) => askUser(a) },
-    // 2.7: for a big request, the advice to define it on the project's Pizarra, with a button that opens it.
+    // for a big request, the advice to define it on the project's Pizarra, with a button that opens it.
     { name: 'orb_pizarra', description: `Recomienda a ${USER} definir un pedido grande en la pizarra del proyecto (dibujar pantallas y flujos, flechas, notas, capturas y archivos) antes de crear las tareas. Sale en el chat con un botón que la abre. No espera: termina tu turno.`,
       inputSchema: { type: 'object', required: ['message'], properties: { message: str('El consejo en 1-3 frases: qué conviene dibujar o adjuntar en la pizarra para este pedido') } },
       run: (a) => suggestBoard(a) },
@@ -491,7 +491,7 @@ if (PIPE && PIPE_TOKEN) tools.push(
     inputSchema: { type: 'object', required: ['key'], properties: { key: { type: 'string', enum: ['Enter', 'Tab', 'Escape', 'Backspace', 'Delete', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End'] } } }, run: (a) => browser('press', a) },
   { name: 'orb_browser_scroll', description: 'Desplaza la página hacia abajo o arriba.',
     inputSchema: { type: 'object', properties: { direction: { type: 'string', enum: ['down', 'up'] }, amount: { type: 'integer', minimum: 50, maximum: 5000, description: 'Píxeles (600 por defecto)' } } }, run: (a) => browser('scroll', a) },
-  // 3.2.1: the page's dialogs and console (a check that says «sin errores en la consola» now can look at it).
+  // the page's dialogs and console (a check that says «sin errores en la consola» now can look at it).
   { name: 'orb_browser_dialog', description: 'Decide cómo se responden los alert(), confirm() y prompt() de la página abierta a partir de ahora (por defecto se cancelan): accept true para aceptarlos, false para cancelarlos; text, la respuesta de prompt(). Úsalo antes de pulsar el botón que los muestra. Devuelve los diálogos que ya mostró.',
     inputSchema: { type: 'object', properties: { accept: { type: 'boolean' }, text: str('Respuesta para prompt()') } }, run: (a) => browser('dialog', a) },
   { name: 'orb_browser_console', description: 'Lee los errores y avisos de la consola de la página abierta (y los recursos que no cargaron) desde la última lectura. clear false los conserva para la siguiente.', readOnly: true,
@@ -502,7 +502,7 @@ if (PIPE && PIPE_TOKEN) tools.push(
   { name: 'orb_browser_close', description: 'Cierra el navegador del agente cuando ya no lo necesites.', inputSchema: { type: 'object', properties: {} }, run: () => browser('close') }
 );
 
-// 3.8.2 (D2): the owner's Android phone, paired in Ajustes › Android, through the engine (src/engine/host/android.mjs). The
+// the owner's Android phone, paired in Ajustes › Android, through the engine (src/engine/host/android.mjs). The
 // engine checks on every call that this conversation holds «Usar mi móvil Android» (or «Acceso total al PC»); the
 // conversation is the one of this process's grant, never an argument.
 const android = (tool, args = {}) => AUTH.call('android', { tool, args });
@@ -520,13 +520,13 @@ if (!BOSS && SIGNED_SESSION) tools.push(
   androidTool('key', 'Pulsa una tecla del sistema: HOME, BACK, ENTER, DEL, TAB, APP_SWITCH, MENU, DPAD_UP/DOWN/LEFT/RIGHT, VOLUME_UP/DOWN…', { key: { type: 'string' } }, ['key']),
   androidTool('logcat', 'Lee el registro del móvil (logcat), acotado: lines (máx. 500), level (V, D, I, W, E, F), package (solo esa app), grep (texto a buscar).', { lines: { type: 'integer' }, level: { type: 'string' }, package: { type: 'string' }, grep: { type: 'string' } }, [], { readOnly: true }),
   androidTool('uninstall', 'Desinstala una app que instalaste tú en este chat con orb_android_install. Otra app: pídeselo al usuario.', { package: { type: 'string' } }, ['package']),
-  // 3.8.2 (T3 3.17): an emulator of the Android SDK already installed on this PC is one more device (emulator-5554…).
+  // an emulator of the Android SDK already installed on this PC is one more device (emulator-5554…).
   { name: 'orb_android_emulators', description: `Lista los emuladores Android (AVD) que ${USER} ya tiene creados en este PC. Mismo permiso que el móvil.`, inputSchema: { type: 'object', properties: {} }, readOnly: true, run: async () => (await android('emulators')).text },
   { name: 'orb_android_emulator', description: 'Arranca un emulador Android existente por su nombre (ver orb_android_emulators). Tarda en arrancar: comprueba con orb_android_devices cuándo aparece (emulator-5554) y úsalo con serial.', inputSchema: { type: 'object', required: ['avd'], properties: { avd: { type: 'string' } } }, run: async (a) => (await android('emulator', a)).text },
   androidTool('shell', `Ejecuta un comando de adb shell en el móvil. Solo con «Acceso total» y «Usar mi móvil Android» en este chat; si no, usa las otras herramientas orb_android_*.`, { command: { type: 'string' } }, ['command'])
 );
 
-// 3.8.2 (T3 3.4): a secret the user types on a private card of this PC (src/engine/security/agent-secrets.mjs). The agent gets a
+// a secret the user types on a private card of this PC (src/engine/security/agent-secrets.mjs). The agent gets a
 // one-time handle for Orb's helper (secret-run.mjs), never the value.
 const SECRET_HELPER = path.join(path.dirname(fileURLToPath(import.meta.url)), 'secret-run.mjs');
 const secretText = (r) => (typeof r === 'string' ? r : `Clave ${r.name} lista: un solo uso, caduca en ${r.minutes} min. Úsala en un comando así (sin mostrarla):

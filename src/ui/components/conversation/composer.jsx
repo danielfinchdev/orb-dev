@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils.js';
 import { useT, t as tNow } from '@/lib/i18n.js';
 
 // A conversation stays at its bottom while the user has not scrolled up (`stick`): when a line arrives (deps) and,
-// 3.8.1 (H4a), whenever the lines change height (older messages drawn late by content-visibility, markdown, pictures)
+// whenever the lines change height (older messages drawn late by content-visibility, markdown, pictures)
 // or the area does (the composer grows): a ResizeObserver on the scrolling area and on its lines.
 export function useAutoScroll(deps) {
   const node = useRef(null);
@@ -59,7 +59,7 @@ function useMentions(value, onChange, ta) {
   return { list, index, pick, onKey };
 }
 
-// mentions: false hides the «@» picker. 3.6 (M2): the microphone also dictates in a computer's browser that has speech
+// mentions: false hides the «@» picker. The microphone also dictates in a computer's browser that has speech
 // recognition (the PC app opens Windows' voice typing instead).
 const WebSpeech = typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition || null) : null;
 function webDictate(lang) {
@@ -71,7 +71,7 @@ function webDictate(lang) {
     r.start();
   });
 }
-// 3.8.3: the text lives in a draft (lib/draft.js) that only this box follows: a key redraws the box, not the view around
+// the text lives in a draft (lib/draft.js) that only this box follows: a key redraws the box, not the view around
 // it. attached: something besides text can be sent (pictures). The box grows with its text in CSS (field-sizing), with
 // no layout read per key; where the browser lacks it, measured once per change.
 const FIELD_SIZING = typeof CSS !== 'undefined' && CSS.supports?.('field-sizing', 'content');
@@ -83,10 +83,10 @@ export function Composer({ draft, onSend, onStop, busy, placeholder, top, bottom
   useEffect(() => { const el = ta.current; if (!el || FIELD_SIZING) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 260)}px`; }, [value]);
   const [dropping, setDropping] = useState(false);
   const m = useMentions(value, onChange, ta);
-  // 3.8.2: what this box had when F5 reloaded the window comes back on the same screen (lib/reload.js).
+  // what this box had when F5 reloaded the window comes back on the same screen (lib/reload.js).
   const here = useStore((s) => routeKey(s.route));
   useEffect(() => { if (!testid) return; const saved = takeDraft(testid, getState().route); if (saved && !draft.get().trim()) draft.set(saved); }, [testid, here]); // eslint-disable-line react-hooks/exhaustive-deps
-  // 3.8.2 (D3): Windows' voice typing in Orb for Windows, nothing on a phone (its keyboard dictates), the browser's speech
+  // Windows' voice typing in Orb for Windows, nothing on a phone (its keyboard dictates), the browser's speech
   // recognition in a computer's browser (lib/mic.js).
   const mic = micMode({ desktop: Boolean(bridge.desktop), windowsDictation: Boolean(bridge.dictateWindows), androidApp: window.__orbHost?.app === true, mobile: Boolean(bridge.mobile),
     coarse: typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches, webSpeech: Boolean(WebSpeech) });

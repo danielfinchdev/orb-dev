@@ -21,15 +21,15 @@ import { t, useT } from '@/lib/i18n.js';
 
 const FILTERS = [
   ['encurso', 'tasks.filter.active', (x) => ['running', 'queued'].includes(x.status)], // working now or waiting its turn
-  // 3.8.3: also the tasks Orb held for review after they ran (a mass deletion…): they wait for the user's OK too.
+  // also the tasks Orb held for review after they ran (a mass deletion…): they wait for the user's OK too.
   ['aprobar', 'tasks.filter.approve', (x) => x.status === 'awaiting_approval' || Boolean(x.held)],
   ['hechas', 'tasks.filter.done', (x) => x.status === 'done'],
   ['incidencias', 'tasks.filter.problems', (x) => ['failed', 'blocked', 'limited'].includes(x.status) && !x.held],
   ['todas', 'tasks.filter.all', () => true]
 ];
 const verdictLabel = (v) => (['correcto', 'con fallos'].includes(v) ? t(`tasks.verdict.${v}`) : v);
-// 3.2.1: an undone task reads «Deshecha» (its files are back as they were), not «Completada».
-// 3.8.3: a held one reads «Por aprobar»; a queued one says why it waits («En pausa», «Espera a #3»).
+// an undone task reads «Deshecha» (its files are back as they were), not «Completada».
+// a held one reads «Por aprobar»; a queued one says why it waits («En pausa», «Espera a #3»).
 const StatusBadge = ({ status, undone, task }) => (undone ? <Badge variant="secondary" data-testid="task-undone"><Undo2 />{t('tasks.undone')}</Badge>
   : task?.held ? <Badge variant="warning" data-testid="task-held-badge">{t('tasks.held.badge')}</Badge>
     : status === 'queued' && task?.waiting ? <Badge variant={task.waiting.kind === 'paused' ? 'warning' : STATUS.queued[1]} title={task.waiting.text}>{waitText(t, task)}</Badge>
@@ -54,7 +54,7 @@ export async function askReview({ task, project }) {
   });
 }
 
-// 3.0: Security Review of a whole project: who audits it (automatic: another provider with quota).
+// Security Review of a whole project: who audits it (automatic: another provider with quota).
 export async function askSecurityReview({ project }) {
   const agents = await reviewers();
   return form(t('tasks.security.title', { project }), {
@@ -76,7 +76,7 @@ function TaskDetail({ id, live }) {
   const A = (props) => <Button size="sm" variant="outline" {...props} />;
   const reassign = async () => {
     const agents = (await call('agents.status')).filter((a) => a.enabled && a.installed);
-    // 2.7: the model is chosen from the agent's real ones (with what each is for), or left to Orb: never typed.
+    // the model is chosen from the agent's real ones (with what each is for), or left to Orb: never typed.
     const catalog = await call('models.catalog').catch(() => []);
     const AUTO = '__auto';
     const modelOptions = (agent) => {
@@ -131,7 +131,7 @@ function TaskDetail({ id, live }) {
         </>) : null}
         {!['done', 'cancelled'].includes(t.status) ? <Button size="sm" variant="danger" onClick={async () => { if (await confirm(tr('tasks.cancel.title'), t.status === 'running' ? tr('tasks.cancel.running') : tr('tasks.cancel.ask'), { ok: tr('tasks.cancel.title'), cancel: tr('tasks.cancel.back'), danger: true })) act(call('tasks.cancel', { id: t.id }), tr('tasks.cancel.done')); }}><Square />{tr('tasks.cancel')}</Button> : null}
       </div>
-      {/* 3.8.3: held for review: what it did and where, with «Aceptar» and «Deshacer»; a paused queue, with «Reanudar». */}
+      {/* held for review: what it did and where, with «Aceptar» and «Deshacer»; a paused queue, with «Reanudar». */}
       {t.held ? <HeldCard task={t} className="mx-5" /> : null}
       {t.status === 'queued' && t.waiting?.kind === 'paused' ? <PausedNote className="mx-5" /> : null}
       {t.status === 'queued' && t.waiting?.kind === 'manual' ? <div className="bg-muted/50 mx-5 rounded-xl border px-3.5 py-2.5 text-[13px]" data-testid="task-wait-manual">{tr('tasks.wait.manualNote')}</div> : null}
@@ -152,7 +152,7 @@ function TaskDetail({ id, live }) {
       </dl>
       <div className="grid gap-1.5 px-5"><div className="text-muted-foreground text-xs">{tr('tasks.brief')}</div><pre className="bg-muted max-h-72 overflow-auto rounded-lg px-3 py-2 font-sans text-[13px] whitespace-pre-wrap">{t.description}</pre></div>
       {t.result ? <div className="grid gap-1.5 px-5"><div className="text-muted-foreground text-xs">{tr('tasks.result')}</div><div className="rounded-lg border px-3.5 py-2.5 text-[13.5px]"><Markdown>{t.result}</Markdown></div></div> : null}
-      {/* 3.8.2: the files it changed, with their diff (read only: «Deshacer» above works as before). */}
+      {/* the files it changed, with their diff (read only: «Deshacer» above works as before). */}
       {t.hasCheckpoint && t.status !== 'running' ? <TaskChanges taskId={t.id} version={`${t.status}:${t.updated_at}`} className="mx-5" /> : null}
       <Collapsible className="px-5">
         <CollapsibleTrigger className="text-muted-foreground group flex cursor-pointer items-center gap-1 text-xs"><ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" />{tr('tasks.history', { n: t.events.length })}</CollapsibleTrigger>
@@ -162,7 +162,7 @@ function TaskDetail({ id, live }) {
   );
 }
 
-// 3.8, the phone: the filter chosen stays when a task is opened and closed again.
+// the phone: the filter chosen stays when a task is opened and closed again.
 let phoneFilter = null;
 
 export function TasksView({ route }) {
@@ -180,7 +180,7 @@ export function TasksView({ route }) {
   // detail side by side; the phone opens a task on a screen of its own).
   useEffect(() => { if (!phone && rows.length && !rows.some((t) => t.id === selected)) setSelected(rows[0].id); }, [filter, rows.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const list = route.project ? { view: 'tasks', project: route.project } : { view: 'tasks' };
-  // 3.8, the phone: a task on its own screen, with the back arrow to the list (also Android's back).
+  // the phone: a task on its own screen, with the back arrow to the list (also Android's back).
   if (phone && route.id != null) return (
     <>
       <PageHeader back={<BackButton to={list} />} title={tr('tasks.taskTitle', { id: route.id })} />

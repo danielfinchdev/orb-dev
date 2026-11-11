@@ -1,8 +1,8 @@
-// The star view: a conversation with the assistant. 3.6 (DESIGN-SYSTEM §2.2): above the text, the project picker and the
+// The star view: a conversation with the assistant. DESIGN-SYSTEM §2.2: above the text, the project picker and the
 // contextual action slot («Compactar» when the context is filling up, «Iniciar test» on the day's first new chat); under
 // it, the brain (agent and model), the reasoning (brain button) and, for a new conversation, the orchestrator (icon and a
 // small switch: on = with the assistant, who coordinates the agents; off = directly with the agent chosen).
-// 3.2: each conversation is its own (route.id), several at once.
+// each conversation is its own (route.id), several at once.
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDraft } from '@/lib/draft.js';
 import { Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, ChevronRight, PenTool, History, FlaskConical, Folder, ListChecks, Ellipsis, Info, BellOff, MessageSquare } from 'lucide-react';
@@ -40,8 +40,8 @@ import { MsgTime, BarPause, COMPACT_AT, CompactButton } from '@/components/conve
 import { ContextMeter } from '@/components/conversation/context-meter.jsx';
 
 
-// 2.7: a different greeting each time the chat opens (lib/greeting.js); the last one is remembered so it does not repeat.
-// 3.8.3: one that names the project («Seguimos con «orb-bots»») follows the project chosen for the new chat afterwards:
+// a different greeting each time the chat opens (lib/greeting.js); the last one is remembered so it does not repeat.
+// one that names the project («Seguimos con «orb-bots»») follows the project chosen for the new chat afterwards:
 // it names the new one, or gives way to one without a project (picked at the same time) after «Sin proyecto».
 function useGreeting(project) {
   const [g] = useState(() => {
@@ -60,7 +60,7 @@ function useGreeting(project) {
 const Message = memo(function Message({ m, name, onChanges, tail }) {
   const t = useT();
   if (m.meta?.kind === 'question') return <QuestionCard m={m} />;
-  // 2.7: for a big request, the assistant's advice to define it on the Pizarra, with the way there.
+  // for a big request, the assistant's advice to define it on the Pizarra, with the way there.
   if (m.meta?.kind === 'board') return (
     <div className="flex gap-3">
       <Robot size={32} still className="mt-0.5" />
@@ -96,19 +96,19 @@ const Message = memo(function Message({ m, name, onChanges, tail }) {
     );
   }
   if (m.meta?.kind === 'approval' || m.meta?.kind === 'task-approval') return <ChatApproval m={m} />;
-  // 3.8.1: an agent made a skill or an MCP server and asks for it to be turned on.
+  // an agent made a skill or an MCP server and asks for it to be turned on.
   if (m.meta?.kind === 'extension' && m.meta.extension) return <ExtensionRequestCard m={m} />;
   if (m.meta?.kind === 'attention' && m.meta.task) return <TaskApprovalLine m={m} />;
-  // 2.6: the assistant's suggestion to play while the agents work, with the button that opens the games.
+  // the assistant's suggestion to play while the agents work, with the button that opens the games.
   if (m.meta?.kind === 'games') return (
     <div className="chat-actions bg-muted/70 text-muted-foreground mx-auto flex max-w-[88%] flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-xl px-3.5 py-2 text-center text-[13px]">
       <span>{m.body}</span>
       {!fullPc() ? null : <Button size="xs" variant="soft" onClick={openGames} data-testid="chat-play"><Gamepad2 />{t('chat.playButton')}</Button>}
     </div>
   );
-  // 3.8.3: the tasks of this chat wait because the queue is paused: «Reanudar» right there (while it still is).
+  // the tasks of this chat wait because the queue is paused: «Reanudar» right there (while it still is).
   if (m.meta?.kind === 'paused') return <PausedLine body={m.body} />;
-  // 3.1: a finished task says it in one line; what the agent reported (technical) unfolds on request.
+  // a finished task says it in one line; what the agent reported (technical) unfolds on request.
   if (m.meta?.kind === 'task-end' && m.meta.result) return (
     <div className="bg-muted/70 text-muted-foreground mx-auto max-w-[88%] rounded-xl px-3.5 py-2 text-center text-[13px]">
       <div className="whitespace-pre-wrap">{m.body}</div>
@@ -134,10 +134,10 @@ function Details({ label, className, children }) {
 // A permission request in the chat: the assistant's own (free mode) or one of a task (answered here or in the task).
 function ChatApproval({ m }) {
   const t = useT();
-  // 3.1: how the request ended comes from the engine too (answered in the task, nobody answered, the task stopped).
+  // how the request ended comes from the engine too (answered in the task, nobody answered, the task stopped).
   const [local, setLocal] = useState(null);
   const task = m.meta.kind === 'task-approval';
-  // 3.2: the assistant no longer runs commands itself (free mode is a direct conversation now): an old request of its is over.
+  // the assistant does not run commands itself (free mode is a direct conversation): an old request of its is over.
   const state = local ?? (task ? m.meta.status ?? 'pending' : m.meta.status === 'pending' || !m.meta.status ? 'expired' : m.meta.status);
   const answer = async (decision) => {
     const r = await act(call('sessions.approve', { id: m.meta.session, request: m.meta.request, decision }));
@@ -148,7 +148,7 @@ function ChatApproval({ m }) {
   return (
     <div className={cn('mx-auto w-full max-w-[88%] rounded-xl border px-3.5 py-2.5 text-[13px]', done ? 'bg-muted/50' : 'border-warning/50 bg-warning/10')}>
       <div className="flex items-start gap-2"><ShieldAlert className={cn('mt-0.5 size-4 shrink-0', done ? 'text-muted-foreground' : 'text-warning')} /><div className="min-w-0 flex-1 whitespace-pre-wrap break-words">{m.body}</div></div>
-      {/* 3.1: the command itself, for whoever wants to look: never in the sentence. */}
+      {/* the command itself, for whoever wants to look: never in the sentence. */}
       {m.meta.detail ? <Details label={t('chat.seeDetails')} className="pl-6"><pre className="bg-muted mt-1.5 max-h-48 overflow-auto rounded-md px-2.5 py-1.5 font-mono text-[11px] whitespace-pre-wrap break-all">{m.meta.detail}</pre></Details> : null}
       <div className="chat-actions mt-2 flex flex-wrap items-center gap-2 pl-6">
         {done ? <Badge variant={badge[1]}>{badge[0]}</Badge> : (<>
@@ -162,8 +162,8 @@ function ChatApproval({ m }) {
   );
 }
 
-// 3.2.1: a task that waits for the user's approval, with «Aprobar» and «Rechazar» right in the chat (before, only in
-// Tareas). Once answered, how it ended. 3.6 (M3): a card: «"Publicar la web" necesita tu aprobación»,
+// a task that waits for the user's approval, with «Aprobar» and «Rechazar» right in the chat
+// Once answered, how it ended. It is a card: «"Publicar la web" necesita tu aprobación»,
 // the reason in words and Rechazar · Ver la tarea · Aprobar.
 const whyOf = (body) => /\(([^()]*)\)\.?\s*$/.exec(String(body ?? ''))?.[1]?.trim() || null;
 function TaskApprovalLine({ m }) {
@@ -172,7 +172,7 @@ function TaskApprovalLine({ m }) {
   const [busy, setBusy] = useState(false);
   const waiting = task?.status === 'awaiting_approval';
   const run = async (fn) => { setBusy(true); try { await fn(task); } finally { setBusy(false); } };
-  // 3.6: why it waits, in plain words from the task's own data (its sensitivity), not the short labels of the log.
+  // why it waits, in plain words from the task's own data (its sensitivity), not the short labels of the log.
   const reasons = (task?.sensitivity ?? []).map((k) => t(`orbchats.why.${k}`)).filter((x) => x && !x.startsWith('orbchats.why.'));
   const why = reasons.length ? reasons.join(t('orbchats.whyAnd')) : whyOf(m.body);
   return (
@@ -199,12 +199,12 @@ function TaskApprovalLine({ m }) {
   );
 }
 
-// 3.6 (M3): the tasks of this conversation that are running or waiting their turn, each as one live line in the
+// the tasks of this conversation that are running or waiting their turn, each as one live line in the
 // conversation (agent, «Tarea #3», what it is doing now, a small bar and the time); a click opens it in Tareas. The
 // agent's own conversation and «Cancelar» stay a click away, as in the block they replace.
 function TaskLines({ conversation }) {
   const live = useLiveTasks();
-  // 3.8.3: and the ones held for review (a mass deletion…), as a card with «Aceptar» and «Deshacer».
+  // and the ones held for review (a mass deletion…), as a card with «Aceptar» and «Deshacer».
   const tasks = useStore((s) => (conversation == null ? [] : s.tasks.filter((x) => x.conversation_id === conversation && (x.status === 'running' || x.status === 'queued' || x.held))));
   if (!tasks.length) return null;
   return <div className="grid gap-2" data-testid="task-lines">{[...tasks].sort((a, b) => a.id - b.id).map((x) => (x.held ? <HeldCard key={x.id} task={x} link className="mx-auto w-full max-w-[92%]" /> : <TaskLine key={x.id} task={x} live={liveOf(live, x.id)} />))}</div>;
@@ -256,7 +256,7 @@ function OrchestratorSwitch({ on, onChange, name, cursor, locked = false }) {
   );
 }
 
-// 3.8.3: the answer being written, the only part of the conversation that follows each streamed piece (drawn once per
+// the answer being written, the only part of the conversation that follows each streamed piece (drawn once per
 // frame: lib/store.js › chatStateSoon); it is typed on screen (TypingMarkdown) and its finished blocks are not parsed
 // again. The saved message that replaces it goes on typing from there (TypedMarkdown).
 function LiveAnswer({ id, name }) {
@@ -274,7 +274,7 @@ function LiveAnswer({ id, name }) {
   );
 }
 
-// 3.2: onConversation / project: inside God mode, a new conversation stays there (in its project) instead of navigating.
+// onConversation / project: inside God mode, a new conversation stays there (in its project) instead of navigating.
 export function ChatView({ route, onConversation, project: inProject }) {
   const t = useT();
   const app = useStore((s) => s.app);
@@ -283,7 +283,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const conv = useStore((s) => (id == null ? null : s.conversations.find((c) => c.id === id) ?? null));
   const [rows, setRows] = useState([]);
   const box = useDraft();
-  // 3.5, the Android app: what was shared from another app («Compartir con Orb») is waiting in the text box to be sent.
+  // the Android app: what was shared from another app («Compartir con Orb») is waiting in the text box to be sent.
   useEffect(() => {
     if (!bridge.takeShared) return undefined;
     const take = () => { const got = bridge.takeShared(); if (got) box.set((prev) => (prev.trim() ? `${prev.trimEnd()}\n${got}` : got)); };
@@ -292,10 +292,10 @@ export function ChatView({ route, onConversation, project: inProject }) {
     return () => window.removeEventListener('orb:shared', take);
   }, []);
   const name = app.config.assistantName;
-  // 3.8.3: only what this view draws from the conversation's live state (the streamed text is LiveAnswer's): a streamed
+  // only what this view draws from the conversation's live state (the streamed text is LiveAnswer's): a streamed
   // piece does not redraw the whole view.
   const chat = useStore((s) => { const c = chatOf(s, id); return { busy: Boolean(c?.busy), waiting: Boolean(c?.waiting), used: c?.context?.used ?? null, size: c?.context?.size ?? null }; });
-  // 3.8: on a phone, the brain and «Orquestador» of a NEW conversation are chosen for that conversation alone (the ones
+  // on a phone, the brain and «Orquestador» of a NEW conversation are chosen for that conversation alone (the ones
   // new conversations start with are a setting of the PC).
   const [draft, setDraft] = useState(null);
   const local = Boolean(bridge.mobile) && id == null;
@@ -327,7 +327,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
     setLoading(false);
   };
   useEffect(() => { initTestOfTheDay(); }, []);
-  // 3.6 (M3): its marks in the Orb zone's list (pinned, muted, unread); what is on screen is marked read.
+  // its marks in the Orb zone's list (pinned, muted, unread); what is on screen is marked read.
   useOrbInbox();
   const item = useStore((s) => (id == null ? null : (s.orbInbox?.items ?? []).find((x) => x.key === `conversation:${id}`) ?? null));
   const unread = item?.unread ?? 0;
@@ -339,7 +339,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
     return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', run); };
   }, [id, unread, rows.length]);
   const showTest = useStore((s) => s.testToday) === true && id == null;
-  // 3.8.3: the line the turn just wrote, from the state that ended it (until the conversation is read again), and the
+  // the line the turn just wrote, from the state that ended it (until the conversation is read again), and the
   // messages the user sent that the engine has not saved yet: no wait and no gap on screen.
   const answer = useStore((s) => (id == null ? null : s.answers?.[id] ?? null));
   const pending = usePending(id == null ? 'new' : `chat:${id}`);
@@ -352,12 +352,12 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const bubble = useUsageBubble(catalog, brain);
   const userName = useStore((st) => st.app?.config?.userName?.trim() || '');
   const [sending, setSending] = useState(false);
-  // 3.2.1: in God mode, a new conversation goes to the project chosen there, and the bar says that one.
+  // in God mode, a new conversation goes to the project chosen there, and the bar says that one.
   const projects = useStore((s) => s.projects);
   const workProject = inProject ? projects.find((p) => p.name === inProject) ?? { name: inProject } : app.activeProject ?? null;
   const greeting = useGreeting(workProject?.name ?? null);
 
-  // 3.2.1: inside God mode, the project chosen there right now (the answer to a first message may come after a change).
+  // inside God mode, the project chosen there right now (the answer to a first message may come after a change).
   const projectNow = useRef(inProject); projectNow.current = inProject;
   // The user went elsewhere while the first message was on its way: they stay where they are, and a notice says where
   // the message is (one click away).
@@ -378,7 +378,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
     const moved = () => !stillHere(ticket) || (onConversation && projectNow.current !== startedIn);
     try {
       if (orchestrate) {
-        // 3.2: the first message makes the conversation (in the working folder): then the screen is that conversation.
+        // the first message makes the conversation (in the working folder): then the screen is that conversation.
         const chosen = local && draft ? Object.fromEntries(['agent', 'model', 'reasoning'].filter((k) => draft[k] !== undefined).map((k) => [k, draft[k]])) : {};
         const r = await act(call('chat.send', { text: msg, ...(inProject ? { project: inProject } : {}), ...(Object.keys(chosen).length ? { brain: chosen } : {}) }));
         if (!r) { dropPending(mine); if (!moved()) box.set(msg); return; }
@@ -388,7 +388,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
         if (onConversation) onConversation(r.conversation); else go({ view: 'chat', id: r.conversation });
       } else {
         // «Orquestador» off: the user hands out the work, and the conversation is directly with the agent chosen below
-        // (3.2.1: in God mode, in the project chosen there).
+        // (in God mode, in the project chosen there).
         const project = inProject ?? app.activeProject?.name ?? null;
         const s = await act(call('sessions.create', { agent: brain.agent, account: brain.account && brain.account !== brain.agent ? brain.account : undefined, model: brain.model || undefined, reasoning: brain.reasoning, project, ...(project ? {} : { permission: 'leer' }) }));
         if (!s) { dropPending(mine); if (!moved()) box.set(msg); return; }
@@ -404,7 +404,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
     if (local) { setDraft((d) => ({ ...(d ?? {}), ...patch })); return true; }
     const r = await act(call('chat.settings', { ...patch, ...(id != null ? { conversation: id } : {}) })); if (r) { setState((s) => ({ app: { ...s.app, ...(id == null ? { assistant: r } : {}) } })); refreshSoon(); } return r;
   };
-  // 3.2.1: the assistant cannot coordinate with Cursor as its brain (Cursor takes no tools of Orb's): turning the
+  // the assistant cannot coordinate with Cursor as its brain (Cursor takes no tools of Orb's): turning the
   // «Orquestador» on moves the brain to Claude (or Codex) and says so, instead of doing nothing.
   const coordinator = ['claude', 'codex'].find((a) => catalog?.some((x) => x.id === a)) ?? null;
   const toggleOrchestrator = async (checked) => {
@@ -430,7 +430,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const lines = answer && answer.id > lastId ? [...saved, answer] : saved;
   const unsaved = pendingShown(pending, lines.filter((m) => m.role === 'usuario').map((m) => ({ id: m.id, text: m.body })));
   useEffect(() => { for (const p of pending) if (!unsaved.includes(p)) dropPending(p.id); }, [pending, unsaved]);
-  // 3.6: «Compactar» when the conversation's context is at 70 % or more (never while it answers).
+  // «Compactar» when the conversation's context is at 70 % or more (never while it answers).
   const live = useMemo(() => (chat.size ? { used: chat.used, size: chat.size } : null), [chat.used, chat.size]);
   const context = live ?? conv?.context ?? null;
   const [compacting, setCompacting] = useState(false);
@@ -450,7 +450,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
 
   return (
     <>
-      {/* 3.6 (M3): the bar of a messaging app: (phone: back to the list) the pill with Orbe, the title and, small, the
+      {/* the bar of a messaging app: (phone: back to the list) the pill with Orbe, the title and, small, the
           project and what it is doing; a click opens the chat's info. On the right: notifications, pause and ⋯. */}
       <ChatBar back={embedded ? null : <BackToList to="chats" />} testid="orb-chat-bar" className="topbar-chat" title={<>
         <h1 className="sr-only">{conv?.title ?? t('orbchats.newChatTitle')}</h1>
@@ -470,7 +470,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
         {/* The phone keeps the bar light: the bell is the system's notifications there, and «Pausar» goes into ⋯. */}
         {slim ? null : <NotificationBell />}
         {slim ? null : <BarPause />}
-        {/* 3.8.2: only the bell and pause stay on the bar; the chat's actions and the games go into ⋯ (also in «Nuevo chat»). */}
+        {/* only the bell and pause stay on the bar; the chat's actions and the games go into ⋯ (also in «Nuevo chat»). */}
         {conv || fullPc() ? (
           <DropdownMenu modal={false}>
             <BubbleTip title={t('chats.more')}><DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={t('chats.more')} data-testid="orb-chat-more"><Ellipsis /></Button></DropdownMenuTrigger></BubbleTip>
@@ -505,12 +505,12 @@ export function ChatView({ route, onConversation, project: inProject }) {
       <Composer draft={box} onSend={send} onStop={id != null ? () => act(call('chat.stop', { conversation: id })) : undefined} busy={chat.busy} disabled={sending} testid="chat-input"
         placeholder={chat.busy ? t('chat.placeholderBusy', { name }) : orchestrate ? t('chat.placeholder', { name }) : t('chat.placeholderDirect', { agent: AGENT[brain.agent] ?? brain.agent })}
         top={<>
-          {/* 3.2.1: in God mode a new conversation takes the project chosen at the top of God mode. */}
+          {/* in God mode a new conversation takes the project chosen at the top of God mode. */}
           {inProject && id == null ? null : <ProjectPicker conversation={id} />}
           <ContextSlot items={[
-            // 3.6: the context is filling up: compact it (the history stays; the assistant goes on from a summary).
+            // the context is filling up: compact it (the history stays; the assistant goes on from a summary).
             compactable ? { key: 'compact', node: <CompactButton onCompact={compact} busy={compacting} /> } : null,
-            // 3.0: the test of the day (first opening of the day, until the user writes; always in Ajustes › Agentes y uso).
+            // the test of the day (first opening of the day, until the user writes; always in Ajustes › Agentes y uso).
             showTest ? { key: 'test', node: <BubbleTip title={t('test.button')} text={t('test.tip')} side="top"><Button size="xs" variant="soft" onClick={() => runTest(t('test.prompt'))} data-testid="chat-test"><FlaskConical />{t('test.button')}</Button></BubbleTip> } : null
           ]} />
         </>}
@@ -518,10 +518,10 @@ export function ChatView({ route, onConversation, project: inProject }) {
         bottom={<>
           <BrainPicker catalog={catalog} value={brain} onChange={pickBrain} className="min-w-0 shrink" />
           <ReasoningMenu catalog={catalog} value={brain} onChange={(reasoning) => settings({ reasoning })} />
-          {/* 3.8.3: «Auto» / «Preguntar» for the tasks the assistant creates and the new chats (the global level, also from the phone). */}
+          {/* «Auto» / «Preguntar» for the tasks the assistant creates and the new chats (the global level, also from the phone). */}
           <AutonomySwitch value={app?.config?.permissions?.mode === 'preguntar' ? 'editar' : 'auto'} testid="chat-autonomy" onChange={(p) => act(call('permissions.setMode', { mode: p === 'auto' ? 'auto' : 'preguntar' }), p === 'auto' ? t('session.autoOn') : t('session.askOn')).then(() => refresh())} />
-          {/* 3.2: whether a NEW conversation is with the assistant or directly with the agent chosen; a conversation keeps
-              the way it started. 3.6: an icon and a small switch; the tooltip explains it. */}
+          {/* whether a NEW conversation is with the assistant or directly with the agent chosen; a conversation keeps
+              the way it started. an icon and a small switch; the tooltip explains it. */}
           <OrchestratorSwitch on={orchestrate} onChange={toggleOrchestrator} name={name} cursor={brain.agent === 'cursor'} locked={id != null} />
           {context ? <span className="text-muted-foreground ml-auto shrink-0 text-xs"><ContextMeter context={context} /></span> : null}
         </>} />

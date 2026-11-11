@@ -11,15 +11,15 @@ import { remotesOf, remotesOfAsync } from './common.mjs';
 import { autonomyOf } from '../../domain/security/guard.mjs';
 import { logUndone } from '../../domain/journal/journal.mjs';
 
-// 3.8.3: folders a build or a package manager makes again by itself: deleting them is never what holds a task back.
+// folders a build or a package manager makes again by itself: deleting them is never what holds a task back.
 export const GENERATED = /(^|\/)(node_modules|dist|build|out|target|\.gradle|\.dart_tool|\.next|\.nuxt|\.svelte-kit|\.turbo|\.cache|\.vite|\.parcel-cache|\.expo|coverage|\.venv|venv|__pycache__|\.pytest_cache|\.mypy_cache|Pods|DerivedData|(bin|obj)\/(Debug|Release))(\/|$)/i;
-// 3.8.3: when a task's deletions hold it for the user's review. paths: what it deleted; total: the project's files before
+// when a task's deletions hold it for the user's review. paths: what it deleted; total: the project's files before
 // it (both without generated folders). «Auto» (owner's decision): more than 50 files or more than a quarter of the
-// project (the quarter only from 10 files on); «Preguntar»: 10 or more, as before. → { held, deleted, total, share } (share: true when the quarter decided).
+// project (the quarter only from 10 files on); «Preguntar»: 10 or more. → { held, deleted, total, share } (share: true when the quarter decided).
 export function deletionHold(paths, total, autonomy) {
   const deleted = paths.filter((p) => !GENERATED.test(p)).length;
   if (autonomy !== 'auto') return { held: deleted >= 10, deleted, total, share: false };
-  // 3.8.3 (security review): the quarter counts from 10 files on, so deleting 1 of 3 files in a tiny project holds nothing.
+  // the quarter counts from 10 files on, so deleting 1 of 3 files in a tiny project holds nothing.
   const byShare = deleted >= 10 && total > 0 && deleted / total > 0.25;
   return { held: deleted > 50 || byShare, deleted, total, share: byShare && deleted <= 50 };
 }
@@ -27,8 +27,8 @@ export function deletionHold(paths, total, autonomy) {
 export class SafetyPart {
   // ---- "carpeta" mode: checkpoint before, so the user can undo exactly what the task changed.
   folderWorkspace(task, project) {
-    // 3.2.1: a read-only task must not touch BITACORA.md, but Orb keeps that file out of its git snapshot (it is private),
-    // so a change to it would go unseen. Its bytes are kept now, to compare and restore when the task ends (finding 25).
+    // a read-only task must not touch BITACORA.md, but Orb keeps that file out of its git snapshot (it is private),
+    // so a change to it would go unseen. Its bytes are kept, to compare and restore when the task ends.
     if (task.readonly) {
       const file = path.join(project.path, 'BITACORA.md');
       let before = null; try { before = fs.readFileSync(file, 'utf8'); } catch { before = null; }
@@ -54,7 +54,7 @@ export class SafetyPart {
   // Git runs off the event loop; the caller keeps the project held (hold) so nothing else writes there meanwhile.
   async afterFolderTask(task) {
     const reasons = [];
-    // 3.2.1: a read-only task that wrote BITACORA.md (its global instructions may ask for a log) is put back as it was and
+    // a read-only task that wrote BITACORA.md (its global instructions may ask for a log) is put back as it was and
     // flagged. Checked apart from git because Orb keeps BITACORA.md out of its snapshot.
     if (task.readonly) {
       const saved = this.board.settingJson(`readonly_bitacora:${task.id}`);
@@ -104,7 +104,7 @@ export class SafetyPart {
     const before = autonomy === 'auto' && gone.length ? (await gitAsync(cp.before.repo, {}, 'ls-tree', '-r', '--name-only', cp.before.commit)).stdout.split('\n').filter((p) => p && !GENERATED.test(p)).length : 0;
     const hold = deletionHold(gone, before, autonomy);
     if (hold.held) reasons.push(hold.share ? tr('msg.scheduler.safetyDeletedShare', { deleted: hold.deleted, total: hold.total, pct: Math.round((hold.deleted / hold.total) * 100) }) : tr('msg.scheduler.safetyDeleted', { deleted: hold.deleted }));
-    // 3.1/3.2.1: a read-only task that runs the tests or the build may leave new outputs (reports, builds) in a build
+    // a read-only task that runs the tests or the build may leave new outputs (reports, builds) in a build
     // folder: those do not count, but creating or changing any other file does (it should not have written anything).
     const BUILD = /(^|\/)(dist|build|out|coverage|\.vite|\.next|\.turbo|\.cache|node_modules)(\/|$)/i;
     const offending = task.readonly ? changed.filter((c) => !BUILD.test(c.path)) : changed.filter((c) => c.status !== 'A');
@@ -115,7 +115,7 @@ export class SafetyPart {
     return tr('msg.scheduler.needsReview', { reasons: why });
   }
 
-  // 3.8.3 (uso real final): «Deshacer» does not trust the fast snapshots (checkpoints.mjs › fullSnapshot): it reads every
+  // «Deshacer» does not trust the fast snapshots (checkpoints.mjs › fullSnapshot): it reads every
   // file again first, off the event loop, and also gives back what the task changed while hiding it from the snapshot
   // after it. Meanwhile no task starts in that project (holding) and a second undo of the same task is refused.
   async undo(taskId) {
@@ -143,7 +143,7 @@ export class SafetyPart {
     } else out = undoCheckpoint(cp.before, cp.after ?? {});
     try { logUndone(this.board, task, out); } catch (error) { this.log?.(`bitácora deshacer #${task.id}: ${error.message}`); }
     this.board.event(task.id, 'usuario', 'task.undone', `restaurados ${out.restored.length}, quitados ${out.removed.length}, sin tocar ${out.skipped.length}`);
-    // 3.2.1: the task stays «Deshecha» (its result can no longer be accepted) and its photo goes: a second undo over a folder
+    // the task stays «Deshecha» (its result can no longer be accepted) and its photo goes: a second undo over a folder
     // that changed since would restore something else. Running it again (retry, a message to its agent) takes a new one.
     this.board.settingJson(`undone:${task.id}`, { at: new Date().toISOString(), restored: out.restored.length, removed: out.removed.length });
     this.board.settingJson(`checkpoint:${task.id}`, null);
@@ -154,7 +154,7 @@ export class SafetyPart {
     this.board.changed('tasks');
     const n = (key, count) => tr(`msg.scheduler.${key}.${count === 1 ? 'one' : 'other'}`, { n: count });
     const said = tr('msg.scheduler.undone', { id: task.id, restored: n('undoneRestored', out.restored.length), removed: n('undoneRemoved', out.removed.length), skipped: out.skipped.length ? tr('msg.scheduler.undoneSkipped', { n: out.skipped.length, list: oneLine(out.skipped.join(', '), 200) }) : '' });
-    // 3.8.3 (uso real final): in the task's conversation (a line, and a note for the assistant's next turn there), so
+    // in the task's conversation (a line, and a note for the assistant's next turn there), so
     // neither the user nor Orbe wonders later where its files went; a task of no conversation, a passing notice.
     const conv = this.board.conversationOfTask(task.id);
     if (conv) {
@@ -165,7 +165,7 @@ export class SafetyPart {
     return out;
   }
 
-  // 3.8.3 (uso real final): before the user accepts a task Orb held for review, its diff comes from a full snapshot (every
+  // before the user accepts a task Orb held for review, its diff comes from a full snapshot (every
   // file read again, off the event loop), not the fast one after it: a held task sits still, so the folder now is what
   // accepting keeps. Done once per held result (after.full); the next fast snapshot starts from that index too.
   async recheckHeld(task) {

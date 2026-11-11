@@ -1,4 +1,4 @@
-// 3.6, mensajería (paso M4): los avisos del móvil como los de una app de mensajería (quién escribe, una por chat,
+// Mensajería: los avisos del móvil como los de una app de mensajería (quién escribe, una por chat,
 // «Responder», «Aprobar» y «Rechazar»).
 export default {
   'msg.notes.reply': 'Responder',

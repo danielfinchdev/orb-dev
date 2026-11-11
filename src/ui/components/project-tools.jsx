@@ -1,4 +1,4 @@
-// 3.2, God mode: the project in an editor («Abrir en»: Cursor, VS Code or the File Explorer) and the project's actions
+// God mode: the project in an editor («Abrir en»: Cursor, VS Code or the File Explorer) and the project's actions
 // (commands of the user's own, such as «npm test», run in a terminal window from the bar or with their shortcut, with an
 // optional preview of a page of this PC).
 import { useEffect, useState } from 'react';
@@ -27,7 +27,7 @@ export function OpenInMenu({ project, labelClassName }) {
   const open = (which) => act(bridge.openIn(which, project.path));
   const first = editors.cursor ? 'cursor' : editors.vscode ? 'vscode' : 'explorer';
   const ICON = { cursor: MousePointer2, vscode: Code2, explorer: FolderOpen };
-  // 3.7: «Explorador de archivos» is Windows' name; elsewhere the system's file manager.
+  // «Explorador de archivos» is Windows' name; elsewhere the system's file manager.
   const LABEL = { cursor: 'Cursor', vscode: 'VS Code', explorer: t(!window.orb?.platform || window.orb.platform === 'win32' ? 'tools.explorer' : 'tools.files') };
   const Main = ICON[first];
   return (

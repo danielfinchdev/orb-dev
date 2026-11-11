@@ -1,4 +1,4 @@
-// 3.6 (messaging, step M3): the pure pieces of the chat list (no React, no store): the unread count, the short time of a
+// the pure pieces of the chat list (no React, no store): the unread count, the short time of a
 // row, the rows themselves (conversations with Orbe and direct ones with an agent), their progress line and their
 // grouping. The data comes from inbox.list (src/engine/api/inbox.mjs). Tested in test/mensajeria-orb.test.mjs.
 import { timeZone } from './clock.js';
@@ -31,11 +31,11 @@ export function shortTime(at, { now = new Date(), locale = 'es', yesterday = 'Ay
 // from inbox.list when there) and each direct conversation with an agent (sessions of kind «chat»: no marks, they are
 // not in inbox.list). Each row carries its own tasks (newest first) for its progress line.
 const OPEN_TASK = ['queued', 'running', 'awaiting_approval', 'limited'];
-// 3.8.1 (H1e): the agents that worked in a conversation, each once, always in the same order: its brain first, then the
+// the agents that worked in a conversation, each once, always in the same order: its brain first, then the
 // agents its tasks ran with (or were given to; «any» not yet assigned does not count), oldest task first. Its avatar's
 // corner shows their marks stacked.
 export const agentsOf = (brain, tasks = []) => [...new Set([brain, ...[...tasks].reverse().map((x) => x.assigned_to || x.agent)].filter((a) => a && a !== 'any'))];
-// 3.8.2: where the corner marks of a chat's avatar go (views/orb/inbox.jsx › OrbAvatar), so that any number of agents fits
+// where the corner marks of a chat's avatar go (views/orb/inbox.jsx › OrbAvatar), so that any number of agents fits
 // inside the avatar, never past its left edge whatever its size: up to `max` marks; past that, fewer marks and a «+N»
 // chip for the rest, overlapped less so it reads. A small avatar shows fewer marks before the «+N» rather than spilling
 // out. Offsets are from the avatar's right edge (the first mark, on top, sits in the corner). → { badge, marks: [right…],
@@ -93,7 +93,7 @@ export function orbItems({ inbox = null, conversations = [], sessions = [], task
 const FINISHED = { done: ['orbchats.done', 'done'], failed: ['orbchats.failed', 'error'], blocked: ['orbchats.failed', 'error'], cancelled: ['orbchats.cancelled', 'muted'], limited: ['orbchats.limited', 'warn'] };
 export function orbProgress(item, t, { assistant = 'Orbe' } = {}) {
   const tasks = item?.tasks ?? [];
-  // 3.8.3: a task held for review after it ran (tasks.list › held) waits for the user's OK too.
+  // a task held for review after it ran (tasks.list › held) waits for the user's OK too.
   if (tasks.some((x) => x.status === 'awaiting_approval' || x.held)) return { text: t('orbchats.awaiting'), tone: 'warn', badge: true };
   if (item?.asks) return { text: t('orbchats.permission'), tone: 'warn', badge: true };
   if (item?.asking) return { text: t('orbchats.asking'), tone: 'warn', badge: true };
@@ -101,7 +101,7 @@ export function orbProgress(item, t, { assistant = 'Orbe' } = {}) {
   if (run) return { text: t('orbchats.running', { id: run.id, title: run.title }), tone: 'live' };
   if (item?.busy) return { text: t('chats.working'), tone: 'live' };
   const queued = tasks.filter((x) => x.status === 'queued');
-  // 3.8.3: with the queue paused they say so (tasks.list › waiting), not just «en cola».
+  // with the queue paused they say so (tasks.list › waiting), not just «en cola».
   if (queued.length && queued.every((x) => x.waiting?.kind === 'paused')) return { text: queued.length === 1 ? t('orbchats.pausedOne') : t('orbchats.paused', { n: queued.length }), tone: 'warn' };
   if (queued.length) return { text: queued.length === 1 ? t('orbchats.queuedOne') : t('orbchats.queued', { n: queued.length }), tone: 'muted' };
   if (item?.stalled) return { text: t('orbchats.stalled'), tone: 'warn' };
@@ -124,7 +124,7 @@ export const orbNeedsYou = (item) => Boolean(item?.asks || item?.asking || (item
 // The list as the screen draws it: the pinned chats on top (in their order, never repeated below), then one group per
 // project (the most recent first; «Sin proyecto» last). Completed chats are left out unless showDone; each group says
 // how many it left out. filter: { state: all | active | attention | done | snoozed, agent: all | <id> }.
-// 3.8.2: a snoozed chat (pinned or not) shows only under the «snoozed» filter until the scheduler wakes it.
+// a snoozed chat (pinned or not) shows only under the «snoozed» filter until the scheduler wakes it.
 export function groupOrb(items, { showDone = false, filter = { state: 'all', agent: 'all' } } = {}) {
   const st = filter?.state ?? 'all'; const ag = filter?.agent ?? 'all';
   const fits = (x) => (ag === 'all' || x.agent === ag) && (st === 'snoozed' ? Boolean(x.snoozedUntil) : !x.snoozedUntil
@@ -148,7 +148,7 @@ export function groupOrb(items, { showDone = false, filter = { state: 'all', age
   return { pinned, groups, hidden: groups.reduce((n, g) => n + g.hidden, 0), snoozed: list.filter((x) => x.snoozedUntil).length };
 }
 
-// 3.8.2: the quick times of «Posponer» from `now`: in an hour, this evening at 18:00 (until 17:00), tomorrow at 9:00
+// the quick times of «Posponer» from `now`: in an hour, this evening at 18:00 (until 17:00), tomorrow at 9:00
 // and next Monday at 9:00. Local time, as the user reads the clock.
 export function snoozeTimes(now = new Date()) {
   const at = (days, h) => { const d = new Date(now); d.setDate(d.getDate() + days); d.setHours(h, 0, 0, 0); return d; };

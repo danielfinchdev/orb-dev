@@ -35,7 +35,7 @@ export function DialogDescription({ className, ...props }) { return <DialogPrimi
 
 // ---- select
 // title: what the control is for, shown as the app's bubble on hover (and as its accessible name).
-// 3.6 (M2): the trigger shows the chosen option itself (SelectPrimitive.Value with children). Without them, Radix copies the
+// the trigger shows the chosen option itself (SelectPrimitive.Value with children). Without them, Radix copies the
 // option's text into the trigger through a portal into the same <span> React also writes the placeholder in, and with the
 // list kept in a detached fragment while closed, React 19 could fail with «insertBefore… is not a child of this node» when
 // the screen changed (seen going from one screen to another). With children there is one writer: options may carry
@@ -68,12 +68,12 @@ export function Select({ value, onValueChange, options, placeholder, className, 
 }
 
 // ---- tooltip
-// 2.6: the one tooltip of the whole app, a small speech bubble (app.css: .orb-tip, styled per visual theme): a short bold
+// the one tooltip of the whole app, a small speech bubble (app.css: .orb-tip, styled per visual theme): a short bold
 // title and, at most, a line or two of muted text, with a little tail towards the control. No icons inside. Shown on hover
 // and on keyboard focus; the control keeps its own accessible name (aria-label).
 // offset: how far from the control (more when a button sits right next to it, so the bubble never covers it).
 // off: kept closed (its control has a list of its own open, like the bell's).
-// 3.8.2: the bubble stays inside the window (collisionPadding) and its tail never sits on a rounded corner (TAIL_PAD,
+// the bubble stays inside the window (collisionPadding) and its tail never sits on a rounded corner (TAIL_PAD,
 // the largest --tip-radius of the themes): a bubble pushed against the window's edge hides its tail instead of looking cut.
 export const TAIL_PAD = 20;
 // Radix opens a tooltip on any focus; a focus that is not :focus-visible (given back by code after a pointer choice) is
@@ -87,7 +87,7 @@ export function BubbleTip({ title, text, children, side = 'bottom', align = 'cen
           up over the chat after every choice. */}
       <TooltipPrimitive.Trigger asChild onFocus={keyboardFocusOnly}>{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
-        {/* 3.2.1: a bubble only informs: clicks go through it to whatever it covers (it hid the project picker). */}
+        {/* a bubble only informs: clicks go through it to whatever it covers (it hid the project picker). */}
         <TooltipPrimitive.Content side={side} align={align} sideOffset={offset} collisionPadding={12} arrowPadding={TAIL_PAD} className={cn('orb-tip pointer-events-none z-50', wide ? 'max-w-80' : 'max-w-[17rem]')} data-testid="bubble-tip">
           {title ? <div className="orb-tip-title text-[13px] leading-snug font-semibold">{title}</div> : null}
           {text ? <p className={cn('orb-tip-text text-[12px] leading-snug', title && 'mt-0.5', wide && 'break-all')}>{text}</p> : null}
@@ -97,7 +97,7 @@ export function BubbleTip({ title, text, children, side = 'bottom', align = 'cen
     </TooltipPrimitive.Root>
   );
 }
-// 3.8.2: an «ⓘ» next to a setting's name: the details that do not fit in its one-line description. A real button, so
+// an «ⓘ» next to a setting's name: the details that do not fit in its one-line description. A real button, so
 // it is reached with the keyboard and its text is read by screen readers (the bubble also opens on focus).
 export function InfoTip({ text, className }) {
   if (!text) return null;
@@ -107,7 +107,7 @@ export function InfoTip({ text, className }) {
     </BubbleTip>
   );
 }
-// 3.2: a bubble with richer content (the card of a conversation in the sidebar): the same look, any content inside.
+// a bubble with richer content (the card of a conversation in the sidebar): the same look, any content inside.
 // onOpen: called when it shows (to fetch what it needs then, not before).
 export function RichTip({ content, children, side = 'right', align = 'start', offset = 12, onOpen }) {
   return (
@@ -143,7 +143,7 @@ export function PopoverContent({ className, children, side = 'bottom', align = '
 // ---- dropdown menu
 export const DropdownMenu = DropdownPrimitive.Root;
 export const DropdownMenuTrigger = DropdownPrimitive.Trigger;
-// 3.8.2: an item that opens a dialog (Renombrar, Posponer…): the focus stays in the dialog's field. The closing menu does
+// an item that opens a dialog (Renombrar, Posponer…): the focus stays in the dialog's field. The closing menu does
 // not take it back (the dialog slides under the pointer and Radix's «pointer left the item» focused the menu), nor hand it
 // to its button once closed (typing went nowhere). A menu inside a dialog still gives the focus back to its button.
 const inDialog = () => Boolean(document.activeElement?.closest?.('[role=dialog], [role=alertdialog]'));
@@ -156,7 +156,7 @@ export function DropdownMenuItem({ className, variant, onPointerLeave, ...props 
   const leave = (e) => { onPointerLeave?.(e); if (!e.defaultPrevented && closing(e.currentTarget)) e.preventDefault(); };
   return <DropdownPrimitive.Item onPointerLeave={leave} className={cn("focus:bg-accent focus:text-accent-foreground relative flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:text-muted-foreground", variant === 'destructive' && 'text-destructive focus:text-destructive [&_svg]:text-destructive', className)} {...props} />;
 }
-// 2.7: an item that is ticked or not (lists where several can be chosen); the menu stays open while ticking.
+// an item that is ticked or not (lists where several can be chosen); the menu stays open while ticking.
 export function DropdownMenuCheckboxItem({ className, children, checked, onCheckedChange, ...props }) {
   return (
     <DropdownPrimitive.CheckboxItem checked={checked} onCheckedChange={onCheckedChange} onSelect={(e) => e.preventDefault()} className={cn('focus:bg-accent focus:text-accent-foreground relative flex cursor-pointer items-center gap-2 rounded-md py-1.5 pr-2 pl-8 text-sm outline-hidden select-none', className)} {...props}>

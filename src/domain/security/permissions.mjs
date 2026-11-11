@@ -19,18 +19,18 @@ const REMOTE = new Set(['phone', 'browser']);
 export const METHODS = Object.freeze({
   // the app and its settings
   'app.state': 'remote', 'app.migrationState': 'pc', 'app.migrationRetry': 'pc', 'app.coreState': 'pc', 'app.coreRepair': 'pc', 'app.layoutPlan': 'pc', 'app.layoutApply': 'pc', 'config.save': 'pc', 'sidebar.complete': 'remote', 'control.pause': 'remote', 'control.resume': 'remote',
-  // 3.8.1: this PC's tools, in the engine (src/engine/api/app.mjs)
+  // this PC's tools, in the engine (src/engine/api/app.mjs)
   'app.openTerminal': 'pc', 'app.editors': 'pc', 'app.openIn': 'pc', 'app.runAction': 'pc', 'app.feedbackSend': 'pc', 'app.moreApps': 'pc',
-  // 3.8.2: the Windows app's music (src/engine/host/music.mjs)
+  // the Windows app's music (src/engine/host/music.mjs)
   'music.track': 'pc',
   'system.check': 'pc', 'installer.check': 'pc', 'installer.progress': 'pc', 'installer.start': 'pc',
   'activity.list': 'remote', 'usage.get': 'remote', 'usage.now': 'remote', 'usage.refresh': 'remote', 'usage.history': 'remote', 'models.guide': 'remote', 'models.catalog': 'remote',
   'mentions.options': 'remote', 'approvals.list': 'remote',
   // this PC's tools
   'android.status': 'pc', 'android.install': 'pc',
-  // 3.8.2: pairing a phone for the agents (Ajustes › Android, src/engine/host/android.mjs)
+  // pairing a phone for the agents (Ajustes › Android, src/engine/host/android.mjs)
   'android.pairStart': 'pc', 'android.pairState': 'pc', 'android.pairCancel': 'pc', 'android.pairCode': 'pc', 'android.devices': 'pc', 'android.disconnect': 'pc', 'android.forget': 'pc',
-  // 3.8.2 (T3 3.17): an Android emulator already installed on this PC
+  // an Android emulator already installed on this PC
   'android.emulators': 'pc', 'android.emulatorStart': 'pc', 'devtools.check': 'pc',
   'github.status': 'pc', 'github.contributions': 'pc', 'github.login': 'pc',
   'expert.tree': 'pc', 'expert.read': 'pc', 'expert.status': 'pc', 'expert.diff': 'pc', 'expert.log': 'pc', 'expert.system': 'pc',
@@ -45,7 +45,7 @@ export const METHODS = Object.freeze({
   'projects.remove': 'pc', 'projects.rename': 'pc', 'projects.setActive': 'remote', 'projects.setIcon': 'pc', 'projects.clearIcon': 'pc',
   'projects.branch': 'remote', 'projects.info': 'remote', 'projects.commit': 'pc', 'projects.merge': 'pc', 'projects.push': 'pc',
   'projects.createPr': 'pc', 'projects.createRepo': 'pc', 'projects.review': 'remote', 'projects.securityReview': 'remote',
-  // 3.8.1: finishing a project (its folder stays) also from the phone; deleting it (its folder too) only here.
+  // finishing a project (its folder stays) also from the phone; deleting it (its folder too) only here.
   'projects.finish': 'remote', 'projects.finished': 'remote', 'projects.reopen': 'remote', 'projects.deleteCheck': 'pc', 'projects.delete': 'pc', 'projects.deleteAbort': 'pc',
   'whiteboard.load': 'remote', 'whiteboard.save': 'remote', 'whiteboard.note': 'remote', 'whiteboard.attach': 'pc', 'whiteboard.remove': 'pc', 'whiteboard.folder': 'pc',
   'logs.list': 'remote', 'logs.read': 'remote',
@@ -57,9 +57,9 @@ export const METHODS = Object.freeze({
   'sessions.list': 'remote', 'sessions.create': 'remote', 'sessions.items': 'remote', 'sessions.send': 'remote', 'sessions.queue': 'remote',
   'sessions.editQueued': 'remote', 'sessions.approve': 'remote', 'sessions.resume': 'remote', 'sessions.fork': 'remote', 'sessions.settle': 'remote',
   'sessions.stop': 'remote', 'sessions.compact': 'remote', 'sessions.update': 'remote', 'sessions.remove': 'pc',
-  // 3.8.3: «Auto» / «Preguntar» for everything (Ajustes › Agentes and the assistant's chat), also from the phone
+  // «Auto» / «Preguntar» for everything (Ajustes › Agentes and the assistant's chat), also from the phone
   'permissions.setMode': 'remote',
-  // 3.8.2: «Acceso total al PC» and «Usar mi móvil Android» (src/engine/security/grants.mjs): given and taken back only here
+  // «Acceso total al PC» and «Usar mi móvil Android» (src/engine/security/grants.mjs): given and taken back only here
   'sessions.grantTotal': 'pc', 'sessions.grantAndroid': 'pc', 'sessions.revokeGrant': 'pc',
   // scheduled tasks
   'schedules.list': 'remote', 'schedules.create': 'remote', 'schedules.update': 'remote', 'schedules.run': 'remote', 'schedules.remove': 'pc',
@@ -76,41 +76,41 @@ export const METHODS = Object.freeze({
   'accounts.add': 'pc', 'accounts.scan': 'pc', 'accounts.update': 'pc', 'accounts.remove': 'pc', 'accounts.clearCooldown': 'pc',
   // backups
   'backup.status': 'pc', 'backup.list': 'pc', 'backup.now': 'pc', 'backup.verify': 'pc', 'backup.restore': 'pc', 'backup.recovery': 'pc', 'backup.previousKey': 'pc', 'legacy.status': 'pc', 'legacy.delete': 'pc',
-  // 3.8: the master password and the connectors' keys
+  // the master password and the connectors' keys
   'master.state': 'pc', 'master.create': 'pc', 'master.unlock': 'pc', 'master.lock': 'pc', 'master.check': 'pc', 'master.change': 'pc', 'master.forgot': 'pc', 'master.reset': 'pc',
   'secrets.connector': 'pc', 'secrets.saveConnector': 'pc',
-  // 3.8.2 (T3 3.4): a secret an agent asked for, typed only on this PC's card (src/engine/security/agent-secrets.mjs)
+  // a secret an agent asked for, typed only on this PC's card (src/engine/security/agent-secrets.mjs)
   'secrets.pending': 'pc', 'secrets.answer': 'pc', 'secrets.decline': 'pc',
-  // 3.8.2 (T3 3.2): the user's terminal inside Orb (src/engine/host/user-terminal.mjs)
+  // the user's terminal inside Orb (src/engine/host/user-terminal.mjs)
   'terminal.list': 'pc', 'terminal.open': 'pc', 'terminal.write': 'pc', 'terminal.close': 'pc',
-  // 3.8.1: Ajustes › Skills y MCP (src/engine/api/extensions.mjs): what agents run comes in and out of core only here
+  // Ajustes › Skills y MCP (src/engine/api/extensions.mjs): what agents run comes in and out of core only here
   'extensions.list': 'pc', 'extensions.toggle': 'pc', 'extensions.import': 'pc', 'extensions.remove': 'pc', 'extensions.approve': 'pc',
   'extensions.reject': 'pc', 'extensions.edit': 'pc', 'extensions.adopt': 'pc', 'extensions.applyCheck': 'pc', 'extensions.apply': 'pc'
 });
 // What a linked phone or browser may call (the rest is this PC's).
 export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter((m) => METHODS[m] === 'remote')));
 
-// 3.8: what this PC's window may only do right after the master password (a token of 5 minutes, src/engine/api/master.mjs):
+// what this PC's window may only do right after the master password (a token of 5 minutes, src/engine/api/master.mjs):
 // restoring a backup, checking one or making a new recovery code (the code opens the backups, and a check would try codes),
 // deleting the data of Orb 3.7, unlinking a phone, seeing or changing a connector's keys, opening core (the app asks
 // master.check) and, in config.save, choosing where the backups go, writing a connector's keys in clear, changing a
 // connector that has keys (its command, its arguments, its name, removing it or one of its keys) and taking a path off
-// «Cosas que nadie toca»; 3.8.1: deleting a project (its folder) and removing a skill or an MCP server from core (or a
+// «Cosas que nadie toca», deleting a project (its folder) and removing a skill or an MCP server from core (or a
 // connector). current: the settings now (the engine's), to compare
 // with. Changing the password asks for the current one instead.
-// 3.8.2: pairing a phone or starting an emulator (the agents may then reach it), and giving a chat «Acceso total al PC» or the phone (below: every
+// pairing a phone or starting an emulator (the agents may then reach it), and giving a chat «Acceso total al PC» or the phone (below: every
 // time).
 export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'backup.previousKey', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'projects.deleteCheck', 'extensions.remove',
   'android.pairStart', 'android.pairCode', 'android.emulatorStart', 'sessions.grantTotal', 'sessions.grantAndroid']));
-// 3.8.1: the actions that ask for the master password EVERY time, even right after another unlock (the owner: deleting a
+// the actions that ask for the master password EVERY time, even right after another unlock (the owner: deleting a
 // project «requiere master pass»): method → the purpose its token must carry (src/domain/security/master.mjs › issue(purpose)).
 // projects.delete and projects.deleteAbort need no token: they take the one-off ticket projects.deleteCheck returned
 // (project-close.mjs), so a token that expires while the Recycle Bin works never leaves a delete half-way.
-// 3.8.2 (D1, D2): «Acceso total al PC» and «Usar mi móvil Android», given to a chat.
-// 3.8.3 (owner's decision): «Acceso total» and «Usar mi móvil Android» take the usual 5-minute unlock (UNLOCK_METHODS), not
+// «Acceso total al PC» and «Usar mi móvil Android», given to a chat:
+// they take the usual 5-minute unlock (UNLOCK_METHODS), not
 // the password every time; they still go when Orb locks (src/engine/security/grants.mjs).
 export const FRESH_UNLOCK = Object.freeze({ 'projects.deleteCheck': 'deleteProject' });
-// 3.8.2 (security review): a secret an agent asked for, saved in the vault or taken from it, asks every time too (its
+// a secret an agent asked for, saved in the vault or taken from it, asks every time too (its
 // token is for that one action); the purpose depends on what the card does.
 export const SECRET_PURPOSES = Object.freeze({ save: 'secretSave', saved: 'secretSaved' });
 export const FRESH_PURPOSES = Object.freeze([...new Set([...Object.values(FRESH_UNLOCK), ...Object.values(SECRET_PURPOSES)])]);
@@ -121,7 +121,7 @@ export function freshPurpose(method, params) {
 }
 export function needsUnlock(method, params, current = {}) {
   if (UNLOCK_METHODS.has(method)) return true;
-  // 3.8.2 (T3 3.4): a secret for an agent saved in the vault, or taken from it.
+  // a secret for an agent saved in the vault, or taken from it.
   if (method === 'secrets.answer') return params?.save === true || params?.saved === true;
   if (method !== 'config.save') return false;
   const patch = params?.patch ?? {};

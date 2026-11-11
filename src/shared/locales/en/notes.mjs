@@ -1,4 +1,4 @@
-// 3.6, messaging (step M4): the phone's notifications as a messaging app's (who writes, one per chat, «Reply»,
+// Messaging: the phone's notifications as a messaging app's (who writes, one per chat, «Reply»,
 // «Approve» and «Reject»).
 export default {
   'msg.notes.reply': 'Reply',

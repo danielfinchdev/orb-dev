@@ -136,7 +136,7 @@ pub fn screen_lock_of(event: &str, payload: &Value) -> Option<bool> {
 }
 
 /// core itself, or its secrets or anything inside them (real paths, lower case): guarded by the master password.
-/// 3.8.1 (item f): core\datos too (orb.db, the sealed approval secret), with everything under it.
+/// core\datos too (orb.db, the sealed approval secret), with everything under it.
 pub fn guarded_core(target: &str, core: &str, inside: &[&str]) -> bool {
   target == core || inside.iter().any(|d| target == *d || target.starts_with(&format!("{d}\\")))
 }

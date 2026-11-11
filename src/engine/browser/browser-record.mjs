@@ -1,4 +1,4 @@
-// 3.8.2 (T3 3.11): the recording of the agents' browser. The JPEG pictures of the page's screencast (host-browser.mjs)
+// the recording of the agents' browser. The JPEG pictures of the page's screencast (host-browser.mjs)
 // at a steady rate, written as a Motion-JPEG AVI that Windows' own player opens; no encoder or extra program needed.
 import fs from 'node:fs';
 import path from 'node:path';

@@ -1,4 +1,4 @@
-// 3.6, mensajería: la lista de chats como una app de mensajería (fijados, sin leer, menú de cada chat), la cabecera
+// Mensajería: la lista de chats como una app de mensajería (fijados, sin leer, menú de cada chat), la cabecera
 // de la conversación y su información.
 export default {
   // Lista de chats
