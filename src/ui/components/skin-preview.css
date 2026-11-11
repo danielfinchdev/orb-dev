@@ -13,7 +13,7 @@
 .dark .skp .night { display: block; }
 .dark .skp .day { display: none; }
 .skp-deco { display: block; }
-.skp svg.skp-deco, .skp svg.skp-rt-chev { display: block; height: auto; overflow: visible; }
+.skp svg.skp-deco { display: block; height: auto; overflow: visible; }
 .dark .skp svg.night { display: block; }
 
 /* The sidebar. */
@@ -101,36 +101,27 @@ html.window-idle .skp-deco { animation-play-state: paused; }
 .skp-vw-floor { left: -50%; right: -50%; bottom: -8%; height: 36%; transform-origin: 50% 0; transform: perspective(60px) rotateX(60deg);
   background: linear-gradient(var(--p-grid) 1px, transparent 1px) 0 0 / 11px 11px, linear-gradient(90deg, var(--p-grid) 1px, transparent 1px) 0 0 / 11px 11px; mask-image: linear-gradient(to bottom, transparent, #000 35%); }
 
-/* ================================================================ RETRO: the seventies by day (orange page, peach
-   panels, black outlines with hard orange shadows, chevrons and flat shapes), the arcade by night (black, rainbow
-   pixel invaders, phosphor green, scanlines). IBM Plex Mono, titles Bungee. */
-.skp[data-skin-preview="retro"] { --p-font: "IBM Plex Mono", "Cascadia Code", Consolas, monospace; --p-title: "Bungee", var(--p-font); --p-r: 3px;
-  --p-ink: #1a0a10; --p-off: #f08a4b; --p-off2: #f6b73c; --p-cream: #eee6d5;
-  --p-bg: #f3c3a0; --p-fg: oklch(0.24 0.05 30); --p-side: oklch(0.92 0.06 60); --p-card: oklch(0.95 0.045 75); --p-border: var(--p-ink); --p-primary: oklch(0.45 0.18 22);
-  --p-accent: #fbd3dc; --p-accent-fg: var(--p-ink); --p-bubble: oklch(0.42 0.1 250); --p-bubble-fg: #fff;
-  --p-scene: linear-gradient(170deg, #f4c7a2, #efb98f 60%, #f3c3a0); --p-glass: oklch(0.95 0.045 75 / 0.78); --p-glass-line: rgb(26 10 16 / 0.35);
-  --p-side-art: repeating-linear-gradient(to bottom, transparent 0 2px, rgb(90 11 30 / 0.05) 2px 3px); --p-side-line: var(--p-ink);
-  --p-new: var(--p-cream); --p-card-shadow: 1.5px 1.5px 0 var(--p-off); --p-on-line: var(--p-ink); --p-on-shadow: 1.5px 1.5px 0 var(--p-off);
-  --p-box-shadow: 2px 2px 0 var(--p-off2); --p-send: var(--p-cream); --p-send-line: var(--p-ink); --p-send-shadow: 1px 1px 0 var(--p-off);
-  --p-bar: none; --p-bar-line: transparent; --p-frost: rgb(243 195 160 / 0.22); }
-.skp[data-skin-preview="retro"] .skp-mark { font-weight: 400; font-size: 6px; letter-spacing: 0.1em; padding: 1.5px 3px 1px; border: 1px solid var(--p-fg); border-radius: 2px; box-shadow: 1.5px 1.5px 0 var(--p-primary); }
-.skp[data-skin-preview="retro"] .skp-mark i { width: 1.5px; height: 1.5px; margin: 0 1px 0 0; }
-.skp[data-skin-preview="retro"] :is(.skp-new, .skp-nav.on, .skp-box, .skp-bot) { border-width: 1px; }
-.skp[data-skin-preview="retro"] .skp-bot { border-color: var(--p-glass-line); }
-.skp-rt-chev { right: -6px; bottom: 2px; width: 52px; opacity: 0.7; }
-.skp-rt-aster { right: 4px; top: 19px; width: 11px; }
-.skp-rt-diamond { left: calc(31% + 7px); bottom: 30px; width: 7px; --r: 0deg; }
-.dark .skp[data-skin-preview="retro"] { --p-ink: #39ff14; --p-off: #ff4fd8; --p-off2: #3ef0ff; --p-cream: oklch(0.15 0.01 290);
-  --p-bg: #000; --p-fg: oklch(0.95 0.02 145); --p-side: oklch(0.08 0 0); --p-card: oklch(0.15 0.01 290); --p-primary: oklch(0.87 0.26 142);
-  --p-accent: oklch(0.28 0.1 330); --p-accent-fg: oklch(0.9 0.16 330); --p-bubble: oklch(0.35 0.14 330);
-  --p-scene: #000; --p-glass: oklch(0.15 0.01 290 / 0.78); --p-glass-line: rgb(57 255 20 / 0.4); --p-side-art: repeating-linear-gradient(to bottom, transparent 0 2px, rgb(0 0 0 / 0.28) 2px 3px);
-  --p-send: var(--p-card); --p-send-line: var(--p-ink); --p-frost: rgb(0 0 0 / 0.2); }
-.dark .skp[data-skin-preview="retro"] .skp-mark { box-shadow: 1.5px 1.5px 0 var(--p-off); border-color: var(--p-ink); }
-.skp-rt-stars { inset: 0; background: radial-gradient(circle, rgb(225 235 255 / 0.55) 0 0.6px, transparent 1px) 0 0 / 13px 11px, radial-gradient(circle, rgb(225 235 255 / 0.5) 0 0.7px, transparent 1.1px) 6px 5px / 21px 19px; }
-.skp-rt-inv1 { right: 4px; top: 19px; width: 10px; }
-.skp-rt-inv2 { right: 5px; top: 31px; width: 9px; }
-.skp-rt-crab { left: calc(31% + 7px); bottom: 30px; width: 9px; filter: drop-shadow(0 0 2px rgb(57 255 20 / 0.9)); }
-.skp-rt-rocket { right: 4px; bottom: 27px; width: 8px; filter: drop-shadow(0 0 2px rgb(57 255 20 / 0.9)); }
+/* ================================================================ RETRO: a green-phosphor terminal, dark only (the
+   thumbnail looks the same in both modes): black glass, VT323 text, double frames, inverse video for the chosen item,
+   faint invaders and scanlines. */
+.skp[data-skin-preview="retro"] { --p-font: "VT323", "IBM Plex Mono", Consolas, monospace; --p-title: "Press Start 2P", var(--p-font); --p-r: 0px;
+  --p-bg: oklch(0.1 0.01 150); --p-fg: oklch(0.9 0.2 145); --p-side: oklch(0.11 0.012 150); --p-card: oklch(0.12 0.014 150); --p-border: oklch(0.72 0.18 145); --p-primary: oklch(0.86 0.21 145);
+  --p-accent: oklch(0.86 0.21 145); --p-accent-fg: oklch(0.11 0.012 150); --p-bubble: oklch(0.2 0.045 150); --p-bubble-fg: oklch(0.92 0.17 145);
+  --p-scene: #000; --p-glass: oklch(0.1 0.01 150 / 0.85); --p-glass-line: oklch(0.52 0.13 145);
+  --p-side-art: repeating-linear-gradient(to bottom, transparent 0 2px, rgb(0 0 0 / 0.28) 2px 3px); --p-side-line: oklch(0.86 0.21 145);
+  --p-new: transparent; --p-new-line: oklch(0.86 0.21 145); --p-on-line: oklch(0.86 0.21 145); --p-bubble-line: oklch(0.72 0.18 145);
+  --p-box: oklch(0.12 0.014 150); --p-box-line: oklch(0.86 0.21 145); --p-bar: none; --p-bar-line: oklch(0.52 0.13 145); --p-frost: rgb(0 0 0 / 0.2); text-shadow: 0 0 3px oklch(0.86 0.21 145 / 0.5); }
+.skp[data-skin-preview="retro"] .skp-mark { font-size: 4.5px; padding: 2px 3px 2px; border: 1px double var(--p-primary); border-radius: 0; color: var(--p-primary); }
+.skp[data-skin-preview="retro"] .skp-mark i { width: 1.5px; height: 1.5px; margin: 0 1px 0 0; border-radius: 0; background: oklch(0.84 0.16 75); }
+.skp[data-skin-preview="retro"] :is(.skp-new, .skp-nav.on, .skp-box, .skp-bot, .skp-me) { border-width: 1px; }
+.skp[data-skin-preview="retro"] .skp-bot { border-style: dashed; }
+.skp[data-skin-preview="retro"] .skp-me { border-style: dashed; }
+.skp[data-skin-preview="retro"] .skp-box { border-style: double; border-width: 2px; }
+.skp-rt-stars { inset: 0; background: radial-gradient(circle, rgb(150 255 150 / 0.4) 0 0.6px, transparent 1px) 0 0 / 13px 11px, radial-gradient(circle, rgb(150 255 150 / 0.35) 0 0.7px, transparent 1.1px) 6px 5px / 21px 19px; }
+.skp-rt-inv1 { right: 4px; top: 19px; width: 10px; opacity: 0.35; }
+.skp-rt-inv2 { right: 5px; top: 31px; width: 9px; opacity: 0.35; }
+.skp-rt-crab { left: calc(31% + 7px); bottom: 30px; width: 9px; opacity: 0.45; }
+.skp-rt-rocket { right: 4px; bottom: 27px; width: 8px; opacity: 0.45; }
 .skp-rt-scan { inset: 0; background: repeating-linear-gradient(to bottom, transparent 0 2px, rgb(0 0 0 / 0.3) 2px 3px); }
 
 /* ================================================================ PROFESIONAL: plain and sober, zinc greys and a

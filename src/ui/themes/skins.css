@@ -107,97 +107,76 @@ html[data-skin="vaporwave"] .brand-sky::before {
 }
 
 /* ================================================================================================================
-   RETRO — the seventies by day (a warm orange page, peach / butter / blush panels, black outlines with hard coloured
-   shadows, hi-fi controls) and the arcade by night (pure black, rainbow pixel invaders, phosphor green). IBM Plex Mono,
-   titles in Bungee. The scene and the components are further down.
+   RETRO — a green-phosphor terminal (Windows cmd, VT100): black glass, P1 green text, amber for warnings, inverse
+   video for what is chosen. Dark only: the tokens sit on html[data-skin="retro"] with no .dark variant, so an instant
+   without .dark never looks light (lib/store.js › applyTheme forces .dark for it). VT323 for the text and Press Start 2P
+   for the few titles. The scene and the components are in scene-retro.css.
    ================================================================================================================ */
 html[data-skin="retro"] {
-  --radius: 0.5rem;
-  --background: oklch(0.87 0.075 55);
-  --foreground: oklch(0.24 0.05 30);
-  --card: oklch(0.95 0.045 75);
-  --card-foreground: oklch(0.24 0.05 30);
-  --popover: oklch(0.96 0.04 75);
-  --popover-foreground: oklch(0.24 0.05 30);
-  --primary: oklch(0.45 0.18 22);
-  --primary-foreground: oklch(0.99 0.005 80);
-  --secondary: oklch(0.9 0.06 20);
-  --secondary-foreground: oklch(0.3 0.12 15);
-  --muted: oklch(0.9 0.05 60);
-  --muted-foreground: oklch(0.38 0.07 35);
-  --accent: oklch(0.88 0.07 40);
-  --accent-foreground: oklch(0.3 0.12 15);
-  --destructive: oklch(0.5 0.19 25);
-  --success: oklch(0.45 0.1 150);
-  --warning: oklch(0.45 0.11 70);
-  --warning-ink: oklch(0.45 0.11 70);
-  --warning-foreground: oklch(0.99 0 0);
-  --info: oklch(0.42 0.1 250);
-  --border: oklch(0.3 0.04 30);
-  --input: oklch(0.3 0.04 30);
-  --ring: oklch(0.55 0.15 40);
-  --sidebar: oklch(0.92 0.06 60);
-  --bubble: oklch(0.42 0.1 250);
-  --bubble-foreground: oklch(0.99 0 0);
-  --rt-shadow: rgb(240 138 75 / 0.9);
-  --rt-scan: rgb(90 11 30 / 0.05);
-  --rt-space: #fdd9c4;
-  --rt-star: rgb(90 11 30 / 0.4);
-  --rt-invaders: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 16' shape-rendering='crispEdges'%3E%3Cpath fill='%235a0b1e' fill-opacity='0.5' d='M4 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h7v1h-7zM3 7h2v1h-2zM6 7h3v1h-3zM10 7h2v1h-2zM2 8h11v1h-11zM2 9h1v1h-1zM4 9h7v1h-7zM12 9h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM5 11h2v1h-2zM8 11h2v1h-2zM27 4h2v1h-2zM26 5h4v1h-4zM25 6h6v1h-6zM24 7h2v1h-2zM27 7h2v1h-2zM30 7h2v1h-2zM24 8h8v1h-8zM26 9h1v1h-1zM29 9h1v1h-1zM25 10h1v1h-1zM27 10h2v1h-2zM30 10h1v1h-1zM24 11h1v1h-1zM26 11h1v1h-1zM29 11h1v1h-1zM31 11h1v1h-1zM46 4h4v1h-4zM43 5h10v1h-10zM42 6h12v1h-12zM42 7h3v1h-3zM47 7h2v1h-2zM51 7h3v1h-3zM42 8h12v1h-12zM45 9h2v1h-2zM49 9h2v1h-2zM44 10h2v1h-2zM47 10h2v1h-2zM50 10h2v1h-2zM42 11h2v1h-2zM52 11h2v1h-2z'/%3E%3C/svg%3E");
-  --rt-ship: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 6' shape-rendering='crispEdges'%3E%3Cpath fill='%235a0b1e' d='M5 0h1v1h-1zM4 1h3v1h-3zM4 2h3v1h-3zM1 3h9v1h-9zM0 4h11v1h-11zM0 5h11v1h-11z'/%3E%3C/svg%3E");
-}
-html.dark[data-skin="retro"] {
-  --radius: 0.15rem;
-  --background: oklch(0.1 0 0);
-  --foreground: oklch(0.95 0.02 145);
-  --card: oklch(0.15 0.01 290);
-  --card-foreground: oklch(0.95 0.02 145);
-  --popover: oklch(0.17 0.012 290);
-  --popover-foreground: oklch(0.95 0.02 145);
-  --primary: oklch(0.87 0.26 142);
-  --primary-foreground: oklch(0.12 0.02 150);
-  --secondary: oklch(0.25 0.08 300);
-  --secondary-foreground: oklch(0.93 0.04 300);
-  --muted: oklch(0.2 0.02 290);
-  --muted-foreground: oklch(0.8 0.06 145);
-  --accent: oklch(0.28 0.1 330);
-  --accent-foreground: oklch(0.9 0.16 330);
-  --destructive: oklch(0.68 0.22 27);
-  --success: oklch(0.84 0.22 145);
-  --warning: oklch(0.88 0.17 100);
-  --warning-ink: oklch(0.88 0.17 100);
-  --info: oklch(0.85 0.13 200);
-  --border: oklch(0.45 0.15 145);
-  --input: oklch(0.6 0.2 145);
-  --ring: oklch(0.87 0.26 142);
-  --sidebar: oklch(0.08 0 0);
-  --bubble: oklch(0.35 0.14 330);
-  --bubble-foreground: oklch(0.99 0 0);
-  --rt-shadow: rgb(57 255 20 / 0.55);
+  --radius: 0px;
+  --background: oklch(0.1 0.01 150);
+  --foreground: oklch(0.9 0.2 145);
+  --card: oklch(0.12 0.014 150);
+  --card-foreground: oklch(0.9 0.2 145);
+  --popover: oklch(0.13 0.016 150);
+  --popover-foreground: oklch(0.9 0.2 145);
+  --primary: oklch(0.86 0.21 145);
+  --primary-foreground: oklch(0.11 0.012 150);
+  --primary-soft: oklch(0.26 0.07 145);
+  --primary-text: oklch(0.88 0.2 145);
+  --secondary: oklch(0.18 0.03 150);
+  --secondary-foreground: oklch(0.9 0.2 145);
+  --muted: oklch(0.18 0.03 150);
+  --muted-foreground: oklch(0.82 0.19 145);
+  --faint-foreground: oklch(0.74 0.17 145);
+  --accent: oklch(0.22 0.04 150);
+  --accent-foreground: oklch(0.9 0.2 145);
+  --destructive: oklch(0.74 0.19 28);
+  --destructive-soft: oklch(0.24 0.06 28);
+  --success: oklch(0.86 0.21 145);
+  --success-soft: oklch(0.24 0.06 145);
+  --warning: oklch(0.84 0.16 75);
+  --warning-ink: oklch(0.84 0.16 75);
+  --warning-soft: oklch(0.24 0.05 75);
+  --warning-foreground: oklch(0.11 0.012 150);
+  --info: oklch(0.84 0.12 205);
+  --border: oklch(0.52 0.13 145);
+  --input: oklch(0.72 0.18 145);
+  --ring: oklch(0.84 0.16 75);
+  --sidebar: oklch(0.11 0.012 150);
+  --bubble: oklch(0.2 0.045 150);
+  --bubble-foreground: oklch(0.92 0.17 145);
+  --chart-empty: oklch(0.32 0.06 150);
+  --rt-ink: var(--primary);
+  --rt-glow: 0 0 5px oklch(0.86 0.21 145 / 0.45);
   --rt-scan: rgb(0 0 0 / 0.28);
-  --rt-space: #000000;
-  --rt-star: rgb(225 235 255 / 0.55);
-  --rt-invaders: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 16' shape-rendering='crispEdges'%3E%3Cpath fill='%2339ff14' fill-opacity='0.55' d='M4 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h7v1h-7zM3 7h2v1h-2zM6 7h3v1h-3zM10 7h2v1h-2zM2 8h11v1h-11zM2 9h1v1h-1zM4 9h7v1h-7zM12 9h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM5 11h2v1h-2zM8 11h2v1h-2zM27 4h2v1h-2zM26 5h4v1h-4zM25 6h6v1h-6zM24 7h2v1h-2zM27 7h2v1h-2zM30 7h2v1h-2zM24 8h8v1h-8zM26 9h1v1h-1zM29 9h1v1h-1zM25 10h1v1h-1zM27 10h2v1h-2zM30 10h1v1h-1zM24 11h1v1h-1zM26 11h1v1h-1zM29 11h1v1h-1zM31 11h1v1h-1zM46 4h4v1h-4zM43 5h10v1h-10zM42 6h12v1h-12zM42 7h3v1h-3zM47 7h2v1h-2zM51 7h3v1h-3zM42 8h12v1h-12zM45 9h2v1h-2zM49 9h2v1h-2zM44 10h2v1h-2zM47 10h2v1h-2zM50 10h2v1h-2zM42 11h2v1h-2zM52 11h2v1h-2z'/%3E%3C/svg%3E");
-  --rt-ship: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 6' shape-rendering='crispEdges'%3E%3Cpath fill='%2339ff14' d='M5 0h1v1h-1zM4 1h3v1h-3zM4 2h3v1h-3zM1 3h9v1h-9zM0 4h11v1h-11zM0 5h11v1h-11z'/%3E%3C/svg%3E");
+  --rt-star: rgb(150 255 150 / 0.3);
+  --rt-invaders: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 16' shape-rendering='crispEdges'%3E%3Cpath fill='%2339ff14' fill-opacity='0.5' d='M4 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h7v1h-7zM3 7h2v1h-2zM6 7h3v1h-3zM10 7h2v1h-2zM2 8h11v1h-11zM2 9h1v1h-1zM4 9h7v1h-7zM12 9h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM5 11h2v1h-2zM8 11h2v1h-2zM27 4h2v1h-2zM26 5h4v1h-4zM25 6h6v1h-6zM24 7h2v1h-2zM27 7h2v1h-2zM30 7h2v1h-2zM24 8h8v1h-8zM26 9h1v1h-1zM29 9h1v1h-1zM25 10h1v1h-1zM27 10h2v1h-2zM30 10h1v1h-1zM24 11h1v1h-1zM26 11h1v1h-1zM29 11h1v1h-1zM31 11h1v1h-1zM46 4h4v1h-4zM43 5h10v1h-10zM42 6h12v1h-12zM42 7h3v1h-3zM47 7h2v1h-2zM51 7h3v1h-3zM42 8h12v1h-12zM45 9h2v1h-2zM49 9h2v1h-2zM44 10h2v1h-2zM47 10h2v1h-2zM50 10h2v1h-2zM42 11h2v1h-2zM52 11h2v1h-2z'/%3E%3C/svg%3E");
+  --rt-ship: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 6' shape-rendering='crispEdges'%3E%3Cpath fill='%2339ff14' fill-opacity='0.7' d='M5 0h1v1h-1zM4 1h3v1h-3zM4 2h3v1h-3zM1 3h9v1h-9zM0 4h11v1h-11zM0 5h11v1h-11z'/%3E%3C/svg%3E");
 }
-/* The welcome backdrop: scanlines, two rows of invaders marching, stars, the ground line and the player's cannon. */
+/* The welcome backdrop: scanlines, two rows of invaders that step sideways (two poses swapped by opacity, the same
+   keyframes as the chat bar's), stars, the ground line and the player's cannon. */
 html[data-skin="retro"] .brand-sky {
+  position: relative; isolation: isolate;
   background:
     repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px),
-    var(--rt-invaders) 0 9% / 240px 64px repeat-x,
-    var(--rt-invaders) 120px calc(9% + 76px) / 240px 64px repeat-x,
+    radial-gradient(ellipse at 50% 45%, transparent 55%, rgb(0 0 0 / 0.5)),
     var(--rt-ship) 50% calc(100% - 26px) / 44px 24px no-repeat,
     linear-gradient(var(--rt-star), var(--rt-star)) 0 calc(100% - 18px) / 100% 3px no-repeat,
     radial-gradient(circle at 30px 40px, var(--rt-star) 0 1.5px, transparent 2px) 0 0 / 170px 130px,
     radial-gradient(circle at 110px 95px, var(--rt-star) 0 1px, transparent 1.5px) 0 0 / 230px 170px,
-    var(--rt-space);
+    var(--background);
 }
-@media (prefers-reduced-motion: no-preference) { html[data-skin="retro"]:not([data-motion="minima"]) .brand-sky { animation: rt-march 2.4s steps(1, end) infinite; } }
-@keyframes rt-march {
-  0%, 100% { background-position: 0 0, 0 9%, 120px calc(9% + 76px), 50% calc(100% - 26px), 0 calc(100% - 18px), 0 0, 0 0, 0 0; }
-  50% { background-position: 0 0, 16px 9%, 136px calc(9% + 76px), 50% calc(100% - 26px), 0 calc(100% - 18px), 0 0, 0 0, 0 0; }
+html[data-skin="retro"] .brand-sky::before, html[data-skin="retro"] .brand-sky::after {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: var(--rt-invaders) 0 9% / 240px 64px repeat-x, var(--rt-invaders) 120px calc(9% + 76px) / 240px 64px repeat-x;
 }
-html[data-skin="retro"] .brand-sky .shadow-2xl { box-shadow: 6px 6px 0 0 var(--rt-shadow); }
+html[data-skin="retro"] .brand-sky::after { background-position: 16px 9%, 136px calc(9% + 76px); opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  html[data-skin="retro"]:not([data-motion="minima"]) .brand-sky::before { animation: rt-band-a 2.4s steps(1, end) infinite; }
+  html[data-skin="retro"]:not([data-motion="minima"]) .brand-sky::after { animation: rt-band-b 2.4s steps(1, end) infinite; }
+}
+html[data-skin="retro"] .brand-sky .shadow-2xl { box-shadow: 0 0 0 1px var(--primary), 0 0 22px -6px oklch(0.86 0.21 145 / 0.5); }
 
 /* ================================================================================================================
    PROFESIONAL: plain and sober, like a developer tool in the line of Linear and VS Code. Zinc greys, one indigo accent

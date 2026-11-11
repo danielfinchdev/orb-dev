@@ -47,7 +47,6 @@ html.window-idle .scene *, html.window-idle .scene *::before, html.window-idle .
    the card's colour (the system's notes have theirs), gentle and in the theme's own shape. Nothing in orb / profesional. */
 html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) .chat-glass { background-color: color-mix(in oklch, var(--card) 76%, transparent); border-radius: calc(var(--radius) + 6px); padding: 0.55rem 0.9rem 0.7rem; }
 html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) .chat-glass.chat-hero { padding: 0.9rem 1.4rem 1.1rem; }
-html[data-skin="retro"] .chat-glass { border: 1.5px solid color-mix(in oklch, var(--rt-ink) 35%, transparent); }
 html[data-skin="nube"] .chat-glass { border-radius: 1.2rem; }
 
 /* ---- With a transparent bar, what scrolls up under it would be cut by a hard line at the bar's edge: the screens'
@@ -65,14 +64,6 @@ html[data-skin="nube"] .chat-glass { border-radius: 1.2rem; }
 
 /* ---- The window's own minimise / maximise / close (app.css draws the plain ghost ones of orb / profesional): in each
    theme, the same shape as its icon buttons; the close one turns red (or the theme's hot colour) on hover. ---- */
-html[data-skin="retro"] .win-control { width: 2rem; height: 2rem; border-radius: 999px; border: 2px solid var(--rt-ink); background-color: var(--rt-cream); color: var(--rt-ink); box-shadow: 2px 2px 0 var(--rt-off); }
-html[data-skin="retro"] .win-control svg { stroke-width: 2.4; }
-html[data-skin="retro"] .win-control:hover { background-color: color-mix(in oklch, var(--rt-cream) 88%, #000); color: var(--rt-ink); }
-html[data-skin="retro"] .win-control:active { transform: none; translate: 1px 1px; box-shadow: 1px 1px 0 var(--rt-off); }
-html[data-skin="retro"] .win-control.win-close:hover { background-color: var(--rt-coral); color: #fff; }
-html.dark[data-skin="retro"] .win-control { background-color: var(--card); color: var(--foreground); }
-html.dark[data-skin="retro"] .win-control:hover { background-color: var(--accent); color: var(--accent-foreground); }
-html.dark[data-skin="retro"] .win-control.win-close:hover { background-color: var(--rt-pink); color: #000; }
 html[data-skin="nube"] .win-control { width: 2.1rem; height: 1.9rem; border-radius: 999px; background-color: var(--card); color: var(--primary-text); border: 1.5px solid var(--cd-rim); box-shadow: 0 2px 0 var(--cd-drop); }
 html[data-skin="nube"] .win-control:hover { background-color: var(--accent); color: var(--primary-text); }
 html[data-skin="nube"] .win-control:active { transform: none; translate: 0 2px; box-shadow: none; }

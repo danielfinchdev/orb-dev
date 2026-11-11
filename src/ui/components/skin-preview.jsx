@@ -29,23 +29,14 @@ const VaporwaveNight = () => (
     <i className="skp-vw-stars night" /><i className="skp-vw-glow night" /><i className="skp-vw-sun night" /><i className="skp-vw-mount night" /><i className="skp-vw-floor night" />
   </>
 );
-const RetroDay = () => (
+const Retro = () => (
   <>
-    <svg viewBox="0 0 520 320" fill="none" strokeWidth="30" strokeLinejoin="miter" className="skp-rt-chev day" aria-hidden="true">
-      {['#5a0b1e', '#d9424e', '#f08a4b', '#fdd9c4', '#f6b73c'].map((c, i) => <path key={c} d={`M-10 ${180 + i * 34}L260 ${60 + i * 34}L530 ${180 + i * 34}`} stroke={c} />)}
-    </svg>
-    <svg viewBox="0 0 100 100" className="skp-deco skp-rt-aster day" aria-hidden="true">{[0, 30, 60, 90, 120, 150].map((r) => <ellipse key={r} cx="50" cy="50" rx="48" ry="11" fill="#e5584f" transform={`rotate(${r} 50 50)`} />)}<circle cx="50" cy="50" r="12" fill="#f6b73c" /></svg>
-    <svg viewBox="0 0 100 100" className="skp-deco skp-rt-diamond day" aria-hidden="true"><path d="M50 2L98 50 50 98 2 50z" fill="#f08a4b" /></svg>
-  </>
-);
-const RetroNight = () => (
-  <>
-    <i className="skp-rt-stars night" />
-    <Pixels rows={PIX.octopus} color="#ffe14d" className="skp-deco skp-rt-inv1 night" />
-    <Pixels rows={PIX.crab} color="#ff2fd2" className="skp-deco skp-rt-inv2 night" />
-    <Pixels rows={PIX.crab} color="#39ff14" className="skp-deco skp-rt-crab night" />
-    <Pixels rows={PIX.rocket} color="#39ff14" className="skp-deco skp-rt-rocket night" />
-    <i className="skp-rt-scan night" />
+    <i className="skp-rt-stars" />
+    <Pixels rows={PIX.octopus} color="#39ff14" className="skp-deco skp-rt-inv1" />
+    <Pixels rows={PIX.crab} color="#39ff14" className="skp-deco skp-rt-inv2" />
+    <Pixels rows={PIX.crab} color="#39ff14" className="skp-deco skp-rt-crab" />
+    <Pixels rows={PIX.rocket} color="#39ff14" className="skp-deco skp-rt-rocket" />
+    <i className="skp-rt-scan" />
   </>
 );
 // Candy: a puffy cloud, a swirl lollipop and a sugared gumdrop, shaded with radial gradients like the real ones.
@@ -79,7 +70,7 @@ const Candy = () => (
 const SCENE = {
   orb: <><i className="skp-cloud a" /><i className="skp-cloud b" /></>,
   vaporwave: <><VaporwaveDay /><VaporwaveNight /></>,
-  retro: <><RetroDay /><RetroNight /></>,
+  retro: <Retro />,
   profesional: null,
   nube: <Candy />,
   cristal: null // its still colour field is --p-scene (skin-preview.css)

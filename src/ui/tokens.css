@@ -2,7 +2,7 @@
 @custom-variant dark (&:is(.dark *));
 /* Órbita compact scale (13 px interface, 14.5 px chat): desktop pointers only, and only the themes already restyled as
    Órbita (the others keep their sizes until they are). The phone keeps its larger sizes and its 16 px fields. */
-@custom-variant compact { @media (pointer: fine) { html:is([data-skin="orb"], [data-skin="profesional"], [data-skin="nube"], [data-skin="vaporwave"]) & { @slot; } } }
+@custom-variant compact { @media (pointer: fine) { html:is([data-skin="orb"], [data-skin="profesional"], [data-skin="nube"], [data-skin="vaporwave"], [data-skin="retro"]) & { @slot; } } }
 
 /* Orb theme tokens, the base every other theme overrides: cool neutrals at hue 268 and a periwinkle primary.
    The -soft tokens are tinted fills for status chips; --primary-text and the status colours are meant as text on them,
@@ -86,18 +86,6 @@
   --bubble: oklch(0.71 0.09 264);
   --bubble-foreground: oklch(0.2 0.03 264);
   --chart-empty: oklch(0.34 0.014 268);
-}
-
-/* The other themes do not set the Órbita-only tokens: without this they would wear the Orb values. Derived from each
-   theme's own colours so a component that uses them keeps that theme's look (text on a tint = the plain colour). */
-html[data-skin]:not([data-skin="orb"], [data-skin="profesional"], [data-skin="nube"], [data-skin="vaporwave"]) {
-  --primary-text: var(--primary);
-  --primary-soft: color-mix(in oklch, var(--primary) 12%, var(--card));
-  --faint-foreground: var(--muted-foreground);
-  --chart-empty: color-mix(in oklch, var(--foreground) 14%, var(--card));
-  --success-soft: color-mix(in oklch, var(--success) 14%, var(--card));
-  --warning-soft: color-mix(in oklch, var(--warning) 18%, var(--card));
-  --destructive-soft: color-mix(in oklch, var(--destructive) 12%, var(--card));
 }
 
 @theme inline {
