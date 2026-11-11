@@ -49,6 +49,8 @@ android {
     testOptions {
         // The Room tests build a database on the JVM; the android.jar stubs must not throw for the Context they pass.
         unitTests.isReturnDefaultValues = true
+        // Robolectric runs the Compose UI tests on the JVM and needs the merged resources and manifest.
+        unitTests.isIncludeAndroidResources = true
     }
 
     buildFeatures {
@@ -85,4 +87,9 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.robolectric)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
+    debugImplementation(platform(libs.compose.bom))
+    debugImplementation(libs.compose.ui.test.manifest)
 }
