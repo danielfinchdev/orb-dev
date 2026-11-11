@@ -272,6 +272,34 @@ class OrbeChatViewModelTest {
         assertTrue(b.calls.contains("task 42 false h1"))
     }
 
+    @Test fun aSecondTapOnATaskWhileTheFirstIsPendingIsIgnored() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two)
+        val vm = vm(b)
+        b.detailGate = kotlinx.coroutines.CompletableDeferred()
+        vm.askApproval(42)
+        vm.askApproval(42)
+        vm.rejectTask(42)
+        runCurrent()
+        assertEquals(1, b.calls.count { it.startsWith("detail") })
+        assertTrue(-42L in vm.state.value.busyCards)
+        b.detailGate!!.complete(Unit)
+        runCurrent()
+        assertFalse(-42L in vm.state.value.busyCards)
+        vm.confirmApproval()
+        vm.confirmApproval()
+        runCurrent()
+        assertEquals(1, b.calls.count { it.startsWith("task 42 true") })
+        assertFalse(-42L in vm.state.value.busyCards)
+    }
+
+    @Test fun theApprovalDetailCarriesTheModelAndReadableReasons() {
+        assertEquals("Claude (opus)", ChatTexts.agentWithModel("Claude", "opus"))
+        assertEquals("Claude", ChatTexts.agentWithModel("Claude", null))
+        assertEquals("pagos", ChatTexts.reason("financial"))
+        assertEquals("otro", ChatTexts.reason("otro"))
+        assertEquals("Completada", ChatTexts.taskStatus("done"))
+    }
+
     @Test fun anAgentRequestIsDecidedOnThePc() = runTest(dispatcher) {
         val meta = """{"kind":"task-approval","session":"s1","task":42,"request":"r9","detail":"npm install idb-keyval","status":"pending"}"""
         val b = FakeOrbeChatBackend(listOf(raw(9, "system", "Claude quiere instalar un paquete", meta)))

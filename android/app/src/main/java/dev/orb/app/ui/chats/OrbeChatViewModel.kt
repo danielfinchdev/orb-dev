@@ -401,32 +401,47 @@ class OrbeChatViewModel(
 
     /** «Aprobar»: first shows what the task is and where it runs, as the PC's own window does. */
     fun askApproval(task: Long) {
+        val key = taskKey(task)
+        if (key in busyCards.value) return
+        busyCards.update { it + key }
         viewModelScope.launch {
             backend.taskDetail(task).fold({ approval.value = ApprovalAsk(it) }, { say(it) })
+            busyCards.update { it - key }
         }
     }
+
+    /** Task cards share `busyCards` with message cards; the negative id keeps the two ranges apart. */
+    private fun taskKey(task: Long) = -task
 
     fun dismissApproval() { approval.value = null }
 
     fun confirmApproval() {
         val ask = approval.value ?: return
+        val key = taskKey(ask.detail.id)
+        if (key in busyCards.value) return
         approval.value = null
-        decideTask(ask.detail.id, true, ask.detail.hash)
+        busyCards.update { it + key }
+        viewModelScope.launch {
+            decideTask(ask.detail.id, true, ask.detail.hash)
+            busyCards.update { it - key }
+        }
     }
 
     fun rejectTask(task: Long) {
+        val key = taskKey(task)
+        if (key in busyCards.value) return
+        busyCards.update { it + key }
         viewModelScope.launch {
             backend.taskDetail(task).fold({ decideTask(task, false, it.hash) }, { say(it) })
+            busyCards.update { it - key }
         }
     }
 
-    private fun decideTask(task: Long, approve: Boolean, hash: String?) {
-        viewModelScope.launch {
-            backend.decideTask(task, approve, hash).fold(
-                onSuccess = { taskStatus.update { it + (task to if (approve) "approved" else "cancelled") }; refreshTask(task); reloads.trySend(Unit) },
-                onFailure = { say(it); refreshTask(task) },
-            )
-        }
+    private suspend fun decideTask(task: Long, approve: Boolean, hash: String?) {
+        backend.decideTask(task, approve, hash).fold(
+            onSuccess = { taskStatus.update { it + (task to if (approve) "approved" else "cancelled") }; refreshTask(task); reloads.trySend(Unit) },
+            onFailure = { say(it); refreshTask(task) },
+        )
     }
 
     private fun say(e: Throwable) {

@@ -27,7 +27,7 @@ import kotlinx.serialization.json.put
 data class PcSnapshot(val mode: String?, val chat: JsonObject?)
 
 /** The task behind an approval card, as the PC describes it, to show before the person agrees. */
-data class TaskDetail(val id: Long, val title: String, val status: String?, val agent: String?, val project: String?, val reasons: List<String>, val hash: String?)
+data class TaskDetail(val id: Long, val title: String, val status: String?, val agent: String?, val project: String?, val reasons: List<String>, val hash: String?, val model: String? = null)
 
 /**
  * What one Orbe chat needs from the PC and the cache. Every action is a request to the PC; the phone only keeps the
@@ -158,7 +158,7 @@ class RuntimeOrbeChatBackend(private val container: AppContainer, private val ru
             id = o.long("id") ?: id, title = o.str("title").orEmpty(), status = o.str("status"), agent = o.str("agent"),
             project = o.str("project_path") ?: o.str("project"),
             reasons = (o["sensitivity"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.content },
-            hash = o.str("previewHash"),
+            hash = o.str("previewHash"), model = o.str("model"),
         )
     }
 

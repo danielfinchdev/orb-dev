@@ -469,6 +469,8 @@ class LinkClient(
         // The job is registered before it can run, then `paused` is re-read: pause() sets the flag and then cancels the
         // registered job, so either it sees this job or we see the flag. Otherwise a pause landing between the
         // supervisor's check and the registration would leave a stream open in the background.
+        // A job cancelled before it starts never runs streamBody, so the previous stream's end must not leak out of here.
+        lastEnd = End.Failed
         val job = launch(start = CoroutineStart.LAZY) { streamBody() }
         streamJob.set(job)
         if (paused.value) job.cancel() else job.start()
