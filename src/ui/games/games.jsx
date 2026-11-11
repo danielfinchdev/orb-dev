@@ -99,7 +99,7 @@ export function GamesDialog() {
                   className="group bg-card hover:border-primary/50 focus-visible:ring-ring/50 grid cursor-pointer gap-2 overflow-hidden rounded-2xl border p-2 pb-3 text-left shadow-xs transition-all duration-200 outline-none hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-[3px] motion-reduce:hover:translate-y-0">
                   <div className={cn('relative aspect-[3/2] overflow-hidden rounded-xl', STAGE)}>
                     <div className="h-full w-full transition-transform duration-300 group-hover:scale-[1.06] motion-reduce:group-hover:scale-100"><Thumb /></div>
-                    {n > 0 ? <span className="bg-card/85 text-foreground absolute top-1.5 right-1.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums shadow-sm backdrop-blur"><Trophy className="text-warning size-3" />{n}</span> : null}
+                    {n > 0 ? <span className="bg-card/85 text-foreground absolute top-1.5 right-1.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums shadow-sm backdrop-blur"><Trophy className="text-warning-ink size-3" />{n}</span> : null}
                   </div>
                   <div className="px-1.5">
                     <div className="font-medium">{t(`games.${x.id}`)}</div>
@@ -114,7 +114,7 @@ export function GamesDialog() {
             <div className="flex w-full items-center justify-between gap-2 text-sm">
               <div className="flex items-center gap-2">
                 <span className="bg-muted inline-flex items-center gap-1.5 rounded-full px-3 py-1"><span className="text-muted-foreground text-xs">{t('games.score')}</span><b className="tabular-nums">{score}</b></span>
-                <span className="bg-muted inline-flex items-center gap-1.5 rounded-full px-3 py-1"><Trophy className="text-warning size-3.5" /><span className="text-muted-foreground text-xs">{t('games.best')}</span><b className="tabular-nums">{Math.max(record, score)}</b></span>
+                <span className="bg-muted inline-flex items-center gap-1.5 rounded-full px-3 py-1"><Trophy className="text-warning-ink size-3.5" /><span className="text-muted-foreground text-xs">{t('games.best')}</span><b className="tabular-nums">{Math.max(record, score)}</b></span>
               </div>
               <Button variant="outline" size="xs" onClick={() => start(game)}><RotateCcw />{t('games.restart')}</Button>
             </div>
@@ -126,11 +126,11 @@ export function GamesDialog() {
               {over ? (
                 <div className="bg-background/60 absolute inset-0 grid place-items-center rounded-2xl backdrop-blur-sm" data-testid="game-over">
                   <div className="bg-card text-card-foreground animate-in fade-in-0 zoom-in-95 grid min-w-56 justify-items-center gap-3 rounded-2xl border p-6 text-center shadow-xl duration-300">
-                    <span className={cn('grid size-12 place-items-center rounded-full', over.record ? 'bg-warning/15 text-warning' : 'bg-primary/12 text-primary')}>{over.record ? <Sparkles className="size-6" /> : <Flag className="size-6" />}</span>
+                    <span className={cn('grid size-12 place-items-center rounded-full', over.record ? 'bg-warning/15 text-warning-ink' : 'bg-primary/12 text-primary')}>{over.record ? <Sparkles className="size-6" /> : <Flag className="size-6" />}</span>
                     <div className="text-lg leading-tight font-medium">{over.record ? t('games.newRecord') : t('games.over')}</div>
                     <div className="grid gap-0.5">
                       <div className="text-3xl font-semibold tabular-nums">{over.score}</div>
-                      <div className="text-muted-foreground inline-flex items-center justify-center gap-1 text-xs"><Trophy className="text-warning size-3" />{t('games.record', { n: Math.max(record, over.score) })}</div>
+                      <div className="text-muted-foreground inline-flex items-center justify-center gap-1 text-xs"><Trophy className="text-warning-ink size-3" />{t('games.record', { n: Math.max(record, over.score) })}</div>
                     </div>
                     <Button size="sm" onClick={() => start(game)}><RotateCcw />{t('games.again')}</Button>
                   </div>

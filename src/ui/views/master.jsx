@@ -51,7 +51,7 @@ function Warning() {
   const t = useT();
   return (
     <div className="border-warning/50 bg-warning/10 grid gap-1 rounded-xl border px-4 py-3 text-left" role="note" data-testid="master-warning">
-      <span className="flex items-center gap-1.5 text-[13px] font-medium"><TriangleAlert className="text-warning size-4 shrink-0" />{t('master.warnTitle')}</span>
+      <span className="flex items-center gap-1.5 text-[13px] font-medium"><TriangleAlert className="text-warning-ink size-4 shrink-0" />{t('master.warnTitle')}</span>
       <span className="text-muted-foreground text-xs leading-relaxed">{t('master.warnBody')}</span>
     </div>
   );

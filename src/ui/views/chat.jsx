@@ -147,7 +147,7 @@ function ChatApproval({ m }) {
   const badge = DECISION[state] ?? DECISION.denied;
   return (
     <div className={cn('mx-auto w-full max-w-[88%] rounded-xl border px-3.5 py-2.5 text-[13px]', done ? 'bg-muted/50' : 'border-warning/50 bg-warning/10')}>
-      <div className="flex items-start gap-2"><ShieldAlert className={cn('mt-0.5 size-4 shrink-0', done ? 'text-muted-foreground' : 'text-warning')} /><div className="min-w-0 flex-1 whitespace-pre-wrap break-words">{m.body}</div></div>
+      <div className="flex items-start gap-2"><ShieldAlert className={cn('mt-0.5 size-4 shrink-0', done ? 'text-muted-foreground' : 'text-warning-ink')} /><div className="min-w-0 flex-1 whitespace-pre-wrap break-words">{m.body}</div></div>
       {/* the command itself, for whoever wants to look: never in the sentence. */}
       {m.meta.detail ? <Details label={t('chat.seeDetails')} className="pl-6"><pre className="bg-muted mt-1.5 max-h-48 overflow-auto rounded-md px-2.5 py-1.5 font-mono text-[11px] whitespace-pre-wrap break-all">{m.meta.detail}</pre></Details> : null}
       <div className="chat-actions mt-2 flex flex-wrap items-center gap-2 pl-6">
@@ -178,7 +178,7 @@ function TaskApprovalLine({ m }) {
   return (
     <div className={cn('mx-auto w-full max-w-[92%] rounded-xl border px-3.5 py-3 text-[13.5px] shadow-xs', waiting ? 'bg-card border-warning/45' : 'bg-muted/50')} data-testid="chat-task-approval" data-status={task?.status ?? 'gone'}>
       <div className="flex items-start gap-2">
-        <ListChecks className={cn('mt-0.5 size-4 shrink-0', waiting ? 'text-warning' : 'text-muted-foreground')} />
+        <ListChecks className={cn('mt-0.5 size-4 shrink-0', waiting ? 'text-warning-ink' : 'text-muted-foreground')} />
         <div className="min-w-0 flex-1">
           {task ? <div className="font-medium">{t('orbchats.cardTitle', { title: task.title })}</div> : <div className="whitespace-pre-wrap break-words">{m.body.replace(/^⚠️\s*/u, '')}</div>}
           {task && why ? <div className="text-muted-foreground mt-0.5 text-[13px]">{t('orbchats.cardWhy', { why })}</div> : null}

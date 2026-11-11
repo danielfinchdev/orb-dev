@@ -73,7 +73,7 @@ export function HeldCard({ task, link = false, className }) {
   return (
     <div className={cn('bg-warning/10 border-warning/40 grid gap-2 rounded-xl border px-3.5 py-2.5 text-[13px]', className)} data-testid="task-held">
       <div className="flex items-start gap-2">
-        <ShieldAlert className="text-warning mt-0.5 size-4 shrink-0" />
+        <ShieldAlert className="text-warning-ink mt-0.5 size-4 shrink-0" />
         <div className="min-w-0 flex-1">
           {link ? <div className="font-semibold">{t('orbchats.taskN', { id: task.id })} · <span className="font-normal">{task.title}</span></div> : null}
           <div className="break-words">{h.folder ? t('tasks.held.line', { reasons: h.reasons, folder: h.folder }) : t('tasks.held.lineNoFolder', { reasons: h.reasons })}</div>

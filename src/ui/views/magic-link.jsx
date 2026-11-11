@@ -81,7 +81,7 @@ function PairDialog({ open: want, onClose }) {
               </div>
               <div className="text-muted-foreground font-mono text-xs break-all">{qr.address}</div>
               <div className="flex items-center justify-center gap-1.5 text-xs sm:justify-start" data-testid="link-fp"><ShieldCheck className="text-success size-3.5 shrink-0" />{t('link.fp', { fp: qr.pc })}</div>
-              {qr.device === 'browser' && !qr.browserOk ? <div className="text-warning flex items-start gap-1.5 text-xs" role="alert" data-testid="link-http-warn"><TriangleAlert className="mt-0.5 size-3.5 shrink-0" />{t('link.httpBrowserWarn')}</div> : null}
+              {qr.device === 'browser' && !qr.browserOk ? <div className="text-warning-ink flex items-start gap-1.5 text-xs" role="alert" data-testid="link-http-warn"><TriangleAlert className="mt-0.5 size-3.5 shrink-0" />{t('link.httpBrowserWarn')}</div> : null}
               {qr.device === 'phone' && qr.kind === 'wifi' && !qr.secure ? <div className="text-muted-foreground text-xs" data-testid="link-android-note">{t('link.preferHttps')}</div> : null}
               <div className="text-sm">{t('link.expires')} <span className="font-medium tabular-nums" data-testid="link-countdown">{countdown(qr.expiresAt, now)}</span></div>
             </div>

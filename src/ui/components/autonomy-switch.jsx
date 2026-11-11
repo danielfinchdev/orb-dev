@@ -18,7 +18,7 @@ export function AutonomySwitch({ value, onChange, more = [], disabled = false, t
     return (
       <Tip label={tip}>
         <button type="button" role="radio" aria-checked={on} disabled={disabled} onClick={() => { if (!on) onChange(mode); }} data-testid={`${testid}-${mode}`}
-          className={cn(SEGMENT, on ? (mode === 'auto' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-accent text-foreground') : 'text-muted-foreground hover:text-foreground')}>
+          className={cn(SEGMENT, on ? (mode === 'auto' ? 'bg-success-soft text-success' : 'bg-accent text-foreground') : 'text-muted-foreground hover:text-foreground')}>
           <Icon className="size-3.5" />{label}
         </button>
       </Tip>

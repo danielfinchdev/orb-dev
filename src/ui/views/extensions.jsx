@@ -125,7 +125,7 @@ function Row({ item, detail, note = null, mono = false, on, disabled = false, on
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm"><span className="truncate">{item.name}</span><Badge variant="outline" className="text-[11px]">{sourceLabel(item.source)}</Badge>{extra}</div>
         <div className={`text-muted-foreground line-clamp-2 text-xs ${mono ? 'truncate font-mono' : ''}`}>{detail}</div>
-        {note ? <div className="text-warning text-xs" data-testid="ext-note">{note}</div> : null}
+        {note ? <div className="text-warning-ink text-xs" data-testid="ext-note">{note}</div> : null}
       </div>
       <Switch checked={on} disabled={disabled} onCheckedChange={onToggle} aria-label={t('ext.toggle', { name: item.name })} data-testid="ext-toggle" />
       {keys ? <BubbleTip title={t('master.keys')}><Button variant="ghost" size="icon-sm" aria-label={t('master.keys')} onClick={() => connectorKeys(keys)} data-testid="mcp-keys"><KeyRound /></Button></BubbleTip> : null}
@@ -191,8 +191,8 @@ async function answerRequest(r, approve, run, done = (x) => x) {
     body: () => (asking ? <span /> : (
       <div className="grid gap-2 text-sm" data-testid="ext-confirm">
         {r.deps ? <p>{t('ext.confirmDeps')}</p> : null}
-        {r.asks?.tools || r.asks?.hooks ? <p className="text-warning">{t('ext.asksNote')}</p> : null}
-        {r.kept?.length ? <p className="text-warning" data-testid="ext-confirm-kept">{t('ext.keptNote', { files: r.kept.slice(0, 5).join(', ') + (r.kept.length > 5 ? '…' : '') })}</p> : null}
+        {r.asks?.tools || r.asks?.hooks ? <p className="text-warning-ink">{t('ext.asksNote')}</p> : null}
+        {r.kept?.length ? <p className="text-warning-ink" data-testid="ext-confirm-kept">{t('ext.keptNote', { files: r.kept.slice(0, 5).join(', ') + (r.kept.length > 5 ? '…' : '') })}</p> : null}
         <p className="text-muted-foreground">{t('ext.filesTitle', { n: r.total ?? r.files?.length ?? 0 })}</p>
         <div className="bg-muted/50 max-h-60 overflow-auto rounded-md p-2 font-mono text-[11px]" data-testid="ext-confirm-files">{(r.files ?? []).map((f) => <div key={f}>{f}</div>)}</div>
         {r.dir ? <div><Button type="button" size="xs" variant="outline" onClick={() => act(bridge.openPath(r.dir))}><FolderOpen />{t('ext.openFolder')}</Button></div> : null}

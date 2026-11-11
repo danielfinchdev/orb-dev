@@ -101,7 +101,7 @@ export function AndroidCard() {
           {phones.length ? phones.map((p) => (
             <div key={`${p.guid ?? ''}${p.serial ?? p.host}`} className="flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2">
               <Smartphone className="text-muted-foreground size-4 shrink-0" />
-              <div className="grid min-w-0 flex-1"><span className="truncate text-sm">{p.model ?? p.host}</span><span className={cn('text-xs', p.connected ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground')}>{t(p.connected ? 'settings.android.connected' : 'settings.android.offline')}</span></div>
+              <div className="grid min-w-0 flex-1"><span className="truncate text-sm">{p.model ?? p.host}</span><span className={cn('text-xs', p.connected ? 'text-success' : 'text-muted-foreground')}>{t(p.connected ? 'settings.android.connected' : 'settings.android.offline')}</span></div>
               {p.connected ? <Button size="sm" variant="ghost" onClick={async () => { await act(call('android.disconnect', { serial: p.serial })); loadPhones(); }}>{t('settings.android.disconnect')}</Button> : null}
               <Button size="sm" variant="ghost" onClick={() => forget(p)}>{t('settings.android.forget')}</Button>
             </div>
@@ -126,7 +126,7 @@ export function AndroidCard() {
             {tools.map((x) => (
               <div key={x.id} className="flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2" data-testid="dev-tool" data-found={x.path ? 'yes' : 'no'}>
                 <div className="grid min-w-0 flex-1">
-                  <span className="truncate text-sm">{x.label} · <span className={x.path ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}>{t(x.path ? 'settings.devtools.installed' : x.inCore ? 'settings.devtools.inCore' : 'settings.devtools.missing')}</span></span>
+                  <span className="truncate text-sm">{x.label} · <span className={x.path ? 'text-success' : 'text-muted-foreground'}>{t(x.path ? 'settings.devtools.installed' : x.inCore ? 'settings.devtools.inCore' : 'settings.devtools.missing')}</span></span>
                   {x.path ? <PathText path={x.path} className="text-muted-foreground text-xs" /> : null}
                   {x.missing.map((m) => <span key={m} className="text-muted-foreground truncate text-xs">{t('settings.devtools.gone', { path: m })}</span>)}
                 </div>

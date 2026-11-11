@@ -9,7 +9,7 @@ import { markNoticesSeen, clearNotices } from '@/lib/notify.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 
-const ICON = { success: [CircleCheck, 'text-success'], warning: [TriangleAlert, 'text-warning'], error: [CircleX, 'text-destructive'], info: [Info, 'text-primary'] };
+const ICON = { success: [CircleCheck, 'text-success'], warning: [TriangleAlert, 'text-warning-ink'], error: [CircleX, 'text-destructive'], info: [Info, 'text-primary'] };
 
 function When({ at }) {
   const locale = useLocale();

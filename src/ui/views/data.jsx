@@ -86,7 +86,7 @@ function BackupsCard() {
           <span>{t('datos.folder')}: <span className="text-foreground font-mono break-all" data-testid="backup-folder">{st.folder}</span></span>
           {!st.custom ? <span>{t('datos.folderOutside')}</span> : null}
           <span data-testid="backup-last">{st.last ? (st.last.ok ? t('datos.lastOk', { when: when(st.last.at) }) : t('datos.lastFailed', { when: when(st.last.at), error: st.last.error ?? '' })) : t('datos.none')}</span>
-          {!st.recovery ? <span className="text-warning flex items-center gap-1"><TriangleAlert className="size-3.5" />{t('datos.noCode')}</span> : <span className="flex items-center gap-1"><ShieldCheck className="text-success size-3.5" />{t('datos.withCode')}</span>}
+          {!st.recovery ? <span className="text-warning-ink flex items-center gap-1"><TriangleAlert className="size-3.5" />{t('datos.noCode')}</span> : <span className="flex items-center gap-1"><ShieldCheck className="text-success size-3.5" />{t('datos.withCode')}</span>}
         </div>
         {/* after «Empezar con una clave nueva», Windows opens the key from before again: the way back (and
             the way back to the new key after that). */}

@@ -77,7 +77,7 @@ function Tree({ project, onOpen, version }) {
         <button type="button" onClick={() => (e.kind === 'dir' ? toggle(e.path) : e.secret ? null : onOpen(e.path))} title={e.secret ? t('expert.secretFile') : `${e.path}${e.size != null ? ` · ${size(e.size)}` : ''}`}
           className={cn('hover:bg-accent/60 flex w-full cursor-pointer items-center gap-1.5 py-[3px] pr-2 text-left text-[12.5px]', e.secret && 'text-muted-foreground cursor-not-allowed')} style={{ paddingLeft: 8 + depth * 12 }}>
           {e.kind === 'dir' ? <><ChevronRight className={cn('size-3 shrink-0 transition-transform', open.has(e.path) && 'rotate-90')} />{open.has(e.path) ? <FolderOpen className="text-primary size-3.5 shrink-0" /> : <Folder className="text-primary size-3.5 shrink-0" />}</>
-            : <><span className="w-3 shrink-0" />{e.secret ? <FileLock2 className="text-warning size-3.5 shrink-0" /> : <File className="text-muted-foreground size-3.5 shrink-0" />}</>}
+            : <><span className="w-3 shrink-0" />{e.secret ? <FileLock2 className="text-warning-ink size-3.5 shrink-0" /> : <File className="text-muted-foreground size-3.5 shrink-0" />}</>}
           <span className="truncate">{e.name}</span>
         </button>
         {e.kind === 'dir' && open.has(e.path) ? render(e.path, depth + 1) : null}
@@ -142,7 +142,7 @@ function GitPanel({ project, version, onDiff }) {
   useEffect(() => { let alive = true; call('expert.status', { project }).then((r) => alive && setSt(r)).catch(() => alive && setSt({ repo: false, files: [] })); return () => { alive = false; }; }, [project, version]);
   if (!st) return <div className="p-3"><Spinner className="size-3" /></div>;
   if (!st.repo) return <p className="text-muted-foreground px-3 py-2 text-xs">{t('expert.noGit')}</p>;
-  const tone = { nuevo: 'text-success', añadido: 'text-success', borrado: 'text-destructive', renombrado: 'text-info', cambiado: 'text-warning' };
+  const tone = { nuevo: 'text-success', añadido: 'text-success', borrado: 'text-destructive', renombrado: 'text-info', cambiado: 'text-warning-ink' };
   return (
     <div className="pb-1" data-testid="expert-git">
       <button type="button" onClick={() => onDiff('')} className="hover:bg-accent/60 flex w-full cursor-pointer items-center gap-1.5 px-3 py-1 text-left text-[12.5px]">

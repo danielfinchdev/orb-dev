@@ -208,7 +208,7 @@ export function ApprovalCard({ sessionId, body, compact = false }) {
   return (
     <div className={cn('rounded-xl border px-3.5 py-3 text-[13px]', done ? 'bg-card' : 'border-warning/50 bg-warning/10')} data-testid="approval-card">
       <div className="flex items-start gap-2.5">
-        <ShieldAlert className={cn('mt-0.5 size-4 shrink-0', done ? 'text-muted-foreground' : 'text-warning')} />
+        <ShieldAlert className={cn('mt-0.5 size-4 shrink-0', done ? 'text-muted-foreground' : 'text-warning-ink')} />
         <div className="min-w-0 flex-1">
           <div className="font-medium">{done ? t('session.askedFor') : t('session.wantsThis')}</div>
           <div className="bg-muted mt-1.5 rounded-md px-2.5 py-1.5 font-mono text-xs break-all whitespace-pre-wrap">{body.title}</div>
@@ -498,10 +498,10 @@ export function SessionView({ route }) {
                 const unlock = await unlockCore('fullAccess');
                 if (unlock) act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged'));
               }} data-testid="session-permission" />}
-            {s.permission === 'total' ? <Tip label={t('session.fullPcTip')}><span tabIndex={0} className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-amber-500/50 bg-amber-500/15 px-2.5 text-[13px] font-medium whitespace-nowrap text-amber-700 dark:text-amber-300" data-testid="session-fullpc"><ShieldAlert className="size-4" />{t('session.fullPcChip')}</span></Tip> : null}
+            {s.permission === 'total' ? <Tip label={t('session.fullPcTip')}><span tabIndex={0} className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-warning/50 bg-warning-soft px-2.5 text-[13px] font-medium whitespace-nowrap text-warning-ink" data-testid="session-fullpc"><ShieldAlert className="size-4" />{t('session.fullPcChip')}</span></Tip> : null}
             {/* «Usar mi móvil Android», in any chat (included in «Acceso total al PC»). */}
-            {!s.project && s.permission === 'total' ? null : bridge.mobile ? (s.android ? <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-500/50 bg-emerald-500/15 px-2.5 text-[13px] text-emerald-700 dark:text-emerald-300"><Smartphone className="size-4" />{t('session.androidChip')}</span> : null)
-              : <Tip label={s.android ? t('session.androidOn') : t('session.android')}><Button variant="ghost" size="sm" aria-label={t('session.android')} aria-pressed={Boolean(s.android)} className={cn('h-8 shrink-0', s.android && 'border border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300')} onClick={async () => {
+            {!s.project && s.permission === 'total' ? null : bridge.mobile ? (s.android ? <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-success/50 bg-success-soft px-2.5 text-[13px] text-success"><Smartphone className="size-4" />{t('session.androidChip')}</span> : null)
+              : <Tip label={s.android ? t('session.androidOn') : t('session.android')}><Button variant="ghost" size="sm" aria-label={t('session.android')} aria-pressed={Boolean(s.android)} className={cn('h-8 shrink-0', s.android && 'border border-success/50 bg-success-soft text-success')} onClick={async () => {
                 if (s.android) { act(call('sessions.revokeGrant', { id: s.id, grant: 'android' })); return; }
                 const unlock = await unlockCore('android');
                 if (unlock) act(call('sessions.grantAndroid', { id: s.id, unlock }));
