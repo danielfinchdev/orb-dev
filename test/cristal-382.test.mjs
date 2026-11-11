@@ -14,7 +14,8 @@ import en from '../src/shared/locales/en/settings.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (...p) => fs.readFileSync(path.join(ROOT, 'src', 'ui', ...p), 'utf8');
-const themes = read('themes.css');
+// themes.css only imports the parts in themes/, in cascade order.
+const themes = ['skins', 'scene', 'scene-vaporwave', 'scene-retro', 'scene-nube'].map((n) => read('themes', `${n}.css`)).join('');
 
 test('Cristal is registered as a theme built on Profesional', () => {
   assert.ok(SKINS.includes('cristal'));

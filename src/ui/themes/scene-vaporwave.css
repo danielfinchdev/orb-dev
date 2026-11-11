@@ -1,0 +1,112 @@
+/* Vaporwave: the scene and the components. Imported in order by ../themes.css. */
+/* ================================================================================================================
+   VAPORWAVE — the scene and the components.
+   DAY: a sticker sheet of old computers on a mint page. Windows-95 windows (bevelled edges, a pastel title strip lilac →
+   pink → peach, grey panels), bevelled buttons, titles in an outlined display face, and stickers with thick ink outlines
+   and flat pastel fills (a floppy, a cassette, a little CRT, a smiley, sparkles, a ringed planet, a folder, a speech
+   bubble) bobbing at the edges (components/scene.jsx). The chat's bar carries a row of sparkles.
+   NIGHT: a synthwave sunset. A starry deep purple sky melting into magenta and orange, big clouds lit from below, a
+   striped sun on the horizon behind far mountains and a city skyline, a neon magenta grid rushing forward, light beams
+   and shooting stars. Neon magenta edges on deep purple panels.
+   ================================================================================================================ */
+html[data-skin="vaporwave"] {
+  --vw-ink: #1f1838; --vw-hi: rgb(255 255 255 / 0.95); --vw-lo: rgb(70 50 110 / 0.5); --vw-hard: #ff8fd0; --vw-strip: linear-gradient(90deg, #cdbcff, #ffb6dc 50%, #ffd4b0);
+  --side-art: linear-gradient(to bottom, rgb(255 255 255 / 0.55) 0 2px, rgb(255 255 255 / 0.18) 2px, transparent 55%);
+  --vw-sparkle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 1 L14.5 9.5 L23 12 L14.5 14.5 L12 23 L9.5 14.5 L1 12 L9.5 9.5 Z' fill='%23fff' stroke='%231f1838' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --band-art:
+    linear-gradient(to bottom, rgb(255 255 255 / 0.55) 0 2px, rgb(255 255 255 / 0.18) 2px, transparent 55%),
+    var(--vw-sparkle) 60px 10px / 190px 18px repeat-x fixed,
+    var(--vw-sparkle) 150px 30px / 260px 11px repeat-x fixed;
+  --vw-page: linear-gradient(rgb(255 255 255 / 0.22) 1px, transparent 1px) 0 0 / 28px 28px, linear-gradient(90deg, rgb(255 255 255 / 0.22) 1px, transparent 1px) 0 0 / 28px 28px, linear-gradient(170deg, #d2ece4, #c3e6dc);
+  --vw-paper: rgb(170 120 230 / 0.12);
+}
+html.dark[data-skin="vaporwave"] {
+  --vw-ink: #ff4fc8; --vw-hard: rgb(255 79 200 / 0.35); --vw-strip: linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe);
+  --side-art: linear-gradient(to bottom, rgb(255 255 255 / 0.06), transparent 60%);
+  /* The chat bar at night is the top of the same sky: a few more stars, twinkling (the sun lives in the scene). */
+  --band-art:
+    linear-gradient(to bottom, rgb(255 255 255 / 0.06), transparent 60%),
+    radial-gradient(circle at 30px 14px, var(--vw-star) 0 1.2px, transparent 1.8px) 0 0 / 110px 56px repeat-x fixed,
+    radial-gradient(circle at 80px 36px, var(--vw-star) 0 1px, transparent 1.5px) 0 0 / 150px 56px repeat-x fixed,
+    radial-gradient(circle at 10px 44px, rgb(255 255 255 / 0.5) 0 0.8px, transparent 1.3px) 0 0 / 70px 56px repeat-x fixed;
+  --vw-night: linear-gradient(to bottom, #0b0222 0%, #1f0747 30%, #4a1270 50%, #a0287c 62%, #ff6a4d 70%, #ffb03d 72%, #12052a 72%, #0b0222 100%);
+  --vw-grid: rgb(255 79 200 / 0.8); --vw-mount: rgb(26 6 48 / 0.95); --vw-mount2: rgb(58 14 96 / 0.85); --vw-star: rgb(255 240 250 / 0.85);
+  --vw-paper: rgb(255 120 220 / 0.07);
+}
+@media (prefers-reduced-motion: no-preference) {
+  html[data-skin="vaporwave"]:not(.dark, [data-motion="minima"]) .theme-band::before { animation: vw-twinkle-band 3s ease-in-out infinite alternate; }
+  html.dark[data-skin="vaporwave"]:not([data-motion="minima"]) .theme-band::before { animation: vw-twinkle-band 4s ease-in-out infinite alternate; }
+}
+@keyframes vw-twinkle-band { from { opacity: 0.55; } to { opacity: 1; } }
+/* Day: the mint page and the stickers; the night pieces stay hidden. */
+.scene-vaporwave .scene-blur { background: var(--vw-page); --scene-opacity: 1; }
+html:not(.dark) .scene-vaporwave :is(.vw-stars, .vw-shoot, .vw-cloud, .vw-glow, .vw-sun, .vw-mount, .vw-city, .vw-floor, .vw-beam) { display: none; }
+html.dark .scene-vaporwave .vw-sticker { display: none; }
+/* its hard shadow is drawn with the drawing (see .cd-candy). */
+.vw-sticker { color: var(--vw-ink); animation: vw-bob ease-in-out infinite alternate; transform-origin: 50% 50%; }
+.vw-sticker svg { display: block; width: 100%; height: auto; overflow: visible; filter: drop-shadow(4px 4px 0 var(--vw-ink)); }
+@keyframes vw-bob { from { transform: translateY(0) rotate(var(--r, 0deg)); } to { transform: translateY(-12px) rotate(calc(var(--r, 0deg) + 5deg)); } }
+/* Night: the sunset. */
+html.dark .scene-vaporwave .scene-blur { background: var(--vw-night); }
+.vw-stars { inset: 0 0 30% 0; background: radial-gradient(circle, var(--vw-star) 0 1px, transparent 1.6px) 0 0 / 140px 110px, radial-gradient(circle, var(--vw-star) 0 1.4px, transparent 2px) 60px 40px / 230px 190px, radial-gradient(circle, rgb(255 255 255 / 0.5) 0 0.8px, transparent 1.3px) 20px 70px / 90px 80px; mask-image: linear-gradient(to bottom, #000 40%, transparent); animation: vw-twinkle 4s ease-in-out infinite alternate; }
+@keyframes vw-twinkle { from { opacity: 0.55; } to { opacity: 1; } }
+.vw-shoot { top: 8%; left: 60%; width: 160px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, #fff); rotate: 28deg; opacity: 0; animation: vw-shoot 9s linear infinite; }
+.vw-shoot.b { top: 20%; left: 20%; width: 110px; animation-duration: 13s; animation-delay: -6s; }
+@keyframes vw-shoot { 0%, 78% { opacity: 0; transform: translate(0, 0); } 80% { opacity: 1; } 92%, 100% { opacity: 0; transform: translate(-260px, 140px); } }
+.vw-beam { bottom: 28%; width: 3px; height: 70%; left: 50%; transform-origin: 50% 100%; background: linear-gradient(to top, rgb(255 180 120 / 0.35), transparent 70%); animation: vw-beam 6s ease-in-out infinite alternate; }
+.vw-beam.a { rotate: -34deg; } .vw-beam.b { rotate: -14deg; animation-delay: -2s; } .vw-beam.c { rotate: 18deg; animation-delay: -4s; } .vw-beam.d { rotate: 38deg; animation-delay: -1s; }
+@keyframes vw-beam { from { opacity: 0.35; } to { opacity: 0.9; } }
+.vw-cloud { animation: vw-drift linear infinite; opacity: 0.8; }
+.vw-cloud svg { display: block; width: 100%; height: auto; }
+@keyframes vw-drift { from { transform: translateX(-12vw); } to { transform: translateX(112vw); } }
+.vw-glow { left: 50%; bottom: 28%; width: min(80vw, 760px); aspect-ratio: 1; translate: -50% 50%; border-radius: 50%; background: radial-gradient(closest-side, rgb(255 150 90 / 0.55), rgb(255 80 160 / 0.25) 45%, transparent 70%); animation: vw-breathe 7s ease-in-out infinite alternate; }
+@keyframes vw-breathe { from { opacity: 0.6; transform: scale(0.96); } to { opacity: 1; transform: scale(1.06); } }
+.vw-sun { left: 50%; bottom: 28%; width: min(44vw, 420px); aspect-ratio: 1; translate: -50% 50%; border-radius: 50%; opacity: 0.6; /* the brightest piece, right under the messages: a little turned down */
+  background: linear-gradient(to bottom, #fff3a0 0%, #ffd23f 30%, #ff8a2a 62%, #ff3f8e 100%);
+  mask-image: linear-gradient(to bottom, #000 0 48%, transparent 48% 52%, #000 52% 60%, transparent 60% 65%, #000 65% 72%, transparent 72% 78%, #000 78% 84%, transparent 84% 91%, #000 91%); }
+.vw-mount { left: -4%; right: -4%; bottom: 27%; height: 20%; }
+.vw-mount.back { background: var(--vw-mount2); clip-path: polygon(0 100%, 6% 55%, 14% 72%, 22% 38%, 31% 66%, 40% 48%, 49% 78%, 57% 40%, 65% 68%, 74% 32%, 83% 64%, 92% 46%, 100% 100%); }
+.vw-mount.front { background: var(--vw-mount); height: 12%; clip-path: polygon(0 100%, 9% 62%, 18% 80%, 27% 50%, 36% 76%, 45% 58%, 53% 84%, 62% 52%, 71% 78%, 80% 44%, 89% 72%, 100% 56%, 100% 100%); }
+.vw-city { left: 0; right: 0; bottom: 27.5%; height: 11%; color: #0a0318; }
+.vw-city svg { display: block; width: 100%; height: 100%; }
+/* the grid rushes on the compositor: it is drawn once on a ::before one tile (60 px) taller than the floor,
+   which slides down a tile and starts again (the same picture as moving the background 60 px, without repainting the
+   whole floor on every frame). */
+.vw-floor { left: -50%; right: -50%; bottom: -10%; height: 40%; transform-origin: 50% 0; transform: perspective(260px) rotateX(62deg); overflow: hidden;
+  mask-image: linear-gradient(to bottom, transparent, #000 35%); filter: drop-shadow(0 0 6px rgb(255 79 200 / 0.8)); }
+.vw-floor::before { content: ""; position: absolute; inset: -60px 0 0 0; animation: vw-rush 1.6s linear infinite;
+  background: linear-gradient(var(--vw-grid) 2px, transparent 2px) 0 0 / 60px 60px, linear-gradient(90deg, var(--vw-grid) 2px, transparent 2px) 0 0 / 60px 60px; }
+@keyframes vw-rush { from { transform: translateY(0); } to { transform: translateY(60px); } }
+/* DAY components: Windows 95 in pastel. Cards, dialogs and the message box are windows (bevelled edges, a pastel title
+   strip on top, a hard pink offset shadow); buttons are bevelled; tabs and the active menu item sink in; the sidebar is a
+   grey panel; titles are outlined (white fill, ink outline, pink offset shadow). */
+html[data-skin="vaporwave"]:not(.dark) :is([data-slot="card"], [data-slot="composer"]) { position: relative; }
+html[data-skin="vaporwave"]:not(.dark) :is([data-slot="card"], [data-slot="composer"], [data-slot="dialog-overlay"] + [role="dialog"]) { border: 1px solid var(--vw-lo); box-shadow: inset 2px 2px 0 var(--vw-hi), inset -2px -2px 0 var(--vw-lo), 5px 5px 0 var(--vw-hard); }
+html[data-skin="vaporwave"]:not(.dark) :is([data-slot="card"], [data-slot="composer"], [data-slot="dialog-overlay"] + [role="dialog"])::before { content: ""; position: absolute; left: 2px; right: 2px; top: 2px; height: 7px; background: var(--vw-strip); pointer-events: none; z-index: 1; }
+html[data-skin="vaporwave"]:not(.dark) [data-slot="composer"] { background-color: color-mix(in oklch, var(--card) 92%, transparent); }
+html[data-skin="vaporwave"]:not(.dark) [data-slot="dialog-overlay"] + [role="dialog"]::before { height: 10px; }
+html[data-skin="vaporwave"]:not(.dark) [data-slot="button"].bg-primary { font-weight: 700; box-shadow: inset 1px 1px 0 rgb(255 255 255 / 0.55), inset -2px -2px 0 rgb(0 0 0 / 0.28), 3px 3px 0 var(--vw-ink); }
+html[data-skin="vaporwave"]:not(.dark) [data-slot="button"].bg-primary:active { box-shadow: inset -1px -1px 0 rgb(255 255 255 / 0.4), inset 2px 2px 0 rgb(0 0 0 / 0.28), 1px 1px 0 var(--vw-ink); translate: 2px 2px; }
+html[data-skin="vaporwave"]:not(.dark) [data-slot="button"].border { background-color: var(--card); border-color: var(--vw-lo); box-shadow: inset 1px 1px 0 var(--vw-hi), inset -2px -2px 0 var(--vw-lo), 2px 2px 0 var(--vw-ink); font-weight: 600; }
+html[data-skin="vaporwave"]:not(.dark) [data-slot="button"].border:active { box-shadow: inset -1px -1px 0 var(--vw-hi), inset 2px 2px 0 var(--vw-lo); translate: 1px 1px; }
+html[data-skin="vaporwave"]:not(.dark) :is([role="tablist"], [role="radiogroup"].bg-muted) { box-shadow: inset 1px 1px 0 var(--vw-lo), inset -1px -1px 0 var(--vw-hi); }
+html[data-skin="vaporwave"]:not(.dark) :is([role="tab"][data-state="active"], [role="radiogroup"].bg-muted [role="radio"][aria-checked="true"]) { background-color: var(--card); box-shadow: inset 1px 1px 0 var(--vw-hi), inset -1px -1px 0 var(--vw-lo), 1px 1px 0 var(--vw-ink); font-weight: 600; }
+html[data-skin="vaporwave"]:not(.dark) :is([data-slot="input"], [data-slot="textarea"]) { box-shadow: inset 1px 1px 0 var(--vw-lo), inset -1px -1px 0 var(--vw-hi); background-color: #fff; }
+html[data-skin="vaporwave"]:not(.dark) aside.bg-sidebar { border-right: 0; box-shadow: inset -2px 0 0 var(--vw-lo), inset -3px 0 0 var(--vw-hi); background-image: none; }
+html[data-skin="vaporwave"]:not(.dark) nav button.bg-accent { box-shadow: inset 1px 1px 0 var(--vw-lo), inset -1px -1px 0 var(--vw-hi); }
+html[data-skin="vaporwave"]:not(.dark) [data-slot="badge"] { box-shadow: 1px 1px 0 var(--vw-ink); border-color: var(--vw-ink); }
+html[data-skin="vaporwave"]:not(.dark) :is(h1, h2, h3, [data-slot="card-title"], .hero-title):not(.prose-chat *) { color: #fff; font-weight: 800; letter-spacing: 0.06em; paint-order: stroke fill; -webkit-text-stroke: 1.3px var(--vw-ink); text-shadow: 2px 2px 0 var(--vw-hard); }
+html[data-skin="vaporwave"]:not(.dark) .hero-title { -webkit-text-stroke: 2.5px var(--vw-ink); text-shadow: 4px 4px 0 var(--vw-hard); }
+/* NIGHT components: neon magenta edges and glow on deep purple; the sidebar on faint grid paper. */
+html.dark[data-skin="vaporwave"] [data-slot="card"] { border: 1px solid color-mix(in oklch, var(--primary) 45%, transparent); box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 12%, transparent), 0 0 20px -6px color-mix(in oklch, var(--primary) 70%, transparent), 0 14px 32px -16px rgb(255 60 180 / 0.45); }
+html.dark[data-skin="vaporwave"] [data-slot="dialog-overlay"] + [role="dialog"] { border: 1.5px solid transparent; background: linear-gradient(var(--popover), var(--popover)) padding-box, var(--vw-strip) border-box; box-shadow: 0 0 30px -6px rgb(255 79 200 / 0.6); }
+html.dark[data-skin="vaporwave"] [data-slot="button"].bg-primary { background-image: linear-gradient(135deg, oklch(0.74 0.19 350), oklch(0.62 0.2 300)); color: oklch(0.99 0 0); box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 70%, transparent), 0 0 18px -3px color-mix(in oklch, var(--primary) 75%, transparent); }
+html.dark[data-skin="vaporwave"] [data-slot="button"].border { border-color: color-mix(in oklch, var(--primary) 45%, transparent); box-shadow: 0 0 10px -4px color-mix(in oklch, var(--primary) 60%, transparent); }
+html.dark[data-skin="vaporwave"] :is([role="tab"][data-state="active"], [role="radiogroup"].bg-muted [role="radio"][aria-checked="true"]) { box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 60%, transparent), 0 0 12px -2px color-mix(in oklch, var(--primary) 70%, transparent); }
+html.dark[data-skin="vaporwave"] :is(h1, h2, h3, [data-slot="card-title"]):not(.prose-chat *) { text-shadow: 0 0 14px color-mix(in oklch, var(--primary) 65%, transparent); letter-spacing: 0.04em; }
+html.dark[data-skin="vaporwave"] aside.bg-sidebar { background-image: linear-gradient(180deg, transparent 45%, color-mix(in oklch, oklch(0.5 0.2 340) 30%, transparent) 100%), linear-gradient(var(--vw-paper) 1px, transparent 1px), linear-gradient(90deg, var(--vw-paper) 1px, transparent 1px); background-size: 100% 100%, 26px 26px, 26px 26px; border-right-color: color-mix(in oklch, var(--primary) 30%, var(--border)); }
+html.dark[data-skin="vaporwave"] nav button.bg-accent { box-shadow: inset 3px 0 0 var(--primary), 0 0 12px -4px color-mix(in oklch, var(--primary) 70%, transparent); }
+html[data-skin="vaporwave"] .bg-bubble { background-image: linear-gradient(135deg, oklch(0.53 0.23 345), oklch(0.48 0.2 300)); }
+html.dark[data-skin="vaporwave"] .bg-bubble { background-image: linear-gradient(135deg, oklch(0.5 0.2 345), oklch(0.45 0.19 295)); }
+html[data-skin="vaporwave"] [data-testid="update-card"] { background-image: linear-gradient(135deg, #7b2ff7, #c2307f); }
+
