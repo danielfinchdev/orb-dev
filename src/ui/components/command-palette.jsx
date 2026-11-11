@@ -2,7 +2,7 @@
 // to the sidebar's search (the same search, lib/search.js) and never takes the key from what already uses it: a project
 // action with Ctrl+K, the whiteboard's own Ctrl+K or an open dialog keep it.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FolderKanban, ListTodo, Search, MessageSquarePlus, FolderPlus, ClipboardCheck, FolderGit2, CalendarSync, Presentation, NotebookPen, Orbit, LifeBuoy, SquareTerminal, Settings, MessageSquare, FileText, CornerDownLeft, Gauge } from 'lucide-react';
+import { Search, MessageSquarePlus, FolderPlus, ClipboardCheck, FolderGit2, CalendarSync, Presentation, NotebookPen, Orbit, LifeBuoy, SquareTerminal, Settings, MessageSquare, FileText, CornerDownLeft, Gauge } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/overlay.jsx';
 import { Kbd } from '@/components/ui/basic.jsx';
 import { useOrbItems, openOrbItem, newProjectChat } from '@/views/orb/inbox.jsx';
@@ -49,8 +49,8 @@ function Palette({ onClose }) {
     if (g.id === 'go') return { ...r, group: g.id };
     if (g.id === 'chats') return { group: g.id, key: `c:${r.key}`, icon: MessageSquare, label: r.title, detail: r.project ?? '', run: () => openOrbItem(r) };
     if (g.id === 'messages') return { group: g.id, key: `m:${r.key}:${r.line.id}`, icon: FileText, label: r.item.title, detail: r.line.text, run: () => openOrbItem(r.item) };
-    if (g.id === 'tasks') return { group: g.id, key: `t:${r.id}`, icon: ListTodo, label: `#${r.id} ${r.title}`, detail: r.snippet || (STATUS[r.status]?.[0] ?? r.status), run: () => go({ view: 'tasks', id: r.id }) };
-    return { group: g.id, key: `p:${r.name}`, icon: FolderKanban, label: r.name, detail: '', run: () => openOrbInfo({ type: 'project', name: r.name }) };
+    if (g.id === 'tasks') return { group: g.id, key: `t:${r.id}`, icon: ClipboardCheck, label: `#${r.id} ${r.title}`, detail: r.snippet || (STATUS[r.status]?.[0] ?? r.status), run: () => go({ view: 'tasks', id: r.id }) };
+    return { group: g.id, key: `p:${r.name}`, icon: FolderGit2, label: r.name, detail: '', run: () => openOrbInfo({ type: 'project', name: r.name }) };
   }));
   useEffect(() => { setAt(0); }, [q]);
   const list = useRef(null);

@@ -8,7 +8,7 @@
 // A project: its initials or icon, name and folder, «Nuevo chat aquí»; Chats, Tareas, Programadas, Pizarra, Bitácora,
 // Compartir (with two or more users), Ajustes del proyecto (Proyectos) and, on the PC with God mode on, «Abrir en God mode».
 import { useEffect, useState } from 'react';
-import { ListTodo, Folder, ChevronRight, Sparkles, Bell, ClipboardCheck, Paperclip, Shrink, Download, Pin, PinOff, CircleCheck, Undo2, Trash2, Pencil, MessageSquarePlus, MessagesSquare, CalendarSync, Presentation, NotebookPen, Settings2, SquareTerminal } from 'lucide-react';
+import { Folder, ChevronRight, Sparkles, Bell, ClipboardCheck, Paperclip, Shrink, Download, Pin, PinOff, CircleCheck, Undo2, Trash2, Pencil, MessageSquarePlus, MessagesSquare, CalendarSync, Presentation, NotebookPen, Settings2, SquareTerminal } from 'lucide-react';
 import { BrainIcon } from '@/components/brain-icon.jsx';
 import { OrchestratorIcon } from '@/components/orchestrator-icon.jsx';
 import { Robot } from '@/components/robot.jsx';
@@ -113,7 +113,7 @@ function ChatInfo({ conv }) {
         <List testid="info-tasks">
           {sorted.length ? sorted.slice(0, 12).map((x) => (
             <button key={x.id} type="button" onClick={() => leave({ view: 'tasks', id: x.id })} className="hover:bg-accent/50 flex min-h-11 w-full cursor-pointer items-center gap-3 px-3.5 py-2 text-left text-[14px]" data-testid={`info-task-${x.id}`}>
-              <ListTodo className={cn('size-[18px] shrink-0', x.status === 'running' ? 'text-primary' : 'text-muted-foreground')} />
+              <ClipboardCheck className={cn('size-[18px] shrink-0', x.status === 'running' ? 'text-primary' : 'text-muted-foreground')} />
               <span className="min-w-0 flex-1 truncate">#{x.id} {x.title}</span>
               <Badge variant={STATUS[x.status]?.[1] ?? 'secondary'} className="shrink-0">{STATUS[x.status]?.[0] ?? x.status}</Badge>
             </button>

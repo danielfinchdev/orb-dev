@@ -7,7 +7,7 @@
 // «Esperando tu aprobación», how its last task ended, else its last line) and the unread count. Right click or ⋯ (PC) and
 // a long press (phone) open the chat's menu: info, pin, mute, mark read, complete or reopen, delete.
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { ListTodo, Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ClipboardCheck, FolderGit2, CalendarSync, Presentation, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, Sparkles, PencilLine, AlarmClock, AlarmClockOff } from 'lucide-react';
+import { Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ClipboardCheck, FolderGit2, CalendarSync, Presentation, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, Sparkles, PencilLine, AlarmClock, AlarmClockOff } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
@@ -462,7 +462,7 @@ export function OrbInbox({ page = false }) {
       })}</> : null}
       {results.tasks.length ? <><Sub>{t('orbchats.tasksFound')}</Sub>{results.tasks.map((x) => (
         <button key={x.id} type="button" onClick={() => go({ view: 'tasks', id: x.id })} className="hover:bg-accent/50 flex min-w-0 cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13.5px]" data-testid={`item-t${x.id}`}>
-          <ListTodo className="text-muted-foreground size-4 shrink-0" /><span className="min-w-0 flex-1"><span className="block truncate">#{x.id} {x.title}</span>{x.snippet ? <span className="text-muted-foreground block truncate text-[12.5px]" data-testid="task-hit-snippet">{x.snippet}</span> : null}</span><span className="text-muted-foreground shrink-0 text-[12px]">{STATUS[x.status]?.[0] ?? x.status}</span>
+          <ClipboardCheck className="text-muted-foreground size-4 shrink-0" /><span className="min-w-0 flex-1"><span className="block truncate">#{x.id} {x.title}</span>{x.snippet ? <span className="text-muted-foreground block truncate text-[12.5px]" data-testid="task-hit-snippet">{x.snippet}</span> : null}</span><span className="text-muted-foreground shrink-0 text-[12px]">{STATUS[x.status]?.[0] ?? x.status}</span>
         </button>))}</> : null}
       {!results.projects.length && !results.chats.length && !results.tasks.length && !found?.messages?.length ? <p className="text-muted-foreground px-3 py-4 text-sm">{t('chats.noResults')}</p> : null}
     </div>
