@@ -95,11 +95,11 @@ export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter(
 // deleting the data of Orb 3.7, unlinking a phone, seeing or changing a connector's keys, opening core (the app asks
 // master.check) and, in config.save, choosing where the backups go, writing a connector's keys in clear, changing a
 // connector that has keys (its command, its arguments, its name, removing it or one of its keys) and taking a path off
-// «Cosas que nadie toca», deleting a project (its folder) and removing a skill or an MCP server from core (or a
+// «Cosas que nadie toca», deleting a project (its folder; every time, see FRESH_UNLOCK) and removing a skill or an MCP server from core (or a
 // connector). current: the settings now (the engine's), to compare
 // with. Changing the password asks for the current one instead.
-// pairing a phone or starting an emulator (the agents may then reach it), and giving a chat «Acceso total al PC» or the phone (below: every
-// time).
+// pairing a phone or starting an emulator (the agents may then reach it), and giving a chat «Acceso total al PC» or the
+// phone (the usual 5-minute unlock, not the password every time: see below).
 export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'backup.previousKey', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'projects.deleteCheck', 'extensions.remove',
   'android.pairStart', 'android.pairCode', 'android.emulatorStart', 'sessions.grantTotal', 'sessions.grantAndroid']));
 // the actions that ask for the master password EVERY time, even right after another unlock (the owner: deleting a
