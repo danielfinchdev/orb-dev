@@ -100,8 +100,10 @@ test('Retro keeps R11: no backdrop-filter, no filter on moving layers, nothing b
   const scene = read('src', 'ui', 'themes', 'scene-retro.css');
   assert.doesNotMatch(scene, /backdrop-filter: (?!none)/);
   assert.doesNotMatch(scene.replace(/\.orb-img \{[^}]*\}/, ''), /[^-]filter:/);
-  for (const [, name, body] of scene.matchAll(/@keyframes (rt-[w-]+) {([sS]*?})s*}/g)) {
-    const props = [...body.matchAll(/([a-z-]+)s*:/g)].map((m) => m[1]);
+  const frames = [...scene.matchAll(/@keyframes (rt-[\w-]+) \{([\s\S]*?\})\s*\}/g)];
+  assert.ok(frames.length > 0, 'Retro defines rt-* keyframes');
+  for (const [, name, body] of frames) {
+    const props = [...body.matchAll(/([a-z-]+)\s*:/g)].map((m) => m[1]);
     assert.ok(props.every((x) => x === 'transform' || x === 'opacity'), `${name} animates only transform / opacity: ${props}`);
   }
   assert.match(scene, /html\[data-skin="retro"\] \[data-slot="composer"\] \{[^}]*backdrop-filter: none/);
