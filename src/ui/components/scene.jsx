@@ -155,13 +155,16 @@ function cloudPictures() {
   return cloudArt;
 }
 // Candy: the pastel blobs (colour, place, size, how far they drift, how long) and the 3D sweets floating at the edges.
+// The blobs sit in the corners; the middle, where the text is, stays calm.
 const BLOBS = [
   { c: 'pink', left: '-8%', top: '-12%', w: 620, h: 480, dx: 50, dy: 30, dur: 34, delay: -6 },
   { c: 'mint', left: '-10%', top: '52%', w: 560, h: 460, dx: 60, dy: -30, dur: 38, delay: -25 },
-  { c: 'sky', left: '62%', top: '58%', w: 560, h: 440, dx: -50, dy: -40, dur: 44, delay: -12 }
+  { c: 'sky', left: '62%', top: '58%', w: 560, h: 440, dx: -50, dy: -40, dur: 44, delay: -12 },
+  { c: 'butter', left: '70%', top: '-16%', w: 520, h: 420, dx: -40, dy: 30, dur: 40, delay: -18 },
+  { c: 'lilac', left: '-14%', top: '22%', w: 460, h: 420, dx: 40, dy: 36, dur: 46, delay: -30 }
 ];
 // Three tones of each sweet colour (light, body, shade) for the 3D shading.
-const SWEET = { pink: ['#ffc9e3', '#ff7cc0', '#d6338e'], lilac: ['#e6d4ff', '#b98cff', '#7d4fd6'], mint: ['#d2f5e7', '#7fd9bd', '#3fa98a'], peach: ['#ffe4c8', '#ffb46e', '#e07a2e'], sky: ['#dbecff', '#8cc4ff', '#4a86d9'], yellow: ['#fff4c4', '#ffd95a', '#e0a800'], white: ['#ffffff', '#fdf3fa', '#eccbe0'] };
+const SWEET = { pink: ['#ffc9e3', '#ff7cc0', '#d6338e'], lilac: ['#e6d4ff', '#b98cff', '#7d4fd6'], mint: ['#d2f5e7', '#7fd9bd', '#3fa98a'], peach: ['#ffe4c8', '#ffb46e', '#e07a2e'], sky: ['#dbecff', '#8cc4ff', '#4a86d9'], yellow: ['#fff4c4', '#ffd95a', '#e0a800'], red: ['#ffd0d0', '#ff6b6b', '#c8283c'], white: ['#ffffff', '#fdf3fa', '#eccbe0'] };
 const g = (c) => `url(#cdg-${c})`;
 const Shine = ({ x, y, rx, ry, a = -30, o = 0.6 }) => <ellipse cx={x} cy={y} rx={rx} ry={ry} fill="#fff" opacity={o} transform={`rotate(${a} ${x} ${y})`} />;
 // A swirl lollipop: the stick, the disc and a white spiral on it.
@@ -199,20 +202,38 @@ const Gumdrop = ({ c = 'mint' }) => (
     <Shine x={38} y={32} rx={8} ry={5} a={-35} />
   </svg>
 );
-// A puffy 3D cloud: three puffs on a rounded base, a pink shade under it.
-const Cloud = () => (
-  <svg viewBox="0 0 200 110" aria-hidden="true">
-    <ellipse cx="100" cy="100" rx="70" ry="9" fill="#e9a9cc" opacity="0.35" />
-    <rect x="28" y="62" width="146" height="38" rx="19" fill={g('white')} />
-    <circle cx="58" cy="66" r="32" fill={g('white')} /><circle cx="104" cy="52" r="42" fill={g('white')} /><circle cx="150" cy="66" r="32" fill={g('white')} />
-    <Shine x={92} y={30} rx={18} ry={7} a={-10} o={0.9} />
+// A frosted donut: the dough ring, the icing with its wavy edge, a few sprinkles.
+const Donut = ({ c = 'pink' }) => (
+  <svg viewBox="0 0 100 100" aria-hidden="true">
+    <circle cx="50" cy="50" r="42" fill={g('peach')} />
+    <path d="M50 14C72 14 86 30 86 50C86 70 72 86 50 86C28 86 14 70 14 50C14 30 28 14 50 14ZM50 36A14 14 0 1 0 50 64A14 14 0 1 0 50 36Z" fill={g(c)} fillRule="evenodd" />
+    <circle cx="50" cy="50" r="14" fill="none" stroke={SWEET.peach[2]} strokeOpacity="0.35" strokeWidth="3" />
+    {[[32, 30, 20], [64, 26, -30], [74, 52, 50], [60, 74, 10], [30, 66, -40], [24, 48, 70]].map(([x, y, r], i) => <rect key={i} x={x - 5} y={y - 1.6} width="10" height="3.2" rx="1.6" fill={['#fff', '#7fd9bd', '#ffd95a'][i % 3]} transform={`rotate(${r} ${x} ${y})`} />)}
+    <Shine x={34} y={24} rx={9} ry={4} a={-35} />
+  </svg>
+);
+// A peppermint: a disc cut in eight red and white wedges.
+const Peppermint = () => (
+  <svg viewBox="0 0 100 100" aria-hidden="true">
+    <circle cx="50" cy="50" r="40" fill={g('white')} />
+    {[0, 1, 2, 3].map((i) => <path key={i} d="M50 50L50 10A40 40 0 0 1 78.3 21.7Z" fill={g('red')} transform={`rotate(${i * 90} 50 50)`} />)}
+    <circle cx="50" cy="50" r="40" fill="none" stroke="#fff" strokeOpacity="0.7" strokeWidth="4" />
+    <Shine x={36} y={28} rx={10} ry={4} a={-35} />
+  </svg>
+);
+// A gummy heart.
+const Heart = ({ c = 'pink' }) => (
+  <svg viewBox="0 0 100 90" aria-hidden="true">
+    <path d="M50 84C20 62 8 46 8 30C8 16 18 8 30 8C40 8 47 14 50 22C53 14 60 8 70 8C82 8 92 16 92 30C92 46 80 62 50 84Z" fill={g(c)} />
+    <Shine x={30} y={24} rx={10} ry={5} a={-35} />
   </svg>
 );
 const SWEETS = [
-  { el: <Cloud />, left: '-1%', top: '9%', w: 150, dur: 14, delay: -3 },
+  { el: <Donut c="pink" />, left: '1%', top: '9%', w: 96, r: -12, dur: 14, delay: -3 },
   { el: <Wrapped c="pink" />, right: '1%', top: '13%', w: 120, r: 18, dur: 11, delay: -6 },
   { el: <Gumdrop c="mint" />, left: '4%', top: '44%', w: 70, r: -6, dur: 12, delay: -1 },
-  { el: <Cloud />, right: '-1%', top: '40%', w: 140, dur: 16, delay: -9 },
+  { el: <Peppermint />, right: '1%', top: '40%', w: 84, r: 10, dur: 16, delay: -9 },
+  { el: <Heart c="red" />, left: '11%', top: '26%', w: 52, r: -10, dur: 10, delay: -5 },
   { el: <Lollipop c="pink" />, left: '2%', bottom: '8%', w: 110, r: -14, dur: 13, delay: -5 },
   { el: <Bean c="lilac" />, right: '5%', bottom: '18%', w: 92, r: -25, dur: 10, delay: -2 },
   { el: <Bean c="peach" />, left: '13%', bottom: '3%', w: 60, r: 30, dur: 9, delay: -7 },
