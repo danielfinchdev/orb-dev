@@ -47,10 +47,13 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
+    // No okhttp-sse on purpose: it hides SSE comments, and the silence watchdog must count the PC's ": ping" lines.
+    implementation(libs.okhttp)
     implementation(libs.tink.android)
     // Only org.bouncycastle.crypto.generators.SCrypt is used (Android has no scrypt); R8 strips the rest of the library.
     implementation(libs.bouncycastle.bcprov)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.okhttp.mockwebserver)
 }
