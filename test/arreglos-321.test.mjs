@@ -44,31 +44,31 @@ test('60: los secretos se buscan también por contenido, y los *.env por nombre'
   assert.deepEqual(secretsInDiff(diff), ['notas.txt'], 'lo que se quita y los .env.example no cuentan');
 });
 
-test('60: «Guardar cambios» no hace commit de una clave escrita en cualquier archivo; el .gitignore nuevo cubre *.env y dist/', () => {
+test('60: «Guardar cambios» no hace commit de una clave escrita en cualquier archivo; el .gitignore nuevo cubre *.env y dist/', async () => {
   // No GIT_AUTHOR_* here: git runs with a clean environment, so on a machine without a git identity (the CI runners)
   // the commit has to work by itself.
   const p = createProject(board, { name: 'secretos' }, 'usuario');
   const ignore = fs.readFileSync(path.join(p.path, '.gitignore'), 'utf8');
   assert.match(ignore, /^\*\.env$/m); assert.match(ignore, /^dist\/$/m);
   fs.writeFileSync(path.join(p.path, 'notas.txt'), `mi token es ${GHP}\n`);
-  assert.throws(() => commitAll(p, 'notas'), /notas\.txt contiene algo que parece una clave/);
+  await assert.rejects(() => commitAll(p, 'notas'), /notas\.txt contiene algo que parece una clave/);
   assert.equal(git(p.path, 'diff', '--cached', '--name-only').stdout.trim(), '', 'el índice queda vacío');
   fs.writeFileSync(path.join(p.path, 'notas.txt'), 'sin secretos\n');
   fs.writeFileSync(path.join(p.path, 'config-prueba.env'), 'OPENAI_API_KEY=sk-proj-abc123def456\n');
   fs.mkdirSync(path.join(p.path, 'dist')); fs.writeFileSync(path.join(p.path, 'dist', 'app.js'), 'compilado');
-  assert.equal(commitAll(p, 'notas limpias').files, 1);
+  assert.equal((await commitAll(p, 'notas limpias')).files, 1);
   assert.deepEqual(git(p.path, 'ls-files').stdout.trim().split(/\r?\n/).sort(), ['.gitignore', 'notas.txt'], 'ni el .env ni dist/ entran');
   // A key that reached a commit some other way is caught before any push.
   fs.writeFileSync(path.join(p.path, 'claves.md'), `# Claves\n${GHP}\n`);
   git(p.path, 'add', 'claves.md'); git(p.path, '-c', 'user.name=x', '-c', 'user.email=x@x', 'commit', '-q', '-m', 'claves');
-  assert.deepEqual(unpushedSecrets(p.path, 'HEAD'), ['claves.md']);
+  assert.deepEqual(await unpushedSecrets(p.path, 'HEAD'), ['claves.md']);
 });
 
-test('60: el commit automático de una copia aislada tampoco guarda claves', () => {
+test('60: el commit automático de una copia aislada tampoco guarda claves', async () => {
   const p = createProject(board, { name: 'aislada' }, 'usuario');
   fs.writeFileSync(path.join(p.path, 'app.js'), `const key = "${GHP}";\n`);
   const self = { board };
-  const r = Scheduler.prototype.commitIsolated.call(self, { id: 1, title: 'x', branch: 'orb/x', workdir: p.path });
+  const r = await Scheduler.prototype.commitIsolated.call(self, { id: 1, title: 'x', branch: 'orb/x', workdir: p.path });
   assert.match(r, /app\.js/);
   assert.equal(git(p.path, 'diff', '--cached', '--name-only').stdout.trim(), '');
 });

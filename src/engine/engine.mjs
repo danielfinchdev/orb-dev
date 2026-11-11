@@ -497,10 +497,12 @@ function coreLost(home, board) {
 let stopping = false;
 function shutdown() {
   if (stopping) return; stopping = true;
-  try { api?.shutdown(); } catch { /* closing anyway */ }
+  let drained = Promise.resolve();
+  try { drained = Promise.resolve(api?.shutdown()).catch(() => {}); } catch { /* closing anyway */ }
   try { hostBrowser?.shutdown(); } catch { /* closing anyway */ }
   try { devControl?.stop(); } catch { /* closing anyway */ }
-  Promise.race([Promise.all([Promise.resolve(remote?.stop()).catch(() => {}), stopAttention()]), new Promise((r) => setTimeout(r, 4000))]).finally(() => setTimeout(() => process.exit(0), 300));
+  // A task being closed or a copy being joined gets up to 10 s to finish writing its state (scheduler.drain) before the engine exits.
+  Promise.all([Promise.race([Promise.all([Promise.resolve(remote?.stop()).catch(() => {}), stopAttention()]), new Promise((r) => setTimeout(r, 4000))]), drained]).finally(() => setTimeout(() => process.exit(0), 300));
 }
 
 // 3.8.1: what an app without Node of its own (Tauri) asks the engine before and around the start, answered as

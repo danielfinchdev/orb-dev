@@ -6,7 +6,7 @@ import { ctx } from '../../platform/context.mjs';
 import { groupOf } from '../../domain/projects/projects.mjs';
 import { localeOf } from '../../shared/i18n.mjs';
 import { assistantName } from '../../domain/tasks/board.mjs';
-import { git } from '../../platform/git.mjs';
+import { git, gitAsync } from '../../platform/git.mjs';
 import { accountLabel } from '../../domain/usage/accounts.mjs';
 import { adapter } from '../../agents/index.mjs';
 
@@ -31,6 +31,9 @@ export const label = (agent) => { try { return adapter(agent).label; } catch { r
 export const whoRan = (task) => { const acc = task.run_account; const name = acc ? accountLabel(acc) : null; return name && name !== acc ? name : label(task.assigned_to); };
 export const remotesOf = (dir) => git(dir, 'for-each-ref', '--format=%(refname) %(objectname)', 'refs/remotes').stdout;
 export const mainStatus = (dir) => { const r = git(dir, 'status', '--porcelain', '-uall'); return r.status === 0 ? r.stdout : null; };
+// The same two questions without blocking the engine (closing a task).
+export const remotesOfAsync = async (dir) => (await gitAsync(dir, {}, 'for-each-ref', '--format=%(refname) %(objectname)', 'refs/remotes')).stdout;
+export const mainStatusAsync = async (dir) => { const r = await gitAsync(dir, {}, 'status', '--porcelain', '-uall'); return r.status === 0 ? r.stdout : null; };
 
 // Adds the methods of a part's class to the Scheduler, as class methods (not enumerable), so the class reads as one.
 export function mixin(target, ...parts) {

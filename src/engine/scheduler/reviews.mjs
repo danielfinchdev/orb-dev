@@ -81,22 +81,25 @@ En result pon, en este orden: VEREDICTO: SEGURO o CON RIESGOS; los hallazgos por
 
   // Deletes the isolated copy and branch of a finished task (the user decided not to keep it). 3.8.1: through dropCopy,
   // which also empties the task's branch, so Tareas stops offering «Unir / PR / Descartar» for a branch that is gone.
-  discardBranch(taskId) {
+  async discardBranch(taskId) {
     const task = this.board.task(taskId); if (!task?.branch) throw new Error(tr('msg.scheduler.noBranch'));
     if (this.running.has(task.id)) throw new Error(tr('msg.scheduler.taskRunning'));
+    // Being closed or joined into the folder right now: its copy is not taken away from under that.
+    if (this.finishing.has(task.id) || this.joining.has(task.id)) throw new Error(tr('msg.scheduler.projectBusy'));
     const project = this.board.project(task.project);
     this.board.event(task.id, 'usuario', 'branch.discarded', task.branch);
-    this.dropCopy(task, project);
+    await this.dropCopy(task, project);
     return { ok: true };
   }
   // 3.8.1: a task's branch joined into its project's folder («Unir»): its copy and branch are not needed any more (they
   // used to stay for good, one per isolated task joined).
-  branchMerged(projectName, branch) {
+  async branchMerged(projectName, branch) {
     const project = this.board.project(projectName);
     const row = project && this.board.one('SELECT id FROM tasks WHERE project = ? AND branch = ? ORDER BY id DESC LIMIT 1', project.name, branch);
     if (!row || this.running.has(row.id)) return;
+    if (this.finishing.has(row.id) || this.joining.has(row.id)) throw new Error(tr('msg.scheduler.projectBusy'));
     const task = this.board.task(row.id);
     this.board.event(task.id, 'usuario', 'branch.merged', branch);
-    this.dropCopy(task, project);
+    await this.dropCopy(task, project);
   }
 }

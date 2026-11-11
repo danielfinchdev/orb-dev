@@ -70,6 +70,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   let catalogCache = null; // models.catalog, for a few seconds (see there)
   const insideHome = (p) => { const rel = path.relative(realHome, p); return Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel); };
   const project = (name) => board.project(str(name, 'proyecto', 200)) ?? fail(tr('msg.api.noProject', { name }));
+  // Runs `work` with the project held (no task starts in it meanwhile); a project already held is refused.
+  const holding = async (name, work) => {
+    if (scheduler.held(name)) throw new Error(tr('msg.scheduler.projectBusy'));
+    const release = scheduler.hold(name);
+    try { return await work(); } finally { release(); }
+  };
   let lastChat = board.one('SELECT MAX(id) AS id FROM chat')?.id ?? 0;
   const conversationId = (id) => { const c = board.conversation(int(id, 'conversación')); if (!c) fail(tr('msg.board.noConversation')); return c.id; };
   let whiteboardOf = null; const wb = async () => (whiteboardOf ??= (await boards()).whiteboard(board));
@@ -257,6 +263,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     },
     'projects.delete': ({ name, ticket, trashed }) => {
       const p = project(name);
+      if (scheduler.held(p.name)) throw new Error(tr('msg.scheduler.projectBusy')); // a close or a join is working in its folder
       const stop = (n) => {
         for (const t of board.all("SELECT id FROM tasks WHERE project = ? AND status = 'running'", n)) { try { scheduler.cancel(t.id, 'usuario'); } catch { /* finished meanwhile */ } }
         for (const s of board.all('SELECT id FROM sessions WHERE project = ?', n)) { sessions.stop(s.id); sessions.closeLive(s.id); }
@@ -300,12 +307,16 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     },
     'projects.clearIcon': ({ name }) => { const icon = clearProjectIcon(project(name)); board.changed('projects'); return icon; },
     'projects.info': async ({ name }) => (await gh()).projectInfo(project(name)),
-    'projects.commit': async ({ name, message }) => (await gh()).commitAll(project(name), str(message, 'mensaje', 200)),
+    // A commit or a merge changes the folder off the event loop: the project is held so no task starts in it meanwhile.
+    'projects.commit': async ({ name, message }) => {
+      const p = project(name); const text = str(message, 'mensaje', 200); const g = await gh();
+      return holding(p.name, () => g.commitAll(p, text));
+    },
     'projects.merge': async ({ name, branch }) => {
-      const p = project(name); const b = str(branch, 'rama', 120);
-      const out = (await gh()).mergeBranch(p, b);
+      const p = project(name); const b = str(branch, 'rama', 120); const g = await gh();
+      const out = await holding(p.name, () => g.mergeBranch(p, b));
       // 3.8.1: the task that owned the branch lets its copy and branch go (src/engine/scheduler/index.mjs › branchMerged).
-      try { scheduler.branchMerged(p.name, b); } catch (error) { log(`tras unir ${b}: ${error.message}`); }
+      try { await scheduler.branchMerged(p.name, b); } catch (error) { log(`tras unir ${b}: ${error.message}`); }
       return out;
     },
     'projects.push': async ({ name, branch }) => (await gh()).push(project(name), str(branch, 'rama', 120)),
@@ -849,7 +860,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     dataTick: () => data.tick(),
     // Running tasks stay "running": the next start continues them (scheduler.finish does not close them while closing).
     // 3.8.2: adb's server goes with Orb (no phone reachable from this PC while Orb is closed).
-    shutdown() { terminals.closeAll(); scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); android.stopServer().catch(() => {}); log('motor detenido'); }
+    // Returns what is still to be waited for: a task being closed or a copy being joined finishes writing its state first.
+    shutdown() { terminals.closeAll(); scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); android.stopServer().catch(() => {}); log('motor detenido'); return scheduler.drain().catch(() => {}); }
   };
 }
 

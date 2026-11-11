@@ -9,7 +9,7 @@ import { chooseModel } from '../usage/catalog.mjs';
 import { PRODUCT } from '../../shared/product.mjs';
 import { assistantName, ofUser, eventKey, userName } from '../../domain/tasks/board.mjs';
 import { checkDevTools, devToolsBrief, needsDevTools } from '../../platform/dev-tools.mjs';
-import { git, isGitRepo, repoRoot, mayHaveWorktrees, ORB_GIT, REF_PREFIX } from '../../platform/git.mjs';
+import { git, gitAsync, isGitRepo, repoRoot, mayHaveWorktrees, ORB_GIT, REF_PREFIX } from '../../platform/git.mjs';
 import { prepareWorkdir } from '../../domain/tasks/checkpoints.mjs';
 import { rankAccounts, isLimitText, isBudgetText, startCooldown, taskBudgetUsd, blockModel, isModelLimitText, liftAfterSuccess, untilText, modelName } from '../../domain/usage/budget.mjs';
 import { installed } from '../../agents/index.mjs';
@@ -17,14 +17,14 @@ import { runDue } from '../../domain/schedules/schedules.mjs';
 import { wakeSnoozed } from '../../domain/conversations/inbox.mjs';
 import { usableAccounts, account as findAccount, accountLabel } from '../../domain/usage/accounts.mjs';
 import { oneLine, MAX_DEP_RESULT } from '../../shared/text.mjs';
-import { redactSecrets, secretFiles, isSecretPath, stagedSecrets } from '../../shared/secrets-scan.mjs';
+import { redactSecrets, secretFiles, isSecretPath, stagedSecretsAsync } from '../../shared/secrets-scan.mjs';
 import { ATTACH_DIR, browserOn } from '../sessions.mjs';
 import { logTask } from '../../domain/journal/journal.mjs';
 import { adapter } from '../../agents/index.mjs';
 import { liveSkills } from '../api/extensions.mjs';
 import { skillsBrief } from '../../domain/extensions/extensions.mjs';
 import { alive } from '../../platform/proc-list.mjs';
-import { groupNote, contractNote, STATUS_ES, label, whoRan, mainStatus, mixin } from './common.mjs';
+import { groupNote, contractNote, STATUS_ES, label, whoRan, mainStatus, mainStatusAsync, mixin } from './common.mjs';
 import { SafetyPart } from './safety.mjs';
 import { FoldersPart } from './folders.mjs';
 import { LeftoversPart } from './leftovers.mjs';
@@ -40,6 +40,9 @@ export class Scheduler {
     this.running = new Map(); // task id -> { sessionId, agent }
     this.cleaning = new Map(); // 3.8.3: task id -> the stop of its leftover programs still under way (a promise)
     this.mainSnapshot = new Map();
+    this.holds = new Map(); // project -> how many things are working on its folder off the event loop (hold)
+    this.finishing = new Map(); // task id -> its close, a promise that never rejects (finish)
+    this.joining = new Map(); // task id -> the join of its copy into the folder under way (folders.mjs)
     // Tasks left "running" by a closed app: their process is gone. 2.3: they continue where they were (the agent resumes its
     // own conversation) when continuity.resumeAfterRestart is on; otherwise they are marked failed for the user to retry.
     for (const t of board.tasks({ status: 'running', limit: 500 })) {
@@ -56,15 +59,45 @@ export class Scheduler {
     // Tasks the agent closed itself (orb_update_task) whose process was still alive when the app went away: what Orb does
     // when the process ends (automatic commit, files changed, log, report) never happened, and their pid would hold their
     // dependent tasks forever. It is done now.
-    for (const t of board.all("SELECT id FROM tasks WHERE pid IS NOT NULL AND status <> 'running'")) {
-      this.finish(t.id, { code: 0, state: null, stderr: '', stopped: false, timedOut: false, limit: null });
-    }
-    try { this.pruneCheckpoints(); } catch (error) { this.log(`limpiar fotos: ${error.message}`); }
-    try { this.pruneCopies(); } catch (error) { this.log(`limpiar copias: ${error.message}`); }
+    const closes = board.all("SELECT id FROM tasks WHERE pid IS NOT NULL AND status <> 'running'")
+      .map((t) => this.finish(t.id, { code: 0, state: null, stderr: '', stopped: false, timedOut: false, limit: null }));
+    // The cleaning waits for those closes: a copy waiting to be joined is marked by the close, and the cleaning keeps it.
+    const clean = () => {
+      try { this.pruneCheckpoints(); } catch (error) { this.log(`limpiar fotos: ${error.message}`); }
+      try { this.pruneCopies(); } catch (error) { this.log(`limpiar copias: ${error.message}`); }
+    };
+    if (closes.length) this.ready = Promise.allSettled(closes).then(clean);
+    else { clean(); this.ready = Promise.resolve(); }
     // 3.8.3: up to 3.8.2 every finished task left an empty «leftovers_pending» row, and the engine listed the PC's
     // processes for each of them on every tick. Those rows mean nothing: they go.
     try { board.run("DELETE FROM settings WHERE key LIKE 'leftovers_pending:%' AND value = ''"); } catch (error) { this.log(`limpiar restos vacíos: ${error.message}`); }
     try { this.refreshAvailable(true); } catch (error) { this.log(`agentes disponibles: ${error.message}`); }
+  }
+
+  // A project whose folder is being read or written off the event loop (closing a task, joining a copy, «Deshacer», a merge):
+  // no task starts there and nothing else touches it meanwhile. A counter, since a close and a join may overlap in time.
+  // hold() returns its release, which can be called more than once.
+  hold(project) {
+    this.holds.set(project, (this.holds.get(project) ?? 0) + 1);
+    let released = false;
+    return () => {
+      if (released) return; released = true;
+      const left = (this.holds.get(project) ?? 1) - 1;
+      if (left > 0) this.holds.set(project, left); else this.holds.delete(project);
+    };
+  }
+  held(project) { return this.holds.has(project); }
+  // Closing the app: what is being closed or joined is let finish (up to maxMs) before the database is shut.
+  async drain(maxMs = 10_000) {
+    const until = Date.now() + maxMs;
+    // Repeated: a close can start a join, which is waited for too.
+    while (this.finishing.size || this.joining.size) {
+      const left = until - Date.now(); if (left <= 0) return;
+      let timer;
+      await Promise.race([Promise.allSettled([...this.finishing.values(), ...this.joining.values()]), new Promise((resolve) => { timer = setTimeout(resolve, left); timer.unref?.(); })]);
+      clearTimeout(timer);
+      await null;
+    }
   }
 
   // 3.2.1: isolated copies left over from a previous run (a task's process still held the folder open when Orb tried to
@@ -241,6 +274,7 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
 
   // Called every few seconds and after every change of the board.
   tick() {
+    if (this.closing) return; // the app is shutting down: nothing starts
     const { board } = this;
     try { this.refreshAvailable(); } catch (error) { this.log(`agentes disponibles: ${error.message}`); }
     try { this.watchQuiet(); } catch (error) { this.log(`vigilancia: ${error.message}`); }
@@ -255,7 +289,7 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
     if (!paused) {
       try { this.resumeLimited(); } catch (error) { this.log(`continuar limitadas: ${error.message}`); }
       try { runDue(board, this.log); } catch (error) { this.log(`programadas: ${error.message}`); }
-      try { this.integratePending(); } catch (error) { this.log(`unir copias: ${error.stack}`); }
+      this.integratePending().catch((error) => this.log(`unir copias: ${error.stack}`));
     }
     board.revalidateQueued(); board.warnBlockedByDeps();
     const enabled = enabledAgents();
@@ -292,7 +326,7 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
       // In its folder only one task that writes at a time (read-only tasks may run alongside); isolated copies run in parallel.
       const project = board.project(task.project);
       if (!project) continue;
-      if (this.holding?.has(task.project)) continue; // «Deshacer» is reading or restoring that folder (safety.mjs)
+      if (this.held(task.project)) continue; // a close, a join or «Deshacer» is reading or writing that folder
       // 3.1: a subtask of a task that works in its own copy works in that same copy: the parent waits for it there and
       // its work goes into the folder with the parent's.
       const parent = task.parent_id ? board.task(task.parent_id) : null;
@@ -541,49 +575,59 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
     return this.board.task(task.id);
   }
 
+  // Closing a task: git runs off the event loop, so the project stays held (nothing starts in it, nobody undoes the task)
+  // until the close is over. The promise never rejects. A close that was already under way when the app began to close is
+  // let finish (drain): its state is written before the database shuts.
   finish(taskId, info) {
     this.running.delete(taskId);
     // The app is closing: the turn was cut by the shutdown, not finished. The task stays as it is (running, with its pid)
     // and the next start continues it, instead of closing it as done or failed half-way.
-    if (this.closing) return;
-    try { this.finishNow(taskId, info); }
-    catch (error) {
-      this.log(`finish #${taskId}: ${error.stack}`);
-      try {
-        const task = this.board.task(taskId);
-        if (task?.status === 'running') this.board.patch(taskId, { status: 'failed', result: tr('sys.scheduler.finishError', { error: error.message }), pid: null }, 'orb', 'task.finished');
-        else if (task?.pid) this.board.patch(taskId, { pid: null }, 'orb', 'task.process_exit');
-      } catch (inner) { this.log(`finish #${taskId} (recuperación): ${inner.message}`); }
-    }
+    if (this.closing) return Promise.resolve();
+    const release = this.hold(this.board.task(taskId)?.project ?? '');
+    const job = (async () => {
+      try { await this.finishNow(taskId, info, release); }
+      catch (error) {
+        this.log(`finish #${taskId}: ${error.stack}`);
+        try {
+          const task = this.board.task(taskId);
+          if (task?.status === 'running') this.board.patch(taskId, { status: 'failed', result: tr('sys.scheduler.finishError', { error: error.message }), pid: null }, 'orb', 'task.finished');
+          else if (task?.pid) this.board.patch(taskId, { pid: null }, 'orb', 'task.process_exit');
+        } catch (inner) { this.log(`finish #${taskId} (recuperación): ${inner.message}`); }
+      } finally { release(); if (this.finishing.get(taskId) === job) this.finishing.delete(taskId); }
+    })();
+    this.finishing.set(taskId, job);
+    return job;
   }
 
-  commitIsolated(task) {
+  async commitIsolated(task) {
     if (!task.branch || !task.workdir || !fs.existsSync(task.workdir)) return '';
-    const status = git(task.workdir, 'status', '--porcelain=v1', '-z', '-uall');
+    const g = (...args) => gitAsync(task.workdir, {}, ...args);
+    const status = await g('status', '--porcelain=v1', '-z', '-uall');
     if (status.status !== 0) return tr('sys.scheduler.gitStatusFailed', { error: oneLine(status.stderr, 200) });
     if (!status.stdout.trim()) return '';
     const risky = secretFiles(status.stdout);
     if (risky.length) return tr('sys.scheduler.secretFilesIn', { list: risky.slice(0, 5).join(', '), dir: task.workdir });
-    git(task.workdir, 'add', '-A', '--', '.', `:(exclude)${ATTACH_DIR}`);
-    const staged = git(task.workdir, 'diff', '--cached', '--name-only', '-z').stdout.split('\0').filter(Boolean).filter(isSecretPath);
-    if (staged.length) { git(task.workdir, 'reset', '-q'); return tr('sys.scheduler.secretFiles', { list: staged.slice(0, 5).join(', ') }); }
-    const inText = stagedSecrets(task.workdir, git); // 3.2.1: a key pasted into any file, not only secret-looking names
-    if (inText.length) { git(task.workdir, 'reset', '-q'); return tr('sys.scheduler.secretFiles', { list: inText.slice(0, 5).join(', ') }); }
+    await g('add', '-A', '--', '.', `:(exclude)${ATTACH_DIR}`);
+    const staged = (await g('diff', '--cached', '--name-only', '-z')).stdout.split('\0').filter(Boolean).filter(isSecretPath);
+    if (staged.length) { await g('reset', '-q'); return tr('sys.scheduler.secretFiles', { list: staged.slice(0, 5).join(', ') }); }
+    let inText;
+    try { inText = await stagedSecretsAsync(task.workdir, (dir, ...args) => gitAsync(dir, {}, ...args)); } catch (error) { await g('reset', '-q'); return tr('sys.scheduler.gitStatusFailed', { error: oneLine(error.message, 200) }); } // 3.2.1: a key pasted into any file, not only secret-looking names
+    if (inText.length) { await g('reset', '-q'); return tr('sys.scheduler.secretFiles', { list: inText.slice(0, 5).join(', ') }); }
     // Nothing really changed: git status can list a file the agent rewrote with the same content but other line endings
     // (core.autocrlf=true, the Git for Windows default), and then "git commit" fails with "nothing to commit".
-    if (git(task.workdir, 'diff', '--cached', '--quiet').status === 0) return '';
-    const commit = git(task.workdir, ...ORB_GIT, 'commit', '-q', '-m', `orb: tarea #${task.id} ${oneLine(task.title)}`);
+    if ((await g('diff', '--cached', '--quiet')).status === 0) return '';
+    const commit = await g(...ORB_GIT, 'commit', '-q', '-m', `orb: tarea #${task.id} ${oneLine(task.title)}`);
     this.board.event(task.id, 'orb', 'git.commit', commit.status === 0 ? eventKey('sys.events.committed') : commit.stderr.trim());
     return commit.status === 0 ? '' : tr('sys.scheduler.commitFailed', { error: oneLine(commit.stderr, 200), dir: task.workdir });
   }
 
-  finishNow(taskId, { code, state, stderr, stopped, timedOut, limit }) {
+  async finishNow(taskId, { code, state, stderr, stopped, timedOut, limit }, release = () => {}) {
     const { board } = this;
     let task = board.task(taskId);
     const project = board.project(task.project);
     const before = this.mainSnapshot.get(taskId); this.mainSnapshot.delete(taskId);
     if (before != null && project?.path) {
-      const after = mainStatus(project.path);
+      const after = await mainStatusAsync(project.path);
       if (after != null && after !== before) {
         board.event(taskId, 'orb', 'folder.warning', 'la carpeta principal cambió mientras trabajaba');
         board.addChat('system', tr('msg.scheduler.folderChanged', { id: taskId, name: project.name }), { task: taskId });
@@ -597,8 +641,10 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
     try { this.sessions.closeLive(task.session_id); } catch (error) { this.log(`cerrar proceso #${taskId}: ${error.message}`); }
     try { this.stopLeftovers(task, { roots }); } catch (error) { this.log(`parar restos #${taskId}: ${error.message}`); }
     try { this.emit('agentBrowser:closeTask', { task: taskId }); } catch { /* no window */ }
-    if (task.mode === 'carpeta' && !task.branch) held = this.afterFolderTask(task);
-    else held = this.commitIsolated(task);
+    if (task.mode === 'carpeta' && !task.branch) held = await this.afterFolderTask(task);
+    else held = await this.commitIsolated(task);
+    // What happened while git worked (a cancel, a follow-up, the agent closing its own task) is read again, not assumed.
+    task = board.task(taskId) ?? task;
     // 3.1: what the program itself said went wrong (its error output, or an error message that is not the agent's own
     // answer). Never the agent's prose: «the API returned 429» in a summary must not pause a whole account for hours.
     const errorFinal = state?.isError && state.final && state.final !== state.text ? state.final : '';
@@ -671,7 +717,9 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
     const isolated = board.settingJson(`isolated:${task.id}`);
     if (task.status === 'done' && isolated?.base && task.branch) {
       board.settingJson(`integrate:${task.id}`, { base: isolated.base, at: new Date().toISOString() });
-      try { this.integratePending(); task = board.task(task.id); } catch (error) { this.log(`unir #${task.id}: ${error.stack}`); }
+      // The join takes its own hold of the project (integratePending): this close lets go of it first, with no await between.
+      release();
+      try { await this.integratePending({ own: taskId }); task = board.task(task.id); } catch (error) { this.log(`unir #${task.id}: ${error.stack}`); }
     }
     this.log(`tarea #${taskId} terminó (código ${code}, estado ${task.status}${stopped ? ', detenida' : ''})`);
     if (task.status === 'queued' || task.status === 'limited') return; // handed to another agent, or waiting for the reset (already told)

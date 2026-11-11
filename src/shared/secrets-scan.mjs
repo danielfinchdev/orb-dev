@@ -64,6 +64,13 @@ export function secretsInDiff(diff) {
 }
 // The files of the index (what the next commit would save) with a secret in their added lines. `git` is workspace's git().
 export const stagedSecrets = (dir, git) => secretsInDiff(git(dir, '-c', 'core.quotePath=false', 'diff', '--cached', '-U0', '--no-color', '--no-ext-diff').stdout);
+// The same with a git that answers with a promise (the engine's asynchronous one, called as git(dir, ...args)).
+// An output that git cut or ran out of time on is never read as «no secrets»: it throws.
+export const stagedSecretsAsync = async (dir, git) => {
+  const r = await git(dir, '-c', 'core.quotePath=false', 'diff', '--cached', '-U0', '--no-color', '--no-ext-diff');
+  if (r.cut || r.timedOut) throw new Error('git output incomplete');
+  return secretsInDiff(r.stdout);
+};
 
 // Accepts the -z output (preferred) or plain lines (old callers and tests).
 export function secretFiles(porcelain) {

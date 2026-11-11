@@ -4,10 +4,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { eventKey, userName } from '../../domain/tasks/board.mjs';
-import { git, REF_PREFIX } from '../../platform/git.mjs';
-import { treeState, saveTreeState, stateFileOf, dropTreeState, takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit, fullSnapshot, missedBy } from '../../domain/tasks/checkpoints.mjs';
+import { git, gitAsync, REF_PREFIX } from '../../platform/git.mjs';
+import { treeState, saveTreeState, stateFileOf, dropTreeState, takeCheckpoint, changedBetweenAsync, undoCheckpoint, snapshotCommitAsync, fullSnapshot, missedBy } from '../../domain/tasks/checkpoints.mjs';
 import { oneLine } from '../../shared/text.mjs';
-import { remotesOf } from './common.mjs';
+import { remotesOf, remotesOfAsync } from './common.mjs';
 import { autonomyOf } from '../../domain/security/guard.mjs';
 import { logUndone } from '../../domain/journal/journal.mjs';
 
@@ -51,7 +51,8 @@ export class SafetyPart {
   }
 
   // After a folder task: record what changed and hold the task if it looks like a push or a mass deletion.
-  afterFolderTask(task) {
+  // Git runs off the event loop; the caller keeps the project held (hold) so nothing else writes there meanwhile.
+  async afterFolderTask(task) {
     const reasons = [];
     // 3.2.1: a read-only task that wrote BITACORA.md (its global instructions may ask for a log) is put back as it was and
     // flagged. Checked apart from git because Orb keeps BITACORA.md out of its snapshot.
@@ -89,17 +90,18 @@ export class SafetyPart {
       return tr('msg.scheduler.needsReview', { reasons: why });
     }
     const at = Date.now(); // a file older than this that the snapshot missed was hidden from it (missedBy)
-    const snap = snapshotCommit(cp.before.repo, { raw: Boolean(cp.before.raw), always: true, message: `orb: foto después de la tarea #${task.id}` });
+    const snap = await snapshotCommitAsync(cp.before.repo, { raw: Boolean(cp.before.raw), always: true, message: `orb: foto después de la tarea #${task.id}` });
     if (!snap) return '';
-    git(cp.before.repo, 'update-ref', `${REF_PREFIX}/t${task.id}-despues`, snap.commit);
-    cp.after = { kind: 'git', repo: cp.before.repo, commit: snap.commit, at };
-    this.board.settingJson(`checkpoint:${task.id}`, cp);
-    const changed = changedBetween(cp.before.repo, cp.before.commit, snap.commit);
+    await gitAsync(cp.before.repo, {}, 'update-ref', `${REF_PREFIX}/t${task.id}-despues`, snap.commit);
+    // Read again after the awaits: only the photo this call started from is completed, never one a later round replaced.
+    const key = `checkpoint:${task.id}`; const current = this.board.settingJson(key);
+    if (current?.before?.commit === cp.before.commit) this.board.settingJson(key, { ...current, after: { kind: 'git', repo: cp.before.repo, commit: snap.commit, at } });
+    const changed = await changedBetweenAsync(cp.before.repo, cp.before.commit, snap.commit);
     this.board.event(task.id, 'orb', 'files.changed', changed.length ? changed.slice(0, 60).map((c) => `${c.status} ${c.path}`).join(', ') + (changed.length > 60 ? ` … y ${changed.length - 60} más` : '') : 'ningún archivo');
-    if (cp.remotes != null && remotesOf(cp.before.repo) !== cp.remotes) reasons.push(tr('msg.scheduler.safetyRemote'));
+    if (cp.remotes != null && (await remotesOfAsync(cp.before.repo)) !== cp.remotes) reasons.push(tr('msg.scheduler.safetyRemote'));
     const gone = changed.filter((c) => c.status === 'D').map((c) => c.path);
     const autonomy = task.readonly ? 'preguntar' : autonomyOf(task);
-    const before = autonomy === 'auto' && gone.length ? git(cp.before.repo, 'ls-tree', '-r', '--name-only', cp.before.commit).stdout.split('\n').filter((p) => p && !GENERATED.test(p)).length : 0;
+    const before = autonomy === 'auto' && gone.length ? (await gitAsync(cp.before.repo, {}, 'ls-tree', '-r', '--name-only', cp.before.commit)).stdout.split('\n').filter((p) => p && !GENERATED.test(p)).length : 0;
     const hold = deletionHold(gone, before, autonomy);
     if (hold.held) reasons.push(hold.share ? tr('msg.scheduler.safetyDeletedShare', { deleted: hold.deleted, total: hold.total, pct: Math.round((hold.deleted / hold.total) * 100) }) : tr('msg.scheduler.safetyDeleted', { deleted: hold.deleted }));
     // 3.1/3.2.1: a read-only task that runs the tests or the build may leave new outputs (reports, builds) in a build
@@ -118,15 +120,14 @@ export class SafetyPart {
   // after it. Meanwhile no task starts in that project (holding) and a second undo of the same task is refused.
   async undo(taskId) {
     const task = this.board.task(taskId); if (!task) throw new Error(tr('msg.scheduler.noTask', { id: taskId }));
-    if (this.running.has(task.id)) throw new Error(tr('msg.scheduler.undoRunning'));
+    if (this.running.has(task.id) || this.finishing.has(task.id)) throw new Error(tr('msg.scheduler.undoRunning'));
     const cp = this.board.settingJson(`checkpoint:${task.id}`);
     if (!cp?.before && this.board.settingJson(`undone:${task.id}`)) throw new Error(tr('msg.scheduler.alreadyUndone', { id: task.id }));
     if (!cp?.before) throw new Error(tr('msg.scheduler.noPhoto'));
-    this.holding ??= new Set();
-    if (this.holding.has(task.project)) throw new Error(tr('msg.scheduler.undoBusy'));
+    if (this.held(task.project)) throw new Error(tr('msg.scheduler.undoBusy'));
     let out;
     if (cp.before.kind === 'git') {
-      this.holding.add(task.project);
+      const release = this.hold(task.project);
       try {
         const full = await fullSnapshot(cp.before.repo, { message: 'orb: foto para deshacer (todo releído)' });
         if (!full) throw new Error(tr('msg.scheduler.cannotReadFolder'));
@@ -138,7 +139,7 @@ export class SafetyPart {
           for (const k of ['restored', 'removed', 'skipped']) out[k].push(...more[k]);
           this.board.event(task.id, 'orb', 'checkpoint.missed', oneLine(`cambiados sin dejar rastro en su fecha: ${missed.map((c) => c.path).join(', ')}`, 400));
         }
-      } finally { this.holding.delete(task.project); }
+      } finally { release(); }
     } else out = undoCheckpoint(cp.before, cp.after ?? {});
     try { logUndone(this.board, task, out); } catch (error) { this.log?.(`bitácora deshacer #${task.id}: ${error.message}`); }
     this.board.event(task.id, 'usuario', 'task.undone', `restaurados ${out.restored.length}, quitados ${out.removed.length}, sin tocar ${out.skipped.length}`);
@@ -170,9 +171,8 @@ export class SafetyPart {
   async recheckHeld(task) {
     const key = `checkpoint:${task.id}`; const cp = this.board.settingJson(key);
     if (cp?.before?.kind !== 'git' || !cp.after?.commit || cp.after.full || !fs.existsSync(cp.before.repo)) return;
-    this.holding ??= new Set();
-    if (this.holding.has(task.project)) return;
-    this.holding.add(task.project);
+    if (this.held(task.project)) return;
+    const release = this.hold(task.project);
     try {
       const at = Date.now();
       const full = await fullSnapshot(cp.before.repo, { message: `orb: foto después de la tarea #${task.id} (todo releído)` });
@@ -182,6 +182,6 @@ export class SafetyPart {
       if (missed.length) this.board.event(task.id, 'orb', 'checkpoint.missed', oneLine(`cambiados sin dejar rastro en su fecha: ${missed.map((c) => c.path).join(', ')}`, 400));
       git(cp.before.repo, 'update-ref', `${REF_PREFIX}/t${task.id}-despues`, full.commit);
       this.board.settingJson(key, { ...now, after: { ...now.after, commit: full.commit, at, full: true } });
-    } finally { this.holding.delete(task.project); }
+    } finally { release(); }
   }
 }
