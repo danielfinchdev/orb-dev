@@ -63,7 +63,7 @@ function Palette({ onClose }) {
   };
   let index = -1;
   return (
-    <DialogContent showClose={false} className="top-[18%] translate-y-0 sm:max-w-xl gap-0 overflow-hidden p-0" onKeyDown={onKey} data-testid="command-palette">
+    <DialogContent instant showClose={false} className="top-[18%] translate-y-0 sm:max-w-xl gap-0 overflow-hidden p-0" onKeyDown={onKey} data-testid="command-palette">
       <DialogTitle className="sr-only">{t('palette.title')}</DialogTitle>
       <DialogDescription className="sr-only">{t('palette.hint')}</DialogDescription>
       <label className="flex h-12 items-center gap-2.5 border-b px-4">
