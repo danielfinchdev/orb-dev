@@ -77,17 +77,25 @@ function ChoiceDialog({ d }) {
   );
 }
 
+// A confirmation focuses Cancel when the action is dangerous and the main button otherwise, never the element that opened it.
+function confirmAutoFocus(e) {
+  e.preventDefault();
+  e.currentTarget.querySelector('[data-autofocus]')?.focus();
+}
+// The Enter that opened the dialog may still be held down; its auto-repeat must not press the focused button.
+function swallowHeldEnter(e) { if (e.key === 'Enter' && e.repeat) e.preventDefault(); }
+
 export function DialogHost() {
   const dialogs = useStore((s) => s.dialogs ?? []);
   return dialogs.map((d) => (
     <Dialog key={d.id} open onOpenChange={(o) => { if (!o) close(d.id, null); }}>
-      <DialogContent className={d.wide ? 'sm:max-w-2xl' : undefined} onOpenAutoFocus={d.kind === 'confirm' ? (e) => e.preventDefault() : undefined}>
+      <DialogContent className={d.wide ? 'sm:max-w-2xl' : undefined} onOpenAutoFocus={d.kind === 'confirm' ? confirmAutoFocus : undefined} onKeyDown={d.kind === 'confirm' ? swallowHeldEnter : undefined}>
         {d.kind === 'confirm' ? (
           <>
             <DialogHeader><DialogTitle>{d.title}</DialogTitle><DialogDescription className="whitespace-pre-wrap">{d.description}</DialogDescription></DialogHeader>
             <DialogFooter>
-              {d.cancel ? <Button variant="outline" onClick={() => close(d.id, false)}>{d.cancel}</Button> : null}
-              <Button variant={d.danger ? 'destructive' : 'default'} onClick={() => close(d.id, true)}>{d.ok}</Button>
+              {d.cancel ? <Button variant="outline" data-autofocus={d.danger ? "" : undefined} onClick={() => close(d.id, false)}>{d.cancel}</Button> : null}
+              <Button variant={d.danger ? 'destructive' : 'default'} data-autofocus={d.danger && d.cancel ? undefined : ""} onClick={() => close(d.id, true)}>{d.ok}</Button>
             </DialogFooter>
           </>
         ) : d.kind === 'choice' ? <ChoiceDialog d={d} /> : <FormDialog d={d} />}
