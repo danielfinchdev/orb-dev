@@ -72,7 +72,7 @@ const Message = memo(function Message({ m, name, onChanges, tail }) {
       </div>
     </div>
   );
-  if (m.role === 'usuario') return <div className="bg-bubble text-bubble-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 compact:text-[14px] whitespace-pre-wrap break-words">{m.body}<MsgTime at={m.at} /></div>;
+  if (m.role === 'usuario') return <div className="bg-bubble text-bubble-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 compact:text-[14.5px] whitespace-pre-wrap break-words">{m.body}<MsgTime at={m.at} /></div>;
   if (m.role === 'orb') {
     const report = m.meta?.kind === 'report' && m.meta.tasks?.length ? m.meta : null;
     return (

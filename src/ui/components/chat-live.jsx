@@ -105,7 +105,7 @@ export function QuestionCard({ m }) {
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           {q.header ? <div className="text-primary mb-0.5 text-[11px] font-semibold tracking-wide uppercase">{q.header}</div> : null}
-          <div className="text-[14.5px] compact:text-[14px] leading-snug font-semibold">{q.question}</div>
+          <div className="text-[14.5px] compact:text-[14.5px] leading-snug font-semibold">{q.question}</div>
         </div>
         <Button size="icon-xs" variant="ghost" onClick={() => setFolded(!folded)} aria-label={folded ? t('chat.q.unfold') : t('chat.q.fold')} aria-expanded={!folded}><ChevronDown className={cn('transition-transform', folded && '-rotate-90')} /></Button>
         <Button size="icon-xs" variant="ghost" onClick={() => send(true)} aria-label={t('chat.q.skip')} disabled={busy}><X /></Button>
