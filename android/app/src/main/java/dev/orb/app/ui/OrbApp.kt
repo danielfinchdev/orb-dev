@@ -1,6 +1,8 @@
 package dev.orb.app.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
@@ -26,7 +28,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import dev.orb.app.AppContainer
-import dev.orb.app.ui.home.HomeScreen
+import androidx.compose.runtime.LaunchedEffect
+import dev.orb.app.ui.chats.ChatTexts
+import dev.orb.app.ui.chats.SearchScreen
+import dev.orb.app.ui.chats.SearchViewModel
+import dev.orb.app.ui.shell.MainShell
+import dev.orb.app.ui.shell.ShellActions
+import dev.orb.app.ui.shell.UnlinkDialog
 import dev.orb.app.ui.home.HomeViewModel
 import dev.orb.app.ui.linktest.LinkTestScreen
 import dev.orb.app.ui.linktest.LinkTestViewModel
@@ -37,6 +45,11 @@ import kotlinx.serialization.Serializable
 @Serializable data object Welcome
 @Serializable data object Home
 @Serializable data object LinkTest
+@Serializable data object Search
+@Serializable data object NewChat
+
+/** An Orbe conversation (`kind` = conversation) or a direct chat with an agent (`kind` = session). */
+@Serializable data class ChatRoute(val kind: String, val id: String)
 
 @Composable
 fun OrbApp(container: AppContainer) {
@@ -70,14 +83,37 @@ private fun OrbNav(container: AppContainer, start: Any) {
             WelcomeScreen(vm, onLinked = { nav.navigate(Home) { popUpTo(Welcome) { inclusive = true } } })
         }
         composable<Home> {
-            val vm = viewModel<HomeViewModel>(factory = viewModelFactory { initializer { HomeViewModel(container) } })
-            HomeScreen(
-                vm,
-                onLinkTest = { nav.navigate(LinkTest) },
-                onAppearance = { appearance = true },
-                onUnlinked = { nav.navigate(Welcome) { popUpTo(Home) { inclusive = true } } },
-            )
+            val backend = remember { container.chatsBackend() }
+            val home = viewModel<HomeViewModel>(factory = viewModelFactory { initializer { HomeViewModel(container) } })
+            val homeState by home.state.collectAsStateWithLifecycle()
+            var confirming by rememberSaveable { mutableStateOf(false) }
+            LaunchedEffect(homeState.unlinked) { if (homeState.unlinked) nav.navigate(Welcome) { popUpTo(Home) { inclusive = true } } }
+            if (backend != null) {
+                MainShell(
+                    backend, container.themePrefs,
+                    ShellActions(
+                        onOpenChat = { nav.navigate(ChatRoute(it.kind.wire, it.id)) },
+                        onSearch = { nav.navigate(Search) },
+                        onNewChat = { nav.navigate(NewChat) },
+                        // Deleting and its undo come with the chat screens; the hook is here so the menu is ready.
+                        onDelete = { },
+                        onAppearance = { appearance = true },
+                        onLinkTest = { nav.navigate(LinkTest) },
+                        onUnlink = { confirming = true },
+                    ),
+                )
+            }
+            if (confirming) UnlinkDialog(onConfirm = { confirming = false; home.unlink() }, onDismiss = { confirming = false })
         }
+        composable<Search> {
+            val backend = remember { container.chatsBackend() }
+            if (backend != null) {
+                val vm = viewModel<SearchViewModel>(factory = viewModelFactory { initializer { SearchViewModel(backend) } })
+                SearchScreen(vm, onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate(ChatRoute(it.kind.wire, it.id)) })
+            }
+        }
+        composable<NewChat> { Placeholder(ChatTexts.NEW_CHAT_SOON, onBack = { nav.popBackStack() }) }
+        composable<ChatRoute> { Placeholder(ChatTexts.CHAT_SOON, onBack = { nav.popBackStack() }) }
         composable<LinkTest> {
             val backend = remember { container.linkTestBackend() }
             if (backend != null) {
@@ -85,5 +121,16 @@ private fun OrbNav(container: AppContainer, start: Any) {
                 LinkTestScreen(vm)
             }
         }
+    }
+}
+
+/** Stands in for screens that other steps build; it only offers the way back. */
+@Composable
+private fun Placeholder(text: String, onBack: () -> Unit) {
+    androidx.compose.foundation.layout.Column(
+        Modifier.fillMaxSize().padding(24.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+    ) {
+        androidx.compose.material3.TextButton(onClick = onBack) { androidx.compose.material3.Text(ChatTexts.BACK) }
+        androidx.compose.material3.Text(text)
     }
 }

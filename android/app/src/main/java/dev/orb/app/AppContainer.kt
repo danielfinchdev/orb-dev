@@ -20,6 +20,8 @@ import dev.orb.app.link.net.Pairing
 import dev.orb.app.link.net.ResolvedLink
 import dev.orb.app.link.payload.LinkPayload
 import dev.orb.app.ui.LinkTestBackend
+import dev.orb.app.ui.chats.ChatsBackend
+import dev.orb.app.ui.chats.RuntimeChatsBackend
 import dev.orb.app.ui.Linker
 import dev.orb.app.ui.RuntimeBackend
 import dev.orb.app.ui.theme.SharedPrefsStore
@@ -137,6 +139,8 @@ class AppContainer(private val app: Application) {
     fun onBackground() = synchronized(runtimeLock) { foreground = false; _runtime.value?.client?.pause() ?: Unit }
 
     fun linkTestBackend(): LinkTestBackend? = _runtime.value?.let { RuntimeBackend(this, it) }
+
+    fun chatsBackend(): ChatsBackend? = _runtime.value?.let { RuntimeChatsBackend(this, it) }
 
     private companion object {
         const val SESSION_KEY = "orb.movil"
