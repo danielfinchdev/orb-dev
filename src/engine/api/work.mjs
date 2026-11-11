@@ -16,6 +16,7 @@ import { autoTitle } from '../titles.mjs';
 import { git } from '../../platform/git.mjs';
 import { diffBetween } from '../../domain/tasks/checkpoints.mjs';
 import { fail, str, int, oneOf, images, DECISION } from './common.mjs';
+import { createDedupe } from './dedupe.mjs';
 import { fold } from '../../domain/conversations/inbox.mjs';
 
 export function workMethods({ project, cut, accept, taskRejected, modelLabelOf, grants, board, sessions, scheduler, log }) {
@@ -179,5 +180,9 @@ export function workMethods({ project, cut, accept, taskRejected, modelLabelOf, 
     },
     'sessions.remove': ({ id }) => sessions.remove(str(id, 'conversación', 64)),
   };
+  // clientId: a retry of the same message gets the first result instead of a second message.
+  const sent = createDedupe();
+  const send = methods['sessions.send'];
+  methods['sessions.send'] = (params) => sent.once(`session:${params.id}`, params.clientId, () => send(params));
   return methods;
 }

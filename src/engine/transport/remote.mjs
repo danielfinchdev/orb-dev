@@ -19,11 +19,11 @@ import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal
 import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
 import { streamFeed } from '../../shared/chat-stream.mjs';
 import { PROTOCOL, MIN_PROTOCOL, PAIR_PROTOCOL, versionOfProtocol, CODE_ALPHABET, shortCodeLabel } from '../../shared/link-payload.mjs';
-import { principalOf } from '../../domain/security/permissions.mjs';
+import { principalOf, REMOTE_METHODS } from '../../domain/security/permissions.mjs';
 import { isLegacy } from '../../domain/data/legacy/migrate-38.mjs';
 import { ownPorts } from '../host/host.mjs';
 import { RENDERER, SESSION_DAYS, PAIR_MINUTES, UPLOAD_MAX, UPLOADS_TOTAL, UPLOADS_DAYS, STREAM_BACKLOG, STREAMS_PER_DEVICE, NETWORK_CHECK_MS, now, PAIR_KINDS, PAIR_FAILS_MAX, PAIR_PASSWORD_TRIES } from './remote-common.mjs';
-import { phoneConfig, guardCall, pushPreview, UPLOAD_NAME, withoutPaths, shapeResult } from './remote-calls.mjs';
+import { phoneConfig, guardCall, pushPreview, IMAGE_NAME, UPLOAD_TYPES, sniffUpload, withoutPaths, shapeResult } from './remote-calls.mjs';
 import { privateSource, orbNameOf, ipOf, kindOf, kindForPairing, localName, plainHttpBrowser, parseMeta, metaVOf, APP_CORS, appOrigin, tailscaleExe, tailscaleAddress, lanAddresses } from './remote-net.mjs';
 import { TYPES, HEADERS, SERVICE_WORKER } from './remote-web.mjs';
 
@@ -139,7 +139,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     if (!msg || msg.m !== expected) return null;
     const f = freshness(device.id, nonce, Number(msg.t));
     // d: 1, a client that takes the streamed answer as deltas (src/shared/chat-stream.mjs; older ones never say it).
-    return f === 'ok' ? { nonce, deltas: msg.d === 1 } : f === 'clock' ? { clock: true } : null;
+    return f === 'ok' ? { nonce, deltas: msg.d === 1, name: typeof msg.name === 'string' ? msg.name.slice(0, 120) : '' } : f === 'clock' ? { clock: true } : null;
   }
   // Only sent after the request opened with the device's own key (or the QR's), so only a paired phone learns it.
   const clockOff = (res) => send(res, 409, { error: tr('msg.remote.clock'), now: Date.now() });
@@ -228,9 +228,15 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     if (what === 'me') {
       // this device's name here, and the versions of both sides (the client says its own).
       const cv = Number(msg.body?.v);
-      if (Number.isFinite(cv) && cv > 0 && cv !== metaV(device)) board.run('UPDATE devices SET meta = ? WHERE id = ?', JSON.stringify({ ...parseMeta(device), v: cv }), device.id);
+      // client: who is calling (e.g. "android-native"), informational only; it never changes what the device may do.
+      const client = typeof msg.body?.client === 'string' && /^[a-z0-9-]{1,32}$/.test(msg.body.client) ? msg.body.client : null;
+      const meta = parseMeta(device);
+      const next = { ...meta, ...(Number.isFinite(cv) && cv > 0 ? { v: cv } : {}), ...(client ? { client } : {}) };
+      if (next.v !== meta.v || next.client !== meta.client) board.run('UPDATE devices SET meta = ? WHERE id = ?', JSON.stringify(next), device.id);
       if (tooOld(cv)) return reply(res, device, msg.nonce, { ok: false, status: 426, update: 'me', error: tr('msg.link.updateClient', { has: versionOfProtocol(cv), need: versionOfProtocol(MIN_PROTOCOL) }) });
-      return reply(res, device, msg.nonce, { ok: true, result: { device: device.name, name: ctx.config.assistantName, orb: orbName(), ...versions(), pc: pcFingerprint(), push: Boolean(device.push), vapid: own().vapid.publicKey } });
+      return reply(res, device, msg.nonce, { ok: true, result: { device: device.name, name: ctx.config.assistantName, orb: orbName(), ...versions(), pc: pcFingerprint(), push: Boolean(device.push), vapid: own().vapid.publicKey,
+        // what this PC accepts from a phone, so a client can offer only that
+        methods: [...REMOTE_METHODS].sort(), uploads: { max: UPLOAD_MAX, types: UPLOAD_TYPES } } });
     }
     if (what === 'push') {
       // Turn notifications on (a subscription made by this phone's browser) or off (null).
@@ -248,7 +254,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     // which account the assistant spends is chosen on the PC (the brain's agent and model, also from the phone).
     if (method === 'chat.settings' && params.account !== undefined) delete params.account;
     // F2.6c: a picture it uploaded comes back by the name /api/upload gave it (never a path of the PC).
-    if (Array.isArray(params.images)) params.images = params.images.map((f) => (typeof f === 'string' && UPLOAD_NAME.test(f) ? path.join(uploads(), f) : f));
+    if (Array.isArray(params.images)) params.images = params.images.map((f) => (typeof f === 'string' && IMAGE_NAME.test(f) ? path.join(uploads(), f) : f));
     const why = guardCall(board, method, params, { uploadsDir: uploads() });
     if (why) return deny(why);
     try {
@@ -363,7 +369,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   const plainBrowser = (req) => plainHttpBrowser({ origin: req.headers.origin, app: Boolean(appOrigin(req)), localAddress: req.socket?.localAddress, routes: state.routes });
 
 
-  // A picture from the phone (encrypted): checked by its first bytes (not its name), stored in the app's folder, path returned.
+  // A picture, PDF or text file from the phone (encrypted): checked by its first bytes (not its name), stored in the app's folder, path returned.
   let uploading = 0;
   async function upload(req, res, device) {
     const mine = uploads();
@@ -375,9 +381,9 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     try {
       let raw; try { raw = await readBody(req, UPLOAD_MAX + 64); } catch { return reply(res, device, auth.nonce, { ok: false, status: 413, error: tr('msg.remote.imageTooBig') }); }
       let b; try { b = Buffer.from(openBytes(keyOf(device), new Uint8Array(raw), AAD.upload(device.id))); } catch { return send(res, 401, { error: tr('msg.remote.notLinked') }); }
-      const ext = b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) ? 'png'
-        : b[0] === 0xff && b[1] === 0xd8 ? 'jpg' : b.subarray(0, 4).toString() === 'RIFF' && b.subarray(8, 12).toString() === 'WEBP' ? 'webp' : b.subarray(0, 3).toString() === 'GIF' ? 'gif' : null;
-      if (!ext) return reply(res, device, auth.nonce, { ok: false, status: 415, error: tr('msg.remote.imageTypes') });
+      // the client's name only tells md/csv/json apart inside plain text; it never reaches the stored path
+      const ext = sniffUpload(b, path.extname(auth.name).slice(1));
+      if (!ext) return reply(res, device, auth.nonce, { ok: false, status: 415, error: tr('msg.remote.fileTypes') });
       await fs.promises.mkdir(mine, { recursive: true });
       await pruneUploads(b.length);
       const file = path.join(mine, `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`);
@@ -576,7 +582,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   // ---- Magic Link: the linked phones and browsers.
   const onlineIds = () => new Set([...clients].map((c) => c.device));
   function deviceView(d, on = onlineIds()) {
-    return { id: d.id, name: d.name, kind: d.kind ?? kindOf({ name: d.name }), createdAt: d.created_at, lastSeen: d.last_seen ?? null, ip: d.ip ?? null, v: metaV(d),
+    return { id: d.id, name: d.name, kind: d.kind ?? kindOf({ name: d.name }), createdAt: d.created_at, lastSeen: d.last_seen ?? null, ip: d.ip ?? null, v: metaV(d), client: parseMeta(d).client ?? null,
       route: d.route ?? null, push: Boolean(d.push), online: on.has(d.id) };
   }
   const devices = () => { const on = onlineIds(); return board.all('SELECT * FROM devices WHERE public_key IS NOT NULL ORDER BY created_at DESC').map((d) => deviceView(d, on)); };

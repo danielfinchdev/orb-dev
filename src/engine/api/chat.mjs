@@ -16,6 +16,7 @@ import { modelCatalog, LEVELS, REASONING_LEVELS, levelsOf } from '../usage/catal
 import { slug } from '../../platform/git.mjs';
 import { PermissionError } from '../../domain/security/permissions.mjs';
 import { fail, str, int, oneOf } from './common.mjs';
+import { createDedupe } from './dedupe.mjs';
 import { fold, snippet } from '../../domain/conversations/inbox.mjs';
 
 export function chatMethods({ project, conversationId, accept, allowedImage, withAccepted, settleConversation, wb, board, sessions, orchestrator, scheduler, emit, log }) {
@@ -243,5 +244,9 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
       return info;
     },
   };
+  // clientId: a retry of the same message (same conversation) gets the first answer instead of a second message.
+  const sent = createDedupe();
+  const send = methods['chat.send'];
+  methods['chat.send'] = (params, principal) => sent.once(`chat:${params.conversation ?? 'new'}`, params.clientId, () => send(params, principal));
   return methods;
 }

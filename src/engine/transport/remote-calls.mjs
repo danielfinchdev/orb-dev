@@ -41,7 +41,10 @@ export const pushPreview = (config) => (PREVIEWS.includes(config?.mobile?.previe
 // path is cut, written in any case and with either separator. F2.6c: free text is never replaced whole (a message that
 // starts with C:\ keeps its words). (Other paths an agent wrote in its text go as they are.)
 const ABSOLUTE = /^(?:[A-Za-z]:[\\/]|\\\\|\/(?:Users|home|root|mnt|media|var|tmp|opt|private|Volumes|srv|data)\/)/;
-const UPLOAD_NAME = /^\d+-[0-9a-f]{8}\.(png|jpg|webp|gif)$/;
+// Names the PC gives to what a phone uploads. Only pictures may go in `images`: the other kinds are stored but never
+// resolve to a path there, so guardCall refuses them as images.
+const UPLOAD_NAME = /^\d+-[0-9a-f]{8}\.(png|jpg|webp|gif|pdf|txt|md|csv|json)$/;
+const IMAGE_NAME = /^\d+-[0-9a-f]{8}\.(png|jpg|webp|gif)$/;
 // Fields of free text (what people and agents write): never replaced whole, only the assistant folder is cut.
 const TEXT_FIELD = /^(body|text|title|description|message|note|notes|result|summary|content|prompt|question|answer|label|reason|error|detail|final|output|input|brief|elements)$/i;
 // A whole value that is one path (a single line, no sentence in it), in any other field.
@@ -77,4 +80,27 @@ export function shapeResult(method, result) {
   return withoutPaths({ ...rest, activeProject, config: phoneConfig(rest.config) });
 }
 
-export { UPLOAD_NAME };
+export { UPLOAD_NAME, IMAGE_NAME };
+
+export const UPLOAD_TYPES = Object.freeze(['png', 'jpg', 'webp', 'gif', 'pdf', 'txt', 'md', 'csv', 'json']);
+const TEXT_KINDS = new Set(['txt', 'md', 'csv', 'json']);
+// What an upload really is, from its first bytes (never from a name): a picture, a PDF or plain UTF-8 text; null for
+// anything else. `hint` is the extension the client says (only to tell md/csv/json apart inside plain text).
+// Text that starts like a program or markup (MZ, #!, <…) is refused so nothing executable or renderable is kept.
+export function sniffUpload(b, hint = '') {
+  if (b.length < 4) return null;
+  if (b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'png';
+  if (b[0] === 0xff && b[1] === 0xd8) return 'jpg';
+  if (b.subarray(0, 4).toString('latin1') === 'RIFF' && b.subarray(8, 12).toString('latin1') === 'WEBP') return 'webp';
+  if (b.subarray(0, 3).toString('latin1') === 'GIF') return 'gif';
+  if (b.subarray(0, 5).toString('latin1') === '%PDF-') return 'pdf';
+  let text;
+  try { text = new TextDecoder('utf-8', { fatal: true }).decode(b); } catch { return null; }
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x08\x0b\x0e-\x1f\x7f]/.test(text)) return null;
+  const head = text.replace(/^﻿/, '').trimStart();
+  if (/^(MZ|#!|<|%!)/.test(head)) return null;
+  const want = String(hint).toLowerCase();
+  if (want === 'json') { try { JSON.parse(text); return 'json'; } catch { return 'txt'; } }
+  return TEXT_KINDS.has(want) ? want : 'txt';
+}

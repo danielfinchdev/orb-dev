@@ -367,6 +367,7 @@ export default {
   "msg.remote.deviceLinked": "Nuevo dispositivo enlazado: {name}. Puedes quitarlo en Ajustes → Magic Link.",
   "msg.remote.enableFirst": "activa primero el acceso desde el móvil",
   "msg.remote.imageTypes": "solo se admiten imágenes PNG, JPG, WEBP o GIF",
+  "msg.remote.fileTypes": "tipo de archivo no admitido: solo imágenes (PNG, JPG, WEBP, GIF), PDF y texto (TXT, MD, CSV, JSON)",
   "msg.remote.internalError": "error interno",
   "msg.remote.noDevice": "ese dispositivo no existe",
   "msg.remote.notMigrated": "El acceso del móvil no se abre hasta terminar de pasar los datos de Orb 3.7. Cierra y vuelve a abrir Orb.",
