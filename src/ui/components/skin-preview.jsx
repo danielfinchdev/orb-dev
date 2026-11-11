@@ -56,10 +56,11 @@ const Sweet = ({ id, hi, body, lo }) => <radialGradient id={id} cx="35%" cy="28%
 const Candy = () => (
   <>
     <i className="skp-cd-blob a" /><i className="skp-cd-blob b" /><i className="skp-cd-blob c" />
-    <svg viewBox="0 0 200 110" className="skp-deco skp-cd-cloud" aria-hidden="true">
-      <defs><Sweet id="skp-cd-white" hi="#ffffff" body="#fdf3fa" lo="#eccbe0" /></defs>
-      <ellipse cx="100" cy="100" rx="70" ry="9" fill="#e9a9cc" opacity="0.35" /><rect x="28" y="62" width="146" height="38" rx="19" fill="url(#skp-cd-white)" />
-      <circle cx="58" cy="66" r="32" fill="url(#skp-cd-white)" /><circle cx="104" cy="52" r="42" fill="url(#skp-cd-white)" /><circle cx="150" cy="66" r="32" fill="url(#skp-cd-white)" />
+    <svg viewBox="0 0 100 100" className="skp-deco skp-cd-donut" aria-hidden="true">
+      <defs><Sweet id="skp-cd-peach" hi="#ffe4c8" body="#ffb46e" lo="#e07a2e" /></defs>
+      <circle cx="50" cy="50" r="42" fill="url(#skp-cd-peach)" />
+      <path d="M50 14C72 14 86 30 86 50C86 70 72 86 50 86C28 86 14 70 14 50C14 30 28 14 50 14ZM50 36A14 14 0 1 0 50 64A14 14 0 1 0 50 36Z" fill="url(#skp-cd-pink)" fillRule="evenodd" />
+      <ellipse cx="34" cy="24" rx="9" ry="4" fill="#fff" opacity="0.6" transform="rotate(-35 34 24)" />
     </svg>
     <svg viewBox="0 0 100 130" className="skp-deco skp-cd-lolli" aria-hidden="true">
       <defs><Sweet id="skp-cd-pink" hi="#ffc9e3" body="#ff7cc0" lo="#d6338e" /></defs>

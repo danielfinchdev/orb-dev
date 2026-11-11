@@ -21,7 +21,7 @@
   body[style*="pointer-events: none"] > #root::after { content: ""; position: fixed; inset: 0; z-index: 50; }
   body { @apply bg-background text-foreground antialiased; font-family: var(--font-sans); font-size: 14.5px; overflow: hidden; }
   /* Órbita compact scale on the Orb theme (see the compact variant in tokens.css). rem is untouched so Tailwind spacing and the webview zoom are unaffected. */
-  @media (pointer: fine) { html:is([data-skin="orb"], [data-skin="profesional"]) body { font-size: 13px; } }
+  @media (pointer: fine) { html:is([data-skin="orb"], [data-skin="profesional"], [data-skin="nube"]) body { font-size: 13px; } }
   h1, h2, h3, h4 { font-weight: 500; letter-spacing: -0.01em; }
   ::selection { background: color-mix(in oklch, var(--primary) 30%, transparent); }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -62,7 +62,7 @@ html[data-skin="retro"] { --tip-border: var(--rt-ink); --tip-radius: 12px; --tip
 html[data-skin="retro"] .orb-tip { border-width: 2px; }
 html[data-skin="retro"] .orb-tip-tail::before { border-width: 2px; }
 html[data-skin="retro"] .orb-tip-tail { translate: 0 -2px; }
-html[data-skin="nube"] { --tip-border: transparent; --tip-radius: 20px; --tip-shadow: 0 14px 34px -10px var(--cd-shadow), 0 0 0 1px color-mix(in oklch, var(--primary) 10%, transparent); }
+html[data-skin="nube"] { --tip-border: var(--cd-rim); --tip-radius: 16px; --tip-shadow: 0 3px 0 var(--cd-drop); }
 html[data-skin="nube"] .orb-tip-title { color: var(--primary); }
 html[data-skin="profesional"] { --tip-radius: 10px; --tip-shadow: 0 10px 24px -10px rgb(0 0 0 / 0.25), 0 2px 6px -2px rgb(0 0 0 / 0.12); }
 
@@ -91,7 +91,7 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
 .screen-loading { animation: screen-loading-in var(--dur-base) ease .4s both; }
 @keyframes screen-loading-in { from { opacity: 0; } to { opacity: 1; } }
 .prose-chat { line-height: 1.6; overflow-wrap: anywhere; }
-@media (pointer: fine) { html:is([data-skin="orb"], [data-skin="profesional"]) .prose-chat { font-size: 14.5px; line-height: 1.43; } }
+@media (pointer: fine) { html:is([data-skin="orb"], [data-skin="profesional"], [data-skin="nube"]) .prose-chat { font-size: 14.5px; line-height: 1.43; } }
 .prose-chat p { margin: 0 0 .6em; } .prose-chat p:last-child { margin-bottom: 0; }
 .prose-chat ul, .prose-chat ol { margin: .3em 0 .6em; padding-left: 1.3em; } .prose-chat ul { list-style: disc; } .prose-chat ol { list-style: decimal; }
 .prose-chat li { margin: .15em 0; }

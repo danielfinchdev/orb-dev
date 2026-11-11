@@ -154,39 +154,49 @@ html.window-idle .skp-deco { animation-play-state: paused; }
 .skp[data-skin-preview="cristal"] .skp-mark { letter-spacing: 0.22em; font-size: 6.5px; }
 .skp[data-skin-preview="cristal"] .skp-mark i { background: currentColor; }
 
-/* ================================================================ NUBE (Candy): a pink-to-lilac page with a dotted
-   pattern and pastel blobs, white rounded panels with soft pink shadows, pills, 3D jelly keys, and 3D sweets at the
-   edges. Nunito, titles Fredoka. Night: the same sweets over a plum sky. */
+/* ================================================================ NUBE (Candy): pastel page with polka dots and blobs, white
+   rounded panels with a darker 1.5 px rim and hard soft shadows, pills, keys with a hard bottom edge, the four places as
+   coloured tiles, and sweets at the edges. Nunito, titles Fredoka. Night: plum with neon glints. */
 .skp[data-skin-preview="nube"] { --p-font: "Nunito Variable", "Segoe UI", system-ui, sans-serif; --p-title: "Fredoka Variable", var(--p-font); --p-r: 7px;
-  --p-key: oklch(0.42 0.19 352); --p-shadow: rgb(236 110 180 / 0.35); --p-frame: color-mix(in oklch, oklch(0.54 0.19 352) 45%, white); --p-glow: rgb(255 140 200 / 0.4);
-  --p-bg: #ffd9ec; --p-fg: oklch(0.3 0.08 330); --p-side: oklch(0.99 0.006 340); --p-card: #fff; --p-border: transparent; --p-primary: oklch(0.54 0.19 352);
-  --p-accent: oklch(0.94 0.05 350); --p-accent-fg: oklch(0.54 0.19 352); --p-bubble: oklch(0.54 0.19 352); --p-bubble-fg: #fff; --p-bubble-shadow: 0 1.5px 0 var(--p-key);
-  --p-scene: radial-gradient(circle, rgb(255 255 255 / 0.65) 0.6px, transparent 1px) 0 0 / 5px 5px, linear-gradient(160deg, #ffd9ec 0%, #ecd9ff 55%, #d9e4ff 100%);
-  --p-glass: rgb(255 255 255 / 0.78); --p-side-line: transparent; --p-side-shadow: 3px 0 10px -5px var(--p-shadow); --p-side-art: linear-gradient(to bottom, rgb(255 255 255 / 0.7), transparent 40%);
-  --p-new: var(--p-accent); --p-card-shadow: 0 0 0 1px var(--p-frame), 0 0 5px var(--p-glow); --p-on-shadow: 0 0 0 1px var(--p-frame), 0 0 5px var(--p-glow);
-  --p-box-shadow: 0 6px 14px -7px var(--p-shadow); --p-send-shadow: 0 1.5px 0 var(--p-key);
-  --p-bar: linear-gradient(to bottom, rgb(255 255 255 / 0.7), transparent 50%); --p-bar-line: transparent; --p-frost: rgb(255 240 248 / 0.2);
-  --p-blob-a: #ffc4dc; --p-blob-b: #bdeedd; --p-blob-c: #c6e3ff; --p-toy: 0.95; --p-toy-shadow: rgb(200 90 160 / 0.4); }
-.skp[data-skin-preview="nube"] .skp-mark { font-weight: 700; font-size: 6.5px; letter-spacing: 0.06em; color: #fff; background: var(--p-primary); padding: 2px 4px 1.5px; border-radius: 99px; box-shadow: 0 1px 0 var(--p-key); }
+  --p-key: oklch(0.42 0.17 355); --p-rim: oklch(0.87 0.055 335); --p-drop: oklch(0.82 0.07 335);
+  --p-bg: #ffd9ec; --p-fg: oklch(0.27 0.08 320); --p-side: oklch(0.975 0.018 335); --p-card: #fff; --p-border: var(--p-rim); --p-primary: oklch(0.56 0.183 355);
+  --p-accent: oklch(0.94 0.045 350); --p-accent-fg: oklch(0.47 0.19 355); --p-bubble: oklch(0.56 0.183 355); --p-bubble-line: var(--p-key); --p-bubble-fg: #fff; --p-bubble-shadow: 0 1.5px 0 var(--p-key);
+  --p-scene: radial-gradient(circle, rgb(255 255 255 / 0.7) 0.7px, transparent 1.1px) 0 0 / 6px 6px, radial-gradient(circle, rgb(255 140 190 / 0.3) 0.7px, transparent 1.1px) 3px 3px / 6px 6px, linear-gradient(160deg, #ffd9ec 0%, #ecd9ff 55%, #d9e4ff 100%);
+  --p-glass: rgb(255 255 255 / 0.8); --p-glass-line: var(--p-rim); --p-side-line: var(--p-rim); --p-side-shadow: none; --p-side-art: none;
+  --p-new: var(--p-primary); --p-new-line: var(--p-key); --p-card-shadow: 0 1.5px 0 var(--p-key); --p-on-shadow: 0 1.5px 0 var(--p-drop);
+  --p-box-line: oklch(0.6 0.12 345); --p-box-shadow: 0 1.5px 0 var(--p-drop); --p-send: var(--p-primary); --p-send-line: var(--p-key); --p-send-shadow: 0 1.5px 0 var(--p-key);
+  --p-bar: var(--p-card); --p-bar-line: var(--p-rim); --p-frost: rgb(255 240 248 / 0.2);
+  --p-blob-a: #ffc4dc; --p-blob-b: #bdeedd; --p-blob-c: #c6e3ff; --p-toy: 0.95; --p-toy-shadow: rgb(214 80 150 / 0.3); }
+.skp[data-skin-preview="nube"] .skp-mark { font-weight: 600; font-size: 6.5px; letter-spacing: 0.06em; color: #fff; background: var(--p-primary); padding: 2px 4px 1.5px; border-radius: 99px; box-shadow: 0 1px 0 var(--p-key); }
 .skp[data-skin-preview="nube"] .skp-mark i { background: currentColor; width: 1.5px; height: 1.5px; margin: 0 1px 0 0; }
 .skp[data-skin-preview="nube"] :is(.skp-new, .skp-nav.on) { border-radius: 99px; }
-.skp[data-skin-preview="nube"] .skp-nav.on { background: var(--p-card); }
-.skp[data-skin-preview="nube"] .skp-box { border-radius: 10px; }
+/* the four places: a green, a blue, an orange and a purple tile with their lower edge */
+.skp[data-skin-preview="nube"] .skp-nav { height: 6px; width: 100%; margin: 0; border-radius: 4px; opacity: 1; border: 1px solid var(--pe); background: var(--pf); box-shadow: 0 1px 0 var(--pe); }
+.skp[data-skin-preview="nube"] .skp-nav.on::after { display: none; }
+.skp[data-skin-preview="nube"] .skp-nav:nth-of-type(2) { --pf: oklch(0.83 0.148 140); --pe: oklch(0.6 0.16 145); }
+.skp[data-skin-preview="nube"] .skp-nav:nth-of-type(3) { --pf: oklch(0.82 0.087 232); --pe: oklch(0.56 0.14 245); }
+.skp[data-skin-preview="nube"] .skp-nav:nth-of-type(4) { --pf: oklch(0.84 0.113 68); --pe: oklch(0.63 0.15 52); }
+.skp[data-skin-preview="nube"] .skp-nav:nth-of-type(5) { --pf: oklch(0.8 0.096 302); --pe: oklch(0.55 0.16 302); }
+.skp[data-skin-preview="nube"] .skp-box { border-width: 1.5px; border-radius: 10px; }
 .skp[data-skin-preview="nube"] .skp-bot { border-radius: 9px; }
-.skp[data-skin-preview="nube"] .skp-me { border-radius: 7px; background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.25), transparent 60%); }
+.skp[data-skin-preview="nube"] .skp-me { border-width: 1.5px; border-radius: 7px 7px 2px 7px; }
 .skp-cd-blob { border-radius: 50%; opacity: 0.75; background: radial-gradient(closest-side, var(--c), color-mix(in srgb, var(--c) 60%, transparent) 55%, transparent); }
 .skp-cd-blob.a { --c: var(--p-blob-a); left: -5%; top: -30%; width: 70%; height: 90%; }
 .skp-cd-blob.b { --c: var(--p-blob-b); left: 10%; top: 50%; width: 55%; height: 80%; }
 .skp-cd-blob.c { --c: var(--p-blob-c); left: 60%; top: 45%; width: 60%; height: 90%; }
-.skp[data-skin-preview="nube"] .skp-deco { opacity: var(--p-toy); filter: drop-shadow(0 2px 2px var(--p-toy-shadow)); }
-.skp-cd-cloud { right: 2px; top: 17px; width: 26px; }
+.skp[data-skin-preview="nube"] .skp-deco { opacity: var(--p-toy); filter: drop-shadow(0 1.5px 0 var(--p-toy-shadow)); }
+.skp-cd-donut { right: 3px; top: 17px; width: 17px; --r: -12deg; }
 .skp-cd-lolli { right: 4px; bottom: 23px; width: 10px; --r: -14deg; }
 .skp-cd-drop { left: calc(31% + 6px); bottom: 29px; width: 9px; --r: -6deg; }
 .skp-cd-bean { right: 20px; bottom: 26px; width: 11px; --r: -25deg; }
-.dark .skp[data-skin-preview="nube"] { --p-key: oklch(0.55 0.16 350); --p-shadow: rgb(0 0 0 / 0.45); --p-frame: oklch(0.8 0.12 350 / 0.7); --p-glow: rgb(255 140 200 / 0.3);
-  --p-bg: #2e1a3c; --p-fg: oklch(0.96 0.015 330); --p-side: oklch(0.2 0.04 325); --p-card: oklch(0.24 0.05 325); --p-primary: oklch(0.8 0.12 350);
-  --p-accent: oklch(0.36 0.08 345); --p-accent-fg: oklch(0.93 0.06 350); --p-bubble: oklch(0.5 0.15 345); --p-bubble-fg: #fff;
-  --p-scene: radial-gradient(circle, rgb(255 255 255 / 0.08) 0.6px, transparent 1px) 0 0 / 5px 5px, linear-gradient(160deg, #2e1a3c 0%, #261f4a 55%, #1d2a4a 100%);
-  --p-glass: oklch(0.24 0.05 325 / 0.78); --p-side-art: linear-gradient(to bottom, rgb(255 255 255 / 0.1), transparent 40%); --p-bar: linear-gradient(to bottom, rgb(255 255 255 / 0.1), transparent 50%); --p-frost: rgb(46 26 60 / 0.25);
-  --p-blob-a: #7d3668; --p-blob-b: #2f6a5e; --p-blob-c: #365682; --p-toy: 0.6; --p-toy-shadow: rgb(0 0 0 / 0.5); }
-.dark .skp[data-skin-preview="nube"] .skp-mark { color: oklch(0.25 0.06 325); }
+.dark .skp[data-skin-preview="nube"] { --p-key: oklch(0.52 0.17 352); --p-rim: oklch(0.4 0.08 322); --p-drop: oklch(0.14 0.045 315);
+  --p-bg: #2c1638; --p-fg: oklch(0.97 0.015 330); --p-side: oklch(0.205 0.05 316); --p-card: oklch(0.255 0.06 318); --p-primary: oklch(0.76 0.157 352);
+  --p-accent: oklch(0.37 0.1 350); --p-accent-fg: oklch(0.85 0.12 352); --p-bubble: oklch(0.46 0.12 352); --p-bubble-line: oklch(0.34 0.1 352); --p-bubble-fg: oklch(0.98 0.01 330); --p-bubble-shadow: 0 1.5px 0 oklch(0.34 0.1 352);
+  --p-scene: radial-gradient(circle, rgb(255 255 255 / 0.08) 0.7px, transparent 1.1px) 0 0 / 6px 6px, radial-gradient(circle, rgb(255 110 200 / 0.16) 0.7px, transparent 1.1px) 3px 3px / 6px 6px, radial-gradient(circle, rgb(255 120 220) 0 1px, transparent 2px) 12% 22% / 5px 5px no-repeat, radial-gradient(circle, rgb(90 240 250) 0 1px, transparent 2px) 90% 12% / 5px 5px no-repeat, linear-gradient(160deg, #2c1638 0%, #231640 55%, #1a1a3c 100%);
+  --p-glass: oklch(0.255 0.06 318 / 0.8); --p-box-line: oklch(0.68 0.12 340); --p-bar: var(--p-card); --p-frost: rgb(44 22 56 / 0.25);
+  --p-blob-a: #8a2f78; --p-blob-b: #1f6b6e; --p-blob-c: #2c4f9a; --p-toy: 0.6; --p-toy-shadow: rgb(255 70 200 / 0.45); }
+.dark .skp[data-skin-preview="nube"] .skp-mark { color: oklch(0.2 0.06 330); }
+.dark .skp[data-skin-preview="nube"] .skp-nav:nth-of-type(2) { --pf: oklch(0.8 0.174 142); --pe: oklch(0.5 0.15 148); }
+.dark .skp[data-skin-preview="nube"] .skp-nav:nth-of-type(3) { --pf: oklch(0.78 0.113 228); --pe: oklch(0.48 0.13 245); }
+.dark .skp[data-skin-preview="nube"] .skp-nav:nth-of-type(4) { --pf: oklch(0.8 0.131 62); --pe: oklch(0.52 0.14 50); }
+.dark .skp[data-skin-preview="nube"] .skp-nav:nth-of-type(5) { --pf: oklch(0.76 0.122 305); --pe: oklch(0.47 0.15 302); }

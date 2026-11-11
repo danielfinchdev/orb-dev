@@ -430,82 +430,122 @@ html[data-material="cristal"] [data-slot="button"].bg-primary { box-shadow: inse
   html[data-material="cristal"] aside.bg-sidebar::before { backdrop-filter: none; }
 }
 
-/* ================================================================================================================
-   NUBE (candy) — a candy game: a pink-to-lilac page with a fine dotted pattern, big white rounded panels with soft pink
-   shadows, chunky plum capitals for the titles, glossy 3D «jelly key» buttons, pills everywhere, and 3D clouds, candies
-   and lollipops floating at the edges. Nunito, titles Fredoka. Night: the same sweets over a plum sky.
-   ================================================================================================================ */
+/* =============================================================================
+   NUBE = Órbita Candy (the id stays «nube»): a chunky game UI in the spirit of Duolingo, Switch menus and Candy Crush.
+   Keys with a 3 px hard bottom edge that sink when pressed, 1.5 px outlines in a darker tone, hard soft shadows, pills,
+   colour-coded places, Fredoka for titles/buttons/labels and Nunito for the text. Night: plum with neon glints.
+   The character on the components is in scene-nube.css (loaded last); the backdrop is there too.
+   ============================================================================= */
 html[data-skin="nube"] {
-  --radius: 1rem;
-  --background: oklch(0.965 0.03 340);
-  --foreground: oklch(0.3 0.08 330);
+  --radius: 1.25rem;
+  --background: oklch(0.955 0.03 330);
+  --foreground: oklch(0.27 0.08 320);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.3 0.08 330);
+  --card-foreground: oklch(0.27 0.08 320);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.3 0.08 330);
-  --primary: oklch(0.54 0.19 352);
-  --primary-foreground: oklch(0.995 0 0);
-  --secondary: oklch(0.93 0.05 300);
-  --secondary-foreground: oklch(0.35 0.1 305);
-  --muted: oklch(0.95 0.03 340);
-  --muted-foreground: oklch(0.46 0.08 335);
-  --accent: oklch(0.94 0.05 350);
-  --accent-foreground: oklch(0.44 0.17 352);
-  --destructive: oklch(0.54 0.19 15);
-  --success: oklch(0.5 0.11 165);
-  --warning: oklch(0.5 0.11 60);
-  --warning-ink: oklch(0.5 0.11 60);
-  --warning-foreground: oklch(0.99 0 0);
+  --popover-foreground: oklch(0.27 0.08 320);
+  --primary: oklch(0.56 0.183 355);
+  --primary-foreground: oklch(1 0 0);
+  --primary-soft: oklch(0.94 0.045 350);
+  --primary-text: oklch(0.47 0.19 355);
+  --secondary: oklch(0.95 0.03 335);
+  --secondary-foreground: oklch(0.27 0.08 320);
+  --muted: oklch(0.95 0.03 335);
+  --muted-foreground: oklch(0.4 0.08 325);
+  --faint-foreground: oklch(0.46 0.08 330);
+  --accent: oklch(0.925 0.045 338);
+  --accent-foreground: oklch(0.27 0.08 320);
+  --destructive: oklch(0.52 0.2 22);
+  --destructive-soft: oklch(0.96 0.03 20);
+  --success: oklch(0.47 0.12 150);
+  --success-soft: oklch(0.95 0.06 145);
+  --warning: oklch(0.49 0.11 60);
+  --warning-ink: oklch(0.47 0.11 60);
+  --warning-soft: oklch(0.96 0.06 90);
+  --warning-foreground: oklch(1 0 0);
   --info: oklch(0.5 0.12 240);
-  --border: oklch(0.9 0.04 345);
-  --input: oklch(0.63 0.1 350);
-  --ring: oklch(0.72 0.14 350);
-  --sidebar: oklch(0.99 0.006 340);
-  --bubble: oklch(0.54 0.19 352);
-  --bubble-foreground: oklch(0.995 0 0);
-  --nb-sky: linear-gradient(180deg, #bfe4ff 0%, #d9d3ff 42%, #ffd3ea 78%, #ffe6f2 100%);
-  --nb-cloud: rgb(255 255 255 / 0.95);
-  --nb-glow: rgb(255 214 236 / 0.8);
+  --border: oklch(0.88 0.05 335);
+  --input: oklch(0.6 0.12 345);
+  --ring: oklch(0.6 0.2 355);
+  --sidebar: oklch(0.975 0.018 335);
+  --bubble: oklch(0.56 0.183 355);
+  --bubble-foreground: oklch(1 0 0);
+  --chart-empty: oklch(0.9 0.05 338);
+  /* Candy material: card rim, hard drop edge, the primary key's edge, the red counter. */
+  --cd-rim: oklch(0.87 0.055 335); --cd-drop: oklch(0.82 0.07 335); --cd-key: oklch(0.42 0.17 355);
+  --cd-red: oklch(0.55 0.183 25); --cd-red-edge: oklch(0.42 0.17 25);
+  /* The four places: fill, edge and ink (the ink is dark so the label passes on the bright fill). */
+  --cd-green: oklch(0.83 0.148 140); --cd-green-edge: oklch(0.6 0.16 145); --cd-green-ink: oklch(0.3 0.09 148);
+  --cd-blue: oklch(0.82 0.087 232); --cd-blue-edge: oklch(0.56 0.14 245); --cd-blue-ink: oklch(0.29 0.09 252);
+  --cd-orange: oklch(0.84 0.113 68); --cd-orange-edge: oklch(0.63 0.15 52); --cd-orange-ink: oklch(0.32 0.09 45);
+  --cd-purple: oklch(0.8 0.096 302); --cd-purple-edge: oklch(0.55 0.16 302); --cd-purple-ink: oklch(0.3 0.1 302);
+  --cd-lemon: oklch(0.95 0.1 100); --cd-lemon-rim: oklch(0.62 0.13 72);
+  --cd-bar: oklch(0.58 0.148 148); --cd-bar-track: oklch(0.94 0.025 335);
 }
 html.dark[data-skin="nube"] {
-  --background: oklch(0.22 0.045 325);
-  --foreground: oklch(0.96 0.015 330);
-  --card: oklch(0.24 0.05 325);
-  --card-foreground: oklch(0.96 0.015 330);
-  --popover: oklch(0.27 0.05 325);
-  --popover-foreground: oklch(0.96 0.015 330);
-  --primary: oklch(0.8 0.12 350);
-  --primary-foreground: oklch(0.25 0.06 325);
-  --secondary: oklch(0.33 0.06 295);
-  --secondary-foreground: oklch(0.94 0.03 300);
-  --muted: oklch(0.3 0.045 325);
-  --muted-foreground: oklch(0.8 0.04 330);
-  --accent: oklch(0.36 0.08 345);
-  --accent-foreground: oklch(0.93 0.06 350);
-  --destructive: oklch(0.68 0.17 18);
-  --success: oklch(0.83 0.11 165);
-  --warning: oklch(0.86 0.11 80);
-  --warning-ink: oklch(0.86 0.11 80);
+  --background: oklch(0.19 0.05 315);
+  --foreground: oklch(0.97 0.015 330);
+  --card: oklch(0.255 0.06 318);
+  --card-foreground: oklch(0.97 0.015 330);
+  --popover: oklch(0.255 0.06 318);
+  --popover-foreground: oklch(0.97 0.015 330);
+  --primary: oklch(0.76 0.157 352);
+  --primary-foreground: oklch(0.2 0.06 330);
+  --primary-soft: oklch(0.37 0.1 350);
+  --primary-text: oklch(0.85 0.12 352);
+  --secondary: oklch(0.3 0.065 320);
+  --secondary-foreground: oklch(0.97 0.015 330);
+  --muted: oklch(0.3 0.065 320);
+  --muted-foreground: oklch(0.88 0.04 330);
+  --faint-foreground: oklch(0.81 0.05 330);
+  --accent: oklch(0.335 0.07 322);
+  --accent-foreground: oklch(0.97 0.015 330);
+  --destructive: oklch(0.77 0.16 18);
+  --destructive-soft: oklch(0.33 0.08 18);
+  --success: oklch(0.82 0.16 150);
+  --success-soft: oklch(0.32 0.06 150);
+  --warning: oklch(0.86 0.13 85);
+  --warning-ink: oklch(0.86 0.13 85);
+  --warning-soft: oklch(0.33 0.06 65);
+  --warning-foreground: oklch(0.22 0.04 70);
   --info: oklch(0.82 0.09 235);
-  --border: oklch(0.38 0.06 330);
-  --input: oklch(0.58 0.08 340);
-  --ring: oklch(0.8 0.12 350);
-  --sidebar: oklch(0.2 0.04 325);
-  --bubble: oklch(0.5 0.15 345);
-  --bubble-foreground: oklch(0.99 0 0);
-  --nb-sky: linear-gradient(180deg, #2c2557 0%, #4a3570 45%, #7a4d86 80%, #8f5a8f 100%);
-  --nb-cloud: rgb(255 230 245 / 0.2);
-  --nb-glow: rgb(255 170 220 / 0.22);
+  --border: oklch(0.38 0.07 322);
+  --input: oklch(0.68 0.12 340);
+  --ring: oklch(0.8 0.16 352);
+  /* Almost the page colour: the sidebar and the backdrop meet without a visible seam (its edge is softened below). */
+  --sidebar: oklch(0.205 0.05 316);
+  /* A dusky pink, not the neon primary: a big block of the bright one tires the eyes at night. */
+  --bubble: oklch(0.46 0.12 352);
+  --bubble-foreground: oklch(0.98 0.01 330);
+  --chart-empty: oklch(0.4 0.07 322);
+  --cd-rim: oklch(0.4 0.08 322); --cd-drop: oklch(0.14 0.045 315); --cd-key: oklch(0.52 0.17 352);
+  --cd-red: oklch(0.72 0.157 22); --cd-red-edge: oklch(0.5 0.17 22);
+  --cd-green: oklch(0.8 0.174 142); --cd-green-edge: oklch(0.5 0.15 148); --cd-green-ink: oklch(0.24 0.08 148);
+  --cd-blue: oklch(0.78 0.113 228); --cd-blue-edge: oklch(0.48 0.13 245); --cd-blue-ink: oklch(0.23 0.08 252);
+  --cd-orange: oklch(0.8 0.131 62); --cd-orange-edge: oklch(0.52 0.14 50); --cd-orange-ink: oklch(0.25 0.08 45);
+  --cd-purple: oklch(0.76 0.122 305); --cd-purple-edge: oklch(0.47 0.15 302); --cd-purple-ink: oklch(0.23 0.09 302);
+  --cd-lemon: oklch(0.32 0.07 75); --cd-lemon-rim: oklch(0.86 0.15 92);
+  --cd-bar: oklch(0.8 0.174 145); --cd-bar-track: oklch(0.2 0.05 316);
 }
-/* The welcome backdrop: a soft sky and three fluffy clouds, each a few overlapping blurred puffs. */
+/* The welcome backdrop: still polka dots, pastel blobs and sweets' colours baked into gradients (nothing moves here). */
 html[data-skin="nube"] .brand-sky {
   background:
-    radial-gradient(150px 60px at 14% 20%, var(--nb-cloud) 0 42%, transparent 72%), radial-gradient(110px 70px at 20% 15%, var(--nb-cloud) 0 42%, transparent 72%),
-    radial-gradient(90px 55px at 9% 17%, var(--nb-cloud) 0 42%, transparent 72%), radial-gradient(190px 70px at 84% 30%, var(--nb-cloud) 0 42%, transparent 72%),
-    radial-gradient(120px 85px at 79% 24%, var(--nb-cloud) 0 42%, transparent 72%), radial-gradient(100px 60px at 90% 25%, var(--nb-cloud) 0 42%, transparent 72%),
-    radial-gradient(220px 80px at 30% 88%, var(--nb-cloud) 0 42%, transparent 72%), radial-gradient(140px 90px at 37% 82%, var(--nb-cloud) 0 42%, transparent 72%),
-    radial-gradient(120px 70px at 22% 84%, var(--nb-cloud) 0 42%, transparent 72%), radial-gradient(60% 50% at 70% 85%, var(--nb-glow), transparent 70%), var(--nb-sky);
+    radial-gradient(circle, rgb(255 255 255 / 0.7) 2px, transparent 2.7px) 0 0 / 38px 38px,
+    radial-gradient(circle, rgb(255 140 190 / 0.3) 2px, transparent 2.7px) 19px 19px / 38px 38px,
+    radial-gradient(46% 56% at 8% 6%, #ffc4dc 0, transparent 70%), radial-gradient(44% 52% at 94% 12%, #ffe9a8 0, transparent 68%),
+    radial-gradient(52% 60% at 6% 96%, #bdeedd 0, transparent 70%), radial-gradient(50% 58% at 96% 94%, #c6e3ff 0, transparent 70%),
+    linear-gradient(160deg, #ffd9ec 0%, #ecd9ff 55%, #d9e4ff 100%);
 }
+html.dark[data-skin="nube"] .brand-sky {
+  background:
+    radial-gradient(circle, rgb(255 255 255 / 0.08) 2px, transparent 2.7px) 0 0 / 38px 38px,
+    radial-gradient(circle, rgb(255 110 200 / 0.16) 2px, transparent 2.7px) 19px 19px / 38px 38px,
+    radial-gradient(44% 54% at 8% 8%, rgb(255 60 190 / 0.34) 0, transparent 70%), radial-gradient(42% 50% at 94% 14%, rgb(120 90 255 / 0.3) 0, transparent 68%),
+    radial-gradient(50% 58% at 96% 94%, rgb(40 220 235 / 0.22) 0, transparent 70%), radial-gradient(44% 52% at 6% 96%, rgb(255 180 60 / 0.16) 0, transparent 70%),
+    linear-gradient(160deg, #2c1638 0%, #231640 55%, #1a1a3c 100%);
+}
+/* Dark: the sidebar shares the page's colour almost exactly, so its edge is softened to keep the seam quiet. */
+html.dark[data-skin="nube"] aside.bg-sidebar { border-right-color: color-mix(in oklch, var(--border) 55%, transparent); }
 
 /* Every new theme, at night: the little yellow counters (pending approvals) carry dark text, white on yellow is unreadable. */
 html.dark:not([data-skin="orb"]) .bg-warning.text-white { color: oklch(0.2 0.03 80); }
