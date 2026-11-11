@@ -14,6 +14,10 @@ export const SKIN_BASE = Object.freeze({ cristal: 'profesional' });
 export const baseSkin = (skin) => SKIN_BASE[skin] ?? skin;
 // The themes with no robot, no backdrop and no decorative motion.
 export const plainSkin = (skin) => baseSkin(skin) === 'profesional';
+// The themes that only exist in dark (the phosphor terminal of «retro»). They ignore ui.theme without overwriting it,
+// so going back to another theme restores the saved light / dark / system choice.
+const DARK_ONLY = new Set(['retro']);
+export const darkOnlySkin = (skin) => DARK_ONLY.has(baseSkin(skin));
 
 // Interface font. outfit is the one Orb has always used.
 export const FONTS = ['outfit', 'inter', 'geist', 'plex', 'system'];

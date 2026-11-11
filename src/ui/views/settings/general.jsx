@@ -11,7 +11,7 @@ import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardF
 import { Select, Switch, Checkbox, BubbleTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
 import { ModelGuide } from '@/components/model-guide.jsx';
 import { AGENT } from '@/lib/labels.js';
-import { act, call, refresh, bridge, go, openTerminal, closeSettings, fullPc, runTest } from '@/lib/store.js';
+import { act, call, refresh, bridge, go, openTerminal, closeSettings, fullPc, runTest, darkOnlySkin } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { t, useT } from '@/lib/i18n.js';
 import { LANGUAGES } from '../../../shared/i18n.mjs';
@@ -48,13 +48,14 @@ export function AppearanceCard({ c }) {
   const set = (patch, ok = null) => save({ ui: patch }, ok);
   const opts = (list, prefix) => list.map((value) => ({ value, label: t(`${prefix}.${value}`) }));
   const robot = !plainSkin(ui.skin);
+  const darkOnly = fullPc() && darkOnlySkin(ui.skin);
   return (
     <Card>
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Palette className="text-primary size-5" /><div><CardTitle>{t('appearance.title')}</CardTitle><CardDescription>{t('appearance.desc')}</CardDescription></div></CardHeader>
       <CardContent className="grid gap-5">
-        <Field label={t('settings.theme')}>
+        <Field label={t('settings.theme')} hint={darkOnly ? t('comp.theme.darkOnly') : undefined}>
           <div className="bg-muted inline-flex w-fit gap-1 rounded-lg p-1" role="radiogroup" aria-label={t('settings.theme')}>
-            {['claro', 'oscuro', 'sistema'].map((theme) => <button key={theme} type="button" role="radio" aria-checked={(ui.theme ?? 'sistema') === theme} onClick={() => set({ theme })} className={cn('cursor-pointer rounded-md px-3 py-1.5 text-[13px]', (ui.theme ?? 'sistema') === theme ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{t(`settings.theme.${theme}`)}</button>)}
+            {['claro', 'oscuro', 'sistema'].map((theme) => <button key={theme} type="button" role="radio" aria-checked={(ui.theme ?? 'sistema') === theme} disabled={darkOnly} onClick={() => set({ theme })} className={cn('rounded-md px-3 py-1.5 text-[13px]', darkOnly ? 'cursor-not-allowed opacity-50' : 'cursor-pointer', (ui.theme ?? 'sistema') === theme ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{t(`settings.theme.${theme}`)}</button>)}
           </div>
         </Field>
         {fullPc() ? <Field label={t('appearance.skin')} hint={t('appearance.skinHint')}>

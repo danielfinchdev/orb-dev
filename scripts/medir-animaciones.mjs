@@ -20,6 +20,7 @@
 // elements first (to tell the backdrop's cost from the robot's).
 import fs from 'node:fs';
 import path from 'node:path';
+import { darkOnlySkin } from '../src/shared/appearance.mjs';
 import { sandbox, arg, wait, pct, r1 } from './lib/e2e-window.mjs';
 
 const SKINS = arg('skins', 'orb,vaporwave,retro,nube,cristal,profesional').split(',');
@@ -99,6 +100,7 @@ async function typing(page) {
 const results = { exe, idleSeconds: IDLE_S, runs: [] };
 for (const skin of SKINS) {
   for (const mode of MODES) {
+    if (mode === 'claro' && darkOnlySkin(skin)) continue; // Retro only exists in dark
     configure({ ui: { skin, theme: mode } });
     const run = await launch();
     const { page } = run;

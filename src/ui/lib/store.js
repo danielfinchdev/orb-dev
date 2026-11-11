@@ -5,8 +5,8 @@ import { errorText } from './utils.js';
 import { bumpNav, navTicket, stillHere } from './nav.js';
 import { cleanRoute, backStep } from './phone-nav.js';
 import { t } from './i18n.js';
-import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, baseSkin, plainSkin } from '../../shared/appearance.mjs';
-export { plainSkin }; // Profesional and the themes built on it (Cristal): no robot, no backdrop, no motion
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, baseSkin, plainSkin, darkOnlySkin } from '../../shared/appearance.mjs';
+export { plainSkin, darkOnlySkin }; // Profesional and the themes built on it (Cristal): no robot, no backdrop, no motion
 import { applyFeed, sinceOf } from '../../shared/feed.mjs';
 import { frameBatch } from './batch.js';
 import { streamText } from '../../shared/chat-stream.mjs';
@@ -277,14 +277,18 @@ export async function openTerminal(folder = terminalFolder()) {
 
 // Theme: "sistema" follows Windows, "claro" / "oscuro" force it.
 const media = window.matchMedia('(prefers-color-scheme: dark)');
+// A dark-only theme (Retro) forces .dark whatever ui.theme says; the saved choice stays in `theme` untouched.
 let theme = 'sistema';
+let currentSkin = SKINS[0];
 export function applyTheme(next = theme) {
   theme = next || 'sistema';
-  const dark = theme === 'oscuro' || (theme === 'sistema' && media.matches);
+  const dark = darkOnlySkin(currentSkin) || theme === 'oscuro' || (theme === 'sistema' && media.matches);
   document.documentElement.classList.toggle('dark', dark);
   document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
 }
 media.addEventListener('change', () => applyTheme());
+// True while the active theme only exists in dark; the day / night controls disable themselves with it.
+export const useDarkOnly = () => useStore((s) => fullPc() && darkOnlySkin(s.app?.config?.ui?.skin));
 export const isDark = () => document.documentElement.classList.contains('dark');
 
 // Ajustes → Apariencia: visual theme, fonts and colours of code, as data attributes of <html> that the CSS reads
@@ -293,6 +297,7 @@ export function applyAppearance(ui = {}) {
   const pick = (value, list) => (list.includes(value) ? value : list[0]);
   const root = document.documentElement.dataset;
   const skin = fullPc() ? pick(ui.skin, SKINS) : SKINS[0]; // the phone always wears the default theme
+  currentSkin = skin;
   // a theme built on another (cristal on profesional) wears its base's data-skin plus its own data-material.
   root.skin = baseSkin(skin);
   if (skin !== root.skin) root.material = skin; else delete root.material;
@@ -300,4 +305,5 @@ export function applyAppearance(ui = {}) {
   root.codeFont = pick(ui.codeFont, CODE_FONTS);
   root.codeTheme = pick(ui.codeTheme, CODE_THEMES);
   root.motion = ui.motion === 'minima' ? 'minima' : 'completa'; // the themes' moving backdrops stop with it
+  applyTheme(); // a dark-only theme forces .dark; leaving it gives the saved choice back
 }

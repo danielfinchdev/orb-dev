@@ -15,6 +15,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fork } from 'node:child_process';
 import { tempHome, ROOT, until } from './helpers.mjs';
+import { darkOnlySkin } from '../src/shared/appearance.mjs';
 import { createMaster, pairBrowser, TEST_MASTER } from './fixtures/e2e-flows.mjs';
 
 const OUT = path.join(ROOT, 'test-results', 'tour');
@@ -407,6 +408,7 @@ try {
       await attempt(P, 'success toast', async () => { await nav(P, { view: 'projects' }); await P.locator('main').getByText('app-tienda', { exact: true }).first().click(); await P.getByRole('button', { name: 'Trabajar aquí' }).first().click(); await P.waitForTimeout(500); await shot(P, { area: 'toast', screen: 'success', state: 'working-project', src: 'src/ui/main.jsx (ThemedToaster) + lib/notify.js', desc: 'Success toast (working project changed)', toasts: true }); await call('projects.setActive', { name: 'mi-web' }); });
       // The other visual themes.
       for (const skin of SKINS.slice(1)) {
+        if (!look.dark && darkOnlySkin(skin)) continue; // Retro only exists in dark
         step = `tema ${skin}`;
         await setLook(P, { ...look, skin });
         await views(P, ['chat', 'tasks', 'projects'], st, { scroll: false });

@@ -6,7 +6,8 @@ import { useState } from 'react';
 import { NavItem } from './sidebar.jsx';
 import { Switch } from './ui/overlay.jsx';
 import { Robot } from './robot.jsx';
-import { useStore, go, applyTheme, isDark } from '@/lib/store.js';
+import { useStore, go, applyTheme, isDark, useDarkOnly } from '@/lib/store.js';
+import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
 const Group = ({ label, children, testid }) => (
@@ -20,6 +21,7 @@ const Group = ({ label, children, testid }) => (
 export function MoreContent() {
   const t = useT();
   const [dark, setDark] = useState(isDark);
+  const darkOnly = useDarkOnly();
   const night = (on) => { const next = on ? 'oscuro' : 'claro'; applyTheme(next); setDark(on); try { localStorage.setItem('orb.theme', next); } catch { /* storage unavailable */ } };
   return (
     <>
@@ -31,9 +33,9 @@ export function MoreContent() {
       </Group>
       <Group label={t('nav.settings')}>
         <NavItem icon={Smartphone} label={t('nav.phone')} onClick={() => go({ view: 'phone' })} testid="nav-phone" />
-        <label className="flex min-h-10 cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[14px]">
+        <label title={darkOnly ? t('comp.theme.darkOnly') : undefined} className={cn('flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[14px]', darkOnly ? 'opacity-60' : 'cursor-pointer')}>
           <Moon className="text-muted-foreground size-4 shrink-0" /><span className="flex-1">{t('nav.darkMode')}</span>
-          <Switch checked={dark} onCheckedChange={night} data-testid="mobile-dark" />
+          <Switch checked={dark || darkOnly} disabled={darkOnly} onCheckedChange={night} data-testid="mobile-dark" />
         </label>
       </Group>
     </>
