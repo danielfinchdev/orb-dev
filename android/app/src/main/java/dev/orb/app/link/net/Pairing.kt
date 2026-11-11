@@ -49,6 +49,9 @@ sealed class PairError {
     data object OldQr : PairError()
 }
 
+/** [PairError.Refused.reason] of an input the phone itself rejected. */
+const val INVALID_INPUT = "invalidInput"
+
 class PairingException(val error: PairError) : Exception(error.toString())
 
 /** A link ready to ask for the password: [fp] is shown so the person compares it with the PC's screen first. */
@@ -72,6 +75,17 @@ class Pairing(
         it.startsWith("http://") && !Regex("\\.ts\\.net(:|/|$)|//100\\.(6[4-9]|[7-9]\\d|1[01]\\d|12[0-7])\\.").containsMatchIn(it)
     }
 
+    // Same words as linkDevice in mobile-crypto.mjs: a challenge, MAC or cost that does not check is "not the PC of this
+    // code"; only a code whose keys cannot be read at all is an old or damaged QR.
+    private fun errorOf(e: LinkCryptoException): PairError = when (e.code) {
+        "kdfTooHeavy" -> PairError.KdfTooHeavy
+        "badAnswer" -> PairError.BadAnswer
+        // Nothing was sent: the password has text the link cannot encode (a lone surrogate). Shaped as a refusal with status 0
+        // so the screens that already show the PC's words need no new case.
+        "badString" -> PairError.Refused(0, "invalid input", INVALID_INPUT, null, null)
+        else -> PairError.OldQr
+    }
+
     private fun fail(e: PairError): Nothing = throw PairingException(e)
 
     private inline fun <T> guarded(block: () -> T): Result<T> = try {
@@ -79,8 +93,7 @@ class Pairing(
     } catch (e: PairingException) {
         Result.failure(e)
     } catch (e: LinkCryptoException) {
-        // Crypto that refuses outside the explicit steps (heavy short-code scrypt, a code the keys cannot be derived from).
-        Result.failure(PairingException(if (e.code == "kdfTooHeavy") PairError.KdfTooHeavy else PairError.OldQr))
+        Result.failure(PairingException(errorOf(e)))
     }
 
     private suspend fun send(request: Request, ms: Long, urls: List<String>): Response = try {
@@ -195,7 +208,7 @@ class Pairing(
             fail(PairError.KdfTooHeavy)
         } catch (e: LinkCryptoException) {
             // The pre-check in LinkCrypto and the OOM net above are the same answer for the person.
-            fail(if (e.code == "kdfTooHeavy") PairError.KdfTooHeavy else PairError.BadAnswer)
+            fail(errorOf(e).let { if (it == PairError.OldQr) PairError.BadAnswer else it })
         }
         val transcript = try { LinkCrypto.pakeTranscript(via, pair.pub, pcPub, sid, kdf) } catch (e: LinkCryptoException) { fail(PairError.BadAnswer) }
         val k = try {

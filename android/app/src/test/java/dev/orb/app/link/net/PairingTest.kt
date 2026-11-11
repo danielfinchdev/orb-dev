@@ -150,4 +150,36 @@ class PairingTest {
         val err = (e.pairing.link(e.pairing.resolve(qr(e)).getOrThrow(), password, "Pixel").exceptionOrNull() as PairingException).error
         assertEquals(PairError.BadAnswer, err)
     }
+
+    private suspend fun linkWith(e: Env, code: String): PairError {
+        val link = e.pairing.resolve(qr(e)).getOrThrow()
+        return (e.pairing.link(link, password, "Pixel").exceptionOrNull() as PairingException).error
+    }
+
+    @Test
+    fun `crypto that says the answer is bad is not the pc of this code, not an old qr`() = runBlocking {
+        val e = env(verifierOf = { _, _ -> throw dev.orb.app.link.crypto.LinkCryptoException("badAnswer") })
+        e.pc.setupPairing(FakePc.PairSetup(code, password, kdf, "qr"))
+        assertEquals(PairError.BadAnswer, linkWith(e, code))
+    }
+
+    @Test
+    fun `a password that cannot be encoded is an invalid input`() = runBlocking {
+        val e = env(verifierOf = { _, _ -> throw dev.orb.app.link.crypto.LinkCryptoException("badString") })
+        e.pc.setupPairing(FakePc.PairSetup(code, password, kdf, "qr"))
+        val err = linkWith(e, code) as PairError.Refused
+        assertEquals(INVALID_INPUT, err.reason)
+        assertEquals(0, err.status)
+        assertTrue(e.pc.pairedIds.isEmpty())
+    }
+
+    @Test
+    fun `a code whose keys cannot be read is an old qr`() = runBlocking {
+        val e = env()
+        e.pc.setupPairing(FakePc.PairSetup(code, password, kdf, "qr"))
+        val good = e.pairing.resolve(qr(e)).getOrThrow()
+        val broken = dev.orb.app.link.net.ResolvedLink(good.urls, good.code, good.pc, ByteArray(31), good.fp, good.name, good.via)
+        val err = (e.pairing.link(broken, password, "Pixel").exceptionOrNull() as PairingException).error
+        assertEquals(PairError.OldQr, err)
+    }
 }
