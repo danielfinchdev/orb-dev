@@ -45,6 +45,7 @@
   --sidebar: oklch(0.972 0.005 268);
   --bubble: oklch(0.53 0.19 264);
   --bubble-foreground: oklch(1 0 0);
+  --chart-empty: oklch(0.9 0.012 268);
 }
 
 .dark {
@@ -77,9 +78,10 @@
   --border: oklch(0.275 0.012 268);
   --input: oklch(0.54 0.02 268);
   --ring: oklch(0.75 0.14 264);
-  --sidebar: oklch(0.175 0.01 268);
-  --bubble: oklch(0.72 0.14 264);
-  --bubble-foreground: oklch(0.2 0.06 264);
+  --sidebar: oklch(0.165 0.01 268);
+  --bubble: oklch(0.71 0.09 264);
+  --bubble-foreground: oklch(0.2 0.03 264);
+  --chart-empty: oklch(0.34 0.014 268);
 }
 
 /* The other themes do not set the Órbita-only tokens: without this they would wear the Orb values. Derived from each
@@ -88,6 +90,7 @@ html[data-skin]:not([data-skin="orb"]) {
   --primary-text: var(--primary);
   --primary-soft: color-mix(in oklch, var(--primary) 12%, var(--card));
   --faint-foreground: var(--muted-foreground);
+  --chart-empty: color-mix(in oklch, var(--foreground) 14%, var(--card));
   --success-soft: color-mix(in oklch, var(--success) 14%, var(--card));
   --warning-soft: color-mix(in oklch, var(--warning) 18%, var(--card));
   --destructive-soft: color-mix(in oklch, var(--destructive) 12%, var(--card));
@@ -133,4 +136,5 @@ html[data-skin]:not([data-skin="orb"]) {
   --color-sidebar: var(--sidebar);
   --color-bubble: var(--bubble);
   --color-bubble-foreground: var(--bubble-foreground);
+  --color-chart-empty: var(--chart-empty);
 }

@@ -418,6 +418,8 @@ html[data-motion="minima"] :is(.tour-panel, .tour-spot), html[data-skin="profesi
 @media (max-width: 640px) { .tour-robot { display: none; } .tour-bubble { width: calc(100vw - 2rem); } }
 html[data-skin="retro"] .tour-bubble { width: 25rem; }
 
+/* Orb dark: the sidebar shares the page colour, so the line between them is softened to keep the seam quiet. */
+html.dark[data-skin="orb"] aside.bg-sidebar { border-right-color: color-mix(in oklch, var(--border) 55%, transparent); }
 /* motion and touch (ideas from Emil Kowalski's «skills», MIT; re-written for Orb, see docs/LEARNINGS-3.5.md).
    - Strong ease-out for what appears or leaves (never ease-in on the interface); ease-in-out for what moves on screen.
    - What appears starts at 95-97 % and transparent, never from nothing; popovers grow from their trigger, dialogs from the centre.

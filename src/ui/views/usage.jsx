@@ -40,7 +40,7 @@ function Days({ days, metric, locale }) {
         return (
           <Tip key={d.day} label={label}>
             <span className="flex h-full min-w-0 flex-1 items-end" tabIndex={0}>
-              <span className={cn('w-full rounded-t-sm', v ? 'bg-primary' : 'bg-muted')} style={{ height: v && max ? `${Math.max(3, (v / max) * 100)}%` : '3px' }} />
+              <span className={cn('w-full rounded-t-sm', v ? 'bg-primary' : 'bg-chart-empty')} style={{ height: v && max ? `${Math.max(3, (v / max) * 100)}%` : '3px' }} />
             </span>
           </Tip>
         );
