@@ -2,7 +2,7 @@
 // state, what streams into a conversation, what passes by as a notice and what reloads the window.
 import { useEffect } from 'react';
 import { bridge, go, refreshSoon, chatStateSoon, loadOrbInboxSoon } from '@/lib/store.js';
-import { notify } from '@/lib/notify.js';
+import { notify, markNoticesSeen } from '@/lib/notify.js';
 import { t as tNow } from '@/lib/i18n.js';
 
 // whether core went missing while Orb ran (an engine restarted after it reloads the window).
@@ -20,6 +20,8 @@ export function useEngineEvents(phase) {
       // what only informs (working folder, brain in use, schedule created…) passes by as a notification.
       // through lib/notify.js: one at a time, never repeated, kept under the bell.
       if (event === 'notice' && payload?.body) notify({ body: payload.body, tone: payload.tone });
+      // the phone read its notices; its ids are not the bell's, so the whole bell counts as seen.
+      if (event === 'notes:read') markNoticesSeen();
       if (event === 'ui:navigate') go(payload);
       if (event === 'inbox:changed') loadOrbInboxSoon(120);
       // the chat list follows what its conversations do (a new line comes with inbox:changed).

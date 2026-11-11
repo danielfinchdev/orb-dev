@@ -33,7 +33,10 @@ export function run(cmd, args, { cwd, timeoutMs = 120_000, input } = {}) {
   });
 }
 
-const gh = (args, opts) => { const exe = ghExe(); if (!exe) throw new Error(tr('msg.github.ghMissing')); return run(exe, args, opts); };
+// Tests swap the finder and the runner for a fake gh; nothing else touches this.
+const seam = { exe: ghExe, run };
+export function setGhForTests(fake) { seam.exe = fake?.exe ?? ghExe; seam.run = fake?.run ?? run; }
+const gh = (args, opts) => { const exe = seam.exe(); if (!exe) throw new Error(tr('msg.github.ghMissing')); return seam.run(exe, args, opts); };
 const must = (r, what) => { if (!r.ok) throw new Error(`${what}: ${oneLine(r.err || r.out, 400)}`); return r; };
 const branchName = (b) => { if (!/^[\w./-]{1,120}$/.test(String(b ?? '')) || String(b).startsWith('-') || String(b).includes('..')) throw new Error(tr('msg.github.badBranch', { b })); return b; };
 
@@ -104,6 +107,58 @@ export async function commitAll(project, message) {
   const r = await git(project.path, ...who, 'commit', '-q', '-m', msg);
   if (r.status !== 0) throw new Error(oneLine(r.stderr || r.stdout, 300));
   return { files: staged.length };
+}
+
+// Pull requests for the phone. Arguments are always an array (no shell), the number is validated by the caller and gh runs
+// inside the project folder so it only ever talks to that project's own remote.
+const AUTH_RE = /not logged in|gh auth login|authentication|authenticate|GH_TOKEN|HTTP 401|bad credentials/i;
+const MERGE_BLOCK_RE = /not mergeable|conflict|required status|checks?\b.*(fail|pending|expected)|review|blocked|draft|policy|protected/i;
+const ghFail = (r) => {
+  const text = oneLine(r.err || r.out, 400);
+  if (AUTH_RE.test(text)) return new Error(tr('msg.github.notLoggedIn'));
+  if (/no github remotes|none of the git remotes|not a git repository|no git remote|could not resolve to a repository/i.test(text)) return new Error(tr('msg.github.noGithubRemote'));
+  if (/could not resolve to a pull ?request|no pull requests? found|not found/i.test(text)) return new Error(tr('msg.github.prNotFound'));
+  return new Error(text || tr('msg.github.prBadAnswer'));
+};
+const ghJson = async (project, args) => {
+  const r = await gh(args, { cwd: project.path, timeoutMs: 40_000 });
+  if (!r.ok) throw ghFail(r);
+  try { return JSON.parse(r.out); } catch { throw new Error(tr('msg.github.prBadAnswer')); }
+};
+const authorOf = (a) => (a && typeof a === 'object' ? String(a.login ?? a.name ?? '') : String(a ?? ''));
+
+export async function listPrs(project) {
+  const list = await ghJson(project, ['pr', 'list', '--state', 'open', '--limit', '30', '--json', 'number,title,headRefName,baseRefName,url,isDraft,author,updatedAt,reviewDecision,mergeable']);
+  return (Array.isArray(list) ? list : []).slice(0, 30).map((x) => ({ number: x.number, title: oneLine(x.title, 300), headRefName: x.headRefName, baseRefName: x.baseRefName, url: x.url, isDraft: Boolean(x.isDraft), author: authorOf(x.author), updatedAt: x.updatedAt, reviewDecision: x.reviewDecision || null, mergeable: x.mergeable || null }));
+}
+
+export async function viewPr(project, number) {
+  const x = await ghJson(project, ['pr', 'view', String(number), '--json', 'number,title,body,state,url,headRefName,baseRefName,isDraft,author,createdAt,updatedAt,mergeable,mergeStateStatus,reviewDecision,additions,deletions,changedFiles,statusCheckRollup,files,commits']);
+  return {
+    number: x.number, title: oneLine(x.title, 300), body: String(x.body ?? '').slice(0, 20_000), state: x.state, url: x.url, headRefName: x.headRefName, baseRefName: x.baseRefName,
+    isDraft: Boolean(x.isDraft), author: authorOf(x.author), createdAt: x.createdAt, updatedAt: x.updatedAt, mergeable: x.mergeable || null, mergeStateStatus: x.mergeStateStatus || null,
+    reviewDecision: x.reviewDecision || null, additions: x.additions ?? 0, deletions: x.deletions ?? 0, changedFiles: x.changedFiles ?? 0,
+    checks: (Array.isArray(x.statusCheckRollup) ? x.statusCheckRollup : []).slice(0, 100).map((c) => ({ name: oneLine(c.name ?? c.context ?? '', 120), status: c.status ?? c.state ?? null, conclusion: c.conclusion ?? null })),
+    files: (Array.isArray(x.files) ? x.files : []).slice(0, 300).map((f) => ({ path: String(f.path ?? ''), additions: f.additions ?? 0, deletions: f.deletions ?? 0 })),
+    commits: (Array.isArray(x.commits) ? x.commits : []).slice(0, 100).map((c) => ({ oid: String(c.oid ?? '').slice(0, 7), title: oneLine(c.messageHeadline ?? '', 200) }))
+  };
+}
+
+// Merges as the user's own gh account. No --delete-branch, --admin or --auto: the phone cannot skip a rule of the
+// repository, and gh leaves the local branch and checkout alone without --delete-branch.
+export const MERGE_METHODS = ['merge', 'squash', 'rebase'];
+export async function mergePr(project, number, method = 'merge') {
+  if (!MERGE_METHODS.includes(method)) throw new Error(tr('msg.github.prFailed'));
+  const r = await gh(['pr', 'merge', String(number), `--${method}`], { cwd: project.path, timeoutMs: 120_000 });
+  if (!r.ok) {
+    const text = oneLine(r.err || r.out, 240);
+    if (!AUTH_RE.test(text) && MERGE_BLOCK_RE.test(text) && !/not found|could not resolve/i.test(text)) throw new Error(tr('msg.github.prNotMergeable', { detail: text }));
+    throw ghFail(r);
+  }
+  const out = { ok: true, number, method };
+  // the state afterwards is best effort: the merge itself already happened
+  try { const s = await ghJson(project, ['pr', 'view', String(number), '--json', 'state,mergedAt']); out.state = s.state; out.mergedAt = s.mergedAt ?? null; } catch { /* merged anyway */ }
+  return out;
 }
 
 // Brings a task branch into the current branch of the project (merge commit). A conflict is undone and reported.

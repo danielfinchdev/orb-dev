@@ -246,6 +246,13 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // «Auto» or «Preguntar». Also from a linked phone (only these two values; «Acceso total» never comes this way).
     'permissions.setMode': ({ mode }) => { const m = oneOf(mode, AUTONOMY, 'modo'); const c = saveConfig({ permissions: { mode: m } }); emit('config:changed', c); return { mode: m }; },
 
+    // The phone read its notices: the PC's bell is a window thing (local storage), so the window is told. The phone's ids are
+    // its own, not the bell's, so everything in the bell counts as seen.
+    'notes.markRead': ({ ids } = {}) => {
+      if (ids != null && (!Array.isArray(ids) || ids.length > 200 || ids.some((x) => typeof x !== 'string' || x.length > 100))) fail(tr('msg.api.badList'));
+      emit('notes:read', { ...(ids ? { ids } : {}), at: Date.now() });
+      return { ok: true };
+    },
     'logs.list': () => logFiles(board).map(([name, file]) => { let size = 0; try { size = fs.statSync(file).size; } catch { /* empty */ } return { name, size }; }),
     'logs.read': ({ project: name, whole }) => readLog(board, str(name, 'bitácora', 200), { whole: Boolean(whole), chars: 40000 }),
 
