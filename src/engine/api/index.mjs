@@ -44,6 +44,7 @@ import { createFeeds } from '../feeds.mjs';
 import { fold } from '../../domain/conversations/inbox.mjs';
 import { projectMethods } from './projects.mjs';
 import { chatMethods } from './chat.mjs';
+import { trashTools } from './trash.mjs';
 import { workMethods } from './work.mjs';
 
 export { fail, str, int, oneOf } from './common.mjs';
@@ -156,7 +157,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   const data = dataApi(shared); // backups
   let usageAskedAt = 0; // usage.refresh
 
-  const hooks = { ...shared, realHome, insideHome, holding, coordinatorBusy, syncSoon, cut, accept, allowedImage, withAccepted, settleConversation, taskRejected, modelLabelOf, wb, android, grants };
+  const trash = trashTools({ board, sessions, orchestrator, scheduler, emit, log, conversationId });
+  const hooks = { ...shared, trash, realHome, insideHome, holding, coordinatorBusy, syncSoon, cut, accept, allowedImage, withAccepted, settleConversation, taskRejected, modelLabelOf, wb, android, grants };
   const methods = {
     'app.state': () => ({
       version, home: ctx.home, paths: { core: ctx.paths.core, projects: ctx.paths.projects, logs: ctx.paths.logs, mcp: ctx.paths.mcp, categories: ctx.paths.categories }, categories: CATEGORIES,
@@ -218,6 +220,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...projectMethods(hooks),
 
     ...chatMethods(hooks),
+    ...trash.methods,
     // the brains to choose from (agent + model), which ones spend the quota faster and how used each account is.
     // Kept for a few seconds: the window asks again on every change of the board (while the agents work, many a second).
     // the guide of Ajustes › Tareas y usos: each agent's models by kind (light, balanced, most capable) and what Orb
@@ -349,7 +352,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       }
     },
     // the daily backup (03:00 in the owner's zone), looked at from the engine's loop.
-    dataTick: () => data.tick(),
+    dataTick: () => { data.tick(); trash.purgeIfDue(); },
+    purgeTrash: (nowMs) => trash.purge(nowMs),
     // Running tasks stay "running": the next start continues them (scheduler.finish does not close them while closing).
     // adb's server goes with Orb (no phone reachable from this PC while Orb is closed).
     // Returns what is still to be waited for: a task being closed or a copy being joined finishes writing its state first.

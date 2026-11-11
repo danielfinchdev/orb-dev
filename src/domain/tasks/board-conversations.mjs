@@ -36,7 +36,7 @@ export class BoardConversations {
     return r ? conversationRow(r) : null;
   }
   conversations({ limit = 300 } = {}) {
-    return this.all('SELECT * FROM conversations WHERE bot_id IS NULL AND group_id IS NULL ORDER BY updated_at DESC, id DESC LIMIT ?', Math.min(Math.max(Number(limit) || 300, 1), 2000)).map(conversationRow);
+    return this.all('SELECT * FROM conversations WHERE bot_id IS NULL AND group_id IS NULL AND trashed_at IS NULL ORDER BY updated_at DESC, id DESC LIMIT ?', Math.min(Math.max(Number(limit) || 300, 1), 2000)).map(conversationRow);
   }
   createConversation({ title = '', project = null, agent = 'claude', account = null, model = null, reasoning = 'medium' } = {}) {
     if (project && !this.project(project)) throw new Error(tr('sys.board.unknownProject', { name: project }));

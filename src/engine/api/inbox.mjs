@@ -53,7 +53,7 @@ export function inboxMethods({ board, emit, orchestrator }) {
     for (const [key, m] of marks) {
       if (!key.startsWith('session:')) continue;
       const id = key.slice(8);
-      const s = board.one("SELECT id FROM sessions WHERE id = ? AND kind = 'chat'", id);
+      const s = board.one("SELECT id FROM sessions WHERE id = ? AND kind = 'chat' AND trashed_at IS NULL", id);
       if (!s) continue;
       out.push({ key, kind: 'session', id: s.id, conversation: null, pinned: m.pinned, pinOrder: m.pinned ? m.pinOrder : null, section: m.section, muted: m.muted, snoozedUntil: m.snoozedUntil, lastMessage: null, unread: 0, at: null });
     }

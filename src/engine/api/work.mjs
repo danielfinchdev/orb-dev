@@ -19,7 +19,7 @@ import { fail, str, int, oneOf, images, DECISION } from './common.mjs';
 import { createDedupe } from './dedupe.mjs';
 import { fold } from '../../domain/conversations/inbox.mjs';
 
-export function workMethods({ project, cut, accept, taskRejected, modelLabelOf, grants, board, sessions, scheduler, log }) {
+export function workMethods({ trash, project, cut, accept, taskRejected, modelLabelOf, grants, board, sessions, scheduler, log }) {
   const methods = {
 
     // the list of every view, sent on each refresh: long texts cut (the whole task is tasks.get) and no approval
@@ -115,6 +115,7 @@ export function workMethods({ project, cut, accept, taskRejected, modelLabelOf, 
     // mode: 'auto' (steer when the agent can, else queue), 'steer' or 'queue'.
     'sessions.send': ({ id, text, images: files, mode }) => {
       const s = sessions.must(str(id, 'conversación', 64));
+      trash.assertSessionNotTrashed(s);
       if (s.kind === 'task') {
         // A running task: the message reaches its agent at once when it can (steer); otherwise after its turn.
         if (sessions.isRunning(s.id) && oneOf(mode, ['auto', 'steer', 'queue'], 'modo', 'auto') !== 'queue' && !(files ?? []).length) {
@@ -138,7 +139,7 @@ export function workMethods({ project, cut, accept, taskRejected, modelLabelOf, 
     'sessions.queue': ({ id }) => sessions.queue(str(id, 'conversación', 64)),
     'sessions.editQueued': ({ id, queueId, text, remove, move }) => sessions.editQueued(str(id, 'conversación', 64), int(queueId, 'mensaje'), { text: text === undefined ? undefined : str(text, 'mensaje', 20000), remove: Boolean(remove), move: oneOf(move, ['up', 'down'], 'mover', undefined) }),
     'sessions.approve': ({ id, request, decision }) => sessions.respond(str(id, 'conversación', 64), str(request, 'petición', 200), oneOf(decision, DECISION, 'decisión')),
-    'sessions.resume': ({ id }) => sessions.resume(str(id, 'conversación', 64)),
+    'sessions.resume': ({ id }) => { trash.assertSessionNotTrashed(sessions.must(str(id, 'conversación', 64))); return sessions.resume(str(id, 'conversación', 64)); },
     // agent: go on with another agent (the copy gets a summary of the conversation; the original stays).
     'sessions.fork': ({ id, title, agent }) => {
       const other = oneOf(agent, AGENT_IDS, 'agente', undefined);

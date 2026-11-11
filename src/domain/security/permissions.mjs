@@ -37,7 +37,7 @@ export const METHODS = Object.freeze({
   'actions.list': 'pc', 'actions.save': 'pc', 'actions.remove': 'pc',
   'images.read': 'pc', 'images.mark': 'pc', 'images.save': 'pc', 'attachments.read': 'pc',
   // conversations with the assistant
-  'conversations.list': 'remote', 'conversations.search': 'remote', 'conversations.update': 'remote', 'conversations.remove': 'pc',
+  'conversations.list': 'remote', 'conversations.search': 'remote', 'conversations.update': 'remote', 'conversations.remove': 'pc', 'conversations.trash': 'remote', 'conversations.restore': 'remote',
   'chat.list': 'remote', 'chat.send': 'remote', 'chat.stop': 'remote', 'chat.compact': 'remote', 'chat.answer': 'remote', 'chat.accept': 'remote',
   'chat.settings': 'remote',
   // projects
@@ -56,7 +56,7 @@ export const METHODS = Object.freeze({
   // direct conversations with an agent and the tasks' sessions
   'sessions.list': 'remote', 'sessions.create': 'remote', 'sessions.items': 'remote', 'sessions.send': 'remote', 'sessions.queue': 'remote',
   'sessions.editQueued': 'remote', 'sessions.approve': 'remote', 'sessions.resume': 'remote', 'sessions.fork': 'remote', 'sessions.settle': 'remote',
-  'sessions.stop': 'remote', 'sessions.compact': 'remote', 'sessions.update': 'remote', 'sessions.remove': 'pc',
+  'sessions.stop': 'remote', 'sessions.compact': 'remote', 'sessions.update': 'remote', 'sessions.remove': 'pc', 'sessions.trash': 'remote', 'sessions.restore': 'remote',
   // «Auto» / «Preguntar» for everything (Ajustes › Agentes and the assistant's chat), also from the phone
   'permissions.setMode': 'remote',
   // «Acceso total al PC» and «Usar mi móvil Android» (src/engine/security/grants.mjs): given and taken back only here

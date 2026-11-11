@@ -528,5 +528,6 @@ export default {
   "msg.installer.agentTimeout": "Could not install: 15 minutes went by without finishing",
   "msg.link.httpBrowser": "A browser does not link over plain Wi-Fi (the master password is never typed in a page without encryption): use the secure Tailscale address (https) or the Android app.",
   "msg.link.notForOrb": "This code only links a phone or a browser.",
+  "msg.trash.inTrash": "That chat is in the trash. Restore it to continue.",
   "msg.remote.pushHidden": "You have a new message",
 };

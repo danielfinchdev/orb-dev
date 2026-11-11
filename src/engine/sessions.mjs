@@ -145,7 +145,7 @@ export class Sessions {
   }
 
   list({ archived = false, kind } = {}) {
-    return this.board.all(`SELECT * FROM sessions WHERE archived = ? ${kind ? 'AND kind = ?' : ''} ORDER BY updated_at DESC LIMIT 300`, Number(archived), ...(kind ? [kind] : [])).map(parseRow);
+    return this.board.all(`SELECT * FROM sessions WHERE archived = ? AND trashed_at IS NULL ${kind ? 'AND kind = ?' : ''} ORDER BY updated_at DESC LIMIT 300`, Number(archived), ...(kind ? [kind] : [])).map(parseRow);
   }
   get(id) { return parseRow(this.board.one('SELECT * FROM sessions WHERE id = ?', String(id))); }
   must(id) { const s = this.get(id); if (!s) throw new Error(tr('msg.sessions.noConversation')); return s; }

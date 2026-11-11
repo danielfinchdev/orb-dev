@@ -19,7 +19,7 @@ import { fail, str, int, oneOf } from './common.mjs';
 import { createDedupe } from './dedupe.mjs';
 import { fold, snippet } from '../../domain/conversations/inbox.mjs';
 
-export function chatMethods({ project, conversationId, accept, allowedImage, withAccepted, settleConversation, wb, board, sessions, orchestrator, scheduler, emit, log }) {
+export function chatMethods({ project, conversationId, accept, allowedImage, withAccepted, settleConversation, trash, wb, board, sessions, orchestrator, scheduler, emit, log }) {
   const methods = {
     // a conversation's lines (the last 160, or 120 more before a line).
     // Without a conversation: the lines of none (tasks made by hand or by a schedule), which the window shows as notices.
@@ -31,6 +31,7 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
     'chat.send': ({ text, conversation, project: name, brain }, principal) => {
       const t = str(text, 'mensaje', 20000);
       const id = conversation == null ? null : conversationId(conversation);
+      if (id) trash.assertNotTrashed(id);
       const proj = name === undefined ? undefined : name ? project(name).name : null;
       if (brain !== undefined) {
         if (id || !brain || typeof brain !== 'object' || Array.isArray(brain)) fail(tr('msg.api.badParams'));
@@ -58,21 +59,7 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
       return board.conversation(c);
     },
     // Deleted with its lines (its tasks stay, in Tareas).
-    'conversations.remove': ({ id }) => {
-      const c = conversationId(id);
-      orchestrator.drop(c);
-      // its tasks still to do (queued, waiting or working) stop with it: they would go on in the scope of the tasks
-      // of no conversation, sharing messages with the manual and scheduled ones. The finished ones stay in Tareas.
-      for (const t of board.all('SELECT id, status FROM tasks WHERE conversation_id = ?', c)) {
-        if (!board.isFinished(t.status)) { try { scheduler.cancel(t.id, 'usuario'); } catch { /* finished meanwhile */ } }
-      }
-      board.run('DELETE FROM chat WHERE conversation_id = ?', c);
-      board.run('UPDATE tasks SET conversation_id = NULL WHERE conversation_id = ?', c);
-      board.run('DELETE FROM conversations WHERE id = ?', c);
-      board.setting(`pending_questions:${c}`, '');
-      board.changed('conversations');
-      return { ok: true };
-    },
+    'conversations.remove': ({ id }) => trash.removeConversation(conversationId(id)),
     // the search of the sidebar: conversations (with the assistant and direct) whose title or messages have the words.
     'conversations.search': ({ q }) => {
       const words = String(q ?? '').trim().toLowerCase().slice(0, 100);
@@ -81,12 +68,12 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
       // SQLite's LIKE ignores case only for ASCII: with accents or «ñ» the words are matched here, in JavaScript.
       if (/[^\x00-\x7f]/.test(words)) {
         const has = (s) => String(s ?? '').toLowerCase().includes(words);
-        const conversations = board.all(`SELECT c.id, c.title, (SELECT group_concat(m.body, ' ') FROM chat m WHERE m.conversation_id = c.id AND m.role IN ('usuario', 'orb')) AS text FROM conversations c WHERE c.bot_id IS NULL AND c.group_id IS NULL`).filter((r) => has(r.title) || has(r.text)).slice(0, 100).map((r) => r.id);
-        const found = board.all(`SELECT s.id, s.title, (SELECT group_concat(i.body, ' ') FROM session_items i WHERE i.session_id = s.id AND i.kind = 'text') AS text FROM sessions s WHERE s.kind = 'chat'`).filter((r) => has(r.title) || has(r.text)).slice(0, 100).map((r) => r.id);
+        const conversations = board.all(`SELECT c.id, c.title, (SELECT group_concat(m.body, ' ') FROM chat m WHERE m.conversation_id = c.id AND m.role IN ('usuario', 'orb')) AS text FROM conversations c WHERE c.bot_id IS NULL AND c.group_id IS NULL AND c.trashed_at IS NULL`).filter((r) => has(r.title) || has(r.text)).slice(0, 100).map((r) => r.id);
+        const found = board.all(`SELECT s.id, s.title, (SELECT group_concat(i.body, ' ') FROM session_items i WHERE i.session_id = s.id AND i.kind = 'text') AS text FROM sessions s WHERE s.kind = 'chat' AND s.trashed_at IS NULL`).filter((r) => has(r.title) || has(r.text)).slice(0, 100).map((r) => r.id);
         return { conversations, sessions: found };
       }
-      const conversations = board.all(`SELECT DISTINCT c.id FROM conversations c LEFT JOIN chat m ON m.conversation_id = c.id AND m.role IN ('usuario', 'orb') WHERE c.bot_id IS NULL AND c.group_id IS NULL AND (lower(c.title) LIKE ? ESCAPE '!' OR lower(m.body) LIKE ? ESCAPE '!') LIMIT 100`, like, like).map((r) => r.id);
-      const found = board.all(`SELECT DISTINCT s.id FROM sessions s LEFT JOIN session_items i ON i.session_id = s.id AND i.kind = 'text' WHERE s.kind = 'chat' AND (lower(s.title) LIKE ? ESCAPE '!' OR lower(i.body) LIKE ? ESCAPE '!') LIMIT 100`, like, like).map((r) => r.id);
+      const conversations = board.all(`SELECT DISTINCT c.id FROM conversations c LEFT JOIN chat m ON m.conversation_id = c.id AND m.role IN ('usuario', 'orb') WHERE c.bot_id IS NULL AND c.group_id IS NULL AND c.trashed_at IS NULL AND (lower(c.title) LIKE ? ESCAPE '!' OR lower(m.body) LIKE ? ESCAPE '!') LIMIT 100`, like, like).map((r) => r.id);
+      const found = board.all(`SELECT DISTINCT s.id FROM sessions s LEFT JOIN session_items i ON i.session_id = s.id AND i.kind = 'text' WHERE s.kind = 'chat' AND s.trashed_at IS NULL AND (lower(s.title) LIKE ? ESCAPE '!' OR lower(i.body) LIKE ? ESCAPE '!') LIMIT 100`, like, like).map((r) => r.id);
       return { conversations, sessions: found };
     },
     // tasks by what they say (title, brief or result, without case or accents), for the sidebar's search and

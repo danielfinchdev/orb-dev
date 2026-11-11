@@ -529,4 +529,5 @@ export default {
   "msg.link.httpBrowser": "Por la wifi sin cifrar, un navegador no se enlaza (la contraseña maestra no se escribe en una página sin cifrar): usa la dirección segura de Tailscale (https) o la app de Android.",
   "msg.link.notForOrb": "Este código solo sirve para enlazar un móvil o un navegador.",
   "msg.remote.pushHidden": "Tienes un mensaje nuevo",
+  "msg.trash.inTrash": "Ese chat está en la papelera. Restáuralo para seguir.",
 };

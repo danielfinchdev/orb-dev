@@ -266,6 +266,8 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   ['projects', 'grupo', 'TEXT'],
   // «Usar mi móvil Android», given to a chat with the master password (src/engine/security/grants.mjs).
   ['sessions', 'android', 'INTEGER NOT NULL DEFAULT 0'],
+  // when a chat was sent to the trash (null = not in it); nothing moves, the visible lists just skip it (src/engine/api/trash.mjs).
+  ['conversations', 'trashed_at', 'TEXT'], ['sessions', 'trashed_at', 'TEXT'],
   // each phone has its own key (end-to-end encryption), the way it was paired and its notifications.
   ['devices', 'public_key', 'TEXT'], ['devices', 'route', 'TEXT'], ['devices', 'push', 'TEXT'],
   // Magic Link: what was linked (phone or browser), its last address and what it told about itself (version).
