@@ -2,7 +2,9 @@ package dev.orb.app.ui.chats
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
@@ -241,7 +243,7 @@ private fun MessageList(
 }
 
 
-private suspend fun LazyListState.toEnd() {
+internal suspend fun LazyListState.toEnd() {
     val last = layoutInfo.totalItemsCount - 1
     if (last < 0) return
     scrollToItem(last)
@@ -251,10 +253,18 @@ private suspend fun LazyListState.toEnd() {
 
 // ---------- Composer ----------
 
+/** One way to send a message while the agent works. */
+class ComposerChoice(val label: String, val send: (String) -> Unit)
+
 @Composable
-private fun Composer(
+internal fun Composer(
     online: Boolean, busy: Boolean, mode: String?, canSetMode: Boolean,
     onSend: (String) -> Unit, onStop: () -> Unit, onMode: (String) -> Unit,
+    placeholder: String = ChatTexts.MESSAGE_FIELD,
+    /** While the agent works and there is text: the ways to send it («Corregir», «Encolar»); the first is the send button's. */
+    busyChoices: List<ComposerChoice> = emptyList(),
+    /** Replaces the permission-mode pill (a direct chat shows its agent and model instead). */
+    leading: (@Composable () -> Unit)? = null,
 ) {
     var text by rememberSaveable { mutableStateOf("") }
     val scheme = MaterialTheme.colorScheme
@@ -264,17 +274,32 @@ private fun Composer(
         Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 6.dp)) {
             Box(Modifier.fillMaxWidth().heightIn(min = 40.dp, max = 160.dp).padding(end = 8.dp, top = 4.dp), contentAlignment = Alignment.CenterStart) {
                 BasicTextField(
-                    text, { text = it }, Modifier.fillMaxWidth().semantics { contentDescription = ChatTexts.MESSAGE_FIELD },
+                    text, { text = it }, Modifier.fillMaxWidth().semantics { contentDescription = placeholder },
                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface),
                     cursorBrush = SolidColor(scheme.primary), maxLines = 8,
                     keyboardOptions = KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences),
                 )
-                if (text.isEmpty()) Text(ChatTexts.MESSAGE_FIELD, color = OrbTheme.colors.text3, style = MaterialTheme.typography.bodyLarge)
+                if (text.isEmpty()) Text(placeholder, color = OrbTheme.colors.text3, style = MaterialTheme.typography.bodyLarge)
+            }
+            val canSend = text.isNotBlank()
+            AnimatedVisibility(
+                busy && canSend && busyChoices.isNotEmpty(),
+                enter = fadeIn(tween(OrbMotion.Short)) + expandVertically(OrbMotion.standard(OrbMotion.Short)),
+                exit = fadeOut(tween(OrbMotion.Fast)) + shrinkVertically(OrbMotion.standard(OrbMotion.Fast)),
+            ) {
+                Row(Modifier.padding(top = 4.dp, bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (choice in busyChoices) {
+                        Box(
+                            Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).border(BorderStroke(1.dp, scheme.outlineVariant), RoundedCornerShape(16.dp))
+                                .clickable { val t = text; text = ""; choice.send(t) }.padding(horizontal = 14.dp),
+                            contentAlignment = Alignment.Center,
+                        ) { Text(choice.label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = scheme.primary) }
+                    }
+                }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (canSetMode) ModePill(mode, onMode)
+                if (leading != null) leading() else if (canSetMode) ModePill(mode, onMode)
                 Box(Modifier.weight(1f))
-                val canSend = text.isNotBlank()
                 // Parar only when there is nothing to send: with text, the message goes to the PC's queue behind the turn.
                 AnimatedContent(
                     targetState = busy && !canSend, label = "send-stop",
@@ -286,7 +311,11 @@ private fun Composer(
                         ) { Icon(OrbIcons.Square, ChatTexts.STOP, Modifier.size(16.dp), tint = scheme.surface) }
                     } else {
                         IconButton(
-                            onClick = { val t = text; text = ""; onSend(t) }, enabled = canSend,
+                            onClick = {
+                                val t = text; text = ""
+                                if (busy && busyChoices.isNotEmpty()) busyChoices.first().send(t) else onSend(t)
+                            },
+                            enabled = canSend,
                             modifier = Modifier.size(40.dp).clip(CircleShape).background(if (canSend) scheme.primary else scheme.surfaceContainerHighest),
                         ) { Icon(OrbIcons.Send, ChatTexts.SEND, Modifier.size(18.dp), tint = if (canSend) scheme.onPrimary else OrbTheme.colors.text3) }
                     }
@@ -304,7 +333,7 @@ private fun Composer(
 
 /** A04: «Auto» / «Preguntar», the PC's way of treating what needs a permission. */
 @Composable
-private fun ModePill(mode: String?, onMode: (String) -> Unit) {
+internal fun ModePill(mode: String?, onMode: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
     val label = when (mode) { "auto" -> ChatTexts.MODE_AUTO; "preguntar" -> ChatTexts.MODE_ASK; else -> ChatTexts.MODE_MENU }
     Box {

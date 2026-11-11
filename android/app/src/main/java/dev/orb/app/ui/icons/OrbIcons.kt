@@ -95,4 +95,10 @@ object OrbIcons {
     val ArrowDown by lazy { lucide("arrow-down", "M12 5v14", "m19 12-7 7-7-7") }
     val ChevronDown by lazy { lucide("chevron-down", "m6 9 6 6 6-6") }
     val MoreVertical by lazy { lucide("ellipsis-vertical", circle(12f, 12f, 1f), circle(12f, 5f, 1f), circle(12f, 19f, 1f)) }
+    val ArrowUp by lazy { lucide("arrow-up", "m5 12 7-7 7 7", "M12 19V5") }
+    val ChevronUp by lazy { lucide("chevron-up", "m18 15-6-6-6 6") }
+    val ChevronRight by lazy { lucide("chevron-right", "m9 18 6-6-6-6") }
+    val ListOrdered by lazy {
+        lucide("list-ordered", "M11 5h10", "M11 12h10", "M11 19h10", "M4 4h1v5", "M4 9h2", "M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02")
+    }
 }

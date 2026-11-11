@@ -30,6 +30,8 @@ import androidx.navigation.compose.rememberNavController
 import dev.orb.app.AppContainer
 import androidx.compose.runtime.LaunchedEffect
 import dev.orb.app.ui.chats.ChatTexts
+import dev.orb.app.ui.chats.DirectChatScreen
+import dev.orb.app.ui.chats.DirectChatViewModel
 import dev.orb.app.ui.chats.SearchScreen
 import dev.orb.app.ui.chats.OrbeChatScreen
 import dev.orb.app.ui.chats.OrbeChatViewModel
@@ -135,8 +137,16 @@ private fun OrbNav(container: AppContainer, start: Any) {
             if (route.kind == "conversation" && conversation != null && backend != null) {
                 val vm = viewModel<OrbeChatViewModel>(key = "orbe:$conversation", factory = viewModelFactory { initializer { OrbeChatViewModel(backend, conversation) } })
                 OrbeChatScreen(vm, onBack = { nav.popBackStack() })
+            } else if (route.kind == "session") {
+                val direct = remember { container.directChatBackend() }
+                if (direct != null) {
+                    val vm = viewModel<DirectChatViewModel>(key = "session:${route.id}", factory = viewModelFactory { initializer { DirectChatViewModel(direct, route.id) } })
+                    DirectChatScreen(
+                        vm, onBack = { nav.popBackStack() },
+                        onOpenChat = { nav.navigate(ChatRoute("session", it)) },
+                    )
+                }
             } else {
-                // Direct chats with an agent come with their own screen.
                 Placeholder(ChatTexts.CHAT_SOON, onBack = { nav.popBackStack() })
             }
         }

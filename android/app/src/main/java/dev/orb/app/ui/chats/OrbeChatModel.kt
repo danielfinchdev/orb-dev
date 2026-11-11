@@ -165,6 +165,29 @@ object ToolText {
     // «mcp__orb__orb_ask», «orb:orb_ask», «orb-orb_ask» → «orb_ask»: each agent names a server's tools its own way.
     fun bare(name: String?): String = (name ?: "").replace(Regex("^mcp__[^_]+(?:_[^_]+)*?__"), "").replace(Regex("^(orb|opti)[:-](?=(orb|opti)_)"), "")
 
+    private val past = mapOf(
+        "read" to "Leyó", "search" to "Buscó", "run" to "Ejecutó en el PC", "edit" to "Editó", "web" to "Consultó",
+    )
+
+    /** The class of a tool (`run`, `edit`, `read`…), or null when it is not one of the known ones. */
+    fun kindOf(rawName: String?): String? = kinds.firstOrNull { it.first.containsMatchIn(bare(rawName)) }?.second
+
+    /** The finished form of a step, split into the verb and what it acted on («Ejecutó en el PC» + «npm test»). */
+    fun did(rawName: String?, target: String?): Pair<String, String> {
+        val kind = kindOf(rawName)
+        val verb = past[kind]
+        if (verb != null) return verb to target.orEmpty()
+        val said = step(rawName, target).let { if (it.startsWith("Usando ")) "Usó ${it.removePrefix("Usando ")}" else it }
+        return said to ""
+    }
+
+    /** What a call acted on: a command, a path, a pattern or an address, whichever the input carries first. */
+    fun targetOf(input: kotlinx.serialization.json.JsonElement?): String? {
+        val o = input as? JsonObject ?: return (input as? JsonPrimitive)?.takeIf { it.isString }?.content?.lineSequence()?.firstOrNull()?.take(200)
+        val key = listOf("command", "cmd", "file_path", "filePath", "path", "pattern", "query", "url", "description").firstOrNull { o.str(it) != null }
+        return key?.let { o.str(it) }?.lineSequence()?.firstOrNull()?.take(200)
+    }
+
     fun step(rawName: String?, target: String?): String {
         val name = bare(rawName)
         val kind = kinds.firstOrNull { it.first.containsMatchIn(name) }?.second

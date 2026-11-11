@@ -291,7 +291,7 @@ fun LiveBubble(info: LiveInfo, text: () -> String, nowMs: () -> Long, modifier: 
 }
 
 @Composable
-private fun ActivityLine(info: LiveInfo, nowMs: () -> Long) {
+internal fun ActivityLine(info: LiveInfo, nowMs: () -> Long) {
     val label = info.activity ?: if (info.hasText) ChatTexts.WRITING else ChatTexts.THINKING
     val pulse = rememberInfiniteTransition(label = "thinking")
     val alpha by pulse.animateFloat(
@@ -325,7 +325,7 @@ class CardActions(
 )
 
 @Composable
-private fun CardFrame(modifier: Modifier = Modifier, warn: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+internal fun CardFrame(modifier: Modifier = Modifier, warn: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val c = OrbTheme.colors
     Column(
