@@ -154,7 +154,7 @@ export function DropdownMenuContent({ className, align = 'end', onCloseAutoFocus
 }
 export function DropdownMenuItem({ className, variant, onPointerLeave, ...props }) {
   const leave = (e) => { onPointerLeave?.(e); if (!e.defaultPrevented && closing(e.currentTarget)) e.preventDefault(); };
-  return <DropdownPrimitive.Item onPointerLeave={leave} className={cn("focus:bg-accent focus:text-accent-foreground relative flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:text-muted-foreground", variant === 'destructive' && 'text-destructive focus:text-destructive [&_svg]:text-destructive', className)} {...props} />;
+  return <DropdownPrimitive.Item onPointerLeave={leave} className={cn("focus:bg-accent focus:text-accent-foreground relative flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm pointer-fine:text-[13px] outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:text-muted-foreground", variant === 'destructive' && 'text-destructive focus:text-destructive [&_svg]:text-destructive', className)} {...props} />;
 }
 // an item that is ticked or not (lists where several can be chosen); the menu stays open while ticking.
 export function DropdownMenuCheckboxItem({ className, children, checked, onCheckedChange, ...props }) {

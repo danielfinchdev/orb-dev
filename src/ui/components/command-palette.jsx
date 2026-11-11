@@ -68,7 +68,7 @@ function Palette({ onClose }) {
       <DialogDescription className="sr-only">{t('palette.hint')}</DialogDescription>
       <label className="flex h-12 items-center gap-2.5 border-b px-4">
         <Search className="text-muted-foreground size-4 shrink-0" />
-        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('palette.placeholder')} aria-label={t('palette.placeholder')} className="placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent text-[14.5px] outline-none" data-testid="palette-input" />
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('palette.placeholder')} aria-label={t('palette.placeholder')} className="placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent text-[14.5px] pointer-fine:text-[13px] outline-none" data-testid="palette-input" />
         <Kbd>Esc</Kbd>
       </label>
       <div ref={list} className="max-h-[min(60vh,420px)] overflow-y-auto p-1.5" role="listbox" aria-label={t('palette.title')}>
@@ -80,7 +80,7 @@ function Palette({ onClose }) {
               const Icon = row.icon;
               return (
                 <button key={row.key} type="button" role="option" aria-selected={i === at} data-active={i === at} onMouseMove={() => setAt(i)} onClick={() => run(row)}
-                  className={cn('flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-left text-[13.5px]', i === at && 'bg-accent')} data-testid={`palette-${row.key}`}>
+                  className={cn('flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-left text-[13.5px] pointer-fine:text-[13px]', i === at && 'bg-accent')} data-testid={`palette-${row.key}`}>
                   <Icon className="text-muted-foreground size-4 shrink-0" />
                   <span className="min-w-0 flex-1"><span className="block truncate">{row.label}</span>{row.detail ? <span className="text-muted-foreground block truncate text-[12.5px]">{row.detail}</span> : null}</span>
                   {i === at ? <CornerDownLeft className="text-muted-foreground size-3.5 shrink-0" /> : null}
@@ -89,7 +89,7 @@ function Palette({ onClose }) {
             })}
           </div>
         ))}
-        {!rows.length ? <p className="text-muted-foreground px-3 py-4 text-sm">{t('chats.noResults')}</p> : null}
+        {!rows.length ? <p className="text-muted-foreground px-3 py-4 text-sm pointer-fine:text-[13px]">{t('chats.noResults')}</p> : null}
       </div>
     </DialogContent>
   );

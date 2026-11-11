@@ -156,7 +156,7 @@ const Block = memo(function Block({ b, agent, brain, sessionId, project, catalog
     const images = typeof body === 'object' && body?.images ? body.images : [];
     const long = textBody.length > 1200 && /^Encargo de /.test(textBody);
     return (
-      <div className="msg-hover bg-bubble text-bubble-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 break-words whitespace-pre-wrap">
+      <div className="msg-hover bg-bubble text-bubble-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 pointer-fine:text-[14px] break-words whitespace-pre-wrap">
         {typeof body === 'object' && body?.steer ? <div className="mb-1 flex items-center gap-1 text-[11px] opacity-80"><CornerDownRight className="size-3" />{t('session.steered')}</div> : null}
         {long ? <Collapsible><CollapsibleTrigger className="cursor-pointer text-left underline-offset-2 hover:underline">{textBody.split('\n')[0]} ({t('session.seeFullTask')})</CollapsibleTrigger><CollapsibleContent className="mt-2 text-[13px] opacity-90">{textBody}</CollapsibleContent></Collapsible> : textBody}
         {images.length ? <div className="mt-2 flex flex-wrap gap-1.5">{images.map((p) => <AttachChip key={p} file={p} sessionId={sessionId} />)}</div> : null}

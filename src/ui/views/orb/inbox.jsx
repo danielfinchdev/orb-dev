@@ -238,7 +238,7 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet }) {
         <OrbAvatar item={item} size={phone ? 46 : 40} />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
-            <span className={cn('min-w-0 flex-1 truncate text-[15px]', strong ? 'font-semibold' : 'font-medium', item.done && 'text-foreground/70')}>{item.title}</span>
+            <span className={cn('min-w-0 flex-1 truncate text-[15px] pointer-fine:text-[13px]', strong ? 'font-semibold' : 'font-medium', item.done && 'text-foreground/70')}>{item.title}</span>
             <span className={cn('shrink-0 text-[12px] tabular-nums', strong ? 'text-primary font-medium' : 'text-muted-foreground')}>{time}</span>
           </span>
           <span className="mt-0.5 flex items-center gap-1.5">
@@ -447,7 +447,7 @@ export function OrbInbox({ page = false }) {
   if (results) body = (
     <div className="grid gap-0.5" data-testid="sidebar-results">
       {results.projects.length ? <><Sub>{t('orbchats.projectsFound')}</Sub>{results.projects.map((p) => (
-        <button key={p.name} type="button" className="hover:bg-accent/50 flex min-w-0 cursor-pointer items-center gap-3 rounded-xl px-2.5 py-2 text-left text-[14px]" onClick={() => openOrbInfo({ type: 'project', name: p.name })} data-testid={`found-project-${p.name}`}>
+        <button key={p.name} type="button" className="hover:bg-accent/50 flex min-w-0 cursor-pointer items-center gap-3 rounded-xl px-2.5 py-2 text-left text-[14px] pointer-fine:text-[13px]" onClick={() => openOrbInfo({ type: 'project', name: p.name })} data-testid={`found-project-${p.name}`}>
           <ProjectIcon name={p.name} size={28} /><span className="min-w-0 flex-1 truncate">{p.name}</span>
         </button>))}</> : null}
       {results.chats.length ? <><Sub>{t('orbchats.chatsFound')}</Sub>{results.chats.map((x) => <OrbRow key={x.key} item={x} {...rowProps} />)}</> : null}
@@ -456,15 +456,15 @@ export function OrbInbox({ page = false }) {
         return (
           <button key={`${m.key}:${m.line.id}`} type="button" onClick={() => openOrbItem(x)} className="hover:bg-accent/50 flex min-w-0 cursor-pointer items-center gap-3 rounded-xl px-2.5 py-2 text-left" data-testid="chats-message-hit">
             <OrbAvatar item={x} size={34} />
-            <span className="min-w-0 flex-1"><span className="block truncate text-[14px] font-medium">{x.title}</span><span className="text-muted-foreground block truncate text-[13px]">{m.line.text}</span></span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-[14px] pointer-fine:text-[13px] font-medium">{x.title}</span><span className="text-muted-foreground block truncate text-[13px]">{m.line.text}</span></span>
           </button>
         );
       })}</> : null}
       {results.tasks.length ? <><Sub>{t('orbchats.tasksFound')}</Sub>{results.tasks.map((x) => (
-        <button key={x.id} type="button" onClick={() => go({ view: 'tasks', id: x.id })} className="hover:bg-accent/50 flex min-w-0 cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13.5px]" data-testid={`item-t${x.id}`}>
+        <button key={x.id} type="button" onClick={() => go({ view: 'tasks', id: x.id })} className="hover:bg-accent/50 flex min-w-0 cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13.5px] pointer-fine:text-[13px]" data-testid={`item-t${x.id}`}>
           <ClipboardCheck className="text-muted-foreground size-4 shrink-0" /><span className="min-w-0 flex-1"><span className="block truncate">#{x.id} {x.title}</span>{x.snippet ? <span className="text-muted-foreground block truncate text-[12.5px]" data-testid="task-hit-snippet">{x.snippet}</span> : null}</span><span className="text-muted-foreground shrink-0 text-[12px]">{STATUS[x.status]?.[0] ?? x.status}</span>
         </button>))}</> : null}
-      {!results.projects.length && !results.chats.length && !results.tasks.length && !found?.messages?.length ? <p className="text-muted-foreground px-3 py-4 text-sm">{t('chats.noResults')}</p> : null}
+      {!results.projects.length && !results.chats.length && !results.tasks.length && !found?.messages?.length ? <p className="text-muted-foreground px-3 py-4 text-sm pointer-fine:text-[13px]">{t('chats.noResults')}</p> : null}
     </div>
   );
   else { let left = shown; const take = (list) => { const part = list.slice(0, Math.max(0, left)); left -= part.length; return part; }; body = (
