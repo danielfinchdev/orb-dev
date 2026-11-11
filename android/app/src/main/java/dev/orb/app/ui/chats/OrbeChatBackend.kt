@@ -52,6 +52,9 @@ interface OrbeChatBackend {
     suspend fun markRead(conversation: Long): Result<Unit>
     fun available(m: ApiMethod): Boolean
 
+    /** Asks the PC to bring this conversation back from its trash. */
+    suspend fun restore(conversation: Long): Result<Unit>
+
     /** Puts the message in the send queue; it leaves for the PC as soon as there is a link. */
     suspend fun send(conversation: Long, text: String): Result<String>
     suspend fun retry(clientId: String): Boolean
@@ -117,6 +120,7 @@ class RuntimeOrbeChatBackend(private val container: AppContainer, private val ru
         api.inbox.markRead(buildJsonObject { put("kind", "conversation"); put("id", conversation) }).map { }
 
     override fun available(m: ApiMethod) = api.available(m)
+    override suspend fun restore(conversation: Long) = api.conversationsRestore(conversation.toString()).map { }
 
     override suspend fun send(conversation: Long, text: String): Result<String> =
         runCatching { container.outbox()?.enqueueChat(conversation.toString(), text) ?: throw LinkException(LinkError.NotLinked) }
@@ -173,7 +177,8 @@ class RuntimeOrbeChatBackend(private val container: AppContainer, private val ru
 
 /** Reads the PC's refusals by their text: the engine sends them without a code. */
 object ChatErrors {
-    fun deleted(e: Throwable): Boolean = refusal(e)?.contains("ya no existe", ignoreCase = true) == true
+    fun deleted(e: Throwable): Boolean =
+        refusal(e)?.let { it.contains("ya no existe", ignoreCase = true) || it.contains("en la papelera", ignoreCase = true) } == true
     fun questionGone(e: Throwable): Boolean =
         refusal(e)?.let { it.contains("ya está respondida", ignoreCase = true) || it.contains("already been answered", ignoreCase = true) } == true
     fun requestGone(e: Throwable): Boolean =

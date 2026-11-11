@@ -26,6 +26,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.AlertDialog
+import dev.orb.app.link.api.ConfirmAction
+import dev.orb.app.link.api.Confirmed
+import dev.orb.app.link.api.UserConfirmation
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -58,14 +64,20 @@ fun ChatListScreen(
     onOpenChat: (ChatRef) -> Unit,
     onSearch: () -> Unit,
     onNewChat: () -> Unit,
-    onDelete: (ChatRef) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
+    LaunchedEffect(vm) {
+        vm.undoOffers.collect { ref ->
+            val r = snackbar.showSnackbar(ChatTexts.DELETED_SNACK, actionLabel = ChatTexts.UNDO, duration = SnackbarDuration.Long)
+            if (r == SnackbarResult.ActionPerformed) vm.undoDelete(ref)
+        }
+    }
+    var deleting by rememberSaveable { mutableStateOf<String?>(null) }
     var actionsFor by rememberSaveable { mutableStateOf<String?>(null) }
-    val actions = remember(vm, onDelete) {
+    val actions = remember(vm) {
         ChatActions(
             onPin = vm::togglePin, onMarkRead = vm::markRead, onMute = vm::toggleMute, onSnooze = vm::snooze,
             onMove = vm::moveToSection, onMoveToNew = vm::moveToNewSection, onRename = vm::rename, onArchive = vm::archive,
@@ -93,6 +105,21 @@ fun ChatListScreen(
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
     }
 
+    val doomed = deleting
+    if (doomed != null) {
+        val row = remember(doomed, state.entries) { state.entries.firstNotNullOfOrNull { (it as? RowEntry)?.row?.takeIf { r -> r.key == doomed } } }
+        if (row == null) deleting = null else DeleteChatDialog(
+            row.title, onDismiss = { deleting = null },
+            onConfirm = {
+                deleting = null
+                // The only place a deletion token is made: the person has just accepted this dialog.
+                @OptIn(UserConfirmation::class)
+                val token = Confirmed(if (row.kind == ChatKind.Orbe) ConfirmAction.TrashConversation else ConfirmAction.TrashSession, row.id)
+                vm.delete(row, token)
+            },
+        )
+    }
+
     val key = actionsFor
     if (key != null) {
         val row = remember(key, state.entries) { state.entries.firstNotNullOfOrNull { (it as? RowEntry)?.row?.takeIf { r -> r.key == key } } }
@@ -102,7 +129,7 @@ fun ChatListScreen(
             val withDelete = remember(actions, row.kind, vm) {
                 if (vm.canDelete(row.kind)) ChatActions(
                     actions.onPin, actions.onMarkRead, actions.onMute, actions.onSnooze, actions.onMove, actions.onMoveToNew,
-                    actions.onRename, actions.onArchive, onDelete = { onDelete(it.ref) },
+                    actions.onRename, actions.onArchive, onDelete = { deleting = it.key },
                 ) else actions
             }
             ChatActionsSheet(row, state.sections, state.online, withDelete, onDismiss = { actionsFor = null })
@@ -218,4 +245,22 @@ fun Message(title: String, body: String? = null, action: String? = null, onActio
         if (body != null) Text(body, Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodyMedium, color = OrbTheme.colors.text2, textAlign = TextAlign.Center)
         if (action != null && onAction != null) TextButton(onClick = onAction, modifier = Modifier.padding(top = 8.dp)) { Text(action) }
     }
+}
+
+/** A38: the PC runs the deletion; the chat can be brought back right after from the «Deshacer» notice. */
+@Composable
+internal fun DeleteChatDialog(title: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(OrbIcons.Trash, null, tint = MaterialTheme.colorScheme.error) },
+        title = { Text(ChatTexts.DELETE_TITLE) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(ChatTexts.deleteBody(title), style = MaterialTheme.typography.bodyMedium)
+                Text(ChatTexts.DELETE_NOTE, style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text2)
+            }
+        },
+        confirmButton = { TextButton(onClick = onConfirm) { Text(ChatTexts.DELETE_CONFIRM, color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(ChatTexts.CANCEL) } },
+    )
 }

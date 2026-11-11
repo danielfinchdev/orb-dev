@@ -57,7 +57,10 @@ class FakeOrbeChatBackend(initial: List<String> = emptyList()) : OrbeChatBackend
 
     override suspend fun markRead(conversation: Long): Result<Unit> { calls += "read"; return Result.success(Unit) }
     var setModeAvailable = true
-    override fun available(m: ApiMethod) = setModeAvailable
+    var restoreAvailable = true
+    override fun available(m: ApiMethod) = if (m == dev.orb.app.link.api.ApiMethods.CONVERSATIONS_RESTORE) restoreAvailable else setModeAvailable
+    var restoreResult: Result<Unit> = Result.success(Unit)
+    override suspend fun restore(conversation: Long): Result<Unit> { calls += "restore"; return restoreResult }
 
     var sendCount = 0
     override suspend fun send(conversation: Long, text: String): Result<String> {

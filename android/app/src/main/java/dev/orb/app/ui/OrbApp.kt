@@ -30,6 +30,8 @@ import androidx.navigation.compose.rememberNavController
 import dev.orb.app.AppContainer
 import androidx.compose.runtime.LaunchedEffect
 import dev.orb.app.ui.chats.ChatTexts
+import dev.orb.app.ui.chats.NewChatScreen
+import dev.orb.app.ui.chats.NewChatViewModel
 import dev.orb.app.ui.chats.DirectChatScreen
 import dev.orb.app.ui.chats.DirectChatViewModel
 import dev.orb.app.ui.chats.SearchScreen
@@ -39,6 +41,8 @@ import dev.orb.app.ui.theme.OrbMotion
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.navigation.toRoute
 import dev.orb.app.ui.chats.SearchViewModel
@@ -112,8 +116,6 @@ private fun OrbNav(container: AppContainer, start: Any) {
                         onOpenChat = { nav.navigate(ChatRoute(it.kind.wire, it.id)) },
                         onSearch = { nav.navigate(Search) },
                         onNewChat = { nav.navigate(NewChat) },
-                        // Deleting and its undo come with the chat screens; the hook is here so the menu is ready.
-                        onDelete = { },
                         onAppearance = { appearance = true },
                         onLinkTest = { nav.navigate(LinkTest) },
                         onUnlink = { confirming = true },
@@ -129,7 +131,21 @@ private fun OrbNav(container: AppContainer, start: Any) {
                 SearchScreen(vm, onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate(ChatRoute(it.kind.wire, it.id)) })
             }
         }
-        composable<NewChat> { Placeholder(ChatTexts.NEW_CHAT_SOON, onBack = { nav.popBackStack() }) }
+        composable<NewChat>(
+            // A sheet-like screen: it rises from below and goes back down, unlike the side-by-side chat screens.
+            enterTransition = { slideInVertically(OrbMotion.standard(OrbMotion.Medium)) { it / 6 } + fadeIn(OrbMotion.standard(OrbMotion.Medium)) },
+            popExitTransition = { slideOutVertically(OrbMotion.standard(OrbMotion.Medium)) { it / 6 } + fadeOut(OrbMotion.standard(OrbMotion.Short)) },
+        ) {
+            val backend = remember { container.newChatBackend() }
+            if (backend != null) {
+                val vm = viewModel<NewChatViewModel>(factory = viewModelFactory { initializer { NewChatViewModel(backend) } })
+                NewChatScreen(
+                    vm, onClose = { nav.popBackStack() },
+                    // The new chat takes the place of this screen, so back from it returns to the list.
+                    onCreated = { nav.navigate(ChatRoute(it.kind, it.id)) { popUpTo<NewChat> { inclusive = true } } },
+                )
+            }
+        }
         composable<ChatRoute> { entry ->
             val route = entry.toRoute<ChatRoute>()
             val conversation = route.id.toLongOrNull()

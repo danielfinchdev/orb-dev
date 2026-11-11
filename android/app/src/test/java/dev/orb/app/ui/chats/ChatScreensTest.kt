@@ -37,11 +37,11 @@ class ChatScreensTest {
     )
     private val menu = ChatsMenu("Conectado a PC", {}, {}, {})
 
-    private fun list(b: FakeChatsBackend, onOpen: (ChatRef) -> Unit = {}, onDelete: (ChatRef) -> Unit = {}) {
+    private fun list(b: FakeChatsBackend, onOpen: (ChatRef) -> Unit = {}) {
         val vm = ChatListViewModel(b, dispatcher = Dispatchers.Unconfined)
         rule.setContent {
             OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) {
-                ChatListScreen(vm, menu, onOpenChat = onOpen, onSearch = {}, onNewChat = {}, onDelete = onDelete)
+                ChatListScreen(vm, menu, onOpenChat = onOpen, onSearch = {}, onNewChat = {})
             }
         }
         rule.waitForIdle()
@@ -83,16 +83,37 @@ class ChatScreensTest {
         rule.onNodeWithText("Borrar el chat en el PC").assertDoesNotExist()
     }
 
-    @Test fun deleteAppearsWhenThePcHasItAndCallsTheHook() {
-        var deleted: ChatRef? = null
+    @Test fun deleteAsksForConfirmationThenTrashesAndOffersUndo() {
         val b = FakeChatsBackend(rows).apply { trashAvailable = true }
-        list(b, onDelete = { deleted = it })
+        list(b)
         rule.onNodeWithText("Revisar pasarela").performTouchInput { longClick() }
         rule.waitForIdle()
         rule.onNodeWithText("Se puede deshacer").assertExists()
         rule.onNodeWithText("Borrar el chat en el PC").performScrollTo().performClick()
         rule.waitForIdle()
-        assertEquals(ChatRef(ChatKind.Orbe, "2"), deleted)
+        rule.onNodeWithText("¿Eliminar este chat en el PC?").assertExists()
+        rule.onNodeWithText("La orden la ejecuta el PC. Las tareas y los cambios del chat no se tocan.").assertExists()
+        assertEquals(emptyList<String>(), b.calls)
+        rule.onNodeWithText("Eliminar el chat en el PC").performClick()
+        rule.waitForIdle()
+        assertEquals(listOf("trash conversation:2"), b.calls)
+        rule.onNodeWithText("Chat borrado en el PC").assertExists()
+        rule.onNodeWithText("Deshacer").performClick()
+        rule.waitForIdle()
+        assertEquals(listOf("trash conversation:2", "restore conversation:2"), b.calls)
+    }
+
+    @Test fun cancellingTheDeleteDialogDoesNothing() {
+        val b = FakeChatsBackend(rows).apply { trashAvailable = true }
+        list(b)
+        rule.onNodeWithText("Revisar pasarela").performTouchInput { longClick() }
+        rule.waitForIdle()
+        rule.onNodeWithText("Borrar el chat en el PC").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Cancelar").performClick()
+        rule.waitForIdle()
+        assertEquals(emptyList<String>(), b.calls)
+        rule.onNodeWithText("Revisar pasarela").assertExists()
     }
 
     @Test fun pinFromTheSheetAsksThePc() {
@@ -150,7 +171,7 @@ class ChatScreensTest {
         val prefs = ThemePrefs(MemoryStore())
         rule.setContent {
             OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) {
-                MainShell(b, prefs, ShellActions({}, {}, {}, {}, {}, {}, {}), Dispatchers.Unconfined)
+                MainShell(b, prefs, ShellActions({}, {}, {}, {}, {}, {}), Dispatchers.Unconfined)
             }
         }
         rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("Orb 3.8.4 seguimiento") > 0 }

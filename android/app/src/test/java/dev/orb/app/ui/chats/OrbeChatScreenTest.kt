@@ -139,6 +139,24 @@ class OrbeChatScreenTest {
         rule.onNodeWithText("Volver a Chats").assertIsDisplayed()
     }
 
+    @Test fun a28OffersToAskThePcToRestoreAndCallsIt() {
+        val b = FakeOrbeChatBackend(thread)
+        b.loadResult = refused("Ese chat está en la papelera. Restáuralo para seguir.").map { 0 }
+        screen(b)
+        rule.onNodeWithText("Pedir al PC que lo restaure").assertIsDisplayed()
+        b.loadResult = Result.success(0)
+        rule.onNodeWithText("Pedir al PC que lo restaure").performClick()
+        rule.waitForIdle()
+        assertTrue(b.calls.contains("restore"))
+    }
+
+    @Test fun a28HidesTheRestoreButtonWhenThePcCannot() {
+        val b = FakeOrbeChatBackend(thread).apply { restoreAvailable = false }
+        b.loadResult = refused("Esa conversación ya no existe.").map { 0 }
+        screen(b)
+        assertEquals(0, rule.onAllNodesWithText("Pedir al PC que lo restaure").fetchSemanticsNodes().size)
+    }
+
     @Test fun cristalPaintsTheSameChat() {
         screen(FakeOrbeChatBackend(thread), ThemeChoice.Cristal)
         rule.onNodeWithText("Mensaje para Orbe").assertIsDisplayed()

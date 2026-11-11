@@ -47,6 +47,12 @@ interface DirectChatBackend {
     suspend fun queue(session: String): Result<List<QueuedMsg>>
     suspend fun markRead(session: String): Result<Unit>
 
+    /** Whether the linked PC can run [m]; what it cannot do is not offered. */
+    fun available(m: dev.orb.app.link.api.ApiMethod): Boolean
+
+    /** Asks the PC to bring this chat back from its trash. */
+    suspend fun restore(session: String): Result<Unit>
+
     /** Puts the message in the send queue; [mode] is `steer` or `queue` while the agent works, null otherwise. */
     suspend fun send(session: String, text: String, mode: String?): Result<String>
     suspend fun retry(clientId: String): Boolean
@@ -125,6 +131,9 @@ class RuntimeDirectChatBackend(private val container: AppContainer, private val 
 
     override suspend fun markRead(session: String) =
         api.inbox.markRead(buildJsonObject { put("kind", "session"); put("id", session) }).map { }
+
+    override fun available(m: dev.orb.app.link.api.ApiMethod) = api.available(m)
+    override suspend fun restore(session: String) = api.sessionsRestore(session).map { }
 
     override suspend fun send(session: String, text: String, mode: String?): Result<String> = runCatching {
         val outbox = container.outbox() ?: throw LinkException(LinkError.NotLinked)

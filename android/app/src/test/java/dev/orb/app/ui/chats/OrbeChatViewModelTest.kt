@@ -227,6 +227,26 @@ class OrbeChatViewModelTest {
         assertTrue(vm.state.value.deleted)
     }
 
+    @Test fun aChatInTheTrashShowsA28AndRestoreBringsItBack() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two)
+        b.loadResult = Result.failure(LinkException(LinkError.Refused(400, "Ese chat está en la papelera. Restáuralo para seguir.")))
+        val vm = vm(b)
+        assertTrue(vm.state.value.deleted)
+        assertTrue(vm.state.value.canRestore)
+        b.loadResult = Result.success(0)
+        vm.restore()
+        runCurrent()
+        assertTrue(b.calls.contains("restore"))
+        assertFalse(vm.state.value.deleted)
+    }
+
+    @Test fun withoutTheRestoreMethodA28OffersNoRestore() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two).apply { restoreAvailable = false }
+        b.loadResult = Result.failure(LinkException(LinkError.Refused(400, "Esa conversación ya no existe.")))
+        val vm = vm(b)
+        assertFalse(vm.state.value.canRestore)
+    }
+
     @Test fun stopAndCompactAreRequestsToThePc() = runTest(dispatcher) {
         val b = FakeOrbeChatBackend(two)
         val vm = vm(b)

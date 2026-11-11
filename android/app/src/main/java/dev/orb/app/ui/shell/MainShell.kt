@@ -70,7 +70,6 @@ class ShellActions(
     val onOpenChat: (ChatRef) -> Unit,
     val onSearch: () -> Unit,
     val onNewChat: () -> Unit,
-    val onDelete: (ChatRef) -> Unit,
     val onAppearance: () -> Unit,
     val onLinkTest: () -> Unit,
     val onUnlink: () -> Unit,
@@ -116,7 +115,7 @@ fun MainShell(
                 val label = connectionText(connection)
                 ChatListScreen(
                     vm, ChatsMenu(label, actions.onAppearance, actions.onLinkTest, actions.onUnlink),
-                    onOpenChat = actions.onOpenChat, onSearch = actions.onSearch, onNewChat = actions.onNewChat, onDelete = actions.onDelete,
+                    onOpenChat = actions.onOpenChat, onSearch = actions.onSearch, onNewChat = actions.onNewChat,
                 )
             }
             composable<TasksTab> { Message(ChatTexts.SOON_TASKS, ChatTexts.SOON_HINT) }

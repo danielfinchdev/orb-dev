@@ -3,6 +3,7 @@ package dev.orb.app.ui.chats
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.orb.app.link.api.ApiMethods
 import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.link.net.LinkEvent
 import dev.orb.app.ui.linkErrorText
@@ -35,6 +36,8 @@ data class DirectChatState(
     val loaded: Boolean = false,
     /** The PC says this conversation no longer exists (A28). */
     val deleted: Boolean = false,
+    /** The PC can bring a deleted chat back, so the deleted screen offers it. */
+    val canRestore: Boolean = false,
     val online: Boolean = false,
     val connection: ConnectionState = ConnectionState.Connecting,
     val canLoadMore: Boolean = false,
@@ -196,7 +199,7 @@ class DirectChatViewModel(
         return DirectChatState(
             title = i?.title ?: header?.title ?: ChatTexts.UNTITLED, project = i?.project ?: header?.project, agent = agent, model = i?.model,
             permission = i?.permission, contextPercent = i?.contextPercent, items = items,
-            loaded = fl.loaded || ordered.isNotEmpty() || items.isNotEmpty(), deleted = fl.deleted, online = st.c is ConnectionState.Online,
+            loaded = fl.loaded || ordered.isNotEmpty() || items.isNotEmpty(), deleted = fl.deleted, canRestore = backend.available(ApiMethods.SESSIONS_RESTORE), online = st.c is ConnectionState.Online,
             connection = st.c, canLoadMore = fl.more, loadingOlder = fl.older, loadFailed = fl.failed, busy = busy,
             activity = if (busy) last?.steps?.lastOrNull()?.takeIf { it.running }?.now else null,
             stalled = i?.stalled == true && !busy, limited = i?.limited == true, settled = i?.settled == true,
@@ -285,6 +288,16 @@ class DirectChatViewModel(
                 onFailure = { canLoadMore.value = false; say(it) },
             )
             loadingOlder.value = false
+        }
+    }
+
+    /** A28: asks the PC to bring the chat back; the thread is read again once it does. */
+    fun restore() {
+        viewModelScope.launch {
+            backend.restore(session).fold(
+                onSuccess = { deleted.value = false; reloads.trySend(Unit) },
+                onFailure = { _messages.trySend("${ChatTexts.RESTORE_FAILED}. ${linkErrorText(it)}") },
+            )
         }
     }
 

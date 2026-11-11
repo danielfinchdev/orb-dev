@@ -168,4 +168,63 @@ class ChatListViewModelTest {
         assertTrue(vm.state.value.loadFailed)
         assertFalse(vm.state.value.loaded)
     }
+
+    @OptIn(dev.orb.app.link.api.UserConfirmation::class)
+    private fun token(r: ChatRow) = dev.orb.app.link.api.Confirmed(
+        if (r.kind == ChatKind.Orbe) dev.orb.app.link.api.ConfirmAction.TrashConversation else dev.orb.app.link.api.ConfirmAction.TrashSession, r.id,
+    )
+
+    @Test fun deletingTrashesOnThePcHidesTheRowAndOffersUndo() = runTest(dispatcher) {
+        val b = FakeChatsBackend(listOf(row("1"), row("s1", kind = ChatKind.Agent, agent = "claude"))).apply { trashAvailable = true }
+        val vm = vm(b)
+        val offers = ArrayList<ChatRef>()
+        backgroundScope.launch { vm.undoOffers.collect { offers += it } }
+        val direct = vm.rows().first { it.direct }
+        vm.delete(direct, token(direct))
+        runCurrent()
+        assertEquals(listOf("trash session:s1"), b.calls)
+        assertEquals(dev.orb.app.link.api.ConfirmAction.TrashSession, b.tokens.single().action)
+        assertEquals("s1", b.tokens.single().target)
+        assertEquals(listOf("conversation:1"), vm.rows().map { it.key })
+        assertEquals(listOf(direct.ref), offers)
+    }
+
+    @Test fun undoRestoresTheChatAndTheRowComesBack() = runTest(dispatcher) {
+        val b = FakeChatsBackend(listOf(row("1"), row("2"))).apply { trashAvailable = true }
+        val vm = vm(b)
+        val gone = vm.rows().first { it.id == "2" }
+        vm.delete(gone, token(gone))
+        runCurrent()
+        assertEquals(1, vm.rows().size)
+        vm.undoDelete(gone.ref)
+        runCurrent()
+        assertEquals(listOf("trash conversation:2", "restore conversation:2"), b.calls)
+        assertEquals(2, vm.rows().size)
+    }
+
+    @Test fun aRefusedTrashBringsTheRowBackWithAMessage() = runTest(dispatcher) {
+        val b = FakeChatsBackend(listOf(row("1"))).apply { trashAvailable = true; trashResult = Result.failure(LinkException(LinkError.Timeout)) }
+        val vm = vm(b)
+        val said = ArrayList<String>()
+        val offers = ArrayList<ChatRef>()
+        backgroundScope.launch { vm.messages.collect { said += it } }
+        backgroundScope.launch { vm.undoOffers.collect { offers += it } }
+        val r = vm.rows().single()
+        vm.delete(r, token(r))
+        runCurrent()
+        assertEquals(1, vm.rows().size)
+        assertTrue(said.single().startsWith("No se pudo borrar el chat en el PC"))
+        assertTrue(offers.isEmpty())
+    }
+
+    @Test fun deletingWithoutTheLinkAsksNothing() = runTest(dispatcher) {
+        val b = FakeChatsBackend(listOf(row("1"))).apply { trashAvailable = true }
+        b.connectionState.value = ConnectionState.Offline(null, null)
+        val vm = vm(b)
+        val r = vm.rows().single()
+        vm.delete(r, token(r))
+        runCurrent()
+        assertTrue(b.calls.isEmpty())
+        assertEquals(1, vm.rows().size)
+    }
 }

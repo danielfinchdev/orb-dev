@@ -106,7 +106,7 @@ private fun LetterCircle(text: String, color: Color) {
 
 // Orbe has no picture in the app: a soft orb in the primary colour.
 @Composable
-private fun OrbeCircle() {
+internal fun OrbeCircle() {
     val primary = MaterialTheme.colorScheme.primary
     val soft = MaterialTheme.colorScheme.primaryContainer
     Box(

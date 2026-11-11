@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.orb.app.link.api.ApiMethods
+import dev.orb.app.link.api.Confirmed
 import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.link.net.LinkEvent
 import dev.orb.app.ui.linkErrorText
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -121,6 +123,9 @@ class ChatListViewModel(
     private val filter = MutableStateFlow(ChatFilter.All)
     private val status = MutableStateFlow(Status())
     private val reloads = Channel<Unit>(Channel.CONFLATED)
+    // Chats the person deleted: gone from the list at once, whatever the cache still says until the PC confirms.
+    private val hidden = MutableStateFlow<Set<String>>(emptySet())
+    private val _undo = Channel<ChatRef>(Channel.BUFFERED)
     private val _messages = Channel<String>(Channel.BUFFERED)
 
     private data class Status(val refreshing: Boolean = false, val failed: Boolean = false, val answered: Boolean = false)
@@ -128,9 +133,12 @@ class ChatListViewModel(
     /** Short messages for a snackbar (an action the PC did not do). */
     val messages = _messages.receiveAsFlow()
 
-    private val data = combine(backend.inbox(), patches) { inbox, p ->
-        if (p.isEmpty()) inbox
-        else inbox.copy(rows = inbox.rows.map { r -> p[r.key]?.apply?.invoke(r) ?: r })
+    /** A chat was deleted on the PC and can still be brought back: the screen shows «Deshacer» for it. */
+    val undoOffers = _undo.receiveAsFlow()
+
+    private val data = combine(backend.inbox(), patches, hidden) { inbox, p, gone ->
+        if (p.isEmpty() && gone.isEmpty()) inbox
+        else inbox.copy(rows = inbox.rows.filter { it.key !in gone }.map { r -> p[r.key]?.apply?.invoke(r) ?: r })
     }
 
     val state: StateFlow<ChatListState> = combine(data, filter, backend.connection, status) { inbox, f, c, st ->
@@ -173,6 +181,9 @@ class ChatListViewModel(
 
     fun canDelete(kind: ChatKind) = backend.available(if (kind == ChatKind.Orbe) ApiMethods.CONVERSATIONS_TRASH else ApiMethods.SESSIONS_TRASH)
 
+    /** Deleting needs the PC to offer the trash; it is also the PC that can bring the chat back. */
+    fun canUndoDelete(kind: ChatKind) = backend.available(if (kind == ChatKind.Orbe) ApiMethods.CONVERSATIONS_RESTORE else ApiMethods.SESSIONS_RESTORE)
+
     fun togglePin(row: ChatRow) = act(row.ref, { it.copy(pinned = !row.pinned, pinOrder = null) }) { backend.pin(row.ref, !row.pinned) }
     fun markRead(row: ChatRow) = act(row.ref, { it.copy(unread = 0) }) { backend.markRead(row.ref) }
     fun toggleMute(row: ChatRow) = act(row.ref, { it.copy(muted = !row.muted) }) { backend.mute(row.ref, !row.muted) }
@@ -202,6 +213,43 @@ class ChatListViewModel(
         if (n.isEmpty()) return
         act(row.ref, { it }) {
             backend.createSection(n).fold(onSuccess = { id -> backend.moveToSection(row.ref, id) }, onFailure = { Result.failure(it) })
+        }
+    }
+
+    /**
+     * [confirmed] comes from the dialog the person accepted. The row leaves the list at once; if the PC refuses or cannot
+     * be reached it comes back.
+     */
+    fun delete(row: ChatRow, confirmed: Confirmed) {
+        if (backend.connection.value !is ConnectionState.Online) {
+            _messages.trySend(ChatTexts.ACTION_OFFLINE)
+            return
+        }
+        hidden.update { it + row.key }
+        viewModelScope.launch {
+            backend.trash(row.ref, confirmed).fold(
+                onSuccess = {
+                    if (canUndoDelete(row.kind)) _undo.trySend(row.ref) else _messages.trySend(ChatTexts.DELETED_SNACK)
+                    reload()
+                    // Once the list no longer holds the chat there is nothing left to hide (a restore elsewhere shows it again).
+                    val present = backend.inbox().first().rows.mapTo(HashSet()) { it.key }
+                    hidden.update { gone -> gone.filterTo(HashSet()) { it in present } }
+                },
+                onFailure = {
+                    hidden.update { it - row.key }
+                    _messages.trySend("${ChatTexts.DELETE_FAILED}. ${linkErrorText(it)}")
+                },
+            )
+        }
+    }
+
+    /** «Deshacer»: the PC brings the chat back and the list reads it again. */
+    fun undoDelete(ref: ChatRef) {
+        viewModelScope.launch {
+            backend.restore(ref).fold(
+                onSuccess = { hidden.update { it - ref.key }; reload() },
+                onFailure = { _messages.trySend("${ChatTexts.RESTORE_FAILED}. ${linkErrorText(it)}") },
+            )
         }
     }
 

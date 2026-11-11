@@ -58,6 +58,8 @@ data class OrbeChatState(
     val loaded: Boolean = false,
     /** The PC says this conversation no longer exists. */
     val deleted: Boolean = false,
+    /** The PC can bring a deleted chat back, so the deleted screen offers it. */
+    val canRestore: Boolean = false,
     val online: Boolean = false,
     val connection: ConnectionState = ConnectionState.Connecting,
     val canLoadMore: Boolean = false,
@@ -199,7 +201,7 @@ class OrbeChatViewModel(
         val online = st.c is ConnectionState.Online
         return OrbeChatState(
             title = header?.title ?: ChatTexts.UNTITLED, project = header?.project, items = items,
-            loaded = fl.loaded || real.isNotEmpty() || items.isNotEmpty(), deleted = fl.deleted, online = online, connection = st.c,
+            loaded = fl.loaded || real.isNotEmpty() || items.isNotEmpty(), deleted = fl.deleted, canRestore = backend.available(ApiMethods.CONVERSATIONS_RESTORE), online = online, connection = st.c,
             canLoadMore = fl.more, loadingOlder = fl.older, loadFailed = fl.failed, mode = st.mode,
             canSetMode = backend.available(ApiMethods.PERMISSIONS_SET_MODE), canCompact = backend.available(ApiMethods.CHAT_COMPACT),
             busyCards = st.busy, taskStatus = st.tasks, approval = st.approval,
@@ -298,6 +300,16 @@ class OrbeChatViewModel(
     fun discard(clientId: String) {
         seenPending.remove(clientId)
         viewModelScope.launch { backend.discard(clientId) }
+    }
+
+    /** A28: asks the PC to bring the chat back; the thread is read again once it does. */
+    fun restore() {
+        viewModelScope.launch {
+            backend.restore(conversation).fold(
+                onSuccess = { deleted.value = false; reloads.trySend(Unit) },
+                onFailure = { _messages.trySend("${ChatTexts.RESTORE_FAILED}. ${linkErrorText(it)}") },
+            )
+        }
     }
 
     fun stop() { viewModelScope.launch { backend.stop(conversation).onFailure { say(it) } } }

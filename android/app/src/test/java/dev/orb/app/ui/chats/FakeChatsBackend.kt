@@ -45,7 +45,7 @@ class FakeChatsBackend(initial: List<ChatRow> = emptyList(), sections: List<Chat
 
     override suspend fun refreshInbox(): Result<Unit> { refreshCount++; return refreshResult }
     override suspend fun appState() = appStateResult
-    override fun available(m: ApiMethod) = trashAvailable || (m != ApiMethods.CONVERSATIONS_TRASH && m != ApiMethods.SESSIONS_TRASH)
+    override fun available(m: ApiMethod) = trashAvailable || m !in setOf(ApiMethods.CONVERSATIONS_TRASH, ApiMethods.SESSIONS_TRASH, ApiMethods.CONVERSATIONS_RESTORE, ApiMethods.SESSIONS_RESTORE)
 
     private fun act(name: String): Result<Unit> { calls += name; if (actionResult.isSuccess) afterAction?.invoke(); return actionResult }
     override suspend fun pin(ref: ChatRef, pinned: Boolean) = act("pin ${ref.key} $pinned")
@@ -58,6 +58,15 @@ class FakeChatsBackend(initial: List<ChatRow> = emptyList(), sections: List<Chat
     override suspend fun createSection(name: String): Result<Long> = act("createSection $name").map { 99L }
     override suspend fun renameSection(id: Long, name: String) = act("renameSection $id $name")
     override suspend fun deleteSection(id: Long) = act("deleteSection $id")
+    var trashResult: Result<Unit> = Result.success(Unit)
+    var restoreResult: Result<Unit> = Result.success(Unit)
+    val tokens = ArrayList<dev.orb.app.link.api.Confirmed>()
+    override suspend fun trash(ref: ChatRef, confirmed: dev.orb.app.link.api.Confirmed): Result<Unit> {
+        calls += "trash ${ref.key}"; tokens += confirmed
+        if (trashResult.isSuccess) afterAction?.invoke()
+        return trashResult
+    }
+    override suspend fun restore(ref: ChatRef): Result<Unit> { calls += "restore ${ref.key}"; if (restoreResult.isSuccess) afterAction?.invoke(); return restoreResult }
 
     override suspend fun search(q: String): Result<SearchResults> {
         searches += q

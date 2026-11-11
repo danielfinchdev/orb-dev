@@ -67,6 +67,10 @@ class FakeDirectChatBackend(initial: List<String> = emptyList()) : DirectChatBac
     override suspend fun approvals(session: String) = Result.success(approvalsOnPc)
     override suspend fun queue(session: String) = Result.success(queueOnPc)
     override suspend fun markRead(session: String): Result<Unit> { calls += "read"; return Result.success(Unit) }
+    var restoreAvailable = true
+    var restoreResult: Result<Unit> = Result.success(Unit)
+    override fun available(m: dev.orb.app.link.api.ApiMethod) = restoreAvailable
+    override suspend fun restore(session: String): Result<Unit> { calls += "restore"; return restoreResult }
 
     var sendCount = 0
     override suspend fun send(session: String, text: String, mode: String?): Result<String> {

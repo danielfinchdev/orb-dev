@@ -98,7 +98,7 @@ fun OrbeChatScreen(
             AnimatedVisibility(!state.online && state.loaded && !state.deleted, enter = fadeIn() + slideInVertically { -it / 2 }, exit = fadeOut()) { OfflineBanner() }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
-                    state.deleted -> DeletedChat(onBack)
+                    state.deleted -> DeletedChat(onBack, if (state.canRestore) vm::restore else null)
                     !state.loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                     else -> MessageList(vm, state, liveInfo, actions, nowMs, stick, onStick = { stick = it })
                 }
@@ -158,7 +158,7 @@ private fun OfflineBanner() {
 
 /** A28: the PC says the conversation is gone. */
 @Composable
-private fun DeletedChat(onBack: () -> Unit) {
+private fun DeletedChat(onBack: () -> Unit, onRestore: (() -> Unit)?) {
     Column(
         Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -166,7 +166,9 @@ private fun DeletedChat(onBack: () -> Unit) {
         Icon(OrbIcons.Trash, null, Modifier.size(40.dp), tint = OrbTheme.colors.text3)
         Text(ChatTexts.DELETED_TITLE, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
         Text(ChatTexts.DELETED_BODY, color = OrbTheme.colors.text2, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
-        Button(onClick = onBack) { Text(ChatTexts.BACK_TO_CHATS) }
+        if (onRestore != null) Button(onClick = onRestore) { Text(ChatTexts.RESTORE_ASK) }
+        if (onRestore != null) androidx.compose.material3.TextButton(onClick = onBack) { Text(ChatTexts.BACK_TO_CHATS) }
+        else Button(onClick = onBack) { Text(ChatTexts.BACK_TO_CHATS) }
     }
 }
 

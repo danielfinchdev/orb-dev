@@ -83,6 +83,12 @@ interface ChatsBackend {
     suspend fun renameSection(id: Long, name: String): Result<Unit>
     suspend fun deleteSection(id: Long): Result<Unit>
 
+    /** Asks the PC to move the chat to its trash; [confirmed] exists only after the person agreed in the dialog. */
+    suspend fun trash(ref: ChatRef, confirmed: dev.orb.app.link.api.Confirmed): Result<Unit>
+
+    /** Asks the PC to bring a trashed chat back. */
+    suspend fun restore(ref: ChatRef): Result<Unit>
+
     /** Search on the PC; [q] has at least 2 characters. */
     suspend fun search(q: String): Result<SearchResults>
 
@@ -164,6 +170,12 @@ class RuntimeChatsBackend(private val container: AppContainer, private val runti
         api.inbox.sectionsRename(buildJsonObject { put("id", id); put("name", name) }).unit()
 
     override suspend fun deleteSection(id: Long) = api.inbox.sectionsDelete(buildJsonObject { put("id", id) }).unit()
+
+    override suspend fun trash(ref: ChatRef, confirmed: dev.orb.app.link.api.Confirmed): Result<Unit> =
+        (if (ref.kind == ChatKind.Orbe) api.conversationsTrash(ref.id, confirmed) else api.sessionsTrash(ref.id, confirmed)).map { }
+
+    override suspend fun restore(ref: ChatRef): Result<Unit> =
+        (if (ref.kind == ChatKind.Orbe) api.conversationsRestore(ref.id) else api.sessionsRestore(ref.id)).unit()
 
     override suspend fun search(q: String): Result<SearchResults> = coroutineScope {
         val chats = async { api.inbox.search(buildJsonObject { put("q", q); put("zone", ZONE) }) }
