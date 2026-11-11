@@ -10,3 +10,6 @@
 -dontwarn okhttp3.internal.platform.**
 -dontwarn org.conscrypt.**
 -dontwarn org.openjsse.**
+
+# SQLCipher's JNI layer calls these classes by name.
+-keep class net.zetetic.database.** { *; }

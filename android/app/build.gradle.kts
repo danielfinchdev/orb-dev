@@ -2,6 +2,13 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
+}
+
+room {
+    // Committed so a schema change always comes with its migration.
+    schemaDirectory("$projectDir/schemas")
 }
 
 android {
@@ -15,9 +22,14 @@ android {
         targetSdk = 36
         versionCode = 3008004
         versionName = "3.8.4"
+        // The only native code is SQLCipher: arm64 for phones, x86_64 for the emulator (debug only).
+        ndk { abiFilters += "arm64-v8a" }
     }
 
     buildTypes {
+        debug {
+            ndk { abiFilters += "x86_64" }
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -29,6 +41,11 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    testOptions {
+        // The Room tests build a database on the JVM; the android.jar stubs must not throw for the Context they pass.
+        unitTests.isReturnDefaultValues = true
     }
 
     buildFeatures {
@@ -53,6 +70,14 @@ dependencies {
     // Only org.bouncycastle.crypto.generators.SCrypt is used (Android has no scrypt); R8 strips the rest of the library.
     implementation(libs.bouncycastle.bcprov)
 
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
+    implementation(libs.androidx.sqlite)
+    // Whole-database encryption; wired into Room through its SupportSQLite open helper factory.
+    implementation(libs.sqlcipher.android)
+
+    testImplementation(libs.androidx.sqlite.bundled)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
