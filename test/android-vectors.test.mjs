@@ -13,7 +13,7 @@ test('the committed Android vectors match the PC code', () => {
   try {
     const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
     execFileSync(process.execPath, [path.join(ROOT, 'scripts/android-vectors.mjs'), tmp], { env, stdio: 'pipe' });
-    for (const f of ['crypto.json', 'link-payload.json']) {
+    for (const f of ['crypto.json', 'link-payload.json', 'remote-methods.json']) {
       const committed = fs.readFileSync(path.join(ROOT, 'android/app/src/test/resources/vectors', f), 'utf8');
       assert.equal(fs.readFileSync(path.join(tmp, f), 'utf8'), committed, `${f} is stale: run npm run android:vectors`);
     }

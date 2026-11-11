@@ -281,4 +281,8 @@ fs.mkdirSync(out, { recursive: true });
 const write = (name, data) => fs.writeFileSync(path.join(out, name), `${JSON.stringify(data, null, 2)}\n`);
 write('crypto.json', await buildCrypto());
 write('link-payload.json', buildLink());
+// The methods a linked phone may call (src/domain/security/permissions.mjs): the client's contract test checks every
+// method its API wrapper calls against this list, so a wrapper can never name a method the PC would refuse.
+const { REMOTE_METHODS } = await import('../src/domain/security/permissions.mjs');
+write('remote-methods.json', { generatedBy: GENERATED_BY, source: sha('src/domain/security/permissions.mjs'), methods: [...REMOTE_METHODS].sort() });
 console.log(`vectors written to ${out}`);
