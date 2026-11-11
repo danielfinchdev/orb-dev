@@ -60,42 +60,46 @@ html.window-idle .skp-deco { animation-play-state: paused; }
 .dark .skp-cloud { background: radial-gradient(closest-side, rgb(160 170 255 / 0.22), rgb(160 170 255 / 0.06) 60%, transparent); }
 .skp-cloud.a { left: 40%; top: 20%; } .skp-cloud.b { left: 66%; top: 58%; width: 40px; }
 
-/* ================================================================ VAPORWAVE: by day a sticker sheet of old computers
-   on mint grid paper, Windows-95 panels in pastel with a hard pink shadow; by night the synthwave sunset, neon magenta
-   edges on deep purple. Space Grotesk, titles Orbitron. */
-.skp[data-skin-preview="vaporwave"] { --p-font: "Space Grotesk Variable", "Segoe UI", system-ui, sans-serif; --p-title: "Orbitron Variable", var(--p-font); --p-r: 2px;
-  --p-ink: #1f1838; --p-hi: rgb(255 255 255 / 0.95); --p-lo: rgb(70 50 110 / 0.5); --p-hard: #ff8fd0; --p-strip: linear-gradient(90deg, #cdbcff, #ffb6dc 50%, #ffd4b0);
-  --p-bg: #cde9e0; --p-fg: oklch(0.24 0.06 300); --p-side: oklch(0.93 0.008 300); --p-card: oklch(0.975 0.006 300); --p-border: oklch(0.72 0.03 300); --p-primary: oklch(0.5 0.22 345);
-  --p-accent: oklch(0.9 0.06 300); --p-accent-fg: oklch(0.33 0.12 300); --p-bubble: linear-gradient(135deg, oklch(0.53 0.23 345), oklch(0.48 0.2 300)); --p-bubble-fg: #fff;
-  --p-scene: linear-gradient(rgb(255 255 255 / 0.32) 1px, transparent 1px) 0 0 / 8px 8px, linear-gradient(90deg, rgb(255 255 255 / 0.32) 1px, transparent 1px) 0 0 / 8px 8px, linear-gradient(170deg, #d2ece4, #c3e6dc);
-  --p-glass: rgb(248 246 251 / 0.78); --p-side-line: transparent; --p-side-shadow: inset -2px 0 0 var(--p-lo), inset -3px 0 0 var(--p-hi);
-  --p-new-line: var(--p-lo); --p-card-shadow: inset 1px 1px 0 var(--p-hi), inset -1px -1px 0 var(--p-lo), 2px 2px 0 var(--p-ink);
-  --p-on-shadow: inset 1px 1px 0 var(--p-lo), inset -1px -1px 0 var(--p-hi);
-  --p-box-line: var(--p-lo); --p-box-shadow: inset 1px 1px 0 var(--p-hi), inset -1px -1px 0 var(--p-lo), 3px 3px 0 var(--p-hard);
-  --p-bar: linear-gradient(to bottom, rgb(255 255 255 / 0.6) 0 1px, rgb(255 255 255 / 0.2) 1px, transparent 60%); --p-bar-line: transparent; --p-frost: rgb(205 233 224 / 0.2); }
-.skp[data-skin-preview="vaporwave"] .skp-mark { font-weight: 800; letter-spacing: 0.08em; padding-bottom: 1px; border-bottom: 1px solid var(--p-primary); }
-.skp[data-skin-preview="vaporwave"] .skp-mark i { width: 1.5px; height: 1.5px; margin: 0 1px; }
-.skp[data-skin-preview="vaporwave"] .skp-mark em { color: var(--p-primary); }
+/* ================================================================ VAPORWAVE: by day Windows 95 in pastel (lavender faces, a
+   violet → pink title strip, bevels) over a sunset with a striped sun and a grid ground; by night the synthwave sunset
+   with neon edges on dark glass. Space Grotesk, titles Tiny5 / Orbitron. */
+.skp[data-skin-preview="vaporwave"] { --p-font: "Space Grotesk Variable", "Segoe UI", system-ui, sans-serif; --p-title: "Silkscreen", var(--p-font); --p-r: 0px;
+  --p-hi: #fff; --p-sh: oklch(0.6 0.06 300); --p-dk: oklch(0.27 0.07 300);
+  --p-strip: linear-gradient(90deg, oklch(0.36 0.15 285), oklch(0.47 0.19 325) 48%, oklch(0.8 0.1 350));
+  --p-bg: oklch(0.9 0.045 320); --p-fg: oklch(0.22 0.06 300); --p-side: oklch(0.885 0.028 300); --p-card: oklch(0.885 0.028 300); --p-border: oklch(0.66 0.05 300); --p-primary: oklch(0.5 0.21 345);
+  --p-accent: oklch(0.36 0.15 285); --p-accent-fg: #fff; --p-bubble: oklch(0.9 0.07 345); --p-bubble-fg: oklch(0.22 0.06 300); --p-bubble-line: var(--p-dk);
+  --p-scene: linear-gradient(180deg, oklch(0.9 0.07 340) 0%, oklch(0.86 0.08 305) 34%, oklch(0.84 0.08 265) 54%, oklch(0.83 0.11 350) 66%, oklch(0.87 0.1 40) 72%, oklch(0.9 0.06 330) 72%, oklch(0.93 0.04 310) 100%);
+  --p-sun: linear-gradient(180deg, oklch(0.95 0.13 100), oklch(0.82 0.13 40) 55%, oklch(0.7 0.2 350)); --p-grid: oklch(0.58 0.22 345 / 0.8);
+  --p-glass: transparent; --p-side-line: var(--p-dk); --p-side-shadow: inset 1px 1px 0 var(--p-hi), inset -1px -1px 0 var(--p-sh);
+  --p-new: oklch(0.5 0.21 345); --p-new-line: var(--p-dk); --p-card-shadow: inset 1px 1px 0 var(--p-hi), inset -1px -1px 0 var(--p-sh);
+  --p-on-shadow: none;
+  --p-box: var(--p-card); --p-box-line: var(--p-dk); --p-box-shadow: inset 1px 1px 0 var(--p-hi), inset -1px -1px 0 var(--p-sh), 2px 2px 0 oklch(0.55 0.15 330 / 0.35);
+  --p-bar: var(--p-strip); --p-bar-line: var(--p-dk); --p-frost: transparent; }
+.skp[data-skin-preview="vaporwave"] .skp-mark { letter-spacing: 0.1em; font-weight: 400; }
+.skp[data-skin-preview="vaporwave"] .skp-mark i { width: 2px; height: 2px; margin: 0 1.5px; border-radius: 0; transform: rotate(45deg); }
+.skp[data-skin-preview="vaporwave"] .skp-side { padding-top: 0; }
+.skp[data-skin-preview="vaporwave"] .skp-mark { margin: 0 -5px 2px; padding: 2px 5px; width: auto; max-width: none; background: var(--p-strip); color: #fff; }
+.skp[data-skin-preview="vaporwave"] .skp-mark em { color: inherit; }
+.skp[data-skin-preview="vaporwave"] .skp-bar { color: #fff; }
+.skp[data-skin-preview="vaporwave"] .skp-bot { background: oklch(0.995 0.004 300); border-color: var(--p-dk); box-shadow: inset 1px 1px 0 var(--p-hi), inset -1px -1px 0 var(--p-sh); color: var(--p-fg); }
 .skp[data-skin-preview="vaporwave"] .skp-box::before { display: block; }
-.skp-vw-floppy { right: 5px; top: 19px; width: 13px; --r: 10deg; }
-.skp-vw-sparkle { left: calc(31% + 6px); bottom: 30px; width: 8px; --r: 15deg; }
-.skp-vw-smiley { right: 22px; bottom: 29px; width: 11px; --r: -8deg; }
-.skp[data-skin-preview="vaporwave"] .skp-deco.day { filter: drop-shadow(1.5px 1.5px 0 var(--p-ink)); }
-.dark .skp[data-skin-preview="vaporwave"] { --p-ink: #ff4fc8; --p-bg: #0b0222; --p-fg: oklch(0.95 0.02 320); --p-side: oklch(0.15 0.045 288); --p-card: oklch(0.21 0.06 292); --p-border: oklch(0.34 0.08 295); --p-primary: oklch(0.74 0.19 350);
-  --p-accent: oklch(0.3 0.08 285); --p-accent-fg: oklch(0.88 0.1 200); --p-bubble: linear-gradient(135deg, oklch(0.5 0.2 345), oklch(0.45 0.19 295));
+.dark .skp[data-skin-preview="vaporwave"] { --p-ink: #ff4fc8; --p-bg: #0b0222; --p-fg: oklch(0.96 0.02 320); --p-side: oklch(0.16 0.05 290); --p-card: oklch(0.19 0.06 292); --p-border: oklch(0.38 0.1 300); --p-primary: oklch(0.75 0.19 350);
+  --p-strip: linear-gradient(90deg, oklch(0.25 0.12 330), oklch(0.2 0.09 295) 55%, oklch(0.24 0.1 240));
+  --p-accent: oklch(0.32 0.13 330); --p-accent-fg: oklch(0.98 0.01 330); --p-bubble: linear-gradient(135deg, oklch(0.42 0.14 340), oklch(0.34 0.12 300)); --p-bubble-fg: oklch(0.97 0.012 330); --p-bubble-line: oklch(0.72 0.24 345);
   --p-scene: linear-gradient(to bottom, #0b0222 0%, #1f0747 30%, #4a1270 50%, #a0287c 62%, #ff6a4d 70%, #ffb03d 72%, #12052a 72%, #0b0222 100%);
-  --p-glass: oklch(0.21 0.06 292 / 0.72); --p-glass-line: oklch(0.74 0.19 350 / 0.25); --p-side-line: oklch(0.5 0.15 340 / 0.5); --p-side-shadow: none;
-  --p-side-art: linear-gradient(180deg, transparent 45%, rgb(170 60 140 / 0.3) 100%), linear-gradient(rgb(255 120 220 / 0.08) 1px, transparent 1px) 0 0 / 7px 7px, linear-gradient(90deg, rgb(255 120 220 / 0.08) 1px, transparent 1px) 0 0 / 7px 7px;
-  --p-new-line: oklch(0.74 0.19 350 / 0.5); --p-card-shadow: 0 0 6px -2px oklch(0.74 0.19 350 / 0.7); --p-on-shadow: inset 2px 0 0 var(--p-primary);
-  --p-box-line: transparent; --p-box: linear-gradient(oklch(0.21 0.06 292 / 0.9), oklch(0.21 0.06 292 / 0.9)) padding-box, linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe) border-box; --p-box-shadow: 0 0 8px -2px rgb(255 79 200 / 0.6);
-  --p-bar: linear-gradient(to bottom, rgb(255 255 255 / 0.06), transparent 60%); --p-frost: rgb(23 10 46 / 0.28); }
+  --p-sun: linear-gradient(180deg, oklch(0.93 0.16 95), oklch(0.75 0.19 30) 50%, oklch(0.65 0.26 350)); --p-grid: oklch(0.78 0.25 345 / 0.95);
+  --p-side-line: oklch(0.38 0.1 300); --p-side-shadow: none; --p-new: oklch(0.75 0.19 350); --p-new-line: oklch(0.72 0.24 345); --p-card-shadow: 0 0 6px -2px oklch(0.72 0.24 345 / 0.7); --p-on-shadow: inset 0 0 0 1px oklch(0.72 0.24 345);
+  --p-box: oklch(0.17 0.055 290); --p-box-line: oklch(0.72 0.24 345); --p-box-shadow: 0 0 8px -2px oklch(0.72 0.24 345 / 0.7);
+  --p-bar-line: oklch(0.72 0.24 345); --p-frost: transparent; }
+.dark .skp[data-skin-preview="vaporwave"] .skp-bot { background: oklch(0.15 0.05 290 / 0.97); border-color: oklch(0.82 0.14 205); box-shadow: 0 0 6px -2px oklch(0.8 0.14 205 / 0.7); }
+.dark .skp[data-skin-preview="vaporwave"] .skp-bar { color: oklch(0.96 0.03 210); }
 .skp-vw-stars { inset: 0 0 35% 0; background: radial-gradient(circle, rgb(255 240 250 / 0.9) 0 0.6px, transparent 1px) 0 0 / 14px 11px, radial-gradient(circle, rgb(255 240 250 / 0.7) 0 0.5px, transparent 0.9px) 5px 6px / 23px 17px; }
 .skp-vw-glow { left: 50%; bottom: 28%; width: 70px; aspect-ratio: 1; translate: -50% 50%; border-radius: 50%; background: radial-gradient(closest-side, rgb(255 150 90 / 0.55), rgb(255 80 160 / 0.25) 45%, transparent 70%); }
-.skp-vw-sun { left: 50%; bottom: 28%; width: 36px; aspect-ratio: 1; translate: -50% 50%; border-radius: 50%; opacity: 0.85; background: linear-gradient(to bottom, #fff3a0 0%, #ffd23f 30%, #ff8a2a 62%, #ff3f8e 100%);
-  mask-image: linear-gradient(to bottom, #000 0 48%, transparent 48% 52%, #000 52% 60%, transparent 60% 65%, #000 65% 72%, transparent 72% 78%, #000 78% 84%, transparent 84% 91%, #000 91%); }
+.skp-vw-sun { left: 50%; bottom: 28%; width: 36px; aspect-ratio: 1; translate: -50% 0; border-radius: 50%; background: var(--p-sun);
+  mask-image: linear-gradient(to bottom, #000 0 52%, transparent 52% 56%, #000 56% 64%, transparent 64% 69%, #000 69% 77%, transparent 77% 83%, #000 83% 91%, transparent 91% 95%, #000 95%); }
 .skp-vw-mount { left: -4%; right: -4%; bottom: 27%; height: 18%; background: rgb(26 6 48 / 0.95); clip-path: polygon(0 100%, 6% 55%, 14% 72%, 22% 38%, 31% 66%, 40% 48%, 49% 78%, 57% 40%, 65% 68%, 74% 32%, 83% 64%, 92% 46%, 100% 100%); }
 .skp-vw-floor { left: -50%; right: -50%; bottom: -8%; height: 36%; transform-origin: 50% 0; transform: perspective(60px) rotateX(60deg);
-  background: linear-gradient(rgb(255 79 200 / 0.8) 1px, transparent 1px) 0 0 / 11px 11px, linear-gradient(90deg, rgb(255 79 200 / 0.8) 1px, transparent 1px) 0 0 / 11px 11px; mask-image: linear-gradient(to bottom, transparent, #000 35%); }
+  background: linear-gradient(var(--p-grid) 1px, transparent 1px) 0 0 / 11px 11px, linear-gradient(90deg, var(--p-grid) 1px, transparent 1px) 0 0 / 11px 11px; mask-image: linear-gradient(to bottom, transparent, #000 35%); }
 
 /* ================================================================ RETRO: the seventies by day (orange page, peach
    panels, black outlines with hard orange shadows, chevrons and flat shapes), the arcade by night (black, rainbow

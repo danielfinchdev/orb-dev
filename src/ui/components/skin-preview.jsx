@@ -1,7 +1,7 @@
 // the thumbnail of each visual theme in Ajustes › Apariencia › Tema. A tiny window drawn with CSS and inline SVG
 // (skin-preview.css): the sidebar with the theme's wordmark, the «new chat» button and three menu lines, the top bar
 // with the window's buttons, the assistant's message, the user's bubble and the message box, over the theme's own
-// backdrop and decorations (the stickers and the sunset of vaporwave, the chevrons and the invaders of retro, the sweets
+// backdrop and decorations (the sunset, striped sun and grid of vaporwave, the chevrons and the invaders of retro, the sweets
 // of candy, the robot's sky of orb, nothing in profesional). Every colour, font and shape comes from the theme being
 // shown, never from the active one, and it follows the light / dark mode of the moment. Decorative only: the button's
 // label names the theme.
@@ -19,12 +19,9 @@ const Pixels = ({ rows, color, className }) => (
   </svg>
 );
 
-const INK = { stroke: '#1f1838', strokeWidth: 8, strokeLinejoin: 'round', strokeLinecap: 'round' };
 const VaporwaveDay = () => (
   <>
-    <svg viewBox="0 0 100 100" className="skp-deco skp-vw-floppy day" aria-hidden="true"><path d="M12 8h66l10 10v74H12z" fill="#ff9fd0" {...INK} /><rect x="30" y="8" width="40" height="28" fill="#c9b8ff" {...INK} /><rect x="24" y="56" width="52" height="30" rx="3" fill="#fff" {...INK} /></svg>
-    <svg viewBox="0 0 100 100" className="skp-deco skp-vw-sparkle day" aria-hidden="true"><path d="M50 4l10 36 36 10-36 10-10 36-10-36L4 50l36-10z" fill="#fff" {...INK} /></svg>
-    <svg viewBox="0 0 100 100" className="skp-deco skp-vw-smiley day" aria-hidden="true"><circle cx="50" cy="50" r="42" fill="#ffe066" {...INK} /><ellipse cx="36" cy="42" rx="6" ry="9" fill="#1f1838" /><ellipse cx="64" cy="42" rx="6" ry="9" fill="#1f1838" /><path d="M28 60c8 14 36 14 44 0z" fill="#fff" {...INK} /></svg>
+    <i className="skp-vw-glow day" /><i className="skp-vw-sun day" /><i className="skp-vw-floor day" />
   </>
 );
 const VaporwaveNight = () => (
