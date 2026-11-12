@@ -26,9 +26,9 @@ import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.theme.OrbTheme
 
 /**
- * What the menu shows. An entry whose PC method is not listed is not offered at all. Pizarra is a web view that comes
- * with its own step; until then it is left out rather than shown as «próximamente». Juegos (a local web view) and
- * Tutoriales (native) work without a connection, so they are always offered.
+ * What the menu shows. An entry whose PC method is not listed is not offered at all. Juegos (a local web view) and
+ * Tutoriales (native) work without a connection, so they are always offered; Pizarra (also a local web view) needs
+ * the PC's methods, because its drawing lives there.
  */
 class MenuState(
     val pcLabel: String,
@@ -36,6 +36,7 @@ class MenuState(
     val showSchedules: Boolean = true,
     val showActivity: Boolean = true,
     val showUsage: Boolean = true,
+    val showWhiteboard: Boolean = true,
 )
 
 class MenuActions(
@@ -43,6 +44,7 @@ class MenuActions(
     val onSchedules: () -> Unit = {},
     val onActivity: () -> Unit = {},
     val onUsage: () -> Unit = {},
+    val onWhiteboard: () -> Unit = {},
     val onGames: () -> Unit = {},
     val onTutorials: () -> Unit = {},
     val onThisPhone: () -> Unit = {},
@@ -72,6 +74,7 @@ fun MenuContent(state: MenuState, actions: MenuActions, close: () -> Unit) {
         if (state.showSchedules) Entry(MenuTexts.SCHEDULES, OrbIcons.Clock, go(actions.onSchedules))
         if (state.showActivity) Entry(MenuTexts.ACTIVITY, OrbIcons.Activity, go(actions.onActivity))
         if (state.showUsage) Entry(MenuTexts.USAGE, OrbIcons.Gauge, go(actions.onUsage))
+        if (state.showWhiteboard) Entry(MenuTexts.WHITEBOARD, OrbIcons.PenTool, go(actions.onWhiteboard))
         Entry(MenuTexts.GAMES, OrbIcons.Gamepad2, go(actions.onGames))
         Entry(MenuTexts.TUTORIALS, OrbIcons.GraduationCap, go(actions.onTutorials))
 

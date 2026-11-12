@@ -46,6 +46,23 @@ internal class LocalWebClient(context: Context) : WebViewClient() {
     override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean = true
 }
 
+/** Lets the screen that hosts a page talk to it: run its `window.orbBack()` or hand it something to receive. */
+class WebController {
+    internal var web: WebView? = null
+
+    /** Calls `window.orbBack()`; false when there is no page yet (the caller leaves by itself). */
+    fun back(): Boolean {
+        val w = web ?: return false
+        w.evaluateJavascript("(function(){return !!(window.orbBack && window.orbBack());})()", null)
+        return true
+    }
+
+    /** Calls `window.orbReceive(message)`; [json] is JSON text, which is also a valid JavaScript expression. */
+    fun send(json: String) {
+        web?.evaluateJavascript("window.orbReceive && window.orbReceive($json)", null)
+    }
+}
+
 /**
  * Hosts a page of `assets/web/` with the hardened settings of [LocalWebPolicy]. [page] is relative to `assets/web/`
  * (for example `games/index.html`); the phone's light or dark theme is passed in the URL. [bridge] is the page's only
@@ -55,7 +72,7 @@ internal class LocalWebClient(context: Context) : WebViewClient() {
  */
 @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
 @Composable
-fun LocalWebView(page: String, dark: Boolean, background: Color, bridge: Any?, onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun LocalWebView(page: String, dark: Boolean, background: Color, bridge: Any?, onBack: () -> Unit, modifier: Modifier = Modifier, controller: WebController? = null) {
     val holder = remember { arrayOfNulls<WebView>(1) }
     BackHandler {
         val web = holder[0]
@@ -63,12 +80,13 @@ fun LocalWebView(page: String, dark: Boolean, background: Color, bridge: Any?, o
             if (handled != "true") onBack()
         }
     }
-    DisposableEffect(Unit) { onDispose { holder[0]?.let { it.removeJavascriptInterface(LocalWebPolicy.BRIDGE_NAME); it.destroy() }; holder[0] = null } }
+    DisposableEffect(Unit) { onDispose { controller?.web = null; holder[0]?.let { it.removeJavascriptInterface(LocalWebPolicy.BRIDGE_NAME); it.destroy() }; holder[0] = null } }
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
             WebView(ctx).also { web ->
                 holder[0] = web
+                controller?.web = web
                 web.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                 web.setBackgroundColor(background.toArgb())
                 LocalWebPolicy.configure(web.settings)

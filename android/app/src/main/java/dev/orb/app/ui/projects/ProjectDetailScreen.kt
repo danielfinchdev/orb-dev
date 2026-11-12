@@ -61,6 +61,8 @@ fun ProjectDetailScreen(
     onOpenTask: (Long) -> Unit,
     modifier: Modifier = Modifier,
     onOpenPrs: (String) -> Unit = {},
+    /** Null hides the row: the Pizarra is not available. */
+    onOpenWhiteboard: ((String) -> Unit)? = null,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
@@ -95,6 +97,7 @@ fun ProjectDetailScreen(
                     state.tasks.take(SECTION_LIMIT).forEach { TaskItem(it, onOpenTask) }
                     Section(ProjectTexts.SECTION_MORE)
                     ActionRow(OrbIcons.ListOrdered, ProjectTexts.BRANCH, ProjectTexts.branchValue(state.git), enabled = true, onClick = null)
+                    if (onOpenWhiteboard != null && state.canWhiteboard) ActionRow(OrbIcons.PenTool, ProjectTexts.WHITEBOARD, null, enabled = state.online) { onOpenWhiteboard(state.name) }
                     if (state.canPrs) ActionRow(OrbIcons.ChevronRight, ProjectTexts.PRS, null, enabled = true) { onOpenPrs(state.name) }
                     if (state.canReview) ActionRow(OrbIcons.Check, ProjectTexts.REVIEW, null, enabled) { confirmReview = "review" }
                     if (state.canSecurityReview) ActionRow(OrbIcons.Shield, ProjectTexts.SECURITY_REVIEW, null, enabled) { confirmReview = "security" }

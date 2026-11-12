@@ -81,6 +81,9 @@ import dev.orb.app.ui.linktest.LinkTestViewModel
 import dev.orb.app.ui.welcome.WelcomeScreen
 import dev.orb.app.ui.welcome.WelcomeViewModel
 import dev.orb.app.ui.web.GamesScreen
+import dev.orb.app.ui.web.RuntimeWhiteboardBackend
+import dev.orb.app.ui.web.WhiteboardScreen
+import dev.orb.app.ui.web.WhiteboardViewModel
 import dev.orb.app.attach.AttachTexts
 import dev.orb.app.share.ShareRequest
 import dev.orb.app.ui.share.ShareDest
@@ -105,6 +108,8 @@ import kotlinx.serialization.Serializable
 @Serializable data object SchedulesRoute
 @Serializable data object ActivityRoute
 @Serializable data object UsageRoute
+/** [project] null opens the project that is active on the PC. */
+@Serializable data class WhiteboardRoute(val project: String? = null)
 @Serializable data object GamesRoute
 @Serializable data object TutorialsRoute
 @Serializable data object ThisPhoneRoute
@@ -173,6 +178,7 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                         schedules = container.schedulesBackend()?.available(ApiMethods.SCHEDULES_LIST) == true,
                         activity = container.activityBackend()?.let { it.available(ApiMethods.ACTIVITY_LIST) || it.available(ApiMethods.LOGS_LIST) } == true,
                         usage = container.usageBackend()?.let { it.available(ApiMethods.USAGE_GET) || it.available(ApiMethods.AGENTS_STATUS) } == true,
+                        whiteboard = container.whiteboardBackend()?.let { b -> RuntimeWhiteboardBackend.NEEDED.all { b.available(it) } } == true,
                     )
                 }
                 MainShell(
@@ -190,6 +196,7 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                         onSchedules = { nav.navigate(SchedulesRoute) },
                         onActivity = { nav.navigate(ActivityRoute) },
                         onUsage = { nav.navigate(UsageRoute) },
+                        onWhiteboard = { nav.navigate(WhiteboardRoute()) },
                         onGames = { nav.navigate(GamesRoute) },
                         onTutorials = { nav.navigate(TutorialsRoute) },
                         onThisPhone = { nav.navigate(ThisPhoneRoute) },
@@ -272,6 +279,7 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                     vm, onBack = { nav.popBackStack() },
                     onOpenChat = { nav.navigate(ChatRoute(it.kind.wire, it.id)) }, onOpenTask = { nav.navigate(TaskRoute(it)) },
                     onOpenPrs = { nav.navigate(PrListRoute(it)) },
+                    onOpenWhiteboard = { nav.navigate(WhiteboardRoute(it)) },
                 )
             }
         }
@@ -319,6 +327,14 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
             if (backend != null) {
                 val vm = viewModel<ActivityViewModel>(factory = viewModelFactory { initializer { ActivityViewModel(backend) } })
                 ActivityScreen(vm, onBack = { nav.popBackStack() })
+            }
+        }
+        composable<WhiteboardRoute> { entry ->
+            val route = entry.toRoute<WhiteboardRoute>()
+            val backend = remember { container.whiteboardBackend() }
+            if (backend != null) {
+                val vm = viewModel<WhiteboardViewModel>(key = "whiteboard:${route.project}", factory = viewModelFactory { initializer { WhiteboardViewModel(backend, route.project) } })
+                WhiteboardScreen(vm, onBack = { nav.popBackStack() })
             }
         }
         composable<GamesRoute> { GamesScreen(onBack = { nav.popBackStack() }) }

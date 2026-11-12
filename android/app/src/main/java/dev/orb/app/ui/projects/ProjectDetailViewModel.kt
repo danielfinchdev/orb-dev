@@ -43,6 +43,7 @@ data class ProjectDetailState(
     val canFinish: Boolean = false,
     val canLog: Boolean = false,
     val canPrs: Boolean = false,
+    val canWhiteboard: Boolean = false,
     val log: LogState? = null,
     /** True once the PC finished the project: the screen leaves. */
     val finished: Boolean = false,
@@ -80,6 +81,7 @@ class ProjectDetailViewModel(
             canFinish = backend.available(ApiMethods.PROJECTS_FINISH),
             canLog = backend.available(ApiMethods.LOGS_READ),
             canPrs = backend.available(ApiMethods.PROJECTS_PRS),
+            canWhiteboard = backend.available(ApiMethods.WHITEBOARD_LOAD) && backend.available(ApiMethods.WHITEBOARD_SAVE),
             log = u.log, finished = u.finished,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ProjectDetailState(name))

@@ -168,17 +168,15 @@ class MenuScreensTest {
 
     @Test fun menuKeepsAppearanceLinkTestAndUnlinkAndAddsTheNewEntries() {
         showMenu(MenuState("Conectado a PC", unreadNotices = 3), MenuActions())
-        for (t in listOf("Conectado a PC", "Notificaciones", "Programadas", "Memorias y actividad", "Uso y agentes", "Juegos", "Tutoriales", "Este móvil", "Apariencia", "Prueba de conexión", "Desenlazar este móvil")) {
+        for (t in listOf("Conectado a PC", "Notificaciones", "Programadas", "Memorias y actividad", "Uso y agentes", "Pizarra", "Juegos", "Tutoriales", "Este móvil", "Apariencia", "Prueba de conexión", "Desenlazar este móvil")) {
             rule.onNodeWithText(t).performScrollTo().assertIsDisplayed()
         }
         rule.onNodeWithText("3").performScrollTo().assertIsDisplayed()
-        // Pizarra waits for its own step and is left out.
-        rule.onNodeWithText("Pizarra").assertDoesNotExist()
     }
 
     @Test fun entriesTheLinkedPcCannotServeAreLeftOut() {
-        showMenu(MenuState("PC", showSchedules = false, showActivity = false, showUsage = false), MenuActions())
-        for (t in listOf("Programadas", "Memorias y actividad", "Uso y agentes")) rule.onNodeWithText(t).assertDoesNotExist()
+        showMenu(MenuState("PC", showSchedules = false, showActivity = false, showUsage = false, showWhiteboard = false), MenuActions())
+        for (t in listOf("Programadas", "Memorias y actividad", "Uso y agentes", "Pizarra")) rule.onNodeWithText(t).assertDoesNotExist()
         rule.onNodeWithText("Notificaciones").assertIsDisplayed()
     }
 
@@ -190,19 +188,19 @@ class MenuScreensTest {
                 MenuContent(
                     MenuState("PC"),
                     MenuActions(
-                        onNotices = { got += "notices" }, onSchedules = { got += "schedules" }, onActivity = { got += "activity" }, onUsage = { got += "usage" }, onGames = { got += "games" }, onTutorials = { got += "tutorials" },
+                        onNotices = { got += "notices" }, onSchedules = { got += "schedules" }, onActivity = { got += "activity" }, onUsage = { got += "usage" }, onWhiteboard = { got += "whiteboard" }, onGames = { got += "games" }, onTutorials = { got += "tutorials" },
                         onAppearance = { got += "appearance" }, onLinkTest = { got += "linktest" }, onUnlink = { got += "unlink" },
                     ),
                     close = { closed++ },
                 )
             }
         }
-        for (t in listOf("Notificaciones", "Programadas", "Memorias y actividad", "Uso y agentes", "Juegos", "Tutoriales", "Apariencia", "Prueba de conexión", "Desenlazar este móvil")) {
+        for (t in listOf("Notificaciones", "Programadas", "Memorias y actividad", "Uso y agentes", "Pizarra", "Juegos", "Tutoriales", "Apariencia", "Prueba de conexión", "Desenlazar este móvil")) {
             rule.onNodeWithText(t).performScrollTo().performClick()
         }
         rule.waitForIdle()
-        assertEquals(listOf("notices", "schedules", "activity", "usage", "games", "tutorials", "appearance", "linktest", "unlink"), got)
-        assertEquals(9, closed)
+        assertEquals(listOf("notices", "schedules", "activity", "usage", "whiteboard", "games", "tutorials", "appearance", "linktest", "unlink"), got)
+        assertEquals(10, closed)
     }
 
     @Test fun tutorialsOffersEveryTutorialAndFaqWithoutAConnection() {

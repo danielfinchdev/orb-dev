@@ -343,6 +343,7 @@ class AppContainer(private val app: Application) {
         notes?.takeIf { it.first === rt }?.second ?: dev.orb.app.ui.notes.RuntimeNotesBackend(rt, scope).also { notes?.second?.close(); notes = rt to it }
     }
 
+    fun whiteboardBackend(): dev.orb.app.ui.web.WhiteboardBackend? = _runtime.value?.let { rt -> projectsBackend()?.let { dev.orb.app.ui.web.RuntimeWhiteboardBackend(rt, it) } }
     fun activityBackend(): dev.orb.app.ui.menu.ActivityBackend? = _runtime.value?.let { dev.orb.app.ui.menu.RuntimeActivityBackend(it, this) }
     fun newChatBackend(): dev.orb.app.ui.chats.NewChatBackend? = _runtime.value?.let { dev.orb.app.ui.chats.RuntimeNewChatBackend(it) }
 

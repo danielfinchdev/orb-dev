@@ -90,6 +90,7 @@ class ShellActions(
     val onSchedules: () -> Unit = {},
     val onActivity: () -> Unit = {},
     val onUsage: () -> Unit = {},
+    val onWhiteboard: () -> Unit = {},
     val onGames: () -> Unit = {},
     val onTutorials: () -> Unit = {},
     val onThisPhone: () -> Unit = {},
@@ -97,7 +98,7 @@ class ShellActions(
     val menu: MenuAvailability = MenuAvailability(),
 )
 
-class MenuAvailability(val schedules: Boolean = true, val activity: Boolean = true, val usage: Boolean = true)
+class MenuAvailability(val schedules: Boolean = true, val activity: Boolean = true, val usage: Boolean = true, val whiteboard: Boolean = true)
 
 /** The three tabs. Each keeps its own state while the others are shown. */
 @Composable
@@ -122,9 +123,9 @@ fun MainShell(
 
     if (menuOpen) {
         MenuSheet(
-            MenuState(connectionText(connection), unreadNotices, actions.menu.schedules, actions.menu.activity, actions.menu.usage),
+            MenuState(connectionText(connection), unreadNotices, actions.menu.schedules, actions.menu.activity, actions.menu.usage, actions.menu.whiteboard),
             MenuActions(
-                onNotices = actions.onNotices, onSchedules = actions.onSchedules, onActivity = actions.onActivity, onUsage = actions.onUsage, onGames = actions.onGames, onTutorials = actions.onTutorials,
+                onNotices = actions.onNotices, onSchedules = actions.onSchedules, onActivity = actions.onActivity, onUsage = actions.onUsage, onWhiteboard = actions.onWhiteboard, onGames = actions.onGames, onTutorials = actions.onTutorials,
                 onThisPhone = actions.onThisPhone, onAppearance = actions.onAppearance, onLinkTest = actions.onLinkTest, onUnlink = actions.onUnlink,
             ),
             onDismiss = { menuOpen = false },

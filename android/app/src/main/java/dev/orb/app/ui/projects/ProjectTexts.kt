@@ -59,6 +59,7 @@ object ProjectTexts {
     const val FINISH_BODY = "Sale de la lista y pasa a «Terminados»; sus tareas pendientes se cancelan y sus programadas se pausan. Podrás reabrirlo."
     const val FINISH_CONFIRM = "Terminar"
     const val FINISHED = "Proyecto terminado"
+    const val WHITEBOARD = "Pizarra"
     const val PRS = "Pull requests"
 
     fun branchValue(g: ProjectGit?): String {
