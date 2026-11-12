@@ -149,4 +149,13 @@ class SmallPartsTest {
         assertTrue("no newline within the cap", fails("x".repeat(100)))
         assertTrue(!fails("data: ok\n\n"))
     }
+
+    @Test
+    fun `a connect failure is not sent, unless an earlier attempt failed after writing`() {
+        assertTrue(failedBeforeSending(java.net.ConnectException("refused")))
+        val alsoRoutes = java.net.ConnectException("refused").apply { addSuppressed(java.net.ConnectException("other route")) }
+        assertTrue(failedBeforeSending(alsoRoutes))
+        val afterWrite = java.net.ConnectException("refused").apply { addSuppressed(java.net.SocketException("Connection reset")) }
+        assertTrue(!failedBeforeSending(afterWrite))
+    }
 }

@@ -47,12 +47,16 @@ internal fun OkHttpClient.forRequest(ms: Long, connectMs: Long): OkHttpClient = 
 
 internal fun isTimeout(e: IOException) = e is InterruptedIOException
 
-/** The failures that happen while connecting, before the request is written. A timeout never counts: it may be the call's own. */
-internal fun failedBeforeSending(e: IOException) = !isTimeout(e) && (
+/**
+ * The failures that happen while connecting, before the request is written. A timeout never counts: it may be the call's own.
+ * OkHttp lists the failures of earlier attempts as suppressed: one that is not itself a connect failure (a reset
+ * or a broken pipe on a pooled connection) means the request may already have been written once.
+ */
+internal fun failedBeforeSending(e: IOException): Boolean = !isTimeout(e) && (
     e is java.net.ConnectException || e is java.net.UnknownHostException || e is java.net.NoRouteToHostException ||
         e is javax.net.ssl.SSLHandshakeException || e is javax.net.ssl.SSLPeerUnverifiedException ||
         e.cause is java.security.cert.CertificateException
-    )
+    ) && e.suppressed.all { it is IOException && failedBeforeSending(it) }
 
 /** Runs the call without blocking a thread; cancelling the coroutine cancels the call. Failures become [NetFailure]. */
 internal suspend fun Call.await(timedOut: () -> Boolean = { false }): Response = suspendCancellableCoroutine { cont ->
