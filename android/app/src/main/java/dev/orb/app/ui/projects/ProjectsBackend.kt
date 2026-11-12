@@ -3,6 +3,7 @@ package dev.orb.app.ui.projects
 import dev.orb.app.LinkRuntime
 import dev.orb.app.link.api.ApiMethod
 import dev.orb.app.link.api.ApiMethods
+import dev.orb.app.link.api.Confirmed
 import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.link.net.LinkError
 import dev.orb.app.link.net.LinkEvent
@@ -57,6 +58,9 @@ interface ProjectsBackend {
     /** The open pull requests; the PC answers with its own message when `gh` or its sign-in is missing. */
     suspend fun prs(name: String): Result<List<PrRow>>
     suspend fun pr(name: String, number: Int): Result<PrDetail>
+
+    /** Merges as the PC's own GitHub account; [confirmed] exists only after the person accepted the dialog for this pull request. */
+    suspend fun mergePr(name: String, number: Int, method: String, confirmed: Confirmed): Result<Unit>
 }
 
 class RuntimeProjectsBackend(private val runtime: LinkRuntime, private val chats: ChatsBackend? = null) : ProjectsBackend {
@@ -116,4 +120,7 @@ class RuntimeProjectsBackend(private val runtime: LinkRuntime, private val chats
 
     override suspend fun pr(name: String, number: Int): Result<PrDetail> =
         api.projectsPr(name, number).mapCatching { PrParser.detail(it) ?: throw LinkException(LinkError.BadAnswer) }
+
+    override suspend fun mergePr(name: String, number: Int, method: String, confirmed: Confirmed): Result<Unit> =
+        api.projectsMergePr(name, number, method, confirmed).unit()
 }

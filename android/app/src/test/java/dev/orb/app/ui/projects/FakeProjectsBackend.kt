@@ -1,6 +1,7 @@
 package dev.orb.app.ui.projects
 
 import dev.orb.app.link.api.ApiMethod
+import dev.orb.app.link.api.Confirmed
 import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.link.net.LinkError
 import dev.orb.app.link.net.LinkException
@@ -52,6 +53,16 @@ class FakeProjectsBackend(initial: List<ProjectItem> = emptyList(), finished: Li
 
     var prList: Result<List<PrRow>> = Result.success(emptyList())
     val prResults = HashMap<Int, Result<PrDetail>>()
+
+    /** What the PC answers to a merge; on success the pull request reads as merged afterwards, like GitHub does. */
+    var mergeResult: Result<Unit> = Result.success(Unit)
+
+    override suspend fun mergePr(name: String, number: Int, method: String, confirmed: Confirmed): Result<Unit> {
+        calls += "merge $name#$number $method"
+        gate?.await()
+        if (mergeResult.isSuccess) prResults[number]?.getOrNull()?.let { prResults[number] = Result.success(it.copy(state = "MERGED")) }
+        return mergeResult
+    }
 
     override suspend fun prs(name: String): Result<List<PrRow>> { calls += "prs $name"; return prList }
     override suspend fun pr(name: String, number: Int): Result<PrDetail> {

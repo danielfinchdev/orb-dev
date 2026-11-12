@@ -13,21 +13,37 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.orb.app.link.api.ConfirmAction
+import dev.orb.app.link.api.Confirmed
+import dev.orb.app.link.api.UserConfirmation
 import dev.orb.app.ui.chats.Message
 import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.tasks.LabelValue
@@ -75,33 +91,85 @@ fun PrListScreen(vm: PrListViewModel, onBack: () -> Unit, onOpenPr: (Int) -> Uni
 @Composable
 fun PrDetailScreen(vm: PrDetailViewModel, onBack: () -> Unit, modifier: Modifier = Modifier) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
+    var confirming by rememberSaveable { mutableStateOf(false) }
     val pr = state.pr
-    Column(modifier.fillMaxSize()) {
-        PrBar(pr?.let { "#${it.number} ${it.title}" } ?: "#${vm.number}", onBack)
-        when {
-            pr == null && state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            pr == null -> Message(ProjectTexts.PR_ERROR, state.error, ProjectTexts.RETRY, vm::refresh)
-            else -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
-                state.error?.let { Text(it, Modifier.padding(bottom = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
-                LabelValue(ProjectTexts.PR_STATE, ProjectTexts.prState(pr))
-                LabelValue(ProjectTexts.PR_BRANCH, listOfNotNull(pr.head, pr.base).joinToString(" → "))
-                pr.author?.takeIf { it.isNotBlank() }?.let { LabelValue(ProjectTexts.PR_AUTHOR, it) }
-                LabelValue(ProjectTexts.PR_CHANGES, ProjectTexts.changes(pr))
-                ProjectTexts.reviewDecision(pr.reviewDecision)?.let { LabelValue(ProjectTexts.PR_REVIEW, it) }
-                if (pr.open) ProjectTexts.mergeable(pr.mergeable)?.let { LabelValue(ProjectTexts.PR_MERGE_STATE, it) }
-                SectionLabel(ProjectTexts.PR_CHECKS)
-                Text(ProjectTexts.checksSummary(pr.checks), style = MaterialTheme.typography.bodyMedium)
-                pr.checks.forEach { c ->
-                    Text(
-                        "${if (c.passed) "✓" else if (c.failed) "✗" else "…"} ${c.name}", Modifier.padding(top = 2.dp),
-                        style = MaterialTheme.typography.bodySmall, color = if (c.failed) MaterialTheme.colorScheme.error else OrbTheme.colors.text2,
-                    )
-                }
-                if (pr.body.isNotBlank()) {
-                    SectionLabel(ProjectTexts.PR_DESCRIPTION)
-                    Text(pr.body, style = MaterialTheme.typography.bodyMedium)
+    Box(modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            PrBar(pr?.let { "#${it.number} ${it.title}" } ?: "#${vm.number}", onBack)
+            when {
+                pr == null && state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                pr == null -> Message(ProjectTexts.PR_ERROR, state.error, ProjectTexts.RETRY, vm::refresh)
+                else -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+                    state.error?.let { Text(it, Modifier.padding(bottom = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+                    LabelValue(ProjectTexts.PR_STATE, ProjectTexts.prState(pr))
+                    LabelValue(ProjectTexts.PR_BRANCH, listOfNotNull(pr.head, pr.base).joinToString(" → "))
+                    pr.author?.takeIf { it.isNotBlank() }?.let { LabelValue(ProjectTexts.PR_AUTHOR, it) }
+                    LabelValue(ProjectTexts.PR_CHANGES, ProjectTexts.changes(pr))
+                    ProjectTexts.reviewDecision(pr.reviewDecision)?.let { LabelValue(ProjectTexts.PR_REVIEW, it) }
+                    if (pr.open) ProjectTexts.mergeable(pr.mergeable)?.let { LabelValue(ProjectTexts.PR_MERGE_STATE, it) }
+                    SectionLabel(ProjectTexts.PR_CHECKS)
+                    Text(ProjectTexts.checksSummary(pr.checks), style = MaterialTheme.typography.bodyMedium)
+                    pr.checks.forEach { c ->
+                        Text(
+                            "${if (c.passed) "✓" else if (c.failed) "✗" else "…"} ${c.name}", Modifier.padding(top = 2.dp),
+                            style = MaterialTheme.typography.bodySmall, color = if (c.failed) MaterialTheme.colorScheme.error else OrbTheme.colors.text2,
+                        )
+                    }
+                    if (pr.body.isNotBlank()) {
+                        SectionLabel(ProjectTexts.PR_DESCRIPTION)
+                        Text(pr.body, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    // Only an open pull request the PC can merge offers the button; a merged or closed one never does.
+                    if (state.canMerge) {
+                        Button(onClick = { confirming = true }, enabled = state.online && !state.merging, modifier = Modifier.padding(top = 20.dp)) {
+                            Text(ProjectTexts.PR_MERGE)
+                        }
+                    }
                 }
             }
         }
+        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
     }
+
+    val target = pr
+    if (confirming && target != null && state.canMerge) MergeDialog(
+        target, vm.name, busy = state.merging, onDismiss = { confirming = false },
+        onConfirm = { method ->
+            confirming = false
+            // The only place a merge token is made: the person has just accepted this dialog, which names the pull request and the method.
+            @OptIn(UserConfirmation::class)
+            val token = Confirmed(ConfirmAction.MergePr, "${vm.name}#${target.number}")
+            vm.merge(method, token)
+        },
+    )
+}
+
+@Composable
+private fun MergeDialog(pr: PrDetail, project: String, busy: Boolean, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var method by rememberSaveable { mutableStateOf(MergeMethods.first()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(ProjectTexts.PR_MERGE_ASK) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("$project · #${pr.number} ${pr.title}", fontWeight = FontWeight.SemiBold)
+                Text(listOfNotNull(pr.head, pr.base).joinToString(" → "), style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text2)
+                Text(ProjectTexts.PR_MERGE_METHOD, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.labelMedium, color = OrbTheme.colors.text2)
+                for (m in MergeMethods) {
+                    Row(
+                        Modifier.fillMaxWidth().selectable(selected = method == m, onClick = { method = m }, role = Role.RadioButton),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = method == m, onClick = null)
+                        Text(ProjectTexts.mergeMethod(m), Modifier.padding(start = 8.dp))
+                    }
+                }
+                Text(ProjectTexts.PR_MERGE_NOTE, style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text2)
+            }
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(method) }, enabled = !busy) { Text(ProjectTexts.PR_MERGE) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(ProjectTexts.CANCEL) } },
+    )
 }

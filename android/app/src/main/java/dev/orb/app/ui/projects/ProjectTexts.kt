@@ -79,6 +79,11 @@ object ProjectTexts {
     const val PR_OPEN = "Abierta"
     const val PR_MERGED = "Fusionada"
     const val PR_CLOSED = "Cerrada"
+    const val PR_MERGE = "Fusionar"
+    const val PR_MERGE_ASK = "¿Fusionar esta pull request?"
+    const val PR_MERGE_NOTE = "El PC la fusionará con su cuenta de GitHub. Desde el móvil no se puede deshacer."
+    const val PR_MERGE_METHOD = "Método"
+    const val PR_MERGED_DONE = "Pull request fusionada"
     const val PR_STATE = "Estado"
     const val PR_MERGE_STATE = "Fusión"
     const val PR_BRANCH = "Rama"
@@ -126,5 +131,11 @@ object ProjectTexts {
     fun pcError(e: Throwable): String {
         val refused = (e as? dev.orb.app.link.net.LinkException)?.error as? dev.orb.app.link.net.LinkError.Refused
         return refused?.error?.takeIf { it.isNotBlank() } ?: dev.orb.app.ui.linkErrorText(e)
+    }
+
+    fun mergeMethod(m: String) = when (m) {
+        "squash" -> "Squash (un solo commit)"
+        "rebase" -> "Rebase"
+        else -> "Merge (commit de fusión)"
     }
 }
