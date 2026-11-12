@@ -18,6 +18,30 @@ import dev.orb.app.link.net.LinkSessionCodec
 import dev.orb.app.link.net.PairOk
 import dev.orb.app.link.net.Pairing
 import dev.orb.app.link.net.ResolvedLink
+import dev.orb.app.link.api.PcCaller
+import dev.orb.app.link.net.ConnectionState
+import dev.orb.app.notify.AndroidNetworkWatcher
+import dev.orb.app.notify.AndroidNotePoster
+import dev.orb.app.notify.AndroidNotificationAccess
+import dev.orb.app.notify.AndroidServiceLauncher
+import dev.orb.app.notify.KeepAliveController
+import dev.orb.app.notify.KeepAlivePolicy
+import dev.orb.app.notify.LinkKind
+import dev.orb.app.notify.NoteActionRunner
+import dev.orb.app.notify.NoteIntents
+import dev.orb.app.notify.NoteJobs
+import dev.orb.app.notify.Notifier
+import dev.orb.app.notify.NotifyPrefs
+import dev.orb.app.notify.NotifyTexts
+import dev.orb.app.notify.ServiceLauncher
+import dev.orb.app.notify.SharedPrefsJobStorage
+import dev.orb.app.ui.notes.NoticeTarget
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.stateIn
 import dev.orb.app.link.payload.LinkPayload
 import dev.orb.app.ui.LinkTestBackend
 import dev.orb.app.ui.chats.ChatsBackend
@@ -64,8 +88,22 @@ class AppContainer(private val app: Application) {
     private val _runtime = MutableStateFlow<LinkRuntime?>(null)
     val runtime: StateFlow<LinkRuntime?> = _runtime.asStateFlow()
 
+    @Volatile
     private var foreground = false
     private val runtimeLock = Any()
+
+    /** What the phone remembers about its notices and the «Mantener conectado» service; not secrets. */
+    val notifyPrefs = NotifyPrefs(SharedPrefsStore(app.getSharedPreferences("orb.notify", android.content.Context.MODE_PRIVATE)))
+    val noteJobs = NoteJobs(SharedPrefsJobStorage(app.getSharedPreferences("orb.notes", android.content.Context.MODE_PRIVATE)))
+    private val notePoster = AndroidNotePoster(app, noteJobs)
+    val notificationAccess = AndroidNotificationAccess(app, notifyPrefs)
+    val keepAliveLauncher: ServiceLauncher = AndroidServiceLauncher(app)
+    private val keepAliveRunning = MutableStateFlow(false)
+    private var notifier: Notifier? = null
+    private var notifierJob: Job? = null
+
+    /** Where a tapped notice leads; the navigation takes it once. */
+    val openTarget = MutableStateFlow<NoticeTarget?>(null)
 
     val linker: Linker = Pairing(http).let { p ->
         object : Linker {
@@ -80,6 +118,29 @@ class AppContainer(private val app: Application) {
         if (session != null) startRuntime(session, 0)
         session != null
     }
+
+    /** Controls the foreground service from the setting, the link and the network. */
+    private val keepAlive = KeepAliveController(
+        KeepAlivePolicy(System::currentTimeMillis),
+        enabled = notifyPrefs.settings.map { it.keepConnected }.distinctUntilChanged(),
+        // Emits only once the saved link is known, so a service started at boot is not stopped while it is read.
+        kind = flow {
+            startup.await()
+            emitAll(runtime.flatMapLatest { rt -> if (rt == null) flowOf(LinkKind.Terminal) else rt.client.connection.map(LinkKind::of) })
+        }.distinctUntilChanged(),
+        network = AndroidNetworkWatcher(app),
+        launcher = keepAliveLauncher,
+        log = log::add,
+    ).also { it.start(scope) }
+
+    /** The fixed notice of the service: who it is connected to. */
+    val keepAliveText: StateFlow<String> = runtime.flatMapLatest { rt ->
+        if (rt == null) flowOf(NotifyTexts.connected(null))
+        else rt.client.connection.map { c ->
+            val pc = (c as? ConnectionState.Online)?.pcName ?: rt.client.pcInfo.value?.name ?: rt.client.currentSession.name
+            if (c is ConnectionState.Online) NotifyTexts.connected(pc) else NotifyTexts.searching(pc)
+        }
+    }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), NotifyTexts.connected(null))
 
     /** The database, opened off the main thread; null while the Keystore is busy. */
     suspend fun database(): OrbCacheDatabase? = withContext(Dispatchers.IO) { databaseFactory.open() }
@@ -117,11 +178,15 @@ class AppContainer(private val app: Application) {
             OutboxSender(repo, api, client.connection, this).start().join()
         }
         scope.launch { client.connection.map { it::class.simpleName ?: "?" }.distinctUntilChanged().collect { log.add("conexión $it") } }
+        notifierJob?.cancel()
+        notifier = Notifier(client.events, { notifyPrefs.settings.value }, { foreground }, notePoster, log::add)
+        notifierJob = notifier?.start(scope)
+        notifyPrefs.linked = true
         val runtime = LinkRuntime(client, api, sender)
         synchronized(runtimeLock) {
             _runtime.value = runtime
             client.start()
-            if (!foreground) client.pause()
+            if (!foreground && !keepAliveRunning.value) client.pause()
         }
     }
 
@@ -130,13 +195,61 @@ class AppContainer(private val app: Application) {
         val current = synchronized(runtimeLock) { _runtime.value.also { _runtime.value = null; notes?.second?.close(); notes = null } }
         current?.client?.stop()
         current?.sender?.cancel()
+        notifierJob?.cancel()
+        notifier = null
+        notePoster.clearNotes()
+        notifyPrefs.linked = false
+        notifyPrefs.setKeepConnected(true)
+        notifyPrefs.setLockScreenPublic(false)
         SecureStore.remove(app, SESSION_KEY)
         wipe.wipe()
         outboxLock.withLock { outboxFor = null; outboxRepo = null }
     }
 
-    fun onForeground() = synchronized(runtimeLock) { foreground = true; _runtime.value?.client?.resume() ?: Unit }
-    fun onBackground() = synchronized(runtimeLock) { foreground = false; _runtime.value?.client?.pause() ?: Unit }
+    fun onForeground() = synchronized(runtimeLock) {
+        foreground = true
+        _runtime.value?.client?.resume()
+        // The app lists the notices itself now.
+        notifier?.onForeground()
+        Unit
+    }
+
+    fun onBackground() = synchronized(runtimeLock) {
+        foreground = false
+        if (!keepAliveRunning.value) _runtime.value?.client?.pause()
+        Unit
+    }
+
+    /** The service says it is running: the link then stays open in the background too. */
+    fun setKeepAlive(on: Boolean) = synchronized(runtimeLock) {
+        keepAliveRunning.value = on
+        val client = _runtime.value?.client
+        if (on) client?.resume() else if (!foreground) client?.pause()
+        Unit
+    }
+
+    /** A notice's button, answered with the app closed (see [dev.orb.app.notify.NoteReceiver]). */
+    suspend fun answerNote(token: String, typed: String?) {
+        val keyguard = app.getSystemService(android.app.KeyguardManager::class.java)
+        val runner = NoteActionRunner(
+            noteJobs,
+            caller = { startup.await(); _runtime.value?.let { PcCaller.of(it.client) } },
+            isLocked = { keyguard?.isDeviceLocked == true },
+            onStart = { notePoster.say(it, NotifyTexts.SENDING, null) },
+        )
+        val (job, outcome) = runner.run(token, typed) ?: return
+        notePoster.say(job, outcome.text, if (outcome.done) 4_000L else null)
+        log.add("aviso respondido")
+    }
+
+    /** A tap on a notice: where it leads, if the intent carries a valid one-use token of this app's own. */
+    fun openFromNotification(intent: android.content.Intent?) {
+        val token = intent?.getStringExtra(NoteIntents.EXTRA_TOKEN) ?: return
+        intent.removeExtra(NoteIntents.EXTRA_TOKEN)
+        // MainActivity is exported: only a token kept here counts, never extras made up by another app.
+        val target = noteJobs.take(token)?.target?.toNotice() ?: return
+        openTarget.value = target
+    }
 
     fun linkTestBackend(): LinkTestBackend? = _runtime.value?.let { RuntimeBackend(this, it) }
 
