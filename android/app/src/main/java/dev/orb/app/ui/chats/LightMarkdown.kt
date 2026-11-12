@@ -1,10 +1,12 @@
 package dev.orb.app.ui.chats
 
 import androidx.compose.runtime.Immutable
+import dev.orb.app.ui.island.IslandKind
 
 /**
  * The few Markdown pieces a chat bubble needs, parsed by hand: no library, so the phone stays light and the result is
- * plain data a test can read. Diagrams, formulas and HTML are not drawn here; their blocks are kept as code and flagged.
+ * plain data a test can read. Diagrams and formulas are not drawn here: their blocks carry a [IslandKind] and the chat draws them
+ * in a local page. HTML and SVG blocks stay code, flagged [MdBlock.Code.onlyOnPc].
  */
 @Immutable
 data class Span(val text: String, val bold: Boolean = false, val italic: Boolean = false, val code: Boolean = false, val link: String? = null)
@@ -15,8 +17,11 @@ sealed interface MdBlock {
     data class Heading(val level: Int, val spans: List<Span>) : MdBlock
     data class Item(val number: Int?, val depth: Int, val spans: List<Span>) : MdBlock
     data class Quote(val spans: List<Span>) : MdBlock
-    /** [onlyOnPc]: a diagram or formula block the phone shows as code. */
-    data class Code(val lang: String?, val text: String, val onlyOnPc: Boolean) : MdBlock
+    /**
+     * [rich]: a closed diagram or formula block the phone can draw; [onlyOnPc]: an HTML or SVG block it shows as code.
+     * A fence still streaming (not closed yet) is plain code with neither.
+     */
+    data class Code(val lang: String?, val text: String, val rich: IslandKind? = null, val onlyOnPc: Boolean = false) : MdBlock
     data object Rule : MdBlock
 }
 
@@ -27,7 +32,11 @@ object LightMarkdown {
     private val numbered = Regex("^(\\s*)(\\d{1,4})[.)]\\s+(.*)$")
     private val quote = Regex("^\\s*>\\s?(.*)$")
     private val rule = Regex("^\\s*([-*_])(\\s*\\1){2,}\\s*$")
-    private val onlyPc = setOf("mermaid", "katex", "latex", "math", "html", "svg")
+    private val onlyPc = setOf("html", "svg")
+    private val math = setOf("katex", "latex", "math")
+    private val dollarLine = Regex("^\\s*[$][$](.*)$")
+    private const val MAX_MATH_LINES = 200
+    private const val DD = "$$"
 
     fun parse(text: String): List<MdBlock> {
         val out = ArrayList<MdBlock>()
@@ -48,8 +57,18 @@ object LightMarkdown {
                 // An unclosed fence (a reply still streaming) shows what has arrived so far.
                 while (i < lines.size && !lines[i].trim().startsWith(mark)) { body += lines[i]; i++ }
                 val lang = f.groupValues[2].ifBlank { null }
-                out += MdBlock.Code(lang, body.joinToString("\n"), lang?.lowercase() in onlyPc)
+                val closed = i < lines.size
+                val l = lang?.lowercase()
+                val rich = if (!closed) null else if (l == "mermaid") IslandKind.Mermaid else if (l in math) IslandKind.Math else null
+                out += MdBlock.Code(lang, body.joinToString("\n"), rich, closed && l in onlyPc)
                 i++
+                continue
+            }
+            val m = mathBlock(lines, i)
+            if (m != null) {
+                flush()
+                out += MdBlock.Code("math", m.first, IslandKind.Math)
+                i = m.second
                 continue
             }
             val h = heading.matchEntire(line)
@@ -71,6 +90,39 @@ object LightMarkdown {
         return out
     }
 
+    /**
+     * A display formula that starts a line with two dollar signs: either all on one line or closed by a later line that
+     * ends with two dollar signs. Returns the formula and the index of the next line, or null (unclosed, empty, or just a
+     * dollar amount) so the text stays as typed. The search stops at a blank line, so a stray marker never swallows the
+     * rest of a reply.
+     */
+    private fun mathBlock(lines: List<String>, at: Int): Pair<String, Int>? {
+        val first = dollarLine.matchEntire(lines[at])?.groupValues?.get(1) ?: return null
+        val one = first.trimEnd()
+        if (one.endsWith(DD)) {
+            val inner = one.removeSuffix(DD)
+            return if (inner.contains(DD) || inner.isBlank()) null else inner.trim() to at + 1
+        }
+        if (first.contains(DD)) return null
+        val body = ArrayList<String>()
+        if (first.isNotBlank()) body += first.trim()
+        var j = at + 1
+        while (j < lines.size && j - at <= MAX_MATH_LINES) {
+            val l = lines[j]
+            if (l.isBlank()) return null
+            val t = l.trimEnd()
+            if (t.endsWith(DD)) {
+                val last = t.removeSuffix(DD)
+                if (last.contains(DD)) return null
+                if (last.isNotBlank()) body += last.trim()
+                return if (body.isEmpty()) null else body.joinToString("\n") to j + 1
+            }
+            if (t.contains(DD)) return null
+            body += l.trim()
+            j++
+        }
+        return null
+    }
     private fun depthOf(indent: String) = (indent.replace("\t", "  ").length / 2).coerceAtMost(3)
 
     /** `**bold**`, `*italic*`/`_italic_`, `` `code` `` and `[text](url)`; anything unclosed stays as typed. */

@@ -12,6 +12,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
+import dev.orb.app.ui.island.IslandBlock
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -120,7 +122,9 @@ fun MarkdownBody(blocks: List<MdBlock>, modifier: Modifier = Modifier) {
                 Box(Modifier.padding(end = 10.dp).size(3.dp, 20.dp).background(scheme.outline, RoundedCornerShape(2.dp)))
                 Text(spansToText(b.spans), style = MaterialTheme.typography.bodyLarge, color = OrbTheme.colors.text2)
             }
-            is MdBlock.Code -> CodeBlock(b)
+            is MdBlock.Code -> if (b.rich != null) {
+                IslandBlock(b.rich, b.text, dark = scheme.background.luminance() < 0.5f) { CodeBlock(b) }
+            } else CodeBlock(b)
             MdBlock.Rule -> Box(Modifier.fillMaxWidth().size(1.dp).background(scheme.outlineVariant))
         }
     }

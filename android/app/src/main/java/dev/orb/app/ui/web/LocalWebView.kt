@@ -96,20 +96,26 @@ class OnceAction(private val action: () -> Unit) {
  * (for example `games/index.html`); the phone's light or dark theme is passed in the URL. [bridge] is the page's only
  * way back into the app, exposed as `OrbHost`.
  *
+ * [handleBack] false leaves the back gesture alone; [errorContent] replaces the Pizarra's "page stopped" screen.
+ *
  * The system back gesture first asks the page (`window.orbBack()`, true when it handled it) and only then leaves.
  */
 @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
 @Composable
-fun LocalWebView(page: String, dark: Boolean, background: Color, bridge: Any?, onBack: () -> Unit, modifier: Modifier = Modifier, controller: WebController? = null, onGone: () -> Unit = {}) {
+fun LocalWebView(page: String, dark: Boolean, background: Color, bridge: Any?, onBack: () -> Unit, modifier: Modifier = Modifier, controller: WebController? = null, onGone: () -> Unit = {},
+    handleBack: Boolean = true, errorContent: (@Composable (reload: () -> Unit) -> Unit)? = null,
+) {
     val holder = remember { arrayOfNulls<WebView>(1) }
     var gone by remember { mutableStateOf(false) }
     var generation by remember { mutableIntStateOf(0) }
-    BackHandler {
+    // An embedded page (a chat block) must not take the system back gesture from the screen around it.
+    if (handleBack) BackHandler {
         val web = holder[0]
         if (web == null) onBack() else web.evaluateJavascript(BACK_SCRIPT) { handled -> if (handled != "true") onBack() }
     }
     DisposableEffect(Unit) { onDispose { controller?.web = null; holder[0]?.let { it.removeJavascriptInterface(LocalWebPolicy.BRIDGE_NAME); it.destroy() }; holder[0] = null } }
     if (gone) {
+        if (errorContent != null) { errorContent { gone = false; generation++ }; return }
         Column(modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
             Text(WhiteboardTexts.GONE_TITLE, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
             TextButton(onClick = { gone = false; generation++ }, Modifier.padding(top = 8.dp)) { Text(WhiteboardTexts.RELOAD) }

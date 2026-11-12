@@ -45,7 +45,7 @@ object LocalWebPolicy {
                 override fun shouldInterceptRequest(request: WebResourceRequest): WebResourceResponse =
                     WebResourceResponse("text/plain", "utf-8", 403, "Blocked", emptyMap(), ByteArrayInputStream(ByteArray(0)))
             })
-        } catch (_: Exception) { /* a hardening extra: pages work without it */ }
+        } catch (_: Throwable) { /* a hardening extra: pages work without it */ }
     }
 
     /** The page's settings: no file or content access, no network cache, no popups, no downloads, no safe-browsing lookups. */
