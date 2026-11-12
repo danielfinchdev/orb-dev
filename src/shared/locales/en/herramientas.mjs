@@ -89,5 +89,8 @@ export default {
   'msg.pr.mergeFailed': 'The user accepted merging pull request #{n}, but it failed: {detail}',
   'msg.pr.noAnswer': 'The user did not answer in time: pull request #{n} was not merged (declined for lack of an answer).',
   'msg.pr.declined': 'The user declined to merge pull request #{n}. Do not ask again in this turn.',
-  'msg.pr.locked': 'Orb locked: the merge of pull request #{n} was cancelled.'
+  'msg.pr.locked': 'Orb locked: the merge of pull request #{n} was cancelled.',
+  'msg.github.ghTooOld': 'your gh is too old to merge safely: update it',
+  'msg.pr.askedComment': 'The agent asks to comment on pull request #{n}. Answer on the PC.',
+  'msg.pr.commentFailed': 'The user accepted the comment on pull request #{n}, but it could not be posted: {detail}'
 };

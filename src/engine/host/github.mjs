@@ -151,7 +151,8 @@ export async function viewPr(project, number) {
 // repository, and gh leaves the local branch and checkout alone without --delete-branch.
 export const MERGE_METHODS = ['merge', 'squash', 'rebase'];
 // --match-head-commit makes gh merge exactly the commit the user saw; if the branch moved since, GitHub refuses.
-const HEAD_MOVED_RE = /head branch was modified|head ref.*(does not match|not match)|match-head-commit|expected head sha/i;
+const HEAD_MOVED_RE = /head branch was modified|head ref.*(does not match|not match)|expected head sha/i;
+const OLD_GH_RE = /unknown flag:? ?--match-head-commit/i;
 const userError = (message) => Object.assign(new Error(message), { userFacing: true });
 export async function mergePr(project, number, method = 'merge', headRefOid) {
   if (!MERGE_METHODS.includes(method)) throw new Error(tr('msg.github.prFailed'));
@@ -160,6 +161,7 @@ export async function mergePr(project, number, method = 'merge', headRefOid) {
   const r = await gh(['pr', 'merge', String(number), `--${method}`, '--match-head-commit', oid], { cwd: project.path, timeoutMs: 120_000 });
   if (!r.ok) {
     const text = oneLine(r.err || r.out, 240);
+    if (OLD_GH_RE.test(text)) throw userError(tr('msg.github.ghTooOld'));
     if (!AUTH_RE.test(text) && HEAD_MOVED_RE.test(text)) throw userError(tr('msg.github.prHeadChanged'));
     if (!AUTH_RE.test(text) && MERGE_BLOCK_RE.test(text) && !/not found|could not resolve/i.test(text)) throw new Error(tr('msg.github.prNotMergeable', { detail: text }));
     throw ghFail(r);

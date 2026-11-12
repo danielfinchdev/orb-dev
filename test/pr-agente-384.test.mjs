@@ -22,7 +22,8 @@ const MOVED = 'b'.repeat(40);
 let t; let board; let sessions; let api; let dir; let chats;
 const events = [];
 const ghCalls = [];
-const wait = (ms = 5) => new Promise((r) => setTimeout(r, ms));
+// Polls (at most 2 s) until the condition holds, instead of sleeping a fixed time.
+const until = async (cond) => { const end = Date.now() + 2000; while (!cond()) { if (Date.now() > end) throw new Error('timeout waiting for the condition'); await new Promise((r) => setImmediate(r)); } };
 
 // A fake of the github.mjs module: the PR's state is changed by each test.
 let pr;
@@ -70,21 +71,75 @@ test('view works at every level and gives the agent a short text marked as data'
   }
 });
 
-test('comment is refused for read and test chats, and allowed from edit up (the chat gets a system line)', async () => {
+test('comment is refused for read and test chats; below total it waits for the card; total publishes directly', async () => {
   const tools = make();
   for (const level of ['leer', 'probar']) { reset(); await rejects(tools.run(chatOf(level), 'comment', { number: 7, body: 'hola' }), /solo lee o prueba/); assert.equal(ghCalls.length, 0, level); }
-  for (const level of ['editar', 'preguntar', 'auto', 'total']) {
+  for (const level of ['editar', 'preguntar', 'auto']) {
     reset();
-    const r = await tools.run(chatOf(level), 'comment', { number: 7, body: '  hola  ' });
-    assert.match(r.text, /#7/);
-    assert.deepEqual(ghCalls, [['comment', 'tienda', 7, 'hola']], level);
+    const p = tools.run(chatOf(level), 'comment', { number: 7, body: '  hola  ' });
+    await until(() => tools.pending().length === 1);
+    assert.equal(ghCalls.filter((c) => c[0] === 'comment').length, 0, `${level}: nothing before the answer`);
+    const [card] = tools.pending();
+    assert.equal(card.kind, 'comment');
+    assert.equal(card.body, 'hola');
+    assert.equal(card.title, 'Add thing');
+    assert.equal(card.number, 7);
+    await tools.answer({ id: card.id });
+    assert.match((await p).text, /#7/);
+    assert.deepEqual(ghCalls.filter((c) => c[0] === 'comment'), [['comment', 'tienda', 7, 'hola']], level);
   }
-  assert.ok(sessions.items?.(chats.editar.id)?.some?.((i) => /comentó en el PR #7/.test(i.body)) ?? board.all('SELECT body FROM items WHERE session_id = ?', chats.editar.id).some((i) => /comentó en el PR #7/.test(i.body)));
+  assert.ok(board.all('SELECT body FROM session_items WHERE session_id = ?', chats.editar.id).some((i) => /comentó en el PR #7/.test(i.body)));
+  reset();
+  const direct = await tools.run(chatOf('total'), 'comment', { number: 7, body: ' directo ' });
+  assert.match(direct.text, /#7/);
+  assert.deepEqual(ghCalls, [['comment', 'tienda', 7, 'directo']]);
+  assert.deepEqual(tools.pending(), []);
   reset();
   await rejects(tools.run(chatOf('editar'), 'comment', { number: 7, body: '   ' }), /entre 1 y 20000/);
   await rejects(tools.run(chatOf('editar'), 'comment', { number: 7, body: 'x'.repeat(20001) }), /entre 1 y 20000/);
   await rejects(tools.run(chatOf('editar'), 'comment', { number: 'x', body: 'a' }), /no válido/);
   assert.equal(ghCalls.length, 0);
+});
+
+test('a comment declined, timed out or wiped never reaches gh; a failing gh clears the request and tells the agent', async () => {
+  reset();
+  const tools = make();
+  const p = tools.run(chatOf('auto'), 'comment', { number: 7, body: 'hola' });
+  await until(() => tools.pending().length === 1);
+  tools.decline({ id: tools.pending()[0].id });
+  assert.match((await p).text, /rechazó/);
+  const q = make({ askMs: 20 });
+  assert.match((await q.run(chatOf('auto'), 'comment', { number: 7, body: 'hola' })).text, /falta de respuesta/);
+  const w = tools.run(chatOf('auto'), 'comment', { number: 7, body: 'hola' });
+  await until(() => tools.pending().length === 1);
+  tools.wipe();
+  assert.match((await w).text, /bloqueado/);
+  assert.equal(ghCalls.filter((c) => c[0] === 'comment').length, 0);
+  // gh fails while merging: the request is gone and the agent's promise resolves with the error
+  mergeError = new Error('boom');
+  const m = tools.run(chatOf('editar'), 'merge', { number: 7 });
+  await until(() => tools.pending().length === 1);
+  await assert.rejects(tools.answer({ id: tools.pending()[0].id }), /boom/);
+  assert.match((await m).text, /no se pudo: boom/);
+  assert.deepEqual(tools.pending(), []);
+});
+
+test('a deleted chat loses its requests', async () => {
+  reset();
+  const tools = make();
+  const doomed = sessions.create({ agent: 'claude', permission: 'editar', project: 'tienda', cwd: dir, title: 'borrable' });
+  const p = tools.run(sessions.get(doomed.id), 'merge', { number: 7 });
+  await until(() => tools.pending().length === 1);
+  board.db.prepare('DELETE FROM sessions WHERE id = ?').run(doomed.id);
+  assert.deepEqual(tools.pending(), []);
+  assert.match((await p).text, /bloqueado/);
+});
+
+test('an unknown tool is refused before gh is loaded', async () => {
+  let loaded = 0;
+  const tools = createPrTools({ board, sessions, gh: async () => { loaded++; return fakeGh; }, emit: () => {}, log: () => {} });
+  await rejects(tools.run(chatOf('editar'), 'borrar', { number: 7 }), /desconocida/);
+  assert.equal(loaded, 0);
 });
 
 test('merge is refused for read and test chats without touching gh', async () => {
@@ -97,7 +152,7 @@ test('merge with total access does NOT merge until the user answers; the merged 
   reset();
   const tools = make();
   const p = tools.run(chatOf('total'), 'merge', { number: 7, method: 'squash' });
-  await wait();
+  await until(() => tools.pending().length === 1);
   assert.equal(ghCalls.filter((c) => c[0] === 'merge').length, 0);
   const [card] = tools.pending();
   assert.equal(card.headRefOid, OID);
@@ -120,7 +175,7 @@ test('when gh refuses a moved head, the agent sees the clear error', async () =>
   reset();
   const tools = make();
   const p = tools.run(chatOf('auto'), 'merge', { number: 7 });
-  await wait();
+  await until(() => tools.pending().length === 1);
   mergeError = Object.assign(new Error('la rama del pull request cambió desde que lo viste'), { userFacing: true });
   await assert.rejects(tools.answer({ id: tools.pending()[0].id }), /cambió desde que lo viste/);
   assert.match((await p).text, /no se pudo: la rama del pull request cambió/);
@@ -130,7 +185,7 @@ test('decline and timeout never call gh to merge', async () => {
   reset();
   const tools = make();
   const p = tools.run(chatOf('editar'), 'merge', { number: 7 });
-  await wait();
+  await until(() => tools.pending().length === 1);
   tools.decline({ id: tools.pending()[0].id });
   assert.match((await p).text, /rechazó fusionar/);
   const q = make({ askMs: 20 });
@@ -155,8 +210,7 @@ test('wipe declines everything waiting', async () => {
   const tools = make();
   const a = tools.run(chatOf('editar'), 'merge', { number: 7 });
   const b = tools.run(chatOf('auto'), 'merge', { number: 8 });
-  await wait();
-  assert.equal(tools.pending().length, 2);
+  await until(() => tools.pending().length === 2);
   tools.wipe();
   assert.match((await a).text, /bloqueado/);
   assert.match((await b).text, /bloqueado/);
@@ -175,17 +229,17 @@ test('a chat without project fails clearly, and a project named by the agent is 
   await rejects(tools.run(chatOf('editar'), 'merge', { number: 7, method: 'octopus' }), /Método no válido/);
 });
 
-test('at most three merges wait per chat', async () => {
+test('at most three merges wait per chat, even with simultaneous calls', async () => {
   reset();
   const tools = make();
-  const waiting = [1, 2, 3].map((n) => tools.run(chatOf('editar'), 'merge', { number: n }));
-  await wait();
-  await rejects(tools.run(chatOf('editar'), 'merge', { number: 4 }), /varias fusiones pendientes/);
+  const calls = [1, 2, 3, 4, 5, 6].map((n) => tools.run(chatOf('editar'), 'merge', { number: n }).then((r) => ({ r }), (e) => ({ e })));
+  await until(() => tools.pending().length === 3);
   const other = tools.run(chatOf('auto'), 'merge', { number: 5 }); // another chat still can
-  await wait();
-  assert.equal(tools.pending().length, 4);
+  await until(() => tools.pending().length === 4);
+  const waiting = calls;
   tools.wipe();
-  await Promise.all([...waiting, other]);
+  const done = await Promise.all([...waiting, other]);
+  assert.equal(done.filter((d) => d.e && /varias fusiones pendientes/.test(d.e.message)).length, 3);
 });
 
 test('the agent pipe path: method "pr" uses the chat of the grant', async () => {
@@ -210,8 +264,8 @@ test('prConfirm.* answers the pending request through the API', async () => {
   reset();
   setGhForTests({ exe: () => 'gh-fake', run: async (cmd, args) => { ghCalls.push(['raw', args]); return { ok: true, out: JSON.stringify({ ...pr, statusCheckRollup: [], files: [], commits: [] }), err: '' }; } });
   const p = agentAuth.onCall({ session: chats.total.id }, 'pr', { tool: 'merge', args: { number: 7 } });
-  await wait(30);
-  const list = await api.call('prConfirm.pending', {}, DESKTOP);
+  let list = [];
+  for (let i = 0; i < 400 && !list.length; i++) { list = await api.call('prConfirm.pending', {}, DESKTOP); if (!list.length) await new Promise((r) => setTimeout(r, 5)); }
   assert.equal(list.length, 1);
   assert.equal(list[0].headRefOid, OID);
   await api.call('prConfirm.decline', { id: list[0].id }, DESKTOP);
@@ -243,4 +297,11 @@ test('the guard keeps asking for gh pr merge / comment from the console', () => 
   for (const command of ['gh pr merge 3', 'gh pr comment 3 -b x']) {
     for (const permission of ['probar', 'editar', 'preguntar']) assert.notEqual(ask(permission, command).decision, 'allow', `${command} (${permission})`);
   }
+});
+
+test('an old gh without --match-head-commit gives its own clear error', async () => {
+  const { mergePr } = await import('../src/engine/host/github.mjs');
+  setGhForTests({ exe: () => 'gh-fake', run: async () => ({ ok: false, out: '', err: 'unknown flag: --match-head-commit' }) });
+  await assert.rejects(mergePr({ name: 'tienda', path: dir }, 7, 'merge', OID), (e) => { assert.match(e.message, /demasiado antiguo/); assert.equal(e.userFacing, true); return true; });
+  setGhForTests(null);
 });

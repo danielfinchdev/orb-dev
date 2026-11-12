@@ -141,7 +141,7 @@ test('projects.mergePr passes the oid literally (lowercased) after --match-head-
 });
 
 test('a moved branch gives its own clear error, not "cannot be merged"', async () => {
-  for (const err of ['X Pull request #5 head branch was modified', 'GraphQL: Head branch was modified. Review and try the merge again.', 'head ref sha does not match the expected one', 'error with --match-head-commit']) {
+  for (const err of ['X Pull request #5 head branch was modified', 'GraphQL: Head branch was modified. Review and try the merge again.', 'head ref sha does not match the expected one', 'expected head sha does not match']) {
     reply = () => ({ ok: false, out: '', err });
     await assert.rejects(call('projects.mergePr', { name: 'tienda', number: 5, headRefOid: OID }), (e) => /cambió desde que lo viste/.test(e.message) && !/no se puede fusionar/.test(e.message) && e.userFacing === true);
   }

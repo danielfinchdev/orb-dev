@@ -89,5 +89,8 @@ export default {
   'msg.pr.mergeFailed': 'El usuario aceptó fusionar el pull request #{n}, pero no se pudo: {detail}',
   'msg.pr.noAnswer': 'El usuario no ha respondido a tiempo: el pull request #{n} no se ha fusionado (rechazado por falta de respuesta).',
   'msg.pr.declined': 'El usuario rechazó fusionar el pull request #{n}. No lo pidas otra vez en este turno.',
-  'msg.pr.locked': 'Orb se ha bloqueado: la fusión del pull request #{n} se ha cancelado.'
+  'msg.pr.locked': 'Orb se ha bloqueado: la fusión del pull request #{n} se ha cancelado.',
+  'msg.github.ghTooOld': 'tu gh es demasiado antiguo para fusionar con seguridad: actualízalo',
+  'msg.pr.askedComment': 'El agente pide comentar en el pull request #{n}. Responde en el PC.',
+  'msg.pr.commentFailed': 'El usuario aceptó el comentario en el pull request #{n}, pero no se pudo publicar: {detail}'
 };

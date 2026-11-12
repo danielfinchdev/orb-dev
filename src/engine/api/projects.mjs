@@ -8,6 +8,7 @@ import { oneLine } from '../../shared/text.mjs';
 import { adbStatus, ensureAdb } from '../host/android.mjs';
 import { projectIcon, setProjectIcon, clearProjectIcon, renameProjectIcon } from '../project-icons.mjs';
 import { git } from '../../platform/git.mjs';
+import { HEAD_OID_RE, MAX_COMMENT } from '../host/github.mjs';
 import { fail, str, oneOf } from './common.mjs';
 import { fold } from '../../domain/conversations/inbox.mjs';
 import { lazy } from './common.mjs';
@@ -18,7 +19,7 @@ const prNumber = (v) => {
   return n;
 };
 const headOid = (v) => {
-  if (typeof v !== 'string' || !/^[0-9a-f]{40}$/i.test(v)) fail(tr('msg.github.prNeedsHeadOid'));
+  if (typeof v !== 'string' || !HEAD_OID_RE.test(v)) fail(tr('msg.github.prNeedsHeadOid'));
   return v.toLowerCase();
 };
 const gh = lazy(() => import('../host/github.mjs'));
@@ -127,7 +128,7 @@ export function projectMethods({ realHome, insideHome, project, holding, coordin
       return holding(p.name, () => g.mergePr(p, n, m, oid));
     },
     'projects.prComment': async ({ name, number, body }) => {
-      const p = project(name); const n = prNumber(number); const text = str(body, 'comentario', 20000);
+      const p = project(name); const n = prNumber(number); const text = str(body, 'comentario', MAX_COMMENT);
       if (!text.trim()) fail(tr('msg.api.missing', { name: 'comentario' }));
       return (await gh()).commentPr(p, n, text);
     },
