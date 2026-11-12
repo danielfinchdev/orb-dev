@@ -218,3 +218,19 @@ test('agents cannot write, delete or list-and-read core\\normas: the rule on cor
     }
   }
 });
+
+test('render: a line that held tags and came out empty goes whole, wherever the conditions open and close', () => {
+  const nl = String.fromCharCode(10);
+  const r = (lines, conds = {}, vars = { v: 'V' }) => render(lines.join(nl), { vars, conds });
+  assert.equal(r(['A', '{?x}B{/}', 'C']), ['A', 'C'].join(nl));
+  assert.equal(r(['A', '{?x}', 'B', '{/}C']), ['A', 'C'].join(nl));
+  assert.equal(r(['{?x}A{:}{/}', 'B']), 'B');
+  // the same templates with the condition true
+  assert.equal(r(['A', '{?x}B{/}', 'C'], { x: true }), ['A', 'B', 'C'].join(nl));
+  assert.equal(r(['A', '{?x}', 'B', '{/}C'], { x: true }), ['A', 'B', 'C'].join(nl));
+  assert.equal(r(['{?x}', 'B', '{/}', 'C'], { x: true }), ['B', 'C'].join(nl));
+  // blank lines without tags stay; a line with only values keeps its value, without the blanks around it
+  assert.equal(r(['A', '', 'C']), ['A', '', 'C'].join(nl));
+  assert.equal(r(['A', '  {v}  ', 'C']), ['A', 'V', 'C'].join(nl));
+  assert.equal(r(['A', '  text {v}', 'C']), ['A', '  text V', 'C'].join(nl));
+});
