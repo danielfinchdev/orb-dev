@@ -4,6 +4,7 @@
 // may edit, and merging ALWAYS waits for the user's explicit answer on this PC's card, also with «auto» and «total».
 // The merge runs with the commit the user saw (--match-head-commit), so a branch that moved afterwards is refused by GitHub.
 // The card and its answer are this PC's only (permissions.mjs: prConfirm.* 'pc'; pr:request / pr:done never reach a phone).
+import { randomInt } from 'node:crypto';
 import { tr } from '../../platform/context.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { HEAD_OID_RE, MAX_COMMENT } from './github.mjs';
@@ -20,7 +21,8 @@ const userError = (key, vars) => Object.assign(new Error(tr(key, vars)), { userF
 // project while the merge runs. A comment also waits for the user's card, except in a chat with «total» (as `gh pr comment`
 // in the console does); the text published is exactly the text the card showed.
 export function createPrTools({ board, sessions, gh, holding = (name, work) => work(), emit = () => {}, log = () => {}, askMs = ASK_MS }) {
-  let seq = 0;
+  // random start: ids must not repeat after an engine restart, or a stale card could answer another request
+  let seq = randomInt(1, 1_000_000);
   const pending = new Map(); // id -> { id, session, project, number, kind, method, body, view, done(text), timer, busy }
   const reserved = new Map(); // session -> slots taken while a request is still being prepared
   const github = async () => (typeof gh === 'function' ? gh() : gh);
@@ -37,7 +39,13 @@ export function createPrTools({ board, sessions, gh, holding = (name, work) => w
     if (!Number.isInteger(n) || n < 1 || n > 10_000_000) throw userError('msg.pr.badNumber');
     return n;
   };
-  const must = (id) => { const r = pending.get(Number(id)); if (!r || r.busy) throw userError('msg.pr.gone'); return r; };
+  // The answer must name the very request the card showed: id plus chat, PR number and head commit.
+  const must = (ref) => {
+    const r = pending.get(Number(ref?.id));
+    if (!r || r.busy) throw userError('msg.pr.gone');
+    if (String(ref.session) !== r.session || ref.number !== r.number || (r.view.headRefOid != null && ref.headRefOid !== r.view.headRefOid)) throw userError('msg.pr.gone');
+    return r;
+  };
   // the chat as it is now (its level may have changed while the request waited)
   const countOf = (session) => [...pending.values()].filter((r) => r.session === session).length + (reserved.get(session) ?? 0);
   // a chat deleted while it had requests waiting: they go, and the agent (if still there) is told
@@ -111,9 +119,9 @@ export function createPrTools({ board, sessions, gh, holding = (name, work) => w
     // The window's list (also after a reload).
     pending: () => { alive(); return [...pending.values()].filter((r) => !r.busy).map((r) => r.view); },
     // The user accepted on the card: merges the commit they saw, not a newer one.
-    async answer({ id }) {
+    async answer(ref) {
       alive();
-      const r = must(id);
+      const r = must(ref);
       if (!mayWrite(r.session)) { finish(r, tr('msg.pr.readOnly')); throw userError('msg.pr.readOnly'); }
       r.busy = true; clearTimeout(r.timer);
       const settle = (text) => { r.busy = false; finish(r, text); };
@@ -139,8 +147,8 @@ export function createPrTools({ board, sessions, gh, holding = (name, work) => w
         throw error;
       }
     },
-    decline({ id }) {
-      const r = must(id);
+    decline(ref) {
+      const r = must(ref);
       log(`pr: rechazada fusión de #${r.number} · chat ${r.session}`);
       note(r, 'msg.pr.declinedNote', { n: r.number });
       finish(r, tr('msg.pr.declined', { n: r.number }));

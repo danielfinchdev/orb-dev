@@ -84,7 +84,7 @@ test('comment is refused for read and test chats; below total it waits for the c
     assert.equal(card.body, 'hola');
     assert.equal(card.title, 'Add thing');
     assert.equal(card.number, 7);
-    await tools.answer({ id: card.id });
+    await tools.answer(ref(card));
     assert.match((await p).text, /#7/);
     assert.deepEqual(ghCalls.filter((c) => c[0] === 'comment'), [['comment', 'tienda', 7, 'hola']], level);
   }
@@ -106,7 +106,7 @@ test('a comment declined, timed out or wiped never reaches gh; a failing gh clea
   const tools = make();
   const p = tools.run(chatOf('auto'), 'comment', { number: 7, body: 'hola' });
   await until(() => tools.pending().length === 1);
-  tools.decline({ id: tools.pending()[0].id });
+  tools.decline(ref(tools.pending()[0]));
   assert.match((await p).text, /rechazó/);
   const q = make({ askMs: 20 });
   assert.match((await q.run(chatOf('auto'), 'comment', { number: 7, body: 'hola' })).text, /falta de respuesta/);
@@ -119,7 +119,7 @@ test('a comment declined, timed out or wiped never reaches gh; a failing gh clea
   mergeError = new Error('boom');
   const m = tools.run(chatOf('editar'), 'merge', { number: 7 });
   await until(() => tools.pending().length === 1);
-  await assert.rejects(tools.answer({ id: tools.pending()[0].id }), /boom/);
+  await assert.rejects(tools.answer(ref(tools.pending()[0])), /boom/);
   assert.match((await m).text, /no se pudo: boom/);
   assert.deepEqual(tools.pending(), []);
 });
@@ -162,13 +162,13 @@ test('merge with total access does NOT merge until the user answers; the merged 
   assert.equal(events.find((e) => e[0] === 'pr:request')?.[1].id, card.id);
   // the branch moves after the user saw the card: gh still gets the old commit (and would refuse it)
   pr.headRefOid = MOVED;
-  await tools.answer({ id: card.id });
+  await tools.answer(ref(card));
   const done = await p;
   assert.deepEqual(ghCalls.filter((c) => c[0] === 'merge'), [['merge', 'tienda', 7, 'squash', OID]]);
   assert.match(done.text, /fusionado/);
   assert.ok(events.some((e) => e[0] === 'pr:done'));
   assert.deepEqual(tools.pending(), []);
-  await rejects(Promise.resolve().then(() => tools.answer({ id: card.id })), /ya no está activa/);
+  await rejects(Promise.resolve().then(() => tools.answer(ref(card))), /ya no está activa/);
 });
 
 test('when gh refuses a moved head, the agent sees the clear error', async () => {
@@ -177,7 +177,7 @@ test('when gh refuses a moved head, the agent sees the clear error', async () =>
   const p = tools.run(chatOf('auto'), 'merge', { number: 7 });
   await until(() => tools.pending().length === 1);
   mergeError = Object.assign(new Error('la rama del pull request cambió desde que lo viste'), { userFacing: true });
-  await assert.rejects(tools.answer({ id: tools.pending()[0].id }), /cambió desde que lo viste/);
+  await assert.rejects(tools.answer(ref(tools.pending()[0])), /cambió desde que lo viste/);
   assert.match((await p).text, /no se pudo: la rama del pull request cambió/);
 });
 
@@ -186,7 +186,7 @@ test('decline and timeout never call gh to merge', async () => {
   const tools = make();
   const p = tools.run(chatOf('editar'), 'merge', { number: 7 });
   await until(() => tools.pending().length === 1);
-  tools.decline({ id: tools.pending()[0].id });
+  tools.decline(ref(tools.pending()[0]));
   assert.match((await p).text, /rechazó fusionar/);
   const q = make({ askMs: 20 });
   const slow = await q.run(chatOf('editar'), 'merge', { number: 7 });
@@ -260,6 +260,24 @@ test('the new methods and events are for this PC only', () => {
   assert.equal(guardCall(board, 'projects.prComment', {}), null);
 });
 
+const ref = (c) => ({ id: c.id, session: c.session, number: c.number, headRefOid: c.headRefOid ?? null });
+
+test('an answer with another chat, PR number or commit is refused and the request stays pending', async () => {
+  reset();
+  const tools = make();
+  const p = tools.run(chatOf('editar'), 'merge', { number: 7 });
+  await until(() => tools.pending().length === 1);
+  const card = tools.pending()[0];
+  for (const bad of [{ session: 'other' }, { number: 8 }, { headRefOid: MOVED }, { headRefOid: null }]) {
+    await assert.rejects(Promise.resolve().then(() => tools.answer({ ...ref(card), ...bad })), /ya no está activa/);
+    assert.throws(() => tools.decline({ ...ref(card), ...bad }), /ya no está activa/);
+    assert.equal(tools.pending().length, 1);
+  }
+  assert.equal(ghCalls.filter((c) => c[0] === 'merge').length, 0);
+  await tools.answer(ref(card));
+  assert.match((await p).text, /fusionado/);
+});
+
 test('prConfirm.* answers the pending request through the API', async () => {
   reset();
   setGhForTests({ exe: () => 'gh-fake', run: async (cmd, args) => { ghCalls.push(['raw', args]); return { ok: true, out: JSON.stringify({ ...pr, statusCheckRollup: [], files: [], commits: [] }), err: '' }; } });
@@ -268,7 +286,7 @@ test('prConfirm.* answers the pending request through the API', async () => {
   for (let i = 0; i < 400 && !list.length; i++) { list = await api.call('prConfirm.pending', {}, DESKTOP); if (!list.length) await new Promise((r) => setTimeout(r, 5)); }
   assert.equal(list.length, 1);
   assert.equal(list[0].headRefOid, OID);
-  await api.call('prConfirm.decline', { id: list[0].id }, DESKTOP);
+  await api.call('prConfirm.decline', ref(list[0]), DESKTOP);
   assert.match((await p).text, /rechazó/);
   assert.equal(ghCalls.filter((c) => c[0] === 'raw' && c[1].includes('merge')).length, 0);
   setGhForTests(null);

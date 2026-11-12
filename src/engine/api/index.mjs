@@ -58,6 +58,10 @@ export { fail, str, int, oneOf } from './common.mjs';
 const inst = lazy(() => import('../host/installer.mjs'));
 const exp = lazy(() => import('../host/expert.mjs'));
 const boards = lazy(() => import('../whiteboard.mjs'));
+const prRef = ({ id, session, number, headRefOid }) => ({
+  id: int(id, 'petición'), session: str(session, 'conversación', 200), number: int(number, 'pull request'),
+  headRefOid: headRefOid == null ? null : str(headRefOid, 'commit', 64)
+});
 
 export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef = { current: null }, onUnlocked = () => {}, onLocked = () => {} }) {
   const realHome = (() => { try { return fs.realpathSync(ctx.home); } catch { return ctx.home; } })();
@@ -332,8 +336,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'secrets.decline': ({ id }) => secrets.decline({ id: int(id, 'petición') }),
     // a merge an agent asked for: shown and answered only on this PC's card.
     'prConfirm.pending': () => prTools.pending(),
-    'prConfirm.answer': ({ id }) => prTools.answer({ id: int(id, 'petición') }),
-    'prConfirm.decline': ({ id }) => prTools.decline({ id: int(id, 'petición') }),
+    // the answer names the request by id, chat, PR number and head commit, so a stale card cannot answer another one
+    'prConfirm.answer': (a) => prTools.answer(prRef(a)),
+    'prConfirm.decline': (a) => prTools.decline(prRef(a)),
     // the user's terminal inside Orb (this PC only, never in core or a protected folder).
     'terminal.list': () => terminals.list(),
     'terminal.open': ({ dir }) => terminals.open({ dir: str(dir, 'carpeta', 1000) }),
