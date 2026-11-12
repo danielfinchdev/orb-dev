@@ -16,6 +16,7 @@ import { t, useT } from '@/lib/i18n.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { connectorKeys } from './master.jsx';
 import { CATEGORIES } from '../../shared/layout.mjs';
+import { MoreButton } from '@/components/ui/primitives.jsx';
 
 // Where one came from, in a word (orb.json › source).
 const SOURCE = { orb: 'ext.source.orb', importado: 'ext.source.imported', creado: 'ext.source.created', usuario: 'ext.source.user' };
@@ -130,7 +131,7 @@ function Row({ item, detail, note = null, mono = false, on, disabled = false, on
       <Switch checked={on} disabled={disabled} onCheckedChange={onToggle} aria-label={t('ext.toggle', { name: item.name })} data-testid="ext-toggle" />
       {keys ? <BubbleTip title={t('master.keys')}><Button variant="ghost" size="icon-sm" aria-label={t('master.keys')} onClick={() => connectorKeys(keys)} data-testid="mcp-keys"><KeyRound /></Button></BubbleTip> : null}
       <DropdownMenu modal={false}>
-        <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={t('ext.more', { name: item.name })} data-testid="ext-menu"><Ellipsis /></Button></DropdownMenuTrigger>
+        <DropdownMenuTrigger asChild><MoreButton label={t('ext.more', { name: item.name })} data-testid="ext-menu" /></DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           {menu.map((m, i) => (m ? <DropdownMenuItem key={m.label} variant={m.danger ? 'destructive' : undefined} onSelect={m.run} data-testid={m.testid}><m.icon />{m.label}</DropdownMenuItem> : <DropdownMenuSeparator key={`s${i}`} />))}
         </DropdownMenuContent>

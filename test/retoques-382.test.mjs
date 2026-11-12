@@ -98,7 +98,7 @@ test('F5 reloads the window and hands each unsent message back to its box, once'
 
 test('the first-run welcome opens maximised and fits the window', () => {
   const setup = read('views', 'setup.jsx');
-  assert.match(setup, /useEffect\(\(\) => \{ bridge\.windowControls\?\.act\('maximize-on'\)\.catch\(\(\) => \{\}\); \}, \[\]\);/);
+  assert.match(setup, /useEffect\(\(\) => \{ bridge\.windowControls\?\.act\('maximize-on'\)\.catch\(quiet\); \}, \[\]\);/);
   assert.equal([...setup.matchAll(/className="brand-sky onboard"/g)].length, 2);
   assert.match(read('views', 'master.jsx'), /<div className="brand-sky onboard">\s*<form onSubmit=\{submit\} className="[^"]*onboard-card/);
   assert.doesNotMatch(setup + read('views', 'master.jsx').split('export function MasterLocked')[0], /pt-24 pb-6/);

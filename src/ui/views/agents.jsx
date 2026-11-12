@@ -5,7 +5,7 @@ import { notifyError, notifyInfo, notifyOk, notifyWarn } from '@/lib/notify.js';
 import { useCatalog } from '@/components/brain-picker.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Installer } from '@/components/installer.jsx';
-import { PageHeader } from '@/components/page.jsx';
+import { PageHeader, PageBody } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Field, Input, Spinner } from '@/components/ui/basic.jsx';
@@ -335,7 +335,7 @@ export function AgentsView() {
       <PageHeader icon={<Orbit className="text-primary size-5" />} title={t('agents.title')} meta={t('agents.meta')}>
         <Button size="sm" variant="outline" onClick={() => { setAgents(null); load(true); }}><RefreshCw />{t('agents.checkAll')}</Button>
       </PageHeader>
-      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 py-5">
+      <PageBody>
         <div className="grid gap-4">
           <LoginCard reload={() => load(true)} windows={system?.platform === 'win32'} />
           {system?.platform === 'win32' ? (
@@ -374,7 +374,7 @@ export function AgentsView() {
             </CardContent>
           </Card>
         </div>
-      </div>
+      </PageBody>
     </>
   );
 }

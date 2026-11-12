@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { phoneLayout } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
+import { CloseButton } from '@/components/ui/primitives.jsx';
 
 // The frame: a pane (PC) or a full sheet (phone).
 export function InfoFrame({ title, onClose, children }) {
@@ -14,7 +15,7 @@ export function InfoFrame({ title, onClose, children }) {
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent data-sheet="full" showClose={false} className="flex flex-col gap-3 overflow-y-auto *:shrink-0" data-testid="chat-info">
         <div className="grid grid-cols-[40px_1fr_40px] items-center">
-          <Button type="button" size="icon" variant="ghost" onClick={onClose} aria-label={t('comp.close')} data-testid="chat-info-close"><X /></Button>
+          <CloseButton onClick={onClose} className="size-9" data-testid="chat-info-close" />
           <DialogTitle className="text-center text-base font-semibold">{title}</DialogTitle>
         </div>
         <DialogDescription className="sr-only">{title}</DialogDescription>
@@ -26,7 +27,7 @@ export function InfoFrame({ title, onClose, children }) {
     <aside className="bg-sidebar/60 flex w-[340px] shrink-0 flex-col border-l" aria-label={title} data-testid="chat-info">
       <div className="app-titlebar wco-pad flex h-14 shrink-0 items-center gap-2 border-b px-4">
         <h2 className="min-w-0 flex-1 truncate text-[15px] font-semibold">{title}</h2>
-        <Button size="icon-sm" variant="ghost" className="no-drag" onClick={onClose} aria-label={t('comp.close')} data-testid="chat-info-close"><X /></Button>
+        <CloseButton className="no-drag" onClick={onClose} data-testid="chat-info-close" />
       </div>
       <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto px-4 py-5">{children}</div>
     </aside>

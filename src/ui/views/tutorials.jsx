@@ -3,7 +3,7 @@
 // tour (components/tour.jsx). Texts: help.* in the locales.
 import { useState } from 'react';
 import { LifeBuoy, Search, Rocket, MessageSquare, Brain, MessageSquarePlus, ClipboardCheck, FolderGit2, Orbit, Gauge, CalendarSync, NotebookPen, Smartphone, SquareTerminal, Gamepad2, Palette, ShieldCheck, Presentation, Keyboard, CircleHelp, ChevronRight, Play, ArrowRight } from 'lucide-react';
-import { PageHeader } from '@/components/page.jsx';
+import { PageHeader, PageBody } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardHeader, CardTitle, CardContent, Empty, Input, Kbd } from '@/components/ui/basic.jsx';
@@ -11,6 +11,7 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 import { useStore, go, openSettings, openGames, startTour, bridge, newChat } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
+import { SearchInput } from '@/components/ui/primitives.jsx';
 
 // id: texts help.tut.<id>.title and .l1…lN (lines). go: the screen it talks about (pc: a button only on the PC).
 const TUTORIALS = [
@@ -89,9 +90,9 @@ export function TutorialsView() {
   return (
     <>
       <PageHeader icon={<LifeBuoy className="text-primary size-5" />} title={t('help.title')} meta={t('help.meta')}>
-        <div className="relative"><Search className="text-muted-foreground absolute top-2.5 left-2.5 size-4" /><Input className="h-8 w-64 pl-8" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('help.search')} aria-label={t('help.search')} data-testid="help-search" /></div>
+        <SearchInput value={q} onChange={setQ} placeholder={t('help.search')} data-testid="help-search" />
       </PageHeader>
-      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 py-5" data-testid="tutorials-view">
+      <PageBody className="px-5 py-5" data-testid="tutorials-view">
         <div className="mx-auto grid max-w-5xl gap-7">
           {bridge.mobile || query ? null : (
             <Card className="flex-row items-center gap-4 px-5 py-4" data-testid="tour-card">
@@ -127,7 +128,7 @@ export function TutorialsView() {
             </Section>
           ) : null}
         </div>
-      </div>
+      </PageBody>
     </>
   );
 }

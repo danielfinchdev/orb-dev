@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { needsApproval } from '@/lib/task-approval.js';
 import { TaskStatus } from '@/components/task-state.jsx';
+import { SectionLabel } from '@/components/ui/primitives.jsx';
 
 // ---- data: the rows of the zone (the conversations and direct chats of the store, the marks of inbox.list)
 export function useOrbInbox() {
@@ -396,7 +397,7 @@ function FilterMenu({ filter, setFilter, agents, snoozed = 0 }) {
   );
 }
 
-const Sub = ({ children }) => <div className="text-muted-foreground px-2.5 pt-3 pb-1 text-[11px] font-medium tracking-wide uppercase">{children}</div>;
+const Sub = SectionLabel;
 
 export function OrbInbox({ page = false }) {
   const t = useT();

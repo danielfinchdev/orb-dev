@@ -81,6 +81,7 @@ export function BackButton({ to, label }) {
   return <Button size="icon" variant="ghost" className="-ml-2 shrink-0" onClick={() => go(to)} aria-label={label ?? t('comp.backToList')} data-testid="page-back"><ChevronLeft className="size-6" /></Button>;
 }
 
-export function PageBody({ className, children }) {
-  return <div className={cn('min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 py-5', className)}>{children}</div>;
+// The scrolling body under a PageHeader. `column`: one centred column for a list.
+export function PageBody({ className, column = false, children, ...props }) {
+  return <div className={cn('min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 py-5', className)} {...props}>{column ? <div className="mx-auto w-full max-w-3xl">{children}</div> : children}</div>;
 }

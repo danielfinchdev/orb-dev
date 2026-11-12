@@ -16,6 +16,7 @@ import { confirm } from './dialogs.jsx';
 import { call, act, go, setState } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
+import { Note } from './ui/primitives.jsx';
 
 export { needsApproval };
 
@@ -70,10 +71,12 @@ export function WaitLabel({ task, className }) {
 export function PausedNote({ className }) {
   const t = useT();
   return (
-    <div className={cn('bg-warning/10 border-warning/40 flex flex-wrap items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[13px]', className)} data-testid="queue-paused">
-      <span className="min-w-0 flex-1">{t('tasks.wait.pausedNote')}</span>
-      <Button size="sm" variant="soft" onClick={() => resumeQueue(t)}><Play />{t('tasks.wait.resume')}</Button>
-    </div>
+    <Note tone="warning" className={className} data-testid="queue-paused">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="min-w-0 flex-1">{t('tasks.wait.pausedNote')}</span>
+        <Button size="sm" variant="soft" onClick={() => resumeQueue(t)}><Play />{t('tasks.wait.resume')}</Button>
+      </div>
+    </Note>
   );
 }
 

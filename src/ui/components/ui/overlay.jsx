@@ -170,6 +170,16 @@ export function DropdownMenuCheckboxItem({ className, children, checked, onCheck
     </DropdownPrimitive.CheckboxItem>
   );
 }
+// one choice among several (a sort order, a mode): the group keeps one value, the chosen item shows a dot.
+export const DropdownMenuRadioGroup = DropdownPrimitive.RadioGroup;
+export function DropdownMenuRadioItem({ className, children, ...props }) {
+  return (
+    <DropdownPrimitive.RadioItem className={cn('focus:bg-accent focus:text-accent-foreground relative flex cursor-pointer items-center gap-2 rounded-md py-1.5 pr-2 pl-8 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50', className)} {...props}>
+      <span className="absolute left-2 grid size-4 place-items-center"><DropdownPrimitive.ItemIndicator><span className="bg-primary block size-2 rounded-full" /></DropdownPrimitive.ItemIndicator></span>
+      {children}
+    </DropdownPrimitive.RadioItem>
+  );
+}
 export function DropdownMenuSeparator() { return <DropdownPrimitive.Separator className="bg-border -mx-1 my-1 h-px" />; }
 export function DropdownMenuLabel({ className, ...props }) { return <DropdownPrimitive.Label className={cn('text-muted-foreground px-2 py-1.5 text-xs', className)} {...props} />; }
 

@@ -19,6 +19,7 @@ import { AGENT, STATUS, REASONING, MODE, SENSITIVE, options } from '@/lib/labels
 import { ago, fmtTime, cn } from '@/lib/utils.js';
 import { t, useT } from '@/lib/i18n.js';
 import { needsApproval } from '@/lib/task-approval.js';
+import { Note } from '@/components/ui/primitives.jsx';
 
 const FILTERS = [
   ['encurso', 'tasks.filter.active', (x) => ['running', 'queued'].includes(x.status)], // working now or waiting its turn
@@ -128,11 +129,11 @@ function TaskDetail({ id, live }) {
       {/* held for review: what it did and where, with «Aceptar» and «Deshacer»; a paused queue, with «Reanudar». */}
       {t.held ? <HeldCard task={t} className="mx-5" /> : null}
       {t.status === 'queued' && t.waiting?.kind === 'paused' ? <PausedNote className="mx-5" /> : null}
-      {t.status === 'queued' && t.waiting?.kind === 'manual' ? <div className="bg-muted/50 mx-5 rounded-xl border px-3.5 py-2.5 text-[13px]" data-testid="task-wait-manual">{tr('tasks.wait.manualNote')}</div> : null}
-      {t.status === 'queued' && t.waiting?.kind === 'deps' ? <div className="bg-muted/50 mx-5 rounded-xl border px-3.5 py-2.5 text-[13px]" data-testid="task-wait-deps">{waitText(tr, t)}</div> : null}
+      {t.status === 'queued' && t.waiting?.kind === 'manual' ? <Note className="mx-5" data-testid="task-wait-manual">{tr('tasks.wait.manualNote')}</Note> : null}
+      {t.status === 'queued' && t.waiting?.kind === 'deps' ? <Note className="mx-5" data-testid="task-wait-deps">{waitText(tr, t)}</Note> : null}
       {t.status === 'running' && live ? <div className="bg-muted/50 mx-5 rounded-xl border px-3.5 py-3" data-testid="task-live"><LiveTask t={live} actions={false} /></div> : null}
-      {t.undone ? <div className="bg-muted/50 mx-5 flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[13px]"><Undo2 className="text-muted-foreground size-4" />{tr('tasks.undoneNote', { when: fmtTime(t.undone.at) })}</div> : null}
-      {t.status === 'limited' && t.limited_until ? <div className="bg-warning/10 border-warning/40 mx-5 flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[13px]"><Hourglass className="text-warning-ink size-4" />{tr('tasks.limitedNote', { when: fmtTime(t.limited_until) })}</div> : null}
+      {t.undone ? <Note icon={Undo2} className="mx-5">{tr('tasks.undoneNote', { when: fmtTime(t.undone.at) })}</Note> : null}
+      {t.status === 'limited' && t.limited_until ? <Note tone="warning" icon={Hourglass} className="mx-5">{tr('tasks.limitedNote', { when: fmtTime(t.limited_until) })}</Note> : null}
       {t.review ? <div className={cn('mx-5 flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[13px]', t.review.verdict === 'correcto' ? 'border-success/40 bg-success/10' : t.review.verdict === 'con fallos' ? 'border-destructive/40 bg-destructive/10' : 'bg-muted/50')}><ScanSearch className="size-4" />{tr('tasks.review.line', { agent: AGENT[t.review.agent] ?? t.review.agent })} <span className="font-medium">{verdictLabel(t.review.verdict)}</span><Button size="sm" variant="ghost" className="ml-auto" onClick={() => go({ view: 'tasks', id: t.review.task })}>{tr('tasks.review.see', { id: t.review.task })}</Button></div> : null}
       <dl className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1.5 px-5 text-[13px]">
         <dt className="text-muted-foreground">{tr('tasks.agent')}</dt><dd>{tr('tasks.agentLine', { agent: `${t.accountLabel ?? AGENT[who] ?? who}${t.model ? ` · ${t.modelLabel ?? t.model}` : ''}`, reasoning: REASONING[t.reasoning]?.toLowerCase() ?? t.reasoning })}</dd>

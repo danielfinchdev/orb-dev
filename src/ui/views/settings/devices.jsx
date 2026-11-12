@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { notifyInfo } from '@/lib/notify.js';
 import QRCode from 'qrcode';
 import { FolderOpen, Smartphone, Globe, PictureInPicture2 } from 'lucide-react';
-import { PageHeader } from '@/components/page.jsx';
+import { PageHeader, PageBody } from '@/components/page.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, PathText, Spinner } from '@/components/ui/basic.jsx';
@@ -225,7 +225,7 @@ export function PhoneView() {
   return (
     <>
       <PageHeader icon={<Smartphone className="text-primary size-5" />} title={t('settings.phone')} />
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5"><div className="mx-auto grid max-w-xl gap-4"><PhoneCard /></div></div>
+      <PageBody><div className="mx-auto grid max-w-xl gap-4"><PhoneCard /></div></PageBody>
     </>
   );
 }

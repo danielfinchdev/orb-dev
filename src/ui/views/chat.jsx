@@ -40,6 +40,7 @@ import { MsgTime, BarPause, COMPACT_AT, CompactButton } from '@/components/conve
 import { ContextMeter } from '@/components/conversation/context-meter.jsx';
 import { needsApproval } from '@/lib/task-approval.js';
 import { quiet } from '@/lib/quiet.js';
+import { MoreButton } from '@/components/ui/primitives.jsx';
 
 
 // a different greeting each time the chat opens (lib/greeting.js); the last one is remembered so it does not repeat.
@@ -475,7 +476,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
         {/* only the bell and pause stay on the bar; the chat's actions and the games go into ⋯ (also in «Nuevo chat»). */}
         {conv || fullPc() ? (
           <DropdownMenu modal={false}>
-            <BubbleTip title={t('chats.more')}><DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={t('chats.more')} data-testid="orb-chat-more"><Ellipsis /></Button></DropdownMenuTrigger></BubbleTip>
+            <BubbleTip title={t('chats.more')}><DropdownMenuTrigger asChild><MoreButton label={t('chats.more')} data-testid="orb-chat-more" /></DropdownMenuTrigger></BubbleTip>
             <DropdownMenuContent align="end" className="w-56">
               {conv && !embedded ? <DropdownMenuItem onSelect={() => openOrbInfo({ type: 'chat' })} data-testid="more-info"><Info />{t('orbchats.info')}</DropdownMenuItem> : null}
               {slim ? <DropdownMenuItem onSelect={() => setQueuePaused(!app.paused, t)} data-testid={app.paused ? 'bar-resume' : 'bar-pause'}>{app.paused ? <Play /> : <Pause />}{app.paused ? t('bar.resume') : t('bar.pause')}</DropdownMenuItem> : null}

@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { History, Copy, Search } from 'lucide-react';
 import { notifyOk } from '@/lib/notify.js';
-import { PageHeader } from '@/components/page.jsx';
+import { PageHeader, PageBody } from '@/components/page.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, Empty, Input } from '@/components/ui/basic.jsx';
 import { useStore, call, go } from '@/lib/store.js';
@@ -11,6 +11,7 @@ import { fmtTime } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { activityLabel, activityDetail } from '@/lib/activity.js';
 import { quiet } from '@/lib/quiet.js';
+import { SearchInput } from '@/components/ui/primitives.jsx';
 
 // bare: inside «Memorias»: the search and copy go above the list instead of in a header of its own.
 export function ActivityView({ bare = false }) {
@@ -24,9 +25,9 @@ export function ActivityView({ bare = false }) {
   return (
     <>
       {bare ? null : <PageHeader icon={<History className="text-primary size-5" />} title={t('activity.title')} meta={t('activity.meta')} />}
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 md:pb-28">
+      <PageBody className="px-5 py-5 md:pb-28">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <div className="relative"><Search className="text-muted-foreground absolute top-2.5 left-2.5 size-4" /><Input className="h-8 w-64 max-w-full pl-8" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('activity.search')} data-testid="activity-search" /></div>
+          <SearchInput value={q} onChange={setQ} placeholder={t('activity.search')} data-testid="activity-search" />
           <Button size="sm" variant="ghost" onClick={copy}><Copy />{t('activity.copy')}</Button>
         </div>
         <Card className="gap-0 py-0">
@@ -39,7 +40,7 @@ export function ActivityView({ bare = false }) {
             </div>
           )) : <Empty icon={History} title={t('activity.empty')} />}
         </Card>
-      </div>
+      </PageBody>
     </>
   );
 }

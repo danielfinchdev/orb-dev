@@ -4,6 +4,7 @@ import { Robot } from './robot.jsx';
 import { ThemeToggle, SidebarToggle } from './theme-toggle.jsx';
 import { useStore, go, bridge, openSettings, anyChatBusy } from '@/lib/store.js';
 import { Tip, BubbleTip } from './ui/overlay.jsx';
+import { NavRow } from '@/components/ui/primitives.jsx';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { PRODUCT } from '../../shared/product.mjs';
@@ -22,15 +23,8 @@ function Wordmark() {
   );
 }
 
-export function NavItem({ icon: Icon, iconEl, label, active, onClick, children, testid }) {
-  return (
-    <button data-testid={testid} onClick={onClick} className={cn('group flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[14px] compact:text-[13px] transition-colors', active ? 'bg-accent text-accent-foreground' : 'text-foreground/80 hover:bg-accent/60 hover:text-foreground')}>
-      {iconEl ?? (Icon ? <Icon className={cn('size-4 shrink-0', active ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')} /> : null)}
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      {children}
-    </button>
-  );
-}
+// A place in the menu (components/ui/primitives.jsx › NavRow).
+export const NavItem = NavRow;
 
 // the sidebar's width, dragged from its edge (a double click goes back to the usual one), remembered in this window.
 const SIDEBAR_DEFAULT = 256; const SIDEBAR_MIN = 216; const SIDEBAR_MAX = 440; const WIDTH_KEY = 'orb.anchoMenu';
