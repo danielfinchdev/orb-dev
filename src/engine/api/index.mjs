@@ -26,6 +26,7 @@ import { grantMethods } from '../security/grants.mjs';
 import { agentAuth } from '../../domain/security/agent-auth.mjs';
 import { createSecretRequests } from '../security/agent-secrets.mjs';
 import { createPrTools } from '../host/pr-tools.mjs';
+import { createHtmlPages } from '../host/html-pages.mjs';
 import { createTerminals } from '../host/user-terminal.mjs';
 import { extensionMethods } from './extensions.mjs';
 import { rulesMethods } from './rules.mjs';
@@ -63,7 +64,12 @@ const prRef = ({ id, session, number, headRefOid }) => ({
   headRefOid: headRefOid == null ? null : str(headRefOid, 'commit', 64)
 });
 
-export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef = { current: null }, onUnlocked = () => {}, onLocked = () => {} }) {
+const htmlRef = ({ id, session }) => ({ id: str(id, 'página', 64), session: str(session, 'conversación', 200) });
+
+export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitRaw, log, version, remoteRef = { current: null }, onUnlocked = () => {}, onLocked = () => {} }) {
+  // A deleted or trashed chat takes the HTML pages it showed with it (htmlPages is declared below; it exists by the first event).
+  const emit = (event, payload) => { emitRaw(event, payload); if (event === 'session:removed' && payload?.id != null) htmlPages.dropSession(payload.id); };
+  if (sessions.emit === emitRaw) sessions.emit = emit; // sessions.remove() emits through the engine's own emit
   const realHome = (() => { try { return fs.realpathSync(ctx.home); } catch { return ctx.home; } })();
   let catalogCache = null; // models.catalog, for a few seconds (see there)
   const insideHome = (p) => { const rel = path.relative(realHome, p); return Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel); };
@@ -156,8 +162,11 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   const secrets = createSecretRequests({ sessions, auth: agentAuth, master: () => ctx.master, emit, log });
   // the pull-request tools of the agents (pr-tools.mjs); a merge is answered only on this PC's card.
   const prTools = createPrTools({ board, sessions, gh: () => import('../host/github.mjs'), holding, emit, log });
+  // the HTML pages an agent shows in a chat (html-pages.mjs): sandboxed, internet off, switched on only on this PC.
+  const htmlPages = createHtmlPages({ sessions, emit: emitRaw, log });
   agentAuth.onCall = async ({ session }, method, args) => {
     if (method === 'secret' && session) return secrets.request(sessions.get(session), args);
+    if (method === 'html' && session) return htmlPages.show(sessions.get(session), args);
     if (method === 'pr' && session) return prTools.run(sessions.get(session), String(args.tool ?? ''), args.args);
     if (method !== 'android' || !session) throw Object.assign(new Error(tr('msg.android.notAllowed')), { userFacing: true });
     const s = sessions.get(session);
@@ -328,7 +337,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...data.methods,
     // Orb locked (or a new password): the grants go, and so do the secrets typed for the agents.
     // under the lock screen the user's terminals take nothing and show nothing (user-terminal.mjs).
-    ...masterMethods({ ...shared, onUnlocked, onLock: (why) => { secrets.wipe(); prTools.wipe(); try { onLocked(); } catch (error) { log(`bloqueo: ${error.message}`); } return grants.revokeAll(why); }, onScreen: (v) => terminals.setLocked(v) }),
+    ...masterMethods({ ...shared, onUnlocked, onLock: (why) => { secrets.wipe(); prTools.wipe(); htmlPages.wipe(); try { onLocked(); } catch (error) { log(`bloqueo: ${error.message}`); } return grants.revokeAll(why); }, onScreen: (v) => terminals.setLocked(v) }),
     // the private card of a secret an agent asked for (this PC only; saving or using a saved one asks for
     // the master password: permissions.mjs › needsUnlock).
     'secrets.pending': () => secrets.pending(),
@@ -339,6 +348,10 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // the answer names the request by id, chat, PR number and head commit, so a stale card cannot answer another one
     'prConfirm.answer': (a) => prTools.answer(prRef(a)),
     'prConfirm.decline': (a) => prTools.decline(prRef(a)),
+    // the HTML pages of the chats: listed, closed and given internet only from this PC's window.
+    'htmlPages.list': () => htmlPages.list(),
+    'htmlPages.setInternet': (a) => { if (typeof a?.internet !== 'boolean') fail('internet: true o false'); return htmlPages.setInternet(htmlRef(a), a.internet); },
+    'htmlPages.close': (a) => htmlPages.close(htmlRef(a)),
     // the user's terminal inside Orb (this PC only, never in core or a protected folder).
     'terminal.list': () => terminals.list(),
     'terminal.open': ({ dir }) => terminals.open({ dir: str(dir, 'carpeta', 1000) }),

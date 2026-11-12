@@ -547,6 +547,11 @@ if (!BOSS && SIGNED_SESSION) tools.push(
   { name: 'orb_pr_merge', description: `Fusiona un pull request abierto del proyecto de este chat (method: merge, squash o rebase). Fusionar SIEMPRE pide la confirmación de ${USER} en el PC, también con acceso total; espera hasta 5 min. Se fusiona el commit que ${USER} vio. ${PR_DATA}`, inputSchema: { type: 'object', required: ['number'], properties: { number: prNumber, method: { type: 'string', enum: ['merge', 'squash', 'rebase'] } } }, run: async (a) => (await pr('merge', a)).text }
 );
 
+// an HTML page shown inside this chat (src/engine/host/html-pages.mjs): sandboxed, no internet unless the user allows it.
+if (!BOSS && SIGNED_SESSION) tools.push(
+  { name: 'orb_html_show', description: `Muestra una página HTML (máx. 512 KB, todo en un solo archivo: CSS y JS en línea) dentro del chat de ${USER}. La página corre en un sandbox sin acceso a Orb, archivos, claves ni internet; ${USER} puede activar internet para esa página con un interruptor. No puedes leer lo que hace la página ni activarle internet.`, inputSchema: { type: 'object', required: ['title', 'html'], properties: { title: { type: 'string', description: 'Título corto (texto plano, máx. 120 caracteres)' }, html: { type: 'string', description: 'El documento HTML completo' } } }, run: async (a) => (await AUTH.call('html', { title: a.title, html: a.html })).text }
+);
+
 const reply = (id, payload) => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id, ...payload })}\n`);
 
 readline.createInterface({ input: process.stdin }).on('line', async (line) => {

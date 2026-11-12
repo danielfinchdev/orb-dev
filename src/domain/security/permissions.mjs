@@ -86,6 +86,8 @@ export const METHODS = Object.freeze({
   'secrets.pending': 'pc', 'secrets.answer': 'pc', 'secrets.decline': 'pc',
   // a merge an agent asked for, confirmed only on this PC's card (src/engine/host/pr-tools.mjs)
   'prConfirm.pending': 'pc', 'prConfirm.answer': 'pc', 'prConfirm.decline': 'pc',
+  // the HTML pages of the chats: only this PC's window may list them, close them or give them internet (src/engine/host/html-pages.mjs)
+  'htmlPages.list': 'pc', 'htmlPages.setInternet': 'pc', 'htmlPages.close': 'pc',
   // the user's terminal inside Orb (src/engine/host/user-terminal.mjs)
   'terminal.list': 'pc', 'terminal.open': 'pc', 'terminal.write': 'pc', 'terminal.close': 'pc',
   // Ajustes › Skills y MCP (src/engine/api/extensions.mjs): what agents run comes in and out of core only here
