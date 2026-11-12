@@ -46,6 +46,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.navigation.toRoute
 import dev.orb.app.ui.chats.SearchViewModel
+import dev.orb.app.ui.lock.LockScreen
 import dev.orb.app.ui.shell.MainShell
 import dev.orb.app.ui.projects.PrDetailScreen
 import dev.orb.app.ui.projects.PrDetailViewModel
@@ -118,9 +119,16 @@ fun OrbApp(container: AppContainer) {
             } else {
                 // Decided once at launch; a restored back stack wins over it after a rotation.
                 val start: Any = remember { if (container.runtime.value != null) Home else Welcome }
+                // Kept above the lock so the person returns to where they were; while locked, no screen is composed at all.
+                val nav = rememberNavController()
+                val locked by container.lock.gate.locked.collectAsStateWithLifecycle()
                 Box(Modifier.fillMaxSize()) {
-                    OrbNav(container, start)
-                    ShareWaiting(container, Modifier.align(Alignment.TopCenter).systemBarsPadding())
+                    if (locked) {
+                        LockScreen(container.lock, Modifier.systemBarsPadding())
+                    } else {
+                        OrbNav(container, start, nav)
+                        ShareWaiting(container, Modifier.align(Alignment.TopCenter).systemBarsPadding())
+                    }
                 }
             }
         } }
@@ -128,8 +136,7 @@ fun OrbApp(container: AppContainer) {
 }
 
 @Composable
-private fun OrbNav(container: AppContainer, start: Any) {
-    val nav = rememberNavController()
+private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation.NavHostController) {
     var appearance by rememberSaveable { mutableStateOf(false) }
     if (appearance) AppearanceSheet(container.themePrefs, onDismiss = { appearance = false })
     OpenFromNotice(container, nav)

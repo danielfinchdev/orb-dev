@@ -116,8 +116,12 @@ class AppContainer(private val app: Application) {
         shareRoot.deleteRecursively()
     }
 
-    /** What the app lock plugs into: shared content is shown only while this is open. */
-    var gate: dev.orb.app.share.AppGate = dev.orb.app.share.AppGate.AlwaysOpen
+    /** The optional app lock (off by default). It keeps a flag and a delay; the secret is the system's own authentication. */
+    val lockPrefs = dev.orb.app.lock.LockPrefs(SharedPrefsStore(app.getSharedPreferences("orb.lock", android.content.Context.MODE_PRIVATE)))
+    val lock = dev.orb.app.lock.AppLock(lockPrefs, dev.orb.app.lock.AppLockGate(lockPrefs, android.os.SystemClock::elapsedRealtime))
+
+    /** What the app lock plugs into: the content (and shared content) is shown only while this is open. */
+    val gate: dev.orb.app.share.AppGate get() = lock.gate
 
     /** Content another app shared, kept until the person chooses where it goes (or drops it). */
     val pendingShare = MutableStateFlow<dev.orb.app.share.ShareRequest?>(null)
@@ -259,6 +263,7 @@ class AppContainer(private val app: Application) {
 
     fun onForeground() = synchronized(runtimeLock) {
         foreground = true
+        lock.gate.onForeground()
         _runtime.value?.client?.resume()
         // The app lists the notices itself now.
         notifier?.onForeground()
@@ -267,6 +272,7 @@ class AppContainer(private val app: Application) {
 
     fun onBackground() = synchronized(runtimeLock) {
         foreground = false
+        lock.gate.onBackground()
         if (!keepAliveRunning.value) _runtime.value?.client?.pause()
         Unit
     }
