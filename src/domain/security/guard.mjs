@@ -20,6 +20,7 @@
 //              which is denied as in every other mode.
 import { translate } from '../../shared/i18n.mjs';
 import { ctx } from '../../platform/context.mjs';
+import { isRailOn, riskRailOn } from '../rules/rails.mjs';
 import { expandEnv, pathWords, unquoted } from './guard/shell-text.mjs';
 import { personalRoots } from './guard/roots.mjs';
 import { deletesProjectOrGit, insideProject, isGitRunsFile, projectRoots, resolveTarget, writesGitRunsFile, writesOutside, writesProjectFile } from './guard/project-writes.mjs';
@@ -74,6 +75,8 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
   const cls = toolClass(tool, kind);
   const text = [command, ...paths, ...patterns].join(' ');
   const auto = permission === 'auto';
+  // a paused rail lifts only its own block (the permission level still decides the rest).
+  const protectedNow = (t) => (isRailOn('rutas-protegidas') ? protectedHit(t) : null);
   if (linkIntoCore(command, internalDir, cwd)) return { decision: 'deny', reason: T('internalLink') };
   if (touchesInternal({ command, paths, patterns, internalDir, cwd, read: cls === 'read' })) {
     // the owner's personal credentials (keys, browsers, the agents' logins): their own reason.
@@ -83,7 +86,7 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
     // only the skills of core: a command (one of their scripts) asks first; changing them, never (an agent makes a
     // new version with orb_create_skill, which the user approves). «Auto» runs it (the user turned the skill on).
     const skillsOnly = cls !== 'read' && !logsOnly && !touchesInternal({ command, paths, patterns, internalDir, cwd, read: ['skills'] });
-    if (skillsOnly && cls === 'exec' && permission !== 'leer' && !escalates(command) && !protectedHit(text) && runsSkillScript(command, internalDir, cwd)) return auto ? autoAllow(T('internalSkillsRun')) : { decision: 'ask', reason: T('internalSkillsRun') };
+    if (skillsOnly && cls === 'exec' && permission !== 'leer' && !escalates(command) && !protectedNow(text) && runsSkillScript(command, internalDir, cwd)) return auto ? autoAllow(T('internalSkillsRun')) : { decision: 'ask', reason: T('internalSkillsRun') };
     return { decision: 'deny', reason: T(logsOnly ? 'internalLogs' : skillsOnly ? 'internalSkills' : 'internal') };
   }
   if (escalates(command)) return { decision: 'deny', reason: T('sudo') };
@@ -91,7 +94,7 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
   if (cls !== 'read' && aliasesDrive(command)) return { decision: 'deny', reason: T('driveAlias') };
   if (cls !== 'read' && copiesClosedParent(command, internalDir, cwd)) return { decision: 'deny', reason: T('copyParent') };
   if (searchesClosedParent({ tool, cls, command, paths, cwd, internalDir })) return { decision: 'deny', reason: T('searchParent') };
-  const hit = protectedHit(text);
+  const hit = protectedNow(text);
   if (hit) return { decision: 'deny', reason: translate(lang, 'msg.guard.protected', { name: hit }) };
   const project = projectDir === undefined ? cwd : projectDir;
   const roots = projectRoots({ projectDir: project, internalDir });
@@ -100,8 +103,8 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
   if (cls !== 'orb' && cls !== 'mcp' && otherSecret({ command, paths, patterns, cwd, roots, names })) return { decision: 'deny', reason: T('otherSecret') };
   // Android's adb by hand only with «Acceso total» and «Usar mi móvil Android» (android): otherwise the agent has
   // Orb's own tools (orb_android_*), which check the grant on every call.
-  if (cls !== 'read' && cls !== 'orb' && runsAdb(command) && !(permission === 'total' && android)) return { decision: 'deny', reason: T('adb') };
-  const risks = cls === 'exec' ? risksOf(command, lang) : [];
+  if (cls !== 'read' && cls !== 'orb' && isRailOn('usar-adb') && runsAdb(command) && !(permission === 'total' && android)) return { decision: 'deny', reason: T('adb') };
+  const risks = cls === 'exec' ? risksOf(command, lang).filter((r) => riskRailOn(r.category)) : [];
   if (cls === 'exec' && !risks.some((r) => r.category === 'gitRuns') && writesGitRunsFile(command, cwd)) risks.push({ category: 'gitRuns', reason: T('gitRuns') });
   const wipe = risks.find((r) => r.category === 'diskWipe');
   // wiping a disk: denied in «Auto», asked in the others (also «total»).
@@ -115,12 +118,14 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
   // writing outside the project asks first in «Auto», «Preguntar» and «Preguntar todo».
   const outsideReason = (what) => translate(lang, 'msg.guard.outside', { what: String(what).slice(0, 120) });
   if (cls === 'edit') {
-    const away = paths.find((p) => !insideProject(p, cwd, roots));
+    const away = isRailOn('fuera-del-proyecto') ? paths.find((p) => !insideProject(p, cwd, roots)) : undefined;
     if (away !== undefined) return { decision: 'ask', reason: outsideReason(away) };
     return { decision: 'allow', reason: T('edits') };
   }
   if (cls === 'exec') {
     const away = permission === 'probar' ? null : writesOutside(command, cwd, roots);
+    // «away» also keeps folder deletes and git rewrites inside the project in «Auto», so only the question is gated.
+    const askAway = isRailOn('fuera-del-proyecto') ? away : null;
     if (auto) {
       // «Auto»: inside the project, deleting folders and rewriting git history go ahead (the checkpoint undoes them);
       // publishing only when the user's own message asked for it; the rest of the risky commands ask as before.
@@ -134,7 +139,7 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
       if (deletesProjectOrGit(command, cwd, project)) return { decision: 'ask', reason: T('checkpoint') };
       if (risks.some((r) => r.category === 'gitRewrite') && cleansIgnored(command)) return { decision: 'ask', reason: T('ignoredFiles') };
       if (AGENT_CONFIG_IN.test(command)) return { decision: 'ask', reason: T('agentConfig') };
-      if (away) return { decision: 'ask', reason: outsideReason(away.what) };
+      if (askAway) return { decision: 'ask', reason: outsideReason(askAway.what) };
       if (risks.length) return autoAllow(risks[0].category === 'publish' ? T('publishAsked') : risks[0].reason);
       return { decision: 'allow', reason: T('normalCommand') };
     }
@@ -145,7 +150,7 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
     // answer, a task's permission times out and is denied, so the write never happens.
     if (permission === 'probar' && writesProjectFile(command)) return { decision: 'ask', reason: T('testWrite') };
     if (permission === 'preguntar') return { decision: 'ask', reason: T('runs') };
-    if (away) return { decision: 'ask', reason: outsideReason(away.what) };
+    if (askAway) return { decision: 'ask', reason: outsideReason(askAway.what) };
     return { decision: 'allow', reason: T('normalCommand') };
   }
   if (cls === 'mcp') return { decision: 'allow', reason: T('connector') };

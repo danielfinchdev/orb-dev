@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { useHome, ctx, tr } from '../platform/context.mjs';
+import { approvalWaitMinutes } from '../domain/rules/rails.mjs';
 import { ensureLayout } from '../domain/workspace/home.mjs';
 import { paths } from '../platform/paths.mjs';
 import { keysOf, machineKeys } from '../platform/keys.mjs';
@@ -337,7 +338,7 @@ async function run(board, { home, version, restored, repair }) {
   sessions.onApproval = (s, item) => {
     if (s?.kind !== 'task') return;
     // in plain words (what for, and why it asks); the command itself goes in the notice's details, one click away.
-    const wait = Number(ctx.config.approvalWaitMinutes ?? 10);
+    const wait = approvalWaitMinutes();
     // What it does comes from the command itself; what the agent says it is for is shown as its words, not as a fact.
     const what = plainAction(item.body?.title ?? '', { lang: ctx.config.language });
     // cut at a word, and not quoted when it is in English and the app is not (Claude describes its commands in

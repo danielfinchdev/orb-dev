@@ -5,10 +5,18 @@
 // in one turn all sit between two 'orb' lines. Every such group is one round: the first is the original plan, each later
 // one is a correction. Tasks of the scheduler (reviews, joins of copies — marked engine_task —, schedules) and subtasks are
 // not the coordinator's rounds.
+import { isRailOn } from '../rules/rails.mjs';
+
 export const maxFixRounds = (config) => {
   const n = Number(config?.budget?.maxFixRounds);
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 2;
 };
+
+// What the coordinator's task creation asks: the limit applies only while the «rondas-correccion» rail is on.
+export function fixRoundGate(board, conversation, config) {
+  const max = maxFixRounds(config);
+  return isRailOn('rondas-correccion') ? fixRoundCheck(board, conversation, max) : { allowed: true, rounds: 0, max };
+}
 
 // { allowed, rounds, max }: rounds = the correction rounds that would exist if a task were created now.
 export function fixRoundCheck(board, conversation, max = 2, at = new Date().toISOString()) {

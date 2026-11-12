@@ -17,6 +17,7 @@ import { runDue } from '../../domain/schedules/schedules.mjs';
 import { wakeSnoozed } from '../../domain/conversations/inbox.mjs';
 import { usableAccounts, account as findAccount, accountLabel } from '../../domain/usage/accounts.mjs';
 import { oneLine, MAX_DEP_RESULT } from '../../shared/text.mjs';
+import { parallelLimits, taskTimeoutMinutes } from '../../domain/rules/rails.mjs';
 import { redactSecrets, secretFiles, isSecretPath, stagedSecretsAsync } from '../../shared/secrets-scan.mjs';
 import { ATTACH_DIR, browserOn } from '../sessions.mjs';
 import { logTask } from '../../domain/journal/journal.mjs';
@@ -173,7 +174,7 @@ export class Scheduler {
       const now = this.sessions.live(r.sessionId); if (!now) return null;
       const t = this.board.task(id); const p = this.board.settingJson(`progress:${id}`);
       return { id, title: t?.title ?? '', project: t?.project ?? '', agent: r.agent, account: r.account, sessionId: r.sessionId, ...now, percent: p?.percent ?? null, note: p?.note ?? null,
-        quietMin: Math.floor((Date.now() - now.lastAt) / 60_000), timeoutMin: ctx.config.timeoutMinutes ?? 60 };
+        quietMin: Math.floor((Date.now() - now.lastAt) / 60_000), timeoutMin: taskTimeoutMinutes() };
     }).filter(Boolean);
   }
 
@@ -296,14 +297,15 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
     board.revalidateQueued(); board.warnBlockedByDeps();
     const enabled = enabledAgents();
     const order = [...new Set([...(ctx.config.agentOrder ?? []), ...enabled])];
+    const limits = parallelLimits();
     for (const task of board.readyTasks('auto')) {
       if (this.running.has(task.id) || (only && !only.has(task.id))) continue;
       // a subtask whose parent is running is what that parent waits for (orb_wait_tasks): it does not wait for a free
       // slot, or with «one at a time» (or one per account) both would wait until the wait runs out.
       // With «Una tarea cada vez», only one of those subtasks at a time.
       const forParent = Boolean(task.parent_id && this.running.has(task.parent_id))
-        && !(ctx.config.oneAtATime && [...this.running.keys()].some((id) => board.task(id)?.parent_id === task.parent_id));
-      if (this.running.size >= (ctx.config.oneAtATime ? 1 : ctx.config.maxParallel) && !forParent) continue;
+        && !(limits.oneAtATime && [...this.running.keys()].some((id) => board.task(id)?.parent_id === task.parent_id));
+      if (this.running.size >= (limits.oneAtATime ? 1 : limits.maxParallel) && !forParent) continue;
       // Only agents whose program is on this PC take work (an "any" task never goes to one that is not installed).
       const types = (task.agent === 'any' ? order.filter((a) => enabled.includes(a)) : [task.agent].filter((a) => enabled.includes(a))).filter((a) => installed(a));
       // Every enabled account of those agents; a task pinned to an account only goes there.
@@ -322,7 +324,7 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
       if (!candidates.length) { this.notice(task, task.account ? tr('sys.scheduler.accountOff', { account: accountLabel(task.account) }) : task.agent !== 'any' && !installed(task.agent) ? tr('sys.scheduler.notInstalled', { name: label(task.agent) }) : task.agent === 'any' ? tr('sys.scheduler.noAgents') : tr('sys.scheduler.noAccounts', { name: label(task.agent) })); continue; }
       const ranked = rankAccounts(board, candidates, task.model);
       const forced = board.setting(`budget_ok:${task.id}`) === '1'; // "Lanzar igualmente" in the app
-      const pick = ranked.find((r) => (forced || r.check.ok) && (forParent || this.busyWith(r.account) < ctx.config.perAgent));
+      const pick = ranked.find((r) => (forced || r.check.ok) && (forParent || this.busyWith(r.account) < limits.perAgent));
       if (pick && forced) board.event(task.id, 'usuario', 'budget.override', 'lanzada aunque superaba el límite de uso');
       if (!pick) { if (ranked.every((r) => !r.check.ok)) this.waitFor(task, ranked); continue; }
       // In its folder only one task that writes at a time (read-only tasks may run alongside); isolated copies run in parallel.
@@ -345,7 +347,7 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
         // Orb joins its work into the folder when it ends. «Una tarea cada vez», a read-only task or a folder without git:
         // it waits its turn, as before.
         // A task that joins two pieces of work by hand works in the folder itself, so it always waits for it.
-        if (ctx.config.oneAtATime || task.readonly || board.setting(`join_task:${task.id}`) || !others.some((t) => !t.readonly) || !isGitRepo(project.path)) continue;
+        if (limits.oneAtATime || task.readonly || board.setting(`join_task:${task.id}`) || !others.some((t) => !t.readonly) || !isGitRepo(project.path)) continue;
         isolate = true;
       }
       this.launch(task, pick.agent, pick.account, { isolate });

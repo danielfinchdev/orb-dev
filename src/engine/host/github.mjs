@@ -8,6 +8,7 @@ import { ctx, tr } from '../../platform/context.mjs';
 import { firstFile, inPath, cleanEnv, IS_WIN } from '../../platform/proc.mjs';
 import { openConsole } from '../../agents/index.mjs';
 import { gitAsyncWith, isGitRepoAsync, ORB_GIT } from '../../platform/git.mjs';
+import { isRailOn } from '../../domain/rules/rails.mjs';
 import { secretFiles, isSecretPath, stagedSecretsAsync, secretsInDiff } from '../../shared/secrets-scan.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { folderName } from '../../platform/paths.mjs';
@@ -97,8 +98,8 @@ export async function commitAll(project, message) {
   const staged = (await git(project.path, 'diff', '--cached', '--name-only', '-z')).stdout.split('\0').filter(Boolean);
   if (staged.some(isSecretPath)) { await git(project.path, 'reset', '-q'); throw new Error(tr('msg.github.looksSecretNone')); }
   // also what the files say (a key pasted into any file), not only their names.
-  let inText;
-  try { inText = await stagedSecretsAsync(project.path, git); } catch { await git(project.path, 'reset', '-q'); throw new Error(tr('msg.github.gitIncomplete')); }
+  let inText = [];
+  try { if (isRailOn('revisar-secretos')) inText = await stagedSecretsAsync(project.path, git); } catch { await git(project.path, 'reset', '-q'); throw new Error(tr('msg.github.gitIncomplete')); }
   if (inText.length) { await git(project.path, 'reset', '-q'); throw new Error(tr('msg.github.secretInText', { files: inText.slice(0, 5).join(', ') })); }
   // The user's own identity when git has one; without it (no global user.name/email) git refuses to commit, so the
   // commit goes in as Orb's, like the first commit of a created project.

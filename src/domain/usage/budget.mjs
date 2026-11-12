@@ -9,6 +9,7 @@
 import { ctx, tr } from '../../platform/context.mjs';
 import { localeOf } from '../../shared/i18n.mjs';
 import { localDay, ownerTz } from '../../shared/tz.mjs';
+import { isRailOn } from '../rules/rails.mjs';
 import { account as findAccount, accounts, accountsOf, usableAccounts } from './accounts.mjs';
 
 export const budgetConfig = () => {
@@ -174,10 +175,10 @@ export function modelName(board, id, model) {
 // own turns use this one, since its answers are not task launches.
 export function usageBrake(board, id) {
   const real = realRate(board, id);
-  if (real?.utilization != null && real.utilization >= budgetConfig().stopAt) return { ok: false, resetAt: real.resetAt ?? undefined, reason: tr('msg.budget.realUsed', { name: nameOf(id), pct: Math.round(real.utilization * 100), reset: real.resetAt ? tr('msg.budget.realUsedReset', { time: hhmm(real.resetAt) }) : '' }) };
+  if (isRailOn('freno-uso') && real?.utilization != null && real.utilization >= budgetConfig().stopAt) return { ok: false, resetAt: real.resetAt ?? undefined, reason: tr('msg.budget.realUsed', { name: nameOf(id), pct: Math.round(real.utilization * 100), reset: real.resetAt ? tr('msg.budget.realUsedReset', { time: hhmm(real.resetAt) }) : '' }) };
   // The weekly window of the whole account stops earlier than the 5-hour one: a week cannot be won back by waiting a few hours.
   // A window of one model (seven_day_opus, seven_day_<any model name>…) is excluded, as recordRate does.
-  const weekly = rateWindows(board, id).find((w) => w.utilization != null && windowMinutes(w.window) === 10080 && !/^seven_day_/.test(String(w.window)) && w.utilization >= budgetConfig().weeklyStopAt);
+  const weekly = !isRailOn('freno-semanal') ? null : rateWindows(board, id).find((w) => w.utilization != null && windowMinutes(w.window) === 10080 && !/^seven_day_/.test(String(w.window)) && w.utilization >= budgetConfig().weeklyStopAt);
   if (weekly) return { ok: false, paused: weekly.resetAt ?? undefined, reason: tr('msg.budget.realUsed', { name: nameOf(id), pct: Math.round(weekly.utilization * 100), reset: weekly.resetAt ? tr('msg.budget.realUsedReset', { time: untilText(weekly.resetAt) }) : '' }) };
   return null;
 }
@@ -191,6 +192,8 @@ export function canLaunch(board, id, model) {
   if (modelUntil) return { ok: false, paused: modelUntil, reason: tr('msg.budget.modelNoQuota', { name: nameOf(id), model: modelName(board, id, model), time: untilText(modelUntil) }) };
   const real = usageBrake(board, id);
   if (real) return real;
+  // the launch counts per window (the 5-hour cap) are one rail.
+  if (!isRailOn('tope-5h')) return { ok: true, reason: '' };
   const r = rules(id, board); const used = windowUsage(board, id); const h = budgetConfig().windowHours;
   if (used.tasks >= r.maxTasks) return { ok: false, reason: tr('msg.budget.maxTasks', { name: nameOf(id), tasks: used.tasks, h, max: r.maxTasks }) };
   if (isHeavy(id, model) && used.heavy >= r.maxHeavy) return { ok: false, reason: tr('msg.budget.maxHeavy', { name: nameOf(id), heavy: used.heavy, h, max: r.maxHeavy }) };

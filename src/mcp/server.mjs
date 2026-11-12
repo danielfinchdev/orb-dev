@@ -3,7 +3,7 @@
 // process is (agent, task, conversation, the coordinator), which assistant folder and the browser's key, and confirms it
 // still holds on every call. Nothing in the environment or the database can make it someone else.
 import fs from 'node:fs';
-import { fixRoundCheck, maxFixRounds } from '../domain/tasks/rounds.mjs';
+import { fixRoundGate, maxFixRounds } from '../domain/tasks/rounds.mjs';
 import path from 'node:path';
 import readline from 'node:readline';
 import net from 'node:net';
@@ -272,7 +272,7 @@ function createTask(a) {
   for (const dep of Array.isArray(a.depends_on) ? a.depends_on : []) seeTask(dep);
   if (CONV) {
     const limit = maxFixRounds(ctx.config);
-    if (!fixRoundCheck(board, CONV, limit).allowed) throw new Error(`Ya hay ${limit} rondas de corrección en este pedido: no crees más tareas. Cuenta a ${USER} qué sigue fallando y pregúntale con orb_ask si quiere que sigas.`);
+    if (!fixRoundGate(board, CONV, ctx.config).allowed) throw new Error(`Ya hay ${limit} rondas de corrección en este pedido: no crees más tareas. Cuenta a ${USER} qué sigue fallando y pregúntale con orb_ask si quiere que sigas.`);
   }
   const task = board.createTask({ ...a, level: a.nivel, conversation_id: CONV }, ME);
   if (CONV && !board.conversation(CONV)?.project) { try { board.setConversationProject(CONV, task.project, ME); } catch { /* the task is made anyway */ } }

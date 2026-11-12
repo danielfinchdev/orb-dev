@@ -7,6 +7,7 @@ import { eventKey, userName } from '../../domain/tasks/board.mjs';
 import { git, gitAsync, REF_PREFIX } from '../../platform/git.mjs';
 import { treeState, saveTreeState, stateFileOf, dropTreeState, takeCheckpoint, changedBetweenAsync, undoCheckpoint, snapshotCommitAsync, fullSnapshot, missedBy } from '../../domain/tasks/checkpoints.mjs';
 import { oneLine } from '../../shared/text.mjs';
+import { isRailOn } from '../../domain/rules/rails.mjs';
 import { remotesOf, remotesOfAsync } from './common.mjs';
 import { autonomyOf } from '../../domain/security/guard.mjs';
 import { logUndone } from '../../domain/journal/journal.mjs';
@@ -18,6 +19,7 @@ export const GENERATED = /(^|\/)(node_modules|dist|build|out|target|\.gradle|\.d
 // project (the quarter only from 10 files on); «Preguntar»: 10 or more. → { held, deleted, total, share } (share: true when the quarter decided).
 export function deletionHold(paths, total, autonomy) {
   const deleted = paths.filter((p) => !GENERATED.test(p)).length;
+  if (!isRailOn('borrado-masivo')) return { held: false, deleted, total, share: false };
   if (autonomy !== 'auto') return { held: deleted >= 10, deleted, total, share: false };
   // the quarter counts from 10 files on, so deleting 1 of 3 files in a tiny project holds nothing.
   const byShare = deleted >= 10 && total > 0 && deleted / total > 0.25;

@@ -11,6 +11,7 @@
 import net from 'node:net';
 import crypto from 'node:crypto';
 import { protectedHit } from '../../domain/security/guard.mjs';
+import { isRailOn } from '../../domain/rules/rails.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -193,7 +194,7 @@ export function createActions({ driver, T, language = () => 'es', onChallenge = 
     // (a password manager's web vault…) is never opened, whatever the chat's permission.
     async open(tab, { url }) {
       const u = normalizeUrl(url, lang());
-      const hit = protectedHit(u);
+      const hit = isRailOn('rutas-protegidas') ? protectedHit(u) : null;
       if (hit) throw new Error(T('sys.browser.protected', { name: hit }));
       await driver.load(tab, u); return snapshot(tab);
     },
@@ -280,7 +281,7 @@ export function createActions({ driver, T, language = () => 'es', onChallenge = 
       // wherever the action ended (a redirect, a click, back), a page of «Elementos protegidos» is left
       // at once and nothing of it reaches the agent.
       let url = ''; try { url = String(driver.url(tab) ?? ''); } catch { /* closed */ }
-      const hit = url && protectedHit(url);
+      const hit = url && isRailOn('rutas-protegidas') && protectedHit(url);
       if (hit) { try { await driver.load(tab, 'about:blank'); } catch { /* gone */ } throw new Error(T('sys.browser.protected', { name: hit })); }
       return out;
     } catch (error) {

@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { ctx, tr } from '../platform/context.mjs';
+import { approvalWaitMinutes, taskTimeoutMinutes } from '../domain/rules/rails.mjs';
 import { connectorKey } from '../platform/config.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
 import { adapter, executable } from '../agents/index.mjs';
@@ -495,7 +496,7 @@ export class Sessions {
       this.stop(id);
       return;
     }
-    const waitMin = Number(ctx.config.approvalWaitMinutes ?? 10);
+    const waitMin = approvalWaitMinutes();
     if (!taskId || !(waitMin > 0)) return;
     const waitMs = Number(process.env.ORB_APPROVAL_WAIT_MS) || waitMin * 60_000; // tests: seconds instead of minutes
     for (const [key, itemId] of [...this.approvals.entries()].filter(([k]) => k.startsWith(`${id}:`))) {
@@ -520,7 +521,7 @@ export class Sessions {
 
   // One turn. options: images (absolute paths), prompt (what the agent receives, if it differs from what the user typed),
   // timeoutMs, budgetUsd, taskId, showUser, onFinish({ code, state, stderr, logFile, stopped, timedOut, limit }).
-  send(id, text, { images = [], prompt, timeoutMs = (ctx.config.timeoutMinutes ?? 60) * 60_000, budgetUsd, taskId, onFinish, showUser = true, asked } = {}) {
+  send(id, text, { images = [], prompt, timeoutMs = taskTimeoutMinutes() * 60_000, budgetUsd, taskId, onFinish, showUser = true, asked } = {}) {
     const s = this.must(id);
     // what this turn may do because the user's own words asked for it: a task's comes from the scheduler (the
     // request it came from); a chat's, from the message the user typed now (a turn Orb sends by itself keeps the last).

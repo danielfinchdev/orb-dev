@@ -8,6 +8,7 @@ import { git, gitAsync, ORB_GIT } from '../../platform/git.mjs';
 import { isLimitText, isBudgetText, startCooldown, blockModel, isModelLimitText, liftAfterSuccess, untilText, modelName } from '../../domain/usage/budget.mjs';
 import { accountLabel } from '../../domain/usage/accounts.mjs';
 import { oneLine } from '../../shared/text.mjs';
+import { isRailOn } from '../../domain/rules/rails.mjs';
 import { redactSecrets, secretFiles, isSecretPath, stagedSecretsAsync } from '../../shared/secrets-scan.mjs';
 import { ATTACH_DIR } from '../sessions.mjs';
 import { logTask } from '../../domain/journal/journal.mjs';
@@ -49,8 +50,8 @@ export class FinishPart {
     await g('add', '-A', '--', '.', `:(exclude)${ATTACH_DIR}`);
     const staged = (await g('diff', '--cached', '--name-only', '-z')).stdout.split('\0').filter(Boolean).filter(isSecretPath);
     if (staged.length) { await g('reset', '-q'); return tr('sys.scheduler.secretFiles', { list: staged.slice(0, 5).join(', ') }); }
-    let inText;
-    try { inText = await stagedSecretsAsync(task.workdir, (dir, ...args) => gitAsync(dir, {}, ...args)); } catch (error) { await g('reset', '-q'); return tr('sys.scheduler.gitStatusFailed', { error: oneLine(error.message, 200) }); } // a key pasted into any file, not only secret-looking names
+    let inText = [];
+    try { if (isRailOn('revisar-secretos')) inText = await stagedSecretsAsync(task.workdir, (dir, ...args) => gitAsync(dir, {}, ...args)); } catch (error) { await g('reset', '-q'); return tr('sys.scheduler.gitStatusFailed', { error: oneLine(error.message, 200) }); } // a key pasted into any file, not only secret-looking names
     if (inText.length) { await g('reset', '-q'); return tr('sys.scheduler.secretFiles', { list: inText.slice(0, 5).join(', ') }); }
     // Nothing really changed: git status can list a file the agent rewrote with the same content but other line endings
     // (core.autocrlf=true, the Git for Windows default), and then "git commit" fails with "nothing to commit".
