@@ -24,7 +24,7 @@ import { principalOf, REMOTE_METHODS } from '../../domain/security/permissions.m
 import { isLegacy } from '../../domain/data/legacy/migrate-38.mjs';
 import { ownPorts } from '../host/host.mjs';
 import { RENDERER, SESSION_DAYS, PAIR_MINUTES, UPLOAD_MAX, UPLOADS_TOTAL, UPLOADS_DAYS, STREAM_BACKLOG, STREAMS_PER_DEVICE, NETWORK_CHECK_MS, now, PAIR_KINDS, PAIR_FAILS_MAX, PAIR_PASSWORD_TRIES } from './remote-common.mjs';
-import { phoneConfig, guardCall, pushPreview, IMAGE_NAME, UPLOAD_TYPES, sniffUpload, withoutPaths, shapeResult } from './remote-calls.mjs';
+import { phoneConfig, guardCall, pushPreview, IMAGE_NAME, UPLOAD_TYPES, sniffUpload, sanitizeUploadName, withoutPaths, shapeResult } from './remote-calls.mjs';
 import { privateSource, orbNameOf, ipOf, kindOf, kindForPairing, localName, plainHttpBrowser, parseMeta, metaVOf, APP_CORS, appOrigin, tailscaleExe, tailscaleAddress, lanAddresses } from './remote-net.mjs';
 import { TYPES, HEADERS, SERVICE_WORKER } from './remote-web.mjs';
 
@@ -399,14 +399,15 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     try {
       let raw; try { raw = await readBody(req, UPLOAD_MAX + 64); } catch { return reply(res, device, auth.nonce, { ok: false, status: 413, error: tr('msg.remote.imageTooBig') }); }
       let b; try { b = Buffer.from(openBytes(keyOf(device), new Uint8Array(raw), AAD.upload(device.id))); } catch { return send(res, 401, { error: tr('msg.remote.notLinked') }); }
-      // the client's name only tells md/csv/json apart inside plain text; it never reaches the stored path
-      const ext = sniffUpload(b, path.extname(auth.name).slice(1));
+      // the client's name only tells md/csv/json apart inside plain text and is echoed back sanitized; it never reaches the stored path
+      const shown = sanitizeUploadName(auth.name);
+      const ext = sniffUpload(b, path.extname(shown).slice(1));
       if (!ext) return reply(res, device, auth.nonce, { ok: false, status: 415, error: tr('msg.remote.fileTypes') });
       await fs.promises.mkdir(mine, { recursive: true });
       await pruneUploads(b.length);
       const file = path.join(mine, `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`);
       await fs.promises.writeFile(file, b);
-      return reply(res, device, auth.nonce, { ok: true, result: { path: path.basename(file) } }); // its name: the PC knows where
+      return reply(res, device, auth.nonce, { ok: true, result: { path: path.basename(file), name: shown } }); // its name: the PC knows where
     } catch (error) { log(`móvil: subida: ${error.message}`); return reply(res, device, auth.nonce, { ok: false, error: tr('msg.remote.cannotSaveImage') }); }
     finally { uploading--; }
   }

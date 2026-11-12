@@ -82,6 +82,28 @@ export function shapeResult(method, result) {
 
 export { UPLOAD_NAME, IMAGE_NAME };
 
+// A file name from the phone made safe to show and to log: no folders or drives, no characters Windows refuses, no
+// reserved device names, no invisible or direction-changing characters, bounded length. Never used to build a path.
+const RESERVED_NAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+// eslint-disable-next-line no-control-regex
+const BAD_CHARS = /[\x00-\x1f\x7f-\x9f<>:"|?*\\/]/g;
+const INVISIBLE = /[\u00ad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff\ufff9-\ufffb]/g;
+export function sanitizeUploadName(name, fallback = 'archivo') {
+  if (typeof name !== 'string') return fallback;
+  let n = name.normalize('NFC').replace(INVISIBLE, '');
+  n = n.split(/[\\/]/).pop(); // last part only: drops folders, drives (C:\x) and ../
+  n = n.replace(BAD_CHARS, '').replace(/^[\s.]+|[\s.]+$/g, '');
+  const dot = n.lastIndexOf('.');
+  let base = dot > 0 ? n.slice(0, dot) : n;
+  let ext = dot > 0 ? n.slice(dot + 1).replace(/\s+$/, '') : '';
+  if (dot === 0) { base = ''; ext = ''; }
+  base = [...base].slice(0, 80).join('').replace(/[\s.]+$/, '');
+  ext = [...ext].slice(0, 10).join('');
+  if (!base || /^\.+$/.test(base)) base = fallback;
+  if (RESERVED_NAME.test(base)) base = `_${base}`;
+  return ext ? `${base}.${ext}` : base;
+}
+
 export const UPLOAD_TYPES = Object.freeze(['png', 'jpg', 'webp', 'gif', 'pdf', 'txt', 'md', 'csv', 'json']);
 const TEXT_KINDS = new Set(['txt', 'md', 'csv', 'json']);
 // What an upload really is, from its first bytes (never from a name): a picture, a PDF or plain UTF-8 text; null for
