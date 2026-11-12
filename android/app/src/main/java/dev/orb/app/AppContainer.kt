@@ -333,8 +333,8 @@ class AppContainer(private val app: Application) {
     fun directChatBackend(): dev.orb.app.ui.chats.DirectChatBackend? = _runtime.value?.let { dev.orb.app.ui.chats.RuntimeDirectChatBackend(this, it) }
     fun tasksBackend(): dev.orb.app.ui.tasks.TasksBackend? = _runtime.value?.let { dev.orb.app.ui.tasks.RuntimeTasksBackend(this, it) }
     fun projectsBackend(): dev.orb.app.ui.projects.ProjectsBackend? = _runtime.value?.let { dev.orb.app.ui.projects.RuntimeProjectsBackend(it, chatsBackend(), this) }
-    fun schedulesBackend(): dev.orb.app.ui.schedules.SchedulesBackend? = _runtime.value?.let { dev.orb.app.ui.schedules.RuntimeSchedulesBackend(it) }
-    fun usageBackend(): dev.orb.app.ui.usage.UsageBackend? = _runtime.value?.let { dev.orb.app.ui.usage.RuntimeUsageBackend(it) }
+    fun schedulesBackend(): dev.orb.app.ui.schedules.SchedulesBackend? = _runtime.value?.let { dev.orb.app.ui.schedules.RuntimeSchedulesBackend(it, this) }
+    fun usageBackend(): dev.orb.app.ui.usage.UsageBackend? = _runtime.value?.let { dev.orb.app.ui.usage.RuntimeUsageBackend(it, this) }
     private var notes: Pair<LinkRuntime, dev.orb.app.ui.notes.RuntimeNotesBackend>? = null
 
     /** One notices list per link, so the bell keeps counting while the center is closed. */

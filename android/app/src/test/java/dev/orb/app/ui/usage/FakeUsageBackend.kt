@@ -7,6 +7,7 @@ import dev.orb.app.link.net.PcVersions
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.filterNotNull
 
 fun account(id: String = "claude", utilization: Double = 0.4, resetAt: Long? = null) = UsageAccount(
     account = id, agent = "claude", label = "Claude", plan = "Max", windows = listOf(UsageWindow("five_hour", utilization, resetAt)),
@@ -44,7 +45,10 @@ class FakeUsageBackend : UsageBackend {
     val historyGates = HashMap<Int, kotlinx.coroutines.CompletableDeferred<Unit>>()
 
     override fun available(m: ApiMethod) = m.name !in unavailable
-    override suspend fun accounts(): Result<List<UsageAccount>> { calls += "accounts"; return accountList }
+    val savedUsage = MutableStateFlow<SavedUsage?>(null)
+    override fun saved() = savedUsage.filterNotNull()
+    var accountsGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+    override suspend fun accounts(): Result<List<UsageAccount>> { calls += "accounts"; accountsGate?.await(); return accountList }
     override suspend fun refresh(): Result<Unit> { calls += "refresh"; return refreshResult }
     override suspend fun history(days: Int): Result<UsageHistory> { calls += "history $days"; historyGates[days]?.await(); return historyResult(days) }
     override suspend fun agents() = agentList

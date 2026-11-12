@@ -72,6 +72,13 @@ class UsageViewModel(private val backend: UsageBackend) : ViewModel() {
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UsageState())
 
     init {
+        // What was saved shows first, as an answer the PC gave earlier; a section it has answered since is not touched.
+        viewModelScope.launch {
+            backend.saved().collect { saved ->
+                saved.accounts?.let { list -> if (!accountsLive) accounts.update { Section(list, false, true) } }
+                saved.agents?.let { list -> if (!agentsLive) agents.update { Section(list, false, true) } }
+            }
+        }
         viewModelScope.launch {
             backend.connection.map { it is ConnectionState.Online }.distinctUntilChanged().filter { it }.collect { reload() }
         }
@@ -84,7 +91,16 @@ class UsageViewModel(private val backend: UsageBackend) : ViewModel() {
         Section(r.getOrNull() ?: old.data, r.isFailure, old.answered || r.isSuccess)
     }
 
-    private suspend fun readAccounts() { if (backend.available(ApiMethods.USAGE_GET)) accounts.take(backend.accounts()) }
+    // Once the PC has answered a section, a later copy from the cache must not replace it.
+    @Volatile private var accountsLive = false
+    @Volatile private var agentsLive = false
+
+    private suspend fun readAccounts() {
+        if (!backend.available(ApiMethods.USAGE_GET)) return
+        val r = backend.accounts()
+        if (r.isSuccess) accountsLive = true
+        accounts.take(r)
+    }
 
     private suspend fun reload() {
         reading = true
@@ -92,7 +108,12 @@ class UsageViewModel(private val backend: UsageBackend) : ViewModel() {
         coroutineScope {
             launch { readAccounts() }
             launch { readHistory(ui.value.days) }
-            launch { if (backend.available(ApiMethods.AGENTS_STATUS)) agents.take(backend.agents()) }
+            launch {
+                if (!backend.available(ApiMethods.AGENTS_STATUS)) return@launch
+                val r = backend.agents()
+                if (r.isSuccess) agentsLive = true
+                agents.take(r)
+            }
             launch { if (backend.available(ApiMethods.MODELS_GUIDE)) guide.take(backend.guide()) }
         }
         reading = false

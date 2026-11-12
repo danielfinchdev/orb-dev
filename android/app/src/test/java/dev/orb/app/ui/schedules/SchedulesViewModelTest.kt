@@ -37,6 +37,22 @@ class SchedulesViewModelTest {
         return vm
     }
 
+    @Test fun savedSchedulesShowBeforeThePcAnswersAndGiveWayToItsAnswer() = runTest(dispatcher) {
+        val b = FakeSchedulesBackend(listOf(schedule(9)))
+        b.listGate = kotlinx.coroutines.CompletableDeferred()
+        b.savedItems.value = listOf(schedule(1))
+        val vm = vm(b)
+        assertTrue(vm.state.value.loaded)
+        assertEquals(listOf(1L), vm.state.value.items.map { it.id })
+        b.listGate!!.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(listOf(9L), vm.state.value.items.map { it.id })
+        // A later copy of the cache (the answer saved) must not undo the answer.
+        b.savedItems.value = listOf(schedule(1))
+        advanceUntilIdle()
+        assertEquals(listOf(9L), vm.state.value.items.map { it.id })
+    }
+
     @Test fun parserReadsThePcRows() {
         val el = Json.parseToJsonElement(
             """[{"id":3,"project":"p","title":"t","description":"d","agent":"claude","readonly":1,"every":"weekly","at_time":"09:00",

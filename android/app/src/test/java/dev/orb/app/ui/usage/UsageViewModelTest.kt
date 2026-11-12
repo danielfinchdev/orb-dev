@@ -36,6 +36,21 @@ class UsageViewModelTest {
         return vm
     }
 
+    @Test fun savedAccountsShowBeforeThePcAnswersAndGiveWayToItsAnswer() = runTest(dispatcher) {
+        val b = FakeUsageBackend()
+        b.accountsGate = kotlinx.coroutines.CompletableDeferred()
+        b.savedUsage.value = SavedUsage(listOf(account("viejo")), null)
+        val vm = vm(b)
+        assertTrue(vm.state.value.loaded)
+        assertEquals(listOf("viejo"), vm.state.value.accounts.data!!.map { it.account })
+        b.accountsGate!!.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(listOf("claude"), vm.state.value.accounts.data!!.map { it.account })
+        b.savedUsage.value = SavedUsage(listOf(account("viejo")), null)
+        advanceUntilIdle()
+        assertEquals(listOf("claude"), vm.state.value.accounts.data!!.map { it.account })
+    }
+
     @Test fun parserReadsAccountsHistoryAgentsAndGuide() {
         val acc = UsageParser.accounts(
             Json.parseToJsonElement("""[{"account":"c1","agent":"claude","label":"Claude","plan":"Max","used":2,"max":5,"windows":[{"window":"five_hour","utilization":0.42,"resetAt":1700000000000}],"cooldownUntil":null}]"""),

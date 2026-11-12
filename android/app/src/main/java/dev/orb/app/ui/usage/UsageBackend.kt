@@ -7,6 +7,7 @@ import dev.orb.app.link.net.LinkError
 import dev.orb.app.link.net.LinkEvent
 import dev.orb.app.link.net.LinkException
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -20,6 +21,9 @@ interface UsageBackend {
     /** Whether the linked PC can run [m]; what it cannot do is hidden. */
     fun available(m: ApiMethod): Boolean
 
+    /** The accounts and agents as last saved on the phone; shown first and while the PC cannot be reached. */
+    fun saved(): kotlinx.coroutines.flow.Flow<SavedUsage> = kotlinx.coroutines.flow.emptyFlow()
+
     /** `usage.get`: every account with the limit windows its agent reported. */
     suspend fun accounts(): Result<List<UsageAccount>>
 
@@ -30,7 +34,10 @@ interface UsageBackend {
     suspend fun guide(): Result<List<ModelGuideAgent>>
 }
 
-class RuntimeUsageBackend(private val runtime: LinkRuntime) : UsageBackend {
+/** What the usage screen keeps from the last answer of the PC. */
+data class SavedUsage(val accounts: List<UsageAccount>?, val agents: List<AgentInfo>?)
+
+class RuntimeUsageBackend(private val runtime: LinkRuntime, private val container: dev.orb.app.AppContainer? = null) : UsageBackend {
     private val api get() = runtime.api
     override val connection get() = runtime.client.connection
     override val events get() = runtime.client.events
@@ -39,8 +46,25 @@ class RuntimeUsageBackend(private val runtime: LinkRuntime) : UsageBackend {
 
     private fun bad() = LinkException(LinkError.BadAnswer)
 
+    private companion object {
+        const val SNAP_ACCOUNTS = "usage.get"
+        const val SNAP_AGENTS = "agents.status"
+    }
+
+    override fun saved(): kotlinx.coroutines.flow.Flow<SavedUsage> = kotlinx.coroutines.flow.flow {
+        // The database opens in the background; until then there is nothing to show.
+        val dao = container?.cacheDao() ?: return@flow
+        emitAll(
+            kotlinx.coroutines.flow.combine(dao.observeSnapshot(SNAP_ACCOUNTS), dao.observeSnapshot(SNAP_AGENTS)) { accounts, agents ->
+                fun parse(json: String?) = json?.let { runCatching { kotlinx.serialization.json.Json.parseToJsonElement(it) }.getOrNull() } as? JsonArray
+                SavedUsage(parse(accounts?.json)?.let(UsageParser::accounts), parse(agents?.json)?.let(UsageParser::agents))
+            },
+        )
+    }
+
     override suspend fun accounts() = api.usage.get().mapCatching {
         if (it !is JsonArray) throw bad()
+        container?.cacheSync()?.applySnapshot(SNAP_ACCOUNTS, it)
         UsageParser.accounts(it)
     }
 
@@ -50,6 +74,7 @@ class RuntimeUsageBackend(private val runtime: LinkRuntime) : UsageBackend {
 
     override suspend fun agents() = api.agents.status().mapCatching {
         if (it !is JsonArray) throw bad()
+        container?.cacheSync()?.applySnapshot(SNAP_AGENTS, it)
         UsageParser.agents(it)
     }
 

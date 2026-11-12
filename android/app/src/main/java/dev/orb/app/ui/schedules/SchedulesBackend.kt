@@ -11,7 +11,9 @@ import dev.orb.app.ui.chats.NewChatParser
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
@@ -26,6 +28,9 @@ interface SchedulesBackend {
     /** Whether the linked PC can run [m]; what it cannot do is hidden. */
     fun available(m: ApiMethod): Boolean
 
+    /** The list as last saved on the phone; shown first and while the PC cannot be reached. */
+    fun saved(): kotlinx.coroutines.flow.Flow<List<ScheduleItem>> = kotlinx.coroutines.flow.emptyFlow()
+
     suspend fun list(): Result<List<ScheduleItem>>
 
     /** The project names a schedule can belong to. */
@@ -39,7 +44,7 @@ interface SchedulesBackend {
     suspend fun run(id: Long): Result<Unit>
 }
 
-class RuntimeSchedulesBackend(private val runtime: LinkRuntime) : SchedulesBackend {
+class RuntimeSchedulesBackend(private val runtime: LinkRuntime, private val container: dev.orb.app.AppContainer? = null) : SchedulesBackend {
     private val api get() = runtime.api
     override val connection get() = runtime.client.connection
     override val events get() = runtime.client.events
@@ -48,9 +53,25 @@ class RuntimeSchedulesBackend(private val runtime: LinkRuntime) : SchedulesBacke
 
     private fun Result<JsonElement>.unit(): Result<Unit> = map { }
 
+    override fun saved(): kotlinx.coroutines.flow.Flow<List<ScheduleItem>> = kotlinx.coroutines.flow.flow {
+        // The database opens in the background; until then there is nothing to show.
+        val dao = container?.cacheDao() ?: return@flow
+        emitAll(
+            dao.observeSnapshot(SNAP_LIST).map { snap ->
+                val rows = snap?.json?.let { runCatching { kotlinx.serialization.json.Json.parseToJsonElement(it) }.getOrNull() } as? JsonArray
+                rows?.let(SchedulesParser::list).orEmpty()
+            },
+        )
+    }
+
     override suspend fun list(): Result<List<ScheduleItem>> = api.schedules.list().mapCatching {
         if (it !is JsonArray) throw LinkException(LinkError.BadAnswer)
+        container?.cacheSync()?.applySnapshot(SNAP_LIST, it)
         SchedulesParser.list(it)
+    }
+
+    private companion object {
+        const val SNAP_LIST = "schedules.list"
     }
 
     override suspend fun projects(): Result<List<String>> = api.projects.list().map { SchedulesParser.projectNames(it) }

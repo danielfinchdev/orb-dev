@@ -9,6 +9,7 @@ import dev.orb.app.ui.chats.ModelOption
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.filterNotNull
 
 fun schedule(id: Long, title: String = "Revisar dependencias", enabled: Boolean = true, approved: Boolean = true, readonly: Boolean = false) = ScheduleItem(
     id = id, project = "app-movil", title = title, description = "Mira las dependencias", agent = "any", readonly = readonly,
@@ -30,7 +31,10 @@ class FakeSchedulesBackend(initial: List<ScheduleItem> = emptyList()) : Schedule
     val calls = ArrayList<String>()
 
     override fun available(m: ApiMethod) = m.name !in unavailable
-    override suspend fun list(): Result<List<ScheduleItem>> { listCount++; return listResult ?: Result.success(items) }
+    val savedItems = MutableStateFlow<List<ScheduleItem>?>(null)
+    override fun saved() = savedItems.filterNotNull()
+    var listGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+    override suspend fun list(): Result<List<ScheduleItem>> { listGate?.await(); listCount++; return listResult ?: Result.success(items) }
     override suspend fun projects() = Result.success(projectNames)
     var agentList: Result<List<AgentOption>> = Result.success(
         listOf(

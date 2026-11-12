@@ -78,6 +78,8 @@ class SchedulesViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SchedulesState())
 
     init {
+        // What was saved shows first; once the PC has answered, its answer is the truth.
+        viewModelScope.launch { backend.saved().collect { saved -> if (!ui.value.answered) items.update { saved } } }
         viewModelScope.launch { reloads.receiveAsFlow().debounce(reloadDebounceMs).collect { reload() } }
         viewModelScope.launch { backend.events.collect { if (it.name in RELOAD_EVENTS) reloads.trySend(Unit) } }
         viewModelScope.launch {
