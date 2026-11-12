@@ -65,8 +65,8 @@ function ChoiceDialog({ d }) {
           {d.options.map((o, i) => (
             <button key={o.value} type="button" onClick={() => close(d.id, o.value)} data-testid={`choice-${o.value}`}
               className={`press grid cursor-pointer gap-0.5 rounded-xl border px-4 py-3 text-left transition-colors ${i === 0 ? 'border-primary/60 bg-primary/5 hover:bg-primary/10' : 'hover:bg-accent/60'} ${o.variant === 'danger' ? 'text-destructive' : ''}`}>
-              <span className="text-[14px] font-medium">{o.label}</span>
-              {o.hint ? <span className="text-muted-foreground text-[12.5px]">{o.hint}</span> : null}
+              <span className="text-body font-medium">{o.label}</span>
+              {o.hint ? <span className="text-muted-foreground text-caption">{o.hint}</span> : null}
             </button>
           ))}
           <div className="flex justify-end pt-1"><Button variant="ghost" onClick={() => close(d.id, null)} data-testid="choice-cancel">{t('comp.dialogs.cancel')}</Button></div>

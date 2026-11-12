@@ -25,22 +25,22 @@ export function ModelGuide({ auto }) {
       <div className="flex items-center gap-1.5 text-sm font-medium">{t('guide.title')}<InfoTip text={auto ? t('guide.hint') : t('guide.hintOff')} /></div>
       {guide.map((a) => (
         <div key={a.id} className="grid gap-2 rounded-xl border p-3" data-testid={`model-guide-${a.id}`}>
-          <div className="flex items-center gap-2 text-[13.5px] font-medium"><AgentIcon agent={a.id} className="size-4" />{a.label}</div>
+          <div className="flex items-center gap-2 text-control font-medium"><AgentIcon agent={a.id} className="size-4" />{a.label}</div>
           <div className="grid gap-1.5 sm:grid-cols-3">
             {LEVELS.map(([level, Icon]) => {
               const p = a.picks[level];
               return (
                 <div key={level} className="bg-muted/50 grid gap-0.5 rounded-lg px-2.5 py-2">
-                  <span className="text-muted-foreground flex items-center gap-1.5 text-[11px] font-medium tracking-wide uppercase"><Icon className="size-3.5" />{t(`guide.level.${level}`)}</span>
-                  <span className="truncate text-[13px] font-semibold">{p.label ?? t('guide.agentOwn')}</span>
-                  <span className="text-muted-foreground text-[11.5px]">{t('guide.reasoning', { level: t(`guide.r.${p.reasoning ?? 'medium'}`) })}</span>
+                  <span className="text-muted-foreground flex items-center gap-1.5 text-micro font-medium tracking-wide uppercase"><Icon className="size-3.5" />{t(`guide.level.${level}`)}</span>
+                  <span className="truncate text-control font-semibold">{p.label ?? t('guide.agentOwn')}</span>
+                  <span className="text-muted-foreground text-micro">{t('guide.reasoning', { level: t(`guide.r.${p.reasoning ?? 'medium'}`) })}</span>
                 </div>
               );
             })}
           </div>
           {/* read-only tasks (reviews, verifications) may use the light model: said here, so the table is the real rule. */}
           {a.readPicks && LEVELS.some(([level]) => a.readPicks[level]?.label !== a.picks[level]?.label) ? (
-            <div className="text-muted-foreground text-[11.5px] leading-snug" data-testid={`model-guide-read-${a.id}`}>
+            <div className="text-muted-foreground text-micro leading-snug" data-testid={`model-guide-read-${a.id}`}>
               {t('guide.readOnly', { list: LEVELS.map(([level]) => `${t(`guide.level.${level}`)}: ${a.readPicks[level]?.label ?? t('guide.agentOwn')} (${t('guide.reasoning', { level: t(`guide.r.${a.readPicks[level]?.reasoning ?? 'medium'}`) })})`).join(' · ') })}
             </div>
           ) : null}

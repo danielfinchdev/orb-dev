@@ -8,8 +8,8 @@ export function Card({ className, ...props }) {
   return <div data-slot="card" className={cn('bg-card text-card-foreground flex flex-col gap-4 rounded-xl border py-5 shadow-xs', className)} {...props} />;
 }
 export function CardHeader({ className, ...props }) { return <div className={cn('flex flex-col gap-1 px-5', className)} {...props} />; }
-export function CardTitle({ className, ...props }) { return <div data-slot="card-title" className={cn('leading-none font-medium text-[15px]', className)} {...props} />; }
-export function CardDescription({ className, ...props }) { return <div className={cn('text-muted-foreground text-[13px]', className)} {...props} />; }
+export function CardTitle({ className, ...props }) { return <div data-slot="card-title" className={cn('leading-none font-medium text-card-title', className)} {...props} />; }
+export function CardDescription({ className, ...props }) { return <div className={cn('text-muted-foreground text-control', className)} {...props} />; }
 export function CardContent({ className, ...props }) { return <div className={cn('px-5', className)} {...props} />; }
 export function CardFooter({ className, ...props }) { return <div className={cn('flex items-center gap-2 px-5', className)} {...props} />; }
 
@@ -35,7 +35,7 @@ export function Input({ className, type = 'text', ...props }) {
 export function Textarea({ className, ...props }) {
   return <textarea data-slot="textarea" className={cn('placeholder:text-muted-foreground dark:bg-input/30 border-input flex field-sizing-content min-h-16 w-full rounded-lg border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:ring-[3px] disabled:opacity-50', className)} {...props} />;
 }
-export function Label({ className, ...props }) { return <label data-slot="label" className={cn('flex items-center gap-2 text-[13px] leading-none font-medium select-none', className)} {...props} />; }
+export function Label({ className, ...props }) { return <label data-slot="label" className={cn('flex items-center gap-2 text-control leading-none font-medium select-none', className)} {...props} />; }
 // The reason a field was refused, right under it (never in a toast away from the field). role=alert so it is announced.
 export function FieldError({ id, className, children }) {
   if (!children) return null;
@@ -67,7 +67,7 @@ export function PathText({ path, className, tail = 20 }) {
   );
 }
 export function Separator({ className, vertical = false }) { return <div role="separator" className={cn('bg-border shrink-0', vertical ? 'h-full w-px' : 'h-px w-full', className)} />; }
-export function Kbd({ className, ...props }) { return <kbd className={cn('bg-muted text-muted-foreground pointer-events-none inline-flex h-5 items-center rounded border px-1.5 font-mono text-[10px]', className)} {...props} />; }
+export function Kbd({ className, ...props }) { return <kbd className={cn('bg-muted text-muted-foreground pointer-events-none inline-flex h-5 items-center rounded border px-1.5 font-mono text-micro', className)} {...props} />; }
 export function Spinner({ className }) { return <span className={cn('inline-block size-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary', className)} />; }
 export function Empty({ icon: Icon, title, children, className }) {
   return (

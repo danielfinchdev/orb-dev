@@ -124,7 +124,7 @@ function Row({ item, detail, note = null, mono = false, on, disabled = false, on
   return (
     <div className="flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2" data-testid={testid}>
       <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm"><span className="truncate">{item.name}</span><Badge variant="outline" className="text-[11px]">{sourceLabel(item.source)}</Badge>{extra}</div>
+        <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm"><span className="truncate">{item.name}</span><Badge variant="outline" className="text-micro">{sourceLabel(item.source)}</Badge>{extra}</div>
         <div className={`text-muted-foreground line-clamp-2 text-xs ${mono ? 'truncate font-mono' : ''}`}>{detail}</div>
         {note ? <div className="text-warning-ink text-xs" data-testid="ext-note">{note}</div> : null}
       </div>
@@ -171,7 +171,7 @@ function FileList({ files = [], total = files.length, first = 8 }) {
   const shown = all ? files : files.slice(0, first);
   const more = Math.max(0, (all ? files.length : total) - shown.length);
   return (
-    <div className="text-muted-foreground font-mono text-[11px] break-all" data-testid="ext-files">
+    <div className="text-muted-foreground font-mono text-micro break-all" data-testid="ext-files">
       {shown.join(' · ')}
       {!all && more > 0 ? <> · <button type="button" className="text-foreground underline" onClick={() => setAll(true)} data-testid="ext-files-more">{t('ext.andMore', { n: more })}</button></> : null}
     </div>
@@ -195,7 +195,7 @@ async function answerRequest(r, approve, run, done = (x) => x) {
         {r.asks?.tools || r.asks?.hooks ? <p className="text-warning-ink">{t('ext.asksNote')}</p> : null}
         {r.kept?.length ? <p className="text-warning-ink" data-testid="ext-confirm-kept">{t('ext.keptNote', { files: r.kept.slice(0, 5).join(', ') + (r.kept.length > 5 ? '…' : '') })}</p> : null}
         <p className="text-muted-foreground">{t('ext.filesTitle', { n: r.total ?? r.files?.length ?? 0 })}</p>
-        <div className="bg-muted/50 max-h-60 overflow-auto rounded-md p-2 font-mono text-[11px]" data-testid="ext-confirm-files">{(r.files ?? []).map((f) => <div key={f}>{f}</div>)}</div>
+        <div className="bg-muted/50 max-h-60 overflow-auto rounded-md p-2 font-mono text-micro" data-testid="ext-confirm-files">{(r.files ?? []).map((f) => <div key={f}>{f}</div>)}</div>
         {r.dir ? <div><Button type="button" size="xs" variant="outline" onClick={() => act(bridge.openPath(r.dir))}><FolderOpen />{t('ext.openFolder')}</Button></div> : null}
       </div>
     )),
@@ -302,9 +302,9 @@ export function ExtensionRequestCard({ m }) {
   const openFolder = async () => { const r = await pendingOne().catch(() => null); if (r?.dir) act(bridge.openPath(r.dir)); };
   const more = (m.meta.total ?? m.meta.files?.length ?? 0) - (m.meta.files?.length ?? 0);
   return (
-    <div className={`mx-auto w-full max-w-[88%] rounded-xl border px-3.5 py-2.5 text-[13px] ${state === 'pending' ? 'border-warning/50 bg-warning/10' : 'bg-muted/50'}`} data-testid="ext-request">
+    <div className={`mx-auto w-full max-w-[88%] rounded-xl border px-3.5 py-2.5 text-control ${state === 'pending' ? 'border-warning/50 bg-warning/10' : 'bg-muted/50'}`} data-testid="ext-request">
       <div className="flex items-start gap-2">{m.meta.ext === 'skill' ? <Puzzle className="mt-0.5 size-4 shrink-0" /> : <Server className="mt-0.5 size-4 shrink-0" />}<div className="min-w-0 flex-1"><div>{m.body}</div>{m.meta.description ? <div className="text-muted-foreground mt-0.5">{m.meta.description}</div> : null}</div></div>
-      {m.meta.files?.length ? <div className="text-muted-foreground mt-1.5 pl-6 font-mono text-[11px] break-all">{m.meta.files.join(' · ')}{more > 0 ? ` · ${t('ext.andMore', { n: more })}` : ''}</div> : null}
+      {m.meta.files?.length ? <div className="text-muted-foreground mt-1.5 pl-6 font-mono text-micro break-all">{m.meta.files.join(' · ')}{more > 0 ? ` · ${t('ext.andMore', { n: more })}` : ''}</div> : null}
       <div className="chat-actions mt-2 flex flex-wrap items-center gap-2 pl-6">
         {state !== 'pending' ? <Badge variant={state === 'approved' ? 'success' : 'outline'}>{t(state === 'approved' ? (asking ? 'ext.stateAllowed' : 'ext.stateApproved') : 'ext.stateRejected')}</Badge>
           : bridge.mobile ? <span className="text-muted-foreground">{t('ext.onPc')}</span> : (<>

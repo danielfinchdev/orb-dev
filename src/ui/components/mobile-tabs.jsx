@@ -36,12 +36,12 @@ export function MobileTabs() {
         const active = current === id;
         return (
           <button key={id} type="button" onClick={() => go(id)} data-testid={testid} aria-current={active ? 'page' : undefined}
-            className={cn('mobile-tab relative grid cursor-pointer justify-items-center gap-0.5 px-1 pt-2 pb-1.5 text-[11px] font-medium transition-colors', active ? 'text-primary' : 'text-muted-foreground')}>
+            className={cn('mobile-tab relative grid cursor-pointer justify-items-center gap-0.5 px-1 pt-2 pb-1.5 text-micro font-medium transition-colors', active ? 'text-primary' : 'text-muted-foreground')}>
             <span className={cn('mobile-tab-icon grid h-7 w-12 place-items-center rounded-full transition-colors', active && 'bg-primary/12')}>
               <Icon className="size-5" />
             </span>
             <span className="max-w-full truncate">{label}</span>
-            {count ? <span className={cn('absolute top-1 left-1/2 ml-2 min-w-4 rounded-full px-1 text-[10px] leading-4 font-semibold tabular-nums', tone === 'primary' ? 'bg-primary text-primary-foreground' : 'bg-warning text-warning-foreground')} aria-label={String(count)} data-testid={`${testid}-count`}>{count > 99 ? '99+' : count}</span>
+            {count ? <span className={cn('absolute top-1 left-1/2 ml-2 min-w-4 rounded-full px-1 text-micro leading-4 font-semibold tabular-nums', tone === 'primary' ? 'bg-primary text-primary-foreground' : 'bg-warning text-warning-foreground')} aria-label={String(count)} data-testid={`${testid}-count`}>{count > 99 ? '99+' : count}</span>
               : dot ? <span className="bg-primary absolute top-2 left-1/2 ml-3 size-2 animate-pulse rounded-full" /> : null}
           </button>
         );

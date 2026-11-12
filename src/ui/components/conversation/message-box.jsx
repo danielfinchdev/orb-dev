@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils.js';
 export function MessageBox({ user = false, name, at, actions, icon, className, children, ...props }) {
   const initial = String(name ?? '').trim().charAt(0).toUpperCase();
   return (
-    <article className={cn('msg-box min-w-0', user ? 'bg-bubble text-bubble-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 compact:text-[14.5px]' : 'chat-glass', className)} data-role={user ? 'user' : 'assistant'} {...props}>
+    <article className={cn('msg-box min-w-0', user ? 'bg-bubble text-bubble-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 compact:text-body' : 'chat-glass', className)} data-role={user ? 'user' : 'assistant'} {...props}>
       <header className={cn('msg-box-head mb-1 flex items-center gap-2 text-xs', user ? 'opacity-80' : 'text-muted-foreground')}>
         {user
           ? <span className="bg-muted text-muted-foreground grid size-5 shrink-0 place-items-center rounded-full font-medium" aria-hidden="true">{initial}</span>

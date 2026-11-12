@@ -75,7 +75,7 @@ export function Setup({ onDone, resume = null }) {
         <Field label={t('setup.nameLabel')}><Input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoFocus data-testid="setup-assistant" /></Field>
         <Field label={t('setup.userLabel')}><Input value={user} onChange={(e) => setUser(e.target.value)} placeholder={t('setup.userPlaceholder')} maxLength={40} data-testid="setup-user" /></Field>
         <div className="grid gap-2">
-          <span className="text-[13px] font-medium">{t('setup.whereFolder')}</span>
+          <span className="text-control font-medium">{t('setup.whereFolder')}</span>
           <Button type="button" variant="outline" className="justify-start" data-testid="setup-folder" onClick={async () => { const f = await bridge.pickFolder(t('setup.whereFolder')); if (f) setBase(f); }}><FolderOpen />{base ? t('setup.changeLocation') : t('setup.pickLocation')}</Button>
           <div className="bg-muted rounded-lg px-3 py-2 font-mono text-xs break-all" data-testid="setup-target">{target ?? t('setup.example', { name: PRODUCT.folder })}</div>
           <p className="text-muted-foreground text-xs leading-relaxed">{t('setup.folderNote')}</p>

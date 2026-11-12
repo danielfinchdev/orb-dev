@@ -36,16 +36,16 @@ export function LogsView({ route, bare = false }) {
             <ListRow key={l.name} selected={selected === l.name} onClick={() => { setSelected(l.name); setWhole(false); }}
               leading={<NotebookText className={cn('size-4', l.name === 'general' ? 'text-primary' : 'text-muted-foreground')} />}
               title={l.name === 'general' ? t('logs.general') : l.name}
-              trailing={<span className="text-muted-foreground text-[11px]">{Math.max(1, Math.ceil(l.size / 1024))} KB</span>} />
+              trailing={<span className="text-muted-foreground text-micro">{Math.max(1, Math.ceil(l.size / 1024))} KB</span>} />
           ))}
         </Card>
         <Card className="min-h-0 gap-3 overflow-hidden">
           <div className="flex items-center gap-2 px-5">
-            <h2 className="flex-1 text-[16px]">{selected === 'general' ? t('logs.generalTitle') : t('logs.projectTitle', { name: selected })}</h2>
+            <h2 className="flex-1 text-title">{selected === 'general' ? t('logs.generalTitle') : t('logs.projectTitle', { name: selected })}</h2>
             {partial && !whole ? <Button size="sm" variant="ghost" onClick={() => setWhole(true)}><Maximize2 />{t('logs.whole')}</Button> : null}
             <Button size="sm" variant="ghost" onClick={() => navigator.clipboard.writeText(body ?? '').then(() => notifyOk(t('logs.copied')))}><Copy />{t('logs.copy')}</Button>
           </div>
-          <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-5 pb-2 text-[14px] md:pb-24" data-testid="log-body">{body == null ? <Spinner /> : <Markdown>{body}</Markdown>}</div>
+          <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-5 pb-2 text-body md:pb-24" data-testid="log-body">{body == null ? <Spinner /> : <Markdown>{body}</Markdown>}</div>
         </Card>
       </PageBody>
     </>

@@ -103,7 +103,7 @@ function TaskDetail({ id, live }) {
     <Card className="gap-5" data-testid="task-detail">
       <div className="flex items-start gap-3 px-5">
         <AgentIcon agent={who} className="mt-1 size-5" />
-        <div className="min-w-0 flex-1"><div className="text-muted-foreground text-xs">{tr('tasks.taskNo', { id: t.id, project: t.project })}</div><h2 className="text-[17px] leading-snug">{t.title}</h2></div>
+        <div className="min-w-0 flex-1"><div className="text-muted-foreground text-xs">{tr('tasks.taskNo', { id: t.id, project: t.project })}</div><h2 className="text-title leading-snug">{t.title}</h2></div>
         {t.accepted ? <Badge variant="success"><ThumbsUp />{tr('tasks.accepted')}</Badge> : null}<TaskStatus status={t.status} undone={Boolean(t.undone)} task={t} />
       </div>
       <div className="flex flex-wrap gap-2 px-5">
@@ -134,8 +134,8 @@ function TaskDetail({ id, live }) {
       {t.status === 'running' && live ? <div className="bg-muted/50 mx-5 rounded-xl border px-3.5 py-3" data-testid="task-live"><LiveTask t={live} actions={false} /></div> : null}
       {t.undone ? <Note icon={Undo2} className="mx-5">{tr('tasks.undoneNote', { when: fmtTime(t.undone.at) })}</Note> : null}
       {t.status === 'limited' && t.limited_until ? <Note tone="warning" icon={Hourglass} className="mx-5">{tr('tasks.limitedNote', { when: fmtTime(t.limited_until) })}</Note> : null}
-      {t.review ? <div className={cn('mx-5 flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[13px]', t.review.verdict === 'correcto' ? 'border-success/40 bg-success/10' : t.review.verdict === 'con fallos' ? 'border-destructive/40 bg-destructive/10' : 'bg-muted/50')}><ScanSearch className="size-4" />{tr('tasks.review.line', { agent: AGENT[t.review.agent] ?? t.review.agent })} <span className="font-medium">{verdictLabel(t.review.verdict)}</span><Button size="sm" variant="ghost" className="ml-auto" onClick={() => go({ view: 'tasks', id: t.review.task })}>{tr('tasks.review.see', { id: t.review.task })}</Button></div> : null}
-      <dl className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1.5 px-5 text-[13px]">
+      {t.review ? <div className={cn('mx-5 flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-control', t.review.verdict === 'correcto' ? 'border-success/40 bg-success/10' : t.review.verdict === 'con fallos' ? 'border-destructive/40 bg-destructive/10' : 'bg-muted/50')}><ScanSearch className="size-4" />{tr('tasks.review.line', { agent: AGENT[t.review.agent] ?? t.review.agent })} <span className="font-medium">{verdictLabel(t.review.verdict)}</span><Button size="sm" variant="ghost" className="ml-auto" onClick={() => go({ view: 'tasks', id: t.review.task })}>{tr('tasks.review.see', { id: t.review.task })}</Button></div> : null}
+      <dl className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1.5 px-5 text-control">
         <dt className="text-muted-foreground">{tr('tasks.agent')}</dt><dd>{tr('tasks.agentLine', { agent: `${t.accountLabel ?? AGENT[who] ?? who}${t.model ? ` · ${t.modelLabel ?? t.model}` : ''}`, reasoning: REASONING[t.reasoning]?.toLowerCase() ?? t.reasoning })}</dd>
         <dt className="text-muted-foreground">{tr('tasks.where')}</dt><dd className="break-all">{MODE[t.mode]}{t.readonly ? ` · ${tr('tasks.readonlyShort')}` : ''}{t.branch ? ` · ${tr('tasks.branchShort', { branch: t.branch })}` : ''}</dd>
         <dt className="text-muted-foreground">{tr('tasks.created')}</dt><dd>{tr('tasks.createdBy', { time: fmtTime(t.created_at), agent: AGENT[t.created_by] ?? t.created_by })}</dd>
@@ -145,8 +145,8 @@ function TaskDetail({ id, live }) {
         {t.dependencies?.length ? <><dt className="text-muted-foreground">{tr('tasks.dependsOn')}</dt><dd className="flex flex-wrap gap-1">{t.dependencies.filter(Boolean).map((d) => <Badge key={d.id} variant="secondary">#{d.id} <TaskStatus task={d} plain /></Badge>)}</dd></> : null}
         {t.sensitivity.length ? <><dt className="text-muted-foreground">{tr('tasks.approval')}</dt><dd className="flex flex-wrap gap-1">{t.sensitivity.map((s) => <Badge key={s} variant="warning">{SENSITIVE[s] ?? s}</Badge>)}</dd></> : null}
       </dl>
-      <div className="grid gap-1.5 px-5"><div className="text-muted-foreground text-xs">{tr('tasks.brief')}</div><pre className="bg-muted max-h-72 overflow-auto rounded-lg px-3 py-2 font-sans text-[13px] whitespace-pre-wrap">{t.description}</pre></div>
-      {t.result ? <div className="grid gap-1.5 px-5"><div className="text-muted-foreground text-xs">{tr('tasks.result')}</div><div className="rounded-lg border px-3.5 py-2.5 text-[13.5px]"><Markdown>{t.result}</Markdown></div></div> : null}
+      <div className="grid gap-1.5 px-5"><div className="text-muted-foreground text-xs">{tr('tasks.brief')}</div><pre className="bg-muted max-h-72 overflow-auto rounded-lg px-3 py-2 font-sans text-control whitespace-pre-wrap">{t.description}</pre></div>
+      {t.result ? <div className="grid gap-1.5 px-5"><div className="text-muted-foreground text-xs">{tr('tasks.result')}</div><div className="rounded-lg border px-3.5 py-2.5 text-control"><Markdown>{t.result}</Markdown></div></div> : null}
       {/* the files it changed, with their diff (read only: «Deshacer» above works as before). */}
       {t.hasCheckpoint && t.status !== 'running' ? <TaskChanges taskId={t.id} version={`${t.status}:${t.updated_at}`} className="mx-5" /> : null}
       <Collapsible className="px-5">
@@ -196,19 +196,19 @@ export function TasksView({ route }) {
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(320px,1fr)_minmax(400px,1.25fr)]">
           <Card className="gap-0 overflow-hidden py-0">
             {rows.length ? rows.map((t) => {
-              const progress = t.status === 'running' && liveOf(live, t.id) ? <div className="mt-1.5 flex items-center gap-2"><ProgressBar percent={liveOf(live, t.id).percent} quiet={liveOf(live, t.id).quietMin >= 5} className="h-1" /><span className="text-muted-foreground shrink-0 text-[11px] tabular-nums">{liveOf(live, t.id).percent != null ? `${liveOf(live, t.id).percent} %` : tr('tasks.steps', { n: liveOf(live, t.id).steps })}</span></div> : null;
+              const progress = t.status === 'running' && liveOf(live, t.id) ? <div className="mt-1.5 flex items-center gap-2"><ProgressBar percent={liveOf(live, t.id).percent} quiet={liveOf(live, t.id).quietMin >= 5} className="h-1" /><span className="text-muted-foreground shrink-0 text-micro tabular-nums">{liveOf(live, t.id).percent != null ? `${liveOf(live, t.id).percent} %` : tr('tasks.steps', { n: liveOf(live, t.id).steps })}</span></div> : null;
               return (
                 <button key={t.id} onClick={() => open(t)} className={cn('flex w-full cursor-pointer items-center gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-accent/50', !phone && selected === t.id && 'bg-accent')} data-testid="task-row">
                   <AgentIcon agent={t.assigned_to ?? t.agent} className={phone ? 'self-start mt-0.5' : undefined} />
                   {/* The phone: the title on up to two lines, and under it the state and where (the agent is the icon). */}
                   {phone ? (
                     <div className="min-w-0 flex-1">
-                      <div className="line-clamp-2 text-[14px] leading-snug">{t.title}</div>
+                      <div className="line-clamp-2 text-body leading-snug">{t.title}</div>
                       <div className="mt-1 flex min-w-0 items-center gap-2"><TaskStatus status={t.status} undone={t.undone} task={t} /><span className="text-muted-foreground truncate text-xs">{t.project} · {ago(t.updated_at)}</span></div>
                       {progress}
                     </div>
                   ) : (<>
-                    <div className="min-w-0 flex-1"><div className="truncate text-[14px]">{t.title}</div><div className="text-muted-foreground truncate text-xs">#{t.id} · {t.project} · {AGENT[t.assigned_to ?? t.agent] ?? t.agent} · {ago(t.updated_at)}</div>{progress}</div>
+                    <div className="min-w-0 flex-1"><div className="truncate text-body">{t.title}</div><div className="text-muted-foreground truncate text-xs">#{t.id} · {t.project} · {AGENT[t.assigned_to ?? t.agent] ?? t.agent} · {ago(t.updated_at)}</div>{progress}</div>
                     <TaskStatus status={t.status} undone={t.undone} task={t} />
                   </>)}
                 </button>

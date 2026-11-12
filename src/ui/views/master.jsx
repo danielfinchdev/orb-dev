@@ -39,7 +39,7 @@ function NewPassword({ v, set, ack = null, autoFocus = false }) {
       <Field label={t('master.repeat')}><Input type="password" autoComplete="new-password" value={v.again} onChange={(e) => set({ again: e.target.value })} data-testid="master-again" /></Field>
       {v.again && v.again !== v.next ? <p className="text-destructive text-xs" role="alert">{t('master.mismatch')}</p> : null}
       {ack ? (
-        <label className="flex cursor-pointer items-start gap-2 text-[13px]"><Checkbox checked={Boolean(v.ack)} onCheckedChange={(c) => set({ ack: c === true })} data-testid="master-ack" className="mt-0.5" /><span>{ack}</span></label>
+        <label className="flex cursor-pointer items-start gap-2 text-control"><Checkbox checked={Boolean(v.ack)} onCheckedChange={(c) => set({ ack: c === true })} data-testid="master-ack" className="mt-0.5" /><span>{ack}</span></label>
       ) : null}
     </div>
   );
@@ -51,7 +51,7 @@ function Warning() {
   const t = useT();
   return (
     <div className="border-warning/50 bg-warning/10 grid gap-1 rounded-xl border px-4 py-3 text-left" role="note" data-testid="master-warning">
-      <span className="flex items-center gap-1.5 text-[13px] font-medium"><TriangleAlert className="text-warning-ink size-4 shrink-0" />{t('master.warnTitle')}</span>
+      <span className="flex items-center gap-1.5 text-control font-medium"><TriangleAlert className="text-warning-ink size-4 shrink-0" />{t('master.warnTitle')}</span>
       <span className="text-muted-foreground text-xs leading-relaxed">{t('master.warnBody')}</span>
     </div>
   );

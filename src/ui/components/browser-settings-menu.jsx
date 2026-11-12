@@ -14,7 +14,7 @@ export function BrowserSettingsMenu({ list = false, active = false }) {
     <DropdownMenu>
       {list ? (
         <DropdownMenuTrigger asChild>
-          <button type="button" className={cn('group flex w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[14px] compact:text-[13px]', active ? 'bg-accent text-accent-foreground' : 'text-foreground/80 hover:bg-accent/60 hover:text-foreground')} data-testid="nav-settings">
+          <button type="button" className={cn('group flex w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-body compact:text-control', active ? 'bg-accent text-accent-foreground' : 'text-foreground/80 hover:bg-accent/60 hover:text-foreground')} data-testid="nav-settings">
             <Settings className={cn('size-4 shrink-0', active ? 'text-primary' : 'text-muted-foreground')} /><span className="min-w-0 flex-1 truncate">{label}</span>
           </button>
         </DropdownMenuTrigger>

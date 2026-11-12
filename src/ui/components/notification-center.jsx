@@ -37,10 +37,10 @@ export function NotificationBell() {
       </BubbleTip>
       <PopoverContent side="bottom" align="end" className="notice-center" data-testid="notice-center">
         <div className="flex items-center gap-2 px-1 pb-1.5">
-          <span className="orb-cal-title flex-1 text-[14px] font-semibold">{t('bar.notices')}</span>
+          <span className="orb-cal-title flex-1 text-body font-semibold">{t('bar.notices')}</span>
           {notices.length ? <button type="button" className="orb-cal-today" onClick={clearNotices} data-testid="notice-clear">{t('bar.noticesClear')}</button> : null}
         </div>
-        {!notices.length ? <p className="orb-tip-text px-1 py-3 text-center text-[13px]">{t('bar.noticesEmpty')}</p> : (
+        {!notices.length ? <p className="orb-tip-text px-1 py-3 text-center text-control">{t('bar.noticesEmpty')}</p> : (
           <ul className="-mx-1 grid max-h-[min(24rem,60vh)] gap-0.5 overflow-y-auto">
             {notices.map((n) => {
               const [Icon, tone] = ICON[n.tone] ?? ICON.info;
@@ -48,9 +48,9 @@ export function NotificationBell() {
                 <>
                   <Icon className={cn('mt-0.5 size-4 shrink-0', tone)} />
                   <span className="min-w-0 flex-1">
-                    {n.title ? <span className="orb-tip-title block text-[13px] font-medium">{n.title}</span> : null}
-                    <span className={cn('block text-[12.5px] leading-snug break-words', n.title ? 'orb-tip-text' : 'orb-tip-title')}>{n.body}</span>
-                    <span className="orb-tip-text mt-0.5 flex gap-1.5 text-[11px] opacity-80"><When at={n.at} />{n.count > 1 ? <span>· ×{n.count}</span> : null}</span>
+                    {n.title ? <span className="orb-tip-title block text-control font-medium">{n.title}</span> : null}
+                    <span className={cn('block text-caption leading-snug break-words', n.title ? 'orb-tip-text' : 'orb-tip-title')}>{n.body}</span>
+                    <span className="orb-tip-text mt-0.5 flex gap-1.5 text-micro opacity-80"><When at={n.at} />{n.count > 1 ? <span>· ×{n.count}</span> : null}</span>
                   </span>
                 </>
               );

@@ -101,7 +101,7 @@ export function GamesDialog() {
                   className="group bg-card hover:border-primary/50 focus-visible:ring-ring/50 grid cursor-pointer gap-2 overflow-hidden rounded-2xl border p-2 pb-3 text-left shadow-xs transition-all duration-200 outline-none hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-[3px] motion-reduce:hover:translate-y-0">
                   <div className={cn('relative aspect-[3/2] overflow-hidden rounded-xl', STAGE)}>
                     <div className="h-full w-full transition-transform duration-300 group-hover:scale-[1.06] motion-reduce:group-hover:scale-100"><Thumb /></div>
-                    {n > 0 ? <span className="bg-card/85 text-foreground absolute top-1.5 right-1.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums shadow-sm backdrop-blur"><Trophy className="text-warning-ink size-3" />{n}</span> : null}
+                    {n > 0 ? <span className="bg-card/85 text-foreground absolute top-1.5 right-1.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-micro font-semibold tabular-nums shadow-sm backdrop-blur"><Trophy className="text-warning-ink size-3" />{n}</span> : null}
                   </div>
                   <div className="px-1.5">
                     <div className="font-medium">{t(`games.${x.id}`)}</div>

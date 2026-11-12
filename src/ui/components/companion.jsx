@@ -50,7 +50,7 @@ export function Companion({ name, base, hidden: hiddenHere }) {
   return (
     <div className={cn('fixed right-6 bottom-6 z-40 flex items-end gap-2 transition-opacity duration-200', near ? 'pointer-events-none opacity-100' : 'pointer-events-none opacity-0 [&_*]:pointer-events-none')} data-testid="companion" data-shown={near ? 'true' : 'false'}>
       {bubble ? (
-        <div className="bg-popover text-popover-foreground animate-in fade-in-0 slide-in-from-bottom-2 pointer-events-auto relative mb-14 max-w-72 rounded-2xl rounded-br-md border p-3 pr-8 text-[13px] shadow-lg">
+        <div className="bg-popover text-popover-foreground animate-in fade-in-0 slide-in-from-bottom-2 pointer-events-auto relative mb-14 max-w-72 rounded-2xl rounded-br-md border p-3 pr-8 text-control shadow-lg">
           <button className="text-muted-foreground hover:text-foreground absolute top-2 right-2 cursor-pointer" onClick={() => setBubble(null)} aria-label={t('comp.close')}><X className="size-3.5" /></button>
           <p className="whitespace-pre-wrap break-words">{bubble.text.slice(0, 280)}</p>
           {bubble.action ? <Button size="xs" className="mt-2" onClick={() => { bubble.action.run(); setBubble(null); }}>{bubble.action.label}</Button> : null}

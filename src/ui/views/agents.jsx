@@ -117,7 +117,7 @@ function InstallButton({ a, reload }) {
       <Button size="sm" variant={a.installed ? 'ghost' : 'default'} disabled={busy} onClick={async () => { const r = await act(call('agents.install', { agent: a.id })); if (r) setSt(r); }} data-testid={`agent-install-${a.id}`}>
         {busy ? <Spinner className="size-3.5" /> : <Download />}{busy ? t('agents.installing') : a.installed ? t('agents.update') : t('agents.install')}
       </Button>
-      {busy && st.line ? <span className="text-muted-foreground w-full truncate text-[11px]">{st.line}</span> : null}
+      {busy && st.line ? <span className="text-muted-foreground w-full truncate text-micro">{st.line}</span> : null}
     </>
   );
 }
@@ -139,7 +139,7 @@ function Accounts({ a, reload }) {
           <CollapsibleContent className="mt-3">
             <Field label={t('agents.sessionFolder')} hint={v.home ? t('agents.folderHintCustom') : t('agents.folderHintEmpty')}>
               <div className="flex min-w-0 items-center gap-2 rounded-lg border px-3 py-1.5">
-                <span className="text-muted-foreground min-w-0 flex-1 truncate text-[13px]">{v.home ? baseName(v.home) : t('agents.folderPlaceholder')}</span>
+                <span className="text-muted-foreground min-w-0 flex-1 truncate text-control">{v.home ? baseName(v.home) : t('agents.folderPlaceholder')}</span>
                 {v.home ? <Button type="button" size="xs" variant="ghost" onClick={() => set({ home: '' })}>{t('agents.folderNew')}</Button> : null}
                 <Button type="button" size="xs" variant="outline" onClick={async () => { const f = await bridge.pickFolder(t('agents.pickFolder')); if (f) set({ home: f }); }}><FolderOpen />{t('agents.pickProgram')}</Button>
               </div>
@@ -183,7 +183,7 @@ function Accounts({ a, reload }) {
           {found.map((f) => (
             <label key={f.dir} className="hover:bg-accent/40 flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2">
               <Checkbox checked={v.picked.includes(f.dir)} onCheckedChange={(on) => set({ picked: on ? [...v.picked, f.dir] : v.picked.filter((d) => d !== f.dir) })} />
-              <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{f.name}</span>
+              <span className="min-w-0 flex-1 truncate text-control font-medium">{f.name}</span>
               {planName(f.plan) ? <Badge variant="secondary" className="font-normal">{planName(f.plan)}</Badge> : null}
               <span className="text-muted-foreground shrink-0 text-xs">{t('agents.scanSavedAt', { when: when(f.savedAt) })}</span>
             </label>
@@ -204,7 +204,7 @@ function Accounts({ a, reload }) {
           // One line: the name with its state, what can be done with it and its switch.
           <div key={acc.id} className={cn('rounded-lg border px-3 py-2', acc.enabled === false && 'opacity-60')}>
             <div className="flex items-center gap-1.5">
-              <div className="min-w-0 flex-1 truncate text-[13px] font-medium">{acc.label}</div>
+              <div className="min-w-0 flex-1 truncate text-control font-medium">{acc.label}</div>
               <Badge variant={login[1]}>{login[0]}</Badge>
               <BubbleTip title={t('agents.login')}><Button size="icon-xs" variant="ghost" aria-label={t('agents.login')} onClick={() => signIn(acc, acc.label)} data-testid={`agent-login-${acc.id}`}><LogIn /></Button></BubbleTip>
               {acc.id !== acc.agent ? <BubbleTip title={t('agents.removeTitle')} text={t('agents.removeTip')}><Button size="icon-xs" variant="danger" aria-label={t('agents.removeTitle')} onClick={async () => { if (await confirm(t('agents.removeTitle'), t('agents.removeBody', { label: acc.label }), { ok: t('agents.remove'), danger: true })) act(call('accounts.remove', { id: acc.id }), t('agents.accountRemoved')).then(reload); }}><Trash2 /></Button></BubbleTip> : null}
@@ -214,7 +214,7 @@ function Accounts({ a, reload }) {
           </div>
         );
       })}
-      {a.multi ? <div className="flex flex-wrap gap-1"><Button size="sm" variant="ghost" className="w-fit" onClick={add}><UserPlus />{t('agents.addAnother')}</Button><BubbleTip title={t('agents.scan')} text={t('agents.scanTip', { label: a.label })}><Button size="sm" variant="ghost" className="w-fit" onClick={scan} data-testid={`agent-scan-${a.id}`}><ScanSearch />{t('agents.scan')}</Button></BubbleTip></div> :<p className="text-muted-foreground text-[11px] leading-snug">{t('agents.fixedSession', { label: a.label })}</p>}
+      {a.multi ? <div className="flex flex-wrap gap-1"><Button size="sm" variant="ghost" className="w-fit" onClick={add}><UserPlus />{t('agents.addAnother')}</Button><BubbleTip title={t('agents.scan')} text={t('agents.scanTip', { label: a.label })}><Button size="sm" variant="ghost" className="w-fit" onClick={scan} data-testid={`agent-scan-${a.id}`}><ScanSearch />{t('agents.scan')}</Button></BubbleTip></div> :<p className="text-muted-foreground text-micro leading-snug">{t('agents.fixedSession', { label: a.label })}</p>}
     </div>
   );
 }
@@ -246,7 +246,7 @@ function StrengthsPicker({ value, onChange, testid }) {
   return (
     <DropdownMenu onOpenChange={close}>
       <DropdownMenuTrigger asChild>
-        <button type="button" className="border-input hover:bg-accent/40 flex min-h-9 w-full cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-[13px]" data-testid={testid}>
+        <button type="button" className="border-input hover:bg-accent/40 flex min-h-9 w-full cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-control" data-testid={testid}>
           <span className="flex min-w-0 flex-1 flex-wrap gap-1">
             {picked.length ? picked.map((id) => <Badge key={id} variant="secondary" className="font-normal">{label(id)}</Badge>) : <span className="text-muted-foreground">{t('agents.strengthsPick')}</span>}
           </span>
@@ -307,7 +307,7 @@ function AgentCard({ a, reload }) {
             <Field label={t('agents.strengths')} hint={t('agents.strengthsHint')}><StrengthsPicker value={cfg.strengths ?? ''} onChange={(strengths) => save(a.id, { strengths })} testid={`agent-strengths-${a.id}`} /></Field>
             <Field label={t('agents.path')} hint={t('agents.pathHint')}>
               <div className="flex min-w-0 items-center gap-2 rounded-lg border px-3 py-1.5">
-                <span className="text-muted-foreground min-w-0 flex-1 truncate text-[13px]">{cfg.path ? t('agents.pathCustom') : t('agents.pathAuto')}</span>
+                <span className="text-muted-foreground min-w-0 flex-1 truncate text-control">{cfg.path ? t('agents.pathCustom') : t('agents.pathAuto')}</span>
                 {cfg.path ? <Button size="xs" variant="ghost" onClick={() => save(a.id, { path: '' }).then(reload)}>{t('agents.auto')}</Button> : null}
                 <Button size="xs" variant="outline" onClick={async () => { const f = await bridge.pickProgram?.(t('sys.dialog.pickProgram')); if (f) save(a.id, { path: f }).then(reload); }} data-testid={`agent-path-${a.id}`}><FolderOpen />{t('agents.pickProgram')}</Button>
               </div>
@@ -346,7 +346,7 @@ export function AgentsView() {
           ) : null}
           {system && !system.git ? (
             <Card className="border-warning/50 flex-row items-center gap-3 px-5 py-3.5">
-              <div className="min-w-0 flex-1"><div className="text-[14px] font-medium">{t('agents.noGit')}</div><div className="text-muted-foreground text-xs">{t('agents.noGitDesc')}</div></div>
+              <div className="min-w-0 flex-1"><div className="text-body font-medium">{t('agents.noGit')}</div><div className="text-muted-foreground text-xs">{t('agents.noGitDesc')}</div></div>
               <Button size="sm" variant="outline" onClick={() => bridge.openExternal('https://git-scm.com/download/win')}><ExternalLink />{t('agents.getGit')}</Button>
             </Card>
           ) : null}

@@ -153,7 +153,7 @@ export function Sidebar({ mood }) {
           </button>
         </Tip>
         {/* with the default name, the drawn wordmark (Orb·E); a name of one's own, as it is written. */}
-        <div className="flex min-w-0 flex-1 items-center">{name === PRODUCT.assistant ? <Wordmark /> : <div className="truncate text-[15px] font-medium">{name}</div>}</div>
+        <div className="flex min-w-0 flex-1 items-center">{name === PRODUCT.assistant ? <Wordmark /> : <div className="truncate text-card-title font-medium">{name}</div>}</div>
         <div className="flex shrink-0 items-center gap-0.5">
           <ThemeToggle />
           <SidebarToggle />

@@ -117,7 +117,7 @@ function Whiteboard({ project }) {
             <Board initial={data} dark={dark} lang={lang} onChange={onChange} menu={menu} />
           </Suspense>
         ) : <div className="grid h-full place-items-center"><Spinner /></div>}
-        <div className="wb-status pointer-events-none absolute bottom-4 left-1/2 z-10 -translate-x-1/2 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px]" data-testid="whiteboard-status">
+        <div className="wb-status pointer-events-none absolute bottom-4 left-1/2 z-10 -translate-x-1/2 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-micro" data-testid="whiteboard-status">
           {saving === 'saved' ? <><Check className="size-3.5" />{t('wb.saved')}</> : <><CloudUpload className="size-3.5" />{t('wb.saving')}</>}
         </div>
       </div>
@@ -126,12 +126,12 @@ function Whiteboard({ project }) {
         // Excalidraw switches to its phone tools.
         <aside className={cn('wb-panel absolute top-16 right-3 bottom-16 z-20 flex w-72 max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-2xl border', dropping && 'ring-primary ring-2 ring-inset')} onDragOver={(e) => { e.preventDefault(); setDropping(true); }} onDragLeave={() => setDropping(false)} onDrop={drop} data-testid="whiteboard-panel">
           <div className="flex items-center gap-2 border-b px-3 py-2.5">
-            <Paperclip className="text-primary size-4" /><span className="flex-1 text-[13.5px] font-semibold">{t('wb.attachments')}</span>
+            <Paperclip className="text-primary size-4" /><span className="flex-1 text-control font-semibold">{t('wb.attachments')}</span>
             <BubbleTip title={t('wb.hidePanel')}><Button size="icon-xs" variant="ghost" onClick={() => setPanel(false)} aria-label={t('wb.hidePanel')}><PanelRightClose /></Button></BubbleTip>
           </div>
           <div className="grid gap-2 border-b p-3">
             <Button size="sm" variant="outline" onClick={pick} disabled={!bridge.pickFiles} data-testid="whiteboard-attach"><Paperclip />{t('wb.attach')}</Button>
-            <p className="text-muted-foreground text-[11.5px] leading-snug">{bridge.mobile ? t('wb.attachPcOnly') : t('wb.attachHint')}</p>
+            <p className="text-muted-foreground text-micro leading-snug">{bridge.mobile ? t('wb.attachPcOnly') : t('wb.attachHint')}</p>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {attachments.length ? attachments.map((a) => {
@@ -140,14 +140,14 @@ function Whiteboard({ project }) {
                 <div key={a.name} className="wb-item mb-2 grid gap-1.5 rounded-xl border p-2" data-testid="whiteboard-item">
                   <div className="flex items-center gap-2">
                     {a.thumb ? <img src={a.thumb} alt="" className="size-10 shrink-0 rounded-md border object-cover" /> : <span className="bg-muted grid size-10 shrink-0 place-items-center rounded-md"><Icon className="text-muted-foreground size-4" /></span>}
-                    <div className="min-w-0 flex-1"><div className="truncate text-[12.5px] font-medium">{a.name}</div><div className="text-muted-foreground text-[11px]">{size(a.size)}</div></div>
+                    <div className="min-w-0 flex-1"><div className="truncate text-caption font-medium">{a.name}</div><div className="text-muted-foreground text-micro">{size(a.size)}</div></div>
                     {bridge.mobile ? null : <BubbleTip title={t('wb.remove')}><Button size="icon-xs" variant="ghost" onClick={() => remove(a.name)} aria-label={t('wb.remove')}><Trash2 /></Button></BubbleTip>}
                   </div>
                   <textarea defaultValue={a.note} rows={2} maxLength={2000} placeholder={t('wb.notePh', { assistant })} onBlur={(e) => { if (e.target.value !== a.note) note(a.name, e.target.value); }}
-                    className="border-input bg-background/70 placeholder:text-muted-foreground focus-visible:ring-ring/40 w-full resize-y rounded-lg border px-2 py-1 text-[12px] outline-none focus-visible:ring-2" />
+                    className="border-input bg-background/70 placeholder:text-muted-foreground focus-visible:ring-ring/40 w-full resize-y rounded-lg border px-2 py-1 text-caption outline-none focus-visible:ring-2" />
                 </div>
               );
-            }) : <p className="text-muted-foreground px-2 py-6 text-center text-[12px] leading-relaxed">{t('wb.noAttachments', { assistant })}</p>}
+            }) : <p className="text-muted-foreground px-2 py-6 text-center text-caption leading-relaxed">{t('wb.noAttachments', { assistant })}</p>}
           </div>
           <div className="grid gap-1.5 border-t p-3">
             {/* Orb reads the Pizarra by itself (and hears when it changes): no button to ask it. */}

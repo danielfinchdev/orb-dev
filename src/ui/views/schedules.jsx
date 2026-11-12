@@ -47,8 +47,8 @@ export async function newSchedule(preset = {}) {
           <div className="flex flex-wrap gap-1.5">{DAYS.map((d) => <Button key={d} type="button" size="sm" variant={v.weekdays.includes(d) ? 'default' : 'outline'} className="w-9" onClick={() => set({ weekdays: v.weekdays.includes(d) ? v.weekdays.filter((x) => x !== d) : [...v.weekdays, d] })}>{t(`schedules.days.${d}`)}</Button>)}</div>
         </Field>
       ) : null}
-      <label className="flex cursor-pointer items-center gap-2 text-[13px]"><Checkbox checked={v.readonly} onCheckedChange={(c) => set({ readonly: c === true })} />{t('schedules.readonly')}</label>
-      {v.every === 'once' ? null : <label className="flex cursor-pointer items-center gap-2 text-[13px]"><Checkbox checked={v.same_chat} onCheckedChange={(c) => set({ same_chat: c === true })} data-testid="schedule-same-chat" />{t('schedules.sameChat')}</label>}
+      <label className="flex cursor-pointer items-center gap-2 text-control"><Checkbox checked={v.readonly} onCheckedChange={(c) => set({ readonly: c === true })} />{t('schedules.readonly')}</label>
+      {v.every === 'once' ? null : <label className="flex cursor-pointer items-center gap-2 text-control"><Checkbox checked={v.same_chat} onCheckedChange={(c) => set({ same_chat: c === true })} data-testid="schedule-same-chat" />{t('schedules.sameChat')}</label>}
     </>),
     ok: t('schedules.new.ok'),
     onOk: async ({ at_date: date, ...v }) => call('schedules.create', { ...v, at_time: v.every === 'once' ? date : v.at_time, same_chat: v.every !== 'once' && v.same_chat, hours: Number(v.hours) || 6 })
@@ -80,7 +80,7 @@ export function SchedulesView() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2"><span className="font-medium">{s.title}</span>{!s.approved ? <Badge variant="warning">{t('schedules.awaiting')}</Badge> : null}{s.readonly ? <Badge variant="secondary">{t('schedules.readonlyBadge')}</Badge> : null}</div>
                   <div className="text-muted-foreground mt-0.5 text-xs">{t('schedules.nextLine', { when: s.when, project: s.project, next: s.enabled && s.approved ? when(s.next_run) : spent(s) ? t('schedules.spent') : t('schedules.paused') })}{s.last_task ? <>{t('schedules.last')}<a className="cursor-pointer underline-offset-2 hover:underline" onClick={() => go({ view: 'tasks', id: s.last_task })}>#{s.last_task}</a></> : null}</div>
-                  <p className="text-muted-foreground mt-1.5 line-clamp-2 text-[13px]">{s.description}</p>
+                  <p className="text-muted-foreground mt-1.5 line-clamp-2 text-control">{s.description}</p>
                   {s.same_chat && s.conversation_id ? <Button size="sm" variant="ghost" className="mt-1 -ml-2" onClick={() => go({ view: 'chat', id: s.conversation_id })} data-testid="schedule-open-chat"><MessageSquare />{t('schedules.openChat')}</Button> : null}
                 </div>
                 <div className="flex items-center gap-2">

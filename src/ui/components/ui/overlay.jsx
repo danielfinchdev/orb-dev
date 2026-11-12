@@ -46,7 +46,7 @@ export function DialogDescription({ className, ...props }) { return <DialogPrimi
 export function Select({ value, onValueChange, options, placeholder, className, size = 'default', disabled, title, id, 'aria-describedby': describedBy, 'data-testid': testid, ...props }) {
   const chosen = options.find((o) => o.value === value) ?? null;
   const trigger = (
-    <SelectPrimitive.Trigger id={id} aria-describedby={describedBy} aria-label={title} data-testid={testid} className={cn("border-input data-[placeholder]:text-muted-foreground dark:bg-input/30 dark:hover:bg-input/50 flex w-fit items-center justify-between gap-2 rounded-lg border bg-transparent px-3 text-sm whitespace-nowrap shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:ring-[3px] disabled:opacity-50 cursor-pointer *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4", size === 'sm' ? 'h-8 text-[13px]' : 'h-9', className)}>
+    <SelectPrimitive.Trigger id={id} aria-describedby={describedBy} aria-label={title} data-testid={testid} className={cn("border-input data-[placeholder]:text-muted-foreground dark:bg-input/30 dark:hover:bg-input/50 flex w-fit items-center justify-between gap-2 rounded-lg border bg-transparent px-3 text-sm whitespace-nowrap shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:ring-[3px] disabled:opacity-50 cursor-pointer *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4", size === 'sm' ? 'h-8 text-control' : 'h-9', className)}>
       <SelectPrimitive.Value data-slot="select-value" placeholder={placeholder}>{chosen ? <>{chosen.icon ?? null}<span className="truncate">{chosen.label}</span></> : null}</SelectPrimitive.Value>
       <SelectPrimitive.Icon asChild><ChevronDownIcon className="size-4 opacity-50" /></SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
@@ -92,8 +92,8 @@ export function BubbleTip({ title, text, children, side = 'bottom', align = 'cen
       <TooltipPrimitive.Portal>
         {/* a bubble only informs: clicks go through it to whatever it covers (it hid the project picker). */}
         <TooltipPrimitive.Content side={side} align={align} sideOffset={offset} collisionPadding={12} arrowPadding={TAIL_PAD} className={cn('orb-tip pointer-events-none z-50', wide ? 'max-w-80' : 'max-w-[17rem]')} data-testid="bubble-tip">
-          {title ? <div className="orb-tip-title text-[13px] leading-snug font-semibold">{title}</div> : null}
-          {text ? <p className={cn('orb-tip-text text-[12px] leading-snug', title && 'mt-0.5', wide && 'break-all')}>{text}</p> : null}
+          {title ? <div className="orb-tip-title text-control leading-snug font-semibold">{title}</div> : null}
+          {text ? <p className={cn('orb-tip-text text-caption leading-snug', title && 'mt-0.5', wide && 'break-all')}>{text}</p> : null}
           <TooltipPrimitive.Arrow asChild width={16} height={8}><span className="orb-tip-tail" aria-hidden="true" /></TooltipPrimitive.Arrow>
         </TooltipPrimitive.Content>
       </TooltipPrimitive.Portal>
@@ -157,7 +157,7 @@ export function DropdownMenuContent({ className, align = 'end', onCloseAutoFocus
 }
 export function DropdownMenuItem({ className, variant, onPointerLeave, ...props }) {
   const leave = (e) => { onPointerLeave?.(e); if (!e.defaultPrevented && closing(e.currentTarget)) e.preventDefault(); };
-  return <DropdownPrimitive.Item onPointerLeave={leave} className={cn("focus:bg-accent focus:text-accent-foreground relative flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm compact:text-[13px] outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:text-muted-foreground", variant === 'destructive' && 'text-destructive focus:text-destructive [&_svg]:text-destructive', className)} {...props} />;
+  return <DropdownPrimitive.Item onPointerLeave={leave} className={cn("focus:bg-accent focus:text-accent-foreground relative flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm compact:text-control outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:text-muted-foreground", variant === 'destructive' && 'text-destructive focus:text-destructive [&_svg]:text-destructive', className)} {...props} />;
 }
 // an item that is ticked or not (lists where several can be chosen); the menu stays open while ticking.
 export function DropdownMenuCheckboxItem({ className, children, checked, onCheckedChange, ...props }) {
@@ -205,7 +205,7 @@ export function Checkbox({ className, ...props }) {
 export const Tabs = TabsPrimitive.Root;
 export function TabsList({ className, ...props }) { return <TabsPrimitive.List className={cn('bg-muted text-muted-foreground inline-flex h-9 w-fit max-w-full items-center justify-start overflow-x-auto rounded-lg p-[3px] [scrollbar-width:none]', className)} {...props} />; }
 export function TabsTrigger({ className, ...props }) {
-  return <TabsPrimitive.Trigger className={cn("data-[state=active]:bg-background dark:data-[state=active]:bg-input/40 data-[state=active]:text-foreground data-[state=active]:shadow-sm inline-flex h-full flex-1 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 text-[13px] font-medium whitespace-nowrap transition-[color,background-color,box-shadow] duration-150 disabled:opacity-50 [&_svg:not([class*='size-'])]:size-4", className)} {...props} />;
+  return <TabsPrimitive.Trigger className={cn("data-[state=active]:bg-background dark:data-[state=active]:bg-input/40 data-[state=active]:text-foreground data-[state=active]:shadow-sm inline-flex h-full flex-1 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 text-control font-medium whitespace-nowrap transition-[color,background-color,box-shadow] duration-150 disabled:opacity-50 [&_svg:not([class*='size-'])]:size-4", className)} {...props} />;
 }
 
 // ---- collapsible

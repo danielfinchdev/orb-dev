@@ -69,7 +69,7 @@ function ToolBlock({ b }) {
   const input = readableInput(b.call?.input, b.call?.name);
   const raw = String(b.call?.input ?? '');
   return (
-    <Collapsible className={cn('bg-card rounded-xl border text-[13px]', error && 'border-destructive/40')}>
+    <Collapsible className={cn('bg-card rounded-xl border text-control', error && 'border-destructive/40')}>
       <CollapsibleTrigger className="group flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left">
         <ChevronRight className="text-muted-foreground size-3.5 transition-transform group-data-[state=open]:rotate-90" />
         <Icon className="text-muted-foreground size-3.5" />
@@ -79,7 +79,7 @@ function ToolBlock({ b }) {
       </CollapsibleTrigger>
       <CollapsibleContent>
         {/* The whole call (a long command, the data it sent) only when unfolded. */}
-        {raw && readableCommand(raw) !== input ? <pre className="text-muted-foreground mx-3 mb-1.5 max-h-40 overflow-auto px-1 font-mono text-[11px] whitespace-pre-wrap break-all">{readableCommand(raw)}</pre> : null}
+        {raw && readableCommand(raw) !== input ? <pre className="text-muted-foreground mx-3 mb-1.5 max-h-40 overflow-auto px-1 font-mono text-micro whitespace-pre-wrap break-all">{readableCommand(raw)}</pre> : null}
         <pre className="bg-muted mx-3 mb-3 max-h-80 overflow-auto rounded-lg px-3 py-2 font-mono text-xs whitespace-pre-wrap break-words">{b.result?.output || (b.result ? t('session.noOutput') : t('session.working'))}</pre>
       </CollapsibleContent>
     </Collapsible>
@@ -94,7 +94,7 @@ function SubagentBlock({ b }) {
   const a = b.call.agent;
   const state = subagentState(b);
   return (
-    <Collapsible className={cn('bg-card rounded-xl border text-[13px]', state === 'failed' && 'border-destructive/40')} data-testid="subagent">
+    <Collapsible className={cn('bg-card rounded-xl border text-control', state === 'failed' && 'border-destructive/40')} data-testid="subagent">
       <CollapsibleTrigger className="group flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left">
         <ChevronRight className="text-muted-foreground size-3.5 transition-transform group-data-[state=open]:rotate-90" />
         <Bot className="text-muted-foreground size-3.5" />
@@ -162,21 +162,21 @@ const Block = memo(function Block({ b, agent, who, brain, sessionId, project, ca
     const long = textBody.length > 1200 && /^Encargo de /.test(textBody);
     return (
       <MessageBox user name={userName || t('chat.you')} at={it.at}>
-        {typeof body === 'object' && body?.steer ? <div className="mb-1 flex items-center gap-1 text-[11px] opacity-80"><CornerDownRight className="size-3" />{t('session.steered')}</div> : null}
-        {long ? <Collapsible><CollapsibleTrigger className="cursor-pointer text-left underline-offset-2 hover:underline">{textBody.split('\n')[0]} ({t('session.seeFullTask')})</CollapsibleTrigger><CollapsibleContent className="mt-2 text-[13px] opacity-90">{textBody}</CollapsibleContent></Collapsible> : textBody}
+        {typeof body === 'object' && body?.steer ? <div className="mb-1 flex items-center gap-1 text-micro opacity-80"><CornerDownRight className="size-3" />{t('session.steered')}</div> : null}
+        {long ? <Collapsible><CollapsibleTrigger className="cursor-pointer text-left underline-offset-2 hover:underline">{textBody.split('\n')[0]} ({t('session.seeFullTask')})</CollapsibleTrigger><CollapsibleContent className="mt-2 text-control opacity-90">{textBody}</CollapsibleContent></Collapsible> : textBody}
         {images.length ? <div className="mt-2 flex flex-wrap gap-1.5">{images.map((p) => <AttachChip key={p} file={p} sessionId={sessionId} />)}</div> : null}
       </MessageBox>
     );
   }
   if (it.kind === 'text' && it.role === 'assistant') return <MessageBox name={who ?? AGENT[agent]} at={it.at} icon={<AgentIcon agent={agent} className="size-5 shrink-0" />}><TypedMarkdown tail={`session:${sessionId}`}>{body}</TypedMarkdown></MessageBox>;
-  if (it.kind === 'reasoning') return <div className="text-muted-foreground border-l-2 pl-3 text-[13px] italic whitespace-pre-wrap line-clamp-4">{body}</div>;
+  if (it.kind === 'reasoning') return <div className="text-muted-foreground border-l-2 pl-3 text-control italic whitespace-pre-wrap line-clamp-4">{body}</div>;
   if (it.kind === 'usage') {
     // Ajustes › Apariencia can hide it (shown by default).
     if (!usageLine) return null;
     const parts = [body?.costUsd != null ? `$${Number(body.costUsd).toFixed(3)}` : null, body?.inputTokens != null ? `${t('session.tokensIn', { n: (body.inputTokens + (body.cacheReadTokens ?? 0) + (body.cacheWriteTokens ?? 0)).toLocaleString(locale) })}${body.cacheReadTokens ? ` (${t('session.tokensCached', { n: body.cacheReadTokens.toLocaleString(locale) })})` : ''}` : null, body?.outputTokens != null ? t('session.tokensOut', { n: body.outputTokens.toLocaleString(locale) }) : null].filter(Boolean);
-    return parts.length ? <div className="text-muted-foreground text-right text-[11px]">{parts.join(' · ')}</div> : null;
+    return parts.length ? <div className="text-muted-foreground text-right text-micro">{parts.join(' · ')}</div> : null;
   }
-  if (it.role === 'error') return <div className="bg-destructive/10 text-destructive rounded-xl px-3.5 py-2.5 text-[13px] whitespace-pre-wrap break-words">{typeof body === 'string' ? body : JSON.stringify(body)}</div>;
+  if (it.role === 'error') return <div className="bg-destructive/10 text-destructive rounded-xl px-3.5 py-2.5 text-control whitespace-pre-wrap break-words">{typeof body === 'string' ? body : JSON.stringify(body)}</div>;
   if (it.kind === 'status' && typeof body === 'string') return <div className="text-muted-foreground text-center text-xs">{statusText(body, brain ?? agent, catalog)}</div>;
   return <div className="text-muted-foreground text-center text-xs">{typeof body === 'string' ? body : JSON.stringify(body)}</div>;
 }, (prev, next) => sameBlock(prev.b, next.b) && prev.agent === next.agent && prev.brain === next.brain && prev.sessionId === next.sessionId && prev.project === next.project && prev.catalog === next.catalog);
@@ -189,7 +189,7 @@ function OptiOldCard({ body = {} }) {
   const [label, tone] = OLD_STATUS[body.status] ?? OLD_STATUS.expired;
   const target = body.action === 'end_process' ? `${body.label || body.name || ''} (${body.pid})` : body.action === 'disable_startup' ? body.label || body.name : '';
   return (
-    <div className="bg-card rounded-xl border px-3.5 py-3 text-[13px]" data-testid="opti-old">
+    <div className="bg-card rounded-xl border px-3.5 py-3 text-control" data-testid="opti-old">
       <div className="flex items-start gap-2.5">
         <ShieldAlert className="text-muted-foreground mt-0.5 size-4 shrink-0" />
         <div className="min-w-0 flex-1">
@@ -210,7 +210,7 @@ export function ApprovalCard({ sessionId, body, compact = false }) {
   const answer = async (decision) => { setBusy(true); await act(call('sessions.approve', { id: sessionId, request: body.id, decision })); setBusy(false); };
   const done = body.status && body.status !== 'pending' ? DECISION[body.status] : null;
   return (
-    <div className={cn('rounded-xl border px-3.5 py-3 text-[13px]', done ? 'bg-card' : 'border-warning/50 bg-warning/10')} data-testid="approval-card">
+    <div className={cn('rounded-xl border px-3.5 py-3 text-control', done ? 'bg-card' : 'border-warning/50 bg-warning/10')} data-testid="approval-card">
       <div className="flex items-start gap-2.5">
         <ShieldAlert className={cn('mt-0.5 size-4 shrink-0', done ? 'text-muted-foreground' : 'text-warning-ink')} />
         <div className="min-w-0 flex-1">
@@ -242,7 +242,7 @@ async function showDetails(s, task) {
   await form(t('session.details'), {
     wide: true,
     body: () => (
-      <dl className="grid grid-cols-[130px_1fr] gap-x-4 gap-y-2 text-[13px]">
+      <dl className="grid grid-cols-[130px_1fr] gap-x-4 gap-y-2 text-control">
         <Row k={t('session.agent')}>{AGENT[s.agent]}{s.model ? ` · ${s.model}` : ''} · {t('session.reasoningOf', { level: REASONING[s.reasoning]?.toLowerCase() ?? s.reasoning })}</Row>
         <Row k={t('session.account')}>{(getState().app?.config?.accounts ?? []).find((a) => a.id === (s.account ?? s.agent))?.label ?? s.account}</Row>
         <Row k={t('session.permissions')}>{PERMISSION[s.permission]}</Row>
@@ -280,7 +280,7 @@ function LivePartial({ id, agent, running }) {
   }, [id]);
   useEffect(() => { if (!running) setPartial(''); }, [running]);
   if (partial) return <div className="flex gap-3" data-testid="partial"><AgentIcon agent={agent} className="mt-1 size-5" /><div className="min-w-0 flex-1 opacity-90"><TypingMarkdown text={partial} tail={`session:${id}`} /></div></div>;
-  return running ? <div className="text-muted-foreground flex items-center gap-2 text-[13px]"><span className="bg-info size-2 animate-pulse rounded-full" />{t('session.agentWorking', { agent: AGENT[agent] })}</div> : null;
+  return running ? <div className="text-muted-foreground flex items-center gap-2 text-control"><span className="bg-info size-2 animate-pulse rounded-full" />{t('session.agentWorking', { agent: AGENT[agent] })}</div> : null;
 }
 
 // What the user wrote, as the engine keeps it (a text, or { text, images }).
@@ -448,7 +448,7 @@ export function SessionView({ route }) {
           {/* a task's conversation ends with the files it changed (nothing while it runs). */}
           {task && !['running', 'queued'].includes(task.status) ? <TaskChanges taskId={task.id} version={`${task.status}:${task.updated_at}`} /> : null}
           {stalled ? (
-            <div className="bg-card flex flex-wrap items-center gap-3 rounded-xl border px-3.5 py-3 text-[13px]">
+            <div className="bg-card flex flex-wrap items-center gap-3 rounded-xl border px-3.5 py-3 text-control">
               <span className="min-w-0 flex-1">{s.status === 'limited' ? t('session.stalledLimit') : t('session.stalledHalf')}</span>
               <Button size="sm" onClick={() => act(call('sessions.resume', { id: s.id }))}><Play />{t('session.continue')}</Button>
             </div>
@@ -460,7 +460,7 @@ export function SessionView({ route }) {
           <div className="text-muted-foreground mb-1.5 flex items-center gap-1.5 text-xs"><ListOrdered className="size-3.5" />{t('session.queueTitle')}</div>
           <div className="grid gap-1.5">
             {queue.map((q, i) => (
-              <div key={q.id} className="bg-card flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[13px]">
+              <div key={q.id} className="bg-card flex items-center gap-2 rounded-lg border px-3 py-1.5 text-control">
                 <span className="text-muted-foreground tabular-nums">{i + 1}.</span>
                 <span className="min-w-0 flex-1 truncate">{q.text}</span>
                 <Tip label={t('session.up')}><Button variant="ghost" size="icon-sm" aria-label={t('session.up')} disabled={i === 0} onClick={() => editQueued(q, { move: 'up' })}><ArrowUpIcon /></Button></Tip>
@@ -502,9 +502,9 @@ export function SessionView({ route }) {
                 const unlock = await unlockCore('fullAccess');
                 if (unlock) act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged'));
               }} data-testid="session-permission" />}
-            {s.permission === 'total' ? <Tip label={t('session.fullPcTip')}><span tabIndex={0} className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-warning/50 bg-warning-soft px-2.5 text-[13px] font-medium whitespace-nowrap text-warning-ink" data-testid="session-fullpc"><ShieldAlert className="size-4" />{t('session.fullPcChip')}</span></Tip> : null}
+            {s.permission === 'total' ? <Tip label={t('session.fullPcTip')}><span tabIndex={0} className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-warning/50 bg-warning-soft px-2.5 text-control font-medium whitespace-nowrap text-warning-ink" data-testid="session-fullpc"><ShieldAlert className="size-4" />{t('session.fullPcChip')}</span></Tip> : null}
             {/* «Usar mi móvil Android», in any chat (included in «Acceso total al PC»). */}
-            {!s.project && s.permission === 'total' ? null : bridge.mobile ? (s.android ? <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-success/50 bg-success-soft px-2.5 text-[13px] text-success"><Smartphone className="size-4" />{t('session.androidChip')}</span> : null)
+            {!s.project && s.permission === 'total' ? null : bridge.mobile ? (s.android ? <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-success/50 bg-success-soft px-2.5 text-control text-success"><Smartphone className="size-4" />{t('session.androidChip')}</span> : null)
               : <Tip label={s.android ? t('session.androidOn') : t('session.android')}><Button variant="ghost" size="sm" aria-label={t('session.android')} aria-pressed={Boolean(s.android)} className={cn('h-8 shrink-0', s.android && 'border border-success/50 bg-success-soft text-success')} onClick={async () => {
                 if (s.android) { act(call('sessions.revokeGrant', { id: s.id, grant: 'android' })); return; }
                 const unlock = await unlockCore('android');
@@ -513,7 +513,7 @@ export function SessionView({ route }) {
             <ReasoningMenu catalog={catalog} value={{ agent: s.agent, model: s.model ?? '', account: s.account, reasoning: s.reasoning ?? 'medium' }} onChange={(reasoning) => act(call('sessions.update', { id: s.id, reasoning }))} />
           </>) : null}
           {/* the folder as a chip of the same height, padding and gap as the model, permissions and reasoning ones. */}
-          <Tip label={s.cwd}><span tabIndex={0} className="border-input text-muted-foreground dark:bg-input/30 hidden h-8 min-w-0 items-center gap-1.5 rounded-lg border px-2.5 text-[13px] whitespace-nowrap shadow-xs outline-none focus-visible:ring-ring/40 focus-visible:ring-[3px] xl:inline-flex" data-testid="session-folder"><FolderOpen className="size-4 shrink-0" /><span className="truncate">{s.project ?? baseName(s.cwd)}</span></span></Tip>
+          <Tip label={s.cwd}><span tabIndex={0} className="border-input text-muted-foreground dark:bg-input/30 hidden h-8 min-w-0 items-center gap-1.5 rounded-lg border px-2.5 text-control whitespace-nowrap shadow-xs outline-none focus-visible:ring-ring/40 focus-visible:ring-[3px] xl:inline-flex" data-testid="session-folder"><FolderOpen className="size-4 shrink-0" /><span className="truncate">{s.project ?? baseName(s.cwd)}</span></span></Tip>
           {s.context ? <span className="text-muted-foreground ml-auto text-xs"><ContextMeter context={s.context} /></span> : null}
         </>} />
     </>

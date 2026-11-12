@@ -91,7 +91,7 @@ function BackupsCard() {
         {/* after «Empezar con una clave nueva», Windows opens the key from before again: the way back (and
             the way back to the new key after that). */}
         {st.previousKey ? (
-          <div className="grid gap-2 rounded-lg border px-3 py-2.5 text-[13px]" data-testid="previous-key">
+          <div className="grid gap-2 rounded-lg border px-3 py-2.5 text-control" data-testid="previous-key">
             <span>{t(way)}</span>
             <Button size="sm" variant="outline" className="w-fit" onClick={previousKey} data-testid="previous-key-use"><KeyRound />{t(`${way}Use`)}</Button>
           </div>
@@ -99,7 +99,7 @@ function BackupsCard() {
         {list.length ? (
           <div className="grid gap-1.5" data-testid="backup-list">
             {list.slice(0, 8).map((b) => (
-              <div key={b.name} className="flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[13px]">
+              <div key={b.name} className="flex items-center gap-2 rounded-lg border px-3 py-1.5 text-control">
                 <span className="min-w-0 flex-1 truncate">{when(b.created)}</span>
                 <Badge variant="outline" className="font-normal">{t(`datos.kind.${['daily', 'manual', 'preupdate', 'premigration', 'move'].includes(b.kind) ? b.kind : 'other'}`)}</Badge>
                 <span className="text-muted-foreground text-xs tabular-nums">{size(b.size)}</span>

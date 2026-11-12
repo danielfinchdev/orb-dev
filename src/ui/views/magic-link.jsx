@@ -26,7 +26,7 @@ function Segmented({ label, value, options, onChange, testid }) {
     <div className="grid gap-1.5">
       <span className="text-muted-foreground text-xs">{label}</span>
       <div className="bg-muted inline-flex w-fit gap-1 rounded-lg p-1" role="radiogroup" aria-label={label} data-testid={testid}>
-        {options.map((o) => <button key={o.value} type="button" role="radio" aria-checked={value === o.value} onClick={() => onChange(o.value)} data-testid={`${testid}-${o.value}`} className={cn('cursor-pointer rounded-md px-3 py-1 text-[13px]', value === o.value ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{o.label}</button>)}
+        {options.map((o) => <button key={o.value} type="button" role="radio" aria-checked={value === o.value} onClick={() => onChange(o.value)} data-testid={`${testid}-${o.value}`} className={cn('cursor-pointer rounded-md px-3 py-1 text-control', value === o.value ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{o.label}</button>)}
       </div>
     </div>
   );
@@ -117,7 +117,7 @@ function OutsideGuide() {
   return (
     <details className="group w-full rounded-lg border px-3 py-2 text-sm sm:col-span-2" data-testid="link-outside">
       <summary className="flex cursor-pointer list-none items-center gap-2 font-medium"><Globe className="text-muted-foreground size-4" />{t('link.outTitle')}<ChevronDown className="text-muted-foreground ml-auto size-4 transition-transform duration-200 group-open:rotate-180" /></summary>
-      <ol className="mt-2 grid list-decimal gap-1 pl-5 text-[13px]"><li>{t('link.out1')}</li><li>{t('link.out2')}</li><li>{t('link.out3')}</li></ol>
+      <ol className="mt-2 grid list-decimal gap-1 pl-5 text-control"><li>{t('link.out1')}</li><li>{t('link.out2')}</li><li>{t('link.out3')}</li></ol>
       <div className="mt-2 flex flex-wrap items-center gap-3">
         <Button size="xs" variant="outline" onClick={() => bridge.openExternal('https://tailscale.com/download').catch((e) => notifyError(e))}><ExternalLink />{t('link.outGet')}</Button>
         <span className="text-muted-foreground text-xs">{t('link.outPcOn')}</span>
@@ -165,7 +165,7 @@ export function SubSection({ id, title, children }) {
   if (!title) return children;
   return (
     <section id={`settings-${id}`} className="grid scroll-mt-4 gap-4 [&>*]:min-w-0" data-testid={`settings-group-${id}`} aria-labelledby={`settings-${id}-title`}>
-      <h3 id={`settings-${id}-title`} className="text-muted-foreground px-1 pt-3 text-[13px] font-medium">{title}</h3>
+      <h3 id={`settings-${id}-title`} className="text-muted-foreground px-1 pt-3 text-control font-medium">{title}</h3>
       {children}
     </section>
   );

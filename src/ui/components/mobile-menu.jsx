@@ -12,7 +12,7 @@ import { useT } from '@/lib/i18n.js';
 
 const Group = ({ label, children, testid }) => (
   <section className="grid gap-1" data-testid={testid}>
-    {label ? <h2 className="text-muted-foreground px-3 text-[11px] font-medium tracking-wide uppercase">{label}</h2> : null}
+    {label ? <h2 className="text-muted-foreground px-3 text-micro font-medium tracking-wide uppercase">{label}</h2> : null}
     <div className="bg-card/80 grid gap-0.5 rounded-2xl border p-2">{children}</div>
   </section>
 );
@@ -33,7 +33,7 @@ export function MoreContent() {
       </Group>
       <Group label={t('nav.settings')}>
         <NavItem icon={Smartphone} label={t('nav.phone')} onClick={() => go({ view: 'phone' })} testid="nav-phone" />
-        <label title={darkOnly ? t('comp.theme.darkOnly') : undefined} className={cn('flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[14px]', darkOnly ? 'opacity-60' : 'cursor-pointer')}>
+        <label title={darkOnly ? t('comp.theme.darkOnly') : undefined} className={cn('flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-body', darkOnly ? 'opacity-60' : 'cursor-pointer')}>
           <Moon className="text-muted-foreground size-4 shrink-0" /><span className="flex-1">{t('nav.darkMode')}</span>
           <Switch checked={dark || darkOnly} disabled={darkOnly} onCheckedChange={night} data-testid="mobile-dark" />
         </label>
@@ -59,7 +59,7 @@ export function MobileMenu() {
           className="bg-sidebar text-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:slide-in-from-left data-[state=closed]:slide-out-to-left fixed inset-y-0 left-0 z-50 flex w-[min(20rem,86vw)] flex-col gap-4 overflow-y-auto border-r px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl duration-300 ease-(--ease-drawer)" data-testid="mobile-menu">
           <div className="flex items-center gap-2.5 px-1">
             <Robot size={28} mood="idle" />
-            <DialogPrimitive.Title className="min-w-0 flex-1 truncate text-[16px] font-medium">{name}</DialogPrimitive.Title>
+            <DialogPrimitive.Title className="min-w-0 flex-1 truncate text-title font-medium">{name}</DialogPrimitive.Title>
             <DialogPrimitive.Close className="press hover:bg-accent -mr-2 grid size-10 cursor-pointer place-items-center rounded-xl" aria-label={t('comp.close')}><X className="size-5" /></DialogPrimitive.Close>
           </div>
           <MoreContent />

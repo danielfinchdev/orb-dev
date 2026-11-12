@@ -25,7 +25,7 @@ function SecretCard({ r }) {
   };
   const send = () => { if (value) answer({ value, save }, save ? 'secretSave' : null); };
   return (
-    <form className="bg-card grid gap-2.5 rounded-xl border px-3.5 py-3 text-[13px]" data-testid="secret-card" autoComplete="off" onSubmit={(e) => { e.preventDefault(); send(); }}>
+    <form className="bg-card grid gap-2.5 rounded-xl border px-3.5 py-3 text-control" data-testid="secret-card" autoComplete="off" onSubmit={(e) => { e.preventDefault(); send(); }}>
       <div className="flex items-center gap-2 font-medium"><KeyRound className="text-muted-foreground size-4 shrink-0" />{t('secrets.title', { agent: AGENT[r.agent] ?? r.agent, name: r.name })}</div>
       <p className="text-muted-foreground">{r.reason}</p>
       <p className="text-warning-ink flex items-start gap-1.5 text-xs font-medium" data-testid="secret-warn"><ShieldAlert className="mt-px size-3.5 shrink-0" />{t('secrets.warn')}</p>

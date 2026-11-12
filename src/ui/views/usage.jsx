@@ -54,7 +54,7 @@ function Table({ rows, head, locale }) {
   const t = useT();
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-[13px]">
+      <table className="w-full text-control">
         <thead><tr className="text-muted-foreground text-left text-xs"><th className="py-1.5 font-normal">{head}</th><th className="py-1.5 text-right font-normal">{t('usage.cost')}</th><th className="py-1.5 text-right font-normal">{t('usage.in')}</th><th className="py-1.5 text-right font-normal">{t('usage.out')}</th><th className="py-1.5 text-right font-normal">{t('usage.turns')}</th></tr></thead>
         <tbody>
           {rows.map((r) => (
@@ -75,11 +75,11 @@ function Table({ rows, head, locale }) {
 function Limits({ accounts, locale }) {
   const t = useT();
   const withData = accounts.filter((u) => u.windows?.length);
-  if (!withData.length) return <p className="text-muted-foreground text-[13px]">{t('usage.noLimits')}</p>;
+  if (!withData.length) return <p className="text-muted-foreground text-control">{t('usage.noLimits')}</p>;
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       {withData.map((u) => (
-        <div key={u.account} className="grid content-start gap-2.5 rounded-xl border p-3.5 text-[13px]" data-testid="usage-account">
+        <div key={u.account} className="grid content-start gap-2.5 rounded-xl border p-3.5 text-control" data-testid="usage-account">
           <div className="flex items-center gap-2 font-medium"><AgentIcon agent={u.agent} className="size-4" />{AGENT[u.agent] ?? u.agent}{u.label && u.label !== (AGENT[u.agent] ?? u.agent) ? <span className="text-muted-foreground truncate font-normal">· {u.label}</span> : null}</div>
           {u.windows.map((w) => {
             const p = Math.round((w.utilization ?? 0) * 100); const pace = paceOf(w);
@@ -123,12 +123,12 @@ export function UsageView() {
               <Stat label={t('usage.out')} value={tokens(data.total.tokensOut)} />
               <Stat label={t('usage.turns')} value={data.total.turns.toLocaleString(locale)} />
             </div>
-            <Card className="gap-3"><div className="px-5 text-[13px] font-medium">{metric === 'usd' ? t('usage.costByDay') : t('usage.tokensByDay')}</div><div className="px-5"><Days days={data.days} metric={metric} locale={locale} /></div></Card>
-            {agents.length ? <Card className="gap-2"><div className="px-5 text-[13px] font-medium">{t('usage.byAgent')}</div><div className="px-5"><Table rows={agents} head={t('usage.agent')} locale={locale} /></div></Card> : null}
-            {models.length ? <Card className="gap-2"><div className="px-5 text-[13px] font-medium">{t('usage.byModel')}</div><div className="px-5"><Table rows={models} head={t('usage.model')} locale={locale} /></div></Card> : null}
-            {!data.total.turns ? <p className="text-muted-foreground text-[13px]">{t('usage.empty')}</p> : null}
+            <Card className="gap-3"><div className="px-5 text-control font-medium">{metric === 'usd' ? t('usage.costByDay') : t('usage.tokensByDay')}</div><div className="px-5"><Days days={data.days} metric={metric} locale={locale} /></div></Card>
+            {agents.length ? <Card className="gap-2"><div className="px-5 text-control font-medium">{t('usage.byAgent')}</div><div className="px-5"><Table rows={agents} head={t('usage.agent')} locale={locale} /></div></Card> : null}
+            {models.length ? <Card className="gap-2"><div className="px-5 text-control font-medium">{t('usage.byModel')}</div><div className="px-5"><Table rows={models} head={t('usage.model')} locale={locale} /></div></Card> : null}
+            {!data.total.turns ? <p className="text-muted-foreground text-control">{t('usage.empty')}</p> : null}
           </>)}
-          <Card className="gap-3"><div className="px-5 text-[13px] font-medium">{t('usage.limits')}</div><div className="px-5"><Limits accounts={accounts} locale={locale} /></div></Card>
+          <Card className="gap-3"><div className="px-5 text-control font-medium">{t('usage.limits')}</div><div className="px-5"><Limits accounts={accounts} locale={locale} /></div></Card>
         </div>
       </PageBody>
     </>

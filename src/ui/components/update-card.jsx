@@ -39,8 +39,8 @@ export function UpdateCard() {
   return (
     <div data-testid="update-card" role="status" className="animate-in fade-in-0 slide-in-from-top-2 fixed top-20 right-4 z-50 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl bg-linear-to-br from-[#8f9ef0] to-[#3d63e0] p-5 text-center text-white shadow-2xl">
       <button onClick={hide} className="absolute top-3 right-3 grid size-7 cursor-pointer place-items-center rounded-full hover:bg-white/15" aria-label={t('update.close')}><X className="size-4" /></button>
-      <div className="px-6 text-[15px] font-semibold">{t('update.title', { version: st.version })}</div>
-      <p className="mt-2 text-[13px] leading-snug text-white/90">
+      <div className="px-6 text-card-title font-semibold">{t('update.title', { version: st.version })}</div>
+      <p className="mt-2 text-control leading-snug text-white/90">
         {st.state === 'downloaded' ? t('update.ready', { version: st.version }) : st.state === 'installing' ? t('update.installing', { version: st.version }) : st.portable ? t('update.availablePortable') : t('update.available')}
       </p>
       {st.state === 'downloading' || st.state === 'installing' ? (
@@ -51,10 +51,10 @@ export function UpdateCard() {
           </div>
         </div>
       ) : st.state === 'downloaded' ? (
-        <button data-testid="update-restart" onClick={updateActions.restart} className="mt-4 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/70 px-4 py-2.5 text-[15px] font-medium hover:bg-white/15"><RotateCw className="size-4" />{t('update.restart')}</button>
+        <button data-testid="update-restart" onClick={updateActions.restart} className="mt-4 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/70 px-4 py-2.5 text-card-title font-medium hover:bg-white/15"><RotateCw className="size-4" />{t('update.restart')}</button>
       ) : (
         <>
-          <button data-testid="update-now" onClick={() => updateActions.update(st)} className="mt-4 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/70 px-4 py-2.5 text-[15px] font-medium hover:bg-white/15"><Download className="size-4" />{st.portable ? t('update.download') : st.error === 'install' ? t('update.downloadAgain') : t('update.update')}</button>
+          <button data-testid="update-now" onClick={() => updateActions.update(st)} className="mt-4 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/70 px-4 py-2.5 text-card-title font-medium hover:bg-white/15"><Download className="size-4" />{st.portable ? t('update.download') : st.error === 'install' ? t('update.downloadAgain') : t('update.update')}</button>
           {st.error ? <p className="mt-2 text-xs text-white/90" role="alert">{st.error === 'install' ? t('update.installFailed') : t('update.failed', { error: st.error })}</p> : null}
         </>
       )}

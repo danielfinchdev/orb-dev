@@ -43,7 +43,7 @@ const NOTE_TONES = {
 const NOTE_ICON = { neutral: 'text-muted-foreground', warning: 'text-warning-ink' };
 export function Note({ tone = 'neutral', icon: Icon, className, children, ...props }) {
   return (
-    <div role={tone === 'danger' ? 'alert' : 'note'} className={cn('flex items-start gap-2 rounded-xl border px-3.5 py-2.5 text-[13px]', NOTE_TONES[tone] ?? NOTE_TONES.neutral, className)} {...props}>
+    <div role={tone === 'danger' ? 'alert' : 'note'} className={cn('flex items-start gap-2 rounded-xl border px-3.5 py-2.5 text-control', NOTE_TONES[tone] ?? NOTE_TONES.neutral, className)} {...props}>
       {Icon ? <Icon className={cn('mt-0.5 size-4 shrink-0', NOTE_ICON[tone])} /> : null}
       <div className="min-w-0 flex-1">{children}</div>
     </div>
@@ -56,7 +56,7 @@ export function Segmented({ value, onChange, options, className, itemTestId, ...
     <div className={cn('bg-muted inline-flex rounded-lg p-[3px]', className)} role="tablist" {...props}>
       {options.map((o) => (
         <button key={o.value} type="button" role="tab" aria-selected={value === o.value} data-testid={o.testid ?? itemTestId?.(o.value)} onClick={() => onChange(o.value)}
-          className={cn('cursor-pointer rounded-md px-3 py-1 text-[13px] transition-colors', value === o.value ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}>
+          className={cn('cursor-pointer rounded-md px-3 py-1 text-control transition-colors', value === o.value ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}>
           {o.label}
         </button>
       ))}
@@ -80,7 +80,7 @@ const rowState = (active) => (active ? 'bg-accent text-accent-foreground' : 'tex
 export function NavRow({ icon: Icon, iconEl, label, active, onClick, children, testid, className }) {
   return (
     <button type="button" data-testid={testid} onClick={onClick} aria-current={active ? 'page' : undefined} data-active={active ? 'true' : undefined}
-      className={cn('group flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[14px] compact:text-[13px] transition-colors', rowState(active), className)}>
+      className={cn('group flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-body compact:text-control transition-colors', rowState(active), className)}>
       {iconEl ?? (Icon ? <Icon className={cn('size-4 shrink-0', active ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')} /> : null)}
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {children}
@@ -93,7 +93,7 @@ export function ListRow({ title, meta, leading, trailing, selected, onClick, cla
   const body = (
     <>
       {leading}
-      <span className="min-w-0 flex-1"><span className="block truncate text-[14px]">{title}</span>{meta ? <span className="text-muted-foreground block truncate text-xs">{meta}</span> : null}</span>
+      <span className="min-w-0 flex-1"><span className="block truncate text-body">{title}</span>{meta ? <span className="text-muted-foreground block truncate text-xs">{meta}</span> : null}</span>
       {trailing}
     </>
   );
@@ -105,5 +105,5 @@ export function ListRow({ title, meta, leading, trailing, selected, onClick, cla
 
 // The small heading over a group of rows.
 export function SectionLabel({ className, children, ...props }) {
-  return <div className={cn('text-muted-foreground px-2.5 pt-3 pb-1 text-[11px] font-medium tracking-wide uppercase', className)} {...props}>{children}</div>;
+  return <div className={cn('text-muted-foreground px-2.5 pt-3 pb-1 text-micro font-medium tracking-wide uppercase', className)} {...props}>{children}</div>;
 }

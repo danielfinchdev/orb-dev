@@ -27,7 +27,7 @@ function GithubCard() {
     <Card className="flex-row flex-wrap items-center gap-x-3 gap-y-2 px-5 py-3.5">
       <GithubIcon className="size-5 shrink-0" />
       <div className="min-w-[12rem] flex-1">
-        <div className="text-[14px] font-medium">GitHub</div>
+        <div className="text-body font-medium">GitHub</div>
         <div className="text-muted-foreground text-xs">{t('projects.gh.desc')}</div>
       </div>
       <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
@@ -62,7 +62,7 @@ function ContributionGraph() {
           {data.weeks.flatMap((w, wi) => w.map((d) => <span key={d.date} className="gh-cell size-[10px] rounded-[2px]" data-level={d.level} style={wi === 0 ? { gridRowStart: new Date(`${d.date}T12:00:00`).getDay() + 1 } : undefined} onMouseEnter={() => setHover(d)} />))}
         </div>
       </div>
-      <div className="text-muted-foreground flex items-center justify-end gap-1 text-[10.5px]">{t('projects.gh.less')}{[0, 1, 2, 3, 4].map((l) => <span key={l} className="gh-cell size-[10px] rounded-[2px]" data-level={l} />)}{t('projects.gh.more')}</div>
+      <div className="text-muted-foreground flex items-center justify-end gap-1 text-micro">{t('projects.gh.less')}{[0, 1, 2, 3, 4].map((l) => <span key={l} className="gh-cell size-[10px] rounded-[2px]" data-level={l} />)}{t('projects.gh.more')}</div>
     </Card>
   );
 }
@@ -122,7 +122,7 @@ function ProjectRow({ p, selected, phone, onOpen }) { // selected: the name of t
       <button type="button" onClick={() => onOpen(p.name)} className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-4 py-3 text-left" data-testid="project-row">
         <Folder className={cn('size-4 shrink-0', p.active ? 'text-primary' : 'text-muted-foreground')} />
         {/* The phone: the name only (the category is the group's title); the PC also shows the folder. */}
-        <div className="grid min-w-0 flex-1"><div className="truncate">{p.name}</div>{bridge.mobile ? null : <PathText path={p.path} className="text-muted-foreground text-[11px]" />}</div>
+        <div className="grid min-w-0 flex-1"><div className="truncate">{p.name}</div>{bridge.mobile ? null : <PathText path={p.path} className="text-muted-foreground text-micro" />}</div>
         {p.open ? <Badge variant="info">{t(p.open === 1 ? 'projects.openOne' : 'projects.openOther', { n: p.open })}</Badge> : null}
         {p.active ? <Pin className="text-primary size-3.5" /> : null}
       </button>
@@ -141,7 +141,7 @@ function FinishedList({ list, onReopened }) {
       <CircleCheckBig className="text-muted-foreground size-4 shrink-0" />
       <div className="grid min-w-0 flex-1">
         <div className="truncate">{x.name}</div>
-        <div className="text-muted-foreground truncate text-[11px]">{bridge.mobile ? t(`comp.projects.category.${x.category ?? 'other'}`) : x.path} · {t('projects.finished.on', { date: new Date(x.at).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }) })}</div>
+        <div className="text-muted-foreground truncate text-micro">{bridge.mobile ? t(`comp.projects.category.${x.category ?? 'other'}`) : x.path} · {t('projects.finished.on', { date: new Date(x.at).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }) })}</div>
       </div>
       <Button size="sm" variant="outline" onClick={() => reopen(x)} data-testid="project-reopen"><Undo2 />{t('projects.reopen')}</Button>
     </div>
@@ -177,7 +177,7 @@ function ProjectDetail({ p, onRenamed }) {
       <CardHeader className="flex-row items-start gap-3">
         <Folder className="text-primary mt-0.5 size-5 shrink-0" />
         {/* the phone shows where it is in Orb's words (category › folder), never the PC's path. */}
-        <div className="min-w-0 flex-1"><CardTitle className="flex items-center gap-2 text-[17px]">{p.name}</CardTitle>{bridge.mobile ? <CardDescription className="mt-1 text-xs break-words">{t(`comp.projects.category.${p.category ?? 'other'}`)} › {baseName(p.path)}</CardDescription> : <CardDescription className="mt-1 font-mono text-xs break-all">{p.path}</CardDescription>}</div>
+        <div className="min-w-0 flex-1"><CardTitle className="flex items-center gap-2 text-title">{p.name}</CardTitle>{bridge.mobile ? <CardDescription className="mt-1 text-xs break-words">{t(`comp.projects.category.${p.category ?? 'other'}`)} › {baseName(p.path)}</CardDescription> : <CardDescription className="mt-1 font-mono text-xs break-all">{p.path}</CardDescription>}</div>
         {p.active ? <Badge><Pin />{t('projects.workProject')}</Badge> : null}
       </CardHeader>
       <CardContent className="flex flex-wrap gap-2">
@@ -194,7 +194,7 @@ function ProjectDetail({ p, onRenamed }) {
       <CardContent className="grid gap-3">
         <div className="text-muted-foreground flex items-center gap-1.5 text-xs"><GitBranch className="size-3.5" />{t('projects.git')}</div>
         {!info ? <Spinner /> : !info.git ? <p className="text-muted-foreground text-sm">{info.error ?? t('projects.noGit')}</p> : (<>
-          <dl className="grid grid-cols-[140px_1fr] gap-x-4 gap-y-1.5 text-[13px]">
+          <dl className="grid grid-cols-[140px_1fr] gap-x-4 gap-y-1.5 text-control">
             <dt className="text-muted-foreground">{t('projects.branch')}</dt><dd className="font-mono text-xs">{info.branch}</dd>
             <dt className="text-muted-foreground">{t('projects.changes')}</dt><dd>{info.changes ? t('projects.filesN', { n: info.changes }) : t('projects.none')}</dd>
             <dt className="text-muted-foreground">{t('projects.remote')}</dt><dd className="break-all">{info.remote ?? t('projects.unpublished')}</dd>
@@ -260,7 +260,7 @@ export function ProjectsView({ route }) {
                 const list = projects.filter((p) => (p.category ?? null) === cat);
                 return list.length ? (
                   <div key={cat ?? 'other'} data-testid={`category-${cat ?? 'other'}`}>
-                    <div className="text-muted-foreground bg-muted/40 border-b px-4 py-1.5 text-[11px] font-medium tracking-wide uppercase">{t(`comp.projects.category.${cat ?? 'other'}`)}</div>
+                    <div className="text-muted-foreground bg-muted/40 border-b px-4 py-1.5 text-micro font-medium tracking-wide uppercase">{t(`comp.projects.category.${cat ?? 'other'}`)}</div>
                     {list.map((p) => <ProjectRow key={p.name} p={p} selected={selected} phone={phone} onOpen={open} />)}
                   </div>
                 ) : null;

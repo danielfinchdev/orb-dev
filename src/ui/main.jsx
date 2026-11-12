@@ -149,7 +149,7 @@ function MobileShell() {
   const fullChat = route.view === 'chat' || route.view === 'session';
   return (
     <div className="mobile-shell flex h-full flex-col">
-      {down ? <div className="bg-warning text-warning-foreground flex shrink-0 items-center justify-center gap-2 px-4 py-1.5 text-[12.5px] font-medium" role="status" data-testid="link-down"><WifiOff className="size-3.5" />{t('app.offlineBar')}</div> : null}
+      {down ? <div className="bg-warning text-warning-foreground flex shrink-0 items-center justify-center gap-2 px-4 py-1.5 text-caption font-medium" role="status" data-testid="link-down"><WifiOff className="size-3.5" />{t('app.offlineBar')}</div> : null}
       <main className="theme-scene flex min-h-0 min-w-0 flex-1 flex-col">
         <Scene />
         <ErrorBoundary key={routeKey(route)} onHome={resetRoute}>
@@ -200,7 +200,7 @@ function Shell() {
         <Scene />
         <div className="relative topbar theme-band app-titlebar wco-pad bg-sidebar flex h-14 shrink-0 items-center gap-2 border-b px-3 md:hidden">
           <button className="hover:bg-accent grid size-9 cursor-pointer place-items-center rounded-lg" onClick={() => setDrawer(true)} aria-label={t('app.menu')}><Menu className="size-5" /></button>
-          <Robot size={26} mood={mood} /><span className="min-w-0 flex-1 truncate text-[15px] font-medium">{app.config.assistantName}</span>
+          <Robot size={26} mood={mood} /><span className="min-w-0 flex-1 truncate text-card-title font-medium">{app.config.assistantName}</span>
           <WindowControlsSlot />
         </div>
         <ErrorBoundary key={routeKey(route)} onHome={resetRoute}>
@@ -254,7 +254,7 @@ function NotifyOffer() {
   const done = () => { try { localStorage.removeItem(OFFER_NOTIFY); } catch { /* storage unavailable */ } setShow(false); };
   const p = bridge.push;
   return (
-    <div className="bg-card flex shrink-0 flex-col gap-2 border-t px-4 py-3 text-[13px]" role="region" aria-label={t('app.notifyOfferOk')} data-testid="notify-offer">
+    <div className="bg-card flex shrink-0 flex-col gap-2 border-t px-4 py-3 text-control" role="region" aria-label={t('app.notifyOfferOk')} data-testid="notify-offer">
       <span>{t(p?.whenClosed?.() === false ? 'app.notifyOfferApp' : 'app.notifyOffer')}</span>
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={() => { p?.decline?.(); done(); }} data-testid="notify-offer-later">{t('app.notifyOfferLater')}</Button>
@@ -581,7 +581,7 @@ function PairPassword({ name, fp = null, confirmFp = false, busy, error, onSubmi
         <div className="bg-muted/60 grid gap-1 rounded-xl px-3 py-2 text-center" data-testid="pair-fp">
           <span className="font-mono text-sm font-medium tracking-wide break-words">{t('app.linkFp', { fp })}</span>
           <span className="text-muted-foreground text-xs">{t('app.linkFpCheck')}</span>
-          {confirmFp ? <label className="flex cursor-pointer items-center justify-center gap-2 text-[13px]"><Checkbox checked={sure} onCheckedChange={(c) => setSure(c === true)} data-testid="pair-fp-ok" />{t('app.linkFpConfirm')}</label> : null}
+          {confirmFp ? <label className="flex cursor-pointer items-center justify-center gap-2 text-control"><Checkbox checked={sure} onCheckedChange={(c) => setSure(c === true)} data-testid="pair-fp-ok" />{t('app.linkFpConfirm')}</label> : null}
         </div>
       ) : null}
       <p className="text-muted-foreground text-center text-sm">{t('app.linkPassBody')}</p>

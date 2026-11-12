@@ -29,7 +29,7 @@ export function GeneratedImage({ body, sessionId, project }) {
         <span className="bg-background/80 absolute top-2 right-2 grid size-7 place-items-center rounded-lg opacity-0 transition-opacity group-hover:opacity-100"><Expand className="size-4" /></span>
       </button>
       {/* what was asked for, in two lines (the whole prompt repeated under every picture filled the conversation). */}
-      {body.prompt ? <div className="text-muted-foreground line-clamp-2 max-w-xl text-[11.5px] leading-snug" title={body.prompt}>{body.prompt}</div> : null}
+      {body.prompt ? <div className="text-muted-foreground line-clamp-2 max-w-xl text-micro leading-snug" title={body.prompt}>{body.prompt}</div> : null}
       {open && src ? <ImageEditor src={src} body={body} sessionId={sessionId} project={project} onClose={() => setOpen(false)} /> : null}
     </div>
   );

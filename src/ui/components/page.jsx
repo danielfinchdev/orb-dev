@@ -60,7 +60,7 @@ export function PageHeader({ icon, title, meta, center, children, className, bac
         <div className="flex min-w-0 flex-1 items-center gap-3">
           {menu}{folded && !phone ? <SidebarToggle collapsed className="-ml-1.5" /> : null}
           {icon}
-          <h1 className="min-w-0 text-[16px] leading-tight">{title}</h1>
+          <h1 className="min-w-0 text-title leading-tight">{title}</h1>
         </div>
         {/* Too narrow for three (a phone, a side panel): the middle goes to a line of its own, under the clock and the buttons. */}
         <div className="order-last flex min-w-0 basis-full justify-center overflow-hidden @2xl:order-none @2xl:max-w-[28rem] @2xl:basis-auto">{center}</div>
@@ -76,7 +76,7 @@ export function PageHeader({ icon, title, meta, center, children, className, bac
       {phone ? null : icon}
       {/* On a phone the buttons go under the title instead of squeezing it. */}
       <div className="min-w-[9rem] flex-1">
-        <h1 className="truncate text-[16px] leading-tight">{title}</h1>
+        <h1 className="truncate text-title leading-tight">{title}</h1>
         {meta ? <div className="text-muted-foreground truncate text-xs">{meta}</div> : null}
       </div>
       {children || palette ? <div className="flex max-w-full flex-wrap items-center gap-2">{children}{palette ? <PaletteButton /> : null}</div> : null}

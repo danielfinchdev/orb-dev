@@ -98,7 +98,7 @@ export function SettingsDialog() {
                         <div className="grid gap-0.5 pb-1 pl-[42px] max-sm:hidden">
                           {groups.map((g) => (
                             <button key={g} type="button" onClick={() => openSettings(`${id}:${g}`)} data-testid={`settings-sub-${g}`} aria-current={part === g ? 'location' : undefined}
-                              className={cn('cursor-pointer truncate rounded-lg px-2 py-1 text-left text-[13px]', part === g ? 'text-foreground font-medium' : 'text-muted-foreground hover:text-foreground')}>{t(`settings.group.${g}`)}</button>
+                              className={cn('cursor-pointer truncate rounded-lg px-2 py-1 text-left text-control', part === g ? 'text-foreground font-medium' : 'text-muted-foreground hover:text-foreground')}>{t(`settings.group.${g}`)}</button>
                           ))}
                         </div>
                       ) : null}
@@ -109,7 +109,7 @@ export function SettingsDialog() {
               {/* the developer's GitHub, the version and the licence at the foot of the list again (also in «Acerca de»). */}
               <div className="grid gap-0.5 px-6 pt-3 pb-5 max-sm:px-3" data-testid="settings-foot">
                 <BubbleTip title={`@${AUTHOR.github}`} text={AUTHOR.url.replace('https://', '')} side="top" align="start">
-                  <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary flex w-fit cursor-pointer items-center gap-1.5 text-[13px] font-medium" aria-label={AUTHOR.url.replace('https://', '')} data-testid="settings-foot-github">
+                  <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary flex w-fit cursor-pointer items-center gap-1.5 text-control font-medium" aria-label={AUTHOR.url.replace('https://', '')} data-testid="settings-foot-github">
                     <ToolIcon tool="gh" className="size-4" /><span className="max-sm:hidden">@{AUTHOR.github}</span>
                   </button>
                 </BubbleTip>

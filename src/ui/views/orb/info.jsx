@@ -94,7 +94,7 @@ function ChatInfo({ conv }) {
       <div className="grid justify-items-center gap-1.5 pb-1 text-center" data-testid="orb-info">
         <Robot size={phoneLayout() ? 92 : 80} mark={48} mood="idle" still head />
         <h3 className="mt-1 max-w-full text-xl font-semibold text-balance" data-testid="info-name">{conv.title}</h3>
-        <p className="text-muted-foreground text-[13px]">{started}</p>
+        <p className="text-muted-foreground text-control">{started}</p>
         <Button size="sm" variant="outline" className="mt-1" onClick={rename} data-testid="info-rename"><Pencil />{t('orbchats.rename')}</Button>
       </div>
       <List testid="info-chat-brain">
@@ -110,22 +110,22 @@ function ChatInfo({ conv }) {
         </BubbleTip>
       </List>
       <div>
-        <div className="text-muted-foreground px-1 pb-1.5 text-[12px] font-medium tracking-wide uppercase">{t('orbchats.tasks')}</div>
+        <div className="text-muted-foreground px-1 pb-1.5 text-caption font-medium tracking-wide uppercase">{t('orbchats.tasks')}</div>
         <List testid="info-tasks">
           {sorted.length ? sorted.slice(0, 12).map((x) => (
-            <button key={x.id} type="button" onClick={() => leave({ view: 'tasks', id: x.id })} className="hover:bg-accent/50 flex min-h-11 w-full cursor-pointer items-center gap-3 px-3.5 py-2 text-left text-[14px]" data-testid={`info-task-${x.id}`}>
+            <button key={x.id} type="button" onClick={() => leave({ view: 'tasks', id: x.id })} className="hover:bg-accent/50 flex min-h-11 w-full cursor-pointer items-center gap-3 px-3.5 py-2 text-left text-body" data-testid={`info-task-${x.id}`}>
               <ClipboardCheck className={cn('size-[18px] shrink-0', x.status === 'running' ? 'text-primary' : 'text-muted-foreground')} />
               <span className="min-w-0 flex-1 truncate">#{x.id} {x.title}</span>
               <TaskStatus task={x} className="shrink-0" />
             </button>
-          )) : <p className="text-muted-foreground px-3.5 py-3 text-[13px]">{t('orbchats.noTasks')}</p>}
+          )) : <p className="text-muted-foreground px-3.5 py-3 text-control">{t('orbchats.noTasks')}</p>}
           {sorted.length > 12 ? <Row label={t('comp.sidebar.viewAll', { n: sorted.length })} onClick={() => leave({ view: 'tasks', project: conv.project ?? undefined })} /> : null}
         </List>
       </div>
       <div>
-        <List><label className="flex min-h-11 cursor-pointer items-center gap-3 px-3.5 py-2 text-[14px]"><Bell className="text-muted-foreground size-[18px] shrink-0" /><span className="flex-1">{t('chats.notifications')}</span>
+        <List><label className="flex min-h-11 cursor-pointer items-center gap-3 px-3.5 py-2 text-body"><Bell className="text-muted-foreground size-[18px] shrink-0" /><span className="flex-1">{t('chats.notifications')}</span>
           <Switch checked={!item?.muted} disabled={!item} onCheckedChange={(on) => orbAct('inbox.mute', { ...ref, muted: !on })} data-testid="info-notify" /></label></List>
-        <p className="text-muted-foreground px-1 pt-1.5 text-[12px]">{item?.muted ? t('chats.notifyOff') : t('chats.notifyOn')}</p>
+        <p className="text-muted-foreground px-1 pt-1.5 text-caption">{item?.muted ? t('chats.notifyOff') : t('chats.notifyOn')}</p>
       </div>
       <List testid="info-actions">
         {/* no «Archivos adjuntos» row: a chat with Orbe takes no attachments of its own (the project's Pizarra is in the
@@ -158,7 +158,7 @@ function ProjectInfo({ name }) {
       <div className="grid justify-items-center gap-1.5 pb-1 text-center" data-testid="project-info-panel">
         <ProjectIcon name={name} size={phoneLayout() ? 88 : 76} />
         <h3 className="mt-1 max-w-full truncate text-xl font-semibold" data-testid="info-name">{name}</h3>
-        <p className="text-muted-foreground max-w-full truncate font-mono text-[12px]" title={p?.path}>{p?.path ?? t('orbchats.pNoPath')}</p>
+        <p className="text-muted-foreground max-w-full truncate font-mono text-caption" title={p?.path}>{p?.path ?? t('orbchats.pNoPath')}</p>
         <Button size="sm" className="mt-1" onClick={() => { closeOrbInfo(); newChat(name); }} data-testid="project-info-new-chat"><MessageSquarePlus />{t('orbchats.projectNewChat')}</Button>
       </div>
       <List testid="project-info-rows">

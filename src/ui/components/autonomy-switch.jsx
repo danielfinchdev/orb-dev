@@ -57,7 +57,7 @@ export function AutonomySwitch({ value, onChange, more = [], disabled = false, t
         <PopoverTrigger asChild>
           <button type="button" role="combobox" aria-haspopup="listbox" aria-expanded={open} aria-controls={list} aria-label={t('session.permissions')} title={current.tip()} disabled={disabled}
             data-testid={`${testid}-more`}
-            className={cn('inline-flex h-full items-center gap-1.5 rounded-lg border px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors duration-200 outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50',
+            className={cn('inline-flex h-full items-center gap-1.5 rounded-lg border px-2.5 text-control font-medium whitespace-nowrap transition-colors duration-200 outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50',
               value === 'auto' ? 'bg-success-soft text-success' : value === 'total' ? 'border-warning/50 bg-warning-soft text-warning-ink' : 'text-foreground')}>
             <CurrentIcon className="size-3.5" />{label}<ChevronDown className="size-3.5 opacity-60" />
           </button>
@@ -72,7 +72,7 @@ export function AutonomySwitch({ value, onChange, more = [], disabled = false, t
                   onClick={() => pick(o.value)} data-testid={`${testid}-${o.value}`}
                   className="hover:bg-accent focus-visible:bg-accent flex w-full cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-left outline-none">
                   <Icon className="mt-0.5 size-4 shrink-0" />
-                  <span className="grid min-w-0 flex-1 gap-0.5"><span className="text-[13px] font-medium">{o.label}</span><span className="text-muted-foreground text-xs leading-snug">{tip()}</span></span>
+                  <span className="grid min-w-0 flex-1 gap-0.5"><span className="text-control font-medium">{o.label}</span><span className="text-muted-foreground text-xs leading-snug">{tip()}</span></span>
                   <Check className={cn('mt-0.5 size-4 shrink-0', on ? 'opacity-100' : 'opacity-0')} aria-hidden />
                 </button>
               );

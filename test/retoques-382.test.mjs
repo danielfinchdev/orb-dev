@@ -47,7 +47,7 @@ test('bubbles stay inside the window and the composer folder is a chip like the 
   assert.match(read('components', 'sidebar.jsx'), /side="top" align=\{n === 0 \? 'start' : 'center'\}/);
   const chip = read('views', 'session.jsx').match(/<span tabIndex=\{0\} className="([^"]+)" data-testid="session-folder">/);
   assert.ok(chip, 'folder chip');
-  for (const c of ['h-8', 'rounded-lg', 'border', 'px-2.5', 'gap-1.5', 'text-[13px]']) assert.ok(chip[1].split(' ').includes(c), c);
+  for (const c of ['h-8', 'rounded-lg', 'border', 'px-2.5', 'gap-1.5', 'text-control']) assert.ok(chip[1].split(' ').includes(c), c);
 });
 
 test('the cost line can be hidden in Apariencia and the message time shows on hover', async () => {

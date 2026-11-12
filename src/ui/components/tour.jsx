@@ -173,9 +173,9 @@ export function Tour() {
         {noRobot ? null : <div className="tour-robot"><Robot size={118} mood={mood} gesture={step.target && !still ? GESTURES[index % GESTURES.length] : undefined} still={still} live title={name} /></div>}
         <div className="tour-bubble">
           <span className="tour-tail" aria-hidden="true" />
-          <div className="text-muted-foreground text-[11px] tracking-wide uppercase" data-testid="tour-counter">{t('help.tour.counter', { n: position, total: stepsLeft.length })}</div>
-          <h2 id={`tour-title-${step.id}`} className="tour-title mt-0.5 text-[17px] leading-snug font-medium">{t(`help.tour.${step.id}.title`, { name })}</h2>
-          <p id={`tour-text-${step.id}`} className="text-muted-foreground mt-1.5 text-[13.5px] leading-relaxed">{t(`help.tour.${step.id}.text`, { name })}</p>
+          <div className="text-muted-foreground text-micro tracking-wide uppercase" data-testid="tour-counter">{t('help.tour.counter', { n: position, total: stepsLeft.length })}</div>
+          <h2 id={`tour-title-${step.id}`} className="tour-title mt-0.5 text-title leading-snug font-medium">{t(`help.tour.${step.id}.title`, { name })}</h2>
+          <p id={`tour-text-${step.id}`} className="text-muted-foreground mt-1.5 text-control leading-relaxed">{t(`help.tour.${step.id}.text`, { name })}</p>
           <div className="mt-3.5 flex flex-wrap items-center gap-2">
             <Button size="sm" variant="ghost" className="text-muted-foreground mr-auto" onClick={finish} data-testid="tour-skip">{t('help.tour.skip')}</Button>
             {first ? null : <Button size="sm" variant="outline" onClick={() => move(-1)} data-testid="tour-back"><ChevronLeft />{t('help.tour.back')}</Button>}

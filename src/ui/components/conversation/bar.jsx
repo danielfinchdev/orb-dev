@@ -54,7 +54,7 @@ function MonthCalendar({ today }) {
   return (
     <div className="grid gap-2">
       <div className="flex items-center gap-1">
-        <span className="orb-cal-title flex-1 truncate px-1 text-[14px] font-semibold" aria-live="polite" data-testid="bar-calendar-title">{shown.toLocaleDateString(locale, { month: 'long', year: 'numeric' })}</span>
+        <span className="orb-cal-title flex-1 truncate px-1 text-body font-semibold" aria-live="polite" data-testid="bar-calendar-title">{shown.toLocaleDateString(locale, { month: 'long', year: 'numeric' })}</span>
         <button type="button" className="orb-cal-nav" onClick={() => move(-1)} aria-label={t('chat.calendarPrev')}><ChevronLeft className="size-4" /></button>
         <button type="button" className="orb-cal-nav" onClick={() => move(1)} aria-label={t('chat.calendarNext')} data-testid="bar-calendar-next"><ChevronRight className="size-4" /></button>
       </div>

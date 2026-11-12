@@ -47,10 +47,10 @@ function Tutorial({ item, t, name }) {
     <Card className="gap-3 py-4" data-testid={`tutorial-${item.id}`}>
       <CardHeader className="flex-row items-center gap-3">
         <span className="bg-primary/10 text-primary grid size-9 shrink-0 place-items-center rounded-xl"><Icon className="size-4.5" /></span>
-        <CardTitle className="text-[15.5px]">{t(`help.tut.${item.id}.title`, { name })}</CardTitle>
+        <CardTitle className="text-card-title">{t(`help.tut.${item.id}.title`, { name })}</CardTitle>
       </CardHeader>
       <CardContent>
-        <ul className="text-foreground/85 grid list-disc gap-1.5 pl-4 text-[13.5px] leading-relaxed marker:text-primary/60">{lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
+        <ul className="text-foreground/85 grid list-disc gap-1.5 pl-4 text-control leading-relaxed marker:text-primary/60">{lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
       </CardContent>
       {showGo ? <CardContent><Button size="sm" variant="outline" onClick={item.go}>{t(`help.tut.${item.id}.go`)}<ArrowRight /></Button></CardContent> : null}
     </Card>
@@ -61,11 +61,11 @@ function Faq({ n, t, name }) {
   const [open, setOpen] = useState(false);
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="border-b last:border-b-0">
-      <CollapsibleTrigger className="hover:bg-accent/50 flex w-full cursor-pointer items-center gap-2.5 px-4 py-3 text-left text-[14px] font-medium" data-testid={`faq-${n}`}>
+      <CollapsibleTrigger className="hover:bg-accent/50 flex w-full cursor-pointer items-center gap-2.5 px-4 py-3 text-left text-body font-medium" data-testid={`faq-${n}`}>
         <ChevronRight className={cn('text-muted-foreground size-4 shrink-0 transition-transform', open && 'rotate-90')} />
         <span className="min-w-0 flex-1">{t(`help.faq.${n}.q`, { name })}</span>
       </CollapsibleTrigger>
-      <CollapsibleContent><p className="text-muted-foreground px-4 pb-3.5 pl-10.5 text-[13.5px] leading-relaxed">{t(`help.faq.${n}.a`, { name })}</p></CollapsibleContent>
+      <CollapsibleContent><p className="text-muted-foreground px-4 pb-3.5 pl-10.5 text-control leading-relaxed">{t(`help.faq.${n}.a`, { name })}</p></CollapsibleContent>
     </Collapsible>
   );
 }
@@ -83,7 +83,7 @@ export function TutorialsView() {
   const nothing = !tutorials.length && !keys.length && !faqs.length;
   const Section = ({ icon: Icon, title, children }) => (
     <section className="grid gap-3">
-      <h2 className="flex items-center gap-2 text-[13px] font-medium tracking-wide uppercase"><Icon className="text-primary size-4" />{title}</h2>
+      <h2 className="flex items-center gap-2 text-control font-medium tracking-wide uppercase"><Icon className="text-primary size-4" />{title}</h2>
       {children}
     </section>
   );
@@ -98,8 +98,8 @@ export function TutorialsView() {
             <Card className="flex-row items-center gap-4 px-5 py-4" data-testid="tour-card">
               <Robot size={96} mood="hello" title={name} />
               <div className="min-w-0 flex-1">
-                <div className="text-[15px] font-medium">{t('help.replayTitle')}</div>
-                <p className="text-muted-foreground mt-0.5 text-[13px] leading-relaxed">{t('help.replayDesc', { name })}</p>
+                <div className="text-card-title font-medium">{t('help.replayTitle')}</div>
+                <p className="text-muted-foreground mt-0.5 text-control leading-relaxed">{t('help.replayDesc', { name })}</p>
               </div>
               <Button onClick={startTour} data-testid="tour-replay"><Play />{t('help.replay')}</Button>
             </Card>
@@ -114,8 +114,8 @@ export function TutorialsView() {
             <Section icon={Keyboard} title={t('help.sec.keys')}>
               <Card className="gap-0 py-1">
                 {keys.map((n) => (
-                  <div key={n} className="grid grid-cols-[minmax(9rem,auto)_1fr] items-center gap-3 border-b px-4 py-2.5 text-[13.5px] last:border-b-0">
-                    <span className="flex flex-wrap gap-1">{t(`help.key.${n}.k`).split(' / ').map((k) => <Kbd key={k} className="h-6 text-[11px]">{k}</Kbd>)}</span>
+                  <div key={n} className="grid grid-cols-[minmax(9rem,auto)_1fr] items-center gap-3 border-b px-4 py-2.5 text-control last:border-b-0">
+                    <span className="flex flex-wrap gap-1">{t(`help.key.${n}.k`).split(' / ').map((k) => <Kbd key={k} className="h-6 text-micro">{k}</Kbd>)}</span>
                     <span className="text-foreground/85">{t(`help.key.${n}.v`)}</span>
                   </div>
                 ))}

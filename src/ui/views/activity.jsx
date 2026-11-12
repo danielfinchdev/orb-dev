@@ -32,7 +32,7 @@ export function ActivityView({ bare = false }) {
         </div>
         <Card className="gap-0 py-0">
           {rows.length ? rows.map((r) => (
-            <div key={r.id} onClick={() => r.task_id && go({ view: 'tasks', id: r.task_id })} className={`grid grid-cols-[120px_110px_1fr] gap-3 border-b px-4 py-2.5 text-[13px] last:border-b-0 ${r.task_id ? 'hover:bg-accent/50 cursor-pointer' : ''}`}>
+            <div key={r.id} onClick={() => r.task_id && go({ view: 'tasks', id: r.task_id })} className={`grid grid-cols-[120px_110px_1fr] gap-3 border-b px-4 py-2.5 text-control last:border-b-0 ${r.task_id ? 'hover:bg-accent/50 cursor-pointer' : ''}`}>
               <span className="text-muted-foreground">{fmtTime(r.at)}</span>
               <span className="truncate">{AGENT[r.actor] ?? r.actor}</span>
               {/* each event in words; the raw one on hover and in «Copiar». */}

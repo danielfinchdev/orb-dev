@@ -27,7 +27,7 @@ export function InfoFrame({ title, onClose, children }) {
   return (
     <aside className="bg-sidebar/60 flex w-80 shrink-0 flex-col border-l" aria-label={title} data-testid="chat-info">
       <div className="relative app-titlebar wco-pad flex h-14 shrink-0 items-center gap-2 border-b px-4">
-        <h2 className="min-w-0 flex-1 truncate text-[15px] font-semibold">{title}</h2>
+        <h2 className="min-w-0 flex-1 truncate text-card-title font-semibold">{title}</h2>
         <CloseButton className="no-drag" onClick={onClose} data-testid="chat-info-close" />
         <WindowControlsSlot />
       </div>
@@ -42,10 +42,10 @@ export function Row({ icon: Icon, label, value, onClick, danger, testid, childre
   const inner = (<>
     {Icon ? <Icon className={cn('size-[18px] shrink-0', danger ? 'text-destructive' : 'text-muted-foreground')} /> : null}
     <span className={cn('truncate', value != null ? 'shrink-0' : 'min-w-0 flex-1')}>{label}</span>
-    {value != null ? <span className="text-muted-foreground min-w-0 flex-1 truncate text-right text-[13px]">{value}</span> : null}
+    {value != null ? <span className="text-muted-foreground min-w-0 flex-1 truncate text-right text-control">{value}</span> : null}
     {children}
     {onClick && !danger && !children ? <ChevronRight className="text-muted-foreground size-4 shrink-0" /> : null}
   </>);
-  const cls = cn('flex min-h-11 w-full items-center gap-3 px-3.5 py-2 text-left text-[14px]', danger && 'text-destructive', onClick && 'hover:bg-accent/50 cursor-pointer');
+  const cls = cn('flex min-h-11 w-full items-center gap-3 px-3.5 py-2 text-left text-body', danger && 'text-destructive', onClick && 'hover:bg-accent/50 cursor-pointer');
   return onClick ? <button type="button" className={cls} onClick={onClick} data-testid={testid}>{inner}</button> : <div className={cls} data-testid={testid}>{inner}</div>;
 }

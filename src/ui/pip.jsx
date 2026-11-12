@@ -53,7 +53,7 @@ function Pip() {
         <Robot size={20} mood={state.loading ? 'thinking' : 'talking'} skin={state.skin} />
         <div className="min-w-0 flex-1 leading-tight">
           <div className="truncate text-xs text-white/90">{who}{state.action ? <span className="text-white/50"> · {state.action}</span> : null}</div>
-          <div className="flex items-center gap-1 truncate text-[10.5px] text-white/45">{state.loading ? <LoaderCircle className="size-2.5 animate-spin" /> : null}{host(state.url) || t('pip.noPage')}</div>
+          <div className="flex items-center gap-1 truncate text-micro text-white/45">{state.loading ? <LoaderCircle className="size-2.5 animate-spin" /> : null}{host(state.url) || t('pip.noPage')}</div>
         </div>
         {/* point at an element (it goes to the chat's message box) and record what the agent does. */}
         <IconButton label={t('pip.point')} onClick={() => setPointing(!pointing)}><Crosshair className={pointing ? 'text-sky-300' : undefined} /></IconButton>
@@ -66,8 +66,8 @@ function Pip() {
       </div>
       <div className="relative min-h-0 flex-1 bg-black/40">
         {src ? <img src={src} alt={state.title || t('pip.pageAlt')} onClick={pick} className={cn('absolute inset-0 size-full object-contain', pointing && 'cursor-crosshair')} draggable={false} /> : <div className="grid h-full place-items-center text-xs text-white/50">{t('pip.waiting')}</div>}
-        {pointing ? <div className="pointer-events-none absolute inset-x-0 top-0 bg-sky-500/85 px-2.5 py-1 text-center text-[11px] text-white">{t('pip.pointHint')}</div> : null}
-        {state.title ? <div className={cn('pointer-events-none absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-2.5 pt-4 pb-1.5 text-[11px] text-white/85')}>{state.title}</div> : null}
+        {pointing ? <div className="pointer-events-none absolute inset-x-0 top-0 bg-sky-500/85 px-2.5 py-1 text-center text-micro text-white">{t('pip.pointHint')}</div> : null}
+        {state.title ? <div className={cn('pointer-events-none absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-2.5 pt-4 pb-1.5 text-micro text-white/85')}>{state.title}</div> : null}
       </div>
     </div>
   );
