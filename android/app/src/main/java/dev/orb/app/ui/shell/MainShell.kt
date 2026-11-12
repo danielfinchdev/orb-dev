@@ -50,6 +50,9 @@ import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.theme.GlassSurface
 import dev.orb.app.ui.theme.OrbMotion
 import dev.orb.app.ui.theme.OrbTheme
+import dev.orb.app.ui.tasks.TasksBackend
+import dev.orb.app.ui.tasks.TasksScreen
+import dev.orb.app.ui.tasks.TasksViewModel
 import dev.orb.app.ui.theme.ThemePrefs
 import kotlinx.serialization.Serializable
 
@@ -73,6 +76,7 @@ class ShellActions(
     val onAppearance: () -> Unit,
     val onLinkTest: () -> Unit,
     val onUnlink: () -> Unit,
+    val onOpenTask: (Long) -> Unit = {},
 )
 
 /** The three tabs. Each keeps its own state while the others are shown. */
@@ -81,6 +85,7 @@ fun MainShell(
     backend: ChatsBackend, themePrefs: ThemePrefs, actions: ShellActions,
     // Where the list is grouped; tests run it inline.
     listDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.Default,
+    tasks: TasksBackend? = null,
 ) {
     val shell = viewModel<ShellViewModel>(factory = viewModelFactory { initializer { ShellViewModel(backend, themePrefs) } })
     val unread by shell.unreadChats.collectAsStateWithLifecycle()
@@ -118,7 +123,12 @@ fun MainShell(
                     onOpenChat = actions.onOpenChat, onSearch = actions.onSearch, onNewChat = actions.onNewChat,
                 )
             }
-            composable<TasksTab> { Message(ChatTexts.SOON_TASKS, ChatTexts.SOON_HINT) }
+            composable<TasksTab> {
+                if (tasks == null) Message(ChatTexts.SOON_TASKS, ChatTexts.SOON_HINT) else {
+                    val vm = viewModel<TasksViewModel>(factory = viewModelFactory { initializer { TasksViewModel(tasks) } })
+                    TasksScreen(vm, onOpenTask = actions.onOpenTask)
+                }
+            }
             composable<ProjectsTab> { Message(ChatTexts.SOON_PROJECTS, ChatTexts.SOON_HINT) }
         }
     }

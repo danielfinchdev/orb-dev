@@ -64,6 +64,8 @@ import kotlinx.serialization.Serializable
 
 /** An Orbe conversation (`kind` = conversation) or a direct chat with an agent (`kind` = session). */
 @Serializable data class ChatRoute(val kind: String, val id: String)
+@Serializable data class TaskRoute(val id: Long)
+@Serializable data class TaskChangesRoute(val id: Long)
 
 @Composable
 fun OrbApp(container: AppContainer) {
@@ -110,6 +112,7 @@ private fun OrbNav(container: AppContainer, start: Any) {
             var confirming by rememberSaveable { mutableStateOf(false) }
             LaunchedEffect(homeState.unlinked) { if (homeState.unlinked) nav.navigate(Welcome) { popUpTo(Home) { inclusive = true } } }
             if (backend != null) {
+                val tasksBackend = remember { container.tasksBackend() }
                 MainShell(
                     backend, container.themePrefs,
                     ShellActions(
@@ -119,7 +122,9 @@ private fun OrbNav(container: AppContainer, start: Any) {
                         onAppearance = { appearance = true },
                         onLinkTest = { nav.navigate(LinkTest) },
                         onUnlink = { confirming = true },
+                        onOpenTask = { nav.navigate(TaskRoute(it)) },
                     ),
+                    tasks = tasksBackend,
                 )
             }
             if (confirming) UnlinkDialog(onConfirm = { confirming = false; home.unlink() }, onDismiss = { confirming = false })
@@ -166,6 +171,7 @@ private fun OrbNav(container: AppContainer, start: Any) {
                 Placeholder(ChatTexts.CHAT_SOON, onBack = { nav.popBackStack() })
             }
         }
+        composable<TaskRoute> { Placeholder("", onBack = { nav.popBackStack() }) }
         composable<LinkTest> {
             val backend = remember { container.linkTestBackend() }
             if (backend != null) {
