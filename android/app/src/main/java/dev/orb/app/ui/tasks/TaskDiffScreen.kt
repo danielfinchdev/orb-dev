@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.orb.app.ui.chats.Message
 import dev.orb.app.ui.icons.OrbIcons
+import dev.orb.app.ui.offline.NeedsPcNote
 import dev.orb.app.ui.theme.OrbTheme
 import kotlinx.coroutines.launch
 
@@ -80,6 +81,7 @@ fun TaskDiffScreen(vm: TaskDiffViewModel, onBack: () -> Unit, modifier: Modifier
                 }
             }
             if (state.canAccept || state.canUndo || state.accepted) {
+                if (!state.online) NeedsPcNote(Modifier.padding(horizontal = 16.dp))
                 Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                     if (state.accepted) Text(TaskTexts.ALREADY_ACCEPTED, color = OrbTheme.colors.ok, style = MaterialTheme.typography.labelLarge)
                     if (state.canUndo) OutlinedButton(onClick = { confirmUndo = true }, enabled = enabled) { Text(TaskTexts.UNDO) }

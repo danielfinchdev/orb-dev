@@ -66,3 +66,9 @@ fun OfflineStrip(modifier: Modifier = Modifier) {
         TextButton(onClick = info.retryNow) { Text(OfflineTexts.RETRY_NOW) }
     }
 }
+
+/** Under an action that is off because the PC cannot be reached: says why instead of leaving a dead button. */
+@Composable
+fun NeedsPcNote(modifier: Modifier = Modifier) {
+    Text(OfflineTexts.NEEDS_PC, modifier, style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.warn)
+}

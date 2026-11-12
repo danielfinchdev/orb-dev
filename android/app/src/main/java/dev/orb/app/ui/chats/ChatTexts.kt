@@ -161,6 +161,7 @@ object ChatTexts {
     const val PENDING_SENDING = "Enviando…"
     const val PENDING_WAITING = "En espera, sale al volver la conexión"
     const val PENDING_FAILED = "No se envió"
+    const val PENDING_DISCARD = "Descartar"
     const val PENDING_KEPT = "Tu mensaje sigue en este móvil y no se ha perdido."
     const val REMOVE = "Quitar"
 

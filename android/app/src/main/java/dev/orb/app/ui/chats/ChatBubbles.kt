@@ -252,7 +252,7 @@ fun PendingRow(p: PendingMessage, online: Boolean, onRetry: () -> Unit, onDiscar
                     Text(ChatTexts.PENDING_KEPT, color = OrbTheme.colors.text2, style = MaterialTheme.typography.labelSmall)
                     Row {
                         TextButton(onClick = onRetry) { Text(ChatTexts.RETRY) }
-                        TextButton(onClick = onDiscard) { Text(ChatTexts.REMOVE) }
+                        TextButton(onClick = onDiscard) { Text(ChatTexts.PENDING_DISCARD) }
                     }
                 }
                 else -> Row(Modifier.padding(top = 2.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {

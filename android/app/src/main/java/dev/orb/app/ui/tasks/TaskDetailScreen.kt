@@ -52,6 +52,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.orb.app.ui.chats.ChatTime
 import dev.orb.app.ui.chats.Message
 import dev.orb.app.ui.icons.OrbIcons
+import dev.orb.app.ui.offline.NeedsPcNote
+import dev.orb.app.ui.offline.OfflineStrip
 import dev.orb.app.ui.theme.OrbTheme
 
 private enum class Ask { Cancel, Undo, Reassign, Followup, LaunchAnyway, Reject }
@@ -82,12 +84,14 @@ fun TaskDetailScreen(
                     style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 )
             }
+            if (!state.online && state.detail != null) OfflineStrip()
             val d = state.detail
             when {
                 d == null && state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 d == null -> Message(state.error ?: TaskTexts.DETAIL_ERROR, action = TaskTexts.RETRY, onAction = vm::refresh)
                 else -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
                     Header(d, nowMs())
+                    if (!state.online && state.actions.isNotEmpty()) NeedsPcNote(Modifier.padding(top = 8.dp))
                     Decisions(d, state.actions, enabled, vm, onAskUndo = { ask = Ask.Undo }, onAskReject = { ask = Ask.Reject })
                     WhyWaits(d, state.actions, enabled) { ask = Ask.LaunchAnyway }
                     if (d.description.isNotBlank()) {
