@@ -10,7 +10,7 @@ import { modelsOf } from '@/components/brain-picker.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { TaskChanges } from '@/components/task-changes.jsx';
-import { HeldCard, PausedNote, waitText } from '@/components/task-state.jsx';
+import { HeldCard, PausedNote, TaskStatus, waitText } from '@/components/task-state.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, Empty, Field, Input, Textarea } from '@/components/ui/basic.jsx';
 import { Tabs, TabsList, TabsTrigger, Select, Collapsible, CollapsibleTrigger, CollapsibleContent, BubbleTip } from '@/components/ui/overlay.jsx';
@@ -18,23 +18,17 @@ import { useStore, call, act, go, bridge, phoneLayout } from '@/lib/store.js';
 import { AGENT, STATUS, REASONING, MODE, SENSITIVE, options } from '@/lib/labels.js';
 import { ago, fmtTime, cn } from '@/lib/utils.js';
 import { t, useT } from '@/lib/i18n.js';
+import { needsApproval } from '@/lib/task-approval.js';
 
 const FILTERS = [
   ['encurso', 'tasks.filter.active', (x) => ['running', 'queued'].includes(x.status)], // working now or waiting its turn
   // also the tasks Orb held for review after they ran (a mass deletion…): they wait for the user's OK too.
-  ['aprobar', 'tasks.filter.approve', (x) => x.status === 'awaiting_approval' || Boolean(x.held)],
+  ['aprobar', 'tasks.filter.approve', needsApproval],
   ['hechas', 'tasks.filter.done', (x) => x.status === 'done'],
   ['incidencias', 'tasks.filter.problems', (x) => ['failed', 'blocked', 'limited'].includes(x.status) && !x.held],
   ['todas', 'tasks.filter.all', () => true]
 ];
 const verdictLabel = (v) => (['correcto', 'con fallos'].includes(v) ? t(`tasks.verdict.${v}`) : v);
-// an undone task reads «Deshecha» (its files are back as they were), not «Completada».
-// a held one reads «Por aprobar»; a queued one says why it waits («En pausa», «Espera a #3»).
-const StatusBadge = ({ status, undone, task }) => (undone ? <Badge variant="secondary" data-testid="task-undone"><Undo2 />{t('tasks.undone')}</Badge>
-  : task?.held ? <Badge variant="warning" data-testid="task-held-badge">{t('tasks.held.badge')}</Badge>
-    : status === 'queued' && task?.waiting ? <Badge variant={task.waiting.kind === 'paused' ? 'warning' : STATUS.queued[1]} title={task.waiting.text}>{waitText(t, task)}</Badge>
-      : <Badge variant={STATUS[status]?.[1]}>{STATUS[status]?.[0] ?? status}</Badge>);
-
 // Who reviews (Task Review, Security Review): automatic (another provider with quota) or an installed agent.
 const reviewers = async () => (await call('agents.status')).filter((a) => a.enabled && a.installed);
 const ReviewerField = ({ agents, v, set }) => <Field label={t('tasks.review.reviewer')} hint={t('tasks.review.reviewerHint')}><Select className="w-full" value={v.agent || '__auto'} onValueChange={(agent) => set({ agent: agent === '__auto' ? '' : agent })} options={[{ value: '__auto', label: t('tasks.review.auto') }, ...agents.map((a) => ({ value: a.id, label: a.label }))]} /></Field>;
@@ -109,7 +103,7 @@ function TaskDetail({ id, live }) {
       <div className="flex items-start gap-3 px-5">
         <AgentIcon agent={who} className="mt-1 size-5" />
         <div className="min-w-0 flex-1"><div className="text-muted-foreground text-xs">{tr('tasks.taskNo', { id: t.id, project: t.project })}</div><h2 className="text-[17px] leading-snug">{t.title}</h2></div>
-        {t.accepted ? <Badge variant="success"><ThumbsUp />{tr('tasks.accepted')}</Badge> : null}<StatusBadge status={t.status} undone={Boolean(t.undone)} task={t} />
+        {t.accepted ? <Badge variant="success"><ThumbsUp />{tr('tasks.accepted')}</Badge> : null}<TaskStatus status={t.status} undone={Boolean(t.undone)} task={t} />
       </div>
       <div className="flex flex-wrap gap-2 px-5">
         {t.status === 'awaiting_approval' ? (<>
@@ -146,8 +140,8 @@ function TaskDetail({ id, live }) {
         <dt className="text-muted-foreground">{tr('tasks.created')}</dt><dd>{tr('tasks.createdBy', { time: fmtTime(t.created_at), agent: AGENT[t.created_by] ?? t.created_by })}</dd>
         {t.parent_id ? <><dt className="text-muted-foreground">{tr('tasks.subOf')}</dt><dd><button className="cursor-pointer underline-offset-2 hover:underline" onClick={() => go({ view: 'tasks', id: t.parent_id })}>#{t.parent_id}</button></dd></> : null}
         {t.review_of ? <><dt className="text-muted-foreground">{tr('tasks.reviews')}</dt><dd><button className="cursor-pointer underline-offset-2 hover:underline" onClick={() => go({ view: 'tasks', id: t.review_of })}>#{t.review_of}</button></dd></> : null}
-        {t.children?.length ? <><dt className="text-muted-foreground">{tr('tasks.subtasks')}</dt><dd className="flex flex-wrap gap-1">{t.children.map((c) => <button key={c.id} onClick={() => go({ view: 'tasks', id: c.id })} className="cursor-pointer"><Badge variant={STATUS[c.status]?.[1] ?? 'secondary'} className="gap-1"><GitBranch className="size-3" />#{c.id} {AGENT[c.assigned_to ?? c.agent] ?? c.agent} · {STATUS[c.status]?.[0] ?? c.status}</Badge></button>)}</dd></> : null}
-        {t.dependencies?.length ? <><dt className="text-muted-foreground">{tr('tasks.dependsOn')}</dt><dd className="flex flex-wrap gap-1">{t.dependencies.filter(Boolean).map((d) => <Badge key={d.id} variant="secondary">#{d.id} {STATUS[d.status]?.[0]}</Badge>)}</dd></> : null}
+        {t.children?.length ? <><dt className="text-muted-foreground">{tr('tasks.subtasks')}</dt><dd className="flex flex-wrap gap-1">{t.children.map((c) => <button key={c.id} onClick={() => go({ view: 'tasks', id: c.id })} className="cursor-pointer"><Badge variant={STATUS[c.status]?.[1] ?? 'secondary'} className="gap-1"><GitBranch className="size-3" />#{c.id} {AGENT[c.assigned_to ?? c.agent] ?? c.agent} · <TaskStatus task={c} plain /></Badge></button>)}</dd></> : null}
+        {t.dependencies?.length ? <><dt className="text-muted-foreground">{tr('tasks.dependsOn')}</dt><dd className="flex flex-wrap gap-1">{t.dependencies.filter(Boolean).map((d) => <Badge key={d.id} variant="secondary">#{d.id} <TaskStatus task={d} plain /></Badge>)}</dd></> : null}
         {t.sensitivity.length ? <><dt className="text-muted-foreground">{tr('tasks.approval')}</dt><dd className="flex flex-wrap gap-1">{t.sensitivity.map((s) => <Badge key={s} variant="warning">{SENSITIVE[s] ?? s}</Badge>)}</dd></> : null}
       </dl>
       <div className="grid gap-1.5 px-5"><div className="text-muted-foreground text-xs">{tr('tasks.brief')}</div><pre className="bg-muted max-h-72 overflow-auto rounded-lg px-3 py-2 font-sans text-[13px] whitespace-pre-wrap">{t.description}</pre></div>
@@ -171,7 +165,7 @@ export function TasksView({ route }) {
   const phone = phoneLayout();
   // From a folder of the left menu: only that project's tasks (with a button to see them all).
   const tasks = route.project ? all.filter((t) => t.project === route.project) : all;
-  const [filter, setFilterState] = useState(() => (phone && phoneFilter) || (route.id && !phone ? 'todas' : tasks.some((x) => x.status === 'awaiting_approval') ? 'aprobar' : tasks.some((x) => ['running', 'queued'].includes(x.status)) ? 'encurso' : 'todas'));
+  const [filter, setFilterState] = useState(() => (phone && phoneFilter) || (route.id && !phone ? 'todas' : tasks.some(needsApproval) ? 'aprobar' : tasks.some((x) => ['running', 'queued'].includes(x.status)) ? 'encurso' : 'todas'));
   const setFilter = (f) => { setFilterState(f); if (phone) phoneFilter = f; };
   const [selected, setSelected] = useState(route.id ?? null);
   const rows = tasks.filter(FILTERS.find(([k]) => k === filter)[2]);
@@ -209,12 +203,12 @@ export function TasksView({ route }) {
                   {phone ? (
                     <div className="min-w-0 flex-1">
                       <div className="line-clamp-2 text-[14px] leading-snug">{t.title}</div>
-                      <div className="mt-1 flex min-w-0 items-center gap-2"><StatusBadge status={t.status} undone={t.undone} task={t} /><span className="text-muted-foreground truncate text-xs">{t.project} · {ago(t.updated_at)}</span></div>
+                      <div className="mt-1 flex min-w-0 items-center gap-2"><TaskStatus status={t.status} undone={t.undone} task={t} /><span className="text-muted-foreground truncate text-xs">{t.project} · {ago(t.updated_at)}</span></div>
                       {progress}
                     </div>
                   ) : (<>
                     <div className="min-w-0 flex-1"><div className="truncate text-[14px]">{t.title}</div><div className="text-muted-foreground truncate text-xs">#{t.id} · {t.project} · {AGENT[t.assigned_to ?? t.agent] ?? t.agent} · {ago(t.updated_at)}</div>{progress}</div>
-                    <StatusBadge status={t.status} undone={t.undone} task={t} />
+                    <TaskStatus status={t.status} undone={t.undone} task={t} />
                   </>)}
                 </button>
               );

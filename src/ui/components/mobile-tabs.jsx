@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { MoreContent } from './mobile-menu.jsx';
 import { unreadOf } from '@/lib/inbox.js';
+import { needsApproval } from '@/lib/task-approval.js';
 
 // Which tab a screen belongs to.
 // Chats · Tareas · Proyectos (a conversation belongs to Chats).
@@ -20,7 +21,7 @@ export function MobileTabs() {
   const chatBusy = useStore(anyChatBusy);
   const tasks = useStore((s) => s.tasks);
   const sessions = useStore((s) => s.sessions);
-  const approvals = tasks.filter((x) => x.status === 'awaiting_approval').length;
+  const approvals = tasks.filter(needsApproval).length;
   const working = sessions.some((s) => s.kind === 'chat' && s.status === 'running') || chatBusy;
   const orbUnread = useStore((s) => unreadOf(s.orbInbox));
   const current = tabOf(route.view);

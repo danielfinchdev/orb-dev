@@ -38,6 +38,7 @@ import { useAutoScroll, Composer } from '@/components/conversation/composer.jsx'
 import { BarClock, MsgTime, BarPause, BarHeading, COMPACT_AT, CompactButton } from '@/components/conversation/bar.jsx';
 import { ContextMeter } from '@/components/conversation/context-meter.jsx';
 import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
+import { TaskStatus } from '@/components/task-state.jsx';
 
 // An icon that says what the tool does (reading, writing, searching, the web, a command…).
 function toolIcon(name = '') {
@@ -246,7 +247,7 @@ async function showDetails(s, task) {
         {info?.git ? <Row k="Git">{t('session.branch')} <span className="font-mono">{info.branch}</span> · {info.changes ? t('session.unsaved', { n: info.changes }) : t('session.noChanges')}{info.remote ? ` · ${info.remote}` : ''}{info.ahead ? ` · ${t('session.unpushed', { n: info.ahead })}` : ''}</Row> : s.project ? <Row k="Git">{t('session.noGit')}</Row> : null}
         {info?.prs?.length ? <Row k="Pull requests">{info.prs.map((p) => <a key={p.number} className="mr-2 cursor-pointer underline-offset-2 hover:underline" onClick={() => bridge.openExternal(p.url)}>#{p.number} {p.title}</a>)}</Row> : null}
         {s.context?.size ? <Row k={t('session.context')}><ContextMeter context={s.context} /></Row> : null}
-        {task ? <Row k={t('session.task')}><a className="cursor-pointer underline-offset-2 hover:underline" onClick={() => go({ view: 'tasks', id: task.id })}>#{task.id} {task.title}</a> · {STATUS[task.status]?.[0]}</Row> : null}
+        {task ? <Row k={t('session.task')}><a className="cursor-pointer underline-offset-2 hover:underline" onClick={() => go({ view: 'tasks', id: task.id })}>#{task.id} {task.title}</a> · <TaskStatus task={task} plain /></Row> : null}
         {parent ? <Row k={t('session.forkedFrom')}><a className="cursor-pointer underline-offset-2 hover:underline" onClick={() => go({ view: 'session', id: parent.id })}>{parent.title}</a></Row> : null}
         <Row k={t('session.agentConversation')}><span className="font-mono text-xs">{s.cli_session ?? t('session.notStarted')}</span></Row>
         <Row k={t('session.created')}>{new Date(s.created_at).toLocaleString(currentLocale())}</Row>
@@ -413,7 +414,7 @@ export function SessionView({ route }) {
         <NotificationBell />
         <BarPause />
         {s.kind === 'chat' ? null : (<>
-          {task ? <Badge variant={STATUS[task.status]?.[1]}>{STATUS[task.status]?.[0]}</Badge> : null}
+          {task ? <TaskStatus task={task} /> : null}
           <Button variant="outline" size="sm" onClick={() => go({ view: 'tasks', id: s.task_id })}><ClipboardCheck />{t('session.viewTask', { id: s.task_id })}</Button>
         </>)}
         {/* only the bell and pause stay on the bar; the folder, the details, fork, archive, delete and the games go into ⋯. */}

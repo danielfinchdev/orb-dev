@@ -27,6 +27,8 @@ import { usePress } from '@/lib/use-press.js';
 import { AGENT, STATUS } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
+import { needsApproval } from '@/lib/task-approval.js';
+import { TaskStatus } from '@/components/task-state.jsx';
 
 // ---- data: the rows of the zone (the conversations and direct chats of the store, the marks of inbox.list)
 export function useOrbInbox() {
@@ -341,7 +343,7 @@ export function OrbNewMenu({ fab = false }) {
 function Places() {
   const t = useT();
   const view = useStore((s) => s.route.view);
-  const approvals = useStore((s) => s.tasks.filter((x) => x.status === 'awaiting_approval').length);
+  const approvals = useStore((s) => s.tasks.filter(needsApproval).length);
   const running = useStore((s) => s.tasks.filter((x) => x.status === 'running').length);
   const config = useStore((s) => s.app?.config);
   const places = [['tasks', ClipboardCheck, 'nav.tasks'], ['projects', FolderGit2, 'nav.projects'], ['schedules', CalendarSync, 'nav.schedules'], ['board', Presentation, 'nav.board']];
@@ -463,7 +465,7 @@ export function OrbInbox({ page = false }) {
       })}</> : null}
       {results.tasks.length ? <><Sub>{t('orbchats.tasksFound')}</Sub>{results.tasks.map((x) => (
         <button key={x.id} type="button" onClick={() => go({ view: 'tasks', id: x.id })} className="hover:bg-accent/50 flex min-w-0 cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13.5px] compact:text-[13px]" data-testid={`item-t${x.id}`}>
-          <ClipboardCheck className="text-muted-foreground size-4 shrink-0" /><span className="min-w-0 flex-1"><span className="block truncate">#{x.id} {x.title}</span>{x.snippet ? <span className="text-muted-foreground block truncate text-[12.5px]" data-testid="task-hit-snippet">{x.snippet}</span> : null}</span><span className="text-muted-foreground shrink-0 text-[12px]">{STATUS[x.status]?.[0] ?? x.status}</span>
+          <ClipboardCheck className="text-muted-foreground size-4 shrink-0" /><span className="min-w-0 flex-1"><span className="block truncate">#{x.id} {x.title}</span>{x.snippet ? <span className="text-muted-foreground block truncate text-[12.5px]" data-testid="task-hit-snippet">{x.snippet}</span> : null}</span><span className="text-muted-foreground shrink-0 text-[12px]"><TaskStatus task={x} plain /></span>
         </button>))}</> : null}
       {!results.projects.length && !results.chats.length && !results.tasks.length && !found?.messages?.length ? <p className="text-muted-foreground px-3 py-4 text-sm compact:text-[13px]">{t('chats.noResults')}</p> : null}
     </div>

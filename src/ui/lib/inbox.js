@@ -2,6 +2,7 @@
 // row, the rows themselves (conversations with Orbe and direct ones with an agent), their progress line and their
 // grouping. The data comes from inbox.list (src/engine/api/inbox.mjs). Tested in test/mensajeria-orb.test.mjs.
 import { timeZone } from './clock.js';
+import { needsApproval } from './task-approval.js';
 
 // What is unread (muted chats do not count), for the badges.
 export const unreadOf = (data) => (Array.isArray(data?.items) ? data.items.reduce((n, x) => n + (x.muted ? 0 : Number(x.unread) || 0), 0) : 0);
@@ -94,7 +95,7 @@ const FINISHED = { done: ['orbchats.done', 'done'], failed: ['orbchats.failed', 
 export function orbProgress(item, t, { assistant = 'Orbe' } = {}) {
   const tasks = item?.tasks ?? [];
   // a task held for review after it ran (tasks.list › held) waits for the user's OK too.
-  if (tasks.some((x) => x.status === 'awaiting_approval' || x.held)) return { text: t('orbchats.awaiting'), tone: 'warn', badge: true };
+  if (tasks.some(needsApproval)) return { text: t('orbchats.awaiting'), tone: 'warn', badge: true };
   if (item?.asks) return { text: t('orbchats.permission'), tone: 'warn', badge: true };
   if (item?.asking) return { text: t('orbchats.asking'), tone: 'warn', badge: true };
   const run = tasks.find((x) => x.status === 'running');
@@ -119,7 +120,7 @@ export function orbProgress(item, t, { assistant = 'Orbe' } = {}) {
 }
 
 // What a row waits for from the user (a task to approve, a permission, a question).
-export const orbNeedsYou = (item) => Boolean(item?.asks || item?.asking || (item?.tasks ?? []).some((x) => x.status === 'awaiting_approval'));
+export const orbNeedsYou = (item) => Boolean(item?.asks || item?.asking || (item?.tasks ?? []).some(needsApproval));
 
 // The list as the screen draws it: the pinned chats on top (in their order, never repeated below), then one group per
 // project (the most recent first; «Sin proyecto» last). Completed chats are left out unless showDone; each group says

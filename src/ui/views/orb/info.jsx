@@ -26,6 +26,7 @@ import { STATUS } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { useOrbItems, deleteChat } from './inbox.jsx';
+import { TaskStatus } from '@/components/task-state.jsx';
 
 const OPEN = ['queued', 'running', 'awaiting_approval', 'limited'];
 // On the phone the info covers the screen: going somewhere from it closes it.
@@ -115,7 +116,7 @@ function ChatInfo({ conv }) {
             <button key={x.id} type="button" onClick={() => leave({ view: 'tasks', id: x.id })} className="hover:bg-accent/50 flex min-h-11 w-full cursor-pointer items-center gap-3 px-3.5 py-2 text-left text-[14px]" data-testid={`info-task-${x.id}`}>
               <ClipboardCheck className={cn('size-[18px] shrink-0', x.status === 'running' ? 'text-primary' : 'text-muted-foreground')} />
               <span className="min-w-0 flex-1 truncate">#{x.id} {x.title}</span>
-              <Badge variant={STATUS[x.status]?.[1] ?? 'secondary'} className="shrink-0">{STATUS[x.status]?.[0] ?? x.status}</Badge>
+              <TaskStatus task={x} className="shrink-0" />
             </button>
           )) : <p className="text-muted-foreground px-3.5 py-3 text-[13px]">{t('orbchats.noTasks')}</p>}
           {sorted.length > 12 ? <Row label={t('comp.sidebar.viewAll', { n: sorted.length })} onClick={() => leave({ view: 'tasks', project: conv.project ?? undefined })} /> : null}
