@@ -10,6 +10,8 @@ data class NotifySettings(
     val keepConnected: Boolean = true,
     /** Shows the text of a notice on the lock screen; off hides it behind a generic line. */
     val lockScreenPublic: Boolean = false,
+    /** The app lock is on: notices never carry their content, because they can sit in the shade after the app locks. */
+    val appLock: Boolean = false,
 )
 
 /** What the phone remembers about its notices. Not secrets, so plain preferences. */

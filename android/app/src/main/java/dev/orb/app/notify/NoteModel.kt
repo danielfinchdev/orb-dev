@@ -150,14 +150,15 @@ object NotePlanner {
             PlannedAction(jobFor(note, a, target), a.title, input = a.input && !a.open)
         }
         val approval = note.kind != "message"
+        val hidden = if (approval) NotifyTexts.HIDDEN_APPROVAL else NotifyTexts.HIDDEN_MESSAGE
         return NotificationPlan(
             id = note.id,
             channel = if (approval) NoteChannel.Approvals else NoteChannel.Messages,
-            title = note.title,
-            text = note.body,
+            title = if (settings.appLock) "Orb" else note.title,
+            text = if (settings.appLock) hidden else note.body,
             publicTitle = "Orb",
-            publicText = if (approval) NotifyTexts.HIDDEN_APPROVAL else NotifyTexts.HIDDEN_MESSAGE,
-            lockScreenPublic = settings.lockScreenPublic,
+            publicText = hidden,
+            lockScreenPublic = settings.lockScreenPublic && !settings.appLock,
             silent = note.silent,
             tap = tap,
             actions = actions,

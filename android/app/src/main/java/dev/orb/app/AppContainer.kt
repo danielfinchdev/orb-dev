@@ -234,7 +234,7 @@ class AppContainer(private val app: Application) {
         }
         scope.launch { client.connection.map { it::class.simpleName ?: "?" }.distinctUntilChanged().collect { log.add("conexión $it") } }
         notifierJob?.cancel()
-        notifier = Notifier(client.events, { notifyPrefs.settings.value }, { foreground }, notePoster, log::add)
+        notifier = Notifier(client.events, { notifyPrefs.settings.value.copy(appLock = lockPrefs.settings.value.enabled) }, { foreground }, notePoster, log::add)
         notifierJob = notifier?.start(scope)
         notifyPrefs.linked = true
         val runtime = LinkRuntime(client, api, sender)

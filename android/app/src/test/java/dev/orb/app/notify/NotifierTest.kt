@@ -91,6 +91,15 @@ class NotePlannerTest {
         assertTrue(plan(MESSAGE, NotifySettings(lockScreenPublic = true)).lockScreenPublic)
     }
 
+    @Test fun withTheAppLockOnNoticesCarryNoContentAndKeepTheirButtons() {
+        val p = plan(APPROVAL, NotifySettings(lockScreenPublic = true, appLock = true))
+        assertEquals("Orb", p.title)
+        assertEquals("Orb necesita tu respuesta", p.text)
+        assertFalse(p.lockScreenPublic)
+        assertEquals(listOf("Rechazar", "Aprobar"), p.actions.map { it.label })
+        assertEquals("Tienes un mensaje nuevo", plan(MESSAGE, NotifySettings(appLock = true)).text)
+    }
+
     @Test fun nothingWithoutAKeyAndAtMostThreeButtons() {
         assertNull(PcNotes.parse(json("""{"title":"x"}""")))
         assertNull(PcNotes.parse(JsonPrimitive("x")))
