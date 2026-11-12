@@ -36,7 +36,6 @@ object ChatTexts {
     const val PAUSED = "En pausa"
     const val MUTED = "Silenciado"
     const val SNOOZED = "Pospuesto"
-    const val OFFLINE_STRIP = "Sin conexión con el PC. Se muestra lo último guardado en el móvil."
     const val EMPTY_TITLE = "Aún no hay chats"
     const val EMPTY_BODY = "Empieza uno nuevo: el PC hace el trabajo y aquí lo ves."
     const val EMPTY_FILTER = "Ningún chat con este filtro"

@@ -47,6 +47,7 @@ import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.tasks.SectionLabel
 import dev.orb.app.ui.tasks.TaskRow
 import dev.orb.app.ui.tasks.TaskStatusPill
+import dev.orb.app.ui.offline.OfflineStrip
 import dev.orb.app.ui.theme.OrbTheme
 
 /** Most rows a section lists; the rest stay in the Chats and Tareas tabs. */
@@ -84,10 +85,7 @@ fun ProjectDetailScreen(
                 !state.loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 else -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
                     if (!state.online) {
-                        Text(
-                            ProjectTexts.OFFLINE_STRIP, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.warn,
-                        )
+                        OfflineStrip()
                     }
                     Section(ProjectTexts.SECTION_CHATS)
                     if (state.chats.isEmpty()) Empty(ProjectTexts.NO_CHATS)

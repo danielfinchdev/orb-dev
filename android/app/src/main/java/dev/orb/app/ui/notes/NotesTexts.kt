@@ -8,7 +8,6 @@ object NotesTexts {
     const val MARK_ALL = "Marcar todo leído"
     const val EMPTY = "No hay notificaciones"
     const val EMPTY_HINT = "Aquí aparecen los mensajes y permisos que llegan mientras tienes Orb abierto."
-    const val OFFLINE_STRIP = "Sin conexión con el PC. Se muestra lo último recibido."
     const val PC_NOT_TOLD = "Marcados aquí, pero el PC no se ha enterado"
     const val KIND_APPROVAL = "Permiso"
     const val KIND_TASK = "Tarea"

@@ -56,6 +56,7 @@ import dev.orb.app.ui.chats.ChatTexts
 import dev.orb.app.ui.chats.Message
 import dev.orb.app.ui.chats.SearchTask
 import dev.orb.app.ui.icons.OrbIcons
+import dev.orb.app.ui.offline.OfflineStrip
 import dev.orb.app.ui.theme.OrbTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -71,10 +72,7 @@ fun TasksScreen(vm: TasksViewModel, onOpenTask: (Long) -> Unit, modifier: Modifi
         Column(Modifier.fillMaxSize()) {
             if (state.searching) SearchBar(state.query, vm::setQuery, vm::closeSearch) else TasksAppBar(vm::openSearch)
             if (!state.online && state.loaded) {
-                Text(
-                    TaskTexts.OFFLINE_STRIP, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.warn,
-                )
+                OfflineStrip()
             }
             if (state.searching) {
                 SearchBody(state, onOpenTask)

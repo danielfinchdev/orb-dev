@@ -4,7 +4,6 @@ package dev.orb.app.ui.usage
 object UsageTexts {
     const val TITLE = "Uso y agentes"
     const val BACK = "Volver"
-    const val OFFLINE_STRIP = "Sin conexión con el PC. Se muestra lo último recibido."
     const val LOAD_ERROR = "No se pudo cargar el uso desde el PC."
     const val RETRY = "Reintentar"
     const val UPDATE = "Actualizar"

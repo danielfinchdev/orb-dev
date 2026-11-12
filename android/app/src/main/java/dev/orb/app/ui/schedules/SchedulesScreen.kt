@@ -53,6 +53,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.orb.app.ui.chats.Message
 import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.shell.ScreenBar
+import dev.orb.app.ui.offline.OfflineStrip
 import dev.orb.app.ui.theme.OrbTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,10 +70,7 @@ fun SchedulesScreen(vm: SchedulesViewModel, onBack: () -> Unit, modifier: Modifi
         Column(Modifier.fillMaxSize()) {
             ScreenBar(SchedulesTexts.TITLE, onBack, SchedulesTexts.BACK)
             if (!state.online && state.loaded) {
-                Text(
-                    SchedulesTexts.OFFLINE_STRIP, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.warn,
-                )
+                OfflineStrip()
             }
             Text(
                 SchedulesTexts.META, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),

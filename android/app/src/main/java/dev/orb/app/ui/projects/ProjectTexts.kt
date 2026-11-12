@@ -11,7 +11,6 @@ object ProjectTexts {
     const val EMPTY_FINISHED = "No hay proyectos terminados"
     const val LOAD_ERROR = "No se pudieron cargar los proyectos desde el PC."
     const val RETRY = "Reintentar"
-    const val OFFLINE_STRIP = "Sin conexión con el PC. Se muestra lo último recibido."
     const val ACTION_OFFLINE = "Sin conexión con el PC: no se ha cambiado nada."
     const val ACTION_FAILED = "No se pudo hacer en el PC"
 

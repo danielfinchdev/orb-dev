@@ -45,6 +45,7 @@ import dev.orb.app.ui.chats.ChatTime
 import dev.orb.app.ui.chats.Message
 import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.shell.ScreenBar
+import dev.orb.app.ui.offline.OfflineStrip
 import dev.orb.app.ui.theme.OrbTheme
 
 /** The bell of a top bar: it shows how many notices are unread and opens the center. */
@@ -74,10 +75,7 @@ fun NotesScreen(
                 TextButton(onClick = vm::markAllRead, enabled = state.unread > 0 && !state.markingAll) { Text(NotesTexts.MARK_ALL) }
             }
             if (!state.online) {
-                Text(
-                    NotesTexts.OFFLINE_STRIP, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.warn,
-                )
+                OfflineStrip()
             }
             PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::refresh, modifier = Modifier.weight(1f).fillMaxWidth()) {
                 if (state.rows.isEmpty()) Message(NotesTexts.EMPTY, NotesTexts.EMPTY_HINT) else LazyColumn(

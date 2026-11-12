@@ -22,7 +22,6 @@ object MenuTexts {
     const val EMPTY_LOGS = "No hay bitácoras"
     const val LOAD_ERROR = "No se pudo cargar desde el PC."
     const val RETRY = "Reintentar"
-    const val OFFLINE_STRIP = "Sin conexión con el PC. Se muestra lo último recibido."
     const val LOG_LOADING = "Cargando…"
 
     fun unread(n: Int) = if (n == 1) "1 sin leer" else "$n sin leer"

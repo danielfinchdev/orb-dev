@@ -37,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.orb.app.ui.chats.ChatTime
 import dev.orb.app.ui.chats.Message
 import dev.orb.app.ui.shell.ScreenBar
+import dev.orb.app.ui.offline.OfflineStrip
 import dev.orb.app.ui.theme.OrbTheme
 
 /** «Memorias y actividad»: the PC's recent events and its logbooks, read only. */
@@ -61,10 +62,7 @@ fun ActivityScreen(vm: ActivityViewModel, onBack: () -> Unit, modifier: Modifier
             }
         }
         if (!state.online && (state.events != null || state.logs != null)) {
-            Text(
-                MenuTexts.OFFLINE_STRIP, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.warn,
-            )
+            OfflineStrip()
         }
         PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::refresh, modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (state.tab == ActivityTab.Activity) Events(state, vm::refresh, nowMs) else Logs(state, vm::refresh, vm::openLog)

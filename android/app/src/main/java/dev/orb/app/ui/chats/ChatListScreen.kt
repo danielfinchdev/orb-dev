@@ -50,6 +50,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.notes.NotesBell
+import dev.orb.app.ui.offline.LocalOffline
+import dev.orb.app.ui.offline.OfflineStrip
+import dev.orb.app.ui.offline.OfflineTexts
+import kotlinx.coroutines.flow.MutableStateFlow
 import dev.orb.app.ui.theme.OrbTheme
 
 /** What the Chats bar offers: the ☰ menu (a sheet the shell shows) and, when the notices center exists, its bell. */
@@ -150,14 +154,6 @@ private fun ChatsAppBar(menu: ChatsMenu, onSearch: () -> Unit) {
 }
 
 @Composable
-private fun OfflineStrip() {
-    Text(
-        ChatTexts.OFFLINE_STRIP, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.warn,
-    )
-}
-
-@Composable
 private fun FilterChips(state: ChatListState, onFilter: (ChatFilter) -> Unit) {
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
@@ -189,7 +185,7 @@ private fun ListBody(state: ChatListState, onOpen: (ChatRef) -> Unit, onLongPres
     when {
         !state.loaded && state.loadFailed -> Message(ChatTexts.LOAD_ERROR, action = ChatTexts.RETRY, onAction = onRetry)
         !state.loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            if (state.online || state.refreshing) CircularProgressIndicator() else Message(ChatTexts.NEEDS_PC, ChatTexts.NEEDS_PC_HINT)
+            if (state.online || state.refreshing) CircularProgressIndicator() else NoPcYet()
         }
         state.total == 0 -> Message(ChatTexts.EMPTY_TITLE, ChatTexts.EMPTY_BODY)
         state.entries.isEmpty() -> Message(ChatTexts.EMPTY_FILTER)
@@ -254,4 +250,13 @@ internal fun DeleteChatDialog(title: String, onConfirm: () -> Unit, onDismiss: (
         confirmButton = { TextButton(onClick = onConfirm) { Text(ChatTexts.DELETE_CONFIRM, color = MaterialTheme.colorScheme.error) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(ChatTexts.CANCEL) } },
     )
+}
+
+/** The PC cannot be reached and nothing was saved yet, so there is nothing to read: say so and offer to try again. */
+@Composable
+private fun NoPcYet() {
+    val info = LocalOffline.current
+    val seen by (info?.lastContact ?: remember { MutableStateFlow<Long?>(null) }).collectAsStateWithLifecycle()
+    val body = OfflineTexts.NO_PC_BODY + "\n" + OfflineTexts.NOTHING_SAVED + (seen?.let { "\n" + OfflineTexts.lastConnection(it, System.currentTimeMillis()) } ?: "")
+    Message(OfflineTexts.NO_PC_TITLE, body, action = if (info != null) OfflineTexts.RETRY_NOW else null, onAction = info?.retryNow)
 }

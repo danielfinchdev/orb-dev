@@ -61,6 +61,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.orb.app.ui.chats.Message
 import dev.orb.app.ui.icons.OrbIcons
+import dev.orb.app.ui.offline.OfflineStrip
 import dev.orb.app.ui.theme.OrbTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -81,10 +82,7 @@ fun ProjectsScreen(vm: ProjectsViewModel, onOpenProject: (String) -> Unit, modif
                 style = MaterialTheme.typography.titleLarge,
             )
             if (!state.online && state.loaded) {
-                Text(
-                    ProjectTexts.OFFLINE_STRIP, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.warn,
-                )
+                OfflineStrip()
             }
             FilterRow(state, vm::setFilter)
             PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::refresh, modifier = Modifier.weight(1f).fillMaxWidth()) {
