@@ -26,7 +26,10 @@ class MainActivity : ComponentActivity() {
         container = (application as OrbApplication).container
         container.notificationAccess.launchDialog = { notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS) }
         // A tap on a notice opens the chat or task it is about.
-        if (savedInstanceState == null) container.openFromNotification(intent)
+        if (savedInstanceState == null) {
+            container.openFromNotification(intent)
+            container.receiveShare(intent)
+        }
         // Once a PC is linked, Android is asked once to allow notices; after that it is the person's choice in «Este móvil».
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -42,6 +45,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         container.openFromNotification(intent)
+        container.receiveShare(intent)
     }
 
     override fun onResume() {

@@ -51,6 +51,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -107,6 +108,7 @@ fun OrbeChatScreen(
                 Composer(
                     online = state.online, busy = liveInfo?.busy == true, mode = state.mode, canSetMode = state.canSetMode,
                     onSend = { stick = true; vm.send(it) }, onStop = vm::stop, onMode = vm::setMode,
+                    attach = vm.attach,
                 )
             }
         }
@@ -267,13 +269,25 @@ internal fun Composer(
     busyChoices: List<ComposerChoice> = emptyList(),
     /** Replaces the permission-mode pill (a direct chat shows its agent and model instead). */
     leading: (@Composable () -> Unit)? = null,
+    /** The pictures and files of this message; null hides «+» (where nothing can be attached). */
+    attach: dev.orb.app.attach.AttachController? = null,
 ) {
     var text by rememberSaveable { mutableStateOf("") }
+    val attached = attach?.items?.collectAsState()?.value.orEmpty()
+    val attachNotice = attach?.notice?.collectAsState()?.value
+    var problem by remember { mutableStateOf<String?>(null) }
+    var sheet by remember { mutableStateOf(false) }
+    val launchers = if (attach != null) dev.orb.app.ui.attach.rememberAttachLaunchers(attach) { problem = it } else null
+    // Sending waits for every upload: a message that left before them would reach the PC without its files.
+    val attachOk = attached.all { it.state == dev.orb.app.attach.AttachState.Ready }
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(24.dp)
     val glass = OrbTheme.colors.isGlass
     val body: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 6.dp)) {
+            if (attach != null) {
+                dev.orb.app.ui.attach.AttachStrip(attached, attachNotice ?: problem, attach::remove, attach::retry, Modifier.padding(end = 8.dp))
+            }
             Box(Modifier.fillMaxWidth().heightIn(min = 40.dp, max = 160.dp).padding(end = 8.dp, top = 4.dp), contentAlignment = Alignment.CenterStart) {
                 BasicTextField(
                     text, { text = it }, Modifier.fillMaxWidth().semantics { contentDescription = placeholder },
@@ -283,7 +297,7 @@ internal fun Composer(
                 )
                 if (text.isEmpty()) Text(placeholder, color = OrbTheme.colors.text3, style = MaterialTheme.typography.bodyLarge)
             }
-            val canSend = text.isNotBlank()
+            val canSend = text.isNotBlank() && attachOk
             AnimatedVisibility(
                 busy && canSend && busyChoices.isNotEmpty(),
                 enter = fadeIn(tween(OrbMotion.Short)) + expandVertically(OrbMotion.standard(OrbMotion.Short)),
@@ -300,6 +314,11 @@ internal fun Composer(
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (attach != null) {
+                    IconButton(
+                        onClick = { problem = null; sheet = true }, modifier = Modifier.size(36.dp),
+                    ) { Icon(OrbIcons.Plus, dev.orb.app.attach.AttachTexts.ADD, Modifier.size(20.dp), tint = OrbTheme.colors.text2) }
+                }
                 if (leading != null) leading() else if (canSetMode) ModePill(mode, onMode)
                 Box(Modifier.weight(1f))
                 // Parar only when there is nothing to send: with text, the message goes to the PC's queue behind the turn.
@@ -324,6 +343,9 @@ internal fun Composer(
                 }
             }
         }
+    }
+    if (sheet && attach != null && launchers != null) {
+        dev.orb.app.ui.attach.AttachSheet(attach.currentPolicy, launchers, onDismiss = { sheet = false })
     }
     Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
         if (glass) GlassSurface(Modifier.fillMaxWidth(), shape) { body() }

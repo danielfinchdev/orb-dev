@@ -56,7 +56,7 @@ interface OrbeChatBackend {
     suspend fun restore(conversation: Long): Result<Unit>
 
     /** Puts the message in the send queue; it leaves for the PC as soon as there is a link. */
-    suspend fun send(conversation: Long, text: String): Result<String>
+    suspend fun send(conversation: Long, text: String, images: List<String> = emptyList()): Result<String>
     suspend fun retry(clientId: String): Boolean
     suspend fun discard(clientId: String): Boolean
 
@@ -122,8 +122,8 @@ class RuntimeOrbeChatBackend(private val container: AppContainer, private val ru
     override fun available(m: ApiMethod) = api.available(m)
     override suspend fun restore(conversation: Long) = api.conversationsRestore(conversation.toString()).map { }
 
-    override suspend fun send(conversation: Long, text: String): Result<String> =
-        runCatching { container.outbox()?.enqueueChat(conversation.toString(), text) ?: throw LinkException(LinkError.NotLinked) }
+    override suspend fun send(conversation: Long, text: String, images: List<String>): Result<String> =
+        runCatching { container.outbox()?.enqueueChat(conversation.toString(), text, images) ?: throw LinkException(LinkError.NotLinked) }
 
     override suspend fun retry(clientId: String) = container.outbox()?.retry(clientId) ?: false
     override suspend fun discard(clientId: String) = container.outbox()?.delete(clientId) ?: false

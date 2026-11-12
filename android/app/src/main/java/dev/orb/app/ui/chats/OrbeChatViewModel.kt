@@ -89,6 +89,8 @@ class OrbeChatViewModel(
     private val conversation: Long,
     private val clock: () -> Long = System::currentTimeMillis,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /** The pictures and files of the message being written; null where the chat has no way to attach. */
+    val attach: dev.orb.app.attach.AttachController? = null,
 ) : ViewModel() {
     private val _state = MutableStateFlow(OrbeChatState())
     val state: StateFlow<OrbeChatState> = _state
@@ -292,7 +294,14 @@ class OrbeChatViewModel(
     fun send(text: String) {
         val t = text.trim()
         if (t.isEmpty()) return
-        viewModelScope.launch { backend.send(conversation, t).onFailure { say(it) } }
+        // The names are taken now: the next message starts with a clean strip.
+        val images = attach?.remoteNames().orEmpty()
+        attach?.discard()
+        viewModelScope.launch { backend.send(conversation, t, images).onFailure { say(it) } }
+    }
+
+    override fun onCleared() {
+        attach?.close()
     }
 
     fun retrySend(clientId: String) { viewModelScope.launch { backend.retry(clientId) } }

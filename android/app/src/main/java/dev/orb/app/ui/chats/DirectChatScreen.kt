@@ -109,6 +109,7 @@ fun DirectChatScreen(
                     onSend = { stick = true; vm.send(it) }, onStop = vm::stop, onMode = {},
                     placeholder = ChatTexts.directField(state.agentName), busyChoices = choices,
                     leading = { AgentChip(state.agent, state.model ?: state.agentName) },
+                    attach = vm.attach,
                 )
             }
         }

@@ -63,9 +63,9 @@ class FakeOrbeChatBackend(initial: List<String> = emptyList()) : OrbeChatBackend
     override suspend fun restore(conversation: Long): Result<Unit> { calls += "restore"; return restoreResult }
 
     var sendCount = 0
-    override suspend fun send(conversation: Long, text: String): Result<String> {
+    override suspend fun send(conversation: Long, text: String, images: List<String>): Result<String> {
         val id = "c${++sendCount}"
-        calls += "send $text"
+        calls += if (images.isEmpty()) "send $text" else "send $text +${images.joinToString(",")}"
         queue.value = queue.value + PendingMessage(id, text, PendingState.Waiting, null, sendCount.toLong())
         return Result.success(id)
     }

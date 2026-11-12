@@ -78,6 +78,8 @@ class DirectChatViewModel(
     private val session: String,
     private val clock: () -> Long = System::currentTimeMillis,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /** The pictures and files of the message being written; null where the chat has no way to attach. */
+    val attach: dev.orb.app.attach.AttachController? = null,
 ) : ViewModel() {
     private val _state = MutableStateFlow(DirectChatState())
     val state: StateFlow<DirectChatState> = _state
@@ -318,9 +320,15 @@ class DirectChatViewModel(
         if (t.isEmpty()) return
         val s = _state.value
         val how = if (!s.busy) null else mode ?: if (s.canSteer) SendMode.Steer else SendMode.Queue
+        val images = attach?.remoteNames().orEmpty()
+        attach?.discard()
         viewModelScope.launch {
-            backend.send(session, t, how?.wire).fold({ id -> if (how != null) modes[id] = how }, { say(it) })
+            backend.send(session, t, how?.wire, images).fold({ id -> if (how != null) modes[id] = how }, { say(it) })
         }
+    }
+
+    override fun onCleared() {
+        attach?.close()
     }
 
     fun retrySend(clientId: String) { viewModelScope.launch { backend.retry(clientId) } }

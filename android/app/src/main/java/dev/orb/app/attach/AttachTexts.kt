@@ -16,6 +16,7 @@ object AttachTexts {
     const val TOO_BIG = "Es demasiado grande"
     const val UNREADABLE = "No se pudo leer"
     const val CAMERA_FAILED = "No se pudo usar la cámara"
+    const val UNREADABLE_PICKER = "No se pudo abrir el selector"
     const val WAIT_UPLOADS = "Espera a que terminen de subirse los adjuntos."
     const val NOT_ACCEPTED = "Este PC no admite ese tipo de archivo."
     const val TOO_MANY = "Máximo 6 adjuntos por mensaje."

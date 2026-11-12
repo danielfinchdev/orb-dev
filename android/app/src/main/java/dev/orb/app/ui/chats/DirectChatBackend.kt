@@ -54,7 +54,7 @@ interface DirectChatBackend {
     suspend fun restore(session: String): Result<Unit>
 
     /** Puts the message in the send queue; [mode] is `steer` or `queue` while the agent works, null otherwise. */
-    suspend fun send(session: String, text: String, mode: String?): Result<String>
+    suspend fun send(session: String, text: String, mode: String?, images: List<String> = emptyList()): Result<String>
     suspend fun retry(clientId: String): Boolean
     suspend fun discard(clientId: String): Boolean
 
@@ -135,10 +135,10 @@ class RuntimeDirectChatBackend(private val container: AppContainer, private val 
     override fun available(m: dev.orb.app.link.api.ApiMethod) = api.available(m)
     override suspend fun restore(session: String) = api.sessionsRestore(session).map { }
 
-    override suspend fun send(session: String, text: String, mode: String?): Result<String> = runCatching {
+    override suspend fun send(session: String, text: String, mode: String?, images: List<String>): Result<String> = runCatching {
         val outbox = container.outbox() ?: throw LinkException(LinkError.NotLinked)
         // The mode travels with the queued message so a correction written offline is still a correction on reconnect.
-        outbox.enqueueSession(session, text, extra = if (mode == null) JsonObject(emptyMap()) else buildJsonObject { put("mode", mode) })
+        outbox.enqueueSession(session, text, images, extra = if (mode == null) JsonObject(emptyMap()) else buildJsonObject { put("mode", mode) })
     }
 
     override suspend fun retry(clientId: String) = container.outbox()?.retry(clientId) ?: false

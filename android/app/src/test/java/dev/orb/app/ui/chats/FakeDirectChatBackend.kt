@@ -73,9 +73,9 @@ class FakeDirectChatBackend(initial: List<String> = emptyList()) : DirectChatBac
     override suspend fun restore(session: String): Result<Unit> { calls += "restore"; return restoreResult }
 
     var sendCount = 0
-    override suspend fun send(session: String, text: String, mode: String?): Result<String> {
+    override suspend fun send(session: String, text: String, mode: String?, images: List<String>): Result<String> {
         val id = "c${++sendCount}"
-        calls += "send ${mode ?: "-"} $text"
+        calls += "send ${mode ?: "-"} $text" + if (images.isEmpty()) "" else " +${images.joinToString(",")}"
         outbox.value = outbox.value + PendingMessage(id, text, PendingState.Waiting, null, sendCount.toLong())
         return Result.success(id)
     }

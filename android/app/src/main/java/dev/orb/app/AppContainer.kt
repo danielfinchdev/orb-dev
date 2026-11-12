@@ -59,6 +59,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -104,6 +105,56 @@ class AppContainer(private val app: Application) {
 
     /** Where a tapped notice leads; the navigation takes it once. */
     val openTarget = MutableStateFlow<NoticeTarget?>(null)
+
+    /** Pictures and files waiting to be sent, and content shared from other apps, live here only until the message goes. */
+    private val attachRoot = java.io.File(app.cacheDir, "capturas")
+    private val shareRoot = java.io.File(app.cacheDir, "compartido")
+
+    // A previous run may have been killed with copies still in the cache.
+    init {
+        attachRoot.deleteRecursively()
+        shareRoot.deleteRecursively()
+    }
+
+    /** What the app lock plugs into: shared content is shown only while this is open. */
+    var gate: dev.orb.app.share.AppGate = dev.orb.app.share.AppGate.AlwaysOpen
+
+    /** Content another app shared, kept until the person chooses where it goes (or drops it). */
+    val pendingShare = MutableStateFlow<dev.orb.app.share.ShareRequest?>(null)
+
+    /** Copies what [intent] shares into the cache off the main thread; ignores any other intent. */
+    fun receiveShare(intent: android.content.Intent?) {
+        if (!dev.orb.app.share.ShareReader.isShare(intent)) return
+        val shared = intent ?: return
+        scope.launch(Dispatchers.IO) {
+            val io = dev.orb.app.share.ContentShareIo(app.contentResolver)
+            val request = try { dev.orb.app.share.ShareReader.read(shared, io, shareRoot) } catch (_: Exception) { null } ?: return@launch
+            pendingShare.getAndUpdate { request }?.deleteFiles()
+        }
+        // The same intent must not be read again when the screen is recreated.
+        shared.action = android.content.Intent.ACTION_MAIN
+    }
+
+    fun dropShare() {
+        pendingShare.getAndUpdate { null }?.deleteFiles()
+    }
+
+    /** The share screen takes over the request (and the duty to delete its copies). */
+    fun takeShare(): dev.orb.app.share.ShareRequest? = pendingShare.getAndUpdate { null }
+
+    fun shareBackend(): dev.orb.app.ui.share.ShareBackend? = _runtime.value?.let { dev.orb.app.ui.share.RuntimeShareBackend(this, it) }
+
+    /** A fresh set of attachments for one chat screen; each has its own folder so two chats never mix files. */
+    fun attachController(parent: kotlinx.coroutines.CoroutineScope = scope): dev.orb.app.attach.AttachController =
+        dev.orb.app.attach.AttachController(
+            parent, dev.orb.app.attach.ContentIo(app.contentResolver),
+            dev.orb.app.attach.AttachUploader { bytes, mime, name ->
+                val rt = _runtime.value ?: return@AttachUploader Result.failure(dev.orb.app.link.net.LinkException(dev.orb.app.link.net.LinkError.NotLinked))
+                rt.client.upload(bytes, mime, name)
+            },
+            { dev.orb.app.attach.UploadPolicy.fromMe(_runtime.value?.client?.pcInfo?.value?.raw) },
+            java.io.File(attachRoot, java.util.UUID.randomUUID().toString()),
+        )
 
     val linker: Linker = Pairing(http).let { p ->
         object : Linker {

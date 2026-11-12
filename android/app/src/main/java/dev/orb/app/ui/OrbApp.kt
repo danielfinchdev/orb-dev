@@ -78,6 +78,11 @@ import dev.orb.app.ui.linktest.LinkTestScreen
 import dev.orb.app.ui.linktest.LinkTestViewModel
 import dev.orb.app.ui.welcome.WelcomeScreen
 import dev.orb.app.ui.welcome.WelcomeViewModel
+import dev.orb.app.attach.AttachTexts
+import dev.orb.app.share.ShareRequest
+import dev.orb.app.ui.share.ShareDest
+import dev.orb.app.ui.share.ShareScreen
+import dev.orb.app.ui.share.ShareViewModel
 import kotlinx.serialization.Serializable
 
 @Serializable data object Welcome
@@ -98,6 +103,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object ActivityRoute
 @Serializable data object UsageRoute
 @Serializable data object ThisPhoneRoute
+@Serializable data class ShareRoute(val id: Long)
 
 @Composable
 fun OrbApp(container: AppContainer) {
@@ -112,7 +118,10 @@ fun OrbApp(container: AppContainer) {
             } else {
                 // Decided once at launch; a restored back stack wins over it after a rotation.
                 val start: Any = remember { if (container.runtime.value != null) Home else Welcome }
-                OrbNav(container, start)
+                Box(Modifier.fillMaxSize()) {
+                    OrbNav(container, start)
+                    ShareWaiting(container, Modifier.align(Alignment.TopCenter).systemBarsPadding())
+                }
             }
         } }
     }
@@ -124,6 +133,7 @@ private fun OrbNav(container: AppContainer, start: Any) {
     var appearance by rememberSaveable { mutableStateOf(false) }
     if (appearance) AppearanceSheet(container.themePrefs, onDismiss = { appearance = false })
     OpenFromNotice(container, nav)
+    OpenShare(container, nav)
     NavHost(
         navController = nav, startDestination = start, modifier = Modifier.systemBarsPadding(),
         // A short slide with a fade: the chat opens from the side the list sits on.
@@ -207,12 +217,12 @@ private fun OrbNav(container: AppContainer, start: Any) {
             val conversation = route.id.toLongOrNull()
             val backend = remember { container.orbeChatBackend() }
             if (route.kind == "conversation" && conversation != null && backend != null) {
-                val vm = viewModel<OrbeChatViewModel>(key = "orbe:$conversation", factory = viewModelFactory { initializer { OrbeChatViewModel(backend, conversation) } })
+                val vm = viewModel<OrbeChatViewModel>(key = "orbe:$conversation", factory = viewModelFactory { initializer { OrbeChatViewModel(backend, conversation, attach = container.attachController()) } })
                 OrbeChatScreen(vm, onBack = { nav.popBackStack() })
             } else if (route.kind == "session") {
                 val direct = remember { container.directChatBackend() }
                 if (direct != null) {
-                    val vm = viewModel<DirectChatViewModel>(key = "session:${route.id}", factory = viewModelFactory { initializer { DirectChatViewModel(direct, route.id) } })
+                    val vm = viewModel<DirectChatViewModel>(key = "session:${route.id}", factory = viewModelFactory { initializer { DirectChatViewModel(direct, route.id, attach = container.attachController()) } })
                     DirectChatScreen(
                         vm, onBack = { nav.popBackStack() },
                         onOpenChat = { nav.navigate(ChatRoute("session", it)) },
@@ -314,6 +324,28 @@ private fun OrbNav(container: AppContainer, start: Any) {
                 onUnlinked = { nav.navigate(Welcome) { popUpTo(0) { inclusive = true } } },
             )
         }
+        composable<ShareRoute>(
+            enterTransition = { slideInVertically(OrbMotion.standard(OrbMotion.Medium)) { it / 6 } + fadeIn(OrbMotion.standard(OrbMotion.Medium)) },
+            popExitTransition = { slideOutVertically(OrbMotion.standard(OrbMotion.Medium)) { it / 6 } + fadeOut(OrbMotion.standard(OrbMotion.Short)) },
+        ) { entry ->
+            val route = entry.toRoute<ShareRoute>()
+            val backend = remember { container.shareBackend() }
+            if (backend != null) {
+                val vm = viewModel<ShareViewModel>(key = "share:${route.id}", factory = viewModelFactory {
+                    initializer {
+                        val request = container.takeShare() ?: ShareRequest(null, emptyList(), 0, false)
+                        ShareViewModel(
+                            backend, request, container.attachController(),
+                            onSent = { dest ->
+                                nav.popBackStack()
+                                if (dest is ShareDest.Chat) nav.navigate(ChatRoute(dest.ref.kind.wire, dest.ref.id))
+                            },
+                        )
+                    }
+                })
+                ShareScreen(vm, onClose = { nav.popBackStack() })
+            }
+        }
         composable<LinkTest> {
             val backend = remember { container.linkTestBackend() }
             if (backend != null) {
@@ -336,6 +368,30 @@ private fun OpenFromNotice(container: AppContainer, nav: androidx.navigation.Nav
             is NoticeTarget.Chat -> nav.navigate(ChatRoute(t.kind, t.id))
             is NoticeTarget.Task -> nav.navigate(TaskRoute(t.id))
             NoticeTarget.ChatsTab -> Unit
+        }
+    }
+}
+
+/** Opens the «Compartir con Orb» screen for content another app shared, once a PC is linked and the app is open. */
+@Composable
+private fun OpenShare(container: AppContainer, nav: androidx.navigation.NavHostController) {
+    val pending by container.pendingShare.collectAsStateWithLifecycle()
+    val linked by container.runtime.collectAsStateWithLifecycle()
+    val id = pending?.id
+    LaunchedEffect(id, linked != null) {
+        if (id == null || linked == null || !container.gate.isOpen()) return@LaunchedEffect
+        nav.navigate(ShareRoute(id)) { popUpTo<ShareRoute> { inclusive = true } }
+    }
+}
+
+/** Shared content kept until the phone is linked: said plainly, never dropped silently. */
+@Composable
+private fun ShareWaiting(container: AppContainer, modifier: Modifier = Modifier) {
+    val pending by container.pendingShare.collectAsStateWithLifecycle()
+    val linked by container.runtime.collectAsStateWithLifecycle()
+    if (pending != null && linked == null) {
+        Surface(modifier.padding(16.dp), shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp), color = androidx.compose.material3.MaterialTheme.colorScheme.secondaryContainer) {
+            androidx.compose.material3.Text(AttachTexts.SHARE_WAITING, Modifier.padding(12.dp), style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
         }
     }
 }
