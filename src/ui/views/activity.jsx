@@ -1,7 +1,7 @@
 // Activity: every event of the board (who did what and when), searchable.
 import { useEffect, useState } from 'react';
 import { History, Copy, Search } from 'lucide-react';
-import { toast } from 'sonner';
+import { notifyOk } from '@/lib/notify.js';
 import { PageHeader } from '@/components/page.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, Empty, Input } from '@/components/ui/basic.jsx';
@@ -10,6 +10,7 @@ import { AGENT } from '@/lib/labels.js';
 import { fmtTime } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { activityLabel, activityDetail } from '@/lib/activity.js';
+import { quiet } from '@/lib/quiet.js';
 
 // bare: inside «Memorias»: the search and copy go above the list instead of in a header of its own.
 export function ActivityView({ bare = false }) {
@@ -18,8 +19,8 @@ export function ActivityView({ bare = false }) {
   const version = useStore((s) => s.version);
   const [q, setQ] = useState('');
   const [rows, setRows] = useState([]);
-  useEffect(() => { let alive = true; const h = setTimeout(() => call('activity.list', { q, limit: 500 }).then((r) => { if (alive) setRows(r); }).catch(() => {}), 200); return () => { alive = false; clearTimeout(h); }; }, [q, version]); // a slow older answer never lands over a newer one
-  const copy = () => navigator.clipboard.writeText(rows.map((r) => `${r.at}\t${r.actor}\t${r.kind}\t${r.task_id ? `#${r.task_id} ` : ''}${r.detail}`).join('\n')).then(() => toast.success(t('activity.copied')));
+  useEffect(() => { let alive = true; const h = setTimeout(() => call('activity.list', { q, limit: 500 }).then((r) => { if (alive) setRows(r); }).catch(quiet), 200); return () => { alive = false; clearTimeout(h); }; }, [q, version]); // a slow older answer never lands over a newer one
+  const copy = () => navigator.clipboard.writeText(rows.map((r) => `${r.at}\t${r.actor}\t${r.kind}\t${r.task_id ? `#${r.task_id} ` : ''}${r.detail}`).join('\n')).then(() => notifyOk(t('activity.copied')));
   return (
     <>
       {bare ? null : <PageHeader icon={<History className="text-primary size-5" />} title={t('activity.title')} meta={t('activity.meta')} />}

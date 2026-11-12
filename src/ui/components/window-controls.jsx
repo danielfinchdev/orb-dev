@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import { Minus, Square, Copy, X } from 'lucide-react';
 import { useT } from '@/lib/i18n.js';
+import { quiet } from '@/lib/quiet.js';
 
 const controls = () => window.orb?.windowControls;
 
@@ -13,11 +14,11 @@ export function WindowControls() {
   useEffect(() => {
     const c = controls();
     if (!c) return undefined;
-    Promise.resolve(c.act('state')).then((s) => setMaximized(Boolean(s?.maximized))).catch(() => {});
+    Promise.resolve(c.act('state')).then((s) => setMaximized(Boolean(s?.maximized))).catch(quiet);
     return c.onState((s) => setMaximized(Boolean(s?.maximized)));
   }, []);
   if (!controls()) return null;
-  const act = (a) => Promise.resolve(controls().act(a)).catch(() => {});
+  const act = (a) => Promise.resolve(controls().act(a)).catch(quiet);
   const button = (action, label, icon, extra = '') => (
     <button type="button" className={`win-control ${extra}`} onClick={() => act(action)} aria-label={label} data-testid={`window-${action}`}>{icon}</button>
   );

@@ -4,7 +4,7 @@
 import { lazy, memo, Suspense, useEffect, useMemo, useState } from 'react';
 import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, X, ClipboardCheck, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Ellipsis, Gamepad2, Smartphone, Shuffle, ScreenShare, SquareTerminal } from 'lucide-react';
 import { unlockCore } from '@/lib/core-access.js';
-import { toast } from 'sonner';
+import { notifyError, notifyOk } from '@/lib/notify.js';
 import { TypingMarkdown, TypedMarkdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
@@ -39,6 +39,7 @@ import { BarClock, MsgTime, BarPause, BarHeading, COMPACT_AT, CompactButton } fr
 import { ContextMeter } from '@/components/conversation/context-meter.jsx';
 import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
 import { TaskStatus } from '@/components/task-state.jsx';
+import { quiet } from '@/lib/quiet.js';
 
 // An icon that says what the tool does (reading, writing, searching, the web, a command…).
 function toolIcon(name = '') {
@@ -307,7 +308,7 @@ export function SessionView({ route }) {
       const got = takePoints(route.id); if (!got.length) return;
       setImages((prev) => [...new Set([...prev, ...got.map((p) => p.path)])].slice(0, 10));
       draft.set((prev) => [prev.trim(), ...got.map((p) => p.text)].filter(Boolean).join('\n'));
-      toast.success(t('session.pointAdded'));
+      notifyOk(t('session.pointAdded'));
     };
     take();
     return onPoints((id) => { if (id === String(route.id)) take(); });
@@ -315,15 +316,15 @@ export function SessionView({ route }) {
   useEffect(() => {
     let alive = true;
     setItems([]); setQueue([]);
-    if (!sessions.some((x) => x.id === route.id)) call('sessions.list', { archived: true }).then((all) => alive && setArchived(all.find((x) => x.id === route.id) ?? null)).catch(() => {});
+    if (!sessions.some((x) => x.id === route.id)) call('sessions.list', { archived: true }).then((all) => alive && setArchived(all.find((x) => x.id === route.id) ?? null)).catch(quiet);
     // Merged with what arrived live meanwhile: on the phone the live events come by another connection and can get here
     // before this answer (a live copy of an item is the newer one).
     call('sessions.items', { id: route.id, limit: PAGE }).then((r) => {
       if (!alive) return;
       setItems((prev) => { const byId = new Map(r.map((x) => [x.id, x])); for (const p of prev) byId.set(p.id, p); return [...byId.values()].sort((a, b) => a.id - b.id); });
       setMore(r.length >= PAGE);
-    }).catch(() => {});
-    call('sessions.queue', { id: route.id }).then((q) => alive && setQueue(q)).catch(() => {});
+    }).catch(quiet);
+    call('sessions.queue', { id: route.id }).then((q) => alive && setQueue(q)).catch(quiet);
     const offItem = bridge.on('session:item', (it) => {
       if (it.session_id !== route.id) return;
       setItems((prev) => { const i = prev.findIndex((p) => p.id === it.id); if (i >= 0) { const next = prev.slice(); next[i] = it; return next; } return [...prev, it]; });
@@ -364,7 +365,7 @@ export function SessionView({ route }) {
     try {
       const dataUrl = await captureFrame(); if (!dataUrl) return;
       const saved = await act(call('images.mark', { dataUrl })); if (saved?.path) addImages([saved.path]);
-    } catch { toast.error(t('session.captureFailed')); }
+    } catch { notifyError(t('session.captureFailed')); }
   };
   // The files' real paths (a promise); the list is read before the event ends. any file in Orb for Windows (a
   // linked device attaches pictures only: they are uploaded to the PC first).
@@ -382,12 +383,12 @@ export function SessionView({ route }) {
     const r = await act(call('sessions.send', { id: s.id, text: said, images: sentImages, mode }));
     if (r === undefined || r?.queued) { if (mine) dropPending(mine); }
     if (r === undefined) { draft.set((now) => (now.trim() ? now : msg)); setImages((now) => (now.length ? now : sentImages)); return; }
-    if (r?.steered) toast.success(t('session.steerSent'));
-    else if (r?.queued) toast.success(s.kind === 'task' && !running ? t('session.resentTask') : t('session.queuedToast'));
+    if (r?.steered) notifyOk(t('session.steerSent'));
+    else if (r?.queued) notifyOk(s.kind === 'task' && !running ? t('session.resentTask') : t('session.queuedToast'));
   };
   // the same «Renombrar» as the list's ⋯ (views/orb/inbox.jsx).
   const rename = () => renameChat({ kind: 'session', id: s.id, title: s.title }, t);
-  const fork = async () => { const copy = await act(call('sessions.fork', { id: s.id }), t('session.forked')); if (copy) { await refresh().catch(() => {}); go({ view: 'session', id: copy.id }); } };
+  const fork = async () => { const copy = await act(call('sessions.fork', { id: s.id }), t('session.forked')); if (copy) { await refresh().catch(quiet); go({ view: 'session', id: copy.id }); } };
   // «Continuar con otro agente»: a copy with the agent chosen, which gets a summary of this conversation.
   const others = (app?.agentsAvailable ?? Object.keys(app?.config?.agents ?? {})).filter((a) => a !== s.agent && AGENT[a]);
   const switchAgent = async () => {
@@ -396,7 +397,7 @@ export function SessionView({ route }) {
       body: (v, set) => <Select className="w-full" value={v.agent} onValueChange={(agent) => set({ agent })} options={others.map((a) => ({ value: a, label: AGENT[a] }))} data-testid="switch-agent-pick" />,
       ok: t('session.switchAgentOk'), onOk: (v) => call('sessions.fork', { id: s.id, agent: v.agent })
     });
-    if (copy?.id) { await refresh().catch(() => {}); go({ view: 'session', id: copy.id }); }
+    if (copy?.id) { await refresh().catch(quiet); go({ view: 'session', id: copy.id }); }
   };
   const editQueued = (q, patch) => act(call('sessions.editQueued', { id: s.id, queueId: q.id, ...patch }));
   // «Compactar» in the composer's slot when the context is at 70 % or more and the agent can compact (Claude, Codex).

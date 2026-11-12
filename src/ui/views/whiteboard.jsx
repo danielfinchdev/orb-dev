@@ -2,7 +2,7 @@
 // attachments (photos, videos, documents) with a note each. Everything is saved in <project>/pizarra as it changes, and
 // the assistant reads it (PIZARRA.md and the drawing as a picture) when it plans the project's work.
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
+import { notifyError } from '@/lib/notify.js';
 import { Presentation, Paperclip, FolderOpen, Trash2, FileText, Film, Music, PanelRightClose, PanelRightOpen, Check, CloudUpload } from 'lucide-react';
 import { PageHeader } from '@/components/page.jsx';
 import { ProjectPicker } from '@/components/project-actions.jsx';
@@ -57,7 +57,7 @@ function Whiteboard({ project }) {
   useEffect(() => {
     let alive = true;
     call('whiteboard.load', { project }).then((d) => { if (!alive) return; savedFiles.current = new Set(Object.keys(d.files ?? {})); setAttachments(d.attachments ?? []); setData(d); })
-      .catch((e) => { if (alive) { toast.error(String(e.message ?? e)); setData({ elements: [], appState: {}, files: {}, attachments: [] }); } });
+      .catch((e) => { if (alive) { notifyError(e); setData({ elements: [], appState: {}, files: {}, attachments: [] }); } });
     return () => { alive = false; };
   }, [project]);
   useEffect(() => { try { localStorage.setItem('orb.wb.panel', panel ? '1' : '0'); } catch { /* storage unavailable */ } }, [panel]);
@@ -76,7 +76,7 @@ function Whiteboard({ project }) {
       await call('whiteboard.save', { project, elements, appState: { viewBackgroundColor: appState.viewBackgroundColor, gridSize: appState.gridSize, gridModeEnabled: appState.gridModeEnabled }, files: fresh, png });
       for (const id of Object.keys(fresh)) savedFiles.current.add(id);
       setSaving(latest.current?.version === cur.version ? 'saved' : 'pending');
-    } catch (e) { setSaving('pending'); toast.error(String(e.message ?? e)); }
+    } catch (e) { setSaving('pending'); notifyError(e); }
   }, [project]);
   const onChange = useCallback((elements, appState, files) => {
     const prev = latest.current;

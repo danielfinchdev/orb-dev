@@ -9,7 +9,7 @@ import { form, confirm } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, Badge, Field, Input, Textarea, Empty } from '@/components/ui/basic.jsx';
 import { Select, Switch, Checkbox, BubbleTip } from '@/components/ui/overlay.jsx';
-import { toast } from 'sonner';
+import { notifyError } from '@/lib/notify.js';
 import { useStore, call, act, go, getState, bridge } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
 import { t, useT, currentLocale } from '@/lib/i18n.js';
@@ -23,7 +23,7 @@ const when = (iso) => (iso ? new Date(iso).toLocaleString(currentLocale(), { wee
 export async function newSchedule(preset = {}) {
   const { projects, app } = getState();
   const list = projects ?? [];
-  if (!list.length) { toast.error(t('schedules.noProject')); return null; }
+  if (!list.length) { notifyError(t('schedules.noProject')); return null; }
   // only the agents this PC can run (the engine refuses a schedule for another one).
   const agents = app?.agentsAvailable ?? Object.keys(app?.config?.agents ?? {});
   return form(t('schedules.new.title'), {

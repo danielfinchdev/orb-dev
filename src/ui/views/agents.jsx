@@ -1,7 +1,7 @@
 // Agents: which CLIs are installed, their login, models and how much of each subscription window is used.
 import { useEffect, useState } from 'react';
 import { Orbit, RefreshCw, LogIn, ChevronRight, ChevronDown, ExternalLink, UserPlus, Trash2, FolderOpen, ScanSearch, Copy, Download, SquareTerminal, X } from 'lucide-react';
-import { toast } from 'sonner';
+import { notifyError, notifyInfo, notifyOk, notifyWarn } from '@/lib/notify.js';
 import { useCatalog } from '@/components/brain-picker.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Installer } from '@/components/installer.jsx';
@@ -14,6 +14,7 @@ import { cn, baseName } from '@/lib/utils.js';
 import { useStore, call, act, bridge, setState, getState } from '@/lib/store.js';
 import { LOGIN } from '@/lib/labels.js';
 import { t, useT, useLocale } from '@/lib/i18n.js';
+import { quiet } from '@/lib/quiet.js';
 
 const INSTALL = { claude: 'https://docs.claude.com/en/docs/claude-code/setup', codex: 'https://developers.openai.com/codex/cli', cursor: 'https://cursor.com/cli',
   gemini: 'https://github.com/google-gemini/gemini-cli', opencode: 'https://opencode.ai', qwen: 'https://github.com/QwenLM/qwen-code', copilot: 'https://github.com/github/copilot-cli' };
@@ -35,10 +36,10 @@ let showLogin = () => {};
 async function signIn(acc, label, extra = {}) {
   const r = await act(call('agents.login', { account: acc.id, ...extra }));
   if (!r) return;
-  if (r.console) { toast.info(t('agents.followSteps')); return; }
+  if (r.console) { notifyInfo(t('agents.followSteps')); return; }
   showLogin({ ...r, label });
   // Claude opens the browser itself on a PC; the others' link is opened here (the main process' shell, https only).
-  if (!r.opened && r.url) bridge.openExternal(r.url).catch(() => {});
+  if (!r.opened && r.url) bridge.openExternal(r.url).catch((e) => notifyError(e));
 }
 
 function LoginCard({ reload, windows }) {
@@ -49,17 +50,17 @@ function LoginCard({ reload, windows }) {
   useEffect(() => bridge.on('agents:login', (p) => {
     setLogin((cur) => {
       if (!cur || cur.id !== p.id) return cur;
-      if (p.state === 'hecho') { toast.success(t('agents.loginDone', { label: cur.label })); reload(); return null; }
-      if (p.state === 'error') { toast.error(p.message ?? t('agents.loginWaiting')); return null; }
+      if (p.state === 'hecho') { notifyOk(t('agents.loginDone', { label: cur.label })); reload(); return null; }
+      if (p.state === 'error') { notifyError(p.message ?? t('agents.loginWaiting')); return null; }
       if (p.state === 'cancelado') return null;
-      if (p.message) toast.warning(p.message);
+      if (p.message) notifyWarn(p.message);
       return { ...cur, ...p, message: null };
     });
   }), []); // eslint-disable-line react-hooks/exhaustive-deps
   if (!login) return null;
-  const copy = (text) => navigator.clipboard?.writeText(text).then(() => toast.success(t('agents.loginCopied'))).catch(() => {});
+  const copy = (text) => navigator.clipboard?.writeText(text).then(() => notifyOk(t('agents.loginCopied'))).catch(() => notifyError(t('app.copyFailed')));
   const send = async () => { if (await act(call('agents.loginCode', { id: login.id, code: code.trim() }))) setCode(''); };
-  const cancel = () => { call('agents.loginCancel', { id: login.id }).catch(() => {}); setLogin(null); };
+  const cancel = () => { call('agents.loginCancel', { id: login.id }).catch(quiet); setLogin(null); };
   return (
     <Card className="border-primary/50" data-testid="agent-login-card">
       <CardHeader className="flex-row items-start gap-3">
@@ -102,12 +103,12 @@ const INSTALLABLE = ['claude', 'codex'];
 function InstallButton({ a, reload }) {
   const t = useT();
   const [st, setSt] = useState(null);
-  useEffect(() => { call('agents.installState', { agent: a.id }).then((s) => { if (s?.state === 'instalando') setSt(s); }).catch(() => {}); }, [a.id]);
+  useEffect(() => { call('agents.installState', { agent: a.id }).then((s) => { if (s?.state === 'instalando') setSt(s); }).catch(quiet); }, [a.id]);
   useEffect(() => bridge.on('agents:install', (p) => {
     if (p.agent !== a.id) return;
     setSt(p);
-    if (p.state === 'hecho') { toast.success(p.version ? t('agents.installDone', { label: a.label, version: p.version }) : t('agents.installDoneNoVersion', { label: a.label })); reload(); }
-    if (p.state === 'error') toast.error(p.message);
+    if (p.state === 'hecho') { notifyOk(p.version ? t('agents.installDone', { label: a.label, version: p.version }) : t('agents.installDoneNoVersion', { label: a.label })); reload(); }
+    if (p.state === 'error') notifyError(p.message);
   }), [a.id]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!INSTALLABLE.includes(a.id)) return null;
   const busy = st?.state === 'instalando';
@@ -191,7 +192,7 @@ function Accounts({ a, reload }) {
       ),
       ok: t('agents.add'), onOk: (v) => addAll(found.filter((f) => v.picked.includes(f.dir)))
     });
-    if (r) { toast.success(t('agents.scanAddedMany', { n: r })); reload(); }
+    if (r) { notifyOk(t('agents.scanAddedMany', { n: r })); reload(); }
   };
   if (!a.installed) return null;
   return (
@@ -325,10 +326,10 @@ export function AgentsView() {
   const [agents, setAgents] = useState(null);
   const [usage, setUsage] = useState([]);
   const [system, setSystem] = useState(null);
-  useEffect(() => { call('system.check').then(setSystem).catch(() => {}); }, []);
+  useEffect(() => { call('system.check').then(setSystem).catch(quiet); }, []);
   const load = (refresh = false) => { call('agents.status', { refresh }).then(setAgents).catch(() => setAgents([])); };
   useEffect(() => load(), []);
-  useEffect(() => { call('usage.get').then(setUsage).catch(() => {}); }, [version]);
+  useEffect(() => { call('usage.get').then(setUsage).catch(quiet); }, [version]);
   return (
     <>
       <PageHeader icon={<Orbit className="text-primary size-5" />} title={t('agents.title')} meta={t('agents.meta')}>

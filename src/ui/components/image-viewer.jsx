@@ -6,7 +6,7 @@ import { Download, Expand, Crop, Send, X } from 'lucide-react';
 import { Button } from './ui/button.jsx';
 import { Spinner } from './ui/basic.jsx';
 import { Dialog, DialogContent, DialogTitle } from './ui/overlay.jsx';
-import { toast } from 'sonner';
+import { notifyError } from '@/lib/notify.js';
 import { call, act, getState, setState, useStore } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
@@ -44,7 +44,7 @@ export function ImagePreviewHost() {
 function ImagePreview({ body, onClose }) {
   const t = useT();
   const src = useImage(body.path);
-  useEffect(() => { if (src === false) { toast.error(t('img.unavailable')); onClose(); } }, [src]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (src === false) { notifyError(t('img.unavailable')); onClose(); } }, [src]); // eslint-disable-line react-hooks/exhaustive-deps
   return src ? <ImageEditor src={src} body={body} sessionId={null} onClose={onClose} /> : null;
 }
 

@@ -6,6 +6,7 @@
 // be imported first.
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { quiet } from './quiet.js';
 
 if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.orb) {
   const listeners = new Map();
@@ -82,7 +83,7 @@ if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.
       onState: (fn) => {
         if (typeof fn !== 'function') return () => {};
         const off = listen('app:window-state', ({ payload }) => fn(payload));
-        return () => { off.then((un) => un()).catch(() => {}); };
+        return () => { off.then((un) => un()).catch(quiet); };
       }
     },
     // This PC's tools live in the engine (src/engine/api/app.mjs).
@@ -107,12 +108,12 @@ if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.
     if (e.key === '0' || e.code === 'Numpad0' || e.code === 'Digit0') return 'reset';
     return null;
   };
-  const zoomBy = (dir) => invoke('app_zoom_step', { dir }).catch(() => {});
+  const zoomBy = (dir) => invoke('app_zoom_step', { dir }).catch(quiet);
   window.addEventListener('keydown', (e) => {
     const dir = zoomKey(e);
     if (dir) { e.preventDefault(); zoomBy(dir); return; }
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'j') { e.preventDefault(); fire('ui:terminal', {}); return; }
-    if (e.key === 'F11' && !e.ctrlKey && !e.altKey) { e.preventDefault(); windowAct('fullscreen').catch(() => {}); }
+    if (e.key === 'F11' && !e.ctrlKey && !e.altKey) { e.preventDefault(); windowAct('fullscreen').catch(quiet); }
   }, true);
   window.addEventListener('wheel', (e) => { if (e.ctrlKey && e.deltaY) { e.preventDefault(); zoomBy(e.deltaY < 0 ? 'in' : 'out'); } }, { passive: false, capture: true });
 
@@ -130,8 +131,8 @@ if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.
   window.addEventListener('mousedown', (e) => {
     if (e.button !== 0 || !dragTarget(e.target)) return;
     e.preventDefault();
-    if (e.detail === 2) windowAct('maximize').catch(() => {});
-    else invoke('window_drag').catch(() => {});
+    if (e.detail === 2) windowAct('maximize').catch(quiet);
+    else invoke('window_drag').catch(quiet);
   });
 }
 

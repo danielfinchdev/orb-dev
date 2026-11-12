@@ -7,8 +7,7 @@ import './app.css';
 if (import.meta.env.MODE === 'android') (await import('./lib/glass.js')).enableGlass();
 import { StrictMode, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Toaster, toast } from 'sonner';
-import { notify } from '@/lib/notify.js';
+import { notify, notifyError, notifyOk, Toaster } from '@/lib/notify.js';
 import { Menu, Smartphone, ScanLine, Link2, RotateCw, FolderOpen, Download, KeyRound, ArrowLeft, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Field, Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
@@ -50,6 +49,7 @@ import { NoteOpener } from '@/lib/notes.js';
 import { RecoveryNotice } from '@/views/data.jsx';
 import { AutoNotice } from '@/components/autonomy-switch.jsx';
 import { useEngineEvents } from '@/app/engine-events.js';
+import { quiet } from '@/lib/quiet.js';
 
 // the screens other than the chats load the first time they open, so the app starts with less to read; once
 // it is up, they load in the background while the window is idle (opening one later is instant; on a phone's browser
@@ -254,7 +254,7 @@ function NotifyOffer() {
       <span>{t(p?.whenClosed?.() === false ? 'app.notifyOfferApp' : 'app.notifyOffer')}</span>
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={() => { p?.decline?.(); done(); }} data-testid="notify-offer-later">{t('app.notifyOfferLater')}</Button>
-        <Button size="sm" onClick={async () => { if (await act(p.enable()) !== undefined) { toast.success(tNow('app.notifyOn')); done(); } }} data-testid="notify-offer-ok">{t('app.notifyOfferOk')}</Button>
+        <Button size="sm" onClick={async () => { if (await act(p.enable()) !== undefined) { notifyOk(tNow('app.notifyOn')); done(); } }} data-testid="notify-offer-ok">{t('app.notifyOfferOk')}</Button>
       </div>
     </div>
   );
@@ -337,7 +337,7 @@ function Root() {
   useEffect(() => {
     if (phase !== 'app' || bridge.mobile) return undefined;
     const offPoint = listenPoints(bridge, (id) => go({ view: 'session', id }));
-    const offRec = bridge.on('browser:recorded', () => toast.success(tNow('session.recordingSaved')));
+    const offRec = bridge.on('browser:recorded', () => notifyOk(tNow('session.recordingSaved')));
     return () => { offPoint(); offRec(); };
   }, [phase]);
   // Orb's lock screen (decision 20): Windows locked, the PC asleep, «Bloquear» or the minutes of Ajustes › Datos
@@ -357,7 +357,7 @@ function Root() {
   useEffect(() => (phase === 'app' ? startMusic() : undefined), [phase]);
   useEffect(() => {
     if (phase !== 'app' || bridge.mobile) return undefined;
-    return watchIdle({ minutes: () => lockMinutesOf(getState().app?.config), onIdle: () => { call('master.lock', { reason: 'idle' }).catch(() => {}); } });
+    return watchIdle({ minutes: () => lockMinutesOf(getState().app?.config), onIdle: () => { call('master.lock', { reason: 'idle' }).catch((e) => notifyError(e)); } });
   }, [phase]);
   useEffect(() => { const off = () => setPhase('pair'); window.addEventListener('orb:unpaired', off); return () => window.removeEventListener('orb:unpaired', off); }, []);
   // Android's back button or gesture, and a phone browser's back: inside the app (lib/phone-nav.js › backStep).
@@ -375,7 +375,7 @@ function Root() {
       // The first screen: twice within 2 s leaves (the app goes to the background; a browser goes back).
       if (Date.now() - lastExit < 2000) return 'exit';
       lastExit = Date.now();
-      toast(tNow('app.backExit'), { duration: 2000 });
+      notify({ body: tNow('app.backExit') }, { ms: 2000, record: false, always: true });
       return 'stay';
     };
     if (bridge.onBack) return bridge.onBack(() => { if (back() === 'exit') bridge.minimize?.(); });
@@ -434,10 +434,10 @@ function Root() {
         <Robot size={90} mood="worried" /><h1 className="mt-1 text-xl">{t('app.errorTitle')}</h1><p className="text-muted-foreground text-sm break-words">{error}</p>
         {bridge.mobile ? <Button size="lg" onClick={() => location.reload()} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
         {/* start the engine again; after sealed keys that do not open, also with a new key (asked first). */}
-        {bridge.retryStart ? <Button size="lg" onClick={() => bridge.retryStart().catch(() => {}).finally(() => location.reload())} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
+        {bridge.retryStart ? <Button size="lg" onClick={() => bridge.retryStart().catch(quiet).finally(() => location.reload())} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
         {bridge.retryStart && startError?.code === 'secretUnreadable' ? <Button variant="ghost" size="sm" data-testid="app-error-new-secret" onClick={async () => {
           if (!(await askNewSecret(startError))) return;
-          await bridge.retryStart({ newSecret: true }).catch(() => {}); location.reload();
+          await bridge.retryStart({ newSecret: true }).catch(quiet); location.reload();
         }}>{t('app.newSecretOk')}</Button> : null}
         {bridge.mobile && bridge.unlink ? <Button variant="ghost" size="sm" onClick={async () => { if (await relinkPhone(getState().info?.pcName)) setPhase('pair'); }} data-testid="app-error-relink"><Link2 />{t('app.offlineRelink')}</Button> : null}
       </div>

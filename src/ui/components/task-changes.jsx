@@ -3,7 +3,7 @@
 // there is nothing to show (running, undone, a folder without git).
 import { useEffect, useState } from 'react';
 import { ChevronRight, Copy, FileEdit, FileMinus2, FilePlus2, FileDiff } from 'lucide-react';
-import { toast } from 'sonner';
+import { notifyError, notifyOk } from '@/lib/notify.js';
 import { DiffLines } from '@/components/diff-view.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent, Tip } from '@/components/ui/overlay.jsx';
@@ -17,7 +17,7 @@ const TONE = { A: 'text-success', D: 'text-destructive' };
 function FileRow({ f }) {
   const t = useT();
   const Icon = ICON[f.status] ?? FileEdit;
-  const copy = (e) => { e.stopPropagation(); navigator.clipboard?.writeText(f.path).then(() => toast.success(t('tasks.changes.copied'))).catch(() => {}); };
+  const copy = (e) => { e.stopPropagation(); navigator.clipboard?.writeText(f.path).then(() => notifyOk(t('tasks.changes.copied'))).catch(() => notifyError(t('app.copyFailed'))); };
   const note = f.binary ? t('tasks.changes.binary') : f.cut ? t('tasks.changes.tooBig') : !f.patch ? t('tasks.changes.noText') : null;
   return (
     <Collapsible className="border-t first:border-t-0" data-testid="task-change">

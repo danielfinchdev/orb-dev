@@ -3,7 +3,7 @@
 // optional preview of a page of this PC).
 import { useEffect, useState } from 'react';
 import { ChevronDown, FolderOpen, Play, Plus, Pencil, Trash2, Zap, Code2, MousePointer2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { notifyInfo } from '@/lib/notify.js';
 import { Button } from './ui/button.jsx';
 import { Input, Textarea, Field } from './ui/basic.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, Switch } from './ui/overlay.jsx';
@@ -69,7 +69,7 @@ function ShortcutInput({ value, onChange }) {
         e.preventDefault();
         if (e.key === 'Backspace' || e.key === 'Delete') { onChange(null); return; }
         const s = shortcutOf(e); if (!s) return;
-        if (RESERVED.has(s)) { toast.info(t('tools.shortcutReserved', { shortcut: s })); return; }
+        if (RESERVED.has(s)) { notifyInfo(t('tools.shortcutReserved', { shortcut: s })); return; }
         onChange(s);
       }} />
   );

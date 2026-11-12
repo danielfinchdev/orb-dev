@@ -4,6 +4,7 @@
 // (and this file defines it); the encryption code is loaded only on the phone.
 import * as L from '../../shared/link-payload.mjs'; // tiny and pure: what a QR or a typed code says (also the Android app's)
 import { timedFetch, fetchWithin, isOffline, TIMEOUTS } from './net.js';
+import { quiet } from './quiet.js';
 const tl = async (key, vars) => (await import('./i18n.js')).t(key, vars);
 const crypto$ = () => import('../../shared/mobile-crypto.mjs');
 // the Android app (src/ui/lib/app-bridge.js, loaded first) gives this bridge its own host: where the Orb is (the
@@ -289,7 +290,7 @@ if (!window.orb) {
       if (gap) return { mobile: true, needsSetup: false, needsUpdate: { message: (r && !r.ok && r.error) || await tl('app.updateNeeded'), ...gap, ...(host ? { app: true } : {}) }, app: Boolean(host) };
       connect();
       if (!host && window.isSecureContext && 'serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
+        navigator.serviceWorker.register('/sw.js').catch(quiet);
         // a notification tapped while this page is open: the service worker says which chat (lib/notes.js).
         navigator.serviceWorker.addEventListener('message', (e) => { if (e.data?.orbOpen) window.dispatchEvent(new CustomEvent('orb:open-note', { detail: e.data.orbOpen })); });
       }

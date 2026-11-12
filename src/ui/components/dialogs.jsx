@@ -4,7 +4,7 @@ import { LoaderCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/overlay.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { useStore, setState } from '@/lib/store.js';
-import { toast } from 'sonner';
+import { notifyError } from '@/lib/notify.js';
 import { errorText } from '@/lib/utils.js';
 import { t } from '@/lib/i18n.js';
 
@@ -39,7 +39,7 @@ function FormDialog({ d }) {
     e?.preventDefault();
     setBusy(true);
     try { const r = d.onOk ? await d.onOk(values) : values; if (r !== false) close(d.id, r ?? true); }
-    catch (error) { toast.error(errorText(error)); }
+    catch (error) { notifyError(error); }
     finally { setBusy(false); }
   };
   return (

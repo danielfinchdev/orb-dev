@@ -1,7 +1,7 @@
 // Projects: the folders inside the assistant's folder (plus any linked one), with git and GitHub actions.
 import { useEffect, useState } from 'react';
 import { FolderGit2, FolderPlus, FolderOpen, Pin, MessageSquare, NotebookPen, Unlink, GitBranch, Save, Upload, RefreshCw, GitPullRequest, Folder, ScanSearch, ShieldCheck, PencilLine, Ellipsis, CircleCheckBig, Trash2, Undo2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { notifyError, notifyOk } from '@/lib/notify.js';
 import { PageHeader, PageBody, BackButton } from '@/components/page.jsx';
 import { confirm, choose, form } from '@/components/dialogs.jsx';
 import { createProjectFlow, linkFolderFlow, cloneRepoFlow, CATEGORIES } from '@/components/project-actions.jsx';
@@ -15,6 +15,7 @@ import { usePress } from '@/lib/use-press.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { GithubIcon } from '@/components/agent-icon.jsx';
 import { useT, useLocale } from '@/lib/i18n.js';
+import { quiet } from '@/lib/quiet.js';
 
 function GithubCard() {
   const t = useT();
@@ -72,7 +73,7 @@ function ContributionGraph() {
 // or «Borrar para siempre» after a stronger warning. Cancelling gives the project back as it was.
 async function finishFlow(p, t) {
   if (!(await confirm(t('projects.finish.title'), t('projects.finish.body', { name: p.name }), { ok: t('projects.finish.ok'), danger: true }))) return;
-  if ((await act(call('projects.finish', { name: p.name }), t('projects.finish.done'))) !== undefined) await refresh().catch(() => {});
+  if ((await act(call('projects.finish', { name: p.name }), t('projects.finish.done'))) !== undefined) await refresh().catch(quiet);
 }
 export async function deleteProjectFlow(p, t) {
   if (!(await confirm(t('projects.delete.title'), t('projects.delete.body', { name: p.name, path: p.path }), { ok: t('projects.delete.ok'), danger: true }))) return;
@@ -86,11 +87,11 @@ export async function deleteProjectFlow(p, t) {
       else if (r.noTrash) step = await choose(t('projects.delete.noTrash.title'), t('projects.delete.noTrash.body', { path: r.path }), [{ value: 'forever', label: t('projects.delete.noTrash.ok'), variant: 'destructive' }, { value: 'retry', label: t('projects.delete.retry') }]);
       if (!step) { await bridge.deleteProject(p.name, null, 'cancel'); return; }
       r = await bridge.deleteProject(p.name, null, step);
-      if (r?.ok) { toast.success(t(step === 'forever' ? 'projects.delete.doneForever' : 'projects.delete.done')); return; }
+      if (r?.ok) { notifyOk(t(step === 'forever' ? 'projects.delete.doneForever' : 'projects.delete.done')); return; }
     }
-    if (r?.ok) toast.success(t('projects.delete.done'));
-  } catch (error) { toast.error(errorText(error)); }
-  finally { await refresh().catch(() => {}); }
+    if (r?.ok) notifyOk(t('projects.delete.done'));
+  } catch (error) { notifyError(error); }
+  finally { await refresh().catch(quiet); }
 }
 
 // Right click (or a long press on the phone, or its «…»): what can be done with the whole project. Deleting is the PC's
@@ -134,7 +135,7 @@ function ProjectRow({ p, selected, phone, onOpen }) { // selected: the name of t
 function FinishedList({ list, onReopened }) {
   const t = useT();
   const locale = useLocale();
-  const reopen = async (x) => { const name = await act(call('projects.reopen', { key: x.key })); if (name) { toast.success(t('projects.reopen.done', { name })); await refresh().catch(() => {}); onReopened(name); } };
+  const reopen = async (x) => { const name = await act(call('projects.reopen', { key: x.key })); if (name) { notifyOk(t('projects.reopen.done', { name })); await refresh().catch(quiet); onReopened(name); } };
   return list.map((x) => (
     <div key={x.key} className="flex items-center gap-3 border-b px-4 py-3" data-testid="project-finished">
       <CircleCheckBig className="text-muted-foreground size-4 shrink-0" />
@@ -155,7 +156,7 @@ function ProjectDetail({ p, onRenamed }) {
     const r = await form(t('projects.rename.title'), { description: p.inHome ? t('projects.rename.desc') : t('projects.rename.descLinked'), initial: { name: p.name },
       body: (v, set) => <Field label={t('projects.rename.label')}><Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} maxLength={60} /></Field>,
       ok: t('projects.rename.ok'), onOk: (v) => call('projects.rename', { name: p.name, to: v.name.trim() }) });
-    if (r) { toast.success(t('projects.rename.done', { name: r.name })); await refresh().catch(() => {}); onRenamed?.(r.name); }
+    if (r) { notifyOk(t('projects.rename.done', { name: r.name })); await refresh().catch(quiet); onRenamed?.(r.name); }
   };
   const load = () => { setInfo(null); call('projects.info', { name: p.name }).then(setInfo).catch((e) => setInfo({ git: false, error: e.message })); };
   useEffect(load, [p.name]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -163,13 +164,13 @@ function ProjectDetail({ p, onRenamed }) {
     const r = await form(t('projects.commit.title'), { description: t('projects.commit.desc'), initial: { message: '' },
       body: (v, set) => <Field label={t('projects.commit.message')}><Input autoFocus value={v.message} onChange={(e) => set({ message: e.target.value })} maxLength={200} placeholder={t('projects.commit.ph')} /></Field>,
       ok: t('projects.commit.ok'), onOk: (v) => call('projects.commit', { name: p.name, message: v.message }) });
-    if (r) { toast.success(t('projects.commit.done', { files: r.files })); load(); }
+    if (r) { notifyOk(t('projects.commit.done', { files: r.files })); load(); }
   };
   const publish = async () => {
     const r = await form(t('projects.publish.title'), { description: t('projects.publish.desc'), initial: { repo: p.name.replace(/[^\w.-]+/g, '-'), isPrivate: true },
       body: (v, set) => (<><Field label={t('projects.publish.repo')}><Input value={v.repo} onChange={(e) => set({ repo: e.target.value })} /></Field><label className="flex cursor-pointer items-center gap-2 text-sm"><Checkbox checked={v.isPrivate} onCheckedChange={(c) => set({ isPrivate: c === true })} />{t('projects.publish.private')}</label></>),
       ok: t('projects.publish.ok'), onOk: (v) => call('projects.createRepo', { name: p.name, repo: v.repo.trim(), isPrivate: v.isPrivate }) });
-    if (r) { toast.success(t('projects.publish.done', { url: r.url })); load(); }
+    if (r) { notifyOk(t('projects.publish.done', { url: r.url })); load(); }
   };
   return (
     <Card className="gap-5">
@@ -220,7 +221,7 @@ export function ProjectsView({ route }) {
   const phone = phoneLayout();
   const [tab, setTab] = useState('active');
   const [finished, setFinished] = useState([]);
-  useEffect(() => { let alive = true; call('projects.finished').then((l) => alive && setFinished(l ?? [])).catch(() => {}); return () => { alive = false; }; }, [version]);
+  useEffect(() => { let alive = true; call('projects.finished').then((l) => alive && setFinished(l ?? [])).catch(quiet); return () => { alive = false; }; }, [version]);
   const showing = finished.length ? tab : 'active';
   const [selected, setSelected] = useState(route.name ?? (phone ? null : app.activeProject?.name ?? projects[0]?.name ?? null));
   const current = projects.find((p) => p.name === selected) ?? null;

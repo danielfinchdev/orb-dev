@@ -21,6 +21,7 @@ import { DEFAULT_PROTECTED } from '../../../shared/layout.mjs';
 import { available as musicAvailable, musicPrefs, setMusicVolume } from '@/lib/music.js';
 import { save, num, Row, WithKeys, sizes } from './rows.jsx';
 import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
+import { quiet } from '@/lib/quiet.js';
 
 export function AssistantCard({ c }) {
   const t = useT();
@@ -297,7 +298,7 @@ export function InterfaceCard({ c }) {
   const terminals = linux ? { auto: t('settings.term.auto'), warp: 'Warp', 'x-terminal-emulator': t('settings.term.system'), 'gnome-terminal': 'GNOME Terminal', konsole: 'Konsole', 'xfce4-terminal': 'Xfce Terminal', kitty: 'kitty', alacritty: 'Alacritty', xterm: 'XTerm' }
     : window.orb?.platform && window.orb.platform !== 'win32' ? { auto: t('settings.term.auto'), warp: 'Warp' }
       : { auto: t('settings.term.auto'), warp: 'Warp', wt: 'Windows Terminal', powershell: 'PowerShell', cmd: t('settings.term.cmd') };
-  useEffect(() => { bridge.zoom?.().then(setZoom).catch(() => {}); return bridge.on('ui:zoom', (p) => setZoom(p.zoom)); }, []);
+  useEffect(() => { bridge.zoom?.().then(setZoom).catch(quiet); return bridge.on('ui:zoom', (p) => setZoom(p.zoom)); }, []);
   if (!bridge.zoom) return null; // phone: the browser has its own zoom
   const SIZES = sizes();
   const preset = SIZES.find((o) => Math.abs(Number(o.value) - zoom) < 0.01)?.value;

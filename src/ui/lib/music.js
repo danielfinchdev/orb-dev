@@ -10,6 +10,7 @@
 // - Nothing runs while it is off: no element, no timer, no listener but visibilitychange.
 import { bridge, call, getState, setState, fullPc } from './store.js';
 import { musicAllowed, musicPrefs as prefsOf, gameMusicOn as gameOnOf, nextTrack, gameTrack } from '../../shared/music.mjs';
+import { quiet } from './quiet.js';
 
 export const available = () => musicAllowed({ mobile: bridge.mobile, desktop: bridge.desktop, platform: bridge.platform }) && fullPc();
 const ui = () => getState().app?.config?.ui ?? {};
@@ -98,7 +99,7 @@ export async function startGameMusic(id) {
 }
 export function stopGameMusic() {
   if (game) { game.pause(); game.removeAttribute('src'); game.load(); }
-  if (bgHeld && bg && state.playing && !hidden) bg.play().catch(() => {});
+  if (bgHeld && bg && state.playing && !hidden) bg.play().catch(quiet);
   bgHeld = false;
 }
 export async function setGameMusic(on, current = null) {
@@ -121,8 +122,8 @@ function onVisibility() {
     if (hidden) { bg?.pause(); game?.pause(); }
   } else if (hidden) {
     hidden = false;
-    if (resume?.game) game?.play().catch(() => {});
-    if (resume?.bg && state.playing) bg?.play().catch(() => {});
+    if (resume?.game) game?.play().catch(quiet);
+    if (resume?.bg && state.playing) bg?.play().catch(quiet);
     resume = null;
   }
 }

@@ -11,6 +11,7 @@ import { useStore, call, act, go } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
 import { t as tNow, useT } from '@/lib/i18n.js';
+import { quiet } from '@/lib/quiet.js';
 
 const QUIET_MIN = 5; // minutes without activity before it is shown as "sin señales"
 
@@ -21,7 +22,7 @@ export function useLiveTasks() {
   useEffect(() => {
     if (!running) { setLive([]); return undefined; }
     let alive = true;
-    const load = () => call('tasks.live').then((r) => alive && setLive(r ?? [])).catch(() => {});
+    const load = () => call('tasks.live').then((r) => alive && setLive(r ?? [])).catch(quiet);
     // (a hidden window skips the polls: nobody sees the bars; the next one after it shows comes within 2 s)
     load(); const t = setInterval(() => { if (!document.hidden) load(); }, 2000);
     return () => { alive = false; clearInterval(t); };

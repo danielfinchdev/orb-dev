@@ -13,6 +13,7 @@ import { paceOf } from '@/lib/usage-pace.js';
 import { AGENT } from '@/lib/labels.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { cn } from '@/lib/utils.js';
+import { quiet } from '@/lib/quiet.js';
 
 const usd = (n, locale) => `$${Number(n ?? 0).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const tokens = shortTokens;
@@ -104,7 +105,7 @@ export function UsageView() {
   const [data, setData] = useState(null);
   const [accounts, setAccounts] = useState([]);
   useEffect(() => { let alive = true; call('usage.history', { days: Number(days) }).then((r) => alive && setData(r)).catch(() => alive && setData(false)); return () => { alive = false; }; }, [days, version]);
-  useEffect(() => { let alive = true; call('usage.get').then((r) => alive && setAccounts(r ?? [])).catch(() => {}); return () => { alive = false; }; }, [version]);
+  useEffect(() => { let alive = true; call('usage.get').then((r) => alive && setAccounts(r ?? [])).catch(quiet); return () => { alive = false; }; }, [version]);
   const metric = data?.total?.usd ? 'usd' : 'tokens';
   const agents = useMemo(() => (data?.agents ?? []).map((a) => ({ ...a, key: a.agent, name: AGENT[a.agent] ?? a.agent })), [data]);
   const models = useMemo(() => (data?.models ?? []).map((m) => ({ ...m, key: `${m.agent}:${m.model ?? ''}`, name: m.label ?? m.model ?? t('usage.defaultModel') })), [data, t]);

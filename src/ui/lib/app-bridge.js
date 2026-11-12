@@ -7,6 +7,7 @@
 import { invoke, addPluginListener } from '@tauri-apps/api/core';
 import * as L from '../../shared/link-payload.mjs';
 import * as N from '../../shared/notes.mjs';
+import { quiet } from './quiet.js';
 
 // Only the Android build (vite --mode android) inside Tauri: the desktop app is Tauri too, with its own bridge.
 const native = import.meta.env.MODE === 'android' && Boolean(window.__TAURI_INTERNALS__);
@@ -82,7 +83,7 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
       // on the first screen, the app goes to the background instead of closing.
       orb.onBack = (fn) => {
         let handle = null; let gone = false;
-        addPluginListener('app', 'back-button', () => fn()).then((h) => { if (gone) h?.unregister?.(); else handle = h; }).catch(() => {});
+        addPluginListener('app', 'back-button', () => fn()).then((h) => { if (gone) h?.unregister?.(); else handle = h; }).catch(quiet);
         return () => { gone = true; handle?.unregister?.(); };
       };
       orb.minimize = async () => { try { await nat('minimize'); } catch { /* stays */ } };
@@ -121,9 +122,9 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
         return openNote({ route: r.open ?? note.route, approve: r.approve ?? null });
       };
       const take = (r) => { if (r?.action) pieces.record().then((linked) => (linked ? opened(r) : null)).catch(console.error); };
-      listen('note', take).catch(() => {});
-      listen('noteDone', ({ note } = {}) => { const n = noteOf(note); if (n?.key) threads.delete(n.key); }).catch(() => {});
-      nat('take_note_action').then(take).catch(() => {});
+      listen('note', take).catch(quiet);
+      listen('noteDone', ({ note } = {}) => { const n = noteOf(note); if (n?.key) threads.delete(n.key); }).catch(quiet);
+      nat('take_note_action').then(take).catch(quiet);
       // The texts the app shows by itself after a button (in the Orb's language).
       const words = async () => {
         const [sending, sent, allowed, denied, failed, locked, offline, timeout, notLinked, badAnswer] = await Promise.all([
@@ -142,13 +143,13 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
           id: n.id, title: c.count > 1 ? `${n.title} (${c.count})` : n.title, body: n.hidden ? n.body : c.lines[c.lines.length - 1], largeBody: c.body,
           ...(many ? { lines: c.lines, summary: await tl('notes.count', { n: c.count }) } : {}),
           group: `orb-${n.key}`, largeIcon: n.largeIcon || '', silent: Boolean(n.silent), note: JSON.stringify(slim(n)), actions, words: await words()
-        }).catch(() => {});
+        }).catch(quiet);
       });
       // Back in the app: the chats' notifications go (the app shows the chats themselves).
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState !== 'visible') return;
         threads.clear();
-        nat('notify_clear').catch(() => {});
+        nat('notify_clear').catch(quiet);
       });
       orb.push = {
         supported: () => true,
@@ -175,10 +176,10 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
         async disable() { localStorage.setItem(NOTIFY, '0'); return false; }
       };
       // What another app shared: on start and each time the app is opened with something new.
-      listen('shared', (s) => receive(s).catch(console.error)).catch(() => {});
+      listen('shared', (s) => receive(s).catch(console.error)).catch(quiet);
       nat('take_shared').then((first) => {
         if (first?.text || first?.files?.length) pieces.record().then((r) => (r ? receive(first) : null)).catch(console.error);
-      }).catch(() => {});
+      }).catch(quiet);
     }
   };
 }

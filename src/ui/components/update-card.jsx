@@ -6,6 +6,7 @@ import { X, Download, RotateCw } from 'lucide-react';
 import { bridge, act } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
 import { AUTHOR } from '../../shared/product.mjs';
+import { quiet } from '@/lib/quiet.js';
 
 const SHOWN = new Set(['available', 'downloading', 'downloaded', 'installing']);
 const HIDDEN_KEY = 'orb.update.hidden';
@@ -15,7 +16,7 @@ export function useUpdate() {
   const [st, setSt] = useState(null);
   useEffect(() => {
     if (!bridge?.update) return undefined;
-    bridge.update.get().then(setSt).catch(() => {});
+    bridge.update.get().then(setSt).catch(quiet);
     return bridge.on('app:update', setSt);
   }, []);
   return st;

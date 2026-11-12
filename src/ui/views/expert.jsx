@@ -18,6 +18,7 @@ import { DiffLines } from '@/components/diff-view.jsx';
 import { t, useT, useLocale } from '@/lib/i18n.js';
 import { stepText } from '@/components/chat-live.jsx';
 import { activityLabel, activityDetail } from '@/lib/activity.js';
+import { quiet } from '@/lib/quiet.js';
 
 // Labels are read when used (getters), so they follow the language chosen in Ajustes.
 export const PANELS = {
@@ -200,13 +201,13 @@ function Bar({ label, value, max, detail }) {
 function UsagePanel({ version }) {
   const t = useT();
   const [rows, setRows] = useState([]);
-  useEffect(() => { call('usage.get').then(setRows).catch(() => {}); }, [version]);
+  useEffect(() => { call('usage.get').then(setRows).catch(quiet); }, [version]);
   return <div className="py-1">{rows.map((r) => <Bar key={r.account} label={r.label} value={r.used} max={r.max} detail={r.cooldownUntil && r.cooldownUntil > Date.now() ? t('expert.paused') : t('expert.usageOf', { used: r.used, max: r.max, h: r.windowHours })} />)}</div>;
 }
 function SystemPanel() {
   const t = useT();
   const [s, setS] = useState(null);
-  useEffect(() => { let alive = true; const tick = () => call('expert.system').then((r) => alive && setS(r)).catch(() => {}); tick(); const t = setInterval(tick, 3000); return () => { alive = false; clearInterval(t); }; }, []);
+  useEffect(() => { let alive = true; const tick = () => call('expert.system').then((r) => alive && setS(r)).catch(quiet); tick(); const t = setInterval(tick, 3000); return () => { alive = false; clearInterval(t); }; }, []);
   if (!s) return <div className="p-3"><Spinner className="size-3" /></div>;
   return (
     <div className="py-1" data-testid="expert-system">
@@ -221,7 +222,7 @@ function ActivityPanel({ version }) {
   const t = useT();
   const locale = useLocale();
   const [rows, setRows] = useState([]);
-  useEffect(() => { call('activity.list', { limit: 40 }).then(setRows).catch(() => {}); }, [version]);
+  useEffect(() => { call('activity.list', { limit: 40 }).then(setRows).catch(quiet); }, [version]);
   return (
     <div className="py-1 text-[11.5px]">
       {rows.map((r) => <div key={r.id} className="flex gap-2 px-3 py-[2px]" title={`${r.kind} ${r.detail ?? ''}`}><span className="text-muted-foreground shrink-0 tabular-nums">{new Date(r.at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}</span><span className="text-primary shrink-0">{AGENT[r.actor] ?? r.actor}</span><span className="min-w-0 truncate">{activityLabel(t, r.kind)}{r.task_id ? ` #${r.task_id}` : ''} <span className="text-muted-foreground">{activityDetail(t, r, locale, AGENT)}</span></span></div>)}

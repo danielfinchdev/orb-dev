@@ -14,11 +14,12 @@ import { Button } from '@/components/ui/button.jsx';
 import { Input, Field, Spinner } from '@/components/ui/basic.jsx';
 import { bridge, call, getState } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
-import { toast } from 'sonner';
+import { notifyError } from '@/lib/notify.js';
 import { errorText } from '@/lib/utils.js';
 import { PRODUCT } from '../../shared/product.mjs';
 import { MasterCreate } from './master.jsx';
 import { LayoutReview } from './layout.jsx';
+import { quiet } from '@/lib/quiet.js';
 
 const hereTz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; } };
 const hereLanguage = () => (/^en/i.test(navigator.language ?? '') ? 'en' : 'es');
@@ -34,7 +35,7 @@ export function Setup({ onDone, resume = null }) {
   const [step, setStep] = useState(resume?.step ?? 'datos'); // datos → carpetas (folders of an earlier Orb, if any) → maestra (the master password) → equipo (Windows: install what is missing) → app
   const [plan, setPlan] = useState(resume?.plan ?? null);
   // the welcome opens maximised (its screens fit without scrolling; only the agents' install may scroll).
-  useEffect(() => { bridge.windowControls?.act('maximize-on').catch(() => {}); }, []);
+  useEffect(() => { bridge.windowControls?.act('maximize-on').catch(quiet); }, []);
   const shown = name.trim() || PRODUCT.assistant;
   const sep = base?.includes('\\') ? '\\' : '/';
   // The same rule the app uses (homeFor): always <base>/Orb, whatever the assistant is called, unless the base already is it.
@@ -46,16 +47,16 @@ export function Setup({ onDone, resume = null }) {
       const language = hereLanguage();
       await bridge.setup({ base, assistantName: shown, userName: user.trim(), language });
       // The engine runs in the new folder now: it gets this PC's language and time zone.
-      await call('config.save', { patch: { language, tz: hereTz(), setupPending: true } }).catch(() => {});
+      await call('config.save', { patch: { language, tz: hereTz(), setupPending: true } }).catch((e) => notifyError(e));
       setMood('happy');
       const lp = await call('app.layoutPlan').catch(() => null);
       setBusy(false);
       if (lp?.pending) { setPlan(lp); setStep('carpetas'); } else setStep('maestra');
     }
-    catch (error) { setMood('worried'); toast.error(errorText(error)); setBusy(false); }
+    catch (error) { setMood('worried'); notifyError(error); setBusy(false); }
   };
   // The welcome is over: the next start opens Orb.
-  const finish = async (route) => { await call('config.save', { patch: { setupPending: false } }).catch(() => {}); onDone(route); };
+  const finish = async (route) => { await call('config.save', { patch: { setupPending: false } }).catch((e) => notifyError(e)); onDone(route); };
   const afterMaster = async () => { const info = await bridge.info(); if (info.platform === 'win32') setStep('equipo'); else await finish(); };
   // A welcome that goes on may already have its master password (it stopped at «Ordenar carpetas» after making it).
   const afterFolders = async () => { const ms = await call('master.state').catch(() => null); if (ms?.exists) await afterMaster(); else setStep('maestra'); };

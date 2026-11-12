@@ -108,4 +108,5 @@ export default {
   "app.loadOfflineBody": "No se pudo cargar esta pantalla. Comprueba la conexión y vuelve a intentarlo.",
   "app.loadOfflineToast": "No se pudo abrir: sin conexión.",
   'app.linkOfflineWifi': 'No se pudo conectar con tu Orb por la red local. En el PC, permite Orb en el firewall de Windows para redes privadas.',
+  "app.copyFailed": "No se pudo copiar.",
 };

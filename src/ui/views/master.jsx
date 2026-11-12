@@ -4,7 +4,7 @@
 // lib/core-access.js), the card of Ajustes › Datos (change it, «He olvidado la contraseña»: with the backups' recovery
 // code, or «Borrar secretos y empezar de cero») and a connector's keys.
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { notifyError, notifyOk } from '@/lib/notify.js';
 import { KeyRound, LockKeyhole, TriangleAlert, ArrowRight } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -66,8 +66,8 @@ export function MasterCreate({ onDone, upgrade = false }) {
     e.preventDefault();
     if (!ready(v)) return;
     setBusy(true);
-    try { keepUnlock(await call('master.create', { password: v.next })); toast.success(t('master.created')); onDone?.(); }
-    catch (error) { toast.error(errorText(error)); setBusy(false); }
+    try { keepUnlock(await call('master.create', { password: v.next })); notifyOk(t('master.created')); onDone?.(); }
+    catch (error) { notifyError(error); setBusy(false); }
   };
   return (
     <div className="brand-sky onboard">
@@ -136,7 +136,7 @@ export function MasterLocked({ onDone, state = null }) {
   const submit = async (e) => {
     e.preventDefault(); setBusy(true);
     try { keepUnlock(await call('master.unlock', { password })); onDone?.(); }
-    catch (error) { toast.error(errorText(error)); setBusy(false); }
+    catch (error) { notifyError(error); setBusy(false); }
   };
   const forgot = async () => { if (await forgotFlow({ canForget: Boolean(state?.canForget) })) onDone?.(); };
   return (
@@ -184,7 +184,7 @@ export function MasterCard() {
       ok: t('master.change'),
       onOk: async (v) => { if (!v.current || !ready(v, false)) throw new Error(t(v.next !== v.again ? 'master.mismatch' : 'master.fillAll')); return call('master.change', { current: v.current, next: v.next }); }
     });
-    if (r?.unlock) { keepUnlock(r); toast.success(t('master.changed')); load(); }
+    if (r?.unlock) { keepUnlock(r); notifyOk(t('master.changed')); load(); }
   };
   const forgot = async () => { if (await forgotFlow({ canForget: st.canForget })) load(); };
   const when = st.changedAt ? new Date(st.changedAt).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }) : null;
@@ -225,7 +225,7 @@ const KEY_LINE = /^([A-Za-z_][A-Za-z0-9_]{0,99})=(.*)$/;
 export async function connectorKeys(server) {
   const unlock = await unlockCore('secrets');
   if (!unlock) return;
-  let current; try { current = await call('secrets.connector', { name: server.name, unlock }); } catch (error) { toast.error(errorText(error)); return; }
+  let current; try { current = await call('secrets.connector', { name: server.name, unlock }); } catch (error) { notifyError(error); return; }
   const text = Object.entries(current.env ?? {}).map(([k, v]) => `${k}=${v}`).join('\n');
   const r = await form(tNow('master.keysTitle', { name: server.name }), {
     description: tNow('master.keysDesc'),
@@ -240,7 +240,7 @@ export async function connectorKeys(server) {
     }
   });
   if (!r) return;
-  toast.success(tNow('master.keysSaved'));
+  notifyOk(tNow('master.keysSaved'));
   const app = await call('app.state').catch(() => null);
   if (app) setState({ app: { ...getState().app, config: app.config } });
 }

@@ -8,6 +8,7 @@ import { ToolIcon } from './agent-icon.jsx';
 import { call, act, bridge } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
+import { quiet } from '@/lib/quiet.js';
 
 // bar=false: the screen around it shows the progress itself (the first run puts it in its title), told by onProgress.
 export function Installer({ onChange, onProgress, bar = true }) {
@@ -22,7 +23,7 @@ export function Installer({ onChange, onProgress, bar = true }) {
     setChosen(Object.fromEntries(r.map((i) => [i.id, !i.installed && !i.optional])));
     onChange?.(r);
   };
-  useEffect(() => { load(); call('installer.progress').then((p) => p.steps.length && setProgress(p)).catch(() => {}); return bridge.on('installer:progress', (p) => { setProgress(p); if (p.finished) load(); }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); call('installer.progress').then((p) => p.steps.length && setProgress(p)).catch(quiet); return bridge.on('installer:progress', (p) => { setProgress(p); if (p.finished) load(); }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   if (!items) return <div className="flex items-center gap-2 text-sm"><Spinner />{t('comp.installer.checking')}</div>;
   const missing = items.filter((i) => !i.installed);
   const ids = Object.keys(chosen).filter((k) => chosen[k]);

@@ -5,7 +5,7 @@
 // («Editar en un proyecto», then «Aplicar cambios»). PC only. Turning on what an agent made always goes through a dialog
 // that lists every file that will be turned on (the quarantine's copy, src/domain/extensions/extensions.mjs) and opens its folder.
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { notify, notifyError, notifyInfo, notifyOk, notifyProgress } from '@/lib/notify.js';
 import { Check, Download, Ellipsis, FolderOpen, KeyRound, PencilLine, Plus, Puzzle, Server, Trash2, Upload, X } from 'lucide-react';
 import { confirm, choose, form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -33,8 +33,8 @@ export function ExtensionsPanel() {
   const toggle = async (kind, name, enabled, row = null) => {
     if (enabled && row?.needsInstall) {
       if (!await confirm(t('ext.installTitle', { name }), t('ext.installBody'), { ok: t('ext.activate'), danger: true })) return;
-      const id = toast.loading(t('ext.installing'));
-      try { await run(call('extensions.toggle', { kind, name, enabled, install: true }), t('ext.turnedOn', { name })); } finally { toast.dismiss(id); }
+      const closeProgress = notifyProgress(t('ext.installing'));
+      try { await run(call('extensions.toggle', { kind, name, enabled, install: true }), t('ext.turnedOn', { name })); } finally { closeProgress(); }
       return;
     }
     run(call('extensions.toggle', { kind, name, enabled }), t(enabled ? 'ext.turnedOn' : 'ext.turnedOff', { name }));
@@ -202,7 +202,7 @@ async function answerRequest(r, approve, run, done = (x) => x) {
     onOk: () => call('extensions.approve', { id: r.id })
   });
   if (!ok) return undefined;
-  toast.success(asking ? t('ext.stateAllowed') : t('ext.activated', { name: r.name }));
+  notifyOk(asking ? t('ext.stateAllowed') : t('ext.activated', { name: r.name }));
   return done(await run(Promise.resolve(ok)));
 }
 
@@ -214,14 +214,14 @@ async function importFlow(run) {
   ], { testid: 'ext-import-how' });
   if (how === 'folder') {
     const from = await bridge.pickFolder?.(t('ext.importFolder'));
-    if (from) { const id = toast.loading(t('ext.importing')); try { await run(call('extensions.import', { from }), t('ext.imported')); } finally { toast.dismiss(id); } }
+    if (from) { const closeProgress = notifyProgress(t('ext.importing')); try { await run(call('extensions.import', { from }), t('ext.imported')); } finally { closeProgress(); } }
   } else if (how === 'repo') {
     await form(t('ext.importRepo'), {
       description: t('ext.importRepoDesc'),
       initial: { url: '' },
       body: (v, set) => <Field label={t('ext.repoUrl')}><Input autoFocus value={v.url} onChange={(e) => set({ url: e.target.value })} placeholder="https://github.com/usuario/repositorio" data-testid="ext-repo-url" /></Field>,
       ok: t('ext.import'),
-      onOk: async (v) => { const r = await call('extensions.import', { url: v.url.trim() }); toast.success(t('ext.imported')); await run(Promise.resolve(r)); return true; }
+      onOk: async (v) => { const r = await call('extensions.import', { url: v.url.trim() }); notifyOk(t('ext.imported')); await run(Promise.resolve(r)); return true; }
     });
   }
 }
@@ -235,12 +235,12 @@ async function editFlow(name, run) {
     ok: t('ext.editOk'),
     onOk: (v) => call('extensions.edit', { name, category: v.category })
   });
-  if (r?.path) { toast.success(t('ext.editDone', { path: r.path })); run(Promise.resolve(null)); }
+  if (r?.path) { notifyOk(t('ext.editDone', { path: r.path })); run(Promise.resolve(null)); }
 }
 async function applyFlow(name, run) {
-  let check; try { check = await call('extensions.applyCheck', { name }); } catch (error) { toast.error(String(error?.message ?? error)); return; }
+  let check; try { check = await call('extensions.applyCheck', { name }); } catch (error) { notifyError(error); return; }
   const n = check.added.length + check.changed.length + check.removed.length;
-  if (!n) { toast.info(t('ext.applyNothing')); return; }
+  if (!n) { notifyInfo(t('ext.applyNothing')); return; }
   const lines = [...check.added.map((f) => `+ ${f}`), ...check.changed.map((f) => `~ ${f}`), ...check.removed.map((f) => `− ${f}`)].slice(0, 12).join('\n');
   if (!await confirm(t('ext.applyTitle', { name }), `${t('ext.applyBody', { path: check.path, n })}\n\n${lines}${n > 12 ? `\n${t('ext.andMore', { n: n - 12 })}` : ''}`, { ok: t('ext.apply'), danger: true })) return;
   const done = await run(call('extensions.apply', { name, id: check.id }), t('ext.applied', { name }));
@@ -255,7 +255,7 @@ async function applyFlow(name, run) {
 async function adoptFlow(p, run) {
   if (!await confirm(t('ext.adoptTitle', { name: p.name }), t('ext.adoptBody', { path: p.dir }), { ok: t('ext.moveToCore'), danger: true })) return;
   const r = await run(call('extensions.adopt', { project: p.name }));
-  if (r?.moved) toast.success(t('ext.adopted', { name: p.name }), { description: t('ext.adoptedAt', { path: r.moved.to }), duration: 12000 });
+  if (r?.moved) notify({ title: t('ext.adopted', { name: p.name }), body: t('ext.adoptedAt', { path: r.moved.to }), tone: 'success' }, { always: true, ms: 12000 });
 }
 // A project that is an MCP server, used from where it is (its connector points to the project's folder).
 async function connectProject(p, run) {
@@ -293,7 +293,7 @@ export function ExtensionRequestCard({ m }) {
   const asking = m.meta.ask === 'edit';
   const pendingOne = async () => (await call('extensions.list')).pending.find((r) => r.id === m.meta.extension);
   const answer = async (approve) => {
-    let r; try { r = await pendingOne(); } catch (error) { toast.error(String(error?.message ?? error)); return; }
+    let r; try { r = await pendingOne(); } catch (error) { notifyError(error); return; }
     if (!r) { setLocal('gone'); return; }
     const out = await answerRequest(r, approve, (p) => act(p));
     if (out !== undefined) setLocal(approve ? 'approved' : 'rejected');

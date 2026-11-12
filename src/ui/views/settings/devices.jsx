@@ -1,6 +1,6 @@
 // Ajustes: Android, the phone and the browser linked with this PC (Magic Link), and «Este móvil».
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { notifyInfo } from '@/lib/notify.js';
 import QRCode from 'qrcode';
 import { FolderOpen, Smartphone, Globe, PictureInPicture2 } from 'lucide-react';
 import { PageHeader } from '@/components/page.jsx';
@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils.js';
 import { t, useT } from '@/lib/i18n.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { save, Row, PREVIEWS, previewOf } from './rows.jsx';
+import { quiet } from '@/lib/quiet.js';
 
 // the pairing of «Emparejar móvil»: Android's QR (Depuración inalámbrica) that the engine waits for on the
 // network, or the six-digit code by hand. unlock: the master password's token (pairing gives the agents a way in).
@@ -25,10 +26,10 @@ function PairPanel({ v, set }) {
     const r = await act(call('android.pairStart', { unlock }));
     if (r) { setSt(r); setSvg(await QRCode.toString(r.qr, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' })); }
   };
-  useEffect(() => { if (!v.manual) start(); return () => { call('android.pairCancel').catch(() => {}); }; }, [v.manual]);
+  useEffect(() => { if (!v.manual) start(); return () => { call('android.pairCancel').catch(quiet); }; }, [v.manual]);
   useEffect(() => {
     if (st?.state !== 'waiting' && st?.state !== 'pairing') return undefined;
-    const id = setInterval(() => { call('android.pairState').then(setSt).catch(() => {}); }, 1500);
+    const id = setInterval(() => { call('android.pairState').then(setSt).catch(quiet); }, 1500);
     return () => clearInterval(id);
   }, [st?.state]);
   if (v.manual) return (
@@ -70,7 +71,7 @@ export function AndroidCard() {
   const startEmulator = async (avd) => {
     const unlock = await unlockCore('androidEmulator'); if (!unlock) return;
     const r = await act(call('android.emulatorStart', { avd, unlock }));
-    if (r) { toast(r); setTimeout(loadPhones, 30_000); }
+    if (r) { notifyInfo(r); setTimeout(loadPhones, 30_000); }
   };
   const pair = async () => {
     await form(t('settings.android.pair'), {
@@ -145,7 +146,7 @@ export function AndroidCard() {
 export function MobileCard() {
   const t = useT();
   const [st, setSt] = useState(null);
-  const load = () => call('remote.status').then(setSt).catch(() => {});
+  const load = () => call('remote.status').then(setSt).catch(quiet);
   useEffect(() => { load(); }, []);
   const configure = async (patch) => { const r = await act(call('remote.configure', patch)); if (r) setSt(r); };
   if (!st) return null;
@@ -213,7 +214,7 @@ export function BrowserCard({ c }) {
         <Row label={t('settings.browse')} hint={t('settings.browseHint')}><Switch checked={on} onCheckedChange={(enabled) => save({ browser: { enabled } })} /></Row>
         <Row label={t('settings.pip')} hint={t('settings.pipHint')}><Switch checked={pip} disabled={!on} onCheckedChange={(v) => save({ ui: { pip: v } })} /></Row>
       </CardContent>
-      {bridge.showBrowser ? <CardFooter><Button size="sm" variant="outline" disabled={!on || !pip} onClick={async () => { const r = await bridge.showBrowser(); if (!r?.tabs?.length) toast(t('settings.noBrowserUse')); }}><PictureInPicture2 />{t('settings.showPip')}</Button></CardFooter> : null}
+      {bridge.showBrowser ? <CardFooter><Button size="sm" variant="outline" disabled={!on || !pip} onClick={async () => { const r = await bridge.showBrowser(); if (!r?.tabs?.length) notifyInfo(t('settings.noBrowserUse')); }}><PictureInPicture2 />{t('settings.showPip')}</Button></CardFooter> : null}
     </Card>
   );
 }

@@ -13,6 +13,8 @@ import { unlockCore } from '@/lib/core-access.js';
 import { countdown, sortDevices } from '@/lib/link.js';
 import { cn, ago } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
+import { notifyError } from '@/lib/notify.js';
+import { quiet } from '@/lib/quiet.js';
 
 const KIND_ICON = { phone: Smartphone, browser: Globe };
 
@@ -77,7 +79,7 @@ function PairDialog({ open: want, onClose }) {
               <div className="text-muted-foreground text-xs">{t('link.orCode')}</div>
               <div className="flex items-center justify-center gap-2 sm:justify-start">
                 <span className="bg-muted rounded-lg px-3 py-1.5 font-mono text-2xl font-semibold tracking-widest tabular-nums select-all" data-testid="link-code">{qr.code}</span>
-                {navigator.clipboard ? <Button size="icon-sm" variant="ghost" aria-label={copied ? t('link.copied') : t('link.copy')} title={copied ? t('link.copied') : t('link.copy')} onClick={() => navigator.clipboard.writeText(`${qr.code} ${qr.address}`).then(() => setCopied(true)).catch(() => {})} data-testid="link-copy">{copied ? <Check className="text-success animate-in fade-in-0 zoom-in-95" /> : <Copy />}</Button> : null}
+                {navigator.clipboard ? <Button size="icon-sm" variant="ghost" aria-label={copied ? t('link.copied') : t('link.copy')} title={copied ? t('link.copied') : t('link.copy')} onClick={() => navigator.clipboard.writeText(`${qr.code} ${qr.address}`).then(() => setCopied(true)).catch(quiet)} data-testid="link-copy">{copied ? <Check className="text-success animate-in fade-in-0 zoom-in-95" /> : <Copy />}</Button> : null}
               </div>
               <div className="text-muted-foreground font-mono text-xs break-all">{qr.address}</div>
               <div className="flex items-center justify-center gap-1.5 text-xs sm:justify-start" data-testid="link-fp"><ShieldCheck className="text-success size-3.5 shrink-0" />{t('link.fp', { fp: qr.pc })}</div>
@@ -117,7 +119,7 @@ function OutsideGuide() {
       <summary className="flex cursor-pointer list-none items-center gap-2 font-medium"><Globe className="text-muted-foreground size-4" />{t('link.outTitle')}<ChevronDown className="text-muted-foreground ml-auto size-4 transition-transform duration-200 group-open:rotate-180" /></summary>
       <ol className="mt-2 grid list-decimal gap-1 pl-5 text-[13px]"><li>{t('link.out1')}</li><li>{t('link.out2')}</li><li>{t('link.out3')}</li></ol>
       <div className="mt-2 flex flex-wrap items-center gap-3">
-        <Button size="xs" variant="outline" onClick={() => bridge.openExternal('https://tailscale.com/download').catch(() => {})}><ExternalLink />{t('link.outGet')}</Button>
+        <Button size="xs" variant="outline" onClick={() => bridge.openExternal('https://tailscale.com/download').catch((e) => notifyError(e))}><ExternalLink />{t('link.outGet')}</Button>
         <span className="text-muted-foreground text-xs">{t('link.outPcOn')}</span>
       </div>
     </details>

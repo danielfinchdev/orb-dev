@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/overlay.jsx';
 import { call, act, bridge, fullPc } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
 import { useT } from '@/lib/i18n.js';
+import { quiet } from '@/lib/quiet.js';
 
 function SecretCard({ r }) {
   const t = useT();
@@ -47,7 +48,7 @@ export function SecretCards({ sessionId }) {
     if (!fullPc()) return undefined;
     let alive = true;
     const mine = (r) => r?.session === String(sessionId);
-    call('secrets.pending').then((all) => { if (alive) setList((all ?? []).filter(mine)); }).catch(() => {});
+    call('secrets.pending').then((all) => { if (alive) setList((all ?? []).filter(mine)); }).catch(quiet);
     const offAsk = bridge.on('secret:request', (r) => { if (mine(r)) setList((prev) => [...prev.filter((x) => x.id !== r.id), r]); });
     const offDone = bridge.on('secret:done', (r) => setList((prev) => prev.filter((x) => x.id !== r?.id)));
     return () => { alive = false; offAsk(); offDone(); };

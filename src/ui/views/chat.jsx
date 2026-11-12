@@ -39,6 +39,7 @@ import { useAutoScroll, Composer } from '@/components/conversation/composer.jsx'
 import { MsgTime, BarPause, COMPACT_AT, CompactButton } from '@/components/conversation/bar.jsx';
 import { ContextMeter } from '@/components/conversation/context-meter.jsx';
 import { needsApproval } from '@/lib/task-approval.js';
+import { quiet } from '@/lib/quiet.js';
 
 
 // a different greeting each time the chat opens (lib/greeting.js); the last one is remembered so it does not repeat.
@@ -307,7 +308,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const seq = useRef(0);
   const fetchList = useCallback(() => {
     const my = ++seq.current;
-    call('chat.list', { conversation: id }).then((r) => { if (my === seq.current && getState().route?.id === id) { setRows((prev) => keepSame(prev, r)); setMore(r.length >= 160); } }).catch(() => {});
+    call('chat.list', { conversation: id }).then((r) => { if (my === seq.current && getState().route?.id === id) { setRows((prev) => keepSame(prev, r)); setMore(r.length >= 160); } }).catch(quiet);
   }, [id]);
   useEffect(() => { seq.current++; if (id != null) fetchList(); }, [id, fetchList]);
   const firstVersion = useRef(version);
@@ -334,7 +335,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const unread = item?.unread ?? 0;
   useEffect(() => {
     if (id == null || !unread) return undefined;
-    const run = () => { if (document.visibilityState === 'visible') call('inbox.markRead', { kind: 'conversation', id }).then(() => loadOrbInboxSoon(0)).catch(() => {}); };
+    const run = () => { if (document.visibilityState === 'visible') call('inbox.markRead', { kind: 'conversation', id }).then(() => loadOrbInboxSoon(0)).catch(quiet); };
     const timer = setTimeout(run, 350);
     document.addEventListener('visibilitychange', run);
     return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', run); };
@@ -384,7 +385,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
         const r = await act(call('chat.send', { text: msg, ...(inProject ? { project: inProject } : {}), ...(Object.keys(chosen).length ? { brain: chosen } : {}) }));
         if (!r) { dropPending(mine); if (!moved()) box.set(msg); return; }
         movePending(mine, `chat:${r.conversation}`);
-        await refresh().catch(() => {});
+        await refresh().catch(quiet);
         if (moved()) { leftBehind({ view: 'chat', id: r.conversation }, getState().conversations.find((c) => c.id === r.conversation)?.title ?? msg.slice(0, 60)); return; }
         if (onConversation) onConversation(r.conversation); else go({ view: 'chat', id: r.conversation });
       } else {
@@ -395,7 +396,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
         if (!s) { dropPending(mine); if (!moved()) box.set(msg); return; }
         movePending(mine, `session:${s.id}`);
         if ((await act(call('sessions.send', { id: s.id, text: msg }))) === undefined) dropPending(mine);
-        await refresh().catch(() => {});
+        await refresh().catch(quiet);
         if (!stillHere(ticket)) { leftBehind({ view: 'session', id: s.id }, s.title); return; }
         go({ view: 'session', id: s.id });
       }

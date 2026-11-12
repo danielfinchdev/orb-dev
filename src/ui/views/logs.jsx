@@ -1,7 +1,7 @@
 // Bitácoras: the assistant's memory (general log and one per project). Read-only here: only the assistant appends.
 import { useEffect, useRef, useState } from 'react';
 import { NotebookPen, Copy, Maximize2, NotebookText } from 'lucide-react';
-import { toast } from 'sonner';
+import { notifyOk } from '@/lib/notify.js';
 import { PageHeader } from '@/components/page.jsx';
 import { Markdown } from '@/components/markdown.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -9,6 +9,7 @@ import { Card, Spinner } from '@/components/ui/basic.jsx';
 import { useStore, call } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
+import { quiet } from '@/lib/quiet.js';
 
 // bare: inside «Memorias» (its header is that screen's).
 export function LogsView({ route, bare = false }) {
@@ -22,7 +23,7 @@ export function LogsView({ route, bare = false }) {
   // on the newest ones.
   const scroller = useRef(null);
   useEffect(() => { const el = scroller.current; if (el && body != null) el.scrollTop = el.scrollHeight; }, [body]);
-  useEffect(() => { call('logs.list').then(setLogs).catch(() => {}); }, [version]);
+  useEffect(() => { call('logs.list').then(setLogs).catch(quiet); }, [version]);
   useEffect(() => { setText(null); call('logs.read', { project: selected, whole }).then(setText).catch((e) => setText(e.message)); }, [selected, whole, version]);
   const partial = body?.startsWith('(');
   return (
@@ -42,7 +43,7 @@ export function LogsView({ route, bare = false }) {
           <div className="flex items-center gap-2 px-5">
             <h2 className="flex-1 text-[16px]">{selected === 'general' ? t('logs.generalTitle') : t('logs.projectTitle', { name: selected })}</h2>
             {partial && !whole ? <Button size="sm" variant="ghost" onClick={() => setWhole(true)}><Maximize2 />{t('logs.whole')}</Button> : null}
-            <Button size="sm" variant="ghost" onClick={() => navigator.clipboard.writeText(body ?? '').then(() => toast.success(t('logs.copied')))}><Copy />{t('logs.copy')}</Button>
+            <Button size="sm" variant="ghost" onClick={() => navigator.clipboard.writeText(body ?? '').then(() => notifyOk(t('logs.copied')))}><Copy />{t('logs.copy')}</Button>
           </div>
           <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-5 pb-2 text-[14px] md:pb-24" data-testid="log-body">{body == null ? <Spinner /> : <Markdown>{body}</Markdown>}</div>
         </Card>

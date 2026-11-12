@@ -1,6 +1,6 @@
 // Tasks: the board. Filters, approvals, details and every action on a task (undo, retry, model, merge, pull request, OK).
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { notifyOk } from '@/lib/notify.js';
 import { Check, X, Zap, RotateCw, Square, Shuffle, Undo2, MessageSquare, GitMerge, GitPullRequest, Trash2, ClipboardCheck, ThumbsUp, ChevronRight, ScanSearch, Hourglass, GitBranch } from 'lucide-react';
 import { PageHeader, PageBody, BackButton } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
@@ -113,7 +113,7 @@ function TaskDetail({ id, live }) {
         {t.status === 'done' && !t.accepted && !t.undone ? <Button size="sm" onClick={() => act(call('tasks.accept', { id: t.id }), tr('tasks.accepted'))}><ThumbsUp />{tr('tasks.giveOk')}</Button> : null}
         {t.status === 'done' && !t.review_of ? <BubbleTip title={tr('tasks.review.btn')} text={tr('projects.reviewTip')}><A onClick={() => askReview({ task: t })} data-testid="task-review"><ScanSearch />{tr('tasks.review.btn')}</A></BubbleTip> : null}
         {t.session_id ? <A onClick={() => go({ view: 'session', id: t.session_id })}><MessageSquare />{tr('tasks.agentChat')}</A> : null}
-        {t.status === 'queued' ? <A onClick={async () => { const r = await act(call('tasks.launchAnyway', { id: t.id })); if (r) toast.success(tr(r.paused ? 'tasks.launchAnyway.paused' : 'tasks.launchAnyway.done')); }}><Zap />{tr('tasks.launchAnyway')}</A> : null}
+        {t.status === 'queued' ? <A onClick={async () => { const r = await act(call('tasks.launchAnyway', { id: t.id })); if (r) notifyOk(tr(r.paused ? 'tasks.launchAnyway.paused' : 'tasks.launchAnyway.done')); }}><Zap />{tr('tasks.launchAnyway')}</A> : null}
         {['failed', 'blocked', 'cancelled', 'limited'].includes(t.status) ? <A onClick={() => act(call('tasks.retry', { id: t.id }), tr('tasks.retry.done'))}><RotateCw />{t.status === 'limited' ? tr('tasks.continueNow') : tr('tasks.retry')}</A> : null}
         {!['running', 'done'].includes(t.status) ? <A onClick={reassign}><Shuffle />{tr('tasks.reassign.btn')}</A> : null}
         {/* (A held task has «Deshacer» on its card below, next to «Aceptar».) */}

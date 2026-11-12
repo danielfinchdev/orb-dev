@@ -4,6 +4,7 @@
 // Never while you are typing, never with the window in the background, and never piling up.
 import { getState } from './store.js';
 import { quietAudioContext } from './audio-context.js';
+import { quiet } from './quiet.js';
 
 let ctx = null, out = null, ready = () => false, lastKey = 0, busyUntil = 0;
 const settings = () => { const ui = getState().app?.config?.ui ?? {}; return { on: ui.sounds !== false, volume: ui.volume ?? 0.5 }; };
@@ -25,7 +26,7 @@ function audio() {
     out.connect(lp); lp.connect(comp); comp.connect(ctx.destination);
   }
   if (!ready()) return null; // its device is still on its way: this sound is skipped
-  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  if (ctx.state === 'suspended') ctx.resume().catch(quiet);
   out.gain.value = 0.22 * settings().volume;
   return ctx;
 }
