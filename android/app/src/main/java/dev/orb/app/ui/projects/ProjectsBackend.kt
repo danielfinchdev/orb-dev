@@ -13,6 +13,7 @@ import dev.orb.app.ui.tasks.TasksParser
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.serialization.json.JsonArray
@@ -31,6 +32,9 @@ interface ProjectsBackend {
 
     /** Whether the linked PC can run [m]; what it cannot do is hidden, never shown disabled. */
     fun available(m: ApiMethod): Boolean
+
+    /** The list as last saved on the phone; shown first and while the PC cannot be reached. */
+    fun saved(): kotlinx.coroutines.flow.Flow<ProjectsData> = kotlinx.coroutines.flow.emptyFlow()
 
     /** The listed projects with their icons, and the finished ones when the PC can list them. */
     suspend fun list(): Result<ProjectsData>
@@ -63,7 +67,11 @@ interface ProjectsBackend {
     suspend fun mergePr(name: String, number: Int, method: String, headRefOid: String, confirmed: Confirmed): Result<Unit>
 }
 
-class RuntimeProjectsBackend(private val runtime: LinkRuntime, private val chats: ChatsBackend? = null) : ProjectsBackend {
+class RuntimeProjectsBackend(
+    private val runtime: LinkRuntime,
+    private val chats: ChatsBackend? = null,
+    private val container: dev.orb.app.AppContainer? = null,
+) : ProjectsBackend {
     private val api get() = runtime.api
     override val connection get() = runtime.client.connection
     override val events get() = runtime.client.events
@@ -72,13 +80,38 @@ class RuntimeProjectsBackend(private val runtime: LinkRuntime, private val chats
 
     private fun Result<JsonElement>.unit(): Result<Unit> = map { }
 
+    private companion object {
+        const val SNAP_LIST = "projects.list"
+        const val SNAP_ICONS = "projects.icons"
+        const val SNAP_FINISHED = "projects.finished"
+    }
+
+    override fun saved(): kotlinx.coroutines.flow.Flow<ProjectsData> = kotlinx.coroutines.flow.flow {
+        // The database opens in the background; until then there is nothing to show.
+        val dao = container?.cacheDao() ?: return@flow
+        emitAll(
+            kotlinx.coroutines.flow.combine(dao.observeSnapshot(SNAP_LIST), dao.observeSnapshot(SNAP_ICONS), dao.observeSnapshot(SNAP_FINISHED)) { list, icons, finished ->
+                fun parse(json: String?) = json?.let { runCatching { kotlinx.serialization.json.Json.parseToJsonElement(it) }.getOrNull() }
+                val rows = parse(list?.json) as? JsonArray ?: return@combine ProjectsData.Empty
+                ProjectsData(ProjectsParser.list(rows, parse(icons?.json)), ProjectsParser.finished(parse(finished?.json)))
+            },
+        )
+    }
+
     override suspend fun list(): Result<ProjectsData> = coroutineScope {
         val list = async { api.projects.list() }
         val icons = async { if (api.available(ApiMethods.PROJECTS_ICONS)) api.projects.icons().getOrNull() else null }
         val finished = async { if (api.available(ApiMethods.PROJECTS_FINISHED)) api.projects.finished().getOrNull() else null }
         val answer = list.await().getOrElse { return@coroutineScope Result.failure(it) }
         if (answer !is JsonArray) return@coroutineScope Result.failure(LinkException(LinkError.BadAnswer))
-        Result.success(ProjectsData(ProjectsParser.list(answer, icons.await()), ProjectsParser.finished(finished.await())))
+        val iconsAnswer = icons.await()
+        val finishedAnswer = finished.await()
+        container?.cacheSync()?.let { sync ->
+            sync.applySnapshot(SNAP_LIST, answer)
+            if (iconsAnswer != null) sync.applySnapshot(SNAP_ICONS, iconsAnswer)
+            if (finishedAnswer != null) sync.applySnapshot(SNAP_FINISHED, finishedAnswer)
+        }
+        Result.success(ProjectsData(ProjectsParser.list(answer, iconsAnswer), ProjectsParser.finished(finishedAnswer)))
     }
 
     override suspend fun create(name: String, category: String?, notes: String) = api.projects.create(

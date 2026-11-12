@@ -103,6 +103,8 @@ class ProjectsViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ProjectsState())
 
     init {
+        // What was saved shows first; once the PC has answered, its answer is the truth.
+        viewModelScope.launch { backend.saved().collect { saved -> if (!ui.value.answered) data.update { saved } } }
         viewModelScope.launch { reloads.receiveAsFlow().debounce(reloadDebounceMs).collect { reload() } }
         viewModelScope.launch { backend.events.collect { if (it.name in RELOAD_EVENTS) reloads.trySend(Unit) } }
         viewModelScope.launch {

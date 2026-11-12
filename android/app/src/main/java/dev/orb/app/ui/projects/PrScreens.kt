@@ -48,6 +48,7 @@ import dev.orb.app.ui.chats.Message
 import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.tasks.LabelValue
 import dev.orb.app.ui.tasks.SectionLabel
+import dev.orb.app.ui.offline.NeedsPcNote
 import dev.orb.app.ui.theme.OrbTheme
 
 @Composable
@@ -123,6 +124,7 @@ fun PrDetailScreen(vm: PrDetailViewModel, onBack: () -> Unit, modifier: Modifier
                     }
                     // Only an open pull request the PC can merge offers the button; a merged or closed one never does.
                     if (state.canMerge) {
+                        if (!state.online) NeedsPcNote(Modifier.padding(top = 12.dp))
                         Button(onClick = { confirming = true }, enabled = state.online && !state.merging, modifier = Modifier.padding(top = 20.dp)) {
                             Text(ProjectTexts.PR_MERGE)
                         }

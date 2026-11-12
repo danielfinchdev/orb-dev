@@ -56,6 +56,24 @@ class ProjectsViewModelTest {
         assertEquals(listOf(FinishedProject("k", "n", null, "2026-01-01")), f)
     }
 
+    @Test fun savedProjectsShowWhileThePcIsUnreachableAndTheFreshAnswerWins() = runTest(dispatcher) {
+        val off = FakeProjectsBackend().also {
+            it.connectionState.value = ConnectionState.Offline(null, null)
+            it.savedFlow.value = ProjectsData(list, done)
+        }
+        val offline = vm(off)
+        assertEquals(3, offline.state.value.projects.size)
+        assertTrue(offline.state.value.loaded)
+        assertFalse(offline.state.value.online)
+
+        val on = FakeProjectsBackend(listOf(list[0]), done).also { it.savedFlow.value = ProjectsData(list, done) }
+        val fresh = vm(on)
+        assertEquals(1, fresh.state.value.projects.size)
+        on.savedFlow.value = ProjectsData(list + project("otro", "web"), done)
+        runCurrent()
+        assertEquals(1, fresh.state.value.projects.size)
+    }
+
     @Test fun loadsOnStartAndListsCategories() = runTest(dispatcher) {
         val b = FakeProjectsBackend(list, done)
         val vm = vm(b)

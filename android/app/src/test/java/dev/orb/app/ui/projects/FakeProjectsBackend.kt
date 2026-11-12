@@ -27,6 +27,8 @@ class FakeProjectsBackend(initial: List<ProjectItem> = emptyList(), finished: Li
     val calls = ArrayList<String>()
     var actionResult: Result<Unit> = Result.success(Unit)
     var gate: CompletableDeferred<Unit>? = null
+    val savedFlow = MutableStateFlow(ProjectsData.Empty)
+    override fun saved() = savedFlow
 
     override fun available(m: ApiMethod) = m.name !in unavailable
 
