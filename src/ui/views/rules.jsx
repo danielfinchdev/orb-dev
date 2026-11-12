@@ -8,26 +8,27 @@ import { Card, Empty, Spinner } from '@/components/ui/basic.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Segmented } from '@/components/ui/primitives.jsx';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
-import { call } from '@/lib/store.js';
+import { call, bridge } from '@/lib/store.js';
 import { notifyError } from '@/lib/notify.js';
 import { useT } from '@/lib/i18n.js';
-import { asList, ruleSide, railsOf, readRemoved, writeRemoved, isRemoved } from '@/lib/rules-access.js';
+import { asList, ruleSide, railsOf, readRemoved, writeRemoved, isRemoved, pruneRemoved, isMissingMethod } from '@/lib/rules-access.js';
 import { changeRule, restoreRules, changeRail } from '@/lib/rules-actions.js';
 import { RuleCard, RailCard, FixedRail, RemovedRail } from './rules-cards.jsx';
 import { confirmPauseRail, confirmResumeRail, confirmRemoveRail, confirmRestoreRail, confirmSaveRail, confirmPauseRule, confirmDeleteRule, confirmRestoreRules, openRuleEditor } from './rules-dialogs.jsx';
 
 const store = () => { try { return window.localStorage; } catch { return null; } };
 
-function useRules() {
+function useRules(setRemoved) {
   const [state, setState] = useState({ loading: true, rules: [], rails: [] });
   const load = useCallback(async () => {
     // rails.list may not exist in an older engine: the tab then shows the text rules only
     const [rules, rails] = await Promise.all([
       call('rules.list', {}).then(asList, (error) => { notifyError(error); return []; }),
-      call('rails.list', {}).then(asList, () => [])
+      call('rails.list', {}).then(asList, (error) => { if (!isMissingMethod(error)) notifyError(error); return []; })
     ]);
     setState({ loading: false, rules, rails });
-  }, []);
+    setRemoved((cur) => { const next = pruneRemoved(cur, rails); if (next.length !== cur.length) writeRemoved(store(), next); return next.length === cur.length ? cur : next; });
+  }, [setRemoved]);
   useEffect(() => { load(); }, [load]);
   return [state, load];
 }
@@ -43,9 +44,9 @@ function Section({ title, meta, children, testid }) {
 
 export function RulesView() {
   const t = useT();
-  const [{ loading, rules, rails }, load] = useRules();
-  const [side, setSide] = useState('orb');
   const [removed, setRemoved] = useState(() => readRemoved(store()));
+  const [{ loading, rules, rails }, load] = useRules(setRemoved);
+  const [side, setSide] = useState('orb');
   const sideKey = side === 'orb' ? 'orb' : 'subagentes';
 
   const mine = useMemo(() => rules.filter((r) => r.estado !== 'eliminada' && ruleSide(r, sideKey)), [rules, sideKey]);
@@ -85,13 +86,15 @@ export function RulesView() {
     if (await changeRail(rail.id, { enabled: next }, t('rules.railSaved'))) load();
   };
   const railSave = async (rail, before, after, changed) => {
-    if (!(await confirmSaveRail(rail, before, after))) return;
-    if (await changeRail(rail.id, { values: changed }, t('rules.railSaved'))) load();
+    if (!(await confirmSaveRail(rail, before, after))) return false;
+    const done = await changeRail(rail.id, { values: changed }, t('rules.railSaved'));
+    if (done) load();
+    return Boolean(done);
   };
   const railRemove = async (rail) => {
     if (!(await confirmRemoveRail(rail))) return;
-    // the rail is turned off first; only then is it hidden (the engine only knows on / off)
-    if (rail.activo === false || await changeRail(rail.id, { enabled: false }, t('rules.railSaved'))) { remember(rail.id); load(); }
+    // the rail is turned off first (even when it already is: removing asks the password too); only then is it hidden
+    if (await changeRail(rail.id, { enabled: false }, t('rules.railSaved'))) { remember(rail.id); load(); }
   };
   const railRestore = async (rail) => {
     if (!(await confirmRestoreRail(rail))) return;
@@ -109,15 +112,17 @@ export function RulesView() {
           <Segmented value={side} onChange={setSide} aria-label={t('rules.tabsLabel')} options={[{ value: 'orb', label: t('rules.tabOrb'), testid: 'rules-side-orb' }, { value: 'agents', label: t('rules.tabAgents'), testid: 'rules-side-agents' }]} />
           <span className="text-muted-foreground inline-flex items-center gap-1.5 text-caption" title={t('rules.lockedHint')} data-testid="rules-locked"><LockKeyhole className="size-3.5" aria-hidden="true" />{t('rules.lockedPill')}</span>
           <div className="ml-auto flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={restoreSeed} data-testid="rules-restore-seed"><RotateCcw />{t('rules.restoreSeed')}</Button>
-            <Button size="sm" onClick={create} data-testid="rules-new"><Plus />{t('rules.new')}</Button>
+            {bridge.mobile ? null : (<>
+              <Button variant="outline" size="sm" onClick={restoreSeed} data-testid="rules-restore-seed"><RotateCcw />{t('rules.restoreSeed')}</Button>
+              <Button size="sm" onClick={create} data-testid="rules-new"><Plus />{t('rules.new')}</Button>
+            </>)}
           </div>
         </div>
 
         {nothing ? (
           <Card className="py-6" data-testid="rules-empty">
             <Empty icon={ScrollText} title={t('rules.emptyTitle')}>{t('rules.emptyHint')}</Empty>
-            <div className="flex justify-center"><Button variant="outline" size="sm" onClick={restoreSeed}><RotateCcw />{t('rules.restoreSeed')}</Button></div>
+            {bridge.mobile ? null : <div className="flex justify-center"><Button variant="outline" size="sm" onClick={restoreSeed}><RotateCcw />{t('rules.restoreSeed')}</Button></div>}
           </Card>
         ) : (<>
           {core.length ? (

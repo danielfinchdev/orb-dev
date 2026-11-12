@@ -35,6 +35,14 @@ export function readRemoved(storage) {
 export function writeRemoved(storage, ids) {
   try { storage?.setItem(REMOVED_KEY, JSON.stringify([...new Set(ids)])); } catch { /* storage may be blocked: the rail stays paused */ }
 }
+// Keeps only the removed ids whose rail is still off: one turned on from elsewhere (Ajustes, a hand edit) is no
+// longer removed. An empty list of rails (the engine has none) changes nothing.
+export const pruneRemoved = (removed, rails) => (asList(rails).length ? removed.filter((id) => asList(rails).some((r) => r.id === id && r.activo === false)) : removed);
+// A rule listed by the engine has its secrets masked; saving that text back would replace the real one with the mask.
+export const HIDDEN_SECRET = '[secreto oculto]';
+export const hasHiddenSecret = (text) => String(text ?? '').includes(HIDDEN_SECRET);
+// An error that only says the engine does not have the method (an older one): not worth telling the user.
+export const isMissingMethod = (error) => /unknown|desconoc|no existe|not found|method/i.test(String(error?.message ?? error));
 // A removed rail is one that is off AND was removed; a rail the engine turned on again is not removed any more.
 export const isRemoved = (rail, removed) => !rail.fijo && rail.activo === false && removed.includes(rail.id);
 

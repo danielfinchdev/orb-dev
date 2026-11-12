@@ -99,6 +99,7 @@ export default {
   'rules.noAccess': 'The agents cannot reach the rules.',
   'rules.saveRule': 'Save',
   'rules.createRule': 'Create',
+  'rules.hiddenSecret': 'This text holds a key that Orb has hidden. Saving it like this would replace the original key: remove "[secreto oculto]" or change it before saving.',
   'rules.fillAll': 'Write a title and a text.',
   'rules.emptyTitle': 'There are no rules yet',
   'rules.emptyHint': 'The shipped ones come back with "Restore the shipped ones"; you can also write your own.',

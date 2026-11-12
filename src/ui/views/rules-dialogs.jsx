@@ -2,9 +2,9 @@
 // the password itself comes from unlockCore right after, in lib/rules-actions.js. Everything a rule says is plain text.
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Field, Input, Textarea } from '@/components/ui/basic.jsx';
-import { Segmented } from '@/components/ui/primitives.jsx';
+import { Segmented, Note } from '@/components/ui/primitives.jsx';
 import { t } from '@/lib/i18n.js';
-import { diffValues } from '@/lib/rules-access.js';
+import { diffValues, hasHiddenSecret } from '@/lib/rules-access.js';
 
 const lines = (...parts) => parts.filter(Boolean).join('\n\n');
 const railName = (rail) => rail.titulo || t(`rails.${rail.id}.title`);
@@ -46,10 +46,12 @@ export function openRuleEditor(rule, defaultPara = 'orb') {
       <Field label={t('rules.fieldTitle')}><Input value={v.titulo} onChange={(e) => set({ titulo: e.target.value })} maxLength={80} autoFocus data-testid="rule-title" /></Field>
       <Field label={t('rules.fieldFor')}><Segmented value={v.para} onChange={(para) => set({ para })} options={forOptions} className="w-fit" /></Field>
       <Field label={t('rules.fieldText')} hint={t('rules.textHint')}><Textarea value={v.texto} onChange={(e) => set({ texto: e.target.value })} rows={10} maxLength={20000} className="min-h-40 font-mono text-control" data-testid="rule-text" /></Field>
+      {hasHiddenSecret(rule?.texto) || hasHiddenSecret(rule?.titulo) ? <Note tone="warning" data-testid="rule-hidden-note">{t('rules.hiddenSecret')}</Note> : null}
       <p className="text-muted-foreground text-caption">{t('rules.noAccess')}</p>
     </>),
     onOk: (v) => {
       if (!v.titulo.trim() || !v.texto.trim()) throw new Error(t('rules.fillAll'));
+      if (hasHiddenSecret(v.titulo) || hasHiddenSecret(v.texto)) throw new Error(t('rules.hiddenSecret'));
       return { titulo: v.titulo.trim(), para: v.para, texto: v.texto };
     }
   });

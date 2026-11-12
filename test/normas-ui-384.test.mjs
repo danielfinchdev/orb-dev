@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { FRESH_ACTIONS } from '../src/ui/lib/core-access.js';
-import { ruleAction, railAction, asksEveryTime, asList, railsOf, ruleSide, isRemoved, readRemoved, writeRemoved, clampValue, shownValue, diffValues, changedValues, REMOVED_KEY } from '../src/ui/lib/rules-access.js';
+import { ruleAction, railAction, asksEveryTime, asList, railsOf, ruleSide, isRemoved, readRemoved, writeRemoved, clampValue, shownValue, pruneRemoved, hasHiddenSecret, isMissingMethod, diffValues, changedValues, REMOVED_KEY } from '../src/ui/lib/rules-access.js';
 import es from '../src/shared/locales/es.mjs';
 import en from '../src/shared/locales/en.mjs';
 import { RAILS } from '../src/shared/rails-registry.mjs';
@@ -125,4 +125,32 @@ test('values: clamped to the engine limits, percent kept as a fraction, before â
 test('Ajustes â€º save asks the password when a patch changes a rail value', () => {
   const rows = src('views/settings/rows.jsx');
   assert.match(rows, /railValuesChange\(patch, getState\(\)\.app\?\.config\)\) \{ unlock = await unlockCore\('rails'\)/);
+});
+
+test('save() asks the rails password even when another token comes, and Ajustes does not ask a second one', () => {
+  const rows = src('views/settings/rows.jsx');
+  assert.match(rows, /patch\?\.rails !== undefined \|\| railValuesChange\(patch, getState\(\)\.app\?\.config\)\) \{ unlock = await unlockCore\('rails'\)/);
+  assert.doesNotMatch(rows, /!unlock && railValuesChange/);
+  const general = src('views/settings/general.jsx');
+  assert.doesNotMatch(general, /unlockCore\('protected'\)/);
+  assert.match(general, /return save\(\{ protected: clean\.slice\(0, 50\) \}, t\('settings\.protectedSaved'\)\);/);
+  assert.ok((general.match(/\.then\(\(r\) => \{ if \(!r\)/g) ?? []).length >= 3, 'cancelled password puts the controls back');
+});
+
+test('a masked secret in a rule cannot be saved back', () => {
+  assert.ok(hasHiddenSecret('x [secreto oculto] y') && !hasHiddenSecret('x'));
+  const d = src('views/rules-dialogs.jsx');
+  assert.match(d, /hasHiddenSecret\(v\.titulo\) \|\| hasHiddenSecret\(v\.texto\)\) throw/);
+  assert.ok(es['rules.hiddenSecret'] && en['rules.hiddenSecret']);
+});
+
+test('removing a rail asks the password even when it is already off; stale removed ids are dropped', () => {
+  const v = src('views/rules.jsx');
+  const fn = v.slice(v.indexOf('const railRemove'), v.indexOf('const railRestore'));
+  assert.match(fn, /await changeRail\(rail\.id, \{ enabled: false \}/);
+  assert.doesNotMatch(fn, /activo === false \|\|/);
+  assert.deepEqual(pruneRemoved(['a', 'b'], [{ id: 'a', activo: false }, { id: 'b', activo: true }]), ['a']);
+  assert.deepEqual(pruneRemoved(['a'], []), ['a']);
+  assert.ok(isMissingMethod(new Error('unknown method rails.list')) && !isMissingMethod(new Error('disk full')));
+  assert.match(v, /bridge\.mobile \? null : \(<>/);
 });

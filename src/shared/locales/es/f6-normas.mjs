@@ -99,6 +99,7 @@ export default {
   'rules.noAccess': 'Los agentes no tienen acceso a las normas.',
   'rules.saveRule': 'Guardar',
   'rules.createRule': 'Crear',
+  'rules.hiddenSecret': 'Este texto tiene una clave que Orb ha ocultado. Si lo guardas así, la norma perdería la clave original: quita «[secreto oculto]» o cámbialo antes de guardar.',
   'rules.fillAll': 'Escribe un título y un texto.',
   'rules.emptyTitle': 'Todavía no hay normas',
   'rules.emptyHint': 'Las de serie vuelven con «Restaurar las de serie»; también puedes escribir las tuyas.',

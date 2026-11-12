@@ -164,7 +164,7 @@ function RailValues({ rail, onSave }) {
       </div>
       <div className="flex items-center justify-end gap-3">
         <EveryTime />
-        <Button size="sm" disabled={!dirty} onClick={() => onSave(rail, rail.valores, prepared, changed)} data-testid={`rail-save-${rail.id}`}>{t('rules.saveChanges')}</Button>
+        <Button size="sm" disabled={!dirty} onClick={async () => { if (!(await onSave(rail, rail.valores, prepared, changed))) setDraft(rail.valores ?? {}); }} data-testid={`rail-save-${rail.id}`}>{t('rules.saveChanges')}</Button>
       </div>
     </div>
   );
