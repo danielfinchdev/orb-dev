@@ -46,7 +46,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.navigation.toRoute
 import dev.orb.app.ui.chats.SearchViewModel
-import dev.orb.app.ui.lock.LockScreen
+import dev.orb.app.ui.lock.LockGate
 import dev.orb.app.ui.shell.MainShell
 import dev.orb.app.ui.projects.PrDetailScreen
 import dev.orb.app.ui.projects.PrDetailViewModel
@@ -121,11 +121,8 @@ fun OrbApp(container: AppContainer) {
                 val start: Any = remember { if (container.runtime.value != null) Home else Welcome }
                 // Kept above the lock so the person returns to where they were; while locked, no screen is composed at all.
                 val nav = rememberNavController()
-                val locked by container.lock.gate.locked.collectAsStateWithLifecycle()
-                Box(Modifier.fillMaxSize()) {
-                    if (locked) {
-                        LockScreen(container.lock, Modifier.systemBarsPadding())
-                    } else {
+                LockGate(container.lock, Modifier.systemBarsPadding()) {
+                    Box(Modifier.fillMaxSize()) {
                         OrbNav(container, start, nav)
                         ShareWaiting(container, Modifier.align(Alignment.TopCenter).systemBarsPadding())
                     }

@@ -49,3 +49,13 @@ fun LockContent(notice: LockNotice?, busy: Boolean, onUnlock: () -> Unit, onPin:
         TextButton(onClick = onPin, enabled = !busy) { Text(LockTexts.USE_PIN) }
     }
 }
+
+/**
+ * Shows [content] only while the app is open. While locked nothing of it is composed, so whatever waits for the
+ * screen (a tapped notice, shared content) stays pending until the person unlocks, then goes on to its destination.
+ */
+@Composable
+fun LockGate(lock: AppLock, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val locked by lock.gate.locked.collectAsStateWithLifecycle()
+    if (locked) LockScreen(lock, modifier) else content()
+}
