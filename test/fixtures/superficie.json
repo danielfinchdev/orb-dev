@@ -9,6 +9,7 @@
   "actions.remove": "pc",
   "actions.save": "pc",
   "activity.list": "remote",
+  "activity.report": "remote",
   "agents.check": "pc",
   "agents.install": "pc",
   "agents.installState": "pc",

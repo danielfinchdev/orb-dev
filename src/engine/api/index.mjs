@@ -47,6 +47,8 @@ import { projectMethods } from './projects.mjs';
 import { chatMethods } from './chat.mjs';
 import { trashTools } from './trash.mjs';
 import { workMethods } from './work.mjs';
+import { readActivity, buildReport } from '../../domain/activity/activity.mjs';
+import { snapshotBefore, recordUserCall } from '../../domain/activity/record.mjs';
 
 export { fail, str, int, oneOf } from './common.mjs';
 
@@ -257,11 +259,18 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'logs.list': () => logFiles(board).map(([name, file]) => { let size = 0; try { size = fs.statSync(file).size; } catch { /* empty */ } return { name, size }; }),
     'logs.read': ({ project: name, whole }) => readLog(board, str(name, 'bitácora', 200), { whole: Boolean(whole), chars: 40000 }),
 
-    'activity.list': ({ q, limit }) => {
+    // Only q/limit: the events array the window has always had. Any other filter: the paged reader of every source
+    // ({ items, next }, src/domain/activity/activity.mjs).
+    'activity.list': (params) => {
+      const { q, limit } = params;
+      if (['sources', 'level', 'project', 'from', 'to', 'cursor'].some((k) => params[k] !== undefined)) {
+        return readActivity(board, params);
+      }
       const rows = board.recentEvents(Math.min(Number(limit) || 300, 2000));
       const needle = String(q ?? '').toLowerCase().trim();
       return (needle ? rows.filter((r) => `${r.actor} ${r.kind} ${r.detail} ${r.title ?? ''}`.toLowerCase().includes(needle)) : rows).map((r) => ({ ...r, detail: redactSecrets(r.detail) }));
     },
+    'activity.report': ({ at, lines }, principal) => buildReport(board, { at, lines, version, remote: principal?.channel !== 'desktop' }),
     // only the accounts of the agents this PC can run (not every agent Orb knows).
     'usage.get': () => { const avail = board.availableAgents(); return usageReport(board).filter((u) => !avail || avail.includes(u.agent)); },
     // the usage page: what was spent in the last 7, 30 or 90 days, by day, agent and model (names as the selector
@@ -338,7 +347,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       // and, for what the master password guards, a fresh unlock of this PC's window (src/engine/api/master.mjs).
       checkUnlock(method, params);
       trash.guard(method, params);
+      const snap = snapshotBefore(method);
       let out = await fn(params, principal);
+      recordUserCall({ board, method, params, out, principal, snap });
       // the lists of every refresh, as changes since what the caller holds (src/engine/feeds.mjs).
       if (params.since !== undefined) out = feeds.reply(method, params, out, principal);
       // an agent turned on or off, checked again, or an account added or removed: the list of available agents is
