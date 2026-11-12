@@ -126,6 +126,8 @@ class TasksViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TasksState())
 
     init {
+        // What was saved shows first; once the PC has answered, its answer is the truth and the cache only follows it.
+        viewModelScope.launch { backend.saved().collect { saved -> if (!ui.value.answered) data.update { saved } } }
         viewModelScope.launch { reloads.receiveAsFlow().debounce(reloadDebounceMs).collect { reload() } }
         viewModelScope.launch { backend.events.collect { if (it.name in RELOAD_EVENTS) reloads.trySend(Unit) } }
         // Whenever the PC becomes reachable the board is read again, which also covers the first open.

@@ -1,5 +1,6 @@
 package dev.orb.app.ui.tasks
 
+import dev.orb.app.AppContainer
 import dev.orb.app.LinkRuntime
 import dev.orb.app.link.api.ApiMethod
 import dev.orb.app.link.api.ApiMethods
@@ -13,8 +14,14 @@ import dev.orb.app.ui.chats.long
 import dev.orb.app.ui.chats.str
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -35,6 +42,10 @@ interface TasksBackend {
     /** Whether the linked PC can run [m]; what it cannot do is hidden, never shown disabled. */
     fun available(m: ApiMethod): Boolean
 
+    /** The board as last saved on the phone; shown first and while the PC cannot be reached. */
+    fun saved(): Flow<TasksData> = emptyFlow()
+
+    /** Asks the PC for the board and saves the answer in the cache. */
     suspend fun list(): Result<TasksData>
     suspend fun search(q: String): Result<List<SearchTask>>
 
@@ -61,7 +72,7 @@ interface TasksBackend {
     suspend fun decide(id: Long, approve: Boolean, hash: String): Result<Unit>
 }
 
-class RuntimeTasksBackend(private val runtime: LinkRuntime) : TasksBackend {
+class RuntimeTasksBackend(private val container: AppContainer, private val runtime: LinkRuntime) : TasksBackend {
     private val api get() = runtime.api
     override val connection get() = runtime.client.connection
     override val events get() = runtime.client.events
@@ -72,12 +83,25 @@ class RuntimeTasksBackend(private val runtime: LinkRuntime) : TasksBackend {
     private fun Result<JsonElement>.unit(): Result<Unit> = map { }
     private fun bad(): Throwable = LinkException(LinkError.BadAnswer)
 
+    override fun saved(): Flow<TasksData> = flow {
+        // The database opens in the background; until then there is nothing to show.
+        val dao = container.cacheDao() ?: return@flow
+        emitAll(
+            combine(dao.observeTasks(), dao.observeSnapshot("app.state")) { rows, state ->
+                val list = rows.mapNotNull { (runCatching { Json.parseToJsonElement(it.raw) }.getOrNull() as? JsonObject)?.let(TasksParser::row) }
+                val paused = runCatching { (Json.parseToJsonElement(state?.json ?: "") as? JsonObject)?.bool("paused") }.getOrNull()
+                TasksData(list, paused ?: list.any { it.waiting?.kind == "paused" })
+            },
+        )
+    }
+
     override suspend fun list(): Result<TasksData> = coroutineScope {
         val list = async { api.tasks.list() }
         val live = async { if (api.available(ApiMethods.TASKS_LIVE)) api.tasks.live().getOrNull() else null }
         val state = async { api.app.state().getOrNull() }
         val answer = list.await().getOrElse { return@coroutineScope Result.failure(it) }
         if (answer !is JsonArray) return@coroutineScope Result.failure(bad())
+        container.cacheSync()?.applyTasks(answer)
         val rows = TasksParser.mergeLive(TasksParser.list(answer), TasksParser.live(live.await()))
         val paused = ((state.await() as? JsonObject)?.bool("paused")) ?: rows.any { it.waiting?.kind == "paused" }
         Result.success(TasksData(rows, paused))

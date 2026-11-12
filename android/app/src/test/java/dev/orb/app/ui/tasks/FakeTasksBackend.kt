@@ -51,6 +51,9 @@ class FakeTasksBackend(initial: List<TaskRow> = emptyList(), paused: Boolean = f
 
     override fun available(m: ApiMethod) = m.name !in unavailable
 
+    val savedFlow = MutableStateFlow<TasksData?>(null)
+    override fun saved() = kotlinx.coroutines.flow.flow { savedFlow.collect { if (it != null) emit(it) } }
+
     override suspend fun list(): Result<TasksData> { listCount++; return listResult ?: Result.success(data) }
     override suspend fun search(q: String): Result<List<SearchTask>> { searches += q; return searchResult }
 

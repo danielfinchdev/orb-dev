@@ -49,6 +49,27 @@ class TasksViewModelTest {
         task(9, status = "done", result = "Listo el cambio"),
     )
 
+    @Test fun savedBoardShowsWhileThePcIsUnreachable() = runTest(dispatcher) {
+        val b = FakeTasksBackend()
+        b.connectionState.value = ConnectionState.Offline(null, null)
+        b.savedFlow.value = TasksData(listOf(task(1), task(2, status = "done")), paused = false)
+        val vm = vm(b)
+        assertEquals(2, vm.state.value.total)
+        assertTrue(vm.state.value.loaded)
+        assertFalse(vm.state.value.online)
+    }
+
+    @Test fun theFreshAnswerWinsOverTheSavedBoard() = runTest(dispatcher) {
+        val b = FakeTasksBackend(listOf(task(7)))
+        b.savedFlow.value = TasksData(listOf(task(1), task(2)), paused = false)
+        val vm = vm(b)
+        assertEquals(1, vm.state.value.total)
+        // A later cache write that follows the answer must not bring older rows back.
+        b.savedFlow.value = TasksData(listOf(task(1), task(2), task(3)), paused = false)
+        runCurrent()
+        assertEquals(1, vm.state.value.total)
+    }
+
     @Test fun readsTheBoardOnceWhenOnlineAndCountsTheFilters() = runTest(dispatcher) {
         val b = FakeTasksBackend(mixed, paused = true)
         val vm = vm(b)
