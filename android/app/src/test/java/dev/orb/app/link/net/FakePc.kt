@@ -72,6 +72,9 @@ class FakePc(private val clock: Clock) : Interceptor {
     private val startedAt = clock.nowMs()
     val down = HashSet<String>()
     val slow = HashSet<String>()
+
+    /** Hosts that take the request in and then drop the connection, so the PC may have run it. */
+    val resetAfterReceive = HashSet<String>()
     val seenNonces = HashSet<String>()
     val log = CopyOnWriteArrayList<Seen>()
 
@@ -147,6 +150,10 @@ class FakePc(private val clock: Clock) : Interceptor {
         tries += clock.nowMs() - startedAt
         if (host in down) throw ConnectException("down")
         if (host in slow) throw SocketTimeoutException("timeout")
+        if (host in resetAfterReceive) {
+            log += Seen(host, req.url.encodedPath, null, null)
+            throw java.net.SocketException("Connection reset")
+        }
         pairIntercept(req)?.let { return it }
         val path = req.url.encodedPath
         if (path == "/api/note-action") {

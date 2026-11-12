@@ -112,8 +112,8 @@ class LinkClient(
 
     /**
      * Tries the PC's addresses from the one that worked last ([LinkSession.urls] is ordered https, Tailscale, home by
-     * orderBases). [once]: a request that changes something and ran out of time is not sent to the next address (the PC
-     * may have done it). Plain http only ever goes to an address [allowedBase] accepts: Android's network config allows
+     * orderBases). [once]: a request that changes something goes to the next address only when nothing of it was sent
+     * (no connection, TLS refused, address not allowed); a timeout or a reset after connecting could mean the PC ran it. Plain http only ever goes to an address [allowedBase] accepts: Android's network config allows
      * cleartext everywhere, so this check is the real guard.
      * Each address gets a freshly sealed request, so a nonce is never sent twice.
      */
@@ -125,8 +125,9 @@ class LinkClient(
             val base = s.urls[idx]
             val last = i + 1 >= n
             var timedOut = false
+            var mayHaveSent = false
             try {
-                if (!allowedBase(base)) throw NetFailure(false, null)
+                if (!allowedBase(base)) throw NetFailure(false, null, mayHaveSent = false)
                 val p = prepare(base)
                 val res = if (stream) openStream(p.request, ms) else http.forRequest(ms, timeouts.connect).newCall(p.request).await()
                 persistAt(idx)
@@ -134,11 +135,12 @@ class LinkClient(
                 return Reached(res, p.nonce, base)
             } catch (e: NetFailure) {
                 timedOut = e.timeout
+                mayHaveSent = e.mayHaveSent
             } catch (e: IllegalArgumentException) {
                 // not a usable address: the next one
             }
             if (n > 1 && (!last || timedOut)) persistAt((idx + 1) % n)
-            if (once && timedOut) {
+            if (once && mayHaveSent) {
                 markOffline()
                 throw LinkException(LinkError.Timeout)
             }

@@ -24,8 +24,12 @@ import kotlin.coroutines.resumeWithException
 internal val JSON_TYPE = "application/json".toMediaType()
 internal val BYTES_TYPE = "application/octet-stream".toMediaType()
 
-/** The request failed before any answer: [timeout] tells «no answer in time» (the PC may have got it) from «not reached». */
-internal class NetFailure(val timeout: Boolean, cause: Throwable?, val tooLarge: Boolean = false) : IOException("net failure", cause)
+/**
+ * The request failed before any answer: [timeout] tells «no answer in time» (the PC may have got it) from «not reached».
+ * [mayHaveSent] is false only when nothing of the request left the phone (no connection, TLS refused, address not
+ * allowed); after that, a reset or a short read still leaves the PC possibly having run it.
+ */
+internal class NetFailure(val timeout: Boolean, cause: Throwable?, val tooLarge: Boolean = false, val mayHaveSent: Boolean = true) : IOException("net failure", cause)
 
 /** Plain JSON answers (errors, 409, pairing) are tiny; a bigger one is not the PC. */
 internal const val MAX_PLAIN_BODY = 1_000_000L
@@ -43,12 +47,19 @@ internal fun OkHttpClient.forRequest(ms: Long, connectMs: Long): OkHttpClient = 
 
 internal fun isTimeout(e: IOException) = e is InterruptedIOException
 
+/** The failures that happen while connecting, before the request is written. A timeout never counts: it may be the call's own. */
+internal fun failedBeforeSending(e: IOException) = !isTimeout(e) && (
+    e is java.net.ConnectException || e is java.net.UnknownHostException || e is java.net.NoRouteToHostException ||
+        e is javax.net.ssl.SSLHandshakeException || e is javax.net.ssl.SSLPeerUnverifiedException ||
+        e.cause is java.security.cert.CertificateException
+    )
+
 /** Runs the call without blocking a thread; cancelling the coroutine cancels the call. Failures become [NetFailure]. */
 internal suspend fun Call.await(timedOut: () -> Boolean = { false }): Response = suspendCancellableCoroutine { cont ->
     enqueue(object : Callback {
         override fun onFailure(call: Call, e: IOException) {
             if (cont.isCancelled) return
-            cont.resumeWithException(NetFailure(isTimeout(e) || timedOut(), e))
+            cont.resumeWithException(NetFailure(isTimeout(e) || timedOut(), e, mayHaveSent = !failedBeforeSending(e)))
         }
 
         override fun onResponse(call: Call, response: Response) {

@@ -125,6 +125,33 @@ class LinkClientTest {
     }
 
     @Test
+    fun `a reset after the request arrived is not sent to the next address when it changes something`() = runTest {
+        val r = rig(listOf(ts, home))
+        r.pc.resetAfterReceive += "orb.tail1234.ts.net"
+        val c = client(r)
+        assertEquals(LinkError.Timeout, c.call("chat.send").error())
+        assertEquals(listOf("orb.tail1234.ts.net"), r.pc.log.map { it.host })
+        assertTrue(c.connection.value is ConnectionState.Offline)
+    }
+
+    @Test
+    fun `a reset after the request arrived does go to the next address when the request is safe to repeat`() = runTest {
+        val r = rig(listOf(ts, home))
+        r.pc.resetAfterReceive += "orb.tail1234.ts.net"
+        assertTrue(client(r).me().isSuccess)
+        assertEquals(listOf("orb.tail1234.ts.net", "192.168.1.5"), r.pc.log.map { it.host })
+    }
+
+    @Test
+    fun `a failure to connect goes to the next address even when the request changes something`() = runTest {
+        val r = rig(listOf(ts, home))
+        r.pc.down += "orb.tail1234.ts.net"
+        val c = client(r)
+        assertTrue(c.call("chat.send").isSuccess)
+        assertEquals(listOf("192.168.1.5"), r.pc.log.map { it.host })
+    }
+
+    @Test
     fun `addresses are tried https first then tailscale then the home network`() = runTest {
         val ordered = orderBases(listOf(home, "http://100.101.102.103:3131", ts))
         assertEquals(listOf(ts, "http://100.101.102.103:3131", home), ordered)
