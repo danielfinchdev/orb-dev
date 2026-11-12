@@ -285,8 +285,10 @@ function AgentCard({ a, reload }) {
         {a.installed ? <Badge variant="success">{t('agents.installed')}</Badge> : <Badge variant="destructive">{t('agents.notFound')}</Badge>}
         {a.installed ? <Badge variant={login[1]}>{login[0]}</Badge> : null}
         {!cfg.enabled ? <Badge variant="secondary">{t('agents.disabled')}</Badge> : null}
+        {!cfg.enabled && a.id === 'hermes' ? <Button size="xs" variant="soft" onClick={() => save(a.id, { enabled: true })} data-testid="agent-enable-hermes">{t('agents.enable')}</Button> : null}
         {a.installed && KIND[a.kind] ? <Badge variant="outline" className="text-muted-foreground font-normal">{t(KIND[a.kind])}</Badge> : null}
       </CardContent>
+      {a.id === 'hermes' ? <CardContent><p className="text-warning-ink text-xs" data-testid="agent-hermes-note">{t('agents.hermesNote')}</p></CardContent> : null}
       <CardContent className="flex flex-wrap gap-2">
         <InstallButton a={a} reload={reload} />
         {!a.installed && !INSTALLABLE.includes(a.id) ? <Button size="sm" variant="outline" onClick={() => bridge.openExternal(INSTALL[a.id])}><ExternalLink />{t('agents.howInstall')}</Button> : null}
