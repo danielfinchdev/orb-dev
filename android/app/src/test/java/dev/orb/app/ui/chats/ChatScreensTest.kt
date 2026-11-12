@@ -35,7 +35,7 @@ class ChatScreensTest {
         row("2", title = "Revisar pasarela", project = "api-pagos", unread = 2),
         row("3", title = "Orb 3.8.4 seguimiento", pinned = true),
     )
-    private val menu = ChatsMenu("Conectado a PC", {}, {}, {})
+    private val menu = ChatsMenu(onMenu = {})
 
     private fun list(b: FakeChatsBackend, onOpen: (ChatRef) -> Unit = {}) {
         val vm = ChatListViewModel(b, dispatcher = Dispatchers.Unconfined)

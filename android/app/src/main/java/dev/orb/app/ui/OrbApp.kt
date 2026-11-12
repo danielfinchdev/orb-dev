@@ -58,6 +58,17 @@ import dev.orb.app.ui.tasks.TaskDetailViewModel
 import dev.orb.app.ui.tasks.TaskDiffScreen
 import dev.orb.app.ui.tasks.TaskDiffViewModel
 import dev.orb.app.ui.shell.ShellActions
+import dev.orb.app.ui.shell.MenuAvailability
+import dev.orb.app.link.api.ApiMethods
+import dev.orb.app.ui.menu.ActivityScreen
+import dev.orb.app.ui.menu.ActivityViewModel
+import dev.orb.app.ui.notes.NoticeTarget
+import dev.orb.app.ui.notes.NotesScreen
+import dev.orb.app.ui.notes.NotesViewModel
+import dev.orb.app.ui.schedules.SchedulesScreen
+import dev.orb.app.ui.schedules.SchedulesViewModel
+import dev.orb.app.ui.usage.UsageScreen
+import dev.orb.app.ui.usage.UsageViewModel
 import dev.orb.app.ui.shell.UnlinkDialog
 import dev.orb.app.ui.home.HomeViewModel
 import dev.orb.app.ui.linktest.LinkTestScreen
@@ -79,6 +90,10 @@ import kotlinx.serialization.Serializable
 @Serializable data class ProjectRoute(val name: String)
 @Serializable data class PrListRoute(val name: String)
 @Serializable data class PrRoute(val name: String, val number: Int)
+@Serializable data object NoticesRoute
+@Serializable data object SchedulesRoute
+@Serializable data object ActivityRoute
+@Serializable data object UsageRoute
 
 @Composable
 fun OrbApp(container: AppContainer) {
@@ -127,6 +142,14 @@ private fun OrbNav(container: AppContainer, start: Any) {
             if (backend != null) {
                 val tasksBackend = remember { container.tasksBackend() }
                 val projectsBackend = remember { container.projectsBackend() }
+                val notesBackend = remember { container.notesBackend() }
+                val menuAvailable = remember {
+                    MenuAvailability(
+                        schedules = container.schedulesBackend()?.available(ApiMethods.SCHEDULES_LIST) == true,
+                        activity = container.activityBackend()?.let { it.available(ApiMethods.ACTIVITY_LIST) || it.available(ApiMethods.LOGS_LIST) } == true,
+                        usage = container.usageBackend()?.let { it.available(ApiMethods.USAGE_GET) || it.available(ApiMethods.AGENTS_STATUS) } == true,
+                    )
+                }
                 MainShell(
                     backend, container.themePrefs,
                     ShellActions(
@@ -138,9 +161,15 @@ private fun OrbNav(container: AppContainer, start: Any) {
                         onUnlink = { confirming = true },
                         onOpenTask = { nav.navigate(TaskRoute(it)) },
                         onOpenProject = { nav.navigate(ProjectRoute(it)) },
+                        onNotices = { nav.navigate(NoticesRoute) },
+                        onSchedules = { nav.navigate(SchedulesRoute) },
+                        onActivity = { nav.navigate(ActivityRoute) },
+                        onUsage = { nav.navigate(UsageRoute) },
+                        menu = menuAvailable,
                     ),
                     tasks = tasksBackend,
                     projects = projectsBackend,
+                    notes = notesBackend,
                 )
             }
             if (confirming) UnlinkDialog(onConfirm = { confirming = false; home.unlink() }, onDismiss = { confirming = false })
@@ -232,6 +261,42 @@ private fun OrbNav(container: AppContainer, start: Any) {
             if (backend != null) {
                 val vm = viewModel<PrDetailViewModel>(key = "pr:${route.name}#${route.number}", factory = viewModelFactory { initializer { PrDetailViewModel(backend, route.name, route.number) } })
                 PrDetailScreen(vm, onBack = { nav.popBackStack() })
+            }
+        }
+        composable<NoticesRoute> {
+            val backend = remember { container.notesBackend() }
+            if (backend != null) {
+                val vm = viewModel<NotesViewModel>(factory = viewModelFactory { initializer { NotesViewModel(backend) } })
+                NotesScreen(
+                    vm, onBack = { nav.popBackStack() },
+                    onOpen = { target ->
+                        when (target) {
+                            is NoticeTarget.Chat -> nav.navigate(ChatRoute(target.kind, target.id))
+                            is NoticeTarget.Task -> nav.navigate(TaskRoute(target.id))
+                        }
+                    },
+                )
+            }
+        }
+        composable<SchedulesRoute> {
+            val backend = remember { container.schedulesBackend() }
+            if (backend != null) {
+                val vm = viewModel<SchedulesViewModel>(factory = viewModelFactory { initializer { SchedulesViewModel(backend) } })
+                SchedulesScreen(vm, onBack = { nav.popBackStack() })
+            }
+        }
+        composable<ActivityRoute> {
+            val backend = remember { container.activityBackend() }
+            if (backend != null) {
+                val vm = viewModel<ActivityViewModel>(factory = viewModelFactory { initializer { ActivityViewModel(backend) } })
+                ActivityScreen(vm, onBack = { nav.popBackStack() })
+            }
+        }
+        composable<UsageRoute> {
+            val backend = remember { container.usageBackend() }
+            if (backend != null) {
+                val vm = viewModel<UsageViewModel>(factory = viewModelFactory { initializer { UsageViewModel(backend) } })
+                UsageScreen(vm, onBack = { nav.popBackStack() })
             }
         }
         composable<LinkTest> {

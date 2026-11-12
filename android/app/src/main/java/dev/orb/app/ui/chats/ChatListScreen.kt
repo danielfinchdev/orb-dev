@@ -16,8 +16,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
@@ -51,10 +49,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.orb.app.ui.icons.OrbIcons
+import dev.orb.app.ui.notes.NotesBell
 import dev.orb.app.ui.theme.OrbTheme
 
-/** Where the menu of the Chats bar leads; the shell wires each to its screen. */
-class ChatsMenu(val pcLabel: String, val onAppearance: () -> Unit, val onLinkTest: () -> Unit, val onUnlink: () -> Unit)
+/** What the Chats bar offers: the ☰ menu (a sheet the shell shows) and, when the notices center exists, its bell. */
+class ChatsMenu(val onMenu: () -> Unit, val unreadNotices: Int = 0, val onNotices: (() -> Unit)? = null)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -139,21 +138,13 @@ fun ChatListScreen(
 
 @Composable
 private fun ChatsAppBar(menu: ChatsMenu, onSearch: () -> Unit) {
-    var open by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box {
-            IconButton(onClick = { open = true }) { Icon(OrbIcons.Menu, ChatTexts.MENU, tint = OrbTheme.colors.text2) }
-            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                Text(menu.pcLabel, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium, color = OrbTheme.colors.text2)
-                DropdownMenuItem(text = { Text(ChatTexts.MENU_APPEARANCE) }, leadingIcon = { Icon(OrbIcons.Palette, null) }, onClick = { open = false; menu.onAppearance() })
-                DropdownMenuItem(text = { Text(ChatTexts.MENU_LINK_TEST) }, leadingIcon = { Icon(OrbIcons.Activity, null) }, onClick = { open = false; menu.onLinkTest() })
-                DropdownMenuItem(text = { Text(ChatTexts.MENU_UNLINK) }, leadingIcon = { Icon(OrbIcons.LogOut, null) }, onClick = { open = false; menu.onUnlink() })
-            }
-        }
+        IconButton(onClick = menu.onMenu) { Icon(OrbIcons.Menu, ChatTexts.MENU, tint = OrbTheme.colors.text2) }
         Text(
             ChatTexts.TAB_CHATS, Modifier.weight(1f).padding(start = 4.dp).semantics { heading() },
             style = MaterialTheme.typography.titleLarge,
         )
+        menu.onNotices?.let { NotesBell(menu.unreadNotices, it) }
         IconButton(onClick = onSearch) { Icon(OrbIcons.Search, ChatTexts.SEARCH, tint = OrbTheme.colors.text2) }
     }
 }

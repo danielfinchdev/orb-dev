@@ -44,6 +44,11 @@ import dev.orb.app.ui.chats.ChatRef
 import dev.orb.app.ui.chats.ChatTexts
 import dev.orb.app.ui.chats.ChatsBackend
 import dev.orb.app.ui.chats.ChatsMenu
+import dev.orb.app.ui.menu.MenuActions
+import dev.orb.app.ui.menu.MenuSheet
+import dev.orb.app.ui.menu.MenuState
+import dev.orb.app.ui.notes.NotesBackend
+import dev.orb.app.ui.notes.NotesViewModel
 import dev.orb.app.ui.chats.Message
 import dev.orb.app.ui.connectionText
 import dev.orb.app.ui.icons.OrbIcons
@@ -81,7 +86,15 @@ class ShellActions(
     val onUnlink: () -> Unit,
     val onOpenTask: (Long) -> Unit = {},
     val onOpenProject: (String) -> Unit = {},
+    val onNotices: () -> Unit = {},
+    val onSchedules: () -> Unit = {},
+    val onActivity: () -> Unit = {},
+    val onUsage: () -> Unit = {},
+    /** Which menu entries the linked PC can serve; an entry it cannot is left out. */
+    val menu: MenuAvailability = MenuAvailability(),
 )
+
+class MenuAvailability(val schedules: Boolean = true, val activity: Boolean = true, val usage: Boolean = true)
 
 /** The three tabs. Each keeps its own state while the others are shown. */
 @Composable
@@ -91,13 +104,29 @@ fun MainShell(
     listDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.Default,
     tasks: TasksBackend? = null,
     projects: ProjectsBackend? = null,
+    notes: NotesBackend? = null,
 ) {
     val shell = viewModel<ShellViewModel>(factory = viewModelFactory { initializer { ShellViewModel(backend, themePrefs) } })
     val unread by shell.unreadChats.collectAsStateWithLifecycle()
     val connection by backend.connection.collectAsStateWithLifecycle()
+    // The notices list lives in the backend, so the bell counts even while the center is closed.
+    val noticesVm = notes?.let { viewModel<NotesViewModel>(factory = viewModelFactory { initializer { NotesViewModel(it) } }) }
+    val unreadNotices = noticesVm?.state?.collectAsStateWithLifecycle()?.value?.unread ?: 0
+    var menuOpen by rememberSaveable { mutableStateOf(false) }
     val nav = rememberNavController()
     val current by nav.currentBackStackEntryAsState()
     val fade = OrbMotion.Short
+
+    if (menuOpen) {
+        MenuSheet(
+            MenuState(connectionText(connection), unreadNotices, actions.menu.schedules, actions.menu.activity, actions.menu.usage),
+            MenuActions(
+                onNotices = actions.onNotices, onSchedules = actions.onSchedules, onActivity = actions.onActivity, onUsage = actions.onUsage,
+                onAppearance = actions.onAppearance, onLinkTest = actions.onLinkTest, onUnlink = actions.onUnlink,
+            ),
+            onDismiss = { menuOpen = false },
+        )
+    }
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -122,9 +151,8 @@ fun MainShell(
         ) {
             composable<ChatsTab> {
                 val vm = viewModel<ChatListViewModel>(factory = viewModelFactory { initializer { ChatListViewModel(backend, dispatcher = listDispatcher) } })
-                val label = connectionText(connection)
                 ChatListScreen(
-                    vm, ChatsMenu(label, actions.onAppearance, actions.onLinkTest, actions.onUnlink),
+                    vm, ChatsMenu(onMenu = { menuOpen = true }, unreadNotices = unreadNotices, onNotices = actions.onNotices.takeIf { notes != null }),
                     onOpenChat = actions.onOpenChat, onSearch = actions.onSearch, onNewChat = actions.onNewChat,
                 )
             }

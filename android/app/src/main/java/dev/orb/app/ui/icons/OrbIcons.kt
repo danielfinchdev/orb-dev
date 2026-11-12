@@ -54,6 +54,7 @@ object OrbIcons {
             "m2 2 20 20", "M8.668 3.01A6 6 0 0 1 18 8c0 2.687.77 4.653 1.707 6.05",
         )
     }
+    val Gauge by lazy { lucide("gauge", "m12 14 4-4", "M3.34 19a10 10 0 1 1 17.32 0") }
     val Clock by lazy { lucide("clock", circle(12f, 12f, 10f), "M12 6v6l4 2") }
     val Shield by lazy {
         lucide("shield-alert", "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z", "M12 8v4", "M12 16h.01")

@@ -1,0 +1,189 @@
+package dev.orb.app.ui.menu
+
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import dev.orb.app.link.api.ApiMethod
+import dev.orb.app.link.api.ApiMethods
+import dev.orb.app.link.net.ConnectionState
+import dev.orb.app.link.net.LinkError
+import dev.orb.app.link.net.LinkException
+import dev.orb.app.link.net.PcVersions
+import dev.orb.app.ui.theme.OrbTheme
+import dev.orb.app.ui.theme.ThemeChoice
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import kotlinx.serialization.json.Json
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+
+class FakeActivityBackend : ActivityBackend {
+    val connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Online("http://pc", "PC", PcVersions(1, 1, "3.8.4")))
+    override val connection get() = connectionState
+    var unavailable: Set<String> = emptySet()
+    var events: Result<List<ActivityEvent>> = Result.success(
+        listOf(ActivityEvent(2, "task_created", "usuario", "Revisar", "2026-11-12T08:00:00Z", 5, "Revisar dependencias"), ActivityEvent(1, "weird_kind", "orb", "", null, null, null)),
+    )
+    var logs: Result<List<LogInfo>> = Result.success(listOf(LogInfo("general", 2048), LogInfo("app-movil", 100)))
+    var logText: Result<String> = Result.success("### entrada uno")
+    val calls = ArrayList<String>()
+
+    override fun available(m: ApiMethod) = m.name !in unavailable
+    override suspend fun events(limit: Int): Result<List<ActivityEvent>> { calls += "events $limit"; return events }
+    override suspend fun logs() = logs
+    override suspend fun readLog(name: String): Result<String> { calls += "read $name"; return logText }
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class ActivityViewModelTest {
+    private val dispatcher = StandardTestDispatcher()
+
+    @Before fun setUp() = Dispatchers.setMain(dispatcher)
+    @After fun tearDown() = Dispatchers.resetMain()
+
+    private fun TestScope.vm(b: FakeActivityBackend): ActivityViewModel {
+        val vm = ActivityViewModel(b)
+        backgroundScope.launch { vm.state.collect { } }
+        runCurrent()
+        return vm
+    }
+
+    @Test fun parserReadsEventsAndLogs() {
+        val e = ActivityParser.events(Json.parseToJsonElement("""[{"id":4,"task_id":9,"actor":"orb","kind":"note","detail":"x","at":"2026-01-01T10:00:00Z","title":"T"},{"x":1}]""")).single()
+        assertEquals(9L, e.taskId)
+        assertEquals("T", e.taskTitle)
+        assertEquals(listOf(LogInfo("general", 12)), ActivityParser.logs(Json.parseToJsonElement("""[{"name":"general","size":12},{"size":1}]""")))
+        assertEquals("Tarea creada", MenuTexts.kind("task_created"))
+        assertEquals("Weird kind", MenuTexts.kind("weird_kind"))
+    }
+
+    @Test fun loadsEventsAndLogsOnConnect() = runTest(dispatcher) {
+        val b = FakeActivityBackend()
+        val vm = vm(b)
+        advanceUntilIdle()
+        assertEquals(2, vm.state.value.events?.size)
+        assertEquals(2, vm.state.value.logs?.size)
+        assertEquals("events 100", b.calls.first())
+    }
+
+    @Test fun openingALogReadsItAndClosingGoesBack() = runTest(dispatcher) {
+        val b = FakeActivityBackend()
+        val vm = vm(b)
+        advanceUntilIdle()
+        vm.openLog(LogInfo("general", 2048))
+        advanceUntilIdle()
+        assertEquals("### entrada uno", vm.state.value.log?.text)
+        vm.closeLog()
+        runCurrent()
+        assertNull(vm.state.value.log)
+    }
+
+    @Test fun aLogThePcCannotReadShowsItsError() = runTest(dispatcher) {
+        val b = FakeActivityBackend()
+        b.logText = Result.failure(LinkException(LinkError.Timeout))
+        val vm = vm(b)
+        advanceUntilIdle()
+        vm.openLog(LogInfo("general", 1))
+        advanceUntilIdle()
+        assertNull(vm.state.value.log?.text)
+        assertTrue(vm.state.value.log?.failed?.isNotEmpty() == true)
+    }
+
+    @Test fun withoutActivityTheLogsTabIsTheOneShown() = runTest(dispatcher) {
+        val b = FakeActivityBackend()
+        b.unavailable = setOf(ApiMethods.ACTIVITY_LIST.name)
+        val vm = vm(b)
+        advanceUntilIdle()
+        assertEquals(ActivityTab.Logs, vm.state.value.tab)
+        assertTrue(b.calls.none { it.startsWith("events") })
+    }
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
+class MenuScreensTest {
+    @get:Rule val rule = createComposeRule()
+
+    @Before fun setUp() = Dispatchers.setMain(Dispatchers.Unconfined)
+    @After fun tearDown() = Dispatchers.resetMain()
+
+    private fun showMenu(state: MenuState, actions: MenuActions) {
+        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { MenuContent(state, actions, close = {}) } }
+        rule.waitForIdle()
+    }
+
+    @Test fun menuKeepsAppearanceLinkTestAndUnlinkAndAddsTheNewEntries() {
+        showMenu(MenuState("Conectado a PC", unreadNotices = 3), MenuActions())
+        for (t in listOf("Conectado a PC", "Avisos", "Programadas", "Memorias y actividad", "Uso y agentes", "Apariencia", "Prueba de conexión", "Desenlazar este móvil")) {
+            rule.onNodeWithText(t).performScrollTo().assertIsDisplayed()
+        }
+        rule.onNodeWithText("3").assertIsDisplayed()
+        // The web-view entries wait for the browser step and are left out.
+        for (t in listOf("Pizarra", "Juegos", "Tutoriales")) rule.onNodeWithText(t).assertDoesNotExist()
+    }
+
+    @Test fun entriesTheLinkedPcCannotServeAreLeftOut() {
+        showMenu(MenuState("PC", showSchedules = false, showActivity = false, showUsage = false), MenuActions())
+        for (t in listOf("Programadas", "Memorias y actividad", "Uso y agentes")) rule.onNodeWithText(t).assertDoesNotExist()
+        rule.onNodeWithText("Avisos").assertIsDisplayed()
+    }
+
+    @Test fun eachEntryClosesTheMenuAndGoesToItsScreen() {
+        val got = ArrayList<String>()
+        var closed = 0
+        rule.setContent {
+            OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) {
+                MenuContent(
+                    MenuState("PC"),
+                    MenuActions(
+                        onNotices = { got += "notices" }, onSchedules = { got += "schedules" }, onActivity = { got += "activity" }, onUsage = { got += "usage" },
+                        onAppearance = { got += "appearance" }, onLinkTest = { got += "linktest" }, onUnlink = { got += "unlink" },
+                    ),
+                    close = { closed++ },
+                )
+            }
+        }
+        for (t in listOf("Avisos", "Programadas", "Memorias y actividad", "Uso y agentes", "Apariencia", "Prueba de conexión", "Desenlazar este móvil")) {
+            rule.onNodeWithText(t).performScrollTo().performClick()
+        }
+        rule.waitForIdle()
+        assertEquals(listOf("notices", "schedules", "activity", "usage", "appearance", "linktest", "unlink"), got)
+        assertEquals(7, closed)
+    }
+
+    private fun showActivity(b: FakeActivityBackend) {
+        val vm = ActivityViewModel(b)
+        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { ActivityScreen(vm, onBack = {}) } }
+        rule.waitForIdle()
+    }
+
+    @Test fun activityShowsEventsAndLogsOpenAsText() {
+        showActivity(FakeActivityBackend())
+        rule.onNodeWithText("Tarea creada").assertIsDisplayed()
+        rule.onNodeWithText("Bitácoras").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("general").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("### entrada uno").assertIsDisplayed()
+    }
+}
