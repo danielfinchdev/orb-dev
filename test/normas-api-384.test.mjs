@@ -226,7 +226,7 @@ test('an agent or a linked device never reaches the window API', async () => {
 test('backup: core/normas travels in a copy and comes back with your rule and the changed shipped one', async () => {
   const u = await normal();
   const mine = (await call('rules.create', { titulo: 'Para la copia', para: 'ambos', texto: 'Texto de la copia', unlock: u })).after.id;
-  await call('rules.save', { id: SEED, titulo: 'Cambiada', para: 'ambos', texto: 'Texto cambiado de serie', unlock: u });
+  await call('rules.save', { id: SEED, titulo: 'Cambiada', para: 'ambos', texto: 'Texto cambiado de serie', unlock: await fresh('ruleSeed') });
   const secret = crypto.randomBytes(32);
   board.db.close();
   const { file } = await K.createBackup({ home: t.home, secret, version: 'test' });

@@ -82,7 +82,7 @@ export function checkUnlock(method, params) {
   // pausing or deleting a rule asks every time only when it is a shipped one: its file says so (de_serie), and a shipped id
   // counts even when its file is hidden or broken, so there is no state in which the password is skipped.
   const facts = RULE_TARGET_METHODS.has(method) ? { seedRule: isRuleId(params?.id) && (DEFAULT_IDS.has(params.id) || readRule(params.id)?.de_serie === true) } : {};
-  const purpose = freshPurpose(method, params, facts);
+  const purpose = freshPurpose(method, params, { ...facts, current: ctx.config });
   if (!m.checkToken(params?.unlock, purpose, { consume: Boolean(purpose) })) throw userError('msg.master.needUnlock', {}, { reason: 'unlock' });
 }
 

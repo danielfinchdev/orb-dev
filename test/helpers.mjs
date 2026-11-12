@@ -76,3 +76,9 @@ export function fakeLog(home, run) {
 
 // 3.8.3: Ajustes is a folder of files (src/ui/views/settings/); tests that read its source read them all, in order.
 export const settingsSource = () => ['index', 'rows', 'general', 'devices', 'about'].map((f) => fs.readFileSync(path.join(ROOT, 'src', 'ui', 'views', 'settings', `${f}.jsx`), 'utf8')).join('\n');
+
+// A one-use token of the master password for changing a rail's value (config.save, rails.set): creates the password the first time.
+export async function railsToken(call, password = 'una frase larga de prueba') {
+  if (!(await call('master.state')).exists) await call('master.create', { password });
+  return (await call('master.unlock', { password, purpose: 'rails' })).unlock;
+}

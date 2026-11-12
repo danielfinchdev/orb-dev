@@ -215,7 +215,7 @@ test('la copia fuera de core repone lo que falta; los conectores guardan referen
   assert.equal(needsUnlock('config.save', { patch: { mcpServers: [{ ...sealed[0], env: {} }] } }, current), true, 'quitarle sus claves');
   assert.equal(needsUnlock('config.save', { patch: { mcpServers: [...sealed.slice(0, 1), { name: 'nuevo', command: 'npx' }] } }, current), false, 'añadir uno sin claves, no');
   assert.equal(needsUnlock('config.save', { patch: { protected: [] } }, current), true, 'quitar algo de «Cosas que nadie toca»');
-  assert.equal(needsUnlock('config.save', { patch: { protected: ['secreto.txt', 'otro'] } }, current), false, 'añadir, no');
+  assert.equal(needsUnlock('config.save', { patch: { protected: ['secreto.txt', 'otro'] } }, current), true, 'any change of the protected list is a rail value (a fresh token)');
   assert.equal(needsUnlock('config.save', { patch: { ui: { theme: 'claro' } } }, current), false);
   assert.equal(needsUnlock('backup.now', {}), false);
   assert.equal(touchesKeys(current.mcpServers, [{ ...sealed[0], name: 'renombrado' }]), true, 'renombrarlo');

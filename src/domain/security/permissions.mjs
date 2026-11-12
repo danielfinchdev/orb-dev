@@ -10,6 +10,7 @@
 // No engine imports: the MCP processes load this file too.
 import { tr } from '../../platform/context.mjs';
 import { isRef, touchesKeys } from './connector-secrets.mjs';
+import { RAILS } from '../../shared/rails-registry.mjs';
 
 export const CHANNELS = ['desktop', 'phone', 'browser', 'agent'];
 const REMOTE = new Set(['phone', 'browser']);
@@ -126,15 +127,40 @@ export const RAILS_PURPOSE = 'rails';
 export const SECRET_PURPOSES = Object.freeze({ save: 'secretSave', saved: 'secretSaved' });
 export const FRESH_PURPOSES = Object.freeze([...new Set([...Object.values(FRESH_UNLOCK), ...Object.values(SECRET_PURPOSES)])]);
 // Calls whose purpose depends on the rule they name: the caller (master.mjs) reads the rule and says if it is a shipped one.
-export const RULE_TARGET_METHODS = Object.freeze(new Set(['rules.pause', 'rules.delete']));
+export const RULE_TARGET_METHODS = Object.freeze(new Set(['rules.pause', 'rules.delete', 'rules.save']));
 // The purpose a guarded call's token must carry (an action that asks every time), or null (the usual 5-minute token).
 // facts.seedRule: the rule a rules.pause / rules.delete names is a shipped one (this file reads no files itself).
-// config.save with `rails` is the same door as rails.set, so it asks the same way.
+// facts.current: the settings now (config.save is compared against them; this file reads no ctx itself).
+// config.save with `rails`, or with a rail's value that would change, is the same door as rails.set, so it asks the same way.
 export function freshPurpose(method, params, facts = {}) {
   if (method === 'secrets.answer') return params?.saved === true ? SECRET_PURPOSES.saved : params?.save === true ? SECRET_PURPOSES.save : null;
-  if (method === 'config.save') return params?.patch?.rails !== undefined ? RAILS_PURPOSE : null;
+  if (method === 'config.save') return params?.patch?.rails !== undefined || railValuesChange(params?.patch, facts.current) ? RAILS_PURPOSE : null;
   if (RULE_TARGET_METHODS.has(method)) return facts.seedRule === true ? RULE_PURPOSE : null;
   return FRESH_UNLOCK[method] ?? null;
+}
+const RAIL_KEYS = Object.freeze([...new Set(RAILS.flatMap((r) => r.keys))]);
+const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const deepEqual = (a, b) => {
+  if (a === b) return true;
+  if (Array.isArray(a) || Array.isArray(b)) return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, i) => deepEqual(x, b[i]));
+  if (!isObj(a) || !isObj(b)) return false;
+  const ka = Object.keys(a); const kb = Object.keys(b);
+  return ka.length === kb.length && ka.every((k) => Object.hasOwn(b, k) && deepEqual(a[k], b[k]));
+};
+// Same rule as config-file.mjs › merge: objects merge, arrays and scalars replace.
+const overlay = (base, over) => (isObj(base) && isObj(over) ? { ...base, ...Object.fromEntries(Object.entries(over).map(([k, v]) => [k, overlay(base[k], v)])) } : over);
+const pickPath = (obj, dotted) => dotted.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
+// Whether a config.save patch would change the value of any rail key, comparing what the settings would hold after the merge with
+// what they hold now. A resent identical value (Ajustes sends whole objects) is no change.
+export function railValuesChange(patch, current) {
+  if (!isObj(patch)) return false;
+  const now = current ?? {};
+  return RAIL_KEYS.some((key) => {
+    const top = key.split('.')[0];
+    if (!Object.hasOwn(patch, top)) return false;
+    const after = { [top]: overlay(now[top], patch[top]) };
+    return !deepEqual(pickPath(after, key), pickPath(now, key));
+  });
 }
 export function needsUnlock(method, params, current = {}) {
   if (UNLOCK_METHODS.has(method)) return true;
@@ -143,6 +169,7 @@ export function needsUnlock(method, params, current = {}) {
   if (method !== 'config.save') return false;
   const patch = params?.patch ?? {};
   if (patch.rails !== undefined) return true;
+  if (railValuesChange(patch, current)) return true;
   if (patch.backup && typeof patch.backup === 'object' && Object.hasOwn(patch.backup, 'folder')) return true;
   if (Array.isArray(patch.protected) && (current?.protected ?? []).some((x) => !patch.protected.includes(x))) return true;
   if (!Array.isArray(patch.mcpServers)) return false;
