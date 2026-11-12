@@ -16,7 +16,7 @@ import { LOGIN } from '@/lib/labels.js';
 import { t, useT, useLocale } from '@/lib/i18n.js';
 
 const INSTALL = { claude: 'https://docs.claude.com/en/docs/claude-code/setup', codex: 'https://developers.openai.com/codex/cli', cursor: 'https://cursor.com/cli',
-  gemini: 'https://github.com/google-gemini/gemini-cli', opencode: 'https://opencode.ai', qwen: 'https://github.com/QwenLM/qwen-code', copilot: 'https://github.com/github/copilot-cli' };
+  gemini: 'https://github.com/google-gemini/gemini-cli', opencode: 'https://opencode.ai', qwen: 'https://github.com/QwenLM/qwen-code', copilot: 'https://github.com/github/copilot-cli', hermes: 'https://hermes-agent.nousresearch.com' };
 const WINDOW = { five_hour: 'agents.win.fiveHour', seven_day: 'agents.win.week', seven_day_opus: 'agents.win.weekOpus', seven_day_sonnet: 'agents.win.weekSonnet', '300min': 'agents.win.fiveHour', '10080min': 'agents.win.week', '43200min': 'agents.win.month' };
 const windowLabel = (w) => (WINDOW[w] ? t(WINDOW[w]) : w);
 // How each agent is connected (all of them live).

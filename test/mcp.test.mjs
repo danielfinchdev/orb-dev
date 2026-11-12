@@ -95,7 +95,7 @@ test('crear tareas solo ofrece los agentes y las cuentas que este PC puede usar'
     assert.deepEqual(tool.inputSchema.properties.agent.enum, ['claude', 'codex', 'any']);
     const offered = tool.inputSchema.properties.account.description;
     assert.match(offered, /claude/);
-    for (const gone of ['gemini', 'opencode', 'qwen', 'copilot', 'cursor']) assert.doesNotMatch(offered, new RegExp(gone), gone);
+    for (const gone of ['gemini', 'opencode', 'qwen', 'copilot', 'hermes', 'cursor']) assert.doesNotMatch(offered, new RegExp(gone), gone);
   } finally { boss.close(); board.setting('agents_available', before ?? ''); }
 });
 

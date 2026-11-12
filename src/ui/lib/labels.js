@@ -18,7 +18,7 @@ export const STATUS = translated({
   limited: ['status.limited', 'warning']
 });
 // Agent names stay as they are; only «any» and «usuario» are words. AGENT.orb is set to the assistant's name by the app.
-export const AGENT = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor', gemini: 'Gemini', opencode: 'OpenCode', qwen: 'Qwen Code', copilot: 'Copilot', orb: 'Orb' };
+export const AGENT = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor', gemini: 'Gemini', opencode: 'OpenCode', qwen: 'Qwen Code', copilot: 'Copilot', hermes: 'Hermes', orb: 'Orb' };
 Object.defineProperty(AGENT, 'any', { get: () => t('agent.any'), enumerable: true, configurable: true });
 Object.defineProperty(AGENT, 'usuario', { get: () => t('agent.user'), enumerable: true, configurable: true });
 export const PERMISSION = translated({ auto: 'permission.auto', editar: 'permission.editar', preguntar: 'permission.preguntar', probar: 'permission.probar', leer: 'permission.leer', total: 'permission.total' });

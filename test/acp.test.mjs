@@ -144,7 +144,7 @@ test('ACP: cerrar termina el proceso; detección por ruta y la lista de agentes 
   assert.deepEqual(agent.detect({ path: fake('fake-acp.mjs') }).pre, [fake('fake-acp.mjs')]);
   assert.equal(agent.detect({}), null, 'sin el programa instalado no se detecta');
   assert.deepEqual(agent.loginCommand(exe), { cmd: exe.cmd, args: [...exe.pre, 'login'] });
-  assert.deepEqual(Object.keys(ACP_SPECS), ['gemini', 'opencode', 'qwen', 'copilot']);
+  assert.deepEqual(Object.keys(ACP_SPECS), ['gemini', 'opencode', 'qwen', 'copilot', 'hermes']);
   assert.deepEqual(agent.caps, { images: false, steer: false, fork: false, approvals: true, models: false, context: true });
   assert.equal(live.steer({ text: 'x' }), false, 'ACP no corrige en marcha: los mensajes esperan en la cola');
 });
@@ -160,4 +160,41 @@ test('ACP: parado mientras arranca, el programa se cierra y no recibe el encargo
   await new Promise((resolve) => setTimeout(resolve, 1500)); // well after its slow start
   const methods = fs.existsSync(logFile) ? sent().map((m) => m.method) : [];
   assert.ok(!methods.includes('session/new') && !methods.includes('session/prompt'), methods.join(', '));
+});
+
+// Hermes Agent is not an npm package: no "pkg", started as `hermes acp`, its permissions go through the same guard.
+const hermes = acpAgent('hermes', ACP_SPECS.hermes);
+const withPath = (dirs, fn) => {
+  const key = Object.keys(process.env).find((k) => k.toLowerCase() === 'path') ?? 'PATH';
+  const old = process.env[key]; process.env[key] = dirs.join(path.delimiter);
+  try { return fn(); } finally { process.env[key] = old; }
+};
+
+test('Hermes: spec sin paquete npm, detección por ruta y por PATH simulado', () => {
+  const spec = ACP_SPECS.hermes;
+  assert.equal(spec.pkg, undefined);
+  assert.deepEqual(spec.acpArgs, ['acp']);
+  assert.deepEqual(spec.loginArgs, ['login']);
+  assert.deepEqual(hermes.detect({ path: fake('fake-acp.mjs') }).pre, [fake('fake-acp.mjs')], 'by path');
+  const bin = path.join(dir, process.platform === 'win32' ? 'hermes.exe' : 'hermes');
+  fs.writeFileSync(bin, ''); fs.chmodSync(bin, 0o755);
+  const found = withPath([dir], () => hermes.detect({}));
+  assert.deepEqual(found, { cmd: bin, pre: [] }, 'by PATH');
+});
+
+test('Hermes: arranca con «acp» y sus permisos pasan por la guardia (permitir y denegar)', async () => {
+  const argvFile = path.join(dir, 'hermes-argv.json');
+  fs.rmSync(argvFile, { force: true });
+  const events = [];
+  const live = hermes.createLive({ exe, cwd: dir, env: { FAKE_ACP_LOG: logFile, FAKE_ACP_ARGV: argvFile }, permission: 'editar', onEvent: (ev) => events.push(ev), mcpServers: {} });
+  lives.push(live);
+  for (const [decision, option] of [['allow', 'si-una'], ['deny', 'no']]) {
+    events.length = 0;
+    const turn = live.send({ text: 'PERMISO para publicar' });
+    const req = await approvalOf(events);
+    assert.match(req.reason, /git push/, 'the guard asks, the agent does not decide');
+    assert.equal(live.respond(req.id, decision), true);
+    assert.match((await turn).final, new RegExp(`elegido: ${option}$`));
+  }
+  assert.deepEqual(JSON.parse(fs.readFileSync(argvFile, 'utf8')), ['acp']);
 });

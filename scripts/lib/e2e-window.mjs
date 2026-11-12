@@ -39,7 +39,7 @@ export async function sandbox({ name, defaultExe = 'Orb.exe' }) {
 
   const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
   const { home } = createHome(base, { userName: 'Ana' });
-  const OFF = Object.fromEntries(['codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot'].map((a) => [a, { enabled: false }]));
+  const OFF = Object.fromEntries(['codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot', 'hermes'].map((a) => [a, { enabled: false }]));
   const configure = (patch = {}) => writeJson(paths(home).config, merge(loadConfig(home), { agents: OFF, autoRun: false, ...patch, ui: { tourDone: true, ...(patch.ui ?? {}) } }));
   configure();
   fs.mkdirSync(SANDBOX.ORB_USER_DATA, { recursive: true });

@@ -313,6 +313,7 @@ export default {
   "msg.installer.why.node": "necesario para instalar Codex",
   "msg.installer.why.opencode": "agente de código abierto compatible con muchos proveedores y modelos",
   "msg.installer.why.qwen": "agente rápido y económico para tareas repetitivas",
+  "msg.installer.why.hermes": "agente autónomo con memoria y muchos proveedores de modelos",
   "msg.installer.why.tailscale": "acceso privado al asistente desde el móvil",
   "msg.installer.windowsOnly": "la instalación automática solo está disponible en Windows",
   "msg.mcp.filesCopied": "{name} ha copiado {n} archivo(s) a la copia aislada de la tarea #{id}: {list}",

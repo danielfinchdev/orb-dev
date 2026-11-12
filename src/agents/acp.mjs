@@ -1,6 +1,6 @@
 // Agents that speak ACP (Agent Client Protocol, agentclientprotocol.com): JSON-RPC over stdio, an open standard several
 // clients use to drive many coding agents with one client. One adapter serves them all (Gemini CLI, OpenCode,
-// Qwen Code, GitHub Copilot CLI…); each one is a small spec: how to find it, how to start it in ACP mode, where its login
+// Qwen Code, GitHub Copilot CLI, Hermes Agent…); each one is a small spec: how to find it, how to start it in ACP mode, where its login
 // lives and how to install it. The agent's own program and login are used: Orb never sees credentials.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -50,6 +50,12 @@ export const ACP_SPECS = {
     label: 'GitHub Copilot', pkg: '@github/copilot', bin: 'copilot', acpArgs: ['--acp'],
     login: ['.copilot/config.json'], loginArgs: [], install: 'npm install -g @github/copilot',
     strengths: 'cambios con contexto de GitHub, issues y pull requests', models: [], defaultModel: ''
+  },
+  // Not an npm package: installed with uv (Python), so it is looked up in the PATH and in the usual uv/installer folders.
+  hermes: {
+    label: 'Hermes Agent', bin: 'hermes', acpArgs: ['acp'], binDirs: () => [path.join(userHome(), '.local', 'bin'), path.join(process.env.LOCALAPPDATA ?? path.join(userHome(), 'AppData', 'Local'), 'hermes')],
+    login: ['.hermes/.env', '.hermes/auth.json', '.hermes/config.yaml'], loginArgs: ['login'], install: 'uv tool install "hermes-agent[acp]"',
+    strengths: 'agente autónomo con memoria y muchos proveedores de modelos', models: [], defaultModel: ''
   }
 };
 
@@ -79,7 +85,11 @@ export function acpAgent(id, spec) {
   const caps = { images: false, steer: false, fork: false, approvals: true, models: false, context: true };
   const detect = (cfg = {}) => {
     if (cfg.path && firstFile([cfg.path])) return /\.(c|m)?js$/i.test(cfg.path) ? { cmd: firstFile(inPath('node')) ?? nodeRuntime(), pre: [cfg.path] } : { cmd: cfg.path, pre: [] };
-    return npmBin(spec.pkg, spec.bin) ?? (firstFile(inPath(spec.bin)) ? { cmd: firstFile(inPath(spec.bin)), pre: [] } : null);
+    const npm = spec.pkg ? npmBin(spec.pkg, spec.bin) : null;
+    if (npm) return npm;
+    const names = IS_WIN ? [`${spec.bin}.exe`, `${spec.bin}.cmd`] : [spec.bin];
+    const found = firstFile(inPath(spec.bin)) ?? firstFile((spec.binDirs?.() ?? []).flatMap((d) => names.map((n) => path.join(d, n))));
+    return found ? { cmd: found, pre: [] } : null;
   };
   const loginState = () => (spec.login.some((f) => firstFile([path.join(userHome(), f)])) ? 'si' : 'desconocido');
   const loginCommand = (exe) => ({ cmd: exe.cmd, args: [...exe.pre, ...spec.loginArgs] });

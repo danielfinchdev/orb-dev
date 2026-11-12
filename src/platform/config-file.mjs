@@ -8,8 +8,8 @@ import { CONFIG_FILE, paths } from './paths.mjs';
 
 // besides Claude Code, Codex and Cursor, the agents that speak ACP (src/agents/acp.mjs). They show up in Agentes and
 // take work only when their program is installed on this PC.
-export const AGENT_IDS = ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot'];
-export const AGENT_LABELS = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor', gemini: 'Gemini', opencode: 'OpenCode', qwen: 'Qwen Code', copilot: 'GitHub Copilot' };
+export const AGENT_IDS = ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot', 'hermes'];
+export const AGENT_LABELS = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor', gemini: 'Gemini', opencode: 'OpenCode', qwen: 'Qwen Code', copilot: 'GitHub Copilot', hermes: 'Hermes Agent' };
 
 export const DEFAULT_CONFIG = Object.freeze({
   version: 5,
@@ -36,7 +36,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   // The rails (src/domain/rules/rails.mjs): empty = all on; only the ones paused by the user are stored, as
   // { <id>: { enabled: false } }. The core rails have no switch.
   rails: {},
-  agentOrder: ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot'],
+  agentOrder: ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot', 'hermes'],
   agents: {
     // Claude Code accepts the aliases sonnet/opus/haiku, so the list keeps working when new versions come out.
     claude: { enabled: true, path: '', models: ['sonnet', 'opus', 'haiku'], defaultModel: 'sonnet', heavyModels: ['opus'],
@@ -53,7 +53,9 @@ export const DEFAULT_CONFIG = Object.freeze({
     qwen: { enabled: true, path: '', models: [], defaultModel: '', heavyModels: [],
       strengths: 'implementación rápida y barata, tareas repetitivas' },
     copilot: { enabled: true, path: '', models: [], defaultModel: '', heavyModels: [],
-      strengths: 'cambios con contexto de GitHub: issues y pull requests' }
+      strengths: 'cambios con contexto de GitHub: issues y pull requests' },
+    hermes: { enabled: true, path: '', models: [], defaultModel: '', heavyModels: [],
+      strengths: 'agente autónomo con memoria y muchos proveedores de modelos' }
   },
   // Accounts (subscriptions) per agent. id = agent and home '' = the CLI's own folder; more can be added from the app.
   accounts: AGENT_IDS.map((a) => ({ id: a, agent: a, label: AGENT_LABELS[a], home: '', enabled: true })),

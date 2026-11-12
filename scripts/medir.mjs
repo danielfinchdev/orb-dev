@@ -111,7 +111,7 @@ const until = async (fn, what, ms = 60000, every = 50) => { const end = Date.now
 // ---- the workspace: an assistant folder with a long chat list, tasks and projects
 const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
 const { home } = createHome(base, { userName: 'Ana' });
-const OFF = Object.fromEntries(['cursor', 'gemini', 'opencode', 'qwen', 'copilot'].map((a) => [a, { enabled: false }]));
+const OFF = Object.fromEntries(['cursor', 'gemini', 'opencode', 'qwen', 'copilot', 'hermes'].map((a) => [a, { enabled: false }]));
 writeJson(paths(home).config, merge(loadConfig(home), { ui: { tourDone: true }, agents: OFF, autoRun: false }));
 fs.mkdirSync(SANDBOX.ORB_USER_DATA, { recursive: true });
 fs.writeFileSync(path.join(SANDBOX.ORB_USER_DATA, 'ubicacion.json'), JSON.stringify({ home }));

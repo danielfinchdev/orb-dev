@@ -21,7 +21,7 @@ process.env.ORB_BRIDGE_DIR = path.join(os.tmpdir(), `orb-test-puente-${process.p
 process.env.ORB_BACKUP_ROOT ??= path.join(os.tmpdir(), `orb-test-copias-${process.pid}`);
 
 // Cursor and the ACP agents are off by default so "any" tasks and reviews go to Claude or Codex (as in the old tests).
-const OFF = Object.fromEntries(['cursor', 'gemini', 'opencode', 'qwen', 'copilot'].map((a) => [a, { enabled: false }]));
+const OFF = Object.fromEntries(['cursor', 'gemini', 'opencode', 'qwen', 'copilot', 'hermes'].map((a) => [a, { enabled: false }]));
 
 export function tempHome(patch = {}) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-test-'));
