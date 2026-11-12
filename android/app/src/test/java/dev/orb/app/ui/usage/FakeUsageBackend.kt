@@ -40,11 +40,13 @@ class FakeUsageBackend : UsageBackend {
     )
     var refreshResult: Result<Unit> = Result.success(Unit)
     val calls = ArrayList<String>()
+    /** Per-range gates: a history read for that range waits until the gate opens. */
+    val historyGates = HashMap<Int, kotlinx.coroutines.CompletableDeferred<Unit>>()
 
     override fun available(m: ApiMethod) = m.name !in unavailable
     override suspend fun accounts(): Result<List<UsageAccount>> { calls += "accounts"; return accountList }
     override suspend fun refresh(): Result<Unit> { calls += "refresh"; return refreshResult }
-    override suspend fun history(days: Int): Result<UsageHistory> { calls += "history $days"; return historyResult(days) }
+    override suspend fun history(days: Int): Result<UsageHistory> { calls += "history $days"; historyGates[days]?.await(); return historyResult(days) }
     override suspend fun agents() = agentList
     override suspend fun guide() = guideList
 }

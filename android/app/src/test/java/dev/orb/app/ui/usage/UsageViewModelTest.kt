@@ -128,6 +128,21 @@ class UsageViewModelTest {
         assertEquals("history 7", b.calls.last())
     }
 
+    @Test fun aSlowAnswerForAnOldPeriodNeverOverwritesTheCurrentOne() = runTest(dispatcher) {
+        val b = FakeUsageBackend()
+        val vm = vm(b)
+        advanceUntilIdle()
+        val slow = kotlinx.coroutines.CompletableDeferred<Unit>()
+        b.historyGates[7] = slow
+        vm.setDays(7)
+        runCurrent()
+        vm.setDays(90)
+        advanceUntilIdle()
+        slow.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(90, vm.state.value.history.data?.days)
+    }
+
     @Test fun updateAsksThePcThenReadsTheAccounts() = runTest(dispatcher) {
         val b = FakeUsageBackend()
         val vm = vm(b)

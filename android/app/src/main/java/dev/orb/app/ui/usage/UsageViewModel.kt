@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import dev.orb.app.link.api.ApiMethods
 import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.ui.linkErrorText
-import kotlinx.coroutines.async
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -78,6 +78,7 @@ class UsageViewModel(private val backend: UsageBackend) : ViewModel() {
     }
 
     private var reading = false
+    private var historyJob: Job? = null
 
     private fun <T> MutableStateFlow<Section<T>>.take(r: Result<T>) = update { old ->
         Section(r.getOrNull() ?: old.data, r.isFailure, old.answered || r.isSuccess)
@@ -90,12 +91,19 @@ class UsageViewModel(private val backend: UsageBackend) : ViewModel() {
         ui.update { it.copy(refreshing = true) }
         coroutineScope {
             launch { readAccounts() }
-            launch { if (backend.available(ApiMethods.USAGE_HISTORY)) history.take(backend.history(ui.value.days)) }
+            launch { readHistory(ui.value.days) }
             launch { if (backend.available(ApiMethods.AGENTS_STATUS)) agents.take(backend.agents()) }
             launch { if (backend.available(ApiMethods.MODELS_GUIDE)) guide.take(backend.guide()) }
         }
         reading = false
         ui.update { it.copy(refreshing = false) }
+    }
+
+    /** An answer for a range the person has already left is dropped, so it never overwrites the current one. */
+    private suspend fun readHistory(days: Int) {
+        if (!backend.available(ApiMethods.USAGE_HISTORY)) return
+        val r = backend.history(days)
+        if (days == ui.value.days) history.take(r)
     }
 
     /** Pull to refresh and the first read; a read already under way is not repeated. */
@@ -108,7 +116,8 @@ class UsageViewModel(private val backend: UsageBackend) : ViewModel() {
     fun setDays(days: Int) {
         if (days == ui.value.days) return
         ui.update { it.copy(days = days) }
-        viewModelScope.launch { if (backend.available(ApiMethods.USAGE_HISTORY)) history.take(backend.history(days)) }
+        historyJob?.cancel()
+        historyJob = viewModelScope.launch { readHistory(days) }
     }
 
     /** «Actualizar»: the agents are asked for their plan again, then the accounts are read. */
