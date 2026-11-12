@@ -115,6 +115,29 @@ class SchedulesViewModelTest {
         assertTrue(got.single().startsWith(SchedulesTexts.ACTION_FAILED))
     }
 
+    @Test fun openNewLoadsTheAgentsAndCreateSendsTheChosenOnes() = runTest(dispatcher) {
+        val b = FakeSchedulesBackend()
+        val vm = vm(b)
+        advanceUntilIdle()
+        vm.openNew()
+        advanceUntilIdle()
+        assertEquals(listOf("claude", "codex"), vm.state.value.form?.agents?.map { it.id })
+        vm.create(NewSchedule("app-movil", "t", "d", "daily", "08:15", emptyList(), 6, false, false, agent = "claude", model = "opus"))
+        advanceUntilIdle()
+        assertEquals(listOf("create app-movil|t|daily|08:15|[]|6|false|claude|opus"), b.calls)
+    }
+
+    @Test fun formStillOpensWhenTheAgentsCannotBeRead() = runTest(dispatcher) {
+        val b = FakeSchedulesBackend()
+        b.agentList = Result.failure(RuntimeException("x"))
+        val vm = vm(b)
+        advanceUntilIdle()
+        vm.openNew()
+        advanceUntilIdle()
+        assertTrue(vm.state.value.form?.agents.orEmpty().isEmpty())
+        assertEquals(listOf("app-movil", "api-pagos"), vm.state.value.form?.projects)
+    }
+
     @Test fun createSendsTheFormAndClosesIt() = runTest(dispatcher) {
         val b = FakeSchedulesBackend()
         val vm = vm(b)
@@ -124,7 +147,7 @@ class SchedulesViewModelTest {
         assertEquals(listOf("app-movil", "api-pagos"), vm.state.value.form?.projects)
         vm.create(NewSchedule("app-movil", " Tests ", " corre los tests ", "daily", "22:30", emptyList(), 6, true, false))
         advanceUntilIdle()
-        assertEquals(listOf("create app-movil|Tests|daily|22:30|[]|6|true"), b.calls)
+        assertEquals(listOf("create app-movil|Tests|daily|22:30|[]|6|true|any|null"), b.calls)
         assertNull(vm.state.value.form)
     }
 

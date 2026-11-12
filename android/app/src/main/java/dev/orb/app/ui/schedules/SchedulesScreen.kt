@@ -26,6 +26,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -43,6 +44,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -205,15 +207,25 @@ private fun NewDialog(f: ScheduleForm, onCreate: (NewSchedule) -> Unit, onDismis
     var what by rememberSaveable { mutableStateOf("") }
     var every by rememberSaveable { mutableStateOf("daily") }
     var time by rememberSaveable { mutableStateOf("09:00") }
-    var dateTime by rememberSaveable { mutableStateOf("") }
+    var date by rememberSaveable { mutableStateOf("") }
+    var onceTime by rememberSaveable { mutableStateOf("09:00") }
+    var picking by rememberSaveable { mutableStateOf<String?>(null) }
+    var agent by rememberSaveable { mutableStateOf("any") }
+    var model by rememberSaveable { mutableStateOf<String?>(null) }
     var hours by rememberSaveable { mutableStateOf("6") }
     var days by rememberSaveable { mutableStateOf(listOf(1)) }
     var readonly by rememberSaveable { mutableStateOf(false) }
     var sameChat by rememberSaveable { mutableStateOf(false) }
     val chosen = project ?: f.projects.firstOrNull()
-    val at = when (every) { "once" -> dateTime.trim(); "every_hours", "hourly" -> "00:00"; else -> time.trim() }
+    val at = when (every) { "once" -> ScheduleWhen.dateTime(date, onceTime); "every_hours", "hourly" -> "00:00"; else -> time }
+    val agentOption = f.agents.firstOrNull { it.id == agent }
     val ready = !f.saving && chosen != null && title.isNotBlank() && what.isNotBlank() && at.isNotEmpty()
 
+    when (picking) {
+        "time" -> ScheduleTimeDialog(time, { time = it; picking = null }, { picking = null })
+        "once-time" -> ScheduleTimeDialog(onceTime, { onceTime = it; picking = null }, { picking = null })
+        "date" -> ScheduleDateDialog(date, { date = it; picking = null }, { picking = null })
+    }
     AlertDialog(
         onDismissRequest = { if (!f.saving) onDismiss() },
         title = { Text(SchedulesTexts.NEW_TITLE) },
@@ -235,18 +247,40 @@ private fun NewDialog(f: ScheduleForm, onCreate: (NewSchedule) -> Unit, onDismis
                     for (e in ScheduleEvery) FilterChip(selected = every == e, onClick = { every = e }, label = { Text(SchedulesTexts.everyLabel(e)) })
                 }
                 when (every) {
-                    "once" -> OutlinedTextField(dateTime, { dateTime = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text(SchedulesTexts.FIELD_DATETIME) })
+                    "once" -> {
+                        PickRow(SchedulesTexts.FIELD_DATE, date.ifEmpty { SchedulesTexts.PICK_PLACEHOLDER }, "pick-date") { picking = "date" }
+                        PickRow(SchedulesTexts.FIELD_TIME, onceTime, "pick-time") { picking = "once-time" }
+                        Text(SchedulesTexts.PC_TIME_NOTE, style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text3)
+                    }
                     "every_hours" -> OutlinedTextField(
                         hours, { hours = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), label = { Text(SchedulesTexts.FIELD_HOURS) },
                     )
-                    "daily", "weekly" -> OutlinedTextField(time, { time = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text(SchedulesTexts.FIELD_TIME) })
+                    "daily", "weekly" -> {
+                        PickRow(SchedulesTexts.FIELD_TIME, time, "pick-time") { picking = "time" }
+                        Text(SchedulesTexts.PC_TIME_NOTE, style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text3)
+                    }
                 }
                 if (every == "weekly") {
                     Label(SchedulesTexts.FIELD_DAYS)
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         SchedulesTexts.DAYS.forEachIndexed { d, name ->
                             FilterChip(selected = d in days, onClick = { days = if (d in days) days - d else days + d }, label = { Text(name) })
+                        }
+                    }
+                }
+                if (f.agents.isNotEmpty()) {
+                    Label(SchedulesTexts.FIELD_AGENT)
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = agent == "any", onClick = { agent = "any"; model = null }, label = { Text(SchedulesTexts.ANY_AGENT) })
+                        for (a in f.agents) FilterChip(selected = agent == a.id, onClick = { agent = a.id; model = null }, label = { Text(a.label) })
+                    }
+                    val models = agentOption?.models.orEmpty().filter { it.id.isNotEmpty() }
+                    if (models.isNotEmpty()) {
+                        Label(SchedulesTexts.FIELD_MODEL)
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(selected = model == null, onClick = { model = null }, label = { Text(SchedulesTexts.DEFAULT_MODEL) })
+                            for (m in models) FilterChip(selected = model == m.id, onClick = { model = m.id }, label = { Text(m.label) })
                         }
                     }
                 }
@@ -263,6 +297,7 @@ private fun NewDialog(f: ScheduleForm, onCreate: (NewSchedule) -> Unit, onDismis
                             project = chosen.orEmpty(), title = title, description = what, every = every, atTime = at,
                             weekdays = if (every == "weekly") days.sorted().ifEmpty { listOf(1) } else emptyList(),
                             hours = (hours.toIntOrNull() ?: 6).coerceIn(1, 168), readonly = readonly, sameChat = sameChat,
+                            agent = agent, model = model.takeIf { agent != "any" },
                         ),
                     )
                 },
@@ -271,6 +306,14 @@ private fun NewDialog(f: ScheduleForm, onCreate: (NewSchedule) -> Unit, onDismis
         },
         dismissButton = { TextButton(onClick = onDismiss, enabled = !f.saving) { Text(SchedulesTexts.CANCEL) } },
     )
+}
+
+@Composable
+private fun PickRow(label: String, value: String, tag: String, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+        OutlinedButton(onClick = onClick, modifier = Modifier.testTag(tag)) { Text(value) }
+    }
 }
 
 @Composable

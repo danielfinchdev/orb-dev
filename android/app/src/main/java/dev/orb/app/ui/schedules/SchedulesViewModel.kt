@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.orb.app.link.api.ApiMethods
 import dev.orb.app.link.net.ConnectionState
+import dev.orb.app.ui.chats.AgentOption
 import dev.orb.app.ui.linkErrorText
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
@@ -26,6 +27,8 @@ import kotlinx.coroutines.launch
 data class ScheduleForm(
     val editing: ScheduleItem? = null,
     val projects: List<String> = emptyList(),
+    /** Empty while loading or when the PC did not answer: the form then offers only «any agent». */
+    val agents: List<AgentOption> = emptyList(),
     val saving: Boolean = false,
     val error: String? = null,
 )
@@ -139,6 +142,10 @@ class SchedulesViewModel(
         viewModelScope.launch {
             val names = backend.projects().getOrDefault(emptyList())
             ui.update { u -> u.copy(form = u.form?.takeIf { it.editing == null }?.copy(projects = names) ?: u.form) }
+        }
+        viewModelScope.launch {
+            val agents = backend.agents().getOrDefault(emptyList())
+            ui.update { u -> u.copy(form = u.form?.takeIf { it.editing == null }?.copy(agents = agents) ?: u.form) }
         }
     }
 

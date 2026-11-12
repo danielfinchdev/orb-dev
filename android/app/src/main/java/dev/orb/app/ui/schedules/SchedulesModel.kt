@@ -49,6 +49,10 @@ data class NewSchedule(
     val hours: Int,
     val readonly: Boolean,
     val sameChat: Boolean,
+    /** An agent id, or `any` to let the PC choose; the PC rejects an unknown one. */
+    val agent: String = "any",
+    /** A model id of [agent]; null keeps the agent's own default. */
+    val model: String? = null,
 )
 
 object SchedulesParser {

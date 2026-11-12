@@ -6,6 +6,10 @@ import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.link.net.LinkError
 import dev.orb.app.link.net.LinkEvent
 import dev.orb.app.link.net.LinkException
+import dev.orb.app.ui.chats.AgentOption
+import dev.orb.app.ui.chats.NewChatParser
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.JsonArray
@@ -26,6 +30,8 @@ interface SchedulesBackend {
 
     /** The project names a schedule can belong to. */
     suspend fun projects(): Result<List<String>>
+    /** The agents the PC can run now, with their models, for the agent and model choice. */
+    suspend fun agents(): Result<List<AgentOption>>
     suspend fun create(s: NewSchedule): Result<Unit>
 
     /** Only the fields that are not null change. */
@@ -49,6 +55,12 @@ class RuntimeSchedulesBackend(private val runtime: LinkRuntime) : SchedulesBacke
 
     override suspend fun projects(): Result<List<String>> = api.projects.list().map { SchedulesParser.projectNames(it) }
 
+    override suspend fun agents(): Result<List<AgentOption>> = coroutineScope {
+        val state = async { api.app.state() }
+        val catalog = api.models.catalog().getOrElse { return@coroutineScope Result.failure(it) }
+        Result.success(NewChatParser.parse(catalog, state.await().getOrNull(), null).agents)
+    }
+
     override suspend fun create(s: NewSchedule) = api.schedules.create(
         buildJsonObject {
             put("project", s.project)
@@ -60,6 +72,8 @@ class RuntimeSchedulesBackend(private val runtime: LinkRuntime) : SchedulesBacke
             put("hours", s.hours)
             put("readonly", s.readonly)
             put("same_chat", s.sameChat)
+            put("agent", s.agent)
+            s.model?.let { put("model", it) }
         },
     ).unit()
 

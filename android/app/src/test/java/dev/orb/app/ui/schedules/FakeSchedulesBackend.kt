@@ -4,6 +4,8 @@ import dev.orb.app.link.api.ApiMethod
 import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.link.net.LinkEvent
 import dev.orb.app.link.net.PcVersions
+import dev.orb.app.ui.chats.AgentOption
+import dev.orb.app.ui.chats.ModelOption
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,9 +32,16 @@ class FakeSchedulesBackend(initial: List<ScheduleItem> = emptyList()) : Schedule
     override fun available(m: ApiMethod) = m.name !in unavailable
     override suspend fun list(): Result<List<ScheduleItem>> { listCount++; return listResult ?: Result.success(items) }
     override suspend fun projects() = Result.success(projectNames)
+    var agentList: Result<List<AgentOption>> = Result.success(
+        listOf(
+            AgentOption("claude", "Claude", null, listOf(ModelOption("opus", "Opus", true, emptyList()), ModelOption("sonnet", "Sonnet", false, emptyList()))),
+            AgentOption("codex", "Codex", null, emptyList()),
+        ),
+    )
+    override suspend fun agents() = agentList
 
     override suspend fun create(s: NewSchedule): Result<Unit> {
-        calls += "create ${s.project}|${s.title}|${s.every}|${s.atTime}|${s.weekdays}|${s.hours}|${s.readonly}"
+        calls += "create ${s.project}|${s.title}|${s.every}|${s.atTime}|${s.weekdays}|${s.hours}|${s.readonly}|${s.agent}|${s.model}"
         return actionResult
     }
 
