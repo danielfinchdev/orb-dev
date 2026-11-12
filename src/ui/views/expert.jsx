@@ -6,6 +6,7 @@ import { ChevronRight, File, FileLock2, Folder, FolderOpen, GitBranch, GitCommit
 import { ChatView } from './chat.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Empty, Spinner } from '@/components/ui/basic.jsx';
+import { WindowControlsSlot } from '@/components/window-controls.jsx';
 import { OpenInMenu, ActionsMenu } from '@/components/project-tools.jsx';
 import { Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, Checkbox, Tip } from '@/components/ui/overlay.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
@@ -283,7 +284,7 @@ export function ExpertView() {
       <div className="hidden min-h-0 flex-1 flex-col lg:flex" data-testid="expert-view">
         {/* the bar is a container: it leaves room for the window's buttons (wco-pad) and, the narrower it is, the more
             of its buttons show only their icon (with a tooltip), so nothing ever slides under the minimise / close. */}
-        <header className="topbar theme-band app-titlebar wco-pad @container/bar flex h-14 shrink-0 items-center gap-2 overflow-hidden border-b px-3" data-testid="expert-bar">
+        <header className="relative topbar theme-band app-titlebar wco-pad @container/bar flex h-14 shrink-0 items-center gap-2 overflow-hidden border-b px-3" data-testid="expert-bar">
           {folded ? <SidebarToggle collapsed /> : null}
           <SquareTerminal className="text-primary size-4 shrink-0" /><span className="hidden shrink-0 text-[15px] whitespace-nowrap @2xl/bar:inline">{t('nav.expert')}</span>
           <Select size="sm" value={project} onValueChange={setProject} title={t('expert.project')} className="ml-2 w-40 min-w-24 shrink @4xl/bar:w-56" placeholder={t('expert.pickProject')} options={projects.map((p) => ({ value: p.name, label: p.name }))} />
@@ -293,6 +294,7 @@ export function ExpertView() {
           <div className="flex-1" />
           <Button variant="ghost" size="sm" onClick={() => go('settings')} aria-label={t('nav.settings')} title={t('nav.settings')} data-testid="expert-settings"><Settings className="@4xl/bar:hidden" /><span className="hidden @4xl/bar:inline">{t('nav.settings')}</span></Button>
           <PanelsMenu labelClassName="hidden @4xl/bar:inline" />
+          <WindowControlsSlot />
         </header>
         <div className="flex min-h-0 flex-1">
           {left.length && project ? (

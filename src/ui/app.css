@@ -379,6 +379,9 @@ html[data-skin="retro"] .wordmark, html[data-skin="nube"] .wordmark { margin-bot
 :root { --wco-inset: 0px; }
 html.has-win-controls { --wco-inset: 8.25rem; }
 .win-controls { position: fixed; top: 0; right: 0; z-index: 70; height: 3.5rem; padding-inline: 0.5rem 0.625rem; display: flex; align-items: center; gap: 0.25rem; pointer-events: auto; -webkit-app-region: no-drag; app-region: no-drag; }
+/* inside a top bar (window-controls.jsx): the bar's own right edge, as tall as the bar; the slot only marks the spot */
+.win-slot { display: contents; }
+.win-controls.in-bar { position: absolute; z-index: 5; }
 .win-control { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 0.625rem; color: var(--muted-foreground); cursor: pointer; transition: background-color 0.15s, color 0.15s, transform 0.1s; }
 .win-control svg { width: 1rem; height: 1rem; stroke-width: 2; }
 .win-control:hover { background-color: color-mix(in oklch, var(--foreground) 9%, transparent); color: var(--foreground); }

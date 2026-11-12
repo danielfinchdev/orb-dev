@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { phoneLayout } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
+import { WindowControlsSlot } from '@/components/window-controls.jsx';
 import { CloseButton } from '@/components/ui/primitives.jsx';
 
 // The frame: a pane (PC) or a full sheet (phone).
@@ -25,9 +26,10 @@ export function InfoFrame({ title, onClose, children }) {
   );
   return (
     <aside className="bg-sidebar/60 flex w-80 shrink-0 flex-col border-l" aria-label={title} data-testid="chat-info">
-      <div className="app-titlebar wco-pad flex h-14 shrink-0 items-center gap-2 border-b px-4">
+      <div className="relative app-titlebar wco-pad flex h-14 shrink-0 items-center gap-2 border-b px-4">
         <h2 className="min-w-0 flex-1 truncate text-[15px] font-semibold">{title}</h2>
         <CloseButton className="no-drag" onClick={onClose} data-testid="chat-info-close" />
+        <WindowControlsSlot />
       </div>
       <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto px-4 py-5">{children}</div>
     </aside>

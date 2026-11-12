@@ -6,6 +6,7 @@ import { useT } from '@/lib/i18n.js';
 import { Button } from './ui/button.jsx';
 import { SidebarToggle } from './theme-toggle.jsx';
 import { MobileMenu } from './mobile-menu.jsx';
+import { WindowControlsSlot } from './window-controls.jsx';
 import { openPalette } from '@/lib/palette.js';
 
 // the moving pieces of a theme's band (themes.css › .band-art; only Nube's rows of sweets for now), in layers the
@@ -55,7 +56,7 @@ export function PageHeader({ icon, title, meta, center, children, className, bac
   // drawing over the clock or the buttons.
   if (center) return (
     <div className="@container shrink-0">
-      <header className={cn('topbar theme-band app-titlebar wco-pad-md bg-background/80 flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2.5 backdrop-blur @2xl:grid @2xl:flex-nowrap @2xl:grid-cols-[minmax(max-content,1fr)_minmax(0,auto)_minmax(max-content,1fr)] @2xl:px-5', className)}>
+      <header className={cn('relative topbar theme-band app-titlebar wco-pad-md bg-background/80 flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2.5 backdrop-blur @2xl:grid @2xl:flex-nowrap @2xl:grid-cols-[minmax(max-content,1fr)_minmax(0,auto)_minmax(max-content,1fr)] @2xl:px-5', className)}>
         <div className="flex min-w-0 flex-1 items-center gap-3">
           {menu}{folded && !phone ? <SidebarToggle collapsed className="-ml-1.5" /> : null}
           {icon}
@@ -65,11 +66,12 @@ export function PageHeader({ icon, title, meta, center, children, className, bac
         <div className="order-last flex min-w-0 basis-full justify-center overflow-hidden @2xl:order-none @2xl:max-w-[28rem] @2xl:basis-auto">{center}</div>
         <div className="flex min-w-0 items-center justify-end gap-2">{children}{palette ? <PaletteButton /> : null}</div>
         <BandArt />
+        <WindowControlsSlot />
       </header>
     </div>
   );
   return (
-    <header className={cn('topbar theme-band app-titlebar wco-pad-md bg-background/80 flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2.5 backdrop-blur sm:px-5', className)}>
+    <header className={cn('relative topbar theme-band app-titlebar wco-pad-md bg-background/80 flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2.5 backdrop-blur sm:px-5', className)}>
       {menu}{folded && !phone ? <SidebarToggle collapsed className="-ml-1.5" /> : null}
       {phone ? null : icon}
       {/* On a phone the buttons go under the title instead of squeezing it. */}
@@ -79,6 +81,7 @@ export function PageHeader({ icon, title, meta, center, children, className, bac
       </div>
       {children || palette ? <div className="flex max-w-full flex-wrap items-center gap-2">{children}{palette ? <PaletteButton /> : null}</div> : null}
       <BandArt />
+      <WindowControlsSlot />
     </header>
   );
 }

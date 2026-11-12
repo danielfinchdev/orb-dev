@@ -5,6 +5,7 @@ import { Button } from './ui/button.jsx';
 import { SidebarToggle } from './theme-toggle.jsx';
 import { BandArt } from './page.jsx';
 import { useStore, go, phoneLayout } from '@/lib/store.js';
+import { WindowControlsSlot } from '@/components/window-controls.jsx';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
@@ -12,11 +13,12 @@ export function ChatBar({ back, title, children, testid = 'chat-bar', className 
   const phone = phoneLayout();
   const folded = useStore((s) => s.sidebarCollapsed);
   return (
-    <header className={cn('topbar chat-bar theme-band app-titlebar wco-pad-md bg-background/80 flex min-h-14 shrink-0 items-center gap-2 border-b px-3 py-1.5 backdrop-blur sm:px-4', className)} data-testid={testid}>
+    <header className={cn('relative topbar chat-bar theme-band app-titlebar wco-pad-md bg-background/80 flex min-h-14 shrink-0 items-center gap-2 border-b px-3 py-1.5 backdrop-blur sm:px-4', className)} data-testid={testid}>
       {back}{folded && !phone ? <SidebarToggle collapsed className="-ml-1" /> : null}
       <div className="no-drag flex min-w-0 flex-1 items-center">{title}</div>
       <div className="no-drag flex shrink-0 items-center gap-1">{children}</div>
       <BandArt />
+      <WindowControlsSlot />
     </header>
   );
 }
