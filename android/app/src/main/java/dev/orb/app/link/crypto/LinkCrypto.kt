@@ -77,6 +77,7 @@ object LinkCrypto {
         fun response(id: String) = "orb:respuesta:$id"
         fun event(id: String) = "orb:evento:$id"
         fun upload(id: String) = "orb:imagen:$id"
+        fun download(deviceId: String, name: String) = "orb:descarga:$deviceId:$name"
     }
 
     private const val NONCE_LEN = 24

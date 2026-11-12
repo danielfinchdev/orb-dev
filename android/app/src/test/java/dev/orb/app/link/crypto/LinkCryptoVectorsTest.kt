@@ -275,6 +275,27 @@ class LinkCryptoVectorsTest {
         }
     }
 
+    @Test fun downloadChannel() {
+        val d = Json.parseToJsonElement(
+            LinkCryptoVectorsTest::class.java.getResourceAsStream("/vectors/vector-descarga.json")!!.readBytes().toString(Charsets.UTF_8)
+        ).jsonObject
+        val b = d.o("binary")
+        val key = b.bytes("key")
+        val plain = b.bytes("plaintext")
+        val aad = b.s("aad")
+        assertEquals(aad, LinkCrypto.Aad.download(b.s("deviceId"), b.s("name")))
+        val ct = sealWithNonce(key, b.bytes("nonce"), plain, aad)
+        assertEquals(b.s("bytes"), hex(b.bytes("nonce") + ct))
+        assertArrayEquals(plain, LinkCrypto.openBytes(key, b.bytes("bytes"), aad))
+        assertArrayEquals(plain, LinkCrypto.openBytes(key, LinkCrypto.sealBytes(key, plain, aad), aad))
+        hit("download.binary")
+        for (n in d.a("negatives").objs()) {
+            assertTrue(n.throws())
+            mustThrow(n.s("label")) { LinkCrypto.openBytes(n.bytes("key"), n.bytes("bytes"), n.s("aad")) }
+            hit("download.negatives")
+        }
+    }
+
     @Test fun roundTripBetweenTwoSides() {
         val phone = LinkCrypto.newKeyPair()
         val pc = LinkCrypto.newKeyPair()
