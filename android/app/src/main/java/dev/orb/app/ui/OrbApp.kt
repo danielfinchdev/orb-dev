@@ -47,6 +47,8 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.navigation.toRoute
 import dev.orb.app.ui.chats.SearchViewModel
 import dev.orb.app.ui.shell.MainShell
+import dev.orb.app.ui.projects.ProjectDetailScreen
+import dev.orb.app.ui.projects.ProjectDetailViewModel
 import dev.orb.app.ui.tasks.TaskDetailScreen
 import dev.orb.app.ui.tasks.TaskDetailViewModel
 import dev.orb.app.ui.tasks.TaskDiffScreen
@@ -70,6 +72,7 @@ import kotlinx.serialization.Serializable
 @Serializable data class ChatRoute(val kind: String, val id: String)
 @Serializable data class TaskRoute(val id: Long)
 @Serializable data class TaskChangesRoute(val id: Long)
+@Serializable data class ProjectRoute(val name: String)
 
 @Composable
 fun OrbApp(container: AppContainer) {
@@ -128,6 +131,7 @@ private fun OrbNav(container: AppContainer, start: Any) {
                         onLinkTest = { nav.navigate(LinkTest) },
                         onUnlink = { confirming = true },
                         onOpenTask = { nav.navigate(TaskRoute(it)) },
+                        onOpenProject = { nav.navigate(ProjectRoute(it)) },
                     ),
                     tasks = tasksBackend,
                     projects = projectsBackend,
@@ -194,6 +198,17 @@ private fun OrbNav(container: AppContainer, start: Any) {
             if (backend != null) {
                 val vm = viewModel<TaskDiffViewModel>(key = "changes:${route.id}", factory = viewModelFactory { initializer { TaskDiffViewModel(backend, route.id) } })
                 TaskDiffScreen(vm, onBack = { nav.popBackStack() })
+            }
+        }
+        composable<ProjectRoute> { entry ->
+            val route = entry.toRoute<ProjectRoute>()
+            val backend = remember { container.projectsBackend() }
+            if (backend != null) {
+                val vm = viewModel<ProjectDetailViewModel>(key = "project:${route.name}", factory = viewModelFactory { initializer { ProjectDetailViewModel(backend, route.name) } })
+                ProjectDetailScreen(
+                    vm, onBack = { nav.popBackStack() },
+                    onOpenChat = { nav.navigate(ChatRoute(it.kind.wire, it.id)) }, onOpenTask = { nav.navigate(TaskRoute(it)) },
+                )
             }
         }
         composable<LinkTest> {

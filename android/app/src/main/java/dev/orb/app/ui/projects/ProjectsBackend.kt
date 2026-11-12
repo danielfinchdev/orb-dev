@@ -7,12 +7,16 @@ import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.link.net.LinkError
 import dev.orb.app.link.net.LinkEvent
 import dev.orb.app.link.net.LinkException
+import dev.orb.app.ui.chats.ChatsBackend
+import dev.orb.app.ui.tasks.TasksParser
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -36,9 +40,22 @@ interface ProjectsBackend {
     /** A null [name] clears the active project. */
     suspend fun setActive(name: String?): Result<Unit>
     suspend fun reopen(key: String): Result<Unit>
+
+    /** The chats and tasks of one project and what git says about its folder. */
+    suspend fun detail(name: String): Result<ProjectDetailData>
+
+    /** `projects.review` / `projects.securityReview`: both create a read-only task and answer its id when the PC says it. */
+    suspend fun review(name: String): Result<Long?>
+    suspend fun securityReview(name: String): Result<Long?>
+
+    /** `projects.finish`: the project leaves the list and moves to «Terminados». */
+    suspend fun finish(name: String): Result<Unit>
+
+    /** The project's logbook as the PC returns it: the latest entries as plain text. */
+    suspend fun log(name: String): Result<String>
 }
 
-class RuntimeProjectsBackend(private val runtime: LinkRuntime) : ProjectsBackend {
+class RuntimeProjectsBackend(private val runtime: LinkRuntime, private val chats: ChatsBackend? = null) : ProjectsBackend {
     private val api get() = runtime.api
     override val connection get() = runtime.client.connection
     override val events get() = runtime.client.events
@@ -66,4 +83,25 @@ class RuntimeProjectsBackend(private val runtime: LinkRuntime) : ProjectsBackend
 
     override suspend fun setActive(name: String?) = api.projects.setActive(buildJsonObject { put("name", name ?: "") }).unit()
     override suspend fun reopen(key: String) = api.projects.reopen(buildJsonObject { put("key", key) }).unit()
+
+    override suspend fun detail(name: String): Result<ProjectDetailData> = coroutineScope {
+        val tasks = async { api.tasks.list() }
+        val info = async { if (api.available(ApiMethods.PROJECTS_INFO)) api.projects.info(byName(name)).getOrNull() else null }
+        val branch = async { if (api.available(ApiMethods.PROJECTS_BRANCH)) api.projects.branch(byName(name)).getOrNull() else null }
+        val rows = tasks.await().getOrElse { return@coroutineScope Result.failure(it) }
+        if (rows !is JsonArray) return@coroutineScope Result.failure(LinkException(LinkError.BadAnswer))
+        val mine = TasksParser.list(rows).filter { it.project.equals(name, ignoreCase = true) }
+        val inbox = chats?.inbox()?.firstOrNull()?.rows.orEmpty().filter { it.project.equals(name, ignoreCase = true) }
+        val git = ProjectInfoParser.info(info.await()) ?: ProjectInfoParser.branch(branch.await())
+        Result.success(ProjectDetailData(inbox, mine, git))
+    }
+
+    private fun byName(name: String) = buildJsonObject { put("name", name) }
+
+    override suspend fun review(name: String) = api.projects.review(byName(name)).map { ProjectInfoParser.taskId(it) }
+    override suspend fun securityReview(name: String) = api.projects.securityReview(byName(name)).map { ProjectInfoParser.taskId(it) }
+    override suspend fun finish(name: String) = api.projects.finish(byName(name)).unit()
+
+    override suspend fun log(name: String): Result<String> =
+        api.logs.read(buildJsonObject { put("project", name) }).mapCatching { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content ?: throw LinkException(LinkError.BadAnswer) }
 }

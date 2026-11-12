@@ -38,4 +38,13 @@ class FakeProjectsBackend(initial: List<ProjectItem> = emptyList(), finished: Li
     override suspend fun create(name: String, category: String?, notes: String) = act("create $name|$category|$notes")
     override suspend fun setActive(name: String?) = act("active $name")
     override suspend fun reopen(key: String) = act("reopen $key")
+
+    var detailResult: Result<ProjectDetailData> = Result.success(ProjectDetailData(emptyList(), emptyList(), null))
+    var logResult: Result<String> = Result.success("")
+
+    override suspend fun detail(name: String) = detailResult
+    override suspend fun review(name: String): Result<Long?> = act("review $name").map { 41L }
+    override suspend fun securityReview(name: String): Result<Long?> = act("security $name").map { null }
+    override suspend fun finish(name: String) = act("finish $name")
+    override suspend fun log(name: String): Result<String> { calls += "log $name"; return logResult }
 }

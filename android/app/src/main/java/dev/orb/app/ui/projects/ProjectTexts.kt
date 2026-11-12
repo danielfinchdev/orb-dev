@@ -36,4 +36,38 @@ object ProjectTexts {
 
     fun open(n: Int) = if (n == 1) "1 tarea" else "$n tareas"
     fun finishedOn(at: String?) = if (at.isNullOrBlank()) "Terminado" else "Terminado el ${at.take(10)}"
+
+    const val BACK = "Volver"
+    const val SECTION_CHATS = "Chats"
+    const val SECTION_TASKS = "Tareas"
+    const val SECTION_MORE = "Más del proyecto"
+    const val NO_CHATS = "Este proyecto no tiene chats"
+    const val NO_TASKS = "Este proyecto no tiene tareas"
+    const val DETAIL_ERROR = "No se pudo cargar el proyecto desde el PC."
+    const val BRANCH = "Rama y cambios"
+    const val NO_GIT = "Sin git"
+    const val REVIEW = "Revisión"
+    const val SECURITY_REVIEW = "Revisión de seguridad"
+    const val LOG = "Bitácora del proyecto"
+    const val LOG_EMPTY = "La bitácora está vacía"
+    const val CLOSE = "Cerrar"
+    const val FINISH = "Terminar proyecto"
+    const val FINISH_ASK = "¿Terminar este proyecto?"
+    const val FINISH_BODY = "Sale de la lista y pasa a «Terminados»; sus tareas pendientes se cancelan y sus programadas se pausan. Podrás reabrirlo."
+    const val FINISH_CONFIRM = "Terminar"
+    const val FINISHED = "Proyecto terminado"
+    const val PRS = "Pull requests"
+
+    fun branchValue(g: ProjectGit?): String {
+        if (g == null) return NO_GIT
+        val parts = listOfNotNull(
+            g.branch,
+            g.changes?.takeIf { it > 0 }?.let { if (it == 1) "1 cambio" else "$it cambios" },
+            g.ahead?.takeIf { it > 0 }?.let { "$it por subir" },
+        )
+        return if (parts.isEmpty()) "al día" else parts.joinToString(" · ")
+    }
+
+    fun reviewStarted(id: Long?) = if (id == null) "Revisión pedida" else "Revisión pedida (tarea #$id)"
+    fun securityStarted(id: Long?) = if (id == null) "Revisión de seguridad pedida" else "Revisión de seguridad pedida (tarea #$id)"
 }
