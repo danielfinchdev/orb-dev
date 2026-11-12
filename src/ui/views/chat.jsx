@@ -506,13 +506,19 @@ export function ChatView({ route, onConversation, project: inProject }) {
         </>}
         notice={<UsageBubble text={bubble.text} onClose={bubble.close} />}
         bottom={<>
-          <BrainPicker catalog={catalog} value={brain} onChange={pickBrain} className="min-w-0 shrink" />
-          <ReasoningMenu catalog={catalog} value={brain} onChange={(reasoning) => settings({ reasoning })} />
+          {/* the model and its reasoning stay together; the permission and the orchestrator form the second group;
+              the context meter sits at the far end. Each group wraps as a whole on a narrow window. */}
+          <div role="group" aria-label={t('session.model')} className="flex min-w-0 shrink items-center gap-1.5" data-testid="composer-group-brain">
+            <BrainPicker catalog={catalog} value={brain} onChange={pickBrain} className="min-w-0 shrink" />
+            <ReasoningMenu catalog={catalog} value={brain} onChange={(reasoning) => settings({ reasoning })} />
+          </div>
+          <div role="group" aria-label={t('session.permissions')} className="flex shrink-0 items-center gap-1.5" data-testid="composer-group-access">
           {/* «Auto» / «Preguntar» for the tasks the assistant creates and the new chats (the global level, also from the phone). */}
           <AutonomySwitch value={app?.config?.permissions?.mode === 'preguntar' ? 'editar' : 'auto'} testid="chat-autonomy" onChange={(p) => act(call('permissions.setMode', { mode: p === 'auto' ? 'auto' : 'preguntar' }), p === 'auto' ? t('session.autoOn') : t('session.askOn')).then(() => refresh())} />
           {/* whether a NEW conversation is with the assistant or directly with the agent chosen; a conversation keeps
               the way it started. an icon and a small switch; the tooltip explains it. */}
           <OrchestratorSwitch on={orchestrate} onChange={toggleOrchestrator} name={name} cursor={brain.agent === 'cursor'} locked={id != null} />
+          </div>
           {context ? <span className="text-muted-foreground ml-auto shrink-0 text-xs"><ContextMeter context={context} /></span> : null}
         </>} />
     </>
