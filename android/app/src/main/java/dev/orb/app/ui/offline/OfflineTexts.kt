@@ -2,6 +2,7 @@ package dev.orb.app.ui.offline
 
 object OfflineTexts {
     const val TITLE = "Sin conexión con el PC"
+    const val FALLBACK = "Sin conexión con el PC. Se muestra lo último guardado en el móvil."
     const val RETRY_NOW = "Reintentar ahora"
     const val CONNECTING = "Conectando…"
     const val RETRYING = "Reintentando…"

@@ -40,7 +40,7 @@ fun OfflineStrip(modifier: Modifier = Modifier) {
     val info = LocalOffline.current
     if (info == null) {
         Text(
-            OfflineTexts.TITLE, modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            OfflineTexts.FALLBACK, modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
             style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.warn,
         )
         return
