@@ -202,3 +202,16 @@ html[data-skin="vaporwave"] :is(h1, h2, h3, [data-slot="card-title"], .hero-titl
 html.dark[data-skin="vaporwave"] :is(h1, h2, h3, [data-slot="card-title"], .hero-title):not(.prose-chat *) { font-family: "Orbitron Variable", "Space Grotesk Variable", var(--font-sans); letter-spacing: 0.04em; }
 /* Buttons inside a message stay small and light. */
 html[data-skin="vaporwave"] .chat-actions [data-slot="button"] { font-weight: 600; }
+
+/* ---- DOM-backed parts (WindowBar, the chat list as a tree). All of them are still, so no animation or filter here. ---- */
+/* The status bar closing the main window; the caption of a dialog is the strip its top border already paints, with the
+   name written over it and the caption buttons at its end. */
+html[data-skin="vaporwave"] .skin-statusbar { flex: none; display: flex; justify-content: space-between; gap: 12px; padding: 2px 10px; margin: 0 3px 3px; background: var(--vw-face); color: var(--foreground); box-shadow: var(--vw-in-thin); font: 400 12px/18px "Silkscreen", var(--font-sans); letter-spacing: 0.06em; }
+html[data-skin="vaporwave"] .skin-titlebar { position: absolute; top: -18px; left: 0; right: 0; height: 18px; display: flex; align-items: center; justify-content: space-between; padding: 0 3px 0 8px; color: oklch(1 0 0); font: 400 11px/1 "Silkscreen", var(--font-sans); letter-spacing: 0.1em; pointer-events: none; }
+html[data-skin="vaporwave"] .skin-caption { display: flex; gap: 2px; }
+html[data-skin="vaporwave"] .skin-caption i { width: 14px; height: 12px; background: var(--vw-face); box-shadow: var(--vw-out-thin); }
+/* The list of chats of a project is a tree: a dotted trunk and a branch into every row; the last row closes it. */
+html[data-skin="vaporwave"] [data-testid^="orb-group-"] .lazy-row::before { content: ""; position: absolute; left: 14px; top: -2px; bottom: 0; border-left: 1px dotted var(--muted-foreground); pointer-events: none; }
+html[data-skin="vaporwave"] [data-testid^="orb-group-"] .lazy-row:last-child::before { bottom: 50%; }
+html[data-skin="vaporwave"] [data-testid^="orb-group-"] .lazy-row::after { content: ""; position: absolute; left: 14px; top: 50%; width: 12px; border-top: 1px dotted var(--muted-foreground); pointer-events: none; }
+html[data-skin="vaporwave"] [data-testid^="orb-group-"] .lazy-row > button { padding-left: 30px; }

@@ -11,6 +11,7 @@ import { notify, notifyError, notifyOk, Toaster } from '@/lib/notify.js';
 import { Menu, Smartphone, ScanLine, Link2, RotateCw, FolderOpen, Download, KeyRound, ArrowLeft, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Field, Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
+import { WindowBar } from '@/components/window-bar.jsx';
 import { MobileTabs, MoreView } from '@/components/mobile-tabs.jsx';
 import { TooltipProvider, Checkbox } from '@/components/ui/overlay.jsx';
 import { DialogHost, confirm, form } from '@/components/dialogs.jsx';
@@ -203,6 +204,7 @@ function Shell() {
         <ErrorBoundary key={routeKey(route)} onHome={resetRoute}>
           <Suspense fallback={<Loading />}><View key={routeKey(route)} route={route} /></Suspense>
         </ErrorBoundary>
+        <WindowBar kind="status" />
       </main>
       {/* the info pane on the right (a chat, a project). */}
       <OrbInfoHost />

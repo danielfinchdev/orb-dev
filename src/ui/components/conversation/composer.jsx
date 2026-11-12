@@ -7,7 +7,7 @@ import { micMode } from '@/lib/mic.js';
 import { ArrowUp, Square, AtSign, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Tip } from '@/components/ui/overlay.jsx';
-import { bridge, useStore, call, act, getState } from '@/lib/store.js';
+import { bridge, useStore, useSkin, call, act, getState } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT, t as tNow } from '@/lib/i18n.js';
 
@@ -82,6 +82,7 @@ export function Composer({ draft, onSend, onStop, busy, placeholder, top, bottom
   const onChange = draft.set;
   useEffect(() => { const el = ta.current; if (!el || FIELD_SIZING) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 260)}px`; }, [value]);
   const [dropping, setDropping] = useState(false);
+  const skin = useSkin();
   const m = useMentions(value, onChange, ta);
   // what this box had when F5 reloaded the window comes back on the same screen (lib/reload.js).
   const here = useStore((s) => routeKey(s.route));
@@ -118,6 +119,7 @@ export function Composer({ draft, onSend, onStop, busy, placeholder, top, bottom
           </div>
         ) : null}
         {top ? <div className="flex min-w-0 items-center gap-2 px-3 pt-3" data-testid="composer-top">{top}</div> : null}
+        {skin === 'retro' ? <span className="composer-prompt" aria-hidden="true">&gt;</span> : null}
         <textarea ref={ta} data-testid={testid} value={value} disabled={disabled} rows={2} placeholder={placeholder} onPaste={onPaste}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => { if (mentions && m.onKey(e)) return; if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); onSend({ alt: e.ctrlKey || e.metaKey }); } }}

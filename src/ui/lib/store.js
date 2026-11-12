@@ -290,6 +290,8 @@ export function applyTheme(next = theme) {
 media.addEventListener('change', () => applyTheme());
 // True while the active theme only exists in dark; the day / night controls disable themselves with it.
 export const useDarkOnly = () => useStore((s) => fullPc() && darkOnlySkin(s.app?.config?.ui?.skin));
+// The theme's base id (cristal wears profesional's), or the default one on the phone; for DOM only some themes draw.
+export const useSkin = () => useStore((s) => (fullPc() ? baseSkin(SKINS.includes(s.app?.config?.ui?.skin) ? s.app.config.ui.skin : SKINS[0]) : SKINS[0]));
 export const isDark = () => document.documentElement.classList.contains('dark');
 
 // Ajustes → Apariencia: visual theme, fonts and colours of code, as data attributes of <html> that the CSS reads

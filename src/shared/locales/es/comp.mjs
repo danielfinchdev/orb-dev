@@ -6,6 +6,7 @@ export default {
   'comp.companion.talkTo': 'Hablar con {name}',
   'comp.dialogs.ok': 'Aceptar',
   'comp.dialogs.cancel': 'Cancelar',
+  'comp.window.ready': 'Listo',
   'comp.installer.checking': 'Comprobando los programas instalados…',
   'comp.installer.optional': '(opcional)',
   'comp.installer.installing': 'Instalando',

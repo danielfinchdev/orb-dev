@@ -84,7 +84,7 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
         </button>
       </Tip>
       {open ? <div className="mb-1 flex flex-col gap-0.5">{items.map((i) => row(i) ?? <NavItem key={i.testid} icon={i.icon} label={i.label} active={i.active} onClick={i.onClick} testid={i.testid} />)}</div> : null}
-      <div className="flex items-center gap-0.5">
+      <div className="side-foot-row flex items-center gap-0.5">
         {/* the first icon sits at the window's left edge: its bubble starts at the icon instead of being cut there. */}
         {open ? null : items.map((i, n) => row(i) ?? (
           <BubbleTip key={i.testid} title={i.label} text={i.hint} side="top" align={n === 0 ? 'start' : 'center'}>

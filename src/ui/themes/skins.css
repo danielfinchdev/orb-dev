@@ -550,3 +550,7 @@ html.dark:not([data-skin="orb"]) .bg-warning.text-white { color: oklch(0.2 0.03 
 /* Orb at night: the destructive colour is light, so the white label of a solid destructive button gives way to a dark one. */
 html.dark[data-skin="orb"] .bg-destructive.text-white { color: oklch(0.2 0.05 22); }
 
+
+/* Cristal: the footer's icons sit in one glass capsule (a still rim and a tint; the blur stays on the four surfaces). */
+html[data-skin][data-material="cristal"] .side-foot[data-open="false"] .side-foot-row { gap: 2px; padding: 3px; border: 1px solid var(--cr-line); border-radius: 999px; background-color: color-mix(in oklch, var(--card) 72%, transparent); box-shadow: var(--cr-edge); }
+html[data-skin][data-material="cristal"] .side-foot-icon { border-radius: 999px; }

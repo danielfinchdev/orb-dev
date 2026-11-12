@@ -146,3 +146,11 @@ html[data-skin="nube"] [data-slot="composer"]:focus-within { border-color: var(-
 /* in a conversation the bar shows its title in the middle: the theme's art keeps to the sides so it never sits behind
    the words (in every theme, also Retro's own mask above). */
 html[data-skin] .topbar-chat.theme-band:has(.bar-title)::before, html[data-skin] .topbar-chat.theme-band:has(.bar-title)::after, html[data-skin] .topbar-chat.theme-band:has(.bar-title) > .band-art { mask-image: linear-gradient(90deg, transparent 150px, #000 230px, #000 calc(50% - 240px), transparent calc(50% - 180px), transparent calc(50% + 180px), #000 calc(50% + 240px), #000 calc(100% - var(--wco-inset, 0px) - 230px), transparent calc(100% - var(--wco-inset, 0px) - 170px)); }
+
+/* The icons of the sidebar's footer are game tiles too, in the four colours of the places. */
+html[data-skin="nube"] .side-foot-row > button.side-foot-icon:not(.is-active) { border: 2px solid var(--pe); border-radius: 12px; background-color: var(--pf); color: var(--pk); box-shadow: 0 2px 0 var(--pe); }
+html[data-skin="nube"] .side-foot-row > button.side-foot-icon:nth-of-type(4n+1) { --pf: var(--cd-green); --pe: var(--cd-green-edge); --pk: var(--cd-green-ink); }
+html[data-skin="nube"] .side-foot-row > button.side-foot-icon:nth-of-type(4n+2) { --pf: var(--cd-blue); --pe: var(--cd-blue-edge); --pk: var(--cd-blue-ink); }
+html[data-skin="nube"] .side-foot-row > button.side-foot-icon:nth-of-type(4n+3) { --pf: var(--cd-orange); --pe: var(--cd-orange-edge); --pk: var(--cd-orange-ink); }
+html[data-skin="nube"] .side-foot-row > button.side-foot-icon:nth-of-type(4n) { --pf: var(--cd-purple); --pe: var(--cd-purple-edge); --pk: var(--cd-purple-ink); }
+html[data-skin="nube"] .side-foot-row > button.side-foot-icon:not(.is-active):hover { background-color: var(--pf); border-color: var(--pe); transform: translateY(-1px); }
