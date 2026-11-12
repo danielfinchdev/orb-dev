@@ -204,11 +204,11 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       board.changed('sidebar');
       return { ok: true };
     },
-    'config.save': ({ patch, unlock }) => {
+    'config.save': ({ patch, unlock }, _principal, { unlocked = false } = {}) => {
       // a connector's keys never reach orb.json: they go into the vault and orb.json keeps references. With the window
       // unlocked (a change that needs it: checkUnlock), the keys are tied to the connectors' commands as they are now.
       const p = patch ?? {};
-      const sealed = Array.isArray(p.mcpServers) ? sealConnectors(ctx.master, p.mcpServers, { trusted: Boolean(ctx.master?.checkToken(unlock)) }) : null;
+      const sealed = Array.isArray(p.mcpServers) ? sealConnectors(ctx.master, p.mcpServers, { trusted: unlocked || Boolean(ctx.master?.checkToken(unlock)) }) : null;
       const c = saveConfig(sealed ? { ...p, mcpServers: sealed } : p); emit('config:changed', c);
       if (p.backup) guardOutside(); // the chosen backups' folder, kept from the agents
       return c;
@@ -349,10 +349,11 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       if (params === null || typeof params !== 'object' || Array.isArray(params)) fail(tr('msg.api.badParams'));
       authorize(principal, method);
       // and, for what the master password guards, a fresh unlock of this PC's window (src/engine/api/master.mjs).
-      checkUnlock(method, params);
+      // a one-use token (rails) is spent here, so the handler is told the unlock was good instead of checking it again.
+      const unlocked = checkUnlock(method, params);
       trash.guard(method, params);
       const snap = snapshotBefore(method);
-      let out = await fn(params, principal);
+      let out = await fn(params, principal, { unlocked });
       recordUserCall({ board, method, params, out, principal, snap });
       // the lists of every refresh, as changes since what the caller holds (src/engine/feeds.mjs).
       if (params.since !== undefined) out = feeds.reply(method, params, out, principal);

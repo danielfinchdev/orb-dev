@@ -10,7 +10,8 @@
 // No engine imports: the MCP processes load this file too.
 import { tr } from '../../platform/context.mjs';
 import { isRef, touchesKeys } from './connector-secrets.mjs';
-import { RAILS } from '../../shared/rails-registry.mjs';
+import { railValuesChange } from '../../shared/rails-registry.mjs';
+export { railValuesChange };
 
 export const CHANNELS = ['desktop', 'phone', 'browser', 'agent'];
 const REMOTE = new Set(['phone', 'browser']);
@@ -137,30 +138,6 @@ export function freshPurpose(method, params, facts = {}) {
   if (method === 'config.save') return params?.patch?.rails !== undefined || railValuesChange(params?.patch, facts.current) ? RAILS_PURPOSE : null;
   if (RULE_TARGET_METHODS.has(method)) return facts.seedRule === true ? RULE_PURPOSE : null;
   return FRESH_UNLOCK[method] ?? null;
-}
-const RAIL_KEYS = Object.freeze([...new Set(RAILS.flatMap((r) => r.keys))]);
-const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
-const deepEqual = (a, b) => {
-  if (a === b) return true;
-  if (Array.isArray(a) || Array.isArray(b)) return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, i) => deepEqual(x, b[i]));
-  if (!isObj(a) || !isObj(b)) return false;
-  const ka = Object.keys(a); const kb = Object.keys(b);
-  return ka.length === kb.length && ka.every((k) => Object.hasOwn(b, k) && deepEqual(a[k], b[k]));
-};
-// Same rule as config-file.mjs › merge: objects merge, arrays and scalars replace.
-const overlay = (base, over) => (isObj(base) && isObj(over) ? { ...base, ...Object.fromEntries(Object.entries(over).map(([k, v]) => [k, overlay(base[k], v)])) } : over);
-const pickPath = (obj, dotted) => dotted.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
-// Whether a config.save patch would change the value of any rail key, comparing what the settings would hold after the merge with
-// what they hold now. A resent identical value (Ajustes sends whole objects) is no change.
-export function railValuesChange(patch, current) {
-  if (!isObj(patch)) return false;
-  const now = current ?? {};
-  return RAIL_KEYS.some((key) => {
-    const top = key.split('.')[0];
-    if (!Object.hasOwn(patch, top)) return false;
-    const after = { [top]: overlay(now[top], patch[top]) };
-    return !deepEqual(pickPath(after, key), pickPath(now, key));
-  });
 }
 export function needsUnlock(method, params, current = {}) {
   if (UNLOCK_METHODS.has(method)) return true;

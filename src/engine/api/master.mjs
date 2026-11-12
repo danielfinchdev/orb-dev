@@ -74,8 +74,9 @@ export function migrateSecrets(board, master = ctx.master, { log = () => {}, emi
 }
 
 // The guard of the dispatcher (api.mjs): a guarded call from this PC's window needs a fresh unlock token.
+// → true when the call was guarded and its token was valid (the token may be used up by now), false when it needed none.
 export function checkUnlock(method, params) {
-  if (!needsUnlock(method, params, ctx.config)) return;
+  if (!needsUnlock(method, params, ctx.config)) return false;
   const m = ctx.master;
   if (!m?.hasPassword()) throw userError(m?.state().lost ? 'msg.master.lost' : 'msg.master.createFirst', {}, { reason: 'unlock' });
   // a token for one action (FRESH_UNLOCK) opens it once: it is used up here.
@@ -84,6 +85,7 @@ export function checkUnlock(method, params) {
   const facts = RULE_TARGET_METHODS.has(method) ? { seedRule: isRuleId(params?.id) && (DEFAULT_IDS.has(params.id) || readRule(params.id)?.de_serie === true) } : {};
   const purpose = freshPurpose(method, params, { ...facts, current: ctx.config });
   if (!m.checkToken(params?.unlock, purpose, { consume: Boolean(purpose) })) throw userError('msg.master.needUnlock', {}, { reason: 'unlock' });
+  return true;
 }
 
 // onLock(why): Orb locked (or its password changed): what the master password gave the chats goes

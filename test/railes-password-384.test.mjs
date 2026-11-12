@@ -14,6 +14,7 @@ import { PermissionError, principalOf, needsUnlock, freshPurpose, railValuesChan
 import { guardCall } from '../src/engine/transport/remote.mjs';
 import { ensureDefaultRules } from '../src/domain/rules/rules.mjs';
 import { DEFAULT_RULES } from '../src/domain/rules/defaults.mjs';
+import { keysHeld, isRef } from '../src/domain/security/connector-secrets.mjs';
 
 const PASSWORD = 'una frase larga de prueba';
 const desktop = principalOf();
@@ -49,6 +50,7 @@ const CHANGES = {
   maxParallel: () => ({ maxParallel: ctx.config.maxParallel === 3 ? 4 : 3 }),
   perAgent: () => ({ perAgent: ctx.config.perAgent === 2 ? 3 : 2 }),
   oneAtATime: () => ({ oneAtATime: !ctx.config.oneAtATime }),
+  'budget.windowHours': () => ({ budget: { windowHours: ctx.config.budget.windowHours === 6 ? 7 : 6 } }),
   timeoutMinutes: () => ({ timeoutMinutes: ctx.config.timeoutMinutes + 5 })
 };
 
@@ -79,7 +81,7 @@ test('config.save: the same values, or other settings, ask for nothing new', asy
   await call('config.save', { patch: { language: 'es', budget: { profile: ctx.config.budget.profile } } });
   assert.equal(ctx.config.assistantName, 'Otro');
   // a budget key that is not a rail's is free too
-  assert.equal(railValuesChange({ budget: { windowHours: 3 } }, ctx.config), false);
+  assert.equal(railValuesChange({ budget: { autoModel: false } }, ctx.config), false);
 });
 
 test('rails.set with values: the 5-minute unlock is not enough, a rails token passes once', async () => {
@@ -114,4 +116,24 @@ test('the phone and the browser get 403 for every write of rails and shipped rul
     assert.notEqual(guardCall(board, m, p), null, `${m} refused by the link`);
   }
   assert.equal(JSON.stringify(ctx.config), before);
+});
+
+test('budget.windowHours: 1 to 24 whole hours, anything else is refused', async () => {
+  for (const bad of [0, -1, 25, 2.5, '5']) await assert.rejects(call('config.save', { patch: { budget: { windowHours: bad } }, unlock: await fresh('rails') }), /windowHours/, String(bad));
+  for (const good of [1, 24]) await call('config.save', { patch: { budget: { windowHours: good } }, unlock: await fresh('rails') });
+  assert.equal(ctx.config.budget.windowHours, 24);
+});
+
+test('config.save: a rails token spent on a rail value still seals the connectors of the same save', async () => {
+  const first = { name: 'gh', command: 'npx', args: ['a'], env: { TOKEN: 'ghp_DE_PRUEBA' } };
+  await call('config.save', { patch: { mcpServers: [first] }, unlock: await normal() });
+  const saved = ctx.config.mcpServers[0];
+  assert.ok(Object.values(saved.env).every(isRef), 'the key went to the vault');
+  const moved = { ...saved, command: 'node' };
+  const next = ctx.config.maxParallel === 3 ? 4 : 3;
+  await call('config.save', { patch: { maxParallel: next, mcpServers: [moved] }, unlock: await fresh('rails') });
+  assert.equal(keysHeld(ctx.master, ctx.config.mcpServers[0]), false, 'keys follow the new command');
+  // without a valid token the keys are not tied to the new command
+  const other = { ...ctx.config.mcpServers[0], command: 'powershell' };
+  await assert.rejects(call('config.save', { patch: { maxParallel: next + 1, mcpServers: [other] } }), needPassword);
 });
