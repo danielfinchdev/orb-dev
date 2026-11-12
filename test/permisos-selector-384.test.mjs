@@ -20,7 +20,7 @@ test('keeps the test ids and the current mode', () => {
 });
 
 test('lists every level with an icon and a description', () => {
-  for (const level of ['auto', 'editar', 'leer', 'probar', 'preguntar', 'total']) assert.match(src, new RegExp(`\b${level}: \{ Icon:`));
+  for (const level of ['auto', 'editar', 'leer', 'probar', 'preguntar', 'total']) assert.ok(src.includes(`  ${level}: { Icon:`), level);
 });
 
 test('the callers keep the phone rule and the full-access flow', () => {
