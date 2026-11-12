@@ -127,7 +127,7 @@ class AppContainer(private val app: Application) {
 
     /** Forgets the PC: the link keys, the cache and the unsent messages. */
     suspend fun unlink() = withContext(Dispatchers.IO) {
-        val current = synchronized(runtimeLock) { _runtime.value.also { _runtime.value = null } }
+        val current = synchronized(runtimeLock) { _runtime.value.also { _runtime.value = null; notes?.second?.close(); notes = null } }
         current?.client?.stop()
         current?.sender?.cancel()
         SecureStore.remove(app, SESSION_KEY)
@@ -149,6 +149,14 @@ class AppContainer(private val app: Application) {
     fun projectsBackend(): dev.orb.app.ui.projects.ProjectsBackend? = _runtime.value?.let { dev.orb.app.ui.projects.RuntimeProjectsBackend(it, chatsBackend()) }
     fun schedulesBackend(): dev.orb.app.ui.schedules.SchedulesBackend? = _runtime.value?.let { dev.orb.app.ui.schedules.RuntimeSchedulesBackend(it) }
     fun usageBackend(): dev.orb.app.ui.usage.UsageBackend? = _runtime.value?.let { dev.orb.app.ui.usage.RuntimeUsageBackend(it) }
+    private var notes: Pair<LinkRuntime, dev.orb.app.ui.notes.RuntimeNotesBackend>? = null
+
+    /** One notices list per link, so the bell keeps counting while the center is closed. */
+    fun notesBackend(): dev.orb.app.ui.notes.NotesBackend? = synchronized(runtimeLock) {
+        val rt = _runtime.value ?: return null
+        notes?.takeIf { it.first === rt }?.second ?: dev.orb.app.ui.notes.RuntimeNotesBackend(rt, scope).also { notes?.second?.close(); notes = rt to it }
+    }
+
     fun newChatBackend(): dev.orb.app.ui.chats.NewChatBackend? = _runtime.value?.let { dev.orb.app.ui.chats.RuntimeNewChatBackend(it) }
 
     private companion object {
