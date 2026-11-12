@@ -123,6 +123,15 @@ class AppContainer(private val app: Application) {
     /** What the app lock plugs into: the content (and shared content) is shown only while this is open. */
     val gate: dev.orb.app.share.AppGate get() = lock.gate
 
+    /** When the PC last answered, and what the «sin conexión» notes need to show it and to try again. */
+    val lastContact = dev.orb.app.data.LastContact(SharedPrefsStore(app.getSharedPreferences("orb.contact", android.content.Context.MODE_PRIVATE)))
+    val offline = dev.orb.app.ui.offline.OfflineInfo(
+        connection = runtime.flatMapLatest { rt -> rt?.client?.connection ?: flowOf(ConnectionState.Unlinked) }
+            .stateIn(scope, SharingStarted.Eagerly, ConnectionState.Connecting),
+        lastContact = lastContact.at,
+        retryNow = { _runtime.value?.client?.resume() },
+    )
+
     /** Content another app shared, kept until the person chooses where it goes (or drops it). */
     val pendingShare = MutableStateFlow<dev.orb.app.share.ShareRequest?>(null)
 
@@ -233,6 +242,7 @@ class AppContainer(private val app: Application) {
             OutboxSender(repo, api, client.connection, this).start().join()
         }
         scope.launch { client.connection.map { it::class.simpleName ?: "?" }.distinctUntilChanged().collect { log.add("conexión $it") } }
+        scope.launch { lastContact.track(client.connection, System::currentTimeMillis) }
         notifierJob?.cancel()
         notifier = Notifier(client.events, { notifyPrefs.settings.value.copy(appLock = lockPrefs.settings.value.enabled) }, { foreground }, notePoster, log::add)
         notifierJob = notifier?.start(scope)
@@ -254,6 +264,7 @@ class AppContainer(private val app: Application) {
         notifier = null
         notePoster.clearNotes()
         notifyPrefs.linked = false
+        lastContact.clear()
         notifyPrefs.setKeepConnected(true)
         notifyPrefs.setLockScreenPublic(false)
         SecureStore.remove(app, SESSION_KEY)
