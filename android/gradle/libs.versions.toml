@@ -16,6 +16,9 @@ ksp = "2.3.13"
 sqlite = "2.6.2"
 sqlcipher = "4.9.0"
 robolectric = "4.16"
+biometric = "1.1.0"
+# The biometric library brings an old fragment; it must match the activity version the app already uses.
+fragment = "1.8.9"
 
 [libraries]
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
@@ -43,6 +46,8 @@ sqlcipher-android = { module = "net.zetetic:sqlcipher-android", version.ref = "s
 compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
 compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
+androidx-fragment = { module = "androidx.fragment:fragment", version.ref = "fragment" }
 junit = { module = "junit:junit", version.ref = "junit" }
 
 [plugins]
