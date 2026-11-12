@@ -434,7 +434,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const slim = phoneLayout() && Boolean(conv);
   const infoOpen = useStore((s) => s.orbInfo?.type === 'chat') && !embedded;
   const headProject = conv ? conv.project ?? null : workProject?.name ?? null;
-  const waitingYou = useStore((s) => id != null && s.tasks.some((x) => x.conversation_id === id && needsApproval(x)));
+  const waitingTask = useStore((s) => (id != null ? s.tasks.find((x) => x.conversation_id === id && needsApproval(x)) : undefined));
+  const waitingYou = Boolean(waitingTask);
   const chatActions = useOrbActions(conv ? { kind: 'conversation', id: conv.id, title: conv.title, done: conv.status === 'done', pinned: Boolean(item?.pinned), muted: Boolean(item?.muted), unread: 0 } : null);
 
   return (
@@ -451,7 +452,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
             <span className="flex items-center gap-1.5"><span className="truncate text-[15px] font-semibold" data-testid="bar-title-text">{conv?.title ?? t('orbchats.newChatTitle')}</span>{item?.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}</span>
             <span className={cn('flex min-w-0 items-center gap-1 text-[12.5px]', chat.busy ? 'text-primary' : waitingYou ? 'text-warning-ink' : 'text-muted-foreground')} data-testid="orb-chat-status">
               {headProject ? <ProjectIcon name={headProject} size={14} /> : <Folder className="size-3 shrink-0" aria-hidden="true" />}
-              <span className="truncate">{headProject ?? t('orbchats.noProject')} · {chat.busy ? t('chats.working') : waitingYou ? t('orbchats.awaiting') : name}</span>
+              <span className="truncate">{headProject ?? t('orbchats.noProject')} · {chat.busy ? t('chats.working') : waitingYou ? <TaskStatus task={waitingTask} plain /> : name}</span>
             </span>
           </span>
         </button>
