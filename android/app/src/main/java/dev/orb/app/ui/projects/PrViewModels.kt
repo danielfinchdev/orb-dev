@@ -51,6 +51,8 @@ data class PrDetailState(
     val merging: Boolean = false,
     /** The PC said the merge went through, whether or not the state could be read back yet. */
     val mergeSent: Boolean = false,
+    /** The merge timed out: it may have gone through, so the button stays hidden until a later read says the PR is still open. */
+    val mergeUnsure: Boolean = false,
     val online: Boolean = true,
     val canMerge: Boolean = false,
 )
@@ -85,9 +87,12 @@ class PrDetailViewModel(private val backend: ProjectsBackend, val name: String, 
         val r = backend.pr(name, number)
         _state.update { u ->
             val pr = r.getOrDefault(u.pr)
+            // Only a successful read after the timeout settles the doubt; a failed one leaves the button hidden.
+            val unsure = u.mergeUnsure && r.isFailure
             u.copy(
                 pr = pr, loading = false, error = keepError ?: r.exceptionOrNull()?.let(ProjectTexts::pcError),
-                canMerge = pr != null && pr.open && !pr.draft && !u.mergeSent && backend.available(ApiMethods.PROJECTS_MERGE_PR),
+                mergeUnsure = unsure,
+                canMerge = pr != null && pr.open && !pr.draft && !u.mergeSent && !unsure && backend.available(ApiMethods.PROJECTS_MERGE_PR),
             )
         }
     }
@@ -113,8 +118,15 @@ class PrDetailViewModel(private val backend: ProjectsBackend, val name: String, 
                 load()
             } else {
                 // The PC's words, as they came. A timeout may still have merged, so the state is read again; the merge itself is not.
-                _state.update { it.copy(merging = false) }
-                load(keepError = ProjectTexts.pcError(r.exceptionOrNull()!!))
+                val e = r.exceptionOrNull()!!
+                val timedOut = (e as? dev.orb.app.link.net.LinkException)?.error is dev.orb.app.link.net.LinkError.Timeout
+                if (timedOut) {
+                    _state.update { it.copy(merging = false, mergeUnsure = true, canMerge = false) }
+                    load(keepError = ProjectTexts.PR_MERGE_CHECKING)
+                } else {
+                    _state.update { it.copy(merging = false) }
+                    load(keepError = ProjectTexts.pcError(e))
+                }
             }
         }
     }

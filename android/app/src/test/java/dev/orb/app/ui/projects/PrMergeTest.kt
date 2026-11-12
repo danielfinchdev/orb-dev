@@ -128,6 +128,27 @@ class PrMergeViewModelTest {
         assertFalse(vm.state.value.merging)
     }
 
+    @Test fun aTimeoutKeepsTheButtonHiddenUntilAGoodReadSaysItIsOpen() = runTest(dispatcher) {
+        val b = backend()
+        b.mergeResult = Result.failure(LinkException(LinkError.Timeout))
+        val vm = vm(b)
+        // The re-read fails too: the button must not come back.
+        b.prResults[4] = Result.failure(LinkException(LinkError.Offline))
+        vm.merge("merge", token("app#4"))
+        advanceUntilIdle()
+        assertFalse(vm.state.value.canMerge)
+        assertEquals(ProjectTexts.PR_MERGE_CHECKING, vm.state.value.error)
+        vm.refresh()
+        advanceUntilIdle()
+        assertFalse(vm.state.value.canMerge)
+        // A later good read that still says open brings it back; the merge was never retried.
+        b.prResults[4] = Result.success(prDetail(4))
+        vm.refresh()
+        advanceUntilIdle()
+        assertTrue(vm.state.value.canMerge)
+        assertEquals(1, b.calls.count { it.startsWith("merge") })
+    }
+
     @Test fun offlineDoesNotCallThePc() = runTest(dispatcher) {
         val b = backend()
         val vm = vm(b)
