@@ -11,7 +11,9 @@ test('both buttons answer with refOf(r)', () => {
 });
 test('no HTML injection', () => assert.doesNotMatch(card, /dangerouslySetInnerHTML|innerHTML/));
 test('focusCancel puts autoFocus on decline and defaults follow danger', () => {
-  assert.match(card, /autoFocus=\{focusCancel\}.*data-testid="pr-decline"/);
+  assert.match(card, /ref=\{declineRef\}.*data-testid="pr-decline"/);
+  assert.match(card, /isContentEditable/); // never steals the focus from a text field
+  assert.doesNotMatch(card, /autoFocus/);
   assert.ok(card.includes("r.danger ?? !comment"));
   assert.ok(card.includes("r.focusCancel ?? danger"));
 });

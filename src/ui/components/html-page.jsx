@@ -24,6 +24,8 @@ function HtmlPage({ p, paused }) {
   const t = useT();
   const [big, setBig] = useState(false);
   const internet = p.internet === true;
+  // a page that went to sleep must not pop its enlarged view back open when it wakes
+  useEffect(() => { if (paused) setBig(false); }, [paused]);
   return (
     <div className={cn('bg-card grid gap-2.5 rounded-xl border px-3.5 py-3 text-control', internet && 'border-warning/50')} data-testid="html-page">
       <div className="flex items-center gap-2 font-medium">
