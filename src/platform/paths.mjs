@@ -29,7 +29,7 @@ export const LOGS_DIR = 'bitacora';
 export const MCP_DIR = 'mcp';
 export const SKILLS_DIR = 'skills'; // every skill (src/domain/extensions/extensions.mjs)
 export const RULES_DIR = 'normas'; // one .md per text rule the assistant and its agents follow (src/domain/rules)
-export const STAGING_DIR ='preparacion'; // what an agent makes before the user turns it on (the only part of core agents write)
+export const STAGING_DIR = 'preparacion'; // what an agent makes before the user turns it on (the only part of core agents write)
 export const OLD_LOGS_DIR = 'bitacoras'; // layout of Orb 2.3.0 and older
 // the bots' memories of Orb 3.5–3.7. There are no bots now; an old bots\ folder is never taken for a project (the 3.8 migration archives it).
 export const BOTS_DIR = 'bots';

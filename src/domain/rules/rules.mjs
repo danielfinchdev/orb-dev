@@ -1,7 +1,7 @@
 // The text rules: one .md per rule in core\normas, read when a prompt is built (the persona, a task brief, the chat
 // briefing). The shipped rules (defaults.mjs) are created at start; the user's own are added beside them.
 // Nothing here ever breaks a prompt: a file that cannot be read or parsed falls back to the shipped text, a missing
-// folder to the shipped rules. The password and the API that guard changes come later; this is the files and the logic.
+// folder to the shipped rules. Who may change them (password, API) is decided by the callers; this module is only the files and the logic.
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx } from '../../platform/context.mjs';
