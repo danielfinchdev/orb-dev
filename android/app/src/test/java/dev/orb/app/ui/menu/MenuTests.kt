@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import dev.orb.app.link.api.ApiMethod
 import dev.orb.app.link.api.ApiMethods
 import dev.orb.app.link.net.ConnectionState
@@ -167,12 +168,12 @@ class MenuScreensTest {
 
     @Test fun menuKeepsAppearanceLinkTestAndUnlinkAndAddsTheNewEntries() {
         showMenu(MenuState("Conectado a PC", unreadNotices = 3), MenuActions())
-        for (t in listOf("Conectado a PC", "Notificaciones", "Programadas", "Memorias y actividad", "Uso y agentes", "Este móvil", "Apariencia", "Prueba de conexión", "Desenlazar este móvil")) {
+        for (t in listOf("Conectado a PC", "Notificaciones", "Programadas", "Memorias y actividad", "Uso y agentes", "Tutoriales", "Este móvil", "Apariencia", "Prueba de conexión", "Desenlazar este móvil")) {
             rule.onNodeWithText(t).performScrollTo().assertIsDisplayed()
         }
         rule.onNodeWithText("3").performScrollTo().assertIsDisplayed()
         // The web-view entries wait for the browser step and are left out.
-        for (t in listOf("Pizarra", "Juegos", "Tutoriales")) rule.onNodeWithText(t).assertDoesNotExist()
+        for (t in listOf("Pizarra", "Juegos")) rule.onNodeWithText(t).assertDoesNotExist()
     }
 
     @Test fun entriesTheLinkedPcCannotServeAreLeftOut() {
@@ -189,19 +190,52 @@ class MenuScreensTest {
                 MenuContent(
                     MenuState("PC"),
                     MenuActions(
-                        onNotices = { got += "notices" }, onSchedules = { got += "schedules" }, onActivity = { got += "activity" }, onUsage = { got += "usage" },
+                        onNotices = { got += "notices" }, onSchedules = { got += "schedules" }, onActivity = { got += "activity" }, onUsage = { got += "usage" }, onTutorials = { got += "tutorials" },
                         onAppearance = { got += "appearance" }, onLinkTest = { got += "linktest" }, onUnlink = { got += "unlink" },
                     ),
                     close = { closed++ },
                 )
             }
         }
-        for (t in listOf("Notificaciones", "Programadas", "Memorias y actividad", "Uso y agentes", "Apariencia", "Prueba de conexión", "Desenlazar este móvil")) {
+        for (t in listOf("Notificaciones", "Programadas", "Memorias y actividad", "Uso y agentes", "Tutoriales", "Apariencia", "Prueba de conexión", "Desenlazar este móvil")) {
             rule.onNodeWithText(t).performScrollTo().performClick()
         }
         rule.waitForIdle()
-        assertEquals(listOf("notices", "schedules", "activity", "usage", "appearance", "linktest", "unlink"), got)
-        assertEquals(7, closed)
+        assertEquals(listOf("notices", "schedules", "activity", "usage", "tutorials", "appearance", "linktest", "unlink"), got)
+        assertEquals(8, closed)
+    }
+
+    @Test fun tutorialsOffersEveryTutorialAndFaqWithoutAConnection() {
+        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { TutorialsScreen(onBack = {}) } }
+        rule.waitForIdle()
+        rule.onNodeWithText("Primeros pasos").assertIsDisplayed()
+        rule.onNodeWithText("Cómo funciona").assertIsDisplayed()
+        // Nothing for the PC alone, no keyboard shortcuts.
+        for (t in listOf("Atajos de teclado", "Repetir el tutorial guiado")) rule.onNodeWithText(t).assertDoesNotExist()
+        assertEquals(17, TutorialTexts.FAQS.size)
+        assertTrue(TutorialTexts.TUTORIALS.none { it.id in setOf("agents", "usage", "expert", "games", "looks") })
+        assertTrue((TutorialTexts.TUTORIALS.flatMap { it.lines } + TutorialTexts.FAQS.map { it.answer }).none { it.contains("Avisos") })
+    }
+
+    @Test fun aTutorialCardOpensAndFoldsAgain() {
+        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { TutorialsScreen(onBack = {}) } }
+        val firstLine = TutorialTexts.named(TutorialTexts.TUTORIALS.first().lines.first())
+        rule.onNodeWithText("•  $firstLine").assertDoesNotExist()
+        rule.onNodeWithText("Primeros pasos").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("•  $firstLine").assertIsDisplayed()
+        rule.onNodeWithText("Primeros pasos").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("•  $firstLine").assertDoesNotExist()
+    }
+
+    @Test fun searchIgnoresAccentsAndCaseAndSaysWhenNothingMatches() {
+        assertTrue(TutorialSearch.tutorials("BITACORA").any { it.id == "logs" })
+        assertEquals(TutorialTexts.TUTORIALS.size, TutorialSearch.tutorials("  ").size)
+        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { TutorialsScreen(onBack = {}) } }
+        rule.onNodeWithText("Buscar en los tutoriales…").performTextInput("zzzqq")
+        rule.waitForIdle()
+        rule.onNodeWithText("No hay resultados para «zzzqq».").assertIsDisplayed()
     }
 
     private fun showActivity(b: FakeActivityBackend) {

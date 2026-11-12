@@ -63,6 +63,7 @@ import dev.orb.app.ui.shell.MenuAvailability
 import dev.orb.app.link.api.ApiMethods
 import dev.orb.app.ui.menu.ActivityScreen
 import dev.orb.app.ui.menu.ActivityViewModel
+import dev.orb.app.ui.menu.TutorialsScreen
 import dev.orb.app.ui.notes.NoticeTarget
 import dev.orb.app.ui.notes.NotesScreen
 import dev.orb.app.ui.notes.NotesViewModel
@@ -103,6 +104,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object SchedulesRoute
 @Serializable data object ActivityRoute
 @Serializable data object UsageRoute
+@Serializable data object TutorialsRoute
 @Serializable data object ThisPhoneRoute
 @Serializable data class ShareRoute(val id: Long)
 
@@ -186,6 +188,7 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                         onSchedules = { nav.navigate(SchedulesRoute) },
                         onActivity = { nav.navigate(ActivityRoute) },
                         onUsage = { nav.navigate(UsageRoute) },
+                        onTutorials = { nav.navigate(TutorialsRoute) },
                         onThisPhone = { nav.navigate(ThisPhoneRoute) },
                         menu = menuAvailable,
                     ),
@@ -315,6 +318,7 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                 ActivityScreen(vm, onBack = { nav.popBackStack() })
             }
         }
+        composable<TutorialsRoute> { TutorialsScreen(onBack = { nav.popBackStack() }) }
         composable<UsageRoute> {
             val backend = remember { container.usageBackend() }
             if (backend != null) {

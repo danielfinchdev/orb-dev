@@ -26,8 +26,9 @@ import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.theme.OrbTheme
 
 /**
- * What the menu shows. An entry whose PC method is not listed is not offered at all. Pizarra, Juegos and Tutoriales are
- * web views that come with the browser step; until then they are left out rather than shown as «próximamente».
+ * What the menu shows. An entry whose PC method is not listed is not offered at all. Pizarra and Juegos are web views
+ * that come with the browser step; until then they are left out rather than shown as «próximamente». Tutoriales is
+ * native and works without a connection, so it is always offered.
  */
 class MenuState(
     val pcLabel: String,
@@ -42,6 +43,7 @@ class MenuActions(
     val onSchedules: () -> Unit = {},
     val onActivity: () -> Unit = {},
     val onUsage: () -> Unit = {},
+    val onTutorials: () -> Unit = {},
     val onThisPhone: () -> Unit = {},
     val onAppearance: () -> Unit = {},
     val onLinkTest: () -> Unit = {},
@@ -69,6 +71,7 @@ fun MenuContent(state: MenuState, actions: MenuActions, close: () -> Unit) {
         if (state.showSchedules) Entry(MenuTexts.SCHEDULES, OrbIcons.Clock, go(actions.onSchedules))
         if (state.showActivity) Entry(MenuTexts.ACTIVITY, OrbIcons.Activity, go(actions.onActivity))
         if (state.showUsage) Entry(MenuTexts.USAGE, OrbIcons.Gauge, go(actions.onUsage))
+        Entry(MenuTexts.TUTORIALS, OrbIcons.GraduationCap, go(actions.onTutorials))
 
         Section(MenuTexts.SECTION_SETTINGS)
         Entry(MenuTexts.THIS_PHONE, OrbIcons.Smartphone, go(actions.onThisPhone))

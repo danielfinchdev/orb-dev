@@ -9,6 +9,7 @@ object MenuTexts {
     const val SCHEDULES = "Programadas"
     const val ACTIVITY = "Memorias y actividad"
     const val USAGE = "Uso y agentes"
+    const val TUTORIALS = "Tutoriales"
     const val THIS_PHONE = "Este móvil"
     const val APPEARANCE = "Apariencia"
     const val LINK_TEST = "Prueba de conexión"
@@ -22,6 +23,15 @@ object MenuTexts {
     const val EMPTY_LOGS = "No hay bitácoras"
     const val LOAD_ERROR = "No se pudo cargar desde el PC."
     const val KEPT_SAVED = "No se pudo actualizar desde el PC. Se muestra lo último guardado."
+    const val TUT_SEARCH = "Buscar en los tutoriales…"
+    const val TUT_SECTION_HOW = "Cómo funciona"
+    const val TUT_SECTION_FAQ = "Preguntas frecuentes"
+    const val TUT_EXPAND = "Mostrar"
+    const val TUT_COLLAPSE = "Ocultar"
+    const val TUT_CLEAR = "Borrar la búsqueda"
+
+    fun tutNoResults(q: String) = "No hay resultados para «$q»."
+
     const val RETRY = "Reintentar"
     const val LOG_LOADING = "Cargando…"
 
