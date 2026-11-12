@@ -1,9 +1,10 @@
 // Bundles the web pages of the Android app into android/app/src/main/assets/web/:
 //   games       the mini-games (committed)
 //   whiteboard  the Pizarra, i.e. Excalidraw (committed while small; see android/.gitignore)
+//   island      mermaid diagrams and KaTeX formulas drawn inside chat bubbles
 // The game sources stay in src/ui/games (untouched); small shims stand in for the desktop app's store, i18n and music.
 // Node modules come from ORB_NODE_MODULES, ../../orb-dev/node_modules or ./node_modules (first one that has vite).
-// Run: node android/web/build.mjs [games|whiteboard]   (not part of Gradle: the built bundles are committed).
+// Run: node android/web/build.mjs [games|whiteboard|island]   (not part of Gradle: the built bundles are committed).
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -103,6 +104,21 @@ async function buildWhiteboard() {
   console.log(`whiteboard bundle: ${(dirSize(out) / 1048576).toFixed(2)} MB in ${path.relative(repo, out)}`);
 }
 
+// The chat island: mermaid (one chunk per diagram type, loaded on demand) and KaTeX with its fonts, all served locally.
+async function buildIsland() {
+  const out = path.join(repo, 'android/app/src/main/assets/web/island');
+  await build({
+    root: path.join(here, 'island'),
+    configFile: false,
+    base: './',
+    logLevel: 'warn',
+    resolve: { alias: [{ find: /^(mermaid|katex)(\/.*)?$/, replacement: `${posix(NM)}/$1$2` }] },
+    build: { outDir: out, emptyOutDir: true, target: 'chrome100', sourcemap: false, assetsInlineLimit: 0, cssCodeSplit: false, chunkSizeWarningLimit: 4000 }
+  });
+  console.log(`island bundle: ${(dirSize(out) / 1048576).toFixed(2)} MB in ${path.relative(repo, out)}`);
+}
+
 const which = process.argv[2];
 if (!which || which === 'games') await buildGames();
 if (!which || which === 'whiteboard') await buildWhiteboard();
+if (!which || which === 'island') await buildIsland();
