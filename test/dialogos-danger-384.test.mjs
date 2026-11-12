@@ -13,8 +13,10 @@ const callOf = (file, needle) => {
   const at = src.indexOf(needle);
   assert.ok(at >= 0, `${file}: ${needle} not found`);
   const from = src.lastIndexOf('confirm(', at);
-  const end = src.indexOf('}', at);
-  return src.slice(from, end + 1);
+  // up to the end of that statement's line (the options object closes on it) or the next confirm(
+  const next = src.indexOf('confirm(', from + 8);
+  const eol = src.indexOf('\n', at);
+  return src.slice(from, next > 0 && next < eol ? next : eol);
 };
 
 const SERIOUS = [

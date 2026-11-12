@@ -86,7 +86,7 @@ export function AndroidCard() {
     });
     loadPhones(); load();
   };
-  const forget = async (p) => { if (await confirm(t('settings.android.forget'), t('settings.android.forgetBody'), { ok: t('settings.android.forget') })) { await act(call('android.forget', { serial: p.serial ?? undefined, host: p.host ?? undefined })); loadPhones(); } };
+  const forget = async (p) => { if (await confirm(t('settings.android.forget'), t('settings.android.forgetBody'), { ok: t('settings.android.forget'), danger: true })) { await act(call('android.forget', { serial: p.serial ?? undefined, host: p.host ?? undefined })); loadPhones(); } };
   if (!st) return null;
   const label = st.ready ? t('settings.android.ready') : st.state === 'downloading' ? t('settings.android.downloading') : st.state === 'error' ? t('settings.android.error', { error: st.error }) : t('settings.android.missing');
   return (
