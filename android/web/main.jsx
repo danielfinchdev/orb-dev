@@ -13,6 +13,18 @@ import './.gen/app.css';
 const params = new URLSearchParams(location.search);
 document.documentElement.classList.toggle('dark', params.get('theme') === 'dark');
 
+// Touch wording of each game's help: the desktop texts cite keys and the mouse, which a phone does not have.
+const HELP_TOUCH = {
+  snake: 'Desliza el dedo por el tablero o usa las flechas de la pantalla. Come y crece sin morderte la cola.',
+  tetris: 'Usa los botones: izquierda y derecha mueven, el giro rota la pieza, la flecha baja y el doble chevron la deja caer.',
+  chess: 'Juegas con blancas contra el ordenador. Toca una pieza y luego la casilla a la que quieres moverla.',
+  runner: 'El cubo avanza solo. Mantén o toca el botón Saltar y llega al final del nivel sin tocar los pinchos.',
+  g2048: 'Desliza el dedo por el tablero o usa las flechas: las fichas iguales se unen. Llega a 2048.',
+  breakout: 'Mantén los botones izquierda y derecha para mover la pala. Rompe todos los ladrillos.',
+  invaders: 'Mantén izquierda o derecha para moverte y toca Disparar. Acaba con cada oleada antes de que llegue abajo.',
+  pacman: 'Desliza el dedo por el tablero o usa las flechas. Cómete todos los puntos sin que te atrapen los fantasmas; las bolas grandes los asustan.'
+};
+
 const GAMES = [
   { id: 'snake', load: lazy(() => import('../../src/ui/games/snake.jsx')), pad: 'dpad' },
   { id: 'tetris', load: lazy(() => import('../../src/ui/games/tetris.jsx')), pad: 'tetris' },
@@ -141,7 +153,7 @@ function App() {
         <h1 className="min-w-0 flex-1 truncate text-lg font-semibold">{game ? t(`games.${game}`) : t('games.title')}</h1>
         <button className={cn('bg-muted grid size-10 place-items-center rounded-xl', mute && 'text-muted-foreground')} onClick={toggleSound} aria-label={t('games.sound')} aria-pressed={!mute}>{mute ? <VolumeX /> : <Volume2 />}</button>
       </div>
-      <p className="text-muted-foreground text-sm">{game ? t(`games.${game}Help`) : t('games.desc')}</p>
+      <p className="text-muted-foreground text-sm">{game ? (HELP_TOUCH[game] ?? t(`games.${game}Help`)) : t('games.desc')}</p>
       <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label={t('games.level')}>
         <span className="text-muted-foreground text-xs">{t('games.level')}</span>
         <div className="bg-muted inline-flex gap-0.5 rounded-full p-0.5">
