@@ -146,6 +146,7 @@ class AppContainer(private val app: Application) {
     fun orbeChatBackend(): dev.orb.app.ui.chats.OrbeChatBackend? = _runtime.value?.let { dev.orb.app.ui.chats.RuntimeOrbeChatBackend(this, it) }
     fun directChatBackend(): dev.orb.app.ui.chats.DirectChatBackend? = _runtime.value?.let { dev.orb.app.ui.chats.RuntimeDirectChatBackend(this, it) }
     fun tasksBackend(): dev.orb.app.ui.tasks.TasksBackend? = _runtime.value?.let { dev.orb.app.ui.tasks.RuntimeTasksBackend(it) }
+    fun projectsBackend(): dev.orb.app.ui.projects.ProjectsBackend? = _runtime.value?.let { dev.orb.app.ui.projects.RuntimeProjectsBackend(it) }
     fun newChatBackend(): dev.orb.app.ui.chats.NewChatBackend? = _runtime.value?.let { dev.orb.app.ui.chats.RuntimeNewChatBackend(it) }
 
     private companion object {

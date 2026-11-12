@@ -117,6 +117,7 @@ private fun OrbNav(container: AppContainer, start: Any) {
             LaunchedEffect(homeState.unlinked) { if (homeState.unlinked) nav.navigate(Welcome) { popUpTo(Home) { inclusive = true } } }
             if (backend != null) {
                 val tasksBackend = remember { container.tasksBackend() }
+                val projectsBackend = remember { container.projectsBackend() }
                 MainShell(
                     backend, container.themePrefs,
                     ShellActions(
@@ -129,6 +130,7 @@ private fun OrbNav(container: AppContainer, start: Any) {
                         onOpenTask = { nav.navigate(TaskRoute(it)) },
                     ),
                     tasks = tasksBackend,
+                    projects = projectsBackend,
                 )
             }
             if (confirming) UnlinkDialog(onConfirm = { confirming = false; home.unlink() }, onDismiss = { confirming = false })
