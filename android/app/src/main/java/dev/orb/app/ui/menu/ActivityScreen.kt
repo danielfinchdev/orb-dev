@@ -64,6 +64,9 @@ fun ActivityScreen(vm: ActivityViewModel, onBack: () -> Unit, modifier: Modifier
         if (!state.online && (state.events != null || state.logs != null)) {
             OfflineStrip()
         }
+        // The PC could not be read just now: what is on screen is the last copy saved.
+        val shownFailed = if (state.tab == ActivityTab.Activity) state.eventsFailed && state.events != null else state.logsFailed && state.logs != null
+        if (shownFailed) Text(MenuTexts.KEPT_SAVED, Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.warn)
         PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::refresh, modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (state.tab == ActivityTab.Activity) Events(state, vm::refresh, nowMs) else Logs(state, vm::refresh, vm::openLog)
         }

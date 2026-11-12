@@ -21,6 +21,7 @@ object MenuTexts {
     const val EMPTY_ACTIVITY = "No hay actividad"
     const val EMPTY_LOGS = "No hay bitácoras"
     const val LOAD_ERROR = "No se pudo cargar desde el PC."
+    const val KEPT_SAVED = "No se pudo actualizar desde el PC. Se muestra lo último guardado."
     const val RETRY = "Reintentar"
     const val LOG_LOADING = "Cargando…"
 

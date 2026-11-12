@@ -16,6 +16,7 @@ import dev.orb.app.ui.theme.ThemeChoice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -47,8 +48,12 @@ class FakeActivityBackend : ActivityBackend {
     var logText: Result<String> = Result.success("### entrada uno")
     val calls = ArrayList<String>()
 
+    val savedActivity = MutableStateFlow<SavedActivity?>(null)
+    override fun saved() = savedActivity.filterNotNull()
+    var eventsGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+
     override fun available(m: ApiMethod) = m.name !in unavailable
-    override suspend fun events(limit: Int): Result<List<ActivityEvent>> { calls += "events $limit"; return events }
+    override suspend fun events(limit: Int): Result<List<ActivityEvent>> { calls += "events $limit"; eventsGate?.await(); return events }
     override suspend fun logs() = logs
     override suspend fun readLog(name: String): Result<String> { calls += "read $name"; return logText }
 }
@@ -74,6 +79,34 @@ class ActivityViewModelTest {
         assertEquals(listOf(LogInfo("general", 12)), ActivityParser.logs(Json.parseToJsonElement("""[{"name":"general","size":12},{"size":1}]""")))
         assertEquals("Tarea creada", MenuTexts.kind("task_created"))
         assertEquals("Weird kind", MenuTexts.kind("weird_kind"))
+    }
+
+    private val old = ActivityEvent(7, "note", "orb", "viejo", null, null, null)
+
+    @Test fun savedActivityShowsFirstAndGivesWayToThePcAnswer() = runTest(dispatcher) {
+        val b = FakeActivityBackend()
+        b.eventsGate = kotlinx.coroutines.CompletableDeferred()
+        b.savedActivity.value = SavedActivity(listOf(old), listOf(LogInfo("viejo", 1)))
+        val vm = vm(b)
+        assertEquals(listOf(7L), vm.state.value.events?.map { it.id })
+        b.eventsGate!!.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(listOf(2L, 1L), vm.state.value.events?.map { it.id })
+        assertEquals(listOf("general", "app-movil"), vm.state.value.logs?.map { it.name })
+        // A later copy of the cache (the answer saved) must not undo the answer.
+        b.savedActivity.value = SavedActivity(listOf(old), listOf(LogInfo("viejo", 1)))
+        advanceUntilIdle()
+        assertEquals(listOf(2L, 1L), vm.state.value.events?.map { it.id })
+    }
+
+    @Test fun whenTheNetworkFailsTheSavedCopyStaysAndIsFlagged() = runTest(dispatcher) {
+        val b = FakeActivityBackend()
+        b.events = Result.failure(LinkException(LinkError.Timeout))
+        b.savedActivity.value = SavedActivity(listOf(old), null)
+        val vm = vm(b)
+        advanceUntilIdle()
+        assertEquals(listOf(7L), vm.state.value.events?.map { it.id })
+        assertTrue(vm.state.value.eventsFailed)
     }
 
     @Test fun loadsEventsAndLogsOnConnect() = runTest(dispatcher) {

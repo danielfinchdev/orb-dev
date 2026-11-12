@@ -54,6 +54,13 @@ class ActivityViewModel(private val backend: ActivityBackend, private val limit:
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ActivityState())
 
     init {
+        // What was saved shows first; a part the PC has answered since is not touched.
+        viewModelScope.launch {
+            backend.saved().collect { saved ->
+                saved.events?.let { list -> if (!eventsLive) ui.update { it.copy(events = list) } }
+                saved.logs?.let { list -> if (!logsLive) ui.update { it.copy(logs = list) } }
+            }
+        }
         viewModelScope.launch {
             backend.connection.map { it is ConnectionState.Online }.distinctUntilChanged().filter { it }.collect { reload() }
         }
@@ -61,15 +68,21 @@ class ActivityViewModel(private val backend: ActivityBackend, private val limit:
 
     private var reading = false
 
+    // Once the PC has answered a part, a later copy from the cache must not replace it.
+    @Volatile private var eventsLive = false
+    @Volatile private var logsLive = false
+
     private suspend fun reload() {
         reading = true
         ui.update { it.copy(refreshing = true) }
         if (backend.available(ApiMethods.ACTIVITY_LIST)) {
             val r = backend.events(limit)
+            if (r.isSuccess) eventsLive = true
             ui.update { it.copy(events = r.getOrNull() ?: it.events, eventsFailed = r.isFailure) }
         }
         if (backend.available(ApiMethods.LOGS_LIST)) {
             val r = backend.logs()
+            if (r.isSuccess) logsLive = true
             ui.update { it.copy(logs = r.getOrNull() ?: it.logs, logsFailed = r.isFailure) }
         }
         reading = false
