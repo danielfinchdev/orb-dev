@@ -9,6 +9,7 @@ import { Switch, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescrip
 import { cn } from '@/lib/utils.js';
 import { call, act, bridge, fullPc } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
+import { quiet } from '@/lib/quiet.js';
 import { mountable } from '@/lib/html-mount.js';
 
 const refOf = (p) => ({ id: p.id, session: p.session });
@@ -65,7 +66,7 @@ export function HtmlPages({ sessionId }) {
     setList([]);
     const mine = (p) => p?.session === String(sessionId);
     const put = (p) => setList((prev) => (prev.some((x) => x.id === p.id) ? prev.map((x) => (x.id === p.id ? p : x)) : [...prev, p]));
-    call('htmlPages.list').then((all) => { if (alive) setList((all ?? []).filter(mine)); }).catch(() => {});
+    call('htmlPages.list').then((all) => { if (alive) setList((all ?? []).filter(mine)); }).catch(quiet);
     const offPage = bridge.on('html:page', (p) => { if (mine(p)) put(p); });
     const offUpdate = bridge.on('html:update', (p) => { if (mine(p)) put(p); });
     const offClosed = bridge.on('html:closed', (p) => setList((prev) => prev.filter((x) => x.id !== p?.id)));

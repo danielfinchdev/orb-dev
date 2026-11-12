@@ -6,6 +6,7 @@ import { GitPullRequest, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { call, act, bridge, fullPc } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
+import { quiet } from '@/lib/quiet.js';
 import { cn } from '@/lib/utils.js';
 
 // The answer names the request by everything the card showed, so a stale card cannot answer another request.
@@ -63,7 +64,7 @@ export function PrCards({ sessionId }) {
     let alive = true;
     setList([]);
     const mine = (r) => r?.session === String(sessionId);
-    call('prConfirm.pending').then((all) => { if (alive) setList((all ?? []).filter(mine)); }).catch(() => {});
+    call('prConfirm.pending').then((all) => { if (alive) setList((all ?? []).filter(mine)); }).catch(quiet);
     const offAsk = bridge.on('pr:request', (r) => { if (mine(r)) setList((prev) => [...prev.filter((x) => x.id !== r.id), r]); });
     const offDone = bridge.on('pr:done', (r) => setList((prev) => prev.filter((x) => x.id !== r?.id)));
     return () => { alive = false; offAsk(); offDone(); };
