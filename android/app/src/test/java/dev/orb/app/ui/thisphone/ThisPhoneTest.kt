@@ -1,6 +1,7 @@
 package dev.orb.app.ui.thisphone
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -9,6 +10,10 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.link.net.PcVersions
+import dev.orb.app.lock.AuthCapability
+import dev.orb.app.lock.AuthResult
+import dev.orb.app.lock.LockDelay
+import dev.orb.app.lock.LockSettings
 import dev.orb.app.notify.NotifySettings
 import dev.orb.app.ui.theme.OrbTheme
 import dev.orb.app.ui.theme.ThemeChoice
@@ -40,6 +45,13 @@ class FakeThisPhoneBackend : ThisPhoneBackend {
     override fun setKeepConnected(on: Boolean) { settings.value = settings.value.copy(keepConnected = on) }
     override fun setLockScreenPublic(on: Boolean) { settings.value = settings.value.copy(lockScreenPublic = on) }
     override fun requestNotifications() { requested++ }
+    override val lock = MutableStateFlow(LockSettings())
+    var capability = AuthCapability.Ready
+    var enableAnswer: AuthResult = AuthResult.Success
+    override fun lockCapability() = capability
+    override fun enableLock(onDone: (AuthResult) -> Unit) { if (enableAnswer == AuthResult.Success) lock.value = lock.value.copy(enabled = true); onDone(enableAnswer) }
+    override fun disableLock() { lock.value = lock.value.copy(enabled = false) }
+    override fun setLockDelay(delay: LockDelay) { lock.value = lock.value.copy(delay = delay) }
     override suspend fun unlink() { unlinked++ }
 }
 
@@ -97,10 +109,41 @@ class ThisPhoneTest {
         assertEquals(1, backend.requested)
     }
 
-    @Test fun theFingerprintRowIsOffUntilAnotherStepEnablesIt() {
+
+    @Test fun theLockIsOffByDefaultAndTurnsOnAfterTheSystemAgrees() {
+        show()
+        rule.onNodeWithText("Bloqueo con huella").performScrollTo().assertIsEnabled()
+        assertFalse(backend.lock.value.enabled)
+        rule.onNodeWithText("Bloqueo con huella").performClick()
+        rule.waitForIdle()
+        assertTrue(backend.lock.value.enabled)
+        rule.onNodeWithText("1 min").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("5 min").performScrollTo().performClick()
+        assertEquals(LockDelay.FiveMinutes, backend.lock.value.delay)
+    }
+
+    @Test fun aRefusedAuthenticationLeavesTheLockOff() {
+        backend.enableAnswer = AuthResult.Failed
+        show()
+        rule.onNodeWithText("Bloqueo con huella").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertFalse(backend.lock.value.enabled)
+        rule.onNodeWithText(ThisPhoneTexts.LOCK_FAILED).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun withoutAPinOrFingerprintTheSwitchIsDisabledAndExplained() {
+        backend.capability = AuthCapability.NothingSet
         show()
         rule.onNodeWithText("Bloqueo con huella").performScrollTo().assertIsNotEnabled()
-        rule.onNodeWithText("Estará disponible en una próxima versión.").assertIsDisplayed()
+        rule.onNodeWithText(ThisPhoneTexts.FINGERPRINT_UNAVAILABLE).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun anActiveLockCanAlwaysBeTurnedOff() {
+        backend.lock.value = LockSettings(enabled = true)
+        backend.capability = AuthCapability.NothingSet
+        show()
+        rule.onNodeWithText("Bloqueo con huella").performScrollTo().assertIsEnabled().performClick()
+        assertFalse(backend.lock.value.enabled)
     }
 
     @Test fun appearanceAndBackAreHandedBack() {

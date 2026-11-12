@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -25,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.orb.app.lock.LockDelay
 import dev.orb.app.ui.shell.ScreenBar
 import dev.orb.app.ui.shell.UnlinkDialog
 import dev.orb.app.ui.theme.OrbTheme
@@ -35,6 +37,7 @@ fun ThisPhoneScreen(vm: ThisPhoneViewModel, onBack: () -> Unit, onAppearance: ()
     val state by vm.state.collectAsStateWithLifecycle()
     var confirming by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(state.unlinked) { if (state.unlinked) onUnlinked() }
+    LaunchedEffect(Unit) { vm.refreshLock() }
 
     Column(modifier.fillMaxSize()) {
         ScreenBar(ThisPhoneTexts.TITLE, onBack, ThisPhoneTexts.BACK)
@@ -57,7 +60,23 @@ fun ThisPhoneScreen(vm: ThisPhoneViewModel, onBack: () -> Unit, onAppearance: ()
             SwitchRow(ThisPhoneTexts.LOCK_CONTENT, ThisPhoneTexts.LOCK_CONTENT_HINT, state.lockScreenPublic, vm::setLockScreenPublic)
 
             Section(ThisPhoneTexts.SECTION_SECURITY)
-            SwitchRow(ThisPhoneTexts.FINGERPRINT, ThisPhoneTexts.FINGERPRINT_HINT, checked = false, onChange = {}, enabled = false)
+            // Turning it off stays possible whatever Android now has; only turning it on needs something to authenticate with.
+            SwitchRow(
+                ThisPhoneTexts.FINGERPRINT,
+                if (state.lockAvailable || state.appLock) ThisPhoneTexts.FINGERPRINT_HINT else ThisPhoneTexts.FINGERPRINT_UNAVAILABLE,
+                checked = state.appLock, onChange = vm::setAppLock, enabled = state.lockAvailable || state.appLock,
+            )
+            state.lockMessage?.let {
+                Text(it, Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.warn)
+            }
+            if (state.appLock) {
+                Text(ThisPhoneTexts.LOCK_DELAY, Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp), style = MaterialTheme.typography.bodyMedium)
+                Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LockDelay.entries.forEach { d ->
+                        FilterChip(selected = state.lockDelay == d, onClick = { vm.setLockDelay(d) }, label = { Text(ThisPhoneTexts.delay(d)) })
+                    }
+                }
+            }
 
             Section(ThisPhoneTexts.SECTION_LOOK)
             Text(
