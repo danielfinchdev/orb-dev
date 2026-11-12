@@ -4,7 +4,7 @@ package dev.orb.app.ui.menu
 object MenuTexts {
     const val MENU = "Menú"
     const val SECTION_WORK = "Trabajo"
-    const val SECTION_PHONE = "Móvil"
+    const val SECTION_SETTINGS = "Ajustes"
     const val NOTICES = "Notificaciones"
     const val SCHEDULES = "Programadas"
     const val ACTIVITY = "Memorias y actividad"
