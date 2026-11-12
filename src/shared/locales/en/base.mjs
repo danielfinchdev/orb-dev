@@ -35,6 +35,7 @@ export default {
   'nav.footerUnfold': 'Show with names',
   'nav.footerFold': 'Icons only',
   'palette.title': 'Go to',
+  'palette.open': 'Search or go to (Ctrl+K)',
   'palette.hint': 'Search chats, tasks, projects and actions.',
   'palette.placeholder': 'Search or go to…',
   'palette.places': 'Go to'

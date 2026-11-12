@@ -34,6 +34,7 @@ export default {
   'nav.musicError': 'No se pudo reproducir. Comprueba la conexión e inténtalo de nuevo.',
   'nav.footerUnfold': 'Mostrar con nombres',
   'nav.footerFold': 'Solo iconos',
+  'palette.open': 'Buscar o ir a (Ctrl+K)',
   'palette.title': 'Ir a',
   'palette.hint': 'Busca chats, tareas, proyectos y acciones.',
   'palette.placeholder': 'Buscar o ir a…',

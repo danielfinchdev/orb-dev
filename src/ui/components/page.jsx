@@ -1,11 +1,12 @@
 import { useLayoutEffect, useRef } from 'react';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Search } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { useStore, go, phoneLayout } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
 import { Button } from './ui/button.jsx';
 import { SidebarToggle } from './theme-toggle.jsx';
 import { MobileMenu } from './mobile-menu.jsx';
+import { openPalette } from '@/lib/palette.js';
 
 // the moving pieces of a theme's band (themes.css › .band-art; only Nube's rows of sweets for now), in layers the
 // compositor slides. Its art stays aligned to the window like the band's still art (background-attachment: fixed): the
@@ -33,7 +34,14 @@ export function BandArt() {
   return <span ref={ref} className="band-art" aria-hidden="true"><span /><span /></span>;
 }
 
-export function PageHeader({ icon, title, meta, center, children, className, back }) {
+// The way into Ctrl+K from a bar (the shortcut itself is unchanged); the phone has no palette.
+export function PaletteButton({ className }) {
+  const t = useT();
+  if (phoneLayout()) return null;
+  return <Button size="icon" variant="ghost" className={cn('shrink-0', className)} onClick={openPalette} aria-label={t('palette.open')} title={t('palette.open')} data-testid="open-palette"><Search className="size-4" /></Button>;
+}
+
+export function PageHeader({ icon, title, meta, center, children, className, back, palette = true }) {
   // with the sidebar folded away, the button that brings it back starts the bar.
   const folded = useStore((s) => s.sidebarCollapsed);
   // the phone: the menu ☰ starts every bar (the status bar's room is the page's own, app.css › #root).
@@ -55,7 +63,7 @@ export function PageHeader({ icon, title, meta, center, children, className, bac
         </div>
         {/* Too narrow for three (a phone, a side panel): the middle goes to a line of its own, under the clock and the buttons. */}
         <div className="order-last flex min-w-0 basis-full justify-center overflow-hidden @2xl:order-none @2xl:max-w-[28rem] @2xl:basis-auto">{center}</div>
-        <div className="flex min-w-0 items-center justify-end gap-2">{children}</div>
+        <div className="flex min-w-0 items-center justify-end gap-2">{children}{palette ? <PaletteButton /> : null}</div>
         <BandArt />
       </header>
     </div>
@@ -69,7 +77,7 @@ export function PageHeader({ icon, title, meta, center, children, className, bac
         <h1 className="truncate text-[16px] leading-tight">{title}</h1>
         {meta ? <div className="text-muted-foreground truncate text-xs">{meta}</div> : null}
       </div>
-      {children ? <div className="flex max-w-full flex-wrap items-center gap-2">{children}</div> : null}
+      {children || palette ? <div className="flex max-w-full flex-wrap items-center gap-2">{children}{palette ? <PaletteButton /> : null}</div> : null}
       <BandArt />
     </header>
   );

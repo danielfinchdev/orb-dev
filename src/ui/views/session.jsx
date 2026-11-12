@@ -410,7 +410,7 @@ export function SessionView({ route }) {
     <>
       {/* like the chat's: the clock on the left, the conversation's title (and under it its project and agent) in the
           middle, its controls on the right. */}
-      <PageHeader className="topbar-chat" title={<BarClock />} back={<BackToList to={s.kind === 'chat' ? 'chats' : 'tasks'} />}
+      <PageHeader className="topbar-chat" palette={false} title={<BarClock />} back={<BackToList to={s.kind === 'chat' ? 'chats' : 'tasks'} />}
         center={<BarHeading title={s.title} project={s.project} onRename={s.kind === 'chat' ? rename : null} renameLabel={t('session.renameTip')}
           extra={<span className="bar-title-agent"><AgentIcon agent={s.agent} className="size-3.5" />{who}{s.model ? ` · ${modelName(s.model)}` : ''}</span>} />}>
         <NotificationBell />

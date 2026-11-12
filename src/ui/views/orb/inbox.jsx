@@ -519,7 +519,7 @@ export function OrbChatsView() {
   useEffect(() => { setState((s) => (s.orbInfo?.type === 'chat' ? { orbInfo: null } : {})); }, []);
   return (
     <>
-      <PageHeader title={t('nav.modeOrb')} className="chats-head" />
+      <PageHeader palette={false} title={t('nav.modeOrb')} className="chats-head" />
       <OrbInbox page />
     </>
   );

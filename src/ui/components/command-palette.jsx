@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { Kbd } from '@/components/ui/basic.jsx';
 import { useOrbItems, openOrbItem, newProjectChat } from '@/views/orb/inbox.jsx';
 import { useSearch } from '@/lib/search.js';
-import { isPaletteKey, paletteGroups } from '@/lib/palette.js';
+import { isPaletteKey, paletteGroups, PALETTE_EVENT } from '@/lib/palette.js';
 import { useStore, go, newChat, openSettings, openOrbInfo, fullPc } from '@/lib/store.js';
 import { STATUS } from '@/lib/labels.js';
 import { useT } from '@/lib/i18n.js';
@@ -103,8 +103,9 @@ export function CommandPalette() {
       // After every other handler of this key: a project action, the whiteboard or a dialog that took it keeps it.
       setTimeout(() => { if (!e.defaultPrevented && !document.querySelector('[role=dialog]')) setOpen(true); }, 0);
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    const onOpen = () => setOpen(true);
+    window.addEventListener('keydown', onKey); window.addEventListener(PALETTE_EVENT, onOpen);
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener(PALETTE_EVENT, onOpen); };
   }, []);
   return <Dialog open={open} onOpenChange={setOpen}>{open ? <Palette onClose={() => setOpen(false)} /> : null}</Dialog>;
 }
