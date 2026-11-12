@@ -9,6 +9,7 @@ object MenuTexts {
     const val SCHEDULES = "Programadas"
     const val ACTIVITY = "Memorias y actividad"
     const val USAGE = "Uso y agentes"
+    const val GAMES = "Juegos"
     const val TUTORIALS = "Tutoriales"
     const val THIS_PHONE = "Este móvil"
     const val APPEARANCE = "Apariencia"

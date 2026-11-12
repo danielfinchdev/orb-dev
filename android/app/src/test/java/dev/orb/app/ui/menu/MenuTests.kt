@@ -168,12 +168,12 @@ class MenuScreensTest {
 
     @Test fun menuKeepsAppearanceLinkTestAndUnlinkAndAddsTheNewEntries() {
         showMenu(MenuState("Conectado a PC", unreadNotices = 3), MenuActions())
-        for (t in listOf("Conectado a PC", "Notificaciones", "Programadas", "Memorias y actividad", "Uso y agentes", "Tutoriales", "Este móvil", "Apariencia", "Prueba de conexión", "Desenlazar este móvil")) {
+        for (t in listOf("Conectado a PC", "Notificaciones", "Programadas", "Memorias y actividad", "Uso y agentes", "Juegos", "Tutoriales", "Este móvil", "Apariencia", "Prueba de conexión", "Desenlazar este móvil")) {
             rule.onNodeWithText(t).performScrollTo().assertIsDisplayed()
         }
         rule.onNodeWithText("3").performScrollTo().assertIsDisplayed()
-        // The web-view entries wait for the browser step and are left out.
-        for (t in listOf("Pizarra", "Juegos")) rule.onNodeWithText(t).assertDoesNotExist()
+        // Pizarra waits for its own step and is left out.
+        rule.onNodeWithText("Pizarra").assertDoesNotExist()
     }
 
     @Test fun entriesTheLinkedPcCannotServeAreLeftOut() {
@@ -190,19 +190,19 @@ class MenuScreensTest {
                 MenuContent(
                     MenuState("PC"),
                     MenuActions(
-                        onNotices = { got += "notices" }, onSchedules = { got += "schedules" }, onActivity = { got += "activity" }, onUsage = { got += "usage" }, onTutorials = { got += "tutorials" },
+                        onNotices = { got += "notices" }, onSchedules = { got += "schedules" }, onActivity = { got += "activity" }, onUsage = { got += "usage" }, onGames = { got += "games" }, onTutorials = { got += "tutorials" },
                         onAppearance = { got += "appearance" }, onLinkTest = { got += "linktest" }, onUnlink = { got += "unlink" },
                     ),
                     close = { closed++ },
                 )
             }
         }
-        for (t in listOf("Notificaciones", "Programadas", "Memorias y actividad", "Uso y agentes", "Tutoriales", "Apariencia", "Prueba de conexión", "Desenlazar este móvil")) {
+        for (t in listOf("Notificaciones", "Programadas", "Memorias y actividad", "Uso y agentes", "Juegos", "Tutoriales", "Apariencia", "Prueba de conexión", "Desenlazar este móvil")) {
             rule.onNodeWithText(t).performScrollTo().performClick()
         }
         rule.waitForIdle()
-        assertEquals(listOf("notices", "schedules", "activity", "usage", "tutorials", "appearance", "linktest", "unlink"), got)
-        assertEquals(8, closed)
+        assertEquals(listOf("notices", "schedules", "activity", "usage", "games", "tutorials", "appearance", "linktest", "unlink"), got)
+        assertEquals(9, closed)
     }
 
     @Test fun tutorialsOffersEveryTutorialAndFaqWithoutAConnection() {

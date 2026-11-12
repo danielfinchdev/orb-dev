@@ -90,6 +90,7 @@ class ShellActions(
     val onSchedules: () -> Unit = {},
     val onActivity: () -> Unit = {},
     val onUsage: () -> Unit = {},
+    val onGames: () -> Unit = {},
     val onTutorials: () -> Unit = {},
     val onThisPhone: () -> Unit = {},
     /** Which menu entries the linked PC can serve; an entry it cannot is left out. */
@@ -123,7 +124,7 @@ fun MainShell(
         MenuSheet(
             MenuState(connectionText(connection), unreadNotices, actions.menu.schedules, actions.menu.activity, actions.menu.usage),
             MenuActions(
-                onNotices = actions.onNotices, onSchedules = actions.onSchedules, onActivity = actions.onActivity, onUsage = actions.onUsage, onTutorials = actions.onTutorials,
+                onNotices = actions.onNotices, onSchedules = actions.onSchedules, onActivity = actions.onActivity, onUsage = actions.onUsage, onGames = actions.onGames, onTutorials = actions.onTutorials,
                 onThisPhone = actions.onThisPhone, onAppearance = actions.onAppearance, onLinkTest = actions.onLinkTest, onUnlink = actions.onUnlink,
             ),
             onDismiss = { menuOpen = false },

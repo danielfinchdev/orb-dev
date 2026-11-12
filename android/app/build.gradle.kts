@@ -70,6 +70,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.fragment)
+    // WebViewAssetLoader: the local web pages (games, Pizarra) are served from the app's assets, never from the network.
+    implementation(libs.androidx.webkit)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
     // No okhttp-sse on purpose: it hides SSE comments, and the silence watchdog must count the PC's ": ping" lines.

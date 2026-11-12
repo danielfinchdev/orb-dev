@@ -80,6 +80,7 @@ import dev.orb.app.ui.linktest.LinkTestScreen
 import dev.orb.app.ui.linktest.LinkTestViewModel
 import dev.orb.app.ui.welcome.WelcomeScreen
 import dev.orb.app.ui.welcome.WelcomeViewModel
+import dev.orb.app.ui.web.GamesScreen
 import dev.orb.app.attach.AttachTexts
 import dev.orb.app.share.ShareRequest
 import dev.orb.app.ui.share.ShareDest
@@ -104,6 +105,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object SchedulesRoute
 @Serializable data object ActivityRoute
 @Serializable data object UsageRoute
+@Serializable data object GamesRoute
 @Serializable data object TutorialsRoute
 @Serializable data object ThisPhoneRoute
 @Serializable data class ShareRoute(val id: Long)
@@ -188,6 +190,7 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                         onSchedules = { nav.navigate(SchedulesRoute) },
                         onActivity = { nav.navigate(ActivityRoute) },
                         onUsage = { nav.navigate(UsageRoute) },
+                        onGames = { nav.navigate(GamesRoute) },
                         onTutorials = { nav.navigate(TutorialsRoute) },
                         onThisPhone = { nav.navigate(ThisPhoneRoute) },
                         menu = menuAvailable,
@@ -318,6 +321,7 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                 ActivityScreen(vm, onBack = { nav.popBackStack() })
             }
         }
+        composable<GamesRoute> { GamesScreen(onBack = { nav.popBackStack() }) }
         composable<TutorialsRoute> { TutorialsScreen(onBack = { nav.popBackStack() }) }
         composable<UsageRoute> {
             val backend = remember { container.usageBackend() }

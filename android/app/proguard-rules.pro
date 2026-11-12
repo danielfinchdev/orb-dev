@@ -13,3 +13,6 @@
 
 # SQLCipher's JNI layer calls these classes by name.
 -keep class net.zetetic.database.** { *; }
+
+# The web pages call these two methods by name through the JavaScript bridge.
+-keepclassmembers class dev.orb.app.ui.web.GamesBridge { @android.webkit.JavascriptInterface <methods>; }
