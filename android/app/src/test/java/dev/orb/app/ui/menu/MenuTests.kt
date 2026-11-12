@@ -134,7 +134,7 @@ class MenuScreensTest {
 
     @Test fun menuKeepsAppearanceLinkTestAndUnlinkAndAddsTheNewEntries() {
         showMenu(MenuState("Conectado a PC", unreadNotices = 3), MenuActions())
-        for (t in listOf("Conectado a PC", "Avisos", "Programadas", "Memorias y actividad", "Uso y agentes", "Apariencia", "Prueba de conexión", "Desenlazar este móvil")) {
+        for (t in listOf("Conectado a PC", "Notificaciones", "Programadas", "Memorias y actividad", "Uso y agentes", "Apariencia", "Prueba de conexión", "Desenlazar este móvil")) {
             rule.onNodeWithText(t).performScrollTo().assertIsDisplayed()
         }
         rule.onNodeWithText("3").assertIsDisplayed()
@@ -145,7 +145,7 @@ class MenuScreensTest {
     @Test fun entriesTheLinkedPcCannotServeAreLeftOut() {
         showMenu(MenuState("PC", showSchedules = false, showActivity = false, showUsage = false), MenuActions())
         for (t in listOf("Programadas", "Memorias y actividad", "Uso y agentes")) rule.onNodeWithText(t).assertDoesNotExist()
-        rule.onNodeWithText("Avisos").assertIsDisplayed()
+        rule.onNodeWithText("Notificaciones").assertIsDisplayed()
     }
 
     @Test fun eachEntryClosesTheMenuAndGoesToItsScreen() {
@@ -163,7 +163,7 @@ class MenuScreensTest {
                 )
             }
         }
-        for (t in listOf("Avisos", "Programadas", "Memorias y actividad", "Uso y agentes", "Apariencia", "Prueba de conexión", "Desenlazar este móvil")) {
+        for (t in listOf("Notificaciones", "Programadas", "Memorias y actividad", "Uso y agentes", "Apariencia", "Prueba de conexión", "Desenlazar este móvil")) {
             rule.onNodeWithText(t).performScrollTo().performClick()
         }
         rule.waitForIdle()

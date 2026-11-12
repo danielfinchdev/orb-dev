@@ -5,7 +5,7 @@ object MenuTexts {
     const val MENU = "Menú"
     const val SECTION_WORK = "Trabajo"
     const val SECTION_PHONE = "Este móvil"
-    const val NOTICES = "Avisos"
+    const val NOTICES = "Notificaciones"
     const val SCHEDULES = "Programadas"
     const val ACTIVITY = "Memorias y actividad"
     const val USAGE = "Uso y agentes"

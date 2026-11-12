@@ -37,7 +37,7 @@ data class TaskDiffState(
 
 /**
  * What a task changed, file by file. The patches arrive with the list; only the file on screen is turned into lines.
- * «Aceptar» and «Deshacer» are requests to the PC; a second tap while one is on its way does nothing.
+ * «Aprobar» and «Rechazar» are requests to the PC; a second tap while one is on its way does nothing.
  */
 class TaskDiffViewModel(private val backend: TasksBackend, val id: Long) : ViewModel() {
     private data class Ui(

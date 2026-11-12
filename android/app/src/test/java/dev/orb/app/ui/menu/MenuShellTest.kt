@@ -63,14 +63,14 @@ class MenuShellTest {
         notes.feed.add(notice("b", at = 5))
         var opened = 0
         show(notes, ShellActions({}, {}, {}, {}, {}, {}, onNotices = { opened++ }))
-        rule.onNode(hasContentDescription("Avisos, 2 sin leer")).assertIsDisplayed()
-        rule.onNode(hasContentDescription("Avisos, 2 sin leer")).performClick()
+        rule.onNode(hasContentDescription("Notificaciones, 2 sin leer")).assertIsDisplayed()
+        rule.onNode(hasContentDescription("Notificaciones, 2 sin leer")).performClick()
         assertEquals(1, opened)
     }
 
     @Test fun withoutANoticesBackendThereIsNoBell() {
         show(null, ShellActions({}, {}, {}, {}, {}, {}))
-        rule.onNode(hasContentDescription("Avisos")).assertDoesNotExist()
+        rule.onNode(hasContentDescription("Notificaciones")).assertDoesNotExist()
     }
 }
 

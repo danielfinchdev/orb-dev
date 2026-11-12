@@ -50,7 +50,7 @@ import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.theme.OrbTheme
 import kotlinx.coroutines.launch
 
-/** The files a task changed, with each one's diff to swipe through, and «Aceptar» / «Deshacer» within thumb's reach. */
+/** The files a task changed, with each one's diff to swipe through, and «Aprobar» / «Rechazar» within thumb's reach. */
 @Composable
 fun TaskDiffScreen(vm: TaskDiffViewModel, onBack: () -> Unit, modifier: Modifier = Modifier) {
     val state by vm.state.collectAsStateWithLifecycle()

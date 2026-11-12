@@ -170,7 +170,7 @@ class NotesScreenTest {
 
     @Test fun emptyCenterSaysSo() {
         show(FakeNotesBackend())
-        rule.onNodeWithText("No hay avisos").assertIsDisplayed()
+        rule.onNodeWithText("No hay notificaciones").assertIsDisplayed()
     }
 
     @Test fun tappingANoticeOpensItsChat() {
