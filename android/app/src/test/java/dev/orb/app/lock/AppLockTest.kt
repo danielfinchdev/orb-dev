@@ -121,6 +121,20 @@ class AppLockTest {
         assertEquals(1, auth.requests.size)
     }
 
+    @Test fun aNewActivityCanAskAgainWhenThePreviousPromptNeverAnswered() {
+        prefs.setEnabled(true)
+        val lock = AppLock(prefs, gate())
+        val first = FakeAuthenticator().also { lock.authenticator = it }
+        lock.unlock()
+        assertTrue(lock.busy.value)
+        val second = FakeAuthenticator().also { lock.authenticator = it }
+        assertFalse(lock.busy.value)
+        lock.unlock()
+        assertEquals(1, second.requests.size)
+        second.answer(AuthResult.Success)
+        assertTrue(lock.gate.isOpen())
+    }
+
     @Test fun withoutAnActivityNothingOpens() {
         prefs.setEnabled(true)
         val lock = AppLock(prefs, gate())
@@ -159,6 +173,9 @@ class AppLockTest {
         lock.unlock()
         assertTrue(lock.gate.isOpen())
         assertFalse(prefs.settings.value.enabled)
+        assertTrue(LockPrefs(store).settings.value.autoOff)
+        prefs.setEnabled(true)
+        assertFalse(prefs.settings.value.autoOff)
     }
 
     @Test fun turningTheLockOffOpensAndForgets() {

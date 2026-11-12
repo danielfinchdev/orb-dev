@@ -146,6 +146,12 @@ class ThisPhoneTest {
         assertFalse(backend.lock.value.enabled)
     }
 
+    @Test fun saysWhenTheLockTurnedItselfOff() {
+        backend.lock.value = LockSettings(enabled = false, autoOff = true)
+        show()
+        rule.onNodeWithText(ThisPhoneTexts.LOCK_AUTO_OFF).performScrollTo().assertIsDisplayed()
+    }
+
     @Test fun appearanceAndBackAreHandedBack() {
         show()
         rule.onNodeWithText("Apariencia").performScrollTo().performClick()

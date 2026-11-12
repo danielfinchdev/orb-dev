@@ -15,19 +15,27 @@ enum class LockDelay(val key: String, val ms: Long) {
     }
 }
 
-data class LockSettings(val enabled: Boolean = false, val delay: LockDelay = LockDelay.OneMinute)
+/** [autoOff]: the lock turned itself off because the phone lost its PIN and fingerprint; «Este móvil» says so. */
+data class LockSettings(val enabled: Boolean = false, val delay: LockDelay = LockDelay.OneMinute, val autoOff: Boolean = false)
 
 /**
  * The only thing kept about the lock: whether it is on and the delay. No secret lives here; the real protection is
  * the system's own authentication (fingerprint, face or the phone's PIN), asked every time the app opens.
  */
 class LockPrefs(private val store: KeyValueStore) {
-    private val _settings = MutableStateFlow(LockSettings(store.getBoolean(ENABLED, false), LockDelay.fromKey(store.getString(DELAY))))
+    private val _settings = MutableStateFlow(LockSettings(store.getBoolean(ENABLED, false), LockDelay.fromKey(store.getString(DELAY)), store.getBoolean(AUTO_OFF, false)))
     val settings: StateFlow<LockSettings> = _settings.asStateFlow()
 
+    /** A deliberate choice of the person: it also clears the note about an automatic switch-off. */
     fun setEnabled(on: Boolean) {
-        store.edit { putBoolean(ENABLED, on) }
-        _settings.value = _settings.value.copy(enabled = on)
+        store.edit { putBoolean(ENABLED, on); putBoolean(AUTO_OFF, false) }
+        _settings.value = _settings.value.copy(enabled = on, autoOff = false)
+    }
+
+    /** The lock was dropped because nothing can open it any more. */
+    fun setAutoOff() {
+        store.edit { putBoolean(ENABLED, false); putBoolean(AUTO_OFF, true) }
+        _settings.value = _settings.value.copy(enabled = false, autoOff = true)
     }
 
     fun setDelay(delay: LockDelay) {
@@ -38,6 +46,7 @@ class LockPrefs(private val store: KeyValueStore) {
     private companion object {
         const val ENABLED = "lock.enabled"
         const val DELAY = "lock.delay"
+        const val AUTO_OFF = "lock.autoOff"
     }
 }
 
@@ -122,6 +131,11 @@ enum class LockNotice { Blocked, Failed }
 class AppLock(val prefs: LockPrefs, val gate: AppLockGate) {
     @Volatile
     var authenticator: Authenticator? = null
+        set(value) {
+            field = value
+            // A prompt of the previous activity may never answer (it was recreated); do not stay busy for ever.
+            _busy.value = false
+        }
 
     val settings: StateFlow<LockSettings> get() = prefs.settings
 
@@ -136,7 +150,11 @@ class AppLock(val prefs: LockPrefs, val gate: AppLockGate) {
     fun unlock(pin: Boolean = false) {
         val auth = authenticator ?: return
         // A phone with no screen lock protects nothing, and nothing could ever open this lock: it is dropped, not stuck.
-        if (auth.capability() == AuthCapability.NothingSet) return gate.disable()
+        if (auth.capability() == AuthCapability.NothingSet) {
+            gate.disable()
+            prefs.setAutoOff()
+            return
+        }
         if (!_busy.compareAndSet(expect = false, update = true)) return
         _notice.value = null
         auth.authenticate(AuthRequest(LockTexts.PROMPT_TITLE, LockTexts.PROMPT_SUBTITLE, credentialOnly = pin)) { result ->

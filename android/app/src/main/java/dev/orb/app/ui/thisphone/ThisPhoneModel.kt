@@ -95,7 +95,7 @@ class ThisPhoneViewModel(private val backend: ThisPhoneBackend) : ViewModel() {
     ) { name, conn, s, enabled, (b, d) ->
         ThisPhoneState(name, conn, s.keepConnected, s.lockScreenPublic, enabled, b, d)
     }.combine(combine(backend.lock, lockAvailable, lockMessage) { l, a, m -> Triple(l, a, m) }) { st, (l, a, m) ->
-        st.copy(appLock = l.enabled, lockDelay = l.delay, lockAvailable = a, lockMessage = m)
+        st.copy(appLock = l.enabled, lockDelay = l.delay, lockAvailable = a, lockMessage = m ?: ThisPhoneTexts.LOCK_AUTO_OFF.takeIf { l.autoOff })
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ThisPhoneState())
 
     fun setKeepConnected(on: Boolean) = backend.setKeepConnected(on)
@@ -153,6 +153,7 @@ object ThisPhoneTexts {
     const val LOCK_DELAY = "Volver a pedirlo"
     const val LOCK_BLOCKED = "Demasiados intentos. Espera un momento o usa el PIN del móvil."
     const val LOCK_FAILED = "No se pudo comprobar. El bloqueo sigue apagado."
+    const val LOCK_AUTO_OFF = "El bloqueo se desactivó porque el móvil ya no tiene PIN ni huella."
     const val LOCK_NOTHING_SET = "Este móvil no tiene huella ni PIN configurados."
 
     fun delay(d: LockDelay) = when (d) {
