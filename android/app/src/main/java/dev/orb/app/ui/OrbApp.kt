@@ -47,6 +47,8 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.navigation.toRoute
 import dev.orb.app.ui.chats.SearchViewModel
 import dev.orb.app.ui.shell.MainShell
+import dev.orb.app.ui.tasks.TaskDetailScreen
+import dev.orb.app.ui.tasks.TaskDetailViewModel
 import dev.orb.app.ui.shell.ShellActions
 import dev.orb.app.ui.shell.UnlinkDialog
 import dev.orb.app.ui.home.HomeViewModel
@@ -171,7 +173,18 @@ private fun OrbNav(container: AppContainer, start: Any) {
                 Placeholder(ChatTexts.CHAT_SOON, onBack = { nav.popBackStack() })
             }
         }
-        composable<TaskRoute> { Placeholder("", onBack = { nav.popBackStack() }) }
+        composable<TaskRoute> { entry ->
+            val route = entry.toRoute<TaskRoute>()
+            val backend = remember { container.tasksBackend() }
+            if (backend != null) {
+                val vm = viewModel<TaskDetailViewModel>(key = "task:${route.id}", factory = viewModelFactory { initializer { TaskDetailViewModel(backend, route.id) } })
+                TaskDetailScreen(
+                    vm, onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate(TaskRoute(it)) },
+                    onOpenChanges = { nav.navigate(TaskChangesRoute(it)) },
+                )
+            }
+        }
+        composable<TaskChangesRoute> { Placeholder("", onBack = { nav.popBackStack() }) }
         composable<LinkTest> {
             val backend = remember { container.linkTestBackend() }
             if (backend != null) {
