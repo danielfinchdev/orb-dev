@@ -134,10 +134,10 @@ class MenuScreensTest {
 
     @Test fun menuKeepsAppearanceLinkTestAndUnlinkAndAddsTheNewEntries() {
         showMenu(MenuState("Conectado a PC", unreadNotices = 3), MenuActions())
-        for (t in listOf("Conectado a PC", "Notificaciones", "Programadas", "Memorias y actividad", "Uso y agentes", "Apariencia", "Prueba de conexión", "Desenlazar este móvil")) {
+        for (t in listOf("Conectado a PC", "Notificaciones", "Programadas", "Memorias y actividad", "Uso y agentes", "Este móvil", "Apariencia", "Prueba de conexión", "Desenlazar este móvil")) {
             rule.onNodeWithText(t).performScrollTo().assertIsDisplayed()
         }
-        rule.onNodeWithText("3").assertIsDisplayed()
+        rule.onNodeWithText("3").performScrollTo().assertIsDisplayed()
         // The web-view entries wait for the browser step and are left out.
         for (t in listOf("Pizarra", "Juegos", "Tutoriales")) rule.onNodeWithText(t).assertDoesNotExist()
     }

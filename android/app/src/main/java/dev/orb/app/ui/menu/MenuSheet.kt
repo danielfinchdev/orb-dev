@@ -42,6 +42,7 @@ class MenuActions(
     val onSchedules: () -> Unit = {},
     val onActivity: () -> Unit = {},
     val onUsage: () -> Unit = {},
+    val onThisPhone: () -> Unit = {},
     val onAppearance: () -> Unit = {},
     val onLinkTest: () -> Unit = {},
     val onUnlink: () -> Unit = {},
@@ -70,6 +71,7 @@ fun MenuContent(state: MenuState, actions: MenuActions, close: () -> Unit) {
         if (state.showUsage) Entry(MenuTexts.USAGE, OrbIcons.Gauge, go(actions.onUsage))
 
         Section(MenuTexts.SECTION_PHONE)
+        Entry(MenuTexts.THIS_PHONE, OrbIcons.Bell, go(actions.onThisPhone))
         Entry(MenuTexts.APPEARANCE, OrbIcons.Palette, go(actions.onAppearance))
         Entry(MenuTexts.LINK_TEST, OrbIcons.Activity, go(actions.onLinkTest))
         Entry(MenuTexts.UNLINK, OrbIcons.LogOut, go(actions.onUnlink), tint = MaterialTheme.colorScheme.error)

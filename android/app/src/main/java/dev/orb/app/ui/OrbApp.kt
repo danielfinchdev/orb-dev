@@ -68,6 +68,9 @@ import dev.orb.app.ui.notes.NotesViewModel
 import dev.orb.app.ui.schedules.SchedulesScreen
 import dev.orb.app.ui.schedules.SchedulesViewModel
 import dev.orb.app.ui.usage.UsageScreen
+import dev.orb.app.ui.thisphone.RuntimeThisPhoneBackend
+import dev.orb.app.ui.thisphone.ThisPhoneScreen
+import dev.orb.app.ui.thisphone.ThisPhoneViewModel
 import dev.orb.app.ui.usage.UsageViewModel
 import dev.orb.app.ui.shell.UnlinkDialog
 import dev.orb.app.ui.home.HomeViewModel
@@ -94,6 +97,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object SchedulesRoute
 @Serializable data object ActivityRoute
 @Serializable data object UsageRoute
+@Serializable data object ThisPhoneRoute
 
 @Composable
 fun OrbApp(container: AppContainer) {
@@ -119,6 +123,7 @@ private fun OrbNav(container: AppContainer, start: Any) {
     val nav = rememberNavController()
     var appearance by rememberSaveable { mutableStateOf(false) }
     if (appearance) AppearanceSheet(container.themePrefs, onDismiss = { appearance = false })
+    OpenFromNotice(container, nav)
     NavHost(
         navController = nav, startDestination = start, modifier = Modifier.systemBarsPadding(),
         // A short slide with a fade: the chat opens from the side the list sits on.
@@ -165,6 +170,7 @@ private fun OrbNav(container: AppContainer, start: Any) {
                         onSchedules = { nav.navigate(SchedulesRoute) },
                         onActivity = { nav.navigate(ActivityRoute) },
                         onUsage = { nav.navigate(UsageRoute) },
+                        onThisPhone = { nav.navigate(ThisPhoneRoute) },
                         menu = menuAvailable,
                     ),
                     tasks = tasksBackend,
@@ -300,12 +306,36 @@ private fun OrbNav(container: AppContainer, start: Any) {
                 UsageScreen(vm, onBack = { nav.popBackStack() })
             }
         }
+        composable<ThisPhoneRoute> {
+            val backend = remember { RuntimeThisPhoneBackend(container) }
+            val vm = viewModel<ThisPhoneViewModel>(factory = viewModelFactory { initializer { ThisPhoneViewModel(backend) } })
+            ThisPhoneScreen(
+                vm, onBack = { nav.popBackStack() }, onAppearance = { appearance = true },
+                onUnlinked = { nav.navigate(Welcome) { popUpTo(0) { inclusive = true } } },
+            )
+        }
         composable<LinkTest> {
             val backend = remember { container.linkTestBackend() }
             if (backend != null) {
                 val vm = viewModel<LinkTestViewModel>(factory = viewModelFactory { initializer { LinkTestViewModel(backend) } })
                 LinkTestScreen(vm)
             }
+        }
+    }
+}
+
+/** Opens what a tapped notice is about, once a PC is linked. */
+@Composable
+private fun OpenFromNotice(container: AppContainer, nav: androidx.navigation.NavHostController) {
+    val target by container.openTarget.collectAsStateWithLifecycle()
+    LaunchedEffect(target) {
+        val t = target ?: return@LaunchedEffect
+        container.openTarget.value = null
+        if (container.runtime.value == null) return@LaunchedEffect
+        when (t) {
+            is NoticeTarget.Chat -> nav.navigate(ChatRoute(t.kind, t.id))
+            is NoticeTarget.Task -> nav.navigate(TaskRoute(t.id))
+            NoticeTarget.ChatsTab -> Unit
         }
     }
 }
