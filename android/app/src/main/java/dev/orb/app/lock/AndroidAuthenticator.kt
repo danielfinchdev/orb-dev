@@ -19,8 +19,6 @@ import androidx.fragment.app.FragmentActivity
  */
 class AndroidAuthenticator(private val activity: FragmentActivity) : Authenticator {
     private val keyguard = activity.getSystemService(KeyguardManager::class.java)
-    private var credentialDone: ((AuthResult) -> Unit)? = null
-
     private val credentialScreen = activity.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val done = credentialDone
         credentialDone = null
@@ -34,7 +32,13 @@ class AndroidAuthenticator(private val activity: FragmentActivity) : Authenticat
     private val authenticators: Int
         get() = if (Build.VERSION.SDK_INT in Build.VERSION_CODES.P..Build.VERSION_CODES.Q) BIOMETRIC_WEAK or DEVICE_CREDENTIAL else BIOMETRIC_STRONG or DEVICE_CREDENTIAL
 
-    private fun promptReady() = BiometricManager.from(activity).canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS
+    /**
+     * Below Android 9 the library's prompt is an AppCompat dialog fragment, which this app's theme cannot host: it can
+     * throw on show. There the system's own credential screen is used, which also accepts the fingerprint.
+     */
+    private val promptSupported: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+
+    private fun promptReady() = promptSupported && BiometricManager.from(activity).canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS
 
     private fun pinSet() = keyguard?.isDeviceSecure == true
 
@@ -69,7 +73,12 @@ class AndroidAuthenticator(private val activity: FragmentActivity) : Authenticat
             .setAllowedAuthenticators(authenticators)
             .setConfirmationRequired(false)
             .build()
-        BiometricPrompt(activity, ContextCompat.getMainExecutor(activity), callback).authenticate(info)
+        try {
+            BiometricPrompt(activity, ContextCompat.getMainExecutor(activity), callback).authenticate(info)
+        } catch (e: RuntimeException) {
+            // The prompt could not be shown (a theme or fragment state problem): the credential screen still can.
+            if (pinSet()) credential(request, onResult) else onResult(AuthResult.Failed)
+        }
     }
 
     private fun credential(request: AuthRequest, onResult: (AuthResult) -> Unit) {
@@ -82,5 +91,14 @@ class AndroidAuthenticator(private val activity: FragmentActivity) : Authenticat
             credentialDone = null
             onResult(AuthResult.Failed)
         }
+    }
+
+    private companion object {
+        /**
+         * The credential screen can outlive the activity that opened it (a rotation or low memory recreates it); the
+         * callback is kept here so the new activity's launcher still delivers the result to the lock.
+         */
+        @Volatile
+        var credentialDone: ((AuthResult) -> Unit)? = null
     }
 }
