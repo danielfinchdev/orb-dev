@@ -122,6 +122,9 @@ fun PrDetailScreen(vm: PrDetailViewModel, onBack: () -> Unit, modifier: Modifier
                         SectionLabel(ProjectTexts.PR_DESCRIPTION)
                         Text(pr.body, style = MaterialTheme.typography.bodyMedium)
                     }
+                    if (state.needsPcUpdate) {
+                        Text(ProjectTexts.PR_MERGE_UPDATE_PC, Modifier.padding(top = 16.dp), style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text2)
+                    }
                     // Only an open pull request the PC can merge offers the button; a merged or closed one never does.
                     if (state.canMerge) {
                         if (!state.online) NeedsPcNote(Modifier.padding(top = 12.dp))

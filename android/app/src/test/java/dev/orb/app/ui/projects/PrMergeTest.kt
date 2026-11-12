@@ -119,6 +119,7 @@ class PrMergeViewModelTest {
             val b = backend(prDetail(4, oid = oid))
             val vm = vm(b)
             assertFalse(vm.state.value.canMerge)
+            assertTrue(vm.state.value.needsPcUpdate)
             vm.merge("merge", token("app#4"))
             advanceUntilIdle()
             assertTrue(b.calls.none { it.startsWith("merge") })
@@ -249,6 +250,12 @@ class PrMergeScreenTest {
         rule.waitForIdle()
         assertEquals(1, b.calls.count { it == "merge app#4 squash" })
         rule.onNodeWithText("Fusionada").assertIsDisplayed()
+        assertEquals(0, rule.onAllNodesWithTextCount("Fusionar"))
+    }
+
+    @Test fun anOldPcWithoutTheHeadCommitSaysToUpdateInsteadOfHidingTheButtonSilently() {
+        show(backend(prDetail(4, oid = null)))
+        rule.onNodeWithText(ProjectTexts.PR_MERGE_UPDATE_PC).assertIsDisplayed()
         assertEquals(0, rule.onAllNodesWithTextCount("Fusionar"))
     }
 

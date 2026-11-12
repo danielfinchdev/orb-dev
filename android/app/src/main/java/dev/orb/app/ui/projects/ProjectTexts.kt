@@ -83,6 +83,7 @@ object ProjectTexts {
     const val PR_MERGED = "Fusionada"
     const val PR_CLOSED = "Cerrada"
     const val PR_MERGE = "Fusionar"
+    const val PR_MERGE_UPDATE_PC = "Actualiza Orb en el PC para fusionar."
     const val PR_MERGE_ASK = "¿Fusionar esta pull request?"
     const val PR_MERGE_NOTE = "El PC la fusionará con su cuenta de GitHub. Desde el móvil no se puede deshacer."
     const val PR_MERGE_METHOD = "Método"

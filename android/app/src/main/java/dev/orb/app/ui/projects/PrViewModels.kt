@@ -55,6 +55,8 @@ data class PrDetailState(
     val mergeUnsure: Boolean = false,
     val online: Boolean = true,
     val canMerge: Boolean = false,
+    /** An open pull request the PC could merge if it reported the head commit: an old Orb on the PC does not. */
+    val needsPcUpdate: Boolean = false,
 )
 
 /**
@@ -89,10 +91,12 @@ class PrDetailViewModel(private val backend: ProjectsBackend, val name: String, 
             val pr = r.getOrDefault(u.pr)
             // Only a successful read after the timeout settles the doubt; a failed one leaves the button hidden.
             val unsure = u.mergeUnsure && r.isFailure
+            val mergeable = pr != null && pr.open && !pr.draft && !u.mergeSent && !unsure && backend.available(ApiMethods.PROJECTS_MERGE_PR)
             u.copy(
                 pr = pr, loading = false, error = keepError ?: r.exceptionOrNull()?.let(ProjectTexts::pcError),
                 mergeUnsure = unsure,
-                canMerge = pr != null && pr.open && !pr.draft && !u.mergeSent && !unsure && pr.hasMergeableOid && backend.available(ApiMethods.PROJECTS_MERGE_PR),
+                canMerge = mergeable && pr!!.hasMergeableOid,
+                needsPcUpdate = mergeable && !pr!!.hasMergeableOid,
             )
         }
     }
