@@ -35,7 +35,8 @@ import { toBlocks, subagentState } from '@/lib/session-blocks.js';
 import { kindOf, playableType } from '../../shared/attach-kind.mjs';
 import { canCapture, captureFrame } from '@/lib/window-capture.js';
 import { useAutoScroll, Composer } from '@/components/conversation/composer.jsx';
-import { BarClock, MsgTime, BarPause, BarHeading, COMPACT_AT, CompactButton } from '@/components/conversation/bar.jsx';
+import { MessageBox } from '@/components/conversation/message-box.jsx';
+import { BarClock, BarPause, BarHeading, COMPACT_AT, CompactButton } from '@/components/conversation/bar.jsx';
 import { ContextMeter } from '@/components/conversation/context-meter.jsx';
 import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
 import { TaskStatus } from '@/components/task-state.jsx';
@@ -143,8 +144,9 @@ function AttachChip({ file, sessionId }) {
 
 // The blocks are made again from the items whenever one arrives: a block whose content is the same is not drawn again
 // (nor while the agent's answer streams, which redraws the view many times a second): lib/memo.js › sameBlock.
-const Block = memo(function Block({ b, agent, brain, sessionId, project, catalog }) {
+const Block = memo(function Block({ b, agent, who, brain, sessionId, project, catalog }) {
   const t = useT();
+  const userName = useStore((st) => st.app?.config?.userName?.trim() || '');
   const locale = useLocale();
   const usageLine = useStore((st) => st.app?.config?.ui?.usageLine !== false);
   if (b.type === 'tool') return <ToolBlock b={b} />;
@@ -159,15 +161,14 @@ const Block = memo(function Block({ b, agent, brain, sessionId, project, catalog
     const images = typeof body === 'object' && body?.images ? body.images : [];
     const long = textBody.length > 1200 && /^Encargo de /.test(textBody);
     return (
-      <div className="msg-hover bg-bubble text-bubble-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 compact:text-[14.5px] break-words whitespace-pre-wrap">
+      <MessageBox user name={userName || t('chat.you')} at={it.at}>
         {typeof body === 'object' && body?.steer ? <div className="mb-1 flex items-center gap-1 text-[11px] opacity-80"><CornerDownRight className="size-3" />{t('session.steered')}</div> : null}
         {long ? <Collapsible><CollapsibleTrigger className="cursor-pointer text-left underline-offset-2 hover:underline">{textBody.split('\n')[0]} ({t('session.seeFullTask')})</CollapsibleTrigger><CollapsibleContent className="mt-2 text-[13px] opacity-90">{textBody}</CollapsibleContent></Collapsible> : textBody}
         {images.length ? <div className="mt-2 flex flex-wrap gap-1.5">{images.map((p) => <AttachChip key={p} file={p} sessionId={sessionId} />)}</div> : null}
-        <MsgTime at={it.at} hover />
-      </div>
+      </MessageBox>
     );
   }
-  if (it.kind === 'text' && it.role === 'assistant') return <div className="msg-hover flex gap-3"><AgentIcon agent={agent} className="mt-1 size-5" /><div className="min-w-0 flex-1"><TypedMarkdown tail={`session:${sessionId}`}>{body}</TypedMarkdown><div className="text-muted-foreground flow-root"><MsgTime at={it.at} hover /></div></div></div>;
+  if (it.kind === 'text' && it.role === 'assistant') return <MessageBox name={who ?? AGENT[agent]} at={it.at} icon={<AgentIcon agent={agent} className="size-5 shrink-0" />}><TypedMarkdown tail={`session:${sessionId}`}>{body}</TypedMarkdown></MessageBox>;
   if (it.kind === 'reasoning') return <div className="text-muted-foreground border-l-2 pl-3 text-[13px] italic whitespace-pre-wrap line-clamp-4">{body}</div>;
   if (it.kind === 'usage') {
     // Ajustes › Apariencia can hide it (shown by default).
@@ -440,9 +441,9 @@ export function SessionView({ route }) {
       <div ref={scroll.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
         <div className="lazy-lines mx-auto flex max-w-3xl flex-col gap-3.5 px-5 py-6">
           {more ? <Button variant="ghost" size="sm" className="self-center" onClick={loadOlder}><ChevronUp />{t('session.older')}</Button> : null}
-          {blocks.length || unsaved.length ? blocks.map((b) => <Block key={b.key} b={b} agent={s.agent} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />)
+          {blocks.length || unsaved.length ? blocks.map((b) => <Block key={b.key} b={b} agent={s.agent} who={who} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />)
             : <Empty title={t('session.emptyTitle', { agent: AGENT[s.agent] })}>{t('session.workIn')} <span className="font-mono text-xs">{s.cwd}</span> {t('session.withPerm', { perm: PERMISSION[s.permission] })}</Empty>}
-          {unsaved.map((p) => <Block key={p.id} b={{ type: 'item', key: p.id, item: { id: p.id, session_id: s.id, role: 'user', kind: 'text', body: p.text, at: p.at } }} agent={s.agent} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />)}
+          {unsaved.map((p) => <Block key={p.id} b={{ type: 'item', key: p.id, item: { id: p.id, session_id: s.id, role: 'user', kind: 'text', body: p.text, at: p.at } }} agent={s.agent} who={who} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />)}
           <LivePartial key={s.id} id={s.id} agent={s.agent} running={running} />
           {/* a task's conversation ends with the files it changed (nothing while it runs). */}
           {task && !['running', 'queued'].includes(task.status) ? <TaskChanges taskId={task.id} version={`${task.status}:${task.updated_at}`} /> : null}

@@ -57,7 +57,8 @@ test('the cost line can be hidden in Apariencia and the message time shows on ho
   const session = read('views', 'session.jsx');
   assert.match(session, /useStore\(\(st\) => st\.app\?\.config\?\.ui\?\.usageLine !== false\)/);
   assert.match(session, /if \(it\.kind === 'usage'\) \{[\s\S]{0,120}if \(!usageLine\) return null;/);
-  assert.equal([...session.matchAll(/<MsgTime at=\{it\.at\} hover \/>/g)].length, 2);
+  // both the user's and the agent's messages wear the message box, whose header carries the 24 h time
+  assert.equal([...session.matchAll(/<MessageBox [^>]*at=\{it\.at\}/g)].length, 2);
   assert.match(read('app.css'), /\.msg-hover:hover \.msg-time-hover/);
   for (const lang of ['es', 'en']) {
     const { default: dict } = await import(`../src/shared/locales/${lang}/settings.mjs`);
