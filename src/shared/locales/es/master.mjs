@@ -55,6 +55,8 @@ export default {
   'master.ask.unlink': 'Para cerrar la sesión de un dispositivo.',
   'master.ask.deleteProject': 'Para eliminar un proyecto y su carpeta.',
   'master.ask.previousKey': 'Para volver a la clave anterior.',
+  'master.ask.rails': 'Para cambiar los límites de seguridad de Orb.',
+  'master.ask.ruleSeed': 'Para cambiar una norma que viene de serie.',
   'master.ask.removeExtension': 'Para quitar una skill, un servidor MCP o un conector de Orb.',
   'master.askNote': 'Queda desbloqueado {n} minutos o hasta que bloquees el PC.',
   'master.askEveryTime': 'Para esto Orb la pide siempre.',

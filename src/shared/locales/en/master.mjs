@@ -55,6 +55,8 @@ export default {
   'master.ask.unlink': 'To sign a device out.',
   'master.ask.deleteProject': 'To delete a project and its folder.',
   'master.ask.previousKey': 'To go back to the old key.',
+  'master.ask.rails': "To change Orb's safety limits.",
+  'master.ask.ruleSeed': 'To change a rule that ships with Orb.',
   'master.ask.removeExtension': 'To remove a skill, an MCP server or a connector from Orb.',
   'master.askNote': 'It stays unlocked for {n} minutes or until you lock the PC.',
   'master.askEveryTime': 'Orb asks for it every time for this.',

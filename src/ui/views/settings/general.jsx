@@ -16,7 +16,6 @@ import { cn } from '@/lib/utils.js';
 import { t, useT } from '@/lib/i18n.js';
 import { LANGUAGES } from '../../../shared/i18n.mjs';
 import { play } from '@/lib/sounds.js';
-import { unlockCore } from '@/lib/core-access.js';
 import { DEFAULT_PROTECTED } from '../../../shared/layout.mjs';
 import { available as musicAvailable, musicPrefs, setMusicVolume } from '@/lib/music.js';
 import { save, num, Row, WithKeys, sizes } from './rows.jsx';
@@ -143,9 +142,11 @@ export function TasksCard({ c }) {
   const applyProfile = (level) => {
     const p = SPEND_PRESETS[level];
     const caps = Object.fromEntries(agents.map((a) => [a, { maxTasks: p.maxTasks, maxHeavy: p.maxHeavy }]));
+    const before = { profile, v };
     setProfile(level);
     setV({ ...v, maxParallel: p.maxParallel, perAgent: p.perAgent, timeoutMinutes: p.timeoutMinutes, stopAt: Math.round(p.stopAt * 100), caps, high: p.high, maxPerTask: p.maxPerTask, trusted: p.trusted, review: p.review });
-    save({ maxParallel: p.maxParallel, perAgent: p.perAgent, timeoutMinutes: p.timeoutMinutes, review: { auto: p.review }, policy: { highNeedsApproval: p.high }, budget: { profile: level, stopAt: p.stopAt, agents: caps }, delegation: { maxPerTask: p.maxPerTask, trusted: p.trusted } });
+    // cancelling the password puts the slider and the fields back
+    save({ maxParallel: p.maxParallel, perAgent: p.perAgent, timeoutMinutes: p.timeoutMinutes, review: { auto: p.review }, policy: { highNeedsApproval: p.high }, budget: { profile: level, stopAt: p.stopAt, agents: caps }, delegation: { maxPerTask: p.maxPerTask, trusted: p.trusted } }).then((r) => { if (!r) { setProfile(before.profile); setV(before.v); } });
   };
   const level = profile ?? null;
   return (
@@ -164,7 +165,7 @@ export function TasksCard({ c }) {
         <ModelGuide auto={c.budget?.autoModel !== false} />
         <Row label={t('settings.autoRun')} hint={t('settings.autoRunHint')}><Switch checked={v.autoRun} onCheckedChange={(autoRun) => { setV({ ...v, autoRun }); save({ autoRun }); }} /></Row>
         {/* tasks work at the same time by default; this makes them wait for each other. */}
-        <Row label={t('settings.oneAtATime')} hint={t('settings.oneAtATimeHint')}><Switch checked={v.oneAtATime} onCheckedChange={(oneAtATime) => { setV({ ...v, oneAtATime }); save({ oneAtATime }); }} data-testid="one-at-a-time" /></Row>
+        <Row label={t('settings.oneAtATime')} hint={t('settings.oneAtATimeHint')}><Switch checked={v.oneAtATime} onCheckedChange={(oneAtATime) => { setV({ ...v, oneAtATime }); save({ oneAtATime }).then((r) => { if (!r) setV((cur) => ({ ...cur, oneAtATime: !oneAtATime })); }); }} data-testid="one-at-a-time" /></Row>
         <Row label={t('settings.resumeRestart')} hint={t('settings.resumeRestartHint')}><Switch checked={v.resumeAfterRestart} onCheckedChange={(resumeAfterRestart) => { setV({ ...v, resumeAfterRestart }); save({ continuity: { resumeAfterRestart } }); }} /></Row>
         <Row label={t('settings.resumeReset')} hint={t('settings.resumeResetHint')}><Switch checked={v.resumeAtReset} onCheckedChange={(resumeAtReset) => { setV({ ...v, resumeAtReset }); save({ continuity: { resumeAtReset } }); }} /></Row>
         <Row label={t('settings.delegation')} hint={t('settings.delegationHint')}><Switch checked={v.delegation} onCheckedChange={(delegation) => { setV({ ...v, delegation }); save({ delegation: { enabled: delegation } }); }} /></Row>
@@ -194,7 +195,7 @@ export function TasksCard({ c }) {
           <div className="text-muted-foreground grid grid-cols-3 gap-3 text-xs"><span>{t('settings.colAgent')}</span><span>{t('settings.colTasks')}</span><span>{t('settings.colHeavy')}</span></div>
           {agents.map((a) => <div key={a} className="grid grid-cols-3 items-center gap-3"><span className="text-sm">{AGENT[a] ?? a}</span><Input type="number" min={1} value={v.caps[a].maxTasks} onChange={(e) => cap(a, 'maxTasks', e.target.value)} /><Input type="number" min={0} value={v.caps[a].maxHeavy} onChange={(e) => cap(a, 'maxHeavy', e.target.value)} /></div>)}
         </div>
-        <div><Button size="sm" onClick={() => { setProfile(null); save({ autoRun: v.autoRun, maxParallel: v.maxParallel, perAgent: v.perAgent, timeoutMinutes: v.timeoutMinutes, review: { auto: v.review }, policy: { highNeedsApproval: v.high }, budget: { profile: null, windowHours: v.windowHours, stopAt: Math.min(1, Math.max(0.5, v.stopAt / 100)), agents: v.caps }, delegation: { maxPerTask: v.maxPerTask }, approvalWaitMinutes: Math.min(240, Math.max(0, v.approvalWait)), orchestrator: { parallel: Math.min(6, Math.max(1, v.parallelChats || 3)) } }); }} data-testid="spend-save">{t('settings.save')}</Button></div>
+        <div><Button size="sm" onClick={() => { const was = profile; setProfile(null); save({ autoRun: v.autoRun, maxParallel: v.maxParallel, perAgent: v.perAgent, timeoutMinutes: v.timeoutMinutes, review: { auto: v.review }, policy: { highNeedsApproval: v.high }, budget: { profile: null, windowHours: v.windowHours, stopAt: Math.min(1, Math.max(0.5, v.stopAt / 100)), agents: v.caps }, delegation: { maxPerTask: v.maxPerTask }, approvalWaitMinutes: Math.min(240, Math.max(0, v.approvalWait)), orchestrator: { parallel: Math.min(6, Math.max(1, v.parallelChats || 3)) } }).then((r) => { if (!r) setProfile(was); }); }} data-testid="spend-save">{t('settings.save')}</Button></div>
         </div>
           </CollapsibleContent>
         </Collapsible>
@@ -252,10 +253,8 @@ export function ProtectedCard({ c }) {
   const store = async (items) => {
     const seen = new Set();
     const clean = items.map((x) => String(x ?? '').trim()).filter((x) => x.length >= 2 && !seen.has(x.toLowerCase()) && seen.add(x.toLowerCase()));
-    // taking something off the list asks for the master password first.
-    const unlock = list.some((x) => !clean.includes(x)) ? await unlockCore('protected') : null;
-    if (list.some((x) => !clean.includes(x)) && !unlock) return undefined;
-    return save({ protected: clean.slice(0, 50) }, t('settings.protectedSaved'), unlock);
+    // the list is a rail value: save() asks for the master password (every time) when it would change.
+    return save({ protected: clean.slice(0, 50) }, t('settings.protectedSaved'));
   };
   const add = async () => { if (draft.trim().length >= 2 && await store([...list, draft])) setDraft(''); };
   const isDefault = (x) => DEFAULT_PROTECTED.some((d) => d.toLowerCase() === x.toLowerCase());
