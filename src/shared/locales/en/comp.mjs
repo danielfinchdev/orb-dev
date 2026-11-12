@@ -34,6 +34,7 @@ export default {
   'comp.live.stepOther': '{n} steps',
   'comp.live.quiet': 'no activity for {min} min (last step: {now})',
   'comp.live.now': 'now: {now}',
+  'comp.live.noPercentNoLimit': '{agent} does not report progress; each step is shown instead.',
   'comp.live.noPercent': '{agent} does not report progress; each step is shown instead. Maximum {min} min per task.',
   'comp.live.running': 'In progress ({n})',
   'comp.live.more': 'and {n} more in Tasks',

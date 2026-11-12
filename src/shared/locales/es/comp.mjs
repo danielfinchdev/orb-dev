@@ -34,6 +34,7 @@ export default {
   'comp.live.stepOther': '{n} pasos',
   'comp.live.quiet': 'sin actividad desde hace {min} min (último paso: {now})',
   'comp.live.now': 'ahora: {now}',
+  'comp.live.noPercentNoLimit': '{agent} no informa del progreso; se muestra cada paso.',
   'comp.live.noPercent': '{agent} no informa del progreso; se muestra cada paso. Máximo {min} min por tarea.',
   'comp.live.running': 'En curso ({n})',
   'comp.live.more': 'y {n} más en Tareas',

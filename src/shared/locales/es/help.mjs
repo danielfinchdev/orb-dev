@@ -66,7 +66,7 @@ export default {
   'help.tut.board.go': 'Abrir la Pizarra',
 
   'help.tut.agents.title': 'Agentes y cuentas',
-  'help.tut.agents.l1': 'Agentes muestra los programas que Orb encuentra (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code y Copilot), su versión y si tienen la sesión iniciada.',
+  'help.tut.agents.l1': 'Agentes muestra los programas que Orb encuentra (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code, Copilot y Hermes Agent), su versión y si tienen la sesión iniciada.',
   'help.tut.agents.l2': 'Si ya iniciaste sesión en el agente, no tienes que hacer nada más. Si no, «Iniciar sesión» abre su acceso oficial: Orb nunca ve tus contraseñas.',
   'help.tut.agents.l3': 'Puedes añadir varias cuentas de un mismo agente con «Buscar y añadir». El trabajo se reparte entre las que tienen uso disponible, o puedes fijar una.',
   'help.tut.agents.l4': 'En Windows, Orb instala lo que falte con los instaladores oficiales: Git, Node.js, GitHub CLI y los propios agentes.',
