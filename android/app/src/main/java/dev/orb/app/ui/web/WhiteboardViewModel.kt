@@ -64,6 +64,8 @@ data class WhiteboardState(
     val save: SaveStatus = SaveStatus.Saved,
     val projects: List<String> = emptyList(),
     val attachments: List<WhiteboardAttachment> = emptyList(),
+    /** The project [attachments] belong to: notes are saved against this one, whatever the screen shows by then. */
+    val attachmentsProject: String? = null,
     /** True when leaving failed because the last changes are not on the PC: the screen asks what to do. */
     val confirmLeave: Boolean = false,
 )
@@ -109,6 +111,9 @@ class WhiteboardViewModel(
     /** True when a save from the page was refused: the PC is behind the screen and nothing is pending to retry. */
     private var unsynced = false
     private var warnedDropped = 0
+
+    /** Pictures the page's files were refused for in this project: their image elements never travel, in any later save. */
+    private val rejectedFiles = HashSet<String>()
     private var pageFlushed: CompletableDeferred<Unit>? = null
 
     init {
@@ -150,6 +155,7 @@ class WhiteboardViewModel(
                 return@launch
             }
             val scene = backend.load(chosen).getOrElse { return@launch failed(it) }
+            rejectedFiles.clear()
             project = chosen
             // A save received while no project was open belongs to none and is not kept.
             if (pending?.project == null) pending = null
@@ -157,7 +163,7 @@ class WhiteboardViewModel(
             val page = forPage(scene)
             pageScene = page
             if ((scene["damaged"] as? JsonPrimitive)?.booleanOrNull == true) _messages.trySend(WhiteboardTexts.DAMAGED)
-            _state.update { it.copy(phase = WhiteboardPhase.Ready(chosen, page), save = SaveStatus.Saved, attachments = parseAttachments(scene["attachments"])) }
+            _state.update { it.copy(phase = WhiteboardPhase.Ready(chosen, page), save = SaveStatus.Saved, attachments = parseAttachments(scene["attachments"]), attachmentsProject = chosen) }
         }
     }
 
@@ -215,11 +221,15 @@ class WhiteboardViewModel(
 
     /** From the page: the drawing as it is now. */
     fun onSave(received: WhiteboardMessage.Save) {
-        val s = received.copy(project = project)
-        if (s.project != null) remember(s)
+        var s = received.copy(project = project)
+        if (s.project != null) {
+            rejectedFiles += s.rejectedFileIds
+            s = withoutRejected(s)
+            remember(s)
+        }
         unsynced = false
         // A save of another project than the pending one is never mixed into it.
-        pending = pending?.takeIf { it.project == s.project }?.let { merge(it, s) } ?: s
+        pending = pending?.takeIf { it.project == s.project }?.let { merge(withoutRejected(it), s) } ?: s
         if (s.dropped != warnedDropped) {
             warnedDropped = s.dropped
             if (s.dropped > 0) _messages.trySend(WhiteboardTexts.dropped(s.dropped))
@@ -230,6 +240,17 @@ class WhiteboardViewModel(
             if (!s.flush) delay(debounceMs)
             flush()
         }
+    }
+
+    // An image whose picture was refused would be saved as a broken box; elements of pictures the PC already has stay.
+    private fun withoutRejected(s: WhiteboardMessage.Save): WhiteboardMessage.Save {
+        if (rejectedFiles.isEmpty()) return s
+        val kept = s.elements.filter { e ->
+            val o = e as? JsonObject
+            val id = if ((o?.get("type") as? JsonPrimitive)?.content == "image") (o["fileId"] as? JsonPrimitive)?.takeIf { it.isString }?.content else null
+            id == null || id !in rejectedFiles
+        }
+        return if (kept.size == s.elements.size) s else s.copy(elements = kotlinx.serialization.json.JsonArray(kept))
     }
 
     /** From the page: a save was refused, so the PC is behind and the bar must not say «Guardado». */
@@ -334,6 +355,7 @@ class WhiteboardViewModel(
             elements = b.elements, appState = b.appState,
             files = JsonObject(a.files + b.files), png = b.png ?: a.png, flush = a.flush || b.flush,
             dropped = b.dropped, offered = a.offered + b.offered, project = b.project,
+            rejectedFileIds = a.rejectedFileIds + b.rejectedFileIds,
         )
     }
 }

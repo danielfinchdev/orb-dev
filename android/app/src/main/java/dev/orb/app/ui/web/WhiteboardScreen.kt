@@ -138,9 +138,11 @@ fun WhiteboardScreen(vm: WhiteboardViewModel, onBack: () -> Unit, modifier: Modi
     }
 
     // The panel is bound to the project it was opened with, so a late answer never writes a note elsewhere.
-    if (showAttachments && ready != null && vm.canNote) {
-        val opened = remember { ready.project }
-        AttachmentsSheet(state.attachments, onDismiss = { showAttachments = false }, onSave = { file, note -> vm.saveNote(opened, file, note) })
+    LaunchedEffect(ready?.project) { showAttachments = false }
+    if (showAttachments && ready != null && vm.canNote && state.attachmentsProject == ready.project) {
+        androidx.compose.runtime.key(ready.project) {
+            AttachmentsSheet(state.attachments, onDismiss = { showAttachments = false }, onSave = { file, note -> vm.saveNote(ready.project, file, note) })
+        }
     }
 
     if (state.confirmLeave) AlertDialog(
@@ -258,8 +260,12 @@ private fun AttachmentsSheet(items: List<WhiteboardAttachment>, onDismiss: () ->
                         Modifier.fillMaxWidth().clickable { draft = a.note; editing = a }.padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        val bitmap = remember(a.thumb) { decodeThumb(a.thumb) }
-                        if (bitmap != null) Image(bitmap, null, Modifier.size(48.dp), contentScale = ContentScale.Crop)
+                        // Base64 and bitmap decoding stay off the main thread.
+                        val bitmap by androidx.compose.runtime.produceState<ImageBitmap?>(null, a.thumb) {
+                            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { decodeThumb(a.thumb) }
+                        }
+                        val bm = bitmap
+                        if (bm != null) Image(bm, null, Modifier.size(48.dp), contentScale = ContentScale.Crop)
                         else Icon(if (a.kind == "image") OrbIcons.Image else OrbIcons.File, null, Modifier.size(48.dp).padding(10.dp), tint = OrbTheme.colors.text3)
                         Column(Modifier.padding(start = 12.dp)) {
                             Text(a.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)

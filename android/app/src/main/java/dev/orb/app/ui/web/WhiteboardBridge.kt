@@ -33,6 +33,8 @@ sealed interface WhiteboardMessage {
         val dropped: Int = 0,
         val offered: Set<String> = emptySet(),
         val project: String? = null,
+        /** Ids of pictures refused in this message: the app keeps hiding their image elements in later saves. */
+        val rejectedFileIds: Set<String> = emptySet(),
     ) : WhiteboardMessage
 
     /** The page answered a flush request: everything it had was sent before this message. */
@@ -96,6 +98,7 @@ object WhiteboardMessages {
             JsonArray(kept), appState(o["appState"] as? JsonObject), files.accepted, png, flush,
             // A refused picture whose element was removed too is one loss, not two.
             dropped = elements.size - kept.size + files.dropped - orphanFiles.size, offered = files.offered,
+            rejectedFileIds = files.rejected,
         )
     }
 

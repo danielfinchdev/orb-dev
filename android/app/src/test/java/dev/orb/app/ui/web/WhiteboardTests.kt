@@ -380,6 +380,43 @@ class WhiteboardViewModelTest {
         assertEquals(1, left)
     }
 
+    private fun image(id: String, file: String) = buildJsonObject { put("id", id); put("type", "image"); put("fileId", file) }
+
+    private fun withImages(vararg els: JsonObject) = scene().copy(elements = JsonArray(els.toList()))
+
+    @Test fun aRefusedPictureStaysFilteredInLaterSaves() = runTest(dispatcher) {
+        val b = FakeWhiteboardBackend()
+        val vm = vm(b)
+        vm.onSave(withImages(image("i1", "bad"), image("i2", "ok")).copy(rejectedFileIds = setOf("bad"), offered = setOf("bad")))
+        advanceTimeBy(2_100); runCurrent()
+        vm.onSave(withImages(image("i1", "bad"), image("i2", "ok")))
+        advanceTimeBy(2_100); runCurrent()
+        // "ok" is not refused (the PC already has it), so it stays.
+        assertEquals(listOf("i2"), b.saves.last().second.elements.map { ((it as JsonObject)["id"] as JsonPrimitive).content })
+    }
+
+    @Test fun aRefusedPictureIsFilteredFromThePendingSaveToo() = runTest(dispatcher) {
+        val b = FakeWhiteboardBackend()
+        val vm = vm(b)
+        vm.onSave(withImages(image("i1", "bad")))
+        vm.onSave(withImages(image("i1", "bad"), image("i2", "ok")).copy(rejectedFileIds = setOf("bad")))
+        advanceTimeBy(2_100); runCurrent()
+        assertEquals(listOf("i2"), b.saves.single().second.elements.map { ((it as JsonObject)["id"] as JsonPrimitive).content })
+    }
+
+    @Test fun anotherProjectDoesNotInheritRefusedPictures() = runTest(dispatcher) {
+        val b = FakeWhiteboardBackend()
+        val vm = vm(b)
+        vm.onSave(withImages(image("i1", "bad")).copy(rejectedFileIds = setOf("bad"), flush = true))
+        runCurrent()
+        vm.choose("api")
+        runCurrent(); vm.onPageFlushed(); runCurrent()
+        vm.onSave(withImages(image("i1", "bad")).copy(flush = true))
+        runCurrent()
+        assertEquals("api", b.saves.last().first)
+        assertEquals(1, b.saves.last().second.elements.size)
+    }
+
     @Test fun removedElementsAreReportedOncePerCount() = runTest(dispatcher) {
         val b = FakeWhiteboardBackend()
         val vm = vm(b)
