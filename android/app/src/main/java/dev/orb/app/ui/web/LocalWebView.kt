@@ -103,7 +103,7 @@ class OnceAction(private val action: () -> Unit) {
 @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
 @Composable
 fun LocalWebView(page: String, dark: Boolean, background: Color, bridge: Any?, onBack: () -> Unit, modifier: Modifier = Modifier, controller: WebController? = null, onGone: () -> Unit = {},
-    handleBack: Boolean = true, errorContent: (@Composable (reload: () -> Unit) -> Unit)? = null,
+    handleBack: Boolean = true, domStorage: Boolean = true, errorContent: (@Composable (reload: () -> Unit) -> Unit)? = null,
 ) {
     val holder = remember { arrayOfNulls<WebView>(1) }
     var gone by remember { mutableStateOf(false) }
@@ -130,7 +130,7 @@ fun LocalWebView(page: String, dark: Boolean, background: Color, bridge: Any?, o
                 controller?.web = web
                 web.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                 web.setBackgroundColor(background.toArgb())
-                LocalWebPolicy.configure(web.settings)
+                LocalWebPolicy.configure(web.settings, domStorage)
                 // Downloads are ignored; the debugger is never attached.
                 web.setDownloadListener { _, _, _, _, _ -> }
                 WebView.setWebContentsDebuggingEnabled(false)

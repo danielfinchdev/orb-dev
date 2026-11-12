@@ -34,8 +34,11 @@ import dev.orb.app.ui.web.LocalWebView
 import dev.orb.app.ui.web.WebController
 import kotlinx.coroutines.delay
 
-/** How long Kotlin waits for the first size from the page before giving the block back as code. */
+/** How long Kotlin waits for the first size once the page has said it is ready, before giving the block back as code. */
 const val ISLAND_TIMEOUT_MS = 12_000L
+
+/** How long the page itself may take to come up and say it is ready. */
+const val ISLAND_LOAD_TIMEOUT_MS = 20_000L
 val ISLAND_MIN_HEIGHT = 48.dp
 val ISLAND_MAX_HEIGHT = 480.dp
 
@@ -54,10 +57,15 @@ fun IslandBlock(
     var wantOpen by remember(key) { mutableStateOf(IslandShown.wasShown(key)) }
     var failed by remember(key) { mutableStateOf(false) }
     var mounted by remember(key) { mutableStateOf(false) }
+    var noSlot by remember(key) { mutableStateOf(false) }
+    // Every tap on the card is a new try, so a block that found all slots taken can be opened once one is free.
+    var attempt by remember(key) { mutableIntStateOf(0) }
     val token = remember { Any() }
     // The slot is held while the block is on screen and open; leaving the list releases it.
-    DisposableEffect(key, wantOpen, failed) {
-        if (wantOpen && !failed && IslandShown.slots.tryAcquire(token)) mounted = true
+    DisposableEffect(key, wantOpen, failed, attempt) {
+        if (wantOpen && !failed) {
+            if (IslandShown.slots.tryAcquire(token)) { mounted = true; noSlot = false } else noSlot = true
+        }
         onDispose { IslandShown.slots.release(token); mounted = false }
     }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -76,11 +84,12 @@ fun IslandBlock(
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
                         .border(BorderStroke(1.dp, MaterialTheme.colorScheme.primary), RoundedCornerShape(10.dp))
-                        .clickable(role = Role.Button) { IslandShown.mark(key); wantOpen = true }
+                        .clickable(role = Role.Button) { IslandShown.mark(key); wantOpen = true; attempt++ }
                         .semantics { contentDescription = desc }
                         .padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) { Text(label, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge) }
+                if (noSlot) Text(IslandTexts.NO_SLOT, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
                 code()
             }
         }
@@ -93,21 +102,23 @@ private fun IslandPage(kind: IslandKind, source: String, display: Boolean, dark:
     var heightPx by remember { mutableIntStateOf(0) }
     val fail = rememberUpdatedState(onFailed)
     val seq = 1
+    var ready by remember { mutableStateOf(false) }
     val bridge = remember {
         IslandBridge { m ->
             when (m) {
-                IslandMessage.Ready -> controller.send(IslandMessages.renderJson(kind, source, display, seq))
+                IslandMessage.Ready -> { ready = true; controller.send(IslandMessages.renderJson(kind, source, display, seq)) }
                 is IslandMessage.Size -> if (m.seq == seq) heightPx = m.height
                 is IslandMessage.Failed -> if (m.seq == seq) fail.value()
             }
         }
     }
-    LaunchedEffect(Unit) { delay(ISLAND_TIMEOUT_MS); if (heightPx == 0) fail.value() }
+    // The render budget runs from the page's «ready», not from the mount, so a slow start does not eat it.
+    LaunchedEffect(ready) { delay(if (ready) ISLAND_TIMEOUT_MS else ISLAND_LOAD_TIMEOUT_MS); if (heightPx == 0) fail.value() }
     val h = if (heightPx == 0) ISLAND_MIN_HEIGHT else heightPx.dp.coerceIn(ISLAND_MIN_HEIGHT, ISLAND_MAX_HEIGHT)
     val desc = if (kind == IslandKind.Mermaid) IslandTexts.DIAGRAM_DESC else IslandTexts.FORMULA_DESC
     LocalWebView(
         page = "island/index.html", dark = dark, background = Color.Transparent, bridge = bridge, onBack = {},
         modifier = Modifier.fillMaxWidth().height(h).semantics { contentDescription = desc },
-        controller = controller, onGone = { fail.value() }, handleBack = false, errorContent = { },
+        controller = controller, onGone = { fail.value() }, handleBack = false, domStorage = false, errorContent = { },
     )
 }

@@ -23,7 +23,9 @@ const loadMermaid = () => (mermaidLoad ??= import('mermaid').then((m) => {
   const mermaid = m.default ?? m;
   mermaid.initialize({
     startOnLoad: false, securityLevel: 'strict', theme: dark ? 'dark' : 'default', fontFamily: 'sans-serif',
-    htmlLabels: false, flowchart: { htmlLabels: false }
+    htmlLabels: false, flowchart: { htmlLabels: false },
+    // Secure keys: an %%{init}%% directive in the source cannot raise them.
+    maxEdges: 300, maxTextSize: 20000
   });
   mermaidReady = true;
   return mermaid;

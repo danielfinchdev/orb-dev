@@ -48,11 +48,11 @@ object LocalWebPolicy {
         } catch (_: Throwable) { /* a hardening extra: pages work without it */ }
     }
 
-    /** The page's settings: no file or content access, no network cache, no popups, no downloads, no safe-browsing lookups. */
+    /** The page's settings ([domStorage] off for pages that keep nothing): no file or content access, no network cache, no popups, no downloads, no safe-browsing lookups. */
     @Suppress("SetJavaScriptEnabled")
-    fun configure(s: WebSettings) {
+    fun configure(s: WebSettings, domStorage: Boolean = true) {
         s.javaScriptEnabled = true
-        s.domStorageEnabled = true
+        s.domStorageEnabled = domStorage
         s.allowFileAccess = false
         s.allowContentAccess = false
         @Suppress("DEPRECATION")
