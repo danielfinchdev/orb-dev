@@ -93,6 +93,35 @@ class WhiteboardMessagesTest {
         assertEquals(WhiteboardMessage.Rejected, WhiteboardMessages.parse(save(""","files":{$tooMany}""")))
     }
 
+    private val img = """{"id":"i","type":"image","fileId":"f1"}"""
+
+    @Test fun anImageWhosePictureIsRefusedIsRemovedAndCountedOnce() {
+        val bad = ""","files":{"f1":{"dataURL":"data:image/x-icon;base64,AAAA"}}"""
+        val r = WhiteboardMessages.parse(save(bad, elements = "[$rect,$img]")) as WhiteboardMessage.Save
+        assertEquals(1, r.elements.size)
+        assertTrue(r.files.isEmpty())
+        assertEquals(1, r.dropped)
+        val huge = ""","files":{"f1":{"dataURL":"data:image/png;base64,${"A".repeat(WhiteboardMessages.MAX_FILE_CHARS)}"}}"""
+        val h = WhiteboardMessages.parse(save(huge, elements = "[$img]")) as WhiteboardMessage.Save
+        assertEquals(0, h.elements.size)
+        assertEquals(1, h.dropped)
+    }
+
+    @Test fun anImageWhosePictureIsNotInThisMessageIsKept() {
+        val r = WhiteboardMessages.parse(save("", elements = "[$img]")) as WhiteboardMessage.Save
+        assertEquals(1, r.elements.size)
+        assertEquals(0, r.dropped)
+        val other = ""","files":{"f2":{"dataURL":"data:image/x-icon;base64,AAAA"}}"""
+        assertEquals(1, (WhiteboardMessages.parse(save(other, elements = "[$img]")) as WhiteboardMessage.Save).elements.size)
+    }
+
+    @Test fun anImageWithAnAcceptedPictureIsKept() {
+        val ok = ""","files":{"f1":{"dataURL":"data:image/png;base64,AAAA"}}"""
+        val r = WhiteboardMessages.parse(save(ok, elements = "[$img]")) as WhiteboardMessage.Save
+        assertEquals(1, r.elements.size)
+        assertEquals(0, r.dropped)
+    }
+
     @Test fun thePictureIsAPngOrEmpty() {
         assertEquals("", (WhiteboardMessages.parse(save(""","png":""""")) as WhiteboardMessage.Save).png)
         assertNull((WhiteboardMessages.parse(save("")) as WhiteboardMessage.Save).png)

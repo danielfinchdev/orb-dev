@@ -78,8 +78,15 @@ object WhiteboardMessages {
     private fun save(o: JsonObject): WhiteboardMessage.Save? {
         val elements = o["elements"] as? JsonArray ?: return null
         if (elements.size > MAX_ELEMENTS) return null
-        val kept = elements.filter(::element)
         val files = files(o["files"]) ?: return null
+        // An image whose picture was refused here would stay as a broken box (and be saved so); one whose picture simply
+        // is not in this message is left alone, because the PC already has it.
+        val orphanFiles = HashSet<String>()
+        val kept = elements.filter(::element).filter { e ->
+            val obj = e as JsonObject
+            val fileId = if ((obj["type"] as? JsonPrimitive)?.content == "image") (obj["fileId"] as? JsonPrimitive)?.takeIf { it.isString }?.content else null
+            (fileId == null || fileId !in files.rejected).also { if (!it) orphanFiles += fileId!! }
+        }
         val png = when (val p = o["png"]) {
             is JsonPrimitive -> p.takeIf { it.isString }?.content?.takeIf { it.isEmpty() || (it.length <= MAX_PNG_CHARS && it.startsWith(PNG_PREFIX)) }
             else -> null
@@ -87,7 +94,8 @@ object WhiteboardMessages {
         val flush = (o["flush"] as? JsonPrimitive)?.booleanOrNull == true
         return WhiteboardMessage.Save(
             JsonArray(kept), appState(o["appState"] as? JsonObject), files.accepted, png, flush,
-            dropped = elements.size - kept.size + files.dropped, offered = files.offered,
+            // A refused picture whose element was removed too is one loss, not two.
+            dropped = elements.size - kept.size + files.dropped - orphanFiles.size, offered = files.offered,
         )
     }
 
@@ -98,7 +106,7 @@ object WhiteboardMessages {
         return !id.isNullOrEmpty() && type in ELEMENT_TYPES
     }
 
-    private class Files(val accepted: JsonObject, val offered: Set<String>, val dropped: Int)
+    private class Files(val accepted: JsonObject, val offered: Set<String>, val dropped: Int, val rejected: Set<String> = emptySet())
 
     private fun files(el: JsonElement?): Files? {
         if (el == null) return Files(JsonObject(emptyMap()), emptySet(), 0)
@@ -106,17 +114,18 @@ object WhiteboardMessages {
         if (map.size > MAX_FILES) return null
         val offered = LinkedHashSet<String>()
         var dropped = 0
+        val rejected = HashSet<String>()
         val accepted = buildJsonObject {
             for ((id, f) in map) {
-                if (!FILE_ID.matches(id)) { dropped++; continue }
+                if (!FILE_ID.matches(id)) { dropped++; rejected += id; continue }
                 offered += id
                 val data = ((f as? JsonObject)?.get("dataURL") as? JsonPrimitive)?.takeIf { it.isString }?.content
                 val prefix = data?.let { d -> IMAGE_PREFIXES.firstOrNull { d.startsWith(it) } }
-                if (data == null || prefix == null || data.length > MAX_FILE_CHARS) { dropped++; continue }
+                if (data == null || prefix == null || data.length > MAX_FILE_CHARS) { dropped++; rejected += id; continue }
                 put(id, buildJsonObject { put("mimeType", prefix.removePrefix("data:").substringBefore(';')); put("dataURL", data) })
             }
         }
-        return Files(accepted, offered, dropped)
+        return Files(accepted, offered, dropped, rejected)
     }
 
     // Only the three settings the PC keeps; the page's other state never travels.
