@@ -134,6 +134,8 @@ private fun FileDiff(file: DiffFile, more: Int) {
         when {
             file.binary -> Text(TaskTexts.BINARY_FILE, Modifier.padding(16.dp), color = c.text2)
             file.cut -> Text(TaskTexts.TOO_BIG, Modifier.padding(16.dp), color = c.text2)
+            // A rename or a mode change has a path but no patch.
+            file.patch.isBlank() -> Text(TaskTexts.NO_CONTENT_CHANGES, Modifier.padding(16.dp), color = c.text2)
             else -> LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
                 itemsIndexed(lines, key = { i, _ -> i }, contentType = { _, l -> l.kind }) { _, line -> DiffLineRow(line) }
                 if (more > 0) item(key = "more") { Text(TaskTexts.moreFiles(more), Modifier.padding(16.dp), color = c.text2, style = MaterialTheme.typography.bodySmall) }

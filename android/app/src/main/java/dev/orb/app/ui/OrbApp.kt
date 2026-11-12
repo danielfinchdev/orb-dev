@@ -273,6 +273,7 @@ private fun OrbNav(container: AppContainer, start: Any) {
                         when (target) {
                             is NoticeTarget.Chat -> nav.navigate(ChatRoute(target.kind, target.id))
                             is NoticeTarget.Task -> nav.navigate(TaskRoute(target.id))
+                            NoticeTarget.ChatsTab -> nav.popBackStack()
                         }
                     },
                 )

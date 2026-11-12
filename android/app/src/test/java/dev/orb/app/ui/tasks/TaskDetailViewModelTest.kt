@@ -179,4 +179,18 @@ class TaskDetailViewModelTest {
         runCurrent()
         assertEquals(listOf("claude", "codex"), vm.state.value.agents?.map { it.id })
     }
+
+    @Test fun aFailedAgentsReadIsNotKeptSoTheNextOpenTriesAgain() = runTest(dispatcher) {
+        val b = backend(queued)
+        val good = b.agentList
+        b.agentList = Result.failure(LinkException(LinkError.Timeout))
+        val vm = vm(b)
+        vm.loadAgents()
+        runCurrent()
+        assertEquals(null, vm.state.value.agents)
+        b.agentList = good
+        vm.loadAgents()
+        runCurrent()
+        assertEquals(listOf("claude", "codex"), vm.state.value.agents?.map { it.id })
+    }
 }

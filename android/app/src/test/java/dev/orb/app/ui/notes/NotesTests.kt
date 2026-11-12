@@ -74,7 +74,12 @@ class NotesViewModelTest {
         assertEquals(NoticeTarget.Task(41), task.target)
         assertNull(NotesParser.fromEvent(Json.parseToJsonElement("""{"x":1}"""), 10))
         val orb = NotesParser.fromEvent(Json.parseToJsonElement("""{"key":"orb","route":{"view":"chat"},"kind":"message","title":"Orb","body":"b"}"""), 10)!!
-        assertNull(orb.target)
+        assertEquals(NoticeTarget.ChatsTab, orb.target)
+        // A repeat without a line is the same notice, whatever the time.
+        val again = NotesParser.fromEvent(Json.parseToJsonElement("""{"key":"orb","route":{"view":"chat"},"kind":"message","title":"Orb","body":"b"}"""), 99)!!
+        assertEquals(orb.id, again.id)
+        val other = NotesParser.fromEvent(Json.parseToJsonElement("""{"key":"orb","route":{"view":"chat"},"kind":"message","title":"Orb","body":"c"}"""), 10)!!
+        assertTrue(other.id != orb.id)
     }
 
     @Test fun parserReadsPendingApprovalsFromAppState() {

@@ -54,7 +54,7 @@ import dev.orb.app.ui.chats.Message
 import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.theme.OrbTheme
 
-private enum class Ask { Cancel, Undo, Reassign, Followup }
+private enum class Ask { Cancel, Undo, Reassign, Followup, LaunchAnyway, Reject }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -88,8 +88,8 @@ fun TaskDetailScreen(
                 d == null -> Message(state.error ?: TaskTexts.DETAIL_ERROR, action = TaskTexts.RETRY, onAction = vm::refresh)
                 else -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
                     Header(d, nowMs())
-                    Decisions(d, state.actions, enabled, vm, onAskUndo = { ask = Ask.Undo })
-                    WhyWaits(d, state.actions, enabled, vm::launchAnyway)
+                    Decisions(d, state.actions, enabled, vm, onAskUndo = { ask = Ask.Undo }, onAskReject = { ask = Ask.Reject })
+                    WhyWaits(d, state.actions, enabled) { ask = Ask.LaunchAnyway }
                     if (d.description.isNotBlank()) {
                         SectionLabel(TaskTexts.WHAT_TO_DO)
                         Text(d.description, style = MaterialTheme.typography.bodyMedium)
@@ -137,6 +137,20 @@ fun TaskDetailScreen(
             confirmButton = { TextButton(onClick = { ask = null; vm.undo() }) { Text(TaskTexts.UNDO, color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = { ask = null }) { Text(TaskTexts.DISMISS) } },
         )
+        Ask.LaunchAnyway -> AlertDialog(
+            onDismissRequest = { ask = null },
+            title = { Text(TaskTexts.LAUNCH_ASK) },
+            text = { Text(TaskTexts.LAUNCH_BODY) },
+            confirmButton = { TextButton(onClick = { ask = null; vm.launchAnyway() }) { Text(TaskTexts.LAUNCH_CONFIRM) } },
+            dismissButton = { TextButton(onClick = { ask = null }) { Text(TaskTexts.CANCEL_BACK) } },
+        )
+        Ask.Reject -> AlertDialog(
+            onDismissRequest = { ask = null },
+            title = { Text(TaskTexts.REJECT_ASK) },
+            text = { Text(TaskTexts.REJECT_BODY) },
+            confirmButton = { TextButton(onClick = { ask = null; vm.approve(false) }) { Text(TaskTexts.REJECT_CONFIRM, color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { ask = null }) { Text(TaskTexts.CANCEL_BACK) } },
+        )
         Ask.Reassign -> ReassignDialog(state.agents, state.detail?.row?.agent, state.detail?.reasoning, onDismiss = { ask = null }, onOk = { a, r -> ask = null; vm.reassign(a, r) })
         Ask.Followup -> FollowupDialog(onDismiss = { ask = null }, onSend = { ask = null; vm.followup(it) })
         null -> Unit
@@ -154,7 +168,7 @@ private fun Header(d: TaskDetail, nowMs: Long) {
         val created = ChatTime.short(d.row.createdAt, nowMs)
         if (created.isNotEmpty()) {
             Text(
-                "${TaskTexts.CREATED} $created" + (d.createdBy?.takeIf { it.isNotBlank() }?.let { " por $it" } ?: ""),
+                "${TaskTexts.CREATED} $created" + (d.createdBy?.takeIf { it.isNotBlank() }?.let(TaskTexts::createdBy) ?: ""),
                 style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text3,
             )
         }
@@ -164,7 +178,7 @@ private fun Header(d: TaskDetail, nowMs: Long) {
 
 /** The cards that need the person: a task waiting for the OK and one held for review. */
 @Composable
-private fun Decisions(d: TaskDetail, actions: Set<TaskAction>, enabled: Boolean, vm: TaskDetailViewModel, onAskUndo: () -> Unit) {
+private fun Decisions(d: TaskDetail, actions: Set<TaskAction>, enabled: Boolean, vm: TaskDetailViewModel, onAskUndo: () -> Unit, onAskReject: () -> Unit) {
     val held = d.row.held
     if (held != null) {
         Card(OrbTheme.colors.warnSoft) {
@@ -180,7 +194,7 @@ private fun Decisions(d: TaskDetail, actions: Set<TaskAction>, enabled: Boolean,
             Text(TaskTexts.status("awaiting_approval"), style = MaterialTheme.typography.titleSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { vm.approve(true) }, enabled = enabled) { Text(TaskTexts.APPROVE) }
-                OutlinedButton(onClick = { vm.approve(false) }, enabled = enabled) { Text(TaskTexts.REJECT) }
+                OutlinedButton(onClick = onAskReject, enabled = enabled) { Text(TaskTexts.REJECT) }
             }
         }
     }
@@ -246,13 +260,15 @@ private fun History(d: TaskDetail, nowMs: Long) {
             Text(e.detail.ifBlank { e.kind.orEmpty() }, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
         }
     }
-    if (!all && d.events.size > shown.size) TextButton(onClick = { all = true }) { Text("Ver todo") }
+    if (!all && d.events.size > shown.size) TextButton(onClick = { all = true }) { Text(TaskTexts.SEE_ALL) }
 }
 
 @Composable
 private fun ReassignDialog(agents: List<AgentChoice>?, current: String?, reasoning: String?, onDismiss: () -> Unit, onOk: (String, String) -> Unit) {
     var agent by rememberSaveable { mutableStateOf(current?.takeIf { it.isNotBlank() } ?: "any") }
-    var level by rememberSaveable { mutableStateOf(reasoning?.takeIf { it in TaskReasoning } ?: "medium") }
+    var level by rememberSaveable { mutableStateOf(reasoning?.takeIf { it.isNotBlank() } ?: "medium") }
+    // A task already at a level outside the standard list keeps it selectable, so it is not lowered silently.
+    val levels = if (reasoning != null && reasoning !in TaskReasoning && reasoning.isNotBlank()) TaskReasoning + reasoning else TaskReasoning
     val options = listOf(AgentChoice("any", TaskTexts.REASSIGN_AUTO)) + agents.orEmpty()
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -272,7 +288,7 @@ private fun ReassignDialog(agents: List<AgentChoice>?, current: String?, reasoni
                 }
                 Text(TaskTexts.REASSIGN_REASONING, Modifier.padding(top = 12.dp), style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (r in TaskReasoning) FilterChip(selected = level == r, onClick = { level = r }, label = { Text(TaskTexts.reasoning(r)) })
+                    for (r in levels) FilterChip(selected = level == r, onClick = { level = r }, label = { Text(TaskTexts.reasoning(r)) })
                 }
             }
         },

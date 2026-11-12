@@ -67,6 +67,7 @@ fun ProjectDetailScreen(
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
     LaunchedEffect(state.finished) { if (state.finished) onBack() }
     var confirmFinish by rememberSaveable { mutableStateOf(false) }
+    var confirmReview by rememberSaveable { mutableStateOf<String?>(null) }
     val enabled = state.online && !state.busy
 
     Box(modifier.fillMaxSize()) {
@@ -97,8 +98,8 @@ fun ProjectDetailScreen(
                     Section(ProjectTexts.SECTION_MORE)
                     ActionRow(OrbIcons.ListOrdered, ProjectTexts.BRANCH, ProjectTexts.branchValue(state.git), enabled = true, onClick = null)
                     if (state.canPrs) ActionRow(OrbIcons.ChevronRight, ProjectTexts.PRS, null, enabled = true) { onOpenPrs(state.name) }
-                    if (state.canReview) ActionRow(OrbIcons.Check, ProjectTexts.REVIEW, null, enabled, vm::review)
-                    if (state.canSecurityReview) ActionRow(OrbIcons.Shield, ProjectTexts.SECURITY_REVIEW, null, enabled, vm::securityReview)
+                    if (state.canReview) ActionRow(OrbIcons.Check, ProjectTexts.REVIEW, null, enabled) { confirmReview = "review" }
+                    if (state.canSecurityReview) ActionRow(OrbIcons.Shield, ProjectTexts.SECURITY_REVIEW, null, enabled) { confirmReview = "security" }
                     if (state.canLog) ActionRow(OrbIcons.Archive, ProjectTexts.LOG, null, enabled = true, onClick = vm::openLog)
                     if (state.canFinish) ActionRow(OrbIcons.CheckCheck, ProjectTexts.FINISH, null, enabled) { confirmFinish = true }
                 }
@@ -107,6 +108,17 @@ fun ProjectDetailScreen(
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
     }
 
+    confirmReview?.let { kind ->
+        AlertDialog(
+            onDismissRequest = { confirmReview = null },
+            title = { Text(if (kind == "security") ProjectTexts.SECURITY_ASK else ProjectTexts.REVIEW_ASK) },
+            text = { Text(ProjectTexts.REVIEW_BODY) },
+            confirmButton = {
+                TextButton(onClick = { confirmReview = null; if (kind == "security") vm.securityReview() else vm.review() }) { Text(ProjectTexts.REVIEW_CONFIRM) }
+            },
+            dismissButton = { TextButton(onClick = { confirmReview = null }) { Text(ProjectTexts.CANCEL) } },
+        )
+    }
     if (confirmFinish) AlertDialog(
         onDismissRequest = { confirmFinish = false },
         title = { Text(ProjectTexts.FINISH_ASK) },

@@ -52,6 +52,11 @@ class TaskDiffScreenTest {
         rule.onNodeWithText("export function init() {}").assertIsDisplayed()
     }
 
+    @Test fun aFileWithoutPatchSaysThereIsNoContentChange() {
+        show(backend(TaskDiff(true, listOf(DiffFile("R", "src/new-name.ts", 0, 0, false, "", false)), 0)))
+        rule.onNodeWithText("Sin cambios de contenido en este archivo").assertIsDisplayed()
+    }
+
     @Test fun tappingAChipShowsTheOtherFile() {
         show(backend(TaskDiff(true, files, 0)))
         rule.onNodeWithText("logo.png").performClick()

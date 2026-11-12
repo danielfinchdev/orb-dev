@@ -198,8 +198,8 @@ class TaskDetailViewModel(
     fun loadAgents() {
         if (ui.value.agents != null) return
         viewModelScope.launch {
-            val list = backend.agents().getOrDefault(emptyList())
-            ui.update { it.copy(agents = list) }
+            // A failed read is not stored, so opening the dialog again tries again.
+            backend.agents().onSuccess { list -> ui.update { it.copy(agents = list) } }
         }
     }
 

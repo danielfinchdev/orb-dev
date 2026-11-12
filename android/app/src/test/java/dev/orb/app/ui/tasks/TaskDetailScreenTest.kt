@@ -56,7 +56,23 @@ class TaskDetailScreenTest {
         rule.onNodeWithText("Traducir faq.html al inglés").assertIsDisplayed()
         rule.onNodeWithText("Iniciar de todos modos").performClick()
         rule.waitForIdle()
+        assertEquals(emptyList<String>(), b.calls)
+        rule.onNodeWithText("¿Iniciar esta tarea ahora?").assertIsDisplayed()
+        rule.onNodeWithText("Iniciar").performClick()
+        rule.waitForIdle()
         assertEquals(listOf("launch 44"), b.calls)
+    }
+
+    @Test fun rejectingAsksBeforeCancellingTheTask() {
+        val b = backend(detail(task(45, status = "awaiting_approval"), previewHash = "h1"))
+        show(b, 45)
+        rule.onNodeWithText("Rechazar").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Rechazarla cancela la tarea.").assertIsDisplayed()
+        assertEquals(emptyList<String>(), b.calls)
+        rule.onNodeWithText("Rechazar y cancelar").performClick()
+        rule.waitForIdle()
+        assertEquals(listOf("decide 45 false h1"), b.calls)
     }
 
     @Test fun cancelAsksBeforeAskingThePc() {

@@ -84,6 +84,18 @@ class ProjectDetailScreenTest {
         assertEquals(1, left)
     }
 
+    @Test fun reviewsAskBeforeSpendingThePlan() {
+        val b = backend()
+        show(b)
+        rule.onNodeWithText("Revisión de seguridad").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("¿Pedir la revisión de seguridad?").assertIsDisplayed()
+        assertEquals(emptyList<String>(), b.calls)
+        rule.onNodeWithText("Pedir revisión").performClick()
+        rule.waitForIdle()
+        assertEquals(listOf("security app-movil"), b.calls)
+    }
+
     @Test fun logOpensInASheetWithThePcsText() {
         val b = backend()
         b.logResult = Result.success("Entrada del lunes")
