@@ -13,7 +13,7 @@ import { Scheduler } from '../src/engine/scheduler/index.mjs';
 import { buildApi } from '../src/engine/api/index.mjs';
 import { METHODS, principalOf } from '../src/domain/security/permissions.mjs';
 import { shapeResult } from '../src/engine/transport/remote.mjs';
-import { readActivity, BLOCK, READ_CAP } from '../src/domain/activity/activity.mjs';
+import { readActivity, buildReport, BLOCK, READ_CAP } from '../src/domain/activity/activity.mjs';
 import { logUserAction, userLogFile } from '../src/domain/activity/user-log.mjs';
 import { recordUserCall } from '../src/domain/activity/record.mjs';
 import { createProject } from '../src/domain/projects/projects.mjs';
@@ -214,4 +214,63 @@ test('idle: the activity module starts no timers and no processes', () => {
     const src = fs.readFileSync(path.join(import.meta.dirname, '..', 'src', 'domain', 'activity', f), 'utf8').replace(/\/\/.*$/gm, '');
     assert.ok(!/setInterval|setTimeout|spawn|(?<![.\w])exec(Sync|File)?\(|child_process|fs\.watch|chokidar/.test(src), f);
   }
+});
+
+test('activity.list for the phone hides this PC folders in the paged form; the desktop keeps them', async () => {
+  reset();
+  fs.writeFileSync(file('motor.log'), `${iso(1)} ruta ${path.join(ctx.home, 'core', 'x')} fin
+`);
+  const ph = await call('activity.list', { sources: ['orb'] }, phone);
+  assert.ok(!ph.items[0].text.includes(ctx.home) && ph.items[0].text.includes('<Orb>'), ph.items[0].text);
+  const pc = await call('activity.list', { sources: ['orb'] });
+  assert.ok(pc.items[0].text.includes(ctx.home));
+});
+
+test('events: a filter that only matches the oldest rows does not repeat them on the next page', () => {
+  reset();
+  for (let i = 0; i < 100; i++) board.event(null, 'orb', 'task.quiet', `zeta ${i}`);
+  for (let i = 0; i < 500; i++) board.event(null, 'orb', 'task.quiet', `otro ${i}`);
+  const first = readActivity(board, { sources: ['subagentes'], q: 'zeta', limit: 150 });
+  assert.equal(first.items.length, 100);
+  assert.equal(first.next, null, 'nothing left to page');
+  const seen = all({ sources: ['subagentes'], q: 'zeta', limit: 30 });
+  assert.equal(seen.length, 100); assert.equal(new Set(seen.map((i) => i.id)).size, 100);
+});
+
+test('lines without a time: the report has them and they sit by the older timed line; recent events are not pushed out', () => {
+  reset();
+  fs.writeFileSync(file('motor.log'), `${iso(10)} a\nsuelta sin hora\n${iso(20)} b\n`);
+  const range = readActivity(board, { sources: ['orb'], from: iso(5), to: iso(15) }).items.map((i) => i.text);
+  assert.deepEqual(range, ['suelta sin hora', 'a']);
+  fs.writeFileSync(file('asistente.log'), Array.from({ length: 90 }, (_, i) => `[c] mensaje ${i}`).join('\n') + '\n');
+  fs.writeFileSync(file('motor-salida.log'), 'linea de la app\n');
+  for (let i = 0; i < 10; i++) board.event(null, 'orb', 'task.quiet', `evento ${i}`);
+  const big = buildReport(board, { lines: 500, version: 't' }).text;
+  assert.ok(big.includes('mensaje 3') && big.includes('linea de la app'), 'the report includes the assistant and the app');
+  const few = buildReport(board, { lines: 10, version: 't' }).text;
+  assert.equal(few.split('\n').filter((l) => /\[subagentes\]/.test(l)).length, 10, 'timeless lines do not displace recent events');
+});
+
+test('a line longer than the read budget cannot keep the cursor in place', () => {
+  reset();
+  fs.writeFileSync(file('motor.log'), `${'x'.repeat(READ_CAP * 2 + 1000)}\n${iso(1)} fin\n`);
+  let cursor; let pages = 0; const seen = [];
+  do {
+    const r = readActivity(board, { sources: ['orb'], limit: 5, cursor }); pages += 1; seen.push(...r.items.map((i) => i.text.slice(0, 3)));
+    cursor = r.next;
+  } while (cursor && pages < 10);
+  assert.equal(cursor, null, `finished after ${pages} pages`);
+  assert.equal(seen[0], 'fin');
+});
+
+test('a rotation between two pages neither repeats nor skips lines', () => {
+  reset();
+  const lines = Array.from({ length: 10 }, (_, i) => `${iso(i)} linea numero ${i} con relleno para pasar el fingerprint`);
+  fs.writeFileSync(file('motor.log'), lines.join('\n') + '\n');
+  const p1 = readActivity(board, { sources: ['orb'], limit: 4 });
+  assert.deepEqual(p1.items.map((i) => i.text.match(/numero (\d)/)[1]), ['9', '8', '7', '6']);
+  fs.renameSync(file('motor.log'), file('motor.log.1'));
+  fs.writeFileSync(file('motor.log'), `${iso(30)} nueva generacion con texto largo suficiente para el fingerprint\n`);
+  const p2 = readActivity(board, { sources: ['orb'], limit: 20, cursor: p1.next });
+  assert.deepEqual(p2.items.map((i) => i.text.match(/numero (\d)/)?.[1]), ['5', '4', '3', '2', '1', '0']);
 });

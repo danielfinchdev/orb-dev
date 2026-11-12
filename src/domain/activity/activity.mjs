@@ -60,22 +60,59 @@ function parseLine(line, source, name) {
   return { at, level: levelOf(text), project: null, kind: name, text: clip(text) };
 }
 
-// Reads one stream backwards from `from` ({ f: file index, o: end offset } or nothing = its very end), calling `take(item)`
-// for each line, newest first, until take returns false, `budget` bytes are read or the files end.
-// → { end, read }: end is where the next call resumes ({ f, o }), or null when the stream is exhausted.
+// The first bytes of a file identify it across a rotation (a rename keeps them, and later appends do not change them).
+// A creation time cannot be used: Windows hands a new file the old one's when it replaces a renamed file. Shorter files have none.
+const HEAD = 64;
+function headOf(file, fd = null) {
+  let own = null;
+  try {
+    own = fd ?? fs.openSync(file, 'r');
+    const buf = Buffer.alloc(HEAD);
+    return fs.readSync(own, buf, 0, HEAD, 0) === HEAD ? buf.toString('base64') : null;
+  } catch { return null; } finally { if (own != null && fd == null) { try { fs.closeSync(own); } catch { /* closed */ } } }
+}
+
+// A cursor remembers the head of the file it stopped in. If the log rotated between two pages, that file now has
+// another index (or is gone): follow it, so the next page neither repeats lines nor jumps over the older ones.
+function resumePoint(def, from) {
+  if (from?.h == null) return { f: from?.f ?? 0, o: from?.o ?? null };
+  for (let g = 0; g < def.files.length; g += 1) if (headOf(def.files[g]) === from.h) return { f: g, o: from.o ?? null };
+  // not found: that file is gone, so go on with the older ones
+  return { f: (from.f ?? 0) + 1, o: null };
+}
+
+// Reads one stream backwards from `from` ({ f: file index, o: end offset, h: file head } or nothing = its very end),
+// calling `take(item)` for each line, newest first, until take returns false, `budget` bytes are read or the files end.
+// → { end, read }: end is where the next call resumes ({ f, o, h }), or null when the stream is exhausted.
+// A line without a time (the assistant's and the app's logs) takes the time of the nearest older line of its file that
+// has one, so it sorts next to what happened around it; with none, it sorts last.
 export function scanStream(def, from, take, budget = READ_CAP) {
-  let f = from?.f ?? 0; let endAt = from?.o ?? null; let read = 0;
+  const start0 = resumePoint(def, from);
+  let f = start0.f; let endAt = start0.o; let read = 0;
   while (f < def.files.length) {
     let fd = null;
     try {
       fd = fs.openSync(def.files[f], 'r');
       const st = fs.fstatSync(fd);
-      let sort = st.mtimeMs; // lines without a time take the one of the newer line (or the file's) to be placed among the rest
+      const head = headOf(def.files[f], fd);
+      let newerSort = st.mtimeMs; // the time of the newer timed line, for lines that must be flushed before an older one is seen
       const size = st.size;
       let pos = endAt == null || endAt > size ? size : endAt;
+      const startPos = pos;
       let lastStart = pos; let carry = Buffer.alloc(0);
+      const pending = []; // timeless lines waiting for the older timed line that dates them
+      // → the position to stop at when take refuses an item
+      const flush = (time) => {
+        for (const p of pending.splice(0)) { p.sort = time; if (take(p) === false) return p.pos; }
+        return null;
+      };
       while (pos > 0) {
-        if (read >= budget) return { end: { f, o: lastStart }, read };
+        if (read >= budget) {
+          const stopped = flush(newerSort); if (stopped) return { end: stopped, read };
+          // inside a line longer than the whole budget nothing completed: resume where the read got to, so the next
+          // call cannot start at the same place for ever (that line's tail is skipped)
+          return { end: { f, o: lastStart < startPos ? lastStart : pos, h: head }, read };
+        }
         const start = Math.max(0, pos - BLOCK);
         const block = Buffer.alloc(pos - start);
         const got = fs.readSync(fd, block, 0, block.length, start); read += got;
@@ -98,15 +135,22 @@ export function scanStream(def, from, take, budget = READ_CAP) {
           const offset = bodyStart + lineStart;
           if (raw.trim()) {
             const item = parseLine(raw, def.source, def.name);
-            const t = ms(item.at); if (t != null) sort = t;
-            item.sort = sort; item.file = path.basename(def.files[f]); item.offset = offset; item.pos = { f, o: offset };
-            if (take(item) === false) return { end: item.pos, read };
+            item.file = path.basename(def.files[f]); item.offset = offset; item.pos = { f, o: offset, h: head };
+            const t = ms(item.at);
+            if (t == null) pending.push(item);
+            else {
+              newerSort = t;
+              const stopped = flush(t); if (stopped) return { end: stopped, read };
+              item.sort = t;
+              if (take(item) === false) return { end: item.pos, read };
+            }
           }
           lastStart = offset;
           stop = nl < 0 ? 0 : nl;
         }
         if (start === 0) break;
       }
+      const stopped = flush(0); if (stopped) return { end: stopped, read };
     } catch { /* a missing or rotated file: on to the previous generation */ }
     finally { if (fd != null) { try { fs.closeSync(fd); } catch { /* closed */ } } }
     f += 1; endAt = null;
@@ -128,7 +172,7 @@ function matcher(p) {
     if (LEVELS.indexOf(it.level) < min) return false;
     if (p.project && it.project !== p.project) return false;
     if (from != null || to != null) {
-      const t = ms(it.at); // a line without a time cannot be placed in a range
+      const t = ms(it.at) ?? it.sort; // a line without a time is placed by the one it was dated with
       if (t == null || (from != null && t < from) || (to != null && t > to)) return false;
     }
     if (needle && !`${it.kind} ${it.text} ${it.project ?? ''} ${it.before ?? ''} ${it.after ?? ''}`.toLowerCase().includes(needle)) return false;
@@ -160,7 +204,7 @@ export function readActivity(board, params = {}, stats = {}) {
   if (want.has('subagentes') && cursor.events !== DONE) {
     const list = [];
     let before = Number.isFinite(cursor.events) ? cursor.events : null;
-    let end = null; let scanned = 0;
+    let end = null; let scanned = 0; let exhausted = false;
     outer: while (scanned < EVENT_ROWS_CAP) {
       let rows = [];
       try {
@@ -176,10 +220,11 @@ export function readActivity(board, params = {}, stats = {}) {
         const it = { id: `events:${e.id}`, at: e.at ?? null, sort: ms(e.at) ?? 0, source: 'subagentes', level: failed ? 'error' : levelOf(text, 'info'), project: e.project ?? null, kind: e.kind, text, stream: 'events', pos: e.id };
         if (match(it)) { list.push(it); if (list.length >= limit) { end = e.id; break outer; } }
       }
-      if (rows.length < 500) break;
+      // fewer rows than asked: the table is over, so no stale resume point may be kept (a page would repeat)
+      if (rows.length < 500) { end = null; exhausted = true; break; }
       end = before;
     }
-    if (end == null && scanned >= EVENT_ROWS_CAP) end = before;
+    if (end == null && !exhausted && scanned >= EVENT_ROWS_CAP) end = before;
     stats.rows = scanned;
     got.events = { list, end };
   }
@@ -204,6 +249,17 @@ export function readActivity(board, params = {}, stats = {}) {
   return { items: publicItems, next: more ? encodeCursor(next) : null };
 }
 
+// Paths of this PC: the phone gets places, not folders.
+export function hidePcPaths(text) {
+  const swap = (s, from, to) => (from ? s.split(from).join(to) : s);
+  const home = ctx.home ? String(ctx.home) : '';
+  const user = process.env.USERPROFILE || process.env.HOME || '';
+  let out = String(text ?? '');
+  out = swap(out, home, '<Orb>'); out = swap(out, home.replaceAll(String.fromCharCode(92), '/'), '<Orb>');
+  out = swap(out, user, '~'); out = swap(out, user.replaceAll(String.fromCharCode(92), '/'), '~');
+  return out;
+}
+
 // Text for an issue or an agent: the last `lines` items up to `at`, oldest first, secrets hidden twice.
 const REPORT_MAX = 60 * 1024;
 export function buildReport(board, { at, lines, version, remote = false, filters = {} } = {}) {
@@ -219,9 +275,6 @@ export function buildReport(board, { at, lines, version, remote = false, filters
   let text = `${header}\n${body.length > room ? body.slice(body.length - room).replace(/^[^\n]*\n/, '') : body}`;
   text = redactSecrets(text);
   // paths of this PC: the phone gets places, not folders
-  const swap = (s, from, to) => (from ? s.split(from).join(to) : s);
-  const home = ctx.home ? String(ctx.home) : '';
-  const user = process.env.USERPROFILE || process.env.HOME || '';
-  if (remote) { text = swap(text, home, '<Orb>'); text = swap(text, home.replace(/\\/g, '/'), '<Orb>'); text = swap(text, user, '~'); text = swap(text, user.replace(/\\/g, '/'), '~'); }
+  if (remote) text = hidePcPaths(text);
   return { text };
 }

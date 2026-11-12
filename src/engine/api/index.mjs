@@ -47,7 +47,7 @@ import { projectMethods } from './projects.mjs';
 import { chatMethods } from './chat.mjs';
 import { trashTools } from './trash.mjs';
 import { workMethods } from './work.mjs';
-import { readActivity, buildReport } from '../../domain/activity/activity.mjs';
+import { readActivity, buildReport, hidePcPaths } from '../../domain/activity/activity.mjs';
 import { snapshotBefore, recordUserCall } from '../../domain/activity/record.mjs';
 
 export { fail, str, int, oneOf } from './common.mjs';
@@ -261,10 +261,14 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
 
     // Only q/limit: the events array the window has always had. Any other filter: the paged reader of every source
     // ({ items, next }, src/domain/activity/activity.mjs).
-    'activity.list': (params) => {
+    'activity.list': (params, principal) => {
       const { q, limit } = params;
       if (['sources', 'level', 'project', 'from', 'to', 'cursor'].some((k) => params[k] !== undefined)) {
-        return readActivity(board, params);
+        const page = readActivity(board, params);
+        // the phone gets places, not this PC's folders (the same swap as in the report)
+        if (principal?.channel === 'desktop') return page;
+        const hide = (v) => (typeof v === 'string' ? hidePcPaths(v) : v);
+        return { ...page, items: page.items.map((it) => ({ ...it, text: hide(it.text), ...(it.before !== undefined ? { before: hide(it.before) } : {}), ...(it.after !== undefined ? { after: hide(it.after) } : {}) })) };
       }
       const rows = board.recentEvents(Math.min(Number(limit) || 300, 2000));
       const needle = String(q ?? '').toLowerCase().trim();
