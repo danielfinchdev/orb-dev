@@ -34,6 +34,7 @@ export default {
   'chat.resumed': 'Tasks resumed',
   'chat.paused': 'Tasks paused',
   'chat.helloUser': 'Hello, {user}. I’m {name}.',
+  'chat.you': 'You',
   'chat.hello': 'Hello. I’m {name}.',
   'chat.intro': 'What are we working on today?',
   'chat.changesFor': 'Changes for {ids}: ',

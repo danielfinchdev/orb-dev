@@ -351,6 +351,7 @@ html[data-skin="retro"] .wordmark, html[data-skin="nube"] .wordmark { margin-bot
 /* the time of each message, bottom right, as in a messaging app. */
 .msg-time { float: right; margin: 0.35rem 0 -0.25rem 0.75rem; font-size: 0.68rem; line-height: 1.4; font-variant-numeric: tabular-nums; opacity: 0.6; white-space: nowrap; }
 /* in an agent's conversation the time shows while the pointer is over the message (always on touch screens). */
+.msg-time-inline { float: none; margin: 0; }
 .msg-time-hover { opacity: 0; transition: opacity 0.15s ease; }
 .msg-hover:hover .msg-time-hover, .msg-hover:focus-within .msg-time-hover { opacity: 0.6; }
 @media (hover: none) { .msg-time-hover { opacity: 0.6; } }

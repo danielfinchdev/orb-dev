@@ -72,18 +72,19 @@ function MonthCalendar({ today }) {
 const msgFormats = new Map();
 const msgFormat = (locale, day) => {
   const k = `${locale}|${day}|${timeZone()}`;
-  if (!msgFormats.has(k)) msgFormats.set(k, new Intl.DateTimeFormat(locale, day ? { day: 'numeric', month: 'short' } : { hour: '2-digit', minute: '2-digit' }));
+  if (!msgFormats.has(k)) msgFormats.set(k, new Intl.DateTimeFormat(locale, day ? { day: 'numeric', month: 'short' } : { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }));
   return msgFormats.get(k);
 };
 // hover (an agent's conversation): shown while the pointer is over the message (or it has the focus).
-export function MsgTime({ at, hover = false }) {
+// inline: in the message's header, not floating at the end of its text.
+export function MsgTime({ at, hover = false, inline = false }) {
   const locale = useLocale();
   useDay();
   if (!at) return null;
   const d = new Date(at); if (Number.isNaN(d.getTime())) return null;
   const today = d.toDateString() === new Date().toDateString();
   const time = msgFormat(locale, false).format(d);
-  return <time className={hover ? 'msg-time msg-time-hover' : 'msg-time'} dateTime={d.toISOString()}>{today ? time : `${msgFormat(locale, true).format(d)} ${time}`}</time>;
+  return <time className={cn(hover ? 'msg-time msg-time-hover' : 'msg-time', inline && 'msg-time-inline')} dateTime={d.toISOString()}>{today ? time : `${msgFormat(locale, true).format(d)} ${time}`}</time>;
 }
 
 // The bar's pause / resume of all of Orb's work (the chat's bar and an agent conversation's).

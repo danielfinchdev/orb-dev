@@ -36,7 +36,8 @@ import { useT } from '@/lib/i18n.js';
 import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
 import { keepSame } from '@/lib/memo.js';
 import { useAutoScroll, Composer } from '@/components/conversation/composer.jsx';
-import { MsgTime, BarPause, COMPACT_AT, CompactButton } from '@/components/conversation/bar.jsx';
+import { MessageBox } from '@/components/conversation/message-box.jsx';
+import { BarPause, COMPACT_AT, CompactButton } from '@/components/conversation/bar.jsx';
 import { ContextMeter } from '@/components/conversation/context-meter.jsx';
 import { needsApproval } from '@/lib/task-approval.js';
 import { quiet } from '@/lib/quiet.js';
@@ -60,43 +61,28 @@ function useGreeting(project) {
 }
 
 // Memoised: the list (up to 120 lines) is not drawn again while the assistant streams its answer.
-const Message = memo(function Message({ m, name, onChanges, tail }) {
+const Message = memo(function Message({ m, name, user, onChanges, tail }) {
   const t = useT();
   if (m.meta?.kind === 'question') return <QuestionCard m={m} />;
   // for a big request, the assistant's advice to define it on the Pizarra, with the way there.
   if (m.meta?.kind === 'board') return (
-    <div className="flex gap-3">
-      <Robot size={32} still className="mt-0.5" />
-      <div className="chat-glass min-w-0 flex-1" data-testid="board-suggestion">
-        <div className="text-muted-foreground mb-1 text-xs">{name}</div>
-        <Markdown>{m.body}</Markdown>
-        <div className="chat-actions mt-2.5"><Button size="sm" onClick={() => go('board')} data-testid="open-board"><Presentation />{t('chat.openBoard')}</Button></div>
-        <div className="text-muted-foreground flow-root"><MsgTime at={m.at} /></div>
-      </div>
-    </div>
+    <MessageBox name={name} at={m.at} data-testid="board-suggestion" actions={<Button size="sm" onClick={() => go('board')} data-testid="open-board"><Presentation />{t('chat.openBoard')}</Button>}>
+      <Markdown>{m.body}</Markdown>
+    </MessageBox>
   );
-  if (m.role === 'usuario') return <div className="bg-bubble text-bubble-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 compact:text-[14.5px] whitespace-pre-wrap break-words">{m.body}<MsgTime at={m.at} /></div>;
+  if (m.role === 'usuario') return <MessageBox user name={user || t('chat.you')} at={m.at}>{m.body}</MessageBox>;
   if (m.role === 'orb') {
     const report = m.meta?.kind === 'report' && m.meta.tasks?.length ? m.meta : null;
-    return (
-      <div className="flex gap-3">
-        <Robot size={32} still className="mt-0.5" />
-        <div className="chat-glass min-w-0 flex-1">
-          <div className="text-muted-foreground mb-1 text-xs">{name}</div>
-          <TypedMarkdown tail={tail}>{m.body}</TypedMarkdown>
-          {report ? (
-            <div className="chat-actions mt-2.5 flex flex-wrap items-center gap-2" data-testid="report-actions">
-              {report.accepted ? <Badge variant="success"><Check />{t('chat.accepted', { ids: report.tasks.map((id) => `#${id}`).join(', ') })}</Badge> : (<>
-                <Button size="xs" className="px-2.5" onClick={() => act(call('chat.accept', { id: m.id }), t('chat.acceptDone'))}><Check />OK</Button>
-                <Button size="xs" className="px-2.5" variant="outline" onClick={() => onChanges(report.tasks)}><PencilLine />{t('chat.requestChanges')}</Button>
-                <span className="text-muted-foreground text-xs">{t('chat.tasksList', { ids: report.tasks.map((id) => `#${id}`).join(', ') })}</span>
-              </>)}
-            </div>
-          ) : null}
-          <div className="text-muted-foreground flow-root"><MsgTime at={m.at} /></div>
-        </div>
-      </div>
-    );
+    const actions = report ? (
+      <span className="contents" data-testid="report-actions">
+        {report.accepted ? <Badge variant="success"><Check />{t('chat.accepted', { ids: report.tasks.map((id) => `#${id}`).join(', ') })}</Badge> : (<>
+          <Button size="xs" className="px-2.5" onClick={() => act(call('chat.accept', { id: m.id }), t('chat.acceptDone'))}><Check />OK</Button>
+          <Button size="xs" className="px-2.5" variant="outline" onClick={() => onChanges(report.tasks)}><PencilLine />{t('chat.requestChanges')}</Button>
+          <span className="text-muted-foreground text-xs">{t('chat.tasksList', { ids: report.tasks.map((id) => `#${id}`).join(', ') })}</span>
+        </>)}
+      </span>
+    ) : null;
+    return <MessageBox name={name} at={m.at} actions={actions}><TypedMarkdown tail={tail}>{m.body}</TypedMarkdown></MessageBox>;
   }
   if (m.meta?.kind === 'approval' || m.meta?.kind === 'task-approval') return <ChatApproval m={m} />;
   // an agent made a skill or an MCP server and asks for it to be turned on.
@@ -499,8 +485,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
               </div>
               <div className="mt-3 flex max-w-xl flex-wrap justify-center gap-2">{suggestionsFor(workProject?.name).map((s) => <Button key={s} variant="outline" size="sm" className="h-auto max-w-full shrink rounded-full py-1.5 whitespace-normal" onClick={() => box.set(t(s))}>{t(s)}</Button>)}</div>
             </div>
-          ) : lines.map((m) => <Message key={m.id} m={m} name={name} onChanges={askChanges} tail={`chat:${id}`} />)}
-          {unsaved.map((p) => <Message key={p.id} m={{ id: p.id, role: 'usuario', body: p.text, at: p.at }} name={name} onChanges={askChanges} />)}
+          ) : lines.map((m) => <Message key={m.id} m={m} name={name} user={userName} onChanges={askChanges} tail={`chat:${id}`} />)}
+          {unsaved.map((p) => <Message key={p.id} m={{ id: p.id, role: 'usuario', body: p.text, at: p.at }} name={name} user={userName} onChanges={askChanges} />)}
           <TaskLines conversation={id} />
           {chat.busy || chat.waiting || sending ? <LiveAnswer id={id} name={name} /> : null}
         </div>
