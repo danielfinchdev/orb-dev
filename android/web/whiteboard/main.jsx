@@ -1,7 +1,8 @@
 // The phone's «Pizarra»: Excalidraw in the local web view. The drawing lives on the PC; this page only edits the copy
 // the app hands over and reports changes back through the closed set of messages of `OrbHost.post`:
 //   page -> app: {type:'load'} | {type:'save', elements, appState, files, png?, flush?} | {type:'close'}
-//   app -> page: window.orbReceive({type:'scene', scene:{elements, appState, files}})
+//   page -> app: {type:'flushed'} answers the app's {type:'flush'} once everything has been sent
+//   app -> page: window.orbReceive({type:'scene', scene:{elements, appState, files}}) | {type:'flush'} | {type:'saved', files:[ids]} | {type:'unsent'}
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Excalidraw, exportToBlob, MainMenu } from '@excalidraw/excalidraw';
@@ -26,12 +27,17 @@ async function drawingPng(elements, appState, files) {
   return blobToDataURL(blob);
 }
 
+// The Board of the current scene registers its entry points here for the app's messages.
+const board = { flush: null, saved: null, unsent: null };
+
 const THROTTLE_MS = 700;
 const PNG_EVERY_MS = 8000;
 
 function Board({ scene }) {
   const latest = useRef(null);
+  // A picture counts as sent only once the app confirms the PC has it; until then it is in flight and not offered again.
   const sentFiles = useRef(new Set(Object.keys(scene.files ?? {})));
+  const inFlight = useRef(new Set());
   const timer = useRef(0);
   const lastPng = useRef(0);
   const dirty = useRef(false);
@@ -44,7 +50,7 @@ function Board({ scene }) {
     const { elements, appState, files } = cur;
     const fresh = {};
     for (const [id, f] of Object.entries(files ?? {})) {
-      if (!sentFiles.current.has(id) && typeof f?.dataURL === 'string') { fresh[id] = { mimeType: f.mimeType, dataURL: f.dataURL }; sentFiles.current.add(id); }
+      if (!sentFiles.current.has(id) && !inFlight.current.has(id) && typeof f?.dataURL === 'string') { fresh[id] = { mimeType: f.mimeType, dataURL: f.dataURL }; inFlight.current.add(id); }
     }
     let png;
     if (flush || Date.now() - lastPng.current > PNG_EVERY_MS) {
@@ -69,10 +75,13 @@ function Board({ scene }) {
   useEffect(() => {
     // The system back gesture and the app's back arrow: save everything with its picture, then ask the app to leave.
     window.orbBack = () => { send({ flush: true }).then(() => post({ type: 'close' })); return true; };
+    board.flush = () => send({ flush: true }).then(() => post({ type: 'flushed' }));
+    board.saved = (ids) => { for (const id of ids) { inFlight.current.delete(id); sentFiles.current.add(id); } };
+    board.unsent = () => { inFlight.current.clear(); };
     const hidden = () => { if (document.visibilityState === 'hidden') send({ flush: true }); };
     document.addEventListener('visibilitychange', hidden);
     const id = setTimeout(() => window.dispatchEvent(new Event('resize')), 120);
-    return () => { clearTimeout(id); clearTimeout(timer.current); document.removeEventListener('visibilitychange', hidden); delete window.orbBack; };
+    return () => { clearTimeout(id); clearTimeout(timer.current); document.removeEventListener('visibilitychange', hidden); delete window.orbBack; board.flush = board.saved = board.unsent = null; };
   }, [send]);
 
   return (
@@ -98,9 +107,15 @@ function App() {
   const [scene, setScene] = useState(null);
   useEffect(() => {
     window.orbReceive = (msg) => {
-      if (msg && msg.type === 'scene' && msg.scene && Array.isArray(msg.scene.elements)) {
-        setScene({ elements: msg.scene.elements, appState: msg.scene.appState ?? {}, files: msg.scene.files ?? {} });
-      }
+      if (!msg) return;
+      if (msg.type === 'scene' && msg.scene && Array.isArray(msg.scene.elements)) {
+        // Pictures the phone sent travel without id and date: Excalidraw needs both back.
+        const files = {};
+        for (const [id, f] of Object.entries(msg.scene.files ?? {})) files[id] = { ...f, id, created: f.created ?? Date.now() };
+        setScene({ elements: msg.scene.elements, appState: msg.scene.appState ?? {}, files });
+      } else if (msg.type === 'flush') board.flush?.();
+      else if (msg.type === 'saved' && Array.isArray(msg.files)) board.saved?.(msg.files);
+      else if (msg.type === 'unsent') board.unsent?.();
     };
     post({ type: 'load' });
     return () => { delete window.orbReceive; };
