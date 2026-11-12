@@ -18,7 +18,7 @@ sealed class NoteOutcome(val text: String, val done: Boolean = false) {
     /** The phone is locked: nothing is done and the buttons stay for after unlocking. */
     class Locked : NoteOutcome(NotifyTexts.LOCKED)
     /** A reply with nothing typed. */
-    class NothingTyped : NoteOutcome("")
+    class NothingTyped : NoteOutcome(NotifyTexts.NOTHING_TYPED)
     class Expired : NoteOutcome(NotifyTexts.EXPIRED)
     class Failed(why: String) : NoteOutcome(NotifyTexts.failed(why))
 }
@@ -33,6 +33,8 @@ class NoteActionRunner(
     private val isLocked: () -> Boolean,
     // A broadcast receiver is stopped by Android after about ten seconds.
     private val budgetMs: Long = 9_000,
+    // Called once the button is accepted and before the PC is asked, so the notification can say it is working.
+    private val onStart: (NoteJob) -> Unit = {},
 ) {
     /** The job's title with the outcome, or null when the token is unknown. */
     suspend fun run(token: String, typed: String?): Pair<NoteJob, NoteOutcome>? {
@@ -42,6 +44,7 @@ class NoteActionRunner(
         if (isLocked()) return job to NoteOutcome.Locked()
         val text = job.textParam?.let { typed?.trim().orEmpty().ifEmpty { return job to NoteOutcome.NothingTyped() } }
         jobs.take(token) ?: return null
+        onStart(job)
         return job to execute(job, text)
     }
 

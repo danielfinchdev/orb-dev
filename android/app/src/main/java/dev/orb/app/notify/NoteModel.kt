@@ -197,6 +197,7 @@ object NotifyTexts {
     const val HIDDEN_MESSAGE = "Tienes un mensaje nuevo"
     const val HIDDEN_APPROVAL = "Orb necesita tu respuesta"
     const val SENDING = "Enviando…"
+    const val NOTHING_TYPED = "Escribe algo para responder."
     const val SENT = "Enviado"
     const val ALLOWED = "Aprobado"
     const val DENIED = "Rechazado"
