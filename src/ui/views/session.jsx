@@ -15,6 +15,8 @@ import { BackToList } from '@/components/chat-bar.jsx';
 import { ContextSlot } from '@/components/context-slot.jsx';
 import { TaskChanges } from '@/components/task-changes.jsx';
 import { SecretCards } from '@/components/secret-card.jsx';
+import { PrCards } from '@/components/pr-card.jsx';
+import { HtmlPages } from '@/components/html-page.jsx';
 import { takePoints, onPoints } from '@/lib/browser-points.js';
 import { TerminalPanel } from '@/components/terminal-panel.jsx';
 import { onTerminalPaste } from '@/lib/terminal-paste.js';
@@ -474,6 +476,8 @@ export function SessionView({ route }) {
       ) : null}
       {/* a secret the agent asked for, typed only here (never in the chat). */}
       <SecretCards sessionId={s.id} />
+      <PrCards sessionId={s.id} />
+      {fullPc() ? <HtmlPages sessionId={s.id} /> : null}
       {terminal && fullPc() ? <TerminalPanel dir={s.cwd} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
       <Composer draft={draft} onSend={send} attached={images.length > 0} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
         placeholder={running ? (AGENT_CAN_STEER[s.agent] ? t('session.phSteer', { agent: AGENT[s.agent] }) : t('session.phWait', { agent: AGENT[s.agent] })) : s.kind === 'task' ? t('session.phTask') : t('session.ph', { agent: AGENT[s.agent] })}

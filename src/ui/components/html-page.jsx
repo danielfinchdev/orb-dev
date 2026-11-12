@@ -3,35 +3,53 @@
 // top navigation), served from the engine's loopback server whose CSP is also sandboxed. The title is plain text.
 // The internet switch is the engine's state (list + events), never a local copy: it is written by htmlPages.setInternet.
 import { useEffect, useState } from 'react';
-import { Globe, X } from 'lucide-react';
+import { Globe, Maximize2, ShieldAlert, X } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
-import { Switch } from '@/components/ui/overlay.jsx';
+import { Switch, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/overlay.jsx';
+import { cn } from '@/lib/utils.js';
 import { call, act, bridge, fullPc } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
 import { mountable } from '@/lib/html-mount.js';
 
 const refOf = (p) => ({ id: p.id, session: p.session });
 
+// One frame element for both the tile and the enlarged view. sandbox stays "allow-scripts" ONLY: no same-origin, popups or top navigation.
+function PageFrame({ p, className, testid }) {
+  const t = useT();
+  // key: a new key reloads the frame, so the new internet policy is fetched
+  return <iframe key={`${p.id}:${p.internet ? 1 : 0}`} src={p.url} sandbox="allow-scripts" referrerPolicy="no-referrer" title={t('htmlpage.frame', { title: p.title })} className={cn('bg-white w-full rounded-md border', className)} data-testid={testid} />;
+}
+
 function HtmlPage({ p, paused }) {
   const t = useT();
+  const [big, setBig] = useState(false);
+  const internet = p.internet === true;
   return (
-    <div className="bg-card grid gap-2 rounded-xl border px-3.5 py-3 text-[13px]" data-testid="html-page">
+    <div className={cn('bg-card grid gap-2.5 rounded-xl border px-3.5 py-3 text-control', internet && 'border-warning/50')} data-testid="html-page">
       <div className="flex items-center gap-2 font-medium">
         <Globe className="text-muted-foreground size-4 shrink-0" />
         <span className="min-w-0 flex-1 truncate" data-testid="html-title"><bdi>{p.title}</bdi></span>
-        <Button type="button" size="icon" variant="ghost" aria-label={t('htmlpage.close')} title={t('htmlpage.close')} onClick={() => act(call('htmlPages.close', refOf(p)))} data-testid="html-close"><X className="size-4" /></Button>
+        <Button type="button" size="icon-sm" variant="ghost" disabled={paused} aria-label={t('htmlpage.expand')} title={t('htmlpage.expand')} onClick={() => setBig(true)} data-testid="html-expand"><Maximize2 className="size-4" /></Button>
+        <Button type="button" size="icon-sm" variant="ghost" aria-label={t('htmlpage.close')} title={t('htmlpage.close')} onClick={() => act(call('htmlPages.close', refOf(p)))} data-testid="html-close"><X className="size-4" /></Button>
       </div>
-      {/* key: a new key reloads the frame, so the new internet policy is fetched */}
       {paused
         ? <div className="text-muted-foreground bg-muted/40 rounded-md border px-3 py-6 text-center text-xs" data-testid="html-paused">{t('htmlpage.pausedNote')}</div>
-        : <iframe key={`${p.id}:${p.internet ? 1 : 0}`} src={p.url} sandbox="allow-scripts" referrerPolicy="no-referrer" title={t('htmlpage.frame', { title: p.title })} className="bg-white h-[320px] w-full rounded-md border" data-testid="html-frame" />}
+        : <PageFrame p={p} className="h-[320px]" testid="html-frame" />}
       <div className="flex items-center justify-between gap-3">
-        <span className="text-muted-foreground text-xs">{t('htmlpage.note')}</span>
-        <label className="flex items-center gap-2 text-xs" title={t('htmlpage.internetHint')}>
+        <label className="flex items-center gap-2 text-xs font-medium" title={t('htmlpage.internetHint')}>
+          <Switch checked={internet} onCheckedChange={(on) => act(call('htmlPages.setInternet', { ...refOf(p), internet: on === true }))} aria-describedby={`html-help-${p.id}`} data-testid="html-internet" />
           {t('htmlpage.internet')}
-          <Switch checked={p.internet === true} onCheckedChange={(on) => act(call('htmlPages.setInternet', { ...refOf(p), internet: on === true }))} data-testid="html-internet" />
         </label>
       </div>
+      {internet ? <p className="text-warning-ink flex items-start gap-1.5 text-xs font-medium" role="status" data-testid="html-internet-warn"><ShieldAlert className="mt-px size-3.5 shrink-0" />{t('htmlpage.internetOn')}</p> : null}
+      <p id={`html-help-${p.id}`} className="text-muted-foreground text-xs" data-testid="html-help">{t('htmlpage.sandboxHelp')}</p>
+      {/* the enlarged view mounts a second frame only while open and only if this page is the live one */}
+      <Dialog open={big && !paused} onOpenChange={setBig}>
+        <DialogContent className="h-[85vh] max-w-[min(1100px,92vw)] grid-rows-[auto_1fr]" data-testid="html-big">
+          <DialogHeader><DialogTitle className="truncate"><bdi>{p.title}</bdi></DialogTitle><DialogDescription>{t('htmlpage.expandedTitle')}</DialogDescription></DialogHeader>
+          <PageFrame p={p} className="h-full min-h-0" testid="html-frame-big" />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

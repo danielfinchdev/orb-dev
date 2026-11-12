@@ -36,6 +36,7 @@ import acceso from './es/acceso.mjs';
 import auto from './es/auto.mjs';
 import rails from './es/rails.mjs';
 import herramientas from './es/herramientas.mjs';
+import f6nuevas from './es/f6-nuevas.mjs';
 
 export default {
   ...base,
@@ -74,5 +75,6 @@ export default {
   ...acceso,
   ...auto,
   ...rails,
-  ...herramientas
+  ...herramientas,
+  ...f6nuevas
 };
