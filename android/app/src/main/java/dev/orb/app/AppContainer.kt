@@ -137,15 +137,16 @@ class AppContainer(private val app: Application) {
 
     /** Copies what [intent] shares into the cache off the main thread; ignores any other intent. */
     fun receiveShare(intent: android.content.Intent?) {
-        if (!dev.orb.app.share.ShareReader.isShare(intent)) return
-        val shared = intent ?: return
+        // The copy is taken before launching: the original is marked as read right below, on this thread.
+        val shared = dev.orb.app.share.ShareReader.detach(intent) ?: return
+        intent?.action = android.content.Intent.ACTION_MAIN
         scope.launch(Dispatchers.IO) {
             val io = dev.orb.app.share.ContentShareIo(app.contentResolver)
-            val request = try { dev.orb.app.share.ShareReader.read(shared, io, shareRoot) } catch (_: Exception) { null } ?: return@launch
+            val request = try {
+                dev.orb.app.share.ShareReader.read(shared, io, shareRoot, "${app.packageName}.fileprovider")
+            } catch (_: Exception) { null } ?: return@launch
             pendingShare.getAndUpdate { request }?.deleteFiles()
         }
-        // The same intent must not be read again when the screen is recreated.
-        shared.action = android.content.Intent.ACTION_MAIN
     }
 
     fun dropShare() {

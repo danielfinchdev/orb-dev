@@ -52,6 +52,31 @@ class ShareReaderTest {
         assertNull(ShareReader.read(null, io(), tmp.newFolder()))
     }
 
+    @Test fun onlyContentUrisOfOtherAppsAreCopied() {
+        val own = "dev.orb.app.fileprovider"
+        val items = mapOf(
+            "file:///data/data/dev.orb.app/shared_prefs/orb.lock.xml" to (SourceInfo("a.png", "image/png") to 10),
+            "content://dev.orb.app.fileprovider/capturas/x.jpg" to (SourceInfo("b.png", "image/png") to 10),
+            "content://DEV.ORB.APP.fileprovider/capturas/x.jpg" to (SourceInfo("c.png", "image/png") to 10),
+            "content://other.app/pic" to (SourceInfo("d.png", "image/png") to 10),
+        )
+        val uris = items.keys.map { Uri.parse(it) }
+        val r = ShareReader.read(send(uris = uris, type = "image/*"), FakeShareIo(items), tmp.newFolder(), own)!!
+        assertEquals(listOf("d.png"), r.files.map { it.name })
+        assertEquals(3, r.skipped)
+    }
+
+    @Test fun aDetachedCopyIsNotAffectedWhenTheOriginalIsMarkedAsRead() {
+        val original = send("hola", uris = listOf(u("a")), type = "image/png")
+        val copy = ShareReader.detach(original)!!
+        original.action = Intent.ACTION_MAIN
+        original.removeExtra(Intent.EXTRA_TEXT)
+        val r = ShareReader.read(copy, io(Triple("a", "image/png", "foto.png" to 5)), tmp.newFolder())!!
+        assertEquals("hola", r.text)
+        assertEquals(1, r.files.size)
+        assertNull(ShareReader.detach(Intent(Intent.ACTION_MAIN)))
+    }
+
     @Test fun textWithItsSubject() {
         val r = read(send("https://ejemplo.org", "Una pagina"))!!
         assertEquals("Una pagina\nhttps://ejemplo.org", r.text)

@@ -73,8 +73,22 @@ object ShareReader {
 
     fun isShare(intent: Intent?) = intent?.action == Intent.ACTION_SEND || intent?.action == Intent.ACTION_SEND_MULTIPLE
 
+    /** A copy of a share intent that later changes to the original (the caller marks it as read) cannot affect. */
+    fun detach(intent: Intent?): Intent? = if (isShare(intent)) Intent(intent) else null
+
+    /**
+     * Only `content://` items are copied, never `file://` and never this app's own provider or files: another app
+     * could otherwise make Orb copy its private preferences into a message.
+     */
+    fun acceptable(uri: Uri, ownAuthority: String?): Boolean {
+        if (!uri.scheme.equals("content", ignoreCase = true)) return false
+        val authority = uri.authority?.substringAfterLast('@')?.substringBefore(':')
+        if (authority.isNullOrBlank()) return false
+        return ownAuthority == null || !authority.equals(ownAuthority, ignoreCase = true)
+    }
+
     /** → null when [intent] is not a share. Copies run here, so call it off the main thread. */
-    fun read(intent: Intent?, io: ShareIo, dir: File): ShareRequest? {
+    fun read(intent: Intent?, io: ShareIo, dir: File, ownAuthority: String? = null): ShareRequest? {
         if (intent == null || !isShare(intent)) return null
         val text = textOf(intent)
         val cut = text != null && text.length > MAX_TEXT
@@ -84,6 +98,7 @@ object ShareReader {
         var total = 0L
         for ((i, uri) in uris.withIndex()) {
             if (i >= MAX_LOOKED_AT || files.size >= MAX_ATTACHMENTS) { skipped += uris.size - i; break }
+            if (!acceptable(uri, ownAuthority)) { skipped++; continue }
             val info = try { io.info(uri) } catch (_: Exception) { skipped++; continue }
             val mime = info.mime?.takeIf { it != "*/*" } ?: intent.type?.takeIf { !it.endsWith("/*") }
             if (AttachType.detect(mime, info.name) == null) { skipped++; continue }
