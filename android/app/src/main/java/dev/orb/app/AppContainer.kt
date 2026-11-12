@@ -148,6 +148,7 @@ class AppContainer(private val app: Application) {
     fun tasksBackend(): dev.orb.app.ui.tasks.TasksBackend? = _runtime.value?.let { dev.orb.app.ui.tasks.RuntimeTasksBackend(it) }
     fun projectsBackend(): dev.orb.app.ui.projects.ProjectsBackend? = _runtime.value?.let { dev.orb.app.ui.projects.RuntimeProjectsBackend(it, chatsBackend()) }
     fun schedulesBackend(): dev.orb.app.ui.schedules.SchedulesBackend? = _runtime.value?.let { dev.orb.app.ui.schedules.RuntimeSchedulesBackend(it) }
+    fun usageBackend(): dev.orb.app.ui.usage.UsageBackend? = _runtime.value?.let { dev.orb.app.ui.usage.RuntimeUsageBackend(it) }
     fun newChatBackend(): dev.orb.app.ui.chats.NewChatBackend? = _runtime.value?.let { dev.orb.app.ui.chats.RuntimeNewChatBackend(it) }
 
     private companion object {
