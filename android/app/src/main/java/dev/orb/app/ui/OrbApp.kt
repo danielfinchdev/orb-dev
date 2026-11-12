@@ -49,6 +49,8 @@ import dev.orb.app.ui.chats.SearchViewModel
 import dev.orb.app.ui.shell.MainShell
 import dev.orb.app.ui.tasks.TaskDetailScreen
 import dev.orb.app.ui.tasks.TaskDetailViewModel
+import dev.orb.app.ui.tasks.TaskDiffScreen
+import dev.orb.app.ui.tasks.TaskDiffViewModel
 import dev.orb.app.ui.shell.ShellActions
 import dev.orb.app.ui.shell.UnlinkDialog
 import dev.orb.app.ui.home.HomeViewModel
@@ -184,7 +186,14 @@ private fun OrbNav(container: AppContainer, start: Any) {
                 )
             }
         }
-        composable<TaskChangesRoute> { Placeholder("", onBack = { nav.popBackStack() }) }
+        composable<TaskChangesRoute> { entry ->
+            val route = entry.toRoute<TaskChangesRoute>()
+            val backend = remember { container.tasksBackend() }
+            if (backend != null) {
+                val vm = viewModel<TaskDiffViewModel>(key = "changes:${route.id}", factory = viewModelFactory { initializer { TaskDiffViewModel(backend, route.id) } })
+                TaskDiffScreen(vm, onBack = { nav.popBackStack() })
+            }
+        }
         composable<LinkTest> {
             val backend = remember { container.linkTestBackend() }
             if (backend != null) {
