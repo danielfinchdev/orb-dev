@@ -4,7 +4,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { notifyError } from '@/lib/notify.js';
 import { Presentation, Paperclip, FolderOpen, Trash2, FileText, Film, Music, PanelRightClose, PanelRightOpen, Check, CloudUpload } from 'lucide-react';
-import { PageHeader } from '@/components/page.jsx';
+import { PageHeader, PageBody } from '@/components/page.jsx';
 import { ProjectPicker } from '@/components/project-actions.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Empty, Spinner } from '@/components/ui/basic.jsx';
@@ -110,7 +110,7 @@ function Whiteboard({ project }) {
 
   const menu = null;
   return (
-    <div className="relative flex min-h-0 flex-1" data-testid="whiteboard">
+    <PageBody className="relative flex overflow-hidden p-0" data-testid="whiteboard">
       <div className="wb-canvas relative min-w-0 flex-1" data-testid="whiteboard-canvas">
         {data ? (
           <Suspense fallback={<div className="grid h-full place-items-center"><Spinner /></div>}>
@@ -157,6 +157,6 @@ function Whiteboard({ project }) {
       ) : (
         <BubbleTip title={t('wb.showPanel')} side="left"><Button size="icon-sm" variant="outline" className="absolute top-16 right-3 z-20" onClick={() => setPanel(true)} aria-label={t('wb.showPanel')} data-testid="whiteboard-show-panel"><PanelRightOpen /></Button></BubbleTip>
       )}
-    </div>
+    </PageBody>
   );
 }

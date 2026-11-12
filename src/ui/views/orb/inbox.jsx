@@ -9,7 +9,7 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ClipboardCheck, FolderGit2, CalendarSync, Presentation, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, PencilLine, AlarmClock, AlarmClockOff } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
-import { PageHeader } from '@/components/page.jsx';
+import { PageHeader, PageBody } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { OrbMark } from '@/components/orb-mark.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
@@ -520,7 +520,8 @@ export function OrbChatsView() {
   return (
     <>
       <PageHeader palette={false} title={t('nav.modeOrb')} className="chats-head" />
-      <OrbInbox page />
+      {/* the list scrolls on its own inside (the search stays on top) */}
+      <PageBody className="flex flex-col overflow-hidden p-0"><OrbInbox page /></PageBody>
     </>
   );
 }

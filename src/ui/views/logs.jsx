@@ -2,10 +2,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { NotebookPen, Copy, Maximize2, NotebookText } from 'lucide-react';
 import { notifyOk } from '@/lib/notify.js';
-import { PageHeader } from '@/components/page.jsx';
+import { PageHeader, PageBody } from '@/components/page.jsx';
 import { Markdown } from '@/components/markdown.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, Spinner } from '@/components/ui/basic.jsx';
+import { ListRow } from '@/components/ui/primitives.jsx';
 import { useStore, call } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
@@ -29,14 +30,13 @@ export function LogsView({ route, bare = false }) {
   return (
     <>
       {bare ? null : <PageHeader icon={<NotebookPen className="text-primary size-5" />} title={t('logs.title')} meta={t('logs.meta')} />}
-      <div className="grid min-h-0 flex-1 grid-cols-[240px_1fr] gap-4 overflow-hidden px-5 py-5">
+      <PageBody className="grid grid-cols-[240px_1fr] gap-4 overflow-hidden">
         <Card className="gap-0.5 overflow-y-auto p-2">
           {logs.map((l) => (
-            <button key={l.name} onClick={() => { setSelected(l.name); setWhole(false); }} className={cn('flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors', selected === l.name ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50')}>
-              <NotebookText className={cn('size-4', l.name === 'general' ? 'text-primary' : 'text-muted-foreground')} />
-              <span className="min-w-0 flex-1 truncate">{l.name === 'general' ? t('logs.general') : l.name}</span>
-              <span className="text-muted-foreground text-[11px]">{Math.max(1, Math.ceil(l.size / 1024))} KB</span>
-            </button>
+            <ListRow key={l.name} selected={selected === l.name} onClick={() => { setSelected(l.name); setWhole(false); }}
+              leading={<NotebookText className={cn('size-4', l.name === 'general' ? 'text-primary' : 'text-muted-foreground')} />}
+              title={l.name === 'general' ? t('logs.general') : l.name}
+              trailing={<span className="text-muted-foreground text-[11px]">{Math.max(1, Math.ceil(l.size / 1024))} KB</span>} />
           ))}
         </Card>
         <Card className="min-h-0 gap-3 overflow-hidden">
@@ -47,7 +47,7 @@ export function LogsView({ route, bare = false }) {
           </div>
           <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-5 pb-2 text-[14px] md:pb-24" data-testid="log-body">{body == null ? <Spinner /> : <Markdown>{body}</Markdown>}</div>
         </Card>
-      </div>
+      </PageBody>
     </>
   );
 }
