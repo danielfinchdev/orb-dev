@@ -45,7 +45,7 @@ export const METHODS = Object.freeze({
   // projects
   'projects.list': 'remote', 'projects.icons': 'remote', 'projects.create': 'remote', 'projects.import': 'pc', 'projects.clone': 'pc',
   'projects.remove': 'pc', 'projects.rename': 'pc', 'projects.setActive': 'remote', 'projects.setIcon': 'pc', 'projects.clearIcon': 'pc',
-  'projects.branch': 'remote', 'projects.info': 'remote', 'projects.prs': 'remote', 'projects.pr': 'remote', 'projects.mergePr': 'remote', 'notes.markRead': 'remote', 'projects.commit': 'pc', 'projects.merge': 'pc', 'projects.push': 'pc',
+  'projects.branch': 'remote', 'projects.info': 'remote', 'projects.prs': 'remote', 'projects.pr': 'remote', 'projects.mergePr': 'remote', 'projects.prComment': 'remote', 'notes.markRead': 'remote', 'projects.commit': 'pc', 'projects.merge': 'pc', 'projects.push': 'pc',
   'projects.createPr': 'pc', 'projects.createRepo': 'pc', 'projects.review': 'remote', 'projects.securityReview': 'remote',
   // finishing a project (its folder stays) also from the phone; deleting it (its folder too) only here.
   'projects.finish': 'remote', 'projects.finished': 'remote', 'projects.reopen': 'remote', 'projects.deleteCheck': 'pc', 'projects.delete': 'pc', 'projects.deleteAbort': 'pc',
@@ -84,6 +84,8 @@ export const METHODS = Object.freeze({
   'secrets.connector': 'pc', 'secrets.saveConnector': 'pc',
   // a secret an agent asked for, typed only on this PC's card (src/engine/security/agent-secrets.mjs)
   'secrets.pending': 'pc', 'secrets.answer': 'pc', 'secrets.decline': 'pc',
+  // a merge an agent asked for, confirmed only on this PC's card (src/engine/host/pr-tools.mjs)
+  'prConfirm.pending': 'pc', 'prConfirm.answer': 'pc', 'prConfirm.decline': 'pc',
   // the user's terminal inside Orb (src/engine/host/user-terminal.mjs)
   'terminal.list': 'pc', 'terminal.open': 'pc', 'terminal.write': 'pc', 'terminal.close': 'pc',
   // Ajustes › Skills y MCP (src/engine/api/extensions.mjs): what agents run comes in and out of core only here

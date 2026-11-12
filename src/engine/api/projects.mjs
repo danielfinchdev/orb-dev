@@ -126,6 +126,11 @@ export function projectMethods({ realHome, insideHome, project, holding, coordin
       const p = project(name); const n = prNumber(number); const oid = headOid(headRefOid); const m = oneOf(method, ['merge', 'squash', 'rebase'], 'método', 'merge'); const g = await gh();
       return holding(p.name, () => g.mergePr(p, n, m, oid));
     },
+    'projects.prComment': async ({ name, number, body }) => {
+      const p = project(name); const n = prNumber(number); const text = str(body, 'comentario', 20000);
+      if (!text.trim()) fail(tr('msg.api.missing', { name: 'comentario' }));
+      return (await gh()).commentPr(p, n, text);
+    },
     'projects.push': async ({ name, branch }) => (await gh()).push(project(name), str(branch, 'rama', 120)),
     'projects.createPr': async ({ name, branch, title, body, base }) => (await gh()).createPr(project(name), { branch: str(branch, 'rama', 120), title: str(title, 'título', 200), body: str(body, 'descripción', 20000, { optional: true }), base: str(base, 'rama base', 120, { optional: true }) || undefined }),
     'projects.createRepo': async ({ name, repo, isPrivate }) => (await gh()).createRepo(project(name), { name: str(repo, 'repositorio', 100), isPrivate: isPrivate !== false }),

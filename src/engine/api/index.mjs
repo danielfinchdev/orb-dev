@@ -25,6 +25,7 @@ import { createAndroid } from '../host/android.mjs';
 import { grantMethods } from '../security/grants.mjs';
 import { agentAuth } from '../../domain/security/agent-auth.mjs';
 import { createSecretRequests } from '../security/agent-secrets.mjs';
+import { createPrTools } from '../host/pr-tools.mjs';
 import { createTerminals } from '../host/user-terminal.mjs';
 import { extensionMethods } from './extensions.mjs';
 import { rulesMethods } from './rules.mjs';
@@ -149,8 +150,11 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   // The phone's tools of Orb's MCP server (src/mcp/server.mjs): for the conversation of the server's grant, as it is now.
   // the secrets an agent asks for (agent-secrets.mjs), answered only on this PC's card.
   const secrets = createSecretRequests({ sessions, auth: agentAuth, master: () => ctx.master, emit, log });
+  // the pull-request tools of the agents (pr-tools.mjs); a merge is answered only on this PC's card.
+  const prTools = createPrTools({ board, sessions, gh: () => import('../host/github.mjs'), holding, emit, log });
   agentAuth.onCall = async ({ session }, method, args) => {
     if (method === 'secret' && session) return secrets.request(sessions.get(session), args);
+    if (method === 'pr' && session) return prTools.run(sessions.get(session), String(args.tool ?? ''), args.args);
     if (method !== 'android' || !session) throw Object.assign(new Error(tr('msg.android.notAllowed')), { userFacing: true });
     const s = sessions.get(session);
     return android.tool(s, String(args.tool ?? ''), args.args);
@@ -320,12 +324,16 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...data.methods,
     // Orb locked (or a new password): the grants go, and so do the secrets typed for the agents.
     // under the lock screen the user's terminals take nothing and show nothing (user-terminal.mjs).
-    ...masterMethods({ ...shared, onUnlocked, onLock: (why) => { secrets.wipe(); try { onLocked(); } catch (error) { log(`bloqueo: ${error.message}`); } return grants.revokeAll(why); }, onScreen: (v) => terminals.setLocked(v) }),
+    ...masterMethods({ ...shared, onUnlocked, onLock: (why) => { secrets.wipe(); prTools.wipe(); try { onLocked(); } catch (error) { log(`bloqueo: ${error.message}`); } return grants.revokeAll(why); }, onScreen: (v) => terminals.setLocked(v) }),
     // the private card of a secret an agent asked for (this PC only; saving or using a saved one asks for
     // the master password: permissions.mjs › needsUnlock).
     'secrets.pending': () => secrets.pending(),
     'secrets.answer': ({ id, value, save, saved }) => secrets.answer({ id: int(id, 'petición'), value, save: save === true, saved: saved === true }),
     'secrets.decline': ({ id }) => secrets.decline({ id: int(id, 'petición') }),
+    // a merge an agent asked for: shown and answered only on this PC's card.
+    'prConfirm.pending': () => prTools.pending(),
+    'prConfirm.answer': ({ id }) => prTools.answer({ id: int(id, 'petición') }),
+    'prConfirm.decline': ({ id }) => prTools.decline({ id: int(id, 'petición') }),
     // the user's terminal inside Orb (this PC only, never in core or a protected folder).
     'terminal.list': () => terminals.list(),
     'terminal.open': ({ dir }) => terminals.open({ dir: str(dir, 'carpeta', 1000) }),

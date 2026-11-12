@@ -4,7 +4,7 @@
 export const ENGINE_EVENTS = Object.freeze([
   'agentBrowser:closeTask', 'agents:install', 'agents:login', 'approval:changed', 'backup:done', 'backup:progress',
   'backup:restoreReady', 'board:changed', 'chat:new', 'chat:state', 'config:changed', 'core:lost', 'inbox:changed',
-  'installer:progress', 'link:devices', 'master:locked', 'master:unlocked', 'notes:read', 'notice', 'secret:done', 'secret:request',
+  'installer:progress', 'link:devices', 'master:locked', 'master:unlocked', 'notes:read', 'notice', 'pr:done', 'pr:request', 'secret:done', 'secret:request',
   'session:delta', 'session:item', 'session:queue', 'session:removed', 'session:update', 'terminal:data', 'terminal:exit', 'trash:added',
 ]);
 // Sent by the app (src-tauri) or a bridge of the window itself (the phone's link, the browser pointer, the menu).
