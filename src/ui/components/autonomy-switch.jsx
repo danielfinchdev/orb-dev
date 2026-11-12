@@ -53,7 +53,7 @@ export function AutonomySwitch({ value, onChange, more = [], disabled = false, t
 
   return (
     <div className="inline-flex h-8 shrink-0 items-center" data-testid={testid} data-mode={value}>
-      <Popover open={open} onOpenChange={(o) => { if (!disabled) setOpen(o); }}>
+      <Popover open={open} onOpenChange={(o) => { if (disabled) return; if (o) setAt(Math.max(0, levels.findIndex((l) => l.value === value))); setOpen(o); }}>
         <PopoverTrigger asChild>
           <button type="button" role="combobox" aria-haspopup="listbox" aria-expanded={open} aria-controls={list} aria-label={t('session.permissions')} title={current.tip()} disabled={disabled}
             data-testid={`${testid}-more`}

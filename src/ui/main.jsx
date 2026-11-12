@@ -195,7 +195,7 @@ function Shell() {
       {/* folded away (its button next to day / night), the screens take the whole width. */}
       <div className={folded ? 'hidden' : 'hidden md:flex'}><Sidebar mood={mood} /></div>
       {/* Narrow windows: the sidebar is a drawer behind a menu button (phones have their own shell). */}
-      {drawer ? <div className="fixed inset-0 z-50 flex md:hidden" onClick={() => setDrawer(false)}><div className="animate-in slide-in-from-left flex h-full shadow-2xl" onClick={(e) => { if (e.target.closest('button')) setTimeout(() => setDrawer(false), 50); }}><Sidebar mood={mood} /></div><div className="flex-1 bg-black/40" /></div> : null}
+      {drawer ? <div data-modal="" className="fixed inset-0 z-50 flex md:hidden" onClick={() => setDrawer(false)}><div className="animate-in slide-in-from-left flex h-full shadow-2xl" onClick={(e) => { if (e.target.closest('button')) setTimeout(() => setDrawer(false), 50); }}><Sidebar mood={mood} /></div><div className="flex-1 bg-black/40" /></div> : null}
       <main className="theme-scene flex min-w-0 flex-1 flex-col">
         <Scene />
         <div className="relative topbar theme-band app-titlebar wco-pad bg-sidebar flex h-14 shrink-0 items-center gap-2 border-b px-3 md:hidden">

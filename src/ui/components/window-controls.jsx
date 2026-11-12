@@ -16,7 +16,7 @@ const slots = new Set();
 const listeners = new Set();
 let current = null;
 let version = 0;
-const MODAL = '[role=dialog], [role=alertdialog]';
+const MODAL = '[role=dialog], [role=alertdialog], [data-modal]';
 
 // The visible bar closest to the top-right corner wins; a hidden one (md:hidden) is skipped, and so is every bar while a
 // modal dialog is open (it would cover the buttons).
