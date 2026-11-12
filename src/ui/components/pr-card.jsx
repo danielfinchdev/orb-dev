@@ -2,10 +2,11 @@
 // src/engine/host/pr-tools.mjs). Only in this PC's window. Every string of the PR comes from the internet, so it is
 // rendered as plain text (React text nodes), never as HTML or markdown.
 import { useEffect, useState } from 'react';
-import { GitPullRequest } from 'lucide-react';
+import { GitPullRequest, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { call, act, bridge, fullPc } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
+import { cn } from '@/lib/utils.js';
 
 // The answer names the request by everything the card showed, so a stale card cannot answer another request.
 const refOf = (r) => ({ id: r.id, session: r.session, number: r.number, headRefOid: r.headRefOid ?? null });
@@ -14,10 +15,13 @@ function PrCard({ r }) {
   const t = useT();
   const [busy, setBusy] = useState(false);
   const comment = r.kind === 'comment';
+  // Merging is the dangerous action; the engine may send danger / focusCancel to override these defaults.
+  const danger = r.danger ?? !comment;
+  const focusCancel = r.focusCancel ?? danger;
   const checks = Array.isArray(r.checks) ? r.checks.slice(0, 30) : [];
   const accept = async () => { setBusy(true); try { await act(call('prConfirm.answer', refOf(r))); } finally { setBusy(false); } };
   return (
-    <div className="bg-card grid gap-2.5 rounded-xl border px-3.5 py-3 text-[13px]" data-testid="pr-card">
+    <div role="group" aria-label={t('prcard.group', { number: r.number })} className={cn('bg-card grid gap-2.5 rounded-xl border px-3.5 py-3 text-control', danger && 'border-warning/50')} data-testid="pr-card">
       <div className="flex items-center gap-2 font-medium">
         <GitPullRequest className="text-muted-foreground size-4 shrink-0" />
         {comment ? t('prcard.titleComment') : t('prcard.titleMerge', { method: r.method })}
@@ -34,9 +38,10 @@ function PrCard({ r }) {
         </div>
       ) : null}
       {comment ? <pre className="bg-muted max-h-48 overflow-auto whitespace-pre-wrap rounded-md p-2 text-xs" data-testid="pr-body">{r.body}</pre> : null}
+      {danger ? <p className="text-warning-ink flex items-start gap-1.5 text-xs font-medium" data-testid="pr-danger"><ShieldAlert className="mt-px size-3.5 shrink-0" />{t('prcard.dangerNote')}</p> : null}
       <div className="flex flex-wrap items-center justify-end gap-2">
-        <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => act(call('prConfirm.decline', refOf(r)))} data-testid="pr-decline">{t('prcard.decline')}</Button>
-        <Button type="button" size="sm" disabled={busy} onClick={accept} data-testid="pr-accept">{comment ? t('prcard.acceptComment') : t('prcard.acceptMerge')}</Button>
+        <Button type="button" size="sm" variant="ghost" autoFocus={focusCancel} disabled={busy} onClick={() => act(call('prConfirm.decline', refOf(r)))} data-testid="pr-decline">{t('prcard.decline')}</Button>
+        <Button type="button" size="sm" className={cn(danger && 'ring-warning/60 ring-2 ring-offset-1')} disabled={busy} onClick={accept} data-testid="pr-accept">{comment ? t('prcard.acceptComment') : t('prcard.acceptMergeMethod', { method: r.method })}</Button>
       </div>
     </div>
   );
