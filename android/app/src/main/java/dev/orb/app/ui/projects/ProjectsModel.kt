@@ -77,3 +77,72 @@ object ProjectInfoParser {
     /** The task `projects.review` and `projects.securityReview` create. */
     fun taskId(el: JsonElement?): Long? = (el as? JsonObject)?.let { it["id"] as? kotlinx.serialization.json.JsonPrimitive }?.content?.toLongOrNull()
 }
+
+@Immutable
+data class PrRow(
+    val number: Int,
+    val title: String,
+    val head: String?,
+    val base: String?,
+    val draft: Boolean,
+    val author: String?,
+    val updatedAt: String?,
+    val reviewDecision: String?,
+    val mergeable: String?,
+)
+
+@Immutable
+data class PrCheck(val name: String, val status: String?, val conclusion: String?) {
+    /** What the check ended as, or where it is while it has not ended. */
+    val outcome get() = (conclusion ?: status).orEmpty().uppercase()
+    val passed get() = outcome == "SUCCESS" || outcome == "NEUTRAL" || outcome == "SKIPPED"
+    val failed get() = outcome == "FAILURE" || outcome == "ERROR" || outcome == "TIMED_OUT" || outcome == "CANCELLED" || outcome == "ACTION_REQUIRED"
+}
+
+@Immutable
+data class PrDetail(
+    val number: Int,
+    val title: String,
+    val body: String,
+    /** `OPEN`, `MERGED` or `CLOSED`, as GitHub says it. */
+    val state: String,
+    val head: String?,
+    val base: String?,
+    val draft: Boolean,
+    val author: String?,
+    val mergeable: String?,
+    val mergeStateStatus: String?,
+    val reviewDecision: String?,
+    val additions: Int,
+    val deletions: Int,
+    val changedFiles: Int,
+    val checks: List<PrCheck>,
+) {
+    val open get() = state.equals("OPEN", ignoreCase = true)
+    val merged get() = state.equals("MERGED", ignoreCase = true)
+}
+
+object PrParser {
+    fun list(el: JsonElement?): List<PrRow> = (el as? JsonArray).orEmpty().mapNotNull { x ->
+        val o = x as? JsonObject ?: return@mapNotNull null
+        PrRow(
+            o.int("number") ?: return@mapNotNull null, o.str("title").orEmpty(), o.str("headRefName"), o.str("baseRefName"),
+            o.bool("isDraft"), o.str("author"), o.str("updatedAt"), o.str("reviewDecision"), o.str("mergeable"),
+        )
+    }
+
+    fun detail(el: JsonElement?): PrDetail? {
+        val o = el as? JsonObject ?: return null
+        val checks = (o["checks"] as? JsonArray).orEmpty().mapNotNull { c ->
+            val co = c as? JsonObject ?: return@mapNotNull null
+            PrCheck(co.str("name").orEmpty(), co.str("status"), co.str("conclusion"))
+        }
+        return PrDetail(
+            number = o.int("number") ?: return null, title = o.str("title").orEmpty(), body = o.str("body").orEmpty(),
+            state = o.str("state").orEmpty(), head = o.str("headRefName"), base = o.str("baseRefName"), draft = o.bool("isDraft"),
+            author = o.str("author"), mergeable = o.str("mergeable"), mergeStateStatus = o.str("mergeStateStatus"),
+            reviewDecision = o.str("reviewDecision"), additions = o.int("additions") ?: 0, deletions = o.int("deletions") ?: 0,
+            changedFiles = o.int("changedFiles") ?: 0, checks = checks,
+        )
+    }
+}

@@ -47,6 +47,10 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.navigation.toRoute
 import dev.orb.app.ui.chats.SearchViewModel
 import dev.orb.app.ui.shell.MainShell
+import dev.orb.app.ui.projects.PrDetailScreen
+import dev.orb.app.ui.projects.PrDetailViewModel
+import dev.orb.app.ui.projects.PrListScreen
+import dev.orb.app.ui.projects.PrListViewModel
 import dev.orb.app.ui.projects.ProjectDetailScreen
 import dev.orb.app.ui.projects.ProjectDetailViewModel
 import dev.orb.app.ui.tasks.TaskDetailScreen
@@ -73,6 +77,8 @@ import kotlinx.serialization.Serializable
 @Serializable data class TaskRoute(val id: Long)
 @Serializable data class TaskChangesRoute(val id: Long)
 @Serializable data class ProjectRoute(val name: String)
+@Serializable data class PrListRoute(val name: String)
+@Serializable data class PrRoute(val name: String, val number: Int)
 
 @Composable
 fun OrbApp(container: AppContainer) {
@@ -208,7 +214,24 @@ private fun OrbNav(container: AppContainer, start: Any) {
                 ProjectDetailScreen(
                     vm, onBack = { nav.popBackStack() },
                     onOpenChat = { nav.navigate(ChatRoute(it.kind.wire, it.id)) }, onOpenTask = { nav.navigate(TaskRoute(it)) },
+                    onOpenPrs = { nav.navigate(PrListRoute(it)) },
                 )
+            }
+        }
+        composable<PrListRoute> { entry ->
+            val route = entry.toRoute<PrListRoute>()
+            val backend = remember { container.projectsBackend() }
+            if (backend != null) {
+                val vm = viewModel<PrListViewModel>(key = "prs:${route.name}", factory = viewModelFactory { initializer { PrListViewModel(backend, route.name) } })
+                PrListScreen(vm, onBack = { nav.popBackStack() }, onOpenPr = { nav.navigate(PrRoute(route.name, it)) })
+            }
+        }
+        composable<PrRoute> { entry ->
+            val route = entry.toRoute<PrRoute>()
+            val backend = remember { container.projectsBackend() }
+            if (backend != null) {
+                val vm = viewModel<PrDetailViewModel>(key = "pr:${route.name}#${route.number}", factory = viewModelFactory { initializer { PrDetailViewModel(backend, route.name, route.number) } })
+                PrDetailScreen(vm, onBack = { nav.popBackStack() })
             }
         }
         composable<LinkTest> {

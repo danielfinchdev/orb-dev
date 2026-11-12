@@ -2,6 +2,8 @@ package dev.orb.app.ui.projects
 
 import dev.orb.app.link.api.ApiMethod
 import dev.orb.app.link.net.ConnectionState
+import dev.orb.app.link.net.LinkError
+import dev.orb.app.link.net.LinkException
 import dev.orb.app.link.net.LinkEvent
 import dev.orb.app.link.net.PcVersions
 import kotlinx.coroutines.CompletableDeferred
@@ -47,4 +49,17 @@ class FakeProjectsBackend(initial: List<ProjectItem> = emptyList(), finished: Li
     override suspend fun securityReview(name: String): Result<Long?> = act("security $name").map { null }
     override suspend fun finish(name: String) = act("finish $name")
     override suspend fun log(name: String): Result<String> { calls += "log $name"; return logResult }
+
+    var prList: Result<List<PrRow>> = Result.success(emptyList())
+    val prResults = HashMap<Int, Result<PrDetail>>()
+
+    override suspend fun prs(name: String): Result<List<PrRow>> { calls += "prs $name"; return prList }
+    override suspend fun pr(name: String, number: Int): Result<PrDetail> {
+        calls += "pr $name#$number"
+        return prResults[number] ?: Result.failure(LinkException(LinkError.Offline))
+    }
 }
+
+fun prDetail(number: Int, state: String = "OPEN", draft: Boolean = false, checks: List<PrCheck> = emptyList()) = PrDetail(
+    number, "Arreglar el pie", "Cuerpo", state, "dev", "main", draft, "ana", "MERGEABLE", "CLEAN", null, 10, 2, 3, checks,
+)

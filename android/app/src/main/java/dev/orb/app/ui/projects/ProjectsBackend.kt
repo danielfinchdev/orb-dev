@@ -53,6 +53,10 @@ interface ProjectsBackend {
 
     /** The project's logbook as the PC returns it: the latest entries as plain text. */
     suspend fun log(name: String): Result<String>
+
+    /** The open pull requests; the PC answers with its own message when `gh` or its sign-in is missing. */
+    suspend fun prs(name: String): Result<List<PrRow>>
+    suspend fun pr(name: String, number: Int): Result<PrDetail>
 }
 
 class RuntimeProjectsBackend(private val runtime: LinkRuntime, private val chats: ChatsBackend? = null) : ProjectsBackend {
@@ -104,4 +108,12 @@ class RuntimeProjectsBackend(private val runtime: LinkRuntime, private val chats
 
     override suspend fun log(name: String): Result<String> =
         api.logs.read(buildJsonObject { put("project", name) }).mapCatching { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content ?: throw LinkException(LinkError.BadAnswer) }
+
+    override suspend fun prs(name: String): Result<List<PrRow>> = api.projectsPrs(name).mapCatching {
+        if (it !is JsonArray) throw LinkException(LinkError.BadAnswer)
+        PrParser.list(it)
+    }
+
+    override suspend fun pr(name: String, number: Int): Result<PrDetail> =
+        api.projectsPr(name, number).mapCatching { PrParser.detail(it) ?: throw LinkException(LinkError.BadAnswer) }
 }

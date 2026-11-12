@@ -59,6 +59,7 @@ fun ProjectDetailScreen(
     onOpenChat: (ChatRef) -> Unit,
     onOpenTask: (Long) -> Unit,
     modifier: Modifier = Modifier,
+    onOpenPrs: (String) -> Unit = {},
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
@@ -95,6 +96,7 @@ fun ProjectDetailScreen(
                     state.tasks.take(SECTION_LIMIT).forEach { TaskItem(it, onOpenTask) }
                     Section(ProjectTexts.SECTION_MORE)
                     ActionRow(OrbIcons.ListOrdered, ProjectTexts.BRANCH, ProjectTexts.branchValue(state.git), enabled = true, onClick = null)
+                    if (state.canPrs) ActionRow(OrbIcons.ChevronRight, ProjectTexts.PRS, null, enabled = true) { onOpenPrs(state.name) }
                     if (state.canReview) ActionRow(OrbIcons.Check, ProjectTexts.REVIEW, null, enabled, vm::review)
                     if (state.canSecurityReview) ActionRow(OrbIcons.Shield, ProjectTexts.SECURITY_REVIEW, null, enabled, vm::securityReview)
                     if (state.canLog) ActionRow(OrbIcons.Archive, ProjectTexts.LOG, null, enabled = true, onClick = vm::openLog)
