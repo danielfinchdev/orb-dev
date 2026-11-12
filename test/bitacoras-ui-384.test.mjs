@@ -84,7 +84,7 @@ test('the tabs: Rules depends on rules.list and the three routes are registered'
   for (const r of ['logs', 'activity', 'rules']) assert.match(main, new RegExp(`${r}: MemoriesView`), `route ${r}`);
   assert.match(src('components/sidebar.jsx'), /testid: 'nav-memories'/);
   assert.match(src('components/sidebar.jsx'), /nav\.logbooks/);
-  assert.match(src('views/rules.jsx'), /logbooks\.rulesSoon/);
+  assert.match(src('views/rules.jsx'), /call\('rules\.list'/); // the real tab (test/normas-ui-384.test.mjs), no longer the «Próximamente» stub
 });
 
 test('the activity view hides the new controls on the old engine and the report without activity.report', () => {
