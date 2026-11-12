@@ -10,7 +10,7 @@
 // scrubbed from the page's text and the elements' names, and a screenshot blacks out those fields.
 import net from 'node:net';
 import crypto from 'node:crypto';
-import { protectedHit } from '../../domain/security/guard.mjs';
+import { protectedHitRail } from '../../domain/security/guard.mjs';
 import { isRailOn } from '../../domain/rules/rails.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -194,7 +194,7 @@ export function createActions({ driver, T, language = () => 'es', onChallenge = 
     // (a password manager's web vault…) is never opened, whatever the chat's permission.
     async open(tab, { url }) {
       const u = normalizeUrl(url, lang());
-      const hit = isRailOn('rutas-protegidas') ? protectedHit(u) : null;
+      const hit = protectedHitRail(u, isRailOn('rutas-protegidas'));
       if (hit) throw new Error(T('sys.browser.protected', { name: hit }));
       await driver.load(tab, u); return snapshot(tab);
     },
@@ -281,7 +281,7 @@ export function createActions({ driver, T, language = () => 'es', onChallenge = 
       // wherever the action ended (a redirect, a click, back), a page of «Elementos protegidos» is left
       // at once and nothing of it reaches the agent.
       let url = ''; try { url = String(driver.url(tab) ?? ''); } catch { /* closed */ }
-      const hit = url && isRailOn('rutas-protegidas') && protectedHit(url);
+      const hit = url && protectedHitRail(url, isRailOn('rutas-protegidas'));
       if (hit) { try { await driver.load(tab, 'about:blank'); } catch { /* gone */ } throw new Error(T('sys.browser.protected', { name: hit })); }
       return out;
     } catch (error) {

@@ -13,6 +13,7 @@ import { fixRoundGate } from '../src/domain/tasks/rounds.mjs';
 import { RAILS, isRailOn, railList, switchableIds, approvalWaitMinutes, taskTimeoutMinutes, parallelLimits } from '../src/domain/rules/rails.mjs';
 import { saveConfig, validateConfig } from '../src/platform/config.mjs';
 import { configFrom } from '../src/platform/config-file.mjs';
+import { Scheduler } from '../src/engine/scheduler/index.mjs';
 
 const t = tempHome();
 let proj; let internal; let outside; let oldTemp; let oldTmp;
@@ -37,9 +38,8 @@ const TABLE = [
   ['publicar', 'git push origin main', { auto: ['ask', 'allow'], preguntar: ['ask', 'ask'] }],
   ['borrar-carpetas', 'rm -rf build', { auto: ['allow', 'allow'], preguntar: ['ask', 'ask'] }],
   ['reescribir-git', 'git reset --hard HEAD~1', { auto: ['allow', 'allow'], preguntar: ['ask', 'ask'] }],
-  ['formatear-disco', 'format d:', { auto: ['deny', 'allow'], preguntar: ['ask', 'ask'] }],
+  ['formatear-disco', 'format d:', { auto: ['deny', 'ask'], preguntar: ['ask', 'ask'] }],
   ['usar-adb', 'adb devices', { auto: ['deny', 'allow'], preguntar: ['deny', 'ask'] }],
-  ['rutas-protegidas', 'ls bitwarden', { auto: ['deny', 'allow'], preguntar: ['deny', 'ask'] }],
 ];
 for (const [rail, command, per] of TABLE) {
   test(`rail ${rail}: paused lifts only its own block`, () => {
@@ -50,6 +50,37 @@ for (const [rail, command, per] of TABLE) {
     reset();
   });
 }
+
+test('rutas-protegidas paused: the owner list opens, the password vaults stay closed', () => {
+  const saved = ctx.config.protected;
+  ctx.config.protected = ['bitwarden', 'mis-secretos'];
+  try {
+    for (const mode of ['auto', 'preguntar']) {
+      reset(); assert.equal(verdict(mode, 'ls mis-secretos'), 'deny', mode + ' on');
+      pause('rutas-protegidas');
+      assert.equal(verdict(mode, 'ls mis-secretos'), mode === 'auto' ? 'allow' : 'ask', mode + ' owner entry paused');
+      assert.equal(verdict(mode, 'Get-Content C:\\Users\\x\\Documents\\claves.kdbx'), 'deny', mode + ' kdbx');
+      assert.equal(verdict(mode, 'ls bitwarden'), 'deny', mode + ' default entry');
+    }
+    const read = decide({ permission: 'auto', tool: 'Read', kind: 'read', paths: ['C:\\Users\\x\\Documents\\claves.kdbx'], internalDir: internal, cwd: proj, projectDir: proj });
+    assert.equal(read.decision, 'deny');
+  } finally { ctx.config.protected = saved; reset(); }
+});
+
+test('paused risk rails change nothing in probar, leer or total; formatear-disco never drops below asking', () => {
+  const cases = [['publicar', 'git push origin main'], ['borrar-carpetas', 'rm -rf build'], ['reescribir-git', 'git reset --hard HEAD~1'], ['formatear-disco', 'format d:']];
+  for (const [rail, cmd] of cases) {
+    for (const mode of ['probar', 'leer', 'total']) {
+      reset(); const on = sh(mode, cmd);
+      pause(rail); assert.deepEqual(sh(mode, cmd), on, rail + ' ' + mode);
+    }
+  }
+  pause('formatear-disco');
+  assert.equal(verdict('total', 'format d:'), 'ask');
+  assert.equal(verdict('auto', 'format d:'), 'ask');
+  assert.equal(verdict('preguntar', 'format d:'), 'ask');
+  reset();
+});
 
 test('publicar paused: Auto publishes, Preguntar still asks, other risks keep asking', () => {
   pause('publicar');
@@ -202,4 +233,13 @@ test('an old orb.json without rails loads with the defaults', () => {
   assert.deepEqual(c.rails, {}); assert.equal(c.budget.stopAt, 0.9); assert.equal(c.budget.weeklyStopAt, 0.85); assert.equal(c.budget.maxFixRounds, 2);
   const prev = ctx.config; ctx.config = c;
   try { assert.equal(RAILS.every((r) => isRailOn(r.id)), true); } finally { ctx.config = prev; }
+});
+
+test('tiempo-maximo paused: the live view carries no timeout instead of 0', () => {
+  const stub = { running: new Map([['t1', { agent: 'claude', account: 'a', sessionId: 's' }]]), sessions: { live: () => ({ lastAt: Date.now() }) }, board: { task: () => null, settingJson: () => null } };
+  ctx.config.timeoutMinutes = 30;
+  assert.equal(Scheduler.prototype.live.call(stub)[0].timeoutMin, 30);
+  pause('tiempo-maximo');
+  assert.equal(Scheduler.prototype.live.call(stub)[0].timeoutMin, null);
+  reset(); ctx.config.timeoutMinutes = 60;
 });

@@ -174,7 +174,7 @@ export class Scheduler {
       const now = this.sessions.live(r.sessionId); if (!now) return null;
       const t = this.board.task(id); const p = this.board.settingJson(`progress:${id}`);
       return { id, title: t?.title ?? '', project: t?.project ?? '', agent: r.agent, account: r.account, sessionId: r.sessionId, ...now, percent: p?.percent ?? null, note: p?.note ?? null,
-        quietMin: Math.floor((Date.now() - now.lastAt) / 60_000), timeoutMin: taskTimeoutMinutes() };
+        quietMin: Math.floor((Date.now() - now.lastAt) / 60_000), timeoutMin: taskTimeoutMinutes() || null };
     }).filter(Boolean);
   }
 

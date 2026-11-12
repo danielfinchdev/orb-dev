@@ -26,11 +26,11 @@ import { personalRoots } from './guard/roots.mjs';
 import { deletesProjectOrGit, insideProject, isGitRunsFile, projectRoots, resolveTarget, writesGitRunsFile, writesOutside, writesProjectFile } from './guard/project-writes.mjs';
 import { copiesClosedParent, linkIntoCore, runsSkillScript, searchesClosedParent, touchesInternal } from './guard/core-access.mjs';
 import { aliasesDrive, cleansIgnored, escalates, readsCredentialStore, risksOf, runsAdb } from './guard/risks.mjs';
-import { AGENT_CONFIG_IN, isAgentConfig, otherSecret, protectedHit } from './guard/protected-files.mjs';
+import { AGENT_CONFIG_IN, isAgentConfig, otherSecret, protectedHitRail } from './guard/protected-files.mjs';
 export { risksOf, riskOf, riskCategories, readsCredentialStore, escalates, aliasesDrive, runsAdb, pidKills } from './guard/risks.mjs';
 export { localPath, setGuardedRoots, guardedRootsNow, setAppRoots, appRootsNow, defaultPersonalRoots, setPersonalRoots, personalRootsNow, isOrbData } from './guard/roots.mjs';
 export { expandEnv, winPath, workDirs, unwrapShell, statements } from './guard/shell-text.mjs';
-export { isAgentConfig, protectedList, protectedHit, touchesProtected, isSecretFile } from './guard/protected-files.mjs';
+export { isAgentConfig, protectedList, protectedHit, protectedHitRail, touchesProtected, isSecretFile } from './guard/protected-files.mjs';
 export { writesProjectFile, projectRoots, resolveTarget, insideProject, writesOutside, isGitRunsFile } from './guard/project-writes.mjs';
 export { makesLink } from './guard/core-access.mjs';
 export { plainAction, deleteTarget, looksEnglish, describeAction } from './guard/describe.mjs';
@@ -76,7 +76,7 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
   const text = [command, ...paths, ...patterns].join(' ');
   const auto = permission === 'auto';
   // a paused rail lifts only its own block (the permission level still decides the rest).
-  const protectedNow = (t) => (isRailOn('rutas-protegidas') ? protectedHit(t) : null);
+  const protectedNow = (t) => protectedHitRail(t, isRailOn('rutas-protegidas'));
   if (linkIntoCore(command, internalDir, cwd)) return { decision: 'deny', reason: T('internalLink') };
   if (touchesInternal({ command, paths, patterns, internalDir, cwd, read: cls === 'read' })) {
     // the owner's personal credentials (keys, browsers, the agents' logins): their own reason.
@@ -104,11 +104,14 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
   // Android's adb by hand only with «Acceso total» and «Usar mi móvil Android» (android): otherwise the agent has
   // Orb's own tools (orb_android_*), which check the grant on every call.
   if (cls !== 'read' && cls !== 'orb' && isRailOn('usar-adb') && runsAdb(command) && !(permission === 'total' && android)) return { decision: 'deny', reason: T('adb') };
-  const risks = cls === 'exec' ? risksOf(command, lang).filter((r) => riskRailOn(r.category)) : [];
+  // A paused risk rail only relaxes «Auto» and «Preguntar»; «probar», «leer» and «total» keep every risk. Pausing
+  // «formatear-disco» never goes below asking, so that risk stays in the list either way.
+  const railsRelax = permission === 'auto' || permission === 'preguntar';
+  const risks = cls === 'exec' ? risksOf(command, lang).filter((r) => !railsRelax || r.category === 'diskWipe' || riskRailOn(r.category)) : [];
   if (cls === 'exec' && !risks.some((r) => r.category === 'gitRuns') && writesGitRunsFile(command, cwd)) risks.push({ category: 'gitRuns', reason: T('gitRuns') });
   const wipe = risks.find((r) => r.category === 'diskWipe');
   // wiping a disk: denied in «Auto», asked in the others (also «total»).
-  if (wipe && permission !== 'leer') return auto ? { decision: 'deny', reason: wipe.reason } : { decision: 'ask', reason: wipe.reason };
+  if (wipe && permission !== 'leer') return auto && riskRailOn('diskWipe') ? { decision: 'deny', reason: wipe.reason } : { decision: 'ask', reason: wipe.reason };
   if (permission === 'total') return { decision: 'allow', reason: T('full') };
   if (cls === 'read' || cls === 'orb') return { decision: 'allow', reason: T('readOnlyTool') };
   if (permission === 'leer') return { decision: 'deny', reason: T('readOnlyChat') };

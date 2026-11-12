@@ -63,7 +63,7 @@ export function LiveTask({ t: task, compact = false, actions = true }) {
         <span className="shrink-0 tabular-nums">{elapsed(Date.now() - task.startedAt)} · {t(task.steps === 1 ? 'comp.live.stepOne' : 'comp.live.stepOther', { n: task.steps })}</span>
         <span className="min-w-0 truncate">· {quiet ? t('comp.live.quiet', { min: task.quietMin, now }) : t('comp.live.now', { now })}</span>
       </div>
-      {!compact && task.percent == null ? <p className="text-muted-foreground text-[11px]">{t('comp.live.noPercent', { agent: AGENT[task.agent] ?? task.agent, min: task.timeoutMin })}</p> : null}
+      {!compact && task.percent == null ? <p className="text-muted-foreground text-[11px]">{t(task.timeoutMin ? 'comp.live.noPercent' : 'comp.live.noPercentNoLimit', { agent: AGENT[task.agent] ?? task.agent, min: task.timeoutMin })}</p> : null}
     </div>
   );
 }

@@ -29,6 +29,9 @@ export function protectedHit(text, list = protectedList()) {
   if (!t) return null;
   return list.find((e) => entryRe(e).test(t)) ?? null;
 }
+// Rail-aware lookup: pausing «rutas-protegidas» drops only the owner's own list; the password managers and secret
+// stores (DEFAULT_PROTECTED) stay closed so a paused rail never opens a vault.
+export const protectedHitRail = (text, railOn) => (railOn ? protectedHit(text) : protectedHit(text, DEFAULT_PROTECTED));
 export const touchesProtected = (text, list) => protectedHit(text, list) !== null;
 // Always blocked: another project's secrets (.env, keys, certificates): readable inside the current project (they
 // are needed to program it), never elsewhere. .env.example and the like are not secrets.
