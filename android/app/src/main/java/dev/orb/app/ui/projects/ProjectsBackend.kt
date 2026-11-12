@@ -60,7 +60,7 @@ interface ProjectsBackend {
     suspend fun pr(name: String, number: Int): Result<PrDetail>
 
     /** Merges as the PC's own GitHub account; [confirmed] exists only after the person accepted the dialog for this pull request. */
-    suspend fun mergePr(name: String, number: Int, method: String, confirmed: Confirmed): Result<Unit>
+    suspend fun mergePr(name: String, number: Int, method: String, headRefOid: String, confirmed: Confirmed): Result<Unit>
 }
 
 class RuntimeProjectsBackend(private val runtime: LinkRuntime, private val chats: ChatsBackend? = null) : ProjectsBackend {
@@ -121,6 +121,6 @@ class RuntimeProjectsBackend(private val runtime: LinkRuntime, private val chats
     override suspend fun pr(name: String, number: Int): Result<PrDetail> =
         api.projectsPr(name, number).mapCatching { PrParser.detail(it) ?: throw LinkException(LinkError.BadAnswer) }
 
-    override suspend fun mergePr(name: String, number: Int, method: String, confirmed: Confirmed): Result<Unit> =
-        api.projectsMergePr(name, number, method, confirmed).unit()
+    override suspend fun mergePr(name: String, number: Int, method: String, headRefOid: String, confirmed: Confirmed): Result<Unit> =
+        api.projectsMergePr(name, number, method, headRefOid, confirmed).unit()
 }

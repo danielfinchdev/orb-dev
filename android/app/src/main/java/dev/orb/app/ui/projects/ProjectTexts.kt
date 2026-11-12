@@ -88,6 +88,7 @@ object ProjectTexts {
     const val PR_MERGE_NOTE = "El PC la fusionará con su cuenta de GitHub. Desde el móvil no se puede deshacer."
     const val PR_MERGE_METHOD = "Método"
     const val PR_MERGE_CHECKING = "Puede que la PR ya se haya fusionado; comprobando…"
+    const val PR_BRANCH_CHANGED = "La rama del pull request cambió desde que la viste. Se ha vuelto a cargar: revisa los cambios nuevos y vuelve a fusionar si todo sigue bien."
     const val PR_MERGED_DONE = "Pull request fusionada"
     const val PR_STATE = "Estado"
     const val PR_MERGE_STATE = "Fusión"

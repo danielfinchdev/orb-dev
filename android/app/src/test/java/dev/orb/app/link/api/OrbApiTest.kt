@@ -18,6 +18,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 
+private const val OID = "0123456789abcdef0123456789abcdef01234567"
+
 @OptIn(UserConfirmation::class)
 class OrbApiTest {
     private class Recorder(val listed: Set<String> = emptySet(), val result: JsonElement = JsonObject(emptyMap())) : PcCaller {
@@ -106,13 +108,18 @@ class OrbApiTest {
     fun `merging a pr needs its confirmation and sends name number and method`() = runBlocking {
         val rec = Recorder(listed = setOf("projects.mergePr"))
         val api = OrbApi(rec)
-        api.projectsMergePr("orb", 12, "squash", Confirmed(ConfirmAction.MergePr, "orb#12"))
+        api.projectsMergePr("orb", 12, "squash", OID, Confirmed(ConfirmAction.MergePr, "orb#12"))
         val p = rec.calls.single().second
         assertEquals("orb", p["name"]!!.jsonPrimitive.content)
         assertEquals("12", p["number"]!!.jsonPrimitive.content)
         assertEquals("squash", p["method"]!!.jsonPrimitive.content)
+        assertEquals(OID, p["headRefOid"]!!.jsonPrimitive.content)
         try {
-            api.projectsMergePr("orb", 13, null, Confirmed(ConfirmAction.MergePr, "orb#12"))
+            api.projectsMergePr("orb", 12, "merge", "abc", Confirmed(ConfirmAction.MergePr, "orb#12"))
+            fail()
+        } catch (e: IllegalArgumentException) { /* a short oid is refused before sending */ }
+        try {
+            api.projectsMergePr("orb", 13, null, OID, Confirmed(ConfirmAction.MergePr, "orb#12"))
             fail()
         } catch (e: IllegalArgumentException) { /* expected */ }
     }

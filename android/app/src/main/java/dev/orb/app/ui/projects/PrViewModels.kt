@@ -92,7 +92,7 @@ class PrDetailViewModel(private val backend: ProjectsBackend, val name: String, 
             u.copy(
                 pr = pr, loading = false, error = keepError ?: r.exceptionOrNull()?.let(ProjectTexts::pcError),
                 mergeUnsure = unsure,
-                canMerge = pr != null && pr.open && !pr.draft && !u.mergeSent && !unsure && backend.available(ApiMethods.PROJECTS_MERGE_PR),
+                canMerge = pr != null && pr.open && !pr.draft && !u.mergeSent && !unsure && pr.hasMergeableOid && backend.available(ApiMethods.PROJECTS_MERGE_PR),
             )
         }
     }
@@ -102,6 +102,7 @@ class PrDetailViewModel(private val backend: ProjectsBackend, val name: String, 
         val pr = _state.value.pr ?: return
         if (merging || !_state.value.canMerge || !pr.open || pr.draft) return
         if (method !in MergeMethods) return
+        val oid = pr.headRefOid?.takeIf { PrParser.isFullOid(it) } ?: return
         if (confirmed.action != ConfirmAction.MergePr || confirmed.target != "$name#$number") return
         if (backend.connection.value !is ConnectionState.Online) {
             _messages.trySend(ProjectTexts.ACTION_OFFLINE)
@@ -110,7 +111,7 @@ class PrDetailViewModel(private val backend: ProjectsBackend, val name: String, 
         merging = true
         _state.update { it.copy(merging = true, error = null) }
         viewModelScope.launch {
-            val r = backend.mergePr(name, number, method, confirmed)
+            val r = backend.mergePr(name, number, method, oid, confirmed)
             merging = false
             if (r.isSuccess) {
                 _state.update { it.copy(merging = false, mergeSent = true, canMerge = false) }
@@ -125,7 +126,9 @@ class PrDetailViewModel(private val backend: ProjectsBackend, val name: String, 
                     load(keepError = ProjectTexts.PR_MERGE_CHECKING)
                 } else {
                     _state.update { it.copy(merging = false) }
-                    load(keepError = ProjectTexts.pcError(e))
+                    // The branch moved after the person looked: show what is new instead of the PC's raw sentence, and merge nothing.
+                    val moved = ProjectTexts.pcError(e).contains("rama del pull request cambió", ignoreCase = true)
+                    load(keepError = if (moved) ProjectTexts.PR_BRANCH_CHANGED else ProjectTexts.pcError(e))
                 }
             }
         }

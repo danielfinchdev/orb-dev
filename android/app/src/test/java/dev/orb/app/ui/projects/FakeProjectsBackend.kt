@@ -55,10 +55,12 @@ class FakeProjectsBackend(initial: List<ProjectItem> = emptyList(), finished: Li
     val prResults = HashMap<Int, Result<PrDetail>>()
 
     /** What the PC answers to a merge; on success the pull request reads as merged afterwards, like GitHub does. */
+    val mergeOids = mutableListOf<String>()
     var mergeResult: Result<Unit> = Result.success(Unit)
 
-    override suspend fun mergePr(name: String, number: Int, method: String, confirmed: Confirmed): Result<Unit> {
+    override suspend fun mergePr(name: String, number: Int, method: String, headRefOid: String, confirmed: Confirmed): Result<Unit> {
         calls += "merge $name#$number $method"
+        mergeOids += headRefOid
         gate?.await()
         if (mergeResult.isSuccess) prResults[number]?.getOrNull()?.let { prResults[number] = Result.success(it.copy(state = "MERGED")) }
         return mergeResult
@@ -71,6 +73,8 @@ class FakeProjectsBackend(initial: List<ProjectItem> = emptyList(), finished: Li
     }
 }
 
-fun prDetail(number: Int, state: String = "OPEN", draft: Boolean = false, checks: List<PrCheck> = emptyList()) = PrDetail(
-    number, "Arreglar el pie", "Cuerpo", state, "dev", "main", draft, "ana", "MERGEABLE", "CLEAN", null, 10, 2, 3, checks,
+fun prDetail(number: Int, state: String = "OPEN", draft: Boolean = false, checks: List<PrCheck> = emptyList(), oid: String? = TEST_OID) = PrDetail(
+    number, "Arreglar el pie", "Cuerpo", state, "dev", "main", draft, "ana", "MERGEABLE", "CLEAN", null, 10, 2, 3, checks, oid,
 )
+
+const val TEST_OID = "0123456789abcdef0123456789abcdef01234567"

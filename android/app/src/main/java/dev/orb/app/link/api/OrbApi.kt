@@ -359,13 +359,15 @@ class OrbApi(private val pc: PcCaller, private val newId: () -> String = { UUID.
 
     suspend fun sessionsRestore(id: String) = run(ApiMethods.SESSIONS_RESTORE, idOf(id))
 
-    /** «Fusionar PR»: [method] is the merge method (`merge`, `squash`, `rebase`) when the person picked one. */
-    suspend fun projectsMergePr(name: String, number: Int, method: String? = null, confirmed: Confirmed): Result<JsonElement> {
+    /** «Fusionar PR»: [method] is the merge method (`merge`, `squash`, `rebase`) when the person picked one; [headRefOid] is the full commit the PC showed. */
+    suspend fun projectsMergePr(name: String, number: Int, method: String? = null, headRefOid: String, confirmed: Confirmed): Result<JsonElement> {
         require(confirmed.action == ConfirmAction.MergePr && confirmed.target == "$name#$number") { "the confirmation is for another action" }
+        require(Regex("[0-9a-fA-F]{40}").matches(headRefOid)) { "the merge needs the full head commit the PC showed" }
         val params = buildJsonObject {
             put("name", name)
             put("number", number)
             if (method != null) put("method", method)
+            put("headRefOid", headRefOid)
         }
         return run(ApiMethods.PROJECTS_MERGE_PR, params)
     }

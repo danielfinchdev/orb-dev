@@ -89,6 +89,7 @@ data class PrRow(
     val updatedAt: String?,
     val reviewDecision: String?,
     val mergeable: String?,
+    val headRefOid: String? = null,
 )
 
 @Immutable
@@ -117,17 +118,24 @@ data class PrDetail(
     val deletions: Int,
     val changedFiles: Int,
     val checks: List<PrCheck>,
+    /** The exact commit the PC showed; a merge is only sent for it, so a branch that moved meanwhile is never merged unseen. */
+    val headRefOid: String? = null,
 ) {
     val open get() = state.equals("OPEN", ignoreCase = true)
     val merged get() = state.equals("MERGED", ignoreCase = true)
+    val hasMergeableOid get() = PrParser.isFullOid(headRefOid)
 }
 
 object PrParser {
+    private val FULL_OID = Regex("[0-9a-fA-F]{40}")
+
+    fun isFullOid(oid: String?) = oid != null && FULL_OID.matches(oid)
+
     fun list(el: JsonElement?): List<PrRow> = (el as? JsonArray).orEmpty().mapNotNull { x ->
         val o = x as? JsonObject ?: return@mapNotNull null
         PrRow(
             o.int("number") ?: return@mapNotNull null, o.str("title").orEmpty(), o.str("headRefName"), o.str("baseRefName"),
-            o.bool("isDraft"), o.str("author"), o.str("updatedAt"), o.str("reviewDecision"), o.str("mergeable"),
+            o.bool("isDraft"), o.str("author"), o.str("updatedAt"), o.str("reviewDecision"), o.str("mergeable"), o.str("headRefOid"),
         )
     }
 
@@ -142,7 +150,7 @@ object PrParser {
             state = o.str("state").orEmpty(), head = o.str("headRefName"), base = o.str("baseRefName"), draft = o.bool("isDraft"),
             author = o.str("author"), mergeable = o.str("mergeable"), mergeStateStatus = o.str("mergeStateStatus"),
             reviewDecision = o.str("reviewDecision"), additions = o.int("additions") ?: 0, deletions = o.int("deletions") ?: 0,
-            changedFiles = o.int("changedFiles") ?: 0, checks = checks,
+            changedFiles = o.int("changedFiles") ?: 0, checks = checks, headRefOid = o.str("headRefOid"),
         )
     }
 }

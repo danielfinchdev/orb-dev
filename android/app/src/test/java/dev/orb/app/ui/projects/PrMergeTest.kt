@@ -106,6 +106,41 @@ class PrMergeViewModelTest {
         }
     }
 
+    @Test fun theMergeSendsTheHeadCommitTheScreenShowed() = runTest(dispatcher) {
+        val b = backend()
+        val vm = vm(b)
+        vm.merge("merge", token("app#4"))
+        advanceUntilIdle()
+        assertEquals(listOf(TEST_OID), b.mergeOids)
+    }
+
+    @Test fun withoutAFullHeadCommitThereIsNoMerge() = runTest(dispatcher) {
+        for (oid in listOf(null, "", "abc123", TEST_OID.dropLast(1), TEST_OID + "0", "z".repeat(40))) {
+            val b = backend(prDetail(4, oid = oid))
+            val vm = vm(b)
+            assertFalse(vm.state.value.canMerge)
+            vm.merge("merge", token("app#4"))
+            advanceUntilIdle()
+            assertTrue(b.calls.none { it.startsWith("merge") })
+        }
+    }
+
+    @Test fun aMovedBranchReloadsThePullRequestAndSaysSoWithoutMerging() = runTest(dispatcher) {
+        val b = backend()
+        val vm = vm(b)
+        val newer = "f".repeat(40)
+        b.mergeResult = Result.failure(LinkException(LinkError.Refused(409, "la rama del pull request cambió desde que lo viste; vuelve a abrirlo y revisa los cambios nuevos", null)))
+        b.prResults[4] = Result.success(prDetail(4, oid = newer))
+        vm.merge("merge", token("app#4"))
+        advanceUntilIdle()
+        assertEquals(ProjectTexts.PR_BRANCH_CHANGED, vm.state.value.error)
+        assertEquals("OPEN", vm.state.value.pr?.state)
+        assertEquals(newer, vm.state.value.pr?.headRefOid)
+        assertEquals(listOf("pr app#4", "merge app#4 merge", "pr app#4"), b.calls)
+        // The person may merge again, now with the new commit.
+        assertTrue(vm.state.value.canMerge)
+    }
+
     @Test fun aPcWithoutMergeHidesIt() = runTest(dispatcher) {
         val b = backend()
         b.unavailable = setOf(ApiMethods.PROJECTS_MERGE_PR.name)
