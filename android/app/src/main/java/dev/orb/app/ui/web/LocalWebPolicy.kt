@@ -1,7 +1,13 @@
 package dev.orb.app.ui.web
 
 import android.os.Build
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
+import androidx.webkit.ServiceWorkerClientCompat
+import androidx.webkit.ServiceWorkerControllerCompat
+import androidx.webkit.WebViewFeature
+import java.io.ByteArrayInputStream
 import java.net.URI
 
 /**
@@ -30,6 +36,17 @@ object LocalWebPolicy {
     }
 
     fun pageUrl(page: String, dark: Boolean): String = "https://$HOST${ALLOWED_PREFIX}$page?theme=${if (dark) "dark" else "light"}"
+
+    /** No page here registers a service worker; if one ever runs, every request it makes is refused. */
+    fun blockServiceWorkers() {
+        try {
+            if (!WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_BASIC_USAGE) || !WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_SHOULD_INTERCEPT_REQUEST)) return
+            ServiceWorkerControllerCompat.getInstance().setServiceWorkerClient(object : ServiceWorkerClientCompat() {
+                override fun shouldInterceptRequest(request: WebResourceRequest): WebResourceResponse =
+                    WebResourceResponse("text/plain", "utf-8", 403, "Blocked", emptyMap(), ByteArrayInputStream(ByteArray(0)))
+            })
+        } catch (_: Exception) { /* a hardening extra: pages work without it */ }
+    }
 
     /** The page's settings: no file or content access, no network cache, no popups, no downloads, no safe-browsing lookups. */
     @Suppress("SetJavaScriptEnabled")

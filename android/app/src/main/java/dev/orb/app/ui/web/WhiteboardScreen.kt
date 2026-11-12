@@ -38,6 +38,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.shell.ScreenBar
 import dev.orb.app.ui.theme.OrbTheme
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -51,25 +53,38 @@ fun WhiteboardScreen(vm: WhiteboardViewModel, onBack: () -> Unit, modifier: Modi
     val snackbar = remember { SnackbarHostState() }
     val controller = remember { WebController() }
     val onBackNow by rememberUpdatedState(onBack)
+    // The page, the bar and the view model can all ask to leave: the screen is popped once.
+    val leaveOnce = remember { OnceAction { onBackNow() } }
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
-    LaunchedEffect(vm) { vm.leave.collect { onBackNow() } }
+    LaunchedEffect(vm) { vm.leave.collect { leaveOnce.run() } }
+    LaunchedEffect(vm) {
+        vm.pageCommands.collect { c ->
+            when (c) {
+                PageCommand.Flush -> controller.send(buildJsonObject { put("type", "flush") }.toString())
+                PageCommand.Unsent -> controller.send(buildJsonObject { put("type", "unsent") }.toString())
+                is PageCommand.Saved -> controller.send(buildJsonObject { put("type", "saved"); put("files", JsonArray(c.files.map(::JsonPrimitive))) }.toString())
+            }
+        }
+    }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { vm.flushNow() }
 
     val phase = state.phase
     val ready = phase as? WhiteboardPhase.Ready
-    val scene by rememberUpdatedState(ready?.scene)
-    // Whatever the page runs, only these three messages reach the app.
+    // Whatever the page runs, only these messages reach the app. A page that asks again (it was recreated) gets the latest drawing.
     val bridge = remember(vm) {
         WhiteboardBridge { m ->
             when (m) {
-                WhiteboardMessage.Load -> scene?.let { controller.send(buildJsonObject { put("type", "scene"); put("scene", it) }.toString()) }
+                WhiteboardMessage.Load -> vm.sceneForPage()?.let { controller.send(buildJsonObject { put("type", "scene"); put("scene", it) }.toString()) }
                 is WhiteboardMessage.Save -> vm.onSave(m)
                 WhiteboardMessage.Close -> vm.requestLeave()
+                WhiteboardMessage.Flushed -> vm.onPageFlushed()
+                WhiteboardMessage.Rejected -> vm.onRejected()
             }
         }
     }
     // The back arrow asks the page to save everything first; without a page it just leaves.
-    val back: () -> Unit = { if (ready == null || !controller.back()) onBack() }
+    // If the page has no orbBack, or does not answer, the arrow still leaves.
+    val back: () -> Unit = { if (ready == null) leaveOnce.run() else controller.back { handled -> if (!handled) leaveOnce.run() } }
 
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
@@ -93,7 +108,7 @@ fun WhiteboardScreen(vm: WhiteboardViewModel, onBack: () -> Unit, modifier: Modi
                     androidx.compose.runtime.key(phase.project) {
                         LocalWebView(
                             "whiteboard/index.html", dark = background.luminance() < 0.5f, background = background,
-                            bridge = bridge, onBack = onBack, controller = controller, modifier = Modifier.fillMaxWidth().weight(1f),
+                            bridge = bridge, onBack = leaveOnce::run, controller = controller, onGone = vm::onPageGone, modifier = Modifier.fillMaxWidth().weight(1f),
                         )
                     }
                 }

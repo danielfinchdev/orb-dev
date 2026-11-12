@@ -12,18 +12,34 @@ import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.webkit.WebViewAssetLoader
 import java.io.ByteArrayInputStream
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** A refusal with no body: what a page gets for any URL the policy does not allow. */
 private fun blocked() = WebResourceResponse("text/plain", "utf-8", 403, "Blocked", emptyMap(), ByteArrayInputStream(ByteArray(0)))
 
-internal class LocalWebClient(context: Context) : WebViewClient() {
+internal class LocalWebClient(context: Context, private val onGone: () -> Unit = {}) : WebViewClient() {
     private val loader = WebViewAssetLoader.Builder()
         .setDomain(LocalWebPolicy.HOST)
         .addPathHandler(LocalWebPolicy.ASSETS_PATH, WebViewAssetLoader.AssetsPathHandler(context))
@@ -42,25 +58,37 @@ internal class LocalWebClient(context: Context) : WebViewClient() {
         if (!LocalWebPolicy.isAllowed(url)) view.stopLoading()
     }
 
-    // A crashed renderer would take the app with it; the page is just dropped.
-    override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean = true
+    // A crashed renderer would take the app with it: the dead view is removed and destroyed, and the screen offers to reload.
+    override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+        (view.parent as? ViewGroup)?.removeView(view)
+        view.destroy()
+        onGone()
+        return true
+    }
 }
 
 /** Lets the screen that hosts a page talk to it: run its `window.orbBack()` or hand it something to receive. */
 class WebController {
     internal var web: WebView? = null
 
-    /** Calls `window.orbBack()`; false when there is no page yet (the caller leaves by itself). */
-    fun back(): Boolean {
-        val w = web ?: return false
-        w.evaluateJavascript("(function(){return !!(window.orbBack && window.orbBack());})()", null)
-        return true
+    /** Calls `window.orbBack()` and reports whether the page took it; with no page, or none that answers, it is false (the caller leaves by itself). */
+    fun back(onResult: (handled: Boolean) -> Unit) {
+        val w = web ?: return onResult(false)
+        w.evaluateJavascript(BACK_SCRIPT) { onResult(it == "true") }
     }
 
     /** Calls `window.orbReceive(message)`; [json] is JSON text, which is also a valid JavaScript expression. */
     fun send(json: String) {
         web?.evaluateJavascript("window.orbReceive && window.orbReceive($json)", null)
     }
+}
+
+private const val BACK_SCRIPT = "(function(){return !!(window.orbBack && window.orbBack());})()"
+
+/** Runs [action] the first time only: a page can ask to close twice (its own button and the back arrow) and the screen must pop once. */
+class OnceAction(private val action: () -> Unit) {
+    private val done = AtomicBoolean(false)
+    fun run() { if (done.compareAndSet(false, true)) action() }
 }
 
 /**
@@ -72,16 +100,23 @@ class WebController {
  */
 @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
 @Composable
-fun LocalWebView(page: String, dark: Boolean, background: Color, bridge: Any?, onBack: () -> Unit, modifier: Modifier = Modifier, controller: WebController? = null) {
+fun LocalWebView(page: String, dark: Boolean, background: Color, bridge: Any?, onBack: () -> Unit, modifier: Modifier = Modifier, controller: WebController? = null, onGone: () -> Unit = {}) {
     val holder = remember { arrayOfNulls<WebView>(1) }
+    var gone by remember { mutableStateOf(false) }
+    var generation by remember { mutableIntStateOf(0) }
     BackHandler {
         val web = holder[0]
-        if (web == null) onBack() else web.evaluateJavascript("(function(){return !!(window.orbBack && window.orbBack());})()") { handled ->
-            if (handled != "true") onBack()
-        }
+        if (web == null) onBack() else web.evaluateJavascript(BACK_SCRIPT) { handled -> if (handled != "true") onBack() }
     }
     DisposableEffect(Unit) { onDispose { controller?.web = null; holder[0]?.let { it.removeJavascriptInterface(LocalWebPolicy.BRIDGE_NAME); it.destroy() }; holder[0] = null } }
-    AndroidView(
+    if (gone) {
+        Column(modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(WhiteboardTexts.GONE_TITLE, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+            TextButton(onClick = { gone = false; generation++ }, Modifier.padding(top = 8.dp)) { Text(WhiteboardTexts.RELOAD) }
+        }
+        return
+    }
+    key(generation) { AndroidView(
         modifier = modifier,
         factory = { ctx ->
             WebView(ctx).also { web ->
@@ -94,9 +129,15 @@ fun LocalWebView(page: String, dark: Boolean, background: Color, bridge: Any?, o
                 web.setDownloadListener { _, _, _, _, _ -> }
                 WebView.setWebContentsDebuggingEnabled(false)
                 if (bridge != null) web.addJavascriptInterface(bridge, LocalWebPolicy.BRIDGE_NAME)
-                web.webViewClient = LocalWebClient(ctx)
+                web.webViewClient = LocalWebClient(ctx) {
+                    controller?.web = null
+                    holder[0] = null
+                    gone = true
+                    onGone()
+                }
+                LocalWebPolicy.blockServiceWorkers()
                 web.loadUrl(LocalWebPolicy.pageUrl(page, dark))
             }
         },
-    )
+    ) }
 }

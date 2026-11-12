@@ -16,3 +16,6 @@
 
 # The web pages call these two methods by name through the JavaScript bridge.
 -keepclassmembers class dev.orb.app.ui.web.GamesBridge { @android.webkit.JavascriptInterface <methods>; }
+
+# Same for the Pizarra page's bridge: its single method is called by name.
+-keepclassmembers class dev.orb.app.ui.web.WhiteboardBridge { @android.webkit.JavascriptInterface <methods>; }
