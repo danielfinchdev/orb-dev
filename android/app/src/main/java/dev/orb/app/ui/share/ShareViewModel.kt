@@ -83,17 +83,21 @@ class ShareViewModel(
     private val onSent: (ShareDest) -> Unit = {},
 ) : ViewModel() {
     private val _state = MutableStateFlow(
-        ShareState(text = request.text.orEmpty(), textCut = request.textCut, skipped = request.skipped, empty = request.isEmpty),
+        ShareState(text = request.text?.takeIf { it.isNotBlank() } ?: AttachTexts.SHARE_DEFAULT_TEXT.takeIf { request.files.isNotEmpty() }.orEmpty(), textCut = request.textCut, skipped = request.skipped, empty = request.isEmpty),
     )
     val state: StateFlow<ShareState> = _state
 
     init {
         viewModelScope.launch(ioDispatcher) {
-            // The copies in the cache go into the same pipeline as a picked file, and are deleted once read.
+            // The copies in the cache go into the same pipeline as a picked file, and are deleted once read. Each stays
+            // in memory until it is uploaded, so the next one waits when that would pass one file's worth at once.
+            var inMemory = 0L
             for (f in request.files) {
+                val size = f.file.length()
+                if (inMemory + size > MAX_IN_MEMORY) { attach.awaitIdle(); inMemory = 0 }
                 val bytes = try { f.file.readBytes() } catch (_: Exception) { null }
                 f.file.delete()
-                if (bytes != null) attach.addBytes(f.name, f.mime, bytes)
+                if (bytes != null) { inMemory += bytes.size; attach.addBytes(f.name, f.mime, bytes) }
             }
         }
         viewModelScope.launch { backend.recents().collect { rows -> _state.value = _state.value.copy(recents = rows) } }
@@ -106,12 +110,14 @@ class ShareViewModel(
     fun send() {
         val s = _state.value
         if (s.sending) return
-        if (s.text.isBlank()) return say(AttachTexts.SHARE_NEEDS_TEXT)
+        // The person may have cleared the suggested text; a message with only a file still needs some words.
+        val text = s.text.trim().ifEmpty { AttachTexts.SHARE_DEFAULT_TEXT.takeIf { attach.items.value.isNotEmpty() } }
+            ?: return say(AttachTexts.SHARE_NEEDS_TEXT)
         if (attach.items.value.any { it.state != dev.orb.app.attach.AttachState.Ready }) return say(AttachTexts.WAIT_UPLOADS)
         val images = attach.remoteNames()
         _state.value = s.copy(sending = true, message = null)
         viewModelScope.launch {
-            backend.send(s.dest, s.text.trim(), images).fold(
+            backend.send(s.dest, text, images).fold(
                 onSuccess = { attach.discard(); onSent(s.dest) },
                 onFailure = { _state.value = _state.value.copy(sending = false, message = AttachTexts.SHARE_FAILED) },
             )
@@ -122,6 +128,11 @@ class ShareViewModel(
     fun discard() {
         attach.discard()
         request.deleteFiles()
+    }
+
+    private companion object {
+        /** The most that the copies of a share hold in memory at once. */
+        const val MAX_IN_MEMORY = 25L * 1024 * 1024
     }
 
     private fun say(text: String) { _state.value = _state.value.copy(message = text) }

@@ -11,6 +11,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
@@ -61,6 +62,11 @@ class AttachController(
 
     /** Something is still being prepared or uploaded, so sending now would leave it behind. */
     val busy get() = _items.value.any { it.state == AttachState.Preparing || it.state == AttachState.Uploading }
+
+    /** Suspends until nothing is being prepared or uploaded any more (their bytes are released then). */
+    suspend fun awaitIdle() {
+        _items.first { list -> list.none { it.state == AttachState.Preparing || it.state == AttachState.Uploading } }
+    }
 
     fun addUris(uris: List<Uri>) {
         _notice.value = null

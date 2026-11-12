@@ -12,7 +12,6 @@ object OfflineTexts {
     const val NO_PC_TITLE = "No llego a tu PC"
     const val NO_PC_BODY = "Cuando vuelva, tus mensajes en espera saldrán solos."
     const val NOTHING_SAVED = "Todavía no hay nada guardado en el móvil. Se verá en cuanto el PC responda."
-    const val READ_SAVED = "Leer lo guardado"
 
     /** «hace un momento», «hace 5 min», «hace 3 h», «hace 2 días». */
     fun ago(at: Long, now: Long): String {

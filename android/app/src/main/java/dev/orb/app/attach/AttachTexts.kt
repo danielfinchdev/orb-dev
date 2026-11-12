@@ -38,5 +38,6 @@ object AttachTexts {
     const val SHARE_CUT = "El texto era muy largo y se ha recortado."
     const val SHARE_NEEDS_TEXT = "Escribe un mensaje para enviarlo."
     const val SHARE_FAILED = "No se pudo enviar"
-    const val SHARE_NO_TARGET = "Elige a dónde enviarlo."
+    /** Pre-filled when only a picture or file is shared: the PC does not take an empty message. */
+    const val SHARE_DEFAULT_TEXT = "Adjunto compartido desde el móvil"
 }
