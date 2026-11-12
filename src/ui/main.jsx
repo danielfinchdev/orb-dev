@@ -38,7 +38,8 @@ import { ago } from '@/lib/utils.js';
 import { ErrorBoundary } from '@/components/error-boundary.jsx';
 import { lazyScreen } from '@/lib/lazy.js';
 import { AGENT } from '@/lib/labels.js';
-import { WindowControls } from '@/components/window-controls.jsx';
+import { WindowControls, WindowControlsSlot } from '@/components/window-controls.jsx';
+import { FieldError } from '@/components/ui/primitives.jsx';
 import { useT, t as tNow } from '@/lib/i18n.js';
 import { MasterCreate, MasterLocked } from '@/views/master.jsx';
 import { ChatView } from '@/views/chat.jsx';
@@ -197,9 +198,10 @@ function Shell() {
       {drawer ? <div className="fixed inset-0 z-50 flex md:hidden" onClick={() => setDrawer(false)}><div className="animate-in slide-in-from-left flex h-full shadow-2xl" onClick={(e) => { if (e.target.closest('button')) setTimeout(() => setDrawer(false), 50); }}><Sidebar mood={mood} /></div><div className="flex-1 bg-black/40" /></div> : null}
       <main className="theme-scene flex min-w-0 flex-1 flex-col">
         <Scene />
-        <div className="topbar theme-band app-titlebar wco-pad bg-sidebar flex h-14 shrink-0 items-center gap-2 border-b px-3 md:hidden">
+        <div className="relative topbar theme-band app-titlebar wco-pad bg-sidebar flex h-14 shrink-0 items-center gap-2 border-b px-3 md:hidden">
           <button className="hover:bg-accent grid size-9 cursor-pointer place-items-center rounded-lg" onClick={() => setDrawer(true)} aria-label={t('app.menu')}><Menu className="size-5" /></button>
           <Robot size={26} mood={mood} /><span className="min-w-0 flex-1 truncate text-[15px] font-medium">{app.config.assistantName}</span>
+          <WindowControlsSlot />
         </div>
         <ErrorBoundary key={routeKey(route)} onHome={resetRoute}>
           <Suspense fallback={<Loading />}><View key={routeKey(route)} route={route} /></Suspense>
@@ -584,9 +586,9 @@ function PairPassword({ name, fp = null, confirmFp = false, busy, error, onSubmi
       ) : null}
       <p className="text-muted-foreground text-center text-sm">{t('app.linkPassBody')}</p>
       <Input type="password" name={field} autoComplete="off" autoFocus={!confirmFp} disabled={!sure} aria-label={t('app.linkPassLabel')} placeholder={t('app.linkPassLabel')} value={password} onChange={(e) => setPassword(e.target.value)} enterKeyHint="go" data-testid="pair-password-input" />
+      <FieldError className="text-center text-sm">{error}</FieldError>
       <Button type="submit" size="lg" disabled={busy || !password || !sure}>{busy ? <Spinner /> : <KeyRound />}{t('app.linkPassGo')}</Button>
       {onBack ? <Button type="button" variant="ghost" size="sm" onClick={onBack}><ArrowLeft />{t('app.linkBack')}</Button> : null}
-      {error ? <p className="text-destructive text-center text-sm" role="alert">{error}</p> : null}
     </form>
   );
 }

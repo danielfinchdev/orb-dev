@@ -3,9 +3,9 @@ import { useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/overlay.jsx';
 import { Button } from '@/components/ui/button.jsx';
+import { FieldError } from '@/components/ui/primitives.jsx';
 import { WindowBar } from '@/components/window-bar.jsx';
 import { useStore, setState } from '@/lib/store.js';
-import { notifyError } from '@/lib/notify.js';
 import { errorText } from '@/lib/utils.js';
 import { t } from '@/lib/i18n.js';
 
@@ -29,24 +29,27 @@ export const confirm = (title, description, { ok = t('comp.dialogs.ok'), cancel 
 // With hints, each answer is a full-width button with its one line under it (the first one is the default).
 // cancel: false when one of the answers already is «leave it as it is».
 export const choose = (title, description, options, { testid, cancel = true } = {}) => open({ kind: 'choice', title, description, options, testid, cancel });
-// body: (values, set) => JSX; onOk(values) may throw (shown as a toast, the dialog stays open) or return the result.
+// body: (values, set) => JSX; onOk(values) may throw (shown under the fields, the dialog stays open) or return the result.
 export const form = (title, { description, initial = {}, body, ok = t('comp.dialogs.ok'), onOk, wide = false }) => open({ kind: 'form', title, description, initial, body, ok, onOk, wide });
 
 function FormDialog({ d }) {
   const [values, setValues] = useState(d.initial);
   const [busy, setBusy] = useState(false);
-  const set = (patch) => setValues((v) => ({ ...v, ...patch }));
+  // Why onOk refused, shown under the fields; editing anything clears it.
+  const [error, setError] = useState(null);
+  const set = (patch) => { setError(null); setValues((v) => ({ ...v, ...patch })); };
   const submit = async (e) => {
     e?.preventDefault();
+    setError(null);
     setBusy(true);
     try { const r = d.onOk ? await d.onOk(values) : values; if (r !== false) close(d.id, r ?? true); }
-    catch (error) { notifyError(error); }
+    catch (err) { setError(errorText(err)); }
     finally { setBusy(false); }
   };
   return (
     <form onSubmit={submit} className="grid gap-4">
       <DialogHeader><DialogTitle>{d.title}</DialogTitle>{d.description ? <DialogDescription>{d.description}</DialogDescription> : null}</DialogHeader>
-      <div className="grid gap-4">{d.body(values, set)}</div>
+      <div className="grid gap-4">{d.body(values, set)}<FieldError>{error}</FieldError></div>
       <DialogFooter><Button type="button" variant="outline" onClick={() => close(d.id, null)}>{t('comp.dialogs.cancel')}</Button><Button type="submit" disabled={busy} aria-busy={busy}>{busy ? <LoaderCircle className="animate-spin" /> : null}{d.ok}</Button></DialogFooter>
     </form>
   );

@@ -36,7 +36,12 @@ export function Textarea({ className, ...props }) {
   return <textarea data-slot="textarea" className={cn('placeholder:text-muted-foreground dark:bg-input/30 border-input flex field-sizing-content min-h-16 w-full rounded-lg border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:ring-[3px] disabled:opacity-50', className)} {...props} />;
 }
 export function Label({ className, ...props }) { return <label data-slot="label" className={cn('flex items-center gap-2 text-[13px] leading-none font-medium select-none', className)} {...props} />; }
-export function Field({ label, hint, children, className }) {
+// The reason a field was refused, right under it (never in a toast away from the field). role=alert so it is announced.
+export function FieldError({ id, className, children }) {
+  if (!children) return null;
+  return <p id={id} role="alert" className={cn('text-destructive text-xs leading-snug', className)}>{children}</p>;
+}
+export function Field({ label, hint, error, children, className }) {
   // min-w-0: a field in a grid or flex row may shrink below its control's one-line text (which then cuts) instead of widening the row.
   // content-start: fields side by side keep their label and control at the same height even when only one has a hint.
   const uid = useId();
@@ -44,8 +49,10 @@ export function Field({ label, hint, children, className }) {
   const only = Children.count(children) === 1 && isValidElement(children) && children.type !== Fragment ? children : null;
   const controlId = only ? (only.props.id ?? `${uid}-c`) : undefined;
   const hintId = hint ? `${uid}-h` : undefined;
-  const control = only ? cloneElement(only, { id: controlId, ...(hintId ? { 'aria-describedby': [only.props['aria-describedby'], hintId].filter(Boolean).join(' ') } : null) }) : children;
-  return <div className={cn('grid min-w-0 content-start gap-1.5', className)}><Label htmlFor={controlId}>{label}</Label>{control}{hint ? <p id={hintId} className="text-muted-foreground text-xs leading-snug">{hint}</p> : null}</div>;
+  const errorId = error ? `${uid}-e` : undefined;
+  const describedBy = [only?.props['aria-describedby'], hintId, errorId].filter(Boolean).join(' ');
+  const control = only ? cloneElement(only, { id: controlId, ...(describedBy ? { 'aria-describedby': describedBy } : null), ...(error ? { 'aria-invalid': true } : null) }) : children;
+  return <div className={cn('grid min-w-0 content-start gap-1.5', className)}><Label htmlFor={controlId}>{label}</Label>{control}{hint ? <p id={hintId} className="text-muted-foreground text-xs leading-snug">{hint}</p> : null}<FieldError id={errorId}>{error}</FieldError></div>;
 }
 // A file path on one line: cut in the middle so its start and its end stay readable, the whole path in a bubble.
 export function PathText({ path, className, tail = 20 }) {

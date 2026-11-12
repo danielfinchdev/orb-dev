@@ -5,7 +5,9 @@ import { Ellipsis, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { Button } from './button.jsx';
-import { Input } from './basic.jsx';
+import { Input, FieldError } from './basic.jsx';
+
+export { FieldError };
 
 // An icon-only button. `label` is the accessible name and is required; the hit area is 32 px, 44 px on touch.
 export function IconButton({ label, children, className, variant = 'ghost', active, ...props }) {
