@@ -1,6 +1,20 @@
 package dev.orb.app.ui.web
 
+import android.graphics.BitmapFactory
+import android.util.Base64
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -68,6 +82,7 @@ fun WhiteboardScreen(vm: WhiteboardViewModel, onBack: () -> Unit, modifier: Modi
     }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { vm.flushNow() }
 
+    var showAttachments by remember { mutableStateOf(false) }
     val phase = state.phase
     val ready = phase as? WhiteboardPhase.Ready
     // Whatever the page runs, only these messages reach the app. A page that asks again (it was recreated) gets the latest drawing.
@@ -91,7 +106,12 @@ fun WhiteboardScreen(vm: WhiteboardViewModel, onBack: () -> Unit, modifier: Modi
             ScreenBar(
                 title = ready?.let { "${WhiteboardTexts.TITLE} · ${it.project}" } ?: WhiteboardTexts.TITLE,
                 onBack = back, backLabel = WhiteboardTexts.BACK,
-                actions = { if (state.projects.size > 1 && phase !is WhiteboardPhase.Choose) ProjectMenu(state.projects, ready?.project, vm::choose) },
+                actions = {
+                    if (ready != null && vm.canNote) IconButton(onClick = { showAttachments = true }) {
+                        Icon(OrbIcons.Image, WhiteboardTexts.ATTACHMENTS, tint = OrbTheme.colors.text2)
+                    }
+                    if (state.projects.size > 1 && phase !is WhiteboardPhase.Choose) ProjectMenu(state.projects, ready?.project, vm::choose)
+                },
             )
             when (phase) {
                 WhiteboardPhase.Loading -> Center { CircularProgressIndicator() }
@@ -115,6 +135,12 @@ fun WhiteboardScreen(vm: WhiteboardViewModel, onBack: () -> Unit, modifier: Modi
             }
         }
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
+    }
+
+    // The panel is bound to the project it was opened with, so a late answer never writes a note elsewhere.
+    if (showAttachments && ready != null && vm.canNote) {
+        val opened = remember { ready.project }
+        AttachmentsSheet(state.attachments, onDismiss = { showAttachments = false }, onSave = { file, note -> vm.saveNote(opened, file, note) })
     }
 
     if (state.confirmLeave) AlertDialog(
@@ -172,6 +198,76 @@ private fun ProjectMenu(projects: List<String>, current: String?, onPick: (Strin
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             projects.forEach { name ->
                 DropdownMenuItem(text = { Text(if (name == current) "$name ✓" else name) }, onClick = { open = false; onPick(name) })
+            }
+        }
+    }
+}
+
+/** Largest side of a decoded thumbnail; the PC sends full small pictures, so they are subsampled here. */
+private const val THUMB_PX = 96
+
+private fun decodeThumb(dataUrl: String?): ImageBitmap? {
+    if (dataUrl == null) return null
+    return try {
+        val bytes = Base64.decode(dataUrl.substringAfter("base64,", ""), Base64.DEFAULT)
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= THUMB_PX) sample *= 2
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })?.asImageBitmap()
+    } catch (_: Exception) { null } catch (_: OutOfMemoryError) { null }
+}
+
+private fun readableSize(n: Long): String = when {
+    n < 1024 -> "$n B"
+    n < 1024 * 1024 -> "${n / 1024} KB"
+    else -> "%.1f MB".format(java.util.Locale.US, n / 1048576.0)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AttachmentsSheet(items: List<WhiteboardAttachment>, onDismiss: () -> Unit, onSave: suspend (String, String) -> Boolean) {
+    var editing by remember { mutableStateOf<WhiteboardAttachment?>(null) }
+    var draft by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Text(WhiteboardTexts.ATTACHMENTS, Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.titleMedium)
+        val current = editing
+        if (current != null) {
+            Column(Modifier.padding(16.dp)) {
+                Text(current.name, style = MaterialTheme.typography.bodyLarge)
+                OutlinedTextField(
+                    draft, { draft = it.take(WhiteboardViewModel.MAX_NOTE) }, Modifier.fillMaxWidth().padding(top = 8.dp),
+                    label = { Text(WhiteboardTexts.NOTE_HINT) }, minLines = 3, maxLines = 8,
+                )
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = { editing = null }, enabled = !busy) { Text(WhiteboardTexts.CANCEL) }
+                    TextButton(
+                        onClick = { busy = true; scope.launch { if (onSave(current.name, draft)) editing = null; busy = false } },
+                        enabled = !busy,
+                    ) { Text(WhiteboardTexts.SAVE_NOTE) }
+                }
+            }
+        } else if (items.isEmpty()) {
+            Text(WhiteboardTexts.NO_ATTACHMENTS, Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium, color = OrbTheme.colors.text2)
+        } else {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
+                items.forEach { a ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable { draft = a.note; editing = a }.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        val bitmap = remember(a.thumb) { decodeThumb(a.thumb) }
+                        if (bitmap != null) Image(bitmap, null, Modifier.size(48.dp), contentScale = ContentScale.Crop)
+                        else Icon(if (a.kind == "image") OrbIcons.Image else OrbIcons.File, null, Modifier.size(48.dp).padding(10.dp), tint = OrbTheme.colors.text3)
+                        Column(Modifier.padding(start = 12.dp)) {
+                            Text(a.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(readableSize(a.size), style = MaterialTheme.typography.labelMedium, color = OrbTheme.colors.text2)
+                            Text(a.note.ifBlank { WhiteboardTexts.NO_NOTE }, style = MaterialTheme.typography.bodyMedium, color = OrbTheme.colors.text2, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
             }
         }
     }

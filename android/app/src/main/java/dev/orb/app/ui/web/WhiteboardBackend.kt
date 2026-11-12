@@ -27,6 +27,9 @@ interface WhiteboardBackend {
 
     /** `whiteboard.save`: the drawing and, when there is one, its picture. */
     suspend fun save(project: String, save: WhiteboardMessage.Save): Result<Unit>
+
+    /** `whiteboard.note`: the note of one attachment (the PC adds and removes attachments; the phone only annotates). */
+    suspend fun note(project: String, file: String, note: String): Result<Unit>
 }
 
 class RuntimeWhiteboardBackend(private val runtime: LinkRuntime, private val projects: ProjectsBackend) : WhiteboardBackend {
@@ -49,6 +52,10 @@ class RuntimeWhiteboardBackend(private val runtime: LinkRuntime, private val pro
             put("files", save.files)
             if (save.png != null) put("png", JsonPrimitive(save.png))
         },
+    ).map { }
+
+    override suspend fun note(project: String, file: String, note: String) = api.whiteboard.note(
+        buildJsonObject { put("project", project); put("file", file); put("note", note) },
     ).map { }
 
     companion object {

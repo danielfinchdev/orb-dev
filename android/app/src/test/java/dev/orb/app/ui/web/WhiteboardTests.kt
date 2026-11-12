@@ -15,7 +15,9 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -118,12 +120,15 @@ class FakeWhiteboardBackend : WhiteboardBackend {
     var loadResult: Result<JsonObject> = Result.success(buildJsonObject { put("elements", JsonArray(emptyList())); put("attachments", JsonArray(emptyList())) })
     var saveResult: Result<Unit> = Result.success(Unit)
     val loads = ArrayList<String>()
+    var noteResult: Result<Unit> = Result.success(Unit)
+    val notes = ArrayList<Triple<String, String, String>>()
     val saves = ArrayList<Pair<String, WhiteboardMessage.Save>>()
 
     override fun available(m: ApiMethod) = m.name !in unavailable
     override suspend fun projects() = Result.success(projectList)
     override suspend fun load(project: String): Result<JsonObject> { loads += project; return loadResult }
     override suspend fun save(project: String, save: WhiteboardMessage.Save): Result<Unit> { saves += project to save; return saveResult }
+    override suspend fun note(project: String, file: String, note: String): Result<Unit> { notes += Triple(project, file, note); return noteResult }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -369,6 +374,78 @@ class WhiteboardViewModelTest {
         vm.flushNow()
         runCurrent()
         assertEquals(listOf<PageCommand>(PageCommand.Saved(setOf("img1"))), commands)
+    }
+
+    private fun att(name: String, extra: String = "") = Json.parseToJsonElement(
+        """{"name":"$name","size":2048,"mime":"image/png","kind":"image","note":"n","addedAt":5,"thumb":null$extra}""",
+    )
+
+    @Test fun attachmentsAreParsedLeniently() = runTest(dispatcher) {
+        val b = FakeWhiteboardBackend()
+        b.loadResult = Result.success(buildJsonObject {
+            put("elements", JsonArray(emptyList()))
+            put("attachments", JsonArray(listOf(
+                att("a.png"), att(""), JsonPrimitive("x"), Json.parseToJsonElement("""{"name":"b","size":"big","kind":"image","note":"","addedAt":1}"""),
+                Json.parseToJsonElement("""{"name":"c.pdf","size":10,"kind":"file","note":"","addedAt":1}"""),
+            )))
+        })
+        val vm = vm(b)
+        assertEquals(listOf("a.png", "c.pdf"), vm.state.value.attachments.map { it.name })
+        b.loadResult = Result.success(buildJsonObject { put("attachments", JsonPrimitive("rara")) })
+        assertTrue(WhiteboardViewModel.parseAttachments(JsonPrimitive("rara")).isEmpty())
+        val many = JsonArray((1..300).map { att("f$it") })
+        assertEquals(200, WhiteboardViewModel.parseAttachments(many).size)
+    }
+
+    private fun TestScope.withAttachment(b: FakeWhiteboardBackend): WhiteboardViewModel {
+        b.loadResult = Result.success(buildJsonObject { put("elements", JsonArray(emptyList())); put("attachments", JsonArray(listOf(att("a.png")))) })
+        return vm(b)
+    }
+
+    @Test fun savingANoteUpdatesTheListWithoutTouchingTheDrawing() = runTest(dispatcher) {
+        val b = FakeWhiteboardBackend()
+        val vm = withAttachment(b)
+        vm.onSave(scene("a"))
+        val before = vm.state.value.save
+        assertTrue(vm.saveNote("tienda", "a.png", "nueva"))
+        assertEquals("nueva", vm.state.value.attachments.single().note)
+        assertEquals(listOf(Triple("tienda", "a.png", "nueva")), b.notes)
+        assertEquals(before, vm.state.value.save)
+        advanceTimeBy(2_100); runCurrent()
+        // The pending drawing still goes out as it was.
+        assertEquals(1, b.saves.size)
+        assertEquals(1, b.saves.single().second.elements.size)
+    }
+
+    @Test fun aFailedNoteKeepsTheListAndWarns() = runTest(dispatcher) {
+        val b = FakeWhiteboardBackend()
+        val vm = withAttachment(b)
+        val msgs = ArrayList<String>()
+        backgroundScope.launch { vm.messages.collect { msgs += it } }
+        b.noteResult = Result.failure(LinkException(LinkError.Offline))
+        assertFalse(vm.saveNote("tienda", "a.png", "x"))
+        runCurrent()
+        assertEquals("n", vm.state.value.attachments.single().note)
+        assertEquals(listOf(WhiteboardTexts.NOTE_FAILED), msgs)
+        assertFalse(vm.saveNote("tienda", "a.png", "x".repeat(2001)))
+    }
+
+    @Test fun aNoteNeverLandsInAnotherProject() = runTest(dispatcher) {
+        val b = FakeWhiteboardBackend()
+        val vm = withAttachment(b)
+        vm.choose("api")
+        runCurrent(); vm.onPageFlushed(); runCurrent()
+        assertTrue(vm.saveNote("tienda", "a.png", "late"))
+        // The note went to the project the panel was opened with, and the open project's list is not changed.
+        assertEquals("tienda", b.notes.single().first)
+        assertEquals("n", vm.state.value.attachments.single().note)
+    }
+
+    @Test fun theNotesButtonNeedsThePcMethod() = runTest(dispatcher) {
+        val b = FakeWhiteboardBackend()
+        assertTrue(vm(b).canNote)
+        b.unavailable = setOf("whiteboard.note")
+        assertFalse(vm(b).canNote)
     }
 
     @Test fun aSavePendingInOneProjectNeverGoesToAnother() = runTest(dispatcher) {

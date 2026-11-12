@@ -28,6 +28,10 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 
+/** One file attached on the PC; [thumb] is a data URL, only for small pictures. */
+@Immutable
+data class WhiteboardAttachment(val name: String, val size: Long, val kind: String, val note: String, val addedAt: Long, val thumb: String?)
+
 enum class SaveStatus { Saved, Saving, Unsaved }
 
 /** What the app asks of the page it hosts. */
@@ -59,6 +63,7 @@ data class WhiteboardState(
     val phase: WhiteboardPhase = WhiteboardPhase.Loading,
     val save: SaveStatus = SaveStatus.Saved,
     val projects: List<String> = emptyList(),
+    val attachments: List<WhiteboardAttachment> = emptyList(),
     /** True when leaving failed because the last changes are not on the PC: the screen asks what to do. */
     val confirmLeave: Boolean = false,
 )
@@ -120,6 +125,9 @@ class WhiteboardViewModel(
         }
     }
 
+    /** The attachments panel needs a PC that knows `whiteboard.note`. */
+    val canNote: Boolean get() = backend.available(dev.orb.app.link.api.ApiMethods.WHITEBOARD_NOTE)
+
     fun retry() {
         _state.update { it.copy(phase = WhiteboardPhase.Loading) }
         val c = backend.connection.value
@@ -149,7 +157,7 @@ class WhiteboardViewModel(
             val page = forPage(scene)
             pageScene = page
             if ((scene["damaged"] as? JsonPrimitive)?.booleanOrNull == true) _messages.trySend(WhiteboardTexts.DAMAGED)
-            _state.update { it.copy(phase = WhiteboardPhase.Ready(chosen, page), save = SaveStatus.Saved) }
+            _state.update { it.copy(phase = WhiteboardPhase.Ready(chosen, page), save = SaveStatus.Saved, attachments = parseAttachments(scene["attachments"])) }
         }
     }
 
@@ -160,6 +168,21 @@ class WhiteboardViewModel(
 
     /** Only what the page draws with: the attachments of the desktop's side panel stay on the PC. */
     private fun forPage(scene: JsonObject) = JsonObject(scene.filterKeys { it in PAGE_KEYS })
+
+    /**
+     * Saves the note of an attachment of [forProject] (the project the panel was opened with). The list changes only when
+     * the PC confirms; the drawing and the save status are never touched. Returns true when the PC took the note.
+     */
+    suspend fun saveNote(forProject: String, file: String, note: String): Boolean {
+        if (note.length > MAX_NOTE) { _messages.trySend(WhiteboardTexts.noteTooLong(MAX_NOTE)); return false }
+        val r = backend.note(forProject, file, note)
+        if (r.isFailure) { _messages.trySend(WhiteboardTexts.NOTE_FAILED); return false }
+        // The person may have changed project while the PC answered: that list is not this note's.
+        if (project == forProject) {
+            _state.update { st -> st.copy(attachments = st.attachments.map { if (it.name == file) it.copy(note = note) else it }) }
+        }
+        return true
+    }
 
     /** What a page that has just been (re)created is given: the latest drawing, not the one the project was opened with. */
     fun sceneForPage(): JsonObject? = pageScene
@@ -281,11 +304,33 @@ class WhiteboardViewModel(
         clean
     }
 
-    private companion object {
-        val PAGE_KEYS = setOf("elements", "appState", "files")
+    companion object {
+        private val PAGE_KEYS = setOf("elements", "appState", "files")
+        const val MAX_NOTE = 2000
+        const val MAX_ATTACHMENTS = 200
+
+        /** Tolerant: an entry with a missing or odd field is skipped, and a bad list is just empty; loading never fails here. */
+        fun parseAttachments(el: kotlinx.serialization.json.JsonElement?): List<WhiteboardAttachment> {
+            val arr = el as? kotlinx.serialization.json.JsonArray ?: return emptyList()
+            fun str(o: JsonObject, k: String) = (o[k] as? JsonPrimitive)?.takeIf { it.isString }?.content
+            fun num(o: JsonObject, k: String) = (o[k] as? JsonPrimitive)?.takeIf { !it.isString }?.content?.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }?.toLong()
+            val out = ArrayList<WhiteboardAttachment>()
+            for (e in arr) {
+                if (out.size >= MAX_ATTACHMENTS) break
+                val o = e as? JsonObject ?: continue
+                val name = str(o, "name")?.takeIf { it.isNotBlank() } ?: continue
+                val size = num(o, "size") ?: continue
+                val kind = str(o, "kind") ?: continue
+                val note = str(o, "note") ?: continue
+                val at = num(o, "addedAt") ?: continue
+                val thumb = str(o, "thumb")?.takeIf { it.startsWith("data:image/") }
+                out += WhiteboardAttachment(name, size, kind, note, at, thumb)
+            }
+            return out
+        }
 
         /** [b] is the newer one: its drawing wins, the pictures of both are kept, and a picture is only replaced by a newer one. */
-        fun merge(a: WhiteboardMessage.Save, b: WhiteboardMessage.Save) = WhiteboardMessage.Save(
+        private fun merge(a: WhiteboardMessage.Save, b: WhiteboardMessage.Save) = WhiteboardMessage.Save(
             elements = b.elements, appState = b.appState,
             files = JsonObject(a.files + b.files), png = b.png ?: a.png, flush = a.flush || b.flush,
             dropped = b.dropped, offered = a.offered + b.offered, project = b.project,

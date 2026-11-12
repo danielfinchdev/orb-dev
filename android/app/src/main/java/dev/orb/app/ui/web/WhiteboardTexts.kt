@@ -29,5 +29,15 @@ object WhiteboardTexts {
     const val RELOAD = "Recargar"
     const val REJECTED = "No se pudo guardar el último cambio. Los siguientes sí se intentarán guardar."
 
+    const val ATTACHMENTS = "Adjuntos"
+    const val NO_ATTACHMENTS = "Aún no hay adjuntos. Se añaden desde Orb en el PC."
+    const val NOTE_HINT = "Nota"
+    const val SAVE_NOTE = "Guardar"
+    const val CANCEL = "Cancelar"
+    const val NOTE_FAILED = "No se pudo guardar la nota. Inténtalo de nuevo."
+    const val NO_NOTE = "Sin nota"
+
+    fun noteTooLong(max: Int) = "La nota admite hasta $max caracteres."
+
     fun dropped(n: Int) = if (n == 1) "Se ha quitado 1 elemento que la Pizarra del móvil no admite." else "Se han quitado $n elementos que la Pizarra del móvil no admite."
 }
