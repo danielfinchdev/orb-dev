@@ -112,7 +112,8 @@ class AppContainer(private val app: Application) {
 
     // A previous run may have been killed with copies still in the cache.
     init {
-        attachRoot.deleteRecursively()
+        // A photo the camera app is still delivering must survive a restart of the process.
+        dev.orb.app.attach.AttachController.purgeLeftovers(attachRoot)
         shareRoot.deleteRecursively()
     }
 

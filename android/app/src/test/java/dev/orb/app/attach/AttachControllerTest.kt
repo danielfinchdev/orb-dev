@@ -109,6 +109,18 @@ class AttachControllerTest {
         assertTrue(up.calls.isEmpty())
     }
 
+    @Test fun startupCleaningKeepsOnlyAFreshCameraPhoto() {
+        val root = tmp.newFolder()
+        val fresh = java.io.File(root, "cam-1.jpg").apply { writeBytes(ByteArray(3)) }
+        val old = java.io.File(root, "cam-2.jpg").apply { writeBytes(ByteArray(3)); setLastModified(1_000) }
+        val folder = java.io.File(root, "chat-uuid").apply { mkdirs() }
+        java.io.File(folder, "1.jpg").writeBytes(ByteArray(3))
+        val other = java.io.File(root, "x.jpg").apply { writeBytes(ByteArray(3)) }
+        AttachController.purgeLeftovers(root, nowMs = fresh.lastModified() + 1_000)
+        assertTrue(fresh.exists())
+        assertFalse(old.exists() || folder.exists() || other.exists())
+    }
+
     @Test fun aFileKeepsItsNameForThePcAndItsBytes() = runTest {
         val up = Uploads()
         val c = controller(io(Triple("n", "notas.md", "text/plain" to 50)), up)

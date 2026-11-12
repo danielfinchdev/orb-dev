@@ -175,6 +175,17 @@ class AttachController(
     }
 
     companion object {
+        /** A photo the camera app just wrote survives a process restart this long: the result is still on its way. */
+        const val CAMERA_GRACE_MS = 10L * 60 * 1000
+
+        /** Deletes what a previous run left in [root], except recent `cam-*` photos (see [CAMERA_GRACE_MS]). */
+        fun purgeLeftovers(root: File, nowMs: Long = System.currentTimeMillis()) {
+            for (child in root.listFiles().orEmpty()) {
+                val recentPhoto = child.isFile && child.name.startsWith("cam-") && nowMs - child.lastModified() < CAMERA_GRACE_MS
+                if (!recentPhoto) child.deleteRecursively()
+            }
+        }
+
         /** A picture is read up to this size and then reduced; a camera photo is a few MB. */
         const val SOURCE_IMAGE_MAX = 40L * 1024 * 1024
     }
