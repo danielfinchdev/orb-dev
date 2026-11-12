@@ -333,13 +333,14 @@ class LinkClient(
 
     /**
      * A picture chosen on the phone, encrypted and uploaded first: the PC only accepts uploaded files as attachments.
-     * → the name the PC gave it. [mime] is not sent: the PC checks the first bytes, never a name or a type.
+     * → the name the PC gave it. [mime] is not sent: the PC checks the first bytes, never a type. [name] travels sealed
+     * in the header and only for files whose kind the bytes cannot tell (md, csv, json); a PC that does not use it ignores it.
      */
     @Suppress("UNUSED_PARAMETER")
-    suspend fun upload(bytes: ByteArray, mime: String): Result<String> = guarded {
+    suspend fun upload(bytes: ByteArray, mime: String?, name: String? = null): Result<String> = guarded {
         val sealedBody = LinkCrypto.sealBytes(session.key, bytes, Aad.upload(session.id))
         val opened = roundTrip(timeouts.upload, once = true) { base ->
-            val auth = authHeader("upload")
+            val auth = authHeader("upload", name)
             // The envelope of the answer is keyed by the header's nonce.
             Prepared(post(base + "/api/upload", "", mapOf("X-Orb-Auth" to auth), sealedBody), auth.substringBefore('.'))
         }
@@ -363,12 +364,13 @@ class LinkClient(
         }
     }
 
-    private fun authHeader(kind: String): String {
+    private fun authHeader(kind: String, name: String? = null): String {
         val msg = buildJsonObject {
             put("t", stamp())
             put("m", kind)
             // d: 1 says this client takes the streamed answer as deltas (src/shared/chat-stream.mjs).
             if (kind == "events") put("d", 1)
+            if (name != null) put("name", name)
         }
         return LinkCrypto.sealText(session.key, msg, Aad.request(session.id))
     }
