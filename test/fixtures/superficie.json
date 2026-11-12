@@ -430,6 +430,7 @@
   "core:lost",
   "html:closed",
   "html:page",
+  "html:server",
   "html:update",
   "inbox:changed",
   "installer:progress",

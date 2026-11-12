@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
-import { createHtmlPages, pageCsp, FRAME_ANCESTORS, MAX_HTML, MAX_TITLE, PER_SESSION, MAX_PAGES, SHOWS_PER_MINUTE } from '../src/engine/host/html-pages.mjs';
+import { createHtmlPages, pageCsp, FRAME_ANCESTORS, frameAncestors, MAX_HTML, MAX_TITLE, PER_SESSION, MAX_PAGES, SHOWS_PER_MINUTE } from '../src/engine/host/html-pages.mjs';
 import { METHODS, REMOTE_METHODS, principalOf, allowed } from '../src/domain/security/permissions.mjs';
 import { ENGINE_EVENTS } from '../src/shared/events.mjs';
 import { mountable } from '../src/ui/lib/html-mount.js';
@@ -46,7 +46,7 @@ test('no internet by default: sandboxed CSP with nothing open to the network', a
     assert.match(csp, /default-src 'none'/);
     const body = fetchPart(csp);
     assert.doesNotMatch(body, /https:|http:|\*|'self'|unsafe-eval|connect-src/);
-    assert.match(csp, /frame-ancestors tauri:\/\/localhost http:\/\/tauri\.localhost https:\/\/tauri\.localhost http:\/\/localhost:\* http:\/\/127\.0\.0\.1:\*$/);
+    assert.match(csp, /frame-ancestors tauri:\/\/localhost http:\/\/tauri\.localhost https:\/\/tauri\.localhost$/);
     assert.equal(r.headers['x-content-type-options'], 'nosniff');
     assert.equal(r.headers['referrer-policy'], 'no-referrer');
     assert.equal(r.headers['cache-control'], 'no-store');
@@ -134,7 +134,7 @@ c${String.fromCharCode(0x202e)}${'z'.repeat(300)}`;
     assert.equal(new Set(ids).size, ids.length);
     for (const id of ids) assert.match(id, /^[0-9a-f]{32}$/);
     assert.notEqual(Number.parseInt(ids[1].slice(-4), 16) - Number.parseInt(ids[0].slice(-4), 16), 1);
-    for (const [name, p] of events) { assert.ok(['html:page', 'html:update', 'html:closed'].includes(name)); assert.equal(JSON.stringify(p).includes('<script'), false); assert.equal('html' in p, false); }
+    for (const [name, p] of events.filter(([n]) => n !== 'html:server')) { assert.ok(['html:page', 'html:update', 'html:closed'].includes(name)); assert.equal(JSON.stringify(p).includes('<script'), false); assert.equal('html' in p, false); }
     assert.ok(items.some((a) => a[0] === 's1' && a[1] === 'system' && a[2] === 'status'));
     assert.ok(MAX_PAGES >= PER_SESSION);
     assert.ok(Object.keys(pages.list()[0]).every((k) => ['id', 'session', 'title', 'url', 'internet'].includes(k)));
@@ -211,18 +211,23 @@ test('window: HtmlPages is mounted for the full PC and the frame is sandboxed wi
   assert.ok(keys(es).length >= 14); assert.deepEqual(keys(es), keys(en));
 });
 
-test('the window CSP adds only frame-src for the loopback pages', () => {
+test('the window CSP adds only frame-src for the own page scheme (never a loopback port)', () => {
   const tauri = JSON.parse(read('src-tauri/tauri.conf.json')).app.security.csp;
   const meta = /Content-Security-Policy" content="([^"]+)"/.exec(read('src/ui/index.html'))[1];
   for (const csp of [tauri, meta]) {
     const d = csp.split(';').map((x) => x.trim());
-    assert.deepEqual(d.filter((x) => x.startsWith('frame-src')), ['frame-src http://127.0.0.1:*']);
+    assert.deepEqual(d.filter((x) => x.startsWith('frame-src')), ['frame-src http://orbpage.localhost orbpage://localhost']);
     assert.ok(d.includes("script-src 'self'"));
     assert.ok(d.some((x) => x.startsWith('connect-src') && !/127\.0\.0\.1|https?:\/\/\*/.test(x)));
     assert.doesNotMatch(csp, /unsafe-eval/);
   }
   assert.doesNotMatch(read('src/ui/pip.html'), /frame-src/);
+  for (const csp of [tauri, meta]) assert.doesNotMatch(csp, /127\.0\.0\.1|localhost:|\*/);
   assert.ok(FRAME_ANCESTORS.includes('tauri://localhost'));
+  assert.doesNotMatch(FRAME_ANCESTORS, /127\.0\.0\.1|localhost:\*/); // packaged: no loopback framers
+  assert.match(frameAncestors(true), /http:\/\/localhost:\*/);
+  assert.doesNotMatch(frameAncestors(false), /127\.0\.0\.1|localhost:/);
+  assert.match(read('src-tauri/src/protocol.rs'), /--force-webrtc-ip-handling-policy=disable_non_proxied_udp/);
 });
 
 test('per-chat cap drops the oldest of that chat with a system note; rate limit is per chat', async () => {
@@ -280,4 +285,20 @@ test('mountable: while a page has internet only the first such page is a live fr
   const jsx = read('src/ui/components/html-page.jsx');
   assert.ok(jsx.includes("mountable(list)")); assert.ok(jsx.includes("paused={!live.has(p.id)}"));
   for (const l of [es, en]) for (const k of ['htmlpage.pausedNote', 'msg.html.tooMany', 'msg.html.rate', 'msg.html.locked']) assert.ok(l[k], k);
+});
+
+test('the app frames pages through its own scheme and is told the exact server port', async () => {
+  const { pages, events } = make();
+  process.env.ORB_PAGES_ORIGIN = 'http://orbpage.localhost';
+  try {
+    const v = await pages.show({ id: 's1' }, { html: HTML });
+    assert.equal(v.url, `http://orbpage.localhost/p/${v.id}`);
+    const port = events.find(([n]) => n === 'html:server')[1].port;
+    assert.ok(port > 0);
+    assert.equal((await raw(port, `/p/${v.id}`)), 200); // what the Rust proxy fetches (pages.rs)
+    process.env.ORB_PAGES_ORIGIN = 'http://evil.example/x?'; // not an origin: back to the loopback address
+    assert.match(pages.list()[0].url, /^http:\/\/127\.0\.0\.1:\d+\/p\//);
+    pages.dropSession('s1');
+    assert.deepEqual(events.filter(([n]) => n === 'html:server').pop()[1], { port: 0 });
+  } finally { delete process.env.ORB_PAGES_ORIGIN; pages.wipe(); }
 });

@@ -23,6 +23,7 @@ mod engine;
 mod host;
 mod migrate;
 mod notify;
+mod pages;
 mod pip;
 mod pipes;
 mod power;
@@ -346,6 +347,7 @@ pub fn run() {
     // while the window is being moved or resized (the main thread runs that loop). Orb never uses them; the page gets
     // its own input from WebView2.
     .device_event_filter(tauri::DeviceEventFilter::Always)
+    .register_asynchronous_uri_scheme_protocol(pages::SCHEME, |_ctx, request, responder| pages::handle(request, responder))
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_updater::Builder::new().build())

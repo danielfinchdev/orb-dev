@@ -16,8 +16,11 @@ export const MAX_PAGES = 100;
 export const SHOWS_PER_MINUTE = 10;
 const ID_RE = /^[0-9a-f]{32}$/;
 // The only origins allowed to frame a page: the packaged window (Windows: http://tauri.localhost; macOS/Linux:
-// tauri://localhost; the https variant too) and the dev server on loopback. Nothing else.
-export const FRAME_ANCESTORS = 'frame-ancestors tauri://localhost http://tauri.localhost https://tauri.localhost http://localhost:* http://127.0.0.1:*';
+// tauri://localhost; the https variant too). Loopback origins (the dev server) are added only in a development build
+// (ORB_PAGES_DEV=1, set by the app for debug builds): a packaged Orb must not let a page on any local port frame these.
+const PACKAGED_ANCESTORS = 'frame-ancestors tauri://localhost http://tauri.localhost https://tauri.localhost';
+export const FRAME_ANCESTORS = PACKAGED_ANCESTORS;
+export const frameAncestors = (dev = process.env.ORB_PAGES_DEV === '1') => (dev ? `${PACKAGED_ANCESTORS} http://localhost:* http://127.0.0.1:*` : PACKAGED_ANCESTORS);
 const userError = (key, vars) => Object.assign(new Error(tr(key, vars)), { userFacing: true });
 
 // The policy of a page. `default-src 'none'` closes everything not listed. With internet on, only https: is added to
@@ -34,7 +37,7 @@ export function pageCsp(internet) {
     `media-src data:${net}`,
     ...(internet ? ['connect-src https:'] : []),
     "base-uri 'none'", "form-action 'none'", "object-src 'none'", "frame-src 'none'",
-    FRAME_ANCESTORS
+    frameAncestors()
   ].join('; ');
 }
 
@@ -47,7 +50,11 @@ export function createHtmlPages({ sessions, emit = () => {}, log = () => {}, now
   let server = null; let port = 0; let starting = null;
   let generation = 0; // wipe() bumps it so a show() that was awaiting the server does not outlive the lock
 
-  const view = (p) => ({ id: p.id, session: p.session, title: p.title, url: `http://127.0.0.1:${port}/p/${p.id}`, internet: p.internet });
+  // The window loads a page through the app's own scheme (ORB_PAGES_ORIGIN, e.g. http://orbpage.localhost): the Rust side
+  // proxies exactly this server's port (src-tauri/src/pages.rs), so the window's CSP never has to allow loopback frames.
+  // Without it (tests, no app) the frame points at the loopback server directly.
+  const origin = () => { const o = process.env.ORB_PAGES_ORIGIN; return /^(https?:\/\/[a-z0-9.-]+|[a-z]+:\/\/localhost)$/.test(o ?? '') ? o : `http://127.0.0.1:${port}`; };
+  const view = (p) => ({ id: p.id, session: p.session, title: p.title, url: `${origin()}/p/${p.id}`, internet: p.internet });
   const note = (session, key, vars) => { try { sessions.addItem(session, 'system', 'status', tr(key, vars)); } catch { /* the chat went */ } };
 
   function handle(req, res) {
@@ -76,12 +83,12 @@ export function createHtmlPages({ sessions, emit = () => {}, log = () => {}, now
       starting = new Promise((resolve, reject) => {
         const srv = http.createServer(handle);
         srv.once('error', reject);
-        srv.listen(0, '127.0.0.1', () => { srv.removeListener('error', reject); srv.on('error', () => {}); server = srv; port = srv.address().port; resolve(); });
+        srv.listen(0, '127.0.0.1', () => { srv.removeListener('error', reject); srv.on('error', () => {}); server = srv; port = srv.address().port; emit('html:server', { port }); resolve(); });
       }).finally(() => { starting = null; });
     }
     await starting;
   }
-  const stopServer = () => { const s = server; server = null; port = 0; if (s) { try { s.close(); s.closeAllConnections?.(); } catch { /* closed */ } } };
+  const stopServer = () => { const s = server; server = null; port = 0; if (s) emit('html:server', { port: 0 }); if (s) { try { s.close(); s.closeAllConnections?.(); } catch { /* closed */ } } };
   const gone = (p, why) => { if (pages.delete(p.id)) emit('html:closed', { id: p.id, session: p.session }); log(`html: página ${p.id.slice(0, 6)} cerrada (${why})`); };
   const dropSession = (id) => { shows.delete(String(id)); for (const p of [...pages.values()]) if (p.session === String(id)) gone(p, 'chat'); if (!pages.size) stopServer(); };
   const alive = (keepServer = false) => { for (const p of [...pages.values()]) if (!sessions.get(p.session)) gone(p, 'chat'); if (!pages.size && !keepServer) stopServer(); };

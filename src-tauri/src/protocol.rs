@@ -109,12 +109,18 @@ pub fn read_zoom(text: &str) -> f64 {
   serde_json::from_str::<Value>(text).ok().and_then(|v| v.get("zoom").and_then(Value::as_f64)).map(clamp_zoom).unwrap_or(1.0)
 }
 
-/// Arguments of Orb's WebView2: Tauri's own (no Edge-only extras in the window), and, only in a build with the `e2e`
-/// feature (tests and measurements), the DevTools port and no pausing of frames when the window is covered.
+/// WebRTC may only use a proxied UDP route. The CSP of an agent's HTML page cannot stop WebRTC, and STUN would otherwise
+/// let a page with "internet" switched off reach the network over UDP (and learn the local IPs). Known limit: TURN over
+/// TCP/TLS is not closed by this flag (see desarrollo/orb-3.8.4-progreso.md).
+const WEBRTC_POLICY: &str = "--force-webrtc-ip-handling-policy=disable_non_proxied_udp";
+
+/// Arguments of Orb's WebView2: Tauri's own (no Edge-only extras in the window), no direct WebRTC/STUN, and, only in a
+/// build with the `e2e` feature (tests and measurements), the DevTools port and no pausing of frames when the window is
+/// covered.
 pub fn browser_args(cdp_port: Option<u16>) -> String {
   match cdp_port {
-    Some(port) => format!("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --remote-debugging-port={port}"),
-    None => "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection".to_string(),
+    Some(port) => format!("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion {WEBRTC_POLICY} --remote-debugging-port={port}"),
+    None => format!("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection {WEBRTC_POLICY}"),
   }
 }
 
@@ -330,6 +336,9 @@ mod tests {
   #[test]
   fn devtools_port_only_when_asked_and_webview2_vars_dropped() {
     assert!(!browser_args(None).contains("remote-debugging"));
+    for a in [browser_args(None), browser_args(Some(9400))] {
+      assert!(a.contains("--force-webrtc-ip-handling-policy=disable_non_proxied_udp"));
+    }
     assert!(browser_args(Some(9400)).ends_with("--remote-debugging-port=9400"));
     assert!(!browser_args(Some(9400)).contains("allow-origins"));
     let names = ["PATH", "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "webview2_user_data_folder", "WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", "ORB_USER_DATA"];

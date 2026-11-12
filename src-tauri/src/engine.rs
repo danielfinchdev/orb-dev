@@ -147,6 +147,8 @@ impl Engine {
 
   fn spawn(self: &Arc<Self>) -> Result<(), String> {
     let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
+    // The page server of a previous engine is gone: its port must not be proxied (it may belong to someone else now).
+    crate::pages::set_port(None);
     let mut cmd = Command::new(&self.cfg.node);
     // Node reads NODE_OPTIONS (--require, --import: code run inside the engine), NODE_PATH and the rest of NODE_* from the
     // environment; Electron had them off (its fuse). None of the user's reaches the engine or what it starts.
@@ -161,6 +163,9 @@ impl Engine {
       .env("ORB_RENDERER", self.cfg.src.join("renderer"))
       // ORB_DEV_CONTROL: only a build from the code started with ORB_DEV_CONTROL=1, whatever the environment says.
       .env("ORB_DEV_CONTROL", if self.cfg.dev_control { "1" } else { "0" })
+      // Agent HTML pages are framed through Orb's own scheme (pages.rs); a debug build also lets the dev server frame them.
+      .env("ORB_PAGES_ORIGIN", crate::pages::ORIGIN)
+      .env("ORB_PAGES_DEV", if cfg!(debug_assertions) { "1" } else { "0" })
       .current_dir(&self.cfg.src);
     // The vault's channel for this engine only (vault_host.rs): without it the engine does not start.
     let (vault_name, serve_vault) = crate::vault_host::channel()?;
@@ -407,6 +412,9 @@ impl Engine {
         if let Some(locked) = protocol::screen_lock_of(&event, &payload) {
           self.screen_locked.store(locked, Ordering::SeqCst);
         }
+        if event == "html:server" {
+          crate::pages::set_port(payload.get("port").and_then(Value::as_u64));
+        }
         if event == "chat:new" {
           let log = crate::window::hidden(&self.app).then(|| self.cfg.user_data.join("avisos-e2e.jsonl"));
           crate::notify::chat_new(&self.app, &payload, log);
@@ -443,6 +451,7 @@ impl Engine {
       }
       *proc = None;
     }
+    crate::pages::set_port(None);
     // The agents' browser pages and its little window belonged to the engine that went.
     crate::browser::close_all();
     if let Some(w) = self.app.get_webview_window("pip") {
