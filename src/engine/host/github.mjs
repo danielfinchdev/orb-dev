@@ -170,6 +170,16 @@ export async function mergePr(project, number, method = 'merge', headRefOid) {
   return out;
 }
 
+// A comment on a pull request. The text goes to gh on stdin (--body-file -), never as an argument.
+export const MAX_COMMENT = 20_000;
+export async function commentPr(project, number, body) {
+  const text = typeof body === 'string' ? body.trim() : '';
+  if (!text || text.length > MAX_COMMENT) throw userError(tr('msg.github.commentBad', { max: MAX_COMMENT }));
+  const r = await gh(['pr', 'comment', String(number), '--body-file', '-'], { cwd: project.path, timeoutMs: 60_000, input: text });
+  if (!r.ok) throw ghFail(r);
+  return { ok: true, number };
+}
+
 // Brings a task branch into the current branch of the project (merge commit). A conflict is undone and reported.
 export async function mergeBranch(project, branch) {
   branchName(branch);
