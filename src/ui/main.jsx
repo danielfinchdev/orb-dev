@@ -95,14 +95,14 @@ function OnceOpened({ when, onFail, children }) {
   return opened.current ? <ErrorBoundary onFail={onFail} resetKey={when}><Suspense fallback={null}>{children}</Suspense></ErrorBoundary> : null;
 }
 
-const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
+const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity', 'rules']);
 // the phone: the conversations («Chats») and «Más» are screens of their own; Agentes and Modo experto are PC only.
 // «Chats» is the Orb zone's chat list (views/orb/inbox.jsx); the PC has it in the sidebar.
 const ChatsView = OrbChatsView;
 // a route of a screen that is gone (a bot's, saved before or in an old notification) falls back to the chat.
 const VIEWS = bridge.mobile
-  ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, usage: UsageView, phone: PhoneView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
-  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, usage: UsageView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView, expert: ExpertView };
+  ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, rules: MemoriesView, schedules: SchedulesView, usage: UsageView, phone: PhoneView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
+  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, rules: MemoriesView, schedules: SchedulesView, usage: UsageView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView, expert: ExpertView };
 setViews(Object.keys(VIEWS));
 const routeKey = (route) => `${route.view}:${route.id ?? ''}:${route.project ?? ''}`;
 

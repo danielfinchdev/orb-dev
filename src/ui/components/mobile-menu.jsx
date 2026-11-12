@@ -28,7 +28,7 @@ export function MoreContent() {
       <Group>
         <NavItem icon={CalendarSync} label={t('nav.schedules')} onClick={() => go('schedules')} testid="nav-schedules" />
         <NavItem icon={Presentation} label={t('nav.board')} onClick={() => go('board')} testid="nav-board" />
-        <NavItem icon={NotebookPen} label={t('nav.memories')} onClick={() => go('logs')} testid="nav-memories" />
+        <NavItem icon={NotebookPen} label={t('nav.logbooks')} onClick={() => go('logs')} testid="nav-memories" />
         <NavItem icon={LifeBuoy} label={t('nav.tutorials')} onClick={() => go('tutorials')} testid="nav-tutorials" />
       </Group>
       <Group label={t('nav.settings')}>

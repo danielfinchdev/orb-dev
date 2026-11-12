@@ -37,6 +37,7 @@ import auto from './en/auto.mjs';
 import rails from './en/rails.mjs';
 import herramientas from './en/herramientas.mjs';
 import f6nuevas from './en/f6-nuevas.mjs';
+import f6bitacoras from './en/f6-bitacoras.mjs';
 
 export default {
   ...base,
@@ -76,5 +77,6 @@ export default {
   ...auto,
   ...rails,
   ...herramientas,
-  ...f6nuevas
+  ...f6nuevas,
+  ...f6bitacoras
 };

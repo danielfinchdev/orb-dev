@@ -63,13 +63,13 @@ function useRemembered(key, initial) {
 // feedback with Orb's version; unfolded, the list with names. The little arrow on the line above unfolds and folds it.
 function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
   const t = useT();
-  const memories = is('logs') || is('activity');
+  const memories = is('logs') || is('activity') || is('rules');
   // the same slots and icons on the PC and in a linked browser (Ajustes, Agentes, Memorias, Tutoriales); what a
   // browser does not have is left out (Agentes, the bug), never swapped for other icons. Its gear opens this device.
   const items = [
     { icon: Settings, label: t('nav.settings'), active: settingsOpen || is('phone'), onClick: () => openSettings(), testid: 'nav-settings' },
     ...(bridge.mobile ? [] : [{ icon: Orbit, label: t('nav.agents'), active: is('agents'), onClick: () => go('agents'), testid: 'nav-agents' }]),
-    { icon: NotebookPen, label: t('nav.memories'), hint: t('nav.memoriesHint'), active: memories, onClick: () => go('logs'), testid: 'nav-memories' },
+    { icon: NotebookPen, label: t('nav.logbooks'), hint: t('nav.logbooksHint'), active: memories, onClick: () => go('logs'), testid: 'nav-memories' },
     // how the app works, the FAQ and the button that replays the guided tour.
     { icon: LifeBuoy, label: t('nav.tutorials'), active: is('tutorials'), onClick: () => go('tutorials'), testid: 'nav-tutorials' }
   ];

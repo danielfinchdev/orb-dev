@@ -22,7 +22,7 @@ function commands(t, config) {
     { key: 'projects', icon: FolderGit2, label: t('nav.projects'), run: () => go({ view: 'projects' }) },
     { key: 'schedules', icon: CalendarSync, label: t('nav.schedules'), run: () => go({ view: 'schedules' }) },
     { key: 'board', icon: Presentation, label: t('nav.board'), run: () => go({ view: 'board' }) },
-    { key: 'logs', icon: NotebookPen, label: t('nav.memories'), run: () => go({ view: 'logs' }) },
+    { key: 'logs', icon: NotebookPen, label: t('nav.logbooks'), run: () => go({ view: 'logs' }) },
     { key: 'agents', icon: Orbit, label: t('nav.agents'), run: () => go({ view: 'agents' }) },
     { key: 'usage', icon: Gauge, label: t('usage.title'), run: () => go({ view: 'usage' }) },
     { key: 'tutorials', icon: LifeBuoy, label: t('nav.tutorials'), run: () => go({ view: 'tutorials' }) },
