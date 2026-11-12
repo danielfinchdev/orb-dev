@@ -351,6 +351,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     // the HTML pages of the chats: listed, closed and given internet only from this PC's window.
     'htmlPages.list': () => htmlPages.list(),
     'htmlPages.setInternet': (a) => { if (typeof a?.internet !== 'boolean') fail('internet: true o false'); return htmlPages.setInternet(htmlRef(a), a.internet); },
+    'htmlPages.get': (a) => htmlPages.get(htmlRef(a)),
     'htmlPages.close': (a) => htmlPages.close(htmlRef(a)),
     // the user's terminal inside Orb (this PC only, never in core or a protected folder).
     'terminal.list': () => terminals.list(),

@@ -88,6 +88,7 @@
   "github.login": "pc",
   "github.status": "pc",
   "htmlPages.close": "pc",
+  "htmlPages.get": "remote",
   "htmlPages.list": "pc",
   "htmlPages.setInternet": "pc",
   "images.mark": "pc",

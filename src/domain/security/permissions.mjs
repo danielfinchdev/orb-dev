@@ -88,6 +88,8 @@ export const METHODS = Object.freeze({
   'prConfirm.pending': 'pc', 'prConfirm.answer': 'pc', 'prConfirm.decline': 'pc',
   // the HTML pages of the chats: only this PC's window may list them, close them or give them internet (src/engine/host/html-pages.mjs)
   'htmlPages.list': 'pc', 'htmlPages.setInternet': 'pc', 'htmlPages.close': 'pc',
+  // read-only, for the phone: returns the HTML as data (never executed on the host) to show it in a sandboxed frame
+  'htmlPages.get': 'remote',
   // the user's terminal inside Orb (src/engine/host/user-terminal.mjs)
   'terminal.list': 'pc', 'terminal.open': 'pc', 'terminal.write': 'pc', 'terminal.close': 'pc',
   // Ajustes › Skills y MCP (src/engine/api/extensions.mjs): what agents run comes in and out of core only here

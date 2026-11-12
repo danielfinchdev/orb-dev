@@ -142,6 +142,10 @@ export function createHtmlPages({ sessions, emit = () => {}, log = () => {}, now
       emit('html:update', v);
       return v;
     },
+    // For the phone: the page as DATA (its HTML, its title, its internet switch and the exact CSP the PC serves it with).
+    // It is never run here; the phone must render it in a sandboxed frame under that policy. The id is a 128-bit secret
+    // of this run and the chat must match, exactly as for the PC's methods.
+    get(ref) { const p = find(ref); return { ...view(p), html: p.html, csp: pageCsp(p.internet) }; },
     close(ref) { const p = find(ref); gone(p, 'usuario'); if (!pages.size) stopServer(); return true; },
     dropSession,
     // Orb locked or shutting down: nothing is kept and nothing is served.

@@ -302,3 +302,22 @@ test('the app frames pages through its own scheme and is told the exact server p
     assert.deepEqual(events.filter(([n]) => n === 'html:server').pop()[1], { port: 0 });
   } finally { delete process.env.ORB_PAGES_ORIGIN; pages.wipe(); }
 });
+
+test('htmlPages.get: HTML as data for the phone, chat-bound, with the CSP of the page and no run on the host', async () => {
+  const { pages } = make();
+  try {
+    const v = await pages.show({ id: 's1' }, { title: 'g', html: HTML });
+    const g = pages.get({ id: v.id, session: 's1' });
+    assert.equal(g.html, HTML); assert.equal(g.internet, false); assert.equal(g.title, 'g');
+    assert.equal(g.csp, pageCsp(false)); assert.match(g.csp, /^sandbox allow-scripts;/);
+    pages.setInternet({ id: v.id, session: 's1' }, true);
+    assert.equal(pages.get({ id: v.id, session: 's1' }).csp, pageCsp(true));
+    assert.throws(() => pages.get({ id: v.id, session: 's2' }));          // another chat cannot read it
+    assert.throws(() => pages.get({ id: 'f'.repeat(32), session: 's1' })); // unknown id
+    assert.throws(() => pages.get({ id: '../x', session: 's1' }));
+    // only the phone-safe read is remote; the switch and close stay on the PC
+    assert.equal(METHODS['htmlPages.get'], 'remote'); assert.equal(REMOTE_METHODS.has('htmlPages.get'), true);
+    for (const m of ['htmlPages.list', 'htmlPages.setInternet', 'htmlPages.close']) assert.equal(allowed(principalOf({ device: { id: 'd', kind: 'phone' } }), m), false);
+    assert.equal(allowed(principalOf({ device: { id: 'd', kind: 'phone' } }), 'htmlPages.get'), true);
+  } finally { pages.wipe(); }
+});
