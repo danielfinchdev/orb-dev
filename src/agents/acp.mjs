@@ -51,9 +51,9 @@ export const ACP_SPECS = {
     login: ['.copilot/config.json'], loginArgs: [], install: 'npm install -g @github/copilot',
     strengths: 'cambios con contexto de GitHub, issues y pull requests', models: [], defaultModel: ''
   },
-  // Not an npm package: installed with uv (Python), so it is looked up in the PATH and in the usual uv/installer folders.
+  // Not an npm package: installed with uv (Python), so it is looked up in the PATH and in uv's tool folder.
   hermes: {
-    label: 'Hermes Agent', bin: 'hermes', acpArgs: ['acp'], binDirs: () => [path.join(userHome(), '.local', 'bin'), path.join(process.env.LOCALAPPDATA ?? path.join(userHome(), 'AppData', 'Local'), 'hermes')],
+    label: 'Hermes Agent', bin: 'hermes', acpArgs: ['acp'], binDirs: () => [path.join(userHome(), '.local', 'bin')],
     login: ['.hermes/.env', '.hermes/auth.json', '.hermes/config.yaml'], loginArgs: ['login'], install: 'uv tool install "hermes-agent[acp]"',
     strengths: 'agente autónomo con memoria y muchos proveedores de modelos', models: [], defaultModel: ''
   }
@@ -87,7 +87,8 @@ export function acpAgent(id, spec) {
     if (cfg.path && firstFile([cfg.path])) return /\.(c|m)?js$/i.test(cfg.path) ? { cmd: firstFile(inPath('node')) ?? nodeRuntime(), pre: [cfg.path] } : { cmd: cfg.path, pre: [] };
     const npm = spec.pkg ? npmBin(spec.pkg, spec.bin) : null;
     if (npm) return npm;
-    const names = IS_WIN ? [`${spec.bin}.exe`, `${spec.bin}.cmd`] : [spec.bin];
+    // no .cmd: it cannot be spawned without a shell
+    const names = IS_WIN ? [`${spec.bin}.exe`] : [spec.bin];
     const found = firstFile(inPath(spec.bin)) ?? firstFile((spec.binDirs?.() ?? []).flatMap((d) => names.map((n) => path.join(d, n))));
     return found ? { cmd: found, pre: [] } : null;
   };

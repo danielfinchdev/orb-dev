@@ -54,7 +54,8 @@ export const DEFAULT_CONFIG = Object.freeze({
       strengths: 'implementación rápida y barata, tareas repetitivas' },
     copilot: { enabled: true, path: '', models: [], defaultModel: '', heavyModels: [],
       strengths: 'cambios con contexto de GitHub: issues y pull requests' },
-    hermes: { enabled: true, path: '', models: [], defaultModel: '', heavyModels: [],
+    // Off by default: Hermes only asks permission for what it considers dangerous, so the user turns it on by hand.
+    hermes: { enabled: false, path: '', models: [], defaultModel: '', heavyModels: [],
       strengths: 'agente autónomo con memoria y muchos proveedores de modelos' }
   },
   // Accounts (subscriptions) per agent. id = agent and home '' = the CLI's own folder; more can be added from the app.

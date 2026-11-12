@@ -28,7 +28,7 @@ export const ITEMS = [
   { id: 'qwen', label: 'Qwen Code', why: 'agente rápido y barato para tareas repetitivas', install: 'npm install -g @qwen-code/qwen-code', after: ['node'], optional: true },
   // Python tool: installed with uv (fetched from Astral when missing), which puts it in ~/.local/bin.
   { id: 'hermes', label: 'Hermes Agent', why: 'agente autónomo con memoria y muchos proveedores', optional: true,
-    install: "$env:Path = \"$env:USERPROFILE\.local\bin;$env:Path\"; if (-not (Get-Command uv -ErrorAction SilentlyContinue)) { irm https://astral.sh/uv/install.ps1 | iex; $env:Path = \"$env:USERPROFILE\.local\bin;$env:Path\" }; uv tool install 'hermes-agent[acp]'" }
+    install: String.raw`$env:Path = "$env:USERPROFILE\.local\bin;$env:Path"; if (-not (Get-Command uv -ErrorAction SilentlyContinue)) { irm https://astral.sh/uv/install.ps1 | iex; $env:Path = "$env:USERPROFILE\.local\bin;$env:Path" }; uv tool install 'hermes-agent[acp]'` }
 ];
 const AGENT_ITEMS = ['claude', 'codex', 'cursor', 'gemini', 'copilot', 'opencode', 'qwen', 'hermes'];
 

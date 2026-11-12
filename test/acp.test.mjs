@@ -198,3 +198,10 @@ test('Hermes: arranca con «acp» y sus permisos pasan por la guardia (permitir 
   }
   assert.deepEqual(JSON.parse(fs.readFileSync(argvFile, 'utf8')), ['acp']);
 });
+
+test('Hermes: the install script keeps its backslashes and has no control characters', async () => {
+  const { buildScript } = await import('../src/engine/host/installer.mjs');
+  const script = buildScript(['hermes'], path.join(dir, 'log.txt'));
+  assert.ok(script.includes('\\.local\\bin'), 'path kept');
+  assert.equal(/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(script), false, 'no control characters');
+});
