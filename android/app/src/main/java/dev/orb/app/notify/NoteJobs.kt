@@ -79,6 +79,15 @@ class NoteJobs(
     @Synchronized
     fun forgetAll() = storage.clear()
 
+    /**
+     * Forgets the buttons that act on the PC but keeps the ones that only open the app: a tap on a notification can
+     * reach the activity after the app already cleared the tray, and those jobs expire by themselves.
+     */
+    @Synchronized
+    fun forgetActing() {
+        storage.remove(storage.all().filter { decode(it.value)?.acts != false }.keys)
+    }
+
     private fun decode(raw: String): NoteJob? = try { json.decodeFromString(NoteJob.serializer(), raw) } catch (e: Exception) { null }
 
     private companion object {

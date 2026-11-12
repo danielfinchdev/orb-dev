@@ -78,6 +78,25 @@ class AndroidNotePosterTest {
         assertNull(jobs.peek("anything"))
     }
 
+    @Test fun clearingKeepsTheJobOfATapSoALateIntentStillResolves() {
+        val p = plan(message)
+        poster.show(p)
+        val token = shadowOf(nm).allNotifications.single().contentIntent.let { shadowOf(it).savedIntent.getStringExtra(NoteIntents.EXTRA_TOKEN) }
+        poster.clearNotes()
+        assertNotNull(jobs.peek(token))
+    }
+
+    @Test fun theResultNoticeHidesTheRealTitleWhileTheLockIsOn() {
+        var locked = true
+        val p2 = AndroidNotePoster(context, jobs) { locked }
+        val job = plan(approval).actions[1].job
+        p2.say(job, "Aprobado", null)
+        assertEquals("Orb", shadowOf(nm).allNotifications.single().extras.getString(Notification.EXTRA_TITLE))
+        locked = false
+        p2.say(job, "Aprobado", null)
+        assertEquals("Claude Code", shadowOf(nm).allNotifications.single().extras.getString(Notification.EXTRA_TITLE))
+    }
+
     @Test fun sayingReplacesTheNoticeWithoutButtons() {
         val p = plan(approval)
         poster.show(p)

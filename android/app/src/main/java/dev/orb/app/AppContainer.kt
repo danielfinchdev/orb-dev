@@ -96,7 +96,7 @@ class AppContainer(private val app: Application) {
     /** What the phone remembers about its notices and the «Mantener conectado» service; not secrets. */
     val notifyPrefs = NotifyPrefs(SharedPrefsStore(app.getSharedPreferences("orb.notify", android.content.Context.MODE_PRIVATE)))
     val noteJobs = NoteJobs(SharedPrefsJobStorage(app.getSharedPreferences("orb.notes", android.content.Context.MODE_PRIVATE)))
-    private val notePoster = AndroidNotePoster(app, noteJobs)
+    private val notePoster = AndroidNotePoster(app, noteJobs) { lockPrefs.settings.value.enabled }
     val notificationAccess = AndroidNotificationAccess(app, notifyPrefs)
     val keepAliveLauncher: ServiceLauncher = AndroidServiceLauncher(app)
     private val keepAliveRunning = MutableStateFlow(false)
@@ -263,6 +263,8 @@ class AppContainer(private val app: Application) {
         notifierJob?.cancel()
         notifier = null
         notePoster.clearNotes()
+        // Nothing of the old PC may stay reachable, not even the buttons that only open the app.
+        noteJobs.forgetAll()
         notifyPrefs.linked = false
         lastContact.clear()
         notifyPrefs.setKeepConnected(true)
@@ -302,7 +304,8 @@ class AppContainer(private val app: Application) {
         val runner = NoteActionRunner(
             noteJobs,
             caller = { startup.await(); _runtime.value?.let { PcCaller.of(it.client) } },
-            isLocked = { keyguard?.isDeviceLocked == true },
+            // The Orb lock counts as locked too: a button must not answer around the fingerprint.
+            isLocked = { keyguard?.isDeviceLocked == true || lockPrefs.settings.value.enabled },
             onStart = { notePoster.say(it, NotifyTexts.SENDING, null) },
         )
         val (job, outcome) = runner.run(token, typed) ?: return

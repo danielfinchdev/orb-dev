@@ -91,13 +91,17 @@ class NotePlannerTest {
         assertTrue(plan(MESSAGE, NotifySettings(lockScreenPublic = true)).lockScreenPublic)
     }
 
-    @Test fun withTheAppLockOnNoticesCarryNoContentAndKeepTheirButtons() {
+    @Test fun withTheAppLockOnNoticesCarryNoContentNorButtons() {
         val p = plan(APPROVAL, NotifySettings(lockScreenPublic = true, appLock = true))
         assertEquals("Orb", p.title)
         assertEquals("Orb necesita tu respuesta", p.text)
         assertFalse(p.lockScreenPublic)
-        assertEquals(listOf("Rechazar", "Aprobar"), p.actions.map { it.label })
-        assertEquals("Tienes un mensaje nuevo", plan(MESSAGE, NotifySettings(appLock = true)).text)
+        assertTrue(p.actions.isEmpty())
+        assertFalse(p.tap.acts)
+        assertEquals("Orb", p.tap.title)
+        val message = plan(MESSAGE, NotifySettings(appLock = true))
+        assertEquals("Tienes un mensaje nuevo", message.text)
+        assertTrue(message.actions.isEmpty())
     }
 
     @Test fun nothingWithoutAKeyAndAtMostThreeButtons() {
@@ -109,6 +113,14 @@ class NotePlannerTest {
 }
 
 class NoteJobsTest {
+    @Test fun forgettingTheActingJobsKeepsTheOnesThatOnlyOpen() {
+        jobs.keep(job(1))
+        val open = jobs.keep(NoteJob(2, "tap", "T"))
+        jobs.forgetActing()
+        assertNotNull(jobs.peek(open))
+        assertNull(jobs.peek("t0"))
+    }
+
     private var now = 1_000L
     private var n = 0
     private val jobs = NoteJobs(MemoryJobStorage(), { now }, { "t${n++}" })

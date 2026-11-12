@@ -39,7 +39,12 @@ object NotifyChannels {
  * the buttons that can act ([NoteJob.acts]) are answered by [NoteReceiver] with the app closed. Those buttons ask for
  * the phone to be unlocked first (Android 12+); the receiver checks it again for older versions.
  */
-class AndroidNotePoster(private val context: Context, private val jobs: NoteJobs) : NotePoster {
+class AndroidNotePoster(
+    private val context: Context,
+    private val jobs: NoteJobs,
+    // True while the Orb lock is on: the result notice then carries no chat title.
+    private val hideTitles: () -> Boolean = { false },
+) : NotePoster {
     private fun flags(mutable: Boolean) =
         PendingIntent.FLAG_UPDATE_CURRENT or (if (mutable && Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else PendingIntent.FLAG_IMMUTABLE)
 
@@ -93,8 +98,9 @@ class AndroidNotePoster(private val context: Context, private val jobs: NoteJobs
 
     override fun say(job: NoteJob, text: String, goneAfterMs: Long?) {
         NotifyChannels.ensure(context)
-        val tap = NoteJob(job.group, "tap", job.title, target = job.target)
-        val b = base(NoteChannel.Messages, job.title, text)
+        val title = if (hideTitles()) "Orb" else job.title
+        val tap = NoteJob(job.group, "tap", title, target = job.target)
+        val b = base(NoteChannel.Messages, title, text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setSilent(true)
             .setContentIntent(openApp(job.group, 0, tap))
@@ -107,7 +113,7 @@ class AndroidNotePoster(private val context: Context, private val jobs: NoteJobs
         for (s in nm.activeNotifications) {
             if (s.id >= PcNotes.FIRST_ID && s.id < PcNotes.FIRST_ID + PcNotes.ID_COUNT) nm.cancel(s.id)
         }
-        jobs.forgetAll()
+        jobs.forgetActing()
     }
 
     private fun notify(id: Int, b: NotificationCompat.Builder) {

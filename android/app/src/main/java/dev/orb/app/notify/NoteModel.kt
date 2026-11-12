@@ -145,8 +145,11 @@ object NotePlanner {
 
     fun plan(note: PcNote, settings: NotifySettings): NotificationPlan {
         val target = JobTarget.of(note.target)
-        val tap = NoteJob(note.id, "tap", note.title, target = target)
-        val actions = note.actions.take(MAX_ACTIONS).map { a ->
+        // With the Orb lock on, the real chat title is not kept in the jobs (they sit in plain preferences) and no
+        // button can answer from the notification: approving or replying would skip the fingerprint.
+        val jobTitle = if (settings.appLock) "Orb" else note.title
+        val tap = NoteJob(note.id, "tap", jobTitle, target = target)
+        val actions = if (settings.appLock) emptyList() else note.actions.take(MAX_ACTIONS).map { a ->
             PlannedAction(jobFor(note, a, target), a.title, input = a.input && !a.open)
         }
         val approval = note.kind != "message"
