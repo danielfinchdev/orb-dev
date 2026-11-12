@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -63,9 +64,12 @@ class AttachController(
 
     fun addUris(uris: List<Uri>) {
         _notice.value = null
-        for (uri in uris) {
-            val info = io.info(uri)
-            ingest(info.name, info.mime) { max -> io.read(uri, max) }
+        // Asking the content provider for a name and a type can block, so it never runs on the caller's thread.
+        scope.launch(worker) {
+            for (uri in uris) {
+                val info = try { io.info(uri) } catch (_: Exception) { say(AttachTexts.UNREADABLE); continue }
+                ingest(info.name, info.mime) { max -> io.read(uri, max) }
+            }
         }
     }
 
@@ -97,7 +101,13 @@ class AttachController(
             } catch (_: Exception) {
                 return@launch fail(id, AttachTexts.UNREADABLE, retry = false)
             }
-            update(id) { it.copy(type = finalType, file = file) }
+            // The chip may have been removed while the file was being written: nobody would delete it later.
+            var present = false
+            _items.update { list -> present = list.any { it.id == id }; list.map { if (it.id == id) it.copy(type = finalType, file = file) else it } }
+            if (!present || !isActive) {
+                file.delete()
+                return@launch
+            }
             send(id, ready, finalType, name)
         }
     }

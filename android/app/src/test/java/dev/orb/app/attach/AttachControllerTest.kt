@@ -54,8 +54,8 @@ class AttachControllerTest {
         val up = Uploads()
         val c = controller(io(Triple("a", "a.png", "image/png" to 400)), up)
         c.addUris(listOf(uri("a")))
-        assertEquals(AttachState.Preparing, c.items.value.single().state)
-        assertTrue(c.busy)
+        // The provider is asked off the caller's thread, so nothing shows before the worker runs.
+        assertTrue(c.items.value.isEmpty())
         runCurrent()
         val item = c.items.value.single()
         assertEquals(AttachState.Ready, item.state)
@@ -65,6 +65,48 @@ class AttachControllerTest {
         assertEquals(Triple(200, "image/jpeg", null), up.calls.single())
         assertTrue(item.file!!.exists())
         assertFalse(c.busy)
+    }
+
+    @Test fun removingAChipWhilePreparingLeavesNoFileBehind() = runTest {
+        val up = Uploads()
+        val dir = tmp.newFolder()
+        val c = AttachController(
+            backgroundScope, io(Triple("a", "a.pdf", "application/pdf" to 50)), up.uploader,
+            { UploadPolicy(1000, setOf("pdf")) }, dir, StandardTestDispatcher(testScheduler),
+        )
+        c.addUris(listOf(uri("a")))
+        runCurrent()
+        assertEquals(AttachState.Ready, c.items.value.single().state)
+        c.remove(c.items.value.single().id)
+        assertTrue(dir.listFiles().orEmpty().isEmpty())
+        // Removed while still Preparing: the chip exists but the worker has not written the file yet.
+        val c2 = AttachController(
+            backgroundScope, io(Triple("b", "b.pdf", "application/pdf" to 50)), up.uploader,
+            { UploadPolicy(1000, setOf("pdf")) }, dir, StandardTestDispatcher(testScheduler),
+        )
+        c2.addBytes("b.pdf", "application/pdf", ByteArray(10))
+        val id = c2.items.value.single().id
+        c2.remove(id)
+        runCurrent()
+        assertTrue(c2.items.value.isEmpty())
+        assertTrue(dir.listFiles().orEmpty().isEmpty())
+        assertEquals(1, up.calls.size)
+    }
+
+    @Test fun aChipRemovedInTheMiddleOfPreparingLeavesNoFile() = runTest {
+        val up = Uploads()
+        val dir = tmp.newFolder()
+        lateinit var c: AttachController
+        c = AttachController(
+            backgroundScope, io(Triple("a", "a.png", "image/png" to 50)), up.uploader,
+            { UploadPolicy(1000, setOf("png", "jpg")) }, dir, StandardTestDispatcher(testScheduler),
+            reduce = { c.remove(c.items.value.single().id); it },
+        )
+        c.addUris(listOf(uri("a")))
+        runCurrent()
+        assertTrue(c.items.value.isEmpty())
+        assertTrue(dir.listFiles().orEmpty().isEmpty())
+        assertTrue(up.calls.isEmpty())
     }
 
     @Test fun aFileKeepsItsNameForThePcAndItsBytes() = runTest {
