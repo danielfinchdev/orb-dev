@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/overlay.jsx';
 import { Button } from '@/components/ui/button.jsx';
+import { WindowBar } from '@/components/window-bar.jsx';
 import { useStore, setState } from '@/lib/store.js';
 import { notifyError } from '@/lib/notify.js';
 import { errorText } from '@/lib/utils.js';
@@ -92,6 +93,8 @@ export function DialogHost() {
       <DialogContent className={d.wide ? 'sm:max-w-2xl' : undefined} onOpenAutoFocus={d.kind === 'confirm' ? confirmAutoFocus : undefined} onKeyDown={d.kind === 'confirm' ? swallowHeldEnter : undefined}>
         {d.kind === 'confirm' ? (
           <>
+            {/* Decorative caption bar of the window-like themes; the title, text and buttons below are untouched. */}
+            <WindowBar kind="title" />
             <DialogHeader><DialogTitle>{d.title}</DialogTitle><DialogDescription className="whitespace-pre-wrap">{d.description}</DialogDescription></DialogHeader>
             <DialogFooter>
               {d.cancel ? <Button variant="outline" data-autofocus={d.danger ? "" : undefined} onClick={() => close(d.id, false)}>{d.cancel}</Button> : null}
