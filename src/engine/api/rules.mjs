@@ -6,7 +6,7 @@ import { saveConfig } from '../../platform/config.mjs';
 import { DEFAULT_CONFIG } from '../../platform/config-file.mjs';
 import { redactSecrets } from '../../shared/secrets-scan.mjs';
 import { listRules, readRule, saveRule, createRule, setRuleState, deleteRule, restoreDefaults, RuleError, MAX_TITLE, MAX_TEXT } from '../../domain/rules/rules.mjs';
-import { RAILS, railById, railList } from '../../domain/rules/rails.mjs';
+import { RAILS, railById, railList, switchableIds } from '../../domain/rules/rails.mjs';
 import { fail, str } from './common.mjs';
 
 // A RuleError carries a code; the message shown comes from the locale files so it follows the app's language.
@@ -73,8 +73,14 @@ export function rulesMethods({ emit }) {
     },
     // Every switch on and every rail value back to the shipped one.
     'rails.restore': (_params, principal) => {
-      const patch = nest(RAILS.flatMap((r) => r.keys).map((k) => [k, pick(DEFAULT_CONFIG, k)]));
-      const stored = Object.keys(ctx.config.rails ?? {});
+      // «protected» is the owner's own list: restoring keeps it and only adds the shipped entries that are missing.
+      const patch = nest(RAILS.flatMap((r) => r.keys).filter((k) => k !== 'protected').map((k) => [k, pick(DEFAULT_CONFIG, k)]));
+      const mine = Array.isArray(ctx.config.protected) ? ctx.config.protected : [];
+      const lower = new Set(mine.map((x) => String(x).toLowerCase()));
+      patch.protected = [...mine, ...DEFAULT_CONFIG.protected.filter((x) => !lower.has(String(x).toLowerCase()))];
+      // a hand-written orb.json may hold ids that take no switch (a core rail, an unknown one): they are not touched
+      const ok = new Set(switchableIds());
+      const stored = Object.keys(ctx.config.rails ?? {}).filter((id) => ok.has(id));
       patch.rails = Object.fromEntries(stored.map((id) => [id, { enabled: true }]));
       try { saved(patch); } catch (error) { error.userFacing = true; throw error; }
       return railsFor(principal);

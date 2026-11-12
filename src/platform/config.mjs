@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from './context.mjs';
 import { paths, writeJson } from './paths.mjs';
-import { merge, AGENT_IDS } from './config-file.mjs';
-import { switchableIds } from '../domain/rules/rails.mjs';
+import { merge, AGENT_IDS, DEFAULT_CONFIG } from './config-file.mjs';
+import { switchableIds } from '../shared/rails-registry.mjs';
 import { relabelEmptyLogs } from './journal-files.mjs';
 import { inside as insideOf } from './fsx.mjs';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from '../shared/appearance.mjs';
@@ -13,16 +13,27 @@ import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from '../shared/appearance.mjs'
 // A connector's name as it goes into environment variable names (case does not count on Windows).
 export const connectorKey = (name) => String(name ?? '').toLowerCase().replace(/[^a-z0-9_]/g, '_');
 const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'skills', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'oneAtATime', 'approvalWaitMinutes', 'permissions', 'rails', 'protected', 'backup', 'tz', 'setupPending'];
+function tidyStored(stored) {
+  const out = structuredClone(stored);
+  const rounds = out.budget?.maxFixRounds;
+  if (rounds != null && !(Number.isInteger(rounds) && rounds >= 0 && rounds <= 10)) {
+    const n = Number(rounds);
+    out.budget.maxFixRounds = Number.isFinite(n) && n >= 0 ? Math.min(10, Math.floor(n)) : DEFAULT_CONFIG.budget.maxFixRounds;
+  }
+  // rails: a core or unknown id and any entry that is not {enabled: boolean} is ignored by the code, so it is dropped.
+  if (out.rails !== undefined) {
+    const ok = switchableIds();
+    const valid = out.rails && typeof out.rails === 'object' && !Array.isArray(out.rails) ? out.rails : {};
+    out.rails = Object.fromEntries(Object.entries(valid).filter(([id, v]) => ok.includes(id) && v && typeof v === 'object' && !Array.isArray(v) && typeof v.enabled === 'boolean'));
+  }
+  return out;
+}
 export function saveConfig(patch) {
   const unknown = Object.keys(patch ?? {}).filter((k) => !EDITABLE.includes(k));
   if (unknown.length) throw new Error(tr('msg.ctx.unknownSettings', { unknown: unknown.join(', ') }));
-  const next = merge(ctx.config, patch);
-  // A hand-written entry for a core or unknown rail is ignored by the code; it is dropped here so it cannot block
-  // saving other settings. An entry in this patch is validated as it comes.
-  if (next.rails && typeof next.rails === 'object' && !Array.isArray(next.rails)) {
-    const ok = switchableIds();
-    for (const id of Object.keys(next.rails)) if (!ok.includes(id) && !(patch?.rails && id in patch.rails)) delete next.rails[id];
-  }
+  // Only what the patch brings is validated strictly: values a hand-edited orb.json holds that the code tolerates
+  // (a 3.8.3 round limit, a malformed rails entry) are repaired first so they cannot block saving something else.
+  const next = merge(tidyStored(ctx.config), patch);
   validateConfig(next);
   writeJson(ctx.paths.config, next);
   if (next.language !== ctx.config.language) relabelEmptyLogs(ctx.home, ctx.config, next);

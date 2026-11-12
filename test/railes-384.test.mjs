@@ -243,3 +243,26 @@ test('tiempo-maximo paused: the live view carries no timeout instead of 0', () =
   assert.equal(Scheduler.prototype.live.call(stub)[0].timeoutMin, null);
   reset(); ctx.config.timeoutMinutes = 60;
 });
+
+test('saveConfig: values left in orb.json by 3.8.3 or by hand do not block saving something else', () => {
+  const keep = structuredClone(ctx.config);
+  try {
+    for (const legacy of [{ budget: { ...keep.budget, maxFixRounds: 15 } }, { budget: { ...keep.budget, maxFixRounds: '3' } }, { rails: null }, { rails: { publicar: false, core: { enabled: false }, 'freno-uso': { enabled: false } } }]) {
+      ctx.config = { ...structuredClone(keep), ...legacy };
+      assert.doesNotThrow(() => saveConfig({ userName: 'Ana' }), JSON.stringify(legacy));
+      assert.equal(ctx.config.userName, 'Ana');
+      assert.ok(ctx.config.rails === undefined || (ctx.config.rails && !('publicar' in ctx.config.rails) && !('core' in ctx.config.rails)));
+    }
+    ctx.config = { ...structuredClone(keep), budget: { ...keep.budget, maxFixRounds: '3' } };
+    saveConfig({ userName: 'Ana' });
+    assert.equal(ctx.config.budget.maxFixRounds, 3);
+    ctx.config = { ...structuredClone(keep), rails: { 'freno-uso': { enabled: false } } };
+    saveConfig({ userName: 'Ana' });
+    assert.equal(isRailOn('freno-uso'), false, 'a valid paused rail is kept');
+    // what the patch brings is still validated strictly
+    ctx.config = { ...structuredClone(keep), budget: { ...keep.budget, maxFixRounds: 15 } };
+    assert.throws(() => saveConfig({ budget: { maxFixRounds: 15 } }));
+    assert.throws(() => saveConfig({ rails: { publicar: false } }));
+    assert.throws(() => saveConfig({ rails: null }));
+  } finally { ctx.config = keep; }
+});

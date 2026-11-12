@@ -173,6 +173,13 @@ test('rails.set: switch back on, values of its own keys only, no fixed rails, no
   assert.equal(ctx.config.approvalWaitMinutes, 3);
 });
 
+test('rails.restore: a hand-written core rail entry does not break it', async () => {
+  ctx.config.rails = { core: { enabled: false }, 'no-existe': { enabled: false }, publicar: { enabled: false } };
+  await call('rails.restore', { unlock: await fresh('rails') });
+  assert.equal(isRailOn('publicar'), true);
+  assert.equal(isRailOn('core'), true);
+});
+
 test('rails.restore: every switch on and every rail value as shipped', async () => {
   const f = async () => ({ unlock: await fresh('rails') });
   await call('rails.set', { id: 'publicar', enabled: false, ...(await f()) });
@@ -183,7 +190,7 @@ test('rails.restore: every switch on and every rail value as shipped', async () 
   assert.ok(Object.values(ctx.config.rails).every((v) => v.enabled !== false), 'nothing paused');
   assert.ok(list.every((r) => r.activo));
   assert.equal(ctx.config.timeoutMinutes, DEFAULT_CONFIG.timeoutMinutes);
-  assert.deepEqual(ctx.config.protected, DEFAULT_CONFIG.protected);
+  assert.deepEqual(ctx.config.protected, ['C:\\solo-esto', ...DEFAULT_CONFIG.protected], 'the owner list stays, the shipped entries missing come back');
   assert.equal(ctx.config.budget.stopAt, DEFAULT_CONFIG.budget.stopAt);
   assert.equal(ctx.config.approvalWaitMinutes, DEFAULT_CONFIG.approvalWaitMinutes);
   assert.equal(ctx.config.language, 'es', 'settings that are not rails stay');
