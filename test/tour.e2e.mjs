@@ -198,7 +198,7 @@ const PC_VIEWS = ['chat', 'tasks', 'projects', 'agents', 'logs', 'activity', 'sc
 const PHONE_VIEWS = ['chat', 'chats', 'more', 'tasks', 'projects', 'logs', 'activity', 'schedules', 'phone', 'tutorials', 'board'];
 const WEB_VIEWS = ['chat', 'tasks', 'projects', 'logs'];
 // 3.6: six sections (their parts are taken scrolling).
-const SETTINGS = [['general', 'General (assistant, folder, appearance, updates)'], ['magiclink', 'Magic Link (devices)'], ['agentes', 'Agents (chat, tasks, test)'], ['datos', 'Data and backups'], ['avanzado', 'Advanced (tools, God mode)'], ['acerca', 'About (contribute, more apps)']];
+const SETTINGS = [['general', 'General (assistant, folder, appearance, updates)'], ['magiclink', 'Magic Link (devices)'], ['agentes', 'Agents (chat, tasks, test)'], ['permisos', 'Permissions (level, protected paths, timeout)'], ['extensiones', 'Skills and MCP'], ['datos', 'Data and backups'], ['avanzado', 'Advanced (tools, God mode)'], ['acerca', 'About (contribute, more apps)']];
 
 async function views(page, list, state, { scroll = true } = {}) {
   for (const v of list) {

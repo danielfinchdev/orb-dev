@@ -1,8 +1,8 @@
 // Settings: the assistant, its brain, how tasks run, usage caps, skills and MCP servers and the assistant's folder.
-// DESIGN-SYSTEM §2.3: six sections — General, Magic Link (Dispositivos), Agentes y uso, Datos, Avanzado and
+// Eight sections — General, Magic Link (Dispositivos), Agentes y uso, Permisos, Skills y MCP, Datos, Avanzado and
 // Acerca de.
 import { useEffect } from 'react';
-import { DatabaseBackup, Wrench, SlidersHorizontal, Radar, Cpu, Info, Puzzle } from 'lucide-react';
+import { DatabaseBackup, Wrench, SlidersHorizontal, Radar, Cpu, Info, Puzzle, ShieldCheck } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
 import { PRODUCT, AUTHOR } from '../../../shared/product.mjs';
 import { Dialog, DialogContent, DialogTitle, BubbleTip } from '@/components/ui/overlay.jsx';
@@ -12,14 +12,14 @@ import { t, useT } from '@/lib/i18n.js';
 import { MagicLinkPanel, SubSection } from '../magic-link.jsx';
 import { DataCards } from '../data.jsx';
 import { ExtensionsPanel } from '../extensions.jsx';
-import { AssistantCard, AppearanceCard, ChatCard, PermissionsCard, TasksCard, TestCard, FolderCard, ProtectedCard, InterfaceCard, ExpertCard } from './general.jsx';
+import { AssistantCard, AppearanceCard, ChatCard, PermissionsCard, ApprovalWaitCard, TasksCard, TestCard, FolderCard, ProtectedCard, InterfaceCard, ExpertCard } from './general.jsx';
 import { AndroidCard, MobileCard, BrowserCard } from './devices.jsx';
 // «Este móvil», the phone's screen of its own (main.jsx loads it from here, with the dialog).
 export { PhoneView } from './devices.jsx';
 import { UpdatesCard, SupportCard, FeedbackCard, MoreAppsCard, AboutCard } from './about.jsx';
 
 
-// Ajustes is a window over the app: six sections on the left (DESIGN-SYSTEM §2.3). groups: the parts of a section, each
+// Ajustes is a window over the app: eight sections on the left. groups: the parts of a section, each
 // with its heading; the active section lists them under its name in the menu, to jump to one.
 const SECTIONS = [
   { id: 'general', icon: SlidersHorizontal, groups: ['apariencia', 'actualizaciones'],
@@ -27,12 +27,14 @@ const SECTIONS = [
   // Who can enter this Orb: the linked phones and browsers.
   { id: 'magiclink', icon: Radar, groups: ['dispositivos'],
     cards: () => <MagicLinkPanel grouped phoneAccess={<MobileCard />} /> },
-  { id: 'agentes', icon: Cpu, cards: (c) => <><ChatCard c={c} /><PermissionsCard c={c} /><TasksCard c={c} />{bridge.mobile ? null : <TestCard />}</> },
+  { id: 'agentes', icon: Cpu, cards: (c) => <><ChatCard c={c} /><TasksCard c={c} />{bridge.mobile ? null : <TestCard />}</> },
+  // What the agents may do without asking, the protected paths and how long a question waits.
+  { id: 'permisos', icon: ShieldCheck, cards: (c) => <><PermissionsCard c={c} /><ProtectedCard c={c} /><ApprovalWaitCard c={c} /></> },
   // every skill and MCP server of core (src/ui/views/extensions.jsx); this PC only.
   { id: 'extensiones', icon: Puzzle, pcOnly: true, cards: () => <ExtensionsPanel /> },
   { id: 'datos', icon: DatabaseBackup, cards: () => <DataCards /> },
   { id: 'avanzado', icon: Wrench, groups: () => ['herramientas', ...(fullPc() ? ['experto'] : [])],
-    cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /><ProtectedCard c={c} /><AndroidCard /></SubSection>
+    cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /><AndroidCard /></SubSection>
       {fullPc() ? <SubSection id="experto" title={t('settings.group.experto')}><ExpertCard c={c} /></SubSection> : null}</> },
   { id: 'acerca', icon: Info, groups: ['contribuye', 'apps'],
     cards: (c, app) => <><AboutCard version={app.version} /><SubSection id="contribuye" title={t('settings.group.contribuye')}><SupportCard /><FeedbackCard /></SubSection><SubSection id="apps" title={t('settings.group.apps')}><MoreAppsCard /></SubSection></> }

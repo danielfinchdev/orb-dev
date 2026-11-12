@@ -129,6 +129,22 @@ export function PermissionsCard({ c }) {
   );
 }
 
+// How long a permission question waits for an answer before it is denied (own save: it is not part of the tasks form).
+export function ApprovalWaitCard({ c }) {
+  const t = useT();
+  const saved = c.approvalWaitMinutes ?? 10;
+  const [minutes, setMinutes] = useState(saved);
+  return (
+    <Card>
+      <CardHeader><CardTitle>{t('settings.approvalWaitTitle')}</CardTitle><CardDescription>{t('settings.approvalWaitHint')}</CardDescription></CardHeader>
+      <CardContent>
+        <Field label={t('settings.approvalWait')}><div className="flex items-center gap-2"><Input type="number" min={0} max={240} value={minutes} onChange={(e) => setMinutes(num(e.target.value))} aria-label={`${t('settings.approvalWait')} (${t('settings.minutes')})`} data-testid="approval-wait" /><span className="text-muted-foreground text-xs">{t('settings.minutes')}</span></div></Field>
+      </CardContent>
+      <CardFooter><Button size="sm" onClick={() => save({ approvalWaitMinutes: Math.min(240, Math.max(0, minutes)) })} data-testid="approval-wait-save">{t('settings.save')}</Button></CardFooter>
+    </Card>
+  );
+}
+
 export function TasksCard({ c }) {
   const t = useT();
   const agents = Object.keys(c.agents);
@@ -136,7 +152,7 @@ export function TasksCard({ c }) {
     stopAt: Math.round((c.budget.stopAt ?? 0.92) * 100), caps: Object.fromEntries(agents.map((a) => [a, { maxTasks: c.budget.agents?.[a]?.maxTasks ?? 20, maxHeavy: c.budget.agents?.[a]?.maxHeavy ?? 6 }])),
     resumeAfterRestart: c.continuity?.resumeAfterRestart !== false, resumeAtReset: c.continuity?.resumeAtReset !== false,
     delegation: c.delegation?.enabled !== false, trusted: c.delegation?.trusted !== false, maxPerTask: c.delegation?.maxPerTask ?? 4,
-    oneAtATime: c.oneAtATime === true, approvalWait: c.approvalWaitMinutes ?? 10, parallelChats: c.orchestrator?.parallel ?? 3 });
+    oneAtATime: c.oneAtATime === true, parallelChats: c.orchestrator?.parallel ?? 3 });
   const cap = (a, k, val) => setV({ ...v, caps: { ...v.caps, [a]: { ...v.caps[a], [k]: num(val) } } });
   // one slider from maximum saving to maximum use sets every limit at once (and how careful the assistant is with
   // the quota); the limits themselves stay in «Opciones avanzadas» for whoever wants to tune them by hand.
@@ -187,7 +203,6 @@ export function TasksCard({ c }) {
         <div className="grid grid-cols-3 gap-3">
           <Field label={t('settings.stopAt')} hint={t('settings.stopAtHint')}><Input type="number" min={50} max={100} value={v.stopAt} onChange={(e) => setV({ ...v, stopAt: num(e.target.value) })} /></Field>
           <Field label={t('settings.maxPerTask')} hint={t('settings.maxPerTaskHint')}><Input type="number" min={0} max={20} value={v.maxPerTask} onChange={(e) => setV({ ...v, maxPerTask: num(e.target.value) })} /></Field>
-          <Field label={t('settings.approvalWait')} hint={t('settings.approvalWaitHint')}><div className="flex items-center gap-2"><Input type="number" min={0} max={240} value={v.approvalWait} onChange={(e) => setV({ ...v, approvalWait: num(e.target.value) })} aria-label={`${t('settings.approvalWait')} (${t('settings.minutes')})`} data-testid="approval-wait" /><span className="text-muted-foreground text-xs">{t('settings.minutes')}</span></div></Field>
           {/* how many conversations the assistant answers at the same time (the others wait their turn). */}
           <Field label={t('settings.parallelChats')} hint={t('settings.parallelChatsHint')}><Input type="number" min={1} max={6} value={v.parallelChats} onChange={(e) => setV({ ...v, parallelChats: num(e.target.value) })} data-testid="parallel-chats" /></Field>
         </div>
@@ -196,7 +211,7 @@ export function TasksCard({ c }) {
           <div className="text-muted-foreground grid grid-cols-3 gap-3 text-xs"><span>{t('settings.colAgent')}</span><span>{t('settings.colTasks')}</span><span>{t('settings.colHeavy')}</span></div>
           {agents.map((a) => <div key={a} className="grid grid-cols-3 items-center gap-3"><span className="text-sm">{AGENT[a] ?? a}</span><Input type="number" min={1} value={v.caps[a].maxTasks} onChange={(e) => cap(a, 'maxTasks', e.target.value)} /><Input type="number" min={0} value={v.caps[a].maxHeavy} onChange={(e) => cap(a, 'maxHeavy', e.target.value)} /></div>)}
         </div>
-        <div><Button size="sm" onClick={() => { setProfile(null); save({ autoRun: v.autoRun, maxParallel: v.maxParallel, perAgent: v.perAgent, timeoutMinutes: v.timeoutMinutes, review: { auto: v.review }, policy: { highNeedsApproval: v.high }, budget: { profile: null, windowHours: v.windowHours, stopAt: Math.min(1, Math.max(0.5, v.stopAt / 100)), agents: v.caps }, delegation: { maxPerTask: v.maxPerTask }, approvalWaitMinutes: Math.min(240, Math.max(0, v.approvalWait)), orchestrator: { parallel: Math.min(6, Math.max(1, v.parallelChats || 3)) } }); }} data-testid="spend-save">{t('settings.save')}</Button></div>
+        <div><Button size="sm" onClick={() => { setProfile(null); save({ autoRun: v.autoRun, maxParallel: v.maxParallel, perAgent: v.perAgent, timeoutMinutes: v.timeoutMinutes, review: { auto: v.review }, policy: { highNeedsApproval: v.high }, budget: { profile: null, windowHours: v.windowHours, stopAt: Math.min(1, Math.max(0.5, v.stopAt / 100)), agents: v.caps }, delegation: { maxPerTask: v.maxPerTask }, orchestrator: { parallel: Math.min(6, Math.max(1, v.parallelChats || 3)) } }); }} data-testid="spend-save">{t('settings.save')}</Button></div>
         </div>
           </CollapsibleContent>
         </Collapsible>

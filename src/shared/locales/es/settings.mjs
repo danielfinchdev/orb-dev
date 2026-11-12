@@ -77,6 +77,7 @@ export default {
   'settings.oneAtATimeHint': 'Las tareas se ejecutan de una en una, en orden.',
   'settings.approvalWait': 'Tiempo de espera de permisos',
   'settings.approvalWaitHint': 'Al agotarse, se deniega. 0 = sin límite.',
+  'settings.approvalWaitTitle': 'Si nadie responde',
   'settings.review': 'Task Review automático',
   'settings.reviewHint': 'Otro modelo revisa cada tarea terminada antes del informe.',
   'settings.resumeRestart': 'Reanudar tareas al abrir Orb',
