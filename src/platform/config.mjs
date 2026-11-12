@@ -4,6 +4,7 @@ import path from 'node:path';
 import { ctx, tr } from './context.mjs';
 import { paths, writeJson } from './paths.mjs';
 import { merge, AGENT_IDS } from './config-file.mjs';
+import { switchableIds } from '../domain/rules/rails.mjs';
 import { relabelEmptyLogs } from './journal-files.mjs';
 import { inside as insideOf } from './fsx.mjs';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from '../shared/appearance.mjs';
@@ -11,11 +12,17 @@ import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from '../shared/appearance.mjs'
 // Settings saved from the app. Only known top-level keys are accepted.
 // A connector's name as it goes into environment variable names (case does not count on Windows).
 export const connectorKey = (name) => String(name ?? '').toLowerCase().replace(/[^a-z0-9_]/g, '_');
-const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'skills', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'oneAtATime', 'approvalWaitMinutes', 'permissions', 'protected', 'backup', 'tz', 'setupPending'];
+const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'skills', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'oneAtATime', 'approvalWaitMinutes', 'permissions', 'rails', 'protected', 'backup', 'tz', 'setupPending'];
 export function saveConfig(patch) {
   const unknown = Object.keys(patch ?? {}).filter((k) => !EDITABLE.includes(k));
   if (unknown.length) throw new Error(tr('msg.ctx.unknownSettings', { unknown: unknown.join(', ') }));
   const next = merge(ctx.config, patch);
+  // A hand-written entry for a core or unknown rail is ignored by the code; it is dropped here so it cannot block
+  // saving other settings. An entry in this patch is validated as it comes.
+  if (next.rails && typeof next.rails === 'object' && !Array.isArray(next.rails)) {
+    const ok = switchableIds();
+    for (const id of Object.keys(next.rails)) if (!ok.includes(id) && !(patch?.rails && id in patch.rails)) delete next.rails[id];
+  }
   validateConfig(next);
   writeJson(ctx.paths.config, next);
   if (next.language !== ctx.config.language) relabelEmptyLogs(ctx.home, ctx.config, next);
@@ -141,6 +148,16 @@ export function validateConfig(c) {
   // «Auto» or «Preguntar» for the agents (src/domain/security/guard.mjs › globalAutonomy).
   if (c.permissions !== undefined && (!c.permissions || typeof c.permissions !== 'object' || Array.isArray(c.permissions) || !['auto', 'preguntar'].includes(c.permissions.mode))) throw new Error(tr('msg.ctx.badAppearance', { name: 'permissions' }));
   if (c.budget?.stopAt != null && !(Number(c.budget.stopAt) >= 0.5 && Number(c.budget.stopAt) <= 1)) throw new Error(tr('msg.ctx.stopAt'));
+  if (c.budget?.weeklyStopAt != null && !(Number(c.budget.weeklyStopAt) >= 0.5 && Number(c.budget.weeklyStopAt) <= 1)) throw new Error(tr('msg.ctx.weeklyStopAt'));
+  if (c.budget?.maxFixRounds != null) int(c.budget.maxFixRounds, 0, 10, 'budget.maxFixRounds');
+  // Only rails with a switch can be set (a core rail never has one).
+  if (c.rails !== undefined) {
+    const ok = switchableIds();
+    if (!c.rails || typeof c.rails !== 'object' || Array.isArray(c.rails)) throw new Error(tr('msg.ctx.badRails'));
+    for (const [id, v] of Object.entries(c.rails)) {
+      if (!ok.includes(id) || !v || typeof v !== 'object' || Array.isArray(v) || typeof v.enabled !== 'boolean') throw new Error(tr('msg.ctx.badRail', { id }));
+    }
+  }
   if (c.budget?.profile != null && ![0, 1, 2, 3, 4].includes(c.budget.profile)) throw new Error(tr('msg.ctx.profile'));
   if (!Array.isArray(c.projectRoots) || c.projectRoots.some((r) => typeof r !== 'string')) throw new Error(tr('msg.ctx.rootsList'));
   return true;

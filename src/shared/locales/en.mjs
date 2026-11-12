@@ -34,6 +34,7 @@ import notes from './en/notes.mjs';
 import ext from './en/ext.mjs';
 import acceso from './en/acceso.mjs';
 import auto from './en/auto.mjs';
+import rails from './en/rails.mjs';
 import herramientas from './en/herramientas.mjs';
 
 export default {
@@ -72,5 +73,6 @@ export default {
   ...ext,
   ...acceso,
   ...auto,
+  ...rails,
   ...herramientas
 };

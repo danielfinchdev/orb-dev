@@ -33,6 +33,9 @@ export const DEFAULT_CONFIG = Object.freeze({
   // without questions inside the project folder (undo instead of asking), 'preguntar' asks before risky commands and
   // before writing outside it (src/domain/security/guard.mjs).
   permissions: { mode: 'auto' },
+  // The rails (src/domain/rules/rails.mjs): empty = all on; only the ones paused by the user are stored, as
+  // { <id>: { enabled: false } }. The core rails have no switch.
+  rails: {},
   agentOrder: ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot'],
   agents: {
     // Claude Code accepts the aliases sonnet/opus/haiku, so the list keeps working when new versions come out.
@@ -58,7 +61,8 @@ export const DEFAULT_CONFIG = Object.freeze({
   // 5-hour / weekly window is used and when it resets), so the fixed caps are a safety net, not the brake they were.
   // stopAt: share of the real window (0-1) at which new tasks wait for the reset instead of eating the last of it.
   // profile: the «ahorro ↔ uso» slider of Ajustes (0 = maximum saving … 4 = maximum use; null = set by hand).
-  budget: { profile: 2, windowHours: 5, stopAt: 0.92, agents: Object.fromEntries(AGENT_IDS.map((a) => [a, { maxTasks: 20, maxHeavy: 6 }])) },
+  // weeklyStopAt: the same for the weekly window. maxFixRounds: correction rounds of one request.
+  budget: { profile: 2, windowHours: 5, stopAt: 0.92, weeklyStopAt: 0.85, maxFixRounds: 2, agents: Object.fromEntries(AGENT_IDS.map((a) => [a, { maxTasks: 20, maxHeavy: 6 }])) },
   policy: { reasoning: ['low', 'medium', 'high'], highNeedsApproval: true, fast: false, banned: [] },
   sensitive: ['external_write', 'publish', 'financial', 'credential_access', 'destructive', 'razonamiento_alto'],
   // Task Review: another model (another provider when there is one) audits finished work read-only and gives a verdict.
