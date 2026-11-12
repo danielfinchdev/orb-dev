@@ -86,7 +86,10 @@ export const METHODS = Object.freeze({
   'terminal.list': 'pc', 'terminal.open': 'pc', 'terminal.write': 'pc', 'terminal.close': 'pc',
   // Ajustes › Skills y MCP (src/engine/api/extensions.mjs): what agents run comes in and out of core only here
   'extensions.list': 'pc', 'extensions.toggle': 'pc', 'extensions.import': 'pc', 'extensions.remove': 'pc', 'extensions.approve': 'pc',
-  'extensions.reject': 'pc', 'extensions.edit': 'pc', 'extensions.adopt': 'pc', 'extensions.applyCheck': 'pc', 'extensions.apply': 'pc'
+  'extensions.reject': 'pc', 'extensions.edit': 'pc', 'extensions.adopt': 'pc', 'extensions.applyCheck': 'pc', 'extensions.apply': 'pc',
+  // the text rules and the rails (src/engine/api/rules.mjs): the phone may only read them, every change is made here
+  'rules.list': 'remote', 'rules.read': 'remote', 'rails.list': 'remote',
+  'rules.save': 'pc', 'rules.create': 'pc', 'rules.pause': 'pc', 'rules.resume': 'pc', 'rules.delete': 'pc', 'rules.restoreDefaults': 'pc', 'rails.set': 'pc', 'rails.restore': 'pc'
 });
 // What a linked phone or browser may call (the rest is this PC's).
 export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter((m) => METHODS[m] === 'remote')));
@@ -102,7 +105,10 @@ export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter(
 // pairing a phone or starting an emulator (the agents may then reach it), and giving a chat «Acceso total al PC» or the
 // phone (the usual 5-minute unlock, not the password every time: see below).
 export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'backup.previousKey', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'projects.deleteCheck', 'extensions.remove',
-  'android.pairStart', 'android.pairCode', 'android.emulatorStart', 'sessions.grantTotal', 'sessions.grantAndroid']));
+  'android.pairStart', 'android.pairCode', 'android.emulatorStart', 'sessions.grantTotal', 'sessions.grantAndroid',
+  // rules: your own are edited with the usual unlock; pausing or deleting a shipped one (rules.pause / rules.delete,
+  // see freshPurpose) and everything about the rails asks for the password every time
+  'rules.save', 'rules.create', 'rules.resume', 'rules.pause', 'rules.delete', 'rules.restoreDefaults', 'rails.set', 'rails.restore']));
 // the actions that ask for the master password EVERY time, even right after another unlock (the owner: deleting a
 // project «requiere master pass»): method → the purpose its token must carry (src/domain/security/master.mjs › issue(purpose)).
 // projects.delete and projects.deleteAbort need no token: they take the one-off ticket projects.deleteCheck returned
@@ -110,14 +116,24 @@ export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.v
 // «Acceso total al PC» and «Usar mi móvil Android», given to a chat:
 // they take the usual 5-minute unlock (UNLOCK_METHODS), not
 // the password every time; they still go when Orb locks (src/engine/security/grants.mjs).
-export const FRESH_UNLOCK = Object.freeze({ 'projects.deleteCheck': 'deleteProject' });
+// rails: any change to the limits (rails.set, rails.restore, or `rails` inside config.save); ruleSeed: putting the shipped
+// rules back, and pausing or deleting one of them (those two only for a shipped rule: see freshPurpose).
+export const FRESH_UNLOCK = Object.freeze({ 'projects.deleteCheck': 'deleteProject', 'rails.set': 'rails', 'rails.restore': 'rails', 'rules.restoreDefaults': 'ruleSeed' });
+export const RULE_PURPOSE = 'ruleSeed';
+export const RAILS_PURPOSE = 'rails';
 // a secret an agent asked for, saved in the vault or taken from it, asks every time too (its
 // token is for that one action); the purpose depends on what the card does.
 export const SECRET_PURPOSES = Object.freeze({ save: 'secretSave', saved: 'secretSaved' });
 export const FRESH_PURPOSES = Object.freeze([...new Set([...Object.values(FRESH_UNLOCK), ...Object.values(SECRET_PURPOSES)])]);
+// Calls whose purpose depends on the rule they name: the caller (master.mjs) reads the rule and says if it is a shipped one.
+export const RULE_TARGET_METHODS = Object.freeze(new Set(['rules.pause', 'rules.delete']));
 // The purpose a guarded call's token must carry (an action that asks every time), or null (the usual 5-minute token).
-export function freshPurpose(method, params) {
+// facts.seedRule: the rule a rules.pause / rules.delete names is a shipped one (this file reads no files itself).
+// config.save with `rails` is the same door as rails.set, so it asks the same way.
+export function freshPurpose(method, params, facts = {}) {
   if (method === 'secrets.answer') return params?.saved === true ? SECRET_PURPOSES.saved : params?.save === true ? SECRET_PURPOSES.save : null;
+  if (method === 'config.save') return params?.patch?.rails !== undefined ? RAILS_PURPOSE : null;
+  if (RULE_TARGET_METHODS.has(method)) return facts.seedRule === true ? RULE_PURPOSE : null;
   return FRESH_UNLOCK[method] ?? null;
 }
 export function needsUnlock(method, params, current = {}) {
@@ -126,6 +142,7 @@ export function needsUnlock(method, params, current = {}) {
   if (method === 'secrets.answer') return params?.save === true || params?.saved === true;
   if (method !== 'config.save') return false;
   const patch = params?.patch ?? {};
+  if (patch.rails !== undefined) return true;
   if (patch.backup && typeof patch.backup === 'object' && Object.hasOwn(patch.backup, 'folder')) return true;
   if (Array.isArray(patch.protected) && (current?.protected ?? []).some((x) => !patch.protected.includes(x))) return true;
   if (!Array.isArray(patch.mcpServers)) return false;

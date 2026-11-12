@@ -10,7 +10,9 @@ import { paths } from '../../platform/paths.mjs';
 import { machineKeys } from '../../platform/keys.mjs';
 import { Master, MasterError, IN_VAULT, mirrorTo, restoreMissing, checkPassword, MIN_LENGTH, UNLOCK_MS } from '../../domain/security/master.mjs';
 import { sealConnectors, connectorSecrets, refOf, secretId, ENV_NAME, bindMissing } from '../../domain/security/connector-secrets.mjs';
-import { needsUnlock, freshPurpose, FRESH_PURPOSES } from '../../domain/security/permissions.mjs';
+import { needsUnlock, freshPurpose, FRESH_PURPOSES, RULE_TARGET_METHODS } from '../../domain/security/permissions.mjs';
+import { readRule, isRuleId } from '../../domain/rules/rules.mjs';
+import { DEFAULT_IDS } from '../../domain/rules/defaults.mjs';
 import { isRecoveryCode, hasRecovery } from '../../domain/data/backup.mjs';
 import { str } from './common.mjs';
 import { scrubVaultedSecrets, DONE_AT } from '../../domain/data/legacy/migrate-38.mjs';
@@ -77,7 +79,10 @@ export function checkUnlock(method, params) {
   const m = ctx.master;
   if (!m?.hasPassword()) throw userError(m?.state().lost ? 'msg.master.lost' : 'msg.master.createFirst', {}, { reason: 'unlock' });
   // a token for one action (FRESH_UNLOCK) opens it once: it is used up here.
-  const purpose = freshPurpose(method, params);
+  // pausing or deleting a rule asks every time only when it is a shipped one: its file says so (de_serie), and a shipped id
+  // counts even when its file is hidden or broken, so there is no state in which the password is skipped.
+  const facts = RULE_TARGET_METHODS.has(method) ? { seedRule: isRuleId(params?.id) && (DEFAULT_IDS.has(params.id) || readRule(params.id)?.de_serie === true) } : {};
+  const purpose = freshPurpose(method, params, facts);
   if (!m.checkToken(params?.unlock, purpose, { consume: Boolean(purpose) })) throw userError('msg.master.needUnlock', {}, { reason: 'unlock' });
 }
 

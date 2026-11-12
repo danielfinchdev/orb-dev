@@ -27,6 +27,7 @@ import { agentAuth } from '../../domain/security/agent-auth.mjs';
 import { createSecretRequests } from '../security/agent-secrets.mjs';
 import { createTerminals } from '../host/user-terminal.mjs';
 import { extensionMethods } from './extensions.mjs';
+import { rulesMethods } from './rules.mjs';
 import { layoutPlan, layoutApply, guardOutside } from '../workspace-layout.mjs';
 import { modelCatalog, chooseModel, LEVELS } from '../usage/catalog.mjs';
 import { git } from '../../platform/git.mjs';
@@ -318,6 +319,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'terminal.write': ({ id, text }) => terminals.write({ id: int(id, 'terminal'), text: typeof text === 'string' ? text : '' }),
     'terminal.close': ({ id }) => terminals.close({ id: int(id, 'terminal') }),
     ...extensionMethods(shared),
+    ...rulesMethods(shared), // the text rules and the rails (core/normas, orb.json rails)
     ...appMethods({ home: ctx.home, version }), // this PC's tools (terminal, editors, feedback…)
     ...musicMethods({ log }) // the music's tracks, downloaded the first time (src/engine/host/music.mjs)
   };
