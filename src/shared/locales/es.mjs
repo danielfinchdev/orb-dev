@@ -38,6 +38,7 @@ import rails from './es/rails.mjs';
 import herramientas from './es/herramientas.mjs';
 import f6nuevas from './es/f6-nuevas.mjs';
 import f6bitacoras from './es/f6-bitacoras.mjs';
+import f6normas from './es/f6-normas.mjs';
 
 export default {
   ...base,
@@ -78,5 +79,6 @@ export default {
   ...rails,
   ...herramientas,
   ...f6nuevas,
-  ...f6bitacoras
+  ...f6bitacoras,
+  ...f6normas
 };

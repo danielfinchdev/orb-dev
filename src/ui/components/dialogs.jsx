@@ -24,7 +24,7 @@ function open(dialog) {
 }
 function close(id, value) { setState((s) => { const d = (s.dialogs ?? []).find((x) => x.id === id); d?.resolve(value); return { dialogs: (s.dialogs ?? []).filter((x) => x.id !== id) }; }); }
 
-export const confirm = (title, description, { ok = t('comp.dialogs.ok'), cancel = t('comp.dialogs.cancel'), danger = false } = {}) => open({ kind: 'confirm', title, description, ok, cancel, danger });
+export const confirm = (title, description, { ok = t('comp.dialogs.ok'), cancel = t('comp.dialogs.cancel'), danger = false, warn = false } = {}) => open({ kind: 'confirm', title, description, ok, cancel, danger, warn });
 // one of a few answers (each { value, label, hint?, variant? }); resolves with the value chosen, or null when closed.
 // With hints, each answer is a full-width button with its one line under it (the first one is the default).
 // cancel: false when one of the answers already is «leave it as it is».
@@ -101,7 +101,7 @@ export function DialogHost() {
             <DialogHeader><DialogTitle>{d.title}</DialogTitle><DialogDescription className="whitespace-pre-wrap">{d.description}</DialogDescription></DialogHeader>
             <DialogFooter>
               {d.cancel ? <Button variant="outline" data-autofocus={d.danger ? "" : undefined} onClick={() => close(d.id, false)}>{d.cancel}</Button> : null}
-              <Button variant={d.danger ? 'destructive' : 'default'} data-autofocus={d.danger && d.cancel ? undefined : ""} onClick={() => close(d.id, true)}>{d.ok}</Button>
+              <Button variant={d.danger ? 'destructive' : d.warn ? 'warn' : 'default'} data-autofocus={d.danger && d.cancel ? undefined : ""} onClick={() => close(d.id, true)}>{d.ok}</Button>
             </DialogFooter>
           </>
         ) : d.kind === 'choice' ? <ChoiceDialog d={d} /> : <FormDialog d={d} />}

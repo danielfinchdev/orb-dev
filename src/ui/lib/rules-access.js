@@ -46,7 +46,7 @@ export const LIMITS = Object.freeze({
   timeoutMinutes: { min: 5, max: 600 },
   maxParallel: { min: 1, max: 10 },
   perAgent: { min: 1, max: 5 },
-  approvalWaitMinutes: { min: 1, max: 1440 },
+  approvalWaitMinutes: { min: 1, max: 240 },
   maxTasks: { min: 1, max: 1000 },
   maxHeavy: { min: 1, max: 1000 }
 });
@@ -59,3 +59,23 @@ export function clampValue(key, raw) {
   return lim.percent ? v / 100 : v;
 }
 export const shownValue = (key, v) => (LIMITS[key]?.percent && typeof v === 'number' ? Math.round(v * 100) : v);
+
+// The values of a rail as flat «dotted key → value» pairs (a list stays a list), to show a change as before → after.
+export function flatten(obj, prefix = '', out = {}) {
+  if (obj && typeof obj === 'object' && !Array.isArray(obj)) { for (const [k, v] of Object.entries(obj)) flatten(v, prefix ? `${prefix}.${k}` : k, out); } else out[prefix] = obj;
+  return out;
+}
+// → [{ key, before, after }] for every setting that differs; a list is compared as a whole and shown joined.
+export function diffValues(before, after) {
+  const a = flatten(before ?? {}); const b = flatten(after ?? {});
+  const show = (key, v) => (Array.isArray(v) ? v.join(', ') : v === undefined ? '' : String(shownValue(key, v)));
+  return [...new Set([...Object.keys(a), ...Object.keys(b)])]
+    .filter((key) => JSON.stringify(a[key]) !== JSON.stringify(b[key]))
+    .map((key) => ({ key, before: show(key, a[key]), after: show(key, b[key]) }));
+}
+// The patch of rails.set `values` out of an edited copy: only the keys that changed, whole (a list or the agents' caps).
+export function changedValues(before, after, keys) {
+  const out = {};
+  for (const key of keys) if (JSON.stringify(before?.[key]) !== JSON.stringify(after?.[key]) && after && Object.hasOwn(after, key)) out[key] = after[key];
+  return out;
+}
