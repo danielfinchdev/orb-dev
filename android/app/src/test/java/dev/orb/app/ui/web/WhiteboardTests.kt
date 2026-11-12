@@ -42,49 +42,61 @@ class WhiteboardMessagesTest {
     }
 
     @Test fun unknownOrBrokenMessagesAreDropped() {
-        for (raw in listOf(null, "", "nope", "[]", "42", """{"type":"open","url":"https://x"}""", """{"type":"eval"}""", """{"type":7}""", """{}""", """{"type":"save"}""")) {
+        for (raw in listOf(null, "", "nope", "[]", "42", """{"type":"open","url":"https://x"}""", """{"type":"eval"}""", """{"type":7}""", """{}""")) {
             assertNull("must be dropped: $raw", WhiteboardMessages.parse(raw))
         }
     }
 
-    @Test fun anOversizedMessageIsDropped() {
+    @Test fun anOversizedOrUnreadableSaveIsRejectedNotSilentlyLost() {
         val big = save(""","png":"data:image/png;base64,${"A".repeat(WhiteboardMessages.MAX_MESSAGE_CHARS)}"""")
-        assertNull(WhiteboardMessages.parse(big))
+        assertEquals(WhiteboardMessage.Rejected, WhiteboardMessages.parse(big))
+        assertEquals(WhiteboardMessage.Rejected, WhiteboardMessages.parse("""{"type":"save"}"""))
+        assertEquals(WhiteboardMessage.Rejected, WhiteboardMessages.parse("""{"type":"save","elements":{"a":1}}"""))
     }
 
-    @Test fun theDrawingIsChecked() {
-        assertNull(WhiteboardMessages.parse(save(elements = """[{"id":"a","type":"embeddable"}]""")))
-        assertNull(WhiteboardMessages.parse(save(elements = """[{"id":"a","type":"iframe"}]""")))
-        assertNull(WhiteboardMessages.parse(save(elements = """["x"]""")))
-        assertNull(WhiteboardMessages.parse(save(elements = """[{"type":"rectangle"}]""")))
-        assertNull(WhiteboardMessages.parse("""{"type":"save","elements":{"a":1}}"""))
+    @Test fun theFlushedAnswerIsKnown() {
+        assertEquals(WhiteboardMessage.Flushed, WhiteboardMessages.parse("""{"type":"flushed"}"""))
+    }
+
+    @Test fun onlyTheUnsupportedElementsAreRemovedAndCounted() {
+        val mixed = """[$rect,{"id":"b","type":"embeddable"},{"id":"c","type":"iframe"},"x",{"type":"rectangle"}]"""
+        val s = WhiteboardMessages.parse(save(elements = mixed)) as WhiteboardMessage.Save
+        assertEquals(1, s.elements.size)
+        assertEquals(4, s.dropped)
         val many = (1..WhiteboardMessages.MAX_ELEMENTS + 1).joinToString(",", "[", "]") { """{"id":"e$it","type":"line"}""" }
-        assertNull(WhiteboardMessages.parse(save(elements = many)))
+        assertEquals(WhiteboardMessage.Rejected, WhiteboardMessages.parse(save(elements = many)))
     }
 
     @Test fun picturesMustBeSmallDataImages() {
         val ok = save(""","files":{"f-1":{"mimeType":"image/png","dataURL":"data:image/png;base64,AAAA"}}""")
         val s = WhiteboardMessages.parse(ok) as WhiteboardMessage.Save
         assertEquals(setOf("f-1"), s.files.keys)
+        assertEquals(setOf("f-1"), s.offered)
         for (bad in listOf(
             """"f":{"dataURL":"https://evil.test/x.png"}""",
             """"f":{"dataURL":"data:text/html;base64,AAAA"}""",
+            """"f":{"dataURL":"data:image/x-icon;base64,AAAA"}""",
             """"../x":{"dataURL":"data:image/png;base64,AAAA"}""",
             """"f":{"mimeType":"image/png"}""",
             """"f":"data:image/png;base64,AAAA"""",
-        )) assertNull("must be dropped: $bad", WhiteboardMessages.parse(save(""","files":{$bad}""")))
+        )) {
+            // The drawing still travels; only the picture is left out and counted.
+            val r = WhiteboardMessages.parse(save(""","files":{$bad}""")) as WhiteboardMessage.Save
+            assertTrue("must be left out: $bad", r.files.isEmpty())
+            assertEquals(1, r.dropped)
+        }
         val huge = """"f":{"dataURL":"data:image/png;base64,${"A".repeat(WhiteboardMessages.MAX_FILE_CHARS)}"}"""
-        assertNull(WhiteboardMessages.parse(save(""","files":{$huge}""")))
+        assertTrue((WhiteboardMessages.parse(save(""","files":{$huge}""")) as WhiteboardMessage.Save).files.isEmpty())
         val tooMany = (1..WhiteboardMessages.MAX_FILES + 1).joinToString(",") { """"f$it":{"dataURL":"data:image/png;base64,AA"}""" }
-        assertNull(WhiteboardMessages.parse(save(""","files":{$tooMany}""")))
+        assertEquals(WhiteboardMessage.Rejected, WhiteboardMessages.parse(save(""","files":{$tooMany}""")))
     }
 
     @Test fun thePictureIsAPngOrEmpty() {
         assertEquals("", (WhiteboardMessages.parse(save(""","png":""""")) as WhiteboardMessage.Save).png)
         assertNull((WhiteboardMessages.parse(save("")) as WhiteboardMessage.Save).png)
-        assertNull(WhiteboardMessages.parse(save(""","png":"https://evil.test/p.png"""")))
-        assertNull(WhiteboardMessages.parse(save(""","png":"data:image/jpeg;base64,AAAA"""")))
-        assertNull(WhiteboardMessages.parse(save(""","png":5""")))
+        for (bad in listOf(""""https://evil.test/p.png"""", """"data:image/jpeg;base64,AAAA"""", "5")) {
+            assertNull((WhiteboardMessages.parse(save(""","png":$bad""")) as WhiteboardMessage.Save).png)
+        }
     }
 
     @Test fun onlyTheThreeSettingsOfTheDrawingTravel() {
@@ -281,14 +293,150 @@ class WhiteboardViewModelTest {
         backgroundScope.launch { vm.messages.collect { said += it } }
         vm.onSave(scene("a"))
         vm.choose("api")
-        runCurrent()
+        runCurrent(); vm.onPageFlushed(); runCurrent()
         assertEquals(listOf(WhiteboardTexts.SWITCH_BLOCKED), said)
         assertEquals("tienda", (vm.state.value.phase as WhiteboardPhase.Ready).project)
         b.saveResult = Result.success(Unit)
         vm.choose("api")
-        runCurrent()
+        runCurrent(); vm.onPageFlushed(); runCurrent()
         assertEquals("api", (vm.state.value.phase as WhiteboardPhase.Ready).project)
         assertEquals("tienda", b.saves.last().first)
         assertNotNull(b.loads.lastOrNull { it == "api" })
+    }
+
+    @Test fun aRecreatedPageGetsTheLatestDrawingNotTheFirstLoad() = runTest(dispatcher) {
+        val b = FakeWhiteboardBackend()
+        val vm = vm(b)
+        assertEquals(0, (vm.sceneForPage()!!["elements"] as JsonArray).size)
+        vm.onSave(scene("a", "b", files = listOf("img1")))
+        runCurrent()
+        // The save has not reached the PC yet (debounce) and the page is recreated: it still sees its own work.
+        val again = vm.sceneForPage()!!
+        assertEquals(2, (again["elements"] as JsonArray).size)
+        assertEquals(setOf("img1"), (again["files"] as JsonObject).keys)
+        advanceTimeBy(2_100); runCurrent()
+        assertEquals(2, (vm.sceneForPage()!!["elements"] as JsonArray).size)
+    }
+
+    @Test fun aRefusedSaveIsShownAndBlocksLeavingUntilTheNextGoodOne() = runTest(dispatcher) {
+        val b = FakeWhiteboardBackend()
+        val vm = vm(b)
+        val said = ArrayList<String>()
+        val commands = ArrayList<PageCommand>()
+        backgroundScope.launch { vm.messages.collect { said += it } }
+        backgroundScope.launch { vm.pageCommands.collect { commands += it } }
+        var left = 0
+        backgroundScope.launch { vm.leave.collect { left++ } }
+        vm.onRejected()
+        runCurrent()
+        assertEquals(SaveStatus.Unsaved, vm.state.value.save)
+        assertEquals(listOf(WhiteboardTexts.REJECTED), said)
+        assertTrue(PageCommand.Unsent in commands)
+        vm.requestLeave()
+        runCurrent()
+        assertEquals(0, left)
+        assertTrue(vm.state.value.confirmLeave)
+        // The next valid save carries the whole drawing and clears the problem.
+        vm.keepEditing()
+        vm.onSave(scene("a", flush = true))
+        runCurrent()
+        assertEquals(SaveStatus.Saved, vm.state.value.save)
+        vm.requestLeave()
+        runCurrent()
+        assertEquals(1, left)
+    }
+
+    @Test fun removedElementsAreReportedOncePerCount() = runTest(dispatcher) {
+        val b = FakeWhiteboardBackend()
+        val vm = vm(b)
+        val said = ArrayList<String>()
+        backgroundScope.launch { vm.messages.collect { said += it } }
+        val dropped = scene("a").copy(dropped = 2)
+        vm.onSave(dropped); vm.onSave(dropped)
+        runCurrent()
+        assertEquals(listOf(WhiteboardTexts.dropped(2)), said)
+    }
+
+    @Test fun picturesAreConfirmedToThePageOnlyOnceTheyAreSaved() = runTest(dispatcher) {
+        val b = FakeWhiteboardBackend().apply { saveResult = Result.failure(LinkException(LinkError.Offline)) }
+        val vm = vm(b)
+        val commands = ArrayList<PageCommand>()
+        backgroundScope.launch { vm.pageCommands.collect { commands += it } }
+        vm.onSave(scene("a", files = listOf("img1")).copy(offered = setOf("img1")))
+        advanceTimeBy(2_100); runCurrent()
+        assertTrue(commands.none { it is PageCommand.Saved })
+        b.saveResult = Result.success(Unit)
+        vm.flushNow()
+        runCurrent()
+        assertEquals(listOf<PageCommand>(PageCommand.Saved(setOf("img1"))), commands)
+    }
+
+    @Test fun aSavePendingInOneProjectNeverGoesToAnother() = runTest(dispatcher) {
+        val b = FakeWhiteboardBackend().apply { saveResult = Result.failure(LinkException(LinkError.Offline)) }
+        val vm = vm(b)
+        vm.onSave(scene("a"))
+        advanceTimeBy(2_100); runCurrent()
+        assertEquals("tienda", b.saves.single().first)
+        b.saveResult = Result.success(Unit)
+        vm.choose("api")
+        runCurrent(); vm.onPageFlushed(); runCurrent()
+        // Everything pending went to the project it was drawn in, then the other one opened.
+        assertEquals(listOf("tienda", "tienda"), b.saves.map { it.first })
+        assertEquals("api", (vm.state.value.phase as WhiteboardPhase.Ready).project)
+        // From now on saves are stamped with the new project.
+        vm.onSave(scene("z", flush = true))
+        runCurrent()
+        assertEquals("api", b.saves.last().first)
+    }
+
+    @Test fun switchingAsksThePageToFlushAndWaitsForIt() = runTest(dispatcher) {
+        val b = FakeWhiteboardBackend()
+        val vm = vm(b)
+        val commands = ArrayList<PageCommand>()
+        backgroundScope.launch { vm.pageCommands.collect { commands += it } }
+        vm.choose("api")
+        runCurrent()
+        assertEquals(listOf<PageCommand>(PageCommand.Flush), commands)
+        assertEquals("tienda", (vm.state.value.phase as WhiteboardPhase.Ready).project)
+        // The last strokes of the page arrive just before it answers.
+        vm.onSave(scene("last", flush = true))
+        vm.onPageFlushed()
+        runCurrent()
+        assertEquals("tienda", b.saves.last().first)
+        assertEquals("api", (vm.state.value.phase as WhiteboardPhase.Ready).project)
+    }
+
+    @Test fun aSaveWithoutAProjectIsNeverReportedAsSaved() = runTest(dispatcher) {
+        val b = FakeWhiteboardBackend().apply { projectList = WhiteboardProjects(listOf("a"), null) }
+        val vm = vm(b)
+        assertTrue(vm.state.value.phase is WhiteboardPhase.Choose)
+        var left = 0
+        backgroundScope.launch { vm.leave.collect { left++ } }
+        vm.onSave(scene("a", flush = true))
+        vm.requestLeave()
+        runCurrent()
+        assertTrue(b.saves.isEmpty())
+        assertEquals(0, left)
+        assertTrue(vm.state.value.confirmLeave)
+    }
+
+    @Test fun aDeadPageWithPendingChangesIsMarkedUnsaved() = runTest(dispatcher) {
+        val b = FakeWhiteboardBackend().apply { saveResult = Result.failure(LinkException(LinkError.Offline)) }
+        val vm = vm(b)
+        vm.onSave(scene("a"))
+        runCurrent()
+        vm.onPageGone()
+        runCurrent()
+        assertEquals(SaveStatus.Unsaved, vm.state.value.save)
+        assertEquals(1, b.saves.size)
+    }
+}
+
+class OnceActionTest {
+    @Test fun runsOnlyTheFirstTime() {
+        var n = 0
+        val once = OnceAction { n++ }
+        once.run(); once.run(); once.run()
+        assertEquals(1, n)
     }
 }

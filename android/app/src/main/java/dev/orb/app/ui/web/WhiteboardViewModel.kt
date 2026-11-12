@@ -7,6 +7,7 @@ import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.link.net.LinkError
 import dev.orb.app.link.net.LinkException
 import dev.orb.app.ui.linkErrorText
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
@@ -22,11 +23,24 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 
 enum class SaveStatus { Saved, Saving, Unsaved }
+
+/** What the app asks of the page it hosts. */
+sealed interface PageCommand {
+    /** Send everything now and answer with `flushed`. */
+    data object Flush : PageCommand
+
+    /** The PC has these pictures: the page need not send them again. */
+    data class Saved(val files: Set<String>) : PageCommand
+
+    /** The last messages did not arrive: pictures not yet confirmed must travel again. */
+    data object Unsent : PageCommand
+}
 
 sealed interface WhiteboardPhase {
     data object Loading : WhiteboardPhase
@@ -53,11 +67,16 @@ data class WhiteboardState(
  * The Pizarra of one project. The drawing is only ever opened with the PC reachable and is saved back to it; the phone
  * keeps no copy. Changes from the page are coalesced for [debounceMs] and sent in one `whiteboard.save`; when a save
  * fails they stay pending (nothing is marked as saved) and go again when the PC is back or the next change arrives.
+ *
+ * Every save carries the project it was drawn in, so a late save of one project can never land in another. The VM also
+ * remembers the latest drawing it was given, so a page that is recreated (rotation, theme, split screen) gets that one
+ * and not the drawing the PC sent when the project was opened.
  */
 class WhiteboardViewModel(
     private val backend: WhiteboardBackend,
     private val initialProject: String? = null,
     private val debounceMs: Long = 2_000,
+    private val pageFlushTimeoutMs: Long = 3_000,
 ) : ViewModel() {
     private val _state = MutableStateFlow(WhiteboardState())
     val state: StateFlow<WhiteboardState> = _state.asStateFlow()
@@ -70,11 +89,22 @@ class WhiteboardViewModel(
     private val _messages = Channel<String>(Channel.BUFFERED)
     val messages = _messages.receiveAsFlow()
 
+    private val _commands = Channel<PageCommand>(Channel.BUFFERED)
+    val pageCommands = _commands.receiveAsFlow()
+
     private val lock = Mutex()
     private var pending: WhiteboardMessage.Save? = null
     private var debounce: Job? = null
     private var loading: Job? = null
     private var project: String? = null
+
+    /** The drawing as the page last knew it: the PC's, plus every change the page reported since. */
+    private var pageScene: JsonObject? = null
+
+    /** True when a save from the page was refused: the PC is behind the screen and nothing is pending to retry. */
+    private var unsynced = false
+    private var warnedDropped = 0
+    private var pageFlushed: CompletableDeferred<Unit>? = null
 
     init {
         viewModelScope.launch {
@@ -113,8 +143,13 @@ class WhiteboardViewModel(
             }
             val scene = backend.load(chosen).getOrElse { return@launch failed(it) }
             project = chosen
+            // A save received while no project was open belongs to none and is not kept.
+            if (pending?.project == null) pending = null
+            unsynced = false
+            val page = forPage(scene)
+            pageScene = page
             if ((scene["damaged"] as? JsonPrimitive)?.booleanOrNull == true) _messages.trySend(WhiteboardTexts.DAMAGED)
-            _state.update { it.copy(phase = WhiteboardPhase.Ready(chosen, forPage(scene)), save = SaveStatus.Saved) }
+            _state.update { it.copy(phase = WhiteboardPhase.Ready(chosen, page), save = SaveStatus.Saved) }
         }
     }
 
@@ -126,27 +161,79 @@ class WhiteboardViewModel(
     /** Only what the page draws with: the attachments of the desktop's side panel stay on the PC. */
     private fun forPage(scene: JsonObject) = JsonObject(scene.filterKeys { it in PAGE_KEYS })
 
+    /** What a page that has just been (re)created is given: the latest drawing, not the one the project was opened with. */
+    fun sceneForPage(): JsonObject? = pageScene
+
     fun choose(name: String) {
         if (name == project) return
         viewModelScope.launch {
-            // The drawing on screen holds the latest changes: they are on the PC before another one opens.
+            // The page holds the latest changes (up to its last throttle window): it hands them over, then they reach the PC.
             debounce?.cancel()
+            if (_state.value.phase is WhiteboardPhase.Ready) requestPageFlush()
             if (!flush()) { _messages.trySend(WhiteboardTexts.SWITCH_BLOCKED); return@launch }
             project = null
+            pageScene = null
             _state.update { it.copy(phase = WhiteboardPhase.Loading) }
             load(name)
         }
     }
 
+    /** Asks the page for everything it has and waits (a little) for its answer. */
+    private suspend fun requestPageFlush() {
+        val answer = CompletableDeferred<Unit>()
+        pageFlushed = answer
+        _commands.trySend(PageCommand.Flush)
+        withTimeoutOrNull(pageFlushTimeoutMs) { answer.await() }
+        pageFlushed = null
+    }
+
+    /** From the page: it has sent everything it had. */
+    fun onPageFlushed() { pageFlushed?.complete(Unit) }
+
     /** From the page: the drawing as it is now. */
-    fun onSave(s: WhiteboardMessage.Save) {
-        pending = pending?.let { merge(it, s) } ?: s
+    fun onSave(received: WhiteboardMessage.Save) {
+        val s = received.copy(project = project)
+        if (s.project != null) remember(s)
+        unsynced = false
+        // A save of another project than the pending one is never mixed into it.
+        pending = pending?.takeIf { it.project == s.project }?.let { merge(it, s) } ?: s
+        if (s.dropped != warnedDropped) {
+            warnedDropped = s.dropped
+            if (s.dropped > 0) _messages.trySend(WhiteboardTexts.dropped(s.dropped))
+        }
         _state.update { it.copy(save = SaveStatus.Saving) }
         debounce?.cancel()
         debounce = viewModelScope.launch {
             if (!s.flush) delay(debounceMs)
             flush()
         }
+    }
+
+    /** From the page: a save was refused, so the PC is behind and the bar must not say «Guardado». */
+    fun onRejected() {
+        if (!unsynced) _messages.trySend(WhiteboardTexts.REJECTED)
+        unsynced = true
+        _commands.trySend(PageCommand.Unsent)
+        _state.update { it.copy(save = SaveStatus.Unsaved) }
+    }
+
+    /** The page's renderer died: what the app still holds goes to the PC, and until it does the bar says so. */
+    fun onPageGone() {
+        if (pending == null) return
+        _state.update { it.copy(save = SaveStatus.Unsaved) }
+        flushNow()
+    }
+
+    private fun remember(s: WhiteboardMessage.Save) {
+        val base = pageScene ?: return
+        fun part(key: String) = base[key] as? JsonObject ?: JsonObject(emptyMap())
+        pageScene = JsonObject(
+            mapOf(
+                "elements" to s.elements,
+                "appState" to JsonObject(part("appState") + s.appState),
+                "files" to JsonObject(part("files") + s.files),
+            ),
+        )
     }
 
     /** The app goes to the background: whatever is pending is sent now. */
@@ -173,20 +260,25 @@ class WhiteboardViewModel(
 
     /** Sends what is pending; true when nothing is left unsaved afterwards. */
     private suspend fun flush(): Boolean = lock.withLock {
-        val p = pending ?: return@withLock true
-        val name = project ?: return@withLock true
-        pending = null
-        // A newer change cancels the waiting job, never a save that is already on its way.
-        val r = withContext(NonCancellable) { backend.save(name, p) }
-        if (r.isSuccess) {
-            if (pending == null) _state.update { it.copy(save = SaveStatus.Saved, confirmLeave = false) }
-            true
-        } else {
-            // Nothing was saved: the changes (and the pictures that travelled with them) stay pending.
-            pending = pending?.let { merge(p, it) } ?: p
-            _state.update { it.copy(save = SaveStatus.Unsaved) }
-            false
+        val p = pending
+        if (p != null) {
+            // A save without a project cannot be sent anywhere; one of another project is stale.
+            val name = p.project ?: return@withLock false
+            if (name != project) { pending = null; return@withLock !unsynced }
+            pending = null
+            // A newer change cancels the waiting job, never a save that is already on its way.
+            val r = withContext(NonCancellable) { backend.save(name, p) }
+            if (r.isFailure) {
+                // Nothing was saved: the changes (and the pictures that travelled with them) stay pending.
+                pending = pending?.let { merge(p, it) } ?: p
+                _state.update { it.copy(save = SaveStatus.Unsaved) }
+                return@withLock false
+            }
+            if (p.offered.isNotEmpty()) _commands.trySend(PageCommand.Saved(p.offered))
         }
+        val clean = pending == null && !unsynced
+        if (clean) _state.update { it.copy(save = SaveStatus.Saved, confirmLeave = false) }
+        clean
     }
 
     private companion object {
@@ -196,6 +288,7 @@ class WhiteboardViewModel(
         fun merge(a: WhiteboardMessage.Save, b: WhiteboardMessage.Save) = WhiteboardMessage.Save(
             elements = b.elements, appState = b.appState,
             files = JsonObject(a.files + b.files), png = b.png ?: a.png, flush = a.flush || b.flush,
+            dropped = b.dropped, offered = a.offered + b.offered, project = b.project,
         )
     }
 }

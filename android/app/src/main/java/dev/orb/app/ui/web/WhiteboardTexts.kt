@@ -25,4 +25,9 @@ object WhiteboardTexts {
     const val STAY = "Seguir aquí"
     const val LEAVE = "Salir sin guardar"
     const val CLOSE = "Cerrar"
+    const val GONE_TITLE = "La página se ha detenido"
+    const val RELOAD = "Recargar"
+    const val REJECTED = "No se pudo guardar el último cambio. Los siguientes sí se intentarán guardar."
+
+    fun dropped(n: Int) = if (n == 1) "Se ha quitado 1 elemento que la Pizarra del móvil no admite." else "Se han quitado $n elementos que la Pizarra del móvil no admite."
 }

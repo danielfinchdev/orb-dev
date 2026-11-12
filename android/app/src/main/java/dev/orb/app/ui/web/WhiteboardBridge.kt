@@ -18,14 +18,28 @@ sealed interface WhiteboardMessage {
     /** The page is ready and wants the drawing. */
     data object Load : WhiteboardMessage
 
-    /** The drawing as it is now; [files] holds only the pictures not sent yet, [png] is the picture for the assistant ("" = nothing drawn, null = unchanged). */
+    /**
+     * The drawing as it is now; [files] holds only the pictures not sent yet, [png] is the picture for the assistant
+     * ("" = nothing drawn, null = unchanged). [dropped] counts the elements and pictures removed because the phone's
+     * page does not take them, [offered] the ids of every picture the page handed over (so it can mark them as sent
+     * once the save is confirmed) and [project] is stamped by the app when it receives the message.
+     */
     data class Save(
         val elements: JsonArray,
         val appState: JsonObject,
         val files: JsonObject,
         val png: String?,
         val flush: Boolean,
+        val dropped: Int = 0,
+        val offered: Set<String> = emptySet(),
+        val project: String? = null,
     ) : WhiteboardMessage
+
+    /** The page answered a flush request: everything it had was sent before this message. */
+    data object Flushed : WhiteboardMessage
+
+    /** A save that could not be taken at all (too big or not a drawing): nothing of it reached the PC. */
+    data object Rejected : WhiteboardMessage
 
     /** The page has saved everything it had and asks to leave. */
     data object Close : WhiteboardMessage
@@ -48,27 +62,33 @@ object WhiteboardMessages {
     private val ELEMENT_TYPES = setOf("rectangle", "diamond", "ellipse", "arrow", "line", "freedraw", "text", "image", "frame", "magicframe")
 
     fun parse(raw: String?): WhiteboardMessage? {
-        if (raw == null || raw.length > MAX_MESSAGE_CHARS) return null
+        if (raw == null) return null
+        if (raw.length > MAX_MESSAGE_CHARS) return WhiteboardMessage.Rejected
         val o = try { Json.parseToJsonElement(raw) as? JsonObject } catch (_: Exception) { null } ?: return null
         return when ((o["type"] as? JsonPrimitive)?.takeIf { it.isString }?.content) {
             "load" -> WhiteboardMessage.Load
             "close" -> WhiteboardMessage.Close
-            "save" -> save(o)
+            "flushed" -> WhiteboardMessage.Flushed
+            "save" -> save(o) ?: WhiteboardMessage.Rejected
             else -> null
         }
     }
 
+    // What the phone's page cannot take is removed and counted; only a message that cannot be trusted as a whole is refused.
     private fun save(o: JsonObject): WhiteboardMessage.Save? {
         val elements = o["elements"] as? JsonArray ?: return null
-        if (elements.size > MAX_ELEMENTS || !elements.all(::element)) return null
+        if (elements.size > MAX_ELEMENTS) return null
+        val kept = elements.filter(::element)
         val files = files(o["files"]) ?: return null
         val png = when (val p = o["png"]) {
-            null -> null
-            is JsonPrimitive -> p.takeIf { it.isString }?.content?.takeIf { it.isEmpty() || (it.length <= MAX_PNG_CHARS && it.startsWith(PNG_PREFIX)) } ?: return null
-            else -> return null
+            is JsonPrimitive -> p.takeIf { it.isString }?.content?.takeIf { it.isEmpty() || (it.length <= MAX_PNG_CHARS && it.startsWith(PNG_PREFIX)) }
+            else -> null
         }
         val flush = (o["flush"] as? JsonPrimitive)?.booleanOrNull == true
-        return WhiteboardMessage.Save(elements, appState(o["appState"] as? JsonObject), files, png, flush)
+        return WhiteboardMessage.Save(
+            JsonArray(kept), appState(o["appState"] as? JsonObject), files.accepted, png, flush,
+            dropped = elements.size - kept.size + files.dropped, offered = files.offered,
+        )
     }
 
     private fun element(e: JsonElement): Boolean {
@@ -78,19 +98,25 @@ object WhiteboardMessages {
         return !id.isNullOrEmpty() && type in ELEMENT_TYPES
     }
 
-    private fun files(el: JsonElement?): JsonObject? {
-        if (el == null) return JsonObject(emptyMap())
+    private class Files(val accepted: JsonObject, val offered: Set<String>, val dropped: Int)
+
+    private fun files(el: JsonElement?): Files? {
+        if (el == null) return Files(JsonObject(emptyMap()), emptySet(), 0)
         val map = el as? JsonObject ?: return null
         if (map.size > MAX_FILES) return null
-        return buildJsonObject {
+        val offered = LinkedHashSet<String>()
+        var dropped = 0
+        val accepted = buildJsonObject {
             for ((id, f) in map) {
-                val file = f as? JsonObject ?: return null
-                val data = (file["dataURL"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return null
-                val prefix = IMAGE_PREFIXES.firstOrNull { data.startsWith(it) } ?: return null
-                if (!FILE_ID.matches(id) || data.length > MAX_FILE_CHARS) return null
+                if (!FILE_ID.matches(id)) { dropped++; continue }
+                offered += id
+                val data = ((f as? JsonObject)?.get("dataURL") as? JsonPrimitive)?.takeIf { it.isString }?.content
+                val prefix = data?.let { d -> IMAGE_PREFIXES.firstOrNull { d.startsWith(it) } }
+                if (data == null || prefix == null || data.length > MAX_FILE_CHARS) { dropped++; continue }
                 put(id, buildJsonObject { put("mimeType", prefix.removePrefix("data:").substringBefore(';')); put("dataURL", data) })
             }
         }
+        return Files(accepted, offered, dropped)
     }
 
     // Only the three settings the PC keeps; the page's other state never travels.
