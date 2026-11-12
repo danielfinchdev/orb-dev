@@ -126,17 +126,19 @@ const ghJson = async (project, args) => {
   if (!r.ok) throw ghFail(r);
   try { return JSON.parse(r.out); } catch { throw new Error(tr('msg.github.prBadAnswer')); }
 };
+export const HEAD_OID_RE = /^[0-9a-f]{40}$/i;
+const oidOf = (v) => (typeof v === 'string' && HEAD_OID_RE.test(v) ? v.toLowerCase() : null);
 const authorOf = (a) => (a && typeof a === 'object' ? String(a.login ?? a.name ?? '') : String(a ?? ''));
 
 export async function listPrs(project) {
-  const list = await ghJson(project, ['pr', 'list', '--state', 'open', '--limit', '30', '--json', 'number,title,headRefName,baseRefName,url,isDraft,author,updatedAt,reviewDecision,mergeable']);
-  return (Array.isArray(list) ? list : []).slice(0, 30).map((x) => ({ number: x.number, title: oneLine(x.title, 300), headRefName: x.headRefName, baseRefName: x.baseRefName, url: x.url, isDraft: Boolean(x.isDraft), author: authorOf(x.author), updatedAt: x.updatedAt, reviewDecision: x.reviewDecision || null, mergeable: x.mergeable || null }));
+  const list = await ghJson(project, ['pr', 'list', '--state', 'open', '--limit', '30', '--json', 'number,title,headRefName,headRefOid,baseRefName,url,isDraft,author,updatedAt,reviewDecision,mergeable']);
+  return (Array.isArray(list) ? list : []).slice(0, 30).map((x) => ({ number: x.number, title: oneLine(x.title, 300), headRefName: x.headRefName, headRefOid: oidOf(x.headRefOid), baseRefName: x.baseRefName, url: x.url, isDraft: Boolean(x.isDraft), author: authorOf(x.author), updatedAt: x.updatedAt, reviewDecision: x.reviewDecision || null, mergeable: x.mergeable || null }));
 }
 
 export async function viewPr(project, number) {
-  const x = await ghJson(project, ['pr', 'view', String(number), '--json', 'number,title,body,state,url,headRefName,baseRefName,isDraft,author,createdAt,updatedAt,mergeable,mergeStateStatus,reviewDecision,additions,deletions,changedFiles,statusCheckRollup,files,commits']);
+  const x = await ghJson(project, ['pr', 'view', String(number), '--json', 'number,title,body,state,url,headRefName,headRefOid,baseRefName,isDraft,author,createdAt,updatedAt,mergeable,mergeStateStatus,reviewDecision,additions,deletions,changedFiles,statusCheckRollup,files,commits']);
   return {
-    number: x.number, title: oneLine(x.title, 300), body: String(x.body ?? '').slice(0, 20_000), state: x.state, url: x.url, headRefName: x.headRefName, baseRefName: x.baseRefName,
+    number: x.number, title: oneLine(x.title, 300), body: String(x.body ?? '').slice(0, 20_000), state: x.state, url: x.url, headRefName: x.headRefName, headRefOid: oidOf(x.headRefOid), baseRefName: x.baseRefName,
     isDraft: Boolean(x.isDraft), author: authorOf(x.author), createdAt: x.createdAt, updatedAt: x.updatedAt, mergeable: x.mergeable || null, mergeStateStatus: x.mergeStateStatus || null,
     reviewDecision: x.reviewDecision || null, additions: x.additions ?? 0, deletions: x.deletions ?? 0, changedFiles: x.changedFiles ?? 0,
     checks: (Array.isArray(x.statusCheckRollup) ? x.statusCheckRollup : []).slice(0, 100).map((c) => ({ name: oneLine(c.name ?? c.context ?? '', 120), status: c.status ?? c.state ?? null, conclusion: c.conclusion ?? null })),
@@ -148,11 +150,17 @@ export async function viewPr(project, number) {
 // Merges as the user's own gh account. No --delete-branch, --admin or --auto: the phone cannot skip a rule of the
 // repository, and gh leaves the local branch and checkout alone without --delete-branch.
 export const MERGE_METHODS = ['merge', 'squash', 'rebase'];
-export async function mergePr(project, number, method = 'merge') {
+// --match-head-commit makes gh merge exactly the commit the user saw; if the branch moved since, GitHub refuses.
+const HEAD_MOVED_RE = /head branch was modified|head ref.*(does not match|not match)|match-head-commit|expected head sha/i;
+const userError = (message) => Object.assign(new Error(message), { userFacing: true });
+export async function mergePr(project, number, method = 'merge', headRefOid) {
   if (!MERGE_METHODS.includes(method)) throw new Error(tr('msg.github.prFailed'));
-  const r = await gh(['pr', 'merge', String(number), `--${method}`], { cwd: project.path, timeoutMs: 120_000 });
+  const oid = oidOf(headRefOid);
+  if (!oid) throw userError(tr('msg.github.prNeedsHeadOid'));
+  const r = await gh(['pr', 'merge', String(number), `--${method}`, '--match-head-commit', oid], { cwd: project.path, timeoutMs: 120_000 });
   if (!r.ok) {
     const text = oneLine(r.err || r.out, 240);
+    if (!AUTH_RE.test(text) && HEAD_MOVED_RE.test(text)) throw userError(tr('msg.github.prHeadChanged'));
     if (!AUTH_RE.test(text) && MERGE_BLOCK_RE.test(text) && !/not found|could not resolve/i.test(text)) throw new Error(tr('msg.github.prNotMergeable', { detail: text }));
     throw ghFail(r);
   }

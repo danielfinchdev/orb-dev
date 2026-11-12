@@ -238,6 +238,8 @@ export default {
   "msg.github.noGithubRemote": "the project has no GitHub remote",
   "msg.github.prNotFound": "that pull request does not exist",
   "msg.github.prNotMergeable": "the pull request cannot be merged: {detail}",
+  "msg.github.prNeedsHeadOid": "the exact pull request commit (headRefOid) is missing: open it again in the app",
+  "msg.github.prHeadChanged": "the pull request branch changed since you viewed it; open it again and review the new changes",
   "msg.github.prNeedsTitle": "the pull request needs a title",
   "msg.github.pushFailed": "could not push",
   "msg.github.repoFailed": "could not create the repository",

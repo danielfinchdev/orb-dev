@@ -17,6 +17,10 @@ const prNumber = (v) => {
   if (!Number.isInteger(n) || n < 1 || n > 10_000_000) fail(tr('msg.api.invalid', { name: 'número' }));
   return n;
 };
+const headOid = (v) => {
+  if (typeof v !== 'string' || !/^[0-9a-f]{40}$/i.test(v)) fail(tr('msg.github.prNeedsHeadOid'));
+  return v.toLowerCase();
+};
 const gh = lazy(() => import('../host/github.mjs'));
 
 export function projectMethods({ realHome, insideHome, project, holding, coordinatorBusy, syncSoon, cut, android, grants, board, sessions, scheduler, log }) {
@@ -118,9 +122,9 @@ export function projectMethods({ realHome, insideHome, project, holding, coordin
     // Pull requests for the phone. The number is a plain integer (never "1e3" or text with spaces); gh gets it as an argument.
     'projects.prs': async ({ name }) => (await gh()).listPrs(project(name)),
     'projects.pr': async ({ name, number }) => (await gh()).viewPr(project(name), prNumber(number)),
-    'projects.mergePr': async ({ name, number, method }) => {
-      const p = project(name); const n = prNumber(number); const m = oneOf(method, ['merge', 'squash', 'rebase'], 'método', 'merge'); const g = await gh();
-      return holding(p.name, () => g.mergePr(p, n, m));
+    'projects.mergePr': async ({ name, number, method, headRefOid }) => {
+      const p = project(name); const n = prNumber(number); const oid = headOid(headRefOid); const m = oneOf(method, ['merge', 'squash', 'rebase'], 'método', 'merge'); const g = await gh();
+      return holding(p.name, () => g.mergePr(p, n, m, oid));
     },
     'projects.push': async ({ name, branch }) => (await gh()).push(project(name), str(branch, 'rama', 120)),
     'projects.createPr': async ({ name, branch, title, body, base }) => (await gh()).createPr(project(name), { branch: str(branch, 'rama', 120), title: str(title, 'título', 200), body: str(body, 'descripción', 20000, { optional: true }), base: str(base, 'rama base', 120, { optional: true }) || undefined }),
