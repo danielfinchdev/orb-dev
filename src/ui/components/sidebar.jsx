@@ -27,7 +27,7 @@ function Wordmark() {
 export const NavItem = NavRow;
 
 // the sidebar's width, dragged from its edge (a double click goes back to the usual one), remembered in this window.
-const SIDEBAR_DEFAULT = 256; const SIDEBAR_MIN = 216; const SIDEBAR_MAX = 440; const WIDTH_KEY = 'orb.anchoMenu';
+const SIDEBAR_DEFAULT = 340; const SIDEBAR_MIN = 340; const SIDEBAR_MAX = 480; const WIDTH_KEY = 'orb.anchoMenu';
 function useSidebarWidth() {
   const [width, setRaw] = useState(() => { try { const n = Number(localStorage.getItem(WIDTH_KEY)); return n >= SIDEBAR_MIN && n <= SIDEBAR_MAX ? n : SIDEBAR_DEFAULT; } catch { return SIDEBAR_DEFAULT; } });
   const clamp = (n) => Math.round(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, n)));
@@ -142,7 +142,7 @@ export function Sidebar({ mood }) {
   const is = (view) => route.view === view;
   return (
     // the chat list of a messaging app, with the places' labels under the search: at least 340 px.
-    <aside className="bg-sidebar relative flex h-full shrink-0 flex-col border-r" style={{ width: Math.max(width, 340) }}>
+    <aside className="bg-sidebar relative flex h-full shrink-0 flex-col border-r" style={{ width }}>
       {bridge.mobile ? null : <div className="sidebar-resize" role="separator" aria-orientation="vertical" aria-label={t('comp.sidebar.resize')} onPointerDown={startResize} onDoubleClick={() => setWidth(SIDEBAR_DEFAULT)} data-testid="sidebar-resize" />}
       <div className="theme-band side-band app-titlebar flex h-14 shrink-0 items-center gap-2 border-b px-4">
         {/* the robot goes back to the conversation in progress (the last one opened). */}
