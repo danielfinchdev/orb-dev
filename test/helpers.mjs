@@ -36,8 +36,11 @@ export function tempHome(patch = {}) {
 }
 
 export const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+// Waits for a condition by polling. The limit only matters when something is really wrong (success returns at once), so it
+// is multiplied by ORB_TEST_TIME_SCALE (default 3): a loaded PC (a build, other tests) must not turn slowness into a failure.
+const SCALE = Math.max(1, Number(process.env.ORB_TEST_TIME_SCALE) || 3);
 export async function until(fn, what, ms = 15000) {
-  const end = Date.now() + ms;
+  const end = Date.now() + ms * SCALE;
   while (Date.now() < end) { const v = await fn(); if (v) return v; await wait(100); }
   throw new Error(`timeout: ${what}`);
 }
