@@ -104,10 +104,12 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
   // Android's adb by hand only with «Acceso total» and «Usar mi móvil Android» (android): otherwise the agent has
   // Orb's own tools (orb_android_*), which check the grant on every call.
   if (cls !== 'read' && cls !== 'orb' && isRailOn('usar-adb') && runsAdb(command) && !(permission === 'total' && android)) return { decision: 'deny', reason: T('adb') };
-  // A paused risk rail only relaxes «Auto» and «Preguntar»; «probar», «leer» and «total» keep every risk. Pausing
-  // «formatear-disco» never goes below asking, so that risk stays in the list either way.
-  const railsRelax = permission === 'auto' || permission === 'preguntar';
-  const risks = cls === 'exec' ? risksOf(command, lang).filter((r) => !railsRelax || r.category === 'diskWipe' || riskRailOn(r.category)) : [];
+  // A paused risk rail only relaxes «Auto». «Preguntar» (editar), «Preguntar todo», «probar», «leer» and «total» keep
+  // every risk (the first two ask anyway). Pausing «formatear-disco» never goes below asking, so that risk stays in the
+  // list either way.
+  const railsRelax = permission === 'auto';
+  const allRisks = cls === 'exec' ? risksOf(command, lang) : [];
+  const risks = allRisks.filter((r) => !railsRelax || r.category === 'diskWipe' || riskRailOn(r.category));
   if (cls === 'exec' && !risks.some((r) => r.category === 'gitRuns') && writesGitRunsFile(command, cwd)) risks.push({ category: 'gitRuns', reason: T('gitRuns') });
   const wipe = risks.find((r) => r.category === 'diskWipe');
   // wiping a disk: denied in «Auto», asked in the others (also «total»).
@@ -140,7 +142,8 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
       // (where the snapshots live), and git clean -x (ignored files, .env among them, are never in the snapshot).
       // Moving or renaming them too (`mv .git x` leaves no repository to undo from), whatever the command's risks.
       if (deletesProjectOrGit(command, cwd, project)) return { decision: 'ask', reason: T('checkpoint') };
-      if (risks.some((r) => r.category === 'gitRewrite') && cleansIgnored(command)) return { decision: 'ask', reason: T('ignoredFiles') };
+      // (checked on the unfiltered risks: pausing «reescribir-git» must not drop this question)
+      if (allRisks.some((r) => r.category === 'gitRewrite') && cleansIgnored(command)) return { decision: 'ask', reason: T('ignoredFiles') };
       if (AGENT_CONFIG_IN.test(command)) return { decision: 'ask', reason: T('agentConfig') };
       if (askAway) return { decision: 'ask', reason: outsideReason(askAway.what) };
       if (risks.length) return autoAllow(risks[0].category === 'publish' ? T('publishAsked') : risks[0].reason);

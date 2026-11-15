@@ -35,11 +35,11 @@ const verdict = (permission, command, extra) => sh(permission, command, extra).d
 
 // [rail, command, verdict with the rail on / paused, per permission level]
 const TABLE = [
-  ['publicar', 'git push origin main', { auto: ['ask', 'allow'], preguntar: ['ask', 'ask'] }],
-  ['borrar-carpetas', 'rm -rf build', { auto: ['allow', 'allow'], preguntar: ['ask', 'ask'] }],
-  ['reescribir-git', 'git reset --hard HEAD~1', { auto: ['allow', 'allow'], preguntar: ['ask', 'ask'] }],
-  ['formatear-disco', 'format d:', { auto: ['deny', 'ask'], preguntar: ['ask', 'ask'] }],
-  ['usar-adb', 'adb devices', { auto: ['deny', 'allow'], preguntar: ['deny', 'ask'] }],
+  ['publicar', 'git push origin main', { auto: ['ask', 'allow'], editar: ['ask', 'ask'], preguntar: ['ask', 'ask'] }],
+  ['borrar-carpetas', 'rm -rf build', { auto: ['allow', 'allow'], editar: ['ask', 'ask'], preguntar: ['ask', 'ask'] }],
+  ['reescribir-git', 'git reset --hard HEAD~1', { auto: ['allow', 'allow'], editar: ['ask', 'ask'], preguntar: ['ask', 'ask'] }],
+  ['formatear-disco', 'format d:', { auto: ['deny', 'ask'], editar: ['ask', 'ask'], preguntar: ['ask', 'ask'] }],
+  ['usar-adb', 'adb devices', { auto: ['deny', 'allow'], editar: ['deny', 'allow'], preguntar: ['deny', 'ask'] }],
 ];
 for (const [rail, command, per] of TABLE) {
   test(`rail ${rail}: paused lifts only its own block`, () => {
@@ -50,6 +50,14 @@ for (const [rail, command, per] of TABLE) {
     reset();
   });
 }
+
+test('reescribir-git paused: git clean -x still asks in Auto (ignored files are not in the checkpoint)', () => {
+  for (const cmd of ['git clean -fdx', 'git clean -xfd']) {
+    reset(); assert.equal(verdict('auto', cmd), 'ask', cmd + ' on');
+    pause('reescribir-git'); assert.equal(verdict('auto', cmd), 'ask', cmd + ' paused');
+  }
+  reset();
+});
 
 test('rutas-protegidas paused: the owner list opens, the password vaults stay closed', () => {
   const saved = ctx.config.protected;
