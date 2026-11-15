@@ -378,9 +378,16 @@ impl Engine {
     tokio::time::timeout(timeout, work).await.unwrap_or_else(|_| Err(self.t_name("sys.main.engineTimeout")))
   }
 
+  /// Hands an event to the emitter thread (`emit_queue`), never to the window: the reader of the engine's output does
+  /// not wait for the UI thread, and a burst of events reaches the page as one message.
   fn emit_event(&self, event: &str, payload: Value) {
     crate::trace::tally("ui.emit", 0);
-    let _ = self.app.emit_to("main", "engine:event", json!({ "event": event, "payload": payload }));
+    let item = json!({ "event": event, "payload": payload });
+    let queue = EMIT_QUEUE.get_or_init(|| emit_queue(self.app.clone()));
+    // The thread is gone (it never started, or died): straight to the window as before, never lost.
+    if let Err(std::sync::mpsc::SendError(item)) = queue.send(item) {
+      let _ = self.app.emit_to("main", "engine:event", item);
+    }
   }
 
   fn on_line(self: &Arc<Self>, line: &str) {
@@ -598,4 +605,40 @@ mod job {
     }
   }
   // The handle is never closed: it lives as long as Orb's process, and closing it is what kills the engine.
+}
+
+static EMIT_QUEUE: std::sync::OnceLock<std::sync::mpsc::Sender<Value>> = std::sync::OnceLock::new();
+
+/// The most events sent to the window in one message: a burst is cut here so one eval never grows without bound.
+const EMIT_BATCH: usize = 64;
+/// ... and at about this many bytes (a single bigger event still goes out alone).
+const EMIT_BATCH_BYTES: usize = 2 << 20;
+
+/// A thread that sends the engine's events to the window in order. Every `emit_to` is a script evaluated on the UI
+/// thread (WebView2); when that thread is slow (the PC busy) the events used to pile up there one by one, each with its
+/// own evaluation. Here whatever has queued up by the time the thread runs goes out together as one
+/// `engine:events` array (tauri-bridge.js fires them in order), so the UI thread has one evaluation to do, not dozens.
+fn emit_queue(app: AppHandle) -> std::sync::mpsc::Sender<Value> {
+  let (tx, rx) = std::sync::mpsc::channel::<Value>();
+  let spawned = std::thread::Builder::new().name("engine-emit".into()).spawn(move || {
+    while let Ok(first) = rx.recv() {
+      let mut bytes = first.to_string().len();
+      let mut batch = vec![first];
+      while batch.len() < EMIT_BATCH && bytes < EMIT_BATCH_BYTES {
+        match rx.try_recv() {
+          Ok(next) => {
+            bytes += next.to_string().len();
+            batch.push(next);
+          }
+          Err(_) => break,
+        }
+      }
+      crate::trace::tally("ui.emit.batch", batch.len() as u64);
+      let _ = app.emit_to("main", "engine:events", batch);
+    }
+  });
+  if let Err(e) = spawned {
+    eprintln!("[orb] engine-emit thread: {e}");
+  }
+  tx
 }

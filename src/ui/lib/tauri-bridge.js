@@ -15,6 +15,8 @@ if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.
     for (const fn of listeners.get('*') ?? []) { try { fn(event, payload); } catch (error) { console.error(error); } }
   };
   listen('engine:event', ({ payload }) => fire(payload?.event, payload?.payload));
+  // The engine's events arrive in batches (engine.rs, emit_queue), in order.
+  listen('engine:events', ({ payload }) => { for (const item of Array.isArray(payload) ? payload : []) fire(item?.event, item?.payload); });
   const engine = (method, params = {}) => invoke('engine_call', { method: String(method), params: params ?? {} });
   const windowAct = (action) => invoke('window_act', { action: String(action) });
   const text = (v) => (typeof v === 'string' ? v : null);
