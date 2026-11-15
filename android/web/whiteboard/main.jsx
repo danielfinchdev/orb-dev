@@ -46,7 +46,7 @@ function Board({ scene }) {
   const send = useCallback(async ({ flush = false } = {}) => {
     clearTimeout(timer.current);
     const cur = latest.current;
-    if (!cur || (!dirty.current && !flush)) return;
+    if (!cur || !dirty.current) return; // an untouched board is never saved: it would overwrite what the PC has since
     const { elements, appState, files } = cur;
     const fresh = {};
     for (const [id, f] of Object.entries(files ?? {})) {
@@ -77,7 +77,7 @@ function Board({ scene }) {
     window.orbBack = () => { send({ flush: true }).then(() => post({ type: 'close' })); return true; };
     board.flush = () => send({ flush: true }).then(() => post({ type: 'flushed' }));
     board.saved = (ids) => { for (const id of ids) { inFlight.current.delete(id); sentFiles.current.add(id); } };
-    board.unsent = () => { inFlight.current.clear(); };
+    board.unsent = () => { inFlight.current.clear(); dirty.current = true; }; // a failed save is retried on leaving
     const hidden = () => { if (document.visibilityState === 'hidden') send({ flush: true }); };
     document.addEventListener('visibilitychange', hidden);
     const id = setTimeout(() => window.dispatchEvent(new Event('resize')), 120);

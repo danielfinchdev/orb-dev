@@ -115,6 +115,9 @@ class ShareViewModel(
             ?: return say(AttachTexts.SHARE_NEEDS_TEXT)
         if (attach.items.value.any { it.state != dev.orb.app.attach.AttachState.Ready }) return say(AttachTexts.WAIT_UPLOADS)
         val images = attach.remoteNames()
+        // `chat.send` has no attachments: the assistant would answer without the picture and nothing would say so.
+        val toAgent = (s.dest as? ShareDest.Chat)?.ref?.kind == ChatKind.Agent
+        if (images.isNotEmpty() && !toAgent) return say(AttachTexts.SHARE_ASSISTANT_NO_FILES)
         _state.value = s.copy(sending = true, message = null)
         viewModelScope.launch {
             backend.send(s.dest, text, images).fold(

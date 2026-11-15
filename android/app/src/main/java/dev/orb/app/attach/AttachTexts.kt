@@ -37,6 +37,7 @@ object AttachTexts {
     const val SHARE_SKIPPED = "Se dejaron fuera archivos que Orb no admite o que son demasiado grandes."
     const val SHARE_CUT = "El texto era muy largo y se ha recortado."
     const val SHARE_NEEDS_TEXT = "Escribe un mensaje para enviarlo."
+    const val SHARE_ASSISTANT_NO_FILES = "El asistente aún no recibe adjuntos: elige un chat de agente."
     const val SHARE_FAILED = "No se pudo enviar"
     /** Pre-filled when only a picture or file is shared: the PC does not take an empty message. */
     const val SHARE_DEFAULT_TEXT = "Adjunto compartido desde el móvil"

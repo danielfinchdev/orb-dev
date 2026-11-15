@@ -60,11 +60,11 @@ class WhiteboardMessagesTest {
         assertEquals(WhiteboardMessage.Flushed, WhiteboardMessages.parse("""{"type":"flushed"}"""))
     }
 
-    @Test fun onlyTheUnsupportedElementsAreRemovedAndCounted() {
+    @Test fun embeddedElementsFromThePcSurviveTheRoundTrip() {
         val mixed = """[$rect,{"id":"b","type":"embeddable"},{"id":"c","type":"iframe"},"x",{"type":"rectangle"}]"""
         val s = WhiteboardMessages.parse(save(elements = mixed)) as WhiteboardMessage.Save
-        assertEquals(1, s.elements.size)
-        assertEquals(4, s.dropped)
+        assertEquals(3, s.elements.size)
+        assertEquals(2, s.dropped)
         val many = (1..WhiteboardMessages.MAX_ELEMENTS + 1).joinToString(",", "[", "]") { """{"id":"e$it","type":"line"}""" }
         assertEquals(WhiteboardMessage.Rejected, WhiteboardMessages.parse(save(elements = many)))
     }

@@ -60,8 +60,9 @@ object WhiteboardMessages {
     private val IMAGE_PREFIXES = listOf("png", "jpeg", "gif", "webp", "bmp", "svg+xml").map { "data:image/$it;base64," }
     private const val PNG_PREFIX = "data:image/png;base64,"
 
-    // Embeddable and iframe elements would load web pages; the phone's page has none.
-    private val ELEMENT_TYPES = setOf("rectangle", "diamond", "ellipse", "arrow", "line", "freedraw", "text", "image", "frame", "magicframe")
+    // Embeddable and iframe elements are made on the PC: the phone never draws them (`validateEmbeddable` is off) but must
+    // hand them back untouched, or saving the board would delete them there.
+    private val ELEMENT_TYPES = setOf("rectangle", "diamond", "ellipse", "arrow", "line", "freedraw", "text", "image", "frame", "magicframe", "embeddable", "iframe")
 
     fun parse(raw: String?): WhiteboardMessage? {
         if (raw == null) return null

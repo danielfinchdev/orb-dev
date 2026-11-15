@@ -236,7 +236,7 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
             val conversation = route.id.toLongOrNull()
             val backend = remember { container.orbeChatBackend() }
             if (route.kind == "conversation" && conversation != null && backend != null) {
-                val vm = viewModel<OrbeChatViewModel>(key = "orbe:$conversation", factory = viewModelFactory { initializer { OrbeChatViewModel(backend, conversation, attach = container.attachController()) } })
+                val vm = viewModel<OrbeChatViewModel>(key = "orbe:$conversation", factory = viewModelFactory { initializer { OrbeChatViewModel(backend, conversation) } })
                 OrbeChatScreen(vm, onBack = { nav.popBackStack() })
             } else if (route.kind == "session") {
                 val direct = remember { container.directChatBackend() }
