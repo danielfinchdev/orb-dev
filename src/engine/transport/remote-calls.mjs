@@ -23,6 +23,8 @@ export function guardCall(board, method, params, { allowed = REMOTE_METHODS, upl
   if (params.permission === 'total') return tr('msg.remote.totalPcOnly');
   // A conversation the PC gave total access to is driven from the PC only.
   if (method.startsWith('sessions.') && method !== 'sessions.stop' && params.id !== undefined && board.one('SELECT permission FROM sessions WHERE id = ?', String(params.id))?.permission === 'total') return tr('msg.remote.totalConvPcOnly');
+  // The HTML pages of such a conversation are not read from a phone either (the page names its chat in `session`).
+  if (method === 'htmlPages.get' && params.session !== undefined && board.one('SELECT permission FROM sessions WHERE id = ?', String(params.session))?.permission === 'total') return tr('msg.remote.totalConvPcOnly');
   // Pictures from a phone are only the ones it uploaded itself (never other files of the PC).
   if (params.images !== undefined) {
     if (!uploadsDir) return tr('msg.remote.ownImages');

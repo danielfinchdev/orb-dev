@@ -321,3 +321,10 @@ test('htmlPages.get: HTML as data for the phone, chat-bound, with the CSP of the
     assert.equal(allowed(principalOf({ device: { id: 'd', kind: 'phone' } }), 'htmlPages.get'), true);
   } finally { pages.wipe(); }
 });
+
+test('htmlPages.get from a phone is refused for a chat the PC gave total access to', async () => {
+  const { guardCall } = await import('../src/engine/transport/remote-calls.mjs');
+  const board = { one: (_sql, id) => ({ permission: id === 'tot' ? 'total' : 'editar' }) };
+  assert.ok(guardCall(board, 'htmlPages.get', { id: 'a'.repeat(32), session: 'tot' }));
+  assert.equal(guardCall(board, 'htmlPages.get', { id: 'a'.repeat(32), session: 'ok' }), null);
+});
