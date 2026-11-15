@@ -36,8 +36,8 @@ class OrbApiTest {
     fun `every method the api can call is one a linked phone may call, except the newer ones`() {
         val unknown = ApiMethods.all.filter { it.requiresPc == null && it.name !in remote }.map { it.name }
         assertEquals("not in REMOTE_METHODS of the PC", emptyList<String>(), unknown)
-        // the newer ones must really be absent today, or they would not need the flag
-        for (m in ApiMethods.all.filter { it.requiresPc != null }) assertFalse(m.name, m.name in remote)
+        // the 3.8.4 PC lists them in REMOTE_METHODS; the flag only hides them from older PCs that lack them
+        for (m in ApiMethods.all.filter { it.requiresPc != null }) assertTrue(m.name, m.name in remote)
         assertEquals(setOf("pc.screenshot", "conversations.trash", "conversations.restore", "sessions.trash", "sessions.restore", "projects.mergePr",
             "projects.prs", "projects.pr", "notes.markRead"),
             ApiMethods.all.filter { it.requiresPc != null }.map { it.name }.toSet())

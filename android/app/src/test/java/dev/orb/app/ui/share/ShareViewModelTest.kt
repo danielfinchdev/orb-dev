@@ -10,6 +10,8 @@ import dev.orb.app.attach.SourceInfo
 import dev.orb.app.attach.UploadPolicy
 import dev.orb.app.share.ShareRequest
 import dev.orb.app.share.SharedFile
+import dev.orb.app.ui.chats.ChatKind
+import dev.orb.app.ui.chats.ChatRef
 import dev.orb.app.ui.chats.ChatRow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -62,6 +64,7 @@ class ShareViewModelTest {
     @Test fun aSharedPictureWithoutTextGetsAnEditableDefaultAndCanBeSent() {
         val backend = Backend()
         val vm = model(ShareRequest(null, listOf(picture()), 0, false), backend)
+        vm.choose(ShareDest.Chat(ChatRef(ChatKind.Agent, "s1"))) // only assistants take attachments
         assertEquals(AttachTexts.SHARE_DEFAULT_TEXT, vm.state.value.text)
         assertEquals(AttachState.Ready, vm.attach.items.value.single().state)
         vm.send()
@@ -72,6 +75,7 @@ class ShareViewModelTest {
     @Test fun clearingTheSuggestedTextStillSendsTheAttachment() {
         val backend = Backend()
         val vm = model(ShareRequest(null, listOf(picture()), 0, false), backend)
+        vm.choose(ShareDest.Chat(ChatRef(ChatKind.Agent, "s1"))) // only assistants take attachments
         vm.setText("")
         vm.send()
         assertEquals(1, backend.sent.size)
