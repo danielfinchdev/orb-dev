@@ -14,11 +14,12 @@ export const buttonVariants = cva(
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
         soft: 'bg-primary/10 text-primary hover:bg-primary/15',
-        danger: 'text-destructive hover:bg-destructive/10'
+        danger: 'text-destructive hover:bg-destructive/10',
+        warn: 'bg-warning text-warning-foreground shadow-xs hover:bg-warning/90'
       },
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',
-        sm: 'h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5 text-[13px]',
+        sm: 'h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5 text-control',
         xs: 'h-7 rounded-md gap-1 px-2 text-xs',
         lg: 'h-10 rounded-lg px-6',
         icon: 'size-9',

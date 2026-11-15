@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Bot, BookOpen, Bug, ChevronUp, ChevronDown, Settings, GraduationCap, Music, Pause, SkipForward, LoaderCircle } from 'lucide-react';
+import { Orbit, NotebookPen, MessageSquareWarning, ChevronUp, ChevronDown, Settings, LifeBuoy, Headphones, Pause, SkipForward, LoaderCircle } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { ThemeToggle, SidebarToggle } from './theme-toggle.jsx';
 import { useStore, go, bridge, openSettings, anyChatBusy } from '@/lib/store.js';
 import { Tip, BubbleTip } from './ui/overlay.jsx';
+import { NavRow } from '@/components/ui/primitives.jsx';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { PRODUCT } from '../../shared/product.mjs';
@@ -22,18 +23,11 @@ function Wordmark() {
   );
 }
 
-export function NavItem({ icon: Icon, iconEl, label, active, onClick, children, testid }) {
-  return (
-    <button data-testid={testid} onClick={onClick} className={cn('group flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[14px] transition-colors', active ? 'bg-accent text-accent-foreground' : 'text-foreground/80 hover:bg-accent/60 hover:text-foreground')}>
-      {iconEl ?? (Icon ? <Icon className={cn('size-4 shrink-0', active ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')} /> : null)}
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      {children}
-    </button>
-  );
-}
+// A place in the menu (components/ui/primitives.jsx › NavRow).
+export const NavItem = NavRow;
 
 // the sidebar's width, dragged from its edge (a double click goes back to the usual one), remembered in this window.
-const SIDEBAR_DEFAULT = 256; const SIDEBAR_MIN = 216; const SIDEBAR_MAX = 440; const WIDTH_KEY = 'orb.anchoMenu';
+const SIDEBAR_DEFAULT = 340; const SIDEBAR_MIN = 340; const SIDEBAR_MAX = 480; const WIDTH_KEY = 'orb.anchoMenu';
 function useSidebarWidth() {
   const [width, setRaw] = useState(() => { try { const n = Number(localStorage.getItem(WIDTH_KEY)); return n >= SIDEBAR_MIN && n <= SIDEBAR_MAX ? n : SIDEBAR_DEFAULT; } catch { return SIDEBAR_DEFAULT; } });
   const clamp = (n) => Math.round(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, n)));
@@ -69,15 +63,15 @@ function useRemembered(key, initial) {
 // feedback with Orb's version; unfolded, the list with names. The little arrow on the line above unfolds and folds it.
 function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
   const t = useT();
-  const memories = is('logs') || is('activity');
+  const memories = is('logs') || is('activity') || is('rules');
   // the same slots and icons on the PC and in a linked browser (Ajustes, Agentes, Memorias, Tutoriales); what a
   // browser does not have is left out (Agentes, the bug), never swapped for other icons. Its gear opens this device.
   const items = [
     { icon: Settings, label: t('nav.settings'), active: settingsOpen || is('phone'), onClick: () => openSettings(), testid: 'nav-settings' },
-    ...(bridge.mobile ? [] : [{ icon: Bot, label: t('nav.agents'), active: is('agents'), onClick: () => go('agents'), testid: 'nav-agents' }]),
-    { icon: BookOpen, label: t('nav.memories'), hint: t('nav.memoriesHint'), active: memories, onClick: () => go('logs'), testid: 'nav-memories' },
+    ...(bridge.mobile ? [] : [{ icon: Orbit, label: t('nav.agents'), active: is('agents'), onClick: () => go('agents'), testid: 'nav-agents' }]),
+    { icon: NotebookPen, label: t('nav.logbooks'), hint: t('nav.logbooksHint'), active: memories, onClick: () => go('logs'), testid: 'nav-memories' },
     // how the app works, the FAQ and the button that replays the guided tour.
-    { icon: GraduationCap, label: t('nav.tutorials'), active: is('tutorials'), onClick: () => go('tutorials'), testid: 'nav-tutorials' }
+    { icon: LifeBuoy, label: t('nav.tutorials'), active: is('tutorials'), onClick: () => go('tutorials'), testid: 'nav-tutorials' }
   ];
   const toggle = open ? t('nav.footerFold') : t('nav.footerUnfold');
   // A linked browser's gear opens this device's settings (browser-settings-menu.jsx).
@@ -86,11 +80,11 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
     <div className="side-foot relative border-t px-3 pt-2.5 pb-2" data-testid="sidebar-footer" data-open={open}>
       <Tip label={toggle}>
         <button type="button" className="side-foot-toggle" onClick={() => onOpen(!open)} aria-label={toggle} aria-expanded={open} data-testid="sidebar-footer-toggle">
-          {open ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
+          {open ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
         </button>
       </Tip>
       {open ? <div className="mb-1 flex flex-col gap-0.5">{items.map((i) => row(i) ?? <NavItem key={i.testid} icon={i.icon} label={i.label} active={i.active} onClick={i.onClick} testid={i.testid} />)}</div> : null}
-      <div className="flex items-center gap-0.5">
+      <div className="side-foot-row flex items-center gap-0.5">
         {/* the first icon sits at the window's left edge: its bubble starts at the icon instead of being cut there. */}
         {open ? null : items.map((i, n) => row(i) ?? (
           <BubbleTip key={i.testid} title={i.label} text={i.hint} side="top" align={n === 0 ? 'start' : 'center'}>
@@ -102,7 +96,7 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
         {/* The bug: straight to «Enviar comentarios» (Ajustes › Acerca de), with the version next to it. */}
         {bridge.mobile ? null : (
           <BubbleTip title={t('nav.feedback')} side="top">
-            <button type="button" onClick={() => openSettings('contribuye')} aria-label={t('nav.feedback')} data-testid="nav-feedback" className="side-foot-icon"><Bug className="size-4" /></button>
+            <button type="button" onClick={() => openSettings('contribuye')} aria-label={t('nav.feedback')} data-testid="nav-feedback" className="side-foot-icon"><MessageSquareWarning className="size-4" /></button>
           </BubbleTip>
         )}
         {version ? <span className="side-foot-version" data-testid="app-version">v{version}</span> : null}
@@ -127,7 +121,7 @@ function MusicButtons() {
       ) : null}
       <BubbleTip title={t('nav.music')} text={text} side="top">
         <button type="button" onClick={toggleMusic} aria-label={s.playing || s.loading ? t('nav.musicPause') : t('nav.musicPlay')} aria-pressed={s.playing} data-testid="nav-music" data-music-button=""
-          className={cn('side-foot-icon', s.playing && 'is-active')}>{s.loading ? <LoaderCircle className="size-4 animate-spin" /> : s.playing ? <Pause className="size-4" /> : <Music className="size-4" />}</button>
+          className={cn('side-foot-icon', s.playing && 'is-active')}>{s.loading ? <LoaderCircle className="size-4 animate-spin" /> : s.playing ? <Pause className="size-4" /> : <Headphones className="size-4" />}</button>
       </BubbleTip>
     </>
   );
@@ -148,18 +142,18 @@ export function Sidebar({ mood }) {
   const is = (view) => route.view === view;
   return (
     // the chat list of a messaging app, with the places' labels under the search: at least 340 px.
-    <aside className="bg-sidebar relative flex h-full shrink-0 flex-col border-r" style={{ width: Math.max(width, 340) }}>
+    <aside className="bg-sidebar relative flex h-full shrink-0 flex-col border-r" style={{ width }}>
       {bridge.mobile ? null : <div className="sidebar-resize" role="separator" aria-orientation="vertical" aria-label={t('comp.sidebar.resize')} onPointerDown={startResize} onDoubleClick={() => setWidth(SIDEBAR_DEFAULT)} data-testid="sidebar-resize" />}
       <div className="theme-band side-band app-titlebar flex h-14 shrink-0 items-center gap-2 border-b px-4">
         {/* the robot goes back to the conversation in progress (the last one opened). */}
         <Tip label={t('nav.backToChat', { name })} side="bottom" align="start">
           <button type="button" className="no-drag relative shrink-0 cursor-pointer rounded-full" onClick={() => go(lastChat(route, conversations))} aria-label={t('nav.backToChat', { name })} data-testid="sidebar-home">
-            <Robot size={34} mood={mood} title={name} live active={working} />
+            <Robot size={34} mark={28} mood={mood} title={name} live active={working} />
             {chatBusy ? <span className="bg-primary absolute right-0 bottom-0 size-2 animate-pulse rounded-full" /> : null}
           </button>
         </Tip>
         {/* with the default name, the drawn wordmark (Orb·E); a name of one's own, as it is written. */}
-        <div className="flex min-w-0 flex-1 items-center">{name === PRODUCT.assistant ? <Wordmark /> : <div className="truncate text-[15px] font-medium">{name}</div>}</div>
+        <div className="flex min-w-0 flex-1 items-center">{name === PRODUCT.assistant ? <Wordmark /> : <div className="truncate text-card-title font-medium">{name}</div>}</div>
         <div className="flex shrink-0 items-center gap-0.5">
           <ThemeToggle />
           <SidebarToggle />

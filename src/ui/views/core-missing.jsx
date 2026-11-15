@@ -32,7 +32,7 @@ export function CoreMissing({ state }) {
     const file = Array.isArray(files) ? files[0] : files;
     if (file) repair({ file, passphrase: code || null });
   };
-  const fresh = async () => { if (await confirm(t('data.core.fresh'), t('data.core.freshConfirm'), { ok: t('data.core.fresh') })) repair({ fresh: true, language: locale?.startsWith('en') ? 'en' : 'es' }); };
+  const fresh = async () => { if (await confirm(t('data.core.fresh'), t('data.core.freshConfirm'), { ok: t('data.core.fresh'), danger: true })) repair({ fresh: true, language: locale?.startsWith('en') ? 'en' : 'es' }); };
   const offerFresh = v.fresh === 'yes' || (v.fresh === 'noCode' && noCode);
   return (
     <div className="grid h-full place-items-center overflow-y-auto p-8 text-center" data-testid="core-missing">

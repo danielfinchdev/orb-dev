@@ -5,7 +5,7 @@
 // each conversation is its own (route.id), several at once.
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDraft } from '@/lib/draft.js';
-import { Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, ChevronRight, PenTool, History, FlaskConical, Folder, ListChecks, Ellipsis, Info, BellOff, MessageSquare } from 'lucide-react';
+import { Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, ChevronRight, Presentation, History, FlaskConical, Folder, ListChecks, Ellipsis, Info, BellOff, MessageSquare } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown, TypingMarkdown, TypedMarkdown } from '@/components/markdown.jsx';
 import { ExtensionRequestCard } from './extensions.jsx';
@@ -19,7 +19,7 @@ import { NotificationBell } from '@/components/notification-center.jsx';
 import { confirm } from '@/components/dialogs.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { WaitLabel, HeldCard, resumeQueue, setQueuePaused } from '@/components/task-state.jsx';
+import { TaskStatus, WaitLabel, HeldCard, resumeQueue, setQueuePaused } from '@/components/task-state.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { Switch, BubbleTip } from '@/components/ui/overlay.jsx';
 import { bridge, useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout, plainSkin, addPending, movePending, dropPending, pendingShown, usePending } from '@/lib/store.js';
@@ -36,8 +36,12 @@ import { useT } from '@/lib/i18n.js';
 import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
 import { keepSame } from '@/lib/memo.js';
 import { useAutoScroll, Composer } from '@/components/conversation/composer.jsx';
-import { MsgTime, BarPause, COMPACT_AT, CompactButton } from '@/components/conversation/bar.jsx';
+import { MessageBox } from '@/components/conversation/message-box.jsx';
+import { BarPause, COMPACT_AT, CompactButton } from '@/components/conversation/bar.jsx';
 import { ContextMeter } from '@/components/conversation/context-meter.jsx';
+import { needsApproval } from '@/lib/task-approval.js';
+import { quiet } from '@/lib/quiet.js';
+import { MoreButton } from '@/components/ui/primitives.jsx';
 
 
 // a different greeting each time the chat opens (lib/greeting.js); the last one is remembered so it does not repeat.
@@ -57,43 +61,28 @@ function useGreeting(project) {
 }
 
 // Memoised: the list (up to 120 lines) is not drawn again while the assistant streams its answer.
-const Message = memo(function Message({ m, name, onChanges, tail }) {
+const Message = memo(function Message({ m, name, user, onChanges, tail }) {
   const t = useT();
   if (m.meta?.kind === 'question') return <QuestionCard m={m} />;
   // for a big request, the assistant's advice to define it on the Pizarra, with the way there.
   if (m.meta?.kind === 'board') return (
-    <div className="flex gap-3">
-      <Robot size={32} still className="mt-0.5" />
-      <div className="chat-glass min-w-0 flex-1" data-testid="board-suggestion">
-        <div className="text-muted-foreground mb-1 text-xs">{name}</div>
-        <Markdown>{m.body}</Markdown>
-        <div className="chat-actions mt-2.5"><Button size="sm" onClick={() => go('board')} data-testid="open-board"><PenTool />{t('chat.openBoard')}</Button></div>
-        <div className="text-muted-foreground flow-root"><MsgTime at={m.at} /></div>
-      </div>
-    </div>
+    <MessageBox name={name} at={m.at} data-testid="board-suggestion" actions={<Button size="sm" onClick={() => go('board')} data-testid="open-board"><Presentation />{t('chat.openBoard')}</Button>}>
+      <Markdown>{m.body}</Markdown>
+    </MessageBox>
   );
-  if (m.role === 'usuario') return <div className="bg-bubble text-bubble-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 whitespace-pre-wrap break-words">{m.body}<MsgTime at={m.at} /></div>;
+  if (m.role === 'usuario') return <MessageBox user name={user || t('chat.you')} at={m.at}>{m.body}</MessageBox>;
   if (m.role === 'orb') {
     const report = m.meta?.kind === 'report' && m.meta.tasks?.length ? m.meta : null;
-    return (
-      <div className="flex gap-3">
-        <Robot size={32} still className="mt-0.5" />
-        <div className="chat-glass min-w-0 flex-1">
-          <div className="text-muted-foreground mb-1 text-xs">{name}</div>
-          <TypedMarkdown tail={tail}>{m.body}</TypedMarkdown>
-          {report ? (
-            <div className="chat-actions mt-2.5 flex flex-wrap items-center gap-2" data-testid="report-actions">
-              {report.accepted ? <Badge variant="success"><Check />{t('chat.accepted', { ids: report.tasks.map((id) => `#${id}`).join(', ') })}</Badge> : (<>
-                <Button size="xs" className="px-2.5" onClick={() => act(call('chat.accept', { id: m.id }), t('chat.acceptDone'))}><Check />OK</Button>
-                <Button size="xs" className="px-2.5" variant="outline" onClick={() => onChanges(report.tasks)}><PencilLine />{t('chat.requestChanges')}</Button>
-                <span className="text-muted-foreground text-xs">{t('chat.tasksList', { ids: report.tasks.map((id) => `#${id}`).join(', ') })}</span>
-              </>)}
-            </div>
-          ) : null}
-          <div className="text-muted-foreground flow-root"><MsgTime at={m.at} /></div>
-        </div>
-      </div>
-    );
+    const actions = report ? (
+      <span className="contents" data-testid="report-actions">
+        {report.accepted ? <Badge variant="success"><Check />{t('chat.accepted', { ids: report.tasks.map((id) => `#${id}`).join(', ') })}</Badge> : (<>
+          <Button size="xs" className="px-2.5" onClick={() => act(call('chat.accept', { id: m.id }), t('chat.acceptDone'))}><Check />OK</Button>
+          <Button size="xs" className="px-2.5" variant="outline" onClick={() => onChanges(report.tasks)}><PencilLine />{t('chat.requestChanges')}</Button>
+          <span className="text-muted-foreground text-xs">{t('chat.tasksList', { ids: report.tasks.map((id) => `#${id}`).join(', ') })}</span>
+        </>)}
+      </span>
+    ) : null;
+    return <MessageBox name={name} at={m.at} actions={actions}><TypedMarkdown tail={tail}>{m.body}</TypedMarkdown></MessageBox>;
   }
   if (m.meta?.kind === 'approval' || m.meta?.kind === 'task-approval') return <ChatApproval m={m} />;
   // an agent made a skill or an MCP server and asks for it to be turned on.
@@ -101,7 +90,7 @@ const Message = memo(function Message({ m, name, onChanges, tail }) {
   if (m.meta?.kind === 'attention' && m.meta.task) return <TaskApprovalLine m={m} />;
   // the assistant's suggestion to play while the agents work, with the button that opens the games.
   if (m.meta?.kind === 'games') return (
-    <div className="chat-actions bg-muted/70 text-muted-foreground mx-auto flex max-w-[88%] flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-xl px-3.5 py-2 text-center text-[13px]">
+    <div className="chat-actions bg-muted/70 text-muted-foreground mx-auto flex max-w-[88%] flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-xl px-3.5 py-2 text-center text-control">
       <span>{m.body}</span>
       {!fullPc() ? null : <Button size="xs" variant="soft" onClick={openGames} data-testid="chat-play"><Gamepad2 />{t('chat.playButton')}</Button>}
     </div>
@@ -110,12 +99,12 @@ const Message = memo(function Message({ m, name, onChanges, tail }) {
   if (m.meta?.kind === 'paused') return <PausedLine body={m.body} />;
   // a finished task says it in one line; what the agent reported (technical) unfolds on request.
   if (m.meta?.kind === 'task-end' && m.meta.result) return (
-    <div className="bg-muted/70 text-muted-foreground mx-auto max-w-[88%] rounded-xl px-3.5 py-2 text-center text-[13px]">
+    <div className="bg-muted/70 text-muted-foreground mx-auto max-w-[88%] rounded-xl px-3.5 py-2 text-center text-control">
       <div className="whitespace-pre-wrap">{m.body}</div>
       <Details label={t('chat.seeResult')} className="text-left"><div className="mt-1.5 max-h-60 overflow-auto text-xs whitespace-pre-wrap break-words">{m.meta.result}</div></Details>
     </div>
   );
-  return <div className="bg-muted/70 text-muted-foreground mx-auto max-w-[88%] rounded-xl px-3.5 py-2 text-center text-[13px] whitespace-pre-wrap">{m.body}</div>;
+  return <div className="bg-muted/70 text-muted-foreground mx-auto max-w-[88%] rounded-xl px-3.5 py-2 text-center text-control whitespace-pre-wrap">{m.body}</div>;
 });
 
 // A fold: a small link that shows what is inside (details the user may want, not by default).
@@ -146,10 +135,10 @@ function ChatApproval({ m }) {
   const done = state !== 'pending';
   const badge = DECISION[state] ?? DECISION.denied;
   return (
-    <div className={cn('mx-auto w-full max-w-[88%] rounded-xl border px-3.5 py-2.5 text-[13px]', done ? 'bg-muted/50' : 'border-warning/50 bg-warning/10')}>
-      <div className="flex items-start gap-2"><ShieldAlert className={cn('mt-0.5 size-4 shrink-0', done ? 'text-muted-foreground' : 'text-warning')} /><div className="min-w-0 flex-1 whitespace-pre-wrap break-words">{m.body}</div></div>
+    <div className={cn('mx-auto w-full max-w-[88%] rounded-xl border px-3.5 py-2.5 text-control', done ? 'bg-muted/50' : 'border-warning/50 bg-warning/10')}>
+      <div className="flex items-start gap-2"><ShieldAlert className={cn('mt-0.5 size-4 shrink-0', done ? 'text-muted-foreground' : 'text-warning-ink')} /><div className="min-w-0 flex-1 whitespace-pre-wrap break-words">{m.body}</div></div>
       {/* the command itself, for whoever wants to look: never in the sentence. */}
-      {m.meta.detail ? <Details label={t('chat.seeDetails')} className="pl-6"><pre className="bg-muted mt-1.5 max-h-48 overflow-auto rounded-md px-2.5 py-1.5 font-mono text-[11px] whitespace-pre-wrap break-all">{m.meta.detail}</pre></Details> : null}
+      {m.meta.detail ? <Details label={t('chat.seeDetails')} className="pl-6"><pre className="bg-muted mt-1.5 max-h-48 overflow-auto rounded-md px-2.5 py-1.5 font-mono text-micro whitespace-pre-wrap break-all">{m.meta.detail}</pre></Details> : null}
       <div className="chat-actions mt-2 flex flex-wrap items-center gap-2 pl-6">
         {done ? <Badge variant={badge[1]}>{badge[0]}</Badge> : (<>
           <Button size="xs" className="px-2.5" onClick={() => answer('allow')}><Check />{t('chat.allow')}</Button>
@@ -176,12 +165,12 @@ function TaskApprovalLine({ m }) {
   const reasons = (task?.sensitivity ?? []).map((k) => t(`orbchats.why.${k}`)).filter((x) => x && !x.startsWith('orbchats.why.'));
   const why = reasons.length ? reasons.join(t('orbchats.whyAnd')) : whyOf(m.body);
   return (
-    <div className={cn('mx-auto w-full max-w-[92%] rounded-xl border px-3.5 py-3 text-[13.5px] shadow-xs', waiting ? 'bg-card border-warning/45' : 'bg-muted/50')} data-testid="chat-task-approval" data-status={task?.status ?? 'gone'}>
+    <div className={cn('mx-auto w-full max-w-[92%] rounded-xl border px-3.5 py-3 text-control shadow-xs', waiting ? 'bg-card border-warning/45' : 'bg-muted/50')} data-testid="chat-task-approval" data-status={task?.status ?? 'gone'}>
       <div className="flex items-start gap-2">
-        <ListChecks className={cn('mt-0.5 size-4 shrink-0', waiting ? 'text-warning' : 'text-muted-foreground')} />
+        <ListChecks className={cn('mt-0.5 size-4 shrink-0', waiting ? 'text-warning-ink' : 'text-muted-foreground')} />
         <div className="min-w-0 flex-1">
           {task ? <div className="font-medium">{t('orbchats.cardTitle', { title: task.title })}</div> : <div className="whitespace-pre-wrap break-words">{m.body.replace(/^⚠️\s*/u, '')}</div>}
-          {task && why ? <div className="text-muted-foreground mt-0.5 text-[13px]">{t('orbchats.cardWhy', { why })}</div> : null}
+          {task && why ? <div className="text-muted-foreground mt-0.5 text-control">{t('orbchats.cardWhy', { why })}</div> : null}
         </div>
       </div>
       <div className="chat-actions mt-2.5 flex flex-wrap items-center gap-2 sm:pl-6">
@@ -191,7 +180,7 @@ function TaskApprovalLine({ m }) {
           <Button size="xs" className="px-3" variant="outline" disabled={busy} onClick={() => run(rejectTask)} data-testid="chat-task-reject">{t('tasks.reject')}</Button>
           <Button size="xs" className="px-3" disabled={busy} onClick={() => run(approveTask)} data-testid="chat-task-approve"><Check />{t('tasks.approve.ok')}</Button>
         </>) : (<>
-          {task ? <Badge variant={STATUS[task.status]?.[1]}>{STATUS[task.status]?.[0] ?? task.status}</Badge> : null}
+          {task ? <TaskStatus task={task} /> : null}
           <Button size="xs" className="px-2.5" variant="ghost" onClick={() => go({ view: 'tasks', id: m.meta.task })}><ExternalLink />{t('chat.viewTask')}</Button>
         </>)}
       </div>
@@ -216,7 +205,7 @@ function TaskLine({ task, live }) {
   const now = live?.note || live?.last || task.title;
   const cancel = async () => { if (await confirm(t('comp.live.cancelTask'), t('comp.live.cancelBody', { agent: AGENT[agent] ?? agent ?? '' }), { ok: t('comp.live.cancelTask'), cancel: t('comp.live.back'), danger: true })) act(call('tasks.cancel', { id: task.id }), t('comp.live.cancelled')); };
   return (
-    <div className="group/task bg-card/85 mx-auto flex w-full max-w-[92%] items-center gap-2.5 rounded-xl border px-3 py-2 text-[13px]" data-testid="task-line" data-status={task.status}>
+    <div className="group/task bg-card/85 mx-auto flex w-full max-w-[92%] items-center gap-2.5 rounded-xl border px-3 py-2 text-control" data-testid="task-line" data-status={task.status}>
       {agent ? <AgentIcon agent={agent} className={cn('size-4', running && 'animate-pulse')} /> : <ListChecks className="text-muted-foreground size-4 shrink-0" />}
       <button type="button" className="min-w-0 flex-1 cursor-pointer truncate text-left hover:underline" onClick={() => go({ view: 'tasks', id: task.id })} title={task.title}>
         <span className="font-semibold">{t('orbchats.taskN', { id: task.id })}</span>
@@ -236,7 +225,7 @@ function PausedLine({ body }) {
   const t = useT();
   const paused = useStore((s) => Boolean(s.app?.paused));
   return (
-    <div className="chat-actions bg-muted/70 text-muted-foreground mx-auto flex max-w-[88%] flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-xl px-3.5 py-2 text-center text-[13px]" data-testid="chat-paused">
+    <div className="chat-actions bg-muted/70 text-muted-foreground mx-auto flex max-w-[88%] flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-xl px-3.5 py-2 text-center text-control" data-testid="chat-paused">
       <span>{body}</span>
       {paused ? <Button size="xs" variant="soft" onClick={() => resumeQueue(t)} data-testid="chat-resume"><Play />{t('tasks.wait.resume')}</Button> : null}
     </div>
@@ -268,7 +257,7 @@ function LiveAnswer({ id, name }) {
       <div className="chat-glass min-w-0 flex-1">
         <div className="text-muted-foreground mb-1 text-xs">{name}</div>
         {chat.partial ? <TypingMarkdown text={chat.partial} tail={`chat:${id}`} /> : null}
-        {chat.waiting ? <div className="text-muted-foreground text-[13px]" data-testid="chat-waiting-turn">{t('chat.waitingTurn')}</div> : <LiveActivity chat={chat} />}
+        {chat.waiting ? <div className="text-muted-foreground text-control" data-testid="chat-waiting-turn">{t('chat.waitingTurn')}</div> : <LiveActivity chat={chat} />}
       </div>
     </div>
   );
@@ -306,7 +295,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const seq = useRef(0);
   const fetchList = useCallback(() => {
     const my = ++seq.current;
-    call('chat.list', { conversation: id }).then((r) => { if (my === seq.current && getState().route?.id === id) { setRows((prev) => keepSame(prev, r)); setMore(r.length >= 160); } }).catch(() => {});
+    call('chat.list', { conversation: id }).then((r) => { if (my === seq.current && getState().route?.id === id) { setRows((prev) => keepSame(prev, r)); setMore(r.length >= 160); } }).catch(quiet);
   }, [id]);
   useEffect(() => { seq.current++; if (id != null) fetchList(); }, [id, fetchList]);
   const firstVersion = useRef(version);
@@ -333,7 +322,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const unread = item?.unread ?? 0;
   useEffect(() => {
     if (id == null || !unread) return undefined;
-    const run = () => { if (document.visibilityState === 'visible') call('inbox.markRead', { kind: 'conversation', id }).then(() => loadOrbInboxSoon(0)).catch(() => {}); };
+    const run = () => { if (document.visibilityState === 'visible') call('inbox.markRead', { kind: 'conversation', id }).then(() => loadOrbInboxSoon(0)).catch(quiet); };
     const timer = setTimeout(run, 350);
     document.addEventListener('visibilitychange', run);
     return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', run); };
@@ -383,7 +372,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
         const r = await act(call('chat.send', { text: msg, ...(inProject ? { project: inProject } : {}), ...(Object.keys(chosen).length ? { brain: chosen } : {}) }));
         if (!r) { dropPending(mine); if (!moved()) box.set(msg); return; }
         movePending(mine, `chat:${r.conversation}`);
-        await refresh().catch(() => {});
+        await refresh().catch(quiet);
         if (moved()) { leftBehind({ view: 'chat', id: r.conversation }, getState().conversations.find((c) => c.id === r.conversation)?.title ?? msg.slice(0, 60)); return; }
         if (onConversation) onConversation(r.conversation); else go({ view: 'chat', id: r.conversation });
       } else {
@@ -394,7 +383,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
         if (!s) { dropPending(mine); if (!moved()) box.set(msg); return; }
         movePending(mine, `session:${s.id}`);
         if ((await act(call('sessions.send', { id: s.id, text: msg }))) === undefined) dropPending(mine);
-        await refresh().catch(() => {});
+        await refresh().catch(quiet);
         if (!stillHere(ticket)) { leftBehind({ view: 'session', id: s.id }, s.title); return; }
         go({ view: 'session', id: s.id });
       }
@@ -408,7 +397,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   // «Orquestador» on moves the brain to Claude (or Codex) and says so, instead of doing nothing.
   const coordinator = ['claude', 'codex'].find((a) => catalog?.some((x) => x.id === a)) ?? null;
   const toggleOrchestrator = async (checked) => {
-    if (!checked && !(await confirm(t('chat.freeMode'), t('chat.freeModeBody', { name }), { ok: t('chat.freeModeOk') }))) return;
+    if (!checked && !(await confirm(t('chat.freeMode'), t('chat.freeModeBody', { name }), { ok: t('chat.freeModeOk'), danger: true }))) return;
     if (checked && brain.agent === 'cursor') {
       if (!coordinator) { notify({ title: t('chat.orchestratorNoBrain', { name }), tone: 'warning' }); return; }
       if (await settings({ orchestrate: true, agent: coordinator, model: '' })) notify({ title: t('chat.orchestratorSwitched', { name, agent: AGENT[coordinator] }), tone: 'info' });
@@ -445,7 +434,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const slim = phoneLayout() && Boolean(conv);
   const infoOpen = useStore((s) => s.orbInfo?.type === 'chat') && !embedded;
   const headProject = conv ? conv.project ?? null : workProject?.name ?? null;
-  const waitingYou = useStore((s) => id != null && s.tasks.some((x) => x.conversation_id === id && x.status === 'awaiting_approval'));
+  const waitingTask = useStore((s) => (id != null ? s.tasks.find((x) => x.conversation_id === id && needsApproval(x)) : undefined));
+  const waitingYou = Boolean(waitingTask);
   const chatActions = useOrbActions(conv ? { kind: 'conversation', id: conv.id, title: conv.title, done: conv.status === 'done', pinned: Boolean(item?.pinned), muted: Boolean(item?.muted), unread: 0 } : null);
 
   return (
@@ -457,12 +447,12 @@ export function ChatView({ route, onConversation, project: inProject }) {
         <button type="button" disabled={!conv || embedded} onClick={() => (infoOpen ? closeOrbInfo() : openOrbInfo({ type: 'chat' }))}
           className={cn('press flex min-w-0 items-center gap-2.5 rounded-xl py-1 pr-3 pl-1 text-left', conv && !embedded && 'cursor-pointer', infoOpen ? 'bg-accent' : conv && !embedded ? 'hover:bg-accent/60' : '')}
           aria-expanded={conv ? infoOpen : undefined} aria-label={conv ? t('chats.openInfo', { name: conv.title }) : undefined} data-testid="orb-chat-head">
-          <Robot size={36} mood={chat.busy ? 'thinking' : 'idle'} still={!chat.busy} />
+          <Robot size={36} mark={28} mood={chat.busy ? 'thinking' : 'idle'} still={!chat.busy} />
           <span className="min-w-0">
-            <span className="flex items-center gap-1.5"><span className="truncate text-[15px] font-semibold" data-testid="bar-title-text">{conv?.title ?? t('orbchats.newChatTitle')}</span>{item?.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}</span>
-            <span className={cn('flex min-w-0 items-center gap-1 text-[12.5px]', chat.busy ? 'text-primary' : waitingYou ? 'text-warning-ink' : 'text-muted-foreground')} data-testid="orb-chat-status">
+            <span className="flex items-center gap-1.5"><span className="truncate text-card-title font-semibold" data-testid="bar-title-text">{conv?.title ?? t('orbchats.newChatTitle')}</span>{item?.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}</span>
+            <span className={cn('flex min-w-0 items-center gap-1 text-caption', chat.busy ? 'text-primary' : waitingYou ? 'text-warning-ink' : 'text-muted-foreground')} data-testid="orb-chat-status">
               {headProject ? <ProjectIcon name={headProject} size={14} /> : <Folder className="size-3 shrink-0" aria-hidden="true" />}
-              <span className="truncate">{headProject ?? t('orbchats.noProject')} · {chat.busy ? t('chats.working') : waitingYou ? t('orbchats.awaiting') : name}</span>
+              <span className="truncate">{headProject ?? t('orbchats.noProject')} · {chat.busy ? t('chats.working') : waitingYou ? <TaskStatus task={waitingTask} plain /> : name}</span>
             </span>
           </span>
         </button>
@@ -473,7 +463,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
         {/* only the bell and pause stay on the bar; the chat's actions and the games go into ⋯ (also in «Nuevo chat»). */}
         {conv || fullPc() ? (
           <DropdownMenu modal={false}>
-            <BubbleTip title={t('chats.more')}><DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={t('chats.more')} data-testid="orb-chat-more"><Ellipsis /></Button></DropdownMenuTrigger></BubbleTip>
+            <BubbleTip title={t('chats.more')}><DropdownMenuTrigger asChild><MoreButton label={t('chats.more')} data-testid="orb-chat-more" /></DropdownMenuTrigger></BubbleTip>
             <DropdownMenuContent align="end" className="w-56">
               {conv && !embedded ? <DropdownMenuItem onSelect={() => openOrbInfo({ type: 'chat' })} data-testid="more-info"><Info />{t('orbchats.info')}</DropdownMenuItem> : null}
               {slim ? <DropdownMenuItem onSelect={() => setQueuePaused(!app.paused, t)} data-testid={app.paused ? 'bar-resume' : 'bar-pause'}>{app.paused ? <Play /> : <Pause />}{app.paused ? t('bar.resume') : t('bar.pause')}</DropdownMenuItem> : null}
@@ -489,15 +479,15 @@ export function ChatView({ route, onConversation, project: inProject }) {
           {more ? <Button variant="ghost" size="sm" className="text-muted-foreground mx-auto" onClick={loadOlder} disabled={loading} data-testid="chat-older"><History />{t('chat.older')}</Button> : null}
           {id == null && !sending ? (
             <div className="flex flex-col items-center gap-3 pt-10 text-center">
-              <Robot size={130} mood="hello" live />
+              <Robot size={130} mark={56} mood="hello" live />
               <div className="chat-glass chat-hero flex flex-col items-center gap-3">
                 <h2 className="hero-title mt-2 text-2xl" data-testid="chat-greeting">{userName ? t(greeting.key, { ...greeting, user: userName, name }) : t('chat.hello', { name })}</h2>
                 <p className="text-muted-foreground max-w-md">{t(greeting.sub)}</p>
               </div>
               <div className="mt-3 flex max-w-xl flex-wrap justify-center gap-2">{suggestionsFor(workProject?.name).map((s) => <Button key={s} variant="outline" size="sm" className="h-auto max-w-full shrink rounded-full py-1.5 whitespace-normal" onClick={() => box.set(t(s))}>{t(s)}</Button>)}</div>
             </div>
-          ) : lines.map((m) => <Message key={m.id} m={m} name={name} onChanges={askChanges} tail={`chat:${id}`} />)}
-          {unsaved.map((p) => <Message key={p.id} m={{ id: p.id, role: 'usuario', body: p.text, at: p.at }} name={name} onChanges={askChanges} />)}
+          ) : lines.map((m) => <Message key={m.id} m={m} name={name} user={userName} onChanges={askChanges} tail={`chat:${id}`} />)}
+          {unsaved.map((p) => <Message key={p.id} m={{ id: p.id, role: 'usuario', body: p.text, at: p.at }} name={name} user={userName} onChanges={askChanges} />)}
           <TaskLines conversation={id} />
           {chat.busy || chat.waiting || sending ? <LiveAnswer id={id} name={name} /> : null}
         </div>
@@ -516,13 +506,19 @@ export function ChatView({ route, onConversation, project: inProject }) {
         </>}
         notice={<UsageBubble text={bubble.text} onClose={bubble.close} />}
         bottom={<>
-          <BrainPicker catalog={catalog} value={brain} onChange={pickBrain} className="min-w-0 shrink" />
-          <ReasoningMenu catalog={catalog} value={brain} onChange={(reasoning) => settings({ reasoning })} />
+          {/* the model and its reasoning stay together; the permission and the orchestrator form the second group;
+              the context meter sits at the far end. Each group wraps as a whole on a narrow window. */}
+          <div role="group" aria-label={t('session.model')} className="flex min-w-0 shrink items-center gap-1.5" data-testid="composer-group-brain">
+            <BrainPicker catalog={catalog} value={brain} onChange={pickBrain} className="min-w-0 shrink" />
+            <ReasoningMenu catalog={catalog} value={brain} onChange={(reasoning) => settings({ reasoning })} />
+          </div>
+          <div role="group" aria-label={t('session.permissions')} className="flex shrink-0 items-center gap-1.5" data-testid="composer-group-access">
           {/* «Auto» / «Preguntar» for the tasks the assistant creates and the new chats (the global level, also from the phone). */}
           <AutonomySwitch value={app?.config?.permissions?.mode === 'preguntar' ? 'editar' : 'auto'} testid="chat-autonomy" onChange={(p) => act(call('permissions.setMode', { mode: p === 'auto' ? 'auto' : 'preguntar' }), p === 'auto' ? t('session.autoOn') : t('session.askOn')).then(() => refresh())} />
           {/* whether a NEW conversation is with the assistant or directly with the agent chosen; a conversation keeps
               the way it started. an icon and a small switch; the tooltip explains it. */}
           <OrchestratorSwitch on={orchestrate} onChange={toggleOrchestrator} name={name} cursor={brain.agent === 'cursor'} locked={id != null} />
+          </div>
           {context ? <span className="text-muted-foreground ml-auto shrink-0 text-xs"><ContextMeter context={context} /></span> : null}
         </>} />
     </>

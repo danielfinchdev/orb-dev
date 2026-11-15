@@ -50,10 +50,12 @@ const canMove = (tiles, n) => Object.values(DIR).slice(0, 4).some((d) => slide(t
 const tone = (v) => {
   const step = Math.log2(v);
   if (step <= 7) return { background: `color-mix(in oklab, var(--primary) ${[0, 10, 20, 34, 50, 66, 82, 100][step]}%, var(--card))`, color: step >= 5 ? 'var(--primary-foreground)' : 'var(--foreground)' };
-  if (step === 8) return { background: 'color-mix(in oklab, var(--primary) 55%, var(--warning))', color: '#fff' };
-  if (step === 9) return { background: 'var(--warning)', color: '#fff' };
-  if (step === 10) return { background: 'color-mix(in oklab, var(--warning) 50%, var(--destructive))', color: '#fff' };
-  return { background: 'var(--destructive)', color: '#fff', boxShadow: '0 0 24px color-mix(in oklab, var(--destructive) 60%, transparent)' };
+  // dark text on the light warm fills of the dark mode: white there falls under 3:1 even for the big digits
+  const hot = 'light-dark(#fff, oklch(0.2 0.04 40))';
+  if (step === 8) return { background: 'color-mix(in oklab, var(--primary) 55%, var(--warning))', color: hot };
+  if (step === 9) return { background: 'var(--warning)', color: hot };
+  if (step === 10) return { background: 'color-mix(in oklab, var(--warning) 50%, var(--destructive))', color: hot };
+  return { background: 'var(--destructive)', color: hot, boxShadow: '0 0 24px color-mix(in oklab, var(--destructive) 60%, transparent)' };
 };
 
 export default function Game2048({ level, onScore, onOver, paused }) {

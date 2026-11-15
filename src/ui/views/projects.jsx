@@ -1,7 +1,7 @@
 // Projects: the folders inside the assistant's folder (plus any linked one), with git and GitHub actions.
 import { useEffect, useState } from 'react';
-import { FolderKanban, FolderPlus, FolderOpen, Pin, MessageSquare, BookOpen, Unlink, GitBranch, Save, Upload, RefreshCw, GitPullRequest, Folder, ScanSearch, ShieldCheck, PencilLine, Ellipsis, CircleCheckBig, Trash2, Undo2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { FolderGit2, FolderPlus, FolderOpen, Pin, MessageSquare, NotebookPen, Unlink, GitBranch, Save, Upload, RefreshCw, GitPullRequest, Folder, ScanSearch, ShieldCheck, PencilLine, Ellipsis, CircleCheckBig, Trash2, Undo2 } from 'lucide-react';
+import { notifyError, notifyOk } from '@/lib/notify.js';
 import { PageHeader, PageBody, BackButton } from '@/components/page.jsx';
 import { confirm, choose, form } from '@/components/dialogs.jsx';
 import { createProjectFlow, linkFolderFlow, cloneRepoFlow, CATEGORIES } from '@/components/project-actions.jsx';
@@ -15,6 +15,7 @@ import { usePress } from '@/lib/use-press.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { GithubIcon } from '@/components/agent-icon.jsx';
 import { useT, useLocale } from '@/lib/i18n.js';
+import { quiet } from '@/lib/quiet.js';
 
 function GithubCard() {
   const t = useT();
@@ -26,7 +27,7 @@ function GithubCard() {
     <Card className="flex-row flex-wrap items-center gap-x-3 gap-y-2 px-5 py-3.5">
       <GithubIcon className="size-5 shrink-0" />
       <div className="min-w-[12rem] flex-1">
-        <div className="text-[14px] font-medium">GitHub</div>
+        <div className="text-body font-medium">GitHub</div>
         <div className="text-muted-foreground text-xs">{t('projects.gh.desc')}</div>
       </div>
       <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
@@ -61,7 +62,7 @@ function ContributionGraph() {
           {data.weeks.flatMap((w, wi) => w.map((d) => <span key={d.date} className="gh-cell size-[10px] rounded-[2px]" data-level={d.level} style={wi === 0 ? { gridRowStart: new Date(`${d.date}T12:00:00`).getDay() + 1 } : undefined} onMouseEnter={() => setHover(d)} />))}
         </div>
       </div>
-      <div className="text-muted-foreground flex items-center justify-end gap-1 text-[10.5px]">{t('projects.gh.less')}{[0, 1, 2, 3, 4].map((l) => <span key={l} className="gh-cell size-[10px] rounded-[2px]" data-level={l} />)}{t('projects.gh.more')}</div>
+      <div className="text-muted-foreground flex items-center justify-end gap-1 text-micro">{t('projects.gh.less')}{[0, 1, 2, 3, 4].map((l) => <span key={l} className="gh-cell size-[10px] rounded-[2px]" data-level={l} />)}{t('projects.gh.more')}</div>
     </Card>
   );
 }
@@ -71,8 +72,8 @@ function ContributionGraph() {
 // When the Recycle Bin cannot take it: a folder some program is using offers only «Reintentar»; otherwise «Reintentar»
 // or «Borrar para siempre» after a stronger warning. Cancelling gives the project back as it was.
 async function finishFlow(p, t) {
-  if (!(await confirm(t('projects.finish.title'), t('projects.finish.body', { name: p.name }), { ok: t('projects.finish.ok') }))) return;
-  if ((await act(call('projects.finish', { name: p.name }), t('projects.finish.done'))) !== undefined) await refresh().catch(() => {});
+  if (!(await confirm(t('projects.finish.title'), t('projects.finish.body', { name: p.name }), { ok: t('projects.finish.ok'), danger: true }))) return;
+  if ((await act(call('projects.finish', { name: p.name }), t('projects.finish.done'))) !== undefined) await refresh().catch(quiet);
 }
 export async function deleteProjectFlow(p, t) {
   if (!(await confirm(t('projects.delete.title'), t('projects.delete.body', { name: p.name, path: p.path }), { ok: t('projects.delete.ok'), danger: true }))) return;
@@ -86,11 +87,11 @@ export async function deleteProjectFlow(p, t) {
       else if (r.noTrash) step = await choose(t('projects.delete.noTrash.title'), t('projects.delete.noTrash.body', { path: r.path }), [{ value: 'forever', label: t('projects.delete.noTrash.ok'), variant: 'destructive' }, { value: 'retry', label: t('projects.delete.retry') }]);
       if (!step) { await bridge.deleteProject(p.name, null, 'cancel'); return; }
       r = await bridge.deleteProject(p.name, null, step);
-      if (r?.ok) { toast.success(t(step === 'forever' ? 'projects.delete.doneForever' : 'projects.delete.done')); return; }
+      if (r?.ok) { notifyOk(t(step === 'forever' ? 'projects.delete.doneForever' : 'projects.delete.done')); return; }
     }
-    if (r?.ok) toast.success(t('projects.delete.done'));
-  } catch (error) { toast.error(errorText(error)); }
-  finally { await refresh().catch(() => {}); }
+    if (r?.ok) notifyOk(t('projects.delete.done'));
+  } catch (error) { notifyError(error); }
+  finally { await refresh().catch(quiet); }
 }
 
 // Right click (or a long press on the phone, or its «…»): what can be done with the whole project. Deleting is the PC's
@@ -121,7 +122,7 @@ function ProjectRow({ p, selected, phone, onOpen }) { // selected: the name of t
       <button type="button" onClick={() => onOpen(p.name)} className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-4 py-3 text-left" data-testid="project-row">
         <Folder className={cn('size-4 shrink-0', p.active ? 'text-primary' : 'text-muted-foreground')} />
         {/* The phone: the name only (the category is the group's title); the PC also shows the folder. */}
-        <div className="grid min-w-0 flex-1"><div className="truncate">{p.name}</div>{bridge.mobile ? null : <PathText path={p.path} className="text-muted-foreground text-[11px]" />}</div>
+        <div className="grid min-w-0 flex-1"><div className="truncate">{p.name}</div>{bridge.mobile ? null : <PathText path={p.path} className="text-muted-foreground text-micro" />}</div>
         {p.open ? <Badge variant="info">{t(p.open === 1 ? 'projects.openOne' : 'projects.openOther', { n: p.open })}</Badge> : null}
         {p.active ? <Pin className="text-primary size-3.5" /> : null}
       </button>
@@ -134,13 +135,13 @@ function ProjectRow({ p, selected, phone, onOpen }) { // selected: the name of t
 function FinishedList({ list, onReopened }) {
   const t = useT();
   const locale = useLocale();
-  const reopen = async (x) => { const name = await act(call('projects.reopen', { key: x.key })); if (name) { toast.success(t('projects.reopen.done', { name })); await refresh().catch(() => {}); onReopened(name); } };
+  const reopen = async (x) => { const name = await act(call('projects.reopen', { key: x.key })); if (name) { notifyOk(t('projects.reopen.done', { name })); await refresh().catch(quiet); onReopened(name); } };
   return list.map((x) => (
     <div key={x.key} className="flex items-center gap-3 border-b px-4 py-3" data-testid="project-finished">
       <CircleCheckBig className="text-muted-foreground size-4 shrink-0" />
       <div className="grid min-w-0 flex-1">
         <div className="truncate">{x.name}</div>
-        <div className="text-muted-foreground truncate text-[11px]">{bridge.mobile ? t(`comp.projects.category.${x.category ?? 'other'}`) : x.path} · {t('projects.finished.on', { date: new Date(x.at).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }) })}</div>
+        <div className="text-muted-foreground truncate text-micro">{bridge.mobile ? t(`comp.projects.category.${x.category ?? 'other'}`) : x.path} · {t('projects.finished.on', { date: new Date(x.at).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }) })}</div>
       </div>
       <Button size="sm" variant="outline" onClick={() => reopen(x)} data-testid="project-reopen"><Undo2 />{t('projects.reopen')}</Button>
     </div>
@@ -155,7 +156,7 @@ function ProjectDetail({ p, onRenamed }) {
     const r = await form(t('projects.rename.title'), { description: p.inHome ? t('projects.rename.desc') : t('projects.rename.descLinked'), initial: { name: p.name },
       body: (v, set) => <Field label={t('projects.rename.label')}><Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} maxLength={60} /></Field>,
       ok: t('projects.rename.ok'), onOk: (v) => call('projects.rename', { name: p.name, to: v.name.trim() }) });
-    if (r) { toast.success(t('projects.rename.done', { name: r.name })); await refresh().catch(() => {}); onRenamed?.(r.name); }
+    if (r) { notifyOk(t('projects.rename.done', { name: r.name })); await refresh().catch(quiet); onRenamed?.(r.name); }
   };
   const load = () => { setInfo(null); call('projects.info', { name: p.name }).then(setInfo).catch((e) => setInfo({ git: false, error: e.message })); };
   useEffect(load, [p.name]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -163,20 +164,20 @@ function ProjectDetail({ p, onRenamed }) {
     const r = await form(t('projects.commit.title'), { description: t('projects.commit.desc'), initial: { message: '' },
       body: (v, set) => <Field label={t('projects.commit.message')}><Input autoFocus value={v.message} onChange={(e) => set({ message: e.target.value })} maxLength={200} placeholder={t('projects.commit.ph')} /></Field>,
       ok: t('projects.commit.ok'), onOk: (v) => call('projects.commit', { name: p.name, message: v.message }) });
-    if (r) { toast.success(t('projects.commit.done', { files: r.files })); load(); }
+    if (r) { notifyOk(t('projects.commit.done', { files: r.files })); load(); }
   };
   const publish = async () => {
     const r = await form(t('projects.publish.title'), { description: t('projects.publish.desc'), initial: { repo: p.name.replace(/[^\w.-]+/g, '-'), isPrivate: true },
       body: (v, set) => (<><Field label={t('projects.publish.repo')}><Input value={v.repo} onChange={(e) => set({ repo: e.target.value })} /></Field><label className="flex cursor-pointer items-center gap-2 text-sm"><Checkbox checked={v.isPrivate} onCheckedChange={(c) => set({ isPrivate: c === true })} />{t('projects.publish.private')}</label></>),
       ok: t('projects.publish.ok'), onOk: (v) => call('projects.createRepo', { name: p.name, repo: v.repo.trim(), isPrivate: v.isPrivate }) });
-    if (r) { toast.success(t('projects.publish.done', { url: r.url })); load(); }
+    if (r) { notifyOk(t('projects.publish.done', { url: r.url })); load(); }
   };
   return (
     <Card className="gap-5">
       <CardHeader className="flex-row items-start gap-3">
         <Folder className="text-primary mt-0.5 size-5 shrink-0" />
         {/* the phone shows where it is in Orb's words (category › folder), never the PC's path. */}
-        <div className="min-w-0 flex-1"><CardTitle className="flex items-center gap-2 text-[17px]">{p.name}</CardTitle>{bridge.mobile ? <CardDescription className="mt-1 text-xs break-words">{t(`comp.projects.category.${p.category ?? 'other'}`)} › {baseName(p.path)}</CardDescription> : <CardDescription className="mt-1 font-mono text-xs break-all">{p.path}</CardDescription>}</div>
+        <div className="min-w-0 flex-1"><CardTitle className="flex items-center gap-2 text-title">{p.name}</CardTitle>{bridge.mobile ? <CardDescription className="mt-1 text-xs break-words">{t(`comp.projects.category.${p.category ?? 'other'}`)} › {baseName(p.path)}</CardDescription> : <CardDescription className="mt-1 font-mono text-xs break-all">{p.path}</CardDescription>}</div>
         {p.active ? <Badge><Pin />{t('projects.workProject')}</Badge> : null}
       </CardHeader>
       <CardContent className="flex flex-wrap gap-2">
@@ -185,7 +186,7 @@ function ProjectDetail({ p, onRenamed }) {
         <Button size="sm" variant="outline" onClick={async () => { await act(call('projects.setActive', { name: p.name })); go('chat'); }}><MessageSquare />{t('projects.chatHere')}</Button>
         <BubbleTip title={t('projects.review')} text={t('projects.reviewTip')}><Button size="sm" variant="outline" onClick={() => askReview({ project: p.name })} data-testid="project-review"><ScanSearch />{t('projects.review')}</Button></BubbleTip>
         <BubbleTip title={t('projects.security')} text={t('projects.securityTip')}><Button size="sm" variant="outline" onClick={() => askSecurityReview({ project: p.name })} data-testid="project-security"><ShieldCheck />{t('projects.security')}</Button></BubbleTip>
-        <Button size="sm" variant="outline" onClick={() => go({ view: 'logs', name: p.name })}><BookOpen />{t('projects.log')}</Button>
+        <Button size="sm" variant="outline" onClick={() => go({ view: 'logs', name: p.name })}><NotebookPen />{t('projects.log')}</Button>
         <BubbleTip title={t('projects.rename.title')} text={p.open ? t('projects.rename.busy') : undefined}><span><Button size="sm" variant="outline" disabled={Boolean(p.open)} onClick={rename} data-testid="project-rename"><PencilLine />{t('projects.rename.title')}</Button></span></BubbleTip>
         {!p.inHome ? <Button size="sm" variant="danger" onClick={async () => { if (await confirm(t('projects.unlink.title'), t('projects.unlink.body', { name: p.name }), { ok: t('projects.unlink.ok'), danger: true })) act(call('projects.remove', { name: p.name }), t('projects.unlink.done')); }}><Unlink />{t('projects.unlink.ok')}</Button> : null}
       </CardContent>
@@ -193,7 +194,7 @@ function ProjectDetail({ p, onRenamed }) {
       <CardContent className="grid gap-3">
         <div className="text-muted-foreground flex items-center gap-1.5 text-xs"><GitBranch className="size-3.5" />{t('projects.git')}</div>
         {!info ? <Spinner /> : !info.git ? <p className="text-muted-foreground text-sm">{info.error ?? t('projects.noGit')}</p> : (<>
-          <dl className="grid grid-cols-[140px_1fr] gap-x-4 gap-y-1.5 text-[13px]">
+          <dl className="grid grid-cols-[140px_1fr] gap-x-4 gap-y-1.5 text-control">
             <dt className="text-muted-foreground">{t('projects.branch')}</dt><dd className="font-mono text-xs">{info.branch}</dd>
             <dt className="text-muted-foreground">{t('projects.changes')}</dt><dd>{info.changes ? t('projects.filesN', { n: info.changes }) : t('projects.none')}</dd>
             <dt className="text-muted-foreground">{t('projects.remote')}</dt><dd className="break-all">{info.remote ?? t('projects.unpublished')}</dd>
@@ -201,7 +202,7 @@ function ProjectDetail({ p, onRenamed }) {
           </dl>
           <div className="flex flex-wrap gap-2">
             {info.changes ? <Button size="sm" variant="outline" onClick={commit}><Save />{t('projects.commitBtn')}</Button> : null}
-            {info.remote ? <Button size="sm" variant="outline" onClick={async () => { if (await confirm(t('projects.push.title'), t('projects.push.body', { branch: info.branch, remote: info.remote }), { ok: t('projects.push.ok') })) { await act(call('projects.push', { name: p.name, branch: info.branch }), t('projects.push.done')); load(); } }}><Upload />{t('projects.pushBtn')}</Button>
+            {info.remote ? <Button size="sm" variant="outline" onClick={async () => { if (await confirm(t('projects.push.title'), t('projects.push.body', { branch: info.branch, remote: info.remote }), { ok: t('projects.push.ok'), danger: true })) { await act(call('projects.push', { name: p.name, branch: info.branch }), t('projects.push.done')); load(); } }}><Upload />{t('projects.pushBtn')}</Button>
               : <Button size="sm" variant="outline" onClick={publish}><GithubIcon />{t('projects.publish.title')}</Button>}
           </div>
           {info.branches?.length > 1 ? <div className="flex flex-wrap gap-1.5">{info.branches.map((b) => <Badge key={b} variant="secondary" className="font-mono font-normal">{b}</Badge>)}</div> : null}
@@ -220,7 +221,7 @@ export function ProjectsView({ route }) {
   const phone = phoneLayout();
   const [tab, setTab] = useState('active');
   const [finished, setFinished] = useState([]);
-  useEffect(() => { let alive = true; call('projects.finished').then((l) => alive && setFinished(l ?? [])).catch(() => {}); return () => { alive = false; }; }, [version]);
+  useEffect(() => { let alive = true; call('projects.finished').then((l) => alive && setFinished(l ?? [])).catch(quiet); return () => { alive = false; }; }, [version]);
   const showing = finished.length ? tab : 'active';
   const [selected, setSelected] = useState(route.name ?? (phone ? null : app.activeProject?.name ?? projects[0]?.name ?? null));
   const current = projects.find((p) => p.name === selected) ?? null;
@@ -236,7 +237,7 @@ export function ProjectsView({ route }) {
   );
   return (
     <>
-      <PageHeader icon={<FolderKanban className="text-primary size-5" />} title={t('projects.title')} meta={app.home && !bridge.mobile ? t('projects.meta', { home: app.home }) : t('projects.metaRemote')}>
+      <PageHeader icon={<FolderGit2 className="text-primary size-5" />} title={t('projects.title')} meta={app.home && !bridge.mobile ? t('projects.meta', { home: app.home }) : t('projects.metaRemote')}>
         {bridge.mobile ? null : <><Button size="sm" variant="ghost" onClick={async () => pick(await cloneRepoFlow())}><GithubIcon />{t('projects.clone')}</Button>
         <Button size="sm" variant="ghost" onClick={async () => pick(await linkFolderFlow())}><FolderOpen />{t('projects.link')}</Button></>}
         <Button size="sm" onClick={async () => pick(await createProjectFlow())}><FolderPlus />{t('projects.create')}</Button>
@@ -259,11 +260,11 @@ export function ProjectsView({ route }) {
                 const list = projects.filter((p) => (p.category ?? null) === cat);
                 return list.length ? (
                   <div key={cat ?? 'other'} data-testid={`category-${cat ?? 'other'}`}>
-                    <div className="text-muted-foreground bg-muted/40 border-b px-4 py-1.5 text-[11px] font-medium tracking-wide uppercase">{t(`comp.projects.category.${cat ?? 'other'}`)}</div>
+                    <div className="text-muted-foreground bg-muted/40 border-b px-4 py-1.5 text-micro font-medium tracking-wide uppercase">{t(`comp.projects.category.${cat ?? 'other'}`)}</div>
                     {list.map((p) => <ProjectRow key={p.name} p={p} selected={selected} phone={phone} onOpen={open} />)}
                   </div>
                 ) : null;
-              }) : <Empty icon={FolderKanban} title={t('projects.empty.title')}>{app.home ? t('projects.empty.hint', { home: app.home }) : t('projects.empty.hintRemote')}</Empty>}
+              }) : <Empty icon={FolderGit2} title={t('projects.empty.title')}>{app.home ? t('projects.empty.hint', { home: app.home }) : t('projects.empty.hintRemote')}</Empty>}
             </Card>
             {phone ? null : current ? <ProjectDetail key={current.name} p={current} onRenamed={setSelected} /> : <Card><Empty icon={Folder} title={t('projects.pick')} /></Card>}
           </div>

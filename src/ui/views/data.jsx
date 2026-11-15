@@ -1,17 +1,18 @@
 // Ajustes › Datos (the owner, on this PC): encrypted backups (every day at 03:00, or now), the recovery code that
 // opens them on another PC, restoring one, and moving this Orb to another PC. src/engine/api/data.mjs does the work.
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
 import { HardDriveDownload, KeyRound, RotateCcw, LoaderCircle, ShieldCheck, TriangleAlert, Copy, FolderOpen, Archive, Trash2, FolderLock } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardFooter, Field, Input } from '@/components/ui/basic.jsx';
 import { form, confirm } from '@/components/dialogs.jsx';
 import { call, act, bridge, useStore, getState, setState, openSettings } from '@/lib/store.js';
-import { notify } from '@/lib/notify.js';
+import { notify, notifyOk } from '@/lib/notify.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { MasterCard } from '@/views/master.jsx';
+import { TrashCard } from './settings/trash.jsx';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
 import { AUTHOR } from '../../shared/product.mjs';
+import { quiet } from '@/lib/quiet.js';
 
 // the details of going back to the previous key (what stops working, recovery codes), in the README.
 const KEY_DOCS = `https://github.com/${AUTHOR.repo}#going-back-to-the-previous-key`;
@@ -30,7 +31,7 @@ export async function newRecoveryCode() {
     body: () => (
       <div className="grid gap-2">
         <div className="bg-muted rounded-lg px-3 py-3 text-center font-mono text-lg font-semibold tracking-wider break-all select-all" data-testid="recovery-code">{r.code}</div>
-        {navigator.clipboard ? <Button type="button" size="sm" variant="ghost" className="w-fit" onClick={() => navigator.clipboard.writeText(r.code).then(() => toast.success(tNow('datos.copied'))).catch(() => {})}><Copy />{tNow('datos.copy')}</Button> : null}
+        {navigator.clipboard ? <Button type="button" size="sm" variant="ghost" className="w-fit" onClick={() => navigator.clipboard.writeText(r.code).then(() => notifyOk(tNow('datos.copied'))).catch(quiet)}><Copy />{tNow('datos.copy')}</Button> : null}
       </div>
     ),
     ok: tNow('datos.codeKept')
@@ -44,7 +45,7 @@ function BackupsCard() {
   const [st, setSt] = useState(null);
   const [list, setList] = useState([]);
   const [busy, setBusy] = useState(false);
-  const load = () => Promise.all([call('backup.status').then(setSt), call('backup.list').then(setList)]).catch(() => {});
+  const load = () => Promise.all([call('backup.status').then(setSt), call('backup.list').then(setList)]).catch(quiet);
   useEffect(() => { load(); return bridge.on('backup:done', () => load()); }, []);
   if (!st) return null;
   const when = (iso) => (iso ? new Date(iso).toLocaleString(locale, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
@@ -59,16 +60,16 @@ function BackupsCard() {
       ok: t('datos.restore'),
       onOk: async (v) => { await call('backup.verify', { file: b.name, passphrase: v.passphrase || null, unlock }); return call('backup.restore', { file: b.name, passphrase: v.passphrase || null, unlock }); }
     });
-    if (r) toast.success(t('datos.restoreReady'), { duration: 10000 });
+    if (r) notifyOk(t('datos.restoreReady'), { ms: 10000 });
   };
   // The way back after «Empezar con una clave nueva» ('anterior'), and back to the new key after that ('nueva').
   const way = st.previousKey === 'nueva' ? 'datos.newKey' : 'datos.previousKey';
   const previousKey = async () => {
     const body = <>{t(`${way}Body`)} <button type="button" className="text-primary cursor-pointer underline-offset-2 hover:underline" onClick={() => act(bridge.openExternal(KEY_DOCS))} data-testid="previous-key-more">{t('datos.moreInfo')}</button></>;
-    if (!(await confirm(t(`${way}Title`), body, { ok: t(`${way}Use`) }))) return;
+    if (!(await confirm(t(`${way}Title`), body, { ok: t(`${way}Use`), danger: true }))) return;
     const unlock = await unlockCore('previousKey');
     if (!unlock) return;
-    if (await act(call('backup.previousKey', { unlock }))) toast.success(t(`${way}Ready`), { duration: 15000 });
+    if (await act(call('backup.previousKey', { unlock }))) notifyOk(t(`${way}Ready`), { ms: 15000 });
   };
   // where the copies go: outside Orb's folder by default; another folder (never inside core) or back to the default.
   const setFolder = async (folder) => { const unlock = await unlockCore('backupFolder'); if (!unlock) return; if (await act(call('config.save', { patch: { backup: { folder } }, unlock }), t('datos.folderChanged'))) load(); };
@@ -86,12 +87,12 @@ function BackupsCard() {
           <span>{t('datos.folder')}: <span className="text-foreground font-mono break-all" data-testid="backup-folder">{st.folder}</span></span>
           {!st.custom ? <span>{t('datos.folderOutside')}</span> : null}
           <span data-testid="backup-last">{st.last ? (st.last.ok ? t('datos.lastOk', { when: when(st.last.at) }) : t('datos.lastFailed', { when: when(st.last.at), error: st.last.error ?? '' })) : t('datos.none')}</span>
-          {!st.recovery ? <span className="text-warning flex items-center gap-1"><TriangleAlert className="size-3.5" />{t('datos.noCode')}</span> : <span className="flex items-center gap-1"><ShieldCheck className="text-success size-3.5" />{t('datos.withCode')}</span>}
+          {!st.recovery ? <span className="text-warning-ink flex items-center gap-1"><TriangleAlert className="size-3.5" />{t('datos.noCode')}</span> : <span className="flex items-center gap-1"><ShieldCheck className="text-success size-3.5" />{t('datos.withCode')}</span>}
         </div>
         {/* after «Empezar con una clave nueva», Windows opens the key from before again: the way back (and
             the way back to the new key after that). */}
         {st.previousKey ? (
-          <div className="grid gap-2 rounded-lg border px-3 py-2.5 text-[13px]" data-testid="previous-key">
+          <div className="grid gap-2 rounded-lg border px-3 py-2.5 text-control" data-testid="previous-key">
             <span>{t(way)}</span>
             <Button size="sm" variant="outline" className="w-fit" onClick={previousKey} data-testid="previous-key-use"><KeyRound />{t(`${way}Use`)}</Button>
           </div>
@@ -99,7 +100,7 @@ function BackupsCard() {
         {list.length ? (
           <div className="grid gap-1.5" data-testid="backup-list">
             {list.slice(0, 8).map((b) => (
-              <div key={b.name} className="flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[13px]">
+              <div key={b.name} className="flex items-center gap-2 rounded-lg border px-3 py-1.5 text-control">
                 <span className="min-w-0 flex-1 truncate">{when(b.created)}</span>
                 <Badge variant="outline" className="font-normal">{t(`datos.kind.${['daily', 'manual', 'preupdate', 'premigration', 'move'].includes(b.kind) ? b.kind : 'other'}`)}</Badge>
                 <span className="text-muted-foreground text-xs tabular-nums">{size(b.size)}</span>
@@ -127,7 +128,7 @@ function LegacyCard() {
   const t = useT();
   const [st, setSt] = useState(null);
   const [busy, setBusy] = useState(false);
-  const load = () => call('legacy.status').then(setSt).catch(() => {});
+  const load = () => call('legacy.status').then(setSt).catch(quiet);
   useEffect(() => { load(); }, []);
   const local = st ? st.archives.length + st.copies.length : 0;
   if (!st || !(local + (st.oldBackups ?? 0))) return null;
@@ -165,7 +166,7 @@ function CoreCard() {
   );
 }
 
-export function DataCards() { return <><MasterCard /><BackupsCard /><CoreCard /><LegacyCard /></>; }
+export function DataCards() { return <><MasterCard /><BackupsCard /><TrashCard /><CoreCard /><LegacyCard /></>; }
 
 // backups are on from the first day, sealed with this PC's key. A few days later, once, a quiet suggestion to make
 // the recovery code (Ajustes › Datos), so a copy also opens on another PC. Never on a phone.

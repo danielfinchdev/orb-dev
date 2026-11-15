@@ -10,7 +10,7 @@ import { railValuesChange } from '../../../shared/rails-registry.mjs';
 // A patch that changes a rail's value asks the password every time ('rails'); cancelling saves nothing and returns undefined,
 // so a caller that already moved its control can put it back.
 export async function save(patch, ok = t('settings.saved'), unlock = null) {
-  if (!unlock && railValuesChange(patch, getState().app?.config)) { unlock = await unlockCore('rails'); if (!unlock) return undefined; }
+  if (!unlock && (patch?.rails !== undefined || railValuesChange(patch, getState().app?.config))) { unlock = await unlockCore('rails'); if (!unlock) return undefined; }
   const config = await act(call('config.save', { patch, ...(unlock ? { unlock } : {}) }), ok);
   if (config) { setState({ app: { ...getState().app, config } }); applyTheme(config.ui?.theme); applyAppearance(config.ui); }
   return config;

@@ -77,6 +77,7 @@ export default {
   'settings.oneAtATimeHint': 'Tasks run one at a time, in order.',
   'settings.approvalWait': 'Permission timeout',
   'settings.approvalWaitHint': 'Denied when it runs out. 0 = no limit.',
+  'settings.approvalWaitTitle': 'If nobody answers',
   'settings.review': 'Automatic Task Review',
   'settings.reviewHint': 'Another model reviews each finished task before the report.',
   'settings.resumeRestart': 'Resume tasks when Orb opens',

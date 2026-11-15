@@ -92,8 +92,8 @@ function BrainGroups({ catalog, value, onChange }) {
         {/* each model says what it is for (fast, balanced, most capable), so no one has to know the names. */}
         <span className={cn('grid min-w-0 flex-1', !withAgent && 'pl-5')}>
           <span className="truncate">{withAgent ? `${a.label} · ` : ''}{labelOf(a, m, t)}</span>
-          {m.limitedUntil ? <span className="text-warning-ink truncate text-[11px] leading-tight">{t('brain.noUsage', { when: untilShort(m.limitedUntil, locale) })}</span>
-            : m.tier ? <span className="text-muted-foreground truncate text-[11px] leading-tight">{t(`brain.tier.${m.tier}`)}</span> : null}
+          {m.limitedUntil ? <span className="text-warning-ink truncate text-micro leading-tight">{t('brain.noUsage', { when: untilShort(m.limitedUntil, locale) })}</span>
+            : m.tier ? <span className="text-muted-foreground truncate text-micro leading-tight">{t(`brain.tier.${m.tier}`)}</span> : null}
         </span>
         {m.heavy ? <Flame className="text-warning! size-3.5" aria-label={t('brain.heavy')} /> : null}
         {on ? <Check className="text-primary!" /> : null}
@@ -101,7 +101,7 @@ function BrainGroups({ catalog, value, onChange }) {
     );
   };
   const header = (id, icon, label, note) => (
-    <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setOpen((o) => (o === id ? null : id)); }} aria-expanded={open === id} className="text-[13px] font-medium" data-testid={`brain-group-${id}`}>
+    <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setOpen((o) => (o === id ? null : id)); }} aria-expanded={open === id} className="text-control font-medium" data-testid={`brain-group-${id}`}>
       <ChevronRight className={cn('size-3.5 transition-transform', open === id && 'rotate-90')} />{icon}
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {note ? <span className="text-muted-foreground max-w-28 truncate text-xs font-normal">{note}</span> : null}
@@ -214,10 +214,10 @@ export function UsageBubble({ text, onClose }) {
   return (
     <div className="animate-in fade-in slide-in-from-bottom-1 bg-card absolute bottom-full left-3 z-10 mb-3 w-max max-w-[min(24rem,calc(100%-1.5rem))] rounded-2xl border px-4 py-3 shadow-lg" role="status" data-testid="usage-bubble">
       <div className="flex items-start gap-3">
-        <Lightbulb className="text-warning mt-0.5 size-5 shrink-0" />
+        <Lightbulb className="text-warning-ink mt-0.5 size-5 shrink-0" />
         <div className="min-w-0 flex-1">
-          <div className="text-[14px] font-medium">{t('brain.warnTitle')}</div>
-          <p className="text-muted-foreground mt-0.5 text-[13px] leading-snug">{text}</p>
+          <div className="text-body font-medium">{t('brain.warnTitle')}</div>
+          <p className="text-muted-foreground mt-0.5 text-control leading-snug">{text}</p>
         </div>
         <button className="text-muted-foreground hover:text-foreground -mt-1 -mr-1 cursor-pointer rounded p-1" onClick={onClose} aria-label={t('brain.close')}><X className="size-3.5" /></button>
       </div>

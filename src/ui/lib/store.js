@@ -1,12 +1,12 @@
 // App state shared by every view: what the engine knows (assistant, projects, tasks, conversations) plus the current
 // route. The state container itself is state.js; engine events trigger a debounced refresh.
-import { toast } from 'sonner';
+import { notifyError, notifyOk } from './notify.js';
 import { errorText } from './utils.js';
 import { bumpNav, navTicket, stillHere } from './nav.js';
 import { cleanRoute, backStep } from './phone-nav.js';
 import { t } from './i18n.js';
-import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, baseSkin, plainSkin } from '../../shared/appearance.mjs';
-export { plainSkin }; // Profesional and the themes built on it (Cristal): no robot, no backdrop, no motion
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, baseSkin, plainSkin, darkOnlySkin } from '../../shared/appearance.mjs';
+export { plainSkin, darkOnlySkin }; // Profesional and the themes built on it (Cristal): no robot, no backdrop, no motion
 import { applyFeed, sinceOf } from '../../shared/feed.mjs';
 import { frameBatch } from './batch.js';
 import { streamText } from '../../shared/chat-stream.mjs';
@@ -32,6 +32,7 @@ function firstOpenToday() {
   try { if (localStorage.getItem('orb.testDay') === day) return false; localStorage.setItem('orb.testDay', day); return true; } catch { return false; }
 }
 import { getState, setState, useStore, uiLanguage } from './state.js';
+import { quiet } from './quiet.js';
 export { getState, setState, useStore, uiLanguage };
 
 // Ajustes is a window over the current view: open on a section (general, apariencia, contribuye…) or close it.
@@ -53,7 +54,7 @@ export function closeSettings() { setState({ settings: null }); }
 export function startTour() { closeSettings(); setState({ tour: { key: Date.now() } }); }
 export function endTour() {
   setState({ tour: null });
-  if (getState().app?.config?.ui?.tourDone !== true) call('config.save', { patch: { ui: { tourDone: true } } }).catch(() => {});
+  if (getState().app?.config?.ui?.tourDone !== true) call('config.save', { patch: { ui: { tourDone: true } } }).catch(quiet);
 }
 
 // the screens this build has (main.jsx says it once): a route of a screen that is gone (a bot's of 3.7, from an old
@@ -128,7 +129,7 @@ function oneAtATime(fn) {
   let running = null; let queued = null;
   const run = () => {
     if (!running) { running = fn().finally(() => { running = null; }); return running; }
-    queued ??= running.catch(() => {}).then(() => { queued = null; return run(); });
+    queued ??= running.catch(quiet).then(() => { queued = null; return run(); });
     return queued;
   };
   return run;
@@ -157,7 +158,7 @@ export const refresh = oneAtATime(async () => {
 let iconsFor = null;
 export function loadProjectIcons(names = iconsFor) {
   iconsFor = names;
-  return call('projects.icons').then((projectIcons) => setState({ projectIcons })).catch(() => {});
+  return call('projects.icons').then((projectIcons) => setState({ projectIcons })).catch(quiet);
 }
 
 let timer = null; let missed = false; let firstAsk = 0;
@@ -170,14 +171,14 @@ export function refreshSoon() {
   const now = Date.now();
   if (!timer) firstAsk = now;
   clearTimeout(timer);
-  timer = setTimeout(() => { timer = null; refresh().catch(() => {}); }, Math.max(0, Math.min(120, firstAsk + 1000 - now)));
+  timer = setTimeout(() => { timer = null; refresh().catch(quiet); }, Math.max(0, Math.min(120, firstAsk + 1000 - now)));
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && missed) { missed = false; refreshSoon(); } });
 
 // Runs an engine action with a toast on error (and on success when okText is given). Returns undefined on error.
 export async function act(promise, okText) {
-  try { const r = await promise; if (okText) toast.success(okText); return r; }
-  catch (error) { toast.error(errorText(error)); return undefined; }
+  try { const r = await promise; if (okText) notifyOk(okText); return r; }
+  catch (error) { notifyError(error); return undefined; }
 }
 
 // «Nuevo chat»: the screen of a new conversation (it is made with its first message), in that project when one is
@@ -258,7 +259,7 @@ export async function runTest(prompt) {
     return call('chat.send', { text: t('test.wrap', { prompt, project: project.name }), project: project.name });
   })());
   if (!ok) return;
-  await refresh().catch(() => {});
+  await refresh().catch(quiet);
   if (stillHere(ticket)) go({ view: 'chat', id: ok.conversation });
 }
 
@@ -271,20 +272,26 @@ export function terminalFolder() {
 }
 export async function openTerminal(folder = terminalFolder()) {
   if (!bridge.openTerminal) return;
-  try { const name = await bridge.openTerminal(folder); toast.success(t('app.terminalOpened', { name })); }
-  catch (error) { toast.error(errorText(error)); }
+  try { const name = await bridge.openTerminal(folder); notifyOk(t('app.terminalOpened', { name })); }
+  catch (error) { notifyError(error); }
 }
 
 // Theme: "sistema" follows Windows, "claro" / "oscuro" force it.
 const media = window.matchMedia('(prefers-color-scheme: dark)');
+// A dark-only theme (Retro) forces .dark whatever ui.theme says; the saved choice stays in `theme` untouched.
 let theme = 'sistema';
+let currentSkin = SKINS[0];
 export function applyTheme(next = theme) {
   theme = next || 'sistema';
-  const dark = theme === 'oscuro' || (theme === 'sistema' && media.matches);
+  const dark = darkOnlySkin(currentSkin) || theme === 'oscuro' || (theme === 'sistema' && media.matches);
   document.documentElement.classList.toggle('dark', dark);
   document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
 }
 media.addEventListener('change', () => applyTheme());
+// True while the active theme only exists in dark; the day / night controls disable themselves with it.
+export const useDarkOnly = () => useStore((s) => fullPc() && darkOnlySkin(s.app?.config?.ui?.skin));
+// The theme's base id (cristal wears profesional's), or the default one on the phone; for DOM only some themes draw.
+export const useSkin = () => useStore((s) => (fullPc() ? baseSkin(SKINS.includes(s.app?.config?.ui?.skin) ? s.app.config.ui.skin : SKINS[0]) : SKINS[0]));
 export const isDark = () => document.documentElement.classList.contains('dark');
 
 // Ajustes → Apariencia: visual theme, fonts and colours of code, as data attributes of <html> that the CSS reads
@@ -293,6 +300,7 @@ export function applyAppearance(ui = {}) {
   const pick = (value, list) => (list.includes(value) ? value : list[0]);
   const root = document.documentElement.dataset;
   const skin = fullPc() ? pick(ui.skin, SKINS) : SKINS[0]; // the phone always wears the default theme
+  currentSkin = skin;
   // a theme built on another (cristal on profesional) wears its base's data-skin plus its own data-material.
   root.skin = baseSkin(skin);
   if (skin !== root.skin) root.material = skin; else delete root.material;
@@ -300,4 +308,5 @@ export function applyAppearance(ui = {}) {
   root.codeFont = pick(ui.codeFont, CODE_FONTS);
   root.codeTheme = pick(ui.codeTheme, CODE_THEMES);
   root.motion = ui.motion === 'minima' ? 'minima' : 'completa'; // the themes' moving backdrops stop with it
+  applyTheme(); // a dark-only theme forces .dark; leaving it gives the saved choice back
 }

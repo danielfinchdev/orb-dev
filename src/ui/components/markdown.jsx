@@ -6,7 +6,7 @@
 // (rich-blocks.jsx, each library loaded only when needed).
 import { memo, useEffect, useMemo, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import { SquareTerminal } from 'lucide-react';
-import { toast } from 'sonner';
+import { notifyError, notifyOk } from '@/lib/notify.js';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import { remarkPlugins, richKind, isInlineMath, textOf } from '@/lib/markdown-plugins.js';
 import { splitBlocks } from '@/lib/md-blocks.js';
@@ -22,6 +22,7 @@ import { Tip } from './ui/overlay.jsx';
 // The whole window's fonts and code colours (Ajustes → Apariencia): loaded here, after app.css, which main.jsx imports first.
 import '../fonts.css';
 import '../code.css';
+import { quiet } from '@/lib/quiet.js';
 
 // "C:\…\x.png", "C:/…/x.png", "/C:/…/x.png" or "file:///C:/…/x.png" → "C:\…\x.png"; anything else → null.
 export function localImagePath(href) {
@@ -41,7 +42,7 @@ function PasteToTerminal({ code }) {
   const paste = () => {
     const line = oneCommand(code);
     if (pasteToTerminal(line)) return;
-    navigator.clipboard?.writeText(line).then(() => toast.success(t('terminal.copied'))).catch(() => {});
+    navigator.clipboard?.writeText(line).then(() => notifyOk(t('terminal.copied'))).catch(() => notifyError(t('app.copyFailed')));
   };
   return <Tip label={t('terminal.paste')}><button type="button" className="text-muted-foreground hover:text-foreground absolute top-1.5 right-1.5 grid size-7 cursor-pointer place-items-center rounded-md opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 [&_svg]:size-3.5" aria-label={t('terminal.paste')} onClick={paste}><SquareTerminal /></button></Tip>;
 }
@@ -51,7 +52,7 @@ const languageOf = (code) => String([].concat(code?.properties?.className ?? [])
 function ImageAlt({ alt }) { const t = useT(); return <span className="text-muted-foreground">[{alt || t('comp.markdown.image')}]</span>; }
 
 const components = {
-  a: ({ href, children }) => <a onClick={(e) => { e.preventDefault(); const local = localImagePath(href); if (local) openImage(local); else if (/^https:\/\//.test(href ?? '')) bridge.openExternal(href).catch(() => {}); }}>{children}</a>,
+  a: ({ href, children }) => <a onClick={(e) => { e.preventDefault(); const local = localImagePath(href); if (local) openImage(local); else if (/^https:\/\//.test(href ?? '')) bridge.openExternal(href).catch(quiet); }}>{children}</a>,
   img: ({ alt }) => <ImageAlt alt={alt} />,
   // A wide table scrolls on its own instead of widening the chat (narrow window, mobile).
   table: ({ children }) => <div className="prose-table"><table>{children}</table></div>,

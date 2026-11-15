@@ -4,6 +4,11 @@ export default {
   'settings.sectionDesc.datos': 'Contraseña maestra, copias de seguridad, carpeta core y datos de Orb 3.7.',
   // Ajustes › Datos
   'datos.backupsTitle': 'Copias de seguridad',
+  'trash.title': 'Papelera de chats',
+  'trash.desc': 'Los chats eliminados se guardan 7 días y se pueden recuperar.',
+  'trash.empty': 'La papelera está vacía.',
+  'trash.restore': 'Recuperar',
+  'trash.restored': 'Chat recuperado',
   'datos.folder': 'Carpeta',
   'datos.pickFolder': 'Elige la carpeta de las copias',
   'datos.folderChanged': 'Carpeta de las copias cambiada. Las copias anteriores siguen donde estaban.',

@@ -69,10 +69,10 @@ export function Notices() {
     <div key={notice.key} className="pointer-events-none fixed right-4 bottom-32 z-50 flex items-end gap-1" data-testid="robot-notice">
       <div className={cn('bg-card text-card-foreground animate-in fade-in-0 slide-in-from-right-4 pointer-events-auto relative mb-10 max-w-64 rounded-2xl border px-3.5 py-2.5 shadow-xl duration-500', ok ? 'border-success/40' : 'border-warning/50')}>
         <button className="text-muted-foreground hover:text-foreground absolute top-2 right-2 cursor-pointer rounded p-0.5" onClick={close} aria-label={t('brain.close')}><X className="size-3.5" /></button>
-        <div className="flex items-center gap-2 pr-5 text-[14px] font-medium">
-          {ok ? <CircleCheck className="text-success size-4.5" /> : <TriangleAlert className="text-warning size-4.5" />}{notice.title}
+        <div className="flex items-center gap-2 pr-5 text-body font-medium">
+          {ok ? <CircleCheck className="text-success size-4.5" /> : <TriangleAlert className="text-warning-ink size-4.5" />}{notice.title}
         </div>
-        <p className="text-muted-foreground mt-1 text-[13px] leading-snug">{notice.text}</p>
+        <p className="text-muted-foreground mt-1 text-control leading-snug">{notice.text}</p>
         <Button size="xs" variant={ok ? 'soft' : 'default'} className="mt-2" onClick={() => { go(notice.go); close(); }}>{t('notice.open')}</Button>
         <span className="bg-card absolute -right-1.5 bottom-6 size-3 rotate-45 border-t border-r" aria-hidden="true" />
       </div>

@@ -94,8 +94,8 @@ html.glass .mobile-tab { padding: 0; gap: 1px; font-size: 10.5px; font-weight: 6
 html.glass .mobile-tab[aria-current="page"] { color: var(--primary); }
 html.glass .mobile-tab-icon { height: 30px; width: 52px; }
 html.glass .mobile-tab[aria-current="page"] .mobile-tab-icon { background: color-mix(in oklch, var(--primary) 14%, transparent); }
-/* A number on a tab: dark text on the warning colour (white on yellow does not reach 4.5:1). */
-html.glass .mobile-tab .bg-warning { color: oklch(0.22 0.04 70); font-weight: 700; }
+/* A number on a tab: the warning colour's own foreground, which keeps 4.5:1 in light (deep amber) and dark (light amber). */
+html.glass .mobile-tab .bg-warning { color: var(--warning-foreground); font-weight: 700; }
 
 /* ---- Sheets: on the phone a dialog rises from the bottom edge, thick glass with a grabber. The one transient
    blurred layer; the scrim under it only dims (no second blur). ---- */

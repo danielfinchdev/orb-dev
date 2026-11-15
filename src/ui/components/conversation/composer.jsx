@@ -7,7 +7,7 @@ import { micMode } from '@/lib/mic.js';
 import { ArrowUp, Square, AtSign, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Tip } from '@/components/ui/overlay.jsx';
-import { bridge, useStore, call, act, getState } from '@/lib/store.js';
+import { bridge, useStore, useSkin, call, act, getState } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT, t as tNow } from '@/lib/i18n.js';
 
@@ -82,6 +82,7 @@ export function Composer({ draft, onSend, onStop, busy, placeholder, top, bottom
   const onChange = draft.set;
   useEffect(() => { const el = ta.current; if (!el || FIELD_SIZING) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 260)}px`; }, [value]);
   const [dropping, setDropping] = useState(false);
+  const skin = useSkin();
   const m = useMentions(value, onChange, ta);
   // what this box had when F5 reloaded the window comes back on the same screen (lib/reload.js).
   const here = useStore((s) => routeKey(s.route));
@@ -109,19 +110,20 @@ export function Composer({ draft, onSend, onStop, busy, placeholder, top, bottom
         {mentions && m.list.length ? null : notice}
         {mentions && m.list.length ? (
           <div className="bg-popover text-popover-foreground absolute right-3 bottom-full left-3 z-20 mb-2 overflow-hidden rounded-xl border shadow-lg" data-testid="mention-list">
-            <div className="text-muted-foreground border-b px-3 py-1.5 text-[11px]">{t('chat.mentionHeader')}</div>
+            <div className="text-muted-foreground border-b px-3 py-1.5 text-micro">{t('chat.mentionHeader')}</div>
             {m.list.map((o, i) => (
-              <button key={o.token} onMouseDown={(e) => { e.preventDefault(); m.pick(o); }} className={cn('flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-[13px]', i === m.index ? 'bg-accent' : 'hover:bg-accent/60')}>
-                {o.icon ?? <AtSign className="text-muted-foreground size-3.5 shrink-0" />}<span className="min-w-0 flex-1 truncate">{o.label}</span><span className="text-muted-foreground shrink-0 text-[11px]">{o.hint}</span>
+              <button key={o.token} onMouseDown={(e) => { e.preventDefault(); m.pick(o); }} className={cn('flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-control', i === m.index ? 'bg-accent' : 'hover:bg-accent/60')}>
+                {o.icon ?? <AtSign className="text-muted-foreground size-3.5 shrink-0" />}<span className="min-w-0 flex-1 truncate">{o.label}</span><span className="text-muted-foreground shrink-0 text-micro">{o.hint}</span>
               </button>
             ))}
           </div>
         ) : null}
         {top ? <div className="flex min-w-0 items-center gap-2 px-3 pt-3" data-testid="composer-top">{top}</div> : null}
+        {skin === 'retro' ? <span className="composer-prompt" aria-hidden="true">&gt;</span> : null}
         <textarea ref={ta} data-testid={testid} value={value} disabled={disabled} rows={2} placeholder={placeholder} onPaste={onPaste}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => { if (mentions && m.onKey(e)) return; if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); onSend({ alt: e.ctrlKey || e.metaKey }); } }}
-          className="composer-text placeholder:text-muted-foreground block w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[14.5px] leading-relaxed outline-none" />
+          className="composer-text placeholder:text-muted-foreground block w-full resize-none bg-transparent px-4 pt-3 pb-1 text-body compact:text-body compact:leading-5 leading-relaxed outline-none" />
         <div className="flex items-center gap-2 px-3 pb-3">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1" data-testid="composer-bottom">{bottom}</div>
           {mic ? <Tip label={t('chat.dictate')}><Button size="icon-sm" variant="ghost" className="rounded-full" onClick={dictate} disabled={disabled || hearing} aria-label={t('chat.dictate')} data-testid="dictate"><Mic className={hearing ? 'text-primary animate-pulse' : undefined} /></Button></Tip> : null}

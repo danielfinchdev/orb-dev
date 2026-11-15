@@ -3,8 +3,9 @@ import { useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/overlay.jsx';
 import { Button } from '@/components/ui/button.jsx';
+import { FieldError } from '@/components/ui/primitives.jsx';
+import { WindowBar } from '@/components/window-bar.jsx';
 import { useStore, setState } from '@/lib/store.js';
-import { toast } from 'sonner';
 import { errorText } from '@/lib/utils.js';
 import { t } from '@/lib/i18n.js';
 
@@ -23,29 +24,32 @@ function open(dialog) {
 }
 function close(id, value) { setState((s) => { const d = (s.dialogs ?? []).find((x) => x.id === id); d?.resolve(value); return { dialogs: (s.dialogs ?? []).filter((x) => x.id !== id) }; }); }
 
-export const confirm = (title, description, { ok = t('comp.dialogs.ok'), cancel = t('comp.dialogs.cancel'), danger = false } = {}) => open({ kind: 'confirm', title, description, ok, cancel, danger });
+export const confirm = (title, description, { ok = t('comp.dialogs.ok'), cancel = t('comp.dialogs.cancel'), danger = false, warn = false } = {}) => open({ kind: 'confirm', title, description, ok, cancel, danger, warn });
 // one of a few answers (each { value, label, hint?, variant? }); resolves with the value chosen, or null when closed.
 // With hints, each answer is a full-width button with its one line under it (the first one is the default).
 // cancel: false when one of the answers already is «leave it as it is».
 export const choose = (title, description, options, { testid, cancel = true } = {}) => open({ kind: 'choice', title, description, options, testid, cancel });
-// body: (values, set) => JSX; onOk(values) may throw (shown as a toast, the dialog stays open) or return the result.
+// body: (values, set) => JSX; onOk(values) may throw (shown under the fields, the dialog stays open) or return the result.
 export const form = (title, { description, initial = {}, body, ok = t('comp.dialogs.ok'), onOk, wide = false }) => open({ kind: 'form', title, description, initial, body, ok, onOk, wide });
 
 function FormDialog({ d }) {
   const [values, setValues] = useState(d.initial);
   const [busy, setBusy] = useState(false);
-  const set = (patch) => setValues((v) => ({ ...v, ...patch }));
+  // Why onOk refused, shown under the fields; editing anything clears it.
+  const [error, setError] = useState(null);
+  const set = (patch) => { setError(null); setValues((v) => ({ ...v, ...patch })); };
   const submit = async (e) => {
     e?.preventDefault();
+    setError(null);
     setBusy(true);
     try { const r = d.onOk ? await d.onOk(values) : values; if (r !== false) close(d.id, r ?? true); }
-    catch (error) { toast.error(errorText(error)); }
+    catch (err) { setError(errorText(err)); }
     finally { setBusy(false); }
   };
   return (
     <form onSubmit={submit} className="grid gap-4">
       <DialogHeader><DialogTitle>{d.title}</DialogTitle>{d.description ? <DialogDescription>{d.description}</DialogDescription> : null}</DialogHeader>
-      <div className="grid gap-4">{d.body(values, set)}</div>
+      <div className="grid gap-4">{d.body(values, set)}<FieldError>{error}</FieldError></div>
       <DialogFooter><Button type="button" variant="outline" onClick={() => close(d.id, null)}>{t('comp.dialogs.cancel')}</Button><Button type="submit" disabled={busy} aria-busy={busy}>{busy ? <LoaderCircle className="animate-spin" /> : null}{d.ok}</Button></DialogFooter>
     </form>
   );
@@ -61,8 +65,8 @@ function ChoiceDialog({ d }) {
           {d.options.map((o, i) => (
             <button key={o.value} type="button" onClick={() => close(d.id, o.value)} data-testid={`choice-${o.value}`}
               className={`press grid cursor-pointer gap-0.5 rounded-xl border px-4 py-3 text-left transition-colors ${i === 0 ? 'border-primary/60 bg-primary/5 hover:bg-primary/10' : 'hover:bg-accent/60'} ${o.variant === 'danger' ? 'text-destructive' : ''}`}>
-              <span className="text-[14px] font-medium">{o.label}</span>
-              {o.hint ? <span className="text-muted-foreground text-[12.5px]">{o.hint}</span> : null}
+              <span className="text-body font-medium">{o.label}</span>
+              {o.hint ? <span className="text-muted-foreground text-caption">{o.hint}</span> : null}
             </button>
           ))}
           <div className="flex justify-end pt-1"><Button variant="ghost" onClick={() => close(d.id, null)} data-testid="choice-cancel">{t('comp.dialogs.cancel')}</Button></div>
@@ -77,17 +81,27 @@ function ChoiceDialog({ d }) {
   );
 }
 
+// A confirmation focuses Cancel when the action is dangerous and the main button otherwise, never the element that opened it.
+function confirmAutoFocus(e) {
+  e.preventDefault();
+  e.currentTarget.querySelector('[data-autofocus]')?.focus();
+}
+// The Enter that opened the dialog may still be held down; its auto-repeat must not press the focused button.
+function swallowHeldEnter(e) { if (e.key === 'Enter' && e.repeat) e.preventDefault(); }
+
 export function DialogHost() {
   const dialogs = useStore((s) => s.dialogs ?? []);
   return dialogs.map((d) => (
     <Dialog key={d.id} open onOpenChange={(o) => { if (!o) close(d.id, null); }}>
-      <DialogContent className={d.wide ? 'sm:max-w-2xl' : undefined} onOpenAutoFocus={d.kind === 'confirm' ? (e) => e.preventDefault() : undefined}>
+      <DialogContent className={d.wide ? 'sm:max-w-2xl' : undefined} onOpenAutoFocus={d.kind === 'confirm' ? confirmAutoFocus : undefined} onKeyDown={d.kind === 'confirm' ? swallowHeldEnter : undefined}>
         {d.kind === 'confirm' ? (
           <>
+            {/* Decorative caption bar of the window-like themes; the title, text and buttons below are untouched. */}
+            <WindowBar kind="title" />
             <DialogHeader><DialogTitle>{d.title}</DialogTitle><DialogDescription className="whitespace-pre-wrap">{d.description}</DialogDescription></DialogHeader>
             <DialogFooter>
-              {d.cancel ? <Button variant="outline" onClick={() => close(d.id, false)}>{d.cancel}</Button> : null}
-              <Button variant={d.danger ? 'destructive' : 'default'} onClick={() => close(d.id, true)}>{d.ok}</Button>
+              {d.cancel ? <Button variant="outline" data-autofocus={d.danger ? "" : undefined} onClick={() => close(d.id, false)}>{d.cancel}</Button> : null}
+              <Button variant={d.danger ? 'destructive' : d.warn ? 'warn' : 'default'} data-autofocus={d.danger && d.cancel ? undefined : ""} onClick={() => close(d.id, true)}>{d.ok}</Button>
             </DialogFooter>
           </>
         ) : d.kind === 'choice' ? <ChoiceDialog d={d} /> : <FormDialog d={d} />}

@@ -99,7 +99,7 @@ try {
     else { await page.click('[data-testid=chats-new]'); await page.click('[data-testid=new-conversation]'); }
   };
   const views = [['sidebar-home', 'chat'], ['nav-tasks', 'tareas'], ['nav-projects', 'proyectos'], ['nav-agents', 'agentes'], ['nav-memories', 'bitacoras'], ['memories-activity', 'actividad'], ['nav-settings', 'ajustes']];
-  const SECTIONS = ['general', 'magiclink', 'agentes', 'datos', 'avanzado', 'acerca'];
+  const SECTIONS = ['general', 'magiclink', 'agentes', 'permisos', 'extensiones', 'datos', 'avanzado', 'acerca'];
   for (const theme of ['dia', 'noche']) {
     await setDark(theme === 'noche');
     for (const [nav, name] of views) {

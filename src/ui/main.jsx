@@ -7,11 +7,11 @@ import './app.css';
 if (import.meta.env.MODE === 'android') (await import('./lib/glass.js')).enableGlass();
 import { StrictMode, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Toaster, toast } from 'sonner';
-import { notify } from '@/lib/notify.js';
+import { notify, notifyError, notifyOk, Toaster } from '@/lib/notify.js';
 import { Menu, Smartphone, ScanLine, Link2, RotateCw, FolderOpen, Download, KeyRound, ArrowLeft, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Field, Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
+import { WindowBar } from '@/components/window-bar.jsx';
 import { MobileTabs, MoreView } from '@/components/mobile-tabs.jsx';
 import { TooltipProvider, Checkbox } from '@/components/ui/overlay.jsx';
 import { DialogHost, confirm, form } from '@/components/dialogs.jsx';
@@ -38,7 +38,8 @@ import { ago } from '@/lib/utils.js';
 import { ErrorBoundary } from '@/components/error-boundary.jsx';
 import { lazyScreen } from '@/lib/lazy.js';
 import { AGENT } from '@/lib/labels.js';
-import { WindowControls } from '@/components/window-controls.jsx';
+import { WindowControls, WindowControlsSlot } from '@/components/window-controls.jsx';
+import { FieldError } from '@/components/ui/primitives.jsx';
 import { useT, t as tNow } from '@/lib/i18n.js';
 import { MasterCreate, MasterLocked } from '@/views/master.jsx';
 import { ChatView } from '@/views/chat.jsx';
@@ -50,6 +51,7 @@ import { NoteOpener } from '@/lib/notes.js';
 import { RecoveryNotice } from '@/views/data.jsx';
 import { AutoNotice } from '@/components/autonomy-switch.jsx';
 import { useEngineEvents } from '@/app/engine-events.js';
+import { quiet } from '@/lib/quiet.js';
 
 // the screens other than the chats load the first time they open, so the app starts with less to read; once
 // it is up, they load in the background while the window is idle (opening one later is instant; on a phone's browser
@@ -93,14 +95,14 @@ function OnceOpened({ when, onFail, children }) {
   return opened.current ? <ErrorBoundary onFail={onFail} resetKey={when}><Suspense fallback={null}>{children}</Suspense></ErrorBoundary> : null;
 }
 
-const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
+const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity', 'rules']);
 // the phone: the conversations («Chats») and «Más» are screens of their own; Agentes and Modo experto are PC only.
 // «Chats» is the Orb zone's chat list (views/orb/inbox.jsx); the PC has it in the sidebar.
 const ChatsView = OrbChatsView;
 // a route of a screen that is gone (a bot's, saved before or in an old notification) falls back to the chat.
 const VIEWS = bridge.mobile
-  ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, usage: UsageView, phone: PhoneView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
-  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, usage: UsageView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView, expert: ExpertView };
+  ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, rules: MemoriesView, schedules: SchedulesView, usage: UsageView, phone: PhoneView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
+  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, rules: MemoriesView, schedules: SchedulesView, usage: UsageView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView, expert: ExpertView };
 setViews(Object.keys(VIEWS));
 const routeKey = (route) => `${route.view}:${route.id ?? ''}:${route.project ?? ''}`;
 
@@ -147,7 +149,7 @@ function MobileShell() {
   const fullChat = route.view === 'chat' || route.view === 'session';
   return (
     <div className="mobile-shell flex h-full flex-col">
-      {down ? <div className="bg-warning text-warning-foreground flex shrink-0 items-center justify-center gap-2 px-4 py-1.5 text-[12.5px] font-medium" role="status" data-testid="link-down"><WifiOff className="size-3.5" />{t('app.offlineBar')}</div> : null}
+      {down ? <div className="bg-warning text-warning-foreground flex shrink-0 items-center justify-center gap-2 px-4 py-1.5 text-caption font-medium" role="status" data-testid="link-down"><WifiOff className="size-3.5" />{t('app.offlineBar')}</div> : null}
       <main className="theme-scene flex min-h-0 min-w-0 flex-1 flex-col">
         <Scene />
         <ErrorBoundary key={routeKey(route)} onHome={resetRoute}>
@@ -193,16 +195,18 @@ function Shell() {
       {/* folded away (its button next to day / night), the screens take the whole width. */}
       <div className={folded ? 'hidden' : 'hidden md:flex'}><Sidebar mood={mood} /></div>
       {/* Narrow windows: the sidebar is a drawer behind a menu button (phones have their own shell). */}
-      {drawer ? <div className="fixed inset-0 z-50 flex md:hidden" onClick={() => setDrawer(false)}><div className="animate-in slide-in-from-left flex h-full shadow-2xl" onClick={(e) => { if (e.target.closest('button')) setTimeout(() => setDrawer(false), 50); }}><Sidebar mood={mood} /></div><div className="flex-1 bg-black/40" /></div> : null}
+      {drawer ? <div data-modal="" className="fixed inset-0 z-50 flex md:hidden" onClick={() => setDrawer(false)}><div className="animate-in slide-in-from-left flex h-full shadow-2xl" onClick={(e) => { if (e.target.closest('button')) setTimeout(() => setDrawer(false), 50); }}><Sidebar mood={mood} /></div><div className="flex-1 bg-black/40" /></div> : null}
       <main className="theme-scene flex min-w-0 flex-1 flex-col">
         <Scene />
-        <div className="topbar theme-band app-titlebar wco-pad bg-sidebar flex h-14 shrink-0 items-center gap-2 border-b px-3 md:hidden">
+        <div className="relative topbar theme-band app-titlebar wco-pad bg-sidebar flex h-14 shrink-0 items-center gap-2 border-b px-3 md:hidden">
           <button className="hover:bg-accent grid size-9 cursor-pointer place-items-center rounded-lg" onClick={() => setDrawer(true)} aria-label={t('app.menu')}><Menu className="size-5" /></button>
-          <Robot size={26} mood={mood} /><span className="min-w-0 flex-1 truncate text-[15px] font-medium">{app.config.assistantName}</span>
+          <Robot size={26} mood={mood} /><span className="min-w-0 flex-1 truncate text-card-title font-medium">{app.config.assistantName}</span>
+          <WindowControlsSlot />
         </div>
         <ErrorBoundary key={routeKey(route)} onHome={resetRoute}>
           <Suspense fallback={<Loading />}><View key={routeKey(route)} route={route} /></Suspense>
         </ErrorBoundary>
+        <WindowBar kind="status" />
       </main>
       {/* the info pane on the right (a chat, a project). */}
       <OrbInfoHost />
@@ -250,11 +254,11 @@ function NotifyOffer() {
   const done = () => { try { localStorage.removeItem(OFFER_NOTIFY); } catch { /* storage unavailable */ } setShow(false); };
   const p = bridge.push;
   return (
-    <div className="bg-card flex shrink-0 flex-col gap-2 border-t px-4 py-3 text-[13px]" role="region" aria-label={t('app.notifyOfferOk')} data-testid="notify-offer">
+    <div className="bg-card flex shrink-0 flex-col gap-2 border-t px-4 py-3 text-control" role="region" aria-label={t('app.notifyOfferOk')} data-testid="notify-offer">
       <span>{t(p?.whenClosed?.() === false ? 'app.notifyOfferApp' : 'app.notifyOffer')}</span>
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={() => { p?.decline?.(); done(); }} data-testid="notify-offer-later">{t('app.notifyOfferLater')}</Button>
-        <Button size="sm" onClick={async () => { if (await act(p.enable()) !== undefined) { toast.success(tNow('app.notifyOn')); done(); } }} data-testid="notify-offer-ok">{t('app.notifyOfferOk')}</Button>
+        <Button size="sm" onClick={async () => { if (await act(p.enable()) !== undefined) { notifyOk(tNow('app.notifyOn')); done(); } }} data-testid="notify-offer-ok">{t('app.notifyOfferOk')}</Button>
       </div>
     </div>
   );
@@ -337,7 +341,7 @@ function Root() {
   useEffect(() => {
     if (phase !== 'app' || bridge.mobile) return undefined;
     const offPoint = listenPoints(bridge, (id) => go({ view: 'session', id }));
-    const offRec = bridge.on('browser:recorded', () => toast.success(tNow('session.recordingSaved')));
+    const offRec = bridge.on('browser:recorded', () => notifyOk(tNow('session.recordingSaved')));
     return () => { offPoint(); offRec(); };
   }, [phase]);
   // Orb's lock screen (decision 20): Windows locked, the PC asleep, «Bloquear» or the minutes of Ajustes › Datos
@@ -357,7 +361,7 @@ function Root() {
   useEffect(() => (phase === 'app' ? startMusic() : undefined), [phase]);
   useEffect(() => {
     if (phase !== 'app' || bridge.mobile) return undefined;
-    return watchIdle({ minutes: () => lockMinutesOf(getState().app?.config), onIdle: () => { call('master.lock', { reason: 'idle' }).catch(() => {}); } });
+    return watchIdle({ minutes: () => lockMinutesOf(getState().app?.config), onIdle: () => { call('master.lock', { reason: 'idle' }).catch((e) => notifyError(e)); } });
   }, [phase]);
   useEffect(() => { const off = () => setPhase('pair'); window.addEventListener('orb:unpaired', off); return () => window.removeEventListener('orb:unpaired', off); }, []);
   // Android's back button or gesture, and a phone browser's back: inside the app (lib/phone-nav.js › backStep).
@@ -375,7 +379,7 @@ function Root() {
       // The first screen: twice within 2 s leaves (the app goes to the background; a browser goes back).
       if (Date.now() - lastExit < 2000) return 'exit';
       lastExit = Date.now();
-      toast(tNow('app.backExit'), { duration: 2000 });
+      notify({ body: tNow('app.backExit') }, { ms: 2000, record: false, always: true });
       return 'stay';
     };
     if (bridge.onBack) return bridge.onBack(() => { if (back() === 'exit') bridge.minimize?.(); });
@@ -434,10 +438,10 @@ function Root() {
         <Robot size={90} mood="worried" /><h1 className="mt-1 text-xl">{t('app.errorTitle')}</h1><p className="text-muted-foreground text-sm break-words">{error}</p>
         {bridge.mobile ? <Button size="lg" onClick={() => location.reload()} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
         {/* start the engine again; after sealed keys that do not open, also with a new key (asked first). */}
-        {bridge.retryStart ? <Button size="lg" onClick={() => bridge.retryStart().catch(() => {}).finally(() => location.reload())} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
+        {bridge.retryStart ? <Button size="lg" onClick={() => bridge.retryStart().catch(quiet).finally(() => location.reload())} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
         {bridge.retryStart && startError?.code === 'secretUnreadable' ? <Button variant="ghost" size="sm" data-testid="app-error-new-secret" onClick={async () => {
           if (!(await askNewSecret(startError))) return;
-          await bridge.retryStart({ newSecret: true }).catch(() => {}); location.reload();
+          await bridge.retryStart({ newSecret: true }).catch(quiet); location.reload();
         }}>{t('app.newSecretOk')}</Button> : null}
         {bridge.mobile && bridge.unlink ? <Button variant="ghost" size="sm" onClick={async () => { if (await relinkPhone(getState().info?.pcName)) setPhase('pair'); }} data-testid="app-error-relink"><Link2 />{t('app.offlineRelink')}</Button> : null}
       </div>
@@ -577,14 +581,14 @@ function PairPassword({ name, fp = null, confirmFp = false, busy, error, onSubmi
         <div className="bg-muted/60 grid gap-1 rounded-xl px-3 py-2 text-center" data-testid="pair-fp">
           <span className="font-mono text-sm font-medium tracking-wide break-words">{t('app.linkFp', { fp })}</span>
           <span className="text-muted-foreground text-xs">{t('app.linkFpCheck')}</span>
-          {confirmFp ? <label className="flex cursor-pointer items-center justify-center gap-2 text-[13px]"><Checkbox checked={sure} onCheckedChange={(c) => setSure(c === true)} data-testid="pair-fp-ok" />{t('app.linkFpConfirm')}</label> : null}
+          {confirmFp ? <label className="flex cursor-pointer items-center justify-center gap-2 text-control"><Checkbox checked={sure} onCheckedChange={(c) => setSure(c === true)} data-testid="pair-fp-ok" />{t('app.linkFpConfirm')}</label> : null}
         </div>
       ) : null}
       <p className="text-muted-foreground text-center text-sm">{t('app.linkPassBody')}</p>
       <Input type="password" name={field} autoComplete="off" autoFocus={!confirmFp} disabled={!sure} aria-label={t('app.linkPassLabel')} placeholder={t('app.linkPassLabel')} value={password} onChange={(e) => setPassword(e.target.value)} enterKeyHint="go" data-testid="pair-password-input" />
+      <FieldError className="text-center text-sm">{error}</FieldError>
       <Button type="submit" size="lg" disabled={busy || !password || !sure}>{busy ? <Spinner /> : <KeyRound />}{t('app.linkPassGo')}</Button>
       {onBack ? <Button type="button" variant="ghost" size="sm" onClick={onBack}><ArrowLeft />{t('app.linkBack')}</Button> : null}
-      {error ? <p className="text-destructive text-center text-sm" role="alert">{error}</p> : null}
     </form>
   );
 }

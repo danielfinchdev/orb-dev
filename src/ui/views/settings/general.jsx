@@ -11,7 +11,7 @@ import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardF
 import { Select, Switch, Checkbox, BubbleTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
 import { ModelGuide } from '@/components/model-guide.jsx';
 import { AGENT } from '@/lib/labels.js';
-import { act, call, refresh, bridge, go, openTerminal, closeSettings, fullPc, runTest } from '@/lib/store.js';
+import { act, call, refresh, bridge, go, openTerminal, closeSettings, fullPc, runTest, darkOnlySkin } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { t, useT } from '@/lib/i18n.js';
 import { LANGUAGES } from '../../../shared/i18n.mjs';
@@ -20,13 +20,14 @@ import { DEFAULT_PROTECTED } from '../../../shared/layout.mjs';
 import { available as musicAvailable, musicPrefs, setMusicVolume } from '@/lib/music.js';
 import { save, num, Row, WithKeys, sizes } from './rows.jsx';
 import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
+import { quiet } from '@/lib/quiet.js';
 
 export function AssistantCard({ c }) {
   const t = useT();
   const [v, setV] = useState({ assistantName: c.assistantName, userName: c.userName, language: c.language });
   return (
     <Card>
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Robot size={40} /><div><CardTitle>{t('settings.assistant')}</CardTitle><CardDescription>{t('settings.assistantDesc')}</CardDescription></div></CardHeader>
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Robot size={40} mark /><div><CardTitle>{t('settings.assistant')}</CardTitle><CardDescription>{t('settings.assistantDesc')}</CardDescription></div></CardHeader>
       <CardContent className="grid gap-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={t('settings.assistantName')} hint={t('settings.assistantNameHint')}><Input value={v.assistantName} onChange={(e) => setV({ ...v, assistantName: e.target.value })} maxLength={40} /></Field>
@@ -47,13 +48,14 @@ export function AppearanceCard({ c }) {
   const set = (patch, ok = null) => save({ ui: patch }, ok);
   const opts = (list, prefix) => list.map((value) => ({ value, label: t(`${prefix}.${value}`) }));
   const robot = !plainSkin(ui.skin);
+  const darkOnly = fullPc() && darkOnlySkin(ui.skin);
   return (
     <Card>
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Palette className="text-primary size-5" /><div><CardTitle>{t('appearance.title')}</CardTitle><CardDescription>{t('appearance.desc')}</CardDescription></div></CardHeader>
       <CardContent className="grid gap-5">
-        <Field label={t('settings.theme')}>
+        <Field label={t('settings.theme')} hint={darkOnly ? t('comp.theme.darkOnly') : undefined}>
           <div className="bg-muted inline-flex w-fit gap-1 rounded-lg p-1" role="radiogroup" aria-label={t('settings.theme')}>
-            {['claro', 'oscuro', 'sistema'].map((theme) => <button key={theme} type="button" role="radio" aria-checked={(ui.theme ?? 'sistema') === theme} onClick={() => set({ theme })} className={cn('cursor-pointer rounded-md px-3 py-1.5 text-[13px]', (ui.theme ?? 'sistema') === theme ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{t(`settings.theme.${theme}`)}</button>)}
+            {['claro', 'oscuro', 'sistema'].map((theme) => <button key={theme} type="button" role="radio" aria-checked={(ui.theme ?? 'sistema') === theme} disabled={darkOnly} onClick={() => set({ theme })} className={cn('rounded-md px-3 py-1.5 text-control', darkOnly ? 'cursor-not-allowed opacity-50' : 'cursor-pointer', (ui.theme ?? 'sistema') === theme ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{t(`settings.theme.${theme}`)}</button>)}
           </div>
         </Field>
         {fullPc() ? <Field label={t('appearance.skin')} hint={t('appearance.skinHint')}>
@@ -62,7 +64,7 @@ export function AppearanceCard({ c }) {
               <button key={skin} type="button" role="radio" aria-checked={ui.skin === skin} onClick={() => set({ skin })} data-testid={`skin-${skin}`}
                 className={cn('grid cursor-pointer gap-1.5 rounded-xl border p-2 text-left transition-colors', ui.skin === skin ? 'border-primary ring-primary/30 ring-2' : 'hover:bg-accent/40')}>
                 <SkinPreview skin={skin} />
-                <span className="text-[13px] font-medium">{t(`appearance.skin.${skin}`)}</span>
+                <span className="text-control font-medium">{t(`appearance.skin.${skin}`)}</span>
               </button>
             ))}
           </div>
@@ -72,7 +74,7 @@ export function AppearanceCard({ c }) {
           <Field label={t('appearance.codeFont')}><Select className="w-full" value={ui.codeFont} onValueChange={(codeFont) => set({ codeFont })} options={opts(CODE_FONTS, 'appearance.codeFont')} /></Field>
           <Field label={t('appearance.codeTheme')}><Select className="w-full" value={ui.codeTheme} onValueChange={(codeTheme) => set({ codeTheme })} options={opts(CODE_THEMES, 'appearance.codeTheme')} /></Field>
         </div>
-        <pre className="code-sample hljs overflow-x-auto rounded-lg border p-3 text-[12.5px] leading-[1.55]" aria-label={t('appearance.codeSample')}><code><span className="hljs-keyword">const</span> <span className="hljs-variable">orb</span> = <span className="hljs-title function_">director</span>(<span className="hljs-string">'bolsillo'</span>, {'{ '}<span className="hljs-attr">fases</span>: <span className="hljs-number">3</span>{' }'}); <span className="hljs-comment">// Orbe</span></code></pre>
+        <pre className="code-sample hljs overflow-x-auto rounded-lg border p-3 text-caption leading-[1.55]" aria-label={t('appearance.codeSample')}><code><span className="hljs-keyword">const</span> <span className="hljs-variable">orb</span> = <span className="hljs-title function_">director</span>(<span className="hljs-string">'bolsillo'</span>, {'{ '}<span className="hljs-attr">fases</span>: <span className="hljs-number">3</span>{' }'}); <span className="hljs-comment">// Orbe</span></code></pre>
         <Row label={t('appearance.usageLine')} hint={t('appearance.usageLineHint')}><Switch checked={ui.usageLine !== false} onCheckedChange={(usageLine) => set({ usageLine })} data-testid="usage-line-switch" /></Row>
         {musicAvailable() ? <MusicVolume /> : null}
         {robot ? (
@@ -126,6 +128,22 @@ export function PermissionsCard({ c }) {
   );
 }
 
+// How long a permission question waits for an answer before it is denied (own save: it is not part of the tasks form).
+export function ApprovalWaitCard({ c }) {
+  const t = useT();
+  const saved = c.approvalWaitMinutes ?? 10;
+  const [minutes, setMinutes] = useState(saved);
+  return (
+    <Card>
+      <CardHeader><CardTitle>{t('settings.approvalWaitTitle')}</CardTitle><CardDescription>{t('settings.approvalWaitHint')}</CardDescription></CardHeader>
+      <CardContent>
+        <Field label={t('settings.approvalWait')}><div className="flex items-center gap-2"><Input type="number" min={0} max={240} value={minutes} onChange={(e) => setMinutes(num(e.target.value))} aria-label={`${t('settings.approvalWait')} (${t('settings.minutes')})`} data-testid="approval-wait" /><span className="text-muted-foreground text-xs">{t('settings.minutes')}</span></div></Field>
+      </CardContent>
+      <CardFooter><Button size="sm" onClick={() => save({ approvalWaitMinutes: Math.min(240, Math.max(0, minutes)) })} data-testid="approval-wait-save">{t('settings.save')}</Button></CardFooter>
+    </Card>
+  );
+}
+
 export function TasksCard({ c }) {
   const t = useT();
   const agents = Object.keys(c.agents);
@@ -133,7 +151,7 @@ export function TasksCard({ c }) {
     stopAt: Math.round((c.budget.stopAt ?? 0.92) * 100), caps: Object.fromEntries(agents.map((a) => [a, { maxTasks: c.budget.agents?.[a]?.maxTasks ?? 20, maxHeavy: c.budget.agents?.[a]?.maxHeavy ?? 6 }])),
     resumeAfterRestart: c.continuity?.resumeAfterRestart !== false, resumeAtReset: c.continuity?.resumeAtReset !== false,
     delegation: c.delegation?.enabled !== false, trusted: c.delegation?.trusted !== false, maxPerTask: c.delegation?.maxPerTask ?? 4,
-    oneAtATime: c.oneAtATime === true, approvalWait: c.approvalWaitMinutes ?? 10, parallelChats: c.orchestrator?.parallel ?? 3 });
+    oneAtATime: c.oneAtATime === true, parallelChats: c.orchestrator?.parallel ?? 3 });
   const cap = (a, k, val) => setV({ ...v, caps: { ...v.caps, [a]: { ...v.caps[a], [k]: num(val) } } });
   // one slider from maximum saving to maximum use sets every limit at once (and how careful the assistant is with
   // the quota); the limits themselves stay in «Opciones avanzadas» for whoever wants to tune them by hand.
@@ -186,7 +204,6 @@ export function TasksCard({ c }) {
         <div className="grid grid-cols-3 gap-3">
           <Field label={t('settings.stopAt')} hint={t('settings.stopAtHint')}><Input type="number" min={50} max={100} value={v.stopAt} onChange={(e) => setV({ ...v, stopAt: num(e.target.value) })} /></Field>
           <Field label={t('settings.maxPerTask')} hint={t('settings.maxPerTaskHint')}><Input type="number" min={0} max={20} value={v.maxPerTask} onChange={(e) => setV({ ...v, maxPerTask: num(e.target.value) })} /></Field>
-          <Field label={t('settings.approvalWait')} hint={t('settings.approvalWaitHint')}><div className="flex items-center gap-2"><Input type="number" min={0} max={240} value={v.approvalWait} onChange={(e) => setV({ ...v, approvalWait: num(e.target.value) })} aria-label={`${t('settings.approvalWait')} (${t('settings.minutes')})`} data-testid="approval-wait" /><span className="text-muted-foreground text-xs">{t('settings.minutes')}</span></div></Field>
           {/* how many conversations the assistant answers at the same time (the others wait their turn). */}
           <Field label={t('settings.parallelChats')} hint={t('settings.parallelChatsHint')}><Input type="number" min={1} max={6} value={v.parallelChats} onChange={(e) => setV({ ...v, parallelChats: num(e.target.value) })} data-testid="parallel-chats" /></Field>
         </div>
@@ -234,7 +251,7 @@ export function FolderCard({ c, home }) {
         <div className="bg-muted rounded-lg px-3 py-2 font-mono text-xs break-all">{home}</div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => act(bridge.openPath(home))}><FolderOpen />{t('settings.open')}</Button>
-          <Button size="sm" variant="ghost" onClick={async () => { const f = await bridge.pickFolder(t('settings.pickOtherHome')); if (f && await confirm(t('settings.switchTitle'), t('settings.switchBody', { path: f }), { ok: t('settings.switchOk') })) act(bridge.switchHome(f)); }}><ArrowLeftRight />{t('settings.useOther')}</Button>
+          <Button size="sm" variant="ghost" onClick={async () => { const f = await bridge.pickFolder(t('settings.pickOtherHome')); if (f && await confirm(t('settings.switchTitle'), t('settings.switchBody', { path: f }), { ok: t('settings.switchOk'), danger: true })) act(bridge.switchHome(f)); }}><ArrowLeftRight />{t('settings.useOther')}</Button>
         </div>
         <Field label={t('settings.roots')} hint={t('settings.rootsHint')}><Textarea rows={2} value={roots} onChange={(e) => setRoots(e.target.value)} /></Field>
       </CardContent>
@@ -295,7 +312,7 @@ export function InterfaceCard({ c }) {
   const terminals = linux ? { auto: t('settings.term.auto'), warp: 'Warp', 'x-terminal-emulator': t('settings.term.system'), 'gnome-terminal': 'GNOME Terminal', konsole: 'Konsole', 'xfce4-terminal': 'Xfce Terminal', kitty: 'kitty', alacritty: 'Alacritty', xterm: 'XTerm' }
     : window.orb?.platform && window.orb.platform !== 'win32' ? { auto: t('settings.term.auto'), warp: 'Warp' }
       : { auto: t('settings.term.auto'), warp: 'Warp', wt: 'Windows Terminal', powershell: 'PowerShell', cmd: t('settings.term.cmd') };
-  useEffect(() => { bridge.zoom?.().then(setZoom).catch(() => {}); return bridge.on('ui:zoom', (p) => setZoom(p.zoom)); }, []);
+  useEffect(() => { bridge.zoom?.().then(setZoom).catch(quiet); return bridge.on('ui:zoom', (p) => setZoom(p.zoom)); }, []);
   if (!bridge.zoom) return null; // phone: the browser has its own zoom
   const SIZES = sizes();
   const preset = SIZES.find((o) => Math.abs(Number(o.value) - zoom) < 0.01)?.value;
@@ -334,7 +351,7 @@ export function ExpertCard({ c }) {
       <CardContent className="grid gap-4">
         <Row label={t('settings.expertOn')} hint={t('settings.expertOnHint')}><Switch checked={on} onCheckedChange={(enabled) => save({ expert: { enabled } }, enabled ? t('settings.expertEnabled') : t('settings.expertDisabled'))} data-testid="expert-switch" /></Row>
         <div className="grid gap-2 sm:grid-cols-2">
-          {Object.entries(PANELS).map(([id, label]) => <label key={id} className={cn('-mx-1 flex items-center gap-2 rounded-md px-1 py-1 text-[13px]', on ? 'hover:bg-accent/40 cursor-pointer' : 'text-muted-foreground cursor-not-allowed')}><Checkbox disabled={!on} checked={panels[id] !== false} onCheckedChange={(v) => savePanels({ ...panels, [id]: v === true })} />{label}</label>)}
+          {Object.entries(PANELS).map(([id, label]) => <label key={id} className={cn('-mx-1 flex items-center gap-2 rounded-md px-1 py-1 text-control', on ? 'hover:bg-accent/40 cursor-pointer' : 'text-muted-foreground cursor-not-allowed')}><Checkbox disabled={!on} checked={panels[id] !== false} onCheckedChange={(v) => savePanels({ ...panels, [id]: v === true })} />{label}</label>)}
         </div>
       </CardContent>
       {on ? <CardFooter><Button size="sm" variant="outline" onClick={() => go('expert')}><SquareTerminal />{t('settings.expertOpen')}</Button></CardFooter> : null}

@@ -12,6 +12,7 @@ import { Select } from '@/components/ui/overlay.jsx';
 import { bridge } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
 import { layoutOptions, layoutTitle } from '@/lib/core-access.js';
+import { notifyError } from '@/lib/notify.js';
 
 export function LayoutReview({ plan, onDone }) {
   const t = useT();
@@ -70,7 +71,7 @@ function Path({ p, testid }) {
   return (
     <div className="flex min-w-0 items-center gap-2">
       <span className="min-w-0 flex-1 font-mono text-xs break-all" data-testid={testid}>{p}</span>
-      <Button variant="ghost" size="icon" title={t('layout.copyPath')} aria-label={t('layout.copyPath')} onClick={() => navigator.clipboard?.writeText(p).catch(() => {})}><Copy /></Button>
+      <Button variant="ghost" size="icon" title={t('layout.copyPath')} aria-label={t('layout.copyPath')} onClick={() => navigator.clipboard?.writeText(p).catch(() => notifyError(t('app.copyFailed')))}><Copy /></Button>
     </div>
   );
 }

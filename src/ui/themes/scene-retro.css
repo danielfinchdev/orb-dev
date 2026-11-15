@@ -1,126 +1,183 @@
-/* Retro: the scene and the components. Imported in order by ../themes.css. */
+/* Retro = Órbita Retro: the backdrop and the character of the components. Tokens and palette are in skins.css. Imported in order by ../themes.css. */
 /* ================================================================================================================
-   RETRO — the scene and the components.
-   DAY: the seventies. A muted orange page with peach, butter and blush panels, bold chevron stripes (maroon, red,
-   orange, peach, golden) in the corner of the chat's bar and of the page, flat shapes scattered at the edges (red
-   asterisk flowers, orange diamonds, thin sparkles), titles in a wide outlined display face (Bungee), inputs and
-   buttons with a black outline and a hard coloured offset shadow, and hi-fi controls: cream knobs and toggles on navy
-   tracks, round cream icon buttons, segmented switches.
-   NIGHT: the arcade. Pure black, rainbow pixel invaders drifting in zig-zag columns at the edges, a phosphor green crab
-   and a pixel rocket with a soft CRT bloom, stars and scanlines; the same outlined titles and hard shadows in neon.
+   THE BACKDROP. A black CRT: very faint pixel invaders march in the margins (they step sideways like the arcade's,
+   by transform), a crab and a rocket idle, scanlines are painted over everything and a dim band rolls down the
+   glass now and then. Everything that moves uses transform / opacity only; the scanlines and the vignette are one
+   still gradient, and no glow is a filter (the phosphor is baked into text-shadow and gradients).
+   THE CHARACTER. A terminal: VT323 text, square corners, double or dashed frames of 1 to 3 px, buttons written between
+   brackets, inverse video (black on green) for what is chosen, amber for warnings. What needs another DOM (a prompt
+   «$» in the message box, text-cell navigation with real brackets, a status line) is not here.
    ================================================================================================================ */
 html[data-skin="retro"] {
-  --rt-ink: #1a0a10; --rt-cream: #eee6d5; --rt-navy: #2f5a85; --rt-orange: #f08a4b; --rt-coral: #e5584f; --rt-gold: #f6b73c; --rt-maroon: #5a0b1e; --rt-pink: #fbd3dc;
-  --rt-off: var(--rt-orange); --rt-off2: var(--rt-gold); --rt-off3: var(--rt-pink);
-  --side-art: none;
-  /* Five nested chevrons pointing down from the top edge of the bar, whole inside it (nothing cut at its bottom). */
-  --rt-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 56' fill='none' stroke-width='6' stroke-linejoin='miter'%3E%3Cpath d='M-4 -2L100 50L204 -2' stroke='%235a0b1e'/%3E%3Cpath d='M16 -2L100 40L184 -2' stroke='%23d9424e'/%3E%3Cpath d='M36 -2L100 30L164 -2' stroke='%23f08a4b'/%3E%3Cpath d='M56 -2L100 20L144 -2' stroke='%23fdd9c4'/%3E%3Cpath d='M76 -2L100 10L124 -2' stroke='%23f6b73c'/%3E%3C/svg%3E");
-  --band-art: var(--rt-chevron) right calc(var(--wco-inset) + 160px) top 0 / 180px 56px no-repeat fixed;
-  --band-art-opacity: 1;
-  --rt-page: linear-gradient(170deg, #f4c7a2, #efb98f 60%, #f3c3a0);
-  --rt-glow: none;
-}
-html.dark[data-skin="retro"] {
-  --side-art: repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px);
-  --rt-ink: #39ff14; --rt-cream: #d9d2c0; --rt-navy: #1b2d4a; --rt-orange: #ff8a3d; --rt-coral: #ff4fd8; --rt-gold: #ffe14d; --rt-maroon: #4a0a2a; --rt-pink: #ff4fd8;
-  --rt-off: #ff4fd8; --rt-off2: #3ef0ff; --rt-off3: #ffe14d;
-  --rt-band-invaders: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23ff4fd8' d='M4 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h7v1h-7zM3 7h2v1h-2zM6 7h3v1h-3zM10 7h2v1h-2zM2 8h11v1h-11zM2 9h1v1h-1zM4 9h7v1h-7zM12 9h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM5 11h2v1h-2zM8 11h2v1h-2z'/%3E%3Cpath fill='%233ef0ff' d='M27 4h2v1h-2zM26 5h4v1h-4zM25 6h6v1h-6zM24 7h2v1h-2zM27 7h2v1h-2zM30 7h2v1h-2zM24 8h8v1h-8zM26 9h1v1h-1zM29 9h1v1h-1zM25 10h1v1h-1zM27 10h2v1h-2zM30 10h1v1h-1zM24 11h1v1h-1zM26 11h1v1h-1zM29 11h1v1h-1zM31 11h1v1h-1z'/%3E%3Cpath fill='%23ffe14d' d='M46 4h4v1h-4zM43 5h10v1h-10zM42 6h12v1h-12zM42 7h3v1h-3zM47 7h2v1h-2zM51 7h3v1h-3zM42 8h12v1h-12zM45 9h2v1h-2zM49 9h2v1h-2zM44 10h2v1h-2zM47 10h2v1h-2zM50 10h2v1h-2zM42 11h2v1h-2zM52 11h2v1h-2z'/%3E%3C/svg%3E");
+  /* VT323 is small for its size (x-height 0.4 em against Inter's 0.55): every text is scaled to the same x-height as
+     the other themes, wherever its size comes from (text-xs, text-[11px], the 13 px base). The few titles in Press Start 2P cancel it. */
+  font-size-adjust: 0.55; font-synthesis: none;
+  --rt-bg: var(--background);
   --band-art:
     repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px),
-    var(--rt-band-invaders) 0 11px / 132px 34px repeat-x fixed,
+    var(--rt-invaders) 0 11px / 132px 34px repeat-x fixed,
     radial-gradient(circle at 20px 10px, var(--rt-star) 0 1px, transparent 1.5px) 0 0 / 97px 56px fixed,
     radial-gradient(circle at 60px 40px, var(--rt-star) 0 1px, transparent 1.5px) 0 0 / 143px 56px fixed;
   --band-art-opacity: 0.7;
-  --rt-page: #000;
-  --rt-glow: drop-shadow(0 0 4px rgb(57 255 20 / 0.9)) drop-shadow(0 0 10px rgb(57 255 20 / 0.5));
+  --side-art: repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px);
 }
-/* The chat bar of the day: the chevrons sit whole at the right, just before the bar's buttons (no fade over them). */
-html[data-skin="retro"]:not(.dark) .topbar-chat.theme-band::before, html[data-skin="retro"]:not(.dark) .topbar-chat.theme-band > .band-art { mask-image: linear-gradient(90deg, transparent 150px, #000 150px, #000 calc(100% - var(--wco-inset) - 150px), transparent calc(100% - var(--wco-inset) - 150px)); }
-html.dark[data-skin="retro"] .theme-band:not(.side-band, .topbar:not(.topbar-chat))::after {
+html[data-skin="retro"] body { text-shadow: var(--rt-glow); }
+/* The chat bar's second pose of the invaders; the bar's own ::before is the first (see scene.css). */
+html[data-skin="retro"] .theme-band:not(.side-band, .topbar:not(.topbar-chat))::after {
   content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0;
   background:
     repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px),
-    var(--rt-band-invaders) 12px 11px / 132px 34px repeat-x fixed,
+    var(--rt-invaders) 12px 11px / 132px 34px repeat-x fixed,
     radial-gradient(circle at 20px 10px, var(--rt-star) 0 1px, transparent 1.5px) 0 0 / 97px 56px fixed,
     radial-gradient(circle at 60px 40px, var(--rt-star) 0 1px, transparent 1.5px) 0 0 / 143px 56px fixed;
 }
 @media (prefers-reduced-motion: no-preference) {
-  html.dark[data-skin="retro"]:not([data-motion="minima"]) .theme-band:not(.side-band, .topbar:not(.topbar-chat))::before { animation: rt-band-a 2.4s steps(1, end) infinite; }
-  html.dark[data-skin="retro"]:not([data-motion="minima"]) .theme-band:not(.side-band, .topbar:not(.topbar-chat))::after { animation: rt-band-b 2.4s steps(1, end) infinite; }
+  html[data-skin="retro"]:not([data-motion="minima"]) .theme-band:not(.side-band, .topbar:not(.topbar-chat))::before { animation: rt-band-a 2.4s steps(1, end) infinite; }
+  html[data-skin="retro"]:not([data-motion="minima"]) .theme-band:not(.side-band, .topbar:not(.topbar-chat))::after { animation: rt-band-b 2.4s steps(1, end) infinite; }
 }
 /* The invaders step 12 px and back: one pose for the first half, the other for the second. */
 @keyframes rt-band-a { 0%, 100% { opacity: 0.7; } 50% { opacity: 0; } }
 @keyframes rt-band-b { 0%, 100% { opacity: 0; } 50% { opacity: 0.7; } }
-.scene-retro .scene-blur { background: var(--rt-page); --scene-opacity: 1; }
-html.dark .scene-retro { --frost-filter: blur(7px) brightness(0.65); } /* the yellow invaders glow a little less */
-/* Day pieces: the big chevron corner and the flat shapes; hidden at night. Night pieces hidden by day. */
-html.dark .scene-retro :is(.rt-corner, .rt-shape) { display: none; }
-html:not(.dark) .scene-retro :is(.rt-stars, .rt-scan, .rt-rocket, .rt-crab) { display: none; }
-.rt-corner { right: -2%; bottom: -2%; width: min(46vw, 520px); opacity: 0.55; }
-.rt-corner svg { display: block; width: 100%; height: auto; }
-.rt-shape { color: var(--rt-coral); animation: rt-spin ease-in-out infinite alternate; }
-.rt-shape svg { display: block; width: 100%; height: auto; }
-@keyframes rt-spin { from { transform: rotate(var(--r, 0deg)) translateY(0); } to { transform: rotate(calc(var(--r, 0deg) + 25deg)) translateY(-10px); } }
-.rt-stars { inset: -200px 0 0 0; animation: rt-fall linear infinite; }
-.rt-stars.s1 { background: radial-gradient(circle, var(--rt-star) 0 1px, transparent 1.6px) 0 0 / 120px 100px; animation-duration: 60s; }
-.rt-stars.s2 { background: radial-gradient(circle, var(--rt-star) 0 1.4px, transparent 2px) 40px 30px / 190px 170px; animation-duration: 34s; }
-@keyframes rt-fall { from { transform: translateY(0); } to { transform: translateY(200px); } }
-/* The columns of invaders: each one steps sideways like the arcade's and the column slides slowly down and back. */
-.rt-column { top: 6%; width: 44px; display: grid; gap: 22px; animation: rt-slide ease-in-out infinite alternate; }
-.rt-column.left { left: 0.5%; } .rt-column.right { right: 0.5%; animation-delay: -9s; }
-.rt-column > * { width: 44px; height: 32px; image-rendering: pixelated; animation: rt-step 1.6s steps(1, end) infinite; }
+
+/* ---- The pieces of the backdrop (components/scene.jsx). ---- */
+.scene-retro .scene-blur { background: var(--rt-bg); --scene-opacity: 1; }
+html[data-skin="retro"] .scene-retro { --frost-tint: 24%; --frost-filter: none; }
+.rt-column { top: 6%; width: 44px; display: grid; gap: 22px; color: var(--primary); opacity: 0.15; animation: rt-slide 70s ease-in-out infinite alternate; }
+.rt-column.left { left: 0.8%; } .rt-column.right { right: 0.8%; animation-delay: -35s; }
+.rt-column > * { width: 44px; height: 32px; animation: rt-step 1.6s steps(1, end) infinite; }
 .rt-column > :nth-child(even) { translate: 16px 0; animation-delay: -0.8s; }
-.rt-column svg { display: block; width: 100%; height: 100%; }
-@keyframes rt-slide { from { transform: translateY(0); } to { transform: translateY(40px); } }
+.rt-column svg, .rt-crab svg, .rt-rocket svg { display: block; width: 100%; height: 100%; }
+@keyframes rt-slide { from { transform: translateY(0); } to { transform: translateY(60px); } }
 @keyframes rt-step { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(10px); } }
-.rt-crab, .rt-rocket { color: #39ff14; filter: var(--rt-glow); image-rendering: pixelated; }
-.rt-crab svg, .rt-rocket svg { display: block; width: 100%; height: auto; }
-.rt-crab { left: 1.5%; bottom: 25%; width: 80px; animation: rt-step 1.6s steps(1, end) infinite; }
-.rt-rocket { right: 2%; bottom: 24%; width: 64px; animation: rt-lift 5s ease-in-out infinite alternate; }
+.rt-crab, .rt-rocket { color: var(--primary); }
+.rt-crab { left: 2%; bottom: 22%; width: 72px; aspect-ratio: 11 / 8; opacity: 0.2; animation: rt-step 1.6s steps(1, end) infinite; }
+.rt-rocket { right: 2.4%; bottom: 20%; width: 54px; aspect-ratio: 9 / 13; opacity: 0.22; animation: rt-lift 9s ease-in-out infinite alternate; }
 @keyframes rt-lift { from { transform: translateY(0); } to { transform: translateY(-26px); } }
 .rt-rocket .flame { animation: rt-flame 0.5s steps(1, end) infinite; }
-@keyframes rt-flame { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
-.rt-scan { inset: 0; background: radial-gradient(120% 90% at 50% 45%, transparent 55%, rgb(0 0 0 / 0.55)), repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px); }
-/* Components: a black outline and a hard coloured offset shadow on cards, dialogs, the message box, inputs and buttons;
-   the main button golden; outline buttons cream; icon buttons round and cream; switches, checkboxes, sliders and tabs
-   as hi-fi controls (cream on navy); titles outlined (white fill, ink outline, orange offset). Night: the same in neon
-   on black (green ink, magenta / cyan / yellow shadows). */
-html[data-skin="retro"] :is(h1, h2, h3, [data-slot="card-title"], .hero-title):not(.prose-chat *) { font-family: "Bungee", "IBM Plex Mono", var(--font-sans); font-weight: 400; letter-spacing: 0.03em; color: #fff; paint-order: stroke fill; -webkit-text-stroke: 1.2px var(--rt-ink); text-shadow: 2px 2px 0 var(--rt-off); }
-html[data-skin="retro"] .hero-title { -webkit-text-stroke: 2.2px var(--rt-ink); text-shadow: 4px 4px 0 var(--rt-off); }
-html[data-skin="retro"] :is([data-slot="card"], [data-slot="dialog-overlay"] + [role="dialog"], [data-slot="composer"]) { border: 2px solid var(--rt-ink); box-shadow: 5px 5px 0 var(--rt-off); }
-html[data-skin="retro"] [data-slot="dialog-overlay"] + [role="dialog"] { box-shadow: 8px 8px 0 var(--rt-off2); }
-html[data-skin="retro"] [data-slot="composer"] { box-shadow: 5px 5px 0 var(--rt-off2); background-color: color-mix(in oklch, var(--card) 92%, transparent); }
-html[data-skin="retro"] :is([data-slot="input"], [data-slot="textarea"]) { border: 2px solid var(--rt-ink); box-shadow: 3px 3px 0 var(--rt-off3); background-color: var(--card); }
-html[data-skin="retro"] [data-slot="button"].bg-primary { border: 2px solid var(--rt-ink); box-shadow: 3px 3px 0 var(--rt-ink); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; background-color: var(--rt-gold); color: #1a0a10; }
-html[data-skin="retro"] [data-slot="button"].bg-primary:hover { background-color: color-mix(in oklch, var(--rt-gold) 88%, #000); }
-html.dark[data-skin="retro"] [data-slot="button"].bg-primary { background-color: var(--primary); color: var(--primary-foreground); box-shadow: 3px 3px 0 var(--rt-off); }
-html[data-skin="retro"] [data-slot="button"].bg-primary:active { translate: 2px 2px; box-shadow: 1px 1px 0 var(--rt-ink); }
-html[data-skin="retro"] [data-slot="button"].border { border: 2px solid var(--rt-ink); background-color: var(--rt-cream); color: var(--rt-ink); box-shadow: 3px 3px 0 var(--rt-off); font-weight: 600; }
-html.dark[data-skin="retro"] [data-slot="button"].border { background-color: var(--card); color: var(--foreground); }
-html[data-skin="retro"] [data-slot="button"].border:active { translate: 2px 2px; box-shadow: 1px 1px 0 var(--rt-off); }
-html[data-skin="retro"] [data-slot="button"]:is(.size-8, .size-9) { border-radius: 999px; border: 2px solid var(--rt-ink); background-color: var(--rt-cream); color: var(--rt-ink); box-shadow: 2px 2px 0 var(--rt-off); }
-html.dark[data-skin="retro"] [data-slot="button"]:is(.size-8, .size-9) { background-color: var(--card); color: var(--foreground); }
-html[data-skin="retro"] [data-slot="button"]:is(.size-8, .size-9):active { translate: 1px 1px; box-shadow: 1px 1px 0 var(--rt-off); }
-html[data-skin="retro"] :is([role="tablist"], [role="radiogroup"].bg-muted) { background-color: var(--rt-navy); color: var(--rt-cream); border: 2px solid var(--rt-ink); border-radius: 999px; padding: 3px; box-shadow: 3px 3px 0 var(--rt-off); }
-html[data-skin="retro"] :is([role="tab"], [role="radiogroup"].bg-muted [role="radio"]) { border-radius: 999px; color: var(--rt-cream); font-weight: 600; }
-html[data-skin="retro"] :is([role="tab"], [role="radiogroup"].bg-muted [role="radio"]) .text-muted-foreground { color: var(--rt-cream); opacity: 0.8; }
-html[data-skin="retro"] :is([role="tab"][data-state="active"], [role="radiogroup"].bg-muted [role="radio"][aria-checked="true"]) { background-color: var(--rt-cream); color: var(--rt-ink); box-shadow: inset 0 -2px 0 rgb(0 0 0 / 0.15); }
-html.dark[data-skin="retro"] :is([role="tab"][data-state="active"], [role="radiogroup"].bg-muted [role="radio"][aria-checked="true"]) { color: #000; }
-html[data-skin="retro"] [role="switch"] { background-color: var(--rt-navy); border: 2px solid var(--rt-ink); box-shadow: 2px 2px 0 var(--rt-off); }
-html[data-skin="retro"] [role="switch"][data-state="checked"] { background-color: var(--rt-orange); }
-html[data-skin="retro"] [role="switch"] > span { background-color: var(--rt-cream); box-shadow: inset 0 -2px 0 rgb(0 0 0 / 0.25), 0 1px 0 rgb(0 0 0 / 0.3); }
-html[data-skin="retro"] [role="checkbox"] { border: 2px solid var(--rt-ink); background-color: var(--rt-cream); box-shadow: 2px 2px 0 var(--rt-off); border-radius: 4px; }
-html[data-skin="retro"] [role="checkbox"][data-state="checked"] { background-color: var(--rt-gold); color: var(--rt-ink); }
-html[data-skin="retro"] input[type="range"] { accent-color: var(--rt-navy); }
-html.dark[data-skin="retro"] input[type="range"] { accent-color: var(--primary); }
-html[data-skin="retro"] [data-slot="badge"] { border: 1.5px solid var(--rt-ink); box-shadow: 2px 2px 0 var(--rt-off3); font-weight: 600; }
-html[data-skin="retro"] aside.bg-sidebar { background-image: repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px); border-right: 2px solid var(--rt-ink); }
-html[data-skin="retro"] nav button { border-radius: 999px; }
-html[data-skin="retro"] nav button.bg-accent { border: 2px solid var(--rt-ink); box-shadow: 3px 3px 0 var(--rt-off); background-color: var(--rt-pink); color: var(--rt-ink); font-weight: 600; }
-html.dark[data-skin="retro"] nav button.bg-accent { background-color: var(--accent); color: var(--accent-foreground); }
-html[data-skin="retro"] [data-testid="update-card"] { background-image: none; background-color: var(--rt-navy); border: 2px solid var(--rt-ink); box-shadow: 4px 4px 0 var(--rt-off); }
-html[data-skin="retro"] ::-webkit-scrollbar-thumb { background-color: color-mix(in oklch, var(--foreground) 35%, transparent); }
-html.dark[data-skin="retro"] [data-slot="card"] { box-shadow: 5px 5px 0 var(--rt-off), 0 0 18px -6px rgb(57 255 20 / 0.35); }
-/* Very faint scanlines over the whole window at night. */
-html.dark[data-skin="retro"] body { background-image: repeating-linear-gradient(to bottom, transparent 0 2px, rgb(0 0 0 / 0.16) 2px 3px); }
+@keyframes rt-flame { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+/* The glass: still scanlines and a vignette, and a dim band that rolls down it (one tall layer slid by transform, from
+   above the screen to below it, so it never jumps). */
+.rt-scan { inset: 0; background: radial-gradient(120% 90% at 50% 45%, transparent 55%, rgb(0 0 0 / 0.5)), repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px); overflow: hidden; }
+.rt-scan::before { content: ""; position: absolute; left: 0; right: 0; top: -180px; height: 160px; background: linear-gradient(to bottom, transparent, oklch(0.86 0.21 145 / 0.05) 65%, oklch(0.86 0.21 145 / 0.09) 90%, transparent); animation: rt-roll 14s linear infinite; will-change: transform; }
+@keyframes rt-roll { from { transform: translateY(0); } to { transform: translateY(calc(100vh + 200px)); } }
 
+/* ================================================================================================================
+   THE CHARACTER. Square corners everywhere.
+   ================================================================================================================ */
+html[data-skin="retro"] :is(.rounded-sm, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-full:not(.animate-spin), [data-slot="card"], [data-slot="button"], [data-slot="input"], [data-slot="textarea"], [data-slot="badge"], [data-slot="composer"], [data-slot="dialog-content"], [data-slot="menu-content"], [data-slot="select-content"], .chat-glass, .bg-bubble, [role="tab"], [role="tablist"], [role="switch"], [role="switch"] > span, [role="checkbox"], [role="progressbar"], [role="progressbar"] > *, .prose-chat :is(pre, code)) { border-radius: 0; }
+html[data-skin="retro"] .win-control { width: 2rem; height: 1.7rem; border-radius: 0; border: 2px solid var(--primary); color: var(--primary); background: transparent; }
+html[data-skin="retro"] .win-control svg { stroke-width: 2.4; }
+html[data-skin="retro"] .win-control:hover { background: var(--primary); color: var(--primary-foreground); text-shadow: none; }
+html[data-skin="retro"] .win-control.win-close { color: var(--destructive); border-color: var(--destructive); }
+html[data-skin="retro"] .win-control.win-close:hover { background: var(--destructive); color: var(--primary-foreground); }
+html[data-skin="retro"] .win-control:active { transform: none; translate: 1px 1px; }
+
+/* Titles: Press Start 2P only for the big greeting and the page titles (it is unreadable small); the rest of the headings stay in the terminal's own face, in capitals. */
+html[data-skin="retro"] :is(h1, h2, h3, [data-slot="card-title"], .hero-title):not(.prose-chat *) { font-family: var(--font-sans); font-weight: 400; letter-spacing: 0.04em; text-transform: uppercase; color: var(--primary-text); }
+html[data-skin="retro"] :is(h1, .hero-title):not(.prose-chat *) { font-family: var(--font-title); font-size-adjust: none; font-size: 1.15rem; line-height: 1.6; letter-spacing: 0; }
+html[data-skin="retro"] .hero-title { font-size: 1.5rem; line-height: 1.5; }
+html[data-skin="retro"] :is([data-slot="dialog-title"], [data-slot="card-title"]) { font-size: 1.05rem; }
+
+/* Buttons: written [ LIKE THIS ] (the brackets are decoration with no accessible text), flat, with no shadow; the pressed
+   one moves a pixel. Chosen things are inverse video. */
+html[data-skin="retro"] [data-slot="button"] { text-transform: uppercase; letter-spacing: 0.03em; transition: background-color var(--dur-fast), color var(--dur-fast); }
+html[data-skin="retro"] [data-slot="button"]:not(.size-7, .size-8, .size-9, .underline-offset-4)::before { content: "[" / ""; margin-right: -0.2rem; }
+html[data-skin="retro"] [data-slot="button"]:not(.size-7, .size-8, .size-9, .underline-offset-4)::after { content: "]" / ""; margin-left: -0.2rem; }
+html[data-skin="retro"] [data-slot="button"]:is(.bg-primary, .bg-destructive) { border: 2px solid transparent; box-shadow: none; text-shadow: none; }
+html[data-skin="retro"] [data-slot="button"].bg-primary { border-color: var(--primary); color: var(--primary-foreground); }
+html[data-skin="retro"] [data-slot="button"].bg-primary:hover:not(:disabled) { background-color: color-mix(in oklch, var(--primary) 82%, white); }
+html[data-skin="retro"] [data-slot="button"].bg-destructive { border-color: var(--destructive); color: var(--primary-foreground); }
+html[data-skin="retro"] [data-slot="button"].bg-destructive:hover:not(:disabled) { background-color: color-mix(in oklch, var(--destructive) 82%, white); }
+html[data-skin="retro"] [data-slot="button"].border { background-color: transparent; border: 2px solid var(--primary); color: var(--primary-text); box-shadow: none; }
+html[data-skin="retro"] [data-slot="button"].border:hover:not(:disabled), html[data-skin="retro"] [data-slot="button"].hover\:bg-accent:not(.border):hover:not(:disabled) { background-color: var(--primary); color: var(--primary-foreground); text-shadow: none; }
+html[data-skin="retro"] [data-slot="button"].bg-secondary { background-color: transparent; border: 1px dashed var(--input); color: var(--foreground); }
+html[data-skin="retro"] [data-slot="button"].bg-secondary:hover:not(:disabled) { background-color: var(--accent); }
+html[data-skin="retro"] [data-slot="button"].bg-primary\/10 { background-color: var(--primary-soft); color: var(--primary-text); border: 1px solid var(--border); }
+html[data-skin="retro"] [data-slot="button"].bg-primary\/10:hover:not(:disabled) { background-color: var(--primary); color: var(--primary-foreground); text-shadow: none; }
+html[data-skin="retro"] [data-slot="button"].text-destructive:hover:not(:disabled) { background-color: var(--destructive-soft); }
+html[data-skin="retro"] [data-slot="button"]:active:not(:disabled) { translate: 1px 1px; }
+html[data-skin="retro"] :is([data-slot="button"], [data-slot="input"], [data-slot="textarea"], [role="tab"], [role="switch"], [role="checkbox"], [role="radio"]):focus-visible { outline: 2px dashed var(--ring); outline-offset: 2px; }
+html[data-skin="retro"] [data-slot="badge"] { border: 1px solid currentColor; text-transform: uppercase; letter-spacing: 0.04em; }
+html[data-skin="retro"] .chat-actions [data-slot="button"] { letter-spacing: 0.02em; }
+
+/* Windows and panels: a double frame in phosphor; what sits inside another panel gets a dashed line instead. */
+html[data-skin="retro"] [data-slot="card"] { border: 3px double var(--input); background-color: var(--card); box-shadow: none; }
+html[data-skin="retro"] [data-slot="card"][class*="border-warning"] { border-color: var(--warning); }
+html[data-skin="retro"] [data-slot="card"][class*="border-primary"] { border-color: var(--primary); }
+html[data-skin="retro"] [data-slot="card"] [data-slot="card"] { border: 1px dashed var(--border); background-color: var(--background); }
+html[data-skin="retro"] [data-slot="dialog-content"] { border: 3px double var(--primary); background-color: var(--popover); box-shadow: 0 0 28px -8px oklch(0.86 0.21 145 / 0.5); }
+html[data-skin="retro"] [data-slot="dialog-overlay"] { backdrop-filter: none; background-color: rgb(0 0 0 / 0.72); }
+html[data-skin="retro"] :is([data-slot="menu-content"], [data-slot="select-content"]) { border: 3px double var(--primary); background-color: var(--popover); box-shadow: 0 0 18px -6px oklch(0.86 0.21 145 / 0.4); padding: 2px; }
+html[data-skin="retro"] :is([data-slot="menu-content"], [data-slot="select-content"]) :is([data-highlighted], [aria-selected="true"]) { background-color: var(--primary); color: var(--primary-foreground); text-shadow: none; }
+html[data-skin="retro"] :is([data-slot="menu-content"], [data-slot="select-content"]) :is([data-highlighted], [aria-selected="true"]) :is(svg, .text-muted-foreground, .text-destructive, kbd) { color: inherit; }
+html[data-skin="retro"] :is([data-slot="menu-content"], [data-slot="select-content"]) [role="separator"] { background: none; border-top: 1px dashed var(--border); height: 0; margin: 3px 0; }
+
+/* Fields: a hard 2 px frame, the cursor in phosphor, amber when focused. */
+html[data-skin="retro"] :is([data-slot="input"], [data-slot="textarea"], .side-search-box) { background-color: var(--background); border: 2px solid var(--input); box-shadow: none; caret-color: var(--primary); }
+html[data-skin="retro"] :is([data-slot="input"], [data-slot="textarea"]):focus-visible { border-color: var(--ring); outline-offset: 0; }
+html[data-skin="retro"] :is([data-slot="input"], [data-slot="textarea"])::placeholder { color: var(--faint-foreground); }
+html[data-skin="retro"] [data-slot="composer"] { border: 3px double var(--primary); border-radius: 0; background-color: var(--card); box-shadow: none; backdrop-filter: none; caret-color: var(--primary); }
+html[data-skin="retro"] [data-slot="composer"]:focus-within { border-color: var(--ring); }
+html[data-skin="retro"] [data-slot="composer"] :is(textarea, .composer-text)::placeholder { color: var(--faint-foreground); }
+html[data-skin="retro"] [role="switch"] { background-color: transparent; border: 2px solid var(--primary); box-shadow: none; }
+html[data-skin="retro"] [role="switch"][data-state="checked"] { background-color: var(--primary); }
+html[data-skin="retro"] [role="switch"] > span { background-color: var(--primary); box-shadow: none; }
+html[data-skin="retro"] [role="switch"][data-state="checked"] > span { background-color: var(--primary-foreground); }
+html[data-skin="retro"] [role="checkbox"] { border: 2px solid var(--input); background-color: transparent; box-shadow: none; }
+html[data-skin="retro"] [role="checkbox"][data-state="checked"] { background-color: var(--primary); border-color: var(--primary); color: var(--primary-foreground); }
+html[data-skin="retro"] [role="progressbar"] { border: 1px solid var(--primary); background-color: transparent; }
+html[data-skin="retro"] [role="progressbar"] > * { background: repeating-linear-gradient(90deg, var(--primary) 0 7px, transparent 7px 9px); }
+html[data-skin="retro"] input[type="range"] { accent-color: var(--primary); }
+html[data-skin="retro"] ::-webkit-scrollbar-thumb { background-color: color-mix(in oklch, var(--primary) 45%, transparent); border-radius: 0; }
+
+/* Tabs and segmented choices: the chosen one in inverse video. */
+html[data-skin="retro"] :is([role="tablist"], [role="radiogroup"].bg-muted) { background-color: transparent; border: 2px dashed var(--input); padding: 2px; }
+html[data-skin="retro"] :is([role="tab"], [role="radiogroup"].bg-muted [role="radio"]) { color: var(--muted-foreground); }
+html[data-skin="retro"] :is([role="tab"][data-state="active"], [role="radiogroup"].bg-muted [role="radio"][aria-checked="true"]) { background-color: var(--primary); color: var(--primary-foreground); box-shadow: none; text-shadow: none; }
+
+/* The sidebar: a terminal pane framed on its right edge. Its places are four text cells in a grid; the chat that is
+   open is inverse video (green with black letters), as a selected line of a text menu. */
+html[data-skin="retro"] aside.bg-sidebar { background-color: var(--sidebar); background-image: repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px); border-right: 3px double var(--primary); }
+html[data-skin="retro"] .side-band { border-bottom: 3px double var(--primary); }
+html[data-skin="retro"] [data-testid="orb-places"] { gap: 4px; padding-inline: 8px; padding-bottom: 8px; }
+html[data-skin="retro"] [data-testid="orb-places"] > button { min-height: 46px; justify-content: center; border: 2px solid var(--input); background-color: transparent; color: var(--foreground); }
+html[data-skin="retro"] [data-testid="orb-places"] > button:hover { background-color: var(--accent); }
+html[data-skin="retro"] [data-testid="orb-places"] > button.bg-accent { background-color: var(--primary); border-color: var(--primary); color: var(--primary-foreground); text-shadow: none; }
+html[data-skin="retro"] [data-testid="orb-places"] > button.bg-accent svg { color: inherit; }
+html[data-skin="retro"] [data-testid="nav-tasks-count"] { border-radius: 0; color: var(--warning-foreground); }
+html[data-skin="retro"] [data-testid^="orb-row-"] { border-radius: 0; }
+html[data-skin="retro"] [data-testid^="orb-row-"].bg-accent { background-color: var(--primary); color: var(--primary-foreground); text-shadow: none; }
+html[data-skin="retro"] [data-testid^="orb-row-"].bg-accent :is(*, svg) { color: var(--primary-foreground); text-shadow: none; }
+html[data-skin="retro"] .side-foot-icon:hover { background-color: var(--primary); color: var(--primary-foreground); text-shadow: none; }
+html[data-skin="retro"] .side-foot-icon.is-active { background-color: var(--primary); color: var(--primary-foreground); text-shadow: none; }
+html[data-skin="retro"] nav button { border-radius: 0; }
+html[data-skin="retro"] nav button.bg-accent { background-color: var(--primary); color: var(--primary-foreground); text-shadow: none; }
+
+/* The chat bar: a terminal title line with a double rule under it. */
+html[data-skin="retro"] .chat-bar { border-bottom: 3px double var(--primary); }
+html[data-skin="retro"] .chat-bar [data-testid="orb-chat-head"] { border-radius: 0; }
+html[data-skin="retro"] .chat-bar [data-testid="orb-chat-head"]:hover { background-color: var(--primary); color: var(--primary-foreground); text-shadow: none; }
+html[data-skin="retro"] .chat-bar [data-testid="orb-chat-head"]:hover * { color: inherit; }
+
+/* The conversation: the assistant types on black glass; the user's message is a dashed line in a quieter green. */
+html[data-skin="retro"] .chat-glass { background-color: color-mix(in oklch, var(--background) 90%, transparent); border: 1px dashed var(--border); }
+html[data-skin="retro"] .bg-bubble { background-color: var(--bubble); color: var(--bubble-foreground); border: 2px dashed var(--input); padding: 8px 14px; box-shadow: none; }
+html[data-skin="retro"] main :is(.prose-chat, .hero-title + p, .text-muted-foreground.text-xs) { text-shadow: var(--rt-glow), 0 0 8px color-mix(in oklch, var(--background) 70%, transparent); }
+html[data-skin="retro"] .prose-chat :is(pre, code) { background-color: var(--muted); }
+html[data-skin="retro"] .prose-chat :not(pre) > code { color: var(--warning-ink); background-color: transparent; }
+html[data-skin="retro"] [data-testid="update-card"] { background-image: none; background-color: var(--primary-soft); border: 3px double var(--primary); box-shadow: none; }
+
+/* The robot is tinted green like a phosphor monitor (a still filter on its picture; the body that floats carries none). */
+html[data-skin="retro"] .orb { --eye: oklch(0.86 0.21 145); }
+html[data-skin="retro"] .orb-img { filter: grayscale(1) sepia(1) hue-rotate(68deg) saturate(3.2) brightness(0.95); }
+html[data-skin="retro"] .orb-led { background: radial-gradient(circle, oklch(0.86 0.21 145 / 0.9) 0%, oklch(0.86 0.21 145 / 0.35) 45%, transparent 72%); }
+
+/* ---- DOM-backed parts (WindowBar, the prompt of the message box). ---- */
+/* The status line closing the main screen and the inverse-video caption written over a dialog's frame. */
+html[data-skin="retro"] .skin-statusbar { flex: none; display: flex; justify-content: space-between; gap: 12px; padding: 1px 10px; border-top: 1px dashed var(--input); background: var(--background); color: var(--primary); font-size: 14px; line-height: 18px; text-transform: uppercase; }
+html[data-skin="retro"] .skin-titlebar { position: absolute; top: -3px; left: -3px; right: 0; height: 16px; display: flex; align-items: center; justify-content: space-between; padding: 0 4px 0 8px; background: var(--primary); color: var(--primary-foreground); font-size: 14px; line-height: 16px; text-transform: uppercase; text-shadow: none; pointer-events: none; }
+html[data-skin="retro"] .skin-caption { display: flex; gap: 3px; }
+html[data-skin="retro"] .skin-caption i { width: 8px; height: 8px; border: 1px solid currentColor; }
+/* «>» is out of flow, so it sits where the text starts without moving anything; the text leaves room for it. */
+html[data-skin="retro"] .composer-prompt { position: absolute; margin: 0.75rem 0 0 1rem; color: var(--rt-ink); font-size: 14.5px; line-height: 1.625; pointer-events: none; }
+html[data-skin="retro"] [data-slot="composer"] .composer-text { padding-left: 2.25rem; }

@@ -110,4 +110,5 @@ export default {
   "app.loadOfflineBody": "This screen could not be loaded. Check the connection and try again.",
   "app.loadOfflineToast": "Could not open: no connection.",
   'app.linkOfflineWifi': 'Couldn’t connect to your Orb over the local network. On the PC, allow Orb through Windows Firewall for private networks.',
+  "app.copyFailed": "Could not copy.",
 };

@@ -1,6 +1,6 @@
 // Create / link / clone a project, and the project control under the assistant's message box.
 import { FolderOpen, FolderPlus, FolderX, ChevronsUpDown, Check, Folder } from 'lucide-react';
-import { toast } from 'sonner';
+import { notifyOk } from '@/lib/notify.js';
 import { form } from './dialogs.jsx';
 import { Field, Input, Textarea } from './ui/basic.jsx';
 import { Button } from './ui/button.jsx';
@@ -11,6 +11,7 @@ import { GithubIcon } from '@/components/agent-icon.jsx';
 import { t, useT } from '@/lib/i18n.js';
 import { projectNameProblem } from '../../shared/product.mjs';
 import { CATEGORIES, PLATFORMS, MULTI, SHARED_DIR, DEFAULT_CATEGORY } from '../../shared/layout.mjs';
+import { quiet } from '@/lib/quiet.js';
 
 const home = () => getState().app?.home ?? '';
 const sep = () => (home().includes('\\') ? '\\' : '/');
@@ -51,7 +52,7 @@ export async function createProjectFlow() {
     ok: t('comp.projects.create'),
     onOk: (v) => call('projects.create', { name: v.name.trim(), notes: v.notes.trim(), category: v.category, ...(v.category === MULTI ? { platforms: v.platforms } : {}) })
   });
-  if (p) { toast.success(t('comp.projects.created', { name: p.name })); await refresh().catch(() => {}); }
+  if (p) { notifyOk(t('comp.projects.created', { name: p.name })); await refresh().catch(quiet); }
   return p;
 }
 
@@ -68,7 +69,7 @@ export async function linkFolderFlow() {
     ok: t('comp.projects.link'),
     onOk: (v) => call('projects.import', { name: v.name.trim(), folder })
   });
-  if (p) { toast.success(t('comp.projects.linked', { name: p.name })); await refresh().catch(() => {}); }
+  if (p) { notifyOk(t('comp.projects.linked', { name: p.name })); await refresh().catch(quiet); }
   return p;
 }
 
@@ -84,7 +85,7 @@ export async function cloneRepoFlow() {
     ok: t('comp.projects.clone'),
     onOk: (v) => call('projects.clone', { repo: v.repo.trim(), name: v.name.trim(), category: v.category })
   });
-  if (p) { toast.success(t('comp.projects.cloned', { path: p.path })); await refresh().catch(() => {}); }
+  if (p) { notifyOk(t('comp.projects.cloned', { path: p.path })); await refresh().catch(quiet); }
   return p;
 }
 

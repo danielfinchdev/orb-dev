@@ -40,7 +40,7 @@ export function DiffLines({ text, headers = true, className, testid }) {
     return first < 0 ? all : all.slice(first);
   }, [text, hl, headers]);
   return (
-    <div className={cn('code-surface w-max min-w-full py-2 text-[12.5px] leading-[1.55]', className)} data-testid={testid}>
+    <div className={cn('code-surface w-max min-w-full py-2 text-caption leading-[1.55]', className)} data-testid={testid}>
       {rows.map((r, i) => (
         <div key={i} className={cn('px-3 whitespace-pre', ROW[r.kind])}>
           {r.code ? <><span className="code-sign">{r.sign}</span>{r.code.length ? r.code : (r.sign ? null : ' ')}</> : (r.l || ' ')}

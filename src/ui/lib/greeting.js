@@ -1,3 +1,4 @@
+import { needsApproval } from './task-approval.js';
 // the empty chat's greeting changes each time (texts in src/shared/locales/*/greet.mjs). What matters comes first: a task
 // waiting for approval always; other news (tasks working, left halfway, finished yesterday, the project in use) most
 // times; otherwise one for the time of day, one for coming back, or now and then a playful one (never in Profesional).
@@ -24,7 +25,7 @@ export function pickGreeting({ tasks = [], project = null, first = false, seriou
   const words = (list) => list.map((key) => ({ key }));
   if (first) return pick([{ key: 'greet.first1' }, { key: 'greet.first2' }]);
   const by = (s) => tasks.filter((t) => t.status === s).length;
-  const approvals = by('awaiting_approval');
+  const approvals = tasks.filter(needsApproval).length;
   if (approvals) return count('greet.approvals', approvals);
   const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
   const finished = tasks.filter((t) => t.status === 'done' && t.updated_at && dayKey(new Date(t.updated_at)) === dayKey(yesterday)).length;

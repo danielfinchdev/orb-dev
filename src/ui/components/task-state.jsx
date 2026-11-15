@@ -9,10 +9,28 @@
 //                 «Aceptar» (the result stays) and «Deshacer» (the folder goes back to before the task).
 import { ShieldAlert, Play, Undo2, Check, ExternalLink } from 'lucide-react';
 import { Button } from './ui/button.jsx';
+import { Badge } from './ui/basic.jsx';
+import { STATUS } from '@/lib/labels.js';
+import { needsApproval } from '@/lib/task-approval.js';
 import { confirm } from './dialogs.jsx';
 import { call, act, go, setState } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
+import { Note } from './ui/primitives.jsx';
+
+export { needsApproval };
+
+// The state of a task, drawn the same everywhere (list, detail, chat, sidebar, search): «Deshecha» when undone, «Por
+// aprobar» when held for review, why it waits when queued, else the status. `plain`: just the text, no badge.
+export function TaskStatus({ task, status, undone, plain = false, className }) {
+  const t = useT();
+  const st = task?.status ?? status;
+  const label = (variant, text, extra) => (plain ? <span className={className} {...extra}>{text}</span> : <Badge variant={variant} className={className} {...extra}>{text}</Badge>);
+  if (undone ?? task?.undone) return plain ? <span className={className} data-testid="task-undone">{t('tasks.undone')}</span> : <Badge variant="secondary" className={className} data-testid="task-undone"><Undo2 />{t('tasks.undone')}</Badge>;
+  if (task?.held) return label('warning', t('tasks.held.badge'), { 'data-testid': 'task-held-badge' });
+  if (st === 'queued' && task?.waiting) return label(task.waiting.kind === 'paused' ? 'warning' : STATUS.queued[1], waitText(t, task), { title: task.waiting.text });
+  return label(STATUS[st]?.[1] ?? 'secondary', STATUS[st]?.[0] ?? st);
+}
 
 // The short text of why a queued task waits («En pausa», «Espera a #3», «En cola»).
 export function waitText(t, task) {
@@ -53,10 +71,12 @@ export function WaitLabel({ task, className }) {
 export function PausedNote({ className }) {
   const t = useT();
   return (
-    <div className={cn('bg-warning/10 border-warning/40 flex flex-wrap items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[13px]', className)} data-testid="queue-paused">
-      <span className="min-w-0 flex-1">{t('tasks.wait.pausedNote')}</span>
-      <Button size="sm" variant="soft" onClick={() => resumeQueue(t)}><Play />{t('tasks.wait.resume')}</Button>
-    </div>
+    <Note tone="warning" className={className} data-testid="queue-paused">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="min-w-0 flex-1">{t('tasks.wait.pausedNote')}</span>
+        <Button size="sm" variant="soft" onClick={() => resumeQueue(t)}><Play />{t('tasks.wait.resume')}</Button>
+      </div>
+    </Note>
   );
 }
 
@@ -71,9 +91,9 @@ export function HeldCard({ task, link = false, className }) {
   const h = task?.held;
   if (!h) return null;
   return (
-    <div className={cn('bg-warning/10 border-warning/40 grid gap-2 rounded-xl border px-3.5 py-2.5 text-[13px]', className)} data-testid="task-held">
+    <div className={cn('bg-warning/10 border-warning/40 grid gap-2 rounded-xl border px-3.5 py-2.5 text-control', className)} data-testid="task-held">
       <div className="flex items-start gap-2">
-        <ShieldAlert className="text-warning mt-0.5 size-4 shrink-0" />
+        <ShieldAlert className="text-warning-ink mt-0.5 size-4 shrink-0" />
         <div className="min-w-0 flex-1">
           {link ? <div className="font-semibold">{t('orbchats.taskN', { id: task.id })} · <span className="font-normal">{task.title}</span></div> : null}
           <div className="break-words">{h.folder ? t('tasks.held.line', { reasons: h.reasons, folder: h.folder }) : t('tasks.held.lineNoFolder', { reasons: h.reasons })}</div>

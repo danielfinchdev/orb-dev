@@ -41,7 +41,7 @@ function UsagePanel({ context, pct }) {
     finally { setReloading(false); setWait(reloadWait()); }
   };
   return (
-    <div className="grid w-80 gap-3 p-2.5 text-[13px]" data-testid="usage-panel">
+    <div className="grid w-80 gap-3 p-2.5 text-control" data-testid="usage-panel">
       <div className="grid gap-1.5">
         <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">{t('session.usage.context')}</span><span className="ml-auto tabular-nums">{shortTokens(context.used)} / {shortTokens(context.size)} ({pct} %)</span>
           <Tip label={t('session.usage.reload')}><Button size="icon-sm" variant="ghost" className="size-6" onClick={reload} disabled={reloading || wait > 0} aria-label={t('session.usage.reload')} aria-busy={reloading} data-testid="usage-reload">{reloading ? <Spinner className="size-3" /> : <RefreshCw className="size-3.5" />}</Button></Tip></div>
