@@ -20,8 +20,8 @@ android {
         applicationId = "dev.orb.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 3008004
-        versionName = "3.8.4"
+        versionCode = 3008006
+        versionName = "3.8.6"
         // The only native code is SQLCipher: arm64 for phones, x86_64 for the emulator (debug only).
         ndk { abiFilters += "arm64-v8a" }
     }
