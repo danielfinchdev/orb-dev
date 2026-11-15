@@ -33,8 +33,8 @@ export function notify(n, { toast: asToast = true, ms, always = false, record = 
   const tone = ['success', 'warning', 'error'].includes(n.tone) ? n.tone : 'info';
   const notices = getState().notices ?? [];
   // always: a notice that must never be silenced by the repeat filter (a screen capture of the PC)
-  const same = (n.always === true || always) ? null : notices.find((x) => x.body === body && (x.title ?? '') === (n.title ?? '') && now - x.at < REPEAT_MS);
-  if (same) {
+  const same = n.always === true ? null : notices.find((x) => x.body === body && (x.title ?? '') === (n.title ?? '') && now - x.at < REPEAT_MS);
+  if (same && !always) {
     const next = notices.map((x) => (x === same ? { ...x, count: (x.count ?? 1) + 1, at: now } : x));
     setState({ notices: next }); write(KEY, next);
     return { show: false };

@@ -206,7 +206,7 @@ test('window: HtmlPages is mounted for the full PC and the frame is sandboxed wi
   assert.match(jsx, /referrerPolicy="no-referrer"/);
   assert.ok(jsx.includes('<bdi>{p.title}</bdi>'));
   for (const m of ['htmlPages.list', 'htmlPages.setInternet', 'htmlPages.close', 'html:page', 'html:update', 'html:closed']) assert.ok(jsx.includes(m), m);
-  assert.doesNotMatch(jsx, /useState\((true|false)\)/); // the switch comes from the engine, not from local state
+  assert.doesNotMatch(jsx, /\[\s*internet\w*\s*,[^\]]*\]\s*=\s*useState/); // the switch comes from the engine, not from local state (`big` is only view state)
   const keys = (m) => Object.keys(m.default ?? m).filter((k) => k.startsWith('htmlpage.') || k.startsWith('msg.html.')).sort();
   assert.ok(keys(es).length >= 14); assert.deepEqual(keys(es), keys(en));
 });
