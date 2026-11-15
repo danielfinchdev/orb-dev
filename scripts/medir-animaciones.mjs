@@ -108,6 +108,7 @@ for (const skin of SKINS) {
     await page.click('[data-testid=chats-new]'); await page.click('[data-testid=new-conversation]');
     await page.locator('[data-testid=chat-input]').waitFor({ timeout: 20000 });
     await page.mouse.move(5, 300); // the pointer away from anything with a hover
+    if (process.env.MEDIR_UNFOCUS) await page.evaluate((MINIMA) => { document.documentElement.classList.add('window-idle'); if (MINIMA) document.documentElement.dataset.motion = 'minima'; }, process.env.MEDIR_UNFOCUS === 'minima'); // MEDIR_UNFOCUS=1: the page as when its window has no focus (main.jsx, class window-idle); =minima: with animations off too
     await wait(SETTLE_S * 1000); // the start settles (the robot's hello floats for 8.4 s: --settle 10 measures after it)
     if (process.env.MEDIR_HIDE) await page.evaluate((sel) => { for (const el of document.querySelectorAll(sel)) el.style.display = 'none'; }, process.env.MEDIR_HIDE);
     const row = { skin, mode, ...(await idleCost(run)), mainThread: await mainThreadAnimations(page), ...(await typing(page)) };
