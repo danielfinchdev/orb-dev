@@ -30,7 +30,11 @@ class DatabaseFactory(
             // Without its passphrase the file is unreadable noise.
             CacheKeyState.Missing, CacheKeyState.Lost -> return startOver()
         }
-        return tryOpen(passphrase) ?: startOver()
+        val opened = tryOpen(passphrase)
+        if (opened != null) return opened
+        // Only a file this key cannot read is dropped. Any other failure (disk busy, storage full, I/O error) may pass:
+        // the cache holds the messages not sent yet, so it stays as it is and the next call tries again.
+        return if (unreadable) startOver() else null
     }
 
     @Synchronized
@@ -48,18 +52,25 @@ class DatabaseFactory(
 
     private fun startOver(): OrbCacheDatabase? {
         deleteFiles()
-        return tryOpen(keys.create())
+        return tryOpen(keys.create()).also { if (it == null) runCatching { deleteFiles() } }
     }
 
+    /** Whether the last failed [tryOpen] was a file the key cannot read (wrong passphrase, not a database, corrupt). */
+    private var unreadable = false
+
     private fun tryOpen(passphrase: ByteArray): OrbCacheDatabase? = try {
+        unreadable = false
         // SQLCipher clears the array it is given once it has opened the file; the factory hands it a copy.
         opener(file, passphrase.copyOf()).also { current = it }
     } catch (e: Exception) {
-        runCatching { deleteFiles() }
+        val text = generateSequence<Throwable>(e) { it.cause }.mapNotNull { it.message }.joinToString(" ").lowercase()
+        unreadable = UNREADABLE.any { it in text }
         null
     }
 
     companion object {
+        private val UNREADABLE = listOf("not a database", "encrypted", "corrupt", "malformed")
+
         /** The real opener: Room over SQLCipher, forced to open now so a wrong passphrase fails here and not in a query. */
         fun sqlcipher(context: Context): (File, ByteArray) -> OrbCacheDatabase = { file, passphrase ->
             System.loadLibrary("sqlcipher")

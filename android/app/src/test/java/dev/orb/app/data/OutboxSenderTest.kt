@@ -95,6 +95,23 @@ class OutboxSenderTest {
         assertEquals(OutboxState.SENT, state(id))
     }
 
+    @Test fun aRetryAfterALongGapIsNotSentAgainBecauseItMayHaveArrived() = runTest {
+        pc.answer = { failure(LinkError.Timeout) }
+        val repo = repo()
+        val id = repo.enqueueChat("1", "maybe arrived")
+        sender(repo)
+        runCurrent()
+        assertEquals(1, pc.calls.size)
+        connection.value = OFFLINE
+        runCurrent()
+        advanceTimeBy(15 * 60_000L)
+        pc.answer = { Result.success(JsonObject(emptyMap())) }
+        connection.value = ONLINE
+        runCurrent()
+        assertEquals(1, pc.calls.size)
+        assertEquals(OutboxState.FAILED, state(id))
+    }
+
     @Test fun backoffGrowsFrom3To30Seconds() {
         assertEquals(listOf(3_000L, 6_000L, 12_000L, 24_000L, 30_000L, 30_000L), (1..6).map { retryBackoffMs(it) })
     }

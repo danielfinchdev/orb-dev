@@ -117,6 +117,17 @@ class DatabaseFactoryTest {
         assertEquals(1, keys.created)
     }
 
+    @Test fun aTransientOpenFailureKeepsTheFileAndTheKey() = runTest {
+        put(factory.open()!!)
+        factory.close()
+        val flaky = DatabaseFactory(file, keys) { _, _ -> throw java.io.IOException("disk I/O error") }
+        assertNull(flaky.open())
+        assertTrue(file.exists())
+        assertEquals(1, keys.created)
+        // and the next attempt with a working opener finds the data again
+        assertEquals(1, queryCount(factory.open()!!))
+    }
+
     @Test fun wipeDeletesTheDatabaseAndTheKey() = runTest {
         put(factory.open()!!)
         CacheWipe(factory, keys).wipe()

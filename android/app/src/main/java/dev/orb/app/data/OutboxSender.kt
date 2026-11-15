@@ -79,6 +79,11 @@ class OutboxSender(
     }
 
     private suspend fun sendOne(item: OutboxEntity) {
+        // The PC remembers a message id for 10 minutes. A retry after a long gap (no network, PC restarted) could land as
+        // a second copy of one that did arrive, so the person decides instead of the app guessing.
+        if (item.attempts > 0 && clock() - (item.nextAttemptAt - backoff(item.attempts)) > DEDUPE_SAFE_MS) {
+            return repo.markFailed(item.clientId, "not retried: too long since the last attempt, it may have arrived")
+        }
         val result = try {
             when (item.target) {
                 OutboxTarget.SESSION -> api.sessionsSend(paramsOf(item), item.clientId)
@@ -127,6 +132,8 @@ class OutboxSender(
     }
 
     companion object {
+        /** Under the PC's 10 minute memory of message ids, with room for the clock and the backoff. */
+        const val DEDUPE_SAFE_MS = 9L * 60 * 1000
         const val SENT_RETENTION_MS = 24L * 60 * 60 * 1000
     }
 }
