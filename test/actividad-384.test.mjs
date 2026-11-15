@@ -274,3 +274,16 @@ test('a rotation between two pages neither repeats nor skips lines', () => {
   const p2 = readActivity(board, { sources: ['orb'], limit: 20, cursor: p1.next });
   assert.deepEqual(p2.items.map((i) => i.text.match(/numero (\d)/)?.[1]), ['5', '4', '3', '2', '1', '0']);
 });
+
+test('a forged cursor cannot make the engine loop: out-of-range positions restart from the newest line', () => {
+  reset();
+  fs.writeFileSync(file('motor.log'), Array.from({ length: 10 }, (_, i) => `${iso(i)} linea ${i}`).join('\n') + '\n');
+  const enc = (c) => Buffer.from(JSON.stringify(c)).toString('base64url');
+  const clean = readActivity(board, { sources: ['orb'], limit: 5 });
+  for (const bad of [{ f: -1e15 }, { f: 1e15 }, { f: 1.5 }, { f: 'x' }, { f: 0, o: -5 }, { f: 0, o: 1e400 }, { f: -1e15, h: 'AAAA' }]) {
+    const t0 = Date.now();
+    const r = readActivity(board, { sources: ['orb'], limit: 5, cursor: enc({ motor: bad }) });
+    assert.ok(Date.now() - t0 < 2000, JSON.stringify(bad));
+    assert.deepEqual(r.items.map((i) => i.text), clean.items.map((i) => i.text), JSON.stringify(bad));
+  }
+});

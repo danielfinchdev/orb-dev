@@ -75,10 +75,14 @@ function headOf(file, fd = null) {
 // A cursor remembers the head of the file it stopped in. If the log rotated between two pages, that file now has
 // another index (or is gone): follow it, so the next page neither repeats lines nor jumps over the older ones.
 function resumePoint(def, from) {
+  // A cursor comes from a client: a file index outside the list (or a negative offset) would make the scan loop
+  // for as many turns as the number says, so anything but a plain in-range integer restarts from the newest line.
+  const sane = Number.isSafeInteger(from?.f) && from.f >= 0 && from.f <= def.files.length && (from.o == null || (Number.isSafeInteger(from.o) && from.o >= 0));
+  if (from != null && !sane) return { f: 0, o: null };
   if (from?.h == null) return { f: from?.f ?? 0, o: from?.o ?? null };
   for (let g = 0; g < def.files.length; g += 1) if (headOf(def.files[g]) === from.h) return { f: g, o: from.o ?? null };
   // not found: that file is gone, so go on with the older ones
-  return { f: (from.f ?? 0) + 1, o: null };
+  return { f: from.f + 1, o: null };
 }
 
 // Reads one stream backwards from `from` ({ f: file index, o: end offset, h: file head } or nothing = its very end),
