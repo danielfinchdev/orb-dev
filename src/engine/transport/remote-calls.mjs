@@ -106,7 +106,9 @@ export function sanitizeUploadName(name, fallback = 'archivo') {
   return ext ? `${base}.${ext}` : base;
 }
 
-export const UPLOAD_TYPES = Object.freeze(['png', 'jpg', 'webp', 'gif', 'pdf', 'txt', 'md', 'csv', 'json']);
+// Only pictures are announced and kept: `images` is the one place a phone can cite an upload and guardCall takes only
+// pictures there, so a PDF or text file would upload fine and then fail on send with a 403.
+export const UPLOAD_TYPES = Object.freeze(['png', 'jpg', 'webp', 'gif']);
 const TEXT_KINDS = new Set(['txt', 'md', 'csv', 'json']);
 // What an upload really is, from its first bytes (never from a name): a picture, a PDF or plain UTF-8 text; null for
 // anything else. `hint` is the extension the client says (only to tell md/csv/json apart inside plain text).

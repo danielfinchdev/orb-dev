@@ -402,7 +402,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       // the client's name only tells md/csv/json apart inside plain text and is echoed back sanitized; it never reaches the stored path
       const shown = sanitizeUploadName(auth.name);
       const ext = sniffUpload(b, path.extname(shown).slice(1));
-      if (!ext) return reply(res, device, auth.nonce, { ok: false, status: 415, error: tr('msg.remote.fileTypes') });
+      if (!ext || !UPLOAD_TYPES.includes(ext)) return reply(res, device, auth.nonce, { ok: false, status: 415, error: tr('msg.remote.fileTypes') });
       await fs.promises.mkdir(mine, { recursive: true });
       await pruneUploads(b.length);
       const file = path.join(mine, `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`);

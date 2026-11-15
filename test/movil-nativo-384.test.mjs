@@ -50,8 +50,8 @@ test('me anuncia los métodos remotos y lo que acepta la subida; los clientes vi
   assert.ok(!msg.result.methods.includes('conversations.remove'));
   assert.ok(!msg.result.methods.includes('config.save'));
   assert.equal(msg.result.uploads.max, 10 * 1024 * 1024);
-  for (const k of ['png', 'jpg', 'webp', 'gif', 'pdf', 'txt']) assert.ok(msg.result.uploads.types.includes(k), k);
-  for (const k of ['exe', 'html', 'svg', 'js', 'bat', 'ps1']) assert.ok(!msg.result.uploads.types.includes(k), k);
+  for (const k of ['png', 'jpg', 'webp', 'gif']) assert.ok(msg.result.uploads.types.includes(k), k);
+  for (const k of ['pdf', 'txt', 'md', 'csv', 'json', 'exe', 'html', 'svg', 'js', 'bat', 'ps1']) assert.ok(!msg.result.uploads.types.includes(k), k);
   assert.ok(msg.result.device && msg.result.pc, 'los campos de siempre siguen');
 });
 
@@ -68,22 +68,21 @@ test('meta.client se guarda si es válido y se ignora si no', async () => {
   assert.equal(await client(), 'android-native', 'un cliente que no lo manda no lo borra');
 });
 
-test('subida: PDF y texto sí; ejecutables, HTML y SVG no (415); un PDF no pasa como imagen', async () => {
-  const pdf = await upload(Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\n%%EOF'));
-  assert.equal(pdf.ok, true);
-  assert.match(pdf.result.path, /^\d+-[0-9a-f]{8}\.pdf$/);
-  assert.ok(fs.existsSync(path.join(t.home, 'core', 'adjuntos-movil', pdf.result.path)));
-  assert.match((await upload(Buffer.from('hola, mundo\n'), 'nota.txt')).result.path, /\.txt$/);
-  assert.match((await upload(Buffer.from('# Titulo\n'), '../../evil.md')).result.path, /^\d+-[0-9a-f]{8}\.md$/, 'el nombre del cliente solo da el tipo de texto');
-  assert.match((await upload(Buffer.from('a,b\n1,2\n'), 'datos.csv')).result.path, /\.csv$/);
-  assert.match((await upload(Buffer.from('{"a":1}'), 'x.json')).result.path, /\.json$/);
-  assert.match((await upload(Buffer.from('{no json'), 'x.json')).result.path, /\.txt$/, 'JSON roto: texto plano');
+test('subida: solo imágenes; PDF, texto, ejecutables, HTML y SVG no (415); un PDF no pasa como imagen', async () => {
+  const png = await upload(Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(16)]));
+  assert.equal(png.ok, true);
+  assert.match(png.result.path, /^\d+-[0-9a-f]{8}\.png$/);
+  assert.ok(fs.existsSync(path.join(t.home, 'core', 'adjuntos-movil', png.result.path)));
+  // a PDF or a text file would upload fine and then fail on send (403), so the PC refuses them up front
+  assert.equal((await upload(Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\n%%EOF'))).status, 415, 'pdf');
+  assert.equal((await upload(Buffer.from('hola, mundo\n'), 'nota.txt')).status, 415, 'txt');
+  assert.equal((await upload(Buffer.from('{"a":1}'), 'x.json')).status, 415, 'json');
   for (const bad of ['<!doctype html><script>1</script>', '<svg xmlns="http://www.w3.org/2000/svg"/>', '#!/bin/sh\nrm -rf /', '\x7fELF\x02\x01\x01']) {
     const r = await upload(Buffer.from(bad), 'a.txt');
     assert.equal(r.ok, false, bad); assert.equal(r.status, 415, bad);
   }
   assert.equal((await upload(Buffer.from([0x00, 0x01, 0x02, 0x03, 0x04]))).status, 415, 'binario con NUL');
-  const asImage = await phone.call(peer.id, 'sessions.send', { id: 'x', text: 'mira', images: [pdf.result.path] }).catch((e) => e);
+  const asImage = await phone.call(peer.id, 'sessions.send', { id: 'x', text: 'mira', images: ['1731000000000-0123abcd.pdf'] }).catch((e) => e);
   assert.equal(asImage.status, 403, 'un PDF no es una imagen');
 });
 
