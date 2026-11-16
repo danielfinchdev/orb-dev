@@ -32,6 +32,7 @@ import { processList, taskProcesses, powershell } from '../platform/proc-list.mj
 import { explainFailure } from '../shared/agent-errors.mjs';
 import { rememberModels } from './usage/catalog.mjs';
 import { snapshotBeforeTurn, snapshotAfterTurn, dropTurns } from '../domain/conversations/turns.mjs';
+import { dropRescues } from '../domain/conversations/rewind.mjs';
 import { changedFiles, logDirect } from '../domain/journal/journal.mjs';
 import { ATTACH_DIR, placeAttachments as copyAttachments, prepareAttachments } from './host/attachments.mjs';
 import { goalAfterTurn, goalFailed, goalSteered, debugOn } from './modes.mjs';
@@ -203,7 +204,7 @@ export class Sessions {
     if (this.running.has(id)) throw new Error(tr('msg.sessions.stopFirst'));
     const s = this.must(id); if (s.kind === 'task') throw new Error(tr('msg.sessions.taskSession'));
     this.closeLive(id); this.asked.delete(id);
-    if (s.project && s.cwd) dropTurns(s.cwd, id);
+    if (s.project && s.cwd) { dropTurns(s.cwd, id); dropRescues(s.cwd, id); }
     this.board.run('DELETE FROM session_items WHERE session_id = ?', id);
     this.board.run('DELETE FROM session_queue WHERE session_id = ?', id);
     this.board.run('DELETE FROM sessions WHERE id = ?', id);
@@ -549,6 +550,7 @@ export class Sessions {
     const s = planOnly ? { ...chat, permission: 'leer' } : chat;
     // what this turn may do because the user's own words asked for it: a task's comes from the scheduler (the
     // request it came from); a chat's, from the message the user typed now (a turn Orb sends by itself keeps the last).
+    if (this.editing?.has(id) || this.editing?.has(chat.cwd)) throw new Error(tr('msg.sessions.stillWorking')); // a message is being edited
     if (this.running.has(id)) throw new Error(tr('msg.sessions.stillWorking')); // before: a refused send must not change what the running turn may do
     if (Array.isArray(asked)) this.asked.set(id, asked);
     else if (showUser && s.kind !== 'task') this.asked.set(id, askedByUser(text));

@@ -38,7 +38,8 @@ before(() => {
   // the simulated agent writes in the chat's own folder: «write f=x», «del f» and «hold» (a turn that stays running)
   sessions.getLive = (s) => ({ lastUsed: Date.now(), logFile: null, live: { caps: {}, close() {}, isClosed: () => false, async send({ text }) {
     sent.push(`${s.id}:${text}`);
-    const w = /write (\S+)=(\S+)/.exec(text); if (w) { fs.mkdirSync(path.dirname(path.join(s.cwd, w[1])), { recursive: true }); fs.writeFileSync(path.join(s.cwd, w[1]), `${w[2]}\n`); }
+    // the last command is the user's: an edited turn carries the earlier ones in its summary
+    const w = [...text.matchAll(/write (\S+)=(\S+)/g)].at(-1); if (w) { fs.mkdirSync(path.dirname(path.join(s.cwd, w[1])), { recursive: true }); fs.writeFileSync(path.join(s.cwd, w[1]), `${w[2]}\n`); }
     const d = /del (\S+)/.exec(text); if (d) fs.rmSync(path.join(s.cwd, d[1]), { force: true });
     if (/hold/.test(text)) await new Promise((r) => { release = r; });
     return { final: 'ok', text: 'ok', isError: false, usage: {} };
@@ -161,4 +162,56 @@ test('a chat in a git worktree rewinds the worktree and leaves the main checkout
 test('permissions: rewinding is only from the PC, editing also from the phone', () => {
   assert.equal(METHODS['sessions.edit'], 'remote'); assert.equal(METHODS['sessions.rewindInfo'], 'remote');
   assert.equal(METHODS['sessions.editRewind'], 'pc'); assert.equal(METHODS['sessions.rewindUndo'], 'pc');
+});
+
+test('the photo before a message includes what the user changed since the last turn', async () => {
+  const s = create();
+  await turn(s.id, 'write ua.txt=agent');
+  fs.writeFileSync(path.join(repo, 'ua.txt'), 'user change\n'); // between turns, by hand
+  await turn(s.id, 'write ub.txt=two');
+  await turn(s.id, 'write uc.txt=three');
+  const nums = photos(s.id);
+  await call('sessions.editRewind', { id: s.id, item: userItems(s.id)[1].id, text: 'write ud.txt=four' });
+  await idle(s.id);
+  assert.equal(read(repo, 'ua.txt'), 'user change\n'); assert.ok(!fs.existsSync(path.join(repo, 'ub.txt')));
+  // the message photos are marks, not turns: «Cambios» sees the same numbered photos plus the edited turn's own
+  await until(() => photos(s.id) === nums + 1, 'one new photo'); await new Promise((r) => setTimeout(r, 300)); assert.equal(photos(s.id), nums + 1);
+});
+
+test('editing again after a rewind goes back to the rewound state, and a second click is refused', async () => {
+  const s = create();
+  await turn(s.id, 'write ra.txt=v1'); await turn(s.id, 'write rb.txt=2');
+  const m2 = userItems(s.id)[1];
+  const both = await Promise.allSettled([
+    call('sessions.editRewind', { id: s.id, item: m2.id, text: 'write rc.txt=3' }),
+    call('sessions.editRewind', { id: s.id, item: m2.id, text: 'write rc.txt=3' }),
+  ]);
+  assert.equal(both.filter((r) => r.status === 'fulfilled').length, 1);
+  assert.match(both.find((r) => r.status === 'rejected').reason.message, /Espera|Wait/);
+  await idle(s.id);
+  assert.ok(!fs.existsSync(path.join(repo, 'rb.txt'))); assert.ok(fs.existsSync(path.join(repo, 'rc.txt')));
+  const edited = userItems(s.id).at(-1);
+  await call('sessions.editRewind', { id: s.id, item: edited.id, text: 'write rd.txt=4' });
+  await idle(s.id);
+  assert.ok(!fs.existsSync(path.join(repo, 'rc.txt'))); assert.ok(!fs.existsSync(path.join(repo, 'rb.txt'))); assert.ok(fs.existsSync(path.join(repo, 'ra.txt')));
+  // deleting the chat for good takes its photos and rescue copies; archiving would have kept the rescues
+  const refsOf = (p) => g(repo, 'for-each-ref', '--format=%(refname)', `${p}/${s.id}/`);
+  assert.ok(refsOf('refs/orb/rescate')); assert.ok(refsOf('refs/orb/turnos'));
+  sessions.remove(s.id);
+  await until(() => refsOf('refs/orb/turnos') === '', 'photos dropped'); assert.equal(refsOf('refs/orb/rescate'), '');
+});
+
+test('a rewind skips files behind a link or that cannot be written, and still finishes', async () => {
+  const { undoCheckpoint } = await import('../src/domain/tasks/checkpoints.mjs');
+  const dir = path.join(t.home, 'web', 'safe'); const outside = path.join(t.home, 'web', 'outside');
+  fs.mkdirSync(dir, { recursive: true }); fs.mkdirSync(outside, { recursive: true });
+  git(dir, 'init', '-q', '-b', 'main');
+  fs.mkdirSync(path.join(dir, 'd')); fs.writeFileSync(path.join(dir, 'd', 'f.txt'), 'old\n'); fs.writeFileSync(path.join(dir, 'ro.txt'), 'old\n');
+  git(dir, 'add', '-A'); git(dir, ...ident, 'commit', '-q', '-m', 'one'); const c1 = g(dir, 'rev-parse', 'HEAD');
+  git(dir, 'rm', '-rq', 'd'); fs.writeFileSync(path.join(dir, 'ro.txt'), 'new\n'); git(dir, 'add', '-A'); git(dir, ...ident, 'commit', '-q', '-m', 'two'); const c2 = g(dir, 'rev-parse', 'HEAD');
+  try { fs.symlinkSync(outside, path.join(dir, 'd'), 'junction'); } catch { return; } // links not permitted here
+  fs.chmodSync(path.join(dir, 'ro.txt'), 0o444);
+  const out = undoCheckpoint({ kind: 'git', repo: dir, commit: c1 }, { commit: c2 }, { safe: true });
+  assert.ok(out.skipped.includes('d/f.txt')); assert.ok(!fs.existsSync(path.join(outside, 'f.txt')));
+  fs.chmodSync(path.join(dir, 'ro.txt'), 0o666);
 });

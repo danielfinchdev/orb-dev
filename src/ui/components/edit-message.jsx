@@ -23,6 +23,7 @@ async function edit(sessionId, item) {
           <Checkbox checked={Boolean(v.rewind) && info.canRewind} disabled={!info.canRewind} onCheckedChange={(on) => set({ rewind: on === true })} className="mt-0.5" data-testid="edit-rewind" />
           <span>{t('edit.rewind')}</span>
         </label>
+        {info.canRewind ? <p className="text-xs font-medium" data-testid="edit-commits-kept">{t('edit.commitsKept')}</p> : null}
         <p className="text-muted-foreground text-xs">{info.canRewind ? t('edit.rewindHelp') : t('edit.rewindOff', { why: info.rewindWhy })}</p>
       </div>
     ),

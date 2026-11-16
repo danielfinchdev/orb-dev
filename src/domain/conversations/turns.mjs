@@ -34,19 +34,17 @@ async function take(cwd, sid, { start, alive, mark = 0 }) {
   if (alive && !alive()) { dropNow(cwd, sid); return null; }
   const repo = await repoRootAsync(cwd);
   const have = await listRefs(repo, sid);
-  // the baseline is only the folder before the very first turn; a message mark still points at the latest photo, which is
-  // the folder as it was right before that message (the previous turn's closing photo ran earlier in this same chain)
-  if (start && have.length) {
-    if (mark) await gitAsync(repo, {}, 'update-ref', `${refDir(sid)}/antes/${mark}`, have[have.length - 1].commit);
-    return null;
-  }
+  const baseline = start && have.length > 0; // the numbered baseline is only the folder before the very first turn
+  if (baseline && !mark) return null;
   const snap = await snapshotCommitAsync(repo, { raw: true, always: true, message: `orb: turno ${sid}` });
   if (!snap) return null;
+  // A message's own photo is always fresh (the user may have changed files since the last turn ended) and is not a turn:
+  // it carries no number, so «Cambios» never shows it.
+  if (start && mark) await gitAsync(repo, {}, 'update-ref', `${refDir(sid)}/antes/${mark}`, snap.commit);
+  if (baseline) return null;
   const n = have.length ? have[have.length - 1].n + 1 : 0;
   const r = await gitAsync(repo, {}, 'update-ref', `${refDir(sid)}/${n}`, snap.commit);
-  if (r.status !== 0) return null;
-  if (start && mark) await gitAsync(repo, {}, 'update-ref', `${refDir(sid)}/antes/${mark}`, snap.commit);
-  return { n, commit: snap.commit };
+  return r.status === 0 ? { n, commit: snap.commit } : null;
 }
 
 // Before a turn starts: the baseline, once per conversation. Never throws: a failed photo only means no panel.

@@ -3,7 +3,7 @@
 // rewind itself can be undone. Only files change: HEAD, the index, branches and the stash are never touched, and
 // ignored or secret-looking files are not in either photo, so they are never read or written. Commits an agent made
 // since then stay in the history; their files are what goes back.
-import { gitAsync, REF_PREFIX } from '../../platform/git.mjs';
+import { git, gitAsync, REF_PREFIX } from '../../platform/git.mjs';
 import { fullSnapshot, undoCheckpoint } from '../tasks/checkpoints.mjs';
 import { photoBefore } from './turns.mjs';
 
@@ -36,7 +36,7 @@ export async function rewindFiles(cwd, sid, itemId) {
   const ref = `${rescueDir(sid)}/${Date.now()}`;
   if ((await gitAsync(repo, {}, 'update-ref', ref, rescue.commit)).status !== 0) throw new Error('no rescue ref');
   await prune(repo, sid);
-  const out = undoCheckpoint({ kind: 'git', repo, commit: target, raw: true }, { commit: rescue.commit });
+  const out = undoCheckpoint({ kind: 'git', repo, commit: target, raw: true }, { commit: rescue.commit }, { safe: true });
   return { rescue: rescue.commit, target, ref, restored: out.restored.length, removed: out.removed.length, skipped: out.skipped.length,
     files: { restored: cut(out.restored), removed: cut(out.removed), skipped: cut(out.skipped) } };
 }
@@ -50,7 +50,19 @@ export async function undoRewindFiles(cwd, body) {
   if (!repo) throw new Error('no repo');
   const now = await gitAsync(repo, {}, 'rev-parse', '--verify', '--quiet', `${ref}^{commit}`);
   if (now.stdout.trim() !== rescue) throw new Error('rescue gone');
-  const out = undoCheckpoint({ kind: 'git', repo, commit: rescue, raw: true }, { commit: target });
+  const out = undoCheckpoint({ kind: 'git', repo, commit: rescue, raw: true }, { commit: target }, { safe: true });
   return { restored: out.restored.length, removed: out.removed.length, skipped: out.skipped.length,
     files: { restored: cut(out.restored), removed: cut(out.removed), skipped: cut(out.skipped) } };
+}
+
+// A conversation deleted for good takes its rescue copies with it (an archived one keeps them: its rewind can still be undone).
+// Sync on purpose, like dropTurns: it runs where the conversation is removed.
+export function dropRescues(cwd, sid) {
+  try {
+    const refs = git(cwd, 'for-each-ref', '--format=%(refname)', `${rescueDir(sid)}/`);
+    if (refs.status !== 0) return 0;
+    const names = refs.stdout.split(/\r?\n/).filter(Boolean);
+    for (const name of names) git(cwd, 'update-ref', '-d', name);
+    return names.length;
+  } catch { return 0; }
 }
