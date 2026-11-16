@@ -136,9 +136,11 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
         sessions.update(s.id, { title: quick, titled: true });
         autoTitle(board, { agent: s.agent, account: s.account, text: t }).then((better) => { if (better && sessions.get(s.id)?.title === quick) sessions.update(s.id, { title: better }); }).catch(() => {});
       }
-      return sessions.message(s.id, block ? `${t}
+      // the block goes as context, not as typed text: what the user's words ask for (security/approval.mjs › askedByUser) is read from `t` alone,
+      // since the paths in the comments come from file names an agent may have chosen.
+      return sessions.message(s.id, t, { images: images(files), mode: oneOf(mode, ['auto', 'steer', 'queue'], 'modo', 'auto'), context: `${expandMentions(board, sessions, t) ?? ''}${block ? `
 
-${block}` : t, { images: images(files), mode: oneOf(mode, ['auto', 'steer', 'queue'], 'modo', 'auto'), context: expandMentions(board, sessions, t) });
+${block}` : ''}` });
     },
     // «Cambios» of a direct chat, turn by turn (turns.mjs): read only, from Orb's light photos of the folder.
     'sessions.turns': async ({ id }) => { const s = sessions.must(str(id, 'conversación', 64)); return s.kind === 'chat' && s.project ? listTurns(s.cwd, s.id) : { available: false, turns: [] }; },

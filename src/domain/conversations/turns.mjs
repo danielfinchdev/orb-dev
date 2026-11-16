@@ -28,8 +28,10 @@ async function listRefs(repo, sid) {
   }).filter((t) => Number.isInteger(t.n) && t.n >= 0).sort((a, b) => a.n - b.n);
 }
 
-async function take(cwd, sid, { start }) {
+async function take(cwd, sid, { start, alive }) {
   if (!(await isGitRepoAsync(cwd))) return null;
+  // the chat was archived or deleted while the turn ran: nothing is left behind
+  if (alive && !alive()) { dropNow(cwd, sid); return null; }
   const repo = await repoRootAsync(cwd);
   const have = await listRefs(repo, sid);
   if (start && have.length) return null; // the baseline is only the folder before the very first turn
@@ -41,9 +43,9 @@ async function take(cwd, sid, { start }) {
 }
 
 // Before a turn starts: the baseline, once per conversation. Never throws: a failed photo only means no panel.
-export const snapshotBeforeTurn = (cwd, sid) => serial(sid, () => take(cwd, sid, { start: true })).catch(() => null);
+export const snapshotBeforeTurn = (cwd, sid, alive) => serial(sid, () => take(cwd, sid, { start: true, alive })).catch(() => null);
 // When a turn ends.
-export const snapshotAfterTurn = (cwd, sid) => serial(sid, () => take(cwd, sid, { start: false })).catch(() => null);
+export const snapshotAfterTurn = (cwd, sid, alive) => serial(sid, () => take(cwd, sid, { start: false, alive })).catch(() => null);
 
 // → { available, turns: [{ n, at }] }: n = 1… are turns; the baseline (0) is not listed.
 export async function listTurns(cwd, sid) {
@@ -76,7 +78,9 @@ export async function turnDiff(cwd, sid, { scope = 'last', n } = {}) {
 }
 
 // An archived or deleted conversation leaves nothing behind. Sync on purpose: it runs where the conversation is removed.
-export function dropTurns(cwd, sid) {
+// It queues behind a snapshot still being taken, so that one cannot write its ref after the drop.
+export const dropTurns = (cwd, sid) => serial(sid, async () => dropNow(cwd, sid)).catch(() => 0);
+function dropNow(cwd, sid) {
   try {
     const refs = git(cwd, 'for-each-ref', '--format=%(refname)', `${refDir(sid)}/`);
     if (refs.status !== 0) return 0;
