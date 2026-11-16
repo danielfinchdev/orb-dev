@@ -15,7 +15,7 @@ import { Scheduler } from '../src/engine/scheduler/index.mjs';
 import { buildApi } from '../src/engine/api/index.mjs';
 import { DESKTOP, METHODS } from '../src/domain/security/permissions.mjs';
 import { git } from '../src/platform/git.mjs';
-import { snapshotCommit } from '../src/domain/tasks/checkpoints.mjs';
+import { snapshotCommit, snapshotCommitAsync } from '../src/domain/tasks/checkpoints.mjs';
 
 let t; let board; let api; let sessions; let repo; let sent; let release;
 const call = (method, params = {}) => api.call(method, params, DESKTOP);
@@ -282,11 +282,13 @@ function forcedRepo(name) {
   return r;
 }
 const forceCommit = (r, ...files) => { for (const f of files) { fs.mkdirSync(path.dirname(path.join(r, f)), { recursive: true }); fs.writeFileSync(path.join(r, f), `${f}\n`); } git(r, 'add', '-f', '--', ...files); git(r, ...ident, 'commit', '-q', '-m', 'force'); };
+// the first snapshot starts cold; the second one is the first to leave the up-to-date marker beside the raw index
+const warm = (r) => { snapshotCommit(r, { raw: true, always: true }); snapshotCommit(r, { raw: true, always: true }); };
 const tracked = (r, commit) => g(r, 'ls-tree', '-r', '--name-only', commit).split('\n');
 
 test('a fast snapshot keeps an ignored file that was force-added and committed after the raw index', () => {
   const r = forcedRepo('forced1');
-  snapshotCommit(r, { raw: true, always: true });
+  warm(r);
   forceCommit(r, 'gen/x.txt');
   const snap = snapshotCommit(r, { raw: true, always: true });
   assert.ok(tracked(r, snap.commit).includes('gen/x.txt'));
@@ -296,7 +298,7 @@ test('a fast snapshot keeps an ignored file that was force-added and committed a
 
 test('a force-committed secret stays out of the photo, and a file the user deleted is not brought back', () => {
   const r = forcedRepo('forced2');
-  snapshotCommit(r, { raw: true, always: true });
+  warm(r);
   forceCommit(r, 'gen/y.txt', '.env');
   fs.rmSync(path.join(r, 'del.txt'));
   const snap = snapshotCommit(r, { raw: true, always: true });
@@ -315,4 +317,54 @@ test('rewinding a chat does not delete a force-added ignored file committed afte
   await idle(s.id);
   assert.equal(read(repo, 'gen', 'kept.txt'), 'gen/kept.txt\n');
   assert.ok(!fs.existsSync(path.join(repo, 'c2.txt')));
+});
+
+test('a snapshot that copied the raw index before another one replaced it still restores the forced file', async () => {
+  const r = forcedRepo('forced3'); warm(r);
+  forceCommit(r, 'gen/k.txt');
+  // the async snapshot has copied the old index; a sync one finishes (index and marker) before it reads the marker
+  const orig = fs.readFileSync; let other = null; let fired = false;
+  fs.readFileSync = function (f, ...a) { if (!fired && String(f).endsWith('index-raw.head')) { fired = true; other = snapshotCommit(r, { raw: true, always: true }); } return orig.call(this, f, ...a); };
+  let mine; try { mine = await snapshotCommitAsync(r, { raw: true, always: true }); } finally { fs.readFileSync = orig; }
+  assert.ok(tracked(r, other.commit).includes('gen/k.txt'));
+  assert.ok(tracked(r, mine.commit).includes('gen/k.txt'));
+  assert.ok(tracked(r, snapshotCommit(r, { raw: true, always: true }).commit).includes('gen/k.txt'));
+});
+
+test('an ignored folder standing where HEAD had a file is not dragged into the photo', () => {
+  const r = forcedRepo('forced4');
+  fs.writeFileSync(path.join(r, '.gitignore'), 'gen/\nout/\n'); fs.writeFileSync(path.join(r, 'out'), 'file\n');
+  git(r, 'add', '-A'); git(r, ...ident, 'commit', '-q', '-m', 'out');
+  warm(r);
+  fs.rmSync(path.join(r, 'out')); fs.mkdirSync(path.join(r, 'out', 'node_modules'), { recursive: true });
+  fs.writeFileSync(path.join(r, 'out', 'creds.json'), '{}'); fs.writeFileSync(path.join(r, 'out', 'node_modules', 'i.js'), '1');
+  forceCommit(r, 'gen/z.txt'); // HEAD moves
+  const files = tracked(r, snapshotCommit(r, { raw: true, always: true }).commit);
+  assert.ok(files.includes('gen/z.txt')); assert.ok(!files.some((f) => f.startsWith('out/')));
+});
+
+test('a path of HEAD behind a folder that became a link does not make every photo cold', (c) => {
+  const r = forcedRepo('forced5');
+  fs.mkdirSync(path.join(r, 'd')); fs.writeFileSync(path.join(r, 'd', 'f.txt'), 'f\n'); git(r, 'add', '-A'); git(r, ...ident, 'commit', '-q', '-m', 'd');
+  warm(r);
+  fs.mkdirSync(path.join(r, 'real')); fs.renameSync(path.join(r, 'd', 'f.txt'), path.join(r, 'real', 'f.txt')); fs.rmdirSync(path.join(r, 'd'));
+  try { fs.symlinkSync(path.join(r, 'real'), path.join(r, 'd'), 'dir'); } catch { c.skip('cannot create symlinks here'); return; }
+  forceCommit(r, 'gen/q.txt');
+  const index = path.join(r, g(r, 'rev-parse', '--git-path', 'orb/index-raw'));
+  snapshotCommit(r, { raw: true, always: true });
+  assert.ok(fs.existsSync(`${index}.head`)); // the warm index was kept and reconciled
+});
+
+test('with the marker naming the current HEAD and index the check is skipped, and any other marker runs it', () => {
+  const r = forcedRepo('forced6'); warm(r);
+  forceCommit(r, 'gen/m.txt');
+  const index = path.resolve(r, g(r, 'rev-parse', '--git-path', 'orb/index-raw'));
+  const raw = fs.readFileSync(index);
+  const stamp = `${g(r, 'rev-parse', 'HEAD')}:${raw.subarray(raw.length - 32).toString('hex')}`;
+  // a marker that claims the index is reconciled with the new HEAD: nothing is looked for, so the forced file stays out
+  fs.writeFileSync(`${index}.head`, stamp);
+  assert.ok(!tracked(r, snapshotCommit(r, { raw: true, always: true }).commit).includes('gen/m.txt'));
+  // the same HEAD with another index checksum is not trusted
+  fs.writeFileSync(`${index}.head`, `${stamp.split(':')[0]}:${'0'.repeat(64)}`);
+  assert.ok(tracked(r, snapshotCommit(r, { raw: true, always: true }).commit).includes('gen/m.txt'));
 });
