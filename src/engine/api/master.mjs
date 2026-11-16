@@ -75,8 +75,13 @@ export function migrateSecrets(board, master = ctx.master, { log = () => {}, emi
 
 // The guard of the dispatcher (api.mjs): a guarded call from this PC's window needs a fresh unlock token.
 // → true when the call was guarded and its token was valid (the token may be used up by now), false when it needed none.
-export function checkUnlock(method, params) {
-  if (!needsUnlock(method, params, ctx.config)) return false;
+// defer: true → returns { unlocked, settle(ok) } and a one-use token is spent by settle(true), after the action has run
+// without error (so a call refused for its parameters does not make the owner type the password again). Until then the
+// token is held as «in flight», so a second call with the same token cannot slip through while the first one runs.
+const inflight = new Set();
+export function checkUnlock(method, params, { defer = false } = {}) {
+  const none = { unlocked: false, settle: () => {} };
+  if (!needsUnlock(method, params, ctx.config)) return defer ? none : false;
   const m = ctx.master;
   if (!m?.hasPassword()) throw userError(m?.state().lost ? 'msg.master.lost' : 'msg.master.createFirst', {}, { reason: 'unlock' });
   // a token for one action (FRESH_UNLOCK) opens it once: it is used up here.
@@ -84,8 +89,15 @@ export function checkUnlock(method, params) {
   // counts even when its file is hidden or broken, so there is no state in which the password is skipped.
   const facts = RULE_TARGET_METHODS.has(method) ? { seedRule: isRuleId(params?.id) && (DEFAULT_IDS.has(params.id) || readRule(params.id)?.de_serie === true) } : {};
   const purpose = freshPurpose(method, params, { ...facts, current: ctx.config });
-  if (!m.checkToken(params?.unlock, purpose, { consume: Boolean(purpose) })) throw userError('msg.master.needUnlock', {}, { reason: 'unlock' });
-  return true;
+  const needed = () => userError('msg.master.needUnlock', {}, { reason: 'unlock' });
+  if (!defer || !purpose) {
+    if (!m.checkToken(params?.unlock, purpose, { consume: Boolean(purpose) })) throw needed();
+    return defer ? { unlocked: true, settle: () => {} } : true;
+  }
+  const token = params?.unlock;
+  if (typeof token !== 'string' || inflight.has(token) || !m.checkToken(token, purpose)) throw needed();
+  inflight.add(token);
+  return { unlocked: true, settle: (ok) => { inflight.delete(token); if (ok) { try { m.checkToken(token, purpose, { consume: true }); } catch { /* the token was already gone */ } } } };
 }
 
 // onLock(why): Orb locked (or its password changed): what the master password gave the chats goes
