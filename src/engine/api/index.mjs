@@ -392,6 +392,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
       const ref = htmlRef(a); const text = htmlPages.choiceText(ref, a.index);
       const s = sessions.must(ref.session);
       if (s.kind !== 'chat') fail(tr('msg.html.badChoice'));
+      if (chatTrees.busy.has(s.id)) fail(tr('msg.chatWt.removing'));
       if (sessions.running.has(s.id)) fail(tr('msg.sessions.stillWorking'));
       return sessions.message(s.id, text, { asked: [] });
     },

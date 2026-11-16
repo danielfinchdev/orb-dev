@@ -1,5 +1,6 @@
 // A button of orb_html_show › choices carries only its index: the engine sends the text it registered, with nothing granted
 // by its words. «deploy it» typed by the person still counts as asking for a publish; the same words on a button do not.
+import fs from 'node:fs';
 import { tempHome, until } from './helpers.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -53,4 +54,9 @@ test('a forged index, page or chat is refused', async () => {
   await assert.rejects(call('htmlPages.choose', { id: page.id, session: b.id, index: 0 })); // another chat's page
   await assert.rejects(call('htmlPages.choose', { id: 'f'.repeat(32), session: a.id, index: 0 }));
   assert.equal(sent.length, n);
+});
+
+test('a choice is refused while the chat\'s worktree is being removed', () => {
+  const src = fs.readFileSync(new URL('../src/engine/api/index.mjs', import.meta.url), 'utf8');
+  assert.match(src, /'htmlPages\.choose'[\s\S]*?chatTrees\.busy\.has\(s\.id\)/);
 });
