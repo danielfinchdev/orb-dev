@@ -154,7 +154,7 @@ test('shortcuts: a user rule moves a command and frees its old key', () => {
 });
 
 test('shortcuts: the editing editing combos cannot be taken', () => {
-  const { problems } = K.resolve(['Ctrl+C', 'Ctrl+V', 'Ctrl+X', 'Ctrl+A', 'Ctrl+Z', 'Ctrl+Y'].map((key) => ({ command: 'tabs.new', key })));
+  const { problems } = K.resolve([['tabs.new', 'Ctrl+C'], ['tabs.close', 'Ctrl+V'], ['tabs.next', 'Ctrl+X'], ['tabs.prev', 'Ctrl+A'], ['tabs.split', 'Ctrl+Z'], ['changes.toggle', 'Ctrl+Y']].map(([command, key]) => ({ command, key })));
   assert.equal(problems.length, 6); assert.ok(problems.every((p) => p.reason === 'system'));
 });
 
