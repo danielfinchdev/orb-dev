@@ -42,6 +42,7 @@ import { ContextMeter } from '@/components/conversation/context-meter.jsx';
 import { needsApproval } from '@/lib/task-approval.js';
 import { quiet } from '@/lib/quiet.js';
 import { MoreButton } from '@/components/ui/primitives.jsx';
+import { ConversationTrail, useTrailScroll } from '@/components/conversation/trail.jsx';
 
 
 // a different greeting each time the chat opens (lib/greeting.js); the last one is remembered so it does not repeat.
@@ -333,6 +334,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const answer = useStore((s) => (id == null ? null : s.answers?.[id] ?? null));
   const pending = usePending(id == null ? 'new' : `chat:${id}`);
   const scroll = useAutoScroll([rows.length, chat.busy, id, pending.length, answer?.id]);
+  const trail = useTrailScroll(scroll);
   const catalog = useCatalog();
   const brain = conv
     ? { agent: conv.agent ?? 'claude', model: conv.model ?? '', account: conv.account ?? conv.agent, reasoning: conv.reasoning ?? 'medium' }
@@ -474,7 +476,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
           </DropdownMenu>
         ) : null}
       </ChatBar>
-      <div ref={scroll.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div ref={trail.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
         <div className="lazy-lines mx-auto flex max-w-3xl flex-col gap-5 px-5 py-6" data-testid="chat-lines">
           {more ? <Button variant="ghost" size="sm" className="text-muted-foreground mx-auto" onClick={loadOlder} disabled={loading} data-testid="chat-older"><History />{t('chat.older')}</Button> : null}
           {id == null && !sending ? (
@@ -491,6 +494,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
           <TaskLines conversation={id} />
           {chat.busy || chat.waiting || sending ? <LiveAnswer id={id} name={name} /> : null}
         </div>
+      </div>
+      <ConversationTrail scrollRef={trail.node} />
       </div>
       <Composer draft={box} onSend={send} onStop={id != null ? () => act(call('chat.stop', { conversation: id })) : undefined} busy={chat.busy} disabled={sending} testid="chat-input"
         placeholder={chat.busy ? t('chat.placeholderBusy', { name }) : orchestrate ? t('chat.placeholder', { name }) : t('chat.placeholderDirect', { agent: AGENT[brain.agent] ?? brain.agent })}
