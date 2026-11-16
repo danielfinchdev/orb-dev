@@ -560,7 +560,7 @@ export class Sessions {
     if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));
     const a = adapter(s.agent);
     const attached = placeAttachments(images, s.cwd);
-    if (showUser) this.addItem(id, 'user', 'text', attached.length ? { text, images: attached.map((f) => f.path) } : text);
+    const shown = showUser ? this.addItem(id, 'user', 'text', attached.length ? { text, images: attached.map((f) => f.path) } : text) : null;
     let body = prompt ?? text;
     if (s.kind === 'chat' && debugOn(this.board, id)) body = `${tr('sys.debug.prompt')}
 
@@ -598,7 +598,7 @@ ${body}`;
     if (attached.length) run.last = tr('sys.attach.preparing');
     const prepared = attached.length ? prepareAttachments(attached, { nativeImages, log: (m) => this.log(m) }) : Promise.resolve({ images: [], text: '' });
     // the light photo of the folder for the «Cambios» panel (turns.mjs): the baseline before the first turn, one more when each ends.
-    prepared.then(async (p) => { if (direct && !run.stopped) await snapshotBeforeTurn(s.cwd, id, alive); return p; }).then((p) => (run.stopped ? { final: '', text: '', isError: true } : entry.live.send({ text: p.text ? `${body}\n\n${p.text}` : body, images: p.images }))).then((result) => {
+    prepared.then(async (p) => { if (direct && !run.stopped) await snapshotBeforeTurn(s.cwd, id, alive, { mark: shown?.id }); return p; }).then((p) => (run.stopped ? { final: '', text: '', isError: true } : entry.live.send({ text: p.text ? `${body}\n\n${p.text}` : body, images: p.images }))).then((result) => {
       clearInterval(timer);
       entry.lastUsed = Date.now();
       if (this.running.get(id) === run) this.running.delete(id);

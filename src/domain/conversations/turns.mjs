@@ -28,22 +28,40 @@ async function listRefs(repo, sid) {
   }).filter((t) => Number.isInteger(t.n) && t.n >= 0).sort((a, b) => a.n - b.n);
 }
 
-async function take(cwd, sid, { start, alive }) {
+async function take(cwd, sid, { start, alive, mark = 0 }) {
   if (!(await isGitRepoAsync(cwd))) return null;
   // the chat was archived or deleted while the turn ran: nothing is left behind
   if (alive && !alive()) { dropNow(cwd, sid); return null; }
   const repo = await repoRootAsync(cwd);
   const have = await listRefs(repo, sid);
-  if (start && have.length) return null; // the baseline is only the folder before the very first turn
+  // the baseline is only the folder before the very first turn; a message mark still points at the latest photo, which is
+  // the folder as it was right before that message (the previous turn's closing photo ran earlier in this same chain)
+  if (start && have.length) {
+    if (mark) await gitAsync(repo, {}, 'update-ref', `${refDir(sid)}/antes/${mark}`, have[have.length - 1].commit);
+    return null;
+  }
   const snap = await snapshotCommitAsync(repo, { raw: true, always: true, message: `orb: turno ${sid}` });
   if (!snap) return null;
   const n = have.length ? have[have.length - 1].n + 1 : 0;
   const r = await gitAsync(repo, {}, 'update-ref', `${refDir(sid)}/${n}`, snap.commit);
-  return r.status === 0 ? { n, commit: snap.commit } : null;
+  if (r.status !== 0) return null;
+  if (start && mark) await gitAsync(repo, {}, 'update-ref', `${refDir(sid)}/antes/${mark}`, snap.commit);
+  return { n, commit: snap.commit };
 }
 
 // Before a turn starts: the baseline, once per conversation. Never throws: a failed photo only means no panel.
-export const snapshotBeforeTurn = (cwd, sid, alive) => serial(sid, () => take(cwd, sid, { start: true, alive })).catch(() => null);
+// mark: the id of the user message this turn answers; refs/orb/turnos/<sid>/antes/<mark> keeps the folder as it was before it.
+export const snapshotBeforeTurn = (cwd, sid, alive, { mark } = {}) => serial(sid, () => take(cwd, sid, { start: true, alive, mark: Number.isInteger(mark) && mark > 0 ? mark : 0 })).catch(() => null);
+
+// The photo taken right before a user message, or null when there is none (an older chat, a turn without photo, a dropped chat).
+export async function photoBefore(cwd, sid, itemId) {
+  const id = Number(itemId);
+  if (!Number.isInteger(id) || id < 1 || !cwd || !(await isGitRepoAsync(cwd))) return null;
+  const repo = await repoRootAsync(cwd);
+  const r = await gitAsync(repo, {}, 'rev-parse', '--verify', '--quiet', `${refDir(sid)}/antes/${id}^{commit}`);
+  const commit = r.status === 0 ? r.stdout.trim() : '';
+  return /^[0-9a-f]{40,64}$/.test(commit) ? { repo, commit } : null;
+}
 // When a turn ends.
 export const snapshotAfterTurn = (cwd, sid, alive) => serial(sid, () => take(cwd, sid, { start: false, alive })).catch(() => null);
 

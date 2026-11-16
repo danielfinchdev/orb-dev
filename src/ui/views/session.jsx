@@ -46,6 +46,7 @@ import { kindOf, playableType } from '../../shared/attach-kind.mjs';
 import { canCapture, captureFrame } from '@/lib/window-capture.js';
 import { useAutoScroll, Composer } from '@/components/conversation/composer.jsx';
 import { MessageBox } from '@/components/conversation/message-box.jsx';
+import { EditButton, RewindLine } from '@/components/edit-message.jsx';
 import { BarClock, BarPause, BarHeading, COMPACT_AT, CompactButton } from '@/components/conversation/bar.jsx';
 import { ContextMeter } from '@/components/conversation/context-meter.jsx';
 import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
@@ -200,13 +201,14 @@ const Block = memo(function Block({ b, agent, who, brain, sessionId, project, ca
   if (b.type === 'item' && b.item.kind === 'image') return <div className="flex gap-3"><AgentIcon agent={agent} className="mt-1 size-5" /><GeneratedImage body={b.item.body} sessionId={sessionId} project={project} /></div>;
   if (b.type === 'files') return <div className="flex flex-wrap gap-1.5">{b.files.map((f, i) => { const I = FILE_ICON[f?.change] ?? FileEdit; return <Badge key={i} variant="info" className="font-mono font-normal"><I />{f?.path}</Badge>; })}</div>;
   if (b.type === 'item' && b.item.kind === 'handoff') return <HandoffLine body={b.item.body} />;
+  if (b.type === 'item' && b.item.kind === 'rewind') return <RewindLine sessionId={sessionId} item={b.item} />;
   const it = b.item; const body = it.body;
   if (it.role === 'user') {
     const textBody = typeof body === 'string' ? body : body?.text ?? '';
     const images = typeof body === 'object' && body?.images ? body.images : [];
     const long = textBody.length > 1200 && /^Encargo de /.test(textBody);
     return (
-      <MessageBox user name={userName || t('chat.you')} at={it.at}>
+      <MessageBox user name={userName || t('chat.you')} at={it.at} actions={long ? undefined : <EditButton sessionId={sessionId} item={it} />}>
         {typeof body === 'object' && body?.steer ? <div className="mb-1 flex items-center gap-1 text-micro opacity-80"><CornerDownRight className="size-3" />{t('session.steered')}</div> : null}
         {long ? <Collapsible><CollapsibleTrigger className="cursor-pointer text-left underline-offset-2 hover:underline">{textBody.split('\n')[0]} ({t('session.seeFullTask')})</CollapsibleTrigger><CollapsibleContent className="mt-2 text-control opacity-90">{textBody}</CollapsibleContent></Collapsible> : textBody}
         {images.length ? <div className="mt-2 flex flex-wrap gap-1.5">{images.map((p) => <AttachChip key={p} file={p} sessionId={sessionId} />)}</div> : null}
@@ -384,8 +386,9 @@ export function SessionView({ route }) {
       if (it.session_id !== route.id) return;
       setItems((prev) => { const i = prev.findIndex((p) => p.id === it.id); if (i >= 0) { const next = prev.slice(); next[i] = it; return next; } return [...prev, it]; });
     });
+    const offReset = bridge.on('session:reset', (e) => { if (e.id === route.id) call('sessions.items', { id: route.id, limit: PAGE }).then((r) => { setItems(r); setMore(r.length >= PAGE); }).catch(quiet); });
     const offQueue = bridge.on('session:queue', (q) => { if (q.id === route.id) setQueue(q.queue); });
-    return () => { alive = false; offItem(); offQueue(); };
+    return () => { alive = false; offItem(); offReset(); offQueue(); };
   }, [route.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const tb = useT(); // H4a B2: «Resultado» in the language on screen
   const blocks = useMemo(() => toBlocks(items, tb), [items, tb]);
