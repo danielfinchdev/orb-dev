@@ -109,6 +109,7 @@ export default {
   'htmlpage.note': 'Corre en un sandbox, sin acceso a Orb, archivos ni claves.',
   'msg.html.noChat': 'Esta herramienta solo funciona desde un chat.',
   'msg.html.empty': 'La página está vacía: pasa el HTML completo.',
+  'msg.html.badChoices': 'Las opciones deben ser una lista de textos cortos (máximo {n}).',
   'msg.html.tooBig': 'La página es demasiado grande (máx. {kb} KB).',
   'msg.html.gone': 'Esa página ya no existe.',
   'msg.html.badSwitch': 'El interruptor de internet debe ser verdadero o falso.',

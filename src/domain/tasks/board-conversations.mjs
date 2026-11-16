@@ -36,7 +36,7 @@ export class BoardConversations {
     return r ? conversationRow(r) : null;
   }
   conversations({ limit = 300 } = {}) {
-    return this.all('SELECT * FROM conversations WHERE bot_id IS NULL AND group_id IS NULL AND trashed_at IS NULL ORDER BY updated_at DESC, id DESC LIMIT ?', Math.min(Math.max(Number(limit) || 300, 1), 2000)).map(conversationRow);
+    return this.all('SELECT * FROM conversations WHERE bot_id IS NULL AND group_id IS NULL AND trashed_at IS NULL ORDER BY updated_at DESC, id DESC LIMIT ?', Math.min(Math.max(Number(limit) || 300, 1), 2000)).map(conversationRow).map(({ notes, ...rest }) => ({ ...rest, has_notes: Boolean(notes) })); // the notes themselves are read with chat.notes
   }
   createConversation({ title = '', project = null, agent = 'claude', account = null, model = null, reasoning = 'medium' } = {}) {
     if (project && !this.project(project)) throw new Error(tr('sys.board.unknownProject', { name: project }));
@@ -47,7 +47,7 @@ export class BoardConversations {
     return this.conversation(Number(lastInsertRowid));
   }
   updateConversation(id, fields) {
-    const allowed = ['title', 'titled', 'project', 'agent', 'account', 'model', 'reasoning', 'session_id', 'turns', 'context', 'status', 'done_at', 'updated_at'];
+    const allowed = ['title', 'titled', 'notes', 'project', 'agent', 'account', 'model', 'reasoning', 'session_id', 'turns', 'context', 'status', 'done_at', 'updated_at'];
     const keys = Object.keys(fields).filter((k) => allowed.includes(k));
     if (!keys.length) return this.conversation(id);
     const value = (k) => (k === 'context' ? (fields[k] == null ? null : JSON.stringify(fields[k])) : k === 'titled' ? Number(Boolean(fields[k])) : k === 'title' ? oneLine(String(fields[k]), 80) : fields[k] ?? null);
@@ -113,6 +113,20 @@ export class BoardConversations {
     const where = conversation == null ? 'conversation_id IS NULL' : 'conversation_id = ?';
     return this.all(`SELECT * FROM (SELECT * FROM chat WHERE role != 'notice' AND ${where}${before ? ' AND id < ?' : ''} ORDER BY id DESC LIMIT ?) ORDER BY id`, ...(conversation == null ? [] : [Number(conversation)]), ...(before ? [Number(before)] : []), limit)
       .map((r) => { let meta = null; try { meta = r.meta ? JSON.parse(r.meta) : null; } catch { /* ignore */ } return { ...r, meta }; });
+  }
+  // The person's notes on a conversation ('' when none).
+  conversationNotes(id) { return this.one('SELECT notes FROM conversations WHERE id = ?', Number(id))?.notes ?? ''; }
+  // Pins or unpins a line of the conversation (only the person's and the assistant's own messages). → the line, or null when it
+  // is not one of this conversation's.
+  pinChat(conversation, line, pinned = true) {
+    const r = this.chatRow(line);
+    if (!r || Number(r.conversation_id) !== Number(conversation) || !['usuario', 'orb'].includes(r.role)) return null;
+    if (Boolean(r.pinned_at) !== Boolean(pinned)) { this.run('UPDATE chat SET pinned_at = ? WHERE id = ?', pinned ? now() : null, r.id); this.changed('chat'); }
+    return this.chatRow(line);
+  }
+  // The pinned lines of a conversation, most recently pinned first (the first 50).
+  pinnedChat(conversation) {
+    return this.all("SELECT id, role, body, at, pinned_at FROM chat WHERE conversation_id = ? AND pinned_at IS NOT NULL AND role IN ('usuario', 'orb') ORDER BY pinned_at DESC, id DESC LIMIT 50", Number(conversation));
   }
   // One chat line by its id (any conversation), with its extra data.
   chatRow(id) {

@@ -30,7 +30,7 @@ test('orb_html_show is listed for a signed chat, with title and html both requir
   const tool = (await client(signed('claude', { session: 'chat-directo' })).tools()).find((x) => x.name === 'orb_html_show');
   assert.ok(tool, 'a signed chat gets it');
   assert.deepEqual([...tool.inputSchema.required].sort(), ['html', 'title']);
-  assert.deepEqual(Object.keys(tool.inputSchema.properties).sort(), ['html', 'title']);
+  assert.deepEqual(Object.keys(tool.inputSchema.properties).sort(), ['choices', 'html', 'title']);
   const conv = board.createConversation({ title: 'Coordinador', project: 'web' }).id;
   const names = async (server) => (await client(server).tools()).map((x) => x.name);
   assert.ok(!(await names(signed('claude', { orchestrator: true, browser: false, session: `asistente-${conv}`, conversation: conv }))).includes('orb_html_show'), 'the coordinator');

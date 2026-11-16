@@ -137,7 +137,7 @@ c${String.fromCharCode(0x202e)}${'z'.repeat(300)}`;
     for (const [name, p] of events.filter(([n]) => n !== 'html:server')) { assert.ok(['html:page', 'html:update', 'html:closed'].includes(name)); assert.equal(JSON.stringify(p).includes('<script'), false); assert.equal('html' in p, false); }
     assert.ok(items.some((a) => a[0] === 's1' && a[1] === 'system' && a[2] === 'status'));
     assert.ok(MAX_PAGES >= PER_SESSION);
-    assert.ok(Object.keys(pages.list()[0]).every((k) => ['id', 'session', 'title', 'url', 'internet'].includes(k)));
+    assert.ok(Object.keys(pages.list()[0]).every((k) => ['id', 'session', 'title', 'url', 'internet', 'choices'].includes(k)));
   } finally { pages.wipe(); }
 });
 
@@ -321,4 +321,33 @@ test('htmlPages.get from a phone is refused whatever the chat access', async () 
   const board = { one: (_sql, id) => ({ permission: id === 'tot' ? 'total' : 'editar' }) };
   assert.ok(guardCall(board, 'htmlPages.get', { id: 'a'.repeat(32), session: 'tot' }));
   assert.ok(guardCall(board, 'htmlPages.get', { id: 'a'.repeat(32), session: 'ok' }));
+});
+
+// Step 10: answers the agent offers as buttons. They are Orb's own buttons, never part of the page.
+test('choices: short plain texts, at most six, cleaned and without repeats; the page itself never carries them', async () => {
+  const { cleanChoices, MAX_CHOICES } = await import('../src/engine/host/html-pages.mjs');
+  assert.deepEqual(cleanChoices(undefined), []);
+  assert.deepEqual(cleanChoices(['  Sí ', 'Sí', 'No‮\u0000x', '', 'a'.repeat(300)].slice(0, 4)), ['Sí', 'No x']);
+  assert.equal(cleanChoices(['a'.repeat(300)])[0].length, 120);
+  assert.throws(() => cleanChoices('Sí'), /texts|textos/);
+  assert.throws(() => cleanChoices([1]), /texts|textos/);
+  assert.throws(() => cleanChoices(['/clear']), /texts|textos/, 'an Orb command is not an answer');
+  assert.throws(() => cleanChoices(Array.from({ length: MAX_CHOICES + 1 }, (_, i) => `op${i}`)), /texts|textos/);
+  const { pages } = make();
+  try {
+    const v = await pages.show({ id: 's1' }, { title: 'a', html: HTML, choices: ['Opción A', 'Opción B'] });
+    assert.deepEqual(v.choices, ['Opción A', 'Opción B']);
+    assert.deepEqual(pages.list()[0].choices, ['Opción A', 'Opción B']);
+    assert.ok(!pages.get({ id: v.id, session: 's1' }).html.includes('Opción A'), 'the served page is the agent\'s html only');
+    const none = await pages.show({ id: 's1' }, { title: 'b', html: HTML });
+    assert.deepEqual(none.choices, []);
+  } finally { pages.wipe?.(); }
+});
+
+test('the window draws the choices outside the frame and sends them through sessions.send; the frame stays allow-scripts only', () => {
+  const ui = read('src/ui/components/html-page.jsx');
+  assert.match(ui, /sandbox="allow-scripts"/);
+  assert.ok(!/allow-same-origin|allow-top-navigation|allow-popups|postMessage|addEventListener\('message'/.test(ui), 'no channel from the frame to the window');
+  assert.match(ui, /call\('sessions\.send'/);
+  assert.match(read('src/mcp/server.mjs'), /choices: \{ type: 'array', maxItems: 6/);
 });

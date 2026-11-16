@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { useOrbItems, deleteChat } from './inbox.jsx';
 import { TaskStatus } from '@/components/task-state.jsx';
+import { ChatNotes, PinnedList } from '@/components/conversation/chat-notes.jsx';
 
 const OPEN = ['queued', 'running', 'awaiting_approval', 'limited'];
 // On the phone the info covers the screen: going somewhere from it closes it.
@@ -103,12 +104,14 @@ function ChatInfo({ conv }) {
           <ProjectPicker conversation={conv.id} />
           {conv.project ? <Button size="icon-xs" variant="ghost" className="-mr-1.5" onClick={() => openOrbInfo({ type: 'project', name: conv.project })} aria-label={t('orbchats.projectInfo')} data-testid="info-project"><ChevronRight /></Button> : null}
         </Row>
-        <Row icon={Sparkles} label={t('orbchats.model')} value=""><BrainPicker catalog={catalog} value={brain} onChange={(b) => settings({ agent: b.agent, model: b.model, account: b.account })} className="max-w-48 min-w-0 shrink" /></Row>
+        <Row icon={Sparkles} label={t('orbchats.model')} value=""><BrainPicker catalog={catalog} value={brain} onChange={(b) => settings({ agent: b.agent, model: b.model, account: b.account, ...(b.reasoning ? { reasoning: b.reasoning } : {}) })} className="max-w-48 min-w-0 shrink" /></Row>
         <Row icon={BrainIcon} label={t('orbchats.reasoning')} value=""><ReasoningMenu catalog={catalog} value={brain} onChange={(reasoning) => settings({ reasoning })} /></Row>
         <BubbleTip title={t('orbchats.orchestrator')} text={t('orbchats.orchestratorTip', { name })} side="left">
           <div><Row icon={OrchestratorIcon} label={t('orbchats.orchestrator')} value={t('orbchats.orchestratorOn')} testid="info-orchestrator" /></div>
         </BubbleTip>
       </List>
+      <PinnedList conversation={conv.id} assistant={name} you={you} />
+      <ChatNotes conversation={conv.id} />
       <div>
         <div className="text-muted-foreground px-1 pb-1.5 text-caption font-medium tracking-wide uppercase">{t('orbchats.tasks')}</div>
         <List testid="info-tasks">

@@ -252,7 +252,7 @@ pub fn check_host(method: &str, params: &Value, is_dir: impl Fn(&Path) -> bool) 
     "host.openTerminal" => Ok(HostRequest::OpenTerminal { dir: folder("dir", "carpeta no válida")?, choice: choice(params) }),
     "host.openEditor" => {
       let which = text("which");
-      if !matches!(which.as_str(), "cursor" | "vscode") {
+      if !matches!(which.as_str(), "cursor" | "vscode" | "windsurf" | "zed" | "jetbrains") {
         return Err("editor no válido".into());
       }
       Ok(HostRequest::OpenEditor { which, dir: folder("dir", "carpeta no válida")? })

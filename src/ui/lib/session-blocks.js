@@ -4,6 +4,7 @@
 // (the items whose `parent` is its call) and its state: running, done or failed; Codex tells its threads' state in the
 // results of its later collab calls (states).
 const DONE = { completed: 'done', shutdown: 'done', errored: 'failed', notFound: 'failed', interrupted: 'failed' };
+import { groupTools } from './tool-summary.js';
 export function toBlocks(items, t) {
   const blocks = []; const tools = new Map(); const agents = new Map(); const byThread = new Map();
   const place = (b, parent) => { const a = parent != null ? agents.get(parent) : null; if (a) a.steps.push(b); else blocks.push(b); };
@@ -25,7 +26,8 @@ export function toBlocks(items, t) {
     if (it.kind === 'file') { const last = blocks.at(-1); if (last?.type === 'files') last.files.push(it.body); else blocks.push({ type: 'files', key: it.id, files: [it.body] }); continue; }
     blocks.push({ type: 'item', key: it.id, item: it });
   }
-  return blocks;
+  // runs of finished tool calls fold into one line («Leyó 3 archivos, ejecutó 2 comandos»)
+  return groupTools(blocks);
 }
 
 // running | done | failed. Claude's: its call's result. Codex's: its threads' latest state when told, else its call's.

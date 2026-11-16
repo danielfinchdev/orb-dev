@@ -6,6 +6,10 @@ const fold = (s) => String(s ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLo
 export const PALETTE_EVENT = 'orb:palette';
 export const openPalette = () => window.dispatchEvent(new Event(PALETTE_EVENT));
 
+// Ctrl+P / Ctrl+Shift+F: the same window, in the mode that searches the project's files ('files') or its text ('text').
+export const FINDER_EVENT = 'orb:finder';
+export const openFinder = (mode) => window.dispatchEvent(new CustomEvent(FINDER_EVENT, { detail: mode === 'text' ? 'text' : 'files' }));
+
 export const isPaletteKey = (e) => (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === 'KeyK';
 
 // What a query finds, in groups: places and actions, chats (by title, project or messages), messages of other chats,

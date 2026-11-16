@@ -64,8 +64,33 @@ pub fn find_editor(f: &Finder, which: &str) -> Option<PathBuf> {
       Some(programs.join("Microsoft VS Code").join("Code.exe")),
       Some(programs86.join("Microsoft VS Code").join("Code.exe")),
     ]),
+    "windsurf" => f.first(vec![local.map(|l| l.join("Programs").join("Windsurf").join("Windsurf.exe")), Some(programs.join("Windsurf").join("Windsurf.exe"))]),
+    "zed" => f.first(vec![
+      local.clone().map(|l| l.join("Programs").join("Zed").join("Zed.exe")),
+      local.map(|l| l.join("Zed").join("Zed.exe")),
+      Some(programs.join("Zed").join("Zed.exe")),
+    ]),
+    "jetbrains" => jetbrains(&programs),
     _ => None,
   }
+}
+
+/// JetBrains has one program per IDE (`<Program Files>JetBrains<IDE version>in<ide>64.exe`): the first of the usual
+/// ones, in the newest folder. Looks at the real disk (the folder names are not known beforehand).
+fn jetbrains(programs: &Path) -> Option<PathBuf> {
+  let root = programs.join("JetBrains");
+  let mut dirs: Vec<PathBuf> = std::fs::read_dir(root).ok()?.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.is_dir()).collect();
+  dirs.sort();
+  dirs.reverse();
+  for dir in dirs {
+    for name in ["idea", "webstorm", "pycharm", "phpstorm", "goland", "rustrover", "clion", "rider", "rubymine", "datagrip"] {
+      let exe = dir.join("bin").join(format!("{name}64.exe"));
+      if exe.is_file() {
+        return Some(exe);
+      }
+    }
+  }
+  None
 }
 
 /// A program and its arguments as a list (never a shell line), started in `cwd`.
@@ -180,6 +205,7 @@ mod tests {
     assert_eq!(find_editor(&f, "vscode"), Some(PathBuf::from("C:\\Users\\a\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe")));
     assert_eq!(find_editor(&f, "cursor"), None);
     assert_eq!(find_editor(&f, "notepad"), None);
+    assert_eq!(find_editor(&f, "zed"), None);
   }
 
   #[test]

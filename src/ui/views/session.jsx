@@ -11,8 +11,10 @@ import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { renameChat } from '@/views/orb/inbox.jsx';
 import { useDraft } from '@/lib/draft.js';
+import { useAddToChat, appendToBox } from '@/lib/add-to-chat.js';
 import { BackToList } from '@/components/chat-bar.jsx';
 import { ContextSlot } from '@/components/context-slot.jsx';
+import { ColdNotice } from '@/components/conversation/cold-notice.jsx';
 import { ChatModes } from '@/components/chat-modes.jsx';
 import { TaskChanges } from '@/components/task-changes.jsx';
 import { TurnChanges } from '@/components/turn-changes.jsx';
@@ -32,13 +34,14 @@ import { GeneratedImage, openImage } from '@/components/image-viewer.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Textarea, Empty } from '@/components/ui/basic.jsx';
 import { Select, Collapsible, CollapsibleTrigger, CollapsibleContent, Tip, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
-import { useStore, call, act, go, bridge, refresh, getState, fullPc, openGames, addPending, dropPending, pendingShown, usePending } from '@/lib/store.js';
+import { useStore, call, act, go, newChat, bridge, refresh, getState, fullPc, openGames, addPending, dropPending, pendingShown, usePending } from '@/lib/store.js';
 import { useShortcut } from '@/lib/keys.js';
 import { AGENT, PERMISSION, REASONING, STATUS, DECISION, CAN_STEER as AGENT_CAN_STEER, CAN_COMPACT, options } from '@/lib/labels.js';
 import { baseName, cn } from '@/lib/utils.js';
 import { useT, t, useLocale, currentLocale } from '@/lib/i18n.js';
 import { sameBlock } from '@/lib/memo.js';
 import { toBlocks, subagentState } from '@/lib/session-blocks.js';
+import { summaryText } from '@/lib/tool-summary.js';
 import { kindOf, playableType } from '../../shared/attach-kind.mjs';
 import { canCapture, captureFrame } from '@/lib/window-capture.js';
 import { useAutoScroll, Composer } from '@/components/conversation/composer.jsx';
@@ -90,6 +93,23 @@ function ToolBlock({ b }) {
         {raw && readableCommand(raw) !== input ? <pre className="text-muted-foreground mx-3 mb-1.5 max-h-40 overflow-auto px-1 font-mono text-micro whitespace-pre-wrap break-all">{readableCommand(raw)}</pre> : null}
         <pre className="bg-muted mx-3 mb-3 max-h-80 overflow-auto rounded-lg px-3 py-2 font-mono text-xs whitespace-pre-wrap break-words">{b.result?.output || (b.result ? t('session.noOutput') : t('session.working'))}</pre>
       </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+// A run of tool calls as one folded line («Leyó 3 archivos, ejecutó 2 comandos»); unfolded, each call as always.
+function ToolGroup({ b }) {
+  const t = useT();
+  const text = summaryText(b.steps.map((x) => x.call?.name), t);
+  const failed = b.steps.filter((x) => x.result?.error).length;
+  return (
+    <Collapsible className="text-control" data-testid="tool-group">
+      <CollapsibleTrigger className="group text-muted-foreground hover:text-foreground flex w-full cursor-pointer items-center gap-2 px-1 py-1 text-left" aria-label={t('tools.sum.toggle', { summary: text })}>
+        <ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" />
+        <span className="min-w-0 truncate">{text}</span>
+        {failed ? <span className="text-destructive flex shrink-0 items-center gap-1 text-xs"><CircleAlert className="size-3.5" />{t('tools.sum.failed', { n: failed })}</span> : null}
+      </CollapsibleTrigger>
+      <CollapsibleContent><div className="mt-1 grid gap-2">{b.steps.map((x) => <ToolBlock key={x.key} b={x} />)}</div></CollapsibleContent>
     </Collapsible>
   );
 }
@@ -173,6 +193,7 @@ const Block = memo(function Block({ b, agent, who, brain, sessionId, project, ca
   const locale = useLocale();
   const usageLine = useStore((st) => st.app?.config?.ui?.usageLine !== false);
   if (b.type === 'tool') return <ToolBlock b={b} />;
+  if (b.type === 'toolgroup') return <ToolGroup b={b} />;
   if (b.type === 'subagent') return <SubagentBlock b={b} />;
   if (b.type === 'item' && b.item.kind === 'approval') return <ApprovalCard sessionId={sessionId} body={b.item.body} />;
   if (b.type === 'item' && b.item.kind === 'opti_action') return <OptiOldCard body={b.item.body} />;
@@ -321,6 +342,8 @@ export function SessionView({ route }) {
   const [more, setMore] = useState(false);
   const [queue, setQueue] = useState([]);
   const draft = useDraft();
+  // text sent here by «Añadir al chat» (a selected text)
+  useAddToChat((text) => draft.set((prev) => appendToBox(prev, text)));
   const [images, setImages] = useState([]);
   const PAGE = 200;
   // the user's terminal under the chat (this PC only), and a command pasted into it from the chat.
@@ -406,12 +429,12 @@ export function SessionView({ route }) {
   // While the agent works, Enter corrects it on the fly (it reads the message at its next step) and Ctrl+Enter queues
   // the message for after the turn. Agents that cannot be corrected on the fly always queue.
   const send = async ({ alt = false } = {}) => {
-    const msg = draft.get().trim(); if (!msg && !images.length) return;
+    const msg = draft.message().trim(); if (!msg && !images.length) return;
     const mode = running ? (alt ? 'queue' : 'auto') : 'auto';
     const said = msg || t('session.lookAtFiles'); const sentImages = images;
     // the box empties at once and, when the agent is free (the message starts a turn), the message shows at once;
     // while it works the message may go to the queue instead, which shows it when the engine says so.
-    draft.set(''); setImages([]);
+    draft.set(''); draft.clearBlocks(); setImages([]);
     const mine = running ? null : addPending(`session:${s.id}`, said, items.at(-1)?.id ?? 0);
     const taken = takeComments(s.id);
     const r = await act(call('sessions.send', { id: s.id, text: said, images: sentImages, mode, comments: taken.length ? taken : undefined }));
@@ -529,7 +552,7 @@ export function SessionView({ route }) {
       {fullPc() ? <HtmlPages sessionId={s.id} /> : null}
       {terminal && fullPc() ? <TerminalPanel dir={s.cwd} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
       {pendingComments.length ? <div className="text-muted-foreground mx-auto w-full max-w-3xl shrink-0 px-5 pb-1.5 text-xs" data-testid="pending-comments">{t('turns.pending', { n: pendingComments.length })}</div> : null}
-      <Composer draft={draft} onSend={send} attached={images.length > 0} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
+      <Composer draft={draft} onSend={send} attached={images.length > 0} notice={s.kind === 'chat' && CAN_COMPACT[s.agent] === true ? <ColdNotice id={`s${s.id}`} agent={s.agent} used={s.context?.used} lastAt={s.updated_at} busy={running} compacting={compacting} onCompact={compact} onFresh={() => newChat(s.project ?? undefined)} /> : null} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
         placeholder={running ? (AGENT_CAN_STEER[s.agent] ? t('session.phSteer', { agent: AGENT[s.agent] }) : t('session.phWait', { agent: AGENT[s.agent] })) : s.kind === 'task' ? t('session.phTask') : t('session.ph', { agent: AGENT[s.agent] })}
         onPaste={(e) => { fromTransfer(e.clipboardData).then((f) => { if (f.length) addImages(f); }); }}
         onDrop={(e) => { fromTransfer(e.dataTransfer).then(addImages); }}

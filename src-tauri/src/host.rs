@@ -52,7 +52,13 @@ pub async fn handle(app: &AppHandle, method: &str, params: &Value) -> Result<Val
       json!(name)
     }
     HostRequest::OpenEditor { which, dir } => {
-      let name = if which == "vscode" { "VS Code" } else { "Cursor" };
+      let name = match which.as_str() {
+        "vscode" => "VS Code",
+        "windsurf" => "Windsurf",
+        "zed" => "Zed",
+        "jetbrains" => "JetBrains",
+        _ => "Cursor",
+      };
       let exe = tools::find_editor(&finder(), &which).ok_or_else(|| t("sys.terminal.notInstalled", &[("name", name.into())]))?;
       let dir_text = dir.to_string_lossy().to_string();
       spawn_detached(&Program { cmd: exe, args: vec![dir_text], cwd: dir }).map_err(|e| t("sys.terminal.openFailed", &[("name", name.into()), ("error", e)]))?;

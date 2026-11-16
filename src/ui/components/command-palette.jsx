@@ -2,12 +2,14 @@
 // to the sidebar's search (the same search, lib/search.js) and never takes the key from what already uses it: a project
 // action with Ctrl+K, the whiteboard's own Ctrl+K or an open dialog keep it.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, MessageSquarePlus, FolderPlus, ClipboardCheck, FolderGit2, CalendarSync, Presentation, NotebookPen, Orbit, LifeBuoy, SquareTerminal, Settings, MessageSquare, FileText, CornerDownLeft, Gauge } from 'lucide-react';
+import { Search, FileSearch, MessageSquarePlus, FolderPlus, ClipboardCheck, FolderGit2, CalendarSync, Presentation, NotebookPen, Orbit, LifeBuoy, SquareTerminal, Settings, MessageSquare, FileText, CornerDownLeft, Gauge } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/overlay.jsx';
 import { Kbd } from '@/components/ui/basic.jsx';
 import { useOrbItems, openOrbItem, newProjectChat } from '@/views/orb/inbox.jsx';
 import { useSearch } from '@/lib/search.js';
-import { isPaletteKey, paletteGroups, PALETTE_EVENT } from '@/lib/palette.js';
+import { isPaletteKey, paletteGroups, PALETTE_EVENT, FINDER_EVENT, openFinder } from '@/lib/palette.js';
+import { ProjectFinder } from '@/components/project-finder.jsx';
+import { useShortcut } from '@/lib/keys.js';
 import { useStore, go, newChat, openSettings, openOrbInfo, fullPc } from '@/lib/store.js';
 import { STATUS } from '@/lib/labels.js';
 import { useT } from '@/lib/i18n.js';
@@ -27,6 +29,10 @@ function commands(t, config) {
     { key: 'usage', icon: Gauge, label: t('usage.title'), run: () => go({ view: 'usage' }) },
     { key: 'tutorials', icon: LifeBuoy, label: t('nav.tutorials'), run: () => go({ view: 'tutorials' }) },
     ...(config?.expert?.enabled && fullPc() ? [{ key: 'expert', icon: SquareTerminal, label: t('nav.expert'), run: () => go({ view: 'expert' }) }] : []),
+    ...(fullPc() ? [
+      { key: 'find-file', icon: FileSearch, label: t('finder.filesTitle'), run: () => openFinder('files') },
+      { key: 'find-text', icon: Search, label: t('finder.textTitle'), run: () => openFinder('text') }
+    ] : []),
     { key: 'settings', icon: Settings, label: t('nav.settings'), run: () => openSettings() }
   ];
 }
@@ -97,15 +103,21 @@ function Palette({ onClose }) {
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState('all'); // 'all' (Ctrl+K) | 'files' (Ctrl+P) | 'text' (Ctrl+Shift+F)
+  const find = (m) => { if (!fullPc() || document.querySelector('[role=dialog]:not([data-testid=project-finder]):not([data-testid=command-palette])')) return; setMode(m); setOpen(true); };
+  // the browser would print the page with Ctrl+P: the key is taken before it
+  useShortcut('search.files', (e) => { e.preventDefault(); find('files'); }, { capture: true });
+  useShortcut('search.text', (e) => { e.preventDefault(); find('text'); }, { capture: true });
   useEffect(() => {
     const onKey = (e) => {
       if (!isPaletteKey(e) || e.repeat) return;
       // After every other handler of this key: a project action, the whiteboard or a dialog that took it keeps it.
-      setTimeout(() => { if (!e.defaultPrevented && !document.querySelector('[role=dialog]')) setOpen(true); }, 0);
+      setTimeout(() => { if (!e.defaultPrevented && !document.querySelector('[role=dialog]')) { setMode('all'); setOpen(true); } }, 0);
     };
-    const onOpen = () => setOpen(true);
-    window.addEventListener('keydown', onKey); window.addEventListener(PALETTE_EVENT, onOpen);
-    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener(PALETTE_EVENT, onOpen); };
+    const onOpen = () => { setMode('all'); setOpen(true); };
+    const onFind = (e) => { setMode(e.detail === 'text' ? 'text' : 'files'); setOpen(true); };
+    window.addEventListener('keydown', onKey); window.addEventListener(PALETTE_EVENT, onOpen); window.addEventListener(FINDER_EVENT, onFind);
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener(PALETTE_EVENT, onOpen); window.removeEventListener(FINDER_EVENT, onFind); };
   }, []);
-  return <Dialog open={open} onOpenChange={setOpen}>{open ? <Palette onClose={() => setOpen(false)} /> : null}</Dialog>;
+  return <Dialog open={open} onOpenChange={setOpen}>{open ? (mode === 'all' ? <Palette onClose={() => setOpen(false)} /> : <ProjectFinder mode={mode} onClose={() => setOpen(false)} />) : null}</Dialog>;
 }

@@ -14,19 +14,43 @@ function inPath(names, env) {
   return null;
 }
 
+// The editors Orb can open a project in (the File Explorer is always there): id → the name shown to the user.
+export const EDITORS = Object.freeze({ cursor: 'Cursor', vscode: 'VS Code', windsurf: 'Windsurf', zed: 'Zed', jetbrains: 'JetBrains' });
+export const EDITOR_IDS = Object.freeze(Object.keys(EDITORS));
+
+// JetBrains ships one program per IDE: the first installed one in this order opens the folder.
+const JETBRAINS_BIN = ['idea', 'webstorm', 'pycharm', 'phpstorm', 'goland', 'rustrover', 'clion', 'rider', 'rubymine', 'datagrip'];
+const JETBRAINS_APPS = ['IntelliJ IDEA.app', 'IntelliJ IDEA CE.app', 'WebStorm.app', 'PyCharm.app', 'PyCharm CE.app', 'PhpStorm.app', 'GoLand.app', 'RustRover.app', 'CLion.app', 'Rider.app'];
+const subdirs = (dir) => { try { return fs.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name); } catch { return []; } };
+// Windows: <root>\<IDE version>\bin\<ide>64.exe (the newest folder first).
+function jetbrainsWindows(roots) {
+  for (const root of roots) {
+    for (const dir of subdirs(root).sort().reverse()) {
+      for (const name of JETBRAINS_BIN) { const file = path.join(root, dir, 'bin', name + '64.exe'); if (exists(file)) return file; }
+    }
+  }
+  return null;
+}
+
 // Where each editor lives on this machine (null when it is not installed).
 export function findEditors(platform = process.platform, env = process.env) {
   if (platform === 'win32') {
     const local = env.LOCALAPPDATA ?? ''; const programs = env.ProgramFiles ?? 'C:\\Program Files'; const programs86 = env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)';
     return {
       cursor: [path.join(local, 'Programs', 'cursor', 'Cursor.exe'), path.join(programs, 'Cursor', 'Cursor.exe')].find(exists) ?? null,
-      vscode: [path.join(local, 'Programs', 'Microsoft VS Code', 'Code.exe'), path.join(programs, 'Microsoft VS Code', 'Code.exe'), path.join(programs86, 'Microsoft VS Code', 'Code.exe')].find(exists) ?? null
+      vscode: [path.join(local, 'Programs', 'Microsoft VS Code', 'Code.exe'), path.join(programs, 'Microsoft VS Code', 'Code.exe'), path.join(programs86, 'Microsoft VS Code', 'Code.exe')].find(exists) ?? null,
+      windsurf: [path.join(local, 'Programs', 'Windsurf', 'Windsurf.exe'), path.join(programs, 'Windsurf', 'Windsurf.exe')].find(exists) ?? null,
+      zed: [path.join(local, 'Programs', 'Zed', 'Zed.exe'), path.join(local, 'Zed', 'Zed.exe'), path.join(programs, 'Zed', 'Zed.exe')].find(exists) ?? null,
+      jetbrains: jetbrainsWindows([path.join(programs, 'JetBrains'), path.join(local, 'Programs')])
     };
   }
-  if (platform === 'darwin') return { cursor: exists('/Applications/Cursor.app') ? '/Applications/Cursor.app' : null, vscode: exists('/Applications/Visual Studio Code.app') ? '/Applications/Visual Studio Code.app' : null };
+  if (platform === 'darwin') {
+    const app = (name) => { const file = '/Applications/' + name + '.app'; return exists(file) ? file : null; };
+    return { cursor: app('Cursor'), vscode: app('Visual Studio Code'), windsurf: app('Windsurf'), zed: app('Zed'), jetbrains: JETBRAINS_APPS.map((n) => '/Applications/' + n).find(exists) ?? null };
+  }
   // Linux: the PATH, and the usual places that an app started from the desktop menu may not have in it (snap, ~/.local).
   const extra = { ...env, PATH: [env.PATH ?? '', '/usr/bin', '/usr/local/bin', '/snap/bin', '/var/lib/flatpak/exports/bin', env.HOME ? path.join(env.HOME, '.local', 'bin') : ''].filter(Boolean).join(path.delimiter) };
-  return { cursor: inPath(['cursor'], extra), vscode: inPath(['code', 'com.visualstudio.code'], extra) };
+  return { cursor: inPath(['cursor'], extra), vscode: inPath(['code', 'com.visualstudio.code'], extra), windsurf: inPath(['windsurf'], extra), zed: inPath(['zed', 'zeditor'], extra), jetbrains: inPath(JETBRAINS_BIN, extra) };
 }
 
 const folderOf = (dir, language) => {
@@ -38,8 +62,9 @@ const folderOf = (dir, language) => {
 // spawn: how a detached program starts (terminal.mjs › spawnDetached).
 export async function openInEditor(which, dir, { language = 'es', spawn = spawnDetached } = {}) {
   folderOf(dir, language);
+  if (!EDITOR_IDS.includes(which)) throw new Error(translate(language, 'sys.main.badPath'));
   const exe = findEditors()[which];
-  if (!exe) throw new Error(translate(language, 'sys.terminal.notInstalled', { name: which === 'vscode' ? 'VS Code' : 'Cursor' }));
+  if (!exe) throw new Error(translate(language, 'sys.terminal.notInstalled', { name: EDITORS[which] ?? which }));
   if (process.platform === 'darwin') return spawn({ cmd: 'open', args: ['-a', exe, dir], cwd: dir });
   return spawn({ cmd: exe, args: [dir], cwd: dir });
 }

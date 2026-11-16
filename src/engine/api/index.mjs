@@ -61,6 +61,7 @@ export { fail, str, int, oneOf } from './common.mjs';
 // A failed load is not kept (a file locked for a moment): the next call tries again.
 const inst = lazy(() => import('../host/installer.mjs'));
 const exp = lazy(() => import('../host/expert.mjs'));
+const finder = lazy(() => import('../host/project-search.mjs'));
 const boards = lazy(() => import('../whiteboard.mjs'));
 const prRef = ({ id, session, number, headRefOid }) => ({
   id: int(id, 'petición'), session: str(session, 'conversación', 200), number: int(number, 'pull request'),
@@ -338,6 +339,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     // Expert mode (PC only, read-only): the project's files, git and the machine's load.
     'expert.tree': async ({ project: name, dir }) => (await exp()).tree(project(name).path, str(dir, 'carpeta', 1000, { optional: true })),
     'expert.read': async ({ project: name, path: file }) => (await exp()).readFile(project(name).path, str(file, 'archivo', 1000)),
+    // The palette's Ctrl+P and Ctrl+Shift+F (PC only): a file or a text of the project (rg when this PC has it).
+    'projects.findFiles': async ({ project: name, q }) => (await finder()).findFiles(project(name).path, str(q, 'búsqueda', 200, { optional: true })),
+    'projects.searchText': async ({ project: name, q }) => (await finder()).searchText(project(name).path, str(q, 'búsqueda', 200, { optional: true })),
     'expert.status': async ({ project: name }) => (await exp()).gitStatus(project(name).path),
     'expert.diff': async ({ project: name, path: file }) => (await exp()).gitDiff(project(name).path, str(file, 'archivo', 1000, { optional: true })),
     'expert.log': async ({ project: name, limit }) => (await exp()).gitLog(project(name).path, limit),
