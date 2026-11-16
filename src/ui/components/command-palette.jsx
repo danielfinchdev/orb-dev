@@ -2,7 +2,7 @@
 // to the sidebar's search (the same search, lib/search.js) and never takes the key from what already uses it: a project
 // action with Ctrl+K, the whiteboard's own Ctrl+K or an open dialog keep it.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, MessageSquarePlus, FolderPlus, ClipboardCheck, FolderGit2, CalendarSync, Presentation, NotebookPen, Orbit, LifeBuoy, SquareTerminal, Settings, MessageSquare, FileText, CornerDownLeft, Gauge } from 'lucide-react';
+import { History, Search, MessageSquarePlus, FolderPlus, ClipboardCheck, FolderGit2, CalendarSync, Presentation, NotebookPen, Orbit, LifeBuoy, SquareTerminal, Settings, MessageSquare, FileText, CornerDownLeft, Gauge } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/overlay.jsx';
 import { Kbd } from '@/components/ui/basic.jsx';
 import { useOrbItems, openOrbItem, newProjectChat } from '@/views/orb/inbox.jsx';
@@ -25,6 +25,7 @@ function commands(t, config) {
     { key: 'logs', icon: NotebookPen, label: t('nav.logbooks'), run: () => go({ view: 'logs' }) },
     { key: 'agents', icon: Orbit, label: t('nav.agents'), run: () => go({ view: 'agents' }) },
     { key: 'usage', icon: Gauge, label: t('usage.title'), run: () => go({ view: 'usage' }) },
+    { key: 'history', icon: History, label: t('history.title'), run: () => go({ view: 'history' }) },
     { key: 'tutorials', icon: LifeBuoy, label: t('nav.tutorials'), run: () => go({ view: 'tutorials' }) },
     ...(config?.expert?.enabled && fullPc() ? [{ key: 'expert', icon: SquareTerminal, label: t('nav.expert'), run: () => go({ view: 'expert' }) }] : []),
     { key: 'settings', icon: Settings, label: t('nav.settings'), run: () => openSettings() }

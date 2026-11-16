@@ -95,6 +95,8 @@ export const METHODS = Object.freeze({
   // the user's terminal inside Orb (src/engine/host/user-terminal.mjs)
   'terminal.list': 'pc', 'terminal.open': 'pc', 'terminal.write': 'pc', 'terminal.close': 'pc',
   // Ajustes › Skills y MCP (src/engine/api/extensions.mjs): what agents run comes in and out of core only here
+  // the chats and usage that Claude Code and Codex keep on this PC (src/engine/api/history.mjs, read-only)
+  'history.list': 'pc', 'history.read': 'pc', 'history.usage': 'pc',
   'extensions.list': 'pc', 'extensions.toggle': 'pc', 'extensions.import': 'pc', 'extensions.remove': 'pc', 'extensions.approve': 'pc',
   'extensions.reject': 'pc', 'extensions.edit': 'pc', 'extensions.adopt': 'pc', 'extensions.applyCheck': 'pc', 'extensions.apply': 'pc',
   // the text rules and the rails (src/engine/api/rules.mjs): the phone may only read them, every change is made here
