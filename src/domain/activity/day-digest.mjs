@@ -6,11 +6,12 @@ import fs from 'node:fs';
 import { ctx } from '../../platform/context.mjs';
 import { localDay, ownerTz, utcToZoned } from '../../shared/tz.mjs';
 import { redactSecrets } from '../../shared/secrets-scan.mjs';
+import { hidePcPaths } from './activity.mjs';
 import { cutWords, logFiles } from '../journal/journal.mjs';
 import { accounts } from '../usage/accounts.mjs';
 
 const LIST_MAX = 8;
-const title = (v, n = 90) => cutWords(redactSecrets(String(v ?? '')), n);
+const shortTitle = (v, n = 90) => cutWords(redactSecrets(String(v ?? '')), n);
 
 // the local day before `now` ('YYYY-MM-DD'), by calendar days (not 24 h steps, which repeat a day after a clock change).
 export function previousDay(now = new Date(), tz = ownerTz(ctx.config)) {
@@ -19,7 +20,7 @@ export function previousDay(now = new Date(), tz = ownerTz(ctx.config)) {
 }
 
 // «### 2026-11-15 09:30 — Author — Topic» headings of one log that fall on `day`.
-export function logEntriesOf(text, day) {
+export function logEntriesOf(text, day, title = shortTitle) {
   const out = [];
   for (const m of String(text ?? '').matchAll(/^### (\d{4}-\d{2}-\d{2}) \d{2}:\d{2} — (.+?) — (.+)$/gm)) if (m[1] === day) out.push({ author: title(m[2], 60), topic: title(m[3], 100) });
   return out;
@@ -28,9 +29,10 @@ export function logEntriesOf(text, day) {
 // → { day, done: { count, items[] }, failed: { count, items[] }, entries: { count, items[{ project, author, topic }] },
 //      usage: [{ agent, usd, turns }], waiting: { approvals, held }, empty }
 // `waiting` is what needs the user at this moment (not of that day): the card says it apart from the day's facts.
-export function dayDigest(board, { day, now = new Date() } = {}) {
+export function dayDigest(board, { day, now = new Date(), hidePaths = false } = {}) {
   const tz = ownerTz(ctx.config);
-  const d = /^\d{4}-\d{2}-\d{2}$/.test(String(day ?? '')) ? day : previousDay(now, tz);
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(String(day ?? '')) && Number.isFinite(Date.parse(`${day}T00:00:00Z`)) ? day : previousDay(now, tz);
+  const title = (v, n = 90) => (hidePaths ? hidePcPaths(shortTitle(v, n)) : shortTitle(v, n));
   const onDay = (iso) => { const t = Date.parse(iso ?? ''); return Number.isFinite(t) && localDay(new Date(t), tz) === d; };
   // a loose UTC window around the day keeps the query small; the exact local-day test is done in JS.
   const t0 = Date.parse(`${d}T00:00:00Z`);
@@ -41,7 +43,7 @@ export function dayDigest(board, { day, now = new Date() } = {}) {
   const entries = [];
   for (const [project, file] of logFiles(board)) {
     let text; try { text = fs.readFileSync(file, 'utf8'); } catch { continue; }
-    for (const e of logEntriesOf(text, d)) entries.push({ project, ...e });
+    for (const e of logEntriesOf(text, d, title)) entries.push({ project, ...e });
   }
 
   const agentOf = new Map(accounts().map((a) => [a.id, a.agent]));

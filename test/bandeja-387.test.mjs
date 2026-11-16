@@ -143,3 +143,12 @@ test('el resumen viaja al móvil: solo lectura y marca por dispositivo', async (
   assert.equal((await api.call('inbox.digest', { day: DAY }, phone)).due, false, 'el móvil ya la vio');
   assert.equal((await api.call('inbox.digest', { day: DAY }, DESKTOP)).due, true, 'el PC la mantiene pendiente: cada dispositivo la suya');
 });
+
+test('una fecha imposible no rompe la llamada y el móvil no recibe rutas del PC', async () => {
+  const phone = principalOf({ device: { id: 'p2', kind: 'phone' } });
+  assert.match((await api.call('inbox.digest', { day: '2026-13-45' }, phone)).day, /^\d{4}-\d{2}-\d{2}$/);
+  addTask(`Mirar ${ctx.home}${path.sep}secreto`, 'done', '2026-11-14T12:00:00.000Z');
+  const d = await api.call('inbox.digest', { day: '2026-11-14' }, phone);
+  assert.ok(!JSON.stringify(d).includes(String(ctx.home).split(path.sep).join('/')) && !d.done.items[0].title.includes(String(ctx.home)), 'la ruta del PC no viaja');
+  assert.ok((await api.call('inbox.digest', { day: '2026-11-14' }, DESKTOP)).done.items[0].title.includes(String(ctx.home)), 'el PC la ve entera');
+});
