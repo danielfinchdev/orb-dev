@@ -53,7 +53,7 @@ before(() => {
   board.db.prepare("UPDATE sessions SET permission = 'total' WHERE id = ?").run(chats.total.id);
   chats.none = sessions.create({ agent: 'claude', permission: 'editar', cwd: dir, title: 'sin proyecto' });
 });
-after(() => { setGhForTests(null); try { sessions.stopAll(); board.db.close(); } catch { /* closed */ } t.cleanup(); });
+after(() => { clearInterval(keepAlive); setGhForTests(null); try { sessions.stopAll(); board.db.close(); } catch { /* closed */ } t.cleanup(); });
 const reset = () => { pr = freshPr(); mergeError = null; ghCalls.length = 0; events.length = 0; };
 const chatOf = (level) => sessions.get(chats[level].id);
 const rejects = (promise, re) => assert.rejects(promise, (e) => { assert.match(e.message, re); assert.equal(e.userFacing, true); return true; });

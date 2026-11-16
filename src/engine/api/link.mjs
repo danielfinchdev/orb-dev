@@ -28,7 +28,8 @@ const fakeShot = () => {
 };
 
 export function linkMethods({ emit, remoteRef, log }) {
-  const capture = createScreenshot({ run: fakeShot() });
+  const run = fakeShot(); // the test hook stands in for the Windows capture, so it also skips the platform check
+  const capture = createScreenshot(run ? { run, platform: 'win32' } : {});
   const shotsDir = () => path.join(ctx.paths.internal, SHOT_DIR);
   sweepShots(shotsDir()).catch(() => {}); // leftovers of an engine that stopped before they expired
   return {

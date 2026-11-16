@@ -21,7 +21,8 @@ const GENERATED_BY = 'scripts/android-vectors.mjs';
 const hex = (u) => Buffer.from(u).toString('hex');
 const unhex = (h) => new Uint8Array(Buffer.from(h, 'hex'));
 const fill = (n, f) => Uint8Array.from({ length: n }, (_, i) => f(i) & 255);
-const sha = (file) => crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT, file))).digest('hex');
+// Hash the LF form so the value is the same in a CRLF checkout (Windows) and in the repository (LF).
+const sha = (file) => crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT, file), 'utf8').replace(/\r\n/g, '\n')).digest('hex');
 
 // Records the result of a call as data: the value, or that it threw (with the message and the `key` of link errors).
 const rec = (fn) => {
