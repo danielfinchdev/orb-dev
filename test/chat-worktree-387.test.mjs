@@ -15,7 +15,7 @@ import { Sessions } from '../src/engine/sessions.mjs';
 import { Orchestrator } from '../src/engine/orchestrator.mjs';
 import { Scheduler } from '../src/engine/scheduler/index.mjs';
 import { buildApi } from '../src/engine/api/index.mjs';
-import { DESKTOP } from '../src/domain/security/permissions.mjs';
+import { DESKTOP, METHODS, allowed, principalOf } from '../src/domain/security/permissions.mjs';
 import { decide } from '../src/domain/security/guard.mjs';
 import { ctx } from '../src/platform/context.mjs';
 import { git } from '../src/platform/git.mjs';
@@ -216,4 +216,10 @@ test('review fixes: the root .git file is guarded, orb/ bases are refused, ignor
   assert.equal(r.removed, true);
   await call('sessions.remove', { id: s.id });
   git(repo, 'branch', '-D', `orb/chat-${s.id.replace(/-/g, '').slice(0, 8)}`);
+});
+
+test('worktrees.status lists files without a commit, so it stays on the PC like the other worktree methods', () => {
+  assert.equal(METHODS['worktrees.status'], 'pc');
+  assert.equal(allowed(principalOf({ device: { id: 'd', kind: 'phone' } }), 'worktrees.status'), false);
+  assert.equal(allowed(DESKTOP, 'worktrees.status'), true);
 });

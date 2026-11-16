@@ -1,6 +1,6 @@
 {
   "generatedBy": "scripts/android-vectors.mjs",
-  "source": "cc7aac7673fb18bd24fc2667d84dcf7b2b1700184e353902408cd412c0faf7e1",
+  "source": "c16ecfdd787219c21f6ff62fe120905e85689113163b86d75909947f3552247d",
   "methods": [
     "activity.list",
     "activity.report",
@@ -121,7 +121,6 @@
     "whiteboard.load",
     "whiteboard.note",
     "whiteboard.save",
-    "worktrees.branches",
-    "worktrees.status"
+    "worktrees.branches"
   ]
 }
