@@ -123,11 +123,13 @@ test('un dispositivo con persona (de otro usuario de 3.7) no recibe avisos y sus
   try {
     assert.equal((await noteAction(onTablet.data.acts.allow)).status, 401, 'su «Aprobar» no vale');
     assert.equal((await noteAction(onAna.data.acts.deny)).status, 200, 'el del móvil del dueño sí');
-    const before = pushes(tablet.endpoint).length; const k = pushes(ana.endpoint).length;
+    // Replies of earlier tests may still be on their way (slow runner): let the tablet's log go quiet first.
+    let before = -1; for (let i = 0; i < 40 && before !== pushes(tablet.endpoint).length; i++) { before = pushes(tablet.endpoint).length; await new Promise((r) => setTimeout(r, 250)); }
+    const k = pushes(ana.endpoint).length;
     await A.call('chat.send', { text: 'una respuesta más', conversation: conv });
     const mine = await until(() => pushes(ana.endpoint).slice(k).find((x) => x.data.tag === `orb-conversation:${conv}`), 'el aviso al móvil del dueño', 30_000);
     // A push sent before the device got its person (an earlier reply, on a slow runner) may still land: only this message's counts.
-    assert.equal(pushes(tablet.endpoint).slice(before).filter((x) => x.data.tag === mine.data.tag && x.data.body === mine.data.body).length, 0, 'ninguno al de otra persona');
+    assert.equal(pushes(tablet.endpoint).slice(before).filter((x) => x.data.tag === mine.data.tag).length, 0, 'ninguno al de otra persona');
   } finally { db.run('UPDATE devices SET person_id = NULL WHERE id = ?', tablet.id); db.db.close(); }
 });
 
@@ -144,7 +146,9 @@ test('un móvil caducado no recibe avisos y los botones de los que ya tiene no v
   try {
     assert.equal((await noteAction(onTablet.data.acts.allow)).status, 401, 'su «Aprobar» ya no vale');
     assert.equal((await noteAction(onAna.data.acts.deny)).status, 200, 'el del móvil vigente sí');
-    const before = pushes(tablet.endpoint).length; const k = pushes(ana.endpoint).length;
+    // Replies of earlier tests may still be on their way (slow runner): let the tablet's log go quiet first.
+    let before = -1; for (let i = 0; i < 40 && before !== pushes(tablet.endpoint).length; i++) { before = pushes(tablet.endpoint).length; await new Promise((r) => setTimeout(r, 250)); }
+    const k = pushes(ana.endpoint).length;
     await A.call('chat.send', { text: 'otra respuesta', conversation: conv });
     await until(() => pushes(ana.endpoint).slice(k).find((x) => x.data.tag === `orb-conversation:${conv}`), 'el aviso al móvil vigente', 30_000);
     assert.equal(pushes(tablet.endpoint).length, before, 'ninguno a la tablet caducada');

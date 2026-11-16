@@ -20,6 +20,8 @@ import { decide } from '../src/domain/security/guard.mjs';
 const OID = 'a'.repeat(40);
 const MOVED = 'b'.repeat(40);
 let t; let board; let sessions; let api; let dir; let chats;
+// The tools' ask timers are unref'd, so a test awaiting one needs something else to keep the event loop alive on a quiet runner.
+const keepAlive = setInterval(() => {}, 1000);
 const events = [];
 const ghCalls = [];
 // Polls (at most 2 s) until the condition holds, instead of sleeping a fixed time.
