@@ -247,6 +247,7 @@ object ChatTexts {
     fun queueTitle(n: Int) = "En cola ($n)"
     fun agentWorking(agent: String?) = "${agent ?: "El agente"} está trabajando…"
     fun compactContext(percent: Int?) = if (percent == null) COMPACT_CONTEXT else "$COMPACT_CONTEXT $percent %"
+    fun rewind(undone: Boolean) = if (undone) "Rebobinado deshecho en el PC" else "Archivos rebobinados en el PC"
     fun handoff(from: String?, to: String?) = "Traspasado de ${from.orEmpty().replaceFirstChar { it.uppercase() }} a ${to.orEmpty().replaceFirstChar { it.uppercase() }}"
     fun usage(input: Long?, output: Long?) =
         listOfNotNull(input?.let { "$it tokens de entrada" }, output?.let { "$it de salida" }).joinToString(" · ")
