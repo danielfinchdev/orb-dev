@@ -259,7 +259,11 @@
   "whiteboard.load": "remote",
   "whiteboard.note": "remote",
   "whiteboard.remove": "pc",
-  "whiteboard.save": "remote"
+  "whiteboard.save": "remote",
+  "worktrees.branches": "remote",
+  "worktrees.discard": "pc",
+  "worktrees.list": "pc",
+  "worktrees.status": "remote"
  },
  "unlock": [
   "agentKeys.save",

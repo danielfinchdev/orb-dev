@@ -142,5 +142,13 @@ export default {
   'session.handoffSeen': 'see what was passed',
   'session.handoffCut': 'Older messages were left out because of size.',
   'session.capture': 'Capture window',
-  'session.captureFailed': 'The window could not be captured. Try again.'
+  'session.captureFailed': 'The window could not be captured. Try again.',
+  'session.wt.title': 'Remove this chat\'s worktree?',
+  'session.wt.body': 'Its working copy has no unsaved changes. The folder ({path}) is deleted; if you take the chat out of the archive, Orb creates it again. Its branch is kept if it has commits that are not in another branch.',
+  'session.wt.ok': 'Remove worktree',
+  'session.wt.keep': 'Keep',
+  'session.wt.dirty': 'The worktree is kept: it has uncommitted changes ({count}). Save or discard them from its folder.',
+  'session.wt.done': 'Worktree removed',
+  'session.wt.branchKept': 'Worktree removed; branch {branch} is kept because it has unmerged commits.',
+  'session.wt.deleteKept': 'The chat is deleted. Its worktree is only removed if no work is lost; otherwise it is kept and you are told where it is.'
 };

@@ -120,7 +120,8 @@ export class Scheduler {
     const listed = new Set();
     for (const p of repos) { try { for (const line of git(p.path, 'worktree', 'list', '--porcelain').stdout.split('\n')) { const m = line.match(/^worktree\s+(.+)$/); if (m) listed.add(path.resolve(m[1].trim().replace(/\//g, path.sep)).toLowerCase()); } } catch { /* not a repo */ } }
     for (const d of dirs) {
-      if (!d.isDirectory()) continue;
+      // the chats' worktrees (src/engine/chat-worktrees.mjs) have their own record and their own cleanup
+      if (!d.isDirectory() || path.resolve(ctx.paths.worktrees, d.name).toLowerCase() === path.resolve(ctx.paths.chatTrees).toLowerCase()) continue;
       const dir = path.join(ctx.paths.worktrees, d.name); const low = path.resolve(dir).toLowerCase();
       if (keep.has(low) || listed.has(low)) continue;
       try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 }); this.log(`copia huérfana borrada: ${d.name}`); } catch (error) { this.log(`copia huérfana ${d.name}: ${error.message}`); }

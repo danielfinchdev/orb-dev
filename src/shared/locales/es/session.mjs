@@ -142,5 +142,13 @@ export default {
   'session.handoffSeen': 'ver lo que se pasó',
   'session.handoffCut': 'Se omitieron mensajes antiguos por tamaño.',
   'session.capture': 'Capturar ventana',
-  'session.captureFailed': 'No se pudo capturar la ventana. Inténtalo de nuevo.'
+  'session.captureFailed': 'No se pudo capturar la ventana. Inténtalo de nuevo.',
+  'session.wt.title': '¿Quitar el worktree de este chat?',
+  'session.wt.body': 'Su copia de trabajo no tiene cambios sin guardar. Se borra la carpeta ({path}); si sacas el chat del archivo, Orb la vuelve a crear. Su rama se conserva si tiene commits que no están en otra rama.',
+  'session.wt.ok': 'Quitar worktree',
+  'session.wt.keep': 'Conservar',
+  'session.wt.dirty': 'El worktree se conserva: tiene cambios sin commit ({count}). Guárdalos o descártalos desde su carpeta.',
+  'session.wt.done': 'Worktree quitado',
+  'session.wt.branchKept': 'Worktree quitado; la rama {branch} se conserva porque tiene commits sin unir.',
+  'session.wt.deleteKept': 'Se borra el chat. Su worktree solo se quita si no pierde trabajo; si no, se conserva y te avisamos dónde está.'
 };
