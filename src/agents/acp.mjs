@@ -160,9 +160,9 @@ export function acpAgent(id, spec) {
         const command = tc.rawInput?.command ? [].concat(tc.rawInput.command).join(' ') : '';
         const paths = (tc.locations ?? []).map((l) => l.path).filter(Boolean);
         const verdict = decide({ permission, tool: tc.name ?? tc.title, kind: tc.kind, command, paths, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()), projectDir: o.projectDir, userAsked: o.userAsked?.() ?? [] });
-        if (verdict.auto) onEvent({ type: 'auto', title: command || tc.title || paths.join(', '), reason: verdict.reason });
+        if (verdict.auto) onEvent({ type: 'auto', title: mask(command || tc.title || paths.join(', ')), reason: verdict.reason });
         let d = verdict.decision;
-        if (d === 'ask') d = await approvals.ask({ id: tc.toolCallId ?? `p-${Date.now()}`, tool: tc.title ?? tc.kind ?? tr('sys.agents.tool.action'), title: command || tc.title || paths.join(', '), reason: verdict.reason, input: clip(tc.rawInput ?? tc.title, 400) });
+        if (d === 'ask') d = await approvals.ask({ id: tc.toolCallId ?? `p-${Date.now()}`, tool: tc.title ?? tc.kind ?? tr('sys.agents.tool.action'), title: mask(command || tc.title || paths.join(', ')), reason: verdict.reason, input: mask(clip(tc.rawInput ?? tc.title, 400)) });
         // In order of preference (not in the order the agent lists its options): "always" must pick allow_always even
         // when allow_once comes first, and a single "deny" must never pick reject_always.
         const pick = (kinds) => kinds.map((k) => (p.options ?? []).find((opt) => opt.kind === k)).find(Boolean);

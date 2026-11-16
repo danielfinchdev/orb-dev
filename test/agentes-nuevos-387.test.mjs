@@ -83,6 +83,18 @@ test('ACP: the key never shows in the events or the log when the program echoes 
   assert.ok(everything.includes('fallo con ***'), 'the message stays, the value goes');
 });
 
+test('ACP: the key never shows on a permission card, in the command or in its input', async () => {
+  const events = [];
+  const agent = acpAgent('grok', ACP_SPECS.grok);
+  const live = track(agent.createLive({ exe: node('fake-acp.mjs'), cwd: dir, env: { XAI_API_KEY: SECRET }, secretValues: [SECRET], permission: 'editar', onEvent: (e) => events.push(e), log: () => {}, mcpServers: {} }));
+  const turn = live.send({ text: 'PERMISO_CLAVE' });
+  const req = await until(() => events.find((e) => e.type === 'approval'), 'permission card', 10000);
+  assert.ok(!JSON.stringify(req).includes(SECRET), 'the card hides the key');
+  assert.ok(JSON.stringify(req).includes('***'), 'and says something was hidden');
+  live.respond(req.request.id, 'deny'); await turn;
+  assert.ok(!JSON.stringify(events).includes(SECRET), 'no event has it');
+});
+
 test('vault: only the names of an agent\'s table are stored or handed over; values never come back from the state', () => {
   const m = vault();
   assert.equal(saveAgentKey(m, 'grok', 'XAI_API_KEY', SECRET), true);
