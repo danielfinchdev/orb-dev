@@ -44,6 +44,7 @@ import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
 import { TaskStatus } from '@/components/task-state.jsx';
 import { quiet } from '@/lib/quiet.js';
 import { MoreButton } from '@/components/ui/primitives.jsx';
+import { ConversationTrail, useTrailScroll } from '@/components/conversation/trail.jsx';
 
 // An icon that says what the tool does (reading, writing, searching, the web, a command…).
 function toolIcon(name = '') {
@@ -344,6 +345,7 @@ export function SessionView({ route }) {
   useEffect(() => { for (const p of pending) if (!unsaved.includes(p)) dropPending(p.id); }, [pending, unsaved]);
   // (The streamed text grows the lines' height: the ResizeObserver of useAutoScroll follows it.)
   const scroll = useAutoScroll([blocks.length, items.at(-1)?.id, unsaved.length]);
+  const trail = useTrailScroll(scroll);
   const catalog = useCatalog();
   const [compacting, setCompacting] = useState(false);
   if (!s) return <Empty title={t('session.gone')} className="flex-1" />;
@@ -440,7 +442,8 @@ export function SessionView({ route }) {
           </DropdownMenuContent>
         </DropdownMenu>
       </PageHeader>
-      <div ref={scroll.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div ref={trail.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
         <div className="lazy-lines mx-auto flex max-w-3xl flex-col gap-3.5 px-5 py-6">
           {more ? <Button variant="ghost" size="sm" className="self-center" onClick={loadOlder}><ChevronUp />{t('session.older')}</Button> : null}
           {blocks.length || unsaved.length ? blocks.map((b) => <Block key={b.key} b={b} agent={s.agent} who={who} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />)
@@ -456,6 +459,8 @@ export function SessionView({ route }) {
             </div>
           ) : null}
         </div>
+      </div>
+      <ConversationTrail scrollRef={trail.node} />
       </div>
       {queue.length ? (
         <div className="mx-auto w-full max-w-3xl shrink-0 px-5 pb-2" data-testid="queue">

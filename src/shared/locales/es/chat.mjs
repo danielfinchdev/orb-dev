@@ -224,6 +224,9 @@ export default {
   // conversaciones, menú lateral, buscador y globito
   'chat.renameTitle': 'Título de la conversación',
   'chat.placeholderDirect': 'Escribe a {agent}…',
+  'chat.trail.label': 'Mensajes de la conversación',
+  'chat.trail.item': 'Mensaje {n}: {text}',
+  'chat.trail.noReply': 'Sin respuesta todavía',
   'chat.waitingTurn': 'Espera su turno: hay otras conversaciones respondiendo.',
   'brain.noUsage': 'Sin uso en tu plan hasta las {when}',
   'brain.noUsageDay': 'Sin uso en tu plan hasta el {when}'
