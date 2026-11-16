@@ -109,7 +109,7 @@ const ownVariable = (t, command, dir, roots) => /^["']?\$[\w:.]+["']?$/.test(t) 
 const GIT_RUNS_FILE = /(^|[\\/])\.git$|(^|[\\/])\.git[\\/]+(?:(?:worktrees|modules)[\\/]+.+[\\/]+)?(?:config(?:\.worktree)?|commondir|gitdir|hooks(?:[\\/].*)?|info[\\/]+attributes)$/i;
 export const isGitRunsFile = (p, dir) => { const f = resolveTarget(p, dir); return GIT_RUNS_FILE.test(lastName(p)) || Boolean(f && GIT_RUNS_FILE.test(f)); };
 export function writesGitRunsFile(command, cwd) {
-  const c = expandEnv(unwrapShell(command));
+  const c = withoutExcludes(expandEnv(unwrapShell(command)));
   for (const m of c.matchAll(/(?<![0-9&])>>?\s*("[^"]+"|'[^']+'|[^\s|&;<>]+)/g)) if (isGitRunsFile(unq(m[1]), cwd)) return true;
   return workDirs(c, cwd).some((part) => {
     const exe = String(part.words[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
@@ -120,7 +120,10 @@ export function writesGitRunsFile(command, cwd) {
   });
 }
 // the loose `.git` (a worktree's pointer file) counts too, when nothing follows it but the end of the word
-const GIT_RUNS_TEXT = /(^|[\\/\s"'`(=,])\.git(?:[\\/]+(?:(?:worktrees|modules)[\\/]+[^\\/\s"'`]+[\\/]+)?(?:config|commondir|gitdir|hooks|info[\\/]+attributes)(?![\w.-])|(?![\w.\\/-]))/i;
+// `--exclude .git`, `--exclude=.git`, `--ignore-pattern .git`, `-x .git`, `/XD .git` name .git to leave it out, not to write it
+const EXCLUDE_OPTION = /(?:^|\s)(?:--exclude(?:-[\w-]+)?|--ignore[\w-]*|-x|\/XD)(?:=|\s+)(?:"[^"]*"|'[^']*'|\S+)/gi;
+const withoutExcludes = (command) => command.replace(EXCLUDE_OPTION, ' ');
+const GIT_RUNS_TEXT = /(^|[\\/\s"'`(=,])\.git(?:[\\/]+(?:(?:worktrees|modules)[\\/]+(?:[^\\/\s"'`]+[\\/]+)+)?(?:config|commondir|gitdir|hooks|info[\\/]+attributes)(?![\w.-])|(?![\w.\\/-]))/i;
 // a deletion that takes the project folder itself, a folder that holds it, its .git (where Orb's
 // snapshots live) or everything at its top (`*`, which in PowerShell takes .git too): «Deshacer» could not bring it back.
 const DELETERS = /^(rm|rmdir|rd|del|erase|remove-item|ri|unlink|shred|mv|move|move-item|mi|rename-item|rni|ren|rename)$/i;

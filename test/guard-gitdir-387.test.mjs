@@ -4,6 +4,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { tempHome } from './helpers.mjs';
 import { decide, isGitRunsFile } from '../src/domain/security/guard.mjs';
+import { writesGitRunsFile } from '../src/domain/security/guard/project-writes.mjs';
 import { Board } from '../src/domain/tasks/board.mjs';
 import { createProject } from '../src/domain/projects/projects.mjs';
 import { ctx } from '../src/platform/context.mjs';
@@ -24,4 +25,14 @@ test('reading them, plain git and look-alike names do not ask', () => {
   for (const c of ['cat .git/commondir', 'Get-Content .git/worktrees/wt/gitdir', 'git status', 'git worktree list', 'cat .gitignore', 'Set-Content .gitignore "dist/"',
     'Set-Content .gitattributes "*.sh text eol=lf"', 'git clone https://example.com/a/b.git']) assert.equal(auto(c).decision, 'allow', c);
   assert.equal(isGitRunsFile('.gitignore', proj), false);
+});
+
+test('nested module folders ask, and .git named only to leave it out does not', () => {
+  for (const c of ["sed -i 's/a/b/' .git/modules/libs/foo/config", "sed -i 's/a/b/' .git/modules/a/modules/b/config", "sed -i 's/a/b/' .git/modules/a/modules/b/hooks",
+    "node -e \"fs.writeFileSync('.git','x')\""]) assert.equal(auto(c).decision, 'ask', c);
+  for (const c of ['tar --exclude=.git -czf out.tgz .', 'eslint . --ignore-pattern .git', 'robocopy a b /XD .git']) assert.equal(auto(c).decision, 'allow', c);
+});
+
+test('rsync --exclude .git is not a write of .git (rsync asks for its own reason)', () => {
+  assert.equal(writesGitRunsFile('rsync -a --exclude .git src/ dst/', proj), false);
 });
