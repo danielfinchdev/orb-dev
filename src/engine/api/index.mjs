@@ -377,10 +377,15 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
       authorize(principal, method);
       // and, for what the master password guards, a fresh unlock of this PC's window (src/engine/api/master.mjs).
       // a one-use token (rails) is spent here, so the handler is told the unlock was good instead of checking it again.
-      const unlocked = checkUnlock(method, params);
-      trash.guard(method, params);
-      const snap = snapshotBefore(method);
-      let out = await fn(params, principal, { unlocked });
+      const gate = checkUnlock(method, params, { defer: true });
+      const unlocked = gate.unlocked;
+      let out; let snap;
+      try {
+        trash.guard(method, params);
+        snap = snapshotBefore(method);
+        out = await fn(params, principal, { unlocked });
+      } catch (error) { gate.settle(false); throw error; }
+      gate.settle(true); // the action ran: only now is a one-use token spent
       recordUserCall({ board, method, params, out, principal, snap });
       // the lists of every refresh, as changes since what the caller holds (src/engine/feeds.mjs).
       if (params.since !== undefined) out = feeds.reply(method, params, out, principal);

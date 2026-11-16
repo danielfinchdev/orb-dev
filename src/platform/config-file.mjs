@@ -88,7 +88,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   expert: { enabled: false, panels: { explorer: true, git: true, history: true, running: true, usage: true, system: true, activity: true } },
   browser: { enabled: true }, // the agents' browser (pages drawn by the app, driven through the MCP tools)
   // Phone access (off until the user turns it on): through the home Wi-Fi and/or Tailscale (https when the tailnet has it).
-  mobile: { enabled: false, port: 3131, wifi: true, tailscale: true },
+  mobile: { enabled: false, port: 3131, wifi: true, tailscale: true, screenshot: true },
   // «Cosas que nadie toca» (Ajustes › Avanzado): names, paths or containers that no agent touches, whatever the
   // permission (a command or a path that names one is denied).
   protected: [...DEFAULT_PROTECTED]

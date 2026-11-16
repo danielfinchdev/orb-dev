@@ -164,3 +164,16 @@ test('the UI passes the notice flag on and notify() skips the repeat filter for 
   assert.match(read('src', 'ui', 'app', 'engine-events.js'), /always: payload\.always === true/);
   assert.match(read('src', 'ui', 'lib', 'notify.js'), /n\.always === true \? null : notices\.find/);
 });
+
+test('Settings › Mobile › screenshot: on by default, off refuses the phone, back on allows it again', async () => {
+  assert.equal((await A.call('remote.status')).screenshot, true);
+  const off = await A.call('remote.configure', { screenshot: false });
+  assert.equal(off.screenshot, false); assert.equal(off.running, true); // no restart of the access
+  const before = fs.readdirSync(t.home, { recursive: true }).filter((f) => String(f).includes('capturas-movil') && String(f).endsWith('.jpg')).length;
+  await assert.rejects(phone.call(a.id, 'pc.screenshot', {}), /desactivada/);
+  assert.equal(fs.readdirSync(t.home, { recursive: true }).filter((f) => String(f).includes('capturas-movil') && String(f).endsWith('.jpg')).length, before, 'no picture is taken while it is off');
+  const on = await A.call('remote.configure', { screenshot: true });
+  assert.equal(on.screenshot, true);
+  // past the switch again: the only thing in the way now is the 5 s limit of the shot taken earlier in this file
+  await assert.rejects(phone.call(a.id, 'pc.screenshot', {}), /Espera un momento/);
+});

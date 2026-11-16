@@ -303,7 +303,7 @@ test('the app frames pages through its own scheme and is told the exact server p
   } finally { delete process.env.ORB_PAGES_ORIGIN; pages.wipe(); }
 });
 
-test('htmlPages.get: HTML as data for the phone, chat-bound, with the CSP of the page and no run on the host', async () => {
+test('htmlPages.get: HTML as data, chat-bound, PC-only, with the CSP of the page and no run on the host', async () => {
   const { pages } = make();
   try {
     const v = await pages.show({ id: 's1' }, { title: 'g', html: HTML });
@@ -315,16 +315,15 @@ test('htmlPages.get: HTML as data for the phone, chat-bound, with the CSP of the
     assert.throws(() => pages.get({ id: v.id, session: 's2' }));          // another chat cannot read it
     assert.throws(() => pages.get({ id: 'f'.repeat(32), session: 's1' })); // unknown id
     assert.throws(() => pages.get({ id: '../x', session: 's1' }));
-    // only the phone-safe read is remote; the switch and close stay on the PC
-    assert.equal(METHODS['htmlPages.get'], 'remote'); assert.equal(REMOTE_METHODS.has('htmlPages.get'), true);
-    for (const m of ['htmlPages.list', 'htmlPages.setInternet', 'htmlPages.close']) assert.equal(allowed(principalOf({ device: { id: 'd', kind: 'phone' } }), m), false);
-    assert.equal(allowed(principalOf({ device: { id: 'd', kind: 'phone' } }), 'htmlPages.get'), true);
+    // no phone client renders a page, so every htmlPages method stays on the PC
+    assert.equal(METHODS['htmlPages.get'], 'pc'); assert.equal(REMOTE_METHODS.has('htmlPages.get'), false);
+    for (const m of ['htmlPages.list', 'htmlPages.get', 'htmlPages.setInternet', 'htmlPages.close']) assert.equal(allowed(principalOf({ device: { id: 'd', kind: 'phone' } }), m), false);
   } finally { pages.wipe(); }
 });
 
-test('htmlPages.get from a phone is refused for a chat the PC gave total access to', async () => {
+test('htmlPages.get from a phone is refused whatever the chat access', async () => {
   const { guardCall } = await import('../src/engine/transport/remote-calls.mjs');
   const board = { one: (_sql, id) => ({ permission: id === 'tot' ? 'total' : 'editar' }) };
   assert.ok(guardCall(board, 'htmlPages.get', { id: 'a'.repeat(32), session: 'tot' }));
-  assert.equal(guardCall(board, 'htmlPages.get', { id: 'a'.repeat(32), session: 'ok' }), null);
+  assert.ok(guardCall(board, 'htmlPages.get', { id: 'a'.repeat(32), session: 'ok' }));
 });

@@ -93,6 +93,15 @@ test('rails.set with values: the 5-minute unlock is not enough, a rails token pa
   await assert.rejects(call('rails.set', { ...p, unlock: f }), needPassword);
 });
 
+test('a rails token is not spent by a call refused for its parameters, and two calls cannot share it', async () => {
+  const f = await fresh('rails');
+  await assert.rejects(call('rails.set', { id: 'tiempo-maximo', values: { timeoutMinutes: -5 }, unlock: f }), (e) => !needPassword.test(e.message), 'bad value: refused for the value, not for the password');
+  const good = { id: 'tiempo-maximo', values: { timeoutMinutes: ctx.config.timeoutMinutes + 10 }, unlock: f };
+  const [a, b] = await Promise.allSettled([call('rails.set', good), call('rails.set', good)]);
+  assert.equal([a, b].filter((r) => r.status === 'fulfilled').length, 1, 'one passes, the other finds the token in use');
+  await assert.rejects(call('rails.set', good), needPassword, 'and now it is spent');
+});
+
 test('rules.save on a shipped rule: a ruleSeed token once; your own rule keeps the 5-minute unlock', async () => {
   const fields = { id: SEED, titulo: 'x', para: 'ambos', texto: 'x' };
   assert.equal(freshPurpose('rules.save', fields, { seedRule: true }), 'ruleSeed');
