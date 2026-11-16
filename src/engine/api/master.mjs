@@ -10,7 +10,7 @@ import { paths } from '../../platform/paths.mjs';
 import { machineKeys } from '../../platform/keys.mjs';
 import { Master, MasterError, IN_VAULT, mirrorTo, restoreMissing, checkPassword, MIN_LENGTH, UNLOCK_MS } from '../../domain/security/master.mjs';
 import { sealConnectors, connectorSecrets, refOf, secretId, ENV_NAME, bindMissing } from '../../domain/security/connector-secrets.mjs';
-import { needsUnlock, freshPurpose, FRESH_PURPOSES, RULE_TARGET_METHODS } from '../../domain/security/permissions.mjs';
+import { needsUnlock, freshPurpose, FRESH_PURPOSES, RULE_TARGET_METHODS, RAILS_PURPOSE } from '../../domain/security/permissions.mjs';
 import { readRule, isRuleId } from '../../domain/rules/rules.mjs';
 import { DEFAULT_IDS } from '../../domain/rules/defaults.mjs';
 import { isRecoveryCode, hasRecovery } from '../../domain/data/backup.mjs';
@@ -75,7 +75,7 @@ export function migrateSecrets(board, master = ctx.master, { log = () => {}, emi
 
 // The guard of the dispatcher (api.mjs): a guarded call from this PC's window needs a fresh unlock token.
 // → true when the call was guarded and its token was valid (the token may be used up by now), false when it needed none.
-// defer: true → returns { unlocked, settle(ok) } and a one-use token is spent by settle(true), after the action has run
+// defer: true → returns { unlocked, settle(ok) } and a rails token is spent by settle(true), after the action has run
 // without error (so a call refused for its parameters does not make the owner type the password again). Until then the
 // token is held as «in flight», so a second call with the same token cannot slip through while the first one runs.
 const inflight = new Set();
@@ -90,7 +90,9 @@ export function checkUnlock(method, params, { defer = false } = {}) {
   const facts = RULE_TARGET_METHODS.has(method) ? { seedRule: isRuleId(params?.id) && (DEFAULT_IDS.has(params.id) || readRule(params.id)?.de_serie === true) } : {};
   const purpose = freshPurpose(method, params, { ...facts, current: ctx.config });
   const needed = () => userError('msg.master.needUnlock', {}, { reason: 'unlock' });
-  if (!defer || !purpose) {
+  // Only the rails token waits: its handlers validate the values (saveConfig) before any effect. The other one-use tokens
+  // (secrets, rules, project delete) are spent as soon as they are checked: their handlers can fail after their effect.
+  if (!defer || purpose !== RAILS_PURPOSE) {
     if (!m.checkToken(params?.unlock, purpose, { consume: Boolean(purpose) })) throw needed();
     return defer ? { unlocked: true, settle: () => {} } : true;
   }
