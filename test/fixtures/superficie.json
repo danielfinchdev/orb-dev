@@ -210,6 +210,8 @@
   "sessions.settle": "remote",
   "sessions.stop": "remote",
   "sessions.trash": "remote",
+  "sessions.turnDiff": "remote",
+  "sessions.turns": "remote",
   "sessions.update": "remote",
   "sidebar.complete": "remote",
   "system.check": "pc",
