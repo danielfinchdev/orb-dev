@@ -1,7 +1,7 @@
 // The engine's events the window follows (src/shared catalog in test/fixtures/superficie.json): what refreshes the
 // state, what streams into a conversation, what passes by as a notice and what reloads the window.
 import { useEffect } from 'react';
-import { bridge, call, go, refreshSoon, chatStateSoon, loadOrbInboxSoon } from '@/lib/store.js';
+import { bridge, call, go, refreshSoon, chatStateSoon, loadOrbInboxSoon, getState } from '@/lib/store.js';
 import { notify, markNoticesSeen } from '@/lib/notify.js';
 import { t as tNow } from '@/lib/i18n.js';
 
@@ -20,6 +20,15 @@ export function useEngineEvents(phase) {
       // what only informs (working folder, brain in use, schedule created…) passes by as a notification.
       // through lib/notify.js: one at a time, never repeated, kept under the bell.
       if (event === 'notice' && payload?.body) notify({ body: payload.body, tone: payload.tone, always: payload.always === true });
+      // an agent asked to merge or comment on a PR in a chat that is not the one on screen: its card only shows inside that
+      // chat and the request expires, so the bell says it is waiting (a click opens the chat).
+      if (event === 'pr:request' && payload?.session != null) {
+        const here = getState().route;
+        if (!(here?.view === 'session' && String(here.id) === String(payload.session))) {
+          const chat = (getState().sessions ?? []).find((x) => String(x.id) === String(payload.session));
+          notify({ body: tNow('app.prCardWaiting', { number: payload.number ?? '?' }), tone: 'warning', always: true, go: chat ? { view: 'session', id: chat.id } : null });
+        }
+      }
       // the phone read its notices; its ids are not the bell's, so the whole bell counts as seen.
       if (event === 'notes:read') markNoticesSeen();
       // a linked phone sent a chat to the trash: this PC shows it with an «Undo» (the trash is kept for days)

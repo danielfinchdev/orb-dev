@@ -377,6 +377,7 @@
   "mcpServers",
   "mobile.enabled",
   "mobile.port",
+  "mobile.screenshot",
   "mobile.tailscale",
   "mobile.wifi",
   "oneAtATime",

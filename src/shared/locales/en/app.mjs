@@ -31,6 +31,7 @@ export default {
   'app.window.close': 'Close',
   'app.trashAdded': 'The linked device “{device}” sent “{title}” to the trash.',
   'app.trashUndo': 'Undo',
+  'app.prCardWaiting': 'An agent is waiting for your answer on PR #{number}. Open its chat to see it.',
   'app.engineStopped': 'Orb has stopped several times. Close the app and open it again.',
   'app.engineRestarted': 'Orb restarted after an error. Tasks in progress were marked as failed; you can retry them.',
   'app.pairTitle': 'Pair this device',
