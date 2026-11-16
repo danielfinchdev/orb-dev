@@ -8,5 +8,13 @@ export default {
   'prcard.acceptMergeMethod': 'Fusionar ({method})',
   'prcard.dangerNote': 'Fusionar cambia la rama base y no se deshace desde Orb. Revisa los checks antes de aceptar.',
   'agents.hermesNote': 'Hermes solo pide permiso para lo que él considera peligroso, así que Orb no puede garantizar que pregunte antes de cada cambio. Actívalo solo si te fías de lo que le encargas.',
+  'agents.unverifiedNote': "Agente nuevo sin comprobar con el programa real: revisa su ayuda (--help) antes de activarlo. Si no arranca, Orb lo dirá.",
+  'agents.noGuardNote': "Este agente no puede preguntar a Orb antes de actuar: tampoco cumple las reglas fijas de Orb (carpetas protegidas, adb…). Solo arranca en chats con «Acceso total».",
+  'agents.keyTitle': "Clave {name}",
+  'agents.keyDesc': "Se guarda en la bóveda con tu contraseña maestra. Orb no la vuelve a mostrar.",
+  'agents.keySaved': "Clave guardada en la bóveda",
+  'agents.keySet': "Guardar {name}",
+  'agents.keyChange': "Cambiar {name} (guardada)",
+  'agents.keyHint': "Opcional si ya iniciaste sesión con el propio programa.",
   'agents.enable': 'Activar'
 };

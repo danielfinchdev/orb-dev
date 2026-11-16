@@ -12,12 +12,14 @@ import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Field
 import { Switch, Collapsible, CollapsibleTrigger, CollapsibleContent, BubbleTip, Checkbox, Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem } from '@/components/ui/overlay.jsx';
 import { cn, baseName } from '@/lib/utils.js';
 import { useStore, call, act, bridge, setState, getState } from '@/lib/store.js';
-import { LOGIN } from '@/lib/labels.js';
+import { LOGIN, OFF_AGENTS } from '@/lib/labels.js';
+import { unlockCore } from '@/lib/core-access.js';
 import { t, useT, useLocale } from '@/lib/i18n.js';
 import { quiet } from '@/lib/quiet.js';
 
 const INSTALL = { claude: 'https://docs.claude.com/en/docs/claude-code/setup', codex: 'https://developers.openai.com/codex/cli', cursor: 'https://cursor.com/cli',
-  gemini: 'https://github.com/google-gemini/gemini-cli', opencode: 'https://opencode.ai', qwen: 'https://github.com/QwenLM/qwen-code', copilot: 'https://github.com/github/copilot-cli', hermes: 'https://hermes-agent.nousresearch.com' };
+  gemini: 'https://github.com/google-gemini/gemini-cli', opencode: 'https://opencode.ai', qwen: 'https://github.com/QwenLM/qwen-code', copilot: 'https://github.com/github/copilot-cli', hermes: 'https://hermes-agent.nousresearch.com',
+  grok: 'https://x.ai/cli', devin: 'https://cli.devin.ai', droid: 'https://factory.ai', omp: 'https://github.com/can1357/oh-my-pi', pi: 'https://pi.dev', antigravity: 'https://antigravity.google' };
 const WINDOW = { five_hour: 'agents.win.fiveHour', seven_day: 'agents.win.week', seven_day_opus: 'agents.win.weekOpus', seven_day_sonnet: 'agents.win.weekSonnet', '300min': 'agents.win.fiveHour', '10080min': 'agents.win.week', '43200min': 'agents.win.month' };
 const windowLabel = (w) => (WINDOW[w] ? t(WINDOW[w]) : w);
 // How each agent is connected (all of them live).
@@ -285,10 +287,13 @@ function AgentCard({ a, reload }) {
         {a.installed ? <Badge variant="success">{t('agents.installed')}</Badge> : <Badge variant="destructive">{t('agents.notFound')}</Badge>}
         {a.installed ? <Badge variant={login[1]}>{login[0]}</Badge> : null}
         {!cfg.enabled ? <Badge variant="secondary">{t('agents.disabled')}</Badge> : null}
-        {!cfg.enabled && a.id === 'hermes' ? <Button size="xs" variant="soft" onClick={() => save(a.id, { enabled: true })} data-testid="agent-enable-hermes">{t('agents.enable')}</Button> : null}
+        {!cfg.enabled && OFF_AGENTS.includes(a.id) ? <Button size="xs" variant="soft" onClick={() => save(a.id, { enabled: true })} data-testid={`agent-enable-${a.id}`}>{t('agents.enable')}</Button> : null}
         {a.installed && KIND[a.kind] ? <Badge variant="outline" className="text-muted-foreground font-normal">{t(KIND[a.kind])}</Badge> : null}
       </CardContent>
       {a.id === 'hermes' ? <CardContent><p className="text-warning-ink text-xs" data-testid="agent-hermes-note">{t('agents.hermesNote')}</p></CardContent> : null}
+      {a.unverified ? <CardContent><p className="text-warning-ink text-xs" data-testid={`agent-unverified-${a.id}`}>{t('agents.unverifiedNote')}</p></CardContent> : null}
+      {a.id === 'pi' || a.id === 'antigravity' ? <CardContent><p className="text-warning-ink text-xs" data-testid={`agent-noguard-${a.id}`}>{t('agents.noGuardNote')}</p></CardContent> : null}
+      {a.keys?.length ? <CardContent><AgentKeys a={a} /></CardContent> : null}
       <CardContent className="flex flex-wrap gap-2">
         <InstallButton a={a} reload={reload} />
         {!a.installed && !INSTALLABLE.includes(a.id) ? <Button size="sm" variant="outline" onClick={() => bridge.openExternal(INSTALL[a.id])}><ExternalLink />{t('agents.howInstall')}</Button> : null}
@@ -318,6 +323,33 @@ function AgentCard({ a, reload }) {
         </Collapsible>
       </CardContent>
     </Card>
+  );
+}
+
+// The API key of an agent that takes one: kept in the vault (after the master password), never shown again and never in the settings.
+function AgentKeys({ a }) {
+  const t = useT();
+  const [saved, setSaved] = useState({});
+  const load = () => call('agentKeys.state').then((s) => setSaved(s?.[a.id] ?? {})).catch(quiet);
+  useEffect(() => { load(); }, [a.id]);
+  const set = async (name) => {
+    const unlock = await unlockCore('secrets');
+    if (!unlock) return;
+    const r = await form(t('agents.keyTitle', { name }), {
+      description: t('agents.keyDesc'), initial: { value: '' },
+      body: (v, setV) => <Input type="password" autoComplete="off" spellCheck={false} autoFocus value={v.value} onChange={(e) => setV({ value: e.target.value })} data-testid={`agent-key-input-${a.id}`} />,
+      ok: t('settings.save'),
+      onOk: (v) => call('agentKeys.save', { agent: a.id, name, value: v.value.trim(), unlock })
+    });
+    if (r) { notifyOk(t('agents.keySaved')); load(); }
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {a.keys.map((name) => (
+        <Button key={name} size="xs" variant="outline" onClick={() => set(name)} data-testid={`agent-key-${a.id}`}>{saved[name] ? t('agents.keyChange', { name }) : t('agents.keySet', { name })}</Button>
+      ))}
+      <span className="text-muted-foreground text-xs">{t('agents.keyHint')}</span>
+    </div>
   );
 }
 

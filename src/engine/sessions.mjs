@@ -20,6 +20,7 @@ import { runLog } from '../platform/log.mjs';
 import { oneLine } from '../shared/text.mjs';
 import { git, isGitRepo, repoRoot } from '../platform/git.mjs';
 import { account as findAccount, accountEnv } from '../domain/usage/accounts.mjs';
+import { agentKeyEnv } from '../domain/security/agent-keys.mjs';
 import { pickAccount, recordSpend } from '../domain/usage/budget.mjs';
 import { browserKey } from './browser/browser-key.mjs';
 import { androidAllowed } from './host/android.mjs';
@@ -301,12 +302,15 @@ export class Sessions {
     // Long instructions Cursor gets in a file go to the attachments folder (out of git), not among the project's files.
     const promptDir = path.join(s.cwd, ATTACH_DIR);
     if (s.agent === 'cursor') keepOutOfGit(s.cwd, [`${ATTACH_DIR}/`, ...CURSOR_FILES]);
+    // the agent's own API key from the vault (only the names of its table, src/domain/security/agent-keys.mjs): in its
+    // process environment and nowhere else; its value is hidden from the agent's log and events (secretValues).
+    const keyEnv = agentKeyEnv(ctx.master, s.agent);
     entry.live = a.createLive({
-      promptDir,
+      promptDir, secretValues: Object.values(keyEnv),
       exe, cwd: s.cwd, model: s.model, reasoning: s.reasoning, permission: s.permission,
       resumeId: forkFrom || s.cli_session || null, forkSession: Boolean(forkFrom), newSessionId,
       mcpServers: mcpServersOf(a, s.agent, { taskId, session: s.id }), budgetUsd,
-      env: { ...accountEnv(acc), ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
+      env: { ...accountEnv(acc), ...keyEnv, ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
       internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, cfg: ctx.config.agents[s.agent] ?? {},
       // the project's folder for the guard's inside/outside rules (none in a chat without a project), and what the
       // user's own message of the turn asked for (read on every action: «súbelo» lets «Auto» push).

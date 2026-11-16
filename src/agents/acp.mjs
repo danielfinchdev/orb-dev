@@ -1,15 +1,16 @@
 // Agents that speak ACP (Agent Client Protocol, agentclientprotocol.com): JSON-RPC over stdio, an open standard several
 // clients use to drive many coding agents with one client. One adapter serves them all (Gemini CLI, OpenCode,
-// Qwen Code, GitHub Copilot CLI, Hermes Agent…); each one is a small spec: how to find it, how to start it in ACP mode, where its login
+// Qwen Code, GitHub Copilot CLI, Hermes Agent, Grok Build, Devin, Factory Droid, Oh My Pi…); each one is a small spec: how to find it, how to start it in ACP mode, where its login
 // lives and how to install it. The agent's own program and login are used: Orb never sees credentials.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, readOutput, discoverDir, nodeRuntime } from '../platform/proc.mjs';
 import { clip } from './common.mjs';
-import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree, hidingEnvValues } from './live.mjs';
+import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree, hidingEnvValues, maskingValues } from './live.mjs';
 import { decide } from '../domain/security/guard.mjs';
 import { tr } from '../platform/context.mjs';
+import { AGENT_KEY_NAMES } from '../domain/security/agent-keys.mjs';
 
 // An npm-installed CLI on Windows is a .cmd shim that cannot be started without a shell: Orb runs `node <script>` instead,
 // reading the script from the package's "bin" (the same thing the shim does).
@@ -56,6 +57,35 @@ export const ACP_SPECS = {
     label: 'Hermes Agent', bin: 'hermes', acpArgs: ['acp'], binDirs: () => [path.join(userHome(), '.local', 'bin')],
     login: ['.hermes/.env', '.hermes/auth.json', '.hermes/config.yaml'], loginArgs: ['login'], install: 'uv tool install "hermes-agent[acp]"',
     strengths: 'agente autónomo con memoria y muchos proveedores de modelos', models: [], defaultModel: ''
+  },
+  // The four below are NOT verified: none of these programs was installed when they were added, so their ACP arguments come
+  // from public documentation / Synara's table (desarrollo/synara-vs-orb.md, paso 3), not from `<cli> --help`.
+  // Check `<cli> --help` before turning one on; a wrong argument makes the program quit at start and Orb says so.
+  // keyEnv: variables of the vault's «agentkey/<agent>/<NAME>» (src/domain/security/agent-keys.mjs), put into this program's
+  // environment only; none is needed when the program has its own login (loginArgs). Off by default (config-file.mjs).
+  grok: {
+    label: 'Grok Build', bin: 'grok', acpArgs: ['acp'], unverified: true, keyEnv: AGENT_KEY_NAMES.grok,
+    binDirs: () => [path.join(userHome(), '.local', 'bin'), path.join(userHome(), '.grok', 'bin')],
+    login: ['.grok/auth.json'], loginArgs: ['login'], install: null,
+    strengths: 'agente de xAI para programar desde la terminal', models: [], defaultModel: ''
+  },
+  devin: {
+    label: 'Devin', bin: 'devin', acpArgs: ['acp'], unverified: true, keyEnv: AGENT_KEY_NAMES.devin,
+    binDirs: () => [path.join(userHome(), '.local', 'bin'), path.join(userHome(), '.devin', 'bin')],
+    login: ['.config/devin/auth.json', '.devin/auth.json'], loginArgs: ['auth', 'login'], install: null,
+    strengths: 'agente de Cognition (Devin para terminal) con planes y revisión', models: [], defaultModel: ''
+  },
+  droid: {
+    label: 'Factory Droid', bin: 'droid', acpArgs: ['exec', '--output-format', 'acp'], unverified: true, keyEnv: AGENT_KEY_NAMES.droid,
+    binDirs: () => [path.join(userHome(), '.local', 'bin'), path.join(userHome(), 'bin')],
+    login: ['.factory/auth.json', '.factory/settings.json'], loginArgs: [], install: null,
+    strengths: 'agente de Factory para tareas de ingeniería de principio a fin', models: [], defaultModel: ''
+  },
+  omp: {
+    label: 'Oh My Pi', bin: 'omp', acpArgs: ['acp'], unverified: true, keyEnv: [],
+    binDirs: () => [path.join(userHome(), '.local', 'bin'), path.join(userHome(), '.omp', 'bin')],
+    login: ['.omp/auth.json', '.omp/config.yml', '.omp/config.json'], loginArgs: [], install: null,
+    strengths: 'variante de Pi con herramientas extra y muchos proveedores', models: [], defaultModel: ''
   }
 };
 
@@ -97,7 +127,8 @@ export function acpAgent(id, spec) {
 
   function createLive(o) {
     const onEvent = o.onEvent ?? (() => {});
-    const log = hidingEnvValues(o.log ?? (() => {}), o.mcpServers);
+    const log = hidingEnvValues(o.log ?? (() => {}), o.mcpServers, o.secretValues);
+    const mask = maskingValues(o.secretValues); // the agent's own API key (vault): never in an event, the chat or a log
     const approvals = new Approvals(onEvent);
     let permission = o.permission ?? 'editar';
     let child = null; let peer = null; let sessionId = o.resumeId ?? null; let turn = null; let started = null; let closed = false;
@@ -112,11 +143,11 @@ export function acpAgent(id, spec) {
       if (method !== 'session/update' || loading) return; // a loaded session replays its history: not shown twice
       const u = p.update ?? {};
       switch (u.sessionUpdate) {
-        case 'agent_message_chunk': { const t = textOfContent(u.content); if (t) { text += t; onEvent({ type: 'delta', text: t }); } break; }
-        case 'agent_thought_chunk': thought += textOfContent(u.content); break;
-        case 'tool_call': flush(); onEvent({ type: 'item', role: 'tool', kind: 'tool', body: { id: u.toolCallId, name: u.name || toolKindName(u.kind) || u.title || tr('sys.agents.tool.other'), input: clip(u.title ?? u.rawInput ?? '', 300) } }); break;
+        case 'agent_message_chunk': { const t = mask(textOfContent(u.content)); if (t) { text += t; onEvent({ type: 'delta', text: t }); } break; }
+        case 'agent_thought_chunk': thought += mask(textOfContent(u.content)); break;
+        case 'tool_call': flush(); onEvent({ type: 'item', role: 'tool', kind: 'tool', body: { id: u.toolCallId, name: u.name || toolKindName(u.kind) || u.title || tr('sys.agents.tool.other'), input: mask(clip(u.title ?? u.rawInput ?? '', 300)) } }); break;
         case 'tool_call_update':
-          if (u.status === 'completed' || u.status === 'failed') onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: { id: u.toolCallId, output: clip(textOfContent(u.content ?? []) || (u.rawOutput ? JSON.stringify(u.rawOutput) : ''), 3000), error: u.status === 'failed' } });
+          if (u.status === 'completed' || u.status === 'failed') onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: { id: u.toolCallId, output: mask(clip(textOfContent(u.content ?? []) || (u.rawOutput ? JSON.stringify(u.rawOutput) : ''), 3000)), error: u.status === 'failed' } });
           break;
         case 'plan': flush(); onEvent({ type: 'item', role: 'assistant', kind: 'reasoning', body: (u.entries ?? []).map((e) => `${e.status === 'completed' ? '✓' : '·'} ${e.content}`).join('\n') }); break;
         case 'usage_update': if (u.size) onEvent({ type: 'context', used: u.used, size: u.size }); break;
@@ -149,7 +180,7 @@ export function acpAgent(id, spec) {
       const p = new JsonRpcPeer(proc, { onNotification, onRequest, log });
       child = proc; peer = p; // known at once: close() during the start stops this process too
       const quit = new Promise((resolve) => {
-        proc.once('exit', (code) => resolve(new Error(tr('sys.agents.exitedAtStart', { name: spec.label, code, detail: proc.stderrText().trim().split('\n').slice(-2).join(' ') }).trim())));
+        proc.once('exit', (code) => resolve(new Error(tr('sys.agents.exitedAtStart', { name: spec.label, code, detail: mask(proc.stderrText()).trim().split('\n').slice(-2).join(' ') }).trim())));
         proc.once('error', resolve);
       });
       const hello = p.request('initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: 'orb-dev', title: 'Orb', version: '2.5.0' } }, { timeoutMs: 60000 });
@@ -168,8 +199,8 @@ export function acpAgent(id, spec) {
       live.pid = child.pid;
       child.on('exit', (code) => {
         closed = true; approvals.clear(); peer.close();
-        onEvent({ type: 'exit', code, stderr: child.stderrText() });
-        if (turn && !turn.done) { flush(); turn.finish({ isError: true, final: turn.text || tr('sys.agents.exitedCode', { name: spec.label, code, detail: child.stderrText().trim().split('\n').slice(-2).join(' ') }).trim() }); }
+        onEvent({ type: 'exit', code, stderr: mask(child.stderrText()) });
+        if (turn && !turn.done) { flush(); turn.finish({ isError: true, final: turn.text || tr('sys.agents.exitedCode', { name: spec.label, code, detail: mask(child.stderrText()).trim().split('\n').slice(-2).join(' ') }).trim() }); }
       });
       child.on('error', (error) => { closed = true; if (turn && !turn.done) turn.finish({ isError: true, final: tr('sys.agents.startFailed', { name: spec.label, error: error.message }) }); });
       agentCaps = init?.agentCapabilities ?? {};
@@ -216,7 +247,7 @@ export function acpAgent(id, spec) {
         current.finish({ stopReason: stop, isError: stop === 'refusal', final: current.text });
       } catch (error) {
         flush();
-        const msg = String(error.message ?? error);
+        const msg = mask(String(error.message ?? error));
         const limit = /quota|rate limit|usage limit|429|exhausted/i.test(msg) ? { resetAt: null } : null;
         if (!current.done) { onEvent({ type: 'item', role: 'error', kind: 'text', body: clip(msg, 3000) }); current.finish({ isError: true, final: `${spec.label}: ${msg}`, limit }); }
       }

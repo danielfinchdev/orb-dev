@@ -30,7 +30,7 @@ export const ITEMS = [
   { id: 'hermes', label: 'Hermes Agent', why: 'agente autónomo con memoria y muchos proveedores', optional: true,
     install: String.raw`$env:Path = "$env:USERPROFILE\.local\bin;$env:Path"; if (-not (Get-Command uv -ErrorAction SilentlyContinue)) { irm https://astral.sh/uv/install.ps1 | iex; $env:Path = "$env:USERPROFILE\.local\bin;$env:Path" }; uv tool install 'hermes-agent[acp]'` }
 ];
-const AGENT_ITEMS = ['claude', 'codex', 'cursor', 'gemini', 'copilot', 'opencode', 'qwen', 'hermes'];
+const AGENT_ITEMS = ['claude', 'codex', 'cursor', 'gemini', 'copilot', 'opencode', 'qwen', 'hermes', 'grok', 'devin', 'droid', 'omp', 'pi', 'antigravity'];
 
 async function versionOf(cmd, args = ['--version']) { const r = await quickRun(cmd, args, { timeoutMs: 8000 }); return r.ok ? r.out.split(/\r?\n/)[0].slice(0, 60) : null; }
 const tailscaleExe = () => (IS_WIN ? path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Tailscale', 'tailscale.exe') : 'tailscale');

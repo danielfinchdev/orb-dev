@@ -144,7 +144,7 @@ test('ACP: cerrar termina el proceso; detección por ruta y la lista de agentes 
   assert.deepEqual(agent.detect({ path: fake('fake-acp.mjs') }).pre, [fake('fake-acp.mjs')]);
   assert.equal(agent.detect({}), null, 'sin el programa instalado no se detecta');
   assert.deepEqual(agent.loginCommand(exe), { cmd: exe.cmd, args: [...exe.pre, 'login'] });
-  assert.deepEqual(Object.keys(ACP_SPECS), ['gemini', 'opencode', 'qwen', 'copilot', 'hermes']);
+  assert.deepEqual(Object.keys(ACP_SPECS), ['gemini', 'opencode', 'qwen', 'copilot', 'hermes', 'grok', 'devin', 'droid', 'omp']);
   assert.deepEqual(agent.caps, { images: false, steer: false, fork: false, approvals: true, models: false, context: true });
   assert.equal(live.steer({ text: 'x' }), false, 'ACP no corrige en marcha: los mensajes esperan en la cola');
 });

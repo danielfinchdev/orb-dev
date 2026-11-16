@@ -16,6 +16,8 @@ const write = (m) => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ..
 const update = (sessionId, u) => write({ method: 'session/update', params: { sessionId, update: u } });
 // FAKE_ACP_ARGV: a file that receives the arguments the program was started with.
 if (process.env.FAKE_ACP_ARGV) fs.writeFileSync(process.env.FAKE_ACP_ARGV, JSON.stringify(process.argv.slice(2)));
+// FAKE_ACP_ENVDUMP: a file that receives the API key variables the program got (XAI_API_KEY, …).
+if (process.env.FAKE_ACP_ENVDUMP) fs.writeFileSync(process.env.FAKE_ACP_ENVDUMP, JSON.stringify({ XAI_API_KEY: process.env.XAI_API_KEY ?? null, FACTORY_API_KEY: process.env.FACTORY_API_KEY ?? null }));
 const text = (t) => ({ type: 'text', text: t });
 let nextId = 1; const waiting = new Map(); let cancel = null; const history = [];
 
@@ -33,6 +35,9 @@ async function prompt(id, { sessionId, prompt: parts }) {
   update(sessionId, { sessionUpdate: 'tool_call_update', toolCallId: 'tc1', status: 'completed', content: [{ type: 'content', content: text('contenido de a.txt') }] });
   update(sessionId, { sessionUpdate: 'usage_update', used: 1234, size: 100000 });
   if (/MUERE/.test(said)) { process.stderr.write('el agente ACP se cayó\n'); process.exit(3); }
+  // FUGA: dies saying the API key on stderr (a program that echoes its environment when it fails)
+  if (/FUGA/.test(said)) { process.stderr.write(`fallo con ${process.env.XAI_API_KEY}
+`); process.exit(4); }
   if (/CUOTA/.test(said)) return write({ id, error: { code: 429, message: 'Quota exhausted for this account' } });
   if (/NIEGA/.test(said)) return write({ id, result: { stopReason: 'refusal' } });
   let extra = '';

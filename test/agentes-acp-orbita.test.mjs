@@ -20,6 +20,6 @@ test('selectors only offer enabled agents', () => {
 });
 test('Agents view shows the disabled state, an activate button for Hermes and its permission note', () => {
   assert.ok(agents.includes("t('agents.disabled')"));
-  assert.ok(agents.includes('agent-enable-hermes') && agents.includes("save(a.id, { enabled: true })"));
+  assert.ok(agents.includes('agent-enable-${a.id}') && agents.includes("OFF_AGENTS.includes(a.id)") && agents.includes("save(a.id, { enabled: true })"));
   assert.ok(agents.includes("t('agents.hermesNote')"));
 });
