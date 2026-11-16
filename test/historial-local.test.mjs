@@ -140,20 +140,19 @@ test('parseLine tolerates formats it does not know', () => {
   }
 });
 
-test('the methods are for this PC only, and the engine API answers them from ORB_HISTORY_HOME', async () => {
+test('the methods are for this PC only, and the engine API answers them for the given home', async () => {
   for (const m of ['history.list', 'history.read', 'history.usage']) assert.equal(METHODS[m], 'pc');
   const { tempHome } = await import('./helpers.mjs');
   const t = tempHome();
-  const keep = process.env.ORB_HISTORY_HOME; process.env.ORB_HISTORY_HOME = home;
   try {
     const { historyMethods } = await import('../src/engine/api/history.mjs');
-    const api = historyMethods();
+    const api = historyMethods({ home });
     assert.equal((await api['history.list']({})).length, 2);
     assert.equal((await api['history.usage']({ days: 90 })).files >= 0, true);
     await assert.rejects(() => api['history.usage']({ days: 5 }));
     await assert.rejects(() => api['history.list']({ agent: 'cursor' }));
     assert.deepEqual(rootsOf(home), { claude: path.join(home, '.claude', 'projects'), codex: path.join(home, '.codex', 'sessions') });
-  } finally { if (keep === undefined) delete process.env.ORB_HISTORY_HOME; else process.env.ORB_HISTORY_HOME = keep; t.cleanup(); }
+  } finally { t.cleanup(); }
 });
 
 test('the usage page has the heat map and the history view is reached from the palette, with texts in both languages', () => {
@@ -166,4 +165,15 @@ test('the usage page has the heat map and the history view is reached from the p
     const s = read('src', 'shared', 'locales', lang, 'session.mjs');
     for (const k of ['usage.heat', 'usage.byProject', 'history.title', 'history.readOnly', 'usage.days6']) assert.ok(s.includes(`'${k}'`), `${lang} ${k}`);
   }
+});
+
+test('a hard link to a file outside, and a root that is a link, are not read; the newest files survive the cap', async (t) => {
+  const root = path.join(home, '.claude', 'projects'); const hl = path.join(root, 'C--fake-proyecto-uno', 'hard.jsonl');
+  fs.writeFileSync(path.join(outside, 'h.jsonl'), jl({ type: 'user', cwd: '/x', timestamp: ts(1), message: { role: 'user', content: 'HARDLINK' } }));
+  try { fs.linkSync(path.join(outside, 'h.jsonl'), hl); } catch { t.skip('no hard links'); return; }
+  try { assert.ok(!JSON.stringify(await listChats({ home })).includes('HARDLINK')); } finally { fs.rmSync(hl, { force: true }); }
+  const capped = await listFiles(path.join(home, '.codex', 'sessions'), { limit: 1 });
+  assert.equal(capped.length, 1); assert.equal(capped.capped, true);
+  const fake = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-hist-root-'));
+  try { fs.symlinkSync(root, path.join(fake, 'p'), 'junction'); assert.equal((await listFiles(path.join(fake, 'p'))).length, 0); } catch { /* links not allowed */ } finally { fs.rmSync(fake, { recursive: true, force: true }); }
 });
