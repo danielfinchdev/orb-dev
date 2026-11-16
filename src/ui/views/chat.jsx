@@ -28,7 +28,10 @@ import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { pickGreeting, pickSubtitle, suggestionsFor, greetingFor } from '@/lib/greeting.js';
 import { LiveActivity, QuestionCard } from '@/components/chat-live.jsx';
 import { OrchestratorIcon } from '@/components/orchestrator-icon.jsx';
-import { BrainPicker, ReasoningMenu, UsageBubble, useCatalog, useUsageBubble } from '@/components/brain-picker.jsx';
+import { BrainPicker, ReasoningMenu, UsageBubble, useCatalog, useUsageBubble, favoriteLabel } from '@/components/brain-picker.jsx';
+import { favoriteBrains } from '@/lib/favorite-brains.js';
+import { stepFavorite } from '../../shared/favorite-brains.mjs';
+import { useShortcut } from '@/lib/keys.js';
 import { ContextSlot } from '@/components/context-slot.jsx';
 import { cn } from '@/lib/utils.js';
 import { DECISION, AGENT, STATUS } from '@/lib/labels.js';
@@ -410,11 +413,24 @@ export function ChatView({ route, onConversation, project: inProject }) {
   // Choosing Cursor for a new conversation with the «Orquestador» on: the conversation becomes a direct one with Cursor.
   const pickBrain = async (b) => {
     if (id == null && b.agent === 'cursor' && orchestrate) {
-      if (await settings({ agent: b.agent, model: b.model, account: b.account, orchestrate: false })) notify({ title: t('chat.cursorDirect'), tone: 'info' });
+      if (await settings({ agent: b.agent, model: b.model, account: b.account, ...(b.reasoning ? { reasoning: b.reasoning } : {}), orchestrate: false })) notify({ title: t('chat.cursorDirect'), tone: 'info' });
       return;
     }
-    settings({ agent: b.agent, model: b.model, account: b.account });
+    // a favourite also brings its reasoning level
+    settings({ agent: b.agent, model: b.model, account: b.account, ...(b.reasoning ? { reasoning: b.reasoning } : {}) });
   };
+  // Alt+] / Alt+[: the next / previous favourite brain (marked with the star in the brain picker).
+  const stepBrain = (step) => (e) => {
+    e.preventDefault();
+    const list = favoriteBrains();
+    if (!list.length) { notify({ title: t('brain.favNone'), tone: 'info' }, { record: false }); return; }
+    const next = stepFavorite(list, brain, step);
+    if (!next) return;
+    pickBrain(next);
+    notify({ title: t('brain.favSwitched', { label: favoriteLabel(catalog, next, t) }), tone: 'info' }, { record: false });
+  };
+  useShortcut('brain.next', stepBrain(1));
+  useShortcut('brain.prev', stepBrain(-1));
   const saved = [...older, ...rows];
   // The answer that ended the turn goes after the lines until a new read of the conversation brings it.
   const lastId = saved.at(-1)?.id ?? 0;

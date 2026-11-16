@@ -31,6 +31,7 @@ import modos from './es/modos.mjs';
 import ola1 from './es/ola1.mjs';
 import mensajeria from './es/mensajeria.mjs';
 import pestanas from './es/pestanas.mjs';
+import comodidad from './es/comodidad.mjs';
 import orbchats from './es/orbchats.mjs';
 import notes from './es/notes.mjs';
 import ext from './es/ext.mjs';
@@ -75,6 +76,7 @@ export default {
   ...ola1,
   ...mensajeria,
   ...pestanas,
+  ...comodidad,
   ...orbchats,
   ...notes,
   ...ext,

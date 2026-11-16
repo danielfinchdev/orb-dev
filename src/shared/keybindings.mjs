@@ -14,7 +14,11 @@ export const COMMANDS = Object.freeze([
   { id: 'tabs.next', label: 'keys.cmd.tabNext', key: 'Ctrl+PageDown', when: 'chat' },
   { id: 'tabs.prev', label: 'keys.cmd.tabPrev', key: 'Ctrl+PageUp', when: 'chat' },
   { id: 'tabs.split', label: 'keys.cmd.tabSplit', key: 'Ctrl+\\', when: 'chat' },
-  { id: 'tabs.focusOther', label: 'keys.cmd.tabFocus', key: 'Ctrl+Alt+Right', when: 'chat' }
+  { id: 'tabs.focusOther', label: 'keys.cmd.tabFocus', key: 'Ctrl+Alt+Right', when: 'chat' },
+  { id: 'brain.next', label: 'keys.cmd.brainNext', key: 'Alt+]', when: 'chat' },
+  { id: 'brain.prev', label: 'keys.cmd.brainPrev', key: 'Alt+[', when: 'chat' },
+  { id: 'search.files', label: 'keys.cmd.findFile', key: 'Ctrl+P', when: 'always' },
+  { id: 'search.text', label: 'keys.cmd.findText', key: 'Ctrl+Shift+F', when: 'always' }
 ]);
 const BY_ID = new Map(COMMANDS.map((c) => [c.id, c]));
 export const commandOf = (id) => BY_ID.get(id) ?? null;

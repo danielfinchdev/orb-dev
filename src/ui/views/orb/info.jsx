@@ -103,7 +103,7 @@ function ChatInfo({ conv }) {
           <ProjectPicker conversation={conv.id} />
           {conv.project ? <Button size="icon-xs" variant="ghost" className="-mr-1.5" onClick={() => openOrbInfo({ type: 'project', name: conv.project })} aria-label={t('orbchats.projectInfo')} data-testid="info-project"><ChevronRight /></Button> : null}
         </Row>
-        <Row icon={Sparkles} label={t('orbchats.model')} value=""><BrainPicker catalog={catalog} value={brain} onChange={(b) => settings({ agent: b.agent, model: b.model, account: b.account })} className="max-w-48 min-w-0 shrink" /></Row>
+        <Row icon={Sparkles} label={t('orbchats.model')} value=""><BrainPicker catalog={catalog} value={brain} onChange={(b) => settings({ agent: b.agent, model: b.model, account: b.account, ...(b.reasoning ? { reasoning: b.reasoning } : {}) })} className="max-w-48 min-w-0 shrink" /></Row>
         <Row icon={BrainIcon} label={t('orbchats.reasoning')} value=""><ReasoningMenu catalog={catalog} value={brain} onChange={(reasoning) => settings({ reasoning })} /></Row>
         <BubbleTip title={t('orbchats.orchestrator')} text={t('orbchats.orchestratorTip', { name })} side="left">
           <div><Row icon={OrchestratorIcon} label={t('orbchats.orchestrator')} value={t('orbchats.orchestratorOn')} testid="info-orchestrator" /></div>
