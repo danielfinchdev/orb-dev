@@ -2,7 +2,7 @@
 // files appear as the agent works, risky actions wait for a click (approval cards), messages written meanwhile correct the
 // agent on the fly or wait in a queue, and the context meter shows how full the conversation is. Task runs open here too.
 import { lazy, memo, Suspense, useEffect, useMemo, useState } from 'react';
-import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, X, ClipboardCheck, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Ellipsis, Gamepad2, Smartphone, Shuffle, ScreenShare, SquareTerminal } from 'lucide-react';
+import { Info, FileDiff, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, X, ClipboardCheck, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Ellipsis, Gamepad2, Smartphone, Shuffle, ScreenShare, SquareTerminal } from 'lucide-react';
 import { unlockCore } from '@/lib/core-access.js';
 import { notifyError, notifyOk } from '@/lib/notify.js';
 import { TypingMarkdown, TypedMarkdown } from '@/components/markdown.jsx';
@@ -14,6 +14,8 @@ import { useDraft } from '@/lib/draft.js';
 import { BackToList } from '@/components/chat-bar.jsx';
 import { ContextSlot } from '@/components/context-slot.jsx';
 import { TaskChanges } from '@/components/task-changes.jsx';
+import { TurnChanges } from '@/components/turn-changes.jsx';
+import { takeComments, putBackComments, useComments } from '@/lib/turn-comments.js';
 import { SecretCards } from '@/components/secret-card.jsx';
 import { PrCards } from '@/components/pr-card.jsx';
 import { HtmlPages } from '@/components/html-page.jsx';
@@ -320,6 +322,16 @@ export function SessionView({ route }) {
   const PAGE = 200;
   // the user's terminal under the chat (this PC only), and a command pasted into it from the chat.
   const [terminal, setTerminal] = useState(false);
+  // «Cambios» of this chat turn by turn (a direct chat in a project folder), and the comments waiting for the next message.
+  const [changes, setChanges] = useState(false);
+  const pendingComments = useComments(route.id);
+  const hasPanel = s.kind === 'chat' && Boolean(s.project) && fullPc();
+  useEffect(() => setChanges(false), [route.id]);
+  useEffect(() => {
+    if (!hasPanel) return undefined;
+    const on = (e) => { if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'd') { e.preventDefault(); setChanges((v) => !v); } };
+    window.addEventListener('keydown', on); return () => window.removeEventListener('keydown', on);
+  }, [hasPanel]);
   const [termDraft, setTermDraft] = useState('');
   useEffect(() => (fullPc() ? onTerminalPaste((line) => { setTerminal(true); setTermDraft(line); }) : undefined), [route.id]);
   useEffect(() => { setTerminal(false); setTermDraft(''); }, [route.id]);
@@ -402,9 +414,10 @@ export function SessionView({ route }) {
     // while it works the message may go to the queue instead, which shows it when the engine says so.
     draft.set(''); setImages([]);
     const mine = running ? null : addPending(`session:${s.id}`, said, items.at(-1)?.id ?? 0);
-    const r = await act(call('sessions.send', { id: s.id, text: said, images: sentImages, mode }));
+    const taken = takeComments(s.id);
+    const r = await act(call('sessions.send', { id: s.id, text: said, images: sentImages, mode, comments: taken.length ? taken : undefined }));
     if (r === undefined || r?.queued) { if (mine) dropPending(mine); }
-    if (r === undefined) { draft.set((now) => (now.trim() ? now : msg)); setImages((now) => (now.length ? now : sentImages)); return; }
+    if (r === undefined) { putBackComments(s.id, taken); draft.set((now) => (now.trim() ? now : msg)); setImages((now) => (now.length ? now : sentImages)); return; }
     if (r?.steered) notifyOk(t('session.steerSent'));
     else if (r?.queued) notifyOk(s.kind === 'task' && !running ? t('session.resentTask') : t('session.queuedToast'));
   };
@@ -445,6 +458,7 @@ export function SessionView({ route }) {
           extra={<span className="bar-title-agent"><AgentIcon agent={s.agent} className="size-3.5" />{who}{s.model ? ` · ${modelName(s.model)}` : ''}</span>} />}>
         <NotificationBell />
         <BarPause />
+        {hasPanel ? <Tip label={t('turns.buttonTip')}><Button variant={changes ? 'secondary' : 'outline'} size="sm" onClick={() => setChanges(!changes)} data-testid="turn-changes-toggle"><FileDiff />{t('turns.button')}</Button></Tip> : null}
         {s.kind === 'chat' ? null : (<>
           {task ? <TaskStatus task={task} /> : null}
           <Button variant="outline" size="sm" onClick={() => go({ view: 'tasks', id: s.task_id })}><ClipboardCheck />{t('session.viewTask', { id: s.task_id })}</Button>
@@ -468,6 +482,8 @@ export function SessionView({ route }) {
           </DropdownMenuContent>
         </DropdownMenu>
       </PageHeader>
+      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={trail.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
         <div className="lazy-lines mx-auto flex max-w-3xl flex-col gap-3.5 px-5 py-6">
@@ -510,6 +526,7 @@ export function SessionView({ route }) {
       <PrCards sessionId={s.id} />
       {fullPc() ? <HtmlPages sessionId={s.id} /> : null}
       {terminal && fullPc() ? <TerminalPanel dir={s.cwd} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
+      {pendingComments.length ? <div className="text-muted-foreground mx-auto w-full max-w-3xl shrink-0 px-5 pb-1.5 text-xs" data-testid="pending-comments">{t('turns.pending', { n: pendingComments.length })}</div> : null}
       <Composer draft={draft} onSend={send} attached={images.length > 0} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
         placeholder={running ? (AGENT_CAN_STEER[s.agent] ? t('session.phSteer', { agent: AGENT[s.agent] }) : t('session.phWait', { agent: AGENT[s.agent] })) : s.kind === 'task' ? t('session.phTask') : t('session.ph', { agent: AGENT[s.agent] })}
         onPaste={(e) => { fromTransfer(e.clipboardData).then((f) => { if (f.length) addImages(f); }); }}
@@ -551,6 +568,9 @@ export function SessionView({ route }) {
           <Tip label={s.cwd}><span tabIndex={0} className="border-input text-muted-foreground dark:bg-input/30 hidden h-8 min-w-0 items-center gap-1.5 rounded-lg border px-2.5 text-control whitespace-nowrap shadow-xs outline-none focus-visible:ring-ring/40 focus-visible:ring-[3px] xl:inline-flex" data-testid="session-folder"><FolderOpen className="size-4 shrink-0" /><span className="truncate">{s.project ?? baseName(s.cwd)}</span></span></Tip>
           {s.context ? <span className="text-muted-foreground ml-auto text-xs"><ContextMeter context={s.context} /></span> : null}
         </>} />
+      </div>
+      {changes && hasPanel ? <TurnChanges session={s} version={`${s.status}:${s.updated_at}`} onClose={() => setChanges(false)} /> : null}
+      </div>
     </>
   );
 }
