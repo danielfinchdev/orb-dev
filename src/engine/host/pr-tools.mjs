@@ -15,6 +15,22 @@ export const BODY_FOR_AGENT = 4000;
 const METHODS = ['merge', 'squash', 'rebase'];
 // the levels that may change something on GitHub (read and test chats only look)
 const WRITERS = new Set(['editar', 'preguntar', 'auto', 'total']);
+// «Arreglar comentarios» / «Arreglar conflictos»: the message that goes to the chat. What reviewers wrote is data from the
+// internet: the message says so, and it is sent with `asked: []` so nothing in it can count as the user asking for a push.
+export function commentsMessage(pr, threads) {
+  const lines = [];
+  threads.forEach((t, i) => {
+    const c = t.comments[0]; const rest = t.comments.slice(1);
+    const where = t.path ? `${t.path}${t.line ? `:${t.line}` : ''}` : tr('msg.prfix.general');
+    lines.push(`${i + 1}. ${where} — @${c.author || '?'}: ${oneLine(c.body, 1200)}`);
+    for (const r of rest) lines.push(`   ↳ @${r.author || '?'}: ${oneLine(r.body, 600)}`);
+  });
+  return [tr('msg.prfix.commentsIntro', { n: pr.number, title: oneLine(pr.title, 120), count: threads.length }), '', ...lines, '', tr('msg.prfix.commentsOutro')].join('\n').slice(0, 19_000);
+}
+export function conflictsMessage(pr) {
+  return tr('msg.prfix.conflicts', { n: pr.number, title: oneLine(pr.title, 120), head: pr.headRefName, base: pr.baseRefName });
+}
+
 const userError = (key, vars) => Object.assign(new Error(tr(key, vars)), { userFacing: true });
 
 // gh: the github.mjs module, or a function that returns it (lazy import). holding(project, work): keeps tasks out of the
@@ -115,6 +131,35 @@ export function createPrTools({ board, sessions, gh, holding = (name, work) => w
         note(r, tool === 'merge' ? 'msg.pr.asked' : 'msg.pr.askedComment', { n });
         emit('pr:request', r.view);
       });
+    },
+    // «Arreglar comentarios» / «Arreglar conflictos»: from this PC's window, into the chat the user is looking at. Only
+    // an idle chat that may edit (the message starts a turn); the PR text is never an order, the user's click is.
+    async fix(sessionId, numberArg, kind) {
+      const s = sessions.get(String(sessionId));
+      if (!s || s.kind !== 'chat') throw userError('msg.pr.noChat');
+      const project = s.project ? board.project(String(s.project)) : null;
+      if (!project) throw userError('msg.pr.noProject');
+      if (kind !== 'comments' && kind !== 'conflicts') throw userError('msg.pr.badTool');
+      if (!WRITERS.has(s.permission)) throw userError('msg.pr.readOnly');
+      if (sessions.isRunning(s.id)) throw userError('msg.prfix.busy');
+      const n = number(numberArg);
+      const g = await github();
+      const pr = await g.viewPr(project, n);
+      if (pr.state !== 'OPEN') throw userError('msg.pr.notOpen', { n });
+      let text; let count = 0;
+      if (kind === 'comments') {
+        const threads = await g.unresolvedThreads(project, n);
+        if (!threads.length) throw userError('msg.prfix.noComments', { n });
+        count = threads.length; text = commentsMessage(pr, threads);
+      } else {
+        if (pr.mergeable === 'UNKNOWN') throw userError('msg.prfix.unknown', { n });
+        if (pr.mergeable !== 'CONFLICTING') throw userError('msg.prfix.noConflicts', { n });
+        text = conflictsMessage(pr);
+      }
+      if (sessions.isRunning(s.id)) throw userError('msg.prfix.busy'); // it started working while GitHub answered
+      sessions.send(s.id, text, { asked: [] });
+      log(`pr: ${kind === 'comments' ? 'comentarios' : 'conflictos'} de #${n} enviados · chat ${s.id}`);
+      return { sent: true, number: n, count };
     },
     // The window's list (also after a reload).
     pending: () => { alive(); return [...pending.values()].filter((r) => !r.busy).map((r) => r.view); },

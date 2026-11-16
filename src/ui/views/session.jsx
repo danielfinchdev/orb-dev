@@ -17,7 +17,8 @@ import { TaskChanges } from '@/components/task-changes.jsx';
 import { TurnChanges } from '@/components/turn-changes.jsx';
 import { takeComments, putBackComments, useComments } from '@/lib/turn-comments.js';
 import { SecretCards } from '@/components/secret-card.jsx';
-import { PrCards } from '@/components/pr-card.jsx';
+import { PrCards, PrBar } from '@/components/pr-card.jsx';
+import { CommitButton } from '@/components/commit-dialog.jsx';
 import { HtmlPages } from '@/components/html-page.jsx';
 import { takePoints, onPoints } from '@/lib/browser-points.js';
 import { TerminalPanel } from '@/components/terminal-panel.jsx';
@@ -459,6 +460,7 @@ export function SessionView({ route }) {
         <NotificationBell />
         <BarPause />
         {hasPanel ? <Tip label={t('turns.buttonTip')}><Button variant={changes ? 'secondary' : 'outline'} size="sm" onClick={() => setChanges(!changes)} data-testid="turn-changes-toggle"><FileDiff />{t('turns.button')}</Button></Tip> : null}
+        {s.kind === 'chat' && s.project && fullPc() ? <CommitButton project={s.project} /> : null}
         {s.kind === 'chat' ? null : (<>
           {task ? <TaskStatus task={task} /> : null}
           <Button variant="outline" size="sm" onClick={() => go({ view: 'tasks', id: s.task_id })}><ClipboardCheck />{t('session.viewTask', { id: s.task_id })}</Button>
@@ -524,6 +526,7 @@ export function SessionView({ route }) {
       {/* a secret the agent asked for, typed only here (never in the chat). */}
       <SecretCards sessionId={s.id} />
       <PrCards sessionId={s.id} />
+      <PrBar session={s} />
       {fullPc() ? <HtmlPages sessionId={s.id} /> : null}
       {terminal && fullPc() ? <TerminalPanel dir={s.cwd} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
       {pendingComments.length ? <div className="text-muted-foreground mx-auto w-full max-w-3xl shrink-0 px-5 pb-1.5 text-xs" data-testid="pending-comments">{t('turns.pending', { n: pendingComments.length })}</div> : null}

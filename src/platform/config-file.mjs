@@ -31,6 +31,9 @@ export const DEFAULT_CONFIG = Object.freeze({
   // nobody answers in this time is denied and the agent goes on another way (0 = wait for ever).
   oneAtATime: false,
   approvalWaitMinutes: 10,
+  // how «Hacer commit…» writes its message (Ajustes › Agentes): 'conventional' (default), 'repo' (follow the repository's own
+  // history) or 'custom' (commitInstructions).
+  git: { commitStyle: 'conventional', commitInstructions: '' },
   // the agents' permission level for chats and tasks (Ajustes › Agentes; each chat may change its own): 'auto' works
   // without questions inside the project folder (undo instead of asking), 'preguntar' asks before risky commands and
   // before writing outside it (src/domain/security/guard.mjs).

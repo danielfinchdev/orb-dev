@@ -14,7 +14,7 @@ export const DELETING_PROJECTS = 'projects_deleting';
 // reads the sources and fails on one. The table's format does not change: these are the keys already on disk.
 export const STATE_KEYS = Object.freeze({
   exact: Object.freeze([
-    'active_project', 'paused', 'agents_available', 'android_devices', 'backup_daily_day', 'backup_daily_try', 'backup_last',
+    'active_project', 'paused', 'ciwatch', 'agents_available', 'android_devices', 'backup_daily_day', 'backup_daily_try', 'backup_last',
     'games_suggested', 'models_rev', 'msg_delivered', 'notices_migrated', 'conversations_migrated', 'opti_retired', 'opti_session',
     'opti_pending', 'orchestrator_key_hash', 'orchestrator_pending', 'relink_38', 'remote_keys', 'sidebar_completed', 'sidebar_kept',
     'extension_requests', 'extension_edits', 'connector_rebinds', 'pending_questions', 'projects_ignored', 'projects_finished',

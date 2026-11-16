@@ -2,8 +2,9 @@
 // src/engine/host/pr-tools.mjs). Only in this PC's window. Every string of the PR comes from the internet, so it is
 // rendered as plain text (React text nodes), never as HTML or markdown.
 import { useEffect, useRef, useState } from 'react';
-import { GitPullRequest, ShieldAlert } from 'lucide-react';
+import { GitPullRequest, ShieldAlert, MessageSquareWarning, GitMerge, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
+import { Switch, BubbleTip } from '@/components/ui/overlay.jsx';
 import { call, act, bridge, fullPc } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
 import { quiet } from '@/lib/quiet.js';
@@ -71,4 +72,48 @@ export function PrCards({ sessionId }) {
   }, [sessionId]);
   if (!list.length) return null;
   return <div className="mx-auto grid w-full max-w-3xl shrink-0 gap-2 px-5 pb-2">{list.map((r) => <PrCard key={r.id} r={r} />)}</div>;
+}
+
+// The pull request of this chat's branch: gathers what is pending into the chat («Arreglar comentarios», «Arreglar
+// conflictos») and switches on the CI watch (engine/scheduler/ci-watch.mjs: it never merges). Only this PC's window.
+export function PrBar({ session }) {
+  const t = useT();
+  const [pr, setPr] = useState(null);
+  const [watch, setWatch] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const project = session?.project;
+  useEffect(() => {
+    if (!fullPc() || !project || session.kind !== 'chat') return undefined;
+    let alive = true; setPr(null);
+    call('projects.info', { name: project }).then((info) => { if (alive) setPr((info?.prs ?? []).find((p) => p.headRefName === info.branch) ?? null); }).catch(quiet);
+    return () => { alive = false; };
+  }, [project, session?.id, session?.kind]);
+  useEffect(() => {
+    if (!fullPc() || !project) return undefined;
+    let alive = true;
+    const load = () => call('ciWatch.list').then((all) => { if (alive) setWatch((all ?? []).find((w) => w.session === String(session.id)) ?? null); }).catch(quiet);
+    load();
+    const off = bridge.on('ciwatch:changed', load);
+    return () => { alive = false; off(); };
+  }, [project, session?.id]);
+  if (!pr) return null;
+  const fix = async (kind) => {
+    setBusy(true);
+    try { await act(call('projects.prFix', { session: String(session.id), number: pr.number, kind }), t('prbar.sent')); } finally { setBusy(false); }
+  };
+  const toggle = async (on) => {
+    const r = await act(call('ciWatch.set', { session: String(session.id), number: pr.number, on }), on ? t('prbar.watchOn') : t('prbar.watchOff'));
+    if (r) setWatch(on ? { session: String(session.id), number: pr.number, attempts: 0, max: 3 } : null);
+  };
+  return (
+    <div className="mx-auto flex w-full max-w-3xl shrink-0 flex-wrap items-center gap-2 px-5 pb-2 text-xs" data-testid="pr-bar" role="group" aria-label={t('prbar.pr', { number: pr.number, n: pr.number })}>
+      <GitPullRequest className="text-muted-foreground size-3.5 shrink-0" />
+      <span className="text-muted-foreground min-w-0 truncate"><bdi>{t('prbar.pr', { n: pr.number })}</bdi> · <bdi>{pr.title}</bdi></span>
+      <BubbleTip title={t('prbar.fixComments')} text={t('prbar.fixTip')}><Button type="button" size="sm" variant="outline" className="h-6 px-2 text-xs" disabled={busy} onClick={() => fix('comments')} data-testid="pr-fix-comments"><MessageSquareWarning className="size-3" />{t('prbar.fixComments')}</Button></BubbleTip>
+      <BubbleTip title={t('prbar.fixConflicts')} text={t('prbar.fixTip')}><Button type="button" size="sm" variant="outline" className="h-6 px-2 text-xs" disabled={busy} onClick={() => fix('conflicts')} data-testid="pr-fix-conflicts"><GitMerge className="size-3" />{t('prbar.fixConflicts')}</Button></BubbleTip>
+      <BubbleTip title={t('prbar.watch')} text={t('prbar.watchTip')}>
+        <label className="flex cursor-pointer items-center gap-1.5"><Eye className="size-3" /><span>{watch ? t('prbar.watching', { attempts: watch.attempts, max: watch.max }) : t('prbar.watch')}</span><Switch checked={Boolean(watch)} onCheckedChange={toggle} size="sm" data-testid="pr-watch" /></label>
+      </BubbleTip>
+    </div>
+  );
 }

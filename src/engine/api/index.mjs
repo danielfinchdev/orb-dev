@@ -26,6 +26,7 @@ import { grantMethods } from '../security/grants.mjs';
 import { agentAuth } from '../../domain/security/agent-auth.mjs';
 import { createSecretRequests } from '../security/agent-secrets.mjs';
 import { createPrTools } from '../host/pr-tools.mjs';
+import { createCiWatch } from '../scheduler/ci-watch.mjs';
 import { createHtmlPages } from '../host/html-pages.mjs';
 import { createTerminals } from '../host/user-terminal.mjs';
 import { extensionMethods } from './extensions.mjs';
@@ -162,6 +163,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
   const secrets = createSecretRequests({ sessions, auth: agentAuth, master: () => ctx.master, emit, log });
   // the pull-request tools of the agents (pr-tools.mjs); a merge is answered only on this PC's card.
   const prTools = createPrTools({ board, sessions, gh: () => import('../host/github.mjs'), holding, emit, log });
+  // «Vigilar la CI del PR» (scheduler/ci-watch.mjs): the scheduler's tick calls it; it never merges.
+  const ciWatch = createCiWatch({ board, sessions, gh: () => import('../host/github.mjs'), emit, log });
+  if (scheduler) scheduler.ciWatch = ciWatch;
   // the HTML pages an agent shows in a chat (html-pages.mjs): sandboxed, internet off, switched on only on this PC.
   const htmlPages = createHtmlPages({ sessions, emit: emitRaw, log });
   agentAuth.onCall = async ({ session }, method, args) => {
@@ -344,6 +348,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     'secrets.answer': ({ id, value, save, saved }) => secrets.answer({ id: int(id, 'petición'), value, save: save === true, saved: saved === true }),
     'secrets.decline': ({ id }) => secrets.decline({ id: int(id, 'petición') }),
     // a merge an agent asked for: shown and answered only on this PC's card.
+    'projects.prFix': ({ session, number, kind }) => prTools.fix(str(session, 'conversación', 64), number, kind),
+    'ciWatch.list': () => ciWatch.list(),
+    'ciWatch.set': ({ session, number, on }) => ciWatch.set(str(session, 'conversación', 64), number, on === true),
     'prConfirm.pending': () => prTools.pending(),
     // the answer names the request by id, chat, PR number and head commit, so a stale card cannot answer another one
     'prConfirm.answer': (a) => prTools.answer(prRef(a)),
