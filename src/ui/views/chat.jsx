@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { TaskStatus, WaitLabel, HeldCard, resumeQueue, setQueuePaused } from '@/components/task-state.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { Switch, BubbleTip } from '@/components/ui/overlay.jsx';
-import { bridge, useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout, plainSkin, addPending, movePending, dropPending, pendingShown, usePending } from '@/lib/store.js';
+import { bridge, useStore, call, act, setState, getState, go, newChat, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout, plainSkin, addPending, movePending, dropPending, pendingShown, usePending } from '@/lib/store.js';
 import { notify } from '@/lib/notify.js';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { pickGreeting, pickSubtitle, suggestionsFor, greetingFor } from '@/lib/greeting.js';
@@ -41,6 +41,7 @@ import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
 import { keepSame } from '@/lib/memo.js';
 import { useAutoScroll, Composer } from '@/components/conversation/composer.jsx';
 import { MessageBox } from '@/components/conversation/message-box.jsx';
+import { ColdNotice } from '@/components/conversation/cold-notice.jsx';
 import { BarPause, COMPACT_AT, CompactButton } from '@/components/conversation/bar.jsx';
 import { ContextMeter } from '@/components/conversation/context-meter.jsx';
 import { needsApproval } from '@/lib/task-approval.js';
@@ -528,7 +529,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
             showTest ? { key: 'test', node: <BubbleTip title={t('test.button')} text={t('test.tip')} side="top"><Button size="xs" variant="soft" onClick={() => runTest(t('test.prompt'))} data-testid="chat-test"><FlaskConical />{t('test.button')}</Button></BubbleTip> } : null
           ]} />
         </>}
-        notice={<UsageBubble text={bubble.text} onClose={bubble.close} />}
+        notice={bubble.text ? <UsageBubble text={bubble.text} onClose={bubble.close} /> : id != null ? <ColdNotice id={id} agent={conv?.agent} used={context?.used} lastAt={saved.at(-1)?.at ?? conv?.updated_at} busy={chat.busy || chat.waiting} compacting={compacting} onCompact={compact} onFresh={() => newChat(conv?.project ?? undefined)} /> : null}
         bottom={<>
           {/* the model and its reasoning stay together; the permission and the orchestrator form the second group;
               the context meter sits at the far end. Each group wraps as a whole on a narrow window. */}

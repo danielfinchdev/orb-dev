@@ -13,6 +13,7 @@ import { renameChat } from '@/views/orb/inbox.jsx';
 import { useDraft } from '@/lib/draft.js';
 import { BackToList } from '@/components/chat-bar.jsx';
 import { ContextSlot } from '@/components/context-slot.jsx';
+import { ColdNotice } from '@/components/conversation/cold-notice.jsx';
 import { ChatModes } from '@/components/chat-modes.jsx';
 import { TaskChanges } from '@/components/task-changes.jsx';
 import { TurnChanges } from '@/components/turn-changes.jsx';
@@ -32,7 +33,7 @@ import { GeneratedImage, openImage } from '@/components/image-viewer.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Textarea, Empty } from '@/components/ui/basic.jsx';
 import { Select, Collapsible, CollapsibleTrigger, CollapsibleContent, Tip, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
-import { useStore, call, act, go, bridge, refresh, getState, fullPc, openGames, addPending, dropPending, pendingShown, usePending } from '@/lib/store.js';
+import { useStore, call, act, go, newChat, bridge, refresh, getState, fullPc, openGames, addPending, dropPending, pendingShown, usePending } from '@/lib/store.js';
 import { useShortcut } from '@/lib/keys.js';
 import { AGENT, PERMISSION, REASONING, STATUS, DECISION, CAN_STEER as AGENT_CAN_STEER, CAN_COMPACT, options } from '@/lib/labels.js';
 import { baseName, cn } from '@/lib/utils.js';
@@ -529,7 +530,7 @@ export function SessionView({ route }) {
       {fullPc() ? <HtmlPages sessionId={s.id} /> : null}
       {terminal && fullPc() ? <TerminalPanel dir={s.cwd} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
       {pendingComments.length ? <div className="text-muted-foreground mx-auto w-full max-w-3xl shrink-0 px-5 pb-1.5 text-xs" data-testid="pending-comments">{t('turns.pending', { n: pendingComments.length })}</div> : null}
-      <Composer draft={draft} onSend={send} attached={images.length > 0} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
+      <Composer draft={draft} onSend={send} attached={images.length > 0} notice={s.kind === 'chat' && CAN_COMPACT[s.agent] === true ? <ColdNotice id={`s${s.id}`} agent={s.agent} used={s.context?.used} lastAt={s.updated_at} busy={running} compacting={compacting} onCompact={compact} onFresh={() => newChat(s.project ?? undefined)} /> : null} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
         placeholder={running ? (AGENT_CAN_STEER[s.agent] ? t('session.phSteer', { agent: AGENT[s.agent] }) : t('session.phWait', { agent: AGENT[s.agent] })) : s.kind === 'task' ? t('session.phTask') : t('session.ph', { agent: AGENT[s.agent] })}
         onPaste={(e) => { fromTransfer(e.clipboardData).then((f) => { if (f.length) addImages(f); }); }}
         onDrop={(e) => { fromTransfer(e.dataTransfer).then(addImages); }}

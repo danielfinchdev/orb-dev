@@ -18,6 +18,11 @@ export default {
   'finder.searching': 'Buscando…',
   'finder.type': 'Escribe para buscar.',
   'finder.none': 'No hay resultados.',
+  'cold.title': 'Lleva {idle} parado',
+  'cold.body': 'Reanudar costará releer todo. ¿Compactar o empezar de nuevo?',
+  'cold.compact': 'Compactar',
+  'cold.fresh': 'Empezar de nuevo',
+  'cold.dismiss': 'Seguir con este chat sin compactar',
   'htmlpage.choices': 'Respuestas sugeridas',
   'htmlpage.choiceTip': 'Se envía este texto como mensaje tuyo',
   'finder.chooseHint': 'Intro: poner la ruta en la caja del chat.'

@@ -18,6 +18,11 @@ export default {
   'finder.searching': 'Searching…',
   'finder.type': 'Type to search.',
   'finder.none': 'No results.',
+  'cold.title': 'Idle for {idle}',
+  'cold.body': 'Resuming will have to read everything again. Compact, or start afresh?',
+  'cold.compact': 'Compact',
+  'cold.fresh': 'Start afresh',
+  'cold.dismiss': 'Carry on with this chat without compacting',
   'htmlpage.choices': 'Suggested answers',
   'htmlpage.choiceTip': 'This text is sent as your message',
   'finder.chooseHint': 'Enter: put the path in the chat box.'
