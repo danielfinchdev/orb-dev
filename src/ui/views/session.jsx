@@ -15,7 +15,8 @@ import { BackToList } from '@/components/chat-bar.jsx';
 import { ContextSlot } from '@/components/context-slot.jsx';
 import { TaskChanges } from '@/components/task-changes.jsx';
 import { SecretCards } from '@/components/secret-card.jsx';
-import { PrCards } from '@/components/pr-card.jsx';
+import { PrCards, PrBar } from '@/components/pr-card.jsx';
+import { CommitButton } from '@/components/commit-dialog.jsx';
 import { HtmlPages } from '@/components/html-page.jsx';
 import { takePoints, onPoints } from '@/lib/browser-points.js';
 import { TerminalPanel } from '@/components/terminal-panel.jsx';
@@ -445,6 +446,7 @@ export function SessionView({ route }) {
           extra={<span className="bar-title-agent"><AgentIcon agent={s.agent} className="size-3.5" />{who}{s.model ? ` · ${modelName(s.model)}` : ''}</span>} />}>
         <NotificationBell />
         <BarPause />
+        {s.kind === 'chat' && s.project && fullPc() ? <CommitButton project={s.project} /> : null}
         {s.kind === 'chat' ? null : (<>
           {task ? <TaskStatus task={task} /> : null}
           <Button variant="outline" size="sm" onClick={() => go({ view: 'tasks', id: s.task_id })}><ClipboardCheck />{t('session.viewTask', { id: s.task_id })}</Button>
@@ -508,6 +510,7 @@ export function SessionView({ route }) {
       {/* a secret the agent asked for, typed only here (never in the chat). */}
       <SecretCards sessionId={s.id} />
       <PrCards sessionId={s.id} />
+      <PrBar session={s} />
       {fullPc() ? <HtmlPages sessionId={s.id} /> : null}
       {terminal && fullPc() ? <TerminalPanel dir={s.cwd} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
       <Composer draft={draft} onSend={send} attached={images.length > 0} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"

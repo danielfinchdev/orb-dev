@@ -12,7 +12,7 @@ import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from '../shared/appearance.mjs'
 // Settings saved from the app. Only known top-level keys are accepted.
 // A connector's name as it goes into environment variable names (case does not count on Windows).
 export const connectorKey = (name) => String(name ?? '').toLowerCase().replace(/[^a-z0-9_]/g, '_');
-const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'skills', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'oneAtATime', 'approvalWaitMinutes', 'permissions', 'rails', 'protected', 'backup', 'tz', 'setupPending'];
+const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'skills', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'oneAtATime', 'approvalWaitMinutes', 'permissions', 'rails', 'protected', 'backup', 'tz', 'setupPending', 'git'];
 function tidyStored(stored) {
   const out = structuredClone(stored);
   const rounds = out.budget?.maxFixRounds;
@@ -157,6 +157,8 @@ export function validateConfig(c) {
   }
   if (c.tz !== undefined && c.tz !== '' && !(typeof c.tz === 'string' && c.tz.length <= 64 && (() => { try { new Intl.DateTimeFormat('en', { timeZone: c.tz }); return true; } catch { return false; } })())) throw new Error(tr('msg.ctx.badAppearance', { name: 'tz' }));
   if (c.approvalWaitMinutes !== undefined) int(c.approvalWaitMinutes, 0, 240, 'approvalWaitMinutes');
+  if (c.git?.commitStyle !== undefined && !['conventional', 'repo', 'custom'].includes(c.git.commitStyle)) throw new Error(tr('msg.ctx.badCommitStyle'));
+  if (c.git?.commitInstructions !== undefined && (typeof c.git.commitInstructions !== 'string' || c.git.commitInstructions.length > 2000)) throw new Error(tr('msg.ctx.badCommitStyle'));
   // «Auto» or «Preguntar» for the agents (src/domain/security/guard.mjs › globalAutonomy).
   if (c.permissions !== undefined && (!c.permissions || typeof c.permissions !== 'object' || Array.isArray(c.permissions) || !['auto', 'preguntar'].includes(c.permissions.mode))) throw new Error(tr('msg.ctx.badAppearance', { name: 'permissions' }));
   if (c.budget?.stopAt != null && !(Number(c.budget.stopAt) >= 0.5 && Number(c.budget.stopAt) <= 1)) throw new Error(tr('msg.ctx.stopAt'));

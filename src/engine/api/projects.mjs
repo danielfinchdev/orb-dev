@@ -109,9 +109,27 @@ export function projectMethods({ realHome, insideHome, project, holding, coordin
     'projects.clearIcon': ({ name }) => { const icon = clearProjectIcon(project(name)); board.changed('projects'); return icon; },
     'projects.info': async ({ name }) => (await gh()).projectInfo(project(name)),
     // A commit or a merge changes the folder off the event loop: the project is held so no task starts in it meanwhile.
-    'projects.commit': async ({ name, message }) => {
-      const p = project(name); const text = str(message, 'mensaje', 200); const g = await gh();
+    'projects.commit': async ({ name, message, files, push }) => {
+      const p = project(name); const g = await gh();
+      // the dialog of «Hacer commit…»: some files, a message with a body, and «Commit y push» (never forced).
+      if (Array.isArray(files)) {
+        const text = str(message, 'mensaje', 5000); const list = files.slice(0, 500).map((f) => str(f, 'archivo', 500));
+        return holding(p.name, async () => {
+          const out = await g.commitAll(p, text, { files: list });
+          if (!push) return { ...out, pushed: false };
+          try { await g.push(p, out.branch); } catch (error) { return { ...out, pushed: false, pushError: oneLine(error.message, 300) }; } // the commit is done: the push error is shown, not thrown
+          return { ...out, pushed: true };
+        });
+      }
+      const text = str(message, 'mensaje', 200);
       return holding(p.name, () => g.commitAll(p, text));
+    },
+    'projects.commitFiles': async ({ name }) => (await gh()).changedFiles(project(name)),
+    'projects.commitSuggest': async ({ name }) => {
+      const p = project(name); const g = await gh();
+      const files = await g.changedFiles(p);
+      const { suggestCommitMessage } = await import('../commit-message.mjs');
+      return suggestCommitMessage(board, { files, context: await g.commitContext(p, files) });
     },
     'projects.merge': async ({ name, branch }) => {
       const p = project(name); const b = str(branch, 'rama', 120); const g = await gh();

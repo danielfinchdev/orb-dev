@@ -8,7 +8,7 @@ import { Installer } from '@/components/installer.jsx';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Field, Input, Spinner } from '@/components/ui/basic.jsx';
+import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Field, Input, Spinner, Textarea } from '@/components/ui/basic.jsx';
 import { Switch, Collapsible, CollapsibleTrigger, CollapsibleContent, BubbleTip, Checkbox, Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem } from '@/components/ui/overlay.jsx';
 import { cn, baseName } from '@/lib/utils.js';
 import { useStore, call, act, bridge, setState, getState } from '@/lib/store.js';
@@ -353,6 +353,25 @@ function AgentKeys({ a }) {
   );
 }
 
+// How «Hacer commit…» writes its message (engine/commit-message.mjs): the style the user picks here; never an AI signature.
+function CommitStyleCard() {
+  const t = useT();
+  const cfg = useStore((s) => s.app.config.git) ?? {};
+  const [style, setStyle] = useState(cfg.commitStyle ?? 'conventional');
+  const [text, setText] = useState(cfg.commitInstructions ?? '');
+  const options = ['conventional', 'repo', 'custom'].map((v) => ({ value: v, label: t(`agents.commit.${v}`) }));
+  return (
+    <Card data-testid="commit-style">
+      <CardHeader><CardTitle>{t('agents.commit.title')}</CardTitle><CardDescription>{t('agents.commit.desc')}</CardDescription></CardHeader>
+      <CardContent className="grid gap-3">
+        <Select value={style} onValueChange={setStyle} options={options} className="max-w-sm" title={t('agents.commit.title')} />
+        {style === 'custom' ? <Field label={t('agents.commit.instructions')}><Textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} maxLength={2000} placeholder={t('agents.commit.ph')} /></Field> : null}
+        <div><Button size="sm" onClick={async () => { const c = await act(call('config.save', { patch: { git: { commitStyle: style, commitInstructions: text } } }), t('agents.saved')); if (c) setState({ app: { ...getState().app, config: c } }); }} data-testid="commit-style-save">{t('agents.commit.save')}</Button></div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function AgentsView() {
   const t = useT();
   const locale = useLocale();
@@ -388,6 +407,7 @@ export function AgentsView() {
           <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3 [&>*]:min-w-0">{agents ? agents.map((a) => <AgentCard key={a.id} a={a} reload={() => load(true)} />) : <Card className="items-center"><Spinner /></Card>}</div>
           {/* what Orb leaves out of a project's agent settings (claude.mjs, cursor.mjs, guard.mjs). */}
           <Card><CardHeader><CardTitle>{t('agents.projectSettingsTitle')}</CardTitle><CardDescription>{t('agents.projectSettingsDesc')}</CardDescription></CardHeader></Card>
+          <CommitStyleCard />
           <Card>
             <CardHeader><CardTitle>{t('agents.usageTitle')}</CardTitle><CardDescription>{t('agents.usageDesc', { pct: Math.round((usage[0]?.stopAt ?? 0.92) * 100), hours: usage[0]?.windowHours ?? 5 })}</CardDescription></CardHeader>
             <CardContent className="grid gap-4">

@@ -285,6 +285,8 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
     try { this.retryLeftovers(); } catch (error) { this.log(`reintentar restos: ${error.message}`); }
     try { this.deliverMessages(); } catch (error) { this.log(`mensajes: ${error.message}`); }
     try { this.wakeChats(); } catch (error) { this.log(`chats pospuestos: ${error.message}`); }
+    // a paused queue wakes nobody: the CI watch waits too
+    try { if (ctx.config.autoRun && board.setting('paused') !== '1') this.ciWatch?.tick().catch((error) => this.log(`vigilar CI: ${error.message}`)); } catch (error) { this.log(`vigilar CI: ${error.message}`); }
     // with the queue paused, only a task the user started anyway («Iniciar de todos modos», budget_ok) goes.
     const paused = !ctx.config.autoRun || board.setting('paused') === '1';
     const only = paused ? new Set(board.all("SELECT key FROM settings WHERE key >= 'budget_ok:' AND key < 'budget_ok;' AND value = '1'").map((r) => Number(r.key.slice('budget_ok:'.length)))) : null;
