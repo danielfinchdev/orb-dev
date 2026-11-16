@@ -10,6 +10,7 @@ import { UNGUARDED_AGENTS, requireLevel } from '../agents/unguarded.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
 import { account as findAccount, accountEnv } from '../domain/usage/accounts.mjs';
 import { pickAccount, recordSpend } from '../domain/usage/budget.mjs';
+import { agentKeyEnv } from '../domain/security/agent-keys.mjs';
 import { oneLine } from '../shared/text.mjs';
 
 export const SIDE_TTL_MS = 30 * 60_000;      // quiet for this long: it is gone
@@ -49,6 +50,9 @@ export class SideChats {
     if (!text) throw new Error(tr('msg.side.empty'));
     // an agent Orb cannot guard has no «Solo lectura» to promise: no side chat with it
     if (UNGUARDED_AGENTS.includes(s.agent)) requireLevel('leer', AGENT_LABELS[s.agent] ?? s.agent);
+    // Cursor prepares the project's own folder (.cursor rules, one turn at a time) and may write its prompt there: it would share them with the chat
+    if (s.agent === 'cursor') throw new Error(tr('msg.side.noCursor'));
+    if (s.archived || s.trashed_at) throw new Error(tr('msg.side.gone'));
     let e = side ? this.map.get(side) : null;
     if (side && (!e || e.parent !== parent)) throw new Error(tr('msg.side.gone'));
     if (e?.status === 'running') throw new Error(tr('msg.side.busy'));
@@ -73,7 +77,7 @@ export class SideChats {
         e.account = acc.id;
         e.live = this.make(s.agent, {
           exe: executable(s.agent), cwd: s.cwd, model: s.model, reasoning: 'low', permission: 'leer', // never above the chat's, whatever it is
-          mcpServers: {}, env: { ...accountEnv(acc), ORB_AGENT: s.agent }, internalDir: ctx.paths.internal, lang: ctx.config.language,
+          mcpServers: {}, env: { ...accountEnv(acc), ...agentKeyEnv(ctx.master, s.agent), ORB_AGENT: s.agent }, internalDir: ctx.paths.internal, lang: ctx.config.language,
           cfg: ctx.config.agents[s.agent] ?? {}, projectDir: s.project ? s.cwd : null, userAsked: () => [], android: () => false,
           ...(s.agent === 'claude' ? { tools: { allowed: [], disallowed: SIDE_DENIED } } : {}),
           log: () => {},
@@ -86,7 +90,8 @@ export class SideChats {
       }
       const lead = e.first ? `${tr('sys.side.prompt')}\n\n<chat>\n${this.context(e.parent)}\n</chat>\n\n` : '';
       e.first = false;
-      const result = await Promise.race([e.live.send({ text: `${lead}${tr('sys.side.question', { text: turn.q })}` }), new Promise((resolve) => { timer = setTimeout(() => resolve({ isError: true, final: tr('msg.side.timeout') }), SIDE_TURN_MS); })]);
+      const result = await Promise.race([e.live.send({ text: `${lead}${tr('sys.side.question', { text: turn.q })}` }), new Promise((resolve) => { timer = setTimeout(() => resolve({ isError: true, timedOut: true, final: tr('msg.side.timeout') }), SIDE_TURN_MS); })]);
+      if (result.timedOut || (result.isError && !result.final)) { try { e.live?.close(); } catch { /* gone */ } e.live = null; } // a stuck process does not go on reading
       if (!this.map.has(e.id)) return; // closed meanwhile
       turn.a = String(result.final || result.text || e.partial || '').slice(0, 20000);
       e.partial = '';

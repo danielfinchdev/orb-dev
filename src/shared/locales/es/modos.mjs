@@ -55,6 +55,7 @@ export default {
   "session.goal.stopped": "parado",
   "session.debug.badge": "Depuración",
   "session.debug.off": "Apagar la depuración",
+  "msg.side.noCursor": "Los chats laterales no están disponibles con Cursor.",
   "msg.side.empty": "Escribe la pregunta: «/side tu pregunta».",
   "msg.side.gone": "Ese chat lateral ya no existe (caducó o se cerró).",
   "msg.side.busy": "Ese chat lateral aún está contestando.",

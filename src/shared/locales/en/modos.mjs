@@ -55,6 +55,7 @@ export default {
   "session.goal.stopped": "stopped",
   "session.debug.badge": "Debug",
   "session.debug.off": "Turn debug mode off",
+  "msg.side.noCursor": "Side chats are not available with Cursor.",
   "msg.side.empty": "Write the question: «/side your question».",
   "msg.side.gone": "That side chat is gone (it expired or was closed).",
   "msg.side.busy": "That side chat is still answering.",

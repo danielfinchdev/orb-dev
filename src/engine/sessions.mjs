@@ -657,7 +657,7 @@ ${body}`;
     this.must(id);
     const live = this.lives.get(id)?.live;
     const call = action === 'stop' ? live?.stopSubagent : action === 'background' ? live?.backgroundSubagent : null;
-    if (!call || !this.running.has(id)) throw new Error(tr(action === 'stop' ? 'msg.subagent.noStop' : 'msg.subagent.noBackground'));
+    if (!call || (action !== 'stop' && !this.running.has(id))) throw new Error(tr(action === 'stop' ? 'msg.subagent.noStop' : 'msg.subagent.noBackground'));
     const ok = await call.call(live, String(toolId ?? ''));
     if (!ok) throw new Error(tr('msg.subagent.notRunning'));
     return { ok: true };

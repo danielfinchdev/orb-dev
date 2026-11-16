@@ -44,7 +44,7 @@ test('Stop and Background reach only that subagent; an agent that cannot says so
   const calls = [];
   const live = { stopSubagent: async (id) => { calls.push(['stop', id]); return id === 'a'; }, backgroundSubagent: async (id) => { calls.push(['bg', id]); return true; }, caps: {}, close() {}, isClosed: () => false };
   sessions.lives.set(s.id, { live, lastUsed: Date.now(), key: 'k' });
-  await assert.rejects(() => sessions.subagent(s.id, 'a', 'stop'), (e) => e.message === tr('msg.subagent.noStop'), 'no running turn: nothing to stop');
+  await assert.rejects(() => sessions.subagent(s.id, 'a', 'background'), (e) => e.message === tr('msg.subagent.noBackground'), 'no running turn: nothing to background');
   sessions.running.set(s.id, { agent: 'claude', live });
   assert.deepEqual(await sessions.subagent(s.id, 'a', 'stop'), { ok: true });
   await assert.rejects(() => sessions.subagent(s.id, 'zzz', 'stop'), (e) => e.message === tr('msg.subagent.notRunning'));

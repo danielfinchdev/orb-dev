@@ -7,6 +7,7 @@ import { adapter, executable, installed } from '../agents/index.mjs';
 import { UNGUARDED_AGENTS } from '../agents/unguarded.mjs';
 import { recordSpend } from '../domain/usage/budget.mjs';
 import { chooseModel } from './usage/catalog.mjs';
+import { agentKeyEnv } from '../domain/security/agent-keys.mjs';
 import { oneLine } from '../shared/text.mjs';
 
 const TIMEOUT_MS = 30_000;
@@ -59,7 +60,7 @@ export class Suggester {
     try {
       p.live = this.make(s.agent, {
         exe: executable(s.agent), cwd: ctx.paths.runs, model: light.model || (s.agent === 'claude' ? 'haiku' : null), reasoning: 'low', permission: 'leer',
-        mcpServers: {}, env: accountEnv(acc), internalDir: ctx.paths.internal, lang: ctx.config.language,
+        mcpServers: {}, env: { ...accountEnv(acc), ...agentKeyEnv(ctx.master, s.agent) }, internalDir: ctx.paths.internal, lang: ctx.config.language,
         ...(s.agent === 'claude' ? { tools: { allowed: [], disallowed: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit', 'WebFetch', 'WebSearch', 'Task', 'Agent', 'Skill', 'Read', 'Glob', 'Grep'] } } : {}),
         log: () => {}, onEvent: () => {}
       });
