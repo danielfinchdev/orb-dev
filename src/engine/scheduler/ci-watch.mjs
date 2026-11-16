@@ -43,21 +43,23 @@ export function createCiWatch({ board, sessions, gh, log = () => {}, emit = () =
   async function check(w) {
     const s = sessions.get(w.session);
     const project = s?.project ? board.project(String(s.project)) : null;
-    if (!s || !project) return stop(w, 'msg.ciwatch.gone');
+    if (!s || !project || s.archived || s.trashed_at) return stop(w, 'msg.ciwatch.gone'); // a chat the user put away is not woken
     if (!WRITERS.has(s.permission)) return stop(w, 'msg.ciwatch.readOnly');
     const g = await github();
     let pr; let checks;
-    try { pr = await g.viewPr(project, w.number); checks = pr.state === 'OPEN' ? await g.prChecks(project, w.number) : []; w.errors = 0; } catch (error) {
+    try { pr = await g.viewPr(project, w.number); checks = pr.state === 'OPEN' ? await g.prChecks(project, w.number) : []; } catch (error) {
       w.errors = (w.errors ?? 0) + 1;
       if (w.errors >= MAX_ERRORS) return stop(w, 'msg.ciwatch.errors', { detail: oneLine(error.message, 200) });
-      return save(read().map((x) => (x.session === w.session ? w : x)));
+      return update(w, { errors: w.errors });
     }
+    if (w.errors) update(w, { errors: 0 }); // «in a row»: a good round forgets the earlier failures
     if (pr.state !== 'OPEN') return stop(w, 'msg.ciwatch.closed');
     if (checks.some((c) => c.bucket === 'pending')) { // let them finish: a half-run is not a verdict, but not for ever
-      if (now() - (w.pendingSince ??= now()) > STALL_MS) return stop(w, 'msg.ciwatch.stalled', { minutes: Math.round(STALL_MS / 60_000) });
+      if (!w.pendingSince) return update(w, { pendingSince: now() }); // persisted, or every round would start the clock again
+      if (now() - w.pendingSince > STALL_MS) return stop(w, 'msg.ciwatch.stalled', { minutes: Math.round(STALL_MS / 60_000) });
       return;
     }
-    delete w.pendingSince;
+    if (w.pendingSince) update(w, { pendingSince: null });
     const failed = checks.filter((c) => c.bucket === 'fail');
     if (!failed.length) { if (checks.length && (w.attempts || w.oid)) update(w, { attempts: 0, oid: null, status: 'green' }); return; }
     if (pr.headRefOid && pr.headRefOid === w.oid) { // already woken for this commit: wait for a new one, but not for ever
@@ -71,8 +73,12 @@ export function createCiWatch({ board, sessions, gh, log = () => {}, emit = () =
     const still = read().find((x) => x.session === w.session && x.since === w.since);
     if (!still || sessions.isRunning(w.session)) return; // switched off (or the chat got busy) while the logs came
     const attempt = w.attempts + 1;
-    sessions.send(s.id, ciMessage({ pr, failed: failed.slice(0, 2), logs, attempt }), { asked: [] });
-    update(w, { attempts: attempt, oid: pr.headRefOid ?? `n${now()}`, sentAt: now(), status: 'fixing' });
+    try { sessions.send(s.id, ciMessage({ pr, failed: failed.slice(0, 2), logs, attempt }), { asked: [] }); } catch (error) { // a failing send counts like a failing gh
+      const sendErrors = (w.sendErrors ?? 0) + 1; // apart from `errors`, which a good gh round resets
+      if (sendErrors >= MAX_ERRORS) return stop(w, 'msg.ciwatch.errors', { detail: oneLine(error.message, 200) });
+      return update(w, { sendErrors });
+    }
+    update(w, { sendErrors: 0, attempts: attempt, oid: pr.headRefOid ?? `n${now()}`, sentAt: now(), status: 'fixing' });
     log(`ci: aviso ${attempt}/${MAX_ATTEMPTS} de #${w.number} · chat ${w.session}`);
   }
 

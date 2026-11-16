@@ -271,6 +271,41 @@ test('CI watch: a busy chat is left alone, a stuck commit and a dead gh switch i
   assert.equal(ci.sent.length, 0);
 });
 
+test('CI watch: a pending check that never ends is switched off as stuck (the clock is persisted between rounds)', async () => {
+  const { w } = await setup();
+  checks[0].bucket = 'pending';
+  await w.tick(); assert.ok(board.settingJson('ciwatch')[0].pendingSince, 'the start of the wait is saved');
+  clock += STALL_MS - 1000; await w.tick(); assert.equal(w.list().length, 1);
+  clock += 2000; await w.tick();
+  assert.equal(w.list().length, 0); assert.match(ci.notes.at(-1), /sigue fallando|atascad|minutos/i);
+  const again = await setup(); checks[0].bucket = 'pending';
+  await again.w.tick(); checks[0].bucket = 'pass'; await again.w.tick();
+  assert.ok(!board.settingJson('ciwatch')[0].pendingSince, 'a finished run clears the clock');
+});
+
+test('CI watch: gh errors must be in a row; a good round resets the counter; a failing send counts too', async () => {
+  const { w } = await setup();
+  for (let i = 0; i < MAX_ERRORS - 1; i += 1) { ci.throws = true; await w.tick(); }
+  ci.throws = false; checks[0].bucket = 'pass'; await w.tick();
+  assert.equal(board.settingJson('ciwatch')[0].errors, 0);
+  ci.throws = true; for (let i = 0; i < MAX_ERRORS - 1; i += 1) await w.tick();
+  assert.equal(w.list().length, 1, 'scattered failures do not switch it off');
+  const s = await setup();
+  const failing = createCiWatch({ board, sessions: { get: (x) => sessions.get(x), isRunning: () => false, addItem: (a, b, c, d) => ci.notes.push(d), send: () => { throw new Error('gone'); } }, gh: watchGh(), now: () => clock, intervalMs: 0, log: () => {} });
+  for (let i = 0; i < MAX_ERRORS; i += 1) await failing.tick();
+  assert.equal(failing.list().length, 0); assert.equal(s.id && ci.sent.length, 0);
+});
+
+test('CI watch: a chat in the trash or archived is never woken, and the watch ends', async () => {
+  let s = await setup();
+  board.db.prepare('UPDATE sessions SET trashed_at = ? WHERE id = ?').run(new Date().toISOString(), s.id);
+  await s.w.tick();
+  assert.equal(ci.sent.length, 0); assert.equal(s.w.list().length, 0);
+  s = await setup(); sessions.update(s.id, { archived: true });
+  await s.w.tick();
+  assert.equal(ci.sent.length, 0); assert.equal(s.w.list().length, 0);
+});
+
 test('CI watch: never merges, comments or pushes; it needs an open PR and an editing chat; the interval is respected', async () => {
   const { w, id } = await setup();
   newCommit(1); await w.tick();
