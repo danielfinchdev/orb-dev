@@ -54,3 +54,13 @@ test('los editores en Linux se buscan también fuera del PATH del escritorio (sn
 });
 
 
+
+test('en Windows, sin ProgramFiles en el entorno, los editores se buscan en «C:\\Program Files»', () => {
+  const seen = [];
+  const real = fs.existsSync;
+  fs.existsSync = (f) => { seen.push(String(f)); return false; };
+  try { findEditors('win32', { LOCALAPPDATA: 'C:\\Users\\a\\AppData\\Local' }); } finally { fs.existsSync = real; }
+  assert.ok(seen.includes(path.join('C:\\Program Files', 'Microsoft VS Code', 'Code.exe')));
+  assert.ok(seen.includes(path.join('C:\\Program Files (x86)', 'Microsoft VS Code', 'Code.exe')));
+  assert.ok(!seen.some((f) => f.includes('C:Program')));
+});

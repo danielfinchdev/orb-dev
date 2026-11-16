@@ -35,7 +35,7 @@ function jetbrainsWindows(roots) {
 // Where each editor lives on this machine (null when it is not installed).
 export function findEditors(platform = process.platform, env = process.env) {
   if (platform === 'win32') {
-    const local = env.LOCALAPPDATA ?? ''; const programs = env.ProgramFiles ?? 'C:\Program Files'; const programs86 = env['ProgramFiles(x86)'] ?? 'C:\Program Files (x86)';
+    const local = env.LOCALAPPDATA ?? ''; const programs = env.ProgramFiles ?? 'C:\\Program Files'; const programs86 = env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)';
     return {
       cursor: [path.join(local, 'Programs', 'cursor', 'Cursor.exe'), path.join(programs, 'Cursor', 'Cursor.exe')].find(exists) ?? null,
       vscode: [path.join(local, 'Programs', 'Microsoft VS Code', 'Code.exe'), path.join(programs, 'Microsoft VS Code', 'Code.exe'), path.join(programs86, 'Microsoft VS Code', 'Code.exe')].find(exists) ?? null,
