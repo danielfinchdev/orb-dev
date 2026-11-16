@@ -57,6 +57,7 @@ async function playBackground(id) {
   emit({ loading: true, error: null, track: id });
   try {
     const url = await urlOf(id);
+    if (!available()) { emit({ loading: false, playing: false }); return; } // a plain theme was chosen while the track was downloading
     bg ??= player(false);
     if (!bg.onended) bg.onended = () => { const next = nextTrack(state.track); saveUi({ music: { ...musicPrefs(), track: next } }); playBackground(next); };
     bg.volume = musicPrefs().volume;
@@ -92,6 +93,7 @@ export async function startGameMusic(id) {
   if (!available() || !t || !gameMusicOn()) return;
   try {
     const url = await urlOf(t.id);
+    if (!available()) return; // a plain theme was chosen while the track was downloading
     game ??= player(true);
     game.volume = Math.min(1, musicPrefs().volume + 0.1);
     game.src = url;

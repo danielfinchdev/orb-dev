@@ -89,6 +89,8 @@ test('the music is silent in every plain theme and stops when one is chosen', ()
   const music = read('lib', 'music.js');
   assert.match(music, /export const available = \(\) => platformOk\(\) && !plainSkin\(ui\(\)\.skin\);/);
   assert.match(music, /export function stopIfPlain\(\) \{\s*if \(available\(\)\) return;/);
+  assert.match(music, /const url = await urlOf\(id\);\s*if \(!available\(\)\)/, 'a theme chosen during the download');
+  assert.match(music, /const url = await urlOf\(t\.id\);\s*if \(!available\(\)\) return;/);
   assert.match(music, /onAppearance\(\(\) => stopIfPlain\(\)\);/);
   assert.match(read('lib', 'store.js'), /for \(const fn of appearanceListeners\) fn\(skin\);/);
   for (const skin of SKINS) assert.equal(plainSkin(skin) ? 'silent' : 'music', ['profesional', 'cristal', 'grafito'].includes(skin) ? 'silent' : 'music', skin);
