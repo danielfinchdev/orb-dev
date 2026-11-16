@@ -7,7 +7,7 @@
 import { ctx, tr } from '../../platform/context.mjs';
 import { fail } from './common.mjs';
 import { hostCall, localPath } from '../host/host.mjs';
-import { findEditors } from '../host/editors.mjs';
+import { findEditors, EDITOR_IDS } from '../host/editors.mjs';
 import { guardedCore } from '../desktop-home.mjs';
 import { checkUnlock } from './master.mjs';
 import { sendFeedback, moreApps } from '../host/feedback.mjs';
@@ -30,11 +30,11 @@ export function appMethods({ home, version }) {
       return hostCall('host.openTerminal', { dir: target, choice: choice() });
     },
     // God mode: which editors this PC has (only those are offered), and the project opened in one of them.
-    'app.editors': () => { const e = findEditors(); return { cursor: Boolean(e.cursor), vscode: Boolean(e.vscode) }; },
+    'app.editors': () => { const e = findEditors(); return Object.fromEntries(EDITOR_IDS.map((id) => [id, Boolean(e[id])])); },
     // core itself and its secrets open in the File Explorer only with a fresh unlock of the master password (unlock), as
     // the window's own «Abrir carpeta» (app:openPath).
     'app.openIn': async ({ which, dir, unlock } = {}) => {
-      if (!['cursor', 'vscode', 'explorer'].includes(which) || !absolute(dir)) fail(tr('sys.main.badPath'));
+      if (!['explorer', ...EDITOR_IDS].includes(which) || !absolute(dir)) fail(tr('sys.main.badPath'));
       if (guardedCore(home, dir)) checkUnlock('master.check', { unlock });
       if (which === 'explorer') { await hostCall('host.openPath', { path: dir }); return true; }
       await hostCall('host.openEditor', { which, dir });

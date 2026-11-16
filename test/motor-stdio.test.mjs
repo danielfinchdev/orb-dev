@@ -103,7 +103,7 @@ test('the engine over stdio: starts, answers, asks the app (host.*) and ends whe
 
   assert.equal((await call('app.state')).version, 'prueba-stdio');
   const editors = await call('app.editors');
-  assert.deepEqual(Object.keys(editors).sort(), ['cursor', 'vscode']);
+  assert.deepEqual(Object.keys(editors).sort(), ['cursor', 'jetbrains', 'vscode', 'windsurf', 'zed']);
   // The File Explorer: the engine asks the app to open the folder.
   assert.equal(await call('app.openIn', { which: 'explorer', dir: home }), true);
   assert.deepEqual(hostAnswers.at(-1).method, 'host.openPath');

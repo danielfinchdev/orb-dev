@@ -11,6 +11,7 @@
 // The app checks every request again (checkHostRequest): the engine is trusted, but a link or a path in it may come from
 // a project's settings or an agent's text.
 import path from 'node:path';
+import { EDITOR_IDS } from './editors.mjs';
 
 export const BROWSER_METHODS = Object.freeze(['host.browser.open', 'host.browser.cdp', 'host.browser.close', 'host.pip.show', 'host.pip.hide', 'host.pip.state', 'host.pip.frame']);
 export const HOST_METHODS = Object.freeze(['host.openUrl', 'host.openPath', 'host.openTerminal', 'host.openEditor', 'host.runAction', 'host.screenshot', ...BROWSER_METHODS]);
@@ -71,7 +72,7 @@ export function checkHostRequest(method, params, { isDir } = {}) {
   }
   if (method === 'host.openTerminal') return { dir: folder(p.dir, 'carpeta no válida'), choice: TERMINAL_CHOICES.includes(p.choice) ? p.choice : 'auto' };
   if (method === 'host.openEditor') {
-    if (!['cursor', 'vscode'].includes(p.which)) throw new Error('editor no válido');
+    if (!EDITOR_IDS.includes(p.which)) throw new Error('editor no válido');
     return { which: p.which, dir: folder(p.dir, 'carpeta no válida') };
   }
   if (method === 'host.runAction') {

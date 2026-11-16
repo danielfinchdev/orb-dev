@@ -1,4 +1,4 @@
-// God mode: the project in an editor («Abrir en»: Cursor, VS Code or the File Explorer) and the project's actions
+// God mode: the project in an editor («Abrir en»: Cursor, VS Code, Windsurf, Zed, JetBrains or the File Explorer) and the project's actions
 // (commands of the user's own, such as «npm test», run in a terminal window from the bar or with their shortcut, with an
 // optional preview of a page of this PC).
 import { useEffect, useState } from 'react';
@@ -11,6 +11,8 @@ import { form, confirm } from './dialogs.jsx';
 import { useStore, call, act, bridge } from '@/lib/store.js';
 import { useT, t as tNow } from '@/lib/i18n.js';
 
+// The order the main button picks from (the first one installed); the menu lists the installed ones in it.
+const EDITOR_ORDER = ['cursor', 'vscode', 'windsurf', 'zed', 'jetbrains'];
 // The editors installed on this PC (asked once).
 let editorsAsked = null;
 function useEditors() {
@@ -25,10 +27,10 @@ export function OpenInMenu({ project, labelClassName }) {
   const editors = useEditors();
   if (!project?.path || !bridge.openIn) return null;
   const open = (which) => act(bridge.openIn(which, project.path));
-  const first = editors.cursor ? 'cursor' : editors.vscode ? 'vscode' : 'explorer';
-  const ICON = { cursor: MousePointer2, vscode: Code2, explorer: FolderOpen };
+  const first = EDITOR_ORDER.find((w) => editors[w]) ?? 'explorer';
+  const ICON = { cursor: MousePointer2, vscode: Code2, windsurf: Code2, zed: Code2, jetbrains: Code2, explorer: FolderOpen };
   // «Explorador de archivos» is Windows' name; elsewhere the system's file manager.
-  const LABEL = { cursor: 'Cursor', vscode: 'VS Code', explorer: t(!window.orb?.platform || window.orb.platform === 'win32' ? 'tools.explorer' : 'tools.files') };
+  const LABEL = { cursor: 'Cursor', vscode: 'VS Code', windsurf: 'Windsurf', zed: 'Zed', jetbrains: 'JetBrains', explorer: t(!window.orb?.platform || window.orb.platform === 'win32' ? 'tools.explorer' : 'tools.files') };
   const Main = ICON[first];
   return (
     <div className="flex items-center" data-testid="open-in">
@@ -36,7 +38,7 @@ export function OpenInMenu({ project, labelClassName }) {
       <DropdownMenu>
         <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="rounded-l-none border-l-0 px-1.5" aria-label={t('tools.openWith')} data-testid="open-in-menu"><ChevronDown /></Button></DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
-          {['cursor', 'vscode', 'explorer'].filter((w) => w === 'explorer' || editors[w]).map((w) => { const I = ICON[w]; return <DropdownMenuItem key={w} onSelect={() => open(w)}><I />{LABEL[w]}</DropdownMenuItem>; })}
+          {[...EDITOR_ORDER, 'explorer'].filter((w) => w === 'explorer' || editors[w]).map((w) => { const I = ICON[w]; return <DropdownMenuItem key={w} onSelect={() => open(w)}><I />{LABEL[w]}</DropdownMenuItem>; })}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
