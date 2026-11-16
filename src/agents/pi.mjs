@@ -9,7 +9,7 @@ import { IS_WIN, firstFile, inPath, userHome } from '../platform/proc.mjs';
 import { clip } from './common.mjs';
 import { Turn, spawnAgent, killTree, hidingEnvValues, maskingValues } from './live.mjs';
 import { tr } from '../platform/context.mjs';
-import { requireLevel } from './unguarded.mjs';
+import { requireLevel, UNGUARDED_LEVELS } from './unguarded.mjs';
 import { npmBin } from './acp.mjs';
 
 export const id = 'pi';
@@ -93,7 +93,8 @@ export function createLive(o) {
   live.interrupt = async () => { if (child && turn && !turn.done) send({ type: 'abort' }); };
   live.respond = () => false;
   live.setModel = (m) => { o.model = m; };
-  live.setPermission = (p) => { requireLevel(p, label); o.permission = p; };
+  // a level it cannot keep (the chat was taken off «total» or Orb locked): the process ends, nothing throws (the caller goes on revoking)
+  live.setPermission = (p) => { o.permission = p; if (!UNGUARDED_LEVELS.includes(p)) live.close(); };
   live.close = () => { closed = true; killTree(child); };
   live.isClosed = () => closed;
   return live;

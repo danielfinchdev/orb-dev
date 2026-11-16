@@ -126,7 +126,7 @@ test('permissions: saving a key needs the unlock and the PC; the state needs onl
 // ---- Pi (RPC) ----------------------------------------------------------------------------------------------------------
 function openPi(options = {}) {
   const events = [];
-  const live = track(pi.createLive({ exe: node('fake-pi.mjs'), cwd: dir, env: {}, permission: 'editar', onEvent: (e) => events.push(e), mcpServers: {}, ...options }));
+  const live = track(pi.createLive({ exe: node('fake-pi.mjs'), cwd: dir, env: {}, permission: 'total', onEvent: (e) => events.push(e), mcpServers: {}, ...options }));
   return { live, events };
 }
 
@@ -166,13 +166,14 @@ test('Pi: abort stops the turn, a failed command is an error, a crash does not l
 
 test('Pi and Antigravity refuse the permission levels they cannot keep, before starting any process', () => {
   for (const mod of [pi, agy]) {
-    for (const permission of ['leer', 'probar', 'preguntar']) {
+    for (const permission of ['leer', 'probar', 'preguntar', 'editar', 'auto', undefined]) {
       assert.throws(() => mod.createLive({ exe: node('fake-pi.mjs'), cwd: dir, env: {}, permission, mcpServers: {} }), (e) => e.userFacing === true && /Orb/.test(e.message), `${mod.id} ${permission}`);
     }
-    for (const permission of ['editar', 'auto', 'total', undefined]) track(mod.createLive({ exe: node('fake-pi.mjs'), cwd: dir, env: {}, permission, mcpServers: {} })); // no throw, nothing started until send
-    const live = track(mod.createLive({ exe: node('fake-pi.mjs'), cwd: dir, env: {}, permission: 'auto', mcpServers: {} }));
+    for (const permission of ['total']) track(mod.createLive({ exe: node('fake-pi.mjs'), cwd: dir, env: {}, permission, mcpServers: {} })); // no throw, nothing started until send
+    const live = track(mod.createLive({ exe: node('fake-pi.mjs'), cwd: dir, env: {}, permission: 'total', mcpServers: {} }));
     assert.equal(live.pid, null, 'no process before the first message');
-    assert.throws(() => live.setPermission('preguntar'));
+    live.setPermission('preguntar'); // never throws (a revoke must go on), the process ends
+    assert.equal(live.isClosed(), true);
     assert.equal(mod.caps.approvals, false);
     assert.equal(mod.unverified, true);
   }
@@ -186,7 +187,7 @@ test('Pi: detect() finds nothing without the program and takes a hand-set path',
 // ---- Antigravity (print mode) ------------------------------------------------------------------------------------------
 function openAgy(options = {}) {
   const events = [];
-  const live = track(agy.createLive({ exe: node('fake-agy.mjs'), cwd: dir, env: {}, permission: 'editar', onEvent: (e) => events.push(e), mcpServers: {}, ...options }));
+  const live = track(agy.createLive({ exe: node('fake-agy.mjs'), cwd: dir, env: {}, permission: 'total', onEvent: (e) => events.push(e), mcpServers: {}, ...options }));
   return { live, events };
 }
 
@@ -196,7 +197,7 @@ test('Antigravity: one process per turn in print mode, the prompt as the last ar
   const r = await live.send({ text: 'resume el repo' });
   assert.equal(r.isError, false, r.final);
   assert.equal(r.final, 'Antigravity dice: resume el repo');
-  assert.deepEqual(JSON.parse(fs.readFileSync(argvFile, 'utf8')), ['--print', 'resume el repo']);
+  assert.deepEqual(JSON.parse(fs.readFileSync(argvFile, 'utf8')), ['--print', '--', 'resume el repo']);
   assert.ok(events.some((e) => e.type === 'delta'));
   assert.equal(live.sessionId, null, 'no conversation to resume');
 });
@@ -229,4 +230,13 @@ test('Antigravity: interrupt stops the process of the turn', async () => {
   const r = await turn;
   assert.equal(r.isError, true);
   await until(() => { try { process.kill(pid, 0); return false; } catch { return true; } }, 'process gone', 10000);
+});
+
+test('ACP: the key echoed by an agent in its answer or a tool never reaches the events', async () => {
+  const events = [];
+  const agent = acpAgent('grok', ACP_SPECS.grok);
+  const live = track(agent.createLive({ exe: node('fake-acp.mjs'), cwd: dir, env: {}, secretValues: [SECRET], permission: 'editar', onEvent: (e) => events.push(e), mcpServers: {} }));
+  const r = await live.send({ text: `repite ${SECRET}` });
+  assert.ok(!JSON.stringify({ events, r }).includes(SECRET));
+  assert.match(r.final, /\*\*\*/);
 });

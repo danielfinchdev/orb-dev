@@ -143,11 +143,11 @@ export function acpAgent(id, spec) {
       if (method !== 'session/update' || loading) return; // a loaded session replays its history: not shown twice
       const u = p.update ?? {};
       switch (u.sessionUpdate) {
-        case 'agent_message_chunk': { const t = textOfContent(u.content); if (t) { text += t; onEvent({ type: 'delta', text: t }); } break; }
-        case 'agent_thought_chunk': thought += textOfContent(u.content); break;
-        case 'tool_call': flush(); onEvent({ type: 'item', role: 'tool', kind: 'tool', body: { id: u.toolCallId, name: u.name || toolKindName(u.kind) || u.title || tr('sys.agents.tool.other'), input: clip(u.title ?? u.rawInput ?? '', 300) } }); break;
+        case 'agent_message_chunk': { const t = mask(textOfContent(u.content)); if (t) { text += t; onEvent({ type: 'delta', text: t }); } break; }
+        case 'agent_thought_chunk': thought += mask(textOfContent(u.content)); break;
+        case 'tool_call': flush(); onEvent({ type: 'item', role: 'tool', kind: 'tool', body: { id: u.toolCallId, name: u.name || toolKindName(u.kind) || u.title || tr('sys.agents.tool.other'), input: mask(clip(u.title ?? u.rawInput ?? '', 300)) } }); break;
         case 'tool_call_update':
-          if (u.status === 'completed' || u.status === 'failed') onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: { id: u.toolCallId, output: clip(textOfContent(u.content ?? []) || (u.rawOutput ? JSON.stringify(u.rawOutput) : ''), 3000), error: u.status === 'failed' } });
+          if (u.status === 'completed' || u.status === 'failed') onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: { id: u.toolCallId, output: mask(clip(textOfContent(u.content ?? []) || (u.rawOutput ? JSON.stringify(u.rawOutput) : ''), 3000)), error: u.status === 'failed' } });
           break;
         case 'plan': flush(); onEvent({ type: 'item', role: 'assistant', kind: 'reasoning', body: (u.entries ?? []).map((e) => `${e.status === 'completed' ? '✓' : '·'} ${e.content}`).join('\n') }); break;
         case 'usage_update': if (u.size) onEvent({ type: 'context', used: u.used, size: u.size }); break;

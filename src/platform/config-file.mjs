@@ -65,7 +65,7 @@ export const DEFAULT_CONFIG = Object.freeze({
     devin: { enabled: false, path: '', models: [], defaultModel: '', heavyModels: [], strengths: 'agente de Cognition (Devin para terminal) con planes y revisión' },
     droid: { enabled: false, path: '', models: [], defaultModel: '', heavyModels: [], strengths: 'agente de Factory para tareas de ingeniería de principio a fin' },
     omp: { enabled: false, path: '', models: [], defaultModel: '', heavyModels: [], strengths: 'variante de Pi con herramientas extra y muchos proveedores' },
-    // Pi and Antigravity cannot ask Orb before acting: they only run in «editar», «auto» and «total» (src/agents/unguarded.mjs).
+    // Pi and Antigravity cannot ask Orb before acting: they only run with «total» (src/agents/unguarded.mjs).
     pi: { enabled: false, path: '', models: [], defaultModel: '', heavyModels: [], strengths: 'agente minimalista y extensible, con muchos proveedores de modelos' },
     antigravity: { enabled: false, path: '', models: [], defaultModel: '', heavyModels: [], strengths: 'agente de Google con ventanas de contexto muy grandes' }
   },

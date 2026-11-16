@@ -118,7 +118,16 @@ export function spawnAgent(cmd, args, { cwd, env = {}, log = () => {} } = {}) {
   const child = spawn(cmd, args, { cwd, env: cleanEnv(env), windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
   let stderr = '';
   child.stderr.setEncoding('utf8');
-  child.stderr.on('data', (c) => { stderr = (stderr + c).slice(-8000); log(`stderr: ${c}`); });
+  // logged by whole lines: a key the program echoes may arrive split between two chunks, and the log's masking works per entry
+  let partial = '';
+  child.stderr.on('data', (c) => {
+    stderr = (stderr + c).slice(-8000);
+    partial += c;
+    const cut = partial.lastIndexOf('\n');
+    if (cut >= 0) { log(`stderr: ${partial.slice(0, cut + 1)}`); partial = partial.slice(cut + 1); }
+    else if (partial.length > 8000) { log(`stderr: ${partial}`); partial = ''; }
+  });
+  child.on('close', () => { if (partial) { log(`stderr: ${partial}`); partial = ''; } });
   child.stderrText = () => stderr;
   return child;
 }

@@ -209,7 +209,7 @@ export default {
   'sys.agents.exitedEarly': '{name} se cerró antes de terminar.',
   'sys.agents.projectSettingsSkipped': 'Orb no ha cargado los ajustes .claude/settings de este proyecto porque ejecutan programas o cambian el entorno ({keys}). Sus CLAUDE.md sí se usan.',
   'sys.agents.stopped': 'Detenido.',
-  'sys.agents.noGuard': '{name} no puede preguntar a Orb antes de actuar, así que no arranca en este nivel de permisos. Usa Editar, Auto o Total.',
+  'sys.agents.noGuard': '{name} no puede preguntar a Orb antes de actuar ni cumplir sus reglas fijas, así que solo arranca con «Acceso total» en el chat.',
   'sys.agents.limit': '{name} ha alcanzado su límite de uso',
   'sys.agents.resumeFailed': '{name} no pudo retomar la conversación: {error}',
   'sys.agents.result.duringExecution': 'El turno se interrumpió antes de terminar.',

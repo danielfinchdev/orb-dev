@@ -1,5 +1,5 @@
 // Antigravity (Google). It has no live protocol: only a «print» mode that answers one prompt and quits. So each turn is one
-// process (`<bin> --print <prompt>`, the prompt on stdin when it is long), its standard output is the answer, and there is no
+// process (`<bin> --print -- <prompt>`, the prompt on stdin when it is long), its standard output is the answer, and there is no
 // conversation to resume (every turn starts from the prompt alone). No streaming, no tools shown.
 // NOT verified: Antigravity's CLI was not installed when this was written, so the program name («antigravity», or «agy»)
 // and the flag come from public documentation and are checked only against a simulated process
@@ -9,7 +9,7 @@ import path from 'node:path';
 import { IS_WIN, firstFile, inPath, userHome } from '../platform/proc.mjs';
 import { Turn, spawnAgent, killTree, hidingEnvValues, maskingValues } from './live.mjs';
 import { tr } from '../platform/context.mjs';
-import { requireLevel } from './unguarded.mjs';
+import { requireLevel, UNGUARDED_LEVELS } from './unguarded.mjs';
 
 export const id = 'antigravity';
 export const label = 'Antigravity';
@@ -44,7 +44,7 @@ export function createLive(o) {
     if (turn && !turn.done) throw new Error(tr('sys.agents.busy'));
     turn = new Turn(); const current = turn;
     const long = String(message).length > PROMPT_MAX;
-    const args = [...o.exe.pre, ...printArgs, ...(o.model ? ['--model', o.model] : []), ...(long ? [] : [String(message)])];
+    const args = [...o.exe.pre, ...printArgs, ...(o.model ? ['--model', o.model] : []), ...(long ? [] : ['--', String(message)])];
     child = spawnAgent(o.exe.cmd, args, { cwd: o.cwd, env: o.env, log });
     live.pid = child.pid;
     let out = '';
@@ -71,7 +71,8 @@ export function createLive(o) {
   live.interrupt = async () => { killTree(child); };
   live.respond = () => false;
   live.setModel = (m) => { o.model = m; };
-  live.setPermission = (p) => { requireLevel(p, label); o.permission = p; };
+  // a level it cannot keep (the chat was taken off «total» or Orb locked): the process ends, nothing throws (the caller goes on revoking)
+  live.setPermission = (p) => { o.permission = p; if (!UNGUARDED_LEVELS.includes(p)) live.close(); };
   live.close = () => { closed = true; killTree(child); };
   live.isClosed = () => closed;
   return live;

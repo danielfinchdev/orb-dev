@@ -206,7 +206,7 @@ export default {
   'sys.agents.exitedEarly': '{name} closed before finishing.',
   'sys.agents.projectSettingsSkipped': "Orb did not load the project's .claude/settings files because they run programs or change the environment ({keys}). Its CLAUDE.md files are still used.",
   'sys.agents.stopped': 'Stopped.',
-  'sys.agents.noGuard': '{name} cannot ask Orb before acting, so it does not start at this permission level. Use Edit, Auto or Total.',
+  'sys.agents.noGuard': '{name} cannot ask Orb before acting or follow its fixed rules, so it only starts with «Full access» on the chat.',
   'sys.agents.limit': '{name} usage limit reached',
   'sys.agents.resumeFailed': '{name} could not resume the conversation: {error}',
   'sys.agents.result.duringExecution': 'The turn was interrupted before it finished.',

@@ -65,7 +65,7 @@ export default {
   'help.tut.board.go': 'Open the Whiteboard',
 
   'help.tut.agents.title': 'Agents and accounts',
-  'help.tut.agents.l1': 'Agents lists the programs Orb finds (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code, Copilot and Hermes Agent), their version and whether they’re signed in. Grok Build, Devin, Factory Droid, Oh My Pi, Pi and Antigravity show up turned off: turn them on by hand if you have them installed (not yet checked against the real programs; Pi and Antigravity only work in the Edit, Auto and Total levels).',
+  'help.tut.agents.l1': 'Agents lists the programs Orb finds (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code, Copilot and Hermes Agent), their version and whether they’re signed in. Grok Build, Devin, Factory Droid, Oh My Pi, Pi and Antigravity show up turned off: turn them on by hand if you have them installed (not yet checked against the real programs; Pi and Antigravity only start with «Full access»).',
   'help.tut.agents.l2': 'If you’re already signed in to the agent, there’s nothing else to do. Otherwise, "Sign in" opens its official login: Orb never sees your passwords.',
   'help.tut.agents.l3': 'Add more accounts of the same agent with "Find and add". Work is shared among the accounts with quota, or you can pin one.',
   'help.tut.agents.l4': 'On Windows, Orb installs anything missing with the official installers: Git, Node.js, GitHub CLI and the agents themselves.',
