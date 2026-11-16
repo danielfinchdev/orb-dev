@@ -25,6 +25,14 @@ sealed interface MdBlock {
     data object Rule : MdBlock
 }
 
+/** The link target when it is http, https or mailto; null for any other scheme (file:, other apps' schemes, intent:...). */
+fun safeLink(url: String?): String? {
+    val u = url?.trim() ?: return null
+    val colon = u.indexOf(':')
+    if (colon <= 0) return null
+    return if (u.substring(0, colon).lowercase() in setOf("http", "https", "mailto") && u.length > colon + 1) u else null
+}
+
 object LightMarkdown {
     private val fence = Regex("^\\s*(```|~~~)\\s*([\\w+#.-]*)\\s*$")
     private val heading = Regex("^(#{1,6})\\s+(.*?)\\s*#*\\s*$")
@@ -163,7 +171,7 @@ object LightMarkdown {
                         if (end > close + 2) {
                             flush()
                             val url = s.substring(close + 2, end).trim()
-                            inline(s.substring(i + 1, close)).mapTo(out) { it.copy(link = url) }
+                            inline(s.substring(i + 1, close)).mapTo(out) { it.copy(link = safeLink(url)) }
                             i = end + 1
                             continue
                         }
