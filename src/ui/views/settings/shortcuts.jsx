@@ -10,6 +10,7 @@ import { errorText } from '@/lib/utils.js';
 import { useKeys, saveKeys } from '@/lib/keys.js';
 import { COMMANDS, comboFromEvent, conflictOf, normalizeCombo, withBinding, withoutBinding } from '../../../shared/keybindings.mjs';
 import { save, Row } from './rows.jsx';
+import { quiet } from '@/lib/quiet.js';
 
 export function TabsCard({ c }) {
   const t = useT();
@@ -90,7 +91,7 @@ export function ShortcutsCard() {
             );
           })}
         </ul>
-        {rules.length ? <div className="pt-2"><Button size="sm" variant="outline" onClick={() => { setMsg(null); saveKeys([]).catch(() => {}); }}>{t('keys.resetAll')}</Button></div> : null}
+        {rules.length ? <div className="pt-2"><Button size="sm" variant="outline" onClick={() => { setMsg(null); saveKeys([]).catch(quiet); }}>{t('keys.resetAll')}</Button></div> : null}
       </CardContent>
     </Card>
   );

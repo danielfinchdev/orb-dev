@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { call, go } from '@/lib/store.js';
+import { quiet } from '@/lib/quiet.js';
 import { useT } from '@/lib/i18n.js';
 import { digestLines } from '@/lib/day-digest.js';
 import { cn } from '@/lib/utils.js';
@@ -13,11 +14,11 @@ export function DayDigestCard({ phone = false }) {
   const [d, setD] = useState(null);
   useEffect(() => {
     let live = true;
-    call('inbox.digest', {}).then((r) => { if (live && r?.due && !r.empty) setD(r); }).catch(() => {});
+    call('inbox.digest', {}).then((r) => { if (live && r?.due && !r.empty) setD(r); }).catch(quiet);
     return () => { live = false; };
   }, []);
   if (!d) return null;
-  const close = () => { setD(null); call('inbox.digestSeen', {}).catch(() => {}); };
+  const close = () => { setD(null); call('inbox.digestSeen', {}).catch(quiet); };
   const lines = digestLines(d, t);
   return (
     <section className={cn('bg-card relative mt-2 rounded-xl border px-3 py-2.5', phone ? 'mx-2' : 'mx-0.5')} aria-label={t('orbchats.digestTitle')} data-testid="day-digest">

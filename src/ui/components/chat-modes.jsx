@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Target, Bug, Square, Play, X } from 'lucide-react';
 import { call, act, bridge } from '@/lib/store.js';
+import { quiet } from '@/lib/quiet.js';
 import { useT } from '@/lib/i18n.js';
 import { Button } from '@/components/ui/button.jsx';
 import { Tip } from '@/components/ui/overlay.jsx';
@@ -20,7 +21,7 @@ export function ChatModes({ id }) {
   useEffect(() => {
     let alive = true;
     setGoal(null); setDebug(false);
-    call('sessions.modes', { id }).then((m) => { if (alive && m) { setGoal(m.goal ?? null); setDebug(Boolean(m.debug)); } }).catch(() => {});
+    call('sessions.modes', { id }).then((m) => { if (alive && m) { setGoal(m.goal ?? null); setDebug(Boolean(m.debug)); } }).catch(quiet);
     const offGoal = bridge.on('session:goal', (e) => { if (e.id === id) setGoal(e.goal ?? null); });
     const offDebug = bridge.on('session:debug', (e) => { if (e.id === id) setDebug(Boolean(e.on)); });
     return () => { alive = false; offGoal(); offDebug(); };

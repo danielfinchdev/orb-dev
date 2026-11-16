@@ -54,7 +54,7 @@ test('al abrir: el móvil empieza en sus chats salvo un chat que sigue existiend
   // main.jsx uses it, and a screen that fails to draw forgets the saved route (components/error-boundary.jsx).
   const main = read('src/ui/main.jsx');
   assert.match(main, /restoreRoute\(saved, \{ views: Object\.keys\(VIEWS\), phone: phoneLayout\(\), sessions, conversations \}\)/);
-  assert.equal((main.match(/<ErrorBoundary key=\{routeKey\(route\)\} onHome=\{resetRoute\}>/g) ?? []).length, 2, 'cada pantalla, en el móvil y en el PC');
+  assert.equal((main.match(/<ErrorBoundary key=\{routeKey\((?:route|r)\)\} onHome=\{resetRoute\}>/g) ?? []).length, 2, 'cada pantalla, en el móvil y en el PC');
   assert.match(main, /<ErrorBoundary onHome=\{\(\) => \{ resetRoute\(\); location\.reload\(\); \}\}><Root \/><\/ErrorBoundary>/, 'y la ventana entera');
   const boundary = read('src/ui/components/error-boundary.jsx');
   assert.match(boundary, /componentDidCatch[\s\S]*localStorage\.removeItem\('orb\.route'\)/);
