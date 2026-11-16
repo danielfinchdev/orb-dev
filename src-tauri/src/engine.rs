@@ -614,25 +614,55 @@ const EMIT_BATCH: usize = 64;
 /// ... and at about this many bytes (a single bigger event still goes out alone).
 const EMIT_BATCH_BYTES: usize = 2 << 20;
 
+/// How long the emitter waits after the first event of a batch for more to arrive. The window's thread is slow
+/// when the PC is busy, but `emit_to` only queues a script, so without this pause the channel is always drained
+/// the instant it is read and events leave one by one. A few ms is under a frame and lets a burst travel together.
+const EMIT_WINDOW: std::time::Duration = std::time::Duration::from_millis(4);
+
+/// A cheap size estimate of an event (its strings), so the batch can be cut by bytes without serializing it twice.
+fn approx_bytes(v: &Value) -> usize {
+  match v {
+    Value::String(s) => s.len() + 2,
+    Value::Array(a) => a.iter().map(approx_bytes).sum::<usize>() + 2,
+    Value::Object(o) => o.iter().map(|(k, v)| k.len() + 3 + approx_bytes(v)).sum::<usize>() + 2,
+    _ => 8,
+  }
+}
+
+/// Builds one batch starting at `first`: whatever is already queued, then whatever arrives within `window`, cut at
+/// EMIT_BATCH events or EMIT_BATCH_BYTES. Order is the channel's order and nothing is dropped.
+fn collect_batch(rx: &std::sync::mpsc::Receiver<Value>, first: Value, window: std::time::Duration) -> Vec<Value> {
+  let deadline = std::time::Instant::now() + window;
+  let mut bytes = approx_bytes(&first);
+  let mut batch = vec![first];
+  while batch.len() < EMIT_BATCH && bytes < EMIT_BATCH_BYTES {
+    let next = match rx.try_recv() {
+      Ok(v) => v,
+      Err(std::sync::mpsc::TryRecvError::Empty) => {
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        if left.is_zero() { break; }
+        match rx.recv_timeout(left) {
+          Ok(v) => v,
+          Err(_) => break,
+        }
+      }
+      Err(_) => break,
+    };
+    bytes += approx_bytes(&next);
+    batch.push(next);
+  }
+  batch
+}
+
 /// A thread that sends the engine's events to the window in order. Every `emit_to` is a script evaluated on the UI
 /// thread (WebView2); when that thread is slow (the PC busy) the events used to pile up there one by one, each with its
-/// own evaluation. Here whatever has queued up by the time the thread runs goes out together as one
+/// own evaluation. Here whatever has queued up (plus what arrives in the next few ms) goes out together as one
 /// `engine:events` array (tauri-bridge.js fires them in order), so the UI thread has one evaluation to do, not dozens.
 fn emit_queue(app: AppHandle) -> std::sync::mpsc::Sender<Value> {
   let (tx, rx) = std::sync::mpsc::channel::<Value>();
   let spawned = std::thread::Builder::new().name("engine-emit".into()).spawn(move || {
     while let Ok(first) = rx.recv() {
-      let mut bytes = first.to_string().len();
-      let mut batch = vec![first];
-      while batch.len() < EMIT_BATCH && bytes < EMIT_BATCH_BYTES {
-        match rx.try_recv() {
-          Ok(next) => {
-            bytes += next.to_string().len();
-            batch.push(next);
-          }
-          Err(_) => break,
-        }
-      }
+      let batch = collect_batch(&rx, first, EMIT_WINDOW);
       crate::trace::tally("ui.emit.batch", batch.len() as u64);
       let _ = app.emit_to("main", "engine:events", batch);
     }
@@ -641,4 +671,58 @@ fn emit_queue(app: AppHandle) -> std::sync::mpsc::Sender<Value> {
     eprintln!("[orb] engine-emit thread: {e}");
   }
   tx
+}
+
+#[cfg(test)]
+mod emit_batch_tests {
+  use super::*;
+  use std::sync::mpsc::channel;
+  use std::time::Duration;
+
+  #[test]
+  fn queued_events_go_in_order_in_one_batch() {
+    let (tx, rx) = channel::<Value>();
+    for i in 0..10 { tx.send(serde_json::json!({ "n": i })).unwrap(); }
+    let first = rx.recv().unwrap();
+    let batch = collect_batch(&rx, first, Duration::from_millis(1));
+    let order: Vec<i64> = batch.iter().map(|v| v["n"].as_i64().unwrap()).collect();
+    assert_eq!(order, (0..10).collect::<Vec<_>>());
+  }
+
+  #[test]
+  fn events_arriving_within_the_window_join_the_batch() {
+    let (tx, rx) = channel::<Value>();
+    tx.send(serde_json::json!({ "n": 0 })).unwrap();
+    let t = std::thread::spawn(move || {
+      std::thread::sleep(Duration::from_millis(5));
+      tx.send(serde_json::json!({ "n": 1 })).unwrap();
+    });
+    let first = rx.recv().unwrap();
+    let batch = collect_batch(&rx, first, Duration::from_millis(500));
+    t.join().unwrap();
+    assert_eq!(batch.len(), 2);
+  }
+
+  #[test]
+  fn a_burst_is_cut_at_the_batch_size_and_nothing_is_lost() {
+    let (tx, rx) = channel::<Value>();
+    for i in 0..(EMIT_BATCH + 5) { tx.send(serde_json::json!({ "n": i })).unwrap(); }
+    drop(tx);
+    let first = rx.recv().unwrap();
+    let a = collect_batch(&rx, first, Duration::from_millis(1));
+    assert_eq!(a.len(), EMIT_BATCH);
+    let first = rx.recv().unwrap();
+    let b = collect_batch(&rx, first, Duration::from_millis(1));
+    assert_eq!(b.len(), 5);
+    assert_eq!(b[0]["n"].as_i64().unwrap(), EMIT_BATCH as i64);
+  }
+
+  #[test]
+  fn a_lone_event_leaves_after_the_window() {
+    let (_tx, rx) = channel::<Value>();
+    let t = std::time::Instant::now();
+    let batch = collect_batch(&rx, serde_json::json!({ "n": 0 }), Duration::from_millis(4));
+    assert_eq!(batch.len(), 1);
+    assert!(t.elapsed() < Duration::from_millis(200));
+  }
 }
