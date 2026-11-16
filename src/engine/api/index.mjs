@@ -40,6 +40,7 @@ import { linkMethods } from './link.mjs';
 import { accountMethods } from './accounts.mjs';
 import { dataApi } from './data.mjs';
 import { inboxMethods } from './inbox.mjs';
+import { keysMethods } from './keys.mjs';
 import { masterMethods, checkUnlock } from './master.mjs';
 import { appMethods } from './app.mjs';
 import { musicMethods } from '../host/music.mjs';
@@ -338,6 +339,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     ...accountMethods(shared),
     ...linkMethods(shared),
     ...inboxMethods(shared),
+    ...keysMethods(shared),
     ...data.methods,
     // Orb locked (or a new password): the grants go, and so do the secrets typed for the agents.
     // under the lock screen the user's terminals take nothing and show nothing (user-terminal.mjs).

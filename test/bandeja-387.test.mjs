@@ -74,7 +74,7 @@ test('Ctrl+Alt+A salta al siguiente que te necesita, da la vuelta y no cuenta lo
 
 test('la interfaz: el atajo, el orden y la tarjeta están conectados y los textos existen en es y en', async () => {
   const src = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'views', 'orb', 'inbox.jsx'), 'utf8');
-  assert.match(src, /isNextNeedsKey/); assert.match(src, /nextNeedingYou/); assert.match(src, /DayDigestCard/);
+  assert.match(src, /useShortcut\('inbox\.nextNeeds'/); /* the key is a row of the shortcut table (src/shared/keybindings.mjs), Ctrl+Alt+A by default */ assert.match(src, /nextNeedingYou/); assert.match(src, /DayDigestCard/);
   for (const lang of ['es', 'en']) {
     const m = (await import(`../src/shared/locales/${lang}/orbchats.mjs`)).default;
     for (const k of ['order', 'orderPriority', 'reorder', 'digestTitle', 'digestDone', 'digestUsage']) assert.ok(m[`orbchats.${k}`], `${lang}: ${k}`);

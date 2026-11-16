@@ -30,6 +30,7 @@ import master from './en/master.mjs';
 import modos from './en/modos.mjs';
 import ola1 from './en/ola1.mjs';
 import mensajeria from './en/mensajeria.mjs';
+import pestanas from './en/pestanas.mjs';
 import orbchats from './en/orbchats.mjs';
 import notes from './en/notes.mjs';
 import ext from './en/ext.mjs';
@@ -73,6 +74,7 @@ export default {
   ...modos,
   ...ola1,
   ...mensajeria,
+  ...pestanas,
   ...orbchats,
   ...notes,
   ...ext,

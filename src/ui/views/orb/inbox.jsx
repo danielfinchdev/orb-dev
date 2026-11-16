@@ -20,7 +20,8 @@ import { confirm, form } from '@/components/dialogs.jsx';
 import { Input } from '@/components/ui/basic.jsx';
 import { useSearch } from '@/lib/search.js';
 import { useStore, go, call, act, newChat, orbAct, loadOrbInbox, openOrbInfo, closeOrbInfo, getState, phoneLayout, fullPc, refreshSoon, setState, plainSkin } from '@/lib/store.js';
-import { orbItems, orbProgress, groupOrb, shortTime, avatarStack, snoozeTimes, priorityKeys, nextNeedingYou, isNextNeedsKey } from '@/lib/inbox.js';
+import { orbItems, orbProgress, groupOrb, shortTime, avatarStack, snoozeTimes, priorityKeys, nextNeedingYou } from '@/lib/inbox.js';
+import { useShortcut } from '@/lib/keys.js';
 import { DayDigestCard } from '@/components/day-digest.jsx';
 import { sameItem } from '@/lib/memo.js';
 import { useDay } from '@/lib/use-day.js';
@@ -424,17 +425,13 @@ export function OrbInbox({ page = false }) {
   const parts = useMemo(() => groupOrb(items, { showDone, filter, order, frozen }), [items, showDone, filter, order, frozen]);
   // Ctrl+Alt+A: the next chat that needs the user, in the order the list shows.
   const route = useStore((s) => s.route);
-  useEffect(() => {
-    const on = (e) => {
-      if (!isNextNeedsKey(e)) return;
-      const shown = [...parts.pinned, ...parts.groups.flatMap((g) => g.items)];
-      const cur = shown.find((x) => isOpen(route, x))?.key ?? null;
-      const next = nextNeedingYou(shown, cur);
-      if (next) { e.preventDefault(); openOrbItem(next); }
-    };
-    window.addEventListener('keydown', on);
-    return () => window.removeEventListener('keydown', on);
-  }, [parts, route]);
+  // the key is a command of the shortcut table (lib/keys.js): Ajustes › Atajos can change it
+  useShortcut('inbox.nextNeeds', (e) => {
+    const shown = [...parts.pinned, ...parts.groups.flatMap((g) => g.items)];
+    const cur = shown.find((x) => isOpen(route, x))?.key ?? null;
+    const next = nextNeedingYou(shown, cur);
+    if (next) { e.preventDefault(); openOrbItem(next); }
+  });
   const onSheet = useCallback((x) => setSheet(x.key), []);
   // the day: «ayer» and the times of the rows move on at midnight
   const day = useDay();
