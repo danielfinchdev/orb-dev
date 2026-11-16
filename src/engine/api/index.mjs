@@ -38,6 +38,7 @@ import { authorize, PermissionError } from '../../domain/security/permissions.mj
 import { fld, fail, str, int, oneOf, images, lazy } from './common.mjs';
 import { linkMethods } from './link.mjs';
 import { accountMethods } from './accounts.mjs';
+import { historyMethods } from './history.mjs';
 import { dataApi } from './data.mjs';
 import { inboxMethods } from './inbox.mjs';
 import { keysMethods } from './keys.mjs';
@@ -258,6 +259,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     ...projectMethods(hooks),
 
     ...chatMethods(hooks),
+    ...historyMethods(),
     ...trash.methods,
     // the brains to choose from (agent + model), which ones spend the quota faster and how used each account is.
     // Kept for a few seconds: the window asks again on every change of the board (while the agents work, many a second).

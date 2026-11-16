@@ -1,7 +1,7 @@
 // «Uso», the whole usage page (reached from the usage panel of the context ring and from Ctrl+K): cost and tokens
 // by day, agent and model in the last 7, 30 or 90 days (usage.history), and each account's plan limits with the mark of
 // an even pace (usage.get). The panel stays as it was; this page only adds detail.
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Gauge } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
@@ -50,7 +50,7 @@ function Days({ days, metric, locale }) {
   );
 }
 
-function Table({ rows, head, locale }) {
+function Table({ rows, head, locale, plain = false }) {
   const t = useT();
   return (
     <div className="overflow-x-auto">
@@ -59,7 +59,7 @@ function Table({ rows, head, locale }) {
         <tbody>
           {rows.map((r) => (
             <tr key={r.key} className="border-t">
-              <td className="py-2"><span className="flex min-w-0 items-center gap-2"><AgentIcon agent={r.agent} className="size-4 shrink-0" /><span className="truncate">{r.name}</span></span></td>
+              <td className="py-2"><span className="flex min-w-0 items-center gap-2">{plain ? null : <AgentIcon agent={r.agent} className="size-4 shrink-0" />}<span className="truncate">{r.name}</span></span></td>
               <td className="py-2 text-right tabular-nums">{r.usd ? usd(r.usd, locale) : '—'}</td>
               <td className="py-2 text-right tabular-nums">{tokens(r.tokensIn)}</td>
               <td className="py-2 text-right tabular-nums">{tokens(r.tokensOut)}</td>
@@ -69,6 +69,51 @@ function Table({ rows, head, locale }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+// Heat map of the hours: a row per weekday (Monday first), a column per hour, darker where there were more turns.
+function Heat({ heat, locale }) {
+  const t = useT();
+  const max = Math.max(...heat.flat(), 0);
+  return (
+    <div className="overflow-x-auto" data-testid="usage-heat">
+      <div className="grid min-w-[420px] gap-[2px]" style={{ gridTemplateColumns: 'auto repeat(24, minmax(0, 1fr))' }} role="img" aria-label={t('usage.heat')}>
+        {heat.map((row, d) => (
+          <Fragment key={d}>
+            <span className="text-muted-foreground pr-2 text-xs">{t(`usage.days${d}`)}</span>
+            {row.map((n, h) => (
+              <Tip key={h} label={t('usage.heatCell', { day: t(`usage.days${d}`), hour: h, n: n.toLocaleString(locale) })}>
+                <span tabIndex={0} className={cn('aspect-square rounded-[3px]', n ? 'bg-primary' : 'bg-chart-empty')} style={n && max ? { opacity: 0.2 + 0.8 * (n / max) } : undefined} />
+              </Tip>
+            ))}
+          </Fragment>
+        ))}
+        <span />
+        {Array.from({ length: 24 }, (_, h) => <span key={h} className="text-muted-foreground text-center text-[10px]">{h % 6 === 0 ? h : ''}</span>)}
+      </div>
+    </div>
+  );
+}
+
+// What the sessions of Claude Code and Codex on this PC spent (history.usage), by model, project and hour.
+function LocalUsage({ days, locale }) {
+  const t = useT();
+  const [data, setData] = useState(null);
+  useEffect(() => { let alive = true; setData(null); call('history.usage', { days }).then((r) => alive && setData(r)).catch(() => alive && setData(false)); return () => { alive = false; }; }, [days]);
+  if (data === false) return null;
+  const models = (data?.models ?? []).map((m) => ({ ...m, key: `${m.agent}:${m.model ?? ''}`, name: m.model ?? t('usage.defaultModel') }));
+  const projects = (data?.projects ?? []).map((p) => ({ ...p, key: p.project, name: p.project || '—' }));
+  return (
+    <>
+      <div><div className="text-control font-medium">{t('usage.local')}</div><p className="text-muted-foreground text-xs">{t('usage.localHint')}</p></div>
+      {data === null ? <Spinner /> : !data.total.turns ? <p className="text-muted-foreground text-control">{t('usage.empty')}</p> : (<>
+        <Card className="gap-3" data-testid="usage-local"><div className="px-5 text-control font-medium">{t('usage.heat')}</div><div className="px-5"><Heat heat={data.heat} locale={locale} /></div></Card>
+        <Card className="gap-2"><div className="px-5 text-control font-medium">{t('usage.byModel')}</div><div className="px-5"><Table rows={models} head={t('usage.model')} locale={locale} /></div></Card>
+        <Card className="gap-2"><div className="px-5 text-control font-medium">{t('usage.byProject')}</div><div className="px-5"><Table rows={projects} head={t('usage.project')} locale={locale} plain /></div></Card>
+        {data.truncated ? <p className="text-muted-foreground text-xs">{t('usage.localTruncated')}</p> : null}
+      </>)}
+    </>
   );
 }
 
@@ -128,6 +173,7 @@ export function UsageView() {
             {models.length ? <Card className="gap-2"><div className="px-5 text-control font-medium">{t('usage.byModel')}</div><div className="px-5"><Table rows={models} head={t('usage.model')} locale={locale} /></div></Card> : null}
             {!data.total.turns ? <p className="text-muted-foreground text-control">{t('usage.empty')}</p> : null}
           </>)}
+          <LocalUsage days={Number(days)} locale={locale} />
           <Card className="gap-3"><div className="px-5 text-control font-medium">{t('usage.limits')}</div><div className="px-5"><Limits accounts={accounts} locale={locale} /></div></Card>
         </div>
       </PageBody>

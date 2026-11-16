@@ -68,6 +68,7 @@ const AgentsView = deferred(() => import('@/views/agents.jsx'), 'AgentsView');
 const MemoriesView = deferred(() => import('@/views/memories.jsx'), 'MemoriesView');
 const SchedulesView = deferred(() => import('@/views/schedules.jsx'), 'SchedulesView');
 const UsageView = deferred(() => import('@/views/usage.jsx'), 'UsageView');
+const HistoryView = deferred(() => import('@/views/history.jsx'), 'HistoryView');
 const ExpertView = deferred(() => import('@/views/expert.jsx'), 'ExpertView');
 const TutorialsView = deferred(() => import('@/views/tutorials.jsx'), 'TutorialsView');
 const WhiteboardView = deferred(() => import('@/views/whiteboard.jsx'), 'WhiteboardView');
@@ -105,7 +106,7 @@ const ChatsView = OrbChatsView;
 // a route of a screen that is gone (a bot's, saved before or in an old notification) falls back to the chat.
 const VIEWS = bridge.mobile
   ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, rules: MemoriesView, schedules: SchedulesView, usage: UsageView, phone: PhoneView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
-  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, rules: MemoriesView, schedules: SchedulesView, usage: UsageView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView, expert: ExpertView };
+  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, history: HistoryView, logs: MemoriesView, activity: MemoriesView, rules: MemoriesView, schedules: SchedulesView, usage: UsageView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView, expert: ExpertView };
 setViews(Object.keys(VIEWS));
 const routeKey = (route) => `${route.view}:${route.id ?? ''}:${route.project ?? ''}`;
 
