@@ -5,6 +5,7 @@ import { enabledAgents } from '../../platform/config.mjs';
 import { git } from '../../platform/git.mjs';
 import { rankAccounts } from '../../domain/usage/budget.mjs';
 import { installed } from '../../agents/index.mjs';
+import { UNGUARDED_AGENTS } from '../../agents/unguarded.mjs';
 import { usableAccounts } from '../../domain/usage/accounts.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { label } from './common.mjs';
@@ -15,7 +16,7 @@ export class ReviewsPart {
   // It goes to a different provider when one is installed and has room (Claude's work is reviewed by Codex, Gemini…), else
   // to the same agent with a different model. scope: a task ({ task }) or a whole project ({ project }).
   reviewer(exclude = []) {
-    const order = [...new Set([...(ctx.config.agentOrder ?? []), ...enabledAgents()])].filter((a) => enabledAgents().includes(a) && installed(a));
+    const order = [...new Set([...(ctx.config.agentOrder ?? []), ...enabledAgents()])].filter((a) => enabledAgents().includes(a) && installed(a) && !UNGUARDED_AGENTS.includes(a));
     const ranked = order.map((a) => ({ a, ok: usableAccounts(a).some((acc) => rankAccounts(this.board, [acc], null)[0]?.check.ok) }));
     return ranked.find((r) => r.ok && !exclude.includes(r.a))?.a ?? ranked.find((r) => r.ok)?.a ?? order[0] ?? null;
   }

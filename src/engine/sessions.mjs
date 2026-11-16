@@ -10,6 +10,7 @@ import { approvalWaitMinutes, taskTimeoutMinutes } from '../domain/rules/rails.m
 import { connectorKey } from '../platform/config.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
 import { adapter, executable } from '../agents/index.mjs';
+import { UNGUARDED_AGENTS, requireLevel } from '../agents/unguarded.mjs';
 import { liveSkills } from './api/extensions.mjs';
 import { orbMcpServer, connectorLauncher } from '../agents/common.mjs';
 import { agentAuth } from '../domain/security/agent-auth.mjs';
@@ -705,6 +706,7 @@ ${body}`;
     if (this.running.has(id)) throw new Error(tr('msg.sessions.forkWait'));
     const other = agent && agent !== s.agent ? agent : null;
     const a = adapter(other ?? s.agent);
+    if (other && UNGUARDED_AGENTS.includes(other)) requireLevel('leer', AGENT_LABELS[other] ?? other); // the copy never keeps «total»
     // what was given with the master password stays with the original (also «total» of a project's chat).
     const copy = this.create({ kind: 'chat', agent: other ?? s.agent, account: other ? null : s.account, model: other ? null : s.model, reasoning: other && s.reasoning === 'xhigh' ? 'high' : s.reasoning, permission: s.permission !== 'total' ? s.permission : s.project ? permissionOfAutonomy(globalAutonomy()) : 'leer',
       project: s.project, cwd: s.cwd, title: title || (other ? tr('msg.sessions.switchTitle', { title: s.title, agent: AGENT_LABELS[other] ?? other }) : tr('msg.sessions.forkTitle', { title: s.title })), parentId: s.id });
@@ -729,6 +731,7 @@ ${body}`;
     if (this.running.has(id)) throw new Error(tr('msg.sessions.handoffWait'));
     if (this.pendingApprovals(id).length) throw new Error(tr('msg.sessions.handoffApproval'));
     adapter(agent); // throws for an unknown agent
+    if (UNGUARDED_AGENTS.includes(agent)) requireLevel('leer', AGENT_LABELS[agent] ?? agent); // «total» is never carried over
     const acc = pickAccount(this.board, { agent });
     if (!acc || acc.agent !== agent) throw new Error(tr('msg.sessions.accountNotOf', { account: agent, agent }));
     const rows = this.board.all("SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT ?", id, HANDOFF_LOOKBACK).reverse().map(parseItem);

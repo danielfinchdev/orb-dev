@@ -5,6 +5,9 @@
 // «Acceso total», which promises none) is accepted. Anything else is refused before a process is started.
 import { tr } from '../platform/context.mjs';
 
+// Never picked automatically (task «any agent», reviews) nor offered by «Pasar a otro agente» / «Bifurcar»: no chat or
+// task Orb creates itself holds «total», so they would fail every time. Only a task or chat pinned to them by hand.
+export const UNGUARDED_AGENTS = Object.freeze(['pi', 'antigravity']);
 export const UNGUARDED_LEVELS = Object.freeze(['total']);
 export function requireLevel(permission, name) {
   if (!UNGUARDED_LEVELS.includes(permission)) throw Object.assign(new Error(tr('sys.agents.noGuard', { name })), { userFacing: true });

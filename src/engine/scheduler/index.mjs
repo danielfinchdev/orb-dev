@@ -13,6 +13,7 @@ import { git, gitAsync, isGitRepo, repoRoot, mayHaveWorktrees, ORB_GIT, REF_PREF
 import { prepareWorkdir } from '../../domain/tasks/checkpoints.mjs';
 import { rankAccounts, isLimitText, isBudgetText, startCooldown, taskBudgetUsd, blockModel, isModelLimitText, liftAfterSuccess, untilText, modelName } from '../../domain/usage/budget.mjs';
 import { installed } from '../../agents/index.mjs';
+import { UNGUARDED_AGENTS } from '../../agents/unguarded.mjs';
 import { runDue } from '../../domain/schedules/schedules.mjs';
 import { wakeSnoozed } from '../../domain/conversations/inbox.mjs';
 import { usableAccounts, account as findAccount, accountLabel } from '../../domain/usage/accounts.mjs';
@@ -309,7 +310,7 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
         && !(limits.oneAtATime && [...this.running.keys()].some((id) => board.task(id)?.parent_id === task.parent_id));
       if (this.running.size >= (limits.oneAtATime ? 1 : limits.maxParallel) && !forParent) continue;
       // Only agents whose program is on this PC take work (an "any" task never goes to one that is not installed).
-      const types = (task.agent === 'any' ? order.filter((a) => enabled.includes(a)) : [task.agent].filter((a) => enabled.includes(a))).filter((a) => installed(a));
+      const types = (task.agent === 'any' ? order.filter((a) => enabled.includes(a) && !UNGUARDED_AGENTS.includes(a)) : [task.agent].filter((a) => enabled.includes(a))).filter((a) => installed(a));
       // Every enabled account of those agents; a task pinned to an account only goes there.
       const candidates = types.flatMap((a) => usableAccounts(a)).filter((acc) => !task.account || acc.id === task.account);
       // a task for an agent this PC cannot run (uninstalled or turned off after it was created) does not wait for

@@ -2,6 +2,7 @@
 // Part of the Scheduler (index.mjs adds these methods to it).
 import { ctx, tr } from '../../platform/context.mjs';
 import { enabledAgents } from '../../platform/config.mjs';
+import { UNGUARDED_AGENTS } from '../../agents/unguarded.mjs';
 import { assistantName, userName } from '../../domain/tasks/board.mjs';
 import { pauseAccount } from '../../domain/usage/budget.mjs';
 import { installed } from '../../agents/index.mjs';
@@ -50,7 +51,7 @@ export class ReportsPart {
     if (why.kind === 'plan') pauseAccount(board, acc, 24 * 3_600_000, tr('msg.budget.noPlan'));
     if (why.kind === 'login') pauseAccount(board, acc, 10 * 60_000, tr('msg.budget.noLogin'));
     const others = task.agent === 'any' && ['plan', 'login', 'missing'].includes(why.kind) && board.setting(`auto_retry:${task.id}`) !== '1'
-      && enabledAgents().filter((a) => a !== task.assigned_to).some((a) => installed(a) && usableAccounts(a).length);
+      && enabledAgents().filter((a) => a !== task.assigned_to && !UNGUARDED_AGENTS.includes(a)).some((a) => installed(a) && usableAccounts(a).length);
     let out = board.patch(task.id, { status: 'blocked', result: `${why.reason[0].toUpperCase()}${why.reason.slice(1)}. ${why.advice}
 
 ${task.result ?? ''}`.trim().slice(0, 4000) }, 'orb', 'task.problem');
