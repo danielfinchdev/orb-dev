@@ -4,7 +4,7 @@ import { form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Textarea } from '@/components/ui/basic.jsx';
 import { Checkbox, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
-import { useStore, call, act } from '@/lib/store.js';
+import { useStore, call, act, fullPc } from '@/lib/store.js';
 import { notifyError } from '@/lib/notify.js';
 import { useT, t } from '@/lib/i18n.js';
 
@@ -19,19 +19,21 @@ async function edit(sessionId, item) {
     body: (v, set) => (
       <div className="flex flex-col gap-3">
         <Textarea value={v.text} onChange={(e) => set({ text: e.target.value })} className="min-h-28" autoFocus data-testid="edit-text" />
+        {item.body?.images?.length ? <p className="text-muted-foreground text-xs" data-testid="edit-images">{t('edit.imagesKept', { n: item.body.images.length })}</p> : null}
+        {fullPc() ? <>
         <label className={`flex items-start gap-2 text-control ${info.canRewind ? '' : 'opacity-60'}`}>
           <Checkbox checked={Boolean(v.rewind) && info.canRewind} disabled={!info.canRewind} onCheckedChange={(on) => set({ rewind: on === true })} className="mt-0.5" data-testid="edit-rewind" />
           <span>{t('edit.rewind')}</span>
         </label>
         {info.canRewind ? <p className="text-xs font-medium" data-testid="edit-commits-kept">{t('edit.commitsKept')}</p> : null}
-        {item.body?.images?.length ? <p className="text-muted-foreground text-xs" data-testid="edit-images">{t('edit.imagesKept', { n: item.body.images.length })}</p> : null}
         <p className="text-muted-foreground text-xs">{info.canRewind ? t('edit.rewindHelp') : t('edit.rewindOff', { why: info.rewindWhy })}</p>
+        </> : null}
       </div>
     ),
     ok: t('edit.save'),
     onOk: (v) => {
       if (!String(v.text ?? '').trim()) throw new Error(t('edit.empty'));
-      return call(v.rewind && info.canRewind ? 'sessions.editRewind' : 'sessions.edit', { id: sessionId, item: item.id, text: v.text });
+      return call(v.rewind && info.canRewind && fullPc() ? 'sessions.editRewind' : 'sessions.edit', { id: sessionId, item: item.id, text: v.text });
     },
   });
 }
@@ -60,7 +62,7 @@ export function RewindLine({ sessionId, item }) {
     <Collapsible className="text-muted-foreground text-center text-xs" data-testid="rewind-line">
       <span>{counts}</span>
       {skipped?.length ? <> · <CollapsibleTrigger className="cursor-pointer underline-offset-2 hover:underline">{t('rewind.skipped')}</CollapsibleTrigger></> : null}
-      {!body.undone ? <Button variant="ghost" size="sm" className="ml-2" onClick={() => act(call('sessions.rewindUndo', { id: sessionId, item: item.id }))} data-testid="rewind-undo"><Undo2 />{t('rewind.undo')}</Button> : null}
+      {!body.undone && fullPc() ? <Button variant="ghost" size="sm" className="ml-2" onClick={() => act(call('sessions.rewindUndo', { id: sessionId, item: item.id }))} data-testid="rewind-undo"><Undo2 />{t('rewind.undo')}</Button> : null}
       <CollapsibleContent className="bg-muted/40 mt-2 rounded-xl px-3.5 py-2.5 text-left">
         <Paths title={t('rewind.skipped')} list={skipped} />
         {(body.skipped ?? 0) > (skipped?.length ?? 0) ? <div className="mt-1 italic">{t('rewind.moreHint')}</div> : null}

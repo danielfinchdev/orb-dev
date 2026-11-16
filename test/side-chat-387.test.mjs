@@ -98,3 +98,15 @@ test('an agent that cannot keep «Solo lectura» gets no side chat, and a chat h
   for (let i = 0; i < 3; i++) await call('sessions.sideAsk', { id: s.id, text: `q${i}` });
   await assert.rejects(() => call('sessions.sideAsk', { id: s.id, text: 'cuarta' }), /3/);
 });
+
+test('a phone cannot start a side question: sideAsk is PC-only and «/side» typed from a phone is refused', async () => {
+  const { METHODS, principalOf } = await import('../src/domain/security/permissions.mjs');
+  const fs = await import('node:fs');
+  assert.equal(METHODS['sessions.sideAsk'], 'pc');
+  const s = await chat('leer');
+  const phone = principalOf({ device: { id: 'd', kind: 'phone' } });
+  await assert.rejects(() => api.call('sessions.send', { id: s.id, text: '/side hola' }, phone), /PC/);
+  assert.equal((await call('sessions.sides', { id: s.id })).length, 0);
+  // the phone's web reloads a chat's list when an edit moves its messages
+  assert.match(fs.readFileSync(new URL('../src/engine/transport/remote.mjs', import.meta.url), 'utf8'), /'session:reset'/);
+});

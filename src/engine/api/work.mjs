@@ -146,7 +146,7 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     'sessions.items': ({ id, after, before, limit }) => sessions.items(str(id, 'conversación', 64), { after: Number(after) || 0, before: Number(before) || 0, limit: Number(limit) || 200 }),
     // A message to a conversation: a new turn, or (while it works) steer the running turn or wait in its queue.
     // mode: 'auto' (steer when the agent can, else queue), 'steer' or 'queue'.
-    'sessions.send': ({ id, text, images: files, mode, comments }) => {
+    'sessions.send': ({ id, text, images: files, mode, comments }, principal) => {
       if (chatTrees.busy.has(String(id))) fail(tr('msg.chatWt.removing'));
       const s = sessions.must(str(id, 'conversación', 64));
       trash.assertSessionNotTrashed(s);
@@ -162,6 +162,8 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       // comments written on diff lines go with this message as one block (turns.mjs › commentsBlock)
       const t = str(text, 'mensaje', 20000); const block = commentsBlock(comments);
       const modeCmd = s.kind === 'chat' && !(files ?? []).length ? modeCommand(t) : null;
+      // the answer of «/side» is drawn in the PC's side panel only; from a phone it would spend plan and show nothing
+      if (modeCmd?.name === 'side' && principal?.device) fail(tr('msg.remote.pcOnly'));
       if (modeCmd) return runMode(s, modeCmd);
       const command = s.kind === 'chat' && !(files ?? []).length ? slashCommand(t) : null;
       if (command) return command === 'compact' ? sessions.compact(s.id) : sessions.clear(s.id);

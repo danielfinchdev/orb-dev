@@ -1,6 +1,6 @@
 {
   "generatedBy": "scripts/android-vectors.mjs",
-  "source": "47ac906c60a3afe20dd20594482e28f04688720250d1b2e5db631bb005bae011",
+  "source": "cc7aac7673fb18bd24fc2667d84dcf7b2b1700184e353902408cd412c0faf7e1",
   "methods": [
     "activity.list",
     "activity.report",
@@ -88,7 +88,6 @@
     "sessions.rewindInfo",
     "sessions.send",
     "sessions.settle",
-    "sessions.sideAsk",
     "sessions.sideClose",
     "sessions.sides",
     "sessions.stop",

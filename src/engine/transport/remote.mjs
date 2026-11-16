@@ -33,7 +33,7 @@ export { PREVIEWS, guardCall, phoneConfig, pushPreview, shapeResult, withoutPath
 export { SERVICE_WORKER } from './remote-web.mjs';
 export { kindForPairing, lanAddresses, localName, orbNameOf, plainHttpBrowser, privateSource, startAttention, tailscaleAddress } from './remote-net.mjs';
 
-const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'session:item', 'session:update', 'session:removed', 'config:changed', 'session:delta', 'session:queue', 'approval:changed',
+const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'session:item', 'session:update', 'session:removed', 'config:changed', 'session:delta', 'session:queue', 'session:reset', 'approval:changed',
   // a chat list changed
   'inbox:changed']);
 
