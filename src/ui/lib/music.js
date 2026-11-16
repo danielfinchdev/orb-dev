@@ -2,18 +2,20 @@
 // sidebar) and one track per minigame (src/ui/games/games.jsx). The tracks and their licences are src/shared/music.mjs;
 // the engine downloads each the first time it is played and hands its bytes over ('music.track', src/engine/host/music.mjs).
 //
-// - Only on the Windows app: never on the phone or in a linked browser (available()).
+// - Only on the Windows app: never on the phone or in a linked browser, nor in Profesional and the themes built on it
+//   (Cristal, Grafito): they are silent, so the button hides and nothing plays (available()). Changing to one stops it (stopIfPlain).
 // - Off by default and never starts by itself: it plays after a click. Whether it was on is remembered (ui.music.on);
 //   on the next start it comes back with the first click or key in the window, not before.
 // - Everything pauses when Orb locks (pauseAll, from main.jsx) and while the window is hidden or minimised (it comes
 //   back when the window is shown, only if it was playing). A game's music pauses the background music meanwhile.
 // - Nothing runs while it is off: no element, no timer, no listener but visibilitychange.
-import { bridge, call, getState, setState, fullPc } from './store.js';
+import { bridge, call, getState, setState, fullPc, plainSkin, onAppearance } from './store.js';
 import { musicAllowed, musicPrefs as prefsOf, gameMusicOn as gameOnOf, nextTrack, gameTrack } from '../../shared/music.mjs';
 import { quiet } from './quiet.js';
 
-export const available = () => musicAllowed({ mobile: bridge.mobile, desktop: bridge.desktop, platform: bridge.platform }) && fullPc();
-const ui = () => getState().app?.config?.ui ?? {};
+const platformOk = () => musicAllowed({ mobile: bridge.mobile, desktop: bridge.desktop, platform: bridge.platform }) && fullPc();
+export const available = () => platformOk() && !plainSkin(ui().skin);
+function ui() { return getState().app?.config?.ui ?? {}; }
 export const musicPrefs = () => prefsOf(ui());
 const gameMusicOn = () => gameOnOf(ui());
 
@@ -55,6 +57,7 @@ async function playBackground(id) {
   emit({ loading: true, error: null, track: id });
   try {
     const url = await urlOf(id);
+    if (!available()) { emit({ loading: false, playing: false }); return; } // a plain theme was chosen while the track was downloading
     bg ??= player(false);
     if (!bg.onended) bg.onended = () => { const next = nextTrack(state.track); saveUi({ music: { ...musicPrefs(), track: next } }); playBackground(next); };
     bg.volume = musicPrefs().volume;
@@ -90,6 +93,7 @@ export async function startGameMusic(id) {
   if (!available() || !t || !gameMusicOn()) return;
   try {
     const url = await urlOf(t.id);
+    if (!available()) return; // a plain theme was chosen while the track was downloading
     game ??= player(true);
     game.volume = Math.min(1, musicPrefs().volume + 0.1);
     game.src = url;
@@ -105,6 +109,14 @@ export function stopGameMusic() {
 export async function setGameMusic(on, current = null) {
   await saveUi({ gameMusic: on });
   if (!on) stopGameMusic(); else if (current) startGameMusic(current);
+}
+
+// A plain theme was chosen (Ajustes → Apariencia): everything stops and the remembered «on» is kept for when a theme with music comes back.
+export function stopIfPlain() {
+  if (available()) return;
+  disarm();
+  bgHeld = false; stopGameMusic(); bg?.pause(); hidden = false; resume = null; // bgHeld first: stopGameMusic would resume the background
+  if (state.playing || state.loading) emit({ playing: false, loading: false });
 }
 
 // ---- Locking, hiding and the start. ----
@@ -130,8 +142,9 @@ function onVisibility() {
 function disarm() { if (pending) { window.removeEventListener('pointerdown', pending, true); window.removeEventListener('keydown', pending, true); pending = null; } }
 // At the start (main.jsx, once the app is on screen): music remembered as on comes back with the first click or key.
 export function startMusic() {
-  if (!available()) return () => {};
+  if (!platformOk()) return () => {};
   document.addEventListener('visibilitychange', onVisibility);
+  if (!available()) return () => document.removeEventListener('visibilitychange', onVisibility); // a plain theme: nothing to bring back
   if (musicPrefs().on && !pending) {
     // The music button itself is not that first click: it does its own (toggleMusic).
     pending = (e) => { if (e.target?.closest?.('[data-music-button]')) return; disarm(); if (!state.playing && !state.loading) playBackground(musicPrefs().track); };
@@ -139,3 +152,5 @@ export function startMusic() {
   }
   return () => { disarm(); document.removeEventListener('visibilitychange', onVisibility); };
 }
+
+onAppearance(() => stopIfPlain());

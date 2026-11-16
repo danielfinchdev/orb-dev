@@ -5,7 +5,7 @@ import { errorText } from './utils.js';
 import { bumpNav, navTicket, stillHere } from './nav.js';
 import { cleanRoute, backStep } from './phone-nav.js';
 import { t } from './i18n.js';
-import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, baseSkin, plainSkin, darkOnlySkin } from '../../shared/appearance.mjs';
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, baseSkin, plainSkin, darkOnlySkin, phoneSkin } from '../../shared/appearance.mjs';
 export { plainSkin, darkOnlySkin }; // Profesional and the themes built on it (Cristal): no robot, no backdrop, no motion
 import { applyFeed, sinceOf } from '../../shared/feed.mjs';
 import { frameBatch } from './batch.js';
@@ -289,17 +289,22 @@ export function applyTheme(next = theme) {
 }
 media.addEventListener('change', () => applyTheme());
 // True while the active theme only exists in dark; the day / night controls disable themselves with it.
+// The theme worn here: any on the PC, only the default or Grafito on the phone.
+const skinOf = (skin) => { const id = SKINS.includes(skin) ? skin : SKINS[0]; return fullPc() ? id : phoneSkin(id); };
 export const useDarkOnly = () => useStore((s) => fullPc() && darkOnlySkin(s.app?.config?.ui?.skin));
 // The theme's base id (cristal wears profesional's), or the default one on the phone; for DOM only some themes draw.
-export const useSkin = () => useStore((s) => (fullPc() ? baseSkin(SKINS.includes(s.app?.config?.ui?.skin) ? s.app.config.ui.skin : SKINS[0]) : SKINS[0]));
+export const useSkin = () => useStore((s) => baseSkin(skinOf(s.app?.config?.ui?.skin)));
 export const isDark = () => document.documentElement.classList.contains('dark');
 
 // Ajustes → Apariencia: visual theme, fonts and colours of code, as data attributes of <html> that the CSS reads
 // (data-skin, data-font, data-code-font, data-code-theme). Unknown or missing values fall back to the defaults.
+// Modules that react to a theme change (the music stops in a plain one) register here; store.js cannot import them.
+const appearanceListeners = new Set();
+export const onAppearance = (fn) => { appearanceListeners.add(fn); return () => appearanceListeners.delete(fn); };
 export function applyAppearance(ui = {}) {
   const pick = (value, list) => (list.includes(value) ? value : list[0]);
   const root = document.documentElement.dataset;
-  const skin = fullPc() ? pick(ui.skin, SKINS) : SKINS[0]; // the phone always wears the default theme
+  const skin = skinOf(ui.skin); // the phone wears the default theme or Grafito
   currentSkin = skin;
   // a theme built on another (cristal on profesional) wears its base's data-skin plus its own data-material.
   root.skin = baseSkin(skin);
@@ -309,4 +314,5 @@ export function applyAppearance(ui = {}) {
   root.codeTheme = pick(ui.codeTheme, CODE_THEMES);
   root.motion = ui.motion === 'minima' ? 'minima' : 'completa'; // the themes' moving backdrops stop with it
   applyTheme(); // a dark-only theme forces .dark; leaving it gives the saved choice back
+  for (const fn of appearanceListeners) fn(skin);
 }

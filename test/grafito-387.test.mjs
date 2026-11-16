@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SKINS, baseSkin, plainSkin } from '../src/shared/appearance.mjs';
+import { SKINS, baseSkin, plainSkin, phoneSkin } from '../src/shared/appearance.mjs';
+import { phoneConfig } from '../src/engine/transport/remote.mjs';
 import es from '../src/shared/locales/es/settings.mjs';
 import en from '../src/shared/locales/en/settings.mjs';
 
@@ -83,3 +84,26 @@ for (const [mode, selector] of [['light', 'html[data-material="grafito"]'], ['da
     assert.ok(ratio(t.background, t.input) >= 3, `${mode} input border on the page: ${ratio(t.background, t.input).toFixed(2)}`);
   });
 }
+
+test('the music is silent in every plain theme and stops when one is chosen', () => {
+  const music = read('lib', 'music.js');
+  assert.match(music, /export const available = \(\) => platformOk\(\) && !plainSkin\(ui\(\)\.skin\);/);
+  assert.match(music, /export function stopIfPlain\(\) \{\s*if \(available\(\)\) return;/);
+  assert.match(music, /const url = await urlOf\(id\);\s*if \(!available\(\)\)/, 'a theme chosen during the download');
+  assert.match(music, /const url = await urlOf\(t\.id\);\s*if \(!available\(\)\) return;/);
+  assert.match(music, /onAppearance\(\(\) => stopIfPlain\(\)\);/);
+  assert.match(read('lib', 'store.js'), /for \(const fn of appearanceListeners\) fn\(skin\);/);
+  for (const skin of SKINS) assert.equal(plainSkin(skin) ? 'silent' : 'music', ['profesional', 'cristal', 'grafito'].includes(skin) ? 'silent' : 'music', skin);
+});
+
+test('the phone may wear Grafito, which reaches it with the PC settings, and nothing else but the default', () => {
+  assert.equal(phoneSkin('grafito'), 'grafito');
+  assert.equal(phoneSkin('orb'), 'orb');
+  for (const skin of ['vaporwave', 'retro', 'profesional', 'nube', 'cristal', 'nope', undefined]) assert.equal(phoneSkin(skin), SKINS[0], String(skin));
+  assert.equal(phoneConfig({ ui: { skin: 'grafito', theme: 'oscuro' } }).ui.skin, 'grafito', 'ui.skin travels in the settings of a phone');
+  const store = read('lib', 'store.js');
+  assert.match(store, /const skinOf = \(skin\) => \{[^}]*fullPc\(\) \? id : phoneSkin\(id\)/);
+  assert.match(store, /const skin = skinOf\(ui\.skin\);/);
+  assert.match(store, /baseSkin\(skinOf\(s\.app\?\.config\?\.ui\?\.skin\)\)/);
+  assert.ok(plainSkin(phoneSkin('grafito')), 'no decorative motion on the phone');
+});

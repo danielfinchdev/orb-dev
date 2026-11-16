@@ -63,6 +63,7 @@ function useRemembered(key, initial) {
 // feedback with Orb's version; unfolded, the list with names. The little arrow on the line above unfolds and folds it.
 function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
   const t = useT();
+  useStore((s) => s.app?.config?.ui?.skin); // the music button hides in the plain themes (lib/music.js › available)
   const memories = is('logs') || is('activity') || is('rules');
   // the same slots and icons on the PC and in a linked browser (Ajustes, Agentes, Memorias, Tutoriales); what a
   // browser does not have is left out (Agentes, the bug), never swapped for other icons. Its gear opens this device.
