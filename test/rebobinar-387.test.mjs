@@ -81,6 +81,21 @@ test('editing without rewinding keeps the later turns in a copy and the chat sta
   assert.ok(fs.existsSync(path.join(repo, 'c.txt'))); // no rewind: files untouched
 });
 
+test('editing a message with pictures sends them again with the new text', async () => {
+  const s = create();
+  const pic = path.join(t.home, 'pic.png'); fs.writeFileSync(pic, 'png');
+  const had = sent.length;
+  sessions.send(s.id, 'look at this', { images: [pic] });
+  await until(() => sent.length > had, 'arranca'); await idle(s.id);
+  const first = userItems(s.id)[0];
+  assert.equal(first.body.includes('images'), true);
+  await call('sessions.edit', { id: s.id, item: first.id, text: 'look again' });
+  await idle(s.id);
+  const edited = JSON.parse(userItems(s.id).at(-1).body);
+  assert.equal(edited.text, 'look again'); assert.equal(edited.images.length, 1);
+  assert.equal(fs.readFileSync(edited.images[0], 'utf8'), 'png');
+});
+
 test('rewind puts back modified, new and deleted files, never an ignored one, and can be undone', async () => {
   const s = create();
   await turn(s.id, 'write a.txt=changed');

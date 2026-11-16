@@ -24,6 +24,7 @@ async function edit(sessionId, item) {
           <span>{t('edit.rewind')}</span>
         </label>
         {info.canRewind ? <p className="text-xs font-medium" data-testid="edit-commits-kept">{t('edit.commitsKept')}</p> : null}
+        {item.body?.images?.length ? <p className="text-muted-foreground text-xs" data-testid="edit-images">{t('edit.imagesKept', { n: item.body.images.length })}</p> : null}
         <p className="text-muted-foreground text-xs">{info.canRewind ? t('edit.rewindHelp') : t('edit.rewindOff', { why: info.rewindWhy })}</p>
       </div>
     ),

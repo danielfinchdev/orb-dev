@@ -20,6 +20,7 @@ export default {
   'edit.rewind': 'Volver también los archivos a como estaban antes de este mensaje',
   'edit.rewindHelp': 'Antes de tocar nada se guarda una copia de rescate y después podrás deshacerlo. Los archivos ignorados por git y los que parecen secretos no se tocan.',
   'edit.commitsKept': 'Los commits que el agente hizo después de ese mensaje se quedan en el historial; solo vuelven los archivos (aparecerán como cambios sin guardar).',
+  'edit.imagesKept': 'Los {n} archivo(s) adjuntos se vuelven a enviar con el mensaje editado.',
   'edit.rewindOff': 'No se pueden volver los archivos: {why}',
   'edit.empty': 'Escribe el mensaje',
   'edit.done': 'Mensaje editado',

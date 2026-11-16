@@ -20,6 +20,7 @@ export default {
   'edit.rewind': 'Also put the files back as they were before this message',
   'edit.rewindHelp': 'A rescue copy is kept before anything is touched, and you can undo it afterwards. Files ignored by git and files that look like secrets are never touched.',
   'edit.commitsKept': 'Commits the agent made after that message stay in the history; only the files go back (they will show as uncommitted changes).',
+  'edit.imagesKept': 'The {n} attached file(s) are sent again with the edited message.',
   'edit.rewindOff': 'The files cannot be put back: {why}',
   'edit.empty': 'Write the message',
   'edit.done': 'Message edited',

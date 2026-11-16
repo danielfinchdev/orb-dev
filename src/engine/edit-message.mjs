@@ -1,6 +1,7 @@
 // «Editar» a message of a direct chat: the conversation goes on from the edited message, optionally with the project's
 // files put back as they were before it (domain/conversations/rewind.mjs). What came after stays in a copy of the chat
 // called «(versión anterior)», so nothing the user saw is lost. Takes the Sessions instance like modes.mjs does.
+import fs from 'node:fs';
 import { tr } from '../platform/context.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
 import { permissionOfAutonomy, globalAutonomy } from '../domain/security/guard.mjs';
@@ -10,6 +11,7 @@ import { buildHandoff, HANDOFF_LOOKBACK } from './handoff.mjs';
 import { isGitRepoAsync, repoRootAsync } from '../platform/git.mjs';
 
 const parse = (row) => { let body = row.body; if (/^[[{]/.test(body)) { try { body = JSON.parse(body); } catch { /* plain text */ } } return { ...row, body }; };
+const isFile = (f) => { try { const st = fs.lstatSync(f); return st.isFile() && !st.isSymbolicLink(); } catch { return false; } };
 const fail = (key, vars) => { throw new Error(tr(key, vars)); };
 
 // What is being edited or rewound right now: the chat id, its folder and (once known) its repository, all added
@@ -84,6 +86,8 @@ export async function editMessage(sessions, id, itemId, text, { rewind = false }
     if (!clean) fail('msg.sessions.writeMessage');
     if (rewind && !info.canRewind) throw new Error(info.rewindWhy);
     const mark = Number(itemId);
+    // the pictures of the message go again with the edited text (only those still on disk: a missing one must not fail the edit)
+    const keptImages = [].concat(userItem(sessions, s, mark)?.body?.images ?? []).filter((f) => typeof f === 'string' && isFile(f));
 
     // the files go first: if they cannot be put back, nothing else changes
     let rewound = null;
@@ -137,7 +141,7 @@ export async function editMessage(sessions, id, itemId, text, { rewind = false }
       sessions.emit('session:reset', { id }); // the window reloads this chat's list: items left it
 
       lk.releaseChat(); // the files are done; the edited message itself must be allowed through
-      sessions.send(id, clean);
+      sessions.send(id, clean, { images: keptImages });
       return { ok: true, copy: copy.id, rewound: Boolean(rewound) };
     } catch (error) {
       if (copy && !moved) {
