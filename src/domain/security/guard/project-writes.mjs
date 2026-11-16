@@ -106,7 +106,7 @@ const ownVariable = (t, command, dir, roots) => /^["']?\$[\w:.]+["']?$/.test(t) 
 // Written by hand they do what `git config filter.x.clean …` does (gitRuns): Orb's snapshots run git in the project
 // as the engine, and a filter or merge driver there runs as the engine. They ask like the git config forms.
 // a worktree's root `.git` is a FILE that says where its git folder is: rewriting it points git at a config of the agent's own.
-const GIT_RUNS_FILE = /(^|[\\/])\.git$|(^|[\\/])\.git[\\/]+(?:(?:worktrees|modules)[\\/]+.+[\\/]+)?(?:config(?:\.worktree)?|hooks(?:[\\/].*)?|info[\\/]+attributes)$/i;
+const GIT_RUNS_FILE = /(^|[\\/])\.git$|(^|[\\/])\.git[\\/]+(?:(?:worktrees|modules)[\\/]+.+[\\/]+)?(?:config(?:\.worktree)?|commondir|gitdir|hooks(?:[\\/].*)?|info[\\/]+attributes)$/i;
 export const isGitRunsFile = (p, dir) => { const f = resolveTarget(p, dir); return GIT_RUNS_FILE.test(lastName(p)) || Boolean(f && GIT_RUNS_FILE.test(f)); };
 export function writesGitRunsFile(command, cwd) {
   const c = expandEnv(unwrapShell(command));
@@ -119,7 +119,8 @@ export function writesGitRunsFile(command, cwd) {
     return !LOOKERS.test(exe) && exe !== 'git' && GIT_RUNS_TEXT.test(part.words.join(' '));
   });
 }
-const GIT_RUNS_TEXT = /(^|[\\/\s"'`(=,])\.git[\\/]+(?:config|hooks|info[\\/]+attributes)(?![\w.-])/i;
+// the loose `.git` (a worktree's pointer file) counts too, when nothing follows it but the end of the word
+const GIT_RUNS_TEXT = /(^|[\\/\s"'`(=,])\.git(?:[\\/]+(?:(?:worktrees|modules)[\\/]+[^\\/\s"'`]+[\\/]+)?(?:config|commondir|gitdir|hooks|info[\\/]+attributes)(?![\w.-])|(?![\w.\\/-]))/i;
 // a deletion that takes the project folder itself, a folder that holds it, its .git (where Orb's
 // snapshots live) or everything at its top (`*`, which in PowerShell takes .git too): «Deshacer» could not bring it back.
 const DELETERS = /^(rm|rmdir|rd|del|erase|remove-item|ri|unlink|shred|mv|move|move-item|mi|rename-item|rni|ren|rename)$/i;
