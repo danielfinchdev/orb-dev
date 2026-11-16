@@ -205,3 +205,7 @@ html.window-idle .skp-deco { animation-play-state: paused; }
   --p-accent: oklch(0.225 0 0); --p-accent-fg: oklch(0.97 0 0); --p-bubble: oklch(0.225 0 0); --p-bubble-fg: oklch(0.97 0 0); --p-bar: oklch(0.164 0 0); --p-box-line: oklch(0.38 0 0); }
 .skp[data-skin-preview="grafito"] .skp-mark { letter-spacing: 0.22em; font-size: 6.5px; }
 .skp[data-skin-preview="grafito"] .skp-mark i { background: currentColor; }
+/* Paletas: the colours arrive inline from the palette on show (previewColors); only the shape is fixed here. */
+.skp[data-skin-preview="paletas"] { --p-font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; --p-title: var(--p-font); --p-r: 5px; }
+.skp[data-skin-preview="paletas"] .skp-mark { letter-spacing: 0.22em; font-size: 6.5px; }
+.skp[data-skin-preview="paletas"] .skp-mark i { background: currentColor; }

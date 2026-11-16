@@ -5,7 +5,8 @@ import { errorText } from './utils.js';
 import { bumpNav, navTicket, stillHere } from './nav.js';
 import { cleanRoute, backStep } from './phone-nav.js';
 import { t } from './i18n.js';
-import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, baseSkin, plainSkin, darkOnlySkin, phoneSkin } from '../../shared/appearance.mjs';
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, ACCENTS, CONTRASTS, DENSITIES, CHAT_WIDTHS, FONT_SIZES, BASE_FONT, baseSkin, plainSkin, darkOnlySkin, phoneSkin } from '../../shared/appearance.mjs';
+import { seedCss } from './theme-seeds.js';
 export { plainSkin, darkOnlySkin }; // Profesional and the themes built on it (Cristal): no robot, no backdrop, no motion
 import { applyFeed, sinceOf } from '../../shared/feed.mjs';
 import { frameBatch } from './batch.js';
@@ -313,6 +314,19 @@ export function applyAppearance(ui = {}) {
   root.codeFont = pick(ui.codeFont, CODE_FONTS);
   root.codeTheme = pick(ui.codeTheme, CODE_THEMES);
   root.motion = ui.motion === 'minima' ? 'minima' : 'completa'; // the themes' moving backdrops stop with it
+  // the theme made from three seeds: its tokens are computed here and written as a <style> the stylesheet rules lean on.
+  const palette = skin === 'paletas' ? seedCss(pick(ui.palette, PALETTES), pick(ui.accent, ACCENTS), pick(ui.contrast ?? 'normal', CONTRASTS)) : '';
+  let tag = document.getElementById('orb-palette');
+  if (palette && !tag) { tag = document.createElement('style'); tag.id = 'orb-palette'; document.head.append(tag); }
+  if (tag) { if (tag.textContent !== palette) tag.textContent = palette; if (!palette) tag.remove(); }
+  // density, width of the chat column and text size: three variables on <html> (tokens.css holds the defaults, which are today's sizes).
+  const style = document.documentElement.style;
+  const size = FONT_SIZES.includes(ui.fontSize) ? ui.fontSize : BASE_FONT;
+  const set = (name, value, fallback) => { if (value === fallback) style.removeProperty(name); else style.setProperty(name, value); };
+  set('--app-density', String(DENSITIES[ui.density] ?? 1), '1');
+  set('--chat-max-width', CHAT_WIDTHS[ui.chatWidth] ?? CHAT_WIDTHS.normal, CHAT_WIDTHS.normal);
+  set('--chat-font', size + 'px', BASE_FONT + 'px');
+  set('--font-k', String(size / BASE_FONT), '1');
   applyTheme(); // a dark-only theme forces .dark; leaving it gives the saved choice back
   for (const fn of appearanceListeners) fn(skin);
 }

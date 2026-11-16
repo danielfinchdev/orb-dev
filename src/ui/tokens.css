@@ -13,6 +13,12 @@
   --icon-md: 16px;
   --icon-lg: 20px;
   --icon-xl: 24px;
+  /* Ajustes › Apariencia (lib/store.js writes them on <html>): the text scale (--font-k = size / 14.5 px; --chat-font is the size itself),
+     the chat column's width and the density of the chat's spacing. These defaults are the sizes Orb has always had. */
+  --chat-font: 14.5px;
+  --font-k: 1;
+  --chat-max-width: 48rem;
+  --app-density: 1;
   --dur-fast: 120ms;
   --dur-base: 200ms;
   --dur-slow: 320ms;
@@ -92,22 +98,22 @@
   --font-sans: "Outfit Variable", "Segoe UI", system-ui, sans-serif;
   --font-mono: "Geist Mono Variable", "Cascadia Code", Consolas, monospace;
   /* Eight type roles, each with its line height (utilities text-micro … text-display). */
-  --text-micro: 11px;
-  --text-micro--line-height: 16px;
-  --text-caption: 12px;
-  --text-caption--line-height: 16px;
-  --text-control: 13px;
-  --text-control--line-height: 18px;
-  --text-body: 14.5px;
-  --text-body--line-height: 22px;
-  --text-card-title: 15px;
-  --text-card-title--line-height: 20px;
-  --text-title: 16px;
-  --text-title--line-height: 22px;
-  --text-dialog: 18px;
-  --text-dialog--line-height: 24px;
-  --text-display: 24px;
-  --text-display--line-height: 30px;
+  --text-micro: calc(11px * var(--font-k));
+  --text-micro--line-height: calc(16px * var(--font-k));
+  --text-caption: calc(12px * var(--font-k));
+  --text-caption--line-height: calc(16px * var(--font-k));
+  --text-control: calc(13px * var(--font-k));
+  --text-control--line-height: calc(18px * var(--font-k));
+  --text-body: calc(14.5px * var(--font-k));
+  --text-body--line-height: calc(22px * var(--font-k));
+  --text-card-title: calc(15px * var(--font-k));
+  --text-card-title--line-height: calc(20px * var(--font-k));
+  --text-title: calc(16px * var(--font-k));
+  --text-title--line-height: calc(22px * var(--font-k));
+  --text-dialog: calc(18px * var(--font-k));
+  --text-dialog--line-height: calc(24px * var(--font-k));
+  --text-display: calc(24px * var(--font-k));
+  --text-display--line-height: calc(30px * var(--font-k));
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

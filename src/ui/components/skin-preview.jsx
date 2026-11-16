@@ -77,12 +77,14 @@ const SCENE = {
   profesional: null,
   nube: <Candy />,
   cristal: null, // its still colour field is --p-scene (skin-preview.css)
-  grafito: null // flat colours only (skin-preview.css)
+  grafito: null, // flat colours only (skin-preview.css)
+  paletas: null // its colours come from the palette being shown (the style prop of SkinPreview)
 };
 
-export function SkinPreview({ skin }) {
+// `colors`: the --p-* variables of a palette (theme-seeds.js previewColors), for the themes whose colours are computed.
+export function SkinPreview({ skin, colors }) {
   return (
-    <span className="skp" data-skin-preview={skin} aria-hidden="true">
+    <span className="skp" data-skin-preview={skin} style={colors} aria-hidden="true">
       <span className="skp-scene">{SCENE[skin]}<i className="skp-frost" /></span>
       <span className="skp-side">
         <span className="skp-mark">ORB<i /><em>E</em></span>
