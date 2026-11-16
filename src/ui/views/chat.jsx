@@ -67,7 +67,7 @@ function useGreeting(project) {
 }
 
 // Memoised: the list (up to 120 lines) is not drawn again while the assistant streams its answer.
-const Message = memo(function Message({ m, name, user, onChanges, tail }) {
+const Message = memo(function Message({ m, name, user, onChanges, tail, onPin }) {
   const t = useT();
   if (m.meta?.kind === 'question') return <QuestionCard m={m} />;
   // for a big request, the assistant's advice to define it on the Pizarra, with the way there.
@@ -76,7 +76,9 @@ const Message = memo(function Message({ m, name, user, onChanges, tail }) {
       <Markdown>{m.body}</Markdown>
     </MessageBox>
   );
-  if (m.role === 'usuario') return <MessageBox user name={user || t('chat.you')} at={m.at}>{m.body}</MessageBox>;
+  // the person's and the assistant's saved messages can be pinned (one still on its way has no saved line yet)
+  const pin = onPin && m.pinned_at !== undefined ? { pinned: Boolean(m.pinned_at), onToggle: () => onPin(m) } : undefined;
+  if (m.role === 'usuario') return <MessageBox user id={`msg-${m.id}`} pin={pin} name={user || t('chat.you')} at={m.at}>{m.body}</MessageBox>;
   if (m.role === 'orb') {
     const report = m.meta?.kind === 'report' && m.meta.tasks?.length ? m.meta : null;
     const actions = report ? (
@@ -88,7 +90,7 @@ const Message = memo(function Message({ m, name, user, onChanges, tail }) {
         </>)}
       </span>
     ) : null;
-    return <MessageBox name={name} at={m.at} actions={actions}><TypedMarkdown tail={tail}>{m.body}</TypedMarkdown></MessageBox>;
+    return <MessageBox id={`msg-${m.id}`} pin={pin} name={name} at={m.at} actions={actions}><TypedMarkdown tail={tail}>{m.body}</TypedMarkdown></MessageBox>;
   }
   if (m.meta?.kind === 'approval' || m.meta?.kind === 'task-approval') return <ChatApproval m={m} />;
   // an agent made a skill or an MCP server and asks for it to be turned on.
@@ -435,6 +437,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
   };
   useShortcut('brain.next', stepBrain(1));
   useShortcut('brain.prev', stepBrain(-1));
+  // pin or unpin a message; the list is read again so the pin shows (and the panel's list follows)
+  const pinLine = useCallback(async (m) => { if ((await act(call('chat.pin', { conversation: id, id: m.id, pinned: !m.pinned_at }))) !== undefined) { setOlder((o) => o.map((x) => (x.id === m.id ? { ...x, pinned_at: m.pinned_at ? null : new Date().toISOString() } : x))); fetchList(); } }, [id, fetchList]);
   const saved = [...older, ...rows];
   // The answer that ended the turn goes after the lines until a new read of the conversation brings it.
   const lastId = saved.at(-1)?.id ?? 0;
@@ -509,7 +513,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
               </div>
               <div className="mt-3 flex max-w-xl flex-wrap justify-center gap-2">{suggestionsFor(workProject?.name).map((s) => <Button key={s} variant="outline" size="sm" className="h-auto max-w-full shrink rounded-full py-1.5 whitespace-normal" onClick={() => box.set(t(s))}>{t(s)}</Button>)}</div>
             </div>
-          ) : lines.map((m) => <Message key={m.id} m={m} name={name} user={userName} onChanges={askChanges} tail={`chat:${id}`} />)}
+          ) : lines.map((m) => <Message key={m.id} m={m} name={name} user={userName} onChanges={askChanges} tail={`chat:${id}`} onPin={pinLine} />)}
           {unsaved.map((p) => <Message key={p.id} m={{ id: p.id, role: 'usuario', body: p.text, at: p.at }} name={name} user={userName} onChanges={askChanges} />)}
           <TaskLines conversation={id} />
           {chat.busy || chat.waiting || sending ? <LiveAnswer id={id} name={name} /> : null}

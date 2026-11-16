@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { useOrbItems, deleteChat } from './inbox.jsx';
 import { TaskStatus } from '@/components/task-state.jsx';
+import { ChatNotes, PinnedList } from '@/components/conversation/chat-notes.jsx';
 
 const OPEN = ['queued', 'running', 'awaiting_approval', 'limited'];
 // On the phone the info covers the screen: going somewhere from it closes it.
@@ -109,6 +110,8 @@ function ChatInfo({ conv }) {
           <div><Row icon={OrchestratorIcon} label={t('orbchats.orchestrator')} value={t('orbchats.orchestratorOn')} testid="info-orchestrator" /></div>
         </BubbleTip>
       </List>
+      <PinnedList conversation={conv.id} assistant={name} you={you} />
+      <ChatNotes conversation={conv.id} />
       <div>
         <div className="text-muted-foreground px-1 pb-1.5 text-caption font-medium tracking-wide uppercase">{t('orbchats.tasks')}</div>
         <List testid="info-tasks">
