@@ -15,6 +15,7 @@ import { ExtensionsPanel } from '../extensions.jsx';
 import { TabsCard, ShortcutsCard } from './shortcuts.jsx';
 import { AssistantCard, AppearanceCard, ChatCard, PermissionsCard, ApprovalWaitCard, TasksCard, TestCard, FolderCard, ProtectedCard, InterfaceCard, ExpertCard } from './general.jsx';
 import { AndroidCard, MobileCard, BrowserCard } from './devices.jsx';
+import { McpExtCard } from './mcp-ext.jsx';
 // «Este móvil», the phone's screen of its own (main.jsx loads it from here, with the dialog).
 export { PhoneView } from './devices.jsx';
 import { UpdatesCard, SupportCard, FeedbackCard, MoreAppsCard, AboutCard } from './about.jsx';
@@ -35,7 +36,7 @@ const SECTIONS = [
   { id: 'extensiones', icon: Puzzle, pcOnly: true, cards: () => <ExtensionsPanel /> },
   { id: 'datos', icon: DatabaseBackup, cards: () => <DataCards /> },
   { id: 'avanzado', icon: Wrench, groups: () => ['herramientas', ...(fullPc() ? ['experto'] : [])],
-    cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /><AndroidCard /></SubSection>
+    cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /><AndroidCard />{bridge.mobile ? null : <McpExtCard />}</SubSection>
       {fullPc() ? <SubSection id="experto" title={t('settings.group.experto')}><ExpertCard c={c} /></SubSection> : null}</> },
   { id: 'acerca', icon: Info, groups: ['contribuye', 'apps'],
     cards: (c, app) => <><AboutCard version={app.version} /><SubSection id="contribuye" title={t('settings.group.contribuye')}><SupportCard /><FeedbackCard /></SubSection><SubSection id="apps" title={t('settings.group.apps')}><MoreAppsCard /></SubSection></> }

@@ -22,6 +22,7 @@ import { createSchedule, EVERY } from '../domain/schedules/schedules.mjs';
 import { mustOwnTask, ownsTask } from '../domain/security/permissions.mjs';
 import { globalAutonomy } from '../domain/security/guard.mjs';
 import { redeem, ticketFromArgs } from './auth-client.mjs';
+import { rpcHandler } from './protocol.mjs';
 import { draftExtension, requestActivation, fileList, REQUESTS, OPEN_PER_CONVERSATION, openRequestsOf } from '../domain/extensions/extensions.mjs';
 
 const AUTH = await redeem(process.env.ORB_AUTH_PIPE, ticketFromArgs());
@@ -552,30 +553,20 @@ if (!BOSS && SIGNED_SESSION) tools.push(
   { name: 'orb_html_show', description: `Muestra una página HTML (máx. 512 KB, todo en un solo archivo: CSS y JS en línea) dentro del chat de ${USER}. La página corre en un sandbox sin acceso a Orb, archivos, claves ni internet; ${USER} puede activar internet para esa página con un interruptor. No puedes leer lo que hace la página ni activarle internet.`, inputSchema: { type: 'object', required: ['title', 'html'], properties: { title: { type: 'string', description: 'Título corto (texto plano, máx. 120 caracteres)' }, html: { type: 'string', description: 'El documento HTML completo' } } }, run: async (a) => (await AUTH.call('html', { title: a.title, html: a.html })).text }
 );
 
-const reply = (id, payload) => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id, ...payload })}\n`);
+const handle = rpcHandler({
+  serverInfo: { name: 'orb', version: APP_VERSION }, instructions: INSTRUCTIONS, tools,
+  extraArgsMessage: (list) => tr('sys.mcp.extraArgs', { list }),
+  unknownToolMessage: (name) => `herramienta desconocida: ${name}`, unsupportedMessage: (method) => `método no soportado: ${method}`,
+  // An agent Orb did not sign (or with a forged conversation) acts on nothing; a signature that ended (its task or
+  // conversation is over) is refused too.
+  authorize: async () => { if (!WHO.signed || !(await stillSigned())) throw new Error(tr('msg.authz.unsigned')); }
+});
+const reply = (payload) => process.stdout.write(`${JSON.stringify(payload)}
+`);
 
 readline.createInterface({ input: process.stdin }).on('line', async (line) => {
   let msg; try { msg = JSON.parse(line); } catch { return; }
-  if (msg.id === undefined) return;
-  try {
-    if (msg.method === 'initialize') return reply(msg.id, { result: { protocolVersion: msg.params?.protocolVersion ?? '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'orb', version: APP_VERSION }, instructions: INSTRUCTIONS } });
-    if (msg.method === 'ping') return reply(msg.id, { result: {} });
-    if (msg.method === 'tools/list') return reply(msg.id, { result: { tools: tools.map(({ run, readOnly, ...t }) => ({ ...t, ...(readOnly ? { annotations: { readOnlyHint: true } } : {}) })) } });
-    if (msg.method === 'tools/call') {
-      const tool = tools.find((t) => t.name === msg.params?.name);
-      if (!tool) return reply(msg.id, { error: { code: -32602, message: `herramienta desconocida: ${msg.params?.name}` } });
-      try {
-        const args = msg.params.arguments ?? {};
-        // Strict arguments: anything outside the schema (e.g. a forged "from") is refused instead of being passed on.
-        const extra = Object.keys(args).filter((k) => !(k in (tool.inputSchema.properties ?? {})));
-        if (extra.length) throw new Error(tr('sys.mcp.extraArgs', { list: extra.join(', ') }));
-        // An agent Orb did not sign (or with a forged conversation) acts on nothing.
-        // A signature that ended (its task or conversation is over) is refused too.
-        if (!WHO.signed || !(await stillSigned())) throw new Error(tr('msg.authz.unsigned'));
-        const out = await tool.run(args);
-        return reply(msg.id, { result: out?.content ? out : text(out) }); // tools with pictures return MCP content themselves
-      } catch (error) { return reply(msg.id, { result: { ...text(`Error: ${error.message}`), isError: true } }); }
-    }
-    reply(msg.id, { error: { code: -32601, message: `método no soportado: ${msg.method}` } });
-  } catch (error) { reply(msg.id, { error: { code: -32603, message: error.message } }); }
+  if (msg?.id === undefined) return;
+  const out = await handle(msg);
+  if (out) reply(out);
 }).on('close', () => process.exit(0));
