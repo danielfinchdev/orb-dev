@@ -43,7 +43,9 @@ before(() => {
 });
 after(() => { try { sessions.stopAll(); board.db.close(); } catch { /* closed */ } t.cleanup(); });
 
-const turnRefs = (id) => g('for-each-ref', '--format=%(refname)', `refs/orb/turnos/${id}/`).split('\n').filter(Boolean);
+const allRefs = (id) => g('for-each-ref', '--format=%(refname)', `refs/orb/turnos/${id}/`).split('\n').filter(Boolean);
+// the numbered photos; refs/orb/turnos/<chat>/antes/<message> only mark where a message started
+const turnRefs = (id) => allRefs(id).filter((r) => !r.includes('/antes/'));
 // sends a message and waits until the turn ended and its photo exists
 async function turn(id, text, photos) {
   await call('sessions.send', { id, text });
@@ -90,7 +92,7 @@ test('las referencias de turnos no salen con un push ni se clonan, y se borran a
   assert.equal(git(clone, 'for-each-ref', '--format=%(refname)', 'refs/orb').stdout.trim(), '');
   assert.doesNotMatch(g('config', '--get-all', 'remote.origin.fetch'), /orb/);
   await call('sessions.update', { id: s.id, archived: true });
-  assert.deepEqual(turnRefs(s.id), []);
+  assert.deepEqual(allRefs(s.id), []);
   assert.deepEqual((await call('sessions.turns', { id: s.id })).turns, []);
 });
 

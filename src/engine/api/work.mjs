@@ -17,6 +17,7 @@ import { autoTitle } from '../titles.mjs';
 import { git } from '../../platform/git.mjs';
 import { diffBetween } from '../../domain/tasks/checkpoints.mjs';
 import { listTurns, turnDiff, commentsBlock } from '../../domain/conversations/turns.mjs';
+import { editMessage, undoRewind, rewindInfo } from '../edit-message.mjs';
 import { fail, str, int, oneOf, images, DECISION } from './common.mjs';
 import { createDedupe, conversationKey } from './dedupe.mjs';
 import { fold } from '../../domain/conversations/inbox.mjs';
@@ -196,6 +197,11 @@ ${block}` : ''}` });
       const s = sessions.must(str(id, 'conversación', 64)); trash.assertSessionNotTrashed(s);
       return sessions.handoff(s.id, { agent: other });
     },
+    // «Editar» a message of a chat: the conversation goes on from it; editRewind also puts the project's files back (only from the PC).
+    'sessions.edit': ({ id, item, text }) => { const s = sessions.must(str(id, 'conversación', 64)); trash.assertSessionNotTrashed(s); return editMessage(sessions, s.id, int(item, 'mensaje'), str(text, 'mensaje', 20000)); },
+    'sessions.editRewind': ({ id, item, text }) => { const s = sessions.must(str(id, 'conversación', 64)); trash.assertSessionNotTrashed(s); return editMessage(sessions, s.id, int(item, 'mensaje'), str(text, 'mensaje', 20000), { rewind: true }); },
+    'sessions.rewindUndo': ({ id, item }) => { const s = sessions.must(str(id, 'conversación', 64)); trash.assertSessionNotTrashed(s); return undoRewind(sessions, s.id, int(item, 'mensaje')); },
+    'sessions.rewindInfo': ({ id, item }) => rewindInfo(sessions, sessions.must(str(id, 'conversación', 64)).id, int(item, 'mensaje')),
     'sessions.settle': ({ id, settled }) => sessions.update(sessions.must(str(id, 'conversación', 64)).id, { settled: settled !== false }),
     'approvals.list': () => sessions.allPendingApprovals(),
     'mentions.options': () => mentionOptions(board, sessions),

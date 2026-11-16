@@ -1,6 +1,6 @@
 {
   "generatedBy": "scripts/android-vectors.mjs",
-  "source": "a1aa2cb0a6956ef4039f789db670cb556981ce64c6439a4db5c2bbb3be6bc243",
+  "source": "91efc8ed97043f890ea37e91738f643c8356f304fadf271cb98af0fb26bc5e5c",
   "methods": [
     "activity.list",
     "activity.report",
@@ -73,6 +73,7 @@
     "sessions.approve",
     "sessions.compact",
     "sessions.create",
+    "sessions.edit",
     "sessions.editQueued",
     "sessions.fork",
     "sessions.goal",
@@ -83,6 +84,7 @@
     "sessions.queue",
     "sessions.restore",
     "sessions.resume",
+    "sessions.rewindInfo",
     "sessions.send",
     "sessions.settle",
     "sessions.sideAsk",
