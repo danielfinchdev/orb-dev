@@ -330,7 +330,7 @@ function AgentCard({ a, reload }) {
 function AgentKeys({ a }) {
   const t = useT();
   const [saved, setSaved] = useState({});
-  const load = () => call('agentKeys.state').then((s) => setSaved(s?.[a.id] ?? {})).catch(() => {});
+  const load = () => call('agentKeys.state').then((s) => setSaved(s?.[a.id] ?? {})).catch(quiet);
   useEffect(() => { load(); }, [a.id]);
   const set = async (name) => {
     const unlock = await unlockCore('secrets');
