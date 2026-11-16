@@ -153,6 +153,11 @@ test('shortcuts: a user rule moves a command and frees its old key', () => {
   assert.equal(K.matchCommand(table, ev({ key: 'N', code: 'KeyN', ctrlKey: true, shiftKey: true }), { view: 'chat' }), 'inbox.nextNeeds');
 });
 
+test('shortcuts: the editing editing combos cannot be taken', () => {
+  const { problems } = K.resolve(['Ctrl+C', 'Ctrl+V', 'Ctrl+X', 'Ctrl+A', 'Ctrl+Z', 'Ctrl+Y'].map((key) => ({ command: 'tabs.new', key })));
+  assert.equal(problems.length, 6); assert.ok(problems.every((p) => p.reason === 'system'));
+});
+
 test('shortcuts: clashes are refused and say with whom; reserved keys cannot be taken or rebound', () => {
   const { table, problems } = K.resolve([
     { command: 'tabs.new', key: 'Ctrl+K' }, // palette (reserved)

@@ -21,7 +21,8 @@ export const commandOf = (id) => BY_ID.get(id) ?? null;
 export const WHENS = Object.freeze(['always', 'chat']);
 
 // Combos the window itself owns (zoom, full screen, tab switching of the webview) though they are not rows of this table.
-const SYSTEM = Object.freeze(['F11', 'Ctrl+0', 'Ctrl+=', 'Ctrl++', 'Ctrl+-', 'Ctrl+Tab', 'Alt+F4']);
+// Ctrl+A/C/V/X/Y/Z are the text box's own (copy, paste, undo…): a rule on them would swallow them in the chat.
+const SYSTEM = Object.freeze(['F11', 'Ctrl+0', 'Ctrl+=', 'Ctrl++', 'Ctrl+-', 'Ctrl+Tab', 'Alt+F4', 'Ctrl+A', 'Ctrl+C', 'Ctrl+V', 'Ctrl+X', 'Ctrl+Y', 'Ctrl+Z']);
 
 const MODS = ['Ctrl', 'Alt', 'Shift'];
 const MOD_NAMES = { cmd: 'Ctrl', command: 'Ctrl', meta: 'Ctrl', control: 'Ctrl', ctrl: 'Ctrl', option: 'Alt', alt: 'Alt', shift: 'Shift' };
