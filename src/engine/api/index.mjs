@@ -169,13 +169,14 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
   if (scheduler) scheduler.ciWatch = ciWatch;
   // the HTML pages an agent shows in a chat (html-pages.mjs): sandboxed, internet off, switched on only on this PC.
   const htmlPages = createHtmlPages({ sessions, emit: emitRaw, log });
+  // the session as this turn runs it: a «/plan» turn is read-only for Orb's own tools too (the chat keeps its permission).
+  const asRunning = (id) => { const s = sessions.get(id); return s && sessions.running.get(id)?.planOnly ? { ...s, permission: 'leer' } : s; };
   agentAuth.onCall = async ({ session }, method, args) => {
-    if (method === 'secret' && session) return secrets.request(sessions.get(session), args);
-    if (method === 'html' && session) return htmlPages.show(sessions.get(session), args);
-    if (method === 'pr' && session) return prTools.run(sessions.get(session), String(args.tool ?? ''), args.args);
+    if (method === 'secret' && session) return secrets.request(asRunning(session), args);
+    if (method === 'html' && session) return htmlPages.show(asRunning(session), args);
+    if (method === 'pr' && session) return prTools.run(asRunning(session), String(args.tool ?? ''), args.args);
     if (method !== 'android' || !session) throw Object.assign(new Error(tr('msg.android.notAllowed')), { userFacing: true });
-    const s = sessions.get(session);
-    return android.tool(s, String(args.tool ?? ''), args.args);
+    return android.tool(asRunning(session), String(args.tool ?? ''), args.args);
   };
   // the user's terminal docked under a chat (user-terminal.mjs); Ctrl+J's own terminal is app.openTerminal.
   const terminals = createTerminals({ emit, log });
