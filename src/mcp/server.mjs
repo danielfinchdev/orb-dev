@@ -22,7 +22,7 @@ import { createSchedule, EVERY } from '../domain/schedules/schedules.mjs';
 import { mustOwnTask, ownsTask } from '../domain/security/permissions.mjs';
 import { globalAutonomy } from '../domain/security/guard.mjs';
 import { redeem, ticketFromArgs } from './auth-client.mjs';
-import { rpcHandler } from './protocol.mjs';
+import { rpcHandler } from '../shared/mcp-protocol.mjs';
 import { draftExtension, requestActivation, fileList, REQUESTS, OPEN_PER_CONVERSATION, openRequestsOf } from '../domain/extensions/extensions.mjs';
 
 const AUTH = await redeem(process.env.ORB_AUTH_PIPE, ticketFromArgs());

@@ -3,13 +3,13 @@
 // the bind is checked after listen() and the server closes if the address is anything else, a peer that is not loopback is
 // dropped, and a Host that is not 127.0.0.1/localhost:<port> or any Origin header is refused (DNS rebinding: a web page
 // cannot reach it; a browser always sends Origin on a cross-site POST). It is NOT the assistant's stdio server
-// (src/mcp/server.mjs) but speaks the same protocol through src/mcp/protocol.mjs.
+// (src/mcp/server.mjs) but speaks the same protocol through src/shared/mcp-protocol.mjs.
 // Every call needs a live token (src/domain/security/mcp-ext-tokens.mjs). The client can never choose its permission: its tasks
 // are always isolated (a worktree), at «Preguntar» and waiting for the user's approval in Orb; arguments outside the schema
 // (permission, mode, autonomy, parent_id…) are refused. Size and rate limits apply, and every refusal and creation is logged
 // to motor.log (Ajustes › Actividad) and the task's own events.
 import http from 'node:http';
-import { rpcHandler } from '../../mcp/protocol.mjs';
+import { rpcHandler } from '../../shared/mcp-protocol.mjs';
 import { checkToken, clientLabel } from '../../domain/security/mcp-ext-tokens.mjs';
 import { oneLine } from '../../shared/text.mjs';
 

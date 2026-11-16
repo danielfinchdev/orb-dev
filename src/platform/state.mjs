@@ -22,6 +22,8 @@ export const STATE_KEYS = Object.freeze({
     'migrated_3_8_config',
     // «Auto» turned on for this install once (src/engine/sessions.mjs › adoptAuto)
     'auto_mode_383',
+    // the external MCP server (src/engine/api/mcp-ext.mjs): on/off and its port
+    'mcpext_enabled', 'mcpext_port',
   ]),
   prefixes: Object.freeze({
     // a device's (the morning summary card shown today)
@@ -41,6 +43,8 @@ export const STATE_KEYS = Object.freeze({
     'pending_questions:': 'conversation', 'report_queue:': 'conversation', 'inbox_since:': 'conversation', 'assistant_cwd:': 'conversation', 'brake_told:': 'conversation',
     // a project's
     'actions:': 'project', 'wb_seen:': 'project',
+    // a chat's own worktree (src/engine/chat-worktrees.mjs, by session id)
+    'chatwt:': 'session',
     // older versions' (deleted when the engine starts or by the 3.8 migration)
     'orchestrator_conv:': 'legacy', 'agent_id:': 'legacy', 'secret:': 'legacy',
   }),
