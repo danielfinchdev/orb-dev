@@ -1,5 +1,7 @@
 // Chat modes: /goal, /plan, /review and /debug (src/engine/modes.mjs).
 export default {
+  "msg.modes.goalNoStart": "Objetivo en pausa: no se pudo lanzar el turno. Escribe «/goal continuar» para probar de nuevo.",
+  "msg.modes.goalSteered": "Objetivo en pausa: escribiste durante el turno. Escribe «/goal continuar» para seguir.",
   "msg.modes.onlyChats": "Este comando solo funciona en una conversación directa con un agente.",
   "msg.modes.goalBrake": "El freno de uso lo impide ahora: {reason}",
   "msg.modes.goalStarted": "Objetivo en marcha: hasta {max} turnos. Orb sigue solo tras cada turno limpio y para si hay cola, una pregunta, una interrupción o un freno de uso.",

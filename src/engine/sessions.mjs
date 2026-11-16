@@ -33,7 +33,7 @@ import { rememberModels } from './usage/catalog.mjs';
 import { snapshotBeforeTurn, snapshotAfterTurn, dropTurns } from '../domain/conversations/turns.mjs';
 import { changedFiles, logDirect } from '../domain/journal/journal.mjs';
 import { ATTACH_DIR, placeAttachments as copyAttachments, prepareAttachments } from './host/attachments.mjs';
-import { goalAfterTurn, debugOn } from './modes.mjs';
+import { goalAfterTurn, goalFailed, goalSteered, debugOn } from './modes.mjs';
 
 export { PERMISSIONS, ATTACH_DIR };
 // a message that asks for a picture (or to change one): Codex gets a short note on how Orb wants it done.
@@ -481,6 +481,7 @@ export class Sessions {
     const onFail = () => { this.addItem(id, 'system', 'status', tr('msg.sessions.steerLate')); this.enqueue(id, text, []); };
     if (mode !== 'queue' && !images.length && !this.running.get(id)?.compacting && entry?.live.caps.steer && entry.live.steer({ text: context ? `${text}${context}` : text, onFail })) {
       this.addItem(id, 'user', 'text', { text, steer: true });
+      goalSteered(this, id);
       return { steered: true };
     }
     this.enqueue(id, text, images);
@@ -542,7 +543,7 @@ export class Sessions {
     // turnPermission: this one turn runs with less permission than the chat has («/plan»). Only «leer» exists, and only to lower
     // it: nothing here can make a turn more permissive than the chat.
     const chat = this.must(id);
-    const planOnly = turnPermission === 'leer' && chat.permission !== 'leer';
+    const planOnly = turnPermission === 'leer';
     const s = planOnly ? { ...chat, permission: 'leer' } : chat;
     // what this turn may do because the user's own words asked for it: a task's comes from the scheduler (the
     // request it came from); a chat's, from the message the user typed now (a turn Orb sends by itself keeps the last).
@@ -632,6 +633,7 @@ ${body}`;
       if (this.running.get(id) === run) this.running.delete(id);
       const final = `${a.label}: ${error.message}`;
       try { this.update(id, { status: 'error' }); this.addItem(id, 'error', 'text', final); } catch { /* the conversation may be gone */ }
+      if (!onFinish && s.kind === 'chat') { try { goalFailed(this, id, final); } catch { /* the conversation may be gone */ } }
       if (!finished) {
         finished = true;
         try { onFinish?.({ code: 1, state: { final, text: '', isError: true }, stderr: error.message, logFile: entry.logFile, stopped: run.stopped, timedOut: Boolean(run.timedOut) }); }

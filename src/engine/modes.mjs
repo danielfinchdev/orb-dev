@@ -46,8 +46,9 @@ export function startGoal(sessions, id, text) {
   const goal = saveGoal(sessions, id, { text: goalText, status: 'active', turns: 0, max: cap, startedAt: new Date().toISOString(), blockedSig: null, blockedCount: 0, lastSig: null, reason: '' });
   sessions.addItem(id, 'system', 'status', tr('msg.modes.goalStarted', { max: cap }));
   // the user's own words ask for what they ask for on the first turn; the turns Orb sends by itself ask for nothing
-  sessions.send(id, tr('sys.goal.shown', { goal: goalText }), { prompt: goalPrompt(goal, true) });
-  return { ok: true, goal };
+  try { if (!sessions.send(id, tr('sys.goal.shown', { goal: goalText }), { prompt: goalPrompt(goal, true) })) goalFailed(sessions, id); }
+  catch (error) { clearGoal(sessions, id); throw error; }
+  return { ok: true, goal: goalOf(sessions.board, id) };
 }
 
 // the user ends it («/goal parar») or Orb pauses it with the reason shown in the chat
@@ -70,8 +71,25 @@ export function resumeGoal(sessions, id) {
   const brake = brakeOf(sessions, s);
   if (brake) throw new Error(tr('msg.modes.goalBrake', { reason: brake }));
   const next = saveGoal(sessions, id, { ...goal, status: 'active', turns: goal.status === 'limit' ? 0 : goal.turns, blockedSig: null, blockedCount: 0, lastSig: null, reason: '' });
-  sessions.send(id, tr('sys.goal.shownResume'), { prompt: goalPrompt(next, false), asked: [] });
-  return { ok: true, goal: next };
+  try { if (!sessions.send(id, tr('sys.goal.shownResume'), { prompt: goalPrompt(next, false), asked: [] })) goalFailed(sessions, id); }
+  catch (error) { saveGoal(sessions, id, { ...next, status: 'paused', reason: error.message }); throw error; }
+  return { ok: true, goal: goalOf(sessions.board, id) };
+}
+
+// a turn that could not start or whose process failed outright: the goal waits for «continuar» instead of staying «active»
+export function goalFailed(sessions, id, why = '') {
+  const goal = goalOf(sessions.board, id);
+  if (goal?.status !== 'active') return;
+  saveGoal(sessions, id, { ...goal, status: 'paused', reason: why || tr('msg.modes.goalNoStart') });
+  sessions.addItem(id, 'system', 'status', why || tr('msg.modes.goalNoStart'));
+}
+
+// the user wrote into a turn of the goal (steered): that is an interruption, the goal waits for «continuar»
+export function goalSteered(sessions, id) {
+  const goal = goalOf(sessions.board, id);
+  if (goal?.status !== 'active') return;
+  saveGoal(sessions, id, { ...goal, status: 'paused', reason: tr('msg.modes.goalSteered') });
+  sessions.addItem(id, 'system', 'status', tr('msg.modes.goalSteered'));
 }
 
 // Called by Sessions.send when a chat's turn ends (a stopped one included). Decides whether the goal goes on.
@@ -87,8 +105,9 @@ export function goalAfterTurn(sessions, id, { result, run }) {
   // blocked: a failed turn, a turn that says so, or the same answer again; three equal ones in a row end the goal
   const sig = signature(text); const same = sig !== '' && sig === goal.lastSig;
   const blockedTurn = Boolean(result.isError) || BLOCKED_RE.test(text) || same;
-  let blockedSig = null; let blockedCount = 0;
-  if (blockedTurn) { blockedSig = sig; blockedCount = sig === goal.blockedSig ? goal.blockedCount + 1 : same ? 2 : 1; }
+  // consecutive blocked turns are counted whatever their wording (an error with a request id differs every time)
+  const blockedCount = blockedTurn ? goal.blockedCount + (goal.blockedCount === 0 && same ? 2 : 1) : 0;
+  const blockedSig = blockedTurn ? sig : null;
   const stay = { blockedSig, blockedCount, lastSig: sig };
   if (blockedCount >= BLOCKED_AFTER) return end('blocked', tr('msg.modes.goalBlocked', { n: blockedCount, why: oneLine(text, 160) }), stay);
   // a message queued by the user goes first, a permission or question waits for its answer: the goal does not push on
@@ -101,7 +120,7 @@ export function goalAfterTurn(sessions, id, { result, run }) {
   if (brake) return end('paused', tr('msg.modes.goalBrake', { reason: brake }), stay);
   const next = saveGoal(sessions, id, { ...goal, turns, ...stay });
   sessions.addItem(id, 'system', 'status', tr('msg.modes.goalTurn', { n: turns + 1, max: goal.max }));
-  try { sessions.send(id, tr('sys.goal.shownNext', { n: turns + 1 }), { showUser: false, asked: [], prompt: goalPrompt(next, false) }); }
+  try { if (!sessions.send(id, tr('sys.goal.shownNext', { n: turns + 1 }), { showUser: false, asked: [], prompt: goalPrompt(next, false) })) goalFailed(sessions, id); }
   catch (error) { saveGoal(sessions, id, { ...next, status: 'paused', reason: error.message }); sessions.addItem(id, 'error', 'text', error.message); }
 }
 
