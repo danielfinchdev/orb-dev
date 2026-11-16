@@ -5,7 +5,7 @@
 // Long pasted texts are kept apart as blocks (draft.blocks()): the box shows them as folded cards and the view sends them
 // with the text (draft.message()).
 import { useState, useSyncExternalStore } from 'react';
-import { composeMessage, MAX_PASTE_CHARS } from '../../shared/chat-compose.mjs';
+import { composeMessage, MAX_MESSAGE_CHARS } from '../../shared/chat-compose.mjs';
 
 export function createDraft(initial = '') {
   let value = initial;
@@ -23,7 +23,12 @@ export function createDraft(initial = '') {
       notify();
     },
     blocks: () => blocks,
-    addBlock: (text) => { blocks = [...blocks, { id: nextId++, text: String(text).slice(0, MAX_PASTE_CHARS) }]; notify(); },
+    // false when the message, with this card, would be longer than the engine accepts: nothing is added and the caller says so
+    addBlock: (text) => {
+      const next = [...blocks, { id: nextId++, text: String(text) }];
+      if (composeMessage(value, next).length > MAX_MESSAGE_CHARS) return false;
+      blocks = next; notify(); return true;
+    },
     removeBlock: (id) => { blocks = blocks.filter((b) => b.id !== id); notify(); },
     clearBlocks: () => { if (blocks.length) { blocks = []; notify(); } },
     // what is sent: the text and the pasted blocks

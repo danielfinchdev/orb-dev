@@ -50,7 +50,11 @@ test('the draft keeps long pastes apart from the box text and sends both', () =>
   assert.equal(d.message(), 'mira');
   assert.ok(calls >= 4);
   d.addBlock('y'.repeat(MAX_PASTE_CHARS + 50));
-  assert.equal(d.blocks()[0].text.length, MAX_PASTE_CHARS, 'a card holds a limited text');
+  assert.equal(d.blocks().length, 0, 'a card that would pass the send limit is refused'); // the engine accepts 20 000 in all
+  assert.equal(MAX_PASTE_CHARS, 20_000);
+  assert.equal(d.addBlock('a'.repeat(12_000)), true);
+  assert.equal(d.addBlock('b'.repeat(12_000)), false, 'two cards together pass the limit');
+  assert.ok(d.message().length <= 20_000);
 });
 
 test('the select-to-chat command is in the shortcut table without clashes', () => {

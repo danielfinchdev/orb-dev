@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { routeKey, takeDraft } from '@/lib/reload.js';
 import { useDraftValue, useDraftBlocks } from '@/lib/draft.js';
-import { isLongPaste, countLines } from '../../../shared/chat-compose.mjs';
+import { isLongPaste, countLines, MAX_MESSAGE_CHARS } from '../../../shared/chat-compose.mjs';
 import { micMode } from '@/lib/mic.js';
 import { ArrowUp, Square, AtSign, Mic, ChevronRight, ClipboardPaste, X } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Tip } from '@/components/ui/overlay.jsx';
 import { bridge, useStore, useSkin, call, act, getState } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
+import { notifyWarn } from '@/lib/notify.js';
 import { useT, t as tNow } from '@/lib/i18n.js';
 
 // A conversation stays at its bottom while the user has not scrolled up (`stick`): when a line arrives (deps) and,
@@ -116,7 +117,7 @@ export function Composer({ draft, onSend, onStop, busy, placeholder, suggestion,
   // a long text pasted goes to a card, not into the box (files and pictures keep the view's own handling)
   const paste = (e) => {
     const data = e.clipboardData; const text = data?.getData?.('text/plain') ?? '';
-    if (!data?.files?.length && isLongPaste(text)) { e.preventDefault(); draft.addBlock(text); return; }
+    if (!data?.files?.length && isLongPaste(text)) { e.preventDefault(); if (!draft.addBlock(text)) notifyWarn(tNow('paste.tooLong', { max: MAX_MESSAGE_CHARS.toLocaleString() })); return; }
     onPaste?.(e);
   };
   useEffect(() => { const el = ta.current; if (!el || FIELD_SIZING) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 260)}px`; }, [value]);

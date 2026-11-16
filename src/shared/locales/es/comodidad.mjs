@@ -43,6 +43,7 @@ export default {
   'tools.sum.failed': '{n} con error',
   'paste.card': 'Texto pegado · {lines} líneas · {chars} caracteres',
   'paste.remove': 'Quitar el texto pegado',
+  'paste.tooLong': 'Ese texto no cabe: un mensaje admite como máximo {max} caracteres entre el texto y los textos pegados.',
   'keys.cmd.addSelection': 'Añadir al chat el texto seleccionado',
   'selection.add': 'Añadir al chat',
   'cold.title': 'Lleva {idle} parado',

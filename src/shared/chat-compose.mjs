@@ -10,7 +10,9 @@ export const asPath = (file, line) => `\`${String(file).replace(/`/g, '')}${line
 
 export const LONG_PASTE_CHARS = 1500;
 export const LONG_PASTE_LINES = 25;
-export const MAX_PASTE_CHARS = 200_000; // one card holds at most this much
+// The engine refuses a message longer than this (sessions.send), so the text and its cards together stay within it.
+export const MAX_MESSAGE_CHARS = 20_000;
+export const MAX_PASTE_CHARS = MAX_MESSAGE_CHARS;
 
 export const countLines = (text) => (String(text).length ? String(text).replace(/\r\n?/g, '\n').replace(/\n$/, '').split('\n').length : 0);
 // A paste that long goes to a card.

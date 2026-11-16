@@ -43,6 +43,7 @@ export default {
   'tools.sum.failed': '{n} failed',
   'paste.card': 'Pasted text · {lines} lines · {chars} characters',
   'paste.remove': 'Remove the pasted text',
+  'paste.tooLong': 'That text does not fit: a message holds at most {max} characters between the text and the pasted blocks.',
   'keys.cmd.addSelection': 'Add the selected text to the chat',
   'selection.add': 'Add to chat',
   'cold.title': 'Idle for {idle}',
