@@ -1,6 +1,6 @@
 {
   "generatedBy": "scripts/android-vectors.mjs",
-  "source": "91efc8ed97043f890ea37e91738f643c8356f304fadf271cb98af0fb26bc5e5c",
+  "source": "47ac906c60a3afe20dd20594482e28f04688720250d1b2e5db631bb005bae011",
   "methods": [
     "activity.list",
     "activity.report",
@@ -24,6 +24,7 @@
     "conversations.search",
     "conversations.trash",
     "conversations.update",
+    "htmlPages.choose",
     "inbox.digest",
     "inbox.digestSeen",
     "inbox.list",

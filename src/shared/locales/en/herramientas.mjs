@@ -112,6 +112,7 @@ export default {
   'msg.html.badChoices': 'The choices must be a list of short texts (at most {n}).',
   'msg.html.tooBig': 'The page is too big (max {kb} KB).',
   'msg.html.gone': 'That page no longer exists.',
+  'msg.html.badChoice': 'That button does not belong to this page.',
   'msg.html.badSwitch': 'The internet switch must be true or false.',
   'msg.html.shown': 'The agent shows a page in the chat: {title}. No internet unless you turn it on.',
   'msg.html.agentText': 'The page is shown in the chat. It runs in a sandbox, with no internet unless the user turns it on, and it has NO access to Orb, files or keys.',

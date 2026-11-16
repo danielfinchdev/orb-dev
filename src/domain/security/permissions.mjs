@@ -93,7 +93,7 @@ export const METHODS = Object.freeze({
   'mcpExt.state': 'pc', 'mcpExt.setEnabled': 'pc', 'mcpExt.createToken': 'pc', 'mcpExt.setProjects': 'pc', 'mcpExt.revoke': 'pc', 'mcpExt.remove': 'pc',
   'htmlPages.list': 'pc', 'htmlPages.setInternet': 'pc', 'htmlPages.close': 'pc',
   // read-only, for the phone: returns the HTML as data (never executed on the host) to show it in a sandboxed frame
-  'htmlPages.get': 'pc',
+  'htmlPages.get': 'pc', 'htmlPages.choose': 'remote',
   // the user's terminal inside Orb (src/engine/host/user-terminal.mjs)
   'terminal.list': 'pc', 'terminal.open': 'pc', 'terminal.write': 'pc', 'terminal.close': 'pc',
   // Ajustes › Skills y MCP (src/engine/api/extensions.mjs): what agents run comes in and out of core only here

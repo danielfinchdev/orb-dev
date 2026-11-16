@@ -381,6 +381,15 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     'htmlPages.setInternet': (a) => { if (typeof a?.internet !== 'boolean') fail('internet: true o false'); return htmlPages.setInternet(htmlRef(a), a.internet); },
     'htmlPages.get': (a) => htmlPages.get(htmlRef(a)),
     'htmlPages.close': (a) => htmlPages.close(htmlRef(a)),
+    // a button of a page's `choices`: sent as the person's message but with asked: [], because its words were written by the agent
+    // and must not count as the user asking for a publish (approval.mjs › askedByUser).
+    'htmlPages.choose': (a) => {
+      const ref = htmlRef(a); const text = htmlPages.choiceText(ref, a.index);
+      const s = sessions.must(ref.session);
+      if (s.kind !== 'chat') fail(tr('msg.html.badChoice'));
+      if (sessions.running.has(s.id)) fail(tr('msg.sessions.stillWorking'));
+      return sessions.message(s.id, text, { asked: [] });
+    },
     // the user's terminal inside Orb (this PC only, never in core or a protected folder).
     'terminal.list': () => terminals.list(),
     'terminal.open': ({ dir }) => terminals.open({ dir: str(dir, 'carpeta', 1000) }),

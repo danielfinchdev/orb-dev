@@ -97,6 +97,7 @@
   "history.list": "pc",
   "history.read": "pc",
   "history.usage": "pc",
+  "htmlPages.choose": "remote",
   "htmlPages.close": "pc",
   "htmlPages.get": "pc",
   "htmlPages.list": "pc",

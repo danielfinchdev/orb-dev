@@ -23,14 +23,15 @@ function PageFrame({ p, className, testid }) {
 
 // The answers the agent offers (orb_html_show › choices): buttons of Orb's own, outside the frame. Pressing one sends its text, as
 // it reads, as the person's message in this chat; the page itself can press nothing.
-function Choices({ sessionId, choices }) {
+function Choices({ pageId, sessionId, choices }) {
   const t = useT();
   const [sent, setSent] = useState(null);
   if (!choices?.length) return null;
-  const send = async (text) => { setSent(text); if ((await act(call('sessions.send', { id: String(sessionId), text }))) === undefined) setSent(null); };
+  // only the page and the button's index travel: the engine sends the text it registered, never one typed by the page or the agent
+  const send = async (text, index) => { setSent(text); if ((await act(call('htmlPages.choose', { id: String(pageId), session: String(sessionId), index }))) === undefined) setSent(null); };
   return (
     <div role="group" aria-label={t('htmlpage.choices')} className="flex flex-wrap items-center gap-2" data-testid="html-choices">
-      {choices.map((c) => <Button key={c} type="button" size="sm" variant="outline" className="h-auto max-w-full py-1.5 whitespace-normal" disabled={sent !== null} aria-pressed={sent === c} title={t('htmlpage.choiceTip')} onClick={() => send(c)} data-testid="html-choice">{c}</Button>)}
+      {choices.map((c, i) => <Button key={c} type="button" size="sm" variant="outline" className="h-auto max-w-full py-1.5 whitespace-normal" disabled={sent !== null} aria-pressed={sent === c} title={t('htmlpage.choiceTip')} onClick={() => send(c, i)} data-testid="html-choice">{c}</Button>)}
     </div>
   );
 }
@@ -52,7 +53,7 @@ function HtmlPage({ p, paused, sessionId }) {
       {paused
         ? <div className="text-muted-foreground bg-muted/40 rounded-md border px-3 py-6 text-center text-xs" data-testid="html-paused">{t('htmlpage.pausedNote')}</div>
         : <PageFrame p={p} className="h-[320px]" testid="html-frame" />}
-      {paused ? null : <Choices sessionId={sessionId} choices={p.choices} />}
+      {paused ? null : <Choices pageId={p.id} sessionId={sessionId} choices={p.choices} />}
       <div className="flex items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-xs font-medium" title={t('htmlpage.internetHint')}>
           <Switch checked={internet} onCheckedChange={(on) => act(call('htmlPages.setInternet', { ...refOf(p), internet: on === true }))} aria-describedby={`html-help-${p.id}`} data-testid="html-internet" />

@@ -112,6 +112,7 @@ export default {
   'msg.html.badChoices': 'Las opciones deben ser una lista de textos cortos (máximo {n}).',
   'msg.html.tooBig': 'La página es demasiado grande (máx. {kb} KB).',
   'msg.html.gone': 'Esa página ya no existe.',
+  'msg.html.badChoice': 'Ese botón no es de esta página.',
   'msg.html.badSwitch': 'El interruptor de internet debe ser verdadero o falso.',
   'msg.html.shown': 'El agente muestra una página en el chat: {title}. Sin internet salvo que lo actives.',
   'msg.html.agentText': 'La página está mostrada en el chat. Corre en un sandbox, sin internet salvo que el usuario lo active, y NO tiene acceso a Orb, a archivos ni a claves.',

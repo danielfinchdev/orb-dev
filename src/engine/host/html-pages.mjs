@@ -100,7 +100,7 @@ export function createHtmlPages({ sessions, emit = () => {}, log = () => {}, now
       starting = new Promise((resolve, reject) => {
         const srv = http.createServer(handle);
         srv.once('error', reject);
-        srv.listen(0, '127.0.0.1', () => { srv.removeListener('error', reject); srv.on('error', () => {}); server = srv; port = srv.address().port; emit('html:server', { port }); resolve(); });
+        srv.listen(0, '127.0.0.1', () => { srv.removeListener('error', reject); srv.on('error', () => {}); server = srv; srv.unref(); port = srv.address().port; emit('html:server', { port }); resolve(); });
       }).finally(() => { starting = null; });
     }
     await starting;
@@ -148,6 +148,14 @@ export function createHtmlPages({ sessions, emit = () => {}, log = () => {}, now
       note(session, 'msg.html.shown', { title });
       emit('html:page', v);
       return { ...v, text: tr('msg.html.agentText') };
+    },
+    // The text of one of the page's own buttons. Only the index travels: the text is the one the agent registered for that page,
+    // so a button can never carry anything else, and the caller sends it without what the words «ask for».
+    choiceText(ref, index) {
+      const p = find(ref);
+      const i = Number(index);
+      if (!Number.isInteger(i) || i < 0 || i >= (p.choices ?? []).length) throw userError('msg.html.badChoice');
+      return p.choices[i];
     },
     list: () => { alive(); return [...pages.values()].map(view); },
     // Only the user's window calls this (htmlPages.setInternet is 'pc'). Changes THIS page only.

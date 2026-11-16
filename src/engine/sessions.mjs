@@ -481,9 +481,9 @@ export class Sessions {
 
   // A message to a conversation: a new turn if it is idle; if it is working, steer it (the agent reads it at its next
   // step) or queue it (sent when the turn ends). mode: 'auto' (steer when the agent can, else queue) | 'steer' | 'queue'.
-  message(id, text, { images = [], mode = 'auto', context = '' } = {}) {
+  message(id, text, { images = [], mode = 'auto', context = '', asked } = {}) {
     // context: what @ attached (another task, conversation or log), added for the agent but not shown as typed.
-    if (!this.running.has(id)) { this.send(id, text, { images, prompt: context ? `${text}${context}` : undefined }); return { sent: true }; }
+    if (!this.running.has(id)) { this.send(id, text, { images, asked, prompt: context ? `${text}${context}` : undefined }); return { sent: true }; }
     const entry = this.lives.get(id);
     const onFail = () => { this.addItem(id, 'system', 'status', tr('msg.sessions.steerLate')); this.enqueue(id, text, []); };
     if (mode !== 'queue' && !images.length && !this.running.get(id)?.compacting && entry?.live.caps.steer && entry.live.steer({ text: context ? `${text}${context}` : text, onFail })) {

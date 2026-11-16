@@ -344,10 +344,10 @@ test('choices: short plain texts, at most six, cleaned and without repeats; the 
   } finally { pages.wipe?.(); }
 });
 
-test('the window draws the choices outside the frame and sends them through sessions.send; the frame stays allow-scripts only', () => {
+test('the window draws the choices outside the frame and sends them through htmlPages.choose; the frame stays allow-scripts only', () => {
   const ui = read('src/ui/components/html-page.jsx');
   assert.match(ui, /sandbox="allow-scripts"/);
   assert.ok(!/allow-same-origin|allow-top-navigation|allow-popups|postMessage|addEventListener\('message'/.test(ui), 'no channel from the frame to the window');
-  assert.match(ui, /call\('sessions\.send'/);
+  assert.match(ui, /call\('htmlPages\.choose'/); assert.ok(!/sessions\.send/.test(ui), 'a button never sends free text');
   assert.match(read('src/mcp/server.mjs'), /choices: \{ type: 'array', maxItems: 6/);
 });
