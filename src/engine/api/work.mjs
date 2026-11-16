@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import { ctx, tr } from '../../platform/context.mjs';
 import { AGENT_IDS } from '../../platform/config-file.mjs';
 import { accountsOf, accountLabel } from '../../domain/usage/accounts.mjs';
-import { slashCommand } from '../../shared/slash.mjs';
+import { slashCommand, modeCommand } from '../../shared/slash.mjs';
+import { startGoal, stopGoal, resumeGoal, clearGoal, planTurn, debugMode, goalOf, debugOn } from '../modes.mjs';
 import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../../domain/schedules/schedules.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { PERMISSIONS } from '../sessions.mjs';
@@ -21,6 +22,21 @@ import { createDedupe, conversationKey } from './dedupe.mjs';
 import { fold } from '../../domain/conversations/inbox.mjs';
 
 export function workMethods({ trash, project, cut, accept, taskRejected, modelLabelOf, grants, board, sessions, scheduler, log }) {
+  const runMode = (s, { name, args }) => {
+    if (name === 'plan') return planTurn(sessions, s.id, args);
+    if (name === 'debug') return debugMode(sessions, s.id, args);
+    if (name === 'review') {
+      const review = scheduler.reviewChat(s, { actor: 'usuario', focus: str(args, 'foco', 500, { optional: true }) });
+      sessions.addItem(s.id, 'system', 'status', tr('msg.modes.reviewStarted', { review: review.id }));
+      return { ok: true, review: review.id };
+    }
+    // goal
+    if (/^(parar|stop|detener|cancelar)$/i.test(args)) { stopGoal(sessions, s.id, 'stopped', tr('msg.modes.goalStopped')); if (sessions.isRunning?.(s.id) ?? sessions.running.has(s.id)) sessions.stop(s.id); return { ok: true, goal: goalOf(board, s.id) }; }
+    if (/^(continuar|reanudar|resume)$/i.test(args)) return resumeGoal(sessions, s.id);
+    if (/^(quitar|borrar|limpiar)$/i.test(args)) return clearGoal(sessions, s.id);
+    if (!args) { const g = goalOf(board, s.id); sessions.addItem(s.id, 'system', 'status', g ? tr('msg.modes.goalStatus', { text: g.text, status: tr(`msg.modes.status.${g.status}`), turns: g.turns, max: g.max }) : tr('msg.modes.goalNone')); return { ok: true, goal: g }; }
+    return startGoal(sessions, s.id, args);
+  };
   const methods = {
 
     // the list of every view, sent on each refresh: long texts cut (the whole task is tasks.get) and no approval
@@ -97,6 +113,13 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     },
     'tasks.discardBranch': ({ id }) => scheduler.discardBranch(int(id, 'tarea')),
 
+    // «/goal», «/plan», «/review» and «/debug» (modes.mjs): none of them changes the chat's permission.
+    'sessions.modes': ({ id }) => { const sid = str(id, 'conversación', 64); sessions.must(sid); return { goal: goalOf(board, sid), debug: debugOn(board, sid) }; },
+    'sessions.goal': ({ id, action, text }) => {
+      const s = sessions.must(str(id, 'conversación', 64)); trash.assertSessionNotTrashed(s);
+      const act = oneOf(action, ['start', 'stop', 'resume', 'clear'], 'acción');
+      return runMode(s, { name: 'goal', args: act === 'start' ? str(text, 'objetivo', 1500) : { stop: 'parar', resume: 'continuar', clear: 'quitar' }[act] });
+    },
     'sessions.list': ({ archived }) => sessions.list({ archived: Boolean(archived) }),
     'sessions.create': (p) => {
       const proj = p.project ? project(p.project) : null;
@@ -128,6 +151,8 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       }
       // comments written on diff lines go with this message as one block (turns.mjs › commentsBlock)
       const t = str(text, 'mensaje', 20000); const block = commentsBlock(comments);
+      const modeCmd = s.kind === 'chat' && !(files ?? []).length ? modeCommand(t) : null;
+      if (modeCmd) return runMode(s, modeCmd);
       const command = s.kind === 'chat' && !(files ?? []).length ? slashCommand(t) : null;
       if (command) return command === 'compact' ? sessions.compact(s.id) : sessions.clear(s.id);
       // a new direct conversation is named by Orb from its first message (at once a quick title, then a better one).

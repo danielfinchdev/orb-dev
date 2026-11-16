@@ -8,6 +8,7 @@ import { installed } from '../../agents/index.mjs';
 import { usableAccounts } from '../../domain/usage/accounts.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { label } from './common.mjs';
+import { changedFiles } from '../../domain/journal/journal.mjs';
 
 export class ReviewsPart {
   // Task Review: another model audits finished work, read-only, and gives a verdict (correct / with problems + the list).
@@ -36,6 +37,24 @@ ${task.branch ? `Está en la rama ${task.branch}.` : 'Los cambios están en la c
 Comprueba que hace lo que se pedía, busca fallos, casos sin cubrir, riesgos de seguridad y código mejorable. Pruébalo de verdad: ejecuta las pruebas si las hay y, si es algo que se puede arrancar (una web, una app, un script), arráncalo; una web, ábrela con orb_browser_open y úsala. Puedes ejecutar comandos, pero NO cambies ningún archivo.
 En result pon, en este orden: VEREDICTO: CORRECTO o CON FALLOS; después la lista de problemas concretos (archivo y qué falla) por gravedad; y al final qué arreglarías primero.` }, actor);
     this.board.notice(tr('msg.scheduler.reviewing', { agent: label(agent), model: model ? ` (${model})` : '', id: task.id, review: review.id }), 'info');
+    return review;
+  }
+
+  // «/review» in a direct chat: Task Review of what the chat changed in its project's folder (the files git sees changed
+  // now), read-only, by another provider than the chat's agent. It never touches the chat or its permission.
+  reviewChat(session, { actor = 'usuario', focus = '' } = {}) {
+    if (!session.project || !this.board.project(session.project)) throw new Error(tr('msg.modes.reviewNoProject'));
+    const files = [...(changedFiles(session.cwd)?.keys() ?? [])];
+    if (!files.length) throw new Error(tr('msg.modes.reviewNoChanges'));
+    const agent = this.reviewer([session.agent]);
+    if (!agent) throw new Error(tr('msg.scheduler.noReviewer'));
+    const review = this.board.createTask({ project: session.project, title: tr('msg.modes.reviewTitle', { title: oneLine(session.title, 80) }), agent, readonly: true, mode: 'carpeta',
+      description: `Eres el revisor (Task Review) de los cambios de una conversación directa con ${session.agent}${session.model ? ` (${session.model})` : ''} en el proyecto ${session.project} (${session.cwd}).
+Archivos con cambios sin guardar en git (${files.length}):
+${files.slice(0, 60).map((f) => `- ${f}`).join('\n')}${files.length > 60 ? `\n… y ${files.length - 60} más` : ''}${focus ? `\nFíjate sobre todo en: ${oneLine(focus, 500)}` : ''}
+Mira los cambios (git diff y git status), comprueba que hacen lo que parece pedirse, busca fallos, casos sin cubrir, riesgos de seguridad y código mejorable. Ejecuta las pruebas si las hay. Puedes ejecutar comandos, pero NO cambies ningún archivo.
+En result pon, en este orden: VEREDICTO: CORRECTO o CON FALLOS; la lista de problemas concretos (archivo y qué falla) por gravedad; y qué arreglarías primero.` }, actor);
+    this.board.notice(tr('msg.modes.reviewing', { agent: label(agent), review: review.id }), 'info');
     return review;
   }
 

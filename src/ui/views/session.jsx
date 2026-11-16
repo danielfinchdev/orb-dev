@@ -13,6 +13,7 @@ import { renameChat } from '@/views/orb/inbox.jsx';
 import { useDraft } from '@/lib/draft.js';
 import { BackToList } from '@/components/chat-bar.jsx';
 import { ContextSlot } from '@/components/context-slot.jsx';
+import { ChatModes } from '@/components/chat-modes.jsx';
 import { TaskChanges } from '@/components/task-changes.jsx';
 import { TurnChanges } from '@/components/turn-changes.jsx';
 import { takeComments, putBackComments, useComments } from '@/lib/turn-comments.js';
@@ -506,6 +507,7 @@ export function SessionView({ route }) {
       </div>
       <ConversationTrail scrollRef={trail.node} />
       </div>
+      {s.kind === 'chat' ? <ChatModes id={s.id} /> : null}
       {queue.length ? (
         <div className="mx-auto w-full max-w-3xl shrink-0 px-5 pb-2" data-testid="queue">
           <div className="text-muted-foreground mb-1.5 flex items-center gap-1.5 text-xs"><ListOrdered className="size-3.5" />{t('session.queueTitle')}</div>
