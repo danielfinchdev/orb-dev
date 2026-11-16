@@ -33,6 +33,7 @@ import { rememberModels } from './usage/catalog.mjs';
 import { snapshotBeforeTurn, snapshotAfterTurn, dropTurns } from '../domain/conversations/turns.mjs';
 import { changedFiles, logDirect } from '../domain/journal/journal.mjs';
 import { ATTACH_DIR, placeAttachments as copyAttachments, prepareAttachments } from './host/attachments.mjs';
+import { goalAfterTurn, debugOn } from './modes.mjs';
 
 export { PERMISSIONS, ATTACH_DIR };
 // a message that asks for a picture (or to change one): Codex gets a short note on how Orb wants it done.
@@ -140,6 +141,11 @@ export class Sessions {
     this.onRate = () => {};     // set by the engine: the real usage each account reports (budget)
     // Sessions left "running" by a closed app: their process is gone. Marked "interrupted" so they can continue.
     board.run("UPDATE sessions SET status = 'interrupted' WHERE status = 'running'");
+    // A «/goal» that was going when the app closed does not start by itself on the next launch: it waits for «continuar».
+    for (const row of board.all("SELECT key FROM settings WHERE key LIKE 'goal:%'")) {
+      const goal = board.settingJson(row.key);
+      if (goal?.status === 'active') board.settingJson(row.key, { ...goal, status: 'paused', reason: tr('msg.modes.goalAppClosed') });
+    }
     // Approval cards left open by a closed app can no longer be answered.
     for (const row of board.all("SELECT id, body FROM session_items WHERE kind = 'approval' AND body LIKE '%\"status\":\"pending\"%'")) {
       const item = parseItem(row); board.run('UPDATE session_items SET body = ? WHERE id = ?', JSON.stringify({ ...item.body, status: 'expired' }), row.id);
@@ -184,7 +190,8 @@ export class Sessions {
     const entry = this.lives.get(id);
     if (entry) {
       if ('model' in fields) { if (entry.live.caps.models) entry.live.setModel?.(fields.model); else if (!this.running.has(id)) this.closeLive(id); }
-      if ('permission' in fields) entry.live.setPermission?.(fields.permission);
+      // a «/plan» turn runs in «Solo lectura»: a change made meanwhile applies from the next turn (its process is rebuilt then)
+      if ('permission' in fields && !this.running.get(id)?.planOnly) entry.live.setPermission?.(fields.permission);
       if ('reasoning' in fields && !this.running.has(id)) this.closeLive(id);
       if ('cwd' in fields || 'account' in fields) this.closeLive(id);
     }
@@ -199,6 +206,7 @@ export class Sessions {
     this.board.run('DELETE FROM session_items WHERE session_id = ?', id);
     this.board.run('DELETE FROM session_queue WHERE session_id = ?', id);
     this.board.run('DELETE FROM sessions WHERE id = ?', id);
+    this.board.settingJson(`goal:${id}`, null); this.board.settingJson(`debug:${id}`, null);
     this.emit('session:removed', { id });
   }
 
@@ -530,8 +538,12 @@ export class Sessions {
 
   // One turn. options: images (absolute paths), prompt (what the agent receives, if it differs from what the user typed),
   // timeoutMs, budgetUsd, taskId, showUser, onFinish({ code, state, stderr, logFile, stopped, timedOut, limit }).
-  send(id, text, { images = [], prompt, timeoutMs = taskTimeoutMinutes() * 60_000, budgetUsd, taskId, onFinish, showUser = true, asked } = {}) {
-    const s = this.must(id);
+  send(id, text, { images = [], prompt, timeoutMs = taskTimeoutMinutes() * 60_000, budgetUsd, taskId, onFinish, showUser = true, asked, turnPermission } = {}) {
+    // turnPermission: this one turn runs with less permission than the chat has («/plan»). Only «leer» exists, and only to lower
+    // it: nothing here can make a turn more permissive than the chat.
+    const chat = this.must(id);
+    const planOnly = turnPermission === 'leer' && chat.permission !== 'leer';
+    const s = planOnly ? { ...chat, permission: 'leer' } : chat;
     // what this turn may do because the user's own words asked for it: a task's comes from the scheduler (the
     // request it came from); a chat's, from the message the user typed now (a turn Orb sends by itself keeps the last).
     if (this.running.has(id)) throw new Error(tr('msg.sessions.stillWorking')); // before: a refused send must not change what the running turn may do
@@ -547,6 +559,9 @@ export class Sessions {
     const attached = placeAttachments(images, s.cwd);
     if (showUser) this.addItem(id, 'user', 'text', attached.length ? { text, images: attached.map((f) => f.path) } : text);
     let body = prompt ?? text;
+    if (s.kind === 'chat' && debugOn(this.board, id)) body = `${tr('sys.debug.prompt')}
+
+${body}`;
     // A fork without native support starts with what was said in the original conversation.
     // A chat handed to another agent (handoff) starts with its bounded summary, once.
     const handed = this.board.settingJson(`handoff_summary:${id}`);
@@ -563,7 +578,7 @@ export class Sessions {
       onFinish?.({ code: -1, state: { final: '', text: '', isError: true }, stderr: error.message, logFile: null, stopped: false });
       return null;
     }
-    const run = { agent: s.agent, stopped: false, startedAt: Date.now(), lastAt: Date.now(), steps: 0, last: tr('sys.sessions.starting'), live: entry.live, waitMs: 0, pausedAt: null };
+    const run = { agent: s.agent, stopped: false, startedAt: Date.now(), lastAt: Date.now(), steps: 0, last: tr('sys.sessions.starting'), live: entry.live, waitMs: 0, pausedAt: null, planOnly };
     this.running.set(id, run);
     this.update(id, { status: 'running', settled: false });
     // the time limit counts working time only: while the turn waits for the user's permission the clock stops. A task
@@ -602,6 +617,8 @@ export class Sessions {
       finished = true;
       try { onFinish?.({ code: result.isError ? 1 : 0, state, stderr: result.isError ? result.final : '', logFile: entry.logFile, stopped: run.stopped, timedOut: Boolean(run.timedOut), limit: result.limit }); }
       catch (error) { this.log(`onFinish ${id}: ${error.stack}`); }
+      // «/goal»: the next turn of the goal, or why it stops (modes.mjs). It goes before the queue: a queued message pauses it. A stopped turn or a limit reaches it too, to pause it.
+      if (!onFinish && s.kind === 'chat') { try { goalAfterTurn(this, id, { result, run }); } catch (error) { this.log(`objetivo ${id}: ${error.message}`); } }
       // Messages written while it worked go now, in order (not after a stop or a limit: then the user decides).
       if (!run.stopped && !limited && !onFinish) {
         const next = this.takeQueued(id);
@@ -663,6 +680,7 @@ export class Sessions {
     this.closeLive(id);
     this.board.settingJson(`fork_summary:${id}`, null); this.board.settingJson(`fork_pending:${id}`, null); this.board.settingJson(`handoff_summary:${id}`, null);
     this.update(id, { cli_session: null, context: null });
+    this.board.settingJson(`goal:${id}`, null); this.emit('session:goal', { id, goal: null });
     this.addItem(id, 'system', 'status', tr('msg.sessions.cleared'));
     return { ok: true };
   }

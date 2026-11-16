@@ -19,6 +19,8 @@
 //   PLAN_GRATIS        Claude fails like a free plan that cannot be used from other apps
 //   FALLA              the process dies with an error
 //   REVIENTA           send() itself rejects (an adapter bug)
+//   OBJETIVO_AL_TURNO <n>  (3.8.7) from its n-th turn answers «OBJETIVO CUMPLIDO»; BLOQUEADO_SIEMPRE answers «OBJETIVO BLOQUEADO»;
+//                      AVANZA answers a different word each turn (a goal that makes progress)
 //   LENTO              takes 1.5 s (to queue or steer while it works)
 //   ESPERA_CORRECCION  waits (up to 10 s) for a steer and answers with it
 //   DUERME             works for 30 s (until it is stopped)
@@ -323,6 +325,12 @@ function createFakeLive(agent, label, caps, o) {
       item('assistant', 'text', reply); current.addText(reply);
       return current.finish({ usage: { inputTokens: 10, outputTokens: 5 }, stopReason: 'end_turn' });
     }
+    // 3.8.7 («/goal» tests): the answers that end, block or move a goal on. The goal's words come back in every turn.
+    const said = (reply) => { for (const piece of reply.match(/.{1,20}/gs) ?? []) onEvent({ type: 'delta', text: piece }); item('assistant', 'text', reply); current.addText(reply); onEvent({ type: 'context', used: 1000 * turns, size: 200_000 }); current.finish({ usage: { inputTokens: 10, outputTokens: 5 }, stopReason: 'end_turn' }); };
+    const doneAt = scan.match(/OBJETIVO_AL_TURNO (\d+)/);
+    if (doneAt && turns >= Number(doneAt[1])) return said(`OBJETIVO CUMPLIDO: hecho en el turno ${turns}`);
+    if (/BLOQUEADO_SIEMPRE/.test(scan)) return said('OBJETIVO BLOQUEADO: falta acceso a la base de datos');
+    if (/AVANZA/.test(scan)) return said(`Avanzo con ${['alfa', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta'][turns % 8]}`);
     const reply = scripted?.reply ?? [`${agent === 'codex' ? `Codex ${continued ? 'sigue' : 'empieza'}` : 'Recibido'}: ${first}`, ...steers.map((s) => `corrección: ${s}`), ...notes].join(' | ');
     for (const piece of reply.match(/.{1,20}/gs) ?? []) onEvent({ type: 'delta', text: piece });
     item('assistant', 'text', reply);
