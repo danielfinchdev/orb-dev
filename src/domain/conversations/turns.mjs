@@ -4,8 +4,13 @@
 // n-1 and n. Nothing here touches the user's files, index, branches or stash, and the refs sit outside refs/heads and
 // refs/tags, so no default push or fetch refspec ever carries them (turns.test.mjs checks it). Diffs are read from the
 // commits (`git diff <a> <b>`), never by checking anything out.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import crypto from 'node:crypto';
 import { git, gitAsync, REF_PREFIX, isGitRepoAsync, repoRootAsync } from '../../platform/git.mjs';
-import { snapshotCommitAsync, diffBetween } from '../tasks/checkpoints.mjs';
+import { snapshotCommitAsync, diffBetween, RAW_GIT, RAW_INDEX } from '../tasks/checkpoints.mjs';
+import { isSecretPath } from '../../shared/secrets-scan.mjs';
 
 const TURNS = `${REF_PREFIX}/turnos`;
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -28,22 +33,88 @@ async function listRefs(repo, sid) {
   }).filter((t) => Number.isInteger(t.n) && t.n >= 0).sort((a, b) => a.n - b.n);
 }
 
+// Where a folder's repository is, remembered per folder: every git call is a process (~90 ms on Windows) and a message
+// asked for two just to find the root. A remembered root is only trusted while no `.git` appeared between the folder and
+// that root (a repository started inside a project) and the root still has its own.
+const roots = new Map();
+const sameDir = (a, b) => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
+function rootHolds(cwd, repo) {
+  try {
+    let d = path.resolve(cwd);
+    for (let i = 0; i < 64; i++) {
+      if (sameDir(d, path.resolve(repo))) return fs.existsSync(path.join(d, '.git'));
+      if (fs.existsSync(path.join(d, '.git'))) return false;
+      const up = path.dirname(d); if (up === d) return false; d = up;
+    }
+  } catch { /* cannot tell: ask git */ }
+  return false;
+}
+async function locate(cwd) {
+  const known = roots.get(cwd);
+  if (known && rootHolds(cwd, known.repo)) return known;
+  roots.delete(cwd);
+  const r = await gitAsync(cwd, {}, 'rev-parse', '--is-inside-work-tree', '--show-toplevel', '--git-path', RAW_INDEX);
+  const [inside, top, raw] = r.stdout.split('\n').map((l) => l.trim());
+  if (r.status !== 0 || inside !== 'true' || !top || !raw) return null;
+  const found = { repo: top.replace(/\//g, path.sep), rawIndex: path.resolve(cwd, raw) };
+  if (roots.size > 64) roots.clear();
+  roots.set(cwd, found);
+  return found;
+}
+
+// The last photo of each conversation (a numbered one or a message's own): the next message may reuse it.
+const lastPhoto = new Map();
+
+// True when the folder is still exactly the one in `ref`'s photo, so a message does not need a new photo. Same trust as the
+// fast snapshot (a file's date and size, as git does), checked against a copy of the raw index (the photo's own stat cache):
+// - diff-index: every file the photo has is on disk with the same content, and the index has nothing the photo lacks;
+// - ls-files --others: no new file that is not ignored (a secret-looking one is never in a photo, so it does not count).
+// Any doubt (no raw index, a failing git, a vanished ref, a difference) answers false and the caller takes a full photo.
+async function unchanged(repo, rawIndex, ref) {
+  const tmp = path.join(os.tmpdir(), `orb-index-check-${process.pid}-${crypto.randomBytes(4).toString('hex')}`);
+  try {
+    const st = fs.statSync(rawIndex);
+    fs.copyFileSync(rawIndex, tmp); fs.utimesSync(tmp, st.atime, st.mtime); // git's «racy» test compares file dates with the index's
+    const env = { GIT_INDEX_FILE: tmp };
+    const [diff, others] = await Promise.all([
+      gitAsync(repo, env, ...RAW_GIT, 'diff-index', '--quiet', `${ref}^{commit}`),
+      gitAsync(repo, env, ...RAW_GIT, 'ls-files', '--others', '--exclude-standard', '-z'),
+    ]);
+    if (diff.status !== 0 || others.status !== 0) return false;
+    return others.stdout.split('\0').filter(Boolean).every(isSecretPath);
+  } catch { return false; } finally { fs.rmSync(tmp, { force: true }); }
+}
+
 async function take(cwd, sid, { start, alive, mark = 0 }) {
-  if (!(await isGitRepoAsync(cwd))) return null;
+  const where = await locate(cwd);
+  if (!where) return null;
   // the chat was archived or deleted while the turn ran: nothing is left behind
   if (alive && !alive()) { dropNow(cwd, sid); return null; }
-  const repo = await repoRootAsync(cwd);
+  const { repo } = where;
+  // A message's photo is the last one when nothing changed since (the usual case: the turn before ended with one).
+  const last = start && mark ? lastPhoto.get(sid) : null;
+  if (last && last.repo === repo) {
+    if (await unchanged(repo, where.rawIndex, last.ref)) {
+      // the photo's ref name as the new value: git resolves it, one process less than asking for its hash first
+      const ref = `${refDir(sid)}/antes/${mark}`;
+      if ((await gitAsync(repo, {}, 'update-ref', ref, `${last.ref}^{commit}`)).status === 0) { lastPhoto.set(sid, { repo, ref }); return null; }
+    }
+  }
   const have = await listRefs(repo, sid);
   const baseline = start && have.length > 0; // the numbered baseline is only the folder before the very first turn
   if (baseline && !mark) return null;
   const snap = await snapshotCommitAsync(repo, { raw: true, always: true, message: `orb: turno ${sid}` });
   if (!snap) return null;
-  // A message's own photo is always fresh (the user may have changed files since the last turn ended) and is not a turn:
-  // it carries no number, so «Cambios» never shows it.
-  if (start && mark) await gitAsync(repo, {}, 'update-ref', `${refDir(sid)}/antes/${mark}`, snap.commit);
+  // A message's own photo is not a turn: it carries no number, so «Cambios» never shows it.
+  if (start && mark) {
+    const ref = `${refDir(sid)}/antes/${mark}`;
+    if ((await gitAsync(repo, {}, 'update-ref', ref, snap.commit)).status === 0) lastPhoto.set(sid, { repo, ref });
+  }
   if (baseline) return null;
   const n = have.length ? have[have.length - 1].n + 1 : 0;
-  const r = await gitAsync(repo, {}, 'update-ref', `${refDir(sid)}/${n}`, snap.commit);
+  const ref = `${refDir(sid)}/${n}`;
+  const r = await gitAsync(repo, {}, 'update-ref', ref, snap.commit);
+  if (r.status === 0) lastPhoto.set(sid, { repo, ref });
   return r.status === 0 ? { n, commit: snap.commit } : null;
 }
 
@@ -97,6 +168,7 @@ export async function turnDiff(cwd, sid, { scope = 'last', n } = {}) {
 // It queues behind a snapshot still being taken, so that one cannot write its ref after the drop.
 export const dropTurns = (cwd, sid) => serial(sid, async () => dropNow(cwd, sid)).catch(() => 0);
 function dropNow(cwd, sid) {
+  lastPhoto.delete(sid);
   try {
     const refs = git(cwd, 'for-each-ref', '--format=%(refname)', `${refDir(sid)}/`);
     if (refs.status !== 0) return 0;

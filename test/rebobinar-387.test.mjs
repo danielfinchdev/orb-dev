@@ -238,3 +238,36 @@ test('a failed edit that cannot put every file back keeps the line that undoes t
   const src = fs.readFileSync(new URL('../src/engine/edit-message.mjs', import.meta.url), 'utf8');
   assert.match(src, /back\.skipped === 0\) rewound = null/);
 });
+
+// The photo before a message: the last one when nothing changed, a new one when the user touched the folder.
+const tip = (id, name) => g(repo, 'rev-parse', '--verify', '--quiet', `refs/orb/turnos/${id}/${name}^{commit}`);
+
+test('a message reuses the last photo when nothing changed and takes a new one when the user edited the folder', async () => {
+  const s = create();
+  fs.writeFileSync(path.join(repo, '.env'), 'TOKEN=secret\n'); // never inside a photo, and never a reason for a new one
+  fs.writeFileSync(path.join(repo, 'ignored.log'), 'noise\n');
+  await turn(s.id, 'write p1.txt=1'); await turn(s.id, 'write p2.txt=2');
+  const [, second] = userItems(s.id);
+  const reused = tip(s.id, `antes/${second.id}`);
+  assert.ok(reused); assert.equal(reused, tip(s.id, '1')); // same commit as the photo the first turn ended with
+  assert.equal(g(repo, 'ls-tree', '-r', '--name-only', reused).split('\n').filter((f) => f === '.env' || f === 'ignored.log').length, 0);
+
+  fs.writeFileSync(path.join(repo, 'a.txt'), 'edited by me\n'); fs.writeFileSync(path.join(repo, 'mine-new.txt'), 'new by me\n');
+  await turn(s.id, 'write p3.txt=3');
+  const third = userItems(s.id)[2];
+  const fresh = tip(s.id, `antes/${third.id}`);
+  assert.ok(fresh); assert.notEqual(fresh, tip(s.id, '2'));
+  assert.equal(g(repo, 'show', `${fresh}:a.txt`), 'edited by me');
+  assert.equal(g(repo, 'show', `${fresh}:mine-new.txt`), 'new by me');
+  assert.equal(g(repo, 'ls-tree', '-r', '--name-only', fresh).split('\n').includes('.env'), false);
+
+  // rewinding to that message leaves the folder as it was just before it: the user's own changes stay, the agent's go
+  await call('sessions.editRewind', { id: s.id, item: third.id, text: 'write p4.txt=4' });
+  await idle(s.id);
+  assert.equal(read(repo, 'a.txt'), 'edited by me\n');
+  assert.equal(read(repo, 'mine-new.txt'), 'new by me\n');
+  assert.equal(read(repo, 'p2.txt'), '2\n');
+  assert.ok(!fs.existsSync(path.join(repo, 'p3.txt')));
+  assert.equal(read(repo, '.env'), 'TOKEN=secret\n'); // a secret the photo never held is not touched
+  assert.equal(read(repo, 'ignored.log'), 'noise\n');
+});
