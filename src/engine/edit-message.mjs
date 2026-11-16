@@ -150,7 +150,7 @@ export async function editMessage(sessions, id, itemId, text, { rewind = false }
       }
       if (!moved && rewound) {
         // nothing moved, so the chat is as it was: put the files back too instead of leaving a half-done edit
-        try { await undoRewindFiles(s.cwd, rewound); rewound = null; } catch { /* the undo line below lets the user do it */ }
+        try { const back = await undoRewindFiles(s.cwd, rewound); if (back.skipped === 0) rewound = null; } catch { /* the undo line below lets the user do it */ }
       }
       try { note(); sessions.emit('session:reset', { id }); } catch { /* the original error is the one to report */ }
       throw error;

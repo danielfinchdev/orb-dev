@@ -233,3 +233,8 @@ test('a rewind skips files behind a link or that cannot be written, and still fi
   assert.ok(out.skipped.includes('d/f.txt')); assert.ok(!fs.existsSync(path.join(outside, 'f.txt')));
   fs.chmodSync(path.join(dir, 'ro.txt'), 0o666);
 });
+
+test('a failed edit that cannot put every file back keeps the line that undoes the rewind', async () => {
+  const src = fs.readFileSync(new URL('../src/engine/edit-message.mjs', import.meta.url), 'utf8');
+  assert.match(src, /back\.skipped === 0\) rewound = null/);
+});
