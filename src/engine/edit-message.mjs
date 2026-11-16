@@ -110,6 +110,8 @@ export async function editMessage(sessions, id, itemId, text, { rewind = false }
       copy = sessions.create({ kind: 'chat', agent: s.agent, account: s.account, model: s.model, reasoning: s.reasoning,
         permission: s.permission !== 'total' ? s.permission : s.project ? permissionOfAutonomy(globalAutonomy()) : 'leer',
         project: s.project, cwd: s.cwd, title: tr('msg.edit.copyTitle', { title: s.title }), parentId: s.id });
+      // parseRow turned context into an object; the raw column is what goes into the copy
+      const raw = board.one('SELECT cli_session, context FROM sessions WHERE id = ?', s.id);
       board.transaction(() => {
         board.run('UPDATE sessions SET titled = 1 WHERE id = ?', copy.id);
         const all = board.all('SELECT role, kind, body, at, id FROM session_items WHERE session_id = ? ORDER BY id', s.id);
@@ -119,7 +121,7 @@ export async function editMessage(sessions, id, itemId, text, { rewind = false }
         }
         board.run('DELETE FROM session_items WHERE session_id = ? AND id >= ?', s.id, mark);
         // the native conversation holds everything that was said, so the copy can be continued from there
-        board.run('UPDATE sessions SET cli_session = ?, context = ? WHERE id = ?', s.cli_session ?? null, s.context ?? null, copy.id);
+        board.run('UPDATE sessions SET cli_session = ?, context = ? WHERE id = ?', raw?.cli_session ?? null, raw?.context ?? null, copy.id);
       });
       moved = true;
       sessions.addItem(copy.id, 'system', 'status', tr('msg.edit.copyNote', { title: s.title }));
@@ -141,6 +143,10 @@ export async function editMessage(sessions, id, itemId, text, { rewind = false }
       if (copy && !moved) {
         // the copy never got the conversation: take it away again
         try { sessions.board.run('DELETE FROM session_items WHERE session_id = ?', copy.id); sessions.board.run('DELETE FROM sessions WHERE id = ?', copy.id); sessions.emit('session:removed', { id: copy.id }); } catch { /* best effort */ }
+      }
+      if (!moved && rewound) {
+        // nothing moved, so the chat is as it was: put the files back too instead of leaving a half-done edit
+        try { await undoRewindFiles(s.cwd, rewound); rewound = null; } catch { /* the undo line below lets the user do it */ }
       }
       try { note(); sessions.emit('session:reset', { id }); } catch { /* the original error is the one to report */ }
       throw error;

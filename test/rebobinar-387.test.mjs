@@ -65,12 +65,14 @@ test('editing without rewinding keeps the later turns in a copy and the chat sta
   const s = create();
   await turn(s.id, 'write b.txt=uno'); await turn(s.id, 'write c.txt=dos');
   board.run('UPDATE sessions SET cli_session = ? WHERE id = ?', 'native-1', s.id);
+  sessions.update(s.id, { context: { used: 1, size: 2 } }); // real chats have it after their first turn
   const second = userItems(s.id)[1];
   const out = await call('sessions.edit', { id: s.id, item: second.id, text: 'write d.txt=tres' });
   await idle(s.id);
   const copy = sessions.get(out.copy);
   assert.equal(copy.parent_id, s.id); assert.equal(copy.cli_session, 'native-1'); assert.match(copy.title, /versión anterior/);
   assert.notEqual(copy.permission, 'total');
+  assert.deepEqual(copy.context, { used: 1, size: 2 });
   assert.deepEqual(users(copy.id), ['write b.txt=uno', 'write c.txt=dos']);
   assert.deepEqual(users(s.id), ['write b.txt=uno', 'write d.txt=tres']);
   assert.ok(!sessions.get(s.id).cli_session);
@@ -85,6 +87,7 @@ test('rewind puts back modified, new and deleted files, never an ignored one, an
   fs.writeFileSync(path.join(repo, 'ignored.log'), 'mine\n');
   await turn(s.id, 'del gone.txt');
   await turn(s.id, 'write new.txt=fresh');
+  sessions.update(s.id, { context: { used: 1, size: 2 } });
   const mark = userItems(s.id)[1]; // «del gone.txt»: before it a.txt was changed and gone.txt existed
   const was = { head: g(repo, 'rev-parse', 'HEAD'), index: g(repo, 'diff', '--cached', '--name-only') };
   fs.writeFileSync(path.join(repo, 'loose.txt'), 'untracked of mine\n');
