@@ -19,6 +19,10 @@ export const plainSkin = (skin) => baseSkin(skin) === 'profesional';
 // The themes that only exist in dark (the phosphor terminal of «retro»). They ignore ui.theme without overwriting it,
 // so going back to another theme restores the saved light / dark / system choice.
 const DARK_ONLY = new Set(['retro']);
+// The themes a phone (or a linked browser) may wear: the default and Grafito, which is plain (no robot, no backdrop, no motion).
+// The phone follows the PC's choice (ui.skin travels in the settings it receives); anything else shows the default.
+const PHONE_SKINS = new Set([SKINS[0], 'grafito']);
+export const phoneSkin = (skin) => (PHONE_SKINS.has(skin) ? skin : SKINS[0]);
 export const darkOnlySkin = (skin) => DARK_ONLY.has(baseSkin(skin));
 
 // Interface font. outfit is the one Orb has always used.
