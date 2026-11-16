@@ -229,5 +229,14 @@ export default {
   'chat.trail.noReply': 'No reply yet',
   'chat.waitingTurn': 'Waiting its turn: other conversations are answering.',
   'brain.noUsage': 'No usage on your plan until {when}',
-  'brain.noUsageDay': 'No usage on your plan until {when}'
+  'brain.noUsageDay': 'No usage on your plan until {when}',
+  'chat.workspace.local': 'Local',
+  'chat.workspace.worktree': 'Worktree',
+  'chat.workspace.tip': 'Where this chat works',
+  'chat.workspace.localTip': 'Local: works directly in the project folder.',
+  'chat.workspace.worktreeTip': 'Worktree: works in its own copy of the project (separate branch) that Orb keeps outside your repository. Your folder does not change until you join its work.',
+  'chat.workspace.noGit': 'Worktree needs the project to be a git repository with at least one commit.',
+  'chat.workspace.base': 'Base branch',
+  'chat.workspace.baseCurrent': 'Current branch ({branch})',
+  'chat.workspace.baseTip': 'The copy starts from this branch, without the folder\'s uncommitted changes.'
 };

@@ -209,6 +209,7 @@ export class Sessions {
     this.board.run('DELETE FROM sessions WHERE id = ?', id);
     this.board.settingJson(`goal:${id}`, null); this.board.settingJson(`debug:${id}`, null);
     this.emit('session:removed', { id });
+    try { this.onRemoved?.(s); } catch { /* a listener must never break a removal */ }
   }
 
   // History in pages: the newest `limit` items, or those before `before` (older pages) / after `after` (new ones).

@@ -21,7 +21,7 @@ import { fail, str, int, oneOf, images, DECISION } from './common.mjs';
 import { createDedupe, conversationKey } from './dedupe.mjs';
 import { fold } from '../../domain/conversations/inbox.mjs';
 
-export function workMethods({ trash, project, cut, accept, taskRejected, modelLabelOf, grants, board, sessions, scheduler, log }) {
+export function workMethods({ trash, project, cut, accept, taskRejected, modelLabelOf, grants, board, sessions, scheduler, chatTrees, log }) {
   const runMode = (s, { name, args }) => {
     if (name === 'plan') return planTurn(sessions, s.id, args);
     if (name === 'debug') return debugMode(sessions, s.id, args);
@@ -128,16 +128,23 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       if (!proj && p.permission && p.permission !== 'leer') fail(tr('msg.api.readOnlyNoProject'));
       // «Acceso total» only through sessions.grantTotal (the master password), never at creation.
       if (p.permission === 'total') fail(tr('msg.grants.totalNeedsPassword'));
+      // «Local» (the project's folder) or «Worktree» (its own git worktree and branch, made below); it changes where the chat works, never what it may do.
+      const where = oneOf(p.workspace, ['local', 'worktree'], 'espacio', 'local');
+      if (where === 'worktree' && !proj) fail(tr('msg.chatWt.needsProject'));
       const created = sessions.create({ kind: 'chat', agent: oneOf(p.agent, AGENT_IDS, 'agente'), account: str(p.account, 'cuenta', 40, { optional: true }) || null, model: str(p.model, 'modelo', 80, { optional: true }) || null,
         reasoning: oneOf(p.reasoning, REASONING_LEVELS, 'razonamiento', 'medium'), permission: proj ? oneOf(p.permission, PERMISSIONS.filter((x) => x !== 'total'), 'permiso', permissionOfAutonomy(globalAutonomy())) : 'leer',
         project: proj?.name ?? null, cwd, title: str(p.title, 'título', 80, { optional: true }) || tr('msg.api.chatWith', { agent: p.agent }) });
+      if (where === 'worktree') {
+        try { const made = chatTrees.create({ id: created.id, project: proj, base: str(p.base, 'rama', 200, { optional: true }) || undefined }); sessions.update(created.id, { cwd: made.cwd }); } catch (error) { sessions.remove(created.id); throw error; }
+      }
       // a title given here stays; without one, Orb names it from its first message.
-      return p.title ? sessions.update(created.id, { titled: true }) : created;
+      return p.title ? sessions.update(created.id, { titled: true }) : sessions.get(created.id);
     },
     'sessions.items': ({ id, after, before, limit }) => sessions.items(str(id, 'conversación', 64), { after: Number(after) || 0, before: Number(before) || 0, limit: Number(limit) || 200 }),
     // A message to a conversation: a new turn, or (while it works) steer the running turn or wait in its queue.
     // mode: 'auto' (steer when the agent can, else queue), 'steer' or 'queue'.
     'sessions.send': ({ id, text, images: files, mode, comments }) => {
+      if (chatTrees.busy.has(String(id))) fail(tr('msg.chatWt.removing'));
       const s = sessions.must(str(id, 'conversación', 64));
       trash.assertSessionNotTrashed(s);
       if (s.kind === 'task') {
@@ -202,8 +209,11 @@ ${block}` : ''}` });
     // «Compactar» in a direct conversation: the agent's own compaction (Claude /compact, Codex thread/compact/start).
     'sessions.compact': ({ id }) => sessions.compact(sessions.must(str(id, 'conversación', 64)).id),
     'sessions.stop': ({ id }) => { const s = sessions.must(str(id, 'conversación', 64)); if (s.kind === 'task') return scheduler.cancel(s.task_id, 'usuario'); return sessions.stop(s.id); },
-    'sessions.update': ({ id, title, model, reasoning, permission, archived }) => {
+    'sessions.update': async ({ id, title, model, reasoning, permission, archived }) => {
       const s = sessions.must(str(id, 'conversación', 64));
+      // a chat taken out of the archive gets back the worktree that was removed when it was archived
+      // (if it cannot be brought back the chat still comes out, and the user is told)
+      if (archived === false && s.archived) { try { await chatTrees.ensure(s.id); } catch (error) { board.notice(tr('msg.chatWt.restoreFailed', { title: s.title, error: error.message }), 'warning'); } }
       if (s.kind === 'task' && (model !== undefined || permission !== undefined || reasoning !== undefined)) fail(tr('msg.api.taskModelFromTask'));
       const fields = {};
       if (title !== undefined) fields.title = oneLine(str(title, 'título', 80), 80);
@@ -221,6 +231,18 @@ ${block}` : ''}` });
       return sessions.update(s.id, fields);
     },
     'sessions.remove': ({ id }) => sessions.remove(str(id, 'conversación', 64)),
+    // the worktrees of direct chats (src/engine/chat-worktrees.mjs)
+    'worktrees.branches': ({ project: name }) => chatTrees.branches(project(name).path),
+    'worktrees.status': ({ id }) => chatTrees.status(str(id, 'conversación', 64)),
+    'worktrees.list': () => chatTrees.all(),
+    // Never loses work unasked: a folder with changes not committed stays unless force (the user confirmed it).
+    'worktrees.discard': async ({ id, force, branch }) => {
+      const sid = str(id, 'conversación', 64);
+      const r = await chatTrees.release(sid, { force: force === true, branch: oneOf(branch, ['auto', 'keep', 'delete'], 'rama', 'auto') });
+      if (r.none) fail(tr('msg.chatWt.none'));
+      if (r.removed) board.changed('sessions');
+      return r;
+    },
   };
   // clientId: a retry of the same message gets the first result instead of a second message.
   const sent = createDedupe();

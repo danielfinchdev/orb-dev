@@ -69,7 +69,7 @@ export function paths(home) {
     mcp: path.join(core, MCP_DIR), skills: path.join(core, SKILLS_DIR), rules: path.join(core, RULES_DIR), staging: path.join(core, STAGING_DIR), tools, adb: isDirSync(keptAdb) ? keptAdb : path.join(tools, 'adb'), secrets: path.join(core, 'secretos'),
     projects: home, categories: Object.fromEntries(CATEGORIES.map((c) => [c, path.join(home, c)])),
     runs: path.join(core, 'ejecuciones'),
-    copies, worktrees: path.join(copies, 'aisladas'), checkpoints: path.join(copies, 'fotos')
+    copies, worktrees: path.join(copies, 'aisladas'), chatTrees: path.join(copies, 'aisladas', 'chats'), checkpoints: path.join(copies, 'fotos')
   };
 }
 

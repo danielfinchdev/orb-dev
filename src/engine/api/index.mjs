@@ -51,6 +51,7 @@ import { projectMethods } from './projects.mjs';
 import { chatMethods } from './chat.mjs';
 import { trashTools } from './trash.mjs';
 import { workMethods } from './work.mjs';
+import { ChatWorktrees } from '../chat-worktrees.mjs';
 import { readActivity, buildReport, hidePcPaths } from '../../domain/activity/activity.mjs';
 import { snapshotBefore, recordUserCall } from '../../domain/activity/record.mjs';
 
@@ -184,7 +185,13 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
   let usageAskedAt = 0; // usage.refresh
 
   const trash = trashTools({ board, sessions, orchestrator, scheduler, emit, log, conversationId });
-  const hooks = { ...shared, trash, realHome, insideHome, holding, coordinatorBusy, syncSoon, cut, accept, allowedImage, withAccepted, settleConversation, taskRejected, modelLabelOf, wb, android, grants };
+  // a deleted chat takes its worktree with it only when nothing in it would be lost; otherwise the folder stays and the user is told
+  const chatTrees = new ChatWorktrees({ board, sessions, log });
+  sessions.onRemoved = (s) => chatTrees.release(s.id).then((r) => { if (r.kept === 'dirty' || r.kept === 'locked' || r.kept === 'shared' || r.branchKept) board.notice(tr('msg.chatWt.kept', { title: s.title, dir: chatTrees.info(s.id)?.path ?? '' }), 'warning'); }).catch(() => {});
+  // a chat taken out of the trash gets back the worktree that was discarded meanwhile
+  const restore = trash.methods['sessions.restore'];
+  trash.methods['sessions.restore'] = async (p, ...rest) => { const r = await restore(p, ...rest); try { await chatTrees.ensure(r.id); } catch (error) { board.notice(tr('msg.chatWt.restoreFailed', { title: r.title, error: error.message }), 'warning'); } return r; };
+  const hooks = { ...shared, trash, chatTrees, realHome, insideHome, holding, coordinatorBusy, syncSoon, cut, accept, allowedImage, withAccepted, settleConversation, taskRejected, modelLabelOf, wb, android, grants };
   const methods = {
     'app.state': () => ({
       version, home: ctx.home, paths: { core: ctx.paths.core, projects: ctx.paths.projects, logs: ctx.paths.logs, mcp: ctx.paths.mcp, categories: ctx.paths.categories }, categories: CATEGORIES,

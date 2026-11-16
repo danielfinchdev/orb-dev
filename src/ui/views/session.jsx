@@ -4,7 +4,7 @@
 import { lazy, memo, Suspense, useEffect, useMemo, useState } from 'react';
 import { Info, FileDiff, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, X, ClipboardCheck, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Ellipsis, Gamepad2, Smartphone, Shuffle, ScreenShare, SquareTerminal } from 'lucide-react';
 import { unlockCore } from '@/lib/core-access.js';
-import { notifyError, notifyOk } from '@/lib/notify.js';
+import { notify, notifyError, notifyOk } from '@/lib/notify.js';
 import { TypingMarkdown, TypedMarkdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
@@ -473,11 +473,11 @@ export function SessionView({ route }) {
             <DropdownMenuItem disabled={running} onSelect={fork} data-testid="fork"><GitFork />{t('session.fork')}</DropdownMenuItem>
             {others.length ? <DropdownMenuItem disabled={running} onSelect={switchAgent} data-testid="switch-agent"><Shuffle />{t('session.switchAgent')}</DropdownMenuItem> : null}
             {others.length && s.kind === 'chat' ? <DropdownMenuItem disabled={running} onSelect={handoff} data-testid="handoff"><Shuffle />{t('session.handoff')}</DropdownMenuItem> : null}
-            {s.kind === 'chat' ? <DropdownMenuItem onSelect={async () => { await act(call('sessions.update', { id: s.id, archived: !s.archived })); if (!s.archived) go('chat'); }} data-testid="archive"><Archive />{s.archived ? t('session.restore') : t('session.archive')}</DropdownMenuItem> : null}
+            {s.kind === 'chat' ? <DropdownMenuItem onSelect={async () => { const ok = await act(call('sessions.update', { id: s.id, archived: !s.archived })); if (!s.archived) { if (ok) await offerWorktreeRemoval(s, t); go('chat'); } }} data-testid="archive"><Archive />{s.archived ? t('session.restore') : t('session.archive')}</DropdownMenuItem> : null}
             {fullPc() ? <DropdownMenuItem onSelect={openGames} data-testid="bar-games"><Gamepad2 />{t('bar.games')}</DropdownMenuItem> : null}
             {s.kind === 'chat' ? <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onSelect={async () => { if (await confirm(t('session.deleteTitle'), t('session.deleteBody'), { ok: t('session.delete'), danger: true })) { await act(call('sessions.remove', { id: s.id })); go('chat'); } }} data-testid="delete"><Trash2 />{t('session.deleteTip')}</DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onSelect={async () => { if (await confirm(t('session.deleteTitle'), t('session.deleteBody') + (await hasWorktree(s) ? ` ${t('session.wt.deleteKept')}` : ''), { ok: t('session.delete'), danger: true })) { await act(call('sessions.remove', { id: s.id })); go('chat'); } }} data-testid="delete"><Trash2 />{t('session.deleteTip')}</DropdownMenuItem>
             </> : null}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -575,4 +575,16 @@ export function SessionView({ route }) {
       </div>
     </>
   );
+}
+
+// A chat in a worktree (src/engine/chat-worktrees.mjs): archiving it offers to remove its folder, but only when no work would be
+// lost; with changes not committed it is kept and the user is told. Never deleted without the user's yes.
+const hasWorktree = async (s) => { try { return (await call('worktrees.status', { id: s.id })).has === true; } catch { return false; } };
+async function offerWorktreeRemoval(s, t) {
+  let st; try { st = await call('worktrees.status', { id: s.id }); } catch { return; }
+  if (!st?.has || st.gone) return;
+  if (st.dirty.length) { notify({ title: t('session.wt.dirty', { count: st.dirty.length }), tone: 'warning' }); return; }
+  if (!(await confirm(t('session.wt.title'), t('session.wt.body', { path: st.path }), { ok: t('session.wt.ok'), cancel: t('session.wt.keep') }))) return;
+  const r = await act(call('worktrees.discard', { id: s.id }));
+  if (r?.removed) notify({ title: r.branchKept ? t('session.wt.branchKept', { branch: st.branch }) : t('session.wt.done'), tone: r.branchKept ? 'info' : 'success' });
 }
