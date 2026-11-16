@@ -118,7 +118,7 @@ test('never deletes work unasked: changes not committed and commits only the bra
   assert.ok(fs.existsSync(path.join(s.cwd, 'wip.txt')));
   // deleting the chat does not take it either, and the user is told
   await call('sessions.remove', { id: s.id });
-  await pause(500);
+  await until(() => board.all('SELECT * FROM chat ORDER BY id DESC LIMIT 10').some((m) => /conserv|kept/i.test(JSON.stringify(m))), 'aviso');
   assert.ok(fs.existsSync(path.join(s.cwd, 'wip.txt')), 'the folder of a deleted chat is kept when it holds work');
   assert.equal((await call('worktrees.list')).filter((x) => x.id === s.id).length, 1);
   assert.ok(board.all('SELECT * FROM chat ORDER BY id DESC LIMIT 10').some((m) => /conserv|kept/i.test(JSON.stringify(m))), 'the user is told');
@@ -192,4 +192,28 @@ test('discarding a chat that has no worktree says so; the startup cleanup of tas
   sched.pruneCopies();
   assert.ok(fs.existsSync(s.cwd), 'pruneCopies did not take the chat worktree');
   await call('sessions.remove', { id: s.id }); await call('sessions.remove', { id: local.id });
+});
+
+test('review fixes: the root .git file is guarded, orb/ bases are refused, ignored files and detached commits count as work', async () => {
+  const s = await mk();
+  const args = { permission: 'editar', internalDir: ctx.paths.internal, cwd: s.cwd, projectDir: s.cwd };
+  assert.notEqual(decide({ ...args, tool: 'Write', paths: [path.join(s.cwd, '.git')] }).decision, 'allow');
+  await assert.rejects(() => mk({ base: g(s.cwd, 'rev-parse', '--abbrev-ref', 'HEAD') }), /no existe|not exist|válida|valid/i);
+  // an ignored file is work too
+  fs.writeFileSync(path.join(s.cwd, '.gitignore'), 'secreto.env\n'); git(s.cwd, 'add', '-A'); git(s.cwd, ...ident, 'commit', '-q', '-m', 'ign');
+  fs.writeFileSync(path.join(s.cwd, 'secreto.env'), 'k=1\n');
+  let r = await call('worktrees.discard', { id: s.id });
+  assert.equal(r.kept, 'dirty'); assert.ok(r.dirty.some((p) => /secreto\.env/.test(p)));
+  fs.rmSync(path.join(s.cwd, 'secreto.env'));
+  // commits on a detached HEAD are in no branch
+  const tip = g(s.cwd, 'rev-parse', 'HEAD');
+  git(s.cwd, 'checkout', '-q', '--detach'); fs.writeFileSync(path.join(s.cwd, 'suelto.txt'), 's\n'); git(s.cwd, 'add', '-A'); git(s.cwd, ...ident, 'commit', '-q', '-m', 'suelto');
+  r = await call('worktrees.discard', { id: s.id });
+  assert.equal(r.kept, 'dirty'); assert.ok(r.dirty.some((p) => /detached/.test(p)));
+  git(s.cwd, 'checkout', '-q', `orb/chat-${s.id.replace(/-/g, '').slice(0, 8)}`);
+  assert.equal(g(s.cwd, 'rev-parse', 'HEAD'), tip);
+  r = await call('worktrees.discard', { id: s.id, force: true });
+  assert.equal(r.removed, true);
+  await call('sessions.remove', { id: s.id });
+  git(repo, 'branch', '-D', `orb/chat-${s.id.replace(/-/g, '').slice(0, 8)}`);
 });

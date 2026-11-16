@@ -7,6 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from '../platform/context.mjs';
+import { ATTACH_DIR } from './sessions.mjs';
 import { git, gitAsync, isGitRepo, repoRoot, slug, BRANCH_PREFIX } from '../platform/git.mjs';
 
 const KEY = (id) => `chatwt:${id}`;
@@ -41,7 +42,7 @@ export class ChatWorktrees {
     const root = isGitRepo(project.path) ? repoRoot(project.path) : null;
     if (!root) throw new Error(tr('msg.chatWt.notGit'));
     const from = base == null || base === '' ? 'HEAD' : String(base);
-    if (from !== 'HEAD' && (!REF_OK.test(from) || from.includes('..'))) throw new Error(tr('msg.chatWt.badBase', { base: from }));
+    if (from !== 'HEAD' && (!REF_OK.test(from) || from.includes('..') || from.startsWith(`${BRANCH_PREFIX}/`))) throw new Error(tr('msg.chatWt.badBase', { base: from }));
     const sha = git(project.path, 'rev-parse', '--verify', '--quiet', `${from}^{commit}`).stdout.trim();
     if (!sha) throw new Error(from === 'HEAD' ? tr('msg.chatWt.noCommits') : tr('msg.chatWt.badBase', { base: from }));
     const short = String(id).replace(/[^a-z0-9]/gi, '').slice(0, 8).toLowerCase();
@@ -67,8 +68,16 @@ export class ChatWorktrees {
     if (!info) return { has: false };
     const out = { has: true, project: info.project, path: info.path, branch: info.branch, base: info.base, gone: !fs.existsSync(info.path), dirty: [], ahead: 0, merged: true };
     if (!out.gone) {
-      const st = await gitAsync(info.path, {}, 'status', '--porcelain=v1', '-uall');
-      if (st.status !== 0) { out.unknown = true; out.dirty = ['?']; } else out.dirty = st.stdout.split(/\r?\n/).filter(Boolean).map((l) => l.slice(3));
+      // ignored files too (.env, local databases): removing the folder would delete them. Orb's own attachments folder is not work.
+      const st = await gitAsync(info.path, {}, 'status', '--porcelain=v1', '-uall', '--ignored');
+      if (st.status !== 0) { out.unknown = true; out.dirty = ['?']; } else out.dirty = st.stdout.split(/\r?\n/).filter(Boolean).map((l) => (l.startsWith('!!') ? `${l.slice(3)} (ignored)` : l.slice(3))).filter((p) => !p.startsWith(`${ATTACH_DIR}/`));
+      // commits made on a detached HEAD belong to no branch: they must be somewhere else before the folder goes
+      const head = await gitAsync(info.path, {}, 'rev-parse', 'HEAD');
+      const sym = await gitAsync(info.path, {}, 'symbolic-ref', '-q', 'HEAD');
+      if (head.status === 0 && sym.stdout.trim() !== `refs/heads/${info.branch}`) {
+        const c = await gitAsync(info.repo, {}, 'for-each-ref', '--contains', head.stdout.trim(), '--format=%(refname)', 'refs/heads', 'refs/tags');
+        if (!c.stdout.split(/\r?\n/).some((r) => r.trim() && !r.startsWith(`refs/heads/${BRANCH_PREFIX}/`))) { out.detached = true; out.dirty.push('HEAD (detached commits)'); }
+      }
     }
     const has = await gitAsync(info.repo, {}, 'rev-parse', '--verify', '--quiet', `refs/heads/${info.branch}`);
     out.branchGone = has.status !== 0;
@@ -78,7 +87,8 @@ export class ChatWorktrees {
       // commits that are in another branch (merged back into the one it started from, or any local one) are not lost
       if (out.ahead > 0) {
         const other = await gitAsync(info.repo, {}, 'for-each-ref', '--contains', `refs/heads/${info.branch}`, '--format=%(refname)', 'refs/heads');
-        out.merged = other.status === 0 && other.stdout.split(/\r?\n/).some((r) => r.trim() && r.trim() !== `refs/heads/${info.branch}`);
+        // another orb/ branch does not count: it may be removed too
+        out.merged = other.status === 0 && other.stdout.split(/\r?\n/).some((r) => r.trim() && !r.trim().startsWith(`refs/heads/${BRANCH_PREFIX}/`));
       }
     }
     out.dirty = out.dirty.slice(0, 50);
@@ -105,6 +115,7 @@ export class ChatWorktrees {
       if (owner && closeLive) { try { this.sessions.closeLive(id); } catch (error) { this.log(`cerrar chat ${id}: ${error.message}`); } }
       const st = await this.status(id);
       if (st.dirty.length && !force) return { removed: false, kept: 'dirty', dirty: st.dirty };
+      if (this.sessions.isRunning(id)) return { removed: false, kept: 'busy' }; // a turn may have started while git was asked
       let removedFolder = st.gone;
       if (!st.gone) {
         // git itself refuses a folder with changes; `--force` only after the user said so.

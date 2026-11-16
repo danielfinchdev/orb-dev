@@ -525,6 +525,8 @@ export default {
   "msg.chatWt.outside": "that folder is not inside Orb's copies: it is not touched",
   "msg.chatWt.needsProject": "«Worktree» needs a project",
   "msg.chatWt.none": "that chat has no worktree",
+  "msg.chatWt.restoreFailed": "could not recreate the worktree of the chat «{title}»: {error}",
+  "msg.chatWt.removing": "this chat's worktree is being removed; try again in a moment",
   "msg.chatWt.kept": "The worktree of the chat «{title}» was kept because it holds work that is not safe: {dir}",
   "msg.workspace.wrongBranch": "the folder {workdir} already exists, but it is on branch “{head}” instead of “{branch}”. Check it or delete it before retrying",
   "msg.budget.modelNoQuota": "{name} has no usage left for the model {model} until {time}",

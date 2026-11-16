@@ -144,6 +144,7 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     // A message to a conversation: a new turn, or (while it works) steer the running turn or wait in its queue.
     // mode: 'auto' (steer when the agent can, else queue), 'steer' or 'queue'.
     'sessions.send': ({ id, text, images: files, mode, comments }) => {
+      if (chatTrees.busy.has(String(id))) fail(tr('msg.chatWt.removing'));
       const s = sessions.must(str(id, 'conversación', 64));
       trash.assertSessionNotTrashed(s);
       if (s.kind === 'task') {
@@ -211,7 +212,8 @@ ${block}` : ''}` });
     'sessions.update': async ({ id, title, model, reasoning, permission, archived }) => {
       const s = sessions.must(str(id, 'conversación', 64));
       // a chat taken out of the archive gets back the worktree that was removed when it was archived
-      if (archived === false && s.archived) await chatTrees.ensure(s.id);
+      // (if it cannot be brought back the chat still comes out, and the user is told)
+      if (archived === false && s.archived) { try { await chatTrees.ensure(s.id); } catch (error) { board.notice(tr('msg.chatWt.restoreFailed', { title: s.title, error: error.message }), 'warning'); } }
       if (s.kind === 'task' && (model !== undefined || permission !== undefined || reasoning !== undefined)) fail(tr('msg.api.taskModelFromTask'));
       const fields = {};
       if (title !== undefined) fields.title = oneLine(str(title, 'título', 80), 80);

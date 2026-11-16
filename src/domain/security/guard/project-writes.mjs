@@ -105,7 +105,8 @@ const ownVariable = (t, command, dir, roots) => /^["']?\$[\w:.]+["']?$/.test(t) 
 // git's own settings and hooks of the project (.git/config, .git/hooks/…, .git/info/attributes).
 // Written by hand they do what `git config filter.x.clean …` does (gitRuns): Orb's snapshots run git in the project
 // as the engine, and a filter or merge driver there runs as the engine. They ask like the git config forms.
-const GIT_RUNS_FILE = /(^|[\\/])\.git[\\/]+(?:(?:worktrees|modules)[\\/]+.+[\\/]+)?(?:config(?:\.worktree)?|hooks(?:[\\/].*)?|info[\\/]+attributes)$/i;
+// a worktree's root `.git` is a FILE that says where its git folder is: rewriting it points git at a config of the agent's own.
+const GIT_RUNS_FILE = /(^|[\\/])\.git$|(^|[\\/])\.git[\\/]+(?:(?:worktrees|modules)[\\/]+.+[\\/]+)?(?:config(?:\.worktree)?|hooks(?:[\\/].*)?|info[\\/]+attributes)$/i;
 export const isGitRunsFile = (p, dir) => { const f = resolveTarget(p, dir); return GIT_RUNS_FILE.test(lastName(p)) || Boolean(f && GIT_RUNS_FILE.test(f)); };
 export function writesGitRunsFile(command, cwd) {
   const c = expandEnv(unwrapShell(command));
