@@ -24,6 +24,8 @@ export const STATE_KEYS = Object.freeze({
     'auto_mode_383',
   ]),
   prefixes: Object.freeze({
+    // a device's (the morning summary card shown today)
+    'digest_shown:': 'device',
     // a task's (by its id)
     'accepted:': 'task', 'auto_retry:': 'task', 'budget_ok:': 'task', 'checkpoint:': 'task', 'followup:': 'task', 'integrate:': 'task',
     'integrate_error:': 'task', 'integrate_error_at:': 'task', 'isolated:': 'task', 'join_task:': 'task', 'engine_task:': 'task', 'leftovers_pending:': 'task',

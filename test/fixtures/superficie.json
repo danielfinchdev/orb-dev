@@ -98,6 +98,8 @@
   "images.mark": "pc",
   "images.read": "pc",
   "images.save": "pc",
+  "inbox.digest": "remote",
+  "inbox.digestSeen": "remote",
   "inbox.list": "remote",
   "inbox.markRead": "remote",
   "inbox.mute": "remote",
