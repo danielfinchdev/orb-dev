@@ -32,6 +32,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Badge, Textarea, Empty } from '@/components/ui/basic.jsx';
 import { Select, Collapsible, CollapsibleTrigger, CollapsibleContent, Tip, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
 import { useStore, call, act, go, bridge, refresh, getState, fullPc, openGames, addPending, dropPending, pendingShown, usePending } from '@/lib/store.js';
+import { useShortcut } from '@/lib/keys.js';
 import { AGENT, PERMISSION, REASONING, STATUS, DECISION, CAN_STEER as AGENT_CAN_STEER, CAN_COMPACT, options } from '@/lib/labels.js';
 import { baseName, cn } from '@/lib/utils.js';
 import { useT, t, useLocale, currentLocale } from '@/lib/i18n.js';
@@ -328,11 +329,7 @@ export function SessionView({ route }) {
   const pendingComments = useComments(route.id);
   const hasPanel = s.kind === 'chat' && Boolean(s.project) && fullPc();
   useEffect(() => setChanges(false), [route.id]);
-  useEffect(() => {
-    if (!hasPanel) return undefined;
-    const on = (e) => { if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'd') { e.preventDefault(); setChanges((v) => !v); } };
-    window.addEventListener('keydown', on); return () => window.removeEventListener('keydown', on);
-  }, [hasPanel]);
+  useShortcut('changes.toggle', (e) => { e.preventDefault(); setChanges((v) => !v); }, { enabled: hasPanel });
   const [termDraft, setTermDraft] = useState('');
   useEffect(() => (fullPc() ? onTerminalPaste((line) => { setTerminal(true); setTermDraft(line); }) : undefined), [route.id]);
   useEffect(() => { setTerminal(false); setTermDraft(''); }, [route.id]);

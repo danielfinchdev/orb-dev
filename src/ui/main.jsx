@@ -23,6 +23,8 @@ import { migrationView } from '@/lib/migration.js';
 import { Notices } from '@/components/notices.jsx';
 import { ActionShortcuts } from '@/components/project-tools.jsx';
 import { CommandPalette } from '@/components/command-palette.jsx';
+import { ChatTabs } from '@/components/chat-tabs.jsx';
+import { loadKeys } from '@/lib/keys.js';
 import { Scene } from '@/components/scene.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { useStore, setState, getState, refresh, refreshSoon, call, bridge, act, go, goBack, resetRoute, setViews, applyTheme, openTerminal, startTour, closeSettings, anyChatBusy, flushChatStates, phoneLayout, loadOrbInbox } from '@/lib/store.js';
@@ -167,7 +169,6 @@ function Shell() {
   const t = useT();
   const route = useStore((s) => s.route);
   const app = useStore((s) => s.app);
-  const View = VIEWS[route.view] ?? ChatView;
   const [drawer, setDrawer] = useState(false);
   const folded = useStore((s) => s.sidebarCollapsed);
   // the shortcuts of the project's actions: God mode's project there, the working folder elsewhere.
@@ -203,9 +204,11 @@ function Shell() {
           <Robot size={26} mood={mood} /><span className="min-w-0 flex-1 truncate text-card-title font-medium">{app.config.assistantName}</span>
           <WindowControlsSlot />
         </div>
-        <ErrorBoundary key={routeKey(route)} onHome={resetRoute}>
-          <Suspense fallback={<Loading />}><View key={routeKey(route)} route={route} /></Suspense>
-        </ErrorBoundary>
+        <ChatTabs route={route} render={(r) => { const V = VIEWS[r.view] ?? ChatView; return (
+          <ErrorBoundary key={routeKey(r)} onHome={resetRoute}>
+            <Suspense fallback={<Loading />}><V key={routeKey(r)} route={r} /></Suspense>
+          </ErrorBoundary>
+        ); }} />
         <WindowBar kind="status" />
       </main>
       {/* the info pane on the right (a chat, a project). */}
@@ -310,6 +313,7 @@ function Root() {
           setState({ route });
           try { localStorage.setItem('orb.route', JSON.stringify(route)); } catch { /* storage unavailable */ }
           loadOrbInbox(); // the unread badges
+          loadKeys(); // the user's shortcuts (core/keybindings.json)
           return setPhase('app');
         } catch (e) {
           // the phone lost its PC while starting: the same calm screen, never «No se pudo iniciar Orb».

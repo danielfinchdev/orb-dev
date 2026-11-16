@@ -12,6 +12,7 @@ import { t, useT } from '@/lib/i18n.js';
 import { MagicLinkPanel, SubSection } from '../magic-link.jsx';
 import { DataCards } from '../data.jsx';
 import { ExtensionsPanel } from '../extensions.jsx';
+import { TabsCard, ShortcutsCard } from './shortcuts.jsx';
 import { AssistantCard, AppearanceCard, ChatCard, PermissionsCard, ApprovalWaitCard, TasksCard, TestCard, FolderCard, ProtectedCard, InterfaceCard, ExpertCard } from './general.jsx';
 import { AndroidCard, MobileCard, BrowserCard } from './devices.jsx';
 // «Este móvil», the phone's screen of its own (main.jsx loads it from here, with the dialog).
@@ -23,7 +24,7 @@ import { UpdatesCard, SupportCard, FeedbackCard, MoreAppsCard, AboutCard } from 
 // with its heading; the active section lists them under its name in the menu, to jump to one.
 const SECTIONS = [
   { id: 'general', icon: SlidersHorizontal, groups: ['apariencia', 'actualizaciones'],
-    cards: (c, app) => <><AssistantCard c={c} /><FolderCard c={c} home={app.home} /><SubSection id="apariencia" title={t('settings.group.apariencia')}><AppearanceCard c={c} /><InterfaceCard c={c} /></SubSection><SubSection id="actualizaciones" title={t('settings.group.actualizaciones')}><UpdatesCard /></SubSection></> },
+    cards: (c, app) => <><AssistantCard c={c} /><FolderCard c={c} home={app.home} /><SubSection id="apariencia" title={t('settings.group.apariencia')}><AppearanceCard c={c} /><InterfaceCard c={c} /></SubSection><SubSection id="atajos" title={t('keys.title')}><TabsCard c={c} /><ShortcutsCard /></SubSection><SubSection id="actualizaciones" title={t('settings.group.actualizaciones')}><UpdatesCard /></SubSection></> },
   // Who can enter this Orb: the linked phones and browsers.
   { id: 'magiclink', icon: Radar, groups: ['dispositivos'],
     cards: () => <MagicLinkPanel grouped phoneAccess={<MobileCard />} /> },

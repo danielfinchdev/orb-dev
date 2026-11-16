@@ -29,6 +29,7 @@ import ws6android from './es/ws6-android.mjs';
 import master from './es/master.mjs';
 import ola1 from './es/ola1.mjs';
 import mensajeria from './es/mensajeria.mjs';
+import pestanas from './es/pestanas.mjs';
 import orbchats from './es/orbchats.mjs';
 import notes from './es/notes.mjs';
 import ext from './es/ext.mjs';
@@ -71,6 +72,7 @@ export default {
   ...master,
   ...ola1,
   ...mensajeria,
+  ...pestanas,
   ...orbchats,
   ...notes,
   ...ext,
