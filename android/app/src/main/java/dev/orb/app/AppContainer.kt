@@ -68,6 +68,21 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 
 /** Everything that lives and dies with a linked phone. */
+/**
+ * Reads the saved link, retrying a few times when the Keystore is busy at start-up so a passing error does not show the
+ * pairing screen to a phone that is linked. Gives up (null) after [attempts].
+ */
+suspend fun readSavedSession(attempts: Int = 5, pauseMs: Long = 400, read: () -> String?): LinkSession? {
+    repeat(attempts) { n ->
+        try {
+            return LinkSessionCodec.decode(read())
+        } catch (e: SecureStore.Busy) {
+            if (n < attempts - 1) kotlinx.coroutines.delay(pauseMs)
+        }
+    }
+    return null
+}
+
 class LinkRuntime(val client: LinkClient, val api: OrbApi, val sender: Job)
 
 /**
@@ -180,7 +195,7 @@ class AppContainer(private val app: Application) {
 
     /** Reads the saved link off the main thread (the Keystore can be slow); true when the phone is linked. */
     val startup = scope.async(Dispatchers.IO) {
-        val session = try { LinkSessionCodec.decode(SecureStore.get(app, SESSION_KEY)) } catch (e: SecureStore.Busy) { null }
+        val session = readSavedSession { SecureStore.get(app, SESSION_KEY) }
         if (session != null) startRuntime(session, 0)
         session != null
     }
