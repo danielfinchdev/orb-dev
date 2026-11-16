@@ -512,38 +512,6 @@
       "key": "app.linkBadQr"
     },
     {
-      "input": "http://xn--.example/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
-      "throws": true,
-      "message": "app.linkInsecure",
-      "key": "app.linkInsecure"
-    },
-    {
-      "input": "http://xn--a.example/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
-      "throws": true,
-      "message": "app.linkInsecure",
-      "key": "app.linkInsecure"
-    },
-    {
-      "input": "http://xn--zzzzzzzzzzzz.example/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
-      "throws": true,
-      "message": "app.linkInsecure",
-      "key": "app.linkInsecure"
-    },
-    {
-      "input": "http://xn--nas-9ra.local/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
-      "value": {
-        "v": 1,
-        "urls": [
-          "http://xn--nas-9ra.local:3131"
-        ],
-        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
-        "code": "z",
-        "name": null,
-        "role": null,
-        "via": "qr"
-      }
-    },
-    {
       "input": "http://nas.lo‍cal/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
       "throws": true,
       "message": "app.linkBadQr",
@@ -901,50 +869,6 @@
     {
       "input": {
         "code": "abcdefgh",
-        "address": "http://xn--.example"
-      },
-      "throws": true,
-      "message": "app.linkInsecure",
-      "key": "app.linkInsecure"
-    },
-    {
-      "input": {
-        "code": "abcdefgh",
-        "address": "http://xn--a.example"
-      },
-      "throws": true,
-      "message": "app.linkInsecure",
-      "key": "app.linkInsecure"
-    },
-    {
-      "input": {
-        "code": "abcdefgh",
-        "address": "http://xn--zzzzzzzzzzzz.example"
-      },
-      "throws": true,
-      "message": "app.linkInsecure",
-      "key": "app.linkInsecure"
-    },
-    {
-      "input": {
-        "code": "abcdefgh",
-        "address": "http://xn--nas-9ra.local"
-      },
-      "value": {
-        "v": 2,
-        "urls": [
-          "http://xn--nas-9ra.local:3131"
-        ],
-        "pc": null,
-        "code": "ABCDEFGH",
-        "name": null,
-        "role": null,
-        "via": "code"
-      }
-    },
-    {
-      "input": {
-        "code": "abcdefgh",
         "address": "http://nas.lo‍cal"
       },
       "throws": true,
@@ -1078,22 +1002,6 @@
       "value": false
     },
     {
-      "input": "http://xn--.example",
-      "value": false
-    },
-    {
-      "input": "http://xn--a.example",
-      "value": false
-    },
-    {
-      "input": "http://xn--zzzzzzzzzzzz.example",
-      "value": false
-    },
-    {
-      "input": "http://xn--nas-9ra.local",
-      "value": true
-    },
-    {
       "input": "http://nas.lo‍cal",
       "value": false
     },
@@ -1178,10 +1086,6 @@
     {
       "input": "nas.lo‍cal",
       "value": false
-    },
-    {
-      "input": "xn--",
-      "value": true
     },
     {
       "input": "100.64.0.1",
@@ -1394,22 +1298,6 @@
       "throws": true,
       "message": "app.linkBadAddress",
       "key": "app.linkBadAddress"
-    },
-    {
-      "input": "http://xn--.example",
-      "value": "http://xn--.example:3131"
-    },
-    {
-      "input": "http://xn--a.example",
-      "value": "http://xn--a.example:3131"
-    },
-    {
-      "input": "http://xn--zzzzzzzzzzzz.example",
-      "value": "http://xn--zzzzzzzzzzzz.example:3131"
-    },
-    {
-      "input": "http://xn--nas-9ra.local",
-      "value": "http://xn--nas-9ra.local:3131"
     },
     {
       "input": "http://nas.lo‍cal",

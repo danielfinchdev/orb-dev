@@ -235,10 +235,11 @@ async function buildCrypto() {
 // ---------------------------------------------------------------- link payload
 // Hostile and odd URL forms. The JS is the oracle for every one of them; Kotlin may only be stricter where the test
 // names the case explicitly (non-ASCII hosts).
+// Malformed punycode hosts are left out: Node 22 and 24 disagree on whether URL accepts them, and the vectors must not depend on the Node version.
 const HOSTILE = [
   'http://evil.com\\@10.0.0.1', 'http://a@b@10.0.0.1', 'http://10.0.0.1:3131@8.8.8.8', 'http://%31%30.0.0.1', 'http://012.0.0.1',
   'http://0300.0250.1.1', 'http://１０．０．０．１', 'http://nas.local.', 'http://[::ffff:10.0.0.1]', 'http://[::fd00:1]', 'http://[fdff::]',
-  'http://10.0.0.1:65536', 'http://xn--.example', 'http://xn--a.example', 'http://xn--zzzzzzzzzzzz.example', 'http://xn--nas-9ra.local', 'http://nas.lo\u200dcal'
+  'http://10.0.0.1:65536', 'http://nas.lo\u200dcal'
 ];
 function buildLink() {
   const PC = b64.enc(pubOf('seq'));
@@ -281,7 +282,7 @@ function buildLink() {
   const baseInputs = [...HOSTILE, 'https://example.com', 'http://example.com', 'ftp://192.168.1.1', 'http://192.168.1.1:3131', 'http://[::1]:3131', 'http://100.64.0.1', 'http://100.128.0.1', 'nonsense', '', 'HTTP://LOCALHOST', 'http://pc.TS.NET'];
   const allowedBase = baseInputs.map((i) => call(L.allowedBase, i));
 
-  const hosts = ['evil.com\\', '10.0.0.1:3131@8.8.8.8', '012.0.0.1', '０.０.０.０', 'nas.local.', '::ffff:10.0.0.1', '::fd00:1', 'fdff::', 'nas.lo\u200dcal', 'xn--', '100.64.0.1', '100.127.255.254', '100.63.255.255', '100.128.0.0', '10.1.2.3', '172.16.0.1', '172.15.255.255', '172.31.9.9', '172.32.0.1', '192.168.0.10', '192.169.0.1', '127.0.0.1', '127.255.255.255',
+  const hosts = ['evil.com\\', '10.0.0.1:3131@8.8.8.8', '012.0.0.1', '０.０.０.０', 'nas.local.', '::ffff:10.0.0.1', '::fd00:1', 'fdff::', 'nas.lo\u200dcal', '100.64.0.1', '100.127.255.254', '100.63.255.255', '100.128.0.0', '10.1.2.3', '172.16.0.1', '172.15.255.255', '172.31.9.9', '172.32.0.1', '192.168.0.10', '192.169.0.1', '127.0.0.1', '127.255.255.255',
     'localhost', 'LOCALHOST', 'pc.tail1234.ts.net', 'home-server', 'nas.local', 'a.lan', 'x.home.arpa', '::1', '[::1]', 'fd12:3456::1', 'fc00::1', 'fe80::1', 'fec0::1', '2001:db8::1',
     '8.8.8.8', 'example.com', '300.1.1.1', '1.2.3', '12345', '1.2.3.4.5', '', null, 'a_b', 'ts.net', 'UPPER-CASE', '0.0.0.0', '169.254.1.1'].map((i) => call(L.isPrivateHost, i));
 
