@@ -1,6 +1,6 @@
 {
   "generatedBy": "scripts/android-vectors.mjs",
-  "source": "96d3d729e3d4975f99ed47a61ad5935d03dd8bce470cf4871c40ada95a50ba40",
+  "source": "a1aa2cb0a6956ef4039f789db670cb556981ce64c6439a4db5c2bbb3be6bc243",
   "methods": [
     "activity.list",
     "activity.report",
@@ -85,7 +85,12 @@
     "sessions.resume",
     "sessions.send",
     "sessions.settle",
+    "sessions.sideAsk",
+    "sessions.sideClose",
+    "sessions.sides",
     "sessions.stop",
+    "sessions.subagent",
+    "sessions.suggestCancel",
     "sessions.trash",
     "sessions.turnDiff",
     "sessions.turns",

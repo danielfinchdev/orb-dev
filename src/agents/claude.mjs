@@ -27,6 +27,17 @@ export function subagentOf(name, input) {
   const text = (v, n) => (typeof v === 'string' && v.trim() ? clip(v.trim(), n) : null);
   return { agent: { name: text(input.subagent_type, 60) ?? 'general-purpose', description: text(input.description, 200), model: text(input.model, 60) } };
 }
+// The task messages of the subagents of a turn: a start remembers its task id (what stopTask asks for); the end of one that was
+// stopped, failed or let go in the background becomes its call's result (the call's own result only said "running in the background").
+export function subagentTask(m, tasks, background) {
+  if (m?.type !== 'system' || !m.tool_use_id) return null;
+  if (m.subtype === 'task_started' && (!m.task_type || m.task_type === 'local_agent')) { tasks.set(m.tool_use_id, m.task_id); return null; }
+  if (m.subtype !== 'task_notification' || !tasks.has(m.tool_use_id)) return null;
+  tasks.delete(m.tool_use_id);
+  const bg = background.delete(m.tool_use_id);
+  if (!bg && m.status === 'completed') return null;
+  return { type: 'item', role: 'tool', kind: 'tool_result', body: { id: m.tool_use_id, output: clip(m.summary ?? '', 3000), error: m.status === 'failed', status: m.status, done: true } };
+}
 const stepOf = (m) => (m.parent_tool_use_id ? { parent: m.parent_tool_use_id } : {});
 export const COORDINATOR_DENIED = ['Bash', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit', 'WebFetch', 'WebSearch', 'Task', 'Skill'];
 // Lighter processes: only the project's own settings, and only the MCP servers Orb passes (strict-mcp-config).
@@ -169,6 +180,8 @@ export function createLive(o) {
   const input = inputQueue();
   const abort = new AbortController();
   let permission = o.permission ?? 'editar';
+  const background = new Set(); // the subagents the user let go on without the turn
+  const subTasks = new Map(); // a subagent's tool call id -> its task id (what stopTask asks for)
   let turn = null; let query = null; let closed = false; let started = null; let child = null; let compactResult = null;
   const live = {
     sessionId: o.resumeId ?? o.newSessionId ?? null,
@@ -195,6 +208,10 @@ export function createLive(o) {
   const handle = (m) => {
     if (m.session_id && m.session_id !== live.sessionId) { live.sessionId = m.session_id; onEvent({ type: 'session', id: m.session_id }); }
     if (m.type === 'system' && m.subtype === 'init') onEvent({ type: 'item', role: 'system', kind: 'status', body: `${label} · ${m.model ?? ''}`.trim() });
+    // the subagents of this turn: their task ids (to stop one) and how a backgrounded or stopped one ended (its call's own
+    // result only says «running in the background»)
+    const ended = subagentTask(m, subTasks, background);
+    if (ended) onEvent(ended);
     // how a compaction went (/compact): the status line says whether it worked, the boundary how much was left.
     if (m.type === 'system' && m.subtype === 'status' && m.compact_result) compactResult = { ok: m.compact_result === 'success', error: m.compact_error ?? null };
     if (m.type === 'system' && m.subtype === 'compact_boundary') { compactResult ??= { ok: true, error: null }; onEvent({ type: 'compacted', before: m.compact_metadata?.pre_tokens ?? null, after: m.compact_metadata?.post_tokens ?? null }); }
@@ -361,6 +378,13 @@ export function createLive(o) {
     return { ok, error: ok ? null : compactResult?.error || r.final || null };
   };
   live.interrupt = async () => { approvals.clear(); try { await query?.interrupt(); } catch { /* not running */ } };
+  // one subagent only: stopped, or let go on in the background (the turn stops waiting for it). → whether one was found
+  live.stopSubagent = async (toolId) => { const task = subTasks.get(toolId); if (!task || !query) return false; await query.stopTask(task); return true; };
+  live.backgroundSubagent = async (toolId) => {
+    if (!subTasks.has(toolId) || !query || !(await query.backgroundTasks(toolId))) return false;
+    background.add(toolId); onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: { id: toolId, output: '', background: true } });
+    return true;
+  };
   live.respond = (requestId, decision) => approvals.respond(requestId, decision);
   live.setModel = async (model) => { o.model = model; try { await query?.setModel(model || undefined); } catch { /* next start */ } };
   live.setPermission = async (p) => { permission = p; try { await query?.setPermissionMode(permissionModeOf(p)); } catch { /* next start */ } };

@@ -16,6 +16,8 @@ import { BackToList } from '@/components/chat-bar.jsx';
 import { ContextSlot } from '@/components/context-slot.jsx';
 import { ColdNotice } from '@/components/conversation/cold-notice.jsx';
 import { ChatModes } from '@/components/chat-modes.jsx';
+import { SubagentList } from '@/components/subagents.jsx';
+import { SideChats } from '@/components/chat-side.jsx';
 import { TaskChanges } from '@/components/task-changes.jsx';
 import { TurnChanges } from '@/components/turn-changes.jsx';
 import { takeComments, putBackComments, useComments } from '@/lib/turn-comments.js';
@@ -116,13 +118,13 @@ function ToolGroup({ b }) {
 
 // a subagent as one folding row: its name, model and state; unfolded, what it was asked, the steps it took and
 // its answer.
-const SUB_STATE = { running: 'bg-info animate-pulse', done: 'bg-success', failed: 'bg-destructive' };
-function SubagentBlock({ b }) {
+const SUB_STATE = { running: 'bg-info animate-pulse', done: 'bg-success', failed: 'bg-destructive', stopped: 'bg-muted-foreground' };
+function SubagentBlock({ b, defaultOpen }) {
   const t = useT();
   const a = b.call.agent;
   const state = subagentState(b);
   return (
-    <Collapsible className={cn('bg-card rounded-xl border text-control', state === 'failed' && 'border-destructive/40')} data-testid="subagent">
+    <Collapsible defaultOpen={defaultOpen} className={cn('bg-card rounded-xl border text-control', state === 'failed' && 'border-destructive/40')} data-testid="subagent">
       <CollapsibleTrigger className="group flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left">
         <ChevronRight className="text-muted-foreground size-3.5 transition-transform group-data-[state=open]:rotate-90" />
         <Bot className="text-muted-foreground size-3.5" />
@@ -398,6 +400,12 @@ export function SessionView({ route }) {
   const trail = useTrailScroll(scroll);
   const catalog = useCatalog();
   const [compacting, setCompacting] = useState(false);
+  // the next message the engine proposes when a turn ends (Ajustes, off by default): grey in the box, Tab takes it
+  const [suggestion, setSuggestion] = useState('');
+  useEffect(() => { setSuggestion(''); return bridge.on('session:suggest', (e) => { if (e.id === route.id) setSuggestion(e.text); }); }, [route.id]);
+  const turnRunning = s?.status === 'running';
+  useEffect(() => { if (turnRunning) setSuggestion(''); }, [turnRunning]);
+  const dropSuggestion = () => { setSuggestion(''); call('sessions.suggestCancel', { id: route.id }).catch(quiet); };
   if (!s) return <Empty title={t('session.gone')} className="flex-1" />;
   const task = s.task_id ? tasks.find((x) => x.id === s.task_id) : null;
   const running = s.status === 'running';
@@ -527,6 +535,8 @@ export function SessionView({ route }) {
       </div>
       <ConversationTrail scrollRef={trail.node} />
       </div>
+      {s.kind === 'chat' ? <SubagentList blocks={blocks} sessionId={s.id} renderBlock={(b) => <SubagentBlock key={b.key} b={b} defaultOpen />} /> : null}
+      {s.kind === 'chat' ? <SideChats id={s.id} /> : null}
       {s.kind === 'chat' ? <ChatModes id={s.id} /> : null}
       {queue.length ? (
         <div className="mx-auto w-full max-w-3xl shrink-0 px-5 pb-2" data-testid="queue">
@@ -552,7 +562,7 @@ export function SessionView({ route }) {
       {fullPc() ? <HtmlPages sessionId={s.id} /> : null}
       {terminal && fullPc() ? <TerminalPanel dir={s.cwd} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
       {pendingComments.length ? <div className="text-muted-foreground mx-auto w-full max-w-3xl shrink-0 px-5 pb-1.5 text-xs" data-testid="pending-comments">{t('turns.pending', { n: pendingComments.length })}</div> : null}
-      <Composer draft={draft} onSend={send} attached={images.length > 0} notice={s.kind === 'chat' && CAN_COMPACT[s.agent] === true ? <ColdNotice id={`s${s.id}`} agent={s.agent} used={s.context?.used} lastAt={s.updated_at} busy={running} compacting={compacting} onCompact={compact} onFresh={() => newChat(s.project ?? undefined)} /> : null} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
+      <Composer draft={draft} onSend={send} suggestion={suggestion} onSuggestionDone={dropSuggestion} attached={images.length > 0} notice={s.kind === 'chat' && CAN_COMPACT[s.agent] === true ? <ColdNotice id={`s${s.id}`} agent={s.agent} used={s.context?.used} lastAt={s.updated_at} busy={running} compacting={compacting} onCompact={compact} onFresh={() => newChat(s.project ?? undefined)} /> : null} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
         placeholder={running ? (AGENT_CAN_STEER[s.agent] ? t('session.phSteer', { agent: AGENT[s.agent] }) : t('session.phWait', { agent: AGENT[s.agent] })) : s.kind === 'task' ? t('session.phTask') : t('session.ph', { agent: AGENT[s.agent] })}
         onPaste={(e) => { fromTransfer(e.clipboardData).then((f) => { if (f.length) addImages(f); }); }}
         onDrop={(e) => { fromTransfer(e.dataTransfer).then(addImages); }}

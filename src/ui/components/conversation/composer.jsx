@@ -104,11 +104,14 @@ function PastedCards({ draft, blocks }) {
 // it. attached: something besides text can be sent (pictures). The box grows with its text in CSS (field-sizing), with
 // no layout read per key; where the browser lacks it, measured once per change.
 const FIELD_SIZING = typeof CSS !== 'undefined' && CSS.supports?.('field-sizing', 'content');
-export function Composer({ draft, onSend, onStop, busy, placeholder, top, bottom, notice, disabled, onPaste, onDrop, testid, attached = false, mentions = true }) {
+export function Composer({ draft, onSend, onStop, busy, placeholder, suggestion, onSuggestionDone, top, bottom, notice, disabled, onPaste, onDrop, testid, attached = false, mentions = true }) {
   const t = useT();
   const ta = useRef(null);
   const value = useDraftValue(draft);
   const onChange = draft.set;
+  // a proposed next message shows grey in the empty box; Tab takes it (it is never sent by itself), typing drops it
+  const proposed = suggestion && !value ? suggestion : '';
+  useEffect(() => { if (suggestion && value) onSuggestionDone?.(); }, [suggestion, value]); // eslint-disable-line react-hooks/exhaustive-deps
   const blocks = useDraftBlocks(draft);
   // a long text pasted goes to a card, not into the box (files and pictures keep the view's own handling)
   const paste = (e) => {
@@ -157,9 +160,9 @@ export function Composer({ draft, onSend, onStop, busy, placeholder, top, bottom
         {top ? <div className="flex min-w-0 items-center gap-2 px-3 pt-3" data-testid="composer-top">{top}</div> : null}
         <PastedCards draft={draft} blocks={blocks} />
         {skin === 'retro' ? <span className="composer-prompt" aria-hidden="true">&gt;</span> : null}
-        <textarea ref={ta} data-testid={testid} value={value} disabled={disabled} rows={2} placeholder={placeholder} onPaste={paste}
+        <textarea ref={ta} data-testid={testid} value={value} disabled={disabled} rows={2} placeholder={proposed || placeholder} title={proposed ? t('session.suggest.hint') : undefined} onPaste={paste}
           onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => { if (mentions && m.onKey(e)) return; if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); onSend({ alt: e.ctrlKey || e.metaKey }); } }}
+          onKeyDown={(e) => { if (proposed && e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); onChange(proposed); return; } if (mentions && m.onKey(e)) return; if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); onSend({ alt: e.ctrlKey || e.metaKey }); } }}
           className="composer-text placeholder:text-muted-foreground block w-full resize-none bg-transparent px-4 pt-3 pb-1 text-body compact:text-body compact:leading-5 leading-relaxed outline-none" />
         <div className="flex items-center gap-2 px-3 pb-3">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1" data-testid="composer-bottom">{bottom}</div>

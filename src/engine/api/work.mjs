@@ -25,6 +25,8 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
   const runMode = (s, { name, args }) => {
     if (name === 'plan') return planTurn(sessions, s.id, args);
     if (name === 'debug') return debugMode(sessions, s.id, args);
+    // a question apart (side.mjs): it answers in the side panel, never in this chat
+    if (name === 'side') return { ok: true, side: sessions.side.ask(s.id, args) };
     if (name === 'review') {
       const review = scheduler.reviewChat(s, { actor: 'usuario', focus: str(args, 'foco', 500, { optional: true }) });
       sessions.addItem(s.id, 'system', 'status', tr('msg.modes.reviewStarted', { review: review.id }));
@@ -208,6 +210,14 @@ ${block}` : ''}` });
     'projects.securityReview': ({ name, agent }) => scheduler.securityReview(project(name).name, { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null) }),
     // «Compactar» in a direct conversation: the agent's own compaction (Claude /compact, Codex thread/compact/start).
     'sessions.compact': ({ id }) => sessions.compact(sessions.must(str(id, 'conversación', 64)).id),
+    // one subagent of the running turn: «stop» or «background» (sessions.subagent says when the agent cannot)
+    'sessions.subagent': ({ id, tool, action }) => sessions.subagent(str(id, 'conversación', 64), str(tool, 'subagente', 200), oneOf(action, ['stop', 'background'], 'acción')),
+    // «/side» chats of a conversation: ask (a new one, or the next question of `side`), list, close
+    'sessions.sideAsk': ({ id, text, side }) => sessions.side.ask(str(id, 'conversación', 64), str(text, 'pregunta', 4000), side === undefined || side === null ? null : str(side, 'lateral', 64)),
+    // the user began to type: the proposed next message is no longer wanted (suggest.mjs)
+    'sessions.suggestCancel': ({ id }) => ({ ok: sessions.suggest.cancel(str(id, 'conversación', 64)) }),
+    'sessions.sides': ({ id }) => sessions.side.list(str(id, 'conversación', 64)),
+    'sessions.sideClose': ({ side }) => sessions.side.close(str(side, 'lateral', 64)),
     'sessions.stop': ({ id }) => { const s = sessions.must(str(id, 'conversación', 64)); if (s.kind === 'task') return scheduler.cancel(s.task_id, 'usuario'); return sessions.stop(s.id); },
     'sessions.update': async ({ id, title, model, reasoning, permission, archived }) => {
       const s = sessions.must(str(id, 'conversación', 64));

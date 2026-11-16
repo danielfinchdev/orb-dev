@@ -23,6 +23,8 @@ export const DEFAULT_CONFIG = Object.freeze({
   orchestrator: { agent: 'claude', account: 'claude', model: 'claude-sonnet-5-5', reasoning: 'medium', maxTurns: 60, renewAt: 0.6, orchestrate: true,
     models: [{ id: 'claude-sonnet-5-5', label: 'Sonnet 5.5' }, { id: 'claude-opus-5-5', label: 'Opus 5.5' }] },
   autoRun: true,
+  // the grey proposal of the next message in a chat's box when a turn ends (src/engine/suggest.mjs). Off: it spends plan.
+  suggestNext: false,
   maxParallel: 3,
   perAgent: 1,
   timeoutMinutes: 60,

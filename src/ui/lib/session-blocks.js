@@ -20,7 +20,7 @@ export function toBlocks(items, t) {
     if (it.kind === 'tool_result') {
       for (const [th, st] of Object.entries(it.body?.states ?? {})) { const a = byThread.get(th); if (a) a.threadState = st; }
       const b = it.body?.id ? tools.get(it.body.id) : null;
-      if (b) b.result = it.body; else place({ type: 'tool', key: it.id, call: { name: t('session.result') }, result: it.body }, it.body?.parent);
+      if (b) { b.result = it.body; if (it.body?.background) b.background = true; if (it.body?.done) b.background = false; } else place({ type: 'tool', key: it.id, call: { name: t('session.result') }, result: it.body }, it.body?.parent);
       continue;
     }
     if (it.kind === 'file') { const last = blocks.at(-1); if (last?.type === 'files') last.files.push(it.body); else blocks.push({ type: 'files', key: it.id, files: [it.body] }); continue; }
@@ -34,5 +34,7 @@ export function toBlocks(items, t) {
 export function subagentState(b) {
   if (b.threadState) return DONE[b.threadState] ?? (b.result?.error ? 'failed' : 'running');
   if (b.call?.agent?.threads?.length) return b.result?.error ? 'failed' : 'running';
+  if (b.background) return 'running'; // let go on in the background: its placeholder result is not its end
+  if (b.result?.status === 'stopped') return 'stopped';
   return !b.result ? 'running' : b.result.error ? 'failed' : 'done';
 }
