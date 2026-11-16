@@ -122,6 +122,21 @@ function statusText(body, agent, catalog) {
   return m ? `${AGENT[agent] ?? m[1]} · ${modelLabel(catalog, agent, m[2])}` : body;
 }
 
+// «Traspasado de Claude a Codex · ver lo que se pasó»: the exact text the new agent received.
+function HandoffLine({ body = {} }) {
+  const t = useT();
+  return (
+    <Collapsible className="text-muted-foreground text-center text-xs" data-testid="handoff-line">
+      <span>{t('session.handoffLine', { from: AGENT[body.from] ?? body.from, to: AGENT[body.to] ?? body.to })} · </span>
+      <CollapsibleTrigger className="cursor-pointer underline-offset-2 hover:underline">{t('session.handoffSeen')}</CollapsibleTrigger>
+      <CollapsibleContent className="bg-muted/40 mt-2 rounded-xl px-3.5 py-2.5 text-left whitespace-pre-wrap break-words">
+        {body.truncated ? <div className="mb-1 italic">{t('session.handoffCut')}</div> : null}
+        {body.summary}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 const FILE_ICON = { add: FilePlus2, delete: FileMinus2 };
 // an attachment's icon by what it is (src/shared/attach-kind.mjs).
 const ATTACH_ICON = { image: ImageIcon, video: Film, audio: Music, pdf: FileText, document: FileText, archive: FileArchive, text: FileCode };
@@ -158,6 +173,7 @@ const Block = memo(function Block({ b, agent, who, brain, sessionId, project, ca
   if (b.type === 'item' && b.item.kind === 'opti_action') return <OptiOldCard body={b.item.body} />;
   if (b.type === 'item' && b.item.kind === 'image') return <div className="flex gap-3"><AgentIcon agent={agent} className="mt-1 size-5" /><GeneratedImage body={b.item.body} sessionId={sessionId} project={project} /></div>;
   if (b.type === 'files') return <div className="flex flex-wrap gap-1.5">{b.files.map((f, i) => { const I = FILE_ICON[f?.change] ?? FileEdit; return <Badge key={i} variant="info" className="font-mono font-normal"><I />{f?.path}</Badge>; })}</div>;
+  if (b.type === 'item' && b.item.kind === 'handoff') return <HandoffLine body={b.item.body} />;
   const it = b.item; const body = it.body;
   if (it.role === 'user') {
     const textBody = typeof body === 'string' ? body : body?.text ?? '';
@@ -405,6 +421,15 @@ export function SessionView({ route }) {
     });
     if (copy?.id) { await refresh().catch(quiet); go({ view: 'session', id: copy.id }); }
   };
+  // «Pasar este chat a otro agente»: the same chat, the same folder and permission; the summary travels in the next message.
+  const handoff = async () => {
+    const out = await form(t('session.handoff'), {
+      description: t('session.handoffDesc'), initial: { agent: others[0] },
+      body: (v, set) => <Select className="w-full" value={v.agent} onValueChange={(agent) => set({ agent })} options={others.map((a) => ({ value: a, label: AGENT[a] }))} data-testid="handoff-pick" />,
+      ok: t('session.handoffOk'), onOk: (v) => call('sessions.handoff', { id: s.id, agent: v.agent })
+    });
+    if (out?.id) await refresh().catch(quiet);
+  };
   const editQueued = (q, patch) => act(call('sessions.editQueued', { id: s.id, queueId: q.id, ...patch }));
   // «Compactar» in the composer's slot when the context is at 70 % or more and the agent can compact (Claude, Codex).
   const compactable = s.kind === 'chat' && CAN_COMPACT[s.agent] === true && (compacting || (!running && s.context?.size > 0 && s.context.used / s.context.size >= COMPACT_AT));
@@ -433,6 +458,7 @@ export function SessionView({ route }) {
             <DropdownMenuItem onSelect={() => showDetails(s, task)} data-testid="details"><Info />{t('session.detailsShort')}</DropdownMenuItem>
             <DropdownMenuItem disabled={running} onSelect={fork} data-testid="fork"><GitFork />{t('session.fork')}</DropdownMenuItem>
             {others.length ? <DropdownMenuItem disabled={running} onSelect={switchAgent} data-testid="switch-agent"><Shuffle />{t('session.switchAgent')}</DropdownMenuItem> : null}
+            {others.length && s.kind === 'chat' ? <DropdownMenuItem disabled={running} onSelect={handoff} data-testid="handoff"><Shuffle />{t('session.handoff')}</DropdownMenuItem> : null}
             {s.kind === 'chat' ? <DropdownMenuItem onSelect={async () => { await act(call('sessions.update', { id: s.id, archived: !s.archived })); if (!s.archived) go('chat'); }} data-testid="archive"><Archive />{s.archived ? t('session.restore') : t('session.archive')}</DropdownMenuItem> : null}
             {fullPc() ? <DropdownMenuItem onSelect={openGames} data-testid="bar-games"><Gamepad2 />{t('bar.games')}</DropdownMenuItem> : null}
             {s.kind === 'chat' ? <>

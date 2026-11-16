@@ -57,7 +57,7 @@ export const METHODS = Object.freeze({
   'tasks.launchAnyway': 'remote', 'tasks.search': 'remote', 'tasks.accept': 'remote', 'tasks.review': 'remote', 'tasks.discardBranch': 'pc',
   // direct conversations with an agent and the tasks' sessions
   'sessions.list': 'remote', 'sessions.create': 'remote', 'sessions.items': 'remote', 'sessions.send': 'remote', 'sessions.queue': 'remote',
-  'sessions.editQueued': 'remote', 'sessions.approve': 'remote', 'sessions.resume': 'remote', 'sessions.fork': 'remote', 'sessions.settle': 'remote',
+  'sessions.editQueued': 'remote', 'sessions.approve': 'remote', 'sessions.resume': 'remote', 'sessions.fork': 'remote', 'sessions.handoff': 'remote', 'sessions.settle': 'remote',
   'sessions.stop': 'remote', 'sessions.compact': 'remote', 'sessions.update': 'remote', 'sessions.remove': 'pc', 'sessions.trash': 'remote', 'sessions.restore': 'remote', 'trash.list': 'remote',
   // «Auto» / «Preguntar» for everything (Ajustes › Agentes and the assistant's chat), also from the phone
   'permissions.setMode': 'remote',

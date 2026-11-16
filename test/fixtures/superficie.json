@@ -201,6 +201,7 @@
   "sessions.fork": "remote",
   "sessions.grantAndroid": "pc",
   "sessions.grantTotal": "pc",
+  "sessions.handoff": "remote",
   "sessions.items": "remote",
   "sessions.list": "remote",
   "sessions.queue": "remote",
