@@ -185,12 +185,7 @@ test('htmlPages.* are pc-only; html:* events never reach a phone', () => {
   assert.doesNotMatch(set, /html:/);
 });
 
-test('the MCP tool exists only for a signed chat and the server refuses extra arguments', () => {
-  const server = read('src/mcp/server.mjs');
-  assert.match(server, /if \(!BOSS && SIGNED_SESSION\) tools\.push\(\s*\{ name: 'orb_html_show'/);
-  assert.match(server, /required: \['title', 'html'\], properties: \{ title:[^}]*\}, html:/);
-  assert.match(server, /AUTH\.call\('html', \{ title: a\.title, html: a\.html \}\)/);
-  assert.match(server, /Strict arguments[\s\S]*sys\.mcp\.extraArgs/);
+test('the engine wires orb_html_show to the pages and checks the switch is a boolean (the tool itself: html-mcp-387.test.mjs)', () => {
   const api = read('src/engine/api/index.mjs');
   assert.match(api, /method === 'html' && session\) return htmlPages\.show\(sessions\.get\(session\)/);
   assert.match(api, /htmlPages\.wipe\(\)/);

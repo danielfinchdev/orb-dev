@@ -79,7 +79,9 @@ test("Orb's git never runs a hook from the temporary folder agents may write, no
   const before = snapshotCommit(repo, { raw: true, always: true }).commit;
   const conv = path.join(h.base, 'textconv.txt');
   fs.appendFileSync(path.join(repo, '.git', 'config'), `[diff "x"]\n\ttextconv = sh -c 'echo ran > ${posix(conv)} && cat \\"$0\\"'\n`);
-  fs.writeFileSync(path.join(repo, '.gitattributes'), '*.txt diff=x\n'); fs.writeFileSync(path.join(repo, 'a.txt'), 'b\n');
+  fs.writeFileSync(path.join(repo, '.gitattributes'), '*.txt diff=x\n'); fs.writeFileSync(path.join(repo, 'a.txt'), 'changed text\n');
+  // ^ A different size on purpose: the fast snapshot trusts date and size (as git does), so a same-size rewrite inside the
+  // file system's timestamp tick (coarse on some Linux runners) is not seen. That limit is by design, not what is tested here.
   const after = snapshotCommit(repo, { raw: true, always: true }).commit;
   const d = diffBetween(repo, before, after);
   assert.ok(d.files.some((f) => f.path === 'a.txt'));
