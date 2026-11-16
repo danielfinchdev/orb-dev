@@ -8,5 +8,15 @@ export default {
   'keys.cmd.brainNext': 'Siguiente cerebro favorito',
   'keys.cmd.brainPrev': 'Cerebro favorito anterior',
   'keys.cmd.findFile': 'Buscar un archivo del proyecto',
-  'keys.cmd.findText': 'Buscar texto en el proyecto'
+  'keys.cmd.findText': 'Buscar texto en el proyecto',
+  'finder.filesTitle': 'Buscar un archivo del proyecto',
+  'finder.textTitle': 'Buscar texto en el proyecto',
+  'finder.hint': 'Escribe para buscar; con las flechas eliges y con Intro el resultado pasa a la caja del chat.',
+  'finder.filesPlaceholder': 'Nombre del archivo en «{project}»…',
+  'finder.textPlaceholder': 'Texto que buscar en «{project}»…',
+  'finder.noProject': 'Abre un chat de un proyecto, o elige uno, para buscar en sus archivos.',
+  'finder.searching': 'Buscando…',
+  'finder.type': 'Escribe para buscar.',
+  'finder.none': 'No hay resultados.',
+  'finder.chooseHint': 'Intro: poner la ruta en la caja del chat.'
 };

@@ -32,6 +32,7 @@ import { BrainPicker, ReasoningMenu, UsageBubble, useCatalog, useUsageBubble, fa
 import { favoriteBrains } from '@/lib/favorite-brains.js';
 import { stepFavorite } from '../../shared/favorite-brains.mjs';
 import { useShortcut } from '@/lib/keys.js';
+import { useAddToChat, appendToBox } from '@/lib/add-to-chat.js';
 import { ContextSlot } from '@/components/context-slot.jsx';
 import { cn } from '@/lib/utils.js';
 import { DECISION, AGENT, STATUS } from '@/lib/labels.js';
@@ -276,6 +277,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const conv = useStore((s) => (id == null ? null : s.conversations.find((c) => c.id === id) ?? null));
   const [rows, setRows] = useState([]);
   const box = useDraft();
+  // text sent here by the project search (Ctrl+P / Ctrl+Shift+F) or by «Añadir al chat»
+  useAddToChat((text) => box.set((prev) => appendToBox(prev, text)));
   // the Android app: what was shared from another app («Compartir con Orb») is waiting in the text box to be sent.
   useEffect(() => {
     if (!bridge.takeShared) return undefined;

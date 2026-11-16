@@ -8,5 +8,15 @@ export default {
   'keys.cmd.brainNext': 'Next favourite brain',
   'keys.cmd.brainPrev': 'Previous favourite brain',
   'keys.cmd.findFile': 'Find a file in the project',
-  'keys.cmd.findText': 'Search text in the project'
+  'keys.cmd.findText': 'Search text in the project',
+  'finder.filesTitle': 'Find a file in the project',
+  'finder.textTitle': 'Search text in the project',
+  'finder.hint': 'Type to search; choose with the arrow keys and Enter puts the result in the chat box.',
+  'finder.filesPlaceholder': 'File name in «{project}»…',
+  'finder.textPlaceholder': 'Text to look for in «{project}»…',
+  'finder.noProject': 'Open a chat of a project, or choose one, to search its files.',
+  'finder.searching': 'Searching…',
+  'finder.type': 'Type to search.',
+  'finder.none': 'No results.',
+  'finder.chooseHint': 'Enter: put the path in the chat box.'
 };
