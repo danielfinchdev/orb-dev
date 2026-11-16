@@ -96,9 +96,10 @@ export async function changedFiles(project) {
   for (let i = 0; i < parts.length; i += 1) {
     const e = parts[i]; if (e.length < 4) continue;
     const xy = e.slice(0, 2); const file = e.slice(3).replace(/\\/g, '/');
-    if (/[RC]/.test(xy)) i += 1; // the old name of a rename or copy follows
+    let from = null;
+    if (/[RC]/.test(xy)) { i += 1; if (xy.includes('R')) from = (parts[i] ?? '').replace(/\\/g, '/') || null; } // the old name of a rename or copy follows
     if (file === ATTACH_DIR || file.startsWith(`${ATTACH_DIR}/`)) continue;
-    out.push({ path: file, status: xy === '??' ? '??' : (xy[0] !== ' ' ? xy[0] : xy[1]), risky: isSecretPath(file) });
+    out.push({ path: file, ...(from ? { from } : {}), status: xy === '??' ? '??' : (xy[0] !== ' ' ? xy[0] : xy[1]), risky: isSecretPath(file) });
   }
   return out.slice(0, 500);
 }
@@ -128,8 +129,10 @@ export async function commitAll(project, message, opts = {}) {
   if (!status.stdout.trim()) throw new Error(tr('msg.github.noChanges'));
   let only = null;
   if (picked) {
-    const known = new Set((await changedFiles(project)).map((f) => f.path));
+    const known = new Map((await changedFiles(project)).map((f) => [f.path, f]));
     only = [...new Set(picked.map(String))].filter((f) => known.has(f));
+    // a ticked rename takes its old name along, or the commit adds the new file and leaves the deletion behind
+    only = [...new Set([...only, ...only.map((f) => known.get(f).from).filter(Boolean)])];
     if (!only.length) throw new Error(tr('msg.github.noFilesPicked'));
     const bad = only.filter(isSecretPath);
     if (bad.length) throw new Error(tr('msg.github.looksSecret', { files: bad.slice(0, 5).join(', ') }));

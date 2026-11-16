@@ -124,6 +124,13 @@ test('«Commit y push» pushes the current branch to the remote, never forced', 
   assert.doesNotMatch(src, /--force|'push'[^\n]*'-f'/);
 });
 
+test('a ticked rename commits the deletion of the old name too', async () => {
+  fs.writeFileSync(path.join(repo, 'old-name.txt'), 'x\n'); git(repo, 'add', '-A'); git(repo, 'commit', '-q', '-m', 'chore: add old');
+  git(repo, 'mv', 'old-name.txt', 'new-name.txt');
+  await api.call('projects.commit', { name: 'tienda', message: 'refactor: rename file', files: ['new-name.txt'] }, DESKTOP);
+  assert.equal(git(repo, 'status', '--porcelain'), '', 'nothing of the rename is left behind');
+});
+
 test('the dialog methods are for this PC only', async () => {
   for (const m of ['projects.commitFiles', 'projects.commitSuggest', 'projects.commit', 'projects.prFix', 'ciWatch.set', 'ciWatch.list']) {
     assert.equal(METHODS[m], 'pc', m);
