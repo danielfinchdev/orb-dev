@@ -16,7 +16,7 @@ const read = (...f) => fs.readFileSync(path.join(ROOT, ...f), 'utf8');
 test('the Tauri pin is the version reviewed for the invoke-key barrier', () => {
   const pin = /^tauri = \{ version = "=([^"]+)"/m.exec(read('src-tauri', 'Cargo.toml'))?.[1];
   assert.equal(pin, REVIEWED, 'Tauri changed: re-check that the invoke-key init script is main-frame-only, then update REVIEWED and the note in docs/architecture/28-security.md');
-  assert.match(read('src-tauri', 'Cargo.lock'), new RegExp(`name = "tauri"\r?\nversion = "${REVIEWED.replace(/\./g, '\.')}"`));
+  assert.match(read('src-tauri', 'Cargo.lock'), new RegExp(`name = "tauri"\r?\nversion = "${REVIEWED.replace(/\./g, '\\.')}"`));
 });
 
 test('the orbpage scheme is the one the threat-model note describes', () => {

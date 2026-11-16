@@ -133,6 +133,8 @@ export default {
   'settings.mobileWifi': 'Local network',
   'settings.mobileWifiHint': 'The device and the PC must be on the same Wi-Fi network.',
   'settings.mobileTs': 'Tailscale',
+  'settings.mobileScreenshot': 'Screenshot from the phone',
+  'settings.mobileScreenshotHint': 'Lets a linked phone ask for a picture of all monitors. The PC always shows a notice.',
   'settings.mobileTsHint': 'From any network. Lets you install the app and get notifications.',
   'settings.mobileUnavailable': 'Not available',
   'settings.qrScanWifi': 'The device must be on the same Wi-Fi network. The code expires in 5 min.',

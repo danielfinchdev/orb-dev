@@ -89,7 +89,7 @@ export function validateConfig(c) {
   if (c.mobile) {
     if (typeof c.mobile.enabled !== 'boolean') throw new Error(tr('msg.ctx.mobileBool'));
     int(c.mobile.port, 1024, 65535, tr('msg.ctx.mobilePort'));
-    for (const k of ['wifi', 'tailscale']) if (c.mobile[k] !== undefined && typeof c.mobile[k] !== 'boolean') throw new Error(tr('msg.ctx.mobileBool'));
+    for (const k of ['wifi', 'tailscale', 'screenshot']) if (c.mobile[k] !== undefined && typeof c.mobile[k] !== 'boolean') throw new Error(tr('msg.ctx.mobileBool'));
   }
   if (!Array.isArray(c.accounts)) throw new Error(tr('msg.ctx.accountsList'));
   const ids = new Set();
