@@ -55,7 +55,9 @@ fun OrbTheme(
     LaunchedEffect(to.key) {
         progress.snapTo(0f)
         pending = false
-        progress.animateTo(1f, OrbMotion.standard(OrbMotion.Medium))
+        // Grafito has no decorative motion: its colours switch at once.
+        if ((to.key as? Triple<*, *, *>)?.first == ThemeChoice.Grafito) progress.snapTo(1f)
+        else progress.animateTo(1f, OrbMotion.standard(OrbMotion.Medium))
     }
     // Until the effect restarts the fade, the frame must still show the starting colours, not the new ones.
     val t = if (pending) 0f else progress.value

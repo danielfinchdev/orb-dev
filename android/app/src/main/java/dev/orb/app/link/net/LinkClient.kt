@@ -188,6 +188,15 @@ class LinkClient(
         }
     }
 
+    // https, or Tailscale (WireGuard already authenticates the sender): a 401 there is the PC's own. A plain-http 401 from the home Wi-Fi is not.
+    private fun isSecureBase(base: String): Boolean {
+        if (base.startsWith("https://", ignoreCase = true)) return true
+        val host = dev.orb.app.link.payload.WhatwgUrl.parseHttp(base)?.hostname?.lowercase() ?: return false
+        if (host.endsWith(".ts.net")) return true
+        val n = host.split('.').mapNotNull { it.toIntOrNull() }
+        return n.size == 4 && host.split('.').size == 4 && n[0] == 100 && n[1] in 64..127
+    }
+
     private fun markOffline() {
         val st = _connection.value
         if (st is ConnectionState.Unlinked || st is ConnectionState.UpdateApp || st is ConnectionState.UpdatePc) return
@@ -232,9 +241,14 @@ class LinkClient(
     private fun refused(status: Int, data: JsonObject) = LinkException(LinkError.Refused(status, data["error"].str() ?: "http $status", data["reason"].str()))
 
     /** The answer to a sealed request: it must open with this phone's key and echo the request's nonce. */
-    private suspend fun answer(res: Response, nonce: String): JsonObject {
+    private suspend fun answer(res: Response, nonce: String, base: String): JsonObject {
         val data = parseObject(bodyOf(res))
         if (res.code == 401) {
+            // A 401 over plain http cannot be authenticated: anyone on the Wi-Fi can send it, so it only means «no connection».
+            if (!isSecureBase(base)) {
+                markOffline()
+                throw LinkException(LinkError.Offline)
+            }
             _connection.value = ConnectionState.Unlinked
             throw LinkException(LinkError.NotLinked)
         }
@@ -267,7 +281,7 @@ class LinkClient(
                     retried = true
                     null
                 } else {
-                    Opened(answer(res, reached.nonce!!), reached.base)
+                    Opened(answer(res, reached.nonce!!, reached.base), reached.base)
                 }
             }
             if (opened != null) return opened
@@ -497,6 +511,10 @@ class LinkClient(
         try {
             when {
                 res.code == 401 -> {
+                    if (!isSecureBase(reached.base)) {
+                        markOffline()
+                        return
+                    }
                     _connection.value = ConnectionState.Unlinked
                     lastEnd = End.Terminal
                     return

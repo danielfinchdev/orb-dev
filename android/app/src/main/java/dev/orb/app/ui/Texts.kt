@@ -66,6 +66,7 @@ object AppearanceTexts {
     const val FOLLOW_PC = "Igual que el PC"
     const val ORBITA = "Órbita"
     const val CRISTAL = "Órbita – Cristal"
+    const val GRAFITO = "Grafito"
     const val DYNAMIC = "Colores del fondo"
     const val DYNAMIC_HINT = "Usa los colores de tu fondo de pantalla"
     const val DYNAMIC_UNAVAILABLE = "Necesita Android 12 o más reciente"
