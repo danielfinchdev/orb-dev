@@ -1,11 +1,58 @@
 ## Download
 
-- **`Orb-3.8.6-instalador.exe`** (the Windows app): installs for your user, without administrator rights, and updates
+- **`Orb-3.8.7-instalador.exe`** (the Windows app): installs for your user, without administrator rights, and updates
   itself. It needs Microsoft Edge WebView2, which Windows 11 and an up-to-date Windows 10 already have (if it is
   missing, the installer gets it).
-- **`Orb-3.8.6-android.apk`** (the Android app): the new native app. How to install and link it: [`docs/ANDROID.md`](docs/ANDROID.md).
+- **`Orb-3.8.7-android.apk`** (the Android app): the new native app. How to install and link it: [`docs/ANDROID.md`](docs/ANDROID.md).
 
 Windows 10/11. Since it isn't signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
+
+## What's new in 3.8.7
+
+**Grafito and conversation marks.** A new graphite theme (also on Android, where phones can wear it). Plain themes
+silence the background music. A hover trail on the chat lets you jump between messages.
+
+**Look and feel settings.** Density, chat width and text size, plus a theme built from a few seed colours (accent
+included).
+
+**Tabs, split view and shortcuts.** Chats open in tabs and can be shown side by side. Shortcuts live in a recorder in
+Settings and are stored in `keybindings.json` in the core folder.
+
+**Changes per turn.** Each agent turn is snapshotted; a panel shows the diff of that turn and lets you leave line
+comments.
+
+**Hand a chat to another agent.** Continue the same chat with a different agent.
+
+**Commit, push and fix a PR.** A commit dialog, PR fix actions and a CI watch that reports on the checks. A bell notice
+is raised when a PR card arrives for a closed chat.
+
+**Chat modes.** `/goal`, `/plan`, `/review` and `/debug`. A goal that cannot start is paused, and blocked turns are
+counted by kind.
+
+**Inbox.** «Te necesita» is ordered by priority, Ctrl+Alt+A jumps to the next chat that needs you, and a summary of the
+day appears on the PC and on the phone.
+
+**More agents (not verified yet).** Grok Build, Devin, Droid, Oh My Pi, Pi and Antigravity over ACP. Pi and
+Antigravity start only at full access, and the vault key is masked in ACP answers, tool inputs and outputs.
+
+**Android.** Only http, https and mailto links open from the chat, a busy Keystore is retried when the saved link is
+read at start-up, and a plain-http 401 without credentials counts as offline. The Grafito theme is available.
+
+**Security.**
+- A one-use unlock token is spent only after the action succeeds, and only rails changes defer it.
+- `htmlPages.get` is PC-only; the invoke key being injected only into the main frame is now guarded by a test.
+- Phone screenshots can be turned off in Settings > Mobile.
+
+**Smoother.** Engine events are batched for a few ms before reaching the window, and the per-call read caps of
+`activity.list` are lower.
+
+**Fixes.**
+- A track that finishes downloading no longer starts after a plain theme is chosen.
+- Late turn snapshots are dropped, and line comments stay out of the typed text.
+- Ignored agent-key state errors are logged instead of swallowed.
+
+New tests cover attachments end to end through the encrypted link, `orb_html_show` through a real MCP process, and tabs,
+split view and themes in a headless browser.
 
 ## What's new in 3.8.6
 
