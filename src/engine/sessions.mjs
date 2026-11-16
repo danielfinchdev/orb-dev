@@ -590,6 +590,8 @@ ${body}`;
     }
     const run = { agent: s.agent, stopped: false, startedAt: Date.now(), lastAt: Date.now(), steps: 0, last: tr('sys.sessions.starting'), live: entry.live, waitMs: 0, pausedAt: null, planOnly };
     this.running.set(id, run);
+    // remembered on the live agent: a subagent left in the background after a «/plan» turn keeps its read-only tools
+    entry.planOnly = planOnly;
     this.update(id, { status: 'running', settled: false });
     // the time limit counts working time only: while the turn waits for the user's permission the clock stops. A task
     // whose permission nobody answers is not left hanging either (watchRun).

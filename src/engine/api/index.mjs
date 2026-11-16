@@ -174,7 +174,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
   // the HTML pages an agent shows in a chat (html-pages.mjs): sandboxed, internet off, switched on only on this PC.
   const htmlPages = createHtmlPages({ sessions, emit: emitRaw, log });
   // the session as this turn runs it: a «/plan» turn is read-only for Orb's own tools too (the chat keeps its permission).
-  const asRunning = (id) => { const s = sessions.get(id); return s && sessions.running.get(id)?.planOnly ? { ...s, permission: 'leer' } : s; };
+  const asRunning = (id) => {
+    const s = sessions.get(id);
+    const live = sessions.lives.get(id);
+    const planOnly = sessions.running.get(id)?.planOnly || (live?.planOnly && live.live?.hasBackground?.());
+    return s && planOnly ? { ...s, permission: 'leer' } : s;
+  };
   agentAuth.onCall = async ({ session }, method, args) => {
     if (method === 'secret' && session) return secrets.request(asRunning(session), args);
     if (method === 'html' && session) return htmlPages.show(asRunning(session), args);

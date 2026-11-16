@@ -43,3 +43,18 @@ test('a /plan turn runs Orb\'s own tools read-only, and the chat gets its permis
   await until(() => !sessions.running.has(s.id), 'fin del turno');
   assert.notEqual(await phone(s.id), tr('msg.android.shellNeedsTotal'), 'after it, the chat\'s own permission');
 });
+
+test('a subagent left in the background after a /plan turn keeps the read-only tools until it ends', async () => {
+  await call('projects.create', { name: 'web2' });
+  const s = await call('sessions.create', { agent: 'claude', project: 'web2', permission: 'editar', title: 'plan2' });
+  sessions.update(s.id, { permission: 'total', android: 1 });
+  let background = true;
+  const live = { caps: {}, close() {}, isClosed: () => false, hasBackground: () => background, async send() { return { final: 'ok', text: 'ok', isError: false, usage: {} }; } };
+  const entry = { lastUsed: Date.now(), logFile: null, live };
+  sessions.getLive = () => { sessions.lives.set(s.id, entry); return entry; };
+  await call('sessions.send', { id: s.id, text: '/plan algo' });
+  await until(() => !sessions.running.has(s.id), 'fin del turno');
+  assert.equal(await phone(s.id), tr('msg.android.shellNeedsTotal'), 'the background subagent still sees «leer»');
+  background = false;
+  assert.notEqual(await phone(s.id), tr('msg.android.shellNeedsTotal'), 'when it has ended, the chat\'s own permission');
+});

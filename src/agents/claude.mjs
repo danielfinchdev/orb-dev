@@ -385,6 +385,8 @@ export function createLive(o) {
     background.add(toolId); onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: { id: toolId, output: '', background: true } });
     return true;
   };
+  // subagents let go in the background that have not ended yet: they outlive the turn that started them
+  live.hasBackground = () => background.size > 0;
   live.respond = (requestId, decision) => approvals.respond(requestId, decision);
   live.setModel = async (model) => { o.model = model; try { await query?.setModel(model || undefined); } catch { /* next start */ } };
   live.setPermission = async (p) => { permission = p; try { await query?.setPermissionMode(permissionModeOf(p)); } catch { /* next start */ } };
