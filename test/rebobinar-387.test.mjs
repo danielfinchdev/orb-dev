@@ -15,6 +15,7 @@ import { Scheduler } from '../src/engine/scheduler/index.mjs';
 import { buildApi } from '../src/engine/api/index.mjs';
 import { DESKTOP, METHODS } from '../src/domain/security/permissions.mjs';
 import { git } from '../src/platform/git.mjs';
+import { snapshotCommit } from '../src/domain/tasks/checkpoints.mjs';
 
 let t; let board; let api; let sessions; let repo; let sent; let release;
 const call = (method, params = {}) => api.call(method, params, DESKTOP);
@@ -270,4 +271,48 @@ test('a message reuses the last photo when nothing changed and takes a new one w
   assert.ok(!fs.existsSync(path.join(repo, 'p3.txt')));
   assert.equal(read(repo, '.env'), 'TOKEN=secret\n'); // a secret the photo never held is not touched
   assert.equal(read(repo, 'ignored.log'), 'noise\n');
+});
+
+// A file that .gitignore ignores but the user force-adds and commits after the raw index was written must stay in the photos.
+function forcedRepo(name) {
+  const r = path.join(t.home, 'web', name); fs.mkdirSync(r, { recursive: true });
+  git(r, 'init', '-q', '-b', 'main'); fs.writeFileSync(path.join(r, 'a.txt'), 'one\n'); fs.writeFileSync(path.join(r, 'del.txt'), 'bye\n');
+  fs.writeFileSync(path.join(r, '.gitignore'), 'gen/\n.env\n');
+  git(r, 'add', '-A'); git(r, ...ident, 'commit', '-q', '-m', 'first');
+  return r;
+}
+const forceCommit = (r, ...files) => { for (const f of files) { fs.mkdirSync(path.dirname(path.join(r, f)), { recursive: true }); fs.writeFileSync(path.join(r, f), `${f}\n`); } git(r, 'add', '-f', '--', ...files); git(r, ...ident, 'commit', '-q', '-m', 'force'); };
+const tracked = (r, commit) => g(r, 'ls-tree', '-r', '--name-only', commit).split('\n');
+
+test('a fast snapshot keeps an ignored file that was force-added and committed after the raw index', () => {
+  const r = forcedRepo('forced1');
+  snapshotCommit(r, { raw: true, always: true });
+  forceCommit(r, 'gen/x.txt');
+  const snap = snapshotCommit(r, { raw: true, always: true });
+  assert.ok(tracked(r, snap.commit).includes('gen/x.txt'));
+  const again = snapshotCommit(r, { raw: true, always: true });
+  assert.ok(tracked(r, again.commit).includes('gen/x.txt'));
+});
+
+test('a force-committed secret stays out of the photo, and a file the user deleted is not brought back', () => {
+  const r = forcedRepo('forced2');
+  snapshotCommit(r, { raw: true, always: true });
+  forceCommit(r, 'gen/y.txt', '.env');
+  fs.rmSync(path.join(r, 'del.txt'));
+  const snap = snapshotCommit(r, { raw: true, always: true });
+  const files = tracked(r, snap.commit);
+  assert.ok(files.includes('gen/y.txt')); assert.ok(!files.includes('.env')); assert.ok(!files.includes('del.txt')); assert.ok(files.includes('a.txt'));
+});
+
+test('rewinding a chat does not delete a force-added ignored file committed after the first photo', async () => {
+  fs.appendFileSync(path.join(repo, '.git', 'info', 'exclude'), 'gen/\n');
+  const s = create();
+  await turn(s.id, 'write a.txt=first');
+  forceCommit(repo, 'gen/kept.txt');
+  await turn(s.id, 'write b2.txt=second');
+  await turn(s.id, 'write c2.txt=third');
+  await call('sessions.editRewind', { id: s.id, item: userItems(s.id)[2].id, text: 'write d2.txt=x' });
+  await idle(s.id);
+  assert.equal(read(repo, 'gen', 'kept.txt'), 'gen/kept.txt\n');
+  assert.ok(!fs.existsSync(path.join(repo, 'c2.txt')));
 });
