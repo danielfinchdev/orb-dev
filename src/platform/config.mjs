@@ -127,6 +127,7 @@ export function validateConfig(c) {
   // continue tasks after a restart / at the reset, and delegation between agents (orb_delegate).
   const bool = (v, name) => { if (v !== undefined && typeof v !== 'boolean') throw new Error(tr('msg.ctx.boolean', { name })); };
   bool(c.continuity?.resumeAfterRestart, 'continuity.resumeAfterRestart'); bool(c.continuity?.resumeAtReset, 'continuity.resumeAtReset');
+  bool(c.suggestNext, 'suggestNext');
   bool(c.delegation?.enabled, 'delegation.enabled'); bool(c.delegation?.trusted, 'delegation.trusted');
   // the background music (Windows; src/ui/lib/music.js) and the games' own music (gameMusic: false = muted).
   const music = c.ui?.music;

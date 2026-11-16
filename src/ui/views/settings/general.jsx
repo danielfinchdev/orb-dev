@@ -219,6 +219,7 @@ export function TasksCard({ c }) {
         {/* Orb chooses each task's model and reasoning (on by default), and the guide says what it uses for what. */}
         <Row label={t('settings.autoModel')} info={t('settings.autoModelHint')}><Switch checked={c.budget?.autoModel !== false} onCheckedChange={(autoModel) => save({ budget: { autoModel } })} data-testid="auto-model" /></Row>
         <ModelGuide auto={c.budget?.autoModel !== false} />
+        <Row label={t('settings.suggest')} hint={`${t('settings.suggestDesc')}`} info={t('settings.suggestWarn')}><Switch checked={c.suggestNext === true} onCheckedChange={(suggestNext) => save({ suggestNext })} data-testid="suggest-next" /></Row>
         <Row label={t('settings.autoRun')} hint={t('settings.autoRunHint')}><Switch checked={v.autoRun} onCheckedChange={(autoRun) => { setV({ ...v, autoRun }); save({ autoRun }); }} /></Row>
         {/* tasks work at the same time by default; this makes them wait for each other. */}
         <Row label={t('settings.oneAtATime')} hint={t('settings.oneAtATimeHint')}><Switch checked={v.oneAtATime} onCheckedChange={(oneAtATime) => { setV({ ...v, oneAtATime }); save({ oneAtATime }).then((r) => { if (!r) setV((cur) => ({ ...cur, oneAtATime: !oneAtATime })); }); }} data-testid="one-at-a-time" /></Row>

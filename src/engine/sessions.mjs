@@ -35,6 +35,8 @@ import { snapshotBeforeTurn, snapshotAfterTurn, dropTurns } from '../domain/conv
 import { changedFiles, logDirect } from '../domain/journal/journal.mjs';
 import { ATTACH_DIR, placeAttachments as copyAttachments, prepareAttachments } from './host/attachments.mjs';
 import { goalAfterTurn, goalFailed, goalSteered, debugOn } from './modes.mjs';
+import { SideChats } from './side.mjs';
+import { Suggester } from './suggest.mjs';
 
 export { PERMISSIONS, ATTACH_DIR };
 // a message that asks for a picture (or to change one): Codex gets a short note on how Orb wants it done.
@@ -153,6 +155,8 @@ export class Sessions {
     }
     this.sweeper = setInterval(() => this.closeIdle(), 60_000);
     this.sweeper.unref?.();
+    this.side = new SideChats(this); // «/side»: questions apart, in memory only (side.mjs)
+    this.suggest = new Suggester(this); // the grey next message in the box, when Ajustes has it on (suggest.mjs)
   }
 
   list({ archived = false, kind } = {}) {
@@ -202,7 +206,7 @@ export class Sessions {
   remove(id) {
     if (this.running.has(id)) throw new Error(tr('msg.sessions.stopFirst'));
     const s = this.must(id); if (s.kind === 'task') throw new Error(tr('msg.sessions.taskSession'));
-    this.closeLive(id); this.asked.delete(id);
+    this.closeLive(id); this.asked.delete(id); this.side.closeFor(id);
     if (s.project && s.cwd) dropTurns(s.cwd, id);
     this.board.run('DELETE FROM session_items WHERE session_id = ?', id);
     this.board.run('DELETE FROM session_queue WHERE session_id = ?', id);
@@ -537,7 +541,7 @@ export class Sessions {
   // every open agent process asks its plan's usage now (the usage panel's «Recargar»). → promises
   refreshUsage() { return [...this.lives.values()].map((e) => { try { return e.live.refreshUsage?.(); } catch { return null; } }).filter(Boolean); }
 
-  stopAll() { for (const id of this.running.keys()) this.stop(id); for (const id of [...this.lives.keys()]) this.closeLive(id); clearInterval(this.sweeper); }
+  stopAll() { this.side.closeAll(); for (const id of [...this.suggest.pending.keys()]) this.suggest.cancel(id); for (const id of this.running.keys()) this.stop(id); for (const id of [...this.lives.keys()]) this.closeLive(id); clearInterval(this.sweeper); }
 
   // One turn. options: images (absolute paths), prompt (what the agent receives, if it differs from what the user typed),
   // timeoutMs, budgetUsd, taskId, showUser, onFinish({ code, state, stderr, logFile, stopped, timedOut, limit }).
@@ -545,6 +549,7 @@ export class Sessions {
     // turnPermission: this one turn runs with less permission than the chat has («/plan»). Only «leer» exists, and only to lower
     // it: nothing here can make a turn more permissive than the chat.
     const chat = this.must(id);
+    this.suggest.cancel(id); // a message of the user ends the proposal for the box
     const planOnly = turnPermission === 'leer';
     const s = planOnly ? { ...chat, permission: 'leer' } : chat;
     // what this turn may do because the user's own words asked for it: a task's comes from the scheduler (the
@@ -622,6 +627,7 @@ ${body}`;
       catch (error) { this.log(`onFinish ${id}: ${error.stack}`); }
       // «/goal»: the next turn of the goal, or why it stops (modes.mjs). It goes before the queue: a queued message pauses it. A stopped turn or a limit reaches it too, to pause it.
       if (!onFinish && s.kind === 'chat') { try { goalAfterTurn(this, id, { result, run }); } catch (error) { this.log(`objetivo ${id}: ${error.message}`); } }
+      if (!onFinish && s.kind === 'chat') { try { this.suggest.after(id, { request: text, result, stopped: run.stopped }); } catch (error) { this.log(`sugerencia ${id}: ${error.message}`); } }
       // Messages written while it worked go now, in order (not after a stop or a limit: then the user decides).
       if (!run.stopped && !limited && !onFinish) {
         const next = this.takeQueued(id);
@@ -643,6 +649,18 @@ ${body}`;
       }
     });
     return run;
+  }
+
+  // One subagent of the running turn (Claude's Agent tool): «stop» ends only that one, «background» lets it go on without the turn
+  // waiting for it. Only an agent that can do it does; the others say so (Codex: the whole turn has to be stopped), never pretend.
+  async subagent(id, toolId, action) {
+    this.must(id);
+    const live = this.lives.get(id)?.live;
+    const call = action === 'stop' ? live?.stopSubagent : action === 'background' ? live?.backgroundSubagent : null;
+    if (!call || !this.running.has(id)) throw new Error(tr(action === 'stop' ? 'msg.subagent.noStop' : 'msg.subagent.noBackground'));
+    const ok = await call.call(live, String(toolId ?? ''));
+    if (!ok) throw new Error(tr('msg.subagent.notRunning'));
+    return { ok: true };
   }
 
   // «Compactar»: the agent's own compaction of a long direct conversation (Claude /compact, Codex's thread

@@ -1,6 +1,6 @@
 {
   "generatedBy": "scripts/android-vectors.mjs",
-  "source": "c5c5b65415971beb02630fe56bc1b2704b625140d3a239fc37382614f2d216dd",
+  "source": "a1aa2cb0a6956ef4039f789db670cb556981ce64c6439a4db5c2bbb3be6bc243",
   "methods": [
     "activity.list",
     "activity.report",
@@ -11,6 +11,9 @@
     "chat.answer",
     "chat.compact",
     "chat.list",
+    "chat.notes",
+    "chat.pin",
+    "chat.pinned",
     "chat.send",
     "chat.settings",
     "chat.stop",
@@ -82,7 +85,12 @@
     "sessions.resume",
     "sessions.send",
     "sessions.settle",
+    "sessions.sideAsk",
+    "sessions.sideClose",
+    "sessions.sides",
     "sessions.stop",
+    "sessions.subagent",
+    "sessions.suggestCancel",
     "sessions.trash",
     "sessions.turnDiff",
     "sessions.turns",
@@ -110,6 +118,8 @@
     "usage.refresh",
     "whiteboard.load",
     "whiteboard.note",
-    "whiteboard.save"
+    "whiteboard.save",
+    "worktrees.branches",
+    "worktrees.status"
   ]
 }

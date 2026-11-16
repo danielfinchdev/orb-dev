@@ -1,11 +1,11 @@
 // the chat commands Orb answers itself, typed at the start of a chat's box.
 // - Bare ones: «/compact» (the agent's own compaction, the same as the «Compactar» button) and «/clear» (the agent
 //   starts a new conversation in the same chat; the history shown in Orb stays).
-// - With words after them: «/goal», «/plan», «/review» and «/debug» (src/engine/modes.mjs); typed alone they show or end
+// - With words after them: «/goal», «/plan», «/review», «/debug» and «/side» (src/engine/modes.mjs); typed alone they show or end
 //   their mode (or, for «/plan», plan what the chat is about).
 // Anything else goes to the agent as typed.
 const BARE = ['clear', 'compact'];
-const WITH_TEXT = ['goal', 'plan', 'review', 'debug'];
+const WITH_TEXT = ['goal', 'plan', 'review', 'debug', 'side'];
 
 export function slashCommand(text) {
   const m = /^\/([a-z]+)$/i.exec(String(text ?? '').trim());
