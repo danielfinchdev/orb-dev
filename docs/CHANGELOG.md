@@ -32,6 +32,27 @@ counted by kind.
 **Inbox.** «Te necesita» is ordered by priority, Ctrl+Alt+A jumps to the next chat that needs you, and a summary of the
 day appears on the PC and on the phone.
 
+**Worktree per chat.** Pick Local or Worktree when you open a direct chat; each worktree lives in a folder managed by
+Orb and is never removed without asking.
+
+**Comforts.** Notes and pinned messages per chat, tool calls grouped in one line, "Add to chat" on selected text, long
+pastes as a collapsible card, model favourites with Alt+] / Alt+[, Ctrl+P and Ctrl+Shift+F in the palette, a cold-session
+notice for Claude, more editors in "Open in", and choice buttons in HTML pages.
+
+**Agents from outside.** An optional local MCP server (127.0.0.1 only, off by default) lets Claude Code or Claude
+Desktop create tasks in Orb with per-client tokens you can revoke and a list of allowed projects.
+
+**History and usage.** Claude Code and Codex history can be imported as read-only chats, and usage is shown per model and
+project with an hours heat map.
+
+**Subagents, side chats and suggestions.** Subagents appear as child chats you can stop, `/side` asks something apart
+without touching the history, and next-message suggestions are optional and off by default.
+
+**Edit a message and rewind.** Edit a previous message and resend from there, optionally rewinding the files, with a
+rescue copy you can always return to.
+
+**Android (native).** The chat list shows the priority order and the summary of the day.
+
 **More agents (not verified yet).** Grok Build, Devin, Droid, Oh My Pi, Pi and Antigravity over ACP. Pi and
 Antigravity start only at full access, and the vault key is masked in ACP answers, tool inputs and outputs.
 
