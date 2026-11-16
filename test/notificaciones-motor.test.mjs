@@ -40,6 +40,9 @@ before(async () => {
   A = await startEngine(t.home, { env: { ORB_REMOTE_BIND: '127.0.0.1', ORB_PUSH_LOG: pushLog } });
   await until(async () => (await A.call('remote.status')).running, 'acceso');
   await A.call('master.create', { password: TEST_MASTER }); // 3.8: phones link with the master password
+  // A 3.7 database keeps devices.person_id (dropped in 3.9). The column goes in before the engine prepares any SELECT * on
+  // devices: a statement prepared earlier may not see a column added behind its back, which would hide the person.
+  { const db = new Board(); try { if (!db.all('PRAGMA table_info(devices)').some((c) => c.name === 'person_id')) db.run('ALTER TABLE devices ADD COLUMN person_id TEXT'); } finally { db.db.close(); } }
   ana = await pushDevice('ana');
   tablet = await pushDevice('tablet');
   await A.call('projects.create', { name: 'web' });
