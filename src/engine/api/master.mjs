@@ -10,6 +10,7 @@ import { paths } from '../../platform/paths.mjs';
 import { machineKeys } from '../../platform/keys.mjs';
 import { Master, MasterError, IN_VAULT, mirrorTo, restoreMissing, checkPassword, MIN_LENGTH, UNLOCK_MS } from '../../domain/security/master.mjs';
 import { sealConnectors, connectorSecrets, refOf, secretId, ENV_NAME, bindMissing } from '../../domain/security/connector-secrets.mjs';
+import { agentKeyState, saveAgentKey } from '../../domain/security/agent-keys.mjs';
 import { needsUnlock, freshPurpose, FRESH_PURPOSES, RULE_TARGET_METHODS, RAILS_PURPOSE } from '../../domain/security/permissions.mjs';
 import { readRule, isRuleId } from '../../domain/rules/rules.mjs';
 import { DEFAULT_IDS } from '../../domain/rules/defaults.mjs';
@@ -209,6 +210,13 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
     // A connector's keys (guarded): to see them, and to change them (empty value: that key goes). Saving ties them to the
     // connector's command as it is now.
     'secrets.connector': ({ name }) => { const s = connector(name); try { return { name: s.name, env: connectorSecrets(master(), s) }; } catch (error) { throw asUser(error); } },
+    // The API keys of the agents that take one (Grok, Devin, Droid): which are saved (never their values), and saving or
+    // removing one (empty value). The window never gets a value back: a key typed is only ever written.
+    'agentKeys.state': () => agentKeyState(master()),
+    'agentKeys.save': ({ agent, name, value }) => {
+      try { return { saved: saveAgentKey(master(), String(agent ?? ''), String(name ?? ''), value ?? '') }; }
+      catch (error) { throw error instanceof MasterError ? asUser(error) : userError('msg.master.badKeys'); }
+    },
     'secrets.saveConnector': ({ name, env }) => {
       const s = connector(name); const m = master();
       if (!env || typeof env !== 'object' || Array.isArray(env) || Object.keys(env).length > 40) throw userError('msg.master.badKeys');

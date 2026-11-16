@@ -82,6 +82,8 @@ export const METHODS = Object.freeze({
   // the master password and the connectors' keys
   'master.state': 'pc', 'master.create': 'pc', 'master.unlock': 'pc', 'master.lock': 'pc', 'master.check': 'pc', 'master.change': 'pc', 'master.forgot': 'pc', 'master.reset': 'pc',
   'secrets.connector': 'pc', 'secrets.saveConnector': 'pc',
+  // the agents' own API keys (Grok, Devin, Droid): the state says only which are saved, saving needs the unlock
+  'agentKeys.state': 'pc', 'agentKeys.save': 'pc',
   // a secret an agent asked for, typed only on this PC's card (src/engine/security/agent-secrets.mjs)
   'secrets.pending': 'pc', 'secrets.answer': 'pc', 'secrets.decline': 'pc',
   // a merge an agent asked for, confirmed only on this PC's card (src/engine/host/pr-tools.mjs)
@@ -112,7 +114,7 @@ export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter(
 // with. Changing the password asks for the current one instead.
 // pairing a phone or starting an emulator (the agents may then reach it), and giving a chat «Acceso total al PC» or the
 // phone (the usual 5-minute unlock, not the password every time: see below).
-export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'backup.previousKey', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'projects.deleteCheck', 'extensions.remove',
+export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'backup.previousKey', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'agentKeys.save', 'projects.deleteCheck', 'extensions.remove',
   'android.pairStart', 'android.pairCode', 'android.emulatorStart', 'sessions.grantTotal', 'sessions.grantAndroid',
   // rules: your own are edited with the usual unlock; pausing or deleting a shipped one (rules.pause / rules.delete,
   // see freshPurpose) and everything about the rails asks for the password every time

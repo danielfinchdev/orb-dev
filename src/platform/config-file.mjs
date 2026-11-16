@@ -8,8 +8,10 @@ import { CONFIG_FILE, paths } from './paths.mjs';
 
 // besides Claude Code, Codex and Cursor, the agents that speak ACP (src/agents/acp.mjs). They show up in Agentes and
 // take work only when their program is installed on this PC.
-export const AGENT_IDS = ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot', 'hermes'];
-export const AGENT_LABELS = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor', gemini: 'Gemini', opencode: 'OpenCode', qwen: 'Qwen Code', copilot: 'GitHub Copilot', hermes: 'Hermes Agent' };
+export const AGENT_IDS = ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot', 'hermes', 'grok', 'devin', 'droid', 'omp', 'pi', 'antigravity'];
+// Agents that start turned off (Ajustes › Agentes): the user turns them on by hand.
+export const OFF_BY_DEFAULT = ['hermes', 'grok', 'devin', 'droid', 'omp', 'pi', 'antigravity'];
+export const AGENT_LABELS = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor', gemini: 'Gemini', opencode: 'OpenCode', qwen: 'Qwen Code', copilot: 'GitHub Copilot', hermes: 'Hermes Agent', grok: 'Grok Build', devin: 'Devin', droid: 'Factory Droid', omp: 'Oh My Pi', pi: 'Pi', antigravity: 'Antigravity' };
 
 export const DEFAULT_CONFIG = Object.freeze({
   version: 5,
@@ -36,7 +38,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   // The rails (src/domain/rules/rails.mjs): empty = all on; only the ones paused by the user are stored, as
   // { <id>: { enabled: false } }. The core rails have no switch.
   rails: {},
-  agentOrder: ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot', 'hermes'],
+  agentOrder: ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot', 'hermes', 'grok', 'devin', 'droid', 'omp', 'pi', 'antigravity'],
   agents: {
     // Claude Code accepts the aliases sonnet/opus/haiku, so the list keeps working when new versions come out.
     claude: { enabled: true, path: '', models: ['sonnet', 'opus', 'haiku'], defaultModel: 'sonnet', heavyModels: ['opus'],
@@ -56,7 +58,16 @@ export const DEFAULT_CONFIG = Object.freeze({
       strengths: 'cambios con contexto de GitHub: issues y pull requests' },
     // Off by default: Hermes only asks permission for what it considers dangerous, so the user turns it on by hand.
     hermes: { enabled: false, path: '', models: [], defaultModel: '', heavyModels: [],
-      strengths: 'agente autónomo con memoria y muchos proveedores de modelos' }
+      strengths: 'agente autónomo con memoria y muchos proveedores de modelos' },
+    // Also off by default, and not verified against the real programs (none was installed when they were added).
+    // Their API keys, when they take one, are in the vault (src/domain/security/agent-keys.mjs), never here.
+    grok: { enabled: false, path: '', models: [], defaultModel: '', heavyModels: [], strengths: 'agente de xAI para programar desde la terminal' },
+    devin: { enabled: false, path: '', models: [], defaultModel: '', heavyModels: [], strengths: 'agente de Cognition (Devin para terminal) con planes y revisión' },
+    droid: { enabled: false, path: '', models: [], defaultModel: '', heavyModels: [], strengths: 'agente de Factory para tareas de ingeniería de principio a fin' },
+    omp: { enabled: false, path: '', models: [], defaultModel: '', heavyModels: [], strengths: 'variante de Pi con herramientas extra y muchos proveedores' },
+    // Pi and Antigravity cannot ask Orb before acting: they only run in «editar», «auto» and «total» (src/agents/unguarded.mjs).
+    pi: { enabled: false, path: '', models: [], defaultModel: '', heavyModels: [], strengths: 'agente minimalista y extensible, con muchos proveedores de modelos' },
+    antigravity: { enabled: false, path: '', models: [], defaultModel: '', heavyModels: [], strengths: 'agente de Google con ventanas de contexto muy grandes' }
   },
   // Accounts (subscriptions) per agent. id = agent and home '' = the CLI's own folder; more can be added from the app.
   accounts: AGENT_IDS.map((a) => ({ id: a, agent: a, label: AGENT_LABELS[a], home: '', enabled: true })),

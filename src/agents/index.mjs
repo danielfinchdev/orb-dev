@@ -5,14 +5,18 @@ import { pathToFileURL } from 'node:url';
 import * as claude from './claude.mjs';
 import * as codex from './codex.mjs';
 import * as cursor from './cursor.mjs';
+import * as pi from './pi.mjs';
+import * as antigravity from './antigravity.mjs';
 import { acpAgent, ACP_SPECS } from './acp.mjs';
 import { cleanEnv, IS_WIN, forgetAppData } from '../platform/proc.mjs';
 import fs from 'node:fs';
 import { ctx, tr } from '../platform/context.mjs';
 import { startLogin } from './login.mjs';
+import { agentKeyNames } from '../domain/security/agent-keys.mjs';
 import { accountsOf, account, accountDir, accountEnv, defaultAccount, loginState as accountLogin, MULTI } from '../domain/usage/accounts.mjs';
 
-export const ADAPTERS = { claude, codex, cursor, ...Object.fromEntries(Object.entries(ACP_SPECS).map(([id, spec]) => [id, acpAgent(id, spec)])) };
+// pi and antigravity are not ACP (own RPC mode / print mode) and unverified: off by default (platform/config-file.mjs).
+export const ADAPTERS = { claude, codex, cursor, ...Object.fromEntries(Object.entries(ACP_SPECS).map(([id, spec]) => [id, acpAgent(id, spec)])), pi, antigravity };
 // Tests: ORB_FAKE_AGENTS points to a module whose fakeAdapter(id) replaces every agent (no real program or account).
 if (process.env.ORB_FAKE_AGENTS) {
   const fake = await import(pathToFileURL(process.env.ORB_FAKE_AGENTS).href);
@@ -73,7 +77,7 @@ export async function status(agent, { refresh = false } = {}) {
   const a = adapter(agent); const cfg = ctx.config.agents[agent] ?? {};
   const exe = a.detect(cfg);
   const accounts = accountsOf(agent).map((acc) => ({ ...acc, login: exe ? loginState(acc) : 'no', dir: accountDir(acc), multi: Boolean(MULTI[agent]) }));
-  const base = { id: agent, label: a.label, kind: a.kind, caps: a.caps ?? {}, install: a.install ?? null, enabled: Boolean(cfg.enabled), models: cfg.models ?? [], defaultModel: cfg.defaultModel ?? '', path: cfg.path ?? '', accounts, multi: Boolean(MULTI[agent]) };
+  const base = { id: agent, label: a.label, kind: a.kind, caps: a.caps ?? {}, install: a.install ?? null, enabled: Boolean(cfg.enabled), unverified: Boolean(a.unverified ?? a.spec?.unverified), keys: agentKeyNames(agent), models: cfg.models ?? [], defaultModel: cfg.defaultModel ?? '', path: cfg.path ?? '', accounts, multi: Boolean(MULTI[agent]) };
   if (!exe) return { ...base, installed: false, login: 'no', version: null, where: null };
   let cached = versions.get(agent);
   if (refresh || !cached || cached.exe !== exe.cmd) {

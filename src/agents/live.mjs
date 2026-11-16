@@ -47,10 +47,15 @@ const LOGGED_SECRET = /(ORB_[A-Z_]*(?:TOKEN|KEY)"(?:\s*,\s*"value")?\s*:\s*")[^"
 
 // what Orb hands an agent's MCP servers in their env (tickets; a connector's keys if any reach here) never gets to a
 // session log, whatever the variable is called: the log hides those values themselves.
-export function hidingEnvValues(log, servers) {
-  const values = [...new Set(Object.values(servers ?? {}).flatMap((s) => Object.values(s?.env ?? {})).map(String).filter((v) => v.length >= 8))];
-  if (!values.length) return log;
-  return (line) => log(values.reduce((text, v) => text.split(v).join('***'), String(line)));
+// extra: more values to hide (the agent's own API key from the vault: it is in its environment, so its stderr may echo it).
+export function maskingValues(values = []) {
+  const list = [...new Set((values ?? []).map(String).filter((v) => v.length >= 8))];
+  const mask = list.length ? (text) => list.reduce((t, v) => t.split(v).join('***'), String(text ?? '')) : null;
+  return Object.assign(mask ?? ((text) => String(text ?? '')), { active: Boolean(mask) });
+}
+export function hidingEnvValues(log, servers, extra = []) {
+  const mask = maskingValues([...Object.values(servers ?? {}).flatMap((s) => Object.values(s?.env ?? {})), ...(extra ?? [])]);
+  return mask.active ? (line) => log(mask(line)) : log;
 }
 
 // JSON-RPC 2.0 over a child's stdin/stdout, one message per line (Codex app-server and ACP agents).
