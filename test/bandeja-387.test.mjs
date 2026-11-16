@@ -134,7 +134,9 @@ test('la tarjeta: solo pinta lo registrado', () => {
   assert.deepEqual(lines.map((l) => l.key), ['done', 'approvals']);
 });
 
-test('el resumen viaja al móvil: solo lectura y marca por dispositivo', async () => {
+test('el resumen viaja al móvil: solo lectura y marca por dispositivo', async (t) => {
+  // the card is only due from 05:00 local time: a fixed clock keeps the test from failing when run at night
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-11-16T10:00:00Z') });
   assert.equal(METHODS['inbox.digest'], 'remote'); assert.equal(METHODS['inbox.digestSeen'], 'remote');
   const phone = principalOf({ device: { id: 'p1', kind: 'phone' } });
   const a = await api.call('inbox.digest', { day: DAY }, phone);
