@@ -96,7 +96,7 @@ function* snapshotFlow(repo, { raw = false, always: wanted = false, message = 'o
     const stage = function* (seed) {
       fs.rmSync(tmp, { force: true });
       if (seed && fs.existsSync(seed)) fs.copyFileSync(seed, tmp);
-      const seedTail = raw && seed === rawIndex ? indexTail(tmp) : null;
+      const seedTail = raw && seed === rawIndex ? indexId(tmp) : null;
       if ((yield ask(env, ...cfg, 'add', '-A')).status !== 0) return false;
       if (raw && seed === rawIndex && head) reconciled = yield* restoreForced(seedTail);
       return !raw || seed === rawIndex || (yield ask(env, ...cfg, 'add', '--renormalize', '--', '.')).status === 0;
@@ -152,9 +152,10 @@ export function missedBy(repo, after, full) {
   });
 }
 // Whole or not at all (another snapshot may be reading it): written beside and renamed over. Losing it only costs time.
-// The last 32 bytes of an index file: git ends it with a checksum of its content, so this identifies that exact file.
-const indexTail = (file) => {
-  try { const fd = fs.openSync(file, 'r'); try { const size = fs.fstatSync(fd).size; const buf = Buffer.alloc(Math.min(32, size)); fs.readSync(fd, buf, 0, buf.length, size - buf.length); return buf.toString('hex'); } finally { fs.closeSync(fd); } } catch { return null; }
+// A hash of the whole index file identifies that exact file. Its own trailing checksum is not enough: with index.skipHash
+// (turned on by feature.manyFiles) git writes it as zeros, and two different indexes may then end alike.
+const indexId = (file) => {
+  try { return crypto.createHash('sha1').update(fs.readFileSync(file)).digest('hex'); } catch { return null; }
 };
 // head: the HEAD the index was reconciled with (see restoreForced), kept beside it together with the index's checksum;
 // without one the marker is dropped.
@@ -164,7 +165,7 @@ function keepRawIndex(tmp, rawIndex, head = null) {
     fs.mkdirSync(path.dirname(rawIndex), { recursive: true });
     fs.rmSync(`${rawIndex}.head`, { force: true });
     fs.copyFileSync(tmp, part); fs.renameSync(part, rawIndex);
-    const tail = head && indexTail(tmp);
+    const tail = head && indexId(tmp);
     if (tail) { fs.writeFileSync(part, `${head}:${tail}`); fs.renameSync(part, `${rawIndex}.head`); }
   } catch { fs.rmSync(part, { force: true }); }
 }

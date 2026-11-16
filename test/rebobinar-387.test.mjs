@@ -8,6 +8,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { Board } from '../src/domain/tasks/board.mjs';
 import { Sessions } from '../src/engine/sessions.mjs';
 import { Orchestrator } from '../src/engine/orchestrator.mjs';
@@ -331,6 +332,22 @@ test('a snapshot that copied the raw index before another one replaced it still 
   assert.ok(tracked(r, snapshotCommit(r, { raw: true, always: true }).commit).includes('gen/k.txt'));
 });
 
+test('the race is caught too when git writes the index without its checksum (index.skipHash)', async () => {
+  // with skipHash the index ends in zeros plus the hash of its last subtree, which a forced file under an earlier folder does not change
+  const r = path.join(t.home, 'web', 'forced7'); fs.mkdirSync(path.join(r, 'zzz'), { recursive: true });
+  git(r, 'init', '-q', '-b', 'main'); git(r, 'config', 'index.skipHash', 'true');
+  fs.writeFileSync(path.join(r, '.gitignore'), 'aaa/\n'); fs.writeFileSync(path.join(r, 'zzz', 'z.txt'), 'z\n');
+  git(r, 'add', '-A'); git(r, ...ident, 'commit', '-q', '-m', 'first');
+  warm(r);
+  forceCommit(r, 'aaa/k.txt');
+  const orig = fs.readFileSync; let other = null; let fired = false;
+  fs.readFileSync = function (f, ...a) { if (!fired && String(f).endsWith('index-raw.head')) { fired = true; other = snapshotCommit(r, { raw: true, always: true }); } return orig.call(this, f, ...a); };
+  let mine; try { mine = await snapshotCommitAsync(r, { raw: true, always: true }); } finally { fs.readFileSync = orig; }
+  assert.ok(tracked(r, other.commit).includes('aaa/k.txt'));
+  assert.ok(tracked(r, mine.commit).includes('aaa/k.txt'));
+  assert.ok(tracked(r, snapshotCommit(r, { raw: true, always: true }).commit).includes('aaa/k.txt'));
+});
+
 test('an ignored folder standing where HEAD had a file is not dragged into the photo', () => {
   const r = forcedRepo('forced4');
   fs.writeFileSync(path.join(r, '.gitignore'), 'gen/\nout/\n'); fs.writeFileSync(path.join(r, 'out'), 'file\n');
@@ -360,11 +377,11 @@ test('with the marker naming the current HEAD and index the check is skipped, an
   forceCommit(r, 'gen/m.txt');
   const index = path.resolve(r, g(r, 'rev-parse', '--git-path', 'orb/index-raw'));
   const raw = fs.readFileSync(index);
-  const stamp = `${g(r, 'rev-parse', 'HEAD')}:${raw.subarray(raw.length - 32).toString('hex')}`;
+  const stamp = `${g(r, 'rev-parse', 'HEAD')}:${crypto.createHash('sha1').update(raw).digest('hex')}`;
   // a marker that claims the index is reconciled with the new HEAD: nothing is looked for, so the forced file stays out
   fs.writeFileSync(`${index}.head`, stamp);
   assert.ok(!tracked(r, snapshotCommit(r, { raw: true, always: true }).commit).includes('gen/m.txt'));
   // the same HEAD with another index checksum is not trusted
-  fs.writeFileSync(`${index}.head`, `${stamp.split(':')[0]}:${'0'.repeat(64)}`);
+  fs.writeFileSync(`${index}.head`, `${stamp.split(':')[0]}:${'0'.repeat(40)}`);
   assert.ok(tracked(r, snapshotCommit(r, { raw: true, always: true }).commit).includes('gen/m.txt'));
 });
