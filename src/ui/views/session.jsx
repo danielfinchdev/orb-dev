@@ -40,6 +40,7 @@ import { baseName, cn } from '@/lib/utils.js';
 import { useT, t, useLocale, currentLocale } from '@/lib/i18n.js';
 import { sameBlock } from '@/lib/memo.js';
 import { toBlocks, subagentState } from '@/lib/session-blocks.js';
+import { summaryText } from '@/lib/tool-summary.js';
 import { kindOf, playableType } from '../../shared/attach-kind.mjs';
 import { canCapture, captureFrame } from '@/lib/window-capture.js';
 import { useAutoScroll, Composer } from '@/components/conversation/composer.jsx';
@@ -91,6 +92,23 @@ function ToolBlock({ b }) {
         {raw && readableCommand(raw) !== input ? <pre className="text-muted-foreground mx-3 mb-1.5 max-h-40 overflow-auto px-1 font-mono text-micro whitespace-pre-wrap break-all">{readableCommand(raw)}</pre> : null}
         <pre className="bg-muted mx-3 mb-3 max-h-80 overflow-auto rounded-lg px-3 py-2 font-mono text-xs whitespace-pre-wrap break-words">{b.result?.output || (b.result ? t('session.noOutput') : t('session.working'))}</pre>
       </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+// A run of tool calls as one folded line («Leyó 3 archivos, ejecutó 2 comandos»); unfolded, each call as always.
+function ToolGroup({ b }) {
+  const t = useT();
+  const text = summaryText(b.steps.map((x) => x.call?.name), t);
+  const failed = b.steps.filter((x) => x.result?.error).length;
+  return (
+    <Collapsible className="text-control" data-testid="tool-group">
+      <CollapsibleTrigger className="group text-muted-foreground hover:text-foreground flex w-full cursor-pointer items-center gap-2 px-1 py-1 text-left" aria-label={t('tools.sum.toggle', { summary: text })}>
+        <ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" />
+        <span className="min-w-0 truncate">{text}</span>
+        {failed ? <span className="text-destructive flex shrink-0 items-center gap-1 text-xs"><CircleAlert className="size-3.5" />{t('tools.sum.failed', { n: failed })}</span> : null}
+      </CollapsibleTrigger>
+      <CollapsibleContent><div className="mt-1 grid gap-2">{b.steps.map((x) => <ToolBlock key={x.key} b={x} />)}</div></CollapsibleContent>
     </Collapsible>
   );
 }
@@ -174,6 +192,7 @@ const Block = memo(function Block({ b, agent, who, brain, sessionId, project, ca
   const locale = useLocale();
   const usageLine = useStore((st) => st.app?.config?.ui?.usageLine !== false);
   if (b.type === 'tool') return <ToolBlock b={b} />;
+  if (b.type === 'toolgroup') return <ToolGroup b={b} />;
   if (b.type === 'subagent') return <SubagentBlock b={b} />;
   if (b.type === 'item' && b.item.kind === 'approval') return <ApprovalCard sessionId={sessionId} body={b.item.body} />;
   if (b.type === 'item' && b.item.kind === 'opti_action') return <OptiOldCard body={b.item.body} />;

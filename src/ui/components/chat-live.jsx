@@ -8,21 +8,10 @@ import { Spinner } from './ui/basic.jsx';
 import { call, act } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
+import { bareTool, kindOf, summaryText } from '@/lib/tool-summary.js';
 
-// What a tool does, by its name (Claude, Codex, Cursor and the ACP agents name them differently).
-const KIND = [
-  [/^(read|read_file|view|cat|open_file)$/i, 'read'], [/^(grep|glob|search|find|ls|list_dir|codebase_search|file_search)/i, 'search'],
-  [/^(bash|shell|exec|command|run|terminal|powershell)/i, 'run'], [/^(edit|write|multiedit|notebookedit|apply_patch|create_file|str_replace)/i, 'edit'],
-  [/^(webfetch|websearch|fetch|web_search|browse)/i, 'web'], [/^orb_create_task$/, 'task'], [/^orb_(board|list_tasks|get_task|wait_tasks)$/, 'board'],
-  [/^orb_read_log$/, 'readLog'], [/^orb_write_log$/, 'writeLog'], [/^orb_ask$/, 'ask'], [/^orb_(set_project|create_project|add_project)$/, 'project'],
-  [/^orb_schedule$/, 'schedule'], [/^orb_browser_/, 'browser'], [/^orb_(send_message|read_messages)$/, 'messages'], [/^(todowrite|todo)/i, 'plan'], [/^(task|agent|delegate)/i, 'delegate'],
-  // the agent looking up its own tools; opti_* in Opti Bot's old conversation
-  [/^tool_?search$/i, 'tools'], [/^opti_propose$/, 'propose'], [/^opti_/, 'pc']
-];
 const WITH_TARGET = new Set(['read', 'search', 'run', 'edit', 'web']);
-// «mcp__orb__orb_ask», «orb:orb_ask», «orb-orb_ask» → «orb_ask» (how each agent names the tools of a server).
-export const bareTool = (name) => String(name ?? '').replace(/^mcp__[^_]+(?:_[^_]+)*?__/, '').replace(/^(orb|opti)[:-](?=(orb|opti)_)/, '');
-const kindOf = (name) => KIND.find(([re]) => re.test(name))?.[1] ?? 'other';
+export { bareTool };
 export function stepText(t, step) {
   const name = bareTool(step.name);
   const kind = kindOf(name);
@@ -56,7 +45,8 @@ export function LiveActivity({ chat, testid = 'chat-activity' }) {
         {steps.length ? <ChevronRight className={cn('size-3.5 shrink-0 transition-transform', open && 'rotate-90')} /> : null}
       </button>
       {open ? (
-        <ol className="border-border/70 ml-1.5 grid gap-0.5 border-l pl-3 text-caption" data-testid="chat-activity-steps">
+        <ol className="border-border/70 ml-1.5 grid gap-0.5 border-l pl-3 text-caption" data-testid="chat-activity-steps" aria-label={summaryText(steps.map((x) => x.name), t)}>
+          {steps.length > 1 ? <li className="text-foreground/80 list-none font-medium" data-testid="chat-activity-summary">{summaryText(steps.map((x) => x.name), t)}</li> : null}
           {steps.map((s, i) => <li key={`${s.at}-${i}`} className="flex min-w-0 gap-2"><span className="min-w-0 flex-1 truncate">{stepText(t, s)}</span>{chat.since ? <span className="shrink-0 tabular-nums opacity-70">{elapsed(t, s.at - chat.since)}</span> : null}</li>)}
         </ol>
       ) : null}
