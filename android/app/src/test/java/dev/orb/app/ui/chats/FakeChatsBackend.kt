@@ -44,6 +44,11 @@ class FakeChatsBackend(initial: List<ChatRow> = emptyList(), sections: List<Chat
     var appStateResult: Result<JsonElement> = Result.failure(LinkException(LinkError.Offline))
 
     override suspend fun refreshInbox(): Result<Unit> { refreshCount++; return refreshResult }
+    var digestResult: Result<JsonElement> = Result.failure(LinkException(LinkError.Offline))
+    var digestCalls = 0
+    var digestSeenCalls = 0
+    override suspend fun digest(): Result<JsonElement> { digestCalls++; return digestResult }
+    override suspend fun digestSeen(): Result<Unit> { digestSeenCalls++; return Result.success(Unit) }
     override suspend fun appState() = appStateResult
     override fun available(m: ApiMethod) = trashAvailable || m !in setOf(ApiMethods.CONVERSATIONS_TRASH, ApiMethods.SESSIONS_TRASH, ApiMethods.CONVERSATIONS_RESTORE, ApiMethods.SESSIONS_RESTORE)
 

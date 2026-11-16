@@ -41,6 +41,8 @@ object ApiMethods {
     val INBOX_SECTIONS_DELETE = m("inbox.sections.delete")
     val INBOX_SECTIONS_REORDER = m("inbox.sections.reorder")
     val INBOX_SECTIONS_MOVE = m("inbox.sections.move")
+    val INBOX_DIGEST = m("inbox.digest", requiresPc = "3.8.7")
+    val INBOX_DIGEST_SEEN = m("inbox.digestSeen", requiresPc = "3.8.7")
     val CONVERSATIONS_LIST = m("conversations.list")
     val CONVERSATIONS_SEARCH = m("conversations.search")
     val CONVERSATIONS_UPDATE = m("conversations.update")
@@ -171,6 +173,8 @@ class OrbApi(private val pc: PcCaller, private val newId: () -> String = { UUID.
         suspend fun sectionsDelete(params: JsonObject = NONE) = run(ApiMethods.INBOX_SECTIONS_DELETE, params)
         suspend fun sectionsReorder(params: JsonObject = NONE) = run(ApiMethods.INBOX_SECTIONS_REORDER, params)
         suspend fun sectionsMove(params: JsonObject = NONE) = run(ApiMethods.INBOX_SECTIONS_MOVE, params)
+        suspend fun digest(params: JsonObject = NONE) = run(ApiMethods.INBOX_DIGEST, params)
+        suspend fun digestSeen(params: JsonObject = NONE) = run(ApiMethods.INBOX_DIGEST_SEEN, params)
     }
 
     val inbox = Inbox()

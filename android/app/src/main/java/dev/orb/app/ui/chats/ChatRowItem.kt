@@ -188,6 +188,7 @@ fun ChatRowItem(row: ChatRow, whenText: String, onClick: () -> Unit, onLongClick
             when {
                 row.waitingPermission -> StatusTag(ChatTexts.WAITING_PERMISSION, OrbIcons.Shield, warn = true, spin = false)
                 row.asking -> StatusTag(ChatTexts.ASKING, OrbIcons.Shield, warn = true, spin = false)
+                row.needsReview -> StatusTag(remember { InboxTexts.current() }.needsReview, OrbIcons.Shield, warn = true, spin = false)
                 row.state == ChatState.Working -> StatusTag(ChatTexts.WORKING, OrbIcons.Loader, warn = false, spin = true)
                 unread -> UnreadCount(row.unread, row.muted)
             }
