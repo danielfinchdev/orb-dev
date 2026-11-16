@@ -138,7 +138,7 @@ mod imp {
     if msg == WM_RUN {
       while let Some(job) = JOBS.with(|j| j.borrow().as_ref().and_then(|r| r.try_recv().ok())) {
         // A panic in a job must not leave this window procedure (unwinding out of `extern "system"` ends Orb): it is
-        // caught here, written down, and the thread goes on with the next job (review D9 B8).
+        // caught here, written down, and the thread goes on with the next job.
         if std::panic::catch_unwind(std::panic::AssertUnwindSafe(job)).is_err() {
           eprintln!("navegador de los agentes: un trabajo falló (pánico); se sigue con el siguiente");
         }
@@ -568,8 +568,7 @@ mod imp {
           core.add_FrameNavigationStarting(&NavigationStartingEventHandler::create(Box::new(move |_, a| handler(a))), &mut token)?;
         }
       }
-      // Review D8 B1: nor any request (fetch, an image, a form) to the engine's own servers on this PC's loopback. Review
-      // final B2: any host on those ports (url_allowed resolves names), and ports the engine names later are added to the
+      // Nor any request (fetch, an image, a form) to the engine's own servers on this PC's loopback, and any host on those ports (url_allowed resolves names), and ports the engine names later are added to the
       // pages already open (refresh_port_filters).
       let ports = browser_rules::own_ports();
       add_port_filters(&core, &ports)?;

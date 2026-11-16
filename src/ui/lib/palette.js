@@ -1,7 +1,11 @@
-// 3.8.2: the logic of Ctrl+K (components/command-palette.jsx), apart so the tests can run it.
+// the logic of Ctrl+K (components/command-palette.jsx), apart so the tests can run it.
 const fold = (s) => String(s ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
 // Ctrl+K (⌘K) alone.
+// The same palette from a button (no shortcut involved): the palette listens for this event.
+export const PALETTE_EVENT = 'orb:palette';
+export const openPalette = () => window.dispatchEvent(new Event(PALETTE_EVENT));
+
 export const isPaletteKey = (e) => (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === 'KeyK';
 
 // What a query finds, in groups: places and actions, chats (by title, project or messages), messages of other chats,

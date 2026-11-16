@@ -13,7 +13,7 @@ export function orbMcpServer(env = {}) {
 }
 export const connectorLauncher = (env = {}) => ({ command: nodeRuntime(), args: [path.join(mcpDir(), 'launch.mjs')], env });
 
-// 3.8: the MCP servers' environment (Orb's signatures, a connector's keys) never goes on a command line, which any
+// the MCP servers' environment (Orb's signatures, a connector's keys) never goes on a command line, which any
 // process of the user can read: each value moves to the agent's own environment under a name of its own, and the
 // server's config keeps only a reference the agent expands when it starts the server (ref(name): "${NAME}" for Claude
 // Code, "${env:NAME}" for Cursor). → { servers, env }

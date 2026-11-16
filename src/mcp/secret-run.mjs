@@ -1,4 +1,4 @@
-// 3.8.2 (T3 3.4): runs one command with a secret the user typed on Orb's private card (orb_request_secret), without the
+// runs one command with a secret the user typed on Orb's private card (orb_request_secret), without the
 // agent ever seeing it:
 //   node secret-run.mjs <handle> --env NAME -- program args…    the secret in the variable NAME of that program only
 //   node secret-run.mjs <handle> --stdin -- program args…       the secret on the program's standard input

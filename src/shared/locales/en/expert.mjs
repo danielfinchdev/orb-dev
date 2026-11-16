@@ -59,7 +59,7 @@ export default {
   'expert.system': 'System',
   'expert.activity': 'Activity',
   'expert.close': 'Close',
-  // 3.2: God mode: open in and actions
+  // God mode: open in and actions
   'tools.explorer': 'File Explorer',
   'tools.files': 'File manager',
   'tools.openIn': 'Open in {app}',

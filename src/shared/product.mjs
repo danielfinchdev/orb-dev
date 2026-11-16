@@ -1,5 +1,5 @@
 // The product's names in one place. Orb.dev is the development (this repository); the program is Orb (Orb.exe); its robot
-// is Orbe (2.6; drawn as the Orb·E wordmark at the top of the sidebar). To rename the program, change these values and the same ones in package.json (productName, build.appId,
+// is Orbe (drawn as the Orb·E wordmark at the top of the sidebar). To rename the program, change these values and the same ones in package.json (productName, build.appId,
 // build.productName, artifact names); `npm run check` warns if they differ. Each user can still call their assistant
 // whatever they like (that name lives in their orb.json).
 export const PRODUCT = {
@@ -23,7 +23,7 @@ export function folderName(name, fallback = PRODUCT.folder) {
   return clean;
 }
 
-// 3.2.1: a project's name is also its folder's name, so a name that the folder could not keep as it is (\ / : * ? " < > |,
+// a project's name is also its folder's name, so a name that the folder could not keep as it is (\ / : * ? " < > |,
 // a final dot or space, CON, NUL…) is refused instead of showing one name and saving another. Returns the text key of the
 // problem, or null when the name is fine. Without Node, so the dialog can say it while the user types.
 export function projectNameProblem(name) {

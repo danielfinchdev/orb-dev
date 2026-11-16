@@ -3,12 +3,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
-import { git, repoRoot, REF_PREFIX } from '../../platform/git.mjs';
-import { integrateInto } from '../../domain/tasks/checkpoints.mjs';
+import { gitAsync, repoRootAsync, REF_PREFIX } from '../../platform/git.mjs';
+import { integrateIntoAsync } from '../../domain/tasks/checkpoints.mjs';
 import { oneLine } from '../../shared/text.mjs';
 
 export class FoldersPart {
-  // ---- 3.1: work done alongside others, joined into the project folder
+  // ---- work done alongside others, joined into the project folder
   // Whether a task's work is waiting to be joined into this project's folder (it then holds the folder like a writer).
   integrating(project) {
     // Not one a task is joining by hand (info.by): that task is the writer.
@@ -24,33 +24,67 @@ export class FoldersPart {
   }
   // Joins every finished copy whose folder has no task writing in it now. Clean: the files land in the folder, with the
   // same undo as a "carpeta" task, and the copy and its branch go. Conflict: nothing is touched; a task joins it by hand.
-  integratePending() {
+  // Git runs off the event loop. What needs no git (closing broken or abandoned rows, a join done by hand) is done before
+  // the first await; each project with copies to join is held while they are joined, one after another.
+  // own: the task whose close is calling (it is still in this.finishing, but joining its own copy is part of closing it).
+  async integratePending({ own = null } = {}) {
     const { board } = this;
+    const groups = new Map();
     for (const { id, info, task } of this.pendingJoins()) {
       if (!task || !info || task.status === 'cancelled') { board.settingJson(`integrate:${id}`, null); continue; }
       if (info.by) { this.joinedBy(task, info); continue; }
-      if (task.status !== 'done' || task.pid || this.running.has(id)) continue;
+      if (task.status !== 'done' || task.pid || this.running.has(id) || this.joining.has(id) || (this.finishing.has(id) && id !== own)) continue;
       const project = board.project(task.project); if (!project) continue;
+      // A close, another join or «Deshacer» is working in that folder: the next pass will do it.
+      if (this.held(project.name)) continue;
       // Nobody working in the folder: neither a writer nor one that is reading or testing it (files must not change under it).
       const busy = [...this.running.keys()].map((rid) => board.task(rid)).some((t) => t && !t.branch && t.workdir && path.resolve(t.workdir) === path.resolve(project.path));
       if (busy) continue;
-      this.integrate(task, project, info);
+      if (!groups.has(project.name)) groups.set(project.name, []);
+      groups.get(project.name).push({ id, project });
     }
+    const jobs = [];
+    if (this.closing) return; // the app is shutting down: no new join starts
+    for (const [name, items] of groups) {
+      const release = this.hold(name);
+      const job = (async () => {
+        await null; // the entries of this.joining are set right after this starts, so they are never set after it ended
+        try {
+          for (const { id, project } of items) {
+            // Read again: the task may have moved on while the ones before it were joined.
+            const task = board.task(id); const info = board.settingJson(`integrate:${id}`);
+            if (!task || !info || info.by || task.status !== 'done' || task.pid || this.running.has(id)) continue;
+            try { await this.integrate(task, project, info); } catch (error) { this.log(`unir #${id}: ${error.stack}`); }
+          }
+        } finally { release(); }
+      })();
+      for (const { id } of items) this.joining.set(id, job);
+      job.finally(() => { for (const { id } of items) if (this.joining.get(id) === job) this.joining.delete(id); });
+      jobs.push(job);
+    }
+    await Promise.all(jobs);
   }
-  integrate(task, project, info) {
+  async integrate(task, project, info) {
     const { board } = this;
-    const repo = repoRoot(project.path);
-    const tip = task.branch ? git(repo, 'rev-parse', '--verify', '--quiet', task.branch).stdout.trim() : '';
+    const repo = await repoRootAsync(project.path);
+    const tip = task.branch ? (await gitAsync(repo, {}, 'rev-parse', '--verify', '--quiet', task.branch)).stdout.trim() : '';
     if (!tip) { board.settingJson(`integrate:${task.id}`, null); board.event(task.id, 'orb', 'integrate.skipped', 'no hay rama que unir'); return; }
     if (tip === info.base) { this.dropCopy(task, project); board.settingJson(`integrate:${task.id}`, null); board.event(task.id, 'orb', 'files.changed', 'ningún archivo'); return; }
-    const out = integrateInto(repo, { base: info.base, tip });
+    const out = await integrateIntoAsync(repo, { base: info.base, tip });
+    // Read again after the awaits: a join closed meanwhile writes nothing more, unless files were already written: then
+    // they are noted anyway, so «Deshacer» can give them back.
+    if (!board.settingJson(`integrate:${task.id}`)) {
+      this.log(`unir #${task.id}: la unión se cerró mientras se hacía${out.ok ? '; sus archivos ya estaban escritos y se anotan' : ''}`);
+      if (!out.ok) return;
+    }
     if (out.ok) {
       // Undo works as for a task that wrote in the folder: back to the folder as it was right before joining.
-      git(repo, 'update-ref', `${REF_PREFIX}/t${task.id}-antes-de-unir`, out.before);
-      git(repo, 'update-ref', `${REF_PREFIX}/t${task.id}-despues`, out.after);
-      board.settingJson(`checkpoint:${task.id}`, { before: { kind: 'git', repo, ref: `${REF_PREFIX}/t${task.id}-antes-de-unir`, commit: out.before }, after: { kind: 'git', repo, commit: out.after }, head: git(repo, 'rev-parse', 'HEAD').stdout.trim(), remotes: null });
+      await gitAsync(repo, {}, 'update-ref', `${REF_PREFIX}/t${task.id}-antes-de-unir`, out.before);
+      await gitAsync(repo, {}, 'update-ref', `${REF_PREFIX}/t${task.id}-despues`, out.after);
+      const head = (await gitAsync(repo, {}, 'rev-parse', 'HEAD')).stdout.trim();
+      board.settingJson(`checkpoint:${task.id}`, { before: { kind: 'git', repo, ref: `${REF_PREFIX}/t${task.id}-antes-de-unir`, commit: out.before }, after: { kind: 'git', repo, commit: out.after }, head, remotes: null });
       board.event(task.id, 'orb', 'files.changed', out.changed.length ? out.changed.slice(0, 60).map((c) => `${c.status} ${c.path}`).join(', ') + (out.changed.length > 60 ? ` … y ${out.changed.length - 60} más` : '') : 'ningún archivo');
-      this.dropCopy(task, project);
+      this.dropCopy(task, project); // not waited for: the removal runs off the event loop and the project is not held meanwhile
       board.settingJson(`integrate:${task.id}`, null); board.setting(`integrate_error_at:${task.id}`, '');
       board.event(task.id, 'orb', 'task.integrated', `unida a la carpeta (${out.changed.length} archivo(s))`);
       board.notice(tr('msg.scheduler.joined', { id: task.id, title: oneLine(task.title), n: out.changed.length, name: project.name }), 'success');
@@ -75,14 +109,16 @@ Une su trabajo a mano en la carpeta del proyecto (${project.path}): mira qué ca
 No hagas commit, merge, rebase ni cambies de rama: deja los cambios en los archivos.` }, 'orb');
     board.settingJson(`integrate:${task.id}`, { ...info, by: join.id }); board.setting(`integrate_error_at:${task.id}`, '');
     board.setting(`join_task:${join.id}`, '1');
+    // Kept for good (join_task is cleared when the join ends): the engine made it, so it is not one of the assistant's rounds.
+    board.setting(`engine_task:${join.id}`, '1');
     board.event(task.id, 'orb', 'integrate.conflict', `conflicto en ${out.conflicts.slice(0, 20).join(', ')}: lo une la tarea #${join.id}`);
     board.notice(tr('msg.scheduler.joinConflict', { id: task.id, join: join.id, list: oneLine(out.conflicts.slice(0, 5).join(', '), 200) }), 'warning');
   }
   // The task that joins a conflicting copy by hand: once it is done, the copy goes and the dependents may start.
   joinedBy(task, info) {
     const by = this.board.task(info.by);
-    // 3.8.3 (repaso): a join task that failed, was cancelled or is gone used to leave the copy pending for ever (its
-    // dependents never started). The work stays in its branch for a «Unir» by hand; the pending join is closed.
+    // a join task that failed, was cancelled or is gone would leave the copy pending for ever (its
+    // dependents would never start). The work stays in its branch for a «Unir» by hand; the pending join is closed.
     if (!by || ['cancelled', 'failed'].includes(by.status)) {
       this.board.settingJson(`integrate:${task.id}`, null); if (by) this.board.setting(`join_task:${by.id}`, '');
       this.board.event(task.id, 'orb', 'integrate.skipped', by ? `la tarea #${by.id} que la unía terminó en ${by.status}` : `la tarea #${info.by} que la unía ya no existe`);
@@ -96,34 +132,38 @@ No hagas commit, merge, rebase ni cambies de rama: deja los cambios en los archi
     this.board.event(task.id, 'orb', 'task.integrated', `unida a la carpeta por la tarea #${by.id}`);
   }
   // The copy (worktree) and its branch, once their work is in the folder. Only Orb's own copies under core\copias\aisladas.
+  // The task is updated at once; the removal runs off the event loop and the returned promise (never rejected) says when it is
+  // over, for the callers that must wait for it.
   dropCopy(task, project) {
     const { branch, workdir } = task;
     const inside = workdir && path.resolve(workdir).toLowerCase().startsWith(path.resolve(ctx.paths.worktrees).toLowerCase() + path.sep);
-    const removeBranch = () => { if (branch) git(project.path, 'branch', '-D', branch); };
+    const g = (...args) => gitAsync(project.path, {}, ...args);
+    const removeBranch = async () => { if (branch) await g('branch', '-D', branch); };
+    let removal;
     if (inside && fs.existsSync(workdir)) {
-      // 3.2.1: the agent's own process and the programs it left can still hold the copy's folder open, so git cannot
+      // the agent's own process and the programs it left can still hold the copy's folder open, so git cannot
       // remove it. Close them first; then let git try; if the folder is still locked, delete it with retries, and if even
       // that fails note it as an orphan so the next startup (pruneCopies) clears it.
       try { this.sessions.closeLive(task.session_id); } catch (error) { this.log(`cerrar proceso #${task.id}: ${error.message}`); }
-      const removeCopy = () => {
-        const r = git(project.path, 'worktree', 'remove', '--force', workdir);
+      const removeCopy = async () => {
+        const r = await g('worktree', 'remove', '--force', workdir);
         if (r.status !== 0) {
           this.log(`quitar copia #${task.id}: ${r.stderr.trim()}`);
-          try { fs.rmSync(workdir, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 }); git(project.path, 'worktree', 'prune'); } catch (error) {
+          try { fs.rmSync(workdir, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 }); await g('worktree', 'prune'); } catch (error) {
             this.log(`borrar copia #${task.id}: ${error.message}`);
             this.board.settingJson(`orphan_copy:${task.id}`, { path: workdir, at: new Date().toISOString() });
           }
         }
-        removeBranch(); // after the copy: git does not delete a branch a worktree still has checked out
+        await removeBranch(); // after the copy: git does not delete a branch a worktree still has checked out
       };
-      // 3.8.3: the programs are stopped asynchronously; the folder and its branch go once that is over.
+      // the programs are stopped asynchronously; the folder and its branch go once that is over.
       let stopping = this.cleaning.get(task.id) ?? null;
       if (!stopping) { try { stopping = this.stopLeftovers(task); } catch (error) { this.log(`parar restos #${task.id}: ${error.message}`); } }
-      if (stopping) stopping.then(removeCopy).catch((error) => this.log(`quitar copia #${task.id}: ${error.message}`));
-      else removeCopy();
-    } else removeBranch();
+      removal = (stopping ? stopping.then(removeCopy) : removeCopy()).catch((error) => this.log(`quitar copia #${task.id}: ${error.message}`));
+    } else removal = removeBranch().catch((error) => this.log(`quitar rama #${task.id}: ${error.message}`));
     // Its copy is gone: a later run starts from the folder as it is then (a fresh base if it works in a copy again).
     this.board.settingJson(`isolated:${task.id}`, null);
     this.board.patch(task.id, { branch: null, workdir: project.path }, 'orb', 'task.copy_removed');
+    return removal;
   }
 }

@@ -278,7 +278,7 @@ mod tests {
     assert!(l.allow("y", t0 + Duration::from_secs(61)));
   }
 
-  /// Review D-fix B6 / D9 B10: what comes too fast is not dropped: the limiter says when it may go.
+  /// What comes too fast is not dropped: the limiter says when it may go.
   #[test]
   fn too_fast_waits_for_its_turn_instead_of_being_dropped() {
     let mut l = Limiter::new();

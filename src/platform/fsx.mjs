@@ -15,3 +15,12 @@ export function inside(root, target) {
   const r = real(root).toLowerCase().replace(/[\\/]+$/, ''); const t = real(target).toLowerCase().replace(/[\\/]+$/, '');
   return t === r || t.startsWith(r + path.sep);
 }
+
+// Writes a file so a reader never sees it half written: a temporary file beside it, then a rename.
+export function writeAtomic(file, data) {
+  const tmp = `${file}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(tmp, data);
+    fs.renameSync(tmp, file);
+  } catch (error) { try { fs.rmSync(tmp, { force: true }); } catch { /* best effort */ } throw error; }
+}

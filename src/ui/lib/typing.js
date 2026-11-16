@@ -1,4 +1,4 @@
-// 3.8.3: the typing of a streamed answer. The engine sends the answer in pieces (one every ~50 ms, or a big one now and
+// the typing of a streamed answer. The engine sends the answer in pieces (one every ~50 ms, or a big one now and
 // then); drawn as they come, the text jumps a piece at a time. Here the text on screen follows the received one at its
 // own steady pace, one character (grapheme) at a time:
 //
@@ -85,7 +85,7 @@ export function createReveal({ reduced = false, start = 0 } = {}) {
       const left = target.length - pos;
       const want = done ? Math.max(DONE_MIN_CPS, left / DONE_LAG_S) : Math.max(MIN_CPS, left / LAG_S);
       // The pace follows smoothly (faster to rise than to fall): a pause between pieces does not stutter. At the end, at once.
-      // The first word shows in the first frame (the answer starts as soon as it comes, as before), and the pace starts
+      // The first word shows in the first frame (the answer starts as soon as it comes), and the pace starts
       // at what the text asks for, not from zero.
       if (shown === 0) { const word = /^\s*\S{1,24}/.exec(target); if (word) pos = Math.max(pos, word[0].length); }
       rate = done || rate === 0 ? Math.max(rate, want) : rate + (want - rate) * (1 - Math.exp(-dt / (want > rate ? RISE_S : FALL_S)));

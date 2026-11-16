@@ -1,6 +1,6 @@
-// 3.5: Magic Link, in Ajustes on the PC. «Enlazar dispositivo» shows a QR and a short code (5 minutes, one use) for a
-// phone or a browser (3.8.2: in a dialog); and the list of linked devices, each with whether it is on, when it was last seen, rename and
-// close its session. 3.8: the phone asks for the master password to link, and unlinking one asks for it here.
+// Magic Link, in Ajustes on the PC. «Enlazar dispositivo» shows a QR and a short code (5 minutes, one use) for a
+// phone or a browser (in a dialog); and the list of linked devices, each with whether it is on, when it was last seen, rename and
+// close its session. The phone asks for the master password to link, and unlinking one asks for it here.
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { QrCode, Smartphone, Globe, Pencil, Trash2, Copy, Check, LoaderCircle, ShieldCheck, TriangleAlert, ChevronDown, ExternalLink, KeyRound } from 'lucide-react';
@@ -13,6 +13,8 @@ import { unlockCore } from '@/lib/core-access.js';
 import { countdown, sortDevices } from '@/lib/link.js';
 import { cn, ago } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
+import { notifyError } from '@/lib/notify.js';
+import { quiet } from '@/lib/quiet.js';
 
 const KIND_ICON = { phone: Smartphone, browser: Globe };
 
@@ -24,14 +26,14 @@ function Segmented({ label, value, options, onChange, testid }) {
     <div className="grid gap-1.5">
       <span className="text-muted-foreground text-xs">{label}</span>
       <div className="bg-muted inline-flex w-fit gap-1 rounded-lg p-1" role="radiogroup" aria-label={label} data-testid={testid}>
-        {options.map((o) => <button key={o.value} type="button" role="radio" aria-checked={value === o.value} onClick={() => onChange(o.value)} data-testid={`${testid}-${o.value}`} className={cn('cursor-pointer rounded-md px-3 py-1 text-[13px]', value === o.value ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{o.label}</button>)}
+        {options.map((o) => <button key={o.value} type="button" role="radio" aria-checked={value === o.value} onClick={() => onChange(o.value)} data-testid={`${testid}-${o.value}`} className={cn('cursor-pointer rounded-md px-3 py-1 text-control', value === o.value ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{o.label}</button>)}
       </div>
     </div>
   );
 }
 
-// The QR with its short code and how long it lasts (5 minutes, one use). 3.5.1: what it is for (a phone or a browser) is
-// decided here, the device cannot change it. 3.8.2: «Enlazar dispositivo» opens it in a dialog, where both that and the
+// The QR with its short code and how long it lasts (5 minutes, one use). what it is for (a phone or a browser) is
+// decided here, the device cannot change it. «Enlazar dispositivo» opens it in a dialog, where both that and the
 // way in (Tailscale first, or the local network) are chosen; the card itself only says what to do.
 const PAIR_FOR = ['phone', 'browser'];
 const PAIR_VIA = ['tailscale', 'wifi'];
@@ -77,15 +79,15 @@ function PairDialog({ open: want, onClose }) {
               <div className="text-muted-foreground text-xs">{t('link.orCode')}</div>
               <div className="flex items-center justify-center gap-2 sm:justify-start">
                 <span className="bg-muted rounded-lg px-3 py-1.5 font-mono text-2xl font-semibold tracking-widest tabular-nums select-all" data-testid="link-code">{qr.code}</span>
-                {navigator.clipboard ? <Button size="icon-sm" variant="ghost" aria-label={copied ? t('link.copied') : t('link.copy')} title={copied ? t('link.copied') : t('link.copy')} onClick={() => navigator.clipboard.writeText(`${qr.code} ${qr.address}`).then(() => setCopied(true)).catch(() => {})} data-testid="link-copy">{copied ? <Check className="text-success animate-in fade-in-0 zoom-in-95" /> : <Copy />}</Button> : null}
+                {navigator.clipboard ? <Button size="icon-sm" variant="ghost" aria-label={copied ? t('link.copied') : t('link.copy')} title={copied ? t('link.copied') : t('link.copy')} onClick={() => navigator.clipboard.writeText(`${qr.code} ${qr.address}`).then(() => setCopied(true)).catch(quiet)} data-testid="link-copy">{copied ? <Check className="text-success animate-in fade-in-0 zoom-in-95" /> : <Copy />}</Button> : null}
               </div>
               <div className="text-muted-foreground font-mono text-xs break-all">{qr.address}</div>
               <div className="flex items-center justify-center gap-1.5 text-xs sm:justify-start" data-testid="link-fp"><ShieldCheck className="text-success size-3.5 shrink-0" />{t('link.fp', { fp: qr.pc })}</div>
-              {qr.device === 'browser' && !qr.browserOk ? <div className="text-warning flex items-start gap-1.5 text-xs" role="alert" data-testid="link-http-warn"><TriangleAlert className="mt-0.5 size-3.5 shrink-0" />{t('link.httpBrowserWarn')}</div> : null}
+              {qr.device === 'browser' && !qr.browserOk ? <div className="text-warning-ink flex items-start gap-1.5 text-xs" role="alert" data-testid="link-http-warn"><TriangleAlert className="mt-0.5 size-3.5 shrink-0" />{t('link.httpBrowserWarn')}</div> : null}
               {qr.device === 'phone' && qr.kind === 'wifi' && !qr.secure ? <div className="text-muted-foreground text-xs" data-testid="link-android-note">{t('link.preferHttps')}</div> : null}
               <div className="text-sm">{t('link.expires')} <span className="font-medium tabular-nums" data-testid="link-countdown">{countdown(qr.expiresAt, now)}</span></div>
             </div>
-            {/* 3.6: reaching this PC from outside home, explained where it is needed: when linking a phone. */}
+            {/* reaching this PC from outside home, explained where it is needed: when linking a phone. */}
             {qr.device === 'phone' ? <OutsideGuide /> : null}
           </div>
         ) : (
@@ -115,9 +117,9 @@ function OutsideGuide() {
   return (
     <details className="group w-full rounded-lg border px-3 py-2 text-sm sm:col-span-2" data-testid="link-outside">
       <summary className="flex cursor-pointer list-none items-center gap-2 font-medium"><Globe className="text-muted-foreground size-4" />{t('link.outTitle')}<ChevronDown className="text-muted-foreground ml-auto size-4 transition-transform duration-200 group-open:rotate-180" /></summary>
-      <ol className="mt-2 grid list-decimal gap-1 pl-5 text-[13px]"><li>{t('link.out1')}</li><li>{t('link.out2')}</li><li>{t('link.out3')}</li></ol>
+      <ol className="mt-2 grid list-decimal gap-1 pl-5 text-control"><li>{t('link.out1')}</li><li>{t('link.out2')}</li><li>{t('link.out3')}</li></ol>
       <div className="mt-2 flex flex-wrap items-center gap-3">
-        <Button size="xs" variant="outline" onClick={() => bridge.openExternal('https://tailscale.com/download').catch(() => {})}><ExternalLink />{t('link.outGet')}</Button>
+        <Button size="xs" variant="outline" onClick={() => bridge.openExternal('https://tailscale.com/download').catch((e) => notifyError(e))}><ExternalLink />{t('link.outGet')}</Button>
         <span className="text-muted-foreground text-xs">{t('link.outPcOn')}</span>
       </div>
     </details>
@@ -145,7 +147,7 @@ function DevicesCard({ devices, reload, onPair }) {
                 <div className="flex min-w-0 items-center gap-2"><Dot on={d.online} /><span className="truncate text-sm font-medium">{d.name}</span></div>
                 <div className="text-muted-foreground truncate text-xs">{[t(`link.kind.${d.kind}`), d.online ? t('link.onNow') : d.lastSeen ? `${t('link.offline')} · ${t('link.seen', { when: ago(d.lastSeen) })}` : t('link.never')].filter(Boolean).join(' · ')}</div>
               </div>
-              {/* 3.8.2: over the local network, a device that no longer connects (the PC's address changed) is linked again. */}
+              {/* over the local network, a device that no longer connects (the PC's address changed) is linked again. */}
               {!d.online && d.lastSeen && d.route === 'wifi' ? <Button size="xs" variant="outline" onClick={() => onPair({ device: d.kind === 'browser' ? 'browser' : 'phone', via: 'wifi' })} data-testid="link-relink">{t('link.relink')}</Button> : null}
               <BubbleTip title={t('link.rename')}><Button size="icon-sm" variant="ghost" aria-label={t('link.rename')} onClick={() => rename(d)}><Pencil /></Button></BubbleTip>
               <BubbleTip title={t('link.revoke')}><Button size="icon-sm" variant="danger" aria-label={t('link.revoke')} onClick={() => revoke(d)} data-testid="link-revoke"><Trash2 /></Button></BubbleTip>
@@ -157,13 +159,13 @@ function DevicesCard({ devices, reload, onPair }) {
   );
 }
 
-// 3.6: a part of a settings section, with its heading (Ajustes › Datos › Copias…); id: the anchor the menu jumps to.
+// a part of a settings section, with its heading (Ajustes › Datos › Copias…); id: the anchor the menu jumps to.
 // Without a title (a phone's own screen), only its cards.
 export function SubSection({ id, title, children }) {
   if (!title) return children;
   return (
     <section id={`settings-${id}`} className="grid scroll-mt-4 gap-4 [&>*]:min-w-0" data-testid={`settings-group-${id}`} aria-labelledby={`settings-${id}-title`}>
-      <h3 id={`settings-${id}-title`} className="text-muted-foreground px-1 pt-3 text-[13px] font-medium">{title}</h3>
+      <h3 id={`settings-${id}-title`} className="text-muted-foreground px-1 pt-3 text-control font-medium">{title}</h3>
       {children}
     </section>
   );

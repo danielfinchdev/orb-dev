@@ -1,9 +1,9 @@
 // Ajustes: Android, the phone and the browser linked with this PC (Magic Link), and «Este móvil».
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { notifyInfo } from '@/lib/notify.js';
 import QRCode from 'qrcode';
 import { FolderOpen, Smartphone, Globe, PictureInPicture2 } from 'lucide-react';
-import { PageHeader } from '@/components/page.jsx';
+import { PageHeader, PageBody } from '@/components/page.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, PathText, Spinner } from '@/components/ui/basic.jsx';
@@ -13,8 +13,9 @@ import { cn } from '@/lib/utils.js';
 import { t, useT } from '@/lib/i18n.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { save, Row, PREVIEWS, previewOf } from './rows.jsx';
+import { quiet } from '@/lib/quiet.js';
 
-// 3.8.2 (D2): the pairing of «Emparejar móvil»: Android's QR (Depuración inalámbrica) that the engine waits for on the
+// the pairing of «Emparejar móvil»: Android's QR (Depuración inalámbrica) that the engine waits for on the
 // network, or the six-digit code by hand. unlock: the master password's token (pairing gives the agents a way in).
 function PairPanel({ v, set }) {
   const t = useT();
@@ -25,10 +26,10 @@ function PairPanel({ v, set }) {
     const r = await act(call('android.pairStart', { unlock }));
     if (r) { setSt(r); setSvg(await QRCode.toString(r.qr, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' })); }
   };
-  useEffect(() => { if (!v.manual) start(); return () => { call('android.pairCancel').catch(() => {}); }; }, [v.manual]);
+  useEffect(() => { if (!v.manual) start(); return () => { call('android.pairCancel').catch(quiet); }; }, [v.manual]);
   useEffect(() => {
     if (st?.state !== 'waiting' && st?.state !== 'pairing') return undefined;
-    const id = setInterval(() => { call('android.pairState').then(setSt).catch(() => {}); }, 1500);
+    const id = setInterval(() => { call('android.pairState').then(setSt).catch(quiet); }, 1500);
     return () => clearInterval(id);
   }, [st?.state]);
   if (v.manual) return (
@@ -58,8 +59,8 @@ export function AndroidCard() {
   const t = useT();
   const [st, setSt] = useState(null);
   const [phones, setPhones] = useState([]);
-  const [emus, setEmus] = useState(null); // 3.8.2 (T3 3.17): { sdk, avds } of this PC's Android SDK
-  const [tools, setTools] = useState(null); // 3.8.3: Flutter, the Android SDK and a JDK as they are (engine/dev-tools.mjs)
+  const [emus, setEmus] = useState(null); // { sdk, avds } of this PC's Android SDK
+  const [tools, setTools] = useState(null); // Flutter, the Android SDK and a JDK as they are (engine/dev-tools.mjs)
   const load = () => call('android.status').then(setSt).catch(() => setSt(null));
   const loadPhones = () => call('android.devices').then(setPhones).catch(() => setPhones([]));
   useEffect(() => { load(); const id = setInterval(load, st?.state === 'downloading' ? 1500 : 15000); return () => clearInterval(id); }, [st?.state]);
@@ -70,7 +71,7 @@ export function AndroidCard() {
   const startEmulator = async (avd) => {
     const unlock = await unlockCore('androidEmulator'); if (!unlock) return;
     const r = await act(call('android.emulatorStart', { avd, unlock }));
-    if (r) { toast(r); setTimeout(loadPhones, 30_000); }
+    if (r) { notifyInfo(r); setTimeout(loadPhones, 30_000); }
   };
   const pair = async () => {
     await form(t('settings.android.pair'), {
@@ -85,7 +86,7 @@ export function AndroidCard() {
     });
     loadPhones(); load();
   };
-  const forget = async (p) => { if (await confirm(t('settings.android.forget'), t('settings.android.forgetBody'), { ok: t('settings.android.forget') })) { await act(call('android.forget', { serial: p.serial ?? undefined, host: p.host ?? undefined })); loadPhones(); } };
+  const forget = async (p) => { if (await confirm(t('settings.android.forget'), t('settings.android.forgetBody'), { ok: t('settings.android.forget'), danger: true })) { await act(call('android.forget', { serial: p.serial ?? undefined, host: p.host ?? undefined })); loadPhones(); } };
   if (!st) return null;
   const label = st.ready ? t('settings.android.ready') : st.state === 'downloading' ? t('settings.android.downloading') : st.state === 'error' ? t('settings.android.error', { error: st.error }) : t('settings.android.missing');
   return (
@@ -101,7 +102,7 @@ export function AndroidCard() {
           {phones.length ? phones.map((p) => (
             <div key={`${p.guid ?? ''}${p.serial ?? p.host}`} className="flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2">
               <Smartphone className="text-muted-foreground size-4 shrink-0" />
-              <div className="grid min-w-0 flex-1"><span className="truncate text-sm">{p.model ?? p.host}</span><span className={cn('text-xs', p.connected ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground')}>{t(p.connected ? 'settings.android.connected' : 'settings.android.offline')}</span></div>
+              <div className="grid min-w-0 flex-1"><span className="truncate text-sm">{p.model ?? p.host}</span><span className={cn('text-xs', p.connected ? 'text-success' : 'text-muted-foreground')}>{t(p.connected ? 'settings.android.connected' : 'settings.android.offline')}</span></div>
               {p.connected ? <Button size="sm" variant="ghost" onClick={async () => { await act(call('android.disconnect', { serial: p.serial })); loadPhones(); }}>{t('settings.android.disconnect')}</Button> : null}
               <Button size="sm" variant="ghost" onClick={() => forget(p)}>{t('settings.android.forget')}</Button>
             </div>
@@ -126,7 +127,7 @@ export function AndroidCard() {
             {tools.map((x) => (
               <div key={x.id} className="flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2" data-testid="dev-tool" data-found={x.path ? 'yes' : 'no'}>
                 <div className="grid min-w-0 flex-1">
-                  <span className="truncate text-sm">{x.label} · <span className={x.path ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}>{t(x.path ? 'settings.devtools.installed' : x.inCore ? 'settings.devtools.inCore' : 'settings.devtools.missing')}</span></span>
+                  <span className="truncate text-sm">{x.label} · <span className={x.path ? 'text-success' : 'text-muted-foreground'}>{t(x.path ? 'settings.devtools.installed' : x.inCore ? 'settings.devtools.inCore' : 'settings.devtools.missing')}</span></span>
                   {x.path ? <PathText path={x.path} className="text-muted-foreground text-xs" /> : null}
                   {x.missing.map((m) => <span key={m} className="text-muted-foreground truncate text-xs">{t('settings.devtools.gone', { path: m })}</span>)}
                 </div>
@@ -141,18 +142,18 @@ export function AndroidCard() {
   );
 }
 
-// Phone access: on/off and the addresses (wifi, Tailscale). 3.5: the QR and the linked devices are in Magic Link.
+// Phone access: on/off and the addresses (wifi, Tailscale). the QR and the linked devices are in Magic Link.
 export function MobileCard() {
   const t = useT();
   const [st, setSt] = useState(null);
-  const load = () => call('remote.status').then(setSt).catch(() => {});
+  const load = () => call('remote.status').then(setSt).catch(quiet);
   useEffect(() => { load(); }, []);
   const configure = async (patch) => { const r = await act(call('remote.configure', patch)); if (r) setSt(r); };
   if (!st) return null;
   const route = (kind) => st.routes?.find((r) => r.kind === kind);
   const via = (kind) => {
     const r = route(kind);
-    // 3.8.2: the local network shows its address; Tailscale, what it allows (its address is in the QR dialog).
+    // the local network shows its address; Tailscale, what it allows (its address is in the QR dialog).
     const hint = st.enabled && st[kind] && !r ? t('settings.mobileUnavailable') : kind === 'wifi' ? (r?.url ?? t('settings.mobileWifiHint')) : t('settings.mobileTsHint');
     return (
       <Row label={t(kind === 'wifi' ? 'settings.mobileWifi' : 'settings.mobileTs')} hint={hint}>
@@ -167,9 +168,9 @@ export function MobileCard() {
         <Row label={t('settings.mobileAccess')} hint={st.enabled && !st.running ? st.error : null}><Switch checked={st.enabled} onCheckedChange={async (enabled) => { const r = await act(call('remote.enable', { enabled })); if (r) setSt(r); }} /></Row>
         {st.enabled ? <div className="grid gap-1">{via('wifi')}{via('tailscale')}</div> : null}
         {st.enabled && st.error && st.running ? <p className="text-muted-foreground text-xs">{st.error}</p> : null}
-        {/* 3.5: the QR, the short code and the linked devices are in Magic Link, below. 3.8.2: the firewall is mentioned
+        {/* the QR, the short code and the linked devices are in Magic Link, below. the firewall is mentioned
             only when linking over the local network fails (app.linkOfflineWifi, on the device). */}
-        {/* 3.5.1: what notifications show when locked. */}
+        {/* what notifications show when locked. */}
         {st.enabled ? (
           <Row label={t('settings.mobilePreview')} hint={t(`settings.mobilePreview.${previewOf(st.preview)}Hint`)}>
             <Select value={previewOf(st.preview)} onValueChange={(preview) => configure({ preview })} data-testid="mobile-preview" title={t('settings.mobilePreview')}
@@ -213,7 +214,7 @@ export function BrowserCard({ c }) {
         <Row label={t('settings.browse')} hint={t('settings.browseHint')}><Switch checked={on} onCheckedChange={(enabled) => save({ browser: { enabled } })} /></Row>
         <Row label={t('settings.pip')} hint={t('settings.pipHint')}><Switch checked={pip} disabled={!on} onCheckedChange={(v) => save({ ui: { pip: v } })} /></Row>
       </CardContent>
-      {bridge.showBrowser ? <CardFooter><Button size="sm" variant="outline" disabled={!on || !pip} onClick={async () => { const r = await bridge.showBrowser(); if (!r?.tabs?.length) toast(t('settings.noBrowserUse')); }}><PictureInPicture2 />{t('settings.showPip')}</Button></CardFooter> : null}
+      {bridge.showBrowser ? <CardFooter><Button size="sm" variant="outline" disabled={!on || !pip} onClick={async () => { const r = await bridge.showBrowser(); if (!r?.tabs?.length) notifyInfo(t('settings.noBrowserUse')); }}><PictureInPicture2 />{t('settings.showPip')}</Button></CardFooter> : null}
     </Card>
   );
 }
@@ -224,7 +225,7 @@ export function PhoneView() {
   return (
     <>
       <PageHeader icon={<Smartphone className="text-primary size-5" />} title={t('settings.phone')} />
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5"><div className="mx-auto grid max-w-xl gap-4"><PhoneCard /></div></div>
+      <PageBody><div className="mx-auto grid max-w-xl gap-4"><PhoneCard /></div></PageBody>
     </>
   );
 }

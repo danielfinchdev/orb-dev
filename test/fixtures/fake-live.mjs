@@ -215,7 +215,7 @@ function createFakeLive(agent, label, caps, o) {
     }
     const progress = /PROGRESO/.test(scan) && text.match(/Tarea #(\d+)/);
     if (progress) { await mcpCall(orb, 'orb_update_task', { id: Number(progress[1]), progress: 40, note: 'probando el formulario' }); await sleep(2500); }
-    const delegate = scan.match(/DELEGA (\d+)(?: (claude|codex|cursor|gemini|opencode|qwen|copilot|any))?/);
+    const delegate = scan.match(/DELEGA (\d+)(?: (claude|codex|cursor|gemini|opencode|qwen|copilot|hermes|any))?/);
     if (delegate) {
       const ids = [];
       for (let i = 1; i <= Number(delegate[1]); i++) {

@@ -46,7 +46,7 @@ test('hallazgo 25: una tarea de solo lectura que escribe BITACORA.md la deja com
     board.settingJson(`readonly_bitacora:${task.id}`, { existed: false, content: null });
     const bit = path.join(dir, 'BITACORA.md');
     fs.writeFileSync(bit, '### 2026-10-14 11:35 — Claude\nhora inventada\n'); // what the read-only task wrote
-    const held = sched.afterFolderTask(board.task(task.id));
+    const held = await sched.afterFolderTask(board.task(task.id));
     assert.match(held, /revisi/i, 'queda marcada para revisar');
     assert.equal(fs.existsSync(bit), false, 'BITACORA.md se devuelve a como estaba (no existía)');
     assert.ok(board.all("SELECT 1 AS x FROM events WHERE task_id = ? AND kind = 'readonly.write'", task.id).length, 'queda anotado');

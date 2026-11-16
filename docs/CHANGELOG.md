@@ -1,14 +1,51 @@
 ## Download
 
-- **`Orb-3.8.3-instalador.exe`** (the Windows app): installs for your user, without administrator rights, and updates
+- **`Orb-3.8.6-instalador.exe`** (the Windows app): installs for your user, without administrator rights, and updates
   itself. It needs Microsoft Edge WebView2, which Windows 11 and an up-to-date Windows 10 already have (if it is
   missing, the installer gets it).
-- **Android:** keep using the Orb 3.8.1 app ([`Orb-3.8.1-android.apk`](https://github.com/danielfinchdev/orb-dev/releases/tag/v3.8.1)); it works with Orb 3.8.3 on your PC. A new native Android app is planned for a later release.
+- **`Orb-3.8.6-android.apk`** (the Android app): the new native app. How to install and link it: [`docs/ANDROID.md`](docs/ANDROID.md).
 
 Windows 10/11. Since it isn't signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
 
-**Updating from 3.8.2:** if «Reiniciar e instalar» seems stuck, close Orb and run the installer above; from 3.8.3 on,
-updating from the app no longer waits on the backup.
+## What's new in 3.8.6
+
+Versions 3.8.4 and 3.8.5 were never published; 3.8.6 brings everything since 3.8.3.
+
+**New interface: Órbita.** A redesigned look for the whole app, with its tiles, cards and scenes. The Retro and
+Vaporwave themes are restyled to match, and the chat, the board and Settings share the same components.
+
+**A native Android app.** The phone app is rebuilt in Kotlin and Jetpack Compose and links to your PC over the same
+sealed connection. It follows chats, tasks, notes, schedules, projects and usage; works offline with an encrypted local
+database; and shows pull requests, the PC screen (captured natively and sent sealed) and the HTML pages of a chat.
+Deleting a chat or a session from the phone moves it to the trash, and the PC can undo it. Phones only send pictures;
+the PC announces what it accepts.
+
+**HTML pages in the chat.** Agents can show a page (a chart, a form, a small tool) inside the chat. It runs in a sandbox
+with the internet off; «Permitir internet» turns it on for that page only. Known limit: a page with internet on can
+still use WebRTC through TURN over TCP.
+
+**Agents.** Hermes joins as an agent over ACP (off by default). Agents get tools to read, comment on and merge pull
+requests, and a merge always needs your explicit confirmation on the card.
+
+**Pull requests inside Orb.** List, read, comment on and merge a project's pull requests without leaving Orb; the merge
+only applies to the commit you saw.
+
+**Logs, Activity and Rules.** «Bitácoras» and «Actividad» read Orb's, the agents', the user's and the app's logs on
+demand, and record your own actions with before and after. «Normas» lists the persona, brief and briefing texts (now
+loaded from `core/normas` and included in backups) and the safety rails, with cards, a rule editor and a «removed» group.
+A paused rail lifts only its own block.
+
+**Safer rails.** Changing a rail value or a shipped rule asks for the master password every time, and cancelling undoes
+the control.
+
+**Smoother.** The engine sends its events to the window in batches from a thread, the projects API loads GitHub lazily
+and the task board shows from a cache first. Several load-sensitive tests were relaxed so the suite fails less by chance.
+
+**Fixes.**
+- The guard keeps asking about `git clean -x` and keeps password vaults closed when a rail is paused.
+- `activity.list` rejects forged cursors, and PC paths stay off the phone.
+- Usage history counts days by calendar date.
+- Scheduling a task lets you pick agent, model, date and time.
 
 ## What's new in 3.8.3
 

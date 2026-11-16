@@ -1,5 +1,4 @@
-// 3.8.3: how long the window takes to show what the user just did (the diagnosis measured 1.5–8 s in Dani's Orb 3.8.2,
-// with the engine blocked). Measured in the window of a test build (scripts/lib/e2e-window.mjs: throwaway workspace,
+// how long the window takes to show what the user just did (a blocked engine made it 1.5–8 s). Measured in the window of a test build (scripts/lib/e2e-window.mjs: throwaway workspace,
 // fake agents), from the click to the first frame that shows the result:
 //   pause / resume   «Pausar» → the button turns into «Reanudar», and back
 //   theme            Ajustes › Apariencia › Retro → the window wears it (html[data-skin]), and back to Orb

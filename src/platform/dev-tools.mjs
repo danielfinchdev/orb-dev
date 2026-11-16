@@ -1,7 +1,6 @@
-// 3.8.3: the big development tools some projects need (Flutter, the Android SDK, a JDK), as they really are on this PC.
-// Up to 3.8.2 nothing checked them: an old note in the logs said Flutter lived in core\herramientas\flutter, the user's
-// PATH still pointed there after a clean install removed it, and the coordinator cannot look inside core, so nobody could
-// tell that it was gone.
+// the big development tools some projects need (Flutter, the Android SDK, a JDK), as they really are on this PC.
+// Checked for real because a note in the logs can say Flutter lives in core\herramientas\flutter while the user's PATH
+// points there after a clean install removed it, and the coordinator cannot look inside core to tell that it is gone.
 //
 // Where these tools live: in their own standard places, outside Orb's folder (the Android SDK where Android Studio puts it,
 // %LOCALAPPDATA%\Android\Sdk; Flutter in a folder of the user such as %USERPROFILE%\flutter or C:\src\flutter, as its own
@@ -17,7 +16,7 @@ import path from 'node:path';
 import { ctx } from './context.mjs';
 import { categoryOf } from './paths.mjs';
 
-// 3.8.3: where the Android SDK may be (its variables, then Android Studio's default folder); android.mjs uses it too.
+// where the Android SDK may be (its variables, then Android Studio's default folder); android.mjs uses it too.
 export function sdkRoots(env = process.env, platform = process.platform) {
   const home = env.USERPROFILE || env.HOME || '';
   return [env.ANDROID_SDK_ROOT, env.ANDROID_HOME,

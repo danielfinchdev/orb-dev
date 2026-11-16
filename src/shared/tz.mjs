@@ -1,4 +1,4 @@
-// 3.6: time zones without dependencies (only Intl). Schedules keep a WALL time («every day at 09:00») in the
+// time zones without dependencies (only Intl). Schedules keep a WALL time («every day at 09:00») in the
 // owner's zone; the instant (UTC) of each run is worked out here, so a PC in UTC fires a
 // Madrid schedule at 09:00 in Madrid, also across both daylight-saving changes.
 //   zonedToUtc('2026-03-29T02:30', 'Europe/Madrid')  → Date (spring forward: the first valid minute, 03:00; fall back:

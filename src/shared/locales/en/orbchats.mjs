@@ -1,4 +1,4 @@
-// 3.6, messaging (step M3): the Orb zone as a messaging app: the list of chats with Orbe by project (with each one's
+// Messaging: the Orb zone as a messaging app: the list of chats with Orbe by project (with each one's
 // latest progress), the conversation (header, tasks on one line, approval cards) and the chat's and project's info.
 export default {
   // Chat list

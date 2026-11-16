@@ -12,7 +12,7 @@ pub const MARK: &str = "migrado-desde-electron.json";
 const DONE: &str = "migrado-desde-electron.hecho.json";
 /// What Electron's Chromium kept in the app's data folder and Orb on Tauri never reads (its own WebView2 profile is
 /// elsewhere): caches, and the agents' browser sessions of 3.8.0 (Partitions; dropping them was accepted).
-/// Electron's browsing data too (review D9 B7: its sign-ins and storage, of no use to Tauri's own WebView2 folder).
+/// Electron's browsing data too (its sign-ins and storage, of no use to Tauri's own WebView2 folder).
 /// Never Local State: the key of the secrets Orb 3.8.0 sealed.
 const LEFTOVERS: [&str; 15] = [
   "Cache", "Code Cache", "GPUCache", "DawnCache", "DawnGraphiteCache", "DawnWebGPUCache", "GrShaderCache", "ShaderCache", "Partitions",

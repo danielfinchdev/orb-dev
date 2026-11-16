@@ -1,4 +1,4 @@
-// 3.2.1: the engine's log as a line anyone can read: «Uso de la tarea · 1 min», «Tarea lanzada · Cursor», instead of
+// the engine's log as a line anyone can read: «Uso de la tarea · 1 min», «Tarea lanzada · Cursor», instead of
 // «task.usage {"minutes":1,"tokens":0,"costUsd":null}». The raw event stays for copying and on hover.
 
 const json = (s) => { if (!/^\s*[{[]/.test(String(s ?? ''))) return null; try { return JSON.parse(s); } catch { return null; } };

@@ -1,11 +1,11 @@
 // First run: the assistant's name, what to call the user and where its folder goes (C:\Orb unless the user picks another
 // place). Everything lives in that folder.
-// 3.7: the 3.5.1 welcome again (the owner's wish). Done without asking: this PC's language and time zone in the settings,
-// backups on (the default). 3.8: then, when the folder has folders of an earlier Orb, what to do with them
+// The same welcome for everyone, including an updated Orb (the owner's wish). Done without asking: this PC's language and time zone in the settings,
+// backups on (the default). Then, when the folder has folders of an earlier Orb, what to do with them
 // (views/layout.jsx: nothing moves without the user's choice), and the master password (views/master.jsx).
 // config.setupPending is on from the folder's creation to the last step: a welcome closed halfway goes on where it
 // stopped (resume: { step, plan, name }, lib/startup.js), never with the words of an Orb updated from 3.7.
-// 3.8.2: maximised, and .onboard / .onboard-card (app.css) shrink the spacing with the window's height.
+// maximised, and .onboard / .onboard-card (app.css) shrink the spacing with the window's height.
 import { useEffect, useState } from 'react';
 import { FolderOpen, ArrowRight, LogIn } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
@@ -14,11 +14,12 @@ import { Button } from '@/components/ui/button.jsx';
 import { Input, Field, Spinner } from '@/components/ui/basic.jsx';
 import { bridge, call, getState } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
-import { toast } from 'sonner';
+import { notifyError } from '@/lib/notify.js';
 import { errorText } from '@/lib/utils.js';
 import { PRODUCT } from '../../shared/product.mjs';
 import { MasterCreate } from './master.jsx';
 import { LayoutReview } from './layout.jsx';
+import { quiet } from '@/lib/quiet.js';
 
 const hereTz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; } };
 const hereLanguage = () => (/^en/i.test(navigator.language ?? '') ? 'en' : 'es');
@@ -27,14 +28,14 @@ export function Setup({ onDone, resume = null }) {
   const t = useT();
   const [name, setName] = useState(resume?.name || PRODUCT.assistant);
   const [user, setUser] = useState('');
-  // 3.8: C:\Orb already chosen (app:info › defaultBase); «Cambiar ubicación…» picks another place.
+  // C:\Orb already chosen (app:info › defaultBase); «Cambiar ubicación…» picks another place.
   const [base, setBase] = useState(() => getState().info?.defaultBase ?? null);
   const [busy, setBusy] = useState(false);
   const [mood, setMood] = useState('happy');
   const [step, setStep] = useState(resume?.step ?? 'datos'); // datos → carpetas (folders of an earlier Orb, if any) → maestra (the master password) → equipo (Windows: install what is missing) → app
   const [plan, setPlan] = useState(resume?.plan ?? null);
-  // 3.8.2: the welcome opens maximised (its screens fit without scrolling; only the agents' install may scroll).
-  useEffect(() => { bridge.windowControls?.act('maximize-on').catch(() => {}); }, []);
+  // the welcome opens maximised (its screens fit without scrolling; only the agents' install may scroll).
+  useEffect(() => { bridge.windowControls?.act('maximize-on').catch(quiet); }, []);
   const shown = name.trim() || PRODUCT.assistant;
   const sep = base?.includes('\\') ? '\\' : '/';
   // The same rule the app uses (homeFor): always <base>/Orb, whatever the assistant is called, unless the base already is it.
@@ -46,16 +47,16 @@ export function Setup({ onDone, resume = null }) {
       const language = hereLanguage();
       await bridge.setup({ base, assistantName: shown, userName: user.trim(), language });
       // The engine runs in the new folder now: it gets this PC's language and time zone.
-      await call('config.save', { patch: { language, tz: hereTz(), setupPending: true } }).catch(() => {});
+      await call('config.save', { patch: { language, tz: hereTz(), setupPending: true } }).catch((e) => notifyError(e));
       setMood('happy');
       const lp = await call('app.layoutPlan').catch(() => null);
       setBusy(false);
       if (lp?.pending) { setPlan(lp); setStep('carpetas'); } else setStep('maestra');
     }
-    catch (error) { setMood('worried'); toast.error(errorText(error)); setBusy(false); }
+    catch (error) { setMood('worried'); notifyError(error); setBusy(false); }
   };
   // The welcome is over: the next start opens Orb.
-  const finish = async (route) => { await call('config.save', { patch: { setupPending: false } }).catch(() => {}); onDone(route); };
+  const finish = async (route) => { await call('config.save', { patch: { setupPending: false } }).catch((e) => notifyError(e)); onDone(route); };
   const afterMaster = async () => { const info = await bridge.info(); if (info.platform === 'win32') setStep('equipo'); else await finish(); };
   // A welcome that goes on may already have its master password (it stopped at «Ordenar carpetas» after making it).
   const afterFolders = async () => { const ms = await call('master.state').catch(() => null); if (ms?.exists) await afterMaster(); else setStep('maestra'); };
@@ -74,7 +75,7 @@ export function Setup({ onDone, resume = null }) {
         <Field label={t('setup.nameLabel')}><Input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoFocus data-testid="setup-assistant" /></Field>
         <Field label={t('setup.userLabel')}><Input value={user} onChange={(e) => setUser(e.target.value)} placeholder={t('setup.userPlaceholder')} maxLength={40} data-testid="setup-user" /></Field>
         <div className="grid gap-2">
-          <span className="text-[13px] font-medium">{t('setup.whereFolder')}</span>
+          <span className="text-control font-medium">{t('setup.whereFolder')}</span>
           <Button type="button" variant="outline" className="justify-start" data-testid="setup-folder" onClick={async () => { const f = await bridge.pickFolder(t('setup.whereFolder')); if (f) setBase(f); }}><FolderOpen />{base ? t('setup.changeLocation') : t('setup.pickLocation')}</Button>
           <div className="bg-muted rounded-lg px-3 py-2 font-mono text-xs break-all" data-testid="setup-target">{target ?? t('setup.example', { name: PRODUCT.folder })}</div>
           <p className="text-muted-foreground text-xs leading-relaxed">{t('setup.folderNote')}</p>
@@ -106,7 +107,7 @@ export function Prepare({ name, onDone, onAgents = null }) {
         <Installer bar={false} onProgress={setProgress} />
         <div className="grid gap-2">
           <Button size="lg" onClick={onDone} data-testid="setup-continue">{t('setup.continue')}<ArrowRight /></Button>
-          {/* 3.8 (F5b): where to sign in to the agents, one click away. */}
+          {/* where to sign in to the agents, one click away. */}
           {onAgents ? <Button variant="ghost" onClick={onAgents} data-testid="setup-agents"><LogIn />{t('setup.signIn')}</Button> : null}
         </div>
       </div>

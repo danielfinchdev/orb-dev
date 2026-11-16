@@ -1,4 +1,4 @@
-// 3.8.2 (T3 3.2): the user's own terminal inside Orb, docked under a chat, in that chat's folder. It is the user's, not an
+// the user's own terminal inside Orb, docked under a chat, in that chat's folder. It is the user's, not an
 // agent's: it never goes through the guard, so it is this PC's window only (permissions.mjs: terminal.* 'pc'; its
 // 'terminal:data' events are never sent to a phone) and it never starts in core or a protected folder.
 // Ctrl+J (terminal.mjs: Warp, Windows Terminal, PowerShell in a window of their own) stays as it was; this one adds a
@@ -41,7 +41,7 @@ export function shellPlan(platform = process.platform, env = process.env) {
 }
 
 // emit(event, payload): to this PC's window only (engine.mjs › toWindow). plan(): the shell (the tests pass node).
-// 3.8.2 (security review, decision b): while Orb's lock screen is up (setLocked), what runs keeps running (a dev server
+// while Orb's lock screen is up (setLocked), what runs keeps running (a dev server
 // is not killed) but nothing can be typed, opened or closed, and its output is neither sent nor listed: it is kept and
 // shows again after the password.
 export function createTerminals({ emit = () => {}, log = () => {}, plan = () => shellPlan() } = {}) {

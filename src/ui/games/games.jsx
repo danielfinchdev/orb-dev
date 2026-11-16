@@ -1,10 +1,11 @@
-// 2.6: mini-games while the agents work. A window with the list of games and the difficulty; the game in the middle with
+// mini-games while the agents work. A window with the list of games and the difficulty; the game in the middle with
 // its score and best score (kept on this PC). Opened from the gamepad of the top bar or from the assistant's message.
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Gamepad2, RotateCcw, ArrowLeft, Trophy, Flag, Sparkles, Volume2, VolumeX, Music } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription, BubbleTip } from '@/components/ui/overlay.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { useStore, setState } from '@/lib/store.js';
+import { useStore, setState, plainSkin } from '@/lib/store.js';
+import { OrbMark } from '@/components/orb-mark.jsx';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { LEVELS, best, saveBest } from './kit.js';
@@ -30,6 +31,7 @@ const STAGE = 'from-primary/12 via-primary/6 to-transparent dark:from-primary/22
 export function GamesDialog() {
   const t = useT();
   const open = useStore((s) => s.games);
+  const skin = useStore((s) => s.app?.config?.ui?.skin);
   const [game, setGame] = useState(null);
   const [level, setLevel] = useState('normal');
   const [round, setRound] = useState(0);
@@ -43,7 +45,7 @@ export function GamesDialog() {
   useEffect(() => { if (!open) stopGameMusic(); }, [open]);
   useEffect(() => stopGameMusic, []);
   const toggleSound = () => { if (!appSounds) return; setMuted(soundOn); setMute(soundOn); if (!soundOn) sfx('select'); };
-  // 3.8.2: each game's own music (Windows, lib/music.js), with its own mute, remembered (ui.gameMusic).
+  // each game's own music (Windows, lib/music.js), with its own mute, remembered (ui.gameMusic).
   const music = useStore((s) => s.app?.config?.ui?.gameMusic !== false);
   const close = () => { stopAll(); stopGameMusic(); setState({ games: false }); setGame(null); setOver(null); };
   const start = (id) => { stopAll(); sfx('start'); setGame(id); setScore(0); setOver(null); setRound((r) => r + 1); startGameMusic(id); };
@@ -99,7 +101,7 @@ export function GamesDialog() {
                   className="group bg-card hover:border-primary/50 focus-visible:ring-ring/50 grid cursor-pointer gap-2 overflow-hidden rounded-2xl border p-2 pb-3 text-left shadow-xs transition-all duration-200 outline-none hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-[3px] motion-reduce:hover:translate-y-0">
                   <div className={cn('relative aspect-[3/2] overflow-hidden rounded-xl', STAGE)}>
                     <div className="h-full w-full transition-transform duration-300 group-hover:scale-[1.06] motion-reduce:group-hover:scale-100"><Thumb /></div>
-                    {n > 0 ? <span className="bg-card/85 text-foreground absolute top-1.5 right-1.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums shadow-sm backdrop-blur"><Trophy className="text-warning size-3" />{n}</span> : null}
+                    {n > 0 ? <span className="bg-card/85 text-foreground absolute top-1.5 right-1.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-micro font-semibold tabular-nums shadow-sm backdrop-blur"><Trophy className="text-warning-ink size-3" />{n}</span> : null}
                   </div>
                   <div className="px-1.5">
                     <div className="font-medium">{t(`games.${x.id}`)}</div>
@@ -114,7 +116,7 @@ export function GamesDialog() {
             <div className="flex w-full items-center justify-between gap-2 text-sm">
               <div className="flex items-center gap-2">
                 <span className="bg-muted inline-flex items-center gap-1.5 rounded-full px-3 py-1"><span className="text-muted-foreground text-xs">{t('games.score')}</span><b className="tabular-nums">{score}</b></span>
-                <span className="bg-muted inline-flex items-center gap-1.5 rounded-full px-3 py-1"><Trophy className="text-warning size-3.5" /><span className="text-muted-foreground text-xs">{t('games.best')}</span><b className="tabular-nums">{Math.max(record, score)}</b></span>
+                <span className="bg-muted inline-flex items-center gap-1.5 rounded-full px-3 py-1"><Trophy className="text-warning-ink size-3.5" /><span className="text-muted-foreground text-xs">{t('games.best')}</span><b className="tabular-nums">{Math.max(record, score)}</b></span>
               </div>
               <Button variant="outline" size="xs" onClick={() => start(game)}><RotateCcw />{t('games.restart')}</Button>
             </div>
@@ -126,11 +128,11 @@ export function GamesDialog() {
               {over ? (
                 <div className="bg-background/60 absolute inset-0 grid place-items-center rounded-2xl backdrop-blur-sm" data-testid="game-over">
                   <div className="bg-card text-card-foreground animate-in fade-in-0 zoom-in-95 grid min-w-56 justify-items-center gap-3 rounded-2xl border p-6 text-center shadow-xl duration-300">
-                    <span className={cn('grid size-12 place-items-center rounded-full', over.record ? 'bg-warning/15 text-warning' : 'bg-primary/12 text-primary')}>{over.record ? <Sparkles className="size-6" /> : <Flag className="size-6" />}</span>
+                    <span className={cn('grid size-12 place-items-center rounded-full', over.record ? 'bg-warning/15 text-warning-ink' : 'bg-primary/12 text-primary')}>{over.record ? (plainSkin(skin) ? <OrbMark size={24} /> : <Sparkles className="size-6" />) : <Flag className="size-6" />}</span>
                     <div className="text-lg leading-tight font-medium">{over.record ? t('games.newRecord') : t('games.over')}</div>
                     <div className="grid gap-0.5">
                       <div className="text-3xl font-semibold tabular-nums">{over.score}</div>
-                      <div className="text-muted-foreground inline-flex items-center justify-center gap-1 text-xs"><Trophy className="text-warning size-3" />{t('games.record', { n: Math.max(record, over.score) })}</div>
+                      <div className="text-muted-foreground inline-flex items-center justify-center gap-1 text-xs"><Trophy className="text-warning-ink size-3" />{t('games.record', { n: Math.max(record, over.score) })}</div>
                     </div>
                     <Button size="sm" onClick={() => start(game)}><RotateCcw />{t('games.again')}</Button>
                   </div>

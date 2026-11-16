@@ -1,6 +1,6 @@
 // Agents that speak ACP (Agent Client Protocol, agentclientprotocol.com): JSON-RPC over stdio, an open standard several
 // clients use to drive many coding agents with one client. One adapter serves them all (Gemini CLI, OpenCode,
-// Qwen Code, GitHub Copilot CLI…); each one is a small spec: how to find it, how to start it in ACP mode, where its login
+// Qwen Code, GitHub Copilot CLI, Hermes Agent…); each one is a small spec: how to find it, how to start it in ACP mode, where its login
 // lives and how to install it. The agent's own program and login are used: Orb never sees credentials.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -50,6 +50,12 @@ export const ACP_SPECS = {
     label: 'GitHub Copilot', pkg: '@github/copilot', bin: 'copilot', acpArgs: ['--acp'],
     login: ['.copilot/config.json'], loginArgs: [], install: 'npm install -g @github/copilot',
     strengths: 'cambios con contexto de GitHub, issues y pull requests', models: [], defaultModel: ''
+  },
+  // Not an npm package: installed with uv (Python), so it is looked up in the PATH and in uv's tool folder.
+  hermes: {
+    label: 'Hermes Agent', bin: 'hermes', acpArgs: ['acp'], binDirs: () => [path.join(userHome(), '.local', 'bin')],
+    login: ['.hermes/.env', '.hermes/auth.json', '.hermes/config.yaml'], loginArgs: ['login'], install: 'uv tool install "hermes-agent[acp]"',
+    strengths: 'agente autónomo con memoria y muchos proveedores de modelos', models: [], defaultModel: ''
   }
 };
 
@@ -64,7 +70,7 @@ const textOfContent = (content) => (Array.isArray(content) ? content : [content]
   return '';
 }).filter(Boolean).join('\n');
 
-// 2.6: the models an ACP agent offers in its answer to session/new (or session/load): the "model" config option
+// the models an ACP agent offers in its answer to session/new (or session/load): the "model" config option
 // (options, maybe in groups, and its current value) or the older models field (availableModels, currentModelId).
 export function acpModels(res) {
   const opt = (res?.configOptions ?? []).find((c) => c?.category === 'model' || c?.id === 'model');
@@ -79,7 +85,12 @@ export function acpAgent(id, spec) {
   const caps = { images: false, steer: false, fork: false, approvals: true, models: false, context: true };
   const detect = (cfg = {}) => {
     if (cfg.path && firstFile([cfg.path])) return /\.(c|m)?js$/i.test(cfg.path) ? { cmd: firstFile(inPath('node')) ?? nodeRuntime(), pre: [cfg.path] } : { cmd: cfg.path, pre: [] };
-    return npmBin(spec.pkg, spec.bin) ?? (firstFile(inPath(spec.bin)) ? { cmd: firstFile(inPath(spec.bin)), pre: [] } : null);
+    const npm = spec.pkg ? npmBin(spec.pkg, spec.bin) : null;
+    if (npm) return npm;
+    // no .cmd: it cannot be spawned without a shell
+    const names = IS_WIN ? [`${spec.bin}.exe`] : [spec.bin];
+    const found = firstFile(inPath(spec.bin)) ?? firstFile((spec.binDirs?.() ?? []).flatMap((d) => names.map((n) => path.join(d, n))));
+    return found ? { cmd: found, pre: [] } : null;
   };
   const loginState = () => (spec.login.some((f) => firstFile([path.join(userHome(), f)])) ? 'si' : 'desconocido');
   const loginCommand = (exe) => ({ cmd: exe.cmd, args: [...exe.pre, ...spec.loginArgs] });
@@ -179,7 +190,7 @@ export function acpAgent(id, spec) {
       const modes = res?.modes?.availableModes ?? [];
       const ro = permission === 'leer' && modes.find((m) => /plan|read|ask/i.test(`${m.id} ${m.name}`));
       if (ro) peer.request('session/set_mode', { sessionId, modeId: ro.id }).catch(() => {});
-      // 2.6: the models this agent offers, for the brain selector.
+      // the models this agent offers, for the brain selector.
       const modelOpt = (res?.configOptions ?? []).find((c) => c.category === 'model' || c.id === 'model');
       const offered = acpModels(res);
       if (offered.length) onEvent({ type: 'models', list: offered });
@@ -221,7 +232,7 @@ export function acpAgent(id, spec) {
     return live;
   }
 
-  // 2.6: the models before any conversation: the program in ACP mode, a hello and an empty session (no prompt, nothing is
+  // the models before any conversation: the program in ACP mode, a hello and an empty session (no prompt, nothing is
   // spent), whose answer lists them; then it is closed. Agents with a listing command of their own (listArgs, such as
   // `opencode models`) use it when the session does not say.
   async function discoverModels(exe, cfg = {}, env = {}) {

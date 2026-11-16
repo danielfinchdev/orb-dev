@@ -1,4 +1,4 @@
-// 3.6, ola 1 de diseño: el compositor (hueco de acción, razonamiento y orquestador), Ajustes en seis secciones
+// El compositor (hueco de acción, razonamiento y orquestador), Ajustes en seis secciones
 // y la compactación de conversaciones. Va la última: también corrige algunos textos anteriores.
 export default {
   // Razonamiento: botón del cerebro con su menú
@@ -40,12 +40,14 @@ export default {
   'settings.section.agentes': 'Agentes y uso',
   'settings.section.avanzado': 'Avanzado',
   'settings.section.extensiones': 'Skills y MCP',
+  'settings.section.permisos': 'Permisos',
   'settings.section.acerca': 'Acerca de',
   'settings.sectionDesc.general': 'Asistente, idioma, carpeta, apariencia y actualizaciones.',
   'settings.sectionDesc.magiclink': 'Dispositivos enlazados con este PC.',
   'settings.sectionDesc.agentes': 'Conversaciones, tareas y límites de uso.',
   'settings.sectionDesc.avanzado': 'Herramientas de los agentes y God mode.',
   'settings.sectionDesc.extensiones': 'Skills y servidores MCP de los agentes.',
+  'settings.sectionDesc.permisos': 'Qué pueden hacer los agentes sin preguntar, rutas protegidas y tiempo de espera.',
   'settings.sectionDesc.acerca': 'Versión, comentarios y otras aplicaciones.',
   'settings.group.apariencia': 'Apariencia',
   'settings.group.actualizaciones': 'Actualizaciones',

@@ -1,11 +1,11 @@
 // Agents: which CLIs are installed, their login, models and how much of each subscription window is used.
 import { useEffect, useState } from 'react';
-import { Bot, RefreshCw, LogIn, ChevronRight, ChevronDown, ExternalLink, UserPlus, Trash2, FolderOpen, ScanSearch, Copy, Download, SquareTerminal, X } from 'lucide-react';
-import { toast } from 'sonner';
+import { Orbit, RefreshCw, LogIn, ChevronRight, ChevronDown, ExternalLink, UserPlus, Trash2, FolderOpen, ScanSearch, Copy, Download, SquareTerminal, X } from 'lucide-react';
+import { notifyError, notifyInfo, notifyOk, notifyWarn } from '@/lib/notify.js';
 import { useCatalog } from '@/components/brain-picker.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Installer } from '@/components/installer.jsx';
-import { PageHeader } from '@/components/page.jsx';
+import { PageHeader, PageBody } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Field, Input, Spinner } from '@/components/ui/basic.jsx';
@@ -14,12 +14,13 @@ import { cn, baseName } from '@/lib/utils.js';
 import { useStore, call, act, bridge, setState, getState } from '@/lib/store.js';
 import { LOGIN } from '@/lib/labels.js';
 import { t, useT, useLocale } from '@/lib/i18n.js';
+import { quiet } from '@/lib/quiet.js';
 
 const INSTALL = { claude: 'https://docs.claude.com/en/docs/claude-code/setup', codex: 'https://developers.openai.com/codex/cli', cursor: 'https://cursor.com/cli',
-  gemini: 'https://github.com/google-gemini/gemini-cli', opencode: 'https://opencode.ai', qwen: 'https://github.com/QwenLM/qwen-code', copilot: 'https://github.com/github/copilot-cli' };
+  gemini: 'https://github.com/google-gemini/gemini-cli', opencode: 'https://opencode.ai', qwen: 'https://github.com/QwenLM/qwen-code', copilot: 'https://github.com/github/copilot-cli', hermes: 'https://hermes-agent.nousresearch.com' };
 const WINDOW = { five_hour: 'agents.win.fiveHour', seven_day: 'agents.win.week', seven_day_opus: 'agents.win.weekOpus', seven_day_sonnet: 'agents.win.weekSonnet', '300min': 'agents.win.fiveHour', '10080min': 'agents.win.week', '43200min': 'agents.win.month' };
 const windowLabel = (w) => (WINDOW[w] ? t(WINDOW[w]) : w);
-// How each agent is connected (2.3: all of them live).
+// How each agent is connected (all of them live).
 const KIND = { sdk: 'agents.kind.sdk', 'app-server': 'agents.kind.appServer', 'cli-stream': 'agents.kind.cliStream', acp: 'agents.kind.acp' };
 
 async function save(agent, patch) {
@@ -28,17 +29,17 @@ async function save(agent, patch) {
   return config;
 }
 
-// 3.5 «Solo Orb»: the sign-in of Claude Code and Codex runs hidden: Orb gets the link (and the code, when there is one),
+// «Solo Orb»: the sign-in of Claude Code and Codex runs hidden: Orb gets the link (and the code, when there is one),
 // shows them in a card and opens the link in the browser; the card follows the 'agents:login' events until it ends.
 // Cursor and the other agents still open their own console ({ console: true }).
 let showLogin = () => {};
 async function signIn(acc, label, extra = {}) {
   const r = await act(call('agents.login', { account: acc.id, ...extra }));
   if (!r) return;
-  if (r.console) { toast.info(t('agents.followSteps')); return; }
+  if (r.console) { notifyInfo(t('agents.followSteps')); return; }
   showLogin({ ...r, label });
   // Claude opens the browser itself on a PC; the others' link is opened here (the main process' shell, https only).
-  if (!r.opened && r.url) bridge.openExternal(r.url).catch(() => {});
+  if (!r.opened && r.url) bridge.openExternal(r.url).catch((e) => notifyError(e));
 }
 
 function LoginCard({ reload, windows }) {
@@ -49,17 +50,17 @@ function LoginCard({ reload, windows }) {
   useEffect(() => bridge.on('agents:login', (p) => {
     setLogin((cur) => {
       if (!cur || cur.id !== p.id) return cur;
-      if (p.state === 'hecho') { toast.success(t('agents.loginDone', { label: cur.label })); reload(); return null; }
-      if (p.state === 'error') { toast.error(p.message ?? t('agents.loginWaiting')); return null; }
+      if (p.state === 'hecho') { notifyOk(t('agents.loginDone', { label: cur.label })); reload(); return null; }
+      if (p.state === 'error') { notifyError(p.message ?? t('agents.loginWaiting')); return null; }
       if (p.state === 'cancelado') return null;
-      if (p.message) toast.warning(p.message);
+      if (p.message) notifyWarn(p.message);
       return { ...cur, ...p, message: null };
     });
   }), []); // eslint-disable-line react-hooks/exhaustive-deps
   if (!login) return null;
-  const copy = (text) => navigator.clipboard?.writeText(text).then(() => toast.success(t('agents.loginCopied'))).catch(() => {});
+  const copy = (text) => navigator.clipboard?.writeText(text).then(() => notifyOk(t('agents.loginCopied'))).catch(() => notifyError(t('app.copyFailed')));
   const send = async () => { if (await act(call('agents.loginCode', { id: login.id, code: code.trim() }))) setCode(''); };
-  const cancel = () => { call('agents.loginCancel', { id: login.id }).catch(() => {}); setLogin(null); };
+  const cancel = () => { call('agents.loginCancel', { id: login.id }).catch(quiet); setLogin(null); };
   return (
     <Card className="border-primary/50" data-testid="agent-login-card">
       <CardHeader className="flex-row items-start gap-3">
@@ -97,17 +98,17 @@ function LoginCard({ reload, windows }) {
   );
 }
 
-// 3.5: install or update Claude Code and Codex with one button (hidden, for this user only); 'agents:install' events.
+// install or update Claude Code and Codex with one button (hidden, for this user only); 'agents:install' events.
 const INSTALLABLE = ['claude', 'codex'];
 function InstallButton({ a, reload }) {
   const t = useT();
   const [st, setSt] = useState(null);
-  useEffect(() => { call('agents.installState', { agent: a.id }).then((s) => { if (s?.state === 'instalando') setSt(s); }).catch(() => {}); }, [a.id]);
+  useEffect(() => { call('agents.installState', { agent: a.id }).then((s) => { if (s?.state === 'instalando') setSt(s); }).catch(quiet); }, [a.id]);
   useEffect(() => bridge.on('agents:install', (p) => {
     if (p.agent !== a.id) return;
     setSt(p);
-    if (p.state === 'hecho') { toast.success(p.version ? t('agents.installDone', { label: a.label, version: p.version }) : t('agents.installDoneNoVersion', { label: a.label })); reload(); }
-    if (p.state === 'error') toast.error(p.message);
+    if (p.state === 'hecho') { notifyOk(p.version ? t('agents.installDone', { label: a.label, version: p.version }) : t('agents.installDoneNoVersion', { label: a.label })); reload(); }
+    if (p.state === 'error') notifyError(p.message);
   }), [a.id]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!INSTALLABLE.includes(a.id)) return null;
   const busy = st?.state === 'instalando';
@@ -116,7 +117,7 @@ function InstallButton({ a, reload }) {
       <Button size="sm" variant={a.installed ? 'ghost' : 'default'} disabled={busy} onClick={async () => { const r = await act(call('agents.install', { agent: a.id })); if (r) setSt(r); }} data-testid={`agent-install-${a.id}`}>
         {busy ? <Spinner className="size-3.5" /> : <Download />}{busy ? t('agents.installing') : a.installed ? t('agents.update') : t('agents.install')}
       </Button>
-      {busy && st.line ? <span className="text-muted-foreground w-full truncate text-[11px]">{st.line}</span> : null}
+      {busy && st.line ? <span className="text-muted-foreground w-full truncate text-micro">{st.line}</span> : null}
     </>
   );
 }
@@ -125,7 +126,7 @@ function InstallButton({ a, reload }) {
 function Accounts({ a, reload }) {
   const t = useT();
   const locale = useLocale();
-  // 2.7: only a name. Orb makes the account's folder and opens the agent's sign-in at once (in the browser), so the other
+  // only a name. Orb makes the account's folder and opens the agent's sign-in at once (in the browser), so the other
   // subscription is used without closing this one. An existing folder, only under «Opciones avanzadas», never typed.
   const add = async () => {
     const r = await form(t('agents.addAccountTitle', { label: a.label }), {
@@ -138,7 +139,7 @@ function Accounts({ a, reload }) {
           <CollapsibleContent className="mt-3">
             <Field label={t('agents.sessionFolder')} hint={v.home ? t('agents.folderHintCustom') : t('agents.folderHintEmpty')}>
               <div className="flex min-w-0 items-center gap-2 rounded-lg border px-3 py-1.5">
-                <span className="text-muted-foreground min-w-0 flex-1 truncate text-[13px]">{v.home ? baseName(v.home) : t('agents.folderPlaceholder')}</span>
+                <span className="text-muted-foreground min-w-0 flex-1 truncate text-control">{v.home ? baseName(v.home) : t('agents.folderPlaceholder')}</span>
                 {v.home ? <Button type="button" size="xs" variant="ghost" onClick={() => set({ home: '' })}>{t('agents.folderNew')}</Button> : null}
                 <Button type="button" size="xs" variant="outline" onClick={async () => { const f = await bridge.pickFolder(t('agents.pickFolder')); if (f) set({ home: f }); }}><FolderOpen />{t('agents.pickProgram')}</Button>
               </div>
@@ -153,7 +154,7 @@ function Accounts({ a, reload }) {
     // A new folder has no login yet: the sign-in opens straight away.
     if (/[\\/]cuentas[\\/][^\\/]+$/.test(r.home ?? '') && r.home.endsWith(r.id)) signIn(r, r.label);
   };
-  // 2.7: «Buscar y añadir»: saved logins of this agent elsewhere on the PC become accounts (Orb only checks that the
+  // «Buscar y añadir»: saved logins of this agent elsewhere on the PC become accounts (Orb only checks that the
   // login file is there; it never opens it). One found: added at once. Several: ticked in a list. None: a new account.
   const scan = async () => {
     const found = await act(call('accounts.scan', { agent: a.id }));
@@ -182,7 +183,7 @@ function Accounts({ a, reload }) {
           {found.map((f) => (
             <label key={f.dir} className="hover:bg-accent/40 flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2">
               <Checkbox checked={v.picked.includes(f.dir)} onCheckedChange={(on) => set({ picked: on ? [...v.picked, f.dir] : v.picked.filter((d) => d !== f.dir) })} />
-              <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{f.name}</span>
+              <span className="min-w-0 flex-1 truncate text-control font-medium">{f.name}</span>
               {planName(f.plan) ? <Badge variant="secondary" className="font-normal">{planName(f.plan)}</Badge> : null}
               <span className="text-muted-foreground shrink-0 text-xs">{t('agents.scanSavedAt', { when: when(f.savedAt) })}</span>
             </label>
@@ -191,7 +192,7 @@ function Accounts({ a, reload }) {
       ),
       ok: t('agents.add'), onOk: (v) => addAll(found.filter((f) => v.picked.includes(f.dir)))
     });
-    if (r) { toast.success(t('agents.scanAddedMany', { n: r })); reload(); }
+    if (r) { notifyOk(t('agents.scanAddedMany', { n: r })); reload(); }
   };
   if (!a.installed) return null;
   return (
@@ -200,10 +201,10 @@ function Accounts({ a, reload }) {
       {a.accounts.map((acc) => {
         const login = LOGIN[acc.login] ?? LOGIN.desconocido;
         return (
-          // One line: the name with its state, what can be done with it and its switch (2.7: no folder path).
+          // One line: the name with its state, what can be done with it and its switch.
           <div key={acc.id} className={cn('rounded-lg border px-3 py-2', acc.enabled === false && 'opacity-60')}>
             <div className="flex items-center gap-1.5">
-              <div className="min-w-0 flex-1 truncate text-[13px] font-medium">{acc.label}</div>
+              <div className="min-w-0 flex-1 truncate text-control font-medium">{acc.label}</div>
               <Badge variant={login[1]}>{login[0]}</Badge>
               <BubbleTip title={t('agents.login')}><Button size="icon-xs" variant="ghost" aria-label={t('agents.login')} onClick={() => signIn(acc, acc.label)} data-testid={`agent-login-${acc.id}`}><LogIn /></Button></BubbleTip>
               {acc.id !== acc.agent ? <BubbleTip title={t('agents.removeTitle')} text={t('agents.removeTip')}><Button size="icon-xs" variant="danger" aria-label={t('agents.removeTitle')} onClick={async () => { if (await confirm(t('agents.removeTitle'), t('agents.removeBody', { label: acc.label }), { ok: t('agents.remove'), danger: true })) act(call('accounts.remove', { id: acc.id }), t('agents.accountRemoved')).then(reload); }}><Trash2 /></Button></BubbleTip> : null}
@@ -213,13 +214,13 @@ function Accounts({ a, reload }) {
           </div>
         );
       })}
-      {a.multi ? <div className="flex flex-wrap gap-1"><Button size="sm" variant="ghost" className="w-fit" onClick={add}><UserPlus />{t('agents.addAnother')}</Button><BubbleTip title={t('agents.scan')} text={t('agents.scanTip', { label: a.label })}><Button size="sm" variant="ghost" className="w-fit" onClick={scan} data-testid={`agent-scan-${a.id}`}><ScanSearch />{t('agents.scan')}</Button></BubbleTip></div> :<p className="text-muted-foreground text-[11px] leading-snug">{t('agents.fixedSession', { label: a.label })}</p>}
+      {a.multi ? <div className="flex flex-wrap gap-1"><Button size="sm" variant="ghost" className="w-fit" onClick={add}><UserPlus />{t('agents.addAnother')}</Button><BubbleTip title={t('agents.scan')} text={t('agents.scanTip', { label: a.label })}><Button size="sm" variant="ghost" className="w-fit" onClick={scan} data-testid={`agent-scan-${a.id}`}><ScanSearch />{t('agents.scan')}</Button></BubbleTip></div> :<p className="text-muted-foreground text-micro leading-snug">{t('agents.fixedSession', { label: a.label })}</p>}
     </div>
   );
 }
 
-// 2.7: what an agent is good at, picked from a list (the assistant reads it to share out the work). It is saved as the
-// labels in words, as before; a saved text is read back by the words in it, in Spanish or English.
+// what an agent is good at, picked from a list (the assistant reads it to share out the work). It is saved as the
+// labels in words; a saved text is read back by the words in it, in Spanish or English.
 const AGENT_DEFAULT = '__agent';
 // The plan names Codex reports (account/read), as its plans are called.
 const PLANS = { free: 'Free', go: 'Go', plus: 'Plus', pro: 'Pro', prolite: 'Pro', team: 'Team', business: 'Business', enterprise: 'Enterprise', edu: 'Edu' };
@@ -245,7 +246,7 @@ function StrengthsPicker({ value, onChange, testid }) {
   return (
     <DropdownMenu onOpenChange={close}>
       <DropdownMenuTrigger asChild>
-        <button type="button" className="border-input hover:bg-accent/40 flex min-h-9 w-full cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-[13px]" data-testid={testid}>
+        <button type="button" className="border-input hover:bg-accent/40 flex min-h-9 w-full cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-control" data-testid={testid}>
           <span className="flex min-w-0 flex-1 flex-wrap gap-1">
             {picked.length ? picked.map((id) => <Badge key={id} variant="secondary" className="font-normal">{label(id)}</Badge>) : <span className="text-muted-foreground">{t('agents.strengthsPick')}</span>}
           </span>
@@ -284,12 +285,14 @@ function AgentCard({ a, reload }) {
         {a.installed ? <Badge variant="success">{t('agents.installed')}</Badge> : <Badge variant="destructive">{t('agents.notFound')}</Badge>}
         {a.installed ? <Badge variant={login[1]}>{login[0]}</Badge> : null}
         {!cfg.enabled ? <Badge variant="secondary">{t('agents.disabled')}</Badge> : null}
+        {!cfg.enabled && a.id === 'hermes' ? <Button size="xs" variant="soft" onClick={() => save(a.id, { enabled: true })} data-testid="agent-enable-hermes">{t('agents.enable')}</Button> : null}
         {a.installed && KIND[a.kind] ? <Badge variant="outline" className="text-muted-foreground font-normal">{t(KIND[a.kind])}</Badge> : null}
       </CardContent>
+      {a.id === 'hermes' ? <CardContent><p className="text-warning-ink text-xs" data-testid="agent-hermes-note">{t('agents.hermesNote')}</p></CardContent> : null}
       <CardContent className="flex flex-wrap gap-2">
         <InstallButton a={a} reload={reload} />
         {!a.installed && !INSTALLABLE.includes(a.id) ? <Button size="sm" variant="outline" onClick={() => bridge.openExternal(INSTALL[a.id])}><ExternalLink />{t('agents.howInstall')}</Button> : null}
-        {/* 2.7: the paths are not shown (they say too much on a shared screen): a button opens the program's folder. */}
+        {/* the paths are not shown (they say too much on a shared screen): a button opens the program's folder. */}
         {a.where ? <Button size="sm" variant="ghost" onClick={() => act(bridge.openPath(dirOf(a.where)))} data-testid={`agent-open-${a.id}`}><FolderOpen />{t('agents.openFolder')}</Button> : null}
         <Button size="sm" variant="ghost" onClick={() => act(call('agents.check', { agent: a.id })).then(reload)}><RefreshCw />{t('agents.check')}</Button>
       </CardContent>
@@ -297,7 +300,7 @@ function AgentCard({ a, reload }) {
       <CardContent>
         <Collapsible>
           <CollapsibleTrigger className="text-muted-foreground hover:text-foreground group flex cursor-pointer items-center gap-1 text-xs"><ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" />{t('agents.modelsSettings')}</CollapsibleTrigger>
-          {/* 2.7: everything is chosen, nothing typed: the agent's real models, its strengths from a list and its program
+          {/* everything is chosen, nothing typed: the agent's real models, its strengths from a list and its program
               in Windows' own dialog. Each change is saved at once. */}
           <CollapsibleContent className="mt-3 grid gap-3">
             <Field label={t('agents.defaultModel')} hint={t('agents.defaultModelHint')}>
@@ -306,7 +309,7 @@ function AgentCard({ a, reload }) {
             <Field label={t('agents.strengths')} hint={t('agents.strengthsHint')}><StrengthsPicker value={cfg.strengths ?? ''} onChange={(strengths) => save(a.id, { strengths })} testid={`agent-strengths-${a.id}`} /></Field>
             <Field label={t('agents.path')} hint={t('agents.pathHint')}>
               <div className="flex min-w-0 items-center gap-2 rounded-lg border px-3 py-1.5">
-                <span className="text-muted-foreground min-w-0 flex-1 truncate text-[13px]">{cfg.path ? t('agents.pathCustom') : t('agents.pathAuto')}</span>
+                <span className="text-muted-foreground min-w-0 flex-1 truncate text-control">{cfg.path ? t('agents.pathCustom') : t('agents.pathAuto')}</span>
                 {cfg.path ? <Button size="xs" variant="ghost" onClick={() => save(a.id, { path: '' }).then(reload)}>{t('agents.auto')}</Button> : null}
                 <Button size="xs" variant="outline" onClick={async () => { const f = await bridge.pickProgram?.(t('sys.dialog.pickProgram')); if (f) save(a.id, { path: f }).then(reload); }} data-testid={`agent-path-${a.id}`}><FolderOpen />{t('agents.pickProgram')}</Button>
               </div>
@@ -325,16 +328,16 @@ export function AgentsView() {
   const [agents, setAgents] = useState(null);
   const [usage, setUsage] = useState([]);
   const [system, setSystem] = useState(null);
-  useEffect(() => { call('system.check').then(setSystem).catch(() => {}); }, []);
+  useEffect(() => { call('system.check').then(setSystem).catch(quiet); }, []);
   const load = (refresh = false) => { call('agents.status', { refresh }).then(setAgents).catch(() => setAgents([])); };
   useEffect(() => load(), []);
-  useEffect(() => { call('usage.get').then(setUsage).catch(() => {}); }, [version]);
+  useEffect(() => { call('usage.get').then(setUsage).catch(quiet); }, [version]);
   return (
     <>
-      <PageHeader icon={<Bot className="text-primary size-5" />} title={t('agents.title')} meta={t('agents.meta')}>
+      <PageHeader icon={<Orbit className="text-primary size-5" />} title={t('agents.title')} meta={t('agents.meta')}>
         <Button size="sm" variant="outline" onClick={() => { setAgents(null); load(true); }}><RefreshCw />{t('agents.checkAll')}</Button>
       </PageHeader>
-      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 py-5">
+      <PageBody>
         <div className="grid gap-4">
           <LoginCard reload={() => load(true)} windows={system?.platform === 'win32'} />
           {system?.platform === 'win32' ? (
@@ -345,13 +348,13 @@ export function AgentsView() {
           ) : null}
           {system && !system.git ? (
             <Card className="border-warning/50 flex-row items-center gap-3 px-5 py-3.5">
-              <div className="min-w-0 flex-1"><div className="text-[14px] font-medium">{t('agents.noGit')}</div><div className="text-muted-foreground text-xs">{t('agents.noGitDesc')}</div></div>
+              <div className="min-w-0 flex-1"><div className="text-body font-medium">{t('agents.noGit')}</div><div className="text-muted-foreground text-xs">{t('agents.noGitDesc')}</div></div>
               <Button size="sm" variant="outline" onClick={() => bridge.openExternal('https://git-scm.com/download/win')}><ExternalLink />{t('agents.getGit')}</Button>
             </Card>
           ) : null}
           {/* Two cards per row from 1024 px, three on very wide windows: each card needs room for its account rows. */}
           <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3 [&>*]:min-w-0">{agents ? agents.map((a) => <AgentCard key={a.id} a={a} reload={() => load(true)} />) : <Card className="items-center"><Spinner /></Card>}</div>
-          {/* 3.8 (F2.6c): what Orb leaves out of a project's agent settings (claude.mjs, cursor.mjs, guard.mjs). */}
+          {/* what Orb leaves out of a project's agent settings (claude.mjs, cursor.mjs, guard.mjs). */}
           <Card><CardHeader><CardTitle>{t('agents.projectSettingsTitle')}</CardTitle><CardDescription>{t('agents.projectSettingsDesc')}</CardDescription></CardHeader></Card>
           <Card>
             <CardHeader><CardTitle>{t('agents.usageTitle')}</CardTitle><CardDescription>{t('agents.usageDesc', { pct: Math.round((usage[0]?.stopAt ?? 0.92) * 100), hours: usage[0]?.windowHours ?? 5 })}</CardDescription></CardHeader>
@@ -361,11 +364,11 @@ export function AgentsView() {
                   <div className="flex flex-wrap items-center gap-2 text-sm"><AgentIcon agent={u.agent} /><span className="min-w-28">{u.label}</span>
                     {u.plan ? <Badge variant="secondary" title={t('agents.planHint')}>{t('agents.plan', { plan: u.plan })}</Badge> : null}
                     {u.real ? <span className="text-xs">{u.real.window ? t('agents.realQuotaWindow', { pct: Math.round(u.real.utilization * 100), window: windowLabel(u.real.window) }) : t('agents.realQuota', { pct: Math.round(u.real.utilization * 100) })}{u.real.resetAt ? ` · ${t('agents.resetsAt', { when: new Date(u.real.resetAt).toLocaleString(locale, { weekday: 'short', hour: '2-digit', minute: '2-digit' }) })}` : ''}</span> : null}
-                    {/* 3.2.1: a plan without high-usage models (Go, free) says so instead of «0/0». */}
+                    {/* a plan without high-usage models (Go, free) says so instead of «0/0». */}
                     <span className="text-muted-foreground text-xs">{u.maxHeavy ? t('agents.tasksUsed', { used: u.used, max: u.max, heavy: u.heavy, maxHeavy: u.maxHeavy }) : t('agents.tasksUsedNoHeavy', { used: u.used, max: u.max })}</span>
                     {u.cooldownUntil ? <Badge variant="destructive">{u.cooldownUntil - Date.now() > 20 * 3_600_000 ? t('agents.cooldownDay', { time: new Date(u.cooldownUntil).toLocaleString(locale, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }) : t('agents.cooldown', { time: new Date(u.cooldownUntil).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) })}</Badge> : null}
                     {u.modelLimits?.map((m) => <Badge key={m.model} variant="warning" title={m.model}>{t('agents.modelLimit', { model: m.label, time: new Date(m.until).toLocaleString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) })}</Badge>)}
-                    {/* 3.2.1: the user decides the pause is over (the limit was only of one model, or it reset earlier). */}
+                    {/* the user decides the pause is over (the limit was only of one model, or it reset earlier). */}
                     {u.cooldownUntil || u.modelLimits?.length ? <Button size="sm" variant="outline" className="h-6 px-2 text-xs" data-testid={`clear-cooldown-${u.account}`} onClick={async () => { if (await act(call('accounts.clearCooldown', { account: u.account }), t('agents.clearCooldownDone', { name: u.label }))) setUsage(await call('usage.get')); }}>{t('agents.clearCooldown')}</Button> : null}</div>
                   <div className="bg-muted h-1.5 overflow-hidden rounded-full"><div className={cn('h-full rounded-full transition-all', (u.real?.utilization ?? 0) >= 0.85 ? 'bg-warning' : 'bg-primary')} style={{ width: `${Math.min(100, (u.real ? u.real.utilization : u.used / Math.max(1, u.max)) * 100)}%` }} /></div>
                 </div>
@@ -373,7 +376,7 @@ export function AgentsView() {
             </CardContent>
           </Card>
         </div>
-      </div>
+      </PageBody>
     </>
   );
 }

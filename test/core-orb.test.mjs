@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { tempHome, until, wait, startEngine } from './helpers.mjs';
+import { tempHome, until, wait, startEngine, railsToken } from './helpers.mjs';
 import { integrateInto, snapshotCommit } from '../src/domain/tasks/checkpoints.mjs';
 import { git } from '../src/platform/git.mjs';
 import { cursorRules, prepareCursorFolder } from '../src/agents/cursor.mjs';
@@ -207,10 +207,10 @@ const get = (id) => call('tasks.get', { id });
 const kinds = (task) => task.events.map((e) => e.kind);
 
 test('los ajustes nuevos del CORE se guardan desde la app y se validan', async () => {
-  const c = await call('config.save', { patch: { oneAtATime: true, approvalWaitMinutes: 3 } });
+  const c = await call('config.save', { patch: { oneAtATime: true, approvalWaitMinutes: 3 }, unlock: await railsToken(call) });
   assert.equal(c.oneAtATime, true); assert.equal(c.approvalWaitMinutes, 3);
-  await assert.rejects(call('config.save', { patch: { approvalWaitMinutes: 999 } }), /approvalWaitMinutes/);
-  await call('config.save', { patch: { oneAtATime: false, approvalWaitMinutes: 10 } });
+  await assert.rejects(call('config.save', { patch: { approvalWaitMinutes: 999 }, unlock: await railsToken(call) }), /approvalWaitMinutes/);
+  await call('config.save', { patch: { oneAtATime: false, approvalWaitMinutes: 10 }, unlock: await railsToken(call) });
 });
 
 test('solo agentes disponibles: una tarea para uno que no hay se rechaza, y la que se queda sin agente pasa a otro', async () => {

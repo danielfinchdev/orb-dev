@@ -1,4 +1,4 @@
-// 3.6: the reasoning button's brain, drawn for Orb in the stroke style of the icon set (lucide: 24 grid, stroke 2,
+// the reasoning button's brain, drawn for Orb in the stroke style of the icon set (lucide: 24 grid, stroke 2,
 // round caps): two lobes either side of the midline, two folds each, legible at 16 px.
 import { cn } from '@/lib/utils.js';
 

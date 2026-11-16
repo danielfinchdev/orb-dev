@@ -1,4 +1,4 @@
-// 3.8.2: «Adjuntar» takes any file. Each one is copied into the conversation's own folder (<folder>\.orb-adjuntos\<stamp>\,
+// «Adjuntar» takes any file. Each one is copied into the conversation's own folder (<folder>\.orb-adjuntos\<stamp>\,
 // kept out of git), where every agent of that chat may read it, and Orb tells the agent what it is and how to use it:
 // pictures go natively to the agents that read them; a video becomes a few frames (and a transcript when this PC can
 // make one); a PDF or an office document, its text; anything else, its path and what Orb knows about it.
@@ -57,7 +57,7 @@ export function placeAttachments(files, cwd, { now = Date.now(), internalDir = c
 // ---- Text out of PDFs and office documents (no extra dependencies; the original is always there too) ----
 
 // The files of a zip (docx, xlsx, pptx, odt…): name → () => Buffer. Bounded, so a zip bomb cannot fill the memory: maxOut
-// is for all the files read together (3.8.2 final review: an epub or pptx of many entries each just under it, too).
+// is for all the files read together (an epub or pptx of many entries each just under it, too).
 export function zipEntries(buf, { maxOut = 64 * 1024 * 1024 } = {}) {
   const out = new Map();
   let left = maxOut;

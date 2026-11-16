@@ -1,4 +1,4 @@
-// wb.*: each project's Whiteboard (2.7): draw, write and attach what the assistant should know. Saved in the project's
+// wb.*: each project's Whiteboard: draw, write and attach what the assistant should know. Saved in the project's
 // pizarra folder. {project} is the project's name.
 export default {
   'nav.board': 'Whiteboard',

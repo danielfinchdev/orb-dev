@@ -1,4 +1,4 @@
-// 3.8.1: the desktop app on Tauri. Defines window.orb (the shape every bridge of Orb has), so
+// the desktop app on Tauri. Defines window.orb (the shape every bridge of Orb has), so
 // no component changes: engine calls and events go through Rust (src-tauri/src), which checks them again and relays them
 // to the engine over its stdin/stdout. Also what Electron's menu and window did for the page: the keys (zoom, Ctrl+J,
 // F11), Ctrl + mouse wheel, and moving the window by its top bars (WebView2 under Tauri ignores CSS app-region).
@@ -6,6 +6,7 @@
 // be imported first.
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { quiet } from './quiet.js';
 
 if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.orb) {
   const listeners = new Map();
@@ -14,6 +15,8 @@ if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.
     for (const fn of listeners.get('*') ?? []) { try { fn(event, payload); } catch (error) { console.error(error); } }
   };
   listen('engine:event', ({ payload }) => fire(payload?.event, payload?.payload));
+  // The engine's events arrive in batches (engine.rs, emit_queue), in order.
+  listen('engine:events', ({ payload }) => { for (const item of Array.isArray(payload) ? payload : []) fire(item?.event, item?.payload); });
   const engine = (method, params = {}) => invoke('engine_call', { method: String(method), params: params ?? {} });
   const windowAct = (action) => invoke('window_act', { action: String(action) });
   const text = (v) => (typeof v === 'string' ? v : null);
@@ -58,15 +61,15 @@ if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.
     // opened (info().startError.code === 'secretUnreadable').
     retryStart: (opts) => invoke('app_retry_start', { newSecret: opts?.newSecret === true }),
     platform: 'win32',
-    // The desktop app (review D10 M7): WebView2 here has no speech service and webview.rs denies the microphone; 3.8.2
-    // (D3): the microphone opens Windows' own voice typing instead (dictateWindows, src/ui/views/chat.jsx).
+    // The desktop app: WebView2 here has no speech service and webview.rs denies the microphone;
+    // the microphone opens Windows' own voice typing instead (dictateWindows, src/ui/views/chat.jsx).
     desktop: true,
     setup: (data) => invoke('app_setup', { data: data ?? {} }),
     switchHome: (folder) => invoke('app_switch_home', { target: String(folder ?? '') }),
     // Windows' own dialogs, opened by Rust (the page has no dialog permission).
     pickFolder: (title) => invoke('app_pick_folder', { title: text(title) }),
     pickAttachments: () => invoke('app_pick_attachments'),
-    // 3.8.2 (D3): the microphone opens Windows' voice typing (Win+H) on the focused message box.
+    // the microphone opens Windows' voice typing (Win+H) on the focused message box.
     dictateWindows: () => invoke('app_dictate'),
     pickProgram: (title) => invoke('app_pick_program', { title: text(title) }),
     pickFiles: (title) => invoke('app_pick_files', { title: text(title) }),
@@ -82,7 +85,7 @@ if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.
       onState: (fn) => {
         if (typeof fn !== 'function') return () => {};
         const off = listen('app:window-state', ({ payload }) => fn(payload));
-        return () => { off.then((un) => un()).catch(() => {}); };
+        return () => { off.then((un) => un()).catch(quiet); };
       }
     },
     // This PC's tools live in the engine (src/engine/api/app.mjs).
@@ -107,12 +110,12 @@ if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.
     if (e.key === '0' || e.code === 'Numpad0' || e.code === 'Digit0') return 'reset';
     return null;
   };
-  const zoomBy = (dir) => invoke('app_zoom_step', { dir }).catch(() => {});
+  const zoomBy = (dir) => invoke('app_zoom_step', { dir }).catch(quiet);
   window.addEventListener('keydown', (e) => {
     const dir = zoomKey(e);
     if (dir) { e.preventDefault(); zoomBy(dir); return; }
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'j') { e.preventDefault(); fire('ui:terminal', {}); return; }
-    if (e.key === 'F11' && !e.ctrlKey && !e.altKey) { e.preventDefault(); windowAct('fullscreen').catch(() => {}); }
+    if (e.key === 'F11' && !e.ctrlKey && !e.altKey) { e.preventDefault(); windowAct('fullscreen').catch(quiet); }
   }, true);
   window.addEventListener('wheel', (e) => { if (e.ctrlKey && e.deltaY) { e.preventDefault(); zoomBy(e.deltaY < 0 ? 'in' : 'out'); } }, { passive: false, capture: true });
 
@@ -130,8 +133,8 @@ if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.
   window.addEventListener('mousedown', (e) => {
     if (e.button !== 0 || !dragTarget(e.target)) return;
     e.preventDefault();
-    if (e.detail === 2) windowAct('maximize').catch(() => {});
-    else invoke('window_drag').catch(() => {});
+    if (e.detail === 2) windowAct('maximize').catch(quiet);
+    else invoke('window_drag').catch(quiet);
   });
 }
 

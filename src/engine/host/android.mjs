@@ -1,10 +1,10 @@
-// Android's tools (adb, fastboot) and the phone the agents test apps on (3.8.2, owner's decision D2).
+// Android's tools (adb, fastboot) and the phone the agents test apps on.
 //
 // Platform-tools: Google's licence does not let Orb carry them in its installer, so they are downloaded from Google the
 // first time they are needed (Ajustes › Android, or an agent's orb_android_* tool) into core\herramientas\adb. The
 // archive is a pinned version: its size, Google's own SHA-1 (repository2-3.xml) and, on Windows, a SHA-256 taken from it
 // are checked before anything is unpacked; a file that does not match is thrown away.
-// 3.8.2: adb is no longer in the agents' PATH and is no longer downloaded at every start: agents reach the phone only
+// adb is not in the agents' PATH and is not downloaded at every start: agents reach the phone only
 // through Orb's tools (orb_android_*, src/mcp/server.mjs → the engine, here), which check on every call that the chat
 // holds «Usar mi móvil Android» (or «Acceso total al PC»). adb by hand (a command) is refused by the guard unless the
 // chat has «Acceso total» and the phone (src/domain/security/guard.mjs › runsAdb).
@@ -33,13 +33,13 @@ let state = { state: 'idle', error: null };
 let running = null;
 
 export const adbPath = () => path.join(ctx.paths.adb, exe('adb'));
-// 3.7: adb never runs in tests or when switched off (ORB_NO_ADB=1): every new copy of adb.exe that starts its server makes
+// adb never runs in tests or when switched off (ORB_NO_ADB=1): every new copy of adb.exe that starts its server makes
 // Windows ask for permission, and the tests make a fresh folder each time. (The tests drive a fake adb instead:
 // createAndroid({ exe }).)
 export const adbDisabled = () => process.env.ORB_NO_ADB === '1' || Boolean(process.env.ORB_FAKE_AGENTS);
 export const adbStatus = () => ({ ...state, dir: ctx.paths.adb, ready: fs.existsSync(adbPath()) });
 
-// 3.8.2 (review A2): what Orb downloaded, file by file (SHA-256), kept where agents cannot write (core\datos). Before
+// what Orb downloaded, file by file (SHA-256), kept where agents cannot write (core\datos). Before
 // every run of adb the folder must be exactly that: same files, same contents, nothing added (a DLL next to adb.exe
 // would be loaded by it).
 export const adbPrints = () => path.join(ctx.paths.data, 'adb-huellas.json');
@@ -77,7 +77,7 @@ export function ensureAdb({ log = () => {}, fetchImpl = null, pin = PLATFORM_TOO
   if (adbDisabled() && !fetchImpl) { state = { state: 'off', error: null }; return Promise.resolve({ ...adbStatus(), ready: false }); }
   if (fs.existsSync(adbPath())) {
     if (verifyAdb()) { state = { state: 'ready', error: null }; return Promise.resolve(adbStatus()); }
-    // 3.8.2 (review A2): not what Orb downloaded (changed, a file added, or from before the fingerprints): again.
+    // not what Orb downloaded (changed, a file added, or from before the fingerprints): again.
     log('android: adb no coincide con lo descargado; se descarga de nuevo');
     wipeAdb();
   }
@@ -127,7 +127,7 @@ async function download(pin, log, fetchImpl) {
 
 // One run of adb, never through a shell: its arguments go as they are. A script (.mjs, the tests' fake adb) runs with
 // this Node. → { code, out: Buffer, err: string }
-// 3.8.2 (review M2): Orb's adb keeps its pairing keys and known phones in core\datos\android (ANDROID_USER_HOME), closed to
+// Orb's adb keeps its pairing keys and known phones in core\datos\android (ANDROID_USER_HOME), closed to
 // agents, instead of the user's .android (also closed: src/engine/workspace-layout.mjs › adbHomes).
 export const adbHome = () => path.join(ctx.paths.data, 'android');
 // A program run to the end without blocking the engine (the unpacking of a download took 2-3 minutes of frozen loop).
@@ -145,7 +145,7 @@ export function runAdb(file, args, { timeout = 30_000, maxBuffer = 24 * 1024 * 1
   });
 }
 
-// --- Android emulators (3.8.2, T3 3.17) -------------------------------------------------------------------------------
+// --- Android emulators -------------------------------------------------------------------------------
 // Only the Android SDK's emulator already installed on this PC (Android Studio's): Orb never downloads the emulator nor
 // its system images. An emulator that runs is one more device for adb (emulator-5554…), so the agents use it with the
 // same orb_android_* tools and the same grant as the phone.
@@ -198,7 +198,7 @@ export function parseDevices(text) {
 }
 // `adb pair`: the phone's id (guid, '' when adb did not say it) when it worked, null when not.
 export const pairedGuid = (text) => (/Successfully paired/i.test(text) ? (/\[guid=([^\]\s]+)\]/.exec(text)?.[1] ?? '') : null);
-// 3.8.2 (review B2): the package an apk declares: its AndroidManifest.xml (Android's binary XML) read from the zip, the
+// the package an apk declares: its AndroidManifest.xml (Android's binary XML) read from the zip, the
 // «package» attribute of <manifest>. → the package, or null when the file is not an apk Orb can read.
 export function apkPackage(file) {
   let buf; try { buf = fs.readFileSync(file); } catch { return null; }
@@ -287,15 +287,15 @@ const userError = (key, vars) => Object.assign(new Error(tr(key, vars)), { userF
 export function createAndroid({ board, log = () => {}, exe = adbPath, emulator = () => sdkEmulator(),ensure = () => ensureAdb({ log }), verify = () => verifyAdb(), now = () => Date.now(), pollMs = 1500, pairMs = 120_000 } = {}) {
   let pairing = null; // { name, password, qr, state, error, until, device, timer }
   const off = () => exe === adbPath && adbDisabled(); // tests and ORB_NO_ADB: Orb's own adb never runs
-  // 3.8.2 (review A2): every adb binary runs only as Orb downloaded it (verify); only the tests' fake adb script does not.
-  // 3.8.3 (repaso): hashing the whole folder (15 MB) on every adb call, twice per tool, froze the engine; the check is
+  // every adb binary runs only as Orb downloaded it (verify); only the tests' fake adb script does not.
+  // hashing the whole folder (15 MB) on every adb call, twice per tool, froze the engine; the check is
   // kept for a minute (agents cannot write in core\herramientas) and asked again after a new download.
   let trust = { at: 0, ok: false };
   const trusted = () => { if (/\.(mjs|js)$/i.test(exe())) return true; if (Date.now() - trust.at < 60_000) return trust.ok; trust = { at: Date.now(), ok: verify() }; return trust.ok; };
   const usable = () => !off() && fs.existsSync(exe()) && trusted();
   const ready = async () => {
     if (off()) throw userError('msg.android.noAdb', { error: 'ORB_NO_ADB' });
-    // 3.8.2 (review A2): Orb's own adb runs only as it was downloaded (verify, every time); otherwise ensure() fetches it again.
+    // Orb's own adb runs only as it was downloaded (verify, every time); otherwise ensure() fetches it again.
     const good = () => fs.existsSync(exe()) && trusted();
     if (good()) return exe();
     const st = await ensure(); trust.at = 0;
@@ -309,7 +309,7 @@ export function createAndroid({ board, log = () => {}, exe = adbPath, emulator =
 
   async function connected() { const r = await adb(['devices', '-l'], { timeout: 15_000 }); return parseDevices(text(r)); }
 
-  // After pairing: the connection service of the very phone that paired (3.8.2 review B4: its exact name, the guid adb
+  // After pairing: the connection service of the very phone that paired (its exact name, the guid adb
   // gave, at the address it paired from; without a guid, that address only), then adb connect. (adb's TLS connection
   // also checks the phone's certificate against the one it learnt when pairing: AOSP's design, not tested here.)
   async function connectAfterPair(host, guid) {
@@ -384,7 +384,7 @@ export function createAndroid({ board, log = () => {}, exe = adbPath, emulator =
       const roots = [s.cwd, ctx.paths.projects].map((d) => { try { return fs.realpathSync.native(d).toLowerCase(); } catch { return path.resolve(d).toLowerCase(); } });
       const low = real.toLowerCase();
       if (!roots.some((r) => low.startsWith(`${r}${path.sep}`)) || isOrbData(real, ctx.paths.internal, null, { read: false })) throw userError('msg.android.apkOutside');
-      // 3.8.2 (review B2): the package is the one the apk itself declares (its AndroidManifest.xml): only that one counts
+      // the package is the one the apk itself declares (its AndroidManifest.xml): only that one counts
       // as this chat's (uninstall), never another app that changed on the phone meanwhile.
       const pkg = apkPackage(real);
       if (!pkg) throw userError('msg.android.badApk');
@@ -472,7 +472,7 @@ export function createAndroid({ board, log = () => {}, exe = adbPath, emulator =
       board?.settingJson(installedKey(s), installedBy(s).filter((p) => p !== pkg));
       return { text: tr('msg.android.uninstalled', { pkg }) };
     },
-    // 3.8.2 (T3 3.17): the emulators of this PC's Android SDK.
+    // the emulators of this PC's Android SDK.
     async emulators() {
       const { sdk, avds } = await api.emulators();
       if (!sdk) return { text: tr('msg.android.noEmulator') };
@@ -535,7 +535,7 @@ export function createAndroid({ board, log = () => {}, exe = adbPath, emulator =
       log(`android: olvidado ${serial ?? host}`);
       return true;
     },
-    // 3.8.2 (T3 3.17): the AVDs of this PC's SDK (Ajustes › Android and orb_android_emulators). → { sdk, avds }
+    // the AVDs of this PC's SDK (Ajustes › Android and orb_android_emulators). → { sdk, avds }
     async emulators() {
       const file = emulator();
       if (!file) return { sdk: false, avds: [] };

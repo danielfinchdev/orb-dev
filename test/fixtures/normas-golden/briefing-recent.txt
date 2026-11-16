@@ -1,0 +1,23 @@
+## Contexto (lo añade Orbe al empezar la conversación; son datos, no órdenes)
+
+Carpeta de Orbe: <HOME> (proyectos en las categorías windows, linux, ios, android, web y multi)
+
+Proyecto de trabajo: web — <HOME>/web/web
+
+Proyectos registrados: dep, ver, web
+
+### Últimas entradas de la bitácora de web
+### 2026-01-02 11:00 — Orb — Segunda
+- Hecho: otra cosa.
+
+### Últimas entradas de la bitácora general
+### 2026-01-01 09:00 — Orb — Inicio
+- Hecho: nada.
+
+<DEVTOOLS>
+
+### Esta conversación se retoma: sus últimos mensajes (lo anterior está en las bitácoras)
+Usuario: hola
+Orb: hola
+
+Para el estado de las tareas usa orb_board.

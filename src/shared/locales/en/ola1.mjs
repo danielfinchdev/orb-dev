@@ -1,4 +1,4 @@
-// 3.6, design wave 1: the composer (action slot, reasoning and orchestrator), Settings in six sections
+// The composer (action slot, reasoning and orchestrator), Settings in six sections
 // and compacting conversations. Loaded last: it also corrects some earlier texts.
 export default {
   // Reasoning: the brain button and its menu
@@ -40,12 +40,14 @@ export default {
   'settings.section.agentes': 'Agents and usage',
   'settings.section.avanzado': 'Advanced',
   'settings.section.extensiones': 'Skills and MCP',
+  'settings.section.permisos': 'Permissions',
   'settings.section.acerca': 'About',
   'settings.sectionDesc.general': 'Assistant, language, folder, appearance and updates.',
   'settings.sectionDesc.magiclink': 'Devices linked with this PC.',
   'settings.sectionDesc.agentes': 'Conversations, tasks and usage limits.',
   'settings.sectionDesc.avanzado': 'Agent tools and God mode.',
   'settings.sectionDesc.extensiones': 'The agents’ skills and MCP servers.',
+  'settings.sectionDesc.permisos': 'What the agents may do without asking, protected paths and the timeout.',
   'settings.sectionDesc.acerca': 'Version, feedback and other apps.',
   'settings.group.apariencia': 'Appearance',
   'settings.group.actualizaciones': 'Updates',

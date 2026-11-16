@@ -1,10 +1,10 @@
-// 3.8: core, Orb's own folder inside the workspace (src/platform/paths.mjs › paths). Here:
+// core, Orb's own folder inside the workspace (src/platform/paths.mjs › paths). Here:
 //   - migrateWorkspace: Orb 3.7's own data at the top of the workspace (.orb, orb.json) moves into core once, before the
 //     database opens. It is Orb's, so it moves without asking (only when it is there: a folder without .orb or orb.json
 //     is never taken for a 3.7 workspace).
 //   - planWorkspace / applyLayout: the other folders 3.7 kept at the top (bitacora, android\adb-tools, each server in
 //     mcp-servers) are the user's to decide about. The window lists them with what would happen to each (move into
-//     core, move as a project into a category, or keep where it is) and nothing moves until the user confirms. 3.8.1:
+//     core, move as a project into a category, or keep where it is) and nothing moves until the user confirms.
 //     every MCP server goes into core\mcp by default, also one the user wrote (the owner's definition), and the projects
 //     that are MCP servers are offered once to a workspace set up by 3.8.0 (which made them projects). What the user kept
 //     is remembered (core\carpetas.json) and not asked again; a kept bitacora or adb-tools is used where it is (home.mjs
@@ -73,12 +73,12 @@ const USER_MARKS = ['.git', 'AGENTS.md', 'BITACORA.md', 'CLAUDE.md', 'package.js
 export const isUserProject = (dir) => USER_MARKS.some((n) => exists(path.join(dir, n)));
 const layoutFile = (home) => path.join(home, CORE_DIR, LAYOUT_FILE);
 const decisions = (home) => readJson(layoutFile(home))?.decided ?? {};
-// 3.8.1: the general log lives in core (the owner's definition), so moving it there is the default. A «keep» an Orb 3.8.0
+// the general log lives in core (the owner's definition), so moving it there is the default. A «keep» an Orb 3.8.0
 // remembered (its default was «keep» then) is asked about once more (carpetas.json › logsAsked); the answer given now
 // is final.
 const LOGS_ASKED = 2;
 const logsKept = (home, done) => done.bitacora === 'keep' && (readJson(layoutFile(home))?.logsAsked ?? 0) >= LOGS_ASKED;
-// 3.8.1: every MCP server lives in core\mcp (the owner's definition; 3.8.0 made the ones the user writes projects). A
+// every MCP server lives in core\mcp (the owner's definition; 3.8.0 made the ones the user writes projects). A
 // workspace that went through «Ordenar carpetas» before 3.8.1 (carpetas.json without mcpAsked) is asked once about the
 // projects of its categories that are MCP servers (e.g. windows\gmail-multi-mcp), with «Mover a core» by default; the
 // answer given then is final, and later ones move from Ajustes › Skills y MCP («Mover a core»).
@@ -104,7 +104,7 @@ export function planWorkspace(home) {
   if (isDir(adb)) add({ id: 'adb', kind: 'adb', name: LEGACY.adb.join(path.sep), from: adb, project: false, choice: 'move', choices: ['move', 'keep'] });
   const servers = path.join(home, LEGACY.mcp);
   let list = []; try { list = fs.readdirSync(servers, { withFileTypes: true }).filter((e) => e.isDirectory() && !e.name.startsWith('.')); } catch { /* none */ }
-  // 3.8.1: every server goes into core\mcp by default, also one the user writes (it keeps working there; Ajustes › Skills
+  // every server goes into core\mcp by default, also one the user writes (it keeps working there; Ajustes › Skills
   // y MCP › «Editar en un proyecto» to improve it); a category is still a choice.
   for (const e of list) {
     const from = path.join(servers, e.name);
@@ -178,14 +178,14 @@ export function applyLayout(home, choices = {}, { language = 'es' } = {}) {
     const readOnly = files.filter((f) => { try { return (fs.statSync(f).mode & 0o200) === 0; } catch { return false; } });
     r.logs = { dir: logsMove.to, files, readOnly };
   }
-  // 3.8.1 (review H1c M8): the MCP servers that moved, from where to where (a program outside Orb, ~/.claude.json for
+  // the MCP servers that moved, from where to where (a program outside Orb, ~/.claude.json for
   // one, may still start them from the old path).
   const servers = moves.filter((m) => m.mcp && !exists(m.from)).map(({ from, to }) => ({ from, to }));
   if (servers.length) r.servers = servers;
   return r;
 }
 
-// 3.8.1: a project that is an MCP server moves into core\mcp (Ajustes › Skills y MCP › «Mover a core»): the same steps
+// a project that is an MCP server moves into core\mcp (Ajustes › Skills y MCP › «Mover a core»): the same steps
 // as «Ordenar carpetas» (checked free first, a note in case it stops halfway, orb.json and the database pointed to the new
 // place). → the new folder. Throws LayoutBusy (nothing moved) when some program is using it. A link or a junction inside
 // it (node_modules too) that leads out of it is refused: the server in core would go on loading what agents write.
@@ -398,9 +398,9 @@ export function coreHealth(home) {
 }
 
 // core hidden in the Explorer on Windows (hidden only: a system attribute would make the user's own backup tools skip
-// it); elsewhere nothing (the workspace is the user's). No access rules: see docs/ARCHITECTURE.md (core) for why a deny
-// ACE was left out.
-// 3.8.1: wait false: attrib runs on its own (the engine's start waited ~25 ms for it on every start) and a promise of
+// it); elsewhere nothing (the workspace is the user's). No access rules: see
+// docs/architecture/36-the-workspace-and-core.md for why a deny ACE was left out.
+// wait false: attrib runs on its own (the engine's start waited ~25 ms for it on every start) and a promise of
 // whether it worked comes back instead (it never says «hidden» before attrib has said so).
 export function protectCore(home, { wait = true } = {}) {
   if (process.platform !== 'win32') return wait ? false : Promise.resolve(false);

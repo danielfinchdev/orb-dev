@@ -121,7 +121,7 @@ export default function Chess({ level, onScore, onOver, paused }) {
     return (
       <div className={cn('flex h-6 items-center gap-0.5 px-1', side)} style={{ width: SIZE + 12 }} aria-hidden="true">
         {list.map((p, i) => <Piece key={i} code={p} size={22} className={cn('drop-shadow-[0_1px_1px_rgb(0_0_0/0.25)]', i > 0 && list[i - 1] === p && '-ml-3')} />)}
-        {lead > 0 ? <span className="text-muted-foreground ml-1 text-[11px] font-semibold tabular-nums">+{lead}</span> : null}
+        {lead > 0 ? <span className="text-muted-foreground ml-1 text-micro font-semibold tabular-nums">+{lead}</span> : null}
       </div>
     );
   };
@@ -150,8 +150,8 @@ export default function Chess({ level, onScore, onOver, paused }) {
                   pick === i && (dark ? 'bg-[color-mix(in_oklab,#ffd166_62%,var(--sq-d))]' : 'bg-[color-mix(in_oklab,#ffd166_58%,var(--sq-l))]'),
                   check === i && 'bg-[radial-gradient(circle,#e5484d_0%,rgb(229_72_77/0.6)_45%,transparent_75%)]',
                   !end && g.turn === 'w' && !thinking && 'hover:brightness-105')}>
-                {(i & 7) === 0 ? <span className={cn('pointer-events-none absolute top-0.5 left-1 text-[9px] font-bold', dark ? 'text-[#f7ecd8]/85' : 'text-[#6b4f36]/75')}>{8 - (i >> 3)}</span> : null}
-                {i >= 56 ? <span className={cn('pointer-events-none absolute right-1 bottom-px text-[9px] font-bold', dark ? 'text-[#f7ecd8]/85' : 'text-[#6b4f36]/75')}>{FILES[i & 7]}</span> : null}
+                {(i & 7) === 0 ? <span className={cn('pointer-events-none absolute top-0.5 left-1 text-micro font-bold', dark ? 'text-[#f7ecd8]/85' : 'text-[#6b4f36]/75')}>{8 - (i >> 3)}</span> : null}
+                {i >= 56 ? <span className={cn('pointer-events-none absolute right-1 bottom-px text-micro font-bold', dark ? 'text-[#f7ecd8]/85' : 'text-[#6b4f36]/75')}>{FILES[i & 7]}</span> : null}
                 {p && !hidden ? <Piece code={p} size={SQ} className={cn('drop-shadow-[0_2px_2px_rgb(60_30_10/0.35)]', pick === i && '-translate-y-1 scale-110 drop-shadow-[0_5px_5px_rgb(60_30_10/0.4)]')} style={{ transition: 'transform 120ms, filter 120ms' }} /> : null}
                 {target ? <span className={cn('pointer-events-none absolute rounded-full', p ? 'inset-[2px] border-[5px] border-[rgb(60_30_10/0.3)]' : 'size-4 bg-[rgb(60_30_10/0.3)] shadow-[inset_0_0_0_2px_rgb(255_255_255/0.25)]')} /> : null}
               </button>

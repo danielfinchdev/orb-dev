@@ -8,7 +8,7 @@ export default {
   'logs.whole': 'Ver completa',
   'logs.copy': 'Copiar',
   'logs.copied': 'Copiada',
-  // 3.2: Memorias
+  // Memorias
   'memories.title': 'Memorias',
   'memories.logs': 'Bitácoras',
   'memories.activity': 'Actividad'

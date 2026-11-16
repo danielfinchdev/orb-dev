@@ -68,7 +68,7 @@ export function killTree(child) {
   try {
     if (IS_WIN) { const k = spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }); k.on('error', () => {}); }
     else {
-      // 3.5 (Linux): the agents start as leaders of their own process group (spawnAgent), so the whole group
+      // the agents start as leaders of their own process group (spawnAgent), so the whole group
       // goes, as taskkill /T does on Windows; a process that is not a leader (the SDK's own) only by itself. If the group
       // ignores the request, it is killed a few seconds later.
       const pid = child.pid;
@@ -78,7 +78,7 @@ export function killTree(child) {
   } catch { /* already gone */ }
 }
 
-// 2.6: what a short command prints (an agent listing its models): stdout only, clean environment, never throws. Resolves
+// what a short command prints (an agent listing its models): stdout only, clean environment, never throws. Resolves
 // with null when the program fails or takes longer than timeoutMs (it is stopped then).
 // The folder where the agents are asked for their models: an empty one of this process only (no project settings, no
 // files planted by anyone else in the shared temp folder are picked up).

@@ -34,12 +34,13 @@ export default {
   'chat.resumed': 'Tasks resumed',
   'chat.paused': 'Tasks paused',
   'chat.helloUser': 'Hello, {user}. I’m {name}.',
+  'chat.you': 'You',
   'chat.hello': 'Hello. I’m {name}.',
   'chat.intro': 'What are we working on today?',
   'chat.changesFor': 'Changes for {ids}: ',
   'chat.thinking': 'Thinking…',
   'chat.queued': '{n} queued',
-  // 3.0: earlier conversations, «New task» and the test of the day
+  // earlier conversations, «New task» and the test of the day
   'chat.older': 'See earlier messages',
   'newTask.title': 'New task',
   'newTask.meta': 'You hand out the work: each message is a task',
@@ -53,10 +54,10 @@ export default {
   'test.title': 'Health check',
   'test.desc': 'Asks Orb, with Orchestrator on, for a test web page built with several models and opens it for you to try. A quick way to check the whole chain works.',
   'test.prompt': 'Create a localhost web page with the words “Hello World” in a balloon texture and, in the background, space with the Sun and an animated planet Earth. Add an inventory bar with weapons and tools to destroy the planet, like the viral browser games where you destroy the world: laser beam, bombs, meteorites and more. The letters can be destroyed too. Everything must look hyper-realistic, with motion animations, and the planet can be rotated. Use several models to build it and open the page to try it.',
-  // 3.2.1: what is added to the test request (a project of its own and no questions)
+  // what is added to the test request (a project of its own and no questions)
   'test.wrap': '{prompt}\n\nThis is Orb’s automatic test: decide everything yourself and do not ask me anything (not the project, not the whiteboard, not the go-ahead for the plan). Work in the project {project}, already created for this test. At the end, have the check leave the page open in Orb’s browser so I can see it working, and put in your report the exact command to open it again (tested: it must work as written).',
   'test.projectNotes': 'Project of Orb’s automatic test (“Start test”). It can be deleted.',
-  // 2.7: the live activity line and the questions with options
+  // the live activity line and the questions with options
   'chat.act.read': 'Reading {target}',
   'chat.act.readAny': 'Reading files',
   'chat.act.search': 'Searching {target}',
@@ -96,7 +97,7 @@ export default {
   'chat.q.skipped': 'Skipped',
   'chat.placeholderBusy': 'Write another message: {name} will read it when done…',
   'chat.placeholder': 'Message {name}…',
-  // 2.6: the choice of brain (agent + model)
+  // the choice of brain (agent + model)
   'brain.title': 'Brain: agent and model',
   'brain.titleText': 'Who thinks for the assistant, and with which model.',
   'brain.none': 'There are no installed agents with an active account. Install them in Agents.',
@@ -112,12 +113,12 @@ export default {
   'brain.reasoningShort': 'Reasoning',
   'brain.close': 'Close',
   'brain.warnTitle': 'Careful',
-  // 3.2: only when the account's real usage is running high
+  // only when the account's real usage is running high
   'brain.warnHigh': 'This account is at {pct}% of its usage, and high reasoning spends much more on every answer.',
   'brain.warnHeavy': 'This account is at {pct}% of its usage, and {model} is one of the most demanding models.',
   'brain.warnBoth': 'This account is at {pct}% of its usage, and {model} with high reasoning is the most demanding combination.',
   'brain.warnUsed': 'This account is at {pct}% of its usage: at this pace it may run out soon.',
-  // 2.6: the chat's top bar (icons only, with their bubble)
+  // the chat's top bar (icons only, with their bubble)
   'bar.pause': 'Pause tasks',
   'bar.pauseText': 'Running tasks finish; new ones wait until you resume.',
   'bar.resume': 'Resume tasks',
@@ -126,7 +127,7 @@ export default {
   'bar.resetText': 'Starts a new conversation. Tasks and logs are kept.',
   'bar.games': 'Mini-games',
   'bar.gamesText': 'Play while the agents work.',
-  // 3.2: notification centre and working folder in the bar
+  // notification centre and working folder in the bar
   'bar.notices': 'Notifications',
   'bar.noticesText': 'Everything Orb told you, in case you missed something.',
   'bar.noticesNew': 'New notifications',
@@ -138,7 +139,7 @@ export default {
   'chat.playButton': 'Play in the meantime',
   'chat.calendarOpen': 'Show the calendar',
   'chat.openBoard': 'Open the whiteboard',
-  // 2.7: pictures an agent makes (Codex)
+  // pictures an agent makes (Codex)
   'img.open': 'View the image',
   'img.unavailable': 'The image is no longer available.',
   'img.title': 'Image',
@@ -164,7 +165,7 @@ export default {
   'chat.calendarPrev': 'Previous month',
   'chat.calendarNext': 'Next month',
   'chat.calendarToday': 'Back to today',
-  // 2.6: mini-games
+  // mini-games
   'games.title': 'Mini-games',
   'games.desc': 'Pick a game and the difficulty. The agents keep working while you play.',
   'games.back': 'Back to the games',
@@ -216,11 +217,11 @@ export default {
   'games.music': 'Game music',
   'games.musicOn': 'Mute the music',
   'games.musicOff': 'Turn the music on',
-  // 2.6: notices with the robot (or at the top, without animations)
+  // notices with the robot (or at the top, without animations)
   'notice.done': 'Done',
   'notice.attention': 'Needs your attention',
   'notice.open': 'View',
-  // 3.2: conversaciones, menú lateral, buscador y globito
+  // conversaciones, menú lateral, buscador y globito
   'chat.renameTitle': 'Conversation title',
   'chat.placeholderDirect': 'Write to {agent}…',
   'chat.waitingTurn': 'Waiting its turn: other conversations are answering.',

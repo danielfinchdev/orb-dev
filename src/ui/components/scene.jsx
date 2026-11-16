@@ -1,4 +1,4 @@
-// 2.6: the illustrated backdrop of each visual theme, behind the screens (themes.css draws and moves it; one frosted
+// the illustrated backdrop of each visual theme, behind the screens (themes.css draws and moves it; one frosted
 // pane over it keeps it out of focus so it never competes with the text). Nothing in the «profesional» theme.
 import { useStore, plainSkin } from '@/lib/store.js';
 
@@ -80,7 +80,7 @@ const City = () => (
 );
 const NIGHT_CLOUDS = [{ top: '6%', w: 300, dur: 150, delay: -40 }, { top: '22%', w: 220, dur: 190, delay: -120 }, { top: '34%', w: 260, dur: 170, delay: -20 }];
 
-// ---- Retro: pixel art drawn as crisp squares (the arcade's crab, squid and octopus, a rocket) and the seventies' shapes. ----
+// ---- Retro: pixel art drawn as crisp squares (the arcade's crab, squid and octopus, a rocket); the colour is the CSS one. ----
 const PIX = {
   crab: ['..X.....X..', '...X...X...', '..XXXXXXX..', '.XX.XXX.XX.', 'XXXXXXXXXXX', 'X.XXXXXXX.X', 'X.X.....X.X', '...XX.XX...'],
   squid: ['...XX...', '..XXXX..', '.XXXXXX.', 'XX.XX.XX', 'XXXXXXXX', '..X..X..', '.X.XX.X.', 'X.X..X.X'],
@@ -92,34 +92,15 @@ const Pixels = ({ rows, color = 'currentColor' }) => (
     {rows.flatMap((row, y) => [...row].map((c, x) => (c === '.' ? null : <rect key={`${x}-${y}`} x={x} y={y} width="1" height="1" fill={color} className={c === 'F' ? 'flame' : undefined} />)))}
   </svg>
 );
-const RAINBOW = ['#ff2fd2', '#b14bff', '#4b6bff', '#3ef0ff', '#5dffb3', '#39ff14', '#ffe14d', '#b5c926', '#ff8a3d', '#ff4040'];
 const COLUMN = ['crab', 'squid', 'octopus', 'crab', 'squid', 'octopus', 'crab'];
-const Asterisk = () => <svg viewBox="0 0 100 100" aria-hidden="true">{[0, 30, 60, 90, 120, 150].map((r) => <ellipse key={r} cx="50" cy="50" rx="48" ry="11" fill="currentColor" transform={`rotate(${r} 50 50)`} />)}<circle cx="50" cy="50" r="12" fill="#f6b73c" /></svg>;
-const Diamond = () => <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M50 2L98 50 50 98 2 50z" fill="currentColor" /></svg>;
-const FourDots = () => <svg viewBox="0 0 100 100" aria-hidden="true">{[[50, 18], [82, 50], [50, 82], [18, 50]].map(([x, y]) => <path key={x + y} d={`M${x} ${y - 16}L${x + 16} ${y} ${x} ${y + 16} ${x - 16} ${y}z`} fill="currentColor" />)}</svg>;
-const ThinSparkle = () => <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M50 0C52 40 60 48 100 50 60 52 52 60 50 100 48 60 40 52 0 50 40 48 48 40 50 0z" fill="currentColor" /></svg>;
-const Chevrons = () => (
-  <svg viewBox="0 0 520 320" fill="none" strokeWidth="26" strokeLinejoin="miter" aria-hidden="true">
-    {['#5a0b1e', '#d9424e', '#f08a4b', '#fdd9c4', '#f6b73c'].map((c, i) => <path key={c} d={`M-10 ${330 + i * 34 - 150}L260 ${60 + i * 34}L530 ${330 + i * 34 - 150}`} stroke={c} />)}
-  </svg>
-);
-const SHAPES = [
-  { el: <Asterisk />, c: '#e5584f', left: '2%', top: '14%', w: 64, r: 0, dur: 14, delay: -3 },
-  { el: <Diamond />, c: '#f08a4b', right: '3%', top: '16%', w: 34, r: 0, dur: 10, delay: -5 },
-  { el: <FourDots />, c: '#2f5a85', left: '5%', top: '48%', w: 44, r: 0, dur: 12, delay: -7 },
-  { el: <ThinSparkle />, c: '#5a0b1e', right: '3%', top: '40%', w: 40, r: 0, dur: 9, delay: -2 },
-  { el: <Asterisk />, c: '#f6b73c', right: '1%', top: '60%', w: 48, r: 20, dur: 13, delay: -8 },
-  { el: <Diamond />, c: '#e5584f', left: '12%', bottom: '6%', w: 26, r: 0, dur: 11, delay: -4 },
-  { el: <ThinSparkle />, c: '#f08a4b', left: '3%', bottom: '18%', w: 56, r: 0, dur: 10, delay: -6 }
-];
 
-// 3.8.1 (H4f): the clouds drift about half a pixel per frame at 60 fps (a 1360 px window), so they step 30 times a second
+// the clouds drift about half a pixel per frame at 60 fps (a 1360 px window), so they step 30 times a second
 // instead (steps of dur × CLOUD_FPS: about 1 px, under their 8 px blur nothing tells it from a glide) and the compositor
 // draws half the frames. Whole-second durations and delays keep the three clouds' steps on the same instants: one
 // redraw moves all of them.
 const CLOUD_FPS = 30;
 const ORB_CLOUDS = [{ dur: 90, delay: -10 }, { dur: 70, delay: -45 }, { dur: 110, delay: -70 }];
-// 3.8.3: each cloud is a picture with its 8 px blur already in it (drawn once, one per mode), not a CSS filter: the GPU
+// each cloud is a picture with its 8 px blur already in it (drawn once, one per mode), not a CSS filter: the GPU
 // applied a filter on a moving layer again on every frame the compositor drew (≈6 % of the GPU process at rest). The
 // picture is the same soft ellipse (the gradient of themes.css › .orb-cloud) blurred the same, with room for the blur
 // around it (3 × 8 px); the layer only slides. Without a canvas (never in Orb's window) the CSS cloud is drawn instead.
@@ -155,13 +136,16 @@ function cloudPictures() {
   return cloudArt;
 }
 // Candy: the pastel blobs (colour, place, size, how far they drift, how long) and the 3D sweets floating at the edges.
+// The blobs sit in the corners; the middle, where the text is, stays calm.
 const BLOBS = [
   { c: 'pink', left: '-8%', top: '-12%', w: 620, h: 480, dx: 50, dy: 30, dur: 34, delay: -6 },
   { c: 'mint', left: '-10%', top: '52%', w: 560, h: 460, dx: 60, dy: -30, dur: 38, delay: -25 },
-  { c: 'sky', left: '62%', top: '58%', w: 560, h: 440, dx: -50, dy: -40, dur: 44, delay: -12 }
+  { c: 'sky', left: '62%', top: '58%', w: 560, h: 440, dx: -50, dy: -40, dur: 44, delay: -12 },
+  { c: 'butter', left: '70%', top: '-16%', w: 520, h: 420, dx: -40, dy: 30, dur: 40, delay: -18 },
+  { c: 'lilac', left: '-14%', top: '22%', w: 460, h: 420, dx: 40, dy: 36, dur: 46, delay: -30 }
 ];
 // Three tones of each sweet colour (light, body, shade) for the 3D shading.
-const SWEET = { pink: ['#ffc9e3', '#ff7cc0', '#d6338e'], lilac: ['#e6d4ff', '#b98cff', '#7d4fd6'], mint: ['#d2f5e7', '#7fd9bd', '#3fa98a'], peach: ['#ffe4c8', '#ffb46e', '#e07a2e'], sky: ['#dbecff', '#8cc4ff', '#4a86d9'], yellow: ['#fff4c4', '#ffd95a', '#e0a800'], white: ['#ffffff', '#fdf3fa', '#eccbe0'] };
+const SWEET = { pink: ['#ffc9e3', '#ff7cc0', '#d6338e'], lilac: ['#e6d4ff', '#b98cff', '#7d4fd6'], mint: ['#d2f5e7', '#7fd9bd', '#3fa98a'], peach: ['#ffe4c8', '#ffb46e', '#e07a2e'], sky: ['#dbecff', '#8cc4ff', '#4a86d9'], yellow: ['#fff4c4', '#ffd95a', '#e0a800'], red: ['#ffd0d0', '#ff6b6b', '#c8283c'], white: ['#ffffff', '#fdf3fa', '#eccbe0'] };
 const g = (c) => `url(#cdg-${c})`;
 const Shine = ({ x, y, rx, ry, a = -30, o = 0.6 }) => <ellipse cx={x} cy={y} rx={rx} ry={ry} fill="#fff" opacity={o} transform={`rotate(${a} ${x} ${y})`} />;
 // A swirl lollipop: the stick, the disc and a white spiral on it.
@@ -199,20 +183,38 @@ const Gumdrop = ({ c = 'mint' }) => (
     <Shine x={38} y={32} rx={8} ry={5} a={-35} />
   </svg>
 );
-// A puffy 3D cloud: three puffs on a rounded base, a pink shade under it.
-const Cloud = () => (
-  <svg viewBox="0 0 200 110" aria-hidden="true">
-    <ellipse cx="100" cy="100" rx="70" ry="9" fill="#e9a9cc" opacity="0.35" />
-    <rect x="28" y="62" width="146" height="38" rx="19" fill={g('white')} />
-    <circle cx="58" cy="66" r="32" fill={g('white')} /><circle cx="104" cy="52" r="42" fill={g('white')} /><circle cx="150" cy="66" r="32" fill={g('white')} />
-    <Shine x={92} y={30} rx={18} ry={7} a={-10} o={0.9} />
+// A frosted donut: the dough ring, the icing with its wavy edge, a few sprinkles.
+const Donut = ({ c = 'pink' }) => (
+  <svg viewBox="0 0 100 100" aria-hidden="true">
+    <circle cx="50" cy="50" r="42" fill={g('peach')} />
+    <path d="M50 14C72 14 86 30 86 50C86 70 72 86 50 86C28 86 14 70 14 50C14 30 28 14 50 14ZM50 36A14 14 0 1 0 50 64A14 14 0 1 0 50 36Z" fill={g(c)} fillRule="evenodd" />
+    <circle cx="50" cy="50" r="14" fill="none" stroke={SWEET.peach[2]} strokeOpacity="0.35" strokeWidth="3" />
+    {[[32, 30, 20], [64, 26, -30], [74, 52, 50], [60, 74, 10], [30, 66, -40], [24, 48, 70]].map(([x, y, r], i) => <rect key={i} x={x - 5} y={y - 1.6} width="10" height="3.2" rx="1.6" fill={['#fff', '#7fd9bd', '#ffd95a'][i % 3]} transform={`rotate(${r} ${x} ${y})`} />)}
+    <Shine x={34} y={24} rx={9} ry={4} a={-35} />
+  </svg>
+);
+// A peppermint: a disc cut in eight red and white wedges.
+const Peppermint = () => (
+  <svg viewBox="0 0 100 100" aria-hidden="true">
+    <circle cx="50" cy="50" r="40" fill={g('white')} />
+    {[0, 1, 2, 3].map((i) => <path key={i} d="M50 50L50 10A40 40 0 0 1 78.3 21.7Z" fill={g('red')} transform={`rotate(${i * 90} 50 50)`} />)}
+    <circle cx="50" cy="50" r="40" fill="none" stroke="#fff" strokeOpacity="0.7" strokeWidth="4" />
+    <Shine x={36} y={28} rx={10} ry={4} a={-35} />
+  </svg>
+);
+// A gummy heart.
+const Heart = ({ c = 'pink' }) => (
+  <svg viewBox="0 0 100 90" aria-hidden="true">
+    <path d="M50 84C20 62 8 46 8 30C8 16 18 8 30 8C40 8 47 14 50 22C53 14 60 8 70 8C82 8 92 16 92 30C92 46 80 62 50 84Z" fill={g(c)} />
+    <Shine x={30} y={24} rx={10} ry={5} a={-35} />
   </svg>
 );
 const SWEETS = [
-  { el: <Cloud />, left: '-1%', top: '9%', w: 150, dur: 14, delay: -3 },
+  { el: <Donut c="pink" />, left: '1%', top: '9%', w: 96, r: -12, dur: 14, delay: -3 },
   { el: <Wrapped c="pink" />, right: '1%', top: '13%', w: 120, r: 18, dur: 11, delay: -6 },
   { el: <Gumdrop c="mint" />, left: '4%', top: '44%', w: 70, r: -6, dur: 12, delay: -1 },
-  { el: <Cloud />, right: '-1%', top: '40%', w: 140, dur: 16, delay: -9 },
+  { el: <Peppermint />, right: '1%', top: '40%', w: 84, r: 10, dur: 16, delay: -9 },
+  { el: <Heart c="red" />, left: '11%', top: '26%', w: 52, r: -10, dur: 10, delay: -5 },
   { el: <Lollipop c="pink" />, left: '2%', bottom: '8%', w: 110, r: -14, dur: 13, delay: -5 },
   { el: <Bean c="lilac" />, right: '5%', bottom: '18%', w: 92, r: -25, dur: 10, delay: -2 },
   { el: <Bean c="peach" />, left: '13%', bottom: '3%', w: 60, r: 30, dur: 9, delay: -7 },
@@ -244,13 +246,10 @@ export function Scene() {
           {STICKERS.map((t, i) => <div key={`k${i}`} className="vw-sticker" style={{ left: t.left, right: t.right, top: t.top, bottom: t.bottom, width: t.w, '--r': `${t.r ?? 0}deg`, animationDuration: `${t.dur}s`, animationDelay: `${t.delay}s` }}>{t.el}</div>)}
         </>) : null}
         {skin === 'retro' ? (<>
-          <div className="rt-stars s1" /><div className="rt-stars s2" />
-          <div className="rt-column left">{COLUMN.map((k, i) => <div key={i}><Pixels rows={PIX[k]} color={RAINBOW[i % RAINBOW.length]} /></div>)}</div>
-          <div className="rt-column right">{COLUMN.map((k, i) => <div key={i}><Pixels rows={PIX[k]} color={RAINBOW[(i + 5) % RAINBOW.length]} /></div>)}</div>
+          <div className="rt-column left">{COLUMN.map((k, i) => <div key={i}><Pixels rows={PIX[k]} /></div>)}</div>
+          <div className="rt-column right">{COLUMN.map((k, i) => <div key={i}><Pixels rows={PIX[k]} /></div>)}</div>
           <div className="rt-crab"><Pixels rows={PIX.crab} /></div>
           <div className="rt-rocket"><Pixels rows={PIX.rocket} /></div>
-          <div className="rt-corner"><Chevrons /></div>
-          {SHAPES.map((t, i) => <div key={`h${i}`} className="rt-shape" style={{ left: t.left, right: t.right, top: t.top, bottom: t.bottom, width: t.w, color: t.c, '--r': `${t.r ?? 0}deg`, animationDuration: `${t.dur}s`, animationDelay: `${t.delay}s` }}>{t.el}</div>)}
           <div className="rt-scan" />
         </>) : null}
         {skin === 'nube' ? (<>

@@ -4,7 +4,7 @@
 # updater key (which never leaves that PC), writes latest.json (Orb on Tauri) and latest.yml (Orb 3.8.0's updater, the
 # bridge) and creates release v<version> with gh.
 # Runs when "version" in package.json changes on main and that version has no release yet, or from the Actions tab.
-# Linux: planned for a later version (docs/ARCHITECTURE.md); the Android app is built and signed on the owner's PC too.
+# Linux: planned for a later version (docs/architecture/29-packaging-versions-and-ci.md); the Android app is built and signed on the owner's PC too.
 # Actions are pinned by commit (the tag in the comment).
 name: Release build
 

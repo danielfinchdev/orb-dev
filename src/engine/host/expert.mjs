@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
+import { gitAsyncWith } from '../../platform/git.mjs';
 import { isSecretPath, redactSecrets } from '../../shared/secrets-scan.mjs';
 import { tr } from '../../platform/context.mjs';
 
@@ -15,12 +15,9 @@ const HIDDEN = new Set(['.git', '.orb', '.orb-adjuntos']); // compared in lower 
 const isHidden = (part) => HIDDEN.has(part.toLowerCase());
 const realpath = fs.realpathSync.native ?? fs.realpathSync; // native: the real case and long names (not ENV~1) on Windows
 
-// git without blocking the engine, with paths taken literally (never as patterns: "*" or "[.]env" would match .env).
-const git = (cwd, args, { max = 32 * 1024 * 1024 } = {}) => new Promise((resolve) => {
-  execFile('git', ['-C', cwd, '--literal-pathspecs', '-c', 'core.quotepath=off', ...args], { encoding: 'utf8', windowsHide: true, maxBuffer: max, timeout: 30_000 }, (error, stdout, stderr) => {
-    resolve({ status: error ? (typeof error.code === 'number' ? error.code : -1) : 0, stdout: stdout ?? '', stderr: stderr ?? '', cut: error?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' });
-  });
-});
+// git without blocking the engine, with paths taken literally (never as patterns: "*" or "[.]env" would match .env). It is
+// Orb's own git: the project's hooks and fsmonitor never run here, and the engine's environment is not handed over.
+const git = (cwd, args, { max = 32 * 1024 * 1024 } = {}) => gitAsyncWith(cwd, { max, timeout: 30_000, literal: true }, ...args);
 const userError = (message) => { const e = new Error(message); e.userFacing = true; return e; };
 
 // Absolute path of `rel` inside the project, refusing anything that leaves it (.., absolute paths, links pointing out).

@@ -1,7 +1,7 @@
 // Tasks: the board. Filters, approvals, details and every action on a task (undo, retry, model, merge, pull request, OK).
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
-import { Check, X, Zap, RotateCw, Square, Shuffle, Undo2, MessageSquare, GitMerge, GitPullRequest, Trash2, ListTodo, ThumbsUp, ChevronRight, ScanSearch, Hourglass, GitBranch } from 'lucide-react';
+import { notifyOk } from '@/lib/notify.js';
+import { Check, X, Zap, RotateCw, Square, Shuffle, Undo2, MessageSquare, GitMerge, GitPullRequest, Trash2, ClipboardCheck, ThumbsUp, ChevronRight, ScanSearch, Hourglass, GitBranch } from 'lucide-react';
 import { PageHeader, PageBody, BackButton } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { Markdown } from '@/components/markdown.jsx';
@@ -10,7 +10,7 @@ import { modelsOf } from '@/components/brain-picker.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { TaskChanges } from '@/components/task-changes.jsx';
-import { HeldCard, PausedNote, waitText } from '@/components/task-state.jsx';
+import { HeldCard, PausedNote, TaskStatus, waitText } from '@/components/task-state.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, Empty, Field, Input, Textarea } from '@/components/ui/basic.jsx';
 import { Tabs, TabsList, TabsTrigger, Select, Collapsible, CollapsibleTrigger, CollapsibleContent, BubbleTip } from '@/components/ui/overlay.jsx';
@@ -18,23 +18,18 @@ import { useStore, call, act, go, bridge, phoneLayout } from '@/lib/store.js';
 import { AGENT, STATUS, REASONING, MODE, SENSITIVE, options } from '@/lib/labels.js';
 import { ago, fmtTime, cn } from '@/lib/utils.js';
 import { t, useT } from '@/lib/i18n.js';
+import { needsApproval } from '@/lib/task-approval.js';
+import { Note } from '@/components/ui/primitives.jsx';
 
 const FILTERS = [
   ['encurso', 'tasks.filter.active', (x) => ['running', 'queued'].includes(x.status)], // working now or waiting its turn
-  // 3.8.3: also the tasks Orb held for review after they ran (a mass deletion…): they wait for the user's OK too.
-  ['aprobar', 'tasks.filter.approve', (x) => x.status === 'awaiting_approval' || Boolean(x.held)],
+  // also the tasks Orb held for review after they ran (a mass deletion…): they wait for the user's OK too.
+  ['aprobar', 'tasks.filter.approve', needsApproval],
   ['hechas', 'tasks.filter.done', (x) => x.status === 'done'],
   ['incidencias', 'tasks.filter.problems', (x) => ['failed', 'blocked', 'limited'].includes(x.status) && !x.held],
   ['todas', 'tasks.filter.all', () => true]
 ];
 const verdictLabel = (v) => (['correcto', 'con fallos'].includes(v) ? t(`tasks.verdict.${v}`) : v);
-// 3.2.1: an undone task reads «Deshecha» (its files are back as they were), not «Completada».
-// 3.8.3: a held one reads «Por aprobar»; a queued one says why it waits («En pausa», «Espera a #3»).
-const StatusBadge = ({ status, undone, task }) => (undone ? <Badge variant="secondary" data-testid="task-undone"><Undo2 />{t('tasks.undone')}</Badge>
-  : task?.held ? <Badge variant="warning" data-testid="task-held-badge">{t('tasks.held.badge')}</Badge>
-    : status === 'queued' && task?.waiting ? <Badge variant={task.waiting.kind === 'paused' ? 'warning' : STATUS.queued[1]} title={task.waiting.text}>{waitText(t, task)}</Badge>
-      : <Badge variant={STATUS[status]?.[1]}>{STATUS[status]?.[0] ?? status}</Badge>);
-
 // Who reviews (Task Review, Security Review): automatic (another provider with quota) or an installed agent.
 const reviewers = async () => (await call('agents.status')).filter((a) => a.enabled && a.installed);
 const ReviewerField = ({ agents, v, set }) => <Field label={t('tasks.review.reviewer')} hint={t('tasks.review.reviewerHint')}><Select className="w-full" value={v.agent || '__auto'} onValueChange={(agent) => set({ agent: agent === '__auto' ? '' : agent })} options={[{ value: '__auto', label: t('tasks.review.auto') }, ...agents.map((a) => ({ value: a.id, label: a.label }))]} /></Field>;
@@ -54,7 +49,7 @@ export async function askReview({ task, project }) {
   });
 }
 
-// 3.0: Security Review of a whole project: who audits it (automatic: another provider with quota).
+// Security Review of a whole project: who audits it (automatic: another provider with quota).
 export async function askSecurityReview({ project }) {
   const agents = await reviewers();
   return form(t('tasks.security.title', { project }), {
@@ -71,12 +66,12 @@ function TaskDetail({ id, live }) {
   const version = useStore((s) => s.version);
   const [t, setT] = useState(null);
   useEffect(() => { let alive = true; call('tasks.get', { id }).then((r) => alive && setT(r)).catch(() => alive && setT(null)); return () => { alive = false; }; }, [id, version]);
-  if (!t) return <Card><Empty title={tr('tasks.pick')} icon={ListTodo} /></Card>;
+  if (!t) return <Card><Empty title={tr('tasks.pick')} icon={ClipboardCheck} /></Card>;
   const who = t.assigned_to ?? t.agent;
   const A = (props) => <Button size="sm" variant="outline" {...props} />;
   const reassign = async () => {
     const agents = (await call('agents.status')).filter((a) => a.enabled && a.installed);
-    // 2.7: the model is chosen from the agent's real ones (with what each is for), or left to Orb: never typed.
+    // the model is chosen from the agent's real ones (with what each is for), or left to Orb: never typed.
     const catalog = await call('models.catalog').catch(() => []);
     const AUTO = '__auto';
     const modelOptions = (agent) => {
@@ -108,8 +103,8 @@ function TaskDetail({ id, live }) {
     <Card className="gap-5" data-testid="task-detail">
       <div className="flex items-start gap-3 px-5">
         <AgentIcon agent={who} className="mt-1 size-5" />
-        <div className="min-w-0 flex-1"><div className="text-muted-foreground text-xs">{tr('tasks.taskNo', { id: t.id, project: t.project })}</div><h2 className="text-[17px] leading-snug">{t.title}</h2></div>
-        {t.accepted ? <Badge variant="success"><ThumbsUp />{tr('tasks.accepted')}</Badge> : null}<StatusBadge status={t.status} undone={Boolean(t.undone)} task={t} />
+        <div className="min-w-0 flex-1"><div className="text-muted-foreground text-xs">{tr('tasks.taskNo', { id: t.id, project: t.project })}</div><h2 className="text-title leading-snug">{t.title}</h2></div>
+        {t.accepted ? <Badge variant="success"><ThumbsUp />{tr('tasks.accepted')}</Badge> : null}<TaskStatus status={t.status} undone={Boolean(t.undone)} task={t} />
       </div>
       <div className="flex flex-wrap gap-2 px-5">
         {t.status === 'awaiting_approval' ? (<>
@@ -119,40 +114,40 @@ function TaskDetail({ id, live }) {
         {t.status === 'done' && !t.accepted && !t.undone ? <Button size="sm" onClick={() => act(call('tasks.accept', { id: t.id }), tr('tasks.accepted'))}><ThumbsUp />{tr('tasks.giveOk')}</Button> : null}
         {t.status === 'done' && !t.review_of ? <BubbleTip title={tr('tasks.review.btn')} text={tr('projects.reviewTip')}><A onClick={() => askReview({ task: t })} data-testid="task-review"><ScanSearch />{tr('tasks.review.btn')}</A></BubbleTip> : null}
         {t.session_id ? <A onClick={() => go({ view: 'session', id: t.session_id })}><MessageSquare />{tr('tasks.agentChat')}</A> : null}
-        {t.status === 'queued' ? <A onClick={async () => { const r = await act(call('tasks.launchAnyway', { id: t.id })); if (r) toast.success(tr(r.paused ? 'tasks.launchAnyway.paused' : 'tasks.launchAnyway.done')); }}><Zap />{tr('tasks.launchAnyway')}</A> : null}
+        {t.status === 'queued' ? <A onClick={async () => { const r = await act(call('tasks.launchAnyway', { id: t.id })); if (r) notifyOk(tr(r.paused ? 'tasks.launchAnyway.paused' : 'tasks.launchAnyway.done')); }}><Zap />{tr('tasks.launchAnyway')}</A> : null}
         {['failed', 'blocked', 'cancelled', 'limited'].includes(t.status) ? <A onClick={() => act(call('tasks.retry', { id: t.id }), tr('tasks.retry.done'))}><RotateCw />{t.status === 'limited' ? tr('tasks.continueNow') : tr('tasks.retry')}</A> : null}
         {!['running', 'done'].includes(t.status) ? <A onClick={reassign}><Shuffle />{tr('tasks.reassign.btn')}</A> : null}
         {/* (A held task has «Deshacer» on its card below, next to «Aceptar».) */}
         {t.hasCheckpoint && t.status !== 'running' && !t.held ? <A onClick={async () => { if (await confirm(tr('tasks.undo.title'), tr('tasks.undo.body'), { ok: tr('tasks.undo.ok'), danger: true })) act(call('tasks.undo', { id: t.id })); }}><Undo2 />{tr('tasks.undo.btn')}</A> : null}
         {t.branch && t.status === 'done' ? (<>
-          <A onClick={async () => { if (await confirm(tr('tasks.merge'), tr('tasks.merge.body', { branch: t.branch }), { ok: tr('tasks.merge.ok') })) act(call('projects.merge', { name: t.project, branch: t.branch }), tr('tasks.merge.done')); }}><GitMerge />{tr('tasks.merge')}</A>
+          <A onClick={async () => { if (await confirm(tr('tasks.merge'), tr('tasks.merge.body', { branch: t.branch }), { ok: tr('tasks.merge.ok'), danger: true })) act(call('projects.merge', { name: t.project, branch: t.branch }), tr('tasks.merge.done')); }}><GitMerge />{tr('tasks.merge')}</A>
           <A onClick={createPr}><GitPullRequest />{tr('tasks.pr.title')}</A>
           <Button size="sm" variant="danger" onClick={async () => { if (await confirm(tr('tasks.discard'), tr('tasks.discard.body', { branch: t.branch }), { ok: tr('tasks.discard.ok'), danger: true })) act(call('tasks.discardBranch', { id: t.id }), tr('tasks.discard.done')); }}><Trash2 />{tr('tasks.discard')}</Button>
         </>) : null}
         {!['done', 'cancelled'].includes(t.status) ? <Button size="sm" variant="danger" onClick={async () => { if (await confirm(tr('tasks.cancel.title'), t.status === 'running' ? tr('tasks.cancel.running') : tr('tasks.cancel.ask'), { ok: tr('tasks.cancel.title'), cancel: tr('tasks.cancel.back'), danger: true })) act(call('tasks.cancel', { id: t.id }), tr('tasks.cancel.done')); }}><Square />{tr('tasks.cancel')}</Button> : null}
       </div>
-      {/* 3.8.3: held for review: what it did and where, with «Aceptar» and «Deshacer»; a paused queue, with «Reanudar». */}
+      {/* held for review: what it did and where, with «Aceptar» and «Deshacer»; a paused queue, with «Reanudar». */}
       {t.held ? <HeldCard task={t} className="mx-5" /> : null}
       {t.status === 'queued' && t.waiting?.kind === 'paused' ? <PausedNote className="mx-5" /> : null}
-      {t.status === 'queued' && t.waiting?.kind === 'manual' ? <div className="bg-muted/50 mx-5 rounded-xl border px-3.5 py-2.5 text-[13px]" data-testid="task-wait-manual">{tr('tasks.wait.manualNote')}</div> : null}
-      {t.status === 'queued' && t.waiting?.kind === 'deps' ? <div className="bg-muted/50 mx-5 rounded-xl border px-3.5 py-2.5 text-[13px]" data-testid="task-wait-deps">{waitText(tr, t)}</div> : null}
+      {t.status === 'queued' && t.waiting?.kind === 'manual' ? <Note className="mx-5" data-testid="task-wait-manual">{tr('tasks.wait.manualNote')}</Note> : null}
+      {t.status === 'queued' && t.waiting?.kind === 'deps' ? <Note className="mx-5" data-testid="task-wait-deps">{waitText(tr, t)}</Note> : null}
       {t.status === 'running' && live ? <div className="bg-muted/50 mx-5 rounded-xl border px-3.5 py-3" data-testid="task-live"><LiveTask t={live} actions={false} /></div> : null}
-      {t.undone ? <div className="bg-muted/50 mx-5 flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[13px]"><Undo2 className="text-muted-foreground size-4" />{tr('tasks.undoneNote', { when: fmtTime(t.undone.at) })}</div> : null}
-      {t.status === 'limited' && t.limited_until ? <div className="bg-warning/10 border-warning/40 mx-5 flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[13px]"><Hourglass className="text-warning size-4" />{tr('tasks.limitedNote', { when: fmtTime(t.limited_until) })}</div> : null}
-      {t.review ? <div className={cn('mx-5 flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[13px]', t.review.verdict === 'correcto' ? 'border-success/40 bg-success/10' : t.review.verdict === 'con fallos' ? 'border-destructive/40 bg-destructive/10' : 'bg-muted/50')}><ScanSearch className="size-4" />{tr('tasks.review.line', { agent: AGENT[t.review.agent] ?? t.review.agent })} <span className="font-medium">{verdictLabel(t.review.verdict)}</span><Button size="sm" variant="ghost" className="ml-auto" onClick={() => go({ view: 'tasks', id: t.review.task })}>{tr('tasks.review.see', { id: t.review.task })}</Button></div> : null}
-      <dl className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1.5 px-5 text-[13px]">
+      {t.undone ? <Note icon={Undo2} className="mx-5">{tr('tasks.undoneNote', { when: fmtTime(t.undone.at) })}</Note> : null}
+      {t.status === 'limited' && t.limited_until ? <Note tone="warning" icon={Hourglass} className="mx-5">{tr('tasks.limitedNote', { when: fmtTime(t.limited_until) })}</Note> : null}
+      {t.review ? <div className={cn('mx-5 flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-control', t.review.verdict === 'correcto' ? 'border-success/40 bg-success/10' : t.review.verdict === 'con fallos' ? 'border-destructive/40 bg-destructive/10' : 'bg-muted/50')}><ScanSearch className="size-4" />{tr('tasks.review.line', { agent: AGENT[t.review.agent] ?? t.review.agent })} <span className="font-medium">{verdictLabel(t.review.verdict)}</span><Button size="sm" variant="ghost" className="ml-auto" onClick={() => go({ view: 'tasks', id: t.review.task })}>{tr('tasks.review.see', { id: t.review.task })}</Button></div> : null}
+      <dl className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1.5 px-5 text-control">
         <dt className="text-muted-foreground">{tr('tasks.agent')}</dt><dd>{tr('tasks.agentLine', { agent: `${t.accountLabel ?? AGENT[who] ?? who}${t.model ? ` · ${t.modelLabel ?? t.model}` : ''}`, reasoning: REASONING[t.reasoning]?.toLowerCase() ?? t.reasoning })}</dd>
         <dt className="text-muted-foreground">{tr('tasks.where')}</dt><dd className="break-all">{MODE[t.mode]}{t.readonly ? ` · ${tr('tasks.readonlyShort')}` : ''}{t.branch ? ` · ${tr('tasks.branchShort', { branch: t.branch })}` : ''}</dd>
         <dt className="text-muted-foreground">{tr('tasks.created')}</dt><dd>{tr('tasks.createdBy', { time: fmtTime(t.created_at), agent: AGENT[t.created_by] ?? t.created_by })}</dd>
         {t.parent_id ? <><dt className="text-muted-foreground">{tr('tasks.subOf')}</dt><dd><button className="cursor-pointer underline-offset-2 hover:underline" onClick={() => go({ view: 'tasks', id: t.parent_id })}>#{t.parent_id}</button></dd></> : null}
         {t.review_of ? <><dt className="text-muted-foreground">{tr('tasks.reviews')}</dt><dd><button className="cursor-pointer underline-offset-2 hover:underline" onClick={() => go({ view: 'tasks', id: t.review_of })}>#{t.review_of}</button></dd></> : null}
-        {t.children?.length ? <><dt className="text-muted-foreground">{tr('tasks.subtasks')}</dt><dd className="flex flex-wrap gap-1">{t.children.map((c) => <button key={c.id} onClick={() => go({ view: 'tasks', id: c.id })} className="cursor-pointer"><Badge variant={STATUS[c.status]?.[1] ?? 'secondary'} className="gap-1"><GitBranch className="size-3" />#{c.id} {AGENT[c.assigned_to ?? c.agent] ?? c.agent} · {STATUS[c.status]?.[0] ?? c.status}</Badge></button>)}</dd></> : null}
-        {t.dependencies?.length ? <><dt className="text-muted-foreground">{tr('tasks.dependsOn')}</dt><dd className="flex flex-wrap gap-1">{t.dependencies.filter(Boolean).map((d) => <Badge key={d.id} variant="secondary">#{d.id} {STATUS[d.status]?.[0]}</Badge>)}</dd></> : null}
+        {t.children?.length ? <><dt className="text-muted-foreground">{tr('tasks.subtasks')}</dt><dd className="flex flex-wrap gap-1">{t.children.map((c) => <button key={c.id} onClick={() => go({ view: 'tasks', id: c.id })} className="cursor-pointer"><Badge variant={STATUS[c.status]?.[1] ?? 'secondary'} className="gap-1"><GitBranch className="size-3" />#{c.id} {AGENT[c.assigned_to ?? c.agent] ?? c.agent} · <TaskStatus task={c} plain /></Badge></button>)}</dd></> : null}
+        {t.dependencies?.length ? <><dt className="text-muted-foreground">{tr('tasks.dependsOn')}</dt><dd className="flex flex-wrap gap-1">{t.dependencies.filter(Boolean).map((d) => <Badge key={d.id} variant="secondary">#{d.id} <TaskStatus task={d} plain /></Badge>)}</dd></> : null}
         {t.sensitivity.length ? <><dt className="text-muted-foreground">{tr('tasks.approval')}</dt><dd className="flex flex-wrap gap-1">{t.sensitivity.map((s) => <Badge key={s} variant="warning">{SENSITIVE[s] ?? s}</Badge>)}</dd></> : null}
       </dl>
-      <div className="grid gap-1.5 px-5"><div className="text-muted-foreground text-xs">{tr('tasks.brief')}</div><pre className="bg-muted max-h-72 overflow-auto rounded-lg px-3 py-2 font-sans text-[13px] whitespace-pre-wrap">{t.description}</pre></div>
-      {t.result ? <div className="grid gap-1.5 px-5"><div className="text-muted-foreground text-xs">{tr('tasks.result')}</div><div className="rounded-lg border px-3.5 py-2.5 text-[13.5px]"><Markdown>{t.result}</Markdown></div></div> : null}
-      {/* 3.8.2: the files it changed, with their diff (read only: «Deshacer» above works as before). */}
+      <div className="grid gap-1.5 px-5"><div className="text-muted-foreground text-xs">{tr('tasks.brief')}</div><pre className="bg-muted max-h-72 overflow-auto rounded-lg px-3 py-2 font-sans text-control whitespace-pre-wrap">{t.description}</pre></div>
+      {t.result ? <div className="grid gap-1.5 px-5"><div className="text-muted-foreground text-xs">{tr('tasks.result')}</div><div className="rounded-lg border px-3.5 py-2.5 text-control"><Markdown>{t.result}</Markdown></div></div> : null}
+      {/* the files it changed, with their diff (read only: «Deshacer» above works as before). */}
       {t.hasCheckpoint && t.status !== 'running' ? <TaskChanges taskId={t.id} version={`${t.status}:${t.updated_at}`} className="mx-5" /> : null}
       <Collapsible className="px-5">
         <CollapsibleTrigger className="text-muted-foreground group flex cursor-pointer items-center gap-1 text-xs"><ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" />{tr('tasks.history', { n: t.events.length })}</CollapsibleTrigger>
@@ -162,7 +157,7 @@ function TaskDetail({ id, live }) {
   );
 }
 
-// 3.8, the phone: the filter chosen stays when a task is opened and closed again.
+// the phone: the filter chosen stays when a task is opened and closed again.
 let phoneFilter = null;
 
 export function TasksView({ route }) {
@@ -171,7 +166,7 @@ export function TasksView({ route }) {
   const phone = phoneLayout();
   // From a folder of the left menu: only that project's tasks (with a button to see them all).
   const tasks = route.project ? all.filter((t) => t.project === route.project) : all;
-  const [filter, setFilterState] = useState(() => (phone && phoneFilter) || (route.id && !phone ? 'todas' : tasks.some((x) => x.status === 'awaiting_approval') ? 'aprobar' : tasks.some((x) => ['running', 'queued'].includes(x.status)) ? 'encurso' : 'todas'));
+  const [filter, setFilterState] = useState(() => (phone && phoneFilter) || (route.id && !phone ? 'todas' : tasks.some(needsApproval) ? 'aprobar' : tasks.some((x) => ['running', 'queued'].includes(x.status)) ? 'encurso' : 'todas'));
   const setFilter = (f) => { setFilterState(f); if (phone) phoneFilter = f; };
   const [selected, setSelected] = useState(route.id ?? null);
   const rows = tasks.filter(FILTERS.find(([k]) => k === filter)[2]);
@@ -180,7 +175,7 @@ export function TasksView({ route }) {
   // detail side by side; the phone opens a task on a screen of its own).
   useEffect(() => { if (!phone && rows.length && !rows.some((t) => t.id === selected)) setSelected(rows[0].id); }, [filter, rows.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const list = route.project ? { view: 'tasks', project: route.project } : { view: 'tasks' };
-  // 3.8, the phone: a task on its own screen, with the back arrow to the list (also Android's back).
+  // the phone: a task on its own screen, with the back arrow to the list (also Android's back).
   if (phone && route.id != null) return (
     <>
       <PageHeader back={<BackButton to={list} />} title={tr('tasks.taskTitle', { id: route.id })} />
@@ -190,7 +185,7 @@ export function TasksView({ route }) {
   const open = (t) => (phone ? go({ ...list, id: t.id }) : setSelected(t.id));
   return (
     <>
-      <PageHeader icon={<ListTodo className="text-primary size-5" />} title={route.project ? tr('tasks.titleProject', { project: route.project }) : tr('nav.tasks')} meta={tr('tasks.meta')}>
+      <PageHeader icon={<ClipboardCheck className="text-primary size-5" />} title={route.project ? tr('tasks.titleProject', { project: route.project }) : tr('nav.tasks')} meta={tr('tasks.meta')}>
         {route.project ? <Button size="sm" variant="ghost" onClick={() => go('tasks')}><X />{tr('tasks.allProjects')}</Button> : null}
       </PageHeader>
       <PageBody className="md:pb-28">
@@ -201,26 +196,26 @@ export function TasksView({ route }) {
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(320px,1fr)_minmax(400px,1.25fr)]">
           <Card className="gap-0 overflow-hidden py-0">
             {rows.length ? rows.map((t) => {
-              const progress = t.status === 'running' && liveOf(live, t.id) ? <div className="mt-1.5 flex items-center gap-2"><ProgressBar percent={liveOf(live, t.id).percent} quiet={liveOf(live, t.id).quietMin >= 5} className="h-1" /><span className="text-muted-foreground shrink-0 text-[11px] tabular-nums">{liveOf(live, t.id).percent != null ? `${liveOf(live, t.id).percent} %` : tr('tasks.steps', { n: liveOf(live, t.id).steps })}</span></div> : null;
+              const progress = t.status === 'running' && liveOf(live, t.id) ? <div className="mt-1.5 flex items-center gap-2"><ProgressBar percent={liveOf(live, t.id).percent} quiet={liveOf(live, t.id).quietMin >= 5} className="h-1" /><span className="text-muted-foreground shrink-0 text-micro tabular-nums">{liveOf(live, t.id).percent != null ? `${liveOf(live, t.id).percent} %` : tr('tasks.steps', { n: liveOf(live, t.id).steps })}</span></div> : null;
               return (
                 <button key={t.id} onClick={() => open(t)} className={cn('flex w-full cursor-pointer items-center gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-accent/50', !phone && selected === t.id && 'bg-accent')} data-testid="task-row">
                   <AgentIcon agent={t.assigned_to ?? t.agent} className={phone ? 'self-start mt-0.5' : undefined} />
                   {/* The phone: the title on up to two lines, and under it the state and where (the agent is the icon). */}
                   {phone ? (
                     <div className="min-w-0 flex-1">
-                      <div className="line-clamp-2 text-[14px] leading-snug">{t.title}</div>
-                      <div className="mt-1 flex min-w-0 items-center gap-2"><StatusBadge status={t.status} undone={t.undone} task={t} /><span className="text-muted-foreground truncate text-xs">{t.project} · {ago(t.updated_at)}</span></div>
+                      <div className="line-clamp-2 text-body leading-snug">{t.title}</div>
+                      <div className="mt-1 flex min-w-0 items-center gap-2"><TaskStatus status={t.status} undone={t.undone} task={t} /><span className="text-muted-foreground truncate text-xs">{t.project} · {ago(t.updated_at)}</span></div>
                       {progress}
                     </div>
                   ) : (<>
-                    <div className="min-w-0 flex-1"><div className="truncate text-[14px]">{t.title}</div><div className="text-muted-foreground truncate text-xs">#{t.id} · {t.project} · {AGENT[t.assigned_to ?? t.agent] ?? t.agent} · {ago(t.updated_at)}</div>{progress}</div>
-                    <StatusBadge status={t.status} undone={t.undone} task={t} />
+                    <div className="min-w-0 flex-1"><div className="truncate text-body">{t.title}</div><div className="text-muted-foreground truncate text-xs">#{t.id} · {t.project} · {AGENT[t.assigned_to ?? t.agent] ?? t.agent} · {ago(t.updated_at)}</div>{progress}</div>
+                    <TaskStatus status={t.status} undone={t.undone} task={t} />
                   </>)}
                 </button>
               );
-            }) : <Empty icon={ListTodo} title={filter === 'aprobar' ? tr('tasks.empty.approve') : tr('tasks.empty.none')}>{tr('tasks.empty.hint')}</Empty>}
+            }) : <Empty icon={ClipboardCheck} title={filter === 'aprobar' ? tr('tasks.empty.approve') : tr('tasks.empty.none')}>{tr('tasks.empty.hint')}</Empty>}
           </Card>
-          {phone ? null : selected ? <TaskDetail id={selected} live={liveOf(live, selected)} /> : <Card><Empty icon={ListTodo} title={tr('tasks.pick')}>{tr('tasks.pickHint')}</Empty></Card>}
+          {phone ? null : selected ? <TaskDetail id={selected} live={liveOf(live, selected)} /> : <Card><Empty icon={ClipboardCheck} title={tr('tasks.pick')}>{tr('tasks.pickHint')}</Empty></Card>}
         </div>
       </PageBody>
     </>

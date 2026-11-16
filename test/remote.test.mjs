@@ -186,7 +186,7 @@ test('el móvil hace lo suyo y nada más (acciones del PC, acceso total, archivo
   const withPicture = await p.call('sessions.send', { id: 'no-existe', text: 'hola', images: [up.result.path] });
   assert.notEqual(withPicture.status, 403, 'su propia imagen, por su nombre, sí');
   assert.ok(!String(withPicture.error ?? '').includes(t.home), 'los errores tampoco llevan la carpeta');
-  assert.equal((await upload(new Uint8Array(Buffer.from('MZ ejecutable')))).status, 415);
+  assert.equal((await upload(new Uint8Array(Buffer.from([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00])))).status, 415);
 });
 
 // 3.8 (M4, B3), through the encrypted /api/call: no folder of the PC, and the brain of one conversation only.

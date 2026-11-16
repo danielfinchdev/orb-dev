@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from './context.mjs';
 import { paths, writeJson } from './paths.mjs';
-import { merge, AGENT_IDS } from './config-file.mjs';
+import { merge, AGENT_IDS, DEFAULT_CONFIG } from './config-file.mjs';
+import { switchableIds } from '../shared/rails-registry.mjs';
 import { relabelEmptyLogs } from './journal-files.mjs';
 import { inside as insideOf } from './fsx.mjs';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from '../shared/appearance.mjs';
@@ -11,11 +12,28 @@ import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from '../shared/appearance.mjs'
 // Settings saved from the app. Only known top-level keys are accepted.
 // A connector's name as it goes into environment variable names (case does not count on Windows).
 export const connectorKey = (name) => String(name ?? '').toLowerCase().replace(/[^a-z0-9_]/g, '_');
-const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'skills', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'oneAtATime', 'approvalWaitMinutes', 'permissions', 'protected', 'backup', 'tz', 'setupPending'];
+const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'skills', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'oneAtATime', 'approvalWaitMinutes', 'permissions', 'rails', 'protected', 'backup', 'tz', 'setupPending'];
+function tidyStored(stored) {
+  const out = structuredClone(stored);
+  const rounds = out.budget?.maxFixRounds;
+  if (rounds != null && !(Number.isInteger(rounds) && rounds >= 0 && rounds <= 10)) {
+    const n = Number(rounds);
+    out.budget.maxFixRounds = Number.isFinite(n) && n >= 0 ? Math.min(10, Math.floor(n)) : DEFAULT_CONFIG.budget.maxFixRounds;
+  }
+  // rails: a core or unknown id and any entry that is not {enabled: boolean} is ignored by the code, so it is dropped.
+  if (out.rails !== undefined) {
+    const ok = switchableIds();
+    const valid = out.rails && typeof out.rails === 'object' && !Array.isArray(out.rails) ? out.rails : {};
+    out.rails = Object.fromEntries(Object.entries(valid).filter(([id, v]) => ok.includes(id) && v && typeof v === 'object' && !Array.isArray(v) && typeof v.enabled === 'boolean'));
+  }
+  return out;
+}
 export function saveConfig(patch) {
   const unknown = Object.keys(patch ?? {}).filter((k) => !EDITABLE.includes(k));
   if (unknown.length) throw new Error(tr('msg.ctx.unknownSettings', { unknown: unknown.join(', ') }));
-  const next = merge(ctx.config, patch);
+  // Only what the patch brings is validated strictly: values a hand-edited orb.json holds that the code tolerates
+  // (a 3.8.3 round limit, a malformed rails entry) are repaired first so they cannot block saving something else.
+  const next = merge(tidyStored(ctx.config), patch);
   validateConfig(next);
   writeJson(ctx.paths.config, next);
   if (next.language !== ctx.config.language) relabelEmptyLogs(ctx.home, ctx.config, next);
@@ -38,6 +56,7 @@ export function checkAccountHome(home, c = ctx.config, projects = []) {
 export function validateConfig(c) {
   const int = (v, min, max, name) => { if (!Number.isInteger(v) || v < min || v > max) throw new Error(tr('msg.ctx.numRange', { name, min, max })); };
   int(c.maxParallel, 1, 10, 'maxParallel'); int(c.perAgent, 1, 5, 'perAgent'); int(c.timeoutMinutes, 5, 600, 'timeoutMinutes');
+  if (c.budget?.windowHours !== undefined) int(c.budget.windowHours, 1, 24, 'budget.windowHours');
   if (c.ui?.lockMinutes !== undefined) int(c.ui.lockMinutes, 1, 240, 'ui.lockMinutes');
   if (!String(c.assistantName ?? '').trim()) throw new Error(tr('msg.ctx.needName'));
   if (!['es', 'en'].includes(c.language)) throw new Error(tr('msg.ctx.badLanguage'));
@@ -56,7 +75,7 @@ export function validateConfig(c) {
   }
   const o = c.orchestrator ?? {};
   if (!Array.isArray(o.models) || !o.models.length || o.models.some((m) => !/^[\w.:-]{1,80}$/.test(m?.id ?? '') || typeof m.label !== 'string')) throw new Error(tr('msg.ctx.badAssistantModels'));
-  // 2.6: the brain can be any agent. With Claude, one of the assistant's models (or an alias); with the others, any model id
+  // the brain can be any agent. With Claude, one of the assistant's models (or an alias); with the others, any model id
   // (empty = the one configured in the agent itself).
   const brain = o.agent || 'claude';
   if (!AGENT_IDS.includes(brain)) throw new Error(tr('msg.ctx.missingAgentCfg', { id: brain }));
@@ -65,7 +84,7 @@ export function validateConfig(c) {
   if (!['low', 'medium', 'high', 'xhigh'].includes(o.reasoning)) throw new Error(tr('msg.ctx.badReasoning'));
   if (typeof o.orchestrate !== 'boolean') throw new Error(tr('msg.ctx.orchestrateBool'));
   int(o.maxTurns, 2, 200, 'maxTurns');
-  if (o.parallel !== undefined) int(o.parallel, 1, 6, 'parallel'); // 3.2: conversations answered at the same time
+  if (o.parallel !== undefined) int(o.parallel, 1, 6, 'parallel'); // conversations answered at the same time
   if (o.account && !(c.accounts ?? []).some((a) => a.id === o.account && a.agent === brain)) throw new Error(tr('msg.ctx.assistantNeedsClaude'));
   if (c.mobile) {
     if (typeof c.mobile.enabled !== 'boolean') throw new Error(tr('msg.ctx.mobileBool'));
@@ -98,49 +117,59 @@ export function validateConfig(c) {
     if (typeof s.command !== 'string' || !s.command.trim()) throw new Error(tr('msg.ctx.connectorCommand', { name: s.name }));
     if (s.args && (!Array.isArray(s.args) || s.args.some((x) => typeof x !== 'string'))) throw new Error(tr('msg.ctx.connectorArgs', { name: s.name }));
   }
-  // 3.8.1: the skills of core\skills that are on (src/domain/extensions/extensions.mjs).
+  // the skills of core\skills that are on (src/domain/extensions/extensions.mjs).
   if (c.skills !== undefined && (!Array.isArray(c.skills) || c.skills.length > 500 || c.skills.some((s) => !/^[a-z0-9][a-z0-9-]{0,62}$/.test(s?.name ?? '') || typeof s.enabled !== 'boolean' || (s.source !== undefined && typeof s.source !== 'string')))) throw new Error(tr('msg.ctx.badAppearance', { name: 'skills' }));
   if (!['sistema', 'claro', 'oscuro'].includes(c.ui?.theme ?? 'sistema')) throw new Error(tr('msg.ctx.badTheme'));
-  // 2.4: visual theme, fonts and colours of code (src/shared/appearance.mjs).
+  // visual theme, fonts and colours of code (src/shared/appearance.mjs).
   for (const [key, list] of [['skin', SKINS], ['font', FONTS], ['codeFont', CODE_FONTS], ['codeTheme', CODE_THEMES]]) {
     if (c.ui?.[key] !== undefined && !list.includes(c.ui[key])) throw new Error(tr('msg.ctx.badAppearance', { name: `ui.${key}` }));
   }
-  // 2.3: continue tasks after a restart / at the reset, and delegation between agents (orb_delegate).
+  // continue tasks after a restart / at the reset, and delegation between agents (orb_delegate).
   const bool = (v, name) => { if (v !== undefined && typeof v !== 'boolean') throw new Error(tr('msg.ctx.boolean', { name })); };
   bool(c.continuity?.resumeAfterRestart, 'continuity.resumeAfterRestart'); bool(c.continuity?.resumeAtReset, 'continuity.resumeAtReset');
   bool(c.delegation?.enabled, 'delegation.enabled'); bool(c.delegation?.trusted, 'delegation.trusted');
-  // 3.8.2: the background music (Windows; src/ui/lib/music.js) and the games' own music (gameMusic: false = muted).
+  // the background music (Windows; src/ui/lib/music.js) and the games' own music (gameMusic: false = muted).
   const music = c.ui?.music;
   if (music !== undefined && (!music || typeof music !== 'object' || Array.isArray(music) || (music.on !== undefined && typeof music.on !== 'boolean')
     || (music.volume !== undefined && !(typeof music.volume === 'number' && music.volume >= 0 && music.volume <= 1))
     || (music.track !== undefined && (typeof music.track !== 'string' || music.track.length > 40)))) throw new Error(tr('msg.ctx.badAppearance', { name: 'ui.music' }));
   bool(c.ui?.gameMusic, 'ui.gameMusic');
-  bool(c.setupPending, 'setupPending'); // 3.8: the welcome is not over yet (src/ui/views/setup.jsx)
-  bool(c.budget?.autoModel, 'budget.autoModel'); // 2.7: Orb chooses each task's model (true / missing) or the agents' defaults
+  bool(c.setupPending, 'setupPending'); // the welcome is not over yet (src/ui/views/setup.jsx)
+  bool(c.budget?.autoModel, 'budget.autoModel'); // Orb chooses each task's model (true / missing) or the agents' defaults
   bool(c.ui?.tourDone, 'ui.tourDone');
-  bool(c.ui?.autoNoticed, 'ui.autoNoticed'); // 3.8.3: the one notice about «Auto» was shown
-  bool(c.ui?.recoveryNoticed, 'ui.recoveryNoticed'); // 3.6: the one notice about the recovery code was shown // 2.6: the guided tour was seen (or skipped) in this assistant folder
+  bool(c.ui?.autoNoticed, 'ui.autoNoticed'); // the one notice about «Auto» was shown
+  bool(c.ui?.recoveryNoticed, 'ui.recoveryNoticed'); // the one notice about the recovery code was shown // the guided tour was seen (or skipped) in this assistant folder
   if (c.delegation?.maxPerTask !== undefined) int(c.delegation.maxPerTask, 0, 20, 'delegation.maxPerTask');
-  // 3.1: «Una tarea cada vez» (no parallel work, not even in isolated copies) and how long a task's permission waits for
+  // «Una tarea cada vez» (no parallel work, not even in isolated copies) and how long a task's permission waits for
   // an answer before it is denied (0 = for ever).
   bool(c.oneAtATime, 'oneAtATime');
-  // 3.5: «Cosas que nadie toca»: up to 50 names, paths or containers (2-200 characters each).
+  // «Cosas que nadie toca»: up to 50 names, paths or containers (2-200 characters each).
   if (c.protected !== undefined && (!Array.isArray(c.protected) || c.protected.length > 50 || c.protected.some((x) => typeof x !== 'string' || x.trim().length < 2 || x.length > 200))) throw new Error(tr('msg.ctx.badAppearance', { name: 'protected' }));
-  // 3.6: backups (src/domain/data/backup.mjs): on/off, another folder (absolute), and whether project folders and the agents'
+  // backups (src/domain/data/backup.mjs): on/off, another folder (absolute), and whether project folders and the agents'
   // login folders go in too (both off). tz: the owner's time zone (the daily backup, the day of the usage ledger).
   if (c.backup !== undefined) {
     if (!c.backup || typeof c.backup !== 'object' || Array.isArray(c.backup)) throw new Error(tr('msg.ctx.badAppearance', { name: 'backup' }));
     bool(c.backup.enabled, 'backup.enabled'); bool(c.backup.projects, 'backup.projects'); bool(c.backup.accounts, 'backup.accounts');
     if (c.backup.folder !== undefined && c.backup.folder !== '' && (typeof c.backup.folder !== 'string' || !path.isAbsolute(c.backup.folder) || c.backup.folder.length > 500)) throw new Error(tr('msg.ctx.badAppearance', { name: 'backup.folder' }));
-    // 3.8: never inside the workspace (core or a project, also through a junction): deleting it would take its copies;
+    // never inside the workspace (core or a project, also through a junction): deleting it would take its copies;
     // and never a folder that holds the workspace (agents are kept out of the backups' folder).
     if (c.backup.folder && ctx.home && (insideOf(ctx.home, c.backup.folder) || insideOf(c.backup.folder, ctx.home))) throw new Error(tr('msg.ctx.backupInHome'));
   }
   if (c.tz !== undefined && c.tz !== '' && !(typeof c.tz === 'string' && c.tz.length <= 64 && (() => { try { new Intl.DateTimeFormat('en', { timeZone: c.tz }); return true; } catch { return false; } })())) throw new Error(tr('msg.ctx.badAppearance', { name: 'tz' }));
   if (c.approvalWaitMinutes !== undefined) int(c.approvalWaitMinutes, 0, 240, 'approvalWaitMinutes');
-  // 3.8.3: «Auto» or «Preguntar» for the agents (src/domain/security/guard.mjs › globalAutonomy).
+  // «Auto» or «Preguntar» for the agents (src/domain/security/guard.mjs › globalAutonomy).
   if (c.permissions !== undefined && (!c.permissions || typeof c.permissions !== 'object' || Array.isArray(c.permissions) || !['auto', 'preguntar'].includes(c.permissions.mode))) throw new Error(tr('msg.ctx.badAppearance', { name: 'permissions' }));
   if (c.budget?.stopAt != null && !(Number(c.budget.stopAt) >= 0.5 && Number(c.budget.stopAt) <= 1)) throw new Error(tr('msg.ctx.stopAt'));
+  if (c.budget?.weeklyStopAt != null && !(Number(c.budget.weeklyStopAt) >= 0.5 && Number(c.budget.weeklyStopAt) <= 1)) throw new Error(tr('msg.ctx.weeklyStopAt'));
+  if (c.budget?.maxFixRounds != null) int(c.budget.maxFixRounds, 0, 10, 'budget.maxFixRounds');
+  // Only rails with a switch can be set (a core rail never has one).
+  if (c.rails !== undefined) {
+    const ok = switchableIds();
+    if (!c.rails || typeof c.rails !== 'object' || Array.isArray(c.rails)) throw new Error(tr('msg.ctx.badRails'));
+    for (const [id, v] of Object.entries(c.rails)) {
+      if (!ok.includes(id) || !v || typeof v !== 'object' || Array.isArray(v) || typeof v.enabled !== 'boolean') throw new Error(tr('msg.ctx.badRail', { id }));
+    }
+  }
   if (c.budget?.profile != null && ![0, 1, 2, 3, 4].includes(c.budget.profile)) throw new Error(tr('msg.ctx.profile'));
   if (!Array.isArray(c.projectRoots) || c.projectRoots.some((r) => typeof r !== 'string')) throw new Error(tr('msg.ctx.rootsList'));
   return true;

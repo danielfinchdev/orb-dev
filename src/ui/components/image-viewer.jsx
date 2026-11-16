@@ -1,4 +1,4 @@
-// 2.7: pictures an agent makes (Codex image_gen) inside the conversation: a preview, and a viewer to look at it big, mark
+// pictures an agent makes (Codex image_gen) inside the conversation: a preview, and a viewer to look at it big, mark
 // a zone with the mouse and say what to change there (the agent gets the picture and a copy with the zone outlined), and
 // to save it in the project's imagenes folder.
 import { useEffect, useRef, useState } from 'react';
@@ -6,7 +6,7 @@ import { Download, Expand, Crop, Send, X } from 'lucide-react';
 import { Button } from './ui/button.jsx';
 import { Spinner } from './ui/basic.jsx';
 import { Dialog, DialogContent, DialogTitle } from './ui/overlay.jsx';
-import { toast } from 'sonner';
+import { notifyError } from '@/lib/notify.js';
 import { call, act, getState, setState, useStore } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
@@ -28,14 +28,14 @@ export function GeneratedImage({ body, sessionId, project }) {
         {src ? <img src={src} alt={body.prompt ?? ''} className={cn('block max-h-80 max-w-full object-contain', body.transparent && 'img-checker')} /> : <span className="grid size-40 place-items-center"><Spinner /></span>}
         <span className="bg-background/80 absolute top-2 right-2 grid size-7 place-items-center rounded-lg opacity-0 transition-opacity group-hover:opacity-100"><Expand className="size-4" /></span>
       </button>
-      {/* 3.2.1: what was asked for, in two lines (the whole prompt repeated under every picture filled the conversation). */}
-      {body.prompt ? <div className="text-muted-foreground line-clamp-2 max-w-xl text-[11.5px] leading-snug" title={body.prompt}>{body.prompt}</div> : null}
+      {/* what was asked for, in two lines (the whole prompt repeated under every picture filled the conversation). */}
+      {body.prompt ? <div className="text-muted-foreground line-clamp-2 max-w-xl text-micro leading-snug" title={body.prompt}>{body.prompt}</div> : null}
       {open && src ? <ImageEditor src={src} body={body} sessionId={sessionId} project={project} onClose={() => setOpen(false)} /> : null}
     </div>
   );
 }
 
-// 3.2.1: a picture of this PC linked from a message ("Ver imagen editada"): the same viewer, to look at it and save it.
+// a picture of this PC linked from a message ("Ver imagen editada"): the same viewer, to look at it and save it.
 export const openImage = (file) => setState({ imagePreview: { path: String(file) } });
 export function ImagePreviewHost() {
   const preview = useStore((s) => s.imagePreview);
@@ -44,7 +44,7 @@ export function ImagePreviewHost() {
 function ImagePreview({ body, onClose }) {
   const t = useT();
   const src = useImage(body.path);
-  useEffect(() => { if (src === false) { toast.error(t('img.unavailable')); onClose(); } }, [src]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (src === false) { notifyError(t('img.unavailable')); onClose(); } }, [src]); // eslint-disable-line react-hooks/exhaustive-deps
   return src ? <ImageEditor src={src} body={body} sessionId={null} onClose={onClose} /> : null;
 }
 

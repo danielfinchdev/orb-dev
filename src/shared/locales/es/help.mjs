@@ -1,4 +1,4 @@
-// help.*: la pantalla Tutoriales (tutoriales, atajos y preguntas frecuentes) y el tutorial guiado del robot (2.6).
+// help.*: la pantalla Tutoriales (tutoriales, atajos y preguntas frecuentes) y el tutorial guiado del robot.
 // {name} es el nombre del asistente. Los tutoriales llevan help.tut.<id>.title, .l1… y, si tienen botón, .go.
 export default {
   'help.title': 'Tutoriales',
@@ -66,7 +66,7 @@ export default {
   'help.tut.board.go': 'Abrir la Pizarra',
 
   'help.tut.agents.title': 'Agentes y cuentas',
-  'help.tut.agents.l1': 'Agentes muestra los programas que Orb encuentra (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code y Copilot), su versión y si tienen la sesión iniciada.',
+  'help.tut.agents.l1': 'Agentes muestra los programas que Orb encuentra (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code, Copilot y Hermes Agent), su versión y si tienen la sesión iniciada.',
   'help.tut.agents.l2': 'Si ya iniciaste sesión en el agente, no tienes que hacer nada más. Si no, «Iniciar sesión» abre su acceso oficial: Orb nunca ve tus contraseñas.',
   'help.tut.agents.l3': 'Puedes añadir varias cuentas de un mismo agente con «Buscar y añadir». El trabajo se reparte entre las que tienen uso disponible, o puedes fijar una.',
   'help.tut.agents.l4': 'En Windows, Orb instala lo que falte con los instaladores oficiales: Git, Node.js, GitHub CLI y los propios agentes.',
@@ -214,15 +214,15 @@ export default {
   'help.tour.tutorials.title': 'Tutoriales',
   'help.tour.tutorials.text': 'Guías, preguntas frecuentes, atajos de teclado y la opción de repetir este recorrido.',
   'help.tour.settings.title': 'Ajustes',
-  'help.tour.settings.text': 'General, Magic Link, Agentes y uso, Skills y MCP, Datos, Avanzado y Acerca de.',
+  'help.tour.settings.text': 'General, Magic Link, Agentes y uso, Permisos, Skills y MCP, Datos, Avanzado y Acerca de.',
   'help.tour.end.title': 'Todo listo',
   'help.tour.end.text': 'Elige un proyecto, cuéntame qué necesitas y empezamos.',
-  // 3.2: conversaciones, menú lateral, buscador y globito
+  // conversaciones, menú lateral, buscador y globito
   'help.tour.search.title': 'Buscar',
   'help.tour.search.text': 'Encuentra cualquier conversación, tarea o proyecto, también por lo que se dijo. Con el filtro, solo lo que está en curso o requiere tu atención.',
   'help.tour.conversations.title': 'Tus chats',
   'help.tour.conversations.text': 'Agrupados por proyecto, con lo último de cada uno: una tarea en curso, algo que espera tu aprobación… Con clic derecho los fijas, silencias o completas.',
-  // 3.2: pie del menú
+  // pie del menú
   'help.tour.feedback.title': 'Enviar comentarios',
   'help.tour.feedback.text': 'Si algo falla o se te ocurre una mejora, cuéntamelo desde aquí. Al lado, la versión de Orb.'
 };

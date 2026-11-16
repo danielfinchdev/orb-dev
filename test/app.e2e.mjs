@@ -104,7 +104,7 @@ try {
 
   // ---- fake agents
   step = 'agentes falsos';
-  await call('config.save', { patch: { agents: { codex: { models: [] }, cursor: { enabled: false }, gemini: { enabled: false }, opencode: { enabled: false }, qwen: { enabled: false }, copilot: { enabled: false } } } });
+  await call('config.save', { patch: { agents: { codex: { models: [] }, cursor: { enabled: false }, gemini: { enabled: false }, opencode: { enabled: false }, qwen: { enabled: false }, copilot: { enabled: false }, hermes: { enabled: false } } } });
   assert.equal((await call('agents.status', { refresh: true })).find((a) => a.id === 'claude').installed, true);
 
   // ---- a project from the chat's project control: a folder in the web category (the default) of the assistant's folder

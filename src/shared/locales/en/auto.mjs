@@ -1,4 +1,4 @@
-// 3.8.3: the «Auto» permission level (src/domain/security/guard.mjs) and its switch in the chats and in Settings.
+// the «Auto» permission level (src/domain/security/guard.mjs) and its switch in the chats and in Settings.
 export default {
   'msg.guard.diskWipe': 'wipes or formats a disk, or changes how the PC boots',
   'msg.guard.credentials': 'touches personal credentials (SSH keys, browsers, the agents’ logins or the Windows credential store), which Orb doesn’t allow',
@@ -20,6 +20,10 @@ export default {
   'session.autoTip': 'Works on its own inside the folder; asks before publishing, sending data or leaving it',
   'session.askTip': 'Asks before deleting folders, undoing git changes or writing outside the folder',
   'session.moreModes': 'More permission options',
+  'session.tip.leer': 'Only reads and analyses; changes nothing',
+  'session.tip.probar': 'Reviews and runs tests; does not edit files',
+  'session.tip.preguntar': 'Asks permission before every action',
+  'session.tip.total': 'The whole PC except Orb data; asks for the master password',
   'session.autoOn': 'Auto mode',
   'session.askOn': 'Ask mode',
   'chat.autoGlobalTip': 'For every chat and task that doesn’t choose another mode',

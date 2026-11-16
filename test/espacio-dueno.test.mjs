@@ -31,7 +31,7 @@ const newBase = () => { const b = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-due
 const put = (p, text = 'x') => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, text); };
 const read = (p) => fs.readFileSync(p, 'utf8');
 const SECRET = 'ab'.repeat(32);
-const OFF = Object.fromEntries(['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot'].map((a) => [a, { enabled: false }]));
+const OFF = Object.fromEntries(['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot', 'hermes'].map((a) => [a, { enabled: false }]));
 
 // The owner's C:\Orb, shape for shape.
 function ownersOrb() {

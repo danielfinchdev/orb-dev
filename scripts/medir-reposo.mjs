@@ -1,12 +1,12 @@
-// 3.8.3: the engine at rest after some real use. Up to 3.8.2 every finished task left a «leftovers_pending» row and the
-// engine listed the PC's processes (a synchronous PowerShell of ~0.8 s) once per row on every tick: its event loop was
-// blocked almost all the time and one core stayed busy. This measures exactly that, on a throwaway workspace in %TEMP%
+// the engine at rest after some real use. A finished task must not leave work behind on every tick (a «leftovers_pending»
+// row listing the PC's processes with a synchronous PowerShell of ~0.8 s would block the event loop and keep a core busy).
+// This measures exactly that, on a throwaway workspace in %TEMP%
 // (never the real C:\Orb or %APPDATA%), with the real agents' code path (the fake agents skip the leftovers):
 //
 //   node scripts/medir-reposo.mjs [--src <checkout>/src] [--tasks 40] [--idle 20] [--out <results.json>]
 //
 // --src: the engine to measure (another checkout's src, e.g. the release before) — the workspace is made with this one.
-// Each finished task gets a «task.launched» event and the empty «leftovers_pending» row 3.8.2 left behind.
+// Each finished task gets a «task.launched» event and the empty «leftovers_pending» row.
 // Measured during --idle seconds, 5 s after the start: PowerShell processes the engine started, the engine's CPU (% of
 // one core), and the event loop's lag: a cheap call (app.coreState) every 100 ms, its round trip p50 / p99 / max.
 import fs from 'node:fs';
@@ -40,7 +40,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 // ---- the workspace: projects and finished tasks, as after a day of use
 const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
 const { home } = createHome(base, { userName: 'Ana' });
-const OFF = Object.fromEntries(['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot'].map((a) => [a, { enabled: false }]));
+const OFF = Object.fromEntries(['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot', 'hermes'].map((a) => [a, { enabled: false }]));
 writeJson(paths(home).config, merge(loadConfig(home), { ui: { tourDone: true }, agents: OFF, autoRun: false }));
 useHome(home);
 {
@@ -55,7 +55,7 @@ useHome(home);
       const t = board.createTask({ project: 'proyecto-1', title: `Tarea ${i}`, description: 'x', agent: 'claude' }, 'usuario');
       board.run('UPDATE tasks SET status = ?, workdir = ? WHERE id = ?', 'done', dir, t.id);
       board.event(t.id, 'orb', 'task.launched', 'x');
-      board.setting(`leftovers_pending:${t.id}`, ''); // what 3.8.2 left for every finished task
+      board.setting(`leftovers_pending:${t.id}`, ''); // the row every finished task leaves
     }
   });
   board.db.close();

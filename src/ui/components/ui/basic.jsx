@@ -1,4 +1,5 @@
 // Small shadcn/ui primitives: card, badge, input, textarea, label, separator, kbd.
+import { Children, Fragment, cloneElement, isValidElement, useId } from 'react';
 import { cva } from 'class-variance-authority';
 import { cn } from '@/lib/utils.js';
 import { BubbleTip } from './overlay.jsx';
@@ -7,15 +8,15 @@ export function Card({ className, ...props }) {
   return <div data-slot="card" className={cn('bg-card text-card-foreground flex flex-col gap-4 rounded-xl border py-5 shadow-xs', className)} {...props} />;
 }
 export function CardHeader({ className, ...props }) { return <div className={cn('flex flex-col gap-1 px-5', className)} {...props} />; }
-export function CardTitle({ className, ...props }) { return <div data-slot="card-title" className={cn('leading-none font-medium text-[15px]', className)} {...props} />; }
-export function CardDescription({ className, ...props }) { return <div className={cn('text-muted-foreground text-[13px]', className)} {...props} />; }
+export function CardTitle({ className, ...props }) { return <div data-slot="card-title" className={cn('leading-none font-medium text-card-title', className)} {...props} />; }
+export function CardDescription({ className, ...props }) { return <div className={cn('text-muted-foreground text-control', className)} {...props} />; }
 export function CardContent({ className, ...props }) { return <div className={cn('px-5', className)} {...props} />; }
 export function CardFooter({ className, ...props }) { return <div className={cn('flex items-center gap-2 px-5', className)} {...props} />; }
 
 const badgeVariants = cva('inline-flex items-center justify-center rounded-full border px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none', {
   variants: {
     variant: {
-      default: 'border-transparent bg-primary/12 text-primary',
+      default: 'border-transparent bg-primary/12 text-primary-text',
       secondary: 'border-transparent bg-secondary text-secondary-foreground',
       outline: 'text-foreground',
       success: 'border-transparent bg-success/14 text-success',
@@ -34,11 +35,24 @@ export function Input({ className, type = 'text', ...props }) {
 export function Textarea({ className, ...props }) {
   return <textarea data-slot="textarea" className={cn('placeholder:text-muted-foreground dark:bg-input/30 border-input flex field-sizing-content min-h-16 w-full rounded-lg border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:ring-[3px] disabled:opacity-50', className)} {...props} />;
 }
-export function Label({ className, ...props }) { return <label data-slot="label" className={cn('flex items-center gap-2 text-[13px] leading-none font-medium select-none', className)} {...props} />; }
-export function Field({ label, hint, children, className }) {
+export function Label({ className, ...props }) { return <label data-slot="label" className={cn('flex items-center gap-2 text-control leading-none font-medium select-none', className)} {...props} />; }
+// The reason a field was refused, right under it (never in a toast away from the field). role=alert so it is announced.
+export function FieldError({ id, className, children }) {
+  if (!children) return null;
+  return <p id={id} role="alert" className={cn('text-destructive text-xs leading-snug', className)}>{children}</p>;
+}
+export function Field({ label, hint, error, children, className }) {
   // min-w-0: a field in a grid or flex row may shrink below its control's one-line text (which then cuts) instead of widening the row.
   // content-start: fields side by side keep their label and control at the same height even when only one has a hint.
-  return <div className={cn('grid min-w-0 content-start gap-1.5', className)}><Label>{label}</Label>{children}{hint ? <p className="text-muted-foreground text-xs leading-snug">{hint}</p> : null}</div>;
+  const uid = useId();
+  // Only a lone element child can be the control; its own id wins, and anything else (several nodes, a fragment, text) is left untouched.
+  const only = Children.count(children) === 1 && isValidElement(children) && children.type !== Fragment ? children : null;
+  const controlId = only ? (only.props.id ?? `${uid}-c`) : undefined;
+  const hintId = hint ? `${uid}-h` : undefined;
+  const errorId = error ? `${uid}-e` : undefined;
+  const describedBy = [only?.props['aria-describedby'], hintId, errorId].filter(Boolean).join(' ');
+  const control = only ? cloneElement(only, { id: controlId, ...(describedBy ? { 'aria-describedby': describedBy } : null), ...(error ? { 'aria-invalid': true } : null) }) : children;
+  return <div className={cn('grid min-w-0 content-start gap-1.5', className)}><Label htmlFor={controlId}>{label}</Label>{control}{hint ? <p id={hintId} className="text-muted-foreground text-xs leading-snug">{hint}</p> : null}<FieldError id={errorId}>{error}</FieldError></div>;
 }
 // A file path on one line: cut in the middle so its start and its end stay readable, the whole path in a bubble.
 export function PathText({ path, className, tail = 20 }) {
@@ -53,7 +67,7 @@ export function PathText({ path, className, tail = 20 }) {
   );
 }
 export function Separator({ className, vertical = false }) { return <div role="separator" className={cn('bg-border shrink-0', vertical ? 'h-full w-px' : 'h-px w-full', className)} />; }
-export function Kbd({ className, ...props }) { return <kbd className={cn('bg-muted text-muted-foreground pointer-events-none inline-flex h-5 items-center rounded border px-1.5 font-mono text-[10px]', className)} {...props} />; }
+export function Kbd({ className, ...props }) { return <kbd className={cn('bg-muted text-muted-foreground pointer-events-none inline-flex h-5 items-center rounded border px-1.5 font-mono text-micro', className)} {...props} />; }
 export function Spinner({ className }) { return <span className={cn('inline-block size-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary', className)} />; }
 export function Empty({ icon: Icon, title, children, className }) {
   return (

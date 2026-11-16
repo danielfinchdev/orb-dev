@@ -11,23 +11,23 @@ import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardF
 import { Select, Switch, Checkbox, BubbleTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
 import { ModelGuide } from '@/components/model-guide.jsx';
 import { AGENT } from '@/lib/labels.js';
-import { act, call, refresh, bridge, go, openTerminal, closeSettings, fullPc, runTest } from '@/lib/store.js';
+import { act, call, refresh, bridge, go, openTerminal, closeSettings, fullPc, runTest, darkOnlySkin } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { t, useT } from '@/lib/i18n.js';
 import { LANGUAGES } from '../../../shared/i18n.mjs';
 import { play } from '@/lib/sounds.js';
-import { unlockCore } from '@/lib/core-access.js';
 import { DEFAULT_PROTECTED } from '../../../shared/layout.mjs';
 import { available as musicAvailable, musicPrefs, setMusicVolume } from '@/lib/music.js';
 import { save, num, Row, WithKeys, sizes } from './rows.jsx';
 import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
+import { quiet } from '@/lib/quiet.js';
 
 export function AssistantCard({ c }) {
   const t = useT();
   const [v, setV] = useState({ assistantName: c.assistantName, userName: c.userName, language: c.language });
   return (
     <Card>
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Robot size={40} /><div><CardTitle>{t('settings.assistant')}</CardTitle><CardDescription>{t('settings.assistantDesc')}</CardDescription></div></CardHeader>
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Robot size={40} mark /><div><CardTitle>{t('settings.assistant')}</CardTitle><CardDescription>{t('settings.assistantDesc')}</CardDescription></div></CardHeader>
       <CardContent className="grid gap-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={t('settings.assistantName')} hint={t('settings.assistantNameHint')}><Input value={v.assistantName} onChange={(e) => setV({ ...v, assistantName: e.target.value })} maxLength={40} /></Field>
@@ -48,13 +48,14 @@ export function AppearanceCard({ c }) {
   const set = (patch, ok = null) => save({ ui: patch }, ok);
   const opts = (list, prefix) => list.map((value) => ({ value, label: t(`${prefix}.${value}`) }));
   const robot = !plainSkin(ui.skin);
+  const darkOnly = fullPc() && darkOnlySkin(ui.skin);
   return (
     <Card>
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Palette className="text-primary size-5" /><div><CardTitle>{t('appearance.title')}</CardTitle><CardDescription>{t('appearance.desc')}</CardDescription></div></CardHeader>
       <CardContent className="grid gap-5">
-        <Field label={t('settings.theme')}>
+        <Field label={t('settings.theme')} hint={darkOnly ? t('comp.theme.darkOnly') : undefined}>
           <div className="bg-muted inline-flex w-fit gap-1 rounded-lg p-1" role="radiogroup" aria-label={t('settings.theme')}>
-            {['claro', 'oscuro', 'sistema'].map((theme) => <button key={theme} type="button" role="radio" aria-checked={(ui.theme ?? 'sistema') === theme} onClick={() => set({ theme })} className={cn('cursor-pointer rounded-md px-3 py-1.5 text-[13px]', (ui.theme ?? 'sistema') === theme ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{t(`settings.theme.${theme}`)}</button>)}
+            {['claro', 'oscuro', 'sistema'].map((theme) => <button key={theme} type="button" role="radio" aria-checked={(ui.theme ?? 'sistema') === theme} disabled={darkOnly} onClick={() => set({ theme })} className={cn('rounded-md px-3 py-1.5 text-control', darkOnly ? 'cursor-not-allowed opacity-50' : 'cursor-pointer', (ui.theme ?? 'sistema') === theme ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{t(`settings.theme.${theme}`)}</button>)}
           </div>
         </Field>
         {fullPc() ? <Field label={t('appearance.skin')} hint={t('appearance.skinHint')}>
@@ -63,7 +64,7 @@ export function AppearanceCard({ c }) {
               <button key={skin} type="button" role="radio" aria-checked={ui.skin === skin} onClick={() => set({ skin })} data-testid={`skin-${skin}`}
                 className={cn('grid cursor-pointer gap-1.5 rounded-xl border p-2 text-left transition-colors', ui.skin === skin ? 'border-primary ring-primary/30 ring-2' : 'hover:bg-accent/40')}>
                 <SkinPreview skin={skin} />
-                <span className="text-[13px] font-medium">{t(`appearance.skin.${skin}`)}</span>
+                <span className="text-control font-medium">{t(`appearance.skin.${skin}`)}</span>
               </button>
             ))}
           </div>
@@ -73,7 +74,7 @@ export function AppearanceCard({ c }) {
           <Field label={t('appearance.codeFont')}><Select className="w-full" value={ui.codeFont} onValueChange={(codeFont) => set({ codeFont })} options={opts(CODE_FONTS, 'appearance.codeFont')} /></Field>
           <Field label={t('appearance.codeTheme')}><Select className="w-full" value={ui.codeTheme} onValueChange={(codeTheme) => set({ codeTheme })} options={opts(CODE_THEMES, 'appearance.codeTheme')} /></Field>
         </div>
-        <pre className="code-sample hljs overflow-x-auto rounded-lg border p-3 text-[12.5px] leading-[1.55]" aria-label={t('appearance.codeSample')}><code><span className="hljs-keyword">const</span> <span className="hljs-variable">orb</span> = <span className="hljs-title function_">director</span>(<span className="hljs-string">'bolsillo'</span>, {'{ '}<span className="hljs-attr">fases</span>: <span className="hljs-number">3</span>{' }'}); <span className="hljs-comment">// Orbe</span></code></pre>
+        <pre className="code-sample hljs overflow-x-auto rounded-lg border p-3 text-caption leading-[1.55]" aria-label={t('appearance.codeSample')}><code><span className="hljs-keyword">const</span> <span className="hljs-variable">orb</span> = <span className="hljs-title function_">director</span>(<span className="hljs-string">'bolsillo'</span>, {'{ '}<span className="hljs-attr">fases</span>: <span className="hljs-number">3</span>{' }'}); <span className="hljs-comment">// Orbe</span></code></pre>
         <Row label={t('appearance.usageLine')} hint={t('appearance.usageLineHint')}><Switch checked={ui.usageLine !== false} onCheckedChange={(usageLine) => set({ usageLine })} data-testid="usage-line-switch" /></Row>
         {musicAvailable() ? <MusicVolume /> : null}
         {robot ? (
@@ -95,7 +96,7 @@ export function AppearanceCard({ c }) {
   );
 }
 
-// 2.6: the brain (agent, model, reasoning) and the Orquestador switch are chosen under the chat's message box; here only
+// the brain (agent, model, reasoning) and the Orquestador switch are chosen under the chat's message box; here only
 // what is not there: how long a conversation lasts and, with several accounts of the brain's agent, which one it uses.
 export function ChatCard({ c }) {
   const t = useT();
@@ -115,7 +116,7 @@ export function ChatCard({ c }) {
   );
 }
 
-// 3.8.3: the agents' permission level for everything that does not choose its own (new chats, the assistant's tasks).
+// the agents' permission level for everything that does not choose its own (new chats, the assistant's tasks).
 export function PermissionsCard({ c }) {
   const t = useT();
   const mode = c.permissions?.mode === 'preguntar' ? 'editar' : 'auto';
@@ -127,6 +128,22 @@ export function PermissionsCard({ c }) {
   );
 }
 
+// How long a permission question waits for an answer before it is denied (own save: it is not part of the tasks form).
+export function ApprovalWaitCard({ c }) {
+  const t = useT();
+  const saved = c.approvalWaitMinutes ?? 10;
+  const [minutes, setMinutes] = useState(saved);
+  return (
+    <Card>
+      <CardHeader><CardTitle>{t('settings.approvalWaitTitle')}</CardTitle><CardDescription>{t('settings.approvalWaitHint')}</CardDescription></CardHeader>
+      <CardContent>
+        <Field label={t('settings.approvalWait')}><div className="flex items-center gap-2"><Input type="number" min={0} max={240} value={minutes} onChange={(e) => setMinutes(num(e.target.value))} aria-label={`${t('settings.approvalWait')} (${t('settings.minutes')})`} data-testid="approval-wait" /><span className="text-muted-foreground text-xs">{t('settings.minutes')}</span></div></Field>
+      </CardContent>
+      <CardFooter><Button size="sm" onClick={() => save({ approvalWaitMinutes: Math.min(240, Math.max(0, minutes)) })} data-testid="approval-wait-save">{t('settings.save')}</Button></CardFooter>
+    </Card>
+  );
+}
+
 export function TasksCard({ c }) {
   const t = useT();
   const agents = Object.keys(c.agents);
@@ -134,18 +151,20 @@ export function TasksCard({ c }) {
     stopAt: Math.round((c.budget.stopAt ?? 0.92) * 100), caps: Object.fromEntries(agents.map((a) => [a, { maxTasks: c.budget.agents?.[a]?.maxTasks ?? 20, maxHeavy: c.budget.agents?.[a]?.maxHeavy ?? 6 }])),
     resumeAfterRestart: c.continuity?.resumeAfterRestart !== false, resumeAtReset: c.continuity?.resumeAtReset !== false,
     delegation: c.delegation?.enabled !== false, trusted: c.delegation?.trusted !== false, maxPerTask: c.delegation?.maxPerTask ?? 4,
-    oneAtATime: c.oneAtATime === true, approvalWait: c.approvalWaitMinutes ?? 10, parallelChats: c.orchestrator?.parallel ?? 3 });
+    oneAtATime: c.oneAtATime === true, parallelChats: c.orchestrator?.parallel ?? 3 });
   const cap = (a, k, val) => setV({ ...v, caps: { ...v.caps, [a]: { ...v.caps[a], [k]: num(val) } } });
-  // 2.6: one slider from maximum saving to maximum use sets every limit at once (and how careful the assistant is with
+  // one slider from maximum saving to maximum use sets every limit at once (and how careful the assistant is with
   // the quota); the limits themselves stay in «Opciones avanzadas» for whoever wants to tune them by hand.
   const [profile, setProfile] = useState(c.budget.profile === undefined ? 2 : c.budget.profile);
   const [advanced, setAdvanced] = useState(false);
   const applyProfile = (level) => {
     const p = SPEND_PRESETS[level];
     const caps = Object.fromEntries(agents.map((a) => [a, { maxTasks: p.maxTasks, maxHeavy: p.maxHeavy }]));
+    const before = { profile, v };
     setProfile(level);
     setV({ ...v, maxParallel: p.maxParallel, perAgent: p.perAgent, timeoutMinutes: p.timeoutMinutes, stopAt: Math.round(p.stopAt * 100), caps, high: p.high, maxPerTask: p.maxPerTask, trusted: p.trusted, review: p.review });
-    save({ maxParallel: p.maxParallel, perAgent: p.perAgent, timeoutMinutes: p.timeoutMinutes, review: { auto: p.review }, policy: { highNeedsApproval: p.high }, budget: { profile: level, stopAt: p.stopAt, agents: caps }, delegation: { maxPerTask: p.maxPerTask, trusted: p.trusted } });
+    // cancelling the password puts the slider and the fields back
+    save({ maxParallel: p.maxParallel, perAgent: p.perAgent, timeoutMinutes: p.timeoutMinutes, review: { auto: p.review }, policy: { highNeedsApproval: p.high }, budget: { profile: level, stopAt: p.stopAt, agents: caps }, delegation: { maxPerTask: p.maxPerTask, trusted: p.trusted } }).then((r) => { if (!r) { setProfile(before.profile); setV(before.v); } });
   };
   const level = profile ?? null;
   return (
@@ -159,12 +178,12 @@ export function TasksCard({ c }) {
           <div className="spend-ticks" aria-hidden="true">{[0, 1, 2, 3, 4].map((i) => <span key={i} className={cn(i === 2 && 'spend-ticks-rec')}>{i === 2 ? t('settings.spendRecommended') : ''}</span>)}</div>
           <p className="text-muted-foreground text-xs leading-snug">{level == null ? t('settings.spendCustomHint') : t(`settings.spend${level}Hint`)}</p>
         </div>
-        {/* 2.7: Orb chooses each task's model and reasoning (on by default), and the guide says what it uses for what. */}
+        {/* Orb chooses each task's model and reasoning (on by default), and the guide says what it uses for what. */}
         <Row label={t('settings.autoModel')} info={t('settings.autoModelHint')}><Switch checked={c.budget?.autoModel !== false} onCheckedChange={(autoModel) => save({ budget: { autoModel } })} data-testid="auto-model" /></Row>
         <ModelGuide auto={c.budget?.autoModel !== false} />
         <Row label={t('settings.autoRun')} hint={t('settings.autoRunHint')}><Switch checked={v.autoRun} onCheckedChange={(autoRun) => { setV({ ...v, autoRun }); save({ autoRun }); }} /></Row>
-        {/* 3.1: tasks work at the same time by default; this makes them wait for each other. */}
-        <Row label={t('settings.oneAtATime')} hint={t('settings.oneAtATimeHint')}><Switch checked={v.oneAtATime} onCheckedChange={(oneAtATime) => { setV({ ...v, oneAtATime }); save({ oneAtATime }); }} data-testid="one-at-a-time" /></Row>
+        {/* tasks work at the same time by default; this makes them wait for each other. */}
+        <Row label={t('settings.oneAtATime')} hint={t('settings.oneAtATimeHint')}><Switch checked={v.oneAtATime} onCheckedChange={(oneAtATime) => { setV({ ...v, oneAtATime }); save({ oneAtATime }).then((r) => { if (!r) setV((cur) => ({ ...cur, oneAtATime: !oneAtATime })); }); }} data-testid="one-at-a-time" /></Row>
         <Row label={t('settings.resumeRestart')} hint={t('settings.resumeRestartHint')}><Switch checked={v.resumeAfterRestart} onCheckedChange={(resumeAfterRestart) => { setV({ ...v, resumeAfterRestart }); save({ continuity: { resumeAfterRestart } }); }} /></Row>
         <Row label={t('settings.resumeReset')} hint={t('settings.resumeResetHint')}><Switch checked={v.resumeAtReset} onCheckedChange={(resumeAtReset) => { setV({ ...v, resumeAtReset }); save({ continuity: { resumeAtReset } }); }} /></Row>
         <Row label={t('settings.delegation')} hint={t('settings.delegationHint')}><Switch checked={v.delegation} onCheckedChange={(delegation) => { setV({ ...v, delegation }); save({ delegation: { enabled: delegation } }); }} /></Row>
@@ -185,8 +204,7 @@ export function TasksCard({ c }) {
         <div className="grid grid-cols-3 gap-3">
           <Field label={t('settings.stopAt')} hint={t('settings.stopAtHint')}><Input type="number" min={50} max={100} value={v.stopAt} onChange={(e) => setV({ ...v, stopAt: num(e.target.value) })} /></Field>
           <Field label={t('settings.maxPerTask')} hint={t('settings.maxPerTaskHint')}><Input type="number" min={0} max={20} value={v.maxPerTask} onChange={(e) => setV({ ...v, maxPerTask: num(e.target.value) })} /></Field>
-          <Field label={t('settings.approvalWait')} hint={t('settings.approvalWaitHint')}><div className="flex items-center gap-2"><Input type="number" min={0} max={240} value={v.approvalWait} onChange={(e) => setV({ ...v, approvalWait: num(e.target.value) })} aria-label={`${t('settings.approvalWait')} (${t('settings.minutes')})`} data-testid="approval-wait" /><span className="text-muted-foreground text-xs">{t('settings.minutes')}</span></div></Field>
-          {/* 3.2: how many conversations the assistant answers at the same time (the others wait their turn). */}
+          {/* how many conversations the assistant answers at the same time (the others wait their turn). */}
           <Field label={t('settings.parallelChats')} hint={t('settings.parallelChatsHint')}><Input type="number" min={1} max={6} value={v.parallelChats} onChange={(e) => setV({ ...v, parallelChats: num(e.target.value) })} data-testid="parallel-chats" /></Field>
         </div>
         <div className="grid gap-2">
@@ -194,7 +212,7 @@ export function TasksCard({ c }) {
           <div className="text-muted-foreground grid grid-cols-3 gap-3 text-xs"><span>{t('settings.colAgent')}</span><span>{t('settings.colTasks')}</span><span>{t('settings.colHeavy')}</span></div>
           {agents.map((a) => <div key={a} className="grid grid-cols-3 items-center gap-3"><span className="text-sm">{AGENT[a] ?? a}</span><Input type="number" min={1} value={v.caps[a].maxTasks} onChange={(e) => cap(a, 'maxTasks', e.target.value)} /><Input type="number" min={0} value={v.caps[a].maxHeavy} onChange={(e) => cap(a, 'maxHeavy', e.target.value)} /></div>)}
         </div>
-        <div><Button size="sm" onClick={() => { setProfile(null); save({ autoRun: v.autoRun, maxParallel: v.maxParallel, perAgent: v.perAgent, timeoutMinutes: v.timeoutMinutes, review: { auto: v.review }, policy: { highNeedsApproval: v.high }, budget: { profile: null, windowHours: v.windowHours, stopAt: Math.min(1, Math.max(0.5, v.stopAt / 100)), agents: v.caps }, delegation: { maxPerTask: v.maxPerTask }, approvalWaitMinutes: Math.min(240, Math.max(0, v.approvalWait)), orchestrator: { parallel: Math.min(6, Math.max(1, v.parallelChats || 3)) } }); }} data-testid="spend-save">{t('settings.save')}</Button></div>
+        <div><Button size="sm" onClick={() => { const was = profile; setProfile(null); save({ autoRun: v.autoRun, maxParallel: v.maxParallel, perAgent: v.perAgent, timeoutMinutes: v.timeoutMinutes, review: { auto: v.review }, policy: { highNeedsApproval: v.high }, budget: { profile: null, windowHours: v.windowHours, stopAt: Math.min(1, Math.max(0.5, v.stopAt / 100)), agents: v.caps }, delegation: { maxPerTask: v.maxPerTask }, orchestrator: { parallel: Math.min(6, Math.max(1, v.parallelChats || 3)) } }).then((r) => { if (!r) setProfile(was); }); }} data-testid="spend-save">{t('settings.save')}</Button></div>
         </div>
           </CollapsibleContent>
         </Collapsible>
@@ -212,7 +230,7 @@ const SPEND_PRESETS = [
   { maxParallel: 6, perAgent: 2, timeoutMinutes: 120, stopAt: 0.99, maxTasks: 50, maxHeavy: 20, high: false, maxPerTask: 10, trusted: true, review: true }
 ];
 
-// 3.0: the test request, always here (in the chat it shows only on the first opening of the day).
+// the test request, always here (in the chat it shows only on the first opening of the day).
 export function TestCard() {
   const t = useT();
   return (
@@ -233,7 +251,7 @@ export function FolderCard({ c, home }) {
         <div className="bg-muted rounded-lg px-3 py-2 font-mono text-xs break-all">{home}</div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => act(bridge.openPath(home))}><FolderOpen />{t('settings.open')}</Button>
-          <Button size="sm" variant="ghost" onClick={async () => { const f = await bridge.pickFolder(t('settings.pickOtherHome')); if (f && await confirm(t('settings.switchTitle'), t('settings.switchBody', { path: f }), { ok: t('settings.switchOk') })) act(bridge.switchHome(f)); }}><ArrowLeftRight />{t('settings.useOther')}</Button>
+          <Button size="sm" variant="ghost" onClick={async () => { const f = await bridge.pickFolder(t('settings.pickOtherHome')); if (f && await confirm(t('settings.switchTitle'), t('settings.switchBody', { path: f }), { ok: t('settings.switchOk'), danger: true })) act(bridge.switchHome(f)); }}><ArrowLeftRight />{t('settings.useOther')}</Button>
         </div>
         <Field label={t('settings.roots')} hint={t('settings.rootsHint')}><Textarea rows={2} value={roots} onChange={(e) => setRoots(e.target.value)} /></Field>
       </CardContent>
@@ -243,7 +261,7 @@ export function FolderCard({ c, home }) {
 }
 
 // «Cosas que nadie toca» (config.protected, src/domain/security/guard.mjs › protectedHit): names, paths or containers no agent
-// touches. Chips to remove, a field to add; saved at once. 3.8: taking off one of the defaults (a password manager) asks
+// touches. Chips to remove, a field to add; saved at once. Taking off one of the defaults (a password manager) asks
 // first, and «Restaurar los de serie» brings back the ones missing (adding needs no password).
 export function ProtectedCard({ c }) {
   const t = useT();
@@ -252,10 +270,8 @@ export function ProtectedCard({ c }) {
   const store = async (items) => {
     const seen = new Set();
     const clean = items.map((x) => String(x ?? '').trim()).filter((x) => x.length >= 2 && !seen.has(x.toLowerCase()) && seen.add(x.toLowerCase()));
-    // 3.8: taking something off the list asks for the master password first.
-    const unlock = list.some((x) => !clean.includes(x)) ? await unlockCore('protected') : null;
-    if (list.some((x) => !clean.includes(x)) && !unlock) return undefined;
-    return save({ protected: clean.slice(0, 50) }, t('settings.protectedSaved'), unlock);
+    // the list is a rail value: save() asks for the master password (every time) when it would change.
+    return save({ protected: clean.slice(0, 50) }, t('settings.protectedSaved'));
   };
   const add = async () => { if (draft.trim().length >= 2 && await store([...list, draft])) setDraft(''); };
   const isDefault = (x) => DEFAULT_PROTECTED.some((d) => d.toLowerCase() === x.toLowerCase());
@@ -291,12 +307,12 @@ export function ProtectedCard({ c }) {
 export function InterfaceCard({ c }) {
   const t = useT();
   const [zoom, setZoom] = useState(null);
-  // 3.7: on Linux, its usual terminals (src/engine/host/terminal.mjs LINUX_TERMINALS) instead of Windows' ones.
+  // on Linux, its usual terminals (src/engine/host/terminal.mjs LINUX_TERMINALS) instead of Windows' ones.
   const linux = window.orb?.platform === 'linux';
   const terminals = linux ? { auto: t('settings.term.auto'), warp: 'Warp', 'x-terminal-emulator': t('settings.term.system'), 'gnome-terminal': 'GNOME Terminal', konsole: 'Konsole', 'xfce4-terminal': 'Xfce Terminal', kitty: 'kitty', alacritty: 'Alacritty', xterm: 'XTerm' }
     : window.orb?.platform && window.orb.platform !== 'win32' ? { auto: t('settings.term.auto'), warp: 'Warp' }
       : { auto: t('settings.term.auto'), warp: 'Warp', wt: 'Windows Terminal', powershell: 'PowerShell', cmd: t('settings.term.cmd') };
-  useEffect(() => { bridge.zoom?.().then(setZoom).catch(() => {}); return bridge.on('ui:zoom', (p) => setZoom(p.zoom)); }, []);
+  useEffect(() => { bridge.zoom?.().then(setZoom).catch(quiet); return bridge.on('ui:zoom', (p) => setZoom(p.zoom)); }, []);
   if (!bridge.zoom) return null; // phone: the browser has its own zoom
   const SIZES = sizes();
   const preset = SIZES.find((o) => Math.abs(Number(o.value) - zoom) < 0.01)?.value;
@@ -335,7 +351,7 @@ export function ExpertCard({ c }) {
       <CardContent className="grid gap-4">
         <Row label={t('settings.expertOn')} hint={t('settings.expertOnHint')}><Switch checked={on} onCheckedChange={(enabled) => save({ expert: { enabled } }, enabled ? t('settings.expertEnabled') : t('settings.expertDisabled'))} data-testid="expert-switch" /></Row>
         <div className="grid gap-2 sm:grid-cols-2">
-          {Object.entries(PANELS).map(([id, label]) => <label key={id} className={cn('-mx-1 flex items-center gap-2 rounded-md px-1 py-1 text-[13px]', on ? 'hover:bg-accent/40 cursor-pointer' : 'text-muted-foreground cursor-not-allowed')}><Checkbox disabled={!on} checked={panels[id] !== false} onCheckedChange={(v) => savePanels({ ...panels, [id]: v === true })} />{label}</label>)}
+          {Object.entries(PANELS).map(([id, label]) => <label key={id} className={cn('-mx-1 flex items-center gap-2 rounded-md px-1 py-1 text-control', on ? 'hover:bg-accent/40 cursor-pointer' : 'text-muted-foreground cursor-not-allowed')}><Checkbox disabled={!on} checked={panels[id] !== false} onCheckedChange={(v) => savePanels({ ...panels, [id]: v === true })} />{label}</label>)}
         </div>
       </CardContent>
       {on ? <CardFooter><Button size="sm" variant="outline" onClick={() => go('expert')}><SquareTerminal />{t('settings.expertOpen')}</Button></CardFooter> : null}
@@ -343,7 +359,7 @@ export function ExpertCard({ c }) {
   );
 }
 
-// 3.8.2: the background music's volume (Windows; lib/music.js), heard while it is dragged and saved when let go.
+// the background music's volume (Windows; lib/music.js), heard while it is dragged and saved when let go.
 function MusicVolume() {
   const t = useT();
   const [v, setV] = useState(() => musicPrefs().volume);

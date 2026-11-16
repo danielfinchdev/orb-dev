@@ -11,6 +11,7 @@ import { useStore, call, act, go } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
 import { t as tNow, useT } from '@/lib/i18n.js';
+import { quiet } from '@/lib/quiet.js';
 
 const QUIET_MIN = 5; // minutes without activity before it is shown as "sin señales"
 
@@ -21,7 +22,7 @@ export function useLiveTasks() {
   useEffect(() => {
     if (!running) { setLive([]); return undefined; }
     let alive = true;
-    const load = () => call('tasks.live').then((r) => alive && setLive(r ?? [])).catch(() => {});
+    const load = () => call('tasks.live').then((r) => alive && setLive(r ?? [])).catch(quiet);
     // (a hidden window skips the polls: nobody sees the bars; the next one after it shows comes within 2 s)
     load(); const t = setInterval(() => { if (!document.hidden) load(); }, 2000);
     return () => { alive = false; clearInterval(t); };
@@ -50,7 +51,7 @@ export function LiveTask({ t: task, compact = false, actions = true }) {
     <div className="grid gap-1.5" data-testid="live-task">
       <div className="flex items-center gap-2">
         <AgentIcon agent={task.agent} className="size-3.5" />
-        <button className="min-w-0 flex-1 cursor-pointer truncate text-left text-[13px] hover:underline" onClick={() => go({ view: 'tasks', id: task.id })}>#{task.id} {task.title}</button>
+        <button className="min-w-0 flex-1 cursor-pointer truncate text-left text-control hover:underline" onClick={() => go({ view: 'tasks', id: task.id })}>#{task.id} {task.title}</button>
         <span className="text-muted-foreground shrink-0 text-xs tabular-nums">{task.percent != null ? `${task.percent} %` : t('comp.live.working')}</span>
         {actions ? <>
           <BubbleTip title={t('comp.live.viewConv')}><Button size="icon-xs" variant="ghost" aria-label={t('comp.live.viewConv')} onClick={() => go({ view: 'session', id: task.sessionId })}><MessageSquare /></Button></BubbleTip>
@@ -63,12 +64,12 @@ export function LiveTask({ t: task, compact = false, actions = true }) {
         <span className="shrink-0 tabular-nums">{elapsed(Date.now() - task.startedAt)} · {t(task.steps === 1 ? 'comp.live.stepOne' : 'comp.live.stepOther', { n: task.steps })}</span>
         <span className="min-w-0 truncate">· {quiet ? t('comp.live.quiet', { min: task.quietMin, now }) : t('comp.live.now', { now })}</span>
       </div>
-      {!compact && task.percent == null ? <p className="text-muted-foreground text-[11px]">{t('comp.live.noPercent', { agent: AGENT[task.agent] ?? task.agent, min: task.timeoutMin })}</p> : null}
+      {!compact && task.percent == null ? <p className="text-muted-foreground text-micro">{t(task.timeoutMin ? 'comp.live.noPercent' : 'comp.live.noPercentNoLimit', { agent: AGENT[task.agent] ?? task.agent, min: task.timeoutMin })}</p> : null}
     </div>
   );
 }
 
-// The block above the assistant's message box: what is running now. 3.2.1: in a conversation, only its own tasks (a new,
+// The block above the assistant's message box: what is running now. In a conversation, only its own tasks (a new,
 // empty chat shows none: each conversation has its tasks); without a conversation given, all of them.
 export function LiveTasksStrip({ conversation }) {
   const t = useT();
@@ -79,7 +80,7 @@ export function LiveTasksStrip({ conversation }) {
   return (
     <div className="shrink-0 px-5 pb-2">
       <div className="bg-card mx-auto grid max-w-3xl gap-3 rounded-2xl border px-4 py-3 shadow-xs" data-testid="live-strip">
-        <div className="text-muted-foreground text-[11px] tracking-wide uppercase">{t('comp.live.running', { n: live.length })}</div>
+        <div className="text-muted-foreground text-micro tracking-wide uppercase">{t('comp.live.running', { n: live.length })}</div>
         {live.slice(0, 4).map((task) => <LiveTask key={task.id} t={task} compact />)}
         {live.length > 4 ? <button className="text-muted-foreground cursor-pointer text-left text-xs hover:underline" onClick={() => go('tasks')}>{t('comp.live.more', { n: live.length - 4 })}</button> : null}
       </div>

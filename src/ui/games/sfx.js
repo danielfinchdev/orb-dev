@@ -1,9 +1,10 @@
-// 2.6: the mini-games' sound effects, all synthesized here with Web Audio (no audio files, nothing to license, zero
+// the mini-games' sound effects, all synthesized here with Web Audio (no audio files, nothing to license, zero
 // bytes of assets): little 8-bit tones, noise bursts and short arpeggios, each a one-shot under a second, so nothing ever
 // keeps playing on its own. The same switch and volume as the robot's voice (Ajustes › Sonidos: config.ui.sounds and
 // ui.volume) plus the games' own mute (this window only), never with the window in the background and never piling up.
 import { getState } from '@/lib/store.js';
 import { quietAudioContext } from '@/lib/audio-context.js';
+import { quiet } from '../lib/quiet.js';
 
 const KEY = 'orb.juegos.sonido';
 let ctx = null; let out = null; let noiseBuf = null; let ready = () => false;
@@ -19,7 +20,7 @@ export function setMuted(v) {
   if (muted) stopAll();
 }
 
-// 3.8.3: made without its device and given it asynchronously (lib/audio-context.js): the window never waits for it.
+// made without its device and given it asynchronously (lib/audio-context.js): the window never waits for it.
 function audio() {
   if (!ctx) {
     const made = quietAudioContext();
@@ -32,7 +33,7 @@ function audio() {
     out.connect(lp); lp.connect(comp); comp.connect(ctx.destination);
   }
   if (!ready()) return null; // its device is still on its way: this effect is skipped
-  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  if (ctx.state === 'suspended') ctx.resume().catch(quiet);
   out.gain.value = 0.16 * app().volume;
   return ctx;
 }

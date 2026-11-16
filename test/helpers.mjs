@@ -21,7 +21,7 @@ process.env.ORB_BRIDGE_DIR = path.join(os.tmpdir(), `orb-test-puente-${process.p
 process.env.ORB_BACKUP_ROOT ??= path.join(os.tmpdir(), `orb-test-copias-${process.pid}`);
 
 // Cursor and the ACP agents are off by default so "any" tasks and reviews go to Claude or Codex (as in the old tests).
-const OFF = Object.fromEntries(['cursor', 'gemini', 'opencode', 'qwen', 'copilot'].map((a) => [a, { enabled: false }]));
+const OFF = Object.fromEntries(['cursor', 'gemini', 'opencode', 'qwen', 'copilot', 'hermes'].map((a) => [a, { enabled: false }]));
 
 export function tempHome(patch = {}) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-test-'));
@@ -36,8 +36,11 @@ export function tempHome(patch = {}) {
 }
 
 export const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+// Waits for a condition by polling. The limit only matters when something is really wrong (success returns at once), so it
+// is multiplied by ORB_TEST_TIME_SCALE (default 3): a loaded PC (a build, other tests) must not turn slowness into a failure.
+const SCALE = Math.max(1, Number(process.env.ORB_TEST_TIME_SCALE) || 3);
 export async function until(fn, what, ms = 15000) {
-  const end = Date.now() + ms;
+  const end = Date.now() + ms * SCALE;
   while (Date.now() < end) { const v = await fn(); if (v) return v; await wait(100); }
   throw new Error(`timeout: ${what}`);
 }
@@ -76,3 +79,9 @@ export function fakeLog(home, run) {
 
 // 3.8.3: Ajustes is a folder of files (src/ui/views/settings/); tests that read its source read them all, in order.
 export const settingsSource = () => ['index', 'rows', 'general', 'devices', 'about'].map((f) => fs.readFileSync(path.join(ROOT, 'src', 'ui', 'views', 'settings', `${f}.jsx`), 'utf8')).join('\n');
+
+// A one-use token of the master password for changing a rail's value (config.save, rails.set): creates the password the first time.
+export async function railsToken(call, password = 'una frase larga de prueba') {
+  if (!(await call('master.state')).exists) await call('master.create', { password });
+  return (await call('master.unlock', { password, purpose: 'rails' })).unlock;
+}

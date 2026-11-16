@@ -34,12 +34,13 @@ export default {
   'chat.resumed': 'Tareas reanudadas',
   'chat.paused': 'Tareas en pausa',
   'chat.helloUser': 'Hola, {user}. Soy {name}.',
+  'chat.you': 'Tú',
   'chat.hello': 'Hola. Soy {name}.',
   'chat.intro': '¿En qué trabajamos hoy?',
   'chat.changesFor': 'Cambios para {ids}: ',
   'chat.thinking': 'Pensando…',
   'chat.queued': '{n} en cola',
-  // 3.0: las conversaciones anteriores, «Nueva tarea» y el test del día
+  // las conversaciones anteriores, «Nueva tarea» y el test del día
   'chat.older': 'Ver mensajes anteriores',
   'newTask.title': 'Nueva tarea',
   'newTask.meta': 'Tú repartes el trabajo: cada mensaje es una tarea',
@@ -53,10 +54,10 @@ export default {
   'test.title': 'Prueba de funcionamiento',
   'test.desc': 'Pide a Orb, con el Orquestador activado, una web de prueba hecha con varios modelos y la abre para probarla. Así compruebas que toda la cadena funciona.',
   'test.prompt': 'Crea una web localhost con las palabras «Hello World» con textura de globos y, de fondo, el espacio con el Sol y el planeta Tierra animado. Añade una barra de inventario con armas y herramientas para destruir el planeta, como en los juegos virales de navegador de destruir el mundo: rayo láser, bombas, meteoritos y más. Las letras también se pueden destruir. Todo debe tener una estética hiperrealista y animaciones de movimiento, y el planeta se puede girar. Usa varios modelos para hacerlo y abre la web para probarla.',
-  // 3.2.1: lo que se añade al pedido del test (proyecto propio y sin preguntas)
+  // lo que se añade al pedido del test (proyecto propio y sin preguntas)
   'test.wrap': '{prompt}\n\nEs la prueba automática de Orb: decide tú todo y no me preguntes nada (ni el proyecto, ni la pizarra, ni el visto bueno del plan). Trabaja en el proyecto {project}, ya creado para esta prueba. Al final, que la verificación deje la web abierta en el navegador de Orb para que yo la vea funcionando, y en tu informe pon el comando exacto para abrirla de nuevo (comprobado: que funcione tal cual).',
   'test.projectNotes': 'Proyecto de la prueba automática de Orb («Iniciar test»). Se puede borrar.',
-  // 2.7: la línea de actividad en vivo y las preguntas con opciones
+  // la línea de actividad en vivo y las preguntas con opciones
   'chat.act.read': 'Leyendo {target}',
   'chat.act.readAny': 'Leyendo archivos',
   'chat.act.search': 'Buscando {target}',
@@ -96,7 +97,7 @@ export default {
   'chat.q.skipped': 'Omitida',
   'chat.placeholderBusy': 'Escribe otro mensaje: {name} lo leerá al terminar…',
   'chat.placeholder': 'Escribe a {name}…',
-  // 2.6: elección del cerebro (agente + modelo)
+  // elección del cerebro (agente + modelo)
   'brain.title': 'Cerebro: agente y modelo',
   'brain.titleText': 'Quién piensa por el asistente y con qué modelo.',
   'brain.none': 'No hay agentes instalados con una cuenta activa. Instálalos en Agentes.',
@@ -112,12 +113,12 @@ export default {
   'brain.reasoningShort': 'Razonamiento',
   'brain.close': 'Cerrar',
   'brain.warnTitle': 'Cuidado',
-  // 3.2: solo cuando el uso real de la cuenta va alto
+  // solo cuando el uso real de la cuenta va alto
   'brain.warnHigh': 'Esta cuenta lleva el {pct} % de su uso y el razonamiento alto gasta bastante más en cada respuesta.',
   'brain.warnHeavy': 'Esta cuenta lleva el {pct} % de su uso y {model} es de los modelos que más gastan.',
   'brain.warnBoth': 'Esta cuenta lleva el {pct} % de su uso y {model} con razonamiento alto es la combinación que más gasta.',
   'brain.warnUsed': 'Esta cuenta lleva el {pct} % de su uso: a este ritmo puede agotarse pronto.',
-  // 2.6: barra superior del chat (solo iconos, con su globo)
+  // barra superior del chat (solo iconos, con su globo)
   'bar.pause': 'Pausar tareas',
   'bar.pauseText': 'Las tareas en curso terminan; las nuevas esperan hasta que reanudes.',
   'bar.resume': 'Reanudar tareas',
@@ -126,7 +127,7 @@ export default {
   'bar.resetText': 'Empieza una conversación nueva. Las tareas y las bitácoras se conservan.',
   'bar.games': 'Minijuegos',
   'bar.gamesText': 'Juega mientras los agentes trabajan.',
-  // 3.2: centro de notificaciones y carpeta de trabajo en la barra
+  // centro de notificaciones y carpeta de trabajo en la barra
   'bar.notices': 'Notificaciones',
   'bar.noticesText': 'Todo lo que Orb te ha avisado, por si se te pasó algo.',
   'bar.noticesNew': 'Notificaciones nuevas',
@@ -138,7 +139,7 @@ export default {
   'chat.playButton': 'Jugar mientras tanto',
   'chat.calendarOpen': 'Ver el calendario',
   'chat.openBoard': 'Abrir la pizarra',
-  // 2.7: imágenes que crea un agente (Codex)
+  // imágenes que crea un agente (Codex)
   'img.open': 'Ver la imagen',
   'img.unavailable': 'La imagen ya no está disponible.',
   'img.title': 'Imagen',
@@ -164,7 +165,7 @@ export default {
   'chat.calendarPrev': 'Mes anterior',
   'chat.calendarNext': 'Mes siguiente',
   'chat.calendarToday': 'Volver a hoy',
-  // 2.6: minijuegos
+  // minijuegos
   'games.title': 'Minijuegos',
   'games.desc': 'Elige un juego y la dificultad. Los agentes siguen trabajando mientras juegas.',
   'games.back': 'Volver a los juegos',
@@ -216,11 +217,11 @@ export default {
   'games.music': 'Música del juego',
   'games.musicOn': 'Silenciar la música',
   'games.musicOff': 'Activar la música',
-  // 2.6: avisos con el robot (o arriba, sin animaciones)
+  // avisos con el robot (o arriba, sin animaciones)
   'notice.done': 'Hecho',
   'notice.attention': 'Requiere tu atención',
   'notice.open': 'Ver',
-  // 3.2: conversaciones, menú lateral, buscador y globito
+  // conversaciones, menú lateral, buscador y globito
   'chat.renameTitle': 'Título de la conversación',
   'chat.placeholderDirect': 'Escribe a {agent}…',
   'chat.waitingTurn': 'Espera su turno: hay otras conversaciones respondiendo.',

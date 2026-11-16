@@ -48,7 +48,7 @@ const until = async (fn, what, ms = 60000) => { const end = Date.now() + ms; whi
 // ---- the workspace
 const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
 const { home } = createHome(base, { userName: 'Ana' });
-const OFF = Object.fromEntries(['cursor', 'gemini', 'opencode', 'qwen', 'copilot'].map((a) => [a, { enabled: false }]));
+const OFF = Object.fromEntries(['cursor', 'gemini', 'opencode', 'qwen', 'copilot', 'hermes'].map((a) => [a, { enabled: false }]));
 writeJson(paths(home).config, merge(loadConfig(home), { ui: { tourDone: true }, agents: OFF, autoRun: false }));
 useHome(home);
 const t0 = Date.now();
@@ -143,7 +143,7 @@ async function latency(e) {
   return res;
 }
 
-// 3.8.1 (H4c): what one refresh of the window moves (its five calls plus the chat list, which it loads again on every
+// what one refresh of the window moves (its five calls plus the chat list, which it loads again on every
 // refresh), the old way (whole replies) and as feeds (src/shared/feed.mjs): bytes of the JSON, the same reply sealed for a
 // phone (shapeResult without paths, then XChaCha20 and base64, as remote.mjs › reply) and the time of the whole refresh.
 // Feeds: the first refresh (whole lists), refreshes where nothing changed, and refreshes after one task changed (a

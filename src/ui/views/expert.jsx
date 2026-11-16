@@ -6,6 +6,7 @@ import { ChevronRight, File, FileLock2, Folder, FolderOpen, GitBranch, GitCommit
 import { ChatView } from './chat.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Empty, Spinner } from '@/components/ui/basic.jsx';
+import { WindowControlsSlot } from '@/components/window-controls.jsx';
 import { OpenInMenu, ActionsMenu } from '@/components/project-tools.jsx';
 import { Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, Checkbox, Tip } from '@/components/ui/overlay.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
@@ -18,6 +19,7 @@ import { DiffLines } from '@/components/diff-view.jsx';
 import { t, useT, useLocale } from '@/lib/i18n.js';
 import { stepText } from '@/components/chat-live.jsx';
 import { activityLabel, activityDetail } from '@/lib/activity.js';
+import { quiet } from '@/lib/quiet.js';
 
 // Labels are read when used (getters), so they follow the language chosen in Ajustes.
 export const PANELS = {
@@ -50,7 +52,7 @@ export async function savePanels(panels) {
 function Panel({ title, icon: Icon, actions, className, children, testid }) {
   return (
     <section className={cn('flex min-h-0 flex-col border-b last:border-b-0', className)} data-testid={testid}>
-      <header className="text-muted-foreground flex h-8 shrink-0 items-center gap-1.5 px-3 text-[11px] tracking-wide uppercase">
+      <header className="text-muted-foreground flex h-8 shrink-0 items-center gap-1.5 px-3 text-micro tracking-wide uppercase">
         {Icon ? <Icon className="size-3.5" /> : null}<span className="min-w-0 flex-1 truncate">{title}</span>{actions}
       </header>
       <div className="min-h-0 flex-1 overflow-auto">{children}</div>
@@ -75,9 +77,9 @@ function Tree({ project, onOpen, version }) {
     return d.entries.map((e) => (
       <div key={e.path}>
         <button type="button" onClick={() => (e.kind === 'dir' ? toggle(e.path) : e.secret ? null : onOpen(e.path))} title={e.secret ? t('expert.secretFile') : `${e.path}${e.size != null ? ` · ${size(e.size)}` : ''}`}
-          className={cn('hover:bg-accent/60 flex w-full cursor-pointer items-center gap-1.5 py-[3px] pr-2 text-left text-[12.5px]', e.secret && 'text-muted-foreground cursor-not-allowed')} style={{ paddingLeft: 8 + depth * 12 }}>
+          className={cn('hover:bg-accent/60 flex w-full cursor-pointer items-center gap-1.5 py-[3px] pr-2 text-left text-caption', e.secret && 'text-muted-foreground cursor-not-allowed')} style={{ paddingLeft: 8 + depth * 12 }}>
           {e.kind === 'dir' ? <><ChevronRight className={cn('size-3 shrink-0 transition-transform', open.has(e.path) && 'rotate-90')} />{open.has(e.path) ? <FolderOpen className="text-primary size-3.5 shrink-0" /> : <Folder className="text-primary size-3.5 shrink-0" />}</>
-            : <><span className="w-3 shrink-0" />{e.secret ? <FileLock2 className="text-warning size-3.5 shrink-0" /> : <File className="text-muted-foreground size-3.5 shrink-0" />}</>}
+            : <><span className="w-3 shrink-0" />{e.secret ? <FileLock2 className="text-warning-ink size-3.5 shrink-0" /> : <File className="text-muted-foreground size-3.5 shrink-0" />}</>}
           <span className="truncate">{e.name}</span>
         </button>
         {e.kind === 'dir' && open.has(e.path) ? render(e.path, depth + 1) : null}
@@ -94,7 +96,7 @@ function CodeView({ text, path }) {
   const hl = useHighlight();
   const lines = useMemo(() => (hl ? hl.highlightLines(text, hl.languageFor(path), createElement) : plain(text)), [hl, text, path]);
   return (
-    <div className="code-surface min-h-full w-max min-w-full py-2 text-[12.5px] leading-[1.55]">
+    <div className="code-surface min-h-full w-max min-w-full py-2 text-caption leading-[1.55]">
       {lines.map((l, i) => <div key={i} className="code-line flex"><span className="code-gutter w-12 shrink-0 pr-3 text-right select-none">{i + 1}</span><span className="pr-4 whitespace-pre">{l.length ? l : ' '}</span></div>)}
     </div>
   );
@@ -104,7 +106,7 @@ function DiffView({ text }) {
   if (!text) return <Empty icon={FileDiff} title={t('expert.noChanges')}>{t('expert.noChangesBody')}</Empty>;
   return <DiffLines text={text} className="min-h-full" testid="expert-diff" />;
 }
-// 3.2.1: a picture of the project is shown as a picture (it said «binary file, cannot be shown as text»).
+// a picture of the project is shown as a picture (it said «binary file, cannot be shown as text»).
 const IMAGE = /\.(png|jpe?g|webp|gif)$/i;
 function ImagePreview({ file, name }) {
   const t = useT();
@@ -142,17 +144,17 @@ function GitPanel({ project, version, onDiff }) {
   useEffect(() => { let alive = true; call('expert.status', { project }).then((r) => alive && setSt(r)).catch(() => alive && setSt({ repo: false, files: [] })); return () => { alive = false; }; }, [project, version]);
   if (!st) return <div className="p-3"><Spinner className="size-3" /></div>;
   if (!st.repo) return <p className="text-muted-foreground px-3 py-2 text-xs">{t('expert.noGit')}</p>;
-  const tone = { nuevo: 'text-success', añadido: 'text-success', borrado: 'text-destructive', renombrado: 'text-info', cambiado: 'text-warning' };
+  const tone = { nuevo: 'text-success', añadido: 'text-success', borrado: 'text-destructive', renombrado: 'text-info', cambiado: 'text-warning-ink' };
   return (
     <div className="pb-1" data-testid="expert-git">
-      <button type="button" onClick={() => onDiff('')} className="hover:bg-accent/60 flex w-full cursor-pointer items-center gap-1.5 px-3 py-1 text-left text-[12.5px]">
+      <button type="button" onClick={() => onDiff('')} className="hover:bg-accent/60 flex w-full cursor-pointer items-center gap-1.5 px-3 py-1 text-left text-caption">
         <GitBranch className="text-primary size-3.5" /><span className="min-w-0 flex-1 truncate">{st.branch}</span>
         {st.ahead ? <Badge variant="secondary">↑{st.ahead}</Badge> : null}{st.behind ? <Badge variant="secondary">↓{st.behind}</Badge> : null}
-        <span className="text-muted-foreground text-[11px]">{st.files.length ? t(st.files.length > 1 ? 'expert.changesOther' : 'expert.changesOne', { n: st.files.length }) : t('expert.clean')}</span>
+        <span className="text-muted-foreground text-micro">{st.files.length ? t(st.files.length > 1 ? 'expert.changesOther' : 'expert.changesOne', { n: st.files.length }) : t('expert.clean')}</span>
       </button>
       {st.files.map((f) => (
-        <button key={f.path} type="button" disabled={f.secret} onClick={() => onDiff(f.path)} title={f.secret ? t('expert.secretFile') : f.path} className="hover:bg-accent/60 flex w-full cursor-pointer items-center gap-2 py-[3px] pr-3 pl-7 text-left text-[12.5px] disabled:cursor-not-allowed disabled:opacity-60">
-          <span className="min-w-0 flex-1 truncate">{f.path}</span><span className={cn('text-[11px]', tone[f.state])}>{f.secret ? t('expert.secret') : STATE_KEY[f.state] ? t(STATE_KEY[f.state]) : f.state}</span>
+        <button key={f.path} type="button" disabled={f.secret} onClick={() => onDiff(f.path)} title={f.secret ? t('expert.secretFile') : f.path} className="hover:bg-accent/60 flex w-full cursor-pointer items-center gap-2 py-[3px] pr-3 pl-7 text-left text-caption disabled:cursor-not-allowed disabled:opacity-60">
+          <span className="min-w-0 flex-1 truncate">{f.path}</span><span className={cn('text-micro', tone[f.state])}>{f.secret ? t('expert.secret') : STATE_KEY[f.state] ? t(STATE_KEY[f.state]) : f.state}</span>
         </button>
       ))}
     </div>
@@ -166,9 +168,9 @@ function HistoryPanel({ project, version }) {
   if (!rows) return <div className="p-3"><Spinner className="size-3" /></div>;
   if (!rows.length) return <p className="text-muted-foreground px-3 py-2 text-xs">{t('expert.noCommits')}</p>;
   return rows.map((c) => (
-    <div key={c.hash} className="flex items-start gap-2 px-3 py-1 text-[12.5px]" title={`${c.hash} · ${c.author} · ${new Date(c.date).toLocaleString(locale)}`}>
+    <div key={c.hash} className="flex items-start gap-2 px-3 py-1 text-caption" title={`${c.hash} · ${c.author} · ${new Date(c.date).toLocaleString(locale)}`}>
       <GitCommitHorizontal className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
-      <div className="min-w-0 flex-1"><div className="truncate">{c.subject}</div><div className="text-muted-foreground truncate text-[11px]"><span className="font-mono">{c.hash}</span> · {c.author} · {ago(c.date)}{c.refs ? ` · ${c.refs}` : ''}</div></div>
+      <div className="min-w-0 flex-1"><div className="truncate">{c.subject}</div><div className="text-muted-foreground truncate text-micro"><span className="font-mono">{c.hash}</span> · {c.author} · {ago(c.date)}{c.refs ? ` · ${c.refs}` : ''}</div></div>
     </div>
   ));
 }
@@ -176,15 +178,15 @@ function RunningPanel() {
   const t = useT();
   const tasks = useStore((s) => s.tasks).filter((t) => t.status === 'running');
   const sessions = useStore((s) => s.sessions).filter((s) => s.status === 'running' && s.kind === 'chat');
-  // 3.2: a conversation answering now (3.8.3: whether it writes and its last step, not each streamed piece).
+  // a conversation answering now (whether it writes and its last step, not each streamed piece).
   const chat = useStore((s) => { const c = s.chats.find((x) => x.busy); const last = Array.isArray(c?.tools) ? c.tools.at(-1) : null; return c ? { busy: true, partial: Boolean(c.partial), step: last && typeof last === 'object' ? stepText(t, last) : '' } : null; });
   const name = useStore((s) => s.app.config.assistantName);
   if (!tasks.length && !sessions.length && !chat?.busy) return <p className="text-muted-foreground px-3 py-2 text-xs">{t('expert.nothingRunning')}</p>;
   return (
     <div className="pb-1">
-      {chat?.busy ? <div className="flex items-center gap-2 px-3 py-1 text-[12.5px]"><span className="bg-primary size-1.5 animate-pulse rounded-full" />{t(chat.partial ? 'expert.writing' : 'expert.thinking', { name })}{chat.step ? <span className="text-muted-foreground truncate">· {chat.step}</span> : null}</div> : null}
-      {tasks.map((t) => <button key={t.id} type="button" onClick={() => go({ view: 'tasks', id: t.id })} className="hover:bg-accent/60 flex w-full cursor-pointer items-center gap-2 px-3 py-1 text-left text-[12.5px]"><AgentIcon agent={t.assigned_to ?? t.agent} className="size-3.5" /><span className="min-w-0 flex-1 truncate">#{t.id} {t.title}</span><span className="text-muted-foreground text-[11px]">{t.project}</span></button>)}
-      {sessions.map((s) => <button key={s.id} type="button" onClick={() => go({ view: 'session', id: s.id })} className="hover:bg-accent/60 flex w-full cursor-pointer items-center gap-2 px-3 py-1 text-left text-[12.5px]"><AgentIcon agent={s.agent} className="size-3.5" /><span className="min-w-0 flex-1 truncate">{s.title}</span><span className="text-muted-foreground text-[11px]">{AGENT[s.agent]}</span></button>)}
+      {chat?.busy ? <div className="flex items-center gap-2 px-3 py-1 text-caption"><span className="bg-primary size-1.5 animate-pulse rounded-full" />{t(chat.partial ? 'expert.writing' : 'expert.thinking', { name })}{chat.step ? <span className="text-muted-foreground truncate">· {chat.step}</span> : null}</div> : null}
+      {tasks.map((t) => <button key={t.id} type="button" onClick={() => go({ view: 'tasks', id: t.id })} className="hover:bg-accent/60 flex w-full cursor-pointer items-center gap-2 px-3 py-1 text-left text-caption"><AgentIcon agent={t.assigned_to ?? t.agent} className="size-3.5" /><span className="min-w-0 flex-1 truncate">#{t.id} {t.title}</span><span className="text-muted-foreground text-micro">{t.project}</span></button>)}
+      {sessions.map((s) => <button key={s.id} type="button" onClick={() => go({ view: 'session', id: s.id })} className="hover:bg-accent/60 flex w-full cursor-pointer items-center gap-2 px-3 py-1 text-left text-caption"><AgentIcon agent={s.agent} className="size-3.5" /><span className="min-w-0 flex-1 truncate">{s.title}</span><span className="text-muted-foreground text-micro">{AGENT[s.agent]}</span></button>)}
     </div>
   );
 }
@@ -192,7 +194,7 @@ function Bar({ label, value, max, detail }) {
   const pct = max ? Math.min(100, Math.round((value / max) * 100)) : 0;
   return (
     <div className="grid gap-1 px-3 py-1">
-      <div className="flex items-center justify-between text-[12px]"><span>{label}</span><span className="text-muted-foreground">{detail ?? `${pct}%`}</span></div>
+      <div className="flex items-center justify-between text-caption"><span>{label}</span><span className="text-muted-foreground">{detail ?? `${pct}%`}</span></div>
       <div className="bg-muted h-1.5 overflow-hidden rounded-full"><div className={cn('h-full rounded-full transition-all', pct > 85 ? 'bg-destructive' : pct > 65 ? 'bg-warning' : 'bg-primary')} style={{ width: `${pct}%` }} /></div>
     </div>
   );
@@ -200,20 +202,20 @@ function Bar({ label, value, max, detail }) {
 function UsagePanel({ version }) {
   const t = useT();
   const [rows, setRows] = useState([]);
-  useEffect(() => { call('usage.get').then(setRows).catch(() => {}); }, [version]);
+  useEffect(() => { call('usage.get').then(setRows).catch(quiet); }, [version]);
   return <div className="py-1">{rows.map((r) => <Bar key={r.account} label={r.label} value={r.used} max={r.max} detail={r.cooldownUntil && r.cooldownUntil > Date.now() ? t('expert.paused') : t('expert.usageOf', { used: r.used, max: r.max, h: r.windowHours })} />)}</div>;
 }
 function SystemPanel() {
   const t = useT();
   const [s, setS] = useState(null);
-  useEffect(() => { let alive = true; const tick = () => call('expert.system').then((r) => alive && setS(r)).catch(() => {}); tick(); const t = setInterval(tick, 3000); return () => { alive = false; clearInterval(t); }; }, []);
+  useEffect(() => { let alive = true; const tick = () => call('expert.system').then((r) => alive && setS(r)).catch(quiet); tick(); const t = setInterval(tick, 3000); return () => { alive = false; clearInterval(t); }; }, []);
   if (!s) return <div className="p-3"><Spinner className="size-3" /></div>;
   return (
     <div className="py-1" data-testid="expert-system">
       <Bar label={t('expert.cpu', { n: s.cores })} value={s.cpu ?? 0} max={100} detail={s.cpu == null ? t('expert.measuring') : `${s.cpu}%`} />
       <Bar label={t('expert.memory')} value={s.memory.total - s.memory.free} max={s.memory.total} detail={t('expert.memoryOf', { used: size(s.memory.total - s.memory.free), total: size(s.memory.total) })} />
       {s.disk ? <Bar label={t('expert.disk')} value={s.disk.total - s.disk.free} max={s.disk.total} detail={t('expert.diskFree', { size: size(s.disk.free) })} /> : null}
-      <div className="text-muted-foreground flex flex-wrap gap-x-3 px-3 pt-1 pb-1.5 text-[11px]"><span>{t('expert.engine', { size: size(s.engine) })}</span><span>{t('expert.agentsWorking', { n: s.running })}</span><span className="truncate">{s.platform}</span></div>
+      <div className="text-muted-foreground flex flex-wrap gap-x-3 px-3 pt-1 pb-1.5 text-micro"><span>{t('expert.engine', { size: size(s.engine) })}</span><span>{t('expert.agentsWorking', { n: s.running })}</span><span className="truncate">{s.platform}</span></div>
     </div>
   );
 }
@@ -221,9 +223,9 @@ function ActivityPanel({ version }) {
   const t = useT();
   const locale = useLocale();
   const [rows, setRows] = useState([]);
-  useEffect(() => { call('activity.list', { limit: 40 }).then(setRows).catch(() => {}); }, [version]);
+  useEffect(() => { call('activity.list', { limit: 40 }).then(setRows).catch(quiet); }, [version]);
   return (
-    <div className="py-1 text-[11.5px]">
+    <div className="py-1 text-micro">
       {rows.map((r) => <div key={r.id} className="flex gap-2 px-3 py-[2px]" title={`${r.kind} ${r.detail ?? ''}`}><span className="text-muted-foreground shrink-0 tabular-nums">{new Date(r.at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}</span><span className="text-primary shrink-0">{AGENT[r.actor] ?? r.actor}</span><span className="min-w-0 truncate">{activityLabel(t, r.kind)}{r.task_id ? ` #${r.task_id}` : ''} <span className="text-muted-foreground">{activityDetail(t, r, locale, AGENT)}</span></span></div>)}
     </div>
   );
@@ -257,7 +259,7 @@ export function ExpertView() {
   const panels = app.config.expert?.panels ?? {};
   const on = (id) => panels[id] !== false;
   const [project, setProject] = useState(app.activeProject?.name ?? projects[0]?.name ?? '');
-  // 3.2: the chat of God mode is a conversation of that project (the latest still open, or a new one in it).
+  // the chat of God mode is a conversation of that project (the latest still open, or a new one in it).
   const conversations = useStore((s) => s.conversations) ?? [];
   const latest = (name) => conversations.find((c) => c.project === name && c.status === 'open')?.id ?? null;
   const [conversation, setConversation] = useState(() => latest(app.activeProject?.name ?? projects[0]?.name ?? ''));
@@ -280,18 +282,19 @@ export function ExpertView() {
     <>
       <div className="m-auto max-w-sm p-6 lg:hidden"><Empty icon={Monitor} title={t('expert.tooNarrow')}>{t('expert.tooNarrowBody')}</Empty></div>
       <div className="hidden min-h-0 flex-1 flex-col lg:flex" data-testid="expert-view">
-        {/* 3.8.1: the bar is a container: it leaves room for the window's buttons (wco-pad) and, the narrower it is, the more
+        {/* the bar is a container: it leaves room for the window's buttons (wco-pad) and, the narrower it is, the more
             of its buttons show only their icon (with a tooltip), so nothing ever slides under the minimise / close. */}
-        <header className="topbar theme-band app-titlebar wco-pad @container/bar flex h-14 shrink-0 items-center gap-2 overflow-hidden border-b px-3" data-testid="expert-bar">
+        <header className="relative topbar theme-band app-titlebar wco-pad @container/bar flex h-14 shrink-0 items-center gap-2 overflow-hidden border-b px-3" data-testid="expert-bar">
           {folded ? <SidebarToggle collapsed /> : null}
-          <SquareTerminal className="text-primary size-4 shrink-0" /><span className="hidden shrink-0 text-[15px] whitespace-nowrap @2xl/bar:inline">{t('nav.expert')}</span>
+          <SquareTerminal className="text-primary size-4 shrink-0" /><span className="hidden shrink-0 text-card-title whitespace-nowrap @2xl/bar:inline">{t('nav.expert')}</span>
           <Select size="sm" value={project} onValueChange={setProject} title={t('expert.project')} className="ml-2 w-40 min-w-24 shrink @4xl/bar:w-56" placeholder={t('expert.pickProject')} options={projects.map((p) => ({ value: p.name, label: p.name }))} />
-          {/* 3.2: the project in an editor, and its actions (commands of the user's own, with their shortcut). */}
+          {/* the project in an editor, and its actions (commands of the user's own, with their shortcut). */}
           <OpenInMenu project={info} labelClassName="hidden @6xl/bar:inline" />
           <ActionsMenu project={info} labelClassName="hidden @4xl/bar:inline" />
           <div className="flex-1" />
           <Button variant="ghost" size="sm" onClick={() => go('settings')} aria-label={t('nav.settings')} title={t('nav.settings')} data-testid="expert-settings"><Settings className="@4xl/bar:hidden" /><span className="hidden @4xl/bar:inline">{t('nav.settings')}</span></Button>
           <PanelsMenu labelClassName="hidden @4xl/bar:inline" />
+          <WindowControlsSlot />
         </header>
         <div className="flex min-h-0 flex-1">
           {left.length && project ? (
@@ -302,10 +305,10 @@ export function ExpertView() {
             </aside>
           ) : null}
           <div className="flex min-w-0 flex-1 flex-col">
-            {/* 3.2.1: the tabs give way (their names cut with «…») instead of running off the edge with a scroll bar. */}
+            {/* the tabs give way (their names cut with «…») instead of running off the edge with a scroll bar. */}
             <div className="bg-sidebar flex h-9 shrink-0 items-end gap-px overflow-x-auto border-b px-1 [scrollbar-width:none]">
               {[{ id: 'chat', label: app.config.assistantName, icon: MessageSquare }, ...tabs].map((tb) => (
-                <div key={tb.id} className={cn('group flex h-8 max-w-52 cursor-pointer items-center gap-1.5 rounded-t-md border border-b-0 px-3 text-[12.5px]', tb.id === 'chat' || tb.id === current ? 'shrink-0' : 'min-w-20 shrink', current === tb.id ? 'bg-background text-foreground' : 'text-muted-foreground hover:text-foreground border-transparent')} onClick={() => setCurrent(tb.id)} title={tb.path}>
+                <div key={tb.id} className={cn('group flex h-8 max-w-52 cursor-pointer items-center gap-1.5 rounded-t-md border border-b-0 px-3 text-caption', tb.id === 'chat' || tb.id === current ? 'shrink-0' : 'min-w-20 shrink', current === tb.id ? 'bg-background text-foreground' : 'text-muted-foreground hover:text-foreground border-transparent')} onClick={() => setCurrent(tb.id)} title={tb.path}>
                   {tb.icon ? <tb.icon className="size-3.5 shrink-0" /> : tb.kind === 'diff' ? <FileDiff className="size-3.5 shrink-0" /> : IMAGE.test(tb.path) ? <ImageIcon className="size-3.5 shrink-0" /> : <File className="size-3.5 shrink-0" />}
                   <span className="truncate">{tb.label ?? t('expert.allChanges')}</span>
                   {tb.id !== 'chat' ? <button type="button" aria-label={t('expert.close')} className="hover:bg-accent -mr-1 grid size-4 shrink-0 place-items-center rounded opacity-60 group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); closeTab(tb.id); }}><X className="size-3" /></button> : null}

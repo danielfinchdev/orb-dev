@@ -1,4 +1,4 @@
-// 3.8.2: «Recargar» in the usage panel asks the agents for their plan's usage now (usage.refresh), at most every 20 s
+// «Recargar» in the usage panel asks the agents for their plan's usage now (usage.refresh), at most every 20 s
 // (the engine keeps the same limit). Kept outside the panel, so closing and opening it does not reset the wait.
 export const RELOAD_GAP_MS = 20_000;
 let last = 0;

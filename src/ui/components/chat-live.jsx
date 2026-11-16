@@ -1,4 +1,4 @@
-// 2.7: two pieces of the assistant's chat. LiveActivity: what the assistant is doing right now («Leyendo claude.mjs ·
+// two pieces of the assistant's chat. LiveActivity: what the assistant is doing right now («Leyendo claude.mjs ·
 // 1 min 3 s»), with the steps of the turn when unfolded. QuestionCard: a question with options (orb_ask) answered with a
 // click, the number keys or own words, or skipped.
 import { useEffect, useRef, useState } from 'react';
@@ -16,7 +16,7 @@ const KIND = [
   [/^(webfetch|websearch|fetch|web_search|browse)/i, 'web'], [/^orb_create_task$/, 'task'], [/^orb_(board|list_tasks|get_task|wait_tasks)$/, 'board'],
   [/^orb_read_log$/, 'readLog'], [/^orb_write_log$/, 'writeLog'], [/^orb_ask$/, 'ask'], [/^orb_(set_project|create_project|add_project)$/, 'project'],
   [/^orb_schedule$/, 'schedule'], [/^orb_browser_/, 'browser'], [/^orb_(send_message|read_messages)$/, 'messages'], [/^(todowrite|todo)/i, 'plan'], [/^(task|agent|delegate)/i, 'delegate'],
-  // 3.2.1: the agent looking up its own tools; opti_* in Opti Bot's old conversation
+  // the agent looking up its own tools; opti_* in Opti Bot's old conversation
   [/^tool_?search$/i, 'tools'], [/^opti_propose$/, 'propose'], [/^opti_/, 'pc']
 ];
 const WITH_TARGET = new Set(['read', 'search', 'run', 'edit', 'web']);
@@ -47,7 +47,7 @@ export function LiveActivity({ chat, testid = 'chat-activity' }) {
   const last = steps.at(-1);
   const label = last ? stepText(t, last) : chat.partial ? t('chat.act.writing') : t('chat.thinking');
   return (
-    <div className="text-muted-foreground mt-1 grid gap-1 text-[13px]" data-testid={testid}>
+    <div className="text-muted-foreground mt-1 grid gap-1 text-control" data-testid={testid}>
       <button type="button" className="hover:text-foreground flex min-w-0 cursor-pointer items-center gap-2 text-left" onClick={() => setOpen(!open)} aria-expanded={open} disabled={!steps.length}>
         <Spinner className="size-3.5 shrink-0" />
         <span className="text-foreground/85 min-w-0 truncate">{label}</span>
@@ -56,7 +56,7 @@ export function LiveActivity({ chat, testid = 'chat-activity' }) {
         {steps.length ? <ChevronRight className={cn('size-3.5 shrink-0 transition-transform', open && 'rotate-90')} /> : null}
       </button>
       {open ? (
-        <ol className="border-border/70 ml-1.5 grid gap-0.5 border-l pl-3 text-[12.5px]" data-testid="chat-activity-steps">
+        <ol className="border-border/70 ml-1.5 grid gap-0.5 border-l pl-3 text-caption" data-testid="chat-activity-steps">
           {steps.map((s, i) => <li key={`${s.at}-${i}`} className="flex min-w-0 gap-2"><span className="min-w-0 flex-1 truncate">{stepText(t, s)}</span>{chat.since ? <span className="shrink-0 tabular-nums opacity-70">{elapsed(t, s.at - chat.since)}</span> : null}</li>)}
         </ol>
       ) : null}
@@ -93,9 +93,9 @@ export function QuestionCard({ m }) {
   };
   if (done) return (
     <div className="chat-glass mx-auto w-full max-w-[92%]" data-testid="question-card">
-      <div className="flex items-start gap-2 text-[13.5px]">
+      <div className="flex items-start gap-2 text-control">
         <span className="min-w-0 flex-1"><span className="font-medium">{q.question}</span>
-          <span className="text-muted-foreground mt-1 flex items-center gap-1.5 text-[13px]">{done.status === 'skipped' ? <><X className="size-3.5" />{t('chat.q.skipped')}</> : <><Check className="text-success size-3.5" />{done.answer}</>}</span>
+          <span className="text-muted-foreground mt-1 flex items-center gap-1.5 text-control">{done.status === 'skipped' ? <><X className="size-3.5" />{t('chat.q.skipped')}</> : <><Check className="text-success size-3.5" />{done.answer}</>}</span>
         </span>
       </div>
     </div>
@@ -104,8 +104,8 @@ export function QuestionCard({ m }) {
     <div ref={box} tabIndex={-1} onKeyDown={keys} className="chat-glass question-card mx-auto w-full max-w-[92%] outline-none" data-testid="question-card">
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          {q.header ? <div className="text-primary mb-0.5 text-[11px] font-semibold tracking-wide uppercase">{q.header}</div> : null}
-          <div className="text-[14.5px] leading-snug font-semibold">{q.question}</div>
+          {q.header ? <div className="text-primary mb-0.5 text-micro font-semibold tracking-wide uppercase">{q.header}</div> : null}
+          <div className="text-body compact:text-body leading-snug font-semibold">{q.question}</div>
         </div>
         <Button size="icon-xs" variant="ghost" onClick={() => setFolded(!folded)} aria-label={folded ? t('chat.q.unfold') : t('chat.q.fold')} aria-expanded={!folded}><ChevronDown className={cn('transition-transform', folded && '-rotate-90')} /></Button>
         <Button size="icon-xs" variant="ghost" onClick={() => send(true)} aria-label={t('chat.q.skip')} disabled={busy}><X /></Button>
@@ -118,22 +118,22 @@ export function QuestionCard({ m }) {
               <button key={o.label} type="button" role={q.multi ? 'checkbox' : 'radio'} aria-checked={on} onClick={() => choose(o.label)} data-testid={`question-option-${i + 1}`}
                 className={cn('question-option flex w-full cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors', on ? 'border-primary bg-primary/8 ring-primary/25 ring-2' : 'bg-card/50 hover:bg-accent/50')}>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[13.5px] font-medium">{o.label}</span>
-                  {o.description ? <span className="text-muted-foreground mt-0.5 block text-[12.5px] leading-snug">{o.description}</span> : null}
+                  <span className="block text-control font-medium">{o.label}</span>
+                  {o.description ? <span className="text-muted-foreground mt-0.5 block text-caption leading-snug">{o.description}</span> : null}
                 </span>
-                <kbd className={cn('mt-0.5 grid size-6 shrink-0 place-items-center rounded-md border text-[11px] font-semibold', on ? 'border-primary text-primary' : 'text-muted-foreground')}>{i + 1}</kbd>
+                <kbd className={cn('mt-0.5 grid size-6 shrink-0 place-items-center rounded-md border text-micro font-semibold', on ? 'border-primary text-primary' : 'text-muted-foreground')}>{i + 1}</kbd>
               </button>
             );
           })}
           <div className={cn('question-option grid gap-2 rounded-xl border px-3.5 py-2.5', other.trim() ? 'border-primary ring-primary/25 ring-2' : 'bg-card/50')}>
-            <div className="flex items-center gap-3"><span className="min-w-0 flex-1 text-[13.5px] font-medium">{t('chat.q.other')}</span><kbd className="text-muted-foreground grid size-6 shrink-0 place-items-center rounded-md border text-[11px] font-semibold">{q.options.length + 1}</kbd></div>
+            <div className="flex items-center gap-3"><span className="min-w-0 flex-1 text-control font-medium">{t('chat.q.other')}</span><kbd className="text-muted-foreground grid size-6 shrink-0 place-items-center rounded-md border text-micro font-semibold">{q.options.length + 1}</kbd></div>
             <textarea ref={otherRef} rows={1} value={other} onChange={(e) => setOther(e.target.value)} maxLength={2000} placeholder={t('chat.q.otherPh')} data-testid="question-other"
-              className="border-input bg-background/70 placeholder:text-muted-foreground focus-visible:ring-ring/40 min-h-9 w-full resize-y rounded-lg border px-3 py-1.5 text-[13.5px] outline-none focus-visible:ring-2" />
+              className="border-input bg-background/70 placeholder:text-muted-foreground focus-visible:ring-ring/40 min-h-9 w-full resize-y rounded-lg border px-3 py-1.5 text-control outline-none focus-visible:ring-2" />
           </div>
         </div>
         <div className="mt-3 flex items-center justify-end gap-2">
           <Button size="sm" variant="ghost" onClick={() => send(true)} disabled={busy} data-testid="question-skip">{t('chat.q.skip')}</Button>
-          <Button size="sm" onClick={() => send()} disabled={!ready || busy} data-testid="question-send">{t('chat.q.send')}<kbd className="ml-1 rounded border border-current/30 px-1 text-[10px] opacity-80">Ctrl ↵</kbd></Button>
+          <Button size="sm" onClick={() => send()} disabled={!ready || busy} data-testid="question-send">{t('chat.q.send')}<kbd className="ml-1 rounded border border-current/30 px-1 text-micro opacity-80">Ctrl ↵</kbd></Button>
         </div>
       </>)}
     </div>

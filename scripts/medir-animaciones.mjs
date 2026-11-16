@@ -1,4 +1,4 @@
-// 3.8.3: what each visual theme's moving backdrop costs at rest, and how fast a key shows over it, measured in the window
+// what each visual theme's moving backdrop costs at rest, and how fast a key shows over it, measured in the window
 // itself (a build with the `e2e` cargo feature: the only one with a DevTools port). Throwaway workspace and app-data
 // folder in %TEMP% (never the real C:\Orb, %APPDATA%\Orb* or the installed app); the window is shown, since frames are
 // only drawn for a visible window. One start per theme and mode (the theme is set in the workspace before the start).
@@ -20,6 +20,7 @@
 // elements first (to tell the backdrop's cost from the robot's).
 import fs from 'node:fs';
 import path from 'node:path';
+import { darkOnlySkin } from '../src/shared/appearance.mjs';
 import { sandbox, arg, wait, pct, r1 } from './lib/e2e-window.mjs';
 
 const SKINS = arg('skins', 'orb,vaporwave,retro,nube,cristal,profesional').split(',');
@@ -99,6 +100,7 @@ async function typing(page) {
 const results = { exe, idleSeconds: IDLE_S, runs: [] };
 for (const skin of SKINS) {
   for (const mode of MODES) {
+    if (mode === 'claro' && darkOnlySkin(skin)) continue; // Retro only exists in dark
     configure({ ui: { skin, theme: mode } });
     const run = await launch();
     const { page } = run;
@@ -106,6 +108,7 @@ for (const skin of SKINS) {
     await page.click('[data-testid=chats-new]'); await page.click('[data-testid=new-conversation]');
     await page.locator('[data-testid=chat-input]').waitFor({ timeout: 20000 });
     await page.mouse.move(5, 300); // the pointer away from anything with a hover
+    if (process.env.MEDIR_UNFOCUS) await page.evaluate((MINIMA) => { document.documentElement.classList.add('window-idle'); if (MINIMA) document.documentElement.dataset.motion = 'minima'; }, process.env.MEDIR_UNFOCUS === 'minima'); // MEDIR_UNFOCUS=1: the page as when its window has no focus (main.jsx, class window-idle); =minima: with animations off too
     await wait(SETTLE_S * 1000); // the start settles (the robot's hello floats for 8.4 s: --settle 10 measures after it)
     if (process.env.MEDIR_HIDE) await page.evaluate((sel) => { for (const el of document.querySelectorAll(sel)) el.style.display = 'none'; }, process.env.MEDIR_HIDE);
     const row = { skin, mode, ...(await idleCost(run)), mainThread: await mainThreadAnimations(page), ...(await typing(page)) };
@@ -116,7 +119,7 @@ for (const skin of SKINS) {
       await wait(300);
       fs.mkdirSync(shots, { recursive: true });
       await page.screenshot({ path: path.join(shots, `${skin}-${mode}.png`) });
-      // 3.8.3: and the bars' art over it (its moving pieces too: Retro's invaders, Nube's sweets), stopped the same way.
+      // and the bars' art over it (its moving pieces too: Retro's invaders, Nube's sweets), stopped the same way.
       await page.addStyleTag({ content: '.theme-band { visibility: visible !important; } .theme-band * { visibility: hidden !important; } .theme-band .band-art, .theme-band .band-art * { visibility: visible !important; }' });
       await page.evaluate(() => { for (const a of document.getAnimations()) { if (a.effect?.target?.closest?.('.scene, .theme-band')) { a.pause(); a.currentTime = 20000; } } });
       await wait(300);

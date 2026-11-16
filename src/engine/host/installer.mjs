@@ -21,13 +21,16 @@ export const ITEMS = [
   { id: 'cursor', label: 'Cursor CLI', why: 'agente de Cursor', install: "irm 'https://cursor.com/install?win32=true' | iex" },
   { id: 'gh', label: 'GitHub CLI', why: 'publicar y crear pull requests con tu cuenta', install: winget('GitHub.cli'), needsWinget: true },
   { id: 'tailscale', label: 'Tailscale', why: 'usar el asistente desde el móvil de forma privada', install: winget('Tailscale.Tailscale'), needsWinget: true, optional: true },
-  // 2.3: more agents (ACP). Optional: each one with its own account (Google, GitHub…), signed in with its own program.
+  // more agents (ACP). Optional: each one with its own account (Google, GitHub…), signed in with its own program.
   { id: 'gemini', label: 'Gemini CLI', why: 'agente de Google: contexto enorme, investigar y revisar', install: 'npm install -g @google/gemini-cli', after: ['node'], optional: true },
   { id: 'copilot', label: 'GitHub Copilot CLI', why: 'agente de GitHub, con tu suscripción de Copilot', install: 'npm install -g @github/copilot', after: ['node'], optional: true },
   { id: 'opencode', label: 'OpenCode', why: 'agente abierto con muchos proveedores y modelos', install: 'npm install -g opencode-ai', after: ['node'], optional: true },
-  { id: 'qwen', label: 'Qwen Code', why: 'agente rápido y barato para tareas repetitivas', install: 'npm install -g @qwen-code/qwen-code', after: ['node'], optional: true }
+  { id: 'qwen', label: 'Qwen Code', why: 'agente rápido y barato para tareas repetitivas', install: 'npm install -g @qwen-code/qwen-code', after: ['node'], optional: true },
+  // Python tool: installed with uv (fetched from Astral when missing), which puts it in ~/.local/bin.
+  { id: 'hermes', label: 'Hermes Agent', why: 'agente autónomo con memoria y muchos proveedores', optional: true,
+    install: String.raw`$env:Path = "$env:USERPROFILE\.local\bin;$env:Path"; if (-not (Get-Command uv -ErrorAction SilentlyContinue)) { irm https://astral.sh/uv/install.ps1 | iex; $env:Path = "$env:USERPROFILE\.local\bin;$env:Path" }; uv tool install 'hermes-agent[acp]'` }
 ];
-const AGENT_ITEMS = ['claude', 'codex', 'cursor', 'gemini', 'copilot', 'opencode', 'qwen'];
+const AGENT_ITEMS = ['claude', 'codex', 'cursor', 'gemini', 'copilot', 'opencode', 'qwen', 'hermes'];
 
 async function versionOf(cmd, args = ['--version']) { const r = await quickRun(cmd, args, { timeoutMs: 8000 }); return r.ok ? r.out.split(/\r?\n/)[0].slice(0, 60) : null; }
 const tailscaleExe = () => (IS_WIN ? path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Tailscale', 'tailscale.exe') : 'tailscale');

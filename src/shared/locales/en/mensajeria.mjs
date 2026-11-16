@@ -1,4 +1,4 @@
-// 3.6, messaging: the chat list as a messaging app's (pinned, unread, each chat's menu), the conversation's header and
+// Messaging: the chat list as a messaging app's (pinned, unread, each chat's menu), the conversation's header and
 // its info.
 export default {
   // Chat list

@@ -10,7 +10,7 @@ import { PRODUCT } from '../shared/product.mjs';
 
 const location = (userData) => path.join(userData, 'ubicacion.json');
 
-// 3.8: a saved workspace whose core is gone is still this PC's workspace: the engine puts core back from the newest backup
+// a saved workspace whose core is gone is still this PC's workspace: the engine puts core back from the newest backup
 // or the window says why it cannot (only a workspace folder that is gone altogether brings the welcome back). Global B13:
 // a folder without core counts only when this app keeps copies for it (claves<its key>…); an old location pointing
 // to some other folder brings the welcome, not «Falta core».
@@ -60,7 +60,7 @@ export function switchHome({ userData, target }) {
 
 // The copies kept outside the workspace, one per workspace: the sealed approval secret (claves\<key>.enc; the backups are
 // sealed with it, so a core deleted by mistake can still be restored) and the master password's files (claves\<key>-
-// secretos). The first 3.8 builds named them after the workspace's whole path (home.mjs › oldHomeKey): taken over once.
+// secretos). The first builds named them after the workspace's whole path (home.mjs › oldHomeKey): taken over once.
 export const secretCopy = (userData, home) => path.join(userData, 'claves', `${homeKey(home)}.enc`);
 export const secretsCopy = (userData, home) => path.join(userData, 'claves', `${homeKey(home)}-secretos`);
 export function adoptOldKeyNames(userData, home) {
@@ -76,8 +76,8 @@ export function secretDir(home) {
   return fs.existsSync(legacy) && !fs.existsSync(paths(home).core) ? legacy : paths(home).data;
 }
 
-// 3.8: core itself (all of it at once) and its secrets open in the File Explorer only with a fresh unlock of the master
-// password. 3.8.1 (owner's decision 19 f, review F3b B1): so does anything else inside core (its data: orb.db,
+// core itself (all of it at once) and its secrets open in the File Explorer only with a fresh unlock of the master
+// password. So does anything else inside core (its data: orb.db,
 // clave.bin, the runs…) but the folders meant to be opened: MCP servers, skills, what an agent prepared, the tools (adb),
 // the logs and the isolated copies tasks work in. Compared by the real path (a junction, a short 8.3 name or the \\?\
 // prefix lead to the same folder).

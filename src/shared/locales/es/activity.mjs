@@ -6,7 +6,7 @@ export default {
   'activity.search': 'Buscar…',
   'activity.copy': 'Copiar',
   'activity.empty': 'No hay actividad',
-  // 3.2.1: cada evento en palabras
+  // cada evento en palabras
   'activity.minutes': '{n} min',
   'activity.tokens': '{n} tokens',
   'activity.reasoning': 'razonamiento {level}',

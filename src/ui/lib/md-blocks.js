@@ -1,4 +1,4 @@
-// 3.8.3: an answer that is still streaming, cut into its top-level Markdown blocks, so that only the last one (the one
+// an answer that is still streaming, cut into its top-level Markdown blocks, so that only the last one (the one
 // still growing) is parsed again with each piece (components/markdown.jsx › StreamingMarkdown; T3 Code does the same).
 // A cut is made only at a blank line outside a code fence or a $$ formula, before a line that starts at the margin
 // (an indented line continues a list item or is code): every block then renders as it would inside the whole text.

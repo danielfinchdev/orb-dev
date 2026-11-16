@@ -1,6 +1,6 @@
-// 3.8: a screen that fails while drawing never leaves the app blank or reopening on it at every start: the saved route
+// a screen that fails while drawing never leaves the app blank or reopening on it at every start: the saved route
 // is forgotten at once and a calm card offers the way back (main.jsx wraps each screen, and the whole window).
-// 3.8.1 (H4a): a screen whose file could not be loaded (a phone's browser gets the files from the PC over the network)
+// a screen whose file could not be loaded (a phone's browser gets the files from the PC over the network)
 // is not broken: «Sin conexión» and «Reintentar», which fetches it again (lib/lazy.js); the route is kept. After two
 // retries that fail, «Reintentar» reloads the page. A window over the screen (Ajustes, the games, the tour) passes
 // `onFail` instead: it closes and says why, and draws again when it is opened again (`resetKey` changes).

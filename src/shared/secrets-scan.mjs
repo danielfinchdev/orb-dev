@@ -36,7 +36,7 @@ export function porcelainPaths(z) {
   }
   return out;
 }
-// 3.2.1: secrets by content, not only by file name (a key pasted into config-prueba.env or notas.txt). The same patterns
+// secrets by content, not only by file name (a key pasted into config-prueba.env or notas.txt). The same patterns
 // as redactSecrets, plus a "KEY = value" assignment whose value looks like a real key (letters and digits, 16+ characters,
 // no code around it), so TOKEN_LIMIT = 123456789012 or apiKey: process.env.API_KEY do not count.
 const CONTENT_PATTERNS = SECRET_PATTERNS.map((re) => new RegExp(re.source, re.flags.replace('g', '')));
@@ -64,6 +64,13 @@ export function secretsInDiff(diff) {
 }
 // The files of the index (what the next commit would save) with a secret in their added lines. `git` is workspace's git().
 export const stagedSecrets = (dir, git) => secretsInDiff(git(dir, '-c', 'core.quotePath=false', 'diff', '--cached', '-U0', '--no-color', '--no-ext-diff').stdout);
+// The same with a git that answers with a promise (the engine's asynchronous one, called as git(dir, ...args)).
+// An output that git cut or ran out of time on is never read as «no secrets»: it throws.
+export const stagedSecretsAsync = async (dir, git) => {
+  const r = await git(dir, '-c', 'core.quotePath=false', 'diff', '--cached', '-U0', '--no-color', '--no-ext-diff');
+  if (r.cut || r.timedOut) throw new Error('git output incomplete');
+  return secretsInDiff(r.stdout);
+};
 
 // Accepts the -z output (preferred) or plain lines (old callers and tests).
 export function secretFiles(porcelain) {

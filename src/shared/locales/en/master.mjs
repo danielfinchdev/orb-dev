@@ -1,4 +1,4 @@
-// 3.8: the master password (views/master.jsx, src/engine/api/master.mjs) and linking a phone with it.
+// the master password (views/master.jsx, src/engine/api/master.mjs) and linking a phone with it.
 export default {
   'master.createTitle': 'Create your master password',
   'master.createIntro': "It protects what matters most in Orb: the keys of your linked phones and of your connectors. Orb asks for it to link a phone and before sensitive actions, such as restoring a backup or opening the core folder.",
@@ -55,6 +55,8 @@ export default {
   'master.ask.unlink': 'To sign a device out.',
   'master.ask.deleteProject': 'To delete a project and its folder.',
   'master.ask.previousKey': 'To go back to the old key.',
+  'master.ask.rails': "To change Orb's safety limits.",
+  'master.ask.ruleSeed': 'To change a rule that ships with Orb.',
   'master.ask.removeExtension': 'To remove a skill, an MCP server or a connector from Orb.',
   'master.askNote': 'It stays unlocked for {n} minutes or until you lock the PC.',
   'master.askEveryTime': 'Orb asks for it every time for this.',

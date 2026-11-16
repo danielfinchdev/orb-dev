@@ -3,15 +3,15 @@ import './lib/tauri-bridge.js'; // first of all: in the desktop app it provides 
 import './lib/app-bridge.js'; // then: in the Android app it tells the web bridge where the linked Orb is
 import './lib/web-bridge.js'; // last: in a phone's browser (or the app) it provides window.orb
 import './app.css';
-// 3.6: the Android app's «glass» look, only in the Android build (the other builds drop this line and its CSS).
+// the Android app's «glass» look, only in the Android build (the other builds drop this line and its CSS).
 if (import.meta.env.MODE === 'android') (await import('./lib/glass.js')).enableGlass();
 import { StrictMode, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Toaster, toast } from 'sonner';
-import { notify } from '@/lib/notify.js';
+import { notify, notifyError, notifyOk, Toaster } from '@/lib/notify.js';
 import { Menu, Smartphone, ScanLine, Link2, RotateCw, FolderOpen, Download, KeyRound, ArrowLeft, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Field, Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
+import { WindowBar } from '@/components/window-bar.jsx';
 import { MobileTabs, MoreView } from '@/components/mobile-tabs.jsx';
 import { TooltipProvider, Checkbox } from '@/components/ui/overlay.jsx';
 import { DialogHost, confirm, form } from '@/components/dialogs.jsx';
@@ -38,7 +38,8 @@ import { ago } from '@/lib/utils.js';
 import { ErrorBoundary } from '@/components/error-boundary.jsx';
 import { lazyScreen } from '@/lib/lazy.js';
 import { AGENT } from '@/lib/labels.js';
-import { WindowControls } from '@/components/window-controls.jsx';
+import { WindowControls, WindowControlsSlot } from '@/components/window-controls.jsx';
+import { FieldError } from '@/components/ui/primitives.jsx';
 import { useT, t as tNow } from '@/lib/i18n.js';
 import { MasterCreate, MasterLocked } from '@/views/master.jsx';
 import { ChatView } from '@/views/chat.jsx';
@@ -50,8 +51,9 @@ import { NoteOpener } from '@/lib/notes.js';
 import { RecoveryNotice } from '@/views/data.jsx';
 import { AutoNotice } from '@/components/autonomy-switch.jsx';
 import { useEngineEvents } from '@/app/engine-events.js';
+import { quiet } from '@/lib/quiet.js';
 
-// 3.8.1 (H4a): the screens other than the chats load the first time they open, so the app starts with less to read; once
+// the screens other than the chats load the first time they open, so the app starts with less to read; once
 // it is up, they load in the background while the window is idle (opening one later is instant; on a phone's browser
 // they come from the PC over the network). A load that fails can be tried again (lib/lazy.js, ErrorBoundary).
 const later = [];
@@ -93,18 +95,18 @@ function OnceOpened({ when, onFail, children }) {
   return opened.current ? <ErrorBoundary onFail={onFail} resetKey={when}><Suspense fallback={null}>{children}</Suspense></ErrorBoundary> : null;
 }
 
-const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
-// 2.7, the phone: the conversations («Chats») and «Más» are screens of their own; Agentes and Modo experto are PC only.
-// 3.6 (M3): «Chats» is the Orb zone's chat list (views/orb/inbox.jsx); the PC has it in the sidebar.
+const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity', 'rules']);
+// the phone: the conversations («Chats») and «Más» are screens of their own; Agentes and Modo experto are PC only.
+// «Chats» is the Orb zone's chat list (views/orb/inbox.jsx); the PC has it in the sidebar.
 const ChatsView = OrbChatsView;
-// 3.8: a route of a screen that is gone (a bot's, saved before or in an old notification) falls back to the chat.
+// a route of a screen that is gone (a bot's, saved before or in an old notification) falls back to the chat.
 const VIEWS = bridge.mobile
-  ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, usage: UsageView, phone: PhoneView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
-  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, usage: UsageView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView, expert: ExpertView };
+  ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, rules: MemoriesView, schedules: SchedulesView, usage: UsageView, phone: PhoneView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
+  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, rules: MemoriesView, schedules: SchedulesView, usage: UsageView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView, expert: ExpertView };
 setViews(Object.keys(VIEWS));
 const routeKey = (route) => `${route.view}:${route.id ?? ''}:${route.project ?? ''}`;
 
-// 3.8: the floating tab bar hides while the on-screen keyboard is up (it rose over the keyboard): a text field has the
+// the floating tab bar hides while the on-screen keyboard is up (it rose over the keyboard): a text field has the
 // focus and the window lost height (lib/phone-nav.js › keyboardOpen).
 const EDITABLE = 'input:not([type="checkbox"], [type="radio"], [type="range"], [type="button"], [type="submit"]), textarea, [contenteditable="true"]';
 function useKeyboard() {
@@ -124,7 +126,7 @@ function useKeyboard() {
   return open;
 }
 
-// 3.8: the link with the PC dropped while the app is open (web-bridge.js: link:offline / link:online): a thin line at
+// the link with the PC dropped while the app is open (web-bridge.js: link:offline / link:online): a thin line at
 // the top of the screen, in the flow (it never covers the status bar or the header), and a refresh when it is back.
 function useLinkDown() {
   const [down, setDown] = useState(false);
@@ -142,12 +144,12 @@ function MobileShell() {
   const View = VIEWS[route.view] ?? ChatView;
   const keyboard = useKeyboard();
   const down = useLinkDown();
-  // 3.6 (M3): a conversation (with Orbe, new or not, or directly with an agent) takes the whole screen (with its back
+  // a conversation (with Orbe, new or not, or directly with an agent) takes the whole screen (with its back
   // arrow); the tabs are on the list.
   const fullChat = route.view === 'chat' || route.view === 'session';
   return (
     <div className="mobile-shell flex h-full flex-col">
-      {down ? <div className="bg-warning text-warning-foreground flex shrink-0 items-center justify-center gap-2 px-4 py-1.5 text-[12.5px] font-medium" role="status" data-testid="link-down"><WifiOff className="size-3.5" />{t('app.offlineBar')}</div> : null}
+      {down ? <div className="bg-warning text-warning-foreground flex shrink-0 items-center justify-center gap-2 px-4 py-1.5 text-caption font-medium" role="status" data-testid="link-down"><WifiOff className="size-3.5" />{t('app.offlineBar')}</div> : null}
       <main className="theme-scene flex min-h-0 min-w-0 flex-1 flex-col">
         <Scene />
         <ErrorBoundary key={routeKey(route)} onHome={resetRoute}>
@@ -168,16 +170,16 @@ function Shell() {
   const View = VIEWS[route.view] ?? ChatView;
   const [drawer, setDrawer] = useState(false);
   const folded = useStore((s) => s.sidebarCollapsed);
-  // 3.2: the shortcuts of the project's actions: God mode's project there, the working folder elsewhere.
+  // the shortcuts of the project's actions: God mode's project there, the working folder elsewhere.
   const projects = useStore((s) => s.projects);
   const expertProject = useStore((s) => s.expertProject);
   const shortcutProject = projects.find((p) => p.name === (route.view === 'expert' ? expertProject : app.activeProject?.name)) ?? null;
   useEffect(() => { if (!drawer) return undefined; const esc = (e) => { if (e.key === 'Escape') setDrawer(false); }; window.addEventListener('keydown', esc); return () => window.removeEventListener('keydown', esc); }, [drawer]);
-  // 3.2: the robot thinks while the assistant answers in any conversation (and talks while one streams its answer).
-  // 3.8.3: a word, not the states themselves: a streamed piece does not redraw the whole window.
+  // the robot thinks while the assistant answers in any conversation (and talks while one streams its answer).
+  // a word, not the states themselves: a streamed piece does not redraw the whole window.
   const mood = useStore((s) => (anyChatBusy(s) ? (s.chats.some((c) => c.partial) ? 'talking' : 'thinking') : 'idle'));
   AGENT.orb = app.config.assistantName;
-  // 2.6: the guided tour, once, the first time the app opens after the setup (never on the phone); later from Tutoriales.
+  // the guided tour, once, the first time the app opens after the setup (never on the phone); later from Tutoriales.
   const tour = useStore((s) => s.tour);
   const settingsOpen = useStore((s) => Boolean(s.settings));
   const gamesOpen = useStore((s) => Boolean(s.games));
@@ -190,25 +192,27 @@ function Shell() {
   if (phoneLayout()) return <MobileShell />;
   return (
     <div className="flex h-full">
-      {/* 2.6: folded away (its button next to day / night), the screens take the whole width. */}
+      {/* folded away (its button next to day / night), the screens take the whole width. */}
       <div className={folded ? 'hidden' : 'hidden md:flex'}><Sidebar mood={mood} /></div>
       {/* Narrow windows: the sidebar is a drawer behind a menu button (phones have their own shell). */}
-      {drawer ? <div className="fixed inset-0 z-50 flex md:hidden" onClick={() => setDrawer(false)}><div className="animate-in slide-in-from-left flex h-full shadow-2xl" onClick={(e) => { if (e.target.closest('button')) setTimeout(() => setDrawer(false), 50); }}><Sidebar mood={mood} /></div><div className="flex-1 bg-black/40" /></div> : null}
+      {drawer ? <div data-modal="" className="fixed inset-0 z-50 flex md:hidden" onClick={() => setDrawer(false)}><div className="animate-in slide-in-from-left flex h-full shadow-2xl" onClick={(e) => { if (e.target.closest('button')) setTimeout(() => setDrawer(false), 50); }}><Sidebar mood={mood} /></div><div className="flex-1 bg-black/40" /></div> : null}
       <main className="theme-scene flex min-w-0 flex-1 flex-col">
         <Scene />
-        <div className="topbar theme-band app-titlebar wco-pad bg-sidebar flex h-14 shrink-0 items-center gap-2 border-b px-3 md:hidden">
+        <div className="relative topbar theme-band app-titlebar wco-pad bg-sidebar flex h-14 shrink-0 items-center gap-2 border-b px-3 md:hidden">
           <button className="hover:bg-accent grid size-9 cursor-pointer place-items-center rounded-lg" onClick={() => setDrawer(true)} aria-label={t('app.menu')}><Menu className="size-5" /></button>
-          <Robot size={26} mood={mood} /><span className="min-w-0 flex-1 truncate text-[15px] font-medium">{app.config.assistantName}</span>
+          <Robot size={26} mood={mood} /><span className="min-w-0 flex-1 truncate text-card-title font-medium">{app.config.assistantName}</span>
+          <WindowControlsSlot />
         </div>
         <ErrorBoundary key={routeKey(route)} onHome={resetRoute}>
           <Suspense fallback={<Loading />}><View key={routeKey(route)} route={route} /></Suspense>
         </ErrorBoundary>
+        <WindowBar kind="status" />
       </main>
-      {/* 3.6 (M3): the info pane on the right (a chat, a project). */}
+      {/* the info pane on the right (a chat, a project). */}
       <OrbInfoHost />
       {/* The floating robot only where there is room for it: never over forms or conversations (it covered the switches of
           Ajustes and took their clicks), and those views leave room at the bottom so nothing stays under it. */}
-      {/* 3.5: a browser linked with an Orb gets the PC's layout, not what only the PC itself does. */}
+      {/* a browser linked with an Orb gets the PC's layout, not what only the PC itself does. */}
       {bridge.mobile ? null : <><UpdateCard /><OnceOpened when={settingsOpen} onFail={closeSettingsFailed}><SettingsDialog /></OnceOpened><OnceOpened when={gamesOpen} onFail={closeGamesFailed}><GamesDialog /></OnceOpened><RecoveryNotice /><AutoNotice /></>}
       <Notices />
       {bridge.mobile ? null : <><ActionShortcuts project={shortcutProject} /><CommandPalette /></>}
@@ -222,9 +226,9 @@ document.addEventListener('visibilitychange', flushChatStates);
 
 // The linking screen's own «back» (AppLink): true when it took the press.
 const linkBack = { current: null };
-// 3.8 (F5b): after linking, the phone's notifications (off until turned on) are offered, saying what they do. 3.8.1: in the
+// after linking, the phone's notifications (off until turned on) are offered, saying what they do. In the
 // list of chats, in the flow above the tabs (never over a screen's buttons, as the toast was), until the person answers.
-// The Android app updated from 3.8.0 starts with no choice saved (a new origin: review Android M2): notifications are
+// The Android app updated from an earlier version starts with no choice saved (a new origin): notifications are
 // turned back on by themselves when Android already allows them, else offered the same way.
 const OFFER_NOTIFY = 'orb.ofrecerAvisos';
 const offerNotify = () => { try { localStorage.setItem(OFFER_NOTIFY, '1'); } catch { /* storage unavailable */ } };
@@ -250,11 +254,11 @@ function NotifyOffer() {
   const done = () => { try { localStorage.removeItem(OFFER_NOTIFY); } catch { /* storage unavailable */ } setShow(false); };
   const p = bridge.push;
   return (
-    <div className="bg-card flex shrink-0 flex-col gap-2 border-t px-4 py-3 text-[13px]" role="region" aria-label={t('app.notifyOfferOk')} data-testid="notify-offer">
+    <div className="bg-card flex shrink-0 flex-col gap-2 border-t px-4 py-3 text-control" role="region" aria-label={t('app.notifyOfferOk')} data-testid="notify-offer">
       <span>{t(p?.whenClosed?.() === false ? 'app.notifyOfferApp' : 'app.notifyOffer')}</span>
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={() => { p?.decline?.(); done(); }} data-testid="notify-offer-later">{t('app.notifyOfferLater')}</Button>
-        <Button size="sm" onClick={async () => { if (await act(p.enable()) !== undefined) { toast.success(tNow('app.notifyOn')); done(); } }} data-testid="notify-offer-ok">{t('app.notifyOfferOk')}</Button>
+        <Button size="sm" onClick={async () => { if (await act(p.enable()) !== undefined) { notifyOk(tNow('app.notifyOn')); done(); } }} data-testid="notify-offer-ok">{t('app.notifyOfferOk')}</Button>
       </div>
     </div>
   );
@@ -273,20 +277,20 @@ function Root() {
   useEffect(() => {
     let alive = true;
     (async () => {
-      // 3.8.1 (Tauri): the engine could not look for the workspace: an error to retry, never the welcome.
+      // the engine could not look for the workspace: an error to retry, never the welcome.
       let info;
       try { info = await bridge.info(); } catch (e) { setError(String(e?.message ?? e)); return alive && setPhase('error'); }
       setState({ info });
       if (info.needsSetup) return alive && setPhase('setup');
       if (info.needsPairing) return alive && setPhase('pair');
-      // 3.6: this app is older than what the Orb asks for (protocol of the link): update first.
+      // this app is older than what the Orb asks for (protocol of the link): update first.
       if (info.needsUpdate) return alive && setPhase('update');
-      // 3.8: the phone cannot reach its PC (off, asleep, another network, Orb closed): a calm screen that keeps trying.
+      // the phone cannot reach its PC (off, asleep, another network, Orb closed): a calm screen that keeps trying.
       if (info.offline) return alive && setPhase('offline');
       // The engine may still be starting: retry for a few seconds.
       for (let i = 0; i < 40 && alive; i++) {
         try {
-          // 3.8 (this PC only): core gone, the data of 3.7 not updated, the master password (typed, or made once), a
+          // this PC only: core gone, the data of 3.7 not updated, the master password (typed, or made once), a
           // welcome left halfway, folders of an earlier Orb to decide about (lib/startup.js).
           const start = await startupPhase((method) => bridge.call(method), { mobile: bridge.mobile });
           if (start.phase !== 'app') {
@@ -298,17 +302,17 @@ function Root() {
             return alive && setPhase(start.phase);
           }
           await refresh();
-          // 3.8: the saved route only if it still exists (lib/phone-nav.js › restoreRoute): the phone opens on its chat
+          // the saved route only if it still exists (lib/phone-nav.js › restoreRoute): the phone opens on its chat
           // list unless it was left in a chat that is still there or on one of its tabs; a broken one is forgotten.
           let saved = null; try { saved = JSON.parse(localStorage.getItem('orb.route') || 'null'); } catch { /* broken: home */ }
           const { sessions, conversations } = getState();
           const route = restoreRoute(saved, { views: Object.keys(VIEWS), phone: phoneLayout(), sessions, conversations });
           setState({ route });
           try { localStorage.setItem('orb.route', JSON.stringify(route)); } catch { /* storage unavailable */ }
-          loadOrbInbox(); // 3.6 (M3): the unread badges
+          loadOrbInbox(); // the unread badges
           return setPhase('app');
         } catch (e) {
-          // 3.8: the phone lost its PC while starting: the same calm screen, never «No se pudo iniciar Orb».
+          // the phone lost its PC while starting: the same calm screen, never «No se pudo iniciar Orb».
           if (bridge.mobile && isOffline(e)) { setState({ info: { ...getState().info, offline: true } }); return alive && setPhase('offline'); }
           setError(String(e?.message ?? e)); await new Promise((r) => setTimeout(r, 250));
         }
@@ -318,7 +322,7 @@ function Root() {
     })();
     return () => { alive = false; };
   }, []);
-  // 3.8.2: F5 reloads Orb's window on the PC, on every screen (the engine goes on; unsent messages come back).
+  // F5 reloads Orb's window on the PC, on every screen (the engine goes on; unsent messages come back).
   useEffect(() => {
     if (!bridge.desktop) return undefined;
     const key = (e) => { if (isReloadKey(e)) { e.preventDefault(); reloadOrb(getState().route); } };
@@ -332,42 +336,42 @@ function Root() {
     // two terminals per press.
     return bridge.on('ui:terminal', () => openTerminal());
   }, [phase]);
-  // 3.8.2 (T3 3.11): the agents' browser, from its little window: an element pointed at opens its chat (its message box
+  // the agents' browser, from its little window: an element pointed at opens its chat (its message box
   // gets it) and a recording is said once saved. This PC's window only.
   useEffect(() => {
     if (phase !== 'app' || bridge.mobile) return undefined;
     const offPoint = listenPoints(bridge, (id) => go({ view: 'session', id }));
-    const offRec = bridge.on('browser:recorded', () => toast.success(tNow('session.recordingSaved')));
+    const offRec = bridge.on('browser:recorded', () => notifyOk(tNow('session.recordingSaved')));
     return () => { offPoint(); offRec(); };
   }, [phase]);
-  // 3.8.1: Orb's lock screen (decision 20): Windows locked, the PC asleep, «Bloquear» or the minutes of Ajustes › Datos
+  // Orb's lock screen (decision 20): Windows locked, the PC asleep, «Bloquear» or the minutes of Ajustes › Datos
   // without use (lib/idle-lock.js). The engine says so with 'master:locked' { screen: true }; the screen comes back,
   // without reloading, once the password is typed (the agents never stopped).
   useEffect(() => {
     if (bridge.mobile || !bridge.on) return undefined;
     return bridge.on('master:locked', (p) => {
       if (!p?.screen) return;
-      pauseAll(); // 3.8.2: the music stops with the lock and does not come back by itself (lib/music.js)
+      pauseAll(); // the music stops with the lock and does not come back by itself (lib/music.js)
       dropUnlock();
       setMasterState((s) => ({ ...(s ?? {}), exists: true, locked: false, lost: false, screenLocked: true }));
       setPhase((now) => (now === 'app' ? 'unlock' : now));
     });
   }, []);
-  // 3.8.2: the background music (Windows): remembered as on, it comes back with the first click (lib/music.js).
+  // the background music (Windows): remembered as on, it comes back with the first click (lib/music.js).
   useEffect(() => (phase === 'app' ? startMusic() : undefined), [phase]);
   useEffect(() => {
     if (phase !== 'app' || bridge.mobile) return undefined;
-    return watchIdle({ minutes: () => lockMinutesOf(getState().app?.config), onIdle: () => { call('master.lock', { reason: 'idle' }).catch(() => {}); } });
+    return watchIdle({ minutes: () => lockMinutesOf(getState().app?.config), onIdle: () => { call('master.lock', { reason: 'idle' }).catch((e) => notifyError(e)); } });
   }, [phase]);
   useEffect(() => { const off = () => setPhase('pair'); window.addEventListener('orb:unpaired', off); return () => window.removeEventListener('orb:unpaired', off); }, []);
-  // 3.8: Android's back button or gesture, and a phone browser's back: inside the app (lib/phone-nav.js › backStep).
+  // Android's back button or gesture, and a phone browser's back: inside the app (lib/phone-nav.js › backStep).
   const phaseRef = useRef(phase); phaseRef.current = phase;
   useEffect(() => {
     if (!bridge.mobile) return undefined;
     let lastExit = 0;
     const back = () => {
       const overlay = document.querySelector(OVERLAYS);
-      // 3.8 (F5b): linking the app has steps of its own (the password back to scanning, «Enlazar sin cámara» closed).
+      // linking the app has steps of its own (the password back to scanning, «Enlazar sin cámara» closed).
       if (phaseRef.current !== 'app' && !overlay && linkBack.current?.()) return 'stay';
       const step = phaseRef.current === 'app' ? goBack({ overlay: Boolean(overlay) }) : overlay ? { close: true } : { exit: true };
       if (step?.close) { (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true })); return 'stay'; }
@@ -375,7 +379,7 @@ function Root() {
       // The first screen: twice within 2 s leaves (the app goes to the background; a browser goes back).
       if (Date.now() - lastExit < 2000) return 'exit';
       lastExit = Date.now();
-      toast(tNow('app.backExit'), { duration: 2000 });
+      notify({ body: tNow('app.backExit') }, { ms: 2000, record: false, always: true });
       return 'stay';
     };
     if (bridge.onBack) return bridge.onBack(() => { if (back() === 'exit') bridge.minimize?.(); });
@@ -386,7 +390,7 @@ function Root() {
     window.addEventListener('popstate', pop);
     return () => window.removeEventListener('popstate', pop);
   }, []);
-  // 3.5, the Android app: something shared from another app («Compartir con Orb») opens the chat, which takes it.
+  // the Android app: something shared from another app («Compartir con Orb») opens the chat, which takes it.
   useEffect(() => {
     if (phase !== 'app' || !bridge.takeShared) return undefined;
     const open = () => { if (getState().route?.view !== 'chat') go({ view: 'chat' }); };
@@ -398,7 +402,7 @@ function Root() {
   // PC's only: on a phone it would only take the taps at the top of the screen).
   const strip = bridge.mobile ? null : <div className="app-titlebar fixed inset-x-0 top-0 z-40 h-14" aria-hidden="true" />;
   useEngineEvents(phase);
-  // 3.8.1: the main screen's first frame, marked for scripts/medir.mjs (the same mark under every app, read whenever the
+  // the main screen's first frame, marked for scripts/medir.mjs (the same mark under every app, read whenever the
   // measurement reaches the page).
   useEffect(() => {
     if (phase !== 'app' || !ready) return;
@@ -406,7 +410,7 @@ function Root() {
   }, [phase, ready]);
   if (phase === 'setup') return <>{strip}<Suspense fallback={null}><Setup resume={resume} onDone={async (route) => { await refresh(); setPhase('app'); if (route) go(route); }} /></Suspense></>;
   if (phase === 'pair' && bridge.link) return <>{strip}<AppLink /></>;
-  // 3.8: a browser opened from the QR: the master password before linking.
+  // a browser opened from the QR: the master password before linking.
   if (phase === 'pair' && getState().info?.pairLink && bridge.pairPending) return <>{strip}<BrowserPair /></>;
   if (phase === 'pair') return (
     <div className="brand-sky flex h-full overflow-y-auto p-6 pt-20 text-center">
@@ -427,34 +431,34 @@ function Root() {
   if (phase === 'unlock') return <>{strip}<MasterLocked state={masterState} onDone={() => { if (masterState?.screenLocked && getState().ready) { setPhase('app'); refreshSoon(); } else location.reload(); }} /></>;
   if (phase === 'layout') return <>{strip}<Suspense fallback={null}><LayoutReview plan={layout} onDone={() => location.reload()} /></Suspense></>;
   if (phase === 'migration') return <>{strip}<MigrationFailed state={migration} /></>;
-  // 3.8 (F5b): on the phone, a way out: try again, or link with another PC.
+  // on the phone, a way out: try again, or link with another PC.
   if (phase === 'error') return (
     <div className="grid h-full place-items-center overflow-y-auto p-8 text-center" data-testid="app-error">{strip}
       <div className="grid max-w-md justify-items-center gap-3">
         <Robot size={90} mood="worried" /><h1 className="mt-1 text-xl">{t('app.errorTitle')}</h1><p className="text-muted-foreground text-sm break-words">{error}</p>
         {bridge.mobile ? <Button size="lg" onClick={() => location.reload()} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
-        {/* 3.8.1 (Tauri): start the engine again; after sealed keys that do not open, also with a new key (asked first). */}
-        {bridge.retryStart ? <Button size="lg" onClick={() => bridge.retryStart().catch(() => {}).finally(() => location.reload())} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
+        {/* start the engine again; after sealed keys that do not open, also with a new key (asked first). */}
+        {bridge.retryStart ? <Button size="lg" onClick={() => bridge.retryStart().catch(quiet).finally(() => location.reload())} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
         {bridge.retryStart && startError?.code === 'secretUnreadable' ? <Button variant="ghost" size="sm" data-testid="app-error-new-secret" onClick={async () => {
           if (!(await askNewSecret(startError))) return;
-          await bridge.retryStart({ newSecret: true }).catch(() => {}); location.reload();
+          await bridge.retryStart({ newSecret: true }).catch(quiet); location.reload();
         }}>{t('app.newSecretOk')}</Button> : null}
         {bridge.mobile && bridge.unlink ? <Button variant="ghost" size="sm" onClick={async () => { if (await relinkPhone(getState().info?.pcName)) setPhase('pair'); }} data-testid="app-error-relink"><Link2 />{t('app.offlineRelink')}</Button> : null}
       </div>
     </div>
   );
   if (phase !== 'app' || !ready) return <div className="grid h-full place-items-center">{strip}<Robot size={80} mood="thinking" /></div>;
-  // 3.6 (M4): a tapped notification opens its chat (lib/notes.js).
+  // a tapped notification opens its chat (lib/notes.js).
   return bridge.mobile ? <><NoteOpener /><Shell /></> : <Shell />;
 }
 
 // What counts as «something open over the screen» for back: a dialog or sheet, the menu ☰, a menu or a list.
 const OVERLAYS = '[data-slot="dialog-content"], [data-slot="drawer-content"], [data-slot="menu-content"], [data-slot="select-content"], [role="dialog"]';
 
-// 3.8: the phone cannot reach its PC. It keeps trying (3 s, 6 s, 12 s… up to 30 s, and at once when the phone comes back
+// the phone cannot reach its PC. It keeps trying (3 s, 6 s, 12 s… up to 30 s, and at once when the phone comes back
 // to the app or to a network) and opens Orb as soon as the PC answers.
 // One loop of tries (lib/net.js › retryLoop): never two at once, none while the app is hidden.
-// 3.8 (F5b): «Vincular con otro PC» forgets this phone's keys for its PC: asked first (with the PC off, linking again
+// «Vincular con otro PC» forgets this phone's keys for its PC: asked first (with the PC off, linking again
 // needs it on). → whether it was done.
 async function relinkPhone(name) {
   if (!bridge.unlink) return false;
@@ -466,7 +470,7 @@ function PcOffline({ info, onRelink }) {
   const t = useT();
   const [busy, setBusy] = useState(false);
   const [wait, setWait] = useState(null); // seconds to the next try
-  // 3.8.2 (review F2.5b M6): the PC answers but needs attention (its data could not be updated): said so, still retrying.
+  // the PC answers but needs attention (its data could not be updated): said so, still retrying.
   const [attention, setAttention] = useState(info?.attention ?? null);
   const loop = useRef(null);
   useEffect(() => {
@@ -498,7 +502,7 @@ function PcOffline({ info, onRelink }) {
             <p className="text-muted-foreground text-sm">{t('app.offlineBody')}</p>
           </>
         )}
-        {/* 3.8.1, the Android app: a PC still on Orb 3.8.0 refuses it (another origin) and looks just like one turned off. */}
+        {/* the Android app: a PC still on Orb 3.8.0 refuses it (another origin) and looks just like one turned off. */}
         {window.__orbHost?.app && !attention ? <p className="text-muted-foreground text-sm" data-testid="pc-offline-old">{t('app.offlineOldPc')}</p> : null}
         {info?.seenAt ? <p className="text-muted-foreground text-xs">{t('app.offlineSeen', { when: ago(info.seenAt) })}</p> : null}
         <Button size="lg" disabled={busy} onClick={() => loop.current?.now({ reset: true })} data-testid="pc-offline-retry">{busy ? <Spinner /> : <RotateCw />}{t('app.offlineRetry')}</Button>
@@ -509,7 +513,7 @@ function PcOffline({ info, onRelink }) {
   );
 }
 
-// 3.8: the data of Orb 3.7 could not be updated (src/domain/data/legacy/migrate-38.mjs): what to do, where the copy is («Abrir
+// the data of Orb 3.7 could not be updated (src/domain/data/legacy/migrate-38.mjs): what to do, where the copy is («Abrir
 // carpeta»), «Reintentar», a new version of Orb (the way out when the cause is Orb's own) and the reason under «Detalles».
 function MigrationFailed({ state }) {
   const t = useT();
@@ -546,9 +550,9 @@ function MigrationFailed({ state }) {
   );
 }
 
-// 3.8: the PC's master password, the second step of linking (the app after scanning, a browser opened from the QR). It
+// the PC's master password, the second step of linking (the app after scanning, a browser opened from the QR). It
 // never leaves the phone (src/shared/mobile-crypto.mjs › linkDevice proves it is known) and is never kept. fp: the PC's
-// 3.8.1 (Tauri, review D-fix M2): «Empezar con una clave nueva» says what is lost (startError: recovery, master = the
+// «Empezar con una clave nueva» says what is lost (startError: recovery, master = the
 // recovery code and the master password exist in core). Without a recovery code the backups made until now will not
 // open any more: the word EMPEZAR must be typed.
 async function askNewSecret(startError) {
@@ -577,14 +581,14 @@ function PairPassword({ name, fp = null, confirmFp = false, busy, error, onSubmi
         <div className="bg-muted/60 grid gap-1 rounded-xl px-3 py-2 text-center" data-testid="pair-fp">
           <span className="font-mono text-sm font-medium tracking-wide break-words">{t('app.linkFp', { fp })}</span>
           <span className="text-muted-foreground text-xs">{t('app.linkFpCheck')}</span>
-          {confirmFp ? <label className="flex cursor-pointer items-center justify-center gap-2 text-[13px]"><Checkbox checked={sure} onCheckedChange={(c) => setSure(c === true)} data-testid="pair-fp-ok" />{t('app.linkFpConfirm')}</label> : null}
+          {confirmFp ? <label className="flex cursor-pointer items-center justify-center gap-2 text-control"><Checkbox checked={sure} onCheckedChange={(c) => setSure(c === true)} data-testid="pair-fp-ok" />{t('app.linkFpConfirm')}</label> : null}
         </div>
       ) : null}
       <p className="text-muted-foreground text-center text-sm">{t('app.linkPassBody')}</p>
       <Input type="password" name={field} autoComplete="off" autoFocus={!confirmFp} disabled={!sure} aria-label={t('app.linkPassLabel')} placeholder={t('app.linkPassLabel')} value={password} onChange={(e) => setPassword(e.target.value)} enterKeyHint="go" data-testid="pair-password-input" />
+      <FieldError className="text-center text-sm">{error}</FieldError>
       <Button type="submit" size="lg" disabled={busy || !password || !sure}>{busy ? <Spinner /> : <KeyRound />}{t('app.linkPassGo')}</Button>
       {onBack ? <Button type="button" variant="ghost" size="sm" onClick={onBack}><ArrowLeft />{t('app.linkBack')}</Button> : null}
-      {error ? <p className="text-destructive text-center text-sm" role="alert">{error}</p> : null}
     </form>
   );
 }
@@ -605,7 +609,7 @@ function BrowserPair() {
     <div className="brand-sky flex h-full overflow-y-auto p-6 pt-20" data-testid="browser-pair">
       <div className="bg-card/95 m-auto grid w-full max-w-sm gap-3 rounded-3xl p-7 shadow-2xl">
         <div className="-mt-16 flex justify-center"><Robot size={110} mood={busy ? 'thinking' : 'idle'} /></div>
-        {/* 3.8: never the master password in a page that came without encryption (plain http on the Wi-Fi). */}
+        {/* never the master password in a page that came without encryption (plain http on the Wi-Fi). */}
         {link?.insecure ? <p className="text-destructive text-center text-sm" role="alert" data-testid="pair-http">{t('app.linkHttp')}</p>
           : gone ? <p className="text-destructive text-center text-sm" role="alert">{error}</p> : <PairPassword name={link?.name} fp={link?.fp} busy={busy} error={error} onSubmit={submit} />}
         <p className="text-muted-foreground flex items-center justify-center gap-1.5 text-xs"><Smartphone className="size-3.5" />{t('app.pairPrivate')}</p>
@@ -614,8 +618,8 @@ function BrowserPair() {
   );
 }
 
-// 3.5, the Android app: link it with an Orb by scanning its QR (Ajustes › Móvil), or by hand when the camera cannot.
-// 3.8: then the PC's master password.
+// the Android app: link it with an Orb by scanning its QR (Ajustes › Móvil), or by hand when the camera cannot.
+// then the PC's master password.
 function AppLink() {
   const t = useT();
   const [busy, setBusy] = useState(false);
@@ -671,7 +675,7 @@ function AppLink() {
   );
 }
 
-// 2.7: the notifications follow the app's day / night (not the system's): more of them now that the notices pass by here.
+// the notifications follow the app's day / night (not the system's): more of them now that the notices pass by here.
 function ThemedToaster() {
   const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
   useEffect(() => {
@@ -679,9 +683,9 @@ function ThemedToaster() {
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => obs.disconnect();
   }, []);
-  // 3.1: below the window's header (offset), so a passing notice never covers the menu or the window buttons.
-  // 3.2: one on screen at a time (the newest); the others are under the bell of the top bar.
-  // 3.8: on a phone, below the status bar as well (edge to edge, the page starts under it).
+  // below the window's header (offset), so a passing notice never covers the menu or the window buttons.
+  // one on screen at a time (the newest); the others are under the bell of the top bar.
+  // on a phone, below the status bar as well (edge to edge, the page starts under it).
   return <Toaster position="top-center" offset={72} mobileOffset={{ top: 'calc(env(safe-area-inset-top, 0px) + 64px)' }} visibleToasts={1} theme={dark ? 'dark' : 'light'} richColors closeButton toastOptions={{ className: 'font-sans' }} />;
 }
 

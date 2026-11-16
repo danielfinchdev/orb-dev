@@ -6,6 +6,7 @@ export default {
   'comp.companion.talkTo': 'Hablar con {name}',
   'comp.dialogs.ok': 'Aceptar',
   'comp.dialogs.cancel': 'Cancelar',
+  'comp.window.ready': 'Listo',
   'comp.installer.checking': 'Comprobando los programas instalados…',
   'comp.installer.optional': '(opcional)',
   'comp.installer.installing': 'Instalando',
@@ -33,6 +34,7 @@ export default {
   'comp.live.stepOther': '{n} pasos',
   'comp.live.quiet': 'sin actividad desde hace {min} min (último paso: {now})',
   'comp.live.now': 'ahora: {now}',
+  'comp.live.noPercentNoLimit': '{agent} no informa del progreso; se muestra cada paso.',
   'comp.live.noPercent': '{agent} no informa del progreso; se muestra cada paso. Máximo {min} min por tarea.',
   'comp.live.running': 'En curso ({n})',
   'comp.live.more': 'y {n} más en Tareas',
@@ -41,6 +43,7 @@ export default {
   'comp.sidebar.expand': 'Desplegar el menú',
   'comp.theme.tip': 'Modo claro / oscuro',
   'comp.theme.aria': 'Cambiar entre modo claro y oscuro',
+  'comp.theme.darkOnly': 'Retro solo tiene modo oscuro',
   'comp.projects.newTitle': 'Nuevo proyecto',
   'comp.projects.newDesc': 'Crea una carpeta con git y bitácora dentro de la carpeta de Orb.',
   'comp.projects.category': 'Categoría',
@@ -83,7 +86,7 @@ export default {
   'comp.sidebar.resize': 'Arrastra para cambiar el ancho del menú',
   'comp.sidebar.viewAll': 'Ver todo ({n})',
   'comp.sidebar.waitApproval': 'Esperan tu aprobación',
-  // 3.2: conversaciones, menú lateral, buscador y globito
+  // conversaciones, menú lateral, buscador y globito
   'comp.sidebar.clearSearch': 'Borrar la búsqueda',
-  // 3.2: en singular
+  // en singular
 };

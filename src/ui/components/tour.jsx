@@ -1,4 +1,4 @@
-// 2.6: the guided tour. The whole robot (the one of the notices) walks the user through the app step by step: each step
+// the guided tour. The whole robot (the one of the notices) walks the user through the app step by step: each step
 // lights the control it talks about (a ring around it, the rest dimmed) and the robot explains it in a bubble next to
 // it, with «Siguiente» / «Atrás», a counter and «Saltar tutorial» always in view (Esc skips too). It changes screen when
 // a step needs it and comes back to the chat at the end. Steps whose control is not on screen (the context ring before
@@ -22,7 +22,7 @@ export const TOUR_STEPS = [
   { id: 'reasoning', target: 'reasoning-picker', view: 'chat' },
   { id: 'orchestrator', target: 'orchestrator-check', view: 'chat', wrap: 'label' },
   { id: 'context', target: 'context-meter', view: 'chat', optional: true },
-  // 3.2.1: the whole bar (its text speaks of the title, the project, the notifications, pause and ⋯ with the games), not the last button.
+  // the whole bar (its text speaks of the title, the project, the notifications, pause and ⋯ with the games), not the last button.
   { id: 'bar', target: 'orb-chat-bar', view: 'chat' },
   { id: 'newchat', target: 'chats-new', sidebar: true },
   { id: 'search', target: 'sidebar-search', sidebar: true },
@@ -30,7 +30,7 @@ export const TOUR_STEPS = [
   { id: 'tasks', target: 'nav-tasks', view: 'tasks', sidebar: true },
   { id: 'schedules', target: 'nav-schedules', view: 'schedules', sidebar: true },
   { id: 'board', target: 'nav-board', sidebar: true },
-  // 3.2: the foot of the sidebar, in its order (Ajustes, then alphabetical); Bitácoras and Actividad are «Memorias».
+  // the foot of the sidebar, in its order (Ajustes, then alphabetical); Bitácoras and Actividad are «Memorias».
   { id: 'settings', target: 'nav-settings', sidebar: true },
   { id: 'agents', target: 'nav-agents', view: 'agents', sidebar: true },
   { id: 'logs', target: 'nav-memories', view: 'logs', sidebar: true },
@@ -54,9 +54,9 @@ function knownMissing() {
   const out = new Set();
   const { app } = getState();
   if (!visible(document.querySelector('[data-testid="chats-new"]'))) for (const s of TOUR_STEPS) if (s.sidebar) out.add(s.id);
-  // 3.2: the tour shows a new conversation, whose ring only appears after an answer.
+  // the tour shows a new conversation, whose ring only appears after an answer.
   if (!visible(document.querySelector('[data-testid="context-meter"]')) && !(app?.assistant?.context)?.size) out.add('context');
-  // 3.2: other optional steps whose control is not there (the conversations without a project, when there are none).
+  // other optional steps whose control is not there (the conversations without a project, when there are none).
   for (const s of TOUR_STEPS) if (s.optional && s.target && !document.querySelector(`[data-testid="${s.target}"]`)) out.add(s.id);
   return out;
 }
@@ -173,9 +173,9 @@ export function Tour() {
         {noRobot ? null : <div className="tour-robot"><Robot size={118} mood={mood} gesture={step.target && !still ? GESTURES[index % GESTURES.length] : undefined} still={still} live title={name} /></div>}
         <div className="tour-bubble">
           <span className="tour-tail" aria-hidden="true" />
-          <div className="text-muted-foreground text-[11px] tracking-wide uppercase" data-testid="tour-counter">{t('help.tour.counter', { n: position, total: stepsLeft.length })}</div>
-          <h2 id={`tour-title-${step.id}`} className="tour-title mt-0.5 text-[17px] leading-snug font-medium">{t(`help.tour.${step.id}.title`, { name })}</h2>
-          <p id={`tour-text-${step.id}`} className="text-muted-foreground mt-1.5 text-[13.5px] leading-relaxed">{t(`help.tour.${step.id}.text`, { name })}</p>
+          <div className="text-muted-foreground text-micro tracking-wide uppercase" data-testid="tour-counter">{t('help.tour.counter', { n: position, total: stepsLeft.length })}</div>
+          <h2 id={`tour-title-${step.id}`} className="tour-title mt-0.5 text-title leading-snug font-medium">{t(`help.tour.${step.id}.title`, { name })}</h2>
+          <p id={`tour-text-${step.id}`} className="text-muted-foreground mt-1.5 text-control leading-relaxed">{t(`help.tour.${step.id}.text`, { name })}</p>
           <div className="mt-3.5 flex flex-wrap items-center gap-2">
             <Button size="sm" variant="ghost" className="text-muted-foreground mr-auto" onClick={finish} data-testid="tour-skip">{t('help.tour.skip')}</Button>
             {first ? null : <Button size="sm" variant="outline" onClick={() => move(-1)} data-testid="tour-back"><ChevronLeft />{t('help.tour.back')}</Button>}

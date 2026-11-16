@@ -13,7 +13,7 @@ import { alive } from '../../platform/proc-list.mjs';
 import { STATUS_ES } from './common.mjs';
 
 export class ReportsPart {
-  // 3.1: what a task's last run cost: minutes, tokens and (Claude) dollars, from its conversation's usage reports.
+  // what a task's last run cost: minutes, tokens and (Claude) dollars, from its conversation's usage reports.
   runUsage(task) {
     const launched = this.board.one("SELECT at FROM events WHERE task_id = ? AND kind = 'task.launched' ORDER BY id DESC LIMIT 1", task.id)?.at;
     if (!launched || !task.session_id) return null;
@@ -22,7 +22,7 @@ export class ReportsPart {
     for (const r of rows) {
       let u; try { u = JSON.parse(r.body); } catch { continue; }
       // Re-read cache is not counted: it is the same context read again at a fraction of the cost, and would inflate it.
-      // 3.2.1: an agent that says nothing of its tokens (older Cursor CLIs) leaves «no data», not 0.
+      // an agent that says nothing of its tokens (older Cursor CLIs) leaves «no data», not 0.
       if (['inputTokens', 'outputTokens'].some((k) => u[k] != null)) measured = true;
       tokens += ['inputTokens', 'outputTokens', 'cacheWriteTokens'].reduce((s, k) => s + (Number(u[k]) || 0), 0);
       // Claude reports the conversation's cost so far: the last one minus what it had before this run.
@@ -64,14 +64,14 @@ ${task.result ?? ''}`.trim().slice(0, 4000) }, 'orb', 'task.problem');
 
   // Finished tasks wait here until every task the assistant created in that project is over; then the assistant reviews
   // them all at once (one model call, not one per task) and reports to the user, who gives the OK or asks for changes.
-  // 3.2: per conversation: the report goes to the conversation that asked for the work, when all of its tasks are over
-  // (the tasks from before 3.2, without a conversation, still wait per project).
+  // per conversation: the report goes to the conversation that asked for the work, when all of its tasks are over
+  // (tasks without a conversation still wait per project).
   queueReport(task) {
     const conv = this.board.conversationOfTask(task.id);
     const key = conv ? `report_queue:c${conv}` : `report_queue:${task.project.toLowerCase()}`;
     const ids = [...new Set([...(this.board.settingJson(key) ?? []), task.id])];
     // Tasks that wait for a failed or cancelled dependency will not run on their own: they do not hold the report back.
-    // 3.1: a task waiting for its account's usage to reset is still part of the request (it continues by itself): the
+    // a task waiting for its account's usage to reset is still part of the request (it continues by itself): the
     // report waits for it instead of coming twice.
     const waiting = ['queued', 'awaiting_approval', 'running', ...(ctx.config.continuity?.resumeAtReset === false ? [] : ['limited'])];
     const mine = conv ? this.board.all('SELECT * FROM tasks WHERE conversation_id = ? ORDER BY id DESC LIMIT 500', conv).map((t) => this.board.task(t.id)) : this.board.tasks({ project: task.project, limit: 500 }).filter((t) => !t.conversation_id);
@@ -79,11 +79,11 @@ ${task.result ?? ''}`.trim().slice(0, 4000) }, 'orb', 'task.problem');
     if (open || !this.orchestrator) { this.board.settingJson(key, ids); return false; }
     this.board.settingJson(key, null);
     const list = ids.map((id) => this.board.task(id)).filter(Boolean);
-    // 3.1: with what each one cost (time, tokens, dollars when the agent says), so the report can tell the user.
+    // with what each one cost (time, tokens, dollars when the agent says), so the report can tell the user.
     const spentOf = (t) => { try { const u = JSON.parse(this.board.one("SELECT detail FROM events WHERE task_id = ? AND kind = 'task.usage' ORDER BY id DESC LIMIT 1", t.id)?.detail ?? 'null'); return u ? ` [${this.usageLine(u)}]` : ''; } catch { return ''; } };
     const unconfirmed = (t) => (t.status === 'done' && this.board.one("SELECT 1 AS x FROM events WHERE task_id = ? AND kind = 'task.unconfirmed'", t.id) ? ' (el agente no la cerró él mismo: comprueba que de verdad está terminada)' : '');
-    // 3.2.1: Orb already stops the programs a task leaves running (task.cleanup) and checks the process numbers an agent
-    // mentions, so the assistant does not pass on to the user a "close PID N" that no longer exists (finding 7).
+    // Orb already stops the programs a task leaves running (task.cleanup) and checks the process numbers an agent
+    // mentions, so the assistant does not pass on to the user a "close PID N" that no longer exists.
     const cleanupOf = (t) => { const e = this.board.one("SELECT detail FROM events WHERE task_id = ? AND kind = 'task.cleanup' ORDER BY id DESC LIMIT 1", t.id)?.detail; return e ? ` [Orb ${oneLine(e, 120)}]` : ''; };
     const pidCheck = (t) => {
       const pids = [...new Set((String(t.result ?? '').match(/\b(?:PID|pid|proceso)\s*[:#]?\s*(\d{2,7})\b/g) ?? []).map((m) => Number(m.replace(/\D+/g, ''))).filter((n) => n > 10))].slice(0, 8);

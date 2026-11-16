@@ -1,4 +1,4 @@
-// 3.8.1 (D7): the agents' browser under Tauri. Its pages are hidden WebView2 windows that Rust makes in a browser
+// the agents' browser under Tauri. Its pages are hidden WebView2 windows that Rust makes in a browser
 // environment of their own (another data folder, so another browser process: Orb's window is never in it) and drives
 // with CallDevToolsProtocolMethod. Nothing listens on a port: the engine reaches a page only through its own stdio
 // channel with the app (src-tauri/src/browser.rs):
@@ -24,7 +24,7 @@ const FRAME_MS = 250;
 const MODES = ['normal', 'grande', 'pildora'];
 const HIDE_AFTER_MS = 20_000; // after a turn ends the little window keeps its last picture this long
 
-// 3.8.2 (T3 3.11): the little window also points at an element of the page (onPointed({ session, selector, tag, text,
+// the little window also points at an element of the page (onPointed({ session, selector, tag, text,
 // url, png })) and records what the agent does (saveRecording(session, avi) when it stops: at most 3 minutes). The
 // session is the one of the page's conversation (its key «agent:session»), never something the page says.
 const sessionOf = (tab) => String(tab?.key ?? '').split(':').pop();
@@ -107,7 +107,7 @@ export function createHostBrowser({ call = hostCall, language = () => 'es', skin
     casting();
   }
 
-  // ---- 3.8.2 (T3 3.11): recording and pointing
+  // ---- recording and pointing
   function record(data) {
     const r = recording; if (!r) return;
     const buf = Buffer.from(String(data ?? ''), 'base64');
@@ -165,7 +165,7 @@ export function createHostBrowser({ call = hostCall, language = () => 'es', skin
       const listeners = pages.get(msg?.page); if (!listeners) return;
       for (const fn of listeners.get(String(msg.method ?? '')) ?? []) { try { fn(msg.params ?? {}); } catch (error) { log(`navegador del agente: ${msg.method}: ${error.message}`); } }
     },
-    // The little window's buttons, and Ajustes › «Ver el navegador» (show): answers with the state. 3.8.2: point (x, y:
+    // The little window's buttons, and Ajustes › «Ver el navegador» (show): answers with the state. Point (x, y:
     // fractions of the picture, checked by the app too), grabar / parar.
     pip(action, args = {}) {
       if (action === 'point') { point(args.x, args.y); return { ...browser.state(), pip: shown }; }

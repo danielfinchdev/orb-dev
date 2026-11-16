@@ -1,4 +1,4 @@
-// Measures a build of Orb the same way for every version (3.8.0 Electron is the baseline, 3.8.1 Tauri must beat it):
+// Measures a build of Orb the same way for every version (3.8.0 Electron is the baseline, Tauri must beat it):
 // start time, memory, sizes and how smooth the interface scrolls. Everything runs on a throwaway workspace and app-data
 // folder in %TEMP% with the fake agents: never the real C:\Orb, %APPDATA%\Orb.dev or the installed app.
 //
@@ -15,7 +15,7 @@
 // a heap snapshot after the views, saved in <dir> (open them in Chrome's DevTools). cpuIdle: the CPU all the processes
 // used at rest, from 5 s after the start until the idle memory point.
 //
-// Fair between shells (review T0–D2 A3/A4/M5): the DevTools port is 0 (the app picks a free one and writes it to
+// Fair between shells: the DevTools port is 0 (the app picks a free one and writes it to
 // DevToolsActivePort in the throwaway data folder: never another Orb's port); the main screen is the page's own mark
 // (performance.mark('orb:ready'), src/ui/main.jsx), so a late DevTools connection changes nothing; the throwaway data
 // folder is checked to really hold the window's profile; the private working set (what Task Manager shows) is given
@@ -30,23 +30,23 @@
 // ParentProcessId) after --idle seconds and after opening chats, tasks, projects and other views. Smoothness:
 // requestAnimationFrame deltas and long animation frames while scrolling the long chat list and a long conversation.
 // --big: the large workspace of scripts/medir-motor.mjs (50 projects, 2000 tasks almost all finished, some blocked)
-// instead of 6 projects and 40 tasks. Refreshes (3.8.1, H4c): on the Tasks screen, a blocked task is retried and
+// instead of 6 projects and 40 tasks. Refreshes: on the Tasks screen, a blocked task is retried and
 // cancelled in turn (each change makes the engine tell the window, which refreshes): the time from the change until the
 // filters' counts show it, and the CPU of the window (renderer) and of the engine meanwhile.
-// --anim <s> (3.8.1, H4d): idle animations: on a new chat, the Tasks screen and the long conversation (the robot and the
+// --anim <s>: idle animations: on a new chat, the Tasks screen and the long conversation (the robot and the
 // «orb» theme's clouds in view, nobody touching anything), <s> seconds each: the page's main thread per second (style,
 // layout, JavaScript, busy %), the CPU of the renderer and of the GPU process and the animations running; with --profile
 // also a trace of each screen and what the compositor did per frame (frames/s, GPU ms per frame, damaged area, the
 // animations not composited). --anim-only: only the starts and that (10 s unless --anim says otherwise).
-// 3.8.1 (H4e): each screen is measured 12 s after it loads (the welcome robot's hello is over: at rest the robot stands
+// Each screen is measured 12 s after it loads (the welcome robot's hello is over: at rest the robot stands
 // still), plus «robot-activo»: the new chat with the pointer over the sidebar's robot (it floats), with the
 // requestAnimationFrame deltas meanwhile (dropped frames). --quiet-scene pauses the theme's moving backdrop (the «orb»
 // theme's clouds) to see what the robot alone costs.
-// 3.8.1 (H4f): --css <file> adds that style sheet to each animation screen after it loads (to try a variant of an
+// --css <file> adds that style sheet to each animation screen after it loads (to try a variant of an
 // animation, or to put the old one back, on the same build).
 // --js <file> runs that script in the page there too (a variant that needs code, not only styles).
 // --ui '{"skin":"vaporwave","theme":"oscuro"}' saves that interface setting first (another theme's backdrop).
-// 3.8.2 (phase 5): --resize sweeps the page's size as dragging a window's edge would (1360 → 900 px wide and back, and
+// --resize sweeps the page's size as dragging a window's edge would (1360 → 900 px wide and back, and
 // the height with it, one size per frame for 4 s) on a new chat, the Tasks screen and the long conversation: the
 // requestAnimationFrame deltas (dropped frames), the long animation frames and the main thread's style / layout / script
 // meanwhile; with --profile, a trace of each sweep. The size is the page's (DevTools' device metrics), so it measures
@@ -111,7 +111,7 @@ const until = async (fn, what, ms = 60000, every = 50) => { const end = Date.now
 // ---- the workspace: an assistant folder with a long chat list, tasks and projects
 const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
 const { home } = createHome(base, { userName: 'Ana' });
-const OFF = Object.fromEntries(['cursor', 'gemini', 'opencode', 'qwen', 'copilot'].map((a) => [a, { enabled: false }]));
+const OFF = Object.fromEntries(['cursor', 'gemini', 'opencode', 'qwen', 'copilot', 'hermes'].map((a) => [a, { enabled: false }]));
 writeJson(paths(home).config, merge(loadConfig(home), { ui: { tourDone: true }, agents: OFF, autoRun: false }));
 fs.mkdirSync(SANDBOX.ORB_USER_DATA, { recursive: true });
 fs.writeFileSync(path.join(SANDBOX.ORB_USER_DATA, 'ubicacion.json'), JSON.stringify({ home }));
@@ -312,7 +312,7 @@ async function heapSnapshot(page, file) {
 let windowInfo = null;
 const results = { target: { exe, shell, version: PKG.version, hiddenWindow: hidden, big, ...(shell === 'tauri' ? { build: 'e2e feature' } : {}) }, starts: [], memory: {}, frames: {}, sizes: {}, machine: {} };
 
-// Idle animations (3.8.1, H4d): on screens where the robot and the «orb» theme's clouds are in view, nobody touching
+// Idle animations: on screens where the robot and the «orb» theme's clouds are in view, nobody touching
 // anything, what the window spends per second: the page's main thread (style, layout, JavaScript, all its tasks), the CPU
 // of the renderer and of the GPU process, and which animations are running. --profile also records a trace of each
 // screen (with style invalidations and the animations' compositing) in <dir>/anim-<screen>.trace.json.

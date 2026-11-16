@@ -1,6 +1,6 @@
 // Create / link / clone a project, and the project control under the assistant's message box.
 import { FolderOpen, FolderPlus, FolderX, ChevronsUpDown, Check, Folder } from 'lucide-react';
-import { toast } from 'sonner';
+import { notifyOk } from '@/lib/notify.js';
 import { form } from './dialogs.jsx';
 import { Field, Input, Textarea } from './ui/basic.jsx';
 import { Button } from './ui/button.jsx';
@@ -11,6 +11,7 @@ import { GithubIcon } from '@/components/agent-icon.jsx';
 import { t, useT } from '@/lib/i18n.js';
 import { projectNameProblem } from '../../shared/product.mjs';
 import { CATEGORIES, PLATFORMS, MULTI, SHARED_DIR, DEFAULT_CATEGORY } from '../../shared/layout.mjs';
+import { quiet } from '@/lib/quiet.js';
 
 const home = () => getState().app?.home ?? '';
 const sep = () => (home().includes('\\') ? '\\' : '/');
@@ -22,7 +23,7 @@ const CategoryField = ({ v, set }) => (
   </Field>
 );
 
-// 3.8: a multiplatform project (multi) is one folder and one repository: a subfolder per platform it has (at least one)
+// a multiplatform project (multi) is one folder and one repository: a subfolder per platform it has (at least one)
 // and «compartido» for what they share.
 const PlatformsField = ({ v, set }) => (
   <Field label={t('comp.projects.platforms')} hint={t('comp.projects.platformsHint')}>
@@ -51,7 +52,7 @@ export async function createProjectFlow() {
     ok: t('comp.projects.create'),
     onOk: (v) => call('projects.create', { name: v.name.trim(), notes: v.notes.trim(), category: v.category, ...(v.category === MULTI ? { platforms: v.platforms } : {}) })
   });
-  if (p) { toast.success(t('comp.projects.created', { name: p.name })); await refresh().catch(() => {}); }
+  if (p) { notifyOk(t('comp.projects.created', { name: p.name })); await refresh().catch(quiet); }
   return p;
 }
 
@@ -68,7 +69,7 @@ export async function linkFolderFlow() {
     ok: t('comp.projects.link'),
     onOk: (v) => call('projects.import', { name: v.name.trim(), folder })
   });
-  if (p) { toast.success(t('comp.projects.linked', { name: p.name })); await refresh().catch(() => {}); }
+  if (p) { notifyOk(t('comp.projects.linked', { name: p.name })); await refresh().catch(quiet); }
   return p;
 }
 
@@ -84,12 +85,12 @@ export async function cloneRepoFlow() {
     ok: t('comp.projects.clone'),
     onOk: (v) => call('projects.clone', { repo: v.repo.trim(), name: v.name.trim(), category: v.category })
   });
-  if (p) { toast.success(t('comp.projects.cloned', { path: p.path })); await refresh().catch(() => {}); }
+  if (p) { notifyOk(t('comp.projects.cloned', { path: p.path })); await refresh().catch(quiet); }
   return p;
 }
 
 // The working project of the assistant's chat: pick one, create one, link a folder, or clear it to pick another.
-// 3.2: conversation: the project of that conversation (otherwise, the working folder new conversations start in).
+// conversation: the project of that conversation (otherwise, the working folder new conversations start in).
 export function ProjectPicker({ conversation = null }) {
   const t = useT();
   const projects = useStore((s) => s.projects);
@@ -112,7 +113,7 @@ export function ProjectPicker({ conversation = null }) {
               <Folder /><span className="flex-1 truncate">{p.name}</span>{active?.name === p.name ? <Check className="text-primary!" /> : null}
             </DropdownMenuItem>
           )) : <div className="text-muted-foreground px-2 py-1.5 text-xs">{t('comp.projects.none')}</div>}
-          {/* 2.6: without a folder (it was a section of its own in the sidebar). */}
+          {/* without a folder. */}
           <DropdownMenuItem onSelect={() => setActive('')} data-testid="project-none">
             <FolderX /><span className="grid flex-1 leading-tight"><span className="truncate">{t('nav.loose')}</span><span className="text-muted-foreground text-xs">{t('comp.projects.noneHint')}</span></span>{!active ? <Check className="text-primary!" /> : null}
           </DropdownMenuItem>

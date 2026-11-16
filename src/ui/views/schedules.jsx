@@ -1,15 +1,15 @@
 // Programadas: tasks that repeat on their own ("cada lunes a las 9 revisa las dependencias"). Each run is a normal task
 // (same approvals, quota and agents); one the assistant proposed needs your approval once before it runs by itself.
-// 3.8.2: «Una sola vez» (a date and time; it turns off after running) and «Ejecutar siempre en el mismo chat».
+// «Una sola vez» (a date and time; it turns off after running) and «Ejecutar siempre en el mismo chat».
 import { useEffect, useState } from 'react';
-import { CalendarClock, Plus, Play, Trash2, Check, MessageSquare } from 'lucide-react';
+import { CalendarSync, Plus, Play, Trash2, Check, MessageSquare } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { form, confirm } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, Badge, Field, Input, Textarea, Empty } from '@/components/ui/basic.jsx';
 import { Select, Switch, Checkbox, BubbleTip } from '@/components/ui/overlay.jsx';
-import { toast } from 'sonner';
+import { notifyError } from '@/lib/notify.js';
 import { useStore, call, act, go, getState, bridge } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
 import { t, useT, currentLocale } from '@/lib/i18n.js';
@@ -23,8 +23,8 @@ const when = (iso) => (iso ? new Date(iso).toLocaleString(currentLocale(), { wee
 export async function newSchedule(preset = {}) {
   const { projects, app } = getState();
   const list = projects ?? [];
-  if (!list.length) { toast.error(t('schedules.noProject')); return null; }
-  // 3.2.1: only the agents this PC can run (the engine refuses a schedule for another one).
+  if (!list.length) { notifyError(t('schedules.noProject')); return null; }
+  // only the agents this PC can run (the engine refuses a schedule for another one).
   const agents = app?.agentsAvailable ?? Object.keys(app?.config?.agents ?? {});
   return form(t('schedules.new.title'), {
     description: t('schedules.new.desc'),
@@ -47,8 +47,8 @@ export async function newSchedule(preset = {}) {
           <div className="flex flex-wrap gap-1.5">{DAYS.map((d) => <Button key={d} type="button" size="sm" variant={v.weekdays.includes(d) ? 'default' : 'outline'} className="w-9" onClick={() => set({ weekdays: v.weekdays.includes(d) ? v.weekdays.filter((x) => x !== d) : [...v.weekdays, d] })}>{t(`schedules.days.${d}`)}</Button>)}</div>
         </Field>
       ) : null}
-      <label className="flex cursor-pointer items-center gap-2 text-[13px]"><Checkbox checked={v.readonly} onCheckedChange={(c) => set({ readonly: c === true })} />{t('schedules.readonly')}</label>
-      {v.every === 'once' ? null : <label className="flex cursor-pointer items-center gap-2 text-[13px]"><Checkbox checked={v.same_chat} onCheckedChange={(c) => set({ same_chat: c === true })} data-testid="schedule-same-chat" />{t('schedules.sameChat')}</label>}
+      <label className="flex cursor-pointer items-center gap-2 text-control"><Checkbox checked={v.readonly} onCheckedChange={(c) => set({ readonly: c === true })} />{t('schedules.readonly')}</label>
+      {v.every === 'once' ? null : <label className="flex cursor-pointer items-center gap-2 text-control"><Checkbox checked={v.same_chat} onCheckedChange={(c) => set({ same_chat: c === true })} data-testid="schedule-same-chat" />{t('schedules.sameChat')}</label>}
     </>),
     ok: t('schedules.new.ok'),
     onOk: async ({ at_date: date, ...v }) => call('schedules.create', { ...v, at_time: v.every === 'once' ? date : v.at_time, same_chat: v.every !== 'once' && v.same_chat, hours: Number(v.hours) || 6 })
@@ -67,7 +67,7 @@ export function SchedulesView() {
   const create = async () => { if (await newSchedule()) load(); };
   return (
     <>
-      <PageHeader icon={<CalendarClock className="text-primary size-5" />} title={t('schedules.title')} meta={t('schedules.meta')}>
+      <PageHeader icon={<CalendarSync className="text-primary size-5" />} title={t('schedules.title')} meta={t('schedules.meta')}>
         <Button size="sm" onClick={create} data-testid="new-schedule"><Plus />{t('schedules.newBtn')}</Button>
       </PageHeader>
       <PageBody>
@@ -80,14 +80,14 @@ export function SchedulesView() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2"><span className="font-medium">{s.title}</span>{!s.approved ? <Badge variant="warning">{t('schedules.awaiting')}</Badge> : null}{s.readonly ? <Badge variant="secondary">{t('schedules.readonlyBadge')}</Badge> : null}</div>
                   <div className="text-muted-foreground mt-0.5 text-xs">{t('schedules.nextLine', { when: s.when, project: s.project, next: s.enabled && s.approved ? when(s.next_run) : spent(s) ? t('schedules.spent') : t('schedules.paused') })}{s.last_task ? <>{t('schedules.last')}<a className="cursor-pointer underline-offset-2 hover:underline" onClick={() => go({ view: 'tasks', id: s.last_task })}>#{s.last_task}</a></> : null}</div>
-                  <p className="text-muted-foreground mt-1.5 line-clamp-2 text-[13px]">{s.description}</p>
+                  <p className="text-muted-foreground mt-1.5 line-clamp-2 text-control">{s.description}</p>
                   {s.same_chat && s.conversation_id ? <Button size="sm" variant="ghost" className="mt-1 -ml-2" onClick={() => go({ view: 'chat', id: s.conversation_id })} data-testid="schedule-open-chat"><MessageSquare />{t('schedules.openChat')}</Button> : null}
                 </div>
                 <div className="flex items-center gap-2">
                   {!s.approved ? <Button size="sm" onClick={() => act(call('schedules.update', { id: s.id, approve: true }), t('schedules.approve.done')).then(load)}><Check />{t('schedules.approve')}</Button>
                     : spent(s) ? null : <Switch checked={s.enabled} onCheckedChange={(enabled) => act(call('schedules.update', { id: s.id, enabled })).then(load)} aria-label={t('schedules.enabled')} />}
                   <BubbleTip title={t('schedules.runNow')}><Button size="icon-sm" variant="ghost" aria-label={t('schedules.runNow')} onClick={() => act(call('schedules.run', { id: s.id }), t('schedules.run.done')).then(load)}><Play /></Button></BubbleTip>
-                  {/* 3.8: deleting a schedule is this PC's (src/domain/security/permissions.mjs). */}
+                  {/* deleting a schedule is this PC's (src/domain/security/permissions.mjs). */}
                   {bridge.mobile ? null : <BubbleTip title={t('schedules.remove')}><Button size="icon-sm" variant="danger" aria-label={t('schedules.remove')} onClick={async () => { if (await confirm(t('schedules.remove.title'), t('schedules.remove.body', { title: s.title }), { ok: t('schedules.remove'), danger: true })) act(call('schedules.remove', { id: s.id })).then(load); }}><Trash2 /></Button></BubbleTip>}
                 </div>
               </CardContent>

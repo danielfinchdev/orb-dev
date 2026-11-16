@@ -20,14 +20,14 @@ export function Companion({ name, base, hidden: hiddenHere }) {
   const [bubble, setBubble] = useState(null);
   const [flash, setFlash] = useState(null);
   const [sleepy, setSleepy] = useState(false);
-  // 3.0: out of sight until the pointer comes near the corner (its last bubble waits there), and never while the robot
+  // out of sight until the pointer comes near the corner (its last bubble waits there), and never while the robot
   // of the notices is on screen, so two robots never show at once.
   const [near, setNear] = useState(false);
   const noticeShown = useStore((s) => s.noticeShown);
   const timers = useRef({});
   useEffect(() => bridge.on('chat:new', (payload) => {
     const body = String(payload?.body ?? '');
-    // 3.1: something that waits for the user (a permission, an approval) sounds like a warning too, whatever its text.
+    // something that waits for the user (a permission, an approval) sounds like a warning too, whatever its text.
     const mood = ['task-approval', 'approval', 'attention'].includes(payload?.meta?.kind) ? 'worried' : moodOf(body);
     play(mood === 'happy' ? 'done' : mood === 'worried' ? 'uhoh' : payload.role === 'orb' ? 'talk' : null, body, { force: mood === 'worried' });
     setFlash(mood); clearTimeout(timers.current.flash); timers.current.flash = setTimeout(() => setFlash(null), 3500);
@@ -50,7 +50,7 @@ export function Companion({ name, base, hidden: hiddenHere }) {
   return (
     <div className={cn('fixed right-6 bottom-6 z-40 flex items-end gap-2 transition-opacity duration-200', near ? 'pointer-events-none opacity-100' : 'pointer-events-none opacity-0 [&_*]:pointer-events-none')} data-testid="companion" data-shown={near ? 'true' : 'false'}>
       {bubble ? (
-        <div className="bg-popover text-popover-foreground animate-in fade-in-0 slide-in-from-bottom-2 pointer-events-auto relative mb-14 max-w-72 rounded-2xl rounded-br-md border p-3 pr-8 text-[13px] shadow-lg">
+        <div className="bg-popover text-popover-foreground animate-in fade-in-0 slide-in-from-bottom-2 pointer-events-auto relative mb-14 max-w-72 rounded-2xl rounded-br-md border p-3 pr-8 text-control shadow-lg">
           <button className="text-muted-foreground hover:text-foreground absolute top-2 right-2 cursor-pointer" onClick={() => setBubble(null)} aria-label={t('comp.close')}><X className="size-3.5" /></button>
           <p className="whitespace-pre-wrap break-words">{bubble.text.slice(0, 280)}</p>
           {bubble.action ? <Button size="xs" className="mt-2" onClick={() => { bubble.action.run(); setBubble(null); }}>{bubble.action.label}</Button> : null}

@@ -1,4 +1,4 @@
-// 3.8: the connectors' keys (the `env` of each MCP server in Ajustes › Conectores) live in the master password's vault
+// the connectors' keys (the `env` of each MCP server in Ajustes › Conectores) live in the master password's vault
 // (src/domain/security/master.mjs), never in orb.json. orb.json keeps a reference in their place («orb-secret:mcp/<connector>/<name>»):
 // the engine puts the real value back only when it hands the connector to its launcher (src/engine/sessions.mjs). The
 // reference names where the value is, but the value is always looked up by the connector's own name and the variable's,
@@ -21,7 +21,7 @@ const sameArgs = (a, b) => JSON.stringify((a ?? []).map(String)) === JSON.string
 
 // Plain values of `servers` go into the vault. → the list with references in their place, or null when nothing changed.
 // Keys of connectors (or variables) that are gone leave the vault too. trusted: the window unlocked this change (or it
-// is the first move of the keys of 3.7), so the connectors' keys are tied to their commands as they are now; otherwise
+// is the first move of the keys of a 3.7 folder), so the connectors' keys are tied to their commands as they are now; otherwise
 // only a connector given new plain keys is.
 export function sealConnectors(master, servers = [], { trusted = false } = {}) {
   if (!master?.unlocked()) return null;
@@ -43,7 +43,7 @@ export function sealConnectors(master, servers = [], { trusted = false } = {}) {
   for (const id of [...master.ids('mcp/'), ...master.ids('mcpbind/')]) if (!keep.has(id)) master.set(id, null);
   return changed ? out : null;
 }
-// The keys stored before they were tied to a command (an earlier build of 3.8): tied to it now. → how many.
+// Ties the keys stored without a command binding to their command. → how many.
 export function bindMissing(master, servers = []) {
   if (!master?.unlocked()) return 0;
   let n = 0;
@@ -52,7 +52,7 @@ export function bindMissing(master, servers = []) {
 }
 
 // What its launcher gets (src/mcp/launch.mjs): the plain values as they are, and for the keys in the vault a one-time
-// grant the launcher trades with the vault itself (3.8.1: the keys never pass through the engine). The vault hands them
+// grant the launcher trades with the vault itself (the keys never pass through the engine). The vault hands them
 // only while they are still tied to the program the connector starts (its binding); a key it does not have is left out.
 // → { env, vault: { pipe, grant } | null }
 export function connectorLaunch(master, server) {
@@ -82,7 +82,7 @@ export function connectorSecrets(master, server) {
   }));
 }
 
-// 3.8: a change of the settings that touches what the keys protect (src/domain/security/permissions.mjs › needsUnlock): a connector
+// a change of the settings that touches what the keys protect (src/domain/security/permissions.mjs › needsUnlock): a connector
 // with keys removed or renamed, its command or arguments changed, or one of its keys dropped.
 export function touchesKeys(current = [], next = []) {
   for (const c of current ?? []) {
@@ -94,7 +94,7 @@ export function touchesKeys(current = [], next = []) {
   return false;
 }
 
-// 3.8.1: a connector whose folder Orb itself moved (into core\mcp, or a new version of it with «Aplicar cambios»): its
+// a connector whose folder Orb itself moved (into core\mcp, or a new version of it with «Aplicar cambios»): its
 // keys go on with the new command when they were tied to the old one (a command changed by someone else stays held).
 // before / after: the connectors before and after the move. → how many were tied again.
 export function rebindMoved(master, before = [], after = []) {
@@ -111,7 +111,7 @@ export function rebindMoved(master, before = [], after = []) {
   return n;
 }
 
-// 3.8.1: the same when the vault is locked (no master password typed yet): what has to be tied again waits in `store`
+// the same when the vault is locked (no master password typed yet): what has to be tied again waits in `store`
 // (the connectors' names and the two bindings, never a key) until it opens (settleRebinds). → the names that wait
 export const REBINDS = 'connector_rebinds'; // board setting
 export function rebindOrWait(master, before = [], after = [], store) {

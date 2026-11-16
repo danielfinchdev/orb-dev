@@ -1,4 +1,4 @@
-// 3.2: the title of a conversation. At once, a short one taken from the first message (what the user asked, without
+// the title of a conversation. At once, a short one taken from the first message (what the user asked, without
 // greetings or «quiero que»); then the engine asks the lightest model for a better one (engine/titles.mjs).
 
 const FILLER = [

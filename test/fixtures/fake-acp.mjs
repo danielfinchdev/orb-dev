@@ -14,6 +14,8 @@ import readline from 'node:readline';
 const log = (m) => { if (process.env.FAKE_ACP_LOG) fs.appendFileSync(process.env.FAKE_ACP_LOG, `${JSON.stringify(m)}\n`); };
 const write = (m) => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...m })}\n`);
 const update = (sessionId, u) => write({ method: 'session/update', params: { sessionId, update: u } });
+// FAKE_ACP_ARGV: a file that receives the arguments the program was started with.
+if (process.env.FAKE_ACP_ARGV) fs.writeFileSync(process.env.FAKE_ACP_ARGV, JSON.stringify(process.argv.slice(2)));
 const text = (t) => ({ type: 'text', text: t });
 let nextId = 1; const waiting = new Map(); let cancel = null; const history = [];
 

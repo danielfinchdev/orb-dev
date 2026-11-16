@@ -1,4 +1,4 @@
-// 3.8.1 (D2, D7): what the agents' browser does with one of its pages over the DevTools protocol, for the shared actions
+// what the agents' browser does with one of its pages over the DevTools protocol, for the shared actions
 // of src/engine/browser/browser-protocol.mjs: the driver interface browser-protocol.mjs expects. Under Tauri the pages are hidden WebView2 windows driven by Rust (CallDevToolsProtocolMethod, no
 // DevTools port: src/engine/browser/host-browser.mjs); in the tests, pages of a headless Edge.
 //
@@ -43,7 +43,7 @@ export async function attachPage(source, tab, { onUpdate = () => {} } = {}) {
   on('Page.frameStoppedLoading', ({ frameId }) => { if (frameId === page.mainFrame) { page.loading = false; tab.loading = false; onUpdate(); } });
   on('Runtime.executionContextsCleared', () => { page.world = null; });
   on('Runtime.executionContextDestroyed', ({ executionContextId }) => { if (executionContextId === page.world) page.world = null; });
-  // 3.2.1: what the page writes to its console (errors and warnings), for orb_browser_console.
+  // what the page writes to its console (errors and warnings), for orb_browser_console.
   on('Runtime.consoleAPICalled', ({ type, args = [], stackTrace }) => {
     const level = type === 'error' || type === 'assert' ? 'error' : type === 'warning' ? 'warning' : null;
     if (!level) return;

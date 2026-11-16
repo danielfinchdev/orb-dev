@@ -1,4 +1,5 @@
-// 2.7: the empty chat's greeting changes each time (texts in src/shared/locales/*/greet.mjs). What matters comes first: a task
+import { needsApproval } from './task-approval.js';
+// the empty chat's greeting changes each time (texts in src/shared/locales/*/greet.mjs). What matters comes first: a task
 // waiting for approval always; other news (tasks working, left halfway, finished yesterday, the project in use) most
 // times; otherwise one for the time of day, one for coming back, or now and then a playful one (never in Profesional).
 // Never the same phrase twice in a row.
@@ -24,7 +25,7 @@ export function pickGreeting({ tasks = [], project = null, first = false, seriou
   const words = (list) => list.map((key) => ({ key }));
   if (first) return pick([{ key: 'greet.first1' }, { key: 'greet.first2' }]);
   const by = (s) => tasks.filter((t) => t.status === s).length;
-  const approvals = by('awaiting_approval');
+  const approvals = tasks.filter(needsApproval).length;
   if (approvals) return count('greet.approvals', approvals);
   const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
   const finished = tasks.filter((t) => t.status === 'done' && t.updated_at && dayKey(new Date(t.updated_at)) === dayKey(yesterday)).length;
@@ -37,20 +38,20 @@ export function pickGreeting({ tasks = [], project = null, first = false, seriou
   ];
   const roll = random();
   if (news.length && roll < 0.55) return pick(news);
-  // 3.2.1: never «the agents are rested» while they are working.
+  // never «the agents are rested» while they are working.
   const working = tasks.some((t) => ['queued', 'running'].includes(t.status));
   if (!serious && roll > 0.8) return pick(words(FUN.filter((k) => !(working && k === 'greet.rested'))));
   return pick([...words(TIME(now.getHours(), now.getDay())), ...words(BACK)]);
 }
 
-// 3.8.3: the greeting picked when the chat opened, for the project chosen now: one naming a project names this one, or
+// the greeting picked when the chat opened, for the project chosen now: one naming a project names this one, or
 // gives way to `plain` (picked at the same time, without a project) when there is none.
 export function greetingFor(g, project) {
   if (g.key !== 'greet.project' || g.project === project) return g;
   return project ? { ...g, project } : { ...g.plain, sub: g.sub };
 }
 
-// 3.2.1: the suggestions under the greeting. With a project already chosen, nothing about creating one; without one,
+// the suggestions under the greeting. With a project already chosen, nothing about creating one; without one,
 // nothing about «the project».
 const SUGGESTIONS = ['chat.suggestion1', 'chat.suggestion2', 'chat.suggestion4'];
 const PROJECT_SUGGESTIONS = ['chat.suggestionProject1', 'chat.suggestion3', 'chat.suggestion2', 'chat.suggestionProject2'];

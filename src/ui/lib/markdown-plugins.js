@@ -1,5 +1,5 @@
 // The Markdown of the messages (components/markdown.jsx): GFM (tables, ~~strikethrough~~, - [ ] task lists and bare
-// links, as the agents write them) and, 3.8.2, formulas between $$. One $ stays a dollar, so amounts like «$5 and $10»
+// links, as the agents write them) and formulas between $$. One $ stays a dollar, so amounts like «$5 and $10»
 // read as before.
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';

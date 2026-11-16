@@ -1,9 +1,9 @@
-// 3.2, God mode: the project in an editor («Abrir en»: Cursor, VS Code or the File Explorer) and the project's actions
+// God mode: the project in an editor («Abrir en»: Cursor, VS Code or the File Explorer) and the project's actions
 // (commands of the user's own, such as «npm test», run in a terminal window from the bar or with their shortcut, with an
 // optional preview of a page of this PC).
 import { useEffect, useState } from 'react';
 import { ChevronDown, FolderOpen, Play, Plus, Pencil, Trash2, Zap, Code2, MousePointer2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { notifyInfo } from '@/lib/notify.js';
 import { Button } from './ui/button.jsx';
 import { Input, Textarea, Field } from './ui/basic.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, Switch } from './ui/overlay.jsx';
@@ -27,7 +27,7 @@ export function OpenInMenu({ project, labelClassName }) {
   const open = (which) => act(bridge.openIn(which, project.path));
   const first = editors.cursor ? 'cursor' : editors.vscode ? 'vscode' : 'explorer';
   const ICON = { cursor: MousePointer2, vscode: Code2, explorer: FolderOpen };
-  // 3.7: «Explorador de archivos» is Windows' name; elsewhere the system's file manager.
+  // «Explorador de archivos» is Windows' name; elsewhere the system's file manager.
   const LABEL = { cursor: 'Cursor', vscode: 'VS Code', explorer: t(!window.orb?.platform || window.orb.platform === 'win32' ? 'tools.explorer' : 'tools.files') };
   const Main = ICON[first];
   return (
@@ -69,7 +69,7 @@ function ShortcutInput({ value, onChange }) {
         e.preventDefault();
         if (e.key === 'Backspace' || e.key === 'Delete') { onChange(null); return; }
         const s = shortcutOf(e); if (!s) return;
-        if (RESERVED.has(s)) { toast.info(t('tools.shortcutReserved', { shortcut: s })); return; }
+        if (RESERVED.has(s)) { notifyInfo(t('tools.shortcutReserved', { shortcut: s })); return; }
         onChange(s);
       }} />
   );
@@ -82,9 +82,9 @@ function editAction(project, action = null) {
     body: (v, set) => (<>
       <Field label={tNow('tools.name')}><Input autoFocus value={v.name} maxLength={40} placeholder={tNow('tools.namePh')} onChange={(e) => set({ name: e.target.value })} data-testid="action-name" /></Field>
       <Field label={tNow('tools.shortcut')} hint={tNow('tools.shortcutHint')}><ShortcutInput value={v.shortcut} onChange={(shortcut) => set({ shortcut })} /></Field>
-      <Field label={tNow('tools.command')}><Textarea rows={3} value={v.command} maxLength={2000} placeholder="npm test" className="font-mono text-[13px]" onChange={(e) => set({ command: e.target.value })} data-testid="action-command" /></Field>
+      <Field label={tNow('tools.command')}><Textarea rows={3} value={v.command} maxLength={2000} placeholder="npm test" className="font-mono text-control" onChange={(e) => set({ command: e.target.value })} data-testid="action-command" /></Field>
       <Field label={tNow('tools.preview')} hint={tNow('tools.previewHint')}><Input value={v.preview} placeholder="http://localhost:5173" onChange={(e) => set({ preview: e.target.value })} data-testid="action-preview" /></Field>
-      <label className="bg-muted/50 flex cursor-pointer items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-[13.5px]">
+      <label className="bg-muted/50 flex cursor-pointer items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-control">
         {tNow('tools.openPreview')}<Switch checked={v.openPreview} disabled={!v.preview.trim()} onCheckedChange={(openPreview) => set({ openPreview })} />
       </label>
     </>),
@@ -113,7 +113,7 @@ export function ActionsMenu({ project, labelClassName }) {
         {actions.map((a) => (
           <DropdownMenuItem key={a.id} onSelect={() => runProjectAction(project, a)} className="group/act" data-testid={`action-${a.id}`}>
             <Play /><span className="min-w-0 flex-1 truncate">{a.name}</span>
-            {a.shortcut ? <kbd className="text-muted-foreground rounded border px-1 text-[10.5px] group-hover/act:hidden">{a.shortcut}</kbd> : null}
+            {a.shortcut ? <kbd className="text-muted-foreground rounded border px-1 text-micro group-hover/act:hidden">{a.shortcut}</kbd> : null}
             <span className="hidden items-center gap-0.5 group-hover/act:flex">
               <button type="button" className="hover:bg-accent grid size-6 place-items-center rounded" aria-label={t('tools.editAction')} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); editAction(project, a); }}><Pencil className="size-3.5" /></button>
               <button type="button" className="hover:bg-accent text-destructive grid size-6 place-items-center rounded" aria-label={t('tools.removeAction')} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); remove(a); }}><Trash2 className="size-3.5" /></button>

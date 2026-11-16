@@ -14,7 +14,8 @@ import en from '../src/shared/locales/en/settings.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (...p) => fs.readFileSync(path.join(ROOT, 'src', 'ui', ...p), 'utf8');
-const themes = read('themes.css');
+// themes.css only imports the parts in themes/, in cascade order.
+const themes = ['skins', 'scene', 'scene-vaporwave', 'scene-retro', 'scene-nube'].map((n) => read('themes', `${n}.css`)).join('');
 
 test('Cristal is registered as a theme built on Profesional', () => {
   assert.ok(SKINS.includes('cristal'));
@@ -74,10 +75,10 @@ function oklch(text) {
 const over = (top, under) => ({ rgb: top.rgb.map((c, i) => c * top.alpha + under.rgb[i] * (1 - top.alpha)), alpha: 1 });
 const luminance = ({ rgb }) => { const [r, g, b] = rgb.map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
 const ratio = (x, y) => { const [a, b] = [luminance(x), luminance(y)].sort((p, q) => q - p); return (a + 0.05) / (b + 0.05); };
-function tokens(selector) {
-  const at = section.indexOf(`${selector} {`);
+function tokens(selector, source = section) {
+  const at = source.indexOf(`${selector} {`);
   assert.ok(at >= 0, selector);
-  const body = section.slice(at, section.indexOf('}', at));
+  const body = source.slice(at, source.indexOf('}', at));
   return Object.fromEntries([...body.matchAll(/--([a-z0-9-]+): (oklch\([^)]+\))/g)].map((m) => [m[1], oklch(m[2])]));
 }
 
@@ -85,7 +86,7 @@ for (const [mode, selector] of [['light', 'html[data-material="cristal"]'], ['da
   test(`Cristal keeps WCAG AA contrast in ${mode} mode`, () => {
     const t = tokens(selector);
     // What can be behind a surface: the field's base and each of its colour pools at full strength.
-    const field = ['cr-base', 'cr-pool-1', 'cr-pool-2', 'cr-pool-3'].map((k) => t[k]);
+    const field = ['cr-base', 'cr-pool-1', 'cr-pool-2', 'cr-pool-3', 'cr-pool-4'].map((k) => t[k]);
     for (const ground of field) {
       const sidebar = over(t.sidebar, ground);
       const card = over(t.card, ground);
@@ -94,11 +95,38 @@ for (const [mode, selector] of [['light', 'html[data-material="cristal"]'], ['da
         sidebar: [sidebar, t.foreground], selected: [over(t.accent, sidebar), t['accent-foreground']], secondary: [over(t.secondary, card), t['secondary-foreground']],
         bubble: [over(t.bubble, ground), t['bubble-foreground']], primary: [t.primary, t['primary-foreground']],
         'muted text': [ground, t['muted-foreground']], 'muted text on a card': [card, t['muted-foreground']], 'muted text on the sidebar': [sidebar, t['muted-foreground']],
-        'muted text on muted': [over(t.muted, card), t['muted-foreground']]
+        'muted text on muted': [over(t.muted, card), t['muted-foreground']],
+        'faint text on the page': [ground, t['faint-foreground']], 'faint text on a card': [card, t['faint-foreground']], 'faint text on the sidebar': [sidebar, t['faint-foreground']],
+        'primary text on a card': [card, t['primary-text']], 'primary text on its fill': [over(t['primary-soft'], card), t['primary-text']],
+        'success on its fill': [over(t['success-soft'], card), t.success], 'destructive on its fill': [over(t['destructive-soft'], card), t.destructive],
+        'warning on its fill': [over(t['warning-soft'], card), t.warning], 'warning ink on the page': [ground, t['warning-ink']], 'warning ink on a card': [card, t['warning-ink']],
+        'warning ink on its fill': [over(t['warning-soft'], card), t['warning-ink']], 'success on a card': [card, t.success], 'destructive on a card': [card, t.destructive], 'info on a card': [card, t.info]
       };
       for (const [name, [bg, fg]] of Object.entries(surfaces)) assert.ok(ratio(bg, over(fg, bg)) >= 4.5, `${mode} ${name}: ${ratio(bg, over(fg, bg)).toFixed(2)}`);
       assert.ok(ratio(card, t.input) >= 3, `${mode} input border: ${ratio(card, t.input).toFixed(2)}`);
       assert.ok(ratio(ground, t.input) >= 3, `${mode} input border on the page: ${ratio(ground, t.input).toFixed(2)}`);
     }
+  });
+}
+
+// Profesional has no translucent surface: every pair is checked on its own opaque colours, in light and dark.
+const profesional = themes.slice(themes.indexOf('PROFESIONAL: plain and sober'), themes.indexOf('CRISTAL (3.8.2)'));
+for (const [mode, selector] of [['light', 'html[data-skin="profesional"]'], ['dark', 'html.dark[data-skin="profesional"]']]) {
+  test(`Profesional keeps WCAG AA contrast in ${mode} mode`, () => {
+    const t = { ...tokens('html[data-skin="profesional"]', profesional), ...tokens(selector, profesional) };
+    const pairs = {
+      text: [t.background, t.foreground], 'text on a card': [t.card, t['card-foreground']], 'text on a menu': [t.popover, t['popover-foreground']],
+      'text on the sidebar': [t.sidebar, t.foreground], 'text on the selection': [t.accent, t['accent-foreground']], 'text on secondary': [t.secondary, t['secondary-foreground']],
+      'user bubble': [t.bubble, t['bubble-foreground']], 'primary button': [t.primary, t['primary-foreground']],
+      'muted text': [t.background, t['muted-foreground']], 'muted text on a card': [t.card, t['muted-foreground']], 'muted text on muted': [t.muted, t['muted-foreground']],
+      'faint text on a card': [t.card, t['faint-foreground']], 'faint text on the page': [t.background, t['faint-foreground']], 'faint text on the sidebar': [t.sidebar, t['faint-foreground']],
+      'primary text on a card': [t.card, t['primary-text']], 'primary text on its fill': [t['primary-soft'], t['primary-text']],
+      'success on its fill': [t['success-soft'], t.success], 'destructive on its fill': [t['destructive-soft'], t.destructive], 'warning on its fill': [t['warning-soft'], t.warning],
+      'warning ink on the page': [t.background, t['warning-ink']], 'warning ink on a card': [t.card, t['warning-ink']], 'warning ink on its fill': [t['warning-soft'], t['warning-ink']],
+      'success on a card': [t.card, t.success], 'destructive on a card': [t.card, t.destructive], 'info on a card': [t.card, t.info]
+    };
+    for (const [name, [bg, fg]] of Object.entries(pairs)) assert.ok(ratio(bg, fg) >= 4.5, `${mode} ${name}: ${ratio(bg, fg).toFixed(2)}`);
+    assert.ok(ratio(t.card, t.input) >= 3, `${mode} input border: ${ratio(t.card, t.input).toFixed(2)}`);
+    assert.ok(ratio(t.background, t.input) >= 3, `${mode} input border on the page: ${ratio(t.background, t.input).toFixed(2)}`);
   });
 }

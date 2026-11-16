@@ -1,4 +1,4 @@
-// 2.7: the Pizarra of each project, saved inside the project in its own folder `pizarra/`:
+// the Pizarra of each project, saved inside the project in its own folder `pizarra/`:
 //   pizarra.excalidraw   the drawing (Excalidraw's own format, so excalidraw.com can open it too)
 //   imagenes/<id>.<ext>  the pictures put on the drawing (kept apart from the drawing, not inside it)
 //   pizarra.png          the drawing as a picture, for the assistant and the agents to look at
@@ -21,7 +21,7 @@ const mimeOf = (file) => MIME[path.extname(file).slice(1).toLowerCase()] ?? 'app
 const kindOf = (mime) => (mime.startsWith('image/') ? 'image' : mime.startsWith('video/') ? 'video' : mime.startsWith('audio/') ? 'audio' : 'file');
 const safeName = (name) => String(name ?? '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/^\.+/, '').trim().slice(0, 120) || 'archivo';
 const readJson = (file, fallback) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; } };
-// 3.8.3 (repaso): the drawing is the only copy of the user's work. Written whole or not at all (beside, then renamed
+// the drawing is the only copy of the user's work. Written whole or not at all (beside, then renamed
 // over), and a file that is there but cannot be read is kept aside as *.roto-<stamp> instead of being replaced by an
 // empty drawing at the next autosave.
 const writeAtomic = (file, data) => { const tmp = `${file}.${process.pid}.tmp`; try { fs.writeFileSync(tmp, data); fs.renameSync(tmp, file); } catch (error) { fs.rmSync(tmp, { force: true }); throw error; } };
@@ -34,7 +34,7 @@ const readScene = (dir) => {
   return { scene: null, damaged: true };
 };
 
-// 3.2.1: the "Contiene" line of PIZARRA.md: every kind of element (texts and frames too), singular or plural as it
+// the "Contiene" line of PIZARRA.md: every kind of element (texts and frames too), singular or plural as it
 // should be, and "empty" only when there is nothing at all. PIZARRA.md is read by the agents, so it stays in Spanish.
 const KINDS = [['text', 'texto', 'textos'], ['rectangle', 'rectángulo', 'rectángulos'], ['ellipse', 'elipse', 'elipses'], ['diamond', 'rombo', 'rombos'],
   ['arrow', 'flecha', 'flechas'], ['line', 'línea', 'líneas'], ['freedraw', 'trazo a mano', 'trazos a mano'], ['image', 'imagen', 'imágenes'], ['frame', 'marco', 'marcos'],

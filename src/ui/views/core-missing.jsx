@@ -1,4 +1,4 @@
-// 3.8: «Falta la carpeta core»: core (or its settings) is gone and Orb could not bring it back by itself from the newest
+// «Falta la carpeta core»: core (or its settings) is gone and Orb could not bring it back by itself from the newest
 // backup (none, one this PC cannot open without its recovery code, or a damaged one). The engine waits
 // (engine.mjs › coreBlocked): restore with the code, pick another backup, or go on without one: offered when there is no
 // usable copy, and behind «No tengo el código» when a copy only needs its code (the copies there were are kept aside).
@@ -32,7 +32,7 @@ export function CoreMissing({ state }) {
     const file = Array.isArray(files) ? files[0] : files;
     if (file) repair({ file, passphrase: code || null });
   };
-  const fresh = async () => { if (await confirm(t('data.core.fresh'), t('data.core.freshConfirm'), { ok: t('data.core.fresh') })) repair({ fresh: true, language: locale?.startsWith('en') ? 'en' : 'es' }); };
+  const fresh = async () => { if (await confirm(t('data.core.fresh'), t('data.core.freshConfirm'), { ok: t('data.core.fresh'), danger: true })) repair({ fresh: true, language: locale?.startsWith('en') ? 'en' : 'es' }); };
   const offerFresh = v.fresh === 'yes' || (v.fresh === 'noCode' && noCode);
   return (
     <div className="grid h-full place-items-center overflow-y-auto p-8 text-center" data-testid="core-missing">

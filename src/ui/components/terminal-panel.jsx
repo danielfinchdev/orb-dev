@@ -1,4 +1,4 @@
-// 3.8.2 (T3 3.2): the user's terminal docked under a chat, in that chat's folder (src/engine/host/user-terminal.mjs). One tab
+// the user's terminal docked under a chat, in that chat's folder (src/engine/host/user-terminal.mjs). One tab
 // per terminal open in this folder; a line typed (or pasted from a command of the chat) runs only when the user presses
 // Enter. «Abrir fuera» opens the usual terminal of Ctrl+J in the same folder. This PC's window only.
 import { useEffect, useRef, useState } from 'react';
@@ -9,6 +9,7 @@ import { call, act, bridge } from '@/lib/store.js';
 import { stripAnsi } from '@/lib/terminal-paste.js';
 import { useT } from '@/lib/i18n.js';
 import { cn } from '@/lib/utils.js';
+import { quiet } from '@/lib/quiet.js';
 
 const KEEP = 200 * 1024;
 
@@ -27,13 +28,13 @@ export function TerminalPanel({ dir, draft, onDraftTaken, onClose }) {
       if (!alive) return;
       const here = (all ?? []).filter(mine);
       if (here.length) { setTerms(here); setActive(here.at(-1).id); } else await openNew();
-    }).catch(() => {});
+    }).catch(quiet);
     const offData = bridge.on('terminal:data', ({ id, data }) => setTerms((p) => p.map((x) => (x.id === id ? { ...x, out: (x.out + data).slice(-KEEP) } : x))));
     const offExit = bridge.on('terminal:exit', ({ id }) => setTerms((p) => p.map((x) => (x.id === id ? { ...x, running: false } : x))));
     // Orb's lock screen: the output goes from the window (the engine keeps it and sends nothing) and comes back after the
     // password.
     const offLock = bridge.on('master:locked', (e) => { if (e?.screen) setTerms((p) => p.map((x) => ({ ...x, out: '' }))); });
-    const offUnlock = bridge.on('master:unlocked', () => call('terminal.list').then((all) => { if (alive) setTerms((p) => p.map((x) => ({ ...x, ...((all ?? []).find((y) => y.id === x.id) ?? {}) }))); }).catch(() => {}));
+    const offUnlock = bridge.on('master:unlocked', () => call('terminal.list').then((all) => { if (alive) setTerms((p) => p.map((x) => ({ ...x, ...((all ?? []).find((y) => y.id === x.id) ?? {}) }))); }).catch(quiet));
     return () => { alive = false; offData(); offExit(); offLock(); offUnlock(); };
   }, [dir]); // eslint-disable-line react-hooks/exhaustive-deps
   // A command pasted from the chat: into the input line, never run.

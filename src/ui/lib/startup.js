@@ -1,4 +1,4 @@
-// 3.8: which screen the PC's window opens on (main.jsx › Root), asked to the engine in this order and kept apart so it
+// which screen the PC's window opens on (main.jsx › Root), asked to the engine in this order and kept apart so it
 // can be tested against a real engine (a blocked one, a missing core, a welcome left halfway) without a window.
 // call(method): the engine's answer (bridge.call). The phone asks none of it: it opens Orb.
 // → { phase, data }:
@@ -18,7 +18,7 @@ export async function startupPhase(call, { mobile = false } = {}) {
   const migration = await call('app.migrationState');
   if (migration?.failed) return { phase: 'migration', data: migration };
   const ms = await call('master.state');
-  // 3.8.1: also Orb's own lock screen (Windows locked, the PC asleep or Orb unused for a while), after a reload.
+  // also Orb's own lock screen (Windows locked, the PC asleep or Orb unused for a while), after a reload.
   if (ms?.exists && (ms.locked || ms.lost || ms.screenLocked)) return { phase: 'unlock', data: ms };
   const plan = await call('app.layoutPlan');
   const state = await call('app.state');

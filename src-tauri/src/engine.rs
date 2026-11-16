@@ -147,6 +147,8 @@ impl Engine {
 
   fn spawn(self: &Arc<Self>) -> Result<(), String> {
     let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
+    // The page server of a previous engine is gone: its port must not be proxied (it may belong to someone else now).
+    crate::pages::set_port(None);
     let mut cmd = Command::new(&self.cfg.node);
     // Node reads NODE_OPTIONS (--require, --import: code run inside the engine), NODE_PATH and the rest of NODE_* from the
     // environment; Electron had them off (its fuse). None of the user's reaches the engine or what it starts.
@@ -159,10 +161,13 @@ impl Engine {
       .env("ORB_NODE", &self.cfg.node)
       .env("ORB_MCP_SCRIPT", self.cfg.src.join("mcp").join("server.mjs"))
       .env("ORB_RENDERER", self.cfg.src.join("renderer"))
-      // ORB_DEV_CONTROL (3.1): only a build from the code started with ORB_DEV_CONTROL=1, whatever the environment says.
+      // ORB_DEV_CONTROL: only a build from the code started with ORB_DEV_CONTROL=1, whatever the environment says.
       .env("ORB_DEV_CONTROL", if self.cfg.dev_control { "1" } else { "0" })
+      // Agent HTML pages are framed through Orb's own scheme (pages.rs); a debug build also lets the dev server frame them.
+      .env("ORB_PAGES_ORIGIN", crate::pages::ORIGIN)
+      .env("ORB_PAGES_DEV", if cfg!(debug_assertions) { "1" } else { "0" })
       .current_dir(&self.cfg.src);
-    // 3.8.1: the vault's channel for this engine only (vault_host.rs): without it the engine does not start.
+    // The vault's channel for this engine only (vault_host.rs): without it the engine does not start.
     let (vault_name, serve_vault) = crate::vault_host::channel()?;
     cmd.env("ORB_VAULT_PIPE", &vault_name);
     #[cfg(windows)]
@@ -258,7 +263,7 @@ impl Engine {
     // hostSecret: this PC's secret is opened by the vault in this app (orb-vault › machine.rs, DPAPI); the engine asks it
     // and gets only the keys made from it.
     // The agents' browser lives in the engine, with this app's hidden pages (browser 'host': browser.rs).
-    // screenLocked (review final B1): an engine that restarts while Orb's lock screen is up (a crash) comes back locked.
+    // screenLocked: an engine that restarts while Orb's lock screen is up (a crash) comes back locked.
     let start = json!({ "type": "start", "screenLocked": self.screen_locked(), "home": self.home(), "version": self.cfg.version, "secret": null, "hostSecret": true, "newSecret": new_secret, "browser": "host", "userData": self.cfg.user_data });
     if !self.send(&start) {
       let e = self.t_name("sys.main.engineOff");
@@ -373,9 +378,16 @@ impl Engine {
     tokio::time::timeout(timeout, work).await.unwrap_or_else(|_| Err(self.t_name("sys.main.engineTimeout")))
   }
 
+  /// Hands an event to the emitter thread (`emit_queue`), never to the window: the reader of the engine's output does
+  /// not wait for the UI thread, and a burst of events reaches the page as one message.
   fn emit_event(&self, event: &str, payload: Value) {
     crate::trace::tally("ui.emit", 0);
-    let _ = self.app.emit_to("main", "engine:event", json!({ "event": event, "payload": payload }));
+    let item = json!({ "event": event, "payload": payload });
+    let queue = EMIT_QUEUE.get_or_init(|| emit_queue(self.app.clone()));
+    // The thread is gone (it never started, or died): straight to the window as before, never lost.
+    if let Err(std::sync::mpsc::SendError(item)) = queue.send(item) {
+      let _ = self.app.emit_to("main", "engine:event", item);
+    }
   }
 
   fn on_line(self: &Arc<Self>, line: &str) {
@@ -403,9 +415,12 @@ impl Engine {
         });
       }
       Incoming::Event { event, payload } => {
-        // 3.8.1: Orb's own lock screen (idle, or Windows locked): notices stop showing the agents' text.
+        // Orb's own lock screen (idle, or Windows locked): notices stop showing the agents' text.
         if let Some(locked) = protocol::screen_lock_of(&event, &payload) {
           self.screen_locked.store(locked, Ordering::SeqCst);
+        }
+        if event == "html:server" {
+          crate::pages::set_port(payload.get("port").and_then(Value::as_u64));
         }
         if event == "chat:new" {
           let log = crate::window::hidden(&self.app).then(|| self.cfg.user_data.join("avisos-e2e.jsonl"));
@@ -443,6 +458,7 @@ impl Engine {
       }
       *proc = None;
     }
+    crate::pages::set_port(None);
     // The agents' browser pages and its little window belonged to the engine that went.
     crate::browser::close_all();
     if let Some(w) = self.app.get_webview_window("pip") {
@@ -589,4 +605,40 @@ mod job {
     }
   }
   // The handle is never closed: it lives as long as Orb's process, and closing it is what kills the engine.
+}
+
+static EMIT_QUEUE: std::sync::OnceLock<std::sync::mpsc::Sender<Value>> = std::sync::OnceLock::new();
+
+/// The most events sent to the window in one message: a burst is cut here so one eval never grows without bound.
+const EMIT_BATCH: usize = 64;
+/// ... and at about this many bytes (a single bigger event still goes out alone).
+const EMIT_BATCH_BYTES: usize = 2 << 20;
+
+/// A thread that sends the engine's events to the window in order. Every `emit_to` is a script evaluated on the UI
+/// thread (WebView2); when that thread is slow (the PC busy) the events used to pile up there one by one, each with its
+/// own evaluation. Here whatever has queued up by the time the thread runs goes out together as one
+/// `engine:events` array (tauri-bridge.js fires them in order), so the UI thread has one evaluation to do, not dozens.
+fn emit_queue(app: AppHandle) -> std::sync::mpsc::Sender<Value> {
+  let (tx, rx) = std::sync::mpsc::channel::<Value>();
+  let spawned = std::thread::Builder::new().name("engine-emit".into()).spawn(move || {
+    while let Ok(first) = rx.recv() {
+      let mut bytes = first.to_string().len();
+      let mut batch = vec![first];
+      while batch.len() < EMIT_BATCH && bytes < EMIT_BATCH_BYTES {
+        match rx.try_recv() {
+          Ok(next) => {
+            bytes += next.to_string().len();
+            batch.push(next);
+          }
+          Err(_) => break,
+        }
+      }
+      crate::trace::tally("ui.emit.batch", batch.len() as u64);
+      let _ = app.emit_to("main", "engine:events", batch);
+    }
+  });
+  if let Err(e) = spawned {
+    eprintln!("[orb] engine-emit thread: {e}");
+  }
+  tx
 }

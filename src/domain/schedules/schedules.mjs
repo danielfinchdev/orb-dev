@@ -1,8 +1,8 @@
-// Scheduled tasks (2.3): "every Monday at 9 review the dependencies", "every night run the tests". A schedule creates a
+// Scheduled tasks: "every Monday at 9 review the dependencies", "every night run the tests". A schedule creates a
 // normal task when it is due (same approvals, usage limits and agents as any task). One created by the assistant needs the
 // user's approval once before it runs on its own; one created by the user is approved already. A schedule never piles
 // up work: while its last task is still open, the next run waits.
-// 3.8.2: «once» runs a single time at a date and time (at_time holds its local 'YYYY-MM-DDTHH:mm') and then turns
+// «once» runs a single time at a date and time (at_time holds its local 'YYYY-MM-DDTHH:mm') and then turns
 // itself off; «same_chat» sends every run to one chat, so its results and the talk about them stay together.
 import { oneLine } from '../../shared/text.mjs';
 import { ctx, tr } from '../../platform/context.mjs';
@@ -15,7 +15,7 @@ const now = () => new Date();
 const parseRow = (r) => r && { ...r, enabled: Boolean(r.enabled), approved: Boolean(r.approved), readonly: Boolean(r.readonly), same_chat: Boolean(r.same_chat), weekdays: (() => { try { const j = JSON.parse(r.weekdays || '[]'); return Array.isArray(j) ? j : []; } catch { return []; } })() };
 
 // every: hourly | every_hours (N hours, in `hours`) | daily (at at_time) | weekly (weekdays 0-6, Sunday = 0, at at_time).
-// 3.6: the wall time is the owner's (tz; default this machine's), right across daylight-saving changes.
+// the wall time is the owner's (tz; default this machine's), right across daylight-saving changes.
 // once: the instant of its local date and time, or null when that has passed.
 export function nextRun({ every, at_time: at = '09:00', weekdays = [], hours = 6 }, from = now(), tz = null) {
   if (!EVERY.includes(every)) throw new Error(tr('msg.schedules.badEvery'));
@@ -83,7 +83,7 @@ export function updateSchedule(board, id, patch) {
 
 export function removeSchedule(board, id) { board.run('DELETE FROM schedules WHERE id = ?', Number(id)); board.changed('schedules'); return true; }
 
-// 3.8.2: the chat of a «same chat» schedule: the one it has, else a new one named after it (the brain chosen for new
+// the chat of a «same chat» schedule: the one it has, else a new one named after it (the brain chosen for new
 // chats), kept for the next runs. A deleted chat is replaced on the next run.
 function chatOf(board, s) {
   if (!s.same_chat) return null;
@@ -97,7 +97,7 @@ function chatOf(board, s) {
 
 // Creates the task of a schedule now (when due, or "Ejecutar ahora"). A «once» schedule is spent by it: it turns off.
 export function runSchedule(board, s, actor = 'usuario') {
-  // 3.1: an agent that is no longer on this PC does not stop the schedule: this run goes to any available agent.
+  // an agent that is no longer on this PC does not stop the schedule: this run goes to any available agent.
   const gone = s.agent && s.agent !== 'any' && board.availableAgents() && !board.availableAgents().includes(s.agent);
   const task = board.createTask({ project: s.project, title: tr('msg.schedules.runTitle', { title: s.title }), description: s.description, agent: gone ? 'any' : s.agent, model: gone ? null : s.model, readonly: s.readonly, schedule_id: s.id, conversation_id: chatOf(board, s) }, s.approved ? 'usuario' : actor);
   if (gone) board.event(task.id, 'orb', 'note', `${s.agent} no está disponible en este PC: la ejecución va a cualquier agente disponible`);

@@ -1,0 +1,1724 @@
+{
+  "generatedBy": "scripts/android-vectors.mjs",
+  "source": "2cb66fb77234a5c138faed66e846e403fed47d32f889346a9265a952fbc68a8d",
+  "constants": {
+    "DEFAULT_PORT": "3131",
+    "PROTOCOL": 4,
+    "MIN_PROTOCOL": 2,
+    "PAIR_PROTOCOL": 4,
+    "CODE_ALPHABET": "ABCDEFGHJKMNPQRSTVWXYZ23456789"
+  },
+  "pcKeyB64": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+  "parseLinkPayload": [
+    {
+      "input": "http://192.168.1.20:3131/#vincular=abc_DEF-123&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://192.168.1.20:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "abc_DEF-123",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://192.168.1.20:3131/#vincular=c0de&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw&v=2&n=Servidor&r=centro&a=http%3A%2F%2F192.168.1.20%3A3131%2Chttps%3A%2F%2Fcasa.tail1234.ts.net%3A3131%2Chttp%3A%2F%2F100.101.102.103%3A3131",
+      "value": {
+        "v": 2,
+        "urls": [
+          "https://casa.tail1234.ts.net:3131",
+          "http://100.101.102.103:3131",
+          "http://192.168.1.20:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "c0de",
+        "name": "Servidor",
+        "role": "centro",
+        "via": "qr"
+      }
+    },
+    {
+      "input": "{\"v\":2,\"urls\":[\"http://100.64.0.7:3131\",\"https://pc.tail.ts.net\"],\"pc\":\"B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw\",\"code\":\"k\",\"role\":\"taller\"}",
+      "value": {
+        "v": 2,
+        "urls": [
+          "https://pc.tail.ts.net",
+          "http://100.64.0.7:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "k",
+        "name": null,
+        "role": "taller",
+        "via": "qr"
+      }
+    },
+    {
+      "input": "hola",
+      "throws": true,
+      "message": "app.linkBadQr",
+      "key": "app.linkBadQr"
+    },
+    {
+      "input": "https://example.com/",
+      "throws": true,
+      "message": "app.linkBadQr",
+      "key": "app.linkBadQr"
+    },
+    {
+      "input": "{\"v\":2}",
+      "throws": true,
+      "message": "app.linkBadQr",
+      "key": "app.linkBadQr"
+    },
+    {
+      "input": "{roto",
+      "throws": true,
+      "message": "app.linkBadQr",
+      "key": "app.linkBadQr"
+    },
+    {
+      "input": "http://192.168.1.2:3131/#vincular=abc",
+      "throws": true,
+      "message": "app.oldQr",
+      "key": "app.oldQr"
+    },
+    {
+      "input": "http://192.168.1.2:3131/#vincular=abc&pc=corta",
+      "throws": true,
+      "message": "app.oldQr",
+      "key": "app.oldQr"
+    },
+    {
+      "input": "http://8.8.8.8:3131/#vincular=abc&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": "orb://x/#vincular=abc&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "throws": true,
+      "message": "app.linkBadQr",
+      "key": "app.linkBadQr"
+    },
+    {
+      "input": "https://orb.example.com/#vincular=abc&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "https://orb.example.com"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "abc",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "  http://10.0.0.5:3131/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw  ",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://10.0.0.5:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "HTTP://LOCALHOST:3131/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://localhost:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://[fd12:3456::1]:3131/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://[fd12:3456::1]:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://192.168.1.2/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://192.168.1.2:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://192.168.1.2:80/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://192.168.1.2:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "https://pc.ts.net:443/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "https://pc.ts.net"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://192.168.1.2:3131/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw=",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://192.168.1.2:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw=",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://192.168.1.2:3131/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw&v=abc",
+      "value": {
+        "v": null,
+        "urls": [
+          "http://192.168.1.2:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://192.168.1.2:3131/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw&v=3&n=Caf%C3%A9+%F0%9F%98%80",
+      "value": {
+        "v": 3,
+        "urls": [
+          "http://192.168.1.2:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": "Café 😀",
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://192.168.1.2:3131/path/x?q=1#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://192.168.1.2:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://192.168.1.2:3131/#vincular=&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "throws": true,
+      "message": "app.linkBadQr",
+      "key": "app.linkBadQr"
+    },
+    {
+      "input": "http://user:pw@192.168.1.2:3131/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://192.168.1.2:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "",
+      "throws": true,
+      "message": "app.linkBadQr",
+      "key": "app.linkBadQr"
+    },
+    {
+      "input": "   ",
+      "throws": true,
+      "message": "app.linkBadQr",
+      "key": "app.linkBadQr"
+    },
+    {
+      "input": null,
+      "throws": true,
+      "message": "app.linkBadQr",
+      "key": "app.linkBadQr"
+    },
+    {
+      "input": {
+        "v": 2,
+        "url": "http://192.168.0.9:3131",
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "k"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "http://192.168.0.9:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "k",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": {
+        "urls": [
+          "ftp://x",
+          "http://192.168.0.9:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "k",
+        "name": "N"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "http://192.168.0.9:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "k",
+        "name": "N",
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": {
+        "v": "3",
+        "urls": [
+          "http://192.168.0.9:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "k"
+      },
+      "value": {
+        "v": 3,
+        "urls": [
+          "http://192.168.0.9:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "k",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": {
+        "urls": [
+          "http://192.168.0.9:3131"
+        ],
+        "pc": 5,
+        "code": "k"
+      },
+      "throws": true,
+      "message": "app.linkBadQr",
+      "key": "app.linkBadQr"
+    },
+    {
+      "input": {
+        "urls": [],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "k"
+      },
+      "throws": true,
+      "message": "app.linkBadQr",
+      "key": "app.linkBadQr"
+    },
+    {
+      "input": {
+        "urls": [
+          "http://8.8.8.8"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "k"
+      },
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": "http://evil.com\\@10.0.0.1/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": "http://a@b@10.0.0.1/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://10.0.0.1:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://10.0.0.1:3131@8.8.8.8/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": "http://%31%30.0.0.1/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://10.0.0.1:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://012.0.0.1/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://10.0.0.1:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://0300.0250.1.1/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://192.168.1.1:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://１０．０．０．１/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://10.0.0.1:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://nas.local./#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": "http://[::ffff:10.0.0.1]/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": "http://[::fd00:1]/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": "http://[fdff::]/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://[fdff::]:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": "http://10.0.0.1:65536/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "throws": true,
+      "message": "app.linkBadQr",
+      "key": "app.linkBadQr"
+    },
+    {
+      "input": "http://nas.lo‍cal/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "throws": true,
+      "message": "app.linkBadQr",
+      "key": "app.linkBadQr"
+    }
+  ],
+  "parseManual": [
+    {
+      "input": {
+        "text": "  http://10.0.0.5:3131/#vincular=z&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw  "
+      },
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://10.0.0.5:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "z",
+        "name": null,
+        "role": null,
+        "via": "qr"
+      }
+    },
+    {
+      "input": {
+        "code": "abcd-efgh",
+        "address": "100.64.1.2"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "http://100.64.1.2:3131"
+        ],
+        "pc": null,
+        "code": "ABCDEFGH",
+        "name": null,
+        "role": null,
+        "via": "code"
+      }
+    },
+    {
+      "input": {
+        "code": "",
+        "address": "100.64.1.2"
+      },
+      "throws": true,
+      "message": "app.linkNoCode",
+      "key": "app.linkNoCode"
+    },
+    {
+      "input": {
+        "code": "ABCDEFGH",
+        "address": ""
+      },
+      "throws": true,
+      "message": "app.linkNoAddress",
+      "key": "app.linkNoAddress"
+    },
+    {
+      "input": {
+        "code": "ABCDEFGH",
+        "address": "1.1.1.1"
+      },
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": {
+        "code": "ABCDE",
+        "address": "100.64.1.2"
+      },
+      "throws": true,
+      "message": "app.linkNoCode",
+      "key": "app.linkNoCode"
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "casa.tail.ts.net"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "http://casa.tail.ts.net:3131"
+        ],
+        "pc": null,
+        "code": "ABCDEFGH",
+        "name": null,
+        "role": null,
+        "via": "code"
+      }
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "https://orb.example.com"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "https://orb.example.com"
+        ],
+        "pc": null,
+        "code": "ABCDEFGH",
+        "name": null,
+        "role": null,
+        "via": "code"
+      }
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://192.168.1.5:4000/"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "http://192.168.1.5:4000"
+        ],
+        "pc": null,
+        "code": "ABCDEFGH",
+        "name": null,
+        "role": null,
+        "via": "code"
+      }
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "[fd12::1]"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "http://[fd12::1]:3131"
+        ],
+        "pc": null,
+        "code": "ABCDEFGH",
+        "name": null,
+        "role": null,
+        "via": "code"
+      }
+    },
+    {
+      "input": {
+        "code": "oO0o1234abcdefgh9999",
+        "address": "10.0.0.1"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "http://10.0.0.1:3131"
+        ],
+        "pc": null,
+        "code": "00001234ABCDEFGH",
+        "name": null,
+        "role": null,
+        "via": "code"
+      }
+    },
+    {
+      "input": {
+        "text": "   ",
+        "code": "abcdefgh",
+        "address": "10.0.0.1"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "http://10.0.0.1:3131"
+        ],
+        "pc": null,
+        "code": "ABCDEFGH",
+        "name": null,
+        "role": null,
+        "via": "code"
+      }
+    },
+    {
+      "input": {
+        "text": "hola"
+      },
+      "throws": true,
+      "message": "app.linkBadQr",
+      "key": "app.linkBadQr"
+    },
+    {
+      "input": {},
+      "throws": true,
+      "message": "app.linkNoCode",
+      "key": "app.linkNoCode"
+    },
+    {
+      "throws": true,
+      "message": "app.linkNoCode",
+      "key": "app.linkNoCode"
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://evil.com\\@10.0.0.1"
+      },
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://a@b@10.0.0.1"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "http://10.0.0.1:3131"
+        ],
+        "pc": null,
+        "code": "ABCDEFGH",
+        "name": null,
+        "role": null,
+        "via": "code"
+      }
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://10.0.0.1:3131@8.8.8.8"
+      },
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://%31%30.0.0.1"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "http://10.0.0.1:3131"
+        ],
+        "pc": null,
+        "code": "ABCDEFGH",
+        "name": null,
+        "role": null,
+        "via": "code"
+      }
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://012.0.0.1"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "http://10.0.0.1:3131"
+        ],
+        "pc": null,
+        "code": "ABCDEFGH",
+        "name": null,
+        "role": null,
+        "via": "code"
+      }
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://0300.0250.1.1"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "http://192.168.1.1:3131"
+        ],
+        "pc": null,
+        "code": "ABCDEFGH",
+        "name": null,
+        "role": null,
+        "via": "code"
+      }
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://１０．０．０．１"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "http://10.0.0.1:3131"
+        ],
+        "pc": null,
+        "code": "ABCDEFGH",
+        "name": null,
+        "role": null,
+        "via": "code"
+      }
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://nas.local."
+      },
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://[::ffff:10.0.0.1]"
+      },
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://[::fd00:1]"
+      },
+      "throws": true,
+      "message": "app.linkInsecure",
+      "key": "app.linkInsecure"
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://[fdff::]"
+      },
+      "value": {
+        "v": 2,
+        "urls": [
+          "http://[fdff::]:3131"
+        ],
+        "pc": null,
+        "code": "ABCDEFGH",
+        "name": null,
+        "role": null,
+        "via": "code"
+      }
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://10.0.0.1:65536"
+      },
+      "throws": true,
+      "message": "app.linkBadAddress",
+      "key": "app.linkBadAddress"
+    },
+    {
+      "input": {
+        "code": "abcdefgh",
+        "address": "http://nas.lo‍cal"
+      },
+      "throws": true,
+      "message": "app.linkBadAddress",
+      "key": "app.linkBadAddress"
+    }
+  ],
+  "orderBases": [
+    {
+      "input": [
+        "http://example.com",
+        "http://192.168.1.1:3131",
+        "http://192.168.1.1:3131",
+        "basura::"
+      ],
+      "value": [
+        "http://192.168.1.1:3131"
+      ]
+    },
+    {
+      "input": [
+        "http://192.168.1.20:3131",
+        "https://casa.tail1234.ts.net:3131",
+        "http://100.101.102.103:3131"
+      ],
+      "value": [
+        "https://casa.tail1234.ts.net:3131",
+        "http://100.101.102.103:3131",
+        "http://192.168.1.20:3131"
+      ]
+    },
+    {
+      "input": [
+        "http://192.168.1.1",
+        "192.168.1.1",
+        "http://192.168.1.1:3131"
+      ],
+      "value": [
+        "http://192.168.1.1:3131"
+      ]
+    },
+    {
+      "input": [
+        "HTTP://PC.TS.NET",
+        "http://a.local",
+        "https://z.example.com"
+      ],
+      "value": [
+        "https://z.example.com",
+        "http://pc.ts.net:3131",
+        "http://a.local:3131"
+      ]
+    },
+    {
+      "input": [],
+      "value": []
+    },
+    {
+      "input": null,
+      "value": []
+    },
+    {
+      "input": [
+        "",
+        "   ",
+        5,
+        "http://10.0.0.1"
+      ],
+      "value": [
+        "http://10.0.0.1:3131"
+      ]
+    },
+    {
+      "input": [
+        "http://[fd12::1]:3131",
+        "http://100.64.0.1"
+      ],
+      "value": [
+        "http://100.64.0.1:3131",
+        "http://[fd12::1]:3131"
+      ]
+    }
+  ],
+  "allowedBase": [
+    {
+      "input": "http://evil.com\\@10.0.0.1",
+      "value": false
+    },
+    {
+      "input": "http://a@b@10.0.0.1",
+      "value": true
+    },
+    {
+      "input": "http://10.0.0.1:3131@8.8.8.8",
+      "value": false
+    },
+    {
+      "input": "http://%31%30.0.0.1",
+      "value": true
+    },
+    {
+      "input": "http://012.0.0.1",
+      "value": true
+    },
+    {
+      "input": "http://0300.0250.1.1",
+      "value": true
+    },
+    {
+      "input": "http://１０．０．０．１",
+      "value": true
+    },
+    {
+      "input": "http://nas.local.",
+      "value": false
+    },
+    {
+      "input": "http://[::ffff:10.0.0.1]",
+      "value": false
+    },
+    {
+      "input": "http://[::fd00:1]",
+      "value": false
+    },
+    {
+      "input": "http://[fdff::]",
+      "value": true
+    },
+    {
+      "input": "http://10.0.0.1:65536",
+      "value": false
+    },
+    {
+      "input": "http://nas.lo‍cal",
+      "value": false
+    },
+    {
+      "input": "https://example.com",
+      "value": true
+    },
+    {
+      "input": "http://example.com",
+      "value": false
+    },
+    {
+      "input": "ftp://192.168.1.1",
+      "value": false
+    },
+    {
+      "input": "http://192.168.1.1:3131",
+      "value": true
+    },
+    {
+      "input": "http://[::1]:3131",
+      "value": true
+    },
+    {
+      "input": "http://100.64.0.1",
+      "value": true
+    },
+    {
+      "input": "http://100.128.0.1",
+      "value": false
+    },
+    {
+      "input": "nonsense",
+      "value": false
+    },
+    {
+      "input": "",
+      "value": false
+    },
+    {
+      "input": "HTTP://LOCALHOST",
+      "value": true
+    },
+    {
+      "input": "http://pc.TS.NET",
+      "value": true
+    }
+  ],
+  "isPrivateHost": [
+    {
+      "input": "evil.com\\",
+      "value": false
+    },
+    {
+      "input": "10.0.0.1:3131@8.8.8.8",
+      "value": false
+    },
+    {
+      "input": "012.0.0.1",
+      "value": false
+    },
+    {
+      "input": "０.０.０.０",
+      "value": false
+    },
+    {
+      "input": "nas.local.",
+      "value": false
+    },
+    {
+      "input": "::ffff:10.0.0.1",
+      "value": false
+    },
+    {
+      "input": "::fd00:1",
+      "value": false
+    },
+    {
+      "input": "fdff::",
+      "value": true
+    },
+    {
+      "input": "nas.lo‍cal",
+      "value": false
+    },
+    {
+      "input": "100.64.0.1",
+      "value": true
+    },
+    {
+      "input": "100.127.255.254",
+      "value": true
+    },
+    {
+      "input": "100.63.255.255",
+      "value": false
+    },
+    {
+      "input": "100.128.0.0",
+      "value": false
+    },
+    {
+      "input": "10.1.2.3",
+      "value": true
+    },
+    {
+      "input": "172.16.0.1",
+      "value": true
+    },
+    {
+      "input": "172.15.255.255",
+      "value": false
+    },
+    {
+      "input": "172.31.9.9",
+      "value": true
+    },
+    {
+      "input": "172.32.0.1",
+      "value": false
+    },
+    {
+      "input": "192.168.0.10",
+      "value": true
+    },
+    {
+      "input": "192.169.0.1",
+      "value": false
+    },
+    {
+      "input": "127.0.0.1",
+      "value": true
+    },
+    {
+      "input": "127.255.255.255",
+      "value": true
+    },
+    {
+      "input": "localhost",
+      "value": true
+    },
+    {
+      "input": "LOCALHOST",
+      "value": true
+    },
+    {
+      "input": "pc.tail1234.ts.net",
+      "value": true
+    },
+    {
+      "input": "home-server",
+      "value": true
+    },
+    {
+      "input": "nas.local",
+      "value": true
+    },
+    {
+      "input": "a.lan",
+      "value": true
+    },
+    {
+      "input": "x.home.arpa",
+      "value": true
+    },
+    {
+      "input": "::1",
+      "value": true
+    },
+    {
+      "input": "[::1]",
+      "value": true
+    },
+    {
+      "input": "fd12:3456::1",
+      "value": true
+    },
+    {
+      "input": "fc00::1",
+      "value": true
+    },
+    {
+      "input": "fe80::1",
+      "value": true
+    },
+    {
+      "input": "fec0::1",
+      "value": false
+    },
+    {
+      "input": "2001:db8::1",
+      "value": false
+    },
+    {
+      "input": "8.8.8.8",
+      "value": false
+    },
+    {
+      "input": "example.com",
+      "value": false
+    },
+    {
+      "input": "300.1.1.1",
+      "value": false
+    },
+    {
+      "input": "1.2.3",
+      "value": false
+    },
+    {
+      "input": "12345",
+      "value": false
+    },
+    {
+      "input": "1.2.3.4.5",
+      "value": false
+    },
+    {
+      "input": "",
+      "value": false
+    },
+    {
+      "input": null,
+      "value": false
+    },
+    {
+      "input": "a_b",
+      "value": false
+    },
+    {
+      "input": "ts.net",
+      "value": false
+    },
+    {
+      "input": "UPPER-CASE",
+      "value": true
+    },
+    {
+      "input": "0.0.0.0",
+      "value": false
+    },
+    {
+      "input": "169.254.1.1",
+      "value": false
+    }
+  ],
+  "normalAddress": [
+    {
+      "input": "http://evil.com\\@10.0.0.1",
+      "value": "http://evil.com:3131"
+    },
+    {
+      "input": "http://a@b@10.0.0.1",
+      "value": "http://10.0.0.1:3131"
+    },
+    {
+      "input": "http://10.0.0.1:3131@8.8.8.8",
+      "value": "http://8.8.8.8:3131"
+    },
+    {
+      "input": "http://%31%30.0.0.1",
+      "value": "http://10.0.0.1:3131"
+    },
+    {
+      "input": "http://012.0.0.1",
+      "value": "http://10.0.0.1:3131"
+    },
+    {
+      "input": "http://0300.0250.1.1",
+      "value": "http://192.168.1.1:3131"
+    },
+    {
+      "input": "http://１０．０．０．１",
+      "value": "http://10.0.0.1:3131"
+    },
+    {
+      "input": "http://nas.local.",
+      "value": "http://nas.local.:3131"
+    },
+    {
+      "input": "http://[::ffff:10.0.0.1]",
+      "value": "http://[::ffff:a00:1]:3131"
+    },
+    {
+      "input": "http://[::fd00:1]",
+      "value": "http://[::fd00:1]:3131"
+    },
+    {
+      "input": "http://[fdff::]",
+      "value": "http://[fdff::]:3131"
+    },
+    {
+      "input": "http://10.0.0.1:65536",
+      "throws": true,
+      "message": "app.linkBadAddress",
+      "key": "app.linkBadAddress"
+    },
+    {
+      "input": "http://nas.lo‍cal",
+      "throws": true,
+      "message": "app.linkBadAddress",
+      "key": "app.linkBadAddress"
+    },
+    {
+      "input": "100.64.1.2",
+      "value": "http://100.64.1.2:3131"
+    },
+    {
+      "input": "100.64.1.2:3131",
+      "value": "http://100.64.1.2:3131"
+    },
+    {
+      "input": "casa.tail.ts.net",
+      "value": "http://casa.tail.ts.net:3131"
+    },
+    {
+      "input": "http://100.64.1.2",
+      "value": "http://100.64.1.2:3131"
+    },
+    {
+      "input": "https://pc.tail.ts.net/",
+      "value": "https://pc.tail.ts.net"
+    },
+    {
+      "input": "HTTPS://PC.TS.NET:8443/x?y#z",
+      "value": "https://pc.ts.net:8443"
+    },
+    {
+      "input": " 10.0.0.1 ",
+      "value": "http://10.0.0.1:3131"
+    },
+    {
+      "input": "",
+      "throws": true,
+      "message": "app.linkNoAddress",
+      "key": "app.linkNoAddress"
+    },
+    {
+      "input": "   ",
+      "throws": true,
+      "message": "app.linkNoAddress",
+      "key": "app.linkNoAddress"
+    },
+    {
+      "input": null,
+      "throws": true,
+      "message": "app.linkNoAddress",
+      "key": "app.linkNoAddress"
+    },
+    {
+      "input": "[fd12::1]",
+      "value": "http://[fd12::1]:3131"
+    },
+    {
+      "input": "[fd12::1]:4000",
+      "value": "http://[fd12::1]:4000"
+    },
+    {
+      "input": "http://[::1]",
+      "value": "http://[::1]:3131"
+    },
+    {
+      "input": "http://host:80",
+      "value": "http://host:3131"
+    },
+    {
+      "input": "https://host:443",
+      "value": "https://host"
+    },
+    {
+      "input": "http://host:99999",
+      "throws": true,
+      "message": "app.linkBadAddress",
+      "key": "app.linkBadAddress"
+    },
+    {
+      "input": "http://",
+      "throws": true,
+      "message": "app.linkBadAddress",
+      "key": "app.linkBadAddress"
+    },
+    {
+      "input": "http://exa mple.com",
+      "throws": true,
+      "message": "app.linkBadAddress",
+      "key": "app.linkBadAddress"
+    },
+    {
+      "input": "http://用户.example",
+      "value": "http://xn--zouo53b.example:3131"
+    },
+    {
+      "input": "http://192.168.1.1:3131/",
+      "value": "http://192.168.1.1:3131"
+    },
+    {
+      "input": "http://192.168.1.1.",
+      "value": "http://192.168.1.1:3131"
+    },
+    {
+      "input": "http://0x7f.1",
+      "value": "http://127.0.0.1:3131"
+    },
+    {
+      "input": "http://2130706433",
+      "value": "http://127.0.0.1:3131"
+    },
+    {
+      "input": "http://user:pw@host",
+      "value": "http://host:3131"
+    }
+  ],
+  "pairingSecret": [
+    {
+      "input": {
+        "via": "qr",
+        "code": "abc_DEF-123"
+      },
+      "value": "abc_DEF-123"
+    },
+    {
+      "input": {
+        "via": "code",
+        "code": "abcd-efgh"
+      },
+      "value": "corto:ABCDEFGH"
+    },
+    {
+      "input": {
+        "via": "code",
+        "code": "oO0o1234"
+      },
+      "value": "corto:00001234"
+    },
+    {
+      "input": {
+        "via": "code",
+        "code": "aaaaaaaaaaaaaaaaaaaa"
+      },
+      "value": "corto:AAAAAAAAAAAAAAAA"
+    },
+    {
+      "input": {
+        "via": "code",
+        "code": null
+      },
+      "value": "corto:"
+    }
+  ],
+  "normalCode": [
+    {
+      "input": "abcd-efgh",
+      "value": "ABCDEFGH"
+    },
+    {
+      "input": "ABCD EFGH",
+      "value": "ABCDEFGH"
+    },
+    {
+      "input": "oO01",
+      "value": "0001"
+    },
+    {
+      "input": "aaaaaaaaaaaaaaaaaaaa",
+      "value": "AAAAAAAAAAAAAAAA"
+    },
+    {
+      "input": "",
+      "value": ""
+    },
+    {
+      "input": null,
+      "value": ""
+    },
+    {
+      "input": "ñandú-12",
+      "value": "AND12"
+    }
+  ],
+  "shortCodeLabel": [
+    {
+      "input": "abcdefgh",
+      "value": "ABCD-EFGH"
+    },
+    {
+      "input": "ABCD-EFGH",
+      "value": "ABCD-EFGH"
+    },
+    {
+      "input": "abc",
+      "value": "ABC"
+    },
+    {
+      "input": "abcd",
+      "value": "ABCD"
+    },
+    {
+      "input": "abcde",
+      "value": "ABCD-E"
+    },
+    {
+      "input": "aaaaaaaaaaaaaaaaaaaa",
+      "value": "AAAA-AAAA-AAAA-AAAA"
+    },
+    {
+      "input": "",
+      "value": ""
+    },
+    {
+      "input": null,
+      "value": ""
+    },
+    {
+      "input": "ab cd.ef",
+      "value": "ABCD-EF"
+    }
+  ],
+  "versionOfProtocol": [
+    {
+      "input": 1,
+      "value": "3.4"
+    },
+    {
+      "input": 2,
+      "value": "3.5"
+    },
+    {
+      "input": 3,
+      "value": "3.6"
+    },
+    {
+      "input": 4,
+      "value": "3.8"
+    },
+    {
+      "input": 5,
+      "value": "3.8"
+    },
+    {
+      "input": "4",
+      "value": "3.8"
+    },
+    {
+      "input": 0,
+      "value": "3.4"
+    },
+    {
+      "input": null,
+      "value": "3.4"
+    },
+    {
+      "value": "3.4"
+    },
+    {
+      "input": "x",
+      "value": "3.4"
+    }
+  ],
+  "updateNeeded": [
+    {
+      "input": [
+        {
+          "min": 5
+        }
+      ],
+      "value": {
+        "has": 4,
+        "need": 5
+      }
+    },
+    {
+      "input": [
+        {
+          "min": 4
+        }
+      ],
+      "value": null
+    },
+    {
+      "input": [
+        {
+          "min": 2
+        }
+      ],
+      "value": null
+    },
+    {
+      "input": [
+        {
+          "min": "6"
+        }
+      ],
+      "value": {
+        "has": 4,
+        "need": 6
+      }
+    },
+    {
+      "input": [
+        null
+      ],
+      "value": null
+    },
+    {
+      "input": [
+        {}
+      ],
+      "value": null
+    },
+    {
+      "input": [
+        {
+          "min": 5
+        },
+        9
+      ],
+      "value": null
+    },
+    {
+      "input": [
+        {
+          "min": "x"
+        }
+      ],
+      "value": null
+    }
+  ],
+  "passwordPageOk": [
+    {
+      "input": [
+        {
+          "protocol": "https:",
+          "hostname": "x.com"
+        }
+      ],
+      "value": true
+    },
+    {
+      "input": [
+        {
+          "protocol": "http:",
+          "hostname": "localhost"
+        }
+      ],
+      "value": true
+    },
+    {
+      "input": [
+        {
+          "protocol": "http:",
+          "hostname": "127.0.0.5"
+        }
+      ],
+      "value": true
+    },
+    {
+      "input": [
+        {
+          "protocol": "http:",
+          "hostname": "[::1]"
+        }
+      ],
+      "value": true
+    },
+    {
+      "input": [
+        {
+          "protocol": "http:",
+          "hostname": "a.ts.net"
+        }
+      ],
+      "value": true
+    },
+    {
+      "input": [
+        {
+          "protocol": "http:",
+          "hostname": "100.64.0.1"
+        }
+      ],
+      "value": true
+    },
+    {
+      "input": [
+        {
+          "protocol": "http:",
+          "hostname": "100.128.0.1"
+        }
+      ],
+      "value": false
+    },
+    {
+      "input": [
+        {
+          "protocol": "http:",
+          "hostname": "192.168.1.1"
+        }
+      ],
+      "value": false
+    },
+    {
+      "input": [
+        {
+          "protocol": "http:",
+          "hostname": "192.168.1.1"
+        },
+        {
+          "app": true
+        }
+      ],
+      "value": true
+    },
+    {
+      "input": [
+        null
+      ],
+      "value": false
+    }
+  ]
+}

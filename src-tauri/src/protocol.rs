@@ -109,12 +109,18 @@ pub fn read_zoom(text: &str) -> f64 {
   serde_json::from_str::<Value>(text).ok().and_then(|v| v.get("zoom").and_then(Value::as_f64)).map(clamp_zoom).unwrap_or(1.0)
 }
 
-/// Arguments of Orb's WebView2: Tauri's own (no Edge-only extras in the window), and, only in a build with the `e2e`
-/// feature (tests and measurements), the DevTools port and no pausing of frames when the window is covered.
+/// WebRTC may only use a proxied UDP route. The CSP of an agent's HTML page cannot stop WebRTC, and STUN would otherwise
+/// let a page with "internet" switched off reach the network over UDP (and learn the local IPs). Known limit: TURN over
+/// TCP/TLS is not closed by this flag (see desarrollo/orb-3.8.4-progreso.md).
+const WEBRTC_POLICY: &str = "--force-webrtc-ip-handling-policy=disable_non_proxied_udp";
+
+/// Arguments of Orb's WebView2: Tauri's own (no Edge-only extras in the window), no direct WebRTC/STUN, and, only in a
+/// build with the `e2e` feature (tests and measurements), the DevTools port and no pausing of frames when the window is
+/// covered.
 pub fn browser_args(cdp_port: Option<u16>) -> String {
   match cdp_port {
-    Some(port) => format!("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --remote-debugging-port={port}"),
-    None => "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection".to_string(),
+    Some(port) => format!("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion {WEBRTC_POLICY} --remote-debugging-port={port}"),
+    None => format!("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection {WEBRTC_POLICY}"),
   }
 }
 
@@ -136,7 +142,7 @@ pub fn screen_lock_of(event: &str, payload: &Value) -> Option<bool> {
 }
 
 /// core itself, or its secrets or anything inside them (real paths, lower case): guarded by the master password.
-/// 3.8.1 (item f): core\datos too (orb.db, the sealed approval secret), with everything under it.
+/// core\datos too (orb.db, the sealed approval secret), with everything under it.
 pub fn guarded_core(target: &str, core: &str, inside: &[&str]) -> bool {
   target == core || inside.iter().any(|d| target == *d || target.starts_with(&format!("{d}\\")))
 }
@@ -168,6 +174,7 @@ pub fn node_vars<I: IntoIterator<Item = String>>(names: I) -> Vec<String> {
 pub enum HostRequest {
   OpenUrl(String),
   OpenPath(PathBuf),
+  Screenshot(PathBuf),
   OpenTerminal { dir: PathBuf, choice: String },
   OpenEditor { which: String, dir: PathBuf },
   RunAction { command: String, dir: PathBuf, choice: String },
@@ -194,6 +201,29 @@ fn choice(params: &Value) -> String {
   if TERMINAL_CHOICES.contains(&c) { c } else { "auto" }.to_string()
 }
 
+/// Where a screenshot may be written: `<ms>-<8 hex>.jpg` directly inside an existing `capturas-movil` folder, with no
+/// `..` or other special component. Nothing else, so the engine (or whatever sits behind it) cannot make the app write
+/// elsewhere. Whether the file already exists is checked by the writer itself (create_new).
+fn screenshot_path(p: &str, is_dir: &impl Fn(&Path) -> bool) -> Result<PathBuf, String> {
+  let err = || "ruta de captura no válida".to_string();
+  if !local_path(p) {
+    return Err(err());
+  }
+  let path = PathBuf::from(p);
+  let name = path.file_name().and_then(|n| n.to_str()).ok_or_else(err)?;
+  let (ms, hex) = name.strip_suffix(".jpg").and_then(|n| n.split_once('-')).ok_or_else(err)?;
+  let good = (1..=16).contains(&ms.len())
+    && ms.bytes().all(|b| b.is_ascii_digit())
+    && hex.len() == 8
+    && hex.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
+  let dir = path.parent().ok_or_else(err)?;
+  let plain = path.components().all(|c| matches!(c, std::path::Component::Prefix(_) | std::path::Component::RootDir | std::path::Component::Normal(_)));
+  if !good || !plain || p.contains("..") || dir.file_name().and_then(|n| n.to_str()) != Some("capturas-movil") || !is_dir(dir) {
+    return Err(err());
+  }
+  Ok(path)
+}
+
 /// A web page over https, a page of this PC (a project's preview) or Warp's link to open a tab in a folder; existing
 /// folders of this PC only, never a file to run; a terminal, an editor or an action by kind; the secret (64 hex characters
 /// to seal, a base64 blob of at most 16 KB to open). The same rules as src/engine/host/host.mjs › checkHostRequest.
@@ -218,6 +248,7 @@ pub fn check_host(method: &str, params: &Value, is_dir: impl Fn(&Path) -> bool) 
       Ok(HostRequest::OpenUrl(u.to_string()))
     }
     "host.openPath" => Ok(HostRequest::OpenPath(folder("path", "solo carpetas")?)),
+    "host.screenshot" => Ok(HostRequest::Screenshot(screenshot_path(&text("path"), &is_dir)?)),
     "host.openTerminal" => Ok(HostRequest::OpenTerminal { dir: folder("dir", "carpeta no válida")?, choice: choice(params) }),
     "host.openEditor" => {
       let which = text("which");
@@ -305,6 +336,9 @@ mod tests {
   #[test]
   fn devtools_port_only_when_asked_and_webview2_vars_dropped() {
     assert!(!browser_args(None).contains("remote-debugging"));
+    for a in [browser_args(None), browser_args(Some(9400))] {
+      assert!(a.contains("--force-webrtc-ip-handling-policy=disable_non_proxied_udp"));
+    }
     assert!(browser_args(Some(9400)).ends_with("--remote-debugging-port=9400"));
     assert!(!browser_args(Some(9400)).contains("allow-origins"));
     let names = ["PATH", "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "webview2_user_data_folder", "WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", "ORB_USER_DATA"];
@@ -357,6 +391,29 @@ mod tests {
       Ok(HostRequest::RunAction { command: "npm run dev".into(), dir: dir.clone(), choice: "wt".into() })
     );
     assert!(ok("host.runAction", json!({"command": "  ", "dir": dir})).is_err());
+    // Screenshots: only <ms>-<8 hex>.jpg inside an existing capturas-movil folder.
+    let shots = PathBuf::from("C:\\datos\\capturas-movil");
+    let shot_dir = |p: &Path| p == Path::new("C:\\datos\\capturas-movil");
+    let shot = |p: &str| check_host("host.screenshot", &json!({ "path": p }), shot_dir);
+    assert_eq!(shot("C:\\datos\\capturas-movil\\1731000000000-0123abcd.jpg"), Ok(HostRequest::Screenshot(shots.join("1731000000000-0123abcd.jpg"))));
+    for p in [
+      "C:\\datos\\capturas-movil\\x.jpg",
+      "C:\\datos\\capturas-movil\\1-0123ABCD.jpg",
+      "C:\\datos\\capturas-movil\\1-0123abc.jpg",
+      "C:\\datos\\capturas-movil\\1-0123abcd.png",
+      "C:\\datos\\capturas-movil\\12345678901234567-0123abcd.jpg",
+      "C:\\datos\\capturas-movil\\..\\1-0123abcd.jpg",
+      "C:\\datos\\capturas-movil\\sub\\1-0123abcd.jpg",
+      "C:\\datos\\otra\\1-0123abcd.jpg",
+      "C:\\1-0123abcd.jpg",
+      "\\\\servidor\\capturas-movil\\1-0123abcd.jpg",
+      "capturas-movil\\1-0123abcd.jpg",
+      "",
+    ] {
+      assert!(shot(p).is_err(), "{p}");
+    }
+    assert!(check_host("host.screenshot", &json!({}), shot_dir).is_err());
+    assert!(check_host("host.screenshot", &json!({ "path": "C:\\datos\\capturas-movil\\1-0123abcd.jpg" }), |_: &Path| false).is_err());
     assert!(ok("host.runAction", json!({"command": "x", "dir": "C:\\no-existe"})).is_err());
     assert!(ok("host.spawnDetached", json!({"cmd": "cmd.exe", "args": [], "cwd": dir})).is_err());
     // This PC's secret is the vault's (orb-vault › machine.rs): the engine cannot ask to seal or open it.

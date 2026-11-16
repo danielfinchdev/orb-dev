@@ -1,0 +1,156 @@
+/* Nube = Órbita Candy: the backdrop and the character of the components. Tokens and palette are in skins.css. Imported in order by ../themes.css. */
+/* ================================================================================================================
+   THE BACKDROP. A pastel page under pale polka dots; five soft blobs of one colour each breathe over it, a layer of
+   glints twinkles (opacity only) and sweets drawn in SVG (components/scene.jsx: donut, peppermint, heart, lollipop,
+   wrapped candy, gumdrops, jelly beans) bob slowly at the edges, never over the text. The blurs are baked into
+   gradients and drawings; what moves moves by transform / opacity only. Night: plum with neon glints.
+   ================================================================================================================ */
+html[data-skin="nube"] {
+  --cd-shine: rgb(255 255 255 / 0.7);
+  --side-art: linear-gradient(to bottom, var(--cd-shine), transparent 48%);
+  /* The shine; its two rows of sweets (the dots below, so their order does not change the picture) are BandArt. */
+  --band-art: linear-gradient(to bottom, var(--cd-shine), transparent 48%);
+  --cd-dot-a: rgb(255 255 255 / 0.9); --cd-dot-b: rgb(255 150 200 / 0.7);
+  --cd-page: radial-gradient(circle, rgb(255 255 255 / 0.7) 2px, transparent 2.7px) 0 0 / 36px 36px, radial-gradient(circle, rgb(255 140 190 / 0.28) 2px, transparent 2.7px) 18px 18px / 36px 36px, linear-gradient(160deg, #ffd9ec 0%, #ecd9ff 55%, #d9e4ff 100%);
+  --cd-glints: radial-gradient(circle, rgb(255 255 255 / 0.95) 0 3px, transparent 4px) 6% 14% / 11px 11px no-repeat, radial-gradient(circle, rgb(255 255 255 / 0.9) 0 2px, transparent 3px) 94% 26% / 8px 8px no-repeat, radial-gradient(circle, rgb(255 255 255 / 0.95) 0 3px, transparent 4px) 3% 66% / 11px 11px no-repeat, radial-gradient(circle, rgb(255 255 255 / 0.9) 0 2px, transparent 3px) 97% 74% / 8px 8px no-repeat, radial-gradient(circle, rgb(255 255 255 / 0.9) 0 2px, transparent 3px) 48% 97% / 8px 8px no-repeat;
+  --cd-pink: #ffc4dc; --cd-lilac: #dccbff; --cd-mint: #bdeedd; --cd-peach: #ffd9b8; --cd-sky: #c6e3ff; --cd-butter: #fff0b8;
+  --cd-shadow: rgb(236 110 180 / 0.32); --cd-glow: rgb(255 140 200 / 0.4);
+  --cd-frame: var(--primary); --cd-pad: var(--cd-rim);
+  --cd-toy-opacity: 0.95; --cd-toy-shadow: rgb(214 80 150 / 0.3);
+}
+html.dark[data-skin="nube"] {
+  --cd-shine: rgb(255 255 255 / 0.08);
+  --cd-dot-a: rgb(255 120 210 / 0.75); --cd-dot-b: rgb(80 230 240 / 0.6);
+  --cd-page: radial-gradient(circle, rgb(255 255 255 / 0.07) 2px, transparent 2.7px) 0 0 / 36px 36px, radial-gradient(circle, rgb(255 110 200 / 0.14) 2px, transparent 2.7px) 18px 18px / 36px 36px, linear-gradient(160deg, #2c1638 0%, #231640 55%, #1a1a3c 100%);
+  --cd-glints: radial-gradient(circle, rgb(255 120 220 / 1) 0 3px, transparent 5px) 6% 14% / 14px 14px no-repeat, radial-gradient(circle, rgb(90 240 250 / 1) 0 2px, transparent 4px) 94% 26% / 11px 11px no-repeat, radial-gradient(circle, rgb(255 230 120 / 1) 0 3px, transparent 5px) 3% 66% / 14px 14px no-repeat, radial-gradient(circle, rgb(255 120 220 / 1) 0 2px, transparent 4px) 97% 74% / 11px 11px no-repeat, radial-gradient(circle, rgb(90 240 250 / 1) 0 2px, transparent 4px) 48% 97% / 11px 11px no-repeat;
+  --cd-pink: #8a2f78; --cd-lilac: #4b3a9a; --cd-mint: #1f6b6e; --cd-peach: #7a4a3a; --cd-sky: #2c4f9a; --cd-butter: #6e5a22;
+  --cd-shadow: rgb(0 0 0 / 0.45); --cd-glow: rgb(255 120 210 / 0.3);
+  --cd-toy-opacity: 0.6; --cd-toy-shadow: rgb(255 70 200 / 0.45);
+}
+/* the rows of sweets crawl 5–6 px a second (one tile in 36 s, the first right, the second left), by
+   transform on the compositor: smooth, with no restyle or repaint of the band. Each row starts where its fixed
+   background was (40px 16px and 120px 34px from the window's corner; the layer starts 240px left of the bar). */
+html[data-skin="nube"] .theme-band:not(.side-band, .topbar:not(.topbar-chat)) > .band-art { display: block; position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+html[data-skin="nube"] .band-art > * { position: absolute; top: 0; left: -240px; width: calc(100% + 480px); height: 100%; }
+html[data-skin="nube"] .band-art > :first-child { background: radial-gradient(circle at 50% 50%, var(--cd-dot-a) 0 3px, transparent 4px) calc(280px - var(--band-x, 0px)) calc(16px - var(--band-y, 0px)) / 190px 56px repeat-x; }
+html[data-skin="nube"] .band-art > :last-child { background: radial-gradient(circle at 50% 50%, var(--cd-dot-b) 0 2px, transparent 3px) calc(360px - var(--band-x, 0px)) calc(34px - var(--band-y, 0px)) / 230px 56px repeat-x; }
+@media (prefers-reduced-motion: no-preference) {
+  html[data-skin="nube"]:not([data-motion="minima"]) .band-art > :first-child { animation: cd-band-a 36s linear infinite; }
+  html[data-skin="nube"]:not([data-motion="minima"]) .band-art > :last-child { animation: cd-band-b 36s linear infinite; }
+}
+@keyframes cd-band-a { to { transform: translateX(190px); } }
+@keyframes cd-band-b { to { transform: translateX(-230px); } }
+.scene-nube .scene-blur { --scene-opacity: 1; background: var(--cd-page); }
+/* The glints: a still layer of tiny bright dots near the edges whose opacity swells and fades (alternate: no jump at the loop). */
+.scene-nube .scene-blur::after { content: ""; position: absolute; inset: 0; background: var(--cd-glints); animation: cd-twinkle 6s ease-in-out infinite alternate; }
+@keyframes cd-twinkle { from { opacity: 0.35; } to { opacity: 1; } }
+/* The blobs: soft-edged ellipses of one pastel each (the soft edge is the gradient itself), breathing and drifting very slowly. */
+.cd-blob { border-radius: 50%; opacity: 0.7; background: radial-gradient(closest-side, var(--c), color-mix(in srgb, var(--c) 60%, transparent) 55%, transparent); animation: cd-drift ease-in-out infinite alternate; }
+@keyframes cd-drift { from { transform: translate(0, 0) scale(1); } to { transform: translate(var(--dx, 40px), var(--dy, -30px)) scale(1.12); } }
+/* The sweets: each an SVG shaded with radial gradients, bobbing and tilting a little. */
+/* the shadow belongs to the drawing (its svg), so it is painted once into the moving layer, which the compositor
+   only moves; on the moving layer itself the GPU drew the blur again every frame. A hard offset, no blur at all. */
+.cd-candy { opacity: var(--cd-toy-opacity); animation: cd-bob ease-in-out infinite alternate; transform-origin: 50% 60%; }
+.cd-candy svg { display: block; width: 100%; height: auto; overflow: visible; filter: drop-shadow(0 6px 0 var(--cd-toy-shadow)); }
+@keyframes cd-bob { from { transform: translateY(0) rotate(var(--r, 0deg)); } to { transform: translateY(-14px) rotate(calc(var(--r, 0deg) + 4deg)); } }
+
+/* ================================================================================================================
+   THE CHARACTER. Fredoka on titles, buttons and labels; chunky keys with a 3 px hard bottom edge that sink when pressed
+   (transform only, nothing moves in the layout); 1.5 px outlines in a darker tone; hard soft shadows; pills and big radii.
+   ================================================================================================================ */
+html[data-skin="nube"] :is([data-slot="button"], [data-slot="badge"], [data-slot="label"], [role="tab"], [data-testid="orb-places"] button, .side-foot-icon) { font-family: "Fredoka Variable", var(--font-sans); }
+html[data-skin="nube"] [data-slot="button"] { border-radius: 999px; font-weight: 600; letter-spacing: 0.01em; transition: transform var(--dur-fast) var(--ease-pop), box-shadow var(--dur-fast) var(--ease-pop), background-color var(--dur-fast); }
+html[data-skin="nube"] [data-slot="button"].bg-primary { border: 2px solid var(--cd-key); box-shadow: inset 0 2px 0 rgb(255 255 255 / 0.3), 0 3px 0 var(--cd-key); }
+html[data-skin="nube"] [data-slot="button"].border { background-color: var(--card); color: var(--foreground); border: 1.5px solid var(--cd-rim); box-shadow: 0 2px 0 var(--cd-drop); }
+html[data-skin="nube"] [data-slot="button"].border:hover { background-color: var(--accent); }
+html[data-skin="nube"] [data-slot="button"].bg-destructive { border: 2px solid var(--cd-red-edge); box-shadow: inset 0 2px 0 rgb(255 255 255 / 0.25), 0 3px 0 var(--cd-red-edge); }
+html[data-skin="nube"] [data-slot="button"]:is(.bg-primary, .bg-destructive, .border):active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 var(--cd-key); }
+html[data-skin="nube"] [data-slot="button"].border:active:not(:disabled) { box-shadow: 0 0 0 var(--cd-drop); }
+html[data-skin="nube"] [data-slot="button"].bg-destructive:active:not(:disabled) { box-shadow: 0 1px 0 var(--cd-red-edge); }
+html[data-skin="nube"] [data-slot="button"]:disabled { box-shadow: none; transform: none; }
+html[data-skin="nube"] [data-slot="button"]:is(.bg-secondary, .bg-primary\/10) { font-weight: 600; }
+html[data-skin="nube"] [data-slot="card"] { border: 1.5px solid var(--cd-rim); border-radius: 1.4rem; box-shadow: 0 2px 0 var(--cd-drop); }
+html[data-skin="nube"] [data-slot="badge"] { font-weight: 600; border: 1.5px solid color-mix(in srgb, currentColor 30%, transparent); box-shadow: none; }
+html[data-skin="nube"] :is([data-slot="input"], [data-slot="textarea"]) { border: 1.5px solid var(--input); border-radius: 1rem; box-shadow: inset 0 2px 0 var(--muted); font-weight: 600; }
+html[data-skin="nube"] :is([data-slot="menu-content"], [data-slot="select-content"]) { border: 1.5px solid var(--cd-rim); border-radius: 1rem; box-shadow: 0 3px 0 var(--cd-drop); padding: 6px; }
+html[data-skin="nube"] :is([data-slot="menu-content"], [data-slot="select-content"]) :is([role="menuitem"], [role="option"]) { border-radius: 0.75rem; font-weight: 600; }
+html[data-skin="nube"] :is([data-slot="dialog-content"], [data-slot="dialog-overlay"] + [role="dialog"]) { border: 1.5px solid var(--cd-rim); border-radius: 1.4rem; box-shadow: 0 4px 0 var(--cd-drop), 0 30px 60px -24px var(--cd-shadow); }
+html[data-skin="nube"] [role="tablist"] { border-radius: 999px; padding: 4px; background-color: var(--muted); border: 1.5px solid var(--cd-rim); box-shadow: inset 0 2px 0 color-mix(in oklch, var(--cd-drop) 35%, transparent); }
+html[data-skin="nube"] [role="tab"] { border-radius: 999px; font-weight: 600; }
+html[data-skin="nube"] [role="tab"][data-state="active"], html[data-skin="nube"] [role="radiogroup"].bg-muted [role="radio"][aria-checked="true"] { background-color: var(--primary-soft); color: var(--primary-text); box-shadow: inset 0 0 0 1.5px var(--primary), 0 2px 0 var(--cd-drop); }
+html[data-skin="nube"] [role="radiogroup"].bg-muted { border-radius: 999px; }
+html[data-skin="nube"] [role="radiogroup"].bg-muted [role="radio"] { border-radius: 999px; font-weight: 600; }
+html[data-skin="nube"] [data-testid="skin-picker"] [role="radio"] { border-radius: 1.2rem; }
+html[data-skin="nube"] [data-testid="skin-picker"] [role="radio"][aria-checked="true"] { box-shadow: 0 0 0 2px var(--primary), 0 3px 0 var(--cd-key); border-color: transparent; }
+
+/* The sidebar: a flat panel with a 1.5 px rim; the four places are game tiles, each with its own colour. */
+html[data-skin="nube"] aside.bg-sidebar { border-right: 1.5px solid var(--cd-rim); box-shadow: none; background-image: none; position: relative; z-index: 1; }
+html.dark[data-skin="nube"] aside.bg-sidebar { border-right-color: color-mix(in oklch, var(--border) 55%, transparent); }
+html[data-skin="nube"] nav button { border-radius: 999px; }
+html[data-skin="nube"] nav button.bg-accent { color: var(--primary-text); font-weight: 600; background-color: var(--primary-soft); box-shadow: inset 0 0 0 1.5px var(--primary); }
+html[data-skin="nube"] nav button.bg-accent svg { color: var(--primary-text); }
+html[data-skin="nube"] [data-testid="orb-places"] { gap: 6px; padding-inline: 10px; padding-bottom: 10px; }
+html[data-skin="nube"] [data-testid="orb-places"] > button { min-height: 54px; justify-content: center; gap: 3px; border-radius: 16px; border: 2px solid var(--pe); background-color: var(--pf); color: var(--pk); box-shadow: inset 0 2px 0 rgb(255 255 255 / 0.3), 0 3px 0 var(--pe); font-size: 10.5px; font-weight: 600; letter-spacing: 0; white-space: nowrap; transition: transform var(--dur-fast) var(--ease-pop), box-shadow var(--dur-fast) var(--ease-pop); }
+html[data-skin="nube"] [data-testid="orb-places"] > button svg { color: var(--pk); width: 18px; height: 18px; stroke-width: 2.3; }
+html[data-skin="nube"] [data-testid="orb-places"] > button:hover { background-color: var(--pf); color: var(--pk); }
+html[data-skin="nube"] [data-testid="orb-places"] > button.bg-accent { background-color: var(--pf); color: var(--pk); transform: translateY(2px); box-shadow: inset 0 2px 0 rgb(0 0 0 / 0.08), 0 1px 0 var(--pe); }
+html[data-skin="nube"] [data-testid="nav-tasks"] { --pf: var(--cd-green); --pe: var(--cd-green-edge); --pk: var(--cd-green-ink); }
+html[data-skin="nube"] [data-testid="nav-projects"] { --pf: var(--cd-blue); --pe: var(--cd-blue-edge); --pk: var(--cd-blue-ink); }
+html[data-skin="nube"] [data-testid="nav-schedules"] { --pf: var(--cd-orange); --pe: var(--cd-orange-edge); --pk: var(--cd-orange-ink); }
+html[data-skin="nube"] [data-testid="nav-board"] { --pf: var(--cd-purple); --pe: var(--cd-purple-edge); --pk: var(--cd-purple-ink); }
+html[data-skin="nube"] [data-testid="orb-places-more"] { --pf: var(--card); --pe: var(--cd-rim); --pk: var(--foreground); }
+html[data-skin="nube"] [data-testid="nav-tasks-count"] { top: 0; right: 4px; min-width: 19px; height: 19px; padding: 0 5px; border: 2px solid var(--card); background-color: var(--cd-red); color: var(--primary-foreground); font-family: "Fredoka Variable", var(--font-sans); font-weight: 600; box-shadow: 0 2px 0 var(--cd-red-edge); }
+html.dark[data-skin="nube"] [data-testid="nav-tasks-count"] { color: oklch(0.18 0.05 20); }
+/* The chats: rounded cards with a hard edge below; the open one in the primary's tint. */
+html[data-skin="nube"] [data-testid^="orb-row-"] { border: 1.5px solid var(--cd-rim); border-radius: 1rem; background-color: var(--card); box-shadow: 0 2px 0 var(--cd-drop); margin-bottom: 3px; }
+html[data-skin="nube"] [data-testid^="orb-row-"]:hover { border-color: var(--input); }
+html[data-skin="nube"] [data-testid^="orb-row-"].bg-accent { background-color: var(--primary-soft); border-color: var(--primary); box-shadow: 0 3px 0 var(--cd-key); }
+html[data-skin="nube"] .side-search-box { border: 1.5px solid var(--input); box-shadow: inset 0 2px 0 var(--muted); font-weight: 600; }
+html[data-skin="nube"] .side-foot-icon { border: 1.5px solid transparent; }
+html[data-skin="nube"] .side-foot-icon:hover { background-color: var(--card); border-color: var(--cd-rim); }
+html[data-skin="nube"] .side-foot-icon.is-active { background-color: var(--primary); color: var(--primary-foreground); border-color: var(--cd-key); box-shadow: 0 2px 0 var(--cd-key); }
+
+/* The chat: the user's message is a key-like bubble; the update card a candy-coloured block. */
+html[data-skin="nube"] .bg-bubble { border: 1.5px solid color-mix(in oklch, var(--bubble) 62%, black); border-radius: 1.15rem 1.15rem 0.35rem 1.15rem; box-shadow: 0 3px 0 color-mix(in oklch, var(--bubble) 62%, black); font-weight: 600; background-image: none; }
+html[data-skin="nube"] [data-testid="update-card"] { background-image: linear-gradient(135deg, oklch(0.52 0.16 348), oklch(0.48 0.14 295)); }
+html[data-skin="nube"] .bg-warning.rounded-full { box-shadow: 0 2px 0 oklch(0.42 0.12 60); font-weight: 600; }
+
+/* ---- Typography of each theme: used while the interface font is the default (a font chosen by hand wins). ---- */
+/* Orb: Inter for the interface and Outfit for the titles, only while the default font is selected. */
+html[data-skin="orb"][data-font="outfit"] { --font-sans: "Inter Variable", "Segoe UI", system-ui, sans-serif; --font-title: "Outfit Variable", var(--font-sans); }
+html[data-skin="vaporwave"][data-font="outfit"] { --font-sans: "Space Grotesk Variable", "Segoe UI", system-ui, sans-serif; }
+html[data-skin="retro"][data-font="outfit"] { --font-sans: "VT323", "IBM Plex Mono", Consolas, monospace; }
+html[data-skin="nube"][data-font="outfit"] { --font-sans: "Nunito Variable", "Segoe UI", system-ui, sans-serif; }
+html[data-skin="profesional"][data-font="outfit"] { --font-sans: "Inter Variable", "Segoe UI", system-ui, sans-serif; }
+html[data-skin="nube"] :is(h1, h2, h3, [data-slot="card-title"], .hero-title):not(.prose-chat *) { font-family: "Fredoka Variable", var(--font-sans); font-weight: 700; }
+/* The big greeting of the chat in the theme's own colours. */
+html.dark[data-skin="vaporwave"] .hero-title { background: linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; }
+html[data-skin="nube"] .hero-title { background: linear-gradient(90deg, #f05aa6, #a07af0 55%, #4fb7e8); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* ---- Over a backdrop, the message box is frosted glass framed in the theme's own way; the chat's notes (the system's
+   bubbles) are the card's colour, nearly solid: the reading column under them already blurs the scene. ---- */
+html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) main :is(.bg-muted\/70, .bg-muted\/50) { background-color: color-mix(in oklch, var(--card) 82%, transparent); }
+/* Text set straight on the scene (the assistant's messages, the greeting, the names): a faint halo of the page's colour
+   under it, so a bright piece of the art drifting by never eats into the letters. */
+html.dark:is([data-skin="vaporwave"], [data-skin="nube"]) main :is(.prose-chat, .hero-title + p, .text-muted-foreground.text-xs) { text-shadow: 0 1px 2px color-mix(in oklch, var(--background) 85%, transparent), 0 0 8px color-mix(in oklch, var(--background) 70%, transparent); }
+html:not(.dark):is([data-skin="vaporwave"], [data-skin="nube"]) main :is(.prose-chat, .hero-title + p) { text-shadow: 0 0 6px color-mix(in oklch, var(--background) 70%, transparent); }
+/* The buttons inside a chat message (accept the report, ask for changes, play, allow / always / deny, see the task):
+   small and light so the conversation stays calm; each theme keeps its character with thinner outlines and shadows. */
+.chat-actions [data-slot="button"] { font-weight: 500; }
+html[data-skin="nube"] .chat-actions [data-slot="button"].bg-primary { border-width: 1.5px; box-shadow: 0 2px 0 var(--cd-key); }
+html[data-skin="nube"] .chat-actions [data-slot="button"].bg-primary:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 1px 0 var(--cd-key); }
+html[data-skin="nube"] .chat-actions [data-slot="button"].border { border-width: 1.5px; box-shadow: 0 2px 0 var(--cd-drop); }
+html[data-skin="nube"] [data-slot="composer"] { border: 1.5px solid var(--input); background-color: color-mix(in oklch, var(--card) 94%, transparent); border-radius: 1.4rem; box-shadow: 0 3px 0 var(--cd-drop); }
+html[data-skin="nube"] [data-slot="composer"]:focus-within { border-color: var(--ring); box-shadow: 0 3px 0 var(--cd-key); }
+
+/* in a conversation the bar shows its title in the middle: the theme's art keeps to the sides so it never sits behind
+   the words (in every theme, also Retro's own mask above). */
+html[data-skin] .topbar-chat.theme-band:has(.bar-title)::before, html[data-skin] .topbar-chat.theme-band:has(.bar-title)::after, html[data-skin] .topbar-chat.theme-band:has(.bar-title) > .band-art { mask-image: linear-gradient(90deg, transparent 150px, #000 230px, #000 calc(50% - 240px), transparent calc(50% - 180px), transparent calc(50% + 180px), #000 calc(50% + 240px), #000 calc(100% - var(--wco-inset, 0px) - 230px), transparent calc(100% - var(--wco-inset, 0px) - 170px)); }
+
+/* The icons of the sidebar's footer are game tiles too, in the four colours of the places. */
+html[data-skin="nube"] .side-foot-row > button.side-foot-icon:not(.is-active) { border: 2px solid var(--pe); border-radius: 12px; background-color: var(--pf); color: var(--pk); box-shadow: 0 2px 0 var(--pe); }
+html[data-skin="nube"] .side-foot-row > button.side-foot-icon:nth-of-type(4n+1) { --pf: var(--cd-green); --pe: var(--cd-green-edge); --pk: var(--cd-green-ink); }
+html[data-skin="nube"] .side-foot-row > button.side-foot-icon:nth-of-type(4n+2) { --pf: var(--cd-blue); --pe: var(--cd-blue-edge); --pk: var(--cd-blue-ink); }
+html[data-skin="nube"] .side-foot-row > button.side-foot-icon:nth-of-type(4n+3) { --pf: var(--cd-orange); --pe: var(--cd-orange-edge); --pk: var(--cd-orange-ink); }
+html[data-skin="nube"] .side-foot-row > button.side-foot-icon:nth-of-type(4n) { --pf: var(--cd-purple); --pe: var(--cd-purple-edge); --pk: var(--cd-purple-ink); }
+html[data-skin="nube"] .side-foot-row > button.side-foot-icon:not(.is-active):hover { background-color: var(--pf); border-color: var(--pe); transform: translateY(-1px); }

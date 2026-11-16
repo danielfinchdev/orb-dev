@@ -1,4 +1,4 @@
-// 3.8.2 (phase 3): “Full PC access”, “Use my Android phone” and pairing the phone (Settings › Android).
+// “Full PC access”, “Use my Android phone” and pairing the phone (Settings › Android).
 export default {
   'msg.guard.adb': 'runs adb; use the orb_android_* tools (adb by hand only with “Full access” and “Use my Android phone”)',
   'msg.guard.driveAlias': 'makes another name for a drive or folder (subst, net use, New-PSDrive), which Orb doesn’t allow',

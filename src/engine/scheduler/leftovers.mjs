@@ -5,15 +5,15 @@ import { processList, taskProcesses, stopProcesses } from '../../platform/proc-l
 import { LEFTOVERS_RETRY_MS } from './common.mjs';
 
 export class LeftoversPart {
-  // 3.1: a task that started a dev server (vite, node server.js…) and left it running: it is stopped when the task ends,
+  // a task that started a dev server (vite, node server.js…) and left it running: it is stopped when the task ends,
   // so the next task or the user does not find the port taken. Windows only. Only programs of the usual runtimes, started
   // from the task's own folder after the task began, and only if no other task is still working in that folder.
-  // 3.8.3: asynchronous (the process list takes ~0.8 s): returns the promise of the stop, or null when there is nothing to
+  // asynchronous (the process list takes ~0.8 s): returns the promise of the stop, or null when there is nothing to
   // do now. While it runs, the task's copy folder stays (dropCopy removes it once the stop is over).
   stopLeftovers(task, { roots = [] } = {}) {
     if (process.platform !== 'win32' || !task.workdir || process.env.ORB_FAKE_AGENTS) return null; // the test agents never start programs
     // Another task still writing in the same folder: wait until it is over (its own leftovers might be among these), then
-    // retry (retryLeftovers, from tick). This is how 3.1 behaved, but now it comes back instead of giving up.
+    // retry (retryLeftovers, from tick). It comes back to the folder instead of giving up.
     if (this.folderBusy(task)) { this.board.settingJson?.(`leftovers_pending:${task.id}`, { workdir: task.workdir }); return null; }
     this.board.settingJson?.(`leftovers_pending:${task.id}`, null);
     return this.stopTaskPrograms([{ task, roots }]);
@@ -29,7 +29,7 @@ export class LeftoversPart {
     const work = (async () => {
       // The processes of this PC now; the task's own by their tree (descendants of the agent, or orphans whose parent was
       // the agent and has since gone — a Start-Process child, the python3.13 the WindowsApps alias relaunches), and those
-      // whose command line names the task's folder (the 3.1 rule). Only the usual runtimes and the shells that start them.
+      // whose command line names the task's folder (the rule). Only the usual runtimes and the shells that start them.
       const list = await processList(Math.min(...jobs.map((j) => j.since))); if (!list) return;
       for (const { task, roots, since } of jobs) {
         try {
@@ -47,8 +47,8 @@ export class LeftoversPart {
     return done;
   }
 
-  // 3.2.1: leftovers that could not be stopped at the time because another task was writing in the same folder: once that
-  // folder is free, they are stopped. Called from tick. 3.8.3: only the rows really pending (never the empty ones), with one
+  // leftovers that could not be stopped at the time because another task was writing in the same folder: once that
+  // folder is free, they are stopped. Called from tick. Only the rows really pending (never the empty ones), with one
   // process list for all of them, never while a stop is under way and at most every LEFTOVERS_RETRY_MS.
   retryLeftovers() {
     if (process.platform !== 'win32' || process.env.ORB_FAKE_AGENTS) return;

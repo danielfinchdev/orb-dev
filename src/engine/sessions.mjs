@@ -1,11 +1,12 @@
 // Live sessions: a conversation with one agent in one folder. Direct conversations and task runs launched
-// by the scheduler use the same machinery. 2.3: every conversation keeps ONE live process of its agent open between turns
+// by the scheduler use the same machinery. Every conversation keeps ONE live process of its agent open between turns
 // (src/agents/live.mjs): answers stream as they are written, the user can steer the running turn or queue messages,
 // approval requests show up as cards, the context meter fills up, and a closed app resumes the agent's own conversation.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { ctx, tr } from '../platform/context.mjs';
+import { approvalWaitMinutes, taskTimeoutMinutes } from '../domain/rules/rails.mjs';
 import { connectorKey } from '../platform/config.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
 import { adapter, executable } from '../agents/index.mjs';
@@ -31,7 +32,7 @@ import { changedFiles, logDirect } from '../domain/journal/journal.mjs';
 import { ATTACH_DIR, placeAttachments as copyAttachments, prepareAttachments } from './host/attachments.mjs';
 
 export { PERMISSIONS, ATTACH_DIR };
-// 3.2.1: a message that asks for a picture (or to change one): Codex gets a short note on how Orb wants it done.
+// a message that asks for a picture (or to change one): Codex gets a short note on how Orb wants it done.
 const IMAGE_ASK = /\b(imagen|im[aá]genes|image|images|picture|ilustraci[oó]n|illustration|logo|icono|icon|dibujo|drawing|foto|photo|wallpaper|edita la imagen)\b/i;
 const IDLE_CLOSE_MS = 20 * 60_000; // a live process with nothing to do for this long is closed (it resumes on the next message)
 const WATCH_MS = Number(process.env.ORB_WATCH_MS) || 5000; // how often a running turn is checked (time limit, permissions)
@@ -45,8 +46,8 @@ export const browserOn = () => Boolean(ctx.browser) && ctx.config.browser?.enabl
 
 // MCP servers handed to an agent: the assistant's board (with the browser tools when the app offers them) plus the
 // user's own connectors enabled for that agent. session: which conversation or task run (its agent process), so its next
-// turn reuses the same page. 3.2: conversation: the coordinator's conversation (its questions, tasks and project).
-// 3.8: who each server is, and a connector's command and keys, stay in the engine's memory (agent-auth.mjs): the config
+// turn reuses the same page. conversation: the coordinator's conversation (its questions, tasks and project).
+// who each server is, and a connector's command and keys, stay in the engine's memory (agent-auth.mjs): the config
 // carries only the pipe and a ticket per server, new for every agent process and taken back when it closes
 // (Sessions.closeLive, the coordinator's Lane.closeLive). A worker's tools act only on its task (permissions.mjs ›
 // ownsTask); two direct conversations of one agent are two identities.
@@ -69,10 +70,10 @@ export function mcpServersFor(agent, { taskId = '', orchestrator = false, browse
     const taken = new Set(['orb']);
     for (const s of ctx.config.mcpServers ?? []) {
       if (s.enabled === false || (s.agents?.length && !s.agents.includes(agent)) || taken.has(connectorKey(s.name))) continue;
-      // 3.8.1: a server of core\mcp whose folder is a link or a junction (or reaches out of core) never starts.
+      // a server of core\mcp whose folder is a link or a junction (or reaches out of core) never starts.
       if (!connectorSafe(ctx.paths.core, s)) continue;
       taken.add(connectorKey(s.name)); // F2.6c: never two servers on one variable name (config checks it too)
-      // 3.8: its keys only for its launcher (orb.json has references). 3.8.1: as a one-time grant of the vault, made when
+      // its keys only for its launcher (orb.json has references). Keys go as a one-time grant of the vault, made when
       // the launcher trades its ticket: the keys go from the vault to the launcher, never through the engine.
       servers[s.name] = ticketed(s.name, connectorLauncher(), () => ({ launch: { command: s.command, args: s.args ?? [], ...connectorLaunch(ctx.master, s) } }));
     }
@@ -82,7 +83,7 @@ export function mcpServersFor(agent, { taskId = '', orchestrator = false, browse
 // What an adapter gets: its servers, or (an agent that starts them again every turn) a function giving new ones.
 export const mcpServersOf = (a, agent, opts) => (a.mcpServersEachTurn ? () => mcpServersFor(agent, { ...opts, reusable: true }) : mcpServersFor(agent, opts));
 
-// 3.8.2: any file (src/engine/host/attachments.mjs), copied into <folder>/.orb-adjuntos/<stamp>/ so every agent of the
+// any file (src/engine/host/attachments.mjs), copied into <folder>/.orb-adjuntos/<stamp>/ so every agent of the
 // conversation can read it, and kept out of git. → [{ path, name, kind, size }]
 export function placeAttachments(files, cwd) {
   const placed = copyAttachments(files, cwd);
@@ -90,7 +91,7 @@ export function placeAttachments(files, cwd) {
   return placed;
 }
 
-// The attachments folder (pictures, long instructions for Cursor) never goes into the project's git; 3.1: nor do the files
+// The attachments folder (pictures, long instructions for Cursor) never goes into the project's git; nor do the files
 // Orb gives Cursor for one turn (its tools and rules, see cursor.mjs).
 function keepOutOfGit(cwd, entries = [`${ATTACH_DIR}/`]) {
   if (isGitRepo(cwd)) {
@@ -117,7 +118,7 @@ export function describeItem(item) {
   return null;
 }
 
-// 3.8.3: whether a permission request could be a task stopping its own processes by number (only then is the process list
+// whether a permission request could be a task stopping its own processes by number (only then is the process list
 // asked, asynchronously, before showing the card).
 const mayBeOwnKill = (command) => process.platform === 'win32' && Boolean(pidKills(unwrapShell(command))?.length);
 
@@ -127,9 +128,9 @@ export class Sessions {
     this.board = board; this.emit = emit; this.log = log;
     this.running = new Map();   // session id -> the running turn { agent, startedAt, lastAt, steps, last, stopped, live }
     this.lives = new Map();     // session id -> { live, key, lastUsed, logFile }
-    this.deltas = new Map();    // 3.8.3: session id -> { text, timer }: the streamed text not sent to the window yet
+    this.deltas = new Map();    // session id -> { text, timer }: the streamed text not sent to the window yet
     this.approvals = new Map(); // `${session}:${request}` -> item id of its card
-    this.asked = new Map();     // 3.8.3: session id -> what the user's own message of this turn asked for (['publish'])
+    this.asked = new Map();     // session id -> what the user's own message of this turn asked for (['publish'])
     this.onApproval = () => {}; // set by the engine: a notice in the chat when a task waits for a click
     this.onApprovalDone = () => {}; // set by the engine: that notice shows how it ended (allowed, denied, nobody answered)
     this.onApprovalExpired = () => {};
@@ -145,7 +146,7 @@ export class Sessions {
   }
 
   list({ archived = false, kind } = {}) {
-    return this.board.all(`SELECT * FROM sessions WHERE archived = ? ${kind ? 'AND kind = ?' : ''} ORDER BY updated_at DESC LIMIT 300`, Number(archived), ...(kind ? [kind] : [])).map(parseRow);
+    return this.board.all(`SELECT * FROM sessions WHERE archived = ? AND trashed_at IS NULL ${kind ? 'AND kind = ?' : ''} ORDER BY updated_at DESC LIMIT 300`, Number(archived), ...(kind ? [kind] : [])).map(parseRow);
   }
   get(id) { return parseRow(this.board.one('SELECT * FROM sessions WHERE id = ?', String(id))); }
   must(id) { const s = this.get(id); if (!s) throw new Error(tr('msg.sessions.noConversation')); return s; }
@@ -256,7 +257,7 @@ export class Sessions {
   }
 
   // ---- the live process of a conversation
-  // 3.8.2 (review M3): a new permission starts the agent again at its next turn (its tools, Codex's sandbox and
+  // a new permission starts the agent again at its next turn (its tools, Codex's sandbox and
   // approvals are chosen when it starts).
   liveKey(s, acc) { return [s.agent, acc.id, s.cwd, s.reasoning, s.permission].join('|'); }
 
@@ -269,7 +270,7 @@ export class Sessions {
   }
   closeIdle() {
     for (const [id, entry] of this.lives) if (!this.running.has(id) && Date.now() - entry.lastUsed > IDLE_CLOSE_MS) this.closeLive(id);
-    // 3.2: a direct conversation quiet for a day, with nothing waiting, is done by itself (it opens again when written to).
+    // a direct conversation quiet for a day, with nothing waiting, is done by itself (it opens again when written to).
     const since = new Date(Date.now() - 24 * 3_600_000).toISOString();
     for (const s of this.board.all("SELECT id FROM sessions WHERE kind = 'chat' AND settled = 0 AND archived = 0 AND status IN ('idle', 'done') AND updated_at < ?", since)) {
       if (this.running.has(s.id) || this.pendingApprovals(s.id).length) continue;
@@ -307,20 +308,20 @@ export class Sessions {
       mcpServers: mcpServersOf(a, s.agent, { taskId, session: s.id }), budgetUsd,
       env: { ...accountEnv(acc), ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
       internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, cfg: ctx.config.agents[s.agent] ?? {},
-      // 3.8.3: the project's folder for the guard's inside/outside rules (none in a chat without a project), and what the
+      // the project's folder for the guard's inside/outside rules (none in a chat without a project), and what the
       // user's own message of the turn asked for (read on every action: «súbelo» lets «Auto» push).
       projectDir: s.project ? s.cwd : null,
       userAsked: () => this.asked.get(s.id) ?? [],
-      // 3.8.2: read on every action (the owner may take it back at any moment): adb by hand needs it (src/domain/security/guard.mjs).
+      // read on every action (the owner may take it back at any moment): adb by hand needs it (src/domain/security/guard.mjs).
       android: () => androidAllowed(this.get(s.id)),
-      skills: liveSkills(), // 3.8.1: the skills of core that are on (Claude and Codex load them themselves)
+      skills: liveSkills(), // the skills of core that are on (Claude and Codex load them themselves)
       onEvent: (ev) => this.onLiveEvent(s.id, ev)
     });
     this.lives.set(s.id, entry);
     return entry;
   }
 
-  // 3.8.3: the streamed text goes to the window (and to each linked phone, ciphered for each) in pieces of up to 50 ms, not
+  // the streamed text goes to the window (and to each linked phone, ciphered for each) in pieces of up to 50 ms, not
   // one event per token; anything else the agent does sends what was pending first, so the order stays the same.
   queueDelta(id, text) {
     const d = this.deltas.get(id);
@@ -345,7 +346,7 @@ export class Sessions {
       if (run) { const what = describeItem(item); if (what) run.last = what; if (ev.kind === 'tool' || ev.kind === 'file') run.steps++; }
       return;
     }
-    // 3.8.3: something «Auto» let through that «Preguntar» would have asked: one quiet line in the chat (and the task's
+    // something «Auto» let through that «Preguntar» would have asked: one quiet line in the chat (and the task's
     // activity), so nothing passes unsaid.
     if (ev.type === 'auto') {
       const what = plainAction(ev.title ?? '', { lang: ctx.config.language });
@@ -358,7 +359,7 @@ export class Sessions {
     if (ev.type === 'approval') {
       const r = ev.request;
       const s = this.get(id);
-      // 3.2.1 (finding 47): the agent already closed its task (orb_update_task) but its process is still asking for a
+      // the agent already closed its task (orb_update_task) but its process is still asking for a
       // permission as it winds down. The task is over: the request is denied and the agent told, so nothing is left
       // hanging for the user to answer on a task that is already "Completada" (Orb stops its programs itself).
       if (s?.kind === 'task' && s.task_id) {
@@ -369,8 +370,8 @@ export class Sessions {
           return;
         }
       }
-      // 3.1: a task stopping its own test server by its number needs nobody: allowed at once, and said in its conversation.
-      // 3.8.3: checked asynchronously (the process list takes ~0.8 s); the card appears only if it is not the task's own.
+      // a task stopping its own test server by its number needs nobody: allowed at once, and said in its conversation.
+      // checked asynchronously (the process list takes ~0.8 s); the card appears only if it is not the task's own.
       if (run && s?.kind === 'task' && mayBeOwnKill(r.title)) {
         this.ownProcesses(r.title, s.cwd, run.startedAt, { roots: [this.lives.get(id)?.live.pid].filter(Boolean) }).catch(() => false).then((own) => {
           if (own && this.lives.get(id)?.live.respond(r.id, 'allow')) this.addItem(id, 'system', 'approval', { id: r.id, tool: r.tool, title: r.title, reason: tr('msg.sessions.ownProcess'), input: r.input, status: 'allowed' });
@@ -408,20 +409,20 @@ export class Sessions {
     try { this.onApproval(this.get(id), item); } catch (error) { this.log(`aviso de aprobación: ${error.message}`); }
   }
 
-  // 3.1: whether a command only stops processes this task started itself: every number it names is a process launched
+  // whether a command only stops processes this task started itself: every number it names is a process launched
   // after the turn began from the task's own folder (Windows). Anything else (by name, someone else's process, a
-  // command cut short in the card) asks as always. 3.8.3: asynchronous (resolves with true or false).
+  // command cut short in the card) asks as always. Asynchronous (resolves with true or false).
   async ownProcesses(command, cwd, since, { roots = [] } = {}) {
     if (process.platform !== 'win32' || !cwd) return false;
-    // 3.2.1: Codex sends the whole command wrapped in powershell -Command and may keep the number in a variable
-    // (`$p = 11188; Stop-Process -Id $p`); pidKills unwraps and resolves that now, so the 400-char cap of 3.1 is gone.
+    // Codex sends the whole command wrapped in powershell -Command and may keep the number in a variable
+    // (`$p = 11188; Stop-Process -Id $p`); pidKills unwraps and resolves that, so no 400-char cap applies.
     const pids = pidKills(unwrapShell(command));
     if (!pids?.length || pids.length > 8) return false;
     const out = await powershell(`Get-CimInstance Win32_Process -Filter "${pids.map((p) => `ProcessId=${Number(p)}`).join(' OR ')}" | ForEach-Object { [pscustomobject]@{ id = $_.ProcessId; cmd = $_.CommandLine; at = $_.CreationDate.ToUniversalTime().ToString('o') } } | ConvertTo-Json -Compress`, { timeout: 15_000 });
     let found = []; try { const j = JSON.parse(out || '[]'); found = Array.isArray(j) ? j : [j]; } catch { return false; }
     const dir = path.resolve(cwd).toLowerCase();
     const byCmd = (pid) => found.some((p) => p.id === pid && String(p.cmd ?? '').toLowerCase().includes(dir) && Date.parse(p.at) >= since - 1000);
-    // 3.2.1: a server started with a relative path does not name the folder in its command line (`node server.js`); it is
+    // a server started with a relative path does not name the folder in its command line (`node server.js`); it is
     // recognised instead as part of the task's process tree (descendant of the agent).
     const tree = new Set();
     if (roots.length && !pids.every(byCmd)) { const list = await processList(since); if (list) for (const p of taskProcesses(list, { since, roots: roots.map(Number), dir, engine: process.pid })) tree.add(p.id); }
@@ -478,7 +479,7 @@ export class Sessions {
     const t = setTimeout(() => { if (this.running.get(id) === run) this.closeLive(id); }, 8000); t.unref?.();
     return true;
   }
-  // 3.1: a running turn, every few seconds.
+  // a running turn, every few seconds.
   // - Time limit on working time: the minutes spent waiting for the user's permission do not count.
   // - A task's permission that nobody answers in approvalWaitMinutes (Ajustes, 10 by default; 0 = wait for ever) is
   //   denied, the agent is told why and goes on another way: a task never sits waiting with nobody looking.
@@ -495,7 +496,7 @@ export class Sessions {
       this.stop(id);
       return;
     }
-    const waitMin = Number(ctx.config.approvalWaitMinutes ?? 10);
+    const waitMin = approvalWaitMinutes();
     if (!taskId || !(waitMin > 0)) return;
     const waitMs = Number(process.env.ORB_APPROVAL_WAIT_MS) || waitMin * 60_000; // tests: seconds instead of minutes
     for (const [key, itemId] of [...this.approvals.entries()].filter(([k]) => k.startsWith(`${id}:`))) {
@@ -513,22 +514,22 @@ export class Sessions {
     }
   }
 
-  // 3.8.2: every open agent process asks its plan's usage now (the usage panel's «Recargar»). → promises
+  // every open agent process asks its plan's usage now (the usage panel's «Recargar»). → promises
   refreshUsage() { return [...this.lives.values()].map((e) => { try { return e.live.refreshUsage?.(); } catch { return null; } }).filter(Boolean); }
 
   stopAll() { for (const id of this.running.keys()) this.stop(id); for (const id of [...this.lives.keys()]) this.closeLive(id); clearInterval(this.sweeper); }
 
   // One turn. options: images (absolute paths), prompt (what the agent receives, if it differs from what the user typed),
   // timeoutMs, budgetUsd, taskId, showUser, onFinish({ code, state, stderr, logFile, stopped, timedOut, limit }).
-  send(id, text, { images = [], prompt, timeoutMs = (ctx.config.timeoutMinutes ?? 60) * 60_000, budgetUsd, taskId, onFinish, showUser = true, asked } = {}) {
+  send(id, text, { images = [], prompt, timeoutMs = taskTimeoutMinutes() * 60_000, budgetUsd, taskId, onFinish, showUser = true, asked } = {}) {
     const s = this.must(id);
-    // 3.8.3: what this turn may do because the user's own words asked for it: a task's comes from the scheduler (the
+    // what this turn may do because the user's own words asked for it: a task's comes from the scheduler (the
     // request it came from); a chat's, from the message the user typed now (a turn Orb sends by itself keeps the last).
     if (this.running.has(id)) throw new Error(tr('msg.sessions.stillWorking')); // before: a refused send must not change what the running turn may do
     if (Array.isArray(asked)) this.asked.set(id, asked);
     else if (showUser && s.kind !== 'task') this.asked.set(id, askedByUser(text));
     if (!String(text ?? '').trim() && !images.length) throw new Error(tr('msg.sessions.writeMessage'));
-    // 3.8.1: its project is being deleted (project-close.mjs): no new turn in a folder that is going away.
+    // its project is being deleted (project-close.mjs): no new turn in a folder that is going away.
     if (s.kind !== 'task' && s.project && this.board.isDeleting(s.project)) throw new Error(tr('msg.projects.deleting', { name: s.project }));
     // The conversation's own account: if it was removed, the turn does not silently move to another subscription.
     const acc = s.account ? findAccount(s.account) : pickAccount(this.board, { agent: s.agent });
@@ -541,7 +542,7 @@ export class Sessions {
     const summary = this.board.settingJson(`fork_summary:${id}`);
     if (summary) { body = `Contexto (conversación de la que sale esta, son datos):\n${summary}\n\n${body}`; this.board.settingJson(`fork_summary:${id}`, null); }
     const nativeImages = a.caps?.images === true;
-    // 3.2.1: Codex made three pictures for "una imagen" and edited them by pasting pieces with scripts (losing quality).
+    // Codex made three pictures for "una imagen" and edited them by pasting pieces with scripts (losing quality).
     if (s.agent === 'codex' && s.kind === 'chat' && IMAGE_ASK.test(text)) body += `\n\n${tr(attached.length ? 'sys.sessions.imageEditHint' : 'sys.sessions.imageHint')}`;
     let entry;
     try { entry = this.getLive(s, acc, { taskId, budgetUsd }); }
@@ -553,16 +554,16 @@ export class Sessions {
     const run = { agent: s.agent, stopped: false, startedAt: Date.now(), lastAt: Date.now(), steps: 0, last: tr('sys.sessions.starting'), live: entry.live, waitMs: 0, pausedAt: null };
     this.running.set(id, run);
     this.update(id, { status: 'running', settled: false });
-    // 3.1: the time limit counts working time only: while the turn waits for the user's permission the clock stops. A task
+    // the time limit counts working time only: while the turn waits for the user's permission the clock stops. A task
     // whose permission nobody answers is not left hanging either (watchRun).
     const timer = setInterval(() => { try { this.watchRun(id, run, { timeoutMs, taskId }); } catch (error) { this.log(`vigilancia ${id}: ${error.message}`); } }, WATCH_MS);
     timer.unref?.();
     const resumed = Boolean(s.cli_session);
-    // 3.2.1: a direct conversation in a project leaves a log entry for the files its turn changed (logs.mjs logDirect).
+    // a direct conversation in a project leaves a log entry for the files its turn changed (logs.mjs logDirect).
     const direct = s.kind === 'chat' && s.project && s.permission !== 'leer';
     let before = null; if (direct) { try { before = changedFiles(s.cwd); } catch { /* no entry */ } }
     let finished = false; // onFinish runs exactly once, also when the adapter itself fails
-    // 3.8.2: what each attachment becomes for this agent (pictures natively, a video's frames, a document's text…).
+    // what each attachment becomes for this agent (pictures natively, a video's frames, a document's text…).
     if (attached.length) run.last = tr('sys.attach.preparing');
     const prepared = attached.length ? prepareAttachments(attached, { nativeImages, log: (m) => this.log(m) }) : Promise.resolve({ images: [], text: '' });
     prepared.then((p) => (run.stopped ? { final: '', text: '', isError: true } : entry.live.send({ text: p.text ? `${body}\n\n${p.text}` : body, images: p.images }))).then((result) => {
@@ -608,7 +609,7 @@ export class Sessions {
     return run;
   }
 
-  // 3.6: «Compactar»: the agent's own compaction of a long direct conversation (Claude /compact, Codex's thread
+  // «Compactar»: the agent's own compaction of a long direct conversation (Claude /compact, Codex's thread
   // compaction). The history in Orb stays as it is; the agent goes on from its summary. While it works the conversation
   // is busy (what is written waits in the queue). → { ok }
   async compact(id) {
@@ -638,7 +639,7 @@ export class Sessions {
     return { ok: Boolean(r?.ok), how: r?.ok ? 'compacted' : 'failed' };
   }
 
-  // 3.8.2: «/clear»: the agent's process closes and the next message starts a new conversation of the agent in this same
+  // «/clear»: the agent's process closes and the next message starts a new conversation of the agent in this same
   // chat (its model, permission and project stay; the lines shown in Orb too).
   clear(id) {
     const s = this.must(id);
@@ -662,17 +663,17 @@ export class Sessions {
 
   // A copy of a conversation from its current point, to try another idea without losing the first one. Agents with native
   // forks (Claude, Codex) carry their whole history; for the others the copy starts with a summary of what was said.
-  // 3.8.2: agent: «Continuar con otro agente», the copy goes on with that agent (its own account and default model) and
+  // agent: «Continuar con otro agente», the copy goes on with that agent (its own account and default model) and
   // always starts with the summary. Without it, the fork of before.
   fork(id, { title, agent } = {}) {
     const s = this.must(id);
     if (this.running.has(id)) throw new Error(tr('msg.sessions.forkWait'));
     const other = agent && agent !== s.agent ? agent : null;
     const a = adapter(other ?? s.agent);
-    // 3.8.2: what was given with the master password stays with the original (D5: also «total» of a project's chat).
+    // what was given with the master password stays with the original (also «total» of a project's chat).
     const copy = this.create({ kind: 'chat', agent: other ?? s.agent, account: other ? null : s.account, model: other ? null : s.model, reasoning: other && s.reasoning === 'xhigh' ? 'high' : s.reasoning, permission: s.permission !== 'total' ? s.permission : s.project ? permissionOfAutonomy(globalAutonomy()) : 'leer',
       project: s.project, cwd: s.cwd, title: title || (other ? tr('msg.sessions.switchTitle', { title: s.title, agent: AGENT_LABELS[other] ?? other }) : tr('msg.sessions.forkTitle', { title: s.title })), parentId: s.id });
-    this.board.run('UPDATE sessions SET titled = 1 WHERE id = ?', copy.id); // 3.2: its title stays (not renamed by its next message)
+    this.board.run('UPDATE sessions SET titled = 1 WHERE id = ?', copy.id); // its title stays (not renamed by its next message)
     const old = this.board.all("SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT 40", s.id).reverse();
     for (const it of old) this.board.run('INSERT INTO session_items (session_id, role, kind, body, at) VALUES (?, ?, ?, ?, ?)', copy.id, it.role, it.kind, it.body, it.at);
     this.addItem(copy.id, 'system', 'status', other ? tr('msg.sessions.switched', { title: s.title, agent: AGENT_LABELS[other] ?? other }) : tr('msg.sessions.forked', { title: s.title }));
@@ -682,7 +683,7 @@ export class Sessions {
   }
 }
 
-// 3.8.3: «Auto» arrives on in an install that already had chats, once: the chats with a project that were at «Editar
+// «Auto» arrives on in an install that already had chats, once: the chats with a project that were at «Editar
 // archivos» (the old default) move to «Auto» like the new ones; the window says so once, with «Usar Preguntar» at hand
 // (src/ui/components/autonomy-switch.jsx › AutoNotice). A chat the owner had set to «Preguntar antes», «Solo lectura» or
 // «Revisar y probar» keeps it. Nothing changes when the owner already chose «Preguntar» for everything.

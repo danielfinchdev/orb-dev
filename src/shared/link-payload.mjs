@@ -1,8 +1,8 @@
-// (3.5: moved from src/ui/lib/link-payload.js; 3.8.3: into src/shared.) What the Android app (and the phone's browser) reads to link with an Orb: the QR's text or what is typed by hand.
+// What the Android app (and the phone's browser) reads to link with an Orb: the QR's text or what is typed by hand.
 // Pure functions, no browser or crypto: kept in one small file so a change of the Magic Link format only touches this
 // (test/android.test.mjs). The formats:
 // - v1 QR: «http://ip:port/#vincular=<one-time code>&pc=<the Orb's public key>»
-// - v2 QR: the same plus «&v=2&n=<name>&a=<other addresses, comma separated>» (an Orb before 3.8 also sent r=<role>)
+// - v2 QR: the same plus «&v=2&n=<name>&a=<other addresses, comma separated>» (an older Orb also sent r=<role>)
 // - JSON: { v, urls | url, pc, code, name, role }
 // - typed by hand: the short code (8 letters and digits) and the Orb's address; its key comes from GET /api/hello.
 
@@ -85,7 +85,7 @@ export function parseManual({ text, code, address } = {}) {
   return { v: 2, urls: [base], pc: null, code: c, name: null, role: null, via: 'code' };
 }
 
-// 3.8: whether a page may ask for the PC's master password: the Android app (its own code), https, this device, or the
+// whether a page may ask for the PC's master password: the Android app (its own code), https, this device, or the
 // Tailscale address (WireGuard encrypts it). Never a page that came in plain http over the Wi-Fi (it could have been
 // changed on the way). location: { protocol, hostname }.
 export function passwordPageOk({ protocol, hostname } = {}, { app = false } = {}) {
@@ -107,10 +107,10 @@ export function pickBridge({ hasOrb = false, native = false } = {}) {
   return native ? 'app' : 'web';
 }
 
-// 3.6: the protocol of the link (this PC, the page and the Android app). Each side says { v, min } (hello, /api/me): v what
+// the protocol of the link (this PC, the page and the Android app). Each side says { v, min } (hello, /api/me): v what
 // it speaks, min the oldest it still accepts. A page or an app older than the PC's min is asked to update; phones of
 // protocol 2 keep working (MIN_PROTOCOL).
-// 3.8 (protocol 4): linking a new device needs the master password, which only a page or an app of 3.8 sends. So a
+// linking a new device needs the master password, which only a page or an app that speaks protocol 4 sends. So a
 // device links only with protocol 4 or newer (PAIR_PROTOCOL); one linked before keeps working (MIN_PROTOCOL stays).
 export const PROTOCOL = 4;
 export const MIN_PROTOCOL = 2;

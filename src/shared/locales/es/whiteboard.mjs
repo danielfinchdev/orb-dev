@@ -1,4 +1,4 @@
-// wb.*: la Pizarra de cada proyecto (2.7): dibujar, escribir y adjuntar lo que el asistente debe saber. Se guarda en la
+// wb.*: la Pizarra de cada proyecto: dibujar, escribir y adjuntar lo que el asistente debe saber. Se guarda en la
 // carpeta pizarra del proyecto. {project} es el nombre del proyecto.
 export default {
   'nav.board': 'Pizarra',

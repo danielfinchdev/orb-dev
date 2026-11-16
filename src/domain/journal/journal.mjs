@@ -8,7 +8,8 @@ import { redactSecrets, porcelainPaths } from '../../shared/secrets-scan.mjs';
 import { generalLogHeader, projectLogHeader } from '../../platform/journal-files.mjs';
 import { AGENT_LABELS } from '../../platform/config-file.mjs';
 import { git, isGitRepo } from '../../platform/git.mjs';
-import { assistantName, ofUserLabel, userName } from '../tasks/board.mjs';
+import { assistantName, ofUser, ofUserLabel, userName } from '../tasks/board.mjs';
+import { ruleSet } from '../rules/rules.mjs';
 import { checkDevTools, devToolsBrief } from '../../platform/dev-tools.mjs';
 import { groupOf } from '../projects/projects.mjs';
 
@@ -27,7 +28,7 @@ export function findLog(board, project) {
   return found;
 }
 
-// 3.8.1: the user's own files beside the general log (e.g. notes they keep there):
+// the user's own files beside the general log (e.g. notes they keep there):
 // agents read them and append to them through Orb (the logs live in core, closed to their own tools but reading). Only
 // regular .md files at the top of the logs' folder, by name.
 export function ownLogFiles() {
@@ -46,7 +47,7 @@ function logOf(board, project, file) {
   return [`general/${hit}`, path.join(path.dirname(ctx.paths.generalLog), hit)];
 }
 
-// 3.8.3: the last `entries` entries (each starts with a «### » heading) that fit in `max` characters, whole and in their
+// the last `entries` entries (each starts with a «### » heading) that fit in `max` characters, whole and in their
 // order: never the end of an older entry nor what comes before the entries (the header, the annexes). Before, the last
 // `max` characters were read, which brought pieces of old text and spent the reader's tokens. The newest entry always
 // comes, cut at `max` (saying so) when it alone is longer. → { text, shown, total }
@@ -98,14 +99,14 @@ export function writeLog(board, project, { tema, pedido, hecho, revertir, estado
   return `Anotado al final de la bitácora de ${name}.`;
 }
 
-// 3.2.1: a text cut to a length without breaking a word («Diálogo de confirmac»), with «…» when something was left out.
+// a text cut to a length without breaking a word («Diálogo de confirmac»), with «…» when something was left out.
 export function cutWords(text, max) {
   const s = String(text ?? '').replace(/\s+/g, ' ').trim();
   if (s.length <= max) return s;
   const part = s.slice(0, max - 1); const space = part.lastIndexOf(' ');
   return `${(space > max * 0.6 ? part.slice(0, space) : part).replace(/[\s,;:.—-]+$/, '')}…`;
 }
-// 3.2.1: who wrote an entry is the agent that did the work («Codex (tarea #12, gpt-6-luna)»), not the assistant.
+// who wrote an entry is the agent that did the work («Codex (tarea #12, gpt-6-luna)»), not the assistant.
 export function agentAuthor(agent, { model, via } = {}) {
   const extra = [via, model && oneLine(model, 40)].filter(Boolean).join(', ');
   return `${AGENT_LABELS[agent] ?? oneLine(agent || assistantName(), 40)}${extra ? ` (${extra})` : ''}`;
@@ -123,7 +124,7 @@ export function logTask(board, task, { revert }) {
 `);
 }
 
-// 3.8.3 (uso real final): «Deshacer» leaves an entry too. Without it the next agent read in the log what the task had
+// «Deshacer» leaves an entry too. Without it the next agent read in the log what the task had
 // made and found the files gone («index.html no existía, a pesar de la bitácora de la tarea #11»).
 export function logUndone(board, task, { restored = [], removed = [], skipped = [] }) {
   const file = board.ensureProjectLog(task.project);
@@ -137,7 +138,7 @@ export function logUndone(board, task, { restored = [], removed = [], skipped = 
 `);
 }
 
-// 3.2.1: a direct conversation (without the assistant) that changes files of its project leaves an entry too, so the
+// a direct conversation (without the assistant) that changes files of its project leaves an entry too, so the
 // assistant later knows where each file came from. What changed is read from git: the files whose state is new or
 // different after the turn (a project without git leaves no entry).
 export function changedFiles(dir) {
@@ -169,7 +170,7 @@ export function logDirect(board, session, { before, request, answer }) {
 }
 
 // Context for the assistant when a conversation starts: its project, latest project and general entries (bounded).
-// 3.2: project: the conversation's (null = none yet); recent: the last lines of a conversation taken up again after a
+// project: the conversation's (null = none yet); recent: the last lines of a conversation taken up again after a
 // while (the logs keep the rest: no long conversation is loaded back).
 export function briefing(board, { project, recent = '' } = {}) {
   const read = (file, entries, max) => { try { return lastEntries(fs.readFileSync(file, 'utf8'), { entries, max }).text; } catch { return ''; } };
@@ -182,18 +183,20 @@ export function briefing(board, { project, recent = '' } = {}) {
   const stats = board.agentStats();
   if (Object.keys(stats).length) parts.push(`Historial de los agentes (últimas tareas): ${Object.entries(stats).map(([a, s]) => `${a} ${s.done} hechas, ${s.failed} fallidas, ${s.blocked} bloqueadas`).join('; ')}`);
   if (active) { const log = read(board.projectLogFile(active.name), 6, 6000); if (log) parts.push(`### Últimas entradas de la bitácora de ${active.name}\n${log}`); }
-  // 2.7: a multiplatform project: its sister projects and the shared folder, so the work stays coordinated between them.
+  // a multiplatform project: its sister projects and the shared folder, so the work stays coordinated between them.
   const group = active ? groupOf(board, active) : null;
   if (group) parts.push(`Grupo multiplataforma «${group.name}»: ${group.members.map((m) => `${m.name} (${m.path})`).join(', ')}. Carpeta común (API, diseño, textos e imágenes que comparten): ${group.common}. Mantenlos coordinados: lo que se decida para uno (API, datos, diseño) debe valer para los demás; puedes crear tareas en cualquiera del grupo.`);
-  // 2.7: the project's Pizarra, if it has a drawing or attachments: its summary, so the assistant knows what is there.
+  // the project's Pizarra, if it has a drawing or attachments: its summary, so the assistant knows what is there.
   if (active) {
     const md = path.join(active.path, 'pizarra', 'PIZARRA.md');
     try { const text = fs.readFileSync(md, 'utf8'); if (text.trim()) parts.push(`### Pizarra de ${active.name} (${path.join(active.path, 'pizarra')}; el dibujo entero en pizarra.png)\n${text.slice(0, 4000)}`); } catch { /* no Pizarra yet */ }
   }
   const general = read(ctx.paths.generalLog, 3, 3000); if (general) parts.push(`### Últimas entradas de la bitácora general\n${general}`);
-  // 3.8.3: the development tools as they really are now (after the logs: an old note may say otherwise).
+  // the development tools as they really are now (after the logs: an old note may say otherwise).
   try { parts.push(devToolsBrief(checkDevTools(), userName())); } catch { /* the briefing goes on without it */ }
   if (recent) parts.push(`### Esta conversación se retoma: sus últimos mensajes (lo anterior está en las bitácoras)\n${recent}`);
-  parts.push('Para el estado de las tareas usa orb_board.');
+  // the closing line is a rule of core/normas (it may be paused)
+  const closing = ruleSet('orb', { vars: { orb: assistantName(), usuario: userName(), del_usuario: ofUser() } }).rule('contexto-al-abrir-un-chat');
+  if (closing) parts.push(closing);
   return parts.join('\n\n');
 }

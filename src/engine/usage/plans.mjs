@@ -1,4 +1,4 @@
-// 3.1: the subscription plan of every account, read from each agent itself, so Orb spends according to what the user pays
+// the subscription plan of every account, read from each agent itself, so Orb spends according to what the user pays
 // for. The plan only sets how much work Orb sends an account before it reports its real usage (budget.mjs: planFactor);
 // once the agent says how much of its window is used, that real figure is what counts.
 // - Claude: the plan Claude Code keeps next to its login (claudeAiOauth.subscriptionType / rateLimitTier). Only those two
@@ -6,8 +6,8 @@
 // - Codex: account/read of its app-server (planType), as «Buscar y añadir» already did.
 // - Cursor: `cursor-agent about --format json` (subscriptionTier).
 // Kept in the board as plan:<account> = { agent, plan, label, at }, asked again at most every 12 hours; an account whose
-// agent did not say its plan (plan_try:<account> newer than the plan) is not asked again on its own for a week (3.8.3:
-// Cursor was started at every Orb start for nothing). A login or «Buscar y añadir» asks at once (force).
+// agent did not say its plan (plan_try:<account> newer than the plan) is not asked again on its own for a week
+// (Cursor would otherwise be started at every Orb start for nothing). A login or «Buscar y añadir» asks at once (force).
 import fs from 'node:fs';
 import path from 'node:path';
 import { usableAccounts, accountDir } from '../../domain/usage/accounts.mjs';

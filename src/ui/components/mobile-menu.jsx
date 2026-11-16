@@ -1,39 +1,41 @@
-// 3.6, the phone (browser and Android app): the menu ☰ at the top left of every screen opens a drawer from the left edge
+// the phone (browser and Android app): the menu ☰ at the top left of every screen opens a drawer from the left edge
 // with the other screens and the phone's own settings. The bottom tabs are the main screens. The PC keeps its sidebar.
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { Menu, X, CalendarClock, PenTool, BookOpen, GraduationCap, Smartphone, Moon } from 'lucide-react';
+import { Menu, X, CalendarSync, Presentation, NotebookPen, LifeBuoy, Smartphone, Moon } from 'lucide-react';
 import { useState } from 'react';
 import { NavItem } from './sidebar.jsx';
 import { Switch } from './ui/overlay.jsx';
 import { Robot } from './robot.jsx';
-import { useStore, go, applyTheme, isDark } from '@/lib/store.js';
+import { useStore, go, applyTheme, isDark, useDarkOnly } from '@/lib/store.js';
+import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
 const Group = ({ label, children, testid }) => (
   <section className="grid gap-1" data-testid={testid}>
-    {label ? <h2 className="text-muted-foreground px-3 text-[11px] font-medium tracking-wide uppercase">{label}</h2> : null}
+    {label ? <h2 className="text-muted-foreground px-3 text-micro font-medium tracking-wide uppercase">{label}</h2> : null}
     <div className="bg-card/80 grid gap-0.5 rounded-2xl border p-2">{children}</div>
   </section>
 );
 
-// What used to be «Más»: the screens that are not tabs, then this phone's settings.
+// «Más»: the screens that are not tabs, then this phone's settings.
 export function MoreContent() {
   const t = useT();
   const [dark, setDark] = useState(isDark);
+  const darkOnly = useDarkOnly();
   const night = (on) => { const next = on ? 'oscuro' : 'claro'; applyTheme(next); setDark(on); try { localStorage.setItem('orb.theme', next); } catch { /* storage unavailable */ } };
   return (
     <>
       <Group>
-        <NavItem icon={CalendarClock} label={t('nav.schedules')} onClick={() => go('schedules')} testid="nav-schedules" />
-        <NavItem icon={PenTool} label={t('nav.board')} onClick={() => go('board')} testid="nav-board" />
-        <NavItem icon={BookOpen} label={t('nav.memories')} onClick={() => go('logs')} testid="nav-memories" />
-        <NavItem icon={GraduationCap} label={t('nav.tutorials')} onClick={() => go('tutorials')} testid="nav-tutorials" />
+        <NavItem icon={CalendarSync} label={t('nav.schedules')} onClick={() => go('schedules')} testid="nav-schedules" />
+        <NavItem icon={Presentation} label={t('nav.board')} onClick={() => go('board')} testid="nav-board" />
+        <NavItem icon={NotebookPen} label={t('nav.logbooks')} onClick={() => go('logs')} testid="nav-memories" />
+        <NavItem icon={LifeBuoy} label={t('nav.tutorials')} onClick={() => go('tutorials')} testid="nav-tutorials" />
       </Group>
       <Group label={t('nav.settings')}>
         <NavItem icon={Smartphone} label={t('nav.phone')} onClick={() => go({ view: 'phone' })} testid="nav-phone" />
-        <label className="flex min-h-10 cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[14px]">
+        <label title={darkOnly ? t('comp.theme.darkOnly') : undefined} className={cn('flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-body', darkOnly ? 'opacity-60' : 'cursor-pointer')}>
           <Moon className="text-muted-foreground size-4 shrink-0" /><span className="flex-1">{t('nav.darkMode')}</span>
-          <Switch checked={dark} onCheckedChange={night} data-testid="mobile-dark" />
+          <Switch checked={dark || darkOnly} disabled={darkOnly} onCheckedChange={night} data-testid="mobile-dark" />
         </label>
       </Group>
     </>
@@ -57,7 +59,7 @@ export function MobileMenu() {
           className="bg-sidebar text-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:slide-in-from-left data-[state=closed]:slide-out-to-left fixed inset-y-0 left-0 z-50 flex w-[min(20rem,86vw)] flex-col gap-4 overflow-y-auto border-r px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl duration-300 ease-(--ease-drawer)" data-testid="mobile-menu">
           <div className="flex items-center gap-2.5 px-1">
             <Robot size={28} mood="idle" />
-            <DialogPrimitive.Title className="min-w-0 flex-1 truncate text-[16px] font-medium">{name}</DialogPrimitive.Title>
+            <DialogPrimitive.Title className="min-w-0 flex-1 truncate text-title font-medium">{name}</DialogPrimitive.Title>
             <DialogPrimitive.Close className="press hover:bg-accent -mr-2 grid size-10 cursor-pointer place-items-center rounded-xl" aria-label={t('comp.close')}><X className="size-5" /></DialogPrimitive.Close>
           </div>
           <MoreContent />

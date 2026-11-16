@@ -1,4 +1,4 @@
-// Codex adapter. 2.3: a live session through "codex app-server" (JSON-RPC over stdio, the protocol of Codex's own
+// Codex adapter: a live session through "codex app-server" (JSON-RPC over stdio, the protocol of Codex's own
 // apps): one process per conversation, a thread that stays open, streamed answers, steer, interrupt,
 // approval requests answered by the guard, native fork, context and the account's real usage limits.
 // It uses the user's own login (CODEX_HOME, ~/.codex by default): ChatGPT or API key, the app never reads auth.json.
@@ -25,7 +25,7 @@ export function detect(cfg = {}) {
     path.join(dir, 'node_modules', '@openai', 'codex', 'node_modules', '@openai', p, 'vendor', triple, 'bin', 'codex.exe')));
   // The Codex app also leaves its CLI in <Local>\OpenAI\Codex\bin\<build>\codex.exe (the newest build wins).
   const appBuilds = (local) => { const base = path.join(local, 'OpenAI', 'Codex', 'bin'); try { return fs.readdirSync(base).map((b) => path.join(base, b, 'codex.exe')).filter((f) => firstFile([f])).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs); } catch { return []; } };
-  // 3.5: on Linux and macOS Orb installs it for the user only (npm --prefix ~/.local): its bin folder may not be in PATH.
+  // on Linux and macOS Orb installs it for the user only (npm --prefix ~/.local): its bin folder may not be in PATH.
   const candidates = [cfg.path, ...inPath('codex'), ...(IS_WIN ? [...npmPrefixes('codex').flatMap(vendor), ...appDataDirs().flatMap((d) => appBuilds(d.local))] : [path.join(userHome(), '.local', 'bin', 'codex')])];
   const cmd = firstFile(candidates);
   return cmd ? { cmd, pre: [] } : null;
@@ -34,10 +34,10 @@ export function detect(cfg = {}) {
 export const codexHome = () => process.env.CODEX_HOME || path.join(userHome(), '.codex');
 export function loginState() { return firstFile([path.join(codexHome(), 'auth.json')]) ? 'si' : 'no'; }
 export const loginCommand = (exe) => ({ cmd: exe.cmd, args: [...exe.pre, 'login'] });
-// 3.5: signs in without a console (src/agents/login.mjs: account/login/start over app-server).
+// signs in without a console (src/agents/login.mjs: account/login/start over app-server).
 export const windowlessLogin = true;
 
-// 2.7: whose account a session folder holds, asked to Codex itself (account/read; auth.json is never opened): the plan
+// whose account a session folder holds, asked to Codex itself (account/read; auth.json is never opened): the plan
 // and a short fingerprint of the account, so «Buscar y añadir» does not offer the same subscription twice. The e-mail
 // never leaves this function. null if Codex does not answer.
 export async function accountInfo(exe, dir, { timeoutMs = 20000 } = {}) {
@@ -61,7 +61,7 @@ export async function accountInfo(exe, dir, { timeoutMs = 20000 } = {}) {
 
 const toml = (value) => JSON.stringify(value); // JSON strings and arrays are valid TOML values
 
-// 3.8: no value of an MCP server's env goes on the command line, which any process of the user can read: each one rides
+// no value of an MCP server's env goes on the command line, which any process of the user can read: each one rides
 // in Codex's own environment under a name of its own (ORB_MCP_<server>_<name>, so two connectors' API_KEY never clash) and
 // the server gets it by that name (env_vars); the config names only what is plainly not secret (PLAIN). Orb's servers
 // read their ticket from the variable their --ticket-env names; connectors start through launch.mjs, which gets their
@@ -91,21 +91,21 @@ export function mcpArgs(servers) {
 }
 
 // The guard decides every action, so Codex asks for anything that is not plainly safe ("untrusted"); the sandbox keeps
-// writes inside the folder. Read-only conversations cannot write at all; "total" runs without sandbox (3.8.2: still asking the guard).
+// writes inside the folder. Read-only conversations cannot write at all; "total" runs without sandbox (still asking the guard).
 function policy(permission) {
-  // 2.6: read-only also asks Orb's guard (which denies anything that changes something) instead of trusting only the
+  // read-only also asks Orb's guard (which denies anything that changes something) instead of trusting only the
   // sandbox: this is how a Codex brain coordinates.
   if (permission === 'leer') return { approvalPolicy: 'untrusted', sandbox: 'read-only' };
-  // 3.8.2: «total» keeps asking Orb's guard (it allows all but the protected set); it only drops the sandbox.
+  // «total» keeps asking Orb's guard (it allows all but the protected set); it only drops the sandbox.
   if (permission === 'total') return { approvalPolicy: 'untrusted', sandbox: 'danger-full-access' };
   return { approvalPolicy: 'untrusted', sandbox: 'workspace-write' };
 }
-// 3.8.3 (owner's decision): in «Auto» Codex's sandbox lets its commands use the network (npm install, downloads) without a
+// in «Auto» Codex's sandbox lets its commands use the network (npm install, downloads) without a
 // card; writes stay inside the folder and every command still goes through Orb's guard («untrusted»).
 export function sandboxConfig(permission) {
   return permission === 'auto' ? { 'sandbox_workspace_write.network_access': true } : {};
 }
-// 3.8.3 (security review): why the guard would deny a command Codex started on its own, in any mode (what is always
+// why the guard would deny a command Codex started on its own, in any mode (what is always
 // closed: core, the owner's keys, another project's secrets…; not what the chat's level alone refuses). null: it would not.
 export function deniedRun(command, o = {}) {
   const c = Array.isArray(command) ? command.join(' ') : String(command ?? '');
@@ -119,7 +119,7 @@ export function onlyNetwork(perms) {
   const keys = Object.keys(perms).filter((k) => perms[k] != null && !(Array.isArray(perms[k]) && !perms[k].length));
   return keys.length > 0 && keys.every((k) => /^network/i.test(k));
 }
-// 3.6: «Extra» (xhigh) goes through as it is: Orb only offers it for the models whose model/list says they take it.
+// «Extra» (xhigh) goes through as it is: Orb only offers it for the models whose model/list says they take it.
 const effort = (r) => r || 'medium';
 
 const ITEM_TOOL = (item) => {
@@ -128,11 +128,11 @@ const ITEM_TOOL = (item) => {
   if (item.type === 'webSearch') return { name: tr('sys.agents.tool.webSearch'), input: clip(item.query ?? item.action?.query ?? '', 300) };
   if (item.type === 'dynamicToolCall') return { name: item.tool, input: clip(item.arguments ?? '', 300) };
   if (item.type === 'collabAgentToolCall') return { name: tr('sys.agents.tool.subagent', { tool: item.tool }), input: clip(item.prompt ?? '', 300), ...collabAgent(item) };
-  if (item.type === 'imageGeneration') return { name: tr('sys.agents.tool.imageGen'), input: '' }; // 2.7
+  if (item.type === 'imageGeneration') return { name: tr('sys.agents.tool.imageGen'), input: '' };
   return null;
 };
 
-// 3.8.2: a subagent Codex starts (collabAgentToolCall spawnAgent): its model and threads, so the conversation shows it as
+// a subagent Codex starts (collabAgentToolCall spawnAgent): its model and threads, so the conversation shows it as
 // one row; the state of its threads comes with each collab call's end (agentsStates: pendingInit, running, completed…).
 export function collabAgent(item) {
   if (item?.type !== 'collabAgentToolCall' || item.tool !== 'spawnAgent') return {};
@@ -144,16 +144,16 @@ export function collabResult(item) {
   return { id: item.id, output: clip(output, 3000), error: item.status === 'failed', states };
 }
 
-// 2.6: the answer of app-server's model/list as the brain selector wants it: the models Codex shows (hidden ones are left
+// the answer of app-server's model/list as the brain selector wants it: the models Codex shows (hidden ones are left
 // out), with their own names, and which one Codex uses when none is chosen.
 export function codexModels(r) {
   const rows = Array.isArray(r?.data) ? r.data : Array.isArray(r?.models) ? r.models : [];
-  // 3.6: the reasoning levels each model takes (supportedReasoningEfforts: strings or { reasoningEffort }).
+  // the reasoning levels each model takes (supportedReasoningEfforts: strings or { reasoningEffort }).
   const effortsOf = (m) => { const list = (Array.isArray(m.supportedReasoningEfforts) ? m.supportedReasoningEfforts : []).map((e) => (typeof e === 'string' ? e : e?.reasoningEffort)).filter((e) => ['low', 'medium', 'high', 'xhigh'].includes(e)); return list.length ? { efforts: [...new Set(list)] } : {}; };
   return rows.filter((m) => m && !m.hidden).map((m) => ({ id: m.model ?? m.id, label: m.displayName || m.model || m.id, ...(m.isDefault ? { default: true } : {}), ...effortsOf(m) })).filter((m) => m.id);
 }
 
-// 2.6: the models of this Codex before any conversation: a short app-server (no thread, no prompt, nothing is spent) asked
+// the models of this Codex before any conversation: a short app-server (no thread, no prompt, nothing is spent) asked
 // for model/list, page by page, and closed.
 export async function discoverModels(exe, cfg = {}, env = {}) {
   const child = spawnAgent(exe.cmd, [...exe.pre, 'app-server'], { cwd: discoverDir(), env });
@@ -173,7 +173,7 @@ export async function discoverModels(exe, cfg = {}, env = {}) {
   } catch { return null; } finally { peer.close(); killTree(child); }
 }
 
-// 3.2.1: what one turn spent, from Codex's token reports. Its totals are the whole thread's (they grow turn after turn) and
+// what one turn spent, from Codex's token reports. Its totals are the whole thread's (they grow turn after turn) and
 // its input includes the cached part: counted as they came, a small task looked like 280 k new tokens when most of them
 // were the same context read again. Per turn: the total now minus the total before the turn's first request (that one's
 // own figure, «last», tells where it started); cached input apart (cacheReadTokens), as Claude reports it.
@@ -187,7 +187,7 @@ export function turnUsage(u, turn) {
 }
 
 // options: exe, cwd, model, reasoning, permission, resumeId, forkSession, mcpServers, env, internalDir, log, onEvent, skills
-// 3.8.1: Codex loads the skills of core by itself (an extra root); agents without this get them in their brief.
+// Codex loads the skills of core by itself (an extra root); agents without this get them in their brief.
 export const nativeSkills = true;
 export function createLive(o) {
   const onEvent = o.onEvent ?? (() => {});
@@ -202,7 +202,7 @@ export function createLive(o) {
     const verdict = decide({ permission, tool, kind, command, paths, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()), projectDir: o.projectDir, userAsked: o.userAsked?.() ?? [] });
     if (verdict.auto) onEvent({ type: 'auto', title: command || paths.join(', ') || tool, reason: verdict.reason });
     const d = verdict.decision !== 'ask' ? verdict.decision : await approvals.ask({ id: itemId, tool, title: command || paths.join(', ') || tool, reason: verdict.reason, input: clip(command || paths.join(', '), 400) });
-    // 3.8.3: Codex's protocol carries no reason with a decline; Claude gets one in canUseTool. Said here as a steer,
+    // Codex's protocol carries no reason with a decline; Claude gets one in canUseTool. Said here as a steer,
     // so the agent does not try the same thing in another spelling (the denied reason is the guard's, a user's has none).
     if (d === 'deny') live.steer?.({ text: tr('sys.agents.deniedHint', { title: clip(command || paths.join(', ') || tool, 200), reason: verdict.decision === 'deny' ? `: ${verdict.reason}` : '' }) });
     return d;
@@ -226,7 +226,7 @@ export function createLive(o) {
       return { decision: d === 'deny' ? { denied: { rejection: 'El usuario no lo ha permitido.' } } : 'approved' };
     }
     if (method === 'item/permissions/requestApproval') {
-      // 3.8.3: in «Auto», asking only for the network (an older Codex that ignores the sandbox setting above): granted.
+      // in «Auto», asking only for the network (an older Codex that ignores the sandbox setting above): granted.
       if (permission === 'auto' && onlyNetwork(p.permissions)) return { permissions: p.permissions, scope: 'session' };
       // Asking for more than the sandbox gives (another folder, network…): the user decides.
       const d = await approvals.ask({ id: p.itemId, tool: tr('sys.agents.permissions'), title: p.reason || tr('sys.agents.morePermissions', { name: 'Codex' }), reason: tr('sys.agents.morePermissionsWhy'), input: clip(p.permissions, 400) });
@@ -242,14 +242,14 @@ export function createLive(o) {
     if (method === 'item/agentMessage/delta') { onEvent({ type: 'delta', text: p.delta }); return; }
     if (method === 'item/started') {
       const tool = ITEM_TOOL(p.item); if (tool) onEvent({ type: 'item', role: 'tool', kind: 'tool', body: { id: p.item.id, ...tool } });
-      // 3.8.3 (security review): Codex runs the commands it deems safe (cat, type, rg…) without asking, so they never
+      // Codex runs the commands it deems safe (cat, type, rg…) without asking, so they never
       // reach the guard. One the guard would deny (reading core, the owner's keys, another project's .env) stops the
       // turn at once, before a next step can send what it read out (in «Auto» Codex has the network).
       const why = p.item?.type === 'commandExecution' ? deniedRun(p.item.command, o) : null;
       if (why) { onEvent({ type: 'item', role: 'system', kind: 'status', body: tr('msg.sessions.autoStopped', { why }) }); live.interrupt?.(); }
       return;
     }
-    // 3.6: the end of a compaction (thread/compact/start): the item of the summary or the thread's own notice. 3.8.1: the
+    // the end of a compaction (thread/compact/start): the item of the summary or the thread's own notice. The
     // compaction runs as a turn of its own; when the server says so (turn/started), it ends with that turn's
     // turn/completed, which could otherwise arrive after the next turn/start and end that turn empty.
     if (method === 'turn/started' && compacting && !compacting.done && !compacting.turnId) { compacting.turnId = p.turn?.id ?? null; return; }
@@ -274,7 +274,7 @@ export function createLive(o) {
       if (item.type === 'webSearch') onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: { id: item.id, output: '', error: false } });
       if (item.type === 'collabAgentToolCall') onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: collabResult(item) });
       if (item.type === 'plan' && item.text?.trim()) onEvent({ type: 'item', role: 'assistant', kind: 'reasoning', body: clip(item.text, 4000) });
-      // 2.7: a picture Codex made (image_gen): kept as a file (Codex's own savedPath, or written next to Orb's runs when
+      // a picture Codex made (image_gen): kept as a file (Codex's own savedPath, or written next to Orb's runs when
       // it only came inline), never as base64 in the conversation.
       if (item.type === 'imageGeneration') {
         let file = item.savedPath ?? null;
@@ -340,7 +340,7 @@ export function createLive(o) {
     child.on('error', (error) => { closed = true; if (turn && !turn.done) turn.finish({ isError: true, final: tr('sys.agents.startFailed', { name: 'Codex', error: error.message }) }); });
     await peer.request('initialize', { clientInfo: CLIENT, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
     peer.notify('initialized', {});
-    // 3.8.1: the skills of core that are on (src/domain/extensions/extensions.mjs › exposeSkills), one more root where Codex looks for
+    // the skills of core that are on (src/domain/extensions/extensions.mjs › exposeSkills), one more root where Codex looks for
     // skills, before the thread starts (checked with the real app-server: skills/list shows them). Older versions: none.
     if (o.skills?.list?.length) await peer.request('skills/extraRoots/set', { extraRoots: [o.skills.root] }, { timeoutMs: 15000 }).catch((error) => log(`skills: ${error?.message ?? error}`));
     const common = { cwd: o.cwd, model, ...policy(permission), config: { model_reasoning_effort: effort(o.reasoning), service_tier: 'default', ...sandboxConfig(permission) } };
@@ -351,7 +351,7 @@ export function createLive(o) {
     threadId = res.thread?.id;
     if (threadId && threadId !== live.sessionId) { live.sessionId = threadId; onEvent({ type: 'session', id: threadId }); }
     onEvent({ type: 'item', role: 'system', kind: 'status', body: `Codex · ${res.model ?? model ?? ''}`.trim() });
-    // 2.6: the models this Codex offers, for the brain selector (older versions without model/list: nothing).
+    // the models this Codex offers, for the brain selector (older versions without model/list: nothing).
     peer.request('model/list', {}, { timeoutMs: 15000 }).then((r) => {
       const list = codexModels(r);
       if (list.length) onEvent({ type: 'models', list });
@@ -371,7 +371,7 @@ export function createLive(o) {
       await started;
       // The answer is only the acknowledgement of the turn; a server that never gives it would leave the turn open for ever.
       const res = await peer.request('turn/start', { threadId, input: input(text, images), ...(model ? { model } : {}), effort: effort(o.reasoning) }, { timeoutMs: 120_000 });
-      // 3.8.3: a turn that ended at once (its turn/completed read in the same piece of output as this answer, before this
+      // a turn that ended at once (its turn/completed read in the same piece of output as this answer, before this
       // line runs) keeps no id: a stale one made the next turn's turn/completed look like another turn's, and that turn
       // never ended (the Ubuntu CI hang).
       if (!current.done) turnId = res?.turn?.id ?? null;
@@ -380,14 +380,14 @@ export function createLive(o) {
     }
     return current.promise;
   };
-  // 3.2.1: the answer of turn/steer arrives later; when it fails (the turn had just ended), onFail gets the message so the
+  // the answer of turn/steer arrives later; when it fails (the turn had just ended), onFail gets the message so the
   // caller sends it as the next turn instead of losing it.
   live.steer = ({ text, onFail }) => {
     if (closed || !turn || turn.done || !turnId) return false;
     peer.request('turn/steer', { threadId, input: input(text), expectedTurnId: turnId }).catch((error) => { log(`steer: ${error.message}`); try { onFail?.(error); } catch { /* caller gone */ } });
     return true;
   };
-  // 3.6: Codex's own compaction of the thread (app-server thread/compact/start): the history is summarised and the
+  // Codex's own compaction of the thread (app-server thread/compact/start): the history is summarised and the
   // thread goes on from the summary. An older Codex without the method answers an error, which is passed on. → { ok, error }
   live.compact = async () => {
     if (closed) throw new Error(tr('sys.agents.sessionClosed', { name: 'Codex' }));
@@ -409,7 +409,7 @@ export function createLive(o) {
   live.setModel = (m) => { model = m || null; }; // applied on the next turn/start
   live.setPermission = (p) => { permission = p; };
   live.close = () => { if (closed && !child) return; closed = true; approvals.clear(); peer?.close(); killTree(child); };
-  // 3.8.2: the plan's windows now (the usage panel's «Recargar»), handled as if Codex had sent them.
+  // the plan's windows now (the usage panel's «Recargar»), handled as if Codex had sent them.
   live.refreshUsage = async () => {
     if (closed || !peer) return false;
     try { const r = await peer.request('account/rateLimits/read', {}, { timeoutMs: 8000 }); if (!r?.rateLimits) return false; onNotification('account/rateLimits/updated', { rateLimits: r.rateLimits }); return true; } catch { return false; }

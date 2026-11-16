@@ -1,11 +1,11 @@
-// 3.8.1: Ajustes › Skills y MCP (src/engine/api/extensions.mjs): every skill and MCP server of core (on or off, where it
+// Ajustes › Skills y MCP (src/engine/api/extensions.mjs): every skill and MCP server of core (on or off, where it
 // came from, its folder, removing it after the master password), «Importar» (a folder or a git repository: it comes in
 // off), what agents made and wait for the user («Activar» / «Descartar»), the connectors of the PC (a package run with
 // npx…) and the projects that are MCP servers («Usar», «Mover a core»). A server of core is improved in a project
 // («Editar en un proyecto», then «Aplicar cambios»). PC only. Turning on what an agent made always goes through a dialog
 // that lists every file that will be turned on (the quarantine's copy, src/domain/extensions/extensions.mjs) and opens its folder.
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { notify, notifyError, notifyInfo, notifyOk, notifyProgress } from '@/lib/notify.js';
 import { Check, Download, Ellipsis, FolderOpen, KeyRound, PencilLine, Plus, Puzzle, Server, Trash2, Upload, X } from 'lucide-react';
 import { confirm, choose, form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -16,6 +16,7 @@ import { t, useT } from '@/lib/i18n.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { connectorKeys } from './master.jsx';
 import { CATEGORIES } from '../../shared/layout.mjs';
+import { MoreButton } from '@/components/ui/primitives.jsx';
 
 // Where one came from, in a word (orb.json › source).
 const SOURCE = { orb: 'ext.source.orb', importado: 'ext.source.imported', creado: 'ext.source.created', usuario: 'ext.source.user' };
@@ -32,9 +33,9 @@ export function ExtensionsPanel() {
   // A server that needs packages is turned on only after saying so (Orb downloads them without running their scripts).
   const toggle = async (kind, name, enabled, row = null) => {
     if (enabled && row?.needsInstall) {
-      if (!await confirm(t('ext.installTitle', { name }), t('ext.installBody'), { ok: t('ext.activate') })) return;
-      const id = toast.loading(t('ext.installing'));
-      try { await run(call('extensions.toggle', { kind, name, enabled, install: true }), t('ext.turnedOn', { name })); } finally { toast.dismiss(id); }
+      if (!await confirm(t('ext.installTitle', { name }), t('ext.installBody'), { ok: t('ext.activate'), danger: true })) return;
+      const closeProgress = notifyProgress(t('ext.installing'));
+      try { await run(call('extensions.toggle', { kind, name, enabled, install: true }), t('ext.turnedOn', { name })); } finally { closeProgress(); }
       return;
     }
     run(call('extensions.toggle', { kind, name, enabled }), t(enabled ? 'ext.turnedOn' : 'ext.turnedOff', { name }));
@@ -123,14 +124,14 @@ function Row({ item, detail, note = null, mono = false, on, disabled = false, on
   return (
     <div className="flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2" data-testid={testid}>
       <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm"><span className="truncate">{item.name}</span><Badge variant="outline" className="text-[11px]">{sourceLabel(item.source)}</Badge>{extra}</div>
+        <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm"><span className="truncate">{item.name}</span><Badge variant="outline" className="text-micro">{sourceLabel(item.source)}</Badge>{extra}</div>
         <div className={`text-muted-foreground line-clamp-2 text-xs ${mono ? 'truncate font-mono' : ''}`}>{detail}</div>
-        {note ? <div className="text-warning text-xs" data-testid="ext-note">{note}</div> : null}
+        {note ? <div className="text-warning-ink text-xs" data-testid="ext-note">{note}</div> : null}
       </div>
       <Switch checked={on} disabled={disabled} onCheckedChange={onToggle} aria-label={t('ext.toggle', { name: item.name })} data-testid="ext-toggle" />
       {keys ? <BubbleTip title={t('master.keys')}><Button variant="ghost" size="icon-sm" aria-label={t('master.keys')} onClick={() => connectorKeys(keys)} data-testid="mcp-keys"><KeyRound /></Button></BubbleTip> : null}
       <DropdownMenu modal={false}>
-        <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={t('ext.more', { name: item.name })} data-testid="ext-menu"><Ellipsis /></Button></DropdownMenuTrigger>
+        <DropdownMenuTrigger asChild><MoreButton label={t('ext.more', { name: item.name })} data-testid="ext-menu" /></DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           {menu.map((m, i) => (m ? <DropdownMenuItem key={m.label} variant={m.danger ? 'destructive' : undefined} onSelect={m.run} data-testid={m.testid}><m.icon />{m.label}</DropdownMenuItem> : <DropdownMenuSeparator key={`s${i}`} />))}
         </DropdownMenuContent>
@@ -170,7 +171,7 @@ function FileList({ files = [], total = files.length, first = 8 }) {
   const shown = all ? files : files.slice(0, first);
   const more = Math.max(0, (all ? files.length : total) - shown.length);
   return (
-    <div className="text-muted-foreground font-mono text-[11px] break-all" data-testid="ext-files">
+    <div className="text-muted-foreground font-mono text-micro break-all" data-testid="ext-files">
       {shown.join(' · ')}
       {!all && more > 0 ? <> · <button type="button" className="text-foreground underline" onClick={() => setAll(true)} data-testid="ext-files-more">{t('ext.andMore', { n: more })}</button></> : null}
     </div>
@@ -191,10 +192,10 @@ async function answerRequest(r, approve, run, done = (x) => x) {
     body: () => (asking ? <span /> : (
       <div className="grid gap-2 text-sm" data-testid="ext-confirm">
         {r.deps ? <p>{t('ext.confirmDeps')}</p> : null}
-        {r.asks?.tools || r.asks?.hooks ? <p className="text-warning">{t('ext.asksNote')}</p> : null}
-        {r.kept?.length ? <p className="text-warning" data-testid="ext-confirm-kept">{t('ext.keptNote', { files: r.kept.slice(0, 5).join(', ') + (r.kept.length > 5 ? '…' : '') })}</p> : null}
+        {r.asks?.tools || r.asks?.hooks ? <p className="text-warning-ink">{t('ext.asksNote')}</p> : null}
+        {r.kept?.length ? <p className="text-warning-ink" data-testid="ext-confirm-kept">{t('ext.keptNote', { files: r.kept.slice(0, 5).join(', ') + (r.kept.length > 5 ? '…' : '') })}</p> : null}
         <p className="text-muted-foreground">{t('ext.filesTitle', { n: r.total ?? r.files?.length ?? 0 })}</p>
-        <div className="bg-muted/50 max-h-60 overflow-auto rounded-md p-2 font-mono text-[11px]" data-testid="ext-confirm-files">{(r.files ?? []).map((f) => <div key={f}>{f}</div>)}</div>
+        <div className="bg-muted/50 max-h-60 overflow-auto rounded-md p-2 font-mono text-micro" data-testid="ext-confirm-files">{(r.files ?? []).map((f) => <div key={f}>{f}</div>)}</div>
         {r.dir ? <div><Button type="button" size="xs" variant="outline" onClick={() => act(bridge.openPath(r.dir))}><FolderOpen />{t('ext.openFolder')}</Button></div> : null}
       </div>
     )),
@@ -202,7 +203,7 @@ async function answerRequest(r, approve, run, done = (x) => x) {
     onOk: () => call('extensions.approve', { id: r.id })
   });
   if (!ok) return undefined;
-  toast.success(asking ? t('ext.stateAllowed') : t('ext.activated', { name: r.name }));
+  notifyOk(asking ? t('ext.stateAllowed') : t('ext.activated', { name: r.name }));
   return done(await run(Promise.resolve(ok)));
 }
 
@@ -214,14 +215,14 @@ async function importFlow(run) {
   ], { testid: 'ext-import-how' });
   if (how === 'folder') {
     const from = await bridge.pickFolder?.(t('ext.importFolder'));
-    if (from) { const id = toast.loading(t('ext.importing')); try { await run(call('extensions.import', { from }), t('ext.imported')); } finally { toast.dismiss(id); } }
+    if (from) { const closeProgress = notifyProgress(t('ext.importing')); try { await run(call('extensions.import', { from }), t('ext.imported')); } finally { closeProgress(); } }
   } else if (how === 'repo') {
     await form(t('ext.importRepo'), {
       description: t('ext.importRepoDesc'),
       initial: { url: '' },
       body: (v, set) => <Field label={t('ext.repoUrl')}><Input autoFocus value={v.url} onChange={(e) => set({ url: e.target.value })} placeholder="https://github.com/usuario/repositorio" data-testid="ext-repo-url" /></Field>,
       ok: t('ext.import'),
-      onOk: async (v) => { const r = await call('extensions.import', { url: v.url.trim() }); toast.success(t('ext.imported')); await run(Promise.resolve(r)); return true; }
+      onOk: async (v) => { const r = await call('extensions.import', { url: v.url.trim() }); notifyOk(t('ext.imported')); await run(Promise.resolve(r)); return true; }
     });
   }
 }
@@ -235,17 +236,17 @@ async function editFlow(name, run) {
     ok: t('ext.editOk'),
     onOk: (v) => call('extensions.edit', { name, category: v.category })
   });
-  if (r?.path) { toast.success(t('ext.editDone', { path: r.path })); run(Promise.resolve(null)); }
+  if (r?.path) { notifyOk(t('ext.editDone', { path: r.path })); run(Promise.resolve(null)); }
 }
 async function applyFlow(name, run) {
-  let check; try { check = await call('extensions.applyCheck', { name }); } catch (error) { toast.error(String(error?.message ?? error)); return; }
+  let check; try { check = await call('extensions.applyCheck', { name }); } catch (error) { notifyError(error); return; }
   const n = check.added.length + check.changed.length + check.removed.length;
-  if (!n) { toast.info(t('ext.applyNothing')); return; }
+  if (!n) { notifyInfo(t('ext.applyNothing')); return; }
   const lines = [...check.added.map((f) => `+ ${f}`), ...check.changed.map((f) => `~ ${f}`), ...check.removed.map((f) => `− ${f}`)].slice(0, 12).join('\n');
-  if (!await confirm(t('ext.applyTitle', { name }), `${t('ext.applyBody', { path: check.path, n })}\n\n${lines}${n > 12 ? `\n${t('ext.andMore', { n: n - 12 })}` : ''}`, { ok: t('ext.apply') })) return;
+  if (!await confirm(t('ext.applyTitle', { name }), `${t('ext.applyBody', { path: check.path, n })}\n\n${lines}${n > 12 ? `\n${t('ext.andMore', { n: n - 12 })}` : ''}`, { ok: t('ext.apply'), danger: true })) return;
   const done = await run(call('extensions.apply', { name, id: check.id }), t('ext.applied', { name }));
   if (!done) return;
-  // 3.8.1 (review H1c M6): the project's copy stays «en edición» until it goes: keep editing, or delete it (Proyectos'
+  // the project's copy stays «en edición» until it goes: keep editing, or delete it (Proyectos'
   // own deletion, with the master password; the row stops saying so by itself).
   const project = (getState().projects ?? []).find((p) => String(p.path).toLowerCase() === String(check.path).toLowerCase());
   if (!project || bridge.mobile || !bridge.deleteProject) return;
@@ -253,9 +254,9 @@ async function applyFlow(name, run) {
   if (next === 'delete') { const { deleteProjectFlow } = await import('./projects.jsx'); await deleteProjectFlow(project, t); run(Promise.resolve(null)); }
 }
 async function adoptFlow(p, run) {
-  if (!await confirm(t('ext.adoptTitle', { name: p.name }), t('ext.adoptBody', { path: p.dir }), { ok: t('ext.moveToCore') })) return;
+  if (!await confirm(t('ext.adoptTitle', { name: p.name }), t('ext.adoptBody', { path: p.dir }), { ok: t('ext.moveToCore'), danger: true })) return;
   const r = await run(call('extensions.adopt', { project: p.name }));
-  if (r?.moved) toast.success(t('ext.adopted', { name: p.name }), { description: t('ext.adoptedAt', { path: r.moved.to }), duration: 12000 });
+  if (r?.moved) notify({ title: t('ext.adopted', { name: p.name }), body: t('ext.adoptedAt', { path: r.moved.to }), tone: 'success' }, { always: true, ms: 12000 });
 }
 // A project that is an MCP server, used from where it is (its connector points to the project's folder).
 async function connectProject(p, run) {
@@ -293,7 +294,7 @@ export function ExtensionRequestCard({ m }) {
   const asking = m.meta.ask === 'edit';
   const pendingOne = async () => (await call('extensions.list')).pending.find((r) => r.id === m.meta.extension);
   const answer = async (approve) => {
-    let r; try { r = await pendingOne(); } catch (error) { toast.error(String(error?.message ?? error)); return; }
+    let r; try { r = await pendingOne(); } catch (error) { notifyError(error); return; }
     if (!r) { setLocal('gone'); return; }
     const out = await answerRequest(r, approve, (p) => act(p));
     if (out !== undefined) setLocal(approve ? 'approved' : 'rejected');
@@ -301,9 +302,9 @@ export function ExtensionRequestCard({ m }) {
   const openFolder = async () => { const r = await pendingOne().catch(() => null); if (r?.dir) act(bridge.openPath(r.dir)); };
   const more = (m.meta.total ?? m.meta.files?.length ?? 0) - (m.meta.files?.length ?? 0);
   return (
-    <div className={`mx-auto w-full max-w-[88%] rounded-xl border px-3.5 py-2.5 text-[13px] ${state === 'pending' ? 'border-warning/50 bg-warning/10' : 'bg-muted/50'}`} data-testid="ext-request">
+    <div className={`mx-auto w-full max-w-[88%] rounded-xl border px-3.5 py-2.5 text-control ${state === 'pending' ? 'border-warning/50 bg-warning/10' : 'bg-muted/50'}`} data-testid="ext-request">
       <div className="flex items-start gap-2">{m.meta.ext === 'skill' ? <Puzzle className="mt-0.5 size-4 shrink-0" /> : <Server className="mt-0.5 size-4 shrink-0" />}<div className="min-w-0 flex-1"><div>{m.body}</div>{m.meta.description ? <div className="text-muted-foreground mt-0.5">{m.meta.description}</div> : null}</div></div>
-      {m.meta.files?.length ? <div className="text-muted-foreground mt-1.5 pl-6 font-mono text-[11px] break-all">{m.meta.files.join(' · ')}{more > 0 ? ` · ${t('ext.andMore', { n: more })}` : ''}</div> : null}
+      {m.meta.files?.length ? <div className="text-muted-foreground mt-1.5 pl-6 font-mono text-micro break-all">{m.meta.files.join(' · ')}{more > 0 ? ` · ${t('ext.andMore', { n: more })}` : ''}</div> : null}
       <div className="chat-actions mt-2 flex flex-wrap items-center gap-2 pl-6">
         {state !== 'pending' ? <Badge variant={state === 'approved' ? 'success' : 'outline'}>{t(state === 'approved' ? (asking ? 'ext.stateAllowed' : 'ext.stateApproved') : 'ext.stateRejected')}</Badge>
           : bridge.mobile ? <span className="text-muted-foreground">{t('ext.onPc')}</span> : (<>

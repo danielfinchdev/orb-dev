@@ -29,6 +29,8 @@ export default {
   'app.window.maximize': 'Maximizar',
   'app.window.restore': 'Restaurar',
   'app.window.close': 'Cerrar',
+  'app.trashAdded': 'El dispositivo enlazado «{device}» ha enviado «{title}» a la papelera.',
+  'app.trashUndo': 'Deshacer',
   'app.engineStopped': 'Orb se ha detenido varias veces. Cierra la aplicación y vuelve a abrirla.',
   'app.engineRestarted': 'Orb se ha reiniciado tras un error. Las tareas en curso se han marcado como fallidas; puedes reintentarlas.',
   'app.pairTitle': 'Vincula este dispositivo',
@@ -108,4 +110,5 @@ export default {
   "app.loadOfflineBody": "No se pudo cargar esta pantalla. Comprueba la conexión y vuelve a intentarlo.",
   "app.loadOfflineToast": "No se pudo abrir: sin conexión.",
   'app.linkOfflineWifi': 'No se pudo conectar con tu Orb por la red local. En el PC, permite Orb en el firewall de Windows para redes privadas.',
+  "app.copyFailed": "No se pudo copiar.",
 };

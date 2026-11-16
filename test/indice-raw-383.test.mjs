@@ -36,6 +36,7 @@ function hiddenTask() {
   const repo = path.join(t.home, 'web', name); fs.mkdirSync(repo, { recursive: true });
   const g = (...a) => { const r = git(repo, ...a); assert.equal(r.status, 0, `git ${a.join(' ')}: ${r.stderr}`); return r.stdout; };
   g('init', '-q');
+  g('config', 'core.trustctime', 'false'); // Linux changes a file's ctime on every write; Windows has none that git uses, so the hole this test needs is only there when ctime is ignored
   for (const [f, c] of Object.entries({ 'a.txt': 'uno\n', 'b.txt': 'dos\n', 'c.txt': 'tres\n' })) { fs.writeFileSync(path.join(repo, f), c); fs.utimesSync(path.join(repo, f), OLD, OLD); }
   g('add', '-A'); g('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'first');
   board.addProject({ name, path: repo }, 'usuario', { fromUser: true });

@@ -1,10 +1,10 @@
-// 3.8: the master password in the window. MasterCreate: the welcome's step after the folder, and the one screen an Orb
+// the master password in the window. MasterCreate: the welcome's step after the folder, and the one screen an Orb
 // updated to 3.8 shows once (it cannot be skipped). MasterLocked: this PC cannot open Orb's keys by itself (another PC,
 // another Windows user) or its file is missing. The dialog that asks for it before a guarded action (registered with
 // lib/core-access.js), the card of Ajustes › Datos (change it, «He olvidado la contraseña»: with the backups' recovery
 // code, or «Borrar secretos y empezar de cero») and a connector's keys.
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { notifyError, notifyOk } from '@/lib/notify.js';
 import { KeyRound, LockKeyhole, TriangleAlert, ArrowRight } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -39,7 +39,7 @@ function NewPassword({ v, set, ack = null, autoFocus = false }) {
       <Field label={t('master.repeat')}><Input type="password" autoComplete="new-password" value={v.again} onChange={(e) => set({ again: e.target.value })} data-testid="master-again" /></Field>
       {v.again && v.again !== v.next ? <p className="text-destructive text-xs" role="alert">{t('master.mismatch')}</p> : null}
       {ack ? (
-        <label className="flex cursor-pointer items-start gap-2 text-[13px]"><Checkbox checked={Boolean(v.ack)} onCheckedChange={(c) => set({ ack: c === true })} data-testid="master-ack" className="mt-0.5" /><span>{ack}</span></label>
+        <label className="flex cursor-pointer items-start gap-2 text-control"><Checkbox checked={Boolean(v.ack)} onCheckedChange={(c) => set({ ack: c === true })} data-testid="master-ack" className="mt-0.5" /><span>{ack}</span></label>
       ) : null}
     </div>
   );
@@ -51,7 +51,7 @@ function Warning() {
   const t = useT();
   return (
     <div className="border-warning/50 bg-warning/10 grid gap-1 rounded-xl border px-4 py-3 text-left" role="note" data-testid="master-warning">
-      <span className="flex items-center gap-1.5 text-[13px] font-medium"><TriangleAlert className="text-warning size-4 shrink-0" />{t('master.warnTitle')}</span>
+      <span className="flex items-center gap-1.5 text-control font-medium"><TriangleAlert className="text-warning-ink size-4 shrink-0" />{t('master.warnTitle')}</span>
       <span className="text-muted-foreground text-xs leading-relaxed">{t('master.warnBody')}</span>
     </div>
   );
@@ -66,8 +66,8 @@ export function MasterCreate({ onDone, upgrade = false }) {
     e.preventDefault();
     if (!ready(v)) return;
     setBusy(true);
-    try { keepUnlock(await call('master.create', { password: v.next })); toast.success(t('master.created')); onDone?.(); }
-    catch (error) { toast.error(errorText(error)); setBusy(false); }
+    try { keepUnlock(await call('master.create', { password: v.next })); notifyOk(t('master.created')); onDone?.(); }
+    catch (error) { notifyError(error); setBusy(false); }
   };
   return (
     <div className="brand-sky onboard">
@@ -125,7 +125,7 @@ export async function forgotFlow({ canForget = false } = {}) {
 }
 
 // This PC cannot open the keys by itself (the password opens them), or the password's file is missing (lost: no
-// password to type; the recovery code, or starting from scratch). 3.8.1: also Orb's lock screen (screenLocked: Windows
+// password to type; the recovery code, or starting from scratch). also Orb's lock screen (screenLocked: Windows
 // locked, the PC asleep, «Bloquear» or Orb unused for a while; the agents keep working meanwhile).
 export function MasterLocked({ onDone, state = null }) {
   const t = useT();
@@ -136,7 +136,7 @@ export function MasterLocked({ onDone, state = null }) {
   const submit = async (e) => {
     e.preventDefault(); setBusy(true);
     try { keepUnlock(await call('master.unlock', { password })); onDone?.(); }
-    catch (error) { toast.error(errorText(error)); setBusy(false); }
+    catch (error) { notifyError(error); setBusy(false); }
   };
   const forgot = async () => { if (await forgotFlow({ canForget: Boolean(state?.canForget) })) onDone?.(); };
   return (
@@ -155,7 +155,7 @@ export function MasterLocked({ onDone, state = null }) {
 }
 
 // Before a guarded action: the password, once every 5 minutes. → { unlock, until } or null.
-// 3.8.1: an action that asks every time (fresh: deleting a project) says so instead, and its token is for it alone.
+// an action that asks every time (fresh: deleting a project) says so instead, and its token is for it alone.
 setMasterAsker((action, { fresh = false } = {}) => form(tNow('master.askTitle'), {
   description: `${tNow(`master.ask.${action}`)} ${fresh ? tNow('master.askEveryTime') : tNow('master.askNote', { n: 5 })}`,
   initial: { password: '' },
@@ -184,7 +184,7 @@ export function MasterCard() {
       ok: t('master.change'),
       onOk: async (v) => { if (!v.current || !ready(v, false)) throw new Error(t(v.next !== v.again ? 'master.mismatch' : 'master.fillAll')); return call('master.change', { current: v.current, next: v.next }); }
     });
-    if (r?.unlock) { keepUnlock(r); toast.success(t('master.changed')); load(); }
+    if (r?.unlock) { keepUnlock(r); notifyOk(t('master.changed')); load(); }
   };
   const forgot = async () => { if (await forgotFlow({ canForget: st.canForget })) load(); };
   const when = st.changedAt ? new Date(st.changedAt).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }) : null;
@@ -202,7 +202,7 @@ export function MasterCard() {
   );
 }
 
-// 3.8.1: after how long without use Orb locks itself (config.ui.lockMinutes; 15 by default).
+// after how long without use Orb locks itself (config.ui.lockMinutes; 15 by default).
 function LockMinutes() {
   const t = useT();
   const config = useStore((s) => s.app?.config);
@@ -225,7 +225,7 @@ const KEY_LINE = /^([A-Za-z_][A-Za-z0-9_]{0,99})=(.*)$/;
 export async function connectorKeys(server) {
   const unlock = await unlockCore('secrets');
   if (!unlock) return;
-  let current; try { current = await call('secrets.connector', { name: server.name, unlock }); } catch (error) { toast.error(errorText(error)); return; }
+  let current; try { current = await call('secrets.connector', { name: server.name, unlock }); } catch (error) { notifyError(error); return; }
   const text = Object.entries(current.env ?? {}).map(([k, v]) => `${k}=${v}`).join('\n');
   const r = await form(tNow('master.keysTitle', { name: server.name }), {
     description: tNow('master.keysDesc'),
@@ -240,7 +240,7 @@ export async function connectorKeys(server) {
     }
   });
   if (!r) return;
-  toast.success(tNow('master.keysSaved'));
+  notifyOk(tNow('master.keysSaved'));
   const app = await call('app.state').catch(() => null);
   if (app) setState({ app: { ...getState().app, config: app.config } });
 }

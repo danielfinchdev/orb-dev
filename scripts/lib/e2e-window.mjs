@@ -1,4 +1,4 @@
-// 3.8.3: the window of a test build (cargo feature `e2e`, the only one with a DevTools port), shared by the measuring
+// the window of a test build (cargo feature `e2e`, the only one with a DevTools port), shared by the measuring
 // scripts (medir-fluidez, medir-animaciones, medir-reflejo). Everything lives in a throwaway folder in %TEMP%: the
 // workspace, the app data, the backups and the bridge folder, with the fake agents (test/fixtures/fake-live.mjs) and
 // the test master password. Never the real C:\Orb, %APPDATA%\Orb* or the installed app; only the process started here
@@ -39,7 +39,7 @@ export async function sandbox({ name, defaultExe = 'Orb.exe' }) {
 
   const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
   const { home } = createHome(base, { userName: 'Ana' });
-  const OFF = Object.fromEntries(['codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot'].map((a) => [a, { enabled: false }]));
+  const OFF = Object.fromEntries(['codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot', 'hermes'].map((a) => [a, { enabled: false }]));
   const configure = (patch = {}) => writeJson(paths(home).config, merge(loadConfig(home), { agents: OFF, autoRun: false, ...patch, ui: { tourDone: true, ...(patch.ui ?? {}) } }));
   configure();
   fs.mkdirSync(SANDBOX.ORB_USER_DATA, { recursive: true });

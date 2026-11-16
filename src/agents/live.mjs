@@ -1,4 +1,4 @@
-// Live sessions with the agents (2.3): one process per conversation that stays open between turns, instead of one
+// Live sessions with the agents: one process per conversation that stays open between turns, instead of one
 // process per message. Every agent adapter returns an object with the same shape, so sessions, tasks and the assistant
 // do not care which agent is behind it:
 //
@@ -45,7 +45,7 @@ export class Turn {
 // Orb's variables named like a token or a key ({"ORB_…TOKEN":"…"} or {"name":"ORB_…KEY","value":"…"}) stay out of the session logs.
 const LOGGED_SECRET = /(ORB_[A-Z_]*(?:TOKEN|KEY)"(?:\s*,\s*"value")?\s*:\s*")[^"]*/g;
 
-// 3.8: what Orb hands an agent's MCP servers in their env (tickets; a connector's keys if any reach here) never gets to a
+// what Orb hands an agent's MCP servers in their env (tickets; a connector's keys if any reach here) never gets to a
 // session log, whatever the variable is called: the log hides those values themselves.
 export function hidingEnvValues(log, servers) {
   const values = [...new Set(Object.values(servers ?? {}).flatMap((s) => Object.values(s?.env ?? {})).map(String).filter((v) => v.length >= 8))];
@@ -109,7 +109,7 @@ export class JsonRpcPeer {
 
 // Starts an agent's process for a live session: no shell, clean environment, stderr kept for error messages.
 export function spawnAgent(cmd, args, { cwd, env = {}, log = () => {} } = {}) {
-  // 3.5: on Linux and macOS in a process group of its own (detached), so killTree stops its children too.
+  // on Linux and macOS in a process group of its own (detached), so killTree stops its children too.
   const child = spawn(cmd, args, { cwd, env: cleanEnv(env), windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
   let stderr = '';
   child.stderr.setEncoding('utf8');

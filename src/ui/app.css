@@ -3,110 +3,16 @@
 @import "@fontsource-variable/outfit";
 @import "@fontsource-variable/geist-mono";
 @import "./themes.css";
-
-@custom-variant dark (&:is(.dark *));
-
-/* shadcn/ui tokens: a calm neutral base with the robot's soft violet as the accent. */
-:root {
-  --radius: 0.8rem;
-  --background: oklch(0.985 0.003 268);
-  --foreground: oklch(0.21 0.02 268);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.21 0.02 268);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0.02 268);
-  --primary: oklch(0.57 0.19 264);
-  --primary-foreground: oklch(0.985 0.005 268);
-  --secondary: oklch(0.955 0.008 268);
-  --secondary-foreground: oklch(0.25 0.02 268);
-  --muted: oklch(0.955 0.008 268);
-  --muted-foreground: oklch(0.53 0.02 268);
-  --accent: oklch(0.945 0.03 268);
-  --accent-foreground: oklch(0.32 0.1 264);
-  --destructive: oklch(0.6 0.2 25);
-  --success: oklch(0.62 0.15 155);
-  --warning: oklch(0.72 0.15 70);
-  --warning-foreground: oklch(0.22 0.04 70);
-  --info: oklch(0.62 0.14 245);
-  --border: oklch(0.915 0.008 268);
-  --input: oklch(0.905 0.01 268);
-  --ring: oklch(0.65 0.15 264);
-  --sidebar: oklch(0.975 0.004 268);
-  --bubble: oklch(0.57 0.19 264);
-  --bubble-foreground: oklch(0.99 0 0);
-}
-
-.dark {
-  --background: oklch(0.155 0.008 268);
-  --foreground: oklch(0.95 0.005 268);
-  --card: oklch(0.195 0.01 268);
-  --card-foreground: oklch(0.95 0.005 268);
-  --popover: oklch(0.205 0.012 268);
-  --popover-foreground: oklch(0.95 0.005 268);
-  --primary: oklch(0.72 0.14 264);
-  --primary-foreground: oklch(0.17 0.03 268);
-  --secondary: oklch(0.25 0.012 268);
-  --secondary-foreground: oklch(0.93 0.005 268);
-  --muted: oklch(0.24 0.01 268);
-  --muted-foreground: oklch(0.68 0.015 268);
-  --accent: oklch(0.28 0.05 266);
-  --accent-foreground: oklch(0.9 0.05 264);
-  --destructive: oklch(0.68 0.19 22);
-  --success: oklch(0.72 0.15 155);
-  --warning: oklch(0.8 0.14 75);
-  --warning-foreground: oklch(0.22 0.04 70);
-  --info: oklch(0.72 0.12 245);
-  --border: oklch(0.29 0.012 268);
-  --input: oklch(0.32 0.014 268);
-  --ring: oklch(0.6 0.14 264);
-  --sidebar: oklch(0.175 0.009 268);
-  --bubble: oklch(0.47 0.16 264);
-  --bubble-foreground: oklch(0.98 0 0);
-}
-
-@theme inline {
-  --font-sans: "Outfit Variable", "Segoe UI", system-ui, sans-serif;
-  --font-mono: "Geist Mono Variable", "Cascadia Code", Consolas, monospace;
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 10px);
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-success: var(--success);
-  --color-warning: var(--warning);
-  --color-warning-foreground: var(--warning-foreground);
-  --color-info: var(--info);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-sidebar: var(--sidebar);
-  --color-bubble: var(--bubble);
-  --color-bubble-foreground: var(--bubble-foreground);
-}
+@import "./tokens.css";
 
 @layer base {
   * { @apply border-border outline-ring/50; }
   html, body, #root { height: 100%; }
-  /* 3.8: edge to edge (the Android app draws under the status bar since Android 15): every screen starts below the
+  /* edge to edge (the Android app draws under the status bar since Android 15): every screen starts below the
      status bar and clear of a notch, the welcome and linking screens too. On the PC these are 0. Overlays (sheets, the
      menu ☰, notifications) are outside #root and keep clear of it themselves. */
   #root { padding-top: env(safe-area-inset-top, 0px); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
-  /* 3.8.2 (lag): a modal layer (dialog, menu, select) sets body { pointer-events: none } and, through react-remove-scroll,
+  /* a modal layer (dialog, menu, select) sets body { pointer-events: none } and, through react-remove-scroll,
      body { --removed-body-scroll-bar-size }. Both are inherited: every element of the app was styled again on each open and
      close, and each offscreen row or message with content-visibility was rebuilt (≈30 ms with 300 chats). #root states
      its own values, so the change stops there; the page's own transparent cover (z-50, under the layers, which are
@@ -114,6 +20,8 @@
   #root { pointer-events: auto; --removed-body-scroll-bar-size: 0px; }
   body[style*="pointer-events: none"] > #root::after { content: ""; position: fixed; inset: 0; z-index: 50; }
   body { @apply bg-background text-foreground antialiased; font-family: var(--font-sans); font-size: 14.5px; overflow: hidden; }
+  /* Órbita compact scale on the Orb theme (see the compact variant in tokens.css). rem is untouched so Tailwind spacing and the webview zoom are unaffected. */
+  @media (pointer: fine) { html:is([data-skin="orb"], [data-skin="profesional"], [data-skin="nube"], [data-skin="vaporwave"], [data-skin="retro"]) body { font-size: 13px; } }
   h1, h2, h3, h4 { font-weight: 500; letter-spacing: -0.01em; }
   ::selection { background: color-mix(in oklch, var(--primary) 30%, transparent); }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -136,7 +44,7 @@
 }
 .dark { --tip-shadow: 0 14px 34px -10px rgb(0 0 0 / 0.6), 0 0 0 1px color-mix(in oklch, var(--primary) 12%, transparent); }
 .orb-tip { background: var(--tip-bg); color: var(--tip-title); border: 1px solid var(--tip-border); border-radius: var(--tip-radius); padding: 10px 14px 11px; box-shadow: var(--tip-shadow); transform-origin: var(--radix-tooltip-content-transform-origin); animation: orb-tip-in 0.16s cubic-bezier(0.2, 0.8, 0.3, 1.1); }
-/* 3.2.1: a help bubble lets clicks through, its positioning box too (it covered the project picker next to the brain's). */
+/* a help bubble lets clicks through, its positioning box too (it covered the project picker next to the brain's). */
 [data-radix-popper-content-wrapper]:has(> [data-testid="bubble-tip"]) { pointer-events: none; }
 .orb-tip-title { color: var(--tip-title); }
 .orb-tip-text { color: var(--tip-text); }
@@ -148,17 +56,17 @@ html[data-motion="minima"] .orb-tip, html[data-skin="profesional"] .orb-tip { an
 @media (prefers-reduced-motion: reduce) { .orb-tip { animation: none; } }
 /* Each theme's bubble. Vaporwave: a pastel sticker with the window's bevel colours. Retro: ink outline and a hard offset
    shadow, like its cards. Candy: rounder, with a pink glow. Professional: tighter corners, a neutral shadow. */
-html[data-skin="vaporwave"]:not(.dark) { --tip-border: var(--vw-lo); --tip-radius: 14px; --tip-shadow: 4px 4px 0 var(--vw-hard), 0 12px 28px -12px color-mix(in oklch, var(--primary) 45%, transparent); }
-html.dark[data-skin="vaporwave"] { --tip-border: color-mix(in oklch, var(--primary) 55%, transparent); --tip-shadow: 0 0 22px -6px color-mix(in oklch, var(--primary) 80%, transparent), 0 14px 30px -12px rgb(0 0 0 / 0.6); }
-html[data-skin="retro"] { --tip-border: var(--rt-ink); --tip-radius: 12px; --tip-shadow: 4px 4px 0 var(--rt-off); }
+html[data-skin="vaporwave"]:not(.dark) { --tip-border: var(--vw-dk); --tip-radius: 0px; --tip-shadow: 3px 3px 0 oklch(0.55 0.15 330 / 0.35); }
+html.dark[data-skin="vaporwave"] { --tip-border: var(--vw-pink); --tip-radius: 0px; --tip-shadow: 0 0 18px -4px oklch(0.7 0.25 345 / 0.75); }
+html[data-skin="retro"] { --tip-border: var(--primary); --tip-radius: 0px; --tip-shadow: 0 0 12px -3px oklch(0.86 0.21 145 / 0.45); }
 html[data-skin="retro"] .orb-tip { border-width: 2px; }
 html[data-skin="retro"] .orb-tip-tail::before { border-width: 2px; }
 html[data-skin="retro"] .orb-tip-tail { translate: 0 -2px; }
-html[data-skin="nube"] { --tip-border: transparent; --tip-radius: 20px; --tip-shadow: 0 14px 34px -10px var(--cd-shadow), 0 0 0 1px color-mix(in oklch, var(--primary) 10%, transparent); }
+html[data-skin="nube"] { --tip-border: var(--cd-rim); --tip-radius: 16px; --tip-shadow: 0 3px 0 var(--cd-drop); }
 html[data-skin="nube"] .orb-tip-title { color: var(--primary); }
 html[data-skin="profesional"] { --tip-radius: 10px; --tip-shadow: 0 10px 24px -10px rgb(0 0 0 / 0.25), 0 2px 6px -2px rgb(0 0 0 / 0.12); }
 
-/* Progress of a task that does not report its percentage: a sliding bar (a third of the track wide). 3.8.1 (H4f): it
+/* Progress of a task that does not report its percentage: a sliding bar (a third of the track wide). It
    slides with translate (percentages of its own width: -105% / 300% are the old left -35% / 100% of the track), on the
    compositor, not by laying out the page 60 times a second. */
 @keyframes orb-indeterminate { 0% { translate: -105% 0; } 100% { translate: 300% 0; } }
@@ -180,9 +88,10 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
 .lazy-lines > :nth-last-child(n+13) { content-visibility: auto; contain-intrinsic-size: auto 120px; overflow-clip-margin: 16px; }
 .lazy-row { content-visibility: auto; contain-intrinsic-size: auto 56px; overflow-clip-margin: 8px; }
 /* A screen whose file is still on its way (main.jsx › Loading): the spinner only after a moment, never a flash. */
-.screen-loading { animation: screen-loading-in .2s ease .4s both; }
+.screen-loading { animation: screen-loading-in var(--dur-base) ease .4s both; }
 @keyframes screen-loading-in { from { opacity: 0; } to { opacity: 1; } }
 .prose-chat { line-height: 1.6; overflow-wrap: anywhere; }
+@media (pointer: fine) { html:is([data-skin="orb"], [data-skin="profesional"], [data-skin="nube"], [data-skin="vaporwave"], [data-skin="retro"]) .prose-chat { font-size: 14.5px; line-height: 1.43; } }
 .prose-chat p { margin: 0 0 .6em; } .prose-chat p:last-child { margin-bottom: 0; }
 .prose-chat ul, .prose-chat ol { margin: .3em 0 .6em; padding-left: 1.3em; } .prose-chat ul { list-style: disc; } .prose-chat ol { list-style: decimal; }
 .prose-chat li { margin: .15em 0; }
@@ -206,13 +115,13 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
 /* ---------- the robot (orb.jsx): the artwork plus living eyes ---------- */
 .orb { --k: 1; --eye: #8cf6ff; position: relative; isolation: isolate; display: inline-block; flex: none; line-height: 0; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
 .orb-body { position: absolute; bottom: 0; }
-/* 3.8.1 (H4e): it floats and its chest light pulses only while something happens (orb.jsx sets data-float/data-glow and
+/* it floats and its chest light pulses only while something happens (orb.jsx sets data-float/data-glow and
    takes them away at the end of a sway or a pulse, where both are back at rest); still, it costs no frames at all. */
 .orb[data-float] .orb-body { animation: orb-float 4.2s ease-in-out infinite; will-change: transform; }
 .orb-img { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .orb-gaze, .orb-eyes { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .orb-eyes { transition: transform .35s ease; }
-/* 3.8.3: each eye is an HTML box (orb.jsx) placed on the artwork's eye and tilted like it; .orb-eye fills it and is what
+/* each eye is an HTML box (orb.jsx) placed on the artwork's eye and tilted like it; .orb-eye fills it and is what
    blinks and talks (scaleY around the eye's centre), a transform the compositor runs alone. */
 .orb-eye-at { position: absolute; }
 .orb-eye { position: absolute; inset: 0; transform-origin: center; transition: transform .12s ease, opacity .2s; }
@@ -260,7 +169,7 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
 .orb[data-mood="sleeping"] .orb-led { animation: none; opacity: .2; }
 .orb.still .orb-body, .orb.still .orb-led, .orb.calm .orb-body { animation: none; }
 .orb.still .orb-led { opacity: 1; }
-/* 3.8.1 (H4d): a robot out of view or in a hidden window (orb.jsx › useOnScreen) holds still where it is: nothing to see,
+/* a robot out of view or in a hidden window (orb.jsx › useOnScreen) holds still where it is: nothing to see,
    and no frames drawn for it. It goes on from the same point when it shows again. */
 .orb[data-away], .orb[data-away] * { animation-play-state: paused !important; }
 /* A robot that stands still needs no layer of its own: hundreds of them (one per message and per chat in the list) made
@@ -292,27 +201,29 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
 .brand-sky { background: radial-gradient(120% 90% at 30% 10%, #c3cbff 0%, #a7b1f6 45%, #8f9ef0 100%); }
 .dark .brand-sky { background: radial-gradient(120% 90% at 30% 10%, #2b3270 0%, #1d2257 50%, #141838 100%); }
 
-/* 2.6: the type of the themes' titles, for the pieces drawn with it (the Orb·E wordmark, the clock of the chat bar). */
+/* the type of the themes' titles, for the pieces drawn with it (the Orb·E wordmark, the clock of the chat bar). */
 :root { --font-title: var(--font-sans); }
-html[data-skin="vaporwave"] { --font-title: "Orbitron Variable", "Space Grotesk Variable", var(--font-sans); }
-html[data-skin="retro"] { --font-title: "Bungee", "IBM Plex Mono", var(--font-sans); }
+html[data-skin="vaporwave"] { --font-title: "Tiny5", "Space Grotesk Variable", var(--font-sans); }
+html.dark[data-skin="vaporwave"] { --font-title: "Orbitron Variable", "Space Grotesk Variable", var(--font-sans); }
+html[data-skin="retro"] { --font-title: "Press Start 2P", "VT323", monospace; }
 html[data-skin="nube"] { --font-title: "Fredoka Variable", var(--font-sans); }
 html[data-skin="profesional"] { --font-title: "Inter Variable", var(--font-sans); }
 
-/* 2.6: the assistant's wordmark ORB·E at the top of the sidebar when it keeps its default name, chosen per theme.
+/* the assistant's wordmark ORB·E at the top of the sidebar when it keeps its default name, chosen per theme.
    Orb (and the others for now): «WALL·E» style, spaced capitals and a round dot of the theme's colour. */
-/* 3.2: --wm-track is the spacing between letters and --wm-gap the extra room on each side of the dot: the dot sits exactly
+/* --wm-track is the spacing between letters and --wm-gap the extra room on each side of the dot: the dot sits exactly
    halfway between B and E, and the last letter gives back its spacing (it pushed the wordmark off its centre). */
 .wordmark { --wm-track: 0.16em; --wm-gap: 0.06em; display: inline-flex; align-items: center; font-family: "Outfit Variable", var(--font-sans); font-weight: 600; font-size: 1.12rem; line-height: 1; letter-spacing: var(--wm-track); color: var(--foreground); }
 .wordmark-dot { flex: none; width: 0.34rem; height: 0.34rem; margin: 0 calc(var(--wm-track) + var(--wm-gap)) 0 var(--wm-gap); border-radius: 999px; background: var(--primary); }
 .wordmark-e { margin-inline-end: calc(var(--wm-track) * -1); }
-/* Vaporwave: techno capitals, ·E in the theme's colour, underlined. */
-html[data-skin="vaporwave"] .wordmark { font-family: "Orbitron Variable", var(--font-sans); --wm-track: 0.08em; --wm-gap: 0.06em; font-weight: 800; font-size: 1rem; padding-bottom: 3px; border-bottom: 2px solid var(--primary); }
-html[data-skin="vaporwave"] .wordmark-dot { width: 0.22rem; height: 0.22rem; }
-html[data-skin="vaporwave"] .wordmark-e { color: var(--primary); }
+/* Vaporwave: Silkscreen capitals on the title bar by day, chrome Orbitron by night; the dot is a little diamond. */
+html[data-skin="vaporwave"] .wordmark { font-family: "Silkscreen", var(--font-title); --wm-track: 0.16em; --wm-gap: 0.06em; font-weight: 400; font-size: 0.95rem; color: oklch(1 0 0); }
+html[data-skin="vaporwave"] .wordmark-dot { width: 0.24rem; height: 0.24rem; border-radius: 0; background: oklch(0.88 0.14 350); transform: rotate(45deg); }
+html[data-skin="vaporwave"] .wordmark-e { color: inherit; }
+html.dark[data-skin="vaporwave"] .wordmark { font-family: "Orbitron Variable", var(--font-sans); font-weight: 800; font-size: 0.92rem; background: linear-gradient(180deg, oklch(0.98 0.02 210) 20%, oklch(0.82 0.14 205) 50%, oklch(0.8 0.18 345) 52%, oklch(0.95 0.06 345)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 /* Retro: a plate, chunky capitals in an ink frame with a hard shadow of the theme's colour. */
-html[data-skin="retro"] .wordmark { font-family: "Bungee", var(--font-sans); --wm-track: 0.1em; --wm-gap: 0.02em; font-weight: 400; font-size: 0.92rem; padding: 4px 9px 3px; border: 2px solid var(--foreground); border-radius: 6px; box-shadow: 3px 3px 0 var(--primary); }
-html[data-skin="retro"] .wordmark-dot { width: 0.24rem; height: 0.24rem; }
+html[data-skin="retro"] .wordmark { font-family: "Press Start 2P", var(--font-title); font-size-adjust: none; --wm-track: 0.06em; --wm-gap: 0.1em; font-weight: 400; font-size: 0.62rem; padding: 6px 8px 5px; border: 3px double var(--primary); border-radius: 0; color: var(--primary); }
+html[data-skin="retro"] .wordmark-dot { width: 0.3rem; height: 0.3rem; border-radius: 0; background: var(--warning); }
 /* Candy: a jelly pill, white capitals on the theme's pink with the darker edge below. */
 html[data-skin="nube"] .wordmark { font-family: "Fredoka Variable", var(--font-sans); --wm-track: 0.06em; --wm-gap: 0.03em; font-weight: 700; font-size: 1rem; color: var(--primary-foreground); background: var(--primary); padding: 6px 14px 5px; border-radius: 999px; box-shadow: 0 3px 0 color-mix(in oklch, var(--primary) 60%, black); }
 html[data-skin="nube"] .wordmark-dot { width: 0.24rem; height: 0.24rem; background: currentColor; }
@@ -320,7 +231,7 @@ html[data-skin="nube"] .wordmark-dot { width: 0.24rem; height: 0.24rem; backgrou
 html[data-skin="profesional"] .wordmark { font-family: "Inter Variable", var(--font-sans); --wm-track: 0.22em; --wm-gap: 0em; font-weight: 600; font-size: 0.9rem; }
 html[data-skin="profesional"] .wordmark-dot { width: 0.22rem; height: 0.22rem; background: currentColor; }
 
-/* 2.6: the system's date and time on the left of the chat's top bar, in the theme's title type. */
+/* the system's date and time on the left of the chat's top bar, in the theme's title type. */
 .bar-clock { display: grid; line-height: 1.1; font-family: var(--font-title); font-variant-numeric: tabular-nums; }
 .bar-clock-time { font-size: 1.05rem; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
 .bar-clock-date { font-family: var(--font-sans); font-size: 0.72rem; color: var(--muted-foreground); white-space: nowrap; }
@@ -329,21 +240,21 @@ html[data-skin="retro"] .bar-clock-time { font-weight: 400; }
 /* The clock sits in the bar's title (an h1): the themes' outlined title styles are not for it. */
 html .bar-clock, html .bar-clock * { -webkit-text-stroke: 0 !important; text-shadow: none !important; color: var(--foreground); letter-spacing: normal; text-transform: none !important; }
 html .bar-clock .bar-clock-date { color: var(--muted-foreground); font-family: var(--font-sans) !important; font-weight: 400; font-variant-numeric: tabular-nums; }
-/* 2.7: the clock is a button (the calendar opens on click), with no button look. 3.2: no box behind it on hover either,
+/* the clock is a button (the calendar opens on click), with no button look. no box behind it on hover either,
    in any theme (only the keyboard's focus ring). */
 html button.bar-clock, html button.bar-clock:hover, html button.bar-clock[data-state="open"] { justify-items: start; text-align: left; background: none !important; box-shadow: none !important; border: 0; margin: -4px -8px; padding: 4px 8px; border-radius: 10px; cursor: pointer; }
 button.bar-clock:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
-/* 3.2: the working folder in the middle of the chat's bar: a quiet pill over the theme's art. */
+/* the working folder in the middle of the chat's bar: a quiet pill over the theme's art. */
 .bar-project { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--border); background: color-mix(in oklch, var(--card) 82%, transparent); backdrop-filter: blur(6px); color: var(--foreground); font-size: 13px; font-weight: 500; line-height: 1.3; cursor: default; }
 .bar-project svg { color: var(--primary); }
 .bar-project.is-empty { color: var(--muted-foreground); font-weight: 400; }
 .bar-project:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
-html[data-skin="retro"] .bar-project { border-radius: 6px; border: 2px solid var(--foreground); box-shadow: 2px 2px 0 var(--primary); font-family: var(--font-title); font-weight: 400; font-size: 12px; letter-spacing: 0.03em; }
+html[data-skin="retro"] .bar-project { border-radius: 0; border: 2px dashed var(--input); box-shadow: none; font-family: var(--font-sans); font-weight: 400; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
 html[data-skin="nube"] .bar-project { font-family: "Fredoka Variable", var(--font-sans); font-weight: 600; border-color: color-mix(in oklch, var(--primary) 35%, var(--border)); }
-html[data-skin="vaporwave"] .bar-project { border-color: color-mix(in oklch, var(--primary) 45%, transparent); }
-html.dark[data-skin="vaporwave"] .bar-project { box-shadow: 0 0 12px -4px var(--primary); }
+html[data-skin="vaporwave"] .bar-project { border-radius: 0; border-color: transparent; background: var(--vw-face); box-shadow: var(--vw-out-thin); backdrop-filter: none; }
+html.dark[data-skin="vaporwave"] .bar-project { background: oklch(0.14 0.05 290); box-shadow: inset 0 0 0 1px var(--vw-violet); }
 html[data-skin="profesional"] .bar-project { border-radius: 6px; backdrop-filter: none; background: var(--card); }
-/* 3.2: the conversation's title in the middle of the bar, big, and under it, small, its project with its icon. */
+/* the conversation's title in the middle of the bar, big, and under it, small, its project with its icon. */
 .bar-title { display: grid; justify-items: center; min-width: 0; max-width: 100%; line-height: 1.15; text-align: center; }
 .bar-title-main { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; border: 0; background: none; color: var(--foreground); font-family: var(--font-title); font-size: 15.5px; font-weight: 600; letter-spacing: 0.005em; }
 button.bar-title-main { cursor: pointer; border-radius: 6px; }
@@ -353,15 +264,15 @@ button.bar-title-main:focus-visible { outline: 2px solid var(--ring); outline-of
 .bar-title-agent::before { content: '·'; margin: 0 2px 0 1px; }
 html[data-skin="retro"] .bar-title-main { font-weight: 400; font-size: 14px; letter-spacing: 0.02em; }
 html[data-skin="nube"] .bar-title-main { font-weight: 700; color: color-mix(in oklch, var(--primary) 55%, var(--foreground)); }
-html[data-skin="vaporwave"] .bar-title-main { font-weight: 700; letter-spacing: 0.03em; }
-/* 3.2: a project's icon (project-icon.jsx): its own picture, or its initials on a colour of its own. */
+html[data-skin="vaporwave"] .bar-title-main { font-weight: 700; letter-spacing: 0.03em; border-radius: 0; }
+/* a project's icon (project-icon.jsx): its own picture, or its initials on a colour of its own. */
 .project-icon { display: inline-grid; place-items: center; flex: none; width: 1rem; height: 1rem; border-radius: 5px; overflow: hidden; font-family: var(--font-sans); font-size: 8px; font-weight: 700; line-height: 1; letter-spacing: 0.02em; color: oklch(0.99 0.01 var(--pi-hue, 255)); background: oklch(0.62 0.14 var(--pi-hue, 255)); }
 .dark .project-icon:not(.is-image) { background: oklch(0.52 0.13 var(--pi-hue, 255)); }
 .project-icon.is-image { object-fit: contain; background: none; }
-html[data-skin="retro"] .project-icon:not(.is-image) { border-radius: 3px; box-shadow: 1px 1px 0 var(--foreground); }
+html[data-skin="retro"] .project-icon:not(.is-image) { border-radius: 0; box-shadow: none; border: 1px solid var(--primary); }
 html[data-skin="nube"] .project-icon:not(.is-image) { border-radius: 999px; }
 html[data-skin="profesional"] .project-icon:not(.is-image) { background: var(--muted); color: var(--foreground); box-shadow: inset 0 0 0 1px var(--border); }
-/* 3.8.1 (H1e): the corner of a chat's avatar (views/orb/inbox.jsx › OrbAvatar): the marks of the agents that worked in
+/* the corner of a chat's avatar (views/orb/inbox.jsx › OrbAvatar): the marks of the agents that worked in
    it, each on a small round chip that reads on any row (hovered, open, glass) without cutting a ring out of the icon
    under it; several overlap like a stack of avatars (the first on top), «+N» past three (overlapped less, so it reads). */
 .orb-avatar-badges { position: absolute; inset: 0; pointer-events: none; }
@@ -369,13 +280,13 @@ html[data-skin="profesional"] .project-icon:not(.is-image) { background: var(--m
 .orb-avatar-badge { position: absolute; right: -3px; bottom: -3px; display: grid; place-items: center; border-radius: 999px; background: var(--card); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / 0.12); }
 .dark .orb-avatar-badge { background: var(--popover); }
 html.glass .orb-avatar-badge { background: var(--glass-solid); box-shadow: 0 0 0 1px var(--glass-stroke), 0 1px 2px rgb(30 36 90 / 0.14); }
-/* 3.2: the search of the sidebar and the card of a conversation on hover. */
+/* the search of the sidebar and the card of a conversation on hover. */
 .side-search-box { background: color-mix(in oklch, var(--card) 70%, transparent); transition: border-color 0.15s, box-shadow 0.15s; }
 .side-search-box:focus-within { border-color: color-mix(in oklch, var(--ring) 70%, var(--border)); box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 18%, transparent); }
-html[data-skin="retro"] .side-search-box, html[data-skin="retro"] .side-search button { border-radius: 6px; border-width: 2px; }
+html[data-skin="retro"] .side-search-box, html[data-skin="retro"] .side-search button { border-radius: 0; border-width: 2px; border-style: dashed; }
 html[data-skin="nube"] .side-search-box { border-radius: 999px; }
 .orb-card { padding: 12px 14px 12px; }
-/* 3.2: the foot of the sidebar: icons with their bubble (folded) or the list (unfolded); its arrow sits on the line above. */
+/* the foot of the sidebar: icons with their bubble (folded) or the list (unfolded); its arrow sits on the line above. */
 .side-foot-toggle { position: absolute; top: 0; left: 50%; z-index: 1; display: grid; place-items: center; width: 26px; height: 16px; transform: translate(-50%, -50%); border: 1px solid var(--border); border-radius: 999px; background: var(--sidebar); color: var(--muted-foreground); cursor: pointer; transition: color 0.15s, border-color 0.15s; }
 .side-foot-toggle:hover { color: var(--foreground); border-color: color-mix(in oklch, var(--foreground) 30%, var(--border)); }
 .side-foot-toggle:focus-visible, .side-foot-icon:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
@@ -383,16 +294,11 @@ html[data-skin="nube"] .side-search-box { border-radius: 999px; }
 .side-foot-icon:hover { color: var(--foreground); background: color-mix(in oklch, var(--accent) 60%, transparent); }
 .side-foot-icon.is-active { color: var(--primary); background: var(--accent); }
 .side-foot-version { margin-left: 2px; padding-right: 2px; color: var(--muted-foreground); font-size: 11px; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
-html[data-skin="retro"] .side-foot-icon, html[data-skin="profesional"] .side-foot-icon { border-radius: 6px; }
-html[data-skin="retro"] .side-foot-toggle { border-width: 2px; border-color: var(--foreground); border-radius: 4px; }
-html[data-skin="retro"] .side-foot-version { font-family: var(--font-title); font-size: 10px; }
+html[data-skin="retro"] .side-foot-icon, html[data-skin="profesional"] .side-foot-icon { border-radius: 0; }
+html[data-skin="retro"] .side-foot-toggle { border-width: 2px; border-color: var(--primary); border-radius: 0; }
+html[data-skin="retro"] .side-foot-version { font-family: var(--font-sans); font-size: 10px; }
 html[data-skin="nube"] .side-foot-icon { border-radius: 999px; }
-/* 3.2: the bell and its list (notification-center.jsx), dressed as the help bubbles. */
-/* 3.8.2: warning text that reads on the page in every theme. Orb's light --warning is a pale amber meant as a fill (its
-   text is --warning-foreground, dark); the other themes' light --warning is a dark amber meant as text (their
-   --warning-foreground is white, so «text-warning-foreground» was white on white there). At night every --warning reads. */
-.text-warning-ink { color: var(--warning); }
-html[data-skin="orb"]:not(.dark) .text-warning-ink { color: var(--warning-foreground); }
+/* the bell and its list (notification-center.jsx), dressed as the help bubbles. */
 .notice-dot { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border-radius: 999px; background: var(--primary); box-shadow: 0 0 0 2px var(--background); }
 .notice-center { width: min(22rem, calc(100vw - 24px)); padding: 10px 10px 8px; }
 .notice-row { display: flex; gap: 10px; width: 100%; padding: 7px 8px; border-radius: 10px; text-align: left; color: var(--tip-title); }
@@ -400,8 +306,8 @@ button.notice-row { cursor: pointer; transition: background-color 0.15s; }
 button.notice-row:hover { background: color-mix(in oklch, var(--primary) 9%, transparent); }
 button.notice-row:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
 .notice-time { font-variant-numeric: tabular-nums; }
-html[data-skin="retro"] .notice-row, html[data-skin="profesional"] .notice-row { border-radius: 6px; }
-html[data-skin="retro"] .notice-dot { border-radius: 2px; }
+html[data-skin="retro"] .notice-row, html[data-skin="profesional"] .notice-row { border-radius: 0; }
+html[data-skin="retro"] .notice-dot { border-radius: 0; }
 /* The month's calendar: the help bubble (.orb-tip, its colours, corners and shadow per theme) holding a grid of days. */
 .orb-pop { transform-origin: var(--radix-popover-content-transform-origin); }
 .orb-cal { width: 17.5rem; padding: 12px 12px 12px; }
@@ -417,38 +323,39 @@ html[data-skin="retro"] .notice-dot { border-radius: 2px; }
 .orb-cal-today:hover { background: color-mix(in oklch, var(--primary) 10%, transparent); }
 .orb-cal-nav:focus-visible, .orb-cal-today:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
 /* Each theme's touch: Retro squares with ink, Vaporwave a glowing day, Professional plain corners. */
-html[data-skin="retro"] .orb-cal-day, html[data-skin="retro"] .orb-cal-nav, html[data-skin="retro"] .orb-cal-today { border-radius: 6px; }
-html[data-skin="retro"] .orb-cal-day.is-today { box-shadow: 2px 2px 0 var(--rt-ink); }
-html.dark[data-skin="vaporwave"] .orb-cal-day.is-today { box-shadow: 0 0 14px -2px var(--primary); }
+html[data-skin="retro"] .orb-cal-day, html[data-skin="retro"] .orb-cal-nav, html[data-skin="retro"] .orb-cal-today { border-radius: 0; }
+html[data-skin="retro"] .orb-cal-day.is-today { box-shadow: inset 0 0 0 2px var(--primary); }
+html.dark[data-skin="vaporwave"] .orb-cal-day.is-today { box-shadow: inset 0 0 0 1px var(--vw-pink), 0 0 10px -2px var(--primary); }
 html[data-skin="profesional"] .orb-cal-day, html[data-skin="profesional"] .orb-cal-nav, html[data-skin="profesional"] .orb-cal-today { border-radius: 6px; }
 html[data-skin="profesional"] .orb-cal-day.is-today { box-shadow: none; }
 html[data-skin="nube"] .orb-cal-title { font-family: "Fredoka Variable", var(--font-sans); color: var(--primary); }
-/* 2.7: the Pizarra. The canvas is Excalidraw's own (light or dark with the app); around it, the theme's surfaces. */
+/* the Pizarra. The canvas is Excalidraw's own (light or dark with the app); around it, the theme's surfaces. */
 .wb-canvas { isolation: isolate; }
 .wb-canvas .excalidraw { --ui-font: var(--font-sans); }
 .wb-status { background: color-mix(in oklch, var(--card) 88%, transparent); color: var(--muted-foreground); border: 1px solid var(--border); box-shadow: 0 4px 14px -8px rgb(0 0 0 / 0.25); backdrop-filter: blur(6px); }
 .wb-item { background: color-mix(in oklch, var(--card) 70%, transparent); }
 .wb-panel { background: color-mix(in oklch, var(--sidebar) 94%, transparent); backdrop-filter: blur(10px); box-shadow: 0 18px 40px -18px rgb(0 0 0 / 0.35), 0 2px 8px -4px rgb(0 0 0 / 0.15); }
-/* 2.7: a picture with a transparent background shows over a light chequerboard. */
+/* a picture with a transparent background shows over a light chequerboard. */
 .img-checker { background-color: #fff; background-image: linear-gradient(45deg, #e5e5e5 25%, transparent 25%), linear-gradient(-45deg, #e5e5e5 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e5e5 75%), linear-gradient(-45deg, transparent 75%, #e5e5e5 75%); background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0; }
-/* 2.7: the GitHub contribution squares, in GitHub's greens (a little softer in dark mode). */
+/* the GitHub contribution squares, in GitHub's greens (a little softer in dark mode). */
 .gh-cell { background: color-mix(in oklch, var(--muted-foreground) 14%, transparent); }
 .gh-cell[data-level="1"] { background: #9be9a8; } .gh-cell[data-level="2"] { background: #40c463; } .gh-cell[data-level="3"] { background: #30a14e; } .gh-cell[data-level="4"] { background: #216e39; }
 .dark .gh-cell[data-level="1"] { background: #0e4429; } .dark .gh-cell[data-level="2"] { background: #006d32; } .dark .gh-cell[data-level="3"] { background: #26a641; } .dark .gh-cell[data-level="4"] { background: #39d353; }
-/* 2.7, the phone: the tabs at the bottom, clear of the home bar of phones without buttons. */
+/* the phone: the tabs at the bottom, clear of the home bar of phones without buttons. */
 .mobile-tabs { position: relative; z-index: 10; padding-bottom: env(safe-area-inset-bottom, 0px); }
 .mobile-tab { -webkit-tap-highlight-color: transparent; }
 .mobile-tab:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; border-radius: 12px; }
 html[data-skin="retro"] .wordmark, html[data-skin="nube"] .wordmark { margin-bottom: 3px; }
 /* A robot that only illustrates (the chat's avatars) is not a button. */
 .orb.still { cursor: default; }
-/* 2.6: the time of each message, bottom right, as in a messaging app. */
+/* the time of each message, bottom right, as in a messaging app. */
 .msg-time { float: right; margin: 0.35rem 0 -0.25rem 0.75rem; font-size: 0.68rem; line-height: 1.4; font-variant-numeric: tabular-nums; opacity: 0.6; white-space: nowrap; }
-/* 3.8.2: in an agent's conversation the time shows while the pointer is over the message (always on touch screens). */
+/* in an agent's conversation the time shows while the pointer is over the message (always on touch screens). */
+.msg-time-inline { float: none; margin: 0; }
 .msg-time-hover { opacity: 0; transition: opacity 0.15s ease; }
 .msg-hover:hover .msg-time-hover, .msg-hover:focus-within .msg-time-hover { opacity: 0.6; }
 @media (hover: none) { .msg-time-hover { opacity: 0.6; } }
-/* 2.6: the «ahorro ↔ uso» slider of Ajustes › Tareas y usos: five steps on a soft track, «Recomendado» under the middle. */
+/* the «ahorro ↔ uso» slider of Ajustes › Tareas y usos: five steps on a soft track, «Recomendado» under the middle. */
 .spend-slider { width: 100%; height: 1.25rem; accent-color: var(--primary); cursor: pointer; background: transparent; }
 .spend-slider::-webkit-slider-runnable-track { height: 6px; border-radius: 999px; background: color-mix(in oklch, var(--foreground) 12%, transparent); }
 .spend-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; margin-top: -6px; border-radius: 999px; background: var(--primary); border: 3px solid var(--card); box-shadow: 0 1px 4px rgb(0 0 0 / 0.25); }
@@ -459,12 +366,12 @@ html[data-skin="retro"] .wordmark, html[data-skin="nube"] .wordmark { margin-bot
 .spend-ticks span { text-align: center; }
 .spend-ticks span:first-child { text-align: left; } .spend-ticks span:last-child { text-align: right; }
 
-/* 2.6: the sidebar's edge, dragged to make it wider or narrower. */
+/* the sidebar's edge, dragged to make it wider or narrower. */
 .sidebar-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: col-resize; z-index: 5; -webkit-app-region: no-drag; app-region: no-drag; }
 .sidebar-resize::after { content: ""; position: absolute; inset: 0 2px; border-radius: 2px; background: var(--primary); opacity: 0; transition: opacity 0.15s; }
 .sidebar-resize:hover::after, .sidebar-resize[data-dragging]::after { opacity: 0.45; }
 
-/* 2.6: the window has no Windows title bar nor Windows buttons: minimise, maximise and close are the app's own
+/* the window has no Windows title bar nor Windows buttons: minimise, maximise and close are the app's own
    (components/window-controls.jsx), top right over every screen, centred in the 56 px of the top bars. The top bars
    (.app-titlebar) move the window and maximise it with a double click; what is clickable inside them stays clickable.
    --wco-inset is the room those buttons take (0 in a browser, such as the phone), and .wco-pad / .wco-pad-md (wide
@@ -472,6 +379,9 @@ html[data-skin="retro"] .wordmark, html[data-skin="nube"] .wordmark { margin-bot
 :root { --wco-inset: 0px; }
 html.has-win-controls { --wco-inset: 8.25rem; }
 .win-controls { position: fixed; top: 0; right: 0; z-index: 70; height: 3.5rem; padding-inline: 0.5rem 0.625rem; display: flex; align-items: center; gap: 0.25rem; pointer-events: auto; -webkit-app-region: no-drag; app-region: no-drag; }
+/* inside a top bar (window-controls.jsx): the bar's own right edge, as tall as the bar; the slot only marks the spot */
+.win-slot { display: contents; }
+.win-controls.in-bar { position: absolute; z-index: 5; }
 .win-control { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 0.625rem; color: var(--muted-foreground); cursor: pointer; transition: background-color 0.15s, color 0.15s, transform 0.1s; }
 .win-control svg { width: 1rem; height: 1rem; stroke-width: 2; }
 .win-control:hover { background-color: color-mix(in oklch, var(--foreground) 9%, transparent); color: var(--foreground); }
@@ -485,7 +395,7 @@ html[data-motion="minima"] .win-control { transition: none; }
 .wco-pad { padding-inline-end: calc(var(--wco-inset) + 0.75rem) !important; }
 @media (min-width: 768px) { .wco-pad-md { padding-inline-end: calc(var(--wco-inset) + 1.25rem) !important; } }
 
-/* ---------- 2.6: the guided tour (components/tour.jsx) ----------
+/* ---------- the guided tour (components/tour.jsx) ----------
    A ring around the control of each step, the rest of the window dimmed by the ring's own shadow (which takes no clicks:
    the app stays usable), and next to it the robot with its bubble. The bubble is drawn with the same variables as the
    app's speech bubbles (--tip-*), so each visual theme dresses it its own way. */
@@ -505,8 +415,8 @@ html[data-motion="minima"] .win-control { transition: none; }
 .tour-panel-plain[data-side="right"] .tour-tail, .tour[data-side="right"] .tour-panel-plain .tour-tail { display: block; left: -8px; top: 2rem; border-top: 0; border-right: 0; }
 .tour-title { color: var(--tip-title); }
 @keyframes tour-in { from { opacity: 0; transform: translateY(6px) scale(0.97); } to { opacity: 1; transform: none; } }
-html[data-skin="retro"] .tour-bubble, html[data-skin="retro"] .tour-tail { border-width: 2px; }
-html[data-skin="retro"] .tour-spot { border-radius: 8px; box-shadow: 0 0 0 9999px rgb(20 18 40 / 0.5), 0 0 0 3px var(--rt-ink), 0 0 0 6px var(--primary); }
+html[data-skin="retro"] .tour-bubble, html[data-skin="retro"] .tour-tail { border-width: 3px; border-style: double; }
+html[data-skin="retro"] .tour-spot { border-radius: 0; box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.6), 0 0 0 3px var(--primary), 0 0 0 6px var(--warning); }
 html[data-skin="nube"] .tour-title { color: var(--primary); }
 html[data-skin="profesional"] .tour-spot { border-radius: 8px; }
 html[data-motion="minima"] :is(.tour-panel, .tour-spot), html[data-skin="profesional"] :is(.tour-panel, .tour-spot) { animation: none; transition: none; }
@@ -514,7 +424,9 @@ html[data-motion="minima"] :is(.tour-panel, .tour-spot), html[data-skin="profesi
 @media (max-width: 640px) { .tour-robot { display: none; } .tour-bubble { width: calc(100vw - 2rem); } }
 html[data-skin="retro"] .tour-bubble { width: 25rem; }
 
-/* 3.5: motion and touch (ideas from Emil Kowalski's «skills», MIT; re-written for Orb, see docs/LEARNINGS-3.5.md).
+/* Orb dark: the sidebar shares the page colour, so the line between them is softened to keep the seam quiet. */
+html.dark[data-skin="orb"] aside.bg-sidebar { border-right-color: color-mix(in oklch, var(--border) 55%, transparent); }
+/* motion and touch (ideas from Emil Kowalski's «skills», MIT; re-written for Orb, see docs/LEARNINGS-3.5.md).
    - Strong ease-out for what appears or leaves (never ease-in on the interface); ease-in-out for what moves on screen.
    - What appears starts at 95-97 % and transparent, never from nothing; popovers grow from their trigger, dialogs from the centre.
    - Press feedback on pointer-down (scale 0.97), not on release; touch gets no sticky hover (Tailwind's hover: already
@@ -539,23 +451,24 @@ html[data-skin="retro"] .tour-bubble { width: 25rem; }
 }
 @media (prefers-reduced-motion: no-preference) {
   html:not([data-motion="minima"]) :is([data-slot="button"], .press):not(:disabled):active { transform: scale(0.97); }
-  .mobile-tab-icon { transition: background-color 150ms ease, color 150ms ease, transform 120ms var(--ease-out); }
+  .mobile-tab-icon { transition: background-color 150ms ease, color 150ms ease, transform var(--dur-fast) var(--ease-out); }
   html:not([data-motion="minima"]) .mobile-tab:active .mobile-tab-icon { transform: scale(0.94); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .animate-in, .animate-out { --tw-enter-translate-x: 0; --tw-enter-translate-y: 0; --tw-enter-scale: 1; --tw-exit-translate-x: 0; --tw-exit-translate-y: 0; --tw-exit-scale: 1; }
+  /* Radix/shadcn put the animation on «data-[state=open]:animate-in», so the class is matched by substring too. */
+  :is(.animate-in, .animate-out, [class*=":animate-in"], [class*=":animate-out"]) { --tw-enter-translate-x: 0; --tw-enter-translate-y: 0; --tw-enter-scale: 1; --tw-exit-translate-x: 0; --tw-exit-translate-y: 0; --tw-exit-scale: 1; --tw-animation-duration: var(--dur-fast); }
 }
-html[data-motion="minima"] :is(.animate-in, .animate-out) { --tw-enter-translate-x: 0; --tw-enter-translate-y: 0; --tw-enter-scale: 1; --tw-exit-translate-x: 0; --tw-exit-translate-y: 0; --tw-exit-scale: 1; }
+html[data-motion="minima"] :is(.animate-in, .animate-out, [class*=":animate-in"], [class*=":animate-out"]) { --tw-enter-translate-x: 0; --tw-enter-translate-y: 0; --tw-enter-scale: 1; --tw-exit-translate-x: 0; --tw-exit-translate-y: 0; --tw-exit-scale: 1; --tw-animation-duration: var(--dur-fast); }
 
-/* 3.8.3: the message box grows with its text in CSS (no layout read per key; views/chat.jsx › Composer): two lines at
+/* the message box grows with its text in CSS (no layout read per key; views/chat.jsx › Composer): two lines at
    least (its rows), 260 px at most, then it scrolls. */
 @supports (field-sizing: content) { .composer-text { field-sizing: content; min-height: calc(2lh + 1rem); max-height: 260px; } }
 
-/* 3.6: the composer's contextual action slot (components/context-slot.jsx, DESIGN-SYSTEM §2.2): one suggestion at a
+/* the composer's contextual action slot (components/context-slot.jsx, DESIGN-SYSTEM §2.2): one suggestion at a
    time, in with a 150 ms fade and a 2 px rise, out with a fade; reduced motion keeps the fade only. */
 .context-slot { display: inline-flex; min-width: 0; }
 .context-slot-item { display: inline-flex; min-width: 0; animation: slot-in 150ms var(--ease-out) both; }
-.context-slot.is-leaving .context-slot-item { opacity: 0; transition: opacity 120ms var(--ease-out); }
+.context-slot.is-leaving .context-slot-item { opacity: 0; transition: opacity var(--dur-fast) var(--ease-out); }
 @keyframes slot-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
 @keyframes slot-fade { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .context-slot-item { animation-name: slot-fade; } }
@@ -572,7 +485,7 @@ html[data-motion="minima"] .context-slot-item { animation-name: slot-fade; }
   html:not(.glass) [data-slot="dialog-content"][data-sheet="bottom"] { top: auto; bottom: 0; left: 0; right: 0; translate: none; width: 100%; max-width: 100%; border-radius: 22px 22px 0 0; border-width: 1px 0 0; padding: 18px 14px calc(14px + env(safe-area-inset-bottom, 0px)); --tw-enter-scale: 1; --tw-exit-scale: 1; --tw-enter-translate-y: 100%; --tw-exit-translate-y: 100%; --tw-duration: 280ms; --tw-ease: var(--ease-drawer); }
 }
 
-/* 3.8.2: the first-run welcome (views/setup.jsx, master.jsx › MasterCreate), maximised: the room above the card (the
+/* the first-run welcome (views/setup.jsx, master.jsx › MasterCreate), maximised: the room above the card (the
    robot rises out of it), the card's padding and the gaps shrink with the window's height, so its screens fit with no
    scroll bar. The scroll stays only for what truly cannot fit (the agents' install). */
 .onboard { display: flex; height: 100%; overflow: auto; padding: clamp(4.25rem, 11vh, 6rem) 1.5rem clamp(0.75rem, 2.5vh, 1.5rem); }
@@ -586,7 +499,7 @@ html[data-motion="minima"] .context-slot-item { animation-name: slot-fade; }
 @media (pointer: fine) and (max-height: 625px) { .onboard-card { zoom: 0.76; } }
 @media (pointer: fine) and (max-height: 590px) { .onboard-card { zoom: 0.7; } }
 
-/* 3.8.3: an answer being typed (components/markdown.jsx › TypingMarkdown): each new paragraph, item or block fades in as
+/* an answer being typed (components/markdown.jsx › TypingMarkdown): each new paragraph, item or block fades in as
    it starts (opacity only, so the compositor runs it). Less motion: the text shows at once and nothing fades. */
 @keyframes type-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: no-preference) {

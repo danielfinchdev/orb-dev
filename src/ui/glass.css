@@ -1,4 +1,4 @@
-/* 3.6: the Android app's «glass» look (docs/DESIGN-SYSTEM.md › Android glass). Only the Android build loads this file
+/* the Android app's «glass» look (docs/DESIGN-SYSTEM.md › Android glass). Only the Android build loads this file
    (lib/glass.js, from main.jsx) and every rule hangs from html.glass, so nothing here can reach the PC or a browser.
    Original work: translucent layers over a soft colour field, light catching their top edge, large radii and a floating
    tab bar. No platform assets, fonts or icons.
@@ -81,7 +81,7 @@ html.glass .mobile-shell [data-slot="composer"]:focus-within { box-shadow: inset
 /* A conversation takes the whole screen (no tab bar): the composer only keeps clear of the gesture bar. */
 html.glass .mobile-shell .composer-dock { padding-inline: 12px; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); }
 
-/* ---- The floating tab bar: the one always-on blurred layer. 3.8: a pill in the flow, under the screen (not over it),
+/* ---- The floating tab bar: the one always-on blurred layer. a pill in the flow, under the screen (not over it),
    so no list ever ends under it, whatever its scroll is made of. ---- */
 html.glass .mobile-tabs {
   position: relative; z-index: 30; margin: 0 12px calc(env(safe-area-inset-bottom, 0px) + var(--dock-gap));
@@ -94,8 +94,8 @@ html.glass .mobile-tab { padding: 0; gap: 1px; font-size: 10.5px; font-weight: 6
 html.glass .mobile-tab[aria-current="page"] { color: var(--primary); }
 html.glass .mobile-tab-icon { height: 30px; width: 52px; }
 html.glass .mobile-tab[aria-current="page"] .mobile-tab-icon { background: color-mix(in oklch, var(--primary) 14%, transparent); }
-/* A number on a tab: dark text on the warning colour (white on yellow does not reach 4.5:1). */
-html.glass .mobile-tab .bg-warning { color: oklch(0.22 0.04 70); font-weight: 700; }
+/* A number on a tab: the warning colour's own foreground, which keeps 4.5:1 in light (deep amber) and dark (light amber). */
+html.glass .mobile-tab .bg-warning { color: var(--warning-foreground); font-weight: 700; }
 
 /* ---- Sheets: on the phone a dialog rises from the bottom edge, thick glass with a grabber. The one transient
    blurred layer; the scrim under it only dims (no second blur). ---- */

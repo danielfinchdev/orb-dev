@@ -2,7 +2,7 @@
 // and continues by itself at the reset; tasks interrupted by a closed app continue when it opens again; an agent delegates
 // part of its task (orb_delegate) and waits for it (orb_wait_tasks); Task Review by another provider with its verdict;
 // and the real usage the accounts report stops new work at budget.stopAt.
-import { tempHome, until, startEngine, fakeLog, wait } from './helpers.mjs';
+import { tempHome, until, startEngine, fakeLog, wait, railsToken } from './helpers.mjs';
 import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -180,7 +180,7 @@ test('uso real: al pasar de budget.stopAt la cuenta no recibe trabajo nuevo, y s
   const task = await call('tasks.create', { project: 'web', title: 'Espera uso', description: 'algo', agent: 'codex' });
   await until(async () => (await call('chat.list')).some((m) => m.body.includes(`#${task.id}`) && /ya ha gastado el 95 % de su uso real/.test(m.body)), 'aviso de espera');
   assert.equal((await call('tasks.get', { id: task.id })).status, 'queued');
-  await call('config.save', { patch: { budget: { stopAt: 0.99 } } });
+  await call('config.save', { patch: { budget: { stopAt: 0.99 } }, unlock: await railsToken(call) });
   assert.equal((await status(call, task.id, ['done'])).status, 'done');
   // An "any" task goes to the account with more room left (Claude has used nothing).
   const any = await call('tasks.create', { project: 'web', title: 'Cualquiera', description: 'algo', agent: 'any' });

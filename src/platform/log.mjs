@@ -13,7 +13,7 @@ export function rotateIfBig(file, max = 10 * 1024 * 1024) {
   } catch { return false; }
 }
 
-// 3.8.3: the writer of a run log (asistente.log, a conversation's registro.jsonl): one line per call, secrets hidden,
+// the writer of a run log (asistente.log, a conversation's registro.jsonl): one line per call, secrets hidden,
 // and at most two generations of `max` bytes. The size is checked again every 200 lines, not only when the agent starts
 // (the assistant's conversation lives for days).
 export function runLog(file, { prefix = '', max } = {}) {
@@ -26,7 +26,7 @@ export function runLog(file, { prefix = '', max } = {}) {
     } catch { /* log unavailable */ }
   };
 }
-// One message of an agent for a run log: always whole JSON (up to 3.8.2 the line was cut at 4 KB and could not be read),
+// One message of an agent for a run log: always whole JSON (cutting the line at 4 KB would leave it unreadable),
 // with each long string (a file read, a tool's output) shortened instead, and the whole kept under `max` characters.
 export function logJson(value, { maxString = 4000, max = 64_000 } = {}) {
   const cut = (n) => (_key, v) => (typeof v === 'string' && v.length > n ? `${v.slice(0, n)}… [+${v.length - n}]` : v);

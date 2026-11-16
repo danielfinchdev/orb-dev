@@ -1,4 +1,4 @@
-// 3.6 (DESIGN-SYSTEM §2.2): the composer's contextual action slot, right of the project picker. It shows at most one
+// the composer's contextual action slot, right of the project picker. It shows at most one
 // suggestion, the first of `items` that is not null (the caller lists them by priority: «Compactar» before «Iniciar
 // test»…). Future suggestions plug in here with their own place in the list; never two at once. The suggestion appears
 // with a short fade and rise and leaves with a fade (app.css .context-slot); the text field never moves.

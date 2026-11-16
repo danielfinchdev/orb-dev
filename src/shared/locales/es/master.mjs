@@ -1,4 +1,4 @@
-// 3.8: the master password (views/master.jsx, src/engine/api/master.mjs) and linking a phone with it.
+// the master password (views/master.jsx, src/engine/api/master.mjs) and linking a phone with it.
 export default {
   'master.createTitle': 'Crea tu contraseña maestra',
   'master.createIntro': 'Protege lo más delicado de Orb: las claves de tus móviles enlazados y de tus conectores. Te la pediremos al enlazar un móvil y antes de acciones sensibles, como restaurar una copia o abrir la carpeta core.',
@@ -55,6 +55,8 @@ export default {
   'master.ask.unlink': 'Para cerrar la sesión de un dispositivo.',
   'master.ask.deleteProject': 'Para eliminar un proyecto y su carpeta.',
   'master.ask.previousKey': 'Para volver a la clave anterior.',
+  'master.ask.rails': 'Para cambiar los límites de seguridad de Orb.',
+  'master.ask.ruleSeed': 'Para cambiar una norma que viene de serie.',
   'master.ask.removeExtension': 'Para quitar una skill, un servidor MCP o un conector de Orb.',
   'master.askNote': 'Queda desbloqueado {n} minutos o hasta que bloquees el PC.',
   'master.askEveryTime': 'Para esto Orb la pide siempre.',

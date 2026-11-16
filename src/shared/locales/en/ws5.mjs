@@ -1,4 +1,4 @@
-// 3.6: backups and time zones.
+// backups and time zones.
 export default {
   'data.backup.restored': 'Backup restored (from {created}).',
   'data.core.restored': 'The core folder (or part of it) was missing: Orb brought back what was missing from the backup of {created}. Changes made after that backup are not there.',

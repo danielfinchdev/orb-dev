@@ -77,6 +77,7 @@ export default {
   'settings.oneAtATimeHint': 'Las tareas se ejecutan de una en una, en orden.',
   'settings.approvalWait': 'Tiempo de espera de permisos',
   'settings.approvalWaitHint': 'Al agotarse, se deniega. 0 = sin límite.',
+  'settings.approvalWaitTitle': 'Si nadie responde',
   'settings.review': 'Task Review automático',
   'settings.reviewHint': 'Otro modelo revisa cada tarea terminada antes del informe.',
   'settings.resumeRestart': 'Reanudar tareas al abrir Orb',
@@ -263,7 +264,7 @@ export default {
   'apps.offline': 'No se pudo consultar la última versión.',
   'apps.details': 'Ver en GitHub',
   'apps.download': 'Descargar',
-  // 3.2: conversaciones a la vez
+  // conversaciones a la vez
   'settings.parallelChats': 'Conversaciones a la vez',
   'settings.parallelChatsHint': 'De 1 a 6. Las demás esperan su turno.',
   'guide.readOnly': 'Revisiones y pruebas: {list}',

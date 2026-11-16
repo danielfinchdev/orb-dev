@@ -18,13 +18,13 @@ export const STATUS = translated({
   limited: ['status.limited', 'warning']
 });
 // Agent names stay as they are; only «any» and «usuario» are words. AGENT.orb is set to the assistant's name by the app.
-export const AGENT = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor', gemini: 'Gemini', opencode: 'OpenCode', qwen: 'Qwen Code', copilot: 'Copilot', orb: 'Orb' };
+export const AGENT = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor', gemini: 'Gemini', opencode: 'OpenCode', qwen: 'Qwen Code', copilot: 'Copilot', hermes: 'Hermes', orb: 'Orb' };
 Object.defineProperty(AGENT, 'any', { get: () => t('agent.any'), enumerable: true, configurable: true });
 Object.defineProperty(AGENT, 'usuario', { get: () => t('agent.user'), enumerable: true, configurable: true });
 export const PERMISSION = translated({ auto: 'permission.auto', editar: 'permission.editar', preguntar: 'permission.preguntar', probar: 'permission.probar', leer: 'permission.leer', total: 'permission.total' });
 // Agents that can be corrected while they work (the message reaches them at their next step).
 export const CAN_STEER = { claude: true, codex: true };
-// 3.6: agents whose own compaction Orb can ask for (Claude /compact, Codex's thread compaction): «Compactar».
+// agents whose own compaction Orb can ask for (Claude /compact, Codex's thread compaction): «Compactar».
 export const CAN_COMPACT = { claude: true, codex: true };
 export const DECISION = translated({ allowed: ['decision.allowed', 'success'], always: ['decision.always', 'success'], denied: ['decision.denied', 'destructive'], expired: ['decision.expired', 'secondary'], timeout: ['decision.timeout', 'secondary'] });
 export const REASONING = translated({ low: 'reasoning.low', medium: 'reasoning.medium', high: 'reasoning.high', xhigh: 'reasoning.xhigh' });

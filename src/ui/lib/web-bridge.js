@@ -4,9 +4,10 @@
 // (and this file defines it); the encryption code is loaded only on the phone.
 import * as L from '../../shared/link-payload.mjs'; // tiny and pure: what a QR or a typed code says (also the Android app's)
 import { timedFetch, fetchWithin, isOffline, TIMEOUTS } from './net.js';
+import { quiet } from './quiet.js';
 const tl = async (key, vars) => (await import('./i18n.js')).t(key, vars);
 const crypto$ = () => import('../../shared/mobile-crypto.mjs');
-// 3.5: the Android app (src/ui/lib/app-bridge.js, loaded first) gives this bridge its own host: where the Orb is (the
+// the Android app (src/ui/lib/app-bridge.js, loaded first) gives this bridge its own host: where the Orb is (the
 // page is not served by it), a key store backed by the Android Keystore, and the app's extras. In a browser, this page.
 const host = window.__orbHost ?? null;
 if (!window.orb) {
@@ -35,7 +36,7 @@ if (!window.orb) {
   };
   const unpaired = () => { keep(null); session = null; window.dispatchEvent(new Event('orb:unpaired')); };
   // Where the Orb answers: this page's own server in a browser; in the app, the linked Orb's addresses (urls), the one
-  // that answered last first. A network error or no answer in time (3.8: lib/net.js) moves to the next one; none
+  // that answered last first. A network error or no answer in time (lib/net.js) moves to the next one; none
   // answering is «the PC cannot be reached» (offline: true), told to the window as link:offline (and link:online again).
   const at = (p) => (host ? `${saved?.urls?.[saved.at ?? 0] ?? ''}${p}` : p);
   let reachable = true;
@@ -43,7 +44,7 @@ if (!window.orb) {
     if (ok) { try { if (Date.now() - Number(localStorage.getItem('orb.visto') ?? 0) > 60_000) localStorage.setItem('orb.visto', String(Date.now())); } catch { /* storage unavailable */ } }
     if (ok === reachable) return;
     reachable = ok; fire(ok ? 'link:online' : 'link:offline', {});
-    // 3.8 (F5b): the PC answers again: the live events too, if their stream is not running.
+    // the PC answers again: the live events too, if their stream is not running.
     if (ok && session && !live && !connecting) connect();
   };
   // once: a request that changes something on the PC (a call, an upload) that ran out of time is not sent again to the
@@ -78,7 +79,7 @@ if (!window.orb) {
   const answer = async (res, s, nonce) => {
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) { unpaired(); throw new Error(data.error ?? await tl('app.notLinked')); }
-    // 3.8.2 (review F2.5b M6): the PC is there but needs attention (its data could not be updated: remote.mjs ›
+    // the PC is there but needs attention (its data could not be updated: remote.mjs ›
     // startAttention); said as such, never as «sin conexión».
     if (res.status === 503 && typeof data.attention === 'string') throw Object.assign(new Error(await tl('app.pcAttentionBody')), { attention: data.attention });
     if (!res.ok) throw new Error(data.error ?? await tl('app.httpError', { n: res.status }));
@@ -96,11 +97,11 @@ if (!window.orb) {
     return answer(res, s, box.n);
   };
   // The envelope of a request whose body is not JSON (live events, pictures): in a header.
-  // 3.8.3: the live events' one also says this client takes the streamed answer as deltas (d: 1, src/shared/chat-stream.mjs).
+  // the live events' one also says this client takes the streamed answer as deltas (d: 1, src/shared/chat-stream.mjs).
   const authHeader = async (s, kind) => { const C = await crypto$(); return C.sealText(s.key, { t: stamp(), m: kind, ...(kind === 'events' ? { d: 1 } : {}) }, C.AAD.request(s.id)); };
 
   // Live events over a streamed fetch (EventSource cannot send headers); reconnects with a growing pause.
-  // 3.8 (F5b): the PC writes a ping every 25 s; nothing at all for TIMEOUTS.eventsIdle (the PC asleep, the Wi-Fi gone
+  // the PC writes a ping every 25 s; nothing at all for TIMEOUTS.eventsIdle (the PC asleep, the Wi-Fi gone
   // without a word) means a dead stream: it is dropped, the window hears link:offline and it connects again.
   let stream = null; let live = false; let connecting = false;
   const connect = async (wait = 1000) => {
@@ -163,7 +164,7 @@ if (!window.orb) {
 
   // Pairing from the QR: #vincular=<one-time code>&pc=<the PC's public key> (or what the app scanned or was typed in,
   // src/shared/link-payload.mjs). The code never travels: the phone proves it read it by sealing its own public key with
-  // a key derived from it. 3.8: the link waits for the PC's master password (main.jsx asks for it: pairPending), and a
+  // a key derived from it. The link waits for the PC's master password (main.jsx asks for it: pairPending), and a
   // page that came in plain http over the Wi-Fi never asks for it (insecure).
   let pending = null;
   const pairFromHash = async () => {
@@ -177,8 +178,8 @@ if (!window.orb) {
   const fingerprintOf = async (pc) => { const C = await crypto$(); try { const k = C.b64.dec(pc); return k.length === 32 ? C.fingerprint(k) : null; } catch { return null; } };
   // A link ready to ask for the password: the short code does not carry the Orb's key, the Orb gives it (GET /api/hello,
   // while its code is on screen). → the link with pc and fp (the person compares fp with the PC's screen before typing).
-  // 3.8.2: an address on the local network (plain http, not Tailscale's 100.64.0.0/10 or *.ts.net): when none answers,
-  // the usual cause is Windows' firewall on the PC, so the error says so (Ajustes no longer warns about it in advance).
+  // an address on the local network (plain http, not Tailscale's 100.64.0.0/10 or *.ts.net): when none answers,
+  // the usual cause is Windows' firewall on the PC, so the error says so.
   const overLan = (u) => /^http:\/\//.test(u ?? '') && !/\.ts\.net(:|\/|$)|\/\/100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(u);
   const offline = async (urls) => new Error(await tl((urls ?? []).some(overLan) ? 'app.linkOfflineWifi' : 'app.linkOffline'));
   const resolveLink = async (link) => {
@@ -188,7 +189,7 @@ if (!window.orb) {
       if (!r) throw await offline([p.urls[0]]);
       const d = await r.json().catch(() => ({}));
       if (!r.ok || typeof d?.pc !== 'string') throw new Error(await tl('app.linkNoShortCode'));
-      // 3.5.1: only an Orb that ties the code to its own key (an older one, or an answer changed on the way: the QR).
+      // only an Orb that ties the code to its own key (an older one, or an answer changed on the way: the QR).
       if (!(Number(d.short) >= 3)) throw new Error(await tl('app.linkOldOrb'));
       p = { ...p, pc: d.pc };
       if (Array.isArray(d.urls)) p = { ...p, urls: [p.urls[0], ...L.orderBases(d.urls).filter((u) => u !== p.urls[0])] };
@@ -207,7 +208,7 @@ if (!window.orb) {
     const name = (await host?.deviceName?.()) ?? (/iPhone/.test(navigator.userAgent) ? 'iPhone' : /iPad/.test(navigator.userAgent) ? 'iPad' : /Android/.test(navigator.userAgent) ? 'Android' : await tl('app.browser'));
     const secret = p.via === 'code' ? await C.shortSecretAsync(L.normalCode(p.code), p.pc) : L.pairingSecret(p);
     const via = p.via === 'code' ? 'code3' : p.via;
-    // 3.5 (Magic Link): it also says what it is (a phone or a computer's browser), for the list of linked devices.
+    // it also says what it is (a phone or a computer's browser), for the list of linked devices.
     const kind = host || /iPhone|iPad|Android|Mobile/.test(navigator.userAgent) ? 'phone' : 'browser';
     let last = null;
     for (const base of p.urls) {
@@ -256,7 +257,7 @@ if (!window.orb) {
   window.orb = {
     mobile: true,
     protocol: L.PROTOCOL,
-    // 3.6: what the Orb said on /api/me (its versions).
+    // what the Orb said on /api/me (its versions).
     me: () => me,
     push,
     async call(method, params) {
@@ -268,20 +269,20 @@ if (!window.orb) {
     async info() {
       let pairError = null;
       try { await pairFromHash(); } catch (e) { pairError = e.message; }
-      // A new QR opened on a page already linked links it again (after the password), as before 3.8.
-      // 3.8: insecure: this page came in plain http over the Wi-Fi, so it never asks for the master password.
+      // A new QR opened on a page already linked links it again (after the password).
+      // insecure: this page came in plain http over the Wi-Fi, so it never asks for the master password.
       if (!await record() || pending) {
         const pairLink = pending ? { name: pending.name ?? null, fp: await fingerprintOf(pending.pc), insecure: !L.passwordPageOk(location, { app: Boolean(host) }) } : null;
         return { mobile: true, needsPairing: true, needsSetup: false, pairError, app: Boolean(host), pairLink };
       }
-      // 3.6: the page says its protocol; an Orb that needs a newer one answers 426 (or a min above ours): update first.
+      // the page says its protocol; an Orb that needs a newer one answers 426 (or a min above ours): update first.
       let r = null;
       try { r = await post('/api/me', 'me', { v: L.PROTOCOL }, true, TIMEOUTS.me); me = r.ok ? r.result : null; }
       catch (e) {
         if (!await record()) return { mobile: true, needsPairing: true, needsSetup: false, pairError, app: Boolean(host) };
-        // 3.8: the PC is off, asleep, out of this network or Orb is closed: a calm screen that keeps trying (main.jsx),
+        // the PC is off, asleep, out of this network or Orb is closed: a calm screen that keeps trying (main.jsx),
         // never «No se pudo iniciar Orb».
-        // 3.8.2: the same calm screen when the PC answers that it needs attention, with that said instead.
+        // the same calm screen when the PC answers that it needs attention, with that said instead.
         if (e.attention) return { mobile: true, needsSetup: false, offline: true, attention: e.attention, pcName: saved?.name ?? null, seenAt: Number(localStorage.getItem('orb.visto') ?? 0) || null, app: Boolean(host) };
         if (isOffline(e)) return { mobile: true, needsSetup: false, offline: true, pcName: saved?.name ?? null, seenAt: Number(localStorage.getItem('orb.visto') ?? 0) || null, app: Boolean(host) };
       }
@@ -289,13 +290,13 @@ if (!window.orb) {
       if (gap) return { mobile: true, needsSetup: false, needsUpdate: { message: (r && !r.ok && r.error) || await tl('app.updateNeeded'), ...gap, ...(host ? { app: true } : {}) }, app: Boolean(host) };
       connect();
       if (!host && window.isSecureContext && 'serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
-        // 3.6 (M4): a notification tapped while this page is open: the service worker says which chat (lib/notes.js).
+        navigator.serviceWorker.register('/sw.js').catch(quiet);
+        // a notification tapped while this page is open: the service worker says which chat (lib/notes.js).
         navigator.serviceWorker.addEventListener('message', (e) => { if (e.data?.orbOpen) window.dispatchEvent(new CustomEvent('orb:open-note', { detail: e.data.orbOpen })); });
       }
       return { mobile: true, needsSetup: false, platform: host ? 'android' : 'web', pc: me?.pc ?? saved?.fp ?? null };
     },
-    // 3.8: the link read from the QR (a browser), with the master password typed on this page.
+    // the link read from the QR (a browser), with the master password typed on this page.
     async pairPending(password) {
       if (!pending) throw new Error(await tl('app.linkBadQr'));
       if (!L.passwordPageOk(location, { app: Boolean(host) })) throw new Error(await tl('app.linkHttp'));
@@ -305,7 +306,7 @@ if (!window.orb) {
     setup: async () => { throw new Error(await tl('app.pcOnly')); },
     switchHome: async () => { throw new Error(await tl('app.pcOnly')); },
     pickFolder: async () => null,
-    // 3.8.2: a linked device still attaches pictures only (they are uploaded to the PC first, remote.mjs).
+    // a linked device still attaches pictures only (they are uploaded to the PC first, remote.mjs).
     pickAttachments: pickImages,
     openPath: async () => { throw new Error(await tl('app.foldersPc')); },
     openExternal: async (url) => { if (/^https:\/\//.test(url)) window.open(url, '_blank', 'noopener'); },

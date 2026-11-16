@@ -13,7 +13,7 @@ import { reloadWait, markReloaded } from '@/lib/usage-reload.js';
 import { UsageBar, windowLabel, resetText, toneOf, shortTokens } from '@/components/usage-bits.jsx';
 
 // How full the agent's context window is (when the agent reports it).
-// 2.6: how full the conversation is, as a ring that fills up (no number); a click opens the panel with the context in
+// how full the conversation is, as a ring that fills up (no number); a click opens the panel with the context in
 // tokens and the limits of the plans working right now (the brain's and the agents' accounts: session, weekly…).
 function Ring({ pct, className }) {
   const r = 7; const c = 2 * Math.PI * r;
@@ -30,7 +30,7 @@ function UsagePanel({ context, pct }) {
   const version = useStore((s) => s.version);
   const [rows, setRows] = useState(null);
   useEffect(() => { let alive = true; call('usage.now').then((r) => alive && setRows(r)).catch(() => alive && setRows([])); return () => { alive = false; }; }, [version]);
-  // 3.8.2: «Recargar»: the agents ask their plan now; a spinner meanwhile, and again only after 20 s (lib/usage-reload.js).
+  // «Recargar»: the agents ask their plan now; a spinner meanwhile, and again only after 20 s (lib/usage-reload.js).
   const [reloading, setReloading] = useState(false);
   const [wait, setWait] = useState(() => reloadWait());
   useEffect(() => { if (!wait) return undefined; const id = setTimeout(() => setWait(reloadWait()), wait); return () => clearTimeout(id); }, [wait]);
@@ -41,7 +41,7 @@ function UsagePanel({ context, pct }) {
     finally { setReloading(false); setWait(reloadWait()); }
   };
   return (
-    <div className="grid w-80 gap-3 p-2.5 text-[13px]" data-testid="usage-panel">
+    <div className="grid w-80 gap-3 p-2.5 text-control" data-testid="usage-panel">
       <div className="grid gap-1.5">
         <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">{t('session.usage.context')}</span><span className="ml-auto tabular-nums">{shortTokens(context.used)} / {shortTokens(context.size)} ({pct} %)</span>
           <Tip label={t('session.usage.reload')}><Button size="icon-sm" variant="ghost" className="size-6" onClick={reload} disabled={reloading || wait > 0} aria-label={t('session.usage.reload')} aria-busy={reloading} data-testid="usage-reload">{reloading ? <Spinner className="size-3" /> : <RefreshCw className="size-3.5" />}</Button></Tip></div>
@@ -63,7 +63,7 @@ function UsagePanel({ context, pct }) {
           }) : <p className="text-muted-foreground text-xs leading-snug">{t('session.usage.noData')}</p>}
         </div>
       ))}
-      {/* 3.8.2: the whole usage page (cost and tokens by day, agent and model). */}
+      {/* the whole usage page (cost and tokens by day, agent and model). */}
       <DropdownMenuItem className="border-t pt-2.5" onSelect={() => go({ view: 'usage' })} data-testid="usage-page"><Gauge />{t('usage.open')}</DropdownMenuItem>
     </div>
   );

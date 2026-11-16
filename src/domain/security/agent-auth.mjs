@@ -1,4 +1,4 @@
-// 3.8: who an agent's MCP process is lives only in the engine's memory, never in a file an agent could write. Each MCP
+// who an agent's MCP process is lives only in the engine's memory, never in a file an agent could write. Each MCP
 // server Orb hands an agent (its own board and the user's connectors) gets a ticket: a random value the engine keeps
 // with what it grants (who the process is, or how to start a connector with its keys). The server trades it on a local
 // pipe for that grant when it starts and asks again on every call; the ticket stays bound to that connection while it
@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
-// 3.8.2 (T3 3.4): the pipe of an id. Orb's secret helper (src/mcp/secret-run.mjs) rebuilds it from the handle it gets.
+// The pipe of an id. Orb's secret helper (src/mcp/secret-run.mjs) rebuilds it from the handle it gets.
 export const pipeOf = (id) => (process.platform === 'win32' ? `\\\\.\\pipe\\orb-agentes-${id}` : path.join(os.tmpdir(), `orb-agentes-${id}.sock`));
 const RELEASE_WAIT_MS = 3000; // a server that restarts waits for the old connection to go
 const HELLO_WITHIN_MS = 10_000; // a connection that never says hello is closed
@@ -35,7 +35,7 @@ export class AgentAuth {
   }
 
   // grant: { session, reply, reusable, once } — reply is what the MCP process receives; session, which agent process it
-  // belongs to; reusable, traded again without the secret until revoked (Cursor's servers of one turn); once (3.8.2, a
+  // belongs to; reusable, traded again without the secret until revoked (Cursor's servers of one turn); once (a
   // secret the user typed for one command of an agent), traded a single time and forgotten at once: it never holds the
   // connection, answers no check and serves no call.
   issue(grant) {
@@ -78,7 +78,7 @@ export class AgentAuth {
       const g = this.grants.get(ticket);
       if (m?.op === 'ack' && g?.holder === socket) g.acked = true;
       if (m?.op === 'check') send({ id: m.id, ok: g?.holder === socket });
-      // 3.8.2: a request of Orb's own MCP server for the engine (the phone's tools): only on the connection that holds a
+      // a request of Orb's own MCP server for the engine (the phone's tools): only on the connection that holds a
       // grant of Orb's board (never a connector's), for the conversation the engine gave it. Not awaited here, so the
       // checks of the same connection are answered while it runs (an install can take minutes).
       if (m?.op === 'call' && Number.isInteger(m.id) && g?.holder === socket) {

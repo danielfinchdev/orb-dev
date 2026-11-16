@@ -47,7 +47,7 @@ test('bubbles stay inside the window and the composer folder is a chip like the 
   assert.match(read('components', 'sidebar.jsx'), /side="top" align=\{n === 0 \? 'start' : 'center'\}/);
   const chip = read('views', 'session.jsx').match(/<span tabIndex=\{0\} className="([^"]+)" data-testid="session-folder">/);
   assert.ok(chip, 'folder chip');
-  for (const c of ['h-8', 'rounded-lg', 'border', 'px-2.5', 'gap-1.5', 'text-[13px]']) assert.ok(chip[1].split(' ').includes(c), c);
+  for (const c of ['h-8', 'rounded-lg', 'border', 'px-2.5', 'gap-1.5', 'text-control']) assert.ok(chip[1].split(' ').includes(c), c);
 });
 
 test('the cost line can be hidden in Apariencia and the message time shows on hover', async () => {
@@ -57,7 +57,8 @@ test('the cost line can be hidden in Apariencia and the message time shows on ho
   const session = read('views', 'session.jsx');
   assert.match(session, /useStore\(\(st\) => st\.app\?\.config\?\.ui\?\.usageLine !== false\)/);
   assert.match(session, /if \(it\.kind === 'usage'\) \{[\s\S]{0,120}if \(!usageLine\) return null;/);
-  assert.equal([...session.matchAll(/<MsgTime at=\{it\.at\} hover \/>/g)].length, 2);
+  // both the user's and the agent's messages wear the message box, whose header carries the 24 h time
+  assert.equal([...session.matchAll(/<MessageBox [^>]*at=\{it\.at\}/g)].length, 2);
   assert.match(read('app.css'), /\.msg-hover:hover \.msg-time-hover/);
   for (const lang of ['es', 'en']) {
     const { default: dict } = await import(`../src/shared/locales/${lang}/settings.mjs`);
@@ -98,7 +99,7 @@ test('F5 reloads the window and hands each unsent message back to its box, once'
 
 test('the first-run welcome opens maximised and fits the window', () => {
   const setup = read('views', 'setup.jsx');
-  assert.match(setup, /useEffect\(\(\) => \{ bridge\.windowControls\?\.act\('maximize-on'\)\.catch\(\(\) => \{\}\); \}, \[\]\);/);
+  assert.match(setup, /useEffect\(\(\) => \{ bridge\.windowControls\?\.act\('maximize-on'\)\.catch\(quiet\); \}, \[\]\);/);
   assert.equal([...setup.matchAll(/className="brand-sky onboard"/g)].length, 2);
   assert.match(read('views', 'master.jsx'), /<div className="brand-sky onboard">\s*<form onSubmit=\{submit\} className="[^"]*onboard-card/);
   assert.doesNotMatch(setup + read('views', 'master.jsx').split('export function MasterLocked')[0], /pt-24 pb-6/);

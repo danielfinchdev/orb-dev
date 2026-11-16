@@ -2,7 +2,7 @@
 // (request → tasks → agent → review and report → OK), isolated copies, secrets, quota and direct conversations.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { tempHome, until, startEngine, fakeLog } from './helpers.mjs';
+import { tempHome, until, startEngine, fakeLog, railsToken } from './helpers.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { git } from '../src/platform/git.mjs';
@@ -243,7 +243,7 @@ test('varias cuentas: si una cuenta de Codex llega a su límite de uso, el traba
   const engineUsage = await call('usage.get');
   assert.ok(engineUsage.some((u) => u.account === 'codex-2'));
   // Simulate the main account hitting its limit through its cooldown setting, as the scheduler does.
-  await call('config.save', { patch: { budget: { agents: { codex: { maxTasks: 1 } } } } });
+  await call('config.save', { patch: { budget: { agents: { codex: { maxTasks: 1 } } } }, unlock: await railsToken(call) });
   const next = await call('tasks.create', { project: 'web', title: 'Segunda', description: 'algo más', agent: 'codex' });
   const done = await taskDone(next.id);
   assert.equal(done.status, 'done', done.result);

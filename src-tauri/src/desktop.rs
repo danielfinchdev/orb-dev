@@ -45,12 +45,12 @@ pub async fn pick_files(window: &WebviewWindow, title: Option<String>) -> Vec<St
   paths(dialog(window, title, "sys.dialog.pickFiles").blocking_pick_files(), 20)
 }
 
-/// 3.8.2: files for an agent's message, of any kind: up to 10 (the engine checks each one, src/engine/host/attachments.mjs).
+/// Files for an agent's message, of any kind: up to 10 (the engine checks each one, src/engine/host/attachments.mjs).
 pub async fn pick_attachments(window: &WebviewWindow) -> Vec<String> {
   paths(dialog(window, None, "sys.dialog.attach").blocking_pick_files(), 10)
 }
 
-/// 3.8.2 (D3): Windows' voice typing, as the user would open it: Win+H on the focused window. Windows has no API for it
+/// Windows' voice typing, as the user would open it: Win+H on the focused window. Windows has no API for it
 /// (it is the touch keyboard's dictation), so the keys are sent with SendInput. It fails when Windows takes none of them
 /// (another program's window in front, a secure desktop); when voice typing is off, Windows itself says so.
 #[cfg(windows)]
@@ -256,7 +256,7 @@ fn same_program(h: windows::Win32::Foundation::HWND) -> bool {
   ok && String::from_utf16_lossy(&buf[..len as usize]).eq_ignore_ascii_case(&me.to_string_lossy())
 }
 
-/// 3.8.1 (review Tauri D-fix M5): Orb 3.8.0 (Electron) opened AFTER this Orb never starts. This Orb leaves the same
+/// Orb 3.8.0 (Electron) opened AFTER this Orb never starts. This Orb leaves the same
 /// message-only window Chromium's single-instance lock looks for (class Chrome_MessageWindow, named after the data
 /// folder), on a thread of its own: Electron's requestSingleInstanceLock finds it, sends it its command line
 /// (WM_COPYDATA), gets «received» and quits, as when the same Electron app is opened twice; this Orb comes to the front
@@ -350,7 +350,7 @@ mod electron_tests {
     let _ = std::fs::remove_dir_all(&dir);
   }
 
-  /// Review D-fix M5: with this Orb's guard window for a data folder, the real Electron (Orb 3.8.0's) started afterwards
+  /// With this Orb's guard window for a data folder, the real Electron (Orb 3.8.0's) started afterwards
   /// on that folder does not get its single-instance lock and quits; this Orb is told (to come to the front). And the
   /// guard is not taken for an Electron by this same program.
   #[test]

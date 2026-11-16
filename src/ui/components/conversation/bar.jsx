@@ -13,8 +13,8 @@ import { useT, useLocale } from '@/lib/i18n.js';
 import { timeZone } from '@/lib/clock.js';
 import { useDay } from '@/lib/use-day.js';
 
-// 2.6: the system's date and time on the left of the chat's top bar (app.css .bar-clock, in the theme's title type).
-// 2.7: with the pointer on it, the seconds too; a click opens the month's calendar in a bubble (MonthCalendar).
+// the system's date and time on the left of the chat's top bar (app.css .bar-clock, in the theme's title type).
+// with the pointer on it, the seconds too; a click opens the month's calendar in a bubble (MonthCalendar).
 export function BarClock() {
   const t = useT();
   const locale = useLocale();
@@ -54,7 +54,7 @@ function MonthCalendar({ today }) {
   return (
     <div className="grid gap-2">
       <div className="flex items-center gap-1">
-        <span className="orb-cal-title flex-1 truncate px-1 text-[14px] font-semibold" aria-live="polite" data-testid="bar-calendar-title">{shown.toLocaleDateString(locale, { month: 'long', year: 'numeric' })}</span>
+        <span className="orb-cal-title flex-1 truncate px-1 text-body font-semibold" aria-live="polite" data-testid="bar-calendar-title">{shown.toLocaleDateString(locale, { month: 'long', year: 'numeric' })}</span>
         <button type="button" className="orb-cal-nav" onClick={() => move(-1)} aria-label={t('chat.calendarPrev')}><ChevronLeft className="size-4" /></button>
         <button type="button" className="orb-cal-nav" onClick={() => move(1)} aria-label={t('chat.calendarNext')} data-testid="bar-calendar-next"><ChevronRight className="size-4" /></button>
       </div>
@@ -72,18 +72,19 @@ function MonthCalendar({ today }) {
 const msgFormats = new Map();
 const msgFormat = (locale, day) => {
   const k = `${locale}|${day}|${timeZone()}`;
-  if (!msgFormats.has(k)) msgFormats.set(k, new Intl.DateTimeFormat(locale, day ? { day: 'numeric', month: 'short' } : { hour: '2-digit', minute: '2-digit' }));
+  if (!msgFormats.has(k)) msgFormats.set(k, new Intl.DateTimeFormat(locale, day ? { day: 'numeric', month: 'short' } : { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }));
   return msgFormats.get(k);
 };
-// hover (3.8.2, an agent's conversation): shown while the pointer is over the message (or it has the focus).
-export function MsgTime({ at, hover = false }) {
+// hover (an agent's conversation): shown while the pointer is over the message (or it has the focus).
+// inline: in the message's header, not floating at the end of its text.
+export function MsgTime({ at, hover = false, inline = false }) {
   const locale = useLocale();
   useDay();
   if (!at) return null;
   const d = new Date(at); if (Number.isNaN(d.getTime())) return null;
   const today = d.toDateString() === new Date().toDateString();
   const time = msgFormat(locale, false).format(d);
-  return <time className={hover ? 'msg-time msg-time-hover' : 'msg-time'} dateTime={d.toISOString()}>{today ? time : `${msgFormat(locale, true).format(d)} ${time}`}</time>;
+  return <time className={cn(hover ? 'msg-time msg-time-hover' : 'msg-time', inline && 'msg-time-inline')} dateTime={d.toISOString()}>{today ? time : `${msgFormat(locale, true).format(d)} ${time}`}</time>;
 }
 
 // The bar's pause / resume of all of Orb's work (the chat's bar and an agent conversation's).
@@ -108,7 +109,7 @@ export function BarHeading({ title, project, onRename, renameLabel, extra, showP
   );
 }
 
-// 3.6: the share of the context at which the composer suggests «Compactar» (DESIGN-SYSTEM §2.2).
+// the share of the context at which the composer suggests «Compactar» (DESIGN-SYSTEM §2.2).
 export const COMPACT_AT = 0.7;
 // «Compactar» in the contextual slot: the conversation goes on from a summary; nothing of the history is lost.
 export function CompactButton({ onCompact, busy }) {

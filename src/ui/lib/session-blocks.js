@@ -1,6 +1,6 @@
 // The items of a direct conversation as the view draws them (views/session.jsx). A tool call and its result become one
 // block (the latest call with that id gets the result); a run of changed files, one block.
-// 3.8.2: a subagent (Claude's Agent tool, Codex's spawnAgent) is one block of its own with the steps it took inside
+// a subagent (Claude's Agent tool, Codex's spawnAgent) is one block of its own with the steps it took inside
 // (the items whose `parent` is its call) and its state: running, done or failed; Codex tells its threads' state in the
 // results of its later collab calls (states).
 const DONE = { completed: 'done', shutdown: 'done', errored: 'failed', notFound: 'failed', interrupted: 'failed' };

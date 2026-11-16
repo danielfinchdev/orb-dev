@@ -1,4 +1,4 @@
-// 3.6: the orchestrator's glyph, on its own so its design can change here without touching the composer. The owner's
+// the orchestrator's glyph, on its own so its design can change here without touching the composer. The owner's
 // choice from the design sheet (docs/diseno/maquetas/orquestador.html, option 4 «Ramas desde un punto»): one point
 // branching into three arrows, Orbe handing the work out to several agents. Lucide stroke style (24 grid, 2 px, round).
 import { cn } from '@/lib/utils.js';

@@ -1,12 +1,12 @@
 // Markdown written by the assistant and the agents. Raw HTML is never rendered; links open outside the app (https only).
-// 3.2.1: a link to a picture on this PC (an agent's "Ver imagen editada") opens Orb's image viewer; any other local path
+// a link to a picture on this PC (an agent's "Ver imagen editada") opens Orb's image viewer; any other local path
 // stays a plain text link (nothing an agent writes is ever opened or run).
 // Code blocks that say their language (```js) are coloured with the theme of Ajustes → Apariencia (code.css).
-// 3.8.2: formulas between $$ (one $ stays a dollar: amounts like «$5 and $10» read as before) and ```mermaid diagrams
+// formulas between $$ (one $ stays a dollar: amounts like «$5 and $10» read as amounts) and ```mermaid diagrams
 // (rich-blocks.jsx, each library loaded only when needed).
 import { memo, useEffect, useMemo, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import { SquareTerminal } from 'lucide-react';
-import { toast } from 'sonner';
+import { notifyError, notifyOk } from '@/lib/notify.js';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import { remarkPlugins, richKind, isInlineMath, textOf } from '@/lib/markdown-plugins.js';
 import { splitBlocks } from '@/lib/md-blocks.js';
@@ -22,6 +22,7 @@ import { Tip } from './ui/overlay.jsx';
 // The whole window's fonts and code colours (Ajustes → Apariencia): loaded here, after app.css, which main.jsx imports first.
 import '../fonts.css';
 import '../code.css';
+import { quiet } from '@/lib/quiet.js';
 
 // "C:\…\x.png", "C:/…/x.png", "/C:/…/x.png" or "file:///C:/…/x.png" → "C:\…\x.png"; anything else → null.
 export function localImagePath(href) {
@@ -33,7 +34,7 @@ export function localImagePath(href) {
 }
 const urlTransform = (url) => (localImagePath(url) ? url : defaultUrlTransform(url));
 
-// 3.8.2 (T3 3.2): a block of terminal commands (```bash, powershell…) gets «Pegar en el terminal» on the PC: the command
+// a block of terminal commands (```bash, powershell…) gets «Pegar en el terminal» on the PC: the command
 // goes to the input line of the terminal under the chat (it never runs until the user presses Enter); with no terminal
 // there, it is copied.
 function PasteToTerminal({ code }) {
@@ -41,7 +42,7 @@ function PasteToTerminal({ code }) {
   const paste = () => {
     const line = oneCommand(code);
     if (pasteToTerminal(line)) return;
-    navigator.clipboard?.writeText(line).then(() => toast.success(t('terminal.copied'))).catch(() => {});
+    navigator.clipboard?.writeText(line).then(() => notifyOk(t('terminal.copied'))).catch(() => notifyError(t('app.copyFailed')));
   };
   return <Tip label={t('terminal.paste')}><button type="button" className="text-muted-foreground hover:text-foreground absolute top-1.5 right-1.5 grid size-7 cursor-pointer place-items-center rounded-md opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 [&_svg]:size-3.5" aria-label={t('terminal.paste')} onClick={paste}><SquareTerminal /></button></Tip>;
 }
@@ -51,11 +52,11 @@ const languageOf = (code) => String([].concat(code?.properties?.className ?? [])
 function ImageAlt({ alt }) { const t = useT(); return <span className="text-muted-foreground">[{alt || t('comp.markdown.image')}]</span>; }
 
 const components = {
-  a: ({ href, children }) => <a onClick={(e) => { e.preventDefault(); const local = localImagePath(href); if (local) openImage(local); else if (/^https:\/\//.test(href ?? '')) bridge.openExternal(href).catch(() => {}); }}>{children}</a>,
+  a: ({ href, children }) => <a onClick={(e) => { e.preventDefault(); const local = localImagePath(href); if (local) openImage(local); else if (/^https:\/\//.test(href ?? '')) bridge.openExternal(href).catch(quiet); }}>{children}</a>,
   img: ({ alt }) => <ImageAlt alt={alt} />,
   // A wide table scrolls on its own instead of widening the chat (narrow window, mobile).
   table: ({ children }) => <div className="prose-table"><table>{children}</table></div>,
-  // 3.8.2: a formula (remark-math marks it language-math) or a diagram block; any other code as before.
+  // a formula (remark-math marks it language-math) or a diagram block; any other code is a plain code block.
   pre: ({ node, children, ...props }) => {
     const kind = richKind(node?.children?.[0]);
     if (kind === 'math') return <MathBlock tex={textOf(node.children[0])} display />;
@@ -80,14 +81,14 @@ export const Markdown = memo(function Markdown({ children, className }) {
   return <div className={cn('prose-chat', className)}><Parsed text={String(children ?? '')} /></div>;
 });
 
-// 3.8.3: an answer still streaming: block by block (lib/md-blocks.js), so the finished blocks keep what they drew and only
+// an answer still streaming: block by block (lib/md-blocks.js), so the finished blocks keep what they drew and only
 // the last one is parsed again with each piece. The same elements, in the same box, as Markdown draws for the whole text.
 export function StreamingMarkdown({ children, className }) {
   const blocks = splitBlocks(children);
   return <div className={cn('prose-chat', className)}>{blocks.map((text, i) => <Parsed key={i} text={text} />)}</div>;
 }
 
-// 3.8.3: an answer being typed (lib/typing.js): the text on screen follows the streamed one at a steady pace, a character
+// an answer being typed (lib/typing.js): the text on screen follows the streamed one at a steady pace, a character
 // at a time, block by block like StreamingMarkdown (only the last block is parsed again, never the list of messages).
 //   text     everything received so far        done      the turn has ended (what is left shows quickly)
 //   tail     the conversation's key: what is on screen is noted, so the saved message goes on from there (TypedMarkdown)

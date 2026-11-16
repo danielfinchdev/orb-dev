@@ -3,12 +3,13 @@
 // from a button the user clicks and confirms; agents have no access to these functions.
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn, execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { ctx, tr } from '../../platform/context.mjs';
 import { firstFile, inPath, cleanEnv, IS_WIN } from '../../platform/proc.mjs';
 import { openConsole } from '../../agents/index.mjs';
-import { git, isGitRepo, ORB_GIT } from '../../platform/git.mjs';
-import { secretFiles, isSecretPath, stagedSecrets, secretsInDiff } from '../../shared/secrets-scan.mjs';
+import { gitAsyncWith, isGitRepoAsync, ORB_GIT } from '../../platform/git.mjs';
+import { isRailOn } from '../../domain/rules/rails.mjs';
+import { secretFiles, isSecretPath, stagedSecretsAsync, secretsInDiff } from '../../shared/secrets-scan.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { folderName } from '../../platform/paths.mjs';
 import { checkCategory } from '../../domain/projects/projects.mjs';
@@ -33,7 +34,10 @@ export function run(cmd, args, { cwd, timeoutMs = 120_000, input } = {}) {
   });
 }
 
-const gh = (args, opts) => { const exe = ghExe(); if (!exe) throw new Error(tr('msg.github.ghMissing')); return run(exe, args, opts); };
+// Tests swap the finder and the runner for a fake gh; nothing else touches this.
+const seam = { exe: ghExe, run };
+export function setGhForTests(fake) { seam.exe = fake?.exe ?? ghExe; seam.run = fake?.run ?? run; }
+const gh = (args, opts) => { const exe = seam.exe(); if (!exe) throw new Error(tr('msg.github.ghMissing')); return seam.run(exe, args, opts); };
 const must = (r, what) => { if (!r.ok) throw new Error(`${what}: ${oneLine(r.err || r.out, 400)}`); return r; };
 const branchName = (b) => { if (!/^[\w./-]{1,120}$/.test(String(b ?? '')) || String(b).startsWith('-') || String(b).includes('..')) throw new Error(tr('msg.github.badBranch', { b })); return b; };
 
@@ -45,7 +49,7 @@ export async function status() {
   return { installed: true, loggedIn: auth.ok, user: user?.ok ? user.out : null, where: exe };
 }
 
-// 2.7: the user's contribution calendar of the last year (the green squares of their GitHub profile), from GitHub itself
+// the user's contribution calendar of the last year (the green squares of their GitHub profile), from GitHub itself
 // through gh (GraphQL contributionsCollection). Real numbers only: nothing is filled in when gh cannot answer.
 export async function contributions() {
   const exe = ghExe(); if (!exe) return null;
@@ -60,19 +64,20 @@ export async function contributions() {
 
 export function login() { const exe = ghExe(); if (!exe) throw new Error(tr('msg.github.ghMissingShort')); openConsole(exe, ['auth', 'login', '--web', '--git-protocol', 'https']); }
 
-// git for the card, without blocking the engine (3.8.3 repaso: five synchronous calls per open card, up to a second on a
-// big repository). Never throws: a failure is an empty answer.
-const gitAsync = (cwd, ...args) => new Promise((resolve) => {
-  execFile('git', ['-C', cwd, '-c', 'core.fsmonitor=false', ...args], { encoding: 'utf8', windowsHide: true, maxBuffer: 32 * 1024 * 1024, timeout: 30_000, env: cleanEnv() }, (error, stdout) => resolve({ stdout: error ? '' : stdout ?? '' }));
-});
+// git for the card, without blocking the engine (five calls per open card, up to a second on a big repository). Never
+// throws: a failure is an empty answer.
+const query = async (cwd, ...args) => { const r = await gitAsyncWith(cwd, { timeout: 30_000, max: 32 * 1024 * 1024 }, ...args); return { stdout: r.status === 0 ? r.stdout : '' }; };
+// The engine's asynchronous git, called as git(dir, ...args), for what has to look at the status code.
+// Writing actions keep the two minutes they always had; only the card's reads are cut at 30 s (query).
+const git = (dir, ...args) => gitAsyncWith(dir, { timeout: 120_000 }, ...args);
 export async function projectInfo(project) {
-  if (!isGitRepo(project.path)) return { git: false };
-  const [b, r, refs, st] = await Promise.all([gitAsync(project.path, 'rev-parse', '--abbrev-ref', 'HEAD'), gitAsync(project.path, 'remote', 'get-url', 'origin'), gitAsync(project.path, 'for-each-ref', '--format=%(refname:short)', 'refs/heads'), gitAsync(project.path, 'status', '--porcelain', '-uall')]);
+  if (!(await isGitRepoAsync(project.path))) return { git: false };
+  const [b, r, refs, st] = await Promise.all([query(project.path, 'rev-parse', '--abbrev-ref', 'HEAD'), query(project.path, 'remote', 'get-url', 'origin'), query(project.path, 'for-each-ref', '--format=%(refname:short)', 'refs/heads'), query(project.path, 'status', '--porcelain', '-uall')]);
   const branch = b.stdout.trim();
   const remote = r.stdout.trim() || null;
   const branches = refs.stdout.split(/\r?\n/).filter(Boolean).slice(0, 100);
   const changes = st.stdout.split(/\r?\n/).filter(Boolean).length;
-  const ahead = remote ? (await gitAsync(project.path, 'rev-list', '--count', '@{upstream}..HEAD')).stdout.trim() : '';
+  const ahead = remote ? (await query(project.path, 'rev-list', '--count', '@{upstream}..HEAD')).stdout.trim() : '';
   let prs = [];
   if (remote && /github\.com/i.test(remote) && ghExe()) {
     const r = await gh(['pr', 'list', '--state', 'open', '--limit', '20', '--json', 'number,title,headRefName,url,isDraft'], { cwd: project.path, timeoutMs: 30_000 });
@@ -82,54 +87,128 @@ export async function projectInfo(project) {
 }
 
 // Commit of everything in the project folder (the folder mode never commits on its own). Secret-looking files stop it.
-export function commitAll(project, message) {
-  if (!isGitRepo(project.path)) throw new Error(tr('msg.github.noGit'));
+export async function commitAll(project, message) {
+  if (!(await isGitRepoAsync(project.path))) throw new Error(tr('msg.github.noGit'));
   const msg = oneLine(message, 200); if (!msg) throw new Error(tr('msg.github.commitMsg'));
-  const status = git(project.path, 'status', '--porcelain=v1', '-z', '-uall');
+  const status = await git(project.path, 'status', '--porcelain=v1', '-z', '-uall');
   if (!status.stdout.trim()) throw new Error(tr('msg.github.noChanges'));
   const risky = secretFiles(status.stdout);
   if (risky.length) throw new Error(tr('msg.github.looksSecret', { files: risky.slice(0, 5).join(', ') }));
-  git(project.path, 'add', '-A', '--', '.', `:(exclude)${ATTACH_DIR}`);
-  const staged = git(project.path, 'diff', '--cached', '--name-only', '-z').stdout.split('\0').filter(Boolean);
-  if (staged.some(isSecretPath)) { git(project.path, 'reset', '-q'); throw new Error(tr('msg.github.looksSecretNone')); }
-  // 3.2.1: also what the files say (a key pasted into any file), not only their names.
-  const inText = stagedSecrets(project.path, git);
-  if (inText.length) { git(project.path, 'reset', '-q'); throw new Error(tr('msg.github.secretInText', { files: inText.slice(0, 5).join(', ') })); }
+  await git(project.path, 'add', '-A', '--', '.', `:(exclude)${ATTACH_DIR}`);
+  const staged = (await git(project.path, 'diff', '--cached', '--name-only', '-z')).stdout.split('\0').filter(Boolean);
+  if (staged.some(isSecretPath)) { await git(project.path, 'reset', '-q'); throw new Error(tr('msg.github.looksSecretNone')); }
+  // also what the files say (a key pasted into any file), not only their names.
+  let inText = [];
+  try { if (isRailOn('revisar-secretos')) inText = await stagedSecretsAsync(project.path, git); } catch { await git(project.path, 'reset', '-q'); throw new Error(tr('msg.github.gitIncomplete')); }
+  if (inText.length) { await git(project.path, 'reset', '-q'); throw new Error(tr('msg.github.secretInText', { files: inText.slice(0, 5).join(', ') })); }
   // The user's own identity when git has one; without it (no global user.name/email) git refuses to commit, so the
   // commit goes in as Orb's, like the first commit of a created project.
-  const known = (key) => git(project.path, 'config', '--get', key).stdout.trim() !== '';
-  const who = known('user.name') && known('user.email') ? [] : ORB_GIT;
-  const r = git(project.path, ...who, 'commit', '-q', '-m', msg);
+  const known = async (key) => (await git(project.path, 'config', '--get', key)).stdout.trim() !== '';
+  const who = (await known('user.name')) && (await known('user.email')) ? [] : ORB_GIT;
+  const r = await git(project.path, ...who, 'commit', '-q', '-m', msg);
   if (r.status !== 0) throw new Error(oneLine(r.stderr || r.stdout, 300));
   return { files: staged.length };
 }
 
+// Pull requests for the phone. Arguments are always an array (no shell), the number is validated by the caller and gh runs
+// inside the project folder so it only ever talks to that project's own remote.
+const AUTH_RE = /not logged in|gh auth login|authentication|authenticate|GH_TOKEN|HTTP 401|bad credentials/i;
+const MERGE_BLOCK_RE = /not mergeable|conflict|required status|checks?\b.*(fail|pending|expected)|review|blocked|draft|policy|protected/i;
+const ghFail = (r) => {
+  const text = oneLine(r.err || r.out, 400);
+  if (AUTH_RE.test(text)) return new Error(tr('msg.github.notLoggedIn'));
+  if (/no github remotes|none of the git remotes|not a git repository|no git remote|could not resolve to a repository/i.test(text)) return new Error(tr('msg.github.noGithubRemote'));
+  if (/could not resolve to a pull ?request|no pull requests? found|not found/i.test(text)) return new Error(tr('msg.github.prNotFound'));
+  return new Error(text || tr('msg.github.prBadAnswer'));
+};
+const ghJson = async (project, args) => {
+  const r = await gh(args, { cwd: project.path, timeoutMs: 40_000 });
+  if (!r.ok) throw ghFail(r);
+  try { return JSON.parse(r.out); } catch { throw new Error(tr('msg.github.prBadAnswer')); }
+};
+export const HEAD_OID_RE = /^[0-9a-f]{40}$/i;
+const oidOf = (v) => (typeof v === 'string' && HEAD_OID_RE.test(v) ? v.toLowerCase() : null);
+const authorOf = (a) => (a && typeof a === 'object' ? String(a.login ?? a.name ?? '') : String(a ?? ''));
+
+export async function listPrs(project) {
+  const list = await ghJson(project, ['pr', 'list', '--state', 'open', '--limit', '30', '--json', 'number,title,headRefName,headRefOid,baseRefName,url,isDraft,author,updatedAt,reviewDecision,mergeable']);
+  return (Array.isArray(list) ? list : []).slice(0, 30).map((x) => ({ number: x.number, title: oneLine(x.title, 300), headRefName: x.headRefName, headRefOid: oidOf(x.headRefOid), baseRefName: x.baseRefName, url: x.url, isDraft: Boolean(x.isDraft), author: authorOf(x.author), updatedAt: x.updatedAt, reviewDecision: x.reviewDecision || null, mergeable: x.mergeable || null }));
+}
+
+export async function viewPr(project, number) {
+  const x = await ghJson(project, ['pr', 'view', String(number), '--json', 'number,title,body,state,url,headRefName,headRefOid,baseRefName,isDraft,author,createdAt,updatedAt,mergeable,mergeStateStatus,reviewDecision,additions,deletions,changedFiles,statusCheckRollup,files,commits']);
+  return {
+    number: x.number, title: oneLine(x.title, 300), body: String(x.body ?? '').slice(0, 20_000), state: x.state, url: x.url, headRefName: x.headRefName, headRefOid: oidOf(x.headRefOid), baseRefName: x.baseRefName,
+    isDraft: Boolean(x.isDraft), author: authorOf(x.author), createdAt: x.createdAt, updatedAt: x.updatedAt, mergeable: x.mergeable || null, mergeStateStatus: x.mergeStateStatus || null,
+    reviewDecision: x.reviewDecision || null, additions: x.additions ?? 0, deletions: x.deletions ?? 0, changedFiles: x.changedFiles ?? 0,
+    checks: (Array.isArray(x.statusCheckRollup) ? x.statusCheckRollup : []).slice(0, 100).map((c) => ({ name: oneLine(c.name ?? c.context ?? '', 120), status: c.status ?? c.state ?? null, conclusion: c.conclusion ?? null })),
+    files: (Array.isArray(x.files) ? x.files : []).slice(0, 300).map((f) => ({ path: String(f.path ?? ''), additions: f.additions ?? 0, deletions: f.deletions ?? 0 })),
+    commits: (Array.isArray(x.commits) ? x.commits : []).slice(0, 100).map((c) => ({ oid: String(c.oid ?? '').slice(0, 7), title: oneLine(c.messageHeadline ?? '', 200) }))
+  };
+}
+
+// Merges as the user's own gh account. No --delete-branch, --admin or --auto: the phone cannot skip a rule of the
+// repository, and gh leaves the local branch and checkout alone without --delete-branch.
+export const MERGE_METHODS = ['merge', 'squash', 'rebase'];
+// --match-head-commit makes gh merge exactly the commit the user saw; if the branch moved since, GitHub refuses.
+const HEAD_MOVED_RE = /head branch was modified|head ref.*(does not match|not match)|expected head sha/i;
+const OLD_GH_RE = /unknown flag:? ?--match-head-commit/i;
+const userError = (message) => Object.assign(new Error(message), { userFacing: true });
+export async function mergePr(project, number, method = 'merge', headRefOid) {
+  if (!MERGE_METHODS.includes(method)) throw new Error(tr('msg.github.prFailed'));
+  const oid = oidOf(headRefOid);
+  if (!oid) throw userError(tr('msg.github.prNeedsHeadOid'));
+  const r = await gh(['pr', 'merge', String(number), `--${method}`, '--match-head-commit', oid], { cwd: project.path, timeoutMs: 120_000 });
+  if (!r.ok) {
+    const text = oneLine(r.err || r.out, 240);
+    if (OLD_GH_RE.test(text)) throw userError(tr('msg.github.ghTooOld'));
+    if (!AUTH_RE.test(text) && HEAD_MOVED_RE.test(text)) throw userError(tr('msg.github.prHeadChanged'));
+    if (!AUTH_RE.test(text) && MERGE_BLOCK_RE.test(text) && !/not found|could not resolve/i.test(text)) throw new Error(tr('msg.github.prNotMergeable', { detail: text }));
+    throw ghFail(r);
+  }
+  const out = { ok: true, number, method };
+  // the state afterwards is best effort: the merge itself already happened
+  try { const s = await ghJson(project, ['pr', 'view', String(number), '--json', 'state,mergedAt']); out.state = s.state; out.mergedAt = s.mergedAt ?? null; } catch { /* merged anyway */ }
+  return out;
+}
+
+// A comment on a pull request. The text goes to gh on stdin (--body-file -), never as an argument.
+export const MAX_COMMENT = 20_000;
+export async function commentPr(project, number, body) {
+  const text = typeof body === 'string' ? body.trim() : '';
+  if (!text || text.length > MAX_COMMENT) throw userError(tr('msg.github.commentBad', { max: MAX_COMMENT }));
+  const r = await gh(['pr', 'comment', String(number), '--body-file', '-'], { cwd: project.path, timeoutMs: 60_000, input: text });
+  if (!r.ok) throw ghFail(r);
+  return { ok: true, number };
+}
+
 // Brings a task branch into the current branch of the project (merge commit). A conflict is undone and reported.
-export function mergeBranch(project, branch) {
+export async function mergeBranch(project, branch) {
   branchName(branch);
-  if (git(project.path, 'status', '--porcelain').stdout.trim()) throw new Error(tr('msg.github.unsaved'));
-  const r = git(project.path, ...ORB_GIT, 'merge', '--no-ff', '--no-edit', branch);
-  if (r.status !== 0) { git(project.path, 'merge', '--abort'); throw new Error(tr('msg.github.mergeFail', { branch, detail: oneLine(r.stdout || r.stderr, 300) })); }
+  if ((await git(project.path, 'status', '--porcelain')).stdout.trim()) throw new Error(tr('msg.github.unsaved'));
+  const r = await git(project.path, ...ORB_GIT, 'merge', '--no-ff', '--no-edit', branch);
+  if (r.status !== 0) { await git(project.path, 'merge', '--abort'); throw new Error(tr('msg.github.mergeFail', { branch, detail: oneLine(r.stdout || r.stderr, 300) })); }
   return { ok: true };
 }
 
-// 3.2.1: nothing that looks like a key leaves the PC. Checks the commits of the branch that no remote has yet (all of them
+// nothing that looks like a key leaves the PC. Checks the commits of the branch that no remote has yet (all of them
 // for a repository without remotes): files named like secrets and added lines that look like keys.
-export function unpushedSecrets(dir, branch = 'HEAD') {
+export async function unpushedSecrets(dir, branch = 'HEAD', { max } = {}) {
+  const g = async (...args) => { const r = await gitAsyncWith(dir, { timeout: 120_000, ...(max ? { max } : {}) }, ...args); if (r.cut || r.timedOut) throw new Error(tr('msg.github.gitIncomplete')); return r; };
   const range = [branch, '--not', '--remotes'];
-  const names = git(dir, '-c', 'core.quotePath=false', 'log', '-n', '500', '--format=', '--name-only', '--diff-filter=AM', ...range).stdout.split(/\r?\n/).filter(Boolean);
+  const names = (await g('-c', 'core.quotePath=false', 'log', '-n', '500', '--format=', '--name-only', '--diff-filter=AM', ...range)).stdout.split(/\r?\n/).filter(Boolean);
   const byName = [...new Set(names.filter(isSecretPath))];
   if (byName.length) return byName;
-  return secretsInDiff(git(dir, '-c', 'core.quotePath=false', 'log', '-n', '500', '-p', '-U0', '--no-color', '--no-ext-diff', '--format=', ...range).stdout);
+  return secretsInDiff((await g('-c', 'core.quotePath=false', 'log', '-n', '500', '-p', '-U0', '--no-color', '--no-ext-diff', '--format=', ...range)).stdout);
 }
-const checkUnpushed = (dir, branch) => {
-  const found = unpushedSecrets(dir, branch);
+const checkUnpushed = async (dir, branch) => {
+  const found = await unpushedSecrets(dir, branch);
   if (found.length) throw new Error(tr('msg.github.secretBeforePush', { files: found.slice(0, 5).join(', ') }));
 };
 
 export async function push(project, branch) {
   branchName(branch);
-  checkUnpushed(project.path, branch);
+  await checkUnpushed(project.path, branch);
   must(await run('git', ['-C', project.path, 'push', '-u', 'origin', branch], { timeoutMs: 180_000 }), tr('msg.github.pushFailed'));
   return { ok: true };
 }
@@ -144,10 +223,10 @@ export async function createPr(project, { branch, title, body = '', base }) {
 
 export async function createRepo(project, { name, isPrivate = true }) {
   if (!/^[\w.][\w.-]{0,99}$/.test(name ?? '')) throw new Error(tr('msg.github.badRepoName')); // never starts with "-": gh would read it as a flag
-  if (!isGitRepo(project.path)) throw new Error(tr('msg.github.noGit'));
-  if (!git(project.path, 'rev-parse', '--verify', '--quiet', 'HEAD').stdout.trim()) throw new Error(tr('msg.github.needCommit'));
-  if (git(project.path, 'remote', 'get-url', 'origin').status === 0) throw new Error(tr('msg.github.hasOrigin'));
-  checkUnpushed(project.path, 'HEAD');
+  if (!(await isGitRepoAsync(project.path))) throw new Error(tr('msg.github.noGit'));
+  if (!(await git(project.path, 'rev-parse', '--verify', '--quiet', 'HEAD')).stdout.trim()) throw new Error(tr('msg.github.needCommit'));
+  if ((await git(project.path, 'remote', 'get-url', 'origin')).status === 0) throw new Error(tr('msg.github.hasOrigin'));
+  await checkUnpushed(project.path, 'HEAD');
   const r = must(await gh(['repo', 'create', name, isPrivate ? '--private' : '--public', '--source', project.path, '--remote', 'origin', '--push'], { cwd: project.path, timeoutMs: 180_000 }), tr('msg.github.repoFailed'));
   return { url: r.out.split(/\s+/).find((s) => /^https:\/\//.test(s)) ?? r.out };
 }
@@ -160,7 +239,7 @@ export async function clone(repo, name, category) {
   const exe = ghExe();
   const r = exe ? await run(exe, ['repo', 'clone', String(repo).trim(), folder], { timeoutMs: 600_000 })
     : await run('git', ['clone', '--', /^https:/.test(repo) ? repo : `https://github.com/${repo}.git`, folder], { timeoutMs: 600_000 });
-  // 3.2.1: the usual case (a wrong name or a private repository of someone else) in the user's words, not gh's.
+  // the usual case (a wrong name or a private repository of someone else) in the user's words, not gh's.
   if (!r.ok && /could not resolve to a repository|repository not found|not found|HTTP 404|does not exist/i.test(`${r.err} ${r.out}`)) {
     fs.rmSync(folder, { recursive: true, force: true });
     throw new Error(tr('msg.github.cloneNotFound', { repo: oneLine(repo, 200) }));

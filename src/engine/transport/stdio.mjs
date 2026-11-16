@@ -1,4 +1,4 @@
-// 3.8.1: the engine's transport for an app that starts it as a plain process (Tauri: Rust starts the bundled node.exe
+// the engine's transport for an app that starts it as a plain process (Tauri: Rust starts the bundled node.exe
 // with ORB_ENGINE_STDIO=1): one JSON message per line, app → engine on stdin and engine → app on stdout. No port and no
 // named pipe: no other process can talk to the engine. stdout belongs to the channel, so anything else written there
 // (console.log, a library's stray output) goes to stderr, which the app keeps in motor-salida.log.
@@ -9,7 +9,7 @@
 import readline from 'node:readline';
 
 // One message, one line: JSON.stringify never leaves a raw line break inside (they are escaped in strings).
-// 3.8.1 (review D2 B3): what JSON changes without saying so (a Buffer becomes { type, data }, a Map or a Set {}, a
+// what JSON changes without saying so (a Buffer becomes { type, data }, a Map or a Set {}, a
 // BigInt throws) is sent in a form that keeps its meaning (a Buffer as base64, a Map as an object, a Set as a list,
 // a BigInt as text) and written once per kind to stderr (the app's motor-salida.log), so a method that returns one can
 // be found. A Date is already its ISO text.

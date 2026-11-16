@@ -1,4 +1,4 @@
-// 3.8.2 (T3 3.4): the private card of a secret an agent asked for (orb_request_secret, src/engine/security/agent-secrets.mjs).
+// the private card of a secret an agent asked for (orb_request_secret, src/engine/security/agent-secrets.mjs).
 // Only in this PC's window: the value typed here goes to the engine once and never shows in the chat; saving it in the
 // vault, or using the one saved, asks for the master password.
 import { useEffect, useState } from 'react';
@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/overlay.jsx';
 import { call, act, bridge, fullPc } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
 import { useT } from '@/lib/i18n.js';
+import { quiet } from '@/lib/quiet.js';
 
 function SecretCard({ r }) {
   const t = useT();
@@ -24,7 +25,7 @@ function SecretCard({ r }) {
   };
   const send = () => { if (value) answer({ value, save }, save ? 'secretSave' : null); };
   return (
-    <form className="bg-card grid gap-2.5 rounded-xl border px-3.5 py-3 text-[13px]" data-testid="secret-card" autoComplete="off" onSubmit={(e) => { e.preventDefault(); send(); }}>
+    <form className="bg-card grid gap-2.5 rounded-xl border px-3.5 py-3 text-control" data-testid="secret-card" autoComplete="off" onSubmit={(e) => { e.preventDefault(); send(); }}>
       <div className="flex items-center gap-2 font-medium"><KeyRound className="text-muted-foreground size-4 shrink-0" />{t('secrets.title', { agent: AGENT[r.agent] ?? r.agent, name: r.name })}</div>
       <p className="text-muted-foreground">{r.reason}</p>
       <p className="text-warning-ink flex items-start gap-1.5 text-xs font-medium" data-testid="secret-warn"><ShieldAlert className="mt-px size-3.5 shrink-0" />{t('secrets.warn')}</p>
@@ -47,7 +48,7 @@ export function SecretCards({ sessionId }) {
     if (!fullPc()) return undefined;
     let alive = true;
     const mine = (r) => r?.session === String(sessionId);
-    call('secrets.pending').then((all) => { if (alive) setList((all ?? []).filter(mine)); }).catch(() => {});
+    call('secrets.pending').then((all) => { if (alive) setList((all ?? []).filter(mine)); }).catch(quiet);
     const offAsk = bridge.on('secret:request', (r) => { if (mine(r)) setList((prev) => [...prev.filter((x) => x.id !== r.id), r]); });
     const offDone = bridge.on('secret:done', (r) => setList((prev) => prev.filter((x) => x.id !== r?.id)));
     return () => { alive = false; offAsk(); offDone(); };

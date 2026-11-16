@@ -1,4 +1,4 @@
-// 3.8.1: builds the Android app «Orb» (Tauri 2, src-tauri/gen/android) into dist/Orb-<version>-android.apk:
+// builds the Android app «Orb» (Tauri 2, src-tauri/gen/android) into dist/Orb-<version>-android.apk:
 //   1. `tauri android build --apk --target aarch64` (its beforeBuildCommand, scripts/android-web.mjs, builds the page in
 //      the app's mode), signed with Orb's release key (--debug: a debug build, signed with the SDK's debug key);
 //   2. checks the APK: package dev.orb.app, versionCode = major·1 000 000 + minor·1000 + patch (Tauri's; 3.8.0 was 30800),
@@ -56,7 +56,7 @@ const tool = (name, args) => {
   return r.stdout;
 };
 
-// The key every Orb for Android is signed with: made once (Orb 3.5) and kept in the build cache, never in the repository.
+// The key every Orb for Android is signed with: made once and kept in the build cache, never in the repository.
 function signingKey() {
   const store = path.join(CACHE, 'keys', 'orb-release.jks'); const passFile = path.join(CACHE, 'keys', 'orb-release.pass');
   if (!fs.existsSync(store) || !fs.existsSync(passFile)) {
@@ -82,7 +82,7 @@ function checkApk(apk, { release }) {
 
 async function main() {
   // An APK of this app called 3.8.0 would be taken for Orb 3.8.0's (Capacitor), which links with a 3.8.0 PC; this one
-  // needs Orb 3.8.1 on the PC (review Android B4).
+  // needs Orb 3.8.1 on the PC.
   if (VERSION_CODE <= 3_008_000) fail(`La versión ${version} no es mayor que 3.8.0: sube la de package.json antes de compilar la app.`);
   const keys = debug ? {} : signingKey();
   await run(process.execPath, [path.join(ROOT, 'node_modules', '@tauri-apps', 'cli', 'tauri.js'), 'android', 'build', '--apk', '--target', 'aarch64', ...(debug ? ['--debug'] : [])], keys);

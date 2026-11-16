@@ -1,4 +1,4 @@
-// 3.8.1 (H4c): the lists the window asks for on every refresh (tasks, conversations, direct conversations, projects, the
+// the lists the window asks for on every refresh (tasks, conversations, direct conversations, projects, the
 // chat list) go as changes instead of whole. No engine imports: the window (src/ui/lib/store.js) loads this file too.
 //
 // The engine keeps one Feed per list (method + its parameters). Each call computes the list as before and compares each
@@ -8,7 +8,7 @@
 // it: { feed, epoch, v, base, rows, gone?, order?, meta? }. A caller with nothing (`since: {}`), of another engine run
 // (epoch), or too far behind (gone rows forgotten) gets the whole list ({ ..., full: true, rows, meta? }). The versions
 // are shared by every caller (the PC's window, phones), so any number of them can follow one Feed.
-// A caller that sends no `since` (an Orb or a phone app of before 3.8.1) gets the plain reply, as before.
+// A caller that sends no `since` (an Orb or a phone app that does not know Feed) gets the plain reply.
 export const FEED_FORMAT = 1;
 const MAX_GONE = 5000;
 const randomEpoch = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -64,7 +64,7 @@ export class Feed {
 // ---- the caller's side
 // state: what the caller holds ({ epoch, v, byKey, list, meta }) or null. → { state, list, meta, changed }: list keeps
 // the same array (and each unchanged row the same object) when nothing moved, so the screens draw nothing again.
-// A plain reply (an engine of before 3.8.1) is taken whole: { state: null, list (or the reply itself as `plain`) }.
+// A plain reply (from an engine that does not know Feed) is taken whole: { state: null, list (or the reply itself as `plain`) }.
 // A reply that does not follow from what the caller holds (an answer to an older request that arrived late) changes
 // nothing; one that cannot be applied (a key in the order that the caller never got) asks for the whole list again
 // (state null, `again`).

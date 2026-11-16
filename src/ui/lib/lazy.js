@@ -1,8 +1,9 @@
-// 3.8.1 (H4a): screens that load the first time they open (main.jsx), and that recover when that load fails. React.lazy
+// screens that load the first time they open (main.jsx), and that recover when that load fails. React.lazy
 // keeps a failed load for good (the screen would fail until the page reloads); a phone's browser gets the files from
 // the PC over the network, so a weak or dropped connection must end in «Sin conexión · Reintentar», never in a broken
 // screen. A screen that failed to load is made again when the user retries (retryLoads, from the ErrorBoundary).
 import { createElement, lazy } from 'react';
+import { quiet } from './quiet.js';
 
 // A file of the app that could not be fetched (Chromium, Firefox and Safari word it differently; Vite's preload too).
 const LOAD_FAILED = /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed|Unable to preload CSS|Loading (CSS )?chunk [\w-]+ failed/i;
@@ -41,6 +42,6 @@ export function lazyScreen(load, name) {
   // Only on a retry: making it again from inside the failed render would fetch it in a loop while offline.
   const reset = () => { attempt++; Lazy = null; };
   function Screen(props) { Lazy ??= make(); return createElement(Lazy, props); }
-  Screen.preload = () => load().catch(() => {});
+  Screen.preload = () => load().catch(quiet);
   return Screen;
 }

@@ -1,12 +1,50 @@
-// The phone access and Magic Link part of the engine's API (split out of api.mjs in 3.6): the phones and browsers
+// The phone access and Magic Link part of the engine's API: the phones and browsers
 // linked with this PC. This PC only (src/domain/security/permissions.mjs).
-import { ctx } from '../../platform/context.mjs';
+import path from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
+import { ctx, tr } from '../../platform/context.mjs';
+import { createScreenshot, sweepShots, SHOT_DIR } from '../host/screenshot.mjs';
+import { PermissionError } from '../../domain/security/permissions.mjs';
 import { saveConfig } from '../../platform/config.mjs';
 import { PAIR_KINDS, PREVIEWS } from '../transport/remote.mjs';
 import { str, oneOf } from './common.mjs';
 
-export function linkMethods({ emit, remoteRef }) {
+// Engine tests (they run with the fake agents) never touch the real screen: they copy a prepared JPEG instead. The
+// hook needs the fake-agents mode and only accepts a real JPEG inside the temp folder. Residual risk: whoever controls
+// this process's environment could still make a capture "show" a JPEG from the temp folder, which they could read anyway.
+const fakeShot = () => {
+  const src = process.env.ORB_FAKE_AGENTS && process.env.ORB_FAKE_SCREENSHOT;
+  if (!src) return undefined;
+  return async (out) => {
+    const full = path.resolve(src); const tmp = path.resolve(os.tmpdir()) + path.sep;
+    const rel = path.relative(tmp, full);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) throw new Error('fake screenshot outside the temp folder');
+    const head = Buffer.alloc(2); const fh = await fs.promises.open(full, 'r');
+    try { await fh.read(head, 0, 2, 0); } finally { await fh.close(); }
+    if (head[0] !== 0xff || head[1] !== 0xd8) throw new Error('fake screenshot is not a JPEG');
+    await fs.promises.copyFile(full, out);
+  };
+};
+
+export function linkMethods({ emit, remoteRef, log }) {
+  const run = fakeShot(); // the test hook stands in for the Windows capture, so it also skips the platform check
+  const capture = createScreenshot(run ? { run, platform: 'win32' } : {});
+  const shotsDir = () => path.join(ctx.paths.internal, SHOT_DIR);
+  sweepShots(shotsDir()).catch(() => {}); // leftovers of an engine that stopped before they expired
   return {
+    // The phone asks for a picture of the PC's screen. It is stored in its own folder (never with the uploads) and only
+    // that phone may download it; the PC always shows a notice (never silenced as a repeat) so nobody is watched
+    // without knowing. Only the phone app may ask: a linked browser may not. Parameters are ignored.
+    'pc.screenshot': async (_params, principal) => {
+      if (principal?.channel !== 'phone' && principal?.channel !== 'desktop') throw Object.assign(new PermissionError('pc.screenshot'), { message: tr('msg.screenshot.phoneOnly') });
+      const name = await capture(shotsDir());
+      const device = principal?.device ? remoteRef.current?.allowDownload(principal.device, name) : null;
+      log(`móvil: captura de pantalla${device ? ` (${device})` : ''}`);
+      const time = new Date().toLocaleTimeString(ctx.config?.language === 'en' ? 'en-GB' : 'es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      emit('notice', { body: device ? tr('msg.screenshot.taken', { device, time }) : tr('msg.screenshot.takenAnon', { time }), tone: 'warning', always: true });
+      return { path: name };
+    },
     // ---- phone access
     'remote.status': () => remoteRef.current.status(),
     'remote.enable': async ({ enabled }) => {
@@ -15,7 +53,7 @@ export function linkMethods({ emit, remoteRef }) {
       return remoteRef.current.status();
     },
     // The ways in: home Wi-Fi and/or Tailscale (the servers reopen with the new choice).
-    // preview (3.5.1): what notifications show on a locked phone ('all', 'chat' or 'none').
+    // preview: what notifications show on a locked phone ('all', 'chat' or 'none').
     'remote.configure': async ({ wifi, tailscale, preview }) => {
       const patch = {};
       if (typeof wifi === 'boolean') patch.wifi = wifi;
@@ -28,9 +66,9 @@ export function linkMethods({ emit, remoteRef }) {
     },
     'remote.pair': ({ kind }) => remoteRef.current.pair(oneOf(kind, ['wifi', 'tailscale'], 'vía', undefined)),
     'remote.revoke': ({ id }) => remoteRef.current.revoke(str(id, 'dispositivo', 64)),
-    // ---- 3.5 Magic Link
+    // ---- Magic Link
     // A QR (and a short code) to link a phone or a browser. Turns the access on if it was off.
-    // 3.5.1: device: what it is for (phone or browser), chosen here, never by the device.
+    // device: what it is for (phone or browser), chosen here, never by the device.
     'link.qr': async ({ kind, device }) => {
       const via = oneOf(kind, ['wifi', 'tailscale'], 'vía', undefined);
       const forKind = device == null || device === '' ? null : oneOf(device, PAIR_KINDS, 'dispositivo');

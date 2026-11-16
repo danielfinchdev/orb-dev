@@ -40,6 +40,9 @@ before(async () => {
   A = await startEngine(t.home, { env: { ORB_REMOTE_BIND: '127.0.0.1', ORB_PUSH_LOG: pushLog } });
   await until(async () => (await A.call('remote.status')).running, 'acceso');
   await A.call('master.create', { password: TEST_MASTER }); // 3.8: phones link with the master password
+  // A 3.7 database keeps devices.person_id (dropped in 3.9). The column goes in before the engine prepares any SELECT * on
+  // devices: a statement prepared earlier may not see a column added behind its back, which would hide the person.
+  { const db = new Board(); try { if (!db.all('PRAGMA table_info(devices)').some((c) => c.name === 'person_id')) db.run('ALTER TABLE devices ADD COLUMN person_id TEXT'); } finally { db.db.close(); } }
   ana = await pushDevice('ana');
   tablet = await pushDevice('tablet');
   await A.call('projects.create', { name: 'web' });
@@ -123,11 +126,14 @@ test('un dispositivo con persona (de otro usuario de 3.7) no recibe avisos y sus
   try {
     assert.equal((await noteAction(onTablet.data.acts.allow)).status, 401, 'su «Aprobar» no vale');
     assert.equal((await noteAction(onAna.data.acts.deny)).status, 200, 'el del móvil del dueño sí');
-    const before = pushes(tablet.endpoint).length; const k = pushes(ana.endpoint).length;
+    // Replies of earlier tests may still be on their way (slow runner): let the tablet's log go quiet first.
+    let before = -1; for (let i = 0; i < 40 && before !== pushes(tablet.endpoint).length; i++) { before = pushes(tablet.endpoint).length; await new Promise((r) => setTimeout(r, 250)); }
+    const k = pushes(ana.endpoint).length;
     await A.call('chat.send', { text: 'una respuesta más', conversation: conv });
-    await until(() => pushes(ana.endpoint).slice(k).find((x) => x.data.tag === `orb-conversation:${conv}`), 'el aviso al móvil del dueño', 30_000);
-    // A push sent before the device got its person (the previous task's, say) may still land: only this message's counts.
-    assert.equal(pushes(tablet.endpoint).slice(before).filter((x) => x.data.tag === `orb-conversation:${conv}`).length, 0, 'ninguno al de otra persona');
+    const mine = await until(() => pushes(ana.endpoint).slice(k).find((x) => x.data.tag === `orb-conversation:${conv}`), 'el aviso al móvil del dueño', 30_000);
+    // A push sent before the device got its person (an earlier reply, on a slow runner) may still land: only this message's counts.
+    const late = pushes(tablet.endpoint).slice(before).filter((x) => x.data.tag === mine.data.tag);
+    assert.equal(late.length, 0, `ninguno al de otra persona: ${JSON.stringify(late.map((x) => ({ title: x.data.title, body: x.data.body, kind: x.data.kind })))} devices=${JSON.stringify(db.all('SELECT id, kind, person_id, last_seen, created_at, push IS NOT NULL AS has_push FROM devices'))} tablet=${tablet.id} now=${new Date().toISOString()}`);
   } finally { db.run('UPDATE devices SET person_id = NULL WHERE id = ?', tablet.id); db.db.close(); }
 });
 
@@ -144,7 +150,9 @@ test('un móvil caducado no recibe avisos y los botones de los que ya tiene no v
   try {
     assert.equal((await noteAction(onTablet.data.acts.allow)).status, 401, 'su «Aprobar» ya no vale');
     assert.equal((await noteAction(onAna.data.acts.deny)).status, 200, 'el del móvil vigente sí');
-    const before = pushes(tablet.endpoint).length; const k = pushes(ana.endpoint).length;
+    // Replies of earlier tests may still be on their way (slow runner): let the tablet's log go quiet first.
+    let before = -1; for (let i = 0; i < 40 && before !== pushes(tablet.endpoint).length; i++) { before = pushes(tablet.endpoint).length; await new Promise((r) => setTimeout(r, 250)); }
+    const k = pushes(ana.endpoint).length;
     await A.call('chat.send', { text: 'otra respuesta', conversation: conv });
     await until(() => pushes(ana.endpoint).slice(k).find((x) => x.data.tag === `orb-conversation:${conv}`), 'el aviso al móvil vigente', 30_000);
     assert.equal(pushes(tablet.endpoint).length, before, 'ninguno a la tablet caducada');

@@ -26,10 +26,10 @@ export class BoardProjects {
               ON CONFLICT(name) DO UPDATE SET path = excluded.path, notes = excluded.notes`, name, checked, String(notes ?? '').slice(0, 2000), now());
     this.ensureProjectLog(name);
     try { this.mergeRootLog(name, checked); } catch { /* the folder's log stays where it is: merged on a later add */ }
-    // 3.8: a folder added (by hand, or by an agent) is listed again even if it was another user's project of 3.7.
+    // a folder added (by hand, or by an agent) is listed again even if it was another user's project of 3.7.
     const ignored = this.settingJson(IGNORED_PROJECTS);
     if (Array.isArray(ignored) && ignored.includes(folderKey(checked))) this.settingJson(IGNORED_PROJECTS, ignored.filter((k) => k !== folderKey(checked)));
-    // 3.8.1: and a finished one added again by hand (or by an agent) is open again.
+    // and a finished one added again by hand (or by an agent) is open again.
     const finished = this.settingJson(FINISHED_PROJECTS);
     if (Array.isArray(finished) && finished.some((x) => x?.key === folderKey(checked))) this.settingJson(FINISHED_PROJECTS, finished.filter((x) => x?.key !== folderKey(checked)));
     this.event(null, actor, 'project.saved', `${name} -> ${checked}`);
@@ -37,7 +37,7 @@ export class BoardProjects {
     return this.project(name);
   }
   project(name) { return this.one('SELECT * FROM projects WHERE name = ?', String(name ?? '')); }
-  // 3.8.1: between the check of «Eliminar proyecto» and its end (project-close.mjs): nothing of it starts.
+  // between the check of «Eliminar proyecto» and its end (project-close.mjs): nothing of it starts.
   isDeleting(name) { const list = this.settingJson(DELETING_PROJECTS); return Array.isArray(list) && list.some((x) => x?.name === name); }
   projects() { return this.all('SELECT * FROM projects ORDER BY name'); }
   removeProject(name, actor) {
@@ -57,7 +57,7 @@ export class BoardProjects {
     if (!fs.existsSync(file)) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, projectLogHeader(name, ctx.config?.language)); }
     return file;
   }
-  // 3.8.2: a project's log under another name (a rename, a project closed or reopened). When the new name already has a
+  // a project's log under another name (a rename, a project closed or reopened). When the new name already has a
   // log, the old one is added at its end (a log only grows) and removed once the new file is read back holding it; one
   // with nothing but its header just goes. Never a second file («name (2).md») beside the first.
   moveProjectLog(from, to) {
@@ -72,13 +72,13 @@ export class BoardProjects {
     }
     fs.rmSync(oldLog, { force: true });
   }
-  // 3.8.2: one log system, Orb's (core\bitacora). A BITACORA.md a project brings in its folder (another tool's log) is
+  // one log system, Orb's (core\bitacora). A BITACORA.md a project brings in its folder (another tool's log) is
   // added once at the end of the project's log, whole, and removed from the folder only after the log is read back
   // holding it. One that git tracks is left in the folder (removing it would change the repository); it is not added a
   // second time (its text is already in the log). → whether it was merged.
   mergeRootLog(name, folder) {
     const src = path.join(folder, 'BITACORA.md');
-    // 3.8.2 (final review): only a plain file of its own. Not a link nor a second name of another file (a hard link an
+    // only a plain file of its own. Not a link nor a second name of another file (a hard link an
     // agent made to core\datos would put Orb's data in a log agents read), and not a huge one.
     let text; try { const st = fs.lstatSync(src); if (!st.isFile() || st.isSymbolicLink() || st.nlink > 1 || st.size > ROOT_LOG_MAX) return false; text = fs.readFileSync(src, 'utf8'); } catch { return false; }
     const whole = text.replace(/\r\n/g, '\n').trim();
@@ -100,7 +100,7 @@ export class BoardProjects {
   setActiveProject(name, actor) {
     if (!name) { this.setting('active_project', ''); this.event(null, actor, 'project.active', 'ninguno'); this.changed('projects'); return null; }
     const project = this.project(name); if (!project) throw new Error(tr('sys.board.unknownProject', { name }));
-    // 3.2: the same folder again (the assistant sets it on each request) says nothing: the notice came out again and again.
+    // the same folder again (the assistant sets it on each request) says nothing: the notice came out again and again.
     if (this.activeName() === project.name) return project;
     this.setting('active_project', project.name);
     this.event(null, actor, 'project.active', `${project.name} -> ${project.path}`);

@@ -52,4 +52,4 @@ Chat, Tasks, Conversation, Agents, Settings, Mobile… (see docs/ARCHITECTURE.md
 1. It is implemented on its own branch and tested (automated tests and, when relevant, in the installed app).
 2. A pull request is opened; CI tests it on Windows and Linux.
 3. When it is merged with a new version in `package.json`, the release is published and Orb offers the update by itself.
-4. [`CHANGELOG.md`](CHANGELOG.md) and [`ARCHITECTURE.md`](ARCHITECTURE.md) are updated in the same change.
+4. [`CHANGELOG.md`](CHANGELOG.md) and the matching section of [`architecture/`](architecture/) are updated in the same change.

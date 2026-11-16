@@ -1,4 +1,4 @@
-// 2.6: the brains the user can pick for a chat (agent + model), for the selector under the message box: the installed and
+// the brains the user can pick for a chat (agent + model), for the selector under the message box: the installed and
 // enabled agents with an account, each with its models. The models are the configured ones plus those the agent itself
 // reports, kept in settings models:<agent>: asked to the agent in the background (discoverModels: at start once every
 // 12 h, when «Comprobar» is pressed, and when the selector wants an agent that has none yet) and when a session starts
@@ -12,7 +12,7 @@ import { usableAccounts } from '../../domain/usage/accounts.mjs';
 import { usageReport, HEAVY_FAMILY, canLaunch, modelLimits } from '../../domain/usage/budget.mjs';
 import { cursorShownName } from '../../agents/cursor.mjs';
 const MODEL_ID = /^[A-Za-z0-9][\w.:\-/[\]=,@]{0,79}$/;
-// 3.6: the reasoning levels Orb offers (Bajo, Medio, Alto, Extra); Extra only for the models that take it.
+// the reasoning levels Orb offers (Bajo, Medio, Alto, Extra); Extra only for the models that take it.
 export const REASONING_LEVELS = ['low', 'medium', 'high', 'xhigh'];
 const USUAL_LEVELS = ['low', 'medium', 'high'];
 // The levels a model takes, from the catalog (what its agent listed); without a figure, the usual three.
@@ -22,17 +22,17 @@ export function levelsOf(catalog, agent, model, account = null) {
   const m = list.find((x) => x.id === (model ?? '')) ?? (model ? null : list.find((x) => x.id === ''));
   return m?.efforts?.length ? m.efforts : USUAL_LEVELS;
 }
-// 2.7: the light models (fast and cheap) by their names; heavy ones by HEAVY_FAMILY; everything else is «balanced».
+// the light models (fast and cheap) by their names; heavy ones by HEAVY_FAMILY; everything else is «balanced».
 const LIGHT = /haiku|mini\b|nano|flash|lite\b|small|spark/i;
 export const MODELS_EVERY = 12 * 3_600_000; // how often an agent is asked again for its models
-// 3.8.3: an agent that did not answer (Cursor without a login, a broken CLI) is not started again on its own for a week:
+// an agent that did not answer (Cursor without a login, a broken CLI) is not started again on its own for a week:
 // before, it was started at every Orb start and every hour the selector looked. «Comprobar», a new login or an install
 // ask again at once (force).
 export const NO_ANSWER_WAIT = 7 * 24 * 3_600_000;
 
 // Models an agent reported itself (the last list wins): its own names (label), which one it uses by default (default) and,
 // for an alias, the model it stands for (resolved). Returns whether the list changed (the window is told so).
-// 3.0: kept per account (models:<account id>): two subscriptions of one agent can offer different models (Codex Go and
+// kept per account (models:<account id>): two subscriptions of one agent can offer different models (Codex Go and
 // Pro). The default account's id is the agent's, so its list keeps the key it always had.
 export function rememberModels(board, agent, list, account = agent) {
   if (!AGENT_IDS.includes(agent) || !Array.isArray(list)) return false;
@@ -49,7 +49,7 @@ export function rememberModels(board, agent, list, account = agent) {
     const item = { id: m.id, label };
     if (m.default && !marked) { item.default = true; marked = true; }
     if (typeof m.resolved === 'string' && m.resolved !== m.id && MODEL_ID.test(m.resolved)) item.resolved = m.resolved;
-    // 3.6: the reasoning levels the agent says the model takes (only Orb's four).
+    // the reasoning levels the agent says the model takes (only Orb's four).
     if (Array.isArray(m.efforts)) { const e = REASONING_LEVELS.filter((x) => m.efforts.includes(x)); if (e.length) item.efforts = e; }
     clean.push(item);
     if (clean.length >= 40) break;
@@ -98,7 +98,7 @@ export async function refreshAllModels(board, options = {}) {
   return changed;
 }
 
-// 3.2.1: the name Cursor itself gave each model when it opened it (its «init» line: «Claude Opus 5 300K High»), without
+// the name Cursor itself gave each model when it opened it (its «init» line: «Claude Opus 5 300K High»), without
 // the effort words. Its model list names some by another variant («Claude Opus 5 1M») than the one it really opens.
 export function cursorSeenNames(board) {
   const out = {};
@@ -125,7 +125,7 @@ export function modelCatalog(board, { discover = false, log } = {}) {
     if (discover && !known.length) refreshModels(board, agent, { log });
     if (agent === 'cursor' && known.length) { try { const seen = cursorSeenNames(board); known = known.map((m) => (seen[m.id] ? { ...m, label: seen[m.id] } : m)); } catch { /* the names of its list */ } }
     const accounts = usableAccounts(agent);
-    // 3.0: another account with its own list (another plan) gets its own models; the others use the agent's.
+    // another account with its own list (another plan) gets its own models; the others use the agent's.
     const accountModels = {};
     for (const acc of accounts) {
       if (acc.id === agent) continue;
@@ -155,10 +155,10 @@ function buildModels(agent, cfg, known) {
     if (m.resolved && (seen.has(m.resolved) || stands.has(m.resolved))) continue;
     seen.add(m.id); if (m.resolved) stands.add(m.resolved);
     const heavy = (cfg.heavyModels ?? []).some((h) => m.id === h || m.id.includes(h)) || HEAVY_FAMILY.test(m.id);
-    // 2.6: «Recomendados» at the top of the selector: the assistant's own Claude models and the model Codex uses by default.
+    // «Recomendados» at the top of the selector: the assistant's own Claude models and the model Codex uses by default.
     const recommended = agent === 'claude' ? labelled.some((l) => l.id === m.id) : agent === 'codex' && Boolean(usual) && m.id === usual.id;
     const name = m.label ?? (/^[a-z]+$/.test(m.id) ? m.id[0].toUpperCase() + m.id.slice(1) : m.id);
-    // 3.6: the reasoning levels of the model (as the agent listed it, also under its full id); unknown: the usual three.
+    // the reasoning levels of the model (as the agent listed it, also under its full id); unknown: the usual three.
     const listed = known.find((k) => k.id === m.id || (m.resolved && k.resolved === m.resolved) || k.resolved === m.id || (k.id && m.resolved === k.id));
     const efforts = m.efforts ?? listed?.efforts ?? null;
     models.push({ id: m.id, label: name, heavy, tier: heavy ? 'heavy' : LIGHT.test(`${m.id} ${name}`) ? 'light' : 'balanced', ...(recommended ? { recommended: true } : {}), ...(efforts ? { efforts } : {}) });
@@ -166,7 +166,7 @@ function buildModels(agent, cfg, known) {
   return models;
 }
 
-// 2.7: «Orb elige el modelo»: the model and reasoning for a task, from how hard it is (level, set by the assistant:
+// «Orb elige el modelo»: the model and reasoning for a task, from how hard it is (level, set by the assistant:
 // simple / normal / complejo) and the «ahorro ↔ uso» slider (budget.profile). Light models for the simple, balanced for
 // the everyday, the most capable for the hard ones, always the newest of each kind the agent offers. A heavy model only
 // while the account has room for one; Fable last (it may need extra credits); Cursor keeps its own «Auto».
@@ -175,7 +175,7 @@ const TARGET = [['light', 'light', 'balanced'], ['light', 'balanced', 'balanced'
 const REASONING = [['low', 'low', 'medium'], ['low', 'medium', 'medium'], ['low', 'medium', 'high'], ['medium', 'medium', 'high'], ['medium', 'high', 'high']];
 const FALLBACK = { light: ['light', 'balanced', 'heavy'], balanced: ['balanced', 'heavy', 'light'], heavy: ['heavy', 'balanced', 'light'] };
 const version = (m) => { const n = String(m.label ?? m.id).match(/(\d+(?:\.\d+)?)/); return n ? parseFloat(n[1]) : 0; };
-// 3.1: writes: the task changes code. Then never a light model (Haiku, mini…): a weak first version costs more in
+// writes: the task changes code. Then never a light model (Haiku, mini…): a weak first version costs more in
 // corrections than the model saves. Light stays for reading, reviewing and answering.
 export function chooseModel(board, agent, level = 'normal', accountId = agent, { writes = false } = {}) {
   const li = LEVELS.includes(level) ? LEVELS.indexOf(level) : 1;
@@ -187,7 +187,7 @@ export function chooseModel(board, agent, level = 'normal', accountId = agent, {
   const base = { model: null, label: null, tier: null, reasoning, level: LEVELS[li], profile };
   if (agent === 'cursor') return base; // Cursor's «Auto» already chooses for each request
   const entry = modelCatalog(board).find((a) => a.id === agent);
-  // 3.2.1: never a model this account has no usage of now.
+  // never a model this account has no usage of now.
   const blocked = modelLimits(board, accountId);
   const models = (entry?.accountModels?.[accountId] ?? entry?.models ?? []).filter((m) => m.id && !blocked[m.id]);
   if (!models.length) return base;
