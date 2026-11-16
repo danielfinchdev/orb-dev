@@ -429,7 +429,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     // Running tasks stay "running": the next start continues them (scheduler.finish does not close them while closing).
     // adb's server goes with Orb (no phone reachable from this PC while Orb is closed).
     // Returns what is still to be waited for: a task being closed or a copy being joined finishes writing its state first.
-    shutdown() { terminals.closeAll(); scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); android.stopServer().catch(() => {}); log('motor detenido'); return scheduler.drain().catch(() => {}); }
+    shutdown() { terminals.closeAll(); scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); android.stopServer().catch(() => {}); mcpExt.stop().catch(() => {}); log('motor detenido'); return scheduler.drain().catch(() => {}); }
   };
 }
 

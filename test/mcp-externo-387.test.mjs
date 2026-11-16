@@ -188,6 +188,14 @@ test('abuse: a foreign Host, an Origin header, other methods and paths (DNS rebi
   assert.ok(r.logs.some((l) => /rechazada una petición/.test(l)));
 });
 
+test('stopping while the server is still starting leaves it closed', async () => {
+  const r = await rig(); await r.s.stop();
+  const starting = r.s.start(0); const stopping = r.s.stop();
+  await Promise.all([starting.catch(() => {}), stopping]);
+  assert.equal(r.s.status().running, false);
+  await assert.rejects(post(r.port, { token: 'x' }), /ECONNREFUSED/);
+});
+
 test('abuse: size and rate limits', async () => {
   const r = await rig(); const tok = r.mk('a', ['web']);
   const big = await post(r.port, { token: tok, raw: true, body: JSON.stringify(rpc('ping', { pad: 'x'.repeat(MAX_BODY) })) });
@@ -208,7 +216,10 @@ test('abuse: size and rate limits', async () => {
   // wrong tokens in a flood close the door for everyone for a minute
   const r2 = await rig(); const ok = r2.mk('a', ['web']); let last = 0;
   for (let i = 0; i <= BAD_PER_MINUTE + 1; i++) last = (await r2.call(`orbmcp_${'1'.repeat(12)}_${'B'.repeat(43)}`, 'ping', {})).status;
-  assert.equal(last, 429); assert.equal((await r2.call(ok, 'ping', {})).status, 429);
+  assert.equal(last, 429); assert.equal((await r2.call(ok, 'ping', {})).status, 200, 'a live token is not locked out by wrong tokens of others');
+  // a flood of foreign Origins writes one log line, not thousands
+  const before = r2.logs.length; for (let i = 0; i < 30; i++) await post(r2.port, { token: ok, headers: { origin: 'http://evil.example' }, body: rpc('ping', {}) });
+  assert.ok(r2.logs.length - before <= 1, 'the rejected-origin log is throttled');
 });
 
 // ---------------------------------------------------------------- the board: what an external task is

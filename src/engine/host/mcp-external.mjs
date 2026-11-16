@@ -28,7 +28,7 @@ const INSTRUCTIONS = "Orb is the user's desktop app that runs coding agents. Use
 
 export function createMcpExternal({ board, master, createTask, agents = [], log = () => {}, now = Date.now, version = '0' }) {
   let server = null; let port = 0; let starting = null;
-  const calls = new Map(); const creates = new Map(); let bad = [];
+  const calls = new Map(); const creates = new Map(); let bad = []; let lastReject = 0; let rejected = 0;
   const hits = (map, key, limit, windowMs) => {
     const t = now(); const list = (map.get(key) ?? []).filter((x) => t - x < windowMs);
     if (list.length >= limit) { map.set(key, list); return false; }
@@ -81,14 +81,23 @@ export function createMcpExternal({ board, master, createTask, agents = [], log 
   async function handle(req, res) {
     try {
       const peer = req.socket.remoteAddress;
-      if (!LOOPBACK.has(peer) || !hostOk(req.headers.host) || req.headers.origin !== undefined) { log(`mcp-externo: rechazada una petición (host «${oneLine(req.headers.host ?? '', 60)}», origen «${oneLine(req.headers.origin ?? '', 60)}»)`); return send(res, 403, { error: 'forbidden' }); }
+      if (!LOOPBACK.has(peer) || !hostOk(req.headers.host) || req.headers.origin !== undefined) {
+        // at most one line a minute (the log is written synchronously and rotates: a flood must not erase the audit)
+        rejected++; const at = now();
+        if (at - lastReject >= 60_000) { lastReject = at; log(`mcp-externo: rechazada una petición (host «${oneLine(req.headers.host ?? '', 60)}», origen «${oneLine(req.headers.origin ?? '', 60)}»); ${rejected} desde el aviso anterior`); rejected = 0; }
+        return send(res, 403, { error: 'forbidden' });
+      }
       if (req.url !== '/mcp') return send(res, 404, { error: 'not found' });
       if (req.method !== 'POST') return send(res, 405, { error: 'POST only' }, { allow: 'POST' });
       if (!/^application\/json\b/i.test(String(req.headers['content-type'] ?? ''))) return send(res, 415, { error: 'application/json only' });
       const t = now(); bad = bad.filter((x) => t - x < 60_000);
-      if (bad.length >= BAD_PER_MINUTE) return send(res, 429, { error: 'too many wrong tokens' }, { 'retry-after': '60' });
       const client = checkToken(master(), req.headers.authorization, t);
-      if (!client) { bad.push(t); log('mcp-externo: token rechazado (falso, caducado o revocado)'); return send(res, 401, { error: 'unauthorized' }, { 'www-authenticate': 'Bearer' }); }
+      // a flood of wrong tokens is answered 429 and not logged again; a live token is never locked out by it
+      if (!client) {
+        if (bad.length >= BAD_PER_MINUTE) return send(res, 429, { error: 'too many wrong tokens' }, { 'retry-after': '60' });
+        bad.push(t); log('mcp-externo: token rechazado (falso, caducado o revocado)');
+        return send(res, 401, { error: 'unauthorized' }, { 'www-authenticate': 'Bearer' });
+      }
       if (!hits(calls, client.id, CALLS_PER_MINUTE, 60_000)) return send(res, 429, { error: 'rate limit' }, { 'retry-after': '60' });
       const declared = Number(req.headers['content-length']);
       if (Number.isFinite(declared) && declared > MAX_BODY) return send(res, 413, { error: 'too large' }, { connection: 'close' });
@@ -120,6 +129,7 @@ export function createMcpExternal({ board, master, createTask, agents = [], log 
     })).finally(() => { starting = null; });
   }
   async function stop() {
+    if (starting) { try { await starting; } catch { /* it did not start */ } }
     const srv = server; server = null; port = 0;
     if (srv) await new Promise((r) => { srv.close(() => r()); srv.closeAllConnections?.(); });
     calls.clear(); creates.clear(); bad = [];
