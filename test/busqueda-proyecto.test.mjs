@@ -73,4 +73,5 @@ test('the helpers: allowed paths, ranking and where rg is looked for', () => {
   const name = process.platform === 'win32' ? 'rg.exe' : 'rg';
   assert.equal(findRg({ PATH: `${dir}${path.delimiter}relativa` }, (f) => f === path.join(dir, name)), path.join(dir, name));
   assert.equal(findRg({ PATH: 'relativa' }, () => true), null, 'only absolute folders of the PATH');
+  assert.equal(allowedPath('a.txt', 'C:/Users/x/keepass/proj'), false, 'a protected entry written as a path matches the absolute path too');
 });

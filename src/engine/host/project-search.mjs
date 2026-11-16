@@ -21,11 +21,13 @@ const fold = (s) => String(s ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLo
 const userError = (message) => { const e = new Error(message); e.userFacing = true; return e; };
 
 // Whether a path (relative to the project, with /) may be listed or read.
-export function allowedPath(rel) {
+// root: the project's real folder, so a protected entry written as an absolute path matches too.
+export function allowedPath(rel, root = '') {
   const parts = String(rel).split('/');
   if (parts.some((p) => SKIP_DIRS.has(p.toLowerCase()))) return false;
   if (isSecretPath(rel) || isSecretPath(rel.toLowerCase()) || isAgentConfig(rel)) return false;
-  return protectedHitRail(rel, isRailOn('rutas-protegidas')) === null;
+  const on = isRailOn('rutas-protegidas');
+  return protectedHitRail(rel, on) === null && (!root || protectedHitRail(`${String(root).replace(/\\/g, '/')}/${rel}`, on) === null);
 }
 
 // Where ripgrep is (the PATH's absolute folders only), or null.
@@ -37,10 +39,14 @@ export function findRg(env = process.env, exists = fs.existsSync) {
 }
 
 // The files of the project, as relative paths with /. Without links, without the folders above.
-async function* walk(root, deadline) {
+// A newer search cancels the one in progress (typing fast must not pile up walks or rg processes).
+let generation = 0;
+let activeRg = null;
+async function* walk(root, deadline, mine) {
   const stack = [''];
   let seen = 0;
   while (stack.length) {
+    if (mine !== generation || Date.now() > deadline) return;
     const rel = stack.pop();
     let list;
     try { list = await fs.promises.readdir(path.join(root, rel), { withFileTypes: true }); } catch { continue; }
@@ -48,8 +54,8 @@ async function* walk(root, deadline) {
       if (e.isSymbolicLink()) continue; // a link (or a junction) may leave the project
       const child = rel ? `${rel}/${e.name}` : e.name;
       if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name.toLowerCase())) stack.push(child); continue; }
-      if (!e.isFile() || !allowedPath(child)) continue;
-      if (++seen > MAX_WALK || Date.now() > deadline) return;
+      if (++seen > MAX_WALK) return; // every entry counts, rejected ones too
+      if (!e.isFile() || !allowedPath(child, root)) continue;
       yield child;
     }
   }
@@ -80,7 +86,8 @@ export async function findFiles(root, query) {
   const words = fold(text).split(/\s+/).filter(Boolean);
   const real = insideProject(root, '').abs;
   const scored = [];
-  for await (const rel of walk(real, Date.now() + BUDGET_MS)) {
+  const mine = ++generation;
+  for await (const rel of walk(real, Date.now() + BUDGET_MS, mine)) {
     const s = fileScore(rel, words);
     if (s > 0) scored.push([s, rel]);
   }
@@ -88,7 +95,8 @@ export async function findFiles(root, query) {
   return { files: scored.slice(0, MAX_FILES).map((x) => x[1]), engine: 'built-in' };
 }
 
-const clip = (line) => redactSecrets(String(line).replace(/\s+/g, ' ').trim().slice(0, 200));
+// secrets are hidden before the line is cut, so a token cut at the limit cannot slip through
+const clip = (line) => redactSecrets(String(line).replace(/\s+/g, ' ').trim()).slice(0, 200);
 
 // The lines of one file that have the text; at most 3 per file.
 async function grepFile(root, rel, needle, caseSensitive) {
@@ -103,7 +111,9 @@ async function grepFile(root, rel, needle, caseSensitive) {
     await fh.read(buf, 0, buf.length, 0);
     if (buf.subarray(0, 8000).includes(0)) return [];
     const out = [];
-    const lines = buf.toString('utf8').split(/\r?\n/);
+    const whole = buf.toString('utf8');
+    if (whole.includes('-----BEGIN')) return []; // a key may be written line by line: none of its lines are shown
+    const lines = whole.split(/\r?\n/);
     for (let i = 0; i < lines.length && out.length < 3; i += 1) {
       if ((caseSensitive ? lines[i] : lines[i].toLowerCase()).includes(needle)) out.push({ file: rel, line: i + 1, text: clip(lines[i]) });
     }
@@ -115,10 +125,13 @@ function runRg(rg, root, args) {
   return new Promise((resolve) => {
     // minimal environment: no RIPGREP_CONFIG_PATH (and --no-config), nothing else of the engine's
     const env = { PATH: process.env.PATH ?? process.env.Path ?? '', SystemRoot: process.env.SystemRoot ?? '' };
-    execFile(rg, args, { cwd: root, timeout: 8000, maxBuffer: 4 * 1024 * 1024, windowsHide: true, encoding: 'utf8', env }, (error, stdout) => {
+    activeRg?.kill();
+    const child = execFile(rg, args, { cwd: root, timeout: 8000, maxBuffer: 4 * 1024 * 1024, windowsHide: true, encoding: 'utf8', env }, (error, stdout) => {
       // exit 1 = no match (not an error); a timeout or another failure falls back to the built-in search
+      if (activeRg === child) activeRg = null;
       if (error && error.code !== 1) resolve(null); else resolve(String(stdout ?? ''));
     });
+    activeRg = child;
   });
 }
 const RG_BASE = ['--no-config', '--hidden', '--no-follow', '--color', 'never', '--max-filesize', '1M', ...[...SKIP_DIRS].flatMap((d) => ['--glob', `!${d}`])];
@@ -128,6 +141,7 @@ export async function searchText(root, query, { rg = findRg() } = {}) {
   const text = cleanQuery(query, 2);
   if (!text) return { hits: [], engine: 'built-in' };
   const real = insideProject(root, '').abs;
+  const mine = ++generation;
   if (rg) {
     // -e: the query is the pattern even when it starts with a dash; --fixed-strings: it is text, not a regex; the «.» and
     // --null: paths come as «path NUL line:text», whatever characters the names have.
@@ -137,7 +151,7 @@ export async function searchText(root, query, { rg = findRg() } = {}) {
       for (const row of out.split('\n')) {
         const nul = row.indexOf('\0'); if (nul < 0) continue;
         const file = row.slice(0, nul).replace(/\\/g, '/').replace(/^\.\//, '');
-        const m = /^(\d+):(.*)$/s.exec(row.slice(nul + 1).replace(/\r$/, '')); if (!m || !allowedPath(file)) continue;
+        const m = /^(\d+):(.*)$/s.exec(row.slice(nul + 1).replace(/\r$/, '')); if (!m || !allowedPath(file, real)) continue;
         try { insideProject(real, file); } catch { continue; }
         hits.push({ file, line: Number(m[1]), text: clip(m[2]) });
         if (hits.length >= MAX_HITS) break;
@@ -148,7 +162,7 @@ export async function searchText(root, query, { rg = findRg() } = {}) {
   const caseSensitive = text !== text.toLowerCase();
   const needle = caseSensitive ? text : text.toLowerCase();
   const hits = [];
-  for await (const rel of walk(real, Date.now() + BUDGET_MS)) {
+  for await (const rel of walk(real, Date.now() + BUDGET_MS, mine)) {
     hits.push(...await grepFile(real, rel, needle, caseSensitive));
     if (hits.length >= MAX_HITS) break;
   }

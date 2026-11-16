@@ -331,6 +331,7 @@ test('choices: short plain texts, at most six, cleaned and without repeats; the 
   assert.equal(cleanChoices(['a'.repeat(300)])[0].length, 120);
   assert.throws(() => cleanChoices('Sí'), /texts|textos/);
   assert.throws(() => cleanChoices([1]), /texts|textos/);
+  assert.throws(() => cleanChoices(['/clear']), /texts|textos/, 'an Orb command is not an answer');
   assert.throws(() => cleanChoices(Array.from({ length: MAX_CHOICES + 1 }, (_, i) => `op${i}`)), /texts|textos/);
   const { pages } = make();
   try {

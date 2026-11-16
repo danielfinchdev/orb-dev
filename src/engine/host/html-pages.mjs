@@ -32,6 +32,7 @@ export function cleanChoices(v) {
   for (const item of v) {
     if (typeof item !== 'string') throw userError('msg.html.badChoices', { n: MAX_CHOICES });
     const text = cleanTitle(item).slice(0, MAX_CHOICE);
+    if (text.startsWith('/')) throw userError('msg.html.badChoices', { n: MAX_CHOICES }); // «/clear» would run as an Orb command
     if (text && !out.includes(text)) out.push(text);
   }
   if (out.length > MAX_CHOICES) throw userError('msg.html.badChoices', { n: MAX_CHOICES });
