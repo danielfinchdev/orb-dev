@@ -133,6 +133,8 @@ export default {
   'settings.mobileWifi': 'Red local',
   'settings.mobileWifiHint': 'El dispositivo y el PC deben estar en la misma red wifi.',
   'settings.mobileTs': 'Tailscale',
+  'settings.mobileScreenshot': 'Captura de pantalla desde el móvil',
+  'settings.mobileScreenshotHint': 'Deja que un móvil enlazado pida una imagen de todos los monitores. El PC siempre avisa.',
   'settings.mobileTsHint': 'Desde cualquier red. Permite instalar la app y recibir notificaciones.',
   'settings.mobileUnavailable': 'No disponible',
   'settings.qrScanWifi': 'El dispositivo debe estar en la misma red wifi. El código caduca en 5 min.',

@@ -682,7 +682,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       let pc = null; try { pc = pcFingerprint(); } catch { /* the vault is locked */ }
       return { enabled: Boolean(ctx.config.mobile?.enabled), running: Boolean(state.running), routes: state.routes ?? [], error: state.error ?? null, pc,
         wifi: ctx.config.mobile?.wifi !== false, tailscale: ctx.config.mobile?.tailscale !== false, name: orbName(),
-        preview: pushPreview(ctx.config),
+        preview: pushPreview(ctx.config), screenshot: ctx.config.mobile?.screenshot !== false,
         devices: board.all('SELECT id, name, created_at, last_seen, route, kind, ip, push IS NOT NULL AS push FROM devices ORDER BY created_at DESC').map((d) => ({ ...d, push: Boolean(d.push) })) };
     },
     // A one-time QR for 5 minutes, for one of the ways in (Wi-Fi or Tailscale). The code and this PC's key travel in the
