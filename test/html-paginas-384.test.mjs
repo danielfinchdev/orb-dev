@@ -187,7 +187,7 @@ test('htmlPages.* are pc-only; html:* events never reach a phone', () => {
 
 test('the engine wires orb_html_show to the pages and checks the switch is a boolean (the tool itself: html-mcp-387.test.mjs)', () => {
   const api = read('src/engine/api/index.mjs');
-  assert.match(api, /method === 'html' && session\) return htmlPages\.show\(sessions\.get\(session\)/);
+  assert.match(api, /method === 'html' && session\) return htmlPages\.show\(asRunning\(session\)/);
   assert.match(api, /htmlPages\.wipe\(\)/);
   assert.match(api, /typeof a\?\.internet !== 'boolean'/);
 });
