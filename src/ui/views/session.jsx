@@ -11,6 +11,7 @@ import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { renameChat } from '@/views/orb/inbox.jsx';
 import { useDraft } from '@/lib/draft.js';
+import { useAddToChat, appendToBox } from '@/lib/add-to-chat.js';
 import { BackToList } from '@/components/chat-bar.jsx';
 import { ContextSlot } from '@/components/context-slot.jsx';
 import { ColdNotice } from '@/components/conversation/cold-notice.jsx';
@@ -341,6 +342,8 @@ export function SessionView({ route }) {
   const [more, setMore] = useState(false);
   const [queue, setQueue] = useState([]);
   const draft = useDraft();
+  // text sent here by «Añadir al chat» (a selected text)
+  useAddToChat((text) => draft.set((prev) => appendToBox(prev, text)));
   const [images, setImages] = useState([]);
   const PAGE = 200;
   // the user's terminal under the chat (this PC only), and a command pasted into it from the chat.
@@ -426,12 +429,12 @@ export function SessionView({ route }) {
   // While the agent works, Enter corrects it on the fly (it reads the message at its next step) and Ctrl+Enter queues
   // the message for after the turn. Agents that cannot be corrected on the fly always queue.
   const send = async ({ alt = false } = {}) => {
-    const msg = draft.get().trim(); if (!msg && !images.length) return;
+    const msg = draft.message().trim(); if (!msg && !images.length) return;
     const mode = running ? (alt ? 'queue' : 'auto') : 'auto';
     const said = msg || t('session.lookAtFiles'); const sentImages = images;
     // the box empties at once and, when the agent is free (the message starts a turn), the message shows at once;
     // while it works the message may go to the queue instead, which shows it when the engine says so.
-    draft.set(''); setImages([]);
+    draft.set(''); draft.clearBlocks(); setImages([]);
     const mine = running ? null : addPending(`session:${s.id}`, said, items.at(-1)?.id ?? 0);
     const taken = takeComments(s.id);
     const r = await act(call('sessions.send', { id: s.id, text: said, images: sentImages, mode, comments: taken.length ? taken : undefined }));

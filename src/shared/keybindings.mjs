@@ -15,6 +15,7 @@ export const COMMANDS = Object.freeze([
   { id: 'tabs.prev', label: 'keys.cmd.tabPrev', key: 'Ctrl+PageUp', when: 'chat' },
   { id: 'tabs.split', label: 'keys.cmd.tabSplit', key: 'Ctrl+\\', when: 'chat' },
   { id: 'tabs.focusOther', label: 'keys.cmd.tabFocus', key: 'Ctrl+Alt+Right', when: 'chat' },
+  { id: 'chat.addSelection', label: 'keys.cmd.addSelection', key: 'Ctrl+Shift+L', when: 'chat' },
   { id: 'brain.next', label: 'keys.cmd.brainNext', key: 'Alt+]', when: 'chat' },
   { id: 'brain.prev', label: 'keys.cmd.brainPrev', key: 'Alt+[', when: 'chat' },
   { id: 'search.files', label: 'keys.cmd.findFile', key: 'Ctrl+P', when: 'always' },

@@ -3,16 +3,12 @@
 // takes it when it appears. Nothing is sent: the person reads it and sends it.
 import { useEffect, useRef } from 'react';
 import { getState, go } from './store.js';
+import { appendToBox, asQuote, asPath } from '../../shared/chat-compose.mjs';
 
 const handlers = []; // chat views on screen; the last one to appear takes the text
 const waiting = [];
 
-// What the box holds plus `text`, on its own paragraph.
-export const appendToBox = (prev, text) => (String(prev ?? '').trim() ? `${String(prev).trimEnd()}\n\n${text}` : text);
-// A selected text as a Markdown quote.
-export const asQuote = (text) => String(text).replace(/\r\n?/g, '\n').trim().split('\n').map((l) => `> ${l}`.trimEnd()).join('\n');
-// A file path (and line) as code, the way the chat's Markdown shows it.
-export const asPath = (file, line) => `\`${String(file).replace(/`/g, '')}${line ? `:${line}` : ''}\``;
+export { appendToBox, asQuote, asPath };
 
 export function addToChat(text) {
   const t = String(text ?? '');

@@ -23,6 +23,7 @@ import { migrationView } from '@/lib/migration.js';
 import { Notices } from '@/components/notices.jsx';
 import { ActionShortcuts } from '@/components/project-tools.jsx';
 import { CommandPalette } from '@/components/command-palette.jsx';
+import { SelectionToChat } from '@/components/conversation/selection-to-chat.jsx';
 import { ChatTabs } from '@/components/chat-tabs.jsx';
 import { loadKeys } from '@/lib/keys.js';
 import { Scene } from '@/components/scene.jsx';
@@ -218,7 +219,7 @@ function Shell() {
       {/* a browser linked with an Orb gets the PC's layout, not what only the PC itself does. */}
       {bridge.mobile ? null : <><UpdateCard /><OnceOpened when={settingsOpen} onFail={closeSettingsFailed}><SettingsDialog /></OnceOpened><OnceOpened when={gamesOpen} onFail={closeGamesFailed}><GamesDialog /></OnceOpened><RecoveryNotice /><AutoNotice /></>}
       <Notices />
-      {bridge.mobile ? null : <><ActionShortcuts project={shortcutProject} /><CommandPalette /></>}
+      {bridge.mobile ? null : <><ActionShortcuts project={shortcutProject} /><CommandPalette /><SelectionToChat /></>}
       <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile || Boolean(tour)} /></div>
       {tour ? <ErrorBoundary key={tour.key} onFail={closeTourFailed}><Suspense fallback={null}><Tour /></Suspense></ErrorBoundary> : null}
     </div>

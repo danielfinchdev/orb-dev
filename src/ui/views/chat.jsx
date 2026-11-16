@@ -363,8 +363,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
   // the message is (one click away).
   const leftBehind = (target, title) => notify({ title: t('chat.startedIn', { title }), body: t('chat.startedInBody'), tone: 'info', go: target, action: { label: t('notice.open'), onClick: () => go(target) } });
   const send = async () => {
-    const msg = box.get().trim(); if (!msg || sending) return;
-    box.set('');
+    const msg = box.message().trim(); if (!msg || sending) return;
+    box.set(''); box.clearBlocks();
     dismissTest();
     const mine = addPending(id == null ? 'new' : `chat:${id}`, msg, lastId);
     if (id != null) {

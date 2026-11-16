@@ -2,9 +2,10 @@
 // (views/session.jsx), and the scrolling that keeps a conversation at its bottom.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { routeKey, takeDraft } from '@/lib/reload.js';
-import { useDraftValue } from '@/lib/draft.js';
+import { useDraftValue, useDraftBlocks } from '@/lib/draft.js';
+import { isLongPaste, countLines } from '../../../shared/chat-compose.mjs';
 import { micMode } from '@/lib/mic.js';
-import { ArrowUp, Square, AtSign, Mic } from 'lucide-react';
+import { ArrowUp, Square, AtSign, Mic, ChevronRight, ClipboardPaste, X } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Tip } from '@/components/ui/overlay.jsx';
 import { bridge, useStore, useSkin, call, act, getState } from '@/lib/store.js';
@@ -71,6 +72,34 @@ function webDictate(lang) {
     r.start();
   });
 }
+// A long pasted text as a folded card above the box: its size, and its text when unfolded; «Quitar» drops it. The box itself
+// stays as it was; the card's text goes with the message when it is sent (draft.message()).
+function PastedCards({ draft, blocks }) {
+  const t = useT();
+  const [open, setOpen] = useState(null);
+  if (!blocks.length) return null;
+  return (
+    <div className="grid gap-1.5 px-3 pt-3" data-testid="pasted-cards">
+      {blocks.map((b) => {
+        const lines = countLines(b.text); const shown = open === b.id;
+        return (
+          <div key={b.id} className="bg-muted/60 rounded-lg border text-control" data-testid="pasted-card">
+            <div className="flex items-center gap-1 pr-1">
+              <button type="button" className="hover:text-foreground flex min-w-0 flex-1 cursor-pointer items-center gap-2 px-2.5 py-1.5 text-left" aria-expanded={shown} onClick={() => setOpen(shown ? null : b.id)}>
+                <ChevronRight className={cn('size-3.5 shrink-0 transition-transform', shown && 'rotate-90')} aria-hidden="true" />
+                <ClipboardPaste className="text-muted-foreground size-3.5 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate">{t('paste.card', { lines, chars: b.text.length })}</span>
+              </button>
+              <Button type="button" size="icon-xs" variant="ghost" onClick={() => draft.removeBlock(b.id)} aria-label={t('paste.remove')} title={t('paste.remove')} data-testid="pasted-remove"><X /></Button>
+            </div>
+            {shown ? <pre className="text-muted-foreground mx-2.5 mb-2 max-h-48 overflow-auto font-mono text-xs whitespace-pre-wrap break-words" data-testid="pasted-text">{b.text}</pre> : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // the text lives in a draft (lib/draft.js) that only this box follows: a key redraws the box, not the view around
 // it. attached: something besides text can be sent (pictures). The box grows with its text in CSS (field-sizing), with
 // no layout read per key; where the browser lacks it, measured once per change.
@@ -80,6 +109,13 @@ export function Composer({ draft, onSend, onStop, busy, placeholder, top, bottom
   const ta = useRef(null);
   const value = useDraftValue(draft);
   const onChange = draft.set;
+  const blocks = useDraftBlocks(draft);
+  // a long text pasted goes to a card, not into the box (files and pictures keep the view's own handling)
+  const paste = (e) => {
+    const data = e.clipboardData; const text = data?.getData?.('text/plain') ?? '';
+    if (!data?.files?.length && isLongPaste(text)) { e.preventDefault(); draft.addBlock(text); return; }
+    onPaste?.(e);
+  };
   useEffect(() => { const el = ta.current; if (!el || FIELD_SIZING) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 260)}px`; }, [value]);
   const [dropping, setDropping] = useState(false);
   const skin = useSkin();
@@ -119,8 +155,9 @@ export function Composer({ draft, onSend, onStop, busy, placeholder, top, bottom
           </div>
         ) : null}
         {top ? <div className="flex min-w-0 items-center gap-2 px-3 pt-3" data-testid="composer-top">{top}</div> : null}
+        <PastedCards draft={draft} blocks={blocks} />
         {skin === 'retro' ? <span className="composer-prompt" aria-hidden="true">&gt;</span> : null}
-        <textarea ref={ta} data-testid={testid} value={value} disabled={disabled} rows={2} placeholder={placeholder} onPaste={onPaste}
+        <textarea ref={ta} data-testid={testid} value={value} disabled={disabled} rows={2} placeholder={placeholder} onPaste={paste}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => { if (mentions && m.onKey(e)) return; if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); onSend({ alt: e.ctrlKey || e.metaKey }); } }}
           className="composer-text placeholder:text-muted-foreground block w-full resize-none bg-transparent px-4 pt-3 pb-1 text-body compact:text-body compact:leading-5 leading-relaxed outline-none" />
@@ -128,7 +165,7 @@ export function Composer({ draft, onSend, onStop, busy, placeholder, top, bottom
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1" data-testid="composer-bottom">{bottom}</div>
           {mic ? <Tip label={t('chat.dictate')}><Button size="icon-sm" variant="ghost" className="rounded-full" onClick={dictate} disabled={disabled || hearing} aria-label={t('chat.dictate')} data-testid="dictate"><Mic className={hearing ? 'text-primary animate-pulse' : undefined} /></Button></Tip> : null}
           {busy && onStop ? <Tip label={t('chat.stop')}><Button size="icon-sm" variant="secondary" onClick={onStop} aria-label={t('chat.stop')}><Square className="size-3.5 fill-current" /></Button></Tip> : null}
-          <Button size="icon-sm" className="rounded-full" onClick={() => onSend({ alt: false })} disabled={disabled || !(value.trim() || attached)} aria-label={t('chat.send')} data-testid="send"><ArrowUp /></Button>
+          <Button size="icon-sm" className="rounded-full" onClick={() => onSend({ alt: false })} disabled={disabled || !(value.trim() || attached || blocks.length)} aria-label={t('chat.send')} data-testid="send"><ArrowUp /></Button>
         </div>
       </div>
     </div>
