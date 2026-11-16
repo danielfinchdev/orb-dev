@@ -107,7 +107,8 @@ test('a big log is read in blocks, not whole; the previous generation follows; a
   const miss = {}; const rm = readActivity(board, { sources: ['orb'], q: 'zzz-nada' }, miss);
   assert.ok(miss.bytes <= READ_CAP + BLOCK, `capped: ${miss.bytes}`);
   assert.ok(rm.next, 'more to look at');
-  const rest = readActivity(board, { sources: ['orb'], q: 'la primera', cursor: rm.next });
+  let rest = readActivity(board, { sources: ['orb'], q: 'la primera', cursor: rm.next }); let calls = 1;
+  while (!rest.items.length && rest.next && calls < 20) { rest = readActivity(board, { sources: ['orb'], q: 'la primera', cursor: rest.next }); calls += 1; }
   assert.equal(rest.items.length, 1, 'the cursor reaches the first line at the end of a >5 MB file');
   // generation .1 and a line longer than a block
   reset();
@@ -286,4 +287,15 @@ test('a forged cursor cannot make the engine loop: out-of-range positions restar
     assert.ok(Date.now() - t0 < 2000, JSON.stringify(bad));
     assert.deepEqual(r.items.map((i) => i.text), clean.items.map((i) => i.text), JSON.stringify(bad));
   }
+});
+
+test('a filter that matches no event scans a capped number of rows per call and the cursor reaches the oldest match', () => {
+  reset();
+  board.event(null, 'orb', 'task.quiet', 'aguja-unica');
+  for (let i = 0; i < 6000; i++) board.event(null, 'orb', 'task.quiet', `paja ${i}`);
+  const first = {}; const r1 = readActivity(board, { sources: ['subagentes'], q: 'aguja-unica' }, first);
+  assert.ok(first.rows <= 5000 + 500, `scanned ${first.rows}`);
+  assert.equal(r1.items.length, 0); assert.ok(r1.next, 'more to look at');
+  const r2 = readActivity(board, { sources: ['subagentes'], q: 'aguja-unica', cursor: r1.next });
+  assert.equal(r2.items.length, 1); assert.equal(r2.next, null);
 });

@@ -11,8 +11,8 @@ import { userLogFile } from './user-log.mjs';
 export const SOURCES = Object.freeze(['orb', 'subagentes', 'usuario', 'app']);
 export const LEVELS = Object.freeze(['info', 'warn', 'error']);
 export const BLOCK = 256 * 1024;
-export const READ_CAP = 4 * 1024 * 1024; // bytes read per log stream per call
-const EVENT_ROWS_CAP = 20_000;
+export const READ_CAP = 1024 * 1024; // bytes read per log stream per call (the read is synchronous, on the engine thread: a cursor goes on in the next call)
+const EVENT_ROWS_CAP = 5000;
 const TEXT_MAX = 2000;
 const DONE = 0; // a stream in the cursor with nothing left
 
