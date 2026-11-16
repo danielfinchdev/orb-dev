@@ -89,6 +89,8 @@ export const METHODS = Object.freeze({
   // a merge an agent asked for, confirmed only on this PC's card (src/engine/host/pr-tools.mjs)
   'prConfirm.pending': 'pc', 'prConfirm.answer': 'pc', 'prConfirm.decline': 'pc',
   // the HTML pages of the chats: only this PC's window may list them, close them or give them internet (src/engine/host/html-pages.mjs)
+  // agents outside Orb that create tasks through a loopback MCP server (src/engine/api/mcp-ext.mjs)
+  'mcpExt.state': 'pc', 'mcpExt.setEnabled': 'pc', 'mcpExt.createToken': 'pc', 'mcpExt.setProjects': 'pc', 'mcpExt.revoke': 'pc', 'mcpExt.remove': 'pc',
   'htmlPages.list': 'pc', 'htmlPages.setInternet': 'pc', 'htmlPages.close': 'pc',
   // read-only, for the phone: returns the HTML as data (never executed on the host) to show it in a sandboxed frame
   'htmlPages.get': 'pc',
@@ -115,7 +117,7 @@ export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter(
 // pairing a phone or starting an emulator (the agents may then reach it), and giving a chat «Acceso total al PC» or the
 // phone (the usual 5-minute unlock, not the password every time: see below).
 export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'backup.previousKey', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'agentKeys.save', 'projects.deleteCheck', 'extensions.remove',
-  'android.pairStart', 'android.pairCode', 'android.emulatorStart', 'sessions.grantTotal', 'sessions.grantAndroid',
+  'android.pairStart', 'android.pairCode', 'android.emulatorStart', 'sessions.grantTotal', 'sessions.grantAndroid', 'mcpExt.createToken', 'mcpExt.setProjects',
   // rules: your own are edited with the usual unlock; pausing or deleting a shipped one (rules.pause / rules.delete,
   // see freshPurpose) and everything about the rails asks for the password every time
   'rules.save', 'rules.create', 'rules.resume', 'rules.pause', 'rules.delete', 'rules.restoreDefaults', 'rails.set', 'rails.restore']));
@@ -151,6 +153,8 @@ export function needsUnlock(method, params, current = {}) {
   if (UNLOCK_METHODS.has(method)) return true;
   // a secret for an agent saved in the vault, or taken from it.
   if (method === 'secrets.answer') return params?.save === true || params?.saved === true;
+  // switching the MCP server for outside agents on asks; switching it off (taking access back) needs nothing
+  if (method === 'mcpExt.setEnabled') return params?.enabled === true;
   if (method !== 'config.save') return false;
   const patch = params?.patch ?? {};
   if (patch.rails !== undefined) return true;

@@ -41,6 +41,7 @@ import { accountMethods } from './accounts.mjs';
 import { dataApi } from './data.mjs';
 import { inboxMethods } from './inbox.mjs';
 import { keysMethods } from './keys.mjs';
+import { mcpExtMethods } from './mcp-ext.mjs';
 import { masterMethods, checkUnlock } from './master.mjs';
 import { appMethods } from './app.mjs';
 import { musicMethods } from '../host/music.mjs';
@@ -182,6 +183,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
   };
   // the user's terminal docked under a chat (user-terminal.mjs); Ctrl+J's own terminal is app.openTerminal.
   const terminals = createTerminals({ emit, log });
+  // the loopback MCP server for agents outside Orb (off by default: mcp-ext.mjs)
+  const mcpExt = mcpExtMethods({ board, log, version, emit });
+  mcpExt.startup();
   const data = dataApi(shared); // backups
   let usageAskedAt = 0; // usage.refresh
 
@@ -352,6 +356,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     ...linkMethods(shared),
     ...inboxMethods(shared),
     ...keysMethods(shared),
+    ...mcpExt.methods,
     ...data.methods,
     // Orb locked (or a new password): the grants go, and so do the secrets typed for the agents.
     // under the lock screen the user's terminals take nothing and show nothing (user-terminal.mjs).
@@ -436,7 +441,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     // Running tasks stay "running": the next start continues them (scheduler.finish does not close them while closing).
     // adb's server goes with Orb (no phone reachable from this PC while Orb is closed).
     // Returns what is still to be waited for: a task being closed or a copy being joined finishes writing its state first.
-    shutdown() { terminals.closeAll(); scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); android.stopServer().catch(() => {}); log('motor detenido'); return scheduler.drain().catch(() => {}); }
+    shutdown() { terminals.closeAll(); scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); android.stopServer().catch(() => {}); mcpExt.stop().catch(() => {}); log('motor detenido'); return scheduler.drain().catch(() => {}); }
   };
 }
 
