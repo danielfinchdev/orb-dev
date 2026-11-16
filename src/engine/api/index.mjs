@@ -165,7 +165,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
   const prTools = createPrTools({ board, sessions, gh: () => import('../host/github.mjs'), holding, emit, log });
   // «Vigilar la CI del PR» (scheduler/ci-watch.mjs): the scheduler's tick calls it; it never merges.
   const ciWatch = createCiWatch({ board, sessions, gh: () => import('../host/github.mjs'), emit, log });
-  scheduler.ciWatch = ciWatch;
+  if (scheduler) scheduler.ciWatch = ciWatch;
   // the HTML pages an agent shows in a chat (html-pages.mjs): sandboxed, internet off, switched on only on this PC.
   const htmlPages = createHtmlPages({ sessions, emit: emitRaw, log });
   agentAuth.onCall = async ({ session }, method, args) => {
