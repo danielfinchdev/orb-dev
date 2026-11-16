@@ -15,6 +15,7 @@ import { titleFrom } from '../../shared/titles.mjs';
 import { autoTitle } from '../titles.mjs';
 import { git } from '../../platform/git.mjs';
 import { diffBetween } from '../../domain/tasks/checkpoints.mjs';
+import { listTurns, turnDiff, commentsBlock } from '../../domain/conversations/turns.mjs';
 import { fail, str, int, oneOf, images, DECISION } from './common.mjs';
 import { createDedupe, conversationKey } from './dedupe.mjs';
 import { fold } from '../../domain/conversations/inbox.mjs';
@@ -113,7 +114,7 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     'sessions.items': ({ id, after, before, limit }) => sessions.items(str(id, 'conversación', 64), { after: Number(after) || 0, before: Number(before) || 0, limit: Number(limit) || 200 }),
     // A message to a conversation: a new turn, or (while it works) steer the running turn or wait in its queue.
     // mode: 'auto' (steer when the agent can, else queue), 'steer' or 'queue'.
-    'sessions.send': ({ id, text, images: files, mode }) => {
+    'sessions.send': ({ id, text, images: files, mode, comments }) => {
       const s = sessions.must(str(id, 'conversación', 64));
       trash.assertSessionNotTrashed(s);
       if (s.kind === 'task') {
@@ -125,7 +126,8 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
         scheduler.followup(s.task_id, str(text, 'mensaje', 20000), images(files));
         return { queued: true };
       }
-      const t = str(text, 'mensaje', 20000);
+      // comments written on diff lines go with this message as one block (turns.mjs › commentsBlock)
+      const t = str(text, 'mensaje', 20000); const block = commentsBlock(comments);
       const command = s.kind === 'chat' && !(files ?? []).length ? slashCommand(t) : null;
       if (command) return command === 'compact' ? sessions.compact(s.id) : sessions.clear(s.id);
       // a new direct conversation is named by Orb from its first message (at once a quick title, then a better one).
@@ -134,8 +136,13 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
         sessions.update(s.id, { title: quick, titled: true });
         autoTitle(board, { agent: s.agent, account: s.account, text: t }).then((better) => { if (better && sessions.get(s.id)?.title === quick) sessions.update(s.id, { title: better }); }).catch(() => {});
       }
-      return sessions.message(s.id, t, { images: images(files), mode: oneOf(mode, ['auto', 'steer', 'queue'], 'modo', 'auto'), context: expandMentions(board, sessions, t) });
+      return sessions.message(s.id, block ? `${t}
+
+${block}` : t, { images: images(files), mode: oneOf(mode, ['auto', 'steer', 'queue'], 'modo', 'auto'), context: expandMentions(board, sessions, t) });
     },
+    // «Cambios» of a direct chat, turn by turn (turns.mjs): read only, from Orb's light photos of the folder.
+    'sessions.turns': async ({ id }) => { const s = sessions.must(str(id, 'conversación', 64)); return s.kind === 'chat' && s.project ? listTurns(s.cwd, s.id) : { available: false, turns: [] }; },
+    'sessions.turnDiff': async ({ id, scope, n }) => { const s = sessions.must(str(id, 'conversación', 64)); return s.kind === 'chat' && s.project ? turnDiff(s.cwd, s.id, { scope: oneOf(scope, ['last', 'all', 'turn', 'head'], 'ámbito', 'last'), n }) : { available: false, files: [], more: 0 }; },
     'sessions.queue': ({ id }) => sessions.queue(str(id, 'conversación', 64)),
     'sessions.editQueued': ({ id, queueId, text, remove, move }) => sessions.editQueued(str(id, 'conversación', 64), int(queueId, 'mensaje'), { text: text === undefined ? undefined : str(text, 'mensaje', 20000), remove: Boolean(remove), move: oneOf(move, ['up', 'down'], 'mover', undefined) }),
     'sessions.approve': ({ id, request, decision }) => sessions.respond(str(id, 'conversación', 64), str(request, 'petición', 200), oneOf(decision, DECISION, 'decisión')),

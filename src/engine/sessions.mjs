@@ -28,6 +28,7 @@ import { askedByUser } from '../domain/security/approval.mjs';
 import { processList, taskProcesses, powershell } from '../platform/proc-list.mjs';
 import { explainFailure } from '../shared/agent-errors.mjs';
 import { rememberModels } from './usage/catalog.mjs';
+import { snapshotBeforeTurn, snapshotAfterTurn, dropTurns } from '../domain/conversations/turns.mjs';
 import { changedFiles, logDirect } from '../domain/journal/journal.mjs';
 import { ATTACH_DIR, placeAttachments as copyAttachments, prepareAttachments } from './host/attachments.mjs';
 
@@ -175,6 +176,8 @@ export class Sessions {
     if ('permission' in fields && !PERMISSIONS.includes(fields.permission)) throw new Error(tr('msg.sessions.badPermission'));
     const value = (k) => { const v = fields[k]; if (typeof v === 'boolean') return Number(v); if (v && typeof v === 'object') return JSON.stringify(v); return v ?? null; };
     this.board.run(`UPDATE sessions SET ${keys.map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`, ...keys.map(value), now(), id);
+    // an archived conversation leaves no photos in the user's repository (turns.mjs); un-archiving starts the panel again.
+    if (fields.archived === true && !this.running.has(id)) { const c = this.get(id); if (c?.kind === 'chat' && c.project && c.cwd) dropTurns(c.cwd, id); }
     // The live process follows the changes it can take on the fly; the rest apply when it starts again.
     const entry = this.lives.get(id);
     if (entry) {
@@ -190,6 +193,7 @@ export class Sessions {
     if (this.running.has(id)) throw new Error(tr('msg.sessions.stopFirst'));
     const s = this.must(id); if (s.kind === 'task') throw new Error(tr('msg.sessions.taskSession'));
     this.closeLive(id); this.asked.delete(id);
+    if (s.project && s.cwd) dropTurns(s.cwd, id);
     this.board.run('DELETE FROM session_items WHERE session_id = ?', id);
     this.board.run('DELETE FROM session_queue WHERE session_id = ?', id);
     this.board.run('DELETE FROM sessions WHERE id = ?', id);
@@ -566,7 +570,8 @@ export class Sessions {
     // what each attachment becomes for this agent (pictures natively, a video's frames, a document's text…).
     if (attached.length) run.last = tr('sys.attach.preparing');
     const prepared = attached.length ? prepareAttachments(attached, { nativeImages, log: (m) => this.log(m) }) : Promise.resolve({ images: [], text: '' });
-    prepared.then((p) => (run.stopped ? { final: '', text: '', isError: true } : entry.live.send({ text: p.text ? `${body}\n\n${p.text}` : body, images: p.images }))).then((result) => {
+    // the light photo of the folder for the «Cambios» panel (turns.mjs): the baseline before the first turn, one more when each ends.
+    prepared.then(async (p) => { if (direct && !run.stopped) await snapshotBeforeTurn(s.cwd, id); return p; }).then((p) => (run.stopped ? { final: '', text: '', isError: true } : entry.live.send({ text: p.text ? `${body}\n\n${p.text}` : body, images: p.images }))).then((result) => {
       clearInterval(timer);
       entry.lastUsed = Date.now();
       if (this.running.get(id) === run) this.running.delete(id);
@@ -581,6 +586,7 @@ export class Sessions {
       if (run.stopped && !run.timedOut) this.addItem(id, 'system', 'status', tr('msg.sessions.stopped'));
       const limited = Boolean(result.limit);
       this.update(id, { status: limited ? 'limited' : failed ? 'error' : 'idle' });
+      if (direct) snapshotAfterTurn(s.cwd, id);
       if (before) { try { logDirect(this.board, this.get(id) ?? s, { before, request: text, answer: result.text || result.final }); } catch (error) { this.log(`bitácora de la conversación ${id}: ${error.message}`); } }
       try { recordSpend(this.board, { account: acc.id, session: s.id, task: taskId ?? null, usage: result.usage ?? {} }); } catch (error) { this.log(`uso ${id}: ${error.message}`); }
       const state = { final: result.final, text: result.text, isError: result.isError, usage: result.usage, cliSession: this.get(id)?.cli_session };
