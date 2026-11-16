@@ -134,6 +134,13 @@ export default {
   'session.switchAgent': 'Continuar con otro agente',
   'session.switchAgentDesc': 'Se abre una conversación nueva con un resumen de esta. La original se conserva.',
   'session.switchAgentOk': 'Continuar',
+  'session.handoff': 'Pasar este chat a otro agente',
+  'session.handoffDesc': 'El chat sigue aquí, en la misma carpeta y con el mismo permiso (el acceso total y el móvil Android no pasan). El otro agente recibe un resumen de lo hablado, no la sesión del anterior.',
+  'session.handoffOk': 'Pasar',
+  'session.handoffDone': 'Chat pasado a otro agente.',
+  'session.handoffLine': 'Traspasado de {from} a {to}',
+  'session.handoffSeen': 'ver lo que se pasó',
+  'session.handoffCut': 'Se omitieron mensajes antiguos por tamaño.',
   'session.capture': 'Capturar ventana',
   'session.captureFailed': 'No se pudo capturar la ventana. Inténtalo de nuevo.'
 };

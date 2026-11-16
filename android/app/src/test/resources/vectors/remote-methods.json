@@ -1,6 +1,6 @@
 {
   "generatedBy": "scripts/android-vectors.mjs",
-  "source": "955bcaed298123d528ce05ca4d6c3591b863dd84fbc1e24627d4f3428c62c3bc",
+  "source": "9fec49a624b4343c2e13d39298ace45596d71c39b11f6b14f2dbcab3812e2f15",
   "methods": [
     "activity.list",
     "activity.report",
@@ -21,7 +21,6 @@
     "conversations.search",
     "conversations.trash",
     "conversations.update",
-    "htmlPages.get",
     "inbox.list",
     "inbox.markRead",
     "inbox.mute",
@@ -71,6 +70,7 @@
     "sessions.create",
     "sessions.editQueued",
     "sessions.fork",
+    "sessions.handoff",
     "sessions.items",
     "sessions.list",
     "sessions.queue",

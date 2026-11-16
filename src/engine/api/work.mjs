@@ -146,6 +146,13 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       if (other && !(board.availableAgents() ?? AGENT_IDS).includes(other)) fail(tr('msg.api.agentUnavailable', { agent: other }));
       return sessions.fork(str(id, 'conversación', 64), { title: str(title, 'título', 80, { optional: true }) || undefined, agent: other });
     },
+    // the same chat goes on with another agent (a bounded summary travels; the chat's permission is kept, never raised).
+    'sessions.handoff': ({ id, agent }) => {
+      const other = oneOf(agent, AGENT_IDS, 'agente');
+      if (!(board.availableAgents() ?? AGENT_IDS).includes(other)) fail(tr('msg.api.agentUnavailable', { agent: other }));
+      const s = sessions.must(str(id, 'conversación', 64)); trash.assertSessionNotTrashed(s);
+      return sessions.handoff(s.id, { agent: other });
+    },
     'sessions.settle': ({ id, settled }) => sessions.update(sessions.must(str(id, 'conversación', 64)).id, { settled: settled !== false }),
     'approvals.list': () => sessions.allPendingApprovals(),
     'mentions.options': () => mentionOptions(board, sessions),

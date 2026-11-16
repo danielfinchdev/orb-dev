@@ -34,7 +34,7 @@ export const STATE_KEYS = Object.freeze({
     'models_try:': 'account', 'model_limit:': 'account', 'model_limit_at:': 'account', 'plan:': 'account', 'plan_try:': 'account',
     'rate:': 'account', 'rates:': 'account',
     // a session's (a direct conversation with an agent or a task's run)
-    'fork_pending:': 'session', 'fork_summary:': 'session', 'grant_prev:': 'session',
+    'fork_pending:': 'session', 'fork_summary:': 'session', 'handoff_summary:': 'session', 'grant_prev:': 'session',
     // a conversation's with the assistant
     'pending_questions:': 'conversation', 'report_queue:': 'conversation', 'inbox_since:': 'conversation', 'assistant_cwd:': 'conversation', 'brake_told:': 'conversation',
     // a project's

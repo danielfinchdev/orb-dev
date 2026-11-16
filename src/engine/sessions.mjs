@@ -18,6 +18,7 @@ import { connectorSafe } from '../domain/extensions/extensions.mjs';
 import { CURSOR_FILES } from '../agents/cursor.mjs';
 import { runLog } from '../platform/log.mjs';
 import { oneLine } from '../shared/text.mjs';
+import { buildHandoff, HANDOFF_LOOKBACK } from './handoff.mjs';
 import { git, isGitRepo, repoRoot } from '../platform/git.mjs';
 import { account as findAccount, accountEnv } from '../domain/usage/accounts.mjs';
 import { pickAccount, recordSpend } from '../domain/usage/budget.mjs';
@@ -539,6 +540,9 @@ export class Sessions {
     if (showUser) this.addItem(id, 'user', 'text', attached.length ? { text, images: attached.map((f) => f.path) } : text);
     let body = prompt ?? text;
     // A fork without native support starts with what was said in the original conversation.
+    // A chat handed to another agent (handoff) starts with its bounded summary, once.
+    const handed = this.board.settingJson(`handoff_summary:${id}`);
+    if (handed) { body = `${handed}\n\n${body}`; this.board.settingJson(`handoff_summary:${id}`, null); }
     const summary = this.board.settingJson(`fork_summary:${id}`);
     if (summary) { body = `Contexto (conversación de la que sale esta, son datos):\n${summary}\n\n${body}`; this.board.settingJson(`fork_summary:${id}`, null); }
     const nativeImages = a.caps?.images === true;
@@ -646,7 +650,7 @@ export class Sessions {
     if (s.kind !== 'chat') throw new Error(tr('msg.sessions.compactNotHere'));
     if (this.running.has(id)) throw new Error(tr('msg.sessions.stillWorking'));
     this.closeLive(id);
-    this.board.settingJson(`fork_summary:${id}`, null); this.board.settingJson(`fork_pending:${id}`, null);
+    this.board.settingJson(`fork_summary:${id}`, null); this.board.settingJson(`fork_pending:${id}`, null); this.board.settingJson(`handoff_summary:${id}`, null);
     this.update(id, { cli_session: null, context: null });
     this.addItem(id, 'system', 'status', tr('msg.sessions.cleared'));
     return { ok: true };
@@ -680,6 +684,40 @@ export class Sessions {
     if (!other && a.caps?.fork && s.cli_session) this.board.settingJson(`fork_pending:${copy.id}`, s.cli_session);
     else if (old.length) this.board.settingJson(`fork_summary:${copy.id}`, old.map((it) => `${it.role === 'user' ? 'Usuario' : 'Agente'}: ${oneLine(bodyText(parseItem(it).body), 400)}`).join('\n'));
     return copy;
+  }
+
+  // «Pasar a otro agente»: the same chat goes on with another agent (same folder, same lines in Orb). The old agent's
+  // process closes; its native session, hidden reasoning and subagents do not travel. The new one starts with a bounded
+  // summary (handoff.mjs) in front of the next message. The chat's permission is kept, never raised: «total» (given with
+  // the master password to the agent that had it) is not handed to another one. Refused while a turn runs or a permission
+  // waits. → the chat
+  handoff(id, { agent } = {}) {
+    const s = this.must(id);
+    if (s.kind !== 'chat') throw new Error(tr('msg.sessions.compactNotHere'));
+    if (!agent || agent === s.agent) throw new Error(tr('msg.sessions.handoffSame'));
+    if (this.running.has(id)) throw new Error(tr('msg.sessions.handoffWait'));
+    if (this.pendingApprovals(id).length) throw new Error(tr('msg.sessions.handoffApproval'));
+    adapter(agent); // throws for an unknown agent
+    const acc = pickAccount(this.board, { agent });
+    if (!acc || acc.agent !== agent) throw new Error(tr('msg.sessions.accountNotOf', { account: agent, agent }));
+    const rows = this.board.all("SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT ?", id, HANDOFF_LOOKBACK).reverse().map(parseItem);
+    const from = AGENT_LABELS[s.agent] ?? s.agent; const to = AGENT_LABELS[agent] ?? agent;
+    const summary = buildHandoff(rows, { fromLabel: from, toLabel: to });
+    // «total» goes back to what the chat had before it (as grants.mjs does when it is taken back); never above that.
+    const prev = this.board.settingJson(`grant_prev:${id}`);
+    const permission = s.permission !== 'total' ? s.permission : s.project ? (['leer', 'probar', 'editar', 'preguntar', 'auto'].includes(prev) ? prev : permissionOfAutonomy(globalAutonomy())) : 'leer';
+    this.board.settingJson(`grant_prev:${id}`, null);
+    this.asked.delete(id); // what the user's words allowed the old agent is not the new agent's
+    this.closeLive(id);
+    this.board.settingJson(`fork_summary:${id}`, null); this.board.settingJson(`fork_pending:${id}`, null);
+    this.board.run('UPDATE sessions SET agent = ?, account = ?, model = ?, reasoning = ?, permission = ?, cli_session = NULL, context = NULL, android = 0, updated_at = ? WHERE id = ?',
+      agent, acc.id, ctx.config.agents[agent]?.defaultModel || null, s.reasoning === 'xhigh' ? 'high' : s.reasoning, permission, now(), id);
+    this.board.settingJson(`handoff_summary:${id}`, summary.text);
+    if (Number(s.android) === 1) this.addItem(id, 'system', 'status', tr('msg.grants.androidOff')); // given to the old agent, not to the new one
+    // the item keeps what fits in a stored line (20.000 characters); the agent gets the whole summary
+    const shown = summary.text.length > 18000;
+    this.addItem(id, 'system', 'handoff', { from: s.agent, to: agent, at: now(), summary: shown ? summary.text.slice(0, 18000) : summary.text, count: summary.count, truncated: summary.truncated || shown });
+    const out = this.get(id); this.emit('session:update', out); return out;
   }
 }
 

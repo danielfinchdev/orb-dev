@@ -46,7 +46,7 @@ export function trashTools({ board, sessions, orchestrator, scheduler, emit, log
     'chat.settings': (p) => p.conversation,
     'conversations.update': (p) => p.id,
   };
-  const SESSION_WRITES = new Set(['sessions.queue', 'sessions.editQueued', 'sessions.approve', 'sessions.fork', 'sessions.update', 'sessions.settle', 'sessions.compact']);
+  const SESSION_WRITES = new Set(['sessions.queue', 'sessions.editQueued', 'sessions.approve', 'sessions.fork', 'sessions.handoff', 'sessions.update', 'sessions.settle', 'sessions.compact']);
   function guard(method, params) {
     try {
       if (Object.hasOwn(WRITES, method)) {
