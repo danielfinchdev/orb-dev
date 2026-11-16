@@ -10,7 +10,7 @@ import { ROOT } from './helpers.mjs';
 
 // Whether a malformed punycode host is rejected by URL itself or by Orb's own check depends on the Node version
 // (22 vs 24); either way it throws, so only that it throws is compared.
-const XN_REJECTED = /("input": "[^"\n]*\/\/xn--[^"\n]*",\n\s*"throws": true,\n\s*)"message": "[^"]*",\n(\s*)"key": "[^"]*"/g;
+const XN_REJECTED = /(xn--[^]{0,200}?"throws": true,\n\s*)"message": "[^"]*",\n(\s*)"key": "[^"]*"/g;
 const norm = (text) => text.replace(XN_REJECTED, '$1"message": "rejected",\n$2"key": "rejected"');
 
 test('the committed Android vectors match the PC code', () => {

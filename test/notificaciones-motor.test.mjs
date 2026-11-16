@@ -130,7 +130,7 @@ test('un dispositivo con persona (de otro usuario de 3.7) no recibe avisos y sus
     const mine = await until(() => pushes(ana.endpoint).slice(k).find((x) => x.data.tag === `orb-conversation:${conv}`), 'el aviso al móvil del dueño', 30_000);
     // A push sent before the device got its person (an earlier reply, on a slow runner) may still land: only this message's counts.
     const late = pushes(tablet.endpoint).slice(before).filter((x) => x.data.tag === mine.data.tag);
-    assert.equal(late.length, 0, `ninguno al de otra persona: ${JSON.stringify(late.map((x) => ({ title: x.data.title, body: x.data.body, kind: x.data.kind })))} person=${db.one('SELECT person_id FROM devices WHERE id = ?', tablet.id)?.person_id}`);
+    assert.equal(late.length, 0, `ninguno al de otra persona: ${JSON.stringify(late.map((x) => ({ title: x.data.title, body: x.data.body, kind: x.data.kind })))} devices=${JSON.stringify(db.all('SELECT id, kind, person_id, last_seen, created_at, push IS NOT NULL AS has_push FROM devices'))} tablet=${tablet.id} now=${new Date().toISOString()}`);
   } finally { db.run('UPDATE devices SET person_id = NULL WHERE id = ?', tablet.id); db.db.close(); }
 });
 
