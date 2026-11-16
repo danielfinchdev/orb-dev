@@ -18,7 +18,7 @@ const start = themes.indexOf('GRAFITO: Profesional in near-monochrome');
 const section = themes.slice(start, themes.indexOf('/* ====', start + 20) === -1 ? undefined : themes.indexOf('/* ====', themes.indexOf('*/', start)));
 
 test('Grafito is registered after the existing themes, on top of Profesional', () => {
-  assert.deepEqual(SKINS, ['orb', 'vaporwave', 'retro', 'profesional', 'nube', 'cristal', 'grafito']);
+  assert.deepEqual(SKINS, ['orb', 'vaporwave', 'retro', 'profesional', 'nube', 'cristal', 'grafito', 'paletas']);
   assert.equal(baseSkin('grafito'), 'profesional');
   assert.ok(plainSkin('grafito'));
   assert.equal(es['appearance.skin.grafito'], 'Grafito');
@@ -26,7 +26,7 @@ test('Grafito is registered after the existing themes, on top of Profesional', (
   assert.match(read('components', 'skin-preview.jsx'), /grafito: null/);
   assert.match(read('components', 'skin-preview.css'), /\.skp\[data-skin-preview="grafito"\]/);
   assert.match(read('components', 'skin-preview.css'), /\.dark \.skp\[data-skin-preview="grafito"\]/);
-  assert.match(fs.readFileSync(path.join(ROOT, 'scripts', 'medir-animaciones.mjs'), 'utf8'), /cristal,grafito/);
+  assert.match(fs.readFileSync(path.join(ROOT, 'scripts', 'medir-animaciones.mjs'), 'utf8'), /cristal,grafito,paletas/);
 });
 
 test('Grafito leaves Profesional and Cristal untouched and adds no motion', () => {
@@ -93,7 +93,7 @@ test('the music is silent in every plain theme and stops when one is chosen', ()
   assert.match(music, /const url = await urlOf\(t\.id\);\s*if \(!available\(\)\) return;/);
   assert.match(music, /onAppearance\(\(\) => stopIfPlain\(\)\);/);
   assert.match(read('lib', 'store.js'), /for \(const fn of appearanceListeners\) fn\(skin\);/);
-  for (const skin of SKINS) assert.equal(plainSkin(skin) ? 'silent' : 'music', ['profesional', 'cristal', 'grafito'].includes(skin) ? 'silent' : 'music', skin);
+  for (const skin of SKINS) assert.equal(plainSkin(skin) ? 'silent' : 'music', ['profesional', 'cristal', 'grafito', 'paletas'].includes(skin) ? 'silent' : 'music', skin);
 });
 
 test('the phone may wear Grafito, which reaches it with the PC settings, and nothing else but the default', () => {

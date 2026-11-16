@@ -496,6 +496,22 @@ html.dark[data-material="grafito"] [data-slot="composer"]:focus-within { box-sha
 html[data-material="grafito"] aside.bg-sidebar [data-testid^="nav-"].bg-accent { box-shadow: inset 2px 0 0 var(--primary-text); }
 
 /* =============================================================================
+   PALETAS: Profesional painted from three seeds (surface, ink, accent). <html> wears data-skin="profesional" plus
+   data-material="paletas"; the ~35 colour tokens are computed by ui/lib/theme-seeds.js and written into <style id="orb-palette">
+   (lib/store.js), so only the shapes live here. Same softer corners as Grafito, system font, no motion.
+   ============================================================================= */
+html[data-material="paletas"] { --radius: 0.625rem; }
+html[data-skin][data-material="paletas"] body { letter-spacing: normal; }
+html[data-skin][data-material="paletas"][data-font="outfit"] { --font-sans: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; }
+html[data-skin][data-material="paletas"] { --font-title: var(--font-sans); }
+html[data-skin][data-material="paletas"] .wordmark { font-family: var(--font-sans); }
+html[data-material="paletas"] :is([data-slot="badge"], [data-slot="button"], [data-slot="input"]) { border-radius: calc(var(--radius) - 2px); }
+html[data-material="paletas"] [data-slot="card"] { border-radius: calc(var(--radius) + 2px); }
+html[data-material="paletas"] :is(.rounded-3xl, .rounded-2xl) { border-radius: calc(var(--radius) + 2px); }
+html[data-material="paletas"] .bg-bubble { border-radius: 1rem; }
+html[data-material="paletas"] aside.bg-sidebar [data-testid^="nav-"].bg-accent { box-shadow: inset 2px 0 0 var(--primary-text); }
+
+/* =============================================================================
    NUBE = Órbita Candy (the id stays «nube»): a chunky game UI in the spirit of Duolingo, Switch menus and Candy Crush.
    Keys with a 3 px hard bottom edge that sink when pressed, 1.5 px outlines in a darker tone, hard soft shadows, pills,
    colour-coded places, Fredoka for titles/buttons/labels and Nunito for the text. Night: plum with neon glints.
