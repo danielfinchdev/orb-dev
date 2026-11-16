@@ -18,5 +18,7 @@ export default {
   'finder.searching': 'Searching…',
   'finder.type': 'Type to search.',
   'finder.none': 'No results.',
+  'htmlpage.choices': 'Suggested answers',
+  'htmlpage.choiceTip': 'This text is sent as your message',
   'finder.chooseHint': 'Enter: put the path in the chat box.'
 };

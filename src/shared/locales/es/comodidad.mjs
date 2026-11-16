@@ -18,5 +18,7 @@ export default {
   'finder.searching': 'Buscando…',
   'finder.type': 'Escribe para buscar.',
   'finder.none': 'No hay resultados.',
+  'htmlpage.choices': 'Respuestas sugeridas',
+  'htmlpage.choiceTip': 'Se envía este texto como mensaje tuyo',
   'finder.chooseHint': 'Intro: poner la ruta en la caja del chat.'
 };

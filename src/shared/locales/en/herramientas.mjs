@@ -109,6 +109,7 @@ export default {
   'htmlpage.note': 'Runs in a sandbox, with no access to Orb, files or keys.',
   'msg.html.noChat': 'This tool only works from a chat.',
   'msg.html.empty': 'The page is empty: pass the complete HTML.',
+  'msg.html.badChoices': 'The choices must be a list of short texts (at most {n}).',
   'msg.html.tooBig': 'The page is too big (max {kb} KB).',
   'msg.html.gone': 'That page no longer exists.',
   'msg.html.badSwitch': 'The internet switch must be true or false.',
