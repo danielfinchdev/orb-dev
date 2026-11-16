@@ -28,6 +28,14 @@ class ThemeTokensTest {
         near(oklchToSrgb(0.915, 0.035, 258.0), CristalLightPalette.bg.rgb())
     }
 
+    @Test fun grafitoMatchesAnnexA() {
+        near(oklchToSrgb(0.991, 0.0, 0.0), GrafitoLightPalette.bg.rgb())
+        near(oklchToSrgb(0.52, 0.17, 40.0), GrafitoLightPalette.primaryText.rgb())
+        near(oklchToSrgb(0.164, 0.0, 0.0), GrafitoDarkPalette.bg.rgb())
+        near(oklchToSrgb(0.74, 0.15, 45.0), GrafitoDarkPalette.primaryText.rgb())
+        for (p in listOf(GrafitoLightPalette, GrafitoDarkPalette)) assertTrue(contrast(p.outline, p.bg) >= 3.0)
+    }
+
     @Test fun alphaIsKept() {
         assertEquals(0.36f, CristalLightPalette.scLow.alpha, 0.01f)
         assertEquals(0.4f, OrbitaLightPalette.scrim.alpha, 0.01f)
@@ -35,6 +43,7 @@ class ThemeTokensTest {
 
     @Test fun pcThemeMapsToThePhoneTheme() {
         assertEquals(ThemeChoice.Cristal, phoneThemeFor("cristal"))
+        assertEquals(ThemeChoice.Grafito, phoneThemeFor("grafito"))
         for (s in listOf("orb", "profesional", "nube", "vaporwave", "retro", "algo-nuevo", "", null)) assertEquals(ThemeChoice.Orbita, phoneThemeFor(s))
     }
 
@@ -49,6 +58,7 @@ class ThemeTokensTest {
         val palettes = mapOf(
             "orbita-light" to OrbitaLightPalette, "orbita-dark" to OrbitaDarkPalette,
             "cristal-light" to CristalLightPalette, "cristal-dark" to CristalDarkPalette,
+            "grafito-light" to GrafitoLightPalette, "grafito-dark" to GrafitoDarkPalette,
         )
         for ((name, p) in palettes) for ((tn, text) in listOf("text" to p.text, "text2" to p.text2, "text3" to p.text3))
             for ((bn, bg) in listOf("surface" to p.surface, "bg" to p.bg)) {

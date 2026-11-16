@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.lerp
 fun paletteFor(choice: ThemeChoice, dark: Boolean): OrbPalette = when (choice) {
     ThemeChoice.Orbita -> if (dark) OrbitaDarkPalette else OrbitaLightPalette
     ThemeChoice.Cristal -> if (dark) CristalDarkPalette else CristalLightPalette
+    ThemeChoice.Grafito -> if (dark) GrafitoDarkPalette else GrafitoLightPalette
 }
 
 /**

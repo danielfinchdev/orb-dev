@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 enum class ThemeChoice(val key: String) {
-    Orbita("orbita"), Cristal("cristal");
+    Orbita("orbita"), Cristal("cristal"), Grafito("grafito");
 
     companion object {
         fun fromKey(key: String?) = entries.firstOrNull { it.key == key }
@@ -22,10 +22,14 @@ enum class DarkMode(val key: String) {
 }
 
 /**
- * The theme the phone wears when it follows the PC: «cristal» is the only PC theme with a glass counterpart, every
- * other one (orb, profesional, nube, vaporwave, retro…) is Órbita, and so is "unknown".
+ * The theme the phone wears when it follows the PC: «cristal» and «grafito» have a counterpart, every other one
+ * (orb, profesional, nube, vaporwave, retro…) is Órbita, and so is "unknown".
  */
-fun phoneThemeFor(pcTheme: String?): ThemeChoice = if (pcTheme == "cristal") ThemeChoice.Cristal else ThemeChoice.Orbita
+fun phoneThemeFor(pcTheme: String?): ThemeChoice = when (pcTheme) {
+    "cristal" -> ThemeChoice.Cristal
+    "grafito" -> ThemeChoice.Grafito
+    else -> ThemeChoice.Orbita
+}
 
 /**
  * [choice] null = follow the PC. [pcTheme] is the PC's `ui.skin`, remembered so a cold start without a connection
