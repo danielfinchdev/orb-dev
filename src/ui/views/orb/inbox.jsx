@@ -20,7 +20,8 @@ import { confirm, form } from '@/components/dialogs.jsx';
 import { Input } from '@/components/ui/basic.jsx';
 import { useSearch } from '@/lib/search.js';
 import { useStore, go, call, act, newChat, orbAct, loadOrbInbox, openOrbInfo, closeOrbInfo, getState, phoneLayout, fullPc, refreshSoon, setState, plainSkin } from '@/lib/store.js';
-import { orbItems, orbProgress, groupOrb, shortTime, avatarStack, snoozeTimes } from '@/lib/inbox.js';
+import { orbItems, orbProgress, groupOrb, shortTime, avatarStack, snoozeTimes, priorityKeys, nextNeedingYou, isNextNeedsKey } from '@/lib/inbox.js';
+import { DayDigestCard } from '@/components/day-digest.jsx';
 import { sameItem } from '@/lib/memo.js';
 import { useDay } from '@/lib/use-day.js';
 import { usePress } from '@/lib/use-press.js';
@@ -375,7 +376,7 @@ function Places() {
 
 // ---- search: titles and projects at once; from two letters, the messages too (lib/search.js); «#12» finds that task.
 const FILTER0 = { state: 'all', agent: 'all' };
-function FilterMenu({ filter, setFilter, agents, snoozed = 0 }) {
+function FilterMenu({ filter, setFilter, agents, snoozed = 0, order = 'recent', setOrder = () => {} }) {
   const t = useT();
   const changed = filter.state !== 'all' || filter.agent !== 'all';
   const pick = (k, v) => setFilter((f) => ({ ...f, [k]: f[k] === v ? 'all' : v }));
@@ -391,6 +392,8 @@ function FilterMenu({ filter, setFilter, agents, snoozed = 0 }) {
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>{t('orbchats.filterState')}</DropdownMenuLabel>
         {[['active', 'orbchats.stateActive'], ['attention', 'orbchats.stateAttention'], ['done', 'orbchats.stateDone'], ...(snoozed || filter.state === 'snoozed' ? [['snoozed', 'orbchats.stateSnoozed']] : [])].map(([v, k]) => <DropdownMenuCheckboxItem key={v} checked={filter.state === v} onCheckedChange={() => pick('state', v)} onSelect={(e) => e.preventDefault()} data-testid={`filter-${v}`}>{t(k)}{v === 'snoozed' && snoozed ? <span className="text-muted-foreground ml-auto tabular-nums">{snoozed}</span> : null}</DropdownMenuCheckboxItem>)}
+        <DropdownMenuSeparator /><DropdownMenuLabel>{t('orbchats.order')}</DropdownMenuLabel>
+        {[['recent', 'orbchats.orderRecent'], ['priority', 'orbchats.orderPriority']].map(([v, k]) => <DropdownMenuCheckboxItem key={v} checked={order === v} onCheckedChange={() => setOrder(v)} onSelect={(e) => e.preventDefault()} data-testid={`order-${v}`}>{t(k)}</DropdownMenuCheckboxItem>)}
         {agents.length > 1 ? <><DropdownMenuSeparator /><DropdownMenuLabel>{t('orbchats.filterAgent')}</DropdownMenuLabel>{agents.map((a) => <DropdownMenuCheckboxItem key={a} checked={filter.agent === a} onCheckedChange={() => pick('agent', a)} onSelect={(e) => e.preventDefault()}>{AGENT[a] ?? a}</DropdownMenuCheckboxItem>)}</> : null}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -412,7 +415,26 @@ export function OrbInbox({ page = false }) {
   const [folded, setFolded] = useFolded();
   const [sheet, setSheet] = useState(null);
   const sheetItem = sheet ? items.find((x) => x.key === sheet) ?? null : null;
-  const parts = useMemo(() => groupOrb(items, { showDone, filter }), [items, showDone, filter]);
+  // «Prioridad» (the tray «Te necesita»): the order is taken once, when the list opens or the user asks, and kept while the
+  // rows are attended; a chat that arrives later goes on top, none of the others moves.
+  const [order, setOrderState] = useState(() => { try { return localStorage.getItem('orb.inbox.order') === 'priority' ? 'priority' : 'recent'; } catch { return 'recent'; } });
+  const [frozen, setFrozen] = useState(null);
+  const setOrder = (v) => { setOrderState(v); setFrozen(null); try { localStorage.setItem('orb.inbox.order', v); } catch { /* the order is a convenience */ } };
+  useEffect(() => { if (order === 'priority' && !frozen && items.length) setFrozen(priorityKeys(items)); }, [order, frozen, items]);
+  const parts = useMemo(() => groupOrb(items, { showDone, filter, order, frozen }), [items, showDone, filter, order, frozen]);
+  // Ctrl+Alt+A: the next chat that needs the user, in the order the list shows.
+  const route = useStore((s) => s.route);
+  useEffect(() => {
+    const on = (e) => {
+      if (!isNextNeedsKey(e)) return;
+      const shown = [...parts.pinned, ...parts.groups.flatMap((g) => g.items)];
+      const cur = shown.find((x) => isOpen(route, x))?.key ?? null;
+      const next = nextNeedingYou(shown, cur);
+      if (next) { e.preventDefault(); openOrbItem(next); }
+    };
+    window.addEventListener('keydown', on);
+    return () => window.removeEventListener('keydown', on);
+  }, [parts, route]);
   const onSheet = useCallback((x) => setSheet(x.key), []);
   // the day: «ayer» and the times of the rows move on at midnight
   const day = useDay();
@@ -442,7 +464,7 @@ export function OrbInbox({ page = false }) {
         <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') { setQuery(''); setFilter(FILTER0); } }} placeholder={t('orbchats.search')} aria-label={t('orbchats.search')} className={cn('placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent outline-none', phone ? 'text-title' : 'text-control')} data-testid="sidebar-search-input" />
         {query ? <button type="button" className="text-muted-foreground hover:text-foreground grid size-5 cursor-pointer place-items-center rounded" aria-label={t('comp.sidebar.clearSearch')} onClick={() => setQuery('')}><X className="size-3.5" /></button> : null}
       </label>
-      <FilterMenu filter={filter} setFilter={setFilter} agents={agents} snoozed={parts.snoozed} />
+      <FilterMenu filter={filter} setFilter={setFilter} agents={agents} snoozed={parts.snoozed} order={order} setOrder={setOrder} />
       {phone ? null : <OrbNewMenu />}
     </div>
   );
@@ -473,6 +495,8 @@ export function OrbInbox({ page = false }) {
   );
   else { let left = shown; const take = (list) => { const part = list.slice(0, Math.max(0, left)); left -= part.length; return part; }; body = (
     <>
+      <DayDigestCard phone={phone} />
+      {order === 'priority' ? <button type="button" onClick={() => setFrozen(null)} className="text-muted-foreground hover:text-foreground hover:bg-accent/50 mt-1 flex cursor-pointer items-center gap-2 self-start rounded-lg px-2.5 py-1 text-caption" data-testid="orb-reorder">{t('orbchats.reorder')}</button> : null}
       {parts.pinned.length ? (
         <div className="pt-2" data-testid="orb-pinned">
           <div className="text-muted-foreground flex items-center gap-1.5 px-2 py-1.5 text-micro font-semibold tracking-wide uppercase"><Pin className="size-3.5" />{t('chats.pinned')}</div>
@@ -484,7 +508,7 @@ export function OrbInbox({ page = false }) {
         const open = !folded[id];
         return (
           <Collapsible key={id || 'none'} open={open} onOpenChange={(v) => setFolded(id, v)} className="pt-2" data-testid={`orb-group-${g.project ?? 'none'}`}>
-            <ProjectHead group={g} open={open} phone={phone} />
+            {g.flat ? null : <ProjectHead group={g} open={open} phone={phone} />}
             <CollapsibleContent className="grid gap-0.5">
               {(open ? take(g.items) : []).map((x) => <OrbRow key={x.key} item={x} {...rowProps} />)}
               {!g.items.length && g.hidden ? <p className="text-muted-foreground px-3 py-1 text-xs">{t('orbchats.showDone', { n: g.hidden })}</p> : null}
