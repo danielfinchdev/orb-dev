@@ -76,7 +76,8 @@ const SCENE = {
   retro: <Retro />,
   profesional: null,
   nube: <Candy />,
-  cristal: null // its still colour field is --p-scene (skin-preview.css)
+  cristal: null, // its still colour field is --p-scene (skin-preview.css)
+  grafito: null // flat colours only (skin-preview.css)
 };
 
 export function SkinPreview({ skin }) {

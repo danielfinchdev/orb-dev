@@ -195,3 +195,13 @@ html.window-idle .skp-deco { animation-play-state: paused; }
 .dark .skp[data-skin-preview="nube"] .skp-nav:nth-of-type(3) { --pf: oklch(0.78 0.113 228); --pe: oklch(0.48 0.13 245); }
 .dark .skp[data-skin-preview="nube"] .skp-nav:nth-of-type(4) { --pf: oklch(0.8 0.131 62); --pe: oklch(0.52 0.14 50); }
 .dark .skp[data-skin-preview="nube"] .skp-nav:nth-of-type(5) { --pf: oklch(0.76 0.122 305); --pe: oklch(0.47 0.15 302); }
+
+/* ================================================================ GRAFITO: Profesional in graphite, near-white and
+   near-black with one orange mark, the system font and softer corners. */
+.skp[data-skin-preview="grafito"] { --p-font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; --p-title: var(--p-font); --p-r: 5px;
+  --p-bg: oklch(0.991 0 0); --p-fg: oklch(0.269 0 0); --p-side: oklch(0.978 0 0); --p-card: #fff; --p-border: oklch(0.948 0 0); --p-primary: oklch(0.6 0.18 40);
+  --p-accent: oklch(0.958 0 0); --p-accent-fg: oklch(0.269 0 0); --p-bubble: oklch(0.958 0 0); --p-bubble-fg: oklch(0.269 0 0); --p-bar: oklch(0.991 0 0); --p-box-line: oklch(0.85 0 0); }
+.dark .skp[data-skin-preview="grafito"] { --p-bg: oklch(0.164 0 0); --p-fg: oklch(0.97 0 0); --p-side: oklch(0.145 0 0); --p-card: oklch(0.178 0 0); --p-border: oklch(0.26 0 0); --p-primary: oklch(0.67 0.19 38);
+  --p-accent: oklch(0.225 0 0); --p-accent-fg: oklch(0.97 0 0); --p-bubble: oklch(0.225 0 0); --p-bubble-fg: oklch(0.97 0 0); --p-bar: oklch(0.164 0 0); --p-box-line: oklch(0.38 0 0); }
+.skp[data-skin-preview="grafito"] .skp-mark { letter-spacing: 0.22em; font-size: 6.5px; }
+.skp[data-skin-preview="grafito"] .skp-mark i { background: currentColor; }

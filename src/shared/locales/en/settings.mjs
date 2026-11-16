@@ -212,6 +212,7 @@ export default {
   'appearance.skin.profesional': 'Professional',
   'appearance.skin.nube': 'Candy',
   'appearance.skin.cristal': 'Glass',
+  'appearance.skin.grafito': 'Graphite',
   'appearance.musicVolume': 'Music volume',
   'appearance.font': 'Font',
   'appearance.font.outfit': 'Theme font',
