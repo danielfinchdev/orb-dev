@@ -2,6 +2,7 @@
 import { createElement, useMemo } from 'react';
 import { useHighlight } from '@/lib/use-highlight.js';
 import { cn } from '@/lib/utils.js';
+import { hunkStart } from '@/lib/diff-hunk.js';
 
 // A diff's kinds of line. After "diff --git" come header lines (index, ---, +++…) until the first hunk ("@@") or the
 // "+++" line, so a removed line that starts with "--" is still a removed line.
@@ -31,7 +32,6 @@ function diffRows(text, hl) {
   }
   return out;
 }
-const hunkStart = (l) => { const m = /^@@ -(d+)(?:,d+)? +(d+)/.exec(l); return m ? [Number(m[1]), Number(m[2])] : [0, 0]; };
 const ROW = { add: 'code-add', del: 'code-del', hunk: 'code-hunk', meta: 'code-meta-line', ctx: '' };
 
 // headers: false leaves out the lines before the first hunk (diff --git, index, ---, +++), when the file is named apart.
