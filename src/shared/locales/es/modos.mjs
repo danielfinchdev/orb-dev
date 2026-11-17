@@ -27,6 +27,7 @@ export default {
   "msg.modes.debugOn": "Modo depuración activado: el agente buscará la causa antes de tocar nada. «/debug apagar» lo quita.",
   "msg.modes.debugOff": "Modo depuración desactivado.",
   "msg.modes.reviewNoProject": "La revisión necesita un chat dentro de un proyecto.",
+  "msg.modes.reviewWorktree": "/review aún no funciona en chats con copia propia: revisaría la carpeta del proyecto, no el trabajo de este chat. Pídele al agente que revise sus cambios, o haz commit y revisa la rama.",
   "msg.modes.reviewNoChanges": "No hay cambios sin guardar en git que revisar en este proyecto.",
   "msg.modes.reviewTitle": "Revisión de los cambios del chat «{title}»",
   "msg.modes.reviewing": "{agent} revisa los cambios del chat (revisión #{review}), solo en lectura.",

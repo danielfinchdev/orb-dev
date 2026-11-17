@@ -45,6 +45,9 @@ En result pon, en este orden: VEREDICTO: CORRECTO o CON FALLOS; después la list
   // now), read-only, by another provider than the chat's agent. It never touches the chat or its permission.
   reviewChat(session, { actor = 'usuario', focus = '' } = {}) {
     if (!session.project || !this.board.project(session.project)) throw new Error(tr('msg.modes.reviewNoProject'));
+    // The review task runs in the project's folder, which holds none of a Worktree chat's work: refusing is safer than
+    // reviewing the wrong files (or reporting «no changes» when the chat has plenty).
+    if (this.board.settingJson(`chatwt:${session.id}`)) throw new Error(tr('msg.modes.reviewWorktree'));
     const files = [...(changedFiles(session.cwd)?.keys() ?? [])];
     if (!files.length) throw new Error(tr('msg.modes.reviewNoChanges'));
     const agent = this.reviewer([session.agent]);
