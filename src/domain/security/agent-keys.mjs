@@ -3,8 +3,7 @@
 // listed here can be stored or handed over: a name that is not in the table of its agent is refused, so the vault cannot
 // be used to hand any other variable (PATH, NODE_OPTIONS…) to an agent's process. The value goes only into the
 // environment of that agent's own process (src/engine/sessions.mjs) and is hidden from its session log.
-// The names come from each CLI's public documentation (NOT verified against the installed programs: none was installed
-// when this was written; see desarrollo/orb-3.8.7-agentes.md).
+// The names come from each CLI's public documentation (not verified against the installed programs).
 export const AGENT_KEY_NAMES = Object.freeze({
   grok: Object.freeze(['XAI_API_KEY']),
   devin: Object.freeze(['WINDSURF_API_KEY']),
