@@ -31,6 +31,19 @@ const RUN_FLAG = /^(\/c|\/k|-c|-command|-commandwithargs)$/i;
 // A Git Bash, Cygwin or WSL path of a Windows drive (/c/Users…, /cygdrive/c/…, /mnt/c/…) as Windows writes it.
 export const winPath = (p) => (process.platform === 'win32' ? String(p).replace(/^\/(?:cygdrive\/|mnt\/)?([a-z])(?=\/|$)/i, (_m, d) => `${d.toUpperCase()}:`) : String(p));
 export const bare = (w) => String(w ?? '').replace(/^["'`]+|["'`,;]+$/g, '').replace(/^\d*[<>]+&?/, '').replace(/^[^=\\/]*=(?=.)/, '');
+// Segments (even indexes) and the separators between them (odd), cutting only outside quotes: `node w.js "|rg"` is one
+// segment run by node, not a node and an rg.
+export function splitOutsideQuotes(command) {
+  const out = []; let cur = ''; let q = null;
+  for (const ch of String(command)) {
+    if (q) { cur += ch; if (ch === q) q = null; continue; }
+    if (ch === '"' || ch === "'") { q = ch; cur += ch; continue; }
+    if (/[\n;&|(){}]/.test(ch)) { out.push(cur, ch); cur = ''; continue; }
+    cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
 export function workDirs(command, cwd) {
   const out = [];
   let dir = cwd ? path.resolve(cwd) : null; let prev = dir; const stack = [];
@@ -42,7 +55,7 @@ export function workDirs(command, cwd) {
     if (path.isAbsolute(t) || path.win32.isAbsolute(t)) return path.resolve(t);
     return dir ? path.resolve(dir, t) : null;
   };
-  for (const part of String(command ?? '').split(/\r?\n|[;&|(){}]/)) {
+  for (const part of splitOutsideQuotes(String(command ?? '')).filter((_, i) => i % 2 === 0)) {
     let w = words(part).map(bare).filter(Boolean);
     // A shell inside the command: what it runs is read as part of this one.
     for (let i = 0; i < 4 && w.length && SHELL_CMD.test(w[0].replace(/^.*[\\/]/, '').replace(/\.exe$/i, '')); i++) {

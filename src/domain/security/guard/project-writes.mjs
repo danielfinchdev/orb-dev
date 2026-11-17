@@ -2,7 +2,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import { STAGING_DIR } from '../../../platform/paths.mjs';
-import { bare, expandEnv, lastName, pathWords, unq, unwrapShell, winPath, workDirs } from './shell-text.mjs';
+import { bare, expandEnv, splitOutsideQuotes, lastName, pathWords, unq, unwrapShell, winPath, workDirs } from './shell-text.mjs';
 import { localPath, norm, realOf, rootsOf } from './roots.mjs';
 import { GLOB, globRe } from './core-access.mjs';
 
@@ -118,9 +118,11 @@ export function writesGitRunsFile(command, cwd) {
   if (workDirs(c, cwd).some((part) => WRITERS.test(exeOf(part)) && !DELETERS.test(exeOf(part)) && targetsOf(exeOf(part), part.words.slice(1)).some((t) => isGitRunsFile(bare(t), part.dir)))) return true;
   // Any other program that names them (sed -i, [IO.File]::WriteAllText, node -e …), except one that only looks and git
   // itself (its config forms are the gitRuns rule). A program run from inside .git (`cd .git && node w.js`) writes there.
-  return workDirs(withoutExcludes(c), cwd).some((part) => { const exe = exeOf(part); return !WRITERS.test(exe) && !LOOKERS.test(exe) && exe !== 'git' && !CD_NAME.test(exe) && (GIT_RUNS_TEXT.test(part.words.join(' ')) || (part.dir && IN_GIT_DIR.test(part.dir))); });
+  // `find` only looks until it is told to run or write something.
+  return workDirs(withoutExcludes(c), cwd).some((part) => { const exe = exeOf(part); return part.words.length && !WRITERS.test(exe) && (!LOOKERS.test(exe) || (exe === 'find' && part.words.some((w) => FIND_ACTION.test(w)))) && exe !== 'git' && !CD_NAME.test(exe) && (GIT_RUNS_TEXT.test(part.words.join(' ')) || (part.dir && IN_GIT_DIR.test(part.dir))); });
 }
-const CD_NAME = /^(cd|chdir|pushd|popd|set-location|sl|push-location|pop-location)$/i;
+const FIND_ACTION = /^-(exec|execdir|ok|okdir|delete|fprint0?|fprintf|fls)$/i;
+const CD_NAME =/^(cd|chdir|pushd|popd|set-location|sl|push-location|pop-location)$/i;
 const IN_GIT_DIR = /(^|[\\/])\.git([\\/]|$)/i;
 // `--exclude .git` and friends name .git to leave it out, not to write it. Only a program that really excludes, only an
 // option from a closed list that takes a value, and only when the value is exactly .git; any other program (node, python,
@@ -132,7 +134,7 @@ const EXCLUDE_OPTION = new RegExp(String.raw`(?:^|\s)(?:--exclude(?:-dir)?|--ign
 const SHORT_EXCLUDE = new RegExp(String.raw`(?:^|\s)-x\s+` + GIT_VALUE, 'gi');
 const segmentExe = (seg) => (/^\s*(\S+)/.exec(seg)?.[1] ?? '').replace(/^["']|["']$/g, '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '');
 function withoutExcludes(command) {
-  return command.split(/(\r?\n|[;&|(){}])/).map((seg) => {
+  return splitOutsideQuotes(command).map((seg) => {
     const exe = segmentExe(seg);
     if (!EXCLUDERS.test(exe)) return seg;
     const s = seg.replace(EXCLUDE_OPTION, ' ');
@@ -140,7 +142,7 @@ function withoutExcludes(command) {
   }).join('');
 }
 // the loose `.git` (a worktree's pointer file) counts too, when nothing follows it but the end of the word
-const GIT_RUNS_TEXT = /(^|[\\/\s"'`(=,])\.git(?:[\\/]+(?:(?:worktrees|modules)[\\/]+(?:[^\\/\s"'`]+[\\/]+)+)?(?:config|commondir|gitdir|hooks|info[\\/]+attributes)(?![\w.-])|(?![\w.\\/-]))/i;
+const GIT_RUNS_TEXT = /(^|[\\/\s"'`(=,]|\s-[A-Za-z])\.git(?:[\\/]+(?:(?:worktrees|modules)[\\/]+(?:[^\\/\s"'`]+[\\/]+)+)?(?:config|commondir|gitdir|hooks|info[\\/]+attributes)(?![\w.-])|(?![\w.\\/-]))/i;
 // a deletion that takes the project folder itself, a folder that holds it, its .git (where Orb's
 // snapshots live) or everything at its top (`*`, which in PowerShell takes .git too): «Deshacer» could not bring it back.
 const DELETERS = /^(rm|rmdir|rd|del|erase|remove-item|ri|unlink|shred|mv|move|move-item|mi|rename-item|rni|ren|rename)$/i;
