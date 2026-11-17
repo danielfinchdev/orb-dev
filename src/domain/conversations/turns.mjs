@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { git, gitAsync, REF_PREFIX, isGitRepoAsync, repoRootAsync } from '../../platform/git.mjs';
-import { snapshotCommitAsync, diffBetween, RAW_GIT, RAW_INDEX } from '../tasks/checkpoints.mjs';
+import { snapshotCommitAsync, diffBetween, RAW_GIT, RAW_INDEX, caseRenamed } from '../tasks/checkpoints.mjs';
 import { isSecretPath } from '../../shared/secrets-scan.mjs';
 
 const TURNS = `${REF_PREFIX}/turnos`;
@@ -68,7 +68,8 @@ const lastPhoto = new Map();
 // True when the folder is still exactly the one in `ref`'s photo, so a message does not need a new photo. Same trust as the
 // fast snapshot (a file's date and size, as git does), checked against a copy of the raw index (the photo's own stat cache):
 // - diff-index: every file the photo has is on disk with the same content, and the index has nothing the photo lacks;
-// - ls-files --others: no new file that is not ignored (a secret-looking one is never in a photo, so it does not count).
+// - ls-files --others: no new file that is not ignored (a secret-looking one is never in a photo, so it does not count);
+// - letter case: on a file system that ignores it, a file renamed only in case is invisible to both, so it is looked for apart.
 // Any doubt (no raw index, a failing git, a vanished ref, a difference) answers false and the caller takes a full photo.
 async function unchanged(repo, rawIndex, ref) {
   const tmp = path.join(os.tmpdir(), `orb-index-check-${process.pid}-${crypto.randomBytes(4).toString('hex')}`);
@@ -81,7 +82,8 @@ async function unchanged(repo, rawIndex, ref) {
       gitAsync(repo, env, ...RAW_GIT, 'ls-files', '--others', '--exclude-standard', '-z'),
     ]);
     if (diff.status !== 0 || others.status !== 0) return false;
-    return others.stdout.split('\0').filter(Boolean).every(isSecretPath);
+    if (!others.stdout.split('\0').filter(Boolean).every(isSecretPath)) return false;
+    return !(await caseRenamed(repo, rawIndex, tmp));
   } catch { return false; } finally { fs.rmSync(tmp, { force: true }); }
 }
 
