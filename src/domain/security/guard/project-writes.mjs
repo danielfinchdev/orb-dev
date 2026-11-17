@@ -109,20 +109,24 @@ const ownVariable = (t, command, dir, roots) => /^["']?\$[\w:.]+["']?$/.test(t) 
 const GIT_RUNS_FILE = /(^|[\\/])\.git$|(^|[\\/])\.git[\\/]+(?:(?:worktrees|modules)[\\/]+.+[\\/]+)?(?:config(?:\.worktree)?|commondir|gitdir|hooks(?:[\\/].*)?|info[\\/]+attributes)$/i;
 export const isGitRunsFile = (p, dir) => { const f = resolveTarget(p, dir); return GIT_RUNS_FILE.test(lastName(p)) || Boolean(f && GIT_RUNS_FILE.test(f)); };
 export function writesGitRunsFile(command, cwd) {
-  const c = withoutExcludes(expandEnv(unwrapShell(command)));
+  const c = expandEnv(unwrapShell(command));
   for (const m of c.matchAll(/(?<![0-9&])>>?\s*("[^"]+"|'[^']+'|[^\s|&;<>]+)/g)) if (isGitRunsFile(unq(m[1]), cwd)) return true;
-  return workDirs(c, cwd).some((part) => {
-    const exe = String(part.words[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
-    if (WRITERS.test(exe)) return !DELETERS.test(exe) && targetsOf(exe, part.words.slice(1)).some((t) => isGitRunsFile(bare(t), part.dir));
-    // Any other program that names them (sed -i, [IO.File]::WriteAllText, node -e …), except one that only looks and git
-    // itself (its config forms are the gitRuns rule).
-    return !LOOKERS.test(exe) && exe !== 'git' && GIT_RUNS_TEXT.test(part.words.join(' '));
-  });
+  const exeOf = (part) => String(part.words[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
+  // Writers and redirections are judged on the full command; only the text scan of the other programs drops `--exclude .git`.
+  if (workDirs(c, cwd).some((part) => WRITERS.test(exeOf(part)) && !DELETERS.test(exeOf(part)) && targetsOf(exeOf(part), part.words.slice(1)).some((t) => isGitRunsFile(bare(t), part.dir)))) return true;
+  // Any other program that names them (sed -i, [IO.File]::WriteAllText, node -e …), except one that only looks and git
+  // itself (its config forms are the gitRuns rule).
+  return workDirs(withoutShortExcludes(c), cwd).some((part) => { const exe = exeOf(part); return !WRITERS.test(exe) && !LOOKERS.test(exe) && exe !== 'git' && GIT_RUNS_TEXT.test(part.words.join(' ')); });
 }
 // the loose `.git` (a worktree's pointer file) counts too, when nothing follows it but the end of the word
 // `--exclude .git`, `--exclude=.git`, `--ignore-pattern .git`, `-x .git`, `/XD .git` name .git to leave it out, not to write it
-const EXCLUDE_OPTION = /(?:^|\s)(?:--exclude(?:-[\w-]+)?|--ignore[\w-]*|-x|\/XD)(?:=|\s+)(?:"[^"]*"|'[^']*'|\S+)/gi;
+// Only an option whose value is exactly .git is dropped, and only for the text check: any other value (`cp -x cfg .git/config`)
+// may be a destination, and writers and redirections are judged on the full command.
+const EXCLUDE_OPTION = /(?:^|\s)(?:--exclude(?:-[\w-]+)?|--ignore[\w-]*|\/XD)(?:=|\s+)(?:\.git[\\/]*|"\.git[\\/]*"|'\.git[\\/]*')(?=\s|$)/gi;
 const withoutExcludes = (command) => command.replace(EXCLUDE_OPTION, ' ');
+// `-x .git` is rg's/tar's exclude but also a plausible destination (`cp src -x .git`), so only the text check drops it.
+const SHORT_EXCLUDE = /(?:^|\s)-x\s+(?:\.git[\\/]*|"\.git[\\/]*"|'\.git[\\/]*')(?=\s|$)/gi;
+const withoutShortExcludes = (command) => withoutExcludes(command).replace(SHORT_EXCLUDE, ' ');
 const GIT_RUNS_TEXT = /(^|[\\/\s"'`(=,])\.git(?:[\\/]+(?:(?:worktrees|modules)[\\/]+(?:[^\\/\s"'`]+[\\/]+)+)?(?:config|commondir|gitdir|hooks|info[\\/]+attributes)(?![\w.-])|(?![\w.\\/-]))/i;
 // a deletion that takes the project folder itself, a folder that holds it, its .git (where Orb's
 // snapshots live) or everything at its top (`*`, which in PowerShell takes .git too): «Deshacer» could not bring it back.

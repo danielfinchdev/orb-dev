@@ -36,3 +36,11 @@ test('nested module folders ask, and .git named only to leave it out does not', 
 test('rsync --exclude .git is not a write of .git (rsync asks for its own reason)', () => {
   assert.equal(writesGitRunsFile('rsync -a --exclude .git src/ dst/', proj), false);
 });
+
+test('an option that merely looks like an exclude cannot hide a write to .git', () => {
+  const bad = ['cp -x cfg .git/config', 'cp -x evil.sh .git/hooks/pre-commit', 'echo p | tee --ignore-interrupts .git/hooks/pre-commit'];
+  for (const permission of ['auto', 'editar', 'probar']) {
+    for (const c of bad) assert.equal(decide({ permission, tool: 'Bash', command: c, internalDir: ctx.paths.internal, cwd: proj, projectDir: proj }).decision, 'ask', `${permission}: ${c}`);
+  }
+  for (const c of ['rg --exclude .git foo', 'grep -r --exclude-dir=.git x .', 'robocopy a b /XD .git', "rg --exclude '.git/' foo"]) assert.equal(auto(c).decision, 'allow', c);
+});
