@@ -641,3 +641,23 @@ test('undoing a task still removes a file the task created', () => {
   assert.deepEqual(out.removed, ['task.txt']);
   assert.ok(!fs.existsSync(path.join(r, 'task.txt')));
 });
+
+test('with a reused photo, a file ignored then that appeared before the message is kept when the turn stops ignoring it', async () => {
+  const r = forcedRepo('photo-i3-reuse'); const sid = 'i3r';
+  await snapshotBeforeTurn(r, sid, alive, { mark: 1 });
+  await snapshotBeforeTurn(r, sid, alive, { mark: 2 }); // writes the marker
+  await sleep(100);
+  fs.mkdirSync(path.join(r, 'gen'), { recursive: true }); fs.writeFileSync(path.join(r, 'gen', 'mine.csv'), 'before the message\n');
+  await sleep(100);
+  const messageAt = Date.now();
+  await sleep(100);
+  await snapshotBeforeTurn(r, sid, alive, { mark: 3 });
+  assert.equal(photoRef(r, sid, 3), photoRef(r, sid, 2)); // reused: older than the file
+  fs.writeFileSync(path.join(r, '.gitignore'), '.env\n');
+  fs.writeFileSync(path.join(r, 'made.txt'), 'by the turn\n');
+  await snapshotAfterTurn(r, sid, alive);
+  const out = await rewindFiles(r, sid, 3, { messageAt });
+  assert.equal(read(r, 'gen', 'mine.csv'), 'before the message\n');
+  assert.ok(out.files.skipped.some((f) => f.startsWith('gen/mine.csv')));
+  assert.ok(!fs.existsSync(path.join(r, 'made.txt')));
+});
