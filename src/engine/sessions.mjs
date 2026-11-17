@@ -59,7 +59,7 @@ export const browserOn = () => Boolean(ctx.browser) && ctx.config.browser?.enabl
 // carries only the pipe and a ticket per server, new for every agent process and taken back when it closes
 // (Sessions.closeLive, the coordinator's Lane.closeLive). A worker's tools act only on its task (permissions.mjs ›
 // ownsTask); two direct conversations of one agent are two identities.
-// F2.6c: reusable: Cursor's tickets, new every turn (mcpServersEachTurn) and released when the turn ends (.release()).
+// Reusable: Cursor's tickets, new every turn (mcpServersEachTurn) and released when the turn ends (.release()).
 export function mcpServersFor(agent, { taskId = '', orchestrator = false, browser = !orchestrator, session = '', conversation = null, reusable = false } = {}) {
   const who = orchestrator ? 'orb' : agent;
   const sid = session ? String(session) : null;
@@ -80,7 +80,7 @@ export function mcpServersFor(agent, { taskId = '', orchestrator = false, browse
       if (s.enabled === false || (s.agents?.length && !s.agents.includes(agent)) || taken.has(connectorKey(s.name))) continue;
       // a server of core\mcp whose folder is a link or a junction (or reaches out of core) never starts.
       if (!connectorSafe(ctx.paths.core, s)) continue;
-      taken.add(connectorKey(s.name)); // F2.6c: never two servers on one variable name (config checks it too)
+      taken.add(connectorKey(s.name)); // never two servers on one variable name (config checks it too)
       // its keys only for its launcher (orb.json has references). Keys go as a one-time grant of the vault, made when
       // the launcher trades its ticket: the keys go from the vault to the launcher, never through the engine.
       servers[s.name] = ticketed(s.name, connectorLauncher(), () => ({ launch: { command: s.command, args: s.args ?? [], ...connectorLaunch(ctx.master, s) } }));
@@ -422,7 +422,7 @@ export class Sessions {
     }
     if (ev.type === 'context') { if (ev.size) this.update(id, { context: { used: ev.used, size: ev.size, at: now() } }); return; }
     if (ev.type === 'rate') { const s = this.get(id); try { this.onRate(s?.account ?? s?.agent, ev); } catch { /* budget only */ } return; }
-    // F2.6c: the process is gone: its tickets go with it at once, even mid-turn (a process it left behind could trade them).
+    // The process is gone: its tickets go with it at once, even mid-turn (a process it left behind could trade them).
     if (ev.type === 'exit') { if (this.lives.get(id)?.live.isClosed?.()) { agentAuth.revokeSession(id); if (!this.running.has(id)) this.lives.delete(id); } }
   }
 

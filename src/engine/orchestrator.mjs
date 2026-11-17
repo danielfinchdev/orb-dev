@@ -350,7 +350,7 @@ class Lane {
     if (ev.type === 'rate') { try { recordRate(this.board, this.liveAccount ?? this.liveAgent, ev); } catch { /* budget only */ } return; }
     if (ev.type === 'context' && ev.size) { this.board.updateConversation(this.id, { context: { used: ev.used, size: ev.size } }); this.push(); return; }
     // Only the process that ended is dropped: a replaced live's late exit must not detach the one in use.
-    // F2.6c: the coordinator's process is gone: its tickets go with it at once (even mid-turn).
+    // The coordinator's process is gone: its tickets go with it at once (even mid-turn).
     if (ev.type === 'exit' && this.live?.isClosed()) { agentAuth.revokeSession(`asistente-${this.id}`); if (!this.busy) this.live = null; }
   }
 

@@ -11,7 +11,7 @@ import { PRODUCT } from '../shared/product.mjs';
 const location = (userData) => path.join(userData, 'ubicacion.json');
 
 // a saved workspace whose core is gone is still this PC's workspace: the engine puts core back from the newest backup
-// or the window says why it cannot (only a workspace folder that is gone altogether brings the welcome back). Global B13:
+// or the window says why it cannot (only a workspace folder that is gone altogether brings the welcome back). Also:
 // a folder without core counts only when this app keeps copies for it (claves<its key>…); an old location pointing
 // to some other folder brings the welcome, not «Falta core».
 const keptHere = (userData, h) => {

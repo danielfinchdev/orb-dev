@@ -58,7 +58,7 @@ export const ACP_SPECS = {
     strengths: 'agente autónomo con memoria y muchos proveedores de modelos', models: [], defaultModel: ''
   },
   // The four below are NOT verified: none of these programs was installed when they were added, so their ACP arguments come
-  // from public documentation / Synara's table (desarrollo/synara-vs-orb.md, paso 3), not from `<cli> --help`.
+  // from public documentation / Synara's table, not from `<cli> --help`.
   // Check `<cli> --help` before turning one on; a wrong argument makes the program quit at start and Orb says so.
   // keyEnv: variables of the vault's «agentkey/<agent>/<NAME>» (src/domain/security/agent-keys.mjs), put into this program's
   // environment only; none is needed when the program has its own login (loginArgs). Off by default (config-file.mjs).

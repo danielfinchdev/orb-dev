@@ -271,7 +271,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const principal = principalOf({ device });
     // which account the assistant spends is chosen on the PC (the brain's agent and model, also from the phone).
     if (method === 'chat.settings' && params.account !== undefined) delete params.account;
-    // F2.6c: a picture it uploaded comes back by the name /api/upload gave it (never a path of the PC).
+    // A picture it uploaded comes back by the name /api/upload gave it (never a path of the PC).
     if (Array.isArray(params.images)) params.images = params.images.map((f) => (typeof f === 'string' && IMAGE_NAME.test(f) ? path.join(uploads(), f) : f));
     const why = guardCall(board, method, params, { uploadsDir: uploads() });
     if (why) return deny(why);

@@ -16,7 +16,7 @@ export const id = 'cursor';
 export const label = 'Cursor';
 export const kind = 'cli-stream';
 export const caps = { images: false, steer: false, fork: false, approvals: false, models: true, context: false };
-// F2.6c: Cursor starts its MCP servers again every turn, so they get new tickets every turn (o.mcpServers is then a
+// Cursor starts its MCP servers again every turn, so they get new tickets every turn (o.mcpServers is then a
 // function), taken back when the turn ends (src/domain/security/agent-auth.mjs).
 export const mcpServersEachTurn = true;
 
