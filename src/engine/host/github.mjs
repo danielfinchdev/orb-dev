@@ -164,7 +164,8 @@ export async function commitAll(project, message, opts = {}) {
     if (secretsInDiff(shown).length) {
       // `rev-list --parents`: «<sha>» alone is a root commit; if git itself fails the ref is left untouched.
       const rl = await git(project.path, 'rev-list', '--parents', '-n1', 'HEAD');
-      if (rl.status !== 0) throw new Error(tr('msg.github.gitIncomplete'));
+      // The commit is already in HEAD: say so, and never let the caller go on to push it.
+      if (rl.status !== 0) throw new Error(tr('msg.github.committedSecret'));
       await (rl.stdout.trim().split(/\s+/).length > 1 ? git(project.path, 'reset', '-q', '--soft', 'HEAD~1') : git(project.path, 'update-ref', '-d', 'HEAD'));
       await unstage(); throw new Error(tr('msg.github.secretInText', { files: only.slice(0, 5).join(', ') })); }
   }

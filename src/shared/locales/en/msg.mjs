@@ -215,6 +215,7 @@ export default {
   "msg.expert.secrets": "the file may contain secrets and is not shown",
   "msg.github.badBranch": "invalid branch name: {b}",
   "msg.github.gitIncomplete": "git did not return the full list of changes (it was cut or took too long); not continuing, to be safe.",
+  "msg.github.committedSecret": "The commit was made and may contain a secret, and Orb could not undo it. Run git reset --soft HEAD~1 before pushing anything.",
   "msg.github.badRepo": "the repository must use the format user/repo or https://github.com/user/repo",
   "msg.github.badRepoName": "invalid repository name (use letters, numbers, dots or hyphens)",
   "msg.github.cloneFailed": "could not clone",
