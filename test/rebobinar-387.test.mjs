@@ -16,7 +16,9 @@ import { Scheduler } from '../src/engine/scheduler/index.mjs';
 import { buildApi } from '../src/engine/api/index.mjs';
 import { DESKTOP, METHODS } from '../src/domain/security/permissions.mjs';
 import { git } from '../src/platform/git.mjs';
-import { snapshotCommit, snapshotCommitAsync } from '../src/domain/tasks/checkpoints.mjs';
+import { snapshotCommit, snapshotCommitAsync, undoCheckpoint } from '../src/domain/tasks/checkpoints.mjs';
+import { snapshotBeforeTurn, snapshotAfterTurn } from '../src/domain/conversations/turns.mjs';
+import { rewindFiles, undoRewindFiles } from '../src/domain/conversations/rewind.mjs';
 
 let t; let board; let api; let sessions; let repo; let sent; let release;
 const call = (method, params = {}) => api.call(method, params, DESKTOP);
@@ -576,4 +578,66 @@ folds('caseRenamed uses the folder list of the last photo and lists the index on
   for (const d of ['lib/x', 'lib', '']) fs.utimesSync(path.join(r, d), old, old);
   // with the index copy missing, any attempt to list it would fail loudly: an untouched folder tree needs none
   assert.equal(await caseRenamed(r, raw, path.join(r, 'no-such-index')), false);
+});
+
+// Direct use of the photo and rewind modules (no chat engine), on a repository of their own.
+const alive = () => true;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const photoRef = (r, sid, mark) => g(r, 'rev-parse', `refs/orb/turnos/${sid}/antes/${mark}^{commit}`);
+
+test('a message photo sees an ignored file force-added and committed since the last photo, and a rewind keeps it', async () => {
+  const r = forcedRepo('photo-i2'); const sid = 'i2';
+  await snapshotBeforeTurn(r, sid, alive, { mark: 1 });
+  fs.writeFileSync(path.join(r, 'a.txt'), 'turn 1\n');
+  await snapshotAfterTurn(r, sid, alive);
+  forceCommit(r, 'gen/datos.json');
+  await snapshotBeforeTurn(r, sid, alive, { mark: 2 });
+  assert.ok(tracked(r, `refs/orb/turnos/${sid}/antes/2`).includes('gen/datos.json'));
+  fs.writeFileSync(path.join(r, 'a.txt'), 'turn 2\n');
+  await snapshotAfterTurn(r, sid, alive);
+  await rewindFiles(r, sid, 2);
+  assert.equal(read(r, 'gen', 'datos.json'), 'gen/datos.json\n');
+  assert.equal(read(r, 'a.txt'), 'turn 1\n');
+});
+
+test('a message photo is still reused when nothing changed and HEAD is the same', async () => {
+  const r = forcedRepo('photo-reuse'); const sid = 'reuse';
+  await snapshotBeforeTurn(r, sid, alive, { mark: 1 });
+  await snapshotBeforeTurn(r, sid, alive, { mark: 2 }); // the first photo left no marker: this one is a new photo that writes it
+  await snapshotBeforeTurn(r, sid, alive, { mark: 3 });
+  assert.equal(photoRef(r, sid, 3), photoRef(r, sid, 2));
+  await snapshotBeforeTurn(r, sid, alive, { mark: 4 }); // and again
+  assert.equal(photoRef(r, sid, 4), photoRef(r, sid, 2));
+  fs.writeFileSync(path.join(r, 'new.txt'), 'x\n');
+  await snapshotBeforeTurn(r, sid, alive, { mark: 5 });
+  assert.notEqual(photoRef(r, sid, 5), photoRef(r, sid, 2));
+});
+
+test('a rewind keeps a file that existed before the message but was ignored then, and deletes one the turn created', async () => {
+  const r = forcedRepo('photo-i3'); const sid = 'i3';
+  fs.mkdirSync(path.join(r, 'gen'), { recursive: true }); fs.writeFileSync(path.join(r, 'gen', 'clientes.csv'), 'only here\n');
+  await sleep(100); // so the file is clearly older than the photo
+  await snapshotBeforeTurn(r, sid, alive, { mark: 1 });
+  await sleep(100);
+  // the turn stops ignoring gen/ and creates a file of its own
+  fs.writeFileSync(path.join(r, '.gitignore'), '.env\n');
+  fs.writeFileSync(path.join(r, 'made.txt'), 'by the turn\n');
+  await snapshotAfterTurn(r, sid, alive);
+  const out = await rewindFiles(r, sid, 1);
+  assert.equal(read(r, 'gen', 'clientes.csv'), 'only here\n');
+  assert.ok(out.files.skipped.some((f) => f.startsWith('gen/clientes.csv')));
+  assert.ok(!fs.existsSync(path.join(r, 'made.txt')));
+  assert.ok(out.files.removed.includes('made.txt'));
+  await undoRewindFiles(r, out);
+  assert.equal(read(r, 'made.txt'), 'by the turn\n');
+});
+
+test('undoing a task still removes a file the task created', () => {
+  const r = forcedRepo('task-undo');
+  const before = snapshotCommit(r, { raw: true, always: true });
+  fs.writeFileSync(path.join(r, 'task.txt'), 'new\n');
+  const after = snapshotCommit(r, { raw: true, always: true });
+  const out = undoCheckpoint({ kind: 'git', repo: r, commit: before.commit, raw: true }, { commit: after.commit });
+  assert.deepEqual(out.removed, ['task.txt']);
+  assert.ok(!fs.existsSync(path.join(r, 'task.txt')));
 });

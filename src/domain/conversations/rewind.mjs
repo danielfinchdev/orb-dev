@@ -5,7 +5,7 @@
 // since then stay in the history; their files are what goes back.
 import { git, gitAsync, REF_PREFIX } from '../../platform/git.mjs';
 import { fullSnapshot, undoCheckpoint } from '../tasks/checkpoints.mjs';
-import { photoBefore } from './turns.mjs';
+import { photoBefore, PHOTO_AT } from './turns.mjs';
 
 const RESCUE = `${REF_PREFIX}/rescate`;
 const KEEP = 10; // rescue copies kept per chat; the oldest go first
@@ -36,7 +36,15 @@ export async function rewindFiles(cwd, sid, itemId) {
   const ref = `${rescueDir(sid)}/${Date.now()}`;
   if ((await gitAsync(repo, {}, 'update-ref', ref, rescue.commit)).status !== 0) throw new Error('no rescue ref');
   await prune(repo, sid);
-  const out = undoCheckpoint({ kind: 'git', repo, commit: target, raw: true }, { commit: rescue.commit }, { safe: true });
+  // Files in the rescue copy but not in the photo count as created after it, unless they are older than the photo
+  // (they were ignored then and stopped being so). Photos without the exact time fall back to the commit's whole
+  // seconds plus a margin that leans toward keeping files.
+  const msg = (await gitAsync(repo, {}, 'show', '-s', '--format=%ct%n%B', target)).stdout;
+  const lines = msg.split(/\r?\n/);
+  const exact = Number(lines.find((l) => l.startsWith(PHOTO_AT))?.slice(PHOTO_AT.length));
+  const taken = Number(lines[0]);
+  const madeAfter = exact > 0 ? exact : taken > 0 ? taken * 1000 + 2000 : Infinity;
+  const out = undoCheckpoint({ kind: 'git', repo, commit: target, raw: true }, { commit: rescue.commit }, { safe: true, madeAfter });
   return { rescue: rescue.commit, target, ref, restored: out.restored.length, removed: out.removed.length, skipped: out.skipped.length,
     files: { restored: cut(out.restored), removed: cut(out.removed), skipped: cut(out.skipped) } };
 }

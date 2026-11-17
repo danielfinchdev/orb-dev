@@ -187,7 +187,7 @@ export function missedBy(repo, after, full) {
 // Whole or not at all (another snapshot may be reading it): written beside and renamed over. Losing it only costs time.
 // A hash of the whole index file identifies that exact file. Its own trailing checksum is not enough: with index.skipHash
 // (turned on by feature.manyFiles) git writes it as zeros, and two different indexes may then end alike.
-const indexId = (file) => {
+export const indexId = (file) => {
   try { return crypto.createHash('sha1').update(fs.readFileSync(file)).digest('hex'); } catch { return null; }
 };
 // head: the HEAD the index was reconciled with (see restoreForced), kept beside it together with the index's checksum;
@@ -297,7 +297,8 @@ export async function foldsCaseOf(repo) {
 // last photo cannot be reused. `index` is a copy of the raw index (the caller's temporary one).
 export async function caseRenamed(repo, rawIndex, index) {
   if (!(await foldsCaseOf(repo))) return false;
-  const id = indexId(rawIndex);
+  // the id of the copy that was compared, not of the raw index as it is now: another snapshot may have replaced it since
+  const id = indexId(index);
   const since = scanSince(rawIndex, id);
   const listIndex = async () => (await gitAsync(repo, { GIT_INDEX_FILE: index }, 'ls-files', '-z')).stdout.split('\0').filter(Boolean);
   const known = knownDirs.get(rawIndex);
@@ -442,9 +443,12 @@ const MTIME_SLACK_MS = 2000;
 // Undo a task in "carpeta" mode: only the files it changed go back to how they were before it. A file that somebody changed
 // again after the task is left alone and reported. Never touches git history, branches or the index.
 // only: a Set of paths to limit it to (the files a fast snapshot missed, after a full one).
+// madeAfter: ms timestamp; a file that is in `after` but not in `before` is only removed when it was created after it. One
+// that already existed (e.g. it was ignored when `before` was taken and stopped being ignored later) or whose creation date
+// cannot be trusted is kept and reported.
 // safe: a file behind a link or junction is skipped, and a file that cannot be written or removed is reported in `skipped`
 // instead of stopping the whole undo (a conversation's rewind must always finish so that it can itself be undone).
-export function undoCheckpoint(before, after, { only = null, safe = false } = {}) {
+export function undoCheckpoint(before, after, { only = null, safe = false, madeAfter = null } = {}) {
   const restored = []; const removed = []; const skipped = [];
   if (before.kind === 'git') {
     const repo = before.repo; const cfg = before.raw ? RAW_GIT : []; // a raw checkpoint is read and compared raw
@@ -482,6 +486,10 @@ export function undoCheckpoint(before, after, { only = null, safe = false } = {}
         // it may be the very same file, and when that cannot be told the file is left alone
         const low = rel.toLowerCase();
         if (nowExists && list.some((c) => c.status !== 'A' && c.path !== rel && c.path.toLowerCase() === low && fs.existsSync(path.join(repo, c.path)))) { skipped.push(rel); continue; }
+        if (nowExists && madeAfter !== null) {
+          let born = 0; try { born = fs.lstatSync(file).birthtimeMs; } catch { /* unreadable: keep it */ }
+          if (!(born >= madeAfter)) { skipped.push(`${rel}: ya existía antes del mensaje`); continue; }
+        }
         if (nowExists && attempt(rel, () => fs.rmSync(file, { force: true }))) removed.push(rel);
         continue;
       }
