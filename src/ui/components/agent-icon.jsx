@@ -18,28 +18,31 @@ const PATHS = {
 // that arrives from the config without its own mark.
 PATHS.hermes = 'M2 5c5 0 9 1.6 11.5 4.6C15 8.6 17.3 8.2 20 8.5c-1 1.7-2.6 2.7-4.6 3.1 1.8.1 3.4-.2 5.1-1-.7 2.3-2.4 3.8-4.9 4.4 1.2.3 2.3.3 3.4.1-1 1.8-2.8 2.8-5.3 2.8-3.7 0-6.7-1.4-8.7-4.100C4 12.7 3.1 9.7 2 5z';
 PATHS.acp = 'M12 2a1.5 1.5 0 0 1 1.5 1.5c0 .6-.4 1.1-.9 1.400V6H17a4 4 0 0 1 4 4v7a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4v-7a4 4 0 0 1 4-4h4.400V4.900a1.5 1.5 0 0 1-.9-1.400A1.5 1.5 0 0 1 12 2ZM8.5 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM9 16.500a.75.75 0 0 0 0 1.500h6a.75.75 0 0 0 0-1.500Z';
-const COLORS = { claude: 'text-[#d97757]', codex: 'text-foreground', cursor: 'text-foreground', gemini: 'text-[#4285f4]', copilot: 'text-foreground', opencode: 'text-foreground', qwen: 'text-[#615ced]', hermes: 'text-[#b8892e]', any: 'text-primary', orb: 'text-primary' };
+// Brand colours live in themes/pieces.css, keyed by data-agent / data-tool, so the components hold no colour of their own.
+const KNOWN = new Set(['claude', 'codex', 'cursor', 'gemini', 'copilot', 'opencode', 'qwen', 'hermes']);
 const MARK = { claude: 'claude', codex: 'openai', cursor: 'cursor', gemini: 'gemini', copilot: 'copilot', qwen: 'qwen', opencode: 'opencode', hermes: 'hermes' };
 
-function Mark({ name, className }) {
-  return <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true"><path d={PATHS[name]} /></svg>;
+function Mark({ name, className, ...data }) {
+  return <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true" {...data}><path d={PATHS[name]} /></svg>;
 }
 
+// The agent's mark (.ag): round, no background, 12 px in rows (pass a size class for another size).
 export function AgentIcon({ agent, className }) {
-  const cls = cn('size-4 shrink-0', COLORS[agent] ?? 'text-muted-foreground', className);
-  if (MARK[agent]) return <Mark name={MARK[agent]} className={cls} />;
+  const cls = cn('ag size-3 shrink-0', className);
+  const tone = KNOWN.has(agent) ? agent : agent && agent !== 'any' && agent !== 'orb' ? 'other' : 'orb';
+  if (MARK[agent]) return <Mark name={MARK[agent]} className={cls} data-agent={tone} />;
   // an agent the app has no mark for (a future ACP agent from the config)
-  if (agent && agent !== 'any' && agent !== 'orb') return <Mark name="acp" className={cls} />;
+  if (agent && agent !== 'any' && agent !== 'orb') return <Mark name="acp" className={cls} data-agent={tone} />;
   // "any agent" and the assistant: a sparkle, not a vendor's mark
-  return <svg viewBox="0 0 24 24" className={cls} fill="currentColor" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" /></svg>;
+  return <svg viewBox="0 0 24 24" className={cls} data-agent={tone} fill="currentColor" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" /></svg>;
 }
 
 // Marks for the tools the installer sets up (git, node, gh, tailscale; the agents use AgentIcon).
-const TOOL = { git: ['git', 'text-[#f05032]'], node: ['node', 'text-[#5fa04e]'], gh: ['github', 'text-foreground'], tailscale: ['tailscale', 'text-foreground'] };
+const TOOL = { git: 'git', node: 'node', gh: 'github', tailscale: 'tailscale' };
 export function ToolIcon({ tool, className }) {
-  if (MARK[tool]) return <AgentIcon agent={tool} className={className} />;
-  const [name, color] = TOOL[tool] ?? [];
-  return name ? <Mark name={name} className={cn('size-4 shrink-0', color, className)} /> : null;
+  if (MARK[tool]) return <AgentIcon agent={tool} className={cn('size-4', className)} />;
+  const name = TOOL[tool];
+  return name ? <Mark name={name} className={cn('size-4 shrink-0', className)} data-tool={tool} /> : null;
 }
 
 export function GithubIcon({ className }) {
