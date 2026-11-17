@@ -131,7 +131,7 @@ export async function fullSnapshot(repo, { message }) {
     const head = (await run('rev-parse', '--verify', '--quiet', 'HEAD')).stdout.trim();
     if (head && (await run('read-tree', head)).status !== 0) return null;
     if ((await run(...RAW_GIT, 'add', '-A')).status !== 0) return null;
-    const listed = async () => (await run('ls-files', '-z')).stdout.split(' ').filter(Boolean);
+    const listed = async () => (await run('ls-files', '-z')).stdout.split('\0').filter(Boolean);
     const secret = (await listed()).filter(isSecretPath);
     for (const file of secret) await run('rm', '-q', '--cached', '--ignore-unmatch', '--', file);
     if ((await listed()).some(isSecretPath)) return null;
