@@ -9,7 +9,7 @@ import { firstFile, inPath, cleanEnv, IS_WIN } from '../../platform/proc.mjs';
 import { openConsole } from '../../agents/index.mjs';
 import { gitAsyncWith, isGitRepoAsync, ORB_GIT } from '../../platform/git.mjs';
 import { isRailOn } from '../../domain/rules/rails.mjs';
-import { secretFiles, isSecretPath, stagedSecretsAsync, secretsInDiff, redactSecrets } from '../../shared/secrets-scan.mjs';
+import { secretFiles, isSecretPath, looksSecretText, stagedSecretsAsync, secretsInDiff, redactSecrets } from '../../shared/secrets-scan.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { folderName } from '../../platform/paths.mjs';
 import { checkCategory } from '../../domain/projects/projects.mjs';
@@ -125,6 +125,8 @@ export async function commitAll(project, message, opts = {}) {
   if (!(await isGitRepoAsync(project.path))) throw new Error(tr('msg.github.noGit'));
   const picked = Array.isArray(opts.files) ? opts.files : null;
   const msg = picked ? cleanCommitMessage(message) : oneLine(message, 200); if (!msg) throw new Error(tr('msg.github.commitMsg'));
+  // Checked before anything is staged or committed, line by line (the diff scanner only reads added lines under a file header).
+  if (isRailOn('revisar-secretos') && msg.split(/\r?\n/).some(looksSecretText)) throw new Error(tr('msg.github.secretInText', { files: tr('msg.github.theMessage') }));
   const status = await git(project.path, 'status', '--porcelain=v1', '-z', '-uall');
   if (!status.stdout.trim()) throw new Error(tr('msg.github.noChanges'));
   let only = null;
@@ -153,13 +155,13 @@ export async function commitAll(project, message, opts = {}) {
   // commit goes in as Orb's, like the first commit of a created project.
   const known = async (key) => (await git(project.path, 'config', '--get', key)).stdout.trim() !== '';
   const who = (await known('user.name')) && (await known('user.email')) ? [] : ORB_GIT;
-  if (secretsInDiff(msg).length) { await unstage(); throw new Error(tr('msg.github.secretInText', { files: tr('msg.github.theMessage') })); }
   const r = await git(project.path, ...(only ? [lit] : []), ...who, 'commit', '-q', '-m', msg, ...(only ? ['--', ...only] : []));
   if (r.status !== 0) throw new Error(oneLine(r.stderr || r.stdout, 300));
   // `commit -- paths` reads the files again: if one changed after the check (an agent writing), look at what really went in.
   if (only) {
     const shown = (await git(project.path, '-c', 'core.quotePath=false', 'show', '-p', '-U0', '--no-color', '--no-ext-diff', '--format=', 'HEAD')).stdout;
-    if (secretsInDiff(shown).length) { await git(project.path, 'reset', '-q', '--soft', 'HEAD~1'); await unstage(); throw new Error(tr('msg.github.secretInText', { files: only.slice(0, 5).join(', ') })); }
+    // a first commit has no parent to soft-reset to: drop the ref instead
+    if (secretsInDiff(shown).length) { await ((await git(project.path, 'rev-parse', '--verify', '-q', 'HEAD~1')).status === 0 ? git(project.path, 'reset', '-q', '--soft', 'HEAD~1') : git(project.path, 'update-ref', '-d', 'HEAD')); await unstage(); throw new Error(tr('msg.github.secretInText', { files: only.slice(0, 5).join(', ') })); }
   }
   const branch = (await git(project.path, 'rev-parse', '--abbrev-ref', 'HEAD')).stdout.trim();
   return { files: staged.length, branch };

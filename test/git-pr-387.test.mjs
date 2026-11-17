@@ -344,3 +344,20 @@ test('interface: the header button, the PR bar and the style card exist, in both
   for (const k of keys) { assert.notEqual(es(k, { n: 1, max: 3, title: 'x', count: 1 }), k, k); assert.notEqual(en(k, { n: 1, max: 3, title: 'x', count: 1 }), k, k); }
   assert.equal(es('commit.button'), 'Hacer commit…');
 });
+
+test('askedByUser ignores quotes and fenced code, not the user\'s own words', () => {
+  assert.deepEqual(askedByUser('¿qué significa esto?\n\n> …hacer el push a origin y deploy it.'), []);
+  assert.deepEqual(askedByUser('mira esto\n```\ngit push origin main\n```\ngracias'), []);
+  assert.deepEqual(askedByUser('mira esto\n~~~\ngit push origin main\n~~~'), []);
+  assert.deepEqual(askedByUser('súbelo'), ['publish']);
+  assert.deepEqual(askedByUser('> cita\nhaz push'), ['publish']);
+});
+
+test('a secret in the commit message is refused before anything is committed', async () => {
+  fs.writeFileSync(path.join(repo, 'm.txt'), 'm\n');
+  const before = git(repo, 'rev-parse', 'HEAD');
+  await assert.rejects(api.call('projects.commit', { name: 'tienda', message: 'chore: m\n\ntoken ghp_' + 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8', files: ['m.txt'] }, DESKTOP), /secret|clave|parece|mensaje|message/i);
+  assert.equal(git(repo, 'rev-parse', 'HEAD'), before);
+  assert.equal(git(repo, 'diff', '--cached', '--name-only'), '');
+  fs.rmSync(path.join(repo, 'm.txt'));
+});
