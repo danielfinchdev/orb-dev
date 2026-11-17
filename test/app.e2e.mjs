@@ -284,10 +284,10 @@ try {
   await until(async () => (await call('app.state')).config.ui.skin === 'retro', 'tema guardado');
   await win.waitForTimeout(400);
   await shot('10f-tema-retro');
-  await win.click('[data-testid=skin-profesional]');
-  await until(async () => (await win.evaluate(() => document.documentElement.dataset.skin)) === 'profesional', 'tema profesional');
+  await win.click('[data-testid=skin-predeterminado]');
+  await until(async () => (await win.evaluate(() => document.documentElement.dataset.skin)) === 'predeterminado', 'tema predeterminado');
   await win.waitForTimeout(400);
-  await shot('10g-tema-profesional');
+  await shot('10g-tema-predeterminado');
   await win.click('[data-testid=skin-orb]');
   await until(async () => (await win.evaluate(() => document.documentElement.dataset.skin)) === 'orb', 'vuelve al tema Orb');
   // 2.6: no Windows title bar nor Windows buttons: minimise, maximise and close are the app's own, and the top bars move

@@ -1,5 +1,5 @@
 // the illustrated backdrop of each visual theme, behind the screens (themes.css draws and moves it; one frosted
-// pane over it keeps it out of focus so it never competes with the text). Nothing in the «profesional» theme.
+// pane over it keeps it out of focus so it never competes with the text). Nothing in the plain themes.
 import { useStore, plainSkin } from '@/lib/store.js';
 
 // ---- Vaporwave, day: stickers of old computers (thick ink outline, flat pastel fills; the offset shadow is CSS). ----
@@ -135,101 +135,10 @@ function cloudPictures() {
   } catch { /* no canvas: the CSS cloud */ }
   return cloudArt;
 }
-// Candy: the pastel blobs (colour, place, size, how far they drift, how long) and the 3D sweets floating at the edges.
-// The blobs sit in the corners; the middle, where the text is, stays calm.
-const BLOBS = [
-  { c: 'pink', left: '-8%', top: '-12%', w: 620, h: 480, dx: 50, dy: 30, dur: 34, delay: -6 },
-  { c: 'mint', left: '-10%', top: '52%', w: 560, h: 460, dx: 60, dy: -30, dur: 38, delay: -25 },
-  { c: 'sky', left: '62%', top: '58%', w: 560, h: 440, dx: -50, dy: -40, dur: 44, delay: -12 },
-  { c: 'butter', left: '70%', top: '-16%', w: 520, h: 420, dx: -40, dy: 30, dur: 40, delay: -18 },
-  { c: 'lilac', left: '-14%', top: '22%', w: 460, h: 420, dx: 40, dy: 36, dur: 46, delay: -30 }
-];
-// Three tones of each sweet colour (light, body, shade) for the 3D shading.
-const SWEET = { pink: ['#ffc9e3', '#ff7cc0', '#d6338e'], lilac: ['#e6d4ff', '#b98cff', '#7d4fd6'], mint: ['#d2f5e7', '#7fd9bd', '#3fa98a'], peach: ['#ffe4c8', '#ffb46e', '#e07a2e'], sky: ['#dbecff', '#8cc4ff', '#4a86d9'], yellow: ['#fff4c4', '#ffd95a', '#e0a800'], red: ['#ffd0d0', '#ff6b6b', '#c8283c'], white: ['#ffffff', '#fdf3fa', '#eccbe0'] };
-const g = (c) => `url(#cdg-${c})`;
-const Shine = ({ x, y, rx, ry, a = -30, o = 0.6 }) => <ellipse cx={x} cy={y} rx={rx} ry={ry} fill="#fff" opacity={o} transform={`rotate(${a} ${x} ${y})`} />;
-// A swirl lollipop: the stick, the disc and a white spiral on it.
-const Lollipop = ({ c = 'pink' }) => (
-  <svg viewBox="0 0 100 130" aria-hidden="true">
-    <rect x="46" y="62" width="8" height="66" rx="4" fill={g('white')} />
-    <circle cx="50" cy="38" r="34" fill={g(c)} />
-    <path d="M50 38a4 4 0 0 1 4 4a8 8 0 0 1 -8 8a12 12 0 0 1 -12 -12a16 16 0 0 1 16 -16a20 20 0 0 1 20 20a24 24 0 0 1 -24 24a28 28 0 0 1 -28 -28" fill="none" stroke="#fff" strokeOpacity="0.85" strokeWidth="5" strokeLinecap="round" />
-    <Shine x={36} y={20} rx={9} ry={5} />
-  </svg>
-);
-// A wrapped candy: the striped body and the two twisted ends of the wrapper.
-const Wrapped = ({ c = 'pink', c2 = 'white' }) => (
-  <svg viewBox="0 0 140 80" aria-hidden="true">
-    <path d="M42 40 L10 20 Q18 40 10 60 Z" fill={g(c)} /><path d="M98 40 L130 20 Q122 40 130 60 Z" fill={g(c)} />
-    <ellipse cx="70" cy="40" rx="30" ry="22" fill={g(c)} />
-    <path d="M52 20 L40 56 M66 18 L54 62 M80 18 L68 62 M94 20 L82 56" stroke={SWEET[c2][0]} strokeOpacity="0.8" strokeWidth="6" strokeLinecap="round" />
-    <ellipse cx="42" cy="40" rx="4" ry="9" fill={SWEET[c][2]} opacity="0.6" /><ellipse cx="98" cy="40" rx="4" ry="9" fill={SWEET[c][2]} opacity="0.6" />
-    <Shine x={58} y={27} rx={9} ry={4} a={-20} />
-  </svg>
-);
-// A jelly bean.
-const Bean = ({ c = 'lilac' }) => (
-  <svg viewBox="0 0 100 60" aria-hidden="true">
-    <path d="M20 15C35 -2 70 2 85 18C98 32 88 55 65 55C45 55 40 45 25 48C8 50 5 30 20 15Z" fill={g(c)} />
-    <Shine x={38} y={16} rx={11} ry={4} a={-15} o={0.55} />
-  </svg>
-);
-// A sugared gumdrop.
-const Gumdrop = ({ c = 'mint' }) => (
-  <svg viewBox="0 0 100 100" aria-hidden="true">
-    <ellipse cx="50" cy="86" rx="33" ry="8" fill={SWEET[c][2]} opacity="0.5" />
-    <path d="M18 86C14 40 30 18 50 18C70 18 86 40 82 86Z" fill={g(c)} />
-    {[[32, 40], [60, 30], [70, 58], [40, 66], [52, 50], [28, 70]].map(([x, y], i) => <circle key={i} cx={x} cy={y} r="2.2" fill="#fff" opacity="0.75" />)}
-    <Shine x={38} y={32} rx={8} ry={5} a={-35} />
-  </svg>
-);
-// A frosted donut: the dough ring, the icing with its wavy edge, a few sprinkles.
-const Donut = ({ c = 'pink' }) => (
-  <svg viewBox="0 0 100 100" aria-hidden="true">
-    <circle cx="50" cy="50" r="42" fill={g('peach')} />
-    <path d="M50 14C72 14 86 30 86 50C86 70 72 86 50 86C28 86 14 70 14 50C14 30 28 14 50 14ZM50 36A14 14 0 1 0 50 64A14 14 0 1 0 50 36Z" fill={g(c)} fillRule="evenodd" />
-    <circle cx="50" cy="50" r="14" fill="none" stroke={SWEET.peach[2]} strokeOpacity="0.35" strokeWidth="3" />
-    {[[32, 30, 20], [64, 26, -30], [74, 52, 50], [60, 74, 10], [30, 66, -40], [24, 48, 70]].map(([x, y, r], i) => <rect key={i} x={x - 5} y={y - 1.6} width="10" height="3.2" rx="1.6" fill={['#fff', '#7fd9bd', '#ffd95a'][i % 3]} transform={`rotate(${r} ${x} ${y})`} />)}
-    <Shine x={34} y={24} rx={9} ry={4} a={-35} />
-  </svg>
-);
-// A peppermint: a disc cut in eight red and white wedges.
-const Peppermint = () => (
-  <svg viewBox="0 0 100 100" aria-hidden="true">
-    <circle cx="50" cy="50" r="40" fill={g('white')} />
-    {[0, 1, 2, 3].map((i) => <path key={i} d="M50 50L50 10A40 40 0 0 1 78.3 21.7Z" fill={g('red')} transform={`rotate(${i * 90} 50 50)`} />)}
-    <circle cx="50" cy="50" r="40" fill="none" stroke="#fff" strokeOpacity="0.7" strokeWidth="4" />
-    <Shine x={36} y={28} rx={10} ry={4} a={-35} />
-  </svg>
-);
-// A gummy heart.
-const Heart = ({ c = 'pink' }) => (
-  <svg viewBox="0 0 100 90" aria-hidden="true">
-    <path d="M50 84C20 62 8 46 8 30C8 16 18 8 30 8C40 8 47 14 50 22C53 14 60 8 70 8C82 8 92 16 92 30C92 46 80 62 50 84Z" fill={g(c)} />
-    <Shine x={30} y={24} rx={10} ry={5} a={-35} />
-  </svg>
-);
-const SWEETS = [
-  { el: <Donut c="pink" />, left: '1%', top: '9%', w: 96, r: -12, dur: 14, delay: -3 },
-  { el: <Wrapped c="pink" />, right: '1%', top: '13%', w: 120, r: 18, dur: 11, delay: -6 },
-  { el: <Gumdrop c="mint" />, left: '4%', top: '44%', w: 70, r: -6, dur: 12, delay: -1 },
-  { el: <Peppermint />, right: '1%', top: '40%', w: 84, r: 10, dur: 16, delay: -9 },
-  { el: <Heart c="red" />, left: '11%', top: '26%', w: 52, r: -10, dur: 10, delay: -5 },
-  { el: <Lollipop c="pink" />, left: '2%', bottom: '8%', w: 110, r: -14, dur: 13, delay: -5 },
-  { el: <Bean c="lilac" />, right: '5%', bottom: '18%', w: 92, r: -25, dur: 10, delay: -2 },
-  { el: <Bean c="peach" />, left: '13%', bottom: '3%', w: 60, r: 30, dur: 9, delay: -7 },
-  { el: <Wrapped c="sky" c2="white" />, right: '18%', bottom: '4%', w: 110, r: -8, dur: 12, delay: -4 },
-  { el: <Gumdrop c="yellow" />, right: '3%', bottom: '2%', w: 56, r: 8, dur: 11, delay: -8 }
-];
-const SweetDefs = () => (
-  <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
-    <defs>{Object.entries(SWEET).map(([k, [hi, body, lo]]) => <radialGradient key={k} id={`cdg-${k}`} cx="35%" cy="28%" r="78%"><stop offset="0" stopColor={hi} /><stop offset="0.5" stopColor={body} /><stop offset="1" stopColor={lo} /></radialGradient>)}</defs>
-  </svg>
-);
-
 export function Scene() {
-  const skin = useStore((s) => s.app?.config?.ui?.skin) ?? 'orb';
-  if (plainSkin(skin)) return null;
+  const skin = useStore((s) => s.app?.config?.ui?.skin) ?? 'predeterminado';
+  // candy has no CSS backdrop: its background is a shader (a later step).
+  if (plainSkin(skin) || skin === 'candy') return null;
   const clouds = skin === 'orb' ? cloudPictures() : null;
   return (
     <div className={`scene scene-${skin}`} aria-hidden="true" data-testid="scene" style={clouds ? { '--orb-cloud-art': clouds.light, '--orb-cloud-art-dark': clouds.dark } : undefined}>
@@ -251,11 +160,6 @@ export function Scene() {
           <div className="rt-crab"><Pixels rows={PIX.crab} /></div>
           <div className="rt-rocket"><Pixels rows={PIX.rocket} /></div>
           <div className="rt-scan" />
-        </>) : null}
-        {skin === 'nube' ? (<>
-          {BLOBS.map((b, i) => <div key={`b${i}`} className="cd-blob" style={{ left: b.left, top: b.top, width: b.w, height: b.h, '--c': `var(--cd-${b.c})`, '--dx': `${b.dx}px`, '--dy': `${b.dy}px`, animationDuration: `${b.dur}s`, animationDelay: `${b.delay}s` }} />)}
-          <SweetDefs />
-          {SWEETS.map((t, i) => <div key={`s${i}`} className="cd-candy" style={{ left: t.left, right: t.right, top: t.top, bottom: t.bottom, width: t.w, '--r': `${t.r ?? 0}deg`, animationDuration: `${t.dur}s`, animationDelay: `${t.delay}s` }}>{t.el}</div>)}
         </>) : null}
       </div>
       {/* One frosted pane over the whole scene (themes.css): the art stays a soft wallpaper behind every screen. */}

@@ -4,25 +4,23 @@
    (components/scene.jsx) moves slowly under one frosted pane (.scene-frost: blurred and tinted with the page's own
    colour, the same over the whole area), so the art is a soft wallpaper and the text never sits on a sharp shape. The
    top bar of each screen (B2, and the chat's B3) has no colour of its own: it is transparent over that same backdrop,
-   so bar and screen are one — only its decoration (the sparkles, the invaders, the chevrons, the candy dots) is drawn on
+   so bar and screen are one — only its decoration (the sparkles, the invaders, the chevrons) is drawn on
    it, in the middle, away from the title, the bar's buttons and the window's own minimise / maximise / close (the
    app's, components/window-controls.jsx, top right over everything: each theme dresses them like its own icon buttons,
    see .win-control further down). The sidebar's head (B1) is just the sidebar's top, with the same shading and never
    drawings: the robot, the name and the buttons stay clean. Everything stops with reduced motion or with «Animaciones»
-   off (html[data-motion="minima"]). The «profesional» theme has none of it.
+   off (html[data-motion="minima"]). The plain themes (predeterminado, cristal) have none of it.
    ================================================================================================================ */
 .theme-band { position: relative; isolation: isolate; }
 .theme-band::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--band-art, none); opacity: var(--band-art-opacity, 1); }
 .side-band::before { background: var(--side-art, none); opacity: 1; }
 /* the band's moving pieces run on the compositor (transform / opacity only), never as background-position, which
    restyles and repaints the band on the main thread every frame. Retro at night: its two poses drawn whole, one in
-   ::before and one in ::after, shown in turn (opacity in steps). Nube: each row of sweets in its own layer
-   (components/page.jsx › BandArt), slid by transform. Their art keeps the alignment to the window that
-   background-attachment: fixed gives the still art (fixed does not follow a moved layer): BandArt gives each band its
-   place in the window (--band-x / --band-y), and the art is offset by it. Only the chat's bar shows them (the phone's
-   tabs, at the bottom, are below where that art is). */
+   ::before and one in ::after, shown in turn (opacity in steps). A layer slid by transform (components/page.jsx ›
+   BandArt) keeps the alignment of the still art to the window through --band-x / --band-y. Only the chat's bar shows
+   them (the phone's tabs, at the bottom, are below where that art is). */
 .band-art { display: none; }
-html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) .theme-band { z-index: 10; background: none; border-bottom-color: transparent; backdrop-filter: none; }
+html:is([data-skin="vaporwave"], [data-skin="retro"]) .theme-band { z-index: 10; background: none; border-bottom-color: transparent; backdrop-filter: none; }
 /* The top bar's drawing: in the middle, clear of the title, of the bar's buttons and of the window's buttons. */
 .topbar.theme-band::before, .topbar.theme-band::after, .topbar.theme-band > .band-art { mask-image: linear-gradient(90deg, transparent 150px, #000 290px, #000 calc(100% - 330px), transparent calc(100% - 190px)); }
 /* Only the chat's bar (no title, just a few buttons on the right) has room for a drawing: the other screens' bars carry
@@ -44,10 +42,9 @@ html[data-motion="minima"] .scene *, html[data-motion="minima"] .scene *::before
 /* with the window in the background (or minimised) the scene stands still: nothing to repaint under the blur. */
 html.window-idle .scene *, html.window-idle .scene *::before, html.window-idle .scene *::after, html.window-idle .theme-band::before, html.window-idle .theme-band::after, html.window-idle .band-art > * { animation-play-state: paused !important; }
 /* Text set straight on the scene — the assistant's messages and the greeting of a new chat — reads on a soft pane of
-   the card's colour (the system's notes have theirs), gentle and in the theme's own shape. Nothing in orb / profesional. */
-html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) .chat-glass { background-color: color-mix(in oklch, var(--card) 76%, transparent); border-radius: calc(var(--radius) + 6px); padding: 0.55rem 0.9rem 0.7rem; }
-html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) .chat-glass.chat-hero { padding: 0.9rem 1.4rem 1.1rem; }
-html[data-skin="nube"] .chat-glass { border-radius: 1.2rem; }
+   the card's colour (the system's notes have theirs), gentle and in the theme's own shape. Nothing in orb or the plain themes. */
+html:is([data-skin="vaporwave"], [data-skin="retro"]) .chat-glass { background-color: color-mix(in oklch, var(--card) 76%, transparent); border-radius: calc(var(--radius) + 6px); padding: 0.55rem 0.9rem 0.7rem; }
+html:is([data-skin="vaporwave"], [data-skin="retro"]) .chat-glass.chat-hero { padding: 0.9rem 1.4rem 1.1rem; }
 
 /* ---- With a transparent bar, what scrolls up under it would be cut by a hard line at the bar's edge: the screens'
    scroll areas fade their top edge instead, and only once scrolled (at the top nothing fades, the first message is
@@ -56,18 +53,11 @@ html[data-skin="nube"] .chat-glass { border-radius: 1.2rem; }
 @property --scroll-fade { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @keyframes scroll-fade { from { --scroll-fade: 0px; } to { --scroll-fade: 36px; } }
 @supports (animation-timeline: scroll()) {
-  html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) main > .overflow-y-auto { mask-image: linear-gradient(to bottom, transparent, #000 var(--scroll-fade)); animation: scroll-fade linear both; }
+  html:is([data-skin="vaporwave"], [data-skin="retro"]) main > .overflow-y-auto { mask-image: linear-gradient(to bottom, transparent, #000 var(--scroll-fade)); animation: scroll-fade linear both; }
   /* In its own rule (another selector on purpose): the minifier would otherwise fold the timeline into the «animation»
      shorthand, which Chromium does not accept, and the whole animation would be dropped. */
-  html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) main > div.overflow-y-auto { animation-timeline: scroll(self block); animation-range: 0 40px; }
+  html:is([data-skin="vaporwave"], [data-skin="retro"]) main > div.overflow-y-auto { animation-timeline: scroll(self block); animation-range: 0 40px; }
 }
-
-/* ---- The window's own minimise / maximise / close (app.css draws the plain ghost ones of orb / profesional): in each
-   theme, the same shape as its icon buttons; the close one turns red (or the theme's hot colour) on hover. ---- */
-html[data-skin="nube"] .win-control { width: 2.1rem; height: 1.9rem; border-radius: 999px; background-color: var(--card); color: var(--primary-text); border: 1.5px solid var(--cd-rim); box-shadow: 0 2px 0 var(--cd-drop); }
-html[data-skin="nube"] .win-control:hover { background-color: var(--accent); color: var(--primary-text); }
-html[data-skin="nube"] .win-control:active { transform: none; translate: 0 2px; box-shadow: none; }
-html[data-skin="nube"] .win-control.win-close:hover { background-color: var(--cd-red); color: var(--primary-foreground); border-color: var(--cd-red-edge); box-shadow: 0 2px 0 var(--cd-red-edge); }
 
 /* ---- Orb: the bar stays as it is; behind the chat, the robot's periwinkle sky with a few soft clouds drifting. ---- */
 .scene-orb .scene-blur { background: radial-gradient(60% 50% at 30% 0%, #c3cbff, transparent 70%), radial-gradient(50% 60% at 90% 100%, #a7b1f6, transparent 70%); --scene-opacity: 0.5; }
@@ -88,3 +78,13 @@ html.dark .orb-cloud { background: radial-gradient(closest-side, rgb(160 170 255
 html.dark .orb-cloud.baked { background: var(--orb-cloud-art-dark) 0 0 / 100% 100% no-repeat; }
 @keyframes cloud-drift { from { transform: translateX(-30vw); } to { transform: translateX(130vw); } }
 
+/* ---- Rules every theme with a backdrop shares. ---- */
+/* Over a backdrop, the chat's notes (the system's bubbles) are the card's colour, nearly solid: the reading column under them already blurs the scene. */
+html:is([data-skin="vaporwave"], [data-skin="retro"]) main :is(.bg-muted\/70, .bg-muted\/50) { background-color: color-mix(in oklch, var(--card) 82%, transparent); }
+/* Text set straight on the scene (the assistant's messages, the greeting, the names): a faint halo of the page's colour under it, so a bright piece of the art drifting by never eats into the letters. */
+html.dark[data-skin="vaporwave"] main :is(.prose-chat, .hero-title + p, .text-muted-foreground.text-xs) { text-shadow: 0 1px 2px color-mix(in oklch, var(--background) 85%, transparent), 0 0 8px color-mix(in oklch, var(--background) 70%, transparent); }
+html:not(.dark)[data-skin="vaporwave"] main :is(.prose-chat, .hero-title + p) { text-shadow: 0 0 6px color-mix(in oklch, var(--background) 70%, transparent); }
+/* The buttons inside a chat message (accept the report, ask for changes, play, allow / always / deny, see the task): small and light so the conversation stays calm. */
+.chat-actions [data-slot="button"] { font-weight: 500; }
+/* In a conversation the bar shows its title in the middle: the theme's art keeps to the sides so it never sits behind the words. */
+html[data-skin] .topbar-chat.theme-band:has(.bar-title)::before, html[data-skin] .topbar-chat.theme-band:has(.bar-title)::after, html[data-skin] .topbar-chat.theme-band:has(.bar-title) > .band-art { mask-image: linear-gradient(90deg, transparent 150px, #000 230px, #000 calc(50% - 240px), transparent calc(50% - 180px), transparent calc(50% + 180px), #000 calc(50% + 240px), #000 calc(100% - var(--wco-inset, 0px) - 230px), transparent calc(100% - var(--wco-inset, 0px) - 170px)); }

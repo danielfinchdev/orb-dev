@@ -1,8 +1,8 @@
-/* Visual themes (Ajustes → Apariencia → Tema visual): src/shared/appearance.mjs lists them and lib/store.js puts the chosen one
-   on <html> as data-skin. «orb» is the default and has no rules here (app.css is the orb theme). Each theme redefines the
-   tokens of app.css for light (html[data-skin]) and dark (html.dark[data-skin]: the light / dark switch still applies on
-   top), plus its own touches: typography, cards, buttons, the message box, the decoration of the top bars (transparent
-   over the backdrop) and the illustrated backdrop behind every screen (components/scene.jsx), under one frosted pane.
+/* Visual themes (Ajustes → Apariencia → Tema): src/shared/appearance.mjs lists them and lib/store.js puts the chosen one
+   on <html> as data-skin. «predeterminado» is the base and has no rules (tokens.css). skins.css redefines the tokens for
+   light (html[data-skin]) and dark (html.dark[data-skin]) and the few pieces of each theme; the scene-*.css files are the
+   CSS backdrops of Orb, Vaporwave and Retro (the decoration of the top bars and the illustrated backdrop behind every
+   screen, components/scene.jsx, under one frosted pane), until the WebGL backdrops replace them.
    Contrast: normal text >= 4.5:1 on its background, input borders >= 3:1, in light and dark, and the text of the chat
    over the brightest and darkest piece of each scene (test-results/contraste-temas.mjs).
    These rules are outside any layer on purpose: they win over Tailwind's utilities without !important. */
@@ -15,4 +15,3 @@
 @import "./themes/scene.css";
 @import "./themes/scene-vaporwave.css";
 @import "./themes/scene-retro.css";
-@import "./themes/scene-nube.css";

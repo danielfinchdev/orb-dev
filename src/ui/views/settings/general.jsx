@@ -1,8 +1,7 @@
 // Ajustes: the assistant, appearance, chat, tasks, interface, God mode, the folder, «Cosas que nadie toca» and the daily test.
 import { useEffect, useState } from 'react';
 import { FlaskConical, FolderOpen, Plus, ArrowLeftRight, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, X, ChevronRight, ShieldBan, RotateCcw } from 'lucide-react';
-import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, ACCENTS, CONTRASTS, DENSITIES, CHAT_WIDTHS, FONT_SIZES, APPEARANCE_DEFAULTS, plainSkin } from '../../../shared/appearance.mjs';
-import { previewColors, seedsOf, ACCENT_COLORS } from '@/lib/theme-seeds.js';
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, DENSITIES, CHAT_WIDTHS, FONT_SIZES, APPEARANCE_DEFAULTS, plainSkin, robotSkin } from '../../../shared/appearance.mjs';
 import { PANELS, savePanels } from '../expert.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { SkinPreview } from '@/components/skin-preview.jsx';
@@ -12,7 +11,7 @@ import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardF
 import { Select, Switch, Checkbox, BubbleTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
 import { ModelGuide } from '@/components/model-guide.jsx';
 import { AGENT } from '@/lib/labels.js';
-import { act, call, refresh, bridge, go, openTerminal, closeSettings, fullPc, runTest, darkOnlySkin, useStore } from '@/lib/store.js';
+import { act, call, refresh, bridge, go, openTerminal, closeSettings, fullPc, runTest, darkOnlySkin, lightOnlySkin, useStore } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { LANGUAGES } from '../../../shared/i18n.mjs';
@@ -42,23 +41,24 @@ export function AssistantCard({ c }) {
 }
 
 // Appearance: light / dark, the visual theme, fonts, colours of code and the robot (floating, sounds, animations).
-// Everything is saved as soon as it changes. The professional theme has no robot, so its options are hidden there.
+// Everything is saved as soon as it changes. Only the Orb theme has the robot; the plain themes have no sounds nor motion.
 export function AppearanceCard({ c }) {
   const t = useT();
   const ui = { ...APPEARANCE_DEFAULTS, ...c.ui };
   const [volume, setVolume] = useState(c.ui?.volume ?? 0.5);
   const set = (patch, ok = null) => save({ ui: patch }, ok);
   const opts = (list, prefix) => list.map((value) => ({ value, label: t(`${prefix}.${value}`) }));
-  const robot = !plainSkin(ui.skin);
+  const hasRobot = robotSkin(ui.skin);
   const darkOnly = fullPc() && darkOnlySkin(ui.skin);
-  const mode = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+  const lightOnly = fullPc() && lightOnlySkin(ui.skin);
+  const locked = darkOnly || lightOnly;
   return (
     <Card>
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Palette className="text-primary size-5" /><div><CardTitle>{t('appearance.title')}</CardTitle><CardDescription>{t('appearance.desc')}</CardDescription></div></CardHeader>
       <CardContent className="grid gap-5">
-        <Field label={t('settings.theme')} hint={darkOnly ? t('comp.theme.darkOnly') : undefined}>
+        <Field label={t('settings.theme')} hint={darkOnly ? t('comp.theme.darkOnly') : lightOnly ? t('comp.theme.lightOnly') : undefined}>
           <div className="bg-muted inline-flex w-fit gap-1 rounded-lg p-1" role="radiogroup" aria-label={t('settings.theme')}>
-            {['claro', 'oscuro', 'sistema'].map((theme) => <button key={theme} type="button" role="radio" aria-checked={(ui.theme ?? 'sistema') === theme} disabled={darkOnly} onClick={() => set({ theme })} className={cn('rounded-md px-3 py-1.5 text-control', darkOnly ? 'cursor-not-allowed opacity-50' : 'cursor-pointer', (ui.theme ?? 'sistema') === theme ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{t(`settings.theme.${theme}`)}</button>)}
+            {['claro', 'oscuro', 'sistema'].map((theme) => <button key={theme} type="button" role="radio" aria-checked={(ui.theme ?? 'sistema') === theme} disabled={locked} onClick={() => set({ theme })} className={cn('rounded-md px-3 py-1.5 text-control', locked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer', (ui.theme ?? 'sistema') === theme ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{t(`settings.theme.${theme}`)}</button>)}
           </div>
         </Field>
         {fullPc() ? <Field label={t('appearance.skin')} hint={t('appearance.skinHint')}>
@@ -66,41 +66,24 @@ export function AppearanceCard({ c }) {
             {SKINS.map((skin) => (
               <button key={skin} type="button" role="radio" aria-checked={ui.skin === skin} onClick={() => set({ skin })} data-testid={`skin-${skin}`}
                 className={cn('grid cursor-pointer gap-1.5 rounded-xl border p-2 text-left transition-colors', ui.skin === skin ? 'border-primary ring-primary/30 ring-2' : 'hover:bg-accent/40')}>
-                <SkinPreview skin={skin} colors={skin === 'paletas' ? previewColors(ui.palette, mode, ui.accent, ui.contrast) : undefined} />
+                <SkinPreview skin={skin} />
                 <span className="text-control font-medium">{t(`appearance.skin.${skin}`)}</span>
               </button>
             ))}
           </div>
         </Field> : null}
-        {fullPc() && ui.skin === 'paletas' ? (
+        {fullPc() && plainSkin(ui.skin) ? (
           <div className="grid gap-3" data-testid="palette-settings">
             <Field label={t('appearance.palette')} hint={t('appearance.paletteHint')}>
-              <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7" role="radiogroup" aria-label={t('appearance.palette')} data-testid="palette-picker">
-                {PALETTES.map((id) => {
-                  const seeds = seedsOf(id, mode, 'tema');
-                  return (
-                    <button key={id} type="button" role="radio" aria-checked={ui.palette === id} onClick={() => set({ palette: id })} data-testid={`palette-${id}`}
-                      className={cn('grid cursor-pointer gap-1 rounded-lg border p-1.5 text-left transition-colors', ui.palette === id ? 'border-primary ring-primary/30 ring-2' : 'hover:bg-accent/40')}>
-                      <span className="flex h-5 overflow-hidden rounded-md border" aria-hidden="true"><i className="flex-1" style={{ background: seeds.surface }} /><i className="flex-1" style={{ background: seeds.ink }} /><i className="flex-1" style={{ background: previewColors(id, mode, 'tema', 'normal')['--p-primary'] }} /></span>
-                      <span className="truncate text-caption">{t(`appearance.palette.${id}`)}</span>
-                    </button>
-                  );
-                })}
+              <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6" role="radiogroup" aria-label={t('appearance.palette')} data-testid="palette-picker">
+                {PALETTES.map((id) => (
+                  <button key={id} type="button" role="radio" aria-checked={ui.palette === id} onClick={() => set({ palette: id })} data-testid={`palette-${id}`}
+                    className={cn('grid cursor-pointer gap-1 rounded-lg border p-1.5 text-left transition-colors', ui.palette === id ? 'border-primary ring-primary/30 ring-2' : 'hover:bg-accent/40')}>
+                    <span className="flex items-center gap-1.5"><i className="pal-dot" data-palette={id} aria-hidden="true" /><span className="truncate text-caption">{t(`appearance.palette.${id}`)}</span></span>
+                  </button>
+                ))}
               </div>
             </Field>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label={t('appearance.accent')} hint={t('appearance.accentHint')}>
-                <div className="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label={t('appearance.accent')} data-testid="accent-picker">
-                  {ACCENTS.map((id) => (
-                    <button key={id} type="button" role="radio" aria-checked={ui.accent === id} aria-label={t(`appearance.accent.${id}`)} title={t(`appearance.accent.${id}`)} onClick={() => set({ accent: id })} data-testid={`accent-${id}`}
-                      className={cn('flex size-7 cursor-pointer items-center justify-center rounded-full border text-caption', ui.accent === id ? 'border-primary ring-primary/30 ring-2' : 'hover:bg-accent/40')}>
-                      {id === 'tema' ? <span aria-hidden="true">∗</span> : <i className="size-4 rounded-full" style={{ background: ACCENT_COLORS[id] }} />}
-                    </button>
-                  ))}
-                </div>
-              </Field>
-              <Field label={t('appearance.contrast')}><Select className="w-full" value={ui.contrast} onValueChange={(contrast) => set({ contrast })} options={opts(CONTRASTS, 'appearance.contrast')} /></Field>
-            </div>
           </div>
         ) : null}
         <div className="grid gap-3 sm:grid-cols-3" data-testid="size-settings">
@@ -116,9 +99,9 @@ export function AppearanceCard({ c }) {
         <pre className="code-sample hljs overflow-x-auto rounded-lg border p-3 text-caption leading-[1.55]" aria-label={t('appearance.codeSample')}><code><span className="hljs-keyword">const</span> <span className="hljs-variable">orb</span> = <span className="hljs-title function_">director</span>(<span className="hljs-string">'bolsillo'</span>, {'{ '}<span className="hljs-attr">fases</span>: <span className="hljs-number">3</span>{' }'}); <span className="hljs-comment">// Orbe</span></code></pre>
         <Row label={t('appearance.usageLine')} hint={t('appearance.usageLineHint')}><Switch checked={ui.usageLine !== false} onCheckedChange={(usageLine) => set({ usageLine })} data-testid="usage-line-switch" /></Row>
         {musicAvailable() ? <MusicSettings /> : null}
-        {robot ? (
-          <div className="grid gap-1">
-            <Row label={t('settings.companion')} hint={t('settings.companionHint')}><Switch checked={ui.companion !== false} onCheckedChange={(companion) => set({ companion }, companion ? t('settings.companionOn') : t('settings.companionOff'))} /></Row>
+        <div className="grid gap-1">
+            {!hasRobot ? <p className="text-muted-foreground text-xs">{t('appearance.noRobot')}</p> : null}
+            {hasRobot ? <Row label={t('settings.companion')} hint={t('settings.companionHint')}><Switch checked={ui.companion !== false} onCheckedChange={(companion) => set({ companion }, companion ? t('settings.companionOn') : t('settings.companionOff'))} /></Row> : null}
             <Row label={t('settings.sounds')} hint={t('settings.soundsHint')}><Switch checked={ui.sounds !== false} onCheckedChange={(sounds) => set({ sounds }, sounds ? t('settings.soundsOn') : t('settings.soundsOff')).then(() => sounds && play('wake'))} /></Row>
             {ui.sounds !== false ? (
               <div className="flex items-center gap-3 py-1 text-sm">
@@ -128,8 +111,7 @@ export function AppearanceCard({ c }) {
               </div>
             ) : null}
             <Row label={t('settings.motion')} hint={t('settings.motionHint')}><Switch checked={ui.motion !== 'minima'} onCheckedChange={(on) => set({ motion: on ? 'completa' : 'minima' }, on ? t('settings.motionOn') : t('settings.motionOff'))} /></Row>
-          </div>
-        ) : <p className="text-muted-foreground text-xs">{t('appearance.noRobot')}</p>}
+        </div>
       </CardContent>
     </Card>
   );

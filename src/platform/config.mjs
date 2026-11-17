@@ -7,7 +7,7 @@ import { merge, AGENT_IDS, DEFAULT_CONFIG } from './config-file.mjs';
 import { switchableIds } from '../shared/rails-registry.mjs';
 import { relabelEmptyLogs } from './journal-files.mjs';
 import { inside as insideOf } from './fsx.mjs';
-import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, ACCENTS, CONTRASTS, DENSITIES, CHAT_WIDTHS, FONT_SIZES } from '../shared/appearance.mjs';
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, ACCENTS, CONTRASTS, DENSITIES, CHAT_WIDTHS, FONT_SIZES, migrateAppearance } from '../shared/appearance.mjs';
 import { MUSIC_MODES, ADAPTIVE_THEMES } from '../shared/music.mjs';
 
 // Settings saved from the app. Only known top-level keys are accepted.
@@ -16,6 +16,7 @@ export const connectorKey = (name) => String(name ?? '').toLowerCase().replace(/
 const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'skills', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'oneAtATime', 'approvalWaitMinutes', 'permissions', 'rails', 'protected', 'backup', 'tz', 'setupPending', 'git', 'suggestNext'];
 function tidyStored(stored) {
   const out = structuredClone(stored);
+  if (out.ui !== undefined) out.ui = migrateAppearance(out.ui);
   const rounds = out.budget?.maxFixRounds;
   if (rounds != null && !(Number.isInteger(rounds) && rounds >= 0 && rounds <= 10)) {
     const n = Number(rounds);

@@ -2,7 +2,7 @@
 // deep merge used for settings. No process state: src/platform/context.mjs holds the loaded configuration.
 import fs from 'node:fs';
 import { PRODUCT } from '../shared/product.mjs';
-import { APPEARANCE_DEFAULTS } from '../shared/appearance.mjs';
+import { APPEARANCE_DEFAULTS, migrateAppearance } from '../shared/appearance.mjs';
 import { DEFAULT_PROTECTED } from '../shared/layout.mjs';
 import { CONFIG_FILE, paths } from './paths.mjs';
 
@@ -126,6 +126,8 @@ export function loadConfig(home) {
 }
 // The configuration a stored orb.json gives: the defaults filled in and the settings of older versions updated.
 export function configFrom(stored) {
+  // Themes and palettes of older versions are mapped before merging, so the defaults never mask a retired value.
+  if (stored?.ui !== undefined) stored = { ...stored, ui: migrateAppearance(stored.ui) };
   const config = merge(DEFAULT_CONFIG, stored);
   // The old fixed caps (6 tasks, 2 heavy per window; 20 turns) were too tight. Values the user never changed
   // move to the new ones; anything the user set by hand stays.

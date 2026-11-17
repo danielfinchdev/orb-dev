@@ -44,6 +44,7 @@ export default {
   'comp.theme.tip': 'Modo claro / oscuro',
   'comp.theme.aria': 'Cambiar entre modo claro y oscuro',
   'comp.theme.darkOnly': 'Retro solo tiene modo oscuro',
+  'comp.theme.lightOnly': 'Cristal solo existe en claro',
   'comp.projects.newTitle': 'Nuevo proyecto',
   'comp.projects.newDesc': 'Crea una carpeta con git y bitácora dentro de la carpeta de Orb.',
   'comp.projects.category': 'Categoría',

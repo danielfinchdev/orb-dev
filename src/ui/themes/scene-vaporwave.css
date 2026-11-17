@@ -67,7 +67,7 @@ html.dark .scene-vaporwave .scene-blur { background: var(--vw-night); }
 /* Day keeps the sun, its glow and the grid and loses the night pieces; the desktop-icon stickers are day only. */
 html:not(.dark) .scene-vaporwave :is(.vw-stars, .vw-shoot, .vw-cloud, .vw-mount, .vw-city, .vw-beam) { display: none; }
 html.dark .scene-vaporwave .vw-sticker { display: none; }
-/* its hard shadow is drawn with the drawing (see .cd-candy). */
+/* its hard shadow is drawn with the drawing. */
 .vw-sticker { color: var(--vw-ink); animation: vw-bob ease-in-out infinite alternate; transform-origin: 50% 50%; }
 .vw-sticker svg { display: block; width: 100%; height: auto; overflow: visible; filter: drop-shadow(4px 4px 0 var(--vw-ink)); }
 @keyframes vw-bob { from { transform: translateY(0) rotate(var(--r, 0deg)); } to { transform: translateY(-12px) rotate(calc(var(--r, 0deg) + 5deg)); } }

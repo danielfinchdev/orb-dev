@@ -23,7 +23,7 @@ import path from 'node:path';
 import { darkOnlySkin } from '../src/shared/appearance.mjs';
 import { sandbox, arg, wait, pct, r1 } from './lib/e2e-window.mjs';
 
-const SKINS = arg('skins', 'orb,vaporwave,retro,nube,cristal,grafito,paletas,profesional').split(',');
+const SKINS = arg('skins', 'orb,vaporwave,retro,candy,cristal,predeterminado').split(',');
 const MODES = arg('modes', 'claro,oscuro').split(',');
 const IDLE_S = Number(arg('idle', 6));
 const SETTLE_S = Number(arg('settle', 3));

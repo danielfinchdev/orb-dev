@@ -159,7 +159,7 @@ async function start(home, version, secret, browser, keep = null, userData = nul
     const { createHostBrowser } = await import('./browser/host-browser.mjs');
     const AGENTS = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor' };
     hostBrowser = createHostBrowser({
-      log: (line) => log(line), language: () => ctx.config?.language ?? 'es', skin: () => ctx.config?.ui?.skin ?? 'orb',
+      log: (line) => log(line), language: () => ctx.config?.language ?? 'es', skin: () => ctx.config?.ui?.skin ?? 'predeterminado',
       pipEnabled: () => ctx.config?.ui?.pip !== false && ctx.config?.browser?.enabled !== false,
       label: (agent) => (agent === 'orb' ? ctx.config?.assistantName ?? PRODUCT.assistant : AGENTS[agent] ?? agent),
       onPointed: (p) => { browserFiles?.pointed(p).catch((error) => log(`navegador del agente: señalar: ${error.message}`)); },

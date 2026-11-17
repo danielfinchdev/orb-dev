@@ -4,9 +4,8 @@ import { notifyError, notifyOk } from './notify.js';
 import { bumpNav, navTicket, stillHere } from './nav.js';
 import { cleanRoute, backStep } from './phone-nav.js';
 import { t } from './i18n.js';
-import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, ACCENTS, CONTRASTS, DENSITIES, CHAT_WIDTHS, FONT_SIZES, BASE_FONT, baseSkin, plainSkin, darkOnlySkin, phoneSkin } from '../../shared/appearance.mjs';
-import { seedCss } from './theme-seeds.js';
-export { plainSkin, darkOnlySkin }; // Profesional and the themes built on it (Cristal): no robot, no backdrop, no motion
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, DENSITIES, CHAT_WIDTHS, FONT_SIZES, BASE_FONT, plainSkin, robotSkin, darkOnlySkin, lightOnlySkin, phoneSkin } from '../../shared/appearance.mjs';
+export { plainSkin, robotSkin, darkOnlySkin, lightOnlySkin };
 import { applyFeed, sinceOf } from '../../shared/feed.mjs';
 import { frameBatch } from './batch.js';
 import { streamText } from '../../shared/chat-stream.mjs';
@@ -278,46 +277,42 @@ export async function openTerminal(folder = terminalFolder()) {
 
 // Theme: "sistema" follows Windows, "claro" / "oscuro" force it.
 const media = window.matchMedia('(prefers-color-scheme: dark)');
-// A dark-only theme (Retro) forces .dark whatever ui.theme says; the saved choice stays in `theme` untouched.
+// A dark-only theme (Retro) forces .dark and a light-only one (Cristal) forces light, whatever ui.theme says;
+// the saved choice stays in `theme` untouched.
 let theme = 'sistema';
 let currentSkin = SKINS[0];
 export function applyTheme(next = theme) {
   theme = next || 'sistema';
-  const dark = darkOnlySkin(currentSkin) || theme === 'oscuro' || (theme === 'sistema' && media.matches);
+  const dark = darkOnlySkin(currentSkin) || (!lightOnlySkin(currentSkin) && (theme === 'oscuro' || (theme === 'sistema' && media.matches)));
   document.documentElement.classList.toggle('dark', dark);
   document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
 }
 media.addEventListener('change', () => applyTheme());
-// True while the active theme only exists in dark; the day / night controls disable themselves with it.
-// The theme worn here: any on the PC, only the default or Grafito on the phone.
+// The theme worn here: any on the PC, only the default or Orb on the phone.
 const skinOf = (skin) => { const id = SKINS.includes(skin) ? skin : SKINS[0]; return fullPc() ? id : phoneSkin(id); };
+// True while the active theme only exists in dark (or only in light); the day / night controls disable themselves with it.
 export const useDarkOnly = () => useStore((s) => fullPc() && darkOnlySkin(s.app?.config?.ui?.skin));
-// The theme's base id (cristal wears profesional's), or the default one on the phone; for DOM only some themes draw.
-export const useSkin = () => useStore((s) => baseSkin(skinOf(s.app?.config?.ui?.skin)));
+export const useLightOnly = () => useStore((s) => fullPc() && lightOnlySkin(s.app?.config?.ui?.skin));
+// The theme worn here, or the default one on the phone; for DOM only some themes draw.
+export const useSkin = () => useStore((s) => skinOf(s.app?.config?.ui?.skin));
 export const isDark = () => document.documentElement.classList.contains('dark');
 
 // Ajustes → Apariencia: visual theme, fonts and colours of code, as data attributes of <html> that the CSS reads
 // (data-skin, data-font, data-code-font, data-code-theme). Unknown or missing values fall back to the defaults.
-// Modules that react to a theme change (the music stops in a plain one) register here; store.js cannot import them.
-const appearanceListeners = new Set();
-export const onAppearance = (fn) => { appearanceListeners.add(fn); return () => appearanceListeners.delete(fn); };
 export function applyAppearance(ui = {}) {
   const pick = (value, list) => (list.includes(value) ? value : list[0]);
   const root = document.documentElement.dataset;
-  const skin = skinOf(ui.skin); // the phone wears the default theme or Grafito
+  const skin = skinOf(ui.skin); // the phone wears the default theme or Orb
   currentSkin = skin;
-  // a theme built on another (cristal on profesional) wears its base's data-skin plus its own data-material.
-  root.skin = baseSkin(skin);
-  if (skin !== root.skin) root.material = skin; else delete root.material;
+  root.skin = skin;
+  delete root.material;
+  // only the two themes that wear a palette write it; the default palette needs no attribute.
+  const palette = pick(ui.palette, PALETTES);
+  if ((skin === 'predeterminado' || skin === 'cristal') && palette !== PALETTES[0]) root.palette = palette; else delete root.palette;
   root.font = pick(ui.font, FONTS);
   root.codeFont = pick(ui.codeFont, CODE_FONTS);
   root.codeTheme = pick(ui.codeTheme, CODE_THEMES);
   root.motion = ui.motion === 'minima' ? 'minima' : 'completa'; // the themes' moving backdrops stop with it
-  // the theme made from three seeds: its tokens are computed here and written as a <style> the stylesheet rules lean on.
-  const palette = skin === 'paletas' ? seedCss(pick(ui.palette, PALETTES), pick(ui.accent, ACCENTS), pick(ui.contrast ?? 'normal', CONTRASTS)) : '';
-  let tag = document.getElementById('orb-palette');
-  if (palette && !tag) { tag = document.createElement('style'); tag.id = 'orb-palette'; document.head.append(tag); }
-  if (tag) { if (tag.textContent !== palette) tag.textContent = palette; if (!palette) tag.remove(); }
   // density, width of the chat column and text size: three variables on <html> (tokens.css holds the defaults, which are today's sizes).
   const style = document.documentElement.style;
   const size = FONT_SIZES.includes(ui.fontSize) ? ui.fontSize : BASE_FONT;
@@ -327,5 +322,4 @@ export function applyAppearance(ui = {}) {
   set('--chat-font', size + 'px', BASE_FONT + 'px');
   set('--font-k', String(size / BASE_FONT), '1');
   applyTheme(); // a dark-only theme forces .dark; leaving it gives the saved choice back
-  for (const fn of appearanceListeners) fn(skin);
 }

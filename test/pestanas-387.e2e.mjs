@@ -80,7 +80,7 @@ try {
   assert.equal(await tabs().count(), 2);
 
   // the themes keep the bar readable (look at the pictures)
-  for (const skin of ['cristal', 'grafito', 'orb']) {
+  for (const skin of ['cristal', 'predeterminado', 'orb']) {
     await call('config.save', { patch: { ui: { skin } } });
     await page.reload();
     await page.locator('[data-testid=chat-tabs]').waitFor();

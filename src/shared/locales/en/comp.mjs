@@ -44,6 +44,7 @@ export default {
   'comp.theme.tip': 'Light / dark mode',
   'comp.theme.aria': 'Switch between light and dark mode',
   'comp.theme.darkOnly': 'Retro only has a dark mode',
+  'comp.theme.lightOnly': 'Glass only exists in light',
   'comp.projects.newTitle': 'New project',
   'comp.projects.newDesc': 'Creates a folder with git and a log inside the Orb folder.',
   'comp.projects.category': 'Category',

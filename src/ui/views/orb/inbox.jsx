@@ -19,7 +19,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Input } from '@/components/ui/basic.jsx';
 import { useSearch } from '@/lib/search.js';
-import { useStore, go, call, act, newChat, orbAct, loadOrbInbox, openOrbInfo, closeOrbInfo, getState, phoneLayout, fullPc, refreshSoon, setState, plainSkin } from '@/lib/store.js';
+import { useStore, go, call, act, newChat, orbAct, loadOrbInbox, openOrbInfo, closeOrbInfo, getState, phoneLayout, fullPc, refreshSoon, setState, robotSkin } from '@/lib/store.js';
 import { orbItems, orbProgress, groupOrb, shortTime, avatarStack, snoozeTimes, priorityKeys, nextNeedingYou } from '@/lib/inbox.js';
 import { useShortcut } from '@/lib/keys.js';
 import { DayDigestCard } from '@/components/day-digest.jsx';
@@ -73,7 +73,7 @@ export function OrbAvatar({ item, size = 40 }) {
   const who = agents.length ? new Intl.ListFormat(locale, { type: 'conjunction' }).format(agents.map((a) => AGENT[a] ?? a)) : '';
   const body = item.project
     ? <ProjectIcon name={item.project} size={size} />
-    : plainSkin(skin)
+    : !robotSkin(skin)
       ? <span className="grid place-items-center" style={{ width: size, height: size }}><OrbMark size={Math.round(size * 0.7)} /></span>
       : <Robot size={size} still mood={item.busy ? 'thinking' : 'idle'} />;
   return (

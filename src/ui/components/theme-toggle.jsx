@@ -2,7 +2,7 @@
 import { Moon, Sun, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Button } from './ui/button.jsx';
 import { Tip } from './ui/overlay.jsx';
-import { call, applyTheme, isDark, act, setState, getState, bridge, setSidebarCollapsed, useDarkOnly } from '@/lib/store.js';
+import { call, applyTheme, isDark, act, setState, getState, bridge, setSidebarCollapsed, useDarkOnly, useLightOnly } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
@@ -22,8 +22,11 @@ export function SidebarToggle({ className, collapsed = false }) {
 export function ThemeToggle({ className }) {
   const t = useT();
   const darkOnly = useDarkOnly();
+  const lightOnly = useLightOnly();
+  const locked = darkOnly || lightOnly;
+  const lockText = darkOnly ? t('comp.theme.darkOnly') : t('comp.theme.lightOnly');
   const toggle = async () => {
-    if (darkOnly) return;
+    if (locked) return;
     const next = isDark() ? 'claro' : 'oscuro';
     applyTheme(next);
     if (bridge.mobile) { try { localStorage.setItem('orb.theme', next); } catch { /* storage unavailable */ } return; } // a phone keeps its own choice
@@ -31,8 +34,8 @@ export function ThemeToggle({ className }) {
     if (config) setState({ app: { ...getState().app, config } });
   };
   return (
-    <Tip label={darkOnly ? t('comp.theme.darkOnly') : t('comp.theme.tip')}>
-      <Button variant="ghost" size="icon-sm" className={cn(className, darkOnly && 'cursor-not-allowed opacity-50')} onClick={toggle} aria-label={darkOnly ? t('comp.theme.darkOnly') : t('comp.theme.aria')} aria-disabled={darkOnly || undefined} title={darkOnly ? t('comp.theme.darkOnly') : undefined}>
+    <Tip label={locked ? lockText : t('comp.theme.tip')}>
+      <Button variant="ghost" size="icon-sm" className={cn(className, locked && 'cursor-not-allowed opacity-50')} onClick={toggle} aria-label={locked ? lockText : t('comp.theme.aria')} aria-disabled={locked || undefined} title={locked ? lockText : undefined}>
         <Sun className="size-4 dark:hidden" /><Moon className="hidden size-4 dark:block" />
       </Button>
     </Tip>

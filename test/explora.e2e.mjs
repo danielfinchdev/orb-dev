@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { createHome } from '../src/domain/workspace/home.mjs';
 import { loadConfig, merge } from '../src/platform/config-file.mjs';
 import { writeJson } from '../src/platform/paths.mjs';
-import { SKINS } from '../src/shared/appearance.mjs';
+import { SKINS, darkOnlySkin, lightOnlySkin } from '../src/shared/appearance.mjs';
 import { throughStart, sandboxEnv } from './fixtures/e2e-flows.mjs';
 import { launchOrb } from './fixtures/launch-orb.mjs';
 
@@ -20,12 +20,20 @@ const OUT = path.join(ROOT, 'test-results', LANG ? `explora-${LANG}` : 'explora'
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-explora-'));
 const until = async (fn, what, ms = 30000) => { const end = Date.now() + ms; while (Date.now() < end) { try { const v = await fn(); if (v) return v; } catch { /* not yet */ } await new Promise((r) => setTimeout(r, 300)); } throw new Error(`no llegó: ${what}`); };
 const notes = [];
+// Every Orb this run opens: a failed step closes them all, so the run always ends.
+const opened = [];
+// A run that hangs (a control that never shows) ends by itself: it closes its Orbs and exits with an error.
+setTimeout(async () => { console.error('✖ tiempo máximo agotado'); for (const stop of opened) { try { await stop(); } catch { /* already closed */ } } process.exit(2); }, Number(process.env.ORB_EXPLORA_MAX_MIN || 9) * 60000).unref();
+// ORB_EXPLORA_SIZE=1440x880 gives every picture that window size (the mockups' size).
+const SIZE = /^(\d+)x(\d+)$/.exec(process.env.ORB_EXPLORA_SIZE || '');
 const note = (s) => { notes.push(s); console.log(`  · ${s}`); };
 
 // Orb's window over CDP: the pictures and the window size go through the page (the window itself stays hidden).
 async function open(userData, env = {}) {
   const orb = await launchOrb({ userData, env: { ...sandboxEnv(tmp), ...env } });
   const page = orb.page; const stop = () => orb.close();
+  opened.push(stop);
+  if (SIZE) await page.setViewportSize({ width: Number(SIZE[1]), height: Number(SIZE[2]) });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`); });
@@ -147,16 +155,18 @@ try {
     await call('config.save', { patch: { ui: { skin } } });
     await until(async () => (await page.evaluate(() => document.documentElement.dataset.skin)) === skin, `tema ${skin}`);
     for (const theme of ['dia', 'noche']) {
+      // a theme that only exists in one mode has no day / night control: its other mode is skipped
+      if ((theme === 'noche' && lightOnlySkin(skin)) || (theme === 'dia' && darkOnlySkin(skin))) continue;
       await setDark(theme === 'noche');
       await goChat(); await shot(`tema-${skin}-${theme}-chat`);
       await page.click('[data-testid=nav-tasks]'); await shot(`tema-${skin}-${theme}-tareas`);
       await page.click('[data-testid=nav-settings]'); await page.click('[data-testid=settings-nav-general]'); await shot(`tema-${skin}-${theme}-ajustes`);
-      if (theme === 'dia') {
+      if (theme === 'dia' || darkOnlySkin(skin)) {
         const wide = await overflow(page);
         if (wide.length) note(`tema ${skin}: contenido más ancho que su caja → ${wide.join(' | ')}`);
         const robots = await page.evaluate(() => document.querySelectorAll('.orb').length);
-        if (skin === 'profesional' && robots) note(`tema profesional: quedan ${robots} robots en pantalla`);
-        if (skin !== 'profesional' && !robots) note(`tema ${skin}: no se ve el robot`);
+        if (skin !== 'orb' && robots) note(`tema ${skin}: quedan ${robots} robots en pantalla`);
+        if (skin === 'orb' && !robots) note(`tema ${skin}: no se ve el robot`);
       }
       await closeSettings(page, `tema ${skin}/${theme}`);
     }
@@ -187,5 +197,7 @@ try {
   process.exitCode = 1;
 } finally {
   fs.writeFileSync(path.join(OUT, 'notas.txt'), notes.join('\n'));
+  for (const stop of opened) { try { await stop(); } catch { /* already closed */ } }
   try { fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5 }); } catch { /* a file still open: the temp folder stays */ }
+  process.exit(process.exitCode ?? 0);
 }

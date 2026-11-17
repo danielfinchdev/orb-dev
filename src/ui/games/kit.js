@@ -31,11 +31,11 @@ export function useKeys(handler) {
   }, []);
 }
 
-// The visual theme in use: html[data-skin] (orb | vaporwave | retro | profesional | nube) and html.dark.
-export const skin = () => document.documentElement.dataset.skin || 'orb';
+// The visual theme in use: html[data-skin] (predeterminado | cristal | orb | vaporwave | candy | retro) and html.dark.
+export const skin = () => document.documentElement.dataset.skin || 'predeterminado';
 export const isDark = () => document.documentElement.classList.contains('dark');
-// Less motion: the system asks for it, or the «profesional» theme (no decorative motion).
-export const reducedMotion = () => skin() === 'profesional' || Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+// Less motion: only when the system asks for it. No theme turns the games' motion off.
+export const reducedMotion = () => Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 
 // The colours of the visual theme in use, for the canvas (read at most every 250 ms: getComputedStyle is not free).
 let cache = null; let cacheAt = 0; let cacheKey = '';

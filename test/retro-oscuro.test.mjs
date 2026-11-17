@@ -19,7 +19,7 @@ test('darkOnlySkin: only retro is dark only', () => {
 
 test('applyTheme forces .dark for a dark-only theme and keeps the saved choice', () => {
   const store = read('src', 'ui', 'lib', 'store.js');
-  assert.match(store, /const dark = darkOnlySkin\(currentSkin\) \|\| theme === 'oscuro'/);
+  assert.match(store, /const dark = darkOnlySkin\(currentSkin\) \|\| \(!lightOnlySkin\(currentSkin\) && \(theme === 'oscuro'/);
   assert.match(store, /currentSkin = skin;/);
   // applyAppearance re-evaluates the mode, so changing theme neither leaves Retro light nor Orb stuck dark
   assert.match(store, /root\.motion = [^\n]*\n[\s\S]*?\n\s*applyTheme\(\);/);
@@ -44,9 +44,9 @@ test('the tour and the animation meter skip Retro by day', () => {
 });
 
 // ---- Contrast (WCAG AA). oklch → sRGB with the chroma reduced until it fits the gamut, as CSS does for colours the screen cannot show. ----
-const skins = read('src', 'ui', 'themes', 'skins.css');
-const block = (() => { const i = skins.indexOf('html[data-skin="retro"] {'); return skins.slice(i, skins.indexOf('\n}', i)); })();
-const tok = Object.fromEntries([...block.matchAll(/--([a-z0-9-]+): (oklch\([^)]+\))/g)].map((m) => [m[1], m[2]]));
+// Retro always wears .dark: the browser sees the dark base tokens with the Retro block over them.
+const declsOf = (css, selector) => { const i = css.indexOf(selector); const body = css.slice(css.indexOf('{', i) + 1, css.indexOf('}', i)); return [...body.matchAll(/--([a-z0-9-]+)\s*:\s*(oklch\([^)]*\))/g)].map((m) => [m[1], m[2]]); };
+const tok = Object.fromEntries([...declsOf(read('src', 'ui', 'tokens.css'), '.dark {'), ...declsOf(read('src', 'ui', 'themes', 'skins.css'), 'html[data-skin="retro"]{')]);
 function toRgb(L, C, H) {
   const lin = (c) => { const h = (H * Math.PI) / 180, a = c * Math.cos(h), b = c * Math.sin(h);
     const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3, m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3, s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
@@ -90,7 +90,7 @@ test('Retro: the chat text reads over the brightest piece of the backdrop', () =
 });
 
 test('Retro tokens are on html[data-skin] alone: .dark changes nothing, and no light variant remains', () => {
-  const all = ['skins', 'scene', 'scene-retro', 'scene-nube'].map((n) => read('src', 'ui', 'themes', `${n}.css`)).join('') + read('src', 'ui', 'app.css');
+  const all = ['skins', 'scene', 'scene-retro'].map((n) => read('src', 'ui', 'themes', `${n}.css`)).join('') + read('src', 'ui', 'app.css');
   assert.doesNotMatch(all, /html:not\(\.dark\)[^{]*\[data-skin="retro"\]|html\[data-skin="retro"\]:not\(\.dark\)/);
   assert.doesNotMatch(all, /html\.dark\[data-skin="retro"\] \{\s*--/);
   assert.doesNotMatch(read('src', 'ui', 'tokens.css'), /html\[data-skin\]:not\(/, 'every theme has its own soft / faint tokens now');
