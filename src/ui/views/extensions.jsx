@@ -6,7 +6,7 @@
 // that lists every file that will be turned on (the quarantine's copy, src/domain/extensions/extensions.mjs) and opens its folder.
 import { useEffect, useState } from 'react';
 import { notify, notifyError, notifyInfo, notifyOk, notifyProgress } from '@/lib/notify.js';
-import { Check, Download, Ellipsis, FolderOpen, KeyRound, PencilLine, Plus, Puzzle, Server, Trash2, Upload, X } from 'lucide-react';
+import { Check, Download, FolderOpen, KeyRound, PencilLine, Plus, Puzzle, Server, Trash2, Upload, X } from 'lucide-react';
 import { confirm, choose, form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input } from '@/components/ui/basic.jsx';

@@ -3,7 +3,6 @@
 // Qwen Code, GitHub Copilot CLI, Hermes Agent, Grok Build, Devin, Factory Droid, Oh My Pi…); each one is a small spec: how to find it, how to start it in ACP mode, where its login
 // lives and how to install it. The agent's own program and login are used: Orb never sees credentials.
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, readOutput, discoverDir, nodeRuntime } from '../platform/proc.mjs';
 import { clip } from './common.mjs';

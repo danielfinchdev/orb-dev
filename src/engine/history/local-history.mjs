@@ -30,9 +30,6 @@ export const AGENTS = ['claude', 'codex'];
 const historyHome = () => os.homedir();
 export const rootsOf = (home = historyHome()) => ({ claude: path.join(home, '.claude', 'projects'), codex: path.join(home, '.codex', 'sessions') });
 
-const realOf = (p) => { try { return fs.realpathSync(p); } catch { return null; } };
-const inside = (root, file) => { const rel = path.relative(root, file); return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel); };
-
 // The .jsonl files below a root, newest first, at most `limit`. Symbolic links and junctions (files or folders), the root
 // itself when it is one, and files with several hard links are never followed or read. { files, capped }: capped says
 // there were more files than the limit.

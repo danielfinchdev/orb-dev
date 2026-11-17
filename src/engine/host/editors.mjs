@@ -59,16 +59,6 @@ const folderOf = (dir, language) => {
   return dir;
 };
 
-// spawn: how a detached program starts (terminal.mjs › spawnDetached).
-async function openInEditor(which, dir, { language = 'es', spawn = spawnDetached } = {}) {
-  folderOf(dir, language);
-  if (!EDITOR_IDS.includes(which)) throw new Error(translate(language, 'sys.main.badPath'));
-  const exe = findEditors()[which];
-  if (!exe) throw new Error(translate(language, 'sys.terminal.notInstalled', { name: EDITORS[which] ?? which }));
-  if (process.platform === 'darwin') return spawn({ cmd: 'open', args: ['-a', exe, dir], cwd: dir });
-  return spawn({ cmd: exe, args: [dir], cwd: dir });
-}
-
 // The program to start for an action's command, in a terminal window that stays open with its output. Pure, so it is
 // tested. Windows: Windows Terminal (its «;» escaped) or PowerShell; CMD when chosen in Ajustes.
 export function actionPlan(command, dir, found, choice = 'auto', platform = process.platform, language = 'es') {

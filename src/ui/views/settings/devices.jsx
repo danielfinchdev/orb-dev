@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, 
 import { Select, Switch, BubbleTip } from '@/components/ui/overlay.jsx';
 import { call, act, bridge } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
-import { t, useT } from '@/lib/i18n.js';
+import { useT } from '@/lib/i18n.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { save, Row, PREVIEWS, previewOf } from './rows.jsx';
 import { quiet } from '@/lib/quiet.js';

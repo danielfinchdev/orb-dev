@@ -16,7 +16,7 @@ import { useT } from '@/lib/i18n.js';
 const ANIM_FADE = "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0";
 const ANIM_ZOOM = `${ANIM_FADE} data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95`;
 export const Dialog = DialogPrimitive.Root;
-const DialogTrigger = DialogPrimitive.Trigger;
+export const DialogTrigger = DialogPrimitive.Trigger;
 export const DialogClose = DialogPrimitive.Close;
 // instant: no enter or exit animation (overlay included), for surfaces opened from the keyboard such as the palette.
 export function DialogContent({ className, children, showClose = true, instant = false, ...props }) {
@@ -112,7 +112,7 @@ export function InfoTip({ text, className }) {
 }
 // a bubble with richer content (the card of a conversation in the sidebar): the same look, any content inside.
 // onOpen: called when it shows (to fetch what it needs then, not before).
-function RichTip({ content, children, side = 'right', align = 'start', offset = 12, onOpen }) {
+export function RichTip({ content, children, side = 'right', align = 'start', offset = 12, onOpen }) {
   return (
     <TooltipPrimitive.Root delayDuration={450} onOpenChange={(open) => { if (open) onOpen?.(); }}>
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>

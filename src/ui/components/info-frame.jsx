@@ -1,17 +1,14 @@
 // A chat's info frame (a pane on the right on the PC, a full sheet on the phone), its groups of rows and a row. Used by the
 // info of a chat and of a project (views/orb/info.jsx).
-import { X, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button.jsx';
+import { ChevronRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/overlay.jsx';
 import { phoneLayout } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
-import { useT } from '@/lib/i18n.js';
 import { WindowControlsSlot } from '@/components/window-controls.jsx';
 import { CloseButton } from '@/components/ui/primitives.jsx';
 
 // The frame: a pane (PC) or a full sheet (phone).
 export function InfoFrame({ title, onClose, children }) {
-  const t = useT();
   if (phoneLayout()) return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent data-sheet="full" showClose={false} className="flex flex-col gap-3 overflow-y-auto *:shrink-0" data-testid="chat-info">

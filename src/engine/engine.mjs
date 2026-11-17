@@ -19,7 +19,7 @@ import { DESKTOP, authorize } from '../domain/security/permissions.mjs';
 
 import { stdioTransport } from './transport/stdio.mjs';
 import { streamFeed } from '../shared/chat-stream.mjs';
-import { attachHost, hostReply, hostCall } from './host/host.mjs';
+import { attachHost, hostReply } from './host/host.mjs';
 import { appMethods } from './api/app.mjs';
 import { locateHome, setupHome, switchHome, secretCopy, secretsCopy, adoptOldKeyNames, secretDir } from './desktop-home.mjs';
 import { loadConfig } from '../platform/config-file.mjs';

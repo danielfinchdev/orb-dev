@@ -1,7 +1,6 @@
 // App state shared by every view: what the engine knows (assistant, projects, tasks, conversations) plus the current
 // route. The state container itself is state.js; engine events trigger a debounced refresh.
 import { notifyError, notifyOk } from './notify.js';
-import { errorText } from './utils.js';
 import { bumpNav, navTicket, stillHere } from './nav.js';
 import { cleanRoute, backStep } from './phone-nav.js';
 import { t } from './i18n.js';

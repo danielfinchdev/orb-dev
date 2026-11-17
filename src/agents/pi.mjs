@@ -19,7 +19,7 @@ export const unverified = true;
 export const caps = { images: false, steer: false, fork: false, approvals: false, models: false, context: false };
 export const install = null;
 export const strengths = 'agente minimalista y extensible, con muchos proveedores de modelos';
-export const rpcArgs = ['--mode', 'rpc'];
+const rpcArgs = ['--mode', 'rpc'];
 
 export function detect(cfg = {}) {
   if (cfg.path && firstFile([cfg.path])) return { cmd: cfg.path, pre: [] };

@@ -24,7 +24,7 @@ import { principalOf, REMOTE_METHODS } from '../../domain/security/permissions.m
 import { isLegacy } from '../../domain/data/legacy/migrate-38.mjs';
 import { ownPorts } from '../host/host.mjs';
 import { RENDERER, SESSION_DAYS, PAIR_MINUTES, UPLOAD_MAX, UPLOADS_TOTAL, UPLOADS_DAYS, STREAM_BACKLOG, STREAMS_PER_DEVICE, NETWORK_CHECK_MS, now, PAIR_KINDS, PAIR_FAILS_MAX, PAIR_PASSWORD_TRIES } from './remote-common.mjs';
-import { phoneConfig, guardCall, pushPreview, IMAGE_NAME, UPLOAD_TYPES, sniffUpload, sanitizeUploadName, withoutPaths, shapeResult } from './remote-calls.mjs';
+import { guardCall, pushPreview, IMAGE_NAME, UPLOAD_TYPES, sniffUpload, sanitizeUploadName, withoutPaths, shapeResult } from './remote-calls.mjs';
 import { privateSource, orbNameOf, ipOf, kindOf, kindForPairing, localName, plainHttpBrowser, parseMeta, metaVOf, APP_CORS, appOrigin, tailscaleExe, tailscaleAddress, lanAddresses } from './remote-net.mjs';
 import { TYPES, HEADERS, SERVICE_WORKER } from './remote-web.mjs';
 

@@ -45,7 +45,6 @@ export const pushPreview = (config) => (PREVIEWS.includes(config?.mobile?.previe
 const ABSOLUTE = /^(?:[A-Za-z]:[\\/]|\\\\|\/(?:Users|home|root|mnt|media|var|tmp|opt|private|Volumes|srv|data)\/)/;
 // Names the PC gives to what a phone uploads. Only pictures may go in `images`: the other kinds are stored but never
 // resolve to a path there, so guardCall refuses them as images.
-const UPLOAD_NAME = /^\d+-[0-9a-f]{8}\.(png|jpg|webp|gif|pdf|txt|md|csv|json)$/;
 const IMAGE_NAME = /^\d+-[0-9a-f]{8}\.(png|jpg|webp|gif)$/;
 // Fields of free text (what people and agents write): never replaced whole, only the assistant folder is cut.
 const TEXT_FIELD = /^(body|text|title|description|message|note|notes|result|summary|content|prompt|question|answer|label|reason|error|detail|final|output|input|brief|elements)$/i;

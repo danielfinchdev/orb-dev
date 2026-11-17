@@ -9,7 +9,7 @@ import { Select } from '@/components/ui/overlay.jsx';
 import { act, bridge, useStore, plainSkin } from '@/lib/store.js';
 import { OrbMark } from '@/components/orb-mark.jsx';
 import { cn } from '@/lib/utils.js';
-import { t, useT, useLocale } from '@/lib/i18n.js';
+import { useT, useLocale } from '@/lib/i18n.js';
 import { useUpdate, updateActions, notesUrl } from '@/components/update-card.jsx';
 import { TRACKS } from '../../../shared/music.mjs';
 import { available as musicAvailable } from '@/lib/music.js';

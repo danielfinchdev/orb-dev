@@ -8,7 +8,7 @@
 // A project: its initials or icon, name and folder, «Nuevo chat aquí»; Chats, Tareas, Programadas, Pizarra, Bitácora,
 // Compartir (with two or more users), Ajustes del proyecto (Proyectos) and, on the PC with God mode on, «Abrir en God mode».
 import { useEffect, useState } from 'react';
-import { Folder, ChevronRight, Sparkles, Bell, ClipboardCheck, Paperclip, Shrink, Download, Pin, PinOff, CircleCheck, Undo2, Trash2, Pencil, MessageSquarePlus, MessagesSquare, CalendarSync, Presentation, NotebookPen, Settings2, SquareTerminal } from 'lucide-react';
+import { Folder, ChevronRight, Sparkles, Bell, ClipboardCheck, Shrink, Download, Pin, PinOff, CircleCheck, Undo2, Trash2, Pencil, MessageSquarePlus, MessagesSquare, CalendarSync, Presentation, NotebookPen, Settings2, SquareTerminal } from 'lucide-react';
 import { BrainIcon } from '@/components/brain-icon.jsx';
 import { OrchestratorIcon } from '@/components/orchestrator-icon.jsx';
 import { Robot } from '@/components/robot.jsx';
@@ -17,12 +17,11 @@ import { ProjectPicker } from '@/components/project-actions.jsx';
 import { BrainPicker, ReasoningMenu, useCatalog } from '@/components/brain-picker.jsx';
 import { form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge, Input, Spinner } from '@/components/ui/basic.jsx';
+import { Input, Spinner } from '@/components/ui/basic.jsx';
 import { Switch, BubbleTip } from '@/components/ui/overlay.jsx';
 import { InfoFrame, List, Row } from '@/components/info-frame.jsx';
 import { useStore, call, act, go, setState, newChat, orbAct, closeOrbInfo, openOrbInfo, refreshSoon, phoneLayout, fullPc, chatOf } from '@/lib/store.js';
 import { notify } from '@/lib/notify.js';
-import { STATUS } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { useOrbItems, deleteChat } from './inbox.jsx';

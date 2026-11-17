@@ -7,8 +7,8 @@ import { contentHash, sign, verify, detectSensitivity, deletionAskedByUser, aske
 import { AUTONOMY, globalAutonomy, autonomyOf } from '../security/guard.mjs';
 import { BoardProjects } from './board-projects.mjs';
 import { BoardConversations } from './board-conversations.mjs';
-import { now, real, same, inside } from './board-common.mjs';
-import { AGENTS, assistantName, checkProjectPath, userName } from './board-common.mjs';
+import { now, same } from './board-common.mjs';
+import { AGENTS, assistantName, userName } from './board-common.mjs';
 export { AGENTS, assistantName, checkProjectPath, userName } from './board-common.mjs';
 
 

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { ctx, tr } from '../../platform/context.mjs';
 import { PRODUCT } from '../../shared/product.mjs';
 import { assistantName, eventKey, userName } from '../../domain/tasks/board.mjs';
-import { git, gitAsync, ORB_GIT } from '../../platform/git.mjs';
+import { gitAsync, ORB_GIT } from '../../platform/git.mjs';
 import { isLimitText, isBudgetText, startCooldown, blockModel, isModelLimitText, liftAfterSuccess, untilText, modelName } from '../../domain/usage/budget.mjs';
 import { accountLabel } from '../../domain/usage/accounts.mjs';
 import { oneLine } from '../../shared/text.mjs';
@@ -12,7 +12,7 @@ import { isRailOn } from '../../domain/rules/rails.mjs';
 import { redactSecrets, secretFiles, isSecretPath, stagedSecretsAsync } from '../../shared/secrets-scan.mjs';
 import { ATTACH_DIR } from '../sessions.mjs';
 import { logTask } from '../../domain/journal/journal.mjs';
-import { STATUS_ES, label, whoRan, mainStatus, mainStatusAsync } from './common.mjs';
+import { STATUS_ES, whoRan, mainStatusAsync } from './common.mjs';
 
 export class FinishPart {
   // Closing a task: git runs off the event loop, so the project stays held (nothing starts in it, nobody undoes the task)

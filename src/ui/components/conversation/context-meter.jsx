@@ -8,7 +8,7 @@ import { Tip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMe
 import { useStore, call, act, go } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
-import { useT, t, useLocale } from '@/lib/i18n.js';
+import { useT, useLocale } from '@/lib/i18n.js';
 import { reloadWait, markReloaded } from '@/lib/usage-reload.js';
 import { UsageBar, windowLabel, resetText, toneOf, shortTokens } from '@/components/usage-bits.jsx';
 

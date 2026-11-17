@@ -12,7 +12,7 @@ import { useHome, ctx, tr } from '../platform/context.mjs';
 import { isHome, CATEGORIES, PLATFORMS } from '../platform/paths.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
 import { budgetConfig, waitReason, modelLimits } from '../domain/usage/budget.mjs';
-import { accountLabel, accountsOf, usableAccounts } from '../domain/usage/accounts.mjs';
+import { accountLabel, usableAccounts } from '../domain/usage/accounts.mjs';
 import { oneLine } from '../shared/text.mjs';
 import { redactSecrets } from '../shared/secrets-scan.mjs';
 import { git } from '../platform/git.mjs';
@@ -167,7 +167,6 @@ Si un comando necesita una clave o contraseña, pídela con orb_request_secret: 
 // The app's version (package.json sits two folders up, in a checkout and in the installed app's resources alike).
 const APP_VERSION = (() => { try { return String(JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version); } catch { return '3.8'; } })();
 
-const text = (value) => ({ content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value, null, 2) }] });
 const str = (description) => ({ type: 'string', description });
 
 // Only the coordinator: files from the main folder (or another task's copy) into a task's isolated copy.

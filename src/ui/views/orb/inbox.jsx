@@ -26,7 +26,7 @@ import { DayDigestCard } from '@/components/day-digest.jsx';
 import { sameItem } from '@/lib/memo.js';
 import { useDay } from '@/lib/use-day.js';
 import { usePress } from '@/lib/use-press.js';
-import { AGENT, STATUS } from '@/lib/labels.js';
+import { AGENT } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { needsApproval } from '@/lib/task-approval.js';

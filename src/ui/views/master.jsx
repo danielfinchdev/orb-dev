@@ -16,7 +16,7 @@ import { Select } from '@/components/ui/overlay.jsx';
 import { LOCK_MINUTES, lockMinutesOf } from '@/lib/idle-lock.js';
 import { setMasterAsker, keepUnlock, dropUnlock, unlockCore, passwordStrength, MASTER_MIN } from '@/lib/core-access.js';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
-import { errorText, cn } from '@/lib/utils.js';
+import { cn } from '@/lib/utils.js';
 
 const MIN = MASTER_MIN;
 const BAR = ['bg-destructive', 'bg-destructive', 'bg-warning', 'bg-success', 'bg-success'];

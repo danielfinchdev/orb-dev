@@ -127,8 +127,6 @@ function archiveName(board, name, kind) {
 }
 
 export const finishedProjects = (board) => { const list = board.settingJson(FINISHED_PROJECTS); return Array.isArray(list) ? list.filter((x) => x && typeof x.key === 'string') : []; };
-// The folders the project sync leaves alone.
-const finishedKeys = (board) => new Set(finishedProjects(board).map((x) => x.key));
 
 export function finishProject(board, name, actor, { category = null, busy } = {}) {
   const p = mustProject(board, name);

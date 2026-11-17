@@ -3,7 +3,6 @@
 import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { enabledAgents } from '../../platform/config.mjs';
-import { git } from '../../platform/git.mjs';
 import { rankAccounts } from '../../domain/usage/budget.mjs';
 import { installed } from '../../agents/index.mjs';
 import { UNGUARDED_AGENTS } from '../../agents/unguarded.mjs';

@@ -1,6 +1,6 @@
 // Plain-language descriptions of actions for the approval prompts, and the language guess they use.
 import { translate } from '../../../shared/i18n.mjs';
-import { statements, words } from './shell-text.mjs';
+import { statements } from './shell-text.mjs';
 
 // what a command does, in words anyone understands, for the permission notice in the chat (the command itself is
 // one click away, never in the sentence). The agent's own description wins (Claude's Bash tool gives one).

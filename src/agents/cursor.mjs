@@ -107,7 +107,7 @@ function toolOf(call) {
 }
 
 // Orb's tools by what they do («Progreso de la tarea · 20 % · Creando saludo.html»); another server's tools by «server: tool».
-export function mcpToolLabel(server, tool, args = {}) {
+function mcpToolLabel(server, tool, args = {}) {
   const t = String(tool ?? '');
   if (server && server !== 'orb' && !/^orb_/.test(t)) return { name: `${server}: ${t}`, input: '' };
   const parts = (...xs) => xs.filter((x) => x != null && x !== '').map((x) => clip(String(x), 200)).join(' · ');

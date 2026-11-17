@@ -40,7 +40,6 @@ export function sanitize(raw, { exists = () => true } = {}) {
   return { tabs, active, split, right: split ? right : null, focus: split && raw.focus === 'right' ? 'right' : 'left', ratio };
 }
 
-const withTab = (s, key) => (s.tabs.includes(key) ? s.tabs : [...s.tabs, key]);
 // at the limit the oldest tab that nobody is looking at makes room
 function room(s) {
   if (s.tabs.length < MAX_TABS) return s.tabs;

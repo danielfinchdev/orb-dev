@@ -18,7 +18,7 @@ export const unverified = true;
 export const caps = { images: false, steer: false, fork: false, approvals: false, models: false, context: false };
 export const install = null;
 export const strengths = 'agente de Google con ventanas de contexto muy grandes';
-export const printArgs = ['--print'];
+const printArgs = ['--print'];
 export const PROMPT_MAX = 20000; // longer prompts go on stdin (Windows refuses command lines near 32 767 characters)
 
 export function detect(cfg = {}) {

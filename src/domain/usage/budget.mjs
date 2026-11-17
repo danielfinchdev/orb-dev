@@ -112,11 +112,6 @@ export function liftAfterSuccess(board, id, model, launchedAt) {
   return lifted;
 }
 
-// the earliest moment this account can take a task with this model, when it is paused (0 when it is not).
-function blockedUntil(board, id, model = null) {
-  return Math.max(cooldownUntil(board, id), modelLimitUntil(board, id, model));
-}
-
 // The real usage an account reported last (live sessions): { utilization 0-1, resetAt, window, status, at }.
 export function recordRate(board, id, rate) {
   if (!id || !rate) return;
