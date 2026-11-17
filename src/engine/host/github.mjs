@@ -161,7 +161,12 @@ export async function commitAll(project, message, opts = {}) {
   if (only) {
     const shown = (await git(project.path, '-c', 'core.quotePath=false', 'show', '-p', '-U0', '--no-color', '--no-ext-diff', '--format=', 'HEAD')).stdout;
     // a first commit has no parent to soft-reset to: drop the ref instead
-    if (secretsInDiff(shown).length) { await ((await git(project.path, 'rev-parse', '--verify', '-q', 'HEAD~1')).status === 0 ? git(project.path, 'reset', '-q', '--soft', 'HEAD~1') : git(project.path, 'update-ref', '-d', 'HEAD')); await unstage(); throw new Error(tr('msg.github.secretInText', { files: only.slice(0, 5).join(', ') })); }
+    if (secretsInDiff(shown).length) {
+      // `rev-list --parents`: «<sha>» alone is a root commit; if git itself fails the ref is left untouched.
+      const rl = await git(project.path, 'rev-list', '--parents', '-n1', 'HEAD');
+      if (rl.status !== 0) throw new Error(tr('msg.github.gitIncomplete'));
+      await (rl.stdout.trim().split(/\s+/).length > 1 ? git(project.path, 'reset', '-q', '--soft', 'HEAD~1') : git(project.path, 'update-ref', '-d', 'HEAD'));
+      await unstage(); throw new Error(tr('msg.github.secretInText', { files: only.slice(0, 5).join(', ') })); }
   }
   const branch = (await git(project.path, 'rev-parse', '--abbrev-ref', 'HEAD')).stdout.trim();
   return { files: staged.length, branch };

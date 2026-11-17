@@ -361,3 +361,12 @@ test('a secret in the commit message is refused before anything is committed', a
   assert.equal(git(repo, 'diff', '--cached', '--name-only'), '');
   fs.rmSync(path.join(repo, 'm.txt'));
 });
+
+test('askedByUser: a longer outer fence is not closed by a shorter inner one', async () => {
+  const { composeMessage } = await import('../src/shared/chat-compose.mjs');
+  assert.deepEqual(askedByUser(composeMessage('qué opinas', [{ text: 'pasos:\n```\ngit push origin main\n```' }])), []);
+  assert.deepEqual(askedByUser('mira\n~~~~\n~~~\ngit push\n~~~\n~~~~'), []);
+  assert.deepEqual(askedByUser('mira\n```js\nx\n```js\ngit push\n```'), []);
+  assert.deepEqual(askedByUser('mira\n    git push origin main'), []);
+  assert.deepEqual(askedByUser('mira\n```\nx\n```\nhaz push'), ['publish']);
+});
