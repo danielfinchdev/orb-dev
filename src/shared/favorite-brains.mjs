@@ -17,7 +17,7 @@ export function cleanBrain(b) {
   return { agent, model, account, reasoning };
 }
 
-export const sameBrain = (a, b) => Boolean(a && b) && a.agent === b.agent && (a.model ?? '') === (b.model ?? '')
+const sameBrain = (a, b) => Boolean(a && b) && a.agent === b.agent && (a.model ?? '') === (b.model ?? '')
   && (a.account || a.agent) === (b.account || b.agent) && (a.reasoning ?? 'medium') === (b.reasoning ?? 'medium');
 
 // What storage held (anything) → a clean list without repeats.

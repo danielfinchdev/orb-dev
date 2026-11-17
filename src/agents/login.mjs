@@ -14,7 +14,7 @@ import os from 'node:os';
 import { spawnAgent, JsonRpcPeer, killTree } from './live.mjs';
 import { tr } from '../platform/context.mjs';
 
-export const LOGIN_MAX_MS = 15 * 60_000; // the codes and links of both agents expire within 15 minutes
+const LOGIN_MAX_MS = 15 * 60_000; // the codes and links of both agents expire within 15 minutes
 const URL_WAIT_MS = 60_000;
 const logins = new Map(); // id -> login (finished ones stay a while so a late look still finds how it ended)
 
@@ -50,7 +50,7 @@ export function failureOf(raw) {
 // ---- the records
 const publicOf = (l) => ({ id: l.id, agent: l.agent, account: l.account, state: l.state, url: l.url ?? null, code: l.code ?? null, opened: Boolean(l.opened), needsCode: Boolean(l.needsCode), mode: l.mode, message: l.message ?? null, startedAt: l.startedAt });
 export const loginInfo = (id) => { const l = logins.get(id); return l ? publicOf(l) : null; };
-export const activeLogin = (account) => { for (const l of logins.values()) if (l.account === account && l.state === 'esperando') return publicOf(l); return null; };
+const activeLogin = (account) => { for (const l of logins.values()) if (l.account === account && l.state === 'esperando') return publicOf(l); return null; };
 export const allLogins = () => [...logins.values()].map(publicOf);
 
 function finish(l, state, message = null) {

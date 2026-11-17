@@ -30,7 +30,7 @@ const pathExts = (env) => String(env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';'
 
 // The script an npm shim runs: npx.cmd / npm.cmd of a Node.js install (npx-cli.js, or the newer npm of the global prefix,
 // as the shim checks), or a cmd-shim of a global package ("%dp0%\node_modules\…\cli.js" %*). null: not a shim.
-export function shimScript(file, env = process.env) {
+function shimScript(file, env = process.env) {
   let text; try { text = fs.readFileSync(file, 'utf8'); } catch { return null; }
   const dir = path.dirname(file);
   const npm = text.match(/SET\s+"(?:NPX|NPM)_CLI_JS=%~dp0\\([^"%]+)"/i);
@@ -62,7 +62,7 @@ export function cmdArg(arg) {
   a = a.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\*)$/, '$1$1');
   return `"${a}"`.replace(META, '^$1').replace(META, '^$1');
 }
-export const cmdLine = (file, args) => `"${[String(file).replace(META, '^$1'), ...args.map(cmdArg)].join(' ')}"`;
+const cmdLine = (file, args) => `"${[String(file).replace(META, '^$1'), ...args.map(cmdArg)].join(' ')}"`;
 
 // → { command, args, verbatim } for spawn(), or throws «no se encuentra <orden>».
 export function winPlan(command, args = [], env = process.env) {

@@ -5,13 +5,13 @@ import { tr, ctx } from '../platform/context.mjs';
 import { oneLine } from '../shared/text.mjs';
 import { canLaunch } from '../domain/usage/budget.mjs';
 
-export const GOAL_DEFAULT_TURNS = 20;
-export const GOAL_MAX_TURNS = 100;
-export const BLOCKED_AFTER = 3;          // equal blocked turns in a row
+const GOAL_DEFAULT_TURNS = 20;
+const GOAL_MAX_TURNS = 100;
+const BLOCKED_AFTER = 3;          // equal blocked turns in a row
 const DONE_RE = /(^|\n)[\s>*_`#-]*OBJETIVO CUMPLIDO/i;
 const BLOCKED_RE = /(^|\n)[\s>*_`#-]*OBJETIVO BLOQUEADO/i;
 
-export const goalTurns = () => {
+const goalTurns = () => {
   const n = Number(ctx.config?.goal?.maxTurns);
   return Number.isFinite(n) && n >= 1 ? Math.min(Math.floor(n), GOAL_MAX_TURNS) : GOAL_DEFAULT_TURNS;
 };

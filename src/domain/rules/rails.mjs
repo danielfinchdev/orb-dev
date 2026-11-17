@@ -27,7 +27,7 @@ export function railList(lang = ctx.config?.language ?? 'es') {
 }
 
 // guard categories that belong to a switchable rail (the other risks have none and always apply).
-export const RISK_RAIL = Object.freeze({ publish: 'publicar', deleteFolders: 'borrar-carpetas', gitRewrite: 'reescribir-git', diskWipe: 'formatear-disco' });
+const RISK_RAIL = Object.freeze({ publish: 'publicar', deleteFolders: 'borrar-carpetas', gitRewrite: 'reescribir-git', diskWipe: 'formatear-disco' });
 export const riskRailOn = (category) => !RISK_RAIL[category] || isRailOn(RISK_RAIL[category]);
 
 // Minutes a task's permission waits for an answer (0 = for ever, which is what a paused rail means).

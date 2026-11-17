@@ -6,7 +6,7 @@
 import '../glass.css';
 
 // A phone with few cores or little memory, or one that asked to save data: no blur.
-export function modestDevice(nav = globalThis.navigator) {
+function modestDevice(nav = globalThis.navigator) {
   if (!nav) return false;
   return (nav.hardwareConcurrency ?? 8) <= 4 || (nav.deviceMemory ?? 8) <= 3 || nav.connection?.saveData === true;
 }

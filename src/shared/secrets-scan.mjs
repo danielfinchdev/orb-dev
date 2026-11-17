@@ -63,7 +63,7 @@ export function secretsInDiff(diff) {
   return [...hits];
 }
 // The files of the index (what the next commit would save) with a secret in their added lines. `git` is workspace's git().
-export const stagedSecrets = (dir, git) => secretsInDiff(git(dir, '-c', 'core.quotePath=false', 'diff', '--cached', '-U0', '--no-color', '--no-ext-diff').stdout);
+const stagedSecrets = (dir, git) => secretsInDiff(git(dir, '-c', 'core.quotePath=false', 'diff', '--cached', '-U0', '--no-color', '--no-ext-diff').stdout);
 // The same with a git that answers with a promise (the engine's asynchronous one, called as git(dir, ...args)).
 // An output that git cut or ran out of time on is never read as «no secrets»: it throws.
 export const stagedSecretsAsync = async (dir, git) => {

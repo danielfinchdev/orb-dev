@@ -115,7 +115,7 @@ function keepOutOfGit(cwd, entries = [`${ATTACH_DIR}/`]) {
 }
 
 // One line for the live view: what the agent is doing now.
-export function describeItem(item) {
+function describeItem(item) {
   const b = item.body;
   if (item.kind === 'tool') return oneLine(`${b?.name ?? tr('msg.sessions.tool')}${b?.input ? `: ${b.input}` : ''}`, 140);
   if (item.kind === 'file') return oneLine(`${{ add: tr('msg.sessions.fileAdd'), delete: tr('msg.sessions.fileDelete') }[b?.change] ?? tr('msg.sessions.fileEdit')} ${b?.path ?? ''}`, 140);

@@ -3,11 +3,11 @@
 
 export const TICK_PITCH = 10; // distance between tick centres, in px
 export const TICK_REST = 6; // tick width at rest
-export const TICK_MAX = 30; // tick width under the pointer
-export const READ_OFFSET = 24; // a message counts as "being read" once its top is within this of the viewport top
-export const MIN_GUTTER = 56; // narrowest left gutter that can hold the rail without touching the text
-export const COLUMN_MAX = 768; // the chat column (max-w-3xl)
-export const PREVIEW_MAX = 280;
+const TICK_MAX = 30; // tick width under the pointer
+const READ_OFFSET = 24; // a message counts as "being read" once its top is within this of the viewport top
+const MIN_GUTTER = 56; // narrowest left gutter that can hold the rail without touching the text
+const COLUMN_MAX = 768; // the chat column (max-w-3xl)
+const PREVIEW_MAX = 280;
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 

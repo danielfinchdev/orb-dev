@@ -49,7 +49,7 @@ const KEYWORDS = [
 // deleted") only needs the request to ask for it. Anything else waits for the click.
 const FILE_RE = /(?:^|[\s«"'`(\[/\\])((?:[\w-][\w.-]*[\\/])*[\w-][\w.-]*\.[A-Za-z][A-Za-z0-9]{0,7})(?=$|[\s»"'`),;:!?\]]|\.(?:\s|$))/g;
 const DELETE_RE = /(rm\s+-rf|\b(borra\w*|borr[eé]\w*|elimina\w*|elimin[eé]\w*|delete\w*|remove\s+(the\s+)?files?|drop\s+table|formatea\w*)\b)/i;
-export const filesIn = (text) => [...String(text ?? '').matchAll(FILE_RE)].map((m) => m[1].replace(/\\/g, '/').split('/').pop().toLowerCase());
+const filesIn = (text) => [...String(text ?? '').matchAll(FILE_RE)].map((m) => m[1].replace(/\\/g, '/').split('/').pop().toLowerCase());
 export function filesToDelete(taskText) {
   const sentences = String(taskText ?? '').split(/(?<=[.!?;])\s+|\n+/);
   return [...new Set(sentences.filter((s) => DELETE_RE.test(s)).flatMap(filesIn))];

@@ -27,7 +27,7 @@ export const LIMITS = Object.freeze({
 });
 export const AGENTS = ['claude', 'codex'];
 
-export const historyHome = () => os.homedir();
+const historyHome = () => os.homedir();
 export const rootsOf = (home = historyHome()) => ({ claude: path.join(home, '.claude', 'projects'), codex: path.join(home, '.codex', 'sessions') });
 
 const realOf = (p) => { try { return fs.realpathSync(p); } catch { return null; } };

@@ -11,7 +11,7 @@ import { HEAD_OID_RE, MAX_COMMENT } from './github.mjs';
 
 export const ASK_MS = 5 * 60_000;
 export const PER_SESSION = 3; // requests waiting at once in one chat
-export const BODY_FOR_AGENT = 4000;
+const BODY_FOR_AGENT = 4000;
 const METHODS = ['merge', 'squash', 'rebase'];
 // the levels that may change something on GitHub (read and test chats only look)
 const WRITERS = new Set(['editar', 'preguntar', 'auto', 'total']);

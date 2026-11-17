@@ -16,7 +16,7 @@ import { checkCategory } from '../../domain/projects/projects.mjs';
 import { ATTACH_DIR } from '../sessions.mjs';
 import { cleanCommitMessage } from '../../shared/commit-message.mjs';
 
-export function ghExe() {
+function ghExe() {
   const pf = process.env.ProgramFiles ?? 'C:\\Program Files';
   return firstFile([...inPath('gh'), ...(IS_WIN ? [path.join(pf, 'GitHub CLI', 'gh.exe'), path.join(process.env.LOCALAPPDATA ?? '', 'Programs', 'GitHub CLI', 'gh.exe')] : [])]);
 }
@@ -212,7 +212,7 @@ export async function viewPr(project, number) {
 
 // Merges as the user's own gh account. No --delete-branch, --admin or --auto: the phone cannot skip a rule of the
 // repository, and gh leaves the local branch and checkout alone without --delete-branch.
-export const MERGE_METHODS = ['merge', 'squash', 'rebase'];
+const MERGE_METHODS = ['merge', 'squash', 'rebase'];
 // --match-head-commit makes gh merge exactly the commit the user saw; if the branch moved since, GitHub refuses.
 const HEAD_MOVED_RE = /head branch was modified|head ref.*(does not match|not match)|expected head sha/i;
 const OLD_GH_RE = /unknown flag:? ?--match-head-commit/i;

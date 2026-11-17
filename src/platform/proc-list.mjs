@@ -24,7 +24,7 @@ const unquote = (w) => w.replace(/^(["'])([\s\S]*)\1$/, '$2');
 const words = (s) => (String(s ?? '').match(/"[^"]*"|'[^']*'|\S+/g) ?? []).map(unquote);
 
 // The arguments of a command line, without the program itself (as `"C:\…\node.exe" server.js` → ['server.js']).
-export function argsOf(cmd) { return words(cmd).slice(1); }
+function argsOf(cmd) { return words(cmd).slice(1); }
 
 // Whether a command the task ran started this process: every argument of the process appears in that command, and at
 // least one of them says something (not only options or numbers).

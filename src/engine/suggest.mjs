@@ -11,9 +11,9 @@ import { agentKeyEnv } from '../domain/security/agent-keys.mjs';
 import { oneLine } from '../shared/text.mjs';
 
 const TIMEOUT_MS = 30_000;
-export const SUGGEST_MAX = 160;
+const SUGGEST_MAX = 160;
 
-export const suggestOn = () => ctx.config?.suggestNext === true;
+const suggestOn = () => ctx.config?.suggestNext === true;
 
 // what the model said as a message for the box: one line, no quotes, nothing when it had no good idea
 export function cleanSuggestion(text) {

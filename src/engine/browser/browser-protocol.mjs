@@ -21,7 +21,7 @@ import { translate } from '../../shared/i18n.mjs';
 export const VIEW = { width: 1280, height: 800 };
 export const MAX_TABS = 4;
 export const MAX_LINE = 64 * 1024;
-export const ACTION_MS = 40_000; // a page that does not answer in this time is stopped (endless loops, frozen renderers)
+const ACTION_MS = 40_000; // a page that does not answer in this time is stopped (endless loops, frozen renderers)
 export const MAX_PENDING = 8; // queued requests per connection
 export const WORLD = 1717; // the isolated world: our scripts share the page's DOM but none of its JavaScript
 export const TEXT_MAX = 5000;
@@ -64,7 +64,7 @@ const SECRETS = `
 
 // Runs in the page's isolated world: lists what can be clicked or typed into (numbered refs) and the visible text, with
 // the secret fields' values left out. challenge: the page asks for a human (a CAPTCHA, or a code sent to the person).
-export const SNAPSHOT = `(() => {${SECRETS}
+const SNAPSHOT = `(() => {${SECRETS}
   const refs = globalThis.__orbRefs = [];
   const out = [];
   const scrub = scrubWith(secretValues());
@@ -108,7 +108,7 @@ export const focus = (ref, clear) => `(() => {
   return true;
 })()`;
 // A screenshot never shows a secret field: black boxes over them while the picture is taken.
-export const MASK_ON = `(() => {${SECRETS}
+const MASK_ON = `(() => {${SECRETS}
   const old = globalThis.__orbMask; if (old) old.remove();
   const boxes = secretFields().filter((el) => String(el.value ?? el.textContent ?? '')).map((el) => el.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight);
   if (!boxes.length) return 0;
@@ -119,7 +119,7 @@ export const MASK_ON = `(() => {${SECRETS}
   globalThis.__orbMask = layer;
   return boxes.length;
 })()`;
-export const MASK_OFF = `(() => { const m = globalThis.__orbMask; if (m) m.remove(); globalThis.__orbMask = null; return true; })()`;
+const MASK_OFF = `(() => { const m = globalThis.__orbMask; if (m) m.remove(); globalThis.__orbMask = null; return true; })()`;
 
 // the page's alert/confirm/prompt (an off-screen page cannot show them) replaced in the page itself: they answer
 // what the agent chose (orb_browser_dialog) and are noted for it to read. Installed again on each page; the answer of the
@@ -134,9 +134,9 @@ export const dialogsHook = (answer) => `(() => {
   window.prompt = (m, d) => { const r = a().accept ? (a().text || (d ?? '')) : null; log.push({ type: 'prompt', message: String(m ?? ''), result: r }); return r; };
 })()`;
 export const TAKE_DIALOGS = '(window.__orbDialogs || []).splice(0)';
-export const dialogLine = (d) => `${d.type}(${JSON.stringify(String(d.message ?? '').slice(0, 200))})${d.type === 'alert' ? '' : ` → ${d.result === null || d.result === false ? 'cancelado' : d.type === 'prompt' ? JSON.stringify(String(d.result).slice(0, 100)) : 'aceptado'}`}`;
+const dialogLine = (d) => `${d.type}(${JSON.stringify(String(d.message ?? '').slice(0, 200))})${d.type === 'alert' ? '' : ` → ${d.result === null || d.result === false ? 'cancelado' : d.type === 'prompt' ? JSON.stringify(String(d.result).slice(0, 100)) : 'aceptado'}`}`;
 
-export function normalizeUrl(raw, language = 'es') {
+function normalizeUrl(raw, language = 'es') {
   let s = String(raw ?? '').trim();
   if (!s) throw new Error(translate(language, 'sys.browser.noUrl'));
   if (!/^[a-z][a-z0-9+.-]*:/i.test(s)) s = (/^(localhost|127\.|\[::1\]|0\.0\.0\.0)/i.test(s) ? 'http://' : 'https://') + s;
@@ -147,7 +147,7 @@ export function normalizeUrl(raw, language = 'es') {
 export const allowed = (url) => { try { return ['http:', 'https:'].includes(new URL(url).protocol); } catch { return false; } };
 
 // The page as the agent reads it (the text of orb_browser_snapshot and of every action that changes the page).
-export function formatSnapshot(s, { dialogs = [], errors = 0, notes = [] } = {}) {
+function formatSnapshot(s, { dialogs = [], errors = 0, notes = [] } = {}) {
   return [
     `Página: ${s.title || '(sin título)'}\nDirección: ${s.url}`,
     ...notes.filter(Boolean),
@@ -293,7 +293,7 @@ export function createActions({ driver, T, language = () => 'es', onChallenge = 
 }
 
 // The pipe's name: a named pipe on Windows, a socket file elsewhere (the engine checks this shape before trusting it).
-export const pipeName = (id) => (process.platform === 'win32' ? `\\\\.\\pipe\\orb-navegador-${id}` : path.join(os.tmpdir(), `orb-navegador-${id}.sock`));
+const pipeName = (id) => (process.platform === 'win32' ? `\\\\.\\pipe\\orb-navegador-${id}` : path.join(os.tmpdir(), `orb-navegador-${id}.sock`));
 
 // The control pipe: one JSON message per line. First { hello: key, agent, session, task } with the key the engine
 // gave that conversation, then { id, action, args }. One action at a time per page; closing never waits behind a page

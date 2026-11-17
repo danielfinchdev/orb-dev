@@ -171,7 +171,7 @@ export function DataCards() { return <><MasterCard /><BackupsCard /><TrashCard /
 
 // backups are on from the first day, sealed with this PC's key. A few days later, once, a quiet suggestion to make
 // the recovery code (Ajustes › Datos), so a copy also opens on another PC. Never on a phone.
-export const RECOVERY_AFTER_MS = 3 * 86_400_000;
+const RECOVERY_AFTER_MS = 3 * 86_400_000;
 const firstSeen = () => {
   try { const v = Number(localStorage.getItem('orb.firstSeen')); if (v > 0) return v; localStorage.setItem('orb.firstSeen', String(Date.now())); } catch { /* storage unavailable */ }
   return Date.now();

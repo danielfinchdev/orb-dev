@@ -82,7 +82,7 @@ export function shapeResult(method, result) {
   return withoutPaths({ ...rest, activeProject, config: phoneConfig(rest.config) });
 }
 
-export { UPLOAD_NAME, IMAGE_NAME };
+export { IMAGE_NAME };
 
 // A file name from the phone made safe to show and to log: no folders or drives, no characters Windows refuses, no
 // reserved device names, no invisible or direction-changing characters, bounded length. Never used to build a path.

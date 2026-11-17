@@ -3,7 +3,7 @@
 import { oneLine } from './text.mjs';
 
 export const COMMIT_STYLES = ['conventional', 'repo', 'custom'];
-export const SUBJECT_MAX = 72;
+const SUBJECT_MAX = 72;
 const BODY_MAX = 4000;
 
 // A model may add a signature of its own; the user's rule is no AI signatures in any commit.

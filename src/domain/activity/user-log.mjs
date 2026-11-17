@@ -7,7 +7,7 @@ import { ctx } from '../../platform/context.mjs';
 import { rotateIfBig } from '../../platform/log.mjs';
 import { redactSecrets } from '../../shared/secrets-scan.mjs';
 
-export const USER_LOG_MAX = 10 * 1024 * 1024;
+const USER_LOG_MAX = 10 * 1024 * 1024;
 export const userLogFile = () => path.join(ctx.paths.runs, 'usuario.log');
 
 const clip = (v, n) => { const s = redactSecrets(typeof v === 'string' ? v : JSON.stringify(v ?? null)); return s.length > n ? `${s.slice(0, n)}…` : s; };

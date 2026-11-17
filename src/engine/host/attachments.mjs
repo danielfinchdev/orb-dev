@@ -15,7 +15,7 @@ import { kindOf } from '../../shared/attach-kind.mjs';
 export { kindOf };
 
 export const ATTACH_DIR = '.orb-adjuntos';
-export const ATTACH_COUNT = 10;
+const ATTACH_COUNT = 10;
 export const ATTACH_MAX = 100 * 1024 * 1024; // per file
 const NATIVE_MAX = 5 * 1024 * 1024; // a picture larger than this goes by its path (the agents' APIs refuse bigger ones)
 const NATIVE_COUNT = 20;
@@ -92,7 +92,7 @@ const decodeEntities = (s) => s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) 
   return ENTITIES[e.toLowerCase()] ?? m;
 });
 // The words of an office XML: one line per paragraph, cell or row.
-export function xmlText(xml) {
+function xmlText(xml) {
   return decodeEntities(String(xml)
     .replace(/<(w:tab|w:br|a:br|text:tab|text:line-break)\b[^>]*\/>/g, (m) => (/tab/.test(m) ? '\t' : '\n'))
     .replace(/<\/(w:p|a:p|text:p|text:h|si|row|table:table-row)>/g, '\n')
@@ -144,7 +144,7 @@ function pdfHex(h) {
   if (b.length >= 2 && b[0] === 0xfe && b[1] === 0xff) return b.subarray(2).swap16().toString('utf16le');
   return b.toString('latin1');
 }
-export function pdfText(buf) {
+function pdfText(buf) {
   const raw = buf.toString('latin1');
   const parts = [];
   const re = /<<([\s\S]{0,2000}?)>>\s*stream\r?\n/g;
@@ -176,7 +176,7 @@ export function pdfText(buf) {
   return parts.join('\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 // Mostly letters, digits, spaces and punctuation: real text, not the codes of a font.
-export const looksLikeText = (s) => {
+const looksLikeText = (s) => {
   const t = String(s ?? '').slice(0, 20_000);
   if (t.replace(/\s/g, '').length < 20) return false;
   const good = (t.match(/[\p{L}\p{N}\s.,;:!?¿¡'"()\-–—%€$@/]/gu) ?? []).length;
@@ -209,7 +209,7 @@ export const FFMPEG = Object.freeze({
   }
 });
 const exe = (name) => (process.platform === 'win32' ? `${name}.exe` : name);
-export const ffmpegDir = () => path.join(ctx.paths.tools, 'ffmpeg');
+const ffmpegDir = () => path.join(ctx.paths.tools, 'ffmpeg');
 const ffmpegPrints = () => path.join(ctx.paths.data, 'ffmpeg-huellas.json');
 // Tests (fake agents) and ORB_NO_DOWNLOADS=1 never download.
 const downloadsOff = () => process.env.ORB_NO_DOWNLOADS === '1' || Boolean(process.env.ORB_FAKE_AGENTS);
@@ -262,7 +262,7 @@ async function downloadFfmpeg(pin, fetchImpl, log) {
 }
 
 // The ffmpeg to use: Orb's own (checked), the one in PATH, or (Windows) Orb's downloaded now. → path or null
-export async function findFfmpeg({ fetchImpl = null, pin = FFMPEG[process.platform], log = () => {} } = {}) {
+async function findFfmpeg({ fetchImpl = null, pin = FFMPEG[process.platform], log = () => {} } = {}) {
   const own = ctx.paths ? ownFfmpeg() : null;
   if (own) return own;
   const found = inPath('ffmpeg');
@@ -315,7 +315,7 @@ export async function extractFrames(file, ffmpeg, { runImpl = run } = {}) {
 
 // A transcript of the sound, only with a speech-to-text program already on this PC (OpenAI's whisper in PATH). Orb does
 // not bring one (too heavy): without it, the agent is told so. → path of the .txt or null
-export async function transcribe(file, { whisper = inPath('whisper'), runImpl = run } = {}) {
+async function transcribe(file, { whisper = inPath('whisper'), runImpl = run } = {}) {
   if (!whisper) return null;
   const dir = `${file}-transcripcion`;
   fs.mkdirSync(dir, { recursive: true });

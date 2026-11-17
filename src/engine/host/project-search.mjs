@@ -12,7 +12,7 @@ import { protectedHitRail, isAgentConfig } from '../../domain/security/guard/pro
 import { isRailOn } from '../../domain/rules/rails.mjs';
 
 export const MAX_FILES = 60;
-export const MAX_HITS = 80;
+const MAX_HITS = 80;
 const MAX_WALK = 40_000; // files looked at before it gives up
 const MAX_BYTES = 1024 * 1024; // a bigger file is not searched
 const BUDGET_MS = 6000;

@@ -56,7 +56,7 @@ const SETTLE_MS = 24 * 3_600_000; // a quiet conversation with nothing open is d
 
 // a step of the assistant for the chat's live line: the tool, what it works on (only a file's name, never its folder;
 // the first words of a command) and when it started.
-export function toolStep(body) {
+function toolStep(body) {
   const name = String(body?.name ?? '').replace(/^orb:/, '');
   let target = String(body?.input ?? '').replace(/\s+/g, ' ').trim();
   if (/^([a-z]:)?[\\/]|^\.{0,2}[\\/]|[\\/][^\\/\s]+\.[\w]{1,8}$/i.test(target) && !/\s/.test(target)) target = target.split(/[\\/]/).filter(Boolean).pop() ?? '';
@@ -80,7 +80,7 @@ export function answerOf(result, said = []) {
 // a message of the user that arrives while the assistant is answering waits for the end of that turn and is added
 // to what was asked (added to the running turn, a short turn could lose its answer). Several messages
 // written meanwhile go together, as one turn.
-export function queueUserMessage(lane, text, user = userName()) {
+function queueUserMessage(lane, text, user = userName()) {
   const last = lane.queue.at(-1);
   if (last && !last.internal && last.user) { last.text += `\n\n${text}`; return last; }
   // (For the brain, in Spanish like the rest of its instructions; the chat shows the message as the user wrote it.)

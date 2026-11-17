@@ -26,7 +26,7 @@ export async function timedFetch(url, init = {}, ms = TIMEOUTS.call, get = globa
 export const fetchWithin = (ms, get = globalThis.fetch) => (url, init) => timedFetch(url, init, ms, get);
 
 // The PC could not be reached (network down, PC off, Orb closed, too slow): not an answer of the PC.
-export const offlineError = (cause, timeout = false) => Object.assign(new Error('offline'), { offline: true, timeout, cause });
+const offlineError = (cause, timeout = false) => Object.assign(new Error('offline'), { offline: true, timeout, cause });
 export const isOffline = (e) => Boolean(e?.offline);
 
 // The pause before trying again while the PC cannot be reached: 3 s, 6 s, 12 s… up to 30 s.

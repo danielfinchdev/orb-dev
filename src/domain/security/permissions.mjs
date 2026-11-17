@@ -133,11 +133,11 @@ export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.v
 // rails: any change to the limits (rails.set, rails.restore, or `rails` inside config.save); ruleSeed: putting the shipped
 // rules back, and pausing or deleting one of them (those two only for a shipped rule: see freshPurpose).
 export const FRESH_UNLOCK = Object.freeze({ 'projects.deleteCheck': 'deleteProject', 'rails.set': 'rails', 'rails.restore': 'rails', 'rules.restoreDefaults': 'ruleSeed' });
-export const RULE_PURPOSE = 'ruleSeed';
+const RULE_PURPOSE = 'ruleSeed';
 export const RAILS_PURPOSE = 'rails';
 // a secret an agent asked for, saved in the vault or taken from it, asks every time too (its
 // token is for that one action); the purpose depends on what the card does.
-export const SECRET_PURPOSES = Object.freeze({ save: 'secretSave', saved: 'secretSaved' });
+const SECRET_PURPOSES = Object.freeze({ save: 'secretSave', saved: 'secretSaved' });
 export const FRESH_PURPOSES = Object.freeze([...new Set([...Object.values(FRESH_UNLOCK), ...Object.values(SECRET_PURPOSES)])]);
 // Calls whose purpose depends on the rule they name: the caller (master.mjs) reads the rule and says if it is a shipped one.
 export const RULE_TARGET_METHODS = Object.freeze(new Set(['rules.pause', 'rules.delete', 'rules.save']));

@@ -25,7 +25,7 @@ import { spawn } from 'node:child_process';
 import { killTree, cleanEnv } from '../platform/proc.mjs';
 import { tr } from '../platform/context.mjs';
 
-export const DECISIONS = ['allow', 'always', 'deny'];
+const DECISIONS = ['allow', 'always', 'deny'];
 
 // A turn that finishes once: send() returns its promise, the adapter calls finish() when the agent says it is over.
 export class Turn {

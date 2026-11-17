@@ -138,7 +138,7 @@ export function renameChat(item, t) {
 }
 // «Posponer»: a quick time or a date and time of the user's choice (local), sent as an ISO time.
 const localInput = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
-export function snoozeChat(item, t) {
+function snoozeChat(item, t) {
   const quick = snoozeTimes();
   // The dialog opens with the focus on the time already chosen (it went to the first one, which looked chosen too).
   const initialAt = localInput(quick[2]?.[1] ?? quick[1][1]);
@@ -325,7 +325,7 @@ export async function newProjectChat() {
   const p = await createProjectFlow();
   if (p) await newChat(p.name);
 }
-export function OrbNewMenu({ fab = false }) {
+function OrbNewMenu({ fab = false }) {
   const t = useT();
   const trigger = fab
     ? <button type="button" className="press bg-primary text-primary-foreground fixed right-4 bottom-[calc(84px+env(safe-area-inset-bottom,0px))] z-30 grid size-14 cursor-pointer place-items-center rounded-2xl shadow-lg" aria-label={t('chats.new')} data-testid="chats-new"><Plus className="size-6" /></button>

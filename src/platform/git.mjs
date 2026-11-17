@@ -84,5 +84,5 @@ export function mayHaveWorktrees(dir, cache = new Map()) {
     const up = path.dirname(d); if (up === d) return answer(false); d = up;
   }
 }
-export const changedPaths = (repo) => { const r = git(repo, 'status', '--porcelain=v1', '-z', '-uall'); return r.status === 0 ? porcelainPaths(r.stdout) : null; };
-export const changedPathsAsync = async (repo) => { const r = await gitAsync(repo, {}, 'status', '--porcelain=v1', '-z', '-uall'); return r.status === 0 ? porcelainPaths(r.stdout) : null; };
+const changedPaths = (repo) => { const r = git(repo, 'status', '--porcelain=v1', '-z', '-uall'); return r.status === 0 ? porcelainPaths(r.stdout) : null; };
+const changedPathsAsync = async (repo) => { const r = await gitAsync(repo, {}, 'status', '--porcelain=v1', '-z', '-uall'); return r.status === 0 ? porcelainPaths(r.stdout) : null; };

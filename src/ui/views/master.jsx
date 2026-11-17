@@ -109,7 +109,7 @@ async function resetFlow() {
   });
 }
 // canForget: this PC can keep the secrets (it opened them and has a recovery code); otherwise only starting from scratch.
-export async function forgotFlow({ canForget = false } = {}) {
+async function forgotFlow({ canForget = false } = {}) {
   let r = null;
   if (!canForget) r = await resetFlow();
   else {

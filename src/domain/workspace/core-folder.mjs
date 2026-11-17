@@ -54,13 +54,13 @@ const coreMcp = (home) => path.join(home, CORE_DIR, MCP_DIR);
 const notes = (home) => [path.join(home, CORE_DIR, MOVE_STATE), path.join(home, LEGACY.internal, MOVE_STATE)];
 
 // Orb 3.7's own data: moved when the engine starts.
-export function ownMoves(home) {
+function ownMoves(home) {
   const p = paths(home);
   return [{ from: path.join(home, LEGACY.internal), to: p.core }, { from: path.join(home, LEGACY.config), to: p.config, file: true }];
 }
 // Everything 3.7 kept at the top, all into core: how the names of a backup made by 3.7 are read (backup.mjs ›
 // legacyName), and so the paths its orb.json and database hold.
-export function legacyMoves(home) {
+function legacyMoves(home) {
   return [...ownMoves(home),
     { from: path.join(home, LEGACY.logs), to: coreLogs(home), logs: true },
     { from: path.join(home, LEGACY.mcp), to: coreMcp(home) },
@@ -70,7 +70,7 @@ export function legacyMoves(home) {
 // ---- the folders the user decides about
 const USER_MARKS = ['.git', 'AGENTS.md', 'BITACORA.md', 'CLAUDE.md', 'package.json', 'pyproject.toml'];
 // A server folder the user wrote (or develops): a project, not a part of Orb.
-export const isUserProject = (dir) => USER_MARKS.some((n) => exists(path.join(dir, n)));
+const isUserProject = (dir) => USER_MARKS.some((n) => exists(path.join(dir, n)));
 const layoutFile = (home) => path.join(home, CORE_DIR, LAYOUT_FILE);
 const decisions = (home) => readJson(layoutFile(home))?.decided ?? {};
 // the general log lives in core (the owner's definition), so moving it there is the default. A «keep» an Orb 3.8.0
@@ -140,7 +140,7 @@ function isHeld(dir) {
   try { fs.renameSync(dir, probe); } catch (error) { return ['EBUSY', 'EPERM', 'EACCES'].includes(error.code); }
   for (let i = 0; ; i++) { try { fs.renameSync(probe, dir); return false; } catch (error) { if (i >= 50) throw error; sleep(100); } }
 }
-export class LayoutBusy extends Error {
+class LayoutBusy extends Error {
   constructor(list, language = 'es') {
     super(translate(language, 'data.layout.busy', { paths: list.join(', ') }));
     this.code = 'busy'; this.userFacing = true; this.paths = list;
@@ -220,7 +220,7 @@ function finish(home, note, language) {
 
 // The old prefix → the new one for each move (folders end with the separator, so a project called «bitacora-web» is
 // not touched), also as they look inside JSON text (backslashes doubled).
-export function rewritePairs(moves) {
+function rewritePairs(moves) {
   const s = path.sep;
   const pairs = moves.map((m) => (m.file ? [m.from, m.to] : [m.from + s, m.to + s]));
   const json = pairs.map(([a, b]) => [JSON.stringify(a).slice(1, -1), JSON.stringify(b).slice(1, -1)]).filter(([a], i) => a !== pairs[i][0]);
@@ -370,7 +370,7 @@ export function rewriteDb(file, home, moves = legacyMoves(home)) {
 
 // An isolated copy is a git worktree: its repository keeps where it lives (<repo>\.git\worktrees\<n>\gitdir). After a
 // move it points to the old place; written again as git itself writes it (what `git worktree repair` does).
-export function repairWorktrees(dir) {
+function repairWorktrees(dir) {
   let n = 0;
   let entries = []; try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return 0; }
   for (const e of entries) {

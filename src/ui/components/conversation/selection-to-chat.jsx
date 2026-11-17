@@ -11,7 +11,7 @@ const MAX_QUOTE = 4000;
 const MIN_QUOTE = 2;
 
 // The selected text when it lies inside one message of a chat: { text, rect } or null.
-export function selectedMessageText() {
+function selectedMessageText() {
   const sel = typeof window !== 'undefined' ? window.getSelection() : null;
   if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
   const text = sel.toString().trim();

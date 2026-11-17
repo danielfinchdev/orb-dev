@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { translate } from '../../shared/i18n.mjs';
 
-export const TERMINALS = { auto: 'Automática', warp: 'Warp', wt: 'Windows Terminal', powershell: 'PowerShell', cmd: 'Símbolo del sistema (CMD)' };
+const TERMINALS = { auto: 'Automática', warp: 'Warp', wt: 'Windows Terminal', powershell: 'PowerShell', cmd: 'Símbolo del sistema (CMD)' };
 // the usual terminals, in the order «Automática» tries them (x-terminal-emulator is the one the system chose
 // on Debian / Ubuntu). Each one is told the folder its own way; those without a way (xterm) start in it (cwd).
 // open: the arguments to open it in dir; run: to run a command there (bash -lc …, the window stays open afterwards).

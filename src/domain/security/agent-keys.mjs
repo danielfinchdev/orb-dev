@@ -10,10 +10,10 @@ export const AGENT_KEY_NAMES = Object.freeze({
   devin: Object.freeze(['WINDSURF_API_KEY']),
   droid: Object.freeze(['FACTORY_API_KEY'])
 });
-export const MAX_KEY = 8000;
+const MAX_KEY = 8000;
 export const agentKeyId = (agent, name) => `agentkey/${agent}/${name}`;
 export const agentKeyNames = (agent) => (Object.hasOwn(AGENT_KEY_NAMES, agent) ? AGENT_KEY_NAMES[agent] : []);
-export const isAgentKeyName = (agent, name) => agentKeyNames(agent).includes(name);
+const isAgentKeyName = (agent, name) => agentKeyNames(agent).includes(name);
 
 // Which keys are saved (booleans only: a value never leaves the vault through here). → { <agent>: { <NAME>: boolean } }
 export function agentKeyState(master) {

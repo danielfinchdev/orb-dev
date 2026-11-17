@@ -20,7 +20,7 @@ import { NO_ANSWER_WAIT } from './catalog.mjs';
 const REFRESH_MS = 12 * 3_600_000;
 
 // Normalised plan ids: free, pro, max5, max20, go, plus, prolite, team, business, enterprise, edu, proplus, ultra.
-export function claudePlan(dir) {
+function claudePlan(dir) {
   try {
     const o = JSON.parse(fs.readFileSync(path.join(dir, '.credentials.json'), 'utf8'))?.claudeAiOauth ?? {};
     const sub = String(o.subscriptionType ?? '').toLowerCase(); const tier = String(o.rateLimitTier ?? '').toLowerCase();
@@ -33,7 +33,7 @@ export function codexPlan(planType) {
   const p = String(planType ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
   return p ? ({ free: 'free', go: 'go', plus: 'plus', prolite: 'prolite', pro: 'pro', team: 'team', business: 'business', enterprise: 'enterprise', edu: 'edu' }[p] ?? p.slice(0, 20)) : null;
 }
-export function cursorPlan(tier) {
+function cursorPlan(tier) {
   const p = String(tier ?? '').toLowerCase().replace(/\s+/g, '');
   if (!p) return null;
   if (/ultra/.test(p)) return 'ultra';

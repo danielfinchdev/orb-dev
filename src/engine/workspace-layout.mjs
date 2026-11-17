@@ -43,7 +43,7 @@ export async function layoutApply(choices, { emit = () => {}, log = () => {}, bo
 }
 
 // the owner's private folder (notes, plans): kept from the agents like core.
-export const PRIVATE_DIR = 'personal';
+const PRIVATE_DIR = 'personal';
 export const privateDir = (home) => path.join(home, PRIVATE_DIR);
 // Where adb keeps the keys it pairs phones with and the phones it knows: the user's .android folder and an
 // ANDROID_USER_HOME, whole. Orb's own adb uses one inside core\datos (src/engine/host/android.mjs).

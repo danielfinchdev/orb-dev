@@ -15,7 +15,7 @@ export const PER_SESSION = 20;
 export const MAX_PAGES = 100;
 export const SHOWS_PER_MINUTE = 10;
 export const MAX_CHOICES = 6;
-export const MAX_CHOICE = 120;
+const MAX_CHOICE = 120;
 const ID_RE = /^[0-9a-f]{32}$/;
 // The only origins allowed to frame a page: the packaged window (Windows: http://tauri.localhost; macOS/Linux:
 // tauri://localhost; the https variant too). Loopback origins (the dev server) are added only in a development build

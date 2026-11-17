@@ -15,7 +15,7 @@ const ROOK = [[-1, 0], [1, 0], [0, -1], [0, 1]];
 const BISHOP = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
 
 // Is square i attacked by colour `by`?
-export function attacked(board, i, by) {
+function attacked(board, i, by) {
   const [r, c] = rc(i);
   const pawnRow = by === 'w' ? 1 : -1; // a white pawn attacks from the row below
   for (const dc of [-1, 1]) { const j = at(r + pawnRow, c + dc); if (j >= 0 && board[j] === (by === 'w' ? 'P' : 'p')) return true; }

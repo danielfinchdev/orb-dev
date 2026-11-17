@@ -12,7 +12,7 @@ import { tr } from '../../platform/context.mjs';
 import { fail, str, oneOf } from '../api/common.mjs';
 import { globalAutonomy, permissionOfAutonomy } from '../../domain/security/guard.mjs';
 
-export const GRANTS = ['total', 'android'];
+const GRANTS = ['total', 'android'];
 
 export function grantMethods({ board, sessions, log = () => {}, android = null }) {
   const chat = (id) => {

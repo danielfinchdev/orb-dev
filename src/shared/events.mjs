@@ -8,7 +8,7 @@ export const ENGINE_EVENTS = Object.freeze([
   'session:debug', 'session:delta', 'session:goal', 'session:item', 'session:queue', 'session:removed', 'session:reset', 'session:side', 'session:suggest', 'session:update', 'terminal:data', 'terminal:exit', 'trash:added',
 ]);
 // Sent by the app (src-tauri) or a bridge of the window itself (the phone's link, the browser pointer, the menu).
-export const WINDOW_EVENTS = Object.freeze([
+const WINDOW_EVENTS = Object.freeze([
   'engine:stopped', 'engine:restarted', 'app:update', 'ui:navigate', 'ui:terminal', 'ui:zoom', 'link:offline', 'link:online',
   'browser:pointed', 'browser:recorded',
 ]);

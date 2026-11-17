@@ -13,7 +13,7 @@ import { subagentState } from '@/lib/session-blocks.js';
 const DOT = { running: 'bg-info animate-pulse', done: 'bg-success', failed: 'bg-destructive', stopped: 'bg-muted-foreground' };
 
 // every subagent block of the conversation, nested ones included, in order
-export function subagentsOf(blocks, out = []) {
+function subagentsOf(blocks, out = []) {
   for (const b of blocks) if (b.type === 'subagent') { out.push(b); subagentsOf(b.steps, out); }
   return out;
 }

@@ -289,7 +289,7 @@ async function caseMovesAsync(repo, files, dirs) {
   }
 }
 // core.ignorecase of a repository, asked once.
-export async function foldsCaseOf(repo) {
+async function foldsCaseOf(repo) {
   if (!foldsCase.has(repo)) foldsCase.set(repo, (await gitAsync(repo, {}, 'config', '--bool', 'core.ignorecase')).stdout.trim() === 'true');
   return foldsCase.get(repo);
 }
@@ -682,7 +682,7 @@ function* integrateFlow(repo, { base, tip }) {
 const oneLineOf = (s) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
 
 // No component of `target` (from root down) may be a link or junction: a link in the middle could point outside the project.
-export function linkFree(root, target) {
+function linkFree(root, target) {
   let cur = root;
   for (const part of path.relative(root, target).split(path.sep)) {
     cur = path.join(cur, part);

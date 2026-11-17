@@ -25,7 +25,7 @@ import '../code.css';
 import { quiet } from '@/lib/quiet.js';
 
 // "C:\…\x.png", "C:/…/x.png", "/C:/…/x.png" or "file:///C:/…/x.png" → "C:\…\x.png"; anything else → null.
-export function localImagePath(href) {
+function localImagePath(href) {
   let s = String(href ?? '').trim();
   try { s = decodeURI(s); } catch { /* as it is */ }
   s = s.replace(/^file:\/{2,3}/i, '').replace(/^\/(?=[A-Za-z]:[\\/])/, '');

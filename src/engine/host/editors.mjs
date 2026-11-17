@@ -15,7 +15,7 @@ function inPath(names, env) {
 }
 
 // The editors Orb can open a project in (the File Explorer is always there): id → the name shown to the user.
-export const EDITORS = Object.freeze({ cursor: 'Cursor', vscode: 'VS Code', windsurf: 'Windsurf', zed: 'Zed', jetbrains: 'JetBrains' });
+const EDITORS = Object.freeze({ cursor: 'Cursor', vscode: 'VS Code', windsurf: 'Windsurf', zed: 'Zed', jetbrains: 'JetBrains' });
 export const EDITOR_IDS = Object.freeze(Object.keys(EDITORS));
 
 // JetBrains ships one program per IDE: the first installed one in this order opens the folder.
@@ -60,7 +60,7 @@ const folderOf = (dir, language) => {
 };
 
 // spawn: how a detached program starts (terminal.mjs › spawnDetached).
-export async function openInEditor(which, dir, { language = 'es', spawn = spawnDetached } = {}) {
+async function openInEditor(which, dir, { language = 'es', spawn = spawnDetached } = {}) {
   folderOf(dir, language);
   if (!EDITOR_IDS.includes(which)) throw new Error(translate(language, 'sys.main.badPath'));
   const exe = findEditors()[which];
