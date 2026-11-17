@@ -166,6 +166,9 @@ export default {
   'session.wt.ok': 'Remove worktree',
   'session.wt.keep': 'Keep',
   'session.wt.dirty': 'The worktree is kept: it has uncommitted changes ({count}). Save or discard them from its folder.',
+  'session.wt.dirtyTitle': 'Remove the worktree with {count} unsaved file(s)?',
+  'session.wt.dirtyBody': 'These are uncommitted changes or ignored files that cannot be regenerated (like a .env). If you remove it anyway they are deleted for good. Files:',
+  'session.wt.force': 'Remove anyway',
   'session.wt.done': 'Worktree removed',
   'session.wt.branchKept': 'Worktree removed; branch {branch} is kept because it has unmerged commits.',
   'session.wt.deleteKept': 'The chat is deleted. Its worktree is only removed if no work is lost; otherwise it is kept and you are told where it is.'

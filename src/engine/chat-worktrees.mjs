@@ -13,6 +13,11 @@ import { git, gitAsync, isGitRepo, repoRoot, slug, BRANCH_PREFIX } from '../plat
 const KEY = (id) => `chatwt:${id}`;
 const lower = (p) => path.resolve(p).toLowerCase();
 const REF_OK = /^[\w][\w./@-]{0,199}$/;
+// Ignored folders that a tool rebuilds on its own (dependencies, build output, caches). Exact folder names of well-known
+// tools only: any other ignored path (.env, *.db, a folder of local data) may be the user's only copy, so it stays work.
+const REGENERABLE_DIRS = new Set(['node_modules', '.venv', 'venv', '__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache', 'dist', 'build', 'out', 'target', '.next', '.nuxt', '.turbo', '.gradle', '.cache', 'coverage']);
+const regenerable = (p) => { const last = p.replace(/\/+$/, '').split('/').pop(); return REGENERABLE_DIRS.has(last) || /\.py[co]$/.test(last); };
+const isRepo = async (dir) => Boolean(dir) && fs.existsSync(dir) && (await gitAsync(dir, {}, 'rev-parse', '--git-dir')).status === 0;
 
 export class ChatWorktrees {
   constructor({ board, sessions, log = () => {} }) { this.board = board; this.sessions = sessions; this.log = log; this.busy = new Set(); }
@@ -27,6 +32,30 @@ export class ChatWorktrees {
   }
   // only a folder inside Orb's own chats folder is ever touched
   managed(dir) { const root = lower(ctx.paths.chatTrees); const d = lower(dir); return d.startsWith(root + path.sep); }
+
+  // The repository of a record, found when it is used: the project may have been moved or renamed since the record was made.
+  // Falls back to the main repository the worktree itself points at; a changed answer is saved. '' when there is none.
+  async repoOf(id, info) {
+    if (await isRepo(info.repo)) return info.repo;
+    if (!fs.existsSync(info.path)) return '';
+    const r = await gitAsync(info.path, {}, 'rev-parse', '--path-format=absolute', '--git-common-dir');
+    const common = r.status === 0 ? r.stdout.trim().replace(/\//g, path.sep) : '';
+    if (!common) return '';
+    // a normal repository: the folder that holds .git; a bare one (or a separate git dir): the git dir itself is the repository
+    const repo = path.basename(common).toLowerCase() === '.git' ? path.dirname(common) : common;
+    if (!(await isRepo(repo))) return '';
+    info.repo = repo; this.board.settingJson(KEY(id), info);
+    return repo;
+  }
+
+  // Follows a project that was renamed or moved: the records that pointed at the old name or folder point at the new one.
+  followProject(oldName, oldPath, project) {
+    for (const { id, ...info } of this.all()) {
+      const sameRepo = Boolean(info.repo) && lower(info.repo) === lower(oldPath);
+      if (info.project !== oldName && !sameRepo) continue;
+      this.board.settingJson(KEY(id), { ...info, project: info.project === oldName ? project.name : info.project, repo: sameRepo ? project.path : info.repo });
+    }
+  }
 
   // Branches the user can start from: the repository's local branches, the current one first.
   branches(projectPath) {
@@ -66,27 +95,41 @@ export class ChatWorktrees {
   async status(id) {
     const info = this.info(id);
     if (!info) return { has: false };
-    const out = { has: true, project: info.project, path: info.path, branch: info.branch, base: info.base, gone: !fs.existsSync(info.path), dirty: [], ahead: 0, merged: true };
-    if (!out.gone) {
-      // ignored files too (.env, local databases): removing the folder would delete them. Orb's own attachments folder is not work.
-      const st = await gitAsync(info.path, {}, 'status', '--porcelain=v1', '-uall', '--ignored');
-      if (st.status !== 0) { out.unknown = true; out.dirty = ['?']; } else out.dirty = st.stdout.split(/\r?\n/).filter(Boolean).map((l) => (l.startsWith('!!') ? `${l.slice(3)} (ignored)` : l.slice(3))).filter((p) => !p.startsWith(`${ATTACH_DIR}/`));
+    const out = { has: true, project: info.project, path: info.path, branch: info.branch, base: info.base, gone: !fs.existsSync(info.path), dirty: [], regenerable: 0, ahead: 0, merged: true };
+    const repo = await this.repoOf(id, info);
+    out.orphan = !repo;
+    if (!out.gone && !repo) {
+      // Git cannot tell what changed without its repository, so every file the folder holds counts as work (the user can
+      // still remove it with force); only an empty folder, or one with just the .git pointer, is clean.
+      let names = []; try { names = fs.readdirSync(info.path); } catch { out.unknown = true; names = ['?']; }
+      out.dirty = names.filter((n) => n !== '.git' && n !== ATTACH_DIR).map((n) => `${n} (orphan)`);
+    } else if (!out.gone) {
+      // Ignored files too (.env, local databases): removing the folder would delete them. Only what a tool rebuilds
+      // (REGENERABLE_DIRS) is told apart and does not count. Orb's own attachments folder is not work.
+      const [st, ig] = await Promise.all([gitAsync(info.path, {}, 'status', '--porcelain=v1', '-uall'), gitAsync(info.path, {}, 'status', '--porcelain=v1', '--ignored')]);
+      if (st.status !== 0 || ig.status !== 0) { out.unknown = true; out.dirty = ['?']; } else {
+        const lines = (r) => r.stdout.split(/\r?\n/).filter(Boolean);
+        const ignored = lines(ig).filter((l) => l.startsWith('!!')).map((l) => l.slice(3));
+        out.regenerable = ignored.filter(regenerable).length;
+        out.dirty = [...lines(st).map((l) => l.slice(3)), ...ignored.filter((q) => !regenerable(q)).map((q) => `${q} (ignored)`)].filter((q) => !q.startsWith(`${ATTACH_DIR}/`));
+      }
       // commits made on a detached HEAD belong to no branch: they must be somewhere else before the folder goes
       const head = await gitAsync(info.path, {}, 'rev-parse', 'HEAD');
       const sym = await gitAsync(info.path, {}, 'symbolic-ref', '-q', 'HEAD');
-      if (head.status === 0 && sym.stdout.trim() !== `refs/heads/${info.branch}`) {
-        const c = await gitAsync(info.repo, {}, 'for-each-ref', '--contains', head.stdout.trim(), '--format=%(refname)', 'refs/heads', 'refs/tags');
+      if (repo && head.status === 0 && sym.stdout.trim() !== `refs/heads/${info.branch}`) {
+        const c = await gitAsync(repo, {}, 'for-each-ref', '--contains', head.stdout.trim(), '--format=%(refname)', 'refs/heads', 'refs/tags');
         if (!c.stdout.split(/\r?\n/).some((r) => r.trim() && !r.startsWith(`refs/heads/${BRANCH_PREFIX}/`))) { out.detached = true; out.dirty.push('HEAD (detached commits)'); }
       }
     }
-    const has = await gitAsync(info.repo, {}, 'rev-parse', '--verify', '--quiet', `refs/heads/${info.branch}`);
+    // without a repository the branch is unreachable: nothing to compare, nothing to delete
+    const has = repo ? await gitAsync(repo, {}, 'rev-parse', '--verify', '--quiet', `refs/heads/${info.branch}`) : { status: 1 };
     out.branchGone = has.status !== 0;
     if (!out.branchGone) {
-      const n = await gitAsync(info.repo, {}, 'rev-list', '--count', `${info.baseSha}..refs/heads/${info.branch}`);
+      const n = await gitAsync(repo, {}, 'rev-list', '--count', `${info.baseSha}..refs/heads/${info.branch}`);
       out.ahead = n.status === 0 ? Number(n.stdout.trim()) || 0 : 1;
       // commits that are in another branch (merged back into the one it started from, or any local one) are not lost
       if (out.ahead > 0) {
-        const other = await gitAsync(info.repo, {}, 'for-each-ref', '--contains', `refs/heads/${info.branch}`, '--format=%(refname)', 'refs/heads');
+        const other = await gitAsync(repo, {}, 'for-each-ref', '--contains', `refs/heads/${info.branch}`, '--format=%(refname)', 'refs/heads');
         // another orb/ branch does not count: it may be removed too
         out.merged = other.status === 0 && other.stdout.split(/\r?\n/).some((r) => r.trim() && !r.trim().startsWith(`refs/heads/${BRANCH_PREFIX}/`));
       }
@@ -116,11 +159,15 @@ export class ChatWorktrees {
       const st = await this.status(id);
       if (st.dirty.length && !force) return { removed: false, kept: 'dirty', dirty: st.dirty };
       if (this.sessions.isRunning(id)) return { removed: false, kept: 'busy' }; // a turn may have started while git was asked
+      const repo = await this.repoOf(id, info);
       let removedFolder = st.gone;
       if (!st.gone) {
-        // git itself refuses a folder with changes; `--force` only after the user said so.
-        const r = await gitAsync(info.repo, {}, 'worktree', 'remove', ...(force ? ['--force'] : []), '--', info.path);
-        if (r.status !== 0) {
+        // git itself refuses a folder with changes; `--force` only after the user said so. With no repository left (the
+        // project is gone) the folder is an orphan: managed() above guarantees it is Orb's own, and st.dirty was checked.
+        const r = repo ? await gitAsync(repo, {}, 'worktree', 'remove', ...(force ? ['--force'] : []), '--', info.path) : { status: 1, stderr: '' };
+        if (r.status !== 0 && !repo) {
+          try { fs.rmSync(info.path, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 }); } catch (error) { return { removed: false, kept: 'locked', error: error.message }; }
+        } else if (r.status !== 0) {
           this.log(`quitar worktree del chat ${id}: ${r.stderr.trim()}`);
           if (!force) return { removed: false, kept: /modified|untracked|changes/i.test(r.stderr) ? 'dirty' : 'locked', error: r.stderr.trim() };
           // a program of the agent still holds the folder open: delete it by hand (only inside Orb's folder, links never followed into)
@@ -129,12 +176,12 @@ export class ChatWorktrees {
         removedFolder = !fs.existsSync(info.path);
         if (!removedFolder) return { removed: false, kept: 'locked' };
       }
-      await gitAsync(info.repo, {}, 'worktree', 'prune');
+      if (repo) await gitAsync(repo, {}, 'worktree', 'prune');
       const out = { removed: true };
       if (!st.branchGone && branch !== 'keep') {
         const lost = st.ahead > 0 && !st.merged;
-        if (!lost) { const r = await gitAsync(info.repo, {}, 'branch', '-D', info.branch); if (r.status !== 0) out.branchKept = true; }
-        else if (branch === 'delete' && force) { const r = await gitAsync(info.repo, {}, 'branch', '-D', info.branch); if (r.status !== 0) out.branchKept = true; }
+        if (!lost) { const r = await gitAsync(repo, {}, 'branch', '-D', info.branch); if (r.status !== 0) out.branchKept = true; }
+        else if (branch === 'delete' && force) { const r = await gitAsync(repo, {}, 'branch', '-D', info.branch); if (r.status !== 0) out.branchKept = true; }
         else out.branchKept = true;
       } else if (!st.branchGone) out.branchKept = true;
       // the record goes with the chat; a chat that stays (archived) keeps it, marked, to bring the folder back on restore
@@ -150,6 +197,12 @@ export class ChatWorktrees {
     if (!info || !info.removed) return { restored: false };
     if (!this.managed(info.path)) throw new Error(tr('msg.chatWt.outside'));
     if (fs.existsSync(info.path)) throw new Error(tr('msg.chatWt.exists', { dir: info.path }));
+    // the folder is gone, so only the recorded repository or the project's current folder can host it again
+    if (!(await isRepo(info.repo))) {
+      const now = this.board.project(info.project)?.path;
+      if (!(await isRepo(now))) throw new Error(tr('msg.workspace.worktreeFailed', { error: info.repo }));
+      info.repo = now; this.board.settingJson(KEY(id), info);
+    }
     await gitAsync(info.repo, {}, 'worktree', 'prune');
     const has = (await gitAsync(info.repo, {}, 'rev-parse', '--verify', '--quiet', `refs/heads/${info.branch}`)).status === 0;
     const r = has ? await gitAsync(info.repo, {}, 'worktree', 'add', '--', info.path, info.branch) : await gitAsync(info.repo, {}, 'worktree', 'add', '-b', info.branch, '--', info.path, info.baseSha);

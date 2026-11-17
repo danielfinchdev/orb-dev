@@ -166,6 +166,9 @@ export default {
   'session.wt.ok': 'Quitar worktree',
   'session.wt.keep': 'Conservar',
   'session.wt.dirty': 'El worktree se conserva: tiene cambios sin commit ({count}). Guárdalos o descártalos desde su carpeta.',
+  'session.wt.dirtyTitle': '¿Quitar el worktree con {count} archivo(s) sin guardar?',
+  'session.wt.dirtyBody': 'Son cambios sin commit o archivos ignorados que no se pueden regenerar (como un .env). Si lo quitas igualmente, se borran para siempre. Archivos:',
+  'session.wt.force': 'Quitar igualmente',
   'session.wt.done': 'Worktree quitado',
   'session.wt.branchKept': 'Worktree quitado; la rama {branch} se conserva porque tiene commits sin unir.',
   'session.wt.deleteKept': 'Se borra el chat. Su worktree solo se quita si no pierde trabajo; si no, se conserva y te avisamos dónde está.'

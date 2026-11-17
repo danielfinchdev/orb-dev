@@ -24,7 +24,7 @@ const headOid = (v) => {
 // github.mjs stays lazy (startup cost): its oid pattern and comment limit are repeated here on purpose.
 const gh = lazy(() => import('../host/github.mjs'));
 
-export function projectMethods({ realHome, insideHome, project, holding, coordinatorBusy, syncSoon, cut, android, grants, board, sessions, scheduler, log }) {
+export function projectMethods({ realHome, insideHome, project, holding, coordinatorBusy, syncSoon, cut, android, grants, board, sessions, scheduler, chatTrees, log }) {
   const methods = {
     'projects.list': () => {
       syncSoon();
@@ -42,9 +42,10 @@ export function projectMethods({ realHome, insideHome, project, holding, coordin
     'projects.remove': ({ name }) => board.removeProject(project(name).name, 'usuario'),
     // a new name (and folder) for a project with nothing working in it (domain/projects/projects.mjs renameProject).
     'projects.rename': ({ name, to }) => {
-      const from = project(name).name;
+      const old = project(name); const from = old.name;
       const p = renameProject(board, { name: from, to: str(to, 'nombre', 60) }, 'usuario');
       renameProjectIcon(from, p.name);
+      chatTrees.followProject(from, old.path, p);
       return p;
     },
     'projects.setActive': ({ name }) => board.setActiveProject(name ? project(name).name : '', 'usuario'),

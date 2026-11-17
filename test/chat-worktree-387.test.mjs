@@ -223,3 +223,72 @@ test('worktrees.status lists files without a commit, so it stays on the PC like 
   assert.equal(allowed(principalOf({ device: { id: 'd', kind: 'phone' } }), 'worktrees.status'), false);
   assert.equal(allowed(DESKTOP, 'worktrees.status'), true);
 });
+
+test('regenerable ignored folders do not make a worktree dirty; other ignored files still do', async () => {
+  const s = await mk();
+  fs.writeFileSync(path.join(s.cwd, '.gitignore'), 'node_modules/\n.env\n'); git(s.cwd, 'add', '-A'); git(s.cwd, ...ident, 'commit', '-q', '-m', 'ign2');
+  fs.mkdirSync(path.join(s.cwd, 'node_modules'), { recursive: true }); fs.writeFileSync(path.join(s.cwd, 'node_modules', 'x.js'), '1\n');
+  let st = await call('worktrees.status', { id: s.id });
+  assert.deepEqual(st.dirty, []); assert.ok(st.regenerable >= 1);
+  fs.writeFileSync(path.join(s.cwd, '.env'), 'k=1\n');
+  st = await call('worktrees.status', { id: s.id });
+  assert.equal(st.safe, false); assert.ok(st.dirty.some((p) => /\.env/.test(p)));
+  fs.rmSync(path.join(s.cwd, '.env'));
+  const r = await call('worktrees.discard', { id: s.id });
+  assert.equal(r.removed, true);
+  assert.ok(!fs.existsSync(s.cwd));
+  await call('sessions.remove', { id: s.id });
+});
+
+test('a moved or renamed project: status and release find the repository again and the record follows', async () => {
+  const dir = path.join(t.home, 'web', 'mover'); fs.mkdirSync(dir, { recursive: true });
+  git(dir, 'init', '-q', '-b', 'main'); fs.writeFileSync(path.join(dir, 'a.txt'), '1\n'); git(dir, 'add', '-A'); git(dir, ...ident, 'commit', '-q', '-m', 'f');
+  board.addProject({ name: 'mover', path: dir }, 'usuario', { fromUser: true });
+  const s = await call('sessions.create', { agent: 'claude', project: 'mover', permission: 'editar', title: 'm', workspace: 'worktree' });
+  const moved = path.join(t.home, 'web', 'movido');
+  fs.renameSync(dir, moved); git(moved, 'worktree', 'repair');
+  const st = await call('worktrees.status', { id: s.id });
+  assert.equal(st.has, true); assert.equal(st.orphan, false);
+  assert.equal(lower(board.settingJson(`chatwt:${s.id}`).repo), lower(moved));
+  const r = await call('worktrees.discard', { id: s.id });
+  assert.equal(r.removed, true); assert.equal(git(moved, 'branch', '--list', 'orb/*').stdout.trim(), '');
+  await call('sessions.remove', { id: s.id });
+});
+
+test('renaming the project in Orb updates the chat records', async () => {
+  const dir = path.join(t.home, 'web', 'viejo'); fs.mkdirSync(dir, { recursive: true });
+  git(dir, 'init', '-q', '-b', 'main'); fs.writeFileSync(path.join(dir, 'a.txt'), '1\n'); git(dir, 'add', '-A'); git(dir, ...ident, 'commit', '-q', '-m', 'f');
+  board.addProject({ name: 'viejo', path: dir }, 'usuario', { fromUser: true });
+  const s = await call('sessions.create', { agent: 'claude', project: 'viejo', permission: 'editar', title: 'v', workspace: 'worktree' });
+  await call('sessions.update', { id: s.id, archived: true });
+  await call('projects.rename', { name: 'viejo', to: 'nuevo' });
+  const rec = board.settingJson(`chatwt:${s.id}`);
+  assert.equal(rec.project, 'nuevo'); assert.equal(lower(rec.repo), lower(path.join(t.home, 'web', 'nuevo')));
+  assert.equal((await call('worktrees.discard', { id: s.id })).removed, true);
+  await call('sessions.remove', { id: s.id });
+});
+
+test('a deleted repository leaves an orphan folder: removed when empty, kept until force when it holds files', async () => {
+  const dir = path.join(t.home, 'web', 'borrable'); fs.mkdirSync(dir, { recursive: true });
+  git(dir, 'init', '-q', '-b', 'main'); fs.writeFileSync(path.join(dir, 'a.txt'), '1\n'); git(dir, 'add', '-A'); git(dir, ...ident, 'commit', '-q', '-m', 'f');
+  board.addProject({ name: 'borrable', path: dir }, 'usuario', { fromUser: true });
+  const a = await call('sessions.create', { agent: 'claude', project: 'borrable', permission: 'editar', title: 'a', workspace: 'worktree' });
+  const b = await call('sessions.create', { agent: 'claude', project: 'borrable', permission: 'editar', title: 'b', workspace: 'worktree' });
+  fs.writeFileSync(path.join(b.cwd, 'work.txt'), 'w\n');
+  // the worktree's .git file points into the repo, so with the repo gone git no longer works inside it
+  fs.rmSync(dir, { recursive: true, force: true });
+  let r = await call('worktrees.discard', { id: a.id });
+  // without its repository git cannot say what changed: a folder with files needs force, one with only the .git pointer does not
+  assert.equal(r.kept, 'dirty'); assert.ok(r.dirty.some((p) => /a.txt/.test(p)));
+  for (const f of fs.readdirSync(a.cwd)) if (f !== '.git') fs.rmSync(path.join(a.cwd, f), { recursive: true, force: true });
+  r = await call('worktrees.discard', { id: a.id });
+  assert.equal(r.removed, true); assert.ok(!fs.existsSync(a.cwd));
+  r = await call('worktrees.discard', { id: b.id });
+  assert.equal(r.kept, 'dirty'); assert.ok(fs.existsSync(b.cwd));
+  r = await call('worktrees.discard', { id: b.id, force: true });
+  assert.equal(r.removed, true); assert.ok(!fs.existsSync(b.cwd));
+});
+
+test('forcing a worktree removal is not available from the phone', () => {
+  assert.equal(METHODS['worktrees.discard'], 'pc');
+});

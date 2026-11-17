@@ -619,7 +619,17 @@ const hasWorktree = async (s) => { try { return (await call('worktrees.status', 
 async function offerWorktreeRemoval(s, t) {
   let st; try { st = await call('worktrees.status', { id: s.id }); } catch { return; }
   if (!st?.has || st.gone) return;
-  if (st.dirty.length) { notify({ title: t('session.wt.dirty', { count: st.dirty.length }), tone: 'warning' }); return; }
+  // Work that would be lost: show it and let the user remove the folder anyway (force), never silently.
+  if (st.dirty.length) {
+    const shown = st.dirty.slice(0, 50).join('\n');
+    if (!(await confirm(t('session.wt.dirtyTitle', { count: st.dirty.length }), `${t('session.wt.dirtyBody')}
+
+${shown}`, { ok: t('session.wt.force'), cancel: t('session.wt.keep'), danger: true }))) return;
+    const f = await act(call('worktrees.discard', { id: s.id, force: true }));
+    if (f?.removed) notify({ title: f.branchKept ? t('session.wt.branchKept', { branch: st.branch }) : t('session.wt.done'), tone: f.branchKept ? 'info' : 'success' });
+    else notify({ title: t('session.wt.dirty', { count: st.dirty.length }), tone: 'warning' });
+    return;
+  }
   if (!(await confirm(t('session.wt.title'), t('session.wt.body', { path: st.path }), { ok: t('session.wt.ok'), cancel: t('session.wt.keep') }))) return;
   const r = await act(call('worktrees.discard', { id: s.id }));
   if (r?.removed) notify({ title: r.branchKept ? t('session.wt.branchKept', { branch: st.branch }) : t('session.wt.done'), tone: r.branchKept ? 'info' : 'success' });
