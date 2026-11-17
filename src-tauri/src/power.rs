@@ -176,7 +176,7 @@ mod tests {
     assert!(!locks(0x0010, 0)); // WM_CLOSE
   }
 
-  /// Review D-fix B5: private until Orb knows; this test session (signed in, unlocked) is read as unlocked.
+  /// Private until Orb knows; this test session (signed in, unlocked) is read as unlocked.
   #[test]
   fn the_lock_state_starts_locked_and_windows_says_this_session_is_not() {
     assert!(session_locked() || !LOCKED.load(Ordering::SeqCst));
