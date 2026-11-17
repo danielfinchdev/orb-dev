@@ -11,7 +11,7 @@ import { PRODUCT } from '../../shared/product.mjs';
 import { BrowserSettingsMenu } from './browser-settings-menu.jsx';
 import { OrbInbox } from '@/views/orb/inbox.jsx';
 import { available as musicAvailable, musicState, subscribe as onMusic, toggleMusic, skipTrack } from '@/lib/music.js';
-import { trackOf } from '../../shared/music.mjs';
+import { trackOf, musicPrefs } from '../../shared/music.mjs';
 
 // The assistant's wordmark ORB·E, drawn its own way in each theme (app.css .wordmark): spaced capitals with a dot of the
 // theme's colour in Orb, a techno one underlined in Vaporwave…
@@ -106,18 +106,25 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
   );
 }
 
-// the background music (Windows only, lib/music.js): play / pause, and the next track while it plays.
+// the background music (Windows only, lib/music.js): play / pause, and while it plays the next track, or the next
+// theme of the adaptive music.
 function MusicButtons() {
   const t = useT();
   const [s, setS] = useState(musicState);
   useEffect(() => onMusic(setS), []);
+  // While it plays, what plays; before, what the button would start (Ajustes › Apariencia).
+  const chosen = useStore((st) => musicPrefs(st.app?.config?.ui).mode === 'adaptive');
+  const adaptive = s.playing || s.loading ? Boolean(s.theme) : chosen;
   const now = trackOf(s.track);
-  const text = s.error ? t('nav.musicError') : s.loading ? t('nav.musicLoading') : s.playing && now ? t('nav.musicNow', { title: now.title, author: now.author }) : t('nav.musicHint');
+  const text = adaptive
+    ? (s.error ? t('nav.musicErrorAdaptive') : s.playing ? t('nav.musicNowAdaptive', { theme: t(`nav.musicTheme.${s.theme}`) }) : t('nav.musicHintAdaptive'))
+    : s.error ? t('nav.musicError') : s.loading ? t('nav.musicLoading') : s.playing && now ? t('nav.musicNow', { title: now.title, author: now.author }) : t('nav.musicHint');
+  const next = t(adaptive ? 'nav.musicNextTheme' : 'nav.musicNext');
   return (
     <>
       {s.playing ? (
-        <BubbleTip title={t('nav.musicNext')} side="top">
-          <button type="button" onClick={skipTrack} aria-label={t('nav.musicNext')} data-testid="nav-music-next" className="side-foot-icon"><SkipForward className="size-4" /></button>
+        <BubbleTip title={next} side="top">
+          <button type="button" onClick={skipTrack} aria-label={next} data-testid="nav-music-next" className="side-foot-icon"><SkipForward className="size-4" /></button>
         </BubbleTip>
       ) : null}
       <BubbleTip title={t('nav.music')} text={text} side="top">

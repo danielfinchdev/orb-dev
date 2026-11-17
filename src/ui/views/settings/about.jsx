@@ -155,6 +155,7 @@ export function AboutCard({ version }) {
           <details data-testid="about-music">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3"><span className="text-muted-foreground">{t('about.music')}</span><span>{t('about.musicSummary', { n: MUSIC_CREDITS.length })}</span></summary>
             <ul className="text-muted-foreground mt-1 grid gap-0.5 text-xs">
+              <li data-testid="about-music-adaptive">{t('about.musicAdaptive')}</li>
               {MUSIC_CREDITS.map((m) => <li key={m.id}><button type="button" onClick={() => bridge.openExternal(m.page)} className="hover:text-primary cursor-pointer text-left">{t('about.musicTrack', { title: m.title, author: m.author })} · {m.licence}</button></li>)}
             </ul>
           </details>

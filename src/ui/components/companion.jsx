@@ -9,10 +9,9 @@ import { BubbleTip } from './ui/overlay.jsx';
 import { bridge, go, useStore, plainSkin } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
 import { play } from '@/lib/sounds.js';
+import { chatMood } from '@/lib/chat-mood.js';
 import { noticeOf } from './notices.jsx';
 import { cn } from '@/lib/utils.js';
-
-const moodOf = (body) => (/^(✅|↩️|👍)/.test(body) ? 'happy' : /^(❌|⛔|🛑|⚠️)/.test(body) ? 'worried' : 'talking');
 
 export function Companion({ name, base, hidden: hiddenHere }) {
   const t = useT();
@@ -27,8 +26,7 @@ export function Companion({ name, base, hidden: hiddenHere }) {
   const timers = useRef({});
   useEffect(() => bridge.on('chat:new', (payload) => {
     const body = String(payload?.body ?? '');
-    // something that waits for the user (a permission, an approval) sounds like a warning too, whatever its text.
-    const mood = ['task-approval', 'approval', 'attention'].includes(payload?.meta?.kind) ? 'worried' : moodOf(body);
+    const mood = chatMood(payload);
     play(mood === 'happy' ? 'done' : mood === 'worried' ? 'uhoh' : payload.role === 'orb' ? 'talk' : null, body, { force: mood === 'worried' });
     setFlash(mood); clearTimeout(timers.current.flash); timers.current.flash = setTimeout(() => setFlash(null), 3500);
     if (hidden || noticeOf(payload)) return; // finished tasks and things that need you: the robot of notices.jsx says them

@@ -62,6 +62,7 @@ export default {
   'about.music': 'Música',
   'about.musicSummary': '{n} pistas libres (CC0)',
   'about.musicTrack': '«{title}», de {author}',
+  'about.musicAdaptive': 'Música adaptativa: la crea Orb al momento, sin archivos de audio',
   // Textos que apuntaban a las secciones de antes
   'help.faq.10.a': 'El tema Profesional no muestra el robot ni animaciones; cámbialo en Ajustes › General, donde también se activa o desactiva el robot flotante.',
   // Pie de la barra lateral en un navegador enlazado: el engranaje abre este dispositivo y Magic Link

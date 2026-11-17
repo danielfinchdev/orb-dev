@@ -12,7 +12,7 @@ import { validateConfig } from '../src/platform/config.mjs';
 import { isOrbData } from '../src/domain/security/guard.mjs';
 import { DEFAULT_CONFIG, merge } from '../src/platform/config-file.mjs';
 import { METHODS } from '../src/domain/security/permissions.mjs';
-import { BACKGROUND, GAMES, TRACKS, trackOf, DEFAULT_VOLUME, musicAllowed, musicPrefs, gameMusicOn, nextTrack, gameTrack } from '../src/shared/music.mjs';
+import { BACKGROUND, GAMES, TRACKS, trackOf, DEFAULT_VOLUME, DEFAULT_INTENSITY, musicAllowed, musicPrefs, gameMusicOn, nextTrack, gameTrack } from '../src/shared/music.mjs';
 import { trackBytes, musicDir, musicMethods } from '../src/engine/host/music.mjs';
 
 const read = (...p) => fs.readFileSync(path.join(ROOT, 'src', 'ui', ...p), 'utf8');
@@ -50,13 +50,14 @@ test('the music plays only in the Windows app', () => {
   assert.match(read('components', 'sidebar.jsx'), /\{musicAvailable\(\) \? <MusicButtons \/> : null\}/);
   assert.match(read('games', 'games.jsx'), /\{musicAvailable\(\) \? \(\s*<BubbleTip title=\{t\('games\.music'\)\}/);
   const settings = settingsSource();
-  assert.match(settings, /\{musicAvailable\(\) \? <MusicVolume \/> : null\}/);
+  assert.match(settings, /\{musicAvailable\(\) \? <MusicSettings \/> : null\}/);
   assert.match(settings, /\{musicAvailable\(\) \? \(\s*<details data-testid="about-music">/, 'the credits in «Acerca de»');
 });
 
 test('off by default, a soft volume, the tracks in turn and the games\' mute remembered', () => {
-  assert.deepEqual(musicPrefs({}), { on: false, volume: DEFAULT_VOLUME, track: BACKGROUND[0].id });
-  assert.deepEqual(musicPrefs({ music: { on: true, volume: 3, track: 'nope' } }), { on: true, volume: 1, track: BACKGROUND[0].id });
+  const adaptive = { mode: 'adaptive', theme: 'bruma', reactive: true, intensity: DEFAULT_INTENSITY }; // test/musica-388.test.mjs
+  assert.deepEqual(musicPrefs({}), { on: false, volume: DEFAULT_VOLUME, track: BACKGROUND[0].id, ...adaptive });
+  assert.deepEqual(musicPrefs({ music: { on: true, volume: 3, track: 'nope' } }), { on: true, volume: 1, track: BACKGROUND[0].id, ...adaptive });
   assert.equal(musicPrefs({ music: { track: BACKGROUND[2].id } }).track, BACKGROUND[2].id);
   assert.ok(DEFAULT_VOLUME > 0 && DEFAULT_VOLUME <= 0.5);
   assert.equal(nextTrack(BACKGROUND.at(-1).id), BACKGROUND[0].id, 'the list starts again');
@@ -88,7 +89,7 @@ test('it never starts by itself and stops when Orb locks or hides', () => {
   // Hidden or minimised: paused, and back when shown.
   assert.match(music, /document\.addEventListener\('visibilitychange', onVisibility\)/);
   // A game's music pauses the background music, which comes back after it.
-  assert.match(music, /if \(bg && !bg\.paused\) \{ bg\.pause\(\); bgHeld = true; \}/);
+  assert.match(music, /if \(bgSounding\(\)\) \{ bgPause\(\); bgHeld = true; \}/);
 });
 
 test('a track is downloaded once, checked and kept read-only for agents (mocked)', async (t) => {

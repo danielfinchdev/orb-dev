@@ -1,6 +1,7 @@
 // the music Orb can play on Windows: background music for studying or coding (the
-// play / pause button at the foot of the sidebar) and one track per minigame. None of it is in the installer: each
-// track is downloaded the first time it is played (src/engine/host/music.mjs) into core\herramientas\musica (read-only for
+// play / pause button at the foot of the sidebar) and one track per minigame. The background music is either made by
+// Orb as it plays (the adaptive music, below) or one of the free tracks. No track is in the installer: each
+// one is downloaded the first time it is played (src/engine/host/music.mjs) into core\herramientas\musica (read-only for
 // agents, src/domain/security/guard.mjs) and checked against its size and SHA-256 here before it is kept or played.
 //
 // Only free music: every track is CC0 1.0 (public domain dedication), checked by hand on its page (the «License(s)»
@@ -34,19 +35,38 @@ export const GAMES = Object.freeze({
 export const TRACKS = Object.freeze(Object.fromEntries([...BACKGROUND, ...Object.values(GAMES)].map((t) => [t.id, t])));
 export const trackOf = (id) => (Object.hasOwn(TRACKS, id) ? TRACKS[id] : null);
 
+// The adaptive music (src/ui/lib/adaptive-music.js): Orb makes it as it plays, so it has no file, pin or licence, and
+// it needs no network. Its themes by id, in the order the «next» button goes through them; their names are interface
+// texts (music.theme.<id>). The engine's own list must stay the same as this one (test/musica-388.test.mjs).
+export const ADAPTIVE_THEMES = Object.freeze(['bruma', 'neon', 'marfil', 'orbita']);
+// Where the background music comes from: made by Orb (the default: it works offline and follows what happens), or the
+// free tracks above.
+export const MUSIC_MODES = Object.freeze(['adaptive', 'tracks']);
+
 // The volume the background music starts at (0..1): soft, under the voice of a video call or the agents' sounds.
 export const DEFAULT_VOLUME = 0.35;
+// How lively the adaptive music is when it does not follow the activity (0 calm .. 1 everything playing).
+export const DEFAULT_INTENSITY = 0.35;
 
 // Only the Windows app plays music: never a phone, the Android app or a linked browser. b: the window's bridge.
 export const musicAllowed = (b) => Boolean(b && !b.mobile && b.desktop === true && b.platform === 'win32');
-// ui.music of orb.json: { on (off by default), volume (0..1), track (a background track's id) }.
+// ui.music of orb.json: { on (off by default), volume (0..1), track (a background track's id), mode (MUSIC_MODES),
+// theme (ADAPTIVE_THEMES), reactive (the adaptive music follows the activity; true unless turned off), intensity (0..1,
+// used when it does not) }.
+const unit = (v, fallback) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : fallback);
 export function musicPrefs(ui = {}) {
   const m = ui?.music ?? {};
-  return { on: m.on === true, volume: typeof m.volume === 'number' ? Math.min(1, Math.max(0, m.volume)) : DEFAULT_VOLUME, track: BACKGROUND.some((t) => t.id === m.track) ? m.track : BACKGROUND[0].id };
+  return {
+    on: m.on === true, volume: unit(m.volume, DEFAULT_VOLUME), track: BACKGROUND.some((t) => t.id === m.track) ? m.track : BACKGROUND[0].id,
+    mode: MUSIC_MODES.includes(m.mode) ? m.mode : MUSIC_MODES[0], theme: ADAPTIVE_THEMES.includes(m.theme) ? m.theme : ADAPTIVE_THEMES[0],
+    reactive: m.reactive !== false, intensity: unit(m.intensity, DEFAULT_INTENSITY)
+  };
 }
 // The games' music is on unless muted (ui.gameMusic === false).
 export const gameMusicOn = (ui = {}) => ui?.gameMusic !== false;
 // The background track after this one: they play in turn and the list starts again (a loop).
 export const nextTrack = (id) => BACKGROUND[(BACKGROUND.findIndex((t) => t.id === id) + 1) % BACKGROUND.length].id;
+// The adaptive theme after this one, in a loop.
+export const nextTheme = (id) => ADAPTIVE_THEMES[(ADAPTIVE_THEMES.indexOf(id) + 1) % ADAPTIVE_THEMES.length];
 // A game's track, or null.
 export const gameTrack = (game) => (Object.hasOwn(GAMES, game) ? GAMES[game] : null);

@@ -12,13 +12,14 @@ import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardF
 import { Select, Switch, Checkbox, BubbleTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
 import { ModelGuide } from '@/components/model-guide.jsx';
 import { AGENT } from '@/lib/labels.js';
-import { act, call, refresh, bridge, go, openTerminal, closeSettings, fullPc, runTest, darkOnlySkin } from '@/lib/store.js';
+import { act, call, refresh, bridge, go, openTerminal, closeSettings, fullPc, runTest, darkOnlySkin, useStore } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { LANGUAGES } from '../../../shared/i18n.mjs';
 import { play } from '@/lib/sounds.js';
 import { DEFAULT_PROTECTED } from '../../../shared/layout.mjs';
-import { available as musicAvailable, musicPrefs, setMusicVolume } from '@/lib/music.js';
+import { available as musicAvailable, musicPrefs, setMusicVolume, setMusicMode, setMusicTheme, setMusicReactive, setMusicIntensity } from '@/lib/music.js';
+import { MUSIC_MODES, ADAPTIVE_THEMES } from '../../../shared/music.mjs';
 import { save, num, Row, WithKeys, sizes } from './rows.jsx';
 import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
 import { quiet } from '@/lib/quiet.js';
@@ -114,7 +115,7 @@ export function AppearanceCard({ c }) {
         </div>
         <pre className="code-sample hljs overflow-x-auto rounded-lg border p-3 text-caption leading-[1.55]" aria-label={t('appearance.codeSample')}><code><span className="hljs-keyword">const</span> <span className="hljs-variable">orb</span> = <span className="hljs-title function_">director</span>(<span className="hljs-string">'bolsillo'</span>, {'{ '}<span className="hljs-attr">fases</span>: <span className="hljs-number">3</span>{' }'}); <span className="hljs-comment">// Orbe</span></code></pre>
         <Row label={t('appearance.usageLine')} hint={t('appearance.usageLineHint')}><Switch checked={ui.usageLine !== false} onCheckedChange={(usageLine) => set({ usageLine })} data-testid="usage-line-switch" /></Row>
-        {musicAvailable() ? <MusicVolume /> : null}
+        {musicAvailable() ? <MusicSettings /> : null}
         {robot ? (
           <div className="grid gap-1">
             <Row label={t('settings.companion')} hint={t('settings.companionHint')}><Switch checked={ui.companion !== false} onCheckedChange={(companion) => set({ companion }, companion ? t('settings.companionOn') : t('settings.companionOff'))} /></Row>
@@ -398,16 +399,45 @@ export function ExpertCard({ c }) {
   );
 }
 
-// the background music's volume (Windows; lib/music.js), heard while it is dragged and saved when let go.
-function MusicVolume() {
+// the background music (Windows; lib/music.js): where it comes from, the adaptive music's theme, whether it follows
+// what happens in Orb (or keeps one intensity) and the volume. Each change is heard at once when the music is playing;
+// the sliders are heard while they are dragged and saved when let go.
+function MusicSettings() {
   const t = useT();
-  const [v, setV] = useState(() => musicPrefs().volume);
-  const keep = () => setMusicVolume(v, { save: true });
+  useStore((s) => s.app?.config?.ui?.music); // drawn again when a choice is saved
+  const prefs = musicPrefs();
+  const [v, setV] = useState(prefs.volume);
+  const [level, setLevel] = useState(prefs.intensity);
+  const keepVolume = () => setMusicVolume(v, { save: true });
+  const keepLevel = () => setMusicIntensity(level, { save: true });
+  const line = 'flex items-center justify-between gap-4 py-1 text-sm';
   return (
-    <div className="flex items-center justify-between gap-4 py-1 text-sm">
-      <span>{t('appearance.musicVolume')}</span>
-      <input type="range" min={0} max={1} step={0.05} value={v} aria-label={t('appearance.musicVolume')} className="accent-primary w-40 cursor-pointer" data-testid="music-volume"
-        onChange={(e) => { const n = Number(e.target.value); setV(n); setMusicVolume(n); }} onPointerUp={keep} onKeyUp={keep} />
+    <div className="grid gap-1" data-testid="music-settings">
+      <div className={line}>
+        <div><div>{t('appearance.music')}</div><div className="text-muted-foreground text-xs">{t(`appearance.musicModeHint.${prefs.mode}`)}</div></div>
+        <Select className="w-52 shrink-0" value={prefs.mode} onValueChange={setMusicMode} title={t('appearance.music')} data-testid="music-mode" options={MUSIC_MODES.map((value) => ({ value, label: t(`appearance.musicMode.${value}`) }))} />
+      </div>
+      {prefs.mode === 'adaptive' ? (
+        <>
+          <div className={line}>
+            <span>{t('appearance.musicTheme')}</span>
+            <Select className="w-52 shrink-0" value={prefs.theme} onValueChange={setMusicTheme} title={t('appearance.musicTheme')} data-testid="music-theme" options={ADAPTIVE_THEMES.map((value) => ({ value, label: t(`appearance.musicTheme.${value}`) }))} />
+          </div>
+          <Row label={t('appearance.musicReactive')} hint={t('appearance.musicReactiveHint')}><Switch checked={prefs.reactive} onCheckedChange={setMusicReactive} data-testid="music-reactive" /></Row>
+          {prefs.reactive ? null : (
+            <div className={line}>
+              <span>{t('appearance.musicIntensity')}</span>
+              <input type="range" min={0} max={1} step={0.05} value={level} aria-label={t('appearance.musicIntensity')} className="accent-primary w-40 cursor-pointer" data-testid="music-intensity"
+                onChange={(e) => { const n = Number(e.target.value); setLevel(n); setMusicIntensity(n); }} onPointerUp={keepLevel} onKeyUp={keepLevel} />
+            </div>
+          )}
+        </>
+      ) : null}
+      <div className={line}>
+        <span>{t('appearance.musicVolume')}</span>
+        <input type="range" min={0} max={1} step={0.05} value={v} aria-label={t('appearance.musicVolume')} className="accent-primary w-40 cursor-pointer" data-testid="music-volume"
+          onChange={(e) => { const n = Number(e.target.value); setV(n); setMusicVolume(n); }} onPointerUp={keepVolume} onKeyUp={keepVolume} />
+      </div>
     </div>
   );
 }

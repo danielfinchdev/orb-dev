@@ -8,6 +8,7 @@ import { switchableIds } from '../shared/rails-registry.mjs';
 import { relabelEmptyLogs } from './journal-files.mjs';
 import { inside as insideOf } from './fsx.mjs';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, ACCENTS, CONTRASTS, DENSITIES, CHAT_WIDTHS, FONT_SIZES } from '../shared/appearance.mjs';
+import { MUSIC_MODES, ADAPTIVE_THEMES } from '../shared/music.mjs';
 
 // Settings saved from the app. Only known top-level keys are accepted.
 // A connector's name as it goes into environment variable names (case does not count on Windows).
@@ -133,7 +134,10 @@ export function validateConfig(c) {
   const music = c.ui?.music;
   if (music !== undefined && (!music || typeof music !== 'object' || Array.isArray(music) || (music.on !== undefined && typeof music.on !== 'boolean')
     || (music.volume !== undefined && !(typeof music.volume === 'number' && music.volume >= 0 && music.volume <= 1))
-    || (music.track !== undefined && (typeof music.track !== 'string' || music.track.length > 40)))) throw new Error(tr('msg.ctx.badAppearance', { name: 'ui.music' }));
+    || (music.track !== undefined && (typeof music.track !== 'string' || music.track.length > 40))
+    || (music.mode !== undefined && !MUSIC_MODES.includes(music.mode)) || (music.theme !== undefined && !ADAPTIVE_THEMES.includes(music.theme))
+    || (music.reactive !== undefined && typeof music.reactive !== 'boolean')
+    || (music.intensity !== undefined && !(typeof music.intensity === 'number' && music.intensity >= 0 && music.intensity <= 1)))) throw new Error(tr('msg.ctx.badAppearance', { name: 'ui.music' }));
   bool(c.ui?.gameMusic, 'ui.gameMusic');
   bool(c.setupPending, 'setupPending'); // the welcome is not over yet (src/ui/views/setup.jsx)
   bool(c.budget?.autoModel, 'budget.autoModel'); // Orb chooses each task's model (true / missing) or the agents' defaults
