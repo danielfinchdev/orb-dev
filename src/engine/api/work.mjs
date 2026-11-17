@@ -252,7 +252,8 @@ ${block}` : ''}` });
     // the worktrees of direct chats (src/engine/chat-worktrees.mjs)
     'worktrees.branches': ({ project: name }) => chatTrees.branches(project(name).path),
     'worktrees.status': ({ id }) => chatTrees.status(str(id, 'conversación', 64)),
-    'worktrees.list': () => chatTrees.all(),
+    // Every record, with what is left of its chat: Settings lists the copies of chats that are gone or archived.
+    'worktrees.list': () => chatTrees.all().map((r) => { const s = sessions.get(r.id); return { ...r, gone: !fs.existsSync(r.path), chat: s ? { title: s.title, archived: Boolean(s.archived) } : null }; }),
     // Never loses work unasked: a folder with changes not committed stays unless force (the user confirmed it).
     'worktrees.discard': async ({ id, force, branch, fingerprint }) => {
       const sid = str(id, 'conversación', 64);
