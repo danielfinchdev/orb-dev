@@ -35,7 +35,10 @@ test('a token is shown once, only its hash is kept, and it opens only while it i
   assert.ok(!stored.includes(secret), 'the secret is not in the vault, only its hash');
   assert.deepEqual(checkToken(m, `Bearer ${made.token}`, t0 + 1000), { id: made.id, name: 'Claude Code', projects: ['web'] });
   assert.equal(checkToken(m, `Bearer ${made.token}`, t0 + 2 * 86_400_000 + 1), null, 'expired');
-  assert.equal(checkToken(m, `Bearer ${made.token.slice(0, -1)}A`, t0), null, 'another secret of the same id');
+  // one character changed in the middle of the secret: the last one may already be «A», or differ only in bits base64
+  // ignores, and then it is the same secret
+  const mid = made.token.length - 10; const other = `${made.token.slice(0, mid)}${made.token[mid] === 'A' ? 'B' : 'A'}${made.token.slice(mid + 1)}`;
+  assert.equal(checkToken(m, `Bearer ${other}`, t0), null, 'another secret of the same id');
   assert.equal(checkToken(m, `Bearer orbmcp_${'0'.repeat(12)}_${secret}`, t0), null, 'the secret under another id');
   assert.equal(checkToken(m, made.token, t0), null, 'without Bearer');
   assert.equal(checkToken(m, 'Bearer nonsense', t0), null);
