@@ -43,7 +43,13 @@ export class ChatWorktrees {
     const s = this.sessions.get(String(sessionId));
     if (!s || s.kind !== 'chat') throw new Error(tr('msg.chatWt.none'));
     if (!s.project || String(s.project).toLowerCase() !== String(projectName).toLowerCase()) throw new Error(tr('msg.chatWt.notOfProject'));
-    const info = this.info(s.id);
+    // A fork, «continue with another agent» or an edit copy works in the original chat's folder without a record of its own:
+    // it uses the record whose folder holds its cwd (same project, inside Orb's chats folder).
+    let info = this.info(s.id);
+    if (!info && s.cwd) {
+      const cwd = lower(s.cwd);
+      info = this.all().find((r) => !r.removed && String(r.project).toLowerCase() === String(s.project).toLowerCase() && this.managed(r.path) && (cwd === lower(r.path) || cwd.startsWith(lower(r.path) + path.sep))) ?? null;
+    }
     if (!info) return null;
     if (info.removed || !this.managed(info.path) || !fs.existsSync(info.path)) throw new Error(tr('msg.chatWt.noCopy'));
     return info.path;

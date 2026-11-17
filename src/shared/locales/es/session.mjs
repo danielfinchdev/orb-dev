@@ -170,6 +170,7 @@ export default {
   'session.wt.dirtyBody': 'Son cambios sin commit o archivos ignorados que no se pueden regenerar (como un .env). Si lo quitas igualmente, se borran para siempre. Archivos:',
   'session.wt.unverified': 'Orb no ha podido comprobar qué contiene este worktree, así que no lo quita. Revisa la carpeta y bórrala a mano si quieres: {path}',
   'session.wt.changed': 'El worktree se conserva: han aparecido archivos nuevos desde que lo viste ({count}). Vuelve a archivar el chat para revisarlos.',
+  'session.wt.shared': 'La copia se conserva: la usa también: {titles}.',
   'session.wt.force': 'Quitar igualmente',
   'session.wt.done': 'Worktree quitado',
   'session.wt.branchKept': 'Worktree quitado; la rama {branch} se conserva porque tiene commits sin unir.',

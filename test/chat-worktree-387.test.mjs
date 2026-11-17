@@ -452,3 +452,17 @@ test('worktrees.list says which chat each copy has left', async () => {
   await until(() => !board.settingJson(`chatwt:${s.id}`), 'copia quitada');
   assert.equal((await call('worktrees.list')).find((r) => r.id === s.id), undefined, 'a clean copy went with its chat');
 });
+
+test('a fork that shares the chat\'s worktree commits on the chat\'s branch and is refused by /review', async () => {
+  const s = await mk();
+  const fork = sessions.create({ agent: 'claude', project: 'arbol', cwd: s.cwd, title: 'fork', parentId: s.id });
+  fs.writeFileSync(path.join(s.cwd, 'fork-work.txt'), 'f\n');
+  const out = await call('projects.commit', { name: 'arbol', session: fork.id, message: 'feat: from fork', files: ['fork-work.txt'] });
+  assert.equal(out.branch, `orb/chat-${s.id.replace(/-/g, '').slice(0, 8)}`);
+  const scheduler = new Scheduler(board, sessions, { orchestrator: new Orchestrator(board, { emit() {} }), emit() {} });
+  fs.writeFileSync(path.join(s.cwd, 'y.txt'), 'y\n');
+  assert.throws(() => scheduler.reviewChat(sessions.get(fork.id), {}), /copia propia/);
+  sessions.remove(fork.id);
+  assert.equal((await forceDiscard(s.id, { branch: 'keep' })).removed, true);
+  await call('sessions.remove', { id: s.id });
+});

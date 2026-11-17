@@ -26,4 +26,5 @@ ${shown}`, { ok: t('session.wt.force'), cancel: t('session.wt.keep'), danger: tr
   if (!(await confirm(t('session.wt.title'), t('session.wt.body', { path: st.path }), { ok: t('session.wt.ok'), cancel: t('session.wt.keep') }))) return;
   const r = await act(call('worktrees.discard', { id: s.id }));
   if (r?.removed) notify({ title: r.branchKept ? t('session.wt.branchKept', { branch: st.branch }) : t('session.wt.done'), tone: r.branchKept ? 'info' : 'success' });
+  else if (r?.kept === 'shared') notify({ title: t('session.wt.shared', { titles: (r.sessions ?? []).join(', ') }), tone: 'warning' });
 }
