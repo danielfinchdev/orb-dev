@@ -7,7 +7,7 @@ import { winPath } from './shell-text.mjs';
 
 // Orb's data folder (core, src/platform/paths.mjs › paths().internal) is never an agent's business: what a tool
 // names or a command mentions is resolved (against the agent's folder) and refused when it falls inside it. The isolated
-// copies (core\copias\aisladas) are where isolated tasks work, and core\herramientas holds the tools agents run (adb by
+// copies (core\copias\aisladas) are where isolated tasks work, core\copias\chats where the chats in a worktree do, and core\herramientas holds the tools agents run (adb by
 // its full path), so those stay open. The same goes for what Orb keeps about the workspace outside it (setGuardedRoots:
 // the backups' folders and the copies of its sealed secrets), with nothing open there. Matched by RESOLVED path, not by
 // name: a project may well have its own orb.db or talk about ORB_HOME. The `cd`s of a compound command are followed
@@ -18,7 +18,7 @@ import { winPath } from './shell-text.mjs';
 // they are written only through Orb's own tools. The skills (core\skills) too: agents read them (their SKILL.md
 // and files); a command that runs one of their scripts asks first, and nobody writes there. What an agent makes for the
 // user to turn on goes in core\preparacion, open like the isolated copies (src/domain/extensions/extensions.mjs).
-const OPEN_INTERNAL = [['copias', 'aisladas'], ['herramientas'], ['preparacion']];
+const OPEN_INTERNAL = [['copias', 'aisladas'], ['copias', 'chats'], ['herramientas'], ['preparacion']];
 const READ_INTERNAL = [['bitacora'], ['skills']];
 // Windows drops the trailing dots and spaces of each name and reads `name:stream` as a stream of
 // that file or folder (`core.\datos`, `core \datos`, `core::$INDEX_ALLOCATION\datos` are core\datos; `.env::$DATA` is .env):
@@ -51,7 +51,7 @@ const readable = (read) => (read === true ? READ_INTERNAL : Array.isArray(read) 
 // what Orb checked.
 const READ_ONLY_INTERNAL = [['herramientas', 'adb'], ['herramientas', 'ffmpeg'], ['herramientas', 'musica']];
 const openInCore = (rest, read = false) => (READ_ONLY_INTERNAL.some(under(rest)) ? read === true : OPEN_INTERNAL.some(under(rest)) || readable(read).some(under(rest)));
-export const OPEN_TEXT = /^\\+(copias\\+aisladas|herramientas(?!\\+(adb|ffmpeg|musica)(\\|$|["'\s]))|preparacion)(\\|$|["'\s])/;
+export const OPEN_TEXT = /^\\+(copias\\+(aisladas|chats)|herramientas(?!\\+(adb|ffmpeg|musica)(\\|$|["'\s]))|preparacion)(\\|$|["'\s])/;
 export const ADB_TEXT = /^\\+herramientas\\+(adb|ffmpeg|musica)(\\|$|["'\s])/;
 // a UNC path to this PC (\\localhost\C$\…, \\<its name>\C$\…, \\127.0.0.1\…, \\?\UNC\…, //localhost/…),
 // a \\?\C:\… or \\.\C:\… one, as the local path it names. → that path; null when it is not this PC's (another

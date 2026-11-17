@@ -27,6 +27,7 @@ export default {
   "msg.modes.debugOn": "Debug mode on: the agent will look for the cause before touching anything. «/debug apagar» turns it off.",
   "msg.modes.debugOff": "Debug mode off.",
   "msg.modes.reviewNoProject": "A review needs a chat inside a project.",
+  "msg.modes.reviewWorktree": "/review does not work yet in chats with their own copy: it would review the project folder, not this chat's work. Ask the agent to review its changes, or commit them and review the branch.",
   "msg.modes.reviewNoChanges": "There are no uncommitted changes to review in this project.",
   "msg.modes.reviewTitle": "Review of the changes of the chat «{title}»",
   "msg.modes.reviewing": "{agent} is reviewing the chat's changes (review #{review}), read only.",

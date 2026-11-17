@@ -1,5 +1,5 @@
 // «Local / Worktree» for a direct chat: the chat works in its own git worktree, in a folder Orb manages
-// (core\copias\aisladas\chats, outside the user's repository), on its own branch orb/chat-<id>. What it holds is the
+// (core\copias\chats, outside the user's repository), on its own branch orb/chat-<id>. What it holds is the
 // chat's work, so Orb never deletes it unasked: a folder with changes that are not committed, or a branch with commits
 // that live nowhere else, are kept unless the user confirmed (force), and every removal goes through `git worktree
 // remove` (which itself refuses a folder with changes) before anything else. One record per chat in the board's
@@ -31,8 +31,29 @@ export class ChatWorktrees {
       return v?.path ? [{ id: row.key.slice('chatwt:'.length), ...v }] : [];
     });
   }
-  // only a folder inside Orb's own chats folder is ever touched
-  managed(dir) { const root = lower(ctx.paths.chatTrees); const d = lower(dir); return d.startsWith(root + path.sep); }
+  // Only a folder inside Orb's own chats folder is ever touched. The old place (copias\aisladas\chats, used by development
+  // builds) is still accepted so a record that points there can be discarded.
+  managed(dir) { const d = lower(dir); return [ctx.paths.chatTrees, path.join(ctx.paths.worktrees, 'chats')].some((r) => d.startsWith(lower(r) + path.sep)); }
+
+  // The folder git works in for a chat of `projectName`: its own worktree when it has one (so a commit or a push is the chat's,
+  // not the project folder's), null for a chat that works in the project itself. The caller names only the chat: the folder
+  // always comes from Orb's own record. Throws for a chat that does not exist or belongs to another project, and for one whose
+  // copy is gone (archived), because the project's folder holds none of its work.
+  folderFor(sessionId, projectName) {
+    const s = this.sessions.get(String(sessionId));
+    if (!s || s.kind !== 'chat') throw new Error(tr('msg.chatWt.none'));
+    if (!s.project || String(s.project).toLowerCase() !== String(projectName).toLowerCase()) throw new Error(tr('msg.chatWt.notOfProject'));
+    // A fork, «continue with another agent» or an edit copy works in the original chat's folder without a record of its own:
+    // it uses the record whose folder holds its cwd (same project, inside Orb's chats folder).
+    let info = this.info(s.id);
+    if (!info && s.cwd) {
+      const cwd = lower(s.cwd);
+      info = this.all().find((r) => !r.removed && String(r.project).toLowerCase() === String(s.project).toLowerCase() && this.managed(r.path) && (cwd === lower(r.path) || cwd.startsWith(lower(r.path) + path.sep))) ?? null;
+    }
+    if (!info) return null;
+    if (info.removed || !this.managed(info.path) || !fs.existsSync(info.path)) throw new Error(tr('msg.chatWt.noCopy'));
+    return info.path;
+  }
 
   // The absolute git common dir of a folder ('' when git cannot say), for telling whether two folders share a repository.
   async commonDir(dir) {

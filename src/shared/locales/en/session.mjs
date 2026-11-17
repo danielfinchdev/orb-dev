@@ -170,6 +170,7 @@ export default {
   'session.wt.dirtyBody': 'These are uncommitted changes or ignored files that cannot be regenerated (like a .env). If you remove it anyway they are deleted for good. Files:',
   'session.wt.unverified': 'Orb could not check what this worktree holds, so it does not remove it. Look at the folder and delete it by hand if you want: {path}',
   'session.wt.changed': 'The worktree is kept: new files appeared since you looked ({count}). Archive the chat again to review them.',
+  'session.wt.shared': 'The copy is kept: it is also used by: {titles}.',
   'session.wt.force': 'Remove anyway',
   'session.wt.done': 'Worktree removed',
   'session.wt.branchKept': 'Worktree removed; branch {branch} is kept because it has unmerged commits.',

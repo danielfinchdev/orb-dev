@@ -209,6 +209,8 @@ export class Sessions {
     const s = this.must(id); if (s.kind === 'task') throw new Error(tr('msg.sessions.taskSession'));
     this.closeLive(id); this.asked.delete(id); this.side.closeFor(id);
     if (s.project && s.cwd) { dropTurns(s.cwd, id); dropRescues(s.cwd, id); }
+    // The rescue refs live in the project's repository, so they go even when the chat's own folder is already gone.
+    if (s.project) for (const repo of new Set([this.board.settingJson(`chatwt:${id}`)?.repo, this.board.project(s.project)?.path])) { if (repo && repo !== s.cwd && fs.existsSync(repo)) dropRescues(repo, id); }
     this.board.run('DELETE FROM session_items WHERE session_id = ?', id);
     this.board.run('DELETE FROM session_queue WHERE session_id = ?', id);
     this.board.run('DELETE FROM sessions WHERE id = ?', id);

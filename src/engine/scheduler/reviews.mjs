@@ -1,5 +1,6 @@
 // Task Review and project reviews, and the isolated branches a user discards or merges.
 // Part of the Scheduler (index.mjs adds these methods to it).
+import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { enabledAgents } from '../../platform/config.mjs';
 import { git } from '../../platform/git.mjs';
@@ -45,6 +46,11 @@ En result pon, en este orden: VEREDICTO: CORRECTO o CON FALLOS; después la list
   // now), read-only, by another provider than the chat's agent. It never touches the chat or its permission.
   reviewChat(session, { actor = 'usuario', focus = '' } = {}) {
     if (!session.project || !this.board.project(session.project)) throw new Error(tr('msg.modes.reviewNoProject'));
+    // The review task runs in the project's folder, which holds none of a Worktree chat's work: refusing is safer than
+    // reviewing the wrong files (or reporting «no changes» when the chat has plenty).
+    const cwd = path.resolve(session.cwd ?? '.').toLowerCase();
+    const inChats = [ctx.paths.chatTrees, path.join(ctx.paths.worktrees, 'chats')].some((r) => cwd.startsWith(path.resolve(r).toLowerCase() + path.sep));
+    if (inChats || this.board.settingJson(`chatwt:${session.id}`)) throw new Error(tr('msg.modes.reviewWorktree'));
     const files = [...(changedFiles(session.cwd)?.keys() ?? [])];
     if (!files.length) throw new Error(tr('msg.modes.reviewNoChanges'));
     const agent = this.reviewer([session.agent]);

@@ -10,6 +10,7 @@ import { notify, notifyOk } from '@/lib/notify.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { MasterCard } from '@/views/master.jsx';
 import { TrashCard } from './settings/trash.jsx';
+import { WorktreesCard } from './settings/worktrees.jsx';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
 import { AUTHOR } from '../../shared/product.mjs';
 import { quiet } from '@/lib/quiet.js';
@@ -166,7 +167,7 @@ function CoreCard() {
   );
 }
 
-export function DataCards() { return <><MasterCard /><BackupsCard /><TrashCard /><CoreCard /><LegacyCard /></>; }
+export function DataCards() { return <><MasterCard /><BackupsCard /><TrashCard /><WorktreesCard /><CoreCard /><LegacyCard /></>; }
 
 // backups are on from the first day, sealed with this PC's key. A few days later, once, a quiet suggestion to make
 // the recovery code (Ajustes › Datos), so a copy also opens on another PC. Never on a phone.
