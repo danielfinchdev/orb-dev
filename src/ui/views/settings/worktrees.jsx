@@ -8,6 +8,7 @@ import { ListRow } from '@/components/ui/primitives.jsx';
 import { call, bridge } from '@/lib/store.js';
 import { offerWorktreeRemoval } from '@/components/worktree-removal.jsx';
 import { useT } from '@/lib/i18n.js';
+import { notifyError } from '@/lib/notify.js';
 
 export function WorktreesCard() {
   const t = useT();
@@ -20,7 +21,7 @@ export function WorktreesCard() {
   }, []);
   if (!items?.length) return null;
   const remove = async (it) => {
-    if (it.gone) await call('worktrees.discard', { id: it.id }).catch(() => {}); // nothing on disk: only the record and a safe branch go
+    if (it.gone) await call('worktrees.discard', { id: it.id }).catch(notifyError); // nothing on disk: only the record and a safe branch go
     else await offerWorktreeRemoval({ id: it.id }, t);
     load();
   };
