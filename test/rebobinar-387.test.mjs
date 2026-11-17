@@ -399,8 +399,11 @@ const caseRepo = (name) => {
 const recase = (r, from, to) => { fs.renameSync(path.join(r, from), path.join(r, `${from}.tmp`)); fs.renameSync(path.join(r, `${from}.tmp`), path.join(r, to)); };
 const caseOf = (r, commit, re) => tracked(r, commit).filter((f) => re.test(f));
 
+const nap = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
 folds('a hot photo after a letter-case rename holds the new name only', () => {
   const r = caseRepo('case1'); warm(r);
+  nap(2600); // past the margin: the folder's date, not luck, is what finds the rename
   recase(r, 'Readme.md', 'README.md');
   const snap = snapshotCommit(r, { raw: true, always: true });
   assert.deepEqual(caseOf(r, snap.commit, /^readme/i), ['README.md']);
@@ -410,10 +413,40 @@ folds('a hot photo after a letter-case rename holds the new name only', () => {
 
 folds('a letter-case rename inside a folder, and of the folder itself, reaches the photo', () => {
   const r = caseRepo('case2'); warm(r);
+  nap(2600);
   recase(r, 'lib/x/Util.c', 'lib/x/UTIL.c');
   assert.deepEqual(caseOf(r, snapshotCommit(r, { raw: true, always: true }).commit, /util/i), ['lib/x/UTIL.c']);
+  nap(2600);
   recase(r, 'lib', 'Lib');
   assert.deepEqual(caseOf(r, snapshotCommit(r, { raw: true, always: true }).commit, /util/i), ['Lib/x/UTIL.c']);
+});
+
+folds('only folders touched since the last photo are read: an untouched one keeps its old name until it is touched', () => {
+  const r = caseRepo('case2b'); warm(r);
+  recase(r, 'lib/x/Util.c', 'lib/x/UTIL.c');
+  const old = new Date(Date.now() - 3600_000);
+  for (const d of ['lib/x', 'lib', '']) fs.utimesSync(path.join(r, d), old, old); // as if the rename were long ago
+  assert.deepEqual(caseOf(r, snapshotCommit(r, { raw: true, always: true }).commit, /util/i), ['lib/x/Util.c']);
+  const now = new Date(); fs.utimesSync(path.join(r, 'lib/x'), now, now);
+  assert.deepEqual(caseOf(r, snapshotCommit(r, { raw: true, always: true }).commit, /util/i), ['lib/x/UTIL.c']);
+});
+
+folds('an index holding a.txt and A.txt, with only a.txt on disk, loses no entry', () => {
+  const r = forcedRepo('case2c'); git(r, 'config', 'core.ignorecase', 'true');
+  const blob = g(r, 'hash-object', '-w', 'a.txt');
+  git(r, 'update-index', '--add', '--cacheinfo', `100644,${blob},A.txt`); git(r, ...ident, 'commit', '-q', '-m', 'dup');
+  const first = snapshotCommit(r, { raw: true, always: true }); const second = snapshotCommit(r, { raw: true, always: true });
+  for (const s of [first, second]) assert.equal(caseOf(r, s.commit, /^a\.txt$/i).length, 2);
+});
+
+folds('a submodule whose folder differs only in case is not turned into a file entry', () => {
+  const r = forcedRepo('case2d'); git(r, 'config', 'core.ignorecase', 'true');
+  git(r, 'update-index', '--add', '--cacheinfo', `160000,${g(r, 'rev-parse', 'HEAD')},Sub`); git(r, ...ident, 'commit', '-q', '-m', 'sub');
+  fs.mkdirSync(path.join(r, 'Sub')); warm(r);
+  fs.renameSync(path.join(r, 'Sub'), path.join(r, 'sub'));
+  const snap = snapshotCommit(r, { raw: true, always: true });
+  assert.ok(snap);
+  assert.equal(g(r, 'ls-tree', snap.commit, 'Sub').split(/\s+/)[0], '160000');
 });
 
 folds('a full snapshot after a letter-case rename holds the new name', async () => {
@@ -424,17 +457,47 @@ folds('a full snapshot after a letter-case rename holds the new name', async () 
   assert.deepEqual(caseOf(r, full.commit, /^readme/i), ['README.md']);
 });
 
-folds('rewinding to a photo from before the letter-case rename leaves the file once, with its content', async () => {
+// «Deshacer» / rewind from the photo taken after a letter-case rename back to the one before it: the file must stay, with
+// the old spelling and its content (the deleted and the added path are one file on disk, so removing one removes both).
+const undoCase = async (name, files, renames, edit = null) => {
   const { undoCheckpoint } = await import('../src/domain/tasks/checkpoints.mjs');
-  const r = caseRepo('case4'); warm(r);
+  const r = forcedRepo(name); git(r, 'config', 'core.ignorecase', 'true');
+  for (const [f, c] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(r, f)), { recursive: true }); fs.writeFileSync(path.join(r, f), c); }
+  git(r, 'add', '-A'); git(r, ...ident, 'commit', '-q', '-m', 'files'); warm(r);
   const before = snapshotCommit(r, { raw: true, always: true });
-  recase(r, 'Readme.md', 'README.md'); fs.writeFileSync(path.join(r, 'README.md'), 'edited\n');
+  for (const [from, to] of renames) recase(r, from, to);
+  if (edit) edit(r);
   const after = snapshotCommit(r, { raw: true, always: true });
-  undoCheckpoint({ kind: 'git', repo: r, commit: before.commit, raw: true }, { kind: 'git', repo: r, commit: after.commit });
-  assert.equal(fs.readFileSync(path.join(r, 'README.md'), 'utf8').length > 0, true);
-  const names = fs.readdirSync(r).filter((f) => /^readme/i.test(f));
-  assert.equal(names.length, 1);
-  assert.equal(fs.readFileSync(path.join(r, names[0]), 'utf8'), 'readme\n');
+  const out = undoCheckpoint({ kind: 'git', repo: r, commit: before.commit, raw: true }, { kind: 'git', repo: r, commit: after.commit }, { safe: true });
+  return { r, out };
+};
+const listing = (r, dir = '') => fs.readdirSync(path.join(r, dir)).sort();
+
+folds('undoing README.md -> readme.md gives the file back with its old name and content', async () => {
+  const { r, out } = await undoCase('case4a', { 'README.md': 'upper\n' }, [['README.md', 'readme.md']]);
+  assert.deepEqual(out.skipped, []);
+  assert.deepEqual(listing(r).filter((f) => /^readme/i.test(f)), ['README.md']);
+  assert.equal(read(r, 'README.md'), 'upper\n');
+});
+
+folds('undoing Readme.md -> README.md gives the old name and content', async () => {
+  const { r } = await undoCase('case4b', { 'Readme.md': 'orig\n' }, [['Readme.md', 'README.md']]);
+  assert.deepEqual(listing(r).filter((f) => /^readme/i.test(f)), ['Readme.md']);
+  assert.equal(read(r, 'Readme.md'), 'orig\n');
+});
+
+folds('undoing a folder Lib -> lib keeps every file in it, under the old spelling', async () => {
+  const { r, out } = await undoCase('case4c', { 'Lib/a.c': 'a\n', 'Lib/b.c': 'b\n', 'Lib/sub/c.c': 'c\n' }, [['Lib', 'lib']]);
+  assert.deepEqual(out.skipped, []);
+  assert.deepEqual(listing(r).filter((f) => /^lib$/i.test(f)), ['Lib']);
+  assert.deepEqual(listing(r, 'Lib'), ['a.c', 'b.c', 'sub']);
+  assert.equal(read(r, 'Lib/b.c'), 'b\n'); assert.equal(read(r, 'Lib/sub/c.c'), 'c\n');
+});
+
+folds('undoing lib -> Lib (the other direction) keeps every file too', async () => {
+  const { r } = await undoCase('case4d', { 'lib/a.c': 'a\n', 'lib/b.c': 'b\n' }, [['lib', 'Lib']]);
+  assert.deepEqual(listing(r).filter((f) => /^lib$/i.test(f)), ['lib']);
+  assert.deepEqual(listing(r, 'lib'), ['a.c', 'b.c']);
 });
 
 folds('a photo with no renamed file leaves every name as it is and keeps the folder-date stamp', () => {
@@ -446,4 +509,25 @@ folds('a photo with no renamed file leaves every name as it is and keeps the fol
   const [at, id] = fs.readFileSync(`${index}.scan`, 'utf8').split(':');
   assert.ok(Date.now() - Number(at) < 60_000);
   assert.equal(id, crypto.createHash('sha1').update(fs.readFileSync(index)).digest('hex'));
+});
+
+// «Cambios» reuses the last photo when the folder is unchanged; a case-only rename is invisible to diff-index and ls-files.
+folds('caseRenamed tells a letter-case rename from an untouched folder, so the last photo is not reused', async () => {
+  const { caseRenamed } = await import('../src/domain/tasks/checkpoints.mjs');
+  const r = caseRepo('case6'); warm(r);
+  const raw = path.resolve(r, g(r, 'rev-parse', '--git-path', 'orb/index-raw'));
+  const copy = `${raw}.check`;
+  const probe = async () => { fs.copyFileSync(raw, copy); try { return await caseRenamed(r, raw, copy); } finally { fs.rmSync(copy, { force: true }); } };
+  assert.equal(await probe(), false);
+  recase(r, 'Readme.md', 'README.md');
+  assert.equal(await probe(), true);
+  snapshotCommit(r, { raw: true, always: true }); // the next photo has the new spelling
+  assert.equal(await probe(), false);
+});
+
+test('caseRenamed does nothing without core.ignorecase', async () => {
+  const { caseRenamed } = await import('../src/domain/tasks/checkpoints.mjs');
+  const r = forcedRepo('case7'); git(r, 'config', 'core.ignorecase', 'false'); warm(r);
+  const raw = path.resolve(r, g(r, 'rev-parse', '--git-path', 'orb/index-raw'));
+  assert.equal(await caseRenamed(r, raw, raw), false);
 });
