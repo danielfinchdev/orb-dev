@@ -9,7 +9,7 @@ import { ctx } from './context.mjs';
 import { paths } from './paths.mjs';
 
 // This PC's secret without the app: core\datos\clave.bin, made the first time it is needed.
-export function readKey(home) {
+function readKey(home) {
   const file = paths(home).key;
   try {
     const key = fs.readFileSync(file);

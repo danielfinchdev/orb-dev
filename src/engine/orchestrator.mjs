@@ -8,8 +8,8 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { ctx, tr } from '../platform/context.mjs';
-import { AGENTS, assistantName, userName, ofUser } from '../domain/tasks/board.mjs';
-import { executable, installed, adapter } from '../agents/index.mjs';
+import { assistantName, userName, ofUser } from '../domain/tasks/board.mjs';
+import { executable, adapter } from '../agents/index.mjs';
 import * as claude from '../agents/claude.mjs';
 import { runLog } from '../platform/log.mjs';
 import { oneLine } from '../shared/text.mjs';
@@ -20,10 +20,7 @@ import { accountEnv } from '../domain/usage/accounts.mjs';
 import { briefing } from '../domain/journal/journal.mjs';
 import { rememberModels } from './usage/catalog.mjs';
 import { recordRate, pickAccount, recordSpend, usageBrake } from '../domain/usage/budget.mjs';
-import { maxFixRounds } from '../domain/tasks/rounds.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
-import { globalAutonomy } from '../domain/security/guard.mjs';
-import { browserOn } from './sessions.mjs';
 import { persona } from './orchestrator-persona.mjs';
 
 export { persona, knownModels } from './orchestrator-persona.mjs';
@@ -56,7 +53,7 @@ const SETTLE_MS = 24 * 3_600_000; // a quiet conversation with nothing open is d
 
 // a step of the assistant for the chat's live line: the tool, what it works on (only a file's name, never its folder;
 // the first words of a command) and when it started.
-export function toolStep(body) {
+function toolStep(body) {
   const name = String(body?.name ?? '').replace(/^orb:/, '');
   let target = String(body?.input ?? '').replace(/\s+/g, ' ').trim();
   if (/^([a-z]:)?[\\/]|^\.{0,2}[\\/]|[\\/][^\\/\s]+\.[\w]{1,8}$/i.test(target) && !/\s/.test(target)) target = target.split(/[\\/]/).filter(Boolean).pop() ?? '';
@@ -80,7 +77,7 @@ export function answerOf(result, said = []) {
 // a message of the user that arrives while the assistant is answering waits for the end of that turn and is added
 // to what was asked (added to the running turn, a short turn could lose its answer). Several messages
 // written meanwhile go together, as one turn.
-export function queueUserMessage(lane, text, user = userName()) {
+function queueUserMessage(lane, text, user = userName()) {
   const last = lane.queue.at(-1);
   if (last && !last.internal && last.user) { last.text += `\n\n${text}`; return last; }
   // (For the brain, in Spanish like the rest of its instructions; the chat shows the message as the user wrote it.)
@@ -353,7 +350,7 @@ class Lane {
     if (ev.type === 'rate') { try { recordRate(this.board, this.liveAccount ?? this.liveAgent, ev); } catch { /* budget only */ } return; }
     if (ev.type === 'context' && ev.size) { this.board.updateConversation(this.id, { context: { used: ev.used, size: ev.size } }); this.push(); return; }
     // Only the process that ended is dropped: a replaced live's late exit must not detach the one in use.
-    // F2.6c: the coordinator's process is gone: its tickets go with it at once (even mid-turn).
+    // The coordinator's process is gone: its tickets go with it at once (even mid-turn).
     if (ev.type === 'exit' && this.live?.isClosed()) { agentAuth.revokeSession(`asistente-${this.id}`); if (!this.busy) this.live = null; }
   }
 

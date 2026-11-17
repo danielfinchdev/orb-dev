@@ -5,14 +5,14 @@ export const WIDTH = 640; export const HEIGHT = 300; export const U = 28; export
 export const GROUND = 244; export const CEIL = 40; export const PX = 130; // where the cube is drawn
 export const SPEED = { facil: 0.28, normal: 0.33, dificil: 0.4 }; // px per ms, steady
 export const G = 0.0021; export const JUMP = 0.52; export const PAD = 0.8; export const ORB = 0.56; // px/ms
-export const AIR = (2 * JUMP) / G; // ms in the air of a plain jump
-export const ROT = (Math.PI / 2) / AIR; // a quarter turn per jump
+const AIR = (2 * JUMP) / G; // ms in the air of a plain jump
+const ROT = (Math.PI / 2) / AIR; // a quarter turn per jump
 const D = { facil: 0, normal: 1, dificil: 2 };
 const X = (u) => PX + (6 + u) * U; // unit → world px (the cube starts 6 blocks before unit 0)
 
 // The level: sections one after the other with some runway in between (more on «fácil»). Each section places its
 // patterns from x (in units) and returns its length; the difficulty adds or removes a spike here and there.
-export function buildLevel(level) {
+function buildLevel(level) {
   const d = D[level] ?? 1;
   const objects = [];
   const spike = (x, n = 1, o = {}) => { for (let i = 0; i < n; i++) objects.push({ kind: 'spike', x: x + i, y: o.y || 0, ceil: Boolean(o.ceil) }); };

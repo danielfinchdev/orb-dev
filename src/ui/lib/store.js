@@ -1,7 +1,6 @@
 // App state shared by every view: what the engine knows (assistant, projects, tasks, conversations) plus the current
 // route. The state container itself is state.js; engine events trigger a debounced refresh.
 import { notifyError, notifyOk } from './notify.js';
-import { errorText } from './utils.js';
 import { bumpNav, navTicket, stillHere } from './nav.js';
 import { cleanRoute, backStep } from './phone-nav.js';
 import { t } from './i18n.js';
@@ -23,7 +22,7 @@ export const fullPc = () => !bridge.mobile;
 // a computer's browser linked with an Orb: the PC's layout, with what
 // a linked device may do. Decided once, when the page opens (a phone, or the Android app, keeps the phone's layout).
 let wide = null;
-export const wideBrowser = () => (wide ??= Boolean(bridge.mobile) && !window.__orbHost && !/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) && window.innerWidth >= 1024);
+const wideBrowser = () => (wide ??= Boolean(bridge.mobile) && !window.__orbHost && !/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) && window.innerWidth >= 1024);
 export const phoneLayout = () => Boolean(bridge.mobile) && !wideBrowser();
 
 // «Iniciar test» shows on the first opening of the day (on the PC), until the user writes to the assistant.
@@ -157,7 +156,7 @@ export const refresh = oneAtATime(async () => {
 // The app's language (Ajustes › General).
 
 let iconsFor = null;
-export function loadProjectIcons(names = iconsFor) {
+function loadProjectIcons(names = iconsFor) {
   iconsFor = names;
   return call('projects.icons').then((projectIcons) => setState({ projectIcons })).catch(quiet);
 }
@@ -265,7 +264,7 @@ export async function runTest(prompt) {
 }
 
 // Ctrl+J: a terminal in the folder of what is on screen (a conversation's project, the active project) or the assistant's.
-export function terminalFolder() {
+function terminalFolder() {
   const { route, sessions, projects, app } = getState();
   const session = route.view === 'session' ? sessions.find((s) => s.id === route.id) : null;
   const named = (name) => projects.find((p) => p.name === name)?.path;

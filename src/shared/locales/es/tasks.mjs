@@ -136,7 +136,6 @@ export default {
   'turns.scopeHead': 'Frente al último commit',
   'turns.scopeTurn': 'Turno {n}',
   'turns.empty': 'Todavía no hay cambios que mostrar: aparecerán cuando el agente termine un turno en esta carpeta.',
-  'turns.noGit': 'Este panel necesita que la carpeta del proyecto sea un repositorio git.',
   'turns.noChanges': 'Este turno no cambió ningún archivo.',
   'turns.partial': 'Diff parcial: hay archivos demasiado grandes o más archivos de los que se muestran.',
   'turns.next': 'Siguiente cambio (Alt+↓)',

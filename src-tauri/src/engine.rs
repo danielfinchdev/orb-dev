@@ -655,7 +655,7 @@ fn collect_batch(rx: &std::sync::mpsc::Receiver<Value>, first: Value, window: st
 }
 
 /// A thread that sends the engine's events to the window in order. Every `emit_to` is a script evaluated on the UI
-/// thread (WebView2); when that thread is slow (the PC busy) the events used to pile up there one by one, each with its
+/// thread (WebView2); when that thread is slow (the PC busy) the events would pile up there one by one, each with its
 /// own evaluation. Here whatever has queued up (plus what arrives in the next few ms) goes out together as one
 /// `engine:events` array (tauri-bridge.js fires them in order), so the UI thread has one evaluation to do, not dozens.
 fn emit_queue(app: AppHandle) -> std::sync::mpsc::Sender<Value> {

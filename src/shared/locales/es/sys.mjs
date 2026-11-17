@@ -47,7 +47,6 @@ export default {
   'sys.terminal.folderOnly': 'solo se puede abrir una terminal en una carpeta',
   'sys.terminal.openFailed': 'no se pudo abrir {name}: {error}',
   // Navegador de los agentes
-  'sys.browser.title': 'Navegador del agente',
   'sys.browser.noUrl': 'falta la dirección',
   'sys.browser.badUrl': 'dirección no válida: {url}',
   'sys.browser.httpOnly': 'solo se pueden abrir páginas http o https',

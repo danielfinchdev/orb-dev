@@ -16,7 +16,7 @@ export const id = 'cursor';
 export const label = 'Cursor';
 export const kind = 'cli-stream';
 export const caps = { images: false, steer: false, fork: false, approvals: false, models: true, context: false };
-// F2.6c: Cursor starts its MCP servers again every turn, so they get new tickets every turn (o.mcpServers is then a
+// Cursor starts its MCP servers again every turn, so they get new tickets every turn (o.mcpServers is then a
 // function), taken back when the turn ends (src/domain/security/agent-auth.mjs).
 export const mcpServersEachTurn = true;
 
@@ -107,7 +107,7 @@ function toolOf(call) {
 }
 
 // Orb's tools by what they do («Progreso de la tarea · 20 % · Creando saludo.html»); another server's tools by «server: tool».
-export function mcpToolLabel(server, tool, args = {}) {
+function mcpToolLabel(server, tool, args = {}) {
   const t = String(tool ?? '');
   if (server && server !== 'orb' && !/^orb_/.test(t)) return { name: `${server}: ${t}`, input: '' };
   const parts = (...xs) => xs.filter((x) => x != null && x !== '').map((x) => clip(String(x), 200)).join(' · ');

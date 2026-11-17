@@ -19,14 +19,12 @@ export default {
   'session.askMode': 'Ask',
   'session.autoTip': 'Works on its own inside the folder; asks before publishing, sending data or leaving it',
   'session.askTip': 'Asks before deleting folders, undoing git changes or writing outside the folder',
-  'session.moreModes': 'More permission options',
   'session.tip.leer': 'Only reads and analyses; changes nothing',
   'session.tip.probar': 'Reviews and runs tests; does not edit files',
   'session.tip.preguntar': 'Asks permission before every action',
   'session.tip.total': 'The whole PC except Orb data; asks for the master password',
   'session.autoOn': 'Auto mode',
   'session.askOn': 'Ask mode',
-  'chat.autoGlobalTip': 'For every chat and task that doesn’t choose another mode',
   'settings.autonomy': 'Agent permissions',
   'settings.autonomyHint': 'Auto: they work without asking inside the project folder (it can be undone). Ask: they ask before anything risky. They always ask before publishing, sending data or leaving the folder.'
 };

@@ -8,16 +8,16 @@ import { tr } from '../../platform/context.mjs';
 import { randomBytes } from 'node:crypto';
 import { oneLine } from '../../shared/text.mjs';
 
-export const CI_INTERVAL_MS = 3 * 60_000; // 2–5 minutes
+const CI_INTERVAL_MS = 3 * 60_000; // 2–5 minutes
 export const MAX_ATTEMPTS = 3;
 export const STALL_MS = 40 * 60_000; // the same failing commit this long after waking the agent: stuck
 export const MAX_ERRORS = 3; // gh failing this many checks in a row: stuck
-export const MAX_WATCHES = 5;
+const MAX_WATCHES = 5;
 const KEY = 'ciwatch';
 const WRITERS = new Set(['editar', 'preguntar', 'auto', 'total']);
 const userError = (key, vars) => Object.assign(new Error(tr(key, vars)), { userFacing: true });
 
-export function ciMessage({ pr, failed, logs, attempt }) {
+function ciMessage({ pr, failed, logs, attempt }) {
   const names = failed.map((c) => `- ${c.workflow ? `${c.workflow} / ` : ''}${c.name}`).join('\n');
   const mark = randomBytes(6).toString('hex'); // the log cannot imitate its own closing line
   const body = logs.filter(Boolean).map((l, i) => `<<${mark}>> ${tr('msg.ciwatch.logOf', { name: failed[i]?.name ?? '' })}

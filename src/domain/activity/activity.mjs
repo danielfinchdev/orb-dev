@@ -90,7 +90,7 @@ function resumePoint(def, from) {
 // → { end, read }: end is where the next call resumes ({ f, o, h }), or null when the stream is exhausted.
 // A line without a time (the assistant's and the app's logs) takes the time of the nearest older line of its file that
 // has one, so it sorts next to what happened around it; with none, it sorts last.
-export function scanStream(def, from, take, budget = READ_CAP) {
+function scanStream(def, from, take, budget = READ_CAP) {
   const start0 = resumePoint(def, from);
   let f = start0.f; let endAt = start0.o; let read = 0;
   while (f < def.files.length) {

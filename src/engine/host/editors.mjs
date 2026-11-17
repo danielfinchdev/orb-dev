@@ -15,7 +15,7 @@ function inPath(names, env) {
 }
 
 // The editors Orb can open a project in (the File Explorer is always there): id → the name shown to the user.
-export const EDITORS = Object.freeze({ cursor: 'Cursor', vscode: 'VS Code', windsurf: 'Windsurf', zed: 'Zed', jetbrains: 'JetBrains' });
+const EDITORS = Object.freeze({ cursor: 'Cursor', vscode: 'VS Code', windsurf: 'Windsurf', zed: 'Zed', jetbrains: 'JetBrains' });
 export const EDITOR_IDS = Object.freeze(Object.keys(EDITORS));
 
 // JetBrains ships one program per IDE: the first installed one in this order opens the folder.
@@ -58,16 +58,6 @@ const folderOf = (dir, language) => {
   if (!st.isDirectory()) throw new Error(translate(language, 'sys.terminal.folderOnly'));
   return dir;
 };
-
-// spawn: how a detached program starts (terminal.mjs › spawnDetached).
-export async function openInEditor(which, dir, { language = 'es', spawn = spawnDetached } = {}) {
-  folderOf(dir, language);
-  if (!EDITOR_IDS.includes(which)) throw new Error(translate(language, 'sys.main.badPath'));
-  const exe = findEditors()[which];
-  if (!exe) throw new Error(translate(language, 'sys.terminal.notInstalled', { name: EDITORS[which] ?? which }));
-  if (process.platform === 'darwin') return spawn({ cmd: 'open', args: ['-a', exe, dir], cwd: dir });
-  return spawn({ cmd: exe, args: [dir], cwd: dir });
-}
 
 // The program to start for an action's command, in a terminal window that stays open with its output. Pure, so it is
 // tested. Windows: Windows Terminal (its «;» escaped) or PowerShell; CMD when chosen in Ajustes.

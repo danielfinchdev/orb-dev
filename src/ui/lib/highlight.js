@@ -60,7 +60,7 @@ export function languageFor(file) {
 }
 
 // Big files stay plain: highlighting half a megabyte would freeze the window for a moment.
-export const MAX_HIGHLIGHT = 200 * 1024;
+const MAX_HIGHLIGHT = 200 * 1024;
 
 const plainLines = (text) => text.split('\n').map((line) => (line ? [line] : []));
 

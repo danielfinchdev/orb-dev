@@ -3,7 +3,7 @@
 // the 3.8 migration, src/domain/data/legacy/migrate-38.mjs.)
 
 // Opti Bot's conversation and its pending cards. → { session, expired } (what was tidied; null when nothing).
-export function retireOpti(board) {
+function retireOpti(board) {
   if (board.setting('opti_retired') === '1') return null;
   const id = board.setting('opti_session') || null;
   let expired = 0;

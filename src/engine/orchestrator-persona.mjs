@@ -1,8 +1,7 @@
 // The assistant's persona (system prompt) and the helpers that feed it: the models each agent offers and the spend-level texts.
-import { ctx, tr } from '../platform/context.mjs';
+import { ctx } from '../platform/context.mjs';
 import { AGENTS, assistantName, userName, ofUser } from '../domain/tasks/board.mjs';
 import { installed } from '../agents/index.mjs';
-import * as claude from '../agents/claude.mjs';
 import { maxFixRounds } from '../domain/tasks/rounds.mjs';
 import { globalAutonomy } from '../domain/security/guard.mjs';
 import { browserOn } from './sessions.mjs';

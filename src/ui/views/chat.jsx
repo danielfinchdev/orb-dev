@@ -5,7 +5,7 @@
 // each conversation is its own (route.id), several at once.
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDraft } from '@/lib/draft.js';
-import { Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, ChevronRight, Presentation, History, FlaskConical, Folder, ListChecks, Ellipsis, Info, BellOff, MessageSquare } from 'lucide-react';
+import { Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, ChevronRight, Presentation, History, FlaskConical, Folder, ListChecks, Info, BellOff, MessageSquare } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown, TypingMarkdown, TypedMarkdown } from '@/components/markdown.jsx';
 import { ExtensionRequestCard } from './extensions.jsx';
@@ -36,7 +36,7 @@ import { useAddToChat, appendToBox } from '@/lib/add-to-chat.js';
 import { ContextSlot } from '@/components/context-slot.jsx';
 import { WorkspacePills } from '@/components/workspace-pills.jsx';
 import { cn } from '@/lib/utils.js';
-import { DECISION, AGENT, STATUS } from '@/lib/labels.js';
+import { DECISION, AGENT } from '@/lib/labels.js';
 import { useT } from '@/lib/i18n.js';
 import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
 import { keepSame } from '@/lib/memo.js';

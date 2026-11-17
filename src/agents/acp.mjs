@@ -3,7 +3,6 @@
 // Qwen Code, GitHub Copilot CLI, Hermes Agent, Grok Build, Devin, Factory Droid, Oh My Pi…); each one is a small spec: how to find it, how to start it in ACP mode, where its login
 // lives and how to install it. The agent's own program and login are used: Orb never sees credentials.
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, readOutput, discoverDir, nodeRuntime } from '../platform/proc.mjs';
 import { clip } from './common.mjs';
@@ -59,7 +58,7 @@ export const ACP_SPECS = {
     strengths: 'agente autónomo con memoria y muchos proveedores de modelos', models: [], defaultModel: ''
   },
   // The four below are NOT verified: none of these programs was installed when they were added, so their ACP arguments come
-  // from public documentation / Synara's table (desarrollo/synara-vs-orb.md, paso 3), not from `<cli> --help`.
+  // from public documentation / Synara's table, not from `<cli> --help`.
   // Check `<cli> --help` before turning one on; a wrong argument makes the program quit at start and Orb says so.
   // keyEnv: variables of the vault's «agentkey/<agent>/<NAME>» (src/domain/security/agent-keys.mjs), put into this program's
   // environment only; none is needed when the program has its own login (loginArgs). Off by default (config-file.mjs).

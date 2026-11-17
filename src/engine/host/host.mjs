@@ -13,7 +13,7 @@
 import path from 'node:path';
 import { EDITOR_IDS } from './editors.mjs';
 
-export const BROWSER_METHODS = Object.freeze(['host.browser.open', 'host.browser.cdp', 'host.browser.close', 'host.pip.show', 'host.pip.hide', 'host.pip.state', 'host.pip.frame']);
+const BROWSER_METHODS = Object.freeze(['host.browser.open', 'host.browser.cdp', 'host.browser.close', 'host.pip.show', 'host.pip.hide', 'host.pip.state', 'host.pip.frame']);
 export const HOST_METHODS = Object.freeze(['host.openUrl', 'host.openPath', 'host.openTerminal', 'host.openEditor', 'host.runAction', 'host.screenshot', ...BROWSER_METHODS]);
 let send = null; let next = 0; const pending = new Map();
 // the ports of this engine's own servers (the phone's access, dev-control). The agents' browser never

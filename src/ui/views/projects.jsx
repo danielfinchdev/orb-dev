@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Empty, Field, Input, PathText, Spinner } from '@/components/ui/basic.jsx';
 import { Checkbox, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
 import { useStore, call, act, go, bridge, refresh, phoneLayout } from '@/lib/store.js';
-import { cn, baseName, errorText } from '@/lib/utils.js';
+import { cn, baseName } from '@/lib/utils.js';
 import { usePress } from '@/lib/use-press.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { GithubIcon } from '@/components/agent-icon.jsx';

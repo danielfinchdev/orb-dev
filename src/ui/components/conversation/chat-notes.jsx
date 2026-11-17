@@ -10,7 +10,7 @@ import { notify } from '@/lib/notify.js';
 import { quiet } from '@/lib/quiet.js';
 import { useT } from '@/lib/i18n.js';
 
-export const MAX_NOTES = 4000;
+const MAX_NOTES = 4000;
 const SAVE_MS = 800;
 
 export function ChatNotes({ conversation }) {

@@ -90,7 +90,7 @@ async function main() {
   const out = path.join(ROOT, 'src-tauri', 'gen', 'android', 'app', 'build', 'outputs', 'apk', 'universal', kind, `app-universal-${kind}.apk`);
   if (!fs.existsSync(out)) throw new Error(`no está el APK en ${out}`);
   const info = checkApk(out, { release: !debug });
-  // Review Android B4/B5: the debug APK (debuggable, the SDK's key, ~300 MB) lives apart, never beside the one to publish.
+  // The debug APK (debuggable, the SDK's key, ~300 MB) lives apart, never beside the one to publish.
   const dest = debug ? path.join(ROOT, 'dist', 'debug', `Orb-${version}-android-debug.apk`) : path.join(ROOT, 'dist', `Orb-${version}-android.apk`);
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.copyFileSync(out, dest);

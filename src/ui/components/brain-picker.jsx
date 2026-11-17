@@ -173,7 +173,7 @@ function BrainGroups({ catalog, value, onChange }) {
 // the reasoning levels Orb offers; «Extra» (xhigh) only for the models whose agent says they take it.
 export const REASONING_LEVELS = ['low', 'medium', 'high', 'xhigh'];
 const USUAL_LEVELS = ['low', 'medium', 'high'];
-export function levelsFor(catalog, value) {
+function levelsFor(catalog, value) {
   const m = modelOf(catalog, value);
   return m?.efforts?.length ? REASONING_LEVELS.filter((l) => m.efforts.includes(l)) : USUAL_LEVELS;
 }
@@ -227,7 +227,7 @@ function UsageMeter({ level }) {
 // why the account may run out soon (or null). Only from its real usage (what the agent reports): 75 % or more, or
 // 50 % with a choice that spends more (a heavy model or high reasoning). Without that figure, nothing: the model alone
 // is no reason to warn (the bubble came out far too often).
-export function usageWarning(catalog, value, t) {
+function usageWarning(catalog, value, t) {
   const agent = catalog?.find((a) => a.id === value.agent);
   const model = modelOf(catalog, value);
   const used = agent?.accounts.find((a) => a.id === value.account)?.usage ?? agent?.accounts[0]?.usage ?? null;

@@ -23,9 +23,6 @@ async function prune(repo, sid) {
   for (const name of names.slice(0, Math.max(0, names.length - KEEP))) await gitAsync(repo, {}, 'update-ref', '-d', name);
 }
 
-// The photo a rewind to `itemId` would go back to, or null.
-export const rewindTarget = (cwd, sid, itemId) => photoBefore(cwd, sid, itemId);
-
 // kept: files that already existed when the message was sent, so they stay (not a failure, unlike `skipped`).
 // → { rescue, target, ref, restored, removed, skipped, kept } (paths capped; the counts are whole). Throws when no rescue copy can be made.
 // messageAt: when the user sent the message (ms). A reused photo is older than the message, and a file that existed when the

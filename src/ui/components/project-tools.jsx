@@ -46,13 +46,13 @@ export function OpenInMenu({ project, labelClassName }) {
 }
 
 // ---- actions
-export function runProjectAction(project, action) {
+function runProjectAction(project, action) {
   if (!bridge.runAction || !project?.path) return undefined;
   return act(bridge.runAction({ dir: project.path, command: action.command, preview: action.preview, openPreview: action.openPreview }), tNow('tools.actionRunning', { name: action.name }));
 }
 
 // «Ctrl+Shift+T» from a key press (null for a key that cannot be one: a lone modifier, or a plain letter).
-export function shortcutOf(e) {
+function shortcutOf(e) {
   const key = /^F\d{1,2}$/.test(e.key) ? e.key : /^[a-z0-9]$/i.test(e.key) ? e.key.toUpperCase() : e.code?.startsWith('Digit') ? e.code.slice(5) : e.code?.startsWith('Key') ? e.code.slice(3) : null;
   if (!key) return null;
   const mods = [e.ctrlKey && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Meta'].filter(Boolean);
@@ -95,7 +95,7 @@ function editAction(project, action = null) {
   });
 }
 
-export function useProjectActions(name) {
+function useProjectActions(name) {
   const version = useStore((s) => s.version);
   const [actions, setActions] = useState([]);
   useEffect(() => { if (!name) { setActions([]); return undefined; } let alive = true; call('actions.list', { project: name }).then((l) => alive && setActions(l)).catch(() => alive && setActions([])); return () => { alive = false; }; }, [name, version]);

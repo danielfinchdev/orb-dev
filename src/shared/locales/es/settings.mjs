@@ -272,7 +272,6 @@ export default {
   'appearance.fontSize': 'Tamaño de letra',
   'appearance.fontSizeHint': 'Escala todos los textos de la aplicación; 14,5 px es el tamaño de siempre.',
   'appearance.fontSizeValue': '{px} px',
-  'appearance.sizesReset': 'Restablecer tamaños',
   'appearance.musicVolume': 'Volumen de la música',
   'appearance.font': 'Tipografía',
   'appearance.font.outfit': 'La del tema',

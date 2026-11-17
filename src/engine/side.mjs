@@ -14,7 +14,7 @@ import { agentKeyEnv } from '../domain/security/agent-keys.mjs';
 import { oneLine } from '../shared/text.mjs';
 
 export const SIDE_TTL_MS = 30 * 60_000;      // quiet for this long: it is gone
-export const SIDE_TURN_MS = 3 * 60_000;      // one answer
+const SIDE_TURN_MS = 3 * 60_000;      // one answer
 const MAX_PER_CHAT = 3;
 const LOOKBACK = 40;
 // what a side agent may use: look, never change or run (Claude's tool names; the other agents get «leer» from their adapter)

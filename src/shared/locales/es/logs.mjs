@@ -9,7 +9,4 @@ export default {
   'logs.copy': 'Copiar',
   'logs.copied': 'Copiada',
   // Memorias
-  'memories.title': 'Memorias',
-  'memories.logs': 'Bitácoras',
-  'memories.activity': 'Actividad'
 };

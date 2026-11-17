@@ -7,8 +7,8 @@ import { contentHash, sign, verify, detectSensitivity, deletionAskedByUser, aske
 import { AUTONOMY, globalAutonomy, autonomyOf } from '../security/guard.mjs';
 import { BoardProjects } from './board-projects.mjs';
 import { BoardConversations } from './board-conversations.mjs';
-import { now, real, same, inside } from './board-common.mjs';
-import { AGENTS, assistantName, checkProjectPath, userName } from './board-common.mjs';
+import { now, same } from './board-common.mjs';
+import { AGENTS, assistantName, userName } from './board-common.mjs';
 export { AGENTS, assistantName, checkProjectPath, userName } from './board-common.mjs';
 
 
@@ -60,7 +60,7 @@ const ORCHESTRATOR_TO = { queued: ['failed', 'blocked', 'cancelled', 'queued'], 
 
 // Validated model id for an agent: one of its configured models, or any well-formed id when the list is empty (CLI default).
 // listed = the models the agent itself reported (models:<agent>), also valid.
-export function checkModel(agent, model, listed = []) {
+function checkModel(agent, model, listed = []) {
   if (!model) return null;
   const configured = ctx.config.agents[agent]?.models ?? [];
   // An alias the agent listed (opus) also stands for the full id it resolves to (claude-opus-5-5).

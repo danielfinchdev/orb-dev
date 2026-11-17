@@ -12,7 +12,7 @@ import { ATTACH_DIR } from '../sessions.mjs';
 import { playableType } from '../../shared/attach-kind.mjs';
 import { expandMentions } from '../mentions.mjs';
 import { assistantName } from '../../domain/tasks/board.mjs';
-import { modelCatalog, LEVELS, REASONING_LEVELS, levelsOf } from '../usage/catalog.mjs';
+import { modelCatalog, REASONING_LEVELS, levelsOf } from '../usage/catalog.mjs';
 import { slug } from '../../platform/git.mjs';
 import { PermissionError } from '../../domain/security/permissions.mjs';
 import { fail, str, int, oneOf } from './common.mjs';

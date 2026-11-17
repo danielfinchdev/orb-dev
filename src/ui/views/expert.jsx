@@ -231,7 +231,7 @@ function ActivityPanel({ version }) {
   );
 }
 
-export function PanelsMenu({ labelClassName }) {
+function PanelsMenu({ labelClassName }) {
   const t = useT();
   const panels = useStore((s) => s.app.config.expert?.panels) ?? {};
   return (

@@ -378,7 +378,6 @@ export default {
   "msg.remote.defaultName": "Phone",
   "msg.remote.deviceLinked": "New device linked: {name}. You can remove it in Settings → Magic Link.",
   "msg.remote.enableFirst": "turn on mobile access first",
-  "msg.remote.imageTypes": "only PNG, JPG, WEBP or GIF images are supported",
   "msg.remote.fileTypes": "unsupported file type: only images (PNG, JPG, WEBP, GIF)",
   "msg.remote.internalError": "internal error",
   "msg.remote.noDevice": "that device does not exist",

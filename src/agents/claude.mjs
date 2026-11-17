@@ -3,7 +3,6 @@
 // per conversation stays open between turns; answers stream as they are written; every action that needs permission goes
 // through the guard (src/domain/security/guard.mjs) and, when it must ask, to an approval card in the app.
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, cleanEnv, within, discoverDir, killTree } from '../platform/proc.mjs';
@@ -41,7 +40,7 @@ export function subagentTask(m, tasks, background) {
 const stepOf = (m) => (m.parent_tool_use_id ? { parent: m.parent_tool_use_id } : {});
 export const COORDINATOR_DENIED = ['Bash', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit', 'WebFetch', 'WebSearch', 'Task', 'Skill'];
 // Lighter processes: only the project's own settings, and only the MCP servers Orb passes (strict-mcp-config).
-export const LEAN_SOURCES = ['project', 'local'];
+const LEAN_SOURCES = ['project', 'local'];
 
 // what in a project's .claude/settings*.json would let one agent change the next ones (a task can write that
 // folder; the next agent may be another conversation's): programs Claude runs by itself (apiKeyHelper ran from a trusted

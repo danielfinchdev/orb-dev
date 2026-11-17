@@ -22,7 +22,6 @@ export default {
   'tabs.empty.recent': 'Abrir reciente',
   'keys.title': 'Atajos de teclado',
   'keys.hint': 'Pulsa «Grabar» y la combinación que quieras. Se guardan en keybindings.json, dentro de tu carpeta core.',
-  'keys.command': 'Acción',
   'keys.record': 'Grabar',
   'keys.recording': 'Pulsa la combinación… Esc cancela, Retroceso la quita.',
   'keys.reset': 'Restablecer',

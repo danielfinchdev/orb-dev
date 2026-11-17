@@ -9,7 +9,6 @@ import { adbStatus, ensureAdb } from '../host/android.mjs';
 import { projectIcon, setProjectIcon, clearProjectIcon, renameProjectIcon } from '../project-icons.mjs';
 import { git } from '../../platform/git.mjs';
 import { fail, str, oneOf } from './common.mjs';
-import { fold } from '../../domain/conversations/inbox.mjs';
 import { lazy } from './common.mjs';
 
 const prNumber = (v) => {

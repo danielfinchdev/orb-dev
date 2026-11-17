@@ -20,7 +20,7 @@ export function inPath(name, env = process.env) {
   return found;
 }
 // Folders in PATH that hold an npm shim (name.cmd): the real binary lives under <dir>/node_modules/<package>.
-export const shimDirs = (name, env = process.env) => String(env.PATH ?? env.Path ?? '').split(path.delimiter).filter(Boolean)
+const shimDirs = (name, env = process.env) => String(env.PATH ?? env.Path ?? '').split(path.delimiter).filter(Boolean)
   .filter((dir) => firstFile([path.join(dir, `${name}.cmd`), path.join(dir, name)]));
 
 export const userHome = () => process.env.USERPROFILE || os.homedir();

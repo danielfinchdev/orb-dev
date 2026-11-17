@@ -10,7 +10,7 @@ export const MAX_RATIO = 70;
 export const emptyTabs = () => ({ tabs: [], active: null, split: false, right: null, focus: 'left', ratio: 50 });
 
 const KEY = /^(chat:(\d{1,12}|new)|session:[\w-]{1,90})$/;
-export const isTabKey = (k) => typeof k === 'string' && KEY.test(k);
+const isTabKey = (k) => typeof k === 'string' && KEY.test(k);
 
 // The tab a route stands for, or null when the route is not a chat.
 export function keyOfRoute(route) {
@@ -40,7 +40,6 @@ export function sanitize(raw, { exists = () => true } = {}) {
   return { tabs, active, split, right: split ? right : null, focus: split && raw.focus === 'right' ? 'right' : 'left', ratio };
 }
 
-const withTab = (s, key) => (s.tabs.includes(key) ? s.tabs : [...s.tabs, key]);
 // at the limit the oldest tab that nobody is looking at makes room
 function room(s) {
   if (s.tabs.length < MAX_TABS) return s.tabs;

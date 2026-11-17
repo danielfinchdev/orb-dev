@@ -6,12 +6,12 @@
 import crypto from 'node:crypto';
 
 export const PREFIX = 'mcpext/';
-export const MAX_TOKENS = 20;
-export const MAX_NAME = 60;
-export const MAX_PROJECTS = 50;
+const MAX_TOKENS = 20;
+const MAX_NAME = 60;
+const MAX_PROJECTS = 50;
 export const DEFAULT_DAYS = 30;
 export const MAX_DAYS = 365;
-export const TOKEN_RE = /^orbmcp_([0-9a-f]{12})_([A-Za-z0-9_-]{43})$/;
+const TOKEN_RE = /^orbmcp_([0-9a-f]{12})_([A-Za-z0-9_-]{43})$/;
 const DAY = 86_400_000;
 
 export class TokenError extends Error {

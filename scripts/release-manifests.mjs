@@ -41,7 +41,7 @@ export function latestYml({ version, file, date }) {
   ].join('\n');
 }
 
-export function latestJson({ version, notes, date, url, signature }) {
+function latestJson({ version, notes, date, url, signature }) {
   const entry = { signature, url };
   // The plugin looks for "<target>-<installer>" first, then "<target>".
   return { version, notes: notes ?? '', pub_date: date, platforms: { 'windows-x86_64-nsis': entry, 'windows-x86_64': entry } };

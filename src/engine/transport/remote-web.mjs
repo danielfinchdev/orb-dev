@@ -1,5 +1,4 @@
 // Static web assets of the phone link: content types, security headers and the installed app's service worker.
-import { open } from '../../shared/mobile-crypto.mjs';
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
 const HEADERS = {

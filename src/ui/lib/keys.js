@@ -12,7 +12,6 @@ const publish = (rules, problems = []) => {
   listeners.forEach((fn) => fn());
 };
 const subscribe = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
-export const keyTable = () => current.table;
 export const useKeys = () => useSyncExternalStore(subscribe, () => current);
 
 let watching = false;

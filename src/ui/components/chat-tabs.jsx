@@ -14,7 +14,7 @@ import { useOrbItems } from '@/views/orb/inbox.jsx';
 import * as T from '../../shared/tabs.mjs';
 
 // Below this width two chats do not fit: the split stays saved, but only the pane with the focus is shown.
-export const SPLIT_MIN_WIDTH = 900;
+const SPLIT_MIN_WIDTH = 900;
 const SHORT_TITLE = 18;
 
 const itemKey = (tab) => (tab.startsWith('session:') ? tab : `conversation:${tab.slice(5)}`);
@@ -26,7 +26,7 @@ if (typeof window !== 'undefined') window.addEventListener('click', (e) => { if 
 const ctrlRecent = () => Date.now() - ctrlAt < 600;
 
 // The state the window shows for this route: the chat of the route is in a tab (and in the focused pane).
-export function syncedWith(state, key, mode) {
+function syncedWith(state, key, mode) {
   if (!key) return state;
   const shown = state.split && state.focus === 'right' ? state.right : state.active;
   if (state.tabs.includes(key) && shown === key) return state;

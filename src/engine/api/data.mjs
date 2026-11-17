@@ -15,7 +15,7 @@ import { refused } from './master.mjs';
 export const before38 = (v) => { const m = /^(\d+)\.(\d+)/.exec(String(v ?? '')); return Boolean(m) && (Number(m[1]) < 3 || (Number(m[1]) === 3 && Number(m[2]) < 8)); };
 
 const fail = (message) => { const e = new Error(message); e.userFacing = true; throw e; };
-export const DAILY_HOUR = 3;
+const DAILY_HOUR = 3;
 
 export function dataApi({ board, emit = () => {}, log = () => {}, version = null }) {
   const secret = () => machineKeys().backup; // this PC's backup key (src/platform/keys.mjs)

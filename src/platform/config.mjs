@@ -32,7 +32,7 @@ export function saveConfig(patch) {
   const unknown = Object.keys(patch ?? {}).filter((k) => !EDITABLE.includes(k));
   if (unknown.length) throw new Error(tr('msg.ctx.unknownSettings', { unknown: unknown.join(', ') }));
   // Only what the patch brings is validated strictly: values a hand-edited orb.json holds that the code tolerates
-  // (a 3.8.3 round limit, a malformed rails entry) are repaired first so they cannot block saving something else.
+  // (an out-of-range round limit, a malformed rails entry) are repaired first so they cannot block saving something else.
   const next = merge(tidyStored(ctx.config), patch);
   validateConfig(next);
   writeJson(ctx.paths.config, next);
@@ -106,7 +106,7 @@ export function validateConfig(c) {
   const homes = c.accounts.filter((a) => a.home).map((a) => path.resolve(a.home).toLowerCase());
   if (new Set(homes).size !== homes.length) throw new Error(tr('msg.ctx.sameHome'));
   if (!Array.isArray(c.mcpServers)) throw new Error(tr('msg.ctx.mcpList'));
-  // F2.6c: two names that give the same environment variable (git-hub and git_hub, GitHub and github on Windows) would
+  // Two names that give the same environment variable (git-hub and git_hub, GitHub and github on Windows) would
   // swap their tickets: refused.
   const envNames = new Set();
   for (const s of c.mcpServers) {

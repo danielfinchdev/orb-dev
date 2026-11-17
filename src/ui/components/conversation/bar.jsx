@@ -7,7 +7,7 @@ import { Spinner } from '@/components/ui/basic.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { setQueuePaused } from '@/components/task-state.jsx';
 import { BubbleTip, Popover, PopoverTrigger, PopoverContent } from '@/components/ui/overlay.jsx';
-import { useStore, call } from '@/lib/store.js';
+import { useStore } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { timeZone } from '@/lib/clock.js';

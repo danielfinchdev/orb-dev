@@ -13,7 +13,7 @@ import { IS_WIN, cleanEnv, inPath, killTree } from '../../platform/proc.mjs';
 const winget = (id) => `winget install --id ${id} -e --source winget --accept-package-agreements --accept-source-agreements --silent --disable-interactivity`;
 
 // id → what it is, how to check it and the official way to install it.
-export const ITEMS = [
+const ITEMS = [
   { id: 'git', label: 'Git', why: 'deshacer tareas con historial, ramas y GitHub', install: winget('Git.Git'), needsWinget: true },
   { id: 'node', label: 'Node.js', why: 'lo necesita Codex para instalarse', install: winget('OpenJS.NodeJS.LTS'), needsWinget: true, exe: 'node.exe' },
   { id: 'claude', label: 'Claude Code', why: 'agente y cerebro del asistente', install: "irm https://claude.ai/install.ps1 | iex" },

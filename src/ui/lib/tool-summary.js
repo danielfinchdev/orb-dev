@@ -16,7 +16,7 @@ export const bareTool = (name) => String(name ?? '').replace(/^mcp__[^_]+(?:_[^_
 export const kindOf = (name) => KIND.find(([re]) => re.test(name))?.[1] ?? 'other';
 
 // The kinds the summary counts, in the order it says them; every other tool counts as «other».
-export const SUMMARY_KINDS = ['read', 'search', 'edit', 'run', 'web', 'other'];
+const SUMMARY_KINDS = ['read', 'search', 'edit', 'run', 'web', 'other'];
 const summaryKind = (name) => { const k = kindOf(bareTool(name)); return SUMMARY_KINDS.includes(k) ? k : 'other'; };
 
 // names of tool calls → [{ kind, n }] in SUMMARY_KINDS order, only the kinds that appear.

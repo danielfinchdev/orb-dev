@@ -23,7 +23,6 @@ export default {
   'edit.imagesKept': 'Los {n} archivo(s) adjuntos se vuelven a enviar con el mensaje editado.',
   'edit.rewindOff': 'No se pueden volver los archivos: {why}',
   'edit.empty': 'Escribe el mensaje',
-  'edit.done': 'Mensaje editado',
   'rewind.line': 'Archivos vueltos atrás: {restored} restaurados, {removed} eliminados, {skipped} sin tocar',
   'rewind.lineUndone': 'Rebobinado deshecho: {restored} restaurados, {removed} eliminados, {skipped} sin tocar',
   'rewind.undo': 'Deshacer el rebobinado',

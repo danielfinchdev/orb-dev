@@ -7,7 +7,7 @@ const byChat = new Map(); const listeners = new Set(); const EMPTY = Object.free
 const emit = () => { for (const fn of listeners) fn(); };
 const subscribe = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
 
-export const commentsOf = (id) => byChat.get(id) ?? EMPTY;
+const commentsOf = (id) => byChat.get(id) ?? EMPTY;
 export function addComment(id, c) {
   const text = String(c.text ?? '').trim(); if (!text) return;
   byChat.set(id, [...commentsOf(id), { key: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, path: c.path, line: c.line, side: c.side === 'old' ? 'old' : 'new', text }]);

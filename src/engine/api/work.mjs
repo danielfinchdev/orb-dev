@@ -11,16 +11,14 @@ import { PERMISSIONS } from '../sessions.mjs';
 import { globalAutonomy, permissionOfAutonomy } from '../../domain/security/guard.mjs';
 import { checkDevTools } from '../../platform/dev-tools.mjs';
 import { expandMentions, mentionOptions } from '../mentions.mjs';
-import { modelCatalog, chooseModel, LEVELS, REASONING_LEVELS, levelsOf } from '../usage/catalog.mjs';
+import { modelCatalog, REASONING_LEVELS, levelsOf } from '../usage/catalog.mjs';
 import { titleFrom } from '../../shared/titles.mjs';
 import { autoTitle } from '../titles.mjs';
-import { git } from '../../platform/git.mjs';
 import { diffBetween } from '../../domain/tasks/checkpoints.mjs';
 import { listTurns, turnDiff, commentsBlock } from '../../domain/conversations/turns.mjs';
 import { editMessage, undoRewind, rewindInfo } from '../edit-message.mjs';
 import { fail, str, int, oneOf, images, DECISION } from './common.mjs';
 import { createDedupe, conversationKey } from './dedupe.mjs';
-import { fold } from '../../domain/conversations/inbox.mjs';
 
 export function workMethods({ trash, project, cut, accept, taskRejected, modelLabelOf, grants, board, sessions, scheduler, chatTrees, log }) {
   const runMode = (s, { name, args }) => {

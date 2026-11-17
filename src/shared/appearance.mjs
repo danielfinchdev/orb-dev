@@ -13,7 +13,7 @@ export const SKINS = ['orb', 'vaporwave', 'retro', 'profesional', 'nube', 'crist
 // a theme built on top of another one («grafito» the same way over Profesional). «cristal» is Profesional (no robot, no sounds, no backdrop, no animation)
 // plus its own glass material: <html> wears data-skin="profesional" and data-material="cristal" (lib/store.js), so every
 // rule of Profesional applies and themes.css adds the glass under html[data-material="cristal"].
-export const SKIN_BASE = Object.freeze({ cristal: 'profesional', grafito: 'profesional', paletas: 'profesional' });
+const SKIN_BASE = Object.freeze({ cristal: 'profesional', grafito: 'profesional', paletas: 'profesional' });
 export const baseSkin = (skin) => SKIN_BASE[skin] ?? skin;
 // The themes with no robot, no backdrop and no decorative motion.
 export const plainSkin = (skin) => baseSkin(skin) === 'profesional';

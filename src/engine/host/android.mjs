@@ -23,7 +23,7 @@ import { sdkRoots } from '../../platform/dev-tools.mjs';
 import { isOrbData } from '../../domain/security/guard.mjs';
 
 // Platform-tools r37.0.2 (Google's repository2-3.xml, checked 2026-11-08). A newer version needs a new pin here.
-export const PLATFORM_TOOLS = Object.freeze({
+const PLATFORM_TOOLS = Object.freeze({
   win32: { url: 'https://dl.google.com/android/repository/platform-tools_r37.0.2-win.zip', size: 8239125, sha1: 'd7ee482b3874f1e0d6d5dca135f6bd58f5716db0', sha256: '6d93a5e63bc1654b70b7b94bec5c6ab46db113df0265beb314055dd253772b58' },
   darwin: { url: 'https://dl.google.com/android/repository/platform-tools_r37.0.2-darwin.zip', size: 16516152, sha1: '6f86aa58ba42dd4bfe27477f3f11c09edc3ebe3f' },
   linux: { url: 'https://dl.google.com/android/repository/platform-tools_r37.0.2-linux.zip', size: 9541228, sha1: '736a08af10515674e40d8b754fe87390d698da2b' }
@@ -32,17 +32,17 @@ const exe = (name) => (process.platform === 'win32' ? `${name}.exe` : name);
 let state = { state: 'idle', error: null };
 let running = null;
 
-export const adbPath = () => path.join(ctx.paths.adb, exe('adb'));
+const adbPath = () => path.join(ctx.paths.adb, exe('adb'));
 // adb never runs in tests or when switched off (ORB_NO_ADB=1): every new copy of adb.exe that starts its server makes
 // Windows ask for permission, and the tests make a fresh folder each time. (The tests drive a fake adb instead:
 // createAndroid({ exe }).)
-export const adbDisabled = () => process.env.ORB_NO_ADB === '1' || Boolean(process.env.ORB_FAKE_AGENTS);
+const adbDisabled = () => process.env.ORB_NO_ADB === '1' || Boolean(process.env.ORB_FAKE_AGENTS);
 export const adbStatus = () => ({ ...state, dir: ctx.paths.adb, ready: fs.existsSync(adbPath()) });
 
 // what Orb downloaded, file by file (SHA-256), kept where agents cannot write (core\datos). Before
 // every run of adb the folder must be exactly that: same files, same contents, nothing added (a DLL next to adb.exe
 // would be loaded by it).
-export const adbPrints = () => path.join(ctx.paths.data, 'adb-huellas.json');
+const adbPrints = () => path.join(ctx.paths.data, 'adb-huellas.json');
 export function fingerprints(dir) {
   const out = {};
   const walk = (d, pre) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const rel = pre ? `${pre}/${e.name}` : e.name; if (e.isDirectory()) walk(path.join(d, e.name), rel); else out[rel.toLowerCase()] = crypto.createHash('sha256').update(fs.readFileSync(path.join(d, e.name))).digest('hex'); } };
@@ -129,12 +129,12 @@ async function download(pin, log, fetchImpl) {
 // this Node. → { code, out: Buffer, err: string }
 // Orb's adb keeps its pairing keys and known phones in core\datos\android (ANDROID_USER_HOME), closed to
 // agents, instead of the user's .android (also closed: src/engine/workspace-layout.mjs › adbHomes).
-export const adbHome = () => path.join(ctx.paths.data, 'android');
+const adbHome = () => path.join(ctx.paths.data, 'android');
 // A program run to the end without blocking the engine (the unpacking of a download took 2-3 minutes of frozen loop).
 const runQuiet = (file, args, { timeout = 120_000, env = process.env } = {}) => new Promise((resolve) => {
   execFile(file, args, { windowsHide: true, timeout, maxBuffer: 16 * 1024 * 1024, env }, (error) => resolve({ status: error ? (typeof error.code === 'number' ? error.code : 1) : 0 }));
 });
-export function runAdb(file, args, { timeout = 30_000, maxBuffer = 24 * 1024 * 1024 } = {}) {
+function runAdb(file, args, { timeout = 30_000, maxBuffer = 24 * 1024 * 1024 } = {}) {
   const script = /\.(mjs|js)$/i.test(file);
   let env = process.env;
   if (!script) { try { fs.mkdirSync(adbHome(), { recursive: true }); env = { ...process.env, ANDROID_USER_HOME: adbHome() }; } catch { /* its default */ } }
@@ -264,7 +264,7 @@ export function inputText(text) {
   if (!t || t.length > 500 || /[^\u0020-\u007e]/.test(t)) return null;
   return `'${t.replace(/ /g, '%s').replace(/'/g, "'\\''")}'`;
 }
-export const PACKAGE = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/;
+const PACKAGE = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/;
 const ACTIVITY = /^\.?[A-Za-z][A-Za-z0-9_$]*(\.[A-Za-z][A-Za-z0-9_$]*)*$/;
 const SERIAL = /^[A-Za-z0-9._:\-[\]%]{1,120}$/;
 const ADDRESS = /^[A-Za-z0-9._[\]%-]{1,80}(:[A-Za-z0-9._[\]%-]{1,80})*:\d{2,5}$/;

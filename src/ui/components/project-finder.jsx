@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils.js';
 const split = (file) => { const i = file.lastIndexOf('/'); return i < 0 ? ['', file] : [file.slice(0, i), file.slice(i + 1)]; };
 
 // The project the search is about: the one of the chat on screen, else the active one.
-export function useFinderProject() {
+function useFinderProject() {
   return useStore((s) => {
     const chat = s.route?.view === 'chat' && s.route.id != null ? s.conversations.find((c) => c.id === s.route.id)?.project : null;
     return chat || s.app?.activeProject?.name || null;

@@ -10,7 +10,7 @@ import { Tip } from '@/components/ui/overlay.jsx';
 import { Markdown } from '@/components/markdown.jsx';
 
 // the open side chats of a conversation: the engine pushes each change (session:side), and says when one is gone
-export function useSides(id) {
+function useSides(id) {
   const [sides, setSides] = useState([]);
   useEffect(() => {
     let alive = true;

@@ -8,7 +8,7 @@
 import crypto from 'node:crypto';
 import { connectorKey } from '../../platform/config.mjs';
 
-export const REF = 'orb-secret:';
+const REF = 'orb-secret:';
 export const isRef = (v) => typeof v === 'string' && v.startsWith(REF);
 export const secretId = (name, key) => `mcp/${connectorKey(name)}/${key}`;
 export const refOf = (name, key) => `${REF}${secretId(name, key)}`;
@@ -16,7 +16,7 @@ export const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,99}$/;
 const bindId = (name) => `mcpbind/${connectorKey(name)}`;
 // What a connector's keys are tied to: the program it starts.
 export const bindingOf = (server) => crypto.createHash('sha256').update(JSON.stringify([String(server?.command ?? ''), (server?.args ?? []).map(String)])).digest('base64').slice(0, 24);
-export const hasRefs = (server) => Object.values(server?.env ?? {}).some(isRef);
+const hasRefs = (server) => Object.values(server?.env ?? {}).some(isRef);
 const sameArgs = (a, b) => JSON.stringify((a ?? []).map(String)) === JSON.stringify((b ?? []).map(String));
 
 // Plain values of `servers` go into the vault. → the list with references in their place, or null when nothing changed.

@@ -100,7 +100,7 @@ export async function refreshAllModels(board, options = {}) {
 
 // the name Cursor itself gave each model when it opened it (its «init» line: «Claude Opus 5 300K High»), without
 // the effort words. Its model list names some by another variant («Claude Opus 5 1M») than the one it really opens.
-export function cursorSeenNames(board) {
+function cursorSeenNames(board) {
   const out = {};
   const rows = board.all(`SELECT s.model AS model, (SELECT body FROM session_items i WHERE i.session_id = s.id AND i.kind = 'status' AND i.body LIKE 'Cursor · %' ORDER BY i.id DESC LIMIT 1) AS body
     FROM sessions s WHERE s.agent = 'cursor' AND s.model IS NOT NULL AND s.model <> '' ORDER BY s.updated_at DESC LIMIT 80`);
