@@ -19,6 +19,7 @@ import { DESKTOP, METHODS, allowed, principalOf } from '../src/domain/security/p
 import { decide } from '../src/domain/security/guard.mjs';
 import { ctx } from '../src/platform/context.mjs';
 import { git } from '../src/platform/git.mjs';
+import { ChatWorktrees } from '../src/engine/chat-worktrees.mjs';
 
 let t; let board; let api; let sessions; let repo; let sent;
 const call = (method, params = {}) => api.call(method, params, DESKTOP);
@@ -246,7 +247,8 @@ test('a moved or renamed project: status and release find the repository again a
   board.addProject({ name: 'mover', path: dir }, 'usuario', { fromUser: true });
   const s = await call('sessions.create', { agent: 'claude', project: 'mover', permission: 'editar', title: 'm', workspace: 'worktree' });
   const moved = path.join(t.home, 'web', 'movido');
-  fs.renameSync(dir, moved); git(moved, 'worktree', 'repair');
+  // moved by hand and the project pointed at its new folder: the worktree's own .git still names the old path
+  fs.renameSync(dir, moved); board.run('UPDATE projects SET path = ? WHERE name = ?', moved, 'mover');
   const st = await call('worktrees.status', { id: s.id });
   assert.equal(st.has, true); assert.equal(st.orphan, false);
   assert.equal(lower(board.settingJson(`chatwt:${s.id}`).repo), lower(moved));
@@ -279,16 +281,60 @@ test('a deleted repository leaves an orphan folder: removed when empty, kept unt
   fs.rmSync(dir, { recursive: true, force: true });
   let r = await call('worktrees.discard', { id: a.id });
   // without its repository git cannot say what changed: a folder with files needs force, one with only the .git pointer does not
-  assert.equal(r.kept, 'dirty'); assert.ok(r.dirty.some((p) => /a.txt/.test(p)));
+  assert.equal(r.kept, 'unverified'); assert.ok(r.dirty.some((p) => /a.txt/.test(p)));
   for (const f of fs.readdirSync(a.cwd)) if (f !== '.git') fs.rmSync(path.join(a.cwd, f), { recursive: true, force: true });
   r = await call('worktrees.discard', { id: a.id });
   assert.equal(r.removed, true); assert.ok(!fs.existsSync(a.cwd));
+  // Orb cannot see what an orphan holds: not even force from the app removes it; only the explicit engine option does
   r = await call('worktrees.discard', { id: b.id });
-  assert.equal(r.kept, 'dirty'); assert.ok(fs.existsSync(b.cwd));
+  assert.equal(r.kept, 'unverified'); assert.ok(fs.existsSync(b.cwd));
   r = await call('worktrees.discard', { id: b.id, force: true });
+  assert.equal(r.kept, 'unverified'); assert.ok(fs.existsSync(b.cwd));
+  r = await new ChatWorktrees({ board, sessions }).release(b.id, { force: true, unverified: true });
   assert.equal(r.removed, true); assert.ok(!fs.existsSync(b.cwd));
 });
 
 test('forcing a worktree removal is not available from the phone', () => {
   assert.equal(METHODS['worktrees.discard'], 'pc');
+});
+
+test('ignored files inside folders that are not themselves ignored stay work; an ignored node_modules does not', async () => {
+  const s = await mk();
+  fs.writeFileSync(path.join(s.cwd, '.gitignore'), 'node_modules/\n.env\n*.db\n'); git(s.cwd, 'add', '-A'); git(s.cwd, ...ident, 'commit', '-q', '-m', 'ign3');
+  fs.mkdirSync(path.join(s.cwd, 'node_modules')); fs.writeFileSync(path.join(s.cwd, 'node_modules', 'x.js'), '1\n');
+  fs.mkdirSync(path.join(s.cwd, 'out')); fs.writeFileSync(path.join(s.cwd, 'out', 'app.db'), '1\n');
+  fs.mkdirSync(path.join(s.cwd, 'target')); fs.writeFileSync(path.join(s.cwd, 'target', '.env'), 'k=1\n');
+  const st = await call('worktrees.status', { id: s.id });
+  assert.ok(st.dirty.some((p) => /out\/app\.db/.test(p)) && st.dirty.some((p) => /target\/\.env/.test(p)), JSON.stringify(st.dirty));
+  assert.ok(!st.dirty.some((p) => /node_modules/.test(p)));
+  assert.equal((await call('worktrees.discard', { id: s.id })).kept, 'dirty');
+  assert.ok(fs.existsSync(path.join(s.cwd, 'out', 'app.db')));
+  assert.equal((await call('worktrees.discard', { id: s.id, force: true })).removed, true);
+  await call('sessions.remove', { id: s.id });
+});
+
+test('force only removes what the user was shown: a file that appeared after is kept; the real total is reported', async () => {
+  const s = await mk();
+  fs.writeFileSync(path.join(s.cwd, 'one.txt'), '1\n');
+  const st = await call('worktrees.status', { id: s.id });
+  assert.equal(st.dirtyTotal, 1);
+  fs.writeFileSync(path.join(s.cwd, 'two.txt'), '2\n');
+  let r = await call('worktrees.discard', { id: s.id, force: true, confirmed: st.dirty, confirmedTotal: st.dirtyTotal });
+  assert.equal(r.kept, 'dirty'); assert.equal(r.dirtyTotal, 2); assert.ok(fs.existsSync(path.join(s.cwd, 'two.txt')));
+  const again = await call('worktrees.status', { id: s.id });
+  r = await call('worktrees.discard', { id: s.id, force: true, confirmed: again.dirty, confirmedTotal: again.dirtyTotal });
+  assert.equal(r.removed, true);
+  await call('sessions.remove', { id: s.id });
+});
+
+test('a recorded repository that is not the worktree own is not trusted', async () => {
+  const s = await mk();
+  const other = path.join(t.home, 'web', 'otro'); fs.mkdirSync(path.join(other, 'sub'), { recursive: true });
+  git(other, 'init', '-q', '-b', 'main'); fs.writeFileSync(path.join(other, 'b.txt'), '1\n'); git(other, 'add', '-A'); git(other, ...ident, 'commit', '-q', '-m', 'f');
+  const key = `chatwt:${s.id}`; const rec = board.settingJson(key);
+  board.settingJson(key, { ...rec, repo: path.join(other, 'sub') });
+  const st = await call('worktrees.status', { id: s.id });
+  assert.equal(st.orphan, false); assert.equal(lower(board.settingJson(key).repo), lower(rec.repo));
+  assert.equal((await call('worktrees.discard', { id: s.id })).removed, true);
+  await call('sessions.remove', { id: s.id });
 });

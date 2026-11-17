@@ -254,9 +254,9 @@ ${block}` : ''}` });
     'worktrees.status': ({ id }) => chatTrees.status(str(id, 'conversación', 64)),
     'worktrees.list': () => chatTrees.all(),
     // Never loses work unasked: a folder with changes not committed stays unless force (the user confirmed it).
-    'worktrees.discard': async ({ id, force, branch }) => {
+    'worktrees.discard': async ({ id, force, branch, confirmed, confirmedTotal }) => {
       const sid = str(id, 'conversación', 64);
-      const r = await chatTrees.release(sid, { force: force === true, branch: oneOf(branch, ['auto', 'keep', 'delete'], 'rama', 'auto') });
+      const r = await chatTrees.release(sid, { force: force === true, branch: oneOf(branch, ['auto', 'keep', 'delete'], 'rama', 'auto'), confirmed: Array.isArray(confirmed) ? confirmed.slice(0, 50).map(String) : null, confirmedTotal: Number.isInteger(confirmedTotal) ? confirmedTotal : null });
       if (r.none) fail(tr('msg.chatWt.none'));
       if (r.removed) board.changed('sessions');
       return r;

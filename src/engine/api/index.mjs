@@ -198,7 +198,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
   const trash = trashTools({ board, sessions, orchestrator, scheduler, emit, log, conversationId });
   // a deleted chat takes its worktree with it only when nothing in it would be lost; otherwise the folder stays and the user is told
   const chatTrees = new ChatWorktrees({ board, sessions, log });
-  sessions.onRemoved = (s) => chatTrees.release(s.id).then((r) => { if (r.kept === 'dirty' || r.kept === 'locked' || r.kept === 'shared' || r.branchKept) board.notice(tr('msg.chatWt.kept', { title: s.title, dir: chatTrees.info(s.id)?.path ?? '' }), 'warning'); }).catch(() => {});
+  sessions.onRemoved = (s) => chatTrees.release(s.id).then((r) => { if (r.kept === 'dirty' || r.kept === 'unverified' || r.kept === 'locked' || r.kept === 'shared' || r.branchKept) board.notice(tr('msg.chatWt.kept', { title: s.title, dir: chatTrees.info(s.id)?.path ?? '' }), 'warning'); }).catch(() => {});
   // a chat taken out of the trash gets back the worktree that was discarded meanwhile
   const restore = trash.methods['sessions.restore'];
   trash.methods['sessions.restore'] = async (p, ...rest) => { const r = await restore(p, ...rest); try { await chatTrees.ensure(r.id); } catch (error) { board.notice(tr('msg.chatWt.restoreFailed', { title: r.title, error: error.message }), 'warning'); } return r; };

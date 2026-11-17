@@ -33,19 +33,40 @@ export class ChatWorktrees {
   // only a folder inside Orb's own chats folder is ever touched
   managed(dir) { const root = lower(ctx.paths.chatTrees); const d = lower(dir); return d.startsWith(root + path.sep); }
 
+  // The absolute git common dir of a folder ('' when git cannot say), for telling whether two folders share a repository.
+  async commonDir(dir) {
+    const r = await gitAsync(dir, {}, 'rev-parse', '--path-format=absolute', '--git-common-dir');
+    return r.status === 0 && r.stdout.trim() ? path.resolve(r.stdout.trim()) : '';
+  }
+  // Whether `repo` is the repository this record's worktree belongs to (any folder inside some other repo does not count).
+  async linked(repo, info) {
+    if (!(await isRepo(repo))) return false;
+    if (fs.existsSync(info.path)) { const mine = await this.commonDir(info.path); return Boolean(mine) && lower(mine) === lower(await this.commonDir(repo)); }
+    const list = await gitAsync(repo, {}, 'worktree', 'list', '--porcelain');
+    if (list.status === 0 && list.stdout.split(/\r?\n/).some((l) => l.startsWith('worktree ') && lower(l.slice(9)) === lower(info.path))) return true;
+    return (await gitAsync(repo, {}, 'rev-parse', '--verify', '--quiet', `refs/heads/${info.branch}`)).status === 0;
+  }
+
   // The repository of a record, found when it is used: the project may have been moved or renamed since the record was made.
-  // Falls back to the main repository the worktree itself points at; a changed answer is saved. '' when there is none.
+  // Order: the recorded one, the one the worktree itself points at, the project's current folder (repairing the worktree's
+  // link to it when the folder was moved by hand). A changed answer is saved. '' when there is none.
   async repoOf(id, info) {
-    if (await isRepo(info.repo)) return info.repo;
-    if (!fs.existsSync(info.path)) return '';
-    const r = await gitAsync(info.path, {}, 'rev-parse', '--path-format=absolute', '--git-common-dir');
-    const common = r.status === 0 ? r.stdout.trim().replace(/\//g, path.sep) : '';
-    if (!common) return '';
-    // a normal repository: the folder that holds .git; a bare one (or a separate git dir): the git dir itself is the repository
-    const repo = path.basename(common).toLowerCase() === '.git' ? path.dirname(common) : common;
-    if (!(await isRepo(repo))) return '';
-    info.repo = repo; this.board.settingJson(KEY(id), info);
-    return repo;
+    if (await this.linked(info.repo, info)) return info.repo;
+    const save = (repo) => { info.repo = repo; this.board.settingJson(KEY(id), info); return repo; };
+    if (fs.existsSync(info.path)) {
+      const common = await this.commonDir(info.path);
+      if (common) {
+        // a normal repository: the folder that holds .git; a bare one (or a separate git dir): the git dir itself is the repository
+        const repo = path.basename(common).toLowerCase() === '.git' ? path.dirname(common) : common;
+        if (await isRepo(repo)) return save(repo);
+      }
+    }
+    const now = this.board.project(info.project)?.path;
+    if (now && await isRepo(now)) {
+      if (fs.existsSync(info.path) && !(await this.commonDir(info.path))) await gitAsync(now, {}, 'worktree', 'repair', '--', info.path);
+      if (await this.linked(now, info)) return save(now);
+    }
+    return '';
   }
 
   // Follows a project that was renamed or moved: the records that pointed at the old name or folder point at the new one.
@@ -92,7 +113,8 @@ export class ChatWorktrees {
   }
 
   // What the chat's folder holds that would be lost: files not committed, and commits only its branch has.
-  async status(id) {
+  // full: keeps the whole list of files in `all` (release compares it with what the user confirmed); the list shown stops at 50.
+  async status(id, { full = false } = {}) {
     const info = this.info(id);
     if (!info) return { has: false };
     const out = { has: true, project: info.project, path: info.path, branch: info.branch, base: info.base, gone: !fs.existsSync(info.path), dirty: [], regenerable: 0, ahead: 0, merged: true };
@@ -106,7 +128,7 @@ export class ChatWorktrees {
     } else if (!out.gone) {
       // Ignored files too (.env, local databases): removing the folder would delete them. Only what a tool rebuilds
       // (REGENERABLE_DIRS) is told apart and does not count. Orb's own attachments folder is not work.
-      const [st, ig] = await Promise.all([gitAsync(info.path, {}, 'status', '--porcelain=v1', '-uall'), gitAsync(info.path, {}, 'status', '--porcelain=v1', '--ignored')]);
+      const [st, ig] = await Promise.all([gitAsync(info.path, {}, 'status', '--porcelain=v1', '-uall'), gitAsync(info.path, {}, 'status', '--porcelain=v1', '--ignored=matching')]);
       if (st.status !== 0 || ig.status !== 0) { out.unknown = true; out.dirty = ['?']; } else {
         const lines = (r) => r.stdout.split(/\r?\n/).filter(Boolean);
         const ignored = lines(ig).filter((l) => l.startsWith('!!')).map((l) => l.slice(3));
@@ -134,6 +156,8 @@ export class ChatWorktrees {
         out.merged = other.status === 0 && other.stdout.split(/\r?\n/).some((r) => r.trim() && !r.trim().startsWith(`refs/heads/${BRANCH_PREFIX}/`));
       }
     }
+    out.dirtyTotal = out.dirty.length;
+    if (full) out.all = out.dirty;
     out.dirty = out.dirty.slice(0, 50);
     out.safe = !out.dirty.length && (out.ahead === 0 || out.merged);
     return out;
@@ -142,8 +166,10 @@ export class ChatWorktrees {
   // Removes the folder of chat `id` and, when nothing would be lost, its branch.
   // force: the user confirmed losing the changes not committed (and, with branch: 'delete', the commits only the branch has).
   // branch: 'auto' (delete it only when it holds nothing that is not elsewhere), 'keep', 'delete' (needs force when it has commits of its own).
-  // → { removed, kept?: 'dirty'|'busy'|'locked'|'shared', branchKept?, dirty?, error? }; never throws.
-  async release(id, { force = false, branch = 'auto', closeLive = true } = {}) {
+  // → { removed, kept?: 'dirty'|'unverified'|'busy'|'locked'|'shared', branchKept?, dirty?, error? }; never throws.
+  // confirmed / confirmedTotal: the files the user saw when confirming force; a file that is not among them keeps the folder.
+  // unverified: remove even when Orb could not check the folder's content (no repository, or git failed); the app never sets it.
+  async release(id, { force = false, branch = 'auto', closeLive = true, confirmed = null, confirmedTotal = null, unverified = false } = {}) {
     const info = this.info(id);
     if (!info) return { removed: false, none: true };
     if (this.busy.has(id)) return { removed: false, kept: 'busy' };
@@ -156,8 +182,14 @@ export class ChatWorktrees {
       const owner = this.sessions.get(id);
       if (owner && this.sessions.isRunning(id)) return { removed: false, kept: 'busy' };
       if (owner && closeLive) { try { this.sessions.closeLive(id); } catch (error) { this.log(`cerrar chat ${id}: ${error.message}`); } }
-      const st = await this.status(id);
-      if (st.dirty.length && !force) return { removed: false, kept: 'dirty', dirty: st.dirty };
+      const st = await this.status(id, { full: true });
+      // what Orb cannot check it does not delete, not even with force
+      if (st.dirty.length && (st.unknown || st.orphan) && !unverified) return { removed: false, kept: 'unverified', dirty: st.dirty, dirtyTotal: st.dirtyTotal };
+      if (st.dirty.length && !force) return { removed: false, kept: 'dirty', dirty: st.dirty, dirtyTotal: st.dirtyTotal };
+      if (st.dirty.length && Array.isArray(confirmed)) {
+        const seen = new Set(confirmed);
+        if (st.all.slice(0, 50).some((f) => !seen.has(f)) || (confirmedTotal != null && st.dirtyTotal > confirmedTotal)) return { removed: false, kept: 'dirty', dirty: st.dirty, dirtyTotal: st.dirtyTotal, changed: true };
+      }
       if (this.sessions.isRunning(id)) return { removed: false, kept: 'busy' }; // a turn may have started while git was asked
       const repo = await this.repoOf(id, info);
       let removedFolder = st.gone;
