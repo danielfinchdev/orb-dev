@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { git, gitAsync, REF_PREFIX, isGitRepoAsync, repoRootAsync } from '../../platform/git.mjs';
-import { snapshotCommitAsync, diffBetween, RAW_GIT, RAW_INDEX, caseRenamed } from '../tasks/checkpoints.mjs';
+import { snapshotCommitAsync, diffBetween, RAW_GIT, RAW_INDEX, caseRenamed, indexId } from '../tasks/checkpoints.mjs';
 import { isSecretPath } from '../../shared/secrets-scan.mjs';
 
 const TURNS = `${REF_PREFIX}/turnos`;
@@ -63,6 +63,8 @@ async function locate(cwd) {
 }
 
 // The last photo of each conversation (a numbered one or a message's own): the next message may reuse it.
+// Trailer of a photo's commit message: when the folder was read (ms), so a rewind can tell which files were already there.
+export const PHOTO_AT = 'orb-photo-at: ';
 const lastPhoto = new Map();
 
 // True when the folder is still exactly the one in `ref`'s photo, so a message does not need a new photo. Same trust as the
@@ -76,12 +78,18 @@ async function unchanged(repo, rawIndex, ref) {
   try {
     const st = fs.statSync(rawIndex);
     fs.copyFileSync(rawIndex, tmp); fs.utimesSync(tmp, st.atime, st.mtime); // git's «racy» test compares file dates with the index's
+    // The marker says which HEAD this index was reconciled with. A file added with `add -f` and committed since is in HEAD
+    // but neither in the index nor in `ls-files --others`, so only a moved HEAD (or a missing marker) reveals it.
+    const [markedHead, markedId] = fs.readFileSync(`${rawIndex}.head`, 'utf8').trim().split(':');
+    const id = indexId(tmp);
+    if (!id || markedId !== id) return false;
     const env = { GIT_INDEX_FILE: tmp };
-    const [diff, others] = await Promise.all([
+    const [head, diff, others] = await Promise.all([
+      gitAsync(repo, {}, 'rev-parse', '--verify', '--quiet', 'HEAD'),
       gitAsync(repo, env, ...RAW_GIT, 'diff-index', '--quiet', `${ref}^{commit}`),
       gitAsync(repo, env, ...RAW_GIT, 'ls-files', '--others', '--exclude-standard', '-z'),
     ]);
-    if (diff.status !== 0 || others.status !== 0) return false;
+    if (head.stdout.trim() !== markedHead || diff.status !== 0 || others.status !== 0) return false;
     if (!others.stdout.split('\0').filter(Boolean).every(isSecretPath)) return false;
     return !(await caseRenamed(repo, rawIndex, tmp));
   } catch { return false; } finally { fs.rmSync(tmp, { force: true }); }
@@ -105,7 +113,9 @@ async function take(cwd, sid, { start, alive, mark = 0 }) {
   const have = await listRefs(repo, sid);
   const baseline = start && have.length > 0; // the numbered baseline is only the folder before the very first turn
   if (baseline && !mark) return null;
-  const snap = await snapshotCommitAsync(repo, { raw: true, always: true, message: `orb: turno ${sid}` });
+  const snap = await snapshotCommitAsync(repo, { raw: true, always: true, message: `orb: turno ${sid}
+
+${PHOTO_AT}${Date.now()}` });
   if (!snap) return null;
   // A message's own photo is not a turn: it carries no number, so «Cambios» never shows it.
   if (start && mark) {

@@ -187,7 +187,7 @@ export function missedBy(repo, after, full) {
 // Whole or not at all (another snapshot may be reading it): written beside and renamed over. Losing it only costs time.
 // A hash of the whole index file identifies that exact file. Its own trailing checksum is not enough: with index.skipHash
 // (turned on by feature.manyFiles) git writes it as zeros, and two different indexes may then end alike.
-const indexId = (file) => {
+export const indexId = (file) => {
   try { return crypto.createHash('sha1').update(fs.readFileSync(file)).digest('hex'); } catch { return null; }
 };
 // head: the HEAD the index was reconciled with (see restoreForced), kept beside it together with the index's checksum;
@@ -297,7 +297,8 @@ export async function foldsCaseOf(repo) {
 // last photo cannot be reused. `index` is a copy of the raw index (the caller's temporary one).
 export async function caseRenamed(repo, rawIndex, index) {
   if (!(await foldsCaseOf(repo))) return false;
-  const id = indexId(rawIndex);
+  // the id of the copy that was compared, not of the raw index as it is now: another snapshot may have replaced it since
+  const id = indexId(index);
   const since = scanSince(rawIndex, id);
   const listIndex = async () => (await gitAsync(repo, { GIT_INDEX_FILE: index }, 'ls-files', '-z')).stdout.split('\0').filter(Boolean);
   const known = knownDirs.get(rawIndex);
@@ -324,6 +325,23 @@ function* inBatches(list) {
     while (i < list.length && (!batch.length || size + list[i].length < 24000)) { size += list[i].length + 1; batch.push(list[i++]); }
     yield batch;
   }
+}
+
+// Blob ids of `paths` in `commit`, in one git process per batch.
+function blobsOf(repo, commit, paths) {
+  const ids = new Set();
+  for (const batch of inBatches(paths)) {
+    const out = git(repo, '--literal-pathspecs', 'ls-tree', '-r', '-z', commit, '--', ...batch);
+    for (const entry of out.stdout.split('\0')) { const m = /^\d+ blob ([0-9a-f]+)\t/.exec(entry); if (m) ids.add(m[1]); }
+  }
+  return ids;
+}
+// True when a folder between the repository and the file was created or changed (date of the folder itself) at or after `since`.
+function newFolderAbove(repo, rel, since) {
+  for (let dir = path.dirname(rel); dir && dir !== '.'; dir = path.dirname(dir)) {
+    try { const st = fs.lstatSync(path.join(repo, dir)); if (Math.max(st.birthtimeMs, st.ctimeMs) >= since) return true; } catch { return false; }
+  }
+  return false;
 }
 
 // ---- checkpoints of the "carpeta" mode
@@ -442,10 +460,13 @@ const MTIME_SLACK_MS = 2000;
 // Undo a task in "carpeta" mode: only the files it changed go back to how they were before it. A file that somebody changed
 // again after the task is left alone and reported. Never touches git history, branches or the index.
 // only: a Set of paths to limit it to (the files a fast snapshot missed, after a full one).
+// madeAfter: ms timestamp; a file that is in `after` but not in `before` is only removed when it was created after it. One
+// that already existed (e.g. it was ignored when `before` was taken and stopped being ignored later) or whose creation date
+// cannot be trusted is kept and reported.
 // safe: a file behind a link or junction is skipped, and a file that cannot be written or removed is reported in `skipped`
 // instead of stopping the whole undo (a conversation's rewind must always finish so that it can itself be undone).
-export function undoCheckpoint(before, after, { only = null, safe = false } = {}) {
-  const restored = []; const removed = []; const skipped = [];
+export function undoCheckpoint(before, after, { only = null, safe = false, madeAfter = null } = {}) {
+  const restored = []; const removed = []; const skipped = []; const kept = [];
   if (before.kind === 'git') {
     const repo = before.repo; const cfg = before.raw ? RAW_GIT : []; // a raw checkpoint is read and compared raw
     const attempt = (rel, write) => { try { write(); return true; } catch (error) { if (!safe) throw error; skipped.push(rel); return false; } };
@@ -454,6 +475,7 @@ export function undoCheckpoint(before, after, { only = null, safe = false } = {}
     // are the same file on disk: removing the added one would delete the file for good, so such a pair is put back by renaming.
     const twins = caseTwins(list, (a, b) => sameFile(path.join(repo, a), path.join(repo, b)));
     const respelled = new Set();
+    let deletedBlobs = null;
     for (const { status, path: rel } of list) {
       const file = path.join(repo, rel);
       if (twins.has(rel)) {
@@ -475,6 +497,8 @@ export function undoCheckpoint(before, after, { only = null, safe = false } = {}
       const blobAfter = git(repo, 'rev-parse', '--verify', '--quiet', `${after.commit}:${rel}`).stdout.trim();
       // (The snapshot after may have been taken either way: an older one, normalized.)
       const same = nowExists ? [cfg, ...(cfg.length ? [[]] : [])].some((c) => git(repo, ...c, 'hash-object', '--', file).stdout.trim() === blobAfter) : blobAfter === '';
+      // a file the task removed that is on disk and already as it was before: nothing to put back (a rewind kept it)
+      if (!same && status === 'D' && nowExists && !blobAfter && [cfg, ...(cfg.length ? [[]] : [])].some((c) => git(repo, ...c, 'hash-object', '--', file).stdout.trim() === git(repo, 'rev-parse', '--verify', '--quiet', `${before.commit}:${rel}`).stdout.trim())) continue;
       if (!same) { skipped.push(rel); continue; } // changed again after the task: the user decides
       // Only a file the task created is removed; whatever else cannot be read back is left alone and reported.
       if (status === 'A') {
@@ -482,6 +506,18 @@ export function undoCheckpoint(before, after, { only = null, safe = false } = {}
         // it may be the very same file, and when that cannot be told the file is left alone
         const low = rel.toLowerCase();
         if (nowExists && list.some((c) => c.status !== 'A' && c.path !== rel && c.path.toLowerCase() === low && fs.existsSync(path.join(repo, c.path)))) { skipped.push(rel); continue; }
+        if (nowExists && madeAfter !== null) {
+          // Made by the turn: created after the cutoff. A file that already existed and was written during the turn is kept.
+          // One brought from elsewhere or renamed keeps its creation and write dates but gets a new change date: removed.
+          // A file inside a moved folder keeps all three, so there the content of a deleted file and a folder that is new
+          // (or changed) since the cutoff stand for the move.
+          let st = null; try { st = fs.lstatSync(file); } catch { /* unreadable: keep it */ }
+          const made = st && (st.birthtimeMs >= madeAfter || (st.mtimeMs < madeAfter && st.ctimeMs >= madeAfter));
+          if (st && !made && st.mtimeMs < madeAfter && blobAfter) {
+            deletedBlobs ??= blobsOf(repo, before.commit, list.filter((c) => c.status === 'D').map((c) => c.path));
+            if (deletedBlobs.has(blobAfter) && newFolderAbove(repo, rel, madeAfter)) { /* a moved file: remove it */ } else { kept.push(rel); continue; }
+          } else if (!made) { kept.push(rel); continue; }
+        }
         if (nowExists && attempt(rel, () => fs.rmSync(file, { force: true }))) removed.push(rel);
         continue;
       }
@@ -491,7 +527,7 @@ export function undoCheckpoint(before, after, { only = null, safe = false } = {}
       if (old.status === 0) { if (attempt(rel, () => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, old.stdout); })) restored.push(rel); }
       else skipped.push(rel);
     }
-    return { restored, removed, skipped };
+    return { restored, removed, skipped, kept };
   }
   // Copy checkpoint: files that differ from the copy come back; files the task created (not in the copy) are removed.
   // A file is the user's, not the task's, when it was written after the task ended (mtime rule, always available because

@@ -92,7 +92,7 @@ export async function editMessage(sessions, id, itemId, text, { rewind = false }
     // the files go first: if they cannot be put back, nothing else changes
     let rewound = null;
     if (rewind) {
-      try { rewound = await rewindFiles(s.cwd, s.id, mark); }
+      try { rewound = await rewindFiles(s.cwd, s.id, mark, { messageAt: Date.parse(userItem(sessions, s, mark)?.at) }); }
       catch (error) { fail('msg.edit.rewindFailed', { message: error.message }); }
     }
     // From here the files are already back: whatever fails below, the line that undoes the rewind must exist.
@@ -100,7 +100,7 @@ export async function editMessage(sessions, id, itemId, text, { rewind = false }
     const note = () => {
       if (!rewound || noted) return; noted = true;
       sessions.addItem(id, 'system', 'rewind', { rescue: rewound.rescue, target: rewound.target, ref: rewound.ref, restored: rewound.restored, removed: rewound.removed,
-        skipped: rewound.skipped, files: rewound.files, undone: false, at: new Date().toISOString() });
+        skipped: rewound.skipped, kept: rewound.kept, files: rewound.files, undone: false, at: new Date().toISOString() });
     };
     let copy = null; let moved = false;
     try {
