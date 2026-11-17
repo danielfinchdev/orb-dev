@@ -46,7 +46,7 @@ object ChatTexts {
     const val YOU = "Tú"
     const val ORBE = "Orbe"
 
-    // Actions (A20)
+    // Actions
     const val ACTIONS_FOR = "Acciones del chat"
     const val PIN = "Fijar arriba"
     const val UNPIN = "Quitar de fijados"
@@ -77,7 +77,7 @@ object ChatTexts {
     const val ACTION_FAILED = "No se pudo hacer en el PC"
     const val ACTION_OFFLINE = "Sin conexión con el PC: no se ha cambiado nada."
 
-    // Search (A18)
+    // Search
     const val SEARCH_PLACEHOLDER = "Buscar en chats, mensajes, tareas y proyectos"
     const val SEARCH_HINT_SHORT = "Escribe al menos 2 letras. La búsqueda la hace el PC."
     const val SCOPE_ALL = "Todo"
@@ -94,7 +94,7 @@ object ChatTexts {
     const val PROJECT_ON_PC = "Proyecto en el PC"
 
     // Placeholders of routes other pieces fill in
-    // New chat (A30)
+    // New chat
     const val NEW_CHAT_SUBTITLE = "Se crea en el PC"
     const val NEW_CHAT_WITH = "¿Con quién quieres hablar?"
     const val NEW_CHAT_ORBE_HINT = "Reparte el trabajo entre los agentes"
@@ -120,7 +120,7 @@ object ChatTexts {
     const val NEW_CHAT_PICK = "Elegir"
     const val NEW_CHAT_USE_PC_CHOICE = "Dejar la elección del PC"
 
-    // Delete in the PC (A38)
+    // Delete in the PC
     const val DELETE_TITLE = "¿Eliminar este chat en el PC?"
     const val DELETE_CONFIRM = "Eliminar el chat en el PC"
     const val DELETE_NOTE = "La orden la ejecuta el PC. Las tareas y los cambios del chat no se tocan."
@@ -133,7 +133,7 @@ object ChatTexts {
     const val RESTORE_ASK = "Pedir al PC que lo restaure"
     const val CHAT_SOON = "El chat se abre aquí en el siguiente paso."
 
-    // Orbe chat (A04, A28, A29, A34, A35)
+    // Orbe chat
     const val MESSAGE_FIELD = "Mensaje para Orbe"
     const val SEND = "Enviar"
     const val STOP = "Parar"
@@ -165,7 +165,7 @@ object ChatTexts {
     const val PENDING_KEPT = "Tu mensaje sigue en este móvil y no se ha perdido."
     const val REMOVE = "Quitar"
 
-    // Permission mode (A04)
+    // Permission mode
     const val MODE_AUTO = "Auto"
     const val MODE_ASK = "Preguntar"
     const val MODE_AUTO_HINT = "El PC decide solo lo que es seguro"
@@ -197,7 +197,7 @@ object ChatTexts {
     const val TASK_WAITING_OK = "Espera tu aprobación"
     const val ON_PC_NOTE = "Se hace en el PC."
 
-    // Direct chat with an agent (A05, A34)
+    // Direct chat with an agent
     const val TOOL_RESULT = "Resultado"
     const val IMAGE_ATTACHED = "Imagen adjunta"
     const val STEER = "Corregir"
@@ -255,7 +255,7 @@ object ChatTexts {
         "leer" -> PERMISSION_READ; "editar" -> PERMISSION_EDIT; "auto" -> PERMISSION_AUTO; "total" -> PERMISSION_TOTAL; else -> p.orEmpty()
     }
 
-    // Deleted chat (A28)
+    // Deleted chat
     const val DELETED_TITLE = "Este chat se borró en el PC"
     const val DELETED_BODY = "Ya no está en el PC y se quitará de lo guardado en este móvil. Si ha sido un error, el borrado se puede deshacer en el PC."
     const val BACK_TO_CHATS = "Volver a Chats"

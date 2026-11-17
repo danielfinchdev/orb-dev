@@ -354,7 +354,7 @@ internal fun CardFrame(modifier: Modifier = Modifier, warn: Boolean = false, con
     )
 }
 
-/** A35: the agent's question with its options, «Otra respuesta» and «Saltar». Answered, it closes into one line. */
+/** The agent's question with its options, «Otra respuesta» and «Saltar». Answered, it closes into one line. */
 @Composable
 fun QuestionCard(m: ChatMessage, q: MsgCard.Question, online: Boolean, sending: Boolean, actions: CardActions) {
     AnimatedContent(
@@ -459,7 +459,7 @@ private fun ReportCard(m: ChatMessage, r: MsgCard.Report, online: Boolean, sendi
     }
 }
 
-/** An agent asks to run something: «Denegar», «Permitir» or «Permitir siempre aquí» (A04). */
+/** An agent asks to run something: «Denegar», «Permitir» or «Permitir siempre aquí». */
 @Composable
 private fun PermissionCard(m: ChatMessage, p: MsgCard.Permission, online: Boolean, sending: Boolean, actions: CardActions, modifier: Modifier) {
     val pending = p.status == "pending"

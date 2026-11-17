@@ -288,7 +288,7 @@ fun Message(title: String, body: String? = null, action: String? = null, onActio
     }
 }
 
-/** A38: the PC runs the deletion; the chat can be brought back right after from the «Deshacer» notice. */
+/** The PC runs the deletion; the chat can be brought back right after from the «Deshacer» notice. */
 @Composable
 internal fun DeleteChatDialog(title: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(

@@ -50,7 +50,7 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** A06: «Cámara», «Galería» and, when the PC reads them, «Archivo». */
+/** «Cámara», «Galería» and, when the PC reads them, «Archivo». */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AttachSheet(policy: UploadPolicy, launchers: AttachLaunchers, onDismiss: () -> Unit) {

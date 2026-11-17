@@ -116,7 +116,7 @@ object ApiMethods {
     val SESSIONS_SEND = m("sessions.send")
     val TASKS_CREATE = m("tasks.create")
 
-    // Approved on 2026-11-11; the PC side comes with 3.8.4, so older PCs lack them.
+    // Older PCs lack these: the PC side arrived with 3.8.4.
     val PC_SCREENSHOT = m("pc.screenshot", requiresPc = "3.8.4")
     val CONVERSATIONS_TRASH = m("conversations.trash", requiresPc = "3.8.4")
     val CONVERSATIONS_RESTORE = m("conversations.restore", requiresPc = "3.8.4")

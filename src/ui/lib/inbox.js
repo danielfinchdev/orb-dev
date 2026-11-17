@@ -166,7 +166,7 @@ export function snoozeTimes(now = new Date()) {
   return out;
 }
 
-// ---- «Prioridad»: the order of the list by what needs the user (the 3.8.7 tray «Te necesita»).
+// ---- «Prioridad»: the order of the list by what needs the user (the tray «Te necesita»).
 // 0 waits for the user (approval, permission, question, plan to review) · 1 finished with something unseen · 2 working ·
 // 3 the rest (completed ones always last).
 export const priorityRank = (x) => {

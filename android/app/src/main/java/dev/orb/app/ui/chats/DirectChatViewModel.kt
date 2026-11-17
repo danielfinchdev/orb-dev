@@ -34,7 +34,7 @@ data class DirectChatState(
     val items: List<DItem> = emptyList(),
     /** True once there is something to show: saved lines, or the first answer of the PC. */
     val loaded: Boolean = false,
-    /** The PC says this conversation no longer exists (A28). */
+    /** The PC says this conversation no longer exists. */
     val deleted: Boolean = false,
     /** The PC can bring a deleted chat back, so the deleted screen offers it. */
     val canRestore: Boolean = false,
@@ -293,7 +293,7 @@ class DirectChatViewModel(
         }
     }
 
-    /** A28: asks the PC to bring the chat back; the thread is read again once it does. */
+    /** Asks the PC to bring the chat back; the thread is read again once it does. */
     fun restore() {
         viewModelScope.launch {
             backend.restore(session).fold(
