@@ -111,17 +111,19 @@ function* snapshotFlow(repo, { raw = false, always: wanted = false, message = 'o
     // Remove anything secret-looking from the snapshot (also files already tracked by mistake) and verify.
     const listed = function* () { return (yield ask(env, 'ls-files', '-z')).stdout.split('\0').filter(Boolean); };
     let files = yield* listed();
+    let allDirs = null;
     if (raw) {
       // `add -A` keeps the old spelling of a file the user renamed only in letter case when core.ignorecase is on
       if (!foldsCase.has(repo)) foldsCase.set(repo, (yield ask({}, 'config', '--bool', 'core.ignorecase')).stdout.trim() === 'true');
       if (foldsCase.get(repo)) {
-        const moves = caseMovesSync(repo, files, changedDirs(repo, files, since));
+        allDirs = dirsOf(files);
+        const moves = caseMovesSync(repo, files, changedDirs(repo, allDirs, since));
         if (moves.length) {
           let ok = true;
           for (const batch of inBatches(moves.map((m) => m[0]))) ok = ((yield ask(env, ...cfg, '--literal-pathspecs', 'rm', '-q', '--cached', '--ignore-unmatch', '--', ...batch)).status === 0) && ok;
           for (const batch of inBatches(moves.map((m) => m[1]))) ok = ((yield ask(env, ...cfg, '--literal-pathspecs', 'add', '-f', '--', ...batch)).status === 0) && ok;
           if (!ok) return null;
-          files = yield* listed();
+          files = yield* listed(); allDirs = dirsOf(files);
         }
       }
     }
@@ -131,7 +133,7 @@ function* snapshotFlow(repo, { raw = false, always: wanted = false, message = 'o
     if (secret.length && (yield* listed()).some(isSecretPath)) return null;
     const tree = (yield ask(env, 'write-tree')).stdout.trim(); if (!tree) return null;
     // the marker is written only when HEAD's files are known to be in the index; a cold start or a failed restore leaves it out so the next snapshot checks
-    if (raw) keepRawIndex(tmp, rawIndex, reconciled ? head : null, startedAt);
+    if (raw) keepRawIndex(tmp, rawIndex, reconciled ? head : null, startedAt, allDirs);
     if (!always && head && tree === (yield ask({}, 'rev-parse', 'HEAD^{tree}')).stdout.trim()) return null;
     const commit = (yield ask(env, ...ORB_GIT, 'commit-tree', tree, ...(head ? ['-p', head] : []), '-m', message)).stdout.trim();
     return commit ? { commit, files: changed.length } : null;
@@ -153,19 +155,21 @@ export async function fullSnapshot(repo, { message }) {
     if ((await run(...RAW_GIT, 'add', '-A')).status !== 0) return null;
     const listed = async () => (await run('ls-files', '-z')).stdout.split('\0').filter(Boolean);
     let files = await listed();
-    const moves = (await foldsCaseOf(repo)) ? await caseMovesAsync(repo, files, changedDirs(repo, files, 0)) : [];
+    const folds = await foldsCaseOf(repo);
+    let allDirs = folds ? dirsOf(files) : null;
+    const moves = folds ? await caseMovesAsync(repo, files, changedDirs(repo, allDirs, 0)) : [];
     if (moves.length) {
       let ok = true;
       for (const batch of inBatches(moves.map((m) => m[0]))) ok = ((await run(...RAW_GIT, '--literal-pathspecs', 'rm', '-q', '--cached', '--ignore-unmatch', '--', ...batch)).status === 0) && ok;
       for (const batch of inBatches(moves.map((m) => m[1]))) ok = ((await run(...RAW_GIT, '--literal-pathspecs', 'add', '-f', '--', ...batch)).status === 0) && ok;
       if (!ok) return null;
-      files = await listed();
+      files = await listed(); allDirs = dirsOf(files);
     }
     const secret = files.filter(isSecretPath);
     for (const file of secret) await run('rm', '-q', '--cached', '--ignore-unmatch', '--', file);
     if (secret.length && (await listed()).some(isSecretPath)) return null;
     const tree = (await run('write-tree')).stdout.trim(); if (!tree) return null;
-    keepRawIndex(tmp, rawIndex, head, startedAt);
+    keepRawIndex(tmp, rawIndex, head, startedAt, allDirs);
     const commit = (await run(...ORB_GIT, 'commit-tree', tree, ...(head ? ['-p', head] : []), '-m', message)).stdout.trim();
     return commit ? { commit } : null;
   } finally { fs.rmSync(tmp, { force: true }); }
@@ -188,7 +192,7 @@ const indexId = (file) => {
 };
 // head: the HEAD the index was reconciled with (see restoreForced), kept beside it together with the index's checksum;
 // without one the marker is dropped. scanAt: when this snapshot started, kept the same way for the letter-case check.
-function keepRawIndex(tmp, rawIndex, head = null, scanAt = null) {
+function keepRawIndex(tmp, rawIndex, head = null, scanAt = null, dirs = null) {
   const part = `${rawIndex}.${process.pid}.${crypto.randomBytes(4).toString('hex')}`;
   try {
     fs.mkdirSync(path.dirname(rawIndex), { recursive: true });
@@ -197,6 +201,8 @@ function keepRawIndex(tmp, rawIndex, head = null, scanAt = null) {
     const tail = indexId(tmp);
     if (tail && head) { fs.writeFileSync(part, `${head}:${tail}`); fs.renameSync(part, `${rawIndex}.head`); }
     if (tail && scanAt) { fs.writeFileSync(part, `${scanAt}:${tail}`); fs.renameSync(part, `${rawIndex}.scan`); }
+    // the folder list of the index just written, so the next check need not list the index again (only in this process)
+    if (tail && dirs) { knownDirs.set(rawIndex, { id: tail, dirs }); if (knownDirs.size > 16) knownDirs.delete(knownDirs.keys().next().value); } else knownDirs.delete(rawIndex);
   } catch { fs.rmSync(part, { force: true }); }
 }
 
@@ -208,6 +214,7 @@ function keepRawIndex(tmp, rawIndex, head = null, scanAt = null) {
 // together with the checksum of the index it belongs to: a raw index another snapshot replaced, or one with no such
 // file, means checking every folder. The margin covers coarse file-system dates.
 const foldsCase = new Map();
+const knownDirs = new Map();
 const SCAN_MARGIN_MS = 2000;
 function scanSince(rawIndex, tail) {
   try {
@@ -215,16 +222,22 @@ function scanSince(rawIndex, tail) {
     return id === tail && Number(at) > 0 ? Number(at) - SCAN_MARGIN_MS : 0;
   } catch { return 0; }
 }
-function changedDirs(repo, files, since) {
-  const seen = new Set(); const dirs = new Set();
-  const visit = (dir) => {
-    if (seen.has(dir)) return; seen.add(dir);
+// every folder holding an index entry, ancestors included, as the index spells them ('' is the root)
+function dirsOf(files) {
+  const all = new Set();
+  for (const f of files) {
+    let dir = f.includes('/') ? f.slice(0, f.lastIndexOf('/')) : '';
+    while (!all.has(dir)) { all.add(dir); if (!dir) break; dir = dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : ''; }
+  }
+  return all;
+}
+function changedDirs(repo, all, since) {
+  const dirs = new Set();
+  for (const dir of all) {
     let hit = since <= 0;
     if (!hit) { try { hit = fs.statSync(path.join(repo, dir)).mtimeMs >= since; } catch { hit = true; } }
     if (hit) dirs.add(dir);
-    if (dir) visit(dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : '');
-  };
-  for (const f of files) visit(f.includes('/') ? f.slice(0, f.lastIndexOf('/')) : '');
+  }
   return dirs;
 }
 // [[old index path, path as spelled on disk]] for the files whose name differs from the disk only in letter case;
@@ -284,10 +297,17 @@ export async function foldsCaseOf(repo) {
 // last photo cannot be reused. `index` is a copy of the raw index (the caller's temporary one).
 export async function caseRenamed(repo, rawIndex, index) {
   if (!(await foldsCaseOf(repo))) return false;
-  const since = scanSince(rawIndex, indexId(rawIndex));
-  const files = (await gitAsync(repo, { GIT_INDEX_FILE: index }, 'ls-files', '-z')).stdout.split('\0').filter(Boolean);
-  const dirs = changedDirs(repo, files, since);
-  return dirs.size > 0 && (await caseMovesAsync(repo, files, dirs)).length > 0;
+  const id = indexId(rawIndex);
+  const since = scanSince(rawIndex, id);
+  const listIndex = async () => (await gitAsync(repo, { GIT_INDEX_FILE: index }, 'ls-files', '-z')).stdout.split('\0').filter(Boolean);
+  const known = knownDirs.get(rawIndex);
+  let files = null;
+  let all = known && known.id === id ? known.dirs : null;
+  if (!all) { files = await listIndex(); all = dirsOf(files); }
+  const dirs = changedDirs(repo, all, since);
+  if (!dirs.size) return false; // the usual case: no folder was touched since the last photo
+  files ??= await listIndex();
+  return (await caseMovesAsync(repo, files, dirs)).length > 0;
 }
 // The file system's own clock: the date of a file written now, so a folder's date and this stamp are comparable even on a
 // network drive whose clock differs from ours.
@@ -432,9 +452,7 @@ export function undoCheckpoint(before, after, { only = null, safe = false } = {}
     const list = changedBetween(repo, before.commit, after.commit).filter((c) => !only || only.has(c.path));
     // On a file system that ignores letter case, a file renamed only in case shows up as a deleted path and an added one that
     // are the same file on disk: removing the added one would delete the file for good, so such a pair is put back by renaming.
-    const idOf = (f) => { try { const st = fs.lstatSync(f, { bigint: true }); return st.ino ? `${st.dev}:${st.ino}` : null; } catch { return null; } };
-    const twins = caseTwins(list, (rel) => idOf(path.join(repo, rel)));
-    const kept = new Set(list.filter((c) => c.status !== 'A').map((c) => idOf(path.join(repo, c.path))).filter(Boolean));
+    const twins = caseTwins(list, (a, b) => sameFile(path.join(repo, a), path.join(repo, b)));
     const respelled = new Set();
     for (const { status, path: rel } of list) {
       const file = path.join(repo, rel);
@@ -447,7 +465,8 @@ export function undoCheckpoint(before, after, { only = null, safe = false } = {}
         if (![cfg, ...(cfg.length ? [[]] : [])].some((c) => git(repo, ...c, 'hash-object', '--', file).stdout.trim() === blobAfter)) { skipped.push(target); continue; }
         const old = gitBuffer(repo, ...cfg, 'cat-file', '--filters', `${before.commit}:${target}`);
         if (old.status !== 0) { skipped.push(target); continue; }
-        if (attempt(target, () => { respellPath(repo, rel, target, respelled); fs.writeFileSync(path.join(repo, target), old.stdout); })) restored.push(target);
+        try { respellPath(repo, rel, target, respelled); fs.writeFileSync(path.join(repo, target), old.stdout); restored.push(target); }
+        catch (error) { if (!safe) throw error; skipped.push(`${target}: ${error.message}`); }
         continue;
       }
 
@@ -459,8 +478,10 @@ export function undoCheckpoint(before, after, { only = null, safe = false } = {}
       if (!same) { skipped.push(rel); continue; } // changed again after the task: the user decides
       // Only a file the task created is removed; whatever else cannot be read back is left alone and reported.
       if (status === 'A') {
-        const id = nowExists ? idOf(file) : null;
-        if (id && kept.has(id)) { skipped.push(rel); continue; } // the same file as one that must stay
+        // never remove a path whose letter-case twin is on the list and still on disk: on a file system that ignores case
+        // it may be the very same file, and when that cannot be told the file is left alone
+        const low = rel.toLowerCase();
+        if (nowExists && list.some((c) => c.status !== 'A' && c.path !== rel && c.path.toLowerCase() === low && fs.existsSync(path.join(repo, c.path)))) { skipped.push(rel); continue; }
         if (nowExists && attempt(rel, () => fs.rmSync(file, { force: true }))) removed.push(rel);
         continue;
       }
@@ -503,17 +524,25 @@ export function undoCheckpoint(before, after, { only = null, safe = false } = {}
 }
 
 // Pairs of changed paths (a deleted one and an added one) that differ only in letter case and are one file on disk:
-// Map(path -> its partner). `idOf` gives a file's identity on disk, or null when it is not there.
-function caseTwins(list, idOf) {
+// Map(path -> its partner). `same(a, b)` tells whether two paths are one file on disk.
+function caseTwins(list, same) {
   const byLower = new Map(); const twins = new Map();
   for (const c of list) { const k = c.path.toLowerCase(); byLower.set(k, [...(byLower.get(k) ?? []), c]); }
   for (const group of byLower.values()) {
     const gone = group.filter((c) => c.status === 'D'); const added = group.filter((c) => c.status === 'A');
     if (gone.length !== 1 || added.length !== 1) continue;
-    const id = idOf(added[0].path);
-    if (id && id === idOf(gone[0].path)) { twins.set(added[0].path, gone[0].path); twins.set(gone[0].path, added[0].path); }
+    if (same(added[0].path, gone[0].path)) { twins.set(added[0].path, gone[0].path); twins.set(gone[0].path, added[0].path); }
   }
   return twins;
+}
+// Two paths are one file on disk: same device and inode; where the file system gives no inode (network drives), the same real
+// path once letter case is ignored. A path that is not there is never the same.
+function sameFile(a, b) {
+  try {
+    const x = fs.lstatSync(a, { bigint: true }); const y = fs.lstatSync(b, { bigint: true });
+    if (x.ino && y.ino) return x.dev === y.dev && x.ino === y.ino;
+    return fs.realpathSync.native(a).toLowerCase() === fs.realpathSync.native(b).toLowerCase();
+  } catch { return false; }
 }
 // Gives the file at `now` the spelling of `want` (folders first, then the name), through a temporary name because the
 // file system will not rename a name onto its own spelling. `done` remembers the folders already respelled.
@@ -522,7 +551,15 @@ function respellPath(repo, now, want, done) {
   for (let i = 0; i < a.length; i++) {
     if (a[i] === b[i]) continue;
     const from = path.join(repo, ...a.slice(0, i + 1)); const to = path.join(repo, ...b.slice(0, i + 1));
-    if (!done.has(from)) { const tmp = `${from}.orb-case-${process.pid}`; fs.renameSync(from, tmp); fs.renameSync(tmp, to); done.add(from); }
+    if (done.has(from)) continue;
+    const tmp = `${from}.orb-case-${process.pid}`;
+    fs.renameSync(from, tmp);
+    try { fs.renameSync(tmp, to); } catch (error) {
+      // put it back; if even that fails, say where the file is now
+      try { fs.renameSync(tmp, from); } catch { throw new Error(`no se pudo renombrar; queda como ${path.basename(tmp)}`); }
+      throw error;
+    }
+    done.add(from);
   }
 }
 

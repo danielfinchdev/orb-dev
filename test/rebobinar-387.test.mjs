@@ -459,7 +459,7 @@ folds('a full snapshot after a letter-case rename holds the new name', async () 
 
 // «Deshacer» / rewind from the photo taken after a letter-case rename back to the one before it: the file must stay, with
 // the old spelling and its content (the deleted and the added path are one file on disk, so removing one removes both).
-const undoCase = async (name, files, renames, edit = null) => {
+const undoCase = async (name, files, renames, edit = null, around = (run) => run()) => {
   const { undoCheckpoint } = await import('../src/domain/tasks/checkpoints.mjs');
   const r = forcedRepo(name); git(r, 'config', 'core.ignorecase', 'true');
   for (const [f, c] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(r, f)), { recursive: true }); fs.writeFileSync(path.join(r, f), c); }
@@ -468,7 +468,7 @@ const undoCase = async (name, files, renames, edit = null) => {
   for (const [from, to] of renames) recase(r, from, to);
   if (edit) edit(r);
   const after = snapshotCommit(r, { raw: true, always: true });
-  const out = undoCheckpoint({ kind: 'git', repo: r, commit: before.commit, raw: true }, { kind: 'git', repo: r, commit: after.commit }, { safe: true });
+  const out = around(() => undoCheckpoint({ kind: 'git', repo: r, commit: before.commit, raw: true }, { kind: 'git', repo: r, commit: after.commit }, { safe: true }));
   return { r, out };
 };
 const listing = (r, dir = '') => fs.readdirSync(path.join(r, dir)).sort();
@@ -530,4 +530,50 @@ test('caseRenamed does nothing without core.ignorecase', async () => {
   const r = forcedRepo('case7'); git(r, 'config', 'core.ignorecase', 'false'); warm(r);
   const raw = path.resolve(r, g(r, 'rev-parse', '--git-path', 'orb/index-raw'));
   assert.equal(await caseRenamed(r, raw, raw), false);
+});
+
+// A network drive gives no inode: two spellings of one file must still never be removed as if they were two files.
+const patched = (name, fake) => (run) => { const real = fs[name]; fs[name] = fake(real); try { return run(); } finally { fs[name] = real; } };
+const noInode = patched('lstatSync', (real) => (f, o) => { const st = real(f, o); return o?.bigint ? { dev: st.dev, ino: 0n } : st; });
+
+folds('with no inode from the file system, undoing README.md -> readme.md still keeps the file', async () => {
+  const { r, out } = await undoCase('case8a', { 'README.md': 'upper\n' }, [['README.md', 'readme.md']], null, noInode);
+  assert.deepEqual(out.removed, []);
+  assert.deepEqual(listing(r).filter((f) => /^readme/i.test(f)), ['README.md']);
+  assert.equal(read(r, 'README.md'), 'upper\n');
+});
+
+folds('with no inode, undoing a folder Lib -> lib keeps its files', async () => {
+  const { r } = await undoCase('case8b', { 'Lib/a.c': 'a\n', 'Lib/b.c': 'b\n' }, [['Lib', 'lib']], null, noInode);
+  assert.deepEqual(listing(r, listing(r).find((f) => /^lib$/i.test(f))), ['a.c', 'b.c']);
+});
+
+folds('when the second rename of a respelling fails, the file goes back and the reason is reported', async () => {
+  let n = 0;
+  const failSecond = patched('renameSync', (real) => (a, b) => { if (++n === 2) throw new Error('EPERM simulated'); return real(a, b); });
+  const { r, out } = await undoCase('case8c', { 'README.md': 'upper\n' }, [['README.md', 'readme.md']], null, failSecond);
+  assert.ok(out.skipped.some((x) => x.startsWith('README.md:') && x.includes('EPERM')), JSON.stringify(out));
+  assert.equal(listing(r).filter((f) => /^readme/i.test(f)).length, 1);
+  assert.equal(fs.readFileSync(path.join(r, listing(r).find((f) => /^readme/i.test(f))), 'utf8'), 'upper\n');
+});
+
+test('undoing a hard link the task made removes the link and keeps the file it points to', async () => {
+  const { undoCheckpoint } = await import('../src/domain/tasks/checkpoints.mjs');
+  const r = forcedRepo('case9'); warm(r);
+  const before = snapshotCommit(r, { raw: true, always: true });
+  fs.linkSync(path.join(r, 'a.txt'), path.join(r, 'b.txt'));
+  const after = snapshotCommit(r, { raw: true, always: true });
+  undoCheckpoint({ kind: 'git', repo: r, commit: before.commit, raw: true }, { kind: 'git', repo: r, commit: after.commit }, { safe: true });
+  assert.ok(!fs.existsSync(path.join(r, 'b.txt')));
+  assert.equal(read(r, 'a.txt'), 'one\n');
+});
+
+folds('caseRenamed uses the folder list of the last photo and lists the index only when a folder was touched', async () => {
+  const { caseRenamed } = await import('../src/domain/tasks/checkpoints.mjs');
+  const r = caseRepo('case10'); warm(r);
+  const raw = path.resolve(r, g(r, 'rev-parse', '--git-path', 'orb/index-raw'));
+  const old = new Date(Date.now() - 3600_000);
+  for (const d of ['lib/x', 'lib', '']) fs.utimesSync(path.join(r, d), old, old);
+  // with the index copy missing, any attempt to list it would fail loudly: an untouched folder tree needs none
+  assert.equal(await caseRenamed(r, raw, path.join(r, 'no-such-index')), false);
 });
