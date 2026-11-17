@@ -44,3 +44,10 @@ test('an option that merely looks like an exclude cannot hide a write to .git', 
   }
   for (const c of ['rg --exclude .git foo', 'grep -r --exclude-dir=.git x .', 'robocopy a b /XD .git', "rg --exclude '.git/' foo"]) assert.equal(auto(c).decision, 'allow', c);
 });
+
+test('value-less switches and non-excluding programs cannot hide a .git destination', () => {
+  for (const c of ['patch --ignore-whitespace .git p.diff', 'node -e "require(\'fs\').writeFileSync(process.argv.at(-1),\'x\')" --exclude .git',
+    'python -c "open(__import__(\'sys\').argv[-1],\'w\')" --ignore .git', 'xcopy evil.sh .git\\hooks\\ /EXCLUDE:a', 'cd .git && node w.js hooks/pre-commit',
+    'cd .git/hooks; node w.js pre-commit']) assert.equal(auto(c).decision, 'ask', c);
+  for (const c of ['rg --exclude .git foo', 'grep -r --exclude-dir=.git x .', 'robocopy a b /XD .git', 'zip -r a.zip . -x .git', 'cd src && node w.js']) assert.equal(auto(c).decision, 'allow', c);
+});
