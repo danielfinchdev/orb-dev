@@ -23,7 +23,6 @@ export default {
   'edit.imagesKept': 'The {n} attached file(s) are sent again with the edited message.',
   'edit.rewindOff': 'The files cannot be put back: {why}',
   'edit.empty': 'Write the message',
-  'edit.done': 'Message edited',
   'rewind.line': 'Files put back: {restored} restored, {removed} removed, {skipped} left alone',
   'rewind.lineUndone': 'Rewind undone: {restored} restored, {removed} removed, {skipped} left alone',
   'rewind.undo': 'Undo the rewind',

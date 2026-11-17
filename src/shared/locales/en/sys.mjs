@@ -45,7 +45,6 @@ export default {
   'sys.terminal.folderOnly': 'a terminal can only be opened in a folder',
   'sys.terminal.openFailed': 'could not open {name}: {error}',
   // Agents' browser
-  'sys.browser.title': 'Agent browser',
   'sys.browser.noUrl': 'the address is missing',
   'sys.browser.badUrl': 'invalid address: {url}',
   'sys.browser.httpOnly': 'only http or https pages can be opened',

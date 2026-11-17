@@ -136,7 +136,6 @@ export default {
   'turns.scopeHead': 'Against the last commit',
   'turns.scopeTurn': 'Turn {n}',
   'turns.empty': 'Nothing to show yet: changes appear when the agent finishes a turn in this folder.',
-  'turns.noGit': 'This panel needs the project folder to be a git repository.',
   'turns.noChanges': 'This turn changed no files.',
   'turns.partial': 'Partial diff: some files are too big or there are more files than shown.',
   'turns.next': 'Next change (Alt+↓)',
