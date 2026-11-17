@@ -69,3 +69,11 @@ test('typing (or sending) cancels the request: nothing is proposed afterwards', 
   assert.deepEqual(suggestions(), []);
   assert.equal(sessions.suggest.cancel(s.id), false, 'nothing left to cancel');
 });
+
+test('the setting can be saved from Ajustes (config.save)', async () => {
+  const { saveConfig } = await import('../src/platform/config.mjs');
+  try {
+    assert.equal(saveConfig({ suggestNext: true }).suggestNext, true);
+    assert.throws(() => saveConfig({ suggestNext: 'sí' }));
+  } finally { saveConfig({ suggestNext: false }); }
+});
