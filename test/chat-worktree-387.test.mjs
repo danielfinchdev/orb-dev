@@ -26,7 +26,9 @@ let t; let board; let api; let sessions; let repo; let sent;
 const call = (method, params = {}) => api.call(method, params, DESKTOP);
 const g = (dir, ...a) => git(dir, ...a).stdout.trim();
 const ident = ['-c', 'user.name=t', '-c', 'user.email=t@t'];
-const lower = (p) => path.resolve(p).toLowerCase();
+// git reports the long form of a path (runneradmin) while the test built it with the 8.3 one (RUNNER~1): compare the real folder
+const real = (p) => { try { return fs.realpathSync.native(path.resolve(p)); } catch { return path.resolve(p); } };
+const lower = (p) => real(p).toLowerCase();
 const pause = (ms) => new Promise((res) => setTimeout(res, ms));
 
 before(() => {

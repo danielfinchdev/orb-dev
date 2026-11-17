@@ -15,7 +15,7 @@ import { Scheduler } from '../src/engine/scheduler/index.mjs';
 import { buildApi } from '../src/engine/api/index.mjs';
 import { DESKTOP } from '../src/domain/security/permissions.mjs';
 import { git } from '../src/platform/git.mjs';
-import { commentsBlock } from '../src/domain/conversations/turns.mjs';
+import { commentsBlock, snapshotAfterTurn, snapshotBeforeTurn } from '../src/domain/conversations/turns.mjs';
 
 let t; let board; let api; let sessions; let repo; let sent;
 const call = (method, params = {}) => api.call(method, params, DESKTOP);
@@ -114,4 +114,15 @@ test('los comentarios sobre líneas viajan con el siguiente mensaje', async () =
   assert.equal(sent[0], 'Corrige esto\n\nComentarios sobre el código:\n- a.txt:2: usa otro nombre');
   assert.equal(commentsBlock([]), ''); assert.equal(commentsBlock('x'), '');
   assert.match(commentsBlock([{ path: 'a.txt', line: 3, side: 'old', text: 'a\nb' }]), /- a\.txt:3 \(antes del cambio\): a b/);
+});
+
+test('a photo that fails (the chat lookup throws) leaves no unhandled rejection behind', async () => {
+  const seen = []; const on = (e) => seen.push(e); process.on('unhandledRejection', on);
+  try {
+    const boom = () => { throw new Error('statement has been finalized'); };
+    assert.equal(await snapshotAfterTurn(repo, 'serial-check', boom), null);
+    assert.equal(await snapshotBeforeTurn(repo, 'serial-check', boom), null);
+    await new Promise((res) => setTimeout(res, 50));
+    assert.deepEqual(seen, []);
+  } finally { process.off('unhandledRejection', on); }
 });

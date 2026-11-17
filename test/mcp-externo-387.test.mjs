@@ -29,12 +29,14 @@ test('a token is shown once, only its hash is kept, and it opens only while it i
   const m = fakeMaster(); const t0 = 1_000_000;
   const made = createToken(m, { name: 'Claude Code', projects: ['web'], days: 2, now: t0 });
   assert.match(made.token, /^orbmcp_[0-9a-f]{12}_[A-Za-z0-9_-]{43}$/);
+  // the secret is base64url, so it may hold '_' itself: take everything after the id
+  const secret = made.token.split('_').slice(2).join('_');
   const stored = [...m.raw.values()].join('');
-  assert.ok(!stored.includes(made.token.split('_')[2]), 'the secret is not in the vault, only its hash');
+  assert.ok(!stored.includes(secret), 'the secret is not in the vault, only its hash');
   assert.deepEqual(checkToken(m, `Bearer ${made.token}`, t0 + 1000), { id: made.id, name: 'Claude Code', projects: ['web'] });
   assert.equal(checkToken(m, `Bearer ${made.token}`, t0 + 2 * 86_400_000 + 1), null, 'expired');
   assert.equal(checkToken(m, `Bearer ${made.token.slice(0, -1)}A`, t0), null, 'another secret of the same id');
-  assert.equal(checkToken(m, `Bearer orbmcp_${'0'.repeat(12)}_${made.token.split('_')[2]}`, t0), null, 'the secret under another id');
+  assert.equal(checkToken(m, `Bearer orbmcp_${'0'.repeat(12)}_${secret}`, t0), null, 'the secret under another id');
   assert.equal(checkToken(m, made.token, t0), null, 'without Bearer');
   assert.equal(checkToken(m, 'Bearer nonsense', t0), null);
   assert.equal(checkToken(m, undefined, t0), null);
