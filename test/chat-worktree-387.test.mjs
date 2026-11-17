@@ -21,6 +21,7 @@ import { ctx } from '../src/platform/context.mjs';
 import { git } from '../src/platform/git.mjs';
 import { ChatWorktrees } from '../src/engine/chat-worktrees.mjs';
 
+const releasing = new Set();
 let t; let board; let api; let sessions; let repo; let sent;
 const call = (method, params = {}) => api.call(method, params, DESKTOP);
 const g = (dir, ...a) => git(dir, ...a).stdout.trim();
@@ -35,6 +36,10 @@ before(() => {
   sessions = new Sessions(board, { emit });
   const scheduler = new Scheduler(board, sessions, { orchestrator, emit });
   api = buildApi({ board, sessions, orchestrator, scheduler, emit, log: () => {}, version: 'test', remoteRef: { current: null, link: null } });
+  // Removing a chat releases its worktree in the background, and that ends with `git worktree prune` on the shared repo.
+  // Tests that hide a worktree's .git must not overlap it, or prune would drop that worktree's administrative entry.
+  const onRemoved = sessions.onRemoved;
+  sessions.onRemoved = (s) => { const p = Promise.resolve(onRemoved(s)); releasing.add(p); p.finally(() => releasing.delete(p)); return p; };
   repo = path.join(t.home, 'web', 'arbol'); fs.mkdirSync(repo, { recursive: true });
   git(repo, 'init', '-q', '-b', 'main'); fs.writeFileSync(path.join(repo, 'a.txt'), 'one\n');
   git(repo, 'add', '-A'); git(repo, ...ident, 'commit', '-q', '-m', 'first');
@@ -52,7 +57,7 @@ after(() => { try { sessions.stopAll(); board.db.close(); } catch { /* closed */
 
 // force needs the fingerprint of the status the user confirmed
 const forceDiscard = async (id, extra = {}) => call('worktrees.discard', { id, force: true, fingerprint: (await call('worktrees.status', { id })).fingerprint, ...extra });
-const mk = (extra = {}) => call('sessions.create', { agent: 'claude', project: 'arbol', permission: 'editar', title: 'x', workspace: 'worktree', ...extra });
+const mk = async (extra = {}) => { await Promise.allSettled([...releasing]); return call('sessions.create', { agent: 'claude', project: 'arbol', permission: 'editar', title: 'x', workspace: 'worktree', ...extra }); };
 async function say(id, text) {
   const n = sent.length; await call('sessions.send', { id, text });
   await until(() => sent.length > n && !sessions.isRunning(id), 'turno');
