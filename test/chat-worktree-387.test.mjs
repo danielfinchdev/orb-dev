@@ -50,6 +50,8 @@ before(() => {
 });
 after(() => { try { sessions.stopAll(); board.db.close(); } catch { /* closed */ } t.cleanup(); });
 
+// force needs the fingerprint of the status the user confirmed
+const forceDiscard = async (id, extra = {}) => call('worktrees.discard', { id, force: true, fingerprint: (await call('worktrees.status', { id })).fingerprint, ...extra });
 const mk = (extra = {}) => call('sessions.create', { agent: 'claude', project: 'arbol', permission: 'editar', title: 'x', workspace: 'worktree', ...extra });
 async function say(id, text) {
   const n = sent.length; await call('sessions.send', { id, text });
@@ -77,7 +79,7 @@ test('Worktree: the chat gets its own folder (outside the repo, in Orb) and bran
   assert.equal(g(repo, 'status', '--porcelain'), '');
   assert.equal(g(repo, 'rev-parse', 'HEAD'), headBefore);
   assert.deepEqual((await call('worktrees.status', { id: s.id })).dirty, ['nuevo.txt']);
-  await call('worktrees.discard', { id: s.id, force: true });
+  await forceDiscard(s.id);
   await call('sessions.remove', { id: s.id }); await call('sessions.remove', { id: local.id });
 });
 
@@ -141,7 +143,7 @@ test('force, after the user confirmed, discards the uncommitted work but not the
   git(s.cwd, 'add', '-A'); git(s.cwd, ...ident, 'commit', '-q', '-m', 'c');
   fs.writeFileSync(path.join(s.cwd, 'sucio.txt'), 's\n');
   const branch = g(s.cwd, 'rev-parse', '--abbrev-ref', 'HEAD');
-  const r = await call('worktrees.discard', { id: s.id, force: true });
+  const r = await forceDiscard(s.id);
   assert.equal(r.removed, true); assert.equal(r.branchKept, true, 'its commit is not lost without asking for it');
   assert.ok(!fs.existsSync(s.cwd));
   assert.equal(g(repo, 'status', '--porcelain'), '');
@@ -173,7 +175,7 @@ test('archive → discard the worktree → restore: the chat gets its folder bac
 test('a folder is only touched when it is inside Orb\'s chats folder; a fork sharing it keeps it alive', async () => {
   const s = await mk();
   board.settingJson(`chatwt:${s.id}`, { ...board.settingJson(`chatwt:${s.id}`), path: repo });
-  const r = await call('worktrees.discard', { id: s.id, force: true });
+  const r = await forceDiscard(s.id);
   assert.equal(r.removed, false);
   assert.ok(fs.existsSync(path.join(repo, 'a.txt')), 'the project folder is never removed');
   const s2 = await mk();
@@ -213,7 +215,7 @@ test('review fixes: the root .git file is guarded, orb/ bases are refused, ignor
   assert.equal(r.kept, 'dirty'); assert.ok(r.dirty.some((p) => /detached/.test(p)));
   git(s.cwd, 'checkout', '-q', `orb/chat-${s.id.replace(/-/g, '').slice(0, 8)}`);
   assert.equal(g(s.cwd, 'rev-parse', 'HEAD'), tip);
-  r = await call('worktrees.discard', { id: s.id, force: true });
+  r = await forceDiscard(s.id);
   assert.equal(r.removed, true);
   await call('sessions.remove', { id: s.id });
   git(repo, 'branch', '-D', `orb/chat-${s.id.replace(/-/g, '').slice(0, 8)}`);
@@ -288,7 +290,7 @@ test('a deleted repository leaves an orphan folder: removed when empty, kept unt
   // Orb cannot see what an orphan holds: not even force from the app removes it; only the explicit engine option does
   r = await call('worktrees.discard', { id: b.id });
   assert.equal(r.kept, 'unverified'); assert.ok(fs.existsSync(b.cwd));
-  r = await call('worktrees.discard', { id: b.id, force: true });
+  r = await forceDiscard(b.id);
   assert.equal(r.kept, 'unverified'); assert.ok(fs.existsSync(b.cwd));
   r = await new ChatWorktrees({ board, sessions }).release(b.id, { force: true, unverified: true });
   assert.equal(r.removed, true); assert.ok(!fs.existsSync(b.cwd));
@@ -309,7 +311,7 @@ test('ignored files inside folders that are not themselves ignored stay work; an
   assert.ok(!st.dirty.some((p) => /node_modules/.test(p)));
   assert.equal((await call('worktrees.discard', { id: s.id })).kept, 'dirty');
   assert.ok(fs.existsSync(path.join(s.cwd, 'out', 'app.db')));
-  assert.equal((await call('worktrees.discard', { id: s.id, force: true })).removed, true);
+  assert.equal((await forceDiscard(s.id)).removed, true);
   await call('sessions.remove', { id: s.id });
 });
 
@@ -319,10 +321,10 @@ test('force only removes what the user was shown: a file that appeared after is 
   const st = await call('worktrees.status', { id: s.id });
   assert.equal(st.dirtyTotal, 1);
   fs.writeFileSync(path.join(s.cwd, 'two.txt'), '2\n');
-  let r = await call('worktrees.discard', { id: s.id, force: true, confirmed: st.dirty, confirmedTotal: st.dirtyTotal });
+  let r = await call('worktrees.discard', { id: s.id, force: true, fingerprint: st.fingerprint });
   assert.equal(r.kept, 'dirty'); assert.equal(r.dirtyTotal, 2); assert.ok(fs.existsSync(path.join(s.cwd, 'two.txt')));
   const again = await call('worktrees.status', { id: s.id });
-  r = await call('worktrees.discard', { id: s.id, force: true, confirmed: again.dirty, confirmedTotal: again.dirtyTotal });
+  r = await call('worktrees.discard', { id: s.id, force: true, fingerprint: again.fingerprint });
   assert.equal(r.removed, true);
   await call('sessions.remove', { id: s.id });
 });
@@ -335,6 +337,51 @@ test('a recorded repository that is not the worktree own is not trusted', async 
   board.settingJson(key, { ...rec, repo: path.join(other, 'sub') });
   const st = await call('worktrees.status', { id: s.id });
   assert.equal(st.orphan, false); assert.equal(lower(board.settingJson(key).repo), lower(rec.repo));
+  assert.equal((await call('worktrees.discard', { id: s.id })).removed, true);
+  await call('sessions.remove', { id: s.id });
+});
+
+test('force without the current fingerprint keeps the folder, also when the change is beyond the 50 files shown', async () => {
+  const s = await mk();
+  for (let i = 0; i < 60; i++) fs.writeFileSync(path.join(s.cwd, 'f' + String(i).padStart(2, '0') + '.txt'), 'x');
+  const st = await call('worktrees.status', { id: s.id });
+  assert.equal(st.dirtyTotal, 60); assert.equal(st.dirty.length, 50);
+  assert.equal((await call('worktrees.discard', { id: s.id, force: true })).changed, true); // no fingerprint at all
+  fs.rmSync(path.join(s.cwd, 'f59.txt')); fs.writeFileSync(path.join(s.cwd, 'f60.txt'), 'x'); // one leaves, one enters, outside the shown 50
+  const r = await call('worktrees.discard', { id: s.id, force: true, fingerprint: st.fingerprint });
+  assert.equal(r.kept, 'dirty'); assert.equal(r.changed, true); assert.ok(fs.existsSync(path.join(s.cwd, 'f60.txt')));
+  assert.equal((await forceDiscard(s.id)).removed, true);
+  await call('sessions.remove', { id: s.id });
+});
+
+test('ignored files that are not regenerable are listed before the rest, so they are among the 50 shown', async () => {
+  const s = await mk();
+  fs.writeFileSync(path.join(s.cwd, '.gitignore'), '.env');
+  git(s.cwd, 'add', '-A'); git(s.cwd, ...ident, 'commit', '-q', '-m', 'ign4');
+  for (let i = 0; i < 60; i++) fs.writeFileSync(path.join(s.cwd, 'a' + String(i).padStart(2, '0') + '.txt'), 'x');
+  fs.writeFileSync(path.join(s.cwd, '.env'), 'k=1');
+  const st = await call('worktrees.status', { id: s.id });
+  assert.ok(st.dirty[0].includes('.env'));
+  assert.equal((await forceDiscard(s.id)).removed, true);
+  await call('sessions.remove', { id: s.id });
+});
+
+test('a project folder that did not make the worktree is never used to repair it', async () => {
+  const s = await mk();
+  const key = 'chatwt:' + s.id; const rec = board.settingJson(key);
+  const other = path.join(t.home, 'web', 'ajeno'); fs.mkdirSync(other, { recursive: true });
+  git(other, 'init', '-q', '-b', 'main'); fs.writeFileSync(path.join(other, 'b.txt'), '1'); git(other, 'add', '-A'); git(other, ...ident, 'commit', '-q', '-m', 'f');
+  // the other repository administers a worktree under the same folder name
+  const twin = path.join(t.home, 'gemelo', path.basename(rec.path));
+  git(other, 'worktree', 'add', '-q', '-b', 'otra', twin);
+  const admin = path.join(other, '.git', 'worktrees', path.basename(rec.path), 'gitdir');
+  const before = fs.readFileSync(admin, 'utf8');
+  const gitFile = path.join(rec.path, '.git'); fs.renameSync(gitFile, gitFile + '.off');
+  board.run('UPDATE projects SET path = ? WHERE name = ?', other, 'arbol');
+  const st = await call('worktrees.status', { id: s.id });
+  assert.equal(st.orphan, true);
+  assert.equal(fs.readFileSync(admin, 'utf8'), before); assert.ok(!fs.existsSync(gitFile));
+  board.run('UPDATE projects SET path = ? WHERE name = ?', repo, 'arbol'); fs.renameSync(gitFile + '.off', gitFile);
   assert.equal((await call('worktrees.discard', { id: s.id })).removed, true);
   await call('sessions.remove', { id: s.id });
 });

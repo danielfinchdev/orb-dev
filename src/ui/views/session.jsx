@@ -628,7 +628,7 @@ async function offerWorktreeRemoval(s, t) {
     if (!(await confirm(t('session.wt.dirtyTitle', { count: total }), `${t('session.wt.dirtyBody')}
 
 ${shown}`, { ok: t('session.wt.force'), cancel: t('session.wt.keep'), danger: true }))) return;
-    const f = await act(call('worktrees.discard', { id: s.id, force: true, confirmed: st.dirty, confirmedTotal: total }));
+    const f = await act(call('worktrees.discard', { id: s.id, force: true, fingerprint: st.fingerprint }));
     if (f?.removed) notify({ title: f.branchKept ? t('session.wt.branchKept', { branch: st.branch }) : t('session.wt.done'), tone: f.branchKept ? 'info' : 'success' });
     else notify({ title: t(f?.changed ? 'session.wt.changed' : 'session.wt.dirty', { count: f?.dirtyTotal ?? total }), tone: 'warning' });
     return;

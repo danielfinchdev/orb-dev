@@ -6,6 +6,7 @@
 // settings (`chatwt:<session id>`); it outlives the chat when its folder had to be kept, so it can be discarded later.
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { ctx, tr } from '../platform/context.mjs';
 import { ATTACH_DIR } from './sessions.mjs';
 import { git, gitAsync, isGitRepo, repoRoot, slug, BRANCH_PREFIX } from '../platform/git.mjs';
@@ -47,6 +48,13 @@ export class ChatWorktrees {
     return (await gitAsync(repo, {}, 'rev-parse', '--verify', '--quiet', `refs/heads/${info.branch}`)).status === 0;
   }
 
+  // Whether `repo` holds this worktree's branch, or administers a worktree that points at this very folder.
+  async madeBy(repo, info) {
+    if ((await gitAsync(repo, {}, 'rev-parse', '--verify', '--quiet', `refs/heads/${info.branch}`)).status === 0) return true;
+    const common = await this.commonDir(repo); if (!common) return false;
+    try { return lower(fs.readFileSync(path.join(common, 'worktrees', path.basename(info.path), 'gitdir'), 'utf8').trim()) === lower(path.join(info.path, '.git')); } catch { return false; }
+  }
+
   // The repository of a record, found when it is used: the project may have been moved or renamed since the record was made.
   // Order: the recorded one, the one the worktree itself points at, the project's current folder (repairing the worktree's
   // link to it when the folder was moved by hand). A changed answer is saved. '' when there is none.
@@ -63,7 +71,9 @@ export class ChatWorktrees {
     }
     const now = this.board.project(info.project)?.path;
     if (now && await isRepo(now)) {
-      if (fs.existsSync(info.path) && !(await this.commonDir(info.path))) await gitAsync(now, {}, 'worktree', 'repair', '--', info.path);
+      // repair re-links the folder to that repository, so only when it is the one that made it: another repository may
+      // administer a worktree under the same folder name, and repairing would take that one over
+      if (fs.existsSync(info.path) && !(await this.commonDir(info.path)) && await this.madeBy(now, info)) await gitAsync(now, {}, 'worktree', 'repair', '--', info.path);
       if (await this.linked(now, info)) return save(now);
     }
     return '';
@@ -113,8 +123,8 @@ export class ChatWorktrees {
   }
 
   // What the chat's folder holds that would be lost: files not committed, and commits only its branch has.
-  // full: keeps the whole list of files in `all` (release compares it with what the user confirmed); the list shown stops at 50.
-  async status(id, { full = false } = {}) {
+  // The list shown stops at 50; dirtyTotal and fingerprint cover all of it.
+  async status(id) {
     const info = this.info(id);
     if (!info) return { has: false };
     const out = { has: true, project: info.project, path: info.path, branch: info.branch, base: info.base, gone: !fs.existsSync(info.path), dirty: [], regenerable: 0, ahead: 0, merged: true };
@@ -133,7 +143,7 @@ export class ChatWorktrees {
         const lines = (r) => r.stdout.split(/\r?\n/).filter(Boolean);
         const ignored = lines(ig).filter((l) => l.startsWith('!!')).map((l) => l.slice(3));
         out.regenerable = ignored.filter(regenerable).length;
-        out.dirty = [...lines(st).map((l) => l.slice(3)), ...ignored.filter((q) => !regenerable(q)).map((q) => `${q} (ignored)`)].filter((q) => !q.startsWith(`${ATTACH_DIR}/`));
+        out.dirty = [...ignored.filter((q) => !regenerable(q)).map((q) => `${q} (ignored)`), ...lines(st).map((l) => l.slice(3))].filter((q) => !q.startsWith(`${ATTACH_DIR}/`));
       }
       // commits made on a detached HEAD belong to no branch: they must be somewhere else before the folder goes
       const head = await gitAsync(info.path, {}, 'rev-parse', 'HEAD');
@@ -157,7 +167,8 @@ export class ChatWorktrees {
       }
     }
     out.dirtyTotal = out.dirty.length;
-    if (full) out.all = out.dirty;
+    // what a forced removal must have been shown: any change to the whole list, shown part or not, changes it
+    out.fingerprint = crypto.createHash('sha1').update([...out.dirty].sort().join(String.fromCharCode(10))).digest('hex');
     out.dirty = out.dirty.slice(0, 50);
     out.safe = !out.dirty.length && (out.ahead === 0 || out.merged);
     return out;
@@ -167,9 +178,9 @@ export class ChatWorktrees {
   // force: the user confirmed losing the changes not committed (and, with branch: 'delete', the commits only the branch has).
   // branch: 'auto' (delete it only when it holds nothing that is not elsewhere), 'keep', 'delete' (needs force when it has commits of its own).
   // → { removed, kept?: 'dirty'|'unverified'|'busy'|'locked'|'shared', branchKept?, dirty?, error? }; never throws.
-  // confirmed / confirmedTotal: the files the user saw when confirming force; a file that is not among them keeps the folder.
+  // fingerprint: the status's fingerprint when the user confirmed; force without the current one keeps the folder (the list changed).
   // unverified: remove even when Orb could not check the folder's content (no repository, or git failed); the app never sets it.
-  async release(id, { force = false, branch = 'auto', closeLive = true, confirmed = null, confirmedTotal = null, unverified = false } = {}) {
+  async release(id, { force = false, branch = 'auto', closeLive = true, fingerprint = null, unverified = false } = {}) {
     const info = this.info(id);
     if (!info) return { removed: false, none: true };
     if (this.busy.has(id)) return { removed: false, kept: 'busy' };
@@ -182,14 +193,11 @@ export class ChatWorktrees {
       const owner = this.sessions.get(id);
       if (owner && this.sessions.isRunning(id)) return { removed: false, kept: 'busy' };
       if (owner && closeLive) { try { this.sessions.closeLive(id); } catch (error) { this.log(`cerrar chat ${id}: ${error.message}`); } }
-      const st = await this.status(id, { full: true });
+      const st = await this.status(id);
       // what Orb cannot check it does not delete, not even with force
       if (st.dirty.length && (st.unknown || st.orphan) && !unverified) return { removed: false, kept: 'unverified', dirty: st.dirty, dirtyTotal: st.dirtyTotal };
       if (st.dirty.length && !force) return { removed: false, kept: 'dirty', dirty: st.dirty, dirtyTotal: st.dirtyTotal };
-      if (st.dirty.length && Array.isArray(confirmed)) {
-        const seen = new Set(confirmed);
-        if (st.all.slice(0, 50).some((f) => !seen.has(f)) || (confirmedTotal != null && st.dirtyTotal > confirmedTotal)) return { removed: false, kept: 'dirty', dirty: st.dirty, dirtyTotal: st.dirtyTotal, changed: true };
-      }
+      if (force && !unverified && fingerprint !== st.fingerprint) return { removed: false, kept: 'dirty', dirty: st.dirty, dirtyTotal: st.dirtyTotal, changed: true };
       if (this.sessions.isRunning(id)) return { removed: false, kept: 'busy' }; // a turn may have started while git was asked
       const repo = await this.repoOf(id, info);
       let removedFolder = st.gone;
