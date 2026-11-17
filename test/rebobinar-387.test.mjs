@@ -625,7 +625,8 @@ test('a rewind keeps a file that existed before the message but was ignored then
   await snapshotAfterTurn(r, sid, alive);
   const out = await rewindFiles(r, sid, 1);
   assert.equal(read(r, 'gen', 'clientes.csv'), 'only here\n');
-  assert.ok(out.files.skipped.some((f) => f.startsWith('gen/clientes.csv')));
+  assert.ok(out.files.kept.includes('gen/clientes.csv'));
+  assert.equal(out.skipped, 0);
   assert.ok(!fs.existsSync(path.join(r, 'made.txt')));
   assert.ok(out.files.removed.includes('made.txt'));
   await undoRewindFiles(r, out);
@@ -658,6 +659,41 @@ test('with a reused photo, a file ignored then that appeared before the message 
   await snapshotAfterTurn(r, sid, alive);
   const out = await rewindFiles(r, sid, 3, { messageAt });
   assert.equal(read(r, 'gen', 'mine.csv'), 'before the message\n');
-  assert.ok(out.files.skipped.some((f) => f.startsWith('gen/mine.csv')));
+  assert.ok(out.files.kept.includes('gen/mine.csv'));
   assert.ok(!fs.existsSync(path.join(r, 'made.txt')));
+});
+
+// A rename or a move keeps the creation date, but the file at its new place is the turn's doing: only the original stays.
+async function movedTurn(name, prepare, act) {
+  const r = forcedRepo(name); const sid = name;
+  prepare(r);
+  git(r, 'add', '-A'); git(r, ...ident, 'commit', '-q', '-m', 'files');
+  await sleep(100);
+  await snapshotBeforeTurn(r, sid, alive, { mark: 1 });
+  await sleep(100);
+  act(r);
+  await snapshotAfterTurn(r, sid, alive);
+  const out = await rewindFiles(r, sid, 1);
+  return { r, out };
+}
+const put = (r, f, text) => { fs.mkdirSync(path.dirname(path.join(r, f)), { recursive: true }); fs.writeFileSync(path.join(r, f), text); };
+
+test('a git mv of the turn is undone: the original comes back and the new name goes', async () => {
+  const { r, out } = await movedTurn('mv-git', (d) => put(d, 'src/a.js', 'aaa\n'), (d) => { fs.mkdirSync(path.join(d, 'lib')); git(d, 'mv', 'src/a.js', 'lib/b.js'); });
+  assert.equal(read(r, 'src', 'a.js'), 'aaa\n');
+  assert.ok(!fs.existsSync(path.join(r, 'lib', 'b.js')));
+  assert.equal(out.kept, 0);
+});
+
+test('a folder of two files moved by the turn is undone', async () => {
+  const { r } = await movedTurn('mv-dir', (d) => { put(d, 'old/x.txt', 'xx\n'); put(d, 'old/y.txt', 'yy\n'); }, (d) => fs.renameSync(path.join(d, 'old'), path.join(d, 'new')));
+  assert.equal(read(r, 'old', 'x.txt'), 'xx\n'); assert.equal(read(r, 'old', 'y.txt'), 'yy\n');
+  assert.ok(!fs.existsSync(path.join(r, 'new', 'x.txt'))); assert.ok(!fs.existsSync(path.join(r, 'new', 'y.txt')));
+});
+
+test('a file the turn brought from outside the repository is removed', async () => {
+  const outside = path.join(t.home, 'outside-file.txt'); fs.writeFileSync(outside, 'from outside\n');
+  await sleep(100);
+  const { r } = await movedTurn('mv-outside', () => {}, (d) => fs.renameSync(outside, path.join(d, 'brought.txt')));
+  assert.ok(!fs.existsSync(path.join(r, 'brought.txt')));
 });

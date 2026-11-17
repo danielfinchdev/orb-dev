@@ -26,7 +26,8 @@ async function prune(repo, sid) {
 // The photo a rewind to `itemId` would go back to, or null.
 export const rewindTarget = (cwd, sid, itemId) => photoBefore(cwd, sid, itemId);
 
-// → { rescue, target, ref, restored, removed, skipped } (paths capped; the counts are whole). Throws when no rescue copy can be made.
+// kept: files that already existed when the message was sent, so they stay (not a failure, unlike `skipped`).
+// → { rescue, target, ref, restored, removed, skipped, kept } (paths capped; the counts are whole). Throws when no rescue copy can be made.
 // messageAt: when the user sent the message (ms). A reused photo is older than the message, and a file that existed when the
 // message was sent is kept even if the photo does not hold it.
 export async function rewindFiles(cwd, sid, itemId, { messageAt = 0 } = {}) {
@@ -48,8 +49,8 @@ export async function rewindFiles(cwd, sid, itemId, { messageAt = 0 } = {}) {
   const photoAt = exact > 0 ? exact : taken > 0 ? taken * 1000 + 2000 : Infinity;
   const madeAfter = Math.max(photoAt, Number.isFinite(messageAt) ? messageAt : 0);
   const out = undoCheckpoint({ kind: 'git', repo, commit: target, raw: true }, { commit: rescue.commit }, { safe: true, madeAfter });
-  return { rescue: rescue.commit, target, ref, restored: out.restored.length, removed: out.removed.length, skipped: out.skipped.length,
-    files: { restored: cut(out.restored), removed: cut(out.removed), skipped: cut(out.skipped) } };
+  return { rescue: rescue.commit, target, ref, restored: out.restored.length, removed: out.removed.length, skipped: out.skipped.length, kept: out.kept.length,
+    files: { restored: cut(out.restored), removed: cut(out.removed), skipped: cut(out.skipped), kept: cut(out.kept) } };
 }
 
 // Puts back what the rewind removed or replaced, only in files still as the rewind left them (the rest come back as

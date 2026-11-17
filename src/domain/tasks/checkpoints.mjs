@@ -449,7 +449,7 @@ const MTIME_SLACK_MS = 2000;
 // safe: a file behind a link or junction is skipped, and a file that cannot be written or removed is reported in `skipped`
 // instead of stopping the whole undo (a conversation's rewind must always finish so that it can itself be undone).
 export function undoCheckpoint(before, after, { only = null, safe = false, madeAfter = null } = {}) {
-  const restored = []; const removed = []; const skipped = [];
+  const restored = []; const removed = []; const skipped = []; const kept = [];
   if (before.kind === 'git') {
     const repo = before.repo; const cfg = before.raw ? RAW_GIT : []; // a raw checkpoint is read and compared raw
     const attempt = (rel, write) => { try { write(); return true; } catch (error) { if (!safe) throw error; skipped.push(rel); return false; } };
@@ -458,6 +458,7 @@ export function undoCheckpoint(before, after, { only = null, safe = false, madeA
     // are the same file on disk: removing the added one would delete the file for good, so such a pair is put back by renaming.
     const twins = caseTwins(list, (a, b) => sameFile(path.join(repo, a), path.join(repo, b)));
     const respelled = new Set();
+    let deletedBlobs = null;
     for (const { status, path: rel } of list) {
       const file = path.join(repo, rel);
       if (twins.has(rel)) {
@@ -479,6 +480,8 @@ export function undoCheckpoint(before, after, { only = null, safe = false, madeA
       const blobAfter = git(repo, 'rev-parse', '--verify', '--quiet', `${after.commit}:${rel}`).stdout.trim();
       // (The snapshot after may have been taken either way: an older one, normalized.)
       const same = nowExists ? [cfg, ...(cfg.length ? [[]] : [])].some((c) => git(repo, ...c, 'hash-object', '--', file).stdout.trim() === blobAfter) : blobAfter === '';
+      // a file the task removed that is on disk and already as it was before: nothing to put back (a rewind kept it)
+      if (!same && status === 'D' && nowExists && !blobAfter && [cfg, ...(cfg.length ? [[]] : [])].some((c) => git(repo, ...c, 'hash-object', '--', file).stdout.trim() === git(repo, 'rev-parse', '--verify', '--quiet', `${before.commit}:${rel}`).stdout.trim())) continue;
       if (!same) { skipped.push(rel); continue; } // changed again after the task: the user decides
       // Only a file the task created is removed; whatever else cannot be read back is left alone and reported.
       if (status === 'A') {
@@ -487,8 +490,13 @@ export function undoCheckpoint(before, after, { only = null, safe = false, madeA
         const low = rel.toLowerCase();
         if (nowExists && list.some((c) => c.status !== 'A' && c.path !== rel && c.path.toLowerCase() === low && fs.existsSync(path.join(repo, c.path)))) { skipped.push(rel); continue; }
         if (nowExists && madeAfter !== null) {
-          let born = 0; try { born = fs.lstatSync(file).birthtimeMs; } catch { /* unreadable: keep it */ }
-          if (!(born >= madeAfter)) { skipped.push(`${rel}: ya existía antes del mensaje`); continue; }
+          // A rename keeps the creation date but changes the change date, so the later of the two tells a file the turn
+          // made or moved here. A file whose content is that of a deleted one is a rename or a copy of it.
+          let born = 0; try { const st = fs.lstatSync(file); born = Math.max(st.birthtimeMs, st.ctimeMs); } catch { /* unreadable: keep it */ }
+          if (!(born >= madeAfter)) {
+            deletedBlobs ??= new Set(list.filter((c) => c.status === 'D').map((c) => git(repo, 'rev-parse', '--verify', '--quiet', `${before.commit}:${c.path}`).stdout.trim()).filter(Boolean));
+            if (!(blobAfter && deletedBlobs.has(blobAfter))) { kept.push(rel); continue; }
+          }
         }
         if (nowExists && attempt(rel, () => fs.rmSync(file, { force: true }))) removed.push(rel);
         continue;
@@ -499,7 +507,7 @@ export function undoCheckpoint(before, after, { only = null, safe = false, madeA
       if (old.status === 0) { if (attempt(rel, () => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, old.stdout); })) restored.push(rel); }
       else skipped.push(rel);
     }
-    return { restored, removed, skipped };
+    return { restored, removed, skipped, kept };
   }
   // Copy checkpoint: files that differ from the copy come back; files the task created (not in the copy) are removed.
   // A file is the user's, not the task's, when it was written after the task ended (mtime rule, always available because

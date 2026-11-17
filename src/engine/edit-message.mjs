@@ -100,7 +100,7 @@ export async function editMessage(sessions, id, itemId, text, { rewind = false }
     const note = () => {
       if (!rewound || noted) return; noted = true;
       sessions.addItem(id, 'system', 'rewind', { rescue: rewound.rescue, target: rewound.target, ref: rewound.ref, restored: rewound.restored, removed: rewound.removed,
-        skipped: rewound.skipped, files: rewound.files, undone: false, at: new Date().toISOString() });
+        skipped: rewound.skipped, kept: rewound.kept, files: rewound.files, undone: false, at: new Date().toISOString() });
     };
     let copy = null; let moved = false;
     try {
