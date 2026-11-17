@@ -19,8 +19,11 @@ const refDir = (sid) => { if (!ID.test(String(sid))) throw new Error('conversaci
 // one chain per conversation: the snapshot at the start and at the end of a turn never run at once, so numbers do not repeat.
 const chains = new Map();
 const serial = (sid, fn) => {
-  const next = (chains.get(sid) ?? Promise.resolve()).catch(() => {}).then(fn);
-  chains.set(sid, next.finally(() => { if (chains.get(sid) === next) chains.delete(sid); }));
+  const next = (chains.get(sid) ?? Promise.resolve()).then(fn);
+  // The stored link must never reject: nobody awaits it, so a failed photo (git gone, the database already closed at
+  // shutdown) would surface as an unhandledRejection. The caller still gets the real error through `next`.
+  const link = next.then(() => {}, () => {}).then(() => { if (chains.get(sid) === link) chains.delete(sid); });
+  chains.set(sid, link);
   return next;
 };
 
