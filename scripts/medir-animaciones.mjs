@@ -113,17 +113,12 @@ for (const skin of SKINS) {
     if (process.env.MEDIR_HIDE) await page.evaluate((sel) => { for (const el of document.querySelectorAll(sel)) el.style.display = 'none'; }, process.env.MEDIR_HIDE);
     const row = { skin, mode, ...(await idleCost(run)), mainThread: await mainThreadAnimations(page), ...(await typing(page)) };
     if (shots) {
-      // Only the backdrop, every animation of it stopped at the same moment: two builds' pictures can be compared.
-      await page.addStyleTag({ content: 'body * { visibility: hidden !important; } .scene, .scene * { visibility: visible !important; }' });
-      await page.evaluate(() => { for (const a of document.getAnimations()) { if (a.effect?.target?.closest?.('.scene')) { a.pause(); a.currentTime = 20000; } } });
+      // Only the backdrop (the shader canvas, components/scene.jsx), frozen on its still frame: two builds' pictures can be compared.
+      await page.addStyleTag({ content: 'body * { visibility: hidden !important; } canvas.orb-shader { visibility: visible !important; }' });
+      await page.evaluate(() => { document.documentElement.dataset.motion = 'minima'; });
       await wait(300);
       fs.mkdirSync(shots, { recursive: true });
       await page.screenshot({ path: path.join(shots, `${skin}-${mode}.png`) });
-      // and the bars' art over it (its moving pieces too: Retro's invaders, Nube's sweets), stopped the same way.
-      await page.addStyleTag({ content: '.theme-band { visibility: visible !important; } .theme-band * { visibility: hidden !important; } .theme-band .band-art, .theme-band .band-art * { visibility: visible !important; }' });
-      await page.evaluate(() => { for (const a of document.getAnimations()) { if (a.effect?.target?.closest?.('.scene, .theme-band')) { a.pause(); a.currentTime = 20000; } } });
-      await wait(300);
-      await page.screenshot({ path: path.join(shots, `${skin}-${mode}-banda.png`) });
     }
     results.runs.push(row);
     console.error(JSON.stringify(row));

@@ -80,37 +80,23 @@ test('Retro: field borders, the focus ring and the empty chart bars are visible'
 });
 
 test('Retro: the chat text reads over the brightest piece of the backdrop', () => {
-  // a column of invaders (opacity 0.15 of the phosphor) under the 24 % veil of the page colour
+  // the phosphor at its brightest under the part of the page colour that the veil lets through
   const brightest = mix(C('background'), mix(C('primary'), C('background'), 0.22), 0.24);
   assert.ok(ratio(C('foreground'), brightest) >= 4.5, ratio(C('foreground'), brightest).toFixed(2));
   assert.ok(ratio(C('muted-foreground'), brightest) >= 4.5, ratio(C('muted-foreground'), brightest).toFixed(2));
-  const scene = read('src', 'ui', 'themes', 'scene-retro.css');
-  assert.match(scene, /--frost-tint: 24%/);
-  for (const [, o] of scene.matchAll(/\.rt-(?:column|crab|rocket)[^{]*\{[^}]*?opacity: ([\d.]+)/g)) assert.ok(+o <= 0.22, `invader opacity ${o}`);
 });
 
 test('Retro tokens are on html[data-skin] alone: .dark changes nothing, and no light variant remains', () => {
-  const all = ['skins', 'scene', 'scene-retro'].map((n) => read('src', 'ui', 'themes', `${n}.css`)).join('') + read('src', 'ui', 'app.css');
+  const all = ['skins'].map((n) => read('src', 'ui', 'themes', `${n}.css`)).join('') + read('src', 'ui', 'app.css');
   assert.doesNotMatch(all, /html:not\(\.dark\)[^{]*\[data-skin="retro"\]|html\[data-skin="retro"\]:not\(\.dark\)/);
   assert.doesNotMatch(all, /html\.dark\[data-skin="retro"\] \{\s*--/);
   assert.doesNotMatch(read('src', 'ui', 'tokens.css'), /html\[data-skin\]:not\(/, 'every theme has its own soft / faint tokens now');
 });
 
-test('Retro keeps R11: no backdrop-filter, no filter on moving layers, nothing but transform / opacity animated', () => {
-  const scene = read('src', 'ui', 'themes', 'scene-retro.css');
-  assert.doesNotMatch(scene, /backdrop-filter: (?!none)/);
-  assert.doesNotMatch(scene.replace(/\.orb-img \{[^}]*\}/, ''), /[^-]filter:/);
-  const frames = [...scene.matchAll(/@keyframes (rt-[\w-]+) \{([\s\S]*?\})\s*\}/g)];
-  assert.ok(frames.length > 0, 'Retro defines rt-* keyframes');
-  for (const [, name, body] of frames) {
-    const props = [...body.matchAll(/([a-z-]+)\s*:/g)].map((m) => m[1]);
-    assert.ok(props.every((x) => x === 'transform' || x === 'opacity'), `${name} animates only transform / opacity: ${props}`);
-  }
-  assert.match(scene, /html\[data-skin="retro"\] \[data-slot="composer"\] \{[^}]*backdrop-filter: none/);
-});
-
-test('Retro buttons are written between brackets without changing the accessible text', () => {
-  const scene = read('src', 'ui', 'themes', 'scene-retro.css');
-  assert.match(scene, /content: "\[" \/ ""/);
-  assert.match(scene, /content: "\]" \/ ""/);
+test('Retro: the CRT glass takes no clicks and the phosphor is a text-shadow, not a filter', () => {
+  const skins = read('src', 'ui', 'themes', 'skins.css');
+  assert.match(skins, /^\.crt \{[^}]*pointer-events: none/m);
+  assert.match(skins, /html\[data-skin="retro"\] body \{ text-shadow: 0 0 6px/);
+  assert.doesNotMatch(skins, /html\[data-skin="retro"\][^{]*\{[^}]*[^-]filter:/);
+  assert.match(read('src', 'ui', 'components', 'scene.jsx'), /skin === 'retro' \? <div className="crt"/);
 });

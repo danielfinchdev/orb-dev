@@ -207,6 +207,52 @@ test('no theme rule switches off the animations or the sounds: those are setting
   }
 });
 
+// ---- The backdrops: one WebGL canvas per window (lib/shaders.js, mounted by components/scene.jsx). ----
+test('every theme with a background has its shader, and the module keeps it cheap', () => {
+  const src = readUi('lib', 'shaders.js');
+  for (const skin of SKINS.filter((s) => s !== 'predeterminado')) {
+    assert.match(src, new RegExp(`^  ${skin}: HEAD \\+ `, 'm'), `${skin} has its fragment shader`);
+  }
+  assert.doesNotMatch(src, /^  predeterminado: /m, 'the default theme has no background');
+  assert.match(src, /const SCALE = 0\.5;/, 'half resolution');
+  assert.match(src, /const FRAME_MS = 33;/, 'at most 30 frames a second');
+  assert.match(src, /document\.hidden/, 'nothing runs while the window is hidden');
+  assert.match(src, /visibilitychange/);
+  assert.match(src, /prefers-reduced-motion: reduce/, 'reduced motion: one still frame');
+  assert.match(src, /dataset\.motion === 'minima'/, '«animations off»: one still frame');
+  assert.match(src, /classList\.contains\('dark'\)/, 'the dark uniform follows html.dark');
+  assert.match(src, /webglcontextlost/); assert.match(src, /webglcontextrestored/);
+  assert.match(src, /stop\(\) \{/); assert.match(src, /deleteProgram/); assert.match(src, /deleteBuffer/);
+  assert.doesNotMatch(src, /getBoundingClientRect|offsetWidth|clientWidth[^;]*frame/, 'no layout reads per frame');
+});
+
+test('the scene mounts one canvas per window, nothing in the default theme, and the shader follows the theme', () => {
+  const scene = readUi('components', 'scene.jsx');
+  assert.match(scene, /hasShader\(skin\)/);
+  assert.match(scene, /if \(!on\) return null;/);
+  assert.match(scene, /aria-hidden="true"/);
+  assert.match(scene, /<canvas key=\{skin\}/, 'a theme change replaces the canvas without a reload');
+  assert.match(scene, /skin === 'retro' \? <div className="crt"/);
+  const main = readUi('main.jsx');
+  assert.equal([...main.matchAll(/<Scene \/>/g)].length, 2, 'the desktop shell and the phone shell');
+  assert.match(skinsCss, /^\.orb-shader \{[^}]*pointer-events: none[^}]*contain: strict/m);
+  assert.match(skinsCss, /^\.crt \{[^}]*pointer-events: none/m);
+});
+
+test('the columns let the shader through with the veil of the design', () => {
+  assert.match(skinsCss, /main\.theme-scene \{ background: color-mix\(in oklab, var\(--background\) var\(--veil\), transparent\); \}/);
+  assert.match(skinsCss, /aside\.bg-sidebar \{ background-color: color-mix\(in oklab, var\(--sidebar\) var\(--veil-side\), transparent\); backdrop-filter: blur\(14px\)/);
+  assert.match(skinsCss, /\[data-testid="turn-changes"\], \[data-testid="chat-tabs"\]\) \{ background: color-mix\(in oklab, var\(--background\) var\(--veil-side\), transparent\); backdrop-filter: blur\(14px\)/);
+});
+
+test('the old CSS backdrops are gone: no scene stylesheet, no import, no pixel fonts nobody uses', () => {
+  const themes = path.join(UI, 'themes');
+  assert.deepEqual(fs.readdirSync(themes).filter((f) => /^scene/.test(f)), []);
+  assert.doesNotMatch(readUi('themes.css'), /@import[^;]*scene/);
+  assert.doesNotMatch(readUi('themes.css'), /tiny5|silkscreen/);
+  for (const file of cssFiles(UI)) assert.doesNotMatch(fs.readFileSync(file, 'utf8'), /@import[^;]*scene|\.scene-|\.rt-column|\.vw-sticker|\.orb-cloud|brand-sky::/, path.relative(ROOT, file));
+});
+
 // ---- Contrast (WCAG AA). oklch -> linear sRGB, the chroma reduced until it fits the gamut as CSS does. ----
 function toRgb(L, C, H) {
   const lin = (c) => {

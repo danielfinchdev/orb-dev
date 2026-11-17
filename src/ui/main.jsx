@@ -11,7 +11,6 @@ import { notify, notifyError, notifyOk, Toaster } from '@/lib/notify.js';
 import { Menu, Smartphone, ScanLine, Link2, RotateCw, FolderOpen, Download, KeyRound, ArrowLeft, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Field, Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
-import { WindowBar } from '@/components/window-bar.jsx';
 import { MobileTabs, MoreView } from '@/components/mobile-tabs.jsx';
 import { TooltipProvider, Checkbox } from '@/components/ui/overlay.jsx';
 import { DialogHost, confirm, form } from '@/components/dialogs.jsx';
@@ -152,10 +151,10 @@ function MobileShell() {
   // arrow); the tabs are on the list.
   const fullChat = route.view === 'chat' || route.view === 'session';
   return (
-    <div className="mobile-shell flex h-full flex-col">
+    <div className="mobile-shell relative isolate flex h-full flex-col">
+      <Scene />
       {down ? <div className="bg-warning text-warning-foreground flex shrink-0 items-center justify-center gap-2 px-4 py-1.5 text-caption font-medium" role="status" data-testid="link-down"><WifiOff className="size-3.5" />{t('app.offlineBar')}</div> : null}
       <main className="theme-scene flex min-h-0 min-w-0 flex-1 flex-col">
-        <Scene />
         <ErrorBoundary key={routeKey(route)} onHome={resetRoute}>
           <Suspense fallback={<Loading />}><View key={routeKey(route)} route={route} /></Suspense>
         </ErrorBoundary>
@@ -194,13 +193,13 @@ function Shell() {
   }, []);
   if (phoneLayout()) return <MobileShell />;
   return (
-    <div className="flex h-full">
+    <div className="relative isolate flex h-full">
+      <Scene />
       {/* folded away (its button next to day / night), the screens take the whole width. */}
       <div className={folded ? 'hidden' : 'hidden md:flex'}><Sidebar mood={mood} /></div>
       {/* Narrow windows: the sidebar is a drawer behind a menu button (phones have their own shell). */}
       {drawer ? <div data-modal="" className="fixed inset-0 z-50 flex md:hidden" onClick={() => setDrawer(false)}><div className="animate-in slide-in-from-left flex h-full shadow-2xl" onClick={(e) => { if (e.target.closest('button')) setTimeout(() => setDrawer(false), 50); }}><Sidebar mood={mood} /></div><div className="flex-1 bg-black/40" /></div> : null}
       <main className="theme-scene flex min-w-0 flex-1 flex-col">
-        <Scene />
         <div className="relative topbar theme-band app-titlebar wco-pad bg-sidebar flex h-14 shrink-0 items-center gap-2 border-b px-3 md:hidden">
           <button className="hover:bg-accent grid size-9 cursor-pointer place-items-center rounded-lg" onClick={() => setDrawer(true)} aria-label={t('app.menu')}><Menu className="size-5" /></button>
           <Robot size={26} mood={mood} /><span className="min-w-0 flex-1 truncate text-card-title font-medium">{app.config.assistantName}</span>
@@ -211,7 +210,6 @@ function Shell() {
             <Suspense fallback={<Loading />}><V key={routeKey(r)} route={r} /></Suspense>
           </ErrorBoundary>
         ); }} />
-        <WindowBar kind="status" />
       </main>
       {/* the info pane on the right (a chat, a project). */}
       <OrbInfoHost />

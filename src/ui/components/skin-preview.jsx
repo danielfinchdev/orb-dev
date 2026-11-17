@@ -7,7 +7,7 @@
 // Decorative only: the button's label names the theme.
 import './skin-preview.css';
 
-// Pixel art of the retro night, as in components/scene.jsx: crisp squares.
+// Pixel art of the retro night: crisp squares.
 const PIX = {
   crab: ['..X.....X..', '...X...X...', '..XXXXXXX..', '.XX.XXX.XX.', 'XXXXXXXXXXX', 'X.XXXXXXX.X', 'X.X.....X.X', '...XX.XX...'],
   octopus: ['....XXXX....', '.XXXXXXXXXX.', 'XXXXXXXXXXXX', 'XXX..XX..XXX', 'XXXXXXXXXXXX', '...XX..XX...', '..XX.XX.XX..', 'XX........XX'],

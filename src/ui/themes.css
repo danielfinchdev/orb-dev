@@ -1,17 +1,12 @@
 /* Visual themes (Ajustes → Apariencia → Tema): src/shared/appearance.mjs lists them and lib/store.js puts the chosen one
    on <html> as data-skin. «predeterminado» is the base and has no rules (tokens.css). skins.css redefines the tokens for
-   light (html[data-skin]) and dark (html.dark[data-skin]) and the few pieces of each theme; the scene-*.css files are the
-   CSS backdrops of Orb, Vaporwave and Retro (the decoration of the top bars and the illustrated backdrop behind every
-   screen, components/scene.jsx, under one frosted pane), until the WebGL backdrops replace them.
-   Contrast: normal text >= 4.5:1 on its background, input borders >= 3:1, in light and dark, and the text of the chat
-   over the brightest and darkest piece of each scene (test-results/contraste-temas.mjs).
+   light (html[data-skin]) and dark (html.dark[data-skin]), the veil that lets each theme's shader through and the few
+   pieces of each theme. The shaders themselves are lib/shaders.js, mounted by components/scene.jsx.
+   Contrast: normal text >= 4.5:1 on its background, input borders >= 3:1, in light and dark.
    These rules are outside any layer on purpose: they win over Tailwind's utilities without !important. */
+/* Press Start 2P is the canvas font of the games in Retro (games/kit.js) */
 @import "@fontsource/press-start-2p/latin-400.css";
-@import "@fontsource/tiny5/latin-400.css";
-@import "@fontsource/silkscreen/latin-400.css";
 @import "@fontsource/vt323/latin-400.css";
 
 @import "./themes/skins.css";
-@import "./themes/scene.css";
-@import "./themes/scene-vaporwave.css";
-@import "./themes/scene-retro.css";
+@import "./themes/pieces.css";

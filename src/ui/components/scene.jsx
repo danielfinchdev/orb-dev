@@ -1,169 +1,24 @@
-// the illustrated backdrop of each visual theme, behind the screens (themes.css draws and moves it; one frosted
-// pane over it keeps it out of focus so it never competes with the text). Nothing in the plain themes.
-import { useStore, plainSkin } from '@/lib/store.js';
+// The backdrop of the themes that have a shader: one canvas per window, behind everything (lib/shaders.js draws on it).
+// Predeterminado has none. The canvas is replaced, not reused, when the theme changes: a canvas keeps its first context.
+import { useEffect, useRef } from 'react';
+import { useSkin } from '@/lib/store.js';
+import { hasShader, startShader } from '@/lib/shaders.js';
 
-// ---- Vaporwave, day: stickers of old computers (thick ink outline, flat pastel fills; the offset shadow is CSS). ----
-const INK = { stroke: 'currentColor', strokeWidth: 4, strokeLinejoin: 'round', strokeLinecap: 'round' };
-const Floppy = () => (
-  <svg viewBox="0 0 100 100" aria-hidden="true">
-    <path d="M12 8h66l10 10v74H12z" fill="#ff9fd0" {...INK} /><rect x="30" y="8" width="40" height="28" fill="#c9b8ff" {...INK} /><rect x="56" y="13" width="8" height="17" fill="currentColor" />
-    <rect x="24" y="56" width="52" height="30" rx="3" fill="#fff" {...INK} /><path d="M32 66h36M32 76h24" {...INK} strokeWidth="3" />
-  </svg>
-);
-const Cassette = () => (
-  <svg viewBox="0 0 120 80" aria-hidden="true">
-    <rect x="4" y="8" width="112" height="64" rx="8" fill="#c9b8ff" {...INK} /><rect x="16" y="18" width="88" height="34" rx="4" fill="#ffd4b0" {...INK} /><rect x="16" y="35" width="88" height="17" fill="#ffb6dc" />
-    <circle cx="40" cy="35" r="10" fill="#fff" {...INK} /><circle cx="80" cy="35" r="10" fill="#fff" {...INK} /><circle cx="40" cy="35" r="3" fill="currentColor" /><circle cx="80" cy="35" r="3" fill="currentColor" />
-    <path d="M34 72l6-12h40l6 12" fill="#e7e4f3" {...INK} />
-  </svg>
-);
-const Monitor = () => (
-  <svg viewBox="0 0 100 100" aria-hidden="true">
-    <rect x="8" y="6" width="84" height="66" rx="8" fill="#e7e4f3" {...INK} /><rect x="18" y="15" width="64" height="46" rx="4" fill="#ffb6dc" {...INK} /><rect x="18" y="15" width="64" height="23" rx="4" fill="#c9b8ff" /><rect x="18" y="30" width="64" height="8" fill="#dcc6f5" />
-    <text x="50" y="45" textAnchor="middle" fontFamily="Space Grotesk Variable, sans-serif" fontWeight="700" fontSize="15" fill="#fff" stroke="currentColor" strokeWidth="3" paintOrder="stroke">Hello!</text>
-    <rect x="40" y="72" width="20" height="8" fill="#e7e4f3" {...INK} /><rect x="26" y="80" width="48" height="10" rx="3" fill="#e7e4f3" {...INK} />
-  </svg>
-);
-const Smiley = () => (
-  <svg viewBox="0 0 100 100" aria-hidden="true">
-    <circle cx="50" cy="50" r="42" fill="#ffe066" {...INK} /><ellipse cx="36" cy="42" rx="5" ry="8" fill="currentColor" /><ellipse cx="64" cy="42" rx="5" ry="8" fill="currentColor" />
-    <path d="M28 60c8 14 36 14 44 0" fill="#fff" {...INK} /><path d="M46 70c6 8 14 6 16-2" fill="#ff9fd0" {...INK} strokeWidth="3" />
-  </svg>
-);
-const Sparkle = () => <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M50 4l10 36 36 10-36 10-10 36-10-36L4 50l36-10z" fill="#fff" {...INK} /></svg>;
-const Planet = () => (
-  <svg viewBox="0 0 120 100" aria-hidden="true">
-    <ellipse cx="60" cy="52" rx="56" ry="14" fill="none" {...INK} strokeWidth="12" transform="rotate(-18 60 52)" /><ellipse cx="60" cy="52" rx="56" ry="14" fill="none" stroke="#ffb6dc" strokeWidth="6" transform="rotate(-18 60 52)" />
-    <circle cx="60" cy="50" r="28" fill="#c9b8ff" {...INK} /><circle cx="50" cy="42" r="6" fill="#e7e4f3" /><circle cx="68" cy="58" r="4" fill="#e7e4f3" />
-    <path d="M6 66c18 10 90 10 108-10" fill="none" stroke="#ffb6dc" strokeWidth="6" strokeLinecap="round" /><path d="M6 66c18 10 90 10 108-10" fill="none" {...INK} strokeWidth="2.5" />
-  </svg>
-);
-const Folder = () => (
-  <svg viewBox="0 0 110 90" aria-hidden="true">
-    <path d="M6 20h34l10 10h54v50H6z" fill="#ffd27a" {...INK} /><path d="M6 36h98v44H6z" fill="#ffe3a6" {...INK} />
-  </svg>
-);
-const Bubble = () => (
-  <svg viewBox="0 0 110 90" aria-hidden="true">
-    <path d="M14 8h82a8 8 0 0 1 8 8v44a8 8 0 0 1-8 8H48L28 86l4-18H14a8 8 0 0 1-8-8V16a8 8 0 0 1 8-8z" fill="#fff" {...INK} />
-    <text x="55" y="50" textAnchor="middle" fontFamily="Space Grotesk Variable, sans-serif" fontWeight="800" fontSize="34" fill="#ff5fb4" stroke="currentColor" strokeWidth="2.5" paintOrder="stroke">!!!</text>
-  </svg>
-);
-const STICKERS = [
-  { el: <Monitor />, left: '0.5%', top: '13%', w: 90, r: -8, dur: 13, delay: -2 },
-  { el: <Sparkle />, left: '12%', top: '8%', w: 34, r: 15, dur: 9, delay: -5 },
-  { el: <Cassette />, right: '0.5%', top: '14%', w: 112, r: 10, dur: 14, delay: -7 },
-  { el: <Floppy />, left: '2%', top: '46%', w: 86, r: 12, dur: 12, delay: -4 },
-  { el: <Planet />, right: '0.5%', top: '44%', w: 104, r: -6, dur: 16, delay: -9 },
-  { el: <Smiley />, left: '3%', bottom: '8%', w: 80, r: -10, dur: 11, delay: -1 },
-  { el: <Sparkle />, right: '9%', top: '36%', w: 28, r: -20, dur: 8, delay: -3 },
-  { el: <Bubble />, right: '2%', bottom: '20%', w: 84, r: 6, dur: 12, delay: -6 },
-  { el: <Folder />, left: '14%', bottom: '2%', w: 90, r: 8, dur: 13, delay: -8 },
-  { el: <Sparkle />, left: '9%', bottom: '28%', w: 22, r: 30, dur: 10, delay: -2 }
-];
-// ---- Vaporwave, night: fluffy clouds lit from below and a city skyline in front of the sun. ----
-const NightCloud = ({ id }) => (
-  <svg viewBox="0 0 240 110" aria-hidden="true">
-    <defs><linearGradient id={`vwg-${id}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#3a1468" /><stop offset="0.45" stopColor="#8a2a7a" /><stop offset="0.8" stopColor="#ff7a6a" /><stop offset="1" stopColor="#ffc07a" /></linearGradient></defs>
-    <g fill={`url(#vwg-${id})`}>
-      <circle cx="52" cy="72" r="30" /><circle cx="88" cy="52" r="34" /><circle cx="126" cy="40" r="38" /><circle cx="166" cy="56" r="32" /><circle cx="196" cy="76" r="26" />
-      <rect x="22" y="70" width="200" height="30" rx="15" />
-    </g>
-    <path d="M30 96c40 8 140 8 190-2" fill="none" stroke="#ffd27a" strokeWidth="4" strokeLinecap="round" opacity="0.7" />
-  </svg>
-);
-const CITY = [[0, 30], [24, 55], [40, 42], [70, 70], [84, 48], [110, 62], [130, 90], [146, 56], [176, 44], [196, 76], [220, 60], [250, 100], [262, 66], [290, 52], [314, 80], [334, 46], [360, 64], [390, 92], [404, 58], [430, 40], [458, 70], [480, 54], [506, 84], [520, 48], [550, 66], [576, 96], [590, 60], [620, 44], [646, 72], [670, 58], [700, 88], [716, 50], [744, 64], [770, 42], [800, 78], [820, 56], [850, 68], [880, 94], [896, 52], [924, 62], [950, 46], [976, 74], [1000, 0]];
-const City = () => (
-  <svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
-    {CITY.slice(0, -1).map(([x, h], i) => <rect key={i} x={x} y={100 - h} width={CITY[i + 1][0] - x + 1} height={h} fill="currentColor" />)}
-  </svg>
-);
-const NIGHT_CLOUDS = [{ top: '6%', w: 300, dur: 150, delay: -40 }, { top: '22%', w: 220, dur: 190, delay: -120 }, { top: '34%', w: 260, dur: 170, delay: -20 }];
-
-// ---- Retro: pixel art drawn as crisp squares (the arcade's crab, squid and octopus, a rocket); the colour is the CSS one. ----
-const PIX = {
-  crab: ['..X.....X..', '...X...X...', '..XXXXXXX..', '.XX.XXX.XX.', 'XXXXXXXXXXX', 'X.XXXXXXX.X', 'X.X.....X.X', '...XX.XX...'],
-  squid: ['...XX...', '..XXXX..', '.XXXXXX.', 'XX.XX.XX', 'XXXXXXXX', '..X..X..', '.X.XX.X.', 'X.X..X.X'],
-  octopus: ['....XXXX....', '.XXXXXXXXXX.', 'XXXXXXXXXXXX', 'XXX..XX..XXX', 'XXXXXXXXXXXX', '...XX..XX...', '..XX.XX.XX..', 'XX........XX'],
-  rocket: ['....X....', '...XXX...', '...XXX...', '..XXXXX..', '..XX.XX..', '..XXXXX..', '..XXXXX..', '.XXXXXXX.', 'XXXXXXXXX', 'X.XXXXX.X', 'X..XXX..X', '..F...F..', '...F.F...']
-};
-const Pixels = ({ rows, color = 'currentColor' }) => (
-  <svg viewBox={`0 0 ${rows[0].length} ${rows.length}`} shapeRendering="crispEdges" aria-hidden="true">
-    {rows.flatMap((row, y) => [...row].map((c, x) => (c === '.' ? null : <rect key={`${x}-${y}`} x={x} y={y} width="1" height="1" fill={color} className={c === 'F' ? 'flame' : undefined} />)))}
-  </svg>
-);
-const COLUMN = ['crab', 'squid', 'octopus', 'crab', 'squid', 'octopus', 'crab'];
-
-// the clouds drift about half a pixel per frame at 60 fps (a 1360 px window), so they step 30 times a second
-// instead (steps of dur × CLOUD_FPS: about 1 px, under their 8 px blur nothing tells it from a glide) and the compositor
-// draws half the frames. Whole-second durations and delays keep the three clouds' steps on the same instants: one
-// redraw moves all of them.
-const CLOUD_FPS = 30;
-const ORB_CLOUDS = [{ dur: 90, delay: -10 }, { dur: 70, delay: -45 }, { dur: 110, delay: -70 }];
-// each cloud is a picture with its 8 px blur already in it (drawn once, one per mode), not a CSS filter: the GPU
-// applied a filter on a moving layer again on every frame the compositor drew (≈6 % of the GPU process at rest). The
-// picture is the same soft ellipse (the gradient of themes.css › .orb-cloud) blurred the same, with room for the blur
-// around it (3 × 8 px); the layer only slides. Without a canvas (never in Orb's window) the CSS cloud is drawn instead.
-const CLOUD = { w: 260, h: 72, blur: 8 };
-const CLOUD_PAD = CLOUD.blur * 3;
-const CLOUD_TINTS = { light: [255, 255, 255, 0.75, 0.3], dark: [160, 170, 255, 0.18, 0.06] };
-let cloudArt;
-function cloudPictures() {
-  if (cloudArt !== undefined) return cloudArt;
-  cloudArt = null;
-  try {
-    const scale = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
-    const art = {};
-    for (const [mode, [r, g, b, inner, mid]] of Object.entries(CLOUD_TINTS)) {
-      const shape = document.createElement('canvas'); shape.width = Math.round(CLOUD.w * scale); shape.height = Math.round(CLOUD.h * scale);
-      const s = shape.getContext('2d');
-      // radial-gradient(closest-side, inner, mid 60%, transparent): a circle stretched into the box's ellipse; it fades
-      // to the same colour at alpha 0 (what CSS interpolates to, premultiplied).
-      s.setTransform(shape.width / 2 / (shape.height / 2), 0, 0, 1, shape.width / 2, shape.height / 2);
-      const radius = shape.height / 2;
-      const fill = s.createRadialGradient(0, 0, 0, 0, 0, radius);
-      fill.addColorStop(0, `rgb(${r} ${g} ${b} / ${inner})`); fill.addColorStop(0.6, `rgb(${r} ${g} ${b} / ${mid})`); fill.addColorStop(1, `rgb(${r} ${g} ${b} / 0)`);
-      s.fillStyle = fill; s.fillRect(-radius, -radius, radius * 2, radius * 2);
-      const pad = Math.round(CLOUD_PAD * scale);
-      const out = document.createElement('canvas'); out.width = shape.width + pad * 2; out.height = shape.height + pad * 2;
-      const o = out.getContext('2d');
-      o.filter = `blur(${CLOUD.blur * scale}px)`;
-      o.drawImage(shape, pad, pad);
-      art[mode] = `url(${out.toDataURL('image/png')})`;
-    }
-    cloudArt = art;
-  } catch { /* no canvas: the CSS cloud */ }
-  return cloudArt;
-}
 export function Scene() {
-  const skin = useStore((s) => s.app?.config?.ui?.skin) ?? 'predeterminado';
-  // candy has no CSS backdrop: its background is a shader (a later step).
-  if (plainSkin(skin) || skin === 'candy') return null;
-  const clouds = skin === 'orb' ? cloudPictures() : null;
+  const skin = useSkin(); // the theme actually worn here: a linked phone wears its own, not the PC's
+  const ref = useRef(null);
+  const on = hasShader(skin);
+  useEffect(() => {
+    if (!on || !ref.current) return undefined;
+    const shader = startShader(ref.current, skin);
+    return () => shader.stop();
+  }, [skin, on]);
+  if (!on) return null;
   return (
-    <div className={`scene scene-${skin}`} aria-hidden="true" data-testid="scene" style={clouds ? { '--orb-cloud-art': clouds.light, '--orb-cloud-art-dark': clouds.dark } : undefined}>
-      <div className="scene-blur">
-        {skin === 'orb' ? ORB_CLOUDS.map((c, i) => <div key={i} className={clouds ? 'orb-cloud baked' : 'orb-cloud'} style={{ top: `${18 + i * 26}%`, animationDuration: `${c.dur}s`, animationDelay: `${c.delay}s`, animationTimingFunction: `steps(${c.dur * CLOUD_FPS})` }} />) : null}
-        {skin === 'vaporwave' ? (<>
-          <div className="vw-stars" /><div className="vw-shoot a" /><div className="vw-shoot b" />
-          <div className="vw-beam a" /><div className="vw-beam b" /><div className="vw-beam c" /><div className="vw-beam d" />
-          <div className="vw-glow" /><div className="vw-sun" />
-          {NIGHT_CLOUDS.map((c, i) => <div key={`n${i}`} className="vw-cloud" style={{ top: c.top, width: c.w, animationDuration: `${c.dur}s`, animationDelay: `${c.delay}s` }}><NightCloud id={i} /></div>)}
-          <div className="vw-mount back" /><div className="vw-mount front" />
-          <div className="vw-city"><City /></div>
-          <div className="vw-floor" />
-          {STICKERS.map((t, i) => <div key={`k${i}`} className="vw-sticker" style={{ left: t.left, right: t.right, top: t.top, bottom: t.bottom, width: t.w, '--r': `${t.r ?? 0}deg`, animationDuration: `${t.dur}s`, animationDelay: `${t.delay}s` }}>{t.el}</div>)}
-        </>) : null}
-        {skin === 'retro' ? (<>
-          <div className="rt-column left">{COLUMN.map((k, i) => <div key={i}><Pixels rows={PIX[k]} /></div>)}</div>
-          <div className="rt-column right">{COLUMN.map((k, i) => <div key={i}><Pixels rows={PIX[k]} /></div>)}</div>
-          <div className="rt-crab"><Pixels rows={PIX.crab} /></div>
-          <div className="rt-rocket"><Pixels rows={PIX.rocket} /></div>
-          <div className="rt-scan" />
-        </>) : null}
-      </div>
-      {/* One frosted pane over the whole scene (themes.css): the art stays a soft wallpaper behind every screen. */}
-      <div className="scene-frost" />
-    </div>
+    <>
+      <canvas key={skin} ref={ref} className="orb-shader" aria-hidden="true" data-testid="scene" data-shader={skin} />
+      {/* Retro's CRT glass (skins.css): scanlines and vignette over the whole window, above everything but the dialogs */}
+      {skin === 'retro' ? <div className="crt" aria-hidden="true" data-testid="crt" /> : null}
+    </>
   );
 }

@@ -1,4 +1,3 @@
-import { useLayoutEffect, useRef } from 'react';
 import { ChevronLeft, Search } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { useStore, go, phoneLayout } from '@/lib/store.js';
@@ -8,32 +7,6 @@ import { SidebarToggle } from './theme-toggle.jsx';
 import { MobileMenu } from './mobile-menu.jsx';
 import { WindowControlsSlot } from './window-controls.jsx';
 import { openPalette } from '@/lib/palette.js';
-
-// the moving pieces of a theme's band (themes.css › .band-art; only Nube's rows of sweets for now), in layers the
-// compositor slides. Its art stays aligned to the window like the band's still art (background-attachment: fixed): the
-// band's place in the window is given to it here (--band-x / --band-y), read again only when the band or the window
-// change size (never per frame). Hidden (display: none) in every other theme.
-export function BandArt() {
-  const ref = useRef(null);
-  useLayoutEffect(() => {
-    const art = ref.current; const band = art?.parentElement;
-    if (!band || typeof ResizeObserver === 'undefined') return undefined;
-    let frame = null;
-    const place = () => {
-      frame = null;
-      const r = band.getBoundingClientRect();
-      art.style.setProperty('--band-x', `${Math.round(r.left)}px`);
-      art.style.setProperty('--band-y', `${Math.round(r.top)}px`);
-    };
-    const soon = () => { frame ??= requestAnimationFrame(place); };
-    place();
-    const ro = new ResizeObserver(soon);
-    ro.observe(band);
-    window.addEventListener('resize', soon);
-    return () => { ro.disconnect(); window.removeEventListener('resize', soon); if (frame != null) cancelAnimationFrame(frame); };
-  }, []);
-  return <span ref={ref} className="band-art" aria-hidden="true"><span /><span /></span>;
-}
 
 // The way into Ctrl+K from a bar (the shortcut itself is unchanged); the phone has no palette.
 function PaletteButton({ className }) {
@@ -65,7 +38,6 @@ export function PageHeader({ icon, title, meta, center, children, className, bac
         {/* Too narrow for three (a phone, a side panel): the middle goes to a line of its own, under the clock and the buttons. */}
         <div className="order-last flex min-w-0 basis-full justify-center overflow-hidden @2xl:order-none @2xl:max-w-[28rem] @2xl:basis-auto">{center}</div>
         <div className="flex min-w-0 items-center justify-end gap-2">{children}{palette ? <PaletteButton /> : null}</div>
-        <BandArt />
         <WindowControlsSlot />
       </header>
     </div>
@@ -80,7 +52,6 @@ export function PageHeader({ icon, title, meta, center, children, className, bac
         {meta ? <div className="text-muted-foreground truncate text-xs">{meta}</div> : null}
       </div>
       {children || palette ? <div className="flex max-w-full flex-wrap items-center gap-2">{children}{palette ? <PaletteButton /> : null}</div> : null}
-      <BandArt />
       <WindowControlsSlot />
     </header>
   );

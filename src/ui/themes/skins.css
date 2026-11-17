@@ -31,9 +31,16 @@ html[data-palette="arena"],.pal-dot[data-palette="arena"]{--primary-soft:oklch(0
 html.dark[data-palette="arena"],.dark .pal-dot[data-palette="arena"]{--primary-soft:oklch(0.28 0.04 70);--primary-text:oklch(0.8 0.11 75);--ring:oklch(0.72 0.12 70);--background:oklch(0.17 0.008 70);--sidebar:oklch(0.15 0.01 70);--bubble:oklch(0.23 0.012 70);--card:oklch(0.185 0.008 70);--border:oklch(0.235 0 0)}
 
 /* ======================================================= themes with a shader behind the window
-   The window lets it through: surfaces are translucent and the side columns blur what is behind (steps 2 to 4 use these). */
+   One canvas per window (components/scene.jsx, lib/shaders.js) sits behind the whole app. The columns let it through:
+   the sides blur what is behind them and the centre is lighter. Dialogs, menus and bubbles keep their own opaque surface. */
 html[data-skin="orb"], html[data-skin="vaporwave"], html[data-skin="candy"], html[data-skin="retro"] { --veil: 84%; --veil-side: 76%; }
 html[data-skin="candy"] { --veil: 76%; --veil-side: 68%; }
+.orb-shader { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; display: block; pointer-events: none; contain: strict; }
+html[data-skin]:not([data-skin="predeterminado"]) main.theme-scene { background: color-mix(in oklab, var(--background) var(--veil), transparent); }
+html[data-skin]:not([data-skin="predeterminado"]):not([data-skin="cristal"]) aside.bg-sidebar { background-color: color-mix(in oklab, var(--sidebar) var(--veil-side), transparent); backdrop-filter: blur(14px) saturate(1.1); }
+html[data-skin]:not([data-skin="predeterminado"]) :is([data-testid="turn-changes"], [data-testid="chat-tabs"]) { background: color-mix(in oklab, var(--background) var(--veil-side), transparent); backdrop-filter: blur(14px); }
+/* the welcome and start-up screens (.brand-sky) are not redrawn yet: the theme's own colour instead of Orb's sky */
+html:is([data-skin="cristal"], [data-skin="vaporwave"], [data-skin="candy"], [data-skin="retro"]) .brand-sky { background: var(--background); }
 
 /* ======================================================= Orb: the robot and Orb's blue */
 html[data-skin="orb"]{
@@ -49,43 +56,14 @@ html[data-skin="vaporwave"]{
   --primary:oklch(0.62 0.22 350);--primary-foreground:oklch(0.99 0 0);--primary-soft:oklch(0.95 0.04 340);--primary-text:oklch(0.55 0.22 350);--ring:oklch(0.65 0.2 200);
   --background:oklch(0.97 0.025 320);--sidebar:oklch(0.95 0.04 310);--card:oklch(0.985 0.015 320);--bubble:oklch(0.93 0.05 200);--border:oklch(0.88 0.05 320);--accent:oklch(0.93 0.04 320);--secondary:oklch(0.94 0.035 320);--muted:oklch(0.94 0.035 320);
   --info:oklch(0.55 0.15 220);--muted-foreground:oklch(0.47 0.06 320);--faint-foreground:oklch(0.55 0.05 320);
-  --wm-grad:linear-gradient(180deg,oklch(0.75 0.14 200) 20%,oklch(0.65 0.2 340) 80%);--wm-dot:oklch(0.8 0.18 345);
-  /* the welcome backdrop (.brand-sky): sunset, striped sun and grid */
-  --vw-sky: linear-gradient(180deg, oklch(0.9 0.07 340) 0%, oklch(0.86 0.08 305) 26%, oklch(0.84 0.08 265) 44%, oklch(0.83 0.11 350) 56%, oklch(0.87 0.1 40) 62%, oklch(0.9 0.06 330) 62%, oklch(0.93 0.04 310) 100%);
-  --vw-glow: oklch(0.8 0.15 350 / 0.4);
-  --vw-sun: linear-gradient(180deg, oklch(0.95 0.13 100) 0%, oklch(0.82 0.13 40) 55%, oklch(0.7 0.2 350) 100%);
-  --vw-line: oklch(0.62 0.2 345 / 0.5);}
+  --wm-grad:linear-gradient(180deg,oklch(0.75 0.14 200) 20%,oklch(0.65 0.2 340) 80%);--wm-dot:oklch(0.8 0.18 345);}
 html.dark[data-skin="vaporwave"]{
   --primary:oklch(0.72 0.21 350);--primary-foreground:oklch(0.15 0.05 300);--primary-soft:oklch(0.3 0.1 340);--primary-text:oklch(0.78 0.18 350);--ring:oklch(0.82 0.14 200);
   --foreground:oklch(0.96 0.02 330);--background:oklch(0.17 0.07 295);--sidebar:oklch(0.14 0.06 290);--card:oklch(0.2 0.08 295);--popover:oklch(0.21 0.08 295);--bubble:oklch(0.28 0.09 300);--border:oklch(0.33 0.1 310);--accent:oklch(0.26 0.09 300);--secondary:oklch(0.24 0.08 300);--muted:oklch(0.24 0.08 300);
   --info:oklch(0.83 0.13 200);--muted-foreground:oklch(0.78 0.06 320);--faint-foreground:oklch(0.68 0.07 320);--success:oklch(0.82 0.16 165);
-  --wm-grad:linear-gradient(180deg,oklch(0.98 0.02 210) 20%,oklch(0.82 0.14 205) 50%,oklch(0.8 0.18 345) 52%,oklch(0.95 0.06 345));
-  --vw-sky: linear-gradient(180deg, oklch(0.13 0.05 285) 0%, oklch(0.2 0.1 300) 28%, oklch(0.33 0.17 330) 46%, oklch(0.5 0.22 355) 56%, oklch(0.62 0.2 20) 62%, oklch(0.12 0.06 295) 62%, oklch(0.1 0.05 290) 100%);
-  --vw-glow: oklch(0.7 0.25 345 / 0.5);
-  --vw-sun: linear-gradient(180deg, oklch(0.93 0.16 95) 0%, oklch(0.75 0.19 30) 50%, oklch(0.65 0.26 350) 100%);
-  --vw-line: oklch(0.72 0.24 345 / 0.75);}
+  --wm-grad:linear-gradient(180deg,oklch(0.98 0.02 210) 20%,oklch(0.82 0.14 205) 50%,oklch(0.8 0.18 345) 52%,oklch(0.95 0.06 345))}
 html[data-skin="vaporwave"] :is(.bar-clock-time, .bar-title-main) { letter-spacing: 0.04em; }
 html.dark[data-skin="vaporwave"] :is(.bar-clock-time, .bar-title-main) { text-shadow: 0 0 12px color-mix(in oklch, var(--primary) 55%, transparent); }
-/* The welcome backdrop: sky, the sun on the horizon (62 %) and the grid of the ground, which fades into the distance. */
-html[data-skin="vaporwave"] .brand-sky { position: relative; isolation: isolate; background: radial-gradient(70vmin 42vmin at 50% 62%, var(--vw-glow), transparent 70%), var(--vw-sky); }
-html[data-skin="vaporwave"] .brand-sky::after {
-  content: ""; position: absolute; z-index: -1; left: 50%; bottom: 38%; translate: -50% 0;
-  width: min(84vmin, 620px); aspect-ratio: 2 / 1; border-radius: 999px 999px 0 0; pointer-events: none; background: var(--vw-sun);
-  mask-image: linear-gradient(to bottom, #000 0 50%, transparent 50% 56%, #000 56% 66%, transparent 66% 73%, #000 73% 81%, transparent 81% 89%, #000 89% 94%, transparent 94%);
-}
-html[data-skin="vaporwave"] .brand-sky::before {
-  content: ""; position: absolute; z-index: -1; left: 0; right: 0; bottom: 0; height: 38%; pointer-events: none;
-  background:
-    linear-gradient(to bottom, var(--vw-line) 0 2px, transparent 2px 4%, var(--vw-line) 4% calc(4% + 2px), transparent calc(4% + 2px) 9%,
-      var(--vw-line) 9% calc(9% + 2px), transparent calc(9% + 2px) 15%, var(--vw-line) 15% calc(15% + 2px), transparent calc(15% + 2px) 23%,
-      var(--vw-line) 23% calc(23% + 2px), transparent calc(23% + 2px) 33%, var(--vw-line) 33% calc(33% + 2px), transparent calc(33% + 2px) 46%,
-      var(--vw-line) 46% calc(46% + 2px), transparent calc(46% + 2px) 62%, var(--vw-line) 62% calc(62% + 2px), transparent calc(62% + 2px) 81%,
-      var(--vw-line) 81% calc(81% + 2px), transparent calc(81% + 2px) 100%),
-    repeating-conic-gradient(from 89.8deg at 50% 0%, var(--vw-line) 0deg 0.4deg, transparent 0.4deg 6deg);
-  mask-image: linear-gradient(to bottom, transparent 0%, #000 45%);
-}
-
-
 /* ======================================================= Candy: a game, softened */
 html[data-skin="candy"]{
   --title:"Fredoka Variable","Fredoka",system-ui,sans-serif;--radius:14px;--r-ctl:12px;--r-card:18px;--r-big:24px;
@@ -105,44 +83,20 @@ html[data-skin="retro"]{
   --secondary:oklch(0.18 0.04 150);--muted:oklch(0.18 0.04 150);--accent:oklch(0.21 0.05 150);--border:oklch(0.36 0.09 148);--input:oklch(0.55 0.13 148);
   --muted-foreground:oklch(0.74 0.15 145);--faint-foreground:oklch(0.64 0.12 145);--info:oklch(0.86 0.13 190);--success:oklch(0.86 0.21 145);--warning:oklch(0.86 0.16 95);--warning-ink:oklch(0.86 0.16 95);--warning-soft:oklch(0.24 0.05 95);--destructive:oklch(0.72 0.19 30);--success-soft:oklch(0.22 0.06 150);
   --shadow:none;
-  /* the welcome backdrop and the band of the chat (scene-retro.css) */
-  --rt-ink: var(--primary);
-  --rt-glow: 0 0 5px oklch(0.86 0.21 145 / 0.45);
-  --rt-scan: rgb(0 0 0 / 0.28);
-  --rt-star: rgb(150 255 150 / 0.3);
-  --rt-invaders: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 16' shape-rendering='crispEdges'%3E%3Cpath fill='%2339ff14' fill-opacity='0.5' d='M4 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h7v1h-7zM3 7h2v1h-2zM6 7h3v1h-3zM10 7h2v1h-2zM2 8h11v1h-11zM2 9h1v1h-1zM4 9h7v1h-7zM12 9h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM5 11h2v1h-2zM8 11h2v1h-2zM27 4h2v1h-2zM26 5h4v1h-4zM25 6h6v1h-6zM24 7h2v1h-2zM27 7h2v1h-2zM30 7h2v1h-2zM24 8h8v1h-8zM26 9h1v1h-1zM29 9h1v1h-1zM25 10h1v1h-1zM27 10h2v1h-2zM30 10h1v1h-1zM24 11h1v1h-1zM26 11h1v1h-1zM29 11h1v1h-1zM31 11h1v1h-1zM46 4h4v1h-4zM43 5h10v1h-10zM42 6h12v1h-12zM42 7h3v1h-3zM47 7h2v1h-2zM51 7h3v1h-3zM42 8h12v1h-12zM45 9h2v1h-2zM49 9h2v1h-2zM44 10h2v1h-2zM47 10h2v1h-2zM50 10h2v1h-2zM42 11h2v1h-2zM52 11h2v1h-2z'/%3E%3C/svg%3E");
-  --rt-ship: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 6' shape-rendering='crispEdges'%3E%3Cpath fill='%2339ff14' fill-opacity='0.7' d='M5 0h1v1h-1zM4 1h3v1h-3zM4 2h3v1h-3zM1 3h9v1h-9zM0 4h11v1h-11zM0 5h11v1h-11z'/%3E%3C/svg%3E");}
+}
 html[data-skin="retro"] :is(.bar-clock-time, .bar-title-main, .orb-cal-title) { font-size: 22px; font-weight: 400; letter-spacing: 0.04em; }
 html[data-skin="retro"] .project-icon:not(.is-image) { border-radius: 0; background: var(--primary); }
 html[data-skin="retro"] { --tip-border: var(--input); --tip-shadow: none; }
 html[data-skin="retro"] :is([data-slot="menu-content"], [data-slot="select-content"], [data-slot="composer"]) { box-shadow: none; border-color: var(--input); }
-/* The welcome backdrop: scanlines, two rows of invaders that step sideways (two poses swapped by opacity, the same
-   keyframes as the chat bar's), stars, the ground line and the player's cannon. */
-html[data-skin="retro"] .brand-sky {
-  position: relative; isolation: isolate;
-  background:
-    repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px),
-    radial-gradient(ellipse at 50% 45%, transparent 55%, rgb(0 0 0 / 0.5)),
-    var(--rt-ship) 50% calc(100% - 26px) / 44px 24px no-repeat,
-    linear-gradient(var(--rt-star), var(--rt-star)) 0 calc(100% - 18px) / 100% 3px no-repeat,
-    radial-gradient(circle at 30px 40px, var(--rt-star) 0 1.5px, transparent 2px) 0 0 / 170px 130px,
-    radial-gradient(circle at 110px 95px, var(--rt-star) 0 1px, transparent 1.5px) 0 0 / 230px 170px,
-    var(--background);
-}
-html[data-skin="retro"] .brand-sky::before, html[data-skin="retro"] .brand-sky::after {
-  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background: var(--rt-invaders) 0 9% / 240px 64px repeat-x, var(--rt-invaders) 120px calc(9% + 76px) / 240px 64px repeat-x;
-}
-html[data-skin="retro"] .brand-sky::after { background-position: 16px 9%, 136px calc(9% + 76px); opacity: 0; }
-@media (prefers-reduced-motion: no-preference) {
-  html[data-skin="retro"]:not([data-motion="minima"]) .brand-sky::before { animation: rt-band-a 2.4s steps(1, end) infinite; }
-  html[data-skin="retro"]:not([data-motion="minima"]) .brand-sky::after { animation: rt-band-b 2.4s steps(1, end) infinite; }
-}
-html[data-skin="retro"] .brand-sky .shadow-2xl { box-shadow: 0 0 0 1px var(--primary), 0 0 22px -6px oklch(0.86 0.21 145 / 0.5); }
-
+/* the phosphor glow on the text, as in the design; solid buttons and counters keep their text plain */
+html[data-skin="retro"] body { text-shadow: 0 0 6px oklch(0.86 0.21 145 / 0.45); }
+html[data-skin="retro"] :is([data-slot="button"]:is(.bg-primary, .bg-destructive), [data-testid="nav-tasks-count"], .bg-warning) { text-shadow: none; }
+/* the CRT glass over the whole window: scanlines and a soft vignette, never taking a click (components/scene.jsx) */
+.crt { position: absolute; inset: 0; z-index: 7; pointer-events: none; contain: strict; mix-blend-mode: multiply;
+  background: repeating-linear-gradient(to bottom, rgb(0 0 0 / 0.22) 0 1px, transparent 1px 3px), radial-gradient(ellipse at center, transparent 60%, rgb(0 0 0 / 0.45)); }
 
 /* ======================================================= Cristal: the predeterminado (with its palettes) made of glass, only light
-   Until the glass of steps 3 and 4 exists, the panes that already have a class of their own: the sidebar, the chat bar, the
+   The shader of Cristal is its background (lib/shaders.js). Until the glass of steps 3 and 4 exists, the panes that already have a class of their own: the sidebar, the chat bar, the
    message box, cards and floating layers. Blur is only on the few that float over what moves; cards and rows have none. */
 html[data-skin="cristal"]{
   color-scheme:light;--veil:34%;--veil-side:26%;--radius:12px;--r-ctl:10px;--r-card:18px;--r-big:26px;
@@ -151,9 +105,9 @@ html[data-skin="cristal"]{
   --g-shadow:oklch(0.4 0.04 265 / .2);--g-shadow-near:oklch(0.4 0.04 265 / .1);
   --border:oklch(1 0 0 / .55);--accent:oklch(1 0 0 / .45);--secondary:oklch(1 0 0 / .35);--muted:oklch(1 0 0 / .35);--bubble:oklch(1 0 0 / .5);
   --muted-foreground:oklch(0.42 0.015 265);--faint-foreground:oklch(0.5 0.015 265);
-  /* a still colour field behind the glass, until the shader of Cristal exists */
-  --g-base:oklch(0.97 0.012 262);--g-pool-1:oklch(0.9 0.06 252);--g-pool-2:oklch(0.92 0.05 330);--g-pool-3:oklch(0.93 0.05 195);--g-pool-4:oklch(0.95 0.05 80);}
-html[data-skin="cristal"] body { background: radial-gradient(40% 52% at 0% 4%, var(--g-pool-1), transparent 74%), radial-gradient(44% 60% at 100% 100%, var(--g-pool-2), transparent 72%), radial-gradient(40% 50% at 40% 108%, var(--g-pool-3), transparent 70%), radial-gradient(34% 44% at 96% 6%, var(--g-pool-4), transparent 70%), var(--g-base); }
+  /* the colour left if the shader cannot run (no WebGL) */
+  --g-base:oklch(0.97 0.012 262);}
+html[data-skin="cristal"] body { background: var(--g-base); }
 html[data-skin="cristal"] aside.bg-sidebar { background-color: color-mix(in oklab, var(--sidebar) var(--veil-side), transparent); border-right-color: var(--g-line); box-shadow: inset -1px 0 0 var(--g-rim-low); }
 html[data-skin="cristal"] aside.bg-sidebar::before { content: ""; position: absolute; inset: 0; z-index: -1; backdrop-filter: blur(40px) saturate(1.6); pointer-events: none; }
 html[data-skin="cristal"] .chat-bar { background-color: color-mix(in oklab, var(--background) var(--veil-side), transparent); backdrop-filter: blur(30px) saturate(1.5); border-bottom-color: var(--g-line); }

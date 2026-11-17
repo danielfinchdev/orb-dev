@@ -40,8 +40,8 @@
 // animations not composited). --anim-only: only the starts and that (10 s unless --anim says otherwise).
 // Each screen is measured 12 s after it loads (the welcome robot's hello is over: at rest the robot stands
 // still), plus «robot-activo»: the new chat with the pointer over the sidebar's robot (it floats), with the
-// requestAnimationFrame deltas meanwhile (dropped frames). --quiet-scene pauses the theme's moving backdrop (the «orb»
-// theme's clouds) to see what the robot alone costs.
+// requestAnimationFrame deltas meanwhile (dropped frames). --quiet-scene takes the theme's shader canvas away
+// (components/scene.jsx) to see what the robot alone costs.
 // --css <file> adds that style sheet to each animation screen after it loads (to try a variant of an
 // animation, or to put the old one back, on the same build).
 // --js <file> runs that script in the page there too (a variant that needs code, not only styles).
@@ -346,7 +346,7 @@ async function idleAnimations(run) {
   for (const [name, { hover, ...route }] of Object.entries(screens)) {
     await page.evaluate((r) => { localStorage.setItem('orb.route', JSON.stringify(r)); location.reload(); }, route);
     await page.waitForSelector(READY, { state: 'attached', timeout: 30000 }); // attached: in Profesional and Cristal the button has no robot, so no size
-    if (quietScene) await page.addStyleTag({ content: '.scene *, .scene *::before, .scene *::after, .theme-band::before { animation-play-state: paused !important; }' });
+    if (quietScene) await page.evaluate(() => { for (const c of document.querySelectorAll('canvas.orb-shader')) c.remove(); });
     if (extraCss) await page.addStyleTag({ content: extraCss });
     if (extraJs) await page.evaluate(extraJs);
     await wait(12000);
