@@ -81,6 +81,18 @@ class DirectParserTest {
         assertEquals("Se cayó la red", (items[3] as DItem.Failure).text)
     }
 
+    @Test fun handoffShowsOneLineNotTheStoredSummary() {
+        val summary = "Traspaso: " + "x".repeat(18_000)
+        val items = display(sitem(1, "system", "handoff", """{"from":"claude","to":"codex","at":1,"summary":"$summary","count":9,"truncated":true}"""))
+        assertEquals("Traspasado de Claude a Codex", (items.single() as DItem.Note).text)
+    }
+
+    @Test fun rewindShowsOneShortLineNotItsJson() {
+        val body = """{"rescue":"abc","target":"def","ref":"refs/orb/x","restored":2,"removed":1,"skipped":0,"files":{"restored":["a.txt"]},"undone":false,"at":"2026-11-16"}"""
+        assertEquals("Archivos rebobinados en el PC", (display(sitem(1, "system", "rewind", body)).single() as DItem.Note).text)
+        assertEquals("Rebobinado deshecho en el PC", (display(sitem(2, "system", "rewind", body.replace("false", "true"))).single() as DItem.Note).text)
+    }
+
     @Test fun approvalCarriesTheRequestAndTheLocalDecisionWins() {
         val row = sitem(5, "system", "approval", approvalBody())
         val pending = display(row)[0] as DItem.Approval

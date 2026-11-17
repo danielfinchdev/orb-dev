@@ -30,7 +30,12 @@ import androidx.compose.material3.AlertDialog
 import dev.orb.app.link.api.ConfirmAction
 import dev.orb.app.link.api.Confirmed
 import dev.orb.app.link.api.UserConfirmation
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -92,9 +97,9 @@ fun ChatListScreen(
         Column(Modifier.fillMaxSize()) {
             ChatsAppBar(menu, onSearch)
             if (!state.online && state.loaded) OfflineStrip()
-            FilterChips(state, vm::setFilter)
+            FilterChips(state, vm::setFilter, vm::setOrder)
             PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::refresh, modifier = Modifier.weight(1f).fillMaxWidth()) {
-                ListBody(state, onOpenChat, onLongPress = { actionsFor = it.key }, onRetry = vm::refresh)
+                ListBody(state, onOpenChat, onLongPress = { actionsFor = it.key }, onRetry = vm::refresh, onCloseDigest = vm::closeDigest, onReorder = vm::reorder)
             }
         }
         ExtendedFloatingActionButton(
@@ -154,7 +159,8 @@ private fun ChatsAppBar(menu: ChatsMenu, onSearch: () -> Unit) {
 }
 
 @Composable
-private fun FilterChips(state: ChatListState, onFilter: (ChatFilter) -> Unit) {
+private fun FilterChips(state: ChatListState, onFilter: (ChatFilter) -> Unit, onOrder: (ChatOrder) -> Unit) {
+    val texts = remember { InboxTexts.current() }
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -163,6 +169,8 @@ private fun FilterChips(state: ChatListState, onFilter: (ChatFilter) -> Unit) {
         Chip(ChatTexts.FILTER_UNREAD, state.unreadChats.takeIf { it > 0 }, state.filter == ChatFilter.Unread) { onFilter(ChatFilter.Unread) }
         Chip(ChatTexts.FILTER_WORKING, state.workingChats.takeIf { it > 0 }, state.filter == ChatFilter.Working) { onFilter(ChatFilter.Working) }
         Chip(ChatTexts.FILTER_DIRECT, null, state.filter == ChatFilter.Direct) { onFilter(ChatFilter.Direct) }
+        // An order, not a filter: it changes how the rows are laid out, not which ones show.
+        Chip(texts.priority, null, state.order == ChatOrder.Priority) { onOrder(if (state.order == ChatOrder.Priority) ChatOrder.Recent else ChatOrder.Priority) }
     }
 }
 
@@ -181,7 +189,10 @@ private fun Chip(label: String, count: Int?, selected: Boolean, onClick: () -> U
 }
 
 @Composable
-private fun ListBody(state: ChatListState, onOpen: (ChatRef) -> Unit, onLongPress: (ChatRow) -> Unit, onRetry: () -> Unit) {
+private fun ListBody(
+    state: ChatListState, onOpen: (ChatRef) -> Unit, onLongPress: (ChatRow) -> Unit, onRetry: () -> Unit,
+    onCloseDigest: () -> Unit, onReorder: () -> Unit,
+) {
     when {
         !state.loaded && state.loadFailed -> Message(ChatTexts.LOAD_ERROR, action = ChatTexts.RETRY, onAction = onRetry)
         !state.loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -193,7 +204,14 @@ private fun ListBody(state: ChatListState, onOpen: (ChatRef) -> Unit, onLongPres
             // The clock is read when the list is composed; rows do not repaint just because a minute went by.
             val now = remember(state.entries) { System.currentTimeMillis() }
             val list = rememberLazyListState()
+            val texts = remember { InboxTexts.current() }
             LazyColumn(Modifier.fillMaxSize(), list, contentPadding = PaddingValues(bottom = 96.dp)) {
+                state.digest?.let { d -> item(key = "digest", contentType = "digest") { DigestCard(d, texts, onCloseDigest, Modifier.animateItem()) } }
+                if (state.order == ChatOrder.Priority) item(key = "reorder", contentType = "reorder") {
+                    TextButton(onClick = onReorder, Modifier.padding(horizontal = 8.dp)) {
+                        Text(texts.reorder, style = MaterialTheme.typography.labelLarge, color = OrbTheme.colors.text2)
+                    }
+                }
                 items(state.entries, key = { it.key }, contentType = { it.contentType }) { entry ->
                     when (entry) {
                         is HeaderEntry -> SectionHeader(entry, Modifier.animateItem())
@@ -203,6 +221,42 @@ private fun ListBody(state: ChatListState, onOpen: (ChatRef) -> Unit, onLongPres
                                 row, ChatTime.short(row.at, now),
                                 onClick = { onOpen(row.ref) }, onLongClick = { onLongPress(row) },
                                 modifier = Modifier.animateItem(),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The summary of the day: what the PC registered yesterday. A line with nothing behind it is not drawn. */
+@Composable
+internal fun DigestCard(d: DayDigest, texts: InboxTexts, onClose: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(Modifier.padding(start = 16.dp, top = 8.dp, end = 4.dp, bottom = 12.dp).testTag("day-digest")) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    texts.digestTitle, Modifier.weight(1f).semantics { heading() },
+                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
+                )
+                Text(d.day, style = MaterialTheme.typography.labelSmall, color = OrbTheme.colors.text3)
+                IconButton(onClick = onClose, Modifier.testTag("day-digest-close")) {
+                    Icon(OrbIcons.Close, texts.digestClose, Modifier.size(18.dp), tint = OrbTheme.colors.text2)
+                }
+            }
+            Column(Modifier.padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (line in d.lines) {
+                    Column(Modifier.testTag("day-digest-${line.key}")) {
+                        Text(line.text, style = MaterialTheme.typography.bodyMedium)
+                        for (item in line.items) {
+                            Text(
+                                "· $item", Modifier.padding(start = 4.dp, top = 2.dp), style = MaterialTheme.typography.bodySmall,
+                                color = OrbTheme.colors.text2, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
@@ -234,7 +288,7 @@ fun Message(title: String, body: String? = null, action: String? = null, onActio
     }
 }
 
-/** A38: the PC runs the deletion; the chat can be brought back right after from the «Deshacer» notice. */
+/** The PC runs the deletion; the chat can be brought back right after from the «Deshacer» notice. */
 @Composable
 internal fun DeleteChatDialog(title: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(

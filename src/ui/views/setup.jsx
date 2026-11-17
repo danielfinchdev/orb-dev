@@ -15,7 +15,6 @@ import { Input, Field, Spinner } from '@/components/ui/basic.jsx';
 import { bridge, call, getState } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
 import { notifyError } from '@/lib/notify.js';
-import { errorText } from '@/lib/utils.js';
 import { PRODUCT } from '../../shared/product.mjs';
 import { MasterCreate } from './master.jsx';
 import { LayoutReview } from './layout.jsx';

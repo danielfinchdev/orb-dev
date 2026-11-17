@@ -10,6 +10,7 @@ import { approvalWaitMinutes, taskTimeoutMinutes } from '../domain/rules/rails.m
 import { connectorKey } from '../platform/config.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
 import { adapter, executable } from '../agents/index.mjs';
+import { UNGUARDED_AGENTS, requireLevel } from '../agents/unguarded.mjs';
 import { liveSkills } from './api/extensions.mjs';
 import { orbMcpServer, connectorLauncher } from '../agents/common.mjs';
 import { agentAuth } from '../domain/security/agent-auth.mjs';
@@ -18,8 +19,10 @@ import { connectorSafe } from '../domain/extensions/extensions.mjs';
 import { CURSOR_FILES } from '../agents/cursor.mjs';
 import { runLog } from '../platform/log.mjs';
 import { oneLine } from '../shared/text.mjs';
+import { buildHandoff, HANDOFF_LOOKBACK } from './handoff.mjs';
 import { git, isGitRepo, repoRoot } from '../platform/git.mjs';
 import { account as findAccount, accountEnv } from '../domain/usage/accounts.mjs';
+import { agentKeyEnv } from '../domain/security/agent-keys.mjs';
 import { pickAccount, recordSpend } from '../domain/usage/budget.mjs';
 import { browserKey } from './browser/browser-key.mjs';
 import { androidAllowed } from './host/android.mjs';
@@ -28,8 +31,13 @@ import { askedByUser } from '../domain/security/approval.mjs';
 import { processList, taskProcesses, powershell } from '../platform/proc-list.mjs';
 import { explainFailure } from '../shared/agent-errors.mjs';
 import { rememberModels } from './usage/catalog.mjs';
+import { snapshotBeforeTurn, snapshotAfterTurn, dropTurns } from '../domain/conversations/turns.mjs';
+import { dropRescues } from '../domain/conversations/rewind.mjs';
 import { changedFiles, logDirect } from '../domain/journal/journal.mjs';
 import { ATTACH_DIR, placeAttachments as copyAttachments, prepareAttachments } from './host/attachments.mjs';
+import { goalAfterTurn, goalFailed, goalSteered, debugOn } from './modes.mjs';
+import { SideChats } from './side.mjs';
+import { Suggester } from './suggest.mjs';
 
 export { PERMISSIONS, ATTACH_DIR };
 // a message that asks for a picture (or to change one): Codex gets a short note on how Orb wants it done.
@@ -51,7 +59,7 @@ export const browserOn = () => Boolean(ctx.browser) && ctx.config.browser?.enabl
 // carries only the pipe and a ticket per server, new for every agent process and taken back when it closes
 // (Sessions.closeLive, the coordinator's Lane.closeLive). A worker's tools act only on its task (permissions.mjs ›
 // ownsTask); two direct conversations of one agent are two identities.
-// F2.6c: reusable: Cursor's tickets, new every turn (mcpServersEachTurn) and released when the turn ends (.release()).
+// Reusable: Cursor's tickets, new every turn (mcpServersEachTurn) and released when the turn ends (.release()).
 export function mcpServersFor(agent, { taskId = '', orchestrator = false, browser = !orchestrator, session = '', conversation = null, reusable = false } = {}) {
   const who = orchestrator ? 'orb' : agent;
   const sid = session ? String(session) : null;
@@ -72,7 +80,7 @@ export function mcpServersFor(agent, { taskId = '', orchestrator = false, browse
       if (s.enabled === false || (s.agents?.length && !s.agents.includes(agent)) || taken.has(connectorKey(s.name))) continue;
       // a server of core\mcp whose folder is a link or a junction (or reaches out of core) never starts.
       if (!connectorSafe(ctx.paths.core, s)) continue;
-      taken.add(connectorKey(s.name)); // F2.6c: never two servers on one variable name (config checks it too)
+      taken.add(connectorKey(s.name)); // never two servers on one variable name (config checks it too)
       // its keys only for its launcher (orb.json has references). Keys go as a one-time grant of the vault, made when
       // the launcher trades its ticket: the keys go from the vault to the launcher, never through the engine.
       servers[s.name] = ticketed(s.name, connectorLauncher(), () => ({ launch: { command: s.command, args: s.args ?? [], ...connectorLaunch(ctx.master, s) } }));
@@ -107,7 +115,7 @@ function keepOutOfGit(cwd, entries = [`${ATTACH_DIR}/`]) {
 }
 
 // One line for the live view: what the agent is doing now.
-export function describeItem(item) {
+function describeItem(item) {
   const b = item.body;
   if (item.kind === 'tool') return oneLine(`${b?.name ?? tr('msg.sessions.tool')}${b?.input ? `: ${b.input}` : ''}`, 140);
   if (item.kind === 'file') return oneLine(`${{ add: tr('msg.sessions.fileAdd'), delete: tr('msg.sessions.fileDelete') }[b?.change] ?? tr('msg.sessions.fileEdit')} ${b?.path ?? ''}`, 140);
@@ -137,12 +145,19 @@ export class Sessions {
     this.onRate = () => {};     // set by the engine: the real usage each account reports (budget)
     // Sessions left "running" by a closed app: their process is gone. Marked "interrupted" so they can continue.
     board.run("UPDATE sessions SET status = 'interrupted' WHERE status = 'running'");
+    // A «/goal» that was going when the app closed does not start by itself on the next launch: it waits for «continuar».
+    for (const row of board.all("SELECT key FROM settings WHERE key LIKE 'goal:%'")) {
+      const goal = board.settingJson(row.key);
+      if (goal?.status === 'active') board.settingJson(row.key, { ...goal, status: 'paused', reason: tr('msg.modes.goalAppClosed') });
+    }
     // Approval cards left open by a closed app can no longer be answered.
     for (const row of board.all("SELECT id, body FROM session_items WHERE kind = 'approval' AND body LIKE '%\"status\":\"pending\"%'")) {
       const item = parseItem(row); board.run('UPDATE session_items SET body = ? WHERE id = ?', JSON.stringify({ ...item.body, status: 'expired' }), row.id);
     }
     this.sweeper = setInterval(() => this.closeIdle(), 60_000);
     this.sweeper.unref?.();
+    this.side = new SideChats(this); // «/side»: questions apart, in memory only (side.mjs)
+    this.suggest = new Suggester(this); // the grey next message in the box, when Ajustes has it on (suggest.mjs)
   }
 
   list({ archived = false, kind } = {}) {
@@ -175,11 +190,14 @@ export class Sessions {
     if ('permission' in fields && !PERMISSIONS.includes(fields.permission)) throw new Error(tr('msg.sessions.badPermission'));
     const value = (k) => { const v = fields[k]; if (typeof v === 'boolean') return Number(v); if (v && typeof v === 'object') return JSON.stringify(v); return v ?? null; };
     this.board.run(`UPDATE sessions SET ${keys.map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`, ...keys.map(value), now(), id);
+    // an archived conversation leaves no photos in the user's repository (turns.mjs); un-archiving starts the panel again.
+    if (fields.archived === true && !this.running.has(id)) { const c = this.get(id); if (c?.kind === 'chat' && c.project && c.cwd) dropTurns(c.cwd, id); }
     // The live process follows the changes it can take on the fly; the rest apply when it starts again.
     const entry = this.lives.get(id);
     if (entry) {
       if ('model' in fields) { if (entry.live.caps.models) entry.live.setModel?.(fields.model); else if (!this.running.has(id)) this.closeLive(id); }
-      if ('permission' in fields) entry.live.setPermission?.(fields.permission);
+      // a «/plan» turn runs in «Solo lectura»: a change made meanwhile applies from the next turn (its process is rebuilt then)
+      if ('permission' in fields && !this.running.get(id)?.planOnly) entry.live.setPermission?.(fields.permission);
       if ('reasoning' in fields && !this.running.has(id)) this.closeLive(id);
       if ('cwd' in fields || 'account' in fields) this.closeLive(id);
     }
@@ -189,11 +207,16 @@ export class Sessions {
   remove(id) {
     if (this.running.has(id)) throw new Error(tr('msg.sessions.stopFirst'));
     const s = this.must(id); if (s.kind === 'task') throw new Error(tr('msg.sessions.taskSession'));
-    this.closeLive(id); this.asked.delete(id);
+    this.closeLive(id); this.asked.delete(id); this.side.closeFor(id);
+    if (s.project && s.cwd) { dropTurns(s.cwd, id); dropRescues(s.cwd, id); }
+    // The rescue refs live in the project's repository, so they go even when the chat's own folder is already gone.
+    if (s.project) for (const repo of new Set([this.board.settingJson(`chatwt:${id}`)?.repo, this.board.project(s.project)?.path])) { if (repo && repo !== s.cwd && fs.existsSync(repo)) dropRescues(repo, id); }
     this.board.run('DELETE FROM session_items WHERE session_id = ?', id);
     this.board.run('DELETE FROM session_queue WHERE session_id = ?', id);
     this.board.run('DELETE FROM sessions WHERE id = ?', id);
+    this.board.settingJson(`goal:${id}`, null); this.board.settingJson(`debug:${id}`, null);
     this.emit('session:removed', { id });
+    try { this.onRemoved?.(s); } catch { /* a listener must never break a removal */ }
   }
 
   // History in pages: the newest `limit` items, or those before `before` (older pages) / after `after` (new ones).
@@ -301,12 +324,15 @@ export class Sessions {
     // Long instructions Cursor gets in a file go to the attachments folder (out of git), not among the project's files.
     const promptDir = path.join(s.cwd, ATTACH_DIR);
     if (s.agent === 'cursor') keepOutOfGit(s.cwd, [`${ATTACH_DIR}/`, ...CURSOR_FILES]);
+    // the agent's own API key from the vault (only the names of its table, src/domain/security/agent-keys.mjs): in its
+    // process environment and nowhere else; its value is hidden from the agent's log and events (secretValues).
+    const keyEnv = agentKeyEnv(ctx.master, s.agent);
     entry.live = a.createLive({
-      promptDir,
+      promptDir, secretValues: Object.values(keyEnv),
       exe, cwd: s.cwd, model: s.model, reasoning: s.reasoning, permission: s.permission,
       resumeId: forkFrom || s.cli_session || null, forkSession: Boolean(forkFrom), newSessionId,
       mcpServers: mcpServersOf(a, s.agent, { taskId, session: s.id }), budgetUsd,
-      env: { ...accountEnv(acc), ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
+      env: { ...accountEnv(acc), ...keyEnv, ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
       internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, cfg: ctx.config.agents[s.agent] ?? {},
       // the project's folder for the guard's inside/outside rules (none in a chat without a project), and what the
       // user's own message of the turn asked for (read on every action: «súbelo» lets «Auto» push).
@@ -396,7 +422,7 @@ export class Sessions {
     }
     if (ev.type === 'context') { if (ev.size) this.update(id, { context: { used: ev.used, size: ev.size, at: now() } }); return; }
     if (ev.type === 'rate') { const s = this.get(id); try { this.onRate(s?.account ?? s?.agent, ev); } catch { /* budget only */ } return; }
-    // F2.6c: the process is gone: its tickets go with it at once, even mid-turn (a process it left behind could trade them).
+    // The process is gone: its tickets go with it at once, even mid-turn (a process it left behind could trade them).
     if (ev.type === 'exit') { if (this.lives.get(id)?.live.isClosed?.()) { agentAuth.revokeSession(id); if (!this.running.has(id)) this.lives.delete(id); } }
   }
 
@@ -457,13 +483,14 @@ export class Sessions {
 
   // A message to a conversation: a new turn if it is idle; if it is working, steer it (the agent reads it at its next
   // step) or queue it (sent when the turn ends). mode: 'auto' (steer when the agent can, else queue) | 'steer' | 'queue'.
-  message(id, text, { images = [], mode = 'auto', context = '' } = {}) {
+  message(id, text, { images = [], mode = 'auto', context = '', asked } = {}) {
     // context: what @ attached (another task, conversation or log), added for the agent but not shown as typed.
-    if (!this.running.has(id)) { this.send(id, text, { images, prompt: context ? `${text}${context}` : undefined }); return { sent: true }; }
+    if (!this.running.has(id)) { this.send(id, text, { images, asked, prompt: context ? `${text}${context}` : undefined }); return { sent: true }; }
     const entry = this.lives.get(id);
     const onFail = () => { this.addItem(id, 'system', 'status', tr('msg.sessions.steerLate')); this.enqueue(id, text, []); };
     if (mode !== 'queue' && !images.length && !this.running.get(id)?.compacting && entry?.live.caps.steer && entry.live.steer({ text: context ? `${text}${context}` : text, onFail })) {
       this.addItem(id, 'user', 'text', { text, steer: true });
+      goalSteered(this, id);
       return { steered: true };
     }
     this.enqueue(id, text, images);
@@ -517,14 +544,20 @@ export class Sessions {
   // every open agent process asks its plan's usage now (the usage panel's «Recargar»). → promises
   refreshUsage() { return [...this.lives.values()].map((e) => { try { return e.live.refreshUsage?.(); } catch { return null; } }).filter(Boolean); }
 
-  stopAll() { for (const id of this.running.keys()) this.stop(id); for (const id of [...this.lives.keys()]) this.closeLive(id); clearInterval(this.sweeper); }
+  stopAll() { this.side.closeAll(); for (const id of [...this.suggest.pending.keys()]) this.suggest.cancel(id); for (const id of this.running.keys()) this.stop(id); for (const id of [...this.lives.keys()]) this.closeLive(id); clearInterval(this.sweeper); }
 
   // One turn. options: images (absolute paths), prompt (what the agent receives, if it differs from what the user typed),
   // timeoutMs, budgetUsd, taskId, showUser, onFinish({ code, state, stderr, logFile, stopped, timedOut, limit }).
-  send(id, text, { images = [], prompt, timeoutMs = taskTimeoutMinutes() * 60_000, budgetUsd, taskId, onFinish, showUser = true, asked } = {}) {
-    const s = this.must(id);
+  send(id, text, { images = [], prompt, timeoutMs = taskTimeoutMinutes() * 60_000, budgetUsd, taskId, onFinish, showUser = true, asked, turnPermission } = {}) {
+    // turnPermission: this one turn runs with less permission than the chat has («/plan»). Only «leer» exists, and only to lower
+    // it: nothing here can make a turn more permissive than the chat.
+    const chat = this.must(id);
+    this.suggest.cancel(id); // a message of the user ends the proposal for the box
+    const planOnly = turnPermission === 'leer';
+    const s = planOnly ? { ...chat, permission: 'leer' } : chat;
     // what this turn may do because the user's own words asked for it: a task's comes from the scheduler (the
     // request it came from); a chat's, from the message the user typed now (a turn Orb sends by itself keeps the last).
+    if (this.editing?.has(id) || this.editing?.has(chat.cwd)) throw new Error(tr('msg.sessions.stillWorking')); // a message is being edited
     if (this.running.has(id)) throw new Error(tr('msg.sessions.stillWorking')); // before: a refused send must not change what the running turn may do
     if (Array.isArray(asked)) this.asked.set(id, asked);
     else if (showUser && s.kind !== 'task') this.asked.set(id, askedByUser(text));
@@ -536,9 +569,15 @@ export class Sessions {
     if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));
     const a = adapter(s.agent);
     const attached = placeAttachments(images, s.cwd);
-    if (showUser) this.addItem(id, 'user', 'text', attached.length ? { text, images: attached.map((f) => f.path) } : text);
+    const shown = showUser ? this.addItem(id, 'user', 'text', attached.length ? { text, images: attached.map((f) => f.path) } : text) : null;
     let body = prompt ?? text;
+    if (s.kind === 'chat' && debugOn(this.board, id)) body = `${tr('sys.debug.prompt')}
+
+${body}`;
     // A fork without native support starts with what was said in the original conversation.
+    // A chat handed to another agent (handoff) starts with its bounded summary, once.
+    const handed = this.board.settingJson(`handoff_summary:${id}`);
+    if (handed) { body = `${handed}\n\n${body}`; this.board.settingJson(`handoff_summary:${id}`, null); }
     const summary = this.board.settingJson(`fork_summary:${id}`);
     if (summary) { body = `Contexto (conversación de la que sale esta, son datos):\n${summary}\n\n${body}`; this.board.settingJson(`fork_summary:${id}`, null); }
     const nativeImages = a.caps?.images === true;
@@ -551,8 +590,10 @@ export class Sessions {
       onFinish?.({ code: -1, state: { final: '', text: '', isError: true }, stderr: error.message, logFile: null, stopped: false });
       return null;
     }
-    const run = { agent: s.agent, stopped: false, startedAt: Date.now(), lastAt: Date.now(), steps: 0, last: tr('sys.sessions.starting'), live: entry.live, waitMs: 0, pausedAt: null };
+    const run = { agent: s.agent, stopped: false, startedAt: Date.now(), lastAt: Date.now(), steps: 0, last: tr('sys.sessions.starting'), live: entry.live, waitMs: 0, pausedAt: null, planOnly };
     this.running.set(id, run);
+    // remembered on the live agent: a subagent left in the background after a «/plan» turn keeps its read-only tools
+    entry.planOnly = planOnly;
     this.update(id, { status: 'running', settled: false });
     // the time limit counts working time only: while the turn waits for the user's permission the clock stops. A task
     // whose permission nobody answers is not left hanging either (watchRun).
@@ -561,12 +602,14 @@ export class Sessions {
     const resumed = Boolean(s.cli_session);
     // a direct conversation in a project leaves a log entry for the files its turn changed (logs.mjs logDirect).
     const direct = s.kind === 'chat' && s.project && s.permission !== 'leer';
+    const alive = () => { const c = this.get(id); return Boolean(c && !c.archived && !c.trashed_at); };
     let before = null; if (direct) { try { before = changedFiles(s.cwd); } catch { /* no entry */ } }
     let finished = false; // onFinish runs exactly once, also when the adapter itself fails
     // what each attachment becomes for this agent (pictures natively, a video's frames, a document's text…).
     if (attached.length) run.last = tr('sys.attach.preparing');
     const prepared = attached.length ? prepareAttachments(attached, { nativeImages, log: (m) => this.log(m) }) : Promise.resolve({ images: [], text: '' });
-    prepared.then((p) => (run.stopped ? { final: '', text: '', isError: true } : entry.live.send({ text: p.text ? `${body}\n\n${p.text}` : body, images: p.images }))).then((result) => {
+    // the light photo of the folder for the «Cambios» panel (turns.mjs): the baseline before the first turn, one more when each ends.
+    prepared.then(async (p) => { if (direct && !run.stopped) await snapshotBeforeTurn(s.cwd, id, alive, { mark: shown?.id }); return p; }).then((p) => (run.stopped ? { final: '', text: '', isError: true } : entry.live.send({ text: p.text ? `${body}\n\n${p.text}` : body, images: p.images }))).then((result) => {
       clearInterval(timer);
       entry.lastUsed = Date.now();
       if (this.running.get(id) === run) this.running.delete(id);
@@ -581,12 +624,16 @@ export class Sessions {
       if (run.stopped && !run.timedOut) this.addItem(id, 'system', 'status', tr('msg.sessions.stopped'));
       const limited = Boolean(result.limit);
       this.update(id, { status: limited ? 'limited' : failed ? 'error' : 'idle' });
+      if (direct) snapshotAfterTurn(s.cwd, id, alive);
       if (before) { try { logDirect(this.board, this.get(id) ?? s, { before, request: text, answer: result.text || result.final }); } catch (error) { this.log(`bitácora de la conversación ${id}: ${error.message}`); } }
       try { recordSpend(this.board, { account: acc.id, session: s.id, task: taskId ?? null, usage: result.usage ?? {} }); } catch (error) { this.log(`uso ${id}: ${error.message}`); }
       const state = { final: result.final, text: result.text, isError: result.isError, usage: result.usage, cliSession: this.get(id)?.cli_session };
       finished = true;
       try { onFinish?.({ code: result.isError ? 1 : 0, state, stderr: result.isError ? result.final : '', logFile: entry.logFile, stopped: run.stopped, timedOut: Boolean(run.timedOut), limit: result.limit }); }
       catch (error) { this.log(`onFinish ${id}: ${error.stack}`); }
+      // «/goal»: the next turn of the goal, or why it stops (modes.mjs). It goes before the queue: a queued message pauses it. A stopped turn or a limit reaches it too, to pause it.
+      if (!onFinish && s.kind === 'chat') { try { goalAfterTurn(this, id, { result, run }); } catch (error) { this.log(`objetivo ${id}: ${error.message}`); } }
+      if (!onFinish && s.kind === 'chat') { try { this.suggest.after(id, { request: text, result, stopped: run.stopped }); } catch (error) { this.log(`sugerencia ${id}: ${error.message}`); } }
       // Messages written while it worked go now, in order (not after a stop or a limit: then the user decides).
       if (!run.stopped && !limited && !onFinish) {
         const next = this.takeQueued(id);
@@ -600,6 +647,7 @@ export class Sessions {
       if (this.running.get(id) === run) this.running.delete(id);
       const final = `${a.label}: ${error.message}`;
       try { this.update(id, { status: 'error' }); this.addItem(id, 'error', 'text', final); } catch { /* the conversation may be gone */ }
+      if (!onFinish && s.kind === 'chat') { try { goalFailed(this, id, final); } catch { /* the conversation may be gone */ } }
       if (!finished) {
         finished = true;
         try { onFinish?.({ code: 1, state: { final, text: '', isError: true }, stderr: error.message, logFile: entry.logFile, stopped: run.stopped, timedOut: Boolean(run.timedOut) }); }
@@ -607,6 +655,18 @@ export class Sessions {
       }
     });
     return run;
+  }
+
+  // One subagent of the running turn (Claude's Agent tool): «stop» ends only that one, «background» lets it go on without the turn
+  // waiting for it. Only an agent that can do it does; the others say so (Codex: the whole turn has to be stopped), never pretend.
+  async subagent(id, toolId, action) {
+    this.must(id);
+    const live = this.lives.get(id)?.live;
+    const call = action === 'stop' ? live?.stopSubagent : action === 'background' ? live?.backgroundSubagent : null;
+    if (!call || (action !== 'stop' && !this.running.has(id))) throw new Error(tr(action === 'stop' ? 'msg.subagent.noStop' : 'msg.subagent.noBackground'));
+    const ok = await call.call(live, String(toolId ?? ''));
+    if (!ok) throw new Error(tr('msg.subagent.notRunning'));
+    return { ok: true };
   }
 
   // «Compactar»: the agent's own compaction of a long direct conversation (Claude /compact, Codex's thread
@@ -646,8 +706,9 @@ export class Sessions {
     if (s.kind !== 'chat') throw new Error(tr('msg.sessions.compactNotHere'));
     if (this.running.has(id)) throw new Error(tr('msg.sessions.stillWorking'));
     this.closeLive(id);
-    this.board.settingJson(`fork_summary:${id}`, null); this.board.settingJson(`fork_pending:${id}`, null);
+    this.board.settingJson(`fork_summary:${id}`, null); this.board.settingJson(`fork_pending:${id}`, null); this.board.settingJson(`handoff_summary:${id}`, null);
     this.update(id, { cli_session: null, context: null });
+    this.board.settingJson(`goal:${id}`, null); this.emit('session:goal', { id, goal: null });
     this.addItem(id, 'system', 'status', tr('msg.sessions.cleared'));
     return { ok: true };
   }
@@ -670,6 +731,7 @@ export class Sessions {
     if (this.running.has(id)) throw new Error(tr('msg.sessions.forkWait'));
     const other = agent && agent !== s.agent ? agent : null;
     const a = adapter(other ?? s.agent);
+    if (other && UNGUARDED_AGENTS.includes(other)) requireLevel('leer', AGENT_LABELS[other] ?? other); // the copy never keeps «total»
     // what was given with the master password stays with the original (also «total» of a project's chat).
     const copy = this.create({ kind: 'chat', agent: other ?? s.agent, account: other ? null : s.account, model: other ? null : s.model, reasoning: other && s.reasoning === 'xhigh' ? 'high' : s.reasoning, permission: s.permission !== 'total' ? s.permission : s.project ? permissionOfAutonomy(globalAutonomy()) : 'leer',
       project: s.project, cwd: s.cwd, title: title || (other ? tr('msg.sessions.switchTitle', { title: s.title, agent: AGENT_LABELS[other] ?? other }) : tr('msg.sessions.forkTitle', { title: s.title })), parentId: s.id });
@@ -680,6 +742,41 @@ export class Sessions {
     if (!other && a.caps?.fork && s.cli_session) this.board.settingJson(`fork_pending:${copy.id}`, s.cli_session);
     else if (old.length) this.board.settingJson(`fork_summary:${copy.id}`, old.map((it) => `${it.role === 'user' ? 'Usuario' : 'Agente'}: ${oneLine(bodyText(parseItem(it).body), 400)}`).join('\n'));
     return copy;
+  }
+
+  // «Pasar a otro agente»: the same chat goes on with another agent (same folder, same lines in Orb). The old agent's
+  // process closes; its native session, hidden reasoning and subagents do not travel. The new one starts with a bounded
+  // summary (handoff.mjs) in front of the next message. The chat's permission is kept, never raised: «total» (given with
+  // the master password to the agent that had it) is not handed to another one. Refused while a turn runs or a permission
+  // waits. → the chat
+  handoff(id, { agent } = {}) {
+    const s = this.must(id);
+    if (s.kind !== 'chat') throw new Error(tr('msg.sessions.compactNotHere'));
+    if (!agent || agent === s.agent) throw new Error(tr('msg.sessions.handoffSame'));
+    if (this.running.has(id)) throw new Error(tr('msg.sessions.handoffWait'));
+    if (this.pendingApprovals(id).length) throw new Error(tr('msg.sessions.handoffApproval'));
+    adapter(agent); // throws for an unknown agent
+    if (UNGUARDED_AGENTS.includes(agent)) requireLevel('leer', AGENT_LABELS[agent] ?? agent); // «total» is never carried over
+    const acc = pickAccount(this.board, { agent });
+    if (!acc || acc.agent !== agent) throw new Error(tr('msg.sessions.accountNotOf', { account: agent, agent }));
+    const rows = this.board.all("SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT ?", id, HANDOFF_LOOKBACK).reverse().map(parseItem);
+    const from = AGENT_LABELS[s.agent] ?? s.agent; const to = AGENT_LABELS[agent] ?? agent;
+    const summary = buildHandoff(rows, { fromLabel: from, toLabel: to });
+    // «total» goes back to what the chat had before it (as grants.mjs does when it is taken back); never above that.
+    const prev = this.board.settingJson(`grant_prev:${id}`);
+    const permission = s.permission !== 'total' ? s.permission : s.project ? (['leer', 'probar', 'editar', 'preguntar', 'auto'].includes(prev) ? prev : permissionOfAutonomy(globalAutonomy())) : 'leer';
+    this.board.settingJson(`grant_prev:${id}`, null);
+    this.asked.delete(id); // what the user's words allowed the old agent is not the new agent's
+    this.closeLive(id);
+    this.board.settingJson(`fork_summary:${id}`, null); this.board.settingJson(`fork_pending:${id}`, null);
+    this.board.run('UPDATE sessions SET agent = ?, account = ?, model = ?, reasoning = ?, permission = ?, cli_session = NULL, context = NULL, android = 0, updated_at = ? WHERE id = ?',
+      agent, acc.id, ctx.config.agents[agent]?.defaultModel || null, s.reasoning === 'xhigh' ? 'high' : s.reasoning, permission, now(), id);
+    this.board.settingJson(`handoff_summary:${id}`, summary.text);
+    if (Number(s.android) === 1) this.addItem(id, 'system', 'status', tr('msg.grants.androidOff')); // given to the old agent, not to the new one
+    // the item keeps what fits in a stored line (20.000 characters); the agent gets the whole summary
+    const shown = summary.text.length > 18000;
+    this.addItem(id, 'system', 'handoff', { from: s.agent, to: agent, at: now(), summary: shown ? summary.text.slice(0, 18000) : summary.text, count: summary.count, truncated: summary.truncated || shown });
+    const out = this.get(id); this.emit('session:update', out); return out;
   }
 }
 

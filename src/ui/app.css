@@ -85,6 +85,8 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
    comes near (content-visibility); its last known height keeps the scroll bar steady. The newest messages always are; if
    older ones on screen change height when drawn, the conversation goes back to its bottom (chat.jsx › useAutoScroll).
    The clip margin lets shadows and rings show as before. */
+/* Densidad (Ajustes › Apariencia): scales Tailwind's spacing unit inside the chat column only; 1 leaves it exactly as it was. */
+.lazy-lines { --spacing: calc(0.25rem * var(--app-density)); }
 .lazy-lines > :nth-last-child(n+13) { content-visibility: auto; contain-intrinsic-size: auto 120px; overflow-clip-margin: 16px; }
 .lazy-row { content-visibility: auto; contain-intrinsic-size: auto 56px; overflow-clip-margin: 8px; }
 /* A screen whose file is still on its way (main.jsx › Loading): the spinner only after a moment, never a flash. */

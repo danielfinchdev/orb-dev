@@ -121,7 +121,7 @@ export function newProject(board, { name, notes = '', category, platforms }, act
 
 // 2.7–3.7: a multiplatform project was a group (tienda-android, tienda-ios… with a shared folder <home>/comun/<name>).
 // None is made any more (multi instead); the groups of a workspace of those versions still work together.
-export const commonFolder = (group) => path.join(ctx.home, 'comun', folderName(group, 'proyecto'));
+const commonFolder = (group) => path.join(ctx.home, 'comun', folderName(group, 'proyecto'));
 // The group of a project: its sister projects (with their folders) and the shared folder; null if it is on its own.
 export function groupOf(board, project) {
   const p = typeof project === 'string' ? board.project(project) : project;

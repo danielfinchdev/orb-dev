@@ -31,6 +31,7 @@ export default {
   'app.window.close': 'Cerrar',
   'app.trashAdded': 'El dispositivo enlazado «{device}» ha enviado «{title}» a la papelera.',
   'app.trashUndo': 'Deshacer',
+  'app.prCardWaiting': 'Un agente espera tu respuesta sobre la PR #{number}. Abre su chat para verla.',
   'app.engineStopped': 'Orb se ha detenido varias veces. Cierra la aplicación y vuelve a abrirla.',
   'app.engineRestarted': 'Orb se ha reiniciado tras un error. Las tareas en curso se han marcado como fallidas; puedes reintentarlas.',
   'app.pairTitle': 'Vincula este dispositivo',

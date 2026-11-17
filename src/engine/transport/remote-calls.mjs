@@ -24,7 +24,7 @@ export function guardCall(board, method, params, { allowed = REMOTE_METHODS, upl
   // A conversation the PC gave total access to is driven from the PC only.
   if (method.startsWith('sessions.') && method !== 'sessions.stop' && params.id !== undefined && board.one('SELECT permission FROM sessions WHERE id = ?', String(params.id))?.permission === 'total') return tr('msg.remote.totalConvPcOnly');
   // The HTML pages of such a conversation are not read from a phone either (the page names its chat in `session`).
-  if (method === 'htmlPages.get' && params.session !== undefined && board.one('SELECT permission FROM sessions WHERE id = ?', String(params.session))?.permission === 'total') return tr('msg.remote.totalConvPcOnly');
+  if ((method === 'htmlPages.get' || method === 'htmlPages.choose') && params.session !== undefined && board.one('SELECT permission FROM sessions WHERE id = ?', String(params.session))?.permission === 'total') return tr('msg.remote.totalConvPcOnly');
   // Pictures from a phone are only the ones it uploaded itself (never other files of the PC).
   if (params.images !== undefined) {
     if (!uploadsDir) return tr('msg.remote.ownImages');
@@ -40,12 +40,11 @@ export const pushPreview = (config) => (PREVIEWS.includes(config?.mobile?.previe
 // no folder of this PC reaches a phone or browser. A value that is one whole absolute path (a project's folder, a
 // task's copy, a conversation's cwd…) goes as its place inside the assistant folder («proyectos/web/tienda»), or just
 // its last part when it is outside; in any other text (a chat message, an activity line, an error, a key), only the assistant folder's own
-// path is cut, written in any case and with either separator. F2.6c: free text is never replaced whole (a message that
+// path is cut, written in any case and with either separator. Free text is never replaced whole (a message that
 // starts with C:\ keeps its words). (Other paths an agent wrote in its text go as they are.)
 const ABSOLUTE = /^(?:[A-Za-z]:[\\/]|\\\\|\/(?:Users|home|root|mnt|media|var|tmp|opt|private|Volumes|srv|data)\/)/;
 // Names the PC gives to what a phone uploads. Only pictures may go in `images`: the other kinds are stored but never
 // resolve to a path there, so guardCall refuses them as images.
-const UPLOAD_NAME = /^\d+-[0-9a-f]{8}\.(png|jpg|webp|gif|pdf|txt|md|csv|json)$/;
 const IMAGE_NAME = /^\d+-[0-9a-f]{8}\.(png|jpg|webp|gif)$/;
 // Fields of free text (what people and agents write): never replaced whole, only the assistant folder is cut.
 const TEXT_FIELD = /^(body|text|title|description|message|note|notes|result|summary|content|prompt|question|answer|label|reason|error|detail|final|output|input|brief|elements)$/i;
@@ -74,7 +73,7 @@ export function withoutPaths(value, depth = 0, key = '', re = homePattern()) {
 // What a call from outside gets back: the settings without secrets, and no folder of this PC (its home, the assistant's
 // paths; any other path as its place in the assistant folder).
 export function shapeResult(method, result) {
-  // F2.6c: the whiteboard comes back to the PC as it went (whiteboard.save): only its attachments are cut.
+  // The whiteboard comes back to the PC as it went (whiteboard.save): only its attachments are cut.
   if (method === 'whiteboard.load' && result) return { ...result, attachments: withoutPaths(result.attachments) };
   if (method !== 'app.state' || !result) return withoutPaths(result);
   const { home: _home, paths: _paths, ...rest } = result;
@@ -82,7 +81,7 @@ export function shapeResult(method, result) {
   return withoutPaths({ ...rest, activeProject, config: phoneConfig(rest.config) });
 }
 
-export { UPLOAD_NAME, IMAGE_NAME };
+export { IMAGE_NAME };
 
 // A file name from the phone made safe to show and to log: no folders or drives, no characters Windows refuses, no
 // reserved device names, no invisible or direction-changing characters, bounded length. Never used to build a path.

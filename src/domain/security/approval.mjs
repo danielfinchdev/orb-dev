@@ -49,7 +49,7 @@ const KEYWORDS = [
 // deleted") only needs the request to ask for it. Anything else waits for the click.
 const FILE_RE = /(?:^|[\s«"'`(\[/\\])((?:[\w-][\w.-]*[\\/])*[\w-][\w.-]*\.[A-Za-z][A-Za-z0-9]{0,7})(?=$|[\s»"'`),;:!?\]]|\.(?:\s|$))/g;
 const DELETE_RE = /(rm\s+-rf|\b(borra\w*|borr[eé]\w*|elimina\w*|elimin[eé]\w*|delete\w*|remove\s+(the\s+)?files?|drop\s+table|formatea\w*)\b)/i;
-export const filesIn = (text) => [...String(text ?? '').matchAll(FILE_RE)].map((m) => m[1].replace(/\\/g, '/').split('/').pop().toLowerCase());
+const filesIn = (text) => [...String(text ?? '').matchAll(FILE_RE)].map((m) => m[1].replace(/\\/g, '/').split('/').pop().toLowerCase());
 export function filesToDelete(taskText) {
   const sentences = String(taskText ?? '').split(/(?<=[.!?;])\s+|\n+/);
   return [...new Set(sentences.filter((s) => DELETE_RE.test(s)).flatMap(filesIn))];
@@ -77,6 +77,21 @@ export function detectSensitivity(text) {
 // Only orders to the agent (imperatives and «git push»), so «añade notificaciones push» or «un botón para publicar» do not
 // count.
 const PUBLISH_ASK = /(^|[^\p{L}])(git\s+push|(?:haz|hacer|hagas|haga)\s+(?:el\s+|un\s+)?push|push(?:[eé][aá]\w*|ear)|push\s+(?:a|al|to|it|the|los|el)|publ[ií]ca(?:lo|la|los|las)?|publish(?:\s+it)?|deploy(?:\s+it)?|despl[ií]ega(?:lo|la)?|s[uú]bel[oa]s?|sube(?:lo|los)?\s+(?:los\s+cambios|el\s+c[oó]digo|a\s+(?:github|gitlab|git|origin|remoto|main|master)|al\s+(?:repo\w*|remoto)))(?![\p{L}])/iu;
+// Quotes (`> …`, added by the reply-to-selection action) and fenced code are pasted text, not the user's own order.
+function ownWords(text) {
+  // A fence closes only with the same character, at least as long, and nothing after it (a longer outer fence may hold shorter ones).
+  let fence = null;
+  return String(text ?? '').split(/\r?\n/).filter((line) => {
+    if (fence) {
+      const close = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(line)?.[1];
+      if (close && close[0] === fence[0] && close.length >= fence.length) fence = null;
+      return false;
+    }
+    const open = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    if (open) { fence = open; return false; }
+    return !/^\s*>/.test(line) && !/^(?: {4}|\t)/.test(line);
+  }).join('\n');
+}
 export function askedByUser(userText) {
-  return PUBLISH_ASK.test(affirmed(userText)) ? ['publish'] : [];
+  return PUBLISH_ASK.test(affirmed(ownWords(userText))) ? ['publish'] : [];
 }

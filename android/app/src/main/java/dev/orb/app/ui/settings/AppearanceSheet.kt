@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -55,13 +56,14 @@ fun AppearanceContent(
     onDark: (DarkMode) -> Unit,
     onDynamic: (Boolean) -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxWidth().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(T.TITLE, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
 
         Column(Modifier.selectableGroup().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             ChoiceRow(T.FOLLOW_PC, selected = settings.choice == null) { onChoice(null) }
             ChoiceRow(T.ORBITA, selected = settings.choice == ThemeChoice.Orbita) { onChoice(ThemeChoice.Orbita) }
             ChoiceRow(T.CRISTAL, selected = settings.choice == ThemeChoice.Cristal) { onChoice(ThemeChoice.Cristal) }
+            ChoiceRow(T.GRAFITO, selected = settings.choice == ThemeChoice.Grafito) { onChoice(ThemeChoice.Grafito) }
         }
 
         Row(

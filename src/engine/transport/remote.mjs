@@ -24,7 +24,7 @@ import { principalOf, REMOTE_METHODS } from '../../domain/security/permissions.m
 import { isLegacy } from '../../domain/data/legacy/migrate-38.mjs';
 import { ownPorts } from '../host/host.mjs';
 import { RENDERER, SESSION_DAYS, PAIR_MINUTES, UPLOAD_MAX, UPLOADS_TOTAL, UPLOADS_DAYS, STREAM_BACKLOG, STREAMS_PER_DEVICE, NETWORK_CHECK_MS, now, PAIR_KINDS, PAIR_FAILS_MAX, PAIR_PASSWORD_TRIES } from './remote-common.mjs';
-import { phoneConfig, guardCall, pushPreview, IMAGE_NAME, UPLOAD_TYPES, sniffUpload, sanitizeUploadName, withoutPaths, shapeResult } from './remote-calls.mjs';
+import { guardCall, pushPreview, IMAGE_NAME, UPLOAD_TYPES, sniffUpload, sanitizeUploadName, withoutPaths, shapeResult } from './remote-calls.mjs';
 import { privateSource, orbNameOf, ipOf, kindOf, kindForPairing, localName, plainHttpBrowser, parseMeta, metaVOf, APP_CORS, appOrigin, tailscaleExe, tailscaleAddress, lanAddresses } from './remote-net.mjs';
 import { TYPES, HEADERS, SERVICE_WORKER } from './remote-web.mjs';
 
@@ -33,7 +33,7 @@ export { PREVIEWS, guardCall, phoneConfig, pushPreview, shapeResult, withoutPath
 export { SERVICE_WORKER } from './remote-web.mjs';
 export { kindForPairing, lanAddresses, localName, orbNameOf, plainHttpBrowser, privateSource, startAttention, tailscaleAddress } from './remote-net.mjs';
 
-const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'session:item', 'session:update', 'session:removed', 'config:changed', 'session:delta', 'session:queue', 'approval:changed',
+const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'session:item', 'session:update', 'session:removed', 'config:changed', 'session:delta', 'session:queue', 'session:reset', 'approval:changed',
   // a chat list changed
   'inbox:changed']);
 
@@ -271,7 +271,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const principal = principalOf({ device });
     // which account the assistant spends is chosen on the PC (the brain's agent and model, also from the phone).
     if (method === 'chat.settings' && params.account !== undefined) delete params.account;
-    // F2.6c: a picture it uploaded comes back by the name /api/upload gave it (never a path of the PC).
+    // A picture it uploaded comes back by the name /api/upload gave it (never a path of the PC).
     if (Array.isArray(params.images)) params.images = params.images.map((f) => (typeof f === 'string' && IMAGE_NAME.test(f) ? path.join(uploads(), f) : f));
     const why = guardCall(board, method, params, { uploadsDir: uploads() });
     if (why) return deny(why);
@@ -682,7 +682,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       let pc = null; try { pc = pcFingerprint(); } catch { /* the vault is locked */ }
       return { enabled: Boolean(ctx.config.mobile?.enabled), running: Boolean(state.running), routes: state.routes ?? [], error: state.error ?? null, pc,
         wifi: ctx.config.mobile?.wifi !== false, tailscale: ctx.config.mobile?.tailscale !== false, name: orbName(),
-        preview: pushPreview(ctx.config),
+        preview: pushPreview(ctx.config), screenshot: ctx.config.mobile?.screenshot !== false,
         devices: board.all('SELECT id, name, created_at, last_seen, route, kind, ip, push IS NOT NULL AS push FROM devices ORDER BY created_at DESC').map((d) => ({ ...d, push: Boolean(d.push) })) };
     },
     // A one-time QR for 5 minutes, for one of the ways in (Wi-Fi or Tailscale). The code and this PC's key travel in the

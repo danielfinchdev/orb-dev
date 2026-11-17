@@ -46,7 +46,7 @@ export function setMark(board, kind, id, fields) {
 
 // ---- snooze: a chat hidden from the list until a time. The scheduler's tick wakes the ones that are due:
 // their mark is cleared and they come back where their last activity puts them. Returns the woken items.
-export const SNOOZE_MAX_MS = 366 * 24 * 3600 * 1000;
+const SNOOZE_MAX_MS = 366 * 24 * 3600 * 1000;
 export function snoozeUntil(value, now = Date.now()) {
   if (value == null || value === '') return null;
   const at = Date.parse(String(value));

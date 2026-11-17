@@ -2,7 +2,7 @@
 // files appear as the agent works, risky actions wait for a click (approval cards), messages written meanwhile correct the
 // agent on the fly or wait in a queue, and the context meter shows how full the conversation is. Task runs open here too.
 import { lazy, memo, Suspense, useEffect, useMemo, useState } from 'react';
-import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, X, ClipboardCheck, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Ellipsis, Gamepad2, Smartphone, Shuffle, ScreenShare, SquareTerminal } from 'lucide-react';
+import { Info, FileDiff, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, X, ClipboardCheck, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Gamepad2, Smartphone, Shuffle, ScreenShare, SquareTerminal } from 'lucide-react';
 import { unlockCore } from '@/lib/core-access.js';
 import { notifyError, notifyOk } from '@/lib/notify.js';
 import { TypingMarkdown, TypedMarkdown } from '@/components/markdown.jsx';
@@ -11,11 +11,20 @@ import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { renameChat } from '@/views/orb/inbox.jsx';
 import { useDraft } from '@/lib/draft.js';
+import { useAddToChat, appendToBox } from '@/lib/add-to-chat.js';
 import { BackToList } from '@/components/chat-bar.jsx';
 import { ContextSlot } from '@/components/context-slot.jsx';
+import { ColdNotice } from '@/components/conversation/cold-notice.jsx';
+import { ChatModes } from '@/components/chat-modes.jsx';
+import { SubagentList } from '@/components/subagents.jsx';
+import { SideChats } from '@/components/chat-side.jsx';
 import { TaskChanges } from '@/components/task-changes.jsx';
+import { TurnChanges } from '@/components/turn-changes.jsx';
+import { takeComments, putBackComments, useComments } from '@/lib/turn-comments.js';
 import { SecretCards } from '@/components/secret-card.jsx';
-import { PrCards } from '@/components/pr-card.jsx';
+import { PrCards, PrBar } from '@/components/pr-card.jsx';
+import { CommitButton } from '@/components/commit-dialog.jsx';
+import { offerWorktreeRemoval } from '@/components/worktree-removal.jsx';
 import { HtmlPages } from '@/components/html-page.jsx';
 import { takePoints, onPoints } from '@/lib/browser-points.js';
 import { TerminalPanel } from '@/components/terminal-panel.jsx';
@@ -28,22 +37,26 @@ import { GeneratedImage, openImage } from '@/components/image-viewer.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Textarea, Empty } from '@/components/ui/basic.jsx';
 import { Select, Collapsible, CollapsibleTrigger, CollapsibleContent, Tip, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
-import { useStore, call, act, go, bridge, refresh, getState, fullPc, openGames, addPending, dropPending, pendingShown, usePending } from '@/lib/store.js';
-import { AGENT, PERMISSION, REASONING, STATUS, DECISION, CAN_STEER as AGENT_CAN_STEER, CAN_COMPACT, options } from '@/lib/labels.js';
+import { useStore, call, act, go, newChat, bridge, refresh, getState, fullPc, openGames, addPending, dropPending, pendingShown, usePending } from '@/lib/store.js';
+import { useShortcut } from '@/lib/keys.js';
+import { AGENT, PERMISSION, REASONING, DECISION, CAN_STEER as AGENT_CAN_STEER, CAN_COMPACT, options } from '@/lib/labels.js';
 import { baseName, cn } from '@/lib/utils.js';
 import { useT, t, useLocale, currentLocale } from '@/lib/i18n.js';
 import { sameBlock } from '@/lib/memo.js';
 import { toBlocks, subagentState } from '@/lib/session-blocks.js';
+import { summaryText } from '@/lib/tool-summary.js';
 import { kindOf, playableType } from '../../shared/attach-kind.mjs';
 import { canCapture, captureFrame } from '@/lib/window-capture.js';
 import { useAutoScroll, Composer } from '@/components/conversation/composer.jsx';
 import { MessageBox } from '@/components/conversation/message-box.jsx';
+import { EditButton, RewindLine } from '@/components/edit-message.jsx';
 import { BarClock, BarPause, BarHeading, COMPACT_AT, CompactButton } from '@/components/conversation/bar.jsx';
 import { ContextMeter } from '@/components/conversation/context-meter.jsx';
 import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
 import { TaskStatus } from '@/components/task-state.jsx';
 import { quiet } from '@/lib/quiet.js';
 import { MoreButton } from '@/components/ui/primitives.jsx';
+import { ConversationTrail, useTrailScroll } from '@/components/conversation/trail.jsx';
 
 // An icon that says what the tool does (reading, writing, searching, the web, a command…).
 function toolIcon(name = '') {
@@ -88,15 +101,32 @@ function ToolBlock({ b }) {
   );
 }
 
+// A run of tool calls as one folded line («Leyó 3 archivos, ejecutó 2 comandos»); unfolded, each call as always.
+function ToolGroup({ b }) {
+  const t = useT();
+  const text = summaryText(b.steps.map((x) => x.call?.name), t);
+  const failed = b.steps.filter((x) => x.result?.error).length;
+  return (
+    <Collapsible className="text-control" data-testid="tool-group">
+      <CollapsibleTrigger className="group text-muted-foreground hover:text-foreground flex w-full cursor-pointer items-center gap-2 px-1 py-1 text-left" aria-label={t('tools.sum.toggle', { summary: text })}>
+        <ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" />
+        <span className="min-w-0 truncate">{text}</span>
+        {failed ? <span className="text-destructive flex shrink-0 items-center gap-1 text-xs"><CircleAlert className="size-3.5" />{t('tools.sum.failed', { n: failed })}</span> : null}
+      </CollapsibleTrigger>
+      <CollapsibleContent><div className="mt-1 grid gap-2">{b.steps.map((x) => <ToolBlock key={x.key} b={x} />)}</div></CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 // a subagent as one folding row: its name, model and state; unfolded, what it was asked, the steps it took and
 // its answer.
-const SUB_STATE = { running: 'bg-info animate-pulse', done: 'bg-success', failed: 'bg-destructive' };
-function SubagentBlock({ b }) {
+const SUB_STATE = { running: 'bg-info animate-pulse', done: 'bg-success', failed: 'bg-destructive', stopped: 'bg-muted-foreground' };
+function SubagentBlock({ b, defaultOpen }) {
   const t = useT();
   const a = b.call.agent;
   const state = subagentState(b);
   return (
-    <Collapsible className={cn('bg-card rounded-xl border text-control', state === 'failed' && 'border-destructive/40')} data-testid="subagent">
+    <Collapsible defaultOpen={defaultOpen} className={cn('bg-card rounded-xl border text-control', state === 'failed' && 'border-destructive/40')} data-testid="subagent">
       <CollapsibleTrigger className="group flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left">
         <ChevronRight className="text-muted-foreground size-3.5 transition-transform group-data-[state=open]:rotate-90" />
         <Bot className="text-muted-foreground size-3.5" />
@@ -119,6 +149,21 @@ function SubagentBlock({ b }) {
 function statusText(body, agent, catalog) {
   const m = /^(.+?) · ([\w.:\-/[\]]+)$/.exec(String(body ?? ''));
   return m ? `${AGENT[agent] ?? m[1]} · ${modelLabel(catalog, agent, m[2])}` : body;
+}
+
+// «Traspasado de Claude a Codex · ver lo que se pasó»: the exact text the new agent received.
+function HandoffLine({ body = {} }) {
+  const t = useT();
+  return (
+    <Collapsible className="text-muted-foreground text-center text-xs" data-testid="handoff-line">
+      <span>{t('session.handoffLine', { from: AGENT[body.from] ?? body.from, to: AGENT[body.to] ?? body.to })} · </span>
+      <CollapsibleTrigger className="cursor-pointer underline-offset-2 hover:underline">{t('session.handoffSeen')}</CollapsibleTrigger>
+      <CollapsibleContent className="bg-muted/40 mt-2 rounded-xl px-3.5 py-2.5 text-left whitespace-pre-wrap break-words">
+        {body.truncated ? <div className="mb-1 italic">{t('session.handoffCut')}</div> : null}
+        {body.summary}
+      </CollapsibleContent>
+    </Collapsible>
+  );
 }
 
 const FILE_ICON = { add: FilePlus2, delete: FileMinus2 };
@@ -152,18 +197,21 @@ const Block = memo(function Block({ b, agent, who, brain, sessionId, project, ca
   const locale = useLocale();
   const usageLine = useStore((st) => st.app?.config?.ui?.usageLine !== false);
   if (b.type === 'tool') return <ToolBlock b={b} />;
+  if (b.type === 'toolgroup') return <ToolGroup b={b} />;
   if (b.type === 'subagent') return <SubagentBlock b={b} />;
   if (b.type === 'item' && b.item.kind === 'approval') return <ApprovalCard sessionId={sessionId} body={b.item.body} />;
   if (b.type === 'item' && b.item.kind === 'opti_action') return <OptiOldCard body={b.item.body} />;
   if (b.type === 'item' && b.item.kind === 'image') return <div className="flex gap-3"><AgentIcon agent={agent} className="mt-1 size-5" /><GeneratedImage body={b.item.body} sessionId={sessionId} project={project} /></div>;
   if (b.type === 'files') return <div className="flex flex-wrap gap-1.5">{b.files.map((f, i) => { const I = FILE_ICON[f?.change] ?? FileEdit; return <Badge key={i} variant="info" className="font-mono font-normal"><I />{f?.path}</Badge>; })}</div>;
+  if (b.type === 'item' && b.item.kind === 'handoff') return <HandoffLine body={b.item.body} />;
+  if (b.type === 'item' && b.item.kind === 'rewind') return <RewindLine sessionId={sessionId} item={b.item} />;
   const it = b.item; const body = it.body;
   if (it.role === 'user') {
     const textBody = typeof body === 'string' ? body : body?.text ?? '';
     const images = typeof body === 'object' && body?.images ? body.images : [];
     const long = textBody.length > 1200 && /^Encargo de /.test(textBody);
     return (
-      <MessageBox user name={userName || t('chat.you')} at={it.at}>
+      <MessageBox user name={userName || t('chat.you')} at={it.at} actions={long ? undefined : <EditButton sessionId={sessionId} item={it} />}>
         {typeof body === 'object' && body?.steer ? <div className="mb-1 flex items-center gap-1 text-micro opacity-80"><CornerDownRight className="size-3" />{t('session.steered')}</div> : null}
         {long ? <Collapsible><CollapsibleTrigger className="cursor-pointer text-left underline-offset-2 hover:underline">{textBody.split('\n')[0]} ({t('session.seeFullTask')})</CollapsibleTrigger><CollapsibleContent className="mt-2 text-control opacity-90">{textBody}</CollapsibleContent></Collapsible> : textBody}
         {images.length ? <div className="mt-2 flex flex-wrap gap-1.5">{images.map((p) => <AttachChip key={p} file={p} sessionId={sessionId} />)}</div> : null}
@@ -299,10 +347,18 @@ export function SessionView({ route }) {
   const [more, setMore] = useState(false);
   const [queue, setQueue] = useState([]);
   const draft = useDraft();
+  // text sent here by «Añadir al chat» (a selected text)
+  useAddToChat((text) => draft.set((prev) => appendToBox(prev, text)));
   const [images, setImages] = useState([]);
   const PAGE = 200;
   // the user's terminal under the chat (this PC only), and a command pasted into it from the chat.
   const [terminal, setTerminal] = useState(false);
+  // «Cambios» of this chat turn by turn (a direct chat in a project folder), and the comments waiting for the next message.
+  const [changes, setChanges] = useState(false);
+  const pendingComments = useComments(route.id);
+  const hasPanel = s.kind === 'chat' && Boolean(s.project) && fullPc();
+  useEffect(() => setChanges(false), [route.id]);
+  useShortcut('changes.toggle', (e) => { e.preventDefault(); setChanges((v) => !v); }, { enabled: hasPanel });
   const [termDraft, setTermDraft] = useState('');
   useEffect(() => (fullPc() ? onTerminalPaste((line) => { setTerminal(true); setTermDraft(line); }) : undefined), [route.id]);
   useEffect(() => { setTerminal(false); setTermDraft(''); }, [route.id]);
@@ -333,8 +389,9 @@ export function SessionView({ route }) {
       if (it.session_id !== route.id) return;
       setItems((prev) => { const i = prev.findIndex((p) => p.id === it.id); if (i >= 0) { const next = prev.slice(); next[i] = it; return next; } return [...prev, it]; });
     });
+    const offReset = bridge.on('session:reset', (e) => { if (e.id === route.id) call('sessions.items', { id: route.id, limit: PAGE }).then((r) => { setItems(r); setMore(r.length >= PAGE); }).catch(quiet); });
     const offQueue = bridge.on('session:queue', (q) => { if (q.id === route.id) setQueue(q.queue); });
-    return () => { alive = false; offItem(); offQueue(); };
+    return () => { alive = false; offItem(); offReset(); offQueue(); };
   }, [route.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const tb = useT(); // H4a B2: «Resultado» in the language on screen
   const blocks = useMemo(() => toBlocks(items, tb), [items, tb]);
@@ -344,8 +401,15 @@ export function SessionView({ route }) {
   useEffect(() => { for (const p of pending) if (!unsaved.includes(p)) dropPending(p.id); }, [pending, unsaved]);
   // (The streamed text grows the lines' height: the ResizeObserver of useAutoScroll follows it.)
   const scroll = useAutoScroll([blocks.length, items.at(-1)?.id, unsaved.length]);
+  const trail = useTrailScroll(scroll);
   const catalog = useCatalog();
   const [compacting, setCompacting] = useState(false);
+  // the next message the engine proposes when a turn ends (Ajustes, off by default): grey in the box, Tab takes it
+  const [suggestion, setSuggestion] = useState('');
+  useEffect(() => { setSuggestion(''); return bridge.on('session:suggest', (e) => { if (e.id === route.id) setSuggestion(e.text); }); }, [route.id]);
+  const turnRunning = s?.status === 'running';
+  useEffect(() => { if (turnRunning) setSuggestion(''); }, [turnRunning]);
+  const dropSuggestion = () => { setSuggestion(''); call('sessions.suggestCancel', { id: route.id }).catch(quiet); };
   if (!s) return <Empty title={t('session.gone')} className="flex-1" />;
   const task = s.task_id ? tasks.find((x) => x.id === s.task_id) : null;
   const running = s.status === 'running';
@@ -377,16 +441,17 @@ export function SessionView({ route }) {
   // While the agent works, Enter corrects it on the fly (it reads the message at its next step) and Ctrl+Enter queues
   // the message for after the turn. Agents that cannot be corrected on the fly always queue.
   const send = async ({ alt = false } = {}) => {
-    const msg = draft.get().trim(); if (!msg && !images.length) return;
+    const msg = draft.message().trim(); if (!msg && !images.length) return;
     const mode = running ? (alt ? 'queue' : 'auto') : 'auto';
     const said = msg || t('session.lookAtFiles'); const sentImages = images;
     // the box empties at once and, when the agent is free (the message starts a turn), the message shows at once;
     // while it works the message may go to the queue instead, which shows it when the engine says so.
-    draft.set(''); setImages([]);
+    draft.set(''); draft.clearBlocks(); setImages([]);
     const mine = running ? null : addPending(`session:${s.id}`, said, items.at(-1)?.id ?? 0);
-    const r = await act(call('sessions.send', { id: s.id, text: said, images: sentImages, mode }));
+    const taken = takeComments(s.id);
+    const r = await act(call('sessions.send', { id: s.id, text: said, images: sentImages, mode, comments: taken.length ? taken : undefined }));
     if (r === undefined || r?.queued) { if (mine) dropPending(mine); }
-    if (r === undefined) { draft.set((now) => (now.trim() ? now : msg)); setImages((now) => (now.length ? now : sentImages)); return; }
+    if (r === undefined) { putBackComments(s.id, taken); draft.set((now) => (now.trim() ? now : msg)); setImages((now) => (now.length ? now : sentImages)); return; }
     if (r?.steered) notifyOk(t('session.steerSent'));
     else if (r?.queued) notifyOk(s.kind === 'task' && !running ? t('session.resentTask') : t('session.queuedToast'));
   };
@@ -403,6 +468,15 @@ export function SessionView({ route }) {
     });
     if (copy?.id) { await refresh().catch(quiet); go({ view: 'session', id: copy.id }); }
   };
+  // «Pasar este chat a otro agente»: the same chat, the same folder and permission; the summary travels in the next message.
+  const handoff = async () => {
+    const out = await form(t('session.handoff'), {
+      description: t('session.handoffDesc'), initial: { agent: others[0] },
+      body: (v, set) => <Select className="w-full" value={v.agent} onValueChange={(agent) => set({ agent })} options={others.map((a) => ({ value: a, label: AGENT[a] }))} data-testid="handoff-pick" />,
+      ok: t('session.handoffOk'), onOk: (v) => call('sessions.handoff', { id: s.id, agent: v.agent })
+    });
+    if (out?.id) await refresh().catch(quiet);
+  };
   const editQueued = (q, patch) => act(call('sessions.editQueued', { id: s.id, queueId: q.id, ...patch }));
   // «Compactar» in the composer's slot when the context is at 70 % or more and the agent can compact (Claude, Codex).
   const compactable = s.kind === 'chat' && CAN_COMPACT[s.agent] === true && (compacting || (!running && s.context?.size > 0 && s.context.used / s.context.size >= COMPACT_AT));
@@ -418,6 +492,8 @@ export function SessionView({ route }) {
           extra={<span className="bar-title-agent"><AgentIcon agent={s.agent} className="size-3.5" />{who}{s.model ? ` · ${modelName(s.model)}` : ''}</span>} />}>
         <NotificationBell />
         <BarPause />
+        {hasPanel ? <Tip label={t('turns.buttonTip')}><Button variant={changes ? 'secondary' : 'outline'} size="sm" onClick={() => setChanges(!changes)} data-testid="turn-changes-toggle"><FileDiff />{t('turns.button')}</Button></Tip> : null}
+        {s.kind === 'chat' && s.project && fullPc() ? <CommitButton project={s.project} session={s.id} /> : null}
         {s.kind === 'chat' ? null : (<>
           {task ? <TaskStatus task={task} /> : null}
           <Button variant="outline" size="sm" onClick={() => go({ view: 'tasks', id: s.task_id })}><ClipboardCheck />{t('session.viewTask', { id: s.task_id })}</Button>
@@ -431,16 +507,20 @@ export function SessionView({ route }) {
             <DropdownMenuItem onSelect={() => showDetails(s, task)} data-testid="details"><Info />{t('session.detailsShort')}</DropdownMenuItem>
             <DropdownMenuItem disabled={running} onSelect={fork} data-testid="fork"><GitFork />{t('session.fork')}</DropdownMenuItem>
             {others.length ? <DropdownMenuItem disabled={running} onSelect={switchAgent} data-testid="switch-agent"><Shuffle />{t('session.switchAgent')}</DropdownMenuItem> : null}
-            {s.kind === 'chat' ? <DropdownMenuItem onSelect={async () => { await act(call('sessions.update', { id: s.id, archived: !s.archived })); if (!s.archived) go('chat'); }} data-testid="archive"><Archive />{s.archived ? t('session.restore') : t('session.archive')}</DropdownMenuItem> : null}
+            {others.length && s.kind === 'chat' ? <DropdownMenuItem disabled={running} onSelect={handoff} data-testid="handoff"><Shuffle />{t('session.handoff')}</DropdownMenuItem> : null}
+            {s.kind === 'chat' ? <DropdownMenuItem onSelect={async () => { const ok = await act(call('sessions.update', { id: s.id, archived: !s.archived })); if (!s.archived) { if (ok) await offerWorktreeRemoval(s, t); go('chat'); } }} data-testid="archive"><Archive />{s.archived ? t('session.restore') : t('session.archive')}</DropdownMenuItem> : null}
             {fullPc() ? <DropdownMenuItem onSelect={openGames} data-testid="bar-games"><Gamepad2 />{t('bar.games')}</DropdownMenuItem> : null}
             {s.kind === 'chat' ? <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onSelect={async () => { if (await confirm(t('session.deleteTitle'), t('session.deleteBody'), { ok: t('session.delete'), danger: true })) { await act(call('sessions.remove', { id: s.id })); go('chat'); } }} data-testid="delete"><Trash2 />{t('session.deleteTip')}</DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onSelect={async () => { if (await confirm(t('session.deleteTitle'), t('session.deleteBody') + (await hasWorktree(s) ? ` ${t('session.wt.deleteKept')}` : ''), { ok: t('session.delete'), danger: true })) { await act(call('sessions.remove', { id: s.id })); go('chat'); } }} data-testid="delete"><Trash2 />{t('session.deleteTip')}</DropdownMenuItem>
             </> : null}
           </DropdownMenuContent>
         </DropdownMenu>
       </PageHeader>
-      <div ref={scroll.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
+      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div ref={trail.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
         <div className="lazy-lines mx-auto flex max-w-3xl flex-col gap-3.5 px-5 py-6">
           {more ? <Button variant="ghost" size="sm" className="self-center" onClick={loadOlder}><ChevronUp />{t('session.older')}</Button> : null}
           {blocks.length || unsaved.length ? blocks.map((b) => <Block key={b.key} b={b} agent={s.agent} who={who} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />)
@@ -457,6 +537,11 @@ export function SessionView({ route }) {
           ) : null}
         </div>
       </div>
+      <ConversationTrail scrollRef={trail.node} />
+      </div>
+      {s.kind === 'chat' ? <SubagentList blocks={blocks} sessionId={s.id} renderBlock={(b) => <SubagentBlock key={b.key} b={b} defaultOpen />} /> : null}
+      {s.kind === 'chat' ? <SideChats id={s.id} /> : null}
+      {s.kind === 'chat' ? <ChatModes id={s.id} /> : null}
       {queue.length ? (
         <div className="mx-auto w-full max-w-3xl shrink-0 px-5 pb-2" data-testid="queue">
           <div className="text-muted-foreground mb-1.5 flex items-center gap-1.5 text-xs"><ListOrdered className="size-3.5" />{t('session.queueTitle')}</div>
@@ -477,9 +562,11 @@ export function SessionView({ route }) {
       {/* a secret the agent asked for, typed only here (never in the chat). */}
       <SecretCards sessionId={s.id} />
       <PrCards sessionId={s.id} />
+      <PrBar session={s} />
       {fullPc() ? <HtmlPages sessionId={s.id} /> : null}
       {terminal && fullPc() ? <TerminalPanel dir={s.cwd} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
-      <Composer draft={draft} onSend={send} attached={images.length > 0} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
+      {pendingComments.length ? <div className="text-muted-foreground mx-auto w-full max-w-3xl shrink-0 px-5 pb-1.5 text-xs" data-testid="pending-comments">{t('turns.pending', { n: pendingComments.length })}</div> : null}
+      <Composer draft={draft} onSend={send} suggestion={suggestion} onSuggestionDone={dropSuggestion} attached={images.length > 0} notice={s.kind === 'chat' && CAN_COMPACT[s.agent] === true ? <ColdNotice id={`s${s.id}`} agent={s.agent} used={s.context?.used} lastAt={s.updated_at} busy={running} compacting={compacting} onCompact={compact} onFresh={() => newChat(s.project ?? undefined)} /> : null} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
         placeholder={running ? (AGENT_CAN_STEER[s.agent] ? t('session.phSteer', { agent: AGENT[s.agent] }) : t('session.phWait', { agent: AGENT[s.agent] })) : s.kind === 'task' ? t('session.phTask') : t('session.ph', { agent: AGENT[s.agent] })}
         onPaste={(e) => { fromTransfer(e.clipboardData).then((f) => { if (f.length) addImages(f); }); }}
         onDrop={(e) => { fromTransfer(e.dataTransfer).then(addImages); }}
@@ -520,6 +607,12 @@ export function SessionView({ route }) {
           <Tip label={s.cwd}><span tabIndex={0} className="border-input text-muted-foreground dark:bg-input/30 hidden h-8 min-w-0 items-center gap-1.5 rounded-lg border px-2.5 text-control whitespace-nowrap shadow-xs outline-none focus-visible:ring-ring/40 focus-visible:ring-[3px] xl:inline-flex" data-testid="session-folder"><FolderOpen className="size-4 shrink-0" /><span className="truncate">{s.project ?? baseName(s.cwd)}</span></span></Tip>
           {s.context ? <span className="text-muted-foreground ml-auto text-xs"><ContextMeter context={s.context} /></span> : null}
         </>} />
+      </div>
+      {changes && hasPanel ? <TurnChanges session={s} version={`${s.status}:${s.updated_at}`} onClose={() => setChanges(false)} /> : null}
+      </div>
     </>
   );
 }
+
+// A chat in a worktree (src/engine/chat-worktrees.mjs): archiving it offers to remove its folder (offerWorktreeRemoval).
+const hasWorktree = async (s) => { try { return (await call('worktrees.status', { id: s.id })).has === true; } catch { return false; } };

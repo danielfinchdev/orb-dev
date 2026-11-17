@@ -80,8 +80,8 @@ export function PausedNote({ className }) {
   );
 }
 
-export const acceptHeld = (t, task) => act(call('tasks.accept', { id: task.id }), t('tasks.held.accepted'));
-export async function undoHeld(t, task) {
+const acceptHeld = (t, task) => act(call('tasks.accept', { id: task.id }), t('tasks.held.accepted'));
+async function undoHeld(t, task) {
   if (await confirm(t('tasks.undo.title'), t('tasks.undo.body'), { ok: t('tasks.undo.ok'), danger: true })) act(call('tasks.undo', { id: task.id }));
 }
 

@@ -13,7 +13,7 @@ import { needsApproval } from '@/lib/task-approval.js';
 // Which tab a screen belongs to.
 // Chats · Tareas · Proyectos (a conversation belongs to Chats).
 const TAB_OF = { chat: 'chats', session: 'chats', new: 'chats', chats: 'chats', tasks: 'tasks', projects: 'projects' };
-export const tabOf = (view) => TAB_OF[view] ?? 'more';
+const tabOf = (view) => TAB_OF[view] ?? 'more';
 
 export function MobileTabs() {
   const t = useT();

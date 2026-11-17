@@ -58,14 +58,52 @@ pub fn find_editor(f: &Finder, which: &str) -> Option<PathBuf> {
   let programs = f.var("ProgramFiles").unwrap_or_else(|| PathBuf::from("C:\\Program Files"));
   let programs86 = f.var("ProgramFiles(x86)").unwrap_or_else(|| PathBuf::from("C:\\Program Files (x86)"));
   match which {
-    "cursor" => f.first(vec![local.map(|l| l.join("Programs").join("cursor").join("Cursor.exe")), Some(programs.join("Cursor").join("Cursor.exe"))]),
+    "cursor" => f.first(vec![local.clone().map(|l| l.join("Programs").join("cursor").join("Cursor.exe")), Some(programs.join("Cursor").join("Cursor.exe"))]),
     "vscode" => f.first(vec![
-      local.map(|l| l.join("Programs").join("Microsoft VS Code").join("Code.exe")),
+      local.clone().map(|l| l.join("Programs").join("Microsoft VS Code").join("Code.exe")),
       Some(programs.join("Microsoft VS Code").join("Code.exe")),
       Some(programs86.join("Microsoft VS Code").join("Code.exe")),
     ]),
+    "windsurf" => f.first(vec![local.clone().map(|l| l.join("Programs").join("Windsurf").join("Windsurf.exe")), Some(programs.join("Windsurf").join("Windsurf.exe"))]),
+    "zed" => f.first(vec![
+      local.clone().map(|l| l.join("Programs").join("Zed").join("Zed.exe")),
+      local.clone().map(|l| l.join("Zed").join("Zed.exe")),
+      Some(programs.join("Zed").join("Zed.exe")),
+    ]),
+    "jetbrains" => jetbrains(&programs, local.as_ref()),
     _ => None,
   }
+}
+
+/// JetBrains has one program per IDE (`<root>\<IDE version>\bin\<ide>64.exe`): the first of the usual ones, in the
+/// newest folder of each root. The roots are `Program Files\JetBrains` and `%LOCALAPPDATA%\Programs` (where Toolbox
+/// installs), the same as the engine's editors.mjs. `subdirs` and `is_file` look at the disk, so a test can fake them.
+fn jetbrains_in(roots: &[PathBuf], subdirs: &dyn Fn(&Path) -> Vec<PathBuf>, is_file: &dyn Fn(&Path) -> bool) -> Option<PathBuf> {
+  for root in roots {
+    let mut dirs = subdirs(root);
+    dirs.sort();
+    dirs.reverse();
+    for dir in dirs {
+      for name in ["idea", "webstorm", "pycharm", "phpstorm", "goland", "rustrover", "clion", "rider", "rubymine", "datagrip"] {
+        let exe = dir.join("bin").join(format!("{name}64.exe"));
+        if is_file(&exe) {
+          return Some(exe);
+        }
+      }
+    }
+  }
+  None
+}
+
+fn jetbrains(programs: &Path, local: Option<&PathBuf>) -> Option<PathBuf> {
+  let mut roots = vec![programs.join("JetBrains")];
+  if let Some(l) = local {
+    roots.push(l.join("Programs"));
+  }
+  let list = |root: &Path| -> Vec<PathBuf> {
+    std::fs::read_dir(root).map(|r| r.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.is_dir()).collect()).unwrap_or_default()
+  };
+  jetbrains_in(&roots, &list, &|p: &Path| p.is_file())
 }
 
 /// A program and its arguments as a list (never a shell line), started in `cwd`.
@@ -180,6 +218,21 @@ mod tests {
     assert_eq!(find_editor(&f, "vscode"), Some(PathBuf::from("C:\\Users\\a\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe")));
     assert_eq!(find_editor(&f, "cursor"), None);
     assert_eq!(find_editor(&f, "notepad"), None);
+    assert_eq!(find_editor(&f, "zed"), None);
+  }
+
+  #[test]
+  fn jetbrains_is_found_under_program_files_and_under_local_programs() {
+    let pf = PathBuf::from(r"C:\Program Files\JetBrains");
+    let lp = PathBuf::from(r"C:\Users\a\AppData\Local\Programs");
+    let toolbox = lp.join("Rider 2024.1");
+    let exe = toolbox.join("bin").join("rider64.exe");
+    let (pf2, lp2, tb) = (pf.clone(), lp.clone(), toolbox.clone());
+    let subdirs = move |r: &Path| if r == lp2 { vec![tb.clone()] } else if r == pf2 { vec![] } else { vec![] };
+    let files: std::collections::HashSet<PathBuf> = [exe.clone()].into_iter().collect();
+    let is_file = |p: &Path| files.contains(p);
+    assert_eq!(jetbrains_in(&[pf.clone(), lp.clone()], &subdirs, &is_file), Some(exe));
+    assert_eq!(jetbrains_in(&[pf], &subdirs, &is_file), None, "without the local root it is not found");
   }
 
   #[test]

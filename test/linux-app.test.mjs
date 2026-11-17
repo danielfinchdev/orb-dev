@@ -44,7 +44,23 @@ test('los editores en Linux se buscan también fuera del PATH del escritorio (sn
     fs.writeFileSync(path.join(bin, 'code'), '');
     const e = findEditors('linux', { PATH: '', HOME: home });
     assert.equal(e.vscode, path.join(bin, 'code'));
+    assert.equal(e.zed, null);
+    fs.writeFileSync(path.join(bin, 'zed'), ''); fs.writeFileSync(path.join(bin, 'webstorm'), ''); fs.writeFileSync(path.join(bin, 'windsurf'), '');
+    const more = findEditors('linux', { PATH: '', HOME: home });
+    assert.equal(more.zed, path.join(bin, 'zed'));
+    assert.equal(more.windsurf, path.join(bin, 'windsurf'));
+    assert.equal(more.jetbrains, path.join(bin, 'webstorm'));
   } finally { fs.rmSync(home, { recursive: true, force: true }); }
 });
 
 
+
+test('en Windows, sin ProgramFiles en el entorno, los editores se buscan en «C:\\Program Files»', () => {
+  const seen = [];
+  const real = fs.existsSync;
+  fs.existsSync = (f) => { seen.push(String(f)); return false; };
+  try { findEditors('win32', { LOCALAPPDATA: 'C:\\Users\\a\\AppData\\Local' }); } finally { fs.existsSync = real; }
+  assert.ok(seen.includes(path.join('C:\\Program Files', 'Microsoft VS Code', 'Code.exe')));
+  assert.ok(seen.includes(path.join('C:\\Program Files (x86)', 'Microsoft VS Code', 'Code.exe')));
+  assert.ok(!seen.some((f) => f.includes('C:Program')));
+});

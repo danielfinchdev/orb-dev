@@ -36,7 +36,7 @@ export function BandArt() {
 }
 
 // The way into Ctrl+K from a bar (the shortcut itself is unchanged); the phone has no palette.
-export function PaletteButton({ className }) {
+function PaletteButton({ className }) {
   const t = useT();
   if (phoneLayout()) return null;
   return <Button size="icon" variant="ghost" className={cn('shrink-0', className)} onClick={openPalette} aria-label={t('palette.open')} title={t('palette.open')} data-testid="open-palette"><Search className="size-4" /></Button>;

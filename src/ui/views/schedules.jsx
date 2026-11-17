@@ -20,7 +20,7 @@ const tomorrowAt9 = () => { const d = new Date(); d.setDate(d.getDate() + 1); co
 const DAYS = [1, 2, 3, 4, 5, 6, 0];
 const when = (iso) => (iso ? new Date(iso).toLocaleString(currentLocale(), { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
 
-export async function newSchedule(preset = {}) {
+async function newSchedule(preset = {}) {
   const { projects, app } = getState();
   const list = projects ?? [];
   if (!list.length) { notifyError(t('schedules.noProject')); return null; }

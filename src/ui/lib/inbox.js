@@ -126,7 +126,7 @@ export const orbNeedsYou = (item) => Boolean(item?.asks || item?.asking || (item
 // project (the most recent first; «Sin proyecto» last). Completed chats are left out unless showDone; each group says
 // how many it left out. filter: { state: all | active | attention | done | snoozed, agent: all | <id> }.
 // a snoozed chat (pinned or not) shows only under the «snoozed» filter until the scheduler wakes it.
-export function groupOrb(items, { showDone = false, filter = { state: 'all', agent: 'all' } } = {}) {
+export function groupOrb(items, { showDone = false, filter = { state: 'all', agent: 'all' }, order = 'recent', frozen = null } = {}) {
   const st = filter?.state ?? 'all'; const ag = filter?.agent ?? 'all';
   const fits = (x) => (ag === 'all' || x.agent === ag) && (st === 'snoozed' ? Boolean(x.snoozedUntil) : !x.snoozedUntil
     && (st === 'all' ? (showDone || !x.done) : st === 'active' ? x.busy && !x.done : st === 'attention' ? orbNeedsYou(x) && !x.done : x.done));
@@ -144,9 +144,15 @@ export function groupOrb(items, { showDone = false, filter = { state: 'all', age
     if (x.busy) g.working++;
     if (orbNeedsYou(x)) g.waiting++;
   }
-  const groups = [...by.values()].filter((g) => g.items.length || g.hidden)
+  let groups = [...by.values()].filter((g) => g.items.length || g.hidden)
     .sort((a, b) => Number(a.project == null) - Number(b.project == null) || String(b.items[0]?.at ?? b.at ?? '').localeCompare(String(a.items[0]?.at ?? a.at ?? '')));
-  return { pinned, groups, hidden: groups.reduce((n, g) => n + g.hidden, 0), snoozed: list.filter((x) => x.snoozedUntil).length };
+  const hidden = groups.reduce((n, g) => n + g.hidden, 0);
+  // «Prioridad»: one flat group (no project heads) in the order of the snapshot taken when the list was opened.
+  if (order === 'priority') {
+    const all = inFrozenOrder(groups.flatMap((g) => g.items), frozen ?? priorityKeys(list));
+    groups = all.length || hidden ? [{ project: null, flat: true, at: all[0]?.at ?? null, items: all, hidden, unread: groups.reduce((n, g) => n + g.unread, 0), working: groups.reduce((n, g) => n + g.working, 0), waiting: groups.reduce((n, g) => n + g.waiting, 0) }] : [];
+  }
+  return { pinned, groups, hidden, snoozed: list.filter((x) => x.snoozedUntil).length };
 }
 
 // the quick times of «Posponer» from `now`: in an hour, this evening at 18:00 (until 17:00), tomorrow at 9:00
@@ -159,3 +165,35 @@ export function snoozeTimes(now = new Date()) {
   out.push(['snoozeMonday', at(((8 - now.getDay()) % 7) || 7, 9)]);
   return out;
 }
+
+// ---- «Prioridad»: the order of the list by what needs the user (the tray «Te necesita»).
+// 0 waits for the user (approval, permission, question, plan to review) · 1 finished with something unseen · 2 working ·
+// 3 the rest (completed ones always last).
+export const priorityRank = (x) => {
+  if (!x || x.done) return 3;
+  if (orbNeedsYou(x)) return 0;
+  if (x.busy) return 2;
+  return (Number(x.unread) || 0) > 0 && !x.muted ? 1 : 3;
+};
+const byRankThenRecent = (a, b) => priorityRank(a) - priorityRank(b) || String(b.at ?? '').localeCompare(String(a.at ?? '')) || (b.id ?? 0) - (a.id ?? 0);
+// The keys in priority order. The list takes this snapshot when it is opened (or when the user asks to reorder) and keeps
+// it: a row that changes state while it is being attended does not jump away from under the pointer.
+export const priorityKeys = (items) => [...(Array.isArray(items) ? items : [])].sort(byRankThenRecent).map((x) => x.key);
+// The items in the order of a snapshot. What the snapshot did not know (a chat that arrived since) goes on top, by
+// priority, so it is seen; what it knew never moves.
+export function inFrozenOrder(items, frozen) {
+  const at = new Map((frozen ?? []).map((k, i) => [k, i]));
+  const list = Array.isArray(items) ? items : [];
+  const fresh = list.filter((x) => !at.has(x.key)).sort(byRankThenRecent);
+  return [...fresh, ...list.filter((x) => at.has(x.key)).sort((a, b) => at.get(a.key) - at.get(b.key))];
+}
+// The next row that needs the user after `current` in the order the list shows (wrapping round); null when none does.
+// `shown`: the rows as drawn (pinned first). Completed and postponed chats never count.
+export function nextNeedingYou(shown, current = null) {
+  const wait = (Array.isArray(shown) ? shown : []).filter((x) => orbNeedsYou(x) && !x.done && !x.snoozedUntil);
+  if (!wait.length) return null;
+  const i = wait.findIndex((x) => x.key === current);
+  return wait[(i + 1) % wait.length];
+}
+// Ctrl+Alt+A (not AltGr+A of another layout: that one sets altKey and ctrlKey too but also types a character).
+export const isNextNeedsKey = (e) => Boolean(e && e.ctrlKey && e.altKey && !e.shiftKey && !e.metaKey && e.code === 'KeyA' && !(e.key && e.key.length === 1 && e.key.toLowerCase() !== 'a'));

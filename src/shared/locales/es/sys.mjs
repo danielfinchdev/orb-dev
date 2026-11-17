@@ -47,7 +47,6 @@ export default {
   'sys.terminal.folderOnly': 'solo se puede abrir una terminal en una carpeta',
   'sys.terminal.openFailed': 'no se pudo abrir {name}: {error}',
   // Navegador de los agentes
-  'sys.browser.title': 'Navegador del agente',
   'sys.browser.noUrl': 'falta la dirección',
   'sys.browser.badUrl': 'dirección no válida: {url}',
   'sys.browser.httpOnly': 'solo se pueden abrir páginas http o https',
@@ -209,6 +208,7 @@ export default {
   'sys.agents.exitedEarly': '{name} se cerró antes de terminar.',
   'sys.agents.projectSettingsSkipped': 'Orb no ha cargado los ajustes .claude/settings de este proyecto porque ejecutan programas o cambian el entorno ({keys}). Sus CLAUDE.md sí se usan.',
   'sys.agents.stopped': 'Detenido.',
+  'sys.agents.noGuard': '{name} no puede preguntar a Orb antes de actuar ni cumplir sus reglas fijas, así que solo arranca con «Acceso total» en el chat.',
   'sys.agents.limit': '{name} ha alcanzado su límite de uso',
   'sys.agents.resumeFailed': '{name} no pudo retomar la conversación: {error}',
   'sys.agents.result.duringExecution': 'El turno se interrumpió antes de terminar.',

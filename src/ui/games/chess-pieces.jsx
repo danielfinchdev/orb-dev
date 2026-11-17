@@ -2,7 +2,7 @@
 // ones with a dark outline. One <img> per piece from the app's public folder; the twelve files are fetched once when
 // this module loads, so the board never shows a blank square while a piece arrives.
 const DIR = '/juegos/ajedrez/rhosgfx';
-export const pieceSrc = (code) => `${DIR}/${code === code.toUpperCase() ? 'w' : 'b'}${code.toUpperCase()}.svg`;
+const pieceSrc = (code) => `${DIR}/${code === code.toUpperCase() ? 'w' : 'b'}${code.toUpperCase()}.svg`;
 
 const preloaded = [];
 if (typeof Image !== 'undefined') for (const c of 'KQRBNPkqrbnp') { const img = new Image(); img.decoding = 'async'; img.src = pieceSrc(c); preloaded.push(img); }

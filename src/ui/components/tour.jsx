@@ -14,7 +14,7 @@ import { useT } from '@/lib/i18n.js';
 
 // id: texts help.tour.<id>.title / .text. target: the data-testid to light (none: the bubble in the middle). view: the
 // screen to show first. wrap: light the control's container instead (the switch alone is tiny). mood: the robot's.
-export const TOUR_STEPS = [
+const TOUR_STEPS = [
   { id: 'welcome', mood: 'hello', view: 'chat' },
   { id: 'chat', target: 'chat-input', view: 'chat' },
   { id: 'project', target: 'project-picker', view: 'chat' },

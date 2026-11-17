@@ -71,3 +71,31 @@ val CristalDarkPalette = OrbPalette(
     rimEdge = Color(0x14FFFFFF),
 )
 
+
+/**
+ * Grafito: neutral greys with a single orange accent, from annex A of synara-vs-orb.md (OKLCH converted to sRGB once, like
+ * the others). The text tokens were checked for WCAG AA against the field and the soft fills; the control outline
+ * (`--input`) for 3:1. Primary is neutral (near-black by day, near-white at night): the orange is only for text on
+ * [OrbPalette.primarySoft]. No glass fields.
+ */
+val GrafitoLightPalette = OrbPalette(
+    bg = Color(0xFFFCFCFC), surface = Color(0xFFFFFFFF), scLow = Color(0xFFF8F8F8),
+    sc = Color(0xFFF4F4F4), scHigh = Color(0xFFF1F1F1), scHighest = Color(0xFFE8E8E8),
+    line = Color(0xFFEEEEEE), outline = Color(0xFF868686), text = Color(0xFF262626),
+    text2 = Color(0xFF636363), text3 = Color(0xFF747474), primary = Color(0xFF171717),
+    onPrimary = Color(0xFFFAFAFA), primarySoft = Color(0xFFFFEDE6), primaryText = Color(0xFFB53900),
+    ok = Color(0xFF007948), okSoft = Color(0xFFE2F9EC), warn = Color(0xFF945A00),
+    warnSoft = Color(0xFFFFF3D6), err = Color(0xFFD01D21), errSoft = Color(0xFFFFEFED),
+    scrim = Color(0x6612161F),
+)
+
+val GrafitoDarkPalette = OrbPalette(
+    bg = Color(0xFF0E0E0E), surface = Color(0xFF111111), scLow = Color(0xFF131313),
+    sc = Color(0xFF171717), scHigh = Color(0xFF1C1C1C), scHighest = Color(0xFF262626),
+    line = Color(0xFF191919), outline = Color(0xFF636363), text = Color(0xFFF5F5F5),
+    text2 = Color(0xFFA4A4A4), text3 = Color(0xFF8C8C8C), primary = Color(0xFFF5F5F5),
+    onPrimary = Color(0xFF171717), primarySoft = Color(0xFF3B1D13), primaryText = Color(0xFFF78955),
+    ok = Color(0xFF4EC983), okSoft = Color(0xFF13271A), warn = Color(0xFFF0BA59),
+    warnSoft = Color(0xFF30200D), err = Color(0xFFFF645F), errSoft = Color(0xFF391919),
+    scrim = Color(0x8C000000),
+)

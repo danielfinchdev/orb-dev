@@ -7,8 +7,8 @@ import { contentHash, sign, verify, detectSensitivity, deletionAskedByUser, aske
 import { AUTONOMY, globalAutonomy, autonomyOf } from '../security/guard.mjs';
 import { BoardProjects } from './board-projects.mjs';
 import { BoardConversations } from './board-conversations.mjs';
-import { now, real, same, inside } from './board-common.mjs';
-import { AGENTS, assistantName, checkProjectPath, userName } from './board-common.mjs';
+import { now, same } from './board-common.mjs';
+import { AGENTS, assistantName, userName } from './board-common.mjs';
 export { AGENTS, assistantName, checkProjectPath, userName } from './board-common.mjs';
 
 
@@ -60,7 +60,7 @@ const ORCHESTRATOR_TO = { queued: ['failed', 'blocked', 'cancelled', 'queued'], 
 
 // Validated model id for an agent: one of its configured models, or any well-formed id when the list is empty (CLI default).
 // listed = the models the agent itself reported (models:<agent>), also valid.
-export function checkModel(agent, model, listed = []) {
+function checkModel(agent, model, listed = []) {
   if (!model) return null;
   const configured = ctx.config.agents[agent]?.models ?? [];
   // An alias the agent listed (opus) also stands for the full id it resolves to (claude-opus-5-5).
@@ -162,7 +162,7 @@ export class Board {
   // readonly: the task only reads (research, review): it may run at the same time as others in the same folder.
   // conversation_id: the conversation that asked for it (its report goes back there); a subtask, a review or a join
   // task belongs to the one of the task it comes from.
-  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false, internal = false, conversation_id = null, autonomy }, actor) {
+  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false, internal = false, conversation_id = null, autonomy, external = false }, actor) {
     if (!MODES.includes(mode)) throw new Error(tr('sys.board.badMode'));
     const proj = this.project(project);
     if (!proj) throw new Error(tr('sys.board.unknownProject', { name: project }));
@@ -176,7 +176,7 @@ export class Board {
     const active = conversation ? (conversation.project ? this.project(conversation.project) : null) : this.activeProject();
     // the projects of a multiplatform group work together: a task may go to a sister of the active project.
     // internal: a task the engine itself needs in that project (joining a copy), whatever project is active now.
-    if (!internal && active && proj.name !== active.name && actor !== 'usuario' && !(active.grupo && proj.grupo === active.grupo)) throw new Error(tr('sys.board.otherFolder', { name: active.name, path: active.path, user: userName() }));
+    if (!internal && !external && active && proj.name !== active.name && actor !== 'usuario' && !(active.grupo && proj.grupo === active.grupo)) throw new Error(tr('sys.board.otherFolder', { name: active.name, path: active.path, user: userName() }));
     if (!title || !description) throw new Error(tr('sys.board.titleAndDesc'));
     title = oneLine(title);
     if (String(description).length > MAX_DESCRIPTION) throw new Error(tr('sys.board.descTooLong', { n: String(description).length, max: MAX_DESCRIPTION }));
@@ -198,7 +198,9 @@ export class Board {
     // the task's level: a subtask takes its parent's, the user may choose it (the API), anything else takes the
     // global one now (Ajustes › Agentes; an agent never chooses it).
     const parentTask = parent_id ? this.task(parent_id) : null;
-    const mine = parentTask?.autonomy ?? (actor === 'usuario' && AUTONOMY.includes(autonomy) ? autonomy : globalAutonomy());
+    // external: an agent outside Orb (src/engine/host/mcp-external.mjs) always starts at «Preguntar» and in an isolated copy.
+    if (external && (mode !== 'aislada' || !String(actor).startsWith('mcp:'))) throw new Error('external tasks are isolated and signed mcp:<client>');
+    const mine = external ? 'preguntar' : parentTask?.autonomy ?? (actor === 'usuario' && AUTONOMY.includes(autonomy) ? autonomy : globalAutonomy());
     const auto = mine === 'auto';
     // Approval does not depend on the creator declaring it: a task made by a worker always waits for the user,
     // and a keyword net adds the tags the creator forgot.

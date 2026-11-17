@@ -12,6 +12,8 @@ import { prettyModel } from '@/lib/tools.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { keepIfSame } from '@/lib/memo.js';
+import { useFavoriteBrains, toggleFavoriteBrain } from '@/lib/favorite-brains.js';
+import { isFavorite } from '../../shared/favorite-brains.mjs';
 
 // The installed agents with their models (engine: models.catalog), read again when the settings change. The
 // same catalog stays the same object (the memoised blocks of a direct conversation compare it by reference, and the app's
@@ -43,7 +45,15 @@ const modelOf = (catalog, value) => modelsOf(catalog?.find((a) => a.id === value
 // The agent's own default (id ''), named after the model the agent says it uses when it says so.
 const labelOf = (a, m, t) => (m.id ? m.label : m.defaultOf ? t('brain.defaultIs', { model: m.defaultOf }) : t('brain.defaultOf', { agent: a.label }));
 
-// value: { agent, model }; onChange({ agent, model, account }).
+// «Codex Pro · GPT-6 · Alto»: what a favourite says on its row (and to the screen reader).
+export function favoriteLabel(catalog, f, t) {
+  const agent = catalog?.find((a) => a.id === f.agent);
+  const account = agent?.accounts?.length > 1 ? agent.accounts.find((x) => x.id === f.account)?.label ?? agent.label : agent?.label ?? f.agent;
+  const model = f.model ? modelLabel(catalog, f.agent, f.model) : modelOf(catalog, f)?.defaultOf ?? '';
+  return [account, model, t(`reasoning.${f.reasoning}`)].filter(Boolean).join(' · ');
+}
+
+// value: { agent, model, account, reasoning }; onChange({ agent, model, account }); a favourite also brings its reasoning.
 export function BrainPicker({ catalog, value, onChange, className }) {
   const t = useT();
   const agent = catalog?.find((a) => a.id === value.agent);
@@ -68,10 +78,34 @@ export function BrainPicker({ catalog, value, onChange, className }) {
       {/* closing the menu does not put the focus back on its button: that opened the bubble, which then covered
           the project picker next to it. */}
       <DropdownMenuContent align="start" className="max-h-[60vh] w-72 overflow-y-auto" onCloseAutoFocus={(e) => e.preventDefault()}>
-        {!catalog?.length ? <div className="text-muted-foreground px-2 py-1.5 text-xs">{t('brain.none')}</div> : <BrainGroups catalog={catalog} value={value} onChange={onChange} />}
+        {!catalog?.length ? <div className="text-muted-foreground px-2 py-1.5 text-xs">{t('brain.none')}</div> : <><BrainFavorites catalog={catalog} value={value} onChange={onChange} /><BrainGroups catalog={catalog} value={value} onChange={onChange} /></>}
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
+
+// The favourites on top (a click picks model, reasoning and account together) and the star that marks the brain in use.
+function BrainFavorites({ catalog, value, onChange }) {
+  const t = useT();
+  const list = useFavoriteBrains();
+  const on = isFavorite(list, value);
+  return (<>
+    {list.length ? <>
+      <DropdownMenuLabel>{t('brain.favorites')}</DropdownMenuLabel>
+      {list.map((f) => (
+        <DropdownMenuItem key={`${f.agent}|${f.account}|${f.model}|${f.reasoning}`} onSelect={() => onChange(f)} data-testid="brain-favorite">
+          <Star className="text-warning! size-3.5 fill-current" aria-hidden />
+          <span className="min-w-0 flex-1 truncate">{favoriteLabel(catalog, f, t)}</span>
+          {value.agent === f.agent && (value.model ?? '') === f.model && value.reasoning === f.reasoning && (value.account || value.agent) === f.account ? <Check className="text-primary!" /> : null}
+        </DropdownMenuItem>
+      ))}
+    </> : null}
+    <DropdownMenuItem onSelect={(e) => { e.preventDefault(); toggleFavoriteBrain(value); }} aria-pressed={on} data-testid="brain-favorite-toggle">
+      <Star className={cn('size-3.5', on && 'text-warning! fill-current')} aria-hidden />
+      <span className="min-w-0 flex-1 truncate">{on ? t('brain.unfavorite') : t('brain.favorite')}</span>
+    </DropdownMenuItem>
+    <DropdownMenuSeparator />
+  </>);
 }
 
 // the list folded, so it stays short: «Recomendados» first (the assistant's Claude models and Codex's usual one),
@@ -139,7 +173,7 @@ function BrainGroups({ catalog, value, onChange }) {
 // the reasoning levels Orb offers; «Extra» (xhigh) only for the models whose agent says they take it.
 export const REASONING_LEVELS = ['low', 'medium', 'high', 'xhigh'];
 const USUAL_LEVELS = ['low', 'medium', 'high'];
-export function levelsFor(catalog, value) {
+function levelsFor(catalog, value) {
   const m = modelOf(catalog, value);
   return m?.efforts?.length ? REASONING_LEVELS.filter((l) => m.efforts.includes(l)) : USUAL_LEVELS;
 }
@@ -193,7 +227,7 @@ function UsageMeter({ level }) {
 // why the account may run out soon (or null). Only from its real usage (what the agent reports): 75 % or more, or
 // 50 % with a choice that spends more (a heavy model or high reasoning). Without that figure, nothing: the model alone
 // is no reason to warn (the bubble came out far too often).
-export function usageWarning(catalog, value, t) {
+function usageWarning(catalog, value, t) {
   const agent = catalog?.find((a) => a.id === value.agent);
   const model = modelOf(catalog, value);
   const used = agent?.accounts.find((a) => a.id === value.account)?.usage ?? agent?.accounts[0]?.usage ?? null;

@@ -5,27 +5,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { enabledAgents } from '../../platform/config.mjs';
-import { chooseModel } from '../usage/catalog.mjs';
 import { PRODUCT } from '../../shared/product.mjs';
-import { assistantName, ofUser, eventKey, userName } from '../../domain/tasks/board.mjs';
-import { checkDevTools, devToolsBrief, needsDevTools } from '../../platform/dev-tools.mjs';
-import { git, gitAsync, isGitRepo, repoRoot, mayHaveWorktrees, ORB_GIT, REF_PREFIX } from '../../platform/git.mjs';
-import { prepareWorkdir } from '../../domain/tasks/checkpoints.mjs';
-import { rankAccounts, isLimitText, isBudgetText, startCooldown, taskBudgetUsd, blockModel, isModelLimitText, liftAfterSuccess, untilText, modelName } from '../../domain/usage/budget.mjs';
+import { assistantName, userName } from '../../domain/tasks/board.mjs';
+import { git, isGitRepo, repoRoot, mayHaveWorktrees, REF_PREFIX } from '../../platform/git.mjs';
+import { rankAccounts, untilText, modelName } from '../../domain/usage/budget.mjs';
 import { installed } from '../../agents/index.mjs';
+import { UNGUARDED_AGENTS } from '../../agents/unguarded.mjs';
 import { runDue } from '../../domain/schedules/schedules.mjs';
 import { wakeSnoozed } from '../../domain/conversations/inbox.mjs';
-import { usableAccounts, account as findAccount, accountLabel } from '../../domain/usage/accounts.mjs';
-import { oneLine, MAX_DEP_RESULT } from '../../shared/text.mjs';
+import { usableAccounts, accountLabel } from '../../domain/usage/accounts.mjs';
+import { oneLine } from '../../shared/text.mjs';
 import { parallelLimits, taskTimeoutMinutes } from '../../domain/rules/rails.mjs';
-import { redactSecrets, secretFiles, isSecretPath, stagedSecretsAsync } from '../../shared/secrets-scan.mjs';
-import { ATTACH_DIR, browserOn } from '../sessions.mjs';
-import { logTask } from '../../domain/journal/journal.mjs';
-import { adapter } from '../../agents/index.mjs';
-import { liveSkills } from '../api/extensions.mjs';
-import { skillsBrief } from '../../domain/extensions/extensions.mjs';
-import { alive } from '../../platform/proc-list.mjs';
-import { groupNote, contractNote, STATUS_ES, label, whoRan, mainStatus, mainStatusAsync, mixin } from './common.mjs';
+import { label, mixin } from './common.mjs';
 import { SafetyPart } from './safety.mjs';
 import { FoldersPart } from './folders.mjs';
 import { LeftoversPart } from './leftovers.mjs';
@@ -33,8 +24,6 @@ import { ReportsPart } from './reports.mjs';
 import { ReviewsPart } from './reviews.mjs';
 import { LaunchPart } from './launch.mjs';
 import { FinishPart } from './finish.mjs';
-import { autonomyOf, permissionOfAutonomy } from '../../domain/security/guard.mjs';
-import { askedByUser } from '../../domain/security/approval.mjs';
 export { contractNote } from './common.mjs';
 
 export class Scheduler {
@@ -119,7 +108,9 @@ export class Scheduler {
     const listed = new Set();
     for (const p of repos) { try { for (const line of git(p.path, 'worktree', 'list', '--porcelain').stdout.split('\n')) { const m = line.match(/^worktree\s+(.+)$/); if (m) listed.add(path.resolve(m[1].trim().replace(/\//g, path.sep)).toLowerCase()); } } catch { /* not a repo */ } }
     for (const d of dirs) {
-      if (!d.isDirectory()) continue;
+      // The chats' worktrees live in core\copias\chats, outside this folder. A development build once put them in
+      // aisladas\chats: that folder has its own records and cleanup, so it is skipped instead of swept as an orphan copy.
+      if (!d.isDirectory() || d.name.toLowerCase() === 'chats') continue;
       const dir = path.join(ctx.paths.worktrees, d.name); const low = path.resolve(dir).toLowerCase();
       if (keep.has(low) || listed.has(low)) continue;
       try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 }); this.log(`copia huérfana borrada: ${d.name}`); } catch (error) { this.log(`copia huérfana ${d.name}: ${error.message}`); }
@@ -285,6 +276,8 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
     try { this.retryLeftovers(); } catch (error) { this.log(`reintentar restos: ${error.message}`); }
     try { this.deliverMessages(); } catch (error) { this.log(`mensajes: ${error.message}`); }
     try { this.wakeChats(); } catch (error) { this.log(`chats pospuestos: ${error.message}`); }
+    // a paused queue wakes nobody: the CI watch waits too
+    try { if (ctx.config.autoRun && board.setting('paused') !== '1') this.ciWatch?.tick().catch((error) => this.log(`vigilar CI: ${error.message}`)); } catch (error) { this.log(`vigilar CI: ${error.message}`); }
     // with the queue paused, only a task the user started anyway («Iniciar de todos modos», budget_ok) goes.
     const paused = !ctx.config.autoRun || board.setting('paused') === '1';
     const only = paused ? new Set(board.all("SELECT key FROM settings WHERE key >= 'budget_ok:' AND key < 'budget_ok;' AND value = '1'").map((r) => Number(r.key.slice('budget_ok:'.length)))) : null;
@@ -307,7 +300,7 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
         && !(limits.oneAtATime && [...this.running.keys()].some((id) => board.task(id)?.parent_id === task.parent_id));
       if (this.running.size >= (limits.oneAtATime ? 1 : limits.maxParallel) && !forParent) continue;
       // Only agents whose program is on this PC take work (an "any" task never goes to one that is not installed).
-      const types = (task.agent === 'any' ? order.filter((a) => enabled.includes(a)) : [task.agent].filter((a) => enabled.includes(a))).filter((a) => installed(a));
+      const types = (task.agent === 'any' ? order.filter((a) => enabled.includes(a) && !UNGUARDED_AGENTS.includes(a)) : [task.agent].filter((a) => enabled.includes(a))).filter((a) => installed(a));
       // Every enabled account of those agents; a task pinned to an account only goes there.
       const candidates = types.flatMap((a) => usableAccounts(a)).filter((acc) => !task.account || acc.id === task.account);
       // a task for an agent this PC cannot run (uninstalled or turned off after it was created) does not wait for

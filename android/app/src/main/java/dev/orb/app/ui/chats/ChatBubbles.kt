@@ -43,6 +43,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.LinkInteractionListener
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -78,12 +79,22 @@ import dev.orb.app.ui.theme.OrbTheme
 
 // ---------- Markdown ----------
 
+/** Opens an http, https or mailto link; any failure (no app to handle it, a bad address) is swallowed instead of closing the app. */
+internal fun openSafeLink(context: android.content.Context, url: String) {
+    val target = safeLink(url) ?: return
+    try {
+        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(target)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+    } catch (e: Exception) {
+    }
+}
+
 @Composable
 private fun spansToText(spans: List<Span>): AnnotatedString {
     val scheme = MaterialTheme.colorScheme
     val link = scheme.primary
     val codeBg = scheme.surfaceContainerHigh
-    return remember(spans, link, codeBg) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    return remember(spans, link, codeBg, context) {
         buildAnnotatedString {
             for (s in spans) {
                 val style = SpanStyle(
@@ -93,8 +104,10 @@ private fun spansToText(spans: List<Span>): AnnotatedString {
                     fontSize = if (s.code) 13.sp else TextStyle.Default.fontSize,
                     background = if (s.code) codeBg else androidx.compose.ui.graphics.Color.Unspecified,
                 )
-                if (s.link != null) {
-                    withLink(LinkAnnotation.Url(s.link, TextLinkStyles(SpanStyle(color = link, textDecoration = TextDecoration.Underline)))) {
+                val target = safeLink(s.link)
+                if (target != null) {
+                    val open = LinkInteractionListener { openSafeLink(context, target) }
+                    withLink(LinkAnnotation.Clickable("link", TextLinkStyles(SpanStyle(color = link, textDecoration = TextDecoration.Underline)), open)) {
                         withStyle(style) { append(s.text) }
                     }
                 } else withStyle(style) { append(s.text) }
@@ -341,7 +354,7 @@ internal fun CardFrame(modifier: Modifier = Modifier, warn: Boolean = false, con
     )
 }
 
-/** A35: the agent's question with its options, «Otra respuesta» and «Saltar». Answered, it closes into one line. */
+/** The agent's question with its options, «Otra respuesta» and «Saltar». Answered, it closes into one line. */
 @Composable
 fun QuestionCard(m: ChatMessage, q: MsgCard.Question, online: Boolean, sending: Boolean, actions: CardActions) {
     AnimatedContent(
@@ -446,7 +459,7 @@ private fun ReportCard(m: ChatMessage, r: MsgCard.Report, online: Boolean, sendi
     }
 }
 
-/** An agent asks to run something: «Denegar», «Permitir» or «Permitir siempre aquí» (A04). */
+/** An agent asks to run something: «Denegar», «Permitir» or «Permitir siempre aquí». */
 @Composable
 private fun PermissionCard(m: ChatMessage, p: MsgCard.Permission, online: Boolean, sending: Boolean, actions: CardActions, modifier: Modifier) {
     val pending = p.status == "pending"

@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import dev.orb.app.ui.settings.AppearanceSheet
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -38,7 +39,7 @@ class AppearanceSheetTest {
         rule.onNodeWithText("Órbita – Cristal").performClick()
         rule.waitForIdle()
         assertEquals(ThemeChoice.Cristal, prefs.settings.value.choice)
-        rule.onNodeWithText("Oscuro").performClick()
+        rule.onNodeWithText("Oscuro").performScrollTo().performClick()
         assertEquals(DarkMode.Dark, prefs.settings.value.dark)
     }
 }

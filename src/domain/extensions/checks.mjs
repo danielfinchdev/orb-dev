@@ -147,7 +147,7 @@ export function fingerprint(dir) {
 // Every file that moves into core, relative and sorted (the card shows them all).
 export const fileList = (dir) => walkTree(dir).files.map((f) => f.rel).sort();
 
-// ---- secrets (H5): what never leaves core
+// ---- secrets: what never leaves core
 // The patterns a server declares (package.json › orb.secrets, .orb-secrets), as tests on a relative path.
 function declaredSecrets(dirs) {
   const pats = [];

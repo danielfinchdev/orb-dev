@@ -45,7 +45,6 @@ export default {
   'sys.terminal.folderOnly': 'a terminal can only be opened in a folder',
   'sys.terminal.openFailed': 'could not open {name}: {error}',
   // Agents' browser
-  'sys.browser.title': 'Agent browser',
   'sys.browser.noUrl': 'the address is missing',
   'sys.browser.badUrl': 'invalid address: {url}',
   'sys.browser.httpOnly': 'only http or https pages can be opened',
@@ -206,6 +205,7 @@ export default {
   'sys.agents.exitedEarly': '{name} closed before finishing.',
   'sys.agents.projectSettingsSkipped': "Orb did not load the project's .claude/settings files because they run programs or change the environment ({keys}). Its CLAUDE.md files are still used.",
   'sys.agents.stopped': 'Stopped.',
+  'sys.agents.noGuard': '{name} cannot ask Orb before acting or follow its fixed rules, so it only starts with «Full access» on the chat.',
   'sys.agents.limit': '{name} usage limit reached',
   'sys.agents.resumeFailed': '{name} could not resume the conversation: {error}',
   'sys.agents.result.duringExecution': 'The turn was interrupted before it finished.',

@@ -14,6 +14,8 @@ export const MAX_TITLE = 120;
 export const PER_SESSION = 20;
 export const MAX_PAGES = 100;
 export const SHOWS_PER_MINUTE = 10;
+export const MAX_CHOICES = 6;
+const MAX_CHOICE = 120;
 const ID_RE = /^[0-9a-f]{32}$/;
 // The only origins allowed to frame a page: the packaged window (Windows: http://tauri.localhost; macOS/Linux:
 // tauri://localhost; the https variant too). Loopback origins (the dev server) are added only in a development build
@@ -21,6 +23,21 @@ const ID_RE = /^[0-9a-f]{32}$/;
 const PACKAGED_ANCESTORS = 'frame-ancestors tauri://localhost http://tauri.localhost https://tauri.localhost';
 export const FRAME_ANCESTORS = PACKAGED_ANCESTORS;
 export const frameAncestors = (dev = process.env.ORB_PAGES_DEV === '1') => (dev ? `${PACKAGED_ANCESTORS} http://localhost:* http://127.0.0.1:*` : PACKAGED_ANCESTORS);
+// The answers an agent offers as buttons under the page: plain one-line texts, at most MAX_CHOICES, without repeats. They are
+// drawn by Orb's own window (never by the page) and sent as a message only when the person presses one.
+export function cleanChoices(v) {
+  if (v == null) return [];
+  if (!Array.isArray(v)) throw userError('msg.html.badChoices', { n: MAX_CHOICES });
+  const out = [];
+  for (const item of v) {
+    if (typeof item !== 'string') throw userError('msg.html.badChoices', { n: MAX_CHOICES });
+    const text = cleanTitle(item).slice(0, MAX_CHOICE);
+    if (text.startsWith('/')) throw userError('msg.html.badChoices', { n: MAX_CHOICES }); // «/clear» would run as an Orb command
+    if (text && !out.includes(text)) out.push(text);
+  }
+  if (out.length > MAX_CHOICES) throw userError('msg.html.badChoices', { n: MAX_CHOICES });
+  return out;
+}
 const userError = (key, vars) => Object.assign(new Error(tr(key, vars)), { userFacing: true });
 
 // The policy of a page. `default-src 'none'` closes everything not listed. With internet on, only https: is added to
@@ -54,7 +71,7 @@ export function createHtmlPages({ sessions, emit = () => {}, log = () => {}, now
   // proxies exactly this server's port (src-tauri/src/pages.rs), so the window's CSP never has to allow loopback frames.
   // Without it (tests, no app) the frame points at the loopback server directly.
   const origin = () => { const o = process.env.ORB_PAGES_ORIGIN; return /^(https?:\/\/[a-z0-9.-]+|[a-z]+:\/\/localhost)$/.test(o ?? '') ? o : `http://127.0.0.1:${port}`; };
-  const view = (p) => ({ id: p.id, session: p.session, title: p.title, url: `${origin()}/p/${p.id}`, internet: p.internet });
+  const view = (p) => ({ id: p.id, session: p.session, title: p.title, url: `${origin()}/p/${p.id}`, internet: p.internet, choices: p.choices ?? [] });
   const note = (session, key, vars) => { try { sessions.addItem(session, 'system', 'status', tr(key, vars)); } catch { /* the chat went */ } };
 
   function handle(req, res) {
@@ -83,7 +100,7 @@ export function createHtmlPages({ sessions, emit = () => {}, log = () => {}, now
       starting = new Promise((resolve, reject) => {
         const srv = http.createServer(handle);
         srv.once('error', reject);
-        srv.listen(0, '127.0.0.1', () => { srv.removeListener('error', reject); srv.on('error', () => {}); server = srv; port = srv.address().port; emit('html:server', { port }); resolve(); });
+        srv.listen(0, '127.0.0.1', () => { srv.removeListener('error', reject); srv.on('error', () => {}); server = srv; srv.unref(); port = srv.address().port; emit('html:server', { port }); resolve(); });
       }).finally(() => { starting = null; });
     }
     await starting;
@@ -106,6 +123,7 @@ export function createHtmlPages({ sessions, emit = () => {}, log = () => {}, now
       if (typeof a.html !== 'string' || !a.html.trim()) throw userError('msg.html.empty');
       if (Buffer.byteLength(a.html, 'utf8') > MAX_HTML) throw userError('msg.html.tooBig', { kb: MAX_HTML / 1024 });
       const title = cleanTitle(a.title) || tr('htmlpage.untitled');
+      const choices = cleanChoices(a.choices);
       const session = String(s.id);
       const gen = generation;
       await ensureServer();
@@ -123,13 +141,21 @@ export function createHtmlPages({ sessions, emit = () => {}, log = () => {}, now
       recent.push(t); shows.set(session, recent);
       for (const old of mine.slice(0, dropping)) { gone(old, 'límite del chat'); note(session, 'msg.html.dropped', { title: old.title, n: PER_SESSION }); }
       // always a new page with the internet switch off, whatever the chat's other pages have
-      const p = { id: randomBytes(16).toString('hex'), session, title, html: a.html, internet: false, createdAt: Date.now() };
+      const p = { id: randomBytes(16).toString('hex'), session, title, html: a.html, choices, internet: false, createdAt: Date.now() };
       pages.set(p.id, p);
       const v = view(p);
       log(`html: página ${p.id.slice(0, 6)} · chat ${session}`);
       note(session, 'msg.html.shown', { title });
       emit('html:page', v);
       return { ...v, text: tr('msg.html.agentText') };
+    },
+    // The text of one of the page's own buttons. Only the index travels: the text is the one the agent registered for that page,
+    // so a button can never carry anything else, and the caller sends it without what the words «ask for».
+    choiceText(ref, index) {
+      const p = find(ref);
+      const i = Number(index);
+      if (!Number.isInteger(i) || i < 0 || i >= (p.choices ?? []).length) throw userError('msg.html.badChoice');
+      return p.choices[i];
     },
     list: () => { alive(); return [...pages.values()].map(view); },
     // Only the user's window calls this (htmlPages.setInternet is 'pc'). Changes THIS page only.

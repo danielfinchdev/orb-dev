@@ -29,6 +29,9 @@ import kotlinx.coroutines.launch
 
 enum class ChatFilter { All, Unread, Working, Direct }
 
+/** «Recientes» (projects, most recent first) or «Prioridad» (what needs the person first, one flat list). */
+enum class ChatOrder { Recent, Priority }
+
 enum class SnoozeOption { OneHour, ThreeHours, Tomorrow, Clear }
 
 sealed interface ListEntry {
@@ -62,6 +65,9 @@ data class ChatListState(
     val refreshing: Boolean = false,
     /** The last attempt to read the list from the PC failed. */
     val loadFailed: Boolean = false,
+    val order: ChatOrder = ChatOrder.Recent,
+    /** The summary of the day, when the PC says this phone has not shown it today. */
+    val digest: DayDigest? = null,
 )
 
 /** Groups what the list shows: pinned first, then the person's sections, then projects (most recent first). */
@@ -73,7 +79,35 @@ object ChatGrouping {
         ChatFilter.Direct -> r.direct
     }
 
-    fun build(rows: List<ChatRow>, sections: List<ChatSection>, filter: ChatFilter): List<ListEntry> {
+    /**
+     * The PC's `priorityRank`: 0 waits for the person (permission, question, task to approve or review), 1 finished with
+     * something unseen, 2 working, 3 the rest (completed ones always last).
+     */
+    fun priorityRank(r: ChatRow) = when {
+        r.done -> 3
+        r.needsYou -> 0
+        r.state == ChatState.Working -> 2
+        r.unread > 0 && !r.muted -> 1
+        else -> 3
+    }
+
+    private val byRankThenRecent = compareBy<ChatRow> { priorityRank(it) }
+        .thenByDescending { it.at ?: "" }.thenBy { it.key }
+
+    /** The keys in priority order: the snapshot the list takes when it opens (or when the person asks to reorder). */
+    fun priorityKeys(rows: List<ChatRow>): List<String> = rows.filter { !it.done }.sortedWith(byRankThenRecent).map { it.key }
+
+    /** [rows] in the order of a snapshot; a chat the snapshot did not know goes on top (by priority), none of the others moves. */
+    fun inFrozenOrder(rows: List<ChatRow>, frozen: List<String>?): List<ChatRow> {
+        val at = frozen?.withIndex()?.associate { it.value to it.index } ?: return rows.sortedWith(byRankThenRecent)
+        val (known, fresh) = rows.partition { it.key in at }
+        return fresh.sortedWith(byRankThenRecent) + known.sortedBy { at.getValue(it.key) }
+    }
+
+    fun build(
+        rows: List<ChatRow>, sections: List<ChatSection>, filter: ChatFilter,
+        order: ChatOrder = ChatOrder.Recent, frozen: List<String>? = null,
+    ): List<ListEntry> {
         val visible = rows.filter { !it.done && matches(it, filter) }
         val recent = compareByDescending<ChatRow> { it.at ?: "" }.thenBy { it.key }
         val out = ArrayList<ListEntry>()
@@ -83,6 +117,11 @@ object ChatGrouping {
             pinned.mapTo(out) { RowEntry(it) }
         }
         val rest = visible.filter { !it.pinned }
+        if (order == ChatOrder.Priority) {
+            // One flat group, like the PC: no project or section heads, the pinned ones stay on top.
+            inFrozenOrder(rest, frozen).mapTo(out) { RowEntry(it) }
+            return out
+        }
         val known = sections.map { it.id }.toSet()
         for (s in sections) {
             val inSection = rest.filter { it.section == s.id }.sortedWith(recent)
@@ -121,6 +160,11 @@ class ChatListViewModel(
     private val patches = MutableStateFlow<Map<String, Patch>>(emptyMap())
     private var patchSeq = 0L
     private val filter = MutableStateFlow(ChatFilter.All)
+    private val order = MutableStateFlow(ChatOrder.Recent)
+    // The keys in the order the list had when it opened; rows do not move while the person attends them.
+    private val frozen = MutableStateFlow<List<String>?>(null)
+    private val digest = MutableStateFlow<DayDigest?>(null)
+    private var digestAsked = false
     private val status = MutableStateFlow(Status())
     private val reloads = Channel<Unit>(Channel.CONFLATED)
     // Chats the person deleted: gone from the list at once, whatever the cache still says until the PC confirms.
@@ -141,10 +185,12 @@ class ChatListViewModel(
         else inbox.copy(rows = inbox.rows.filter { it.key !in gone }.map { r -> p[r.key]?.apply?.invoke(r) ?: r })
     }
 
-    val state: StateFlow<ChatListState> = combine(data, filter, backend.connection, status) { inbox, f, c, st ->
+    private val view = combine(order, frozen, digest) { o, fr, d -> Triple(o, fr, d) }
+
+    val state: StateFlow<ChatListState> = combine(data, filter, backend.connection, status, view) { inbox, f, c, st, v ->
         val rows = inbox.rows.filter { !it.done }
         ChatListState(
-            entries = ChatGrouping.build(inbox.rows, inbox.sections, f), sections = inbox.sections, filter = f,
+            entries = ChatGrouping.build(inbox.rows, inbox.sections, f, v.first, v.second), order = v.first, digest = v.third, sections = inbox.sections, filter = f,
             unreadChats = rows.count { it.unread > 0 }, workingChats = rows.count { it.state == ChatState.Working },
             total = rows.size, connection = c, online = c is ConnectionState.Online,
             loaded = rows.isNotEmpty() || st.answered, refreshing = st.refreshing, loadFailed = st.failed,
@@ -154,9 +200,17 @@ class ChatListViewModel(
     init {
         viewModelScope.launch { reloads.receiveAsFlow().debounce(reloadDebounceMs).collect { reload() } }
         viewModelScope.launch { backend.events.collect { onEvent(it) } }
+        // The order is taken once the list is real (the PC answered, or there is no PC to wait for); then it is kept.
+        viewModelScope.launch {
+            combine(order, frozen, data, status, backend.connection) { o, fr, inbox, st, c ->
+                if (o == ChatOrder.Priority && fr == null && inbox.rows.any { !it.done } && (st.answered || st.failed || c !is ConnectionState.Online)) {
+                    frozen.value = ChatGrouping.priorityKeys(inbox.rows)
+                }
+            }.collect { }
+        }
         // Whenever the PC becomes reachable the list is read again, which also covers the first open.
         viewModelScope.launch {
-            backend.connection.map { it is ConnectionState.Online }.distinctUntilChanged().filter { it }.collect { reload() }
+            backend.connection.map { it is ConnectionState.Online }.distinctUntilChanged().filter { it }.collect { reload(); loadDigest() }
         }
     }
 
@@ -173,6 +227,28 @@ class ChatListViewModel(
     /** Pull to refresh. */
     fun refresh() {
         viewModelScope.launch { reload() }
+    }
+
+    /** The morning card is asked once per run of the app; the PC decides if it is due (once per local day, per phone). */
+    private suspend fun loadDigest() {
+        if (digestAsked || !backend.available(ApiMethods.INBOX_DIGEST)) return
+        backend.digest().onSuccess { digestAsked = true; digest.value = DayDigests.parse(it) }
+    }
+
+    /** Closing the card tells the PC it was shown, so it does not come back today. */
+    fun closeDigest() {
+        digest.value = null
+        viewModelScope.launch { backend.digestSeen() }
+    }
+
+    fun setOrder(o: ChatOrder) {
+        order.value = o
+        frozen.value = null
+    }
+
+    /** «Reordenar por prioridad»: takes a new snapshot. */
+    fun reorder() {
+        frozen.value = null
     }
 
     fun setFilter(f: ChatFilter) {

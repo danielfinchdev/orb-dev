@@ -1,20 +1,22 @@
 // Task Review and project reviews, and the isolated branches a user discards or merges.
 // Part of the Scheduler (index.mjs adds these methods to it).
+import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { enabledAgents } from '../../platform/config.mjs';
-import { git } from '../../platform/git.mjs';
 import { rankAccounts } from '../../domain/usage/budget.mjs';
 import { installed } from '../../agents/index.mjs';
+import { UNGUARDED_AGENTS } from '../../agents/unguarded.mjs';
 import { usableAccounts } from '../../domain/usage/accounts.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { label } from './common.mjs';
+import { changedFiles } from '../../domain/journal/journal.mjs';
 
 export class ReviewsPart {
   // Task Review: another model audits finished work, read-only, and gives a verdict (correct / with problems + the list).
   // It goes to a different provider when one is installed and has room (Claude's work is reviewed by Codex, Gemini…), else
   // to the same agent with a different model. scope: a task ({ task }) or a whole project ({ project }).
   reviewer(exclude = []) {
-    const order = [...new Set([...(ctx.config.agentOrder ?? []), ...enabledAgents()])].filter((a) => enabledAgents().includes(a) && installed(a));
+    const order = [...new Set([...(ctx.config.agentOrder ?? []), ...enabledAgents()])].filter((a) => enabledAgents().includes(a) && installed(a) && !UNGUARDED_AGENTS.includes(a));
     const ranked = order.map((a) => ({ a, ok: usableAccounts(a).some((acc) => rankAccounts(this.board, [acc], null)[0]?.check.ok) }));
     return ranked.find((r) => r.ok && !exclude.includes(r.a))?.a ?? ranked.find((r) => r.ok)?.a ?? order[0] ?? null;
   }
@@ -36,6 +38,29 @@ ${task.branch ? `Está en la rama ${task.branch}.` : 'Los cambios están en la c
 Comprueba que hace lo que se pedía, busca fallos, casos sin cubrir, riesgos de seguridad y código mejorable. Pruébalo de verdad: ejecuta las pruebas si las hay y, si es algo que se puede arrancar (una web, una app, un script), arráncalo; una web, ábrela con orb_browser_open y úsala. Puedes ejecutar comandos, pero NO cambies ningún archivo.
 En result pon, en este orden: VEREDICTO: CORRECTO o CON FALLOS; después la lista de problemas concretos (archivo y qué falla) por gravedad; y al final qué arreglarías primero.` }, actor);
     this.board.notice(tr('msg.scheduler.reviewing', { agent: label(agent), model: model ? ` (${model})` : '', id: task.id, review: review.id }), 'info');
+    return review;
+  }
+
+  // «/review» in a direct chat: Task Review of what the chat changed in its project's folder (the files git sees changed
+  // now), read-only, by another provider than the chat's agent. It never touches the chat or its permission.
+  reviewChat(session, { actor = 'usuario', focus = '' } = {}) {
+    if (!session.project || !this.board.project(session.project)) throw new Error(tr('msg.modes.reviewNoProject'));
+    // The review task runs in the project's folder, which holds none of a Worktree chat's work: refusing is safer than
+    // reviewing the wrong files (or reporting «no changes» when the chat has plenty).
+    const cwd = path.resolve(session.cwd ?? '.').toLowerCase();
+    const inChats = [ctx.paths.chatTrees, path.join(ctx.paths.worktrees, 'chats')].some((r) => cwd.startsWith(path.resolve(r).toLowerCase() + path.sep));
+    if (inChats || this.board.settingJson(`chatwt:${session.id}`)) throw new Error(tr('msg.modes.reviewWorktree'));
+    const files = [...(changedFiles(session.cwd)?.keys() ?? [])];
+    if (!files.length) throw new Error(tr('msg.modes.reviewNoChanges'));
+    const agent = this.reviewer([session.agent]);
+    if (!agent) throw new Error(tr('msg.scheduler.noReviewer'));
+    const review = this.board.createTask({ project: session.project, title: tr('msg.modes.reviewTitle', { title: oneLine(session.title, 80) }), agent, readonly: true, mode: 'carpeta',
+      description: `Eres el revisor (Task Review) de los cambios de una conversación directa con ${session.agent}${session.model ? ` (${session.model})` : ''} en el proyecto ${session.project} (${session.cwd}).
+Archivos con cambios sin guardar en git (${files.length}):
+${files.slice(0, 60).map((f) => `- ${f}`).join('\n')}${files.length > 60 ? `\n… y ${files.length - 60} más` : ''}${focus ? `\nFíjate sobre todo en: ${oneLine(focus, 500)}` : ''}
+Mira los cambios (git diff y git status), comprueba que hacen lo que parece pedirse, busca fallos, casos sin cubrir, riesgos de seguridad y código mejorable. Ejecuta las pruebas si las hay. Puedes ejecutar comandos, pero NO cambies ningún archivo.
+En result pon, en este orden: VEREDICTO: CORRECTO o CON FALLOS; la lista de problemas concretos (archivo y qué falla) por gravedad; y qué arreglarías primero.` }, actor);
+    this.board.notice(tr('msg.modes.reviewing', { agent: label(agent), review: review.id }), 'info');
     return review;
   }
 

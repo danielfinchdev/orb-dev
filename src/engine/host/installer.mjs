@@ -13,7 +13,7 @@ import { IS_WIN, cleanEnv, inPath, killTree } from '../../platform/proc.mjs';
 const winget = (id) => `winget install --id ${id} -e --source winget --accept-package-agreements --accept-source-agreements --silent --disable-interactivity`;
 
 // id → what it is, how to check it and the official way to install it.
-export const ITEMS = [
+const ITEMS = [
   { id: 'git', label: 'Git', why: 'deshacer tareas con historial, ramas y GitHub', install: winget('Git.Git'), needsWinget: true },
   { id: 'node', label: 'Node.js', why: 'lo necesita Codex para instalarse', install: winget('OpenJS.NodeJS.LTS'), needsWinget: true, exe: 'node.exe' },
   { id: 'claude', label: 'Claude Code', why: 'agente y cerebro del asistente', install: "irm https://claude.ai/install.ps1 | iex" },
@@ -30,7 +30,7 @@ export const ITEMS = [
   { id: 'hermes', label: 'Hermes Agent', why: 'agente autónomo con memoria y muchos proveedores', optional: true,
     install: String.raw`$env:Path = "$env:USERPROFILE\.local\bin;$env:Path"; if (-not (Get-Command uv -ErrorAction SilentlyContinue)) { irm https://astral.sh/uv/install.ps1 | iex; $env:Path = "$env:USERPROFILE\.local\bin;$env:Path" }; uv tool install 'hermes-agent[acp]'` }
 ];
-const AGENT_ITEMS = ['claude', 'codex', 'cursor', 'gemini', 'copilot', 'opencode', 'qwen', 'hermes'];
+const AGENT_ITEMS = ['claude', 'codex', 'cursor', 'gemini', 'copilot', 'opencode', 'qwen', 'hermes', 'grok', 'devin', 'droid', 'omp', 'pi', 'antigravity'];
 
 async function versionOf(cmd, args = ['--version']) { const r = await quickRun(cmd, args, { timeoutMs: 8000 }); return r.ok ? r.out.split(/\r?\n/)[0].slice(0, 60) : null; }
 const tailscaleExe = () => (IS_WIN ? path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Tailscale', 'tailscale.exe') : 'tailscale');

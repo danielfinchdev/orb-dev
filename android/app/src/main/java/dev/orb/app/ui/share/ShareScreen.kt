@@ -35,7 +35,7 @@ import dev.orb.app.ui.attach.AttachStrip
 import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.theme.OrbTheme
 
-/** Full-screen sheet of «Compartir con Orb» (A06): pick where it goes, edit the text, send. */
+/** Full-screen sheet of «Compartir con Orb»: pick where it goes, edit the text, send. */
 @Composable
 fun ShareScreen(vm: ShareViewModel, onClose: () -> Unit, modifier: Modifier = Modifier) {
     val state by vm.state.collectAsStateWithLifecycle()

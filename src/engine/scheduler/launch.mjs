@@ -16,7 +16,6 @@ import { browserOn } from '../sessions.mjs';
 import { adapter } from '../../agents/index.mjs';
 import { liveSkills } from '../api/extensions.mjs';
 import { skillsBrief } from '../../domain/extensions/extensions.mjs';
-import { alive } from '../../platform/proc-list.mjs';
 import { autonomyOf, permissionOfAutonomy } from '../../domain/security/guard.mjs';
 import { askedByUser } from '../../domain/security/approval.mjs';
 import { groupNote, contractNote, label, mainStatus } from './common.mjs';

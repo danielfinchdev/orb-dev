@@ -11,7 +11,7 @@ import { ENV_NAME } from '../../domain/security/connector-secrets.mjs';
 import { oneLine } from '../../shared/text.mjs';
 
 export const ASK_MS = 5 * 60_000; // how long the agent waits for the user
-export const HANDLE_MS = 10 * 60_000; // how long a handle may be traded
+const HANDLE_MS = 10 * 60_000; // how long a handle may be traded
 export const MAX_VALUE = 8 * 1024;
 const PER_SESSION = 3; // requests waiting at once in one chat
 // the master-password check of a typed value counts no try in the vault, so the card would be an
@@ -20,7 +20,7 @@ const PER_SESSION = 3; // requests waiting at once in one chat
 export const MASTER_CHECKS = 6;
 export const MASTER_CHECKS_MS = 10 * 60_000;
 export const savedId = (name) => `agent/${name}`; // the vault's id of a saved one
-export const handleOf = (pipeId, ticket) => `orbsec1.${pipeId}.${ticket}`; // read back by src/mcp/secret-run.mjs
+const handleOf = (pipeId, ticket) => `orbsec1.${pipeId}.${ticket}`; // read back by src/mcp/secret-run.mjs
 
 // Whether a typed value is the master password (checked in the vault, no try counted, nothing kept).
 async function isMaster(m, value) {

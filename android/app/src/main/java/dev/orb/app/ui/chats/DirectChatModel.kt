@@ -222,7 +222,11 @@ object DirectParser {
             it.kind == "plan" -> plan(it)
             it.kind == "usage" -> usage(it)
             it.kind == "image" -> DItem.Note(it.id, ChatTexts.IMAGE_ATTACHED)
-            else -> text(body).takeIf { t -> t.isNotBlank() }?.let { t -> DItem.Note(it.id, t) }
+            // the PC stores the whole summary for the next agent in this item: only the line «from → to» is shown
+            it.kind == "handoff" -> (body as? JsonObject)?.let { o -> DItem.Note(it.id, ChatTexts.handoff(o.str("from"), o.str("to"))) }
+            // a rewind done on the PC: its body is data (rescue copy, file lists), so only a short line is shown
+            it.kind == "rewind" -> DItem.Note(it.id, ChatTexts.rewind((body as? JsonObject)?.bool("undone") == true))
+            else -> text(body).takeIf { t -> t.isNotBlank() }?.let { t -> DItem.Note(it.id, clip(t)) }
         }
     }
 

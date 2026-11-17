@@ -14,7 +14,7 @@ export const DELETING_PROJECTS = 'projects_deleting';
 // reads the sources and fails on one. The table's format does not change: these are the keys already on disk.
 export const STATE_KEYS = Object.freeze({
   exact: Object.freeze([
-    'active_project', 'paused', 'agents_available', 'android_devices', 'backup_daily_day', 'backup_daily_try', 'backup_last',
+    'active_project', 'paused', 'ciwatch', 'agents_available', 'android_devices', 'backup_daily_day', 'backup_daily_try', 'backup_last',
     'games_suggested', 'models_rev', 'msg_delivered', 'notices_migrated', 'conversations_migrated', 'opti_retired', 'opti_session',
     'opti_pending', 'orchestrator_key_hash', 'orchestrator_pending', 'relink_38', 'remote_keys', 'sidebar_completed', 'sidebar_kept',
     'extension_requests', 'extension_edits', 'connector_rebinds', 'pending_questions', 'projects_ignored', 'projects_finished',
@@ -22,8 +22,12 @@ export const STATE_KEYS = Object.freeze({
     'migrated_3_8_config',
     // «Auto» turned on for this install once (src/engine/sessions.mjs › adoptAuto)
     'auto_mode_383',
+    // the external MCP server (src/engine/api/mcp-ext.mjs): on/off and its port
+    'mcpext_enabled', 'mcpext_port',
   ]),
   prefixes: Object.freeze({
+    // a device's (the morning summary card shown today)
+    'digest_shown:': 'device',
     // a task's (by its id)
     'accepted:': 'task', 'auto_retry:': 'task', 'budget_ok:': 'task', 'checkpoint:': 'task', 'followup:': 'task', 'integrate:': 'task',
     'integrate_error:': 'task', 'integrate_error_at:': 'task', 'isolated:': 'task', 'join_task:': 'task', 'engine_task:': 'task', 'leftovers_pending:': 'task',
@@ -34,11 +38,13 @@ export const STATE_KEYS = Object.freeze({
     'models_try:': 'account', 'model_limit:': 'account', 'model_limit_at:': 'account', 'plan:': 'account', 'plan_try:': 'account',
     'rate:': 'account', 'rates:': 'account',
     // a session's (a direct conversation with an agent or a task's run)
-    'fork_pending:': 'session', 'fork_summary:': 'session', 'grant_prev:': 'session',
+    'fork_pending:': 'session', 'fork_summary:': 'session', 'handoff_summary:': 'session', 'grant_prev:': 'session', 'goal:': 'session', 'debug:': 'session',
     // a conversation's with the assistant
     'pending_questions:': 'conversation', 'report_queue:': 'conversation', 'inbox_since:': 'conversation', 'assistant_cwd:': 'conversation', 'brake_told:': 'conversation',
     // a project's
     'actions:': 'project', 'wb_seen:': 'project',
+    // a chat's own worktree (src/engine/chat-worktrees.mjs, by session id)
+    'chatwt:': 'session',
     // older versions' (deleted when the engine starts or by the 3.8 migration)
     'orchestrator_conv:': 'legacy', 'agent_id:': 'legacy', 'secret:': 'legacy',
   }),

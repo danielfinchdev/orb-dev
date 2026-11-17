@@ -59,9 +59,14 @@ data class ChatRow(
     val waitingPermission: Boolean,
     /** An Orbe chat is waiting for the person's answer to a question. */
     val asking: Boolean,
+    /** A task of this Orbe chat waits for the person's OK or was held for review (set from `tasks.list`). */
+    val needsReview: Boolean = false,
 ) {
     val ref get() = ChatRef(kind, id)
     val direct get() = kind == ChatKind.Agent
+
+    /** Waits for the person: a permission, a question, or a task to approve or review. The PC's `orbNeedsYou`. */
+    val needsYou get() = waitingPermission || asking || needsReview
 }
 
 @Immutable
@@ -115,7 +120,7 @@ object InboxParser {
             unread = o.int("unread") ?: 0, state = state,
             pinned = o.bool("pinned"), pinOrder = o.int("pinOrder"), muted = o.bool("muted"),
             snoozedUntil = o.str("snoozedUntil"), section = o.long("section"),
-            agent = o.str("agent"), done = o.bool("done"), waitingPermission = o.bool("asks"), asking = o.bool("asking"),
+            agent = o.str("agent"), done = o.bool("done"), waitingPermission = o.bool("asks"), asking = o.bool("asking"), needsReview = o.bool("review"),
         )
     }
 
@@ -152,7 +157,7 @@ object InboxParser {
  * `approvals.list`, the same three the PC's own window merges.
  */
 object InboxMerge {
-    fun merge(inbox: JsonObject, conversations: JsonElement?, sessions: JsonElement?, approvals: JsonElement?): JsonObject {
+    fun merge(inbox: JsonObject, conversations: JsonElement?, sessions: JsonElement?, approvals: JsonElement?, tasks: JsonElement? = null): JsonObject {
         val convs = (conversations as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.associateBy { it.str("id") }
         val sess = (sessions as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
             .filter { it.str("kind") == "chat" && !it.bool("archived") }.associateBy { it.str("id") }
@@ -160,6 +165,9 @@ object InboxMerge {
             val o = it as? JsonObject
             (o?.get("session") as? JsonObject)?.str("id") ?: o?.str("session_id")
         }.toSet()
+        // The PC's rule (task-approval.js): a task waits for approval, or Orb held its result for review.
+        val review = (tasks as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+            .filter { it.str("status") == "awaiting_approval" || it.isHeld() }.mapNotNull { it.str("conversation_id") }.toSet()
         val seen = HashSet<String>()
         val out = ArrayList<JsonElement>()
         for (el in (inbox["items"] as? JsonArray).orEmpty()) {
@@ -175,6 +183,7 @@ object InboxMerge {
                 val extra = HashMap<String, JsonElement>()
                 c?.str("agent")?.let { extra["agent"] = JsonPrimitive(it) }
                 if (c?.bool("asking") == true) extra["asking"] = JsonPrimitive(true)
+                if (id in review) extra["review"] = JsonPrimitive(true)
                 out += JsonObject(o + extra)
             }
         }
@@ -202,6 +211,8 @@ object InboxMerge {
         return JsonObject(mark + extra)
     }
 }
+
+private fun JsonObject.isHeld(): Boolean = (this["held"] as? JsonPrimitive)?.let { it.booleanOrNull ?: (it.intOrNull == 1) } ?: (this["held"] is JsonObject)
 
 /** Keeps a chat's text on one line, trimmed to what a row can show. */
 fun oneLine(s: String): String = s.replace(Regex("\\s+"), " ").trim().take(160)

@@ -7,12 +7,12 @@ import { merge, AGENT_IDS, DEFAULT_CONFIG } from './config-file.mjs';
 import { switchableIds } from '../shared/rails-registry.mjs';
 import { relabelEmptyLogs } from './journal-files.mjs';
 import { inside as insideOf } from './fsx.mjs';
-import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from '../shared/appearance.mjs';
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, ACCENTS, CONTRASTS, DENSITIES, CHAT_WIDTHS, FONT_SIZES } from '../shared/appearance.mjs';
 
 // Settings saved from the app. Only known top-level keys are accepted.
 // A connector's name as it goes into environment variable names (case does not count on Windows).
 export const connectorKey = (name) => String(name ?? '').toLowerCase().replace(/[^a-z0-9_]/g, '_');
-const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'skills', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'oneAtATime', 'approvalWaitMinutes', 'permissions', 'rails', 'protected', 'backup', 'tz', 'setupPending'];
+const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'skills', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'oneAtATime', 'approvalWaitMinutes', 'permissions', 'rails', 'protected', 'backup', 'tz', 'setupPending', 'git', 'suggestNext'];
 function tidyStored(stored) {
   const out = structuredClone(stored);
   const rounds = out.budget?.maxFixRounds;
@@ -32,7 +32,7 @@ export function saveConfig(patch) {
   const unknown = Object.keys(patch ?? {}).filter((k) => !EDITABLE.includes(k));
   if (unknown.length) throw new Error(tr('msg.ctx.unknownSettings', { unknown: unknown.join(', ') }));
   // Only what the patch brings is validated strictly: values a hand-edited orb.json holds that the code tolerates
-  // (a 3.8.3 round limit, a malformed rails entry) are repaired first so they cannot block saving something else.
+  // (an out-of-range round limit, a malformed rails entry) are repaired first so they cannot block saving something else.
   const next = merge(tidyStored(ctx.config), patch);
   validateConfig(next);
   writeJson(ctx.paths.config, next);
@@ -89,7 +89,7 @@ export function validateConfig(c) {
   if (c.mobile) {
     if (typeof c.mobile.enabled !== 'boolean') throw new Error(tr('msg.ctx.mobileBool'));
     int(c.mobile.port, 1024, 65535, tr('msg.ctx.mobilePort'));
-    for (const k of ['wifi', 'tailscale']) if (c.mobile[k] !== undefined && typeof c.mobile[k] !== 'boolean') throw new Error(tr('msg.ctx.mobileBool'));
+    for (const k of ['wifi', 'tailscale', 'screenshot']) if (c.mobile[k] !== undefined && typeof c.mobile[k] !== 'boolean') throw new Error(tr('msg.ctx.mobileBool'));
   }
   if (!Array.isArray(c.accounts)) throw new Error(tr('msg.ctx.accountsList'));
   const ids = new Set();
@@ -106,7 +106,7 @@ export function validateConfig(c) {
   const homes = c.accounts.filter((a) => a.home).map((a) => path.resolve(a.home).toLowerCase());
   if (new Set(homes).size !== homes.length) throw new Error(tr('msg.ctx.sameHome'));
   if (!Array.isArray(c.mcpServers)) throw new Error(tr('msg.ctx.mcpList'));
-  // F2.6c: two names that give the same environment variable (git-hub and git_hub, GitHub and github on Windows) would
+  // Two names that give the same environment variable (git-hub and git_hub, GitHub and github on Windows) would
   // swap their tickets: refused.
   const envNames = new Set();
   for (const s of c.mcpServers) {
@@ -121,12 +121,13 @@ export function validateConfig(c) {
   if (c.skills !== undefined && (!Array.isArray(c.skills) || c.skills.length > 500 || c.skills.some((s) => !/^[a-z0-9][a-z0-9-]{0,62}$/.test(s?.name ?? '') || typeof s.enabled !== 'boolean' || (s.source !== undefined && typeof s.source !== 'string')))) throw new Error(tr('msg.ctx.badAppearance', { name: 'skills' }));
   if (!['sistema', 'claro', 'oscuro'].includes(c.ui?.theme ?? 'sistema')) throw new Error(tr('msg.ctx.badTheme'));
   // visual theme, fonts and colours of code (src/shared/appearance.mjs).
-  for (const [key, list] of [['skin', SKINS], ['font', FONTS], ['codeFont', CODE_FONTS], ['codeTheme', CODE_THEMES]]) {
+  for (const [key, list] of [['skin', SKINS], ['font', FONTS], ['codeFont', CODE_FONTS], ['codeTheme', CODE_THEMES], ['palette', PALETTES], ['accent', ACCENTS], ['contrast', CONTRASTS], ['density', Object.keys(DENSITIES)], ['chatWidth', Object.keys(CHAT_WIDTHS)], ['fontSize', FONT_SIZES]]) {
     if (c.ui?.[key] !== undefined && !list.includes(c.ui[key])) throw new Error(tr('msg.ctx.badAppearance', { name: `ui.${key}` }));
   }
   // continue tasks after a restart / at the reset, and delegation between agents (orb_delegate).
   const bool = (v, name) => { if (v !== undefined && typeof v !== 'boolean') throw new Error(tr('msg.ctx.boolean', { name })); };
   bool(c.continuity?.resumeAfterRestart, 'continuity.resumeAfterRestart'); bool(c.continuity?.resumeAtReset, 'continuity.resumeAtReset');
+  bool(c.suggestNext, 'suggestNext');
   bool(c.delegation?.enabled, 'delegation.enabled'); bool(c.delegation?.trusted, 'delegation.trusted');
   // the background music (Windows; src/ui/lib/music.js) and the games' own music (gameMusic: false = muted).
   const music = c.ui?.music;
@@ -157,6 +158,8 @@ export function validateConfig(c) {
   }
   if (c.tz !== undefined && c.tz !== '' && !(typeof c.tz === 'string' && c.tz.length <= 64 && (() => { try { new Intl.DateTimeFormat('en', { timeZone: c.tz }); return true; } catch { return false; } })())) throw new Error(tr('msg.ctx.badAppearance', { name: 'tz' }));
   if (c.approvalWaitMinutes !== undefined) int(c.approvalWaitMinutes, 0, 240, 'approvalWaitMinutes');
+  if (c.git?.commitStyle !== undefined && !['conventional', 'repo', 'custom'].includes(c.git.commitStyle)) throw new Error(tr('msg.ctx.badCommitStyle'));
+  if (c.git?.commitInstructions !== undefined && (typeof c.git.commitInstructions !== 'string' || c.git.commitInstructions.length > 2000)) throw new Error(tr('msg.ctx.badCommitStyle'));
   // «Auto» or «Preguntar» for the agents (src/domain/security/guard.mjs › globalAutonomy).
   if (c.permissions !== undefined && (!c.permissions || typeof c.permissions !== 'object' || Array.isArray(c.permissions) || !['auto', 'preguntar'].includes(c.permissions.mode))) throw new Error(tr('msg.ctx.badAppearance', { name: 'permissions' }));
   if (c.budget?.stopAt != null && !(Number(c.budget.stopAt) >= 0.5 && Number(c.budget.stopAt) <= 1)) throw new Error(tr('msg.ctx.stopAt'));

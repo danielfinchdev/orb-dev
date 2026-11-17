@@ -12,7 +12,7 @@ import { useHome, ctx, tr } from '../platform/context.mjs';
 import { isHome, CATEGORIES, PLATFORMS } from '../platform/paths.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
 import { budgetConfig, waitReason, modelLimits } from '../domain/usage/budget.mjs';
-import { accountLabel, accountsOf, usableAccounts } from '../domain/usage/accounts.mjs';
+import { accountLabel, usableAccounts } from '../domain/usage/accounts.mjs';
 import { oneLine } from '../shared/text.mjs';
 import { redactSecrets } from '../shared/secrets-scan.mjs';
 import { git } from '../platform/git.mjs';
@@ -22,6 +22,7 @@ import { createSchedule, EVERY } from '../domain/schedules/schedules.mjs';
 import { mustOwnTask, ownsTask } from '../domain/security/permissions.mjs';
 import { globalAutonomy } from '../domain/security/guard.mjs';
 import { redeem, ticketFromArgs } from './auth-client.mjs';
+import { rpcHandler } from '../shared/mcp-protocol.mjs';
 import { draftExtension, requestActivation, fileList, REQUESTS, OPEN_PER_CONVERSATION, openRequestsOf } from '../domain/extensions/extensions.mjs';
 
 const AUTH = await redeem(process.env.ORB_AUTH_PIPE, ticketFromArgs());
@@ -166,7 +167,6 @@ Si un comando necesita una clave o contraseña, pídela con orb_request_secret: 
 // The app's version (package.json sits two folders up, in a checkout and in the installed app's resources alike).
 const APP_VERSION = (() => { try { return String(JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version); } catch { return '3.8'; } })();
 
-const text = (value) => ({ content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value, null, 2) }] });
 const str = (description) => ({ type: 'string', description });
 
 // Only the coordinator: files from the main folder (or another task's copy) into a task's isolated copy.
@@ -549,33 +549,23 @@ if (!BOSS && SIGNED_SESSION) tools.push(
 
 // an HTML page shown inside this chat (src/engine/host/html-pages.mjs): sandboxed, no internet unless the user allows it.
 if (!BOSS && SIGNED_SESSION) tools.push(
-  { name: 'orb_html_show', description: `Muestra una página HTML (máx. 512 KB, todo en un solo archivo: CSS y JS en línea) dentro del chat de ${USER}. La página corre en un sandbox sin acceso a Orb, archivos, claves ni internet; ${USER} puede activar internet para esa página con un interruptor. No puedes leer lo que hace la página ni activarle internet.`, inputSchema: { type: 'object', required: ['title', 'html'], properties: { title: { type: 'string', description: 'Título corto (texto plano, máx. 120 caracteres)' }, html: { type: 'string', description: 'El documento HTML completo' } } }, run: async (a) => (await AUTH.call('html', { title: a.title, html: a.html })).text }
+  { name: 'orb_html_show', description: `Muestra una página HTML (máx. 512 KB, todo en un solo archivo: CSS y JS en línea) dentro del chat de ${USER}. La página corre en un sandbox sin acceso a Orb, archivos, claves ni internet; ${USER} puede activar internet para esa página con un interruptor. No puedes leer lo que hace la página ni activarle internet.`, inputSchema: { type: 'object', required: ['title', 'html'], properties: { title: { type: 'string', description: 'Título corto (texto plano, máx. 120 caracteres)' }, html: { type: 'string', description: 'El documento HTML completo' }, choices: { type: 'array', maxItems: 6, items: { type: 'string', maxLength: 120 }, description: `Opcional: hasta 6 respuestas cortas que Orb muestra como botones bajo la página. Al pulsar uno, ese texto exacto se envía como mensaje de ${USER}. La página no puede pulsarlos.` } } }, run: async (a) => (await AUTH.call('html', { title: a.title, html: a.html, ...(a.choices !== undefined ? { choices: a.choices } : {}) })).text }
 );
 
-const reply = (id, payload) => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id, ...payload })}\n`);
+const handle = rpcHandler({
+  serverInfo: { name: 'orb', version: APP_VERSION }, instructions: INSTRUCTIONS, tools,
+  extraArgsMessage: (list) => tr('sys.mcp.extraArgs', { list }),
+  unknownToolMessage: (name) => `herramienta desconocida: ${name}`, unsupportedMessage: (method) => `método no soportado: ${method}`,
+  // An agent Orb did not sign (or with a forged conversation) acts on nothing; a signature that ended (its task or
+  // conversation is over) is refused too.
+  authorize: async () => { if (!WHO.signed || !(await stillSigned())) throw new Error(tr('msg.authz.unsigned')); }
+});
+const reply = (payload) => process.stdout.write(`${JSON.stringify(payload)}
+`);
 
 readline.createInterface({ input: process.stdin }).on('line', async (line) => {
   let msg; try { msg = JSON.parse(line); } catch { return; }
-  if (msg.id === undefined) return;
-  try {
-    if (msg.method === 'initialize') return reply(msg.id, { result: { protocolVersion: msg.params?.protocolVersion ?? '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'orb', version: APP_VERSION }, instructions: INSTRUCTIONS } });
-    if (msg.method === 'ping') return reply(msg.id, { result: {} });
-    if (msg.method === 'tools/list') return reply(msg.id, { result: { tools: tools.map(({ run, readOnly, ...t }) => ({ ...t, ...(readOnly ? { annotations: { readOnlyHint: true } } : {}) })) } });
-    if (msg.method === 'tools/call') {
-      const tool = tools.find((t) => t.name === msg.params?.name);
-      if (!tool) return reply(msg.id, { error: { code: -32602, message: `herramienta desconocida: ${msg.params?.name}` } });
-      try {
-        const args = msg.params.arguments ?? {};
-        // Strict arguments: anything outside the schema (e.g. a forged "from") is refused instead of being passed on.
-        const extra = Object.keys(args).filter((k) => !(k in (tool.inputSchema.properties ?? {})));
-        if (extra.length) throw new Error(tr('sys.mcp.extraArgs', { list: extra.join(', ') }));
-        // An agent Orb did not sign (or with a forged conversation) acts on nothing.
-        // A signature that ended (its task or conversation is over) is refused too.
-        if (!WHO.signed || !(await stillSigned())) throw new Error(tr('msg.authz.unsigned'));
-        const out = await tool.run(args);
-        return reply(msg.id, { result: out?.content ? out : text(out) }); // tools with pictures return MCP content themselves
-      } catch (error) { return reply(msg.id, { result: { ...text(`Error: ${error.message}`), isError: true } }); }
-    }
-    reply(msg.id, { error: { code: -32601, message: `método no soportado: ${msg.method}` } });
-  } catch (error) { reply(msg.id, { error: { code: -32603, message: error.message } }); }
+  if (msg?.id === undefined) return;
+  const out = await handle(msg);
+  if (out) reply(out);
 }).on('close', () => process.exit(0));

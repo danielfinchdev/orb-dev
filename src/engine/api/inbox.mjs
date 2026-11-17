@@ -8,6 +8,9 @@ import { tr } from '../../platform/context.mjs';
 import { userName } from '../../domain/tasks/board.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import * as I from '../../domain/conversations/inbox.mjs';
+import { dayDigest, morningDue } from '../../domain/activity/day-digest.mjs';
+import { ctx } from '../../platform/context.mjs';
+import { localDay, ownerTz } from '../../shared/tz.mjs';
 import { fail, str, int, oneOf } from './common.mjs';
 
 export function inboxMethods({ board, emit, orchestrator }) {
@@ -21,6 +24,8 @@ export function inboxMethods({ board, emit, orchestrator }) {
     else { const c = board.conversation(int(id, 'conversación')); if (!c || c.bot_id != null || c.group_id != null) fail(tr('msg.board.noConversation')); id = c.id; }
     return { kind, id: String(id) };
   }
+  // one mark per device: the PC, and each linked phone or browser by its own id.
+  const shownKey = (principal) => `digest_shown:${principal?.channel && principal.channel !== 'desktop' ? `${principal.channel}:${String(principal.device ?? '').slice(0, 64)}` : 'desktop'}`;
   const told = (extra = {}) => emit('inbox:changed', extra);
   const keyList = (list) => (Array.isArray(list) ? list.slice(0, 200).map((x) => (typeof x === 'string' ? x : x && typeof x === 'object' ? I.keyOf(x.kind, x.id) : '')).filter(Boolean) : fail(tr('msg.api.invalid', { name: 'order' })));
   const sectionOf = (id) => I.section(board, int(id, 'sección')) ?? fail(tr('msg.api.invalid', { name: 'sección' }));
@@ -99,6 +104,10 @@ export function inboxMethods({ board, emit, orchestrator }) {
 
   return {
     'inbox.list': ({ zone }) => list(zoneOf(zone)),
+    // The morning card: yesterday's facts from the logs and the board (domain/activity/day-digest.mjs). `due` says whether
+    // this device (the PC or the phone: each keeps its own mark) has not shown it yet today.
+    'inbox.digest': (p = {}, principal) => ({ ...dayDigest(board, { day: p.day, hidePaths: principal?.channel !== 'desktop' }), due: morningDue(board.setting(shownKey(principal)) ?? null) }),
+    'inbox.digestSeen': (p, principal) => { const day = localDay(new Date(), ownerTz(ctx.config)); board.setting(shownKey(principal), day); return { day }; },
     'inbox.pin': (p) => {
       const it = itemOf(p);
       if (!I.mark(board, it.kind, it.id).pinned) I.setMark(board, it.kind, it.id, { pinned: true, pinOrder: I.nextPinOrder(board, I.zoneOf(it.kind)) });

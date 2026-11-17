@@ -1,11 +1,11 @@
 // App state shared by every view: what the engine knows (assistant, projects, tasks, conversations) plus the current
 // route. The state container itself is state.js; engine events trigger a debounced refresh.
 import { notifyError, notifyOk } from './notify.js';
-import { errorText } from './utils.js';
 import { bumpNav, navTicket, stillHere } from './nav.js';
 import { cleanRoute, backStep } from './phone-nav.js';
 import { t } from './i18n.js';
-import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, baseSkin, plainSkin, darkOnlySkin } from '../../shared/appearance.mjs';
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, ACCENTS, CONTRASTS, DENSITIES, CHAT_WIDTHS, FONT_SIZES, BASE_FONT, baseSkin, plainSkin, darkOnlySkin, phoneSkin } from '../../shared/appearance.mjs';
+import { seedCss } from './theme-seeds.js';
 export { plainSkin, darkOnlySkin }; // Profesional and the themes built on it (Cristal): no robot, no backdrop, no motion
 import { applyFeed, sinceOf } from '../../shared/feed.mjs';
 import { frameBatch } from './batch.js';
@@ -22,7 +22,7 @@ export const fullPc = () => !bridge.mobile;
 // a computer's browser linked with an Orb: the PC's layout, with what
 // a linked device may do. Decided once, when the page opens (a phone, or the Android app, keeps the phone's layout).
 let wide = null;
-export const wideBrowser = () => (wide ??= Boolean(bridge.mobile) && !window.__orbHost && !/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) && window.innerWidth >= 1024);
+const wideBrowser = () => (wide ??= Boolean(bridge.mobile) && !window.__orbHost && !/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) && window.innerWidth >= 1024);
 export const phoneLayout = () => Boolean(bridge.mobile) && !wideBrowser();
 
 // «Iniciar test» shows on the first opening of the day (on the PC), until the user writes to the assistant.
@@ -156,7 +156,7 @@ export const refresh = oneAtATime(async () => {
 // The app's language (Ajustes › General).
 
 let iconsFor = null;
-export function loadProjectIcons(names = iconsFor) {
+function loadProjectIcons(names = iconsFor) {
   iconsFor = names;
   return call('projects.icons').then((projectIcons) => setState({ projectIcons })).catch(quiet);
 }
@@ -264,7 +264,7 @@ export async function runTest(prompt) {
 }
 
 // Ctrl+J: a terminal in the folder of what is on screen (a conversation's project, the active project) or the assistant's.
-export function terminalFolder() {
+function terminalFolder() {
   const { route, sessions, projects, app } = getState();
   const session = route.view === 'session' ? sessions.find((s) => s.id === route.id) : null;
   const named = (name) => projects.find((p) => p.name === name)?.path;
@@ -289,17 +289,22 @@ export function applyTheme(next = theme) {
 }
 media.addEventListener('change', () => applyTheme());
 // True while the active theme only exists in dark; the day / night controls disable themselves with it.
+// The theme worn here: any on the PC, only the default or Grafito on the phone.
+const skinOf = (skin) => { const id = SKINS.includes(skin) ? skin : SKINS[0]; return fullPc() ? id : phoneSkin(id); };
 export const useDarkOnly = () => useStore((s) => fullPc() && darkOnlySkin(s.app?.config?.ui?.skin));
 // The theme's base id (cristal wears profesional's), or the default one on the phone; for DOM only some themes draw.
-export const useSkin = () => useStore((s) => (fullPc() ? baseSkin(SKINS.includes(s.app?.config?.ui?.skin) ? s.app.config.ui.skin : SKINS[0]) : SKINS[0]));
+export const useSkin = () => useStore((s) => baseSkin(skinOf(s.app?.config?.ui?.skin)));
 export const isDark = () => document.documentElement.classList.contains('dark');
 
 // Ajustes → Apariencia: visual theme, fonts and colours of code, as data attributes of <html> that the CSS reads
 // (data-skin, data-font, data-code-font, data-code-theme). Unknown or missing values fall back to the defaults.
+// Modules that react to a theme change (the music stops in a plain one) register here; store.js cannot import them.
+const appearanceListeners = new Set();
+export const onAppearance = (fn) => { appearanceListeners.add(fn); return () => appearanceListeners.delete(fn); };
 export function applyAppearance(ui = {}) {
   const pick = (value, list) => (list.includes(value) ? value : list[0]);
   const root = document.documentElement.dataset;
-  const skin = fullPc() ? pick(ui.skin, SKINS) : SKINS[0]; // the phone always wears the default theme
+  const skin = skinOf(ui.skin); // the phone wears the default theme or Grafito
   currentSkin = skin;
   // a theme built on another (cristal on profesional) wears its base's data-skin plus its own data-material.
   root.skin = baseSkin(skin);
@@ -308,5 +313,19 @@ export function applyAppearance(ui = {}) {
   root.codeFont = pick(ui.codeFont, CODE_FONTS);
   root.codeTheme = pick(ui.codeTheme, CODE_THEMES);
   root.motion = ui.motion === 'minima' ? 'minima' : 'completa'; // the themes' moving backdrops stop with it
+  // the theme made from three seeds: its tokens are computed here and written as a <style> the stylesheet rules lean on.
+  const palette = skin === 'paletas' ? seedCss(pick(ui.palette, PALETTES), pick(ui.accent, ACCENTS), pick(ui.contrast ?? 'normal', CONTRASTS)) : '';
+  let tag = document.getElementById('orb-palette');
+  if (palette && !tag) { tag = document.createElement('style'); tag.id = 'orb-palette'; document.head.append(tag); }
+  if (tag) { if (tag.textContent !== palette) tag.textContent = palette; if (!palette) tag.remove(); }
+  // density, width of the chat column and text size: three variables on <html> (tokens.css holds the defaults, which are today's sizes).
+  const style = document.documentElement.style;
+  const size = FONT_SIZES.includes(ui.fontSize) ? ui.fontSize : BASE_FONT;
+  const set = (name, value, fallback) => { if (value === fallback) style.removeProperty(name); else style.setProperty(name, value); };
+  set('--app-density', String(DENSITIES[ui.density] ?? 1), '1');
+  set('--chat-max-width', CHAT_WIDTHS[ui.chatWidth] ?? CHAT_WIDTHS.normal, CHAT_WIDTHS.normal);
+  set('--chat-font', size + 'px', BASE_FONT + 'px');
+  set('--font-k', String(size / BASE_FONT), '1');
   applyTheme(); // a dark-only theme forces .dark; leaving it gives the saved choice back
+  for (const fn of appearanceListeners) fn(skin);
 }

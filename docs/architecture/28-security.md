@@ -100,3 +100,10 @@ Part of [How Orb works](../ARCHITECTURE.md).
   share messages with the tasks of no conversation), and manual tasks a 3.7 agent took without a conversation go back to
   the queue at start (`board.releaseUnclaimed`).
 - More detail in `docs/historico/AUDITORIA-v2.md` and `docs/historico/AUDITORIA-v2-segunda.md`.
+- **`orbpage` is a "local" origin to Tauri (threat-model note):** agent HTML pages are served from
+  `http://orbpage.localhost` (`src-tauri/src/pages.rs`), and Tauri's `is_local_url` treats every scheme the app
+  registers as the app's own origin. What stops such a page from calling the window's commands is therefore a single
+  barrier: the invoke key (`invoke_initialization_script`) is injected only into the **main frame** and the sandboxed
+  page frame cannot read it. That holds for Tauri 2.12.4 (`manager/webview.rs`, `main_frame_script`). `test/tauri-invoke-key.test.mjs`
+  fails when the Tauri pin changes without this being re-checked, and, when the crate source is on disk, when the
+  invoke-key script stops being main-frame-only. Review it on every Tauri bump.

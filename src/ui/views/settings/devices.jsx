@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, 
 import { Select, Switch, BubbleTip } from '@/components/ui/overlay.jsx';
 import { call, act, bridge } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
-import { t, useT } from '@/lib/i18n.js';
+import { useT } from '@/lib/i18n.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { save, Row, PREVIEWS, previewOf } from './rows.jsx';
 import { quiet } from '@/lib/quiet.js';
@@ -170,6 +170,11 @@ export function MobileCard() {
         {st.enabled && st.error && st.running ? <p className="text-muted-foreground text-xs">{st.error}</p> : null}
         {/* the QR, the short code and the linked devices are in Magic Link, below. the firewall is mentioned
             only when linking over the local network fails (app.linkOfflineWifi, on the device). */}
+        {st.enabled ? (
+          <Row label={t('settings.mobileScreenshot')} hint={t('settings.mobileScreenshotHint')}>
+            <Switch data-testid="mobile-screenshot" checked={st.screenshot !== false} onCheckedChange={(screenshot) => configure({ screenshot })} />
+          </Row>
+        ) : null}
         {/* what notifications show when locked. */}
         {st.enabled ? (
           <Row label={t('settings.mobilePreview')} hint={t(`settings.mobilePreview.${previewOf(st.preview)}Hint`)}>

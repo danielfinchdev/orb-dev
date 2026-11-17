@@ -26,29 +26,32 @@ import { grantMethods } from '../security/grants.mjs';
 import { agentAuth } from '../../domain/security/agent-auth.mjs';
 import { createSecretRequests } from '../security/agent-secrets.mjs';
 import { createPrTools } from '../host/pr-tools.mjs';
+import { createCiWatch } from '../scheduler/ci-watch.mjs';
 import { createHtmlPages } from '../host/html-pages.mjs';
 import { createTerminals } from '../host/user-terminal.mjs';
 import { extensionMethods } from './extensions.mjs';
 import { rulesMethods } from './rules.mjs';
 import { layoutPlan, layoutApply, guardOutside } from '../workspace-layout.mjs';
 import { modelCatalog, chooseModel, LEVELS } from '../usage/catalog.mjs';
-import { git } from '../../platform/git.mjs';
 import { authorize, PermissionError } from '../../domain/security/permissions.mjs';
-import { fld, fail, str, int, oneOf, images, lazy } from './common.mjs';
+import { fld, fail, str, int, oneOf, lazy } from './common.mjs';
 import { linkMethods } from './link.mjs';
 import { accountMethods } from './accounts.mjs';
+import { historyMethods } from './history.mjs';
 import { dataApi } from './data.mjs';
 import { inboxMethods } from './inbox.mjs';
+import { keysMethods } from './keys.mjs';
+import { mcpExtMethods } from './mcp-ext.mjs';
 import { masterMethods, checkUnlock } from './master.mjs';
 import { appMethods } from './app.mjs';
 import { musicMethods } from '../host/music.mjs';
 import { sealConnectors } from '../../domain/security/connector-secrets.mjs';
 import { createFeeds } from '../feeds.mjs';
-import { fold } from '../../domain/conversations/inbox.mjs';
 import { projectMethods } from './projects.mjs';
 import { chatMethods } from './chat.mjs';
 import { trashTools } from './trash.mjs';
 import { workMethods } from './work.mjs';
+import { ChatWorktrees } from '../chat-worktrees.mjs';
 import { readActivity, buildReport, hidePcPaths } from '../../domain/activity/activity.mjs';
 import { snapshotBefore, recordUserCall } from '../../domain/activity/record.mjs';
 
@@ -58,6 +61,7 @@ export { fail, str, int, oneOf } from './common.mjs';
 // A failed load is not kept (a file locked for a moment): the next call tries again.
 const inst = lazy(() => import('../host/installer.mjs'));
 const exp = lazy(() => import('../host/expert.mjs'));
+const finder = lazy(() => import('../host/project-search.mjs'));
 const boards = lazy(() => import('../whiteboard.mjs'));
 const prRef = ({ id, session, number, headRefOid }) => ({
   id: int(id, 'petición'), session: str(session, 'conversación', 200), number: int(number, 'pull request'),
@@ -162,23 +166,41 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
   const secrets = createSecretRequests({ sessions, auth: agentAuth, master: () => ctx.master, emit, log });
   // the pull-request tools of the agents (pr-tools.mjs); a merge is answered only on this PC's card.
   const prTools = createPrTools({ board, sessions, gh: () => import('../host/github.mjs'), holding, emit, log });
+  // «Vigilar la CI del PR» (scheduler/ci-watch.mjs): the scheduler's tick calls it; it never merges.
+  const ciWatch = createCiWatch({ board, sessions, gh: () => import('../host/github.mjs'), emit, log });
+  if (scheduler) scheduler.ciWatch = ciWatch;
   // the HTML pages an agent shows in a chat (html-pages.mjs): sandboxed, internet off, switched on only on this PC.
   const htmlPages = createHtmlPages({ sessions, emit: emitRaw, log });
+  // the session as this turn runs it: a «/plan» turn is read-only for Orb's own tools too (the chat keeps its permission).
+  const asRunning = (id) => {
+    const s = sessions.get(id);
+    const live = sessions.lives.get(id);
+    const planOnly = sessions.running.get(id)?.planOnly || (live?.planOnly && live.live?.hasBackground?.());
+    return s && planOnly ? { ...s, permission: 'leer' } : s;
+  };
   agentAuth.onCall = async ({ session }, method, args) => {
-    if (method === 'secret' && session) return secrets.request(sessions.get(session), args);
-    if (method === 'html' && session) return htmlPages.show(sessions.get(session), args);
-    if (method === 'pr' && session) return prTools.run(sessions.get(session), String(args.tool ?? ''), args.args);
+    if (method === 'secret' && session) return secrets.request(asRunning(session), args);
+    if (method === 'html' && session) return htmlPages.show(asRunning(session), args);
+    if (method === 'pr' && session) return prTools.run(asRunning(session), String(args.tool ?? ''), args.args);
     if (method !== 'android' || !session) throw Object.assign(new Error(tr('msg.android.notAllowed')), { userFacing: true });
-    const s = sessions.get(session);
-    return android.tool(s, String(args.tool ?? ''), args.args);
+    return android.tool(asRunning(session), String(args.tool ?? ''), args.args);
   };
   // the user's terminal docked under a chat (user-terminal.mjs); Ctrl+J's own terminal is app.openTerminal.
   const terminals = createTerminals({ emit, log });
+  // the loopback MCP server for agents outside Orb (off by default: mcp-ext.mjs)
+  const mcpExt = mcpExtMethods({ board, log, version, emit });
+  mcpExt.startup();
   const data = dataApi(shared); // backups
   let usageAskedAt = 0; // usage.refresh
 
   const trash = trashTools({ board, sessions, orchestrator, scheduler, emit, log, conversationId });
-  const hooks = { ...shared, trash, realHome, insideHome, holding, coordinatorBusy, syncSoon, cut, accept, allowedImage, withAccepted, settleConversation, taskRejected, modelLabelOf, wb, android, grants };
+  // a deleted chat takes its worktree with it only when nothing in it would be lost; otherwise the folder stays and the user is told
+  const chatTrees = new ChatWorktrees({ board, sessions, log });
+  sessions.onRemoved = (s) => chatTrees.release(s.id).then((r) => { if (r.kept === 'dirty' || r.kept === 'unverified' || r.kept === 'locked' || r.kept === 'shared' || r.branchKept) board.notice(tr('msg.chatWt.kept', { title: s.title, dir: chatTrees.info(s.id)?.path ?? '' }), 'warning'); }).catch(() => {});
+  // a chat taken out of the trash gets back the worktree that was discarded meanwhile
+  const restore = trash.methods['sessions.restore'];
+  trash.methods['sessions.restore'] = async (p, ...rest) => { const r = await restore(p, ...rest); try { await chatTrees.ensure(r.id); } catch (error) { board.notice(tr('msg.chatWt.restoreFailed', { title: r.title, error: error.message }), 'warning'); } return r; };
+  const hooks = { ...shared, trash, chatTrees, realHome, insideHome, holding, coordinatorBusy, syncSoon, cut, accept, allowedImage, withAccepted, settleConversation, taskRejected, modelLabelOf, wb, android, grants };
   const methods = {
     'app.state': () => ({
       version, home: ctx.home, paths: { core: ctx.paths.core, projects: ctx.paths.projects, logs: ctx.paths.logs, mcp: ctx.paths.mcp, categories: ctx.paths.categories }, categories: CATEGORIES,
@@ -240,6 +262,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     ...projectMethods(hooks),
 
     ...chatMethods(hooks),
+    ...historyMethods(),
     ...trash.methods,
     // the brains to choose from (agent + model), which ones spend the quota faster and how used each account is.
     // Kept for a few seconds: the window asks again on every change of the board (while the agents work, many a second).
@@ -325,6 +348,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     // Expert mode (PC only, read-only): the project's files, git and the machine's load.
     'expert.tree': async ({ project: name, dir }) => (await exp()).tree(project(name).path, str(dir, 'carpeta', 1000, { optional: true })),
     'expert.read': async ({ project: name, path: file }) => (await exp()).readFile(project(name).path, str(file, 'archivo', 1000)),
+    // The palette's Ctrl+P and Ctrl+Shift+F (PC only): a file or a text of the project (rg when this PC has it).
+    'projects.findFiles': async ({ project: name, q }) => (await finder()).findFiles(project(name).path, str(q, 'búsqueda', 200, { optional: true })),
+    'projects.searchText': async ({ project: name, q }) => (await finder()).searchText(project(name).path, str(q, 'búsqueda', 200, { optional: true })),
     'expert.status': async ({ project: name }) => (await exp()).gitStatus(project(name).path),
     'expert.diff': async ({ project: name, path: file }) => (await exp()).gitDiff(project(name).path, str(file, 'archivo', 1000, { optional: true })),
     'expert.log': async ({ project: name, limit }) => (await exp()).gitLog(project(name).path, limit),
@@ -334,6 +360,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     ...accountMethods(shared),
     ...linkMethods(shared),
     ...inboxMethods(shared),
+    ...keysMethods(shared),
+    ...mcpExt.methods,
     ...data.methods,
     // Orb locked (or a new password): the grants go, and so do the secrets typed for the agents.
     // under the lock screen the user's terminals take nothing and show nothing (user-terminal.mjs).
@@ -344,6 +372,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     'secrets.answer': ({ id, value, save, saved }) => secrets.answer({ id: int(id, 'petición'), value, save: save === true, saved: saved === true }),
     'secrets.decline': ({ id }) => secrets.decline({ id: int(id, 'petición') }),
     // a merge an agent asked for: shown and answered only on this PC's card.
+    'projects.prFix': ({ session, number, kind }) => prTools.fix(str(session, 'conversación', 64), number, kind),
+    'ciWatch.list': () => ciWatch.list(),
+    'ciWatch.set': ({ session, number, on }) => ciWatch.set(str(session, 'conversación', 64), number, on === true),
     'prConfirm.pending': () => prTools.pending(),
     // the answer names the request by id, chat, PR number and head commit, so a stale card cannot answer another one
     'prConfirm.answer': (a) => prTools.answer(prRef(a)),
@@ -353,6 +384,16 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     'htmlPages.setInternet': (a) => { if (typeof a?.internet !== 'boolean') fail('internet: true o false'); return htmlPages.setInternet(htmlRef(a), a.internet); },
     'htmlPages.get': (a) => htmlPages.get(htmlRef(a)),
     'htmlPages.close': (a) => htmlPages.close(htmlRef(a)),
+    // a button of a page's `choices`: sent as the person's message but with asked: [], because its words were written by the agent
+    // and must not count as the user asking for a publish (approval.mjs › askedByUser).
+    'htmlPages.choose': (a) => {
+      const ref = htmlRef(a); const text = htmlPages.choiceText(ref, a.index);
+      const s = sessions.must(ref.session);
+      if (s.kind !== 'chat') fail(tr('msg.html.badChoice'));
+      if (chatTrees.busy.has(s.id)) fail(tr('msg.chatWt.removing'));
+      if (sessions.running.has(s.id)) fail(tr('msg.sessions.stillWorking'));
+      return sessions.message(s.id, text, { asked: [] });
+    },
     // the user's terminal inside Orb (this PC only, never in core or a protected folder).
     'terminal.list': () => terminals.list(),
     'terminal.open': ({ dir }) => terminals.open({ dir: str(dir, 'carpeta', 1000) }),
@@ -377,10 +418,15 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
       authorize(principal, method);
       // and, for what the master password guards, a fresh unlock of this PC's window (src/engine/api/master.mjs).
       // a one-use token (rails) is spent here, so the handler is told the unlock was good instead of checking it again.
-      const unlocked = checkUnlock(method, params);
-      trash.guard(method, params);
-      const snap = snapshotBefore(method);
-      let out = await fn(params, principal, { unlocked });
+      const gate = checkUnlock(method, params, { defer: true });
+      const unlocked = gate.unlocked;
+      let out; let snap;
+      try {
+        trash.guard(method, params);
+        snap = snapshotBefore(method);
+        out = await fn(params, principal, { unlocked });
+      } catch (error) { gate.settle(false); throw error; }
+      gate.settle(true); // the action ran: only now is a one-use token spent
       recordUserCall({ board, method, params, out, principal, snap });
       // the lists of every refresh, as changes since what the caller holds (src/engine/feeds.mjs).
       if (params.since !== undefined) out = feeds.reply(method, params, out, principal);
@@ -410,7 +456,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     // Running tasks stay "running": the next start continues them (scheduler.finish does not close them while closing).
     // adb's server goes with Orb (no phone reachable from this PC while Orb is closed).
     // Returns what is still to be waited for: a task being closed or a copy being joined finishes writing its state first.
-    shutdown() { terminals.closeAll(); scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); android.stopServer().catch(() => {}); log('motor detenido'); return scheduler.drain().catch(() => {}); }
+    shutdown() { terminals.closeAll(); scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); android.stopServer().catch(() => {}); mcpExt.stop().catch(() => {}); log('motor detenido'); return scheduler.drain().catch(() => {}); }
   };
 }
 

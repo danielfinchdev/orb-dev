@@ -37,7 +37,7 @@ import { LIVE_DIR, OLD_DIR } from '../extensions/extensions.mjs';
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
 
 export const MAGIC = Buffer.from('ORBBAK1\n');
-export const FORMAT = 1;
+const FORMAT = 1;
 export const CHUNK = 1 << 20;
 export const EXT = '.orbbak';
 // (A copy of kind «move», made by Orb 3.7's «Mover a otro PC», still lists and restores; none is made now.)
@@ -60,12 +60,12 @@ const tick = () => new Promise((r) => setImmediate(r));
 const machineKek = (key) => new Uint8Array(Buffer.from(key));
 // A recovery code typed with or without dashes and spaces, in any case, gives the same key; any other passphrase is used
 // as written (NFKC, trimmed).
-export function normalizePassphrase(text) {
+function normalizePassphrase(text) {
   const s = String(text ?? '').normalize('NFKC').trim();
   const compact = s.replace(/[\s-]+/g, '').toUpperCase();
   return /^[A-Z2-9]{32}$/.test(compact) && /^[A-Za-z2-9\s-]+$/.test(s) ? compact : s;
 }
-export const passKek = (passphrase, kdf) => {
+const passKek = (passphrase, kdf) => {
   const pass = normalizePassphrase(passphrase);
   if (!pass) throw new BackupError('needsPassphrase');
   return new Uint8Array(crypto.scryptSync(pass, Buffer.from(kdf.salt, 'base64'), 32, { N: kdf.N, r: kdf.r, p: kdf.p, maxmem: 256 * 1024 * 1024 }));
@@ -119,7 +119,7 @@ export function orbIdOf(home) {
 
 // This workspace's id without making one (a core that lost its data folder has none): from core, or else from the note
 // kept beside the backups (ultima.json).
-export function knownOrbId(home) {
+function knownOrbId(home) {
   try { const x = JSON.parse(fs.readFileSync(identityFile(home), 'utf8')); if (/^[0-9a-f]{32}$/.test(x.orbId)) return x.orbId; } catch { /* below */ }
   const last = readLast(home);
   return /^[0-9a-f]{32}$/.test(last.orbId ?? '') ? last.orbId : null;
@@ -149,7 +149,7 @@ const sameDir = (a, b) => path.resolve(a).toLowerCase().replace(/[\\/]+$/, '') =
 const isNetwork = (p) => /^(\\\\|\/\/)/.test(String(p));
 // The newest copy is noted in the default folder, with this workspace's id and the folders copies went to, so that Orb
 // finds them with core gone.
-export function rememberBackup(home, file, header) {
+function rememberBackup(home, file, header) {
   const dir = defaultBackupDir(home);
   fs.mkdirSync(dir, { recursive: true });
   const before = readLast(home);
@@ -171,7 +171,7 @@ export function knownBackupDirs(home, config = null) {
 }
 // The copies of this workspace, newest first (by the date in their header): a copy of another workspace (another orbId)
 // is never one of them. → entries of listBackups.
-export async function backupCandidates(home, config = null) {
+async function backupCandidates(home, config = null) {
   const want = knownOrbId(home);
   const found = new Map();
   for (const dir of knownBackupDirs(home, config)) for (const b of await listBackups(dir)) found.set(b.file.toLowerCase(), b);
@@ -265,7 +265,7 @@ export function legacyName(name) {
   if (s[0] === LEGACY.mcp && s.length > 1) return [INTERNAL_DIR, 'mcp', ...s.slice(1)].join('/');
   return name;
 }
-export const homePath = (home, name) => path.join(home, ...String(name).split('/'));
+const homePath = (home, name) => path.join(home, ...String(name).split('/'));
 const insideOf = (root, p) => { const r = path.relative(root, p); return Boolean(r) && !r.startsWith('..') && !path.isAbsolute(r); };
 
 // Copies what goes in to `stage` (a mini Orb folder) and returns the manifest.
@@ -454,7 +454,7 @@ export async function readHeader(file) {
 }
 
 // The body key, with this machine's secret or with the recovery code.
-export function openKey(header, { secret = null, passphrase = null } = {}) {
+function openKey(header, { secret = null, passphrase = null } = {}) {
   if (secret && header.wrapped?.machine) { try { return unwrap(machineKek(secret), header.wrapped.machine, `orbbak:wrap:machine:${header.id}`); } catch { /* another machine */ } }
   if (!header.wrapped?.passphrase) throw new BackupError(header.wrapped?.machine ? 'otherMachine' : 'noKey');
   if (!passphrase) throw new BackupError('needsPassphrase');

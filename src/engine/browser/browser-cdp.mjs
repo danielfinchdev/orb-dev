@@ -9,7 +9,7 @@
 import { VIEW, allowed, dialogsHook, TAKE_DIALOGS } from './browser-protocol.mjs';
 
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
-export const WORLD_NAME = 'orb-agent';
+const WORLD_NAME = 'orb-agent';
 const LOAD_MS = 25_000;
 
 export async function attachPage(source, tab, { onUpdate = () => {} } = {}) {

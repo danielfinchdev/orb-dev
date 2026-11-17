@@ -137,7 +137,7 @@ c${String.fromCharCode(0x202e)}${'z'.repeat(300)}`;
     for (const [name, p] of events.filter(([n]) => n !== 'html:server')) { assert.ok(['html:page', 'html:update', 'html:closed'].includes(name)); assert.equal(JSON.stringify(p).includes('<script'), false); assert.equal('html' in p, false); }
     assert.ok(items.some((a) => a[0] === 's1' && a[1] === 'system' && a[2] === 'status'));
     assert.ok(MAX_PAGES >= PER_SESSION);
-    assert.ok(Object.keys(pages.list()[0]).every((k) => ['id', 'session', 'title', 'url', 'internet'].includes(k)));
+    assert.ok(Object.keys(pages.list()[0]).every((k) => ['id', 'session', 'title', 'url', 'internet', 'choices'].includes(k)));
   } finally { pages.wipe(); }
 });
 
@@ -185,14 +185,9 @@ test('htmlPages.* are pc-only; html:* events never reach a phone', () => {
   assert.doesNotMatch(set, /html:/);
 });
 
-test('the MCP tool exists only for a signed chat and the server refuses extra arguments', () => {
-  const server = read('src/mcp/server.mjs');
-  assert.match(server, /if \(!BOSS && SIGNED_SESSION\) tools\.push\(\s*\{ name: 'orb_html_show'/);
-  assert.match(server, /required: \['title', 'html'\], properties: \{ title:[^}]*\}, html:/);
-  assert.match(server, /AUTH\.call\('html', \{ title: a\.title, html: a\.html \}\)/);
-  assert.match(server, /Strict arguments[\s\S]*sys\.mcp\.extraArgs/);
+test('the engine wires orb_html_show to the pages and checks the switch is a boolean (the tool itself: html-mcp-387.test.mjs)', () => {
   const api = read('src/engine/api/index.mjs');
-  assert.match(api, /method === 'html' && session\) return htmlPages\.show\(sessions\.get\(session\)/);
+  assert.match(api, /method === 'html' && session\) return htmlPages\.show\(asRunning\(session\)/);
   assert.match(api, /htmlPages\.wipe\(\)/);
   assert.match(api, /typeof a\?\.internet !== 'boolean'/);
 });
@@ -303,7 +298,7 @@ test('the app frames pages through its own scheme and is told the exact server p
   } finally { delete process.env.ORB_PAGES_ORIGIN; pages.wipe(); }
 });
 
-test('htmlPages.get: HTML as data for the phone, chat-bound, with the CSP of the page and no run on the host', async () => {
+test('htmlPages.get: HTML as data, chat-bound, PC-only, with the CSP of the page and no run on the host', async () => {
   const { pages } = make();
   try {
     const v = await pages.show({ id: 's1' }, { title: 'g', html: HTML });
@@ -315,16 +310,44 @@ test('htmlPages.get: HTML as data for the phone, chat-bound, with the CSP of the
     assert.throws(() => pages.get({ id: v.id, session: 's2' }));          // another chat cannot read it
     assert.throws(() => pages.get({ id: 'f'.repeat(32), session: 's1' })); // unknown id
     assert.throws(() => pages.get({ id: '../x', session: 's1' }));
-    // only the phone-safe read is remote; the switch and close stay on the PC
-    assert.equal(METHODS['htmlPages.get'], 'remote'); assert.equal(REMOTE_METHODS.has('htmlPages.get'), true);
-    for (const m of ['htmlPages.list', 'htmlPages.setInternet', 'htmlPages.close']) assert.equal(allowed(principalOf({ device: { id: 'd', kind: 'phone' } }), m), false);
-    assert.equal(allowed(principalOf({ device: { id: 'd', kind: 'phone' } }), 'htmlPages.get'), true);
+    // no phone client renders a page, so every htmlPages method stays on the PC
+    assert.equal(METHODS['htmlPages.get'], 'pc'); assert.equal(REMOTE_METHODS.has('htmlPages.get'), false);
+    for (const m of ['htmlPages.list', 'htmlPages.get', 'htmlPages.setInternet', 'htmlPages.close']) assert.equal(allowed(principalOf({ device: { id: 'd', kind: 'phone' } }), m), false);
   } finally { pages.wipe(); }
 });
 
-test('htmlPages.get from a phone is refused for a chat the PC gave total access to', async () => {
+test('htmlPages.get from a phone is refused whatever the chat access', async () => {
   const { guardCall } = await import('../src/engine/transport/remote-calls.mjs');
   const board = { one: (_sql, id) => ({ permission: id === 'tot' ? 'total' : 'editar' }) };
   assert.ok(guardCall(board, 'htmlPages.get', { id: 'a'.repeat(32), session: 'tot' }));
-  assert.equal(guardCall(board, 'htmlPages.get', { id: 'a'.repeat(32), session: 'ok' }), null);
+  assert.ok(guardCall(board, 'htmlPages.get', { id: 'a'.repeat(32), session: 'ok' }));
+});
+
+// Step 10: answers the agent offers as buttons. They are Orb's own buttons, never part of the page.
+test('choices: short plain texts, at most six, cleaned and without repeats; the page itself never carries them', async () => {
+  const { cleanChoices, MAX_CHOICES } = await import('../src/engine/host/html-pages.mjs');
+  assert.deepEqual(cleanChoices(undefined), []);
+  assert.deepEqual(cleanChoices(['  Sí ', 'Sí', 'No‮\u0000x', '', 'a'.repeat(300)].slice(0, 4)), ['Sí', 'No x']);
+  assert.equal(cleanChoices(['a'.repeat(300)])[0].length, 120);
+  assert.throws(() => cleanChoices('Sí'), /texts|textos/);
+  assert.throws(() => cleanChoices([1]), /texts|textos/);
+  assert.throws(() => cleanChoices(['/clear']), /texts|textos/, 'an Orb command is not an answer');
+  assert.throws(() => cleanChoices(Array.from({ length: MAX_CHOICES + 1 }, (_, i) => `op${i}`)), /texts|textos/);
+  const { pages } = make();
+  try {
+    const v = await pages.show({ id: 's1' }, { title: 'a', html: HTML, choices: ['Opción A', 'Opción B'] });
+    assert.deepEqual(v.choices, ['Opción A', 'Opción B']);
+    assert.deepEqual(pages.list()[0].choices, ['Opción A', 'Opción B']);
+    assert.ok(!pages.get({ id: v.id, session: 's1' }).html.includes('Opción A'), 'the served page is the agent\'s html only');
+    const none = await pages.show({ id: 's1' }, { title: 'b', html: HTML });
+    assert.deepEqual(none.choices, []);
+  } finally { pages.wipe?.(); }
+});
+
+test('the window draws the choices outside the frame and sends them through htmlPages.choose; the frame stays allow-scripts only', () => {
+  const ui = read('src/ui/components/html-page.jsx');
+  assert.match(ui, /sandbox="allow-scripts"/);
+  assert.ok(!/allow-same-origin|allow-top-navigation|allow-popups|postMessage|addEventListener\('message'/.test(ui), 'no channel from the frame to the window');
+  assert.match(ui, /call\('htmlPages\.choose'/); assert.ok(!/sessions\.send/.test(ui), 'a button never sends free text');
+  assert.match(read('src/mcp/server.mjs'), /choices: \{ type: 'array', maxItems: 6/);
 });

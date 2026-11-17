@@ -12,7 +12,7 @@ function withNonce(nonce, fn) {
   try { return fn(); } finally { Object.defineProperty(globalThis, 'crypto', real); }
 }
 
-export function buildVector() {
+function buildVector() {
   const deviceId = 'dev-42';
   const name = '1760000000000-0a1b2c3d.jpg';
   const key = fill(32, (i) => i + 1);

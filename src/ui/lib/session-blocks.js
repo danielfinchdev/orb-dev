@@ -4,6 +4,7 @@
 // (the items whose `parent` is its call) and its state: running, done or failed; Codex tells its threads' state in the
 // results of its later collab calls (states).
 const DONE = { completed: 'done', shutdown: 'done', errored: 'failed', notFound: 'failed', interrupted: 'failed' };
+import { groupTools } from './tool-summary.js';
 export function toBlocks(items, t) {
   const blocks = []; const tools = new Map(); const agents = new Map(); const byThread = new Map();
   const place = (b, parent) => { const a = parent != null ? agents.get(parent) : null; if (a) a.steps.push(b); else blocks.push(b); };
@@ -19,18 +20,21 @@ export function toBlocks(items, t) {
     if (it.kind === 'tool_result') {
       for (const [th, st] of Object.entries(it.body?.states ?? {})) { const a = byThread.get(th); if (a) a.threadState = st; }
       const b = it.body?.id ? tools.get(it.body.id) : null;
-      if (b) b.result = it.body; else place({ type: 'tool', key: it.id, call: { name: t('session.result') }, result: it.body }, it.body?.parent);
+      if (b) { b.result = it.body; if (it.body?.background) b.background = true; if (it.body?.done) b.background = false; } else place({ type: 'tool', key: it.id, call: { name: t('session.result') }, result: it.body }, it.body?.parent);
       continue;
     }
     if (it.kind === 'file') { const last = blocks.at(-1); if (last?.type === 'files') last.files.push(it.body); else blocks.push({ type: 'files', key: it.id, files: [it.body] }); continue; }
     blocks.push({ type: 'item', key: it.id, item: it });
   }
-  return blocks;
+  // runs of finished tool calls fold into one line («Leyó 3 archivos, ejecutó 2 comandos»)
+  return groupTools(blocks);
 }
 
 // running | done | failed. Claude's: its call's result. Codex's: its threads' latest state when told, else its call's.
 export function subagentState(b) {
   if (b.threadState) return DONE[b.threadState] ?? (b.result?.error ? 'failed' : 'running');
   if (b.call?.agent?.threads?.length) return b.result?.error ? 'failed' : 'running';
+  if (b.background) return 'running'; // let go on in the background: its placeholder result is not its end
+  if (b.result?.status === 'stopped') return 'stopped';
   return !b.result ? 'running' : b.result.error ? 'failed' : 'done';
 }

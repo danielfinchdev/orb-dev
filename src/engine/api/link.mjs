@@ -38,6 +38,8 @@ export function linkMethods({ emit, remoteRef, log }) {
     // without knowing. Only the phone app may ask: a linked browser may not. Parameters are ignored.
     'pc.screenshot': async (_params, principal) => {
       if (principal?.channel !== 'phone' && principal?.channel !== 'desktop') throw Object.assign(new PermissionError('pc.screenshot'), { message: tr('msg.screenshot.phoneOnly') });
+      // Settings › Mobile › screenshot: off means no phone gets a picture of the PC (the PC's own window is never blocked).
+      if (principal?.channel === 'phone' && ctx.config?.mobile?.screenshot === false) throw Object.assign(new PermissionError('pc.screenshot'), { message: tr('msg.screenshot.off') });
       const name = await capture(shotsDir());
       const device = principal?.device ? remoteRef.current?.allowDownload(principal.device, name) : null;
       log(`móvil: captura de pantalla${device ? ` (${device})` : ''}`);
@@ -54,8 +56,9 @@ export function linkMethods({ emit, remoteRef, log }) {
     },
     // The ways in: home Wi-Fi and/or Tailscale (the servers reopen with the new choice).
     // preview: what notifications show on a locked phone ('all', 'chat' or 'none').
-    'remote.configure': async ({ wifi, tailscale, preview }) => {
+    'remote.configure': async ({ wifi, tailscale, preview, screenshot }) => {
       const patch = {};
+      if (typeof screenshot === 'boolean') patch.screenshot = screenshot;
       if (typeof wifi === 'boolean') patch.wifi = wifi;
       if (typeof tailscale === 'boolean') patch.tailscale = tailscale;
       if (preview !== undefined) patch.preview = oneOf(preview, PREVIEWS, 'avisos');

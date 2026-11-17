@@ -8,8 +8,10 @@ import { CONFIG_FILE, paths } from './paths.mjs';
 
 // besides Claude Code, Codex and Cursor, the agents that speak ACP (src/agents/acp.mjs). They show up in Agentes and
 // take work only when their program is installed on this PC.
-export const AGENT_IDS = ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot', 'hermes'];
-export const AGENT_LABELS = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor', gemini: 'Gemini', opencode: 'OpenCode', qwen: 'Qwen Code', copilot: 'GitHub Copilot', hermes: 'Hermes Agent' };
+export const AGENT_IDS = ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot', 'hermes', 'grok', 'devin', 'droid', 'omp', 'pi', 'antigravity'];
+// Agents that start turned off (Ajustes › Agentes): the user turns them on by hand.
+export const OFF_BY_DEFAULT = ['hermes', 'grok', 'devin', 'droid', 'omp', 'pi', 'antigravity'];
+export const AGENT_LABELS = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor', gemini: 'Gemini', opencode: 'OpenCode', qwen: 'Qwen Code', copilot: 'GitHub Copilot', hermes: 'Hermes Agent', grok: 'Grok Build', devin: 'Devin', droid: 'Factory Droid', omp: 'Oh My Pi', pi: 'Pi', antigravity: 'Antigravity' };
 
 export const DEFAULT_CONFIG = Object.freeze({
   version: 5,
@@ -21,6 +23,8 @@ export const DEFAULT_CONFIG = Object.freeze({
   orchestrator: { agent: 'claude', account: 'claude', model: 'claude-sonnet-5-5', reasoning: 'medium', maxTurns: 60, renewAt: 0.6, orchestrate: true,
     models: [{ id: 'claude-sonnet-5-5', label: 'Sonnet 5.5' }, { id: 'claude-opus-5-5', label: 'Opus 5.5' }] },
   autoRun: true,
+  // the grey proposal of the next message in a chat's box when a turn ends (src/engine/suggest.mjs). Off: it spends plan.
+  suggestNext: false,
   maxParallel: 3,
   perAgent: 1,
   timeoutMinutes: 60,
@@ -29,6 +33,9 @@ export const DEFAULT_CONFIG = Object.freeze({
   // nobody answers in this time is denied and the agent goes on another way (0 = wait for ever).
   oneAtATime: false,
   approvalWaitMinutes: 10,
+  // how «Hacer commit…» writes its message (Ajustes › Agentes): 'conventional' (default), 'repo' (follow the repository's own
+  // history) or 'custom' (commitInstructions).
+  git: { commitStyle: 'conventional', commitInstructions: '' },
   // the agents' permission level for chats and tasks (Ajustes › Agentes; each chat may change its own): 'auto' works
   // without questions inside the project folder (undo instead of asking), 'preguntar' asks before risky commands and
   // before writing outside it (src/domain/security/guard.mjs).
@@ -36,7 +43,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   // The rails (src/domain/rules/rails.mjs): empty = all on; only the ones paused by the user are stored, as
   // { <id>: { enabled: false } }. The core rails have no switch.
   rails: {},
-  agentOrder: ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot', 'hermes'],
+  agentOrder: ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot', 'hermes', 'grok', 'devin', 'droid', 'omp', 'pi', 'antigravity'],
   agents: {
     // Claude Code accepts the aliases sonnet/opus/haiku, so the list keeps working when new versions come out.
     claude: { enabled: true, path: '', models: ['sonnet', 'opus', 'haiku'], defaultModel: 'sonnet', heavyModels: ['opus'],
@@ -56,7 +63,16 @@ export const DEFAULT_CONFIG = Object.freeze({
       strengths: 'cambios con contexto de GitHub: issues y pull requests' },
     // Off by default: Hermes only asks permission for what it considers dangerous, so the user turns it on by hand.
     hermes: { enabled: false, path: '', models: [], defaultModel: '', heavyModels: [],
-      strengths: 'agente autónomo con memoria y muchos proveedores de modelos' }
+      strengths: 'agente autónomo con memoria y muchos proveedores de modelos' },
+    // Also off by default, and not verified against the real programs (none was installed when they were added).
+    // Their API keys, when they take one, are in the vault (src/domain/security/agent-keys.mjs), never here.
+    grok: { enabled: false, path: '', models: [], defaultModel: '', heavyModels: [], strengths: 'agente de xAI para programar desde la terminal' },
+    devin: { enabled: false, path: '', models: [], defaultModel: '', heavyModels: [], strengths: 'agente de Cognition (Devin para terminal) con planes y revisión' },
+    droid: { enabled: false, path: '', models: [], defaultModel: '', heavyModels: [], strengths: 'agente de Factory para tareas de ingeniería de principio a fin' },
+    omp: { enabled: false, path: '', models: [], defaultModel: '', heavyModels: [], strengths: 'variante de Pi con herramientas extra y muchos proveedores' },
+    // Pi and Antigravity cannot ask Orb before acting: they only run with «total» (src/agents/unguarded.mjs).
+    pi: { enabled: false, path: '', models: [], defaultModel: '', heavyModels: [], strengths: 'agente minimalista y extensible, con muchos proveedores de modelos' },
+    antigravity: { enabled: false, path: '', models: [], defaultModel: '', heavyModels: [], strengths: 'agente de Google con ventanas de contexto muy grandes' }
   },
   // Accounts (subscriptions) per agent. id = agent and home '' = the CLI's own folder; more can be added from the app.
   accounts: AGENT_IDS.map((a) => ({ id: a, agent: a, label: AGENT_LABELS[a], home: '', enabled: true })),
@@ -88,7 +104,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   expert: { enabled: false, panels: { explorer: true, git: true, history: true, running: true, usage: true, system: true, activity: true } },
   browser: { enabled: true }, // the agents' browser (pages drawn by the app, driven through the MCP tools)
   // Phone access (off until the user turns it on): through the home Wi-Fi and/or Tailscale (https when the tailnet has it).
-  mobile: { enabled: false, port: 3131, wifi: true, tailscale: true },
+  mobile: { enabled: false, port: 3131, wifi: true, tailscale: true, screenshot: true },
   // «Cosas que nadie toca» (Ajustes › Avanzado): names, paths or containers that no agent touches, whatever the
   // permission (a command or a path that names one is denied).
   protected: [...DEFAULT_PROTECTED]

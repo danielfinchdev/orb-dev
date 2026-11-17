@@ -111,7 +111,7 @@ pub fn read_zoom(text: &str) -> f64 {
 
 /// WebRTC may only use a proxied UDP route. The CSP of an agent's HTML page cannot stop WebRTC, and STUN would otherwise
 /// let a page with "internet" switched off reach the network over UDP (and learn the local IPs). Known limit: TURN over
-/// TCP/TLS is not closed by this flag (see desarrollo/orb-3.8.4-progreso.md).
+/// TCP/TLS is not closed by this flag.
 const WEBRTC_POLICY: &str = "--force-webrtc-ip-handling-policy=disable_non_proxied_udp";
 
 /// Arguments of Orb's WebView2: Tauri's own (no Edge-only extras in the window), no direct WebRTC/STUN, and, only in a
@@ -252,7 +252,7 @@ pub fn check_host(method: &str, params: &Value, is_dir: impl Fn(&Path) -> bool) 
     "host.openTerminal" => Ok(HostRequest::OpenTerminal { dir: folder("dir", "carpeta no válida")?, choice: choice(params) }),
     "host.openEditor" => {
       let which = text("which");
-      if !matches!(which.as_str(), "cursor" | "vscode") {
+      if !matches!(which.as_str(), "cursor" | "vscode" | "windsurf" | "zed" | "jetbrains") {
         return Err("editor no válido".into());
       }
       Ok(HostRequest::OpenEditor { which, dir: folder("dir", "carpeta no válida")? })

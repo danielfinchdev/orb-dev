@@ -5,7 +5,7 @@
 // each conversation is its own (route.id), several at once.
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDraft } from '@/lib/draft.js';
-import { Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, ChevronRight, Presentation, History, FlaskConical, Folder, ListChecks, Ellipsis, Info, BellOff, MessageSquare } from 'lucide-react';
+import { Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, ChevronRight, Presentation, History, FlaskConical, Folder, ListChecks, Info, BellOff, MessageSquare } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown, TypingMarkdown, TypedMarkdown } from '@/components/markdown.jsx';
 import { ExtensionRequestCard } from './extensions.jsx';
@@ -22,26 +22,33 @@ import { Button } from '@/components/ui/button.jsx';
 import { TaskStatus, WaitLabel, HeldCard, resumeQueue, setQueuePaused } from '@/components/task-state.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { Switch, BubbleTip } from '@/components/ui/overlay.jsx';
-import { bridge, useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout, plainSkin, addPending, movePending, dropPending, pendingShown, usePending } from '@/lib/store.js';
+import { bridge, useStore, call, act, setState, getState, go, newChat, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout, plainSkin, addPending, movePending, dropPending, pendingShown, usePending } from '@/lib/store.js';
 import { notify } from '@/lib/notify.js';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { pickGreeting, pickSubtitle, suggestionsFor, greetingFor } from '@/lib/greeting.js';
 import { LiveActivity, QuestionCard } from '@/components/chat-live.jsx';
 import { OrchestratorIcon } from '@/components/orchestrator-icon.jsx';
-import { BrainPicker, ReasoningMenu, UsageBubble, useCatalog, useUsageBubble } from '@/components/brain-picker.jsx';
+import { BrainPicker, ReasoningMenu, UsageBubble, useCatalog, useUsageBubble, favoriteLabel } from '@/components/brain-picker.jsx';
+import { favoriteBrains } from '@/lib/favorite-brains.js';
+import { stepFavorite } from '../../shared/favorite-brains.mjs';
+import { useShortcut } from '@/lib/keys.js';
+import { useAddToChat, appendToBox } from '@/lib/add-to-chat.js';
 import { ContextSlot } from '@/components/context-slot.jsx';
+import { WorkspacePills } from '@/components/workspace-pills.jsx';
 import { cn } from '@/lib/utils.js';
-import { DECISION, AGENT, STATUS } from '@/lib/labels.js';
+import { DECISION, AGENT } from '@/lib/labels.js';
 import { useT } from '@/lib/i18n.js';
 import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
 import { keepSame } from '@/lib/memo.js';
 import { useAutoScroll, Composer } from '@/components/conversation/composer.jsx';
 import { MessageBox } from '@/components/conversation/message-box.jsx';
+import { ColdNotice } from '@/components/conversation/cold-notice.jsx';
 import { BarPause, COMPACT_AT, CompactButton } from '@/components/conversation/bar.jsx';
 import { ContextMeter } from '@/components/conversation/context-meter.jsx';
 import { needsApproval } from '@/lib/task-approval.js';
 import { quiet } from '@/lib/quiet.js';
 import { MoreButton } from '@/components/ui/primitives.jsx';
+import { ConversationTrail, useTrailScroll } from '@/components/conversation/trail.jsx';
 
 
 // a different greeting each time the chat opens (lib/greeting.js); the last one is remembered so it does not repeat.
@@ -61,7 +68,7 @@ function useGreeting(project) {
 }
 
 // Memoised: the list (up to 120 lines) is not drawn again while the assistant streams its answer.
-const Message = memo(function Message({ m, name, user, onChanges, tail }) {
+const Message = memo(function Message({ m, name, user, onChanges, tail, onPin }) {
   const t = useT();
   if (m.meta?.kind === 'question') return <QuestionCard m={m} />;
   // for a big request, the assistant's advice to define it on the Pizarra, with the way there.
@@ -70,7 +77,9 @@ const Message = memo(function Message({ m, name, user, onChanges, tail }) {
       <Markdown>{m.body}</Markdown>
     </MessageBox>
   );
-  if (m.role === 'usuario') return <MessageBox user name={user || t('chat.you')} at={m.at}>{m.body}</MessageBox>;
+  // the person's and the assistant's saved messages can be pinned (one still on its way has no saved line yet)
+  const pin = onPin && m.pinned_at !== undefined ? { pinned: Boolean(m.pinned_at), onToggle: () => onPin(m) } : undefined;
+  if (m.role === 'usuario') return <MessageBox user id={`msg-${m.id}`} pin={pin} name={user || t('chat.you')} at={m.at}>{m.body}</MessageBox>;
   if (m.role === 'orb') {
     const report = m.meta?.kind === 'report' && m.meta.tasks?.length ? m.meta : null;
     const actions = report ? (
@@ -82,7 +91,7 @@ const Message = memo(function Message({ m, name, user, onChanges, tail }) {
         </>)}
       </span>
     ) : null;
-    return <MessageBox name={name} at={m.at} actions={actions}><TypedMarkdown tail={tail}>{m.body}</TypedMarkdown></MessageBox>;
+    return <MessageBox id={`msg-${m.id}`} pin={pin} name={name} at={m.at} actions={actions}><TypedMarkdown tail={tail}>{m.body}</TypedMarkdown></MessageBox>;
   }
   if (m.meta?.kind === 'approval' || m.meta?.kind === 'task-approval') return <ChatApproval m={m} />;
   // an agent made a skill or an MCP server and asks for it to be turned on.
@@ -272,6 +281,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const conv = useStore((s) => (id == null ? null : s.conversations.find((c) => c.id === id) ?? null));
   const [rows, setRows] = useState([]);
   const box = useDraft();
+  // text sent here by the project search (Ctrl+P / Ctrl+Shift+F) or by «Añadir al chat»
+  useAddToChat((text) => box.set((prev) => appendToBox(prev, text)));
   // the Android app: what was shared from another app («Compartir con Orb») is waiting in the text box to be sent.
   useEffect(() => {
     if (!bridge.takeShared) return undefined;
@@ -333,6 +344,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const answer = useStore((s) => (id == null ? null : s.answers?.[id] ?? null));
   const pending = usePending(id == null ? 'new' : `chat:${id}`);
   const scroll = useAutoScroll([rows.length, chat.busy, id, pending.length, answer?.id]);
+  const trail = useTrailScroll(scroll);
   const catalog = useCatalog();
   const brain = conv
     ? { agent: conv.agent ?? 'claude', model: conv.model ?? '', account: conv.account ?? conv.agent, reasoning: conv.reasoning ?? 'medium' }
@@ -348,12 +360,14 @@ export function ChatView({ route, onConversation, project: inProject }) {
 
   // inside God mode, the project chosen there right now (the answer to a first message may come after a change).
   const projectNow = useRef(inProject); projectNow.current = inProject;
+  // a NEW direct chat works in the project's folder («Local») or in a worktree of its own (a branch to start from)
+  const [where, setWhere] = useState({ mode: 'local', base: '' });
   // The user went elsewhere while the first message was on its way: they stay where they are, and a notice says where
   // the message is (one click away).
   const leftBehind = (target, title) => notify({ title: t('chat.startedIn', { title }), body: t('chat.startedInBody'), tone: 'info', go: target, action: { label: t('notice.open'), onClick: () => go(target) } });
   const send = async () => {
-    const msg = box.get().trim(); if (!msg || sending) return;
-    box.set('');
+    const msg = box.message().trim(); if (!msg || sending) return;
+    box.set(''); box.clearBlocks();
     dismissTest();
     const mine = addPending(id == null ? 'new' : `chat:${id}`, msg, lastId);
     if (id != null) {
@@ -379,7 +393,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
         // «Orquestador» off: the user hands out the work, and the conversation is directly with the agent chosen below
         // (in God mode, in the project chosen there).
         const project = inProject ?? app.activeProject?.name ?? null;
-        const s = await act(call('sessions.create', { agent: brain.agent, account: brain.account && brain.account !== brain.agent ? brain.account : undefined, model: brain.model || undefined, reasoning: brain.reasoning, project, ...(project ? {} : { permission: 'leer' }) }));
+        const s = await act(call('sessions.create', { agent: brain.agent, account: brain.account && brain.account !== brain.agent ? brain.account : undefined, model: brain.model || undefined, reasoning: brain.reasoning, project, ...(project ? {} : { permission: 'leer' }), ...(project && where.mode === 'worktree' ? { workspace: 'worktree', ...(where.base ? { base: where.base } : {}) } : {}) }));
         if (!s) { dropPending(mine); if (!moved()) box.set(msg); return; }
         movePending(mine, `session:${s.id}`);
         if ((await act(call('sessions.send', { id: s.id, text: msg }))) === undefined) dropPending(mine);
@@ -408,11 +422,26 @@ export function ChatView({ route, onConversation, project: inProject }) {
   // Choosing Cursor for a new conversation with the «Orquestador» on: the conversation becomes a direct one with Cursor.
   const pickBrain = async (b) => {
     if (id == null && b.agent === 'cursor' && orchestrate) {
-      if (await settings({ agent: b.agent, model: b.model, account: b.account, orchestrate: false })) notify({ title: t('chat.cursorDirect'), tone: 'info' });
+      if (await settings({ agent: b.agent, model: b.model, account: b.account, ...(b.reasoning ? { reasoning: b.reasoning } : {}), orchestrate: false })) notify({ title: t('chat.cursorDirect'), tone: 'info' });
       return;
     }
-    settings({ agent: b.agent, model: b.model, account: b.account });
+    // a favourite also brings its reasoning level
+    settings({ agent: b.agent, model: b.model, account: b.account, ...(b.reasoning ? { reasoning: b.reasoning } : {}) });
   };
+  // Alt+] / Alt+[: the next / previous favourite brain (marked with the star in the brain picker).
+  const stepBrain = (step) => (e) => {
+    e.preventDefault();
+    const list = favoriteBrains();
+    if (!list.length) { notify({ title: t('brain.favNone'), tone: 'info' }, { record: false }); return; }
+    const next = stepFavorite(list, brain, step);
+    if (!next) return;
+    pickBrain(next);
+    notify({ title: t('brain.favSwitched', { label: favoriteLabel(catalog, next, t) }), tone: 'info' }, { record: false });
+  };
+  useShortcut('brain.next', stepBrain(1));
+  useShortcut('brain.prev', stepBrain(-1));
+  // pin or unpin a message; the list is read again so the pin shows (and the panel's list follows)
+  const pinLine = useCallback(async (m) => { if ((await act(call('chat.pin', { conversation: id, id: m.id, pinned: !m.pinned_at }))) !== undefined) { setOlder((o) => o.map((x) => (x.id === m.id ? { ...x, pinned_at: m.pinned_at ? null : new Date().toISOString() } : x))); fetchList(); } }, [id, fetchList]);
   const saved = [...older, ...rows];
   // The answer that ended the turn goes after the lines until a new read of the conversation brings it.
   const lastId = saved.at(-1)?.id ?? 0;
@@ -474,8 +503,9 @@ export function ChatView({ route, onConversation, project: inProject }) {
           </DropdownMenu>
         ) : null}
       </ChatBar>
-      <div ref={scroll.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
-        <div className="lazy-lines mx-auto flex max-w-3xl flex-col gap-5 px-5 py-6" data-testid="chat-lines">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div ref={trail.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
+        <div className="lazy-lines mx-auto flex max-w-[var(--chat-max-width)] flex-col gap-5 px-5 py-6" data-testid="chat-lines">
           {more ? <Button variant="ghost" size="sm" className="text-muted-foreground mx-auto" onClick={loadOlder} disabled={loading} data-testid="chat-older"><History />{t('chat.older')}</Button> : null}
           {id == null && !sending ? (
             <div className="flex flex-col items-center gap-3 pt-10 text-center">
@@ -486,11 +516,13 @@ export function ChatView({ route, onConversation, project: inProject }) {
               </div>
               <div className="mt-3 flex max-w-xl flex-wrap justify-center gap-2">{suggestionsFor(workProject?.name).map((s) => <Button key={s} variant="outline" size="sm" className="h-auto max-w-full shrink rounded-full py-1.5 whitespace-normal" onClick={() => box.set(t(s))}>{t(s)}</Button>)}</div>
             </div>
-          ) : lines.map((m) => <Message key={m.id} m={m} name={name} user={userName} onChanges={askChanges} tail={`chat:${id}`} />)}
+          ) : lines.map((m) => <Message key={m.id} m={m} name={name} user={userName} onChanges={askChanges} tail={`chat:${id}`} onPin={pinLine} />)}
           {unsaved.map((p) => <Message key={p.id} m={{ id: p.id, role: 'usuario', body: p.text, at: p.at }} name={name} user={userName} onChanges={askChanges} />)}
           <TaskLines conversation={id} />
           {chat.busy || chat.waiting || sending ? <LiveAnswer id={id} name={name} /> : null}
         </div>
+      </div>
+      <ConversationTrail scrollRef={trail.node} />
       </div>
       <Composer draft={box} onSend={send} onStop={id != null ? () => act(call('chat.stop', { conversation: id })) : undefined} busy={chat.busy} disabled={sending} testid="chat-input"
         placeholder={chat.busy ? t('chat.placeholderBusy', { name }) : orchestrate ? t('chat.placeholder', { name }) : t('chat.placeholderDirect', { agent: AGENT[brain.agent] ?? brain.agent })}
@@ -504,7 +536,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
             showTest ? { key: 'test', node: <BubbleTip title={t('test.button')} text={t('test.tip')} side="top"><Button size="xs" variant="soft" onClick={() => runTest(t('test.prompt'))} data-testid="chat-test"><FlaskConical />{t('test.button')}</Button></BubbleTip> } : null
           ]} />
         </>}
-        notice={<UsageBubble text={bubble.text} onClose={bubble.close} />}
+        notice={bubble.text ? <UsageBubble text={bubble.text} onClose={bubble.close} /> : id != null ? <ColdNotice id={id} agent={conv?.agent} used={context?.used} lastAt={saved.at(-1)?.at ?? conv?.updated_at} busy={chat.busy || chat.waiting} compacting={compacting} onCompact={compact} onFresh={() => newChat(conv?.project ?? undefined)} /> : null}
         bottom={<>
           {/* the model and its reasoning stay together; the permission and the orchestrator form the second group;
               the context meter sits at the far end. Each group wraps as a whole on a narrow window. */}
@@ -519,6 +551,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
               the way it started. an icon and a small switch; the tooltip explains it. */}
           <OrchestratorSwitch on={orchestrate} onChange={toggleOrchestrator} name={name} cursor={brain.agent === 'cursor'} locked={id != null} />
           </div>
+          {!orchestrate && id == null ? <WorkspacePills project={inProject ?? app.activeProject?.name ?? null} value={where} onChange={setWhere} /> : null}
           {context ? <span className="text-muted-foreground ml-auto shrink-0 text-xs"><ContextMeter context={context} /></span> : null}
         </>} />
     </>

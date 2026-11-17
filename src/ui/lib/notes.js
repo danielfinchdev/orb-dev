@@ -7,7 +7,7 @@ import { call, act, go } from './store.js';
 import { t } from './i18n.js';
 
 // Open what a notification is for: { route, approve? } (approve: the permission or task to approve, from src/shared/notes.mjs).
-export async function openFromNote({ route, approve } = {}) {
+async function openFromNote({ route, approve } = {}) {
   if (!route?.view) return;
   go(route);
   if (!approve) return;

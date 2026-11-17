@@ -6,7 +6,7 @@ import { LifeBuoy, Search, Rocket, MessageSquare, Brain, MessageSquarePlus, Clip
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Card, CardHeader, CardTitle, CardContent, Empty, Input, Kbd } from '@/components/ui/basic.jsx';
+import { Card, CardHeader, CardTitle, CardContent, Empty, Kbd } from '@/components/ui/basic.jsx';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
 import { useStore, go, openSettings, openGames, startTour, bridge, newChat } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';

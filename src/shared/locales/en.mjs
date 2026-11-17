@@ -27,8 +27,12 @@ import ws5 from './en/ws5.mjs';
 import ws6 from './en/ws6.mjs';
 import ws6android from './en/ws6-android.mjs';
 import master from './en/master.mjs';
+import modos from './en/modos.mjs';
 import ola1 from './en/ola1.mjs';
 import mensajeria from './en/mensajeria.mjs';
+import pestanas from './en/pestanas.mjs';
+import comodidad from './en/comodidad.mjs';
+import rebobinar from './en/rebobinar.mjs';
 import orbchats from './en/orbchats.mjs';
 import notes from './en/notes.mjs';
 import ext from './en/ext.mjs';
@@ -69,8 +73,12 @@ export default {
   ...ws6,
   ...ws6android,
   ...master,
+  ...modos,
   ...ola1,
   ...mensajeria,
+  ...pestanas,
+  ...comodidad,
+  ...rebobinar,
   ...orbchats,
   ...notes,
   ...ext,

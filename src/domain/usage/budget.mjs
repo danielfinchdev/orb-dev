@@ -38,7 +38,7 @@ const rules = (id, board = null) => {
 // Models that use the quota faster: the agent's heavyModels and any of a known heavy family (Opus, Fable, Pro…), so
 // a model Orb picks by its full name (claude-opus-5-5) counts as heavy too, not only the alias «opus».
 export const HEAVY_FAMILY = /opus|fable|(^|[-_.])pro($|[-_.])|ultra|max\b|xhigh|o3\b|o1\b/i;
-export const isHeavy = (id, model) => Boolean(model && (rules(id).heavyModels.includes(model) || HEAVY_FAMILY.test(model)));
+const isHeavy = (id, model) => Boolean(model && (rules(id).heavyModels.includes(model) || HEAVY_FAMILY.test(model)));
 
 // Optional per-task spending cap for Claude (--max-budget-usd), only when the user sets one.
 export function taskBudgetUsd(agent, model) {
@@ -50,7 +50,7 @@ export function taskBudgetUsd(agent, model) {
 
 // Launches of each account inside the rolling window, from the event written at every launch (account, agent and model
 // really used). Events without an account belong to the agent's default account (id = agent).
-export function windowUsage(board, id) {
+function windowUsage(board, id) {
   const since = new Date(Date.now() - budgetConfig().windowHours * 3_600_000).toISOString();
   const rows = board.all(`SELECT json_extract(detail, '$.model') AS model FROM events
     WHERE kind = 'task.launch_options' AND at >= ? AND json_valid(detail) AND COALESCE(json_extract(detail, '$.account'), json_extract(detail, '$.agent')) = ?`, since, id);
@@ -64,7 +64,7 @@ export function cooldownUntil(board, id) {
 
 // a limit of one model only (Cursor's API models: «Switch to a different model … to continue with Gemini») stops that
 // model on that account, never the whole account: the other models (Cursor's own, Auto) keep working.
-export const MODEL_LIMIT_RE = /switch to a different model|continue with this model|to continue with \w|limit (of|for) this model|model'?s? (usage )?limit/i;
+const MODEL_LIMIT_RE = /switch to a different model|continue with this model|to continue with \w|limit (of|for) this model|model'?s? (usage )?limit/i;
 export const isModelLimitText = (text) => MODEL_LIMIT_RE.test(String(text ?? ''));
 const modelKey = (id, model) => `model_limit:${id}:${String(model).slice(0, 80)}`;
 export function modelLimitUntil(board, id, model) {
@@ -112,11 +112,6 @@ export function liftAfterSuccess(board, id, model, launchedAt) {
   return lifted;
 }
 
-// the earliest moment this account can take a task with this model, when it is paused (0 when it is not).
-export function blockedUntil(board, id, model = null) {
-  return Math.max(cooldownUntil(board, id), modelLimitUntil(board, id, model));
-}
-
 // The real usage an account reported last (live sessions): { utilization 0-1, resetAt, window, status, at }.
 export function recordRate(board, id, rate) {
   if (!id || !rate) return;
@@ -138,14 +133,14 @@ export function recordRate(board, id, rate) {
   board.settingJson(`rate:${id}`, next);
 }
 // The windows an account reported that are still running, the shortest first (session before weekly).
-export const windowMinutes = (w) => { const m = String(w).match(/(\d+)\s*min/); if (m) return Number(m[1]); if (/five_hour|5h/i.test(w)) return 300; if (/seven_day|week/i.test(w)) return 10080 + (/opus|sonnet|fable|model/i.test(w) ? 1 : 0); return 100000; };
+const windowMinutes = (w) => { const m = String(w).match(/(\d+)\s*min/); if (m) return Number(m[1]); if (/five_hour|5h/i.test(w)) return 300; if (/seven_day|week/i.test(w)) return 10080 + (/opus|sonnet|fable|model/i.test(w) ? 1 : 0); return 100000; };
 export function rateWindows(board, id) {
   const all = board.settingJson(`rates:${id}`) ?? {};
   return Object.entries(all).filter(([, w]) => (!w.resetAt || w.resetAt > Date.now()) && Date.now() - (w.at ?? 0) < 7 * 86_400_000)
     .map(([window, w]) => ({ window, utilization: w.utilization, resetAt: w.resetAt, status: w.status, at: w.at ?? null }))
     .sort((a, b) => windowMinutes(a.window) - windowMinutes(b.window));
 }
-export function realRate(board, id) {
+function realRate(board, id) {
   const r = board.settingJson(`rate:${id}`);
   if (!r || (r.resetAt && r.resetAt < Date.now())) return null; // that window is over
   if (Date.now() - (r.at ?? 0) > 12 * 3_600_000) return null; // too old to trust

@@ -22,7 +22,7 @@ export const METHODS = Object.freeze({
   // the app and its settings
   'app.state': 'remote', 'app.migrationState': 'pc', 'app.migrationRetry': 'pc', 'app.coreState': 'pc', 'app.coreRepair': 'pc', 'app.layoutPlan': 'pc', 'app.layoutApply': 'pc', 'config.save': 'pc', 'sidebar.complete': 'remote', 'control.pause': 'remote', 'control.resume': 'remote',
   // this PC's tools, in the engine (src/engine/api/app.mjs)
-  'app.openTerminal': 'pc', 'app.editors': 'pc', 'app.openIn': 'pc', 'app.runAction': 'pc', 'app.feedbackSend': 'pc', 'app.moreApps': 'pc',
+  'keys.get': 'pc', 'keys.save': 'pc', 'app.openTerminal': 'pc', 'app.editors': 'pc', 'app.openIn': 'pc', 'app.runAction': 'pc', 'app.feedbackSend': 'pc', 'app.moreApps': 'pc',
   // the Windows app's music (src/engine/host/music.mjs)
   'music.track': 'pc',
   'system.check': 'pc', 'installer.check': 'pc', 'installer.progress': 'pc', 'installer.start': 'pc',
@@ -35,17 +35,17 @@ export const METHODS = Object.freeze({
   // an Android emulator already installed on this PC
   'android.emulators': 'pc', 'android.emulatorStart': 'pc', 'devtools.check': 'pc',
   'github.status': 'pc', 'github.contributions': 'pc', 'github.login': 'pc',
-  'expert.tree': 'pc', 'expert.read': 'pc', 'expert.status': 'pc', 'expert.diff': 'pc', 'expert.log': 'pc', 'expert.system': 'pc',
+  'expert.tree': 'pc', 'projects.findFiles': 'pc', 'projects.searchText': 'pc', 'expert.read': 'pc', 'expert.status': 'pc', 'expert.diff': 'pc', 'expert.log': 'pc', 'expert.system': 'pc',
   'actions.list': 'pc', 'actions.save': 'pc', 'actions.remove': 'pc',
   'images.read': 'pc', 'images.mark': 'pc', 'images.save': 'pc', 'attachments.read': 'pc',
   // conversations with the assistant
   'conversations.list': 'remote', 'conversations.search': 'remote', 'conversations.update': 'remote', 'conversations.remove': 'pc', 'conversations.trash': 'remote', 'conversations.restore': 'remote',
-  'chat.list': 'remote', 'chat.send': 'remote', 'chat.stop': 'remote', 'chat.compact': 'remote', 'chat.answer': 'remote', 'chat.accept': 'remote',
+  'chat.list': 'remote', 'chat.pin': 'remote', 'chat.pinned': 'remote', 'chat.notes': 'remote', 'chat.send': 'remote', 'chat.stop': 'remote', 'chat.compact': 'remote', 'chat.answer': 'remote', 'chat.accept': 'remote',
   'chat.settings': 'remote',
   // projects
   'projects.list': 'remote', 'projects.icons': 'remote', 'projects.create': 'remote', 'projects.import': 'pc', 'projects.clone': 'pc',
   'projects.remove': 'pc', 'projects.rename': 'pc', 'projects.setActive': 'remote', 'projects.setIcon': 'pc', 'projects.clearIcon': 'pc',
-  'projects.branch': 'remote', 'projects.info': 'remote', 'projects.prs': 'remote', 'projects.pr': 'remote', 'projects.mergePr': 'remote', 'projects.prComment': 'remote', 'notes.markRead': 'remote', 'projects.commit': 'pc', 'projects.merge': 'pc', 'projects.push': 'pc',
+  'projects.branch': 'remote', 'projects.info': 'remote', 'projects.prs': 'remote', 'projects.pr': 'remote', 'projects.mergePr': 'remote', 'projects.prComment': 'remote', 'notes.markRead': 'remote', 'projects.commit': 'pc', 'projects.commitFiles': 'pc', 'projects.commitSuggest': 'pc', 'projects.prFix': 'pc', 'ciWatch.list': 'pc', 'ciWatch.set': 'pc', 'projects.merge': 'pc', 'projects.push': 'pc',
   'projects.createPr': 'pc', 'projects.createRepo': 'pc', 'projects.review': 'remote', 'projects.securityReview': 'remote',
   // finishing a project (its folder stays) also from the phone; deleting it (its folder too) only here.
   'projects.finish': 'remote', 'projects.finished': 'remote', 'projects.reopen': 'remote', 'projects.deleteCheck': 'pc', 'projects.delete': 'pc', 'projects.deleteAbort': 'pc',
@@ -53,12 +53,12 @@ export const METHODS = Object.freeze({
   'logs.list': 'remote', 'logs.read': 'remote',
   // tasks
   'tasks.list': 'remote', 'tasks.live': 'remote', 'tasks.get': 'remote', 'tasks.create': 'remote', 'tasks.approve': 'remote',
-  'tasks.retry': 'remote', 'tasks.cancel': 'remote', 'tasks.reassign': 'remote', 'tasks.followup': 'remote', 'tasks.undo': 'remote', 'tasks.diff': 'remote',
+  'tasks.retry': 'remote', 'tasks.cancel': 'remote', 'tasks.reassign': 'remote', 'tasks.followup': 'remote', 'tasks.undo': 'remote', 'tasks.diff': 'remote', 'sessions.turns': 'remote', 'sessions.turnDiff': 'remote',
   'tasks.launchAnyway': 'remote', 'tasks.search': 'remote', 'tasks.accept': 'remote', 'tasks.review': 'remote', 'tasks.discardBranch': 'pc',
   // direct conversations with an agent and the tasks' sessions
   'sessions.list': 'remote', 'sessions.create': 'remote', 'sessions.items': 'remote', 'sessions.send': 'remote', 'sessions.queue': 'remote',
-  'sessions.editQueued': 'remote', 'sessions.approve': 'remote', 'sessions.resume': 'remote', 'sessions.fork': 'remote', 'sessions.settle': 'remote',
-  'sessions.stop': 'remote', 'sessions.compact': 'remote', 'sessions.update': 'remote', 'sessions.remove': 'pc', 'sessions.trash': 'remote', 'sessions.restore': 'remote', 'trash.list': 'remote',
+  'sessions.editQueued': 'remote', 'sessions.approve': 'remote', 'sessions.resume': 'remote', 'sessions.fork': 'remote', 'sessions.handoff': 'remote', 'sessions.edit': 'remote', 'sessions.rewindInfo': 'remote', 'sessions.editRewind': 'pc', 'sessions.rewindUndo': 'pc', 'sessions.settle': 'remote',
+  'sessions.stop': 'remote', 'sessions.subagent': 'remote', 'sessions.sideAsk': 'pc', 'sessions.sides': 'remote', 'sessions.sideClose': 'remote', 'sessions.suggestCancel': 'remote', 'sessions.modes': 'remote', 'sessions.goal': 'remote', 'sessions.compact': 'remote', 'sessions.update': 'remote', 'sessions.remove': 'pc', 'worktrees.branches': 'remote', 'worktrees.status': 'pc', 'worktrees.list': 'pc', 'worktrees.discard': 'pc', 'sessions.trash': 'remote', 'sessions.restore': 'remote', 'trash.list': 'remote',
   // «Auto» / «Preguntar» for everything (Ajustes › Agentes and the assistant's chat), also from the phone
   'permissions.setMode': 'remote',
   // «Acceso total al PC» and «Usar mi móvil Android» (src/engine/security/grants.mjs): given and taken back only here
@@ -66,7 +66,7 @@ export const METHODS = Object.freeze({
   // scheduled tasks
   'schedules.list': 'remote', 'schedules.create': 'remote', 'schedules.update': 'remote', 'schedules.run': 'remote', 'schedules.remove': 'pc',
   // the chat list (pins, sections, read marks)
-  'inbox.list': 'remote', 'inbox.search': 'remote', 'inbox.pin': 'remote', 'inbox.unpin': 'remote', 'inbox.reorderPins': 'remote',
+  'inbox.list': 'remote', 'inbox.digest': 'remote', 'inbox.digestSeen': 'remote','inbox.search': 'remote', 'inbox.pin': 'remote', 'inbox.unpin': 'remote', 'inbox.reorderPins': 'remote',
   'inbox.mute': 'remote', 'inbox.snooze': 'remote', 'inbox.markRead': 'remote', 'inbox.sections.list': 'remote', 'inbox.sections.create': 'remote',
   'inbox.sections.rename': 'remote', 'inbox.sections.delete': 'remote', 'inbox.sections.reorder': 'remote', 'inbox.sections.move': 'remote',
   // phone access and Magic Link
@@ -82,17 +82,23 @@ export const METHODS = Object.freeze({
   // the master password and the connectors' keys
   'master.state': 'pc', 'master.create': 'pc', 'master.unlock': 'pc', 'master.lock': 'pc', 'master.check': 'pc', 'master.change': 'pc', 'master.forgot': 'pc', 'master.reset': 'pc',
   'secrets.connector': 'pc', 'secrets.saveConnector': 'pc',
+  // the agents' own API keys (Grok, Devin, Droid): the state says only which are saved, saving needs the unlock
+  'agentKeys.state': 'pc', 'agentKeys.save': 'pc',
   // a secret an agent asked for, typed only on this PC's card (src/engine/security/agent-secrets.mjs)
   'secrets.pending': 'pc', 'secrets.answer': 'pc', 'secrets.decline': 'pc',
   // a merge an agent asked for, confirmed only on this PC's card (src/engine/host/pr-tools.mjs)
   'prConfirm.pending': 'pc', 'prConfirm.answer': 'pc', 'prConfirm.decline': 'pc',
   // the HTML pages of the chats: only this PC's window may list them, close them or give them internet (src/engine/host/html-pages.mjs)
+  // agents outside Orb that create tasks through a loopback MCP server (src/engine/api/mcp-ext.mjs)
+  'mcpExt.state': 'pc', 'mcpExt.setEnabled': 'pc', 'mcpExt.createToken': 'pc', 'mcpExt.setProjects': 'pc', 'mcpExt.revoke': 'pc', 'mcpExt.remove': 'pc',
   'htmlPages.list': 'pc', 'htmlPages.setInternet': 'pc', 'htmlPages.close': 'pc',
   // read-only, for the phone: returns the HTML as data (never executed on the host) to show it in a sandboxed frame
-  'htmlPages.get': 'remote',
+  'htmlPages.get': 'pc', 'htmlPages.choose': 'remote',
   // the user's terminal inside Orb (src/engine/host/user-terminal.mjs)
   'terminal.list': 'pc', 'terminal.open': 'pc', 'terminal.write': 'pc', 'terminal.close': 'pc',
   // Ajustes › Skills y MCP (src/engine/api/extensions.mjs): what agents run comes in and out of core only here
+  // the chats and usage that Claude Code and Codex keep on this PC (src/engine/api/history.mjs, read-only)
+  'history.list': 'pc', 'history.read': 'pc', 'history.usage': 'pc',
   'extensions.list': 'pc', 'extensions.toggle': 'pc', 'extensions.import': 'pc', 'extensions.remove': 'pc', 'extensions.approve': 'pc',
   'extensions.reject': 'pc', 'extensions.edit': 'pc', 'extensions.adopt': 'pc', 'extensions.applyCheck': 'pc', 'extensions.apply': 'pc',
   // the text rules and the rails (src/engine/api/rules.mjs): the phone may only read them, every change is made here
@@ -112,8 +118,8 @@ export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter(
 // with. Changing the password asks for the current one instead.
 // pairing a phone or starting an emulator (the agents may then reach it), and giving a chat «Acceso total al PC» or the
 // phone (the usual 5-minute unlock, not the password every time: see below).
-export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'backup.previousKey', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'projects.deleteCheck', 'extensions.remove',
-  'android.pairStart', 'android.pairCode', 'android.emulatorStart', 'sessions.grantTotal', 'sessions.grantAndroid',
+export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'backup.previousKey', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'agentKeys.save', 'projects.deleteCheck', 'extensions.remove',
+  'android.pairStart', 'android.pairCode', 'android.emulatorStart', 'sessions.grantTotal', 'sessions.grantAndroid', 'mcpExt.createToken', 'mcpExt.setProjects',
   // rules: your own are edited with the usual unlock; pausing or deleting a shipped one (rules.pause / rules.delete,
   // see freshPurpose) and everything about the rails asks for the password every time
   'rules.save', 'rules.create', 'rules.resume', 'rules.pause', 'rules.delete', 'rules.restoreDefaults', 'rails.set', 'rails.restore']));
@@ -149,6 +155,8 @@ export function needsUnlock(method, params, current = {}) {
   if (UNLOCK_METHODS.has(method)) return true;
   // a secret for an agent saved in the vault, or taken from it.
   if (method === 'secrets.answer') return params?.save === true || params?.saved === true;
+  // switching the MCP server for outside agents on asks; switching it off (taking access back) needs nothing
+  if (method === 'mcpExt.setEnabled') return params?.enabled === true;
   if (method !== 'config.save') return false;
   const patch = params?.patch ?? {};
   if (patch.rails !== undefined) return true;

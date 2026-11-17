@@ -62,6 +62,12 @@ interface ChatsBackend {
     /** Asks the PC for the list and saves it in the cache. */
     suspend fun refreshInbox(): Result<Unit>
 
+    /** `inbox.digest`: yesterday's summary and whether this phone has not shown it today. */
+    suspend fun digest(): Result<JsonElement>
+
+    /** `inbox.digestSeen`: the PC keeps that this phone showed the card today. */
+    suspend fun digestSeen(): Result<Unit>
+
     /** `app.state`, saved in the cache; its answer carries the PC's theme. */
     suspend fun appState(): Result<JsonElement>
 
@@ -116,13 +122,17 @@ class RuntimeChatsBackend(private val container: AppContainer, private val runti
         val conversations = async { api.conversations.list() }
         val sessions = async { api.sessions.list(buildJsonObject { put("archived", false) }) }
         val approvals = async { api.approvals.list() }
+        val tasks = async { api.tasks.list() }
         val list = inbox.await().getOrElse { return@coroutineScope Result.failure(it) } as? JsonObject
             ?: return@coroutineScope Result.failure(LinkException(LinkError.BadAnswer))
         // The extra lists only complete the rows; without them the list still shows what the inbox itself says.
-        val merged = InboxMerge.merge(list, conversations.await().getOrNull(), sessions.await().getOrNull(), approvals.await().getOrNull())
+        val merged = InboxMerge.merge(list, conversations.await().getOrNull(), sessions.await().getOrNull(), approvals.await().getOrNull(), tasks.await().getOrNull())
         container.cacheSync()?.applyInbox(merged, ZONE)
         Result.success(Unit)
     }
+
+    override suspend fun digest() = api.inbox.digest(buildJsonObject { })
+    override suspend fun digestSeen() = api.inbox.digestSeen(buildJsonObject { }).map { }
 
     override suspend fun appState(): Result<JsonElement> {
         val result = api.app.state()

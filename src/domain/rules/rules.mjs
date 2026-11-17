@@ -9,8 +9,8 @@ import { writeAtomic } from '../../platform/fsx.mjs';
 import { DEFAULT_RULES, DEFAULT_IDS, HOST_OF, defaultRule, hashText } from './defaults.mjs';
 import { render } from './render.mjs';
 
-export const PARAS = Object.freeze(['orb', 'subagentes', 'ambos']);
-export const ESTADOS = Object.freeze(['activa', 'pausada', 'eliminada']);
+const PARAS = Object.freeze(['orb', 'subagentes', 'ambos']);
+const ESTADOS = Object.freeze(['activa', 'pausada', 'eliminada']);
 export const MAX_TITLE = 80;
 export const MAX_TEXT = 20_000;
 const ID = /^[a-z0-9-]{1,60}$/;

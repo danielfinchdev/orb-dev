@@ -21,7 +21,22 @@ function PageFrame({ p, className, testid }) {
   return <iframe key={`${p.id}:${p.internet ? 1 : 0}`} src={p.url} sandbox="allow-scripts" referrerPolicy="no-referrer" title={t('htmlpage.frame', { title: p.title })} className={cn('bg-white w-full rounded-md border', className)} data-testid={testid} />;
 }
 
-function HtmlPage({ p, paused }) {
+// The answers the agent offers (orb_html_show › choices): buttons of Orb's own, outside the frame. Pressing one sends its text, as
+// it reads, as the person's message in this chat; the page itself can press nothing.
+function Choices({ pageId, sessionId, choices }) {
+  const t = useT();
+  const [sent, setSent] = useState(null);
+  if (!choices?.length) return null;
+  // only the page and the button's index travel: the engine sends the text it registered, never one typed by the page or the agent
+  const send = async (text, index) => { setSent(text); if ((await act(call('htmlPages.choose', { id: String(pageId), session: String(sessionId), index }))) === undefined) setSent(null); };
+  return (
+    <div role="group" aria-label={t('htmlpage.choices')} className="flex flex-wrap items-center gap-2" data-testid="html-choices">
+      {choices.map((c, i) => <Button key={c} type="button" size="sm" variant="outline" className="h-auto max-w-full py-1.5 whitespace-normal" disabled={sent !== null} aria-pressed={sent === c} title={t('htmlpage.choiceTip')} onClick={() => send(c, i)} data-testid="html-choice">{c}</Button>)}
+    </div>
+  );
+}
+
+function HtmlPage({ p, paused, sessionId }) {
   const t = useT();
   const [big, setBig] = useState(false);
   const internet = p.internet === true;
@@ -38,6 +53,7 @@ function HtmlPage({ p, paused }) {
       {paused
         ? <div className="text-muted-foreground bg-muted/40 rounded-md border px-3 py-6 text-center text-xs" data-testid="html-paused">{t('htmlpage.pausedNote')}</div>
         : <PageFrame p={p} className="h-[320px]" testid="html-frame" />}
+      {paused ? null : <Choices pageId={p.id} sessionId={sessionId} choices={p.choices} />}
       <div className="flex items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-xs font-medium" title={t('htmlpage.internetHint')}>
           <Switch checked={internet} onCheckedChange={(on) => act(call('htmlPages.setInternet', { ...refOf(p), internet: on === true }))} aria-describedby={`html-help-${p.id}`} data-testid="html-internet" />
@@ -74,5 +90,5 @@ export function HtmlPages({ sessionId }) {
   }, [sessionId]);
   if (!list.length) return null;
   const live = mountable(list);
-  return <div className="mx-auto grid w-full max-w-3xl shrink-0 gap-2 px-5 pb-2">{list.map((p) => <HtmlPage key={p.id} p={p} paused={!live.has(p.id)} />)}</div>;
+  return <div className="mx-auto grid w-full max-w-3xl shrink-0 gap-2 px-5 pb-2">{list.map((p) => <HtmlPage key={p.id} p={p} paused={!live.has(p.id)} sessionId={sessionId} />)}</div>;
 }

@@ -9,7 +9,7 @@ import { readLog } from '../domain/journal/journal.mjs';
 const TOKEN = /@(tarea|conversacion|bitacora):([\w.-]{1,64})/g;
 const MAX_EACH = 2500;
 
-export function mentionTokens(text) { return [...String(text ?? '').matchAll(TOKEN)].map((m) => ({ kind: m[1], id: m[2], raw: m[0] })); }
+function mentionTokens(text) { return [...String(text ?? '').matchAll(TOKEN)].map((m) => ({ kind: m[1], id: m[2], raw: m[0] })); }
 
 // Context block for the agent ('' when there is nothing to attach).
 export function expandMentions(board, sessions, text) {

@@ -69,7 +69,7 @@ test('Ctrl+K: only the key alone, and it waits for what already uses it', () => 
   assert.match(palette, /!e\.defaultPrevented && !document\.querySelector\('\[role=dialog\]'\)/, 'a project action, the whiteboard or a dialog keep Ctrl+K');
   // No other shortcut of Orb is Ctrl+K: the terminal is Ctrl+J, zoom Ctrl +/-/0, F5 and F11.
   for (const file of [['lib', 'tauri-bridge.js'], ['main.jsx'], ['components', 'project-tools.jsx']]) assert.doesNotMatch(read(...file), /KeyK|key(\.toLowerCase\(\))? === 'k'/i, file.join('/'));
-  assert.match(read('main.jsx'), /bridge\.mobile \? null : <><ActionShortcuts project=\{shortcutProject\} \/><CommandPalette \/><\/>/, 'PC only, next to the actions');
+  assert.match(read('main.jsx'), /bridge\.mobile \? null : <><ActionShortcuts project=\{shortcutProject\} \/><CommandPalette \/><SelectionToChat \/><\/>/, 'PC only, next to the actions');
 });
 
 test('Ctrl+K: places without a query; with one, chats, messages, tasks and projects', () => {

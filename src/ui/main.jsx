@@ -23,6 +23,9 @@ import { migrationView } from '@/lib/migration.js';
 import { Notices } from '@/components/notices.jsx';
 import { ActionShortcuts } from '@/components/project-tools.jsx';
 import { CommandPalette } from '@/components/command-palette.jsx';
+import { SelectionToChat } from '@/components/conversation/selection-to-chat.jsx';
+import { ChatTabs } from '@/components/chat-tabs.jsx';
+import { loadKeys } from '@/lib/keys.js';
 import { Scene } from '@/components/scene.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { useStore, setState, getState, refresh, refreshSoon, call, bridge, act, go, goBack, resetRoute, setViews, applyTheme, openTerminal, startTour, closeSettings, anyChatBusy, flushChatStates, phoneLayout, loadOrbInbox } from '@/lib/store.js';
@@ -65,6 +68,7 @@ const AgentsView = deferred(() => import('@/views/agents.jsx'), 'AgentsView');
 const MemoriesView = deferred(() => import('@/views/memories.jsx'), 'MemoriesView');
 const SchedulesView = deferred(() => import('@/views/schedules.jsx'), 'SchedulesView');
 const UsageView = deferred(() => import('@/views/usage.jsx'), 'UsageView');
+const HistoryView = deferred(() => import('@/views/history.jsx'), 'HistoryView');
 const ExpertView = deferred(() => import('@/views/expert.jsx'), 'ExpertView');
 const TutorialsView = deferred(() => import('@/views/tutorials.jsx'), 'TutorialsView');
 const WhiteboardView = deferred(() => import('@/views/whiteboard.jsx'), 'WhiteboardView');
@@ -102,7 +106,7 @@ const ChatsView = OrbChatsView;
 // a route of a screen that is gone (a bot's, saved before or in an old notification) falls back to the chat.
 const VIEWS = bridge.mobile
   ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, rules: MemoriesView, schedules: SchedulesView, usage: UsageView, phone: PhoneView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
-  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, rules: MemoriesView, schedules: SchedulesView, usage: UsageView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView, expert: ExpertView };
+  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, history: HistoryView, logs: MemoriesView, activity: MemoriesView, rules: MemoriesView, schedules: SchedulesView, usage: UsageView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView, expert: ExpertView };
 setViews(Object.keys(VIEWS));
 const routeKey = (route) => `${route.view}:${route.id ?? ''}:${route.project ?? ''}`;
 
@@ -167,7 +171,6 @@ function Shell() {
   const t = useT();
   const route = useStore((s) => s.route);
   const app = useStore((s) => s.app);
-  const View = VIEWS[route.view] ?? ChatView;
   const [drawer, setDrawer] = useState(false);
   const folded = useStore((s) => s.sidebarCollapsed);
   // the shortcuts of the project's actions: God mode's project there, the working folder elsewhere.
@@ -203,9 +206,11 @@ function Shell() {
           <Robot size={26} mood={mood} /><span className="min-w-0 flex-1 truncate text-card-title font-medium">{app.config.assistantName}</span>
           <WindowControlsSlot />
         </div>
-        <ErrorBoundary key={routeKey(route)} onHome={resetRoute}>
-          <Suspense fallback={<Loading />}><View key={routeKey(route)} route={route} /></Suspense>
-        </ErrorBoundary>
+        <ChatTabs route={route} render={(r) => { const V = VIEWS[r.view] ?? ChatView; return (
+          <ErrorBoundary key={routeKey(r)} onHome={resetRoute}>
+            <Suspense fallback={<Loading />}><V key={routeKey(r)} route={r} /></Suspense>
+          </ErrorBoundary>
+        ); }} />
         <WindowBar kind="status" />
       </main>
       {/* the info pane on the right (a chat, a project). */}
@@ -215,7 +220,7 @@ function Shell() {
       {/* a browser linked with an Orb gets the PC's layout, not what only the PC itself does. */}
       {bridge.mobile ? null : <><UpdateCard /><OnceOpened when={settingsOpen} onFail={closeSettingsFailed}><SettingsDialog /></OnceOpened><OnceOpened when={gamesOpen} onFail={closeGamesFailed}><GamesDialog /></OnceOpened><RecoveryNotice /><AutoNotice /></>}
       <Notices />
-      {bridge.mobile ? null : <><ActionShortcuts project={shortcutProject} /><CommandPalette /></>}
+      {bridge.mobile ? null : <><ActionShortcuts project={shortcutProject} /><CommandPalette /><SelectionToChat /></>}
       <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile || Boolean(tour)} /></div>
       {tour ? <ErrorBoundary key={tour.key} onFail={closeTourFailed}><Suspense fallback={null}><Tour /></Suspense></ErrorBoundary> : null}
     </div>
@@ -310,6 +315,7 @@ function Root() {
           setState({ route });
           try { localStorage.setItem('orb.route', JSON.stringify(route)); } catch { /* storage unavailable */ }
           loadOrbInbox(); // the unread badges
+          loadKeys(); // the user's shortcuts (core/keybindings.json)
           return setPhase('app');
         } catch (e) {
           // the phone lost its PC while starting: the same calm screen, never «No se pudo iniciar Orb».

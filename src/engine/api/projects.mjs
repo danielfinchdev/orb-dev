@@ -9,7 +9,6 @@ import { adbStatus, ensureAdb } from '../host/android.mjs';
 import { projectIcon, setProjectIcon, clearProjectIcon, renameProjectIcon } from '../project-icons.mjs';
 import { git } from '../../platform/git.mjs';
 import { fail, str, oneOf } from './common.mjs';
-import { fold } from '../../domain/conversations/inbox.mjs';
 import { lazy } from './common.mjs';
 
 const prNumber = (v) => {
@@ -24,7 +23,15 @@ const headOid = (v) => {
 // github.mjs stays lazy (startup cost): its oid pattern and comment limit are repeated here on purpose.
 const gh = lazy(() => import('../host/github.mjs'));
 
-export function projectMethods({ realHome, insideHome, project, holding, coordinatorBusy, syncSoon, cut, android, grants, board, sessions, scheduler, log }) {
+export function projectMethods({ realHome, insideHome, project, holding, coordinatorBusy, syncSoon, cut, android, grants, board, sessions, scheduler, chatTrees, log }) {
+  // The project as a commit dialog of chat `session` sees it: a chat in its own worktree commits and pushes there, on its
+  // own branch. Only the chat id comes from the caller; the folder is Orb's record (ChatWorktrees.folderFor).
+  const inChat = (name, session) => {
+    const p = project(name);
+    const sid = str(session, 'conversación', 64, { optional: true });
+    const dir = sid ? chatTrees.folderFor(sid, p.name) : null;
+    return dir ? { ...p, path: dir } : p;
+  };
   const methods = {
     'projects.list': () => {
       syncSoon();
@@ -42,9 +49,10 @@ export function projectMethods({ realHome, insideHome, project, holding, coordin
     'projects.remove': ({ name }) => board.removeProject(project(name).name, 'usuario'),
     // a new name (and folder) for a project with nothing working in it (domain/projects/projects.mjs renameProject).
     'projects.rename': ({ name, to }) => {
-      const from = project(name).name;
+      const old = project(name); const from = old.name;
       const p = renameProject(board, { name: from, to: str(to, 'nombre', 60) }, 'usuario');
       renameProjectIcon(from, p.name);
+      chatTrees.followProject(from, old.path, p);
       return p;
     },
     'projects.setActive': ({ name }) => board.setActiveProject(name ? project(name).name : '', 'usuario'),
@@ -109,9 +117,27 @@ export function projectMethods({ realHome, insideHome, project, holding, coordin
     'projects.clearIcon': ({ name }) => { const icon = clearProjectIcon(project(name)); board.changed('projects'); return icon; },
     'projects.info': async ({ name }) => (await gh()).projectInfo(project(name)),
     // A commit or a merge changes the folder off the event loop: the project is held so no task starts in it meanwhile.
-    'projects.commit': async ({ name, message }) => {
-      const p = project(name); const text = str(message, 'mensaje', 200); const g = await gh();
+    'projects.commit': async ({ name, session, message, files, push }) => {
+      const p = inChat(name, session); const g = await gh();
+      // the dialog of «Hacer commit…»: some files, a message with a body, and «Commit y push» (never forced).
+      if (Array.isArray(files)) {
+        const text = str(message, 'mensaje', 5000); const list = files.slice(0, 500).map((f) => str(f, 'archivo', 500));
+        return holding(p.name, async () => {
+          const out = await g.commitAll(p, text, { files: list });
+          if (!push) return { ...out, pushed: false };
+          try { await g.push(p, out.branch); } catch (error) { return { ...out, pushed: false, pushError: oneLine(error.message, 300) }; } // the commit is done: the push error is shown, not thrown
+          return { ...out, pushed: true };
+        });
+      }
+      const text = str(message, 'mensaje', 200);
       return holding(p.name, () => g.commitAll(p, text));
+    },
+    'projects.commitFiles': async ({ name, session }) => (await gh()).changedFiles(inChat(name, session)),
+    'projects.commitSuggest': async ({ name, session }) => {
+      const p = inChat(name, session); const g = await gh();
+      const files = await g.changedFiles(p);
+      const { suggestCommitMessage } = await import('../commit-message.mjs');
+      return suggestCommitMessage(board, { files, context: await g.commitContext(p, files) });
     },
     'projects.merge': async ({ name, branch }) => {
       const p = project(name); const b = str(branch, 'rama', 120); const g = await gh();

@@ -1,11 +1,12 @@
 // Ajustes: the assistant, appearance, chat, tasks, interface, God mode, the folder, «Cosas que nadie toca» and the daily test.
 import { useEffect, useState } from 'react';
 import { FlaskConical, FolderOpen, Plus, ArrowLeftRight, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, X, ChevronRight, ShieldBan, RotateCcw } from 'lucide-react';
-import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS, plainSkin } from '../../../shared/appearance.mjs';
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, ACCENTS, CONTRASTS, DENSITIES, CHAT_WIDTHS, FONT_SIZES, APPEARANCE_DEFAULTS, plainSkin } from '../../../shared/appearance.mjs';
+import { previewColors, seedsOf, ACCENT_COLORS } from '@/lib/theme-seeds.js';
 import { PANELS, savePanels } from '../expert.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { SkinPreview } from '@/components/skin-preview.jsx';
-import { confirm, form } from '@/components/dialogs.jsx';
+import { confirm } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea } from '@/components/ui/basic.jsx';
 import { Select, Switch, Checkbox, BubbleTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
@@ -13,7 +14,7 @@ import { ModelGuide } from '@/components/model-guide.jsx';
 import { AGENT } from '@/lib/labels.js';
 import { act, call, refresh, bridge, go, openTerminal, closeSettings, fullPc, runTest, darkOnlySkin } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
-import { t, useT } from '@/lib/i18n.js';
+import { useT } from '@/lib/i18n.js';
 import { LANGUAGES } from '../../../shared/i18n.mjs';
 import { play } from '@/lib/sounds.js';
 import { DEFAULT_PROTECTED } from '../../../shared/layout.mjs';
@@ -49,6 +50,7 @@ export function AppearanceCard({ c }) {
   const opts = (list, prefix) => list.map((value) => ({ value, label: t(`${prefix}.${value}`) }));
   const robot = !plainSkin(ui.skin);
   const darkOnly = fullPc() && darkOnlySkin(ui.skin);
+  const mode = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
   return (
     <Card>
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Palette className="text-primary size-5" /><div><CardTitle>{t('appearance.title')}</CardTitle><CardDescription>{t('appearance.desc')}</CardDescription></div></CardHeader>
@@ -63,12 +65,48 @@ export function AppearanceCard({ c }) {
             {SKINS.map((skin) => (
               <button key={skin} type="button" role="radio" aria-checked={ui.skin === skin} onClick={() => set({ skin })} data-testid={`skin-${skin}`}
                 className={cn('grid cursor-pointer gap-1.5 rounded-xl border p-2 text-left transition-colors', ui.skin === skin ? 'border-primary ring-primary/30 ring-2' : 'hover:bg-accent/40')}>
-                <SkinPreview skin={skin} />
+                <SkinPreview skin={skin} colors={skin === 'paletas' ? previewColors(ui.palette, mode, ui.accent, ui.contrast) : undefined} />
                 <span className="text-control font-medium">{t(`appearance.skin.${skin}`)}</span>
               </button>
             ))}
           </div>
         </Field> : null}
+        {fullPc() && ui.skin === 'paletas' ? (
+          <div className="grid gap-3" data-testid="palette-settings">
+            <Field label={t('appearance.palette')} hint={t('appearance.paletteHint')}>
+              <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7" role="radiogroup" aria-label={t('appearance.palette')} data-testid="palette-picker">
+                {PALETTES.map((id) => {
+                  const seeds = seedsOf(id, mode, 'tema');
+                  return (
+                    <button key={id} type="button" role="radio" aria-checked={ui.palette === id} onClick={() => set({ palette: id })} data-testid={`palette-${id}`}
+                      className={cn('grid cursor-pointer gap-1 rounded-lg border p-1.5 text-left transition-colors', ui.palette === id ? 'border-primary ring-primary/30 ring-2' : 'hover:bg-accent/40')}>
+                      <span className="flex h-5 overflow-hidden rounded-md border" aria-hidden="true"><i className="flex-1" style={{ background: seeds.surface }} /><i className="flex-1" style={{ background: seeds.ink }} /><i className="flex-1" style={{ background: previewColors(id, mode, 'tema', 'normal')['--p-primary'] }} /></span>
+                      <span className="truncate text-caption">{t(`appearance.palette.${id}`)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t('appearance.accent')} hint={t('appearance.accentHint')}>
+                <div className="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label={t('appearance.accent')} data-testid="accent-picker">
+                  {ACCENTS.map((id) => (
+                    <button key={id} type="button" role="radio" aria-checked={ui.accent === id} aria-label={t(`appearance.accent.${id}`)} title={t(`appearance.accent.${id}`)} onClick={() => set({ accent: id })} data-testid={`accent-${id}`}
+                      className={cn('flex size-7 cursor-pointer items-center justify-center rounded-full border text-caption', ui.accent === id ? 'border-primary ring-primary/30 ring-2' : 'hover:bg-accent/40')}>
+                      {id === 'tema' ? <span aria-hidden="true">∗</span> : <i className="size-4 rounded-full" style={{ background: ACCENT_COLORS[id] }} />}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+              <Field label={t('appearance.contrast')}><Select className="w-full" value={ui.contrast} onValueChange={(contrast) => set({ contrast })} options={opts(CONTRASTS, 'appearance.contrast')} /></Field>
+            </div>
+          </div>
+        ) : null}
+        <div className="grid gap-3 sm:grid-cols-3" data-testid="size-settings">
+          <Field label={t('appearance.density')} hint={t('appearance.densityHint')}><Select className="w-full" value={ui.density} onValueChange={(density) => set({ density })} options={opts(Object.keys(DENSITIES), 'appearance.density')} /></Field>
+          <Field label={t('appearance.chatWidth')}><Select className="w-full" value={ui.chatWidth} onValueChange={(chatWidth) => set({ chatWidth })} options={opts(Object.keys(CHAT_WIDTHS), 'appearance.chatWidth')} /></Field>
+          <Field label={t('appearance.fontSize')} hint={t('appearance.fontSizeHint')}><Select className="w-full" value={ui.fontSize} onValueChange={(fontSize) => set({ fontSize })} options={FONT_SIZES.map((px) => ({ value: px, label: t('appearance.fontSizeValue', { px: String(px).replace('.', ',') }) }))} /></Field>
+        </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label={t('appearance.font')}><Select className="w-full" value={ui.font} onValueChange={(font) => set({ font })} options={opts(FONTS, 'appearance.font')} /></Field>
           <Field label={t('appearance.codeFont')}><Select className="w-full" value={ui.codeFont} onValueChange={(codeFont) => set({ codeFont })} options={opts(CODE_FONTS, 'appearance.codeFont')} /></Field>
@@ -181,6 +219,7 @@ export function TasksCard({ c }) {
         {/* Orb chooses each task's model and reasoning (on by default), and the guide says what it uses for what. */}
         <Row label={t('settings.autoModel')} info={t('settings.autoModelHint')}><Switch checked={c.budget?.autoModel !== false} onCheckedChange={(autoModel) => save({ budget: { autoModel } })} data-testid="auto-model" /></Row>
         <ModelGuide auto={c.budget?.autoModel !== false} />
+        <Row label={t('settings.suggest')} hint={`${t('settings.suggestDesc')}`} info={t('settings.suggestWarn')}><Switch checked={c.suggestNext === true} onCheckedChange={(suggestNext) => save({ suggestNext })} data-testid="suggest-next" /></Row>
         <Row label={t('settings.autoRun')} hint={t('settings.autoRunHint')}><Switch checked={v.autoRun} onCheckedChange={(autoRun) => { setV({ ...v, autoRun }); save({ autoRun }); }} /></Row>
         {/* tasks work at the same time by default; this makes them wait for each other. */}
         <Row label={t('settings.oneAtATime')} hint={t('settings.oneAtATimeHint')}><Switch checked={v.oneAtATime} onCheckedChange={(oneAtATime) => { setV({ ...v, oneAtATime }); save({ oneAtATime }).then((r) => { if (!r) setV((cur) => ({ ...cur, oneAtATime: !oneAtATime })); }); }} data-testid="one-at-a-time" /></Row>

@@ -11,7 +11,7 @@ import { PRODUCT } from '../shared/product.mjs';
 const location = (userData) => path.join(userData, 'ubicacion.json');
 
 // a saved workspace whose core is gone is still this PC's workspace: the engine puts core back from the newest backup
-// or the window says why it cannot (only a workspace folder that is gone altogether brings the welcome back). Global B13:
+// or the window says why it cannot (only a workspace folder that is gone altogether brings the welcome back). Also:
 // a folder without core counts only when this app keeps copies for it (claves<its key>…); an old location pointing
 // to some other folder brings the welcome, not «Falta core».
 const keptHere = (userData, h) => {
@@ -19,16 +19,16 @@ const keptHere = (userData, h) => {
   const keys = [homeKey(h), oldHomeKey(h)];
   return names.some((n) => keys.some((k) => n === k || n.startsWith(`${k}.`) || n.startsWith(`${k}-`)));
 };
-export function readLocation(userData) {
+function readLocation(userData) {
   try { const h = JSON.parse(fs.readFileSync(location(userData), 'utf8')).home; return typeof h === 'string' && h && (isHome(h) || (fs.existsSync(h) && keptHere(userData, h))) ? h : null; } catch { return null; }
 }
-export function saveLocation(userData, home) { fs.mkdirSync(userData, { recursive: true }); writeJson(location(userData), { home }); }
+function saveLocation(userData, home) { fs.mkdirSync(userData, { recursive: true }); writeJson(location(userData), { home }); }
 
 // A fresh install (no saved location) on a PC that already has an Orb folder uses it as it is: <drive>:\Orb, Documents\Orb
 // or <user>\Orb, the most recently used one if there are several. Nothing is created or overwritten. Only for an installed
 // app with its normal data folder: tests and runs from the code (separate data folder or not packaged) never pick up a
 // real folder.
-export function findExistingHome({ packaged, separateData, documents, profile, platform = process.platform }) {
+function findExistingHome({ packaged, separateData, documents, profile, platform = process.platform }) {
   if (!packaged || separateData) return null;
   // Drive letters only exist on Windows; on Linux / macOS, Documents/Orb and ~/Orb.
   const drives = platform !== 'win32' ? [] : 'CDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((l) => `${l}:\\`).filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });

@@ -12,7 +12,7 @@ import { ATTACH_DIR } from '../sessions.mjs';
 import { playableType } from '../../shared/attach-kind.mjs';
 import { expandMentions } from '../mentions.mjs';
 import { assistantName } from '../../domain/tasks/board.mjs';
-import { modelCatalog, LEVELS, REASONING_LEVELS, levelsOf } from '../usage/catalog.mjs';
+import { modelCatalog, REASONING_LEVELS, levelsOf } from '../usage/catalog.mjs';
 import { slug } from '../../platform/git.mjs';
 import { PermissionError } from '../../domain/security/permissions.mjs';
 import { fail, str, int, oneOf } from './common.mjs';
@@ -51,13 +51,24 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
     // its last lines when its agent cannot). → { ok, how: 'compacted' | 'renewed' }
     'chat.compact': ({ conversation }) => orchestrator.compact(conversationId(conversation)),
     // rename, change the project of a conversation, mark it done or open it again.
-    'conversations.update': ({ id, title, project: name, done }) => {
+    'conversations.update': ({ id, title, project: name, done, notes }) => {
       const c = conversationId(id);
+      // the person's notes on the chat (its info panel); empty text clears them
+      if (notes !== undefined) { board.updateConversation(c, { notes: str(notes, 'notas', 4000, { optional: true }) || null }); return { id: c, notes: board.conversationNotes(c) }; }
       if (title !== undefined) board.updateConversation(c, { title: oneLine(str(title, 'título', 80), 80), titled: true });
       if (name !== undefined) board.setConversationProject(c, name ? project(name).name : '', 'usuario', { asDefault: true });
       if (done !== undefined) board.setConversationDone(c, Boolean(done));
       return board.conversation(c);
     },
+    // Pinned messages: a line of this conversation (the person's or the assistant's) is pinned or unpinned, and the pinned ones
+    // are listed (the line list only holds the last ones, a pin may be older).
+    'chat.pin': ({ conversation, id, pinned }) => {
+      const row = board.pinChat(conversationId(conversation), int(id, 'mensaje'), pinned !== false);
+      if (!row) fail(tr('msg.api.invalid', { name: 'mensaje' }));
+      return { id: row.id, pinned: Boolean(row.pinned_at) };
+    },
+    'chat.notes': ({ conversation }) => ({ notes: board.conversationNotes(conversationId(conversation)) }),
+    'chat.pinned': ({ conversation }) => board.pinnedChat(conversationId(conversation)),
     // Deleted with its lines (its tasks stay, in Tareas).
     'conversations.remove': ({ id }) => trash.removeConversation(conversationId(id)),
     // the search of the sidebar: conversations (with the assistant and direct) whose title or messages have the words.

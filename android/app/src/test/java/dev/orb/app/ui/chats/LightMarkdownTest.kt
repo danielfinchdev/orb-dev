@@ -16,6 +16,19 @@ class LightMarkdownTest {
         assertTrue(s.any { it.text == "enlace" && it.link == "https://orb.dev" })
     }
 
+    @Test fun onlyHttpHttpsAndMailtoLinksSurvive() {
+        assertEquals("https://orb.dev", safeLink("https://orb.dev"))
+        assertEquals("MAILTO:a@b.c", safeLink(" MAILTO:a@b.c "))
+        assertEquals(null, safeLink("file:///sdcard/x"))
+        assertEquals(null, safeLink("otraapp://accion"))
+        assertEquals(null, safeLink("intent:#Intent;end"))
+        assertEquals(null, safeLink("javascript:alert(1)"))
+        assertEquals(null, safeLink("/relativo"))
+        val s = spans("[docs](file:///sdcard/x) y [web](http://orb.dev)")
+        assertTrue(s.any { it.text == "docs" && it.link == null })
+        assertTrue(s.any { it.text == "web" && it.link == "http://orb.dev" })
+    }
+
     @Test fun snakeCaseAndUnclosedMarksStayAsTyped() {
         assertEquals("mi_variable_larga", spans("mi_variable_larga").joinToString("") { it.text })
         assertEquals("2 * 3 = 6", spans("2 * 3 = 6").joinToString("") { it.text })

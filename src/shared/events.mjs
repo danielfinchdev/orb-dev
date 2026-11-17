@@ -3,12 +3,12 @@
 // The window listens by name (bridge.on(name) or the engine events hook, src/ui/app/engine-events.js).
 export const ENGINE_EVENTS = Object.freeze([
   'agentBrowser:closeTask', 'agents:install', 'agents:login', 'approval:changed', 'backup:done', 'backup:progress',
-  'backup:restoreReady', 'board:changed', 'chat:new', 'chat:state', 'config:changed', 'core:lost', 'html:closed', 'html:page', 'html:server', 'html:update', 'inbox:changed',
-  'installer:progress', 'link:devices', 'master:locked', 'master:unlocked', 'notes:read', 'notice', 'pr:done', 'pr:request', 'secret:done', 'secret:request',
-  'session:delta', 'session:item', 'session:queue', 'session:removed', 'session:update', 'terminal:data', 'terminal:exit', 'trash:added',
+  'backup:restoreReady', 'board:changed', 'chat:new', 'chat:state', 'ciwatch:changed', 'config:changed', 'core:lost', 'html:closed', 'html:page', 'html:server', 'html:update', 'inbox:changed',
+  'installer:progress', 'keys:changed', 'link:devices', 'master:locked', 'master:unlocked', 'mcpext:changed', 'notes:read', 'notice', 'pr:done', 'pr:request', 'secret:done', 'secret:request',
+  'session:debug', 'session:delta', 'session:goal', 'session:item', 'session:queue', 'session:removed', 'session:reset', 'session:side', 'session:suggest', 'session:update', 'terminal:data', 'terminal:exit', 'trash:added',
 ]);
 // Sent by the app (src-tauri) or a bridge of the window itself (the phone's link, the browser pointer, the menu).
-export const WINDOW_EVENTS = Object.freeze([
+const WINDOW_EVENTS = Object.freeze([
   'engine:stopped', 'engine:restarted', 'app:update', 'ui:navigate', 'ui:terminal', 'ui:zoom', 'link:offline', 'link:online',
   'browser:pointed', 'browser:recorded',
 ]);

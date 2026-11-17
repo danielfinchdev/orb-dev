@@ -19,7 +19,7 @@ import { translate } from '../../shared/i18n.mjs';
 import { MAX_TABS, createActions, servePipe } from './browser-protocol.mjs';
 import { attachPage, cdpDriver } from './browser-cdp.mjs';
 
-export const IDLE_MS = 10 * 60_000; // a page no turn uses goes after this
+const IDLE_MS = 10 * 60_000; // a page no turn uses goes after this
 
 export function createCdpBrowser({ windows, language = () => 'es', log = () => {}, onActivity = () => {}, onUpdate = () => {}, onRelease = () => {}, onClose = () => {}, idleMs = IDLE_MS }) {
   const T = (key, vars) => translate(language() === 'en' ? 'en' : 'es', key, vars);

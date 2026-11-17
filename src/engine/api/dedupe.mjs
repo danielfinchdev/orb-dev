@@ -2,7 +2,7 @@
 // does not send it twice. In memory only: after a restart a retry is a new message, which is the old behavior.
 const CLIENT_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
-export const clientIdOf = (value) => (typeof value === 'string' && CLIENT_ID.test(value) ? value : null);
+const clientIdOf = (value) => (typeof value === 'string' && CLIENT_ID.test(value) ? value : null);
 
 // A conversation id as one stable text, whatever shape the client sent it in.
 export const conversationKey = (x) => (x == null ? 'new' : Number.isFinite(Number(x)) && String(x).trim() !== '' ? String(Number(x)) : String(x));

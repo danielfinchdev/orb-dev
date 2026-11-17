@@ -196,6 +196,24 @@ class LinkClientTest {
     }
 
     @Test
+    fun `a 401 over plain http only means offline`() = runTest {
+        val r = rig(listOf(home))
+        r.pc.reply = FakePc.Reply.Unlinked401
+        val c = client(r)
+        assertEquals(LinkError.Offline, c.call("app.state").error())
+        assertTrue(c.connection.value !is ConnectionState.Unlinked)
+    }
+
+    @Test
+    fun `a 401 over Tailscale still unlinks the phone`() = runTest {
+        val r = rig(listOf("http://100.101.102.103:3131"))
+        r.pc.reply = FakePc.Reply.Unlinked401
+        val c = client(r)
+        assertEquals(LinkError.NotLinked, c.call("app.state").error())
+        assertEquals(ConnectionState.Unlinked, c.connection.value)
+    }
+
+    @Test
     fun `me sends the protocols and says the app is too old on 426`() = runTest {
         val r = rig()
         r.pc.meUpdate = true

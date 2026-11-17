@@ -14,10 +14,10 @@
 
 export const LAG_S = 0.32;
 export const MIN_CPS = 45;
-export const RISE_S = 0.05;
-export const FALL_S = 0.15;
-export const DONE_LAG_S = 0.12;
-export const DONE_MIN_CPS = 600;
+const RISE_S = 0.05;
+const FALL_S = 0.15;
+const DONE_LAG_S = 0.12;
+const DONE_MIN_CPS = 600;
 export const MAX_BEHIND = 3000;
 
 const segmenter = typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null;

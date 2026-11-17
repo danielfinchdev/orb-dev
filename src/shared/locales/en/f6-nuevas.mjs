@@ -8,5 +8,13 @@ export default {
   'prcard.acceptMergeMethod': 'Merge ({method})',
   'prcard.dangerNote': 'Merging changes the base branch and cannot be undone from Orb. Check the checks before accepting.',
   'agents.hermesNote': 'Hermes only asks permission for what it considers dangerous, so Orb cannot guarantee it asks before every change. Turn it on only if you trust what you give it.',
+  'agents.unverifiedNote': "New agent, not checked against the real program: read its help (--help) before turning it on. If it does not start, Orb says so.",
+  'agents.noGuardNote': "This agent cannot ask Orb before acting: it does not follow Orb’s fixed rules either (protected folders, adb…). It only starts in chats with «Full access».",
+  'agents.keyTitle': "{name} key",
+  'agents.keyDesc': "Saved in the vault with your master password. Orb never shows it again.",
+  'agents.keySaved': "Key saved in the vault",
+  'agents.keySet': "Save {name}",
+  'agents.keyChange': "Change {name} (saved)",
+  'agents.keyHint': "Optional if you already signed in with the program itself.",
   'agents.enable': 'Turn on'
 };

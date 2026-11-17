@@ -10,7 +10,7 @@ import crypto from 'node:crypto';
 // open, rename or delete the file while it is held, and Windows lets it go when the app ends, however it ends.
 // Elsewhere, a file made with 'wx' and taken over when older than STALE_MS, or at once when the app that wrote its process
 // id there is gone (killed: it never removed it).
-export const EXLOCK = 0x10000000;
+const EXLOCK = 0x10000000;
 const STALE_MS = 30_000;
 const holderGone = (file) => {
   let pid = 0; try { pid = Number.parseInt(fs.readFileSync(file, 'utf8'), 10); } catch { return false; }

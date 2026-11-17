@@ -6,7 +6,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { porcelainPaths } from '../shared/secrets-scan.mjs';
 import { cleanEnv } from './proc.mjs';
 import { PRODUCT } from '../shared/product.mjs';
 
@@ -84,5 +83,3 @@ export function mayHaveWorktrees(dir, cache = new Map()) {
     const up = path.dirname(d); if (up === d) return answer(false); d = up;
   }
 }
-export const changedPaths = (repo) => { const r = git(repo, 'status', '--porcelain=v1', '-z', '-uall'); return r.status === 0 ? porcelainPaths(r.stdout) : null; };
-export const changedPathsAsync = async (repo) => { const r = await gitAsync(repo, {}, 'status', '--porcelain=v1', '-z', '-uall'); return r.status === 0 ? porcelainPaths(r.stdout) : null; };
