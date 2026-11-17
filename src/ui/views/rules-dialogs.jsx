@@ -34,7 +34,7 @@ export const confirmPauseRule = (rule) => confirm(t('rules.pauseRuleTitle', { na
 export const confirmDeleteRule = (rule) => confirm(t('rules.deleteRuleTitle', { name: rule.titulo }), lines(t(rule.de_serie ? 'rules.deleteSeedBody' : 'rules.deleteMineBody'), rule.de_serie ? t('rules.askEveryTime') : t('rules.fiveMin')), { ok: t('rules.delete'), danger: true });
 export const confirmRestoreRules = () => confirm(t('rules.restoreSeedTitle'), lines(t('rules.restoreSeedBody'), t('rules.askEveryTime')), { ok: t('rules.restoreOk') });
 
-// The editor of a text rule (D55). rule: null for a new one. → { titulo, para, texto } or null when cancelled.
+// The editor of a text rule. rule: null for a new one. → { titulo, para, texto } or null when cancelled.
 export function openRuleEditor(rule, defaultPara = 'orb') {
   const forOptions = [['orb', 'rules.forOrb'], ['subagentes', 'rules.forAgents'], ['ambos', 'rules.forBoth']].map(([value, key]) => ({ value, label: t(key), testid: `rule-for-${value}` }));
   return form(t(rule ? 'rules.editorEdit' : 'rules.editorNew'), {
