@@ -24,6 +24,7 @@ import { takeComments, putBackComments, useComments } from '@/lib/turn-comments.
 import { SecretCards } from '@/components/secret-card.jsx';
 import { PrCards, PrBar } from '@/components/pr-card.jsx';
 import { CommitButton } from '@/components/commit-dialog.jsx';
+import { offerWorktreeRemoval } from '@/components/worktree-removal.jsx';
 import { HtmlPages } from '@/components/html-page.jsx';
 import { takePoints, onPoints } from '@/lib/browser-points.js';
 import { TerminalPanel } from '@/components/terminal-panel.jsx';
@@ -492,7 +493,7 @@ export function SessionView({ route }) {
         <NotificationBell />
         <BarPause />
         {hasPanel ? <Tip label={t('turns.buttonTip')}><Button variant={changes ? 'secondary' : 'outline'} size="sm" onClick={() => setChanges(!changes)} data-testid="turn-changes-toggle"><FileDiff />{t('turns.button')}</Button></Tip> : null}
-        {s.kind === 'chat' && s.project && fullPc() ? <CommitButton project={s.project} /> : null}
+        {s.kind === 'chat' && s.project && fullPc() ? <CommitButton project={s.project} session={s.id} /> : null}
         {s.kind === 'chat' ? null : (<>
           {task ? <TaskStatus task={task} /> : null}
           <Button variant="outline" size="sm" onClick={() => go({ view: 'tasks', id: s.task_id })}><ClipboardCheck />{t('session.viewTask', { id: s.task_id })}</Button>
@@ -613,27 +614,5 @@ export function SessionView({ route }) {
   );
 }
 
-// A chat in a worktree (src/engine/chat-worktrees.mjs): archiving it offers to remove its folder, but only when no work would be
-// lost; with changes not committed it is kept and the user is told. Never deleted without the user's yes.
+// A chat in a worktree (src/engine/chat-worktrees.mjs): archiving it offers to remove its folder (offerWorktreeRemoval).
 const hasWorktree = async (s) => { try { return (await call('worktrees.status', { id: s.id })).has === true; } catch { return false; } };
-async function offerWorktreeRemoval(s, t) {
-  let st; try { st = await call('worktrees.status', { id: s.id }); } catch { return; }
-  if (!st?.has || st.gone) return;
-  // Work that would be lost: show it and let the user remove the folder anyway (force), never silently.
-  const total = st.dirtyTotal ?? st.dirty.length;
-  // Orb could not check what the folder holds (no repository, or git failed): it offers no removal, only where the folder is.
-  if (st.dirty.length && (st.unknown || st.orphan)) { notify({ title: t('session.wt.unverified', { path: st.path }), tone: 'warning' }); return; }
-  if (st.dirty.length) {
-    const shown = st.dirty.slice(0, 50).join('\n');
-    if (!(await confirm(t('session.wt.dirtyTitle', { count: total }), `${t('session.wt.dirtyBody')}
-
-${shown}`, { ok: t('session.wt.force'), cancel: t('session.wt.keep'), danger: true }))) return;
-    const f = await act(call('worktrees.discard', { id: s.id, force: true, fingerprint: st.fingerprint }));
-    if (f?.removed) notify({ title: f.branchKept ? t('session.wt.branchKept', { branch: st.branch }) : t('session.wt.done'), tone: f.branchKept ? 'info' : 'success' });
-    else notify({ title: t(f?.changed ? 'session.wt.changed' : 'session.wt.dirty', { count: f?.dirtyTotal ?? total }), tone: 'warning' });
-    return;
-  }
-  if (!(await confirm(t('session.wt.title'), t('session.wt.body', { path: st.path }), { ok: t('session.wt.ok'), cancel: t('session.wt.keep') }))) return;
-  const r = await act(call('worktrees.discard', { id: s.id }));
-  if (r?.removed) notify({ title: r.branchKept ? t('session.wt.branchKept', { branch: st.branch }) : t('session.wt.done'), tone: r.branchKept ? 'info' : 'success' });
-}

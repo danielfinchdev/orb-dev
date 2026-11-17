@@ -25,6 +25,14 @@ const headOid = (v) => {
 const gh = lazy(() => import('../host/github.mjs'));
 
 export function projectMethods({ realHome, insideHome, project, holding, coordinatorBusy, syncSoon, cut, android, grants, board, sessions, scheduler, chatTrees, log }) {
+  // The project as a commit dialog of chat `session` sees it: a chat in its own worktree commits and pushes there, on its
+  // own branch. Only the chat id comes from the caller; the folder is Orb's record (ChatWorktrees.folderFor).
+  const inChat = (name, session) => {
+    const p = project(name);
+    const sid = str(session, 'conversación', 64, { optional: true });
+    const dir = sid ? chatTrees.folderFor(sid, p.name) : null;
+    return dir ? { ...p, path: dir } : p;
+  };
   const methods = {
     'projects.list': () => {
       syncSoon();
@@ -110,8 +118,8 @@ export function projectMethods({ realHome, insideHome, project, holding, coordin
     'projects.clearIcon': ({ name }) => { const icon = clearProjectIcon(project(name)); board.changed('projects'); return icon; },
     'projects.info': async ({ name }) => (await gh()).projectInfo(project(name)),
     // A commit or a merge changes the folder off the event loop: the project is held so no task starts in it meanwhile.
-    'projects.commit': async ({ name, message, files, push }) => {
-      const p = project(name); const g = await gh();
+    'projects.commit': async ({ name, session, message, files, push }) => {
+      const p = inChat(name, session); const g = await gh();
       // the dialog of «Hacer commit…»: some files, a message with a body, and «Commit y push» (never forced).
       if (Array.isArray(files)) {
         const text = str(message, 'mensaje', 5000); const list = files.slice(0, 500).map((f) => str(f, 'archivo', 500));
@@ -125,9 +133,9 @@ export function projectMethods({ realHome, insideHome, project, holding, coordin
       const text = str(message, 'mensaje', 200);
       return holding(p.name, () => g.commitAll(p, text));
     },
-    'projects.commitFiles': async ({ name }) => (await gh()).changedFiles(project(name)),
-    'projects.commitSuggest': async ({ name }) => {
-      const p = project(name); const g = await gh();
+    'projects.commitFiles': async ({ name, session }) => (await gh()).changedFiles(inChat(name, session)),
+    'projects.commitSuggest': async ({ name, session }) => {
+      const p = inChat(name, session); const g = await gh();
       const files = await g.changedFiles(p);
       const { suggestCommitMessage } = await import('../commit-message.mjs');
       return suggestCommitMessage(board, { files, context: await g.commitContext(p, files) });

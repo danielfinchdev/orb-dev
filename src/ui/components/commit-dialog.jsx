@@ -11,7 +11,7 @@ import { errorText } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { quiet } from '@/lib/quiet.js';
 
-function CommitBody({ project, onClose }) {
+function CommitBody({ project, session, onClose }) {
   const t = useT();
   const [files, setFiles] = useState(null);
   const [picked, setPicked] = useState(new Set());
@@ -22,19 +22,19 @@ function CommitBody({ project, onClose }) {
   const ticket = useRef(0);
   const suggest = () => {
     const mine = ++ticket.current; setWriting(true);
-    call('projects.commitSuggest', { name: project }).then((r) => { if (mine !== ticket.current) return; setMessage(r.message ?? ''); setGuess(r.source === 'guess'); }).catch(quiet).finally(() => { if (mine === ticket.current) setWriting(false); });
+    call('projects.commitSuggest', { name: project, session }).then((r) => { if (mine !== ticket.current) return; setMessage(r.message ?? ''); setGuess(r.source === 'guess'); }).catch(quiet).finally(() => { if (mine === ticket.current) setWriting(false); });
   };
   useEffect(() => {
     let alive = true;
-    call('projects.commitFiles', { name: project }).then((list) => { if (!alive) return; setFiles(list); setPicked(new Set(list.filter((f) => !f.risky).map((f) => f.path))); if (list.some((f) => !f.risky)) suggest(); else setWriting(false); })
+    call('projects.commitFiles', { name: project, session }).then((list) => { if (!alive) return; setFiles(list); setPicked(new Set(list.filter((f) => !f.risky).map((f) => f.path))); if (list.some((f) => !f.risky)) suggest(); else setWriting(false); })
       .catch((e) => { notifyError(errorText(e)); onClose(); });
     return () => { alive = false; ticket.current += 1; };
-  }, [project]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [project, session]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggle = (p) => setPicked((prev) => { const n = new Set(prev); if (n.has(p)) n.delete(p); else n.add(p); return n; });
   const run = async (push) => {
     setBusy(true);
     try {
-      const r = await call('projects.commit', { name: project, message, files: [...picked], push });
+      const r = await call('projects.commit', { name: project, session, message, files: [...picked], push });
       if (push && r.pushed === false) notifyError(t('commit.pushFailed', { detail: r.pushError ?? '' }));
       else notifyOk(push ? t('commit.donePush', { branch: r.branch }) : t('commit.done', { files: r.files }));
       onClose(true);
@@ -82,7 +82,7 @@ function CommitBody({ project, onClose }) {
 }
 
 // The button for the chat's header; the dialog loads its files only while it is open.
-export function CommitButton({ project }) {
+export function CommitButton({ project, session }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   if (!project) return null;
@@ -92,7 +92,7 @@ export function CommitButton({ project }) {
         <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)} data-testid="commit-open"><GitCommitHorizontal />{t('commit.button')}</Button>
       </BubbleTip>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-xl">{open ? <CommitBody project={project} onClose={() => setOpen(false)} /> : null}</DialogContent>
+        <DialogContent className="max-w-xl">{open ? <CommitBody project={project} session={session} onClose={() => setOpen(false)} /> : null}</DialogContent>
       </Dialog>
     </>
   );

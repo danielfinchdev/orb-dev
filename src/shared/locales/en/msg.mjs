@@ -526,6 +526,8 @@ export default {
   "msg.chatWt.needsProject": "«Worktree» needs a project",
   "msg.chatWt.none": "that chat has no worktree",
   "msg.chatWt.restoreFailed": "could not recreate the worktree of the chat «{title}»: {error}",
+  "msg.chatWt.noCopy": "this chat's own copy is not there (it was removed with the archive): bring the chat back from the archive first",
+  "msg.chatWt.notOfProject": "that chat does not belong to the project",
   "msg.chatWt.removing": "this chat's worktree is being removed; try again in a moment",
   "msg.chatWt.kept": "The worktree of the chat «{title}» was kept because it holds work that is not safe: {dir}",
   "msg.workspace.wrongBranch": "the folder {workdir} already exists, but it is on branch “{head}” instead of “{branch}”. Check it or delete it before retrying",

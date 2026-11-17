@@ -385,3 +385,70 @@ test('a project folder that did not make the worktree is never used to repair it
   assert.equal((await call('worktrees.discard', { id: s.id })).removed, true);
   await call('sessions.remove', { id: s.id });
 });
+
+test('the commit dialog of a Worktree chat lists and commits the chat\'s own changes, on its own branch; a Local chat uses the project', async () => {
+  const s = await mk();
+  const local = await call('sessions.create', { agent: 'claude', project: 'arbol', permission: 'editar', title: 'l' });
+  fs.writeFileSync(path.join(s.cwd, 'del-chat.txt'), 'chat\n');
+  fs.writeFileSync(path.join(repo, 'de-la-carpeta.txt'), 'main\n');
+  const branch = `orb/chat-${s.id.replace(/-/g, '').slice(0, 8)}`;
+  const mainBefore = g(repo, 'rev-parse', 'HEAD');
+  assert.deepEqual((await call('projects.commitFiles', { name: 'arbol', session: s.id })).map((f) => f.path), ['del-chat.txt']);
+  assert.deepEqual((await call('projects.commitFiles', { name: 'arbol', session: local.id })).map((f) => f.path), ['de-la-carpeta.txt']);
+  assert.deepEqual((await call('projects.commitFiles', { name: 'arbol' })).map((f) => f.path), ['de-la-carpeta.txt']);
+  const out = await call('projects.commit', { name: 'arbol', session: s.id, message: 'feat: chat work', files: ['del-chat.txt'] });
+  assert.equal(out.branch, branch);
+  assert.equal(g(s.cwd, 'show', '--name-only', '--format=', 'HEAD'), 'del-chat.txt');
+  assert.equal(g(repo, 'rev-parse', 'HEAD'), mainBefore, 'the project folder\'s branch did not move');
+  assert.ok(fs.existsSync(path.join(repo, 'de-la-carpeta.txt')) && g(repo, 'status', '--porcelain').includes('de-la-carpeta.txt'));
+  // a Local chat commits in the project's folder
+  const outLocal = await call('projects.commit', { name: 'arbol', session: local.id, message: 'chore: main work', files: ['de-la-carpeta.txt'] });
+  assert.equal(outLocal.branch, 'main');
+  // the session is checked: unknown, or of another project, never a path from the caller
+  await assert.rejects(() => call('projects.commitFiles', { name: 'arbol', session: 'no-such-chat' }));
+  await assert.rejects(() => call('projects.commitFiles', { name: 'arbol', session: s.cwd }));
+  assert.equal((await forceDiscard(s.id, { branch: 'keep' })).removed, true);
+  await call('sessions.remove', { id: s.id }); await call('sessions.remove', { id: local.id });
+});
+
+test('/review refuses a Worktree chat instead of reviewing the project folder', async () => {
+  const s = await mk();
+  fs.writeFileSync(path.join(s.cwd, 'x.txt'), 'x\n');
+  const scheduler = new Scheduler(board, sessions, { orchestrator: new Orchestrator(board, { emit() {} }), emit() {} });
+  assert.throws(() => scheduler.reviewChat(sessions.get(s.id), {}), /copia propia/);
+  assert.equal((await forceDiscard(s.id)).removed, true);
+  await call('sessions.remove', { id: s.id });
+});
+
+test('deleting a chat whose folder was already removed still drops its rescue refs from the repository', async () => {
+  const s = await mk();
+  const ref = `refs/orb/rescate/${s.id}/1`;
+  git(repo, 'update-ref', ref, 'HEAD');
+  assert.equal((await call('worktrees.discard', { id: s.id, branch: 'keep' })).removed, true);
+  assert.ok(!fs.existsSync(s.cwd));
+  await call('sessions.remove', { id: s.id });
+  assert.equal(g(repo, 'for-each-ref', `refs/orb/rescate/${s.id}`), '');
+});
+
+test('the chats folder is core\copias\chats, outside the task copies that an older pruneCopies sweeps', async () => {
+  assert.equal(path.basename(ctx.paths.chatTrees), 'chats');
+  assert.equal(path.dirname(ctx.paths.chatTrees), path.dirname(ctx.paths.worktrees));
+  assert.ok(!lower(ctx.paths.chatTrees).startsWith(lower(ctx.paths.worktrees) + path.sep));
+  const s = await mk();
+  assert.ok(lower(s.cwd).startsWith(lower(ctx.paths.chatTrees) + path.sep));
+  // an old record under aisladas\chats stays removable
+  const cw = new ChatWorktrees({ board, sessions });
+  assert.equal(cw.managed(path.join(ctx.paths.worktrees, 'chats', 'x-1')), true);
+  assert.equal(cw.managed(path.join(ctx.paths.worktrees, 'otra', 'x-1')), false);
+  assert.equal((await call('worktrees.discard', { id: s.id })).removed, true);
+  await call('sessions.remove', { id: s.id });
+});
+
+test('worktrees.list says which chat each copy has left', async () => {
+  const s = await mk();
+  const row = (await call('worktrees.list')).find((r) => r.id === s.id);
+  assert.deepEqual([row.gone, row.chat.archived], [false, false]);
+  await call('sessions.remove', { id: s.id });
+  await until(() => !board.settingJson(`chatwt:${s.id}`), 'copia quitada');
+  assert.equal((await call('worktrees.list')).find((r) => r.id === s.id), undefined, 'a clean copy went with its chat');
+});

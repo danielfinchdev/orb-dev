@@ -526,6 +526,8 @@ export default {
   "msg.chatWt.needsProject": "«Worktree» necesita un proyecto",
   "msg.chatWt.none": "ese chat no tiene un worktree",
   "msg.chatWt.restoreFailed": "no se pudo volver a crear el worktree del chat «{title}»: {error}",
+  "msg.chatWt.noCopy": "la copia propia de este chat no está (se quitó al archivarlo): sácalo antes del archivo",
+  "msg.chatWt.notOfProject": "esa conversación no es de este proyecto",
   "msg.chatWt.removing": "se está quitando el worktree de este chat; inténtalo en un momento",
   "msg.chatWt.kept": "Se ha conservado el worktree del chat «{title}» porque tiene trabajo que no está a salvo: {dir}",
   "msg.workspace.wrongBranch": "la carpeta {workdir} ya existe, pero está en la rama «{head}» en lugar de «{branch}». Revísala o elimínala antes de reintentar",
