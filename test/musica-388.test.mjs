@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { validateConfig } from '../src/platform/config.mjs';
 import { DEFAULT_CONFIG, merge } from '../src/platform/config-file.mjs';
-import { ADAPTIVE_THEMES, MUSIC_MODES, DEFAULT_INTENSITY, DEFAULT_VOLUME, BACKGROUND, musicPrefs, nextTheme } from '../src/shared/music.mjs';
+import { ADAPTIVE_THEMES, MUSIC_MODES, DEFAULT_INTENSITY, DEFAULT_VOLUME, BACKGROUND, musicPrefs, nextTheme, previousTheme, nextTrack, previousTrack } from '../src/shared/music.mjs';
 import { THEME_IDS, SIGNALS, createAdaptiveMusic } from '../src/ui/lib/adaptive-music.js';
 import { createSignals, isTyping, TYPING_MS, EVENT_MS, IDLE_MS, WORKING_MS } from '../src/ui/lib/music-signals.js';
 import { textMood, chatMood, waitsForUser } from '../src/ui/lib/chat-mood.js';
@@ -231,12 +231,13 @@ test('the player keeps its rules with the adaptive music: a click starts it, the
   assert.match(music, /quietAudioContext\(\{ latencyHint: 'playback' \}\)/);
   assert.match(music, /context: engineCtx, autoPause: false \}\)/);
   assert.doesNotMatch(music, /new (window\.)?AudioContext/);
-  // The lock, a plain theme and the button stop it for good, and its context and listeners go with it.
+  // The lock and the button stop it for good, and its context and listeners go with it.
   assert.match(music, /export function pauseAll\(\) \{\n\s+disarm\(\);\n\s+bg\?\.pause\(\); game\?\.pause\(\); stopBackground\(\);/);
   assert.match(music, /function stopBackground\(\) \{\n\s+runs\+\+;\n\s+bg\?\.pause\(\); stopAdaptive\(\); source = null; bgHeld = false;/);
   assert.match(music, /function stopAdaptive\(\) \{\n\s+stopSignals\?\.\(\); stopSignals = null;\n\s+if \(!engine \|\| letGo\) return;\n\s+engine\.stop\(\);/);
   assert.match(music, /engine\?\.destroy\(\); engine = null;\n\s+engineCtx\?\.close\(\)\.catch\(quiet\); engineCtx = null;/);
-  assert.match(music, /bgHeld = false; stopGameMusic\(\); stopBackground\(\); hidden = false; resume = null;/, 'a plain theme');
+  // No theme silences it: it is there in every one and plays only when the user turns it on.
+  assert.doesNotMatch(music, /plainSkin|stopIfPlain|onAppearance/);
   // Hidden or minimised: paused, and back when shown. A game holds it meanwhile.
   assert.match(music, /if \(hidden\) \{ bgPause\(\); game\?\.pause\(\); \}/);
   assert.match(music, /const bgPause = \(\) => \{ if \(source === 'adaptive'\) engine\?\.pause\(\); else bg\?\.pause\(\); \};/);
@@ -265,7 +266,13 @@ test('Ajustes and the sidebar: the source, the theme, «Música que reacciona» 
   assert.match(sidebar, /const adaptive = s\.playing \|\| s\.loading \? Boolean\(s\.theme\) : chosen;/, 'what plays; before, what the button would start');
   assert.match(sidebar, /const next = t\(adaptive \? 'nav\.musicNextTheme' : 'nav\.musicNext'\);/);
   const music = read('lib', 'music.js');
-  assert.match(music, /if \(source === 'adaptive'\) \{ setMusicTheme\(nextTheme\(musicPrefs\(\)\.theme\)\); return; \}/);
+  // «Next» and «previous» go through the themes (or the tracks) in both directions.
+  assert.match(music, /if \(source === 'adaptive'\) \{ setMusicTheme\(\(back \? previousTheme : nextTheme\)\(musicPrefs\(\)\.theme\)\); return; \}/);
+  assert.match(music, /export const skipTrack = \(\) => skip\(false\);\nexport const skipBack = \(\) => skip\(true\);/);
+  for (const id of ADAPTIVE_THEMES) assert.equal(previousTheme(nextTheme(id)), id, id);
+  assert.equal(previousTheme('bruma'), 'orbita'); assert.equal(previousTheme('nope'), ADAPTIVE_THEMES.at(-1));
+  for (const t of BACKGROUND) assert.equal(previousTrack(nextTrack(t.id)), t.id, t.id);
+  assert.equal(previousTrack(BACKGROUND[0].id), BACKGROUND.at(-1).id);
   assert.match(music, /if \(was && available\(\)\) \{ stopBackground\(\); playNow\(\); \}/, 'changing the source while it plays goes on with the other');
 });
 

@@ -44,8 +44,8 @@ test('the music plays only in the Windows app', () => {
   assert.equal(musicAllowed(undefined), false);
   assert.equal(METHODS['music.track'], 'pc', 'never asked by a linked device');
   const music = read('lib', 'music.js');
-  assert.match(music, /const platformOk = \(\) => musicAllowed\(\{ mobile: bridge\.mobile, desktop: bridge\.desktop, platform: bridge\.platform \}\) && fullPc\(\);/);
-  assert.match(music, /export const available = \(\) => platformOk\(\) && !plainSkin\(ui\(\)\.skin\);/, 'silent in Profesional, Cristal and Grafito');
+  // In every theme: whether it plays depends on the platform alone, never on the look (test/musica-388.test.mjs).
+  assert.match(music, /export const available = \(\) => musicAllowed\(\{ mobile: bridge\.mobile, desktop: bridge\.desktop, platform: bridge\.platform \}\) && fullPc\(\);/);
   // Every button and setting hangs from it.
   assert.match(read('components', 'sidebar.jsx'), /\{musicAvailable\(\) \? <MusicButtons \/> : null\}/);
   assert.match(read('games', 'games.jsx'), /\{musicAvailable\(\) \? \(\s*<BubbleTip title=\{t\('games\.music'\)\}/);

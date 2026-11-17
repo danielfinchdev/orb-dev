@@ -64,9 +64,12 @@ export function musicPrefs(ui = {}) {
 }
 // The games' music is on unless muted (ui.gameMusic === false).
 export const gameMusicOn = (ui = {}) => ui?.gameMusic !== false;
-// The background track after this one: they play in turn and the list starts again (a loop).
+// The background track after this one, and the one before: they play in turn and the list starts again (a loop).
+const around = (list, at, step) => list[(Math.max(0, at) + step + list.length) % list.length];
 export const nextTrack = (id) => BACKGROUND[(BACKGROUND.findIndex((t) => t.id === id) + 1) % BACKGROUND.length].id;
-// The adaptive theme after this one, in a loop.
+export const previousTrack = (id) => around(BACKGROUND, BACKGROUND.findIndex((t) => t.id === id), -1).id;
+// The adaptive theme after this one and the one before, in a loop.
 export const nextTheme = (id) => ADAPTIVE_THEMES[(ADAPTIVE_THEMES.indexOf(id) + 1) % ADAPTIVE_THEMES.length];
+export const previousTheme = (id) => around(ADAPTIVE_THEMES, ADAPTIVE_THEMES.indexOf(id), -1);
 // A game's track, or null.
 export const gameTrack = (game) => (Object.hasOwn(GAMES, game) ? GAMES[game] : null);
