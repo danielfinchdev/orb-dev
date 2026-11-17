@@ -77,6 +77,16 @@ export function detectSensitivity(text) {
 // Only orders to the agent (imperatives and «git push»), so «añade notificaciones push» or «un botón para publicar» do not
 // count.
 const PUBLISH_ASK = /(^|[^\p{L}])(git\s+push|(?:haz|hacer|hagas|haga)\s+(?:el\s+|un\s+)?push|push(?:[eé][aá]\w*|ear)|push\s+(?:a|al|to|it|the|los|el)|publ[ií]ca(?:lo|la|los|las)?|publish(?:\s+it)?|deploy(?:\s+it)?|despl[ií]ega(?:lo|la)?|s[uú]bel[oa]s?|sube(?:lo|los)?\s+(?:los\s+cambios|el\s+c[oó]digo|a\s+(?:github|gitlab|git|origin|remoto|main|master)|al\s+(?:repo\w*|remoto)))(?![\p{L}])/iu;
+// Quotes (`> …`, added by the reply-to-selection action) and fenced code are pasted text, not the user's own order.
+function ownWords(text) {
+  let fence = null;
+  return String(text ?? '').split('\n').filter((line) => {
+    const f = /^\s*(```|~~~)/.exec(line)?.[1];
+    if (fence) { if (f === fence) fence = null; return false; }
+    if (f) { fence = f; return false; }
+    return !/^\s*>/.test(line);
+  }).join('\n');
+}
 export function askedByUser(userText) {
-  return PUBLISH_ASK.test(affirmed(userText)) ? ['publish'] : [];
+  return PUBLISH_ASK.test(affirmed(ownWords(userText))) ? ['publish'] : [];
 }
