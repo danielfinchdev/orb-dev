@@ -1,15 +1,24 @@
 ## Download
 
-### [Descargar para Windows](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.7/Orb-3.8.7-instalador.exe)
+### [Descargar para Windows](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.8/Orb-3.8.8-instalador.exe)
 
-`Orb-3.8.7-instalador.exe`: installs for your user, without administrator rights, and updates itself. Windows 10/11.
+`Orb-3.8.8-instalador.exe`: installs for your user, without administrator rights, and updates itself. Windows 10/11.
 It needs Microsoft Edge WebView2, which Windows 11 and an up-to-date Windows 10 already have (if it is missing, the
 installer gets it). Since it isn't signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
 
-### [Descargar para Android](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.7/Orb-3.8.7-android.apk)
+### [Descargar para Android](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.8/Orb-3.8.8-android.apk)
 
-`Orb-3.8.7-android.apk`: the native app. Open it on the phone to install it (or on top of an earlier Orb for Android:
+`Orb-3.8.8-android.apk`: the native app. Open it on the phone to install it (or on top of an earlier Orb for Android:
 the link with your PC is kept). How to install and link it: [`docs/ANDROID.md`](docs/ANDROID.md).
+
+## What's new in 3.8.8
+
+**Adaptive music.** The background music of the Windows app can now be made by Orb itself as it plays: endless, with
+no audio files and no connection, and it follows what happens. It rises while you type and while the agents work, and
+it marks an error or a job well done. Four styles (Mist, Neon, Ivory and Orbit); the headphones in the sidebar turn
+it on and the button next to them changes the style. In Settings › Appearance you choose the style and the volume,
+turn "Music that reacts" off to keep one intensity, or go back to the free tracks. As before, it is off until you
+turn it on, stops when Orb locks and pauses while the window is hidden.
 
 ## What's new in 3.8.7
 
