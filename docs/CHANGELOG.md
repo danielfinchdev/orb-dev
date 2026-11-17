@@ -33,7 +33,8 @@ counted by kind.
 day appears on the PC and on the phone.
 
 **Worktree per chat.** Pick Local or Worktree when you open a direct chat; each worktree lives in a folder managed by
-Orb and is never removed without asking.
+Orb and is never removed without asking. Commit and push from such a chat act on its own branch, and copies left by deleted chats
+can be removed from Settings › Data.
 
 **Comforts.** Notes and pinned messages per chat, tool calls grouped in one line, "Add to chat" on selected text, long
 pastes as a collapsible card, model favourites with Alt+] / Alt+[, Ctrl+P and Ctrl+Shift+F in the palette, a cold-session
@@ -50,6 +51,10 @@ without touching the history, and next-message suggestions are optional and off 
 
 **Edit a message and rewind.** Edit a previous message and resend from there, optionally rewinding the files, with a
 rescue copy you can always return to.
+
+**Safer undo and rewind.** Rewinding keeps files that already existed when the message was sent, files added with
+`git add -f`, and letter-case renames; renames made by the agent are undone. The guard asks again before writes to
+`.git` hidden behind exclude options, and quoted text no longer counts as an order to publish.
 
 **Android (native).** The chat list shows the priority order and the summary of the day.
 
