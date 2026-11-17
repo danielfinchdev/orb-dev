@@ -278,6 +278,7 @@ test('git that is cut or timed out is refused by the secret checks of a commit a
   const p = project(5); fs.writeFileSync(path.join(p.dir, 'big.txt'), `${'x'.repeat(200)}\n`); raw(p.dir, 'add', '-A'); raw(p.dir, 'commit', '-q', '-m', 'big');
   await assert.rejects(() => unpushedSecrets(p.dir, 'HEAD', { max: 10 }));
   assert.deepEqual(await unpushedSecrets(p.dir, 'HEAD'), []);
-  const t = await gitAsyncWith(p.dir, { timeout: 1 }, 'log');
+  // a git that always outlasts its limit (a 1 ms limit on `git log` was raced by fast CI runners)
+  const t = await gitAsyncWith(p.dir, { timeout: 300 }, '-c', 'alias.orbwait=!sleep 5', 'orbwait');
   assert.equal(t.status, -1); assert.equal(t.timedOut, true);
 });

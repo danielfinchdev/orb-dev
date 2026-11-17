@@ -1,11 +1,15 @@
 ## Download
 
-- **`Orb-3.8.7-instalador.exe`** (the Windows app): installs for your user, without administrator rights, and updates
-  itself. It needs Microsoft Edge WebView2, which Windows 11 and an up-to-date Windows 10 already have (if it is
-  missing, the installer gets it).
-- **`Orb-3.8.7-android.apk`** (the Android app): the new native app. How to install and link it: [`docs/ANDROID.md`](docs/ANDROID.md).
+### [Descargar para Windows](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.7/Orb-3.8.7-instalador.exe)
 
-Windows 10/11. Since it isn't signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
+`Orb-3.8.7-instalador.exe`: installs for your user, without administrator rights, and updates itself. Windows 10/11.
+It needs Microsoft Edge WebView2, which Windows 11 and an up-to-date Windows 10 already have (if it is missing, the
+installer gets it). Since it isn't signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
+
+### [Descargar para Android](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.7/Orb-3.8.7-android.apk)
+
+`Orb-3.8.7-android.apk`: the native app. Open it on the phone to install it (or on top of an earlier Orb for Android:
+the link with your PC is kept). How to install and link it: [`docs/ANDROID.md`](docs/ANDROID.md).
 
 ## What's new in 3.8.7
 
