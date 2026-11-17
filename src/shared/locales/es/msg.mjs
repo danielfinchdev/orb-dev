@@ -215,6 +215,7 @@ export default {
   "msg.expert.secrets": "el archivo puede contener secretos y no se muestra",
   "msg.github.badBranch": "nombre de rama no válido: {b}",
   "msg.github.gitIncomplete": "git no devolvió la lista completa de cambios (se cortó o tardó demasiado); no se continúa por seguridad.",
+  "msg.github.committedSecret": "El commit se hizo y puede contener un secreto, y Orb no pudo deshacerlo. Ejecuta git reset --soft HEAD~1 antes de subir nada.",
   "msg.github.badRepo": "el repositorio debe tener el formato usuario/repo o https://github.com/usuario/repo",
   "msg.github.badRepoName": "nombre de repositorio no válido (usa letras, números, puntos o guiones)",
   "msg.github.cloneFailed": "no se pudo clonar",

@@ -58,12 +58,14 @@ const COPY_DEST = /^(cp|copy|copy-item|cpi|xcopy)$/i;
 // Programs that only look: a part of a command that runs in a folder outside the project with one of these is fine.
 const LOOKERS = /^(ls|dir|cat|type|more|less|head|tail|wc|get-childitem|gci|get-content|gc|get-item|gi|select-string|sls|rg|grep|findstr|find|tree|pwd|echo|write-output|write-host|test-path|resolve-path|get-location|where|which|stat|file|du|cd|chdir|pushd|popd|set-location|sl|push-location|pop-location)$/i;
 const GIT_LOOK = /^(status|log|diff|show|branch|rev-parse|ls-files|remote|describe|blame|config|fetch)$/i;
+const WIN_TOOLS = /^(xcopy|robocopy|copy|move|del|erase|rd|rmdir|md|mkdir|ren|rename|attrib|icacls|takeown|mklink)$/i;
 const targetsOf = (exe, ws) => {
   const args = []; let dest = null;
   for (let i = 0; i < ws.length; i++) {
     if (/^-(destination|d|t|target-directory)$/i.test(ws[i]) && COPY_DEST.test(exe)) { dest = ws[i + 1] ?? null; i++; continue; }
     if (/^-(value|encoding|itemtype|type|filter|include|exclude|erroraction|ea|newname)$/i.test(ws[i])) { i++; continue; }
-    if (/^-/.test(ws[i]) || /^\/[a-z0-9:]{1,8}$/i.test(ws[i])) continue;
+    // cmd tools take /X and /X:value (`xcopy /EXCLUDE:list`) as switches, never as a destination
+    if (/^-/.test(ws[i]) || /^\/[a-z0-9:]{1,8}$/i.test(ws[i]) || (WIN_TOOLS.test(exe) && /^\/[a-z]+(:.*)?$/i.test(ws[i]))) continue;
     args.push(ws[i]);
   }
   if (COPY_DEST.test(exe)) return dest ? [dest] : args.length > 1 ? args.slice(-1) : [];
@@ -109,21 +111,59 @@ const ownVariable = (t, command, dir, roots) => /^["']?\$[\w:.]+["']?$/.test(t) 
 const GIT_RUNS_FILE = /(^|[\\/])\.git$|(^|[\\/])\.git[\\/]+(?:(?:worktrees|modules)[\\/]+.+[\\/]+)?(?:config(?:\.worktree)?|commondir|gitdir|hooks(?:[\\/].*)?|info[\\/]+attributes)$/i;
 export const isGitRunsFile = (p, dir) => { const f = resolveTarget(p, dir); return GIT_RUNS_FILE.test(lastName(p)) || Boolean(f && GIT_RUNS_FILE.test(f)); };
 export function writesGitRunsFile(command, cwd) {
-  const c = withoutExcludes(expandEnv(unwrapShell(command)));
+  const c = expandEnv(unwrapShell(command));
   for (const m of c.matchAll(/(?<![0-9&])>>?\s*("[^"]+"|'[^']+'|[^\s|&;<>]+)/g)) if (isGitRunsFile(unq(m[1]), cwd)) return true;
-  return workDirs(c, cwd).some((part) => {
-    const exe = String(part.words[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
-    if (WRITERS.test(exe)) return !DELETERS.test(exe) && targetsOf(exe, part.words.slice(1)).some((t) => isGitRunsFile(bare(t), part.dir));
-    // Any other program that names them (sed -i, [IO.File]::WriteAllText, node -e …), except one that only looks and git
-    // itself (its config forms are the gitRuns rule).
-    return !LOOKERS.test(exe) && exe !== 'git' && GIT_RUNS_TEXT.test(part.words.join(' '));
-  });
+  const exeOf = (part) => String(part.words[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
+  // Writers and redirections are judged on the full command; only the text scan of the other programs drops `--exclude .git`.
+  if (workDirs(c, cwd).some((part) => WRITERS.test(exeOf(part)) && !DELETERS.test(exeOf(part)) && targetsOf(exeOf(part), part.words.slice(1)).some((t) => isGitRunsFile(bare(t), part.dir)))) return true;
+  // Any other program that names them (sed -i, [IO.File]::WriteAllText, node -e …), except one that only looks and git
+  // itself (its config forms are the gitRuns rule). A program run from inside .git (`cd .git && node w.js`) writes there.
+  // A segment whose first word has a lone quote glued on (`rg"` after `node w.js "|rg"`) is the tail of a quoted string, not
+  // a looker or an excluder: judge its text as it is.
+  const loneQuote = (w) => ['"', "'"].some((q) => (w.split(q).length - 1) % 2 === 1);
+  if (c.split(/\r?\n|[;&|(){}]/).some((seg) => loneQuote(/^\s*(\S*)/.exec(seg)[1]) && GIT_RUNS_TEXT.test(seg))) return true;
+  // `find` only looks until it is told to run or write something.
+  return workDirs(withoutExcludes(c), cwd).some((part) => { const exe = exeOf(part); return part.words.length && !WRITERS.test(exe) && (!LOOKERS.test(exe) || (exe === 'find' && part.words.some((w) => FIND_ACTION.test(w)))) && exe !== 'git' && !CD_NAME.test(exe) && (GIT_RUNS_TEXT.test(part.words.join(' ')) || (part.dir && IN_GIT_DIR.test(part.dir))); });
+}
+const FIND_ACTION = /^-(exec|execdir|ok|okdir|delete|fprint0?|fprintf|fls)$/i;
+const CD_NAME =/^(cd|chdir|pushd|popd|set-location|sl|push-location|pop-location)$/i;
+const IN_GIT_DIR = /(^|[\\/])\.git([\\/]|$)/i;
+// `--exclude .git` and friends name .git to leave it out, not to write it. Only a program that really excludes, only an
+// option from a closed list that takes a value, and only when the value is exactly .git; any other program (node, python,
+// patch…) may read the same words as a destination, and writers and redirections are judged on the full command.
+const EXCLUDERS = /^(rg|grep|egrep|fgrep|find|tar|zip|unzip|7z|7za|robocopy|xcopy|eslint|prettier|fd|ag|ack|rsync)$/i;
+const SHORT_X = /^(zip|unzip|7z|7za)$/i;
+const GIT_VALUE = String.raw`(?:!?\.git[\\/]*|"!?\.git[\\/]*"|'!?\.git[\\/]*')(?=\s|$)`;
+const EXCLUDE_OPTION = new RegExp(String.raw`(?:^|\s)(?:--exclude(?:-dir)?|--ignore-(?:pattern|path|dir)|--glob|/XD)(?:=|\s+)` + GIT_VALUE, 'gi');
+const SHORT_EXCLUDE = new RegExp(String.raw`(?:^|\s)-x\s+` + GIT_VALUE, 'gi');
+const segmentExe = (seg) => (/^\s*(\S+)/.exec(seg)?.[1] ?? '').replace(/^["']|["']$/g, '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '');
+// Segments (even indexes) and separators (odd), cut only outside quotes. Only used to tell which program owns an exclude
+// option: a command whose quoting cannot be read for sure is left whole (nothing is stripped).
+function splitOutsideQuotes(command) {
+  if (/[`]|\\["']|\$\(|@["']/.test(command)) return null; // escapes, here-strings and substitutions: not plain quoting
+  const out = []; let cur = ''; let q = null;
+  for (const ch of command) {
+    if (q) { cur += ch; if (ch === q) q = null; continue; }
+    if (ch === '"' || ch === "'") { q = ch; cur += ch; continue; }
+    if (/[\n;&|(){}]/.test(ch)) { out.push(cur, ch); cur = ''; continue; }
+    cur += ch;
+  }
+  if (q) return null; // unbalanced quotes
+  out.push(cur);
+  return out;
+}
+function withoutExcludes(command) {
+  const segments = splitOutsideQuotes(String(command));
+  if (!segments) return command;
+  return segments.map((seg) => {
+    const exe = segmentExe(seg);
+    if (!EXCLUDERS.test(exe)) return seg;
+    const s = seg.replace(EXCLUDE_OPTION, ' ');
+    return SHORT_X.test(exe) ? s.replace(SHORT_EXCLUDE, ' ') : s;
+  }).join('');
 }
 // the loose `.git` (a worktree's pointer file) counts too, when nothing follows it but the end of the word
-// `--exclude .git`, `--exclude=.git`, `--ignore-pattern .git`, `-x .git`, `/XD .git` name .git to leave it out, not to write it
-const EXCLUDE_OPTION = /(?:^|\s)(?:--exclude(?:-[\w-]+)?|--ignore[\w-]*|-x|\/XD)(?:=|\s+)(?:"[^"]*"|'[^']*'|\S+)/gi;
-const withoutExcludes = (command) => command.replace(EXCLUDE_OPTION, ' ');
-const GIT_RUNS_TEXT = /(^|[\\/\s"'`(=,])\.git(?:[\\/]+(?:(?:worktrees|modules)[\\/]+(?:[^\\/\s"'`]+[\\/]+)+)?(?:config|commondir|gitdir|hooks|info[\\/]+attributes)(?![\w.-])|(?![\w.\\/-]))/i;
+const GIT_RUNS_TEXT = /(^|[\\/\s"'`(=,]|\s-[A-Za-z])\.git(?:[\\/]+(?:(?:worktrees|modules)[\\/]+(?:[^\\/\s"'`]+[\\/]+)+)?(?:config|commondir|gitdir|hooks|info[\\/]+attributes)(?![\w.-])|(?![\w.\\/-]))/i;
 // a deletion that takes the project folder itself, a folder that holds it, its .git (where Orb's
 // snapshots live) or everything at its top (`*`, which in PowerShell takes .git too): «Deshacer» could not bring it back.
 const DELETERS = /^(rm|rmdir|rd|del|erase|remove-item|ri|unlink|shred|mv|move|move-item|mi|rename-item|rni|ren|rename)$/i;
