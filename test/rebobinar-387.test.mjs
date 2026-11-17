@@ -697,3 +697,20 @@ test('a file the turn brought from outside the repository is removed', async () 
   const { r } = await movedTurn('mv-outside', () => {}, (d) => fs.renameSync(outside, path.join(d, 'brought.txt')));
   assert.ok(!fs.existsSync(path.join(r, 'brought.txt')));
 });
+
+test('a file that existed ignored is kept when the turn writes it or deletes another file with the same content', async () => {
+  const r = forcedRepo('photo-i3-dup'); const sid = 'i3d';
+  put(r, 'gen/dup.txt', 'bye'); put(r, 'gen/edited.txt', 'before');
+  fs.writeFileSync(path.join(r, 'del.txt'), 'bye'); git(r, 'add', '-A'); git(r, ...ident, 'commit', '-q', '-m', 'same content');
+  await sleep(100);
+  await snapshotBeforeTurn(r, sid, alive, { mark: 1 });
+  await sleep(100);
+  fs.writeFileSync(path.join(r, '.gitignore'), '.env');
+  fs.rmSync(path.join(r, 'del.txt'));
+  fs.writeFileSync(path.join(r, 'gen', 'edited.txt'), 'after the turn wrote it');
+  await snapshotAfterTurn(r, sid, alive);
+  const out = await rewindFiles(r, sid, 1);
+  assert.equal(read(r, 'gen', 'dup.txt'), 'bye');
+  assert.ok(fs.existsSync(path.join(r, 'del.txt')));
+  assert.ok(out.files.kept.includes('gen/dup.txt') && out.files.kept.includes('gen/edited.txt'));
+});

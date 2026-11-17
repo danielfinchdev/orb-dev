@@ -327,6 +327,23 @@ function* inBatches(list) {
   }
 }
 
+// Blob ids of `paths` in `commit`, in one git process per batch.
+function blobsOf(repo, commit, paths) {
+  const ids = new Set();
+  for (const batch of inBatches(paths)) {
+    const out = git(repo, '--literal-pathspecs', 'ls-tree', '-r', '-z', commit, '--', ...batch);
+    for (const entry of out.stdout.split('\0')) { const m = /^\d+ blob ([0-9a-f]+)\t/.exec(entry); if (m) ids.add(m[1]); }
+  }
+  return ids;
+}
+// True when a folder between the repository and the file was created or changed (date of the folder itself) at or after `since`.
+function newFolderAbove(repo, rel, since) {
+  for (let dir = path.dirname(rel); dir && dir !== '.'; dir = path.dirname(dir)) {
+    try { const st = fs.lstatSync(path.join(repo, dir)); if (Math.max(st.birthtimeMs, st.ctimeMs) >= since) return true; } catch { return false; }
+  }
+  return false;
+}
+
 // ---- checkpoints of the "carpeta" mode
 // Git: a hidden ref (refs/orb/…), invisible in the user's branches and log, that keeps the snapshot from being garbage collected.
 // Without git: a copy of the folder in backups/checkpoints (without node_modules, .git, secrets or files over 50 MB).
@@ -490,13 +507,16 @@ export function undoCheckpoint(before, after, { only = null, safe = false, madeA
         const low = rel.toLowerCase();
         if (nowExists && list.some((c) => c.status !== 'A' && c.path !== rel && c.path.toLowerCase() === low && fs.existsSync(path.join(repo, c.path)))) { skipped.push(rel); continue; }
         if (nowExists && madeAfter !== null) {
-          // A rename keeps the creation date but changes the change date, so the later of the two tells a file the turn
-          // made or moved here. A file whose content is that of a deleted one is a rename or a copy of it.
-          let born = 0; try { const st = fs.lstatSync(file); born = Math.max(st.birthtimeMs, st.ctimeMs); } catch { /* unreadable: keep it */ }
-          if (!(born >= madeAfter)) {
-            deletedBlobs ??= new Set(list.filter((c) => c.status === 'D').map((c) => git(repo, 'rev-parse', '--verify', '--quiet', `${before.commit}:${c.path}`).stdout.trim()).filter(Boolean));
-            if (!(blobAfter && deletedBlobs.has(blobAfter))) { kept.push(rel); continue; }
-          }
+          // Made by the turn: created after the cutoff. A file that already existed and was written during the turn is kept.
+          // One brought from elsewhere or renamed keeps its creation and write dates but gets a new change date: removed.
+          // A file inside a moved folder keeps all three, so there the content of a deleted file and a folder that is new
+          // (or changed) since the cutoff stand for the move.
+          let st = null; try { st = fs.lstatSync(file); } catch { /* unreadable: keep it */ }
+          const made = st && (st.birthtimeMs >= madeAfter || (st.mtimeMs < madeAfter && st.ctimeMs >= madeAfter));
+          if (st && !made && st.mtimeMs < madeAfter && blobAfter) {
+            deletedBlobs ??= blobsOf(repo, before.commit, list.filter((c) => c.status === 'D').map((c) => c.path));
+            if (deletedBlobs.has(blobAfter) && newFolderAbove(repo, rel, madeAfter)) { /* a moved file: remove it */ } else { kept.push(rel); continue; }
+          } else if (!made) { kept.push(rel); continue; }
         }
         if (nowExists && attempt(rel, () => fs.rmSync(file, { force: true }))) removed.push(rel);
         continue;
