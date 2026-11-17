@@ -385,3 +385,65 @@ test('with the marker naming the current HEAD and index the check is skipped, an
   fs.writeFileSync(`${index}.head`, `${stamp.split(':')[0]}:${'0'.repeat(40)}`);
   assert.ok(tracked(r, snapshotCommit(r, { raw: true, always: true }).commit).includes('gen/m.txt'));
 });
+
+// A rename that changes only letter case must reach the photo: with core.ignorecase `add -A` would keep the old spelling.
+const folds = process.platform === 'win32' || process.platform === 'darwin' ? test : test.skip;
+const caseRepo = (name) => {
+  const r = forcedRepo(name); git(r, 'config', 'core.ignorecase', 'true');
+  fs.mkdirSync(path.join(r, 'lib/x'), { recursive: true });
+  fs.writeFileSync(path.join(r, 'Readme.md'), 'readme\n'); fs.writeFileSync(path.join(r, 'lib/x/Util.c'), 'util\n');
+  git(r, 'add', '-A'); git(r, ...ident, 'commit', '-q', '-m', 'files');
+  return r;
+};
+// two steps through a temporary name, because the file system will not rename onto itself
+const recase = (r, from, to) => { fs.renameSync(path.join(r, from), path.join(r, `${from}.tmp`)); fs.renameSync(path.join(r, `${from}.tmp`), path.join(r, to)); };
+const caseOf = (r, commit, re) => tracked(r, commit).filter((f) => re.test(f));
+
+folds('a hot photo after a letter-case rename holds the new name only', () => {
+  const r = caseRepo('case1'); warm(r);
+  recase(r, 'Readme.md', 'README.md');
+  const snap = snapshotCommit(r, { raw: true, always: true });
+  assert.deepEqual(caseOf(r, snap.commit, /^readme/i), ['README.md']);
+  // a later photo with nothing new keeps it
+  assert.deepEqual(caseOf(r, snapshotCommit(r, { raw: true, always: true }).commit, /^readme/i), ['README.md']);
+});
+
+folds('a letter-case rename inside a folder, and of the folder itself, reaches the photo', () => {
+  const r = caseRepo('case2'); warm(r);
+  recase(r, 'lib/x/Util.c', 'lib/x/UTIL.c');
+  assert.deepEqual(caseOf(r, snapshotCommit(r, { raw: true, always: true }).commit, /util/i), ['lib/x/UTIL.c']);
+  recase(r, 'lib', 'Lib');
+  assert.deepEqual(caseOf(r, snapshotCommit(r, { raw: true, always: true }).commit, /util/i), ['Lib/x/UTIL.c']);
+});
+
+folds('a full snapshot after a letter-case rename holds the new name', async () => {
+  const r = caseRepo('case3');
+  recase(r, 'Readme.md', 'README.md');
+  const { fullSnapshot } = await import('../src/domain/tasks/checkpoints.mjs');
+  const full = await fullSnapshot(r, { message: 'full' });
+  assert.deepEqual(caseOf(r, full.commit, /^readme/i), ['README.md']);
+});
+
+folds('rewinding to a photo from before the letter-case rename leaves the file once, with its content', async () => {
+  const { undoCheckpoint } = await import('../src/domain/tasks/checkpoints.mjs');
+  const r = caseRepo('case4'); warm(r);
+  const before = snapshotCommit(r, { raw: true, always: true });
+  recase(r, 'Readme.md', 'README.md'); fs.writeFileSync(path.join(r, 'README.md'), 'edited\n');
+  const after = snapshotCommit(r, { raw: true, always: true });
+  undoCheckpoint({ kind: 'git', repo: r, commit: before.commit, raw: true }, { kind: 'git', repo: r, commit: after.commit });
+  assert.equal(fs.readFileSync(path.join(r, 'README.md'), 'utf8').length > 0, true);
+  const names = fs.readdirSync(r).filter((f) => /^readme/i.test(f));
+  assert.equal(names.length, 1);
+  assert.equal(fs.readFileSync(path.join(r, names[0]), 'utf8'), 'readme\n');
+});
+
+folds('a photo with no renamed file leaves every name as it is and keeps the folder-date stamp', () => {
+  const r = caseRepo('case5'); warm(r);
+  fs.writeFileSync(path.join(r, 'a.txt'), 'two\n'); fs.writeFileSync(path.join(r, 'lib/new.txt'), 'n\n'); // folder dates change, no name does
+  const snap = snapshotCommit(r, { raw: true, always: true });
+  assert.deepEqual(caseOf(r, snap.commit, /^readme|util/i), ['Readme.md', 'lib/x/Util.c']);
+  const index = path.resolve(r, g(r, 'rev-parse', '--git-path', 'orb/index-raw'));
+  const [at, id] = fs.readFileSync(`${index}.scan`, 'utf8').split(':');
+  assert.ok(Date.now() - Number(at) < 60_000);
+  assert.equal(id, crypto.createHash('sha1').update(fs.readFileSync(index)).digest('hex'));
+});

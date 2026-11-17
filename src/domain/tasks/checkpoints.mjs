@@ -43,6 +43,7 @@ export const RAW_INDEX = 'orb/index-raw';
 export const snapshotCommit = (repo, opts = {}) => runSync(repo, snapshotFlow(repo, opts));
 export const snapshotCommitAsync = (repo, opts = {}) => runAsync(repo, snapshotFlow(repo, opts));
 function* snapshotFlow(repo, { raw = false, always: wanted = false, message = 'orb: punto de partida (lo que había en la carpeta principal sin commitear; no es trabajo del agente)' } = {}) {
+  const startedAt = Date.now();
   const status = yield ask({}, 'status', '--porcelain=v1', '-z', '-uall');
   const changed = status.status === 0 ? porcelainPaths(status.stdout) : null; if (changed === null) return null;
   // A repository without any commit yet (git init and nothing more): the snapshot is a first commit with no parent, and it
@@ -68,6 +69,8 @@ function* snapshotFlow(repo, { raw = false, always: wanted = false, message = 'o
     // replacing the index between our copy and our read can never make us skip a check that our copy still needs.
     const headFile = raw ? `${rawIndex}.head` : null;
     let reconciled = false;
+    // Folders to check for names that differ only in letter case: those touched since the raw index was written (0 = all).
+    let since = 0;
     const restoreForced = function* (seedTail) {
       let seen = null; try { seen = fs.readFileSync(headFile, 'utf8').trim(); } catch { /* none yet: check */ }
       if (seedTail && seen === `${head}:${seedTail}`) return true;
@@ -97,6 +100,7 @@ function* snapshotFlow(repo, { raw = false, always: wanted = false, message = 'o
       fs.rmSync(tmp, { force: true });
       if (seed && fs.existsSync(seed)) fs.copyFileSync(seed, tmp);
       const seedTail = raw && seed === rawIndex ? indexId(tmp) : null;
+      since = seedTail ? scanSince(rawIndex, seedTail) : 0;
       if ((yield ask(env, ...cfg, 'add', '-A')).status !== 0) return false;
       if (raw && seed === rawIndex && head) reconciled = yield* restoreForced(seedTail);
       return !raw || seed === rawIndex || (yield ask(env, ...cfg, 'add', '--renormalize', '--', '.')).status === 0;
@@ -106,13 +110,29 @@ function* snapshotFlow(repo, { raw = false, always: wanted = false, message = 'o
     if (!warmOk) { reconciled = false; if (warm) fs.rmSync(rawIndex, { force: true }); if (!(yield* stage(realIndex))) return null; }
     // Remove anything secret-looking from the snapshot (also files already tracked by mistake) and verify.
     const listed = function* () { return (yield ask(env, 'ls-files', '-z')).stdout.split('\0').filter(Boolean); };
-    const secret = (yield* listed()).filter(isSecretPath);
+    let files = yield* listed();
+    if (raw) {
+      // `add -A` keeps the old spelling of a file the user renamed only in letter case when core.ignorecase is on
+      const dirs = changedDirs(repo, files, since);
+      if (dirs.size) {
+        if (!foldsCase.has(repo)) foldsCase.set(repo, (yield ask({}, 'config', '--bool', 'core.ignorecase')).stdout.trim() === 'true');
+        const moves = foldsCase.get(repo) ? caseMoves(repo, files, dirs) : [];
+        if (moves.length) {
+          let ok = true;
+          for (const batch of inBatches(moves.map((m) => m[0]))) ok = ((yield ask(env, ...cfg, '--literal-pathspecs', 'rm', '-q', '--cached', '--ignore-unmatch', '--', ...batch)).status === 0) && ok;
+          for (const batch of inBatches(moves.map((m) => m[1]))) ok = ((yield ask(env, ...cfg, '--literal-pathspecs', 'add', '-f', '--', ...batch)).status === 0) && ok;
+          if (!ok) return null;
+          files = yield* listed();
+        }
+      }
+    }
+    const secret = files.filter(isSecretPath);
     for (const file of secret) yield ask(env, 'rm', '-q', '--cached', '--ignore-unmatch', '--', file);
     // the check only means something after a removal: with none, the index is the list just read
     if (secret.length && (yield* listed()).some(isSecretPath)) return null;
     const tree = (yield ask(env, 'write-tree')).stdout.trim(); if (!tree) return null;
     // the marker is written only when HEAD's files are known to be in the index; a cold start or a failed restore leaves it out so the next snapshot checks
-    if (raw) keepRawIndex(tmp, rawIndex, reconciled ? head : null);
+    if (raw) keepRawIndex(tmp, rawIndex, reconciled ? head : null, startedAt);
     if (!always && head && tree === (yield ask({}, 'rev-parse', 'HEAD^{tree}')).stdout.trim()) return null;
     const commit = (yield ask(env, ...ORB_GIT, 'commit-tree', tree, ...(head ? ['-p', head] : []), '-m', message)).stdout.trim();
     return commit ? { commit, files: changed.length } : null;
@@ -126,17 +146,28 @@ function* snapshotFlow(repo, { raw = false, always: wanted = false, message = 'o
 export async function fullSnapshot(repo, { message }) {
   const tmp = path.join(os.tmpdir(), `orb-index-${process.pid}-${crypto.randomBytes(4).toString('hex')}`);
   const run = (...args) => gitAsync(repo, { GIT_INDEX_FILE: tmp }, ...args);
+  const startedAt = Date.now();
   try {
     const rawIndex = path.resolve(repo, (await gitAsync(repo, {}, 'rev-parse', '--git-path', RAW_INDEX)).stdout.trim());
     const head = (await run('rev-parse', '--verify', '--quiet', 'HEAD')).stdout.trim();
     if (head && (await run('read-tree', head)).status !== 0) return null;
     if ((await run(...RAW_GIT, 'add', '-A')).status !== 0) return null;
     const listed = async () => (await run('ls-files', '-z')).stdout.split('\0').filter(Boolean);
-    const secret = (await listed()).filter(isSecretPath);
+    let files = await listed();
+    if (!foldsCase.has(repo)) foldsCase.set(repo, (await gitAsync(repo, {}, 'config', '--bool', 'core.ignorecase')).stdout.trim() === 'true');
+    const moves = foldsCase.get(repo) ? caseMoves(repo, files, changedDirs(repo, files, 0)) : [];
+    if (moves.length) {
+      let ok = true;
+      for (const batch of inBatches(moves.map((m) => m[0]))) ok = ((await run(...RAW_GIT, '--literal-pathspecs', 'rm', '-q', '--cached', '--ignore-unmatch', '--', ...batch)).status === 0) && ok;
+      for (const batch of inBatches(moves.map((m) => m[1]))) ok = ((await run(...RAW_GIT, '--literal-pathspecs', 'add', '-f', '--', ...batch)).status === 0) && ok;
+      if (!ok) return null;
+      files = await listed();
+    }
+    const secret = files.filter(isSecretPath);
     for (const file of secret) await run('rm', '-q', '--cached', '--ignore-unmatch', '--', file);
-    if ((await listed()).some(isSecretPath)) return null;
+    if (secret.length && (await listed()).some(isSecretPath)) return null;
     const tree = (await run('write-tree')).stdout.trim(); if (!tree) return null;
-    keepRawIndex(tmp, rawIndex, head);
+    keepRawIndex(tmp, rawIndex, head, startedAt);
     const commit = (await run(...ORB_GIT, 'commit-tree', tree, ...(head ? ['-p', head] : []), '-m', message)).stdout.trim();
     return commit ? { commit } : null;
   } finally { fs.rmSync(tmp, { force: true }); }
@@ -158,16 +189,81 @@ const indexId = (file) => {
   try { return crypto.createHash('sha1').update(fs.readFileSync(file)).digest('hex'); } catch { return null; }
 };
 // head: the HEAD the index was reconciled with (see restoreForced), kept beside it together with the index's checksum;
-// without one the marker is dropped.
-function keepRawIndex(tmp, rawIndex, head = null) {
+// without one the marker is dropped. scanAt: when this snapshot started, kept the same way for the letter-case check.
+function keepRawIndex(tmp, rawIndex, head = null, scanAt = null) {
   const part = `${rawIndex}.${process.pid}.${crypto.randomBytes(4).toString('hex')}`;
   try {
     fs.mkdirSync(path.dirname(rawIndex), { recursive: true });
-    fs.rmSync(`${rawIndex}.head`, { force: true });
+    fs.rmSync(`${rawIndex}.head`, { force: true }); fs.rmSync(`${rawIndex}.scan`, { force: true });
     fs.copyFileSync(tmp, part); fs.renameSync(part, rawIndex);
-    const tail = head && indexId(tmp);
-    if (tail) { fs.writeFileSync(part, `${head}:${tail}`); fs.renameSync(part, `${rawIndex}.head`); }
+    const tail = indexId(tmp);
+    if (tail && head) { fs.writeFileSync(part, `${head}:${tail}`); fs.renameSync(part, `${rawIndex}.head`); }
+    if (tail && scanAt) { fs.writeFileSync(part, `${scanAt}:${tail}`); fs.renameSync(part, `${rawIndex}.scan`); }
   } catch { fs.rmSync(part, { force: true }); }
+}
+
+// ---- letter-case renames
+// With core.ignorecase (Windows, macOS) `add -A` leaves the old spelling in the index when a file or folder is renamed only
+// in letter case, so a photo would hold the old name. A rename always changes the modification date of the folder that
+// holds the name, so only the folders touched since the previous raw snapshot started are read; the folders come from the
+// index list the snapshot already asked for, with no extra git process. The start time is kept in `index-raw.scan`
+// together with the checksum of the index it belongs to: a raw index another snapshot replaced, or one with no such
+// file, means checking every folder. The margin covers coarse file-system dates.
+const foldsCase = new Map();
+const SCAN_MARGIN_MS = 2000;
+function scanSince(rawIndex, tail) {
+  try {
+    const [at, id] = fs.readFileSync(`${rawIndex}.scan`, 'utf8').trim().split(':');
+    return id === tail && Number(at) > 0 ? Number(at) - SCAN_MARGIN_MS : 0;
+  } catch { return 0; }
+}
+function changedDirs(repo, files, since) {
+  const seen = new Set(); const dirs = new Set();
+  const visit = (dir) => {
+    if (seen.has(dir)) return; seen.add(dir);
+    let hit = since <= 0;
+    if (!hit) { try { hit = fs.statSync(path.join(repo, dir)).mtimeMs >= since; } catch { hit = true; } }
+    if (hit) dirs.add(dir);
+    if (dir) visit(dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : '');
+  };
+  for (const f of files) visit(f.includes('/') ? f.slice(0, f.lastIndexOf('/')) : '');
+  return dirs;
+}
+// [[old index path, path as spelled on disk]] for the files whose name differs from the disk only in letter case;
+// a name is looked up only inside the folders in `dirs` (named as the index spells them).
+function caseMoves(repo, files, dirs) {
+  const listing = new Map();
+  const entries = (real) => {
+    if (!listing.has(real)) {
+      let names = null; try { names = fs.readdirSync(path.join(repo, real)); } catch { /* gone */ }
+      listing.set(real, names && { names: new Set(names), lower: new Map(names.map((n) => [n.toLowerCase(), n])) });
+    }
+    return listing.get(real);
+  };
+  const moves = [];
+  for (const f of files) {
+    const out = [];
+    let old = ''; let real = ''; let ok = true;
+    for (const name of f.split('/')) {
+      let actual = name;
+      if (dirs.has(old)) {
+        const list = entries(real);
+        if (!list) { ok = false; break; }
+        if (!list.names.has(name)) { actual = list.lower.get(name.toLowerCase()); if (!actual) { ok = false; break; } }
+      }
+      out.push(actual); old = old ? `${old}/${name}` : name; real = real ? `${real}/${actual}` : actual;
+    }
+    const now = out.join('/');
+    if (ok && now !== f) moves.push([f, now]);
+  }
+  return moves;
+}
+function* inBatches(list) {
+  for (let i = 0; i < list.length;) {
+    let size = 0; const batch = [];
+    while (i < list.length && (!batch.length || size + list[i].length < 24000)) { size += list[i].length + 1; batch.push(list[i++]); }
+    yield batch;
+  }
 }
 
 // ---- checkpoints of the "carpeta" mode
