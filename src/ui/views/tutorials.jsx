@@ -46,11 +46,11 @@ function Tutorial({ item, t, name }) {
   return (
     <Card className="gap-3 py-4" data-testid={`tutorial-${item.id}`}>
       <CardHeader className="flex-row items-center gap-3">
-        <span className="bg-primary/10 text-primary grid size-9 shrink-0 place-items-center rounded-xl"><Icon className="size-4.5" /></span>
+        <span className="bg-primary-soft text-primary-text grid size-9 shrink-0 place-items-center rounded-xl"><Icon className="size-4.5" /></span>
         <CardTitle className="text-card-title">{t(`help.tut.${item.id}.title`, { name })}</CardTitle>
       </CardHeader>
       <CardContent>
-        <ul className="text-foreground/85 grid list-disc gap-1.5 pl-4 text-control leading-relaxed marker:text-primary/60">{lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
+        <ul className="text-foreground/85 grid list-disc gap-1.5 pl-4 text-control leading-relaxed marker:text-primary-text/60">{lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
       </CardContent>
       {showGo ? <CardContent><Button size="sm" variant="outline" onClick={item.go}>{t(`help.tut.${item.id}.go`)}<ArrowRight /></Button></CardContent> : null}
     </Card>
@@ -83,13 +83,13 @@ export function TutorialsView() {
   const nothing = !tutorials.length && !keys.length && !faqs.length;
   const Section = ({ icon: Icon, title, children }) => (
     <section className="grid gap-3">
-      <h2 className="flex items-center gap-2 text-control font-medium tracking-wide uppercase"><Icon className="text-primary size-4" />{title}</h2>
+      <h2 className="flex items-center gap-2 text-control font-medium tracking-wide uppercase"><Icon className="text-primary-text size-4" />{title}</h2>
       {children}
     </section>
   );
   return (
     <>
-      <PageHeader icon={<LifeBuoy className="text-primary size-5" />} title={t('help.title')} meta={t('help.meta')}>
+      <PageHeader icon={<LifeBuoy className="text-primary-text size-5" />} title={t('help.title')} meta={t('help.meta')}>
         <SearchInput value={q} onChange={setQ} placeholder={t('help.search')} data-testid="help-search" />
       </PageHeader>
       <PageBody className="px-5 py-5" data-testid="tutorials-view">

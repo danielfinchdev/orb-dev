@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Orbit, NotebookPen, MessageSquareWarning, ChevronUp, ChevronDown, Settings, LifeBuoy, Headphones, Pause, SkipForward, LoaderCircle } from 'lucide-react';
+import { Orbit, NotebookPen, MessageSquareWarning, Settings, LifeBuoy, Headphones, Pause, SkipForward, LoaderCircle } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { ThemeToggle, SidebarToggle } from './theme-toggle.jsx';
 import { useStore, go, bridge, openSettings, anyChatBusy } from '@/lib/store.js';
@@ -52,19 +52,12 @@ function useSidebarWidth() {
   return { width, setWidth, startResize };
 }
 
-// What is unfolded (the foot of the sidebar), remembered in this window.
-function useRemembered(key, initial) {
-  const [open, setOpen] = useState(() => { try { return { ...initial, ...JSON.parse(localStorage.getItem(key) || '{}') }; } catch { return initial; } });
-  const set = (name, value) => setOpen((o) => { const next = { ...o, [name]: value }; try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* storage unavailable */ } return next; });
-  return [open, set];
-}
-
-// the foot of the sidebar. Folded (by default) only the icons, each with its bubble, and on the right the bug to send
-// feedback with Orb's version; unfolded, the list with names. The little arrow on the line above unfolds and folds it.
-function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
+// the foot of the sidebar: only icons, each with its bubble (its name and what it holds); on the right the music, the bug
+// to send feedback and Orb's version.
+function SidebarFooter({ version, is, settingsOpen }) {
   const t = useT();
   const memories = is('logs') || is('activity') || is('rules');
-  // the same slots and icons on the PC and in a linked browser (Ajustes, Agentes, Memorias, Tutoriales); what a
+  // the same slots and icons on the PC and in a linked browser (Ajustes, Agentes, Bitácoras, Tutoriales); what a
   // browser does not have is left out (Agentes, the bug), never swapped for other icons. Its gear opens this device.
   const items = [
     { icon: Settings, label: t('nav.settings'), active: settingsOpen || is('phone'), onClick: () => openSettings(), testid: 'nav-settings' },
@@ -73,34 +66,24 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
     // how the app works, the FAQ and the button that replays the guided tour.
     { icon: LifeBuoy, label: t('nav.tutorials'), active: is('tutorials'), onClick: () => go('tutorials'), testid: 'nav-tutorials' }
   ];
-  const toggle = open ? t('nav.footerFold') : t('nav.footerUnfold');
-  // A linked browser's gear opens this device's settings (browser-settings-menu.jsx).
-  const row = (i) => (i.testid === 'nav-settings' && bridge.mobile ? <BrowserSettingsMenu key={i.testid} list={open} active={i.active} /> : null);
   return (
-    <div className="side-foot relative border-t px-3 pt-2.5 pb-2" data-testid="sidebar-footer" data-open={open}>
-      <Tip label={toggle}>
-        <button type="button" className="side-foot-toggle" onClick={() => onOpen(!open)} aria-label={toggle} aria-expanded={open} data-testid="sidebar-footer-toggle">
-          {open ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
-        </button>
-      </Tip>
-      {open ? <div className="mb-1 flex flex-col gap-0.5">{items.map((i) => row(i) ?? <NavItem key={i.testid} icon={i.icon} label={i.label} active={i.active} onClick={i.onClick} testid={i.testid} />)}</div> : null}
-      <div className="side-foot-row flex items-center gap-0.5">
-        {/* the first icon sits at the window's left edge: its bubble starts at the icon instead of being cut there. */}
-        {open ? null : items.map((i, n) => row(i) ?? (
-          <BubbleTip key={i.testid} title={i.label} text={i.hint} side="top" align={n === 0 ? 'start' : 'center'}>
-            <button type="button" onClick={i.onClick} aria-label={i.label} data-testid={i.testid} className={cn('side-foot-icon', i.active && 'is-active')}><i.icon className="size-4" /></button>
-          </BubbleTip>
-        ))}
-        <span className="flex-1" />
-        {musicAvailable() ? <MusicButtons /> : null}
-        {/* The bug: straight to «Enviar comentarios» (Ajustes › Acerca de), with the version next to it. */}
-        {bridge.mobile ? null : (
-          <BubbleTip title={t('nav.feedback')} side="top">
-            <button type="button" onClick={() => openSettings('contribuye')} aria-label={t('nav.feedback')} data-testid="nav-feedback" className="side-foot-icon"><MessageSquareWarning className="size-4" /></button>
-          </BubbleTip>
-        )}
-        {version ? <span className="side-foot-version" data-testid="app-version">v{version}</span> : null}
-      </div>
+    <div className="side-foot border-border flex items-center gap-1 border-t px-2.5 py-2" data-testid="sidebar-footer">
+      {/* A linked browser's gear opens this device's settings (browser-settings-menu.jsx). */}
+      {items.map((i, n) => (i.testid === 'nav-settings' && bridge.mobile ? <BrowserSettingsMenu key={i.testid} active={i.active} /> : (
+        // the first icon sits at the window's left edge: its bubble starts at the icon instead of being cut there.
+        <BubbleTip key={i.testid} title={i.label} text={i.hint} side="top" align={n === 0 ? 'start' : 'center'}>
+          <button type="button" onClick={i.onClick} aria-label={i.hint ? `${i.label}: ${i.hint}` : i.label} aria-current={i.active ? 'page' : undefined} data-testid={i.testid} className="side-foot-icon"><i.icon className="size-5" /></button>
+        </BubbleTip>
+      )))}
+      <span className="flex-1" />
+      {musicAvailable() ? <MusicButtons /> : null}
+      {/* The bug: straight to «Enviar comentarios» (Ajustes › Acerca de), with the version next to it. */}
+      {bridge.mobile ? null : (
+        <BubbleTip title={t('nav.feedback')} side="top">
+          <button type="button" onClick={() => openSettings('contribuye')} aria-label={t('nav.feedback')} data-testid="nav-feedback" className="side-foot-icon"><MessageSquareWarning className="size-5" /></button>
+        </BubbleTip>
+      )}
+      {version ? <span className="side-foot-version" data-testid="app-version">v{version}</span> : null}
     </div>
   );
 }
@@ -123,12 +106,12 @@ function MusicButtons() {
     <>
       {s.playing ? (
         <BubbleTip title={next} side="top">
-          <button type="button" onClick={skipTrack} aria-label={next} data-testid="nav-music-next" className="side-foot-icon"><SkipForward className="size-4" /></button>
+          <button type="button" onClick={skipTrack} aria-label={next} data-testid="nav-music-next" className="side-foot-icon"><SkipForward className="size-5" /></button>
         </BubbleTip>
       ) : null}
       <BubbleTip title={t('nav.music')} text={text} side="top">
         <button type="button" onClick={toggleMusic} aria-label={s.playing || s.loading ? t('nav.musicPause') : t('nav.musicPlay')} aria-pressed={s.playing} data-testid="nav-music" data-music-button=""
-          className={cn('side-foot-icon', s.playing && 'is-active')}>{s.loading ? <LoaderCircle className="size-4 animate-spin" /> : s.playing ? <Pause className="size-4" /> : <Headphones className="size-4" />}</button>
+          className={cn('side-foot-icon', s.playing && 'is-active')}>{s.loading ? <LoaderCircle className="size-5 animate-spin" /> : s.playing ? <Pause className="size-5" /> : <Headphones className="size-5" />}</button>
       </BubbleTip>
     </>
   );
@@ -144,31 +127,29 @@ export function Sidebar({ mood }) {
   // while an agent works on a task the robot floats (its face stays as the conversations say).
   const working = useStore((s) => s.tasks.some((x) => x.status === 'running'));
   const name = app.config.assistantName;
-  const [sections, setSection] = useRemembered('orb.secciones', { footer: false });
   const { width, setWidth, startResize } = useSidebarWidth();
   const is = (view) => route.view === view;
   return (
     // the chat list of a messaging app, with the places' labels under the search: at least 340 px.
-    <aside className="bg-sidebar relative flex h-full shrink-0 flex-col border-r" style={{ width }}>
+    <aside className="bg-sidebar relative flex h-full shrink-0 flex-col border-r" style={{ width }} data-testid="sidebar">
       {bridge.mobile ? null : <div className="sidebar-resize" role="separator" aria-orientation="vertical" aria-label={t('comp.sidebar.resize')} onPointerDown={startResize} onDoubleClick={() => setWidth(SIDEBAR_DEFAULT)} data-testid="sidebar-resize" />}
-      <div className="theme-band side-band app-titlebar flex h-14 shrink-0 items-center gap-2 border-b px-4">
-        {/* the robot goes back to the conversation in progress (the last one opened). */}
+      <div className="theme-band side-band app-titlebar flex h-14 shrink-0 items-center gap-1 pr-2.5 pl-4">
+        {/* the brand goes back to the conversation in progress (the last one opened). Only the Orb theme has the robot's
+            head next to the wordmark; every other theme shows the wordmark alone, in the same place. */}
         <Tip label={t('nav.backToChat', { name })} side="bottom" align="start">
-          <button type="button" className="no-drag relative shrink-0 cursor-pointer rounded-full" onClick={() => go(lastChat(route, conversations))} aria-label={t('nav.backToChat', { name })} data-testid="sidebar-home">
-            <Robot size={34} mark={28} mood={mood} title={name} live active={working} />
-            {chatBusy ? <span className="bg-primary absolute right-0 bottom-0 size-2 animate-pulse rounded-full" /> : null}
+          <button type="button" className="side-brand no-drag flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-ctl px-0.5 py-1 text-left" onClick={() => go(lastChat(route, conversations))} aria-label={t('nav.backToChat', { name })} data-testid="sidebar-home">
+            <Robot size={34} head mood={mood} title={name} live active={working} />
+            {/* with the default name, the drawn wordmark (Orb·E); a name of one's own, as it is written. */}
+            <span className="flex min-w-0 items-center">{name === PRODUCT.assistant ? <Wordmark /> : <span className="truncate text-[15px] font-semibold">{name}</span>}</span>
+            {chatBusy ? <span className="bg-primary-text size-1.5 shrink-0 animate-pulse rounded-full" aria-hidden="true" /> : null}
           </button>
         </Tip>
-        {/* with the default name, the drawn wordmark (Orb·E); a name of one's own, as it is written. */}
-        <div className="flex min-w-0 flex-1 items-center">{name === PRODUCT.assistant ? <Wordmark /> : <div className="truncate text-card-title font-medium">{name}</div>}</div>
-        <div className="flex shrink-0 items-center gap-0.5">
-          <ThemeToggle />
-          <SidebarToggle />
-        </div>
+        <ThemeToggle />
+        <SidebarToggle />
       </div>
       {/* the chat list of a messaging app (views/orb/inbox.jsx). */}
-      <div className="flex min-h-0 flex-1 flex-col pt-2"><OrbInbox /></div>
-      <SidebarFooter version={app.version} is={is} settingsOpen={settingsOpen} open={sections.footer === true} onOpen={(v) => setSection('footer', v)} />
+      <div className="flex min-h-0 flex-1 flex-col"><OrbInbox /></div>
+      <SidebarFooter version={app.version} is={is} settingsOpen={settingsOpen} />
     </aside>
   );
 }

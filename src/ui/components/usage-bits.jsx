@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils.js';
 
 // 1234 → «1k», 2_500_000 → «2.5M» (the context ring and the usage page).
 export const shortTokens = (n) => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n ?? 0));
-export const toneOf = (pct) => (pct >= 85 ? 'text-destructive' : pct >= 60 ? 'text-warning-ink' : 'text-primary');
+export const toneOf = (pct) => (pct >= 85 ? 'text-destructive' : pct >= 60 ? 'text-warning-ink' : 'text-primary-text');
 // pace: where an even use of the window would be now (a mark on the bar).
 export function UsageBar({ pct, pace = null }) {
   return (

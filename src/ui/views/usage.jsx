@@ -41,7 +41,7 @@ function Days({ days, metric, locale }) {
         return (
           <Tip key={d.day} label={label}>
             <span className="flex h-full min-w-0 flex-1 items-end" tabIndex={0}>
-              <span className={cn('w-full rounded-t-sm', v ? 'bg-primary' : 'bg-chart-empty')} style={{ height: v && max ? `${Math.max(3, (v / max) * 100)}%` : '3px' }} />
+              <span className={cn('w-full rounded-t-sm', v ? 'bg-primary-text' : 'bg-chart-empty')} style={{ height: v && max ? `${Math.max(3, (v / max) * 100)}%` : '3px' }} />
             </span>
           </Tip>
         );
@@ -84,7 +84,7 @@ function Heat({ heat, locale }) {
             <span className="text-muted-foreground pr-2 text-xs">{t(`usage.days${d}`)}</span>
             {row.map((n, h) => (
               <Tip key={h} label={t('usage.heatCell', { day: t(`usage.days${d}`), hour: h, n: n.toLocaleString(locale) })}>
-                <span tabIndex={0} className={cn('aspect-square rounded-[3px]', n ? 'bg-primary' : 'bg-chart-empty')} style={n && max ? { opacity: 0.2 + 0.8 * (n / max) } : undefined} />
+                <span tabIndex={0} className={cn('aspect-square rounded-[3px]', n ? 'bg-primary-text' : 'bg-chart-empty')} style={n && max ? { opacity: 0.2 + 0.8 * (n / max) } : undefined} />
               </Tip>
             ))}
           </Fragment>
@@ -156,7 +156,7 @@ export function UsageView() {
   const models = useMemo(() => (data?.models ?? []).map((m) => ({ ...m, key: `${m.agent}:${m.model ?? ''}`, name: m.label ?? m.model ?? t('usage.defaultModel') })), [data, t]);
   return (
     <>
-      <PageHeader icon={<Gauge className="text-primary size-5" />} title={t('usage.title')}>
+      <PageHeader icon={<Gauge className="text-primary-text size-5" />} title={t('usage.title')}>
         <Tabs value={days} onValueChange={setDays}><TabsList>{['7', '30', '90'].map((d) => <TabsTrigger key={d} value={d} data-testid={`usage-range-${d}`}>{t('usage.days', { n: d })}</TabsTrigger>)}</TabsList></Tabs>
       </PageHeader>
       <PageBody>

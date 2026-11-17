@@ -90,7 +90,7 @@ export function InstallProgress({ progress, fun = true }) {
         <span className="text-muted-foreground font-mono text-xs tabular-nums">{percent} %</span>
       </div>
       <div className="bg-muted h-2 overflow-hidden rounded-full" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-label={line}>
-        <div className={cn('h-full rounded-full transition-[width] duration-700 ease-out', failed || progress.interrupted ? 'bg-destructive' : 'bg-primary')} style={{ width: `${Math.max(percent, 4)}%` }} />
+        <div className={cn('h-full rounded-full transition-[width] duration-700 ease-out', failed || progress.interrupted ? 'bg-destructive' : 'bg-primary-text')} style={{ width: `${Math.max(percent, 4)}%` }} />
       </div>
       {progress.running && fun ? (
         <p key={n} className="text-muted-foreground animate-in fade-in slide-in-from-bottom-1 text-center text-sm italic duration-500" aria-live="polite" data-testid="install-fun">

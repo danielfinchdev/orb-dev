@@ -64,7 +64,7 @@ function LoginCard({ reload, windows }) {
   const send = async () => { if (await act(call('agents.loginCode', { id: login.id, code: code.trim() }))) setCode(''); };
   const cancel = () => { call('agents.loginCancel', { id: login.id }).catch(quiet); setLogin(null); };
   return (
-    <Card className="border-primary/50" data-testid="agent-login-card">
+    <Card className="border-primary-text/50" data-testid="agent-login-card">
       <CardHeader className="flex-row items-start gap-3">
         <AgentIcon agent={login.agent} className="mt-0.5 size-6 shrink-0" />
         <div className="min-w-0 flex-1">
@@ -385,7 +385,7 @@ export function AgentsView() {
   useEffect(() => { call('usage.get').then(setUsage).catch(quiet); }, [version]);
   return (
     <>
-      <PageHeader icon={<Orbit className="text-primary size-5" />} title={t('agents.title')} meta={t('agents.meta')}>
+      <PageHeader icon={<Orbit className="text-primary-text size-5" />} title={t('agents.title')} meta={t('agents.meta')}>
         <Button size="sm" variant="outline" onClick={() => { setAgents(null); load(true); }}><RefreshCw />{t('agents.checkAll')}</Button>
       </PageHeader>
       <PageBody>
@@ -422,7 +422,7 @@ export function AgentsView() {
                     {u.modelLimits?.map((m) => <Badge key={m.model} variant="warning" title={m.model}>{t('agents.modelLimit', { model: m.label, time: new Date(m.until).toLocaleString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) })}</Badge>)}
                     {/* the user decides the pause is over (the limit was only of one model, or it reset earlier). */}
                     {u.cooldownUntil || u.modelLimits?.length ? <Button size="sm" variant="outline" className="h-6 px-2 text-xs" data-testid={`clear-cooldown-${u.account}`} onClick={async () => { if (await act(call('accounts.clearCooldown', { account: u.account }), t('agents.clearCooldownDone', { name: u.label }))) setUsage(await call('usage.get')); }}>{t('agents.clearCooldown')}</Button> : null}</div>
-                  <div className="bg-muted h-1.5 overflow-hidden rounded-full"><div className={cn('h-full rounded-full transition-all', (u.real?.utilization ?? 0) >= 0.85 ? 'bg-warning' : 'bg-primary')} style={{ width: `${Math.min(100, (u.real ? u.real.utilization : u.used / Math.max(1, u.max)) * 100)}%` }} /></div>
+                  <div className="bg-muted h-1.5 overflow-hidden rounded-full"><div className={cn('h-full rounded-full transition-all', (u.real?.utilization ?? 0) >= 0.85 ? 'bg-warning' : 'bg-primary-text')} style={{ width: `${Math.min(100, (u.real ? u.real.utilization : u.used / Math.max(1, u.max)) * 100)}%` }} /></div>
                 </div>
               ))}
             </CardContent>

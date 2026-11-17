@@ -95,6 +95,8 @@ try {
   const call = (method, params = {}) => page.evaluate(([m, p]) => window.orb.call(m, p), [method, params]);
   // 3.8: a folder made before the first start has no master password yet: «Crea tu contraseña maestra» once.
   await throughStart(page, { ready: '[data-testid=chat-greeting]' });
+  // The one-time «Modo Auto activado» notice would sit over every picture for 20 s: marked as seen (ORB_EXPLORA_AUTO_NOTICE=1 keeps it).
+  if (!process.env.ORB_EXPLORA_AUTO_NOTICE) await call('config.save', { patch: { ui: { autoNoticed: true } } });
   // ORB_LANG=en: the same tour in English (the interface and the engine's notices follow config.language).
   if (LANG) { await call('config.save', { patch: { language: LANG } }); await page.reload(); await page.waitForSelector('[data-testid=sidebar-home]'); }
   if (await page.isVisible('text=Preparando tu PC')) { await shot('01-preparo-equipo'); await page.click('text=Continuar'); }
@@ -106,6 +108,8 @@ try {
     if (await page.locator('[data-testid=sidebar-home]').isVisible()) await page.click('[data-testid=sidebar-home]');
     else { await page.click('[data-testid=chats-new]'); await page.click('[data-testid=new-conversation]'); }
   };
+  // The families the default settings really give (the mockups use Segoe UI Variable Text and JetBrains Mono).
+  note(`letras de serie: cuerpo «${await page.evaluate(() => getComputedStyle(document.body).fontFamily)}» · mono «${await page.evaluate(() => { const e = document.createElement('code'); e.className = 'font-mono'; document.body.append(e); const v = getComputedStyle(e).fontFamily; e.remove(); return v; })}»`);
   const views = [['sidebar-home', 'chat'], ['nav-tasks', 'tareas'], ['nav-projects', 'proyectos'], ['nav-agents', 'agentes'], ['nav-memories', 'bitacoras'], ['memories-activity', 'actividad'], ['nav-settings', 'ajustes']];
   const SECTIONS = ['general', 'magiclink', 'agentes', 'permisos', 'extensiones', 'datos', 'avanzado', 'acerca'];
   for (const theme of ['dia', 'noche']) {

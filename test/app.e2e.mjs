@@ -310,7 +310,7 @@ try {
 
   // ---- interface size: Ctrl + / Ctrl - / Ctrl 0 and the presets in Ajustes (kept per PC)
   step = 'tamaño de la interfaz';
-  // The interface's size (×1.15 on top in WebView2: window.rs › ZOOM_BASE); the keys are read by the page itself.
+  // The interface's size (100 % real in WebView2: protocol.rs › ZOOM_BASE = 1); the keys are read by the page itself.
   const factor = () => win.evaluate(() => window.orb.zoom());
   const ctrl = (key) => win.keyboard.press(`Control+${key}`);
   assert.ok(Math.abs((await factor()) - 1) < 0.01, 'por defecto «Normal»');
@@ -326,8 +326,8 @@ try {
   await sizeBox.scrollIntoViewIfNeeded(); await win.waitForTimeout(800); await sizeBox.scrollIntoViewIfNeeded();
   await sizeBox.click();
   await win.getByRole('option', { name: 'Grande' }).click();
-  await until(async () => Math.abs((await factor()) - 1.15) < 0.01, 'tamaño grande');
-  assert.equal(JSON.parse(fs.readFileSync(path.join(tmp, 'datos-app', 'interfaz.json'), 'utf8')).zoom, 1.15);
+  await until(async () => Math.abs((await factor()) - 1.1) < 0.01, 'tamaño grande');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(tmp, 'datos-app', 'interfaz.json'), 'utf8')).zoom, 1.1);
   await win.waitForTimeout(400);
   await shot('10a-ajustes-grande');
   await ctrl('Digit0');

@@ -51,7 +51,7 @@ export function DialogDescription({ className, ...props }) { return <DialogPrimi
 export function Select({ value, onValueChange, options, placeholder, className, size = 'default', disabled, title, id, 'aria-describedby': describedBy, 'data-testid': testid, ...props }) {
   const chosen = options.find((o) => o.value === value) ?? null;
   const trigger = (
-    <SelectPrimitive.Trigger id={id} aria-describedby={describedBy} aria-label={title} data-testid={testid} className={cn("btn pick out border-border bg-card text-foreground hover:bg-accent data-[placeholder]:text-muted-foreground flex h-(--ctl) w-fit items-center justify-between gap-1.5 rounded-ctl border px-2.5 text-control whitespace-nowrap transition-[background-color,border-color] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-45 cursor-pointer *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4", className)}>
+    <SelectPrimitive.Trigger data-slot="select-trigger" id={id} aria-describedby={describedBy} aria-label={title} data-testid={testid} className={cn("btn pick out border-border bg-card text-foreground hover:bg-accent data-[placeholder]:text-muted-foreground flex h-(--ctl) w-fit items-center justify-between gap-1.5 rounded-ctl border px-2.5 text-control whitespace-nowrap transition-[background-color,border-color] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-45 cursor-pointer *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4", className)}>
       <SelectPrimitive.Value data-slot="select-value" placeholder={placeholder}>{chosen ? <>{chosen.icon ?? null}<span className="truncate">{chosen.label}</span></> : null}</SelectPrimitive.Value>
       <SelectPrimitive.Icon asChild><ChevronDownIcon className="text-muted-foreground size-4" /></SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
@@ -149,7 +149,6 @@ export function PopoverContent({ className, children, side = 'bottom', align = '
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content side={side} align={align} sideOffset={offset} collisionPadding={12} data-slot="popover" className={cn('orb-tip orb-pop z-50 outline-none', className)} {...props}>
         {children}
-        <PopoverPrimitive.Arrow asChild width={16} height={8}><span className="orb-tip-tail" aria-hidden="true" /></PopoverPrimitive.Arrow>
       </PopoverPrimitive.Content>
     </PopoverPrimitive.Portal>
   );
@@ -233,7 +232,7 @@ export function TabsList({ className, variant = 'segm', ...props }) {
   return <TabsPrimitive.List data-slot="tabs-list" data-variant={variant} className={cn('segm text-muted-foreground inline-flex max-w-full items-center justify-start overflow-x-auto [scrollbar-width:none]', variant === 'line' ? 'vtabs border-border w-full gap-0.5 border-b pb-2' : 'bg-secondary h-(--ctl) w-fit gap-0.5 rounded-ctl p-0.5', className)} {...props} />;
 }
 export function TabsTrigger({ className, ...props }) {
-  return <TabsPrimitive.Trigger data-slot="tabs-trigger" className={cn("ptab data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-[0_1px_2px_color-mix(in_oklab,var(--foreground)_10%,transparent)] focus-visible:outline-ring inline-flex h-(--ctl-sm) shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-[calc(var(--r-ctl)-2px)] px-2.5 text-control whitespace-nowrap transition-[color,background-color,box-shadow] duration-150 outline-none focus-visible:outline-2 disabled:opacity-45 [&_svg:not([class*='size-'])]:size-4", className)} {...props} />;
+  return <TabsPrimitive.Trigger data-slot="tabs-trigger" className={cn("ptab data-[state=active]:bg-card data-[state=active]:text-foreground focus-visible:outline-ring inline-flex h-(--ctl-sm) shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-[calc(var(--r-ctl)-2px)] px-2.5 text-control whitespace-nowrap transition-[color,background-color,box-shadow] duration-150 outline-none focus-visible:outline-2 disabled:opacity-45 [&_svg:not([class*='size-'])]:size-4", className)} {...props} />;
 }
 
 // ---- collapsible

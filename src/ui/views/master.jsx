@@ -190,7 +190,7 @@ export function MasterCard() {
   const when = st.changedAt ? new Date(st.changedAt).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }) : null;
   return (
     <Card data-testid="master-card">
-      <CardHeader className="flex-row items-start gap-3"><KeyRound className="text-primary mt-0.5 size-5 shrink-0" /><div><CardTitle>{t('master.cardTitle')}</CardTitle><CardDescription>{t('master.cardDesc')}</CardDescription></div></CardHeader>
+      <CardHeader className="flex-row items-start gap-3"><KeyRound className="text-primary-text mt-0.5 size-5 shrink-0" /><div><CardTitle>{t('master.cardTitle')}</CardTitle><CardDescription>{t('master.cardDesc')}</CardDescription></div></CardHeader>
       {when ? <CardContent><p className="text-muted-foreground text-xs">{t('master.since', { when })}</p></CardContent> : null}
       <CardFooter className="flex-wrap">
         <Button size="sm" variant="outline" onClick={change} data-testid="master-change"><KeyRound />{t('master.change')}</Button>

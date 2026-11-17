@@ -31,7 +31,7 @@ export function WithKeys({ text, keys }) {
 }
 
 // Interface: its size on this PC (also Ctrl + / Ctrl - / Ctrl 0) and the terminal that Ctrl+J opens.
-export const sizes = () => [{ value: '0.87', label: t('settings.size.small') }, { value: '1', label: t('settings.size.normal') }, { value: '1.15', label: t('settings.size.large') }];
+export const sizes = () => [{ value: '0.9', label: t('settings.size.small') }, { value: '1', label: t('settings.size.normal') }, { value: '1.1', label: t('settings.size.large') }, { value: '1.25', label: t('settings.size.xlarge') }];
 // What a notification shows on a locked phone. «all» (the bots' messages too) shows the same as «chat»:
 // it is offered no more and reads as «chat».
 export const PREVIEWS = ['chat', 'none'];

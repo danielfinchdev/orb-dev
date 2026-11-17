@@ -58,7 +58,7 @@ export function Segmented({ value, onChange, options, className, itemTestId, ...
     <div data-slot="segmented" className={cn('segm bg-secondary inline-flex gap-0.5 rounded-ctl p-0.5', className)} role="tablist" {...props}>
       {options.map((o) => (
         <button key={o.value} type="button" role="tab" aria-selected={value === o.value} data-testid={o.testid ?? itemTestId?.(o.value)} onClick={() => onChange(o.value)}
-          className={cn('inline-flex h-(--ctl-sm) cursor-pointer items-center gap-1.5 rounded-[calc(var(--r-ctl)-2px)] px-2.5 text-control whitespace-nowrap transition-[color,background-color,box-shadow] duration-150 outline-none focus-visible:outline-2 focus-visible:outline-ring', value === o.value ? 'bg-card text-foreground shadow-[0_1px_2px_color-mix(in_oklab,var(--foreground)_10%,transparent)]' : 'text-muted-foreground hover:text-foreground')}>
+          className={cn('inline-flex h-(--ctl-sm) cursor-pointer items-center gap-1.5 rounded-[calc(var(--r-ctl)-2px)] px-2.5 text-control whitespace-nowrap transition-[color,background-color,box-shadow] duration-150 outline-none focus-visible:outline-2 focus-visible:outline-ring', value === o.value ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground')}>
           {o.label}{o.count != null ? <span className="n text-micro text-faint-foreground tabular-nums">{o.count}</span> : null}
         </button>
       ))}

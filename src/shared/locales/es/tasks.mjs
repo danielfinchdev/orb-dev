@@ -6,6 +6,7 @@ export default {
   'tasks.filter.problems': 'Incidencias',
   'tasks.filter.all': 'Todas',
   'tasks.titleProject': 'Tareas · {project}',
+  'tasks.sub': '{total} en total · {shown} a la vista · {waiting} esperan algo de ti',
   'tasks.meta': 'Supervisa, aprueba y deshaz el trabajo de los agentes',
   'tasks.allProjects': 'Ver todos los proyectos',
   'tasks.steps': '{n} pasos',

@@ -6,6 +6,7 @@ export default {
   'tasks.filter.problems': 'Issues',
   'tasks.filter.all': 'All',
   'tasks.titleProject': 'Tasks · {project}',
+  'tasks.sub': '{total} in total · {shown} shown · {waiting} waiting on you',
   'tasks.meta': 'Monitor, approve and undo the agents’ work',
   'tasks.allProjects': 'View all projects',
   'tasks.steps': '{n} steps',

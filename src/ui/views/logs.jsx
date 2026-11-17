@@ -37,13 +37,13 @@ export function LogsView({ route, bare = false }) {
   const pick = (name) => { setSelected(name); setWhole(false); setQ(''); };
   const row = (l, title, primary) => (
     <ListRow key={l.name} selected={selected === l.name} onClick={() => pick(l.name)}
-      leading={<NotebookText className={cn('size-4', primary ? 'text-primary' : 'text-muted-foreground')} />}
+      leading={<NotebookText className={cn('size-4', primary ? 'text-primary-text' : 'text-muted-foreground')} />}
       title={title}
       trailing={<span className="text-muted-foreground text-micro">{kb(l.size)}</span>} />
   );
   return (
     <>
-      {bare ? null : <PageHeader icon={<NotebookPen className="text-primary size-5" />} title={t('logs.title')} meta={t('logs.meta')} />}
+      {bare ? null : <PageHeader icon={<NotebookPen className="text-primary-text size-5" />} title={t('logs.title')} meta={t('logs.meta')} />}
       <PageBody className="grid grid-cols-[240px_1fr] gap-4 overflow-hidden">
         <Card className="gap-0.5 overflow-y-auto p-2">
           {groups.general ? <><SectionLabel>{t('logbooks.groupGeneral')}</SectionLabel>{row(groups.general, t('logs.general'), true)}</> : null}

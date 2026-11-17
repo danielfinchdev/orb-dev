@@ -78,7 +78,7 @@ function Tree({ project, onOpen, version }) {
       <div key={e.path}>
         <button type="button" onClick={() => (e.kind === 'dir' ? toggle(e.path) : e.secret ? null : onOpen(e.path))} title={e.secret ? t('expert.secretFile') : `${e.path}${e.size != null ? ` · ${size(e.size)}` : ''}`}
           className={cn('hover:bg-accent/60 flex w-full cursor-pointer items-center gap-1.5 py-[3px] pr-2 text-left text-caption', e.secret && 'text-muted-foreground cursor-not-allowed')} style={{ paddingLeft: 8 + depth * 12 }}>
-          {e.kind === 'dir' ? <><ChevronRight className={cn('size-3 shrink-0 transition-transform', open.has(e.path) && 'rotate-90')} />{open.has(e.path) ? <FolderOpen className="text-primary size-3.5 shrink-0" /> : <Folder className="text-primary size-3.5 shrink-0" />}</>
+          {e.kind === 'dir' ? <><ChevronRight className={cn('size-3 shrink-0 transition-transform', open.has(e.path) && 'rotate-90')} />{open.has(e.path) ? <FolderOpen className="text-primary-text size-3.5 shrink-0" /> : <Folder className="text-primary-text size-3.5 shrink-0" />}</>
             : <><span className="w-3 shrink-0" />{e.secret ? <FileLock2 className="text-warning-ink size-3.5 shrink-0" /> : <File className="text-muted-foreground size-3.5 shrink-0" />}</>}
           <span className="truncate">{e.name}</span>
         </button>
@@ -148,7 +148,7 @@ function GitPanel({ project, version, onDiff }) {
   return (
     <div className="pb-1" data-testid="expert-git">
       <button type="button" onClick={() => onDiff('')} className="hover:bg-accent/60 flex w-full cursor-pointer items-center gap-1.5 px-3 py-1 text-left text-caption">
-        <GitBranch className="text-primary size-3.5" /><span className="min-w-0 flex-1 truncate">{st.branch}</span>
+        <GitBranch className="text-primary-text size-3.5" /><span className="min-w-0 flex-1 truncate">{st.branch}</span>
         {st.ahead ? <Badge variant="secondary">↑{st.ahead}</Badge> : null}{st.behind ? <Badge variant="secondary">↓{st.behind}</Badge> : null}
         <span className="text-muted-foreground text-micro">{st.files.length ? t(st.files.length > 1 ? 'expert.changesOther' : 'expert.changesOne', { n: st.files.length }) : t('expert.clean')}</span>
       </button>
@@ -184,7 +184,7 @@ function RunningPanel() {
   if (!tasks.length && !sessions.length && !chat?.busy) return <p className="text-muted-foreground px-3 py-2 text-xs">{t('expert.nothingRunning')}</p>;
   return (
     <div className="pb-1">
-      {chat?.busy ? <div className="flex items-center gap-2 px-3 py-1 text-caption"><span className="bg-primary size-1.5 animate-pulse rounded-full" />{t(chat.partial ? 'expert.writing' : 'expert.thinking', { name })}{chat.step ? <span className="text-muted-foreground truncate">· {chat.step}</span> : null}</div> : null}
+      {chat?.busy ? <div className="flex items-center gap-2 px-3 py-1 text-caption"><span className="bg-primary-text size-1.5 animate-pulse rounded-full" />{t(chat.partial ? 'expert.writing' : 'expert.thinking', { name })}{chat.step ? <span className="text-muted-foreground truncate">· {chat.step}</span> : null}</div> : null}
       {tasks.map((t) => <button key={t.id} type="button" onClick={() => go({ view: 'tasks', id: t.id })} className="hover:bg-accent/60 flex w-full cursor-pointer items-center gap-2 px-3 py-1 text-left text-caption"><AgentIcon agent={t.assigned_to ?? t.agent} className="size-3.5" /><span className="min-w-0 flex-1 truncate">#{t.id} {t.title}</span><span className="text-muted-foreground text-micro">{t.project}</span></button>)}
       {sessions.map((s) => <button key={s.id} type="button" onClick={() => go({ view: 'session', id: s.id })} className="hover:bg-accent/60 flex w-full cursor-pointer items-center gap-2 px-3 py-1 text-left text-caption"><AgentIcon agent={s.agent} className="size-3.5" /><span className="min-w-0 flex-1 truncate">{s.title}</span><span className="text-muted-foreground text-micro">{AGENT[s.agent]}</span></button>)}
     </div>
@@ -195,7 +195,7 @@ function Bar({ label, value, max, detail }) {
   return (
     <div className="grid gap-1 px-3 py-1">
       <div className="flex items-center justify-between text-caption"><span>{label}</span><span className="text-muted-foreground">{detail ?? `${pct}%`}</span></div>
-      <div className="bg-muted h-1.5 overflow-hidden rounded-full"><div className={cn('h-full rounded-full transition-all', pct > 85 ? 'bg-destructive' : pct > 65 ? 'bg-warning' : 'bg-primary')} style={{ width: `${pct}%` }} /></div>
+      <div className="bg-muted h-1.5 overflow-hidden rounded-full"><div className={cn('h-full rounded-full transition-all', pct > 85 ? 'bg-destructive' : pct > 65 ? 'bg-warning' : 'bg-primary-text')} style={{ width: `${pct}%` }} /></div>
     </div>
   );
 }
@@ -226,7 +226,7 @@ function ActivityPanel({ version }) {
   useEffect(() => { call('activity.list', { limit: 40 }).then(setRows).catch(quiet); }, [version]);
   return (
     <div className="py-1 text-micro">
-      {rows.map((r) => <div key={r.id} className="flex gap-2 px-3 py-[2px]" title={`${r.kind} ${r.detail ?? ''}`}><span className="text-muted-foreground shrink-0 tabular-nums">{new Date(r.at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}</span><span className="text-primary shrink-0">{AGENT[r.actor] ?? r.actor}</span><span className="min-w-0 truncate">{activityLabel(t, r.kind)}{r.task_id ? ` #${r.task_id}` : ''} <span className="text-muted-foreground">{activityDetail(t, r, locale, AGENT)}</span></span></div>)}
+      {rows.map((r) => <div key={r.id} className="flex gap-2 px-3 py-[2px]" title={`${r.kind} ${r.detail ?? ''}`}><span className="text-muted-foreground shrink-0 tabular-nums">{new Date(r.at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}</span><span className="text-primary-text shrink-0">{AGENT[r.actor] ?? r.actor}</span><span className="min-w-0 truncate">{activityLabel(t, r.kind)}{r.task_id ? ` #${r.task_id}` : ''} <span className="text-muted-foreground">{activityDetail(t, r, locale, AGENT)}</span></span></div>)}
     </div>
   );
 }
@@ -286,7 +286,7 @@ export function ExpertView() {
             of its buttons show only their icon (with a tooltip), so nothing ever slides under the minimise / close. */}
         <header className="relative topbar theme-band app-titlebar wco-pad @container/bar flex h-14 shrink-0 items-center gap-2 overflow-hidden border-b px-3" data-testid="expert-bar">
           {folded ? <SidebarToggle collapsed /> : null}
-          <SquareTerminal className="text-primary size-4 shrink-0" /><span className="hidden shrink-0 text-card-title whitespace-nowrap @2xl/bar:inline">{t('nav.expert')}</span>
+          <SquareTerminal className="text-primary-text size-4 shrink-0" /><span className="hidden shrink-0 text-card-title whitespace-nowrap @2xl/bar:inline">{t('nav.expert')}</span>
           <Select size="sm" value={project} onValueChange={setProject} title={t('expert.project')} className="ml-2 w-40 min-w-24 shrink @4xl/bar:w-56" placeholder={t('expert.pickProject')} options={projects.map((p) => ({ value: p.name, label: p.name }))} />
           {/* the project in an editor, and its actions (commands of the user's own, with their shortcut). */}
           <OpenInMenu project={info} labelClassName="hidden @6xl/bar:inline" />

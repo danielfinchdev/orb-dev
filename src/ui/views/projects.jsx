@@ -120,11 +120,11 @@ function ProjectRow({ p, selected, phone, onOpen }) { // selected: the name of t
   return (
     <div className={cn('group/row flex items-center border-b transition-colors hover:bg-accent/50', !phone && selected === p.name && 'bg-accent')} {...press}>
       <button type="button" onClick={() => onOpen(p.name)} className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-4 py-3 text-left" data-testid="project-row">
-        <Folder className={cn('size-4 shrink-0', p.active ? 'text-primary' : 'text-muted-foreground')} />
+        <Folder className={cn('size-4 shrink-0', p.active ? 'text-primary-text' : 'text-muted-foreground')} />
         {/* The phone: the name only (the category is the group's title); the PC also shows the folder. */}
         <div className="grid min-w-0 flex-1"><div className="truncate">{p.name}</div>{bridge.mobile ? null : <PathText path={p.path} className="text-muted-foreground text-micro" />}</div>
         {p.open ? <Badge variant="info">{t(p.open === 1 ? 'projects.openOne' : 'projects.openOther', { n: p.open })}</Badge> : null}
-        {p.active ? <Pin className="text-primary size-3.5" /> : null}
+        {p.active ? <Pin className="text-primary-text size-3.5" /> : null}
       </button>
       <ProjectMenu p={p} open={menu} setOpen={setMenu} phone={phone} />
     </div>
@@ -175,7 +175,7 @@ function ProjectDetail({ p, onRenamed }) {
   return (
     <Card className="gap-5">
       <CardHeader className="flex-row items-start gap-3">
-        <Folder className="text-primary mt-0.5 size-5 shrink-0" />
+        <Folder className="text-primary-text mt-0.5 size-5 shrink-0" />
         {/* the phone shows where it is in Orb's words (category › folder), never the PC's path. */}
         <div className="min-w-0 flex-1"><CardTitle className="flex items-center gap-2 text-title">{p.name}</CardTitle>{bridge.mobile ? <CardDescription className="mt-1 text-xs break-words">{t(`comp.projects.category.${p.category ?? 'other'}`)} › {baseName(p.path)}</CardDescription> : <CardDescription className="mt-1 font-mono text-xs break-all">{p.path}</CardDescription>}</div>
         {p.active ? <Badge><Pin />{t('projects.workProject')}</Badge> : null}
@@ -237,7 +237,7 @@ export function ProjectsView({ route }) {
   );
   return (
     <>
-      <PageHeader icon={<FolderGit2 className="text-primary size-5" />} title={t('projects.title')} meta={app.home && !bridge.mobile ? t('projects.meta', { home: app.home }) : t('projects.metaRemote')}>
+      <PageHeader icon={<FolderGit2 className="text-primary-text size-5" />} title={t('projects.title')} meta={app.home && !bridge.mobile ? t('projects.meta', { home: app.home }) : t('projects.metaRemote')}>
         {bridge.mobile ? null : <><Button size="sm" variant="ghost" onClick={async () => pick(await cloneRepoFlow())}><GithubIcon />{t('projects.clone')}</Button>
         <Button size="sm" variant="ghost" onClick={async () => pick(await linkFolderFlow())}><FolderOpen />{t('projects.link')}</Button></>}
         <Button size="sm" onClick={async () => pick(await createProjectFlow())}><FolderPlus />{t('projects.create')}</Button>

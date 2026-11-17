@@ -35,7 +35,7 @@ export function WhiteboardView() {
   const project = projects.find((p) => p.name === app.activeProject?.name) ?? null;
   return (
     <>
-      <PageHeader icon={<Presentation className="text-primary size-5" />} title={t('wb.title')} meta={project ? t('wb.meta', { project: project.name, assistant: app.config.assistantName }) : t('wb.metaNone')}>
+      <PageHeader icon={<Presentation className="text-primary-text size-5" />} title={t('wb.title')} meta={project ? t('wb.meta', { project: project.name, assistant: app.config.assistantName }) : t('wb.metaNone')}>
         <ProjectPicker />
       </PageHeader>
       {project ? <Whiteboard key={project.name} project={project.name} /> : <Empty icon={Presentation} title={t('wb.pickTitle')} className="m-auto">{t('wb.pickBody')}</Empty>}
@@ -124,9 +124,9 @@ function Whiteboard({ project }) {
       {panel ? (
         // Floating over the canvas (as Excalidraw's own sidebar does), so the canvas keeps the whole width: below 730 px
         // Excalidraw switches to its phone tools.
-        <aside className={cn('wb-panel absolute top-16 right-3 bottom-16 z-20 flex w-72 max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-2xl border', dropping && 'ring-primary ring-2 ring-inset')} onDragOver={(e) => { e.preventDefault(); setDropping(true); }} onDragLeave={() => setDropping(false)} onDrop={drop} data-testid="whiteboard-panel">
+        <aside className={cn('wb-panel absolute top-16 right-3 bottom-16 z-20 flex w-72 max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-2xl border', dropping && 'ring-ring ring-2 ring-inset')} onDragOver={(e) => { e.preventDefault(); setDropping(true); }} onDragLeave={() => setDropping(false)} onDrop={drop} data-testid="whiteboard-panel">
           <div className="flex items-center gap-2 border-b px-3 py-2.5">
-            <Paperclip className="text-primary size-4" /><span className="flex-1 text-control font-semibold">{t('wb.attachments')}</span>
+            <Paperclip className="text-primary-text size-4" /><span className="flex-1 text-control font-semibold">{t('wb.attachments')}</span>
             <BubbleTip title={t('wb.hidePanel')}><Button size="icon-xs" variant="ghost" onClick={() => setPanel(false)} aria-label={t('wb.hidePanel')}><PanelRightClose /></Button></BubbleTip>
           </div>
           <div className="grid gap-2 border-b p-3">

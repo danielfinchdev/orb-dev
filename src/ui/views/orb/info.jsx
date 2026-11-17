@@ -116,7 +116,7 @@ function ChatInfo({ conv }) {
         <List testid="info-tasks">
           {sorted.length ? sorted.slice(0, 12).map((x) => (
             <button key={x.id} type="button" onClick={() => leave({ view: 'tasks', id: x.id })} className="hover:bg-accent/50 flex min-h-11 w-full cursor-pointer items-center gap-3 px-3.5 py-2 text-left text-body" data-testid={`info-task-${x.id}`}>
-              <ClipboardCheck className={cn('size-[18px] shrink-0', x.status === 'running' ? 'text-primary' : 'text-muted-foreground')} />
+              <ClipboardCheck className={cn('size-[18px] shrink-0', x.status === 'running' ? 'text-primary-text' : 'text-muted-foreground')} />
               <span className="min-w-0 flex-1 truncate">#{x.id} {x.title}</span>
               <TaskStatus task={x} className="shrink-0" />
             </button>

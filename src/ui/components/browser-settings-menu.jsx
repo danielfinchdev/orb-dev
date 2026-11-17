@@ -3,28 +3,18 @@
 import { MonitorSmartphone, Settings } from 'lucide-react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, BubbleTip } from '@/components/ui/overlay.jsx';
 import { go } from '@/lib/store.js';
-import { cn } from '@/lib/utils.js';
 import { t, useT } from '@/lib/i18n.js';
 
-// list: the sidebar's footer unfolded (a row with the name) instead of the icon.
-export function BrowserSettingsMenu({ list = false, active = false }) {
+export function BrowserSettingsMenu({ active = false }) {
   useT();
   const label = t('nav.settings');
   return (
     <DropdownMenu>
-      {list ? (
+      <BubbleTip title={label} side="top" align="start">
         <DropdownMenuTrigger asChild>
-          <button type="button" className={cn('group flex w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-body compact:text-control', active ? 'bg-accent text-accent-foreground' : 'text-foreground/80 hover:bg-accent/60 hover:text-foreground')} data-testid="nav-settings">
-            <Settings className={cn('size-4 shrink-0', active ? 'text-primary' : 'text-muted-foreground')} /><span className="min-w-0 flex-1 truncate">{label}</span>
-          </button>
+          <button type="button" className="side-foot-icon" aria-label={label} aria-current={active ? 'page' : undefined} data-testid="nav-settings"><Settings className="size-5" /></button>
         </DropdownMenuTrigger>
-      ) : (
-        <BubbleTip title={label} side="top">
-          <DropdownMenuTrigger asChild>
-            <button type="button" className={cn('side-foot-icon', active && 'is-active')} aria-label={label} data-testid="nav-settings"><Settings className="size-4" /></button>
-          </DropdownMenuTrigger>
-        </BubbleTip>
-      )}
+      </BubbleTip>
       <DropdownMenuContent side="top" align="start" className="min-w-52">
         <DropdownMenuItem onSelect={() => go('phone')} data-testid="nav-device"><MonitorSmartphone className="size-4" />{t('nav.thisDevice')}</DropdownMenuItem>
       </DropdownMenuContent>

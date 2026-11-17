@@ -30,6 +30,7 @@ export default {
   'schedules.readonly': 'Read-only (review or research without modifying files)',
   'schedules.new.ok': 'Schedule',
   'schedules.title': 'Scheduled',
+  'schedules.sub': '{total} schedules · {active} active',
   'schedules.meta': 'Tasks that run periodically: reviews, tests, reports…',
   'schedules.newBtn': 'New',
   'schedules.empty.title': 'No scheduled tasks',

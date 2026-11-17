@@ -30,6 +30,7 @@ export default {
   'schedules.readonly': 'Solo lectura (revisar o investigar sin modificar archivos)',
   'schedules.new.ok': 'Programar',
   'schedules.title': 'Programadas',
+  'schedules.sub': '{total} programaciones · {active} activas',
   'schedules.meta': 'Tareas que se ejecutan periódicamente: revisiones, pruebas, informes…',
   'schedules.newBtn': 'Nueva',
   'schedules.empty.title': 'No hay tareas programadas',

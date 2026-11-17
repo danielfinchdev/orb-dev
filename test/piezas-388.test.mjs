@@ -78,3 +78,29 @@ test('the dialog has the scrim, header, body and footer of the mock-up and keeps
   assert.match(o, /data-\[state=open\]:zoom-in-95/);
   assert.match(o, /collisionPadding=\{12\} arrowPadding=\{TAIL_PAD\}/);
 });
+
+// `--primary` is neutral in Predeterminado and Cristal (the fill of the main button); the accent is --primary-text / --primary-soft / --ring.
+const jsx = (dir) => fs.readdirSync(new URL(`../src/ui/${dir}`, import.meta.url), { withFileTypes: true }).flatMap((e) => {
+  const rel = dir ? `${dir}/${e.name}` : e.name;
+  return e.isDirectory() ? (rel === 'games' ? [] : jsx(rel)) : e.name.endsWith('.jsx') ? [rel] : [];
+});
+
+test('no view or component paints its accent with the neutral --primary', () => {
+  for (const f of jsx('')) {
+    const src = read(f);
+    assert.doesNotMatch(src, /(?<![\w-])(?:text|accent|border|ring)-primary(?![\w-])/, `${f}: use primary-text, ring-ring or border-primary-text`);
+    assert.doesNotMatch(src, /(?<![\w-])bg-primary\/(?:5|8|10|12|15)(?!\d)/, `${f}: use bg-primary-soft`);
+  }
+});
+
+test('the active pill of the segmented control and of the tabs has no foreground-coloured outline', () => {
+  assert.doesNotMatch(read('components/ui/primitives.jsx'), /shadow-\[[^\]]*var\(--foreground\)/);
+  const trigger = read('components/ui/overlay.jsx').split('\n').find((l) => l.includes('data-slot="tabs-trigger"'));
+  assert.doesNotMatch(trigger, /shadow-\[/);
+  assert.match(read('themes/pieces.css'), /\[aria-selected="true"\][^{]*\{ box-shadow: 0 1px 2px rgb\(0 0 0 \/ 0\.08\); \}/);
+});
+
+test('the Select trigger carries the slot the Cristal fields are styled by', () => {
+  assert.match(read('components/ui/overlay.jsx'), /Trigger data-slot="select-trigger"/);
+  assert.match(read('themes/pieces.css'), /cristal"\] :is\([^)]*\[data-slot="select-trigger"\]/);
+});

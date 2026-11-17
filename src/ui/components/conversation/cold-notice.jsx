@@ -21,7 +21,7 @@ export function ColdNotice({ id, agent, used, lastAt, busy, compacting, onCompac
   return (
     <div className="animate-in fade-in slide-in-from-bottom-1 bg-card absolute bottom-full left-3 z-10 mb-3 w-max max-w-[min(26rem,calc(100%-1.5rem))] rounded-2xl border px-4 py-3 shadow-lg" role="status" data-testid="cold-notice">
       <div className="flex items-start gap-3">
-        <Snowflake className="text-primary mt-0.5 size-5 shrink-0" aria-hidden="true" />
+        <Snowflake className="text-primary-text mt-0.5 size-5 shrink-0" aria-hidden="true" />
         <div className="min-w-0 flex-1">
           <div className="text-body font-medium">{t('cold.title', { idle: idleText(minutes) })}</div>
           <p className="text-muted-foreground mt-0.5 text-control leading-snug">{t('cold.body')}</p>

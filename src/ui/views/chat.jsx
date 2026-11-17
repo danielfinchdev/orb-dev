@@ -247,7 +247,7 @@ function OrchestratorSwitch({ on, onChange, name, cursor, locked = false }) {
   return (
     <BubbleTip title={t('chat.orchestratorTip', { name })} text={locked ? t('chat.orchestratorLocked', { name }) : cursor ? t('chat.orchestratorCursor', { name }) : on ? t('chat.orchestratorOn') : t('chat.orchestratorOff')} side="top">
       <label className={cn('flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2', locked ? 'cursor-default' : 'hover:bg-accent/60 cursor-pointer')} data-testid="orchestrator">
-        <OrchestratorIcon className={cn('size-4', on ? 'text-primary' : 'text-muted-foreground')} aria-hidden="true" />
+        <OrchestratorIcon className={cn('size-4', on ? 'text-primary-text' : 'text-muted-foreground')} aria-hidden="true" />
         <Switch size="sm" checked={on} disabled={locked} onCheckedChange={(v) => onChange(v === true)} aria-label={t('chat.orchestrator')} data-testid="orchestrator-check" />
       </label>
     </BubbleTip>
@@ -479,7 +479,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
           <Robot size={36} mark={28} mood={chat.busy ? 'thinking' : 'idle'} still={!chat.busy} />
           <span className="min-w-0">
             <span className="flex items-center gap-1.5"><span className="truncate text-card-title font-semibold" data-testid="bar-title-text">{conv?.title ?? t('orbchats.newChatTitle')}</span>{item?.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}</span>
-            <span className={cn('flex min-w-0 items-center gap-1 text-caption', chat.busy ? 'text-primary' : waitingYou ? 'text-warning-ink' : 'text-muted-foreground')} data-testid="orb-chat-status">
+            <span className={cn('flex min-w-0 items-center gap-1 text-caption', chat.busy ? 'text-primary-text' : waitingYou ? 'text-warning-ink' : 'text-muted-foreground')} data-testid="orb-chat-status">
               {headProject ? <ProjectIcon name={headProject} size={14} /> : <Folder className="size-3 shrink-0" aria-hidden="true" />}
               <span className="truncate">{headProject ?? t('orbchats.noProject')} · {chat.busy ? t('chats.working') : waitingYou ? <TaskStatus task={waitingTask} plain /> : name}</span>
             </span>

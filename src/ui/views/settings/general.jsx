@@ -8,7 +8,7 @@ import { SkinPreview } from '@/components/skin-preview.jsx';
 import { confirm } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea } from '@/components/ui/basic.jsx';
-import { Select, Switch, Checkbox, BubbleTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
+import { Select, Switch, Checkbox, Range, BubbleTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
 import { ModelGuide } from '@/components/model-guide.jsx';
 import { AGENT } from '@/lib/labels.js';
 import { act, call, refresh, bridge, go, openTerminal, closeSettings, fullPc, runTest, darkOnlySkin, lightOnlySkin, useStore } from '@/lib/store.js';
@@ -54,7 +54,7 @@ export function AppearanceCard({ c }) {
   const locked = darkOnly || lightOnly;
   return (
     <Card>
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Palette className="text-primary size-5" /><div><CardTitle>{t('appearance.title')}</CardTitle><CardDescription>{t('appearance.desc')}</CardDescription></div></CardHeader>
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Palette className="text-primary-text size-5" /><div><CardTitle>{t('appearance.title')}</CardTitle><CardDescription>{t('appearance.desc')}</CardDescription></div></CardHeader>
       <CardContent className="grid gap-5">
         <Field label={t('settings.theme')} hint={darkOnly ? t('comp.theme.darkOnly') : lightOnly ? t('comp.theme.lightOnly') : undefined}>
           <div className="bg-muted inline-flex w-fit gap-1 rounded-lg p-1" role="radiogroup" aria-label={t('settings.theme')}>
@@ -65,7 +65,7 @@ export function AppearanceCard({ c }) {
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="radiogroup" aria-label={t('appearance.skin')} data-testid="skin-picker">
             {SKINS.map((skin) => (
               <button key={skin} type="button" role="radio" aria-checked={ui.skin === skin} onClick={() => set({ skin })} data-testid={`skin-${skin}`}
-                className={cn('grid cursor-pointer gap-1.5 rounded-xl border p-2 text-left transition-colors', ui.skin === skin ? 'border-primary ring-primary/30 ring-2' : 'hover:bg-accent/40')}>
+                className={cn('grid cursor-pointer gap-1.5 rounded-xl border p-2 text-left transition-colors', ui.skin === skin ? 'border-primary-text ring-ring/30 ring-2' : 'hover:bg-accent/40')}>
                 <SkinPreview skin={skin} />
                 <span className="text-control font-medium">{t(`appearance.skin.${skin}`)}</span>
               </button>
@@ -78,7 +78,7 @@ export function AppearanceCard({ c }) {
               <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6" role="radiogroup" aria-label={t('appearance.palette')} data-testid="palette-picker">
                 {PALETTES.map((id) => (
                   <button key={id} type="button" role="radio" aria-checked={ui.palette === id} onClick={() => set({ palette: id })} data-testid={`palette-${id}`}
-                    className={cn('grid cursor-pointer gap-1 rounded-lg border p-1.5 text-left transition-colors', ui.palette === id ? 'border-primary ring-primary/30 ring-2' : 'hover:bg-accent/40')}>
+                    className={cn('grid cursor-pointer gap-1 rounded-lg border p-1.5 text-left transition-colors', ui.palette === id ? 'border-primary-text ring-ring/30 ring-2' : 'hover:bg-accent/40')}>
                     <span className="flex items-center gap-1.5"><i className="pal-dot" data-palette={id} aria-hidden="true" /><span className="truncate text-caption">{t(`appearance.palette.${id}`)}</span></span>
                   </button>
                 ))}
@@ -106,7 +106,7 @@ export function AppearanceCard({ c }) {
             {ui.sounds !== false ? (
               <div className="flex items-center gap-3 py-1 text-sm">
                 <span className="text-muted-foreground text-xs">{t('settings.volume')}</span>
-                <input type="range" min={0.1} max={1} step={0.1} value={volume} aria-label={t('settings.volume')} className="accent-primary w-40 cursor-pointer"
+                <Range min={0.1} max={1} step={0.1} value={volume} aria-label={t('settings.volume')} className="w-40 cursor-pointer"
                   onChange={(e) => setVolume(Number(e.target.value))} onPointerUp={() => set({ volume }).then(() => play('boop'))} onKeyUp={() => set({ volume })} />
               </div>
             ) : null}
@@ -193,9 +193,9 @@ export function TasksCard({ c }) {
       <CardHeader><CardTitle>{t('settings.tasks')}</CardTitle><CardDescription>{t('settings.tasksDesc')}</CardDescription></CardHeader>
       <CardContent className="grid gap-4">
         <div className="grid gap-2" data-testid="spend-profile">
-          <div className="flex items-baseline justify-between gap-3"><span className="text-sm font-medium">{t('settings.spend')}</span><span className="text-sm font-medium text-primary">{level == null ? t('settings.spendCustom') : t(`settings.spend${level}`)}</span></div>
+          <div className="flex items-baseline justify-between gap-3"><span className="text-sm font-medium">{t('settings.spend')}</span><span className="text-sm font-medium text-primary-text">{level == null ? t('settings.spendCustom') : t(`settings.spend${level}`)}</span></div>
           <div className="text-muted-foreground flex justify-between text-xs"><span>{t('settings.spendLow')}</span><span>{t('settings.spendHigh')}</span></div>
-          <input type="range" min={0} max={4} step={1} value={level ?? 2} onChange={(e) => applyProfile(Number(e.target.value))} className="spend-slider" aria-label={t('settings.spend')} aria-valuetext={level == null ? t('settings.spendCustom') : t(`settings.spend${level}`)} data-testid="spend-slider" />
+          <Range min={0} max={4} step={1} value={level ?? 2} onChange={(e) => applyProfile(Number(e.target.value))} className="spend-slider" aria-label={t('settings.spend')} aria-valuetext={level == null ? t('settings.spendCustom') : t(`settings.spend${level}`)} data-testid="spend-slider" />
           <div className="spend-ticks" aria-hidden="true">{[0, 1, 2, 3, 4].map((i) => <span key={i} className={cn(i === 2 && 'spend-ticks-rec')}>{i === 2 ? t('settings.spendRecommended') : ''}</span>)}</div>
           <p className="text-muted-foreground text-xs leading-snug">{level == null ? t('settings.spendCustomHint') : t(`settings.spend${level}Hint`)}</p>
         </div>
@@ -304,7 +304,7 @@ export function ProtectedCard({ c }) {
   const missing = DEFAULT_PROTECTED.filter((d) => !list.some((x) => x.toLowerCase() === d.toLowerCase()));
   return (
     <Card data-testid="protected-card">
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><ShieldBan className="text-primary size-5" /><div><CardTitle>{t('settings.protected')}</CardTitle><CardDescription>{t('settings.protectedHint')}</CardDescription></div></CardHeader>
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><ShieldBan className="text-primary-text size-5" /><div><CardTitle>{t('settings.protected')}</CardTitle><CardDescription>{t('settings.protectedHint')}</CardDescription></div></CardHeader>
       <CardContent className="grid gap-3">
         {list.length ? (
           <div className="flex flex-wrap gap-1.5">
@@ -341,7 +341,7 @@ export function InterfaceCard({ c }) {
   const change = async (value) => setZoom(await act(bridge.zoom(Number(value))));
   return (
     <Card>
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><MonitorCog className="text-primary size-5" /><div><CardTitle>{t('settings.interface')}</CardTitle><CardDescription><WithKeys text={t('settings.interfaceDesc')} keys={{ shortcut: ['Ctrl', 'J'] }} /></CardDescription></div></CardHeader>
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><MonitorCog className="text-primary-text size-5" /><div><CardTitle>{t('settings.interface')}</CardTitle><CardDescription><WithKeys text={t('settings.interfaceDesc')} keys={{ shortcut: ['Ctrl', 'J'] }} /></CardDescription></div></CardHeader>
       <CardContent className="grid gap-4">
         <Field label={t('settings.sizeLabel')} hint={<WithKeys text={t('settings.sizeHint')} keys={{ zoomIn: ['Ctrl', '+'], zoomOut: ['Ctrl', '-'], reset: ['Ctrl', '0'] }} />}>
           <div className="flex flex-wrap items-center gap-2">
@@ -369,7 +369,7 @@ export function ExpertCard({ c }) {
   const on = c.expert?.enabled === true; const panels = c.expert?.panels ?? {};
   return (
     <Card>
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><SquareTerminal className="text-primary size-5" /><div><CardTitle>{t('settings.expert')}</CardTitle><CardDescription>{t('settings.expertDesc')}</CardDescription></div></CardHeader>
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><SquareTerminal className="text-primary-text size-5" /><div><CardTitle>{t('settings.expert')}</CardTitle><CardDescription>{t('settings.expertDesc')}</CardDescription></div></CardHeader>
       <CardContent className="grid gap-4">
         <Row label={t('settings.expertOn')} hint={t('settings.expertOnHint')}><Switch checked={on} onCheckedChange={(enabled) => save({ expert: { enabled } }, enabled ? t('settings.expertEnabled') : t('settings.expertDisabled'))} data-testid="expert-switch" /></Row>
         <div className="grid gap-2 sm:grid-cols-2">
@@ -409,7 +409,7 @@ function MusicSettings() {
           {prefs.reactive ? null : (
             <div className={line}>
               <span>{t('appearance.musicIntensity')}</span>
-              <input type="range" min={0} max={1} step={0.05} value={level} aria-label={t('appearance.musicIntensity')} className="accent-primary w-40 cursor-pointer" data-testid="music-intensity"
+              <Range min={0} max={1} step={0.05} value={level} aria-label={t('appearance.musicIntensity')} className="w-40 cursor-pointer" data-testid="music-intensity"
                 onChange={(e) => { const n = Number(e.target.value); setLevel(n); setMusicIntensity(n); }} onPointerUp={keepLevel} onKeyUp={keepLevel} />
             </div>
           )}
@@ -417,7 +417,7 @@ function MusicSettings() {
       ) : null}
       <div className={line}>
         <span>{t('appearance.musicVolume')}</span>
-        <input type="range" min={0} max={1} step={0.05} value={v} aria-label={t('appearance.musicVolume')} className="accent-primary w-40 cursor-pointer" data-testid="music-volume"
+        <Range min={0} max={1} step={0.05} value={v} aria-label={t('appearance.musicVolume')} className="w-40 cursor-pointer" data-testid="music-volume"
           onChange={(e) => { const n = Number(e.target.value); setV(n); setMusicVolume(n); }} onPointerUp={keepVolume} onKeyUp={keepVolume} />
       </div>
     </div>

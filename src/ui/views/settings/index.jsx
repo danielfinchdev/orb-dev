@@ -95,14 +95,14 @@ export function SettingsDialog() {
                   return (
                     <div key={id} className="grid gap-0.5">
                       <button type="button" onClick={() => openSettings(id)} data-testid={`settings-nav-${id}`} aria-label={t(`settings.section.${id}`)} aria-current={on ? 'page' : undefined}
-                        className={cn('flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm', on ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground')}>
-                        <Icon className="size-[18px] shrink-0" /><span className="truncate max-sm:hidden">{t(`settings.section.${id}`)}</span>
+                        className={cn('flex h-(--ctl) cursor-pointer items-center gap-2.5 rounded-ctl px-2.5 text-left text-control', on ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-[color-mix(in_oklab,var(--accent)_60%,transparent)]')}>
+                        <Icon className="size-4 shrink-0" /><span className="truncate max-sm:hidden">{t(`settings.section.${id}`)}</span>
                       </button>
                       {groups.length ? (
                         <div className="grid gap-0.5 pb-1 pl-[42px] max-sm:hidden">
                           {groups.map((g) => (
                             <button key={g} type="button" onClick={() => openSettings(`${id}:${g}`)} data-testid={`settings-sub-${g}`} aria-current={part === g ? 'location' : undefined}
-                              className={cn('cursor-pointer truncate rounded-lg px-2 py-1 text-left text-control', part === g ? 'text-foreground font-medium' : 'text-muted-foreground hover:text-foreground')}>{t(`settings.group.${g}`)}</button>
+                              className={cn('flex h-(--ctl-sm) cursor-pointer items-center truncate rounded-ctl px-2.5 text-left text-control', part === g ? 'text-foreground font-medium' : 'text-muted-foreground hover:text-foreground')}>{t(`settings.group.${g}`)}</button>
                           ))}
                         </div>
                       ) : null}
@@ -113,7 +113,7 @@ export function SettingsDialog() {
               {/* the developer's GitHub, the version and the licence at the foot of the list again (also in «Acerca de»). */}
               <div className="grid gap-0.5 px-6 pt-3 pb-5 max-sm:px-3" data-testid="settings-foot">
                 <BubbleTip title={`@${AUTHOR.github}`} text={AUTHOR.url.replace('https://', '')} side="top" align="start">
-                  <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary flex w-fit cursor-pointer items-center gap-1.5 text-control font-medium" aria-label={AUTHOR.url.replace('https://', '')} data-testid="settings-foot-github">
+                  <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary-text flex w-fit cursor-pointer items-center gap-1.5 text-control font-medium" aria-label={AUTHOR.url.replace('https://', '')} data-testid="settings-foot-github">
                     <ToolIcon tool="gh" className="size-4" /><span className="max-sm:hidden">@{AUTHOR.github}</span>
                   </button>
                 </BubbleTip>

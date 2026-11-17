@@ -7,15 +7,14 @@
 // «Esperando tu aprobación», how its last task ended, else its last line) and the unread count. Right click or ⋯ (PC) and
 // a long press (phone) open the chat's menu: info, pin, mute, mark read, complete or reopen, delete.
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ClipboardCheck, FolderGit2, CalendarSync, Presentation, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, PencilLine, AlarmClock, AlarmClockOff } from 'lucide-react';
-import { Button } from '@/components/ui/button.jsx';
+import { Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ClipboardCheck, FolderGit2, CalendarSync, Presentation, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, PencilLine, AlarmClock, AlarmClockOff, Hand, ArrowUpDown, ChevronDown, LoaderCircle } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { OrbMark } from '@/components/orb-mark.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { createProjectFlow } from '@/components/project-actions.jsx';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, DropdownMenuCheckboxItem, Collapsible, CollapsibleTrigger, CollapsibleContent, Dialog, DialogContent, DialogTitle, DialogDescription, Tip } from '@/components/ui/overlay.jsx';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, DropdownMenuCheckboxItem, Collapsible, CollapsibleTrigger, CollapsibleContent, Dialog, DialogContent, DialogTitle, DialogDescription, BubbleTip } from '@/components/ui/overlay.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Input } from '@/components/ui/basic.jsx';
 import { useSearch } from '@/lib/search.js';
@@ -31,7 +30,7 @@ import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { needsApproval } from '@/lib/task-approval.js';
 import { TaskStatus } from '@/components/task-state.jsx';
-import { SectionLabel } from '@/components/ui/primitives.jsx';
+import { SectionLabel, IconButton, MoreButton, SearchInput } from '@/components/ui/primitives.jsx';
 
 // ---- data: the rows of the zone (the conversations and direct chats of the store, the marks of inbox.list)
 export function useOrbInbox() {
@@ -150,7 +149,7 @@ function snoozeChat(item, t) {
         <div className="grid gap-1" role="radiogroup">
           {quick.map(([key, d]) => (
             <button key={key} type="button" role="radio" aria-checked={v.at === localInput(d)} autoFocus={initialAt === localInput(d)} onClick={() => set({ at: localInput(d) })} data-testid={`snooze-${key}`}
-              className={cn('flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2 text-left text-body', v.at === localInput(d) ? 'border-primary bg-primary/8' : 'hover:bg-accent/60')}>
+              className={cn('flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2 text-left text-body', v.at === localInput(d) ? 'border-primary-text bg-primary-soft' : 'hover:bg-accent/60')}>
               <span>{t(`orbchats.${key}`)}</span>
             </button>
           ))}
@@ -189,11 +188,9 @@ function OrbMenu({ item, open, setOpen, className }) {
   return (
     <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
       <DropdownMenuTrigger asChild>
-        <button type="button" className={cn('text-muted-foreground hover:text-foreground hover:bg-accent grid size-7 shrink-0 cursor-pointer place-items-center rounded-md opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100', className)} aria-label={t('chats.menu', { name: item.title })} data-testid="chat-menu" onClick={(e) => e.stopPropagation()}>
-          <Ellipsis className="size-4" />
-        </button>
+        <MoreButton small label={t('chats.menu', { name: item.title })} className={cn('shrink-0 opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100', className)} data-testid="chat-menu" onClick={(e) => e.stopPropagation()} />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56" data-testid="chat-menu-list">
+      <DropdownMenuContent align="end" className="w-[230px]" data-testid="chat-menu-list">
         {actions.map((a) => <div key={a.id}>{a.danger ? <DropdownMenuSeparator /> : null}<DropdownMenuItem variant={a.danger ? 'destructive' : undefined} onSelect={a.run} data-testid={`chat-${a.id}`}><a.icon />{a.label}</DropdownMenuItem></div>)}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -228,7 +225,7 @@ function OrbSheet({ item, onClose }) {
 // ---- a row of the list
 // Memoised: the list is made again on every refresh of the app's state, and hundreds of rows drew again each time (and
 // every row whenever the screen changed). A row draws again when what it shows changes, or when it opens or closes.
-const OrbRow = memo(function OrbRow({ item, phone, onSheet }) {
+const OrbRow = memo(function OrbRow({ item, phone, onSheet, showProject = false }) {
   const t = useT();
   const locale = useLocale();
   const active = useStore((s) => isOpen(s.route, item));
@@ -238,6 +235,37 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet }) {
   const p = orbProgress(item, t, { assistant });
   const time = item.at ? shortTime(item.at, { locale, yesterday: t('chats.yesterday') }) : '';
   const strong = item.unread && !item.muted;
+  if (!phone) {
+    // The PC's row (the mock-up's .row): the mark of the agent that answers, the title, what it is doing, the time and the
+    // unread count on the first line; its latest progress under it. The ⋯ sits over the room the first line keeps for it.
+    const agents = item.agents ?? (item.agent ? [item.agent] : []);
+    const who = agents.length ? new Intl.ListFormat(locale, { type: 'conjunction' }).format(agents.map((a) => AGENT[a] ?? a)) : '';
+    const needsYou = Boolean(p.badge);
+    return (
+      <div className={cn('lazy-row group/row relative rounded-ctl', active ? 'bg-accent' : 'hover:bg-accent')} data-testid={`orb-row-${item.title}`} data-kind={item.kind} data-unread={item.unread || 0} {...press}>
+        <button type="button" onClick={() => openOrbItem(item)} aria-current={active ? 'true' : undefined} className="block w-full min-w-0 cursor-pointer rounded-ctl px-2 py-[7px] text-left" data-testid={`item-${item.kind === 'session' ? 's' : 'c'}${item.id}`}>
+          <span className="flex min-h-5 items-center gap-1.5">
+            <span className="grid shrink-0 place-items-center" role="img" aria-label={who || t('orbchats.noProject')} title={who || undefined} data-testid="orb-agent-mark"><AgentIcon agent={agents[0]} /></span>
+            <span className={cn('min-w-0 flex-1 truncate text-control leading-5', strong ? 'font-semibold' : 'font-normal', item.done && 'text-foreground/70')}>{item.title}</span>
+            {item.busy || p.tone === 'live' ? <LoaderCircle className="text-muted-foreground size-3.5 shrink-0 animate-spin" aria-label={t('chats.working')} data-testid="orb-working" /> : null}
+            {item.snoozedUntil ? <AlarmClock className="text-muted-foreground size-3.5 shrink-0" aria-label={t('orbchats.snoozed', { when: new Date(item.snoozedUntil).toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' }) })} data-testid="chat-snoozed" /> : null}
+            {item.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}
+            <span className={cn('shrink-0 text-micro tabular-nums', strong ? 'text-primary-text font-medium' : 'text-faint-foreground')}>{time}</span>
+            {item.unread ? <span className={cn('grid h-[17px] min-w-[17px] shrink-0 place-items-center rounded-full px-[5px] text-micro font-semibold tabular-nums', item.muted ? 'bg-muted-foreground/25 text-foreground/70' : 'bg-primary-text text-primary-foreground')} data-testid="chat-unread" aria-label={t('chats.unread', { n: item.unread })}>{item.unread > 99 ? '99+' : item.unread}</span> : null}
+            <span className="-mr-1 w-6 shrink-0" aria-hidden="true" />
+          </span>
+          <span className={cn('mt-0.5 flex items-center gap-2 overflow-hidden text-caption whitespace-nowrap', needsYou || p.tone === 'warn' ? 'text-warning-ink' : p.tone === 'error' ? 'text-destructive' : p.tone === 'live' ? 'text-primary-text' : 'text-faint-foreground')} data-testid="orb-progress" data-tone={p.tone}>
+            {showProject && item.project ? <span className="inline-flex shrink-0 items-center gap-1"><ProjectIcon name={item.project} small />{item.project}</span> : null}
+            <span className="inline-flex min-w-0 items-center gap-[3px]">
+              {needsYou ? <Hand className="size-3.5 shrink-0" aria-hidden="true" /> : null}
+              <span className="min-w-0 truncate">{p.prefix ? <span className="text-foreground/70">{p.prefix}</span> : null}{p.text}</span>
+            </span>
+          </span>
+        </button>
+        <OrbMenu item={item} open={menu} setOpen={setMenu} className="absolute top-[5px] right-2" />
+      </div>
+    );
+  }
   return (
     <div className={cn('lazy-row group/row relative flex items-center rounded-xl', active ? 'bg-accent' : 'hover:bg-accent/50')} data-testid={`orb-row-${item.title}`} data-kind={item.kind} data-unread={item.unread || 0} {...press}>
       <button type="button" onClick={() => openOrbItem(item)} className={cn('flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-2.5 text-left', phone ? 'py-2.5' : 'py-2')} data-testid={`item-${item.kind === 'session' ? 's' : 'c'}${item.id}`}>
@@ -245,39 +273,66 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet }) {
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
             <span className={cn('min-w-0 flex-1 truncate text-card-title compact:text-control', strong ? 'font-semibold' : 'font-medium', item.done && 'text-foreground/70')}>{item.title}</span>
-            <span className={cn('shrink-0 text-caption tabular-nums', strong ? 'text-primary font-medium' : 'text-muted-foreground')}>{time}</span>
+            <span className={cn('shrink-0 text-caption tabular-nums', strong ? 'text-primary-text font-medium' : 'text-muted-foreground')}>{time}</span>
           </span>
           <span className="mt-0.5 flex items-center gap-1.5">
             {p.badge
               ? <span className="bg-warning/18 text-warning-ink min-w-0 truncate rounded-md px-1.5 py-px text-caption font-medium" data-testid="orb-progress" data-tone={p.tone}>{p.text}</span>
               : (
-                <span className={cn('flex min-w-0 flex-1 items-center gap-1.5 truncate text-control', p.tone === 'live' ? 'text-primary' : p.tone === 'error' ? 'text-destructive' : p.tone === 'warn' ? 'text-warning-ink' : 'text-muted-foreground')} data-testid="orb-progress" data-tone={p.tone}>
-                  {p.tone === 'live' ? <span className="bg-primary size-1.5 shrink-0 animate-pulse rounded-full" aria-hidden="true" /> : null}
+                <span className={cn('flex min-w-0 flex-1 items-center gap-1.5 truncate text-control', p.tone === 'live' ? 'text-primary-text' : p.tone === 'error' ? 'text-destructive' : p.tone === 'warn' ? 'text-warning-ink' : 'text-muted-foreground')} data-testid="orb-progress" data-tone={p.tone}>
+                  {p.tone === 'live' ? <span className="bg-primary-text size-1.5 shrink-0 animate-pulse rounded-full" aria-hidden="true" /> : null}
                   <span className="min-w-0 truncate">{p.prefix ? <span className="text-foreground/70">{p.prefix}</span> : null}{p.text}</span>
                 </span>
               )}
             {p.badge ? <span className="flex-1" /> : null}
             {item.snoozedUntil ? <AlarmClock className="text-muted-foreground size-3.5 shrink-0" aria-label={t('orbchats.snoozed', { when: new Date(item.snoozedUntil).toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' }) })} data-testid="chat-snoozed" /> : null}
             {item.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}
-            {item.unread ? <span className={cn('min-w-5 shrink-0 rounded-full px-1.5 text-center text-micro leading-5 font-semibold tabular-nums', item.muted ? 'bg-muted-foreground/25 text-foreground/70' : 'bg-primary text-primary-foreground')} data-testid="chat-unread" aria-label={t('chats.unread', { n: item.unread })}>{item.unread > 99 ? '99+' : item.unread}</span> : null}
+            {item.unread ? <span className={cn('min-w-5 shrink-0 rounded-full px-1.5 text-center text-micro leading-5 font-semibold tabular-nums', item.muted ? 'bg-muted-foreground/25 text-foreground/70' : 'bg-primary-text text-primary-foreground')} data-testid="chat-unread" aria-label={t('chats.unread', { n: item.unread })}>{item.unread > 99 ? '99+' : item.unread}</span> : null}
           </span>
         </span>
       </button>
       {phone ? null : <OrbMenu item={item} open={menu} setOpen={setMenu} className="mr-1" />}
     </div>
   );
-}, (a, b) => a.phone === b.phone && a.onSheet === b.onSheet && a.day === b.day && sameItem(a.item, b.item));
+}, (a, b) => a.phone === b.phone && a.showProject === b.showProject && a.onSheet === b.onSheet && a.day === b.day && sameItem(a.item, b.item));
 
 // ---- a project's heading: its initials in colour, its name; folds its chats; its ⋯: new chat there, its info
 function ProjectHead({ group, open, phone }) {
   const t = useT();
   const name = group.project;
+  if (!phone) {
+    // The PC's heading (the mock-up's .grp): a chevron, the project's 10 px dot, its name, and on hover «+» (its menu).
+    return (
+      <div className="group/row text-faint-foreground hover:text-foreground flex items-center pr-1">
+        <CollapsibleTrigger className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-ctl px-2 pt-2.5 pb-[3px] text-left text-caption" data-testid={`project-head-${name ?? 'none'}`}>
+          <ChevronDown className={cn('size-3.5 shrink-0 transition-transform duration-150', !open && '-rotate-90')} />
+          {name ? <ProjectIcon name={name} /> : <span className="size-2.5 shrink-0 rounded-full shadow-[inset_0_0_0_1px_var(--faint-foreground)]" aria-hidden="true" />}
+          <span className="min-w-0 truncate">{name ?? t('orbchats.noProject')}</span>
+          {group.waiting ? <span className="bg-warning size-1.5 shrink-0 rounded-full" role="img" aria-label={t('orbchats.awaiting')} /> : group.working ? <span className="bg-primary-text size-1.5 shrink-0 animate-pulse rounded-full" role="img" aria-label={t('chats.working')} /> : null}
+          <span className="flex-1" />
+          {group.unread ? <span className="bg-primary size-1.5 rounded-full" aria-label={t('chats.unread', { n: group.unread })} /> : null}
+          {open ? null : <span className="tabular-nums opacity-70">{group.items.length}</span>}
+        </CollapsibleTrigger>
+        {name ? (
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <IconButton small label={t('orbchats.projectMenu', { name })} className="mt-1.5 opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100" data-testid={`project-menu-${name}`}><Plus /></IconButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-60">
+              <DropdownMenuItem onSelect={() => newChat(name)} data-testid="project-new-chat"><MessageSquarePlus />{t('orbchats.projectNewChat')}</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => openOrbInfo({ type: 'project', name })} data-testid="project-info"><Info />{t('orbchats.projectInfo')}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+      </div>
+    );
+  }
   return (
     <div className="group/row text-muted-foreground flex items-center pr-1">
       <CollapsibleTrigger className="hover:text-foreground flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-micro font-semibold tracking-wide uppercase" data-testid={`project-head-${name ?? 'none'}`}>
         {name ? <ProjectIcon name={name} size={18} /> : <span className="bg-muted-foreground/30 grid size-[18px] shrink-0 place-items-center rounded-full" aria-hidden="true"><span className="bg-muted-foreground size-1 rounded-full" /></span>}
         <span className="min-w-0 truncate">{name ?? t('orbchats.noProject')}</span>
-        {group.waiting ? <span className="bg-warning size-1.5 shrink-0 rounded-full" role="img" aria-label={t('orbchats.awaiting')} /> : group.working ? <span className="bg-primary size-1.5 shrink-0 animate-pulse rounded-full" role="img" aria-label={t('chats.working')} /> : null}
+        {group.waiting ? <span className="bg-warning size-1.5 shrink-0 rounded-full" role="img" aria-label={t('orbchats.awaiting')} /> : group.working ? <span className="bg-primary-text size-1.5 shrink-0 animate-pulse rounded-full" role="img" aria-label={t('chats.working')} /> : null}
         <span className="flex-1" />
         {group.unread ? <span className="bg-primary size-1.5 rounded-full" aria-label={t('chats.unread', { n: group.unread })} /> : null}
         {open ? null : <span className="tabular-nums opacity-70">{group.items.length}</span>}
@@ -328,12 +383,12 @@ export async function newProjectChat() {
 function OrbNewMenu({ fab = false }) {
   const t = useT();
   const trigger = fab
-    ? <button type="button" className="press bg-primary text-primary-foreground fixed right-4 bottom-[calc(84px+env(safe-area-inset-bottom,0px))] z-30 grid size-14 cursor-pointer place-items-center rounded-2xl shadow-lg" aria-label={t('chats.new')} data-testid="chats-new"><Plus className="size-6" /></button>
-    : <Button size="icon" className="size-9 shrink-0 rounded-lg" aria-label={t('chats.new')} data-testid="chats-new"><Plus /></Button>;
+    ? <button type="button" className="press bg-primary-text text-primary-foreground fixed right-4 bottom-[calc(84px+env(safe-area-inset-bottom,0px))] z-30 grid size-14 cursor-pointer place-items-center rounded-2xl shadow-lg" aria-label={t('chats.new')} data-testid="chats-new"><Plus className="size-6" /></button>
+    : <IconButton label={t('chats.new')} className="shrink-0" data-testid="chats-new"><Plus /></IconButton>;
   return (
     <DropdownMenu modal={false}>
-      {fab ? <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger> : <Tip label={t('chats.new')}><DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger></Tip>}
-      <DropdownMenuContent align="end" side={fab ? 'top' : 'bottom'} className="w-52">
+      {fab ? <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger> : <BubbleTip title={t('chats.new')} text={t('chats.newHint')}><DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger></BubbleTip>}
+      <DropdownMenuContent align="end" side={fab ? 'top' : 'bottom'} className="w-56">
         <DropdownMenuItem onSelect={() => newChat()} data-testid="new-conversation"><MessageSquarePlus />{t('nav.newChat')}</DropdownMenuItem>
         <DropdownMenuItem onSelect={newProjectChat} data-testid="sidebar-new-project"><FolderPlus />{t('comp.projects.newTitle')}</DropdownMenuItem>
       </DropdownMenuContent>
@@ -351,20 +406,23 @@ function Places() {
   const config = useStore((s) => s.app?.config);
   const places = [['tasks', ClipboardCheck, 'nav.tasks'], ['projects', FolderGit2, 'nav.projects'], ['schedules', CalendarSync, 'nav.schedules'], ['board', Presentation, 'nav.board']];
   const more = config?.expert?.enabled && fullPc() ? [['expert', SquareTerminal, 'nav.expert']] : [];
-  const cls = (on) => cn('press relative flex min-w-0 cursor-pointer flex-col items-center gap-0.5 rounded-lg px-0 py-1.5 text-micro transition-colors', on ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground');
+  const cls = (on) => cn('press relative flex min-w-0 cursor-pointer flex-col items-center gap-[3px] rounded-ctl pt-[7px] pb-1.5 text-caption transition-colors', on ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground');
   return (
-    <nav className={cn('grid gap-0.5 px-2 pb-1', more.length ? 'grid-cols-5' : 'grid-cols-4')} aria-label={t('orbchats.places')} data-testid="orb-places">
+    <nav className={cn('grid gap-0.5 px-2 pb-1.5', more.length ? 'grid-cols-5' : 'grid-cols-4')} aria-label={t('orbchats.places')} data-testid="orb-places">
       {places.map(([id, Icon, label]) => (
-        <button key={id} type="button" className={cls(view === id)} onClick={() => go({ view: id })} data-testid={`nav-${id}`}>
-          <Icon className={cn('size-4', view === id && 'text-primary')} /><span className="max-w-full truncate">{t(label)}</span>
-          {id === 'tasks' && approvals ? <span className="bg-warning text-warning-foreground absolute -top-0.5 right-[calc(50%-26px)] min-w-4 rounded-full px-1 text-micro leading-4 font-semibold tabular-nums" aria-label={t('comp.sidebar.waitApproval')} data-testid="nav-tasks-count">{approvals}</span>
-            : id === 'tasks' && running ? <span className="bg-primary absolute top-1.5 right-[calc(50%-14px)] size-1.5 animate-pulse rounded-full" aria-hidden="true" /> : null}
+        <button key={id} type="button" className={cls(view === id)} onClick={() => go({ view: id })} aria-current={view === id ? 'page' : undefined} data-testid={`nav-${id}`}>
+          <span className="relative grid place-items-center">
+            <Icon className={cn('size-5', view === id && 'text-primary-text')} />
+            {id === 'tasks' && approvals ? <span className="bg-warning text-warning-foreground absolute -top-2 -right-3 grid h-[17px] min-w-[17px] place-items-center rounded-full px-1 text-micro font-bold tabular-nums shadow-[0_0_0_2px_var(--sidebar)]" aria-label={t('comp.sidebar.waitApproval')} title={t('comp.sidebar.waitApproval')} data-testid="nav-tasks-count">{approvals}</span>
+              : id === 'tasks' && running ? <span className="bg-primary-text absolute -top-1 -right-2 size-1.5 animate-pulse rounded-full" aria-hidden="true" /> : null}
+          </span>
+          <span className="max-w-full truncate">{t(label)}</span>
         </button>
       ))}
       {more.length ? (
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
-            <button type="button" className={cls(more.some(([id]) => id === view))} data-testid="orb-places-more"><Ellipsis className="size-4" /><span className="max-w-full truncate">{t('nav.more')}</span></button>
+            <button type="button" className={cls(more.some(([id]) => id === view))} data-testid="orb-places-more"><Ellipsis className="size-5" /><span className="max-w-full truncate">{t('nav.more')}</span></button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {more.map(([id, Icon, label]) => <DropdownMenuItem key={id} onSelect={() => go({ view: id })} data-testid={`nav-${id}`}><Icon />{t(label)}</DropdownMenuItem>)}
@@ -377,25 +435,50 @@ function Places() {
 
 // ---- search: titles and projects at once; from two letters, the messages too (lib/search.js); «#12» finds that task.
 const FILTER0 = { state: 'all', agent: 'all' };
-function FilterMenu({ filter, setFilter, agents, snoozed = 0, order = 'recent', setOrder = () => {} }) {
+function FilterMenu({ filter, setFilter, agents, snoozed = 0, order = 'recent', setOrder = () => {}, inline = false }) {
   const t = useT();
   const changed = filter.state !== 'all' || filter.agent !== 'all';
   const pick = (k, v) => setFilter((f) => ({ ...f, [k]: f[k] === v ? 'all' : v }));
   return (
     <DropdownMenu modal={false}>
-      <Tip label={t('orbchats.filter')}>
+      <BubbleTip title={t('orbchats.filter')} text={t('orbchats.filterHint')}>
         <DropdownMenuTrigger asChild>
-          <button type="button" className={cn('relative grid size-9 shrink-0 cursor-pointer place-items-center rounded-lg border', changed ? 'text-primary border-primary/40' : 'text-muted-foreground hover:text-foreground')} aria-label={t('orbchats.filter')} data-testid="sidebar-filter">
-            <SlidersHorizontal className="size-4" />{changed ? <span className="notice-dot" aria-hidden="true" /> : null}
-          </button>
+          {inline
+            ? <IconButton small label={t('orbchats.filter')} className={cn('relative', changed && 'text-primary-text')} data-testid="sidebar-filter"><SlidersHorizontal />{changed ? <span className="bg-primary-text absolute top-0.5 right-0.5 size-1.5 rounded-full" aria-hidden="true" /> : null}</IconButton>
+            : (
+              <button type="button" className={cn('relative grid size-9 shrink-0 cursor-pointer place-items-center rounded-lg border', changed ? 'text-primary-text border-primary-text/40' : 'text-muted-foreground hover:text-foreground')} aria-label={t('orbchats.filter')} data-testid="sidebar-filter">
+                <SlidersHorizontal className="size-4" />{changed ? <span className="notice-dot" aria-hidden="true" /> : null}
+              </button>
+            )}
         </DropdownMenuTrigger>
-      </Tip>
+      </BubbleTip>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>{t('orbchats.filterState')}</DropdownMenuLabel>
         {[['active', 'orbchats.stateActive'], ['attention', 'orbchats.stateAttention'], ['done', 'orbchats.stateDone'], ...(snoozed || filter.state === 'snoozed' ? [['snoozed', 'orbchats.stateSnoozed']] : [])].map(([v, k]) => <DropdownMenuCheckboxItem key={v} checked={filter.state === v} onCheckedChange={() => pick('state', v)} onSelect={(e) => e.preventDefault()} data-testid={`filter-${v}`}>{t(k)}{v === 'snoozed' && snoozed ? <span className="text-muted-foreground ml-auto tabular-nums">{snoozed}</span> : null}</DropdownMenuCheckboxItem>)}
         <DropdownMenuSeparator /><DropdownMenuLabel>{t('orbchats.order')}</DropdownMenuLabel>
         {[['recent', 'orbchats.orderRecent'], ['priority', 'orbchats.orderPriority']].map(([v, k]) => <DropdownMenuCheckboxItem key={v} checked={order === v} onCheckedChange={() => setOrder(v)} onSelect={(e) => e.preventDefault()} data-testid={`order-${v}`}>{t(k)}</DropdownMenuCheckboxItem>)}
         {agents.length > 1 ? <><DropdownMenuSeparator /><DropdownMenuLabel>{t('orbchats.filterAgent')}</DropdownMenuLabel>{agents.map((a) => <DropdownMenuCheckboxItem key={a} checked={filter.agent === a} onCheckedChange={() => pick('agent', a)} onSelect={(e) => e.preventDefault()}>{AGENT[a] ?? a}</DropdownMenuCheckboxItem>)}</> : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// The list's own order and state, one click from its heading (the mock-up's second sort button); the same choices as the filter.
+function SortMenu({ filter, setFilter, order, setOrder }) {
+  const t = useT();
+  const pick = (v) => setFilter((f) => ({ ...f, state: f.state === v ? 'all' : v }));
+  return (
+    <DropdownMenu modal={false}>
+      <BubbleTip title={t('orbchats.sortFilter')}>
+        <DropdownMenuTrigger asChild>
+          <IconButton small label={t('orbchats.sortFilter')} data-testid="sidebar-sort"><ArrowUpDown /></IconButton>
+        </DropdownMenuTrigger>
+      </BubbleTip>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel>{t('orbchats.order')}</DropdownMenuLabel>
+        {[['recent', 'orbchats.orderRecent'], ['priority', 'orbchats.orderPriority']].map(([v, k]) => <DropdownMenuCheckboxItem key={v} checked={order === v} onCheckedChange={() => setOrder(v)} onSelect={(e) => e.preventDefault()} data-testid={`order-${v}`}>{t(k)}</DropdownMenuCheckboxItem>)}
+        <DropdownMenuSeparator /><DropdownMenuLabel>{t('orbchats.filterState')}</DropdownMenuLabel>
+        {[['attention', 'orbchats.stateAttention'], ['done', 'orbchats.stateDone']].map(([v, k]) => <DropdownMenuCheckboxItem key={v} checked={filter.state === v} onCheckedChange={() => pick(v)} onSelect={(e) => e.preventDefault()} data-testid={`filter-${v}`}>{t(k)}</DropdownMenuCheckboxItem>)}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -454,7 +537,7 @@ export function OrbInbox({ page = false }) {
     };
   })();
 
-  const search = (
+  const phoneSearch = (
     <div className="flex items-center gap-2">
       <label className="side-search-box bg-background/60 flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border px-2.5">
         <Search className="text-muted-foreground size-4 shrink-0" />
@@ -462,9 +545,23 @@ export function OrbInbox({ page = false }) {
         {query ? <button type="button" className="text-muted-foreground hover:text-foreground grid size-5 cursor-pointer place-items-center rounded" aria-label={t('comp.sidebar.clearSearch')} onClick={() => setQuery('')}><X className="size-3.5" /></button> : null}
       </label>
       <FilterMenu filter={filter} setFilter={setFilter} agents={agents} snoozed={parts.snoozed} order={order} setOrder={setOrder} />
-      {phone ? null : <OrbNewMenu />}
     </div>
   );
+  // The PC's search (the mock-up's .search): the filter sits inside the box, at its right end, and «+» is an icon button.
+  const pcSearch = (
+    <div className="flex items-center gap-1">
+      <div className="relative min-w-0 flex-1">
+        <SearchInput value={query} onChange={setQuery} placeholder={t('orbchats.search')} className="w-full" inputClassName="pr-8" data-testid="sidebar-search-input"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setQuery(''); setFilter(FILTER0); } }} />
+        <div className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center">
+          {query ? <IconButton small label={t('comp.sidebar.clearSearch')} onClick={() => setQuery('')}><X /></IconButton> : null}
+          <FilterMenu inline filter={filter} setFilter={setFilter} agents={agents} snoozed={parts.snoozed} order={order} setOrder={setOrder} />
+        </div>
+      </div>
+      <OrbNewMenu />
+    </div>
+  );
+  const search = phone ? phoneSearch : pcSearch;
 
   let body;
   if (results) body = (
@@ -473,7 +570,7 @@ export function OrbInbox({ page = false }) {
         <button key={p.name} type="button" className="hover:bg-accent/50 flex min-w-0 cursor-pointer items-center gap-3 rounded-xl px-2.5 py-2 text-left text-body compact:text-control" onClick={() => openOrbInfo({ type: 'project', name: p.name })} data-testid={`found-project-${p.name}`}>
           <ProjectIcon name={p.name} size={28} /><span className="min-w-0 flex-1 truncate">{p.name}</span>
         </button>))}</> : null}
-      {results.chats.length ? <><Sub>{t('orbchats.chatsFound')}</Sub>{results.chats.map((x) => <OrbRow key={x.key} item={x} {...rowProps} />)}</> : null}
+      {results.chats.length ? <><Sub>{t('orbchats.chatsFound')}</Sub>{results.chats.map((x) => <OrbRow key={x.key} item={x} showProject {...rowProps} />)}</> : null}
       {found?.messages?.length ? <><Sub>{t('chats.messages')}</Sub>{found.messages.map((m) => {
         const x = items.find((y) => y.key === m.key); if (!x) return null;
         return (
@@ -495,18 +592,20 @@ export function OrbInbox({ page = false }) {
       <DayDigestCard phone={phone} />
       {order === 'priority' ? <button type="button" onClick={() => setFrozen(null)} className="text-muted-foreground hover:text-foreground hover:bg-accent/50 mt-1 flex cursor-pointer items-center gap-2 self-start rounded-lg px-2.5 py-1 text-caption" data-testid="orb-reorder">{t('orbchats.reorder')}</button> : null}
       {parts.pinned.length ? (
-        <div className="pt-2" data-testid="orb-pinned">
-          <div className="text-muted-foreground flex items-center gap-1.5 px-2 py-1.5 text-micro font-semibold tracking-wide uppercase"><Pin className="size-3.5" />{t('chats.pinned')}</div>
-          <div className="grid gap-0.5">{take(parts.pinned).map((x) => <OrbRow key={x.key} item={x} {...rowProps} />)}</div>
+        <div className={phone ? 'pt-2' : undefined} data-testid="orb-pinned">
+          {phone
+            ? <div className="text-muted-foreground flex items-center gap-1.5 px-2 py-1.5 text-micro font-semibold tracking-wide uppercase"><Pin className="size-3.5" />{t('chats.pinned')}</div>
+            : <div className="text-faint-foreground flex items-center gap-1.5 px-2 pt-2.5 pb-[3px] text-caption"><Pin className="size-3.5" />{t('chats.pinned')}</div>}
+          <div className={cn('grid', phone && 'gap-0.5')}>{take(parts.pinned).map((x) => <OrbRow key={x.key} item={x} showProject {...rowProps} />)}</div>
         </div>
       ) : null}
       {parts.groups.map((g) => {
         const id = g.project ?? '';
         const open = !folded[id];
         return (
-          <Collapsible key={id || 'none'} open={open} onOpenChange={(v) => setFolded(id, v)} className="pt-2" data-testid={`orb-group-${g.project ?? 'none'}`}>
+          <Collapsible key={id || 'none'} open={open} onOpenChange={(v) => setFolded(id, v)} className={phone ? 'pt-2' : undefined} data-testid={`orb-group-${g.project ?? 'none'}`}>
             {g.flat ? null : <ProjectHead group={g} open={open} phone={phone} />}
-            <CollapsibleContent className="grid gap-0.5">
+            <CollapsibleContent className={cn('grid', phone && 'gap-0.5')}>
               {(open ? take(g.items) : []).map((x) => <OrbRow key={x.key} item={x} {...rowProps} />)}
               {!g.items.length && g.hidden ? <p className="text-muted-foreground px-3 py-1 text-xs">{t('orbchats.showDone', { n: g.hidden })}</p> : null}
             </CollapsibleContent>
@@ -515,8 +614,12 @@ export function OrbInbox({ page = false }) {
       })}
       {!items.length ? <p className="text-muted-foreground px-3 py-4 text-sm leading-relaxed" data-testid="orb-empty">{t('orbchats.empty')}</p> : null}
       {parts.hidden || showDone ? (
-        <button type="button" onClick={() => setShowDone(!showDone)} className="text-muted-foreground hover:text-foreground hover:bg-accent/50 mt-2 flex cursor-pointer items-center gap-2 self-start rounded-lg px-2.5 py-1.5 text-control" data-testid="sidebar-completed">
-          {showDone ? <Undo2 className="size-4" /> : <Check className="size-4" />}{showDone ? t('orbchats.hideDone') : t('orbchats.showDone', { n: parts.hidden })}
+        <button type="button" onClick={() => setShowDone(!showDone)} className={phone
+          ? 'text-muted-foreground hover:text-foreground hover:bg-accent/50 mt-2 flex cursor-pointer items-center gap-2 self-start rounded-lg px-2.5 py-1.5 text-control'
+          : 'text-faint-foreground hover:text-foreground flex cursor-pointer items-center gap-0.5 self-start px-2 pt-2.5 pb-1 text-caption'} data-testid="sidebar-completed">
+          {phone ? (showDone ? <Undo2 className="size-4" /> : <Check className="size-4" />) : null}
+          {showDone ? t('orbchats.hideDone') : phone ? t('orbchats.showDone', { n: parts.hidden }) : t('orbchats.doneCount', { n: parts.hidden })}
+          {phone ? null : <ChevronRight className={cn('size-3.5 transition-transform duration-150', showDone && 'rotate-90')} />}
         </button>
       ) : null}
     </>
@@ -525,9 +628,17 @@ export function OrbInbox({ page = false }) {
 
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col', page && 'bg-background')} data-testid="orb-inbox">
-      <div className={cn('grid gap-2 pb-2', phone ? 'px-4 pt-3' : 'px-3 pt-1')} data-testid="sidebar-search">{search}</div>
+      <div className={cn('grid gap-2', phone ? 'px-4 pt-3 pb-2' : 'mt-0.5 mr-2.5 mb-2 ml-3')} data-testid="sidebar-search">{search}</div>
       {phone ? null : <Places />}
-      <nav className={cn('flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto', phone ? 'px-2 pb-28' : 'px-1.5 pb-3')} aria-label={t('chats.list')} data-testid="mobile-chats">{body}</nav>
+      {phone ? null : (
+        <div className="text-faint-foreground flex items-center justify-between px-4 pt-2.5 pb-1 text-caption">
+          <BubbleTip title={t('orbchats.activityTip')}>
+            <button type="button" onClick={() => go('activity')} className="hover:text-foreground inline-flex cursor-pointer items-center gap-0.5" data-testid="sidebar-activity">{t('orbchats.activity')}<ChevronRight className="size-3.5" /></button>
+          </BubbleTip>
+          <SortMenu filter={filter} setFilter={setFilter} order={order} setOrder={setOrder} />
+        </div>
+      )}
+      <nav className={cn('flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto', phone ? 'px-2 pb-28' : 'px-2 pb-2')} aria-label={t('chats.list')} data-testid="mobile-chats">{body}</nav>
       {phone ? <OrbNewMenu fab /> : null}
       {sheetItem ? <OrbSheet item={sheetItem} onClose={() => setSheet(null)} /> : null}
     </div>

@@ -40,7 +40,7 @@ function FileBlock({ f, sessionId, comments }) {
     <>
       {mine.filter((c) => sameLine(c, r)).map((c) => (
         <div key={c.key} className="bg-accent/40 mx-2 my-1 flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-xs whitespace-normal" data-testid="diff-comment">
-          <MessageSquarePlus className="text-primary mt-0.5 size-3.5 shrink-0" /><span className="min-w-0 flex-1 break-words">{c.text}</span>
+          <MessageSquarePlus className="text-primary-text mt-0.5 size-3.5 shrink-0" /><span className="min-w-0 flex-1 break-words">{c.text}</span>
           <button type="button" className="text-muted-foreground cursor-pointer" aria-label={t('turns.trayRemove')} onClick={() => removeComment(sessionId, c.key)}><X className="size-3.5" /></button>
         </div>
       ))}

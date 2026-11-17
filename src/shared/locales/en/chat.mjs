@@ -152,7 +152,7 @@ export default {
   'img.editText': 'Edit the attached image {where}: {change}',
   'chat.calendarPrev': 'Previous month',
   'chat.calendarNext': 'Next month',
-  'chat.calendarToday': 'Back to today',
+  'chat.calendarToday': 'Today',
   // mini-games
   'games.title': 'Mini-games',
   'games.desc': 'Pick a game and the difficulty. The agents keep working while you play.',

@@ -33,8 +33,6 @@ export default {
   'nav.musicTheme.neon': 'Neón',
   'nav.musicTheme.marfil': 'Marfil',
   'nav.musicTheme.orbita': 'Órbita',
-  'nav.footerUnfold': 'Mostrar con nombres',
-  'nav.footerFold': 'Solo iconos',
   'palette.open': 'Buscar o ir a (Ctrl+K)',
   'palette.title': 'Ir a',
   'palette.hint': 'Busca chats, tareas, proyectos y acciones.',

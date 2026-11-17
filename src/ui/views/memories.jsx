@@ -23,7 +23,7 @@ export function MemoriesView({ route }) {
   const meta = { logs: t('logs.meta'), activity: t('activity.meta'), rules: t('logbooks.metaRules') }[tab];
   return (
     <>
-      <PageHeader icon={<NotebookPen className="text-primary size-5" />} title={t('logbooks.title')} meta={meta}>
+      <PageHeader icon={<NotebookPen className="text-primary-text size-5" />} title={t('logbooks.title')} meta={meta}>
         <Segmented value={tab} onChange={(id) => go({ view: id })} options={tabs.map(([value, label]) => ({ value, label }))} itemTestId={(id) => `memories-${id}`} data-testid="memories-tabs" />
       </PageHeader>
       {tab === 'logs' ? <LogsView route={route} bare /> : tab === 'activity' ? <ActivityView bare /> : <RulesView />}

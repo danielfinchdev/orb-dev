@@ -94,7 +94,7 @@ export function QuestionCard({ m }) {
     <div ref={box} tabIndex={-1} onKeyDown={keys} className="chat-glass question-card mx-auto w-full max-w-[92%] outline-none" data-testid="question-card">
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          {q.header ? <div className="text-primary mb-0.5 text-micro font-semibold tracking-wide uppercase">{q.header}</div> : null}
+          {q.header ? <div className="text-primary-text mb-0.5 text-micro font-semibold tracking-wide uppercase">{q.header}</div> : null}
           <div className="text-body compact:text-body leading-snug font-semibold">{q.question}</div>
         </div>
         <Button size="icon-xs" variant="ghost" onClick={() => setFolded(!folded)} aria-label={folded ? t('chat.q.unfold') : t('chat.q.fold')} aria-expanded={!folded}><ChevronDown className={cn('transition-transform', folded && '-rotate-90')} /></Button>
@@ -106,16 +106,16 @@ export function QuestionCard({ m }) {
             const on = picked.includes(o.label);
             return (
               <button key={o.label} type="button" role={q.multi ? 'checkbox' : 'radio'} aria-checked={on} onClick={() => choose(o.label)} data-testid={`question-option-${i + 1}`}
-                className={cn('question-option flex w-full cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors', on ? 'border-primary bg-primary/8 ring-primary/25 ring-2' : 'bg-card/50 hover:bg-accent/50')}>
+                className={cn('question-option flex w-full cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors', on ? 'border-primary-text bg-primary-soft ring-ring/25 ring-2' : 'bg-card/50 hover:bg-accent/50')}>
                 <span className="min-w-0 flex-1">
                   <span className="block text-control font-medium">{o.label}</span>
                   {o.description ? <span className="text-muted-foreground mt-0.5 block text-caption leading-snug">{o.description}</span> : null}
                 </span>
-                <kbd className={cn('mt-0.5 grid size-6 shrink-0 place-items-center rounded-md border text-micro font-semibold', on ? 'border-primary text-primary' : 'text-muted-foreground')}>{i + 1}</kbd>
+                <kbd className={cn('mt-0.5 grid size-6 shrink-0 place-items-center rounded-md border text-micro font-semibold', on ? 'border-primary-text text-primary-text' : 'text-muted-foreground')}>{i + 1}</kbd>
               </button>
             );
           })}
-          <div className={cn('question-option grid gap-2 rounded-xl border px-3.5 py-2.5', other.trim() ? 'border-primary ring-primary/25 ring-2' : 'bg-card/50')}>
+          <div className={cn('question-option grid gap-2 rounded-xl border px-3.5 py-2.5', other.trim() ? 'border-primary-text ring-ring/25 ring-2' : 'bg-card/50')}>
             <div className="flex items-center gap-3"><span className="min-w-0 flex-1 text-control font-medium">{t('chat.q.other')}</span><kbd className="text-muted-foreground grid size-6 shrink-0 place-items-center rounded-md border text-micro font-semibold">{q.options.length + 1}</kbd></div>
             <textarea ref={otherRef} rows={1} value={other} onChange={(e) => setOther(e.target.value)} maxLength={2000} placeholder={t('chat.q.otherPh')} data-testid="question-other"
               className="border-input bg-background/70 placeholder:text-muted-foreground focus-visible:ring-ring/40 min-h-9 w-full resize-y rounded-lg border px-3 py-1.5 text-control outline-none focus-visible:ring-2" />

@@ -73,7 +73,7 @@ export function AutonomySwitch({ value, onChange, more = [], disabled = false, t
                   className="hover:bg-accent focus-visible:bg-accent flex w-full cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-left outline-none">
                   <Icon className="mt-0.5 size-4 shrink-0" />
                   <span className="grid min-w-0 flex-1 gap-0.5"><span className="text-control font-medium">{o.label}</span><span className="text-muted-foreground text-xs leading-snug">{tip()}</span></span>
-                  <Check className={cn('mt-0.5 size-4 shrink-0', on ? 'opacity-100' : 'opacity-0')} aria-hidden />
+                  <Check className={cn('text-primary-text mt-0.5 size-4 shrink-0', on ? 'opacity-100' : 'opacity-0')} aria-hidden />
                 </button>
               );
             })}

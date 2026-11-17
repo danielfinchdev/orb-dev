@@ -4,6 +4,11 @@
 export default {
   // Lista de chats
   'orbchats.search': 'Buscar chats y proyectos',
+  'orbchats.filterHint': 'Estado, orden y agente',
+  'orbchats.sortFilter': 'Orden y filtro',
+  'orbchats.activity': 'Toda la actividad',
+  'orbchats.activityTip': 'Bitácoras › Actividad',
+  'orbchats.doneCount': 'Completados · {n}',
   'orbchats.places': 'Más sitios de Orb',
   'orbchats.noProject': 'Sin proyecto',
   'orbchats.empty': 'Aún no hay chats. Empieza uno con «Nuevo chat».',

@@ -67,7 +67,7 @@ export function SchedulesView() {
   const create = async () => { if (await newSchedule()) load(); };
   return (
     <>
-      <PageHeader icon={<CalendarSync className="text-primary size-5" />} title={t('schedules.title')} meta={t('schedules.meta')}>
+      <PageHeader icon={<CalendarSync className="text-primary-text size-5" />} title={t('schedules.title')} meta={list ? t('schedules.sub', { total: list.length, active: list.filter((s) => s.enabled).length }) : t('schedules.meta')}>
         <Button size="sm" onClick={create} data-testid="new-schedule"><Plus />{t('schedules.newBtn')}</Button>
       </PageHeader>
       <PageBody>

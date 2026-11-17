@@ -21,7 +21,7 @@ export function DayDigestCard({ phone = false }) {
   const close = () => { setD(null); call('inbox.digestSeen', {}).catch(quiet); };
   const lines = digestLines(d, t);
   return (
-    <section className={cn('bg-card relative mt-2 rounded-xl border px-3 py-2.5', phone ? 'mx-2' : 'mx-0.5')} aria-label={t('orbchats.digestTitle')} data-testid="day-digest">
+    <section className={cn('bg-card relative border', phone ? 'mx-2 mt-2 rounded-xl px-3 py-2.5' : 'mx-0.5 mt-1 mb-1.5 rounded-card px-2.5 py-2 text-caption')} aria-label={t('orbchats.digestTitle')} data-testid="day-digest">
       <button type="button" onClick={close} className="text-muted-foreground hover:text-foreground absolute top-2 right-2 grid size-6 cursor-pointer place-items-center rounded" aria-label={t('orbchats.digestClose')} data-testid="day-digest-close"><X className="size-3.5" /></button>
       <h3 className="pr-7 text-control font-semibold">{t('orbchats.digestTitle')} <span className="text-muted-foreground font-normal">{d.day}</span></h3>
       <ul className="mt-1 grid gap-1.5 text-control">
@@ -32,7 +32,7 @@ export function DayDigestCard({ phone = false }) {
           </li>
         ))}
       </ul>
-      {d.waiting?.approvals || d.waiting?.held ? <button type="button" onClick={() => { close(); go({ view: 'tasks' }); }} className="text-primary mt-2 cursor-pointer text-control hover:underline" data-testid="day-digest-tasks">{t('orbchats.digestOpenTasks')}</button> : null}
+      {d.waiting?.approvals || d.waiting?.held ? <button type="button" onClick={() => { close(); go({ view: 'tasks' }); }} className="text-primary-text mt-2 cursor-pointer text-control hover:underline" data-testid="day-digest-tasks">{t('orbchats.digestOpenTasks')}</button> : null}
     </section>
   );
 }

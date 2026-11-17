@@ -85,8 +85,8 @@ pub fn translate(texts: &HashMap<String, String>, key: &str, vars: &[(&str, Stri
 }
 
 // Size of the interface on this PC (Ajustes → Interfaz, Ctrl + / Ctrl - / Ctrl 0, Ctrl + wheel), kept in interfaz.json.
-// 1 = «Normal», a bit bigger than WebView2's 100% (the same numbers as Orb 3.8.0).
-pub const ZOOM_BASE: f64 = 1.15;
+// 1 = «Normal» = WebView2's real 100 %; the saved zoom is relative to it.
+pub const ZOOM_BASE: f64 = 1.0;
 const ZOOM_MIN: f64 = 0.6;
 const ZOOM_MAX: f64 = 1.8;
 const ZOOM_STEP: f64 = 0.1;

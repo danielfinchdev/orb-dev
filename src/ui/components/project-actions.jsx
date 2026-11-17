@@ -110,12 +110,12 @@ export function ProjectPicker({ conversation = null }) {
           <DropdownMenuLabel>{t('comp.projects.inFolder')}</DropdownMenuLabel>
           {projects.length ? projects.map((p) => (
             <DropdownMenuItem key={p.name} onSelect={() => setActive(p.name)}>
-              <Folder /><span className="flex-1 truncate">{p.name}</span>{active?.name === p.name ? <Check className="text-primary!" /> : null}
+              <Folder /><span className="flex-1 truncate">{p.name}</span>{active?.name === p.name ? <Check className="text-primary-text!" /> : null}
             </DropdownMenuItem>
           )) : <div className="text-muted-foreground px-2 py-1.5 text-xs">{t('comp.projects.none')}</div>}
           {/* without a folder. */}
           <DropdownMenuItem onSelect={() => setActive('')} data-testid="project-none">
-            <FolderX /><span className="grid flex-1 leading-tight"><span className="truncate">{t('nav.loose')}</span><span className="text-muted-foreground text-xs">{t('comp.projects.noneHint')}</span></span>{!active ? <Check className="text-primary!" /> : null}
+            <FolderX /><span className="grid flex-1 leading-tight"><span className="truncate">{t('nav.loose')}</span><span className="text-muted-foreground text-xs">{t('comp.projects.noneHint')}</span></span>{!active ? <Check className="text-primary-text!" /> : null}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={async () => { const p = await createProjectFlow(); if (p) setActive(p.name); }}><FolderPlus />{t('comp.projects.newTitle')}</DropdownMenuItem>

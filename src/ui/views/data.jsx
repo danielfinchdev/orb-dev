@@ -66,7 +66,7 @@ function BackupsCard() {
   // The way back after «Empezar con una clave nueva» ('anterior'), and back to the new key after that ('nueva').
   const way = st.previousKey === 'nueva' ? 'datos.newKey' : 'datos.previousKey';
   const previousKey = async () => {
-    const body = <>{t(`${way}Body`)} <button type="button" className="text-primary cursor-pointer underline-offset-2 hover:underline" onClick={() => act(bridge.openExternal(KEY_DOCS))} data-testid="previous-key-more">{t('datos.moreInfo')}</button></>;
+    const body = <>{t(`${way}Body`)} <button type="button" className="text-primary-text cursor-pointer underline-offset-2 hover:underline" onClick={() => act(bridge.openExternal(KEY_DOCS))} data-testid="previous-key-more">{t('datos.moreInfo')}</button></>;
     if (!(await confirm(t(`${way}Title`), body, { ok: t(`${way}Use`), danger: true }))) return;
     const unlock = await unlockCore('previousKey');
     if (!unlock) return;
@@ -82,7 +82,7 @@ function BackupsCard() {
   };
   return (
     <Card data-testid="backups-card">
-      <CardHeader className="flex-row items-start gap-3"><HardDriveDownload className="text-primary mt-0.5 size-5 shrink-0" /><CardTitle className="mt-1">{t('datos.backupsTitle')}</CardTitle></CardHeader>
+      <CardHeader className="flex-row items-start gap-3"><HardDriveDownload className="text-primary-text mt-0.5 size-5 shrink-0" /><CardTitle className="mt-1">{t('datos.backupsTitle')}</CardTitle></CardHeader>
       <CardContent className="grid gap-3">
         <div className="text-muted-foreground grid gap-1 text-xs">
           <span>{t('datos.folder')}: <span className="text-foreground font-mono break-all" data-testid="backup-folder">{st.folder}</span></span>
@@ -140,7 +140,7 @@ function LegacyCard() {
   };
   return (
     <Card data-testid="legacy-card">
-      <CardHeader className="flex-row items-start gap-3"><Archive className="text-primary mt-0.5 size-5 shrink-0" /><CardTitle className="mt-1">{t('datos.legacyTitle')}</CardTitle></CardHeader>
+      <CardHeader className="flex-row items-start gap-3"><Archive className="text-primary-text mt-0.5 size-5 shrink-0" /><CardTitle className="mt-1">{t('datos.legacyTitle')}</CardTitle></CardHeader>
       <CardContent className="grid gap-1.5">
         {local > 0 && <p className="text-muted-foreground text-xs">{t('datos.legacyDesc', { size: size(st.bytes) })}</p>}
         {st.oldBackups > 0 && <p className="text-muted-foreground text-xs" data-testid="legacy-backups">{t('datos.legacyBackups', { n: st.oldBackups })}</p>}
@@ -160,7 +160,7 @@ function CoreCard() {
   const open = async () => { const unlock = await unlockCore('open'); if (unlock) act(bridge.openPath(dir, unlock)); };
   return (
     <Card data-testid="core-card">
-      <CardHeader className="flex-row items-start gap-3"><FolderLock className="text-primary mt-0.5 size-5 shrink-0" /><CardTitle className="mt-1">{t('datos.coreTitle')}</CardTitle></CardHeader>
+      <CardHeader className="flex-row items-start gap-3"><FolderLock className="text-primary-text mt-0.5 size-5 shrink-0" /><CardTitle className="mt-1">{t('datos.coreTitle')}</CardTitle></CardHeader>
       <CardContent className="grid gap-1 text-xs"><p className="text-muted-foreground">{t('datos.coreDesc')}</p><span className="font-mono break-all">{dir}</span></CardContent>
       <CardFooter><Button size="sm" variant="outline" onClick={open} data-testid="core-open"><FolderOpen />{t('datos.coreOpen')}</Button></CardFooter>
     </Card>

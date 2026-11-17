@@ -96,7 +96,7 @@ function BrainFavorites({ catalog, value, onChange }) {
         <DropdownMenuItem key={`${f.agent}|${f.account}|${f.model}|${f.reasoning}`} onSelect={() => onChange(f)} data-testid="brain-favorite">
           <Star className="text-warning! size-3.5 fill-current" aria-hidden />
           <span className="min-w-0 flex-1 truncate">{favoriteLabel(catalog, f, t)}</span>
-          {value.agent === f.agent && (value.model ?? '') === f.model && value.reasoning === f.reasoning && (value.account || value.agent) === f.account ? <Check className="text-primary!" /> : null}
+          {value.agent === f.agent && (value.model ?? '') === f.model && value.reasoning === f.reasoning && (value.account || value.agent) === f.account ? <Check className="text-primary-text!" /> : null}
         </DropdownMenuItem>
       ))}
     </> : null}
@@ -130,7 +130,7 @@ function BrainGroups({ catalog, value, onChange }) {
             : m.tier ? <span className="text-muted-foreground truncate text-micro leading-tight">{t(`brain.tier.${m.tier}`)}</span> : null}
         </span>
         {m.heavy ? <Flame className="text-warning! size-3.5" aria-label={t('brain.heavy')} /> : null}
-        {on ? <Check className="text-primary!" /> : null}
+        {on ? <Check className="text-primary-text!" /> : null}
       </DropdownMenuItem>
     );
   };
@@ -204,7 +204,7 @@ export function ReasoningMenu({ catalog, value, onChange, levels, disabled }) {
             <DropdownMenuItem onSelect={() => onChange(level)} data-testid={`reasoning-${level}`} data-selected={current === level || undefined}>
               <span className="min-w-0 flex-1">{t(`reasoning.${level}`)}</span>
               <UsageMeter level={level} />
-              <Check className={cn('text-primary!', current === level ? null : 'invisible')} />
+              <Check className={cn('text-primary-text!', current === level ? null : 'invisible')} />
             </DropdownMenuItem>
           </BubbleTip>
         ))}
@@ -219,7 +219,7 @@ function UsageMeter({ level }) {
   const n = METER[level] ?? 2;
   return (
     <span className="flex h-3 items-end gap-[2px]" aria-hidden="true" data-testid="reasoning-meter" data-bars={n}>
-      {[0, 1, 2, 3].map((i) => <span key={i} className={cn('w-[3px] rounded-[1px]', i < n ? 'bg-primary' : 'bg-muted-foreground/25')} style={{ height: `${5 + i * 2.3}px` }} />)}
+      {[0, 1, 2, 3].map((i) => <span key={i} className={cn('w-[3px] rounded-[1px]', i < n ? 'bg-primary-text' : 'bg-muted-foreground/25')} style={{ height: `${5 + i * 2.3}px` }} />)}
     </span>
   );
 }

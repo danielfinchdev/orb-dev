@@ -185,7 +185,7 @@ export function TasksView({ route }) {
   const open = (t) => (phone ? go({ ...list, id: t.id }) : setSelected(t.id));
   return (
     <>
-      <PageHeader icon={<ClipboardCheck className="text-primary size-5" />} title={route.project ? tr('tasks.titleProject', { project: route.project }) : tr('nav.tasks')} meta={tr('tasks.meta')}>
+      <PageHeader icon={<ClipboardCheck className="text-primary-text size-5" />} title={route.project ? tr('tasks.titleProject', { project: route.project }) : tr('nav.tasks')} meta={tr('tasks.sub', { total: tasks.length, shown: rows.length, waiting: tasks.filter(needsApproval).length })}>
         {route.project ? <Button size="sm" variant="ghost" onClick={() => go('tasks')}><X />{tr('tasks.allProjects')}</Button> : null}
       </PageHeader>
       <PageBody className="md:pb-28">

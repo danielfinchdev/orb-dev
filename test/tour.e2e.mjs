@@ -181,7 +181,8 @@ async function setLook(page, { dark, skin = 'orb' }) {
   await page.reload(); await loaded(page);
 }
 const dialog = (page) => page.waitForSelector('[role=dialog], [role=alertdialog]', { state: 'visible' });
-const footerOpen = async (page) => { if ((await page.locator('[data-testid=sidebar-footer]').getAttribute('data-open')) !== 'true') await page.click('[data-testid=sidebar-footer-toggle]'); };
+// The foot is only icons now (no arrow to unfold it): nothing to open.
+const footerOpen = async () => {};
 
 // What each view is (route view → [label, component]).
 const SRC = {

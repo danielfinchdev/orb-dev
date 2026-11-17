@@ -62,8 +62,8 @@ html.dark[data-skin="vaporwave"]{
   --foreground:oklch(0.96 0.02 330);--background:oklch(0.17 0.07 295);--sidebar:oklch(0.14 0.06 290);--card:oklch(0.2 0.08 295);--popover:oklch(0.21 0.08 295);--bubble:oklch(0.28 0.09 300);--border:oklch(0.33 0.1 310);--accent:oklch(0.26 0.09 300);--secondary:oklch(0.24 0.08 300);--muted:oklch(0.24 0.08 300);
   --info:oklch(0.83 0.13 200);--muted-foreground:oklch(0.78 0.06 320);--faint-foreground:oklch(0.68 0.07 320);--success:oklch(0.82 0.16 165);
   --wm-grad:linear-gradient(180deg,oklch(0.98 0.02 210) 20%,oklch(0.82 0.14 205) 50%,oklch(0.8 0.18 345) 52%,oklch(0.95 0.06 345))}
-html[data-skin="vaporwave"] :is(.bar-clock-time, .bar-title-main) { letter-spacing: 0.04em; }
-html.dark[data-skin="vaporwave"] :is(.bar-clock-time, .bar-title-main) { text-shadow: 0 0 12px color-mix(in oklch, var(--primary) 55%, transparent); }
+html[data-skin="vaporwave"] :is(.bar-clock-time, .bar-title-main, .bar-center .name) { letter-spacing: 0.04em; }
+html.dark[data-skin="vaporwave"] :is(.bar-clock-time, .bar-title-main, .bar-center .name) { text-shadow: 0 0 12px color-mix(in oklch, var(--primary) 55%, transparent); }
 /* ======================================================= Candy: a game, softened */
 html[data-skin="candy"]{
   --title:"Fredoka Variable","Fredoka",system-ui,sans-serif;--radius:14px;--r-ctl:12px;--r-card:18px;--r-big:24px;
@@ -84,7 +84,7 @@ html[data-skin="retro"]{
   --muted-foreground:oklch(0.74 0.15 145);--faint-foreground:oklch(0.64 0.12 145);--info:oklch(0.86 0.13 190);--success:oklch(0.86 0.21 145);--warning:oklch(0.86 0.16 95);--warning-ink:oklch(0.86 0.16 95);--warning-soft:oklch(0.24 0.05 95);--destructive:oklch(0.72 0.19 30);--success-soft:oklch(0.22 0.06 150);
   --shadow:none;
 }
-html[data-skin="retro"] :is(.bar-clock-time, .bar-title-main, .orb-cal-title) { font-size: 22px; font-weight: 400; letter-spacing: 0.04em; }
+html[data-skin="retro"] :is(.bar-clock-time, .bar-title-main, .bar-center .name, .orb-cal-h) { font-size: 22px; font-weight: 400; letter-spacing: 0.04em; }
 html[data-skin="retro"] .project-icon:not(.is-image) { border-radius: 0; background: var(--primary); }
 html[data-skin="retro"] { --tip-border: var(--input); --tip-shadow: none; }
 html[data-skin="retro"] :is([data-slot="menu-content"], [data-slot="select-content"], [data-slot="composer"]) { box-shadow: none; border-color: var(--input); }
@@ -110,15 +110,18 @@ html[data-skin="cristal"]{
 html[data-skin="cristal"] body { background: var(--g-base); }
 html[data-skin="cristal"] aside.bg-sidebar { background-color: color-mix(in oklab, var(--sidebar) var(--veil-side), transparent); border-right-color: var(--g-line); box-shadow: inset -1px 0 0 var(--g-rim-low); }
 html[data-skin="cristal"] aside.bg-sidebar::before { content: ""; position: absolute; inset: 0; z-index: -1; backdrop-filter: blur(40px) saturate(1.6); pointer-events: none; }
-html[data-skin="cristal"] .chat-bar { background-color: color-mix(in oklab, var(--background) var(--veil-side), transparent); backdrop-filter: blur(30px) saturate(1.5); border-bottom-color: var(--g-line); }
+html[data-skin="cristal"] :is(.bar, .tabs-strip) { border-bottom-color: var(--g-line); }
+html[data-skin="cristal"] .tabs-strip { backdrop-filter: blur(40px) saturate(1.6); }
+html[data-skin="cristal"] .win-control:not(.win-close):hover { background: oklch(1 0 0 / 0.5); }
 html[data-skin="cristal"] [data-slot="composer"] { background-color: var(--g-fill-strong); backdrop-filter: blur(16px) saturate(1.9); border-color: var(--g-line); border-radius: var(--r-big); box-shadow: inset 0 1px 0 var(--g-rim), 0 22px 46px -18px var(--g-shadow), 0 4px 10px -4px var(--g-shadow-near); }
-html[data-skin="cristal"] [data-slot="card"] { border-color: var(--g-line); border-radius: var(--r-card); box-shadow: inset 0 1px 0 var(--g-rim), 0 12px 32px -16px var(--g-shadow), 0 2px 6px -3px var(--g-shadow-near); }
+html[data-skin="cristal"] [data-slot="card"] { background: linear-gradient(170deg, oklch(1 0 0 / 0.42), oklch(1 0 0 / 0.12) 60%, oklch(1 0 0 / 0.2)), var(--g-fill); border-color: var(--g-line); border-radius: var(--r-card); box-shadow: inset 0 1px 0 var(--g-rim), 0 12px 32px -16px var(--g-shadow), 0 2px 6px -3px var(--g-shadow-near); }
 html[data-skin="cristal"] :is([data-slot="menu-content"], [data-slot="select-content"], [data-slot="dialog-content"]) { background-color: var(--g-fill-strong); backdrop-filter: blur(28px) saturate(1.8); border-color: var(--g-line); box-shadow: inset 0 1px 0 var(--g-rim), 0 24px 50px -16px var(--g-shadow), 0 3px 8px -3px var(--g-shadow-near); }
 html[data-skin="cristal"] [data-slot="dialog-overlay"] { background-color: var(--g-shadow-near); backdrop-filter: blur(8px); }
 /* Less transparency asked by the system: solid surfaces, no blur. */
 @media (prefers-reduced-transparency: reduce) {
   html[data-skin="cristal"] { --g-fill-strong: var(--card); --sidebar: var(--background); }
-  html[data-skin="cristal"] :is(.chat-bar, [data-slot="composer"], [data-slot="menu-content"], [data-slot="select-content"], [data-slot="dialog-content"], [data-slot="dialog-overlay"]),
+  html[data-skin="cristal"] [data-slot="card"] { background: var(--card); }
+  html[data-skin="cristal"] :is(.tabs-strip, [data-slot="composer"], [data-slot="menu-content"], [data-slot="select-content"], [data-slot="dialog-content"], [data-slot="dialog-overlay"]),
   html[data-skin="cristal"] aside.bg-sidebar::before { backdrop-filter: none; }
 }
 

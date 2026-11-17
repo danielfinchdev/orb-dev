@@ -57,7 +57,7 @@ export function ActivityView({ bare = false }) {
   const summary = (r) => `${t(`logbooks.level.${r.level}`)} · ${String(r.text).slice(0, 80)}`;
   return (
     <>
-      {bare ? null : <PageHeader icon={<History className="text-primary size-5" />} title={t('activity.title')} meta={t('activity.meta')} />}
+      {bare ? null : <PageHeader icon={<History className="text-primary-text size-5" />} title={t('activity.title')} meta={t('activity.meta')} />}
       <PageBody className="px-5 py-5 md:pb-28">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <SearchInput value={filters.q} onChange={(q) => set({ q })} placeholder={t('activity.search')} data-testid="activity-search" />
@@ -73,7 +73,7 @@ export function ActivityView({ bare = false }) {
                 const Icon = SOURCE_ICON[s]; const on = filters.sources.includes(s);
                 return (
                   <button key={s} type="button" aria-pressed={on} onClick={() => toggleSource(s)} data-testid={`activity-source-${s}`}
-                    className={cn('flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-control transition-colors', on ? 'border-primary bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground')}>
+                    className={cn('flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-control transition-colors', on ? 'border-primary-text bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground')}>
                     {on ? <Check className="size-3.5" /> : <Icon className="size-3.5" />}{t(`logbooks.source.${s}`)}
                   </button>
                 );
@@ -127,7 +127,7 @@ function PagedRow({ r, t, marked, canMark, onMark }) {
       <span className={cn('flex items-center gap-1.5', LEVEL_TONE[r.level])}><LvlIcon className="size-3.5 shrink-0" />{t(`logbooks.level.${r.level}`)}</span>
       <span className="text-muted-foreground truncate">{r.project ?? t('logbooks.noProject')}</span>
       <span className="min-w-0 break-words whitespace-pre-wrap" title={r.kind}>{r.text}</span>
-      {canMark && r.at ? <button type="button" aria-pressed={marked} title={marked ? t('logbooks.marked') : t('logbooks.mark')} aria-label={marked ? t('logbooks.marked') : t('logbooks.mark')} onClick={onMark} className={cn('cursor-pointer rounded-md p-1', marked ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}><Bug className="size-3.5" /></button> : <span />}
+      {canMark && r.at ? <button type="button" aria-pressed={marked} title={marked ? t('logbooks.marked') : t('logbooks.mark')} aria-label={marked ? t('logbooks.marked') : t('logbooks.mark')} onClick={onMark} className={cn('cursor-pointer rounded-md p-1', marked ? 'text-primary-text' : 'text-muted-foreground hover:text-foreground')}><Bug className="size-3.5" /></button> : <span />}
     </div>
   );
 }

@@ -4,6 +4,7 @@ export default {
   // Chat list
   'chats.list': 'Chats',
   'chats.new': 'New',
+  'chats.newHint': 'Chat or project',
   'chats.pinned': 'Pinned',
   'chats.messages': 'Messages',
   'chats.noResults': 'No results.',

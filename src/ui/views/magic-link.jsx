@@ -105,7 +105,7 @@ function PairCard({ onPair }) {
   const t = useT();
   return (
     <Card data-testid="link-pair">
-      <CardHeader className="flex-row items-start gap-3"><QrCode className="text-primary mt-0.5 size-5 shrink-0" /><div><CardTitle>{t('link.pairTitle')}</CardTitle><CardDescription>{t('link.pairHint')}</CardDescription></div></CardHeader>
+      <CardHeader className="flex-row items-start gap-3"><QrCode className="text-primary-text mt-0.5 size-5 shrink-0" /><div><CardTitle>{t('link.pairTitle')}</CardTitle><CardDescription>{t('link.pairHint')}</CardDescription></div></CardHeader>
       <CardContent><Button onClick={() => onPair({})} data-testid="link-make"><QrCode />{t('link.make')}</Button></CardContent>
     </Card>
   );
