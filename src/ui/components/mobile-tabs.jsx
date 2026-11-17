@@ -41,7 +41,7 @@ export function MobileTabs() {
               <Icon className="size-5" />
             </span>
             <span className="max-w-full truncate">{label}</span>
-            {count ? <span className={cn('absolute top-1 left-1/2 ml-2 min-w-4 rounded-full px-1 text-micro leading-4 font-semibold tabular-nums', tone === 'primary' ? 'bg-primary-text text-primary-foreground' : 'bg-warning text-warning-foreground')} aria-label={String(count)} data-testid={`${testid}-count`}>{count > 99 ? '99+' : count}</span>
+            {count ? <span className={cn('absolute top-1 left-1/2 ml-2 min-w-4 rounded-full px-1 text-micro leading-4 font-semibold tabular-nums', tone === 'primary' ? 'bg-primary text-primary-foreground' : 'bg-warning text-warning-foreground')} aria-label={String(count)} data-testid={`${testid}-count`}>{count > 99 ? '99+' : count}</span>
               : dot ? <span className="bg-primary-text absolute top-2 left-1/2 ml-3 size-2 animate-pulse rounded-full" /> : null}
           </button>
         );

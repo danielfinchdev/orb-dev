@@ -97,6 +97,8 @@ try {
   await throughStart(page, { ready: '[data-testid=chat-greeting]' });
   // The one-time «Modo Auto activado» notice would sit over every picture for 20 s: marked as seen (ORB_EXPLORA_AUTO_NOTICE=1 keeps it).
   if (!process.env.ORB_EXPLORA_AUTO_NOTICE) await call('config.save', { patch: { ui: { autoNoticed: true } } });
+  // The default name, so the sidebar shows the ORB·E wordmark the mockups draw (the welcome gave it another one).
+  await call('config.save', { patch: { assistantName: 'Orbe' } });
   // ORB_LANG=en: the same tour in English (the interface and the engine's notices follow config.language).
   if (LANG) { await call('config.save', { patch: { language: LANG } }); await page.reload(); await page.waitForSelector('[data-testid=sidebar-home]'); }
   if (await page.isVisible('text=Preparando tu PC')) { await shot('01-preparo-equipo'); await page.click('text=Continuar'); }

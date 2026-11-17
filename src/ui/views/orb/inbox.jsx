@@ -251,7 +251,7 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet, showProject = false 
             {item.snoozedUntil ? <AlarmClock className="text-muted-foreground size-3.5 shrink-0" aria-label={t('orbchats.snoozed', { when: new Date(item.snoozedUntil).toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' }) })} data-testid="chat-snoozed" /> : null}
             {item.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}
             <span className={cn('shrink-0 text-micro tabular-nums', strong ? 'text-primary-text font-medium' : 'text-faint-foreground')}>{time}</span>
-            {item.unread ? <span className={cn('grid h-[17px] min-w-[17px] shrink-0 place-items-center rounded-full px-[5px] text-micro font-semibold tabular-nums', item.muted ? 'bg-muted-foreground/25 text-foreground/70' : 'bg-primary-text text-primary-foreground')} data-testid="chat-unread" aria-label={t('chats.unread', { n: item.unread })}>{item.unread > 99 ? '99+' : item.unread}</span> : null}
+            {item.unread ? <span className={cn('grid h-[17px] min-w-[17px] shrink-0 place-items-center rounded-full px-[5px] text-micro font-semibold tabular-nums', item.muted ? 'bg-muted-foreground/25 text-foreground/70' : 'bg-primary text-primary-foreground')} data-testid="chat-unread" aria-label={t('chats.unread', { n: item.unread })}>{item.unread > 99 ? '99+' : item.unread}</span> : null}
             <span className="-mr-1 w-6 shrink-0" aria-hidden="true" />
           </span>
           <span className={cn('mt-0.5 flex items-center gap-2 overflow-hidden text-caption whitespace-nowrap', needsYou || p.tone === 'warn' ? 'text-warning-ink' : p.tone === 'error' ? 'text-destructive' : p.tone === 'live' ? 'text-primary-text' : 'text-faint-foreground')} data-testid="orb-progress" data-tone={p.tone}>
@@ -287,7 +287,7 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet, showProject = false 
             {p.badge ? <span className="flex-1" /> : null}
             {item.snoozedUntil ? <AlarmClock className="text-muted-foreground size-3.5 shrink-0" aria-label={t('orbchats.snoozed', { when: new Date(item.snoozedUntil).toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' }) })} data-testid="chat-snoozed" /> : null}
             {item.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}
-            {item.unread ? <span className={cn('min-w-5 shrink-0 rounded-full px-1.5 text-center text-micro leading-5 font-semibold tabular-nums', item.muted ? 'bg-muted-foreground/25 text-foreground/70' : 'bg-primary-text text-primary-foreground')} data-testid="chat-unread" aria-label={t('chats.unread', { n: item.unread })}>{item.unread > 99 ? '99+' : item.unread}</span> : null}
+            {item.unread ? <span className={cn('min-w-5 shrink-0 rounded-full px-1.5 text-center text-micro leading-5 font-semibold tabular-nums', item.muted ? 'bg-muted-foreground/25 text-foreground/70' : 'bg-primary text-primary-foreground')} data-testid="chat-unread" aria-label={t('chats.unread', { n: item.unread })}>{item.unread > 99 ? '99+' : item.unread}</span> : null}
           </span>
         </span>
       </button>
@@ -383,7 +383,7 @@ export async function newProjectChat() {
 function OrbNewMenu({ fab = false }) {
   const t = useT();
   const trigger = fab
-    ? <button type="button" className="press bg-primary-text text-primary-foreground fixed right-4 bottom-[calc(84px+env(safe-area-inset-bottom,0px))] z-30 grid size-14 cursor-pointer place-items-center rounded-2xl shadow-lg" aria-label={t('chats.new')} data-testid="chats-new"><Plus className="size-6" /></button>
+    ? <button type="button" className="press bg-primary text-primary-foreground fixed right-4 bottom-[calc(84px+env(safe-area-inset-bottom,0px))] z-30 grid size-14 cursor-pointer place-items-center rounded-2xl shadow-lg" aria-label={t('chats.new')} data-testid="chats-new"><Plus className="size-6" /></button>
     : <IconButton label={t('chats.new')} className="shrink-0" data-testid="chats-new"><Plus /></IconButton>;
   return (
     <DropdownMenu modal={false}>
