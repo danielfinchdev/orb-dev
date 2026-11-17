@@ -118,6 +118,10 @@ export function writesGitRunsFile(command, cwd) {
   if (workDirs(c, cwd).some((part) => WRITERS.test(exeOf(part)) && !DELETERS.test(exeOf(part)) && targetsOf(exeOf(part), part.words.slice(1)).some((t) => isGitRunsFile(bare(t), part.dir)))) return true;
   // Any other program that names them (sed -i, [IO.File]::WriteAllText, node -e …), except one that only looks and git
   // itself (its config forms are the gitRuns rule). A program run from inside .git (`cd .git && node w.js`) writes there.
+  // A segment whose first word has a lone quote glued on (`rg"` after `node w.js "|rg"`) is the tail of a quoted string, not
+  // a looker or an excluder: judge its text as it is.
+  const loneQuote = (w) => ['"', "'"].some((q) => (w.split(q).length - 1) % 2 === 1);
+  if (c.split(/\r?\n|[;&|(){}]/).some((seg) => loneQuote(/^\s*(\S*)/.exec(seg)[1]) && GIT_RUNS_TEXT.test(seg))) return true;
   // `find` only looks until it is told to run or write something.
   return workDirs(withoutExcludes(c), cwd).some((part) => { const exe = exeOf(part); return part.words.length && !WRITERS.test(exe) && (!LOOKERS.test(exe) || (exe === 'find' && part.words.some((w) => FIND_ACTION.test(w)))) && exe !== 'git' && !CD_NAME.test(exe) && (GIT_RUNS_TEXT.test(part.words.join(' ')) || (part.dir && IN_GIT_DIR.test(part.dir))); });
 }
