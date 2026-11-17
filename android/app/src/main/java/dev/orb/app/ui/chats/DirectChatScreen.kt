@@ -55,7 +55,7 @@ import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.theme.OrbMotion
 import dev.orb.app.ui.theme.OrbTheme
 
-/** The direct conversation with an agent (A05, A34). A remote control: it shows what the PC says and asks it for things. */
+/** The direct conversation with an agent. A remote control: it shows what the PC says and asks it for things. */
 @Composable
 fun DirectChatScreen(
     vm: DirectChatViewModel,
@@ -161,7 +161,7 @@ private fun DirectTopBar(state: DirectChatState, onBack: () -> Unit, menu: MenuA
     }
 }
 
-/** A34: the PC cannot be reached. What is shown was saved on the phone; what is written waits to leave. */
+/** The PC cannot be reached. What is shown was saved on the phone; what is written waits to leave. */
 @Composable
 private fun OfflineStrip() {
     Column(
@@ -173,7 +173,7 @@ private fun OfflineStrip() {
     }
 }
 
-/** A28: the PC says the conversation is gone. */
+/** The PC says the conversation is gone. */
 @Composable
 private fun DeletedDirect(onBack: () -> Unit, onRestore: (() -> Unit)?) {
     Column(

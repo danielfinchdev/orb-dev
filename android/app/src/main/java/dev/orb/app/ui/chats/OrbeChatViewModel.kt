@@ -311,7 +311,7 @@ class OrbeChatViewModel(
         viewModelScope.launch { backend.discard(clientId) }
     }
 
-    /** A28: asks the PC to bring the chat back; the thread is read again once it does. */
+    /** Asks the PC to bring the chat back; the thread is read again once it does. */
     fun restore() {
         viewModelScope.launch {
             backend.restore(conversation).fold(

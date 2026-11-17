@@ -54,8 +54,8 @@ object SecureStore {
   class Busy(cause: Throwable) : Exception(cause)
 
   /** The value, or null: none, or unreadable for good (the Keystore key is gone or another one, or the value is
-   *  damaged: it is removed, the phone links again). Throws [Busy] on any other error (review Android B1: a passing
-   *  Keystore error, now also read in the background by NoteReceiver, must never unlink the phone). */
+   *  damaged: it is removed, the phone links again). Throws [Busy] on any other error: a passing
+   *  Keystore error, also read in the background by NoteReceiver, must never unlink the phone). */
   fun get(context: Context, k: String): String? {
     val stored = prefs(context).getString(k, null) ?: return null
     val sep = stored.indexOf(':')

@@ -208,7 +208,7 @@ private fun FailureLine(text: String, modifier: Modifier) {
     )
 }
 
-/** A28's sibling for a run that stopped: the PC offers to go on. */
+/** A run that stopped: the PC offers to go on. */
 @Composable
 fun StalledCard(limited: Boolean, online: Boolean, onResume: () -> Unit, modifier: Modifier = Modifier) {
     CardFrame(modifier, warn = true) {

@@ -76,7 +76,7 @@ import dev.orb.app.ui.theme.GlassSurface
 import dev.orb.app.ui.theme.OrbMotion
 import dev.orb.app.ui.theme.OrbTheme
 
-/** The conversation with Orbe (A04). A remote control: it shows what the PC says and sends what the person asks for. */
+/** The conversation with Orbe. A remote control: it shows what the PC says and sends what the person asks for. */
 @Composable
 fun OrbeChatScreen(
     vm: OrbeChatViewModel,
@@ -158,7 +158,7 @@ private fun OfflineBanner() {
     }
 }
 
-/** A28: the PC says the conversation is gone. */
+/** The PC says the conversation is gone. */
 @Composable
 private fun DeletedChat(onBack: () -> Unit, onRestore: (() -> Unit)?) {
     Column(
@@ -355,7 +355,7 @@ internal fun Composer(
     }
 }
 
-/** A04: «Auto» / «Preguntar», the PC's way of treating what needs a permission. */
+/** «Auto» / «Preguntar», the PC's way of treating what needs a permission. */
 @Composable
 internal fun ModePill(mode: String?, onMode: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }

@@ -61,7 +61,7 @@ import dev.orb.app.ui.theme.OrbTheme
 
 private enum class Pick { None, Project, Brain }
 
-/** A30: choose Orbe or an agent, the project and the brain, write the first line and ask the PC to create the chat. */
+/** Choose Orbe or an agent, the project and the brain, write the first line and ask the PC to create the chat. */
 @Composable
 fun NewChatScreen(vm: NewChatViewModel, onClose: () -> Unit, onCreated: (NewChatCreated) -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
