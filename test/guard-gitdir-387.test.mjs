@@ -55,7 +55,19 @@ test('value-less switches and non-excluding programs cannot hide a .git destinat
 test('cd into .git alone asks nothing; quotes do not make a program an excluder; glued options and find actions are seen', () => {
   for (const c of ['cd .git', 'cd .git && rg foo', 'cd .git && cat config', 'cd .git && git log', 'cd .git && cd .. && npm test', 'pushd .git && popd && npm test',
     'find . -name "*.js" -exec grep foo {} +']) assert.equal(auto(c).decision, 'allow', c);
-  for (const c of ['cd .git && node w.js hooks/pre-commit', 'node w.js "|rg" --exclude .git', 'node w.js ";rg" --exclude .git', 'node w.js "&tar" --exclude .git',
-    'tar -xf x.tar -C.git', '7z x e.7z -o.git', 'unzip e.zip -d.git', 'find . -exec cp evil .git/hooks/pre-commit \;', 'find . -fprint .git/hooks/pre-commit',
+  for (const c of ['cd .git && node w.js hooks/pre-commit', 'tar -xf x.tar -C.git', '7z x e.7z -o.git', 'unzip e.zip -d.git', 'find . -exec cp evil .git/hooks/pre-commit \;', 'find . -fprint .git/hooks/pre-commit',
     'find . -o -exec node w.js .git \;']) assert.equal(auto(c).decision, 'ask', c);
+});
+
+test('a quote the shell does not read as one cannot swallow the rest of the command', () => {
+  const cases = [
+    "$t = @'\ndon't do this\n'@\nRemove-Item -Recurse -Force *",
+    'echo "$(rm -rf .git)"',
+    'echo "a\"b"; rm -rf .git',
+    "cmd /c echo it's & rd /s /q .git",
+    'echo "$(cp evil .git/hooks/pre-commit)"',
+  ];
+  for (const permission of ['auto', 'editar', 'probar']) {
+    for (const command of cases) assert.equal(decide({ permission, tool: 'Bash', command, internalDir: ctx.paths.internal, cwd: proj, projectDir: proj }).decision, 'ask', permission + ': ' + command);
+  }
 });

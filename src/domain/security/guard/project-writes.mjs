@@ -2,7 +2,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import { STAGING_DIR } from '../../../platform/paths.mjs';
-import { bare, expandEnv, splitOutsideQuotes, lastName, pathWords, unq, unwrapShell, winPath, workDirs } from './shell-text.mjs';
+import { bare, expandEnv, lastName, pathWords, unq, unwrapShell, winPath, workDirs } from './shell-text.mjs';
 import { localPath, norm, realOf, rootsOf } from './roots.mjs';
 import { GLOB, globRe } from './core-access.mjs';
 
@@ -133,8 +133,25 @@ const GIT_VALUE = String.raw`(?:!?\.git[\\/]*|"!?\.git[\\/]*"|'!?\.git[\\/]*')(?
 const EXCLUDE_OPTION = new RegExp(String.raw`(?:^|\s)(?:--exclude(?:-dir)?|--ignore-(?:pattern|path|dir)|--glob|/XD)(?:=|\s+)` + GIT_VALUE, 'gi');
 const SHORT_EXCLUDE = new RegExp(String.raw`(?:^|\s)-x\s+` + GIT_VALUE, 'gi');
 const segmentExe = (seg) => (/^\s*(\S+)/.exec(seg)?.[1] ?? '').replace(/^["']|["']$/g, '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '');
+// Segments (even indexes) and separators (odd), cut only outside quotes. Only used to tell which program owns an exclude
+// option: a command whose quoting cannot be read for sure is left whole (nothing is stripped).
+function splitOutsideQuotes(command) {
+  if (/[`]|\\["']|\$\(|@["']/.test(command)) return null; // escapes, here-strings and substitutions: not plain quoting
+  const out = []; let cur = ''; let q = null;
+  for (const ch of command) {
+    if (q) { cur += ch; if (ch === q) q = null; continue; }
+    if (ch === '"' || ch === "'") { q = ch; cur += ch; continue; }
+    if (/[\n;&|(){}]/.test(ch)) { out.push(cur, ch); cur = ''; continue; }
+    cur += ch;
+  }
+  if (q) return null; // unbalanced quotes
+  out.push(cur);
+  return out;
+}
 function withoutExcludes(command) {
-  return splitOutsideQuotes(command).map((seg) => {
+  const segments = splitOutsideQuotes(String(command));
+  if (!segments) return command;
+  return segments.map((seg) => {
     const exe = segmentExe(seg);
     if (!EXCLUDERS.test(exe)) return seg;
     const s = seg.replace(EXCLUDE_OPTION, ' ');
