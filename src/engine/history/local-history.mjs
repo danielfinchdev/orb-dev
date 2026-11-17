@@ -195,7 +195,7 @@ export async function listChats({ agent, q, limit = 200, home } = {}) {
 // The row of one file, kept while the file does not change (a search or a change of tab reads nothing again).
 const ROWS = new Map();
 async function rowOf(a, f) {
-  const key = `${a} ${f.file}`;
+  const key = `${a}\0${f.file}`;
   const hit = ROWS.get(key);
   if (hit && hit.mtimeMs === f.mtimeMs && hit.size === f.size) { ROWS.delete(key); ROWS.set(key, hit); return hit.row; }
   {
