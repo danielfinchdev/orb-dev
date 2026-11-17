@@ -79,12 +79,17 @@ export function detectSensitivity(text) {
 const PUBLISH_ASK = /(^|[^\p{L}])(git\s+push|(?:haz|hacer|hagas|haga)\s+(?:el\s+|un\s+)?push|push(?:[eé][aá]\w*|ear)|push\s+(?:a|al|to|it|the|los|el)|publ[ií]ca(?:lo|la|los|las)?|publish(?:\s+it)?|deploy(?:\s+it)?|despl[ií]ega(?:lo|la)?|s[uú]bel[oa]s?|sube(?:lo|los)?\s+(?:los\s+cambios|el\s+c[oó]digo|a\s+(?:github|gitlab|git|origin|remoto|main|master)|al\s+(?:repo\w*|remoto)))(?![\p{L}])/iu;
 // Quotes (`> …`, added by the reply-to-selection action) and fenced code are pasted text, not the user's own order.
 function ownWords(text) {
+  // A fence closes only with the same character, at least as long, and nothing after it (a longer outer fence may hold shorter ones).
   let fence = null;
-  return String(text ?? '').split('\n').filter((line) => {
-    const f = /^\s*(```|~~~)/.exec(line)?.[1];
-    if (fence) { if (f === fence) fence = null; return false; }
-    if (f) { fence = f; return false; }
-    return !/^\s*>/.test(line);
+  return String(text ?? '').split(/\r?\n/).filter((line) => {
+    if (fence) {
+      const close = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(line)?.[1];
+      if (close && close[0] === fence[0] && close.length >= fence.length) fence = null;
+      return false;
+    }
+    const open = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    if (open) { fence = open; return false; }
+    return !/^\s*>/.test(line) && !/^(?: {4}|\t)/.test(line);
   }).join('\n');
 }
 export function askedByUser(userText) {
