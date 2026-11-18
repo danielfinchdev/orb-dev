@@ -15,7 +15,7 @@ import { folderName } from '../../platform/paths.mjs';
 import { checkCategory } from '../../domain/projects/projects.mjs';
 import { ATTACH_DIR } from '../sessions.mjs';
 import { cleanCommitMessage } from '../../shared/commit-message.mjs';
-import { rememberRepo } from './pr-cache.mjs';
+import { rememberRepo, cachedPr } from './pr-cache.mjs';
 
 function ghExe() {
   const pf = process.env.ProgramFiles ?? 'C:\\Program Files';
@@ -69,19 +69,28 @@ export function login() { const exe = ghExe(); if (!exe) throw new Error(tr('msg
 // git for the card, without blocking the engine (five calls per open card, up to a second on a big repository). Never
 // throws: a failure is an empty answer.
 const query = async (cwd, ...args) => { const r = await gitAsyncWith(cwd, { timeout: 30_000, max: 32 * 1024 * 1024 }, ...args); return { stdout: r.status === 0 ? r.stdout : '' }; };
+// The list reads every visible project each time it opens, while an agent may be running git add/commit there. A plain
+// `git status` refreshes .git/index and takes index.lock for it; --no-optional-locks keeps these reads from touching either.
+const peek = (cwd, ...args) => query(cwd, '--no-optional-locks', ...args);
 // The engine's asynchronous git, called as git(dir, ...args), for what has to look at the status code.
 // Writing actions keep the two minutes they always had; only the card's reads are cut at 30 s (query).
 const git = (dir, ...args) => gitAsyncWith(dir, { timeout: 120_000 }, ...args);
-export async function projectInfo(project) {
+// opts.local: git only, never gh and never the network; the PR is the one already in memory (pr-cache) or left out, and
+// nothing is remembered.
+export async function projectInfo(project, { local = false } = {}) {
   if (!(await isGitRepoAsync(project.path))) return { git: false };
-  const [b, r, refs, st] = await Promise.all([query(project.path, 'rev-parse', '--abbrev-ref', 'HEAD'), query(project.path, 'remote', 'get-url', 'origin'), query(project.path, 'for-each-ref', '--format=%(refname:short)', 'refs/heads'), query(project.path, 'status', '--porcelain', '-uall')]);
+  const [b, r, refs, st] = await Promise.all([peek(project.path, 'rev-parse', '--abbrev-ref', 'HEAD'), peek(project.path, 'remote', 'get-url', 'origin'), peek(project.path, 'for-each-ref', '--format=%(refname:short)', 'refs/heads'), peek(project.path, 'status', '--porcelain', '-uall')]);
   const branch = b.stdout.trim();
   const remote = r.stdout.trim() || null;
   const branches = refs.stdout.split(/\r?\n/).filter(Boolean).slice(0, 100);
   const changes = st.stdout.split(/\r?\n/).filter(Boolean).length;
-  const ahead = remote ? (await query(project.path, 'rev-list', '--count', '@{upstream}..HEAD')).stdout.trim() : '';
+  const ahead = remote ? (await peek(project.path, 'rev-list', '--count', '@{upstream}..HEAD')).stdout.trim() : '';
+  if (local) {
+    const known = cachedPr(project.path, branch);
+    return { git: true, branch, remote, branches, changes, ahead: ahead === '' ? null : Number(ahead), ...(known ? { prs: [{ number: known, headRefName: branch }] } : {}) };
+  }
   let prs = []; let prsRead = false;
-  if (remote && /github\.com/i.test(remote) && ghExe()) {
+  if (remote && /github\.com/i.test(remote) && seam.exe()) {
     const r = await gh(['pr', 'list', '--state', 'open', '--limit', '20', '--json', 'number,title,headRefName,url,isDraft,isCrossRepository,author,createdAt,mergeable'], { cwd: project.path, timeoutMs: 30_000 });
     // the author is flattened to its login, the way listPrs and viewPr give it
     if (r.ok) { try { prs = JSON.parse(r.out); prsRead = Array.isArray(prs); if (prsRead) prs = prs.map((x) => ({ ...x, author: authorOf(x?.author) })); } catch { /* ignore */ } }

@@ -115,7 +115,8 @@ export function projectMethods({ realHome, insideHome, project, holding, coordin
       return { ok: true };
     },
     'projects.clearIcon': ({ name }) => { const icon = clearProjectIcon(project(name)); board.changed('projects'); return icon; },
-    'projects.info': async ({ name }) => (await gh()).projectInfo(project(name)),
+    // local: true is the list's read (git only, no gh, no network); without it the page's full read.
+    'projects.info': async ({ name, local }) => (await gh()).projectInfo(project(name), { local: local === true }),
     // A commit or a merge changes the folder off the event loop: the project is held so no task starts in it meanwhile.
     'projects.commit': async ({ name, session, message, files, push }) => {
       const p = inChat(name, session); const g = await gh();

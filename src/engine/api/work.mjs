@@ -14,7 +14,7 @@ import { expandMentions, mentionOptions } from '../mentions.mjs';
 import { modelCatalog, REASONING_LEVELS, levelsOf } from '../usage/catalog.mjs';
 import { titleFrom } from '../../shared/titles.mjs';
 import { autoTitle } from '../titles.mjs';
-import { diffBetween } from '../../domain/tasks/checkpoints.mjs';
+import { diffBetween, statBetweenAsync } from '../../domain/tasks/checkpoints.mjs';
 import { listTurns, turnDiff, commentsBlock } from '../../domain/conversations/turns.mjs';
 import { editMessage, undoRewind, rewindInfo } from '../edit-message.mjs';
 import { fail, str, int, oneOf, images, DECISION } from './common.mjs';
@@ -88,12 +88,14 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     'tasks.undo': ({ id }) => scheduler.undo(int(id, 'tarea')),
     // what a finished task changed, with each file's diff (read only, against its undo checkpoint: «Deshacer» works
     // the same). Nothing to show while it runs, after it was undone, or without git (a copy checkpoint).
-    'tasks.diff': async ({ id }) => {
+    // stat: true → only the line counts per file, no patch, and nothing else is done (read only, no recheck of held files).
+    'tasks.diff': async ({ id, stat }) => {
       const task = board.task(int(id, 'tarea')) ?? fail(tr('msg.api.noTaskThat'));
       // a held task's diff is read from every file again (safety.mjs › recheckHeld): what accepting it keeps.
-      if (board.heldInfo(task)) await scheduler.recheckHeld(task);
+      if (stat !== true && board.heldInfo(task)) await scheduler.recheckHeld(task);
       const cp = board.settingJson(`checkpoint:${task.id}`);
       if (cp?.before?.kind !== 'git' || !cp.after?.commit || !cp.before.repo || !fs.existsSync(cp.before.repo)) return { available: false, files: [], more: 0 };
+      if (stat === true) return { available: true, ...(await statBetweenAsync(cp.before.repo, cp.before.commit, cp.after.commit)) };
       return { available: true, ...diffBetween(cp.before.repo, cp.before.commit, cp.after.commit) };
     },
     // «Iniciar de todos modos» starts that task now, over the usage limit and also with the queue paused (only that
