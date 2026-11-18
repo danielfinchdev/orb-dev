@@ -265,6 +265,9 @@ function TasksLegacy({ route }) {
 // ---- The PC: the board as in the mock-up 03-tareas. The list on the left with its filters and the queue's card; the
 // task's Detalle and Cambios in the right panel. The phone and a linked browser keep TasksLegacy above.
 
+// Below 44rem of view area (measured on the view, not the window: the sidebar may be folded) the list and the detail panel
+// cannot sit side by side without squeezing the list to a word per line, so the panel covers the list and closes back to it.
+const NARROW_PANEL = '@max-[44rem]/tasks:absolute! @max-[44rem]/tasks:inset-0 @max-[44rem]/tasks:z-20 @max-[44rem]/tasks:w-full! @max-[44rem]/tasks:max-w-none! @max-[44rem]/tasks:border-l-0 @max-[44rem]/tasks:bg-background! @max-[44rem]/tasks:[&>.chat-panel-resize]:hidden';
 const PC_FILTERS = [
   ['todas', 'tasks.filter.all', () => true],
   ['encurso', 'tasks.filter.active', (x) => x.status === 'running'],
@@ -603,7 +606,7 @@ function TasksPc({ route }) {
   const tabs = [{ value: 'info', icon: Info, label: tr('tasks.panel.detail'), testid: 'task-panel-tab-detail' }, { value: 'changes', icon: FileDiff, label: tr('tasks.panel.changes'), testid: 'task-panel-tab-changes' }];
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1">
+    <div className="@container/tasks relative flex min-h-0 min-w-0 flex-1">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <PageHeader title={route.project ? tr('tasks.titleProject', { project: route.project }) : tr('nav.tasks')} meta={tr('tasks.sub', { total: tasks.length, shown: rows.length, waiting: tasks.filter(needsApproval).length })}>
           {route.project ? <Button size="sm" variant="ghost" onClick={() => go('tasks')}><X />{tr('tasks.allProjects')}</Button> : null}
@@ -642,7 +645,7 @@ function TasksPc({ route }) {
           </div>
         </PageBody>
       </div>
-      <ChatPanel open={panelOpen && current != null} tab={shownTab} onTab={setTab} onClose={() => setPanelOpen(false)} tabs={tabs} label={tr('tasks.panel.label')} closeLabel={tr('tasks.panel.close')} closeTestId="task-panel-close">
+      <ChatPanel open={panelOpen && current != null} tab={shownTab} onTab={setTab} onClose={() => setPanelOpen(false)} tabs={tabs} label={tr('tasks.panel.label')} closeLabel={tr('tasks.panel.close')} closeTestId="task-panel-close" className={NARROW_PANEL}>
         {!sel ? (loadingSel ? <div aria-busy="true" data-testid="task-panel-loading" /> : <Empty icon={ClipboardCheck} title={tr('tasks.pick')}>{tr('tasks.pickHint')}</Empty>)
           : shownTab === 'changes' ? <TaskPanelChanges t={sel} diff={diff} raw={raw} />
             : <TaskPanelDetail t={sel} live={liveOf(live, sel.id)} diff={diff} onChanges={() => setTab('changes')} />}

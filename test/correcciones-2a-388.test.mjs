@@ -80,3 +80,12 @@ test('11: the 20 px fade is on the scroller itself, whose 24 px end padding keep
   assert.match(read('src/ui/views/chat.jsx'), /className="lazy-lines [^"]*py-6 /);
   assert.match(read('src/ui/views/session.jsx'), /className="lazy-lines [^"]*py-6 /);
 });
+
+test('Tareas: the detail panel covers the list when the view area is narrow', () => {
+  const tasks = fs.readFileSync(root + 'src/ui/views/tasks.jsx', 'utf8');
+  const panel = fs.readFileSync(root + 'src/ui/components/chat-panel.jsx', 'utf8');
+  assert.match(tasks, /"@container\/tasks relative flex min-h-0 min-w-0 flex-1"/);
+  assert.match(tasks, /NARROW_PANEL = '[^']*@max-\[44rem\]\/tasks:absolute![^']*@max-\[44rem\]\/tasks:inset-0[^']*@max-\[44rem\]\/tasks:w-full!/);
+  assert.match(tasks, /closeTestId="task-panel-close" className=\{NARROW_PANEL\}/);
+  assert.match(panel, /chat-panel bg-background relative flex max-w-\[70%\] shrink-0 flex-col border-l\$\{className/);
+});

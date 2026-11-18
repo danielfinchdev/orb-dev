@@ -36,8 +36,9 @@ function usePanelWidth(key, initial) {
 
 // open: the panel is shown; while it closes it stays mounted for the length of its exit animation.
 // tabs: another screen's own tabs ([{ value, icon, label, testid }], Tareas); without them, the chat's Ficha / Cambios / PR.
+// className: extra classes for the screen that hosts the panel (Tareas covers its list when narrow).
 // widthKey / defaultWidth: a screen that wants its own remembered width (the Pizarra's canvas needs room to keep its desktop tools).
-export function ChatPanel({ open, tab, onTab, onClose, prNumber, children, tabs, label, closeLabel, closeTestId, widthKey = WIDTH_KEY, defaultWidth = PANEL_DEFAULT }) {
+export function ChatPanel({ open, tab, onTab, onClose, prNumber, children, tabs, label, closeLabel, closeTestId, className = '', widthKey = WIDTH_KEY, defaultWidth = PANEL_DEFAULT }) {
   const t = useT();
   const { width, setWidth, startResize } = usePanelWidth(widthKey, defaultWidth);
   const [mounted, setMounted] = useState(open);
@@ -51,7 +52,7 @@ export function ChatPanel({ open, tab, onTab, onClose, prNumber, children, tabs,
     if (e.key === 'ArrowLeft') { e.preventDefault(); setWidth(width + 16); } else if (e.key === 'ArrowRight') { e.preventDefault(); setWidth(width - 16); }
   };
   return (
-    <aside className="chat-panel bg-background relative flex max-w-[70%] shrink-0 flex-col border-l" style={{ width }} data-state={open ? 'open' : 'closed'} data-testid="chat-panel" aria-label={label ?? t('panel.tabs')}>
+    <aside className={`chat-panel bg-background relative flex max-w-[70%] shrink-0 flex-col border-l${className ? ` ${className}` : ''}`} style={{ width }} data-state={open ? 'open' : 'closed'} data-testid="chat-panel" aria-label={label ?? t('panel.tabs')}>
       <div className="chat-panel-resize" role="separator" aria-orientation="vertical" aria-label={t('panel.resize')} aria-valuemin={PANEL_MIN} aria-valuemax={PANEL_MAX} aria-valuenow={width} tabIndex={0}
         onPointerDown={startResize} onDoubleClick={() => setWidth(defaultWidth)} onKeyDown={nudge} data-testid="chat-panel-resize" />
       <Tabs value={tab} onValueChange={onTab} className="flex min-h-0 flex-1 flex-col">
