@@ -279,10 +279,14 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   ['conversations', 'bot_id', 'INTEGER'], ['conversations', 'group_id', 'INTEGER'],
   // the direct conversation (session) that claimed a manual task: only that one may work on it.
   ['tasks', 'claimed_session', 'TEXT'],
+  // the direct conversation (session) whose agent created the task (orb_create_task); older tasks have none.
+  ['tasks', 'origin_session', 'TEXT'],
   // the task a worker's message comes from (task_id is then the task it is for: its own, or a sibling's).
   ['messages', 'from_task', 'INTEGER'],
   // a chat snoozed until then (hidden from the list; the scheduler brings it back).
   ['inbox_items', 'snoozed_until', 'TEXT'],
+  // a chat the user marked as unread by hand (it counts as one unread line until it is read again).
+  ['inbox_items', 'marked_unread', 'INTEGER NOT NULL DEFAULT 0'],
   // a schedule whose runs all go to one chat (made on its first run, or the one that asked for it).
   ['schedules', 'same_chat', 'INTEGER NOT NULL DEFAULT 0'], ['schedules', 'conversation_id', 'INTEGER'],
   // The person's own notes on a chat (shown in its info panel) and the chat lines they pinned (when, null = not pinned).

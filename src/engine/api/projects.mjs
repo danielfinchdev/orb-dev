@@ -149,6 +149,8 @@ export function projectMethods({ realHome, insideHome, project, holding, coordin
     },
     // Pull requests for the phone. The number is a plain integer (never "1e3" or text with spaces); gh gets it as an argument.
     'projects.prs': async ({ name }) => (await gh()).listPrs(project(name)),
+    // The newest PR of a branch in any state (a merged or closed one too); read-only, like projects.pr.
+    'projects.branchPr': async ({ name, branch }) => (await gh()).branchPr(project(name), str(branch, 'rama', 120)),
     'projects.pr': async ({ name, number }) => (await gh()).viewPr(project(name), prNumber(number)),
     'projects.mergePr': async ({ name, number, method, headRefOid }) => {
       const p = project(name); const n = prNumber(number); const oid = headOid(headRefOid); const m = oneOf(method, ['merge', 'squash', 'rebase'], 'método', 'merge'); const g = await gh();

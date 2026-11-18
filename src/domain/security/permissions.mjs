@@ -45,7 +45,7 @@ export const METHODS = Object.freeze({
   // projects
   'projects.list': 'remote', 'projects.icons': 'remote', 'projects.create': 'remote', 'projects.import': 'pc', 'projects.clone': 'pc',
   'projects.remove': 'pc', 'projects.rename': 'pc', 'projects.setActive': 'remote', 'projects.setIcon': 'pc', 'projects.clearIcon': 'pc',
-  'projects.branch': 'remote', 'projects.info': 'remote', 'projects.prs': 'remote', 'projects.pr': 'remote', 'projects.mergePr': 'remote', 'projects.prComment': 'remote', 'notes.markRead': 'remote', 'projects.commit': 'pc', 'projects.commitFiles': 'pc', 'projects.commitSuggest': 'pc', 'projects.prFix': 'pc', 'ciWatch.list': 'pc', 'ciWatch.set': 'pc', 'projects.merge': 'pc', 'projects.push': 'pc',
+  'projects.branch': 'remote', 'projects.info': 'remote', 'projects.prs': 'remote', 'projects.pr': 'remote', 'projects.branchPr': 'remote', 'projects.mergePr': 'remote', 'projects.prComment': 'remote', 'notes.markRead': 'remote', 'projects.commit': 'pc', 'projects.commitFiles': 'pc', 'projects.commitSuggest': 'pc', 'projects.prFix': 'pc', 'ciWatch.list': 'pc', 'ciWatch.set': 'pc', 'projects.merge': 'pc', 'projects.push': 'pc',
   'projects.createPr': 'pc', 'projects.createRepo': 'pc', 'projects.review': 'remote', 'projects.securityReview': 'remote',
   // finishing a project (its folder stays) also from the phone; deleting it (its folder too) only here.
   'projects.finish': 'remote', 'projects.finished': 'remote', 'projects.reopen': 'remote', 'projects.deleteCheck': 'pc', 'projects.delete': 'pc', 'projects.deleteAbort': 'pc',
@@ -67,7 +67,7 @@ export const METHODS = Object.freeze({
   'schedules.list': 'remote', 'schedules.create': 'remote', 'schedules.update': 'remote', 'schedules.run': 'remote', 'schedules.remove': 'pc',
   // the chat list (pins, sections, read marks)
   'inbox.list': 'remote', 'inbox.digest': 'remote', 'inbox.digestSeen': 'remote','inbox.search': 'remote', 'inbox.pin': 'remote', 'inbox.unpin': 'remote', 'inbox.reorderPins': 'remote',
-  'inbox.mute': 'remote', 'inbox.snooze': 'remote', 'inbox.markRead': 'remote', 'inbox.sections.list': 'remote', 'inbox.sections.create': 'remote',
+  'inbox.mute': 'remote', 'inbox.snooze': 'remote', 'inbox.markRead': 'remote', 'inbox.markUnread': 'remote', 'inbox.sections.list': 'remote', 'inbox.sections.create': 'remote',
   'inbox.sections.rename': 'remote', 'inbox.sections.delete': 'remote', 'inbox.sections.reorder': 'remote', 'inbox.sections.move': 'remote',
   // phone access and Magic Link
   'remote.status': 'pc', 'remote.enable': 'pc', 'remote.configure': 'pc', 'remote.pair': 'pc', 'remote.revoke': 'pc',

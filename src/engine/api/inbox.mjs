@@ -45,7 +45,7 @@ export function inboxMethods({ board, emit, orchestrator }) {
       const last = I.describeLine(lines.get(Number(conversation)) ?? null, { userName: user });
       out.push({ key: I.keyOf(kind, id), kind, id: Number(id), conversation: conversation ?? null, ...base,
         pinned: m.pinned, pinOrder: m.pinned ? m.pinOrder : null, section: m.section, muted: m.muted, snoozedUntil: m.snoozedUntil,
-        lastMessage: last, unread: conversation == null ? 0 : unread.get(Number(conversation)) ?? 0, at: last?.at ?? base.at ?? null });
+        lastMessage: last, unread: I.withMarkedUnread(conversation == null ? 0 : unread.get(Number(conversation)) ?? 0, m), markedUnread: m.markedUnread, at: last?.at ?? base.at ?? null });
     };
     const running = new Set(board.all("SELECT DISTINCT conversation_id AS c FROM tasks WHERE conversation_id IS NOT NULL AND status = 'running'").map((r) => r.c));
     const paused = board.setting('paused') === '1';
@@ -60,7 +60,7 @@ export function inboxMethods({ board, emit, orchestrator }) {
       const id = key.slice(8);
       const s = board.one("SELECT id FROM sessions WHERE id = ? AND kind = 'chat' AND trashed_at IS NULL", id);
       if (!s) continue;
-      out.push({ key, kind: 'session', id: s.id, conversation: null, pinned: m.pinned, pinOrder: m.pinned ? m.pinOrder : null, section: m.section, muted: m.muted, snoozedUntil: m.snoozedUntil, lastMessage: null, unread: 0, at: null });
+      out.push({ key, kind: 'session', id: s.id, conversation: null, pinned: m.pinned, pinOrder: m.pinned ? m.pinOrder : null, section: m.section, muted: m.muted, snoozedUntil: m.snoozedUntil, lastMessage: null, unread: I.withMarkedUnread(0, m), markedUnread: m.markedUnread, at: null });
     }
     return out;
   }
@@ -96,7 +96,7 @@ export function inboxMethods({ board, emit, orchestrator }) {
     const it = I.itemOfConversation(board, conversation); if (!it) return;
     try {
       I.since(board, { before: line });
-      if (role === 'usuario' && line != null) I.setMark(board, it.kind, it.id, { lastRead: line });
+      if (role === 'usuario' && line != null) I.setMark(board, it.kind, it.id, { lastRead: line, markedUnread: false });
       told({ kind: it.kind, id: Number(it.id), conversation: Number(conversation) });
     } catch { /* a list mark must never break a line */ }
   }
@@ -135,6 +135,13 @@ export function inboxMethods({ board, emit, orchestrator }) {
       const conv = I.conversationOf(board, it.kind, it.id);
       const m = I.markRead(board, it.kind, it.id, conv, p.upTo == null ? null : int(p.upTo, 'línea'));
       told(it); return { ...m, unread: I.unread(board, conv, m.lastRead) };
+    },
+    // The pair of markRead: the chat counts as having one unread line until it is opened or read again.
+    'inbox.markUnread': (p) => {
+      const it = itemOf(p);
+      const conv = I.conversationOf(board, it.kind, it.id);
+      const m = I.markUnread(board, it.kind, it.id);
+      told(it); return { ...m, unread: I.withMarkedUnread(I.unread(board, conv, m.lastRead), m) };
     },
     'inbox.sections.list': ({ zone }) => I.sections(board, zoneOf(zone)),
     'inbox.sections.create': ({ zone, name }) => {

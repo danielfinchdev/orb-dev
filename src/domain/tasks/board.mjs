@@ -162,7 +162,7 @@ export class Board {
   // readonly: the task only reads (research, review): it may run at the same time as others in the same folder.
   // conversation_id: the conversation that asked for it (its report goes back there); a subtask, a review or a join
   // task belongs to the one of the task it comes from.
-  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false, internal = false, conversation_id = null, autonomy, external = false }, actor) {
+  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false, internal = false, conversation_id = null, autonomy, external = false, origin_session = null }, actor) {
     if (!MODES.includes(mode)) throw new Error(tr('sys.board.badMode'));
     const proj = this.project(project);
     if (!proj) throw new Error(tr('sys.board.unknownProject', { name: project }));
@@ -252,6 +252,9 @@ export class Board {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, proj.name, title, String(description), agent, account || null, model, reasoning, Number(fast), launch, Math.min(Math.max(Number(priority) || 2, 1), 3),
       JSON.stringify(depends_on.map(Number)), JSON.stringify([...new Set(tags)]), status, String(actor), proj.path, at, at, mode, Number(Boolean(readonly)), parent_id ? Number(parent_id) : null, review_of ? Number(review_of) : null, schedule_id ? Number(schedule_id) : null, ['simple', 'normal', 'complejo'].includes(level) ? level : null, convId ?? null, mine, asked.length ? JSON.stringify(asked) : null);
     const id = Number(lastInsertRowid);
+    // A label only (the Ficha of a chat lists the tasks made from it): kept just for a chat of the task's own project, and
+    // nothing reads it to decide about permissions or approval.
+    if (origin_session && this.one("SELECT id FROM sessions WHERE id = ? AND kind = 'chat' AND project = ? COLLATE NOCASE", String(origin_session), proj.name)) this.run('UPDATE tasks SET origin_session = ? WHERE id = ?', String(origin_session), id);
     this.event(id, actor, 'task.created', status);
     if (askedNote) this.event(id, 'orb', 'note', askedNote);
     if (status === 'awaiting_approval') { const tagList = tagWords(tags); this.addChat('system', reasons.length ? tr('msg.board.needsApprovalWhy', { id, title, tags: tagList, reasons: reasons.join('; ') }) : tr('msg.board.needsApproval', { id, title, tags: tagList }), { kind: 'attention', task: id }, convId ?? null); }

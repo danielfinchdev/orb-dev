@@ -228,6 +228,18 @@ export async function listPrs(project) {
   return out;
 }
 
+// The newest pull request of a branch whatever its state (open, merged or closed): what the PR panel shows once the open one
+// is gone. Read-only; a new call, so the field lists of the open-PR reads above stay as they are. null when the branch
+// never had one (or only a fork's, which shares the branch name without being ours).
+export async function branchPr(project, branch) {
+  const name = branchName(branch);
+  const list = await ghJson(project, ['pr', 'list', '--state', 'all', '--head', name, '--limit', '5', '--json', 'number,title,headRefName,headRefOid,baseRefName,url,isDraft,isCrossRepository,author,createdAt,updatedAt,mergeable,state']);
+  const x = (Array.isArray(list) ? list : []).find((p) => p && Number.isInteger(p.number) && p.headRefName === name && p.isCrossRepository === false);
+  if (!x) return null;
+  return { number: x.number, title: oneLine(x.title, 300), headRefName: x.headRefName, headRefOid: oidOf(x.headRefOid), baseRefName: x.baseRefName, url: x.url, state: x.state, isDraft: Boolean(x.isDraft),
+    author: authorOf(x.author), createdAt: x.createdAt, updatedAt: x.updatedAt, mergeable: x.mergeable || null };
+}
+
 export async function viewPr(project, number) {
   const x = await ghJson(project, ['pr', 'view', String(number), '--json', 'number,title,body,state,url,headRefName,headRefOid,baseRefName,isDraft,author,createdAt,updatedAt,mergeable,mergeStateStatus,reviewDecision,additions,deletions,changedFiles,statusCheckRollup,files,commits,reviewRequests,latestReviews,comments']);
   return {

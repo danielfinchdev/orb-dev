@@ -19,7 +19,7 @@ import { listTurns, turnDiff, commentsBlock } from '../../domain/conversations/t
 import { editMessage, undoRewind, rewindInfo } from '../edit-message.mjs';
 import { fail, str, int, oneOf, images, DECISION } from './common.mjs';
 import { createDedupe, conversationKey } from './dedupe.mjs';
-import { cachedBranch, cachedPr } from '../host/pr-cache.mjs';
+import { cachedBranch, cachedPr, liveBranch } from '../host/pr-cache.mjs';
 
 export function workMethods({ trash, project, cut, accept, taskRejected, modelLabelOf, grants, board, sessions, scheduler, chatTrees, log }) {
   const runMode = (s, { name, args }) => {
@@ -77,7 +77,8 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       project: project(p.project).name, title: str(p.title, 'título', 200), description: str(p.description, 'descripción', 12000),
       agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente', 'any'), model: str(p.model, 'modelo', 80, { optional: true }) || null,
       reasoning: oneOf(p.reasoning, ['low', 'medium', 'high'], 'razonamiento', 'medium'), mode: oneOf(p.mode, ['carpeta', 'aislada'], 'modo', 'carpeta'),
-      readonly: Boolean(p.readonly), account: str(p.account, 'cuenta', 40, { optional: true }) || null, level: oneOf(p.level, ['simple', 'normal', 'complejo'], 'nivel', null), depends_on: Array.isArray(p.depends_on) ? p.depends_on.map((d) => int(d, 'dependencia')) : []
+      readonly: Boolean(p.readonly), account: str(p.account, 'cuenta', 40, { optional: true }) || null, level: oneOf(p.level, ['simple', 'normal', 'complejo'], 'nivel', null), depends_on: Array.isArray(p.depends_on) ? p.depends_on.map((d) => int(d, 'dependencia')) : [],
+      origin_session: p.origin_session == null ? null : str(p.origin_session, 'sesión', 64)
     }, 'usuario'),
     'tasks.approve': ({ id, decision, hash }) => {
       const out = board.approve(int(id, 'tarea'), decision === 'approved' ? 'approved' : 'rejected', 'usuario', str(hash, 'huella', 100));
@@ -130,6 +131,8 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     // `branch` and `prNumber` are optional and only read from what the engine already holds (the chats' worktree records, and
     // the branch and open PRs that projects.info / projects.prs last read): this list never runs git or gh.
     'sessions.list': ({ archived }) => {
+      // HEAD read first (cheap, 5 s per folder); the older read of projects.info only when HEAD could not be read.
+      const currentBranch = (dir) => { const live = liveBranch(dir); return live === undefined ? cachedBranch(dir) : live; };
       const list = sessions.list({ archived: Boolean(archived) });
       let trees = null;
       return list.map((s) => {
@@ -137,7 +140,7 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
         trees ??= new Map(chatTrees.all().filter((r) => !r.removed).map((r) => [r.id, r]));
         const tree = trees.get(s.id);
         // the project's branch is today's: a settled or archived chat did not work on it
-        const branch = tree?.branch || (s.archived || s.settled ? null : cachedBranch(s.cwd));
+        const branch = tree?.branch || (s.archived || s.settled ? null : currentBranch(s.cwd));
         if (!branch) return s;
         const pr = cachedPr(tree?.repo || s.cwd, branch);
         return { ...s, branch, ...(pr ? { prNumber: pr } : {}) };

@@ -24,8 +24,8 @@ export function itemOfConversation(board, conversation) {
 export const conversationOf = (board, kind, id) => (kind === 'conversation' ? board.one('SELECT id FROM conversations WHERE id = ? AND bot_id IS NULL AND group_id IS NULL', Number(id))?.id ?? null : null);
 
 // ---- the marks (a chat without a row: not pinned, no section, not muted, nothing read but the starting point)
-const DEFAULT = { pinned: false, pinOrder: null, section: null, muted: false, lastRead: 0, snoozedUntil: null };
-const view = (r) => (r ? { pinned: Boolean(r.pinned), pinOrder: r.pin_order ?? null, section: r.section_id ?? null, muted: Boolean(r.muted), lastRead: Number(r.last_read) || 0, snoozedUntil: r.snoozed_until ?? null } : { ...DEFAULT });
+const DEFAULT = { pinned: false, pinOrder: null, section: null, muted: false, lastRead: 0, snoozedUntil: null, markedUnread: false };
+const view = (r) => (r ? { pinned: Boolean(r.pinned), pinOrder: r.pin_order ?? null, section: r.section_id ?? null, muted: Boolean(r.muted), lastRead: Number(r.last_read) || 0, snoozedUntil: r.snoozed_until ?? null, markedUnread: Boolean(r.marked_unread) } : { ...DEFAULT });
 export function marks(board) {
   const out = new Map();
   if (!has(board, 'inbox_items')) return out;
@@ -35,7 +35,7 @@ export function marks(board) {
 // No row: the marks of a chat nobody marked.
 export const noMark = () => ({ ...DEFAULT });
 export const mark = (board, kind, id) => view(board.one('SELECT * FROM inbox_items WHERE person_id = ? AND kind = ? AND item_id = ?', ME, kind, String(id)));
-const COLS = { pinned: 'pinned', pinOrder: 'pin_order', section: 'section_id', muted: 'muted', lastRead: 'last_read', snoozedUntil: 'snoozed_until' };
+const COLS = { pinned: 'pinned', pinOrder: 'pin_order', section: 'section_id', muted: 'muted', lastRead: 'last_read', snoozedUntil: 'snoozed_until', markedUnread: 'marked_unread' };
 export function setMark(board, kind, id, fields) {
   const keys = Object.keys(fields).filter((k) => COLS[k]);
   const val = (k) => (typeof fields[k] === 'boolean' ? Number(fields[k]) : fields[k] ?? null);
@@ -85,9 +85,14 @@ export function unreadMany(board, list) {
 export function markRead(board, kind, id, conversation, upTo = null) {
   const last = conversation == null ? 0 : board.one("SELECT MAX(id) AS id FROM chat WHERE conversation_id = ? AND role != 'notice'", Number(conversation))?.id ?? 0;
   const to = upTo == null ? last : Math.min(Number(upTo), last);
-  const was = mark(board, kind, id).lastRead;
-  return to > was ? setMark(board, kind, id, { lastRead: to }) : mark(board, kind, id);
+  const now = mark(board, kind, id);
+  // Reading also drops a by-hand «unread» mark, even when no line is newer than the last one read.
+  return to > now.lastRead ? setMark(board, kind, id, { lastRead: to, markedUnread: false }) : now.markedUnread ? setMark(board, kind, id, { markedUnread: false }) : now;
 }
+// A chat left as unread by the user: it counts as one unread line (a direct conversation with an agent has no lines to
+// count) until it is read again.
+export const markUnread = (board, kind, id) => setMark(board, kind, id, { markedUnread: true });
+export const withMarkedUnread = (count, m) => (m?.markedUnread ? Math.max(1, Number(count) || 0) : Number(count) || 0);
 export function isMuted(board, conversation) {
   if (!has(board, 'inbox_items')) return false;
   const it = itemOfConversation(board, conversation);
