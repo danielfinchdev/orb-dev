@@ -38,6 +38,12 @@ try {
   await page.fill('[data-testid=setup-user]', 'Ana');
   await page.click('[data-testid=setup-create]');
   await throughStart(page, { ready: '[data-testid=chat-greeting]' });
+  // The guided tour starts by itself on the first launch: skipped before anything else, because while it is up it
+  // takes Escape (the player would stay open) and its start closes Ajustes.
+  await page.locator('[data-testid=tour]').waitFor({ timeout: 10000 });
+  await page.click('[data-testid=tour-skip]');
+  await until(async () => (await page.locator('[data-testid=tour]').count()) === 0, 'the tour closed');
+  await until(async () => (await orb.call('app.state')).config?.ui?.tourDone === true, 'the tour remembered as done');
   // Every audio context the page makes from now on, with the options it was made with: the music's is the one that
   // asks for playback latency (the robot's voice and the games make theirs without options).
   await page.evaluate(() => {
@@ -106,7 +112,7 @@ try {
   assert.equal((await contexts())[0].state, 'running');
   await closePlayer();
 
-  step('Ajustes › Apariencia: theme, «Música que reacciona», intensity and volume');
+  step('Ajustes: theme, «Música que reacciona», intensity and volume');
   await page.click('[data-testid=nav-settings]');
   const settings = page.locator('[data-testid=music-settings]');
   await settings.scrollIntoViewIfNeeded();
