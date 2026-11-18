@@ -595,8 +595,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
       </ChatBar>
       <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={trail.ref} onScroll={scroll.onScroll} className="chat-fade min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
-        {/* the column is as wide as the text box (its 20 px sides are the padding); the bar's room is taken from the right padding so the edges line up */}
-        <div className="lazy-lines mx-auto flex min-h-full max-w-[calc(var(--chat-max-width)+2.5rem)] flex-col gap-5 py-6 pr-[calc(1.25rem-var(--sb-w))] pl-5" data-testid="chat-lines" data-paste-chat={String(id ?? 'new')}>
+        {/* the column is as wide as the text box (its 20 px sides are the padding); the bar's room is taken from the right padding and from the max width, so the text, the bubbles and the box share their edges */}
+        <div className="lazy-lines mx-auto flex min-h-full max-w-[calc(var(--chat-max-width)+2.5rem-var(--sb-w))] flex-col gap-5 py-6 pr-[calc(1.25rem-var(--sb-w))] pl-5" data-testid="chat-lines" data-paste-chat={String(id ?? 'new')}>
           {more ? <Button variant="ghost" size="sm" className="text-muted-foreground mx-auto" onClick={loadOlder} disabled={loading} data-testid="chat-older"><History />{t('chat.older')}</Button> : null}
           {id == null && !sending ? (
             <div className="flex min-h-full flex-1 flex-col items-center justify-center gap-3 py-6 text-center" data-testid="empty-chat">

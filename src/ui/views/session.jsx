@@ -548,7 +548,7 @@ export function SessionView({ route }) {
       <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={trail.ref} onScroll={scroll.onScroll} className="chat-fade min-h-0 flex-1 overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable]">
         {/* as wide as the text box, whose edges the messages line up with (see the same column in chat.jsx) */}
-        <div className="lazy-lines mx-auto flex max-w-[calc(var(--chat-max-width)+2.5rem)] flex-col gap-3.5 py-6 pr-[calc(1.25rem-var(--sb-w))] pl-5">
+        <div className="lazy-lines mx-auto flex max-w-[calc(var(--chat-max-width)+2.5rem-var(--sb-w))] flex-col gap-3.5 py-6 pr-[calc(1.25rem-var(--sb-w))] pl-5">
           {more ? <Button variant="ghost" size="sm" className="self-center" onClick={loadOlder}><ChevronUp />{t('session.older')}</Button> : null}
           {blocks.length || unsaved.length ? <TurnFlow blocks={blocks} session={s} running={running} onFork={s.kind === 'chat' ? fork : null} forkDisabled={running} renderBlock={(b) => <Block key={b.key} b={b} agent={s.agent} who={who} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />} />
             : <Empty title={t('session.emptyTitle', { agent: AGENT[s.agent] })}>{t('session.workIn')} <span className="font-mono text-xs">{s.cwd}</span> {t('session.withPerm', { perm: PERMISSION[s.permission] })}</Empty>}

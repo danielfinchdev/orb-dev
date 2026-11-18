@@ -80,7 +80,8 @@ export function GamesDialog() {
           ) : null}
           <DialogClose asChild><Button variant="ghost" size="icon-sm" aria-label={t('comp.close')} data-testid="games-close"><X /></Button></DialogClose>
         </DialogHeader>
-        <div className={cn('flex flex-col gap-3.5', game && 'py-1.5')}>
+        {/* the dialog's own grid gap is 12 px under the header; the mock-up's body starts 18 px under it */}
+        <div className={cn('flex flex-col gap-3.5 pt-1.5', game && 'pb-1.5')}>
           <DialogDescription className={cn('text-control', game && 'text-center leading-[1.45]')}>{game ? t(`games.${game}Help`) : t('games.desc')}</DialogDescription>
           {/* Difficulty: chosen before playing, and changing it starts the game again. */}
           <div className={cn('flex items-center gap-3 text-control', game ? 'justify-center' : 'justify-between')} role="radiogroup" aria-label={t('games.level')}>
@@ -100,8 +101,8 @@ export function GamesDialog() {
                   <button key={x.id} onClick={() => start(x.id)} data-testid={`game-${x.id}`}
                     className="bg-card border-border hover:bg-accent focus-visible:outline-ring rounded-card flex cursor-pointer flex-col items-start gap-1 border p-2.5 text-left transition-[background-color,transform] duration-200 outline-none hover:-translate-y-0.5 focus-visible:outline-2 motion-reduce:hover:translate-y-0">
                     <span className="bg-primary-soft text-primary-text relative grid h-18 w-full place-items-center rounded-ctl"><Icon className="size-6" />{n > 0 ? <Badge className="absolute top-1.5 right-1.5 tabular-nums">{n}</Badge> : null}</span>
-                    <b className="text-control font-medium">{t(`games.${x.id}`)}</b>
-                    <span className="text-muted-foreground text-caption">{t('games.record', { n })}</span>
+                    <b className="text-control leading-[1.45] font-medium">{t(`games.${x.id}`)}</b>
+                    <span className="text-muted-foreground text-caption leading-[1.45]">{t('games.record', { n })}</span>
                   </button>
                 );
               })}

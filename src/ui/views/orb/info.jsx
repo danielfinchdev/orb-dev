@@ -208,12 +208,12 @@ export function SessionInfo({ session: s, line, onRename, task }) {
   return (
     <section className="grid gap-0" data-testid="orb-info">
       <div className="bg-card rounded-card border px-3 py-2.5">
-        {/* a full-size rename button (32 px) sets the row's height, as in the mock-up: the card is 73-75 px, not 63 */}
+        {/* a full-size rename button (32 px) sets the row's height, as in the mock-up: the card is 75.4 px (border 1 + padding 10 + 32 + 4 + a 12 px line at 1.45 + 10 + 1), not 63 */}
         <div className="flex min-h-(--ctl) items-center justify-between gap-2">
           <b className="min-w-0 truncate font-(family-name:--title) text-[15px] font-semibold" data-testid="info-name">{s.title}</b>
           {s.kind === 'chat' ? <BubbleTip title={t('panel.info.rename')}><IconButton label={t('panel.info.rename')} onClick={onRename} data-testid="info-rename"><PencilLine /></IconButton></BubbleTip> : null}
         </div>
-        <div className="text-muted-foreground mt-1 text-xs">{line}</div>
+        <div className="text-muted-foreground mt-1 text-xs leading-[1.45]">{line}</div>
       </div>
       <dl className="my-4 grid grid-cols-[minmax(120px,max-content)_1fr] items-center gap-x-2.5 gap-y-[9px] text-control">
         {s.project ? <><dt className={dt}><FolderGit2 />{t('panel.info.project')}</dt><dd className="m-0 flex min-w-0 items-center gap-1.5" data-testid="info-project"><ProjectIcon name={s.project} className="size-3.5" /><span className="truncate">{s.project}</span></dd></> : null}

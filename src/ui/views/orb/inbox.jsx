@@ -34,6 +34,7 @@ import { quiet } from '@/lib/quiet.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { needsApproval } from '@/lib/task-approval.js';
 import { TaskStatus } from '@/components/task-state.jsx';
+import { stepText } from '@/components/chat-live.jsx';
 import { SectionLabel, IconButton, MoreButton, SearchInput } from '@/components/ui/primitives.jsx';
 
 // ---- data: the rows of the zone (the conversations and direct chats of the store, the marks of inbox.list)
@@ -66,7 +67,13 @@ export function useOrbItems() {
   const tasks = useStore((s) => s.tasks);
   // only which conversations are answering (a streamed piece does not redraw the list).
   const liveKey = useStore((s) => s.chats.filter((c) => c.busy || c.waiting).map((c) => c.conversation).join(','));
-  const chats = useMemo(() => (liveKey ? liveKey.split(',').map((c) => ({ conversation: Number(c), busy: true })) : []), [liveKey]);
+  // the newest step each answering conversation has already announced (the row shows it instead of a bare «Trabajando…»)
+  const stepKey = useStore((s) => s.chats.filter((c) => c.busy && Array.isArray(c.tools) && c.tools.at(-1)?.name).map((c) => `${c.conversation}\u0001${c.tools.at(-1).name}\u0001${c.tools.at(-1).target ?? ''}`).join('\u0002'));
+  const t = useT();
+  const chats = useMemo(() => {
+    const steps = new Map(stepKey ? stepKey.split('\u0002').map((x) => { const [id, name, target] = x.split('\u0001'); return [Number(id), stepText(t, { name, ...(target ? { target } : {}) })]; }) : []);
+    return liveKey ? liveKey.split(',').map((c) => ({ conversation: Number(c), busy: true, step: steps.get(Number(c)) ?? null })) : [];
+  }, [liveKey, stepKey, t]);
   const approvals = useStore((s) => s.app?.approvals);
   const completed = useStore((s) => s.app?.completed);
   return useMemo(() => orbItems({ inbox, conversations, sessions, tasks, chats, approvals, completed }).map((x) => ({ ...x, agentName: AGENT[x.agent] ?? x.agent })),
@@ -271,8 +278,7 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet, showProject = false 
   const press = usePress(() => (phone ? onSheet(item) : setMenu(true)));
   const p = orbProgress(item, t, { assistant });
   const time = item.at ? shortTime(item.at, { locale, yesterday: t('chats.yesterday') }) : '';
-  // an unread row is told apart by its counter alone (the mock-up keeps the title in normal weight and the time grey)
-  const strong = item.unread && !item.muted;
+  // an unread row is told apart by its counter alone, in every layout (the mock-up keeps the title in normal weight and the time grey)
   if (!phone) {
     // The PC's row (the mock-up's .row): the mark of the agent that answers, the title, what it is doing, the time and the
     // unread count on the first line; its latest progress under it. The ⋯ sits over the room the first line keeps for it.
@@ -295,7 +301,7 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet, showProject = false 
             {item.unread ? <span className={cn('grid h-[17px] min-w-[17px] shrink-0 place-items-center rounded-full px-[5px] text-micro font-semibold tabular-nums', item.muted ? 'bg-muted-foreground/25 text-foreground/70' : 'bg-primary text-primary-foreground')} data-testid="chat-unread" aria-label={t('chats.unread', { n: item.unread })}>{item.unread > 99 ? '99+' : item.unread}</span> : null}
             <span className="-mr-1 w-6 shrink-0" aria-hidden="true" />
           </span>
-          <span className={cn('mt-0.5 flex items-center gap-2 overflow-hidden text-caption whitespace-nowrap', needsYou || p.tone === 'warn' ? 'text-warning-ink' : p.tone === 'error' ? 'text-destructive' : p.tone === 'live' ? 'text-primary-text' : 'text-faint-foreground')} data-testid="orb-progress" data-tone={p.tone}>
+          <span className={cn('mt-0.5 flex items-center gap-2 overflow-hidden text-caption whitespace-nowrap', needsYou || p.tone === 'warn' ? 'text-warning-ink' : p.tone === 'error' ? 'text-destructive' : 'text-faint-foreground')} data-testid="orb-progress" data-tone={p.tone}>
             {showProject && item.project ? <span className="inline-flex shrink-0 items-center gap-1"><ProjectIcon name={item.project} small />{item.project}</span> : null}
             {item.branch && p.tone === 'muted' && !needsYou
               ? (
@@ -322,8 +328,8 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet, showProject = false 
         <OrbAvatar item={item} size={phone ? 46 : 40} />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
-            <span className={cn('min-w-0 flex-1 truncate text-card-title compact:text-control', strong ? 'font-semibold' : 'font-medium', item.done && 'text-foreground/70')}>{item.title}</span>
-            <span className={cn('shrink-0 text-caption tabular-nums', strong ? 'text-primary-text font-medium' : 'text-muted-foreground')}>{time}</span>
+            <span className={cn('min-w-0 flex-1 truncate text-card-title compact:text-control', 'font-medium', item.done && 'text-foreground/70')}>{item.title}</span>
+            <span className={cn('shrink-0 text-caption tabular-nums', 'text-muted-foreground')}>{time}</span>
           </span>
           <span className="mt-0.5 flex items-center gap-1.5">
             {p.badge
@@ -465,23 +471,25 @@ function Places() {
   const config = useStore((s) => s.app?.config);
   const places = [['tasks', ClipboardCheck, 'nav.tasks'], ['projects', FolderGit2, 'nav.projects'], ['schedules', CalendarSync, 'nav.schedules'], ['board', Presentation, 'nav.board']];
   const more = config?.expert?.enabled && fullPc() ? [['expert', SquareTerminal, 'nav.expert']] : [];
-  const cls = (on) => cn('press relative flex min-w-0 cursor-pointer flex-col items-center gap-[3px] rounded-ctl pt-[7px] pb-1.5 text-caption leading-[1.45] transition-colors', on ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground');
+  // five columns (God mode adds «Más») leave no room for «Programadas»: the names then go to the tooltip, never cut
+  const iconsOnly = more.length > 0;
+  const cls = (on) => cn('press relative flex min-w-0 cursor-pointer flex-col items-center gap-[3px] rounded-ctl pt-[7px] pb-1.5 text-caption leading-[1.45] transition-colors', iconsOnly && 'min-h-[53px] justify-center', on ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground');
   return (
     <nav className={cn('grid gap-0.5 px-2 pb-1.5', more.length ? 'grid-cols-5' : 'grid-cols-4')} aria-label={t('orbchats.places')} data-testid="orb-places">
       {places.map(([id, Icon, label]) => (
-        <button key={id} type="button" className={cls(view === id)} onClick={() => go({ view: id })} aria-current={view === id ? 'page' : undefined} data-testid={`nav-${id}`}>
+        <button key={id} type="button" className={cls(view === id)} onClick={() => go({ view: id })} aria-current={view === id ? 'page' : undefined} title={iconsOnly ? t(label) : undefined} aria-label={iconsOnly ? t(label) : undefined} data-testid={`nav-${id}`}>
           <span className="relative grid place-items-center">
             <Icon className={cn('size-5', view === id && 'text-primary-text')} />
             {id === 'tasks' && approvals ? <span className="bg-warning text-warning-foreground absolute -top-2 -right-3 grid h-[17px] min-w-[17px] place-items-center rounded-full px-1 text-micro font-bold tabular-nums shadow-[0_0_0_2px_var(--sidebar)]" aria-label={t('comp.sidebar.waitApproval')} title={t('comp.sidebar.waitApproval')} data-testid="nav-tasks-count">{approvals}</span>
               : id === 'tasks' && running ? <span className="bg-primary-text absolute -top-1 -right-2 size-1.5 animate-pulse rounded-full" aria-hidden="true" /> : null}
           </span>
-          <span className="max-w-full truncate">{t(label)}</span>
+          <span className={cn('max-w-full truncate', iconsOnly && 'sr-only')}>{t(label)}</span>
         </button>
       ))}
       {more.length ? (
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
-            <button type="button" className={cls(more.some(([id]) => id === view))} data-testid="orb-places-more"><Ellipsis className="size-5" /><span className="max-w-full truncate">{t('nav.more')}</span></button>
+            <button type="button" className={cls(more.some(([id]) => id === view))} title={t('nav.more')} aria-label={t('nav.more')} data-testid="orb-places-more"><Ellipsis className="size-5" /><span className="sr-only">{t('nav.more')}</span></button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {more.map(([id, Icon, label]) => <DropdownMenuItem key={id} onSelect={() => go({ view: id })} data-testid={`nav-${id}`}><Icon />{t(label)}</DropdownMenuItem>)}

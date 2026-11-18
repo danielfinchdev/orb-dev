@@ -64,6 +64,7 @@ export function orbItems({ inbox = null, conversations = [], sessions = [], task
   }
   for (const list of byConv.values()) list.sort((a, b) => String(b.updated_at ?? '').localeCompare(String(a.updated_at ?? '')) || b.id - a.id);
   const live = new Set((chats ?? []).filter((c) => c.busy || c.waiting).map((c) => c.conversation));
+  const stepOf = new Map((chats ?? []).filter((c) => c.step).map((c) => [c.conversation, c.step]));
   const done = new Set(completed ?? []);
   const out = [];
   for (const c of Array.isArray(conversations) ? conversations : []) {
@@ -73,7 +74,7 @@ export function orbItems({ inbox = null, conversations = [], sessions = [], task
       key: `conversation:${c.id}`, kind: 'conversation', id: c.id, title: c.title, project: c.project ?? null, agent: c.agent ?? null, model: c.model ?? null,
       pinned: Boolean(m.pinned), pinOrder: m.pinOrder ?? null, muted: Boolean(m.muted), snoozedUntil: m.snoozedUntil ?? null, unread: Number(m.unread) || 0, markedUnread: Boolean(m.markedUnread), lastMessage: m.lastMessage ?? null,
       at: [m.lastMessage?.at, c.updated_at, own[0]?.updated_at].filter(Boolean).sort().pop() ?? null,
-      done: c.status === 'done', busy: Boolean(c.busy || c.waiting || live.has(c.id) || m.state === 'working'), asking: Boolean(c.asking),
+      done: c.status === 'done', busy: Boolean(c.busy || c.waiting || live.has(c.id) || m.state === 'working'), asking: Boolean(c.asking), ...(stepOf.has(c.id) ? { step: stepOf.get(c.id) } : {}),
       agents: agentsOf(c.agent, own), tasks: own, open: own.filter((x) => OPEN_TASK.includes(x.status)).length
     });
   }
@@ -101,7 +102,7 @@ export function orbProgress(item, t, { assistant = 'Orbe' } = {}) {
   if (item?.asking) return { text: t('orbchats.asking'), tone: 'warn', badge: true };
   const run = tasks.find((x) => x.status === 'running');
   if (run) return { text: t('orbchats.running', { id: run.id, title: run.title }), tone: 'live' };
-  if (item?.busy) return { text: t('chats.working'), tone: 'live' };
+  if (item?.busy) return { text: item.step ? `${item.step}…` : t('chats.working'), tone: 'live' };
   const queued = tasks.filter((x) => x.status === 'queued');
   // with the queue paused they say so (tasks.list › waiting), not just «en cola».
   if (queued.length && queued.every((x) => x.waiting?.kind === 'paused')) return { text: queued.length === 1 ? t('orbchats.pausedOne') : t('orbchats.paused', { n: queued.length }), tone: 'warn' };

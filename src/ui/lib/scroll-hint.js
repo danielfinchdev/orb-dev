@@ -1,7 +1,7 @@
 // Marks the area that is scrolling for a moment (data-scrolling) so app.css can draw its scrollbar thumb only then.
 // scroll does not bubble: it is heard in the capture phase.
 const timers = new WeakMap();
-const IDLE_MS = 900;
+const IDLE_MS = 600;
 
 if (typeof window !== 'undefined') {
   window.addEventListener('scroll', (e) => {

@@ -557,10 +557,11 @@ function QueueCard({ tasks }) {
   const queued = tasks.filter((x) => x.status === 'queued').length;
   const sub = paused ? tr('tasks.queue.subPaused') : tr(max ? 'tasks.queue.subMax' : 'tasks.queue.sub', { running, queued, max });
   return (
-    <Card className="qbar flex-row items-center gap-3 px-3.5 py-2.5" data-testid="task-queue" data-paused={paused ? 'true' : undefined}>
-      <Play className="text-muted-foreground size-4 shrink-0" />
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5"><b className="text-body font-medium">{paused ? tr('tasks.queue.off') : tr('tasks.queue.on')}</b><span className="text-muted-foreground text-caption">{sub}</span></div>
-      <Button variant="outline" onClick={() => setQueuePaused(!paused, tr)} data-testid="task-queue-toggle">{paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}{paused ? tr('tasks.queue.resume') : tr('tasks.queue.pause')}</Button>
+    <Card className="qbar @container flex-row flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-2.5" data-testid="task-queue" data-paused={paused ? 'true' : undefined}>
+      {/* a narrow card stacks: the title and its line take the width, the button goes under them */}
+      <Play className="text-muted-foreground hidden size-4 shrink-0 @min-[17rem]:block" />
+      <div className="flex min-w-0 flex-[1_1_9rem] flex-col gap-0.5"><b className="text-body font-medium">{paused ? tr('tasks.queue.off') : tr('tasks.queue.on')}</b><span className="text-muted-foreground text-caption">{sub}</span></div>
+      <Button variant="outline" className="@max-[17rem]:w-full" onClick={() => setQueuePaused(!paused, tr)} data-testid="task-queue-toggle">{paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}{paused ? tr('tasks.queue.resume') : tr('tasks.queue.pause')}</Button>
     </Card>
   );
 }
@@ -621,7 +622,7 @@ function TasksPc({ route }) {
             <QueueCard tasks={all} />
             <div className="toolbar flex flex-wrap items-center gap-1.5">
               <Tabs value={filter} onValueChange={setFilter} className="max-w-full min-w-0 overflow-x-auto">
-                <TabsList data-testid="task-filters">{PC_FILTERS.map(([key, label, fn]) => { const n = narrowed.filter(fn).length; return <TabsTrigger key={key} value={key}>{tr(label)}{key !== 'todas' ? <span className="n text-micro text-faint-foreground tabular-nums">{n}</span> : null}</TabsTrigger>; })}</TabsList>
+                <TabsList className="h-auto min-h-(--ctl) flex-wrap" data-testid="task-filters">{PC_FILTERS.map(([key, label, fn]) => { const n = narrowed.filter(fn).length; return <TabsTrigger key={key} value={key}>{tr(label)}{key !== 'todas' ? <span className="n text-micro text-faint-foreground tabular-nums">{n}</span> : null}</TabsTrigger>; })}</TabsList>
               </Tabs>
               {/* One group: it sits beside the tabs when there is room and otherwise takes the next line whole; the search is what gives way. */}
               <div className="flex min-w-0 flex-[1_1_440px] items-center justify-end gap-1.5">
