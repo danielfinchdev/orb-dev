@@ -201,5 +201,6 @@ test('11D: «Ordenar carpetas» has the full kicker, the green badge, and the se
   assert.match(layout, /layout\.kickReview/);
   assert.match(layout, /<Badge variant="success"[^>]*>\{t\('layout\.recommended'\)\}<\/Badge>/);
   assert.match(layout, /options\.length <= 2/);
-  assert.match(layout, /bridge\.call\('app\.layoutApply', \{ choices: all \?\? choices \}\)/);
+  assert.match(layout, /applyMethod = 'app\.layoutApply'/);
+  assert.match(layout, /bridge\.call\(applyMethod, \{ choices: all \?\? choices \}\)/);
 });

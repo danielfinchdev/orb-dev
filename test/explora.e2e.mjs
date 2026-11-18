@@ -641,25 +641,74 @@ try {
       await tap('task-panel-tab-detail', 'volver a «Detalle»');
     } catch (error) { noteOnce(`capturas de Tareas: el recorrido se cortó (${String(error?.message ?? error).split('\n')[0]})`); await closeMenus(); }
   };
-  // One project's page (its tabs and its ⋯), the whiteboard with its attachments, and the new-schedule dialog. Only opens
-  // and cancels: it never presses Fusionar, Publicar comentario, Push, Publicar or Crear PR.
+  // Proyectos: the list, what its header and rows open (new project, tidy folders, change category) and one project's page
+  // with its tabs, its «⋯», the closed pull requests, «Sincronizar», «Escribir entrada» and the menu of «Encargar una tarea».
+  // Only opens and cancels: it never presses Sincronizar, Mover, Crear, Guardar, Fusionar, Permitir or Comentar.
+  const projectPageShots = async (prefix) => {
+    if (!seeded) return;
+    const cancelDialog = async (what) => {
+      const cancel = page.getByRole('dialog').getByRole('button', { name: /^(Cancelar|Cancel)$/ }).first();
+      if (await cancel.click({ timeout: 3000 }).then(() => true, () => false)) { await page.waitForTimeout(300); return; }
+      noteOnce(`Proyectos: sin «Cancelar» en ${what}`); await closeMenus();
+    };
+    try {
+      if (!(await tap('nav-projects', 'Proyectos'))) return;
+      // each row asks for its git state in turn (a queue): the list is shot once the rows of the repositories show their branch
+      await until(async () => (await page.locator('[data-testid=project-facts] svg.lucide-git-branch').count()) >= 3, 'la línea de git de las filas', 12000)
+        .catch(async () => noteOnce(`Proyectos: solo ${await page.locator('[data-testid=project-facts] svg.lucide-git-branch').count().catch(() => 0)} filas enseñan su rama`));
+      await page.waitForTimeout(400); await shot(`${prefix}-proyectos-lista`);
+      // «Nuevo proyecto» with its «Plantilla y git» switch and what it keeps under «Más opciones»
+      if (await tap('project-new', '«Nuevo» de Proyectos') && await tap('project-new-create', '«Crear un proyecto»')) {
+        await page.locator('[data-testid=project-template]').first().waitFor({ timeout: 4000 }).catch(() => noteOnce('Proyectos: el diálogo de crear no tiene «Plantilla y git»'));
+        await shot(`${prefix}-proyecto-nuevo`);
+        await cancelDialog('el diálogo de crear un proyecto');
+      } else await closeMenus();
+      // «Ordenar carpetas»: its review, or the notice that says why it does not open (work in progress, nothing to tidy)
+      if (await tap('projects-arrange', '«Ordenar carpetas» de la cabecera')) {
+        await page.waitForTimeout(900); await shot(`${prefix}-proyectos-ordenar`);
+        if (await page.locator('[data-testid=projects-arrange-panel]').count()) await tap('projects-arrange-close', 'cerrar «Ordenar carpetas»');
+      }
+      // «Cambiar categoría» from the row's «⋯»
+      const row = page.locator('[data-testid=project-row]', { hasText: 'tienda-web' }).first();
+      if (await row.locator('[data-testid=project-menu]').first().click({ timeout: 4000 }).then(() => true, () => false)) {
+        await page.waitForTimeout(300);
+        if (await tap('project-change-category', '«Cambiar categoría» del proyecto')) {
+          await page.locator('[data-testid=project-category-select]').first().waitFor({ timeout: 4000 }).catch(() => noteOnce('Proyectos: «Cambiar categoría» no abre su diálogo'));
+          await shot(`${prefix}-proyecto-categoria`);
+          await cancelDialog('«Cambiar categoría»');
+        } else await closeMenus();
+      } else noteOnce('Proyectos: sin «⋯» en la fila de «tienda-web»');
+      const name = row.locator('[data-testid=project-open-name]').first();
+      if (!(await name.click({ timeout: 4000 }).then(() => true, () => false))) { noteOnce('Proyectos: sin fila «tienda-web» para abrir su página'); return; }
+      await page.waitForTimeout(500); await shot(`${prefix}-proyecto`);
+      if (await tap('project-sync', '«Sincronizar» de la tarjeta de git')) {
+        // the plan is read first (a fetch from the remote inside the temp folder): its dialog, or the notice that says there is nothing to do
+        await page.locator('[data-testid=project-sync-dialog]').first().waitFor({ timeout: 8000 }).catch(() => {});
+        await shot(`${prefix}-proyecto-sincronizar`);
+        if (await page.locator('[data-testid=project-sync-dialog]').count()) { if (!(await tap('choice-cancel', '«Cancelar» de Sincronizar'))) await closeMenus(); }
+      }
+      if (await tap('project-log-write', '«Escribir entrada» de la bitácora')) {
+        await page.locator('[data-testid=project-log-entry-title]').first().waitFor({ timeout: 4000 }).catch(() => noteOnce('Proyecto: «Escribir entrada» no abre su diálogo'));
+        await shot(`${prefix}-proyecto-entrada`);
+        await cancelDialog('«Escribir entrada»');
+      }
+      if (await tap('project-tab-git', 'pestaña «Git y PR» del proyecto')) {
+        await page.waitForTimeout(500); await shot(`${prefix}-proyecto-git`);
+        if (await tap('project-pr-filter-merged', 'filtro «Fusionados» de las PR')) { await page.waitForTimeout(500); await shot(`${prefix}-proyecto-git-fusionados`); await tap('project-pr-filter-open', 'filtro «Abiertos» de las PR'); }
+      }
+      if (await tap('project-tab-tareas', 'pestaña «Tareas» del proyecto')) {
+        await page.waitForTimeout(500); await shot(`${prefix}-proyecto-tareas`);
+        if (await tap('project-new-task-more', 'la flecha de «Encargar una tarea»')) { await shot(`${prefix}-proyecto-tareas-menu`); await closeMenus(); }
+      }
+      if (await tap('project-more', '⋯ del proyecto')) { await shot(`${prefix}-proyecto-menu`); await closeMenus(); }
+      await tap('project-back', 'volver a la lista de proyectos');
+    } catch (error) { noteOnce(`Proyectos: el recorrido se cortó (${String(error?.message ?? error).split('\n')[0]})`); await closeMenus(); }
+  };
+  // The whiteboard with its attachments and the new-schedule dialog, after the projects. Only opens and cancels.
   const projectShots = async (prefix) => {
     if (!seeded) return;
+    await projectPageShots(prefix);
     try {
-      if (await tap('nav-projects', 'Proyectos')) {
-        // each row asks for its git state in turn (a queue): the list is shot once the rows of the repositories show their branch
-        await until(async () => (await page.locator('[data-testid=project-facts] svg.lucide-git-branch').count()) >= 3, 'la línea de git de las filas', 12000)
-          .catch(async () => noteOnce(`Proyectos: solo ${await page.locator('[data-testid=project-facts] svg.lucide-git-branch').count().catch(() => 0)} filas enseñan su rama`));
-        await page.waitForTimeout(400); await shot(`${prefix}-proyectos-lista`);
-        const name =page.locator('[data-testid=project-row]', { hasText: 'tienda-web' }).locator('[data-testid=project-open-name]').first();
-        if (await name.click({ timeout: 4000 }).then(() => true, () => false)) {
-          await page.waitForTimeout(500); await shot(`${prefix}-proyecto`);
-          if (await tap('project-tab-git', 'pestaña «Git y PR» del proyecto')) { await page.waitForTimeout(500); await shot(`${prefix}-proyecto-git`); }
-          if (await tap('project-tab-tareas', 'pestaña «Tareas» del proyecto')) { await page.waitForTimeout(500); await shot(`${prefix}-proyecto-tareas`); }
-          if (await tap('project-more', '⋯ del proyecto')) { await shot(`${prefix}-proyecto-menu`); await closeMenus(); }
-          await tap('project-back', 'volver a la lista de proyectos');
-        } else noteOnce('Proyectos: sin fila «tienda-web» para abrir su página');
-      }
       if (await tap('nav-board', 'Pizarra')) {
         await page.waitForTimeout(500); await shot(`${prefix}-pizarra-sin-proyecto`);
         // The whiteboard belongs to the active project: one is chosen for the shots and the choice is undone afterwards.
@@ -804,10 +853,16 @@ try {
         await page.waitForTimeout(500); await scrollView('top'); await shot(`${prefix}-agentes-cuentas`);
         await scrollShot(`${prefix}-agentes-medio`, 'middle');
         await scrollShot(`${prefix}-agentes-abajo`, 'end');
+        // the card's «⋯» (turning the agent on or off lives there; never pressed)
+        await scrollView('top');
+        if (await page.locator('[data-testid^=agent-more-]').first().click({ timeout: 3000 }).then(() => true, () => false)) { await page.waitForTimeout(300); await shot(`${prefix}-agentes-menu`); await closeMenus(); }
+        else noteOnce('Agentes: sin «⋯» en la tarjeta de un agente');
         if (await tap('agents-tab-usage', 'pestaña «Uso»')) {
           await page.waitForTimeout(800); await scrollView('top'); await shot(`${prefix}-uso`);
           await scrollShot(`${prefix}-uso-medio`, 'middle');
           await scrollShot(`${prefix}-uso-abajo`, 'end');
+          // «Más opciones» at the end of the page, unfolded (the table of tokens per day), then folded again
+          if (await tap('usage-more-toggle', '«Más opciones» de Uso')) { await scrollShot(`${prefix}-uso-mas-opciones`, 'end'); await tap('usage-more-toggle', 'plegar «Más opciones» de Uso'); }
           // the period «Hoy» (the default is 30 days, put back afterwards)
           if (await tap('usage-range-1', 'periodo «Hoy» del uso')) { await page.waitForTimeout(600); await scrollView('top'); await shot(`${prefix}-uso-hoy`); await tap('usage-range-30', 'periodo de 30 días del uso'); }
           await tap('agents-tab-agents', 'pestaña «Agentes y cuentas»');
@@ -851,6 +906,8 @@ try {
         if (await tap('rules-side-agents', 'Normas › subagentes')) { await scrollView('top'); await page.waitForTimeout(300); await shot(`${prefix}-normas-subagentes`); }
         await tap('rules-side-orb', 'Normas › Orb');
         await tap('memories-logs', 'volver a la pestaña «Bitácoras»');
+        // the header's «⋯» of the logbooks (copy and read it whole live there)
+        if (await tap('logbooks-more', '«⋯» de la cabecera de Bitácoras')) { await shot(`${prefix}-bitacoras-menu`); await closeMenus(); }
       }
     } catch (error) { noteOnce(`Normas: el recorrido se cortó (${String(error?.message ?? error).split(String.fromCharCode(10))[0]})`); await closeMenus(); }
     // Games: the list, the snake in the middle of a game and the 2048 after two moves
@@ -1076,6 +1133,7 @@ try {
       // the extra pass: deepShots takes the place of the chat pictures, the boards and the places, then the lock screen
       await chatExtraShots(theme);
       await taskExtraShots(theme);
+      await projectPageShots(theme);
       await deepShots(theme);
       await footShots(theme);
       await lockShots(theme);
