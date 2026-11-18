@@ -37,6 +37,15 @@ const levelOf = (text, explicit) => {
   return ERROR_RE.test(text) ? 'error' : WARN_RE.test(text) ? 'warn' : 'info';
 };
 const FAIL_KIND = /(fail|error|problem|conflict|missed)/i;
+
+// Who an event belongs to, for the source filter and its counters. What the user did is «usuario»; what an agent did or
+// reported is «subagentes» (even when Orb is the one writing the line down); the rest is Orb's own work as the conductor.
+const AGENT_KINDS = new Set(['agent.reply', 'agent.problem', 'files.changed', 'files.given', 'task.usage', 'review.verdict', 'task.delegated', 'task.claimed', 'task.problem']);
+export function sourceOf(actor, kind) {
+  if (actor === 'usuario') return 'usuario';
+  if (AGENT_KINDS.has(kind)) return 'subagentes';
+  return actor === 'orb' ? 'orb' : 'subagentes';
+}
 const clip = (s, n = TEXT_MAX) => { const r = redactSecrets(typeof s === 'string' ? s : s == null ? '' : JSON.stringify(s)); return r.length > n ? `${r.slice(0, n)}…` : r; };
 const ms = (v) => {
   if (v == null || v === '') return null;
@@ -195,7 +204,7 @@ function eventItem(e) {
   const detail = eventText(e.detail);
   const failed = FAIL_KIND.test(e.kind) || (e.kind === 'task.updated' && /^failed$/i.test(String(e.detail)));
   const text = clip(`${e.actor}${e.title ? ` · ${e.title}` : ''}${detail ? ` · ${detail}` : ''}`);
-  return { id: `events:${e.id}`, at: e.at ?? null, sort: ms(e.at) ?? 0, source: 'subagentes', level: failed ? 'error' : levelOf(text, 'info'), project: e.project ?? null, kind: e.kind, text, actor: e.actor, title: e.title ?? null, detail: clip(detail ?? ''), stream: 'events', pos: e.id, ...(e.task != null ? { task: e.task } : {}) };
+  return { id: `events:${e.id}`, at: e.at ?? null, sort: ms(e.at) ?? 0, source: sourceOf(e.actor, e.kind), level: failed ? 'error' : levelOf(text, 'info'), project: e.project ?? null, kind: e.kind, text, actor: e.actor, title: e.title ?? null, detail: clip(detail ?? ''), stream: 'events', pos: e.id, ...(e.task != null ? { task: e.task } : {}) };
 }
 
 // → how many lines each source and each level hold under the other filters: a source's number follows the level, project,
@@ -270,7 +279,8 @@ export function readActivity(board, params = {}, stats = {}) {
     got[name] = { list, end: r.end };
   }
 
-  if (want.has('subagentes') && cursor.events !== DONE) {
+  // events of any of the three sources live in one table: read it when one of them is wanted and keep the ones asked for
+  if ((want.has('subagentes') || want.has('orb') || want.has('usuario')) && cursor.events !== DONE) {
     const list = [];
     let before = Number.isFinite(cursor.events) ? cursor.events : null;
     let end = null; let scanned = 0; let exhausted = false;
@@ -279,7 +289,7 @@ export function readActivity(board, params = {}, stats = {}) {
       for (const e of rows) {
         scanned += 1; before = e.id;
         const it = eventItem(e);
-        if (match(it)) { list.push(it); if (list.length >= limit) { end = e.id; break outer; } }
+        if (want.has(it.source) && match(it)) { list.push(it); if (list.length >= limit) { end = e.id; break outer; } }
       }
       // fewer rows than asked: the table is over, so no stale resume point may be kept (a page would repeat)
       if (rows.length < 500) { end = null; exhausted = true; break; }

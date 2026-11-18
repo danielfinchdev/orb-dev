@@ -14,7 +14,7 @@ import { useStore, call, go } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
 import { cn, fmtTime } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
-import { activityLabel, activityDetail } from '@/lib/activity.js';
+import { activityLabel, activityDetail, activitySentence } from '@/lib/activity.js';
 import { SOURCES, LEVELS, EMPTY_FILTERS, buildQuery, normalizeActivity, appendPage, hasFilters, hasMethod, countsKey } from '@/lib/activity-filters.js';
 import { quiet } from '@/lib/quiet.js';
 import { ReportDialog } from './activity-report.jsx';
@@ -149,21 +149,15 @@ function LegacyRow({ r, t, locale }) {
   );
 }
 
-// What a line of the paged reader says, in words: an event of the agents from its own parts, any other line as text.
-// r.text stays as the engine wrote it (hover and «Copiar»).
-function what(r, t, locale, max = 0) {
-  if (r.source === 'subagentes' && r.actor !== undefined) {
-    const detail = activityDetail(t, { kind: r.kind, detail: r.detail }, locale, AGENT, max);
-    // the actor only when it is not Orb itself; the title is not said twice
-    const who = r.actor === 'orb' ? null : AGENT[r.actor] ?? r.actor;
-    return [who, activityLabel(t, r.kind), r.title, detail && detail !== r.title ? detail : null].filter(Boolean).join(' · ');
-  }
-  return activityDetail(t, { kind: r.kind, detail: r.text }, locale, AGENT, max) || activityLabel(t, r.kind);
-}
+// What a line of the paged reader says: one sentence («Claude Code empezó la tarea #42 «…»»), from the event's own parts or
+// from the line's text. r.text stays as the engine wrote it (hover and «Copiar»).
+const what = (r, t, locale, max = 0) => activitySentence(t, r, locale, AGENT, max);
 
 // A line of the paged reader; it opens to show where it came from. Its text is plain text, never markup.
 function PagedRow({ r, t, locale, open, onOpen, marked, canMark, onMark }) {
   const SrcIcon = SOURCE_ICON[r.source] ?? Monitor;
+  // the event's name in words; the engine's own names (a log stream, an unknown kind) say nothing to a person
+  const kindLabel = r.kind && activityLabel(t, r.kind) !== r.kind ? activityLabel(t, r.kind) : '';
   return (
     <div className={cn('border-border border-b last:border-b-0', marked && 'bg-accent/60')} data-level={r.level} data-testid="activity-row">
       <button type="button" onClick={onOpen} aria-expanded={open} className={cn('lrow arow hover:bg-accent/60 grid w-full cursor-pointer items-center gap-3 px-3.5 py-2.5 text-left outline-none focus-visible:outline-2 focus-visible:outline-ring', COLS)}>
@@ -176,7 +170,7 @@ function PagedRow({ r, t, locale, open, onOpen, marked, canMark, onMark }) {
       {open ? (
         <div className="detail bg-secondary border-border border-t px-3.5 pt-3 pb-3.5 pl-16" data-testid="activity-detail">
           <dl className="kv m-0 mb-2.5 grid grid-cols-[80px_1fr] gap-x-3 gap-y-1 text-control">
-            <dt className="text-muted-foreground">{t('logbooks.source')}</dt><dd className="m-0">{t(`logbooks.source.${r.source}`)}{r.kind ? ` · ${r.kind}` : ''}</dd>
+            <dt className="text-muted-foreground">{t('logbooks.source')}</dt><dd className="m-0">{t(`logbooks.source.${r.source}`)}{kindLabel ? ` · ${kindLabel}` : ''}</dd>
             <dt className="text-muted-foreground">{t('logbooks.colTime')}</dt><dd className="m-0">{fmtTime(r.at)}</dd>
             {r.task != null ? <><dt className="text-muted-foreground">{t('logbooks.task')}</dt><dd className="m-0" data-testid="activity-task">#{r.task}</dd></> : null}
             <dt className="text-muted-foreground">{t('logbooks.project')}</dt><dd className="m-0">{r.project ?? t('logbooks.noProject')}</dd>

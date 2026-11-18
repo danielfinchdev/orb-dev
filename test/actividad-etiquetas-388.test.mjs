@@ -141,7 +141,7 @@ test('agent ids, log lines and Markdown marks read in plain words', () => {
   assert.equal(detail('task.followup', 'misma conversación · codex', 0), 'misma conversación · Codex');
   assert.equal(activityDetail(tr, { kind: 'task.followup', detail: 'misma conversación · codex' }, 'es', AGENTS), 'misma conversación · Codex');
   assert.equal(activityDetail(tr, { kind: 'motor', detail: 'tarea #1 terminó (código 0, estado done)' }, 'es', AGENTS), `tarea #1 terminó (estado: ${es['status.done'].toLowerCase()})`);
-  assert.equal(activityDetail(tr, { kind: 'motor', detail: 'tarea #1 terminó (código 2, estado failed)' }, 'es', AGENTS), `tarea #1 terminó (código 2, estado: ${es['status.failed'].toLowerCase()})`);
+  assert.equal(activityDetail(tr, { kind: 'motor', detail: 'tarea #1 terminó (código 2, estado failed)' }, 'es', AGENTS), `tarea #1 terminó (estado: ${es['status.failed'].toLowerCase()})`);
   const out = activityDetail(tr, { kind: 'asistente', detail: '## Contexto (lo añade Orbe al empezar)\n- Orbe: C:/Users/x/proyecto '.repeat(3) }, 'es', AGENTS, 60);
   assert.ok(!/^[#>*-]/.test(out) && out.endsWith('…') && out.length <= 61, out);
 });

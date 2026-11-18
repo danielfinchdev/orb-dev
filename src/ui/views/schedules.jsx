@@ -19,6 +19,7 @@ import { MoreButton, IconButton, ListCard, ListRow, Segmented, SectionLabel, Fie
 import { notifyError, notifyOk } from '@/lib/notify.js';
 import { useStore, call, act, go, getState, bridge, fullPc, refresh } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
+import { activityPlain } from '@/lib/activity.js';
 import { modelsOf } from '@/components/brain-picker.jsx';
 import { canRetryFromRow } from './tasks.jsx';
 import { ago, cn, errorText } from '@/lib/utils.js';
@@ -406,7 +407,7 @@ function SchedulesPc() {
                   <SectionLabel className="flex items-baseline gap-2 px-0 pt-2 pb-0"><h2 className="m-0 text-[length:inherit] font-[inherit]">{tr('schedules.lastRuns')}</h2><span className="text-faint-foreground text-caption font-normal">{tr('schedules.lastRunsSub')}</span><span className="grow" /><Button variant="link" className="text-info h-auto p-0 text-control font-normal" onClick={() => go('tasks')}>{tr('schedules.seeTasks')}</Button></SectionLabel>
                   <ListCard data-testid="schedule-runs">
                     {runs.map((x) => (
-                      <ListRow key={x.id} className="rounded-none" leading={<TaskStatus task={x} />} title={titleOf(x)} meta={<span>{resultOf(x) || `#${x.id} · ${x.project}`}</span>}
+                      <ListRow key={x.id} className="rounded-none" leading={<TaskStatus task={x} />} title={titleOf(x)} meta={<span title={resultOf(x) || undefined}>{resultOf(x) ? activityPlain(tr, resultOf(x), 140, AGENT) : `#${x.id} · ${x.project}`}</span>}
                         trailing={<>
                           {canRetryFromRow(x) ? <RetryRun id={x.id} /> : null}
                           <span className="text-faint-foreground text-caption">{ago(x.updated_at ?? x.created_at)}</span>

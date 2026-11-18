@@ -53,13 +53,12 @@ test('6: the summary of a rule in the list shows no template braces', async () =
   const { readableRule } = await import('../src/ui/lib/rule-text.js');
   assert.equal(readableRule('{?navegador}Prueba en {orb} la tarea {tarea}{/}. {usuario} decide', { orb: 'Alex', usuario: 'Ana' }), 'Prueba en Alex la tarea la tarea. Ana decide');
   assert.doesNotMatch(readableRule('{orb} {del_usuario} {rama} {nota_grupo} {norma:abc}'), /[{}]/);
-  assert.match(read('src/ui/views/rules-cards.jsx'), /ruleSummary\(readableRule\(rule\.texto/);
+  assert.match(read('src/ui/views/rules-cards.jsx'), /ruleBlurb\(ruleSummary\(readableRule\(rule\.texto/);
 });
 
 test('r2-1: the row of an event says what happened, with the actor only when it is not Orb', () => {
   const a = read('src/ui/views/activity.jsx');
-  assert.match(a, /\[who, activityLabel\(t, r\.kind\), r\.title, detail && detail !== r\.title \? detail : null\]/);
-  assert.match(a, /r\.actor === 'orb' \? null/);
+  assert.match(a, /activitySentence\(t, r, locale, AGENT, max\)/);
   assert.match(read('src/ui/views/expert.jsx'), /activityLabel\(t, r\.kind\)/);
   assert.equal((read('src/ui/views/tasks.jsx').match(/activityLabel\(tr, e\.kind\)/g) ?? []).length, 2);
 });
