@@ -1017,7 +1017,7 @@ try {
       await call('projects.setActive', { name: 'orb-dev' }).catch(() => noteOnce('God mode: no se pudo elegir el proyecto «orb-dev»'));
       const patch = { enabled: true };
       // every panel on, whatever the profile had
-      if (panelIds.some((id) => wasPanels[id] === false)) patch.panels = Object.fromEntries(panelIds.map((id) => [id, true]));
+      if (panelIds.some((id) => wasPanels[id] === false)) patch.panels = Object.fromEntries(panelIds.map((id) => [id, id === 'history' ? wasPanels.history === true : true])); // the history panel is opt-in: it stays as the user had it
       await call('config.save', { patch: { expert: patch } }).catch(() => noteOnce('God mode: no se pudo activar'));
       const shown = await page.locator('[data-testid=orb-places-more]').first().waitFor({ timeout: 5000 }).then(() => true, () => false);
       if (shown && await tap('orb-places-more', '«Más» de los sitios') && await tap('nav-expert', 'God mode')) {
@@ -1070,7 +1070,7 @@ try {
       } else noteOnce('God mode: no aparece en la barra tras activarlo');
       await goChat();
     } catch (error) { noteOnce(`God mode: el recorrido se cortó (${String(error?.message ?? error).split(String.fromCharCode(10))[0]})`); await closeMenus(); await goChat().catch(() => {}); }
-    await call('config.save', { patch: { expert: { enabled: false, ...(panelIds.some((id) => wasPanels[id] === false) ? { panels: Object.fromEntries(panelIds.map((id) => [id, wasPanels[id] !== false])) } : {}) } } }).catch(() => {});
+    await call('config.save', { patch: { expert: { enabled: false, ...(panelIds.some((id) => wasPanels[id] === false) ? { panels: Object.fromEntries(panelIds.map((id) => [id, id === 'history' ? wasPanels.history === true : wasPanels[id] !== false])) } : {}) } } }).catch(() => {});
     await call('projects.setActive', { name: wasActive }).catch(() => {});
   };
   // The two popups of the sidebar's foot: the music player (never pressed «play» unless ORB_EXPLORA_SOUND=1) and the feedback
