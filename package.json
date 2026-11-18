@@ -28,6 +28,7 @@
     "tauri:build": "tauri build -- --locked && node scripts/tauri-check-release.mjs",
     "tauri:build:e2e": "node scripts/tauri-check-release.mjs --build-e2e",
     "release:firmar": "node scripts/release-firmar.mjs",
+    "installer:build": "node scripts/installer-build.mjs",
     "android:build": "node scripts/android-build.mjs",
     "android:build:debug": "node scripts/android-build.mjs --debug",
     "android:native": "node scripts/android-native.mjs",

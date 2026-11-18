@@ -1,0 +1,69 @@
+# Orb's installer face: a small WebView2 window that shows the screens and runs the NSIS setup (built by `tauri build`)
+# that travels inside it. It is not part of the app's workspace and has its own Cargo.lock; every dependency is one the
+# app's lock already holds, so it builds offline (`cargo build --offline`).
+[package]
+name = "orb-instalador"
+version = "0.1.0"
+edition = "2021"
+publish = false
+build = "build.rs"
+
+[workspace]
+
+[lib]
+name = "orb_instalador"
+path = "src/lib.rs"
+
+[[bin]]
+name = "orb-instalador"
+path = "src/main.rs"
+
+# A harmless stand-in for the NSIS setup, only for the tests (cargo test --features fake-setup): it writes a marker
+# file and exits with the code it is asked for. It is never part of the installer.
+[[bin]]
+name = "fake-setup"
+path = "src/bin/fake-setup.rs"
+required-features = ["fake-setup"]
+
+[features]
+fake-setup = []
+
+[dependencies]
+wry = "=0.57.1"
+tao = "=0.37.2"
+sha2 = "=0.10.9"
+minisign-verify = "=0.3.0"
+base64 = "=0.22.1"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
+getrandom = "=0.3.4"
+windows-registry = "=0.6.1"
+
+[dependencies.windows]
+version = "=0.62.2"
+features = [
+  "Win32_Foundation",
+  "Win32_Globalization",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_Storage_FileSystem",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Com",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Threading",
+  "Win32_UI_Shell",
+  "Win32_UI_Shell_Common",
+  "Win32_UI_WindowsAndMessaging",
+]
+
+[build-dependencies]
+sha2 = "=0.10.9"
+minisign-verify = "=0.3.0"
+base64 = "=0.22.1"
+serde_json = "=1.0.154"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

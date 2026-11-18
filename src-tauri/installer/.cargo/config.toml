@@ -1,0 +1,4 @@
+# The C runtime is linked in: a PC without the Visual C++ package must still reach main(), where the classic installer waits as
+# the fallback. (scripts/installer-build.mjs fails the build if VCRUNTIME140 shows up in the program.)
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
