@@ -99,7 +99,26 @@ function Branches({ project, st, dirty, branches, version, reload, ago }) {
   );
 }
 
-export function GitPanel({ project, st, version, reload, onDiff, ago }) {
+// The last commits inside the git panel (the same `expert.log` the full history uses) and «Ver todo», which opens that history.
+const RECENT = 5;
+function RecentHistory({ project, version, ago, onAll }) {
+  const t2 = useT();
+  const [rows, setRows] = useState(null);
+  useEffect(() => { let alive = true; call('expert.log', { project, limit: RECENT }).then((r) => alive && setRows((r ?? []).slice(0, RECENT))).catch(() => alive && setRows([])); return () => { alive = false; }; }, [project, version]);
+  return (
+    <section className="border-border flex flex-col gap-1 border-b px-3 py-2.5" data-testid="expert-git-history">
+      <div className="text-faint-foreground flex items-center gap-1.5 text-micro tracking-wide uppercase"><span className="min-w-0 flex-1 truncate">{t2('expert.history')}</span>
+        {onAll ? <button type="button" onClick={onAll} className="text-primary-text cursor-pointer normal-case hover:underline" data-testid="expert-git-history-all">{t2('expert.git.seeAll')}</button> : null}</div>
+      {!rows ? <div className="p-1"><Spinner className="size-3" /></div> : !rows.length ? <p className="text-muted-foreground py-1 text-caption">{t2('expert.noCommits')}</p> : rows.map((c) => (
+        <div key={c.hash} className="flex min-h-7 items-center gap-2 text-control" title={`${c.hash} · ${c.author}${c.refs ? ` · ${c.refs}` : ''}`} data-testid="expert-git-history-row">
+          <span className="text-faint-foreground font-mono text-caption">{c.hash.slice(0, 7)}</span><span className="min-w-0 flex-1 truncate">{c.subject}</span><span className="text-faint-foreground text-micro whitespace-nowrap">{ago(c.date)}</span>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+export function GitPanel({ project, st, version, reload, onDiff, onHistory, ago }) {
   const t2 = useT();
   const branches = useBranches(project, version);
   const last = useLastCommit(project, version);
@@ -214,6 +233,7 @@ export function GitPanel({ project, st, version, reload, onDiff, ago }) {
           </div>
         </div>
       )}
+      <RecentHistory project={project} version={version} ago={ago} onAll={onHistory} />
       <Branches project={project} st={st} dirty={files.length > 0 || Boolean(st.files?.length)} branches={branches} version={version} reload={reload} ago={ago} />
     </div>
   );

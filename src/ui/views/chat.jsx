@@ -424,7 +424,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const [terminal, setTerminal] = useState(false);
   const [termDraft, setTermDraft] = useState('');
   // only the pane the command was pasted from reacts: a split view has two chats, each with its own folder
-  useEffect(() => (fullPc() ? onTerminalPaste((line, from) => { const pane = from?.closest?.('[data-paste-chat]'); if (from && pane?.getAttribute('data-paste-chat') !== String(id ?? 'new')) return; setTerminal(true); setTermDraft(line); }) : undefined), [id]);
+  useEffect(() => (fullPc() && !onConversation ? onTerminalPaste((line, from) => { const pane = from?.closest?.('[data-paste-chat]'); if (from && pane?.getAttribute('data-paste-chat') !== String(id ?? 'new')) return; setTerminal(true); setTermDraft(line); }) : undefined), [id]);
   useEffect(() => { setTerminal(false); setTermDraft(''); }, [id]);
   // in God mode, a new conversation goes to the project chosen there, and the bar says that one.
   const projects = useStore((s) => s.projects);
@@ -586,7 +586,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
               {conv && !embedded ? <DropdownMenuItem onSelect={() => openOrbInfo({ type: 'chat' })} data-testid="more-info"><Info />{t('orbchats.info')}</DropdownMenuItem> : null}
               {slim ? <DropdownMenuItem onSelect={() => setQueuePaused(!app.paused, t)} data-testid={app.paused ? 'bar-resume' : 'bar-pause'}>{app.paused ? <Play /> : <Pause />}{app.paused ? t('bar.resume') : t('bar.pause')}</DropdownMenuItem> : null}
               {chatActions.filter((a) => a.id !== 'info' && !a.danger).map((a) => <DropdownMenuItem key={a.id} onSelect={a.run} data-testid={`more-${a.id}`}><a.icon />{a.label}</DropdownMenuItem>)}
-              {fullPc() ? <DropdownMenuItem onSelect={() => setTerminal(!terminal)} data-testid="session-terminal"><SquareTerminal />{terminal ? t('session.menu.terminalHide') : t('session.menu.terminalShow')}</DropdownMenuItem> : null}
+              {fullPc() && !embedded ? <DropdownMenuItem onSelect={() => setTerminal(!terminal)} data-testid="session-terminal"><SquareTerminal />{terminal ? t('session.menu.terminalHide') : t('session.menu.terminalShow')}</DropdownMenuItem> : null}
               {fullPc() ? <DropdownMenuItem onSelect={openGames} data-testid="bar-games"><Gamepad2 />{t('bar.games')}</DropdownMenuItem> : null}
               {chatActions.filter((a) => a.danger).map((a) => <div key={a.id}><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onSelect={a.run} data-testid={`more-${a.id}`}><a.icon />{a.label}</DropdownMenuItem></div>)}
             </DropdownMenuContent>
@@ -624,7 +624,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
       <ConversationTrail scrollRef={trail.node} />
       </div>
       <TaskSideCards conversation={id} />
-      {terminal && fullPc() ? <TerminalPanel dir={terminalDir} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
+      {terminal && fullPc() && !embedded ? <TerminalPanel dir={terminalDir} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
       <Composer draft={box} onSend={send} onStop={id != null ? () => act(call('chat.stop', { conversation: id })) : undefined} busy={chat.busy} disabled={sending} testid="chat-input"
         attached={images.length > 0}
         onPaste={(e) => { fromTransfer(e.clipboardData).then((f) => { if (f.length) addImages(f); }); }}

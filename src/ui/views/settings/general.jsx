@@ -2,7 +2,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { LayoutDashboard, Gem, Bot, Waves, Candy, Terminal, FlaskConical, FolderOpen, Plus, SquareTerminal, ZoomIn, ZoomOut, X, RotateCcw } from 'lucide-react';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, APPEARANCE_DEFAULTS, plainSkin } from '../../../shared/appearance.mjs';
-import { PANELS, savePanels } from '../expert.jsx';
+import { PANELS, savePanels, panelOn } from '../expert.jsx';
 import { confirm } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Input, Textarea } from '@/components/ui/basic.jsx';
@@ -452,7 +452,7 @@ export function ExpertPanelsCard({ c }) {
       <Panel>
         <Stack>
           <div className="grid gap-2 sm:grid-cols-2">
-            {Object.entries(PANELS).map(([id, label]) => <label key={id} className={cn('-mx-1 flex items-center gap-2 rounded-md px-1 py-1 text-control', on ? 'hover:bg-accent/40 cursor-pointer' : 'text-muted-foreground cursor-not-allowed')}><Checkbox disabled={!on} checked={panels[id] !== false} onCheckedChange={(v) => savePanels({ ...panels, [id]: v === true })} />{label}</label>)}
+            {Object.entries(PANELS).map(([id, label]) => <label key={id} className={cn('-mx-1 flex items-center gap-2 rounded-md px-1 py-1 text-control', on ? 'hover:bg-accent/40 cursor-pointer' : 'text-muted-foreground cursor-not-allowed')}><Checkbox disabled={!on} checked={panelOn(panels, id)} onCheckedChange={(v) => savePanels({ ...panels, [id]: v === true })} />{label}</label>)}
           </div>
         </Stack>
       </Panel>

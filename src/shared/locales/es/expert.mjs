@@ -63,6 +63,8 @@ export default {
   'expert.searchFiles': 'Buscar archivos',
   'expert.searchFilesHint': 'Busca por nombre entre los archivos ya leídos; abre una carpeta para buscar dentro.',
   'expert.exit': 'Salir del God mode',
+  'expert.git.seeAll': 'Ver todo',
+  'tools.runInWindow': 'Ejecutar en una ventana aparte',
   'expert.openTerminal': 'Abrir un terminal aquí',
   'expert.panelsHint': 'Tú eliges cuáles ver.',
   'expert.git': 'Git',

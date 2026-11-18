@@ -152,7 +152,9 @@ function useProjectActions(name) {
   return actions;
 }
 
-export function ActionsMenu({ project, labelClassName }) {
+// onRun(action): where a click on an action goes (God mode's terminal); without it the action runs in a window of its own.
+// The hover button of a line always offers that window.
+export function ActionsMenu({ project, labelClassName, onRun }) {
   const t = useT();
   const actions = useProjectActions(project?.name);
   if (!project || !bridge.runAction) return null;
@@ -163,10 +165,11 @@ export function ActionsMenu({ project, labelClassName }) {
       <DropdownMenuContent align="end" className="w-72">
         {actions.length ? <DropdownMenuLabel>{t('tools.actionsOf', { name: project.name })}</DropdownMenuLabel> : null}
         {actions.map((a) => (
-          <DropdownMenuItem key={a.id} onSelect={() => runProjectAction(project, a)} className="group/act" data-testid={`action-${a.id}`}>
+          <DropdownMenuItem key={a.id} onSelect={() => (onRun ? onRun(a) : runProjectAction(project, a))} className="group/act" data-testid={`action-${a.id}`}>
             <Play /><span className="min-w-0 flex-1 truncate">{a.name}</span>
             {a.shortcut ? <kbd className="text-muted-foreground rounded border px-1 text-micro group-hover/act:hidden">{a.shortcut}</kbd> : null}
             <span className="hidden items-center gap-0.5 group-hover/act:flex">
+              {onRun ? <button type="button" className="hover:bg-accent grid size-6 place-items-center rounded" aria-label={t('tools.runInWindow')} title={t('tools.runInWindow')} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); runProjectAction(project, a); }} data-testid={`action-window-${a.id}`}><ExternalLink className="size-3.5" /></button> : null}
               <button type="button" className="hover:bg-accent grid size-6 place-items-center rounded" aria-label={t('tools.editAction')} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); editAction(project, a); }}><Pencil className="size-3.5" /></button>
               <button type="button" className="hover:bg-accent text-destructive grid size-6 place-items-center rounded" aria-label={t('tools.removeAction')} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); remove(a); }}><Trash2 className="size-3.5" /></button>
             </span>

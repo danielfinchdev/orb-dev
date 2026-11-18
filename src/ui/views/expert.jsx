@@ -1,8 +1,9 @@
+/* eslint no-use-before-define: ["error", { "functions": false, "classes": false, "variables": true }] */
 // God mode / expert mode (PC only): an IDE-like view for demanding users. Files on the left; in the middle the assistant's
 // chat and the files opened as tabs; on the right git (changes and history) and the other panels chosen in the header.
 // Everything here only reads; the work is still done by the agents.
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight, FilePlus2, Copy, File, FileCode2, FileJson, FileText, FlaskConical, Lock, Folder, FolderOpen, FolderTree, GitBranch, GitCompare, History, LoaderCircle, RefreshCw, X, LayoutPanelLeft, Cpu, Activity, Gauge, SquareTerminal, MessageSquare, FileDiff, Monitor, ImageIcon, Settings, LogOut, CircleCheck } from 'lucide-react';
+import { ChevronRight, FilePlus2, Copy, File, FileCode2, FileJson, FileText, FlaskConical, Lock, Folder, FolderOpen, FolderTree, GitBranch, GitCompare, History, LoaderCircle, RefreshCw, X, LayoutPanelLeft, Cpu, Activity, Gauge, SquareTerminal, MessageSquare, FileDiff, Monitor, ImageIcon, Settings, LogOut, CircleCheck, ChevronUp } from 'lucide-react';
 import { ChatView } from './chat.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Input, Spinner } from '@/components/ui/basic.jsx';
@@ -25,6 +26,9 @@ import { stepText } from '@/components/chat-live.jsx';
 import { activityLabel, activityDetail } from '@/lib/activity.js';
 import { quiet } from '@/lib/quiet.js';
 import { GitPanel, BranchMenu } from '@/components/expert-git.jsx';
+import { TerminalPanel } from '@/components/terminal-panel.jsx';
+import { TaskOutput } from '@/components/task-output.jsx';
+import { onTerminalPaste, oneCommand } from '@/lib/terminal-paste.js';
 
 // Labels are read when used (getters), so they follow the language chosen in Ajustes.
 export const PANELS = {
@@ -73,6 +77,8 @@ function useCalmVersion(ms = 5000) {
   return calm;
 }
 
+// «Historial» is opened from the git panel's «Ver todo» unless the user switched it on; every other panel is on unless switched off.
+export const panelOn = (panels, id) => (id === 'history' ? panels.history === true : panels[id] !== false);
 export async function savePanels(panels) {
   const config = await act(call('config.save', { patch: { expert: { panels } } }));
   if (config) setState({ app: { ...getState().app, config } });
@@ -221,13 +227,13 @@ function useGitStatus(project, version) {
   useEffect(() => { if (bridge.mobile || !project) return undefined; let alive = true; call('expert.status', { project }).then((r) => alive && setSt(r)).catch(() => alive && setSt({ repo: false, files: [] })); return () => { alive = false; }; }, [project, version]);
   return st;
 }
-function HistoryPanel({ project, version }) {
+function HistoryPanel({ project, version, onClose }) {
   const t = useT();
   const locale = useLocale();
   const [rows, setRows] = useState(null);
   useEffect(() => { let alive = true; call('expert.log', { project, limit: 60 }).then((r) => alive && setRows(r)).catch(() => alive && setRows([])); return () => { alive = false; }; }, [project, version]);
   return (
-    <Sec label={t('expert.history')} testid="panel-history">
+    <Sec label={t('expert.history')} testid="panel-history" action={onClose ? <IconButton small label={t('expert.close')} onClick={onClose} data-testid="expert-history-close"><X /></IconButton> : null}>
       {!rows ? <div className="p-1"><Spinner className="size-3" /></div> : !rows.length ? <Note>{t('expert.noCommits')}</Note> : rows.map((c) => (
         <Row key={c.hash} title={`${c.hash} · ${c.author} · ${new Date(c.date).toLocaleString(locale)}${c.refs ? ` · ${c.refs}` : ''}`}>
           <span className="text-faint-foreground font-mono text-caption">{c.hash.slice(0, 7)}</span><span className="min-w-0 flex-1 truncate">{c.subject}</span><span className="text-faint-foreground text-micro whitespace-nowrap">{ago(c.date)}</span>
@@ -308,8 +314,8 @@ function PanelsMenu() {
         {Object.entries(PANELS).map(([id, label]) => {
           const Icon = PANEL_ICON[id];
           return (
-            <DropdownMenuItem key={id} onSelect={(e) => { e.preventDefault(); savePanels({ ...panels, [id]: panels[id] === false }); }}>
-              <Icon /><span className="min-w-0 flex-1 truncate">{label}</span><Switch size="sm" checked={panels[id] !== false} aria-label={label} className="pointer-events-none" tabIndex={-1} />
+            <DropdownMenuItem key={id} onSelect={(e) => { e.preventDefault(); savePanels({ ...panels, [id]: !panelOn(panels, id) }); }}>
+              <Icon /><span className="min-w-0 flex-1 truncate">{label}</span><Switch size="sm" checked={panelOn(panels, id)} aria-label={label} className="pointer-events-none" tabIndex={-1} />
             </DropdownMenuItem>
           );
         })}
@@ -326,7 +332,8 @@ export function ExpertView() {
   const [manual, setManual] = useState(0); // the refresh button reads everything again right away
   const version = `${useCalmVersion()}-${manual}`;
   const panels = app.config.expert?.panels ?? {};
-  const on = (id) => panels[id] !== false;
+  const on = (id) => panelOn(panels, id);
+  const [historyAll, setHistoryAll] = useState(false); // «Ver todo» of the git panel
   const [project, setProject] = useState(app.activeProject?.name ?? projects[0]?.name ?? '');
   // the chat of God mode is a conversation of that project (the latest still open, or a new one in it).
   const conversations = useStore((s) => s.conversations) ?? [];
@@ -341,7 +348,14 @@ export function ExpertView() {
   const changes = useMemo(() => Object.fromEntries((st?.files ?? []).map((f) => [f.path, f.state])), [st]);
   const lineCounts = useMemo(() => Object.fromEntries((st?.files ?? []).filter((f) => f.add != null).map((f) => [f.path, f])), [st]);
   useEffect(() => { if (!project && projects[0]) setProject(app.activeProject?.name ?? projects[0].name); }, [projects]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { setTabs([]); setCurrent('chat'); setFileQuery(''); }, [project]);
+  const [term, setTerm] = useState(false);
+  const [termDraft, setTermDraft] = useState('');
+  const [launch, setLaunch] = useState(null);
+  useEffect(() => { setTabs([]); setCurrent('chat'); setFileQuery(''); setTerm(false); setLaunch(null); setTermDraft(''); setHistoryAll(false); }, [project]);
+  // The terminal dock (this PC's window only). It opens when the user asks (its button, an action or a command pasted from
+  // the chat); closing it, leaving the view or changing project closes the shells it opened.
+  useEffect(() => (bridge.mobile || !info?.path ? undefined : onTerminalPaste((line, from) => { if (from && !from.closest?.('[data-testid="expert-view"]')) return; setTerm(true); setTermDraft(line); })), [info?.path]);
+  const runInTerminal = (a) => { setLaunch({ n: Date.now(), name: a.name, command: oneCommand(a.command), preview: Boolean(a.openPreview && a.preview) }); setTerm(true); };
   const openTab = (kind, path) => {
     const id = `${kind}:${path}`;
     if (!tabs.some((t) => t.id === id)) setTabs([...tabs, { id, kind, path, label: kind === 'diff' ? (path ? `Δ ${path.split('/').pop()}` : null) : path.split('/').pop() }].slice(-12));
@@ -365,7 +379,7 @@ export function ExpertView() {
   const copyPath = (p) => navigator.clipboard?.writeText(p).then(() => notifyOk(t('expert.pathCopied'))).catch(() => notifyError(t('app.copyFailed')));
   if (bridge.mobile) return <div className="m-auto"><Notice icon={Monitor} title={t('expert.pcOnly')}>{t('expert.pcOnlyBody')}</Notice></div>;
   const tab = tabs.find((x) => x.id === current);
-  const showRight = RIGHT_PANELS.some(on);
+  const showRight = RIGHT_PANELS.some(on) || historyAll;
   const running = tasks.find((x) => x.status === 'running' && x.project === project);
   const count = st?.repo ? (st.files.length ? t(st.files.length > 1 ? 'expert.changesOther' : 'expert.changesOne', { n: st.files.length }) : t('expert.clean')) : null;
   const meta = [project, st?.repo ? st.branch : null, count].filter(Boolean).join(' · ');
@@ -399,7 +413,7 @@ export function ExpertView() {
           {running ? <Badge variant="info" className="hidden shrink-0 @5xl/bar:inline-flex"><AgentIcon agent={running.assigned_to ?? running.agent} className="size-3" />{t('expert.workingOn', { agent: AGENT[running.assigned_to ?? running.agent] ?? '', id: running.id })}</Badge> : null}
           <div className="min-w-0 flex-1" />
           {/* the project in an editor, and its actions (commands of the user's own, with their shortcut). */}
-          <ActionsMenu project={info} labelClassName="hidden @4xl/bar:inline" />
+          <ActionsMenu project={info} labelClassName="hidden @4xl/bar:inline" onRun={info?.path ? runInTerminal : undefined} />
           <OpenInMenu project={info} labelClassName="hidden @6xl/bar:inline" />
           <Button variant="outline" size="sm" className="shrink-0" onClick={() => go('chat')} aria-label={t('expert.exit')} title={t('expert.exit')}><LogOut className="@4xl/bar:hidden" /><span className="hidden @4xl/bar:inline">{t('expert.exit')}</span></Button>
         </div>
@@ -447,6 +461,15 @@ export function ExpertView() {
             {/* The chat stays mounted so switching tabs never loses what is being written. */}
             <div className={cn('min-h-0 flex-1 flex-col', current === 'chat' ? 'flex' : 'hidden')}><ChatView route={{ view: 'chat', id: conversation }} onConversation={setConversation} project={project || undefined} /></div>
             {tab ? <div className="min-h-0 flex-1 overflow-auto [&_.code-surface]:bg-background!" data-testid="expert-viewer"><Viewer project={project} root={info?.path} tab={tab} version={version} onInfo={setFileInfo} /></div> : null}
+            {info?.path ? (term ? (
+              <TerminalPanel key={project} dock dir={info.path} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => { setTerm(false); setLaunch(null); }} launch={launch}
+                readonly={{ label: running ? t('terminal.taskId', { id: running.id }) : t('terminal.task'), content: <TaskOutput task={running} /> }} />
+            ) : (
+              <div className="border-border bg-secondary flex shrink-0 items-center gap-1 border-t px-2 py-1" data-testid="terminal-strip">
+                <SquareTerminal className="text-muted-foreground mx-1 size-4 shrink-0" /><span className="text-muted-foreground text-control">{t('terminal.tabs')}</span><span className="grow" />
+                <BubbleTip title={t('terminal.open')}><IconButton small label={t('terminal.open')} onClick={() => setTerm(true)} data-testid="terminal-open"><ChevronUp /></IconButton></BubbleTip>
+              </div>
+            )) : null}
           </div>
           {showRight && project ? (
             <aside className="border-border flex w-75 shrink-0 flex-col overflow-y-auto border-l" aria-label={t('expert.git')}>
@@ -456,8 +479,8 @@ export function ExpertView() {
                     {st?.repo ? <span className="text-muted-foreground truncate text-caption">{[st.branch, st.ahead ? t(st.upstream ? 'expert.aheadOf' : 'expert.ahead', { n: st.ahead, base: st.upstream }) : null, st.behind ? t(st.upstream ? 'expert.behindOf' : 'expert.behind', { n: st.behind, base: st.upstream }) : null].filter(Boolean).join(' · ')}</span> : null}</div>
                 </div>
               ) : null}
-              {on('git') ? <GitPanel project={project} st={st} version={version} reload={() => setManual((n) => n + 1)} onDiff={(p) => openTab('diff', p)} ago={ago} /> : null}
-              {on('history') ? <HistoryPanel project={project} version={version} /> : null}
+              {on('git') ? <GitPanel project={project} st={st} version={version} reload={() => setManual((n) => n + 1)} onDiff={(p) => openTab('diff', p)} onHistory={() => setHistoryAll(true)} ago={ago} /> : null}
+              {on('history') || historyAll ? <HistoryPanel project={project} version={version} onClose={on('history') ? undefined : () => setHistoryAll(false)} /> : null}
               {on('running') ? <RunningPanel /> : null}
               {on('usage') ? <UsagePanel version={version} /> : null}
               {on('system') ? <SystemPanel /> : null}
