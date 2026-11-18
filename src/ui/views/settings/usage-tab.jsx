@@ -44,7 +44,8 @@ export function BrakesCard({ c }) {
   const [v, setV] = useState({ stop: String(stopNow), week: String(weekNow) });
   useEffect(() => { setV({ stop: String(stopNow), week: String(weekNow) }); }, [stopNow, weekNow]);
   // Same ranges as the selects of the Uso view; an empty or out-of-range field saves nothing.
-  const RANGE = { stop: [75, 100], week: [70, 100] };
+  // the engine takes 50 to 100 for both (a lower number is a stricter brake): none of that range is taken away here
+  const RANGE = { stop: [50, 100], week: [50, 100] };
   const valid = (key) => { const s = String(v[key]).trim(); const n = Number(s); return s !== '' && Number.isFinite(n) && n >= RANGE[key][0] && n <= RANGE[key][1]; };
   const allValid = valid('stop') && valid('week');
   const apply = () => {

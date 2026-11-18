@@ -90,7 +90,7 @@ test('revisión: freno solo lectura en el móvil, rangos, carrera del QR, códig
   assert.doesNotMatch(general, /windowHours: v\.windowHours, stopAt/);
   assert.doesNotMatch(general, /v\.stopAt/);
   // 3: empty or out-of-range values are not saved
-  assert.match(tab, /stop: \[75, 100\], week: \[70, 100\]/);
+  assert.match(tab, /stop: \[50, 100\], week: \[50, 100\]/);
   assert.match(tab, /disabled=\{!allValid\}/);
   assert.match(tab, /if \(!allValid\) return undefined;/);
   assert.ok(es['settings.brakeInvalid'] && en['settings.brakeInvalid']);
