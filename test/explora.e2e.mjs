@@ -698,6 +698,12 @@ try {
       const name = row.locator('[data-testid=project-open-name]').first();
       if (!(await name.click({ timeout: 4000 }).then(() => true, () => false))) { noteOnce('Proyectos: sin fila «tienda-web» para abrir su página'); return; }
       await page.waitForTimeout(500); await shot(`${prefix}-proyecto`);
+      // the project's own skills and MCP: the card, and the dialog that adds one from those installed (cancelled)
+      if (await page.locator('[data-testid=project-extensions]').first().scrollIntoViewIfNeeded({ timeout: 3000 }).then(() => true, () => false)) {
+        await page.waitForTimeout(300); await shot(`${prefix}-proyecto-skills-mcp`);
+        if (await tap('project-ext-add', '«Añadir» de Skills y MCP del proyecto')) { await page.waitForTimeout(400); await shot(`${prefix}-proyecto-skills-mcp-anadir`); await cancelDialog('añadir skills o MCP al proyecto'); }
+        await scrollView('top');
+      } else noteOnce('Proyecto: sin la tarjeta «Skills y MCP del proyecto»');
       if (await tap('project-log-write', '«Escribir entrada» de la bitácora')) {
         await page.locator('[data-testid=project-log-entry-title]').first().waitFor({ timeout: 4000 }).catch(() => noteOnce('Proyecto: «Escribir entrada» no abre su diálogo'));
         await shot(`${prefix}-proyecto-entrada`);
@@ -1024,6 +1030,12 @@ try {
           await entry(/^src$/).click({ timeout: 3000 }); await page.waitForTimeout(500);
           await entry(/^context-meter\.js$/).click({ timeout: 3000 }); await page.waitForTimeout(900);
           await shot(`${prefix}-god-mode-archivo`);
+          // the Git panel: the save menu, the new-branch form and the branches of the bar. Opened and closed: nothing is
+          // saved, pushed, pulled, switched or undone.
+          for (const [id, name, what] of [['expert-git-savemore', 'guardar-menu', 'el menú de «Guardar cambios»'], ['expert-git-cleanmore', 'guardar-menu', '«Más formas de guardar»'], ['expert-git-newbranch', 'rama-nueva', '«Nueva rama»'], ['expert-branch', 'ramas', 'el menú de ramas de la barra'], ['expert-git-more', 'git-menu', 'el «⋯» del panel Git']]) {
+            if (!(await page.locator(`[data-testid=${id}]`).count())) continue;
+            if (await tap(id, what)) { await page.waitForTimeout(300); await shot(`${prefix}-god-mode-${name}`); await closeMenus(); await closeMenus(); }
+          }
           // the file's «⋯» and «Nuevo archivo»: opened and closed, nothing is created
           if (await tap('expert-file-more', 'el «⋯» del archivo abierto en el God mode')) { await shot(`${prefix}-god-mode-archivo-menu`); await closeMenus(); }
           if (await tap('expert-new-file', '«Nuevo archivo» del God mode')) {
