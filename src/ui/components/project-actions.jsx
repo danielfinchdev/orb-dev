@@ -17,8 +17,9 @@ const home = () => getState().app?.home ?? '';
 const sep = () => (home().includes('\\') ? '\\' : '/');
 // Projects of Orb's folder live in one of its categories (windows, linux, ios, android, web, multi: src/shared/layout.mjs).
 export { CATEGORIES };
-const CategoryField = ({ v, set }) => (
-  <Field label={t('comp.projects.category')} hint={t('comp.projects.categoryHint')}>
+// hint: the dialog that makes the folder shows where it will go instead of the generic line.
+const CategoryField = ({ v, set, hint = t('comp.projects.categoryHint') }) => (
+  <Field label={t('comp.projects.category')} hint={hint}>
     <Select className="w-full" value={v.category} onValueChange={(category) => set({ category })} options={CATEGORIES.map((value) => ({ value, label: t(`comp.projects.category.${value}`) }))} data-testid="project-category" />
   </Field>
 );
@@ -51,11 +52,10 @@ const folderHint = (v) => (v.template === false ? t('comp.projects.emptyFolderHi
 
 export async function createProjectFlow() {
   const p = await form(t('comp.projects.newTitle'), {
-    description: t('comp.projects.newDesc'),
     initial: { name: '', notes: '', category: DEFAULT_CATEGORY, platforms: ['android', 'web'], template: true },
     body: (v, set) => (<>
-      <Field label={t('comp.projects.name')} hint={v.name.trim() && projectNameProblem(v.name) ? <span className="text-destructive">{t(projectNameProblem(v.name), { name: v.name.trim() })}</span> : v.name.trim() ? folderHint(v) : null}><Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder="webviaproject" maxLength={60} /></Field>
-      <CategoryField v={v} set={set} />
+      <Field label={t('comp.projects.name')} hint={v.name.trim() && projectNameProblem(v.name) ? <span className="text-destructive">{t(projectNameProblem(v.name), { name: v.name.trim() })}</span> : null}><Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder="webviaproject" maxLength={60} /></Field>
+      <CategoryField v={v} set={set} hint={folderHint(v)} />
       {v.category === MULTI ? <PlatformsField v={v} set={set} /> : null}
       <TemplateField v={v} set={set} />
       <details className="border-border rounded-(--r-md) border px-3 py-2" data-testid="project-more-options">

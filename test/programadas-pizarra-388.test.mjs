@@ -102,13 +102,14 @@ test('step 7C-b: a row shows the model by its name and the zone of its time', ()
   assert.match(schedules, /call\('models\.catalog'\)/);
 });
 
-test('8C-a: a form dialog keeps its header and footer in view and scrolls only its body; a confirmation is the 440 px one', () => {
+test('8C-a: a form dialog keeps its header and footer in view and scrolls only its body; every dialog but the wide ones is the 440 px one', () => {
   const dialogs = read('src/ui/components/dialogs.jsx');
   assert.match(dialogs, /grid-rows-\[minmax\(0,1fr\)\] gap-0 overflow-hidden p-0/);
-  assert.match(dialogs, /<div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-\[18px\]">\{d\.body\(values, set\)\}/);
+  assert.match(dialogs, /<DialogBody className="grid gap-4 p-\[18px\]">\{d\.body\(values, set\)\}/);
+  assert.match(read('src/ui/components/ui/overlay.jsx'), /cn\('min-h-0 flex-1 overflow-y-auto', className\)/);
   assert.match(dialogs, /<DialogHeader className="flex-none"><DialogTitle>\{d\.title\}<\/DialogTitle>/);
   assert.match(dialogs, /<DialogFooter className="flex-none">/);
-  assert.match(dialogs, /size=\{d\.kind === 'confirm' \? 'sm' : undefined\}/);
+  assert.match(dialogs, /size=\{d\.wide \? undefined : 'sm'\}/);
   assert.match(dialogs, /d\.tone === 'primary' \? 'default' : d\.danger \? 'destructive'/);
   // the focus rule of a dangerous confirmation does not depend on its colour
   assert.match(dialogs, /data-autofocus=\{d\.danger \? "" : undefined\}/);

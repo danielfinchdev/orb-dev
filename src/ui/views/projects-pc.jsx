@@ -44,7 +44,7 @@ function RowFacts({ info, counts }) {
   const t = useT();
   const facts = gitFacts(info);
   return (
-    <span className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5" data-testid="project-facts">
+    <span className="mt-px flex flex-wrap items-center gap-x-2.5 gap-y-0.5 leading-[17.4px]" data-testid="project-facts">
       {facts.map((f) => {
         if (f.key === 'branch') return <Fact key={f.key} icon={GitBranch}>{f.value}</Fact>;
         if (f.key === 'changes') return <Fact key={f.key} icon={FilePen} kind="warn">{plural(t, 'projects.m.changes', f.n)}</Fact>;
@@ -89,7 +89,7 @@ function ProjectRow({ p, stamp, counts, last, onOpen }) {
       onClickCapture={(e) => { if (!e.target.closest('button, a, [role=menuitem]')) onOpen(p.name); }}
       leading={<ProjectIcon name={p.name} />}
       title={<button type="button" onClick={() => onOpen(p.name)} className="max-w-full cursor-pointer truncate text-left font-medium outline-none focus-visible:underline" data-testid="project-open-name">{p.name}</button>}
-      meta={<><PathText path={p.path} className="text-faint-foreground text-caption" /><RowFacts info={info} counts={counts} /></>}
+      meta={<><PathText path={p.path} className="text-faint-foreground text-caption leading-[17.4px]" /><RowFacts info={info} counts={counts} /></>}
       trailing={<>
         <span className="text-muted-foreground w-[150px] shrink-0 text-right text-caption">{last ? t('projects.last', { when: since(last, t) }) : t('projects.last.none')}</span>
         <div className="acts flex shrink-0 items-center gap-1.5">
@@ -138,7 +138,7 @@ function NewProject({ onMade }) {
   ];
   return (
     <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild><Button data-testid="project-new"><Plus />{t('projects.create')}<ChevronDown /></Button></DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild><Button className="gap-1.5 [&_svg:not([class*=size-])]:size-3.5" data-testid="project-new"><Plus />{t('projects.create')}<ChevronDown /></Button></DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72" data-testid="project-new-list">
         {items.map(([id, Icon, flow, testid]) => (
           <DropdownMenuItem key={id} className="items-start" onSelect={async () => onMade(await flow())} data-testid={testid}>

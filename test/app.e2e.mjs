@@ -112,7 +112,7 @@ try {
   await win.click('[data-testid=project-picker]');
   await win.getByRole('menuitem', { name: 'Nuevo proyecto' }).click();
   await win.getByRole('dialog').locator('input').fill('webviaproject');
-  await dialogButton('Crear proyecto').click();
+  await dialogButton('Crear').click();
   await until(async () => (await call('app.state')).activeProject?.name === 'webviaproject', 'proyecto activo');
   assert.ok(fs.existsSync(path.join(home, 'web', 'webviaproject', '.git')), 'D:\\Orb\\webviaproject');
   // A folder created by hand in the Explorer shows up as a project too.

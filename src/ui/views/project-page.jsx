@@ -65,7 +65,7 @@ function LogCard({ p, full }) {
   useEffect(() => { let alive = true; call('logs.read', { project: p.name }).then((r) => alive && setEntry(lastLogEntry(r))).catch(() => alive && setEntry(null)); return () => { alive = false; }; }, [p.name, version, written]);
   return (
     <PjCard icon={NotebookPen} title={t('projects.log.last')} data-testid="project-log-card"
-      aside={<Button variant="link" size="xs" className="text-info" onClick={() => go({ view: 'logs', name: p.name })} data-testid="project-log-open">{t('projects.log.open')}</Button>}>
+      aside={<Button variant="link" size="xs" className="text-info text-control font-semibold" onClick={() => go({ view: 'logs', name: p.name })} data-testid="project-log-open">{t('projects.log.open')}</Button>}>
       {entry === undefined ? <Spinner /> : !entry ? <p className="text-muted-foreground text-control">{t('projects.log.none')}</p> : (<>
         <p className="text-muted-foreground text-caption">{[entry.who, `${entry.date}${entry.time ? ` ${entry.time}` : ''}`].filter(Boolean).join(' · ')}</p>
         <b className="text-body font-medium">{entry.topic}</b>
@@ -347,9 +347,10 @@ export function ProjectPage({ p }) {
 
   return (
     <>
-      <PageHeader
+      {/* The right group (Abrir en…, pause, bell, ⋯) keeps its own width: with the bar's 150 px minimum it grew over the centre and cut the line under the title. */}
+      <PageHeader className="[&.bar]:grid-cols-[minmax(max-content,1fr)_minmax(0,auto)_minmax(max-content,1fr)]!"
         title={<><button type="button" className="text-faint-foreground hover:text-foreground cursor-pointer" onClick={() => go('projects')} data-testid="project-back">{t('projects.title')} /</button> {p.name}</>}
-        meta={<><ProjectIcon name={p.name} small />{t(`comp.projects.category.${p.category ?? 'other'}`)}{sep}<span className="truncate">{p.path}</span>{sep}{chatsN}{sep}{tasksN}</>}>
+        meta={<><ProjectIcon name={p.name} small /><span className="shrink-0">{t(`comp.projects.category.${p.category ?? 'other'}`)}</span>{sep}<span className="min-w-0 truncate" title={p.path} data-testid="project-path">{p.path}</span>{sep}<span className="shrink-0">{chatsN}</span>{sep}<span className="shrink-0">{tasksN}</span></>}>
         <ProjectOpenMenu project={p} page />
         <BarPause />
         <NotificationBell />
@@ -389,12 +390,12 @@ export function ProjectPage({ p }) {
                 <LogCard p={p} />
               </div>
               <div className="flex min-w-0 flex-col gap-4">
-                <PjCard icon={ClipboardCheck} title={t('projects.tasks.active')} aside={<Button variant="link" size="xs" className="text-info" onClick={() => go({ view: 'tasks', project: p.name })}>{t('projects.tasks.all')}</Button>}>
+                <PjCard icon={ClipboardCheck} title={t('projects.tasks.active')} aside={<Button variant="link" size="xs" className="text-info text-control font-semibold" onClick={() => go({ view: 'tasks', project: p.name })}>{t('projects.tasks.all')}</Button>}>
                   {active.length ? <ListCard className="border-0">{active.slice(0, 3).map((x) => <TaskRow key={x.id} x={x} compact />)}</ListCard> : <p className="text-muted-foreground text-control">{t('projects.tasks.none')}</p>}
                   <p className="text-faint-foreground text-caption">{t('projects.tasks.week', { done: week.filter((x) => x.status === 'done' && !x.undone).length, undone: week.filter((x) => x.undone).length })}</p>
                   <Actions><Button variant="outline" onClick={() => go({ view: 'tasks', project: p.name })}><Plus />{t('projects.tasks.new')}</Button></Actions>
                 </PjCard>
-                <PjCard icon={MessagesSquare} title={t('projects.chats.recent')} aside={items.length > 4 ? <Button variant="link" size="xs" className="text-info" onClick={() => setTab('chats')}>{t('projects.chats.all', { n: items.length })}</Button> : null}>
+                <PjCard icon={MessagesSquare} title={t('projects.chats.recent')} aside={items.length > 4 ? <Button variant="link" size="xs" className="text-info text-control font-semibold" onClick={() => setTab('chats')}>{t('projects.chats.all', { n: items.length })}</Button> : null}>
                   {items.length ? <ListCard className="border-0">{items.slice(0, 4).map((x) => <ChatRow key={x.key} x={x} assistant={assistant} compact />)}</ListCard> : <p className="text-muted-foreground text-control">{t('projects.chats.none')}</p>}
                 </PjCard>
                 <PjCard icon={ImageIcon} title={t('projects.icon.title')}>
@@ -419,7 +420,7 @@ export function ProjectPage({ p }) {
           {tab === 'tareas' ? (
             <div className="flex flex-col gap-3">
               <div>
-                <div className="sec-h flex items-center gap-2"><h2 className={H3}>{t('projects.tasks.active')}</h2><span className="text-faint-foreground text-caption">{active.length}</span><span className="grow" /><Button variant="link" size="xs" className="text-info" onClick={() => go({ view: 'tasks', project: p.name })}>{t('projects.tasks.all')}</Button></div>
+                <div className="sec-h flex items-center gap-2"><h2 className={H3}>{t('projects.tasks.active')}</h2><span className="text-faint-foreground text-caption">{active.length}</span><span className="grow" /><Button variant="link" size="xs" className="text-info text-control font-semibold" onClick={() => go({ view: 'tasks', project: p.name })}>{t('projects.tasks.all')}</Button></div>
                 <ListCard className="mt-1.5">{active.length ? active.map((x) => <TaskRow key={x.id} x={x} />) : <Empty icon={ClipboardCheck} title={t('projects.tasks.none')} />}</ListCard>
               </div>
               <p className="text-faint-foreground text-caption">{t('projects.tasks.week', { done: week.filter((x) => x.status === 'done' && !x.undone).length, undone: week.filter((x) => x.undone).length })}</p>

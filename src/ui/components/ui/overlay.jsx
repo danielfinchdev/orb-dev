@@ -9,7 +9,7 @@ import * as CheckboxPrimitive from '@radix-ui/react-checkbox';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import * as CollapsiblePrimitive from '@radix-ui/react-collapsible';
 import { CheckIcon, ChevronDownIcon, InfoIcon, XIcon } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
@@ -37,6 +37,31 @@ export function DialogContent({ className, children, showClose = true, instant =
   );
 }
 export function DialogHeader({ className, ...props }) { return <div data-slot="dialog-header" className={cn('dialog-h border-border flex min-h-14 flex-col justify-center gap-0.5 border-b py-2.5 pr-12 pl-[18px]', className)} {...props} />; }
+// The scrolling part of a dialog (.dialog-b): a soft fade on its bottom edge while more content waits below, so a row that
+// the height cuts is read as «there is more» and not as the end. Without anything to scroll there is no fade.
+export function DialogBody({ className, children, ...props }) {
+  const ref = useRef(null);
+  const [more, setMore] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const check = () => setMore(el.scrollHeight - el.scrollTop - el.clientHeight > 2);
+    check();
+    el.addEventListener('scroll', check, { passive: true });
+    const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(check) : null;
+    resize?.observe(el);
+    // fields appear and disappear and a «Más opciones» opens: all of it changes the height without a scroll
+    const mutate = typeof MutationObserver === 'function' ? new MutationObserver(check) : null;
+    mutate?.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ['open', 'hidden'] });
+    return () => { el.removeEventListener('scroll', check); resize?.disconnect(); mutate?.disconnect(); };
+  }, []);
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div ref={ref} data-slot="dialog-body" className={cn('min-h-0 flex-1 overflow-y-auto', className)} {...props}>{children}</div>
+      <div aria-hidden="true" data-slot="dialog-more" data-more={more ? 'true' : 'false'} className="pointer-events-none absolute inset-x-0 bottom-0 h-8 opacity-0 transition-opacity duration-150 data-[more=true]:opacity-100" style={{ background: 'linear-gradient(to top, var(--background), transparent)' }} />
+    </div>
+  );
+}
 export function DialogFooter({ className, ...props }) { return <div data-slot="dialog-footer" className={cn('dialog-f border-border flex flex-col-reverse gap-2 border-t px-[18px] py-3 sm:flex-row sm:justify-end', className)} {...props} />; }
 export function DialogTitle({ className, ...props }) { return <DialogPrimitive.Title className={cn('font-(family-name:--title) text-title leading-tight font-semibold', className)} {...props} />; }
 export function DialogDescription({ className, ...props }) { return <DialogPrimitive.Description className={cn('text-muted-foreground text-caption', className)} {...props} />; }

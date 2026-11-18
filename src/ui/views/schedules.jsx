@@ -14,7 +14,7 @@ import { TaskStatus } from '@/components/task-state.jsx';
 import { confirm } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, Badge, Field, Input, Textarea, Empty } from '@/components/ui/basic.jsx';
-import { Select, Switch, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from '@/components/ui/overlay.jsx';
+import { Select, Switch, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, Dialog, DialogContent, DialogHeader, DialogBody, DialogFooter, DialogTitle, DialogDescription } from '@/components/ui/overlay.jsx';
 import { MoreButton, IconButton, ListCard, ListRow, Segmented, SectionLabel, FieldError } from '@/components/ui/primitives.jsx';
 import { notifyError, notifyOk } from '@/lib/notify.js';
 import { useStore, call, act, go, getState, bridge, fullPc, refresh } from '@/lib/store.js';
@@ -195,7 +195,7 @@ function ScheduleDialog({ schedule = null, preset = {}, onDone }) {
             <div className="flex items-center gap-2"><DialogTitle>{tr(editing ? 'schedules.edit.title' : 'schedules.new.title')}</DialogTitle>{dirty ? <Badge variant="warning" data-testid="schedule-unsaved">{tr('schedules.unsaved')}</Badge> : null}</div>
             <DialogDescription className="sr-only">{tr(editing ? 'schedules.edit.title' : 'schedules.new.title')}</DialogDescription>
           </DialogHeader>
-          <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-[18px]">
+          <DialogBody className="grid gap-4 p-[18px] [&_label]:font-normal">
             <Field label={tr(editing ? 'schedules.edit.name' : 'schedules.titleField')}><Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={120} placeholder={tr('schedules.titlePh')} data-testid={editing ? 'schedule-edit-title' : 'schedule-title'} /></Field>
             <Field label={tr(editing ? 'schedules.edit.what' : 'schedules.what')} hint={tr('schedules.whatNote', { assistant: app?.config?.assistantName })}><Textarea rows={editing ? 5 : 4} value={v.description} onChange={(e) => set({ description: e.target.value })} placeholder={tr('schedules.whatHint')} data-testid={editing ? 'schedule-edit-description' : 'schedule-description'} /></Field>
             <div className="grid grid-cols-2 gap-3">
@@ -246,7 +246,7 @@ function ScheduleDialog({ schedule = null, preset = {}, onDone }) {
               </div>
             </details>
             <FieldError>{error}</FieldError>
-          </div>
+          </DialogBody>
           <DialogFooter className="flex-none">
             <Button type="button" variant="outline" onClick={requestClose} data-testid="schedule-cancel">{tr('comp.dialogs.cancel')}</Button>
             {editing ? <Button type="button" variant="outline" onClick={runNow} data-testid="schedule-dialog-run"><Play />{tr('schedules.runNow')}</Button> : null}
