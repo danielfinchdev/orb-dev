@@ -11,6 +11,7 @@
 //   m.pause(); m.resume(); m.stop(); m.setVolume(0.4); m.getState(); m.subscribe(fn); m.destroy();
 //
 // The same seed and the same signals give the same music. A context passed in is the caller's to close.
+// `themes` adds themes of the caller's to the ones below (the mini-games' music: lib/game-music.js).
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -170,6 +171,7 @@ function leadVoices(prev, pcs, lo, hi) {
 // ---- Themes ----
 // mix: [intensity where the layer starts, intensity where it is full, level at calm, level at full].
 // sends: [reverb, delay]. filt: layer lowpass at calm and at full intensity.
+// rush (optional): how much faster it plays at full intensity (0.3 = 30 % faster); the tempo follows bar by bar.
 const LAYERS = ['pad', 'bass', 'arp', 'perc', 'tex'];
 const TENSION_DUCK = { pad: 1, bass: 0.85, arp: 0.5, perc: 0.12, tex: 1 };
 const THEMES = {
@@ -278,12 +280,12 @@ const TICK_MS = 50;
 // ---- One theme playing: its own buses, effects, sequencer and harmony. Two exist only during a crossfade. ----
 class Scene {
   constructor(eng, id, t0) {
-    this.eng = eng; this.ctx = eng.ctx; this.id = id; this.th = THEMES[id];
+    this.eng = eng; this.ctx = eng.ctx; this.id = id; this.th = eng.themes[id];
     const base = hashSeed(eng.seed + '|' + id + '|' + (eng.sceneSerial++));
     this.rH = makeRng(base); this.rM = makeRng(base ^ 0x9e3779b9); this.rP = makeRng(base ^ 0x51ed270b); this.rS = makeRng(base ^ 0x2545f491);
     this.harm = new Harmony(this.th, this.rH);
     this.bpm = Math.round(this.rH.range(this.th.bpm[0], this.th.bpm[1]));
-    this.stepDur = 15 / this.bpm;
+    this.tempo();
     this.phase = [0, 1, 2, 3, 4].map(() => this.rH() * 6.283);
     this.drift = { bright: 1, reg: 0 };
     this.voices = []; this.sources = []; this.levels = {};
@@ -338,6 +340,8 @@ class Scene {
   }
 
   delayTime() { return clamp(this.th.delay.beats * 60 / this.bpm, 0.05, 2.4); }
+  // A sixteenth's length. A theme with `rush` plays faster the higher the intensity.
+  tempo() { this.stepDur = 15 / (this.th.rush ? this.bpm * (1 + this.th.rush * this.eng.intensity) : this.bpm); }
 
   // ---- Texture: continuous filtered noise, the bed that is always there. ----
   loop(buffer, t0, rate) {
@@ -545,7 +549,7 @@ class Scene {
     this.phrases = (this.phrases || 0) + 1;
     if (this.phrases > 1) {
       this.bpm = clamp(this.bpm + this.rH.range(-1.5, 1.5), th.bpm[0], th.bpm[1]);
-      this.stepDur = 15 / this.bpm;
+      this.tempo();
       const dt = this.delayTime();
       this.dL.delayTime.setTargetAtTime(dt, t, 1); this.dR.delayTime.setTargetAtTime(dt, t, 1);
     }
@@ -567,6 +571,9 @@ class Scene {
     if (this.tension && this.bar >= this.tension.endBar) { this.tension = null; force = true; this.toneLP.frequency.setTargetAtTime(this.th.tone, t, 0.4); }
     if (this.resolve && this.bar >= this.resolve.bar) { land = this.resolve; this.resolve = null; force = true; }
     this.updateDrift(t);
+    // The notes that have ended are forgotten here too: while only the bass plays, nothing else asks for the budget.
+    if (this.voices.length > 8) this.voices = this.voices.filter((e) => e > t);
+    if (this.th.rush) this.tempo();
     if (force) { this.queue = []; this.chordBarsLeft = 0; }
     if (this.chordBarsLeft <= 0) {
       if (!this.queue.length) { this.queue = this.newPhrase(t); if (force) this.queue[0].deg = 0; }
@@ -679,6 +686,24 @@ class Scene {
         if (this.freshDur) play(root, this.freshDur / sd - 2, 0.9);
         else if (s === 0 && I > 0.6) play(root + 12, 6, 0.4);
         break;
+      case 'octave':
+        // The arcade bounce: the root and its octave in eighths; one long note while it is calm.
+        if (I < 0.3) { if (s === 0) play(root, 12, 0.8); }
+        else if (s % 2 === 0) play(s % 4 === 2 ? root + 12 : s === 12 && this.octaves[6] ? fifth : root, 1.6, s % 4 === 0 ? 0.9 : 0.62);
+        break;
+      case 'walk': {
+        // A note per beat through the chord; every other beat while it is calm.
+        if (s % 4 !== 0) { if (s === 14 && I > 0.7 && r.chance(0.3)) play(fifth, 1.5, 0.5); break; }
+        const beat = s / 4;
+        if (I < 0.3 && beat % 2) break;
+        const line = this.octaves[0] ? [root, fit(ch.third, th.range.bass), fifth, root + 12] : [root, fifth, root + 12, fifth];
+        play(line[beat], I < 0.3 ? 7 : 3.4, beat === 0 ? 0.9 : 0.7);
+        break;
+      }
+      case 'stomp':
+        // One heavy note per beat, a march; half of them while it is calm.
+        if (s % 4 === 0 && (I > 0.25 || s % 8 === 0)) play(s === 12 ? (this.octaves[1] ? fit(ch.seventh, th.range.bass) : fifth) : root, 3, s === 0 ? 1 : 0.8);
+        break;
     }
   }
   playArp(t, s, I) {
@@ -738,6 +763,19 @@ class Scene {
         if (I > 0.5 && (s === 0 || s === 3)) kick(s === 0 ? 0.95 : 0.55);
         if (I > 0.62 && ((s % 4 === 2 && r.chance(0.6)) || (I > 0.8 && s % 2 === 1 && r.chance(0.15)))) this.sineHit(dest, tt, K.tick, r.range(0.5, 1));
         break;
+      case 'chip':
+        if (I > 0.3 && (s % 8 === 0 || (I > 0.7 && s % 4 === 0) || (s === 10 && I > 0.5 && r.chance(0.4)))) kick(s % 8 === 0 ? 1 : 0.8);
+        if (I > 0.45 && (s === 4 || s === 12)) snare(0.8);
+        else if (I > 0.6 && lastBar && s >= 13 && r.chance(0.5)) snare(0.35);
+        if (I > 0.2) { if (s % 2 === 0) hat(s % 4 === 2 ? 0.8 : 0.5, s === 14 && r.chance(0.15)); else if (I > 0.75) hat(0.35); }
+        break;
+      case 'march':
+        if (I > 0.15 && s % 4 === 0) kick(s === 0 ? 1 : 0.8);
+        // A roll into the next phrase.
+        if (I > 0.65 && lastBar && s >= 12) snare(0.3 + 0.1 * (s - 12));
+        else if (I > 0.5 && (s === 4 || s === 12)) snare(0.6);
+        if (I > 0.4 && s % 4 === 2) hat(0.6); else if (I > 0.8 && s % 2 === 1) hat(0.3);
+        break;
     }
   }
 
@@ -757,7 +795,8 @@ class Engine {
   constructor(opts) {
     this.opts = opts || {};
     this.seed = String(this.opts.seed == null ? 'orb' : this.opts.seed);
-    this.themeId = THEMES[this.opts.theme] ? this.opts.theme : 'bruma';
+    this.themes = this.opts.themes ? Object.assign({}, THEMES, this.opts.themes) : THEMES;
+    this.themeId = this.themes[this.opts.theme] ? this.opts.theme : 'bruma';
     this.volume = this.opts.volume == null ? 0.6 : clamp(Number(this.opts.volume) || 0, 0, 1);
     this.solo = this.opts.solo || null;
     this.ctx = null; this.state = 'stopped'; this.scenes = []; this.scene = null; this.sceneSerial = 0;
@@ -793,6 +832,8 @@ class Engine {
       soft: wave(Array.from({ length: 10 }, (_, i) => 1 / Math.pow(i + 1, 2))),
       piano: wave([1, 0.55, 0.3, 0.2, 0.13, 0.09, 0.06, 0.045, 0.03, 0.02, 0.015, 0.01]),
       glass: wave([1, 0, 0.28, 0, 0.1, 0, 0.04]),
+      // A quarter-duty pulse, the thin and nasal square of the old consoles.
+      pulse: wave(Array.from({ length: 24 }, (_, i) => Math.sin((i + 1) * Math.PI * 0.25) / (i + 1))),
     };
 
     this.masterIn = c.createGain();
@@ -897,7 +938,7 @@ class Engine {
     if (this.vol) this.vol.gain.setTargetAtTime(this.volGain(), this.ctx.currentTime, 0.04);
   }
   setTheme(id) {
-    if (!THEMES[id] || id === this.themeId) return;
+    if (!this.themes[id] || id === this.themeId) return;
     this.themeId = id;
     if (this.state === 'stopped') { this.emit(true); return; }
     const t = Math.max(this.ctx.currentTime, this.lastNow);

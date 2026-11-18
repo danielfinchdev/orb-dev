@@ -12,6 +12,11 @@ const voices = new Set(); // what is sounding or scheduled, so it can all be cut
 const last = new Map(); // when each effect last played, to keep fast repeats from piling up
 let muted = (() => { try { return localStorage.getItem(KEY) === '0'; } catch { return false; } })();
 
+// Who is told what happens in a game, by the name of its sound effect and with the effects on or off: the game's
+// music follows the play that way (lib/music.js › gameMusicEvent), and no game needs to know about it.
+const hearers = new Set();
+export const hearGame = (fn) => { hearers.add(fn); return () => hearers.delete(fn); };
+
 const app = () => { const ui = getState().app?.config?.ui ?? {}; return { on: ui.sounds !== false, volume: ui.volume ?? 0.5 }; };
 export const isMuted = () => muted;
 export function setMuted(v) {
@@ -175,6 +180,7 @@ const GAP = { 'tetris.move': 0.03, 'tetris.soft': 0.03, 'pac.waka': 0.06, 'break
 
 // sfx('snake.eat', length) or sfx('over', null, { delay: 0.5 }).
 export function sfx(name, arg, { delay = 0 } = {}) {
+  for (const fn of hearers) fn(name, arg);
   const s = app();
   if (muted || !s.on || s.volume <= 0 || document.hidden || !document.hasFocus()) return;
   const fx = FX[name]; if (!fx || voices.size > 48) return;

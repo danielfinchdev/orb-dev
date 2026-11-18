@@ -166,7 +166,6 @@
   "mentions.options": "remote",
   "models.catalog": "remote",
   "models.guide": "remote",
-  "music.track": "pc",
   "notes.markRead": "remote",
   "pc.screenshot": "remote",
   "permissions.setMode": "remote",

@@ -143,9 +143,11 @@ menus, texts, permissions and themes.
 - **Music** (Windows only; `lib/music.js`): the headphones in the sidebar's foot play the adaptive music, which Orb makes
   as it plays (`lib/adaptive-music.js`; no files, no network; style, "Music that reacts" and intensity in Settings ›
   Appearance). `ui.music` keeps `on`, `volume`, `theme`, `reactive` and `intensity`; the `mode` and `track` keys of
-  earlier versions are ignored. Each mini-game has a CC0 track pinned by size and SHA-256 and downloaded the first time
-  (`src/engine/host/music.mjs`) to `core\herramientas\musica`. Off by default; it stops when Orb locks or the window
-  hides.
+  earlier versions are ignored. Each mini-game has music of its own made the same way: a theme per game for the same
+  engine (`lib/game-music.js`), which follows the game through the names of its sound effects (`games/sfx.js`): it rises
+  as the game gets harder, marks the good moments and darkens with the bad ones. Nothing is downloaded; the tracks an
+  earlier version left in `core\herramientas\musica` are not used and not deleted. The background music is off by
+  default; all of it stops when Orb locks or the window hides.
 
 ## Tutorials and guided tour
 

@@ -46,7 +46,6 @@ import { keysMethods } from './keys.mjs';
 import { mcpExtMethods } from './mcp-ext.mjs';
 import { masterMethods, checkUnlock } from './master.mjs';
 import { appMethods } from './app.mjs';
-import { musicMethods } from '../host/music.mjs';
 import { sealConnectors } from '../../domain/security/connector-secrets.mjs';
 import { createFeeds } from '../feeds.mjs';
 import { projectMethods } from './projects.mjs';
@@ -443,7 +442,6 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     ...extensionMethods(shared),
     ...rulesMethods(shared), // the text rules and the rails (core/normas, orb.json rails)
     ...appMethods({ home: ctx.home, version, folders: () => [...board.projects().map((p) => p.path), ...board.all('SELECT DISTINCT workdir FROM tasks WHERE workdir IS NOT NULL').map((x) => x.workdir)] }), // this PC's tools (terminal, editors, feedback…)
-    ...musicMethods({ log }) // the music's tracks, downloaded the first time (src/engine/host/music.mjs)
   };
   const feeds = createFeeds();
   return {

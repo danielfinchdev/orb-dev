@@ -11,7 +11,6 @@ import { notifyInfo } from '@/lib/notify.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { useUpdate, updateActions, notesUrl } from '@/components/update-card.jsx';
-import { TRACKS } from '../../../shared/music.mjs';
 import { available as musicAvailable } from '@/lib/music.js';
 import { useFeedback, FEEDBACK_TYPES } from '@/components/feedback-pop.jsx';
 import { Block, Panel, Setting, Fld, Stack, CardFoot, Hint } from './rows.jsx';
@@ -114,9 +113,6 @@ export function MoreAppsCard() {
   );
 }
 
-// the music's credits (src/shared/music.mjs): all CC0, each with the page it comes from.
-const MUSIC_CREDITS = Object.values(TRACKS);
-
 // «Acerca de»: the version, the developer's GitHub and the licence (also at the foot of the sections list).
 export function AboutCard({ version }) {
   const t = useT();
@@ -131,15 +127,8 @@ export function AboutCard({ version }) {
           <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="text-primary-text cursor-pointer text-control hover:underline" data-testid="about-github">@{AUTHOR.github}</button>
         </Setting>
         <Setting label={t('about.license')} hint={t('about.openSource')}><Badge variant="secondary">MIT</Badge></Setting>
-        {musicAvailable() ? (
-          <details data-testid="about-music">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-4"><span className="flex flex-col gap-0.5"><span className="text-control font-medium">{t('about.music')}</span><span className="text-muted-foreground text-caption">{t('about.musicSummary', { n: MUSIC_CREDITS.length })}</span></span></summary>
-            <ul className="text-muted-foreground mt-2 grid gap-0.5 text-caption">
-              <li data-testid="about-music-adaptive">{t('about.musicAdaptive')}</li>
-              {MUSIC_CREDITS.map((m) => <li key={m.id}><button type="button" onClick={() => bridge.openExternal(m.page)} className="hover:text-primary-text cursor-pointer text-left">{t('about.musicTrack', { title: m.title, author: m.author })} · {m.licence}</button></li>)}
-            </ul>
-          </details>
-        ) : null}
+        {/* all the music is made by Orb as it plays: there is nothing to credit */}
+        {musicAvailable() ? <Setting label={t('about.music')} hint={t('about.musicAdaptive')} data-testid="about-music" /> : null}
       </Panel>
     </Block>
   );

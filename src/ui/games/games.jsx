@@ -10,8 +10,8 @@ import { OrbMark } from '@/components/orb-mark.jsx';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { LEVELS, best, saveBest } from './kit.js';
-import { sfx, arm, stopAll, isMuted, setMuted } from './sfx.js';
-import { available as musicAvailable, startGameMusic, stopGameMusic, setGameMusic } from '@/lib/music.js';
+import { sfx, arm, stopAll, isMuted, setMuted, hearGame } from './sfx.js';
+import { available as musicAvailable, startGameMusic, stopGameMusic, setGameMusic, gameMusicEvent, endGameMusic } from '@/lib/music.js';
 
 // Each game is loaded only when it is played.
 const GAMES = [
@@ -44,8 +44,10 @@ export function GamesDialog() {
   useEffect(() => (open ? arm() : undefined), [open]);
   useEffect(() => { if (!open) stopGameMusic(); }, [open]);
   useEffect(() => stopGameMusic, []);
+  // The game's music follows the play: it hears what happens in it, with the sound effects on or off.
+  useEffect(() => (open ? hearGame(gameMusicEvent) : undefined), [open]);
   const toggleSound = () => { if (!appSounds) return; setMuted(soundOn); setMute(soundOn); if (!soundOn) sfx('select'); };
-  // each game's own music (Windows, lib/music.js), with its own mute, remembered (ui.gameMusic).
+  // each game's own music (Windows, lib/music.js): made by Orb as the game is played, with its own mute, remembered (ui.gameMusic).
   const music = useStore((s) => s.app?.config?.ui?.gameMusic !== false);
   const close = () => { stopAll(); stopGameMusic(); setState({ games: false }); setGame(null); setOver(null); };
   const start = (id) => { stopAll(); sfx('start'); setGame(id); setScore(0); setOver(null); setRound((r) => r + 1); startGameMusic(id); };
@@ -55,6 +57,7 @@ export function GamesDialog() {
   const ended = (s) => {
     const rec = saveBest(game, level, s);
     setOver({ score: s, record: rec });
+    endGameMusic(rec);
     const own = game === 'chess' || game === 'runner';
     if (rec) sfx('record', null, { delay: own ? 0.9 : 0.5 }); else if (!own) sfx('over', null, { delay: 0.5 });
   };

@@ -13,35 +13,11 @@ import { ADAPTIVE_THEMES, DEFAULT_INTENSITY, DEFAULT_VOLUME, musicPrefs, nextThe
 import { THEME_IDS, SIGNALS, createAdaptiveMusic } from '../src/ui/lib/adaptive-music.js';
 import { createSignals, isTyping, levelOf, TYPING_MS, EVENT_MS, IDLE_MS, WORKING_MS, LEVEL_MS } from '../src/ui/lib/music-signals.js';
 import { textMood, chatMood, waitsForUser } from '../src/ui/lib/chat-mood.js';
+import { fakeContext, run } from './fixtures/fake-audio.mjs';
 import es from '../src/shared/locales/es.mjs';
 import en from '../src/shared/locales/en.mjs';
 
 const read = (...p) => fs.readFileSync(path.join(ROOT, 'src', 'ui', ...p), 'utf8');
-
-// A stand-in for Web Audio: every node and parameter takes any call, the clock is the test's. Nothing is rendered.
-function fakeContext({ sampleRate = 8000 } = {}) {
-  const calls = { nodes: 0, suspend: 0, resume: 0, close: 0 };
-  const param = () => { const p = { value: 0 }; for (const m of ['setValueAtTime', 'linearRampToValueAtTime', 'exponentialRampToValueAtTime', 'setTargetAtTime', 'setValueCurveAtTime', 'cancelScheduledValues', 'cancelAndHoldAtTime']) p[m] = () => p; return p; };
-  const METHODS = new Set(['connect', 'disconnect', 'start', 'stop', 'setPeriodicWave', 'getFloatTimeDomainData', 'addEventListener', 'removeEventListener']);
-  const node = () => new Proxy({}, {
-    get(t, k) { if (k in t || typeof k === 'symbol' || k === 'then') return t[k]; t[k] = METHODS.has(k) ? () => {} : param(); return t[k]; },
-    set(t, k, v) { t[k] = v; return true; }
-  });
-  const ctx = {
-    currentTime: 0, sampleRate, state: 'running', destination: node(),
-    createBuffer: (channels, length, rate) => { const data = Array.from({ length: channels }, () => new Float32Array(length)); return { length, sampleRate: rate, duration: length / rate, numberOfChannels: channels, getChannelData: (ch) => data[ch] }; },
-    createPeriodicWave: () => ({}),
-    resume() { calls.resume++; ctx.state = 'running'; return Promise.resolve(); },
-    suspend() { calls.suspend++; ctx.state = 'suspended'; return Promise.resolve(); },
-    close() { calls.close++; ctx.state = 'closed'; return Promise.resolve(); }
-  };
-  return { calls, ctx: new Proxy(ctx, { get(t, k) { if (k in t) return t[k]; if (typeof k === 'string' && k.startsWith('create')) return () => { calls.nodes++; return node(); }; return undefined; }, set(t, k, v) { t[k] = v; return true; } }) };
-}
-// Runs the engine's scheduler for `seconds` of the audio clock, as its own timer does (every 50 ms).
-function run(music, ctx, seconds, each = () => {}) {
-  const end = ctx.currentTime + seconds;
-  while (ctx.currentTime < end) { ctx.currentTime += 0.05; each(ctx.currentTime); music._tick(ctx.currentTime); }
-}
 
 test('its settings: a theme, whether it reacts and an intensity for when it does not', () => {
   assert.deepEqual(musicPrefs({}), { on: false, volume: DEFAULT_VOLUME, theme: ADAPTIVE_THEMES[0], reactive: true, intensity: DEFAULT_INTENSITY });
@@ -245,21 +221,21 @@ test('the player keeps its rules with the adaptive music: a click starts it, the
   assert.match(music, /context: engineCtx, autoPause: false \}\)/);
   assert.doesNotMatch(music, /new (window\.)?AudioContext/);
   // The lock and the button stop it for good, and its context and listeners go with it.
-  assert.match(music, /export function pauseAll\(\) \{\n\s+disarm\(\);\n\s+game\?\.pause\(\); stopBackground\(\);/);
+  assert.match(music, /export function pauseAll\(\) \{\n\s+disarm\(\);\n\s+stopBackground\(\); stopGameMusic\(\);/);
   assert.match(music, /function stopBackground\(\) \{\n\s+runs\+\+;\n\s+stopAdaptive\(\); source = null; bgHeld = false;/);
   assert.match(music, /function stopAdaptive\(\) \{\n\s+stopSignals\?\.\(\); stopSignals = null; stopLevel\(\);\n\s+if \(!engine \|\| letGo\) return;\n\s+engine\.stop\(\);/);
   assert.match(music, /engine\?\.destroy\(\); engine = null;\n\s+engineCtx\?\.close\(\)\.catch\(quiet\); engineCtx = null;/);
   // No theme silences it: it is there in every one and plays only when the user turns it on.
   assert.doesNotMatch(music, /plainSkin|stopIfPlain|onAppearance/);
   // Hidden or minimised: paused, and back when shown. A game holds it meanwhile.
-  assert.match(music, /if \(hidden\) \{ bgPause\(\); game\?\.pause\(\); \}/);
+  assert.match(music, /if \(hidden\) \{ bgPause\(\); gameEngine\?\.pause\(\); \}/);
   assert.match(music, /const bgPause = \(\) => \{ engine\?\.pause\(\); \};/);
   assert.match(music, /if \(bgSounding\(\)\) \{ bgPause\(\); bgHeld = true; \}/);
-  assert.match(music, /if \(game && !game\.paused\) \{ bgHeld = true; return; \}\n\s+engine\.start\(\); catchUp\(\);/, 'never over a game\'s music');
+  assert.match(music, /if \(gameOn\) \{ bgHeld = true; return; \}\n\s+engine\.start\(\); catchUp\(\);/, 'never over a game\'s music');
   // It follows the activity only while it plays and reacts: no listener nor timer otherwise.
   assert.match(music, /if \(prefs\.reactive\) stopSignals = follow\(\);/);
   assert.match(music, /if \(engine && source === 'adaptive' && state\.playing && !hidden && !bgHeld\) engine\.signal\(signal\);/);
-  assert.equal(music.match(/setInterval\(/g).length, 2, 'the signals and the level'); assert.match(music, /clearInterval\(timer\);/);
+  assert.equal(music.match(/setInterval\(/g).length, 3, 'the signals, the level and a game\'s intensity (test/musica-juegos-388.test.mjs)'); assert.match(music, /clearInterval\(timer\);/);
   assert.equal(music.match(/addEventListener\('keydown', onKey/g).length, music.match(/removeEventListener\('keydown', onKey/g).length);
   // A start overtaken while it loaded gives up (the button pressed twice, the lock while the engine loads).
   assert.match(music, /const \{ createAdaptiveMusic \} = await import\('\.\/adaptive-music\.js'\);\n\s+if \(run !== runs\) return;/);
@@ -296,7 +272,8 @@ test('Ajustes and the sidebar: the switch, the theme, «Música que reacciona» 
   assert.match(settings, /value=\{prefs\.theme\} onValueChange=\{setMusicTheme\}/);
   assert.match(settings, /<Switch checked=\{prefs\.reactive\} onCheckedChange=\{setMusicReactive\}/);
   assert.match(settings, /\{prefs\.reactive \? null : \(/, 'the intensity shows only when it does not react');
-  assert.match(settings, /<li data-testid="about-music-adaptive">\{t\('about\.musicAdaptive'\)\}<\/li>/);
+  // «Acerca de»: one line, with nothing to credit (all the music is made by Orb).
+  assert.match(settings, /\{musicAvailable\(\) \? <Setting label=\{t\('about\.music'\)\} hint=\{t\('about\.musicAdaptive'\)\} data-testid="about-music" \/> : null\}/);
   const sidebar = read('components', 'sidebar.jsx');
   assert.match(sidebar, /t\('nav\.musicNowAdaptive', \{ theme: t\(`nav\.musicTheme\.\$\{s\.theme\}`\) \}\)/);
   assert.doesNotMatch(sidebar, /chosen|trackOf|nav\.musicNext'/);

@@ -47,8 +47,8 @@ const readable = (read) => (read === true ? READ_INTERNAL : Array.isArray(read) 
 // Orb's own adb (core\herramientas\adb) runs in the engine: a reading tool may look, nobody may write
 // there or run it (an agent's adb.exe or DLL left there would run with the engine's rights). The same for Orb's own
 // ffmpeg (core\herramientas\ffmpeg: it makes the frames of an attached video, src/engine/host/attachments.mjs).
-// the same for the music Orb downloads (core\herramientas\musica, src/engine/host/music.mjs): what the window plays is
-// what Orb checked.
+// the same for the music an earlier version downloaded (core\herramientas\musica): Orb no longer downloads or plays
+// it, and the files stay where they are, as the user's.
 const READ_ONLY_INTERNAL = [['herramientas', 'adb'], ['herramientas', 'ffmpeg'], ['herramientas', 'musica']];
 const openInCore = (rest, read = false) => (READ_ONLY_INTERNAL.some(under(rest)) ? read === true : OPEN_INTERNAL.some(under(rest)) || readable(read).some(under(rest)));
 export const OPEN_TEXT = /^\\+(copias\\+(aisladas|chats)|herramientas(?!\\+(adb|ffmpeg|musica)(\\|$|["'\s]))|preparacion)(\\|$|["'\s])/;

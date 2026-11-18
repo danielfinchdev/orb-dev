@@ -1,39 +1,23 @@
-// 3.8.2, phase 6 (item 13, decision D4): the music. The manifest (every track CC0 with its page, size and SHA-256), the
-// download (mocked: never the network) into core\herramientas\musica, read-only for agents, the gating to the Windows
-// app, the settings it keeps (off by default; the games' mute) and the buttons, read as source.
+// The music's rules since 3.8.2 (phase 6, item 13): only in the Windows app, the settings it keeps (off by default; the
+// games' mute) and the buttons, read as source. Nothing is downloaded any more (3.8.8: Orb makes all its music as it
+// plays; test/musica-388.test.mjs and test/musica-juegos-388.test.mjs); what an earlier version downloaded stays where
+// it is, read-only for agents.
 import { tempHome, ROOT, settingsSource } from './helpers.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { ctx } from '../src/platform/context.mjs';
 import { validateConfig } from '../src/platform/config.mjs';
 import { isOrbData } from '../src/domain/security/guard.mjs';
 import { DEFAULT_CONFIG, merge } from '../src/platform/config-file.mjs';
 import { METHODS } from '../src/domain/security/permissions.mjs';
-import { GAMES, TRACKS, trackOf, DEFAULT_VOLUME, DEFAULT_INTENSITY, musicAllowed, musicPrefs, gameMusicOn, gameTrack } from '../src/shared/music.mjs';
-import { trackBytes, musicDir, musicMethods } from '../src/engine/host/music.mjs';
+import * as shared from '../src/shared/music.mjs';
+import es from '../src/shared/locales/es.mjs';
+import en from '../src/shared/locales/en.mjs';
 
+const { DEFAULT_VOLUME, DEFAULT_INTENSITY, musicAllowed, musicPrefs, gameMusicOn } = shared;
 const read = (...p) => fs.readFileSync(path.join(ROOT, 'src', 'ui', ...p), 'utf8');
-const sha = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
-const response = (buf, status = 200) => ({ ok: status === 200, status, headers: { get: (h) => (h === 'content-length' ? String(buf.length) : null) }, arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length) });
-
-test('every track is pinned and free: CC0, its page, size and SHA-256', () => {
-  const games = [...read('games', 'games.jsx').matchAll(/\{ id: '([a-z0-9]+)', load:/g)].map((m) => m[1]);
-  assert.deepEqual(Object.keys(GAMES).sort(), games.sort(), 'one track per minigame');
-  for (const t of Object.values(TRACKS)) {
-    assert.equal(t.licence, 'CC0 1.0', t.id);
-    assert.match(t.page, /^https:\/\/opengameart\.org\/content\/[a-z0-9-]+$/, t.id);
-    assert.match(t.url, /^https:\/\/opengameart\.org\/sites\/default\/files\/[^/]+\.(ogg|mp3)$/, t.id);
-    assert.match(t.sha256, /^[0-9a-f]{64}$/, t.id);
-    assert.ok(Number.isInteger(t.size) && t.size > 100_000 && t.size < 8_000_000, t.id);
-    assert.ok(t.title && t.author, t.id);
-    assert.equal(t.mime, t.url.endsWith('.ogg') ? 'audio/ogg' : 'audio/mpeg');
-    assert.ok(Object.isFrozen(t));
-  }
-  assert.equal(trackOf('constructor'), null);
-});
 
 test('the music plays only in the Windows app', () => {
   assert.equal(musicAllowed({ desktop: true, platform: 'win32' }), true);
@@ -41,7 +25,6 @@ test('the music plays only in the Windows app', () => {
   assert.equal(musicAllowed({ mobile: true, platform: 'web' }), false, 'a phone or a linked browser');
   assert.equal(musicAllowed({ desktop: true, platform: 'linux' }), false);
   assert.equal(musicAllowed(undefined), false);
-  assert.equal(METHODS['music.track'], 'pc', 'never asked by a linked device');
   const music = read('lib', 'music.js');
   // In every theme: whether it plays depends on the platform alone, never on the look (test/musica-388.test.mjs).
   assert.match(music, /export const available = \(\) => musicAllowed\(\{ mobile: bridge\.mobile, desktop: bridge\.desktop, platform: bridge\.platform \}\) && fullPc\(\);/);
@@ -50,7 +33,7 @@ test('the music plays only in the Windows app', () => {
   assert.match(read('games', 'games.jsx'), /\{musicAvailable\(\) \? \(\s*<BubbleTip title=\{t\('games\.music'\)\}/);
   const settings = settingsSource();
   assert.match(settings, /\{musicAvailable\(\) \? <MusicSettings \/> : null\}/);
-  assert.match(settings, /\{musicAvailable\(\) \? \(\s*<details data-testid="about-music">/, 'the credits in «Acerca de»');
+  assert.match(settings, /\{musicAvailable\(\) \? <Setting label=\{t\('about\.music'\)\}/, 'its line in «Acerca de»');
 });
 
 test('off by default, a soft volume and the games\' mute remembered', () => {
@@ -59,7 +42,6 @@ test('off by default, a soft volume and the games\' mute remembered', () => {
   assert.deepEqual(musicPrefs({ music: { on: true, volume: 3 } }), { on: true, volume: 1, ...adaptive });
   assert.ok(DEFAULT_VOLUME > 0 && DEFAULT_VOLUME <= 0.5);
   assert.equal(gameMusicOn({}), true); assert.equal(gameMusicOn({ gameMusic: false }), false);
-  assert.equal(gameTrack('tetris'), GAMES.tetris); assert.equal(gameTrack('__proto__'), null);
   // orb.json takes them and refuses anything else.
   const withUi = (ui) => merge(structuredClone(DEFAULT_CONFIG), { ui });
   validateConfig(withUi({ music: { on: true, volume: 0.4 }, gameMusic: false }));
@@ -78,58 +60,34 @@ test('it never starts by itself and stops when Orb locks or hides', () => {
   assert.match(music, /if \(musicPrefs\(\)\.on && !pending\) \{/);
   assert.match(music, /window\.addEventListener\('pointerdown', pending, true\); window\.addEventListener\('keydown', pending, true\);/);
   assert.doesNotMatch(music, /autoplay/);
-  // Locked: everything pauses (main.jsx, on 'master:locked').
+  // Locked: everything stops (main.jsx, on 'master:locked'), a game's music too.
   const main = read('main.jsx');
   assert.match(main, /if \(!p\?\.screen\) return;\n\s+pauseAll\(\);/);
-  assert.match(music, /export function pauseAll\(\) \{\n\s+disarm\(\);\n\s+game\?\.pause\(\);/);
+  assert.match(music, /export function pauseAll\(\) \{\n\s+disarm\(\);\n\s+stopBackground\(\); stopGameMusic\(\);/);
   // Hidden or minimised: paused, and back when shown.
   assert.match(music, /document\.addEventListener\('visibilitychange', onVisibility\)/);
   // A game's music pauses the background music, which comes back after it.
   assert.match(music, /if \(bgSounding\(\)\) \{ bgPause\(\); bgHeld = true; \}/);
+  assert.match(music, /const held = bgHeld; bgHeld = false;\n\s+if \(held && state\.playing && !hidden\) bgResume\(\);/);
 });
 
-test('a track is downloaded once, checked and kept read-only for agents (mocked)', async (t) => {
+test('nothing is downloaded any more, and what an earlier version downloaded stays read-only for agents', (t) => {
   const { cleanup } = tempHome(); t.after(cleanup);
-  const bytes = crypto.randomBytes(4096);
-  const pin = Object.freeze({ id: 'prueba', title: 'Prueba', mime: 'audio/mpeg', size: bytes.length, sha256: sha(bytes), url: 'https://example.invalid/prueba.mp3' });
-  let calls = 0;
-  const fetchImpl = async (url) => { calls++; assert.equal(url, pin.url); return response(bytes); };
-  // Two players asking at once: one download.
-  const [a, b] = await Promise.all([trackBytes('prueba', { fetchImpl, pin }), trackBytes('prueba', { fetchImpl, pin })]);
-  assert.ok(a.equals(bytes) && b.equals(bytes)); assert.equal(calls, 1);
-  const file = path.join(musicDir(), 'prueba.mp3');
-  assert.ok(fs.readFileSync(file).equals(bytes));
-  assert.equal(musicDir(), path.join(ctx.paths.tools, 'musica'));
-  // Already there: no download.
-  await trackBytes('prueba', { fetchImpl, pin }); assert.equal(calls, 1);
-  // Changed by someone else: thrown away and downloaded again.
-  fs.writeFileSync(file, Buffer.from('otra cosa'));
-  assert.ok((await trackBytes('prueba', { fetchImpl, pin })).equals(bytes)); assert.equal(calls, 2);
-  // A wrong file or an HTTP error: refused, nothing kept.
-  fs.rmSync(file);
-  await assert.rejects(trackBytes('prueba', { fetchImpl: async () => response(crypto.randomBytes(4096)), pin }), /no es el esperado/);
-  await assert.rejects(trackBytes('prueba', { fetchImpl: async () => response(Buffer.alloc(0), 404), pin }), /HTTP 404/);
-  assert.equal(fs.existsSync(file), false);
-  assert.deepEqual(fs.readdirSync(musicDir()), [], 'no half-written file left');
-  // Tests never download without their own fetch; an unknown track is refused.
-  await assert.rejects(trackBytes('junkala-level1'), /descargas están desactivadas/);
-  await assert.rejects(musicMethods()['music.track']({ id: '../../orb.json' }), /no existe/);
-  // Read-only for agents: a reading tool may look, nobody writes there.
+  // No track list, no download module, no API method and no text for them.
+  for (const gone of ['GAMES', 'TRACKS', 'trackOf', 'gameTrack']) assert.equal(gone in shared, false, gone);
+  assert.doesNotMatch(fs.readFileSync(path.join(ROOT, 'src', 'shared', 'music.mjs'), 'utf8'), /https?:|sha256|opengameart/i);
+  assert.equal(fs.existsSync(path.join(ROOT, 'src', 'engine', 'host', 'music.mjs')), false);
+  assert.equal(Object.keys(METHODS).some((m) => m.startsWith('music.')), false, 'the window asks the engine for no music');
+  assert.doesNotMatch(fs.readFileSync(path.join(ROOT, 'src', 'engine', 'api', 'index.mjs'), 'utf8'), /musicMethods|host\/music/);
+  for (const [lang, texts] of [['es', es], ['en', en]]) {
+    for (const key of Object.keys(texts)) assert.doesNotMatch(key, /^sys\.music\.|^about\.music(Track|Summary)$/, `${lang}: ${key}`);
+  }
+  // The window plays no file: no audio element and no request for one.
+  const music = read('lib', 'music.js');
+  assert.doesNotMatch(music, /new Audio\(|music\.track|createObjectURL|fetch\(/);
+  assert.doesNotMatch(settingsSource(), /MUSIC_CREDITS|TRACKS|about\.musicTrack/);
+  // The folder an earlier version filled is not touched by Orb, and agents still cannot write there.
+  const file = path.join(ctx.paths.tools, 'musica', 'junkala-level1.mp3');
   assert.equal(isOrbData(file, ctx.paths.internal, null), true);
   assert.equal(isOrbData(file, ctx.paths.internal, null, { read: true }), false);
-});
-
-test('the API hands a track over as base64 (mocked)', async (t) => {
-  const { cleanup } = tempHome(); t.after(cleanup);
-  // A pinned track written as if downloaded: no fetch needed.
-  const pinned = trackOf('junkala-level1');
-  fs.mkdirSync(musicDir(), { recursive: true });
-  const fake = crypto.randomBytes(64);
-  fs.writeFileSync(path.join(musicDir(), 'junkala-level1.mp3'), fake);
-  // Not the pinned bytes: refused (and, with downloads off in tests, not fetched).
-  await assert.rejects(musicMethods()['music.track']({ id: 'junkala-level1' }), /descargas están desactivadas/);
-  assert.equal(fs.existsSync(path.join(musicDir(), 'junkala-level1.mp3')), false);
-  const fetchImpl = async () => response(fake);
-  await assert.rejects(musicMethods({ fetchImpl })['music.track']({ id: 'junkala-level1' }), /no es el esperado/);
-  assert.equal(pinned.mime, 'audio/mpeg');
 });
