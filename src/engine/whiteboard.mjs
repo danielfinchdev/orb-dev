@@ -4,6 +4,7 @@
 //   pizarra.png          the drawing as a picture, for the assistant and the agents to look at
 //   PIZARRA.md           what the assistant reads first: the texts of the drawing and the attachments with their notes
 //   adjuntos/            files attached in the side panel (photos, videos, documents) and adjuntos.json with their notes
+//   nota.txt             the general note for the assistant about the whole canvas (plain text, capped)
 // The folder stays out of git (.git/info/exclude, local only): it is the user's working material, not the project's code.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,6 +12,7 @@ import { tr } from '../platform/context.mjs';
 import { localText, sizeText } from '../shared/text.mjs';
 
 const MB = 1024 * 1024;
+const NOTE_MAX = 2000;
 const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp',
   mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', mkv: 'video/x-matroska', mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg',
   pdf: 'application/pdf', txt: 'text/plain', md: 'text/markdown', json: 'application/json', csv: 'text/csv', zip: 'application/zip',
@@ -67,6 +69,8 @@ export function whiteboard(board) {
     } catch { /* not a git folder we can write: nothing to exclude */ }
   };
   const notesFile = (dir) => path.join(dir, 'adjuntos', 'adjuntos.json');
+  const canvasNoteFile = (dir) => path.join(dir, 'nota.txt');
+  const readCanvasNote = (dir) => { try { return fs.readFileSync(canvasNoteFile(dir), 'utf8').slice(0, NOTE_MAX); } catch { return ''; } };
   const inside = (dir, file) => { const f = path.resolve(dir, file); if (!f.startsWith(path.resolve(dir) + path.sep)) throw new Error(tr('msg.board.badFile')); return f; };
 
   function attachments(dir, { thumbs = true } = {}) {
@@ -86,9 +90,11 @@ export function whiteboard(board) {
     const texts = live.filter((e) => e.type === 'text' && String(e.text ?? '').trim()).sort((a, b) => (a.y - b.y) || (a.x - b.x)).map((e) => String(e.text).trim().replace(/\n+/g, ' / '));
     const frames = live.filter((e) => e.type === 'frame' && e.name).map((e) => e.name);
     const links = live.filter((e) => e.link).map((e) => e.link);
-    const att = attachments(dir, { thumbs: false });
+    const att = attachments(dir, { thumbs: false }); const note = readCanvasNote(dir).trim();
     return [`# Pizarra de ${project.name}`, '', `Actualizada: ${localText()}. El dibujo completo está en pizarra/pizarra.png (míralo: las formas y flechas dicen tanto como los textos).`,
       drawingContents(elements), '',
+      // The user's own words about the whole canvas, quoted so it reads as theirs, not as a system instruction.
+      ...(note ? ['## Nota general del usuario (texto suyo sobre todo el lienzo)', ...note.split('\n').map((l) => `> ${l.replace(/\r$/, '')}`), ''] : []),
       '## Textos del dibujo (de arriba abajo)', ...(texts.length ? texts.map((x) => `- ${x}`) : ['- (ninguno)']),
       ...(frames.length ? ['', '## Marcos', ...frames.map((x) => `- ${x}`)] : []),
       ...(links.length ? ['', '## Enlaces', ...links.map((x) => `- ${x}`)] : []),
@@ -110,7 +116,7 @@ export function whiteboard(board) {
         if (!/^[\w-]{1,100}$/.test(id) || fs.statSync(file).size > 25 * MB) continue;
         files[id] = { id, mimeType: mimeOf(f), dataURL: `data:${mimeOf(f)};base64,${fs.readFileSync(file).toString('base64')}`, created: fs.statSync(file).mtimeMs };
       }
-      return { elements: Array.isArray(scene?.elements) ? scene.elements : [], appState: scene?.appState ?? {}, files, attachments: attachments(dir), updatedAt: scene ? fs.statSync(path.join(dir, 'pizarra.excalidraw')).mtime.toISOString() : null, ...(damaged ? { damaged: true } : {}) };
+      return { elements: Array.isArray(scene?.elements) ? scene.elements : [], appState: scene?.appState ?? {}, files, attachments: attachments(dir), note: readCanvasNote(dir), updatedAt: scene ? fs.statSync(path.join(dir, 'pizarra.excalidraw')).mtime.toISOString() : null, ...(damaged ? { damaged: true } : {}) };
     },
     // The drawing (only the pictures not saved yet travel with it) and, now and then, its picture.
     save({ project: name, elements, appState = {}, files = {}, png }) {
@@ -166,6 +172,16 @@ export function whiteboard(board) {
       writeSummary(project, dir); board.changed('whiteboard');
       return true;
     },
+    // The general note about the whole canvas (what the assistant should know that is not in the drawing): written whole,
+    // an empty one removes the file. It travels to the assistant inside PIZARRA.md like the attachments' notes.
+    canvasNote({ project: name, note }) {
+      const place = folder(name); const { project, dir } = place;
+      const text = String(note ?? '').replace(/\r\n/g, '\n').slice(0, NOTE_MAX);
+      ensure(place);
+      if (text.trim()) writeAtomic(canvasNoteFile(dir), text); else fs.rmSync(canvasNoteFile(dir), { force: true });
+      writeSummary(project, dir); board.changed('whiteboard');
+      return { ok: true, at: new Date().toISOString(), note: text.trim() ? text : '' };
+    },
     // Taken out of the panel: moved to pizarra/.papelera (never deleted), so it can be brought back by hand.
     remove({ project: name, file }) {
       const { project, dir } = folder(name);
@@ -182,9 +198,9 @@ export function whiteboard(board) {
     info(name) {
       try {
         const { dir } = folder(name); const scene = path.join(dir, 'pizarra.excalidraw');
-        const n = attachments(dir, { thumbs: false }).length;
-        if (!fs.existsSync(scene) && !n) return null;
-        return { dir, updatedAt: fs.existsSync(scene) ? fs.statSync(scene).mtime.toISOString() : null, attachments: n };
+        const n = attachments(dir, { thumbs: false }).length; const hasNote = Boolean(readCanvasNote(dir).trim());
+        if (!fs.existsSync(scene) && !n && !hasNote) return null;
+        return { dir, updatedAt: fs.existsSync(scene) ? fs.statSync(scene).mtime.toISOString() : null, attachments: n, hasNote };
       } catch { return null; }
     }
   };

@@ -155,6 +155,7 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
     'whiteboard.save': async ({ project, elements, appState, files, png }) => (await wb()).save({ project: str(project, 'proyecto', 200), elements, appState, files, png }),
     'whiteboard.attach': async ({ project, paths }) => (await wb()).attach({ project: str(project, 'proyecto', 200), paths }),
     'whiteboard.note': async ({ project, file, note }) => (await wb()).note({ project: str(project, 'proyecto', 200), file: str(file, 'archivo', 200), note }),
+    'whiteboard.canvasNote': async ({ project, note }) => (await wb()).canvasNote({ project: str(project, 'proyecto', 200), note: str(note, 'nota', 2000, { optional: true }) ?? '' }),
     'whiteboard.remove': async ({ project, file }) => (await wb()).remove({ project: str(project, 'proyecto', 200), file: str(file, 'archivo', 200) }),
     'whiteboard.folder': async ({ project }) => (await wb()).folder({ project: str(project, 'proyecto', 200) }),
     // the answer to a question card (orb_ask): the options picked and/or own words, or skipped. The card keeps it and
