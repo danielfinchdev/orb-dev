@@ -15,7 +15,7 @@ import { assistantName } from '../../domain/tasks/board.mjs';
 import { modelCatalog, REASONING_LEVELS, levelsOf } from '../usage/catalog.mjs';
 import { slug } from '../../platform/git.mjs';
 import { PermissionError } from '../../domain/security/permissions.mjs';
-import { fail, str, int, oneOf } from './common.mjs';
+import { fail, str, int, oneOf, images } from './common.mjs';
 import { createDedupe, conversationKey } from './dedupe.mjs';
 import { fold, snippet } from '../../domain/conversations/inbox.mjs';
 
@@ -28,8 +28,10 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
     // the working folder). → { conversation }
     // brain ({ agent, model, reasoning }): a new conversation started from a phone with the brain chosen there (the
     // one new conversations start with is this PC's setting).
-    'chat.send': ({ text, conversation, project: name, brain }, principal) => {
+    // images: the files attached to the message (absolute paths, at most 10), checked and placed exactly as in sessions.send.
+    'chat.send': ({ text, conversation, project: name, brain, images: files }, principal) => {
       const t = str(text, 'mensaje', 20000);
+      const attachments = images(files);
       const id = conversation == null ? null : conversationId(conversation);
       if (id) trash.assertNotTrashed(id);
       const proj = name === undefined ? undefined : name ? project(name).name : null;
@@ -38,13 +40,13 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
         const c = orchestrator.startConversation({ text: t, project: proj });
         const pick = Object.fromEntries(['agent', 'model', 'reasoning'].filter((k) => brain[k] !== undefined).map((k) => [k, brain[k]]));
         try { methods['chat.settings']({ conversation: c.id, ...pick }, principal); } catch (error) { board.run('DELETE FROM conversations WHERE id = ?', c.id); board.changed('conversations'); throw error; }
-        return orchestrator.ask(t, expandMentions(board, sessions, t), { conversation: c.id, project: proj });
+        return orchestrator.ask(t, expandMentions(board, sessions, t), { conversation: c.id, project: proj, attachments, fresh: true });
       }
       // «/compact» and «/clear» typed alone in an existing chat are Orb's commands (src/shared/slash.mjs).
-      const command = id ? slashCommand(t) : null;
+      const command = id && !attachments.length ? slashCommand(t) : null;
       if (command) return command === 'compact' ? orchestrator.compact(id) : orchestrator.clear(id);
       if (!id && (brainOf().agent || 'claude') === 'cursor') fail(tr('msg.api.cursorNoCoordinate'));
-      return orchestrator.ask(t, expandMentions(board, sessions, t), { conversation: id, project: proj });
+      return orchestrator.ask(t, expandMentions(board, sessions, t), { conversation: id, project: proj, attachments });
     },
     'chat.stop': ({ conversation }) => orchestrator.stop(conversationId(conversation)),
     // «Compactar»: the conversation's coordinator compacts its own context (or starts afresh with the briefing and

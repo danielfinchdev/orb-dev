@@ -361,6 +361,16 @@ export class Sessions {
     this.emit('session:delta', { id, text: d.text });
   }
 
+  // A turn Orb itself ended (the guard caught a command, the working-time limit) is told in the conversation that asked
+  // for the task, as a line with its cause and reason. It only informs: nothing here stops or allows anything.
+  tellStop(id, cause, { why = '', body = '' } = {}) {
+    try {
+      const s = this.get(id);
+      if (s?.kind !== 'task' || !s.task_id || !this.board.conversationOfTask(s.task_id)) return;
+      this.board.addChat('system', body, { kind: 'turn-stopped', cause, task: s.task_id, ...(why ? { why } : {}), agent: s.agent, ...(s.model ? { model: s.model } : {}) });
+    } catch (error) { this.log(`parada de ${id}: ${error.message}`); }
+  }
+
   onLiveEvent(id, ev) {
     const run = this.running.get(id);
     if (run) run.lastAt = Date.now();
@@ -369,6 +379,7 @@ export class Sessions {
     if (ev.type === 'models') { const s = this.get(id); if (s) rememberModels(this.board, s.agent, ev.list, s.account ?? s.agent); return; }
     if (ev.type === 'item') {
       const item = this.addItem(id, ev.role, ev.kind, ev.body);
+      if (ev.stop) this.tellStop(id, ev.stop.cause, { why: ev.stop.why, body: ev.body });
       if (run) { const what = describeItem(item); if (what) run.last = what; if (ev.kind === 'tool' || ev.kind === 'file') run.steps++; }
       return;
     }
@@ -519,7 +530,9 @@ export class Sessions {
     const worked = t - run.startedAt - run.waitMs - (run.pausedAt != null ? t - run.pausedAt : 0);
     if (timeoutMs && worked >= timeoutMs && !run.timedOut) {
       run.timedOut = true;
-      this.addItem(id, 'error', 'text', tr('msg.sessions.timeout', { min: Math.round(timeoutMs / 60000) }));
+      const timeoutText = tr('msg.sessions.timeout', { min: Math.round(timeoutMs / 60000) });
+      this.addItem(id, 'error', 'text', timeoutText);
+      this.tellStop(id, 'time', { body: timeoutText });
       this.stop(id);
       return;
     }

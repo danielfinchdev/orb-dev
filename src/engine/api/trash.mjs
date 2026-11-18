@@ -21,6 +21,7 @@ export function trashTools({ board, sessions, orchestrator, scheduler, emit, log
     board.run('DELETE FROM chat WHERE conversation_id = ?', c);
     board.run('UPDATE tasks SET conversation_id = NULL WHERE conversation_id = ?', c);
     board.run('DELETE FROM conversations WHERE id = ?', c);
+    orchestrator.forgetAttachments?.(c);
     board.setting(`pending_questions:${c}`, '');
     board.changed('conversations');
     return { ok: true };

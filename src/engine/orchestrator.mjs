@@ -15,6 +15,7 @@ import { runLog } from '../platform/log.mjs';
 import { oneLine } from '../shared/text.mjs';
 import { titleFrom } from '../shared/titles.mjs';
 import { mcpServersOf } from './sessions.mjs';
+import { placeAttachments, prepareAttachments } from './host/attachments.mjs';
 import { agentAuth } from '../domain/security/agent-auth.mjs';
 import { accountEnv } from '../domain/usage/accounts.mjs';
 import { briefing } from '../domain/journal/journal.mjs';
@@ -77,11 +78,11 @@ export function answerOf(result, said = []) {
 // a message of the user that arrives while the assistant is answering waits for the end of that turn and is added
 // to what was asked (added to the running turn, a short turn could lose its answer). Several messages
 // written meanwhile go together, as one turn.
-function queueUserMessage(lane, text, user = userName()) {
+function queueUserMessage(lane, text, user = userName(), attachments = []) {
   const last = lane.queue.at(-1);
-  if (last && !last.internal && last.user) { last.text += `\n\n${text}`; return last; }
+  if (last && !last.internal && last.user) { last.text += `\n\n${text}`; if (attachments.length) last.attachments = [...(last.attachments ?? []), ...attachments]; return last; }
   // (For the brain, in Spanish like the rest of its instructions; the chat shows the message as the user wrote it.)
-  const item = { text: lane.busy ? `(Mensaje nuevo de ${user}, escrito mientras respondías: se suma a lo anterior y no lo sustituye salvo que lo diga. Atiende los dos.)\n${text}` : text, user: true };
+  const item = { text: lane.busy ? `(Mensaje nuevo de ${user}, escrito mientras respondías: se suma a lo anterior y no lo sustituye salvo que lo diga. Atiende los dos.)\n${text}` : text, user: true, ...(attachments.length ? { attachments } : {}) };
   lane.queue.push(item);
   return item;
 }
@@ -241,7 +242,7 @@ class Lane {
     const { text, meta } = item;
     const generation = this.generation;
     let outcome = null;
-    const run = this.run(text, true, meta, { internal: Boolean(item.internal) }).then((r) => { outcome = r ?? null; }).catch((error) => {
+    const run = this.run(text, true, meta, { internal: Boolean(item.internal), attachments: item.attachments ?? [] }).then((r) => { outcome = r ?? null; }).catch((error) => {
       this.orch.log(`asistente (conversación ${this.id}): ${error.stack}`);
       outcome = { ok: false };
       if (generation !== this.generation) return; // stopped meanwhile: nothing to report
@@ -362,7 +363,7 @@ class Lane {
   }
 
   // → { ok, limit } (undefined when stopped meanwhile).
-  async run(text, allowRetry, meta = null, { internal = false } = {}) {
+  async run(text, allowRetry, meta = null, { internal = false, attachments = [] } = {}) {
     // the message that started this turn gets its reply (chat.send) first; starting the agent's process, reading
     // the logs for the briefing and the rest come right after, in the next turn of the event loop. The order holds: the
     // lane is already busy, so anything sent meanwhile waits in its queue.
@@ -401,18 +402,22 @@ class Lane {
     // 20 minutes for a coordinating turn (reviewing several finished tasks can take a while; 10 would cut reports short).
     // a turn that ignores the interrupt goes with its process after the same grace as «Detener» (the
     // lane stayed busy for ever otherwise, and three such lanes left every conversation unanswered).
+    // What the user attached: pictures go natively to a brain that reads them; for the rest the brain gets each file's path
+    // and what Orb knows about it (the same block an agent's chat gets).
+    const prepared = attachments.length ? await prepareAttachments(attachments, { nativeImages: adapter(this.liveAgent).caps?.images === true, log: (m) => this.orch.log(m) }) : null;
+    if (generation !== this.generation || this.orch.closing) return undefined;
     const live = this.live; const run = this.inflight;
     const timer = setTimeout(() => {
-      this.say('system', tr('msg.orch.timeLimit')); Promise.resolve().then(() => live?.interrupt()).catch(() => {});
+      this.say('system', tr('msg.orch.timeLimit'), { kind: 'turn-stopped', cause: 'time' }); Promise.resolve().then(() => live?.interrupt()).catch(() => {});
       setTimeout(() => { if (this.inflight === run && this.live === live) this.closeLive(); }, STOP_GRACE_MS).unref?.();
     }, 20 * 60_000);
     let result;
-    try { result = await live.send({ text: prompt }); } finally { clearTimeout(timer); }
+    try { result = await live.send({ text: prepared?.text ? `${prompt}\n\n${prepared.text}` : prompt, ...(prepared?.images.length ? { images: prepared.images } : {}) }); } finally { clearTimeout(timer); }
     try { recordSpend(this.board, { account: this.liveAccount, conversation: this.id, usage: result?.usage ?? {} }); } catch { /* usage only */ }
     if (generation !== this.generation) return undefined; // stopped: nothing to publish
     // A stale conversation id fails before any answer: forget it and try once more with a fresh conversation. Only for that failure:
     // a usage limit or any other error must not drop the coordinator's memory.
-    if (staleConversation(result) && allowRetry && !fresh) { this.forget(); return this.run(text, false, meta, { internal }); }
+    if (staleConversation(result) && allowRetry && !fresh) { this.forget(); return this.run(text, false, meta, { internal, attachments }); }
     const answer = answerOf(result, this.said);
     this.said = [];
     const ok = !result.isError;
@@ -493,7 +498,11 @@ export class Orchestrator {
 
   // A message of the user: in its conversation (a new one when none is given). → { conversation }
   // meta: { answer: true, own } for the answer to a question card (src/engine/api › chat.answer).
-  ask(text, context = '', { conversation = null, project, meta = null } = {}) {
+  // attachments: absolute paths of what the user attached; each one is copied into this conversation's own folder
+  // (placeAttachments refuses folders, links, Orb's own data and oversized files) before anything is saved.
+  // fresh: the conversation given was made a moment ago for this very message (a brain chosen for it): refused
+  // attachments take it away as they do with one started here.
+  ask(text, context = '', { conversation = null, project, meta = null, attachments = [], fresh = false } = {}) {
     text = String(text ?? '').trim();
     if (!text) throw new Error(tr('msg.orch.writeMessage'));
     if (text.length > 20000) throw new Error(tr('msg.orch.tooLong'));
@@ -502,13 +511,20 @@ export class Orchestrator {
     if (c?.trashed_at) throw new Error(tr('msg.trash.inTrash'));
     const isNew = !c;
     if (!c) c = this.startConversation({ text, project });
-    this.board.addChat('usuario', text, meta, c.id);
+    let placed = [];
+    if (attachments.length) {
+      try { placed = placeAttachments(attachments, path.join(assistantDir(), 'adjuntos', String(c.id))); } catch (error) {
+        if (isNew || fresh) { this.board.run('DELETE FROM conversations WHERE id = ?', c.id); this.board.changed('conversations'); }
+        throw error;
+      }
+    }
+    this.board.addChat('usuario', text, placed.length ? { ...meta, images: placed.map((f) => f.path) } : meta, c.id);
     if (c.status === 'done') this.board.setConversationDone(c.id, false); // written in again: open again
     if (isNew || !c.titled) { try { this.title?.(c, text); } catch (error) { this.log(`título de la conversación ${c.id}: ${error.message}`); } }
     const lane = this.lane(c.id);
     context += lane.whiteboardNote() + this.takeNotes(c.id);
     // never into the running turn (see queueUserMessage): every message of the user gets its own answer.
-    const item = queueUserMessage(lane, text + context, userName());
+    const item = queueUserMessage(lane, text + context, userName(), placed);
     lane.next();
     return { conversation: c.id, queued: lane.current !== item };
   }
@@ -584,6 +600,13 @@ export class Orchestrator {
   forget(id) { this.lane(id).forget(); }
   clear(id) { if (!this.board.conversation(id)) throw new Error(tr('msg.board.noConversation')); return this.lane(id).clear(); }
   closeLive() { for (const l of this.lanes.values()) l.closeLive(); }
+  // A conversation deleted for good: the copies of what was attached to it go too (they may be private, and the next
+  // conversation could be given the same number).
+  forgetAttachments(id) {
+    const key = Number(id);
+    if (!Number.isInteger(key) || key <= 0) return;
+    try { fs.rmSync(path.join(assistantDir(), 'adjuntos', String(key)), { recursive: true, force: true }); } catch (error) { this.log(`adjuntos de la conversación ${key}: ${error.message}`); }
+  }
   // A conversation removed: its process and its waiting messages go.
   drop(id) {
     const key = Number(id);
