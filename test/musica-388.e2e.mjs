@@ -1,8 +1,8 @@
 // The adaptive music in the real Orb on Tauri (its test build, window hidden: test/fixtures/launch-orb.mjs), with
 // fake agents and a throwaway workspace:  npm run tauri:build:e2e && node test/musica-388.e2e.mjs
 // The volume is set to zero first, so nothing sounds on the PC that runs it; the page's audio contexts are watched instead: the music's own one is made only by the
-// click, runs while it plays and is closed when it stops. Checked: off and unloaded at the start, the button, the next
-// theme, Ajustes (its switch, theme, «Música que reacciona», intensity, volume, and the way out of the free tracks,
+// click, runs while it plays and is closed when it stops. Checked: off and unloaded at the start, the player that the
+// headphones open (play and pause, the next and the previous theme), Ajustes (its switch, theme, «Música que reacciona», intensity, volume, and the way out of the free tracks,
 // which are no longer offered), what is saved, and the lock.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -47,7 +47,12 @@ try {
   const contexts = () => page.evaluate(() => window.__ctxs.filter((c) => c.options?.latencyHint === 'playback').map((c) => ({ state: c.ctx.state, time: c.ctx.currentTime })));
   const engineLoaded = () => page.evaluate(() => performance.getEntriesByType('resource').some((r) => /adaptive-music/.test(r.name)));
   const music = async () => (await orb.call('app.state')).config?.ui?.music ?? {}; // what orb.json holds
+  // The headphones of the sidebar's foot show whether it plays and open the player; its «play» is what starts it.
   const button = page.locator('[data-testid=nav-music]');
+  const pop = page.locator('[data-testid=music-pop]');
+  const play = page.locator('[data-testid=music-pop-play]');
+  const openPlayer = async () => { if (!(await pop.count())) await button.click(); await pop.waitFor(); };
+  const closePlayer = async () => { if (await pop.count()) await page.keyboard.press('Escape'); await pop.waitFor({ state: 'detached' }); };
 
   step('off at the start: no engine loaded, no audio context of its own');
   await button.waitFor();
@@ -62,27 +67,44 @@ try {
   assert.deepEqual(await contexts(), []);
   assert.notEqual((await music()).on, true);
 
-  step('the button starts the adaptive music');
-  await button.click();
+  step('the headphones open the player, and that alone starts nothing');
+  await openPlayer();
+  assert.equal(await play.getAttribute('aria-label'), 'Reproducir música');
+  await page.waitForTimeout(500);
+  assert.equal(await button.getAttribute('aria-pressed'), 'false');
+  assert.equal(await engineLoaded(), false, 'not loaded by opening the player');
+  assert.deepEqual(await contexts(), []);
+
+  step('«play» in the player starts the adaptive music');
+  await play.click();
   await until(async () => (await button.getAttribute('aria-pressed')) === 'true', 'the music playing');
   assert.equal(await engineLoaded(), true, 'loaded by the click');
   const first = await until(async () => { const c = await contexts(); return c.length === 1 && c[0].state === 'running' && c[0].time > 0.3 ? c : null; }, 'its audio context running');
   await page.waitForTimeout(500);
   assert.ok((await contexts())[0].time > first[0].time, 'the audio clock advances');
   assert.equal((await music()).on, true, 'remembered as on');
-  assert.equal(await button.getAttribute('aria-label'), 'Pausar música');
+  assert.equal(await play.getAttribute('aria-label'), 'Pausar música');
+  await closePlayer();
+  assert.equal(await button.getAttribute('aria-pressed'), 'true', 'it goes on with the player closed');
 
   step('typing and a chat line reach it without errors');
   await page.keyboard.press('Control+n').catch(() => {});
   const box = page.locator('textarea').first();
   if (await box.count()) { await box.click(); await page.keyboard.type('hola, esto es una prueba de la música', { delay: 20 }); await box.fill(''); }
 
-  step('«next» goes to the next theme and saves it');
+  step('«next» and «previous» in the player go through the themes and save them');
+  await openPlayer();
   const next = page.locator('[data-testid=nav-music-next]');
   assert.equal(await next.getAttribute('aria-label'), 'Siguiente estilo');
   await next.click();
-  await until(async () => (await music()).theme === 'neon', 'the theme saved');
+  await until(async () => (await music()).theme === 'neon', 'the next theme saved');
+  await page.click('[data-testid=music-pop-prev]');
+  await until(async () => (await music()).theme === 'bruma', 'the previous theme saved');
+  await next.click();
+  await until(async () => (await music()).theme === 'neon', 'the next theme again');
   assert.equal((await contexts()).length, 1, 'a change of theme is a crossfade in the same context');
+  assert.equal((await contexts())[0].state, 'running');
+  await closePlayer();
 
   step('Ajustes › Apariencia: theme, «Música que reacciona», intensity and volume');
   await page.click('[data-testid=nav-settings]');
@@ -127,11 +149,14 @@ try {
   await closeSettings();
   assert.equal(await button.getAttribute('aria-pressed'), 'true');
 
-  step('pause with the button: closed again, and remembered as off');
-  await button.click();
+  step('«pause» in the player: closed again, and remembered as off');
+  await openPlayer();
+  await play.click();
   await until(async () => (await contexts())[1].state === 'closed', 'closed after the pause');
   assert.equal((await music()).on, false);
   assert.equal(await button.getAttribute('aria-pressed'), 'false');
+  assert.equal(await play.getAttribute('aria-label'), 'Reproducir música');
+  await closePlayer();
 
   step('the free tracks left chosen by an earlier version: the source shows, to go back to the adaptive music');
   // Written to orb.json the way 3.8.7 left it: Ajustes no longer has a way to choose the tracks.
@@ -150,7 +175,8 @@ try {
   assert.equal(await button.getAttribute('aria-pressed'), 'false');
 
   step('the lock stops it and it does not come back by itself');
-  await button.click();
+  await openPlayer();
+  await play.click();
   await until(async () => { const c = await contexts(); return c.length === 3 && c[2].state === 'running'; }, 'playing before the lock');
   await orb.call('master.lock', { reason: 'hand' });
   await until(async () => (await contexts())[2].state === 'closed', 'stopped by the lock');
