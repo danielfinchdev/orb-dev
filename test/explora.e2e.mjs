@@ -862,7 +862,7 @@ try {
           await scrollShot(`${prefix}-uso-medio`, 'middle');
           await scrollShot(`${prefix}-uso-abajo`, 'end');
           // «Más opciones» at the end of the page, unfolded (the table of tokens per day), then folded again
-          if (await tap('usage-more-toggle', '«Más opciones» de Uso')) { await scrollShot(`${prefix}-uso-mas-opciones`, 'end'); await tap('usage-more-toggle', 'plegar «Más opciones» de Uso'); }
+          if (await tap('usage-table-toggle', 'la tabla de tokens por día, en «Más opciones» de Uso')) { await scrollShot(`${prefix}-uso-mas-opciones`, 'end'); await tap('usage-table-toggle', 'plegar la tabla de tokens por día'); }
           // the period «Hoy» (the default is 30 days, put back afterwards)
           if (await tap('usage-range-1', 'periodo «Hoy» del uso')) { await page.waitForTimeout(600); await scrollView('top'); await shot(`${prefix}-uso-hoy`); await tap('usage-range-30', 'periodo de 30 días del uso'); }
           await tap('agents-tab-agents', 'pestaña «Agentes y cuentas»');

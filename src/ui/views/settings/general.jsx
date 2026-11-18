@@ -125,7 +125,7 @@ if (robot.listo) console.log('Tarea hecha');`}</code></pre>
   );
 }
 
-// What the mock-up does not draw of the music (it follows what happens in Orb, or keeps one intensity): under «Más opciones».
+// What the mock-up does not draw of the music (its style, whether it follows what happens in Orb, or keeps one intensity): under «Más opciones».
 function MusicMore() {
   const t = useT();
   useStore((s) => s.app?.config?.ui?.music);
@@ -136,6 +136,9 @@ function MusicMore() {
   return (
     <MoreOptions testid="more-options-music">
       <Panel>
+            <Setting label={t('appearance.musicTheme')}>
+              <Select caret="solid" className="w-52 shrink-0" value={prefs.theme} onValueChange={setMusicTheme} title={t('appearance.musicTheme')} data-testid="music-theme" options={ADAPTIVE_THEMES.map((value) => ({ value, label: t(`appearance.musicTheme.${value}`) }))} />
+            </Setting>
             <Row label={t('appearance.musicReactive')} hint={t('appearance.musicReactiveHint')}><Switch checked={prefs.reactive} onCheckedChange={setMusicReactive} data-testid="music-reactive" /></Row>
             {prefs.reactive ? null : (
               <Setting label={t('appearance.musicIntensity')}>
@@ -454,13 +457,6 @@ function MusicSettings() {
         <Setting label={t('appearance.musicSource')} hint={t(`appearance.musicModeHint.${prefs.mode}`)}>
           <Select caret="solid" className="w-52 shrink-0" value={prefs.mode} onValueChange={setMusicMode} title={t('appearance.musicSource')} data-testid="music-mode" options={MUSIC_MODES.filter((value) => value === 'adaptive' || value === prefs.mode).map((value) => ({ value, label: t(`appearance.musicMode.${value}`) }))} />
         </Setting>
-      ) : null}
-      {prefs.mode === 'adaptive' ? (
-        <>
-          <Setting label={t('appearance.musicTheme')}>
-            <Select caret="solid" className="w-52 shrink-0" value={prefs.theme} onValueChange={setMusicTheme} title={t('appearance.musicTheme')} data-testid="music-theme" options={ADAPTIVE_THEMES.map((value) => ({ value, label: t(`appearance.musicTheme.${value}`) }))} />
-          </Setting>
-        </>
       ) : null}
     </div>
   );

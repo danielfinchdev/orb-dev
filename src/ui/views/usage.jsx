@@ -108,17 +108,15 @@ function DaysTable({ days, metric, locale }) {
     return i === days.length - 1 ? t('usage.today', { day: name }) : name;
   };
   return (
-    <MoreOptions fold testid="usage-more" triggerTestid="usage-more-toggle">
-      <div className="text-faint-foreground text-caption" data-testid="usage-table">
-        <p>{t('usage.tableOf', { what: metric === 'usd' ? t('usage.costByDay') : t('usage.tokensByDay') })}</p>
+    <details className="text-faint-foreground text-caption" data-testid="usage-table">
+        <summary className="cursor-pointer" data-testid="usage-table-toggle">{t('usage.tableOf', { what: metric === 'usd' ? t('usage.costByDay') : t('usage.tokensByDay') })}</summary>
         <ListCard className="mt-1.5">
           <div className="text-faint-foreground grid grid-cols-[1.2fr_1fr_1fr_1fr] gap-3 px-3.5 py-2 text-micro uppercase"><span>{t('usage.day')}</span><span>{t('usage.in')}</span><span>{t('usage.out')}</span><span>{metric === 'usd' ? t('usage.cost') : t('usage.total')}</span></div>
           {days.map((d, i) => (
             <div key={d.day} className="border-border text-foreground grid grid-cols-[1.2fr_1fr_1fr_1fr] gap-3 border-t px-3.5 py-2 text-control tabular-nums"><span>{dayName(d, i)}</span><span>{tokens(d.tokensIn)}</span><span>{tokens(d.tokensOut)}</span><span>{metric === 'usd' ? usd(d.usd, locale) : tokens(d.tokensIn + d.tokensOut)}</span></div>
           ))}
         </ListCard>
-      </div>
-    </MoreOptions>
+    </details>
   );
 }
 
@@ -327,9 +325,12 @@ export function UsageView() {
             {agentRows.length ? <Block title={t('usage.byAgentModel')}><Rows head={t('usage.agent')} rows={agentRows} locale={locale} total={totalTokens} /></Block> : null}
             {!data.total.turns ? <p className="text-muted-foreground text-control">{t('usage.empty')}</p> : null}
           </>)}
-          {fullPc() ? <Limits cfg={cfg} windowHours={accounts[0]?.windowHours ?? cfg.budget?.windowHours ?? 5} /> : null}
-          <LocalUsage data={local || null} locale={locale} />
-          {data?.days?.length ? <DaysTable days={data.days} metric={metric} locale={locale} /> : null}
+          {/* Orb's own, not drawn by the mock-up: at the end, under «Más opciones». Open, because the limits and the brake are there. */}
+          <MoreOptions testid="usage-more-options">
+            {fullPc() ? <Limits cfg={cfg} windowHours={accounts[0]?.windowHours ?? cfg.budget?.windowHours ?? 5} /> : null}
+            <LocalUsage data={local || null} locale={locale} />
+            {data?.days?.length ? <DaysTable days={data.days} metric={metric} locale={locale} /> : null}
+          </MoreOptions>
         </div>
       </PageBody>
     </>

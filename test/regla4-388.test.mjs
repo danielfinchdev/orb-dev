@@ -65,9 +65,11 @@ test('f: an agent is turned on or off from the «⋯» of its card, with the sam
   for (const l of ['es', 'en']) assert.match(locale(l, 'agents'), /'agents\.turnOff'/);
 });
 
-test('g: Uso keeps «Tokens por día: tabla» under a folded «Más opciones» at the end of the page', () => {
+test('g: Uso keeps its limits, the local usage and «Tokens por día: tabla» under «Más opciones» at the end of the page', () => {
   const usage = src('views', 'usage.jsx');
-  assert.match(usage, /<MoreOptions fold testid="usage-more"/);
-  assert.match(usage, /data-testid="usage-table"/);
+  // open, because the limits and the brake are there; the table of days folds on its own
+  const more = usage.slice(usage.indexOf('<MoreOptions testid="usage-more-options">'), usage.indexOf('</MoreOptions>', usage.indexOf('<MoreOptions testid="usage-more-options">')));
+  for (const piece of ['<Limits cfg=', '<LocalUsage data=', '<DaysTable days=']) assert.ok(more.includes(piece), piece);
+  assert.match(usage, /<details className="text-faint-foreground text-caption" data-testid="usage-table">/);
   assert.ok(usage.indexOf('<DaysTable days=') > usage.indexOf('<LocalUsage'));
 });

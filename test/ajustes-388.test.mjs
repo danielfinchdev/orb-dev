@@ -160,7 +160,8 @@ test('8C-a: Ajustes follows the mock-up where it was out of order, and nothing i
   for (const gone of ['appearance.density', 'appearance.chatWidth', 'appearance.fontSize']) assert.ok(!general.includes(`'${gone}'`), gone);
   // Robot y sonidos: on and volume of the music first, its style and reactivity after
   const music = general.slice(general.indexOf('function MusicMore'));
-  assert.ok(music.indexOf("'appearance.musicVolume'") < music.indexOf("'appearance.musicTheme'"));
+  // the style of the adaptive music is Orb's own: with the reactivity and the intensity, under «Más opciones»
+  assert.ok(music.indexOf("'appearance.musicTheme'") < music.indexOf("'appearance.musicReactive'") && music.indexOf("'appearance.musicReactive'") < music.indexOf("'appearance.musicVolume'"));
   for (const id of ['music-mode', 'music-theme', 'music-reactive', 'music-intensity', 'music-volume', 'music-on']) assert.ok(music.includes(`data-testid="${id}"`), id);
   // Permisos: Auto / Preguntar, waiting, protected paths; the two buttons make the same call
   assert.match(index, /<PermissionsCard c=\{c\} \/><ApprovalWaitCard c=\{c\} \/><ProtectedCard c=\{c\} \/>/);
