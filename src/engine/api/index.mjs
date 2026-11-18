@@ -322,7 +322,13 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     // shows them).
     'usage.history': ({ days }) => {
       const out = usageHistory(board, { days: oneOf(days, [1, 7, 30, 90], 'días', 30) });
-      return { ...out, models: out.models.map(({ account, ...m }) => ({ ...m, label: m.model ? modelLabelOf(m.agent, account ?? m.agent, m.model) : null })) };
+      // the same ledger rows by the project of their task, agent session or chat ('' = none), for «Por proyecto»
+      const byProject = board.all(`SELECT COALESCE(t.project, s.project, c.project, '') AS project, COALESCE(SUM(u.tokens_in), 0) AS tin, COALESCE(SUM(u.tokens_out), 0) AS tout, COALESCE(SUM(u.usd), 0) AS usd
+        FROM usage_ledger u LEFT JOIN tasks t ON t.id = u.task_id LEFT JOIN sessions s ON s.id = u.session_id LEFT JOIN conversations c ON c.id = u.conversation_id
+        WHERE u.day >= ? AND u.day <= ? GROUP BY 1`, out.from, out.to);
+      const projects = byProject.map((p) => ({ project: p.project, tokensIn: p.tin, tokensOut: p.tout, usd: p.usd })).filter((p) => p.tokensIn + p.tokensOut || p.usd)
+        .sort((a, b) => b.usd - a.usd || (b.tokensIn + b.tokensOut) - (a.tokensIn + a.tokensOut));
+      return { ...out, projects, models: out.models.map(({ account, ...m }) => ({ ...m, label: m.model ? modelLabelOf(m.agent, account ?? m.agent, m.model) : null })) };
     },
     // the accounts working right now (the assistant's brain and the agents' running sessions), with the windows of
     // their plan the agents reported (session, weekly…), for the panel of the context ring.

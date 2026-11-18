@@ -98,7 +98,14 @@ export async function gitStatus(root) {
   const files = (await changed(root)).map(({ code, path: file }) => ({ path: file, code, state: code === '??' ? 'nuevo' : /D/.test(code) ? 'borrado' : /R/.test(code) ? 'renombrado' : /A/.test(code) ? 'añadido' : 'cambiado', staged: code[0] !== ' ' && code[0] !== '?', secret: isSecretPath(file) }));
   const ab = await git(root, ['rev-list', '--left-right', '--count', '@{upstream}...HEAD']);
   const [behind, ahead] = ab.status === 0 ? ab.stdout.trim().split(/\s+/).map(Number) : [null, null];
-  return { repo: true, branch, files, ahead, behind };
+  const upstream = ab.status === 0 ? (await git(root, ['rev-parse', '--abbrev-ref', '@{upstream}'])).stdout.trim() || null : null;
+  // lines added and removed per tracked file (numbers only, never the content; secret files get none). Never a program of
+  // the project (no ext-diff, no textconv), and no lock on the index an agent may be using.
+  const counts = new Map();
+  const ns = await git(root, ['--no-optional-locks', 'diff', '--numstat', '--no-color', '--no-ext-diff', '--no-textconv', '--relative', ...((await hasHead(root)) ? ['HEAD'] : ['--cached']), '--', '.']);
+  if (ns.status === 0) for (const line of ns.stdout.split('\n')) { const m = /^(\d+)\t(\d+)\t(.+)$/.exec(line); if (m) counts.set(m[3], { add: Number(m[1]), del: Number(m[2]) }); }
+  for (const f of files) { const c = !f.secret && counts.get(f.path); if (c) { f.add = c.add; f.del = c.del; } }
+  return { repo: true, branch, files, ahead, behind, upstream };
 }
 
 // Leaves out of a diff the sections of secret files (whatever name git printed: renames included).
@@ -122,7 +129,7 @@ export async function gitDiff(root, file) {
     paths = [f.path];
   } else paths = ['.'];
   const head = await hasHead(root);
-  const args = ['diff', '--no-color', '--no-ext-diff', '--relative', '-M', ...(head ? ['HEAD'] : ['--cached']), '--', ...paths];
+  const args = ['diff', '--no-color', '--no-ext-diff', '--no-textconv', '--relative', '-M', ...(head ? ['HEAD'] : ['--cached']), '--', ...paths];
   const r = await git(root, args, { max: MAX_DIFF * 4 });
   let out = withoutSecrets(r.stdout);
   // New files git does not track yet: shown whole, as added lines.
