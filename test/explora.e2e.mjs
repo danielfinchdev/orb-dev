@@ -460,6 +460,41 @@ try {
       }
     } catch (error) { noteOnce(`Proyectos, pizarra y programadas: el recorrido se cortó (${String(error?.message ?? error).split('\n')[0]})`); await closeMenus(); }
   };
+  // The rest of the places: usage (a tab of Agentes), the tutorials, the games (one is entered, none is played) and the
+  // God mode, which is switched on for its shots and off again.
+  const extraShots = async (prefix) => {
+    if (!seeded) return;
+    try {
+      if (await tap('nav-agents', 'Agentes')) {
+        await page.waitForTimeout(500); await shot(`${prefix}-agentes-cuentas`);
+        if (await tap('agents-tab-usage', 'pestaña «Uso»')) {
+          await page.waitForTimeout(800); await shot(`${prefix}-uso`);
+          await page.locator('[data-testid=usage-limits]').first().scrollIntoViewIfNeeded({ timeout: 2000 }).catch(() => noteOnce('Uso: sin el bloque de límites'));
+          await page.waitForTimeout(300); await shot(`${prefix}-uso-limites`);
+          await tap('agents-tab-agents', 'pestaña «Agentes y cuentas»');
+        }
+      }
+      if (await tap('nav-tutorials', 'Tutoriales')) { await page.waitForTimeout(500); await shot(`${prefix}-tutoriales`); }
+      await goChat();
+      if (await tap('orb-chat-more', '⋯ del chat con Orbe') && await tap('bar-games', '«Minijuegos» del menú')) {
+        await page.locator('[data-testid=games-dialog]').waitFor({ timeout: 6000 }).catch(() => noteOnce('Juegos: el diálogo no se abrió'));
+        await page.waitForTimeout(500); await shot(`${prefix}-juegos`);
+        if (await tap('game-snake', 'el juego de la serpiente')) { await page.waitForTimeout(700); await shot(`${prefix}-juego`); }
+        if (!(await tap('games-close', 'cerrar los juegos'))) await closeMenus();
+        await page.waitForTimeout(300);
+      } else await closeMenus();
+      await call('config.save', { patch: { expert: { enabled: true } } }).catch(() => noteOnce('God mode: no se pudo activar'));
+      // its entry lives under «Más» of the places, which only exists while the mode is on
+      const shown = await page.locator('[data-testid=orb-places-more]').first().waitFor({ timeout: 5000 }).then(() => true, () => false);
+      if (shown && await tap('orb-places-more', '«Más» de los sitios') && await tap('nav-expert', 'God mode')) {
+        await page.waitForTimeout(1500); await shot(`${prefix}-god-mode`);
+        if (await tap('expert-panels', 'paneles del God mode')) { await shot(`${prefix}-god-mode-paneles`); await closeMenus(); }
+        if (await tap('expert-more', '⋯ del God mode')) { await shot(`${prefix}-god-mode-menu`); await closeMenus(); }
+      } else noteOnce('God mode: no aparece en la barra tras activarlo');
+      await goChat();
+      await call('config.save', { patch: { expert: { enabled: false } } }).catch(() => {});
+    } catch (error) { noteOnce(`Agentes, tutoriales, juegos y God mode: el recorrido se cortó (${String(error?.message ?? error).split('\n')[0]})`); await closeMenus(); }
+  };
   const dark =() => page.evaluate(() => document.documentElement.classList.contains('dark'));
   const setDark = async (on) => { if (on !== (await dark())) await page.getByRole('button', { name: /claro y oscuro|day and night|light and dark/i }).click(); };
   // The robot at the top goes back to the chat; the professional theme has no robot (nothing drawn): there, a new chat
@@ -473,7 +508,9 @@ try {
   const views = [['sidebar-home', 'chat'], ['nav-tasks', 'tareas'], ['nav-projects', 'proyectos'], ['nav-agents', 'agentes'], ['nav-memories', 'bitacoras'], ['memories-activity', 'actividad'], ['nav-settings', 'ajustes']];
   const SECTIONS = ['general', 'magiclink', 'agentes', 'permisos', 'extensiones', 'datos', 'avanzado', 'acerca'];
   // ORB_EXPLORA_ONLY_THEMES=1 skips the tour of every view (to look again at the themes alone).
-  if (!process.env.ORB_EXPLORA_ONLY_THEMES) for (const theme of ['dia', 'noche']) {
+  // ORB_EXPLORA_MODES=dia (or noche) tours the views in one mode only: both no longer fit in one run of ten minutes.
+  const VIEW_MODES = ['dia', 'noche'].filter((m) => !process.env.ORB_EXPLORA_MODES || process.env.ORB_EXPLORA_MODES.split(',').includes(m));
+  if (!process.env.ORB_EXPLORA_ONLY_THEMES) for (const theme of VIEW_MODES) {
     await setDark(theme === 'noche');
     for (const [nav, name] of views) {
       await keepBusy();
@@ -535,6 +572,7 @@ try {
     // Programadas lives in the sidebar's places: seeded with two schedules (a view the loop above does not list)
     if (seeded && await tap('nav-schedules', 'Programadas')) await shot(`${theme}-programadas`);
     await projectShots(theme);
+    await extraShots(theme);
   }
   // checks and switches in the night theme: their computed colors
   await page.click('[data-testid=nav-settings]');

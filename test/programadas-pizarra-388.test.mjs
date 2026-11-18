@@ -103,3 +103,25 @@ test('step 7C-b: a row shows the model by its name and the zone of its time', ()
   assert.match(schedules, /\['daily', 'weekly', 'once'\]\.includes\(s\.every\)/);
   assert.match(schedules, /call\('models\.catalog'\)/);
 });
+
+test('8C-a: a form dialog keeps its header and footer in view and scrolls only its body; a confirmation is the 440 px one', () => {
+  const dialogs = read('src/ui/components/dialogs.jsx');
+  assert.match(dialogs, /grid-rows-\[minmax\(0,1fr\)\] gap-0 overflow-hidden p-0/);
+  assert.match(dialogs, /<div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-\[18px\]">\{d\.body\(values, set\)\}/);
+  assert.match(dialogs, /<DialogHeader className="flex-none"><DialogTitle>\{d\.title\}<\/DialogTitle>/);
+  assert.match(dialogs, /<DialogFooter className="flex-none">/);
+  assert.match(dialogs, /size=\{d\.kind === 'confirm' \? 'sm' : undefined\}/);
+  assert.match(dialogs, /d\.tone === 'primary' \? 'default' : d\.danger \? 'destructive'/);
+  // the focus rule of a dangerous confirmation does not depend on its colour
+  assert.match(dialogs, /data-autofocus=\{d\.danger \? "" : undefined\}/);
+});
+
+test('8C-a: the notices stay clear of the whiteboard bar and of the controls of an open dialog', () => {
+  const main = read('src/ui/main.jsx');
+  assert.match(main, /whiteboard-status"\], \.zoom-actions/);
+  assert.match(main, /\[data-slot="dialog-content"\]/);
+  assert.match(main, /const dialog = \[\.\.\.document\.querySelectorAll\('\[data-slot="dialog-content"\]'\)\]/);
+  // the old guarantees: only a watched box or panel coming or going costs a measure, and gone nodes are let go
+  assert.match(main, /if \(!el\.isConnected\) \{ resizes\.unobserve\(el\); seen\.delete\(el\); \}/);
+  assert.match(main, /const touches = \(nodes\)/);
+});

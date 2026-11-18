@@ -232,7 +232,7 @@ try {
 
   // ---- other views
   step = 'otras vistas';
-  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'Git y GitHub'], ['nav-agents', '07-agentes', 'Uso de cada cuenta'], ['nav-memories', '08-bitacoras', 'Solo lectura'], ['memories-activity', '09-actividad', 'Tarea creada'], ['nav-tutorials', '08b-tutoriales', 'Preguntas frecuentes']]) {
+  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'Git y GitHub'], ['nav-agents', '07-agentes', 'Agentes nativos'], ['nav-memories', '08-bitacoras', 'Solo lectura'], ['memories-activity', '09-actividad', 'Tarea creada'], ['nav-tutorials', '08b-tutoriales', 'Preguntas frecuentes']]) {
     await win.click(`[data-testid=${nav}]`);
     await win.waitForSelector(`text=${wait}`);
     await win.waitForTimeout(400);
@@ -340,7 +340,7 @@ try {
   await win.getByText('Iniciar las tareas automáticamente').click();
   await until(async () => (await call('app.state')).config.autoRun === autoRun, 'y vuelve');
   // 2.6: one slider from maximum saving to maximum use sets every limit; the limits stay under «Opciones avanzadas».
-  await win.locator('[data-testid=spend-slider]').fill('0');
+  await win.click('[data-testid=spend-low]');
   await until(async () => { const c = (await call('app.state')).config; return c.budget.profile === 0 && c.maxParallel === 1 && c.budget.stopAt === 0.75; }, 'máximo ahorro aplicado');
   await win.click('[data-testid=spend-advanced]');
   await shot('10f-ajustes-ahorro');

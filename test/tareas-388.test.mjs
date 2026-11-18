@@ -43,10 +43,10 @@ test('the list and the panel use the pieces of the design system', () => {
 test('every action keeps its call, its parameters and its confirmation', () => {
   const actions = tasks.slice(tasks.indexOf('function taskActions'), tasks.indexOf('// A task read whole'));
   for (const piece of [
-    "call('tasks.accept', { id: t.id })", "call('tasks.launchAnyway', { id: t.id })", "call('tasks.retry', { id: t.id })", "call('tasks.undo', { id: t.id })",
+    "call('tasks.accept', { id: t.id })", "call('tasks.launchAnyway', { id: t.id })", "call('tasks.retry', { id: t.id })", 
     "call('projects.merge', { name: t.project, branch: t.branch })", "call('tasks.discardBranch', { id: t.id })", "call('tasks.cancel', { id: t.id })",
     "call('tasks.reassign', { id: t.id, agent: v.agent,", "call('projects.createPr', { name: t.project, branch: t.branch, title: v.title, body: v.body })",
-    "{ ok: tr('tasks.undo.ok'), danger: true }", "undoBody(tr, t)","{ ok: tr('tasks.merge.ok'), danger: true }", "{ ok: tr('tasks.discard.ok'), danger: true }",
+    "undoTask(tr, t)","{ ok: tr('tasks.merge.ok'), danger: true }", "{ ok: tr('tasks.discard.ok'), danger: true }",
     "{ ok: tr('tasks.cancel.title'), cancel: tr('tasks.cancel.back'), danger: true }"
   ]) assert.ok(actions.includes(piece), piece);
   // approving and rejecting still go through the one place that signs exactly what is shown
@@ -57,7 +57,11 @@ test('every action keeps its call, its parameters and its confirmation', () => {
   assert.match(approval, /call\('tasks\.approve', \{ id: full\.id, decision: 'rejected', hash: full\.previewHash \}\)/);
   // «Deshacer» of a held task: the same confirmation as before
   const state = read('src/ui/components/task-state.jsx');
-  assert.match(state, /confirm\(t\('tasks\.undo\.title'\), undoBody\(t, task\), \{ ok: t\('tasks\.undo\.ok'\), danger: true \}\)/);
+  assert.match(state, /confirm\(t\('tasks\.undo\.title'\), undoBody\(t, task\), \{ ok: t\('tasks\.undo\.ok'\), danger: true, tone: 'primary' \}\)/);
+  assert.match(state, /call\('tasks\.undo', \{ id: task\.id \}\)/);
+  // the buttons behind the dialog are not dimmed; the per-task lock stops a second click instead
+  assert.match(state, /undoing\.has\(task\.id\)/);
+  assert.doesNotMatch(tasks, /run\(undo\)/);
 });
 
 test('the phone and a linked browser keep their layout', () => {
@@ -114,7 +118,7 @@ test('step 7C-b: the progress of a running row is the 84 px accent bar with no t
 });
 
 test('step 6D: the rows do not retry rejected or sensitive tasks', () => {
-  assert.match(rowActions, /undoHeld\(tr, t\)/);
+  assert.match(rowActions, /undoHeld\(tr, t, \(fn\) => run\(fn\)\(\)\)/);
   assert.match(rowActions, /if \(canRetryFromRow\(t\)\) return <Button[^\n]*task-row-retry/);
   assert.match(tasks, /export const canRetryFromRow = \(t\) => \['failed', 'blocked', 'limited'\]\.includes\(t\?\.status\) && !t\?\.sensitivity\?\.length;/);
   assert.doesNotMatch(rowActions, /'cancelled'/);
@@ -135,11 +139,11 @@ test('step 6D: the buttons of a list or panel are disabled while their action ru
   assert.match(pc, /if \(lock\.current\) return undefined;/);
   assert.match(pc, /<TaskRow [^\n]*busy=\{busy\} run=\{run\} \/>/);
   const detail = pc.slice(pc.indexOf('function TaskPanelDetail'), pc.indexOf('// What a row of the list'));
-  for (const piece of ['disabled={busy} onClick={run(merge)}', 'disabled={busy} onClick={run(discard)}', 'disabled={busy} onClick={run(undo)}', 'disabled={busy} onClick={run(cancel)}',
+  for (const piece of ['disabled={busy} onClick={run(merge)}', 'disabled={busy} onClick={run(discard)}', 'disabled={busy} onClick={() => undoTask(tr, t, (fn) => run(fn)())}', 'disabled={busy} onClick={run(cancel)}',
     'disabled={busy} onClick={run(() => approveTask(t))}', 'disabled={busy} onClick={run(() => rejectTask(t))}']) assert.ok(detail.includes(piece), piece);
-  for (const piece of ['disabled={busy} onClick={run(() => undoHeld(tr, t))}', 'disabled={busy} onClick={run(() => approveTask(t))}', 'disabled={busy} onClick={run(() => rejectTask(t))}', 'disabled={busy} onClick={run(a.cancel)}']) assert.ok(rowActions.includes(piece), piece);
+  for (const piece of ['disabled={busy} onClick={() => undoHeld(tr, t, (fn) => run(fn)())}', 'disabled={busy} onClick={run(() => approveTask(t))}', 'disabled={busy} onClick={run(() => rejectTask(t))}', 'disabled={busy} onClick={run(a.cancel)}']) assert.ok(rowActions.includes(piece), piece);
   // the confirmed calls are awaited so the lock lasts until they end
-  for (const name of ['tasks.undo', 'projects.merge', 'tasks.discardBranch', 'tasks.cancel']) assert.ok(tasks.includes("await act(call('" + name + "'"), name);
+  for (const name of ['projects.merge', 'tasks.discardBranch', 'tasks.cancel']) assert.ok(tasks.includes("await act(call('" + name + "'"), name);
 });
 
 test('step 7C2: the filters are one group that sits beside the tabs or takes the next line whole, and the search is what gives way', () => {

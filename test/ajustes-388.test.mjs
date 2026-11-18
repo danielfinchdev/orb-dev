@@ -148,3 +148,58 @@ test('the menu of Ajustes only has its eight sections: no entries of a block und
   // a link to a block (from the welcome, a notice, a tutorial) still lands on it
   assert.match(index, /document\.getElementById\(`settings-\$\{part\}`\)\?\.scrollIntoView/);
 });
+
+test('8C-a: Ajustes follows the mock-up where it was out of order, and nothing it lacks is lost', () => {
+  const index = view('settings', 'index.jsx');
+  // General: Asistente, Carpeta, Interfaz, Apariencia (with Respuestas and Robot), then what the mock-up lacks, Actualizaciones
+  assert.match(index, /<AssistantCard c=\{c\} \/><FolderCard c=\{c\} home=\{app\.home\} \/><InterfaceCard c=\{c\} \/><SubSection id="apariencia"/);
+  assert.ok(index.indexOf('<TabsCard') > index.indexOf('<AppearanceCard') && index.indexOf('<UpdatesCard') > index.indexOf('<ShortcutsCard'));
+  // Apariencia: the mock-up's rows, then density, chat width and font size after the code sample
+  assert.ok(general.indexOf("'appearance.density'") > general.indexOf("'appearance.codeSample'"));
+  assert.ok(general.indexOf("'appearance.fontSize'") > general.indexOf("'appearance.chatWidth'"));
+  // Robot y sonidos: on and volume of the music first, its style and reactivity after
+  const music = general.slice(general.indexOf('function MusicSettings'));
+  assert.ok(music.indexOf("'appearance.musicVolume'") < music.indexOf("'appearance.musicTheme'"));
+  for (const id of ['music-mode', 'music-theme', 'music-reactive', 'music-intensity', 'music-volume', 'music-on']) assert.ok(music.includes(`data-testid="${id}"`), id);
+  // Permisos: Auto / Preguntar, waiting, protected paths; the two buttons make the same call
+  assert.match(index, /<PermissionsCard c=\{c\} \/><ApprovalWaitCard c=\{c\} \/><ProtectedCard c=\{c\} \/>/);
+  assert.match(general, /<Segmented value=\{mode\} data-testid="settings-autonomy"[^\n]*call\('permissions\.setMode', \{ mode: p === 'auto' \? 'auto' : 'preguntar' \}\)/);
+  // Datos: the core folder before the extras
+  assert.match(view('data.jsx'), /<LegacyCard \/><BackupsCard \/><CoreCard \/><TrashCard \/><WorktreesCard \/>/);
+});
+
+test('8C-a: «Ahorro o potencia» is three buttons (levels 0, 2, 4); levels 1 and 3 stay in the advanced options', () => {
+  assert.match(general, /const SPEND_LEVEL = \{ low: 0, recommended: 2, high: 4 \};/);
+  for (const id of ['spend-low', 'spend-recommended', 'spend-high']) assert.ok(general.includes(`testid: '${id}'`), id);
+  const tasks = general.slice(general.indexOf('export function TasksCard'), general.indexOf('const SPEND_LEVEL'));
+  assert.ok(tasks.indexOf('data-testid="spend-slider"') > tasks.indexOf('<CollapsibleContent>'), 'the exact-level slider is under the advanced options');
+  // the mock-up's rows come before the guide of models
+  assert.ok(tasks.indexOf("'settings.delegation'") < tasks.indexOf('<ModelGuide'));
+  for (const l of [es, en]) for (const k of ['settings.spendFine', 'settings.spendFineHint', 'settings.spendLow', 'settings.spendRecommended', 'settings.spendHigh']) assert.ok(l[k], k);
+});
+
+test('8C-a: the dropdowns of Ajustes draw the solid triangle, the rest of the app keeps the thin chevron', () => {
+  const overlay = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'components', 'ui', 'overlay.jsx'), 'utf8');
+  assert.match(overlay, /caret = 'thin'/);
+  assert.match(overlay, /caret === 'solid'/);
+  assert.equal([...general.matchAll(/<Select (?!caret)/g)].length, 0, 'every Select of general.jsx asks for the solid caret');
+  assert.match(view('master.jsx'), /<Select caret="solid"/);
+});
+
+test('8C-a: the scrolling content of a section ends where an overlay bar would leave it', () => {
+  const index = view('settings', 'index.jsx');
+  assert.match(index, /\[scrollbar-gutter:stable\] pt-\[18px\] pr-\[calc\(1\.5rem-var\(--sb-w\)\)\]/);
+  const css = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'app.css'), 'utf8');
+  assert.match(css, /:root \{ --sb-w: 10px; \}/);
+  assert.match(css, /pointer: coarse\) \{[^\n]*:root \{ --sb-w: 0px; \}/);
+  // headings and rows use the mock-up's 1.45 line height, so a row is 63 px and a title 22 px
+  assert.match(view('settings', 'rows.jsx'), /text-card-title leading-\[1\.45\] font-semibold/);
+  assert.doesNotMatch(index, /className="mt-0"/);
+});
+
+test('8C-a: the glass dialog is the mock-up\'s near-opaque white', () => {
+  const skins = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'themes', 'skins.css'), 'utf8');
+  assert.match(skins, /\[data-slot="dialog-content"\]\) \{ background-color: var\(--g-fill-strong\); background-image: linear-gradient\(170deg, oklch\(1 0 0 \/ 0\.86\), oklch\(1 0 0 \/ 0\.68\)\);/);
+  const pieces = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'themes', 'pieces.css'), 'utf8');
+  assert.doesNotMatch(pieces, /html\[data-skin="cristal"\] \[data-slot="dialog-content"\] \{[^}]*position: relative/);
+});

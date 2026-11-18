@@ -21,9 +21,11 @@ test('every view shares one 56 px header: clock, title with its line, actions', 
   assert.match(page, /<WindowControlsSlot \/>/);
   // the chat's header is the same bar
   assert.match(bar, /<AppBar /);
-  assert.match(bar, /left=\{<BarClock \/>\}/);
+  assert.match(bar, /left=\{inner \? null : <BarClock \/>\}/);
   assert.match(rule('.bar'), /height: 56px/);
-  assert.match(rule('.bar'), /grid-template-columns: minmax\(150px, 1fr\) minmax\(0, auto\) minmax\(150px, 1fr\)/);
+  // the clock side never gives its room to the middle (the date line of a wide face, as Retro's, stays whole); the middle gives way instead
+  assert.match(rule('.bar'), /grid-template-columns: minmax\(max-content, 1fr\) minmax\(0, auto\) minmax\(150px, 1fr\)/);
+  assert.match(read('src/ui/components/page.jsx'), /<span className="min-w-0 truncate">\{meta\}<\/span>/);
   assert.match(rule('.bar-center .name'), /font-size: 15px/);
   assert.match(rule('.bar .sub'), /font-size: 12px/);
   assert.match(rule('.bar-clock-time'), /font-size: 18px/);

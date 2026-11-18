@@ -201,8 +201,8 @@ test('la lista pide el estado de git sin red, en cola, solo lo visible y con tie
 });
 
 test('correcciones 7C-a: margen, enlaces, icono grande, tareas de una línea y Git y PR', () => {
-  assert.ok(list.includes('<PageBody className="px-6 md:pb-28">'), 'las tarjetas van a 24 px de la columna');
-  assert.ok(page.includes('px-6 pt-5 pb-10'));
+  assert.ok(list.includes('<PageBody className="md:pb-28">'), 'las tarjetas van a 24 px de la columna (el margen de PageBody)');
+  assert.ok(page.includes('pt-5 pr-[calc(1.5rem-var(--sb-w))] pb-10 pl-6'));
   for (const src of [list, page]) assert.doesNotMatch(src, /variant="link"(?![^>]*text-info)/, 'los enlaces van en el azul de la maqueta (--info)');
   assert.ok(page.includes('<ProjectIcon name={p.name} size={48} big />'));
   assert.ok(read('components/project-icon.jsx').includes('big ? 48'));

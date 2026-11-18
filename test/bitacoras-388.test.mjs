@@ -29,7 +29,7 @@ test('Bitácoras: two columns, the search of all of them, the list with sizes an
   assert.match(l, /data-testid="log-search-all"/);
   assert.match(l, /data-testid="log-search"/);
   assert.match(l, /data-testid="log-body"/);
-  assert.match(l, /<Lock [^>]*\/>\{t\('logbooks\.private'\)\}/);
+  assert.match(l, /<Lock [^>]*\/>\{dir \? t\('logbooks\.privateAt', \{ dir \}\) : t\('logbooks\.private'\)\}/);
   assert.match(l, /kb\(l\.size\)/);
   assert.match(l, /logbooks\.readOnly/);
   // read only: nothing here writes a log
@@ -116,7 +116,7 @@ test('the activity hour column is 52 px with the hour only; the day goes in the 
 });
 
 test('logs.list counts entries per file version and never throws', () => {
-  assert.match(fs.readFileSync(new URL('../src/engine/api/index.mjs', import.meta.url), 'utf8'), /return \{ name, size, entries: countLogEntries\(file\) \}/);
+  assert.match(fs.readFileSync(new URL('../src/engine/api/index.mjs', import.meta.url), 'utf8'), /return \{ name, size, entries: countLogEntries\(file\), \.\.\.\(principal\?\.channel === 'desktop' && name === 'general'/);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-log-'));
   try {
     const f = path.join(dir, 'a.md');

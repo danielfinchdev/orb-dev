@@ -129,5 +129,5 @@ test('step 7C-b: scroll bars are invisible at rest and show while the pointer is
   const css = read('src/ui/app.css');
   assert.match(css, /::-webkit-scrollbar-thumb \{ background: transparent;/);
   assert.match(css, /:hover::-webkit-scrollbar-thumb \{ background: color-mix/);
-  assert.match(read('src/ui/components/page.jsx'), /overflow-y-auto px-6 py-5/, 'the page margin is the mock-up\'s 24 px');
+  assert.match(read('src/ui/components/page.jsx'), /overflow-y-auto \[scrollbar-gutter:stable\] py-5 pr-\[calc\(1\.5rem-var\(--sb-w\)\)\] pl-6/, 'the page margin is the mock-up\'s 24 px, and the scrollbar takes its room from it');
 });
