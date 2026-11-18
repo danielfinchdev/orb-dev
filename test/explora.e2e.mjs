@@ -79,6 +79,16 @@ const shooter = (page) => async (name) => {
   await page.waitForTimeout(500);
   // a scrollbar thumb is drawn for a moment after anything scrolls (the tour scrolls views itself): the picture is of the view at rest
   await page.waitForFunction(() => !document.querySelector('[data-scrolling]'), null, { timeout: 2000 }).catch(() => {});
+  // Floating notices and a tooltip left by the last click cover what the picture is of: the notices are closed with
+  // their own button and, with no menu or dialog open, the focus that holds a tooltip is dropped. A picture named after
+  // a notice keeps it.
+  if (!/aviso|notif|toast/.test(name)) {
+    await page.evaluate(() => {
+      for (const b of document.querySelectorAll('[data-sonner-toast] [data-close-button]')) b.click();
+      if (!document.querySelector('[role=menu], [role=listbox], [role=dialog], [data-radix-popper-content-wrapper]')) document.activeElement?.blur?.();
+    }).catch(() => {});
+    await page.waitForFunction(() => !document.querySelector('[data-sonner-toast][data-visible=true]'), null, { timeout: 1500 }).catch(() => {});
+  }
   await page.screenshot({ path: path.join(OUT, `${name}.png`) });
 };
 // Ajustes closes with Escape; if it does not (noted: that is a finding), the X closes it so the tour goes on.
