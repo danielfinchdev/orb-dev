@@ -49,8 +49,9 @@ test('Actividad: text chips for the sources and three level chips over the same 
   assert.match(a, /const nextLevel =/);
   assert.match(a, /font-mono/);
   assert.doesNotMatch(a, /<Check\b|<Segmented/);
-  // the engine gives no total per source or level, so no chip carries a number
-  assert.doesNotMatch(a, /\bcount\b/);
+  // a chip carries a number only when the engine sent its totals (counts); never one computed in the window
+  assert.doesNotMatch(a, /\.length\}<\/span>|filter\([^)]*\)\.length/);
+  assert.match(a, /counts\?\.sources\[s\]/);
 });
 
 test('Normas: no switch or edit icon in the rows; pausing and resuming a rail stay in «⋯» on the same path', () => {

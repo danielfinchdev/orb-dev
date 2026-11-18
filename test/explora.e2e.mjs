@@ -614,11 +614,14 @@ try {
         await files.first().waitFor({ timeout: 6000 }).catch(() => noteOnce('Tareas: la pestaña Cambios no lista archivos'));
         if (await files.count().catch(() => 0)) { await files.nth(Math.min(1, (await files.count()) - 1)).click({ timeout: 3000 }).catch(() => {}); await page.waitForTimeout(500); }
         if (await tap('task-change-more', 'el «⋯» del archivo abierto')) await shot(`${prefix}-tareas-cambios-menu`);
+        // the switch keeps its menu open (it is a check): Escape closes it before anything else is pressed
         if (await tap('task-change-whole', '«Archivo entero» en el «⋯» del archivo')) {
+          await closeMenus();
           await page.locator('[data-testid=file-view]').first().waitFor({ timeout: 5000 }).catch(() => noteOnce('Tareas: «Archivo entero» no enseña el archivo'));
           await shot(`${prefix}-tareas-cambios-entero`);
           if (await tap('task-change-more', 'el «⋯» del archivo abierto')) await tap('task-change-whole', 'volver al parche');
         }
+        await closeMenus();
         if (await tap('task-changes-before', '«Antes» de los cambios')) {
           await page.locator('[data-testid=file-view]').first().waitFor({ timeout: 5000 }).catch(() => noteOnce('Tareas: «Antes» no enseña el archivo entero'));
           await shot(`${prefix}-tareas-cambios-antes`);
@@ -684,12 +687,6 @@ try {
       const name = row.locator('[data-testid=project-open-name]').first();
       if (!(await name.click({ timeout: 4000 }).then(() => true, () => false))) { noteOnce('Proyectos: sin fila «tienda-web» para abrir su página'); return; }
       await page.waitForTimeout(500); await shot(`${prefix}-proyecto`);
-      if (await tap('project-sync', '«Sincronizar» de la tarjeta de git')) {
-        // the plan is read first (a fetch from the remote inside the temp folder): its dialog, or the notice that says there is nothing to do
-        await page.locator('[data-testid=project-sync-dialog]').first().waitFor({ timeout: 8000 }).catch(() => {});
-        await shot(`${prefix}-proyecto-sincronizar`);
-        if (await page.locator('[data-testid=project-sync-dialog]').count()) { if (!(await tap('choice-cancel', '«Cancelar» de Sincronizar'))) await closeMenus(); }
-      }
       if (await tap('project-log-write', '«Escribir entrada» de la bitácora')) {
         await page.locator('[data-testid=project-log-entry-title]').first().waitFor({ timeout: 4000 }).catch(() => noteOnce('Proyecto: «Escribir entrada» no abre su diálogo'));
         await shot(`${prefix}-proyecto-entrada`);
@@ -705,6 +702,18 @@ try {
       }
       if (await tap('project-more', '⋯ del proyecto')) { await shot(`${prefix}-proyecto-menu`); await closeMenus(); }
       await tap('project-back', 'volver a la lista de proyectos');
+      // «Sincronizar» needs a remote: orb-dev has one inside the temp folder (no network). The plan is read first (a fetch from
+      // it): its dialog, or the notice that says why not (agents at work, nothing to do). Never confirmed.
+      const withRemote = page.locator('[data-testid=project-row]', { hasText: 'orb-dev' }).locator('[data-testid=project-open-name]').first();
+      if (await withRemote.click({ timeout: 4000 }).then(() => true, () => false)) {
+        await page.waitForTimeout(600);
+        if (await tap('project-sync', '«Sincronizar» de la tarjeta de git')) {
+          await page.locator('[data-testid=project-sync-dialog], [role=dialog]').first().waitFor({ timeout: 8000 }).catch(() => {});
+          await shot(`${prefix}-proyecto-sincronizar`);
+          if (await page.getByRole('dialog').count()) { const cancel = page.getByRole('dialog').getByRole('button', { name: /^(Cancelar|Cancel)$/ }).first(); if (!(await cancel.click({ timeout: 3000 }).then(() => true, () => false))) await closeMenus(); }
+        }
+        await tap('project-back', 'volver a la lista de proyectos');
+      } else noteOnce('Proyectos: sin fila «orb-dev» para «Sincronizar»');
     } catch (error) { noteOnce(`Proyectos: el recorrido se cortó (${String(error?.message ?? error).split('\n')[0]})`); await closeMenus(); }
   };
   // The whiteboard with its attachments and the new-schedule dialog, after the projects. Only opens and cancels.
@@ -929,6 +938,22 @@ try {
         await scrollView('top'); await scrollShot(`${prefix}-normas-abajo`, 'end');
         if (await tap('rules-side-agents', 'Normas › subagentes')) { await scrollView('top'); await page.waitForTimeout(300); await shot(`${prefix}-normas-subagentes`); }
         await tap('rules-side-orb', 'Normas › Orb');
+        // the dialogs of Normas: a new rule's editor, an existing one and a rail's «Antes / Después» with its password field.
+        // Opened and cancelled: nothing is typed, saved, paused or unlocked.
+        const cancelRule = async (what) => {
+          const cancel = page.getByRole('dialog').getByRole('button', { name: /^(Cancelar|Cancel)$/ }).first();
+          if (!(await cancel.click({ timeout: 3000 }).then(() => true, () => false))) { noteOnce(`Normas: sin «Cancelar» en ${what}`); await closeMenus(); }
+          await page.waitForTimeout(300);
+        };
+        await scrollView('top');
+        if (await tap('rules-new', '«Nueva norma»')) { await page.waitForTimeout(400); await shot(`${prefix}-norma-nueva`); await cancelRule('la norma nueva'); }
+        if (await page.locator('[data-testid^=rule-edit-]').first().click({ timeout: 3000 }).then(() => true, () => false)) { await page.waitForTimeout(500); await shot(`${prefix}-norma-editar`); await cancelRule('editar la norma'); }
+        else noteOnce('Normas: sin «Editar» en ninguna norma');
+        if (await page.locator('[data-testid^=rail-more-]').first().click({ timeout: 3000 }).then(() => true, () => false)) {
+          await page.waitForTimeout(300);
+          if (await page.locator('[data-testid^=rail-switch-]').first().click({ timeout: 3000 }).then(() => true, () => false)) { await page.waitForTimeout(500); await shot(`${prefix}-rail-pausar`); await cancelRule('pausar un raíl'); }
+          else await closeMenus();
+        } else noteOnce('Normas: sin «⋯» en ningún raíl');
         await tap('memories-logs', 'volver a la pestaña «Bitácoras»');
         // the header's «⋯» of the logbooks (copy and read it whole live there)
         if (await tap('logbooks-more', '«⋯» de la cabecera de Bitácoras')) { await shot(`${prefix}-bitacoras-menu`); await closeMenus(); }
