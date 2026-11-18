@@ -2,7 +2,7 @@
 // from the task's undo checkpoint). Shown in the task's detail and at the end of its agent's conversation; nothing when
 // there is nothing to show (running, undone, a folder without git).
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Check, ChevronRight, Copy, FileEdit, FileMinus2, FilePlus2, FileDiff, FileText, MessageSquarePlus, X } from 'lucide-react';
+import { Check, ChevronRight, Copy, Ellipsis, FileEdit, FileMinus2, FilePlus2, FileDiff, MessageSquarePlus, X } from 'lucide-react';
 import { notifyError, notifyOk } from '@/lib/notify.js';
 import { DiffLines } from '@/components/diff-view.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -11,8 +11,8 @@ import { SearchInput, Segmented } from '@/components/ui/primitives.jsx';
 import { PatchView, FileView } from '@/components/patch-view.jsx';
 import { firstChangeLine, fileTooLong } from '@/lib/patch-rows.js';
 import { emptyReason, diffOf } from '@/lib/changes-empty.js';
-import { OpenInMenu, OpenFileButton } from '@/components/project-tools.jsx';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent, Tip } from '@/components/ui/overlay.jsx';
+import { OpenInItems, OpenFileButton } from '@/components/project-tools.jsx';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent, Tip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuCheckboxItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
 import { call, useStore } from '@/lib/store.js';
 import { useT, currentLocale } from '@/lib/i18n.js';
 import { addComment, removeComment, useComments } from '@/lib/turn-comments.js';
@@ -246,11 +246,17 @@ function PanelDiff({ f, seen, onSeen, sessionId, project, fileProject, taskId })
         <b className="min-w-0 flex-1 basis-32 truncate font-mono text-caption font-semibold" title={f.path}>{f.path}</b>
         {f.binary ? null : <span className="text-caption tabular-nums"><span className="text-success">+{f.added}</span> <span className="text-destructive">−{f.removed}</span></span>}
         <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
-          <Tip label={t('tasks.changes.copyPath')}><Button size="icon-xs" variant="ghost" aria-label={t('tasks.changes.copyPath')} onClick={copy}><Copy /></Button></Tip>
           <Button size="xs" variant={seen ? 'soft' : 'ghost'} onClick={onSeen} aria-pressed={seen} data-testid="task-change-seen"><Check />{t('tasks.changes.seen')}</Button>
-          {taskId != null && lay.side === 'after' && !f.binary ? <Tip label={t('tasks.changes.whole')}><Button size="icon-xs" variant={whole ? 'soft' : 'ghost'} onClick={() => setWhole((w) => !w)} aria-pressed={whole} aria-label={t('tasks.changes.whole')} data-testid="task-change-whole"><FileText /></Button></Tip> : null}
           {fileProject && f.status !== 'D' ? <OpenFileButton project={fileProject} file={f.path} line={firstChangeLine(f.patch)} /> : null}
-          {project ? <OpenInMenu project={project} compact /> : null}
+          {/* What the mock-up does not draw lives in the row's «⋯»: the path, the file whole, the project's folder elsewhere. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button size="icon-xs" variant="ghost" aria-label={t('tasks.changes.more')} title={t('tasks.changes.more')} data-testid="task-change-more"><Ellipsis /></Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onSelect={copy} data-testid="task-change-copy"><Copy />{t('tasks.changes.copyPath')}</DropdownMenuItem>
+              {taskId != null && lay.side === 'after' && !f.binary ? <DropdownMenuCheckboxItem checked={whole} onCheckedChange={(on) => setWhole(Boolean(on))} data-testid="task-change-whole">{t('tasks.changes.whole')}</DropdownMenuCheckboxItem> : null}
+              {project ? <><DropdownMenuSeparator /><OpenInItems project={project} /></> : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </span>
       </div>
       {body}

@@ -48,7 +48,9 @@ test('the Cambios tab draws the patch with PatchView, the layout controls and th
   assert.match(c, /<PatchView text=\{f\.patch\}/);
   assert.match(c, /tasks\.changes\.unified/);
   assert.match(c, /tasks\.changes\.before/);
-  assert.match(c, /<OpenInMenu project=\{project\}/);
+  // the editor button opens the file; the project's folder elsewhere is in the row's «⋯»
+  assert.match(c, /<OpenFileButton project=\{fileProject\}/);
+  assert.match(c, /<OpenInItems project=\{project\} \/>/);
   assert.match(c, /flex h-9 w-full/, 'file rows are 36 px');
   // the chat panel still uses the shared viewer, and the comments keep their library
   assert.match(c, /<DiffLines text=\{f\.patch\} headers=\{false\} \/>/);

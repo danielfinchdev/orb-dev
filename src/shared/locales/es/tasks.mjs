@@ -124,6 +124,7 @@ export default {
   'tasks.changes.filesOne': '{n} archivo',
   'tasks.changes.filesOther': '{n} archivos',
   'tasks.changes.more': '{n} archivos más sin mostrar.',
+  'tasks.changes.more': 'Más opciones del archivo',
   'tasks.changes.copyPath': 'Copiar ruta',
   'tasks.changes.copied': 'Ruta copiada',
   'tasks.changes.binary': 'Archivo binario.',

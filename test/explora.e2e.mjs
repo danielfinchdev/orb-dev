@@ -610,10 +610,11 @@ try {
         const files = page.locator('[data-testid=task-change]');
         await files.first().waitFor({ timeout: 6000 }).catch(() => noteOnce('Tareas: la pestaña Cambios no lista archivos'));
         if (await files.count().catch(() => 0)) { await files.nth(Math.min(1, (await files.count()) - 1)).click({ timeout: 3000 }).catch(() => {}); await page.waitForTimeout(500); }
-        if (await tap('task-change-whole', '«Archivo entero» del archivo abierto')) {
+        if (await tap('task-change-more', 'el «⋯» del archivo abierto')) await shot(`${prefix}-tareas-cambios-menu`);
+        if (await tap('task-change-whole', '«Archivo entero» en el «⋯» del archivo')) {
           await page.locator('[data-testid=file-view]').first().waitFor({ timeout: 5000 }).catch(() => noteOnce('Tareas: «Archivo entero» no enseña el archivo'));
           await shot(`${prefix}-tareas-cambios-entero`);
-          await tap('task-change-whole', 'volver al parche');
+          if (await tap('task-change-more', 'el «⋯» del archivo abierto')) await tap('task-change-whole', 'volver al parche');
         }
         if (await tap('task-changes-before', '«Antes» de los cambios')) {
           await page.locator('[data-testid=file-view]').first().waitFor({ timeout: 5000 }).catch(() => noteOnce('Tareas: «Antes» no enseña el archivo entero'));

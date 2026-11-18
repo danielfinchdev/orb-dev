@@ -72,6 +72,10 @@ test('Antes / Después enteros: se piden solo con el modo elegido y el archivo a
   assert.match(changes, /if \(!enabled\) return undefined;/);
   assert.match(changes, /call\('tasks\.diff', \{ id: taskId, file: path \}\)/);
   assert.match(changes, /data-testid="task-change-whole"/);
+  // what the mock-up does not draw is in the row's «⋯»: the path, the whole file, the project's folder elsewhere
+  assert.match(changes, /data-testid="task-change-more"><Ellipsis \/>/);
+  assert.match(changes, /<DropdownMenuCheckboxItem checked=\{whole\} onCheckedChange=\{\(on\) => setWhole\(Boolean\(on\)\)\} data-testid="task-change-whole">/);
+  assert.match(changes, /<DropdownMenuItem onSelect=\{copy\} data-testid="task-change-copy">/);
   assert.match(view, /export function FileView/);
   // the testids of today stay
   for (const id of ['task-changes-unified', 'task-changes-split', 'task-changes-after', 'task-changes-before', 'task-change-seen', 'task-changes-search']) assert.ok(changes.includes(id), id);

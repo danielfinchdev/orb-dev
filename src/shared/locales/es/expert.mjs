@@ -82,6 +82,7 @@ export default {
   'tools.openIn': 'Abrir en {app}',
   'tools.openFile': 'Abrir en el editor',
   'tools.openFileIn': 'Abrir este archivo en {app}',
+  'tools.openFolderIn': 'Abrir la carpeta del proyecto en',
   'tools.openWith': 'Abrir con…',
   'tools.actions': 'Acciones',
   'tools.actionsOf': 'Acciones de {name}',

@@ -124,6 +124,7 @@ export default {
   'tasks.changes.filesOne': '{n} file',
   'tasks.changes.filesOther': '{n} files',
   'tasks.changes.more': '{n} more files not shown.',
+  'tasks.changes.more': 'More options for the file',
   'tasks.changes.copyPath': 'Copy path',
   'tasks.changes.copied': 'Path copied',
   'tasks.changes.binary': 'Binary file.',

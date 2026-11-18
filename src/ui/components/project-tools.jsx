@@ -22,8 +22,7 @@ function useEditors() {
 }
 
 // labelClassName hides the words on a narrow bar (God mode's): the button keeps its icon, its name and a tooltip.
-// compact: only the arrow with its menu (beside a button that already opens something, as in a task's changed file).
-export function OpenInMenu({ project, labelClassName, compact = false }) {
+export function OpenInMenu({ project, labelClassName }) {
   const t = useT();
   const editors = useEditors();
   if (!project?.path || !bridge.openIn) return null;
@@ -35,17 +34,28 @@ export function OpenInMenu({ project, labelClassName, compact = false }) {
   const Main = ICON[first];
   return (
     <div className="flex items-center" data-testid="open-in">
-      {compact ? null : <Button variant="outline" size="sm" className="rounded-r-none" onClick={() => open(first)} aria-label={t('tools.openIn', { app: LABEL[first] })} title={labelClassName ? t('tools.openIn', { app: LABEL[first] }) : undefined} data-testid="open-in-main"><Main /><span className={labelClassName}>{t('tools.openIn', { app: LABEL[first] })}</span></Button>}
+      <Button variant="outline" size="sm" className="rounded-r-none" onClick={() => open(first)} aria-label={t('tools.openIn', { app: LABEL[first] })} title={labelClassName ? t('tools.openIn', { app: LABEL[first] }) : undefined} data-testid="open-in-main"><Main /><span className={labelClassName}>{t('tools.openIn', { app: LABEL[first] })}</span></Button>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>{compact
-          ? <Button variant="ghost" size="icon-xs" aria-label={t('tools.openWith')} title={t('tools.openWith')} data-testid="open-in-menu"><ChevronDown /></Button>
-          : <Button variant="outline" size="sm" className="rounded-l-none border-l-0 px-1.5" aria-label={t('tools.openWith')} data-testid="open-in-menu"><ChevronDown /></Button>}</DropdownMenuTrigger>
+        <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="rounded-l-none border-l-0 px-1.5" aria-label={t('tools.openWith')} data-testid="open-in-menu"><ChevronDown /></Button></DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
           {[...EDITOR_ORDER, 'explorer'].filter((w) => w === 'explorer' || editors[w]).map((w) => { const I = ICON[w]; return <DropdownMenuItem key={w} onSelect={() => open(w)}><I />{LABEL[w]}</DropdownMenuItem>; })}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
   );
+}
+
+// The same places as lines of someone else's menu (the «⋯» of a task's changed file): the project's folder in each installed
+// editor and in the file manager.
+export function OpenInItems({ project }) {
+  const t = useT();
+  const editors = useEditors();
+  if (!project?.path || !bridge.openIn) return null;
+  const NAME = { cursor: 'Cursor', vscode: 'VS Code', windsurf: 'Windsurf', zed: 'Zed', jetbrains: 'JetBrains', explorer: t(!window.orb?.platform || window.orb.platform === 'win32' ? 'tools.explorer' : 'tools.files') };
+  return (<>
+    <DropdownMenuLabel>{t('tools.openFolderIn')}</DropdownMenuLabel>
+    {[...EDITOR_ORDER, 'explorer'].filter((w) => w === 'explorer' || editors[w]).map((w) => <DropdownMenuItem key={w} onSelect={() => act(bridge.openIn(w, project.path))} data-testid={`open-folder-${w}`}>{w === 'explorer' ? <FolderOpen /> : <Code2 />}{NAME[w]}</DropdownMenuItem>)}
+  </>);
 }
 
 // «Abrir en el editor» of one file (and its line): the first installed editor, the same one OpenInMenu's main button uses.
