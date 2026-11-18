@@ -79,5 +79,7 @@ export default {
   'logbooks.noEntriesYet': 'There are no entries in this log yet.',
   'logbooks.markShort': 'Mark to copy',
   'logbooks.task': 'Task',
-  'logbooks.reviewTask': 'Review task #{n}'
+  'logbooks.reviewTask': 'Review task #{n}',
+  'logbooks.dateClear': 'Clear',
+  'logbooks.datePick': 'Pick a date'
 };

@@ -82,5 +82,7 @@ export default {
   'logbooks.noEntriesYet': 'Todavía no hay entradas en esta bitácora.',
   'logbooks.markShort': 'Marcar para copiar',
   'logbooks.task': 'Tarea',
-  'logbooks.reviewTask': 'Revisar tarea #{n}'
+  'logbooks.reviewTask': 'Revisar tarea #{n}',
+  'logbooks.dateClear': 'Borrar',
+  'logbooks.datePick': 'Elegir fecha'
 };

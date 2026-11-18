@@ -15,7 +15,7 @@ import { NotificationBell } from '@/components/notification-center.jsx';
 import { BarPause } from '@/components/conversation/bar.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Empty, Input, Spinner } from '@/components/ui/basic.jsx';
-import { BubbleTip, Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
+import { BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
 import { IconButton, MoreButton } from '@/components/ui/primitives.jsx';
 import { confirm } from '@/components/dialogs.jsx';
 import { useStore, call, act, bridge, isDark, fullPc } from '@/lib/store.js';
@@ -169,25 +169,17 @@ function WhiteboardPc({ project }) {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <PageHeader title={t('wb.title')}
           meta={project ? <span className="inline-flex items-center gap-1.5">{pj(project)}{project}<span aria-hidden="true">·</span>{t('wb.saveHint')}</span> : t('wb.metaNone')}>
-          {/* with the panel open the picker moves into ⋯ to leave room. */}
-          {panel && project ? null : (
-            <Select value={project ?? NONE} onValueChange={(name) => setActive(name === NONE ? '' : name)} title={t('wb.project')} data-testid="project-picker"
-              options={[...projects.map((p) => ({ value: p.name, label: p.name, icon: pj(p.name) })), { value: NONE, label: t('nav.loose'), icon: <FolderX className="size-3.5" /> }]} />
-          )}
           {project ? <BubbleTip title={t('wb.attachments')} text={t('wb.togglePanel')}><IconButton label={t('wb.attachments')} active={panel} onClick={() => setPanel(!panel)} data-testid={panel ? 'whiteboard-toggle-panel' : 'whiteboard-show-panel'}><Paperclip /></IconButton></BubbleTip> : null}
           <BarPause />
           <NotificationBell />
           <DropdownMenu modal={false}>
             <BubbleTip title={t('wb.canvasMenu')}><DropdownMenuTrigger asChild><MoreButton label={t('wb.canvasMenu')} data-testid="whiteboard-more" /></DropdownMenuTrigger></BubbleTip>
             <DropdownMenuContent align="end" className="w-[230px]">
-              {panel ? (
-                <>
-                  <DropdownMenuLabel>{t('wb.project')}</DropdownMenuLabel>
-                  {projects.map((p) => <DropdownMenuItem key={p.name} onSelect={() => setActive(p.name)}>{pj(p.name)}<span className="flex-1 truncate">{p.name}</span>{p.name === project ? <Check className="text-primary-text!" /> : null}</DropdownMenuItem>)}
-                  <DropdownMenuItem onSelect={() => setActive('')}><FolderX /><span className="flex-1 truncate">{t('nav.loose')}</span>{project ? null : <Check className="text-primary-text!" />}</DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                </>
-              ) : null}
+              {/* the mock-up's header names the project but has no picker: switching lives here */}
+              <DropdownMenuLabel data-testid="project-picker">{t('wb.project')}</DropdownMenuLabel>
+              {projects.map((p) => <DropdownMenuItem key={p.name} onSelect={() => setActive(p.name)}>{pj(p.name)}<span className="flex-1 truncate">{p.name}</span>{p.name === project ? <Check className="text-primary-text!" /> : null}</DropdownMenuItem>)}
+              <DropdownMenuItem onSelect={() => setActive('')}><FolderX /><span className="flex-1 truncate">{t('nav.loose')}</span>{project ? null : <Check className="text-primary-text!" />}</DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem disabled={!project} onSelect={b.openFolder} data-testid="whiteboard-menu-folder"><FolderOpen />{t('wb.openFolder')}</DropdownMenuItem>
               <DropdownMenuItem disabled={!ready} onSelect={exportDrawing} data-testid="whiteboard-menu-export"><Download />{t('wb.export')}</DropdownMenuItem>
               <DropdownMenuItem disabled={!ready} onSelect={fit} data-testid="whiteboard-menu-fit"><Maximize />{t('wb.fit')}</DropdownMenuItem>

@@ -4,10 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, Bug, Orbit, Bot, User, Monitor, Activity, ClipboardCopy, FilterX, SquareCheck, ArrowRight } from 'lucide-react';
 import { notifyOk } from '@/lib/notify.js';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge, Empty, Input, Spinner } from '@/components/ui/basic.jsx';
+import { Badge, Empty, Spinner } from '@/components/ui/basic.jsx';
 import { DropdownMenuItem, Select } from '@/components/ui/overlay.jsx';
 import { ListCard, SearchInput } from '@/components/ui/primitives.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
+import { DateField } from '@/components/date-field.jsx';
 import { useStore, call, go } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
 import { cn, fmtTime } from '@/lib/utils.js';
@@ -101,9 +102,9 @@ export function ActivityView({ tabs }) {
         {paged ? (
           <>
             <Select value={filters.project || ALL} onValueChange={(project) => set({ project: project === ALL ? '' : project })} options={projectOptions} prefix={t('logbooks.project')} title={t('logbooks.project')} data-testid="activity-project" />
-            <Input type="date" className="w-34" aria-label={t('logbooks.from')} value={filters.from} max={filters.to || undefined} onChange={(e) => set({ from: e.target.value })} data-testid="activity-from" />
+            <DateField label={t('logbooks.from')} value={filters.from} max={filters.to || undefined} onChange={(from) => set({ from })} data-testid="activity-from" />
             <span className="text-muted-foreground">–</span>
-            <Input type="date" className="w-34" aria-label={t('logbooks.to')} value={filters.to} min={filters.from || undefined} onChange={(e) => set({ to: e.target.value })} data-testid="activity-to" />
+            <DateField label={t('logbooks.to')} value={filters.to} min={filters.from || undefined} onChange={(to) => set({ to })} data-testid="activity-to" />
           </>
         ) : null}
         <SearchInput value={filters.q} onChange={(q) => set({ q })} placeholder={t('activity.search')} className="w-70 flex-[0_1_280px]" data-testid="activity-search" />

@@ -288,11 +288,11 @@ function GitPanel({ p, info, reload }) {
   );
 }
 
-// compact: the summary card's row, one line with the state at the end; the tab's row also names the agent and approves.
+// compact: the summary card's row (it keeps the rule under the card's title, as the mock-up draws it), one line with the state at the end; the tab's row also names the agent and approves.
 function TaskRow({ x, compact = false }) {
   const t = useT();
   return (
-    <ListRow data-testid="project-task-row" className={cn('border-border rounded-none border-t first:border-t-0', compact && 'px-0 py-2')} leading={<AgentIcon agent={x.agent} className="size-4" />}
+    <ListRow data-testid="project-task-row" className={cn('border-border rounded-none border-t', compact ? 'px-0 py-2' : 'first:border-t-0')} leading={<AgentIcon agent={x.agent} className="size-4" />}
       title={`#${x.id} ${x.title}`} meta={compact ? null : (AGENT[x.agent] ?? x.agent)}
       trailing={<><TaskStatus task={x} board />{!compact && x.status === 'awaiting_approval' && !x.held ? <div className="acts flex shrink-0 items-center gap-1.5"><Button size="xs" variant="outline" onClick={() => rejectTask(x)}>{t('tasks.reject')}</Button><Button size="xs" onClick={() => approveTask(x)}>{t('tasks.approve.ok')}</Button></div> : null}</>} />
   );
@@ -302,7 +302,7 @@ function ChatRow({ x, assistant, compact = false }) {
   const t = useT();
   const pr = orbProgress(x, t, { assistant });
   return (
-    <ListRow data-testid="project-chat-row" className={cn('border-border cursor-pointer rounded-none border-t first:border-t-0', compact && 'px-0 py-2')} onClick={() => openOrbItem(x)} leading={<AgentIcon agent={x.kind === 'session' ? x.agent : 'orb'} className="size-4" />}
+    <ListRow data-testid="project-chat-row" className={cn('border-border cursor-pointer rounded-none border-t', compact ? 'px-0 py-2' : 'first:border-t-0')} onClick={() => openOrbItem(x)} leading={<AgentIcon agent={x.kind === 'session' ? x.agent : 'orb'} className="size-4" />}
       title={x.title} meta={<span className="inline-flex items-center gap-2">{pr?.text ? <span className="truncate">{pr.prefix ?? ''}{pr.text}</span> : null}</span>}
       trailing={pr?.badge ? <Badge variant="warning">{t('projects.chats.permission')}</Badge> : x.at ? <span className="text-faint-foreground text-caption">{since(x.at, t)}</span> : null} />
   );

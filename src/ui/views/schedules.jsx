@@ -23,6 +23,7 @@ import { modelsOf } from '@/components/brain-picker.jsx';
 import { canRetryFromRow } from './tasks.jsx';
 import { ago, cn, errorText } from '@/lib/utils.js';
 import { nextLocalRun, isValidTz } from '../../shared/tz.mjs';
+import { zoneLabel, whenLabel } from '@/lib/zone-label.js';
 import { t, useT, currentLocale } from '@/lib/i18n.js';
 
 const EVERY = ['hourly', 'daily', 'weekly', 'monthly', 'once'];
@@ -53,13 +54,14 @@ function nextOccurrence(v, tz, from = new Date()) {
 
 // What the chosen frequency means, as the dialog's summary: «Cada lunes a las 9:00 (Europe/Madrid). Próxima: lunes 16 de noviembre.»
 function summary(v) {
-  const tz = v.tz || zoneName();
+  const zone = v.tz || zoneName();
+  const tz = zoneLabel(zone, currentLocale());
   // a «once» date is a wall time in the chosen zone: it is written out as typed, never moved to this PC's zone
   if (v.every === 'once') return t('schedules.sum.once', { when: v.at_date ? new Date(`${v.at_date}:00Z`).toLocaleString(currentLocale(), { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) : '—', tz });
   if (v.every === 'hourly') return t('schedules.sum.hourly');
   if (v.every === 'every_hours') return t('schedules.sum.hours', { n: Number(v.hours) || 6 });
-  const next = nextOccurrence(v, tz);
-  const tail = next ? t('schedules.sum.next', { when: dayDate(next, tz) }) : '';
+  const next = nextOccurrence(v, zone);
+  const tail = next ? t('schedules.sum.next', { when: dayDate(next, zone) }) : '';
   if (v.every === 'daily') return t('schedules.sum.daily', { time: clock(v.at_time), tz }) + tail;
   if (v.every === 'monthly') return t('schedules.sum.monthly', { day: monthDayOf(v), time: clock(v.at_time), tz }) + tail;
   const names = (v.weekdays.length ? DAYS.filter((d) => v.weekdays.includes(d)) : [1]).map(dayName);
@@ -75,7 +77,7 @@ function zoneOptions() {
   try { names = Intl.supportedValuesOf('timeZone'); } catch { /* an older runtime: only the zones a schedule already has */ }
   if (!names.includes('UTC')) names = ['UTC', ...names];
   const offset = (z) => { try { const o = new Intl.DateTimeFormat('en', { timeZone: z, timeZoneName: 'shortOffset' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName')?.value ?? ''; return o === 'GMT' ? 'UTC' : o.replace('GMT', 'UTC'); } catch { return ''; } };
-  zoneList = names.map((z) => ({ value: z, label: `${z} (${offset(z)})` }));
+  zoneList = names.map((z) => ({ value: z, label: `${zoneLabel(z, currentLocale())} (${offset(z)})` }));
   return zoneList;
 }
 
@@ -138,7 +140,8 @@ function ScheduleDialog({ schedule = null, preset = {}, onDone }) {
     if (!out.some((o) => o.value === v.brain)) { const [a, m] = v.brain.split('::'); out.push({ value: v.brain, label: tr('schedules.agentGone', { agent: `${AGENT[a] ?? a}${m ? ` · ${m}` : ''}` }) }); }
     return out;
   })();
-  const zones = (() => { const own = [{ value: ORB_ZONE, label: tr('schedules.tzDefault', { tz: zoneName() }) }, ...zoneOptions()]; return v.tz && !own.some((o) => o.value === v.tz) ? [...own, { value: v.tz, label: v.tz }] : own; })();
+  // the default entry reads as the zone it stands for, like the others; the stored value stays '' (Orb's zone) or the IANA name
+  const zones = (() => { const named = zoneOptions(); const mine = named.find((o) => o.value === zoneName()); const own = [{ value: ORB_ZONE, label: mine?.label ?? zoneLabel(zoneName(), currentLocale()) }, ...named.filter((o) => o.value !== zoneName())]; return v.tz && !own.some((o) => o.value === v.tz) ? [...own, { value: v.tz, label: zoneLabel(v.tz, currentLocale()) }] : own; })();
   // the same number the engine waits (0 = no limit when the rail is paused)
   const wait = Number(app?.approvalWaitMinutes ?? 10);
   const level = tr(app?.config?.permissions?.mode === 'preguntar' ? 'session.askMode' : 'session.autoMode');
@@ -186,23 +189,23 @@ function ScheduleDialog({ schedule = null, preset = {}, onDone }) {
       <Select caret="solid" className="w-full" value={v.tz || ORB_ZONE} onValueChange={(z) => set({ tz: z === ORB_ZONE ? '' : z })} options={zones} data-testid="schedule-tz" />
     </Field>
   );
-  const timeField = <Field label={tr('schedules.time')}><Input type="time" value={v.at_time} onChange={(e) => set({ at_time: e.target.value })} data-testid="schedule-time" /></Field>;
+  const timeField = <Field label={tr('schedules.time')}><Input type="time" className="[&::-webkit-calendar-picker-indicator]:hidden" value={v.at_time} onChange={(e) => set({ at_time: e.target.value })} data-testid="schedule-time" /></Field>;
   return (
     <Dialog open onOpenChange={(o) => { if (!o) requestClose(); }}>
-      <DialogContent className="grid-rows-[minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-2xl" data-testid="schedule-dialog">
+      <DialogContent className="max-h-[calc(100vh-50px)] grid-rows-[minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-2xl" data-testid="schedule-dialog">
         <form onSubmit={submit} className="flex max-h-[inherit] min-h-0 flex-col">
           <DialogHeader className="flex-none">
             <div className="flex items-center gap-2"><DialogTitle>{tr(editing ? 'schedules.edit.title' : 'schedules.new.title')}</DialogTitle>{dirty ? <Badge variant="warning" data-testid="schedule-unsaved">{tr('schedules.unsaved')}</Badge> : null}</div>
             <DialogDescription className="sr-only">{tr(editing ? 'schedules.edit.title' : 'schedules.new.title')}</DialogDescription>
           </DialogHeader>
-          <DialogBody className="grid gap-4 p-[18px] [&_label]:font-normal">
+          <DialogBody className="flex flex-col gap-4 p-[18px] [&>*]:shrink-0 [&_label]:font-normal">
             <Field label={tr(editing ? 'schedules.edit.name' : 'schedules.titleField')}><Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={120} placeholder={tr('schedules.titlePh')} data-testid={editing ? 'schedule-edit-title' : 'schedule-title'} /></Field>
-            <Field label={tr(editing ? 'schedules.edit.what' : 'schedules.what')} hint={tr('schedules.whatNote', { assistant: app?.config?.assistantName })}><Textarea rows={editing ? 5 : 4} value={v.description} onChange={(e) => set({ description: e.target.value })} placeholder={tr('schedules.whatHint')} data-testid={editing ? 'schedule-edit-description' : 'schedule-description'} /></Field>
+            <Field label={tr(editing ? 'schedules.edit.what' : 'schedules.what')} hint={tr('schedules.whatNote', { assistant: app?.config?.assistantName })}><Textarea className="min-h-20" rows={editing ? 5 : 4} value={v.description} onChange={(e) => set({ description: e.target.value })} placeholder={tr('schedules.whatHint')} data-testid={editing ? 'schedule-edit-description' : 'schedule-description'} /></Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label={tr('schedules.project')}><Select caret="solid" className="w-full" value={v.project} onValueChange={(project) => set({ project })} options={list.map((p) => ({ value: p.name, label: p.name, icon: <ProjectIcon name={p.name} small /> }))} data-testid="schedule-project" /></Field>
               <Field label={tr('schedules.agentModel')}><Select caret="solid" className="w-full" value={v.brain} onValueChange={(brain) => set({ brain })} options={brains} data-testid="schedule-brain" /></Field>
             </div>
-            <Field label={tr('schedules.frequency')}><Segmented className="self-start" aria-label={tr('schedules.frequency')} value={v.every} onChange={(every) => set({ every })} itemTestId={(k) => `schedule-every-${k}`} options={EVERY.map((value) => ({ value, label: tr(`schedules.every.${value}`) }))} /></Field>
+            <Field label={tr('schedules.frequency')}><Segmented className="justify-self-start" aria-label={tr('schedules.frequency')} value={v.every} onChange={(every) => set({ every })} itemTestId={(k) => `schedule-every-${k}`} options={EVERY.map((value) => ({ value, label: tr(`schedules.every.${value}`) }))} /></Field>
             {v.every === 'weekly' ? (
               <Field label={tr('schedules.daysField')}>
                 <div className="flex flex-wrap gap-1">{DAYS.map((d) => <Button key={d} type="button" size="icon-sm" variant={v.weekdays.includes(d) ? 'default' : 'outline'} aria-pressed={v.weekdays.includes(d)} aria-label={dayName(d)} onClick={() => set({ weekdays: v.weekdays.includes(d) ? v.weekdays.filter((x) => x !== d) : [...v.weekdays, d] })}>{tr(`schedules.days.${d}`)}</Button>)}</div>
@@ -302,7 +305,7 @@ function ScheduleRow({ s, load, catalog, onEdit }) {
       title={<span className={off ? 'text-muted-foreground' : undefined}>{s.title}</span>}
       meta={(
         <span className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
-          <span className="inline-flex items-center gap-1"><Repeat className="size-3.5" />{['daily', 'weekly', 'monthly', 'once'].includes(s.every) ? `${s.when} (${zoneOf(s)})` : s.when}</span>
+          <span className="inline-flex items-center gap-1"><Repeat className="size-3.5" />{['daily', 'weekly', 'monthly', 'once'].includes(s.every) ? `${whenLabel(s.when)} (${zoneLabel(zoneOf(s), currentLocale())})` : whenLabel(s.when)}</span>
           <span>{s.project}</span>
           {s.readonly ? <Badge variant="secondary">{tr('schedules.readonlyBadge')}</Badge> : null}
           {!s.approved ? <Badge variant="warning">{tr('schedules.awaiting')}</Badge> : null}
