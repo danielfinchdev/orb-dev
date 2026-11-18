@@ -40,8 +40,8 @@ test('inbox_items de antes de los chats directos: se rehace una vez, con las mis
   // Opened again: rebuilt with the wider check, same rows, no table left behind.
   db = openDb(file);
   assert.match(tableSql(db), /'session'/);
-  // The rebuilt table also gets the columns added since (snooze, marked as unread), empty.
-  assert.deepEqual(rows(db).map(({ snoozed_until: snoozed, marked_unread: unread, ...r }) => (assert.equal(snoozed, null), assert.equal(unread, 0), r)), before, 'las marcas de antes se quedan');
+  // The rebuilt table also gets the columns added since (snooze, marked as unread, muted until), empty.
+  assert.deepEqual(rows(db).map(({ snoozed_until: snoozed, marked_unread: unread, muted_until: mutedUntil, ...r }) => (assert.equal(snoozed, null), assert.equal(unread, 0), assert.equal(mutedUntil, null), r)), before, 'las marcas de antes se quedan');
   assert.equal(db.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name = 'inbox_items_old'").get().n, 0, 'sin la tabla vieja');
   db.prepare("INSERT INTO inbox_items (person_id, kind, item_id, pinned) VALUES ('p1', 'session', 's1', 1)").run();
   assert.throws(() => db.prepare("INSERT INTO inbox_items (person_id, kind, item_id) VALUES ('p1', 'otra', 'x')").run(), /CHECK/, 'el resto de tipos sigue sin entrar');

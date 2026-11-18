@@ -44,7 +44,7 @@ export function inboxMethods({ board, emit, orchestrator }) {
       const m = marks.get(I.keyOf(kind, id)) ?? I.noMark();
       const last = I.describeLine(lines.get(Number(conversation)) ?? null, { userName: user });
       out.push({ key: I.keyOf(kind, id), kind, id: Number(id), conversation: conversation ?? null, ...base,
-        pinned: m.pinned, pinOrder: m.pinned ? m.pinOrder : null, section: m.section, muted: m.muted, snoozedUntil: m.snoozedUntil,
+        pinned: m.pinned, pinOrder: m.pinned ? m.pinOrder : null, section: m.section, muted: m.muted, mutedUntil: m.mutedUntil, snoozedUntil: m.snoozedUntil,
         lastMessage: last, unread: I.withMarkedUnread(conversation == null ? 0 : unread.get(Number(conversation)) ?? 0, m), markedUnread: m.markedUnread, at: last?.at ?? base.at ?? null });
     };
     const running = new Set(board.all("SELECT DISTINCT conversation_id AS c FROM tasks WHERE conversation_id IS NOT NULL AND status = 'running'").map((r) => r.c));
@@ -60,7 +60,7 @@ export function inboxMethods({ board, emit, orchestrator }) {
       const id = key.slice(8);
       const s = board.one("SELECT id FROM sessions WHERE id = ? AND kind = 'chat' AND trashed_at IS NULL", id);
       if (!s) continue;
-      out.push({ key, kind: 'session', id: s.id, conversation: null, pinned: m.pinned, pinOrder: m.pinned ? m.pinOrder : null, section: m.section, muted: m.muted, snoozedUntil: m.snoozedUntil, lastMessage: null, unread: I.withMarkedUnread(0, m), markedUnread: m.markedUnread, at: null });
+      out.push({ key, kind: 'session', id: s.id, conversation: null, pinned: m.pinned, pinOrder: m.pinned ? m.pinOrder : null, section: m.section, muted: m.muted, mutedUntil: m.mutedUntil, snoozedUntil: m.snoozedUntil, lastMessage: null, unread: I.withMarkedUnread(0, m), markedUnread: m.markedUnread, at: null });
     }
     return out;
   }
@@ -128,7 +128,14 @@ export function inboxMethods({ board, emit, orchestrator }) {
       if (until === undefined) fail(tr('msg.api.invalid', { name: 'until' }));
       const m = I.setMark(board, it.kind, it.id, { snoozedUntil: until }); told(it); return m;
     },
-    'inbox.mute': (p) => { const it = itemOf(p); const m = I.setMark(board, it.kind, it.id, { muted: p.muted !== false }); told(it); return m; },
+    // muted: false lifts it. until (an ISO time, same limits as snooze) ends the mute by itself; without it, it lasts until lifted.
+    'inbox.mute': (p) => {
+      const it = itemOf(p);
+      const muted = p.muted !== false;
+      const until = muted ? I.snoozeUntil(p.until) : null;
+      if (until === undefined) fail(tr('msg.api.invalid', { name: 'until' }));
+      const m = I.setMark(board, it.kind, it.id, { muted, mutedUntil: until }); told(it); return m;
+    },
     // upTo: the last line read (a chat line id; default: the last one).
     'inbox.markRead': (p) => {
       const it = itemOf(p);

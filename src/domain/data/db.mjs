@@ -289,6 +289,8 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   ['inbox_items', 'snoozed_until', 'TEXT'],
   // a chat the user marked as unread by hand (it counts as one unread line until it is read again).
   ['inbox_items', 'marked_unread', 'INTEGER NOT NULL DEFAULT 0'],
+  // a mute that ends at that time (ISO); none = muted until the user lifts it.
+  ['inbox_items', 'muted_until', 'TEXT'],
   // a schedule whose runs all go to one chat (made on its first run, or the one that asked for it).
   ['schedules', 'same_chat', 'INTEGER NOT NULL DEFAULT 0'], ['schedules', 'conversation_id', 'INTEGER'],
   // a schedule's own zone (IANA; none = Orb's), the day of the month of «monthly», the permission level its runs take
