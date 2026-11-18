@@ -130,7 +130,7 @@ test('«Agentes y uso» has the two tabs of the mock-up, kept in memory only', (
   const index = view('settings', 'index.jsx');
   assert.match(index, /<TabsList variant="line"/);
   assert.match(index, /data-testid="agents-tab-tareas"/); assert.match(index, /data-testid="agents-tab-uso"/);
-  assert.match(index, /\{tab === 'tareas' \? <TasksCard c=\{c\} \/> : <ChatCard c=\{c\} \/>\}/);
+  assert.match(index, /\{tab === 'tareas' \? <TasksCard c=\{c\} \/> : <><UsageAccounts c=\{c\} \/><ChatCard c=\{c\} \/><BrakesCard c=\{c\} \/><BrakeRails c=\{c\} \/><\/>\}/);
   assert.match(index, /^let agentsTab = 'tareas';/m);
   assert.doesNotMatch(index, /localStorage/);
   assert.equal(es['settings.tabUsage'], 'Uso y agentes');
