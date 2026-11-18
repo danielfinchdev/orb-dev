@@ -251,13 +251,11 @@ export function TasksCard({ c }) {
           <Row label={t('settings.resumeRestart')} hint={t('settings.resumeRestartHint')}><Switch checked={v.resumeAfterRestart} onCheckedChange={(resumeAfterRestart) => { setV({ ...v, resumeAfterRestart }); save({ continuity: { resumeAfterRestart } }); }} /></Row>
           <Row label={t('settings.resumeReset')} hint={t('settings.resumeResetHint')}><Switch checked={v.resumeAtReset} onCheckedChange={(resumeAtReset) => { setV({ ...v, resumeAtReset }); save({ continuity: { resumeAtReset } }); }} /></Row>
           <Row label={t('settings.delegation')} hint={t('settings.delegationHint')}><Switch checked={v.delegation} onCheckedChange={(delegation) => { setV({ ...v, delegation }); save({ delegation: { enabled: delegation } }); }} /></Row>
-          {/* what the mock-up does not draw, after its rows: the guide of models (the next-message suggestion is under «Más opciones») */}
-          <Stack className="border-border border-t"><ModelGuide auto={c.budget?.autoModel !== false} /></Stack>
         </Panel>
       </Block>
       {bridge.mobile ? null : <TestCard />}
       <MoreOptions fold open={advanced} onOpenChange={setAdvanced} testid="spend-more" triggerTestid="spend-advanced">
-            <Panel className="mt-0"><Row label={t('settings.suggest')} hint={`${t('settings.suggestDesc')}`} info={t('settings.suggestWarn')}><Switch checked={c.suggestNext === true} onCheckedChange={(suggestNext) => save({ suggestNext })} data-testid="suggest-next" /></Row></Panel>
+            <Panel className="mt-0"><Row data-testid="settings-suggest" label={t('settings.suggest')} hint={`${t('settings.suggestDesc')}`} info={t('settings.suggestWarn')}><Switch checked={c.suggestNext === true} onCheckedChange={(suggestNext) => save({ suggestNext })} data-testid="suggest-next" /></Row></Panel>
             <Hint>{t('settings.advancedHint')}</Hint>
             <Panel>
               <Setting label={t('settings.spendFine')} hint={t('settings.spendFineHint')}>
@@ -287,6 +285,8 @@ export function TasksCard({ c }) {
                 <CardFoot><Button size="sm" onClick={saveAdvanced}>{t('settings.save')}</Button></CardFoot>
               </Panel>
             </Block>
+            {/* the guide of models: the mock-up does not draw it, so it lives here with the other settings it does not draw */}
+            <Panel className="mt-0"><Stack><ModelGuide auto={c.budget?.autoModel !== false} /></Stack></Panel>
       </MoreOptions>
     </>
   );

@@ -3,7 +3,7 @@
 // chosen files, `pushFlow`, `syncFlow`), with their own checks and confirmations; switching branch, a new branch and undoing
 // the last unpublished save are the engine's `expert.*` methods, which never discard anything.
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, CloudDownload, CloudUpload, GitBranch, GitCommitHorizontal, Plus, Undo2, CircleCheck } from 'lucide-react';
+import { Check, ChevronDown, CloudDownload, CloudUpload, GitBranch, GitCommitHorizontal, Plus, Undo2, CircleCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Checkbox, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
 import { Field, Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
@@ -233,8 +233,8 @@ export function GitPanel({ project, st, version, reload, onDiff, onHistory, ago 
           </div>
         </div>
       )}
-      <RecentHistory project={project} version={version} ago={ago} onAll={onHistory} />
       <Branches project={project} st={st} dirty={files.length > 0 || Boolean(st.files?.length)} branches={branches} version={version} reload={reload} ago={ago} />
+      <RecentHistory project={project} version={version} ago={ago} onAll={onHistory} />
     </div>
   );
 }
@@ -246,9 +246,9 @@ export function BranchMenu({ project, st, changes, version, reload }) {
   const dirty = Boolean(st?.files?.length) || Boolean(changes?.length);
   return (
     <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild><Button variant="ghost" size="sm" className="min-w-0 shrink" title={t2('expert.git.branches')} data-testid="expert-branch"><GitBranch /><span className="truncate">{st.branch}</span></Button></DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild><Button variant="ghost" size="sm" className="min-w-0 shrink" title={t2('expert.git.branches')} data-testid="expert-branch"><GitBranch /><span className="truncate">{st.branch}</span><ChevronDown className="opacity-60" /></Button></DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-60" data-testid="expert-branch-menu">
-        {(branches ?? []).filter((b) => !b.orb).slice(0, 30).map((b) => <DropdownMenuItem key={b.name} disabled={b.current} onSelect={() => switchFlow(project, b.name, st.branch, dirty, reload)}><GitBranch /><span className="min-w-0 flex-1 truncate font-mono">{b.name}</span>{b.current ? <CircleCheck className="size-3.5" /> : null}</DropdownMenuItem>)}
+        {(branches ?? []).filter((b) => !b.orb).slice(0, 30).map((b) => <DropdownMenuItem key={b.name} aria-current={b.current ? 'true' : undefined} onSelect={() => { if (!b.current) switchFlow(project, b.name, st.branch, dirty, reload); }}><GitBranch /><span className="min-w-0 flex-1 truncate font-mono">{b.name}</span>{b.current ? <Check className="text-primary-text size-3.5" aria-label={t2('expert.git.current')} /> : null}</DropdownMenuItem>)}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => newBranchFlow(project, reload)} data-testid="expert-branch-new"><Plus />{t2('expert.git.newBranch')}</DropdownMenuItem>
       </DropdownMenuContent>

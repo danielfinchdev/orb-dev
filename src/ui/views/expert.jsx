@@ -381,6 +381,9 @@ export function ExpertView() {
   const tab = tabs.find((x) => x.id === current);
   const showRight = RIGHT_PANELS.some(on) || historyAll;
   const running = tasks.find((x) => x.status === 'running' && x.project === project);
+  // every task running in this project; the pill names the newest one (ids only grow).
+  const runningHere = tasks.filter((x) => x.status === 'running' && x.project === project);
+  const newest = runningHere.reduce((a, b) => (b.id > (a?.id ?? -1) ? b : a), null);
   const count = st?.repo ? (st.files.length ? t(st.files.length > 1 ? 'expert.changesOther' : 'expert.changesOne', { n: st.files.length }) : t('expert.clean')) : null;
   const meta = [project, st?.repo ? st.branch : null, count].filter(Boolean).join(' · ');
   const [dir, fileName] = tab ? splitPath(tab.path) : ['', ''];
@@ -410,11 +413,16 @@ export function ExpertView() {
           <span className="text-faint-foreground hidden min-w-0 flex-1 truncate font-mono text-caption @4xl/bar:inline" title={info?.path}>{info?.path}</span>
           <Badge className="shrink-0">{t('nav.expert')}</Badge>
           {st?.repo ? <BranchMenu project={project} st={st} version={version} reload={() => setManual((n) => n + 1)} /> : null}
-          {running ? <Badge variant="info" className="hidden shrink-0 @5xl/bar:inline-flex"><AgentIcon agent={running.assigned_to ?? running.agent} className="size-3" />{t('expert.workingOn', { agent: AGENT[running.assigned_to ?? running.agent] ?? '', id: running.id })}</Badge> : null}
+          {runningHere.length ? (
+            <button type="button" onClick={() => go({ view: 'tasks', id: newest.id })} className="bg-primary-soft text-primary-text hidden h-(--ctl-sm) min-w-0 shrink cursor-pointer items-center gap-1.5 rounded-full px-2.5 text-caption font-medium @4xl/bar:inline-flex" data-testid="expert-agent-pill">
+              <AgentIcon agent={newest.assigned_to ?? newest.agent} className="size-3.5 shrink-0" />
+              <span className="truncate">{t(runningHere.length > 1 ? 'expert.workingOnMore' : 'expert.workingOn', { agent: AGENT[newest.assigned_to ?? newest.agent] ?? '', id: newest.id, n: runningHere.length - 1 })}</span>
+            </button>
+          ) : null}
           <div className="min-w-0 flex-1" />
           {/* the project in an editor, and its actions (commands of the user's own, with their shortcut). */}
           <ActionsMenu project={info} labelClassName="hidden @4xl/bar:inline" onRun={info?.path ? runInTerminal : undefined} />
-          <OpenInMenu project={info} labelClassName="hidden @6xl/bar:inline" />
+          <OpenInMenu project={info} labelClassName="hidden @5xl/bar:inline" />
           <Button variant="outline" size="sm" className="shrink-0" onClick={() => go('chat')} aria-label={t('expert.exit')} title={t('expert.exit')}><LogOut className="@4xl/bar:hidden" /><span className="hidden @4xl/bar:inline">{t('expert.exit')}</span></Button>
         </div>
         <div className="flex min-h-0 flex-1">

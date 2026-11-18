@@ -135,7 +135,7 @@ export function SettingsDialog() {
             <div key={section.id} className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable] pt-[18px] pr-[calc(1.5rem-var(--sb-w))] pb-8 pl-6">
               {/* min-w-0 on the blocks: a long one-line text inside (a path, a wide control) must not widen the column in a narrow window */}
               <div className="grid gap-4 [&>*]:min-w-0">
-                <Block title={t(`settings.section.${section.id}`)} note={t(`settings.sectionDesc.${section.id}`)} />
+                <Block title={section.id === 'extensiones' ? t('ext.title') : t(`settings.section.${section.id}`)} note={t(`settings.sectionDesc.${section.id}`)} />
                 {section.cards(c, app)}
               </div>
             </div>

@@ -6,9 +6,8 @@ import { PRODUCT, AUTHOR } from '../../../shared/product.mjs';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
 import { Select } from '@/components/ui/overlay.jsx';
-import { act, bridge, useStore, robotSkin } from '@/lib/store.js';
+import { act, bridge } from '@/lib/store.js';
 import { notifyInfo } from '@/lib/notify.js';
-import { OrbMark } from '@/components/orb-mark.jsx';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { useUpdate, updateActions, notesUrl } from '@/components/update-card.jsx';
@@ -68,7 +67,7 @@ export function FeedbackCard() {
     <Block title={t('contribute.feedbackTitle')} note={t('contribute.feedbackDesc')}>
       <Panel>
         <Setting label={t('contribute.type')}><Select caret="solid" value={v.type} onValueChange={(type) => setV({ ...v, type })} title={t('contribute.type')} options={FEEDBACK_TYPES.map((value) => ({ value, label: t(`contribute.type.${value}`) }))} /></Setting>
-        <Fld label={t('contribute.message')}><Textarea ref={messageRef} rows={3} className="h-[72px] resize-y" maxLength={5000} value={v.message} placeholder={t('contribute.messagePh')} onChange={(e) => setV({ ...v, message: e.target.value })} data-testid="feedback-message" /></Fld>
+        <Fld label={t('contribute.message')}><Textarea ref={messageRef} rows={3} className="field-sizing-fixed h-[74px] min-h-[74px] resize-y" maxLength={5000} value={v.message} placeholder={t('contribute.messagePh')} onChange={(e) => setV({ ...v, message: e.target.value })} data-testid="feedback-message" /></Fld>
         <Fld label={t('contribute.contact')} hint={t('contribute.contactHint')}><Input type="email" value={v.contact} maxLength={120} placeholder={t('contribute.contactPh')} onChange={(e) => setV({ ...v, contact: e.target.value })} /></Fld>
         <Stack className="border-border border-t">
           <div className="flex flex-wrap items-center gap-2">
@@ -121,12 +120,11 @@ const MUSIC_CREDITS = Object.values(TRACKS);
 // «Acerca de»: the version, the developer's GitHub and the licence (also at the foot of the sections list).
 export function AboutCard({ version }) {
   const t = useT();
-  const plain = !robotSkin(useStore((s) => s.app?.config?.ui?.skin));
   const st = useUpdate();
   return (
     <Block title={PRODUCT.name} note={t('about.tagline')} data-testid="settings-about">
       <Panel className="[&>details]:border-border [&>details]:border-t [&>details]:px-3.5 [&>details]:py-3">
-        <Setting label={<span className="flex items-center gap-2">{plain ? <span className="shrink-0" data-testid="about-icon"><OrbMark size={20} /></span> : <img src="./icon-o.png" alt="" className="size-5 shrink-0 rounded-[22%]" data-testid="about-icon" />}{t('about.version')}</span>} hint={t('about.installed', { version })}>
+        <Setting label={t('about.version')} hint={t('about.installed', { version })}>
           {st?.state === 'none' ? <Badge variant="success">{t('about.upToDate')}</Badge> : null}
         </Setting>
         <Setting label={t('about.developer')}>

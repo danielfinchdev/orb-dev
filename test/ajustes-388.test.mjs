@@ -87,7 +87,7 @@ test('the shared pieces (Range, Select, Switch) and no control of the system', (
 });
 
 test('every test id of before is still there', () => {
-  const ids = ['about-github', 'about-icon', 'about-music', 'about-music-adaptive', 'android-card', 'android-emulators', 'android-pair', 'android-pair-address', 'android-pair-code', 'android-pair-manual', 'android-pair-qr', 'android-pair-state', 'android-phones',
+  const ids = ['about-github', 'about-music', 'about-music-adaptive', 'android-card', 'android-emulators', 'android-pair', 'android-pair-address', 'android-pair-code', 'android-pair-manual', 'android-pair-qr', 'android-pair-state', 'android-phones',
     'approval-wait', 'approval-wait-save', 'auto-model', 'backup-code', 'backup-folder', 'backup-folder-change', 'backup-last', 'backup-list', 'backup-now', 'backups-card', 'connector-keys', 'contribute-paypal', 'core-card', 'core-open', 'dev-tool', 'dev-tools',
     'expert-switch', 'ext-adopt', 'ext-approve', 'ext-editing', 'ext-files', 'ext-files-more', 'ext-import', 'ext-menu', 'ext-note', 'ext-pending', 'ext-project', 'ext-reject', 'ext-toggle', 'extensions',
     'feedback-capture', 'feedback-message', 'feedback-send', 'legacy-backups', 'legacy-card', 'legacy-delete', 'legacy-keys', 'link-again', 'link-device', 'link-devices', 'link-make', 'link-pair', 'link-pair-dialog', 'link-qr', 'link-relink', 'link-revoke', 'magic-link',

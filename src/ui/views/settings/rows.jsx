@@ -22,8 +22,8 @@ export async function save(patch, ok = t('settings.saved'), unlock = null) {
 export const num = (v) => Number(v) || 0;
 // The whole row is the switch's label: clicking its text toggles it too (the switch alone is a small target).
 // info: the details that do not fit in the hint, behind an «ⓘ» next to the label.
-export function Row({ label, hint, info, children, className }) {
-  return <label className={cn('hover:bg-accent/40 border-border flex cursor-pointer items-center justify-between gap-4 px-3.5 py-3 not-first:border-t', className)}><div className="flex min-w-0 flex-col gap-0.5"><div className="flex items-center gap-1.5 text-control leading-[1.45] font-medium">{label}{info ? <InfoTip text={info} /> : null}</div>{hint ? <div className="text-muted-foreground text-caption leading-[1.45]">{hint}</div> : null}</div><div className="flex flex-none items-center gap-1.5">{children}</div></label>;
+export function Row({ label, hint, info, children, className, ...props }) {
+  return <label {...props} className={cn('hover:bg-accent/40 border-border flex cursor-pointer items-center justify-between gap-4 px-3.5 py-3 not-first:border-t', className)}><div className="flex min-w-0 flex-col gap-0.5"><div className="flex items-center gap-1.5 text-control leading-[1.45] font-medium">{label}{info ? <InfoTip text={info} /> : null}</div>{hint ? <div className="text-muted-foreground text-caption leading-[1.45]">{hint}</div> : null}</div><div className="flex flex-none items-center gap-1.5">{children}</div></label>;
 }
 // The vocabulary of every section of Ajustes, as the mock-up draws it. Block: a heading (.sec-h) with its note and, under
 // them, a panel; its own flow keeps the 16 px between heading, note and panel.

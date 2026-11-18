@@ -90,6 +90,7 @@ export default {
   'expert.encoding.utf8bom': 'UTF-8 con BOM',
   'expert.encoding.unknown': 'No es UTF-8',
   'expert.nLines': '{n} líneas',
+  'expert.workingOnMore': '{agent} trabajando en #{id} y {n} más',
   'expert.workingOn': '{agent} trabajando en #{id}',
   'expert.openFiles': 'Archivos abiertos',
   // God mode: abrir en y acciones
