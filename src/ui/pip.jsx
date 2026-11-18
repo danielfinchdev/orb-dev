@@ -11,6 +11,7 @@ import { IconButton } from '@/components/ui/primitives.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { cn } from '@/lib/utils.js';
 import { createT } from '../shared/i18n.mjs';
+import { APPEARANCE_DEFAULTS } from '../shared/appearance.mjs';
 
 const host = (url) => { try { return new URL(url).host; } catch { return url; } };
 // where a click fell on the page's picture (shown with object-contain), as fractions of the picture
@@ -103,5 +104,9 @@ function Pip() {
     </div>
   );
 }
+
+// This window never gets the saved appearance: without these attributes the text falls back to the title face.
+document.documentElement.dataset.font ??= APPEARANCE_DEFAULTS.font;
+document.documentElement.dataset.codeFont ??= APPEARANCE_DEFAULTS.codeFont;
 
 createRoot(document.getElementById('root')).render(<StrictMode><Pip /></StrictMode>);

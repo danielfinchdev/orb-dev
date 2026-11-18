@@ -62,7 +62,8 @@ fn window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     .maximizable(false)
     .focused(false)
     .visible(false)
-    .background_color(tauri::window::Color(0x11, 0x13, 0x1c, 255))
+    // --background of the default theme in .dark (tokens.css, oklch(0.164 0 0) = rgb(14, 14, 14)).
+    .background_color(tauri::window::Color(14, 14, 14, 255))
     .data_directory(pip.webview_data.clone())
     .additional_browser_args(&pip.args)
     .zoom_hotkeys_enabled(false)
@@ -79,10 +80,31 @@ fn window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     })
     .build()?;
   crate::webview::setup(&window);
+  round_corners(&window);
   if let Some((pos, _)) = corner(app, w, h) {
     let _ = window.set_position(pos);
   }
   Ok(window)
+}
+
+/// An undecorated window gets square corners from Windows 11; ask for the round ones.
+/// Windows 10 rejects the attribute and the call is ignored.
+fn round_corners(w: &WebviewWindow) {
+  #[cfg(windows)]
+  if let Ok(hwnd) = w.hwnd() {
+    use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND};
+    let pref = DWMWCP_ROUND;
+    unsafe {
+      let _ = DwmSetWindowAttribute(
+        windows::Win32::Foundation::HWND(hwnd.0),
+        DWMWA_WINDOW_CORNER_PREFERENCE,
+        &pref as *const _ as *const core::ffi::c_void,
+        std::mem::size_of_val(&pref) as u32,
+      );
+    }
+  }
+  #[cfg(not(windows))]
+  let _ = w;
 }
 
 /// Shown without taking the focus from whatever the user is doing.
