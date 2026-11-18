@@ -314,6 +314,8 @@ try {
           await page.click('[data-testid=setup-skin-predeterminado]', { timeout: 4000 }); await page.waitForTimeout(400);
         } catch (error) { note(`bienvenida: no se pudo marcar otro tema (${String(error?.message ?? error).split(String.fromCharCode(10))[0]})`); }
       }
+      // «Prepara tu equipo» checks the programs first: the picture waits for its list (and for the check to end)
+      if (name === 'prepare') { await page.locator('[data-testid=install-list]').first().waitFor({ timeout: 20000 }).catch(() => note('bienvenida: «Prepara tu equipo» sin lista a los 20 s')); await page.waitForTimeout(800); }
       await shot(screens[name]); await darkShot(screens[name]);
       // «Crea tu contraseña maestra» with both fields written (a made-up example, cleared again so throughStart fills them as before)
       if (name === 'master') {
@@ -741,10 +743,18 @@ try {
     } catch (error) { noteOnce(`Proyectos: el recorrido se cortó (${String(error?.message ?? error).split('\n')[0]})`); await closeMenus(); }
   };
   // The whiteboard with its attachments and the new-schedule dialog, after the projects. Only opens and cancels.
+  let wbSeeded = false;
   const projectShots = async (prefix) => {
     if (!seeded) return;
     await projectPageShots(prefix);
     try {
+      // Two attachments (copies of two files of the test project, kept in its own «pizarra» folder) so the panel has rows.
+      // Before the view opens: the whiteboard reads them when it mounts. Once per profile.
+      if (dirs?.['tienda-web'] && !wbSeeded) {
+        wbSeeded = true;
+        const r = await call('whiteboard.attach', { project: 'tienda-web', paths: [path.join(dirs['tienda-web'], 'README.md'), path.join(dirs['tienda-web'], 'src', 'importar.js')] }).catch((error) => { noteOnce(`Pizarra: no se pudieron adjuntar los dos archivos de ejemplo (${String(error?.message ?? error).split(String.fromCharCode(10))[0]})`); return null; });
+        if (r) note(`Pizarra: adjuntos de ejemplo → ${JSON.stringify(r).slice(0, 160)}`);
+      }
       if (await tap('nav-board', 'Pizarra')) {
         await page.waitForTimeout(500); await shot(`${prefix}-pizarra-sin-proyecto`);
         // The whiteboard belongs to the active project: one is chosen for the shots and the choice is undone afterwards.
@@ -753,9 +763,6 @@ try {
         await page.waitForTimeout(1500);
         if (await page.locator('[data-testid=whiteboard-toggle-panel]').count()) { await tap('whiteboard-toggle-panel', 'cerrar el panel de adjuntos de la pizarra'); await page.waitForTimeout(300); }
         await shot(`${prefix}-pizarra`);
-        // two attachments (copies of two files of the test project, kept in its own «pizarra» folder) so the panel has rows
-        if (dirs?.['tienda-web']) await call('whiteboard.attach', { project: 'tienda-web', paths: [path.join(dirs['tienda-web'], 'README.md'), path.join(dirs['tienda-web'], 'src', 'importar.js')] }).catch(() => noteOnce('Pizarra: no se pudieron adjuntar los dos archivos de ejemplo'));
-        await page.waitForTimeout(600);
         if (await page.locator('[data-testid=whiteboard-show-panel]').count()) { await tap('whiteboard-show-panel', 'panel de adjuntos de la pizarra'); await page.waitForTimeout(300); }
         if (await page.locator('[data-testid=whiteboard-panel]').count()) await shot(`${prefix}-pizarra-adjuntos`); else noteOnce('Pizarra: no hay panel de adjuntos con un proyecto elegido');
         if (await tap('whiteboard-more', '⋯ de la pizarra')) { await shot(`${prefix}-pizarra-adjuntos-menu`); await closeMenus(); }
@@ -1194,6 +1201,7 @@ try {
     const screen = page.locator('[data-testid=master-locked]');
     if (!(await screen.waitFor({ timeout: 8000 }).then(() => true, () => false))) { noteOnce('bloqueo: no salió la pantalla de bloqueo'); await closeMenus(); return; }
     await shot(`${prefix}-bloqueo`);
+    noteOnce(`bloqueo: tarjeta ${await page.evaluate(() => { const c = document.querySelector('[data-testid=master-locked]'); if (!c) return 'no encontrada'; const r = c.getBoundingClientRect(); const kids = [...c.children].map((k) => Math.round(k.getBoundingClientRect().height * 10) / 10).join(', '); return `${Math.round(r.width * 10) / 10} × ${Math.round(r.height * 10) / 10} (maqueta 440 × 315,6) · hijos: ${kids}`; }).catch(() => 'sin medir')}`);
     try {
       await page.fill('[data-testid=master-password]', 'no-es-esta');
       await page.press('[data-testid=master-password]', 'Enter');
