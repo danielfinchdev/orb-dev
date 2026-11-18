@@ -128,7 +128,7 @@ export function validateConfig(c) {
   }
   // continue tasks after a restart / at the reset, and delegation between agents (orb_delegate).
   const bool = (v, name) => { if (v !== undefined && typeof v !== 'boolean') throw new Error(tr('msg.ctx.boolean', { name })); };
-  bool(c.continuity?.resumeAfterRestart, 'continuity.resumeAfterRestart'); bool(c.continuity?.resumeAtReset, 'continuity.resumeAtReset');
+  bool(c.continuity?.resumeAfterRestart, 'continuity.resumeAfterRestart'); bool(c.continuity?.resumeAtReset, 'continuity.resumeAtReset'); bool(c.continuity?.switchAccount, 'continuity.switchAccount');
   bool(c.suggestNext, 'suggestNext');
   bool(c.delegation?.enabled, 'delegation.enabled'); bool(c.delegation?.trusted, 'delegation.trusted');
   // the background music (Windows; src/ui/lib/music.js) and the games' own music (gameMusic: false = muted).
@@ -169,6 +169,8 @@ export function validateConfig(c) {
   if (c.permissions !== undefined && (!c.permissions || typeof c.permissions !== 'object' || Array.isArray(c.permissions) || !['auto', 'preguntar'].includes(c.permissions.mode))) throw new Error(tr('msg.ctx.badAppearance', { name: 'permissions' }));
   if (c.budget?.stopAt != null && !(Number(c.budget.stopAt) >= 0.5 && Number(c.budget.stopAt) <= 1)) throw new Error(tr('msg.ctx.stopAt'));
   if (c.budget?.weeklyStopAt != null && !(Number(c.budget.weeklyStopAt) >= 0.5 && Number(c.budget.weeklyStopAt) <= 1)) throw new Error(tr('msg.ctx.weeklyStopAt'));
+  // The heads-up level (0 = none): not a rail value, since it only tells and never stops or loosens anything.
+  if (c.budget?.warnAt != null && !(Number(c.budget.warnAt) === 0 || (Number(c.budget.warnAt) >= 0.5 && Number(c.budget.warnAt) <= 1))) throw new Error(tr('msg.ctx.warnAt'));
   if (c.budget?.maxFixRounds != null) int(c.budget.maxFixRounds, 0, 10, 'budget.maxFixRounds');
   // Only rails with a switch can be set (a core rail never has one).
   if (c.rails !== undefined) {

@@ -87,7 +87,8 @@ export const DEFAULT_CONFIG = Object.freeze({
   // Task Review: another model (another provider when there is one) audits finished work read-only and gives a verdict.
   review: { auto: false },
   // interrupted tasks continue when the app opens again; tasks stopped by a usage limit continue at the reset.
-  continuity: { resumeAfterRestart: true, resumeAtReset: true },
+  // switchAccount: at its limit an agent passes its work to its next account (off: the task waits for the first one).
+  continuity: { resumeAfterRestart: true, resumeAtReset: true, switchAccount: true },
   // agents may hand subtasks to other agents (orb_delegate). trusted: subtasks without risk words go straight to the
   // queue (instead of waiting for approval), up to maxPerTask per task.
   delegation: { enabled: true, trusted: true, maxPerTask: 4 },

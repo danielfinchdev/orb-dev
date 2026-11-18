@@ -13,7 +13,8 @@ import { AGENT_IDS } from '../../platform/config-file.mjs';
 import { CATEGORIES } from '../../platform/paths.mjs';
 import { accountsOf, accountDir } from '../../domain/usage/accounts.mjs';
 import { usageReport, usageHistory, modelName } from '../../domain/usage/budget.mjs';
-import { syncProjects } from '../../domain/projects/projects.mjs';
+import { syncProjects, projectHasWork } from '../../domain/projects/projects.mjs';
+import { guardedCore } from '../desktop-home.mjs';
 import { PRODUCT } from '../../shared/product.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { redactSecrets } from '../../shared/secrets-scan.mjs';
@@ -363,6 +364,14 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     // The palette's Ctrl+P and Ctrl+Shift+F (PC only): a file or a text of the project (rg when this PC has it).
     'projects.findFiles': async ({ project: name, q }) => (await finder()).findFiles(project(name).path, str(q, 'búsqueda', 200, { optional: true })),
     'projects.searchText': async ({ project: name, q }) => (await finder()).searchText(project(name).path, str(q, 'búsqueda', 200, { optional: true })),
+    // «Nuevo archivo» (window only): an empty file, never over an existing one, in a folder of a registered project that is
+    // not core and has nothing working in it (a task's before/after snapshot would take the file as the task's own).
+    'expert.createFile': async ({ project: name, dir, name: fileName }) => {
+      const p = project(name);
+      if (guardedCore(ctx.home, p.path)) fail(tr('msg.expert.createCore'));
+      if (scheduler.held(p.name) || coordinatorBusy(p.name) || projectHasWork(board, p.name)) fail(tr('msg.expert.createBusy', { name: p.name }));
+      return (await exp()).createFile(p.path, str(dir, 'carpeta', 1000, { optional: true }), str(fileName, 'nombre', 200));
+    },
     'expert.status': async ({ project: name }) => (await exp()).gitStatus(project(name).path),
     'expert.diff': async ({ project: name, path: file }) => (await exp()).gitDiff(project(name).path, str(file, 'archivo', 1000, { optional: true })),
     'expert.log': async ({ project: name, limit }) => (await exp()).gitLog(project(name).path, limit),

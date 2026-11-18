@@ -25,7 +25,7 @@ export const METHODS = Object.freeze({
   'keys.get': 'pc', 'keys.save': 'pc', 'app.openTerminal': 'pc', 'app.editors': 'pc', 'app.openIn': 'pc', 'app.openFileIn': 'pc', 'app.runAction': 'pc', 'app.feedbackSend': 'pc', 'app.moreApps': 'pc',
   // the Windows app's music (src/engine/host/music.mjs)
   'music.track': 'pc',
-  'system.check': 'pc', 'installer.check': 'pc', 'installer.progress': 'pc', 'installer.start': 'pc',
+  'system.check': 'pc', 'installer.check': 'pc', 'installer.progress': 'pc', 'installer.start': 'pc', 'installer.devTools': 'pc',
   'activity.list': 'remote', 'activity.report': 'remote', 'usage.get': 'remote', 'usage.now': 'remote', 'usage.refresh': 'remote', 'usage.history': 'remote', 'models.guide': 'remote', 'models.catalog': 'remote',
   'mentions.options': 'remote', 'approvals.list': 'remote',
   // this PC's tools
@@ -35,7 +35,7 @@ export const METHODS = Object.freeze({
   // an Android emulator already installed on this PC
   'android.emulators': 'pc', 'android.emulatorStart': 'pc', 'devtools.check': 'pc',
   'github.status': 'pc', 'github.contributions': 'pc', 'github.login': 'pc',
-  'expert.tree': 'pc', 'projects.findFiles': 'pc', 'projects.searchText': 'pc', 'expert.read': 'pc', 'expert.status': 'pc', 'expert.diff': 'pc', 'expert.log': 'pc', 'expert.system': 'pc',
+  'expert.tree': 'pc', 'projects.findFiles': 'pc', 'projects.searchText': 'pc', 'expert.read': 'pc', 'expert.status': 'pc', 'expert.diff': 'pc', 'expert.log': 'pc', 'expert.system': 'pc', 'expert.createFile': 'pc',
   'actions.list': 'pc', 'actions.save': 'pc', 'actions.remove': 'pc',
   'images.read': 'pc', 'images.mark': 'pc', 'images.save': 'pc', 'attachments.read': 'pc',
   // conversations with the assistant
@@ -76,7 +76,7 @@ export const METHODS = Object.freeze({
   // agents and their accounts
   'agents.status': 'remote', 'agents.check': 'pc', 'agents.login': 'pc', 'agents.loginCode': 'pc', 'agents.loginCancel': 'pc',
   'agents.loginState': 'pc', 'agents.install': 'pc', 'agents.installState': 'pc',
-  'accounts.add': 'pc', 'accounts.scan': 'pc', 'accounts.update': 'pc', 'accounts.remove': 'pc', 'accounts.clearCooldown': 'pc',
+  'accounts.add': 'pc', 'accounts.scan': 'pc', 'accounts.update': 'pc', 'accounts.remove': 'pc', 'accounts.clearCooldown': 'pc', 'accounts.logout': 'pc', 'agents.checkUpdates': 'pc',
   // backups
   'backup.status': 'pc', 'backup.list': 'pc', 'backup.now': 'pc', 'backup.verify': 'pc', 'backup.restore': 'pc', 'backup.recovery': 'pc', 'backup.previousKey': 'pc', 'legacy.status': 'pc', 'legacy.delete': 'pc',
   // the master password and the connectors' keys

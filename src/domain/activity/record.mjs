@@ -27,6 +27,8 @@ export function recordUserCall({ board, method, params, out, principal, snap }) 
     switch (method) {
       case 'chat.send':
         logUserAction({ kind: 'chat.message', text: tag(principal, String(p.text ?? '').slice(0, 200)), project: p.project || null }); break;
+      case 'expert.createFile':
+        logUserAction({ kind: 'file.create', text: tag(principal, `created ${String(out?.path ?? '').slice(0, 300)}`), project: p.project || null }); break;
       case 'tasks.approve': {
         const t = board.task?.(Number(p.id));
         logUserAction({ kind: 'approval.decision', text: tag(principal, `task #${p.id} ${p.decision === 'approved' ? 'approved' : 'rejected'}`), project: t?.project ?? null }); break;

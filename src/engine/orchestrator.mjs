@@ -600,6 +600,14 @@ export class Orchestrator {
   forget(id) { this.lane(id).forget(); }
   clear(id) { if (!this.board.conversation(id)) throw new Error(tr('msg.board.noConversation')); return this.lane(id).clear(); }
   closeLive() { for (const l of this.lanes.values()) l.closeLive(); }
+  // The assistant's processes on this account: false, and nothing closed, if one of its conversations is working; otherwise
+  // the resting ones are closed.
+  releaseAccount(accountId) {
+    const mine = [...this.lanes.values()].filter((l) => l.live && !l.live.isClosed?.() && l.liveAccount === accountId);
+    if (mine.some((l) => l.busy || l.inflight)) return false;
+    for (const l of mine) l.closeLive();
+    return true;
+  }
   // A conversation deleted for good: the copies of what was attached to it go too (they may be private, and the next
   // conversation could be given the same number).
   forgetAttachments(id) {

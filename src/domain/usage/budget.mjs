@@ -10,11 +10,12 @@ import { ctx, tr } from '../../platform/context.mjs';
 import { localeOf } from '../../shared/i18n.mjs';
 import { localDay, ownerTz } from '../../shared/tz.mjs';
 import { isRailOn } from '../rules/rails.mjs';
-import { account as findAccount, accounts, accountsOf, usableAccounts } from './accounts.mjs';
+import { account as findAccount, accounts, accountsOf, usableAccounts, signedOut } from './accounts.mjs';
 
 export const budgetConfig = () => {
   const b = ctx.config?.budget ?? {};
-  return { windowHours: b.windowHours ?? 5, stopAt: b.stopAt ?? 0.92, weeklyStopAt: b.weeklyStopAt ?? 0.85, agents: b.agents ?? {} };
+  // warnAt: a heads-up only (0 = none); it never stops or loosens anything.
+  return { windowHours: b.windowHours ?? 5, stopAt: b.stopAt ?? 0.92, weeklyStopAt: b.weeklyStopAt ?? 0.85, warnAt: Number(b.warnAt) > 0 ? Number(b.warnAt) : 0, agents: b.agents ?? {} };
 };
 // Limits of an account: its own entry in budget.agents, else its agent's, else the defaults.
 const agentOf = (id) => findAccount(id)?.agent ?? id;
@@ -126,11 +127,32 @@ export function recordRate(board, id, rate) {
     all[String(rate.window).slice(0, 40)] = { utilization: rate.utilization, resetAt: rate.resetAt ?? null, status: rate.status ?? null, at: Date.now() };
     board.settingJson(`rates:${id}`, all);
   }
+  try { warnNear(board, id, rate); } catch { /* a heads-up never breaks the recording of the usage */ }
   if (rate.status === 'rejected' && rate.resetAt) { board.setting(`cooldown:${id}`, String(rate.resetAt)); board.setting(`cooldown_reason:${id}`, ''); board.setting(`cooldown_at:${id}`, String(Date.now())); }
   // A window of one model only (the weekly one of Opus, Fable…) does not stop the whole account: only the panel shows it.
   if (/^seven_day_/.test(String(rate.window ?? ''))) return;
   if (prev.utilization != null && rate.utilization != null && prev.window !== rate.window && prev.utilization > rate.utilization && prev.resetAt > Date.now()) return;
   board.settingJson(`rate:${id}`, next);
+}
+// «Avisarme al llegar al (%)»: one notice per usage window and account when the real usage crosses budget.warnAt, until the
+// window renews (the marker is the window's reset time). It only tells: nothing is paused and the brakes are not touched.
+// Only the 5-hour and the whole-account weekly windows count, and only while the brake of that window is still ahead.
+function warnNear(board, id, rate) {
+  const warn = budgetConfig().warnAt;
+  if (!warn || rate.utilization == null || !rate.window) return;
+  const minutes = windowMinutes(rate.window);
+  const five = minutes === 300; const week = minutes === 10080 && !/^seven_day_/.test(String(rate.window));
+  if (!five && !week) return;
+  const brake = five ? budgetConfig().stopAt : budgetConfig().weeklyStopAt;
+  const key = `warned:${id}:${five ? '5h' : 'week'}`;
+  const mark = String(rate.resetAt ?? 'none');
+  const had = board.setting(key);
+  if (rate.utilization < warn) { if (mark === 'none' && had === mark) board.setting(key, ''); return; }
+  // A reading without a reset time inside a window already marked with its date is the same window: the mark keeps its
+  // date and there is no second notice.
+  if (warn >= brake || rate.utilization >= brake || had === mark || (mark === 'none' && had)) return;
+  board.setting(key, mark);
+  board.notice?.(tr('msg.budget.warnAt', { name: nameOf(id), pct: Math.round(rate.utilization * 100), window: five ? tr('msg.budget.warnWindow', { h: budgetConfig().windowHours }) : tr('msg.budget.warnWeek'), stop: Math.round(brake * 100) }), 'warning');
 }
 // The windows an account reported that are still running, the shortest first (session before weekly).
 const windowMinutes = (w) => { const m = String(w).match(/(\d+)\s*min/); if (m) return Number(m[1]); if (/five_hour|5h/i.test(w)) return 300; if (/seven_day|week/i.test(w)) return 10080 + (/opus|sonnet|fable|model/i.test(w) ? 1 : 0); return 100000; };
@@ -196,10 +218,19 @@ export function canLaunch(board, id, model) {
 }
 
 // Order candidate accounts ([{ id, agent }]) by how much of their window they have used (least used first).
+// continuity.switchAccount off means «at its limit, wait instead of moving to another account»: the order is the same least-used
+// one as with it on while no account is at its limit; when the account that would take the work (the first of its agent in
+// that order) cannot launch, only that one is returned, so the task waits for it. A task that already ran on an account
+// keeps to it too (scheduler/index.mjs). On (default): every account stays a candidate, as it always was.
 export function rankAccounts(board, candidates, model) {
-  return candidates
+  const stay = ctx.config?.continuity?.switchAccount === false;
+  const ranked = candidates
     .map((acc, index) => ({ account: acc.id, agent: acc.agent, index, check: canLaunch(board, acc.id, model), used: realRate(board, acc.id)?.utilization ?? windowUsage(board, acc.id).tasks / Math.max(1, rules(acc.id, board).maxTasks) }))
     .sort((a, b) => a.used - b.used || a.index - b.index);
+  if (!stay) return ranked;
+  const first = new Map();
+  for (const r of ranked) if (!first.has(r.agent)) first.set(r.agent, r);
+  return ranked.filter((r) => first.get(r.agent).check.ok || first.get(r.agent) === r);
 }
 
 export function usageReport(board) {
@@ -273,7 +304,7 @@ export function pauseAccount(board, id, ms, reason) {
 // its first one even if turned off.
 export function pickAccount(board, { agent, preferred = null } = {}) {
   const chosen = preferred ? findAccount(preferred) : null;
-  if (chosen && chosen.agent === agent) return chosen;
+  if (chosen && chosen.agent === agent && !signedOut(chosen)) return chosen;
   return usableAccounts(agent)[0] ?? accountsOf(agent)[0] ?? null;
 }
 
@@ -285,9 +316,9 @@ export function recordSpend(board, { account = null, conversation = null, sessio
   const u = usage ?? {};
   const n = (v) => (v != null && Number.isFinite(Number(v)) ? Number(v) : null);
   try {
-    board.run('INSERT INTO usage_ledger (at, day, account_id, conversation_id, session_id, task_id, turns, tokens_in, tokens_out, usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    board.run('INSERT INTO usage_ledger (at, day, account_id, conversation_id, session_id, task_id, turns, tokens_in, tokens_out, usd, tokens_cache) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       at.toISOString(), day, account, conversation == null ? null : Number(conversation), session == null ? null : String(session), task == null ? null : Number(task),
-      n(u.userTurns) ?? 1, n(u.tokens_in ?? u.input_tokens ?? u.inputTokens), n(u.tokens_out ?? u.output_tokens ?? u.outputTokens), n(u.usd ?? u.cost_usd ?? u.costUsd));
+      n(u.userTurns) ?? 1, n(u.tokens_in ?? u.input_tokens ?? u.inputTokens), n(u.tokens_out ?? u.output_tokens ?? u.outputTokens), n(u.usd ?? u.cost_usd ?? u.costUsd), n(u.tokens_cache ?? u.cacheReadTokens ?? u.cache_read_tokens ?? u.cache_read_input_tokens));
   } catch { /* a database before 3.6 */ }
   return { day };
 }
@@ -301,7 +332,7 @@ export function usageHistory(board, { days = 30, now = new Date() } = {}) {
   const [y, m, d] = localDay(now, tz).split('-').map(Number);
   const list = Array.from({ length: days }, (_, i) => new Date(Date.UTC(y, m - 1, d - (days - 1 - i))).toISOString().slice(0, 10));
   const agentOf = new Map(accounts().map((a) => [a.id, a.agent]));
-  const rows = board.all(`SELECT u.day, u.account_id AS account, u.turns, u.tokens_in AS tin, u.tokens_out AS tout, u.usd,
+  const rows = board.all(`SELECT u.day, u.account_id AS account, u.turns, u.tokens_in AS tin, u.tokens_out AS tout, u.tokens_cache AS tcache, u.usd,
       COALESCE(s.agent, t.assigned_to, t.agent, c.agent) AS agent, COALESCE(s.model, t.model, c.model) AS model
     FROM usage_ledger u LEFT JOIN sessions s ON s.id = u.session_id LEFT JOIN tasks t ON t.id = u.task_id LEFT JOIN conversations c ON c.id = u.conversation_id
     WHERE u.day >= ? AND u.day <= ?`, list[0], list.at(-1));
@@ -309,13 +340,19 @@ export function usageHistory(board, { days = 30, now = new Date() } = {}) {
   const add = (into, r) => { into.usd += r.usd ?? 0; into.tokensIn += r.tin ?? 0; into.tokensOut += r.tout ?? 0; into.turns += r.turns ?? 0; return into; };
   const byDay = new Map(list.map((d) => [d, { day: d, ...zero() }]));
   const byAgent = new Map(); const byModel = new Map(); const total = zero();
+  // Added next to the rest, not inside it: tokens read from the cache (when the agent says) and each day by agent, for the
+  // stacked bars of the usage page. The shapes above stay as they were for the linked phone.
+  const cache = { total: 0, days: new Map(list.map((d) => [d, { day: d, tokensCache: 0, agents: {} }])) };
   for (const r of rows) {
     const agent = agentOf.get(r.account) ?? r.agent ?? 'claude';
+    const day = cache.days.get(r.day);
+    if (day) { const a = (day.agents[agent] ??= { tokensIn: 0, tokensOut: 0, tokensCache: 0, usd: 0, turns: 0 }); a.tokensIn += r.tin ?? 0; a.tokensOut += r.tout ?? 0; a.tokensCache += r.tcache ?? 0; a.usd += r.usd ?? 0; a.turns += r.turns ?? 0; day.tokensCache += r.tcache ?? 0; }
+    cache.total += r.tcache ?? 0;
     add(total, r); add(byDay.get(r.day) ?? { ...zero() }, r);
     add(byAgent.get(agent) ?? byAgent.set(agent, { agent, ...zero() }).get(agent), r);
     const key = `${agent}\0${r.model ?? ''}`;
     add(byModel.get(key) ?? byModel.set(key, { agent, model: r.model ?? null, account: r.account ?? null, ...zero() }).get(key), r);
   }
   const most = (a, b) => b.usd - a.usd || (b.tokensIn + b.tokensOut) - (a.tokensIn + a.tokensOut);
-  return { from: list[0], to: list.at(-1), days: [...byDay.values()], agents: [...byAgent.values()].sort(most), models: [...byModel.values()].sort(most), total };
+  return { from: list[0], to: list.at(-1), days: [...byDay.values()], agents: [...byAgent.values()].sort(most), models: [...byModel.values()].sort(most), total, tokensCache: cache.total, byDay: [...cache.days.values()] };
 }

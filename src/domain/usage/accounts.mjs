@@ -16,7 +16,10 @@ export const account = (id) => accounts().find((a) => a.id === id) ?? null;
 export const accountsOf = (agent) => accounts().filter((a) => a.agent === agent);
 // Accounts that can take work: the account and its agent are enabled.
 // an account whose own folder is gone (moved, renamed, deleted) gets no work: the agent would fail on every task.
-export const usableAccounts = (agent) => accountsOf(agent).filter((a) => a.enabled !== false && ctx.config.agents[agent]?.enabled && (!a.home || fs.existsSync(a.home)));
+// An account Orb manages itself (its folder inside Orb's "cuentas") whose login file is gone (after «Cerrar sesión») takes no
+// work either; it comes back by itself when the user signs in again. The default account and folders the user chose keep
+// their "unknown" state: Orb cannot tell there.
+export const usableAccounts = (agent) => accountsOf(agent).filter((a) => a.enabled !== false && ctx.config.agents[agent]?.enabled && (!a.home || fs.existsSync(a.home)) && !signedOut(a));
 
 // The folder where the CLI keeps this account's login.
 export function accountDir(acc) {
@@ -38,6 +41,7 @@ export function accountEnv(acc) {
 
 export function loginState(acc) {
   const dir = accountDir(acc);
+  if (signedOut(acc)) return 'no';
   if (acc.agent === 'claude') return fs.existsSync(path.join(dir, '.credentials.json')) ? 'si' : fs.existsSync(dir) ? 'desconocido' : 'no';
   if (acc.agent === 'codex') return fs.existsSync(path.join(dir, 'auth.json')) ? 'si' : 'no';
   return fs.existsSync(dir) ? 'desconocido' : 'no';
@@ -86,4 +90,54 @@ export function newAccountId(agent, usedBefore = []) {
   const used = new Set([...accounts().map((a) => a.id), ...usedBefore]);
   let n = 2; while (used.has(`${agent}-${n}`)) n++;
   return `${agent}-${n}`;
+}
+
+// ---- «Cerrar sesión» of an account.
+// Orb only ever closes the session of an account whose folder it made itself, inside its own «cuentas» folder: there it
+// deletes that account's credentials file and nothing else (the account, its settings and its conversations stay). The
+// default accounts (the CLI's own ~/.claude, ~/.codex) and any folder the user picked are the CLI's or the user's: Orb never
+// removes a login from them, the user does it with the agent's own command.
+const CREDENTIALS = { claude: '.credentials.json', codex: 'auth.json' };
+const real = (p) => { try { return fs.realpathSync.native(p); } catch { return null; } };
+const accountsRoot = () => path.join(ctx.paths.internal, 'cuentas');
+
+// The resolved folder of an account that lives inside Orb's accounts folder, or null (links are resolved first, so a
+// folder that only looks like it is inside, or a link that points out of it, does not count).
+function ownedDir(acc) {
+  if (!acc?.home || acc.id === acc.agent) return null;
+  const root = real(accountsRoot()); const dir = real(acc.home);
+  if (!root || !dir) return null;
+  const rel = path.relative(root, dir);
+  return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? dir : null;
+}
+// 'orb' = Orb can close it; 'tool' = only the agent's own command can; null = this agent has no session to close here.
+export const logoutKind = (acc) => (CREDENTIALS[acc?.agent] ? (ownedDir(acc) ? 'orb' : 'tool') : null);
+// The one file that «Cerrar sesión» would delete, or null (not Orb's folder, no login there, or not a plain file).
+export function logoutTarget(acc) {
+  const dir = ownedDir(acc); const marker = CREDENTIALS[acc?.agent];
+  if (!dir || !marker) return null;
+  const file = path.join(dir, marker);
+  try { return fs.lstatSync(file).isFile() ? file : null; } catch { return null; }
+}
+// «Cerrar sesión» leaves this empty file in the account's folder: only an account Orb itself signed out counts as
+// «sin sesión». One that never had the login file (signed in another way, or not yet) stays as it always was.
+const SIGNED_OUT = '.orb-sin-sesion';
+// An account of Orb's own folder that «Cerrar sesión» closed and that has not signed in again: it gets no work.
+export function signedOut(acc) {
+  const dir = ownedDir(acc); const marker = CREDENTIALS[acc?.agent];
+  if (!dir || !marker) return false;
+  try { if (!fs.lstatSync(path.join(dir, SIGNED_OUT)).isFile()) return false; } catch { return false; }
+  try { return !fs.lstatSync(path.join(dir, marker)).isFile(); } catch { return true; }
+}
+export function closeAccountSession(acc) {
+  const file = logoutTarget(acc);
+  if (!file) return false;
+  // Checked again right before deleting: the folder or the file may have been swapped for a link since the first look.
+  const dir = ownedDir(acc);
+  if (!dir || logoutTarget(acc) !== file) return false;
+  try { if (!fs.lstatSync(file).isFile()) return false; } catch { return false; }
+  fs.unlinkSync(file);
+  // wx: never over something already there (a link planted under that name is left alone and the mark is simply not set)
+  try { fs.closeSync(fs.openSync(path.join(dir, SIGNED_OUT), 'wx')); } catch { /* already marked, or not writable */ }
+  return true;
 }

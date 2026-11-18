@@ -62,8 +62,54 @@ export function readFile(root, file) {
     const buf = Buffer.alloc(Math.min(st.size, MAX_READ));
     fs.readSync(fd, buf, 0, buf.length, 0);
     if (buf.subarray(0, 8000).includes(0)) return { path: rel, size: st.size, binary: true, text: '' };
-    return { path: rel, size: st.size, binary: false, cut: st.size > MAX_READ, text: redactSecrets(buf.toString('utf8')) };
+    const cut = st.size > MAX_READ;
+    const bom = buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf;
+    // Real facts about the bytes read: «utf-8» only when they decode strictly (a character split by the size limit is
+    // not an error); lines are only counted when the whole file was read.
+    let encoding = 'utf-8';
+    try { new TextDecoder('utf-8', { fatal: true }).decode(buf, { stream: cut }); } catch { encoding = 'unknown'; }
+    const text = buf.toString('utf8');
+    const lines = cut ? null : text === '' ? 0 : text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
+    return { path: rel, size: st.size, binary: false, cut, text: redactSecrets(text), encoding, bom, lines };
   } finally { fs.closeSync(fd); }
+}
+
+// ---- «Nuevo archivo»: the only thing God mode writes. It creates an empty file that does not exist yet, directly in a
+// folder of the project; it never overwrites, renames or deletes.
+const WIN_RESERVED = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³]|conin\$|conout\$|clock\$)\s*(\..*)?$/i;
+const PROTECTED_DIRS = new Set(['pizarra']); // plus HIDDEN: compared in lower case
+const isProtected = (part) => isHidden(part) || PROTECTED_DIRS.has(part.toLowerCase());
+export function checkNewName(name) {
+  const n = String(name ?? '').trim();
+  if (!n || n.length > 200 || n === '.' || n === '..' || /[\\/:*?"<>|\0-\x1f]/.test(n) || /[. ]$/.test(n) || WIN_RESERVED.test(n)) throw userError(tr('msg.expert.badName'));
+  if (isProtected(n)) throw userError(tr('msg.expert.protectedPath'));
+  return n;
+}
+export function createFile(root, dir, name) {
+  const n = checkNewName(name);
+  const { abs: parent, rel: parentRel } = insideProject(root, dir ?? ''); // the real folder, links already followed
+  if (!fs.statSync(parent).isDirectory()) throw userError(tr('msg.expert.notFolder'));
+  if (parentRel.split('/').some(isProtected)) throw userError(tr('msg.expert.protectedPath'));
+  const rel = parentRel ? `${parentRel}/${n}` : n;
+  if (isSecretPath(rel) || isSecretPath(rel.toLowerCase())) throw userError(tr('msg.expert.secretName'));
+  const target = path.join(parent, n);
+  // Anything already there (a dangling link included, which Windows would follow when creating) means «exists».
+  let there = false; try { fs.lstatSync(target); there = true; } catch { /* free */ }
+  if (there) throw userError(tr('msg.expert.exists', { name: n }));
+  let fd;
+  try { fd = fs.openSync(target, 'wx'); } // wx: fails when anything (even a link) is already there, so nothing is overwritten
+  catch (e) { throw e.code === 'EEXIST' ? userError(tr('msg.expert.exists', { name: n })) : userError(tr('msg.expert.cannotCreate')); }
+  // which file this call made, to never remove another one below
+  let made = null; try { made = fs.fstatSync(fd, { bigint: true }); } catch { /* unknown: nothing will be removed */ }
+  fs.closeSync(fd);
+  // A link planted between the check and the open: the file made (empty, ours) is removed and nothing is reported. Only
+  // the very file created here goes (same file id, a plain file): whatever a swapped link points at is never touched.
+  let landed = null; try { landed = realpath(target); } catch { /* gone */ }
+  if (!landed || path.dirname(landed).toLowerCase() !== parent.toLowerCase()) {
+    try { const now = fs.lstatSync(target, { bigint: true }); if (made && now.isFile() && now.ino === made.ino && now.dev === made.dev) fs.unlinkSync(target); } catch { /* nothing */ }
+    throw userError(tr('msg.expert.cannotCreate'));
+  }
+  return { path: rel, name: n, dir: parentRel };
 }
 
 const hasHead = async (root) => (await git(root, ['rev-parse', '--verify', '-q', 'HEAD'])).status === 0;

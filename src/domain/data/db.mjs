@@ -259,6 +259,8 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   ['tasks', 'parent_id', 'INTEGER'], ['tasks', 'limited_until', 'TEXT'], ['tasks', 'review_of', 'INTEGER'], ['tasks', 'schedule_id', 'INTEGER'],
   // how hard the task is (simple / normal / complejo), for Orb to choose its model and reasoning.
   ['tasks', 'level', 'TEXT'],
+  // tokens an agent read from its cache in a turn (usage_ledger), apart from the ones it paid for.
+  ['usage_ledger', 'tokens_cache', 'INTEGER'],
   // the task's permission level («auto» or «preguntar»; null = the global one) and what the user's own message asked
   // for (JSON list: ["publish"]), src/domain/tasks/board.mjs › createTask.
   ['tasks', 'autonomy', 'TEXT'], ['tasks', 'user_asked', 'TEXT'],

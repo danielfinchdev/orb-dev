@@ -291,6 +291,17 @@ export class Sessions {
     this.lives.delete(id);
     try { entry.live.close(); } catch { /* gone */ }
   }
+  // Frees an account of its live processes (conversations and side chats) so its login can be removed: false, and nothing
+  // closed, when any of them is in the middle of a turn; otherwise the ones resting between turns are closed (they open
+  // again on the next message).
+  releaseAccount(accountId) {
+    const mine = [...this.lives].filter(([, e]) => e.account === accountId);
+    const side = this.side.processesOf(accountId);
+    if (mine.some(([id]) => this.running.has(id)) || side.some((e) => e.status === 'running')) return false;
+    for (const [id] of mine) this.closeLive(id);
+    this.side.closeProcessesOf(accountId);
+    return true;
+  }
   closeIdle() {
     for (const [id, entry] of this.lives) if (!this.running.has(id) && Date.now() - entry.lastUsed > IDLE_CLOSE_MS) this.closeLive(id);
     // a direct conversation quiet for a day, with nothing waiting, is done by itself (it opens again when written to).
@@ -320,7 +331,7 @@ export class Sessions {
     // Claude keeps the id the app chooses; the other agents (and forks) report theirs in their first events.
     const newSessionId = !s.cli_session && !forkFrom && s.agent === 'claude' ? crypto.randomUUID() : null;
     if (newSessionId) this.update(s.id, { cli_session: newSessionId });
-    const entry = { key, lastUsed: Date.now(), logFile, live: null };
+    const entry = { key, lastUsed: Date.now(), logFile, live: null, account: acc.id };
     // Long instructions Cursor gets in a file go to the attachments folder (out of git), not among the project's files.
     const promptDir = path.join(s.cwd, ATTACH_DIR);
     if (s.agent === 'cursor') keepOutOfGit(s.cwd, [`${ATTACH_DIR}/`, ...CURSOR_FILES]);

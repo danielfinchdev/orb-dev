@@ -302,7 +302,9 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
       // Only agents whose program is on this PC take work (an "any" task never goes to one that is not installed).
       const types = (task.agent === 'any' ? order.filter((a) => enabled.includes(a) && !UNGUARDED_AGENTS.includes(a)) : [task.agent].filter((a) => enabled.includes(a))).filter((a) => installed(a));
       // Every enabled account of those agents; a task pinned to an account only goes there.
-      const candidates = types.flatMap((a) => usableAccounts(a)).filter((acc) => !task.account || acc.id === task.account);
+      let candidates = types.flatMap((a) => usableAccounts(a)).filter((acc) => !task.account || acc.id === task.account);
+      // continuity.switchAccount off: a task that already ran on an account waits for that one instead of resuming on another.
+      if (ctx.config.continuity?.switchAccount === false && task.run_account && candidates.some((acc) => acc.id === task.run_account)) candidates = candidates.filter((acc) => acc.id === task.run_account);
       // a task for an agent this PC cannot run (uninstalled or turned off after it was created) does not wait for
       // ever: it goes to any available agent. Not a sensitive one: its approval was for that agent, so the user decides.
       const available = board.availableAgents();
