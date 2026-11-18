@@ -1,6 +1,6 @@
 {
   "generatedBy": "scripts/android-vectors.mjs",
-  "source": "69ae20ab79a1d87ab43075150b05f93b2932e6623e4228472559cad7724d8240",
+  "source": "51d17ffda79a2a7511606455aa0f861249a7af3b87fdab7c828865182d46b3bd",
   "methods": [
     "activity.list",
     "activity.report",
@@ -10,10 +10,12 @@
     "chat.accept",
     "chat.answer",
     "chat.compact",
+    "chat.editQueued",
     "chat.list",
     "chat.notes",
     "chat.pin",
     "chat.pinned",
+    "chat.queue",
     "chat.send",
     "chat.settings",
     "chat.stop",

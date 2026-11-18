@@ -78,13 +78,25 @@ export function answerOf(result, said = []) {
 // a message of the user that arrives while the assistant is answering waits for the end of that turn and is added
 // to what was asked (added to the running turn, a short turn could lose its answer). Several messages
 // written meanwhile go together, as one turn.
-function queueUserMessage(lane, text, user = userName(), attachments = []) {
+// Each message keeps its own part ({ id, chat, shown, context, at, attachments }): what the user typed (shown), what was
+// added for the brain (context) and the chat line that shows it, so one waiting message can be edited or removed
+// without touching the others merged into the same turn.
+function queueUserMessage(lane, text, user = userName(), attachments = [], { chat = null, shown = text, context = '' } = {}) {
   const last = lane.queue.at(-1);
-  if (last && !last.internal && last.user) { last.text += `\n\n${text}`; if (attachments.length) last.attachments = [...(last.attachments ?? []), ...attachments]; return last; }
+  const part = { id: crypto.randomUUID(), chat, shown, context, at: Date.now(), attachments };
+  if (last && !last.internal && last.user) { last.parts.push(part); rebuildQueued(last); return last; }
   // (For the brain, in Spanish like the rest of its instructions; the chat shows the message as the user wrote it.)
-  const item = { text: lane.busy ? `(Mensaje nuevo de ${user}, escrito mientras respondías: se suma a lo anterior y no lo sustituye salvo que lo diga. Atiende los dos.)\n${text}` : text, user: true, ...(attachments.length ? { attachments } : {}) };
+  const item = { text, user: true, parts: [part], note: lane.busy ? user : null };
+  rebuildQueued(item);
   lane.queue.push(item);
   return item;
+}
+// the text the brain gets, from the parts that still wait
+function rebuildQueued(item) {
+  const body = item.parts.map((p) => `${p.shown}${p.context}`).join('\n\n');
+  item.text = item.note ? `(Mensaje nuevo de ${item.note}, escrito mientras respondías: se suma a lo anterior y no lo sustituye salvo que lo diga. Atiende los dos.)\n${body}` : body;
+  const files = item.parts.flatMap((p) => p.attachments);
+  if (files.length) item.attachments = files; else delete item.attachments;
 }
 
 // one conversation with the assistant: its messages waiting, its own live agent process and what it is doing now.
@@ -144,6 +156,29 @@ class Lane {
     this.forget();
     this.say('system', tr('msg.orch.cleared'), { kind: 'cleared' });
     return { ok: true };
+  }
+
+  // The messages of the user that wait for their turn, in the order they will be answered. A message that already
+  // started (it left the queue) is not here. → [{ id, text, at }]
+  waiting() { return this.queue.filter((q) => !q.internal && q.parts).flatMap((q) => q.parts.map((p) => ({ id: p.id, text: p.shown, at: p.at }))); }
+  findWaiting(partId) {
+    for (const item of this.queue) { const part = !item.internal && item.parts?.find((p) => p.id === partId); if (part) return { item, part }; }
+    throw new Error(tr('msg.sessions.notQueued'));
+  }
+  // `text` replaces what the user wrote in a waiting message (its chat line too); null removes it (and its chat line:
+  // it was never sent).
+  changeWaiting(partId, text) {
+    const { item, part } = this.findWaiting(partId);
+    if (text === null) {
+      item.parts = item.parts.filter((p) => p !== part);
+      if (!item.parts.length) this.queue = this.queue.filter((q) => q !== item); else rebuildQueued(item);
+      if (part.chat != null) { this.board.run('DELETE FROM chat WHERE id = ? AND conversation_id = ?', part.chat, this.id); this.board.changed('chat'); }
+    } else {
+      part.shown = text; rebuildQueued(item);
+      if (part.chat != null) { this.board.run('UPDATE chat SET body = ? WHERE id = ? AND conversation_id = ?', text, part.chat, this.id); this.board.changed('chat'); }
+    }
+    this.push();
+    return this.waiting();
   }
 
   // The chat is free at once, but the agent's turn takes a moment to wind down: a new message waits for it in next()
@@ -518,15 +553,28 @@ export class Orchestrator {
         throw error;
       }
     }
-    this.board.addChat('usuario', text, placed.length ? { ...meta, images: placed.map((f) => f.path) } : meta, c.id);
+    const line = this.board.addChat('usuario', text, placed.length ? { ...meta, images: placed.map((f) => f.path) } : meta, c.id);
     if (c.status === 'done') this.board.setConversationDone(c.id, false); // written in again: open again
     if (isNew || !c.titled) { try { this.title?.(c, text); } catch (error) { this.log(`título de la conversación ${c.id}: ${error.message}`); } }
     const lane = this.lane(c.id);
     context += lane.whiteboardNote() + this.takeNotes(c.id);
     // never into the running turn (see queueUserMessage): every message of the user gets its own answer.
-    const item = queueUserMessage(lane, text + context, userName(), placed);
+    const item = queueUserMessage(lane, text + context, userName(), placed, { chat: line.id, shown: text, context });
     lane.next();
     return { conversation: c.id, queued: lane.current !== item };
+  }
+
+  // The queue of a conversation (messages written while it works), and changes to one that has not started.
+  // editQueued(id, partId, { text, remove }) → the queue left. Same limits as ask().
+  queueOf(id) { return this.lanes.get(Number(id))?.waiting() ?? []; }
+  editQueued(id, partId, { text, remove = false } = {}) {
+    const lane = this.lanes.get(Number(id));
+    if (!lane) throw new Error(tr('msg.sessions.notQueued'));
+    if (remove) return lane.changeWaiting(String(partId), null);
+    const t = String(text ?? '').trim();
+    if (!t) throw new Error(tr('msg.orch.writeMessage'));
+    if (t.length > 20000) throw new Error(tr('msg.orch.tooLong'));
+    return lane.changeWaiting(String(partId), t);
   }
 
   // what happened in a conversation without a turn of the assistant (the user undid one of its

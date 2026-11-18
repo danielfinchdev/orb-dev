@@ -41,7 +41,7 @@ export const METHODS = Object.freeze({
   'images.read': 'pc', 'images.mark': 'pc', 'images.save': 'pc', 'attachments.read': 'pc',
   // conversations with the assistant
   'conversations.list': 'remote', 'conversations.search': 'remote', 'conversations.update': 'remote', 'conversations.remove': 'pc', 'conversations.trash': 'remote', 'conversations.restore': 'remote',
-  'chat.list': 'remote', 'chat.pin': 'remote', 'chat.pinned': 'remote', 'chat.notes': 'remote', 'chat.send': 'remote', 'chat.stop': 'remote', 'chat.compact': 'remote', 'chat.answer': 'remote', 'chat.accept': 'remote',
+  'chat.list': 'remote', 'chat.pin': 'remote', 'chat.pinned': 'remote', 'chat.notes': 'remote', 'chat.send': 'remote', 'chat.queue': 'remote', 'chat.editQueued': 'remote', 'chat.stop': 'remote', 'chat.compact': 'remote', 'chat.answer': 'remote', 'chat.accept': 'remote',
   'chat.settings': 'remote',
   // projects
   'projects.list': 'remote', 'projects.icons': 'remote', 'projects.create': 'remote', 'projects.import': 'pc', 'projects.clone': 'pc',

@@ -48,6 +48,15 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
       if (!id && (brainOf().agent || 'claude') === 'cursor') fail(tr('msg.api.cursorNoCoordinate'));
       return orchestrator.ask(t, expandMentions(board, sessions, t), { conversation: id, project: proj, attachments });
     },
+    // The messages written while the assistant works, waiting for their turn: → [{ id, text, at }] (id: a text; at: ms).
+    // Only a message that has not started can be changed: text edits it, remove drops it (→ the queue left).
+    'chat.queue': ({ conversation }) => orchestrator.queueOf(conversationId(conversation)),
+    'chat.editQueued': ({ conversation, queueId, text, remove }) => {
+      const id = conversationId(conversation);
+      trash.assertNotTrashed(id);
+      const qid = str(queueId, 'mensaje', 64);
+      return remove ? orchestrator.editQueued(id, qid, { remove: true }) : orchestrator.editQueued(id, qid, { text: str(text, 'mensaje', 20000) });
+    },
     'chat.stop': ({ conversation }) => orchestrator.stop(conversationId(conversation)),
     // «Compactar»: the conversation's coordinator compacts its own context (or starts afresh with the briefing and
     // its last lines when its agent cannot). → { ok, how: 'compacted' | 'renewed' }
