@@ -20,6 +20,12 @@ it on and the button next to them changes the style. In Settings › Appearance 
 turn "Music that reacts" off to keep one intensity. As before, it is off until you
 turn it on, stops when Orb locks and pauses while the window is hidden.
 
+**Music for each mini-game, made as you play.** The eight mini-games no longer download a track: Orb makes their music
+the same way, each with a character of its own (a quiet piano for chess, a dark march that speeds up as the invaders
+come down, fast electronic music for the runner) and following the game. It rises as the game gets harder, marks a
+good move and darkens when you lose a life. The music button of the games window and the volume in Settings work as
+before.
+
 **A new interface.** Every screen of the Windows app has been redrawn. There are six themes: Default (with six
 palettes: Graphite, Ocean, Forest, Grape, Ruby and Sand), Glass, Orb, Vaporwave, Candy and Retro. Glass is light only and
 Retro is dark only. Unless you choose light or dark, the app follows Windows. Only the Orb theme shows the robot.
@@ -35,7 +41,8 @@ are fixed, and the zoom of the whole app (Ctrl with + and −) is what remains t
 theme built from your own colours is gone too, and the 28 palettes are now six. Code fonts and colours that no longer
 exist fall back to the nearest one that does. The little arrow that opened the sidebar's footer, the list of subsections
 in Settings and the Orb icon in "About" are gone as well. The free background tracks are gone: a profile that had them now plays the
-adaptive music.
+adaptive music. The mini-games' free tracks and their credits in "About" are gone too; the ones already downloaded to a PC
+are not deleted (`core\herramientas\musica`, safe to remove by hand).
 
 **Chat and tasks.** The chat shows unread marks (and "Mark as unread"), the live branch of each chat and closed pull
 requests. A side panel has three tabs: Details, Changes and PR. Every turn that changed files ends with a card that
