@@ -321,7 +321,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     // the usage page: what was spent in the last 7, 30 or 90 days, by day, agent and model (names as the selector
     // shows them).
     'usage.history': ({ days }) => {
-      const out = usageHistory(board, { days: oneOf(days, [7, 30, 90], 'días', 30) });
+      const out = usageHistory(board, { days: oneOf(days, [1, 7, 30, 90], 'días', 30) });
       return { ...out, models: out.models.map(({ account, ...m }) => ({ ...m, label: m.model ? modelLabelOf(m.agent, account ?? m.agent, m.model) : null })) };
     },
     // the accounts working right now (the assistant's brain and the agents' running sessions), with the windows of
