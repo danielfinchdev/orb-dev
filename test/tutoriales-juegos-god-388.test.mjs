@@ -100,7 +100,8 @@ test('9C-a Tutoriales: the guides use the icons of the mock-up and the tour card
 test('9C-a Juegos: the game dialog is 560 wide, centred, with the board scaled to 362 by CSS only', () => {
   const src = read('src/ui/games/games.jsx');
   assert.match(src, /w-\[min\(560px,96vw\)\]/);
-  assert.match(src, /game && 'text-center'/);
+  assert.match(src, /game && 'text-center leading-\[1\.45\]'/);
+  assert.match(src, /game && 'py-1\.5'/, 'the body keeps the 18 px of the design above and below the board');
   assert.match(src, /game \? 'justify-center' : 'justify-between'/);
   assert.match(src, /\[&_canvas\]:h-auto! \[&_canvas\]:max-w-\[362px\]/);
   assert.match(src, /text-2xl leading-\[1\.45\] font-semibold/, 'score cards of 82 px');
@@ -115,4 +116,28 @@ test('9C-a God mode: file search, project as plain text with its dot, panels men
   assert.match(src, /DropdownMenuContent align="end" className="w-75"/);
   assert.doesNotMatch(src, /new file|file-plus|Nuevo archivo/i, 'Orb cannot create files: no «+»');
   for (const lang of ['es', 'en']) assert.match(read(`src/shared/locales/${lang}/expert.mjs`), /'expert\.searchFiles'/);
+});
+
+test('10C-b God mode: the diff is one card per hunk, the path bar says what is known and git shows lines and the base', () => {
+  const src = read('src/ui/views/expert.jsx');
+  assert.match(src, /import \{ PatchView \} from '@\/components\/patch-view\.jsx'/);
+  assert.match(src, /<PatchView key=\{i\} text=\{b\.patch\} path=\{b\.path\} name=\{b\.path\} bodyClass="max-h-none" \/>/);
+  assert.match(src, /data-testid="expert-diff"/);
+  assert.match(src, /data-testid="expert-status"/);
+  assert.doesNotMatch(src, /UTF-8|Ln \d|Col \d/, 'no encoding nor cursor: the viewer is read-only');
+  assert.match(src, /st\.upstream \? 'expert\.aheadOf' : 'expert\.ahead'/);
+  assert.match(src, /f\.add != null \? <span/);
+  assert.doesNotMatch(src, /type="checkbox"|<Checkbox/, 'no commit checkbox: God mode does not commit');
+  const patch = read('src/ui/components/patch-view.jsx');
+  assert.match(patch, /bodyClass = 'max-h-96'/, 'the tab Cambios of the tasks keeps its 24 rem');
+  for (const l of ['es', 'en']) { const s = read(`src/shared/locales/${l}/expert.mjs`); for (const k of ['aheadOf', 'behindOf', 'lines']) assert.match(s, new RegExp(`'expert\.${k}'`)); }
+});
+
+test('10C-b Serpiente: the flat board of Predeterminado, the other themes keep their drawing', () => {
+  const snake = read('src/ui/games/snake.jsx');
+  assert.match(snake, /if \(p\.skin === 'predeterminado'\) \{ paintFlat\(ctx, s, p, points\(s, t\)\); return; \}/);
+  assert.match(snake, /backdrop\(ctx, SIZE, SIZE, p, \{ grid: CELL \}\)/, 'the glossy drawing stays for the rest');
+  assert.match(snake, /--destructive/); assert.match(snake, /--primary-text/);
+  assert.doesNotMatch(snake, /SPEED = \{ facil: 150, normal: 105, dificil: 70 \}[^;]*;[\s\S]*SPEED = /);
+  assert.match(snake, /const N = 20; const CELL = 21;/, 'the logical grid is untouched');
 });

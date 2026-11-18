@@ -109,10 +109,8 @@ try {
   await win.click('[data-testid=nav-tasks]');
   await win.mouse.move(400, 300);
   await win.locator('[data-testid=companion]').waitFor({ timeout: 15000 }); // the robot of the notices has gone
-  assert.equal(await win.locator('[data-testid=companion]').getAttribute('data-shown'), 'false', 'oculto lejos de la esquina');
-  const size = await win.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight }));
-  await win.mouse.move(size.w - 40, size.h - 40, { steps: 4 });
-  await until(async () => (await win.locator('[data-testid=companion]').getAttribute('data-shown')) === 'true', 'aparece al acercar el ratón');
+  // Orb UI 2.0: the companion rests in its corner in sight (it no longer waits for the pointer to come near)
+  await until(async () => (await win.locator('[data-testid=companion]').getAttribute('data-shown')) === 'true', 'el compañero está a la vista en su esquina');
   await shot('06-robot-esquina');
   assert.deepEqual(errors, [], 'sin errores en la ventana');
   console.log('✔ Orb 3.0/3.2: conversaciones, conversaciones directas, Iniciar test, Security Review y robot de la esquina');

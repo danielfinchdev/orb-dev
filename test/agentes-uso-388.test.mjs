@@ -71,7 +71,7 @@ test('9C-a Uso: Today and 90 days in the period, CSV export, cost card, flat mod
   assert.match(usage, /data-testid="usage-export-csv"/);
   assert.match(usage, /data-testid="usage-export-icon"/);
   assert.match(usage, /downloadUsageCsv\(data, data\.models/);
-  assert.match(usage, /text-caption font-semibold tabular-nums/, 'the cost figure is small, as in the mock-up');
+  assert.match(usage, /text-caption leading-\[1\.45\] font-semibold tabular-nums/, 'the cost figure is small, as in the mock-up');
   assert.match(usage, /\(data\?\.models \?\? \[\]\)\.map/, 'one row per model');
   assert.ok(usage.indexOf('<DaysTable') > usage.indexOf('<LocalUsage'), 'the table of days closes the page');
   // the stop of the queue is the rail of «Normas»: same call, same password
@@ -89,4 +89,21 @@ test('9C-a Uso and engine: «Hoy» is one day of the same history, the team chec
 
 test('9C-a Agentes y Uso: the tabs are underlined links', () => {
   assert.equal((tabs.match(/className="underline"/g) ?? []).length, 2);
+});
+
+test('10C-b Uso: «Por proyecto» comes from the ledger, the days flow with the page and the cards follow the mock-up', () => {
+  assert.match(usage, /\(data\?\.projects \?\? \[\]\)/, 'the projects of the period (usage.history), not the local files');
+  assert.match(usage, /<Block title=\{t\('usage\.byProject'\)\}>/);
+  assert.doesNotMatch(usage, /max-h-\[30rem\]|overflow-y-auto/, 'no box with its own scroll for the days');
+  assert.match(usage, /<AgentIcon agent=\{u\.agent\} \/>/, 'the mark of the account card is 12 px');
+  assert.doesNotMatch(usage, /<AgentIcon [^>]*size-4/, 'no 16 px marks in the cards and tables');
+  assert.match(usage, /px-3\.5 py-3 text-control" data-testid="usage-account"/);
+  assert.match(usage, /renewText\(t, locale, w\.resetAt\)/, 'the short «renueva 14:30» under each bar');
+  assert.match(usage, /data-testid="usage-pace"/); assert.match(usage, /data-testid="usage-stop"/);
+  assert.match(usage, /title=\{paceText \|\| undefined\}/, 'the pace sentence stays, as the bar\'s tooltip');
+  for (const l of ['es', 'en']) { const s = read('src', 'shared', 'locales', l, 'agents.mjs'); assert.match(s, /'usage\.renewsAt'/); assert.match(s, /'usage\.renewsOn'/); }
+});
+
+test('10C-b Agentes: every agent that goes by ACP carries the ACP pill', () => {
+  assert.match(agents, /a\.kind === 'acp' \|\| !NATIVE\.includes\(a\.id\)/);
 });

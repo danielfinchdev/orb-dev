@@ -62,3 +62,12 @@ test('Normas: no switch or edit icon in the rows; pausing and resuming a rail st
   assert.match(r, /confirmResumeRail\(rail\) : confirmPauseRail\(rail\)/);
   assert.match(r, /changeRail\(rail\.id, \{ enabled: next \}/);
 });
+
+test('10C-b Normas: a rule\'s summary is plain text (no Markdown marks) and the order is the mock-up\'s', () => {
+  const cards = src('views/rules-cards.jsx');
+  assert.match(cards, /export function ruleSummary\(texto\)/);
+  assert.match(cards, /meta=\{<span className="block truncate">\{ruleSummary\(rule\.texto\)\}<\/span>\}/);
+  const rules = src('views/rules.jsx');
+  const at = (s) => rules.indexOf(s);
+  assert.ok(at('testid="rules-core"') < at('testid="rules-texts"') && at('testid="rules-texts"') < at('testid="rules-rails"') && at('testid="rules-rails"') < at('testid="rules-removed"'), 'core, texts, rails, removed rails: as in 09');
+});

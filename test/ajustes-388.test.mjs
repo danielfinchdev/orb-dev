@@ -232,3 +232,11 @@ test('9C-b: a notice beside a dialog is placed by its real height and falls back
   assert.match(main, /else next = \{ bottom: 4, right: 4 \};/);
   assert.doesNotMatch(main, /dialog-footer/);
 });
+
+test('10C-b Ajustes: sliders of 120 px that win over .range, theme cards of 82 px, no divider in the permissions card', () => {
+  const g = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'views', 'settings', 'general.jsx'), 'utf8');
+  assert.equal((g.match(/<Range [^\n]*className="w-\[120px\]! cursor-pointer"/g) ?? []).length, 4);
+  assert.doesNotMatch(g, /className="w-\[120px\] cursor-pointer"/);
+  assert.match(g, /text-control leading-\[1\.45\] font-medium">\{t\(`appearance\.skin\.\$\{skin\}`\)\}/);
+  assert.match(g, /<Stack><Hint className="leading-\[1\.45\]">\{t\('settings\.autonomyAlways'\)\}/);
+});

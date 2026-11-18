@@ -55,6 +55,12 @@ test('usage.history: 7, 30 or 90 days, with the models by name; also from a link
   assert.ok(out.models.every((m) => typeof m.label === 'string' && !('account' in m)));
   await assert.rejects(call('usage.history', { days: 12 }));
   assert.equal(METHODS['usage.history'], 'remote');
+  // «Por proyecto»: the same ledger by the project of the chat the turn was in ('' when none)
+  const { lastInsertRowid } = board.run("INSERT INTO conversations (title, project, created_at, updated_at) VALUES ('P', 'tienda', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')");
+  recordSpend(board, { account: 'claude', conversation: Number(lastInsertRowid), usage: { inputTokens: 700, outputTokens: 30, costUsd: 0.1 } });
+  const withProjects = await call('usage.history', { days: 7 });
+  assert.deepEqual(withProjects.projects.find((p) => p.project === 'tienda'), { project: 'tienda', tokensIn: 700, tokensOut: 30, usd: 0.1 });
+  assert.ok(withProjects.projects.every((p) => typeof p.project === 'string'));
   const phone = principalOf({ device: { id: 'p1', kind: 'phone' } });
   assert.equal((await call('usage.history', {}, phone)).days.length, 30, '30 by default');
 });

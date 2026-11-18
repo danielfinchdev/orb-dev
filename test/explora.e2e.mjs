@@ -10,7 +10,27 @@
 // bottom, usage with seeded consumption, a game mid-play, God mode with git, the lock screen, «Tu tema» with another
 // theme marked, Agentes and Uso in every theme). It replaces taskShots, projectShots, extraShots and the chat pictures
 // of the views loop so that one mode still fits in a run: use it with ORB_EXPLORA_MODES=dia and then =noche.
+// ORB_EXPLORA_EXTRA=1 also pictures the sidebar's foot (music player and feedback popups, never sent) in every mode
+// (footShots) and in every theme (tema-<skin>-<mode>-reproductor / -comentarios).
+// The companion robot (tema-orb-<mode>-companero, -companero-movido: dragged with the real pointer, then put back) and the
+// pointer-over-the-mark responsiveness check run in the theme tour whenever the Orb theme is in it.
+// ORB_EXPLORA_SOUND=1 lets the tour press «play» of the player (1.5 s of real audio, then pause); without it nothing sounds.
+// ORB_EXPLORA_PIP=1 adds, at the end, the agent browser's live window (pip.html): a fake agent opens a local page (127.0.0.1,
+// no network) and that second window is pictured (vivo-normal, vivo-grande, vivo-pildora). It is always dark.
+// ORB_EXPLORA_START=1 skips everything else and pictures the start-up notices that cannot be provoked (core missing, failed
+// data migration, app update, Orb could not start, a screen that failed…) in day and night: arranque-<card>[-noche].png.
+// The page paints each one with sample data and without the engine (main.jsx › StartPreview) when window.__ORB_START_PREVIEW__
+// names it. Only this script can set that variable: an init script copies it from window.name, which survives the reload
+// and is set here by hand (an init script added once per card would pile up). Cards: core, core-sin, core-danada,
+// core-confirma, migra, migra-act, error, clave, falla, falla-red, actualiza (ORB_EXPLORA_START_ONLY=core,error picks some).
+// ORB_EXPLORA_SERVE=1 does not take pictures: it seeds the same demo data as ORB_EXPLORA_EXTRA=1 (with its consumption), goes to the
+// first chat and leaves Orb OPEN (visible, its own process, still running when this script ends) for someone to try it. It needs
+// ORB_EXPLORA_DATA=<folder> (everything the run makes lives inside it: profile, workspace, projects, backups, the fake agents'
+// scripts; nothing in the temp folder or the user's) and ORB_E2E_EXE=<test build's Orb.exe>. It then writes
+// <ORB_EXPLORA_DATA>/probar-entorno.json and .cmd: the ORB_* variables Orb was started with, to start it again without node.
+// ORB_EXPLORA_WELCOME=1 (only with SERVE) seeds nothing: Orb opens on the welcome, with fake agents, for the user to go through it.
 import fs from 'node:fs';
+import http from 'node:http';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
@@ -20,12 +40,16 @@ import { loadConfig, merge } from '../src/platform/config-file.mjs';
 import { writeJson } from '../src/platform/paths.mjs';
 import { SKINS, darkOnlySkin, lightOnlySkin } from '../src/shared/appearance.mjs';
 import { throughStart, sandboxEnv, TEST_MASTER } from './fixtures/e2e-flows.mjs';
-import { launchOrb } from './fixtures/launch-orb.mjs';
+import { launchOrb, E2E_EXE } from './fixtures/launch-orb.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LANG = process.env.ORB_LANG || '';
-const OUT = path.join(ROOT, 'test-results', LANG ? `explora-${LANG}` : 'explora'); fs.mkdirSync(OUT, { recursive: true });
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-explora-'));
+const SERVE = process.env.ORB_EXPLORA_SERVE === '1';
+const WELCOME = SERVE && process.env.ORB_EXPLORA_WELCOME === '1';
+if (SERVE && !process.env.ORB_EXPLORA_DATA) { console.error('✖ ORB_EXPLORA_SERVE=1 necesita ORB_EXPLORA_DATA=<carpeta>'); process.exit(1); }
+const OUT = SERVE ? path.join(path.resolve(process.env.ORB_EXPLORA_DATA), 'notas') : path.join(ROOT, 'test-results', LANG ? `explora-${LANG}` : 'explora'); fs.mkdirSync(OUT, { recursive: true });
+// SERVE: the temporary folder is the user's data folder itself (it is never removed).
+const tmp = SERVE ? path.resolve(process.env.ORB_EXPLORA_DATA) : fs.mkdtempSync(path.join(os.tmpdir(), 'orb-explora-'));
 const until = async (fn, what, ms = 30000) => { const end = Date.now() + ms; while (Date.now() < end) { try { const v = await fn(); if (v) return v; } catch { /* not yet */ } await new Promise((r) => setTimeout(r, 300)); } throw new Error(`no llegó: ${what}`); };
 const notes = [];
 // Every Orb this run opens: a failed step closes them all, so the run always ends.
@@ -38,19 +62,20 @@ const note = (s) => { notes.push(s); console.log(`  · ${s}`); };
 
 // Orb's window over CDP: the pictures and the window size go through the page (the window itself stays hidden).
 async function open(userData, env = {}) {
-  const orb = await launchOrb({ userData, env: { ...sandboxEnv(tmp), ...env } });
+  const orb = await launchOrb({ userData, env: { ...sandboxEnv(tmp), ...env }, ...(SERVE ? { visible: true, detach: true } : {}) });
   const page = orb.page; const stop = () => orb.close();
   opened.push(stop);
   // Pictures show the themes as designed: a PC with Windows' transparency effects off would drop Cristal's blur.
-  try { const cdp = await page.context().newCDPSession(page); await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'no-preference' }] }); } catch { /* an older WebView2: the pictures follow the system's setting */ }
-  if (SIZE) await page.setViewportSize({ width: Number(SIZE[1]), height: Number(SIZE[2]) });
+  if (!SERVE) try { const cdp = await page.context().newCDPSession(page); await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'no-preference' }] }); } catch { /* an older WebView2: the pictures follow the system's setting */ }
+  if (SIZE && !SERVE) await page.setViewportSize({ width: Number(SIZE[1]), height: Number(SIZE[2]) });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`); });
-  return { page, errors, close: stop };
+  return { page, errors, close: stop, orb };
 }
 // The page's picture (with the interface zoom).
 const shooter = (page) => async (name) => {
+  if (SERVE) return;
   await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(OUT, `${name}.png`) });
 };
@@ -69,7 +94,7 @@ const overflow = (page) => page.evaluate(() => [...document.querySelectorAll('ma
 // ---- demo data (the mockups' sidebar.json and 01-chat.html): what the second Orb is seeded with. All of it is fake: fake
 // agents (test/fixtures/fake-explora.mjs), folders under `tmp`, no network, never this PC's profile.
 const SEED = process.env.ORB_EXPLORA_SEED !== '0';
-const EXTRA = process.env.ORB_EXPLORA_EXTRA === '1';
+const EXTRA = SERVE || process.env.ORB_EXPLORA_EXTRA === '1';
 const text = (...l) => `${l.join('\n')}\n`;
 const noted = new Set();
 const noteOnce = (s) => { if (!noted.has(s)) { noted.add(s); note(s); } };
@@ -144,9 +169,15 @@ const RUNS = [
 const ORBE = [{ text: 'Dame tres planes para el fin de semana si llueve.', reply: 'Te dejo tres planes con lluvia: un museo por la mañana, una peli con comida en casa y una partida de mesa con amigos.' },
   { text: 'Gracias, me quedo con el museo. ¿A qué hora abre?', reply: 'Casi todos abren a las 10:00. Mira el horario del que elijas antes de salir.' }];
 
+// ORB_EXPLORA_PIP=1: a turn whose fake agent opens a local page in the agents' browser (NAVEGA_GUION: open, picture, wait so
+// the live window stays up); the script file is written with the page's port once the local site is listening.
+const PIP = process.env.ORB_EXPLORA_PIP === '1';
+const PIP_SCRIPT = path.join(tmp, 'explora-vivo.json');
+const PIP_TURN = { text: 'Abre la web de ejemplo en el navegador y dime qué ves.', reply: 'He abierto la web de ejemplo: veo un título y un formulario.', append: `NAVEGA_GUION ${PIP_SCRIPT}` };
+
 // The two files the fake agents read at start (so they exist before Orb launches): the natural answers and the side effects.
 function writeFakes() {
-  const turns = [...CHATS.flatMap((c) => c.turns), ...TASKS, ...RUNS, ...ORBE];
+  const turns = [...CHATS.flatMap((c) => c.turns), ...TASKS, ...RUNS, ...ORBE, ...(PIP ? [PIP_TURN] : [])];
   const script = path.join(tmp, 'explora-guion.json'); const plan = path.join(tmp, 'explora-plan.json');
   fs.writeFileSync(script, JSON.stringify(turns.map((t) => ({ when: t.text, reply: t.reply }))));
   // the two «keep working» lines are not seeded turns: they only need DUERME to reach the fake agent
@@ -169,11 +200,62 @@ function makeRepos() {
   return dirs;
 }
 
+// Notes, windows and the temp folder, then out (also the end of the ORB_EXPLORA_START=1 run).
+async function finish(code = process.exitCode ?? 0) {
+  fs.writeFileSync(path.join(OUT, 'notas.txt'), notes.join(String.fromCharCode(10)));
+  for (const stop of opened) { try { await stop(); } catch { /* already closed */ } }
+  if (!SERVE) { try { fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5 }); } catch { /* a file still open: the temp folder stays */ } }
+  process.exit(code);
+}
+// SERVE: what a later start needs (the ORB_* Orb was started with), then out WITHOUT closing Orb.
+function serveLeave(orb) {
+  const env = { ...orb.orbEnv };
+  for (const [k, v] of Object.entries(env)) if (/["%!\r\n]/.test(v)) throw new Error(`${k}: el valor no cabe en un .cmd`);
+  fs.writeFileSync(path.join(tmp, 'probar-entorno.json'), JSON.stringify({ exe: E2E_EXE, env, pid: orb.pid }, null, 2));
+  fs.writeFileSync(path.join(tmp, 'probar-entorno.cmd'), [...Object.entries(env).map(([k, v]) => `set "${k}=${v}"`), `set "PROBAR_EXE=${E2E_EXE}"`, ''].join('\r\n'));
+  fs.writeFileSync(path.join(OUT, 'notas.txt'), notes.join(String.fromCharCode(10)));
+  console.log(`Orb queda abierto (pid ${orb.pid}) con datos en ${tmp}`);
+  process.exit(0);
+}
+
 try {
+  if (process.env.ORB_EXPLORA_START === '1') {
+    const userData = path.join(tmp, 'arranque'); fs.mkdirSync(userData);
+    const base = path.join(tmp, 'PrimerPC'); fs.mkdirSync(base);
+    const { page, errors } = await open(userData, { ORB_DEFAULT_BASE: base });
+    const shot = shooter(page);
+    await page.addInitScript(() => { const m = /^orb-start-preview:(.+)$/.exec(window.name); if (m) window.__ORB_START_PREVIEW__ = m[1]; });
+    const ALL = ['core', 'core-sin', 'core-danada', 'core-confirma', 'migra', 'migra-act', 'error', 'clave', 'falla', 'falla-red', 'actualiza'];
+    const only = process.env.ORB_EXPLORA_START_ONLY ? process.env.ORB_EXPLORA_START_ONLY.split(',') : ALL;
+    for (const name of ALL.filter((n) => only.includes(n))) {
+      try {
+        await page.evaluate((n) => { window.name = `orb-start-preview:${n}`; }, name);
+        await page.reload();
+        await page.waitForSelector(`[data-testid=start-preview][data-preview="${name}"]`, { timeout: 20000 });
+        if (name === 'core-confirma' || name === 'clave') await page.waitForSelector('[data-slot=dialog-content]', { timeout: 10000 });
+        await page.evaluate(() => { const tag = document.querySelector('[data-testid=start-preview-tag]'); if (tag) tag.style.display = 'none'; });
+        for (const night of [false, true]) {
+          await page.evaluate((on) => document.documentElement.classList.toggle('dark', on), night);
+          await shot(`arranque-${name}${night ? '-noche' : ''}`);
+        }
+      } catch (error) { note(`arranque/${name}: ${String(error?.message ?? error).split(String.fromCharCode(10))[0]}`); }
+    }
+    await page.evaluate(() => { window.name = ''; }).catch(() => {});
+    note(`errores de la página: ${errors.join(' | ') || 'ninguno'}`);
+    await finish(0);
+  }
   // ---- 1. a brand-new PC: the welcome wizard, straight into the app.
-  {
+  if (!SERVE) {
     const userData = path.join(tmp, 'nuevo'); fs.mkdirSync(userData);
     const base = path.join(tmp, 'PrimerPC'); fs.mkdirSync(base);
+    // ORB_EXPLORA_EXTRA=1: the folders an earlier Orb kept at the top (bitacora, android/adb-tools, mcp-servers/notas), so that
+    // the welcome has its «Ordenar carpetas» step (it only shows when there is something to move).
+    if (EXTRA) {
+      const old = path.join(base, 'Orb');
+      fs.mkdirSync(path.join(old, 'bitacora'), { recursive: true }); fs.writeFileSync(path.join(old, 'bitacora', 'GENERAL.md'), '# Bitácora' + String.fromCharCode(10));
+      fs.mkdirSync(path.join(old, 'android', 'adb-tools'), { recursive: true });
+      fs.mkdirSync(path.join(old, 'mcp-servers', 'notas'), { recursive: true });
+    }
     const { page, errors, close } = await open(userData, { ORB_DEFAULT_BASE: base });
     const shot = shooter(page);
     // 3.7: the 3.5.1 welcome: the assistant's name, what to call you, the folder (3.8: already chosen: ORB_DEFAULT_BASE);
@@ -183,21 +265,34 @@ try {
     note(`ventana inicial: ${(await page.evaluate(() => [innerWidth, innerHeight])).join('x')}`);
     await page.fill('[data-testid=setup-user]', 'Ana');
     await shot('00-bienvenida');
+    // The welcome has no day / night control: before the setup the theme follows the system, so the dark pictures change the
+    // system's colour scheme (the transparency setting of open() is kept) and give it back.
+    const scheme = async (value) => {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'no-preference' }, ...(value ? [{ name: 'prefers-color-scheme', value }] : [])] });
+      await page.waitForTimeout(400);
+    };
+    const darkShot = async (name) => {
+      try { await scheme('dark'); await shot(`${name}-oscuro`); }
+      catch (error) { note(`bienvenida oscura: ${name}: ${String(error?.message ?? error).split(String.fromCharCode(10))[0]}`); }
+      finally { await scheme(null).catch(() => {}); }
+    };
+    await darkShot('00-bienvenida');
     const screens = { theme: '00a-tu-tema', layout: '00a-ordenar-carpetas', master: '00a-contrasena-maestra', prepare: '00b-preparo-equipo' };
     const onScreen = async (name) => {
       // «Tu tema» with another theme marked, then back to the default so the rest of the tour keeps it
       if (EXTRA && name === 'theme') {
         try {
           await page.click('[data-testid=setup-skin-vaporwave]', { timeout: 4000 }); await page.waitForTimeout(400);
-          await shot('00a-tu-tema-vaporwave');
+          await shot('00a-tu-tema-vaporwave'); await darkShot('00a-tu-tema-vaporwave');
           await page.click('[data-testid=setup-skin-predeterminado]', { timeout: 4000 }); await page.waitForTimeout(400);
         } catch (error) { note(`bienvenida: no se pudo marcar otro tema (${String(error?.message ?? error).split(String.fromCharCode(10))[0]})`); }
       }
-      await shot(screens[name]);
+      await shot(screens[name]); await darkShot(screens[name]);
     };
     // The folder comes chosen (ORB_DEFAULT_BASE): «Cambiar ubicación…» would open Windows' own dialog.
     await page.click('[data-testid=setup-create]');
-    const seen = await throughStart(page, { ready: '[data-testid=sidebar-home]', onScreen });
+    const seen = await throughStart(page, { ready: '[data-testid=sidebar-home]', onScreen, layout: EXTRA ? 'keep' : 'apply' });
     note(`pantallas de bienvenida: ${seen.join(' → ') || 'ninguna'}`);
     if (!seen.includes('master')) note('no salió «Crea tu contraseña maestra»');
     await shot('01c-primer-chat');
@@ -207,17 +302,26 @@ try {
 
   // ---- 2. an assistant already created: every view
   const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
+  // SERVE: the workspace must never land on the default place (C:\Orb): the welcome's folder comes chosen, and the phone link
+  // (off by default) would only listen on this PC.
+  const serveEnv = SERVE ? { ORB_DEFAULT_BASE: base, ORB_REMOTE_BIND: '127.0.0.1' } : {};
+  if (WELCOME) {
+    const profile = path.join(tmp, 'perfil'); fs.mkdirSync(profile, { recursive: true });
+    const { orb } = await open(profile, { ...writeFakes(), ...serveEnv });
+    note('Orb abierto en la bienvenida, sin datos de ejemplo (agentes falsos)');
+    serveLeave(orb);
+  }
   const { home } = createHome(base, { assistantName: 'Orb', userName: 'Alex' });
   writeJson(path.join(home, 'core', 'orb.json'), merge(loadConfig(home), { ui: { tourDone: true } })); // 2.6: no guided tour in the tests
   fs.mkdirSync(path.join(home, 'web', 'webviaproject', 'src'), { recursive: true });
   fs.writeFileSync(path.join(home, 'web', 'webviaproject', 'src', 'index.html'), '<h1>hola</h1>\n');
-  const userData = path.join(tmp, 'datos'); fs.mkdirSync(userData);
+  const userData = path.join(tmp, SERVE ? 'perfil' : 'datos'); fs.mkdirSync(userData);
   fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home }));
   // The fake agents (and the demo folders) must exist before Orb starts: the engine reads them at launch.
   const dirs = SEED ? await attempt('las carpetas de los proyectos', makeRepos) ?? {} : {};
   const fakes = SEED ? await attempt('los agentes falsos', writeFakes) ?? {} : {};
   if (SEED && !fakes.ORB_FAKE_AGENTS) note('sin agentes falsos: no habrá chats sembrados');
-  const { page, errors, close } = await open(userData, fakes);
+  const { page, errors, close, orb: launched } = await open(userData, { ...fakes, ...serveEnv });
   const shot = shooter(page);
   const call = (method, params = {}) => page.evaluate(([m, p]) => window.orb.call(m, p), [method, params]);
   // 3.8: a folder made before the first start has no master password yet: «Crea tu contraseña maestra» once.
@@ -342,6 +446,12 @@ try {
     return tap(`panel-tab-${tab}`);
   };
   const closePanel = async () => { if (await panelIsOpen()) await tap('turn-changes-close', 'cerrar el panel'); await page.waitForTimeout(300); };
+  // SERVE: seeded; the busy work is started once more, the first chat is opened and Orb stays as it is for whoever tries it.
+  if (SERVE) {
+    await keepBusy();
+    await openChat(CHATS[0].title);
+    serveLeave(launched);
+  }
   // The pictures of the chat with an agent (the sidebar, the turns with their «Cambió N archivos» card, the panel and the
   // menus of its bar and its box). prefix: «dia» / «noche».
   const agentShots = async (prefix) => {
@@ -547,12 +657,15 @@ try {
   };
   // The deep pictures of ORB_EXPLORA_EXTRA=1. Each block is on its own: one that fails is a note and the next one goes on.
   // prefix: «dia» / «noche».
+  // Agentes checks the installed programs on arrival (a spinner and «Comprobando los programas instalados…»): the picture waits for it.
+  const settleAgents = () => page.getByText(/Comprobando los programas instalados|Checking installed programs/).first().waitFor({ state: 'hidden', timeout: 30000 }).catch(() => noteOnce('Agentes: la comprobación de programas no terminó'));
   const deepShots = async (prefix) => {
     if (!seeded) return;
     // Agentes: its two tabs, from the top to the end of the page
     try {
       if (await tap('nav-agents', 'Agentes')) {
         await tap('agents-tab-agents', 'pestaña «Agentes y cuentas»');
+        await settleAgents();
         await page.waitForTimeout(500); await scrollView('top'); await shot(`${prefix}-agentes-cuentas`);
         await scrollShot(`${prefix}-agentes-medio`, 'middle');
         await scrollShot(`${prefix}-agentes-abajo`, 'end');
@@ -670,6 +783,72 @@ try {
     await call('config.save', { patch: { expert: { enabled: false, ...(panelIds.some((id) => wasPanels[id] === false) ? { panels: Object.fromEntries(panelIds.map((id) => [id, wasPanels[id] !== false])) } : {}) } } }).catch(() => {});
     await call('projects.setActive', { name: wasActive }).catch(() => {});
   };
+  // The two popups of the sidebar's foot: the music player (never pressed «play» unless ORB_EXPLORA_SOUND=1) and the feedback
+  // form (a sample text is typed and wiped; «Enviar» is never pressed). `name` is the picture's prefix, `full` adds the
+  // states (playing, manual, written) that only one theme needs.
+  const SOUND = process.env.ORB_EXPLORA_SOUND === '1';
+  const popClosed = async (testid) => { await page.keyboard.press('Escape'); await page.locator(`[data-testid=${testid}]`).waitFor({ state: 'detached', timeout: 3000 }).catch(() => noteOnce(`${testid}: Escape no lo cerró`)); await page.waitForTimeout(250); };
+  const footShots = async (name, full = true) => {
+    try {
+      if (await tap('nav-music', 'los auriculares (reproductor)') && await page.locator('[data-testid=music-pop]').waitFor({ timeout: 3000 }).then(() => true, () => false)) {
+        await shot(`${name}-reproductor`);
+        if (full && SOUND && await tap('music-pop-play', 'reproducir')) {
+          await page.waitForTimeout(1500); await shot(`${name}-reproductor-sonando`);
+          await tap('music-pop-play', 'pausar');
+          await page.waitForTimeout(600);
+          const still = await page.locator('[data-testid=nav-music]').getAttribute('aria-pressed').catch(() => null);
+          if (still === 'true') noteOnce('reproductor: tras pulsar de nuevo sigue sonando');
+        }
+        if (full && await tap('music-pop-manual', '«Manual»')) { await shot(`${name}-reproductor-manual`); await tap('music-pop-manual', 'volver a «Manual»'); }
+        await popClosed('music-pop');
+      } else { noteOnce('el reproductor no abrió su ventanita'); await closeMenus(); }
+      if (await tap('nav-feedback', 'comentarios') && await page.locator('[data-testid=feedback-pop]').waitFor({ timeout: 3000 }).then(() => true, () => false)) {
+        await shot(`${name}-comentarios`);
+        if (full) {
+          const box = page.locator('[data-testid=feedback-pop-message]').first();
+          if (await box.count()) {
+            await box.fill('Ejemplo: el botón de guardar no responde.'); await shot(`${name}-comentarios-escrito`);
+            await box.fill('');
+          } else noteOnce('comentarios: sin caja de texto');
+        }
+        await popClosed('feedback-pop');
+      } else { noteOnce('comentarios no abrió su ventanita'); await closeMenus(); }
+    } catch (error) { noteOnce(`pie de la barra lateral: el recorrido se cortó (${String(error?.message ?? error).split(String.fromCharCode(10))[0]})`); await closeMenus(); }
+  };
+  // The Orb theme's companion robot (Tareas shows it): at rest, dragged with the real pointer, put back with a right click, and
+  // the window's answer with the pointer over the mark.
+  const companionShots = async (prefix) => {
+    try {
+      const where = () => page.evaluate(() => { const e = document.querySelector('[data-testid=companion]'); if (!e) return null; const r = e.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }; });
+      const view = () => page.evaluate(() => `${location.href} · robot=${Boolean(document.querySelector('[data-testid=companion]'))} · chat=${Boolean(document.querySelector('[data-testid=chat-greeting]'))}`);
+      if (!(await page.locator('[data-testid=companion]').first().waitFor({ timeout: 4000 }).then(() => true, () => false))) { noteOnce('robot compañero: no se ve en Tareas (¿ajuste «compañero» apagado?)'); return; }
+      await shot(`${prefix}-companero`);
+      const before = await where(); const viewBefore = await view();
+      const cx = before.x + before.w / 2; const cy = before.y + before.h / 2;
+      await page.mouse.move(cx, cy, { steps: 4 }); await page.mouse.down();
+      await page.mouse.move(cx - 300, cy - 150, { steps: 8 }); await page.mouse.up();
+      await page.waitForTimeout(300);
+      const after = await where(); const viewAfter = await view();
+      await shot(`${prefix}-companero-movido`);
+      note(`robot compañero ${prefix}: antes ${JSON.stringify(before)} · después ${JSON.stringify(after)}${after && after.x !== before.x ? '' : ' · NO SE MOVIÓ'}`);
+      if (viewAfter !== viewBefore) note(`robot compañero ${prefix}: el arrastre navegó (${viewBefore} → ${viewAfter})`);
+      if (after) {
+        await page.mouse.click(after.x + after.w / 2, after.y + after.h / 2, { button: 'right' }); await page.waitForTimeout(400);
+        const back = await where();
+        note(`robot compañero ${prefix}: clic derecho → ${JSON.stringify(back)} · ${back && Math.abs(back.x - before.x) <= 2 && Math.abs(back.y - before.y) <= 2 ? 'volvió a su sitio' : 'NO VOLVIÓ a su sitio'}`);
+      }
+      // the pointer resting over the mark: the window must keep answering
+      const home = await page.locator('[data-testid=sidebar-home]').first().boundingBox().catch(() => null);
+      if (home) {
+        await page.mouse.move(home.x + home.width / 2, home.y + home.height / 2, { steps: 4 }); await page.waitForTimeout(1500);
+        const t0 = Date.now();
+        const ok = await Promise.race([page.evaluate(() => 1).then(() => true, () => false), new Promise((r) => setTimeout(() => r(false), 8000))]);
+        const ms = Date.now() - t0;
+        note(`respuesta con el puntero sobre la marca ${prefix}: ${ok ? `${ms} ms${ms > 1000 ? ' · LENTO' : ''}` : 'SIN RESPUESTA en 8 s · LENTO'}`);
+        await page.mouse.move(700, 500, { steps: 3 });
+      } else noteOnce('respuesta con el puntero sobre la marca: sin [data-testid=sidebar-home]');
+    } catch (error) { noteOnce(`robot compañero: el recorrido se cortó (${String(error?.message ?? error).split(String.fromCharCode(10))[0]})`); await page.mouse.up().catch(() => {}); await closeMenus(); }
+  };
   // The lock screen, at the end of a mode's tour: «Bloquear ahora», a wrong password, then the test password of this profile.
   // Throws when the app does not come back: nothing after it could be shot.
   const lockShots = async (prefix) => {
@@ -715,6 +894,7 @@ try {
     for (const [nav, name] of views) {
       await keepBusy();
       if (nav === 'sidebar-home') await goChat(); else await page.click(`[data-testid=${nav}]`);
+      if (name === 'agentes') await settleAgents();
       await shot(`${theme}-${name}`);
       if (theme === 'dia') {
         const wide = await overflow(page);
@@ -760,6 +940,7 @@ try {
     if (EXTRA) {
       // the extra pass: deepShots takes the place of the chat pictures, the boards and the places, then the lock screen
       await deepShots(theme);
+      await footShots(theme);
       await lockShots(theme);
       continue;
     }
@@ -947,7 +1128,12 @@ try {
       await shot(`tema-${skin}-${theme}-chat`);
       // the chat with an agent with its side panel open (Ficha)
       if (seeded && await openChat(CHATS[0].title)) { if (await openPanel('info')) await shot(`tema-${skin}-${theme}-chat-agente`); await closePanel(); }
-      if (await tapOrNote('[data-testid=nav-tasks]')) await shot(`tema-${skin}-${theme}-tareas`);
+      if (await tapOrNote('[data-testid=nav-tasks]')) {
+        await shot(`tema-${skin}-${theme}-tareas`);
+        if (skin === 'orb') await companionShots(`tema-${skin}-${theme}`);
+      }
+      // the sidebar's foot popups in every theme (the player's play button is never pressed here)
+      if (EXTRA) await footShots(`tema-${skin}-${theme}`, false);
       // ORB_EXPLORA_EXTRA=1: Agentes and Uso in every theme too
       if (EXTRA && await tapOrNote('[data-testid=nav-agents]')) {
         await page.waitForTimeout(500); await shot(`tema-${skin}-${theme}-agentes`);
@@ -1000,6 +1186,41 @@ try {
       }
     }
   }
+  // ---- 5. the agents' browser's live window (ORB_EXPLORA_PIP=1): a second window (pip.html) Orb opens when an agent uses its
+  // browser. A fake agent opens a local page (127.0.0.1: no network); the window's own page is what gets pictured.
+  if (PIP) {
+    let site = null;
+    try {
+      if (!seeded) throw new Error('hacen falta los agentes falsos (ORB_EXPLORA_SEED no puede ser 0)');
+      site = http.createServer((_req, res) => {
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+        res.end('<!doctype html><title>Tienda de ejemplo</title><body style="font:20px sans-serif;background:#eef;margin:32px"><h1>Tienda de ejemplo</h1><p>Una página local para la ventana en vivo.</p><input placeholder="Tu correo" style="font:inherit;padding:6px"> <button style="font:inherit;padding:6px 14px">Suscribirme</button></body>');
+      });
+      await new Promise((r) => site.listen(0, '127.0.0.1', r));
+      opened.push(() => new Promise((r) => site.close(() => r())));
+      const url = `http://127.0.0.1:${site.address().port}/`;
+      // open, take a picture (the window gets frames), then stay busy so the window stays up while it is pictured
+      fs.writeFileSync(PIP_SCRIPT, JSON.stringify([['orb_browser_open', { url }], ['orb_browser_screenshot', {}], ['sleep', { ms: 60000 }]]));
+      const chat = await call('sessions.create', { agent: 'claude', project: 'tienda-web', permission: 'editar', title: 'Navegador de ejemplo' });
+      await call('sessions.send', { id: chat.id, text: PIP_TURN.text });
+      const findPip = () => page.context().browser()?.contexts().flatMap((c) => c.pages()).find((p) => p.url().endsWith('pip.html'));
+      const pip = await until(findPip, 'la ventana en vivo (pip.html)', 40000).catch(() => null);
+      if (!pip) note('VENTANA EN VIVO: no se abrió pip.html con la ventana principal oculta (ORB_HIDDEN_WINDOW=1). Haría falta una ejecución con la ventana visible o ver qué pide src-tauri/src/pip.rs en modo oculto');
+      else {
+        const pipShot = async (name) => { await pip.waitForTimeout(500); await pip.screenshot({ path: path.join(OUT, `${name}.png`) }); };
+        const press = async (name, what) => { try { await pip.getByRole('button', { name }).first().click({ timeout: 4000 }); await pip.waitForTimeout(700); return true; } catch { noteOnce(`ventana en vivo: sin botón «${what}»`); return false; } };
+        if (!(await pip.locator('[data-testid=pip] img').first().waitFor({ timeout: 20000 }).then(() => true, () => false))) noteOnce('ventana en vivo: no llegó ninguna imagen de la página (se capta lo que haya)');
+        await pipShot('vivo-normal');
+        if (await press(/Más grande|Larger/, 'Más grande')) { await pipShot('vivo-grande'); await press(/Más pequeña|Smaller/, 'Más pequeña'); }
+        if (await press(/Contraer|Collapse/, 'Contraer')) { await pipShot('vivo-pildora'); await press(/Mostrar|Show/, 'Mostrar'); }
+        note('ventana en vivo: siempre oscura (body.dark), no sigue el modo de la app: una sola serie de capturas');
+        await press(/Cerrar hasta|Close until/, 'Cerrar hasta la próxima vez');
+      }
+      await call('sessions.stop', { id: chat.id }).catch(() => {});
+    } catch (error) { note(`VENTANA EN VIVO: el recorrido se cortó (${String(error?.message ?? error).split(String.fromCharCode(10))[0]})`); } finally {
+      await new Promise((r) => { if (!site) return r(); site.closeAllConnections?.(); site.close(() => r()); });
+    }
+  }
   const state = await call('app.state');
   note(`versión ${state.version}, agentes: ${(await call('agents.status')).map((a) => `${a.id}=${a.installed ? 'instalado' : 'no'}/${a.login ?? '?'}`).join(', ')}`);
   note(`errores de la página: ${errors.join(' | ') || 'ninguno'}`);
@@ -1013,8 +1234,5 @@ try {
   console.error(`✖ ${error.stack}`);
   process.exitCode = 1;
 } finally {
-  fs.writeFileSync(path.join(OUT, 'notas.txt'), notes.join('\n'));
-  for (const stop of opened) { try { await stop(); } catch { /* already closed */ } }
-  try { fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5 }); } catch { /* a file still open: the temp folder stays */ }
-  process.exit(process.exitCode ?? 0);
+  await finish();
 }

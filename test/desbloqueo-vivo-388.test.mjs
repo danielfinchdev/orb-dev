@@ -69,3 +69,13 @@ test('the live window keeps every action it had and only shows what it showed', 
   assert.match(pip, /state\.recording/);
   assert.doesNotMatch(pip, /state\.(path|file|message|text|cwd|project)\b/);
 });
+
+test('10C-a: the lock screen draws the theme backdrop blurred under its veil and never the app', () => {
+  assert.match(locked, /<Scene \/>/);
+  assert.match(locked, /bg-black\/32 p-6 backdrop-blur-\[10px\]/);
+  assert.match(locked, /useBaseAppearance\(\)/);
+  assert.match(master, /import \{ Scene \} from '@\/components\/scene\.jsx'/);
+  // nothing of the app is mounted behind it
+  assert.doesNotMatch(locked, /<Shell|<Sidebar|<ChatView|VIEWS\b/);
+  assert.doesNotMatch(master, /from '@\/components\/sidebar/);
+});
