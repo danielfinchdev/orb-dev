@@ -29,8 +29,8 @@ test('every view shares one 56 px header: clock, title with its line, actions', 
   assert.match(rule('.bar-center .name'), /font-size: 15px/);
   assert.match(rule('.bar .sub'), /font-size: 12px/);
   assert.match(rule('.bar-clock-time'), /font-size: 18px/);
-  // the palette button is an icon button on the right of the actions
-  assert.match(page, /<IconButton label=\{t\('palette\.open'\)\}[^>]*data-testid="open-palette"/);
+  // the magnifier is gone from the bars: Ctrl+K stays and is named in the sidebar's search (regla4-388.test.mjs)
+  assert.ok(!page.includes('open-palette'));
 });
 
 test('the clock shows seconds under the pointer and opens a month calendar with arrows and «Hoy»', () => {
@@ -85,7 +85,7 @@ test('«Normal» is the real 100 % and Ajustes offers four sizes', () => {
 
 test('every data-testid the header, the tabs and the window buttons had is still there', () => {
   const files = ['chat-bar', 'page', 'window-controls', 'chat-tabs', 'bar-clock', 'conversation/bar'].map((f) => read(`src/ui/components/${f}.jsx`)).join('\n');
-  for (const id of ['chat-back', 'open-palette', 'page-back', 'chat-tabs', 'split-divider', 'tabs-empty', 'bar-calendar', 'bar-calendar-next', 'bar-calendar-title', 'bar-clock', 'bar-pause', 'bar-resume', 'bar-title', 'bar-title-project', 'bar-title-text', 'chat-compact']) {
+  for (const id of ['chat-back', 'page-back', 'chat-tabs', 'split-divider', 'tabs-empty', 'bar-calendar', 'bar-calendar-next', 'bar-calendar-title', 'bar-clock', 'bar-pause', 'bar-resume', 'bar-title', 'bar-title-project', 'bar-title-text', 'chat-compact']) {
     assert.ok(files.includes(`data-testid="${id}"`), id);
   }
   for (const frag of ['data-testid={testid}', 'data-testid={`window-${action}`}', 'data-testid={`pane-${side}`}']) assert.ok(files.includes(frag), frag);

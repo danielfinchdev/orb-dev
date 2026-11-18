@@ -21,7 +21,7 @@ import { AGENT } from '@/lib/labels.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { cn } from '@/lib/utils.js';
 import { quiet } from '@/lib/quiet.js';
-import { Block, Panel, Setting, save } from './settings/rows.jsx';
+import { Block, Panel, Setting, MoreOptions, save } from './settings/rows.jsx';
 
 const usd = (n, locale) => `$${Number(n ?? 0).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const tokens = shortTokens;
@@ -100,7 +100,7 @@ function Days({ days, metric, locale }) {
   );
 }
 
-// The same days as a table for reading the numbers; it closes the page.
+// The same days as a table for reading the numbers (not in the mock-up): under «Más opciones», which closes the page.
 function DaysTable({ days, metric, locale }) {
   const t = useT();
   const dayName = (d, i) => {
@@ -108,15 +108,17 @@ function DaysTable({ days, metric, locale }) {
     return i === days.length - 1 ? t('usage.today', { day: name }) : name;
   };
   return (
-    <details className="text-faint-foreground text-caption">
-        <summary className="cursor-pointer">{t('usage.tableOf', { what: metric === 'usd' ? t('usage.costByDay') : t('usage.tokensByDay') })}</summary>
+    <MoreOptions fold testid="usage-more" triggerTestid="usage-more-toggle">
+      <div className="text-faint-foreground text-caption" data-testid="usage-table">
+        <p>{t('usage.tableOf', { what: metric === 'usd' ? t('usage.costByDay') : t('usage.tokensByDay') })}</p>
         <ListCard className="mt-1.5">
           <div className="text-faint-foreground grid grid-cols-[1.2fr_1fr_1fr_1fr] gap-3 px-3.5 py-2 text-micro uppercase"><span>{t('usage.day')}</span><span>{t('usage.in')}</span><span>{t('usage.out')}</span><span>{metric === 'usd' ? t('usage.cost') : t('usage.total')}</span></div>
           {days.map((d, i) => (
             <div key={d.day} className="border-border text-foreground grid grid-cols-[1.2fr_1fr_1fr_1fr] gap-3 border-t px-3.5 py-2 text-control tabular-nums"><span>{dayName(d, i)}</span><span>{tokens(d.tokensIn)}</span><span>{tokens(d.tokensOut)}</span><span>{metric === 'usd' ? usd(d.usd, locale) : tokens(d.tokensIn + d.tokensOut)}</span></div>
           ))}
         </ListCard>
-    </details>
+      </div>
+    </MoreOptions>
   );
 }
 

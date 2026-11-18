@@ -50,7 +50,7 @@ export default {
   'settings.spendCustomHint': 'Límites ajustados a mano. Elige un nivel para volver a uno.',
   'settings.spendFine': 'Nivel exacto',
   'settings.spendFineHint': 'Los cinco niveles: los botones de arriba son el primero, el del medio y el último.',
-  'settings.advanced': 'Opciones avanzadas',
+  'settings.moreOptions': 'Más opciones',
   'settings.advancedHint': 'Al guardar cambios aquí, el nivel pasa a «Personalizado».',
   'settings.autoRun': 'Iniciar las tareas automáticamente',
   'settings.autoModel': 'Elegir el modelo automáticamente',

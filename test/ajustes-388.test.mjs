@@ -95,7 +95,7 @@ test('every test id of before is still there', () => {
     'music-intensity', 'music-mode', 'music-reactive', 'music-settings', 'music-theme', 'music-volume', 'one-at-a-time', 'palette-picker', 'palette-settings', 'parallel-chats', 'phone-card', 'previous-key', 'previous-key-more', 'previous-key-use',
     'protected-card', 'protected-defaults', 'protected-input', 'protected-item', 'protected-remove', 'settings-about', 'settings-dialog', 'settings-foot', 'settings-foot-github', 'settings-foot-version', 'settings-test', 'shortcuts-card', 'skin-picker',
     'spend-advanced', 'spend-profile', 'spend-save', 'spend-slider', 'suggest-next', 'tabs-switch', 'trash-card', 'trash-empty', 'trash-restore', 'updates-card', 'usage-line-switch', 'worktree-remove', 'worktrees-card'];
-  const missing = ids.filter((id) => !ALL.includes(`data-testid="${id}"`) && !ALL.includes(`'data-testid': '${id}'`));
+  const missing = ids.filter((id) => !ALL.includes(`data-testid="${id}"`) && !ALL.includes(`'data-testid': '${id}'`) && !ALL.includes(`triggerTestid="${id}"`));
   assert.deepEqual(missing, []);
   for (const dynamic of ['settings-nav-${id}', 'settings-group-${id}', 'mobile-${kind}', 'app-${a.id}', 'shortcut-${cmd.id}']) assert.ok(ALL.includes(`data-testid={\`${dynamic}\`}`), dynamic);
   assert.match(ALL, /testid="settings-autonomy"/);
@@ -154,18 +154,19 @@ test('8C-a: Ajustes follows the mock-up where it was out of order, and nothing i
   const index = view('settings', 'index.jsx');
   // General: Asistente, Carpeta, Interfaz, Apariencia (with Respuestas and Robot), then what the mock-up lacks, Actualizaciones
   assert.match(index, /<AssistantCard c=\{c\} \/><FolderCard c=\{c\} home=\{app\.home\} \/><InterfaceCard c=\{c\} \/><SubSection id="apariencia"/);
-  assert.ok(index.indexOf('<TabsCard') > index.indexOf('<AppearanceCard') && index.indexOf('<UpdatesCard') > index.indexOf('<ShortcutsCard'));
+  // the chat tabs and the shortcuts are Orb's, not the mock-up's: «Más opciones», after Actualizaciones
+  assert.ok(index.indexOf('<TabsCard') > index.indexOf('<UpdatesCard') && index.indexOf('<ShortcutsCard') > index.indexOf('<UpdatesCard'));
   // Apariencia: only the mock-up's rows (no density, chat width or text size)
   for (const gone of ['appearance.density', 'appearance.chatWidth', 'appearance.fontSize']) assert.ok(!general.includes(`'${gone}'`), gone);
   // Robot y sonidos: on and volume of the music first, its style and reactivity after
-  const music = general.slice(general.indexOf('function MusicSettings'));
+  const music = general.slice(general.indexOf('function MusicMore'));
   assert.ok(music.indexOf("'appearance.musicVolume'") < music.indexOf("'appearance.musicTheme'"));
   for (const id of ['music-mode', 'music-theme', 'music-reactive', 'music-intensity', 'music-volume', 'music-on']) assert.ok(music.includes(`data-testid="${id}"`), id);
   // Permisos: Auto / Preguntar, waiting, protected paths; the two buttons make the same call
   assert.match(index, /<PermissionsCard c=\{c\} \/><ApprovalWaitCard c=\{c\} \/><ProtectedCard c=\{c\} \/>/);
   assert.match(general, /<Segmented value=\{mode\} data-testid="settings-autonomy"[^\n]*call\('permissions\.setMode', \{ mode: p === 'auto' \? 'auto' : 'preguntar' \}\)/);
   // Datos: the core folder before the extras
-  assert.match(view('data.jsx'), /<LegacyCard \/><BackupsCard \/><CoreCard \/><TrashCard \/><WorktreesCard \/>/);
+  assert.match(view('data.jsx'), /<LegacyCard \/><BackupsCard \/><CoreCard \/><MoreOptions testid="more-options-datos"><TrashCard \/><WorktreesCard \/><\/MoreOptions>/);
 });
 
 test('8C-a: «Ahorro o potencia» is three buttons (levels 0, 2, 4); levels 1 and 3 stay in the advanced options', () => {

@@ -1,13 +1,13 @@
 // Ajustes: the assistant, appearance, chat, tasks, interface, God mode, the folder, «Cosas que nadie toca» and the daily test.
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { LayoutDashboard, Gem, Bot, Waves, Candy, Terminal, FlaskConical, FolderOpen, Plus, SquareTerminal, ZoomIn, ZoomOut, X, ChevronRight, RotateCcw } from 'lucide-react';
+import { LayoutDashboard, Gem, Bot, Waves, Candy, Terminal, FlaskConical, FolderOpen, Plus, SquareTerminal, ZoomIn, ZoomOut, X, RotateCcw } from 'lucide-react';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, APPEARANCE_DEFAULTS, plainSkin } from '../../../shared/appearance.mjs';
 import { PANELS, savePanels } from '../expert.jsx';
 import { confirm } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Input, Textarea } from '@/components/ui/basic.jsx';
 import { Segmented } from '@/components/ui/primitives.jsx';
-import { Select, Switch, Checkbox, Range, BubbleTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
+import { Select, Switch, Checkbox, Range, BubbleTip } from '@/components/ui/overlay.jsx';
 import { ModelGuide } from '@/components/model-guide.jsx';
 import { AGENT } from '@/lib/labels.js';
 import { act, call, refresh, bridge, go, openTerminal, closeSettings, fullPc, runTest, darkOnlySkin, lightOnlySkin, useStore } from '@/lib/store.js';
@@ -18,7 +18,7 @@ import { play } from '@/lib/sounds.js';
 import { DEFAULT_PROTECTED } from '../../../shared/layout.mjs';
 import { available as musicAvailable, musicPrefs, musicState, subscribe as onMusic, toggleMusic, setMusicVolume, setMusicMode, setMusicTheme, setMusicReactive, setMusicIntensity } from '@/lib/music.js';
 import { MUSIC_MODES, ADAPTIVE_THEMES } from '../../../shared/music.mjs';
-import { save, num, Row, WithKeys, sizes, Block, Panel, Setting, Fld, Stack, CardFoot, Hint } from './rows.jsx';
+import { save, num, Row, WithKeys, sizes, MoreOptions, Block, Panel, Setting, Fld, Stack, CardFoot, Hint } from './rows.jsx';
 import { quiet } from '@/lib/quiet.js';
 
 export function AssistantCard({ c }) {
@@ -119,8 +119,32 @@ if (robot.listo) console.log('Tarea hecha');`}</code></pre>
           <Row label={t('settings.motion')} hint={t('settings.motionHint')}><Switch checked={ui.motion !== 'minima'} onCheckedChange={(on) => set({ motion: on ? 'completa' : 'minima' }, on ? t('settings.motionOn') : t('settings.motionOff'))} /></Row>
           {musicAvailable() ? <MusicSettings /> : null}
         </Panel>
+        {musicAvailable() ? <MusicMore /> : null}
       </Block>
     </>
+  );
+}
+
+// What the mock-up does not draw of the music (it follows what happens in Orb, or keeps one intensity): under «Más opciones».
+function MusicMore() {
+  const t = useT();
+  useStore((s) => s.app?.config?.ui?.music);
+  const prefs = musicPrefs();
+  const [level, setLevel] = useState(prefs.intensity);
+  const keepLevel = () => setMusicIntensity(level, { save: true });
+  if (prefs.mode !== 'adaptive') return null;
+  return (
+    <MoreOptions testid="more-options-music">
+      <Panel>
+            <Row label={t('appearance.musicReactive')} hint={t('appearance.musicReactiveHint')}><Switch checked={prefs.reactive} onCheckedChange={setMusicReactive} data-testid="music-reactive" /></Row>
+            {prefs.reactive ? null : (
+              <Setting label={t('appearance.musicIntensity')}>
+                <Range min={0} max={1} step={0.05} value={level} aria-label={t('appearance.musicIntensity')} className="w-[120px]! cursor-pointer" data-testid="music-intensity"
+                  onChange={(e) => { const n = Number(e.target.value); setLevel(n); setMusicIntensity(n); }} onPointerUp={keepLevel} onKeyUp={keepLevel} />
+              </Setting>
+            )}
+      </Panel>
+    </MoreOptions>
   );
 }
 
@@ -230,10 +254,7 @@ export function TasksCard({ c }) {
         </Panel>
       </Block>
       {bridge.mobile ? null : <TestCard />}
-      <Collapsible open={advanced} onOpenChange={setAdvanced}>
-        <CollapsibleTrigger className="hover:text-primary-text focus-visible:outline-ring flex cursor-pointer items-center gap-1.5 font-(family-name:--title) text-card-title leading-normal font-semibold outline-none focus-visible:outline-2" data-testid="spend-advanced"><ChevronRight className={cn('size-4 transition-transform', advanced && 'rotate-90')} />{t('settings.advanced')}</CollapsibleTrigger>
-        <CollapsibleContent>
-          <div className="mt-4 flex flex-col gap-4">
+      <MoreOptions fold open={advanced} onOpenChange={setAdvanced} testid="spend-more" triggerTestid="spend-advanced">
             <Hint>{t('settings.advancedHint')}</Hint>
             <Panel>
               <Setting label={t('settings.spendFine')} hint={t('settings.spendFineHint')}>
@@ -264,9 +285,7 @@ export function TasksCard({ c }) {
                 <CardFoot><Button size="sm" onClick={saveAdvanced}>{t('settings.save')}</Button></CardFoot>
               </Panel>
             </Block>
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
+      </MoreOptions>
     </>
   );
 }
@@ -422,9 +441,7 @@ function MusicSettings() {
   const prefs = musicPrefs();
   const playing = useSyncExternalStore(onMusic, () => { const s = musicState(); return Boolean(s.playing || s.loading); });
   const [v, setV] = useState(prefs.volume);
-  const [level, setLevel] = useState(prefs.intensity);
   const keepVolume = () => setMusicVolume(v, { save: true });
-  const keepLevel = () => setMusicIntensity(level, { save: true });
   return (
     <div className="contents" data-testid="music-settings">
       <Row label={t('appearance.music')} hint={t('appearance.musicHint')} className="border-t"><Switch checked={playing} onCheckedChange={() => toggleMusic()} aria-label={t('appearance.music')} data-testid="music-on" /></Row>
@@ -443,13 +460,6 @@ function MusicSettings() {
           <Setting label={t('appearance.musicTheme')}>
             <Select caret="solid" className="w-52 shrink-0" value={prefs.theme} onValueChange={setMusicTheme} title={t('appearance.musicTheme')} data-testid="music-theme" options={ADAPTIVE_THEMES.map((value) => ({ value, label: t(`appearance.musicTheme.${value}`) }))} />
           </Setting>
-          <Row label={t('appearance.musicReactive')} hint={t('appearance.musicReactiveHint')}><Switch checked={prefs.reactive} onCheckedChange={setMusicReactive} data-testid="music-reactive" /></Row>
-          {prefs.reactive ? null : (
-            <Setting label={t('appearance.musicIntensity')}>
-              <Range min={0} max={1} step={0.05} value={level} aria-label={t('appearance.musicIntensity')} className="w-[120px]! cursor-pointer" data-testid="music-intensity"
-                onChange={(e) => { const n = Number(e.target.value); setLevel(n); setMusicIntensity(n); }} onPointerUp={keepLevel} onKeyUp={keepLevel} />
-            </Setting>
-          )}
         </>
       ) : null}
     </div>

@@ -7,8 +7,8 @@ import { MoreButton } from '@/components/ui/primitives.jsx';
 import { BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/overlay.jsx';
 import { useT } from '@/lib/i18n.js';
 
-// actions: icon buttons of the tab, drawn before the bell. onRefresh: what «Actualizar» of «⋯» does.
-export function BitacorasPage({ meta, actions, onRefresh, tabs, children, bodyClassName }) {
+// actions: icon buttons of the tab, drawn before the bell. onRefresh: what «Actualizar» of «⋯» does. menuItems: the tab's own items of «⋯» (what the mock-up does not draw), after it.
+export function BitacorasPage({ meta, actions, menuItems, onRefresh, tabs, children, bodyClassName }) {
   const t = useT();
   return (
     <>
@@ -19,6 +19,7 @@ export function BitacorasPage({ meta, actions, onRefresh, tabs, children, bodyCl
           <BubbleTip title={t('nav.more')}><DropdownMenuTrigger asChild><MoreButton label={t('nav.more')} data-testid="logbooks-more" /></DropdownMenuTrigger></BubbleTip>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuItem onSelect={() => onRefresh?.()} data-testid="logbooks-refresh"><RefreshCw />{t('logbooks.refresh')}</DropdownMenuItem>
+            {menuItems}
           </DropdownMenuContent>
         </DropdownMenu>
       </PageHeader>

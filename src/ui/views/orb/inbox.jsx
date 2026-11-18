@@ -564,6 +564,9 @@ export function OrbInbox({ page = false }) {
   const setOrder = (v) => { setOrderState(v); setFrozen(null); try { localStorage.setItem('orb.inbox.order', v); } catch { /* the order is a convenience */ } };
   useEffect(() => { if (order === 'priority' && !frozen && items.length) setFrozen(priorityKeys(items)); }, [order, frozen, items]);
   const parts = useMemo(() => groupOrb(items, { showDone, filter, order, frozen }), [items, showDone, filter, order, frozen]);
+  // Ctrl+K is named here (the headers carry no magnifier); the key comes from the shortcut table.
+  const paletteKey = useKeys().table.get('palette.open')?.key;
+  const searchTitle = paletteKey ? `${t('orbchats.search')} (${paletteKey})` : t('orbchats.search');
   // Ctrl+Alt+A: the next chat that needs the user, in the order the list shows.
   const route = useStore((s) => s.route);
   // the key is a command of the shortcut table (lib/keys.js): Ajustes › Atajos can change it
@@ -609,7 +612,7 @@ export function OrbInbox({ page = false }) {
   const pcSearch = (
     <div className="flex items-center gap-1">
       <div className="relative min-w-0 flex-1">
-        <SearchInput value={query} onChange={setQuery} placeholder={t('orbchats.search')} className="w-full" inputClassName="pr-8" data-testid="sidebar-search-input"
+        <SearchInput value={query} onChange={setQuery} placeholder={t('orbchats.search')} title={searchTitle} className="w-full" inputClassName="pr-8" data-testid="sidebar-search-input"
           onKeyDown={(e) => { if (e.key === 'Escape') { setQuery(''); setFilter(FILTER0); } }} />
         <div className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center">
           {query ? <IconButton small label={t('comp.sidebar.clearSearch')} onClick={() => setQuery('')}><X /></IconButton> : null}
@@ -709,7 +712,7 @@ export function OrbChatsView() {
   useEffect(() => { setState((s) => (s.orbInfo?.type === 'chat' ? { orbInfo: null } : {})); }, []);
   return (
     <>
-      <PageHeader palette={false} title={t('nav.modeOrb')} className="chats-head" />
+      <PageHeader title={t('nav.modeOrb')} className="chats-head" />
       {/* the list scrolls on its own inside (the search stays on top) */}
       <PageBody className="flex flex-col overflow-hidden p-0 [scrollbar-gutter:auto]"><OrbInbox page /></PageBody>
     </>

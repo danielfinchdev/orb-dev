@@ -7,8 +7,8 @@ import { notifyOk } from '@/lib/notify.js';
 import { Markdown } from '@/components/markdown.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { Badge, Empty, Spinner } from '@/components/ui/basic.jsx';
-import { BubbleTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
-import { IconButton, ListCard, NavRow, SearchInput } from '@/components/ui/primitives.jsx';
+import { DropdownMenuItem, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
+import { ListCard, NavRow, SearchInput } from '@/components/ui/primitives.jsx';
 import { useStore, call } from '@/lib/store.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { quiet } from '@/lib/quiet.js';
@@ -116,14 +116,15 @@ export function LogsView({ route, tabs }) {
   const title = selected === 'general' ? t('logs.general') : selected.replace(/\s*eliminad[oa]$/i, '');
   const count = parsed?.entries.length ?? 0;
   const copy = () => navigator.clipboard.writeText(body ?? '').then(() => notifyOk(t('logs.copied')));
-  const actions = (
+  // «Copiar» and «Ver completa» are not in the mock-up's bar: they live in the «⋯» of the page.
+  const menuItems = (
     <>
-      {partial && !whole ? <BubbleTip title={t('logs.whole')}><IconButton label={t('logs.whole')} onClick={() => setWhole(true)} data-testid="log-whole"><Maximize2 /></IconButton></BubbleTip> : null}
-      <BubbleTip title={t('logs.copy')}><IconButton label={t('logs.copy')} onClick={copy} data-testid="log-copy"><Copy /></IconButton></BubbleTip>
+      {partial && !whole ? <DropdownMenuItem onSelect={() => setWhole(true)} data-testid="log-whole"><Maximize2 />{t('logs.whole')}</DropdownMenuItem> : null}
+      <DropdownMenuItem onSelect={copy} data-testid="log-copy"><Copy />{t('logs.copy')}</DropdownMenuItem>
     </>
   );
   return (
-    <BitacorasPage meta={t('nav.logbooksHint')} actions={actions} onRefresh={() => setTick((n) => n + 1)} tabs={tabs}>
+    <BitacorasPage meta={t('nav.logbooksHint')} menuItems={menuItems} onRefresh={() => setTick((n) => n + 1)} tabs={tabs}>
       <div className="grid items-start gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
         <div className="flex flex-col gap-3 lg:sticky lg:top-0">
           <SearchInput value={all} onChange={setAll} placeholder={t('logbooks.searchAll')} className="h-(--ctl-sm) w-full" data-testid="log-search-all" />

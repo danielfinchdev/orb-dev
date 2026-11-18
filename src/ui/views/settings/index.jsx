@@ -12,7 +12,7 @@ import { t, useT } from '@/lib/i18n.js';
 import { MagicLinkPanel, SubSection } from '../magic-link.jsx';
 import { DataCards } from '../data.jsx';
 import { ExtensionsPanel } from '../extensions.jsx';
-import { Block } from './rows.jsx';
+import { Block, MoreOptions } from './rows.jsx';
 import { TabsCard, ShortcutsCard } from './shortcuts.jsx';
 import { AssistantCard, AppearanceCard, ChatCard, PermissionsCard, ApprovalWaitCard, TasksCard, FolderCard, ProtectedCard, InterfaceCard, ExpertCard } from './general.jsx';
 import { AndroidCard, MobileCard, BrowserCard } from './devices.jsx';
@@ -44,7 +44,7 @@ function AgentsTabs({ c }) {
 // with its heading; the active section lists them under its name in the menu, to jump to one.
 const SECTIONS = [
   { id: 'general', icon: Settings, groups: ['apariencia', 'actualizaciones'],
-    cards: (c, app) => <><AssistantCard c={c} /><FolderCard c={c} home={app.home} /><InterfaceCard c={c} /><SubSection id="apariencia" title={t('settings.group.apariencia')}><AppearanceCard c={c} /></SubSection><SubSection id="atajos" title={t('keys.title')}><TabsCard c={c} /><ShortcutsCard /></SubSection><SubSection id="actualizaciones" title={t('settings.group.actualizaciones')}><UpdatesCard /></SubSection></> },
+    cards: (c, app) => <><AssistantCard c={c} /><FolderCard c={c} home={app.home} /><InterfaceCard c={c} /><SubSection id="apariencia" title={t('settings.group.apariencia')}><AppearanceCard c={c} /></SubSection><SubSection id="actualizaciones" title={t('settings.group.actualizaciones')}><UpdatesCard /></SubSection><MoreOptions testid="more-options-general"><TabsCard c={c} /><ShortcutsCard /></MoreOptions></> },
   // Who can enter this Orb: the linked phones and browsers.
   { id: 'magiclink', icon: Smartphone, groups: ['dispositivos'],
     cards: () => <MagicLinkPanel grouped phoneAccess={<MobileCard />} /> },

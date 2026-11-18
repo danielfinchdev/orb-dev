@@ -50,7 +50,7 @@ export default {
   'settings.spendCustomHint': 'Limits set by hand. Pick a level to go back to one.',
   'settings.spendFine': 'Exact level',
   'settings.spendFineHint': 'All five levels: the buttons above are the first, the middle and the last one.',
-  'settings.advanced': 'Advanced options',
+  'settings.moreOptions': 'More options',
   'settings.advancedHint': 'Saving changes here sets the level to “Custom”.',
   'settings.autoRun': 'Start tasks automatically',
   'settings.autoModel': 'Choose the model automatically',

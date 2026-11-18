@@ -5,8 +5,8 @@ import { Copy, Bug, Orbit, Bot, User, Monitor, Activity, ClipboardCopy, FilterX,
 import { notifyOk } from '@/lib/notify.js';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Empty, Input, Spinner } from '@/components/ui/basic.jsx';
-import { BubbleTip, Select } from '@/components/ui/overlay.jsx';
-import { IconButton, ListCard, SearchInput } from '@/components/ui/primitives.jsx';
+import { DropdownMenuItem, Select } from '@/components/ui/overlay.jsx';
+import { ListCard, SearchInput } from '@/components/ui/primitives.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { useStore, call, go } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
@@ -66,11 +66,10 @@ export function ActivityView({ tabs }) {
   const summary = (r) => `${t(`logbooks.level.${r.level}`)} · ${String(r.text).slice(0, 80)}`;
   // a source on show is one with no filter at all (every source) or the ones picked
   const sourceOn = (s) => (filters.sources.length ? filters.sources.includes(s) : true);
-  const actions = (
-    <BubbleTip title={t('activity.copy')}><IconButton label={t('activity.copy')} onClick={copy} data-testid="activity-copy"><Copy /></IconButton></BubbleTip>
-  );
+  // «Copiar» is not in the mock-up's bar: it lives in the «⋯» of the page.
+  const menuItems = <DropdownMenuItem onSelect={copy} data-testid="activity-copy"><Copy />{t('activity.copy')}</DropdownMenuItem>;
   return (
-    <BitacorasPage meta={t('nav.logbooksHint')} actions={actions} onRefresh={() => setTick((n) => n + 1)} tabs={tabs}>
+    <BitacorasPage meta={t('nav.logbooksHint')} menuItems={menuItems} onRefresh={() => setTick((n) => n + 1)} tabs={tabs}>
       {paged ? (
         <div className="toolbar flex flex-wrap items-center gap-2" role="group" aria-label={t('logbooks.filters')} data-testid="activity-filters">
           <div className="segm bg-secondary inline-flex gap-0.5 rounded-ctl p-0.5" role="group" aria-label={t('logbooks.source')}>

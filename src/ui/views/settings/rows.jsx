@@ -2,7 +2,9 @@
 import { Kbd, Field } from '@/components/ui/basic.jsx';
 import { ListCard } from '@/components/ui/primitives.jsx';
 import { cn } from '@/lib/utils.js';
-import { InfoTip } from '@/components/ui/overlay.jsx';
+import { useState } from 'react';
+import { ChevronRight } from 'lucide-react';
+import { InfoTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
 import { call, act, setState, getState, applyTheme, applyAppearance } from '@/lib/store.js';
 import { t } from '@/lib/i18n.js';
 import { unlockCore } from '@/lib/core-access.js';
@@ -32,6 +34,20 @@ export function Block({ title, count, note, actions, children, className, ...pro
       {note ? <p className="text-faint-foreground text-caption leading-[1.45]">{note}</p> : null}
       {children}
     </section>
+  );
+}
+// «Más opciones»: where a setting of Orb that the mock-up does not draw lives, always the end of its section. fold: the rows
+// are hidden behind the title (folded by default; open/onOpenChange let a caller own the state).
+export function MoreOptions({ fold = false, open, onOpenChange, children, className, testid = 'more-options', triggerTestid, ...props }) {
+  const [own, setOwn] = useState(false);
+  const shown = open ?? own;
+  // the body is empty when every card inside has nothing to show (the trash before it loads): then the title goes too.
+  if (!fold) return <Block title={t('settings.moreOptions')} className={cn('has-[>[data-more-body]:empty]:hidden', className)} data-testid={testid} {...props}><div data-more-body="" className="contents">{children}</div></Block>;
+  return (
+    <Collapsible open={shown} onOpenChange={onOpenChange ?? setOwn} className={className} data-testid={testid} {...props}>
+      <CollapsibleTrigger className="hover:text-primary-text focus-visible:outline-ring flex cursor-pointer items-center gap-1.5 font-(family-name:--title) text-card-title leading-normal font-semibold outline-none focus-visible:outline-2" data-testid={triggerTestid}><ChevronRight className={cn('size-4 transition-transform', shown && 'rotate-90')} />{t('settings.moreOptions')}</CollapsibleTrigger>
+      <CollapsibleContent><div className="mt-4 flex flex-col gap-4">{children}</div></CollapsibleContent>
+    </Collapsible>
   );
 }
 // The frame of a block's rows (.lcard).

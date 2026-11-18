@@ -48,6 +48,7 @@ export default {
   'agents.enabled': 'Activado',
   'agents.notFound': 'No encontrado',
   'agents.disabled': 'Desactivado',
+  'agents.turnOff': 'Desactivar',
   'agents.howInstall': 'Cómo instalarlo',
   'agents.check': 'Comprobar',
   'agents.modelsSettings': 'Modelos y ajustes',

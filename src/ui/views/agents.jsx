@@ -13,7 +13,7 @@ import { AgentIcon } from '@/components/agent-icon.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { IconButton, MoreButton, Note, ListCard, ListRow } from '@/components/ui/primitives.jsx';
 import { Badge, Field, Input, Spinner, Textarea } from '@/components/ui/basic.jsx';
-import { Switch, Collapsible, CollapsibleTrigger, CollapsibleContent, BubbleTip, Checkbox, Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuCheckboxItem, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/overlay.jsx';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent, BubbleTip, Checkbox, Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuCheckboxItem, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/overlay.jsx';
 import { cn, baseName } from '@/lib/utils.js';
 import { useStore, call, act, bridge, setState, getState } from '@/lib/store.js';
 import { LOGIN, OFF_AGENTS } from '@/lib/labels.js';
@@ -357,7 +357,13 @@ function AgentCard({ a, reload, usage, team }) {
           {!a.installed ? <Badge variant={NATIVE.includes(a.id) ? 'destructive' : 'warning'}>{NATIVE.includes(a.id) ? t('agents.missing') : t('agents.notFound')}</Badge>
             : a.login === 'no' ? <Badge variant="warning">{login[0]}</Badge> : <Badge variant="success">{t('agents.installed')}</Badge>}
           {!cfg.enabled ? <Badge variant="secondary">{t('agents.disabled')}</Badge> : null}
-          <Switch checked={cfg.enabled} onCheckedChange={(enabled) => save(a.id, { enabled })} aria-label={t('agents.enabled')} />
+          {/* on/off is not in the mock-up's card: it is an item of the card's «⋯»; the state shows in the badge */}
+          <DropdownMenu modal={false}>
+            <BubbleTip title={t('nav.more')}><DropdownMenuTrigger asChild><MoreButton small data-testid={`agent-more-${a.id}`} /></DropdownMenuTrigger></BubbleTip>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onSelect={() => save(a.id, { enabled: !cfg.enabled })} data-testid={`agent-toggle-${a.id}`}>{cfg.enabled ? t('agents.turnOff') : t('agents.enable')}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
       {!cfg.enabled && OFF_AGENTS.includes(a.id) ? <Stack><div><Button size="xs" variant="soft" onClick={() => save(a.id, { enabled: true })} data-testid={`agent-enable-${a.id}`}>{t('agents.enable')}</Button></div></Stack> : null}

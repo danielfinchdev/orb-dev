@@ -1,22 +1,12 @@
-import { ChevronLeft, Search } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { useStore, go, phoneLayout } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
 import { Button } from './ui/button.jsx';
-import { IconButton } from './ui/primitives.jsx';
-import { BubbleTip } from './ui/overlay.jsx';
 import { BarClock } from './bar-clock.jsx';
 import { SidebarToggle } from './theme-toggle.jsx';
 import { MobileMenu } from './mobile-menu.jsx';
 import { WindowControlsSlot } from './window-controls.jsx';
-import { openPalette } from '@/lib/palette.js';
-
-// The way into Ctrl+K from a bar (the shortcut itself is unchanged); the phone has no palette.
-function PaletteButton({ className }) {
-  const t = useT();
-  if (phoneLayout()) return null;
-  return <BubbleTip title={t('palette.open')}><IconButton label={t('palette.open')} className={className} onClick={openPalette} data-testid="open-palette"><Search /></IconButton></BubbleTip>;
-}
 
 // The header every view of the PC app shares (app.css .bar): the clock on the left, the title with a useful line under
 // it in the middle, the view's actions on the right, and the window's own buttons in the 120 px kept at the end
@@ -35,7 +25,7 @@ export function AppBar({ lead, left, center, children, className, inner = false,
 
 // `meta`: the line under the title (counts, the project…). `center`: the view draws the whole middle itself and `title`
 // then takes the clock's place.
-export function PageHeader({ title, meta, center, children, className, back, palette = true }) {
+export function PageHeader({ title, meta, center, children, className, back }) {
   // with the sidebar folded away, the button that brings it back starts the bar.
   const folded = useStore((s) => s.sidebarCollapsed);
   // the phone: the menu ☰ starts every bar (the status bar's room is the page's own, app.css › #root).
@@ -45,7 +35,7 @@ export function PageHeader({ title, meta, center, children, className, back, pal
       <AppBar className={className} lead={folded ? <SidebarToggle collapsed className="-ml-1.5" /> : null}
         left={center ? title : <BarClock />}
         center={center ?? <><h1 className="name">{title}</h1>{meta ? <div className="sub">{typeof meta === 'string' ? <span className="min-w-0 truncate">{meta}</span> : meta}</div> : null}</>}>
-        {children}{palette ? <PaletteButton /> : null}
+        {children}
       </AppBar>
     );
   }
