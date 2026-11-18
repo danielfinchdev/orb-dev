@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { notifyInfo } from '@/lib/notify.js';
 import QRCode from 'qrcode';
-import { FolderOpen, Smartphone, PictureInPicture2, QrCode, Play, ExternalLink } from 'lucide-react';
+import { FolderOpen, Smartphone, PictureInPicture2, QrCode, Play, ExternalLink, Copy } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -155,10 +155,12 @@ export function MobileCard() {
   const route = (kind) => st.routes?.find((r) => r.kind === kind);
   const via = (kind) => {
     const r = route(kind);
-    // the local network shows its address; Tailscale, what it allows (its address is in the QR dialog).
-    const hint = st.enabled && st[kind] && !r ? t('settings.mobileUnavailable') : kind === 'wifi' ? (r?.url ?? t('settings.mobileWifiHint')) : t('settings.mobileTsHint');
+    // each way says what it is for; its address, with a button to copy it, sits next to the switch.
+    const hint = st.enabled && st[kind] && !r ? t('settings.mobileUnavailable') : kind === 'wifi' ? t('settings.mobileWifiHint') : t('settings.mobileTsHint');
     return (
       <Row label={t(kind === 'wifi' ? 'settings.mobileWifi' : 'settings.mobileTs')} hint={hint}>
+        {/* the address as the mock-up shows it, with a button to copy it */}
+        {st.enabled && st[kind] && r?.url ? <><code className="text-muted-foreground font-mono text-caption cursor-text select-text" onClick={(e) => e.preventDefault()} data-testid={`mobile-${kind}-address`}>{r.url.replace(/^https?:\/\//, '')}</code><Button size="sm" variant="outline" onClick={(e) => { e.preventDefault(); navigator.clipboard?.writeText(r.url).then(() => notifyInfo(t('settings.addressCopied'))).catch(quiet); }} data-testid={`mobile-${kind}-copy`}><Copy />{t('settings.copyAddress')}</Button></> : null}
         <Switch data-testid={`mobile-${kind}`} checked={st[kind]} onCheckedChange={(on) => configure({ [kind]: on })} />
       </Row>
     );

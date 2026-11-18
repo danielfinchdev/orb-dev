@@ -348,5 +348,16 @@ export default {
   'master.cardHint': 'Cámbiala o bloquea Orb ahora.',
   'ext.skillsHint': 'Instrucciones que los agentes usan cuando la tarea lo pide.',
   'ext.serversHint': 'Los de la carpeta core de Orb.',
-  'settings.tabUsage': 'Uso y agentes'
+  'settings.tabUsage': 'Uso y agentes',
+  'settings.usageAccounts': 'Uso de las cuentas',
+  'settings.usageAccountsNote': 'Las marcas negras son los frenos: {stop} % en la ventana de {hours} h y {week} % en la semana.',
+  'settings.brakesTitle': 'Aviso y frenos',
+  'settings.brakesNote': 'Cuando una cuenta llega al límite, las tareas nuevas esperan o usan otra cuenta.',
+  'settings.weeklyStop': 'Freno semanal (%)',
+  'settings.brakeInvalid': 'Pon un número entre {min} y {max}.',
+  'settings.weeklyStopHint': 'Pausa la cuenta al llegar a este punto de la semana. Vale también para el coordinador.',
+  'settings.weeklyRail': 'Parar al llegar al freno semanal ({pct} %)',
+  'settings.weeklyRailHint': 'Sin él, la cuenta sigue trabajando aunque la semana vaya casi agotada.',
+  'settings.copyAddress': 'Copiar',
+  'settings.addressCopied': 'Dirección copiada'
 };

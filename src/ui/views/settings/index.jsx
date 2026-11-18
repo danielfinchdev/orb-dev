@@ -17,6 +17,7 @@ import { TabsCard, ShortcutsCard } from './shortcuts.jsx';
 import { AssistantCard, AppearanceCard, ChatCard, PermissionsCard, ApprovalWaitCard, TasksCard, FolderCard, ProtectedCard, InterfaceCard, ExpertCard } from './general.jsx';
 import { AndroidCard, MobileCard, BrowserCard } from './devices.jsx';
 import { McpExtCard } from './mcp-ext.jsx';
+import { UsageAccounts, BrakesCard, BrakeRails } from './usage-tab.jsx';
 // «Este móvil», the phone's screen of its own (main.jsx loads it from here, with the dialog).
 export { PhoneView } from './devices.jsx';
 import { UpdatesCard, SupportCard, FeedbackCard, MoreAppsCard, AboutCard } from './about.jsx';
@@ -35,7 +36,7 @@ function AgentsTabs({ c }) {
           <TabsTrigger value="uso" data-testid="agents-tab-uso">{t('settings.tabUsage')}</TabsTrigger>
         </TabsList>
       </Tabs>
-      {tab === 'tareas' ? <TasksCard c={c} /> : <ChatCard c={c} />}
+      {tab === 'tareas' ? <TasksCard c={c} /> : <><UsageAccounts c={c} /><ChatCard c={c} /><BrakesCard c={c} /><BrakeRails c={c} /></>}
     </>
   );
 }

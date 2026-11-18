@@ -348,5 +348,16 @@ export default {
   'master.cardHint': 'Change it or lock Orb now.',
   'ext.skillsHint': 'Instructions the agents use when the task calls for them.',
   'ext.serversHint': 'The ones in Orb’s core folder.',
-  'settings.tabUsage': 'Usage and agents'
+  'settings.tabUsage': 'Usage and agents',
+  'settings.usageAccounts': 'Account usage',
+  'settings.usageAccountsNote': 'The black marks are the brakes: {stop}% in the {hours} h window and {week}% in the week.',
+  'settings.brakesTitle': 'Warning and brakes',
+  'settings.brakesNote': 'When an account reaches its limit, new tasks wait or use another account.',
+  'settings.weeklyStop': 'Weekly brake (%)',
+  'settings.brakeInvalid': 'Enter a number between {min} and {max}.',
+  'settings.weeklyStopHint': 'Pauses the account when the week reaches this point. It applies to the assistant too.',
+  'settings.weeklyRail': 'Stop at the weekly brake ({pct}%)',
+  'settings.weeklyRailHint': 'Without it, the account keeps working even when the week is almost used up.',
+  'settings.copyAddress': 'Copy',
+  'settings.addressCopied': 'Address copied'
 };

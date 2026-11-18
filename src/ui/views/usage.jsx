@@ -181,7 +181,7 @@ function renewText(t, locale, at) {
   return t('usage.renewsOn', { when: new Date(at).toLocaleDateString(locale, { weekday: 'long' }) });
 }
 
-function Account({ u, locale, stop, weeklyStop, reload }) {
+export function Account({ u, locale, stop, weeklyStop, reload }) {
   const t = useT();
   // the brakes apply to the 5-hour window and to the whole week, not to a window of one model
   const braked = u.windows?.some((w) => w.utilization != null && (/five_hour|^300min$|^5h$/.test(String(w.window)) ? w.utilization >= stop : /^seven_day$|^10080min$/.test(String(w.window)) && w.utilization >= weeklyStop));

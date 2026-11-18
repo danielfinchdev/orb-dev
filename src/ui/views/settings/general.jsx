@@ -209,7 +209,7 @@ export function TasksCard({ c }) {
   const t = useT();
   const agents = Object.keys(c.agents);
   const [v, setV] = useState({ autoRun: c.autoRun, maxParallel: c.maxParallel, perAgent: c.perAgent, timeoutMinutes: c.timeoutMinutes, review: c.review?.auto === true, high: c.policy?.highNeedsApproval !== false, windowHours: c.budget.windowHours,
-    stopAt: Math.round((c.budget.stopAt ?? 0.92) * 100), caps: Object.fromEntries(agents.map((a) => [a, { maxTasks: c.budget.agents?.[a]?.maxTasks ?? 20, maxHeavy: c.budget.agents?.[a]?.maxHeavy ?? 6 }])),
+    caps: Object.fromEntries(agents.map((a) => [a, { maxTasks: c.budget.agents?.[a]?.maxTasks ?? 20, maxHeavy: c.budget.agents?.[a]?.maxHeavy ?? 6 }])),
     resumeAfterRestart: c.continuity?.resumeAfterRestart !== false, resumeAtReset: c.continuity?.resumeAtReset !== false,
     delegation: c.delegation?.enabled !== false, trusted: c.delegation?.trusted !== false, maxPerTask: c.delegation?.maxPerTask ?? 4,
     oneAtATime: c.oneAtATime === true, parallelChats: c.orchestrator?.parallel ?? 3 });
@@ -230,7 +230,7 @@ export function TasksCard({ c }) {
   const level = profile ?? null;
   const saveAdvanced = () => {
     const was = profile; setProfile(null);
-    save({ autoRun: v.autoRun, maxParallel: v.maxParallel, perAgent: v.perAgent, timeoutMinutes: v.timeoutMinutes, review: { auto: v.review }, policy: { highNeedsApproval: v.high }, budget: { profile: null, windowHours: v.windowHours, stopAt: Math.min(1, Math.max(0.5, v.stopAt / 100)), agents: v.caps }, delegation: { maxPerTask: v.maxPerTask }, orchestrator: { parallel: Math.min(6, Math.max(1, v.parallelChats || 3)) } }).then((r) => { if (!r) setProfile(was); });
+    save({ autoRun: v.autoRun, maxParallel: v.maxParallel, perAgent: v.perAgent, timeoutMinutes: v.timeoutMinutes, review: { auto: v.review }, policy: { highNeedsApproval: v.high }, budget: { profile: null, windowHours: v.windowHours, agents: v.caps }, delegation: { maxPerTask: v.maxPerTask }, orchestrator: { parallel: Math.min(6, Math.max(1, v.parallelChats || 3)) } }).then((r) => { if (!r) setProfile(was); });
   };
   const numField = (key, label, hint, extra = {}) => (
     <Setting label={label} hint={hint}><Input type="number" className="w-[72px]" value={v[key]} onChange={(e) => setV({ ...v, [key]: num(e.target.value) })} aria-label={label} {...extra} /></Setting>
@@ -274,7 +274,6 @@ export function TasksCard({ c }) {
               {numField('maxPerTask', t('settings.maxPerTask'), t('settings.maxPerTaskHint'), { min: 0, max: 20 })}
               {/* how many conversations the assistant answers at the same time (the others wait their turn). */}
               {numField('parallelChats', t('settings.parallelChats'), t('settings.parallelChatsHint'), { min: 1, max: 6, 'data-testid': 'parallel-chats' })}
-              {numField('stopAt', t('settings.stopAt'), t('settings.stopAtHint'), { min: 50, max: 100 })}
               <CardFoot><Button size="sm" onClick={saveAdvanced} data-testid="spend-save">{t('settings.save')}</Button></CardFoot>
             </Panel>
             <Block title={t('settings.capsTitle')} note={t('settings.capsNote')}>

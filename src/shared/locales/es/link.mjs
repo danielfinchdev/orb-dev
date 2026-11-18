@@ -28,6 +28,8 @@ export default {
   'link.kind.phone': 'Móvil',
   'link.kind.browser': 'Navegador',
   'link.fp': 'Huella de este PC: {fp}',
+  'link.fpLabel': 'Huella de este PC',
+  'link.fpHint': 'Para comprobar que enlazas con el PC correcto.',
   'link.httpBrowserWarn': 'Por red local, un navegador no se puede enlazar. Usa Tailscale o la app de Android.',
   "link.forWhat": "¿Qué vas a enlazar?",
   'link.for.phone': 'Móvil',
