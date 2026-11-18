@@ -18,3 +18,23 @@ export function sizeText(bytes) {
   const mb = b / 1048576;
   return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`;
 }
+
+// A path on one line, cut in the middle: the start of the disk (drive and first folder) and the last folders stay, so it
+// reads «C:\Users\…\Proyectos\tienda-web». A path that already fits is returned as it is.
+export function shortPath(path, max = 44) {
+  const text = String(path ?? '');
+  if (text.length <= max) return text;
+  const sep = text.includes('\\') ? '\\' : '/';
+  const parts = text.split(sep);
+  const headCount = 2; // «C:» + «Users», or «» + «home»
+  if (parts.length <= headCount + 1) return text;
+  const head = parts.slice(0, headCount).join(sep);
+  let tail = [parts[parts.length - 1]];
+  for (let i = parts.length - 2; i >= headCount; i -= 1) {
+    const next = [parts[i], ...tail];
+    if (head.length + sep.length + 1 + sep.length + next.join(sep).length > max) break;
+    tail = next;
+  }
+  if (tail.length + headCount >= parts.length) return text;
+  return `${head}${sep}…${sep}${tail.join(sep)}`;
+}

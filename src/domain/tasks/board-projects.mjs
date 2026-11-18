@@ -8,7 +8,7 @@ import { scopesRemoved } from '../extensions/catalog.mjs';
 import { folderName, folderKey } from '../../platform/paths.mjs';
 import { projectLogHeader, logBody } from '../../platform/journal-files.mjs';
 import { IGNORED_PROJECTS, FINISHED_PROJECTS, DELETING_PROJECTS } from '../../platform/state.mjs';
-import { oneLine } from '../../shared/text.mjs';
+import { oneLine, shortPath } from '../../shared/text.mjs';
 import { git, isGitRepo } from '../../platform/git.mjs';
 import { ROOT_LOG_MAX, now, same, checkProjectPath } from './board-common.mjs';
 
@@ -110,7 +110,7 @@ export class BoardProjects {
     if (this.activeName() === project.name) return project;
     this.setting('active_project', project.name);
     this.event(null, actor, 'project.active', `${project.name} -> ${project.path}`);
-    this.notice(tr('msg.board.activeFolder', { name: project.name, path: project.path }), 'info');
+    this.notice(tr('msg.board.activeFolder', { name: project.name, path: shortPath(project.path) }), 'info');
     this.changed('projects');
     return project;
   }

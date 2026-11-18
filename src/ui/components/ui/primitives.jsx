@@ -1,6 +1,7 @@
 // Small pieces every screen repeats, built once so they look and behave the same everywhere. They use the tokens of
 // tokens.css only. «Selected» (aria-selected / data-active, a lasting fact) is drawn apart from «pointer over» (a
 // passing hover): selected is a filled row, hover is a lighter wash.
+import { useEffect, useRef, useState } from 'react';
 import { Ellipsis, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
@@ -67,14 +68,25 @@ export function Segmented({ value, onChange, options, className, itemTestId, ...
 }
 
 // A search field (.field) with its magnifier; the accessible name is the placeholder unless `label` says otherwise.
-export function SearchInput({ value, onChange, placeholder, label, className, inputClassName, ...props }) {
+// shortPlaceholder: the hint under which the field is too narrow for the full one (it would be cut half-way).
+export function SearchInput({ value, onChange, placeholder, shortPlaceholder, label, className, inputClassName, ...props }) {
+  const ref = useRef(null);
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!shortPlaceholder || !el || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(() => setNarrow(el.clientWidth < NARROW_SEARCH));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [shortPlaceholder]);
   return (
     <div data-slot="search" className={cn('field bg-card text-muted-foreground border-border focus-within:border-input flex h-(--ctl) w-64 max-w-full items-center gap-2 rounded-ctl border pr-1 pl-2.5 transition-[border-color]', className)}>
       <Search className="pointer-events-none size-4 shrink-0" />
-      <input className={cn('text-foreground placeholder:text-faint-foreground min-w-0 flex-1 border-0 bg-transparent text-control outline-none', inputClassName)} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} aria-label={label ?? placeholder} {...props} />
+      <input ref={ref} className={cn('text-foreground placeholder:text-faint-foreground min-w-0 flex-1 border-0 bg-transparent text-control text-ellipsis outline-none placeholder:text-ellipsis', inputClassName)} value={value} onChange={(e) => onChange(e.target.value)} placeholder={narrow ? shortPlaceholder : placeholder} aria-label={label ?? placeholder} {...props} />
     </div>
   );
 }
+const NARROW_SEARCH = 96; // px of the text box: about what «Buscar tareas» needs at the control size
 
 const rowState = (active) => (active ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground');
 

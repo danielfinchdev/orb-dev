@@ -4,11 +4,11 @@
 // welcome and when an updated Orb finds them (main.jsx, phase 'layout'). When the logs went into core, a last
 // screen says once where they are now (other tools, like the user's AGENTS.md or CLAUDE.md, must point there).
 import { useState } from 'react';
-import { BookOpen, Copy, FolderCheck, Plug, Smartphone } from 'lucide-react';
+import { BookOpen, Check, Copy, FolderCheck, Plug, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Spinner } from '@/components/ui/basic.jsx';
-import { Select } from '@/components/ui/overlay.jsx';
-import { Segmented, ListCard } from '@/components/ui/primitives.jsx';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/overlay.jsx';
+import { Segmented, ListCard, MoreButton } from '@/components/ui/primitives.jsx';
 import { WizardPage, WizardCard, WizardFoot, WizardText, WizardTitle, StartMark } from '@/components/wizard.jsx';
 import { bridge } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
@@ -50,21 +50,37 @@ export function LayoutReview({ plan, onDone, step = null, applyMethod = 'app.lay
           {items.map((it) => {
             const Icon = KIND_ICON[it.kind] ?? Plug;
             const options = layoutOptions(it).map((o) => ({ value: o.value, label: t(o.key, o.vars) }));
+            // the mock-up: the recommended place and «Dejar donde está»; any other place a server can go as a project stays under «⋯».
+            const main = options.find((o) => o.value === it.choice && o.value !== 'keep') ?? options.find((o) => o.value !== 'keep');
+            const shown = options.filter((o) => o === main || o.value === 'keep');
+            const extras = options.filter((o) => !shown.includes(o));
             const set = (v) => setChoices({ ...choices, [it.id]: v });
             return (
               <div key={it.id} className="border-border flex min-w-0 flex-wrap items-start gap-3 px-3.5 py-3 not-first:border-t" data-testid={`layout-item-${it.id}`}>
                 <Icon className="text-muted-foreground mt-0.5 size-4 flex-none" aria-hidden="true" />
                 <div className="min-w-0 flex-1">
-                  <div className="text-control leading-[1.45] font-medium">{t(layoutTitle(it))}{it.kind === 'logs' ? <Badge variant="success" className="ml-2 align-middle" data-testid="layout-logs-recommended">{t('layout.recommended')}</Badge> : null}</div>
+                  <div className="text-body leading-[1.45] font-medium">{t(layoutTitle(it))}{it.kind === 'logs' ? <Badge variant="success" className="ml-2 align-middle" data-testid="layout-logs-recommended">{t('layout.recommended')}</Badge> : null}</div>
                   <div className="text-muted-foreground mt-0.5 text-caption leading-[1.45]">
                     <code className="font-mono break-all">{it.name}</code>
                     {it.project ? <> · {t('layout.mcpProject')}</> : null}
                     {it.kind === 'logs' ? <span data-testid="layout-logs-note"> · {t('layout.logsNote')}</span> : null}
                   </div>
                 </div>
-                {options.length <= 2
-                  ? <Segmented role="group" aria-label={t(layoutTitle(it))} value={choices[it.id]} onChange={(v) => { if (!busy) set(v); }} options={options.map((o) => ({ ...o, testid: `layout-choice-${it.id}-${o.value}` }))} data-testid={`layout-choice-${it.id}`} />
-                  : <Select className="w-full sm:w-56" value={choices[it.id]} disabled={busy} onValueChange={set} options={options} data-testid={`layout-choice-${it.id}`} />}
+                <div className="flex flex-none items-center gap-1.5">
+                  <Segmented role="group" aria-label={t(layoutTitle(it))} value={shown.some((o) => o.value === choices[it.id]) ? choices[it.id] : undefined} onChange={(v) => { if (!busy) set(v); }} options={shown.map((o) => ({ ...o, testid: `layout-choice-${it.id}-${o.value}` }))} data-testid={`layout-choice-${it.id}`} />
+                  {extras.length ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild><MoreButton small disabled={busy} label={t('layout.otherPlaces')} data-testid={`layout-more-${it.id}`} /></DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {extras.map((o) => (
+                          <DropdownMenuItem key={o.value} onSelect={() => set(o.value)} data-testid={`layout-choice-${it.id}-${o.value}`}>
+                            <span className="min-w-0 flex-1">{o.label}</span>{choices[it.id] === o.value ? <Check className="text-primary-text!" /> : null}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : null}
+                </div>
               </div>
             );
           })}

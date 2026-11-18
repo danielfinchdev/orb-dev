@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { IconButton, ListRow, MoreButton } from '@/components/ui/primitives.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
 import { bridge, useStore } from '@/lib/store.js';
-import { readableRule } from '@/lib/rule-text.js';
+import { readableRule, ruleBlurb } from '@/lib/rule-text.js';
 import { useT } from '@/lib/i18n.js';
 import { cn } from '@/lib/utils.js';
 import { LIMITS, clampValue, shownValue, changedValues } from '@/lib/rules-access.js';
@@ -28,6 +28,14 @@ export function ruleSummary(texto) {
   const plain = (l) => l.replace(/^(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+)+/, '').replace(/\*\*|__|`/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').trim();
   const prose = lines.find((l) => !/^#{1,6}\s/.test(l));
   return plain(prose ?? lines[0] ?? '');
+}
+
+// The one line of a rule in the list: the description the app wrote for a shipped rule, else its first sentence.
+export function ruleLine(t, rule, names) {
+  const key = `rules.desc.${rule.id}`;
+  const own = rule.de_serie ? t(key) : key;
+  if (own !== key) return own;
+  return ruleBlurb(ruleSummary(readableRule(rule.texto, names)));
 }
 
 export function RuleCard({ rule, onEdit, onToggle, onDelete }) {
@@ -54,7 +62,7 @@ export function RuleCard({ rule, onEdit, onToggle, onDelete }) {
     <div data-testid={`rule-${rule.id}`} data-state={rule.estado}>
       <ListRow
         title={<span className="inline-flex items-center gap-2">{rule.titulo}<Badge variant="outline">{t(seed ? 'rules.seed' : 'rules.mine')}</Badge></span>}
-        meta={<span className="block truncate">{ruleSummary(readableRule(rule.texto, { orb: names?.assistantName || 'Orb', usuario: names?.userName?.trim() }))}</span>}
+        meta={<span className="block truncate">{ruleLine(t, rule, { orb: names?.assistantName || 'Orb', usuario: names?.userName?.trim() })}</span>}
         trailing={<span className="acts flex shrink-0 items-center gap-2"><Badge variant={paused ? 'secondary' : 'success'}>{t(paused ? 'rules.paused' : 'rules.active')}</Badge>{acts}</span>} />
       {open ? <pre className="bg-muted/50 mx-3.5 mb-3 max-h-72 overflow-auto rounded-ctl p-3 font-mono text-control whitespace-pre-wrap" data-testid={`rule-body-${rule.id}`}>{rule.texto}</pre> : null}
     </div>

@@ -138,5 +138,15 @@ export default {
   'rules.nowValues': 'Valores actuales',
   'rules.newValues': 'Valores nuevos',
   'rules.pauseRule': 'Pausar la norma',
+  'rules.desc.cuando-preguntarte': 'Te da a elegir entre opciones cuando hay varios caminos claros.',
+  'rules.desc.comprobar-cada-tarea': 'Hace que se compruebe cada tarea antes de darla por buena.',
+  'rules.desc.como-corregir': 'Si algo falla, crea una tarea para corregirlo y volver a comprobarlo.',
+  'rules.desc.varios-agentes-poco-gasto': 'Reparte el trabajo entre varios agentes para gastar menos.',
+  'rules.desc.contexto-al-abrir-un-chat': 'Dice dónde mirar el estado de las tareas al abrir un chat.',
+  'rules.desc.donde-trabajas': 'Cuenta a cada agente en qué carpeta trabaja y qué no debe tocar.',
+  'rules.desc.bitacora-del-proyecto': 'Evita que los agentes escriban su propia bitácora: la lleva Orb.',
+  'rules.desc.mientras-trabajas': 'Los agentes avisan de cómo van en los momentos importantes.',
+  'rules.desc.al-terminar': 'Cómo cierra una tarea cada agente y qué cuenta al acabar.',
+  'rules.desc.limites': 'Dónde puede trabajar un agente y qué nunca puede hacer.',
   'rules.deleteRule': 'Eliminar norma'
 };

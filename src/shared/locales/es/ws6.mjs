@@ -113,6 +113,7 @@ export default {
   'layout.move': 'Mover a core',
   'layout.moveMcp': 'Mover a core (servidores MCP)',
   'layout.keep': 'Dejar donde está',
+  'layout.otherPlaces': 'Otros sitios',
   'layout.asProject': 'Proyecto en {category}',
   'layout.coreNote': 'core está oculta y los agentes solo la usan a través de Orb.',
   'layout.pathsNote': 'Si otros programas o tus normas para agentes usan estas rutas, actualízalas después.',

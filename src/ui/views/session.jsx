@@ -439,7 +439,14 @@ export function SessionView({ route }) {
   // (the selector showed an empty box when it was not among the options).
   const listed = modelsOf(catalog?.find((a) => a.id === s.agent), s.account).filter((m) => m.id);
   const models = [...(listed.length ? listed.map((m) => ({ value: m.id, label: m.label })) : (app?.config?.agents?.[s.agent]?.models ?? []).map((m) => ({ value: m, label: m })))];
-  if (s.model && !models.some((m) => m.value === s.model)) models.unshift({ value: s.model, label: modelLabel(catalog, s.agent, s.model) });
+  // A model saved under an alias or a dated id («sonnet», «claude-sonnet-5-5-2026…») reads as the listed model with the
+  // same name: that entry is the selected one, not a second line with the same label.
+  let selectedModel = s.model ?? '';
+  if (s.model && !models.some((m) => m.value === s.model)) {
+    const label = modelLabel(catalog, s.agent, s.model);
+    const same = models.find((m) => m.label === label);
+    if (same) selectedModel = same.value; else models.unshift({ value: s.model, label });
+  }
   const modelName = (id) => models.find((m) => m.value === id)?.label ?? modelLabel(catalog, s.agent, id);
   const stalled = ['interrupted', 'limited'].includes(s.status) && s.kind === 'chat';
   // with several accounts of the agent (Codex Go, Codex Pro), the one this conversation uses, by its name.
@@ -635,7 +642,7 @@ export function SessionView({ route }) {
           {s.context ? <span className="text-muted-foreground text-xs"><ContextMeter context={s.context} /></span> : null}
           {s.kind === 'chat' ? (<>
             {/* one chip for the agent, its model and its reasoning; its menu lists the models, the levels and «Guía de modelos». */}
-            <AgentChip catalog={catalog} agent={s.agent} account={s.account} models={models} model={s.model ?? ''} modelName={models.length ? modelName(s.model || models[0].value) : ''} reasoning={s.reasoning ?? 'medium'}
+            <AgentChip catalog={catalog} agent={s.agent} account={s.account} models={models} model={selectedModel} modelName={models.length ? modelName(s.model || models[0].value) : ''} reasoning={s.reasoning ?? 'medium'}
               onModel={(model) => act(call('sessions.update', { id: s.id, model }), t('session.modelSet', { model: modelName(model) }))} onReasoning={(reasoning) => act(call('sessions.update', { id: s.id, reasoning }))} />
           </>) : null}
         </>} />

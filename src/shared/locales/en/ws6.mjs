@@ -111,6 +111,7 @@ export default {
   'layout.move': 'Move to core',
   'layout.moveMcp': 'Move to core (MCP servers)',
   'layout.keep': 'Leave it where it is',
+  'layout.otherPlaces': 'Other places',
   'layout.asProject': 'Project in {category}',
   'layout.coreNote': 'core is hidden and the agents use it only through Orb.',
   'layout.pathsNote': 'If other programs or your rules for agents use these paths, update them afterwards.',

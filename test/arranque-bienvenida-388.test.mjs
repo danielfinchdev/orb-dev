@@ -198,11 +198,11 @@ test('11D: the migration path is monospace, and the core card keeps the mock-up 
   assert.doesNotMatch(core, /disabled=\{busy \|\| !code\.trim\(\)\}/, 'Restaurar is never greyed out');
 });
 
-test('11D: «Ordenar carpetas» has the full kicker, the green badge, and the segment only for two options', () => {
+test('11D: «Ordenar carpetas» has the full kicker, the green badge, and every row with its two buttons (the other places under the ellipsis)', () => {
   const layout = read('src/ui/views/layout.jsx');
   assert.match(layout, /layout\.kickReview/);
   assert.match(layout, /<Badge variant="success"[^>]*>\{t\('layout\.recommended'\)\}<\/Badge>/);
-  assert.match(layout, /options\.length <= 2/);
+  assert.match(layout, /const extras = options.filter/);
   assert.match(layout, /applyMethod = 'app\.layoutApply'/);
   assert.match(layout, /bridge\.call\(applyMethod, \{ choices: all \?\? choices \}\)/);
 });

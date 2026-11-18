@@ -138,5 +138,15 @@ export default {
   'rules.nowValues': 'Current values',
   'rules.newValues': 'New values',
   'rules.pauseRule': 'Pause the rule',
+  'rules.desc.cuando-preguntarte': 'Gives you options to pick from when there are several clear ways forward.',
+  'rules.desc.comprobar-cada-tarea': 'Makes sure each task is checked before it counts as done.',
+  'rules.desc.como-corregir': 'If something fails, creates a task to fix it and check it again.',
+  'rules.desc.varios-agentes-poco-gasto': 'Splits the work between several agents to spend less.',
+  'rules.desc.contexto-al-abrir-un-chat': 'Says where to look for the state of the tasks when a chat opens.',
+  'rules.desc.donde-trabajas': 'Tells each agent which folder it works in and what not to touch.',
+  'rules.desc.bitacora-del-proyecto': 'Stops agents from writing their own log: Orb keeps it.',
+  'rules.desc.mientras-trabajas': 'Agents report their progress at the important moments.',
+  'rules.desc.al-terminar': 'How each agent closes a task and what it reports at the end.',
+  'rules.desc.limites': 'Where an agent may work and what it can never do.',
   'rules.deleteRule': 'Delete rule'
 };

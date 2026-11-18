@@ -2,6 +2,8 @@ import { clsx } from 'clsx';
 import { extendTailwindMerge } from 'tailwind-merge';
 import { t, currentLocale } from './i18n.js';
 import { redact } from './redact.js';
+import { shortPath } from '../../shared/text.mjs';
+export { shortPath };
 
 // The eight type roles of tokens.css are font sizes: without telling tailwind-merge, «text-control» would be taken for
 // a colour and drop (or be dropped by) «text-muted-foreground».

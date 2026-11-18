@@ -227,6 +227,7 @@ export default {
   'tasks.new.ok': 'Create task',
   'tasks.new.done': 'Task created',
   'tasks.search': 'Search tasks',
+  'tasks.searchShort': 'Search',
   'tasks.fProject': 'Filter by project',
   'tasks.fAgent': 'Filter by agent',
   'tasks.fProjectKey': 'Project',

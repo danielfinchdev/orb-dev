@@ -636,7 +636,7 @@ function TasksPc({ route }) {
                 options={[{ value: ALL, label: tr('tasks.fAll') }, ...projects.map((name) => ({ value: name, label: name, icon: <ProjectIcon name={name} small /> }))]} />
               <Select value={agent} onValueChange={setAgent} prefix={tr('tasks.fAgentKey')} title={tr('tasks.fAgent')} data-testid="task-filter-agent"
                 options={[{ value: ALL, label: tr('tasks.fAll') }, ...agents.map((id) => ({ value: id, label: AGENT[id] ?? id, icon: <AgentIcon agent={id} className="size-3.5" /> }))]} />
-              <SearchInput className="w-auto min-w-24 flex-[0_1_220px]" value={query} onChange={setQuery} placeholder={tr('tasks.search')} data-testid="task-search" />
+              <SearchInput className="w-auto min-w-24 flex-[0_1_220px]" value={query} onChange={setQuery} placeholder={tr('tasks.search')} shortPlaceholder={tr('tasks.searchShort')} data-testid="task-search" />
               <Button onClick={async () => { const made = await askNewTask(tr, storedProjects.map((p) => p.name), route.project ?? (project === ALL ? undefined : project)); if (made?.id) { setFilter('todas'); open(made); } }} data-testid="task-new"><Plus />{tr('tasks.new')}</Button>
               </div>
             </div>
