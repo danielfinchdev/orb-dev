@@ -66,7 +66,8 @@ export async function rewindInfo(sessions, id, itemId) {
 function forkInfo(sessions, s, itemId) {
   const why = s.kind !== 'chat' ? tr('msg.edit.notChat')
     : !sessions.board.one("SELECT id FROM session_items WHERE id = ? AND session_id = ? AND kind = 'text' AND role IN ('user', 'assistant')", Number(itemId), s.id) ? tr('msg.edit.noMessage')
-      : sessions.running.has(s.id) || sessions.pendingApprovals(s.id).length ? tr('msg.edit.busy') : '';
+      : s.trashed_at ? tr('msg.trash.inTrash')
+        : sessions.running.has(s.id) || sessions.pendingApprovals(s.id).length || locked(sessions, s) ? tr('msg.edit.busy') : '';
   return { canFork: !why, forkWhy: why };
 }
 

@@ -767,6 +767,8 @@ ${body}`;
     const s = this.must(id);
     if (this.running.has(id)) throw new Error(tr('msg.sessions.forkWait'));
     const cut = from == null ? null : Number(from);
+    // an «Editar» in progress is about to delete lines from this chat: a cut copy could carry them
+    if (cut != null && [s.id, s.cwd].some((k) => this.editing?.has(k))) throw new Error(tr('msg.edit.busy'));
     if (cut != null && !this.board.one("SELECT id FROM session_items WHERE id = ? AND session_id = ? AND kind = 'text' AND role IN ('user', 'assistant')", cut, s.id)) throw new Error(tr('msg.edit.noMessage'));
     const other = agent && agent !== s.agent ? agent : null;
     const a = adapter(other ?? s.agent);

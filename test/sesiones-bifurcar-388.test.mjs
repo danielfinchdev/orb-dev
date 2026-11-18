@@ -10,6 +10,7 @@ import { Sessions } from '../src/engine/sessions.mjs';
 import { rewindInfo } from '../src/engine/edit-message.mjs';
 import { buildApi } from '../src/engine/api/index.mjs';
 import { DESKTOP } from '../src/domain/security/permissions.mjs';
+import { guardCall } from '../src/engine/transport/remote-calls.mjs';
 
 let t; let board; let sessions; let project;
 before(() => { t = tempHome(); board = new Board(); project = createProject(board, { name: 'web' }, 'usuario'); sessions = new Sessions(board, { emit: () => {} }); });
@@ -88,4 +89,30 @@ test('the API takes from, validates it and still forks without it', async () => 
   assert.equal(lines((await api.call('sessions.fork', { id: s.id }, DESKTOP)).id).length, 6);
   await assert.rejects(() => api.call('sessions.fork', { id: s.id, from: 'x' }, DESKTOP));
   await assert.rejects(() => api.call('sessions.fork', { id: s.id, from: 999999 }, DESKTOP));
+});
+
+test('canFork is false for a chat in the trash and for one with an «Editar» in progress, and fork refuses a cut then', async () => {
+  const { s, ids } = await talk('claude');
+  assert.equal((await rewindInfo(sessions, s.id, ids[1])).canFork, true);
+  sessions.editing ??= new Set();
+  sessions.editing.add(s.id);
+  try {
+    const info = await rewindInfo(sessions, s.id, ids[1]);
+    assert.equal(info.canFork, false); assert.ok(info.forkWhy);
+    assert.throws(() => sessions.fork(s.id, { from: ids[1] }), /otra|ocupad|edit|moment/i);
+    assert.ok(sessions.fork(s.id), 'a whole fork is as before');
+  } finally { sessions.editing.delete(s.id); }
+  board.run('UPDATE sessions SET trashed_at = ? WHERE id = ?', new Date().toISOString(), s.id);
+  const gone = await rewindInfo(sessions, s.id, ids[1]);
+  assert.equal(gone.canFork, false); assert.match(gone.forkWhy, /papelera/i);
+});
+
+test('the phone guard refuses fork-from and rewindInfo on a chat with «total» permission', async () => {
+  const { s, ids } = await talk('claude');
+  board.run("UPDATE sessions SET permission = 'total' WHERE id = ?", s.id);
+  assert.ok(guardCall(board, 'sessions.fork', { id: s.id, from: ids[1] }));
+  assert.ok(guardCall(board, 'sessions.rewindInfo', { id: s.id, item: ids[1] }));
+  const other = await talk('claude');
+  assert.equal(guardCall(board, 'sessions.fork', { id: other.s.id, from: other.ids[1] }), null);
+  assert.equal(guardCall(board, 'sessions.rewindInfo', { id: other.s.id, item: other.ids[1] }), null);
 });
