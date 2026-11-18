@@ -124,8 +124,7 @@ fun OrbGroupHeader(
         Icon(OrbIcons.ChevronDown, null, Modifier.size(14.dp).graphicsLayer { rotationZ = turn }, tint = OrbKit.mutedForeground)
     }
     Row(
-        modifier.fillMaxWidth().then(click).padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 6.dp)
-            .defaultMinSize(minHeight = if (onClick != null) 36.dp else 0.dp),
+        modifier.fillMaxWidth().then(click).padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (collapsed != null && !chevronAtEnd) chevron()

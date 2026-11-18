@@ -98,9 +98,9 @@ fun ChatListScreen(
     var moreOpen by rememberSaveable { mutableStateOf(false) }
     val actions = remember(vm) {
         ChatActions(
-            onPin = vm::togglePin, onMarkRead = vm::markRead, onMute = vm::toggleMute, onSnooze = vm::snooze,
+            onPin = vm::togglePin, onMarkRead = vm::markRead, onMute = vm::mute, onSnooze = vm::snooze,
             onMove = vm::moveToSection, onMoveToNew = vm::moveToNewSection, onRename = vm::rename, onArchive = vm::archive,
-            onDelete = null,
+            onDelete = null, onMarkUnread = if (vm.canMarkUnread()) ({ r: ChatRow -> vm.markUnread(r); Unit }) else null, timedMute = vm.canMarkUnread(),
         )
     }
 
@@ -112,7 +112,7 @@ fun ChatListScreen(
             ChatFilters(state, vm::setFilter)
             PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::refresh, modifier = Modifier.weight(1f).fillMaxWidth()) {
                 ListBody(
-                    state, onOpenChat, onLongPress = { actionsFor = it.key }, onRetry = vm::refresh, onCloseDigest = vm::closeDigest,
+                    state, onOpenChat, selected = actionsFor, onLongPress = { actionsFor = it.key }, onRetry = vm::refresh, onCloseDigest = vm::closeDigest,
                     onReorder = vm::reorder, onToggleGroup = vm::toggleGroup, onShowAll = { vm.setFilter(ChatFilter.All) },
                     onMarkRead = vm::markRead, onArchive = vm::archive, onRestore = { vm.unarchive(it.ref) },
                 )
@@ -157,10 +157,7 @@ fun ChatListScreen(
             actionsFor = null
         } else {
             val withDelete = remember(actions, row.kind, vm) {
-                if (vm.canDelete(row.kind)) ChatActions(
-                    actions.onPin, actions.onMarkRead, actions.onMute, actions.onSnooze, actions.onMove, actions.onMoveToNew,
-                    actions.onRename, actions.onArchive, onDelete = { deleting = it.key },
-                ) else actions
+                if (vm.canDelete(row.kind)) actions.withDelete { deleting = it.key } else actions
             }
             ChatActionsSheet(row, state.sections, state.online, withDelete, onDismiss = { actionsFor = null })
         }
@@ -200,7 +197,7 @@ private fun ChatFilters(state: ChatListState, onFilter: (ChatFilter) -> Unit) {
 
 @Composable
 private fun ListBody(
-    state: ChatListState, onOpen: (ChatRef) -> Unit, onLongPress: (ChatRow) -> Unit, onRetry: () -> Unit,
+    state: ChatListState, onOpen: (ChatRef) -> Unit, selected: String?, onLongPress: (ChatRow) -> Unit, onRetry: () -> Unit,
     onCloseDigest: () -> Unit, onReorder: () -> Unit, onToggleGroup: (String) -> Unit, onShowAll: () -> Unit,
     onMarkRead: (ChatRow) -> Boolean, onArchive: (ChatRow) -> Boolean, onRestore: (ChatRow) -> Boolean,
 ) {
@@ -228,7 +225,7 @@ private fun ListBody(
                             ChatRowItem(
                                 row, ChatTime.listTime(row.at, now),
                                 onClick = { onOpen(row.ref) }, onLongClick = { onLongPress(row) },
-                                modifier = Modifier.animateItem(),
+                                modifier = Modifier.animateItem(), selected = row.key == selected,
                                 onMarkRead = { onMarkRead(row) },
                                 // A finished chat is brought back from the same gesture instead of archived again.
                                 onArchive = if (row.done) null else ({ onArchive(row) }),
@@ -246,13 +243,14 @@ private fun ListBody(
 private fun GroupHeader(h: HeaderEntry, onToggle: (String) -> Unit, modifier: Modifier = Modifier) {
     OrbGroupHeader(
         h.title,
-        modifier.semantics { stateDescription = if (h.collapsed) ChatTexts.FOLDED else ChatTexts.UNFOLDED },
+        // «Fijados» does not fold: no arrow, no tap, nothing to announce
+        if (h.kind == HeaderKind.Pinned) modifier else modifier.semantics { stateDescription = if (h.collapsed) ChatTexts.FOLDED else ChatTexts.UNFOLDED },
         icon = if (h.kind == HeaderKind.Pinned) OrbIcons.Pin else null,
         project = h.title.takeIf { h.kind == HeaderKind.Project },
         noProject = h.kind == HeaderKind.NoProject,
         count = h.count.takeIf { h.kind == HeaderKind.Project || h.kind == HeaderKind.Section },
-        collapsed = h.collapsed, chevronAtEnd = h.kind == HeaderKind.Done,
-        onClick = { onToggle(h.key) },
+        collapsed = h.collapsed.takeIf { h.kind != HeaderKind.Pinned }, chevronAtEnd = h.kind == HeaderKind.Done,
+        onClick = if (h.kind == HeaderKind.Pinned) null else ({ onToggle(h.key) }),
     )
 }
 

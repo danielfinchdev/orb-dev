@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -62,7 +64,8 @@ internal fun OrbeCircle() {
 internal sealed interface RowLine {
     /** [text] is what waits for the person. */
     data class Waiting(val text: String) : RowLine
-    data object Working : RowLine
+    /** [activity] is what it does now («Editando styles.css»), when the PC says. */
+    data class Working(val activity: String?) : RowLine
     data class Branch(val text: String) : RowLine
     data class Message(val text: String) : RowLine
 }
@@ -73,9 +76,13 @@ internal fun rowLine(row: ChatRow, texts: InboxTexts): RowLine {
         row.waitingPermission -> RowLine.Waiting(ChatTexts.WAITING_PERMISSION)
         row.needsReview -> RowLine.Waiting(ChatTexts.WAITING_PERMISSION)
         row.asking -> RowLine.Waiting(ChatTexts.ASKING)
-        row.state == ChatState.Working -> RowLine.Working
+        row.state == ChatState.Working -> RowLine.Working(row.activity)
         row.branch != null -> RowLine.Branch(
-            listOfNotNull(row.branch, row.prNumber?.let { "PR #$it" }, if (row.done) ChatTexts.DONE_LABEL else null).joinToString(" · "),
+            // «Hecha»: settled, or the PC counted the files it changed (a count only exists for finished work).
+            listOfNotNull(
+                row.branch, row.prNumber?.let { "PR #$it" }, if (row.done || row.changedFiles != null) ChatTexts.DONE_LABEL else null,
+                row.changedFiles?.let(ChatTexts::files),
+            ).joinToString(" · "),
         )
         else -> RowLine.Message(messageLine(row, text))
     }
@@ -99,9 +106,10 @@ private fun RowScope.RowSubtitle(line: RowLine) {
             Icon(OrbIcons.Hand, null, Modifier.size(14.dp), tint = OrbKit.warning)
             OrbSubtitle(line.text, color = OrbKit.warning)
         }
-        RowLine.Working -> {
+        is RowLine.Working -> {
             OrbSpinner(tint = OrbKit.primaryText)
-            OrbSubtitle(ChatTexts.WORKING, color = OrbKit.primaryText)
+            Text(ChatTexts.WORKING, color = OrbKit.primaryText, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 1)
+            if (line.activity != null) OrbSubtitle("· ${line.activity}")
         }
         is RowLine.Branch -> {
             Icon(OrbIcons.GitBranch, null, Modifier.size(14.dp), tint = OrbKit.mutedForeground)
@@ -121,15 +129,17 @@ private fun RowScope.RowSubtitle(line: RowLine) {
 fun ChatRowItem(
     row: ChatRow, whenText: String, onClick: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier,
     onMarkRead: (() -> Boolean)? = null, onArchive: (() -> Boolean)? = null, onRestore: (() -> Boolean)? = null,
+    /** The chat whose actions are open: its row stays marked under the sheet (.mrow.on). */
+    selected: Boolean = false,
 ) {
     val unread = row.unread > 0
     val texts = remember { InboxTexts.current() }
-    val line = remember(row.lastText, row.lastFrom, row.lastFromName, row.agent, row.kind, row.state, row.waitingPermission, row.asking, row.needsReview, row.branch, row.prNumber, row.done) {
+    val line = remember(row.lastText, row.lastFrom, row.lastFromName, row.agent, row.kind, row.state, row.waitingPermission, row.asking, row.needsReview, row.branch, row.prNumber, row.done, row.activity, row.changedFiles) {
         rowLine(row, texts)
     }
     val status = when (line) {
         is RowLine.Waiting -> line.text
-        RowLine.Working -> ChatTexts.WORKING
+        is RowLine.Working -> listOfNotNull(ChatTexts.WORKING, line.activity).joinToString(" · ")
         is RowLine.Branch -> line.text
         is RowLine.Message -> line.text
     }
@@ -142,7 +152,7 @@ fun ChatRowItem(
     ) {
         OrbRow(
             row.title,
-            Modifier.semantics(mergeDescendants = true) { contentDescription = description },
+            Modifier.then(if (selected) Modifier.background(OrbKit.secondary) else Modifier).semantics(mergeDescendants = true) { contentDescription = description },
             lead = { AgentMark(if (row.direct) row.agent ?: "acp" else "orbe") },
             subtitle = { RowSubtitle(line) },
             time = whenText,

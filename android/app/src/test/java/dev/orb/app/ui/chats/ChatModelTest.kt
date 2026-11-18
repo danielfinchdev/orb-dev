@@ -135,4 +135,42 @@ class ChatModelTest {
         assertEquals(emptyList<SearchProject>(), r.projects)
         assertEquals(listOf("api"), SearchParser.projects("ap", known).map { it.name })
     }
+
+    private val now = ChatTime.parse("2026-11-18T10:00:00.000Z")!!
+
+    @Test fun aMuteWithAnEndIsReadAndStopsCountingOnceItHasPassed() {
+        val live = obj("""{"key":"conversation:1","kind":"conversation","id":1,"muted":true,"mutedUntil":"2026-11-18T18:00:00.000Z","unread":1}""")
+        val r = InboxParser.row(live, now)!!
+        assertTrue(r.muted); assertEquals("2026-11-18T18:00:00.000Z", r.mutedUntil)
+        // A list saved before the end still says muted: the phone does not trust it past that moment.
+        val late = InboxParser.row(live, ChatTime.parse("2026-11-18T18:00:01.000Z")!!)!!
+        assertFalse(late.muted)
+        // Muted for good: no end.
+        val forever = InboxParser.row(obj("""{"key":"conversation:2","kind":"conversation","id":2,"muted":true}"""), now)!!
+        assertTrue(forever.muted); assertNull(forever.mutedUntil)
+    }
+
+    @Test fun anOlderPcSendsNoNewFieldsAndTheRowStillReads() {
+        val r = InboxParser.row(obj("""{"key":"conversation:3","kind":"conversation","id":3,"title":"Viejo","unread":0}"""), now)!!
+        assertNull(r.mutedUntil); assertNull(r.activity); assertNull(r.changedFiles)
+    }
+
+    @Test fun readsTheLiveActivityAndTheFilesOfASession() {
+        val merged = InboxMerge.merge(
+            obj("""{"items":[{"key":"session:s1","kind":"session","id":"s1","muted":false,"unread":0}]}"""), null,
+            Json.parseToJsonElement("""[{"id":"s1","kind":"chat","agent":"cursor","title":"Ajustar estilos","status":"running","activity":"Editando styles.css","changedFiles":3,"updated_at":"2026-11-18T09:00:00.000Z"}]"""),
+            null,
+        )
+        val r = InboxParser.parse(merged).rows.single()
+        assertEquals("Editando styles.css", r.activity)
+        assertEquals(3, r.changedFiles)
+        // A count of zero or a blank line is no data.
+        val none = InboxParser.row(obj("""{"key":"session:s2","kind":"session","id":"s2","activity":"  ","changedFiles":0}"""), now)!!
+        assertNull(none.activity); assertNull(none.changedFiles)
+    }
+
+    @Test fun anOrbeConversationCarriesItsActivityFromInboxList() {
+        val r = InboxParser.row(obj("""{"key":"conversation:4","kind":"conversation","id":4,"state":"working","activity":"Leyendo archivos"}"""), now)!!
+        assertEquals("Leyendo archivos", r.activity)
+    }
 }

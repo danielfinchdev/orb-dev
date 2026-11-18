@@ -76,7 +76,9 @@ interface ChatsBackend {
 
     suspend fun pin(ref: ChatRef, pinned: Boolean): Result<Unit>
     suspend fun markRead(ref: ChatRef): Result<Unit>
-    suspend fun mute(ref: ChatRef, muted: Boolean): Result<Unit>
+    /** [untilIso] ends the mute by itself; null with [muted] = until it is lifted. */
+    suspend fun mute(ref: ChatRef, muted: Boolean, untilIso: String? = null): Result<Unit>
+    suspend fun markUnread(ref: ChatRef): Result<Unit>
 
     /** [untilIso] null brings the chat back. */
     suspend fun snooze(ref: ChatRef, untilIso: String?): Result<Unit>
@@ -161,7 +163,9 @@ class RuntimeChatsBackend(private val container: AppContainer, private val runti
         (if (pinned) api.inbox.pin(ref.params()) else api.inbox.unpin(ref.params())).unit()
 
     override suspend fun markRead(ref: ChatRef) = api.inbox.markRead(ref.params()).unit()
-    override suspend fun mute(ref: ChatRef, muted: Boolean) = api.inbox.mute(ref.params { put("muted", muted) }).unit()
+    override suspend fun mute(ref: ChatRef, muted: Boolean, untilIso: String?) =
+        api.inbox.mute(ref.params { put("muted", muted); if (muted && untilIso != null) put("until", untilIso) }).unit()
+    override suspend fun markUnread(ref: ChatRef) = api.inbox.markUnread(ref.params()).unit()
     override suspend fun snooze(ref: ChatRef, untilIso: String?) =
         api.inbox.snooze(ref.params { put("until", untilIso?.let { JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull) }).unit()
 

@@ -225,3 +225,27 @@ fun OrbSearchButton(placeholder: String, onClick: () -> Unit, modifier: Modifier
         Text(placeholder, Modifier.weight(1f), color = OrbKit.mutedForeground, fontSize = 15.sp, maxLines = 1)
     }
 }
+
+/**
+ * `.field` with a real text input: 48 dp, a thin border, the person's text in the foreground colour. [label] is what a
+ * screen reader says (the placeholder is drawn only while the field is empty).
+ */
+@Composable
+fun OrbTextField(
+    value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier,
+    focus: FocusRequester? = null, onDone: (() -> Unit)? = null,
+) {
+    Box(
+        modifier.fillMaxWidth().height(48.dp).clip(RadiusCard).border(1.dp, OrbKit.border, RadiusCard).padding(horizontal = 14.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        if (value.isEmpty()) Text(label, color = OrbKit.faintForeground, fontSize = 15.sp, maxLines = 1)
+        BasicTextField(
+            value, onValueChange,
+            Modifier.fillMaxWidth().then(if (focus != null) Modifier.focusRequester(focus) else Modifier).semantics { contentDescription = label },
+            singleLine = true, textStyle = TextStyle(color = OrbKit.foreground, fontSize = 15.sp), cursorBrush = SolidColor(OrbKit.foreground),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { onDone?.invoke() }),
+        )
+    }
+}

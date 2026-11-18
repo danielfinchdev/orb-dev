@@ -32,7 +32,9 @@ enum class ChatFilter { All, Unread, Working, Direct }
 /** «Recientes» (projects, most recent first) or «Prioridad» (what needs the person first, one flat list). */
 enum class ChatOrder { Recent, Priority }
 
-enum class SnoozeOption { OneHour, ThreeHours, Tomorrow, Clear }
+enum class SnoozeOption { OneHour, ThisAfternoon, Tomorrow, Clear }
+
+enum class MuteOption { OneHour, EightHours, Forever, Clear }
 
 sealed interface ListEntry {
     val key: String
@@ -127,7 +129,8 @@ object ChatGrouping {
         val out = ArrayList<ListEntry>()
         // A folded group keeps its heading and drops its rows.
         fun group(h: HeaderEntry, list: List<ChatRow>) {
-            val folded = h.key in collapsed
+            // «Fijados» never folds, even when an older version saved its key as folded
+            val folded = h.key in collapsed && h.kind != HeaderKind.Pinned
             out += h.copy(collapsed = folded)
             if (!folded) list.mapTo(out) { RowEntry(it) }
         }
@@ -321,7 +324,21 @@ class ChatListViewModel(
 
     /** True when the request went out; false when there is no PC to take it (the row does not change). */
     fun markRead(row: ChatRow) = act(row.ref, { it.copy(unread = 0) }) { backend.markRead(row.ref) }
-    fun toggleMute(row: ChatRow) = act(row.ref, { it.copy(muted = !row.muted) }) { backend.mute(row.ref, !row.muted) }
+    fun mute(row: ChatRow, option: MuteOption) {
+        val until = when (option) {
+            MuteOption.OneHour -> ChatTime.iso(clock() + 3_600_000L)
+            MuteOption.EightHours -> ChatTime.iso(clock() + 8 * 3_600_000L)
+            MuteOption.Forever, MuteOption.Clear -> null
+        }
+        val on = option != MuteOption.Clear
+        act(row.ref, { it.copy(muted = on, mutedUntil = until) }) { backend.mute(row.ref, on, until) }
+    }
+
+    /** The PC marks the chat as having one unread line until it is opened again. */
+    fun markUnread(row: ChatRow) = act(row.ref, { it.copy(unread = maxOf(1, it.unread)) }) { backend.markUnread(row.ref) }
+
+    /** Whether the PC takes a by-hand «unread» and a mute with an end: both came in the same version. */
+    fun canMarkUnread() = backend.available(ApiMethods.INBOX_MARK_UNREAD)
     fun rename(row: ChatRow, title: String) {
         val t = title.trim()
         if (t.isEmpty() || t == row.title) return
@@ -338,7 +355,7 @@ class ChatListViewModel(
         val now = clock()
         val until = when (option) {
             SnoozeOption.OneHour -> ChatTime.iso(now + 3_600_000L)
-            SnoozeOption.ThreeHours -> ChatTime.iso(now + 3 * 3_600_000L)
+            SnoozeOption.ThisAfternoon -> ChatTime.thisAfternoon(now)
             SnoozeOption.Tomorrow -> ChatTime.tomorrowMorning(now)
             SnoozeOption.Clear -> null
         }

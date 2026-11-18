@@ -76,7 +76,7 @@ class ChatScreensTest {
         list(FakeChatsBackend(rows))
         rule.onNodeWithText("Revisar pasarela").performTouchInput { longClick() }
         rule.waitForIdle()
-        for (a in listOf("Fijar arriba", "Marcar como leído", "Silenciar", "Posponer", "Mover a sección…", "Renombrar", "Archivar")) {
+        for (a in listOf("Fijar arriba", "Marcar como leído", "Silenciar", "Posponer", "Mover a sección", "Renombrar", "Archivar")) {
             rule.onNodeWithText(a).assertExists()
         }
         rule.onNodeWithText("Borrar el chat en el PC").assertDoesNotExist()

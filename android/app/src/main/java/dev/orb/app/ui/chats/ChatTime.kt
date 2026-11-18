@@ -55,6 +55,36 @@ object ChatTime {
     /** Whether a postponement is still in force at [nowMs]. */
     fun snoozed(until: String?, nowMs: Long): Boolean = (parse(until) ?: 0L) > nowMs
 
+    /** The hour «Esta tarde» wakes a chat at, and the last moment it is still offered (later it would hardly differ from an hour). */
+    private const val AFTERNOON_AT = 16
+    private const val AFTERNOON_OFFERED_UNTIL_MIN = 15 * 60
+
+    /** Whether «Esta tarde» still means something: before 15:00 local time. */
+    fun afternoonOffered(nowMs: Long, tz: TimeZone = TimeZone.getDefault()): Boolean {
+        val c = GregorianCalendar(tz).apply { timeInMillis = nowMs }
+        return c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE) < AFTERNOON_OFFERED_UNTIL_MIN
+    }
+
+    /** 16:00 local time today, as an ISO UTC time. */
+    fun thisAfternoon(nowMs: Long, tz: TimeZone = TimeZone.getDefault()): String {
+        val c = GregorianCalendar(tz).apply { timeInMillis = nowMs; set(Calendar.HOUR_OF_DAY, AFTERNOON_AT); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }
+        return iso(c.timeInMillis)
+    }
+
+    /** «Hasta las 18:30» today, «Hasta mañana 9:00», «Hasta el lun 9:00» within the week, else «Hasta el 3 nov». */
+    fun until(iso: String?, nowMs: Long, tz: TimeZone = TimeZone.getDefault()): String {
+        val t = parse(iso) ?: return ""
+        val then = GregorianCalendar(tz).apply { timeInMillis = t }
+        val now = GregorianCalendar(tz).apply { timeInMillis = nowMs }
+        val clock = "${then.get(Calendar.HOUR_OF_DAY)}:${then.get(Calendar.MINUTE).toString().padStart(2, '0')}"
+        return when ((dayNumber(then) - dayNumber(now)).toInt()) {
+            0 -> "Hasta las $clock"
+            1 -> "Hasta mañana $clock"
+            in 2..6 -> "Hasta el ${DAYS[then.get(Calendar.DAY_OF_WEEK) - 1]} $clock"
+            else -> "Hasta el ${then.get(Calendar.DAY_OF_MONTH)} ${MONTHS[then.get(Calendar.MONTH)]}"
+        }
+    }
+
     /** 9:00 local time of the next day, as an ISO UTC time. */
     fun tomorrowMorning(nowMs: Long, tz: TimeZone = TimeZone.getDefault()): String {
         val c = GregorianCalendar(tz).apply { timeInMillis = nowMs; add(Calendar.DAY_OF_MONTH, 1); set(Calendar.HOUR_OF_DAY, 9); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }

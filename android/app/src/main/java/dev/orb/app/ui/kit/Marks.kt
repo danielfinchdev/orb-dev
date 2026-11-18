@@ -133,8 +133,8 @@ object AgentGlyphs {
 
 /**
  * The mark of an agent, with no background, drawn as a vector so it has the same size and weight on every phone:
- * ✳ Claude, ◎ Codex, ▲ Cursor, ● Orbe. [size] is the box; the drawing fills about three quarters of it, like the
- * mockups' 14.5 px glyph inside a 16 px box.
+ * ✳ Claude, ◎ Codex, ▲ Cursor, ● Orbe. [size] is the box; the drawing is what the mockups' 14.5 px glyph shows in a
+ * 16 px box: about 11 to 12 dp tall for ✳ ◎ ▲ and 7 to 8 dp for ●.
  */
 @Composable
 fun AgentMark(agent: String?, modifier: Modifier = Modifier, size: Dp = 16.dp, description: String? = AgentGlyphs.name(agent)) {
@@ -152,7 +152,7 @@ fun AgentMark(agent: String?, modifier: Modifier = Modifier, size: Dp = 16.dp, d
         when (kind) {
             "claude" -> {
                 // Eight spokes: four lines through the centre.
-                val r = s * 0.40f
+                val r = s * 0.31f
                 for (k in 0 until 4) {
                     val a = Math.toRadians(k * 45.0)
                     val d = Offset((cos(a) * r).toFloat(), (sin(a) * r).toFloat())
@@ -161,8 +161,8 @@ fun AgentMark(agent: String?, modifier: Modifier = Modifier, size: Dp = 16.dp, d
             }
             "codex" -> {
                 val w = s * 0.09f
-                drawCircle(color, radius = s * 0.40f - w / 2f, center = c, style = Stroke(w))
-                drawCircle(color, radius = s * 0.17f, center = c, style = Stroke(w))
+                drawCircle(color, radius = s * 0.36f - w / 2f, center = c, style = Stroke(w))
+                drawCircle(color, radius = s * 0.15f, center = c, style = Stroke(w))
             }
             "cursor" -> {
                 val tri = Path().apply {
@@ -171,8 +171,8 @@ fun AgentMark(agent: String?, modifier: Modifier = Modifier, size: Dp = 16.dp, d
                 drawPath(tri, color)
                 drawPath(tri, color, style = Stroke(s * 0.06f, join = StrokeJoin.Round))
             }
-            "orbe" -> drawCircle(color, radius = s * 0.30f, center = c)
-            else -> drawCircle(color, radius = s * 0.25f, center = c)
+            "orbe" -> drawCircle(color, radius = s * 0.23f, center = c)
+            else -> drawCircle(color, radius = s * 0.20f, center = c)
         }
     }
 }

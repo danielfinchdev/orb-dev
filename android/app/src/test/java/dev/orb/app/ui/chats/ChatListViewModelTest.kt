@@ -118,14 +118,14 @@ class ChatListViewModelTest {
         val vm = vm(b)
         val r = vm.rows()[0]
         vm.snooze(r, SnoozeOption.OneHour)
-        vm.toggleMute(r)
+        vm.mute(r, MuteOption.Forever)
         vm.rename(r, "  Nuevo título ")
         vm.rename(r, "   ")
         vm.moveToNewSection(r, "Urgentes")
         runCurrent()
         assertEquals(
             listOf(
-                "snooze conversation:1 ${ChatTime.iso(1_000_000L + 3_600_000L)}", "mute conversation:1 true",
+                "snooze conversation:1 ${ChatTime.iso(1_000_000L + 3_600_000L)}", "mute conversation:1 true null",
                 "rename conversation:1 Nuevo título", "createSection Urgentes", "move conversation:1 99",
             ),
             b.calls,

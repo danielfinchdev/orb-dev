@@ -10,6 +10,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import dev.orb.app.ui.chats.ChatSection
 import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.link.net.PcVersions
 import dev.orb.app.ui.chats.ChatKind
@@ -61,9 +66,9 @@ class ChatsShotsTest {
         val done = (1..14).map { n -> row("d$n", title = "Chat terminado $n", done = true, at = at(10L + n, 10, 0)) }
         return listOf(
             row("41", title = "Versión 2.0 de la app", pinned = true, unread = 2, lastText = "Tarea #41 espera tu OK", at = at(0, 13, 31)),
-            row("s1", ChatKind.Agent, "Ajustar estilos con Cursor", "app-movil", at(0, 13, 46), state = ChatState.Working, agent = "cursor", lastText = null),
+            row("s1", ChatKind.Agent, "Ajustar estilos con Cursor", "app-movil", at(0, 13, 46), state = ChatState.Working, agent = "cursor", lastText = null, activity = "Editando styles.css"),
             row("p1", title = "Pantalla de pagos", project = "app-movil", unread = 1, at = at(0, 13, 20), waitingPermission = true),
-            row("s2", ChatKind.Agent, "Arreglar el login con huella", "app-movil", at(0, 9, 15), agent = "claude", lastText = null, branch = "orb/login-huella"),
+            row("s2", ChatKind.Agent, "Arreglar el login con huella", "app-movil", at(0, 9, 15), agent = "claude", lastText = null, branch = "orb/login-huella", changedFiles = 3),
             row("r1", title = "Revisar pasarela", project = "api-pagos", unread = 1, at = at(0, 12, 10), lastText = "Hecho, he añadido un límite de tres."),
             row("o1", title = "Conversación antigua", project = "api-pagos", at = at(1, 11, 0), lastText = "¡Hola!"),
             row("b1", title = "Ideas para el blog", at = at(2, 11, 0), lastText = "Aquí tienes cinco temas."),
@@ -105,6 +110,45 @@ class ChatsShotsTest {
             }
         }
     }
+
+    /** Screen 10: the list of the mockup under the sheet of «Revisar pasarela»; [steps] walks to each variant. */
+    private fun actions(palette: OrbPaletteChoice, suffix: String, steps: () -> Unit = {}, archive: Boolean = false) {
+        Shots.assumeEnabled()
+        val rows = listOf(
+            row("41", title = "Versión 2.0 de la app", pinned = true, unread = 2, lastText = "Tarea #41 espera tu OK", at = at(0, 13, 31)),
+            row("r1", title = "Revisar pasarela", project = "api-pagos", unread = 1, at = at(0, 12, 10), lastText = "Hecho, he añadido un límite de tres."),
+            row("o1", title = "Conversación antigua", project = "api-pagos", at = at(1, 11, 0), lastText = "¡Hola!"),
+            row("b1", title = "Ideas para el blog", at = at(2, 11, 0), lastText = "Aquí tienes cinco temas."),
+        )
+        val b = backend(rows).apply { data.value = data.value.copy(sections = listOf(ChatSection(1, "Pagos", 0, 0, 0))) }
+        val vm = ChatListViewModel(b, dispatcher = Dispatchers.Unconfined)
+        twoModes("10-acciones-chat", palette, suffix, after = {
+            if (archive) {
+                rule.runOnIdle { vm.archive(rows.first { it.id == "r1" }) }
+            } else {
+                rule.onNodeWithText("Revisar pasarela").performTouchInput { longClick() }
+                rule.waitForIdle()
+                steps()
+            }
+        }) {
+            Column(Modifier.fillMaxSize()) {
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    ChatListScreen(vm, ChatsMenu(onMenu = {}, unreadNotices = 2, onNotices = {}), onOpenChat = {}, onSearch = {}, onNewChat = {})
+                }
+                OrbBottomBar(tabs, "chats", {})
+            }
+        }
+    }
+
+    private fun click(text: String) { rule.onNodeWithText(text).performClick(); rule.waitForIdle() }
+
+    @Test fun actionsGrafito() = actions(OrbPaletteChoice.Grafito, "")
+    @Test fun actionsOceano() = actions(OrbPaletteChoice.Oceano, "")
+    @Test fun actionsMute() = actions(OrbPaletteChoice.Grafito, "-silencio", { click("Silenciar") })
+    @Test fun actionsSnooze() = actions(OrbPaletteChoice.Grafito, "-posponer", { click("Posponer") })
+    @Test fun actionsSection() = actions(OrbPaletteChoice.Grafito, "-seccion", { click("Mover a sección") })
+    @Test fun actionsRename() = actions(OrbPaletteChoice.Grafito, "-renombrar", { click("Renombrar") })
+    @Test fun actionsArchived() = actions(OrbPaletteChoice.Grafito, "-archivado", archive = true)
 
     @Test fun chatsGrafito() = chats(OrbPaletteChoice.Grafito)
     @Test fun chatsOceano() = chats(OrbPaletteChoice.Oceano)

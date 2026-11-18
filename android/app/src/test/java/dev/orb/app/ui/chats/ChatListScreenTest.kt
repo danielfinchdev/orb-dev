@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.SemanticsMatcher
@@ -194,5 +195,36 @@ class ChatListScreenTest {
         rule.onNodeWithText("Ver todos").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Revisar pasarela").assertExists()
+    }
+
+    @Test fun aWorkingRowAndAFinishedBranchRowCarryTheirNewDetails() {
+        val rs = listOf(
+            row("b", title = "Ajustar estilos", kind = ChatKind.Agent, agent = "cursor", state = ChatState.Working, activity = "Editando styles.css"),
+            row("c", title = "Arreglar el login", kind = ChatKind.Agent, agent = "claude", branch = "orb/login-huella", changedFiles = 3),
+            row("e", title = "Otro cambio", kind = ChatKind.Agent, agent = "claude", branch = "orb/otra"),
+        )
+        list(FakeChatsBackend(rs))
+        rule.onNodeWithText("· Editando styles.css").assertExists()
+        rule.onNodeWithText("orb/login-huella · Hecha · 3 archivos").assertExists()
+        // No count from the PC: no claim of being finished.
+        rule.onNodeWithText("orb/otra").assertExists()
+    }
+
+    @Test fun thePinnedGroupHasNoArrowAndDoesNotFold() {
+        list(FakeChatsBackend(rows))
+        rule.onNodeWithText("Fijados").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Orb 3.8.4 seguimiento").assertExists()
+        val node = rule.onNodeWithText("Fijados").fetchSemanticsNode()
+        assertTrue(!node.config.contains(androidx.compose.ui.semantics.SemanticsProperties.StateDescription))
+    }
+
+    @Test fun theRowOfTheOpenSheetStaysMarked() {
+        val vm = ChatListViewModel(FakeChatsBackend(rows), dispatcher = Dispatchers.Unconfined)
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { ChatListScreen(vm, ChatsMenu(onMenu = {}), onOpenChat = {}, onSearch = {}, onNewChat = {}) } }
+        rule.waitForIdle()
+        rule.onNodeWithText("Revisar pasarela").performTouchInput { longClick() }
+        rule.waitForIdle()
+        rule.onNodeWithText("Fijar arriba").assertExists()
     }
 }

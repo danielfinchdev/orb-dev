@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -62,6 +63,7 @@ fun OrbSheet(
     title: String? = null,
     closeLabel: String = "Cerrar",
     showClose: Boolean = false,
+    header: (@Composable RowScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val maxHeight = (LocalConfiguration.current.screenHeightDp * 0.88f).dp
@@ -74,7 +76,9 @@ fun OrbSheet(
         },
     ) {
         Column(Modifier.heightIn(max = maxHeight).padding(bottom = 20.dp)) {
-            if (title != null || showClose) {
+            // the header of a sheet (.sh): a mark, a name and a line of context instead of a plain title
+            if (header != null) Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), content = header)
+            else if (title != null || showClose) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 6.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         title.orEmpty(), Modifier.weight(1f).semantics { heading() }, color = OrbKit.foreground, fontSize = 16.sp,

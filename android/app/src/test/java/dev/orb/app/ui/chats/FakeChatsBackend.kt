@@ -17,11 +17,13 @@ fun row(
     id: String, kind: ChatKind = ChatKind.Orbe, title: String = "Chat $id", project: String? = null, at: String? = "2026-11-11T09:00:00.000Z",
     unread: Int = 0, state: ChatState = ChatState.Idle, pinned: Boolean = false, muted: Boolean = false, section: Long? = null,
     agent: String? = null, lastText: String? = "hola", done: Boolean = false, branch: String? = null, prNumber: Int? = null,
-    waitingPermission: Boolean = false,
+    waitingPermission: Boolean = false, activity: String? = null, changedFiles: Int? = null, mutedUntil: String? = null,
+    snoozedUntil: String? = null,
 ) = ChatRow(
     key = "${kind.wire}:$id", kind = kind, id = id, title = title, project = project, lastText = lastText,
     lastFrom = Speaker.Orbe, lastFromName = "Orbe", at = at, unread = unread, state = state, pinned = pinned, pinOrder = null,
-    muted = muted, snoozedUntil = null, section = section, agent = agent, done = done, waitingPermission = waitingPermission, asking = false, branch = branch, prNumber = prNumber,
+    muted = muted, snoozedUntil = snoozedUntil, section = section, agent = agent, done = done, waitingPermission = waitingPermission, asking = false, branch = branch, prNumber = prNumber,
+    mutedUntil = mutedUntil, activity = activity, changedFiles = changedFiles,
 )
 
 class FakeChatsBackend(initial: List<ChatRow> = emptyList(), sections: List<ChatSection> = emptyList()) : ChatsBackend {
@@ -51,12 +53,15 @@ class FakeChatsBackend(initial: List<ChatRow> = emptyList(), sections: List<Chat
     override suspend fun digest(): Result<JsonElement> { digestCalls++; return digestResult }
     override suspend fun digestSeen(): Result<Unit> { digestSeenCalls++; return Result.success(Unit) }
     override suspend fun appState() = appStateResult
-    override fun available(m: ApiMethod) = trashAvailable || m !in setOf(ApiMethods.CONVERSATIONS_TRASH, ApiMethods.SESSIONS_TRASH, ApiMethods.CONVERSATIONS_RESTORE, ApiMethods.SESSIONS_RESTORE)
+    /** Whether the PC is the one that takes a mute with an end and a by-hand «unread» (3.8.8). */
+    var newPc = true
+    override fun available(m: ApiMethod) = (m != ApiMethods.INBOX_MARK_UNREAD || newPc) && (trashAvailable || m !in setOf(ApiMethods.CONVERSATIONS_TRASH, ApiMethods.SESSIONS_TRASH, ApiMethods.CONVERSATIONS_RESTORE, ApiMethods.SESSIONS_RESTORE))
 
     private fun act(name: String): Result<Unit> { calls += name; if (actionResult.isSuccess) afterAction?.invoke(); return actionResult }
     override suspend fun pin(ref: ChatRef, pinned: Boolean) = act("pin ${ref.key} $pinned")
     override suspend fun markRead(ref: ChatRef) = act("read ${ref.key}")
-    override suspend fun mute(ref: ChatRef, muted: Boolean) = act("mute ${ref.key} $muted")
+    override suspend fun mute(ref: ChatRef, muted: Boolean, untilIso: String?) = act("mute ${ref.key} $muted $untilIso")
+    override suspend fun markUnread(ref: ChatRef) = act("unread ${ref.key}")
     override suspend fun snooze(ref: ChatRef, untilIso: String?) = act("snooze ${ref.key} $untilIso")
     override suspend fun rename(ref: ChatRef, title: String) = act("rename ${ref.key} $title")
     override suspend fun archive(ref: ChatRef) = act("archive ${ref.key}")
