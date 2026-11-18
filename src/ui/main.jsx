@@ -9,7 +9,7 @@ if (import.meta.env.MODE === 'android') (await import('./lib/glass.js')).enableG
 import { StrictMode, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { notify, notifyError, notifyOk, holdNotices, Toaster } from '@/lib/notify.js';
-import { Menu, Smartphone, ScanLine, Link2, RotateCw, RefreshCw, FolderOpen, Folder, Database, TriangleAlert, Download, KeyRound, ArrowLeft, WifiOff } from 'lucide-react';
+import { Menu, Smartphone, ScanLine, Link2, RotateCw, RefreshCw, FolderOpen, Folder, Database, TriangleAlert, Download, KeyRound, ArrowLeft, WifiOff, Search, ClipboardCheck, FolderGit2, CalendarSync, Presentation } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Field, Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
 import { MobileTabs, MoreView } from '@/components/mobile-tabs.jsx';
@@ -536,12 +536,36 @@ function StartError({ error, startError, onRelink }) {
 // used as HTML. The cards sit inside an `inert` box: nothing in them can be focused or pressed.
 const START_PREVIEWS = new Set(['core', 'core-sin', 'core-danada', 'core-confirma', 'migra', 'migra-act', 'error', 'clave', 'falla', 'falla-red', 'actualiza']);
 const previewName = () => { const v = window.__ORB_START_PREVIEW__; return typeof v === 'string' && START_PREVIEWS.has(v) ? v : null; };
+// A static drawing of the sidebar for the preview only: the real one reads the engine's state and cannot mount without it.
+function PreviewSidebar() {
+  const t = useT();
+  const places = [[ClipboardCheck, 'nav.tasks'], [FolderGit2, 'nav.projects'], [CalendarSync, 'nav.schedules'], [Presentation, 'nav.board']];
+  return (
+    <aside className="bg-sidebar hidden h-full w-[340px] shrink-0 flex-col border-r md:flex" aria-hidden="true" inert data-testid="start-preview-sidebar">
+      <div className="flex h-14 shrink-0 items-center px-4">
+        <div className="wordmark"><span className="wordmark-orb">ORB</span><span className="wordmark-dot" /><span className="wordmark-e">E</span></div>
+      </div>
+      <div className="px-3 pb-2">
+        <div className="bg-muted text-muted-foreground flex h-[var(--ctl)] items-center gap-2 rounded-ctl px-3 text-control opacity-70"><Search className="size-4" />{t('orbchats.search')}</div>
+      </div>
+      <nav className="grid grid-cols-4 gap-0.5 px-2 pb-1.5">
+        {places.map(([Icon, label]) => (
+          <div key={label} className="text-muted-foreground flex min-w-0 flex-col items-center gap-[3px] pt-[7px] pb-1.5 text-caption leading-[1.45]"><Icon className="size-5" /><span className="max-w-full truncate">{t(label)}</span></div>
+        ))}
+      </nav>
+      <div className="flex flex-col gap-1 px-3 pt-2">
+        {[72, 58, 66].map((w) => (
+          <div key={w} className="flex items-center gap-3 px-1 py-2"><span className="bg-muted size-9 shrink-0 rounded-full" /><span className="flex flex-1 flex-col gap-1.5"><span className="bg-muted h-2.5 rounded" style={{ width: `${w}%` }} /><span className="bg-muted/60 h-2 w-[45%] rounded" /></span></div>
+        ))}
+      </div>
+    </aside>
+  );
+}
 // A screen that fails or cannot load happens inside the app: the card sits in the content area, the sidebar still on view.
 function InArea({ children }) {
   return (
     <div className="flex h-full">
-      {/* the sidebar's place only (the preview has no data to draw the real one): the card is centred in what is left, as in the app */}
-      <div className="bg-sidebar hidden w-[340px] shrink-0 border-r md:block" aria-hidden="true" />
+      <PreviewSidebar />
       <main className="flex min-w-0 flex-1 flex-col">{children}</main>
     </div>
   );

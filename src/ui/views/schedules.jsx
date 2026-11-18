@@ -185,8 +185,8 @@ function ScheduleDialog({ schedule = null, preset = {}, onDone }) {
     await act(call('schedules.run', { id: schedule.id }), tr('schedules.run.done'));
   };
   const zoneField = (
-    <Field label={tr('schedules.tz')} hint={tr('schedules.tzHint')}>
-      <Select caret="solid" className="w-full" value={v.tz || ORB_ZONE} onValueChange={(z) => set({ tz: z === ORB_ZONE ? '' : z })} options={zones} data-testid="schedule-tz" />
+    <Field label={tr('schedules.tz')}>
+      <Select caret="solid" className="w-full" title={tr('schedules.tzHint')} value={v.tz || ORB_ZONE} onValueChange={(z) => set({ tz: z === ORB_ZONE ? '' : z })} options={zones} data-testid="schedule-tz" />
     </Field>
   );
   const timeField = <Field label={tr('schedules.time')}><Input type="time" className="[&::-webkit-calendar-picker-indicator]:hidden" value={v.at_time} onChange={(e) => set({ at_time: e.target.value })} data-testid="schedule-time" /></Field>;
@@ -198,7 +198,8 @@ function ScheduleDialog({ schedule = null, preset = {}, onDone }) {
             <div className="flex items-center gap-2"><DialogTitle>{tr(editing ? 'schedules.edit.title' : 'schedules.new.title')}</DialogTitle>{dirty ? <Badge variant="warning" data-testid="schedule-unsaved">{tr('schedules.unsaved')}</Badge> : null}</div>
             <DialogDescription className="sr-only">{tr(editing ? 'schedules.edit.title' : 'schedules.new.title')}</DialogDescription>
           </DialogHeader>
-          <DialogBody className="flex flex-col gap-4 p-[18px] [&>*]:shrink-0 [&_label]:font-normal">
+          {/* the scrollbar takes its gutter out of the right padding, so the fields end 18 px from the edge as in the mock-up */}
+          <DialogBody className="flex flex-col gap-4 p-[18px] pr-[calc(18px-var(--sb-w))] [scrollbar-gutter:stable] [&>*]:shrink-0 [&_label]:font-normal">
             <Field label={tr(editing ? 'schedules.edit.name' : 'schedules.titleField')}><Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={120} placeholder={tr('schedules.titlePh')} data-testid={editing ? 'schedule-edit-title' : 'schedule-title'} /></Field>
             <Field label={tr(editing ? 'schedules.edit.what' : 'schedules.what')} hint={tr('schedules.whatNote', { assistant: app?.config?.assistantName })}><Textarea className="min-h-20" rows={editing ? 5 : 4} value={v.description} onChange={(e) => set({ description: e.target.value })} placeholder={tr('schedules.whatHint')} data-testid={editing ? 'schedule-edit-description' : 'schedule-description'} /></Field>
             <div className="grid grid-cols-2 gap-3">
@@ -402,7 +403,7 @@ function SchedulesPc() {
               </div>
               {runs.length ? (
                 <div className="grid gap-3">
-                  <SectionLabel className="flex items-baseline gap-2 px-0 pt-2 pb-0"><h2 className="m-0 text-[length:inherit] font-[inherit]">{tr('schedules.lastRuns')}</h2><span className="text-faint-foreground text-caption font-normal">{tr('schedules.lastRunsSub')}</span><span className="grow" /><Button variant="link" className="h-auto p-0 text-control font-normal" onClick={() => go('tasks')}>{tr('schedules.seeTasks')}</Button></SectionLabel>
+                  <SectionLabel className="flex items-baseline gap-2 px-0 pt-2 pb-0"><h2 className="m-0 text-[length:inherit] font-[inherit]">{tr('schedules.lastRuns')}</h2><span className="text-faint-foreground text-caption font-normal">{tr('schedules.lastRunsSub')}</span><span className="grow" /><Button variant="link" className="text-info h-auto p-0 text-control font-normal" onClick={() => go('tasks')}>{tr('schedules.seeTasks')}</Button></SectionLabel>
                   <ListCard data-testid="schedule-runs">
                     {runs.map((x) => (
                       <ListRow key={x.id} className="rounded-none" leading={<TaskStatus task={x} />} title={titleOf(x)} meta={<span>{resultOf(x) || `#${x.id} · ${x.project}`}</span>}

@@ -267,10 +267,24 @@ export function Account({ u, locale, stop, weeklyStop, warn = 0, reload }) {
   );
 }
 
+// «Pasaría de A a B»: the account the agent is using now (the first of an agent that has several) and the one Orb would
+// pass to (the next that is not paused); one line with what would happen, or that there is nowhere to go.
+const accountName = (u) => { const n = AGENT[u.agent] ?? u.agent; return u.label && u.label !== n ? `${n} · ${u.label}` : n; };
+export function switchPreview(t, accounts) {
+  for (const u of accounts) {
+    const others = accounts.filter((x) => x.agent === u.agent && x.account !== u.account);
+    if (accounts.find((x) => x.agent === u.agent) !== u || !others.length) continue;
+    const to = others.find((x) => !x.cooldownUntil) ?? others[0];
+    return t('usage.switchWould', { from: accountName(u), to: accountName(to) });
+  }
+  return t('usage.switchNone');
+}
+
 // What Orb does when an account nears its limit: the brakes are the same values as «Ajustes › Tareas» and «Reglas»
 // (a change of a brake asks the master password, as there).
-function Limits({ cfg, windowHours }) {
+function Limits({ cfg, windowHours, accounts = [] }) {
   const t = useT();
+  const switchHint = switchPreview(t, accounts);
   const stop = Math.round((cfg.budget?.stopAt ?? 0.92) * 100);
   const weekly = Math.round((cfg.budget?.weeklyStopAt ?? 0.85) * 100);
   const opts = (list, cur) => [...new Set([...list, cur])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: `${n} %` }));
@@ -289,7 +303,7 @@ function Limits({ cfg, windowHours }) {
       <Panel className="mt-1.5">
         {stopRail ? <Setting label={t('usage.stopQueue', { pct: stop })} hint={t('usage.stopQueueHint')}><Switch checked={stopRail.activo !== false} onCheckedChange={async (enabled) => { if (!(await (enabled ? confirmResumeRail(stopRail) : confirmPauseRail(stopRail)))) return; if (await changeRail('freno-uso', { enabled }, t('rules.railSaved'))) load(); }} aria-label={t('usage.stopQueue', { pct: stop })} data-testid="usage-stop-queue" /></Setting> : null}
         <Setting label={t('usage.resume')} hint={t('usage.resumeHint')}><Switch checked={resume} onCheckedChange={(resumeAtReset) => save({ continuity: { resumeAtReset } })} aria-label={t('usage.resume')} /></Setting>
-        <Setting label={t('usage.switchAccount')} hint={t('usage.switchAccountHint')}><Switch checked={switchAccount} onCheckedChange={(v) => save({ continuity: { switchAccount: v } })} aria-label={t('usage.switchAccount')} data-testid="usage-switch-account" /></Setting>
+        <Setting label={t('usage.switchAccount')} hint={switchHint} title={t('usage.switchAccountHint')}><Switch checked={switchAccount} onCheckedChange={(v) => save({ continuity: { switchAccount: v } })} aria-label={t('usage.switchAccount')} data-testid="usage-switch-account" /></Setting>
         <Setting label={t('usage.warnAt')} hint={t('usage.warnAtHint')}><Select caret="solid" value={String(warn)} options={warnOpts} onValueChange={(v) => save({ budget: { warnAt: Number(v) / 100 } })} title={t('usage.warnAt')} data-testid="usage-warn-at" /></Setting>
         <Setting label={t('usage.brake5', { h: windowHours })} hint={t('usage.brake5Hint')}><Select caret="solid" value={String(stop)} options={opts([75, 80, 85, 90, 92, 95, 98, 100], stop)} onValueChange={(v) => save({ budget: { profile: null, stopAt: Number(v) / 100 } })} title={t('usage.brake5', { h: windowHours })} data-testid="usage-brake-5h" /></Setting>
         <Setting label={t('usage.brakeWeek')} hint={t('usage.brakeWeekHint')}><Select caret="solid" value={String(weekly)} options={opts([70, 75, 80, 85, 90, 95, 100], weekly)} onValueChange={(v) => save({ budget: { weeklyStopAt: Number(v) / 100 } })} title={t('usage.brakeWeek')} data-testid="usage-brake-week" /></Setting>
@@ -381,13 +395,14 @@ export function UsageView() {
             {!data.total.turns ? <p className="text-muted-foreground text-control">{t('usage.empty')}</p> : null}
           </>)}
           {/* drawn by the mock-up after the tables: what Orb does when an account nears its limit */}
-          {fullPc() ? <Limits cfg={cfg} windowHours={accounts[0]?.windowHours ?? cfg.budget?.windowHours ?? 5} /> : null}
+          {fullPc() ? <Limits cfg={cfg} accounts={accounts} windowHours={accounts[0]?.windowHours ?? cfg.budget?.windowHours ?? 5} /> : null}
           {/* Orb's own, not drawn by the mock-up: at the end, under «Más opciones» */}
-          <MoreOptions testid="usage-more-options">
+          {/* the title only when something is inside */}
+          {data?.total?.turns || data?.days?.length || local?.total?.turns ? <MoreOptions testid="usage-more-options">
             {data?.total?.turns ? <p className="text-muted-foreground text-caption" data-testid="usage-turns">{t('usage.turns')}: {data.total.turns.toLocaleString(locale)}</p> : null}
             <LocalUsage data={local || null} locale={locale} />
             {data?.days?.length ? <DaysTable days={data.days} byDay={data.byDay} order={order} metric={metric} locale={locale} /> : null}
-          </MoreOptions>
+          </MoreOptions> : null}
         </div>
       </PageBody>
     </>

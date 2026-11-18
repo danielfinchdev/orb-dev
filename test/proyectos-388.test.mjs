@@ -63,7 +63,7 @@ test('la página del proyecto tiene las seis pestañas, «Nuevo chat aquí» y e
   assert.ok(order.slice(0, 4).every((id, i, all) => !i || menu.indexOf(`"${all[i - 1]}"`) < menu.indexOf(`"${id}"`)), 'orden de la maqueta');
   assert.match(menu, /<Kbd className="ml-auto">F2<\/Kbd>/);
   // what the menu no longer carries lives where the function map puts it: nothing is lost
-  for (const id of ['project-review', 'project-security', 'project-log']) { assert.doesNotMatch(menu, new RegExp(`"${id}"`), id); assert.ok(page.includes(`data-testid="${id}"`), `${id} sigue en la página`); }
+  for (const id of ['project-review', 'project-security']) { assert.doesNotMatch(menu, new RegExp(`"${id}"`), id); assert.ok(page.includes(`data-testid="${id}"`), `${id} sigue en la página`); }
   // «Trabajar aquí» and the other functions the mock-up does not draw live in the ⋯ menu; the reviews in the task button's menu
   for (const id of ['project-set-active', 'project-git-refresh', 'project-expert-open']) assert.match(menu, new RegExp(`data-testid="${id}"`), id);
   assert.doesNotMatch(page, /data-testid="project-work-card"/);

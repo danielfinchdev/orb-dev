@@ -9,6 +9,7 @@ import { DropdownMenuItem, Select } from '@/components/ui/overlay.jsx';
 import { ListCard, SearchInput } from '@/components/ui/primitives.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { DateField } from '@/components/date-field.jsx';
+import { toIso } from '@/lib/date-field.js';
 import { useStore, call, go } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
 import { cn, fmtTime } from '@/lib/utils.js';
@@ -68,6 +69,8 @@ export function ActivityView({ tabs }) {
     call('activity.list', buildQuery(filters, page.next)).then((r) => { if (gen.current === mine) { const n = normalizeActivity(r); setPage((p) => ({ ...p, next: n.next, items: appendPage(p.items, n.items) })); } }).catch(quiet).finally(() => setLoading(false));
   }, [filters, page.next]);
   const { items, paged, counts } = page;
+  // what is on view while no dates are chosen: from the oldest event loaded up to today (the query itself has no bounds then)
+  const firstDay = items.reduce((min, r) => { const d = r.at ? new Date(r.at) : null; return d && !Number.isNaN(d.getTime()) && (!min || d < min) ? d : min; }, null);
   // the totals count what the other filters let through; a log longer than the engine reads in one go shows a «+»
   const num = (n) => (n == null ? null : <span className="n text-faint-foreground tabular-nums" data-testid="activity-count">{n.toLocaleString(locale)}{counts?.partial ? '+' : ''}</span>);
   const copy = () => navigator.clipboard.writeText(items.map((r) => (r.legacy ? `${r.legacy.at}\t${r.legacy.actor}\t${r.legacy.kind}\t${r.legacy.task_id ? `#${r.legacy.task_id} ` : ''}${r.legacy.detail}` : `${r.at ?? ''}\t${r.source}\t${r.level}\t${r.project ?? ''}\t${r.text}`)).join('\n')).then(() => notifyOk(t('activity.copied')));
@@ -102,9 +105,9 @@ export function ActivityView({ tabs }) {
         {paged ? (
           <>
             <Select value={filters.project || ALL} onValueChange={(project) => set({ project: project === ALL ? '' : project })} options={projectOptions} prefix={t('logbooks.project')} title={t('logbooks.project')} data-testid="activity-project" />
-            <DateField label={t('logbooks.from')} value={filters.from} max={filters.to || undefined} onChange={(from) => set({ from })} data-testid="activity-from" />
+            <DateField label={t('logbooks.from')} value={filters.from} max={filters.to || undefined} fallback={firstDay ? toIso(firstDay) : undefined} onChange={(from) => set({ from })} data-testid="activity-from" />
             <span className="text-muted-foreground">–</span>
-            <DateField label={t('logbooks.to')} value={filters.to} min={filters.from || undefined} onChange={(to) => set({ to })} data-testid="activity-to" />
+            <DateField label={t('logbooks.to')} value={filters.to} min={filters.from || undefined} fallback={toIso(new Date())} onChange={(to) => set({ to })} data-testid="activity-to" />
           </>
         ) : null}
         <SearchInput value={filters.q} onChange={(q) => set({ q })} placeholder={t('activity.search')} className="w-70 flex-[0_1_280px]" data-testid="activity-search" />

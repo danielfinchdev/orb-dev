@@ -60,18 +60,20 @@ function Calendar({ value, min, max, onPick, onClear }) {
   );
 }
 
-export function DateField({ value, onChange, min, max, label, placeholder, className, 'data-testid': testid }) {
+// `fallback`: the day that applies while nothing is chosen, shown in the quiet colour (the value stays empty).
+export function DateField({ value, onChange, min, max, label, placeholder, fallback, className, 'data-testid': testid }) {
   const t = useT();
   const locale = useLocale();
   const [open, setOpen] = useState(false);
   const text = shortDate(value, { locale, labels: { today: t('logbooks.today'), yesterday: t('logbooks.yesterday') } });
+  const implied = text ? '' : shortDate(fallback, { locale, labels: { today: t('logbooks.today'), yesterday: t('logbooks.yesterday') } });
   const done = (iso) => { onChange(iso); setOpen(false); };
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button type="button" aria-label={label} aria-haspopup="dialog" data-testid={testid} data-value={value || ''}
           className={cn('border-border bg-card text-control rounded-ctl flex h-(--ctl) w-30 cursor-pointer items-center border px-2.5 text-left transition-[color,border-color] outline-none focus-visible:border-input', text ? 'text-foreground' : 'text-faint-foreground', className)}>
-          <span className="truncate">{text || placeholder || label}</span>
+          <span className="truncate">{text || implied || placeholder || label}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent side="bottom" align="start" className="orb-cal" aria-label={label}><Calendar value={value} min={min} max={max} onPick={done} onClear={() => done('')} /></PopoverContent>

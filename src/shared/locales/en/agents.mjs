@@ -259,6 +259,8 @@ export default {
   'usage.warnBadge': 'Warning',
   'usage.pastWarn': 'Past the warning. At {pct} % the queue stops.',
   'usage.switchAccount': 'Switch to another account at the limit',
+  'usage.switchWould': 'Would switch from {from} to {to}.',
+  'usage.switchNone': 'There is only one account.',
   'usage.switchAccountHint': 'At its limit, passes the work to another account of the same agent. Off, accounts are shared out the same way, but a task that reaches its limit waits for its account (the one already running it, or the one it was given) to renew instead of moving to another.',
   'usage.cache': 'Read from cache',
   'usage.tokensCache': 'cache'

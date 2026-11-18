@@ -259,6 +259,8 @@ export default {
   'usage.warnBadge': 'Aviso',
   'usage.pastWarn': 'Pasó el aviso. Al {pct} % la cola se para.',
   'usage.switchAccount': 'Cambiar a otra cuenta al llegar al límite',
+  'usage.switchWould': 'Pasaría de {from} a {to}.',
+  'usage.switchNone': 'Solo hay una cuenta.',
   'usage.switchAccountHint': 'Al llegar al límite, pasa el trabajo a otra cuenta del mismo agente. Apagado, el reparto entre cuentas es el mismo, pero una tarea que llega al límite espera a que se renueve su cuenta (la que ya la ejecutaba, o la que le tocaba) en vez de pasar a otra.',
   'usage.cache': 'Leídos de la caché',
   'usage.tokensCache': 'caché'

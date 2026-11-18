@@ -49,7 +49,7 @@ test('7: narrow window: the queue card stacks, the filters wrap, the header drop
   assert.match(tasks, /@max-\[17rem\]:w-full/);
   assert.match(tasks, /className="h-auto min-h-\(--ctl\) flex-wrap" data-testid="task-filters"/);
   assert.match(css, /container: bar \/ inline-size/);
-  assert.match(css, /@container bar \(max-width: 560px\) \{ \.bar-clock-date \{ display: none; \} \}/);
+  assert.match(css, /@container bar \(max-width: 560px\) \{ \.bar \.bar-clock-date \{ display: none; \} \}/);
 });
 
 test('8: the permission menu texts are short', () => {

@@ -90,6 +90,8 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
 .screen-loading { animation: screen-loading-in var(--dur-base) ease .4s both; }
 @keyframes screen-loading-in { from { opacity: 0; } to { opacity: 1; } }
 .prose-chat { line-height: 1.6; overflow-wrap: anywhere; }
+/* a message's own text (a person's, a notice) wraps inside the column too; code blocks keep their `pre` and scroll */
+.msg-box { overflow-wrap: anywhere; }
 @media (pointer: fine) { .prose-chat { font-size: 14.5px; line-height: 1.43; } }
 .prose-chat p { margin: 0 0 .6em; } .prose-chat p:last-child { margin-bottom: 0; }
 .prose-chat ul, .prose-chat ol { margin: .3em 0 .6em; padding-left: 1.3em; } .prose-chat ul { list-style: disc; } .prose-chat ol { list-style: decimal; }
@@ -230,9 +232,6 @@ html[data-skin="retro"] .wordmark-dot { border-radius: 0; }
 html.has-win-controls .bar { padding-right: 120px; }
 html.has-win-controls:has(.tabs-strip) .bar { padding-right: 10px; }
 .bar-left { justify-self: start; display: flex; align-items: center; gap: 4px; min-width: 0; }
-/* a narrow window has no room beside the title: the date goes first, then the whole clock, and the title ellipsizes instead of running under it */
-@container bar (max-width: 560px) { .bar-clock-date { display: none; } }
-@container bar (max-width: 480px) { .bar-clock { display: none; } }
 .bar-center { display: flex; flex-direction: column; align-items: center; min-width: 0; max-width: 100%; }
 .bar-center .name { margin: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 6px; border-radius: var(--r-ctl); font-family: var(--font-title); font-weight: 600; font-size: 15px; line-height: 1.3; letter-spacing: normal; }
 button.name:hover { background: var(--accent); }
@@ -247,6 +246,10 @@ button.name:hover { background: var(--accent); }
 .bar-clock-date::first-letter { text-transform: uppercase; }
 /* the themes' outlined title styles are not for the clock */
 html .bar-clock, html .bar-clock * { -webkit-text-stroke: 0 !important; text-transform: none !important; }
+/* a narrow window has no room beside the title: the date goes first, then the whole clock, and the title ellipsizes instead of
+   running under it. Declared after the clock's own `display` and with the bar in the selector, or the base rule wins the cascade. */
+@container bar (max-width: 560px) { .bar .bar-clock-date { display: none; } }
+@container bar (max-width: 480px) { .bar .bar-clock { display: none; } }
 /* the screens' column: positioned and isolated so what is placed inside it stays inside */
 .theme-scene { position: relative; isolation: isolate; }
 /* The buttons inside a chat message (accept the report, ask for changes, play, allow / always / deny, see the task): small and light so the conversation stays calm. */
@@ -330,7 +333,13 @@ html[data-skin="retro"] .notice-dot { border-radius: 0; }
 .wb-pc .excalidraw .zoom-actions button, .wb-pc .excalidraw .undo-redo-buttons button { height: var(--ctl-sm); min-width: var(--ctl-sm); border-radius: var(--r-ctl) !important; border: 0 !important; background: transparent !important; color: var(--foreground); box-shadow: none; }
 .wb-pc .excalidraw .zoom-actions button:hover:not(:disabled), .wb-pc .excalidraw .undo-redo-buttons button:hover:not(:disabled) { background: var(--accent) !important; }
 .wb-pc .excalidraw .zoom-actions button:disabled, .wb-pc .excalidraw .undo-redo-buttons button:disabled { opacity: 0.45; }
-.wb-pc .excalidraw .reset-zoom-button { font-size: 12px; color: var(--muted-foreground); }
+.wb-pc .excalidraw .reset-zoom-button { font-size: 12px; color: var(--muted-foreground); width: 72px !important; }
+/* One pill, as the mock-up draws it: the section that holds both islands carries the frame and the islands lose theirs; a 1 px
+   rule (::before, no extra element) separates the zoom from undo / redo. Only Excalidraw's own wrappers are styled, never its DOM. */
+.wb-pc .excalidraw .layer-ui__wrapper__footer-left section { display: flex; align-items: center; gap: 2px; width: auto; padding: 4px; border: 1px solid var(--border); border-radius: var(--r-card); background: var(--background); }
+.wb-pc .excalidraw .layer-ui__wrapper__footer-left .zoom-actions, .wb-pc .excalidraw .layer-ui__wrapper__footer-left .undo-redo-buttons { padding: 0; margin: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.wb-pc .excalidraw .layer-ui__wrapper__footer-left .undo-redo-buttons { position: relative; display: flex; gap: 2px; margin-inline-start: 9px; }
+.wb-pc .excalidraw .layer-ui__wrapper__footer-left .undo-redo-buttons::before { content: ""; position: absolute; inset-inline-start: -6px; top: 50%; width: 1px; height: 16px; margin-top: -8px; background: var(--border); }
 .wb-status { background: color-mix(in oklch, var(--card) 88%, transparent); color: var(--muted-foreground); border: 1px solid var(--border); box-shadow: 0 4px 14px -8px rgb(0 0 0 / 0.25); backdrop-filter: blur(6px); }
 .wb-item { background: color-mix(in oklch, var(--card) 70%, transparent); }
 .wb-panel { background: color-mix(in oklch, var(--sidebar) 94%, transparent); backdrop-filter: blur(10px); box-shadow: 0 18px 40px -18px rgb(0 0 0 / 0.35), 0 2px 8px -4px rgb(0 0 0 / 0.15); }

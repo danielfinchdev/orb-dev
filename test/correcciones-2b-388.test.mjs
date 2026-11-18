@@ -32,7 +32,7 @@ test('programada: the dialog keeps the order summary, Solo lectura, Permisos and
   assert.ok(at('data-testid="schedule-summary"') < at('testid="schedule-readonly"'));
   assert.ok(at('testid="schedule-readonly"') < at('data-testid="schedule-permissions"'));
   assert.ok(at('data-testid="schedule-permissions"') < at('data-testid="schedule-more-options"'));
-  assert.match(schedules, /<DialogBody className="flex flex-col gap-4 p-\[18px\] \[&>\*\]:shrink-0/, 'the body is a column whose children keep their height (a grid squashed the card)');
+  assert.match(schedules, /<DialogBody className="flex flex-col gap-4 p-\[18px\] pr-\[calc\(18px-var\(--sb-w\)\)\] \[scrollbar-gutter:stable\] \[&>\*\]:shrink-0/, 'the body is a column whose children keep their height (a grid squashed the card)');
   assert.match(schedules, /max-h-\[calc\(100vh-50px\)\]/);
 });
 

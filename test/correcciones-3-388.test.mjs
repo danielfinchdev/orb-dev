@@ -10,8 +10,8 @@ const locale = (lang, file) => fs.readFileSync(path.join(ROOT, 'src', 'shared', 
 
 test('1a: in a narrow window the date goes first and then the whole clock, so the title never runs under it', () => {
   const css = read('src/ui/app.css');
-  assert.match(css, /@container bar \(max-width: 560px\) \{ \.bar-clock-date \{ display: none; \} \}/);
-  assert.match(css, /@container bar \(max-width: 480px\) \{ \.bar-clock \{ display: none; \} \}/);
+  assert.match(css, /@container bar \(max-width: 560px\) \{ \.bar \.bar-clock-date \{ display: none; \} \}/);
+  assert.match(css, /@container bar \(max-width: 480px\) \{ \.bar \.bar-clock \{ display: none; \} \}/);
   assert.match(css, /\.bar-center \.name \{[^}]*text-overflow: ellipsis/);
 });
 
@@ -102,5 +102,5 @@ test('11: the crash and offline cards sit in the content area, inside the bounda
   assert.match(wide.slice(0, 1400), /<ErrorBoundary key=\{routeKey\(r\)\} onHome=\{resetRoute\}>/);
   const card = read('src/ui/components/error-boundary.jsx');
   assert.equal(card.split('cover={false}').length - 1, 2);
-  assert.match(main, /<div className="bg-sidebar hidden w-\[340px\] shrink-0 border-r md:block"/);
+  assert.match(main, /<aside className="bg-sidebar hidden h-full w-\[340px\] shrink-0 flex-col border-r md:flex"/);
 });

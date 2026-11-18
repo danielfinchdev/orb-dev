@@ -66,15 +66,14 @@ function LogCard({ p, full }) {
   useEffect(() => { let alive = true; call('logs.read', { project: p.name }).then((r) => alive && setEntry(lastLogEntry(r))).catch(() => alive && setEntry(null)); return () => { alive = false; }; }, [p.name, version, written]);
   return (
     <PjCard icon={NotebookPen} title={t('projects.log.last')} data-testid="project-log-card"
-      aside={<Button variant="link" size="xs" className="text-info text-control font-semibold" onClick={() => go({ view: 'logs', name: p.name })} data-testid="project-log-open">{t('projects.log.open')}</Button>}>
+      aside={<Button variant="link" size="xs" className="text-info px-0 text-control font-semibold" onClick={() => go({ view: 'logs', name: p.name })} data-testid="project-log-open">{t('projects.log.open')}</Button>}>
       {entry === undefined ? <Spinner /> : !entry ? <p className="text-muted-foreground text-control">{t('projects.log.none')}</p> : (<>
         <p className="text-muted-foreground text-caption">{[entry.who, `${entry.date}${entry.time ? ` ${entry.time}` : ''}`].filter(Boolean).join(' · ')}</p>
         <b className="text-body font-medium">{entry.topic}</b>
         <p className={cn('text-control whitespace-pre-line', !full && 'line-clamp-6')}>{entry.body}</p>
       </>)}
       <Actions>
-        <Button variant="outline" onClick={() => writeEntryFlow(p, t, () => setWritten((n) => n + 1))} data-testid="project-log-write"><PencilLine />{t('projects.log.write')}</Button>
-        <Button variant={full ? 'default' : 'outline'} onClick={() => go({ view: 'logs', name: p.name })} data-testid="project-log">{t('projects.log.view')}</Button>
+        <Button variant="outline" onClick={() => writeEntryFlow(p, t, () => setWritten((n) => n + 1))} data-testid="project-log-write">{t('projects.log.write')}</Button>
       </Actions>
     </PjCard>
   );
@@ -361,6 +360,7 @@ export function ProjectPage({ p }) {
             <DropdownMenuItem onSelect={() => chatHereFlow(p)} data-testid="project-chat"><MessageSquarePlus />{t('projects.newChat')}</DropdownMenuItem>
             <DropdownMenuItem className="items-start" disabled={Boolean(p.open)} onSelect={rename} data-testid="project-rename"><PencilLine /><span>{t('projects.renameItem')}{p.open ? <><br /><span className="text-muted-foreground text-caption">{t('projects.rename.busy')}</span></> : null}</span>{p.open ? null : <Kbd className="ml-auto">F2</Kbd>}</DropdownMenuItem>
             <DropdownMenuItem disabled={Boolean(p.active)} onSelect={() => act(call('projects.setActive', { name: p.name }), t('projects.setActive.done', { name: p.name }))} data-testid="project-set-active"><Pin />{p.active ? t('projects.workNow') : t('projects.setActive')}</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => go({ view: 'logs', name: p.name })} data-testid="project-log"><NotebookPen />{t('projects.log.view')}</DropdownMenuItem>
             <DropdownMenuItem onSelect={reload} data-testid="project-git-refresh"><RefreshCw />{t('projects.refresh')}</DropdownMenuItem>
             {expert ? <DropdownMenuItem onSelect={async () => { await act(call('projects.setActive', { name: p.name })); go('expert'); }} data-testid="project-expert-open"><SquareTerminal />{t('projects.expert.title')}</DropdownMenuItem> : null}
             <DropdownMenuItem onSelect={() => changeIconFlow(p, t)} data-testid="project-icon-change"><ImageIcon />{t('projects.icon.change')}</DropdownMenuItem>
@@ -391,12 +391,12 @@ export function ProjectPage({ p }) {
                 <LogCard p={p} />
               </div>
               <div className="flex min-w-0 flex-col gap-4">
-                <PjCard icon={ClipboardCheck} title={t('projects.tasks.active')} aside={<Button variant="link" size="xs" className="text-info text-control font-semibold" onClick={() => go({ view: 'tasks', project: p.name })}>{t('projects.tasks.all')}</Button>}>
+                <PjCard icon={ClipboardCheck} title={t('projects.tasks.active')} aside={<Button variant="link" size="xs" className="text-info px-0 text-control font-semibold" onClick={() => go({ view: 'tasks', project: p.name })}>{t('projects.tasks.all')}</Button>}>
                   {active.length ? <ListCard className="border-0">{active.slice(0, 3).map((x) => <TaskRow key={x.id} x={x} compact />)}</ListCard> : <p className="text-muted-foreground text-control">{t('projects.tasks.none')}</p>}
                   <p className="text-faint-foreground text-caption">{t('projects.tasks.week', { done: week.filter((x) => x.status === 'done' && !x.undone).length, undone: week.filter((x) => x.undone).length })}</p>
                   <Actions><Button variant="outline" onClick={() => go({ view: 'tasks', project: p.name })}><Plus />{t('projects.tasks.new')}</Button></Actions>
                 </PjCard>
-                <PjCard icon={MessagesSquare} title={t('projects.chats.recent')} aside={items.length > 4 ? <Button variant="link" size="xs" className="text-info text-control font-semibold" onClick={() => setTab('chats')}>{t('projects.chats.all', { n: items.length })}</Button> : null}>
+                <PjCard icon={MessagesSquare} title={t('projects.chats.recent')} aside={items.length > 4 ? <Button variant="link" size="xs" className="text-info px-0 text-control font-semibold" onClick={() => setTab('chats')}>{t('projects.chats.all', { n: items.length })}</Button> : null}>
                   {items.length ? <ListCard className="border-0">{items.slice(0, 4).map((x) => <ChatRow key={x.key} x={x} assistant={assistant} compact />)}</ListCard> : <p className="text-muted-foreground text-control">{t('projects.chats.none')}</p>}
                 </PjCard>
                 <PjCard icon={ImageIcon} title={t('projects.icon.title')}>
@@ -422,7 +422,7 @@ export function ProjectPage({ p }) {
           {tab === 'tareas' ? (
             <div className="flex flex-col gap-3">
               <div>
-                <div className="sec-h flex items-center gap-2"><h2 className={H3}>{t('projects.tasks.active')}</h2><span className="text-faint-foreground text-caption">{active.length}</span><span className="grow" /><Button variant="link" size="xs" className="text-info text-control font-semibold" onClick={() => go({ view: 'tasks', project: p.name })}>{t('projects.tasks.all')}</Button></div>
+                <div className="sec-h flex items-center gap-2"><h2 className={H3}>{t('projects.tasks.active')}</h2><span className="text-faint-foreground text-caption">{active.length}</span><span className="grow" /><Button variant="link" size="xs" className="text-info px-0 text-control font-semibold" onClick={() => go({ view: 'tasks', project: p.name })}>{t('projects.tasks.all')}</Button></div>
                 <ListCard className="mt-1.5">{active.length ? active.map((x) => <TaskRow key={x.id} x={x} />) : <Empty icon={ClipboardCheck} title={t('projects.tasks.none')} />}</ListCard>
               </div>
               <p className="text-faint-foreground text-caption">{t('projects.tasks.week', { done: week.filter((x) => x.status === 'done' && !x.undone).length, undone: week.filter((x) => x.undone).length })}</p>

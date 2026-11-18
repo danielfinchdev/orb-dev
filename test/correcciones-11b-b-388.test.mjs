@@ -52,7 +52,7 @@ test('15: «Crear proyecto» has no subtitle, says «Crear» and shows where the
 });
 
 test('16: the section links are 13 px semibold and the «Nuevo proyecto» button and the rows follow the mock-up', () => {
-  assert.equal((page.match(/text-info text-control font-semibold/g) ?? []).length, 4);
+  assert.equal((page.match(/text-info px-0 text-control font-semibold/g) ?? []).length, 4);
   assert.match(list, /className="gap-1\.5 \[&_svg:not\(\[class\*=size-\]\)\]:size-3\.5" data-testid="project-new"/);
   assert.match(list, /leading-\[17\.4px\]/);
 });
