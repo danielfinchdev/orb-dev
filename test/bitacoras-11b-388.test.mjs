@@ -77,7 +77,7 @@ test('Normas: las llamadas y lo que pide cada cambio son los de siempre', () => 
   assert.equal(ruleAction('delete', { de_serie: true }), 'ruleSeed');
   assert.equal(ruleAction('restoreDefaults'), 'ruleSeed');
   assert.equal(railAction(), 'rails');
-  assert.deepEqual([...FRESH_ACTIONS].sort(), ['deleteProject', 'rails', 'ruleSeed', 'secretSave', 'secretSaved']);
+  assert.deepEqual([...FRESH_ACTIONS].sort(), ['deleteProject', 'newKey', 'rails', 'ruleSeed', 'secretSave', 'secretSaved']);
   assert.ok(asksEveryTime('rails') && asksEveryTime('ruleSeed') && !asksEveryTime('rules'));
   // the call and its parameters are built where they always were; a token already asked in line only replaces the asking
   assert.match(actions, /const unlock = given \?\? await unlockCore\(action\);/);
