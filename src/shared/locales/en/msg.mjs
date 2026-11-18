@@ -589,6 +589,7 @@ export default {
   "msg.scheduler.undoneRemoved.other": "{n} deleted",
   "msg.scheduler.noTokenData": "tokens: no data",
   "msg.scheduler.whyClosed": "{name} closed with an error {when}.",
+  "msg.scheduler.whyClosedTask": "{name} closed with an error {when} on task #{id} “{title}”.",
   "msg.scheduler.whenSoon": "within a few seconds",
   "msg.scheduler.whenMin": "after {n} min",
   "msg.login.notWaiting": "that sign-in has already ended. Sign in again",

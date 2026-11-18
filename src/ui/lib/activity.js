@@ -34,13 +34,20 @@ const oneLine = (s, max) => {
 
 // A text the engine or an agent wrote: Orb's tool names and the quoted states inside it are told in words.
 // max: cut to that many characters with «…» on one line (the Actividad list keeps one line per event).
-export function activityText(t, raw, max = 0) {
-  const text = String(raw ?? '')
+export function activityText(t, raw, max = 0, agents = {}) {
+  // a line of a list starts without Markdown marks («## Contexto», «- nota»)
+  const lead = max ? /^(?:(?:#{1,6}|>|[-*+])\s+)+/ : /^$^/;
+  const text = String(raw ?? '').trim().replace(lead, '')
     .replace(/\s*\(refs\/[^)]+\)/g, '') // git references mean nothing to a person
     .replace(/\brefs\/orb\/\S+/g, '')
     .replace(/\b(orb_[a-z_]+)\b(?:\s+(?:con\s+)?status:?\s*"?([a-z_]+)"?)?/g, (_, name, st) => `${toolLabel(t, name)}${st ? ` · ${String(stateLabel(t, st)).toLowerCase()}` : ''}`)
     .replace(/"([a-z_]+)"/g, (m, w) => { const label = stateLabel(t, w); return label === w ? m : String(label).toLowerCase(); })
     .replace(/\bnull\b/g, '')
+    // the engine's own log lines: «código 0» says nothing when all went well, and «estado done» is a task state
+    .replace(/\(c[oó]digo 0, /g, '(').replace(/, c[oó]digo 0\)/g, ')').replace(/ ?\(c[oó]digo 0\)/g, '')
+    .replace(/\bestado ([a-z_]+)\b/g, (m, w) => { const label = stateLabel(t, w); return label === w ? m : `estado: ${String(label).toLowerCase()}`; })
+    // a piece that is exactly an agent's id is told with its name
+    .split(' · ').map((part) => agents[part.trim()] ?? part).join(' · ')
     .trim();
   return oneLine(stateLabel(t, text), max);
 }
@@ -71,5 +78,5 @@ export function activityDetail(t, row, locale, agents = {}, max = 0) {
     }
     return '';
   }
-  return activityText(t, raw, max);
+  return activityText(t, raw, max, agents);
 }

@@ -17,12 +17,22 @@ import { STATUS_ES, whoRan, mainStatusAsync } from './common.mjs';
 
 // The reason shown in the chat line and the notice: an agent that closed on its own is told in plain words and the
 // exit code stays in the task's result. Anything else is the agent's own message, with a capital letter.
+const CLOSED = /^(.{1,40}?) (?:se cerró|closed) \((?:código|code) -?\d+\)\.?\s*([\s\S]*)$/;
+const capSentence = (x) => { const v = oneLine(x, 160); return v ? `${v.charAt(0).toUpperCase()}${v.slice(1)}${/[.!?…]$/.test(v) ? '' : '.'}` : ''; };
 export function plainWhy(result, minutes) {
-  const closed = /^(.{1,40}?) (?:se cerró|closed) \((?:código|code) -?\d+\)\.?\s*([\s\S]*)$/.exec(result);
-  const cap = (x) => { const v = oneLine(x, 160); return v ? `${v.charAt(0).toUpperCase()}${v.slice(1)}${/[.!?…]$/.test(v) ? '' : '.'}` : ''; };
-  if (!closed) return cap(result);
+  const closed = CLOSED.exec(result);
+  if (!closed) return capSentence(result);
   const when = minutes != null && minutes >= 1 ? tr('msg.scheduler.whenMin', { n: Math.round(minutes) }) : tr('msg.scheduler.whenSoon');
-  return [tr('msg.scheduler.whyClosed', { name: closed[1], when }), cap(closed[2])].filter(Boolean).join(' ');
+  return [tr('msg.scheduler.whyClosed', { name: closed[1], when }), capSentence(closed[2])].filter(Boolean).join(' ');
+}
+
+// An agent that closed on its own: one plain sentence that also names the task, then the agent's own message.
+// null for any other ending (those keep the usual headline and reason).
+export function closedEnd(result, minutes, task) {
+  const closed = CLOSED.exec(result);
+  if (!closed) return null;
+  const when = minutes != null && minutes >= 1 ? tr('msg.scheduler.whenMin', { n: Math.round(minutes) }) : tr('msg.scheduler.whenSoon');
+  return [tr('msg.scheduler.whyClosedTask', { name: closed[1], when, id: task.id, title: oneLine(task.title) }), capSentence(closed[2])].filter(Boolean).join(' ');
 }
 
 export class FinishPart {
@@ -181,7 +191,8 @@ export class FinishPart {
     // one clear line for the user; what the agent reported (technical) goes folded under it (meta.result).
     // (A task that failed or got blocked says why in a short line: that is what the user needs to decide.)
     const why = ['failed', 'blocked'].includes(task.status) && task.result ? `\n${plainWhy(redactSecrets(task.result), ranMinutes)}` : '';
-    board.addChat('system', `${tr(`msg.scheduler.ended.${task.status in { done: 1, failed: 1, blocked: 1, cancelled: 1 } ? task.status : 'other'}`, { icon, label: whoRan(task), id: task.id, title: oneLine(task.title) })}${spent ? ` (${spent})` : ''}${why}`,
+    const closedLine = ['failed', 'blocked'].includes(task.status) && task.result ? closedEnd(redactSecrets(task.result), ranMinutes, task) : null;
+    board.addChat('system', closedLine ? `${icon} ${closedLine}` : `${tr(`msg.scheduler.ended.${task.status in { done: 1, failed: 1, blocked: 1, cancelled: 1 } ? task.status : 'other'}`, { icon, label: whoRan(task), id: task.id, title: oneLine(task.title) })}${spent ? ` (${spent})` : ''}${why}`,
       { kind: 'task-end', task: task.id, status: task.status, ...scheduleEndMeta(board, task), ...(task.result ? { result: redactSecrets(task.result).slice(0, 1500) } : {}) });
     const cp = board.settingJson(`checkpoint:${task.id}`);
     const revert = cp?.before ? tr('sys.logs.revertUndo', { id: task.id })

@@ -55,3 +55,20 @@ test('6: the summary of a rule in the list shows no template braces', async () =
   assert.doesNotMatch(readableRule('{orb} {del_usuario} {rama} {nota_grupo} {norma:abc}'), /[{}]/);
   assert.match(read('src/ui/views/rules-cards.jsx'), /ruleSummary\(readableRule\(rule\.texto/);
 });
+
+test('r2-1: the row of an event says what happened, with the actor only when it is not Orb', () => {
+  const a = read('src/ui/views/activity.jsx');
+  assert.match(a, /\[who, activityLabel\(t, r\.kind\), r\.title, detail && detail !== r\.title \? detail : null\]/);
+  assert.match(a, /r\.actor === 'orb' \? null/);
+  assert.match(read('src/ui/views/expert.jsx'), /activityLabel\(t, r\.kind\)/);
+  assert.equal((read('src/ui/views/tasks.jsx').match(/activityLabel\(tr, e\.kind\)/g) ?? []).length, 2);
+});
+
+test('r2-5: the notice of a closed agent is one plain sentence with the task, then the agent\'s message', async () => {
+  const { closedEnd } = await import('../src/engine/scheduler/finish.mjs');
+  const task = { id: 6, title: 'Limpiar dependencias sin usar' };
+  assert.equal(closedEnd('Codex se cerró (código 2). algo salió mal', 0.1, task), 'Codex se cerró con un error a los pocos segundos en la tarea #6 «Limpiar dependencias sin usar». Algo salió mal.');
+  assert.match(closedEnd('Codex se cerró (código 2). x', 3, task), /a los 3 min en la tarea #6/);
+  assert.equal(closedEnd('no pude abrir', 1, task), null);
+  assert.match(read('src/engine/scheduler/finish.mjs'), /closedLine \? `\$\{icon\} \$\{closedLine\}`/);
+});

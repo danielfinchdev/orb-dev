@@ -589,6 +589,7 @@ export default {
   "msg.scheduler.undoneRemoved.other": "{n} eliminados",
   "msg.scheduler.noTokenData": "tokens: sin datos",
   "msg.scheduler.whyClosed": "{name} se cerró con un error {when}.",
+  "msg.scheduler.whyClosedTask": "{name} se cerró con un error {when} en la tarea #{id} «{title}».",
   "msg.scheduler.whenSoon": "a los pocos segundos",
   "msg.scheduler.whenMin": "a los {n} min",
   "msg.login.notWaiting": "ese inicio de sesión ya ha terminado. Vuelve a iniciar sesión",

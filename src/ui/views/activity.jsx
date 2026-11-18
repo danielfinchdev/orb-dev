@@ -153,7 +153,10 @@ function LegacyRow({ r, t, locale }) {
 // r.text stays as the engine wrote it (hover and «Copiar»).
 function what(r, t, locale, max = 0) {
   if (r.source === 'subagentes' && r.actor !== undefined) {
-    return [AGENT[r.actor] ?? r.actor, r.title, activityDetail(t, { kind: r.kind, detail: r.detail }, locale, AGENT, max)].filter(Boolean).join(' · ');
+    const detail = activityDetail(t, { kind: r.kind, detail: r.detail }, locale, AGENT, max);
+    // the actor only when it is not Orb itself; the title is not said twice
+    const who = r.actor === 'orb' ? null : AGENT[r.actor] ?? r.actor;
+    return [who, activityLabel(t, r.kind), r.title, detail && detail !== r.title ? detail : null].filter(Boolean).join(' · ');
   }
   return activityDetail(t, { kind: r.kind, detail: r.text }, locale, AGENT, max) || activityLabel(t, r.kind);
 }
