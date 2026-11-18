@@ -55,6 +55,21 @@ test('migrateAppearance: the theme', () => {
   assert.ok(!('skin' in migrateAppearance({ font: 'inter' })));
 });
 
+test('migrateAppearance: retired fonts, code colours, density, chat width and text size fall to the defaults', () => {
+  const ui = { skin: 'orb', font: 'plex', codeFont: 'fira-code', codeTheme: 'dracula', density: 'amplia', chatWidth: 'ancha', fontSize: 17, theme: 'oscuro', music: { on: true } };
+  const out = migrateAppearance(ui);
+  assert.deepEqual(out, { skin: 'orb', font: 'outfit', codeFont: 'geist-mono', codeTheme: 'orb', theme: 'oscuro', music: { on: true } });
+  assert.deepEqual(migrateAppearance(out), out, 'idempotent');
+  for (const f of ['inter', 'geist', 'plex']) assert.equal(migrateAppearance({ font: f }).font, 'outfit', f);
+  for (const f of ['fira-code', 'plex-mono', 'cascadia']) assert.equal(migrateAppearance({ codeFont: f }).codeFont, 'geist-mono', f);
+  for (const c of ['github', 'one-dark', 'dracula', 'nord', 'solarized']) assert.equal(migrateAppearance({ codeTheme: c }).codeTheme, 'orb', c);
+  // what the interface still offers is kept, and nothing is added where nothing was stored
+  const kept = { font: 'outfit-fija', codeFont: 'consolas', codeTheme: 'oscuro' };
+  assert.deepEqual(migrateAppearance(kept), kept);
+  assert.deepEqual(migrateAppearance({ font: 'system' }), { font: 'system' });
+  assert.deepEqual(migrateAppearance({ skin: 'orb' }), { skin: 'orb' });
+});
+
 test('migrateAppearance: the palette of the old «paletas» theme', () => {
   const pal = (palette, accent) => migrateAppearance({ skin: 'paletas', palette, ...(accent ? { accent } : {}) }).palette;
   for (const [accent, want] of Object.entries({ naranja: 'grafito', azul: 'oceano', turquesa: 'oceano', violeta: 'uva', verde: 'bosque', rosa: 'rubi' })) assert.equal(pal('arena', accent), want, accent);
@@ -86,7 +101,8 @@ test('migrateAppearance: pure, idempotent and keeps every other key', () => {
   const out = migrateAppearance(ui);
   assert.deepEqual(ui, frozen, 'the input is not mutated');
   assert.notEqual(out, ui);
-  assert.deepEqual(out, { ...frozen, skin: 'predeterminado', palette: 'oceano' });
+  const { density, ...rest } = frozen;
+  assert.deepEqual(out, { ...rest, skin: 'predeterminado', palette: 'oceano', font: 'outfit' });
   assert.deepEqual(migrateAppearance(out), out);
   for (const old of ['profesional', 'nube', 'grafito', 'loquesea', 'orb']) { const once = migrateAppearance({ skin: old, palette: 'coral', accent: 'azul' }); assert.deepEqual(migrateAppearance(once), once, old); }
   for (const bad of [undefined, null, 'x', 3, [1]]) assert.equal(migrateAppearance(bad), bad);
@@ -110,7 +126,7 @@ test('an orb.json of the previous version with the «paletas» theme starts clea
     assert.equal(c.ui.accent, 'tema');
     assert.equal(c.ui.contrast, 'alto');
     assert.equal(c.ui.theme, 'oscuro');
-    assert.equal(c.ui.font, 'inter');
+    assert.equal(c.ui.font, 'outfit');
     assert.deepEqual(c.ui.music, { on: true, volume: 0.4 });
     assert.equal(c.language, 'en');
     assert.equal(c.maxParallel, 3);
@@ -125,7 +141,7 @@ test('an orb.json with a theme nobody knows, or a retired one, still loads', () 
       assert.doesNotThrow(() => validateConfig(c), skin);
       assert.equal(c.ui.skin, want, skin);
       assert.equal(c.ui.palette, 'grafito', skin);
-      assert.equal(c.ui.font, 'geist');
+      assert.equal(c.ui.font, 'outfit');
     } finally { fs.rmSync(home, { recursive: true, force: true }); }
   }
 });

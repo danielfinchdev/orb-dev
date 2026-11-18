@@ -1,7 +1,7 @@
 // Ajustes: the assistant, appearance, chat, tasks, interface, God mode, the folder, «Cosas que nadie toca» and the daily test.
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { LayoutDashboard, Gem, Bot, Waves, Candy, Terminal, FlaskConical, FolderOpen, Plus, SquareTerminal, ZoomIn, ZoomOut, X, ChevronRight, RotateCcw } from 'lucide-react';
-import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, DENSITIES, CHAT_WIDTHS, FONT_SIZES, APPEARANCE_DEFAULTS, plainSkin } from '../../../shared/appearance.mjs';
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, APPEARANCE_DEFAULTS, plainSkin } from '../../../shared/appearance.mjs';
 import { PANELS, savePanels } from '../expert.jsx';
 import { confirm } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -40,8 +40,6 @@ export function AssistantCard({ c }) {
 const SKIN_ICON = { predeterminado: LayoutDashboard, cristal: Gem, orb: Bot, vaporwave: Waves, candy: Candy, retro: Terminal };
 // The sample of each palette's accent (the mock-up's swatches).
 const PALETTE_SWATCH = { grafito: 'oklch(0.6 0.18 40)', oceano: 'oklch(0.6 0.17 252)', bosque: 'oklch(0.6 0.13 155)', uva: 'oklch(0.6 0.18 300)', rubi: 'oklch(0.6 0.19 15)', arena: 'oklch(0.62 0.12 65)' };
-// «La del tema» first, then the system's letter, then the others.
-const FONT_ORDER = ['outfit', 'system', ...FONTS.filter((f) => f !== 'outfit' && f !== 'system')];
 
 // Appearance: light / dark, the visual theme, fonts, colours of code; the reply line; and the robot (floating, sounds,
 // animations) with the music. Everything is saved as soon as it changes. Only the Orb theme shows the robot; the plain
@@ -95,16 +93,14 @@ export function AppearanceCard({ c }) {
               </div>
             </Setting>
           ) : null}
-          <Setting label={t('appearance.font')} hint={t('appearance.fontHint')}><Select caret="solid" value={ui.font} onValueChange={(font) => set({ font })} title={t('appearance.font')} options={opts(FONT_ORDER, 'appearance.font')} /></Setting>
+          <Setting label={t('appearance.font')} hint={t('appearance.fontHint')}><Select caret="solid" value={ui.font} onValueChange={(font) => set({ font })} title={t('appearance.font')} options={opts(FONTS, 'appearance.font')} /></Setting>
           <Setting label={t('appearance.codeFont')} hint={t('appearance.codeFontHint')}><Select caret="solid" value={ui.codeFont} onValueChange={(codeFont) => set({ codeFont })} title={t('appearance.codeFont')} options={opts(CODE_FONTS, 'appearance.codeFont')} /></Setting>
           <Setting label={t('appearance.codeTheme')} hint={t('appearance.codeThemeHint')}><Select caret="solid" value={ui.codeTheme} onValueChange={(codeTheme) => set({ codeTheme })} title={t('appearance.codeTheme')} options={opts(CODE_THEMES, 'appearance.codeTheme')} /></Setting>
           <Stack className="border-border border-t">
             <span className="text-control font-medium">{t('appearance.codeSample')}</span>
-            <pre className="code-sample hljs rounded-ctl m-0 overflow-x-auto border px-3 py-2.5 text-caption leading-[1.55]" aria-label={t('appearance.codeSample')}><code><span className="hljs-keyword">const</span> <span className="hljs-variable">robot</span> = <span className="hljs-keyword">await</span> orbe.<span className="hljs-title function_">saluda</span>(<span className="hljs-string">'Dani'</span>);{'\n'}<span className="hljs-keyword">if</span> (robot.listo) console.<span className="hljs-title function_">log</span>(<span className="hljs-string">'Tarea hecha'</span>);</code></pre>
+            <pre className="bg-secondary border-border rounded-ctl m-0 overflow-x-auto border px-3 py-2.5 font-mono text-caption" aria-label={t('appearance.codeSample')}><code>{`const robot = await orbe.saluda('Dani');
+if (robot.listo) console.log('Tarea hecha');`}</code></pre>
           </Stack>
-          <Setting label={t('appearance.density')} hint={t('appearance.densityHint')} data-testid="size-settings"><Select caret="solid" value={ui.density} onValueChange={(density) => set({ density })} title={t('appearance.density')} options={opts(Object.keys(DENSITIES), 'appearance.density')} /></Setting>
-          <Setting label={t('appearance.chatWidth')} hint={t('appearance.chatWidthHint')}><Select caret="solid" value={ui.chatWidth} onValueChange={(chatWidth) => set({ chatWidth })} title={t('appearance.chatWidth')} options={opts(Object.keys(CHAT_WIDTHS), 'appearance.chatWidth')} /></Setting>
-          <Setting label={t('appearance.fontSize')} hint={t('appearance.fontSizeHint')}><Select caret="solid" value={ui.fontSize} onValueChange={(fontSize) => set({ fontSize })} title={t('appearance.fontSize')} options={FONT_SIZES.map((px) => ({ value: px, label: t('appearance.fontSizeValue', { px: String(px).replace('.', ',') }) }))} /></Setting>
         </Panel>
       </Block>
       <Block title={t('appearance.repliesTitle')}>

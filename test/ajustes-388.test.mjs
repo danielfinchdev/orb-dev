@@ -55,8 +55,9 @@ test('the six palettes with their swatch, and «Los colores de los temas Predete
 test('«La del tema» for the default letter, «Sistema» for the system\'s, and the other letters still offered', () => {
   assert.equal(es['appearance.font.outfit'], 'La del tema');
   assert.equal(es['appearance.font.system'], 'Sistema');
-  assert.match(general, /const FONT_ORDER = \['outfit', 'system', \.\.\.FONTS\.filter/);
-  assert.ok(FONTS.includes('outfit') && FONTS.includes('system'));
+  assert.match(general, /options=\{opts\(FONTS, 'appearance\.font'\)\}/);
+  assert.deepEqual(FONTS, ['outfit', 'system', 'outfit-fija']);
+  assert.equal(es['appearance.font.outfit-fija'], 'Outfit');
   for (const f of FONTS) assert.ok(es[`appearance.font.${f}`], f);
 });
 
@@ -92,7 +93,7 @@ test('every test id of before is still there', () => {
     'feedback-capture', 'feedback-message', 'feedback-send', 'legacy-backups', 'legacy-card', 'legacy-delete', 'legacy-keys', 'link-again', 'link-device', 'link-devices', 'link-make', 'link-pair', 'link-pair-dialog', 'link-qr', 'link-relink', 'link-revoke', 'magic-link',
     'master-card', 'master-change', 'master-forgot', 'master-lock-minutes', 'master-lock-now', 'mcp-keys', 'mcpext-card', 'mcpext-create', 'mcpext-switch', 'mcpext-token', 'mcpext-url', 'mobile-card', 'mobile-preview', 'mobile-screenshot',
     'music-intensity', 'music-mode', 'music-reactive', 'music-settings', 'music-theme', 'music-volume', 'one-at-a-time', 'palette-picker', 'palette-settings', 'parallel-chats', 'phone-card', 'previous-key', 'previous-key-more', 'previous-key-use',
-    'protected-card', 'protected-defaults', 'protected-input', 'protected-item', 'protected-remove', 'settings-about', 'settings-dialog', 'settings-foot', 'settings-foot-github', 'settings-foot-version', 'settings-test', 'shortcuts-card', 'size-settings', 'skin-picker',
+    'protected-card', 'protected-defaults', 'protected-input', 'protected-item', 'protected-remove', 'settings-about', 'settings-dialog', 'settings-foot', 'settings-foot-github', 'settings-foot-version', 'settings-test', 'shortcuts-card', 'skin-picker',
     'spend-advanced', 'spend-profile', 'spend-save', 'spend-slider', 'suggest-next', 'tabs-switch', 'trash-card', 'trash-empty', 'trash-restore', 'updates-card', 'usage-line-switch', 'worktree-remove', 'worktrees-card'];
   const missing = ids.filter((id) => !ALL.includes(`data-testid="${id}"`) && !ALL.includes(`'data-testid': '${id}'`));
   assert.deepEqual(missing, []);
@@ -154,9 +155,8 @@ test('8C-a: Ajustes follows the mock-up where it was out of order, and nothing i
   // General: Asistente, Carpeta, Interfaz, Apariencia (with Respuestas and Robot), then what the mock-up lacks, Actualizaciones
   assert.match(index, /<AssistantCard c=\{c\} \/><FolderCard c=\{c\} home=\{app\.home\} \/><InterfaceCard c=\{c\} \/><SubSection id="apariencia"/);
   assert.ok(index.indexOf('<TabsCard') > index.indexOf('<AppearanceCard') && index.indexOf('<UpdatesCard') > index.indexOf('<ShortcutsCard'));
-  // Apariencia: the mock-up's rows, then density, chat width and font size after the code sample
-  assert.ok(general.indexOf("'appearance.density'") > general.indexOf("'appearance.codeSample'"));
-  assert.ok(general.indexOf("'appearance.fontSize'") > general.indexOf("'appearance.chatWidth'"));
+  // Apariencia: only the mock-up's rows (no density, chat width or text size)
+  for (const gone of ['appearance.density', 'appearance.chatWidth', 'appearance.fontSize']) assert.ok(!general.includes(`'${gone}'`), gone);
   // Robot y sonidos: on and volume of the music first, its style and reactivity after
   const music = general.slice(general.indexOf('function MusicSettings'));
   assert.ok(music.indexOf("'appearance.musicVolume'") < music.indexOf("'appearance.musicTheme'"));

@@ -24,14 +24,15 @@ export const lightOnlySkin = (skin) => LIGHT_ONLY.has(skin);
 // (ui.skin travels in the settings it receives); anything else shows the default.
 export const phoneSkin = (skin) => (skin === 'orb' ? 'orb' : SKINS[0]);
 
-// Interface font. outfit is the one Orb has always used.
-export const FONTS = ['outfit', 'inter', 'geist', 'plex', 'system'];
+// Interface font. «outfit» is the theme's own letter (the default and what every orb.json already stores), «system» is the
+// system's, and «outfit-fija» is Outfit in every theme, titles included.
+export const FONTS = ['outfit', 'system', 'outfit-fija'];
 
 // Font of code (chat code blocks, files, diffs). geist-mono is the one Orb has always used.
-export const CODE_FONTS = ['geist-mono', 'jetbrains-mono', 'fira-code', 'plex-mono', 'cascadia'];
+export const CODE_FONTS = ['geist-mono', 'jetbrains-mono', 'consolas'];
 
-// Colours of code (syntax highlighting).
-export const CODE_THEMES = ['orb', 'github', 'one-dark', 'dracula', 'nord', 'solarized'];
+// Colours of code (syntax highlighting). «orb» follows light / dark; «claro» and «oscuro» keep one scheme in either mode.
+export const CODE_THEMES = ['orb', 'claro', 'oscuro'];
 
 // Palettes of the «predeterminado» and «cristal» themes. The other themes ignore them.
 export const PALETTES = ['grafito', 'oceano', 'bosque', 'uva', 'rubi', 'arena'];
@@ -52,7 +53,11 @@ for (const [pal, ids] of Object.entries({
   arena: ['arena', 'trigo', 'cafe', 'cobre', 'sol'],
 })) for (const id of ids) OLD_PALETTE[id] = pal;
 
-// Brings the stored `ui` object to the current theme and palette lists. Pure and idempotent; touches no other key.
+// Keys of options that no longer exist (density, width of the chat column, size of the text). The sizes they set are now fixed.
+const RETIRED_KEYS = ['density', 'chatWidth', 'fontSize'];
+
+// Brings the stored `ui` object to the current theme, palette, font and code-colour lists. Pure and idempotent; touches no
+// other key. A retired value falls to the default of its list, which is the look Orb has always had.
 export function migrateAppearance(ui) {
   if (!ui || typeof ui !== 'object' || Array.isArray(ui)) return ui;
   const out = { ...ui };
@@ -71,15 +76,11 @@ export function migrateAppearance(ui) {
     const byAccent = typeof ui.accent === 'string' && ui.accent !== 'tema' ? ACCENT_PALETTE[ui.accent] : undefined;
     if (byAccent) out.palette = byAccent;
   }
+  for (const key of RETIRED_KEYS) delete out[key];
+  for (const [key, list] of [['font', FONTS], ['codeFont', CODE_FONTS], ['codeTheme', CODE_THEMES]]) {
+    if (ui[key] !== undefined && !list.includes(ui[key])) out[key] = list[0];
+  }
   return out;
 }
 
-// Density, width of the chat column and size of the text (Ajustes → Apariencia). They are written on <html> as --app-density,
-// --chat-max-width and --font-k / --chat-font (lib/store.js). The first value of each list is NOT the default: the defaults
-// («normal», 14.5 px) reproduce the sizes Orb has always had, so nothing moves until the user picks another one.
-export const DENSITIES = Object.freeze({ compacta: 0.85, normal: 1, amplia: 1.15 });
-export const CHAT_WIDTHS = Object.freeze({ estrecha: '40rem', normal: '45rem', ancha: '72rem', completa: '100%' });
-export const FONT_SIZES = [12, 13, 14, 14.5, 15, 16, 17, 18];
-export const BASE_FONT = 14.5;
-
-export const APPEARANCE_DEFAULTS = { skin: SKINS[0], font: FONTS[0], codeFont: CODE_FONTS[0], codeTheme: CODE_THEMES[0], palette: PALETTES[0], accent: 'tema', contrast: 'normal', density: 'normal', chatWidth: 'normal', fontSize: BASE_FONT };
+export const APPEARANCE_DEFAULTS = { skin: SKINS[0], font: FONTS[0], codeFont: CODE_FONTS[0], codeTheme: CODE_THEMES[0], palette: PALETTES[0], accent: 'tema', contrast: 'normal' };

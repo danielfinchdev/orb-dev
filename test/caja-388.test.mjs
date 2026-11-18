@@ -333,5 +333,4 @@ test('the text box has the mock-up\'s measures in both chats: 720 px wide at mos
   assert.match(composer, /className="composer-dock shrink-0 px-5 pb-3\.5"/);
   assert.match(composer, /max-w-\[var\(--chat-max-width\)\] rounded-big border/);
   assert.match(ui('tokens.css'), /--chat-max-width: 45rem;/);
-  assert.match(read('src', 'shared', 'appearance.mjs'), /normal: '45rem'/);
 });

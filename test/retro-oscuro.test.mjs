@@ -22,7 +22,7 @@ test('applyTheme forces .dark for a dark-only theme and keeps the saved choice',
   assert.match(store, /const dark = darkOnlySkin\(currentSkin\) \|\| \(!lightOnlySkin\(currentSkin\) && \(theme === 'oscuro'/);
   assert.match(store, /currentSkin = skin;/);
   // applyAppearance re-evaluates the mode, so changing theme neither leaves Retro light nor Orb stuck dark
-  assert.match(store, /put\('motion',[^\n]*\n[\s\S]*?\n\s*applyTheme\(\);/);
+  assert.match(store, /put\('motion',[^\n]*\n\s*applyTheme\(\);/);
   // the system-theme listener goes through the same function, with no argument
   assert.match(store, /media\.addEventListener\('change', \(\) => applyTheme\(\)\)/);
 });

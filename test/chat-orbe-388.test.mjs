@@ -11,7 +11,7 @@ const chat = read('src/ui/views/chat.jsx');
 
 test('applyAppearance writes an attribute of <html> only when its value changes', () => {
   const store = read('src/ui/lib/store.js');
-  const fn = store.slice(store.indexOf('export function applyAppearance'), store.indexOf('// density, width of the chat column'));
+  const fn = store.slice(store.indexOf('export function applyAppearance'), store.indexOf('applyTheme(); // a dark-only theme'));
   assert.match(fn, /const put = \(key, value\) =>[^\n]*root\[key\] !== value/, 'an unchanged value is not written');
   // a refresh runs every second while an agent works: no direct assignment may remain, each one would be a DOM mutation
   assert.doesNotMatch(fn, /root\.(skin|font|codeFont|codeTheme|motion|palette) = /);
