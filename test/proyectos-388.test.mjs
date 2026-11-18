@@ -57,7 +57,13 @@ test('la página del proyecto tiene las seis pestañas, «Nuevo chat aquí» y e
   for (const tab of ['resumen', 'chats', 'tareas', 'git', 'bitacora', 'pizarra']) assert.match(page, new RegExp(`'${tab}'`));
   assert.match(page, /data-testid="project-new-chat"/);
   const menu = between(page, '<DropdownMenuContent align="end" className="w-72"', '</DropdownMenuContent>');
-  for (const id of ['project-chat', 'project-set-active', 'project-rename', 'project-icon-change', 'project-review', 'project-security', 'project-log', 'project-finish', 'project-delete', 'project-unlink']) assert.match(menu, new RegExp(`data-testid="${id}"`), id);
+  // the mock-up's menu: chat, rename (F2), icon, then finish and delete (a linked folder is unlinked in that same slot)
+  const order = ['project-chat', 'project-rename', 'project-icon-change', 'project-finish', 'project-delete', 'project-unlink'];
+  for (const id of order) assert.match(menu, new RegExp(`data-testid="${id}"`), id);
+  assert.ok(order.slice(0, 4).every((id, i, all) => !i || menu.indexOf(`"${all[i - 1]}"`) < menu.indexOf(`"${id}"`)), 'orden de la maqueta');
+  assert.match(menu, /<Kbd className="ml-auto">F2<\/Kbd>/);
+  // what the menu no longer carries lives where the function map puts it: nothing is lost
+  for (const id of ['project-set-active', 'project-review', 'project-security', 'project-log']) { assert.doesNotMatch(menu, new RegExp(`"${id}"`), id); assert.ok(page.includes(`data-testid="${id}"`), `${id} sigue en la página`); }
   assert.match(page, /e\.key === 'F2'/, 'F2 renombra');
   assert.match(page, /<ProjectOpenMenu project=\{p\} page \/>/);
   assert.match(page, /projects\.mergePr/);
@@ -192,4 +198,26 @@ test('la lista pide el estado de git sin red, en cola, solo lo visible y con tie
   assert.match(list, /forgetRowInfos\(\)/);
   assert.doesNotMatch(list, /useProjectInfos|readInfo/);
   assert.match(page, /useProjectInfo\(p\.name\)/, 'la página sigue pidiendo la información completa');
+});
+
+test('correcciones 7C-a: margen, enlaces, icono grande, tareas de una línea y Git y PR', () => {
+  assert.ok(list.includes('<PageBody className="px-6 md:pb-28">'), 'las tarjetas van a 24 px de la columna');
+  assert.ok(page.includes('px-6 pt-5 pb-10'));
+  for (const src of [list, page]) assert.doesNotMatch(src, /variant="link"(?![^>]*text-info)/, 'los enlaces van en el azul de la maqueta (--info)');
+  assert.ok(page.includes('<ProjectIcon name={p.name} size={48} big />'));
+  assert.ok(read('components/project-icon.jsx').includes('big ? 48'));
+  assert.ok(page.includes('<TaskRow key={x.id} x={x} compact />'), 'la tarjeta del Resumen lleva filas de una línea');
+  assert.ok(page.includes('meta={compact ? null'));
+  assert.ok(page.includes('nums={f.add != null'), 'cada archivo con sus +/−');
+  // GitHub's account card is not in the list of the mock-up: it lives in the Git y PR tab
+  assert.doesNotMatch(list, /GithubCard|ContributionGraph/);
+  assert.ok(page.includes('<GithubCard />'));
+  assert.ok(page.includes("'projects.prs.thread'"));
+  assert.ok(list.includes("plural(t, 'projects.tasks'"), 'Terminados dice cuántas tareas tuvo');
+});
+
+test('los +/− de cada archivo salen de un solo numstat y los comentarios de la PR vienen en la misma lectura', () => {
+  const gh = readFileSync(new URL('../src/engine/host/github.mjs', import.meta.url), 'utf8');
+  assert.ok(gh.includes("'diff', 'HEAD', '--numstat', '-z'"));
+  assert.ok(gh.includes('thread: (Array.isArray(x.comments)'));
 });

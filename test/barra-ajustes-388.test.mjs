@@ -37,7 +37,9 @@ test('los avisos flotantes usan los tokens de .pop y no pisan la barra de filtro
   assert.match(block, /font-size: 13px/);
   const main = read('src/ui/main.jsx');
   assert.match(main, /position=\{phone \? 'top-center' : 'bottom-right'\}/);
-  assert.match(main, /offset=\{phone \? 72 : \{ bottom: 112, right: 24 \}\}/);
+  // the PC offset is measured from what is on screen (over the text box, left of an open side panel)
+  assert.match(main, /offset=\{phone \? 72 : insets\}/);
+  assert.match(main, /function useToastInsets\(\)/);
   assert.match(main, /visibleToasts=\{1\}/);
   assert.match(main, /orb-toast/);
   assert.doesNotMatch(main, /<Toaster[^>]*richColors/);

@@ -46,7 +46,7 @@ test('every action keeps its call, its parameters and its confirmation', () => {
     "call('tasks.accept', { id: t.id })", "call('tasks.launchAnyway', { id: t.id })", "call('tasks.retry', { id: t.id })", "call('tasks.undo', { id: t.id })",
     "call('projects.merge', { name: t.project, branch: t.branch })", "call('tasks.discardBranch', { id: t.id })", "call('tasks.cancel', { id: t.id })",
     "call('tasks.reassign', { id: t.id, agent: v.agent,", "call('projects.createPr', { name: t.project, branch: t.branch, title: v.title, body: v.body })",
-    "{ ok: tr('tasks.undo.ok'), danger: true }", "tr('tasks.undo.body')", "{ ok: tr('tasks.merge.ok'), danger: true }", "{ ok: tr('tasks.discard.ok'), danger: true }",
+    "{ ok: tr('tasks.undo.ok'), danger: true }", "undoBody(tr, t)","{ ok: tr('tasks.merge.ok'), danger: true }", "{ ok: tr('tasks.discard.ok'), danger: true }",
     "{ ok: tr('tasks.cancel.title'), cancel: tr('tasks.cancel.back'), danger: true }"
   ]) assert.ok(actions.includes(piece), piece);
   // approving and rejecting still go through the one place that signs exactly what is shown
@@ -57,7 +57,7 @@ test('every action keeps its call, its parameters and its confirmation', () => {
   assert.match(approval, /call\('tasks\.approve', \{ id: full\.id, decision: 'rejected', hash: full\.previewHash \}\)/);
   // «Deshacer» of a held task: the same confirmation as before
   const state = read('src/ui/components/task-state.jsx');
-  assert.match(state, /confirm\(t\('tasks\.undo\.title'\), t\('tasks\.undo\.body'\), \{ ok: t\('tasks\.undo\.ok'\), danger: true \}\)/);
+  assert.match(state, /confirm\(t\('tasks\.undo\.title'\), undoBody\(t, task\), \{ ok: t\('tasks\.undo\.ok'\), danger: true \}\)/);
 });
 
 test('the phone and a linked browser keep their layout', () => {
@@ -82,8 +82,38 @@ test('the texts the board adds exist in Spanish and in English', async () => {
   for (const key of used) { assert.ok(key in es, `es ${key}`); assert.ok(key in en, `en ${key}`); }
 });
 
-test('step 6D: a held task cannot be accepted from its row, and the rows do not retry rejected or sensitive tasks', () => {
-  assert.doesNotMatch(rowActions, /acceptHeld|task-row-accept/);
+test('step 7C-b: a held task is accepted from its row only after a confirmation that shows why the guard held it', () => {
+  assert.match(rowActions, /acceptHeld\(tr, t\)[^\n]*task-row-accept"/);
+  const state = read('src/ui/components/task-state.jsx');
+  const accept = state.slice(state.indexOf('export async function acceptHeld'), state.indexOf('// What «Deshacer» says'));
+  assert.match(accept, /await confirm\(t\('tasks\.held\.acceptTitle', \{ id: task\.id \}\), t\('tasks\.held\.acceptBody', \{ title: task\.title, why \}\)/);
+  assert.match(accept, /h\.reasons/, 'the reason the guard held it is in the question');
+  assert.ok(accept.indexOf('await confirm(') < accept.indexOf("call('tasks.accept', { id: task.id })"), 'the call comes after the confirmation');
+  assert.match(accept, /return undefined;/, 'cancelling does not accept');
+});
+
+test('step 7C-b: a finished task offers «Aceptar resultado» in its row (the same tasks.accept call as the panel), once and never if undone', () => {
+  assert.match(rowActions, /!t\.accepted \? <Button size="xs" disabled=\{busy\} onClick=\{run\(a\.accept\)\} data-testid="task-row-accept-result">\{tr\('tasks\.giveOk'\)\}/);
+  assert.match(rowActions, /if \(t\.undone\) \{[\s\S]*?return \(/, 'an undone task keeps its menu only');
+  const work = read('src/engine/api/work.mjs');
+  assert.match(work, /if \(accepted\.has\(task\.id\)\) task\.accepted = true;/);
+});
+
+test('step 7C-b: the panel of a task that waits for approval says so in prose before its buttons', () => {
+  const detail = pc.slice(pc.indexOf('function TaskPanelDetail'), pc.indexOf('// The Cambios tab'));
+  assert.ok(detail.indexOf('data-testid="task-summary"') > 0 && detail.indexOf('data-testid="task-summary"') < detail.indexOf('className="acts-r'), 'summary, then buttons');
+  assert.match(detail, /tr\('tasks\.summary\.approval/);
+});
+
+test('step 7C-b: the progress of a running row is the 84 px accent bar with no text, and a held reason is cut with an ellipsis', () => {
+  const row = pc.slice(pc.indexOf('function TaskRow'), pc.indexOf('// The queue'));
+  assert.match(row, /w-\[84px\][^\n]*role="progressbar"/);
+  assert.doesNotMatch(row, /bg-primary-text\/70/);
+  assert.doesNotMatch(row, /tr\('tasks\.steps'/);
+  assert.match(row, /<span className="truncate">\{why\.text\}<\/span>/);
+});
+
+test('step 6D: the rows do not retry rejected or sensitive tasks', () => {
   assert.match(rowActions, /undoHeld\(tr, t\)/);
   assert.match(rowActions, /if \(canRetryFromRow\(t\)\) return <Button[^\n]*task-row-retry/);
   assert.match(tasks, /export const canRetryFromRow = \(t\) => \['failed', 'blocked', 'limited'\]\.includes\(t\?\.status\) && !t\?\.sensitivity\?\.length;/);

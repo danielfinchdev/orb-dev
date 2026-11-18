@@ -83,3 +83,23 @@ test('step 7F: the runs list retries with the same rule as the task rows, and a 
   assert.match(schedules, /<Switch checked=\{false\} disabled aria-label=\{tr\('schedules\.enabled'\)\}/);
   for (const l of ['es', 'en']) assert.ok(read(`src/shared/locales/${l}/schedules.mjs`).includes("'schedules.approveFirst'"));
 });
+
+test('step 7C-b: «Nueva programada» is 620 px, joins agent and model, shows the zone and the next run, and keeps «Cada N horas» and «mismo chat»', () => {
+  assert.match(read('src/ui/themes/pieces.css'), /\.dialog:has\(\[data-testid="schedule-summary"\]\) \{ max-width: min\(620px/);
+  assert.match(schedules, /<Field label=\{t\('schedules\.agentModel'\)\}>/);
+  assert.match(schedules, /const \[agent, model\] = brain\.split\('::'\);/);
+  assert.match(schedules, /\.\.\.\(model \? \{ model \} : \{\}\)/);
+  assert.match(schedules, /data-testid="schedule-tz"/);
+  assert.match(schedules, /t\('schedules\.sum\.next'/);
+  assert.match(schedules, /const EVERY = \['hourly', 'daily', 'weekly', 'every_hours', 'once'\];/);
+  assert.match(schedules, /testid="schedule-same-chat"/);
+  assert.match(schedules, /data-testid="schedule-permissions"/);
+  // the engine's create has no zone, no monthly and no permission level of its own: none is sent
+  assert.doesNotMatch(schedules, /tz: |monthly/);
+});
+
+test('step 7C-b: a row shows the model by its name and the zone of its time', () => {
+  assert.match(schedules, /const brain = \(s\.model && modelsOf\(/);
+  assert.match(schedules, /\['daily', 'weekly', 'once'\]\.includes\(s\.every\)/);
+  assert.match(schedules, /call\('models\.catalog'\)/);
+});

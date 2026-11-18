@@ -103,3 +103,31 @@ test('step 7F: the pages of the tasks of a chat are ONE list (the internet rule 
   assert.match(chat, /data-paste-chat=\{String\(id \?\? 'new'\)\}/);
   assert.match(chat, /onTerminalPaste\(\(line, from\) =>/);
 });
+
+test('step 7C-b: the row with the project and «Compactar» is outside the box, over it, as under an agent\'s chat; both use the same Composer', () => {
+  const composer = chat.slice(chat.indexOf('<Composer draft={box}'));
+  assert.match(composer, /\n\s+above=\{<>/);
+  assert.doesNotMatch(composer.slice(0, composer.indexOf('bottom={')), /\n\s+top=\{/);
+  assert.match(composer, /<CompactButton onCompact=\{compact\}/);
+  const session = read('src/ui/views/session.jsx');
+  assert.match(session, /<Composer draft=\{draft\}/);
+  assert.match(session, /\n\s+above=\{/);
+  assert.match(chat, /import \{ useAutoScroll, Composer \} from '@\/components\/conversation\/composer\.jsx'/);
+});
+
+test('step 7C-b: the notices sit over the text box and left of an open side panel, from what is on screen', () => {
+  const main = read('src/ui/main.jsx');
+  assert.match(main, /function useToastInsets\(\)/);
+  assert.match(main, /querySelectorAll\('\.composer-dock'\)/);
+  assert.match(main, /\[data-testid="chat-panel"\]\[data-state="open"\]/);
+  assert.match(main, /offset=\{phone \? 72 : insets\}/);
+  assert.match(main, /visibleToasts=\{1\}/);
+  assert.doesNotMatch(main, /bottom: 112, right: 24/);
+});
+
+test('step 7C-b: scroll bars are invisible at rest and show while the pointer is over the scrolling area', () => {
+  const css = read('src/ui/app.css');
+  assert.match(css, /::-webkit-scrollbar-thumb \{ background: transparent;/);
+  assert.match(css, /:hover::-webkit-scrollbar-thumb \{ background: color-mix/);
+  assert.match(read('src/ui/components/page.jsx'), /overflow-y-auto px-6 py-5/, 'the page margin is the mock-up\'s 24 px');
+});

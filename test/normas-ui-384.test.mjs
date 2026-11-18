@@ -68,7 +68,9 @@ test('pausing is orange (warn: --warning + its foreground), only deleting is red
 
 test('the card does not call a rail change itself and tells which controls ask every time', () => {
   const cards = src('views/rules-cards.jsx');
-  assert.ok((cards.match(/<EveryTime/g) ?? []).length >= 3);
+  assert.ok((cards.match(/<EveryTime/g) ?? []).length >= 2);
+  // the notice of each rail's switch is now the badge of its section: both lists of rails carry it
+  assert.ok((src('views/rules.jsx').match(/badge=\{everyTime\}/g) ?? []).length >= 2);
   assert.match(cards, /rails\.\$\{rail\.id\}\.enabled/);
 });
 

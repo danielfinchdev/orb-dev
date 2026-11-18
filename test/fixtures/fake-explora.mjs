@@ -11,6 +11,23 @@ import { fakeAdapter as base } from './fake-live.mjs';
 
 const PLAN = (() => { try { return process.env.ORB_EXPLORA_PLAN ? JSON.parse(fs.readFileSync(process.env.ORB_EXPLORA_PLAN, 'utf8')) : []; } catch { return []; } })();
 
+// The natural answers (ORB_FAKE_SCRIPT, the same file fake-live.mjs reads): their «when» also takes part in choosing the turn.
+const SCRIPT = (() => { try { return process.env.ORB_FAKE_SCRIPT ? JSON.parse(fs.readFileSync(process.env.ORB_FAKE_SCRIPT, 'utf8')) : []; } catch { return []; } })();
+
+// A task's prompt carries, after its own instructions, the project's recent notes, which can quote the text of an earlier chat turn:
+// the turn that is meant is the one inside the task's own section («## Tarea #N: …»), not whichever the notes mention.
+function turnOf(text) {
+  const head = text.indexOf('## Tarea #');
+  const end = head < 0 ? -1 : text.indexOf('\n## ', head + 3);
+  const own = head < 0 ? text : text.slice(head, end < 0 ? undefined : end);
+  let best = null;
+  for (const x of [...PLAN, ...SCRIPT]) {
+    const at = x.when ? own.lastIndexOf(x.when) : -1;
+    if (at >= 0 && (!best || at > best.at || (at === best.at && x.when.length > best.when.length))) best = { at, when: x.when };
+  }
+  return best?.when ?? null;
+}
+
 export function fakeAdapter(id, real) {
   const adapter = base(id, real);
   const createLive = adapter.createLive;
@@ -20,7 +37,10 @@ export function fakeAdapter(id, real) {
     // Orb takes its «before the turn» photo of the folder before calling send, so what is written here belongs to the turn.
     live.send = (message) => {
       const text = String(message?.text ?? '');
-      const hit = PLAN.find((x) => x.when && text.includes(x.when));
+      const when = turnOf(text);
+      const hit = when ? PLAN.find((x) => x.when === when) : null;
+      // without the quoted context, fake-live finds its own answer for the turn
+      if (when && !hit) return send({ ...message, text: when });
       if (!hit) return send(message);
       const root = path.resolve(o.cwd);
       for (const [rel, body] of Object.entries(hit.files ?? {})) {
@@ -30,7 +50,7 @@ export function fakeAdapter(id, real) {
         fs.mkdirSync(path.dirname(file), { recursive: true });
         fs.writeFileSync(file, body);
       }
-      return send(hit.append ? { ...message, text: `${text}\n${hit.append}` } : message);
+      return send({ ...message, text: hit.append ? `${hit.when}\n${hit.append}` : hit.when });
     };
     return live;
   };

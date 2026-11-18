@@ -82,6 +82,8 @@ const REPOS = {
   'api-pagos': { git: null, files: { 'README.md': text('# api-pagos'), 'src/reembolsos.js': text('export const reembolsar = () => null;'), 'src/checkout.js': text('export const checkout = () => null;') } },
   // a folder of old exports: the task that empties it is held for review (10 or more deletions, in a repository)
   // it needs a repository: without one the task only has a plain copy as its checkpoint and Orb never holds it for a mass deletion
+  // imported and then finished: the «Terminados» of Proyectos
+  'web-antigua': { git: null, files: { 'README.md': text('# web-antigua'), 'index.html': text('<h1>Web antigua</h1>') } },
   'blog': { git: 'main', files: { 'README.md': text('# blog'), ...Object.fromEntries(Array.from({ length: 16 }, (_, i) => [`exportaciones/entradas-${String(i + 1).padStart(2, '0')}.csv`, text('titulo,fecha', `entrada ${i + 1},2026-01-${String((i % 27) + 1).padStart(2, '0')}`)])) } }
 };
 const repeat = (n, make) => Array.from({ length: n }, (_, i) => make(i + 1));
@@ -113,14 +115,15 @@ const CHATS = [
   { key: 'reembolsos', title: 'Reembolsos parciales', agent: 'claude', project: 'api-pagos', permission: 'editar', turns: [
     { text: 'Prepara el plan de los reembolsos parciales.', reply: 'Propongo dos pasos: primero el cálculo del importe y luego la llamada a la pasarela.' }] }
 ];
-// One task per state the board shows. `after`: the title of the task it waits for (a failed or held one stays that way, so the wait lasts);
+// One task per state the board shows. `after`: the title of the task it waits for (a failed or held one stays that way, so the wait lasts;
+// a finished one only keeps two writers of the same folder from running together);
 // `mode: 'aislada'`: its own branch (a worktree). PROGRESO reports 40 %, DUERME keeps it working, ZAP_TODO empties its folder (held for review).
 const TASKS = [
   { project: 'tienda-web', title: 'Traducir las fichas de producto', agent: 'codex', text: 'Traduce las fichas de producto al inglés y al francés.', reply: 'Traduciendo…', append: 'PROGRESO DUERME', busy: true },
   { project: 'api-pagos', title: 'Migrar el cobro a la API nueva de Stripe', agent: 'cursor', text: 'Migra el cobro y haz el pago de la factura con la tarjeta de prueba.', reply: 'Hecho.' },
   { project: 'api-pagos', title: 'Revisar el checkout', agent: 'claude', text: 'Revisa el checkout y deja el resultado a punto de aceptar.', reply: 'Revisado: el checkout guarda el carrito entre recargas.', files: { 'src/checkout.js': text('export const checkout = (carrito) => ({ ...carrito, guardado: true });') } },
   { project: 'orb-dev', title: 'Revisar el contador', agent: 'claude', text: 'Revisa el contador de contexto y deja el resultado dicho.', reply: 'Revisado: el contador usa el presupuesto del runtime.' },
-  { project: 'orb-dev', title: 'Probar en el móvil', agent: 'claude', text: 'Prueba el contador en el móvil y deja el resultado a punto de aceptar.', reply: 'Probado: el contador se ve bien en el móvil.',
+  { project: 'orb-dev', title: 'Probar en el móvil', agent: 'claude', after: 'Revisar el contador', text: 'Prueba el contador en el móvil y deja el resultado a punto de aceptar.', reply: 'Probado: el contador se ve bien en el móvil.',
     files: { 'docs/prueba-movil.md': text('# Prueba en el móvil', '', 'El contador se ve bien.'), 'src/context-meter.js': text('export function ContextMeter({ context }) {', '  const pct = context.size ? Math.round((context.used / context.size) * 100) : null;', '  return { pct, mobile: true };', '}'), 'test/movil-contador.test.js': text(...repeat(8, (n) => `test('móvil ${n}', () => assert.ok(${n}));`)) } },
   { project: 'api-pagos', title: 'Limpiar dependencias sin usar', agent: 'codex', text: 'Limpia las dependencias sin usar de la API.', reply: 'No pude terminar.', append: 'FALLA' },
   { project: 'blog', title: 'Ordenar las exportaciones antiguas', agent: 'claude', text: 'Ordena la carpeta de exportaciones antiguas del blog.', reply: 'Carpeta ordenada.', append: 'ZAP_TODO' },
@@ -128,12 +131,17 @@ const TASKS = [
   { project: 'tienda-web', title: 'Paginar el listado de entradas', agent: 'codex', after: 'Limpiar dependencias sin usar', text: 'Pagina el listado de entradas de la tienda.', reply: 'Paginado.' },
   { project: 'tienda-web', title: 'Optimizar las imágenes del catálogo', agent: 'cursor', after: 'Ordenar las exportaciones antiguas', text: 'Optimiza las imágenes del catálogo.', reply: 'Optimizadas.' }
 ];
+// What the schedules run (their instructions are the task's text). The weekly one fails on purpose: «Reintentar» in its run.
+const RUNS = [
+  { text: 'Resume los errores de la noche.', reply: '3 errores nuevos, ninguno grave.' },
+  { text: 'Revisa las dependencias y avisa de lo que falle.', reply: 'login_test y pago_test fallan.', append: 'FALLA' }
+];
 const ORBE = [{ text: 'Dame tres planes para el fin de semana si llueve.', reply: 'Te dejo tres planes con lluvia: un museo por la mañana, una peli con comida en casa y una partida de mesa con amigos.' },
   { text: 'Gracias, me quedo con el museo. ¿A qué hora abre?', reply: 'Casi todos abren a las 10:00. Mira el horario del que elijas antes de salir.' }];
 
 // The two files the fake agents read at start (so they exist before Orb launches): the natural answers and the side effects.
 function writeFakes() {
-  const turns = [...CHATS.flatMap((c) => c.turns), ...TASKS, ...ORBE];
+  const turns = [...CHATS.flatMap((c) => c.turns), ...TASKS, ...RUNS, ...ORBE];
   const script = path.join(tmp, 'explora-guion.json'); const plan = path.join(tmp, 'explora-plan.json');
   fs.writeFileSync(script, JSON.stringify(turns.map((t) => ({ when: t.text, reply: t.reply }))));
   // the two «keep working» lines are not seeded turns: they only need DUERME to reach the fake agent
@@ -256,6 +264,20 @@ try {
       if (c.complete) await attempt(`completar «${c.title}»`, () => call('sidebar.complete', { key: `s${ids[c.key]}`, done: true }));
       if (!c.unread) await attempt(`marcar leído «${c.title}»`, () => call('inbox.markRead', { kind: 'session', id: ids[c.key] }));
     }
+    // «Probar en el móvil» has its files only if it ran alone in its folder: wait for it, and say so when its diff is empty
+    await attempt('el fin de «Probar en el móvil»', () => until(async () => (await call('tasks.list')).some((x) => x.title === 'Probar en el móvil' && x.status === 'done'), 'tarea con cambios', 40000));
+    await attempt('el diff de «Probar en el móvil»', async () => {
+      const mine = (await call('tasks.list')).find((x) => x.title === 'Probar en el móvil');
+      const d = mine ? await call('tasks.diff', { id: mine.id, stat: true }).catch(() => null) : null;
+      if (!d?.available || !d.files.length) note(`«Probar en el móvil» termina sin cambios (${d?.available ? 0 : 'sin foto de git'}): la pestaña Cambios no tendrá sus archivos`);
+    });
+    // a run of each schedule (the daily one is read only): the «Últimas ejecuciones» of Programadas
+    await attempt('las ejecuciones de las programadas', async () => {
+      for (const s of await call('schedules.list')) await call('schedules.run', { id: s.id });
+      await until(async () => (await call('tasks.list')).filter((x) => x.schedule_id && ['done', 'failed', 'blocked'].includes(x.status)).length >= 2, 'ejecuciones terminadas', 40000);
+    });
+    // the finished project goes last: it is gone from every picker of the pictures that follow
+    await attempt('el proyecto terminado', () => call('projects.finish', { name: 'web-antigua' }));
     note('no sembrado a propósito: PR de GitHub (sin red ni gh), solo carpetas locales');
   }
   // The tour lasts minutes and a fake «DUERME» turn ends after 30 s: before the pictures that need them, whatever has
@@ -348,11 +370,20 @@ try {
     await page.locator('[data-testid=task-row]').first().waitFor({ timeout: 4000 }).catch(() => noteOnce('Tareas: ninguna fila a la vista'));
     if (await page.locator('[data-testid=task-panel-close]').count()) { await tap('task-panel-close', 'cerrar el panel de la tarea'); await shot(`${prefix}-tareas-lista`); } else noteOnce('Tareas: el panel no estaba abierto para cerrarlo');
     if (await openTask('Migrar el cobro')) await shot(`${prefix}-tareas-detalle`);
-    // The Cambios tab only exists once the task has finished with a checkpoint and files changed, so it is waited for first.
-    const changesTask = 'Probar en el móvil';
-    await until(async () => (await call('tasks.list')).some((x) => x.title === changesTask && x.status === 'done'), 'tarea terminada', 8000)
-      .catch(async () => noteOnce(`Tareas: «${changesTask}» no está «Completada» (estado: ${(await call('tasks.list').catch(() => [])).find((x) => x.title === changesTask)?.status ?? 'no existe'})`));
-    if (await openTask(changesTask)) {
+    // The Cambios tab only exists once a task has finished with a git checkpoint and files changed. The seeded task meant for it
+    // is waited for; when it has no diff, the first finished task that has one takes its place and the note says what each had.
+    const wanted = 'Probar en el móvil';
+    await until(async () => (await call('tasks.list')).some((x) => x.title === wanted && x.status === 'done'), 'tarea terminada', 8000)
+      .catch(async () => noteOnce(`Tareas: «${wanted}» no está «Completada» (estado: ${(await call('tasks.list').catch(() => [])).find((x) => x.title === wanted)?.status ?? 'no existe'})`));
+    const stats = [];
+    for (const x of (await call('tasks.list').catch(() => [])).filter((y) => y.status === 'done')) {
+      const d = await call('tasks.diff', { id: x.id, stat: true }).catch(() => null);
+      stats.push({ title: x.title, files: d?.available ? d.files.length + (d.more ?? 0) : -1 });
+    }
+    const changesTask = (stats.find((x) => x.title === wanted && x.files > 0) ?? stats.find((x) => x.files > 0))?.title;
+    if (!changesTask) noteOnce(`Tareas: ninguna tarea terminada tiene cambios (${stats.map((x) => `«${x.title}»: ${x.files < 0 ? 'sin foto de git' : `${x.files} archivos`}`).join('; ') || 'ninguna terminada'})`);
+    else if (changesTask !== wanted) noteOnce(`Tareas: «${wanted}» no tiene cambios (${stats.find((x) => x.title === wanted)?.files ?? 'no terminó'}); Cambios se captura con «${changesTask}»`);
+    if (changesTask && await openTask(changesTask)) {
       await page.locator('[data-testid=task-panel-tab-changes]').first().waitFor({ timeout: 8000 }).catch(() => {});
       if (await tap('task-panel-tab-changes', 'la pestaña «Cambios» de la tarea')) {
         await page.locator('[data-testid=task-changes]').first().waitFor({ timeout: 5000 }).catch(() => noteOnce('Tareas: la pestaña Cambios no enseña la lista de archivos'));
@@ -368,12 +399,28 @@ try {
     if (await undo.count()) {
       try {
         await undo.click({ timeout: 3000 });
-        await page.locator('[data-testid=choice-cancel]').waitFor({ timeout: 3000 });
+        // a plain confirmation (no test ids of its own): only its Cancelar is ever pressed
+        const cancel = page.getByRole('dialog').getByRole('button', { name: /^(Cancelar|Cancel)$/ });
+        await cancel.waitFor({ timeout: 3000 });
+        await page.waitForTimeout(300);
         await shot(`${prefix}-tareas-deshacer`);
-        await page.click('[data-testid=choice-cancel]', { timeout: 3000 });
+        await cancel.click({ timeout: 3000 });
         await page.waitForTimeout(300);
       } catch { noteOnce('Tareas: no se pudo abrir o cerrar el diálogo «Deshacer esta tarea»'); await closeMenus(); }
     } else noteOnce('Tareas: sin tarea retenida con «Deshacer esta tarea» en su fila');
+    // «Aceptar» of the held task asks first, with the reason the guard held it: Cancelar is the only button ever pressed
+    const accept = rowOf('Ordenar las exportaciones').locator('[data-testid=task-row-accept]').first();
+    if (await accept.count()) {
+      try {
+        await accept.click({ timeout: 3000 });
+        const cancel = page.getByRole('dialog').getByRole('button', { name: /^(Cancelar|Cancel)$/ });
+        await cancel.waitFor({ timeout: 3000 });
+        await page.waitForTimeout(300);
+        await shot(`${prefix}-tareas-aceptar`);
+        await cancel.click({ timeout: 3000 });
+        await page.waitForTimeout(300);
+      } catch { noteOnce('Tareas: no se pudo abrir o cerrar la confirmación de «Aceptar»'); await closeMenus(); }
+    } else noteOnce('Tareas: sin «Aceptar» en la fila de la tarea retenida');
   };
   // One project's page (its tabs and its ⋯), the whiteboard with its attachments, and the new-schedule dialog. Only opens
   // and cancels: it never presses Fusionar, Publicar comentario, Push, Publicar or Crear PR.
@@ -381,19 +428,31 @@ try {
     if (!seeded) return;
     try {
       if (await tap('nav-projects', 'Proyectos')) {
-        const name = page.locator('[data-testid=project-row]', { hasText: 'tienda-web' }).locator('[data-testid=project-open-name]').first();
+        // each row asks for its git state in turn (a queue): the list is shot once the rows of the repositories show their branch
+        await until(async () => (await page.locator('[data-testid=project-facts] svg.lucide-git-branch').count()) >= 3, 'la línea de git de las filas', 12000)
+          .catch(async () => noteOnce(`Proyectos: solo ${await page.locator('[data-testid=project-facts] svg.lucide-git-branch').count().catch(() => 0)} filas enseñan su rama`));
+        await page.waitForTimeout(400); await shot(`${prefix}-proyectos-lista`);
+        const name =page.locator('[data-testid=project-row]', { hasText: 'tienda-web' }).locator('[data-testid=project-open-name]').first();
         if (await name.click({ timeout: 4000 }).then(() => true, () => false)) {
           await page.waitForTimeout(500); await shot(`${prefix}-proyecto`);
           if (await tap('project-tab-git', 'pestaña «Git y PR» del proyecto')) { await page.waitForTimeout(500); await shot(`${prefix}-proyecto-git`); }
+          if (await tap('project-tab-tareas', 'pestaña «Tareas» del proyecto')) { await page.waitForTimeout(500); await shot(`${prefix}-proyecto-tareas`); }
           if (await tap('project-more', '⋯ del proyecto')) { await shot(`${prefix}-proyecto-menu`); await closeMenus(); }
           await tap('project-back', 'volver a la lista de proyectos');
         } else noteOnce('Proyectos: sin fila «tienda-web» para abrir su página');
       }
       if (await tap('nav-board', 'Pizarra')) {
-        await page.waitForTimeout(500); await shot(`${prefix}-pizarra`);
-        if (await page.locator('[data-testid=whiteboard-show-panel]').count()) await tap('whiteboard-show-panel', 'panel de adjuntos de la pizarra');
-        if (await page.locator('[data-testid=whiteboard-panel]').count()) await shot(`${prefix}-pizarra-adjuntos`); else noteOnce('Pizarra: no hay panel de adjuntos (¿sin proyecto activo?)');
+        await page.waitForTimeout(500); await shot(`${prefix}-pizarra-sin-proyecto`);
+        // The whiteboard belongs to the active project: one is chosen for the shots and the choice is undone afterwards.
+        await call('projects.setActive', { name: 'tienda-web' }).catch(() => noteOnce('Pizarra: no se pudo elegir el proyecto «tienda-web»'));
+        await page.locator('[data-testid=whiteboard-canvas]').first().waitFor({ timeout: 8000 }).catch(() => noteOnce('Pizarra: el lienzo no aparece con un proyecto elegido'));
+        await page.waitForTimeout(1500);
+        if (await page.locator('[data-testid=whiteboard-toggle-panel]').count()) { await tap('whiteboard-toggle-panel', 'cerrar el panel de adjuntos de la pizarra'); await page.waitForTimeout(300); }
+        await shot(`${prefix}-pizarra`);
+        if (await page.locator('[data-testid=whiteboard-show-panel]').count()) { await tap('whiteboard-show-panel', 'panel de adjuntos de la pizarra'); await page.waitForTimeout(300); }
+        if (await page.locator('[data-testid=whiteboard-panel]').count()) await shot(`${prefix}-pizarra-adjuntos`); else noteOnce('Pizarra: no hay panel de adjuntos con un proyecto elegido');
         if (await tap('whiteboard-more', '⋯ de la pizarra')) { await shot(`${prefix}-pizarra-adjuntos-menu`); await closeMenus(); }
+        await call('projects.setActive', { name: '' }).catch(() => {});
       }
       if (await tap('nav-schedules', 'Programadas') && await tap('new-schedule', 'botón de nueva programada')) {
         await page.waitForTimeout(400); await shot(`${prefix}-programada-nueva`);
@@ -424,11 +483,35 @@ try {
         const wide = await overflow(page);
         if (wide.length) note(`${name}: contenido más ancho que su caja → ${wide.join(' | ')}`);
       }
+      if (name === 'bitacoras' && seeded) {
+        // the logbook of a project with real entries, then the rules tabs (only looked at: no rule is edited, restored or deleted)
+        try {
+          const row = page.locator('main [role=navigation] button', { hasText: 'tienda-web' }).first();
+          if (await row.count()) { await row.click({ timeout: 3000 }); await page.waitForTimeout(500); await shot(`${theme}-bitacoras-proyecto`); } else noteOnce('Bitácoras: sin fila «tienda-web»');
+          if (await tap('memories-rules', 'pestaña «Normas»')) {
+            await page.waitForTimeout(500); await shot(`${theme}-normas`);
+            if (await page.locator('[data-testid=rules-side-agents]').count()) { await tap('rules-side-agents', 'Normas › subagentes'); await page.waitForTimeout(400); await shot(`${theme}-normas-subagentes`); await tap('rules-side-orb', 'Normas › Orb'); }
+            await tap('memories-logs', 'volver a la pestaña «Bitácoras»');
+          }
+        } catch (error) { noteOnce(`Bitácoras: capturas extra: ${error.message.slice(0, 120)}`); }
+      }
       if (name === 'ajustes') {
         // each section of the settings window
         for (const id of SECTIONS) {
           await page.click(`[data-testid=settings-nav-${id}]`);
           await shot(`${theme}-ajustes-${id}`);
+          // the parts of a long section that the first picture does not reach; only scrolling and tabs, nothing is changed
+          try {
+            if (id === 'general') {
+              const skin = page.locator('[data-testid=skin-picker]').first();
+              if (await skin.count()) { await skin.evaluate((e) => e.scrollIntoView({ block: 'start' })); await page.waitForTimeout(300); await shot(`${theme}-ajustes-apariencia`); } else noteOnce('Ajustes: sin [data-testid=skin-picker]');
+              const robot = page.locator('section', { has: page.locator('h2', { hasText: /Robot/i }) }).last();
+              if (await robot.count()) { await robot.evaluate((e) => e.scrollIntoView({ block: 'start' })); await page.waitForTimeout(300); await shot(`${theme}-ajustes-robot`); } else noteOnce('Ajustes: sin el bloque «Robot y sonidos»');
+            }
+            if (id === 'agentes') {
+              if (await tap('agents-tab-uso', 'pestaña «Uso» de Agentes y uso')) { await page.waitForTimeout(600); await shot(`${theme}-ajustes-agentes-uso`); await tap('agents-tab-tareas', 'volver a la pestaña «Tareas»'); }
+            }
+          } catch (error) { noteOnce(`Ajustes/${id}: capturas extra: ${error.message.slice(0, 120)}`); }
           if (theme === 'dia') {
             const wide = await overflow(page);
             if (wide.length) note(`ajustes/${id}: contenido más ancho que su caja → ${wide.join(' | ')}`);
@@ -455,6 +538,8 @@ try {
   }
   // checks and switches in the night theme: their computed colors
   await page.click('[data-testid=nav-settings]');
+  // Ajustes is loaded on demand: without this wait, Escape arrives before the dialog and it then stays open over the tour
+  await page.locator('[data-testid=settings-dialog]').waitFor({ timeout: 8000 }).catch(() => note('controles: Ajustes no se abrió'));
   const controls = await page.evaluate(() => [...document.querySelectorAll('button[role=checkbox],button[role=switch]')].slice(0, 12).map((b) => {
     const cs = getComputedStyle(b); const label = (b.closest('label,div')?.innerText ?? '').split('\n')[0].slice(0, 40);
     return `${b.getAttribute('role')} ${b.dataset.state} bg=${cs.backgroundColor} border=${cs.borderColor} color=${cs.color} «${label}»`;
@@ -507,7 +592,12 @@ try {
   // ---- 3. the visual themes (Ajustes → Apariencia), each in day and night: the chat, Tareas and the Apariencia section.
   // The professional theme has no robot anywhere.
   // with the tour of the views skipped, whatever dialog the seeding left open is closed first
-  if (process.env.ORB_EXPLORA_ONLY_THEMES) { await page.keyboard.press('Escape'); await page.waitForTimeout(400); }
+  if (process.env.ORB_EXPLORA_ONLY_THEMES) {
+    for (let i = 0; i < 4 && await page.locator('[data-slot=dialog-overlay]').count(); i++) {
+      if (i === 0) note(`diálogo abierto tras la siembra: «${(await page.locator('[role=dialog] h2').first().textContent({ timeout: 1000 }).catch(() => '')) || 'sin título'}»`);
+      await page.keyboard.press('Escape'); await page.waitForTimeout(400);
+    }
+  }
   for (const skin of TOUR_SKINS) {
     await call('config.save', { patch: { ui: { skin } } });
     await until(async () => (await page.evaluate(() => document.documentElement.dataset.skin)) === skin, `tema ${skin}`);
@@ -634,8 +724,26 @@ try {
     await page.setViewportSize({ width: w, height: h });
     for (const [nav, view] of [['sidebar-home', 'chat'], ['nav-tasks', 'tareas'], ['nav-settings', 'ajustes']]) {
       if (w < 700) { await page.getByRole('button', { name: /^(Menú|Menu)$/ }).click(); await page.locator(`[data-testid=${nav}]:visible`).click(); } else if (nav === 'sidebar-home') await goChat(); else await page.click(`[data-testid=${nav}]`);
+      // a side panel slides in when its view opens: measured while it moves, it would count as sticking out
+      await page.waitForTimeout(500);
       const [sw, iw] = await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
-      if (sw > iw + 1) note(`${name}/${view}: se sale por los lados (${sw} > ${iw})`);
+      if (sw > iw + 1) {
+        // the widest elements that stick out past the window's right edge
+        const out = await page.evaluate((w) => [...document.querySelectorAll('body *')].map((e) => ({ e, r: e.getBoundingClientRect() })).filter((x) => x.r.width > 0 && x.r.right > w + 1).sort((a, b) => b.r.right - a.r.right).slice(0, 3).map((x) => `${x.e.tagName.toLowerCase()}[${x.e.getAttribute('data-testid') ?? ''}].${String(x.e.className).slice(0, 80)} right=${Math.round(x.r.right)} w=${Math.round(x.r.width)}`), iw);
+        // and where the room goes: the boxes from the one that sticks out the most up to the page, each with its left edge and width
+        const chain = await page.evaluate((w) => {
+          const worst = [...document.querySelectorAll('body *')].map((e) => ({ e, r: e.getBoundingClientRect() })).filter((x) => x.r.width > 0 && x.r.right > w + 1 && x.r.left < w).sort((a, b) => b.r.width - a.r.width)[0]?.e;
+          const rows = [];
+          for (let e = worst; e && e !== document.body; e = e.parentElement) {
+            const r = e.getBoundingClientRect();
+            const sibs = e.parentElement ? [...e.parentElement.children].filter((s) => s !== e && s.getBoundingClientRect().width > 0).map((s) => `${s.tagName.toLowerCase()}:${Math.round(s.getBoundingClientRect().width)}/min${Math.round(parseFloat(getComputedStyle(s).minWidth) || 0)}`).join(',') : '';
+            rows.push(`${e.tagName.toLowerCase()}.${String(e.className).split(' ').slice(0, 4).join('.')}@${Math.round(r.left)}+${Math.round(r.width)}[${sibs}]`);
+          }
+          return rows.slice(0, 8).join(' < ');
+        }, iw);
+        note(`${name}/${view}: se sale por los lados (${sw} > ${iw}) → ${out.join(' | ')}`);
+        note(`${name}/${view}: cadena → ${chain}`);
+      }
       await shot(`${name}-${view}`);
       if (view === 'ajustes') {
         for (const id of ['general', 'agentes', 'acerca']) { await page.click(`[data-testid=settings-nav-${id}]`); await shot(`${name}-ajustes-${id}`); }
