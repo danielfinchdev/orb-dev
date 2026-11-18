@@ -18,7 +18,7 @@ export const PREVIEW = Object.freeze({
   'core-confirma': { card: 'core', state: { ...CORE, reason: 'noBackup' }, confirm: true },
   migra: { card: 'migration', state: MIGRATION, update: { state: 'none-yet' } },
   'migra-act': { card: 'migration', state: MIGRATION, update: { state: 'downloading', percent: 42, version: '3.8.5' } },
-  error: { card: 'error', error: KEY_MESSAGE, startError: null },
+  error: { card: 'error', error: KEY_MESSAGE, startError: { code: 'secretUnreadable', message: KEY_MESSAGE, master: true, recovery: false } },
   clave: { card: 'error', error: KEY_MESSAGE, startError: { code: 'secretUnreadable', message: KEY_MESSAGE, master: true, recovery: false }, dialog: true },
   falla: { card: 'crash' },
   'falla-red': { card: 'offline' },

@@ -9,6 +9,7 @@ export default {
   'data.core.needsPassphrase': 'Hay una copia del {created}, pero este PC no puede abrirla por sí solo: escribe su código de recuperación.',
   'data.core.damaged': 'La copia del {created} no se puede usar. Elige otra copia o sigue sin copia.',
   'data.core.code': 'Código de recuperación',
+  'data.core.codeNeeded': 'Escribe el código de recuperación para restaurar.',
   'data.core.restore': 'Restaurar',
   'data.core.pick': 'Elegir otra copia…',
   'data.core.fresh': 'Seguir sin copia',

@@ -9,7 +9,7 @@ import { StartMark } from './wizard.jsx';
 export const startText = 'text-muted-foreground m-0 text-control leading-[1.45]';
 export const startHint = 'text-foreground m-0 text-control leading-[1.45]';
 
-export function StartNotice({ icon, mood = 'worried', title, label, children, details, footer, testid, cover = true, role = 'alertdialog', width = 'w-[520px]', className, ...props }) {
+export function StartNotice({ icon, mood = 'worried', title, label, children, details, footer, footnote, testid, cover = true, role = 'alertdialog', width = 'w-[520px]', className, ...props }) {
   return (
     <div className={cn('grid min-h-0 flex-1 place-items-center overflow-y-auto p-6', cover && 'bg-background h-full pt-[max(1.5rem,env(safe-area-inset-top))]', className)} data-testid={testid} {...props}>
       <div role={role} aria-label={label ?? title} className={cn('border-border bg-background rounded-card flex max-w-full flex-col overflow-hidden border shadow-[0_30px_80px_-20px_rgb(0_0_0/0.45)]', width)}>
@@ -24,6 +24,8 @@ export function StartNotice({ icon, mood = 'worried', title, label, children, de
           {details}
         </div>
         {footer ? <div className="border-border flex flex-wrap justify-end gap-2 border-t px-[18px] py-3">{footer}</div> : null}
+        {/* a quiet line under the buttons for what the mock-up does not draw (a link, not an action of the card) */}
+        {footnote ? <div className="flex justify-end px-[18px] pb-3">{footnote}</div> : null}
       </div>
     </div>
   );

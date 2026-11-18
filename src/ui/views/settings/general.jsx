@@ -240,7 +240,7 @@ export function TasksCard({ c }) {
       <Block title={t('settings.tasks')} note={t('settings.tasksDesc')}>
         <Panel>
           <Setting label={t('settings.spend')} hint={level == null ? t('settings.spendCustomHint') : t(`settings.spend${level}Hint`)} data-testid="spend-profile">
-            <Segmented value={SPEND_BUTTON[level] ?? null} onChange={(k) => applyProfile(SPEND_LEVEL[k])} aria-label={t('settings.spend')}
+            <Segmented className="max-w-full @max-[28rem]:w-full @max-[28rem]:flex-col" value={SPEND_BUTTON[level] ?? null} onChange={(k) => applyProfile(SPEND_LEVEL[k])} aria-label={t('settings.spend')}
               options={[{ value: 'low', label: t('settings.spendLow'), testid: 'spend-low' }, { value: 'recommended', label: t('settings.spendRecommended'), testid: 'spend-recommended' }, { value: 'high', label: t('settings.spendHigh'), testid: 'spend-high' }]} />
           </Setting>
           {/* Orb chooses each task's model and reasoning (on by default), and the guide says what it uses for what. */}
@@ -251,13 +251,13 @@ export function TasksCard({ c }) {
           <Row label={t('settings.resumeRestart')} hint={t('settings.resumeRestartHint')}><Switch checked={v.resumeAfterRestart} onCheckedChange={(resumeAfterRestart) => { setV({ ...v, resumeAfterRestart }); save({ continuity: { resumeAfterRestart } }); }} /></Row>
           <Row label={t('settings.resumeReset')} hint={t('settings.resumeResetHint')}><Switch checked={v.resumeAtReset} onCheckedChange={(resumeAtReset) => { setV({ ...v, resumeAtReset }); save({ continuity: { resumeAtReset } }); }} /></Row>
           <Row label={t('settings.delegation')} hint={t('settings.delegationHint')}><Switch checked={v.delegation} onCheckedChange={(delegation) => { setV({ ...v, delegation }); save({ delegation: { enabled: delegation } }); }} /></Row>
-          {/* what the mock-up does not draw, after its rows: the suggestion of the next task and the guide of models */}
-          <Row label={t('settings.suggest')} hint={`${t('settings.suggestDesc')}`} info={t('settings.suggestWarn')}><Switch checked={c.suggestNext === true} onCheckedChange={(suggestNext) => save({ suggestNext })} data-testid="suggest-next" /></Row>
+          {/* what the mock-up does not draw, after its rows: the guide of models (the next-message suggestion is under «Más opciones») */}
           <Stack className="border-border border-t"><ModelGuide auto={c.budget?.autoModel !== false} /></Stack>
         </Panel>
       </Block>
       {bridge.mobile ? null : <TestCard />}
       <MoreOptions fold open={advanced} onOpenChange={setAdvanced} testid="spend-more" triggerTestid="spend-advanced">
+            <Panel className="mt-0"><Row label={t('settings.suggest')} hint={`${t('settings.suggestDesc')}`} info={t('settings.suggestWarn')}><Switch checked={c.suggestNext === true} onCheckedChange={(suggestNext) => save({ suggestNext })} data-testid="suggest-next" /></Row></Panel>
             <Hint>{t('settings.advancedHint')}</Hint>
             <Panel>
               <Setting label={t('settings.spendFine')} hint={t('settings.spendFineHint')}>
@@ -416,7 +416,7 @@ export function InterfaceCard({ c }) {
   return (
     <Block title={t('settings.interface')} note={<WithKeys text={t('settings.interfaceDesc')} keys={{ shortcut: ['Ctrl', 'J'] }} />}>
       <Panel>
-        <Setting label={t('settings.sizeLabel')} hint={<WithKeys text={t('settings.sizeHint')} keys={{ zoomIn: ['Ctrl', '+'], zoomOut: ['Ctrl', '-'], reset: ['Ctrl', '0'] }} />}>
+        <Setting label={t('settings.sizeLabel')} hint={<WithKeys plain text={t('settings.sizeHint')} keys={{ zoomIn: ['Ctrl', '+'], zoomOut: ['Ctrl', '-'], reset: ['Ctrl', '0'] }} />}>
           <Select caret="solid" value={preset} placeholder={zoom ? t('settings.custom', { pct: Math.round(zoom * 100) }) : '…'} onValueChange={change} title={t('settings.sizeLabel')} options={SIZES} />
         </Setting>
         <Setting label={t('settings.terminal')} hint={t('settings.terminalHint')}>
@@ -432,13 +432,25 @@ export function InterfaceCard({ c }) {
 // Expert mode: an IDE-like view (PC only) with the panels the user picks.
 export function ExpertCard({ c }) {
   const t = useT();
-  const on = c.expert?.enabled === true; const panels = c.expert?.panels ?? {};
+  const on = c.expert?.enabled === true;
   return (
     <Block title={t('settings.expert')} note={t('settings.expertDesc')}>
       <Panel>
         <Row label={t('settings.expertOn')} hint={t('settings.expertOnHint')}><Switch checked={on} onCheckedChange={(enabled) => save({ expert: { enabled } }, enabled ? t('settings.expertEnabled') : t('settings.expertDisabled'))} data-testid="expert-switch" /></Row>
         <Setting label={t('settings.expertOpen')} hint={t('settings.expertOpenHint')}><Button size="sm" variant="outline" disabled={!on} onClick={() => go('expert')}><SquareTerminal />{t('settings.expertOpen')}</Button></Setting>
-        <Stack className="border-border border-t">
+      </Panel>
+    </Block>
+  );
+}
+
+// Which panels the God mode shows: Orb's own choice, not drawn by the mock-up, so it sits under «Más opciones».
+export function ExpertPanelsCard({ c }) {
+  const t = useT();
+  const on = c.expert?.enabled === true; const panels = c.expert?.panels ?? {};
+  return (
+    <Block title={t('settings.expertPanels')} data-testid="expert-panels">
+      <Panel>
+        <Stack>
           <div className="grid gap-2 sm:grid-cols-2">
             {Object.entries(PANELS).map(([id, label]) => <label key={id} className={cn('-mx-1 flex items-center gap-2 rounded-md px-1 py-1 text-control', on ? 'hover:bg-accent/40 cursor-pointer' : 'text-muted-foreground cursor-not-allowed')}><Checkbox disabled={!on} checked={panels[id] !== false} onCheckedChange={(v) => savePanels({ ...panels, [id]: v === true })} />{label}</label>)}
           </div>

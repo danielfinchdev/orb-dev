@@ -359,7 +359,7 @@ function TaskPanelDetail({ t, live, diff, onChanges }) {
       {approval && !t.held ? <p className="text-muted-foreground m-0 mt-2.5 text-control" data-testid="task-summary">{t.sensitivity.length ? tr('tasks.summary.approvalWhy', { why: t.sensitivity.map((x) => SENSITIVE[x] ?? x).join(', ') }) : tr('tasks.summary.approval')}</p> : null}
 
       {t.held ? (
-        <Note tone="warning" icon={ShieldAlert} className="my-2.5" data-testid="task-held">{t.held.folder ? tr('tasks.held.line', { reasons: t.held.reasons, folder: t.held.folder }) : tr('tasks.held.lineNoFolder', { reasons: t.held.reasons })}</Note>
+        <Note tone="warning" icon={ShieldAlert} className="my-2.5 [overflow-wrap:anywhere]" data-testid="task-held">{t.held.folder ? tr('tasks.held.line', { reasons: t.held.reasons, folder: t.held.folder }) : tr('tasks.held.lineNoFolder', { reasons: t.held.reasons })}</Note>
       ) : null}
       {t.status === 'queued' && t.waiting?.kind === 'paused' ? <PausedNote className="my-2.5" /> : null}
       {t.status === 'queued' && t.waiting?.kind === 'manual' ? <Note tone="warning" icon={Clock} className="my-2.5" data-testid="task-wait-manual">{tr('tasks.wait.manualNote')}</Note> : null}

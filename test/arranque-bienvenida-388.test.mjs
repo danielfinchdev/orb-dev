@@ -66,7 +66,7 @@ test('the dangerous start-up actions keep their calls and their confirmations', 
   assert.match(core, /bridge\.call\('app\.coreRepair', params\)/);
   assert.match(core, /repair\(\{ passphrase: code \}\)/);
   assert.match(core, /repair\(\{ file, passphrase: code \|\| null \}\)/);
-  assert.match(core, /await confirm\(t\('data\.core\.fresh'\), t\('data\.core\.freshConfirm'\), \{ ok: t\('data\.core\.fresh'\), danger: true \}\)\) repair\(\{ fresh: true,/);
+  assert.match(core, /await confirm\(t\('data\.core\.fresh'\), t\('data\.core\.freshConfirm'\), \{ ok: t\('data\.core\.fresh'\), danger: true, tone: 'primary', noClose: true \}\)\) repair\(\{ fresh: true,/);
   assert.match(core, /onClick=\{fresh\}/);
   assert.match(main, /bridge\.call\('app\.migrationRetry'\)/);
   assert.match(main, /bridge\.retryStart\(\{ newSecret: true \}\)/);
@@ -187,13 +187,13 @@ test('11D: the key dialog has separate paragraphs, a placeholder and a button th
   assert.match(read('src/ui/components/dialogs.jsx'), /disabled=\{busy \|\| Boolean\(d\.okDisabled\?\.\(values\)\)\}/);
 });
 
-test('11D: the migration path is monospace, and the core card widens for four buttons without touching its red confirmation', () => {
+test('11D: the migration path is monospace, and the core card keeps the mock-up width (the folder is a link, not a fourth button)', () => {
   assert.match(read('src/ui/components/start-card.jsx'), /<code className="font-mono">\{path\}<\/code>/);
   assert.match(main, /<StartPath icon=\{Folder\} text=/);
   const core = read('src/ui/views/core-missing.jsx');
-  assert.match(core, /width=\{fourButtons \? 'w-\[600px\]' : undefined\}/);
-  assert.match(core, /\{ ok: t\('data\.core\.fresh'\), danger: true \}/);
-  assert.match(core, /disabled=\{busy \|\| !code\.trim\(\)\}/, 'Restaurar stays off until the code is typed');
+  assert.doesNotMatch(core, /fourButtons|w-\[600px\]/);
+  assert.match(core, /\{ ok: t\('data\.core\.fresh'\), danger: true, tone: 'primary', noClose: true \}/);
+  assert.doesNotMatch(core, /disabled=\{busy \|\| !code\.trim\(\)\}/, 'Restaurar is never greyed out');
 });
 
 test('11D: «Ordenar carpetas» has the full kicker, the green badge, and the segment only for two options', () => {

@@ -556,7 +556,7 @@ function StartPreview({ name }) {
   }, [name]);
   // The small dialogs of the mock-up open over their card; their answer is ignored (they call nothing).
   useEffect(() => {
-    if (data?.confirm) confirm(t('data.core.fresh'), t('data.core.freshConfirm'), { ok: t('data.core.fresh'), danger: true });
+    if (data?.confirm) confirm(t('data.core.fresh'), t('data.core.freshConfirm'), { ok: t('data.core.fresh'), danger: true, tone: 'primary', noClose: true });
     if (data?.dialog) askNewSecret(data.startError);
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!data) return null;

@@ -69,10 +69,11 @@ export function Stack({ className, ...props }) { return <div className={cn('flex
 export function CardFoot({ className, ...props }) { return <div className={cn('border-border flex items-center justify-end gap-3 border-t px-3.5 py-3', className)} {...props} />; }
 export function Hint({ className, ...props }) { return <p className={cn('text-faint-foreground text-caption', className)} {...props} />; }
 // A text with keyboard shortcuts in it: each {name} of the text becomes its keys (one key per sentence, so it
-// translates whole, instead of a sentence cut in five).
-export function WithKeys({ text, keys }) {
+// translates whole, instead of a sentence cut in five). plain: the keys as running text ("Ctrl +"), as the mock-up draws a hint.
+export function WithKeys({ text, keys, plain = false }) {
   return text.split(/(\{\w+\})/).map((part, i) => {
     const combo = /^\{(\w+)\}$/.test(part) ? keys[part.slice(1, -1)] : null;
+    if (combo && plain) return <span key={i} className="whitespace-nowrap">{combo.map((k) => (k === '-' ? '−' : k)).join(' ')}</span>;
     return combo ? <span key={i} className="whitespace-nowrap">{combo.map((k, j) => <Kbd key={j} className={j ? 'ml-0.5' : undefined}>{k}</Kbd>)}</span> : part;
   });
 }

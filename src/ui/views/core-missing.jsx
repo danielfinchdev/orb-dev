@@ -2,7 +2,7 @@
 // backup (none, one this PC cannot open without its recovery code, or a damaged one). The engine waits
 // (engine.mjs › coreBlocked): restore with the code, pick another backup, or go on without one: offered when there is no
 // usable copy, and behind «No tengo el código» when a copy only needs its code (the copies there were are kept aside).
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { FolderOpen, FolderX } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Input, Spinner } from '@/components/ui/basic.jsx';
@@ -19,6 +19,8 @@ export function CoreMissing({ state }) {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [noCode, setNoCode] = useState(false);
+  const [codeMissing, setCodeMissing] = useState(false);
+  const codeRef = useRef(null);
   const when = (iso) => (iso ? new Date(iso).toLocaleString(locale, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
   const v = coreView(s, { when });
   const repair = async (params) => {
@@ -32,25 +34,37 @@ export function CoreMissing({ state }) {
     const file = Array.isArray(files) ? files[0] : files;
     if (file) repair({ file, passphrase: code || null });
   };
-  const fresh = async () => { if (await confirm(t('data.core.fresh'), t('data.core.freshConfirm'), { ok: t('data.core.fresh'), danger: true })) repair({ fresh: true, language: locale?.startsWith('en') ? 'en' : 'es' }); };
+  const fresh = async () => { if (await confirm(t('data.core.fresh'), t('data.core.freshConfirm'), { ok: t('data.core.fresh'), danger: true, tone: 'primary', noClose: true })) repair({ fresh: true, language: locale?.startsWith('en') ? 'en' : 'es' }); };
   const offerFresh = v.fresh === 'yes' || (v.fresh === 'noCode' && noCode);
-  // Left to right as the mock-up draws them: the way out, the folder, another copy, and the main action last.
+  // «Restaurar» is never greyed out: with no code typed it points at the field instead of doing nothing.
+  const restore = () => {
+    if (!code.trim()) { setCodeMissing(true); codeRef.current?.focus(); return; }
+    repair({ passphrase: code });
+  };
+  // Left to right as the mock-up draws them: the way out, another copy, and the main action last. The backups' folder is a
+  // quiet link under them (the mock-up does not draw it).
   const footer = (
     <>
       {!offerFresh && v.fresh === 'noCode' ? <Button variant="ghost" disabled={busy} onClick={() => setNoCode(true)} data-testid="core-no-code">{t('data.core.noCode')}</Button> : null}
-      {v.folder && bridge.openPath ? <Button variant="outline" onClick={() => act(bridge.openPath(v.folder))}><FolderOpen />{t('data.core.openFolder')}</Button> : null}
       {bridge.pickFiles ? <Button variant="outline" disabled={busy} onClick={pick} data-testid="core-pick">{t('data.core.pick')}</Button> : null}
       {offerFresh ? <Button variant={v.restore ? 'outline' : 'default'} disabled={busy} onClick={fresh} data-testid="core-fresh">{t('data.core.fresh')}</Button> : null}
-      {v.restore ? <Button disabled={busy || !code.trim()} onClick={() => repair({ passphrase: code })} data-testid="core-restore">{busy ? <Spinner className="border-primary-foreground/40 border-t-primary-foreground" /> : null}{t('data.core.restore')}</Button> : null}
+      {v.restore ? <Button disabled={busy} onClick={restore} data-testid="core-restore">{busy ? <Spinner className="border-primary-foreground/40 border-t-primary-foreground" /> : null}{t('data.core.restore')}</Button> : null}
     </>
   );
-  // four buttons in one row, as the mock-up draws them, need more than the usual 520 px in Orb's own font
-  const fourButtons = [!offerFresh && v.fresh === 'noCode', v.folder && bridge.openPath, bridge.pickFiles, offerFresh, v.restore].filter(Boolean).length >= 4;
+  const folderLink = v.folder && bridge.openPath ? (
+    <button type="button" className="text-muted-foreground hover:text-foreground inline-flex cursor-pointer items-center gap-1.5 self-start border-0 bg-transparent p-0 text-caption underline-offset-2 hover:underline" onClick={() => act(bridge.openPath(v.folder))} data-testid="core-open-folder"><FolderOpen className="size-3.5" aria-hidden="true" />{t('data.core.openFolder')}</button>
+  ) : null;
   return (
-    <StartNotice testid="core-missing" width={fourButtons ? 'w-[600px]' : undefined} icon={FolderX} mood={busy ? 'thinking' : 'worried'} title={t('data.core.title')} footer={footer}
-      details={s.error ? <StartDetails>{s.error}</StartDetails> : null}>
+    <StartNotice testid="core-missing" icon={FolderX} mood={busy ? 'thinking' : 'worried'} title={t('data.core.title')} footer={footer}
+      details={s.error ? <StartDetails>{s.error}</StartDetails> : null} footnote={folderLink}>
       <p className={startText} role="alert">{t(v.body, v.vars)}</p>
-      {v.passphrase ? <Input type="password" autoComplete="off" placeholder={t('data.core.code')} aria-label={t('data.core.code')} value={code} onChange={(e) => setCode(e.target.value)} data-testid="core-code" /> : null}
+      {v.passphrase ? (
+        <>
+          <Input ref={codeRef} type="password" autoComplete="off" placeholder={t('data.core.code')} aria-label={t('data.core.code')} aria-invalid={codeMissing && !code.trim() ? true : undefined} aria-describedby={codeMissing && !code.trim() ? 'core-code-error' : undefined}
+            value={code} onChange={(e) => { setCode(e.target.value); if (e.target.value.trim()) setCodeMissing(false); }} data-testid="core-code" />
+          {codeMissing && !code.trim() ? <p id="core-code-error" className="text-destructive m-0 text-caption" role="alert" data-testid="core-code-error">{t('data.core.codeNeeded')}</p> : null}
+        </>
+      ) : null}
     </StartNotice>
   );
 }

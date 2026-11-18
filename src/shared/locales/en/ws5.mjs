@@ -9,6 +9,7 @@ export default {
   'data.core.needsPassphrase': 'There is a backup from {created}, but this PC cannot open it by itself: type its recovery code.',
   'data.core.damaged': 'The backup from {created} cannot be used. Choose another backup or go on without one.',
   'data.core.code': 'Recovery code',
+  'data.core.codeNeeded': 'Type the recovery code to restore.',
   'data.core.restore': 'Restore',
   'data.core.pick': 'Choose another backup…',
   'data.core.fresh': 'Go on without a backup',

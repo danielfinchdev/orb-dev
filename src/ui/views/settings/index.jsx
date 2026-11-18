@@ -14,8 +14,8 @@ import { DataCards } from '../data.jsx';
 import { ExtensionsPanel } from '../extensions.jsx';
 import { Block, MoreOptions } from './rows.jsx';
 import { TabsCard, ShortcutsCard } from './shortcuts.jsx';
-import { AssistantCard, AppearanceCard, ChatCard, PermissionsCard, ApprovalWaitCard, TasksCard, FolderCard, ProtectedCard, InterfaceCard, ZoomFineCard, ExpertCard } from './general.jsx';
-import { AndroidCard, MobileCard, BrowserCard } from './devices.jsx';
+import { AssistantCard, AppearanceCard, ChatCard, PermissionsCard, ApprovalWaitCard, TasksCard, FolderCard, ProtectedCard, InterfaceCard, ZoomFineCard, ExpertCard, ExpertPanelsCard } from './general.jsx';
+import { AndroidCard, MobileCard, BrowserCard, LiveWindowCard } from './devices.jsx';
 import { McpExtCard } from './mcp-ext.jsx';
 import { UsageAccounts, BrakesCard, BrakeRails } from './usage-tab.jsx';
 // «Este móvil», the phone's screen of its own (main.jsx loads it from here, with the dialog).
@@ -58,7 +58,7 @@ const SECTIONS = [
   { id: 'avanzado', icon: SlidersHorizontal, groups: () => ['herramientas', ...(fullPc() ? ['experto'] : [])],
     cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /></SubSection>
       {fullPc() ? <SubSection id="experto" title={t('settings.group.experto')}><ExpertCard c={c} /></SubSection> : null}
-      <AndroidCard />{bridge.mobile ? null : <MoreOptions testid="more-options-avanzado"><McpExtCard /></MoreOptions>}</> },
+      <AndroidCard />{bridge.mobile ? null : <MoreOptions testid="more-options-avanzado">{fullPc() ? <ExpertPanelsCard c={c} /> : null}<LiveWindowCard c={c} /><McpExtCard /></MoreOptions>}</> },
   { id: 'acerca', icon: Info, groups: ['contribuye', 'apps'],
     cards: (c, app) => <><SubSection id="contribuye" title={t('settings.group.contribuye')}><FeedbackCard /></SubSection><AboutCard version={app.version} /><SupportCard /><SubSection id="apps" title={t('settings.group.apps')}><MoreAppsCard /></SubSection></> }
 ];

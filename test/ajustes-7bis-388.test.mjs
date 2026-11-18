@@ -41,7 +41,7 @@ test('pantalla de bloqueo: un interruptor que guarda los mismos dos valores', ()
 test('avanzado: navegador, God mode y Android en el orden de la maqueta; el conector MCP de Orb en «Más opciones»', () => {
   const adv = index.slice(index.indexOf("{ id: 'avanzado'"), index.indexOf("{ id: 'acerca'"));
   assert.ok(adv.indexOf('<BrowserCard') < adv.indexOf('<ExpertCard') && adv.indexOf('<ExpertCard') < adv.indexOf('<AndroidCard'));
-  assert.match(adv, /<MoreOptions testid="more-options-avanzado"><McpExtCard \/><\/MoreOptions>/);
+  assert.match(adv, /<MoreOptions testid="more-options-avanzado">.*<McpExtCard \/><\/MoreOptions>/);
 });
 
 test('acerca de: comentarios, Orb, apoyo y más aplicaciones, como la maqueta', () => {

@@ -1,5 +1,5 @@
 // Ajustes: updates, support, feedback, more apps, the music and «Acerca de».
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Camera, ImagePlus, X, Send, Download, Heart, RefreshCw } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
 import { PRODUCT, AUTHOR } from '../../../shared/product.mjs';
@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Badge, Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
 import { Select } from '@/components/ui/overlay.jsx';
 import { act, bridge, useStore, robotSkin } from '@/lib/store.js';
+import { notifyInfo } from '@/lib/notify.js';
 import { OrbMark } from '@/components/orb-mark.jsx';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
@@ -60,11 +61,14 @@ export function SupportCard() {
 export function FeedbackCard() {
   const t = useT();
   const { v, setV, images, setImages, room, busy, addCapture, addImages, send } = useFeedback({ toasts: true });
+  const messageRef = useRef(null);
+  // The button stays the main one even with nothing written: it points at the message instead of being greyed out.
+  const trySend = () => { if (!v.message.trim()) { notifyInfo(t('sys.feedback.empty')); messageRef.current?.focus(); return; } send(); };
   return (
     <Block title={t('contribute.feedbackTitle')} note={t('contribute.feedbackDesc')}>
       <Panel>
         <Setting label={t('contribute.type')}><Select caret="solid" value={v.type} onValueChange={(type) => setV({ ...v, type })} title={t('contribute.type')} options={FEEDBACK_TYPES.map((value) => ({ value, label: t(`contribute.type.${value}`) }))} /></Setting>
-        <Fld label={t('contribute.message')}><Textarea rows={3} className="h-[72px] resize-y" maxLength={5000} value={v.message} placeholder={t('contribute.messagePh')} onChange={(e) => setV({ ...v, message: e.target.value })} data-testid="feedback-message" /></Fld>
+        <Fld label={t('contribute.message')}><Textarea ref={messageRef} rows={3} className="h-[72px] resize-y" maxLength={5000} value={v.message} placeholder={t('contribute.messagePh')} onChange={(e) => setV({ ...v, message: e.target.value })} data-testid="feedback-message" /></Fld>
         <Fld label={t('contribute.contact')} hint={t('contribute.contactHint')}><Input type="email" value={v.contact} maxLength={120} placeholder={t('contribute.contactPh')} onChange={(e) => setV({ ...v, contact: e.target.value })} /></Fld>
         <Stack className="border-border border-t">
           <div className="flex flex-wrap items-center gap-2">
@@ -83,7 +87,7 @@ export function FeedbackCard() {
             </div>
           ) : null}
         </Stack>
-        <CardFoot><Hint>{t('contribute.privacy')}</Hint><Button size="sm" disabled={busy || !v.message.trim()} onClick={send} data-testid="feedback-send">{busy ? <Spinner className="border-white/40 border-t-white" /> : <Send />}{t('contribute.send')}</Button></CardFoot>
+        <CardFoot className="justify-between"><Hint className="min-w-0 flex-1 text-left">{t('contribute.privacy')}</Hint><Button size="sm" disabled={busy} onClick={trySend} data-testid="feedback-send">{busy ? <Spinner className="border-white/40 border-t-white" /> : <Send />}{t('contribute.send')}</Button></CardFoot>
       </Panel>
     </Block>
   );

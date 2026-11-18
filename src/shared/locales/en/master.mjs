@@ -38,6 +38,7 @@ export default {
   'master.lockAfter': 'Lock Orb after',
   'master.lockAfterHint': 'After this long without using Orb, it asks for the master password. It also locks when Windows locks or the PC sleeps.',
   'master.lockMinutes': '{n} min',
+  'master.lockUnused': 'idle',
   'master.lostTitle': 'Your master password is missing',
   'master.lostBody': 'The file of your master password cannot be found. If you have a backup, restore it. If not, set another one with the recovery code or start from scratch.',
   'master.unlock': 'Unlock',

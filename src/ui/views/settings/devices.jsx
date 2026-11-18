@@ -229,7 +229,20 @@ export function BrowserCard({ c }) {
       <Panel>
         <Row label={t('settings.browse')} hint={t('settings.browseHint')}><Switch checked={on} onCheckedChange={(enabled) => save({ browser: { enabled } })} /></Row>
         <Row label={t('settings.pip')} hint={t('settings.pipHint')}><Switch checked={pip} disabled={!on} onCheckedChange={(v) => save({ ui: { pip: v } })} /></Row>
-        {bridge.showBrowser ? <CardFoot><Button size="sm" variant="outline" disabled={!on || !pip} onClick={async () => { const r = await bridge.showBrowser(); if (!r?.tabs?.length) notifyInfo(t('settings.noBrowserUse')); }}><PictureInPicture2 />{t('settings.showPip')}</Button></CardFoot> : null}
+      </Panel>
+    </Block>
+  );
+}
+
+// The button that brings the agents' live browser window forward: Orb's own, not drawn by the mock-up, so it sits under «Más opciones».
+export function LiveWindowCard({ c }) {
+  const t = useT();
+  const on = c.browser?.enabled !== false; const pip = c.ui?.pip !== false;
+  if (!bridge.showBrowser) return null;
+  return (
+    <Block title={t('settings.pip')} data-testid="live-window">
+      <Panel>
+        <CardFoot className="justify-start border-t-0"><Button size="sm" variant="outline" disabled={!on || !pip} onClick={async () => { const r = await bridge.showBrowser(); if (!r?.tabs?.length) notifyInfo(t('settings.noBrowserUse')); }}><PictureInPicture2 />{t('settings.showPip')}</Button></CardFoot>
       </Panel>
     </Block>
   );

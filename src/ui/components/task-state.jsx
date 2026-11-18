@@ -122,7 +122,7 @@ export function HeldCard({ task, link = false, className }) {
         <ShieldAlert className="text-warning-ink mt-0.5 size-4 shrink-0" />
         <div className="min-w-0 flex-1">
           {link ? <div className="font-semibold">{t('orbchats.taskN', { id: task.id })} · <span className="font-normal">{task.title}</span></div> : null}
-          <div className="break-words">{h.folder ? t('tasks.held.line', { reasons: h.reasons, folder: h.folder }) : t('tasks.held.lineNoFolder', { reasons: h.reasons })}</div>
+          <div className="[overflow-wrap:anywhere]">{h.folder ? t('tasks.held.line', { reasons: h.reasons, folder: h.folder }) : t('tasks.held.lineNoFolder', { reasons: h.reasons })}</div>
         </div>
       </div>
       <div className="flex flex-wrap gap-2 pl-6">
