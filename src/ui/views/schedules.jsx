@@ -349,6 +349,19 @@ function SchedulesPc() {
   const shown = rows.filter(FILTERS.find(([k]) => k === filter)[1]);
   const failed = count('failed');
   const runs = tasks.filter((x) => x.schedule_id).sort((a, b) => b.id - a.id).slice(0, 5);
+  // The list of tasks comes without their texts: the first line of each run's result is read from its detail, once per state.
+  const [results, setResults] = useState({});
+  const runsKey = runs.map((x) => `${x.id}:${x.status}:${x.updated_at}`).join('|');
+  useEffect(() => {
+    let alive = true;
+    for (const x of runs) {
+      const key = `${x.id}:${x.status}:${x.updated_at}`;
+      if (results[key] !== undefined) continue;
+      call('tasks.get', { id: x.id }).then((d) => { if (alive) setResults((r) => ({ ...r, [key]: String(d?.result ?? '').split('\n').find((l) => l.trim()) ?? '' })); }, () => {});
+    }
+    return () => { alive = false; };
+  }, [runsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const resultOf = (x) => results[`${x.id}:${x.status}:${x.updated_at}`] || '';
   const titleOf = (x) => (list ?? []).find((s) => s.id === x.schedule_id)?.title ?? x.title;
   return (
     <>
@@ -389,7 +402,7 @@ function SchedulesPc() {
                   <SectionLabel className="flex items-baseline gap-2 px-0 pt-2 pb-0"><h2 className="m-0 text-[length:inherit] font-[inherit]">{tr('schedules.lastRuns')}</h2><span className="text-faint-foreground text-caption font-normal">{tr('schedules.lastRunsSub')}</span><span className="grow" /><Button variant="link" className="h-auto p-0 text-control font-normal" onClick={() => go('tasks')}>{tr('schedules.seeTasks')}</Button></SectionLabel>
                   <ListCard data-testid="schedule-runs">
                     {runs.map((x) => (
-                      <ListRow key={x.id} className="rounded-none" leading={<TaskStatus task={x} />} title={titleOf(x)} meta={<span>{String(x.result ?? '').split('\n').find((l) => l.trim()) || `#${x.id} · ${x.project}`}</span>}
+                      <ListRow key={x.id} className="rounded-none" leading={<TaskStatus task={x} />} title={titleOf(x)} meta={<span>{resultOf(x) || `#${x.id} · ${x.project}`}</span>}
                         trailing={<>
                           {canRetryFromRow(x) ? <RetryRun id={x.id} /> : null}
                           <span className="text-faint-foreground text-caption">{ago(x.updated_at ?? x.created_at)}</span>

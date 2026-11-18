@@ -103,3 +103,15 @@ test('every text the dialog uses exists in Spanish and English; colours follow U
 test('the files keep LF line endings', () => {
   for (const f of ['src/ui/views/schedules.jsx', 'src/domain/schedules/schedules.mjs', 'src/engine/api/work.mjs', 'test/programadas-11b-388.test.mjs', 'test/motor-11b-programadas-388.test.mjs']) assert.ok(!read(f).includes('\r'), f);
 });
+
+test('«Últimas ejecuciones» has its runs: the compact list of tasks keeps the schedule of each, and their result is read apart', () => {
+  // the window's list of tasks is the compact feed: without schedule_id no run was ever listed
+  const feeds = read('src/engine/feeds.mjs');
+  const detailOnly = feeds.slice(feeds.indexOf('const TASK_DETAIL_ONLY'), feeds.indexOf('];', feeds.indexOf('const TASK_DETAIL_ONLY')));
+  assert.ok(!detailOnly.includes("'schedule_id'"), 'schedule_id travels in the list');
+  assert.ok(detailOnly.includes("'result'"), 'the texts stay out of the list');
+  const view = read('src/ui/views/schedules.jsx');
+  assert.ok(view.includes('const runs = tasks.filter((x) => x.schedule_id)'));
+  assert.ok(view.includes("call('tasks.get', { id: x.id })"), 'the first line of a run comes from its detail');
+  assert.ok(view.includes('resultOf(x) ||'));
+});
