@@ -2,7 +2,7 @@
 // from the task's undo checkpoint). Shown in the task's detail and at the end of its agent's conversation; nothing when
 // there is nothing to show (running, undone, a folder without git).
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Check, ChevronRight, Copy, FileEdit, FileMinus2, FilePlus2, FileDiff, MessageSquarePlus, X } from 'lucide-react';
+import { Check, ChevronRight, Copy, FileEdit, FileMinus2, FilePlus2, FileDiff, FileText, MessageSquarePlus, X } from 'lucide-react';
 import { notifyError, notifyOk } from '@/lib/notify.js';
 import { DiffLines } from '@/components/diff-view.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -245,12 +245,12 @@ function PanelDiff({ f, seen, onSeen, sessionId, project, fileProject, taskId })
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-control">
         <b className="min-w-0 flex-1 basis-32 truncate font-mono text-caption font-semibold" title={f.path}>{f.path}</b>
         {f.binary ? null : <span className="text-caption tabular-nums"><span className="text-success">+{f.added}</span> <span className="text-destructive">−{f.removed}</span></span>}
-        <span className="ml-auto flex shrink-0 items-center gap-1">
+        <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
           <Tip label={t('tasks.changes.copyPath')}><Button size="icon-xs" variant="ghost" aria-label={t('tasks.changes.copyPath')} onClick={copy}><Copy /></Button></Tip>
           <Button size="xs" variant={seen ? 'soft' : 'ghost'} onClick={onSeen} aria-pressed={seen} data-testid="task-change-seen"><Check />{t('tasks.changes.seen')}</Button>
-          {taskId != null && lay.side === 'after' && !f.binary ? <Button size="xs" variant={whole ? 'soft' : 'ghost'} onClick={() => setWhole((w) => !w)} aria-pressed={whole} data-testid="task-change-whole">{t('tasks.changes.whole')}</Button> : null}
+          {taskId != null && lay.side === 'after' && !f.binary ? <Tip label={t('tasks.changes.whole')}><Button size="icon-xs" variant={whole ? 'soft' : 'ghost'} onClick={() => setWhole((w) => !w)} aria-pressed={whole} aria-label={t('tasks.changes.whole')} data-testid="task-change-whole"><FileText /></Button></Tip> : null}
           {fileProject && f.status !== 'D' ? <OpenFileButton project={fileProject} file={f.path} line={firstChangeLine(f.patch)} /> : null}
-          {project ? <OpenInMenu project={project} /> : null}
+          {project ? <OpenInMenu project={project} compact /> : null}
         </span>
       </div>
       {body}
