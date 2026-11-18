@@ -27,7 +27,8 @@ export function checkProjectName(name) {
 // a multiplatform project (category multi) is one folder and one repository: a subfolder per platform and
 // compartido\ for what they share (API, design, texts, images), with a LEEME.md that says so. `platforms`: the ones it
 // has (at least one; web if none).
-export function createProject(board, { name, notes = '', category, platforms = [] }, actor) {
+// template: false makes only the empty folder (no git repository, .gitignore, platform subfolders or first commit).
+export function createProject(board, { name, notes = '', category, platforms = [], template = true }, actor) {
   const clean = String(name ?? '').normalize('NFC').trim();
   checkProjectName(clean);
   if (board.project(clean)) throw new Error(tr('msg.projects.exists', { name: clean }));
@@ -38,6 +39,7 @@ export function createProject(board, { name, notes = '', category, platforms = [
   const folder = path.join(ctx.paths.categories[cat], dir);
   if (fs.existsSync(folder) && fs.readdirSync(folder).length) throw new Error(tr('msg.projects.folderNotEmpty', { folder }));
   fs.mkdirSync(folder, { recursive: true });
+  if (template === false) return board.addProject({ name: clean, path: folder, notes }, actor);
   // "-b" needs git 2.28+; older versions get the default branch renamed instead. Without git the project still works
   // (undo then uses a copy of the folder), it just has no branches or GitHub.
   let init = git(folder, 'init', '-q', '-b', 'main');
@@ -91,8 +93,10 @@ export function renameProject(board, { name, to }, actor) {
         for (const s of board.all('SELECT id, cwd FROM sessions WHERE project = ?', next)) if (moveIn(s.cwd) !== s.cwd) board.run('UPDATE sessions SET cwd = ? WHERE id = ?', moveIn(s.cwd), s.id);
       }
       if (board.setting('active_project') === project.name) board.setting('active_project', next);
-      const prefix = `wb_seen:${project.name}:`;
-      for (const r of board.all('SELECT key FROM settings WHERE substr(key, 1, ?) = ?', prefix.length, prefix)) board.run('UPDATE settings SET key = ? WHERE key = ?', `wb_seen:${next}:${r.key.slice(prefix.length)}`, r.key);
+      for (const kind of ['wb_seen', 'pr_review']) {
+        const prefix = `${kind}:${project.name}:`;
+        for (const r of board.all('SELECT key FROM settings WHERE substr(key, 1, ?) = ?', prefix.length, prefix)) board.run('UPDATE settings SET key = ? WHERE key = ?', `${kind}:${next}:${r.key.slice(prefix.length)}`, r.key);
+      }
     });
   } catch (error) {
     if (inside) { try { fs.renameSync(target, project.path); git(project.path, 'worktree', 'repair'); } catch { /* reported below */ } }
@@ -106,6 +110,58 @@ export function renameProject(board, { name, to }, actor) {
   return board.project(next);
 }
 
+// Tasks or conversations of the project working or waiting: its folder must not move or change under them. The engine adds
+// the scheduler's holds and the coordinator (projects.setCategory, projects.sync).
+export function projectHasWork(board, name) {
+  const open = board.one("SELECT COUNT(*) AS n FROM tasks WHERE project = ? AND status IN ('queued', 'awaiting_approval', 'running')", name).n;
+  const live = board.one("SELECT COUNT(*) AS n FROM sessions WHERE project = ? AND status = 'running'", name).n;
+  return open > 0 || live > 0;
+}
+
+// Moves a project's folder to another category (<home>\<category>\<folder>), with the same guarantees as renameProject:
+// nothing of it working, the folder moves first (one rename on the same volume: it is never in two places) and moves
+// back if the database update fails. A multiplatform project keeps its structure, so none moves into or out of multi;
+// a linked folder outside Orb's workspace never moves. → the project, or null when it is already there.
+export function moveProjectCategory(board, { name, category }, actor) {
+  const project = board.project(name); if (!project) throw new Error(tr('msg.board.noProject', { name }));
+  // checkCategory falls back to the default one when none is given: here a destination is always required.
+  if (!String(category ?? '').trim()) throw new Error(tr('msg.projects.badCategory', { category: '', list: CATEGORIES.join(', ') }));
+  const to = checkCategory(category);
+  const home = ctx.paths.home;
+  const from = categoryOf(home, project.path);
+  const dir = path.basename(project.path);
+  // only a project folder directly inside its category (<home>\<category>\<project>) is Orb's to move.
+  if (!from || path.dirname(project.path).toLowerCase() !== ctx.paths.categories[from].toLowerCase()) throw new Error(tr('msg.projects.moveLinked', { name: project.name }));
+  if (to === from) return null;
+  if (from === MULTI || to === MULTI) throw new Error(tr('msg.projects.moveMulti', { name: project.name }));
+  if (projectHasWork(board, project.name)) throw new Error(tr('msg.projects.moveBusy', { name: project.name }));
+  if (isReservedInCategory(to, dir) || isReservedName(dir)) throw new Error(tr('msg.projects.reserved', { dir, name: ctx.config.assistantName }));
+  const target = path.join(ctx.paths.categories[to], dir);
+  if (fs.existsSync(target)) throw new Error(tr('msg.projects.moveExists', { folder: target }));
+  try {
+    fs.mkdirSync(ctx.paths.categories[to], { recursive: true });
+    fs.renameSync(project.path, target);
+  } catch { throw new Error(tr('msg.projects.moveInUse', { folder: project.path })); }
+  git(target, 'worktree', 'repair'); // isolated copies of old tasks keep pointing at the moved repository
+  const moveIn = (p) => (p && (p === project.path || p.startsWith(project.path + path.sep)) ? target + p.slice(project.path.length) : p);
+  try {
+    board.transaction(() => {
+      board.run('UPDATE projects SET path = ? WHERE name = ?', target, project.name);
+      for (const t of board.all('SELECT id, workdir, project_path FROM tasks WHERE project = ? OR workdir = ? OR project_path = ?', project.name, project.path, project.path)) board.run('UPDATE tasks SET workdir = ?, project_path = ? WHERE id = ?', moveIn(t.workdir), moveIn(t.project_path), t.id);
+      for (const s of board.all('SELECT id, cwd FROM sessions WHERE project = ?', project.name)) if (moveIn(s.cwd) !== s.cwd) board.run('UPDATE sessions SET cwd = ? WHERE id = ?', moveIn(s.cwd), s.id);
+    });
+  } catch (error) {
+    try { fs.renameSync(target, project.path); } catch {
+      throw new Error(tr('msg.projects.moveStranded', { folder: target, old: project.path, detail: String(error?.message ?? error).slice(0, 200) }));
+    }
+    git(project.path, 'worktree', 'repair');
+    throw error;
+  }
+  board.event(null, actor, 'project.moved', `${project.name}: ${from} -> ${to}`);
+  for (const what of ['projects', 'tasks', 'sessions']) board.changed(what);
+  return board.project(project.name);
+}
+
 const checkPlatforms = (list) => {
   const out = [...new Set((Array.isArray(list) ? list : []).map((x) => String(x ?? '').trim().toLowerCase()).filter(Boolean))];
   for (const x of out) if (!PLATFORMS.includes(x)) throw new Error(tr('msg.projects.badCategory', { category: x, list: PLATFORMS.join(', ') }));
@@ -113,10 +169,10 @@ const checkPlatforms = (list) => {
 };
 
 // One platform → its category; several (or multi) → one multiplatform project in multi with them.
-export function newProject(board, { name, notes = '', category, platforms }, actor) {
+export function newProject(board, { name, notes = '', category, platforms, template = true }, actor) {
   const list = Array.isArray(platforms) ? platforms : [];
-  if (String(category ?? '').toLowerCase() === MULTI || list.length > 1) return createProject(board, { name, notes, category: MULTI, platforms: list }, actor);
-  return createProject(board, { name, notes, category: category || list[0] }, actor);
+  if (String(category ?? '').toLowerCase() === MULTI || list.length > 1) return createProject(board, { name, notes, category: MULTI, platforms: list, template }, actor);
+  return createProject(board, { name, notes, category: category || list[0], template }, actor);
 }
 
 // 2.7–3.7: a multiplatform project was a group (tienda-android, tienda-ios… with a shared folder <home>/comun/<name>).

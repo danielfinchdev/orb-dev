@@ -2,7 +2,8 @@
 import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { categoryOf, CATEGORIES, PLATFORMS } from '../../platform/paths.mjs';
-import { newProject, checkProjectName, renameProject } from '../../domain/projects/projects.mjs';
+import { newProject, checkProjectName, renameProject, moveProjectCategory, projectHasWork } from '../../domain/projects/projects.mjs';
+import { layoutPlan, layoutApply } from '../workspace-layout.mjs';
 import { finishProject, finishedProjects, reopenProject, checkDelete, deleteProject, abortDelete } from '../../domain/projects/project-close.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { adbStatus, ensureAdb } from '../host/android.mjs';
@@ -23,7 +24,7 @@ const headOid = (v) => {
 // github.mjs stays lazy (startup cost): its oid pattern and comment limit are repeated here on purpose.
 const gh = lazy(() => import('../host/github.mjs'));
 
-export function projectMethods({ realHome, insideHome, project, holding, coordinatorBusy, syncSoon, cut, android, grants, board, sessions, scheduler, chatTrees, log }) {
+export function projectMethods({ emit, realHome, insideHome, project, holding, coordinatorBusy, syncSoon, cut, android, grants, board, sessions, scheduler, chatTrees, log }) {
   // The project as a commit dialog of chat `session` sees it: a chat in its own worktree commits and pushes there, on its
   // own branch. Only the chat id comes from the caller; the folder is Orb's record (ChatWorktrees.folderFor).
   const inChat = (name, session) => {
@@ -32,6 +33,11 @@ export function projectMethods({ realHome, insideHome, project, holding, coordin
     const dir = sid ? chatTrees.folderFor(sid, p.name) : null;
     return dir ? { ...p, path: dir } : p;
   };
+  const syncBusy = (name) => scheduler.held(name) || coordinatorBusy(name) || projectHasWork(board, name);
+  // anything working (tasks, conversations, schedules) may be using the folders «Ordenar carpetas» moves.
+  const arrangeBusy = () => board.projects().some((p) => scheduler.held(p.name) || coordinatorBusy(p.name))
+    || board.one("SELECT COUNT(*) AS n FROM tasks WHERE status IN ('queued', 'awaiting_approval', 'running')").n > 0
+    || board.one("SELECT COUNT(*) AS n FROM sessions WHERE status = 'running'").n > 0;
   const methods = {
     'projects.list': () => {
       syncSoon();
@@ -41,10 +47,29 @@ export function projectMethods({ realHome, insideHome, project, holding, coordin
       return board.projects().map((p) => ({ ...p, inHome: insideHome(p.path), category: categoryOf(realHome, p.path), active: active === p.name, open: open.get(p.name) ?? 0 }));
     },
     // category multi (or several platforms) = one multiplatform project with a folder per platform.
-    'projects.create': ({ name, notes, category, platforms }) => board.project(newProject(board, {
+    // template: false = only the empty folder (no git repository, no first files); without it, as always.
+    'projects.create': ({ name, notes, category, platforms, template }) => board.project(newProject(board, {
       name: str(name, 'nombre', 60), notes: str(notes, 'notas', 2000, { optional: true }), category: oneOf(category, CATEGORIES, 'categoría', undefined),
-      platforms: Array.isArray(platforms) ? platforms.slice(0, PLATFORMS.length).map((c) => oneOf(c, PLATFORMS, 'plataforma')) : []
+      platforms: Array.isArray(platforms) ? platforms.slice(0, PLATFORMS.length).map((c) => oneOf(c, PLATFORMS, 'plataforma')) : [],
+      template: template !== false
     }, 'usuario').name),
+    // the folder of a project to another category (domain/projects/projects.mjs moveProjectCategory); the window only.
+    'projects.setCategory': ({ name, category }) => {
+      const old = project(name);
+      if (scheduler.held(old.name) || coordinatorBusy(old.name)) throw new Error(tr('msg.projects.moveBusy', { name: old.name }));
+      // (the domain function checks the project's own tasks and conversations, projectHasWork, the same as projects.sync)
+      const p = moveProjectCategory(board, { name: old.name, category: str(category, 'categoría', 40) }, 'usuario');
+      if (!p) return { ...old, category: categoryOf(realHome, old.path), moved: false };
+      chatTrees.followProject(old.name, old.path, p);
+      return { ...p, category: categoryOf(realHome, p.path), moved: true };
+    },
+    // «Ordenar carpetas» on demand: the plan of the welcome (app.layoutPlan) plus whether anything is working, because
+    // folders in use cannot move; projects.layoutApply is app.layoutApply once nothing is.
+    'projects.layoutPlan': () => ({ ...layoutPlan(), busy: arrangeBusy() }),
+    'projects.layoutApply': ({ choices }) => {
+      if (arrangeBusy()) throw new Error(tr('msg.projects.arrangeBusy'));
+      return layoutApply(choices, { emit, log, board });
+    },
     'projects.import': ({ name, folder }) => board.addProject({ name: checkProjectName(str(name, 'nombre', 60)), path: str(folder, 'carpeta', 1000) }, 'usuario', { fromUser: true }),
     'projects.remove': ({ name }) => board.removeProject(project(name).name, 'usuario'),
     // a new name (and folder) for a project with nothing working in it (domain/projects/projects.mjs renameProject).
@@ -148,7 +173,42 @@ export function projectMethods({ realHome, insideHome, project, holding, coordin
       return out;
     },
     // Pull requests for the phone. The number is a plain integer (never "1e3" or text with spaces); gh gets it as an argument.
-    'projects.prs': async ({ name }) => (await gh()).listPrs(project(name)),
+    // state (open, merged, closed) is the project page's read, with checks and dates; left out it is the phone's list as ever.
+    'projects.prs': async ({ name, state }) => (await gh()).listPrs(project(name), state === undefined || state === null ? {} : { state: oneOf(state, ['open', 'merged', 'closed'], 'estado') }),
+    // The filter's three numbers; never fails (zeros and `error` when GitHub cannot be read). force: skip the two-minute memory.
+    'projects.prCounts': async ({ name, force }, principal) => (await gh()).prCounts(project(name), { force: force === true && (!principal || principal.channel === 'desktop') }),
+    // «Revisar tarea» of a PR: the read-only review task that already looks at it, or a new one. The link PR → task lives in
+    // Orb's own setting (pr_review:<project>:<n> = { id, oid }), never in text a PR author can write: the mark in the brief is
+    // informational. A review is reused only while it exists, is the user's own task of this project and the PR still has the
+    // commit it was made for; new commits get a new review.
+    'projects.prReview': async ({ name, number }) => {
+      const p = project(name); const n = prNumber(number); const mark = `[orb-pr-review:${n}]`; const key = `pr_review:${p.name}:${n}`;
+      const pr = await (await gh()).viewPr(p, n);
+      const oid = pr.headRefOid || '';
+      const saved = board.settingJson(key);
+      const found = saved && Number.isInteger(saved.id) ? board.task(saved.id) : null;
+      // reused only for the very commit it reviewed: without a known head (gh gave none) nothing says it still is
+      if (oid && found && found.project === p.name && found.created_by === 'usuario' && found.review_of == null && found.readonly && !found.trashed_at && String(saved.oid ?? '') === oid) return { id: found.id, created: false };
+      const plain = (v, max) => oneLine(String(v ?? '').replace(/\[orb-pr-review:/gi, '['), max);
+      const review = scheduler.reviewProject(p.name, { actor: 'usuario', focus: tr('msg.api.prReviewFocus', { n, title: plain(pr.title, 120), head: plain(pr.headRefName, 120), base: plain(pr.baseRefName, 120), mark }) });
+      board.settingJson(key, { id: review.id, oid });
+      return { id: review.id, created: true };
+    },
+    // «Sincronizar»: what it would do (it fetches, which only refreshes the local copy of the remote) and then doing it.
+    // The folder changes, so it is held; the push goes through github.push (secrets check) like «Subir rama».
+    // Anything working in the project (the same check as «Cambiar categoría») refuses it: the plan says `busy` instead.
+    'projects.syncPlan': async ({ name }) => {
+      const p = project(name);
+      if (syncBusy(p.name)) return { state: 'busy', busy: true, reason: tr('msg.projects.syncBusy'), branch: '', upstream: '', behind: 0, ahead: 0, changes: 0 };
+      return { ...(await (await gh()).syncPlan(p)), busy: false };
+    },
+    'projects.sync': async ({ name, behind, ahead }) => {
+      const p = project(name); const g = await gh();
+      if (syncBusy(p.name)) throw new Error(tr('msg.projects.syncBusy'));
+      const count = (v, what) => { if (!Number.isInteger(v) || v < 0 || v > 100_000) fail(tr('msg.api.invalid', { name: what })); return v; };
+      const expect = { behind: count(behind, 'commits por traer'), ahead: count(ahead, 'commits por subir') };
+      return holding(p.name, () => g.syncRun(p, { expect }));
+    },
     // The newest PR of a branch in any state (a merged or closed one too); read-only, like projects.pr.
     'projects.branchPr': async ({ name, branch }) => (await gh()).branchPr(project(name), str(branch, 'rama', 120)),
     'projects.pr': async ({ name, number }) => (await gh()).viewPr(project(name), prNumber(number)),

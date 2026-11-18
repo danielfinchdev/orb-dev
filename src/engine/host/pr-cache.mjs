@@ -25,12 +25,13 @@ const ours = (p) => Number.isInteger(p?.number) && typeof p.headRefName === 'str
 
 // branch: given only by a call that read it ('HEAD' = detached and '' = failed read both mean no branch);
 // prs: given only by a call that read them (left out when gh could not be read, so the old list just expires).
-export function rememberRepo(dir, { branch, prs } = {}) {
+export function rememberRepo(dir, { branch, prs, counts } = {}) {
   const key = keyOf(dir); if (!key) return;
   const old = seen.get(key) ?? {};
   const next = { ...old };
   if (typeof branch === 'string') { next.branch = branch && branch !== 'HEAD' ? branch : null; next.branchAt = now(); }
   if (Array.isArray(prs)) { next.prs = prs.filter(ours).map((p) => ({ number: p.number, headRefName: p.headRefName })); next.prsAt = now(); }
+  if (counts && typeof counts === 'object') { next.counts = { open: counts.open | 0, merged: counts.merged | 0, closed: counts.closed | 0, capped: counts.capped === true }; next.countsAt = now(); }
   seen.delete(key);
   seen.set(key, next);
   if (seen.size > MAX) seen.delete(seen.keys().next().value);
@@ -41,7 +42,11 @@ const live = (dir, field) => { const e = seen.get(keyOf(dir)); return e && e[`${
 export const cachedBranch = (dir) => live(dir, 'branch')?.branch ?? null;
 // The open PR whose head is `branch` in the repository at `dir`, as last read; null when unknown or none.
 export const cachedPr = (dir, branch) => (branch ? live(dir, 'prs')?.prs?.find((p) => p.headRefName === branch)?.number ?? null : null);
-export const forgetRepos = () => { seen.clear(); liveSeen.clear(); };
+// The PR counters the page's filter shows, when read less than two minutes ago (a merge or a new PR moves them, so they are
+// not kept as long as the rest); null when unknown or old.
+const COUNTS_TTL_MS = 2 * 60_000;
+export const cachedCounts = (dir) => { const e = seen.get(keyOf(dir)); return e?.countsAt != null && now() - e.countsAt < COUNTS_TTL_MS ? e.counts : null; };
+export const forgetRepos =() => { seen.clear(); liveSeen.clear(); };
 
 // The branch a folder is on right now, read from its .git/HEAD alone (no git process, no lock on the index), so a chat
 // that works in the project's own folder shows the branch it is on today and not the one a 30-minute-old read saw.

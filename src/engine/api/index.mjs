@@ -19,7 +19,7 @@ import { oneLine } from '../../shared/text.mjs';
 import { redactSecrets } from '../../shared/secrets-scan.mjs';
 import { quickRun } from '../../agents/index.mjs';
 import { AUTONOMY } from '../../domain/security/guard.mjs';
-import { readLog, writeLog, logFiles, countLogEntries } from '../../domain/journal/journal.mjs';
+import { readLog, writeLog, writeHandEntry, logFiles, countLogEntries } from '../../domain/journal/journal.mjs';
 import { ofUserLabel, userLabel, userName } from '../../domain/tasks/board.mjs';
 import { createAndroid } from '../host/android.mjs';
 import { grantMethods } from '../security/grants.mjs';
@@ -299,6 +299,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     // `dir` (where the logs live) is for the window only: the phone never gets this PC's folders
     'logs.list': (_params, principal) => logFiles(board).map(([name, file]) => { let size = 0; try { size = fs.statSync(file).size; } catch { /* empty */ } return { name, size, entries: countLogEntries(file), ...(principal?.channel === 'desktop' && name === 'general' ? { dir: path.dirname(file) } : {}) }; }),
     'logs.read': ({ project: name, whole }) => readLog(board, str(name, 'bitácora', 200), { whole: Boolean(whole), chars: 40000 }),
+    // «Escribir entrada»: the user adds a signed entry at the end of a project's logbook (this PC only; append-only).
+    'logs.addEntry': ({ project: name, title, body }) => { writeHandEntry(board, project(str(name, 'bitácora', 200)).name, { title, body }); board.changed('logs'); return { ok: true }; },
 
     // Only q/limit: the events array the window has always had. Any other filter: the paged reader of every source
     // ({ items, next }, src/domain/activity/activity.mjs).

@@ -42,7 +42,7 @@ export const STATE_KEYS = Object.freeze({
     // a conversation's with the assistant
     'pending_questions:': 'conversation', 'report_queue:': 'conversation', 'inbox_since:': 'conversation', 'assistant_cwd:': 'conversation', 'brake_told:': 'conversation',
     // a project's
-    'actions:': 'project', 'wb_seen:': 'project',
+    'actions:': 'project', 'wb_seen:': 'project', 'pr_review:': 'project',
     // a chat's own worktree (src/engine/chat-worktrees.mjs, by session id)
     'chatwt:': 'session',
     // older versions' (deleted when the engine starts or by the 3.8 migration)

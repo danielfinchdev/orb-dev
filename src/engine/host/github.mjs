@@ -15,7 +15,7 @@ import { folderName } from '../../platform/paths.mjs';
 import { checkCategory } from '../../domain/projects/projects.mjs';
 import { ATTACH_DIR } from '../sessions.mjs';
 import { cleanCommitMessage } from '../../shared/commit-message.mjs';
-import { rememberRepo, cachedPr } from './pr-cache.mjs';
+import { rememberRepo, cachedPr, cachedCounts } from './pr-cache.mjs';
 
 function ghExe() {
   const pf = process.env.ProgramFiles ?? 'C:\\Program Files';
@@ -221,11 +221,53 @@ const reviewersOf = (x) => [...new Set([...(Array.isArray(x.latestReviews) ? x.l
   .map((r) => oneLine(r?.login ?? r?.name ?? r?.slug ?? '', 80)).filter(Boolean))].slice(0, 10);
 const authorOf = (a) => (a && typeof a === 'object' ? String(a.login ?? a.name ?? '') : String(a ?? ''));
 
-export async function listPrs(project) {
-  const list = await ghJson(project, ['pr', 'list', '--state', 'open', '--limit', '30', '--json', 'number,title,headRefName,headRefOid,baseRefName,url,isDraft,author,updatedAt,reviewDecision,mergeable,isCrossRepository']);
-  const out = (Array.isArray(list) ? list : []).slice(0, 30).map((x) => ({ number: x.number, title: oneLine(x.title, 300), headRefName: x.headRefName, headRefOid: oidOf(x.headRefOid), baseRefName: x.baseRefName, url: x.url, isDraft: Boolean(x.isDraft), author: authorOf(x.author), updatedAt: x.updatedAt, reviewDecision: x.reviewDecision || null, mergeable: x.mergeable || null }));
-  rememberRepo(project.path, { prs: Array.isArray(list) ? list.slice(0, 30) : undefined });
-  return out;
+// How many of a PR's checks passed, failed or still run, from gh's statusCheckRollup (check runs carry status/conclusion,
+// old-style commit statuses carry state). Only the counts leave: the names and links stay in projects.pr.
+const CHECK_OK = new Set(['SUCCESS', 'NEUTRAL', 'SKIPPED']);
+const CHECK_BAD = new Set(['FAILURE', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE', 'ERROR', 'STALE']);
+export function checksSummary(rollup) {
+  const list = Array.isArray(rollup) ? rollup.slice(0, 100) : [];
+  let ok = 0; let failed = 0;
+  for (const c of list) {
+    const verdict = String(c?.conclusion || (c?.status === 'COMPLETED' ? '' : c?.state) || '').toUpperCase();
+    if (CHECK_OK.has(verdict)) ok += 1; else if (CHECK_BAD.has(verdict)) failed += 1;
+  }
+  return { total: list.length, ok, failed, running: list.length - ok - failed };
+}
+
+const PR_STATES = ['open', 'merged', 'closed'];
+// state left out: the list the phone has always read, field for field. A state named (even «open») is the project page's
+// read: the same list plus when it was opened, its checks summarized and, for a finished one, how it ended.
+export async function listPrs(project, { state } = {}) {
+  if (state === undefined) {
+    const list = await ghJson(project, ['pr', 'list', '--state', 'open', '--limit', '30', '--json', 'number,title,headRefName,headRefOid,baseRefName,url,isDraft,author,updatedAt,reviewDecision,mergeable,isCrossRepository']);
+    const out = (Array.isArray(list) ? list : []).slice(0, 30).map((x) => ({ number: x.number, title: oneLine(x.title, 300), headRefName: x.headRefName, headRefOid: oidOf(x.headRefOid), baseRefName: x.baseRefName, url: x.url, isDraft: Boolean(x.isDraft), author: authorOf(x.author), updatedAt: x.updatedAt, reviewDecision: x.reviewDecision || null, mergeable: x.mergeable || null }));
+    rememberRepo(project.path, { prs: Array.isArray(list) ? list.slice(0, 30) : undefined });
+    return out;
+  }
+  if (!PR_STATES.includes(state)) throw new Error(tr('msg.github.prFailed'));
+  const list = await ghJson(project, ['pr', 'list', '--state', state, '--limit', '30', '--json', 'number,title,headRefName,headRefOid,baseRefName,url,isDraft,author,createdAt,updatedAt,mergedAt,closedAt,reviewDecision,mergeable,isCrossRepository,statusCheckRollup']);
+  const rows = (Array.isArray(list) ? list : []).slice(0, 30);
+  if (state === 'open') rememberRepo(project.path, { prs: rows });
+  return rows.map((x) => ({ number: x.number, title: oneLine(x.title, 300), headRefName: x.headRefName, headRefOid: oidOf(x.headRefOid), baseRefName: x.baseRefName, url: x.url, isDraft: Boolean(x.isDraft), author: authorOf(x.author),
+    createdAt: x.createdAt ?? null, updatedAt: x.updatedAt, mergedAt: x.mergedAt ?? null, closedAt: x.closedAt ?? null, state: state.toUpperCase(), reviewDecision: x.reviewDecision || null, mergeable: x.mergeable || null, checksSummary: checksSummary(x.statusCheckRollup) }));
+}
+
+// How many pull requests the repository has open, merged and closed, for the filter of the PR panel. One cheap read (the
+// states only), remembered for two minutes. It never throws: without gh, a GitHub remote or a network the counters are zeros
+// and `error` says why, so the list underneath can still show what it has.
+const COUNT_LIMIT = 200;
+export async function prCounts(project, { force = false } = {}) {
+  const zero = (error) => ({ open: 0, merged: 0, closed: 0, capped: false, ...(error ? { error } : {}) });
+  if (!force) { const hit = cachedCounts(project.path); if (hit) return hit; }
+  try {
+    const list = await ghJson(project, ['pr', 'list', '--state', 'all', '--limit', String(COUNT_LIMIT), '--json', 'state']);
+    const rows = Array.isArray(list) ? list : [];
+    const n = (s) => rows.filter((x) => x?.state === s).length;
+    const out = { open: n('OPEN'), merged: n('MERGED'), closed: n('CLOSED'), capped: rows.length >= COUNT_LIMIT };
+    rememberRepo(project.path, { counts: out });
+    return out;
+  } catch (error) { return zero(oneLine(error.message, 200)); }
 }
 
 // The newest pull request of a branch whatever its state (open, merged or closed): what the PR panel shows once the open one
@@ -352,6 +394,62 @@ export async function push(project, branch) {
   await checkUnpushed(project.path, branch);
   must(await run('git', ['-C', project.path, 'push', '-u', 'origin', branch], { timeoutMs: 180_000 }), tr('msg.github.pushFailed'));
   return { ok: true };
+}
+
+// «Sincronizar»: bring in what the remote has and send what it lacks, in the one way that can never lose work: a fast-forward
+// and a plain push. Never forced, never a rebase, never a merge commit, never a pull over unsaved changes, and nothing
+// that asks for a password (GIT_TERMINAL_PROMPT=0). The remote branch is always origin's branch of the same name, the one
+// «Subir rama» pushes to.
+const NO_PROMPT = { GIT_TERMINAL_PROMPT: '0' };
+const netGit = (dir, ...args) => gitAsyncWith(dir, { timeout: 120_000, env: NO_PROMPT }, ...args);
+// state: 'upToDate' | 'ready' (something to bring in or send) | 'diverged' | 'unsaved' (to bring in, with unsaved changes) |
+// 'noRemote' | 'noRemoteBranch' (never pushed: «Subir rama» is the way).
+async function syncState(project) {
+  const dir = project.path;
+  if (!(await isGitRepoAsync(dir))) throw new Error(tr('msg.github.noGit'));
+  const branch = (await git(dir, 'rev-parse', '--abbrev-ref', 'HEAD')).stdout.trim();
+  if (!branch || branch === 'HEAD') throw new Error(tr('msg.github.syncDetached'));
+  const base = { branch, upstream: `origin/${branch}`, behind: 0, ahead: 0, changes: 0 };
+  if ((await git(dir, 'remote', 'get-url', 'origin')).status !== 0) return { ...base, state: 'noRemote' };
+  branchName(branch); // it goes into a refspec: no leading «-», spaces or «:»
+  // Only this branch's remote-tracking ref is refreshed: no tags, no submodules and no external transport helpers, whatever
+  // the repository's own config (an agent may have written it) says.
+  // A refspec of a branch the remote lacks makes fetch fail: ask first (exit code 2 = no such branch there).
+  const probe = await netGit(dir, '-c', 'protocol.ext.allow=never', 'ls-remote', '--exit-code', '--heads', 'origin', `refs/heads/${branch}`);
+  if (probe.status === 2) return { ...base, state: 'noRemoteBranch' };
+  if (probe.status !== 0) throw new Error(tr('msg.github.syncFetchFailed', { detail: oneLine(probe.stderr, 300) }));
+  const fetched = await netGit(dir, '-c', 'protocol.ext.allow=never', 'fetch', '--no-tags', '--no-recurse-submodules', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`);
+  if (fetched.status !== 0) throw new Error(tr('msg.github.syncFetchFailed', { detail: oneLine(fetched.stderr, 300) }));
+  const ref = `refs/remotes/origin/${branch}`;
+  const counts = (await git(dir, 'rev-list', '--left-right', '--count', `HEAD...${ref}`)).stdout.trim().split(/\s+/).map(Number);
+  const [ahead, behind] = counts.length === 2 && counts.every(Number.isInteger) ? counts : [0, 0];
+  const changes = (await git(dir, 'status', '--porcelain')).stdout.split(/\r?\n/).filter((l) => l && !l.endsWith(`${ATTACH_DIR}/`)).length;
+  const out = { ...base, ahead, behind, changes };
+  if (behind && ahead) return { ...out, state: 'diverged' };
+  if (behind && changes) return { ...out, state: 'unsaved' };
+  return { ...out, state: behind || ahead ? 'ready' : 'upToDate' };
+}
+// What «Sincronizar» would do, after fetching (which only updates this repository's copy of the remote's branches). Nothing
+// is merged or sent.
+export const syncPlan = (project) => syncState(project);
+// The confirmed plan is `expect` ({ behind, ahead }): if the remote or the branch moved since the user read it, nothing is done.
+export async function syncRun(project, { expect }) {
+  const plan = await syncState(project);
+  if (plan.state === 'diverged') throw userError(tr('msg.github.syncDiverged', { branch: plan.branch }));
+  if (plan.state === 'unsaved') throw userError(tr('msg.github.syncUnsaved'));
+  if (plan.state === 'noRemote' || plan.state === 'noRemoteBranch') throw userError(tr(plan.state === 'noRemote' ? 'msg.github.syncNoRemote' : 'msg.github.syncNoBranch', { branch: plan.branch }));
+  if (!expect || plan.behind !== expect.behind || plan.ahead !== expect.ahead) throw userError(tr('msg.github.syncChanged'));
+  const out = { ok: true, branch: plan.branch, pulled: 0, pushed: 0 };
+  if (plan.behind) {
+    const m = await git(project.path, 'merge', '--ff-only', '--no-edit', `refs/remotes/origin/${plan.branch}`);
+    if (m.status !== 0) throw userError(tr('msg.github.syncNotFf', { detail: oneLine(m.stderr || m.stdout, 300) }));
+    out.pulled = plan.behind;
+  }
+  if (plan.ahead) {
+    try { await push(project, plan.branch); out.pushed = plan.ahead; }
+    catch (error) { return { ...out, pushError: oneLine(error.message, 300) }; } // what came in stays; the push is told apart
+  }
+  return out;
 }
 
 export async function createPr(project, { branch, title, body = '', base }) {
