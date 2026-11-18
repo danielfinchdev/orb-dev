@@ -369,8 +369,17 @@ export function ChatView({ route, onConversation, project: inProject }) {
   useOrbInbox();
   const item = useStore((s) => (id == null ? null : (s.orbInbox?.items ?? []).find((x) => x.key === `conversation:${id}`) ?? null));
   const unread = item?.unread ?? 0;
+  // A chat the user marks as unread while it is on screen stays so until a new line arrives: only the moment it opens
+  // or a line that comes after the mark reads it.
+  const openAt = useRef({ id: null, at: 0 });
+  if (openAt.current.id !== id) openAt.current = { id, at: Date.now() };
+  const keep = useRef({ rows: null });
+  const settled = Date.now() - openAt.current.at > 2500;
+  if (!item?.markedUnread) keep.current.rows = null;
+  else if (settled && keep.current.rows == null) keep.current.rows = rows.length;
+  const keptUnread = Boolean(item?.markedUnread) && settled && rows.length <= keep.current.rows;
   useEffect(() => {
-    if (id == null || !unread) return undefined;
+    if (id == null || !unread || keptUnread) return undefined;
     const run = () => { if (document.visibilityState === 'visible') call('inbox.markRead', { kind: 'conversation', id }).then(() => loadOrbInboxSoon(0)).catch(quiet); };
     const timer = setTimeout(run, 350);
     document.addEventListener('visibilitychange', run);

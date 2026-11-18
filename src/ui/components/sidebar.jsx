@@ -99,7 +99,8 @@ function SidebarFooter({ version, is, settingsOpen }) {
 function MusicButtons() {
   const t = useT();
   const [s, setS] = useState(musicState);
-  useEffect(() => onMusic(setS), []);
+  // the engine also reports how far the music has risen, several times a second: the foot only needs what it draws
+  useEffect(() => onMusic((n) => setS((o) => (o.playing === n.playing && o.loading === n.loading && o.error === n.error && o.track === n.track && o.theme === n.theme ? o : n))), []);
   // While it plays, what plays; before, what the player would start (Ajustes › Apariencia).
   const chosen = useStore((st) => musicPrefs(st.app?.config?.ui).mode === 'adaptive');
   const theme = useStore((st) => musicPrefs(st.app?.config?.ui).theme);

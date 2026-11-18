@@ -6,7 +6,8 @@ import { useT } from '@/lib/i18n.js';
 import { cardTop, collapse, gutterFits, magnify, nearestIndex, readingIndex, tickCenter, TICK_PITCH, TICK_REST } from '@/lib/trail.js';
 
 const ARTICLES = 'article.msg-box[data-role]';
-const OPACITY = { rest: 0.2, visible: 0.5, reading: 0.9, hover: 1 };
+const OPACITY = { rest: 0.4, visible: 0.6, reading: 1, hover: 1 };
+const READING_WIDTH = 14; // the tick of the message on screen is longer than the rest
 
 // Text of a message without its header and action row.
 function bodyText(article, max) {
@@ -57,7 +58,8 @@ export function ConversationTrail({ scrollRef }) {
     users.forEach((_, i) => {
       const bar = bars.current[i]; if (!bar) return;
       const inView = rects[i].top < bottom && rects[i].bottom > top;
-      bar.style.width = `${widths ? widths[i] : TICK_REST}px`;
+      bar.style.width = `${widths ? widths[i] : i === reading ? READING_WIDTH : TICK_REST}px`;
+      bar.style.color = i === reading ? 'var(--foreground)' : '';
       bar.style.opacity = i === near ? OPACITY.hover : i === reading ? OPACITY.reading : inView ? OPACITY.visible : OPACITY.rest;
     });
     // Keep the reading tick in view when the rail itself scrolls (long chats).
@@ -142,15 +144,15 @@ export function ConversationTrail({ scrollRef }) {
           <button key={i} type="button" tabIndex={i === 0 ? 0 : -1} aria-label={t('chat.trail.item', { n: i + 1, text: labels[i] ?? '' })}
             onClick={() => jump(i)} onFocus={() => { focused.current = i; show(i); }}
             onBlur={() => { if (hoverY.current === null) { focused.current = -1; setCard(null); } }}
-            className="text-foreground focus-visible:ring-ring/60 flex w-10 items-center rounded-sm outline-none focus-visible:ring-2" style={{ height: TICK_PITCH }}>
-            <span ref={(el) => { bars.current[i] = el; }} className="block h-0.5 rounded-full bg-current" style={{ width: TICK_REST, opacity: OPACITY.rest, transition: 'opacity 80ms' }} />
+            className="text-faint-foreground focus-visible:ring-ring/60 flex w-10 items-center rounded-sm outline-none focus-visible:ring-2" style={{ height: TICK_PITCH }}>
+            <span ref={(el) => { bars.current[i] = el; }} className="block h-0.5 rounded-full bg-current" style={{ width: TICK_REST, opacity: OPACITY.rest }} />
           </button>
         ))}
       </div>
       {card ? (
-        <div ref={cardEl} className="bg-popover text-popover-foreground border-border pointer-events-none absolute left-12 w-max max-w-[380px] rounded-xl border px-3 py-2 text-sm shadow-lg">
+        <div ref={cardEl} data-slot="trail-card" data-testid="chat-trail-card" className="pop bg-popover text-popover-foreground border-border rounded-card pointer-events-none absolute left-12 w-[400px] max-w-[calc(100vw-4rem)] border px-3 py-2 text-control shadow-(--shadow)">
           <p className="truncate font-medium">{card.title}</p>
-          <p className="text-muted-foreground line-clamp-2">{card.reply || t('chat.trail.noReply')}</p>
+          <p className="text-muted-foreground line-clamp-3 break-words">{card.reply || t('chat.trail.noReply')}</p>
         </div>
       ) : null}
     </nav>

@@ -42,11 +42,12 @@ function flatLayer(c) {
 function paintFlat(ctx, s, p, pts) {
   const c = flatColors(p);
   ctx.drawImage(flatLayer(c), 0, 0, SIZE, SIZE);
-  ctx.fillStyle = c.apple; ctx.beginPath(); ctx.arc(centre(s.food[0]), centre(s.food[1]), CELL / 2 - 1, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = c.apple; ctx.beginPath(); ctx.arc(centre(s.food[0]), centre(s.food[1]), CELL / 2 - 0.5, 0, Math.PI * 2); ctx.fill();
+  // the blocks fill their whole cell (no gap between them), the nearest to the mock-up's big blocks the 20 × 20 grid allows.
   // tail first, so the head ends on top; a segment across the wall is drawn where it is
   for (let i = pts.length - 1; i >= 0; i--) {
     ctx.fillStyle = i === 0 ? (s.over ? p.danger : c.head) : c.snake;
-    ctx.beginPath(); ctx.roundRect(pts[i][0] - (CELL - 2) / 2, pts[i][1] - (CELL - 2) / 2, CELL - 2, CELL - 2, 5); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(pts[i][0] - CELL / 2, pts[i][1] - CELL / 2, CELL, CELL, 5); ctx.fill();
   }
   popup(ctx, s, p);
   s.sparks.draw(ctx);

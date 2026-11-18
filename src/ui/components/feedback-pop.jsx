@@ -2,7 +2,7 @@
 // Ajustes › Acerca de (views/settings/about.jsx), so its state and its one call to the engine are in useFeedback.
 import { useState } from 'react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
-import { Camera, ImagePlus, X, Send, CircleCheck, LoaderCircle, WifiOff, CircleAlert, Lock } from 'lucide-react';
+import { AppWindow, Bug, Lightbulb, ImagePlus, X, Send, CircleCheck, LoaderCircle, WifiOff, CircleAlert, Lock } from 'lucide-react';
 import { Popover, PopoverContent } from '@/components/ui/overlay.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Input, Textarea } from '@/components/ui/basic.jsx';
@@ -12,6 +12,8 @@ import { notifyOk, notifyError } from '@/lib/notify.js';
 import { useT } from '@/lib/i18n.js';
 
 export const FEEDBACK_TYPES = ['error', 'idea', 'otro'];
+// the mock-up's type buttons: a bug and a light bulb; «Otro» has no mark
+const TYPE_ICON = { error: Bug, idea: Lightbulb };
 const MAX_IMAGES = 3;
 
 // The form's state. status: idle | sending | error | sent. With `toasts` the result is also announced as a passing
@@ -62,7 +64,7 @@ export function FeedbackPop({ children }) {
     <Popover open={open} onOpenChange={onOpenChange}>
       {children}
       <PopoverPrimitive.Anchor asChild><span className="foot-anchor" aria-hidden="true" /></PopoverPrimitive.Anchor>
-      <PopoverContent side="top" align="start" alignOffset={8} offset={8} className="foot-pop fb-pop" aria-label={t('nav.feedback')} data-testid="feedback-pop">
+      <PopoverContent side="top" align="start" alignOffset={8} offset={6} collisionPadding={8} className="foot-pop fb-pop" aria-label={t('nav.feedback')} data-testid="feedback-pop">
         <div className="fb-h"><b>{t('contribute.feedbackTitle')}</b><span>{t('contribute.feedbackDesc')}</span></div>
         {status === 'sent' ? (
           <div className="fb-ok" data-testid="feedback-sent" role="status">
@@ -74,7 +76,7 @@ export function FeedbackPop({ children }) {
           <>
             <div className="fb-form">
               <Segmented className="fb-type" aria-label={t('contribute.type')} value={v.type} onChange={(type) => setV({ ...v, type })}
-                options={FEEDBACK_TYPES.map((value) => ({ value, label: t(`contribute.type.${value}`) }))} />
+                options={FEEDBACK_TYPES.map((value) => { const Icon = TYPE_ICON[value]; return { value, label: <>{Icon ? <Icon className="size-3.5" /> : null}{t(`contribute.type.${value}`)}</> }; })} />
               <Textarea className="fb-msg" rows={5} maxLength={5000} value={v.message} placeholder={t('contribute.messagePh')} aria-label={t('contribute.message')}
                 onChange={(e) => setV({ ...v, message: e.target.value })} data-testid="feedback-pop-message" />
               {images.length ? (
@@ -88,7 +90,7 @@ export function FeedbackPop({ children }) {
                 </div>
               ) : null}
               <div className="fb-att">
-                <Button variant="ghost" size="xs" disabled={!room} onClick={f.addCapture} data-testid="feedback-pop-capture"><Camera />{t('contribute.capture')}</Button>
+                <Button variant="ghost" size="xs" disabled={!room} onClick={f.addCapture} data-testid="feedback-pop-capture"><AppWindow />{t('contribute.capture')}</Button>
                 <Button variant="ghost" size="xs" disabled={!room} onClick={f.addImages}><ImagePlus />{t('contribute.addImage')}</Button>
                 <span className="fb-n">{images.length ? t('feedback.imagesCount', { n: images.length }) : t('contribute.imagesLimit')}</span>
               </div>

@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import { BookOpen, Copy, FolderCheck, Plug, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
-import { Spinner } from '@/components/ui/basic.jsx';
+import { Badge, Spinner } from '@/components/ui/basic.jsx';
 import { Select } from '@/components/ui/overlay.jsx';
 import { Segmented, ListCard } from '@/components/ui/primitives.jsx';
 import { WizardPage, WizardCard, WizardFoot, WizardText, WizardTitle, StartMark } from '@/components/wizard.jsx';
@@ -35,8 +35,9 @@ export function LayoutReview({ plan, onDone, step = null }) {
     catch (e) { setError(String(e?.message ?? e)); }
     finally { setBusy(false); }
   };
-  const kick = step ? t('setup.kick', { n: 3 }) : null;
-  if (moved) return <Moved logs={moved.logs} servers={moved.servers} onDone={onDone} step={step} kick={kick} />;
+  // the label over the title says when this step shows (the mock-up's kicker)
+  const kick = step ? `${t('setup.kick', { n: 3 })} · ${t('layout.kickReview')}` : null;
+  if (moved) return <Moved logs={moved.logs} servers={moved.servers} onDone={onDone} step={step} kick={step ? `${t('setup.kick', { n: 3 })} · ${t('layout.kickMoved')}` : null} />;
   const toCore = items.some((it) => ['move', 'mcp'].includes(choices[it.id]));
   return (
     <WizardPage step={step} data-testid="layout-review">
@@ -52,7 +53,7 @@ export function LayoutReview({ plan, onDone, step = null }) {
               <div key={it.id} className="border-border flex min-w-0 flex-wrap items-start gap-3 px-3.5 py-3 not-first:border-t" data-testid={`layout-item-${it.id}`}>
                 <Icon className="text-muted-foreground mt-0.5 size-4 flex-none" aria-hidden="true" />
                 <div className="min-w-0 flex-1">
-                  <div className="text-control leading-[1.45] font-medium">{t(layoutTitle(it))}</div>
+                  <div className="text-control leading-[1.45] font-medium">{t(layoutTitle(it))}{it.kind === 'logs' ? <Badge variant="success" className="ml-2 align-middle" data-testid="layout-logs-recommended">{t('layout.recommended')}</Badge> : null}</div>
                   <div className="text-muted-foreground mt-0.5 text-caption leading-[1.45]">
                     <code className="font-mono break-all">{it.name}</code>
                     {it.project ? <> · {t('layout.mcpProject')}</> : null}

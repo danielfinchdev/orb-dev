@@ -7,16 +7,20 @@ import { X } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { Button } from './ui/button.jsx';
 import { BubbleTip } from './ui/overlay.jsx';
-import { bridge, go, useStore, robotSkin } from '@/lib/store.js';
+import { bridge, go, useStore, getState, robotSkin } from '@/lib/store.js';
+import { needsApproval } from '@/lib/task-approval.js';
 import { useT } from '@/lib/i18n.js';
 import { play } from '@/lib/sounds.js';
 import { chatMood } from '@/lib/chat-mood.js';
 import { noticeOf } from './notices.jsx';
 import { cn } from '@/lib/utils.js';
 
-// Where it rests (px from the window's right and bottom edges; the drawn robot is narrower than its box) and how close
-// to the window's edges it may be dropped (the top one leaves the window's own buttons free).
-const REST_RIGHT = 9, REST_BOTTOM = 96, EDGE = 8, TOP_EDGE = 60;
+// Where it rests (px from the window's right and bottom edges; the 72 px box leaves room for a bubble on its right) and
+// how close to the window's edges it may be dropped (the top one leaves the window's own buttons free).
+const REST_RIGHT = 246, REST_BOTTOM = 96, EDGE = 8, TOP_EDGE = 60;
+const BOX = 72, BUBBLE_W = 220, GREETING_MS = 5200;
+// the greeting says hello once per start of the app, not at every view change
+let greeted = false;
 // Pointer travel (px) that turns a press into a drag: a shorter one is a click and keeps opening the chat.
 const DRAG_THRESHOLD = 5;
 const POS_KEY = 'orb.companion.offset';
@@ -36,6 +40,7 @@ export function Companion({ name, base, hidden: hiddenHere }) {
   const hidden = !robotSkin(useStore((s) => s.app?.config?.ui?.skin)) || hiddenHere;
   const [bubble, setBubble] = useState(null);
   const [flash, setFlash] = useState(null);
+  const [waving, setWaving] = useState(false);
   const [sleepy, setSleepy] = useState(false);
   // the bubble opens towards the middle of the window
   const [side, setSide] = useState('left');
@@ -65,12 +70,25 @@ export function Companion({ name, base, hidden: hiddenHere }) {
     return () => { window.removeEventListener('mousemove', wake); window.removeEventListener('keydown', wake); clearTimeout(timers.current.sleep); };
   }, []);
   const shown = !hidden && !noticeShown;
+  // Hello on arrival, with the real name and the real count of tasks that wait for the user (the bubble text is shown
+  // whatever the motion setting says; only its animation is switched off in CSS).
+  useEffect(() => {
+    if (!shown || greeted) return;
+    greeted = true;
+    const { app, tasks } = getState();
+    const user = app?.config?.userName?.trim() || '';
+    const n = (tasks ?? []).filter(needsApproval).length;
+    const key = n ? `comp.companion.hello${user ? 'Ask' : 'AskAnon'}.${n === 1 ? 'one' : 'many'}` : user ? 'comp.companion.hello' : 'comp.companion.helloAnon';
+    setBubble({ text: t(key, { user, n }), action: null }); setWaving(true);
+    clearTimeout(timers.current.bubble); timers.current.bubble = setTimeout(() => { setBubble(null); setWaving(false); }, GREETING_MS);
+  }, [shown]); // eslint-disable-line react-hooks/exhaustive-deps
   // One transform per frame and no React render while it moves; React only hears of where it ended.
   const place = (o) => { offset.current = o; if (box.current) box.current.style.transform = `translate3d(${o.x}px, ${o.y}px, 0)`; };
   const settle = () => {
     const el = box.current; if (!el) return;
     place(clampOffset(el, offset.current));
-    setSide(el.getBoundingClientRect().left + el.offsetWidth / 2 < window.innerWidth / 2 ? 'right' : 'left');
+    // the bubble goes where it fits inside the window: to the right unless the robot is too close to that edge
+    setSide(el.getBoundingClientRect().right + 8 + BUBBLE_W <= window.innerWidth - EDGE ? 'right' : 'left');
   };
   useLayoutEffect(() => {
     if (!shown) return undefined;
@@ -105,22 +123,22 @@ export function Companion({ name, base, hidden: hiddenHere }) {
   // back to the resting spot: right click, or Home while it has the focus
   const rest = () => { place({ x: 0, y: 0 }); saveOffset({ x: 0, y: 0 }); settle(); };
   if (!shown) return null;
-  const mood = flash ?? (base === 'idle' && sleepy ? 'sleeping' : base);
+  const mood = flash ?? (waving ? 'hello' : base === 'idle' && sleepy ? 'sleeping' : base);
   return (
     <div ref={box} className="companion fixed z-40 [&[data-dragging]_button]:cursor-grabbing" style={{ right: REST_RIGHT, bottom: REST_BOTTOM }} data-testid="companion" data-shown="true">
       {bubble ? (
-        <div className={cn('bg-popover text-popover-foreground animate-in fade-in-0 slide-in-from-bottom-2 absolute bottom-2 w-max max-w-[220px] rounded-[var(--r-card)] border px-3 py-2.5 pr-8 text-[13px] shadow-lg', side === 'left' ? 'right-full mr-2 rounded-br-[4px]' : 'left-full ml-2 rounded-bl-[4px]')}>
+        <div className={cn('bg-popover text-popover-foreground animate-in fade-in-0 slide-in-from-bottom-2 [html[data-motion=minima]_&]:animate-none motion-reduce:animate-none absolute bottom-2 w-max max-w-[min(220px,calc(100vw-16px))] rounded-[var(--r-card)] border px-3 py-2.5 pr-8 text-[13px] shadow-lg', side === 'left' ? 'right-full mr-2 rounded-br-[4px]' : 'left-full ml-2 rounded-bl-[4px]')}>
           <button className="text-muted-foreground hover:text-foreground absolute top-2 right-2 cursor-pointer" onClick={() => setBubble(null)} aria-label={t('comp.close')}><X className="size-3.5" /></button>
           <p className="whitespace-pre-wrap break-words">{bubble.text.slice(0, 280)}</p>
           {bubble.action ? <Button size="xs" className="mt-2" onClick={() => { bubble.action.run(); setBubble(null); }}>{bubble.action.label}</Button> : null}
         </div>
       ) : null}
       <BubbleTip title={t('comp.companion.talkTo', { name })} side="top">
-        <button className="cursor-grab touch-none drop-shadow-lg" aria-label={t('comp.companion.talkTo', { name })}
+        <button className="grid size-[72px] cursor-grab touch-none place-items-center drop-shadow-lg" aria-label={t('comp.companion.talkTo', { name })}
           onPointerDown={press} onPointerMove={dragTo} onPointerUp={drop} onPointerCancel={drop} onContextMenu={(e) => { e.preventDefault(); rest(); }}
           onKeyDown={(e) => { moved.current = false; if (e.key === 'Home') rest(); }}
           onClick={() => { if (moved.current) { moved.current = false; return; } go('chat'); }}>
-          <Robot size={90} mood={mood} title={name} live active />
+          <Robot size={56} mood={mood} title={name} live active />
         </button>
       </BubbleTip>
     </div>

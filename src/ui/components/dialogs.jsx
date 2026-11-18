@@ -30,7 +30,8 @@ export const confirm = (title, description, { ok = t('comp.dialogs.ok'), cancel 
 // cancel: false when one of the answers already is «leave it as it is».
 export const choose = (title, description, options, { testid, cancel = true } = {}) => open({ kind: 'choice', title, description, options, testid, cancel });
 // body: (values, set) => JSX; onOk(values) may throw (shown under the fields, the dialog stays open) or return the result.
-export const form = (title, { description, initial = {}, body, ok = t('comp.dialogs.ok'), onOk, wide = false }) => open({ kind: 'form', title, description, initial, body, ok, onOk, wide });
+// okDisabled(values): the accept button stays off while it is true (a help for the eye: onOk still checks); okDanger draws it red.
+export const form = (title, { description, initial = {}, body, ok = t('comp.dialogs.ok'), onOk, wide = false, okDisabled = null, okDanger = false }) => open({ kind: 'form', title, description, initial, body, ok, onOk, wide, okDisabled, okDanger });
 
 function FormDialog({ d }) {
   const [values, setValues] = useState(d.initial);
@@ -50,7 +51,7 @@ function FormDialog({ d }) {
     <form onSubmit={submit} className="flex max-h-[inherit] min-h-0 flex-col">
       <DialogHeader className="flex-none"><DialogTitle>{d.title}</DialogTitle>{d.description ? <DialogDescription>{d.description}</DialogDescription> : null}</DialogHeader>
       <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-[18px]">{d.body(values, set)}<FieldError>{error}</FieldError></div>
-      <DialogFooter className="flex-none"><Button type="button" variant="outline" onClick={() => close(d.id, null)}>{t('comp.dialogs.cancel')}</Button><Button type="submit" disabled={busy} aria-busy={busy}>{busy ? <LoaderCircle className="animate-spin" /> : null}{d.ok}</Button></DialogFooter>
+      <DialogFooter className="flex-none"><Button type="button" variant="outline" onClick={() => close(d.id, null)}>{t('comp.dialogs.cancel')}</Button><Button type="submit" variant={d.okDanger ? 'destructive' : undefined} disabled={busy || Boolean(d.okDisabled?.(values))} aria-busy={busy}>{busy ? <LoaderCircle className="animate-spin" /> : null}{d.ok}</Button></DialogFooter>
     </form>
   );
 }

@@ -6,8 +6,8 @@
 // the mark of who answers in its corner (OrbAvatar), the title, the time, its latest progress (a running task,
 // «Esperando tu aprobación», how its last task ended, else its last line) and the unread count. Right click or ⋯ (PC) and
 // a long press (phone) open the chat's menu: info, pin, mute, mark read, complete or reopen, delete.
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { PanelTop, Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ClipboardCheck, FolderGit2, CalendarSync, Presentation, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, PencilLine, AlarmClock, AlarmClockOff, Hand, ArrowUpDown, ChevronDown, LoaderCircle, GitBranch, GitPullRequest } from 'lucide-react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { PanelTop, Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ClipboardCheck, FolderGit2, CalendarSync, Presentation, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, PencilLine, AlarmClock, AlarmClockOff, Hand, ArrowUpDown, ChevronDown, LoaderCircle, GitBranch, GitPullRequest, CircleDot } from 'lucide-react';
 import { openPanel } from '@/lib/open-changes.js';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
@@ -19,7 +19,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Input } from '@/components/ui/basic.jsx';
 import { useSearch } from '@/lib/search.js';
-import { useStore, go, call, act, newChat, orbAct, loadOrbInbox, openOrbInfo, closeOrbInfo, getState, phoneLayout, fullPc, refreshSoon, setState, robotSkin } from '@/lib/store.js';
+import { useStore, go, call, act, newChat, orbAct, loadOrbInbox, loadOrbInboxSoon, openOrbInfo, closeOrbInfo, getState, phoneLayout, fullPc, refreshSoon, setState, robotSkin } from '@/lib/store.js';
 import { orbItems, orbProgress, groupOrb, shortTime, avatarStack, snoozeTimes, priorityKeys, nextNeedingYou } from '@/lib/inbox.js';
 import { useShortcut, useKeys } from '@/lib/keys.js';
 import { actTabs } from '@/lib/tabs.js';
@@ -30,6 +30,7 @@ import { useDay } from '@/lib/use-day.js';
 import { usePress } from '@/lib/use-press.js';
 import { AGENT } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
+import { quiet } from '@/lib/quiet.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { needsApproval } from '@/lib/task-approval.js';
 import { TaskStatus } from '@/components/task-state.jsx';
@@ -41,6 +42,22 @@ export function useOrbInbox() {
   const version = useStore((s) => s.version);
   useEffect(() => { loadOrbInbox(); }, [version]);
   return inbox;
+}
+// A direct chat with an agent has no lines to count: opening one that was left as unread by hand reads it. Marking the
+// chat that is already on screen as unread (its row's menu) leaves it so: only the first moments after the list has
+// loaded count as «opening», and nothing is read while the window is hidden.
+export function useReadOnOpen(id) {
+  useOrbInbox();
+  const loaded = useStore((s) => Boolean(s.orbInbox) && !s.orbInbox.fallback);
+  const unread = useStore((s) => (id == null ? 0 : (s.orbInbox?.items ?? []).find((x) => x.key === `session:${id}`)?.unread ?? 0));
+  const open = useRef({ id: null, at: null });
+  if (open.current.id !== id) open.current = { id, at: null };
+  if (loaded && open.current.at == null) open.current.at = Date.now();
+  useEffect(() => {
+    if (id == null || !unread || document.visibilityState !== 'visible') return;
+    if (open.current.at == null || Date.now() - open.current.at > 2500) return;
+    call('inbox.markRead', { kind: 'session', id }).then(() => loadOrbInboxSoon(0)).catch(quiet);
+  }, [id, unread, loaded]);
 }
 export function useOrbItems() {
   const inbox = useOrbInbox();
@@ -119,8 +136,11 @@ function actionList(item, t, row = false) {
   const info = { id: 'info', icon: Info, label: row ? t('orbchats.rowInfo') : t('orbchats.info'), run: () => { openOrbItem(item); if (item.kind === 'session') openPanel(item.id, 'info'); else openOrbInfo({ type: 'chat' }); } };
   const pin = item.pinned ? { id: 'unpin', icon: PinOff, label: t('chats.unpin'), run: () => orbAct('inbox.unpin', ref) } : { id: 'pin', icon: Pin, label: row ? t('orbchats.rowPin') : t('chats.pin'), run: () => orbAct('inbox.pin', ref) };
   const mute = item.muted ? { id: 'unmute', icon: Bell, label: t('chats.unmute'), run: () => orbAct('inbox.mute', { ...ref, muted: false }) } : { id: 'mute', icon: BellOff, label: t('chats.mute'), run: () => orbAct('inbox.mute', { ...ref, muted: true }) };
-  // the row's menu always lists it (the mock-up's nine entries): disabled while there is nothing unread; Orb has no «mark as unread»
-  const read = item.unread || row ? [{ id: 'read', icon: CheckCheck, label: t('chats.markRead'), disabled: !item.unread, run: () => orbAct('inbox.markRead', ref) }] : [];
+  // One entry that turns into its pair: «Marcar como leído» while something is unread, else «Marcar como no leído»
+  // (the row's menu always lists it: the mock-up's nine entries; the phone-sized list only offers it when it can read).
+  const read = item.unread
+    ? [{ id: 'read', icon: CheckCheck, label: t('chats.markRead'), run: () => orbAct('inbox.markRead', ref) }]
+    : row ? [{ id: 'unread', icon: CircleDot, label: t('chats.markUnread'), run: () => orbAct('inbox.markUnread', ref) }] : [];
   const done = (method, args) => (item.done
     ? { id: 'reopen', icon: Undo2, label: t('orbchats.reopen'), run: () => act(call(method, { ...args, done: false })).then(refreshSoon) }
     : { id: 'complete', icon: CircleCheck, label: row ? t('orbchats.rowComplete') : t('orbchats.complete'), run: () => act(call(method, { ...args, done: true })).then(refreshSoon) });

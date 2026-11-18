@@ -45,7 +45,7 @@ export function MusicPlayer({ next, children }) {
     <Popover>
       {children}
       <PopoverPrimitive.Anchor asChild><span className="foot-anchor" aria-hidden="true" /></PopoverPrimitive.Anchor>
-      <PopoverContent side="top" align="start" alignOffset={8} offset={8} className="foot-pop music-pop" aria-label={t('nav.music')} data-testid="music-pop" data-music-button="">
+      <PopoverContent side="top" align="start" alignOffset={8} offset={6} collisionPadding={8} className="foot-pop music-pop" aria-label={t('nav.music')} data-testid="music-pop" data-music-button="">
         <div className="mp-now">
           <span className="mp-art"><AudioLines /></span>
           <span className="mp-t">
@@ -65,7 +65,8 @@ export function MusicPlayer({ next, children }) {
           <span className="mp-lab"><b>{t('player.manual')}</b><span>{t('player.manualHint')}</span></span>
           <Switch checked={manual} onCheckedChange={(on) => setMusicReactive(!on)} aria-label={t('player.manual')} data-testid="music-pop-manual" />
         </div>
-        <Slider icon={Activity} label={t('player.adaptation')} saved={prefs.intensity} disabled={!manual} testid="music-pop-intensity"
+        {/* with «Manual» off the slider shows how far the music has risen by itself (the engine's own figure, while it plays) */}
+        <Slider icon={Activity} label={t('player.adaptation')} saved={!manual && s.intensity != null ? s.intensity : prefs.intensity} disabled={!manual} testid="music-pop-intensity"
           onLive={(n) => setMusicIntensity(n)} onKeep={(n) => setMusicIntensity(n, { save: true })} />
         <Slider icon={Volume2} label={t('player.volume')} saved={prefs.volume} testid="music-pop-volume"
           onLive={(n) => setMusicVolume(n)} onKeep={(n) => setMusicVolume(n, { save: true })} />

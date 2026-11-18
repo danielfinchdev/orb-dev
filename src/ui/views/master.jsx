@@ -178,12 +178,17 @@ export function MasterLocked({ onDone, state = null }) {
   };
   const forgot = async () => { if (await forgotFlow({ canForget: Boolean(state?.canForget) })) onDone?.(); };
   // Nothing of the app is drawn while it is locked: behind the veil there is only the theme's own backdrop, blurred.
+  // The veil and the card are siblings of the backdrop (not inside it) so the window's own buttons, which stay usable
+  // (the pointer goes through the veil), sit under the veil as in the mock-up: app.css lowers them while this card is shown.
   return (
-    <div className="relative isolate h-full">
-      <Scene />
-      <main className="theme-scene h-full">
-        <div className="flex h-full overflow-auto bg-black/32 p-6 backdrop-blur-[10px]">
-          <form onSubmit={submit} data-slot="dialog-content" className="dialog bg-background text-foreground rounded-card border-border m-auto grid w-full max-w-[440px] gap-3 border p-[18px]" data-testid="master-locked" data-screen={screen ? '1' : undefined}>
+    <>
+      <div className="relative isolate h-full">
+        <Scene />
+        <main className="theme-scene h-full" aria-hidden="true" />
+      </div>
+      <div className="pointer-events-none fixed inset-0 z-[46] bg-black/32 backdrop-blur-[10px]" aria-hidden="true" />
+      <div className="pointer-events-none fixed inset-0 z-[47] flex overflow-auto p-6">
+        <form onSubmit={submit} data-slot="dialog-content" className="dialog bg-background text-foreground rounded-card border-border pointer-events-auto m-auto grid w-full max-w-[440px] gap-3 border p-[18px]" data-testid="master-locked" data-screen={screen ? '1' : undefined}>
             <div className="flex items-center gap-4">
               <LockMark busy={busy} lost={lost} />
               <div className="min-w-0">
@@ -206,9 +211,8 @@ export function MasterLocked({ onDone, state = null }) {
             {screen ? <LockStatus /> : null}
             {screen ? <p className="text-muted-foreground text-xs leading-snug" data-testid="master-screen-note">{t('master.screenNote')}</p> : null}
           </form>
-        </div>
-      </main>
-    </div>
+      </div>
+    </>
   );
 }
 

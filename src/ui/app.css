@@ -345,8 +345,9 @@ html[data-skin="retro"] .notice-dot { border-radius: 0; }
 .sidebar-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: col-resize; z-index: 5; -webkit-app-region: no-drag; app-region: no-drag; }
 .sidebar-resize::after { content: ""; position: absolute; inset: 0 2px; border-radius: 2px; background: var(--primary); opacity: 0; transition: opacity 0.15s; }
 .sidebar-resize:hover::after, .sidebar-resize[data-dragging]::after { opacity: 0.45; }
-/* The rail of ticks at the transcript's left edge (trail.jsx) draws nothing at rest, like the mock-up; hovering or focusing it brings it back. */
-[data-testid="chat-trail"]:not(:hover):not(:focus-within) span.block { opacity: 0 !important; }
+/* The preview card of the transcript's rail (trail.jsx) is a frosted pane like the menus on the glass skin. */
+html[data-skin="cristal"] [data-slot="trail-card"] { background-color: var(--g-fill-strong); background-image: linear-gradient(170deg, oklch(1 0 0 / 0.86), oklch(1 0 0 / 0.68)); backdrop-filter: blur(28px) saturate(1.8); border-color: var(--g-line); }
+html[data-skin="retro"] [data-slot="trail-card"] { box-shadow: none; border-color: var(--input); }
 
 /* the chat's right panel (components/chat-panel.jsx): it slides in and fades with transform and opacity only; its edge is
    dragged between 320 and 640 px. The window's buttons live in its tab strip while it is open (the chat's bar gives
@@ -375,6 +376,8 @@ html.has-win-controls { --wco-inset: 7.5rem; }
 /* inside a header (window-controls.jsx): the header's own right edge, as tall as it is; the slot only marks the spot */
 .win-slot { display: contents; }
 .win-controls.in-bar { position: absolute; z-index: 5; }
+/* the lock card (views/master.jsx) draws a veil at z 46 over the whole window: the buttons stay clickable (the veil lets the pointer through) but go under it, as in the mock-up */
+html:has([data-testid="master-locked"]) .win-controls { z-index: 45; }
 .win-control { display: grid; place-items: center; width: var(--ctl); height: var(--ctl); border-radius: var(--r-ctl); color: var(--muted-foreground); cursor: pointer; transition: background-color 0.15s, color 0.15s, transform 0.1s; }
 .win-control svg { width: 16px; height: 16px; stroke-width: 1.75; }
 .win-control:hover { background-color: var(--accent); color: var(--foreground); }
@@ -581,3 +584,7 @@ html[data-motion="minima"] .context-slot-item { animation-name: slot-fade; }
 .fb-f { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--border); }
 .fb-priv { flex: 1; display: flex; align-items: flex-start; gap: 6px; font-size: 11px; color: var(--faint-foreground); }
 .fb-priv svg { width: 14px; height: 14px; margin-top: 1px; }
+
+/* the patch's added and removed lines wear the mock-up's soft green and red (the shared .dl.a / .dl.r of the design) */
+.diff[data-testid="patch-view"] .code-add { background: color-mix(in oklab, var(--success) 12%, transparent); }
+.diff[data-testid="patch-view"] .code-del { background: color-mix(in oklab, var(--destructive) 10%, transparent); }

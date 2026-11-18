@@ -21,6 +21,7 @@ export default {
   'chats.mute': 'Mute',
   'chats.unmute': 'Unmute',
   'chats.markRead': 'Mark as read',
+  'chats.markUnread': 'Mark as unread',
   // Conversation
   'chats.backToList': 'Back to chats',
   'chats.openInfo': '{name} info',

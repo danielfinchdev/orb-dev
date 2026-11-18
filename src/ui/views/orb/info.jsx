@@ -8,7 +8,7 @@
 // A project: its initials or icon, name and folder, «Nuevo chat aquí»; Chats, Tareas, Programadas, Pizarra, Bitácora,
 // Compartir (with two or more users), Ajustes del proyecto (Proyectos) and, on the PC with God mode on, «Abrir en God mode».
 import { useEffect, useState } from 'react';
-import { Folder, FolderGit2, GitBranch, PencilLine, ChevronRight, Sparkles, Bell, ClipboardCheck, Shrink, Download, Pin, PinOff, CircleCheck, Undo2, Trash2, Pencil, MessageSquarePlus, MessagesSquare, CalendarSync, Presentation, NotebookPen, Settings2, SquareTerminal } from 'lucide-react';
+import { Plus, Folder, FolderGit2, GitBranch, PencilLine, ChevronRight, Sparkles, Bell, ClipboardCheck, Shrink, Download, Pin, PinOff, CircleCheck, Undo2, Trash2, Pencil, MessageSquarePlus, MessagesSquare, CalendarSync, Presentation, NotebookPen, Settings2, SquareTerminal } from 'lucide-react';
 import { BrainIcon } from '@/components/brain-icon.jsx';
 import { OrchestratorIcon } from '@/components/orchestrator-icon.jsx';
 import { Robot } from '@/components/robot.jsx';
@@ -17,6 +17,7 @@ import { ProjectPicker } from '@/components/project-actions.jsx';
 import { BrainPicker, ReasoningMenu, useCatalog } from '@/components/brain-picker.jsx';
 import { form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
+import { askNewTask } from '@/components/new-task.jsx';
 import { Input, Spinner } from '@/components/ui/basic.jsx';
 import { Switch, BubbleTip } from '@/components/ui/overlay.jsx';
 import { IconButton } from '@/components/ui/primitives.jsx';
@@ -188,7 +189,7 @@ export function SessionInfo({ session: s, line, onRename, task }) {
   const t = useT();
   const locale = useLocale();
   const item = useOrbItems().find((x) => x.key === `session:${s.id}`) ?? null;
-  const tasks = useStore((st) => st.tasks.filter((x) => String(x.session_id) === String(s.id) && x.id !== task?.id));
+  const tasks = useStore((st) => st.tasks.filter((x) => (String(x.session_id) === String(s.id) || String(x.origin_session) === String(s.id)) && x.id !== task?.id));
   const [info, setInfo] = useState(null);
   const [tree, setTree] = useState(null); // the chat's own worktree (branch it works on), when it has one
   const [entry, setEntry] = useState(null);
@@ -248,6 +249,12 @@ export function SessionInfo({ session: s, line, onRename, task }) {
             ))}
             {mine.length > 8 ? <button type="button" onClick={() => go({ view: 'tasks', project: s.project ?? undefined })} className="text-info w-fit cursor-pointer text-control hover:underline">{t('comp.sidebar.viewAll', { n: mine.length })}</button> : null}
           </div>
+        </>) : null}
+      {/* the user hands a task to this chat's project from here: the chat is kept on it as its origin (a label only). */}
+      {s.project ? (
+        <>
+          {mine.length ? null : <div className="mt-[18px] mb-1.5 font-(family-name:--title) text-[15px] font-semibold">{t('panel.info.tasks')}</div>}
+          <Button size="sm" variant="outline" className="mt-2 w-fit" onClick={() => askNewTask(t, [s.project], s.project, String(s.id))} data-testid="info-new-task"><Plus />{t('projects.tasks.new')}</Button>
         </>) : null}
       {s.project ? (
         <>

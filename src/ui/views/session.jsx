@@ -9,7 +9,7 @@ import { TypingMarkdown, TypedMarkdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
-import { renameChat } from '@/views/orb/inbox.jsx';
+import { renameChat, useReadOnOpen } from '@/views/orb/inbox.jsx';
 import { useDraft } from '@/lib/draft.js';
 import { useAddToChat, appendToBox } from '@/lib/add-to-chat.js';
 import { BackToList } from '@/components/chat-bar.jsx';
@@ -349,6 +349,7 @@ export function SessionView({ route }) {
   const app = useStore((s) => s.app);
   const [archived, setArchived] = useState(null);
   const s = sessions.find((x) => x.id === route.id) ?? archived;
+  useReadOnOpen(route.id);
   const [items, setItems] = useState([]);
   const [more, setMore] = useState(false);
   const [queue, setQueue] = useState([]);

@@ -552,7 +552,7 @@ function StartPreview({ name }) {
   return (
     <>
       <div className="bg-foreground text-background fixed top-0 left-1/2 z-[60] -translate-x-1/2 rounded-b-md px-2 py-0.5 text-micro" data-testid="start-preview-tag">Vista previa — datos de ejemplo</div>
-      <div inert className="h-full" data-testid="start-preview" data-preview={name}>
+      <div inert className="flex h-full flex-col" data-testid="start-preview" data-preview={name}>
         {data.card === 'core' ? <Suspense fallback={null}><CoreMissing state={data.state} /></Suspense>
           : data.card === 'migration' ? <MigrationFailed state={data.state} preview={{ update: data.update }} />
             : data.card === 'error' ? <StartError error={data.error} startError={data.startError} onRelink={() => {}} />
@@ -597,7 +597,7 @@ function MigrationFailed({ state, preview = null }) {
       details={<StartDetails>{t('data.migration38.reason', { reason: s.reason })}</StartDetails>}>
       <p className={startText}>{t(v.body)}</p>
       {u?.percent != null ? null : <p className={startText} role="alert">{t('data.migration38.help')}</p>}
-      <StartPath icon={Folder}>{s.backup ? t('data.migration38.backup', { path: s.backup }) : t('data.migration38.noBackup', { path: s.data })}</StartPath>
+      <StartPath icon={Folder} text={t(s.backup ? 'data.migration38.backup' : 'data.migration38.noBackup', { path: '{path}' })} path={s.backup ?? s.data} />
       {u?.percent != null ? <><StartProgress percent={u.percent} /><p className={startText}>{t('update.downloading', { percent: u.percent })}</p></> : null}
       {u?.none ? <p className={startText}>{t('data.migration38.noUpdate')}</p> : null}
     </StartNotice>
@@ -611,15 +611,23 @@ function MigrationFailed({ state, preview = null }) {
 // open any more: the word EMPEZAR must be typed.
 async function askNewSecret(startError) {
   // not a component: the module's own translator (there is no `t` in scope here)
-  const lines = [tNow('app.newSecretIntro'), startError?.master ? tNow('app.newSecretMaster') : startError?.vault ? tNow('app.newSecretVault') : null, startError?.recovery ? tNow('app.newSecretRecovery') : tNow('app.newSecretNoRecovery'), tNow('app.newSecretBack')].filter(Boolean).join('\n\n');
-  if (startError?.recovery) return confirm(tNow('app.newSecretTitle'), lines, { ok: tNow('app.newSecretOk'), danger: true });
+  const paragraphs = [tNow('app.newSecretIntro'), startError?.master ? tNow('app.newSecretMaster') : startError?.vault ? tNow('app.newSecretVault') : null, startError?.recovery ? tNow('app.newSecretRecovery') : tNow('app.newSecretNoRecovery'), tNow('app.newSecretBack')].filter(Boolean);
+  if (startError?.recovery) return confirm(tNow('app.newSecretTitle'), paragraphs.join('\n\n'), { ok: tNow('app.newSecretOk'), danger: true });
   const word = tNow('app.newSecretWord');
+  const typed = (v) => v.word.trim().toUpperCase() === word.toUpperCase();
   return Boolean(await form(tNow('app.newSecretTitle'), {
-    description: lines,
     initial: { word: '' },
-    body: (v, set) => <Field label={tNow('app.newSecretType', { word })}><Input autoComplete="off" value={v.word} onChange={(e) => set({ word: e.target.value })} data-testid="new-secret-word" /></Field>,
+    body: (v, set) => (
+      <>
+        <div className="grid gap-2">{paragraphs.map((p) => <p key={p} className="text-muted-foreground m-0 text-control leading-[1.45]">{p}</p>)}</div>
+        <Field label={tNow('app.newSecretType', { word })}><Input autoComplete="off" placeholder={word} value={v.word} onChange={(e) => set({ word: e.target.value })} data-testid="new-secret-word" /></Field>
+      </>
+    ),
     ok: tNow('app.newSecretOk'),
-    onOk: (v) => { if (v.word.trim().toUpperCase() !== word.toUpperCase()) throw new Error(tNow('app.newSecretWrong', { word })); return true; }
+    okDanger: true,
+    // the button waits for the word; onOk below still checks it, whatever the button says
+    okDisabled: (v) => !typed(v),
+    onOk: (v) => { if (!typed(v)) throw new Error(tNow('app.newSecretWrong', { word })); return true; }
   }));
 }
 

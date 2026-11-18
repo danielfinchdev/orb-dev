@@ -44,8 +44,10 @@ export function CoreMissing({ state }) {
       {v.restore ? <Button disabled={busy || !code.trim()} onClick={() => repair({ passphrase: code })} data-testid="core-restore">{busy ? <Spinner className="border-primary-foreground/40 border-t-primary-foreground" /> : null}{t('data.core.restore')}</Button> : null}
     </>
   );
+  // four buttons in one row, as the mock-up draws them, need more than the usual 520 px in Orb's own font
+  const fourButtons = [!offerFresh && v.fresh === 'noCode', v.folder && bridge.openPath, bridge.pickFiles, offerFresh, v.restore].filter(Boolean).length >= 4;
   return (
-    <StartNotice testid="core-missing" icon={FolderX} mood={busy ? 'thinking' : 'worried'} title={t('data.core.title')} footer={footer}
+    <StartNotice testid="core-missing" width={fourButtons ? 'w-[600px]' : undefined} icon={FolderX} mood={busy ? 'thinking' : 'worried'} title={t('data.core.title')} footer={footer}
       details={s.error ? <StartDetails>{s.error}</StartDetails> : null}>
       <p className={startText} role="alert">{t(v.body, v.vars)}</p>
       {v.passphrase ? <Input type="password" autoComplete="off" placeholder={t('data.core.code')} aria-label={t('data.core.code')} value={code} onChange={(e) => setCode(e.target.value)} data-testid="core-code" /> : null}
