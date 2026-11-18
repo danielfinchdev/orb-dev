@@ -77,6 +77,8 @@ async function open(userData, env = {}) {
 const shooter = (page) => async (name) => {
   if (SERVE) return;
   await page.waitForTimeout(500);
+  // a scrollbar thumb is drawn for a moment after anything scrolls (the tour scrolls views itself): the picture is of the view at rest
+  await page.waitForFunction(() => !document.querySelector('[data-scrolling]'), null, { timeout: 2000 }).catch(() => {});
   await page.screenshot({ path: path.join(OUT, `${name}.png`) });
 };
 // Ajustes closes with Escape; if it does not (noted: that is a finding), the X closes it so the tour goes on.
@@ -425,7 +427,7 @@ try {
     // the task that empties its folder is held for review (status blocked + «task.held»): a short wait, and a note when it is not
     await attempt('la tarea retenida', () => until(async () => (await call('tasks.list')).some((x) => x.held), 'tarea retenida', 20000)).then((v) => { if (v === null) note('ninguna tarea llegó a «retenida» (la vista Tareas no la enseñará)'); });
     await attempt('la programada diaria', () => call('schedules.create', { project: 'api-pagos', title: 'Resumen de errores de la noche', description: 'Resume los errores de la noche.', agent: 'codex', readonly: true, every: 'daily', at_time: '08:30' }));
-    await attempt('la programada semanal', () => call('schedules.create', { project: 'tienda-web', title: 'Revisión semanal de dependencias', description: 'Revisa las dependencias y avisa de lo que falle.', agent: 'claude', every: 'weekly', weekdays: [1], at_time: '09:00' }));
+    await attempt('la programada semanal', () => call('schedules.create', { project: 'tienda-web', title: 'Revisión semanal de dependencias', description: 'Revisa las dependencias y avisa de lo que falle.', agent: 'claude', model: 'sonnet', every: 'weekly', weekdays: [1], at_time: '09:00' }));
     // a monthly one in another time zone (the day 31 falls on the last day of shorter months)
     await attempt('la programada mensual', () => call('schedules.create', { project: 'blog', title: 'Informe mensual de visitas', description: RUNS[2].text, agent: 'claude', readonly: true, every: 'monthly', month_day: 31, at_time: '07:00', tz: 'Asia/Tokyo' }));
     // marks of the sidebar: one pinned, one completed, and unread only where the demo wants it (the rest are read)
@@ -734,7 +736,7 @@ try {
         await page.waitForTimeout(500); await shot(`${prefix}-pizarra-sin-proyecto`);
         // The whiteboard belongs to the active project: one is chosen for the shots and the choice is undone afterwards.
         await call('projects.setActive', { name: 'tienda-web' }).catch(() => noteOnce('Pizarra: no se pudo elegir el proyecto «tienda-web»'));
-        await page.locator('[data-testid=whiteboard-canvas]').first().waitFor({ timeout: 8000 }).catch(() => noteOnce('Pizarra: el lienzo no aparece con un proyecto elegido'));
+        await page.locator('[data-testid=whiteboard-canvas] canvas').first().waitFor({ timeout: 20000 }).catch(() => noteOnce('Pizarra: el lienzo no aparece con un proyecto elegido'));
         await page.waitForTimeout(1500);
         if (await page.locator('[data-testid=whiteboard-toggle-panel]').count()) { await tap('whiteboard-toggle-panel', 'cerrar el panel de adjuntos de la pizarra'); await page.waitForTimeout(300); }
         await shot(`${prefix}-pizarra`);
@@ -845,7 +847,7 @@ try {
   // The deep pictures of ORB_EXPLORA_EXTRA=1. Each block is on its own: one that fails is a note and the next one goes on.
   // prefix: «dia» / «noche».
   // Agentes checks the installed programs on arrival (a spinner and «Comprobando los programas instalados…»): the picture waits for it.
-  const settleAgents = () => page.getByText(/Comprobando los programas instalados|Checking installed programs/).first().waitFor({ state: 'hidden', timeout: 30000 }).catch(() => noteOnce('Agentes: la comprobación de programas no terminó'));
+  const settleAgents = () => page.getByText(/Comprobando los programas instalados|Checking installed programs/).first().waitFor({ timeout: 1500 }).catch(() => {}).then(() => page.getByText(/Comprobando los programas instalados|Checking installed programs/).first().waitFor({ state: 'hidden', timeout: 30000 })).catch(() => noteOnce('Agentes: la comprobación de programas no terminó'));
   // What the chat gained: the trail of marks at rest and with its preview, a chat marked as unread (the same call as the
   // row's menu, undone afterwards) and the Ficha of an agent chat with its way to order a task.
   const chatExtraShots = async (prefix) => {
