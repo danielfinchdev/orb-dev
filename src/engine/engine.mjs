@@ -377,7 +377,7 @@ async function run(board, { home, version, restored, repair }) {
     autoTitle(board, { agent: c.agent, account: c.account, text }).then((t) => { if (t && board.conversation(c.id)?.title === c.title) board.updateConversation(c.id, { title: t }); }).catch(() => {});
   };
   const orchestrator = new Orchestrator(board, { emit, log, title });
-  const scheduler = new Scheduler(board, sessions, { log, orchestrator, emit });
+  const scheduler = new Scheduler(board, sessions, { log, orchestrator, emit, announce: (fact) => remote?.announce(fact) });
   const { createRemote } = await import('./transport/remote.mjs');
   const remoteRef = { current: null };
   // Monitoreo del equipo and Opti Bot are gone: their settings and conversation are tidied once (engine/retired.mjs).
@@ -423,6 +423,9 @@ async function run(board, { home, version, restored, repair }) {
   syncProjects(board);
   // the skills of core that are on, ready for the agents (core\skills\.activas).
   try { (await import('./api/extensions.mjs')).refreshSkills(); } catch (error) { log(`skills: ${error.message}`); }
+  // an account that leaves its usage limit tells the phones once (src/engine/transport/notes-center.mjs)
+  const { createLimitWatch } = await import('./transport/notes-center.mjs');
+  const limitWatch = createLimitWatch({ board, announce: (fact) => remote?.announce(fact) });
   let ticking = false; let lastSync = Date.now();
   const loop = () => {
     if (ticking) return; ticking = true;
@@ -438,6 +441,7 @@ async function run(board, { home, version, restored, repair }) {
       const v = board.one('PRAGMA data_version').data_version;
       if (v !== dataVersion) { dataVersion = v; changed('external'); }
       scheduler.tick();
+      limitWatch.tick();
       api.dataTick?.();
     } catch (error) { log(`tick: ${error.stack}`); } finally { ticking = false; }
   };

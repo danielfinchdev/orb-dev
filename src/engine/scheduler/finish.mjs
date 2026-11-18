@@ -167,6 +167,7 @@ export class FinishPart {
     }
     if (held && !['blocked', 'cancelled'].includes(task.status)) task = board.patch(taskId, { status: 'blocked' }, 'orb', 'task.held');
     if (held) task = board.patch(taskId, { result: `${held}. ${task.result ?? ''}`.slice(0, 4000) }, 'orb', 'task.held');
+    if (held) { const lead = tr('msg.scheduler.needsReview', { reasons: '' }); try { this.announce({ kind: 'held', task: taskId, reasons: held.startsWith(lead) ? held.slice(lead.length) : '' }); } catch (error) { this.log(`aviso #${taskId}: ${error.message}`); } }
     // a task that ended well on an account paused by a usage limit (launched anyway, or after the limit) lifts it.
     if (task.status === 'done') {
       const launchedAt = board.one("SELECT at FROM events WHERE task_id = ? AND kind = 'task.launched' ORDER BY id DESC LIMIT 1", task.id)?.at;
@@ -210,6 +211,7 @@ export class FinishPart {
       const verdict = /VEREDICTO:\s*CORRECTO/i.test(task.result ?? '') ? 'correcto' : /VEREDICTO:\s*CON FALLOS/i.test(task.result ?? '') ? 'con fallos' : 'sin veredicto claro';
       board.settingJson(`review:${task.review_of}`, { task: task.id, verdict, agent: task.assigned_to, at: new Date().toISOString() });
       board.event(task.review_of, task.assigned_to ?? 'agente', 'review.verdict', `${verdict} (Task Review #${task.id})`);
+      if (verdict === 'correcto' && board.task(task.review_of)?.status === 'done') { try { this.announce({ kind: 'done', task: task.review_of }); } catch (error) { this.log(`aviso #${task.review_of}: ${error.message}`); } }
     }
     // The way back of the loop (person → assistant → tasks → agents → finished → assistant → person → OK).
     const reported = ['done', 'failed', 'blocked'].includes(task.status) && task.created_by === 'orb' ? this.queueReport(task) : false;

@@ -27,8 +27,9 @@ import { FinishPart } from './finish.mjs';
 export { contractNote } from './common.mjs';
 
 export class Scheduler {
-  constructor(board, sessions, { log = () => {}, orchestrator = null, emit = () => {} } = {}) {
+  constructor(board, sessions, { log = () => {}, orchestrator = null, emit = () => {}, announce = () => {} } = {}) {
     this.board = board; this.sessions = sessions; this.log = log; this.orchestrator = orchestrator; this.emit = emit;
+    this.announce = announce; // a notice for the linked phones (src/engine/transport/notes-center.mjs)
     this.running = new Map(); // task id -> { sessionId, agent }
     this.cleaning = new Map(); // task id -> the stop of its leftover programs still under way (a promise)
     this.mainSnapshot = new Map();

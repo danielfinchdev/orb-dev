@@ -9,6 +9,7 @@
 // attention server), remote-web.mjs (service worker, headers).
 import { isMuted, itemOfConversation } from '../../domain/conversations/inbox.mjs';
 import { buildNote, actionRoute } from '../../shared/notes.mjs';
+import { noticeNote } from './notes-center.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -505,6 +506,21 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const built = buildNote({ chat, line, preview: pushPreview(ctx.config), muted, assistantName: ctx.config.assistantName ?? 'Orb', words: noteWords() });
     const n = built ? dress(built) : null;
     if (!n) return false;
+    return pushNote(n, conversation);
+  }
+  // The notices that are not a chat line (a task done and reviewed, one held, a new version, a limit gone): same
+  // delivery, no chat and no mute (a global switch does not exist beyond the preview and the access itself).
+  function announce(fact) {
+    if (fact?.kind === 'update') {
+      const key = `note_update:${String(fact.version ?? '').slice(0, 30)}`;
+      if (board.setting(key)) return false; // once per version
+      board.setting(key, '1');
+    }
+    const built = noticeNote(fact, { preview: pushPreview(ctx.config), assistantName: ctx.config.assistantName ?? 'Orb', hiddenText: tr('msg.remote.pushHidden') });
+    return built ? pushNote(dress(built), null) : false;
+  }
+  // The note goes out: a sealed event to the open apps, Web Push to the others.
+  function pushNote(n, conversation) {
     const openNow = new Set();
     for (const c of clients) {
       openNow.add(c.device);
@@ -640,6 +656,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   }
 
   const remote = {
+    announce,
     // Engine events go to the paired phones too (only the ones the interface needs), each sealed for its phone.
     broadcast(event, payload) {
       if (event === 'chat:new') notify(payload);
