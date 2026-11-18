@@ -96,6 +96,7 @@ test('14: the migration notice keeps its update button while the download runs, 
 });
 
 test('15: «¿Empezar con una clave nueva?» has no corner cross, in both of its forms', () => {
-  assert.ok(main.includes("{ ok: tNow('app.newSecretOk'), danger: true, noClose: true }"));
-  assert.ok(main.includes('okDanger: true,\n    noClose: true,'));
+  const ask = read('src/ui/components/new-secret.jsx');
+  assert.ok(ask.includes("{ ok: tNow('app.newSecretOk'), danger: true, noClose: true }"));
+  assert.ok(ask.includes('okDanger: true,\n    noClose: true,'));
 });

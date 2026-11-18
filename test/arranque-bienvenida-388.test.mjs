@@ -39,7 +39,7 @@ test('the welcome has «Tu tema» with the six themes, saved with the same ui.sk
   assert.match(setup, /appearance\.skinDesc\.\$\{skin\}/);
   // the order of the steps: datos → tema → carpetas → maestra → equipo
   assert.match(setup, /setStep\('tema'\)/);
-  assert.match(setup, /setStep\(plan\?\.pending \? 'carpetas' : 'maestra'\)/);
+  assert.match(setup, /setStep\(plan\?\.pending && !foldersDone \? 'carpetas' : 'maestra'\)/);
   assert.match(read('src/ui/components/wizard.jsx'), /WIZARD_STEPS = \['datos', 'tema', 'carpetas', 'maestra', 'equipo'\]/);
   assert.match(read('test/fixtures/e2e-flows.mjs'), /setup-theme-continue/);
 });
@@ -51,7 +51,7 @@ test('the folder of Orb is asked once: in the first step, never again in «Orden
 });
 
 test('the master password and the recovery key keep their calls and their warnings', () => {
-  assert.match(setup, /<MasterCreate wizard onDone=\{afterMaster\} \/>/);
+  assert.match(setup, /<MasterCreate wizard onDone=\{afterMaster\} onBack=\{\(\) => setStep\('tema'\)\} \/>/);
   const master = read('src/ui/views/master.jsx');
   assert.match(master, /call\('master\.create', \{ password: v\.next \}\)/);
   assert.match(master, /type="password" autoComplete="new-password"/);
@@ -165,24 +165,25 @@ test('10C-a: the master password step has 34 px fields, a 4-stretch bar and grey
   assert.match(create, /\[1, 2, 3, 4\]\.map/);
   assert.match(create, /<Badge variant=\{STRENGTH_TONE\[score\]\}>/);
   assert.match(create, /<Badge variant="success">\{t\('master\.match'\)\}<\/Badge>/);
-  const warning = master.slice(master.indexOf('function Warning()'), master.indexOf('const PROTECTS'));
+  const warning = master.slice(master.indexOf('function Warning('), master.indexOf('const PROTECTS'));
   assert.match(warning, /data-testid="master-warning"/);
   assert.match(warning, /master\.warnTitle/);
   assert.match(warning, /master\.warnBody/);
   assert.doesNotMatch(warning, /bg-warning|border-warning|TriangleAlert/);
   assert.match(create, /call\('master\.create', \{ password: v\.next \}\)/);
   assert.match(create, /const ready|!ready\(v\)/);
-  assert.doesNotMatch(create, /type=\{|Mostrar|Atrás/);
+  // 3.8.8: «Mostrar» and «Atrás» are part of the step now (test/bienvenida-388.test.mjs); the box still never opens by itself.
+  assert.doesNotMatch(create, /type=\{|Atrás/);
 });
 
 test('11D: the key dialog has separate paragraphs, a placeholder and a button that waits for the word (onOk still checks it)', () => {
-  const ask = main.slice(main.indexOf('async function askNewSecret'), main.indexOf('// fingerprint, to compare'));
+  const ask = read('src/ui/components/new-secret.jsx');
   assert.match(ask, /paragraphs\.map\(\(p\) => <p key=\{p\}/);
   assert.match(ask, /placeholder=\{word\}/);
   assert.match(ask, /okDisabled: \(v\) => !typed\(v\)/);
   assert.match(ask, /onOk: \(v\) => \{ if \(!typed\(v\)\) throw new Error\(tNow\('app\.newSecretWrong'/);
   assert.match(ask, /v\.word\.trim\(\)\.toUpperCase\(\) === word\.toUpperCase\(\)/);
-  assert.match(ask, /if \(startError\?\.recovery\) return confirm\(/);
+  assert.match(ask, /if \(startError\?\.recovery && !always\) return confirm\(/);
   assert.match(main, /retryStart\(\{ newSecret: true \}\)/);
   assert.match(read('src/ui/components/dialogs.jsx'), /disabled=\{busy \|\| Boolean\(d\.okDisabled\?\.\(values\)\)\}/);
 });

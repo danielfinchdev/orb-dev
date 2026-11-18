@@ -182,6 +182,8 @@ export default {
   'sys.engine.previousOpens': 'Windows can open the old key of this workspace again. To go back to it, go to Settings › Data.',
   'sys.engine.previousBack': '{name} is back on the old key. The new key has been kept aside.',
   'sys.engine.previousFailed': 'Could not go back to the old key: {name} keeps the new key. Try again from Settings › Data.',
+  'sys.engine.newKeyDone': 'Orb has started with a new key. The old one is kept: you can go back to it in Settings › Data.',
+  'sys.engine.newKeyFailed': 'The new key could not be made. Orb keeps the key it had.',
   'sys.engine.previousNew': '{name} is back on the new key. The old key has been kept aside.',
   'sys.engine.recoveryRestored': 'The restored backup brought the recovery code of another PC, which does not work here: scheduled backups go out without it. Make a new one in Settings › Data.',
   'sys.engine.recoveryOtherKey': 'Your recovery code was made with the other key and no longer works on this PC: scheduled backups go out without it. Make a new one in Settings › Data.',

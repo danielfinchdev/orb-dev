@@ -49,7 +49,9 @@
   "app.state": "remote",
   "approvals.list": "remote",
   "attachments.read": "pc",
+  "backup.cancelKey": "pc",
   "backup.list": "pc",
+  "backup.newKey": "pc",
   "backup.now": "pc",
   "backup.previousKey": "pc",
   "backup.recovery": "pc",
@@ -316,6 +318,7 @@
   "android.emulatorStart",
   "android.pairCode",
   "android.pairStart",
+  "backup.newKey",
   "backup.previousKey",
   "backup.recovery",
   "backup.restore",
@@ -345,7 +348,8 @@
   "projects.deleteCheck": "deleteProject",
   "rails.set": "rails",
   "rails.restore": "rails",
-  "rules.restoreDefaults": "ruleSeed"
+  "rules.restoreDefaults": "ruleSeed",
+  "backup.newKey": "newKey"
  },
  "protocol": {
   "PROTOCOL": 4,

@@ -15,6 +15,7 @@ import { Field, Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
 import { MobileTabs, MoreView } from '@/components/mobile-tabs.jsx';
 import { TooltipProvider, Checkbox } from '@/components/ui/overlay.jsx';
 import { DialogHost, confirm, form } from '@/components/dialogs.jsx';
+import { askNewSecret } from '@/components/new-secret.jsx';
 import { ImagePreviewHost } from '@/components/image-viewer.jsx';
 import { Sidebar } from '@/components/sidebar.jsx';
 import { Companion } from '@/components/companion.jsx';
@@ -643,32 +644,6 @@ function MigrationFailed({ state, preview = null }) {
 
 // the PC's master password, the second step of linking (the app after scanning, a browser opened from the QR). It
 // never leaves the phone (src/shared/mobile-crypto.mjs › linkDevice proves it is known) and is never kept. fp: the PC's
-// «Empezar con una clave nueva» says what is lost (startError: recovery, master = the
-// recovery code and the master password exist in core). Without a recovery code the backups made until now will not
-// open any more: the word EMPEZAR must be typed.
-async function askNewSecret(startError) {
-  // not a component: the module's own translator (there is no `t` in scope here)
-  const paragraphs = [tNow('app.newSecretIntro'), startError?.master ? tNow('app.newSecretMaster') : startError?.vault ? tNow('app.newSecretVault') : null, startError?.recovery ? tNow('app.newSecretRecovery') : tNow('app.newSecretNoRecovery'), tNow('app.newSecretBack')].filter(Boolean);
-  if (startError?.recovery) return confirm(tNow('app.newSecretTitle'), paragraphs.join('\n\n'), { ok: tNow('app.newSecretOk'), danger: true, noClose: true });
-  const word = tNow('app.newSecretWord');
-  const typed = (v) => v.word.trim().toUpperCase() === word.toUpperCase();
-  return Boolean(await form(tNow('app.newSecretTitle'), {
-    initial: { word: '' },
-    body: (v, set) => (
-      <>
-        <div className="grid gap-2">{paragraphs.map((p) => <p key={p} className="text-muted-foreground m-0 text-control leading-[1.45]">{p}</p>)}</div>
-        <Field label={tNow('app.newSecretType', { word })}><Input autoComplete="off" placeholder={word} value={v.word} onChange={(e) => set({ word: e.target.value })} data-testid="new-secret-word" /></Field>
-      </>
-    ),
-    ok: tNow('app.newSecretOk'),
-    okDanger: true,
-    noClose: true,
-    // the button waits for the word; onOk below still checks it, whatever the button says
-    okDisabled: (v) => !typed(v),
-    onOk: (v) => { if (!typed(v)) throw new Error(tNow('app.newSecretWrong', { word })); return true; }
-  }));
-}
-
 // fingerprint, to compare with the PC's screen (with a typed short code it must be confirmed first: confirmFp).
 function PairPassword({ name, fp = null, confirmFp = false, busy, error, onSubmit, onBack = null }) {
   const t = useT();

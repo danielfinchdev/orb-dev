@@ -87,6 +87,8 @@ export default {
   "app.newSecretRecovery": "Earlier backups will ask for your recovery code. Afterwards, make a new code in Settings › Data: until then, new backups will not carry it and “I forgot the password” cannot check it.",
   "app.newSecretNoRecovery": "You have no recovery code: the backups made until now will no longer open. Afterwards, make one in Settings › Data.",
   "app.newSecretBack": "The old key is kept aside. If Windows can open it again, Orb will offer to go back to it.",
+  "app.newSecretIntroKept": "Orb will make a new key for this PC. Approvals will be asked again.",
+  "app.newSecretBackReadable": "The current key is kept aside and not deleted: from Settings › Data you will be able to go back to it.",
   "app.newSecretWord": "START",
   "app.newSecretType": "Type {word} to confirm",
   "app.newSecretWrong": "Type {word} to confirm.",

@@ -6,6 +6,9 @@ import { ctx, tr } from '../../platform/context.mjs';
 import { paths } from '../../platform/paths.mjs';
 import { machineKeys } from '../../platform/keys.mjs';
 import { BACK_FILE } from '../security/approval-secret.mjs';
+
+// The signal for «Empezar con una clave nueva» (src-tauri/vault/src/machine.rs › NEW_FILE), beside BACK_FILE.
+const NEW_FILE = 'clave-nueva.json';
 import * as K from '../../domain/data/backup.mjs';
 import { legacyData, deleteLegacyData } from '../../domain/data/legacy/migrate-38.mjs';
 import { utcToZoned, localDay, ownerTz } from '../../shared/tz.mjs';
@@ -77,11 +80,14 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
     return true;
   };
 
+  // the action waiting for the next start (its signal file), or null
+  const pendingKey = () => { const dir = paths(ctx.home).data; return fs.existsSync(path.join(dir, BACK_FILE)) ? 'volver' : fs.existsSync(path.join(dir, NEW_FILE)) ? 'nueva' : null; };
+
   const methods = {
     'backup.status': () => {
       let last = null; try { last = JSON.parse(board.setting('backup_last') ?? 'null'); } catch { last = null; }
       const rec = K.recoveryOf(ctx.home, secret());
-      return { enabled: ctx.config.backup?.enabled !== false, folder: folder(), custom: folder() !== K.defaultBackupDir(ctx.home), recovery: Boolean(rec), recoveryAt: rec?.at ?? null, previousKey: ctx.previousKey || null, last, running: Boolean(running), tz: ownerTz(ctx.config), hour: DAILY_HOUR, ...opts() };
+      return { enabled: ctx.config.backup?.enabled !== false, folder: folder(), custom: folder() !== K.defaultBackupDir(ctx.home), recovery: Boolean(rec), recoveryAt: rec?.at ?? null, previousKey: ctx.previousKey || null, pendingKey: pendingKey(), last, running: Boolean(running), tz: ownerTz(ctx.config), hour: DAILY_HOUR, ...opts() };
     },
     'backup.list': async () => (await K.listBackups(folder())).map(({ file, ...b }) => ({ ...b, path: file })),
     // kind: manual (Ajustes › Datos) or preupdate (the app, before installing a new version).
@@ -112,8 +118,25 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
     // next start (src-tauri/vault/src/machine.rs › previous_key). Guarded like the recovery code.
     'backup.previousKey': () => {
       if (!ctx.previousKey) fail(tr('data.backup.err.noPreviousKey'));
-      fs.writeFileSync(path.join(paths(ctx.home).data, BACK_FILE), JSON.stringify({ at: new Date().toISOString() }));
+      const dir = paths(ctx.home).data;
+      fs.rmSync(path.join(dir, NEW_FILE), { force: true }); // the last action asked is the only one that waits
+      fs.writeFileSync(path.join(dir, BACK_FILE), JSON.stringify({ at: new Date().toISOString() }));
       return { restart: true };
+    },
+    // «Empezar con una clave nueva» with the key opening fine: only a signal for the next start, nothing is touched now
+    // (src-tauri/vault/src/machine.rs › new_key keeps the old key aside). This PC's window only, the master password
+    // every time (FRESH_UNLOCK: a token for this action alone, checked by the dispatcher before this runs).
+    'backup.newKey': () => {
+      const dir = paths(ctx.home).data;
+      fs.rmSync(path.join(dir, BACK_FILE), { force: true }); // the two signals never wait together
+      fs.writeFileSync(path.join(dir, NEW_FILE), JSON.stringify({ at: new Date().toISOString() }));
+      return { restart: true };
+    },
+    // Takes back what waits for the next start (either signal). Removing a signal changes no key: no password needed.
+    'backup.cancelKey': () => {
+      const dir = paths(ctx.home).data;
+      for (const f of [NEW_FILE, BACK_FILE]) fs.rmSync(path.join(dir, f), { force: true });
+      return { ok: true };
     },
     'backup.recovery': ({ code }) => {
       const value = code == null || code === '' ? K.newRecoveryCode() : String(code);

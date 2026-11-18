@@ -100,7 +100,7 @@ const validSecret = (s) => typeof s === 'string' && /^[0-9a-f]{64}$/.test(s);
 const startError = (key, code, detail) => Object.assign(new Error(tr(key)), { code, detail });
 // What the user should know about the keys, said once the database is open (board.notice in run()).
 const keyNotices = [];
-const KEY_NOTICES = { previousOpens: 'sys.engine.previousOpens', previousBack: 'sys.engine.previousBack', previousNew: 'sys.engine.previousNew', previousFailed: 'sys.engine.previousFailed' };
+const KEY_NOTICES = { previousOpens: 'sys.engine.previousOpens', previousBack: 'sys.engine.previousBack', previousNew: 'sys.engine.previousNew', previousFailed: 'sys.engine.previousFailed', newKeyDone: 'sys.engine.newKeyDone', newKeyFailed: 'sys.engine.newKeyFailed' };
 // Whether this start switched keys (the way back): the recovery code made with the other key no longer opens (below).
 let switchedKey = false;
 async function secretFromApp(home, userData, newSecret) {
@@ -115,6 +115,8 @@ async function secretFromApp(home, userData, newSecret) {
         if (code === 'previousOpens' || code === 'previousQuiet') ctx.previousKey = 'anterior';
         if (code === 'newAvailable') ctx.previousKey = 'nueva';
         if (code === 'previousBack' || code === 'previousNew') switchedKey = true;
+        // a new key made on purpose (machine.rs › new_key): the old one is kept aside and can be gone back to
+        if (code === 'newKeyDone') { switchedKey = true; ctx.previousKey = 'anterior'; }
         if (KEY_NOTICES[code] && !keyNotices.includes(KEY_NOTICES[code])) keyNotices.push(KEY_NOTICES[code]);
       }
       return { approval: keys.approval, backup: keys.backup, inVault: true };

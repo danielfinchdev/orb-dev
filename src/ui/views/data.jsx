@@ -10,6 +10,7 @@ import { call, act, bridge, useStore, getState, setState, openSettings } from '@
 import { notify, notifyOk } from '@/lib/notify.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { MasterCard } from '@/views/master.jsx';
+import { askNewSecret } from '@/components/new-secret.jsx';
 import { TrashCard } from './settings/trash.jsx';
 import { WorktreesCard } from './settings/worktrees.jsx';
 import { Block, Panel, Setting, MoreOptions } from './settings/rows.jsx';
@@ -42,33 +43,55 @@ export async function newRecoveryCode() {
   return r;
 }
 
-// The way back to the previous key (and back to the new one), after «Empezar con una clave nueva»; own call, so it shows even when the backups' status fails.
+// This PC's key (on the PC only): the way back to the previous key (and back to the new one) when there is one, and
+// «Empezar con una clave nueva», asked with the master password every time. Own call, so it shows even when the backups' status fails.
 function KeyCard() {
   const t = useT();
   const [st, setSt] = useState(null);
-  useEffect(() => { call('backup.status').then(setSt).catch(quiet); }, []);
-  if (!st?.previousKey) return null;
+  const [failed, setFailed] = useState(false);
+  const [master, setMaster] = useState(null);
+  const load = () => Promise.all([call('backup.status').then(setSt), call('master.state').then((m) => setMaster(m?.exists === true))]).then(() => setFailed(false)).catch((e) => { setFailed(true); quiet(e); });
+  useEffect(() => { if (!bridge.mobile) load(); }, []);
+  if (bridge.mobile) return null;
   // The way back after «Empezar con una clave nueva» ('anterior'), and back to the new key after that ('nueva').
-  const way = st.previousKey === 'nueva' ? 'datos.newKey' : 'datos.previousKey';
+  const way = st?.previousKey === 'nueva' ? 'datos.newKey' : 'datos.previousKey';
+  // an action already asked waits for the next start: nothing else is offered until Orb is opened again
+  const pending = Boolean(st?.pendingKey);
   const previousKey = async () => {
     const body = <>{t(`${way}Body`)} <button type="button" className="text-primary-text cursor-pointer underline-offset-2 hover:underline" onClick={() => act(bridge.openExternal(KEY_DOCS))} data-testid="previous-key-more">{t('datos.moreInfo')}</button></>;
     if (!(await confirm(t(`${way}Title`), body, { ok: t(`${way}Use`), danger: true }))) return;
     const unlock = await unlockCore('previousKey');
     if (!unlock) return;
     if (await act(call('backup.previousKey', { unlock }))) notifyOk(t(`${way}Ready`), { ms: 15000 });
+    load();
   };
+  // The key opens fine here: the dialog is the start-up one (the word EMPEZAR), then the password, then the signal for the next start.
+  const startNew = async () => {
+    if (!(await askNewSecret({ master: true, recovery: st?.recovery === true }, { readable: true, typed: true }))) return;
+    const unlock = await unlockCore('newKey');
+    if (!unlock) return;
+    if (await act(call('backup.newKey', { unlock }))) notifyOk(t('datos.startKeyReady'), { ms: 15000 });
+    load();
+  };
+  const cancel = async () => { await act(call('backup.cancelKey')); load(); };
+  // without a master password (or without knowing the state) the red button is not offered, and says why
+  const hint = failed || !st ? t('datos.startKeyNoStatus') : master === false ? t('datos.startKeyNoMaster') : t('datos.startKeyHint');
+  const can = Boolean(st) && !failed && master === true && !pending;
   return (
-    <>
-      {/* after «Empezar con una clave nueva», Windows opens the key from before again: the way back (and
-          the way back to the new key after that). */}
-        <Block title={t('datos.keyTitle')} note={t('datos.keyDesc')}>
-          <Panel>
-            <Setting label={t(`${way}Name`)} hint={t(way)} data-testid="previous-key">
-              <Button size="sm" variant="outline" onClick={previousKey} data-testid="previous-key-use"><Undo2 />{t(`${way}Use`)}</Button>
-            </Setting>
-          </Panel>
-        </Block>
-    </>
+    <Block title={t('datos.keyTitle')} note={t('datos.keyDesc')} data-testid="key-card">
+      <Panel>
+        {/* after «Empezar con una clave nueva», Windows opens the key from before again: the way back (and
+            the way back to the new key after that). */}
+        {st?.previousKey ? (
+          <Setting label={t(`${way}Name`)} hint={t(way)} data-testid="previous-key">
+            <Button size="sm" variant="outline" onClick={previousKey} disabled={pending} data-testid="previous-key-use"><Undo2 />{t(`${way}Use`)}</Button>
+          </Setting>
+        ) : null}
+        <Setting label={t('datos.startKeyName')} hint={pending ? <span data-testid="key-pending">{t('datos.keyPending')} <button type="button" className="text-primary-text cursor-pointer underline-offset-2 hover:underline" onClick={cancel} data-testid="key-cancel">{t('datos.keyCancel')}</button></span> : hint} data-testid="new-key">
+          <Button size="sm" variant="danger" onClick={startNew} disabled={!can} data-testid="new-key-start">{t('datos.startKeyName')}</Button>
+        </Setting>
+      </Panel>
+    </Block>
   );
 }
 

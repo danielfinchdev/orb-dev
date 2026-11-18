@@ -87,6 +87,8 @@ export default {
   "app.newSecretRecovery": "Las copias de seguridad anteriores pedirán tu código de recuperación. Después, crea un código nuevo en Ajustes › Datos: hasta entonces, las copias nuevas no lo llevarán y «He olvidado la contraseña» no podrá comprobarlo.",
   "app.newSecretNoRecovery": "No tienes código de recuperación: las copias de seguridad hechas hasta ahora ya no se podrán abrir. Después, crea uno en Ajustes › Datos.",
   "app.newSecretBack": "La clave anterior se guarda aparte. Si Windows vuelve a poder abrirla, Orb te ofrecerá volver a ella.",
+  "app.newSecretIntroKept": "Orb creará una clave nueva para este PC. Se volverán a pedir las aprobaciones.",
+  "app.newSecretBackReadable": "La clave actual se guarda aparte y no se borra: desde Ajustes › Datos podrás volver a ella.",
   "app.newSecretWord": "EMPEZAR",
   "app.newSecretType": "Escribe {word} para confirmar",
   "app.newSecretWrong": "Escribe {word} para confirmar.",
