@@ -295,7 +295,7 @@ try {
     const scheme = async (value) => {
       schemeCdp ??= await page.context().newCDPSession(page);
       const cdp = schemeCdp;
-      await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'no-preference' }, ...(value ? [{ name: 'prefers-color-scheme', value }] : [])] });
+      await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'no-preference' }, { name: 'prefers-color-scheme', value: value ?? 'light' }] }); // never «no value»: that falls back to this PC's own setting, and the light pictures came out dark on a dark Windows
       await page.waitForTimeout(400);
     };
     const darkShot = async (name) => {
