@@ -64,3 +64,29 @@ test('the pages keep the unified look: the accent is a token', () => {
     assert.doesNotMatch(src, /\btext-primary\b(?!-)/, `${name}: accent is -primary-text`);
   }
 });
+
+test('9C-a Uso: Today and 90 days in the period, CSV export, cost card, flat model table, closing day table', () => {
+  for (const d of ['1', '7', '30', '90']) assert.ok(usage.includes(`'${d}'`), d);
+  assert.match(usage, /usage-range-\$\{d\}/);
+  assert.match(usage, /data-testid="usage-export-csv"/);
+  assert.match(usage, /data-testid="usage-export-icon"/);
+  assert.match(usage, /downloadUsageCsv\(data, data\.models/);
+  assert.match(usage, /text-caption font-semibold tabular-nums/, 'the cost figure is small, as in the mock-up');
+  assert.match(usage, /\(data\?\.models \?\? \[\]\)\.map/, 'one row per model');
+  assert.ok(usage.indexOf('<DaysTable') > usage.indexOf('<LocalUsage'), 'the table of days closes the page');
+  // the stop of the queue is the rail of «Normas»: same call, same password
+  assert.match(usage, /changeRail\('freno-uso', \{ enabled \}/);
+  assert.match(usage, /data-testid="usage-stop-queue"/);
+});
+
+test('9C-a Uso and engine: «Hoy» is one day of the same history, the team check gives the tool versions', () => {
+  assert.match(read('src', 'engine', 'api', 'index.mjs'), /oneOf\(days, \[1, 7, 30, 90\]/);
+  assert.match(read('src', 'engine', 'api', 'history.mjs'), /oneOf\(days, \[1, 7, 30, 90\]/);
+  assert.match(read('src', 'engine', 'host', 'installer.mjs'), /version: versions\[i\.id\] \?\? null/);
+  assert.match(agents, /i\.version\?\.match/);
+  assert.match(agents, /<Panel className="mt-0">/, 'no extra 12 px between the note and the table');
+});
+
+test('9C-a Agentes y Uso: the tabs are underlined links', () => {
+  assert.equal((tabs.match(/className="underline"/g) ?? []).length, 2);
+});

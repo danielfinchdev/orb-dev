@@ -245,6 +245,8 @@ try {
     await pc.click('[data-testid=setup-folder]');
     await shot(pc, { area: 'wizard', screen: 'datos', state: 'filled', src: W, desc: 'Welcome, filled in (the folder chosen)' });
     await pc.click('[data-testid=setup-create]');
+    // «Tu tema» comes right after the folder: it is left as it is (the default theme)
+    await pc.locator('[data-testid=setup-theme-continue]').click({ timeout: 20000 });
     await pc.locator('[data-testid=master-create], [data-testid=layout-review]').first().waitFor({ timeout: 20000 });
     if (await pc.locator('[data-testid=layout-review]').isVisible()) {
       await shot(pc, { area: 'wizard', screen: 'layout', state: 'default', src: 'src/ui/views/layout.jsx', desc: 'Welcome: «Ordenar carpetas» (folders of an earlier Orb)' });

@@ -6,6 +6,10 @@
 // The assistant's folder is seeded with demo data like the mockups' (projects with a git repository, chats with fake
 // agents, tasks, a schedule, a chat with Orbe) before the pictures, so the sidebar, the chat and its side panel have
 // something to show. Everything lives in the temp folder; ORB_EXPLORA_SEED=0 skips it (the empty profile of before).
+// ORB_EXPLORA_EXTRA=1 adds the deep pictures the mockup comparison needs (deepShots: views scrolled to the middle and the
+// bottom, usage with seeded consumption, a game mid-play, God mode with git, the lock screen, «Tu tema» with another
+// theme marked, Agentes and Uso in every theme). It replaces taskShots, projectShots, extraShots and the chat pictures
+// of the views loop so that one mode still fits in a run: use it with ORB_EXPLORA_MODES=dia and then =noche.
 import fs from 'node:fs';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
@@ -15,7 +19,7 @@ import { createHome } from '../src/domain/workspace/home.mjs';
 import { loadConfig, merge } from '../src/platform/config-file.mjs';
 import { writeJson } from '../src/platform/paths.mjs';
 import { SKINS, darkOnlySkin, lightOnlySkin } from '../src/shared/appearance.mjs';
-import { throughStart, sandboxEnv } from './fixtures/e2e-flows.mjs';
+import { throughStart, sandboxEnv, TEST_MASTER } from './fixtures/e2e-flows.mjs';
 import { launchOrb } from './fixtures/launch-orb.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -65,6 +69,7 @@ const overflow = (page) => page.evaluate(() => [...document.querySelectorAll('ma
 // ---- demo data (the mockups' sidebar.json and 01-chat.html): what the second Orb is seeded with. All of it is fake: fake
 // agents (test/fixtures/fake-explora.mjs), folders under `tmp`, no network, never this PC's profile.
 const SEED = process.env.ORB_EXPLORA_SEED !== '0';
+const EXTRA = process.env.ORB_EXPLORA_EXTRA === '1';
 const text = (...l) => `${l.join('\n')}\n`;
 const noted = new Set();
 const noteOnce = (s) => { if (!noted.has(s)) { noted.add(s); note(s); } };
@@ -147,7 +152,8 @@ function writeFakes() {
   // the two «keep working» lines are not seeded turns: they only need DUERME to reach the fake agent
   fs.writeFileSync(plan, JSON.stringify([...turns.filter((t) => t.files || t.append).map((t) => ({ when: t.text, files: t.files, append: t.append })),
     { when: BUSY_AGAIN, append: 'DUERME' }, { when: TASK_AGAIN, append: 'PROGRESO DUERME' }]));
-  return { ORB_FAKE_AGENTS: path.join(ROOT, 'test', 'fixtures', 'fake-explora.mjs'), ORB_FAKE_SCRIPT: script, ORB_EXPLORA_PLAN: plan };
+  // the extra pass shows consumption on the account cards: the fake Claude and Codex report part of their windows used
+  return { ORB_FAKE_AGENTS: path.join(ROOT, 'test', 'fixtures', 'fake-explora.mjs'), ORB_FAKE_SCRIPT: script, ORB_EXPLORA_PLAN: plan, ...(EXTRA ? { ORB_EXPLORA_USAGE: '1' } : {}) };
 }
 // The projects' folders: files, and for the ones with a repository a first commit on main plus the branch the chat works on.
 function makeRepos() {
@@ -177,8 +183,18 @@ try {
     note(`ventana inicial: ${(await page.evaluate(() => [innerWidth, innerHeight])).join('x')}`);
     await page.fill('[data-testid=setup-user]', 'Ana');
     await shot('00-bienvenida');
-    const screens = { layout: '00a-ordenar-carpetas', master: '00a-contrasena-maestra', prepare: '00b-preparo-equipo' };
-    const onScreen = (name) => shot(screens[name]);
+    const screens = { theme: '00a-tu-tema', layout: '00a-ordenar-carpetas', master: '00a-contrasena-maestra', prepare: '00b-preparo-equipo' };
+    const onScreen = async (name) => {
+      // «Tu tema» with another theme marked, then back to the default so the rest of the tour keeps it
+      if (EXTRA && name === 'theme') {
+        try {
+          await page.click('[data-testid=setup-skin-vaporwave]', { timeout: 4000 }); await page.waitForTimeout(400);
+          await shot('00a-tu-tema-vaporwave');
+          await page.click('[data-testid=setup-skin-predeterminado]', { timeout: 4000 }); await page.waitForTimeout(400);
+        } catch (error) { note(`bienvenida: no se pudo marcar otro tema (${String(error?.message ?? error).split(String.fromCharCode(10))[0]})`); }
+      }
+      await shot(screens[name]);
+    };
     // The folder comes chosen (ORB_DEFAULT_BASE): «Cambiar ubicación…» would open Windows' own dialog.
     await page.click('[data-testid=setup-create]');
     const seen = await throughStart(page, { ready: '[data-testid=sidebar-home]', onScreen });
@@ -495,6 +511,190 @@ try {
       await call('config.save', { patch: { expert: { enabled: false } } }).catch(() => {});
     } catch (error) { noteOnce(`Agentes, tutoriales, juegos y God mode: el recorrido se cortó (${String(error?.message ?? error).split('\n')[0]})`); await closeMenus(); }
   };
+  // ORB_EXPLORA_EXTRA=1: the biggest scrolling box of the open view (or of the dialog, or of `within`) goes to its top, middle
+  // or end. null when nothing scrolls; otherwise { max, client } so a picture is only taken when there is more to see.
+  const scrollView = async (where, within = null) => {
+    try {
+      const r = await page.evaluate(([w, sel]) => {
+        const root = (sel && document.querySelector(sel)) || document.querySelector('[data-testid=settings-dialog]') || document.querySelector('main') || document.body;
+        const boxes = [root, ...root.querySelectorAll('*')].filter((e) => /(auto|scroll)/.test(getComputedStyle(e).overflowY) && e.scrollHeight > e.clientHeight + 8 && e.clientHeight > 120 && e.clientWidth > 200 && !e.closest('nav'));
+        boxes.sort((a, b) => b.clientHeight * b.clientWidth - a.clientHeight * a.clientWidth);
+        const box = boxes[0];
+        if (!box) return null;
+        const max = box.scrollHeight - box.clientHeight;
+        box.scrollTop = w === 'end' ? max : w === 'middle' ? Math.round(max / 2) : 0;
+        return { max, client: box.clientHeight };
+      }, [where, within]);
+      await page.waitForTimeout(300);
+      return r;
+    } catch { return null; }
+  };
+  // A picture of the view scrolled to `where`; skipped (with a note) when it is already whole in the first picture.
+  const scrollShot = async (name, where, within = null) => {
+    const r = await scrollView(where, within);
+    if (!r) { noteOnce(`${name}: no hay nada que desplazar`); return false; }
+    if (where === 'middle' && r.max < r.client * 0.6) { noteOnce(`${name}: la vista es corta, el medio no añade nada`); return false; }
+    await shot(name);
+    return true;
+  };
+  // The part of a section of Ajustes that its first picture does not reach, by the title of its block.
+  const settingsBlock = async (title) => {
+    const h = page.locator('[data-testid=settings-dialog] section h2', { hasText: title }).first();
+    if (!(await h.count())) return false;
+    await h.evaluate((e) => e.scrollIntoView({ block: 'start' }));
+    await page.waitForTimeout(300);
+    return true;
+  };
+  // The deep pictures of ORB_EXPLORA_EXTRA=1. Each block is on its own: one that fails is a note and the next one goes on.
+  // prefix: «dia» / «noche».
+  const deepShots = async (prefix) => {
+    if (!seeded) return;
+    // Agentes: its two tabs, from the top to the end of the page
+    try {
+      if (await tap('nav-agents', 'Agentes')) {
+        await tap('agents-tab-agents', 'pestaña «Agentes y cuentas»');
+        await page.waitForTimeout(500); await scrollView('top'); await shot(`${prefix}-agentes-cuentas`);
+        await scrollShot(`${prefix}-agentes-medio`, 'middle');
+        await scrollShot(`${prefix}-agentes-abajo`, 'end');
+        if (await tap('agents-tab-usage', 'pestaña «Uso»')) {
+          await page.waitForTimeout(800); await scrollView('top'); await shot(`${prefix}-uso`);
+          await scrollShot(`${prefix}-uso-medio`, 'middle');
+          await scrollShot(`${prefix}-uso-abajo`, 'end');
+          // the period «Hoy» (the default is 30 days, put back afterwards)
+          if (await tap('usage-range-1', 'periodo «Hoy» del uso')) { await page.waitForTimeout(600); await scrollView('top'); await shot(`${prefix}-uso-hoy`); await tap('usage-range-30', 'periodo de 30 días del uso'); }
+          await tap('agents-tab-agents', 'pestaña «Agentes y cuentas»');
+        }
+      }
+    } catch (error) { noteOnce(`Agentes y Uso: el recorrido se cortó (${String(error?.message ?? error).split(String.fromCharCode(10))[0]})`); await closeMenus(); }
+    // Tutoriales
+    try {
+      if (await tap('nav-tutorials', 'Tutoriales')) { await page.waitForTimeout(500); await scrollView('top'); await shot(`${prefix}-tutoriales`); await scrollShot(`${prefix}-tutoriales-abajo`, 'end'); }
+    } catch (error) { noteOnce(`Tutoriales: el recorrido se cortó (${String(error?.message ?? error).split(String.fromCharCode(10))[0]})`); }
+    // Ajustes: the rest of the long sections (only scrolling and tabs; nothing is changed)
+    try {
+      if (await tap('nav-settings', 'Ajustes')) {
+        await page.locator('[data-testid=settings-dialog]').waitFor({ timeout: 8000 }).catch(() => noteOnce('Ajustes: no se abrió'));
+        const section = async (id) => { const ok = await tap(`settings-nav-${id}`, `sección «${id}» de Ajustes`); if (ok) { await page.waitForTimeout(400); await scrollView('top'); } return ok; };
+        if (await section('general')) {
+          if (await settingsBlock(/^(Interfaz|Interface)$/)) await shot(`${prefix}-ajustes-general-interfaz`); else noteOnce('Ajustes: sin el bloque «Interfaz»');
+          if (await settingsBlock(/^(Respuestas de los agentes|Agents.? replies)$/)) await shot(`${prefix}-ajustes-general-respuestas`); else noteOnce('Ajustes: sin el bloque «Respuestas de los agentes»');
+          await scrollShot(`${prefix}-ajustes-general-actualizaciones`, 'end');
+        }
+        if (await section('agentes')) {
+          await scrollShot(`${prefix}-ajustes-agentes-abajo`, 'end');
+          if (await tap('agents-tab-uso', 'pestaña «Uso» de Agentes y uso')) {
+            await page.waitForTimeout(600); await scrollView('top'); await shot(`${prefix}-ajustes-agentes-uso`);
+            await scrollShot(`${prefix}-ajustes-agentes-uso-abajo`, 'end');
+            await tap('agents-tab-tareas', 'volver a la pestaña «Tareas»');
+          }
+        }
+        for (const [id, name] of [['permisos', 'permisos'], ['datos', 'datos'], ['avanzado', 'avanzado']]) {
+          if (await section(id)) { await shot(`${prefix}-ajustes-${name}`); await scrollShot(`${prefix}-ajustes-${name}-abajo`, 'end'); }
+        }
+        await closeSettings(page, `${prefix}/ajustes (extra)`);
+      }
+    } catch (error) { noteOnce(`Ajustes (extra): el recorrido se cortó (${String(error?.message ?? error).split(String.fromCharCode(10))[0]})`); await closeMenus(); }
+    // Normas: the Orb tab to its end and the one of the side agents
+    try {
+      if (await tap('nav-memories', 'Bitácoras y normas') && await tap('memories-rules', 'pestaña «Normas»')) {
+        await page.waitForTimeout(500);
+        await tap('rules-side-orb', 'Normas › Orb');
+        await scrollView('top'); await scrollShot(`${prefix}-normas-abajo`, 'end');
+        if (await tap('rules-side-agents', 'Normas › subagentes')) { await scrollView('top'); await page.waitForTimeout(300); await shot(`${prefix}-normas-subagentes`); }
+        await tap('rules-side-orb', 'Normas › Orb');
+        await tap('memories-logs', 'volver a la pestaña «Bitácoras»');
+      }
+    } catch (error) { noteOnce(`Normas: el recorrido se cortó (${String(error?.message ?? error).split(String.fromCharCode(10))[0]})`); await closeMenus(); }
+    // Games: the list, the snake in the middle of a game and the 2048 after two moves
+    try {
+      await goChat();
+      if (await tap('orb-chat-more', '⋯ del chat con Orbe') && await tap('bar-games', '«Minijuegos» del menú')) {
+        await page.locator('[data-testid=games-dialog]').waitFor({ timeout: 6000 }).catch(() => noteOnce('Juegos: el diálogo no se abrió'));
+        await page.waitForTimeout(500); await shot(`${prefix}-juegos`);
+        if (await tap('game-snake', 'el juego de la serpiente')) {
+          // a key starts it if it waits for one; the picture is taken at once (the snake still has room) and not after shot()'s own pause
+          await page.keyboard.press('ArrowDown'); await page.waitForTimeout(350);
+          await page.screenshot({ path: path.join(OUT, `${prefix}-juego-partida.png`) });
+        }
+        const back = page.locator('[data-testid=games-dialog]').getByRole('button', { name: /^(Volver a los juegos|Back to the games)$/ });
+        if (await back.count()) { await back.first().click({ timeout: 3000 }).catch(() => {}); await page.waitForTimeout(400); }
+        else noteOnce('Juegos: sin botón para volver a la lista');
+        if (await tap('game-g2048', 'el juego 2048')) {
+          await page.waitForTimeout(500);
+          await page.keyboard.press('ArrowLeft'); await page.waitForTimeout(350);
+          await page.keyboard.press('ArrowDown'); await page.waitForTimeout(350);
+          await shot(`${prefix}-juego-2048`);
+        }
+        if (!(await tap('games-close', 'cerrar los juegos'))) await closeMenus();
+        await page.waitForTimeout(300);
+      } else await closeMenus();
+    } catch (error) { noteOnce(`Juegos: el recorrido se cortó (${String(error?.message ?? error).split(String.fromCharCode(10))[0]})`); await closeMenus(); }
+    // God mode with a project that has a repository and changes (orb-dev); the active project and the panels are put back
+    const state = await call('app.state').catch(() => null);
+    const wasActive = state?.activeProject?.name ?? '';
+    const wasPanels = state?.config?.expert?.panels ?? {};
+    const panelIds = ['explorer', 'git', 'history', 'running', 'usage', 'system', 'activity'];
+    try {
+      await call('projects.setActive', { name: 'orb-dev' }).catch(() => noteOnce('God mode: no se pudo elegir el proyecto «orb-dev»'));
+      const patch = { enabled: true };
+      // every panel on, whatever the profile had
+      if (panelIds.some((id) => wasPanels[id] === false)) patch.panels = Object.fromEntries(panelIds.map((id) => [id, true]));
+      await call('config.save', { patch: { expert: patch } }).catch(() => noteOnce('God mode: no se pudo activar'));
+      const shown = await page.locator('[data-testid=orb-places-more]').first().waitFor({ timeout: 5000 }).then(() => true, () => false);
+      if (shown && await tap('orb-places-more', '«Más» de los sitios') && await tap('nav-expert', 'God mode')) {
+        await page.locator('[data-testid=expert-tree]').first().waitFor({ timeout: 8000 }).catch(() => noteOnce('God mode: el árbol de archivos no aparece'));
+        await page.waitForTimeout(1200);
+        const bar = await page.locator('[data-testid=expert-bar]').first().innerText({ timeout: 2000 }).catch(() => '');
+        if (!/orb-dev/.test(bar)) noteOnce('God mode: no se abrió con el proyecto «orb-dev»');
+        await shot(`${prefix}-god-mode`);
+        // a folder and a file of the tree, then its changes
+        const entry = (name) => page.locator('[data-testid=expert-tree] button', { has: page.locator('span.truncate', { hasText: name }) }).first();
+        try {
+          await entry(/^src$/).click({ timeout: 3000 }); await page.waitForTimeout(500);
+          await entry(/^context-meter\.js$/).click({ timeout: 3000 }); await page.waitForTimeout(900);
+          await shot(`${prefix}-god-mode-archivo`);
+          if (await tap('expert-view-changes', '«Ver cambios» del archivo')) { await page.waitForTimeout(900); await shot(`${prefix}-god-mode-diff`); }
+        } catch { noteOnce('God mode: no se pudo abrir una carpeta y un archivo del árbol'); }
+        if (!(await page.locator('[data-testid=expert-view-changes]').count())) {
+          // the file tab is gone (the diff replaced it): the list of Git's changes gives a diff too
+          const change = page.locator('[data-testid=expert-git] button').first();
+          if (await change.count()) { await change.click({ timeout: 3000 }).catch(() => {}); await page.waitForTimeout(800); }
+        }
+        if (await tap('expert-panels', 'paneles del God mode')) { await shot(`${prefix}-god-mode-paneles`); await closeMenus(); }
+        await page.waitForTimeout(300); await shot(`${prefix}-god-mode-paneles-todos`);
+        await scrollShot(`${prefix}-god-mode-abajo`, 'end', '[data-testid=expert-view] aside');
+        if (await tap('expert-more', '⋯ del God mode')) { await shot(`${prefix}-god-mode-menu`); await closeMenus(); }
+      } else noteOnce('God mode: no aparece en la barra tras activarlo');
+      await goChat();
+    } catch (error) { noteOnce(`God mode: el recorrido se cortó (${String(error?.message ?? error).split(String.fromCharCode(10))[0]})`); await closeMenus(); await goChat().catch(() => {}); }
+    await call('config.save', { patch: { expert: { enabled: false, ...(panelIds.some((id) => wasPanels[id] === false) ? { panels: Object.fromEntries(panelIds.map((id) => [id, wasPanels[id] !== false])) } : {}) } } }).catch(() => {});
+    await call('projects.setActive', { name: wasActive }).catch(() => {});
+  };
+  // The lock screen, at the end of a mode's tour: «Bloquear ahora», a wrong password, then the test password of this profile.
+  // Throws when the app does not come back: nothing after it could be shot.
+  const lockShots = async (prefix) => {
+    await goChat().catch(() => {});
+    let locked = false;
+    try {
+      if (await tap('nav-settings', 'Ajustes') && await tap('settings-nav-datos', 'sección «Datos» de Ajustes') && await tap('master-lock-now', '«Bloquear ahora»')) locked = true;
+    } catch { /* the call below locks it */ }
+    if (!locked) { noteOnce('bloqueo: sin botón «Bloquear ahora»; se bloquea con master.lock'); await call('master.lock').catch((error) => noteOnce(`bloqueo: master.lock falló (${String(error?.message ?? error).split(String.fromCharCode(10))[0]})`)); }
+    const screen = page.locator('[data-testid=master-locked]');
+    if (!(await screen.waitFor({ timeout: 8000 }).then(() => true, () => false))) { noteOnce('bloqueo: no salió la pantalla de bloqueo'); await closeMenus(); return; }
+    await shot(`${prefix}-bloqueo`);
+    try {
+      await page.fill('[data-testid=master-password]', 'no-es-esta');
+      await page.press('[data-testid=master-password]', 'Enter');
+      await page.locator('[data-testid=master-error]').waitFor({ timeout: 8000 });
+      await shot(`${prefix}-bloqueo-error`);
+    } catch { noteOnce('bloqueo: con una contraseña equivocada no salió el error'); }
+    await page.fill('[data-testid=master-password]', TEST_MASTER);
+    await page.press('[data-testid=master-password]', 'Enter');
+    const back = await page.locator('[data-testid=sidebar-home]').waitFor({ timeout: 20000 }).then(() => true, () => false);
+    if (!back || await screen.count()) { note('bloqueo: no volvió la app al desbloquear'); throw new Error('bloqueo: el desbloqueo falló; se termina el recorrido'); }
+    // Ajustes was left open behind the lock screen
+    if (await page.locator('[data-testid=settings-dialog]').count()) await closeSettings(page, `${prefix}/bloqueo`);
+  };
   const dark =() => page.evaluate(() => document.documentElement.classList.contains('dark'));
   const setDark = async (on) => { if (on !== (await dark())) await page.getByRole('button', { name: /claro y oscuro|day and night|light and dark/i }).click(); };
   // The robot at the top goes back to the chat; the professional theme has no robot (nothing drawn): there, a new chat
@@ -556,6 +756,12 @@ try {
         }
         await closeSettings(page, `${theme}/ajustes`);
       }
+    }
+    if (EXTRA) {
+      // the extra pass: deepShots takes the place of the chat pictures, the boards and the places, then the lock screen
+      await deepShots(theme);
+      await lockShots(theme);
+      continue;
     }
     // the dialogs and menus of the chat
     await goChat();
@@ -742,6 +948,11 @@ try {
       // the chat with an agent with its side panel open (Ficha)
       if (seeded && await openChat(CHATS[0].title)) { if (await openPanel('info')) await shot(`tema-${skin}-${theme}-chat-agente`); await closePanel(); }
       if (await tapOrNote('[data-testid=nav-tasks]')) await shot(`tema-${skin}-${theme}-tareas`);
+      // ORB_EXPLORA_EXTRA=1: Agentes and Uso in every theme too
+      if (EXTRA && await tapOrNote('[data-testid=nav-agents]')) {
+        await page.waitForTimeout(500); await shot(`tema-${skin}-${theme}-agentes`);
+        if (await tapOrNote('[data-testid=agents-tab-usage]')) { await page.waitForTimeout(600); await shot(`tema-${skin}-${theme}-uso`); await tapOrNote('[data-testid=agents-tab-agents]'); }
+      }
       if (!(await tapOrNote('[data-testid=nav-settings]')) || !(await tapOrNote('[data-testid=settings-nav-general]'))) continue;
       await shot(`tema-${skin}-${theme}-ajustes`);
       if (theme === 'dia' || darkOnlySkin(skin)) {

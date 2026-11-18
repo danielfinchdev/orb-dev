@@ -100,11 +100,12 @@ test('F5 reloads the window and hands each unsent message back to its box, once'
 test('the first-run welcome opens maximised and fits the window', () => {
   const setup = read('views', 'setup.jsx');
   assert.match(setup, /useEffect\(\(\) => \{ bridge\.windowControls\?\.act\('maximize-on'\)\.catch\(quiet\); \}, \[\]\);/);
-  assert.equal([...setup.matchAll(/className="brand-sky onboard"/g)].length, 2);
-  assert.match(read('views', 'master.jsx'), /<div className="brand-sky onboard">\s*<form onSubmit=\{submit\} className="[^"]*onboard-card/);
+  // Orb UI 2.0: every step of the welcome (and the master password's) is a wizard page, one column centred in the window
+  // that scrolls when the window is low.
+  assert.ok([...setup.matchAll(/<WizardPage step="/g)].length >= 3);
+  assert.match(read('views', 'master.jsx'), /<WizardPage /);
   assert.doesNotMatch(setup + read('views', 'master.jsx').split('export function MasterLocked')[0], /pt-24 pb-6/);
-  const css = read('app.css');
-  assert.match(css, /\.onboard \{[^}]*padding: clamp\(/); assert.match(css, /\.onboard-card \{ gap: clamp\(/);
+  assert.match(read('components', 'wizard.jsx'), /flex h-full flex-col overflow-y-auto[^\n]*\n\s*<div className="m-auto /);
   // Rust: maximise only a window that is meant to be seen (a hidden test window would show).
   const rs = fs.readFileSync(path.join(ROOT, 'src-tauri', 'src', 'window.rs'), 'utf8');
   assert.match(rs, /"maximize-on" => \{\s*if !w\.app_handle\(\)\.state::<Ui>\(\)\.hidden && !w\.is_maximized\(\)/);

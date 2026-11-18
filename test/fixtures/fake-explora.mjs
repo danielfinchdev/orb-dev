@@ -28,6 +28,12 @@ function turnOf(text) {
   return best?.when ?? null;
 }
 
+// ORB_EXPLORA_USAGE=1: before each turn the fake Claude and Codex report part of their windows used (the same rate events
+// the real agents send), so the account cards of Uso show percentages. The weekly one goes first: the 5 h one is the last word.
+const HOUR = 3_600_000;
+const RATES = { claude: [['seven_day', 0.31, 96 * HOUR], ['5h', 0.54, 2.5 * HOUR]], codex: [['seven_day', 0.18, 120 * HOUR], ['5h', 0.42, 1.5 * HOUR]] };
+const USAGE = process.env.ORB_EXPLORA_USAGE === '1';
+
 export function fakeAdapter(id, real) {
   const adapter = base(id, real);
   const createLive = adapter.createLive;
@@ -36,6 +42,7 @@ export function fakeAdapter(id, real) {
     const send = live.send;
     // Orb takes its «before the turn» photo of the folder before calling send, so what is written here belongs to the turn.
     live.send = (message) => {
+      if (USAGE) for (const [window, utilization, ms] of RATES[id] ?? []) o.onEvent?.({ type: 'rate', status: 'allowed', resetAt: Date.now() + ms, utilization, window });
       const text = String(message?.text ?? '');
       const when = turnOf(text);
       const hit = when ? PLAN.find((x) => x.when === when) : null;

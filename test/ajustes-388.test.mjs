@@ -203,3 +203,32 @@ test('8C-a: the glass dialog is the mock-up\'s near-opaque white', () => {
   const pieces = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'themes', 'pieces.css'), 'utf8');
   assert.doesNotMatch(pieces, /html\[data-skin="cristal"\] \[data-slot="dialog-content"\] \{[^}]*position: relative/);
 });
+
+test('9C-b: the solid caret is drawn 10 x 5 and not rescaled by the trigger\'s svg size rule', () => {
+  const overlay = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'components', 'ui', 'overlay.jsx'), 'utf8');
+  // «size-» in the class opts the svg out of [&_svg:not([class*='size-'])]:size-4, which would draw it 16 px wide
+  assert.match(overlay, /size-auto h-\[5px\] w-\[10px\][^"]*" viewBox="0 0 10 5"/);
+  assert.match(overlay, /caret === 'solid' && 'pr-2\.5'/);
+});
+
+test('9C-b: the explanations of Permisos name Auto and Preguntar in bold, from two keys without the labels', () => {
+  assert.match(general, /<b className="text-control font-medium">\{t\('session\.autoMode'\)\}:<\/b> \{t\('settings\.autonomyHintAuto'\)\}/);
+  assert.match(general, /<b className="text-control font-medium">\{t\('session\.askMode'\)\}:<\/b> \{t\('settings\.autonomyHintAsk'\)\}/);
+  for (const lang of ['es', 'en']) {
+    const auto = fs.readFileSync(path.join(ROOT, 'src', 'shared', 'locales', lang, 'auto.mjs'), 'utf8');
+    assert.ok(auto.includes("'settings.autonomyHintAuto'") && auto.includes("'settings.autonomyHintAsk'"), lang);
+    assert.ok(!auto.includes("'settings.autonomyHint'"), `${lang}: the old whole-sentence key is gone`);
+  }
+});
+
+test('9C-b: the foot of the navigation starts 18 px in, like the mock-up (8 + 10)', () => {
+  assert.match(view('settings', 'index.jsx'), /text-faint-foreground mb-2\.5 px-\[18px\] py-2 text-caption/);
+});
+
+test('9C-b: a notice beside a dialog is placed by its real height and falls back to the window corner', () => {
+  const main = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'main.jsx'), 'utf8');
+  assert.match(main, /\[data-sonner-toast\], \$\{BOARD_BAR\}/);
+  assert.match(main, /\.height \?\? TOAST_H/);
+  assert.match(main, /else next = \{ bottom: 4, right: 4 \};/);
+  assert.doesNotMatch(main, /dialog-footer/);
+});

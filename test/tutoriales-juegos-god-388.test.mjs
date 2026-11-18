@@ -87,3 +87,32 @@ test('the record celebration stays in the games dialog (spark, robot only with t
   assert.match(src, /data-motion=minima/);
   assert.match(src, /game-record/);
 });
+
+test('9C-a Tutoriales: the guides use the icons of the mock-up and the tour card has its line heights', () => {
+  const view = read('src/ui/views/tutorials.jsx');
+  for (const [id, icon] of [['newchat', 'MessagesSquare'], ['tasks', 'ListChecks'], ['sidebar', 'PanelLeft'], ['board', 'PencilRuler'], ['agents', 'Bot'], ['schedules', 'CalendarClock']]) {
+    assert.ok(new RegExp(`${id}: \{ icon: ${icon},`).test(view), `${id} → ${icon}`);
+  }
+  assert.match(view, /<section className="mt-1 grid gap-1\.5">/);
+  assert.match(view, /text-card-title leading-\[1\.45\] font-semibold">\{t\('help\.replayTitle'\)/);
+});
+
+test('9C-a Juegos: the game dialog is 560 wide, centred, with the board scaled to 362 by CSS only', () => {
+  const src = read('src/ui/games/games.jsx');
+  assert.match(src, /w-\[min\(560px,96vw\)\]/);
+  assert.match(src, /game && 'text-center'/);
+  assert.match(src, /game \? 'justify-center' : 'justify-between'/);
+  assert.match(src, /\[&_canvas\]:h-auto! \[&_canvas\]:max-w-\[362px\]/);
+  assert.match(src, /text-2xl leading-\[1\.45\] font-semibold/, 'score cards of 82 px');
+});
+
+test('9C-a God mode: file search, project as plain text with its dot, panels menu of 300 px', () => {
+  const src = read('src/ui/views/expert.jsx');
+  assert.match(src, /data-testid="expert-file-search"/);
+  assert.match(src, /filter=\{fileQuery\}/);
+  assert.match(src, /border-transparent bg-transparent/);
+  assert.match(src, /icon: <ProjectIcon name=\{p\.name\} small \/>/);
+  assert.match(src, /DropdownMenuContent align="end" className="w-75"/);
+  assert.doesNotMatch(src, /new file|file-plus|Nuevo archivo/i, 'Orb cannot create files: no «+»');
+  for (const lang of ['es', 'en']) assert.match(read(`src/shared/locales/${lang}/expert.mjs`), /'expert\.searchFiles'/);
+});
