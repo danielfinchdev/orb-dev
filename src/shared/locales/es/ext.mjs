@@ -36,6 +36,7 @@ export default {
   'ext.more': 'Más opciones de {name}',
   'ext.openFolder': 'Abrir carpeta',
   'ext.remove': 'Quitar',
+  'ext.removeNamed': 'Quitar {name}',
   'ext.removeTitle': '¿Quitar {name}?',
   'ext.removeBody': 'Se borra su carpeta de core. Si la necesitas otra vez, tendrás que importarla o restaurar una copia de seguridad.',
   'ext.removeConnectorBody': 'Se quita de Orb, con sus claves. El programa no se desinstala.',

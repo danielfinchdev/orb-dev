@@ -18,7 +18,7 @@ import { connectorKeys } from './master.jsx';
 import { CATEGORIES } from '../../shared/layout.mjs';
 import { MoreButton, ListRow } from '@/components/ui/primitives.jsx';
 import { cn } from '@/lib/utils.js';
-import { Block, Panel, Setting, Stack, Hint } from './settings/rows.jsx';
+import { Block, Panel, Fld, Stack, CardFoot, Hint, MoreOptions } from './settings/rows.jsx';
 
 // Where one came from, in a word (orb.json › source).
 const SOURCE = { orb: 'ext.source.orb', importado: 'ext.source.imported', creado: 'ext.source.created', usuario: 'ext.source.user' };
@@ -52,7 +52,6 @@ export function ExtensionsPanel() {
   return (
     <div className="grid gap-4 [&>*]:min-w-0" data-testid="extensions">
       {data.pending.length ? <PendingCard list={data.pending} run={run} /> : null}
-      <Hint>{t('ext.help')}</Hint>
       <Group title={t('ext.skills')} note={t('ext.skillsHint')} dir={data.dirs.skills} onOpen={open} empty={t('ext.noSkills')} count={data.skills.length}>
         {data.skills.map((s) => (
           <Row key={s.name} item={s} testid={`ext-skill-${s.name}`} detail={s.linked ? t('ext.linked') : s.valid ? s.description : t('ext.invalidSkill')}
@@ -79,13 +78,11 @@ export function ExtensionsPanel() {
           {data.connectors.map((s) => (
             <Row key={s.name} item={s} testid={`ext-connector-${s.name}`} detail={`${s.command} ${s.args.join(' ')}`} mono
               on={s.enabled} onToggle={(v) => toggle('connector', s.name, v)} keys={{ name: s.name }}
-              menu={[{ icon: Trash2, label: t('ext.remove'), danger: true, run: () => remove('connector', s.name), testid: 'ext-remove' }]} />
+              onRemove={() => remove('connector', s.name)} />
           ))}
         </Group>
       ) : null}
-      <Block title={t('settings.mcpAddTitle')} note={t('settings.mcpAddDesc')}>
-        <Panel><Setting label={t('ext.addConnector')}><Button size="sm" variant="outline" onClick={() => addConnector(run)}><Plus />{t('ext.addConnector')}</Button></Setting></Panel>
-      </Block>
+      <AddConnector run={run} />
       {data.projects.length ? (
         <Group title={t('ext.projects')} note={t('ext.projectsHint')} count={data.projects.length}>
           {data.projects.map((p) => (
@@ -100,6 +97,7 @@ export function ExtensionsPanel() {
           ))}
         </Group>
       ) : null}
+      <MoreOptions testid="more-options-extensiones"><Panel><Stack><Hint>{t('ext.help')}</Hint></Stack></Panel></MoreOptions>
     </div>
   );
 }
@@ -115,7 +113,7 @@ function Group({ title, note, count, dir, onOpen, empty, children }) {
   );
 }
 
-function Row({ item, detail, note = null, mono = false, on, disabled = false, onToggle, keys = null, extra = null, menu = [], testid }) {
+function Row({ item, detail, note = null, mono = false, on, disabled = false, onToggle, keys = null, extra = null, menu = [], onRemove = null, testid }) {
   const t = useT();
   return (
     <ListRow className="border-border rounded-none not-first:border-t" data-testid={testid}
@@ -127,12 +125,15 @@ function Row({ item, detail, note = null, mono = false, on, disabled = false, on
           <Badge variant="secondary">{sourceLabel(item.source)}</Badge>
           <Switch checked={on} disabled={disabled} onCheckedChange={onToggle} aria-label={t('ext.toggle', { name: item.name })} data-testid="ext-toggle" />
           {keys ? <BubbleTip title={t('master.keys')}><Button variant="ghost" size="icon-xs" aria-label={t('master.keys')} onClick={() => connectorKeys(keys)} data-testid="mcp-keys"><KeyRound /></Button></BubbleTip> : null}
-          <DropdownMenu modal={false}>
-            <DropdownMenuTrigger asChild><MoreButton label={t('ext.more', { name: item.name })} data-testid="ext-menu" /></DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              {menu.map((m, i) => (m ? <DropdownMenuItem key={m.label} variant={m.danger ? 'destructive' : undefined} onSelect={m.run} data-testid={m.testid}><m.icon />{m.label}</DropdownMenuItem> : <DropdownMenuSeparator key={`s${i}`} />))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* a connector has one action (remove): the mock-up draws it as a button, not as a menu */}
+          {onRemove ? <BubbleTip title={t('ext.remove')}><Button variant="ghost" size="icon-xs" aria-label={t('ext.removeNamed', { name: item.name })} onClick={onRemove} data-testid="ext-remove"><Trash2 /></Button></BubbleTip> : (
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger asChild><MoreButton label={t('ext.more', { name: item.name })} data-testid="ext-menu" /></DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {menu.map((m, i) => (m ? <DropdownMenuItem key={m.label} variant={m.danger ? 'destructive' : undefined} onSelect={m.run} data-testid={m.testid}><m.icon />{m.label}</DropdownMenuItem> : <DropdownMenuSeparator key={`s${i}`} />))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       )} />
   );
@@ -260,26 +261,38 @@ async function connectProject(p, run) {
   const c = getState().app?.config;
   run(call('config.save', { patch: { mcpServers: [...(c?.mcpServers ?? []), { name: p.name.replace(/[^a-z0-9_-]+/gi, '-').slice(0, 40), command: p.command, args: p.args, agents: [], enabled: true, source: 'usuario' }] } }), t('ext.added', { name: p.name }));
 }
-// A connector of the PC (a package run with npx, a program): the command and its arguments.
-function addConnector(run) {
-  return form(t('settings.mcpAddTitle'), {
-    description: t('settings.mcpAddDesc'),
-    initial: { name: '', command: '', args: '', agents: '' },
-    body: (v, set) => (<>
-      <Field label={t('settings.mcpName')}><Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder={t('settings.mcpNamePh')} /></Field>
-      <Field label={t('settings.mcpCommand')}><Input value={v.command} onChange={(e) => set({ command: e.target.value })} placeholder="npx" /></Field>
-      <Field label={t('settings.mcpArgs')} hint={t('settings.mcpArgsHint')}><Input value={v.args} onChange={(e) => set({ args: e.target.value })} placeholder="@playwright/mcp@latest" /></Field>
-      <Field label={t('settings.mcpAgents')} hint={t('settings.mcpAgentsHint')}><Input value={v.agents} onChange={(e) => set({ agents: e.target.value })} /></Field>
-    </>),
-    ok: t('settings.add'),
-    onOk: async (v) => {
-      const c = getState().app?.config;
-      const entry = { name: v.name.trim(), command: v.command.trim(), args: v.args.trim() ? v.args.trim().split(/\s+/) : [], agents: v.agents.split(',').map((x) => x.trim()).filter(Boolean), enabled: true, source: 'usuario' };
-      await call('config.save', { patch: { mcpServers: [...(c?.mcpServers ?? []), entry] } });
-      run(Promise.resolve(null));
-      return true;
-    }
-  });
+// A connector of the PC (a package run with npx, a program): the command and its arguments, as the mock-up draws it,
+// a form in the page itself.
+function AddConnector({ run }) {
+  const t = useT();
+  const empty = { name: '', command: '', args: '', agents: '' };
+  const [v, setV] = useState(empty);
+  const set = (patch) => setV((x) => ({ ...x, ...patch }));
+  // one save at a time: a second press while the first is asked for the password would add the connector twice
+  const [busy, setBusy] = useState(false);
+  const add = async () => {
+    if (busy) return;
+    setBusy(true);
+    try { await save(); } finally { setBusy(false); }
+  };
+  const save = async () => {
+    const c = getState().app?.config;
+    const entry = { name: v.name.trim(), command: v.command.trim(), args: v.args.trim() ? v.args.trim().split(/\s+/) : [], agents: v.agents.split(',').map((x) => x.trim()).filter(Boolean), enabled: true, source: 'usuario' };
+    if (!(await act(call('config.save', { patch: { mcpServers: [...(c?.mcpServers ?? []), entry] } }), t('settings.saved')))) return;
+    setV(empty);
+    run(Promise.resolve(null));
+  };
+  return (
+    <Block title={t('settings.mcpAddTitle')} note={t('settings.mcpAddDesc')} data-testid="ext-add-connector">
+      <Panel>
+        <Fld label={t('settings.mcpName')}><Input value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder={t('settings.mcpNamePh')} data-testid="ext-add-name" /></Fld>
+        <Fld label={t('settings.mcpCommand')}><Input value={v.command} onChange={(e) => set({ command: e.target.value })} placeholder="npx" data-testid="ext-add-command" /></Fld>
+        <Fld label={t('settings.mcpArgs')} hint={t('settings.mcpArgsHint')}><Input value={v.args} onChange={(e) => set({ args: e.target.value })} placeholder="@playwright/mcp@latest" data-testid="ext-add-args" /></Fld>
+        <Fld label={t('settings.mcpAgents')} hint={t('settings.mcpAgentsHint')}><Input value={v.agents} onChange={(e) => set({ agents: e.target.value })} data-testid="ext-add-agents" /></Fld>
+        <CardFoot><Button size="sm" onClick={add} disabled={busy || !v.name.trim() || !v.command.trim()} data-testid="ext-add"><Plus />{t('settings.add')}</Button></CardFoot>
+      </Panel>
+    </Block>
+  );
 }
 
 // The card in the chat when an agent asks for what it made to be turned on (src/mcp/server.mjs › orb_request_activation),

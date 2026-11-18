@@ -3,12 +3,12 @@
 // close its session. The phone asks for the master password to link, and unlinking one asks for it here.
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { QrCode, Smartphone, Globe, Pencil, Trash2, Copy, Check, LoaderCircle, ShieldCheck, TriangleAlert, ChevronDown, ExternalLink, KeyRound, RefreshCw } from 'lucide-react';
+import { QrCode, Smartphone, Globe, Pencil, Trash2, Ellipsis, Copy, Check, LoaderCircle, ShieldCheck, TriangleAlert, ChevronDown, ExternalLink, KeyRound, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Input } from '@/components/ui/basic.jsx';
 import { ListRow } from '@/components/ui/primitives.jsx';
 import { Block, Panel, Stack, Hint, Setting, MoreOptions } from './settings/rows.jsx';
-import { BubbleTip, Select } from '@/components/ui/overlay.jsx';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, Select } from '@/components/ui/overlay.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { call, act, bridge } from '@/lib/store.js';
 import { unlockCore } from '@/lib/core-access.js';
@@ -122,16 +122,14 @@ function PairCard({ device, pair, onPair }) {
   );
 }
 
-// What the drawing does not show, under «Más opciones»: what is being linked, and how to reach this PC from outside home.
+// What the drawing does not show, for «Más opciones»: what is being linked, and how to reach this PC from outside home.
 function PairMore({ device, onDevice }) {
   const t = useT();
   return (
-    <MoreOptions testid="link-more-options">
-      <Panel>
-        <Stack><Segmented label={t('link.forWhat')} value={device} onChange={onDevice} testid="link-for" options={PAIR_FOR.map((k) => ({ value: k, label: t(`link.for.${k}`) }))} /></Stack>
-        {device === 'phone' ? <Stack><OutsideGuide /></Stack> : null}
-      </Panel>
-    </MoreOptions>
+    <Panel>
+      <Stack><Segmented label={t('link.forWhat')} value={device} onChange={onDevice} testid="link-for" options={PAIR_FOR.map((k) => ({ value: k, label: t(`link.for.${k}`) }))} /></Stack>
+      {device === 'phone' ? <Stack><OutsideGuide /></Stack> : null}
+    </Panel>
   );
 }
 
@@ -172,8 +170,14 @@ function DevicesCard({ devices, reload, onPair }) {
                   {/* over the local network, a device that no longer connects (the PC's address changed) is linked again. */}
                   {!d.online && d.lastSeen && d.route === 'wifi' ? <Button size="xs" variant="outline" onClick={() => onPair({ device: d.kind === 'browser' ? 'browser' : 'phone', via: 'wifi' })} data-testid="link-relink">{t('link.relink')}</Button> : null}
                   <Badge variant={d.online ? 'success' : 'secondary'}>{d.online ? t('link.online') : t('link.offline')}</Badge>
-                  <BubbleTip title={t('link.rename')}><Button size="icon-xs" variant="ghost" aria-label={t('link.rename')} onClick={() => rename(d)}><Pencil /></Button></BubbleTip>
-                  <BubbleTip title={t('link.revoke')}><Button size="icon-xs" variant="danger" aria-label={t('link.revoke')} onClick={() => revoke(d)} data-testid="link-revoke"><Trash2 /></Button></BubbleTip>
+                  {/* the mock-up's «…» menu: rename and sign out, with the same calls and the same confirmation as before */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild><Button size="icon-xs" variant="ghost" aria-label={t('settings.moreOptions')} title={t('settings.moreOptions')} data-testid="link-menu"><Ellipsis /></Button></DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem onSelect={() => rename(d)} data-testid="link-rename"><Pencil />{t('link.rename')}</DropdownMenuItem>
+                      <DropdownMenuItem variant="destructive" onSelect={() => revoke(d)} data-testid="link-revoke"><Trash2 />{t('link.revoke')}</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               )} />
           );
@@ -212,14 +216,15 @@ export function MagicLinkPanel({ grouped = false, phoneAccess = null }) {
     return () => { clearInterval(id); off(); };
   }, []);
   if (!devices) return null;
+  const more = <PairMore device={device} onDevice={pickDevice} />;
   const title = (id) => (grouped ? t(`settings.group.${id}`) : null);
   return (
     <div className="grid gap-4 [&>*]:min-w-0" data-testid="magic-link">
       <SubSection id="dispositivos" title={title('dispositivos')}>
         <PairCard device={device} pair={pair} onPair={ask} />
         <DevicesCard devices={devices} reload={load} onPair={ask} />
-        {phoneAccess}
-        <PairMore device={device} onDevice={pickDevice} />
+        {/* phoneAccess draws «Acceso desde otros dispositivos» and puts the pairing options inside its «Más opciones» */}
+        {phoneAccess ? phoneAccess(more) : <MoreOptions testid="link-more-options">{more}</MoreOptions>}
       </SubSection>
     </div>
   );

@@ -37,7 +37,7 @@ export default {
   'master.lockNow': 'Bloquear ahora',
   'master.lockAfter': 'Bloquear Orb tras',
   'master.lockAfterHint': 'Sin usar Orb este tiempo, pide la contraseña maestra. También se bloquea al bloquear Windows o suspender el PC.',
-  'master.lockMinutes': '{n} min sin usar',
+  'master.lockMinutes': '{n} min',
   'master.lostTitle': 'Falta tu contraseña maestra',
   'master.lostBody': 'No se encuentra el archivo de tu contraseña maestra. Si tienes una copia de seguridad, restáurala. Si no, pon otra con el código de recuperación o empieza de cero.',
   'master.unlock': 'Desbloquear',

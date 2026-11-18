@@ -29,7 +29,7 @@ export function AssistantCard({ c }) {
       <Panel>
         <Setting label={t('settings.assistantName')} hint={t('settings.assistantNameHint')}><Input className="w-[200px]" value={v.assistantName} onChange={(e) => setV({ ...v, assistantName: e.target.value })} maxLength={40} aria-label={t('settings.assistantName')} /></Setting>
         <Setting label={t('settings.userName')} hint={t('settings.userNameHint')}><Input className="w-[200px]" value={v.userName} onChange={(e) => setV({ ...v, userName: e.target.value })} maxLength={40} aria-label={t('settings.userName')} /></Setting>
-        <Setting label={t('settings.language')} hint={t('settings.languageHint')}><Select caret="solid" value={v.language} onValueChange={(language) => { setV({ ...v, language }); save({ language }); }} title={t('settings.language')} options={Object.entries(LANGUAGES).map(([value, label]) => ({ value, label }))} /></Setting>
+        <Setting label={t('settings.language')} hint={t('settings.languageHint')}><Select caret="solid" value={v.language} onValueChange={(language) => { setV({ ...v, language }); save({ language }); }} title={t('settings.language')} options={Object.entries(LANGUAGES).map(([value, label]) => ({ value, label: label.replace(/\s*\(.*\)$/, '') }))} /></Setting>
         <CardFoot><Button size="sm" onClick={() => save({ assistantName: v.assistantName.trim(), userName: v.userName.trim(), language: v.language })}>{t('settings.save')}</Button></CardFoot>
       </Panel>
     </Block>
@@ -382,6 +382,24 @@ export function ProtectedCard({ c }) {
   );
 }
 
+// Zoom in steps of 10 %: the mock-up draws only the size list, so the buttons live in «Más opciones».
+export function ZoomFineCard() {
+  const t = useT();
+  const [zoom, setZoom] = useState(null);
+  useEffect(() => { bridge.zoom?.().then(setZoom).catch(quiet); return bridge.on('ui:zoom', (p) => setZoom(p.zoom)); }, []);
+  if (!bridge.zoom) return null;
+  const change = async (value) => setZoom(await act(bridge.zoom(Number(value))));
+  return (
+    <Panel>
+      <Setting label={t('settings.zoomFine')} hint={t('settings.zoomFineHint')} data-testid="zoom-fine">
+          <BubbleTip title={t('settings.zoomOut')}><Button size="icon-sm" variant="outline" aria-label={t('settings.zoomOut')} onClick={() => change(zoom - 0.1)}><ZoomOut /></Button></BubbleTip>
+          <BubbleTip title={t('settings.zoomIn')}><Button size="icon-sm" variant="outline" aria-label={t('settings.zoomIn')} onClick={() => change(zoom + 0.1)}><ZoomIn /></Button></BubbleTip>
+          <span className="text-muted-foreground min-w-9 text-caption tabular-nums">{zoom ? `${Math.round(zoom * 100)} %` : ''}</span>
+      </Setting>
+    </Panel>
+  );
+}
+
 export function InterfaceCard({ c }) {
   const t = useT();
   const [zoom, setZoom] = useState(null);
@@ -400,9 +418,6 @@ export function InterfaceCard({ c }) {
       <Panel>
         <Setting label={t('settings.sizeLabel')} hint={<WithKeys text={t('settings.sizeHint')} keys={{ zoomIn: ['Ctrl', '+'], zoomOut: ['Ctrl', '-'], reset: ['Ctrl', '0'] }} />}>
           <Select caret="solid" value={preset} placeholder={zoom ? t('settings.custom', { pct: Math.round(zoom * 100) }) : '…'} onValueChange={change} title={t('settings.sizeLabel')} options={SIZES} />
-          <BubbleTip title={t('settings.zoomOut')}><Button size="icon-sm" variant="outline" aria-label={t('settings.zoomOut')} onClick={() => change(zoom - 0.1)}><ZoomOut /></Button></BubbleTip>
-          <BubbleTip title={t('settings.zoomIn')}><Button size="icon-sm" variant="outline" aria-label={t('settings.zoomIn')} onClick={() => change(zoom + 0.1)}><ZoomIn /></Button></BubbleTip>
-          <span className="text-muted-foreground min-w-9 text-caption tabular-nums">{zoom ? `${Math.round(zoom * 100)} %` : ''}</span>
         </Setting>
         <Setting label={t('settings.terminal')} hint={t('settings.terminalHint')}>
           <Select caret="solid" className="min-w-0" value={c.ui?.terminal ?? 'auto'} onValueChange={(terminal) => save({ ui: { terminal } })} title={t('settings.terminal')} options={Object.entries(terminals).map(([value, label]) => ({ value, label }))} />

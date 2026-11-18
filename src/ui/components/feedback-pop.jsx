@@ -20,7 +20,7 @@ const MAX_IMAGES = 3;
 // notice (Ajustes has no other place to say it); the pop-up says it inside itself.
 export function useFeedback({ toasts = false } = {}) {
   const t = useT();
-  const [v, setV] = useState({ type: 'idea', message: '', contact: '' });
+  const [v, setV] = useState({ type: 'error', message: '', contact: '' });
   const [images, setImages] = useState([]);
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');

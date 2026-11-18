@@ -8,12 +8,12 @@ import { confirm, form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Field, Input, PathText, Spinner } from '@/components/ui/basic.jsx';
 import { ListRow } from '@/components/ui/primitives.jsx';
-import { Select, Switch, BubbleTip } from '@/components/ui/overlay.jsx';
+import { Switch, BubbleTip } from '@/components/ui/overlay.jsx';
 import { call, act, bridge } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { unlockCore } from '@/lib/core-access.js';
-import { save, Row, PREVIEWS, previewOf, Block, Panel, Setting, Stack, CardFoot, Hint } from './rows.jsx';
+import { save, Row, previewOf, MoreOptions, Block, Panel, Setting, Stack, CardFoot, Hint } from './rows.jsx';
 import { quiet } from '@/lib/quiet.js';
 
 // the pairing of «Emparejar móvil»: Android's QR (Depuración inalámbrica) that the engine waits for on the
@@ -144,49 +144,58 @@ export function AndroidCard() {
   );
 }
 
-// Phone access: on/off and the addresses (wifi, Tailscale). the QR and the linked devices are in Magic Link.
-export function MobileCard() {
+// Phone access, as the mock-up draws it: the on/off, each way in with its address and a button to copy it, and what a locked
+// phone shows. The switches that turn each way on (and the screenshots) are in «Más opciones», next to the pairing options
+// that arrive in `more`; the QR and the linked devices are in Magic Link, above.
+export function MobileCard({ more = null }) {
   const t = useT();
   const [st, setSt] = useState(null);
   const load = () => call('remote.status').then(setSt).catch(quiet);
   useEffect(() => { load(); }, []);
   const configure = async (patch) => { const r = await act(call('remote.configure', patch)); if (r) setSt(r); };
-  if (!st) return null;
+  if (!st) return <MoreOptions testid="link-more-options">{more}</MoreOptions>;
   const route = (kind) => st.routes?.find((r) => r.kind === kind);
   const via = (kind) => {
     const r = route(kind);
-    // each way says what it is for; its address, with a button to copy it, sits next to the switch.
+    const usable = st.enabled && st[kind] && r?.url;
     const hint = st.enabled && st[kind] && !r ? t('settings.mobileUnavailable') : kind === 'wifi' ? t('settings.mobileWifiHint') : t('settings.mobileTsHint');
     return (
-      <Row label={t(kind === 'wifi' ? 'settings.mobileWifi' : 'settings.mobileTs')} hint={hint}>
-        {/* the address as the mock-up shows it, with a button to copy it */}
-        {st.enabled && st[kind] && r?.url ? <><code className="text-muted-foreground font-mono text-caption cursor-text select-text" onClick={(e) => e.preventDefault()} data-testid={`mobile-${kind}-address`}>{r.url.replace(/^https?:\/\//, '')}</code><Button size="sm" variant="outline" onClick={(e) => { e.preventDefault(); navigator.clipboard?.writeText(r.url).then(() => notifyInfo(t('settings.addressCopied'))).catch(quiet); }} data-testid={`mobile-${kind}-copy`}><Copy />{t('settings.copyAddress')}</Button></> : null}
-        <Switch data-testid={`mobile-${kind}`} checked={st[kind]} onCheckedChange={(on) => configure({ [kind]: on })} />
-      </Row>
+      <Setting key={kind} label={t(kind === 'wifi' ? 'settings.mobileWifi' : 'settings.mobileTs')} hint={hint}>
+        {usable ? <><code className="text-muted-foreground font-mono text-caption cursor-text select-text" data-testid={`mobile-${kind}-address`}>{r.url.replace(/^https?:\/\//, '')}</code><Button size="sm" variant="outline" onClick={() => navigator.clipboard?.writeText(r.url).then(() => notifyInfo(t('settings.addressCopied'))).catch(quiet)} data-testid={`mobile-${kind}-copy`}><Copy />{t('settings.copyAddress')}</Button></> : null}
+      </Setting>
     );
   };
   return (
-    <Block title={t('settings.mobile')} note={t('settings.mobileDesc')} data-testid="mobile-card">
-      <Panel>
-        <Row label={t('settings.mobileAccess')} hint={st.enabled && !st.running ? st.error : t('settings.mobileAccessHint')}><Switch checked={st.enabled} onCheckedChange={async (enabled) => { const r = await act(call('remote.enable', { enabled })); if (r) setSt(r); }} /></Row>
-        {st.enabled ? <>{via('wifi')}{via('tailscale')}</> : null}
-        {st.enabled && st.error && st.running ? <Stack className="border-border border-t"><Hint>{st.error}</Hint></Stack> : null}
-        {/* the QR, the short code and the linked devices are in Magic Link, above. the firewall is mentioned
-            only when linking over the local network fails (app.linkOfflineWifi, on the device). */}
+    <>
+      <Block title={t('settings.mobile')} note={t('settings.mobileDesc')} data-testid="mobile-card">
+        <Panel>
+          <Row label={t('settings.mobileAccess')} hint={st.enabled && !st.running ? st.error : t('settings.mobileAccessHint')}><Switch checked={st.enabled} onCheckedChange={async (enabled) => { const r = await act(call('remote.enable', { enabled })); if (r) setSt(r); }} /></Row>
+          {st.enabled ? <>{via('wifi')}{via('tailscale')}</> : null}
+          {st.enabled && st.error && st.running ? <Stack className="border-border border-t"><Hint>{st.error}</Hint></Stack> : null}
+          {/* a switch: on shows the start of the message, off shows nothing; the values saved are the same two */}
+          {st.enabled ? (
+            <Row label={t('settings.mobilePreview')} hint={t(`settings.mobilePreview.${previewOf(st.preview)}Hint`)}>
+              <Switch checked={previewOf(st.preview) === 'chat'} onCheckedChange={(on) => configure({ preview: on ? 'chat' : 'none' })} data-testid="mobile-preview" aria-label={t('settings.mobilePreview')} />
+            </Row>
+          ) : null}
+        </Panel>
+      </Block>
+      <MoreOptions testid="link-more-options">
+        {more}
         {st.enabled ? (
-          <Row label={t('settings.mobileScreenshot')} hint={t('settings.mobileScreenshotHint')}>
-            <Switch data-testid="mobile-screenshot" checked={st.screenshot !== false} onCheckedChange={(screenshot) => configure({ screenshot })} />
-          </Row>
+          <Panel>
+            {['wifi', 'tailscale'].map((kind) => (
+              <Row key={kind} label={t(kind === 'wifi' ? 'settings.mobileWifi' : 'settings.mobileTs')} hint={t('settings.mobileWayHint')}>
+                <Switch data-testid={`mobile-${kind}`} checked={st[kind]} onCheckedChange={(on) => configure({ [kind]: on })} />
+              </Row>
+            ))}
+            <Row label={t('settings.mobileScreenshot')} hint={t('settings.mobileScreenshotHint')}>
+              <Switch data-testid="mobile-screenshot" checked={st.screenshot !== false} onCheckedChange={(screenshot) => configure({ screenshot })} />
+            </Row>
+          </Panel>
         ) : null}
-        {/* what notifications show when locked. */}
-        {st.enabled ? (
-          <Row label={t('settings.mobilePreview')} hint={t(`settings.mobilePreview.${previewOf(st.preview)}Hint`)}>
-            <Select caret="solid" value={previewOf(st.preview)} onValueChange={(preview) => configure({ preview })} data-testid="mobile-preview" title={t('settings.mobilePreview')}
-              options={PREVIEWS.map((v) => ({ value: v, label: t(`settings.mobilePreview.${v}`) }))} />
-          </Row>
-        ) : null}
-      </Panel>
-    </Block>
+      </MoreOptions>
+    </>
   );
 }
 

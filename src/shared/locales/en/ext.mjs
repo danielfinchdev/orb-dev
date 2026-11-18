@@ -36,6 +36,7 @@ export default {
   'ext.more': 'More options for {name}',
   'ext.openFolder': 'Open folder',
   'ext.remove': 'Remove',
+  'ext.removeNamed': 'Remove {name}',
   'ext.removeTitle': 'Remove {name}?',
   'ext.removeBody': 'Its folder is deleted from core. If you need it again, import it again or restore a backup.',
   'ext.removeConnectorBody': 'It is removed from Orb, with its keys. The program is not uninstalled.',

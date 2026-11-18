@@ -51,13 +51,14 @@ export function MoreOptions({ fold = false, open, onOpenChange, children, classN
   );
 }
 // The frame of a block's rows (.lcard).
-export function Panel({ className, ...props }) { return <ListCard className={cn('mt-3', className)} {...props} />; }
+// @container: its settings stack (label above, control below) when the dialog is narrow; see Setting.
+export function Panel({ className, ...props }) { return <ListCard className={cn('@container mt-3', className)} {...props} />; }
 // A setting (.setting): its name and what it does on the left, its control on the right.
 export function Setting({ label, hint, children, className, ...props }) {
   return (
-    <div className={cn('border-border flex items-center justify-between gap-4 px-3.5 py-3 not-first:border-t', className)} {...props}>
+    <div className={cn('border-border flex items-center justify-between gap-4 px-3.5 py-3 not-first:border-t @max-[34rem]:flex-col @max-[34rem]:items-stretch @max-[34rem]:gap-2', className)} {...props}>
       <div className="flex min-w-0 flex-col gap-0.5"><span className="text-control leading-[1.45] font-medium">{label}</span>{hint ? <span className="text-muted-foreground text-caption leading-[1.45]">{hint}</span> : null}</div>
-      {children ? <div className="flex flex-none items-center gap-1.5">{children}</div> : null}
+      {children ? <div className="flex flex-none items-center gap-1.5 @max-[34rem]:flex-wrap @max-[34rem]:[&>input]:w-full! @max-[34rem]:[&>input]:flex-1">{children}</div> : null}
     </div>
   );
 }

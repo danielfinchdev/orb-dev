@@ -14,7 +14,7 @@ import { DataCards } from '../data.jsx';
 import { ExtensionsPanel } from '../extensions.jsx';
 import { Block, MoreOptions } from './rows.jsx';
 import { TabsCard, ShortcutsCard } from './shortcuts.jsx';
-import { AssistantCard, AppearanceCard, ChatCard, PermissionsCard, ApprovalWaitCard, TasksCard, FolderCard, ProtectedCard, InterfaceCard, ExpertCard } from './general.jsx';
+import { AssistantCard, AppearanceCard, ChatCard, PermissionsCard, ApprovalWaitCard, TasksCard, FolderCard, ProtectedCard, InterfaceCard, ZoomFineCard, ExpertCard } from './general.jsx';
 import { AndroidCard, MobileCard, BrowserCard } from './devices.jsx';
 import { McpExtCard } from './mcp-ext.jsx';
 import { UsageAccounts, BrakesCard, BrakeRails } from './usage-tab.jsx';
@@ -45,10 +45,10 @@ function AgentsTabs({ c }) {
 // with its heading; the active section lists them under its name in the menu, to jump to one.
 const SECTIONS = [
   { id: 'general', icon: Settings, groups: ['apariencia', 'actualizaciones'],
-    cards: (c, app) => <><AssistantCard c={c} /><FolderCard c={c} home={app.home} /><InterfaceCard c={c} /><SubSection id="apariencia" title={t('settings.group.apariencia')}><AppearanceCard c={c} /></SubSection><SubSection id="actualizaciones" title={t('settings.group.actualizaciones')}><UpdatesCard /></SubSection><MoreOptions testid="more-options-general"><TabsCard c={c} /><ShortcutsCard /></MoreOptions></> },
+    cards: (c, app) => <><AssistantCard c={c} /><FolderCard c={c} home={app.home} /><InterfaceCard c={c} /><SubSection id="apariencia" title={t('settings.group.apariencia')}><AppearanceCard c={c} /></SubSection><SubSection id="actualizaciones" title={t('settings.group.actualizaciones')}><UpdatesCard /></SubSection><MoreOptions testid="more-options-general"><ZoomFineCard /><TabsCard c={c} /><ShortcutsCard /></MoreOptions></> },
   // Who can enter this Orb: the linked phones and browsers.
   { id: 'magiclink', icon: Smartphone, groups: ['dispositivos'],
-    cards: () => <MagicLinkPanel grouped phoneAccess={<MobileCard />} /> },
+    cards: () => <MagicLinkPanel grouped phoneAccess={(more) => <MobileCard more={more} />} /> },
   { id: 'agentes', icon: Bot, cards: (c) => <AgentsTabs c={c} /> },
   // What the agents may do without asking, the protected paths and how long a question waits.
   { id: 'permisos', icon: ShieldCheck, cards: (c) => <><PermissionsCard c={c} /><ApprovalWaitCard c={c} /><ProtectedCard c={c} /></> },
@@ -56,10 +56,11 @@ const SECTIONS = [
   { id: 'extensiones', icon: Puzzle, pcOnly: true, cards: () => <ExtensionsPanel /> },
   { id: 'datos', icon: Database, cards: () => <DataCards /> },
   { id: 'avanzado', icon: SlidersHorizontal, groups: () => ['herramientas', ...(fullPc() ? ['experto'] : [])],
-    cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /><AndroidCard />{bridge.mobile ? null : <McpExtCard />}</SubSection>
-      {fullPc() ? <SubSection id="experto" title={t('settings.group.experto')}><ExpertCard c={c} /></SubSection> : null}</> },
+    cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /></SubSection>
+      {fullPc() ? <SubSection id="experto" title={t('settings.group.experto')}><ExpertCard c={c} /></SubSection> : null}
+      <AndroidCard />{bridge.mobile ? null : <MoreOptions testid="more-options-avanzado"><McpExtCard /></MoreOptions>}</> },
   { id: 'acerca', icon: Info, groups: ['contribuye', 'apps'],
-    cards: (c, app) => <><AboutCard version={app.version} /><SubSection id="contribuye" title={t('settings.group.contribuye')}><SupportCard /><FeedbackCard /></SubSection><SubSection id="apps" title={t('settings.group.apps')}><MoreAppsCard /></SubSection></> }
+    cards: (c, app) => <><SubSection id="contribuye" title={t('settings.group.contribuye')}><FeedbackCard /></SubSection><AboutCard version={app.version} /><SupportCard /><SubSection id="apps" title={t('settings.group.apps')}><MoreAppsCard /></SubSection></> }
 ];
 // The names used before the six-section layout (links in tutorials, notices and the sidebar) → [section, part].
 const ALIASES = { conexiones: ['magiclink', 'dispositivos'], movil: ['magiclink', 'dispositivos'], apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'],
