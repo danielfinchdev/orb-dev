@@ -19,6 +19,7 @@ import { oneLine } from '../../shared/text.mjs';
 import { redactSecrets } from '../../shared/secrets-scan.mjs';
 import { quickRun } from '../../agents/index.mjs';
 import { AUTONOMY } from '../../domain/security/guard.mjs';
+import { approvalWaitMinutes } from '../../domain/rules/rails.mjs';
 import { readLog, writeLog, writeHandEntry, logFiles, countLogEntries } from '../../domain/journal/journal.mjs';
 import { ofUserLabel, userLabel, userName } from '../../domain/tasks/board.mjs';
 import { createAndroid } from '../host/android.mjs';
@@ -213,7 +214,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
       // kept, the finished tasks the user brought back (a finished task goes to «Completadas» by itself).
       completed: board.settingJson('sidebar_completed') ?? [], kept: board.settingJson('sidebar_kept') ?? [],
       // the agents this PC can run now (installed, on, with an account): the lists of the window offer only these.
-      agentsAvailable: board.availableAgents()
+      agentsAvailable: board.availableAgents(),
+      // minutes a permission waits for an answer before it is denied (0 = for ever: the rail is paused)
+      approvalWaitMinutes: approvalWaitMinutes()
     }),
     // the data-migration state (3.7 data updated, or never 3.7): engine.mjs answers these two itself while they could not be.
     'app.migrationState': () => ({ failed: false }),

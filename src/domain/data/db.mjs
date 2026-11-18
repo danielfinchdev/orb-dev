@@ -289,6 +289,9 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   ['inbox_items', 'marked_unread', 'INTEGER NOT NULL DEFAULT 0'],
   // a schedule whose runs all go to one chat (made on its first run, or the one that asked for it).
   ['schedules', 'same_chat', 'INTEGER NOT NULL DEFAULT 0'], ['schedules', 'conversation_id', 'INTEGER'],
+  // a schedule's own zone (IANA; none = Orb's), the day of the month of «monthly», the permission level its runs take
+  // (none = Ajustes') and whether the phone is told when a run ends (on, as it always was).
+  ['schedules', 'tz', 'TEXT'], ['schedules', 'month_day', 'INTEGER'], ['schedules', 'autonomy', 'TEXT'], ['schedules', 'notify_mobile', 'INTEGER NOT NULL DEFAULT 1'],
   // The person's own notes on a chat (shown in its info panel) and the chat lines they pinned (when, null = not pinned).
   ['conversations', 'notes', 'TEXT'], ['chat', 'pinned_at', 'TEXT']];
 // (3.6-3.7's person_id columns and chat.uid are no longer added: only a 3.7 database has them, emptied by the 3.8

@@ -200,7 +200,7 @@ export class Board {
     const parentTask = parent_id ? this.task(parent_id) : null;
     // external: an agent outside Orb (src/engine/host/mcp-external.mjs) always starts at «Preguntar» and in an isolated copy.
     if (external && (mode !== 'aislada' || !String(actor).startsWith('mcp:'))) throw new Error('external tasks are isolated and signed mcp:<client>');
-    const mine = external ? 'preguntar' : parentTask?.autonomy ?? (actor === 'usuario' && AUTONOMY.includes(autonomy) ? autonomy : globalAutonomy());
+    const mine = external ? 'preguntar' : parentTask?.autonomy ?? (autonomy === 'preguntar' || (actor === 'usuario' && AUTONOMY.includes(autonomy)) ? autonomy : globalAutonomy());
     const auto = mine === 'auto';
     // Approval does not depend on the creator declaring it: a task made by a worker always waits for the user,
     // and a keyword net adds the tags the creator forgot.

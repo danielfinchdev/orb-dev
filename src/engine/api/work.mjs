@@ -8,7 +8,7 @@ import { startGoal, stopGoal, resumeGoal, clearGoal, planTurn, debugMode, goalOf
 import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../../domain/schedules/schedules.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { PERMISSIONS } from '../sessions.mjs';
-import { globalAutonomy, permissionOfAutonomy } from '../../domain/security/guard.mjs';
+import { globalAutonomy, permissionOfAutonomy, AUTONOMY } from '../../domain/security/guard.mjs';
 import { checkDevTools } from '../../platform/dev-tools.mjs';
 import { expandMentions, mentionOptions } from '../mentions.mjs';
 import { modelCatalog, REASONING_LEVELS, levelsOf } from '../usage/catalog.mjs';
@@ -240,9 +240,19 @@ ${block}` : ''}` });
     'approvals.list': () => sessions.allPendingApprovals(),
     'mentions.options': () => mentionOptions(board, sessions),
     'schedules.list': () => listSchedules(board).map((s) => ({ ...s, when: describeSchedule({ ...s, hours: s.at_time }) })),
-    'schedules.create': (p) => createSchedule(board, { project: project(p.project).name, title: str(p.title, 'título', 120), description: str(p.description, 'descripción', 8000), agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente', 'any'), model: str(p.model, 'modelo', 80, { optional: true }) || null,
-      readonly: Boolean(p.readonly), every: oneOf(p.every, EVERY, 'frecuencia'), at_time: str(p.at_time, 'hora', 16, { optional: true }) || '09:00', weekdays: Array.isArray(p.weekdays) ? p.weekdays.map(Number) : [], hours: Number(p.hours) || 6, same_chat: p.same_chat === true }, 'usuario'),
-    'schedules.update': ({ id, enabled, approve, title, description }) => updateSchedule(board, int(id, 'programada'), { enabled, approved: approve === true, title, description }),
+    // only this PC's window may loosen the permission level of a schedule (src/domain/schedules/schedules.mjs, clampAutonomy)
+    'schedules.create': (p, principal) => createSchedule(board, { project: project(p.project).name, title: str(p.title, 'título', 120), description: str(p.description, 'descripción', 8000), agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente', 'any'), model: str(p.model, 'modelo', 80, { optional: true }) || null,
+      readonly: Boolean(p.readonly), every: oneOf(p.every, EVERY, 'frecuencia'), at_time: str(p.at_time, 'hora', 16, { optional: true }) || '09:00', weekdays: Array.isArray(p.weekdays) ? p.weekdays.map(Number) : [], hours: Number(p.hours) || 6, same_chat: p.same_chat === true,
+      month_day: p.month_day == null ? undefined : Number(p.month_day), tz: str(p.tz, 'zona horaria', 64, { optional: true }) || null, autonomy: oneOf(p.autonomy, AUTONOMY, 'permiso', undefined), notify_mobile: p.notify_mobile !== false }, 'usuario', { desktop: principal?.channel === 'desktop' }),
+    // every field create takes may change, checked the same way; absent = unchanged
+    'schedules.update': (p, principal) => updateSchedule(board, int(p.id, 'programada'), {
+      enabled: p.enabled, approved: p.approve === true, title: p.title, description: p.description,
+      ...(p.project != null ? { project: project(p.project).name } : {}), ...(p.agent != null ? { agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente') } : {}), ...(p.model !== undefined ? { model: str(p.model, 'modelo', 80, { optional: true }) || null } : {}),
+      ...(p.readonly !== undefined ? { readonly: p.readonly === true } : {}), ...(p.every != null ? { every: oneOf(p.every, EVERY, 'frecuencia') } : {}), ...(p.at_time != null ? { at_time: str(p.at_time, 'hora', 16) } : {}),
+      ...(p.hours != null ? { hours: Number(p.hours) || 6 } : {}), ...(Array.isArray(p.weekdays) ? { weekdays: p.weekdays.map(Number) } : {}), ...(p.month_day != null ? { month_day: Number(p.month_day) } : {}),
+      ...(p.tz !== undefined ? { tz: str(p.tz, 'zona horaria', 64, { optional: true }) || null } : {}), ...(p.same_chat !== undefined ? { same_chat: p.same_chat === true } : {}), ...(p.notify_mobile !== undefined ? { notify_mobile: p.notify_mobile === true } : {}),
+      ...(p.autonomy !== undefined ? { autonomy: oneOf(p.autonomy, AUTONOMY, 'permiso', null) } : {})
+    }, { desktop: principal?.channel === 'desktop' }),
     'schedules.remove': ({ id }) => removeSchedule(board, int(id, 'programada')),
     'schedules.run': ({ id }) => runSchedule(board, getSchedule(board, int(id, 'programada')) ?? fail(tr('msg.api.noScheduled')), 'usuario'),
     'tasks.review': ({ id, agent, focus }) => scheduler.createReview(board.task(int(id, 'tarea')) ?? fail(tr('msg.api.noTaskThat')), { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }) }),

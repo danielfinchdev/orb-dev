@@ -101,7 +101,7 @@ export class FoldersPart {
     }
     // Both changed the same lines: a task (the same agent when it can) joins it by hand, in the folder, in its turn.
     const agent = task.assigned_to && board.availableAgents()?.includes(task.assigned_to) ? task.assigned_to : 'any';
-    const join = board.createTask({ project: project.name, agent, mode: 'carpeta', level: 'normal', internal: true, conversation_id: board.conversationOfTask(task.id),
+    const join = board.createTask({ project: project.name, agent, mode: 'carpeta', level: 'normal', internal: true, conversation_id: board.conversationOfTask(task.id), ...(task.autonomy === 'preguntar' ? { autonomy: 'preguntar' } : {}),
       title: tr('msg.scheduler.joinTitle', { id: task.id, title: oneLine(task.title, 60) }),
       description: `La tarea #${task.id} «${oneLine(task.title)}» trabajó a la vez que otras, en una copia aislada (rama ${task.branch}, carpeta ${task.workdir}). Al unir su trabajo a la carpeta del proyecto hay conflicto en: ${out.conflicts.slice(0, 30).join(', ')}.
 Lo que hizo esa tarea: ${oneLine(task.result ?? 'sin resumen', 1500)}

@@ -12,6 +12,7 @@ import { isRailOn } from '../../domain/rules/rails.mjs';
 import { redactSecrets, secretFiles, isSecretPath, stagedSecretsAsync } from '../../shared/secrets-scan.mjs';
 import { ATTACH_DIR } from '../sessions.mjs';
 import { logTask } from '../../domain/journal/journal.mjs';
+import { scheduleEndMeta } from '../../domain/schedules/schedules.mjs';
 import { STATUS_ES, whoRan, mainStatusAsync } from './common.mjs';
 
 export class FinishPart {
@@ -170,7 +171,7 @@ export class FinishPart {
     // (A task that failed or got blocked says why in a short line: that is what the user needs to decide.)
     const why = ['failed', 'blocked'].includes(task.status) && task.result ? `\n${oneLine(redactSecrets(task.result), 160)}` : '';
     board.addChat('system', `${tr(`msg.scheduler.ended.${task.status in { done: 1, failed: 1, blocked: 1, cancelled: 1 } ? task.status : 'other'}`, { icon, label: whoRan(task), id: task.id, title: oneLine(task.title) })}${spent ? ` (${spent})` : ''}${why}`,
-      { kind: 'task-end', task: task.id, status: task.status, ...(task.result ? { result: redactSecrets(task.result).slice(0, 1500) } : {}) });
+      { kind: 'task-end', task: task.id, status: task.status, ...scheduleEndMeta(board, task), ...(task.result ? { result: redactSecrets(task.result).slice(0, 1500) } : {}) });
     const cp = board.settingJson(`checkpoint:${task.id}`);
     const revert = cp?.before ? tr('sys.logs.revertUndo', { id: task.id })
       : task.branch ? tr('sys.logs.revertBranch', { branch: task.branch }) : tr('sys.logs.revertFolder');

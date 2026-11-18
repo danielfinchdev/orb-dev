@@ -39,6 +39,7 @@ export function buildNote({ chat, line, preview = 'chat', muted = false, assista
   const kind = lineKind(line);
   if (!kind) return null;
   if (muted) return null; // a muted chat says nothing
+  if (line.meta?.quiet === true) return null; // a line marked quiet stays in the chat but is not pushed (a schedule told not to notify)
   const w = { hidden: 'Tienes un mensaje nuevo', reply: 'Responder', allow: 'Aprobar', deny: 'Rechazar', open: 'Abrir', ...words };
   const v = PREVIEWS.includes(preview) ? preview : 'chat';
   // 'all' and 'chat' (the default): the text; 'none': nothing, not even which chat.
