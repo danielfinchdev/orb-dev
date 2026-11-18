@@ -19,7 +19,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.graphicsLayer
+import dev.orb.app.ui.theme.OrbMotion
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,6 +34,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -40,7 +45,8 @@ import dev.orb.app.ui.icons.OrbIcons
 
 /**
  * `.mrow`: a mark on the left (20 dp wide), two lines and a trailing time and badge; at least 64 dp tall.
- * [subtitle] is a slot for the second line (13 sp, muted); [actions] go under it.
+ * [subtitle] is a slot for the second line (13 sp, muted); [actions] go under it; [titleStyled] replaces [title] when
+ * part of it is marked (a search match).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -53,6 +59,7 @@ fun OrbRow(
     badge: (@Composable () -> Unit)? = null,
     actions: (@Composable RowScope.() -> Unit)? = null,
     unread: Boolean = false,
+    titleStyled: AnnotatedString? = null,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
 ) {
@@ -64,7 +71,7 @@ fun OrbRow(
         Box(Modifier.width(20.dp).padding(top = 3.dp), contentAlignment = Alignment.TopCenter) { lead?.invoke() }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                title, color = OrbKit.foreground, fontSize = 15.sp, lineHeight = 22.sp,
+                titleStyled ?: AnnotatedString(title), color = OrbKit.foreground, fontSize = 15.sp, lineHeight = 22.sp,
                 fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             if (subtitle != null) {
@@ -87,9 +94,15 @@ fun RowScope.OrbSubtitle(text: String, modifier: Modifier = Modifier, color: Col
     Text(text, modifier.weight(1f, fill = false), color = color, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
+/** The same line with part of it marked (a search match). */
+@Composable
+fun RowScope.OrbSubtitle(text: AnnotatedString, modifier: Modifier = Modifier, color: Color = OrbKit.mutedForeground) {
+    Text(text, modifier.weight(1f, fill = false), color = color, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+}
+
 /**
  * `.mgrp`: a group heading in a list. [project] draws the project's dot ([noProject] the hollow ring), [count] the number
- * on the right and [collapsed] the fold arrow (null: the group does not fold).
+ * on the right and [collapsed] the fold arrow (null: the group does not fold); [chevronAtEnd] puts the arrow after the text.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -101,15 +114,21 @@ fun OrbGroupHeader(
     noProject: Boolean = false,
     count: Int? = null,
     collapsed: Boolean? = null,
+    chevronAtEnd: Boolean = false,
     onClick: (() -> Unit)? = null,
 ) {
     val click = if (onClick != null) Modifier.combinedClickable(role = Role.Button, onClick = onClick) else Modifier
+    // The arrow turns instead of swapping, as a layer property so the row is not measured again.
+    val turn by animateFloatAsState(if (collapsed == true) -90f else 0f, kitTween(OrbMotion.Short), label = "groupArrow")
+    val chevron: @Composable () -> Unit = {
+        Icon(OrbIcons.ChevronDown, null, Modifier.size(14.dp).graphicsLayer { rotationZ = turn }, tint = OrbKit.mutedForeground)
+    }
     Row(
         modifier.fillMaxWidth().then(click).padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 6.dp)
             .defaultMinSize(minHeight = if (onClick != null) 36.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (collapsed != null) Icon(if (collapsed) OrbIcons.ChevronRight else OrbIcons.ChevronDown, null, Modifier.size(14.dp), tint = OrbKit.mutedForeground)
+        if (collapsed != null && !chevronAtEnd) chevron()
         if (icon != null) Icon(icon, null, Modifier.size(14.dp), tint = OrbKit.mutedForeground)
         if (project != null || noProject) ProjectDot(if (noProject) null else project)
         Text(
@@ -118,6 +137,7 @@ fun OrbGroupHeader(
             fontWeight = if (project != null || noProject) FontWeight.Medium else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
         if (count != null) Text(count.toString(), color = OrbKit.mutedForeground, fontSize = 13.sp, lineHeight = 18.sp)
+        if (collapsed != null && chevronAtEnd) chevron()
     }
 }
 

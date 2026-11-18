@@ -61,6 +61,9 @@ data class ChatRow(
     val asking: Boolean,
     /** A task of this Orbe chat waits for the person's OK or was held for review (set from `tasks.list`). */
     val needsReview: Boolean = false,
+    /** The branch a direct session works on and the open PR number of it; the PC only sends them when it already knows them. */
+    val branch: String? = null,
+    val prNumber: Int? = null,
 ) {
     val ref get() = ChatRef(kind, id)
     val direct get() = kind == ChatKind.Agent
@@ -121,6 +124,7 @@ object InboxParser {
             pinned = o.bool("pinned"), pinOrder = o.int("pinOrder"), muted = o.bool("muted"),
             snoozedUntil = o.str("snoozedUntil"), section = o.long("section"),
             agent = o.str("agent"), done = o.bool("done"), waitingPermission = o.bool("asks"), asking = o.bool("asking"), needsReview = o.bool("review"),
+            branch = o.str("branch")?.takeIf { it.isNotBlank() }, prNumber = o.int("prNumber")?.takeIf { it > 0 },
         )
     }
 
@@ -204,6 +208,8 @@ object InboxMerge {
         s.str("title")?.let { extra["title"] = JsonPrimitive(it) }
         s.str("project")?.let { extra["project"] = JsonPrimitive(it) }
         s.str("agent")?.let { extra["agent"] = JsonPrimitive(it) }
+        s.str("branch")?.let { extra["branch"] = JsonPrimitive(it) }
+        s.int("prNumber")?.let { extra["prNumber"] = JsonPrimitive(it) }
         s.str("updated_at")?.let { extra["at"] = JsonPrimitive(it) }
         extra["state"] = JsonPrimitive(if (s.str("status") == "running") "working" else "idle")
         extra["done"] = JsonPrimitive(s.bool("settled"))

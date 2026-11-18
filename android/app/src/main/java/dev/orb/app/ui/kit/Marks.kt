@@ -1,12 +1,21 @@
 package dev.orb.app.ui.kit
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Box
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.graphicsLayer
+import dev.orb.app.ui.icons.OrbIcons
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -14,10 +23,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import dev.orb.app.ui.theme.oklch
 import kotlin.math.abs
 import kotlin.math.cos
@@ -124,22 +131,60 @@ object AgentGlyphs {
     }
 }
 
-/** The mark of an agent, with no background: ✳ Claude, ◎ Codex, ▲ Cursor, ● Orbe. */
+/**
+ * The mark of an agent, with no background, drawn as a vector so it has the same size and weight on every phone:
+ * ✳ Claude, ◎ Codex, ▲ Cursor, ● Orbe. [size] is the box; the drawing fills about three quarters of it, like the
+ * mockups' 14.5 px glyph inside a 16 px box.
+ */
 @Composable
 fun AgentMark(agent: String?, modifier: Modifier = Modifier, size: Dp = 16.dp, description: String? = AgentGlyphs.name(agent)) {
-    val glyph = AgentGlyphs.glyph(agent)
-    val color = when (agent?.lowercase()) {
+    val kind = agent?.lowercase()
+    val color = when (kind) {
         "claude" -> remember { oklch(0.62, 0.17, 40.0) }
         "codex", "cursor" -> OrbKit.foreground
         "orbe" -> OrbKit.info
         else -> OrbKit.faintForeground
     }
     val semantics = Modifier.clearAndSetSemantics { if (description != null) contentDescription = description }
-    if (glyph == null) {
-        Canvas(modifier.size(size).then(semantics)) { drawCircle(color, radius = 4.dp.toPx()) }
-    } else {
-        Box(modifier.size(size).then(semantics), contentAlignment = Alignment.Center) {
-            Text(glyph, color = color, style = TextStyle(fontSize = 14.5.sp, lineHeight = 14.5.sp))
+    Canvas(modifier.size(size).then(semantics)) {
+        val s = this.size.minDimension
+        val c = Offset(this.size.width / 2f, this.size.height / 2f)
+        when (kind) {
+            "claude" -> {
+                // Eight spokes: four lines through the centre.
+                val r = s * 0.40f
+                for (k in 0 until 4) {
+                    val a = Math.toRadians(k * 45.0)
+                    val d = Offset((cos(a) * r).toFloat(), (sin(a) * r).toFloat())
+                    drawLine(color, c - d, c + d, strokeWidth = s * 0.11f, cap = StrokeCap.Round)
+                }
+            }
+            "codex" -> {
+                val w = s * 0.09f
+                drawCircle(color, radius = s * 0.40f - w / 2f, center = c, style = Stroke(w))
+                drawCircle(color, radius = s * 0.17f, center = c, style = Stroke(w))
+            }
+            "cursor" -> {
+                val tri = Path().apply {
+                    moveTo(s * 0.50f, s * 0.14f); lineTo(s * 0.90f, s * 0.80f); lineTo(s * 0.10f, s * 0.80f); close()
+                }
+                drawPath(tri, color)
+                drawPath(tri, color, style = Stroke(s * 0.06f, join = StrokeJoin.Round))
+            }
+            "orbe" -> drawCircle(color, radius = s * 0.30f, center = c)
+            else -> drawCircle(color, radius = s * 0.25f, center = c)
         }
     }
+}
+
+/** A 14 dp (by default) loader that turns forever; the turn is a layer property, so nothing is measured or drawn again. */
+@Composable
+fun OrbSpinner(modifier: Modifier = Modifier, size: Dp = 14.dp, tint: Color = OrbKit.mutedForeground) {
+    val reduced = reducedMotion()
+    val angle = if (reduced) null else rememberInfiniteTransition(label = "spinner").animateFloat(
+        0f, 360f, infiniteRepeatable(tween(1000, easing = LinearEasing), RepeatMode.Restart), label = "angle",
+    )
+    Icon(
+        OrbIcons.Loader, null, modifier.size(size).graphicsLayer { rotationZ = angle?.value ?: 0f }, tint = tint,
+    )
 }

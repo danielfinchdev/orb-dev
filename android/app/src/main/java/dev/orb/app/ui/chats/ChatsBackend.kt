@@ -28,14 +28,14 @@ import kotlinx.serialization.json.put
 @Immutable
 data class SearchMessage(
     val key: String, val ref: ChatRef, val chatTitle: String, val project: String?,
-    val text: String, val at: String?, val from: Speaker?, val fromName: String?,
+    val text: String, val at: String?, val from: Speaker?, val fromName: String?, val agent: String? = null,
 )
 
 @Immutable
 data class SearchTask(val id: Long, val title: String, val status: String?, val project: String?, val snippet: String?)
 
 @Immutable
-data class SearchProject(val name: String, val chats: Int)
+data class SearchProject(val name: String, val chats: Int, val tasks: Int? = null)
 
 @Immutable
 data class SearchResults(
@@ -84,6 +84,9 @@ interface ChatsBackend {
 
     /** The PC's own «Completar»: an Orbe chat is marked done, a direct chat is settled. Both stay searchable. */
     suspend fun archive(ref: ChatRef): Result<Unit>
+
+    /** The opposite of [archive]: the chat leaves «Completados» and goes back to its group. */
+    suspend fun unarchive(ref: ChatRef): Result<Unit>
     suspend fun moveToSection(ref: ChatRef, section: Long?): Result<Unit>
     suspend fun createSection(name: String): Result<Long>
     suspend fun renameSection(id: Long, name: String): Result<Unit>
@@ -94,6 +97,10 @@ interface ChatsBackend {
 
     /** Asks the PC to bring a trashed chat back. */
     suspend fun restore(ref: ChatRef): Result<Unit>
+
+    /** The headings the person folded in the list, kept on this phone; null until the person folds or unfolds one. */
+    fun collapsedGroups(): Set<String>? = null
+    fun saveCollapsedGroups(keys: Set<String>) {}
 
     /** Search on the PC; [q] has at least 2 characters. */
     suspend fun search(q: String): Result<SearchResults>
@@ -168,6 +175,14 @@ class RuntimeChatsBackend(private val container: AppContainer, private val runti
         ChatKind.Agent -> api.sessions.settle(buildJsonObject { put("id", ref.id); put("settled", true) })
     }.unit()
 
+    override suspend fun unarchive(ref: ChatRef): Result<Unit> = when (ref.kind) {
+        ChatKind.Orbe -> api.conversations.update(buildJsonObject { put("id", ref.id.toLongOrNull() ?: 0L); put("done", false) })
+        ChatKind.Agent -> api.sessions.settle(buildJsonObject { put("id", ref.id); put("settled", false) })
+    }.unit()
+
+    override fun collapsedGroups(): Set<String>? = container.chatListPrefs.collapsed()
+    override fun saveCollapsedGroups(keys: Set<String>) = container.chatListPrefs.setCollapsed(keys)
+
     override suspend fun moveToSection(ref: ChatRef, section: Long?) =
         api.inbox.sectionsMove(ref.params { put("section", section?.let { JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull) }).unit()
 
@@ -192,10 +207,19 @@ class RuntimeChatsBackend(private val container: AppContainer, private val runti
         val tasks = async { api.tasks.search(buildJsonObject { put("q", q) }) }
         val found = chats.await().getOrElse { return@coroutineScope Result.failure(it) }
         val known = inbox().first().rows
-        Result.success(SearchParser.parse(q, found, tasks.await().getOrNull(), known))
+        Result.success(SearchParser.parse(q, found, tasks.await().getOrNull(), known, savedTaskCounts()))
     }
 
-    override suspend fun searchSaved(q: String): SearchResults = SearchParser.local(q, inbox().first().rows)
+    override suspend fun searchSaved(q: String): SearchResults = SearchParser.local(q, inbox().first().rows, savedTaskCounts())
+
+    /** Tasks per project from the saved copy; a project with none known simply shows no task count. */
+    private suspend fun savedTaskCounts(): Map<String, Int> {
+        val dao = container.cacheDao() ?: return emptyMap()
+        val json = kotlinx.serialization.json.Json
+        return dao.observeTasks().first().mapNotNull { t ->
+            ((runCatching { json.parseToJsonElement(t.raw) }.getOrNull() as? JsonObject)?.str("project"))?.takeIf { it.isNotBlank() }
+        }.groupingBy { it }.eachCount()
+    }
 
     companion object {
         const val ZONE = "orb"
@@ -204,7 +228,7 @@ class RuntimeChatsBackend(private val container: AppContainer, private val runti
 
 object SearchParser {
     /** `inbox.search` + `tasks.search`; [known] (the cached rows) fills what a direct chat's bare mark lacks. */
-    fun parse(q: String, inboxSearch: JsonElement, tasksSearch: JsonElement?, known: List<ChatRow>): SearchResults {
+    fun parse(q: String, inboxSearch: JsonElement, tasksSearch: JsonElement?, known: List<ChatRow>, taskCounts: Map<String, Int> = emptyMap()): SearchResults {
         val byKey = known.associateBy { it.key }
         val obj = inboxSearch as? JsonObject
         val chats = (obj?.get("items") as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.let(InboxParser::row) }
@@ -220,7 +244,7 @@ object SearchParser {
             SearchMessage(
                 key = key + "#" + (line.str("id") ?: text.hashCode()), ref = ref,
                 chatTitle = o.str("title")?.takeIf { it.isNotBlank() } ?: row?.title ?: ChatTexts.UNTITLED,
-                project = row?.project, text = oneLine(text), at = line.str("at"),
+                project = row?.project, agent = row?.agent, text = oneLine(text), at = line.str("at"),
                 from = when (from?.str("type")) { "user" -> Speaker.User; "orbe" -> Speaker.Orbe; "system" -> Speaker.System; else -> null },
                 fromName = from?.str("name"),
             )
@@ -229,22 +253,22 @@ object SearchParser {
             val o = el as? JsonObject ?: return@mapNotNull null
             SearchTask(o.long("id") ?: return@mapNotNull null, o.str("title") ?: return@mapNotNull null, o.str("status"), o.str("project"), o.str("snippet"))
         }
-        return SearchResults(chats, messages, tasks, projects(q, known))
+        return SearchResults(chats, messages, tasks, projects(q, known, taskCounts))
     }
 
     /** Offline: titles, last lines and project names saved on the phone. */
-    fun local(q: String, known: List<ChatRow>): SearchResults {
+    fun local(q: String, known: List<ChatRow>, taskCounts: Map<String, Int> = emptyMap()): SearchResults {
         val needle = q.trim().lowercase()
         val chats = known.filter { r ->
             !r.done && (r.title.lowercase().contains(needle) || r.lastText?.lowercase()?.contains(needle) == true || r.project?.lowercase()?.contains(needle) == true)
         }
-        return SearchResults(chats, emptyList(), emptyList(), projects(q, known))
+        return SearchResults(chats, emptyList(), emptyList(), projects(q, known, taskCounts))
     }
 
     /** Projects are not a search of their own on the PC; their names come from the chats' projects. */
-    fun projects(q: String, known: List<ChatRow>): List<SearchProject> {
+    fun projects(q: String, known: List<ChatRow>, taskCounts: Map<String, Int> = emptyMap()): List<SearchProject> {
         val needle = q.trim().lowercase()
         return known.filter { !it.done }.mapNotNull { it.project }.groupingBy { it }.eachCount()
-            .filterKeys { it.lowercase().contains(needle) }.map { SearchProject(it.key, it.value) }.sortedBy { it.name.lowercase() }
+            .filterKeys { it.lowercase().contains(needle) }.map { SearchProject(it.key, it.value, taskCounts[it.key]) }.sortedBy { it.name.lowercase() }
     }
 }

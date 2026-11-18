@@ -1,74 +1,38 @@
 package dev.orb.app.ui.chats
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.kit.AgentMark
+import dev.orb.app.ui.kit.OrbKit
+import dev.orb.app.ui.kit.OrbRow
+import dev.orb.app.ui.kit.OrbSpinner
+import dev.orb.app.ui.kit.OrbSubtitle
+import dev.orb.app.ui.kit.OrbSwipeAction
+import dev.orb.app.ui.kit.OrbSwipeRow
+import dev.orb.app.ui.kit.OrbUnread
 import dev.orb.app.ui.kit.ProjectDot
 import dev.orb.app.ui.kit.ProjectDotSize
-import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.oklch
 
-/** The letter badge of an agent, still used by the direct-chat bubbles until they are redone. */
-@Immutable
-class AgentLetter(val letter: String, val color: Color)
-
-object AgentLetters {
-    private val claude = AgentLetter("C", oklch(0.62, 0.14, 45.0))
-    private val codex = AgentLetter("X", oklch(0.35, 0.02, 268.0))
-    private val cursor = AgentLetter("Cu", oklch(0.45, 0.03, 268.0))
-    private val gemini = AgentLetter("G", oklch(0.58, 0.15, 250.0))
-    private val acp = AgentLetter("A", oklch(0.55, 0.10, 180.0))
-
-    fun of(agent: String?): AgentLetter? = when (agent) {
-        null, "" -> null
-        "claude" -> claude
-        "codex" -> codex
-        "cursor" -> cursor
-        "gemini" -> gemini
-        else -> acp
-    }
-}
-
-/** The mark of a chat: its agent for a direct chat, Orbe otherwise, with the project's dot at the corner. */
+/** The mark of a chat: its agent for a direct chat, Orbe otherwise, with the project's dot at the corner (used by the sheets). */
 @Composable
 fun ChatAvatar(row: ChatRow, modifier: Modifier = Modifier) {
     Box(modifier.size(24.dp), contentAlignment = Alignment.TopCenter) {
@@ -94,29 +58,30 @@ internal fun OrbeCircle() {
     )
 }
 
-@Composable
-private fun StatusTag(text: String, icon: ImageVector, warn: Boolean, spin: Boolean) {
-    val colors = OrbTheme.colors
-    val bg = if (warn) colors.warnSoft else MaterialTheme.colorScheme.primaryContainer
-    val fg = if (warn) colors.warn else MaterialTheme.colorScheme.onPrimaryContainer
-    val angle = if (spin) {
-        val t = rememberInfiniteTransition(label = "spin")
-        t.animateFloat(0f, 360f, infiniteRepeatable(tween(1400, easing = LinearEasing), RepeatMode.Restart), label = "angle")
-    } else null
-    Row(
-        Modifier.clip(RoundedCornerShape(8.dp)).background(bg).padding(horizontal = 8.dp, vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Icon(
-            icon, null, tint = fg,
-            modifier = Modifier.size(12.dp).then(if (angle != null) Modifier.graphicsLayer { rotationZ = angle.value } else Modifier),
+/** What the second line of a row says, decided from what the PC reported; nothing is made up. */
+internal sealed interface RowLine {
+    /** [text] is what waits for the person. */
+    data class Waiting(val text: String) : RowLine
+    data object Working : RowLine
+    data class Branch(val text: String) : RowLine
+    data class Message(val text: String) : RowLine
+}
+
+internal fun rowLine(row: ChatRow, texts: InboxTexts): RowLine {
+    val text = row.lastText
+    return when {
+        row.waitingPermission -> RowLine.Waiting(ChatTexts.WAITING_PERMISSION)
+        row.needsReview -> RowLine.Waiting(ChatTexts.WAITING_PERMISSION)
+        row.asking -> RowLine.Waiting(ChatTexts.ASKING)
+        row.state == ChatState.Working -> RowLine.Working
+        row.branch != null -> RowLine.Branch(
+            listOfNotNull(row.branch, row.prNumber?.let { "PR #$it" }, if (row.done) ChatTexts.DONE_LABEL else null).joinToString(" · "),
         )
-        Text(text, color = fg, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        else -> RowLine.Message(messageLine(row, text))
     }
 }
 
-private fun subtitle(row: ChatRow): String {
-    val text = row.lastText
+private fun messageLine(row: ChatRow, text: String?): String {
     if (text == null) return if (row.direct) "${ChatTexts.DIRECT_WITH} ${agentName(row.agent) ?: "un agente"}" else ""
     val who = when (row.lastFrom) {
         Speaker.User -> ChatTexts.YOU
@@ -127,57 +92,69 @@ private fun subtitle(row: ChatRow): String {
     return if (who == null) text else "$who: $text"
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ChatRowItem(row: ChatRow, whenText: String, onClick: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier) {
-    val unread = row.unread > 0
-    val colors = OrbTheme.colors
-    val subtitle = remember(row.lastText, row.lastFrom, row.lastFromName, row.agent, row.kind) { subtitle(row) }
-    Row(
-        modifier.fillMaxWidth().defaultMinSize(minHeight = 72.dp)
-            .combinedClickable(onClickLabel = null, onLongClickLabel = ChatTexts.ACTIONS_FOR, onClick = onClick, onLongClick = onLongClick)
-            .padding(start = 16.dp, end = 24.dp, top = 8.dp, bottom = 8.dp)
-            .semantics(mergeDescendants = true) { if (unread) contentDescription = "${row.title}, ${ChatTexts.unread(row.unread)}" },
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        ChatAvatar(row)
-        Column(Modifier.weight(1f)) {
-            Text(row.title, style = MaterialTheme.typography.titleMedium, fontWeight = if (unread) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (subtitle.isNotEmpty()) {
-                Text(
-                    subtitle, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    color = if (unread) MaterialTheme.colorScheme.onSurface else colors.text2,
-                )
-            }
+private fun RowScope.RowSubtitle(line: RowLine) {
+    when (line) {
+        is RowLine.Waiting -> {
+            Icon(OrbIcons.Hand, null, Modifier.size(14.dp), tint = OrbKit.warning)
+            OrbSubtitle(line.text, color = OrbKit.warning)
         }
-        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (row.muted) Icon(OrbIcons.BellOff, ChatTexts.MUTED, Modifier.size(14.dp), tint = colors.text3)
-                if (row.snoozedUntil != null) Icon(OrbIcons.Clock, ChatTexts.SNOOZED, Modifier.size(14.dp), tint = colors.text3)
-                Text(
-                    whenText, fontSize = 12.sp, lineHeight = 16.sp,
-                    color = colors.text3,
-                    fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal,
-                )
-            }
-            when {
-                row.waitingPermission -> StatusTag(ChatTexts.WAITING_PERMISSION, OrbIcons.Shield, warn = true, spin = false)
-                row.asking -> StatusTag(ChatTexts.ASKING, OrbIcons.Shield, warn = true, spin = false)
-                row.needsReview -> StatusTag(remember { InboxTexts.current() }.needsReview, OrbIcons.Shield, warn = true, spin = false)
-                row.state == ChatState.Working -> StatusTag(ChatTexts.WORKING, OrbIcons.Loader, warn = false, spin = true)
-                unread -> UnreadCount(row.unread, row.muted)
-            }
+        RowLine.Working -> {
+            OrbSpinner(tint = OrbKit.primaryText)
+            OrbSubtitle(ChatTexts.WORKING, color = OrbKit.primaryText)
         }
+        is RowLine.Branch -> {
+            Icon(OrbIcons.GitBranch, null, Modifier.size(14.dp), tint = OrbKit.mutedForeground)
+            OrbSubtitle(line.text)
+        }
+        is RowLine.Message -> if (line.text.isNotEmpty()) OrbSubtitle(line.text)
     }
 }
 
+/**
+ * One chat in the list (`.mrow`): the agent's mark, the title, a second line for what is happening and, on the right,
+ * the time and the unread count. Swipe right to mark it read, left to archive it; both also reach screen readers as
+ * custom actions, and a long press still opens the chat's actions. [onMarkRead], [onArchive] and [onRestore] (for a chat that
+ * is already done) return false when the request could not go out (no PC), so the row springs back.
+ */
 @Composable
-private fun UnreadCount(n: Int, muted: Boolean) {
-    val bg = if (muted) OrbTheme.colors.text3 else MaterialTheme.colorScheme.primary
-    Box(
-        Modifier.defaultMinSize(minWidth = 20.dp, minHeight = 20.dp).clip(CircleShape).background(bg).padding(horizontal = 6.dp),
-        contentAlignment = Alignment.Center,
+fun ChatRowItem(
+    row: ChatRow, whenText: String, onClick: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier,
+    onMarkRead: (() -> Boolean)? = null, onArchive: (() -> Boolean)? = null, onRestore: (() -> Boolean)? = null,
+) {
+    val unread = row.unread > 0
+    val texts = remember { InboxTexts.current() }
+    val line = remember(row.lastText, row.lastFrom, row.lastFromName, row.agent, row.kind, row.state, row.waitingPermission, row.asking, row.needsReview, row.branch, row.prNumber, row.done) {
+        rowLine(row, texts)
+    }
+    val status = when (line) {
+        is RowLine.Waiting -> line.text
+        RowLine.Working -> ChatTexts.WORKING
+        is RowLine.Branch -> line.text
+        is RowLine.Message -> line.text
+    }
+    val description = listOfNotNull(row.title, status.takeIf { it.isNotEmpty() }, if (unread) ChatTexts.unread(row.unread) else null, whenText).joinToString(", ")
+    OrbSwipeRow(
+        modifier,
+        start = onMarkRead?.takeIf { unread }?.let { OrbSwipeAction(ChatTexts.MARK_READ_SWIPE, OrbIcons.CheckCheck, it) },
+        end = onArchive?.let { OrbSwipeAction(ChatTexts.ARCHIVE, OrbIcons.Archive, it, leaves = true, container = { OrbKit.muted }, content = { OrbKit.foreground }) }
+            ?: onRestore?.let { OrbSwipeAction(ChatTexts.RESTORE_CHAT, OrbIcons.ArrowUp, it, leaves = true, container = { OrbKit.muted }, content = { OrbKit.foreground }) },
     ) {
-        Text(if (n > 99) "99+" else n.toString(), color = MaterialTheme.colorScheme.onPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        OrbRow(
+            row.title,
+            Modifier.semantics(mergeDescendants = true) { contentDescription = description },
+            lead = { AgentMark(if (row.direct) row.agent ?: "acp" else "orbe") },
+            subtitle = { RowSubtitle(line) },
+            time = whenText,
+            badge = if (unread || row.muted || row.snoozedUntil != null) ({
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (row.muted) Icon(OrbIcons.BellOff, ChatTexts.MUTED, Modifier.size(14.dp), tint = OrbKit.faintForeground)
+                    if (row.snoozedUntil != null) Icon(OrbIcons.Clock, ChatTexts.SNOOZED, Modifier.size(14.dp), tint = OrbKit.faintForeground)
+                    if (unread) OrbUnread(row.unread, soft = row.muted)
+                }
+            }) else null,
+            unread = unread,
+            onClick = onClick, onLongClick = onLongClick,
+        )
     }
 }

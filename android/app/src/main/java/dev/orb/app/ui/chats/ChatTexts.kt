@@ -21,7 +21,7 @@ object ChatTexts {
     const val SOON_HINT = "Pronto en el móvil; mientras, en el PC."
 
     // List
-    const val SEARCH = "Buscar chats, mensajes y proyectos"
+    const val SEARCH = "Buscar chats y proyectos"
     const val FILTER_GROUP = "Filtrar chats"
     const val FILTER_ALL = "Todos"
     const val FILTER_UNREAD = "No leídos"
@@ -31,8 +31,22 @@ object ChatTexts {
     const val NO_PROJECT = "Sin proyecto"
     const val NEW_CHAT = "Nuevo chat"
     const val WORKING = "Trabajando"
-    const val WAITING_PERMISSION = "Espera permiso"
+    const val WAITING_PERMISSION = "Esperando tu aprobación"
     const val ASKING = "Te pregunta"
+    const val MORE_OPTIONS = "Más opciones"
+    const val ORDER_PRIORITY = "Ordenar por prioridad"
+    const val ORDER_PRIORITY_ON = "Activado"
+    const val ORDER_PRIORITY_OFF = "Desactivado"
+    const val DAY_SUMMARY = "Resumen del día"
+    const val NO_DIGEST = "No hay nada registrado de ayer."
+    const val ARCHIVED_SNACK = "Chat archivado"
+    const val UNARCHIVE_FAILED = "No se pudo deshacer en el PC"
+    const val MARK_READ_SWIPE = "Leído"
+    const val FOLDED = "Plegado"
+    const val UNFOLDED = "Desplegado"
+    const val SHOW_ALL = "Ver todos"
+    const val RESTORE_CHAT = "Restaurar"
+    const val DONE_LABEL = "Hecha"
     const val PAUSED = "En pausa"
     const val MUTED = "Silenciado"
     const val SNOOZED = "Pospuesto"
@@ -78,8 +92,12 @@ object ChatTexts {
     const val ACTION_OFFLINE = "Sin conexión con el PC: no se ha cambiado nada."
 
     // Search
-    const val SEARCH_PLACEHOLDER = "Buscar en chats, mensajes, tareas y proyectos"
-    const val SEARCH_HINT_SHORT = "Escribe al menos 2 letras. La búsqueda la hace el PC."
+    const val SEARCH_PLACEHOLDER = "Buscar chats, mensajes, tareas y proyectos"
+    const val SEARCH_TITLE = "Buscar"
+    const val SEARCH_SUBTITLE = "Chats, mensajes, tareas y proyectos"
+    const val SEARCH_HINT_BODY = "Busca por contenido en chats, mensajes, tareas y proyectos."
+    const val GROUP_IN_MESSAGES = "En mensajes"
+    const val SEARCH_HINT_SHORT = "Escribe al menos 2 letras"
     const val SCOPE_ALL = "Todo"
     const val GROUP_CHATS = "Chats"
     const val GROUP_MESSAGES = "Mensajes"
@@ -89,6 +107,19 @@ object ChatTexts {
     const val SEARCH_ERROR = "No se pudo buscar en el PC."
     const val SEARCH_OFFLINE = "Sin conexión con el PC: se busca solo en los chats guardados en el móvil."
     const val SEARCHING = "Buscando en el PC…"
+    fun searchNothing(q: String) = "No hay nada con «${q.trim()}»."
+    fun projectLine(chats: Int, tasks: Int?) = chatsOf(chats) + (if (tasks != null && tasks > 0) " · " + tasksOf(tasks) else "")
+    fun tasksOf(n: Int) = if (n == 1) "1 tarea" else "$n tareas"
+    fun completed(n: Int) = "Completados · $n"
+    fun taskLine(project: String?, status: String?) = listOfNotNull(project?.takeIf { it.isNotBlank() }, status?.let(::taskStatus)?.takeIf { it.isNotBlank() }).joinToString(" · ")
+
+    /** The line under the wordmark: which PC and how the link is. */
+    fun linkLine(s: dev.orb.app.link.net.ConnectionState): String = when (s) {
+        is dev.orb.app.link.net.ConnectionState.Online -> "${s.pcName?.takeIf { it.isNotBlank() } ?: "El PC"} · conectado"
+        dev.orb.app.link.net.ConnectionState.Connecting -> "Conectando…"
+        is dev.orb.app.link.net.ConnectionState.Offline -> "Sin conexión"
+        else -> dev.orb.app.ui.connectionText(s)
+    }
     const val BACK = "Volver"
     const val CLEAR = "Borrar texto"
     const val PROJECT_ON_PC = "Proyecto en el PC"

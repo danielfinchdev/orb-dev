@@ -43,6 +43,9 @@ object ChatTime {
         }
     }
 
+    /** [short] as the list rows write it: «Ayer», «Lun». */
+    fun listTime(iso: String?, nowMs: Long): String = short(iso, nowMs).replaceFirstChar { it.uppercase() }
+
     /** Local calendar day as a whole number, so two times can be compared by day across month ends. */
     private fun dayNumber(c: Calendar): Long {
         val utc = GregorianCalendar(TimeZone.getTimeZone("UTC")).apply { clear(); set(c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)) }

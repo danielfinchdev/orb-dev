@@ -1,5 +1,6 @@
 package dev.orb.app.ui.chats
 
+import dev.orb.app.ui.kit.AgentMark
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -61,12 +62,11 @@ class DirectActions(
     val resume: () -> Unit,
 )
 
-/** The agent's letter on its colour (Claude C, Codex X, Cursor Cu, Gemini G, ACP A). */
+/** The agent's mark (✳ Claude, ◎ Codex, ▲ Cursor) centred in a [size] square; any other agent gets the neutral dot. */
 @Composable
 fun AgentAvatar(agent: String?, size: Dp = 28.dp) {
-    val mark = AgentLetters.of(agent) ?: AgentLetters.of("acp")!!
-    Box(Modifier.size(size).clip(CircleShape).background(mark.color), contentAlignment = Alignment.Center) {
-        Text(mark.letter, color = Color.White, fontWeight = FontWeight.Bold, fontSize = (size.value * 0.42f).sp)
+    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+        AgentMark(agent, size = (size.value * 0.72f).coerceAtLeast(16f).dp, description = agentName(agent))
     }
 }
 

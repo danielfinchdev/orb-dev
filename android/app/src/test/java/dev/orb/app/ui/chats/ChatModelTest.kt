@@ -92,7 +92,7 @@ class ChatModelTest {
         )
         val entries = ChatGrouping.build(rows, listOf(ChatSection(7, "Mi sección", 0, 1, 0)), ChatFilter.All)
         val shape = entries.map { if (it is HeaderEntry) "#" + it.title else (it as RowEntry).row.id }
-        assertEquals(listOf("#Fijados", "2", "#Mi sección", "4", "#web", "3", "#api", "1", "#Sin proyecto", "5"), shape)
+        assertEquals(listOf("#Fijados", "2", "#Mi sección", "4", "#web", "3", "#api", "1", "#Sin proyecto", "5", "#Completados · 1"), shape)
         assertEquals(entries.size, entries.map { it.key }.toSet().size)
     }
 

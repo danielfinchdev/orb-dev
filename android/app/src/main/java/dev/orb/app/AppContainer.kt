@@ -139,6 +139,9 @@ class AppContainer(private val app: Application) {
     /** What the app lock plugs into: the content (and shared content) is shown only while this is open. */
     val gate: dev.orb.app.share.AppGate get() = lock.gate
 
+    /** Which headings of the chat list the person folded; local only, forgotten when the phone is unlinked. */
+    val chatListPrefs = dev.orb.app.ui.chats.ChatListPrefs(SharedPrefsStore(app.getSharedPreferences("orb.chatlist", android.content.Context.MODE_PRIVATE)))
+
     /** When the PC last answered, and what the «sin conexión» notes need to show it and to try again. */
     val lastContact = dev.orb.app.data.LastContact(SharedPrefsStore(app.getSharedPreferences("orb.contact", android.content.Context.MODE_PRIVATE)))
     val offline = dev.orb.app.ui.offline.OfflineInfo(
@@ -284,6 +287,7 @@ class AppContainer(private val app: Application) {
         noteJobs.forgetAll()
         notifyPrefs.linked = false
         lastContact.clear()
+        chatListPrefs.clear()
         notifyPrefs.setKeepConnected(true)
         notifyPrefs.setLockScreenPublic(false)
         SecureStore.remove(app, SESSION_KEY)

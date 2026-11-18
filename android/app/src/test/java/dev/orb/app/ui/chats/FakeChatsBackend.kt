@@ -16,11 +16,12 @@ import kotlinx.serialization.json.JsonElement
 fun row(
     id: String, kind: ChatKind = ChatKind.Orbe, title: String = "Chat $id", project: String? = null, at: String? = "2026-11-11T09:00:00.000Z",
     unread: Int = 0, state: ChatState = ChatState.Idle, pinned: Boolean = false, muted: Boolean = false, section: Long? = null,
-    agent: String? = null, lastText: String? = "hola", done: Boolean = false,
+    agent: String? = null, lastText: String? = "hola", done: Boolean = false, branch: String? = null, prNumber: Int? = null,
+    waitingPermission: Boolean = false,
 ) = ChatRow(
     key = "${kind.wire}:$id", kind = kind, id = id, title = title, project = project, lastText = lastText,
     lastFrom = Speaker.Orbe, lastFromName = "Orbe", at = at, unread = unread, state = state, pinned = pinned, pinOrder = null,
-    muted = muted, snoozedUntil = null, section = section, agent = agent, done = done, waitingPermission = false, asking = false,
+    muted = muted, snoozedUntil = null, section = section, agent = agent, done = done, waitingPermission = waitingPermission, asking = false, branch = branch, prNumber = prNumber,
 )
 
 class FakeChatsBackend(initial: List<ChatRow> = emptyList(), sections: List<ChatSection> = emptyList()) : ChatsBackend {
@@ -59,6 +60,11 @@ class FakeChatsBackend(initial: List<ChatRow> = emptyList(), sections: List<Chat
     override suspend fun snooze(ref: ChatRef, untilIso: String?) = act("snooze ${ref.key} $untilIso")
     override suspend fun rename(ref: ChatRef, title: String) = act("rename ${ref.key} $title")
     override suspend fun archive(ref: ChatRef) = act("archive ${ref.key}")
+    override suspend fun unarchive(ref: ChatRef) = act("unarchive ${ref.key}")
+    /** What the phone remembers of the folded headings; null until a test or the list saves one. */
+    var collapsedStore: Set<String>? = null
+    override fun collapsedGroups() = collapsedStore
+    override fun saveCollapsedGroups(keys: Set<String>) { collapsedStore = keys }
     override suspend fun moveToSection(ref: ChatRef, section: Long?) = act("move ${ref.key} $section")
     override suspend fun createSection(name: String): Result<Long> = act("createSection $name").map { 99L }
     override suspend fun renameSection(id: Long, name: String) = act("renameSection $id $name")

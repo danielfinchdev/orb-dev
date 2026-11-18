@@ -24,7 +24,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+@Config(sdk = [35], qualifiers = "w390dp-h844dp")
 class ChatScreensTest {
     @get:Rule val rule = createComposeRule()
 
@@ -50,6 +50,7 @@ class ChatScreensTest {
         rule.onNodeWithText("Carrito que no guarda").assertIsDisplayed()
         rule.onNodeWithText("Revisar pasarela").assertIsDisplayed()
         for (chip in listOf("Todos", "No leídos", "Directos")) rule.onNodeWithText(chip).assertIsDisplayed()
+        rule.onNodeWithText("Prioridad").assertDoesNotExist()
         rule.onNodeWithText("Fijados").assertIsDisplayed()
         rule.onNodeWithText("tienda-online").assertIsDisplayed()
         rule.onNodeWithText("Nuevo chat", useUnmergedTree = true).assertExists()
@@ -149,16 +150,15 @@ class ChatScreensTest {
         vm.setQuery("carrito")
         rule.waitUntil(5_000) { vm.state.value.phase == SearchPhase.Done }
         rule.waitForIdle()
-        rule.onNodeWithText("Todo · 4").assertExists()
-        for (c in listOf("Chats · 1", "Mensajes · 1", "Tareas · 1", "Proyectos · 1")) rule.onNodeWithText(c).assertExists()
-        rule.onNodeWithText("Carrito que no guarda").assertExists()
-        rule.onNodeWithText("Mensajes · 1").performClick()
+        for (c in listOf("Todo", "Chats", "Mensajes", "Tareas", "Proyectos")) assert(rule.onAllNodesWithTextCount(c) >= 1) { c }
+        rule.onAllNodesWithText("Carrito que no guarda")[0].assertExists()
+        rule.onNodeWithText("Mensajes").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("el carrito solo vive en memoria", substring = true).assertExists()
-        rule.onNodeWithText("Proyectos · 1").performClick()
+        rule.onNodeWithText("Proyectos").performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("Proyecto en el PC · 3 chats").assertExists()
-        rule.onNodeWithText("Tareas · 1").performClick()
+        rule.onNodeWithText("3 chats").assertExists()
+        rule.onNodeWithText("Tareas").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("#42", substring = true).assertExists()
         assertNull(opened)

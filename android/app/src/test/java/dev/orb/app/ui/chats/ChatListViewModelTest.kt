@@ -19,6 +19,7 @@ import kotlinx.serialization.json.JsonNull
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -226,5 +227,92 @@ class ChatListViewModelTest {
         runCurrent()
         assertTrue(b.calls.isEmpty())
         assertEquals(1, vm.rows().size)
+    }
+
+    @Test fun completedChatsGetTheirOwnFoldedGroupThatTheListRemembers() = runTest(dispatcher) {
+        val b = FakeChatsBackend(listOf(row("1", project = "api"), row("2", done = true), row("3", done = true)))
+        val vm = vm(b)
+        val head = vm.state.value.entries.filterIsInstance<HeaderEntry>().last()
+        assertEquals("Completados · 2", head.title)
+        assertEquals(HeaderKind.Done, head.kind)
+        assertTrue(head.collapsed)
+        assertEquals(listOf("1"), vm.rows().map { it.id })
+        assertEquals(2, vm.state.value.doneChats)
+        assertEquals(1, vm.state.value.total)
+        vm.toggleGroup(ChatGrouping.DONE_KEY)
+        runCurrent()
+        assertEquals(setOf("1", "2", "3"), vm.rows().map { it.id }.toSet())
+        // A second view model (a new run of the app) starts as the person left it.
+        val again = vm(b)
+        assertEquals(setOf("1", "2", "3"), again.rows().map { it.id }.toSet())
+    }
+
+    @Test fun foldingAProjectGroupHidesItsRowsAndKeepsTheCount() = runTest(dispatcher) {
+        val b = FakeChatsBackend(listOf(row("1", project = "api"), row("2", project = "api"), row("3", project = "web")))
+        val vm = vm(b)
+        vm.toggleGroup("h:project:api")
+        runCurrent()
+        val api = vm.state.value.entries.filterIsInstance<HeaderEntry>().first { it.key == "h:project:api" }
+        assertTrue(api.collapsed)
+        assertEquals(2, api.count)
+        assertEquals(listOf("3"), vm.rows().map { it.id })
+        assertTrue("h:project:api" in b.collapsedStore.orEmpty())
+    }
+
+    @Test fun noProjectHeadingHasNoCountAndTheFilterAppliesToCompleted() = runTest(dispatcher) {
+        val b = FakeChatsBackend(listOf(row("1"), row("2", done = true, unread = 1), row("3", done = true)))
+        val vm = vm(b)
+        assertNull(vm.state.value.entries.filterIsInstance<HeaderEntry>().first { it.kind == HeaderKind.NoProject }.count)
+        vm.setFilter(ChatFilter.Unread)
+        runCurrent()
+        assertEquals("Completados · 1", vm.state.value.entries.filterIsInstance<HeaderEntry>().last().title)
+    }
+
+    @Test fun archiveOffersUndoAndUnarchiveBringsTheChatBack() = runTest(dispatcher) {
+        val b = FakeChatsBackend(listOf(row("1"), row("2")))
+        val vm = vm(b)
+        val offers = ArrayList<ChatRef>()
+        backgroundScope.launch { vm.archiveOffers.collect { offers += it } }
+        assertTrue(vm.archive(vm.rows().first { it.id == "1" }))
+        runCurrent()
+        assertEquals(listOf(ChatRef(ChatKind.Orbe, "1")), offers)
+        assertEquals(listOf("archive conversation:1"), b.calls)
+        assertTrue(vm.unarchive(offers[0]))
+        runCurrent()
+        assertEquals(listOf("archive conversation:1", "unarchive conversation:1"), b.calls)
+    }
+
+    @Test fun gesturesReportWhenThereIsNoPcToTakeThem() = runTest(dispatcher) {
+        val b = FakeChatsBackend(listOf(row("1", unread = 2)))
+        b.connectionState.value = ConnectionState.Offline(null, null)
+        val vm = vm(b)
+        assertFalse(vm.markRead(vm.rows()[0]))
+        assertFalse(vm.archive(vm.rows()[0]))
+        runCurrent()
+        assertTrue(b.calls.isEmpty())
+    }
+
+    @Test fun readingTheSessionBranchAndPrIsTolerant() {
+        fun parse(json: String) = InboxParser.row(kotlinx.serialization.json.Json.parseToJsonElement(json) as kotlinx.serialization.json.JsonObject)!!
+        val full = parse("""{"key":"session:s1","kind":"session","id":"s1","branch":"orb/login-huella","prNumber":12}""")
+        assertEquals("orb/login-huella", full.branch)
+        assertEquals(12, full.prNumber)
+        val none = parse("""{"key":"session:s2","kind":"session","id":"s2"}""")
+        assertNull(none.branch)
+        assertNull(none.prNumber)
+        val odd = parse("""{"key":"session:s3","kind":"session","id":"s3","branch":"  ","prNumber":"x"}""")
+        assertNull(odd.branch)
+        assertNull(odd.prNumber)
+        val text = parse("""{"key":"session:s4","kind":"session","id":"s4","branch":"main","prNumber":"7"}""")
+        assertEquals(7, text.prNumber)
+    }
+
+    @Test fun mergeCarriesTheBranchOfTheSession() {
+        val inbox = kotlinx.serialization.json.Json.parseToJsonElement("""{"items":[{"key":"session:s1","kind":"session","id":"s1"}]}""") as kotlinx.serialization.json.JsonObject
+        val sessions = kotlinx.serialization.json.Json.parseToJsonElement("""[{"id":"s1","kind":"chat","title":"Login","branch":"orb/x","prNumber":3,"status":"idle"}]""")
+        val merged = InboxMerge.merge(inbox, null, sessions, null)
+        val r = InboxParser.parse(merged).rows.single()
+        assertEquals("orb/x", r.branch)
+        assertEquals(3, r.prNumber)
     }
 }

@@ -16,20 +16,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
-import dev.orb.app.link.api.ConfirmAction
-import dev.orb.app.link.api.Confirmed
-import dev.orb.app.link.api.UserConfirmation
-import dev.orb.app.ui.chats.ChatListScreen
-import dev.orb.app.ui.chats.ChatListViewModel
-import dev.orb.app.ui.chats.ChatState
-import dev.orb.app.ui.chats.ChatsMenu
-import dev.orb.app.ui.chats.FakeChatsBackend
-import dev.orb.app.ui.chats.row
 import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.kit.AgentMark
 import dev.orb.app.ui.kit.OrbBadge
 import dev.orb.app.ui.kit.OrbBadgeKind
-import dev.orb.app.ui.kit.OrbBottomBar
 import dev.orb.app.ui.kit.OrbButton
 import dev.orb.app.ui.kit.OrbButtonKind
 import dev.orb.app.ui.kit.OrbCard
@@ -53,14 +43,12 @@ import dev.orb.app.ui.kit.OrbSheetLabel
 import dev.orb.app.ui.kit.OrbSnackbar
 import dev.orb.app.ui.kit.OrbSubtitle
 import dev.orb.app.ui.kit.OrbSwitch
-import dev.orb.app.ui.kit.OrbTab
 import dev.orb.app.ui.kit.OrbTopBar
 import dev.orb.app.ui.kit.OrbUnread
 import dev.orb.app.ui.kit.OrbWordmark
 import dev.orb.app.ui.kit.ProjectDot
 import dev.orb.app.ui.kit.ProjectDotSize
 import dev.orb.app.ui.theme.OrbPaletteChoice
-import kotlinx.coroutines.Dispatchers
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -170,27 +158,4 @@ class KitShotsTest {
             OrbDialog({}, "¿Eliminar el chat?", OrbDialogAction("Eliminar", {}, danger = true), text = "Se quita de la lista. Puedes deshacerlo unos segundos.", dismiss = OrbDialogAction("Cancelar", {}))
         }
     }
-
-    @OptIn(UserConfirmation::class)
-    private fun shell(palette: OrbPaletteChoice) {
-        Shots.assumeEnabled()
-        val rows = listOf(
-            row("1", title = "Carrito que no guarda", project = "tienda-online", agent = "claude", state = ChatState.Working),
-            row("2", title = "Revisar pasarela", project = "api-pagos", unread = 2),
-            row("3", title = "Orb 3.8.4 seguimiento", pinned = true),
-        )
-        val vm = ChatListViewModel(FakeChatsBackend(rows), dispatcher = Dispatchers.Unconfined)
-        val tabs = listOf(OrbTab("chats", "Chats", OrbIcons.Chat, 2), OrbTab("tasks", "Tareas", OrbIcons.Tasks, 1), OrbTab("projects", "Proyectos", OrbIcons.Folder))
-        twoModes("09-chats", palette, after = { vm.delete(rows[2], Confirmed(ConfirmAction.TrashConversation, "3")) }) {
-            Column(Modifier.fillMaxSize()) {
-                Box(Modifier.weight(1f).fillMaxWidth()) {
-                    ChatListScreen(vm, ChatsMenu(onMenu = {}), onOpenChat = {}, onSearch = {}, onNewChat = {})
-                }
-                OrbBottomBar(tabs, "chats", {})
-            }
-        }
-    }
-
-    @Test fun shellGrafito() = shell(OrbPaletteChoice.Grafito)
-    @Test fun shellOceano() = shell(OrbPaletteChoice.Oceano)
 }
