@@ -941,6 +941,8 @@ try {
         }
         if (await section('agentes')) {
           await scrollShot(`${prefix}-ajustes-agentes-abajo`, 'end');
+          // «Más opciones» of the spending card, unfolded (a fold of the page, nothing is saved)
+          if (await page.locator('[data-testid=spend-advanced]').count() && await tap('spend-advanced', '«Más opciones» de Ajustes › Agentes')) { await scrollShot(`${prefix}-ajustes-agentes-mas`, 'end'); await tap('spend-advanced', 'plegar «Más opciones»'); }
           if (await tap('agents-tab-uso', 'pestaña «Uso» de Agentes y uso')) {
             await page.waitForTimeout(600); await scrollView('top'); await shot(`${prefix}-ajustes-agentes-uso`);
             await scrollShot(`${prefix}-ajustes-agentes-uso-abajo`, 'end');
@@ -1034,7 +1036,16 @@ try {
           // saved, pushed, pulled, switched or undone.
           for (const [id, name, what] of [['expert-git-savemore', 'guardar-menu', 'el menú de «Guardar cambios»'], ['expert-git-cleanmore', 'guardar-menu', '«Más formas de guardar»'], ['expert-git-newbranch', 'rama-nueva', '«Nueva rama»'], ['expert-branch', 'ramas', 'el menú de ramas de la barra'], ['expert-git-more', 'git-menu', 'el «⋯» del panel Git']]) {
             if (!(await page.locator(`[data-testid=${id}]`).count())) continue;
-            if (await tap(id, what)) { await page.waitForTimeout(300); await shot(`${prefix}-god-mode-${name}`); await closeMenus(); await closeMenus(); }
+            if (await tap(id, what)) {
+              // the branches load when the menu opens: the picture waits for the list, and opens it again if it closed by itself
+              if (id === 'expert-branch') {
+                const menu = page.locator('[data-testid=expert-branch-menu]');
+                if (!(await menu.isVisible().catch(() => false))) await tap(id, what);
+                await menu.waitFor({ timeout: 3000 }).catch(() => noteOnce('God mode: el menú de ramas no se abre'));
+                await page.waitForTimeout(500);
+              }
+              await page.waitForTimeout(300); await shot(`${prefix}-god-mode-${name}`); await closeMenus(); await closeMenus();
+            }
           }
           // the file's «⋯» and «Nuevo archivo»: opened and closed, nothing is created
           if (await tap('expert-file-more', 'el «⋯» del archivo abierto en el God mode')) { await shot(`${prefix}-god-mode-archivo-menu`); await closeMenus(); }
@@ -1476,17 +1487,30 @@ try {
         note(`${name}/${view}: cadena → ${chain}`);
       }
       await shot(`${name}-${view}`);
-      // the narrow window in the dark too
-      // (the switch is out of reach in a narrow window: the theme is set as it does, by the class of the page)
-      const paint = (on) => page.evaluate((d) => document.documentElement.classList.toggle('dark', d), on);
-      const darkToo = async (file) => { if (name !== 'estrecha') return; await paint(true); await page.waitForTimeout(200); await shot(`${file}-noche`); await paint(false); };
-      await darkToo(`${name}-${view}`);
       if (view === 'ajustes') {
-        for (const id of ['general', 'agentes', 'acerca']) { await page.click(`[data-testid=settings-nav-${id}]`); await shot(`${name}-ajustes-${id}`); await darkToo(`${name}-ajustes-${id}`); }
+        for (const id of ['general', 'agentes', 'acerca']) { await page.click(`[data-testid=settings-nav-${id}]`); await shot(`${name}-ajustes-${id}`); }
         await closeSettings(page, `${name}/ajustes`);
       }
     }
   }
+  // the narrow window in the dark too: the theme is switched at full width with its own button (out of reach in a narrow
+  // window), then the window is narrowed again
+  try {
+    await page.setViewportSize({ width: 1440, height: 880 }); await page.waitForTimeout(400);
+    await setDark(true);
+    await page.setViewportSize({ width: 420, height: 860 }); await page.waitForTimeout(400);
+    for (const [nav, view] of [['sidebar-home', 'chat'], ['nav-tasks', 'tareas'], ['nav-settings', 'ajustes']]) {
+      await page.getByRole('button', { name: /^(Menú|Menu)$/ }).click({ timeout: 5000 }); await page.locator(`[data-testid=${nav}]:visible`).click({ timeout: 5000 });
+      await page.waitForTimeout(500);
+      await shot(`estrecha-${view}-noche`);
+      if (view === 'ajustes') {
+        for (const id of ['general', 'agentes', 'acerca']) { await page.click(`[data-testid=settings-nav-${id}]`, { timeout: 5000 }); await shot(`estrecha-ajustes-${id}-noche`); }
+        await closeSettings(page, 'estrecha/ajustes (noche)');
+      }
+    }
+  } catch (error) { note(`estrecha en oscuro: el recorrido se cortó (${String(error?.message ?? error).split('\n')[0]})`); }
+  await page.setViewportSize({ width: 1440, height: 880 }).catch(() => {});
+  await setDark(false).catch(() => {});
   // ---- 5. the agents' browser's live window (ORB_EXPLORA_PIP=1): a second window (pip.html) Orb opens when an agent uses its
   // browser. A fake agent opens a local page (127.0.0.1: no network); the window's own page is what gets pictured.
   if (PIP) {
