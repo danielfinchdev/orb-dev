@@ -78,10 +78,10 @@ test('paso 7C1: la caja del chat con Orbe en el PC lleva un solo chip de agente,
   assert.match(chat, /fullPc\(\) \? <ProjectChip conversation=\{id\} \/>/);
   assert.match(chat, /<CompactButton onCompact=\{compact\} busy=\{compacting\} percent=\{percent\} reason=\{compactable \? null :/);
   assert.match(read('src/ui/components/conversation/project-chip.jsx'), /data-testid="project-picker"/);
-  // copy and the time close each turn once; no «+» because chat.send takes no attachments
+  // copy and the time close each turn once; the «+» is there since chat.send takes attachments (test/orbe-11b-388.test.mjs)
   assert.match(chat, /orbTurnTails\(lines,/);
   assert.match(chat, /<TurnActions at=\{turnEnds\.get\(lastLine\)\.at\}/);
-  assert.doesNotMatch(chat, /AttachMenu/);
+  assert.match(chat, /<AttachMenu /);
 });
 
 test('paso 7C1: el chat con Orbe muestra el terminal, las páginas HTML y los secretos de las tareas con los componentes del chat con un agente', () => {
@@ -107,7 +107,8 @@ test('step 7F: the pages of the tasks of a chat are ONE list (the internet rule 
 test('step 7C-b: the row with the project and «Compactar» is outside the box, over it, as under an agent\'s chat; both use the same Composer', () => {
   const composer = chat.slice(chat.indexOf('<Composer draft={box}'));
   assert.match(composer, /\n\s+above=\{<>/);
-  assert.doesNotMatch(composer.slice(0, composer.indexOf('bottom={')), /\n\s+top=\{/);
+  // the slot inside the box holds only the attached files, never the project row
+  assert.doesNotMatch(composer.slice(0, composer.indexOf('bottom={')), /\n\s+top=\{(?!images\.length \?)/);
   assert.match(composer, /<CompactButton onCompact=\{compact\}/);
   const session = read('src/ui/views/session.jsx');
   assert.match(session, /<Composer draft=\{draft\}/);
