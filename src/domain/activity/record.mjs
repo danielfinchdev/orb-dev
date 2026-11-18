@@ -27,6 +27,8 @@ export function recordUserCall({ board, method, params, out, principal, snap }) 
     switch (method) {
       case 'chat.send':
         logUserAction({ kind: 'chat.message', text: tag(principal, String(p.text ?? '').slice(0, 200)), project: p.project || null }); break;
+      case 'chat.editQueued':
+        logUserAction({ kind: 'chat.message', text: tag(principal, p.remove ? 'removed a queued message' : `edited a queued message: ${String(p.text ?? '').slice(0, 200)}`) }); break;
       case 'expert.createFile':
         logUserAction({ kind: 'file.create', text: tag(principal, `created ${String(out?.path ?? '').slice(0, 300)}`), project: p.project || null }); break;
       case 'expert.switchBranch':

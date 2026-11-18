@@ -55,7 +55,9 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
       const id = conversationId(conversation);
       trash.assertNotTrashed(id);
       const qid = str(queueId, 'mensaje', 64);
-      return remove ? orchestrator.editQueued(id, qid, { remove: true }) : orchestrator.editQueued(id, qid, { text: str(text, 'mensaje', 20000) });
+      if (remove) return orchestrator.editQueued(id, qid, { remove: true });
+      const t = str(text, 'mensaje', 20000);
+      return orchestrator.editQueued(id, qid, { text: t, mentions: expandMentions(board, sessions, t) });
     },
     'chat.stop': ({ conversation }) => orchestrator.stop(conversationId(conversation)),
     // «Compactar»: the conversation's coordinator compacts its own context (or starts afresh with the briefing and

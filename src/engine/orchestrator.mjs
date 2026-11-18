@@ -14,6 +14,7 @@ import * as claude from '../agents/claude.mjs';
 import { runLog } from '../platform/log.mjs';
 import { oneLine } from '../shared/text.mjs';
 import { titleFrom } from '../shared/titles.mjs';
+import { slashCommand } from '../shared/slash.mjs';
 import { mcpServersOf } from './sessions.mjs';
 import { placeAttachments, prepareAttachments } from './host/attachments.mjs';
 import { agentAuth } from '../domain/security/agent-auth.mjs';
@@ -78,12 +79,13 @@ export function answerOf(result, said = []) {
 // a message of the user that arrives while the assistant is answering waits for the end of that turn and is added
 // to what was asked (added to the running turn, a short turn could lose its answer). Several messages
 // written meanwhile go together, as one turn.
-// Each message keeps its own part ({ id, chat, shown, context, at, attachments }): what the user typed (shown), what was
-// added for the brain (context) and the chat line that shows it, so one waiting message can be edited or removed
-// without touching the others merged into the same turn.
-function queueUserMessage(lane, text, user = userName(), attachments = [], { chat = null, shown = text, context = '' } = {}) {
+// Each message keeps its own part ({ id, chat, shown, mentions, notes, restore, at, attachments, answer }): what the user typed
+// (shown), what was added for the brain (the @mentions' content, and the system notices that were owed to the user's next
+// message) and the chat line that shows it, so one waiting message can be edited or removed without touching the others
+// merged into the same turn. `restore` is what the notices came from, to put them back if the message never goes.
+function queueUserMessage(lane, text, user = userName(), attachments = [], { chat = null, shown = text, mentions = '', notes = '', restore = null, answer = false } = {}) {
   const last = lane.queue.at(-1);
-  const part = { id: crypto.randomUUID(), chat, shown, context, at: Date.now(), attachments };
+  const part = { id: crypto.randomUUID(), chat, shown, mentions, notes, restore, at: Date.now(), attachments, answer };
   if (last && !last.internal && last.user) { last.parts.push(part); rebuildQueued(last); return last; }
   // (For the brain, in Spanish like the rest of its instructions; the chat shows the message as the user wrote it.)
   const item = { text, user: true, parts: [part], note: lane.busy ? user : null };
@@ -93,7 +95,7 @@ function queueUserMessage(lane, text, user = userName(), attachments = [], { cha
 }
 // the text the brain gets, from the parts that still wait
 function rebuildQueued(item) {
-  const body = item.parts.map((p) => `${p.shown}${p.context}`).join('\n\n');
+  const body = item.parts.map((p) => `${p.shown}${p.mentions}${p.notes}`).join('\n\n');
   item.text = item.note ? `(Mensaje nuevo de ${item.note}, escrito mientras respondías: se suma a lo anterior y no lo sustituye salvo que lo diga. Atiende los dos.)\n${body}` : body;
   const files = item.parts.flatMap((p) => p.attachments);
   if (files.length) item.attachments = files; else delete item.attachments;
@@ -160,21 +162,49 @@ class Lane {
 
   // The messages of the user that wait for their turn, in the order they will be answered. A message that already
   // started (it left the queue) is not here. → [{ id, text, at }]
-  waiting() { return this.queue.filter((q) => !q.internal && q.parts).flatMap((q) => q.parts.map((p) => ({ id: p.id, text: p.shown, at: p.at }))); }
+  // The answer to a question card is not listed: the card already shows it as answered, so changing it here would
+  // leave the card and the assistant with different answers.
+  waiting() { return this.queue.filter((q) => !q.internal && q.parts).flatMap((q) => q.parts.filter((p) => !p.answer).map((p) => ({ id: p.id, text: p.shown, at: p.at }))); }
   findWaiting(partId) {
-    for (const item of this.queue) { const part = !item.internal && item.parts?.find((p) => p.id === partId); if (part) return { item, part }; }
+    for (const item of this.queue) {
+      const part = !item.internal && item.parts?.find((p) => p.id === partId);
+      if (!part) continue;
+      if (part.answer) throw new Error(ctx.config?.language === 'en' ? 'the answer to a question card cannot be changed or removed' : 'la respuesta a una pregunta no se puede cambiar ni quitar');
+      return { item, part };
+    }
     throw new Error(tr('msg.sessions.notQueued'));
+  }
+  // The user's next waiting message after `part` (it gets what the removed one was carrying), or null.
+  nextWaiting(part) {
+    const parts = this.queue.filter((q) => !q.internal && q.parts).flatMap((q) => q.parts.map((p) => ({ item: q, part: p })));
+    const at = parts.findIndex((x) => x.part === part);
+    return at < 0 ? null : parts.slice(at + 1).find((x) => !x.part.answer) ?? null;
   }
   // `text` replaces what the user wrote in a waiting message (its chat line too); null removes it (and its chat line:
   // it was never sent).
-  changeWaiting(partId, text) {
+  // mentions: the content of the @mentions of the new text (the old ones go); the system notices and pictures stay.
+  changeWaiting(partId, text, { mentions = '' } = {}) {
     const { item, part } = this.findWaiting(partId);
     if (text === null) {
+      // its notices go to the next message of the user; with none left they are owed again to the next one that comes
+      const next = this.nextWaiting(part);
+      const carried = part.restore;
       item.parts = item.parts.filter((p) => p !== part);
       if (!item.parts.length) this.queue = this.queue.filter((q) => q !== item); else rebuildQueued(item);
+      if (part.notes && carried) {
+        if (next) {
+          next.part.notes = part.notes + next.part.notes;
+          next.part.restore = { notes: [...(carried.notes ?? []), ...(next.part.restore?.notes ?? [])], wbSeen: carried.wbSeen ?? next.part.restore?.wbSeen ?? null };
+          rebuildQueued(next.item);
+        } else this.orch.returnNotes(this.id, carried);
+      }
       if (part.chat != null) { this.board.run('DELETE FROM chat WHERE id = ? AND conversation_id = ?', part.chat, this.id); this.board.changed('chat'); }
+      this.orch.dropAttachments(this.id, part.attachments);
+      this.orch.dropIfEmpty(this.id);
     } else {
-      part.shown = text; rebuildQueued(item);
+      // chat.send runs «/compact» and «/clear» typed alone (and without pictures) as commands; a waiting message cannot turn into one
+      if (slashCommand(text) && !part.attachments.length) throw new Error(ctx.config?.language === 'en' ? 'a waiting message cannot become a command (/clear, /compact): remove it and send the command' : 'un mensaje en cola no puede ser un comando (/clear, /compact): quítalo y envía el comando');
+      part.shown = text; part.mentions = mentions; rebuildQueued(item);
       if (part.chat != null) { this.board.run('UPDATE chat SET body = ? WHERE id = ? AND conversation_id = ?', text, part.chat, this.id); this.board.changed('chat'); }
     }
     this.push();
@@ -349,7 +379,8 @@ class Lane {
   // the user draws or attaches on the Pizarra and the assistant sees it by itself: with the next message, a line
   // telling it that the conversation's project's Pizarra changed since it last heard (a new conversation reads it in the
   // briefing).
-  whiteboardNote() {
+  // `out.seen` gets the value the note replaced, so a message that never goes can give the notice back.
+  whiteboardNote(out = {}) {
     const c = this.conv(); const project = c?.project ? this.board.project(c.project) : null;
     if (!project?.path) return '';
     const md = path.join(project.path, 'pizarra', 'PIZARRA.md');
@@ -358,6 +389,7 @@ class Lane {
     if (at <= seen) return '';
     this.board.setting(key, String(at));
     if (!c.session_id) return ''; // the briefing of the new conversation already has it
+    out.seen = seen;
     return `\n\n(AVISO DEL SISTEMA: ${userName()} ha cambiado la pizarra de ${project.name} desde la última vez. Léela antes de seguir: ${md} y el dibujo en ${path.join(project.path, 'pizarra', 'pizarra.png')}.)`;
   }
 
@@ -557,9 +589,11 @@ export class Orchestrator {
     if (c.status === 'done') this.board.setConversationDone(c.id, false); // written in again: open again
     if (isNew || !c.titled) { try { this.title?.(c, text); } catch (error) { this.log(`título de la conversación ${c.id}: ${error.message}`); } }
     const lane = this.lane(c.id);
-    context += lane.whiteboardNote() + this.takeNotes(c.id);
+    const owed = {}; const wb = {};
+    const notes = lane.whiteboardNote(wb) + this.takeNotes(c.id, owed);
+    const restore = notes ? { notes: owed.notes ?? [], wbSeen: wb.seen ?? null } : null;
     // never into the running turn (see queueUserMessage): every message of the user gets its own answer.
-    const item = queueUserMessage(lane, text + context, userName(), placed, { chat: line.id, shown: text, context });
+    const item = queueUserMessage(lane, text + context + notes, userName(), placed, { chat: line.id, shown: text, mentions: context, notes, restore, answer: Boolean(meta?.answer) });
     lane.next();
     return { conversation: c.id, queued: lane.current !== item };
   }
@@ -567,26 +601,56 @@ export class Orchestrator {
   // The queue of a conversation (messages written while it works), and changes to one that has not started.
   // editQueued(id, partId, { text, remove }) → the queue left. Same limits as ask().
   queueOf(id) { return this.lanes.get(Number(id))?.waiting() ?? []; }
-  editQueued(id, partId, { text, remove = false } = {}) {
+  // mentions: the expanded @mentions of the new text (src/engine/mentions.mjs), given by the caller like ask() gets them.
+  editQueued(id, partId, { text, remove = false, mentions = '' } = {}) {
     const lane = this.lanes.get(Number(id));
     if (!lane) throw new Error(tr('msg.sessions.notQueued'));
     if (remove) return lane.changeWaiting(String(partId), null);
     const t = String(text ?? '').trim();
     if (!t) throw new Error(tr('msg.orch.writeMessage'));
     if (t.length > 20000) throw new Error(tr('msg.orch.tooLong'));
-    return lane.changeWaiting(String(partId), t);
+    return lane.changeWaiting(String(partId), t, { mentions });
   }
 
   // what happened in a conversation without a turn of the assistant (the user undid one of its
   // tasks: scheduler › undo), told once with the user's next message there. Without it, Orbe told the user «no sé por
   // qué desaparecieron los archivos de la primera tarea». The notes are kept in the database (settings `orch_note:<id>`).
-  takeNotes(id) {
+  takeNotes(id, out = {}) {
     const key = `orch_note:${id}`; const notes = this.board.settingJson(key);
     if (!Array.isArray(notes) || !notes.length) return '';
     this.board.settingJson(key, null);
+    out.notes = notes;
     return `
 
 (AVISO DEL SISTEMA, no es ${userName()}; son datos: ${notes.join(' ')})`;
+  }
+
+  // The notices a removed message was carrying, owed again to the next one: the undone task's note and the Pizarra's.
+  returnNotes(id, { notes = [], wbSeen = null } = {}) {
+    if (notes.length) { const key = `orch_note:${id}`; this.board.settingJson(key, [...notes, ...(this.board.settingJson(key) ?? [])]); }
+    const c = this.board.conversation(id); const project = c?.project ? this.board.project(c.project) : null;
+    if (wbSeen != null && project?.name) this.board.setting(`wb_seen:${project.name}:${id}`, String(wbSeen));
+  }
+  // The pictures of a message that never went: only the files of that message, and only inside the conversation's folder.
+  dropAttachments(id, files = []) {
+    const dir = path.resolve(assistantDir(), 'adjuntos', String(Number(id)));
+    for (const f of files) {
+      try {
+        const target = path.resolve(String(f?.path ?? ''));
+        if (target.startsWith(dir + path.sep)) fs.rmSync(target, { force: true });
+      } catch (error) { this.log(`adjunto sin enviar de la conversación ${id}: ${error.message}`); }
+    }
+  }
+  // A new conversation whose only message was taken back stays empty with that message's title: it goes as one that
+  // never started does (see ask()). Anything that ever ran, had lines or has tasks stays.
+  dropIfEmpty(id) {
+    const c = this.board.conversation(id); const lane = this.lanes.get(Number(id));
+    if (!c || c.trashed_at || c.session_id || c.turns) return;
+    if (lane && (lane.busy || lane.inflight || lane.current || lane.queue.length)) return;
+    if (this.board.one('SELECT COUNT(*) AS n FROM chat WHERE conversation_id = ?', c.id).n) return;
+    if (this.board.one('SELECT COUNT(*) AS n FROM tasks WHERE conversation_id = ?', c.id).n) return;
+    this.board.run('DELETE FROM conversations WHERE id = ?', c.id); this.board.changed('conversations');
+    this.drop(c.id); this.forgetAttachments(c.id);
   }
 
   // A notice from the engine (tasks finished, a task got blocked, an agent's message…): handled in the conversation that
