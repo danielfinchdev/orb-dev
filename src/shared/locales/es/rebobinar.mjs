@@ -35,6 +35,8 @@ export default {
   'session.moreOptions': 'Más opciones',
   'session.attachFile': 'Adjuntar archivo',
   'session.captureWindow': 'Capturar una ventana',
+  'msg.copy': 'Copiar',
+  'msg.copied': 'Copiado',
   'turn.changedOne': 'Cambió 1 archivo',
   'turn.changedMany': 'Cambió {n} archivos',
   'turn.review': 'Revisar',

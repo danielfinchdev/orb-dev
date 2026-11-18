@@ -26,7 +26,7 @@ test('Cristal is a theme of its own, plain and light only', () => {
   assert.equal(en['appearance.skin.cristal'], 'Glass');
   // On <html>: its own data-skin, no data-material.
   const store = read('lib', 'store.js');
-  assert.match(store, /root\.skin = skin;/);
+  assert.match(store, /put\('skin', skin\);/);
   assert.doesNotMatch(store, /root\.material = /);
   assert.match(read('components', 'skin-preview.jsx'), /cristal: null/);
   // No robot; its backdrop is the shader of the theme, mounted by the same component as the others.

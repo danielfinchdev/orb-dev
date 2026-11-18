@@ -7,7 +7,8 @@
 // «Esperando tu aprobación», how its last task ended, else its last line) and the unread count. Right click or ⋯ (PC) and
 // a long press (phone) open the chat's menu: info, pin, mute, mark read, complete or reopen, delete.
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { PanelTop, Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ClipboardCheck, FolderGit2, CalendarSync, Presentation, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, PencilLine, AlarmClock, AlarmClockOff, Hand, ArrowUpDown, ChevronDown, LoaderCircle } from 'lucide-react';
+import { PanelTop, Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ClipboardCheck, FolderGit2, CalendarSync, Presentation, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, PencilLine, AlarmClock, AlarmClockOff, Hand, ArrowUpDown, ChevronDown, LoaderCircle, GitBranch, GitPullRequest } from 'lucide-react';
+import { openPanel } from '@/lib/open-changes.js';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { OrbMark } from '@/components/orb-mark.jsx';
@@ -99,42 +100,32 @@ export function OrbAvatar({ item, size = 40 }) {
 export function useOrbActions(item, { tab = false } = {}) {
   const t = useT();
   const tabsOn = useStore((s) => !phoneLayout() && s.app?.config?.ui?.tabs !== false);
-  const list = actionList(item, t);
+  const list = actionList(item, t, tab);
   if (!tab || !tabsOn || !item) return list;
   const newTab = { id: 'newtab', icon: PanelTop, label: t('orbchats.openNewTab'), run: () => { actTabs((s) => T.openTab(s, `${item.kind === 'session' ? 'session' : 'chat'}:${item.id}`, { mode: 'new' })); openOrbItem(item); } };
   const at = list.findIndex((a) => a.danger);
   return at < 0 ? [...list, newTab] : [...list.slice(0, at), newTab, ...list.slice(at)];
 }
-function actionList(item, t) {
+// row: the PC row's menu, with the short labels of the mock-up («Posponer…», «Eliminar…»).
+function actionList(item, t, row = false) {
   if (!item) return [];
   // a direct conversation with an agent: pinned and muted like the others; completed through the sidebar's mark.
   const rename = { id: 'rename', icon: PencilLine, label: t('orbchats.rename'), run: () => renameChat(item, t) };
   // snooze until a time (the scheduler brings it back), or back now.
   const snooze = item.snoozedUntil
     ? { id: 'unsnooze', icon: AlarmClockOff, label: t('orbchats.unsnooze'), run: () => orbAct('inbox.snooze', { ...conversationRef(item), until: null }) }
-    : { id: 'snooze', icon: AlarmClock, label: t('orbchats.snooze'), run: () => snoozeChat(item, t) };
-  if (item.kind === 'session') return [
-    rename,
-    item.pinned ? { id: 'unpin', icon: PinOff, label: t('chats.unpin'), run: () => orbAct('inbox.unpin', conversationRef(item)) } : { id: 'pin', icon: Pin, label: t('chats.pin'), run: () => orbAct('inbox.pin', conversationRef(item)) },
-    snooze,
-    item.muted ? { id: 'unmute', icon: Bell, label: t('chats.unmute'), run: () => orbAct('inbox.mute', { ...conversationRef(item), muted: false }) } : { id: 'mute', icon: BellOff, label: t('chats.mute'), run: () => orbAct('inbox.mute', { ...conversationRef(item), muted: true }) },
-    item.done
-      ? { id: 'reopen', icon: Undo2, label: t('orbchats.reopen'), run: () => act(call('sidebar.complete', { key: `s${item.id}`, done: false })).then(refreshSoon) }
-      : { id: 'complete', icon: CircleCheck, label: t('orbchats.complete'), run: () => act(call('sidebar.complete', { key: `s${item.id}`, done: true })).then(refreshSoon) }
-  ];
+    : { id: 'snooze', icon: AlarmClock, label: row ? t('orbchats.rowSnooze') : t('orbchats.snooze'), run: () => snoozeChat(item, t) };
   const ref = conversationRef(item);
-  return [
-    { id: 'info', icon: Info, label: t('orbchats.info'), run: () => { openOrbItem(item); openOrbInfo({ type: 'chat' }); } },
-    rename,
-    item.pinned ? { id: 'unpin', icon: PinOff, label: t('chats.unpin'), run: () => orbAct('inbox.unpin', ref) } : { id: 'pin', icon: Pin, label: t('chats.pin'), run: () => orbAct('inbox.pin', ref) },
-    snooze,
-    item.muted ? { id: 'unmute', icon: Bell, label: t('chats.unmute'), run: () => orbAct('inbox.mute', { ...ref, muted: false }) } : { id: 'mute', icon: BellOff, label: t('chats.mute'), run: () => orbAct('inbox.mute', { ...ref, muted: true }) },
-    ...(item.unread ? [{ id: 'read', icon: CheckCheck, label: t('chats.markRead'), run: () => orbAct('inbox.markRead', ref) }] : []),
-    item.done
-      ? { id: 'reopen', icon: Undo2, label: t('orbchats.reopen'), run: () => act(call('conversations.update', { id: item.id, done: false })).then(refreshSoon) }
-      : { id: 'complete', icon: CircleCheck, label: t('orbchats.complete'), run: () => act(call('conversations.update', { id: item.id, done: true })).then(refreshSoon) },
-    { id: 'delete', icon: Trash2, label: t('orbchats.delete'), danger: true, run: () => deleteChat(item, t) }
-  ];
+  const info = { id: 'info', icon: Info, label: row ? t('orbchats.rowInfo') : t('orbchats.info'), run: () => { openOrbItem(item); if (item.kind === 'session') openPanel(item.id, 'info'); else openOrbInfo({ type: 'chat' }); } };
+  const pin = item.pinned ? { id: 'unpin', icon: PinOff, label: t('chats.unpin'), run: () => orbAct('inbox.unpin', ref) } : { id: 'pin', icon: Pin, label: row ? t('orbchats.rowPin') : t('chats.pin'), run: () => orbAct('inbox.pin', ref) };
+  const mute = item.muted ? { id: 'unmute', icon: Bell, label: t('chats.unmute'), run: () => orbAct('inbox.mute', { ...ref, muted: false }) } : { id: 'mute', icon: BellOff, label: t('chats.mute'), run: () => orbAct('inbox.mute', { ...ref, muted: true }) };
+  const read = item.unread ? [{ id: 'read', icon: CheckCheck, label: t('chats.markRead'), run: () => orbAct('inbox.markRead', ref) }] : [];
+  const done = (method, args) => (item.done
+    ? { id: 'reopen', icon: Undo2, label: t('orbchats.reopen'), run: () => act(call(method, { ...args, done: false })).then(refreshSoon) }
+    : { id: 'complete', icon: CircleCheck, label: row ? t('orbchats.rowComplete') : t('orbchats.complete'), run: () => act(call(method, { ...args, done: true })).then(refreshSoon) });
+  const remove = { id: 'delete', icon: Trash2, label: row ? t('orbchats.rowDelete') : t('orbchats.delete'), danger: true, run: () => (item.kind === 'session' ? deleteSessionChat(item, t) : deleteChat(item, t)) };
+  if (item.kind === 'session') return [info, rename, pin, snooze, mute, ...read, done('sidebar.complete', { key: `s${item.id}` }), remove];
+  return [info, rename, pin, snooze, mute, ...read, done('conversations.update', { id: item.id }), remove];
 }
 // «Renombrar» from the list's ⋯ (and the chat's own ⋯): the same title a chat or an agent's conversation already has.
 export function renameChat(item, t) {
@@ -193,6 +184,19 @@ export async function deleteChat(item, t) {
   return true;
 }
 
+// «Eliminar…» of an agent's chat: the same confirmation and removal as the chat's own ⋯ (its worktree is only removed when no work is lost).
+export async function deleteSessionChat(item, t) {
+  let kept = false;
+  try { kept = (await call('worktrees.status', { id: item.id })).has === true; } catch { kept = false; }
+  if (!(await confirm(t('session.deleteTitle'), t('session.deleteBody') + (kept ? ` ${t('session.wt.deleteKept')}` : ''), { ok: t('session.delete'), danger: true }))) return false;
+  const ok = await act(call('sessions.remove', { id: item.id }));
+  if (!ok) return false;
+  const r = getState().route;
+  if (r.view === 'session' && r.id === item.id) go({ view: phoneLayout() ? 'chats' : 'chat' });
+  refreshSoon(); loadOrbInbox();
+  return true;
+}
+
 function OrbMenu({ item, open, setOpen, className }) {
   const t = useT();
   const actions = useOrbActions(item, { tab: true });
@@ -241,6 +245,7 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet, showProject = false 
   const locale = useLocale();
   const active = useStore((s) => isOpen(s.route, item));
   const assistant = useStore((s) => s.app?.config?.assistantName ?? 'Orbe');
+  const skin = useStore((s) => s.app?.config?.ui?.skin);
   const [menu, setMenu] = useState(false);
   const press = usePress(() => (phone ? onSheet(item) : setMenu(true)));
   const p = orbProgress(item, t, { assistant });
@@ -252,16 +257,19 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet, showProject = false 
     const agents = item.agents ?? (item.agent ? [item.agent] : []);
     const who = agents.length ? new Intl.ListFormat(locale, { type: 'conjunction' }).format(agents.map((a) => AGENT[a] ?? a)) : '';
     const needsYou = Boolean(p.badge);
+    const working = Boolean(item.busy || p.tone === 'live');
+    // a chat waiting for the user reads like the mock-up's («Esperando tu aprobación»); what it asks for stays in the tooltip.
+    const waitText = needsYou ? t('orbchats.awaiting') : '';
     return (
       <div className={cn('lazy-row group/row relative rounded-ctl', active ? 'bg-accent' : 'hover:bg-accent')} data-testid={`orb-row-${item.title}`} data-kind={item.kind} data-unread={item.unread || 0} {...press}>
         <button type="button" onClick={() => openOrbItem(item)} aria-current={active ? 'true' : undefined} className="block w-full min-w-0 cursor-pointer rounded-ctl px-2 py-[7px] text-left" data-testid={`item-${item.kind === 'session' ? 's' : 'c'}${item.id}`}>
           <span className="flex min-h-5 items-center gap-1.5">
-            <span className="grid shrink-0 place-items-center" role="img" aria-label={who || t('orbchats.noProject')} title={who || undefined} data-testid="orb-agent-mark"><AgentIcon agent={agents[0]} /></span>
+            <span className="grid shrink-0 place-items-center" role="img" aria-label={who || t('orbchats.noProject')} title={who || undefined} data-testid="orb-agent-mark">{!agents[0] && robotSkin(skin) ? <Robot size={16} still /> : <AgentIcon agent={agents[0]} className="size-2.5 opacity-70" />}</span>
             <span className={cn('min-w-0 flex-1 truncate text-control leading-5', strong ? 'font-semibold' : 'font-normal', item.done && 'text-foreground/70')}>{item.title}</span>
-            {item.busy || p.tone === 'live' ? <LoaderCircle className="text-muted-foreground size-3.5 shrink-0 animate-spin" aria-label={t('chats.working')} data-testid="orb-working" /> : null}
+            {working ? <LoaderCircle className="text-muted-foreground size-3.5 shrink-0 animate-spin" aria-label={t('chats.working')} data-testid="orb-working" /> : null}
             {item.snoozedUntil ? <AlarmClock className="text-muted-foreground size-3.5 shrink-0" aria-label={t('orbchats.snoozed', { when: new Date(item.snoozedUntil).toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' }) })} data-testid="chat-snoozed" /> : null}
             {item.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}
-            <span className={cn('shrink-0 text-micro tabular-nums', strong ? 'text-primary-text font-medium' : 'text-faint-foreground')}>{time}</span>
+            {working ? null : <span className={cn('shrink-0 text-micro tabular-nums', strong ? 'text-primary-text font-medium' : 'text-faint-foreground')}>{time}</span>}
             {item.unread ? <span className={cn('grid h-[17px] min-w-[17px] shrink-0 place-items-center rounded-full px-[5px] text-micro font-semibold tabular-nums', item.muted ? 'bg-muted-foreground/25 text-foreground/70' : 'bg-primary text-primary-foreground')} data-testid="chat-unread" aria-label={t('chats.unread', { n: item.unread })}>{item.unread > 99 ? '99+' : item.unread}</span> : null}
             <span className="-mr-1 w-6 shrink-0" aria-hidden="true" />
           </span>
@@ -269,15 +277,15 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet, showProject = false 
             {showProject && item.project ? <span className="inline-flex shrink-0 items-center gap-1"><ProjectIcon name={item.project} small />{item.project}</span> : null}
             {item.branch && p.tone === 'muted' && !needsYou
               ? (
-                <span className="inline-flex min-w-0 items-center gap-1.5" data-testid="orb-branch">
-                  <span className="min-w-0 truncate font-mono" title={item.branch}>{item.branch}</span>
-                  {item.prNumber ? <span className="text-primary-text shrink-0 tabular-nums" data-testid="orb-pr">#{item.prNumber}</span> : null}
+                <span className="inline-flex min-w-0 items-center gap-2" data-testid="orb-branch">
+                  {item.prNumber ? <span className="text-info inline-flex shrink-0 items-center gap-[3px] tabular-nums" data-testid="orb-pr"><GitPullRequest className="size-3.5" aria-hidden="true" />#{item.prNumber}</span> : null}
+                  <span className="inline-flex min-w-0 items-center gap-[3px]" title={item.branch}><GitBranch className="size-3.5 shrink-0" aria-hidden="true" /><span className="min-w-0 truncate">{item.branch}</span></span>
                 </span>
               )
               : (
-                <span className="inline-flex min-w-0 items-center gap-[3px]">
+                <span className="inline-flex min-w-0 items-center gap-[3px]" title={needsYou ? p.text : undefined}>
                   {needsYou ? <Hand className="size-3.5 shrink-0" aria-hidden="true" /> : null}
-                  <span className="min-w-0 truncate">{p.prefix ? <span className="text-foreground/70">{p.prefix}</span> : null}{p.text}</span>
+                  <span className="min-w-0 truncate">{p.prefix ? <span className="text-foreground/70">{p.prefix}</span> : null}{needsYou ? waitText : p.text}</span>
                 </span>
               )}
           </span>
@@ -328,10 +336,13 @@ function ProjectHead({ group, open, phone }) {
           <ChevronDown className={cn('size-3.5 shrink-0 transition-transform duration-150', !open && '-rotate-90')} />
           {name ? <ProjectIcon name={name} /> : <span className="size-2.5 shrink-0 rounded-full shadow-[inset_0_0_0_1px_var(--faint-foreground)]" aria-hidden="true" />}
           <span className="min-w-0 truncate">{name ?? t('orbchats.noProject')}</span>
-          {group.waiting ? <span className="bg-warning size-1.5 shrink-0 rounded-full" role="img" aria-label={t('orbchats.awaiting')} /> : group.working ? <span className="bg-primary-text size-1.5 shrink-0 animate-pulse rounded-full" role="img" aria-label={t('chats.working')} /> : null}
           <span className="flex-1" />
-          {group.unread ? <span className="bg-primary size-1.5 rounded-full" aria-label={t('chats.unread', { n: group.unread })} /> : null}
-          {open ? null : <span className="tabular-nums opacity-70">{group.items.length}</span>}
+          {/* the rows say it themselves while the group is open; folded, its state shows here */}
+          {open ? null : <>
+            {group.waiting ? <span className="bg-warning size-1.5 shrink-0 rounded-full" role="img" aria-label={t('orbchats.awaiting')} /> : group.working ? <span className="bg-primary-text size-1.5 shrink-0 animate-pulse rounded-full" role="img" aria-label={t('chats.working')} /> : null}
+            {group.unread ? <span className="bg-primary size-1.5 rounded-full" aria-label={t('chats.unread', { n: group.unread })} /> : null}
+            <span className="tabular-nums opacity-70">{group.items.length}</span>
+          </>}
         </CollapsibleTrigger>
         {name ? (
           <>
@@ -657,7 +668,7 @@ export function OrbInbox({ page = false }) {
       <div className={cn('grid gap-2', phone ? 'px-4 pt-3 pb-2' : 'mt-0.5 mr-2.5 mb-2 ml-3')} data-testid="sidebar-search">{search}</div>
       {phone ? null : <Places />}
       {phone ? null : (
-        <div className="text-faint-foreground mt-1.5 flex items-center justify-between px-4 pt-2.5 pb-1 text-caption leading-[1.45]">
+        <div className="text-faint-foreground flex items-center justify-between px-4 pt-2.5 pb-1 text-caption leading-[1.45]">
           <BubbleTip title={t('orbchats.activityTip')}>
             <button type="button" onClick={() => go('activity')} className="hover:text-foreground inline-flex cursor-pointer items-center gap-0.5" data-testid="sidebar-activity">{t('orbchats.activity')}<ChevronRight className="size-3.5" /></button>
           </BubbleTip>

@@ -54,7 +54,7 @@ test('the header has no «Cambios» button: the panel button opens the panel and
 
 test('«Hacer commit…» is the first item of the ⋯ menu, not a header button', () => {
   assert.doesNotMatch(session, /CommitButton/);
-  const menu = session.slice(session.indexOf('<DropdownMenuContent align="end" className="w-56">'));
+  const menu = session.slice(session.indexOf('<DropdownMenuContent align="end" className="w-[250px]">'));
   assert.ok(menu.indexOf('<CommitMenuItem') > 0 && menu.indexOf('<CommitMenuItem') < menu.indexOf('data-testid="open-folder"'));
   assert.match(menu, /s\.kind === 'chat' && s\.project && fullPc\(\) \? <><CommitMenuItem/);
   const dialog = read('src/ui/components/commit-dialog.jsx');
@@ -87,7 +87,8 @@ test('every data-testid the files had before is still there', () => {
 });
 
 test('the panel keeps the PC layout only: the phone and a linked browser have no panel', () => {
-  assert.match(session, /const hasPanel = s\.kind === 'chat' && Boolean\(s\.project\) && fullPc\(\);/);
+  // s?. on purpose: the route of a deleted chat reaches this line before the «gone» screen
+  assert.match(session, /const hasPanel = s\?\.kind === 'chat' && Boolean\(s\?\.project\) && fullPc\(\);/);
   assert.match(session, /\{hasPanel \? \(\s*<ChatPanel /);
 });
 
@@ -129,4 +130,56 @@ test('the permissions menu: options in listboxes, «Más opciones» a button, th
   assert.match(menu, /if \(!e\.target\.closest\?\.\('\[role="option"\]'\)\) return;/);
   assert.match(menu, /aria-describedby=/);
   for (const lang of ['es', 'en']) for (const k of ['session.extraAccess', 'session.androidOff', 'session.androidChipTip']) assert.notEqual(createT(lang)(k), k);
+});
+
+test('step 6C1: the Ficha lists the tasks of the chat with the approval of Tareas and the last line of the project log', async () => {
+  const info = read('src/ui/views/orb/info.jsx');
+  const ficha = info.slice(info.indexOf('export function SessionInfo'));
+  // approving and rejecting are the very functions of Tareas (they carry the confirmation and the fingerprint)
+  assert.match(info, /import \{ approveTask, rejectTask \} from '@\/components\/task-approval\.jsx'/);
+  assert.match(ficha, /x\.status === 'awaiting_approval' \? \(/);
+  assert.doesNotMatch(ficha, /needsApproval/);
+  assert.match(ficha, /onClick=\{\(\) => rejectTask\(x\)\}[^>]*>\{t\('tasks\.reject'\)\}/);
+  assert.match(ficha, /onClick=\{\(\) => approveTask\(x\)\}[^>]*>\{t\('tasks\.approve\.ok'\)\}/);
+  assert.doesNotMatch(ficha, /call\('tasks\.approve'/);
+  assert.match(ficha, /String\(x\.session_id\) === String\(s\.id\)/);
+  // the log: one read of the project's log when the Ficha opens, shown as one line, with «Abrir la bitácora»
+  assert.equal((ficha.match(/call\('logs\.read'/g) ?? []).length, 1);
+  assert.match(ficha, /data-testid="info-log-last"/);
+  assert.match(ficha, /data-testid="info-open-log"/);
+  // the folder is here now (it left the box); the worktree row says «Worktree»
+  assert.match(ficha, /data-testid="session-folder">\{s\.cwd\}/);
+  assert.match(ficha, /tree \? t\('panel\.info\.worktree'\) : t\('panel\.info\.branch'\)/);
+  const { lastEntry } = await import('../src/ui/lib/logbook.js');
+  const e = lastEntry('# Bitácora\n\n### 2026-11-16 09:00 — Codex (CLI, GPT) — Primero\n- Hecho: a\n\n### 2026-11-17 14:05 — Claude (Claude Code, Opus) — Contador de contexto: el presupuesto\n- Hecho: b\n');
+  assert.equal(e.topic, 'Contador de contexto: el presupuesto');
+  assert.deepEqual([e.date.getFullYear(), e.date.getMonth(), e.date.getDate()], [2026, 10, 17]);
+  assert.equal(lastEntry('proyecto: todavía no tiene entradas'), null);
+});
+
+test('step 6C1: the permissions menu lists Preguntar then Auto with shield icons and a grey mark, and «Más opciones» from least to most access', () => {
+  const menu = read('src/ui/components/autonomy-switch.jsx');
+  assert.match(menu, /main = \['editar', 'auto'\]/);
+  assert.match(menu, /MORE_ORDER = \['leer', 'probar', 'preguntar', 'total'\]/);
+  for (const [level, icon] of [['auto', 'ShieldCheck'], ['editar', 'ShieldQuestion'], ['preguntar', 'ShieldAlert'], ['total', 'ShieldOff']]) assert.match(menu, new RegExp(`${level}: \\{ Icon: ${icon},`));
+  assert.match(menu, /<Check className=\{cn\('text-muted-foreground mt-0\.5/);
+  // the calls are not in this file: it only draws the options and reports the one chosen
+  assert.doesNotMatch(menu, /grantTotal|grantAndroid|revokeGrant|sessions\.update|unlockCore/);
+});
+
+test('step 6D: the Ficha approves only what waits for approval and gives a held task the Undo and Accept of Tareas', () => {
+  const info = read('src/ui/views/orb/info.jsx');
+  const ficha = info.slice(info.indexOf('export function SessionInfo'));
+  assert.match(info, /import \{ TaskStatus, acceptHeld, undoHeld \} from '@\/components\/task-state\.jsx'/);
+  const approve = ficha.slice(ficha.indexOf("x.status === 'awaiting_approval'"), ficha.indexOf(': x.held ?'));
+  assert.match(approve, /approveTask\(x\)/);
+  const held = ficha.slice(ficha.indexOf(': x.held ?'), ficha.indexOf('mine.length > 8'));
+  assert.match(held, /undoHeld\(t, x\)[^>]*>\{t\('tasks\.undo\.btn'\)\}/);
+  assert.match(held, /acceptHeld\(t, x\)[^>]*>\{t\('tasks\.held\.accept'\)\}/);
+  assert.doesNotMatch(held, /approveTask|rejectTask/);
+});
+
+test('step 6D: the chip gives the reasoning levels the own model, not the first of the list', () => {
+  assert.match(session, /<AgentChip [^\n]*model=\{s\.model \?\? ''\}/);
+  assert.doesNotMatch(session, /<AgentChip [^\n]*model=\{s\.model \|\|/);
 });

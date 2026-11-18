@@ -103,3 +103,33 @@ test('step 5D: Cristal keeps the dialog scrim blur even when the system asks for
   assert.match(skins, /\[data-slot="dialog-overlay"\] \{ background-color: var\(--g-shadow-near\); backdrop-filter: blur\(8px\); \}/);
   assert.doesNotMatch(skins, /prefers-reduced-transparency/);
 });
+
+test('step 6C1: an agent chat is two full-height columns, so the panel strip carries the window buttons', () => {
+  const session = read('src/ui/views/session.jsx');
+  const panel = read('src/ui/components/chat-panel.jsx');
+  // the header lives inside the conversation's column, not over the whole window
+  const open = session.indexOf('<div className="flex min-h-0 flex-1">\n      {/* two full-height columns');
+  assert.ok(open > 0 && open < session.indexOf('<PageHeader className="topbar-chat"'), 'the row opens before the header');
+  assert.ok(session.indexOf('<PageHeader className="topbar-chat"') < session.indexOf('<ChatPanel '), 'the panel is a sibling column');
+  assert.match(session, /<\/div>\n      \{hasPanel \? \(\n        <ChatPanel /);
+  // the strip of the panel: tabs, its ✕ and the window buttons (the slot), 56 px like the header
+  assert.match(panel, /chat-panel-tabs app-titlebar relative flex h-14/);
+  assert.ok(panel.indexOf('data-testid="turn-changes-close"') < panel.indexOf('<WindowControlsSlot />'));
+  // the header gives its 120 px up while the panel (not the header) holds the buttons; the strip makes room for them
+  assert.match(css, /html\.has-win-controls:has\(\.chat-panel\) \.bar \{ padding-right: 10px; \}/);
+  assert.match(css, /html\.has-win-controls \.chat-panel-tabs \{ padding-right: 118px; \}/);
+  assert.match(css, /html\.has-win-controls:has\(\.tabs-strip\) \.chat-panel-tabs \{ padding-right: 10px; \}/);
+  // two bars at the top: the panel's, being further right, wins the slot
+  assert.match(read('src/ui/components/window-controls.jsx'), /Math\.abs\(r\.top - bestRect\.top\) <= 1 && r\.right > bestRect\.right/);
+});
+
+test('step 6C1: the ⋯ menu is 250 px wide with the mock-up texts', async () => {
+  const session = read('src/ui/views/session.jsx');
+  assert.match(session, /<DropdownMenuContent align="end" className="w-\[250px\]">/);
+  const { createT } = await import('../src/shared/i18n.mjs');
+  const es = createT('es');
+  assert.equal(es('session.menu.switchAgent'), 'Cambiar de agente');
+  assert.equal(es('session.menu.terminalShow'), 'Mostrar el terminal');
+  assert.equal(es('session.menu.delete'), 'Eliminar el chat…');
+  for (const k of ['terminalShow', 'terminalHide', 'switchAgent', 'delete']) assert.notEqual(createT('en')(`session.menu.${k}`), `session.menu.${k}`);
+});

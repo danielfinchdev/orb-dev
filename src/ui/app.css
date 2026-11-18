@@ -345,6 +345,8 @@ html[data-skin="retro"] .notice-dot { border-radius: 0; }
 .sidebar-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: col-resize; z-index: 5; -webkit-app-region: no-drag; app-region: no-drag; }
 .sidebar-resize::after { content: ""; position: absolute; inset: 0 2px; border-radius: 2px; background: var(--primary); opacity: 0; transition: opacity 0.15s; }
 .sidebar-resize:hover::after, .sidebar-resize[data-dragging]::after { opacity: 0.45; }
+/* The rail of ticks at the transcript's left edge (trail.jsx) draws nothing at rest, like the mock-up; hovering or focusing it brings it back. */
+[data-testid="chat-trail"]:not(:hover):not(:focus-within) span.block { opacity: 0 !important; }
 
 /* the chat's right panel (components/chat-panel.jsx): it slides in and fades with transform and opacity only; its edge is
    dragged between 320 and 640 px. The window's buttons live in its tab strip while it is open (the chat's bar gives
@@ -382,7 +384,13 @@ html.has-win-controls { --wco-inset: 7.5rem; }
 @media (prefers-reduced-motion: reduce) { .win-control { transition: none; } }
 html[data-motion="minima"] .win-control { transition: none; }
 .app-titlebar { -webkit-app-region: drag; app-region: drag; }
-.app-titlebar :is(button, a, input, select, textarea, label, [role=button], [role=combobox], [role=tab], [role=switch], [contenteditable], [data-no-drag], .orb) { -webkit-app-region: no-drag; app-region: no-drag; }
+/* app-region is inherited, and a region whose box moves makes the WebView rework the window's draggable regions on
+   every frame: the robot's head floats on hover and while agents work, and with its moving parts inside a region the
+   window stopped answering. So nothing that moves inside a robot carries a region: its parts take the initial value,
+   and a robot inside a control leaves the region to that control (the control's own box does not move). A robot
+   standing alone keeps a region on its own still box, so it stays clickable. */
+.app-titlebar :is(button, a, input, select, textarea, label, [role=button], [role=combobox], [role=tab], [role=switch], [contenteditable], [data-no-drag], .orb:not(:is(button, a, [role=button]) .orb)) { -webkit-app-region: no-drag; app-region: no-drag; }
+.app-titlebar .orb *, .app-titlebar :is(button, a, [role=button]) .orb { -webkit-app-region: initial; app-region: initial; }
 .wco-pad { padding-inline-end: calc(var(--wco-inset) + 0.75rem) !important; }
 @media (min-width: 768px) { .wco-pad-md { padding-inline-end: calc(var(--wco-inset) + 1.25rem) !important; } }
 

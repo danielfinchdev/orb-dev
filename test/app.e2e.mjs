@@ -371,7 +371,7 @@ try {
   const firstTask = (await call('tasks.list')).find((x) => x.project === 'webviaproject' && x.status === 'done');
   await win.fill('[data-testid=sidebar-search-input]', `#${firstTask.id}`);
   await win.click(`[data-testid=sidebar-results] [data-testid=item-t${firstTask.id}]`);
-  await win.locator('[data-testid=task-detail]', { hasText: `Tarea #${firstTask.id}` }).waitFor();
+  await win.locator('[data-testid=task-detail]', { hasText: `#${firstTask.id} ·` }).waitFor();
   await win.fill('[data-testid=sidebar-search-input]', '');
   // The conversation of the first request is done after the OK (nothing of it is still open): only under «Ver completados».
   assert.equal((await call('conversations.list')).find((c) => c.id === task.conversation_id).status, 'done', 'conversación completada con el OK');

@@ -35,7 +35,8 @@ function usePanelWidth() {
 }
 
 // open: the panel is shown; while it closes it stays mounted for the length of its exit animation.
-export function ChatPanel({ open, tab, onTab, onClose, prNumber, children }) {
+// tabs: another screen's own tabs ([{ value, icon, label, testid }], Tareas); without them, the chat's Ficha / Cambios / PR.
+export function ChatPanel({ open, tab, onTab, onClose, prNumber, children, tabs, label, closeLabel, closeTestId }) {
   const t = useT();
   const { width, setWidth, startResize } = usePanelWidth();
   const [mounted, setMounted] = useState(open);
@@ -49,20 +50,22 @@ export function ChatPanel({ open, tab, onTab, onClose, prNumber, children }) {
     if (e.key === 'ArrowLeft') { e.preventDefault(); setWidth(width + 16); } else if (e.key === 'ArrowRight') { e.preventDefault(); setWidth(width - 16); }
   };
   return (
-    <aside className="chat-panel bg-background relative flex max-w-[70%] shrink-0 flex-col border-l" style={{ width }} data-state={open ? 'open' : 'closed'} data-testid="chat-panel" aria-label={t('panel.tabs')}>
+    <aside className="chat-panel bg-background relative flex max-w-[70%] shrink-0 flex-col border-l" style={{ width }} data-state={open ? 'open' : 'closed'} data-testid="chat-panel" aria-label={label ?? t('panel.tabs')}>
       <div className="chat-panel-resize" role="separator" aria-orientation="vertical" aria-label={t('panel.resize')} aria-valuemin={PANEL_MIN} aria-valuemax={PANEL_MAX} aria-valuenow={width} tabIndex={0}
         onPointerDown={startResize} onDoubleClick={() => setWidth(PANEL_DEFAULT)} onKeyDown={nudge} data-testid="chat-panel-resize" />
       <Tabs value={tab} onValueChange={onTab} className="flex min-h-0 flex-1 flex-col">
         <div className="chat-panel-tabs app-titlebar relative flex h-14 shrink-0 items-center gap-0.5 border-b pl-2.5 pr-2.5">
           <TabsList variant="line" className="no-drag h-auto w-auto border-b-0 pb-0">
-            <TabsTrigger value="info" data-testid="panel-tab-info"><Info className="size-3.5" />{t('panel.tab.info')}</TabsTrigger>
-            <TabsTrigger value="changes" data-testid="panel-tab-changes"><FileDiff className="size-3.5" />{t('panel.tab.changes')}</TabsTrigger>
-            {prNumber ? <TabsTrigger value="pr" data-testid="panel-tab-pr"><GitPullRequest className="size-3.5" />{t('panel.tab.pr', { n: prNumber })}</TabsTrigger> : null}
+            {tabs ? tabs.map(({ value, icon: Icon, label: text, testid }) => <TabsTrigger key={value} value={value} data-testid={testid}><Icon className="size-3.5" />{text}</TabsTrigger>) : (<>
+              <TabsTrigger value="info" data-testid="panel-tab-info"><Info className="size-3.5" />{t('panel.tab.info')}</TabsTrigger>
+              <TabsTrigger value="changes" data-testid="panel-tab-changes"><FileDiff className="size-3.5" />{t('panel.tab.changes')}</TabsTrigger>
+              {prNumber ? <TabsTrigger value="pr" data-testid="panel-tab-pr"><GitPullRequest className="size-3.5" />{t('panel.tab.pr', { n: prNumber })}</TabsTrigger> : null}
+            </>)}
           </TabsList>
-          <CloseButton className="no-drag ml-auto" label={t('turns.close')} onClick={onClose} data-testid="turn-changes-close" />
+          <CloseButton className="no-drag ml-auto" label={closeLabel ?? t('turns.close')} onClick={onClose} data-testid="turn-changes-close" {...(closeTestId ? { 'data-testid': closeTestId } : {})} />
           <WindowControlsSlot />
         </div>
-        <div className="chat-panel-body min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 py-[18px]" role="tabpanel" aria-label={t(`panel.tab.${tab}`, { n: prNumber })} data-tab={tab}>{children}</div>
+        <div className="chat-panel-body min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 py-[18px]" role="tabpanel" aria-label={tabs ? tabs.find((x) => x.value === tab)?.label : t(`panel.tab.${tab}`, { n: prNumber })} data-tab={tab}>{children}</div>
       </Tabs>
     </aside>
   );

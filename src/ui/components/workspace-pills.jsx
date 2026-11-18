@@ -1,4 +1,4 @@
-// «Local / Worktree» (and the base branch) above the box of a NEW direct chat: where the chat works. Local is the project's
+// «Local / Worktree» (and the base branch) on the row over the box of a direct chat: where the chat works. Local is the project's
 // folder; Worktree is a copy of its own, on a branch of its own, that Orb keeps outside the repository.
 import { useEffect, useState } from 'react';
 import { Folder, GitBranch } from 'lucide-react';
@@ -10,34 +10,55 @@ import { useT } from '@/lib/i18n.js';
 import { cn } from '@/lib/utils.js';
 
 const CURRENT = '@current'; // the radio group's value for «the branch the folder is on»
-// value: { mode: 'local' | 'worktree', base: '' (the current branch) | a branch }
-export function WorkspacePills({ project, value, onChange }) {
+const SEGMENT = 'rounded-[calc(var(--r-ctl)-2px)] px-2';
+const ON = 'bg-card text-foreground shadow-sm hover:bg-card';
+// A chat that already started keeps where it works: the pills only show it (the worktree it runs in and the branch it
+// started from, read from the chat's own worktree).
+// value: { mode: 'local' | 'worktree', base: '' (the current branch) | a branch }; chat: the id of a chat that already started.
+export function WorkspacePills({ project, value, onChange, chat = null }) {
   const t = useT();
-  const [info, setInfo] = useState(null); // { git, current, branches }
+  const [info, setInfo] = useState(null); // { git, current, branches } (a new chat) or { has, base } (one that started)
   useEffect(() => {
     let alive = true; setInfo(null);
-    if (project) call('worktrees.branches', { project }).then((r) => { if (alive) setInfo(r); }).catch((e) => { quiet(e); if (alive) setInfo({ git: false, branches: [] }); });
+    if (chat != null) call('worktrees.status', { id: String(chat) }).then((r) => { if (alive) setInfo({ has: r?.has === true, base: r?.base ?? '' }); }).catch((e) => { quiet(e); if (alive) setInfo({ has: false, base: '' }); });
+    else if (project) call('worktrees.branches', { project }).then((r) => { if (alive) setInfo(r); }).catch((e) => { quiet(e); if (alive) setInfo({ git: false, branches: [] }); });
     return () => { alive = false; };
-  }, [project]);
+  }, [project, chat]);
   if (!project) return null;
+  if (chat != null) {
+    if (!info) return null;
+    return (
+      <>
+        <BubbleTip title={t('chat.workspace.tip')} text={t('chat.workspace.locked')} side="top">
+          <div role="group" aria-label={t('chat.workspace.tip')} className="bg-secondary inline-flex shrink-0 items-center gap-0.5 rounded-[var(--r-ctl)] p-0.5" data-testid="workspace-pills" data-locked="">
+            <Button size="xs" variant="ghost" className={cn(SEGMENT, !info.has && ON)} disabled aria-pressed={!info.has} data-testid="workspace-local"><Folder />{t('chat.workspace.local')}</Button>
+            <Button size="xs" variant="ghost" className={cn(SEGMENT, info.has && ON)} disabled aria-pressed={info.has} data-testid="workspace-worktree"><GitBranch />{t('chat.workspace.worktree')}</Button>
+          </div>
+        </BubbleTip>
+        {info.has && info.base ? <span className="text-faint-foreground truncate px-1.5 text-xs" data-testid="workspace-base">{t('chat.workspace.from', { branch: info.base })}</span> : null}
+      </>
+    );
+  }
   const git = info?.git === true && info.current != null;
   const worktree = value.mode === 'worktree' && git;
   const pick = (mode) => onChange({ mode, base: '' });
   return (
-    <div role="group" aria-label={t('chat.workspace.tip')} className="bg-secondary inline-flex shrink-0 items-center gap-0.5 rounded-[var(--r-ctl)] p-0.5" data-testid="workspace-pills">
-      <BubbleTip title={t('chat.workspace.local')} text={t('chat.workspace.localTip')} side="top">
-        <Button size="xs" variant="ghost" className={cn('rounded-[calc(var(--r-ctl)-2px)] px-2', !worktree && 'bg-card text-foreground shadow-sm hover:bg-card')} onClick={() => pick('local')} aria-pressed={!worktree} data-testid="workspace-local"><Folder />{t('chat.workspace.local')}</Button>
-      </BubbleTip>
-      <BubbleTip title={t('chat.workspace.worktree')} text={git ? t('chat.workspace.worktreeTip') : t('chat.workspace.noGit')} side="top">
-        <span>
-          <Button size="xs" variant="ghost" className={cn('rounded-[calc(var(--r-ctl)-2px)] px-2', worktree && 'bg-card text-foreground shadow-sm hover:bg-card')} disabled={!git} onClick={() => pick('worktree')} aria-pressed={worktree} data-testid="workspace-worktree"><GitBranch />{t('chat.workspace.worktree')}</Button>
-        </span>
-      </BubbleTip>
+    <>
+      <div role="group" aria-label={t('chat.workspace.tip')} className="bg-secondary inline-flex shrink-0 items-center gap-0.5 rounded-[var(--r-ctl)] p-0.5" data-testid="workspace-pills">
+        <BubbleTip title={t('chat.workspace.local')} text={t('chat.workspace.localTip')} side="top">
+          <Button size="xs" variant="ghost" className={cn(SEGMENT, !worktree && ON)} onClick={() => pick('local')} aria-pressed={!worktree} data-testid="workspace-local"><Folder />{t('chat.workspace.local')}</Button>
+        </BubbleTip>
+        <BubbleTip title={t('chat.workspace.worktree')} text={git ? t('chat.workspace.worktreeTip') : t('chat.workspace.noGit')} side="top">
+          <span>
+            <Button size="xs" variant="ghost" className={cn(SEGMENT, worktree && ON)} disabled={!git} onClick={() => pick('worktree')} aria-pressed={worktree} data-testid="workspace-worktree"><GitBranch />{t('chat.workspace.worktree')}</Button>
+          </span>
+        </BubbleTip>
+      </div>
       {worktree ? (
         <DropdownMenu modal={false}>
           <BubbleTip title={t('chat.workspace.base')} text={t('chat.workspace.baseTip')} side="top">
             <DropdownMenuTrigger asChild>
-              <Button size="xs" variant="ghost" className={cn('max-w-40 min-w-0')} data-testid="workspace-base"><span className="truncate">{value.base || t('chat.workspace.baseCurrent', { branch: info.current })}</span></Button>
+              <Button size="xs" variant="ghost" className="text-faint-foreground max-w-40 min-w-0 px-1.5 font-normal" data-testid="workspace-base"><span className="truncate">{t('chat.workspace.from', { branch: value.base || info.current })}</span></Button>
             </DropdownMenuTrigger>
           </BubbleTip>
           <DropdownMenuContent align="start" className="max-h-72 w-56 overflow-y-auto">
@@ -49,6 +70,6 @@ export function WorkspacePills({ project, value, onChange }) {
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
-    </div>
+    </>
   );
 }

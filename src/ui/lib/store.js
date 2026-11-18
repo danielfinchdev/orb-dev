@@ -302,17 +302,20 @@ export const isDark = () => document.documentElement.classList.contains('dark');
 export function applyAppearance(ui = {}) {
   const pick = (value, list) => (list.includes(value) ? value : list[0]);
   const root = document.documentElement.dataset;
+  // writing an attribute with its own value still reports a mutation: only what changes is written (a refresh runs this
+  // every second while an agent works, and every observer of <html> would wake for nothing).
+  const put = (key, value) => { if (value == null) { if (key in root) delete root[key]; } else if (root[key] !== value) root[key] = value; };
   const skin = skinOf(ui.skin); // the phone wears the default theme or Orb
   currentSkin = skin;
-  root.skin = skin;
-  delete root.material;
+  put('skin', skin);
+  put('material', null);
   // only the two themes that wear a palette write it; the default palette needs no attribute.
   const palette = pick(ui.palette, PALETTES);
-  if ((skin === 'predeterminado' || skin === 'cristal') && palette !== PALETTES[0]) root.palette = palette; else delete root.palette;
-  root.font = pick(ui.font, FONTS);
-  root.codeFont = pick(ui.codeFont, CODE_FONTS);
-  root.codeTheme = pick(ui.codeTheme, CODE_THEMES);
-  root.motion = ui.motion === 'minima' ? 'minima' : 'completa'; // the themes' moving backdrops stop with it
+  put('palette', (skin === 'predeterminado' || skin === 'cristal') && palette !== PALETTES[0] ? palette : null);
+  put('font', pick(ui.font, FONTS));
+  put('codeFont', pick(ui.codeFont, CODE_FONTS));
+  put('codeTheme', pick(ui.codeTheme, CODE_THEMES));
+  put('motion', ui.motion === 'minima' ? 'minima' : 'completa'); // the themes' moving backdrops stop with it
   // density, width of the chat column and text size: three variables on <html> (tokens.css holds the defaults, which are today's sizes).
   const style = document.documentElement.style;
   const size = FONT_SIZES.includes(ui.fontSize) ? ui.fontSize : BASE_FONT;

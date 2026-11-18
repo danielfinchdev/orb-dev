@@ -40,3 +40,33 @@ test('los avisos flotantes usan los tokens de .pop y quedan bajo la cabecera de 
   assert.match(main, /orb-toast/);
   assert.doesNotMatch(main, /<Toaster[^>]*richColors/);
 });
+
+test('paso 6C2: el menú de la fila de un chat con agente tiene Información, Marcar como leído y Eliminar… como el de Orbe', () => {
+  const list = inbox.slice(inbox.indexOf('function actionList'), inbox.indexOf('// «Renombrar» from the list'));
+  assert.match(list, /if \(item\.kind === 'session'\) return \[info, rename, pin, snooze, mute, \.\.\.read, done\('sidebar\.complete'/);
+  assert.match(list, /item\.kind === 'session' \? deleteSessionChat\(item, t\) : deleteChat\(item, t\)/);
+  assert.match(inbox, /call\('sessions\.remove', \{ id: item\.id \}\)/);
+  for (const l of ['es', 'en']) for (const k of ['rowInfo', 'rowPin', 'rowSnooze', 'rowComplete', 'rowDelete']) assert.match(read(`src/shared/locales/${l}/orbchats.mjs`), new RegExp(`'orbchats\.${k}'`));
+});
+
+test('paso 6C2: la fila en espera dice «Esperando tu aprobación» en ámbar y un chat trabajando no enseña la hora', () => {
+  assert.match(inbox, /const waitText = needsYou \? t\('orbchats\.awaiting'\) : ''/);
+  assert.match(inbox, /needsYou \|\| p\.tone === 'warn' \? 'text-warning-ink'/);
+  assert.match(inbox, /\{working \? null : <span className=\{cn\('shrink-0 text-micro tabular-nums'/);
+});
+
+test('paso 6C2: los puntos de la cabecera de un grupo solo salen con el grupo plegado', () => {
+  const head = inbox.slice(inbox.indexOf('function ProjectHead'), inbox.indexOf('// a long list draws'));
+  assert.match(head, /\{open \? null : <>\s*\{group\.waiting/);
+});
+
+test('paso 6C2: «Toda la actividad» sin el margen de más y la marca del carril de la conversación solo al pasar el ratón', () => {
+  assert.doesNotMatch(inbox, /mt-1\.5 flex items-center justify-between px-4 pt-2\.5 pb-1 text-caption/);
+  assert.match(read('src/ui/app.css'), /\[data-testid="chat-trail"\]:not\(:hover\):not\(:focus-within\) span\.block \{ opacity: 0 !important; \}/);
+});
+
+test('paso 6C2: el resumen del día usa la tarjeta de la maqueta (icono, texto corto, cerrar)', () => {
+  const digest = read('src/ui/components/day-digest.jsx');
+  assert.match(digest, /Sunrise/);
+  assert.match(digest, /data-testid="day-digest-close"/);
+});

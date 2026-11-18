@@ -5,7 +5,7 @@
 // each conversation is its own (route.id), several at once.
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDraft } from '@/lib/draft.js';
-import { Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, ChevronRight, Presentation, History, FlaskConical, Folder, ListChecks, Info, BellOff, MessageSquare } from 'lucide-react';
+import { PanelRight, FolderPlus, NotebookPen, Gauge, ShieldQuestion, LoaderCircle, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, ChevronRight, Presentation, History, FlaskConical, Folder, ListChecks, Info, BellOff, MessageSquare } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown, TypingMarkdown, TypedMarkdown } from '@/components/markdown.jsx';
 import { ExtensionRequestCard } from './extensions.jsx';
@@ -22,13 +22,12 @@ import { Button } from '@/components/ui/button.jsx';
 import { TaskStatus, WaitLabel, HeldCard, resumeQueue, setQueuePaused } from '@/components/task-state.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { Switch, BubbleTip } from '@/components/ui/overlay.jsx';
-import { bridge, useStore, call, act, setState, getState, go, newChat, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout, plainSkin, addPending, movePending, dropPending, pendingShown, usePending } from '@/lib/store.js';
+import { bridge, useStore, call, act, setState, getState, go, newChat, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout, plainSkin, robotSkin, addPending, movePending, dropPending, pendingShown, usePending } from '@/lib/store.js';
 import { notify } from '@/lib/notify.js';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { pickGreeting, pickSubtitle, suggestionsFor, greetingFor } from '@/lib/greeting.js';
 import { LiveActivity, QuestionCard } from '@/components/chat-live.jsx';
-import { OrchestratorIcon } from '@/components/orchestrator-icon.jsx';
-import { BrainPicker, ReasoningMenu, UsageBubble, useCatalog, useUsageBubble, favoriteLabel } from '@/components/brain-picker.jsx';
+import { BrainPicker, ReasoningMenu, UsageBubble, useCatalog, useUsageBubble, favoriteLabel, modelLabel } from '@/components/brain-picker.jsx';
 import { favoriteBrains } from '@/lib/favorite-brains.js';
 import { stepFavorite } from '../../shared/favorite-brains.mjs';
 import { useShortcut } from '@/lib/keys.js';
@@ -47,7 +46,7 @@ import { BarPause, COMPACT_AT, CompactButton } from '@/components/conversation/b
 import { ContextMeter } from '@/components/conversation/context-meter.jsx';
 import { needsApproval } from '@/lib/task-approval.js';
 import { quiet } from '@/lib/quiet.js';
-import { MoreButton } from '@/components/ui/primitives.jsx';
+import { MoreButton, IconButton } from '@/components/ui/primitives.jsx';
 import { ConversationTrail, useTrailScroll } from '@/components/conversation/trail.jsx';
 
 
@@ -246,8 +245,8 @@ function OrchestratorSwitch({ on, onChange, name, cursor, locked = false }) {
   const t = useT();
   return (
     <BubbleTip title={t('chat.orchestratorTip', { name })} text={locked ? t('chat.orchestratorLocked', { name }) : cursor ? t('chat.orchestratorCursor', { name }) : on ? t('chat.orchestratorOn') : t('chat.orchestratorOff')} side="top">
-      <label className={cn('flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2', locked ? 'cursor-default' : 'hover:bg-accent/60 cursor-pointer')} data-testid="orchestrator">
-        <OrchestratorIcon className={cn('size-4', on ? 'text-primary-text' : 'text-muted-foreground')} aria-hidden="true" />
+      <label className={cn('flex h-[var(--ctl)] shrink-0 items-center gap-1.5 rounded-[var(--r-ctl)] px-2 text-control', locked ? 'cursor-default' : 'hover:bg-accent/60 cursor-pointer')} data-testid="orchestrator">
+        <span className={on ? 'text-foreground' : 'text-muted-foreground'}>{t('chat.orchestrator')}</span>
         <Switch size="sm" checked={on} disabled={locked} onCheckedChange={(v) => onChange(v === true)} aria-label={t('chat.orchestrator')} data-testid="orchestrator-check" />
       </label>
     </BubbleTip>
@@ -268,6 +267,28 @@ function LiveAnswer({ id, name }) {
         {chat.partial ? <TypingMarkdown text={chat.partial} tail={`chat:${id}`} /> : null}
         {chat.waiting ? <div className="text-muted-foreground text-control" data-testid="chat-waiting-turn">{t('chat.waitingTurn')}</div> : <LiveActivity chat={chat} />}
       </div>
+    </div>
+  );
+}
+
+// Orbe's own mark: the robot's head in the Orb theme (the only one with the robot), a dot in the accent of the assistant in
+// the others.
+function OrbeMark({ size = 16 }) {
+  if (robotSkin(useStore((s) => s.app?.config?.ui?.skin))) return <Robot size={size} head still className="shrink-0" />;
+  return <span className="text-info shrink-0 leading-none" style={{ fontSize: Math.round(size * 0.9) }} aria-hidden="true">●</span>;
+}
+const SUGGESTION_ICON = { 'chat.suggestion1': FolderPlus, 'chat.suggestion2': ListChecks, 'chat.suggestion4': NotebookPen, 'chat.suggestion5': Gauge };
+// «2 tareas en curso · 1 espera tu aprobación» under the greeting: what is going on, and the link to the tasks.
+function HeroStatus() {
+  const t = useT();
+  const running = useStore((s) => s.tasks.filter((x) => x.status === 'running').length);
+  const waiting = useStore((s) => s.tasks.filter(needsApproval).length);
+  if (!running && !waiting) return null;
+  return (
+    <div className="text-muted-foreground text-control flex flex-wrap items-center justify-center gap-1.5" data-testid="chat-status">
+      {running ? <span className="inline-flex items-center gap-1.5"><LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />{t(`chat.statusRunning.${running === 1 ? 'one' : 'many'}`, { n: running })}</span> : null}
+      {running && waiting ? <span className="text-faint-foreground" aria-hidden="true">·</span> : null}
+      {waiting ? <span className="inline-flex items-center gap-1.5"><ShieldQuestion className="text-warning-ink size-3.5" aria-hidden="true" /><button type="button" className="text-primary-text cursor-pointer hover:underline" onClick={() => go('tasks')}>{t(`chat.statusWaiting.${waiting === 1 ? 'one' : 'many'}`, { n: waiting })}</button></span> : null}
     </div>
   );
 }
@@ -463,6 +484,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const slim = phoneLayout() && Boolean(conv);
   const infoOpen = useStore((s) => s.orbInfo?.type === 'chat') && !embedded;
   const headProject = conv ? conv.project ?? null : workProject?.name ?? null;
+  const brainName = modelLabel(catalog, brain.agent, brain.model);
   const waitingTask = useStore((s) => (id != null ? s.tasks.find((x) => x.conversation_id === id && needsApproval(x)) : undefined));
   const waitingYou = Boolean(waitingTask);
   const chatActions = useOrbActions(conv ? { kind: 'conversation', id: conv.id, title: conv.title, done: conv.status === 'done', pinned: Boolean(item?.pinned), muted: Boolean(item?.muted), unread: 0 } : null);
@@ -480,7 +502,12 @@ export function ChatView({ route, onConversation, project: inProject }) {
             <span className="flex items-center gap-1.5"><span className="truncate font-(family-name:--title) text-card-title font-semibold" data-testid="bar-title-text">{conv?.title ?? t('orbchats.newChatTitle')}</span>{item?.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}</span>
             <span className={cn('flex min-w-0 items-center gap-1 text-caption', chat.busy ? 'text-primary-text' : waitingYou ? 'text-warning-ink' : 'text-muted-foreground')} data-testid="orb-chat-status">
               {headProject ? <ProjectIcon name={headProject} size={14} /> : <Folder className="size-3 shrink-0" aria-hidden="true" />}
-              <span className="truncate">{headProject ?? t('orbchats.noProject')} · {chat.busy ? t('chats.working') : waitingYou ? <TaskStatus task={waitingTask} plain /> : name}</span>
+              <span className="truncate">{headProject ?? t('orbchats.noProject')}</span>
+              <span aria-hidden="true">·</span>
+              {chat.busy ? <span className="truncate">{t('chats.working')}</span> : waitingYou ? <span className="truncate"><TaskStatus task={waitingTask} plain /></span> : <>
+                <OrbeMark />
+                <span className="truncate" data-testid="orb-chat-brain">{name}{brainName ? ` · ${brainName}` : ''}</span>
+              </>}
             </span>
           </span>
         </button>
@@ -488,6 +515,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
         {/* The phone keeps the bar light: the bell is the system's notifications there, and «Pausar» goes into ⋯. */}
         {slim ? null : <BarPause />}
         {slim ? null : <NotificationBell />}
+        {conv && !embedded && !slim ? <BubbleTip title={t('panel.button')} text={t('panel.buttonTip')}><IconButton label={t('panel.button')} active={infoOpen} onClick={() => (infoOpen ? closeOrbInfo() : openOrbInfo({ type: 'chat' }))} data-testid="orb-chat-panel"><PanelRight /></IconButton></BubbleTip> : null}
         {/* only the bell and pause stay on the bar; the chat's actions and the games go into ⋯ (also in «Nuevo chat»). */}
         {conv || fullPc() ? (
           <DropdownMenu modal={false}>
@@ -504,16 +532,18 @@ export function ChatView({ route, onConversation, project: inProject }) {
       </ChatBar>
       <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={trail.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
-        <div className="lazy-lines mx-auto flex max-w-[var(--chat-max-width)] flex-col gap-5 px-5 py-6" data-testid="chat-lines">
+        <div className="lazy-lines mx-auto flex min-h-full max-w-[var(--chat-max-width)] flex-col gap-5 px-5 py-6" data-testid="chat-lines">
           {more ? <Button variant="ghost" size="sm" className="text-muted-foreground mx-auto" onClick={loadOlder} disabled={loading} data-testid="chat-older"><History />{t('chat.older')}</Button> : null}
           {id == null && !sending ? (
-            <div className="flex flex-col items-center gap-3 pt-10 text-center">
-              <Robot size={130} mark={56} mood="hello" live />
+            <div className="flex min-h-full flex-1 flex-col items-center justify-center gap-3 py-6 text-center" data-testid="empty-chat">
+              {robotSkin(app.config.ui?.skin) ? <Robot size={130} mood="hello" live /> : <span className="bg-secondary grid size-12 place-items-center rounded-full"><OrbeMark size={20} /></span>}
               <div className="chat-glass chat-hero flex flex-col items-center gap-3">
                 <h2 className="hero-title mt-2 text-2xl" data-testid="chat-greeting">{userName ? t(greeting.key, { ...greeting, user: userName, name }) : t('chat.hello', { name })}</h2>
                 <p className="text-muted-foreground max-w-md">{t(greeting.sub)}</p>
               </div>
-              <div className="mt-3 flex max-w-xl flex-wrap justify-center gap-2">{suggestionsFor(workProject?.name).map((s) => <Button key={s} variant="outline" size="sm" className="h-auto max-w-full shrink rounded-full py-1.5 whitespace-normal" onClick={() => box.set(t(s))}>{t(s)}</Button>)}</div>
+              <HeroStatus />
+              <div className="mt-1 flex max-w-xl flex-wrap justify-center gap-2" role="group" aria-label={t('chat.suggestions')}>{suggestionsFor(workProject?.name).map((s) => { const Icon = SUGGESTION_ICON[s]; return <Button key={s} variant="outline" size="sm" className="h-auto max-w-full shrink rounded-full py-1.5 whitespace-normal" onClick={() => box.set(t(s))}>{Icon ? <Icon /> : null}{t(s)}</Button>; })}</div>
+              <p className="text-faint-foreground max-w-[520px] text-xs">{t('chat.heroHint', { name })}</p>
             </div>
           ) : lines.map((m) => <Message key={m.id} m={m} name={name} user={userName} onChanges={askChanges} tail={`chat:${id}`} onPin={pinLine} />)}
           {unsaved.map((p) => <Message key={p.id} m={{ id: p.id, role: 'usuario', body: p.text, at: p.at }} name={name} user={userName} onChanges={askChanges} />)}
@@ -528,21 +558,17 @@ export function ChatView({ route, onConversation, project: inProject }) {
         top={<>
           {/* in God mode a new conversation takes the project chosen at the top of God mode. */}
           {inProject && id == null ? null : <ProjectPicker conversation={id} />}
-          <ContextSlot items={[
+          <ContextSlot className="ml-auto" items={[
             // the context is filling up: compact it (the history stays; the assistant goes on from a summary).
-            compactable ? { key: 'compact', node: <CompactButton onCompact={compact} busy={compacting} /> } : null,
+            compactable ? { key: 'compact', node: <CompactButton onCompact={compact} busy={compacting} percent={context?.size > 0 ? Math.round((context.used / context.size) * 100) : null} /> } : null,
             // the test of the day (first opening of the day, until the user writes; always in Ajustes › Agentes y uso).
             showTest ? { key: 'test', node: <BubbleTip title={t('test.button')} text={t('test.tip')} side="top"><Button size="xs" variant="soft" onClick={() => runTest(t('test.prompt'))} data-testid="chat-test"><FlaskConical />{t('test.button')}</Button></BubbleTip> } : null
           ]} />
         </>}
         notice={bubble.text ? <UsageBubble text={bubble.text} onClose={bubble.close} /> : id != null ? <ColdNotice id={id} agent={conv?.agent} used={context?.used} lastAt={saved.at(-1)?.at ?? conv?.updated_at} busy={chat.busy || chat.waiting} compacting={compacting} onCompact={compact} onFresh={() => newChat(conv?.project ?? undefined)} /> : null}
         bottom={<>
-          {/* the model and its reasoning stay together; the permission and the orchestrator form the second group;
-              the context meter sits at the far end. Each group wraps as a whole on a narrow window. */}
-          <div role="group" aria-label={t('session.model')} className="flex min-w-0 shrink items-center gap-1.5" data-testid="composer-group-brain">
-            <BrainPicker catalog={catalog} value={brain} onChange={pickBrain} className="min-w-0 shrink" />
-            <ReasoningMenu catalog={catalog} value={brain} onChange={(reasoning) => settings({ reasoning })} />
-          </div>
+          {/* the permission and the orchestrator come first; at the far end the context meter, then the model and its
+              reasoning, which stay together. Each group wraps as a whole on a narrow window. */}
           <div role="group" aria-label={t('session.permissions')} className="flex shrink-0 items-center gap-1.5" data-testid="composer-group-access">
           {/* «Auto» / «Preguntar» for the tasks the assistant creates and the new chats (the global level, also from the phone). */}
           <AutonomySwitch value={app?.config?.permissions?.mode === 'preguntar' ? 'editar' : 'auto'} testid="chat-autonomy" onChange={(p) => act(call('permissions.setMode', { mode: p === 'auto' ? 'auto' : 'preguntar' }), p === 'auto' ? t('session.autoOn') : t('session.askOn')).then(() => refresh())} />
@@ -551,7 +577,12 @@ export function ChatView({ route, onConversation, project: inProject }) {
           <OrchestratorSwitch on={orchestrate} onChange={toggleOrchestrator} name={name} cursor={brain.agent === 'cursor'} locked={id != null} />
           </div>
           {!orchestrate && id == null ? <WorkspacePills project={inProject ?? app.activeProject?.name ?? null} value={where} onChange={setWhere} /> : null}
-          {context ? <span className="text-muted-foreground ml-auto shrink-0 text-xs"><ContextMeter context={context} /></span> : null}
+          <span className="ml-auto" aria-hidden="true" />
+          {context ? <span className="text-muted-foreground shrink-0 text-xs"><ContextMeter context={context} /></span> : null}
+          <div role="group" aria-label={t('session.model')} className="flex min-w-0 shrink items-center gap-1.5" data-testid="composer-group-brain">
+            <BrainPicker catalog={catalog} value={brain} onChange={pickBrain} className="min-w-0 shrink" />
+            <ReasoningMenu catalog={catalog} value={brain} onChange={(reasoning) => settings({ reasoning })} />
+          </div>
         </>} />
     </>
   );

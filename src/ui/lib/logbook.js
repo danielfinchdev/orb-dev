@@ -21,3 +21,13 @@ export function filterEntries(body, q) {
   const hits = parts.filter((p) => p.toLowerCase().includes(needle));
   return { text: hits.join('\n'), count: hits.length };
 }
+
+// The newest entry of a log as { date, topic } for a one-line summary: its headings read «### AAAA-MM-DD HH:MM — author — topic».
+export function lastEntry(text) {
+  const heads = [...String(text ?? '').matchAll(/^### (\d{4})-(\d{2})-(\d{2})(?: \d{2}:\d{2})?[ \t]*—[ \t]*(.*)$/gm)];
+  const h = heads.at(-1);
+  if (!h) return null;
+  const parts = h[4].split(/[ \t]+—[ \t]+/);
+  const topic = (parts.length > 1 ? parts.slice(1).join(' — ') : parts[0]).trim();
+  return topic ? { date: new Date(Number(h[1]), Number(h[2]) - 1, Number(h[3])), topic } : null;
+}

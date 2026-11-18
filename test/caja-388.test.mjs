@@ -95,13 +95,14 @@ const TESTIDS = {
   'components/conversation/trail.jsx': ['chat-trail'],
   'components/conversation/context-meter.jsx': ['context-meter', 'usage-page', 'usage-panel', 'usage-reload'],
   'components/conversation/chat-notes.jsx': ['chat-notes', 'chat-notes-input', 'chat-pinned', 'pinned-go', 'pinned-unpin'],
-  'components/brain-picker.jsx': ['brain-favorite', 'brain-favorite-toggle', 'brain-picker', 'reasoning-level', 'reasoning-menu', 'reasoning-meter', 'reasoning-picker', 'usage-bubble'],
+  'components/brain-picker.jsx': ['brain-favorite', 'brain-favorite-toggle', 'brain-picker', 'model-guide-open', 'reasoning-level', 'reasoning-menu', 'reasoning-meter', 'reasoning-picker', 'session-model', 'usage-bubble'],
+  'views/orb/info.jsx': ['session-folder'],
   'components/chat-modes.jsx': ['chat-modes', 'debug-badge', 'goal-capsule'],
   'components/workspace-pills.jsx': ['workspace-base', 'workspace-local', 'workspace-pills', 'workspace-worktree'],
   'components/context-slot.jsx': ['context-slot'],
   'components/conversation/attach-menu.jsx': ['attach', 'capture-window'],
   'components/rich-blocks.jsx': ['mermaid'],
-  'views/session.jsx': ['approval-card', 'approve-allow', 'approve-deny', 'archive', 'attach-open', 'bar-games', 'delete', 'details', 'fork', 'handoff', 'handoff-line', 'handoff-pick', 'open-folder', 'opti-old', 'partial', 'pending-comments', 'queue', 'session-folder', 'session-fullpc', 'session-model', 'session-more', 'session-terminal', 'subagent', 'switch-agent', 'switch-agent-pick', 'tool-group', 'turn-changes-toggle']
+  'views/session.jsx': ['approval-card', 'approve-allow', 'approve-deny', 'archive', 'attach-open', 'bar-games', 'delete', 'details', 'fork', 'handoff', 'handoff-line', 'handoff-pick', 'open-folder', 'opti-old', 'partial', 'pending-comments', 'queue', 'session-fullpc', 'session-more', 'session-terminal', 'subagent', 'switch-agent', 'switch-agent-pick', 'tool-group', 'turn-changes-toggle']
 };
 test('every test id these files had is still there', () => {
   for (const [file, ids] of Object.entries(TESTIDS)) {
@@ -238,4 +239,60 @@ test('turn cards: a normal chat, a rewound one and a turn without its photo', ()
   assert.deepEqual([...g].map(([k, v]) => [k, v.n, v.user?.id ?? null, v.gap]), [[2, 1, 1, false], [6, 3, null, true]]);
   // a stale reference older than the first message places nothing
   assert.equal(placeTurns([item(1, 'user', 9000), item(2, 'assistant', 9500)], [{ n: 1, at: 100 }]).size, 0);
+});
+
+test('step 6C1: one chip for agent, model and reasoning with one menu; the folder chip and «Compactar» left the box', () => {
+  const composer = ui('components', 'conversation', 'composer.jsx');
+  // order in the box: «+», permissions, then the context meter and the one chip
+  const bottom = session.slice(session.indexOf('bottom={<>'));
+  const at = (frag) => bottom.indexOf(frag);
+  assert.ok(at('<AttachMenu') < at('<AutonomySwitch') && at('<AutonomySwitch') < at('<ContextMeter') && at('<ContextMeter') < at('<AgentChip'));
+  assert.doesNotMatch(session, /<ReasoningMenu|<Select size="sm" value=\{s\.model/);
+  assert.doesNotMatch(bottom, /session-folder/);
+  assert.match(session, /<AgentChip catalog=\{catalog\} agent=\{s\.agent\}/);
+  assert.match(session, /call\('sessions\.update', \{ id: s\.id, model \}\)/);
+  assert.match(session, /call\('sessions\.update', \{ id: s\.id, reasoning \}\)/);
+  // the chip is the model picker, the level inside it the reasoning picker; the menu has the three parts
+  const chip = brain.slice(brain.indexOf('export function AgentChip'), brain.indexOf('// four small bars'));
+  assert.match(chip, /data-testid="session-model"/);
+  assert.match(chip, /data-testid="reasoning-picker"/);
+  assert.match(chip, /data-testid="reasoning-level"/);
+  assert.match(chip, /data-testid="reasoning-menu"/);
+  assert.match(chip, /w-\[240px\]/);
+  assert.match(chip, /t\('session\.model'\)[\s\S]*t\('brain\.reasoning'\)[\s\S]*t\('guide\.open'\)/);
+  assert.match(chip, /const list = levelsFor\(catalog, \{ agent, account, model \}\)/); // «Extra» only where the model takes it
+  assert.match(brain, /<ModelGuide /);
+  // the row over the box: where the chat works and «Compactar» on the right; both outside the box
+  assert.match(composer, /data-testid="composer-above"/);
+  assert.ok(composer.indexOf('data-testid="composer-above"') < composer.indexOf('data-slot="composer"'));
+  assert.match(session, /above=\{s\.kind === 'chat'/);
+  assert.match(session, /<WorkspacePills project=\{s\.project\} chat=\{s\.id\}/);
+  assert.match(session, /<ContextSlot className="ml-auto" items=\{\[compactable \? \{ key: 'compact'/);
+  const top = session.slice(session.indexOf('        top={'), session.indexOf('        bottom={'));
+  assert.doesNotMatch(top, /CompactButton/);
+  // a chat that started shows where it works but cannot change it
+  const pills = ui('components', 'workspace-pills.jsx');
+  assert.match(pills, /call\('worktrees\.status', \{ id: String\(chat\) \}\)/);
+  assert.match(pills, /disabled aria-pressed=\{!info\.has\}/);
+  for (const id of ['workspace-pills', 'workspace-local', 'workspace-worktree', 'workspace-base']) assert.ok(pills.includes(`data-testid="${id}"`), id);
+  assert.match(session, /t\('session\.phChat'\)/);
+});
+
+test('paso 6C2: el mensaje del PC es una píldora gris sin nombre ni avatar, con copiar y la hora debajo; el móvil conserva el suyo', () => {
+  const box = ui('components', 'conversation', 'message-box.jsx');
+  assert.match(box, /if \(fullPc\(\)\) \{/);
+  assert.match(box, /bg-bubble text-bubble-foreground rounded-big px-3\.5 py-\[9px\]/);
+  assert.match(box, /className="msg-box-head sr-only" data-testid="msg-name"/);
+  assert.match(box, /group-hover\/msg:opacity-100 group-focus-within\/msg:opacity-100 \[@media\(hover:none\)\]:opacity-100/);
+  assert.match(box, /data-testid="msg-pin"/);
+  assert.match(box, /data-testid="msg-copy"/);
+  assert.match(box, /pin\.pinned \? 'text-primary-text' : reveal/);
+});
+
+test('paso 6C2: una tarjeta de cambios sin archivos (o aún sin números) no se pinta, y cada archivo lleva «⌄»', () => {
+  assert.match(card, /if \(!failed && \(!data \|\| !files\.length\)\) return <div ref=\{box\}/);
+  assert.doesNotMatch(card, /<ChevronRight className="text-muted-foreground size-3\.5 shrink-0" aria-hidden="true" \/>\s*<\/button>/);
+  assert.match(card, /<ChevronDown className="text-muted-foreground size-3\.5 shrink-0" aria-hidden="true" \/>\s*<\/button>/);
+  assert.match(card, /turn\.moreFiles/);
+  assert.doesNotMatch(card, /border-b pb-2 text-\[13px\]/, 'sin línea bajo «Trabajó…»');
 });

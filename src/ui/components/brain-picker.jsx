@@ -1,11 +1,13 @@
 // what the chat runs on, chosen under the message box: the brain (agent + model, one list grouped by agent), the
 // reasoning and, for a direct chat, the permissions. A bubble warns when the account's usage runs high.
 import { useEffect, useState } from 'react';
-import { Check, ChevronDown, ChevronRight, Flame, Lightbulb, Star, X } from 'lucide-react';
+import { BookOpen, Check, ChevronDown, ChevronRight, Flame, Lightbulb, Star, X } from 'lucide-react';
 import { AgentIcon } from './agent-icon.jsx';
 import { Button } from './ui/button.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, BubbleTip } from './ui/overlay.jsx';
-import { call, useStore } from '@/lib/store.js';
+import { ModelGuide } from './model-guide.jsx';
+import { form } from './dialogs.jsx';
+import { call, getState, useStore } from '@/lib/store.js';
 import { notify } from '@/lib/notify.js';
 import { prettyModel } from '@/lib/tools.js';
 import { cn } from '@/lib/utils.js';
@@ -207,6 +209,59 @@ export function ReasoningMenu({ catalog, value, onChange, levels, disabled }) {
             </DropdownMenuItem>
           </BubbleTip>
         ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// One chip for the agent, its model and its reasoning under a conversation's box (mock-up 01-chat) and one menu with the
+// models, the reasoning levels and «Guía de modelos». models: [{ value, label }] of the agent; the reasoning list is the
+// one the model takes («Extra» only where the agent has it). The chip is the model picker; the level and its bars inside it
+// are the reasoning picker (same test ids as when they were two buttons).
+export function AgentChip({ catalog, agent, account, models, model, modelName, reasoning, onModel, onReasoning, disabled }) {
+  const t = useT();
+  const list = levelsFor(catalog, { agent, account, model });
+  const current = list.includes(reasoning) ? reasoning : reasoning === 'xhigh' ? 'high' : (reasoning ?? 'medium');
+  const name = t(`reasoning.${current}`);
+  const guide = () => form(t('guide.open'), { wide: true, body: () => <ModelGuide auto={getState().app?.config?.budget?.autoModel !== false} />, ok: t('comp.dialogs.ok') });
+  return (
+    <DropdownMenu>
+      <BubbleTip title={t('brain.title')} text={t('brain.titleText')} side="top">
+        <DropdownMenuTrigger asChild>
+          <button type="button" disabled={disabled} aria-label={t('brain.title')} data-testid="session-model"
+            className="text-muted-foreground hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground inline-flex h-[var(--ctl)] max-w-64 min-w-0 shrink cursor-pointer items-center gap-1.5 rounded-[var(--r-ctl)] px-2 text-control whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50">
+            <AgentIcon agent={agent} className="size-3.5 shrink-0 opacity-70" />
+            {modelName ? <span className="truncate">{modelName}</span> : null}
+            <span className="text-faint-foreground inline-flex shrink-0 items-center gap-1.5" data-testid="reasoning-picker" data-level={current}>
+              <span data-testid="reasoning-level">{name}</span><UsageMeter level={current} />
+            </span>
+            <ChevronDown className="size-3.5 shrink-0 opacity-60" />
+          </button>
+        </DropdownMenuTrigger>
+      </BubbleTip>
+      <DropdownMenuContent align="end" side="top" className="max-h-[70vh] w-[240px] overflow-y-auto" onCloseAutoFocus={(e) => e.preventDefault()} data-testid="reasoning-menu">
+        {models.length ? <>
+          <DropdownMenuLabel>{t('session.model')}</DropdownMenuLabel>
+          {models.map((m) => (
+            <DropdownMenuItem key={m.value} onSelect={() => onModel(m.value)} data-testid={`session-model-${m.value}`} data-selected={m.value === model || undefined}>
+              <span className="min-w-0 flex-1 truncate">{m.label}</span>
+              <Check className={cn('text-muted-foreground!', m.value === model ? null : 'invisible')} />
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+        </> : null}
+        <DropdownMenuLabel>{t('brain.reasoning')}</DropdownMenuLabel>
+        {list.map((level) => (
+          <BubbleTip key={level} title={t(`reasoning.${level}`)} text={`${t(`reasoning.tasks.${level}`)} ${t(`reasoning.use.${level}`)}.`} side="right" align="center" offset={10}>
+            <DropdownMenuItem onSelect={() => onReasoning(level)} data-testid={`reasoning-${level}`} data-selected={current === level || undefined}>
+              <span className="min-w-0 flex-1">{t(`reasoning.${level}`)}</span>
+              <UsageMeter level={level} />
+              <Check className={cn('text-muted-foreground!', current === level ? null : 'invisible')} />
+            </DropdownMenuItem>
+          </BubbleTip>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={guide} data-testid="model-guide-open"><BookOpen />{t('guide.open')}</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

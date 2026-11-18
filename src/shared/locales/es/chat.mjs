@@ -5,6 +5,13 @@ export default {
   'chat.suggestion1': 'Crea un proyecto «mi-web» con una página de inicio sencilla',
   'chat.suggestion2': '¿Cómo van las tareas?',
   'chat.suggestion3': 'Revisa el proyecto y propón mejoras',
+  'chat.suggestion5': 'Revisa el uso de esta semana',
+  'chat.suggestions': 'Sugerencias',
+  'chat.statusRunning.one': '{n} tarea en curso',
+  'chat.statusRunning.many': '{n} tareas en curso',
+  'chat.statusWaiting.one': '{n} espera tu aprobación',
+  'chat.statusWaiting.many': '{n} esperan tu aprobación',
+  'chat.heroHint': '{name} reparte el trabajo entre tus agentes y te pregunta antes de lo delicado. Ctrl+K para ir a cualquier sitio.',
   'chat.suggestion4': 'Resume las bitácoras de esta semana',
   'chat.suggestionProject1': 'Explícame en pocas líneas qué hay en este proyecto',
   'chat.suggestionProject2': '¿Qué quedó pendiente en este proyecto?',
@@ -89,7 +96,7 @@ export default {
   'chat.q.unfold': 'Desplegar la pregunta',
   'chat.q.skipped': 'Omitida',
   'chat.placeholderBusy': 'Escribe otro mensaje: {name} lo leerá al terminar…',
-  'chat.placeholder': 'Escribe a {name}…',
+  'chat.placeholder': 'Escribe a {name}… @ para mencionar · / para comandos',
   // elección del cerebro (agente + modelo)
   'brain.title': 'Cerebro: agente y modelo',
   'brain.titleText': 'Quién piensa por el asistente y con qué modelo.',
@@ -226,5 +233,13 @@ export default {
   'chat.workspace.noGit': 'Worktree necesita que el proyecto sea un repositorio git con algún commit.',
   'chat.workspace.base': 'Rama base',
   'chat.workspace.baseCurrent': 'Rama actual ({branch})',
-  'chat.workspace.baseTip': 'La copia parte de esta rama, sin los cambios sin commit de la carpeta.'
+  'chat.workspace.baseTip': 'La copia parte de esta rama, sin los cambios sin commit de la carpeta.',
+  'session.menu.terminalShow': 'Mostrar el terminal',
+  'session.menu.terminalHide': 'Ocultar el terminal',
+  'session.menu.switchAgent': 'Cambiar de agente',
+  'session.menu.delete': 'Eliminar el chat…',
+  'guide.open': 'Guía de modelos',
+  'session.phChat': 'Pide algo, menciona con @ o usa / para ver los comandos',
+  'chat.workspace.from': 'desde {branch}',
+  'chat.workspace.locked': 'Este chat ya empezó: donde trabaja ya no se puede cambiar.'
 };

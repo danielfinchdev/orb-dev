@@ -22,13 +22,16 @@ export { needsApproval };
 
 // The state of a task, drawn the same everywhere (list, detail, chat, sidebar, search): «Deshecha» when undone, «Por
 // aprobar» when held for review, why it waits when queued, else the status. `plain`: just the text, no badge.
-export function TaskStatus({ task, status, undone, plain = false, className }) {
+// `board`: the words and tones of the Tareas screen (Trabajando, Fallo, Por aprobar), the same in its list and its panel.
+const BOARD = { running: ['tasks.state.running', 'info'], failed: ['tasks.state.failed', 'destructive'], awaiting_approval: ['tasks.held.badge', 'warning'], queued: ['status.queued', 'secondary'] };
+export function TaskStatus({ task, status, undone, plain = false, className, board = false }) {
   const t = useT();
   const st = task?.status ?? status;
   const label = (variant, text, extra) => (plain ? <span className={className} {...extra}>{text}</span> : <Badge variant={variant} className={className} {...extra}>{text}</Badge>);
   if (undone ?? task?.undone) return plain ? <span className={className} data-testid="task-undone">{t('tasks.undone')}</span> : <Badge variant="secondary" className={className} data-testid="task-undone"><Undo2 />{t('tasks.undone')}</Badge>;
   if (task?.held) return label('warning', t('tasks.held.badge'), { 'data-testid': 'task-held-badge' });
-  if (st === 'queued' && task?.waiting) return label(task.waiting.kind === 'paused' ? 'warning' : STATUS.queued[1], waitText(t, task), { title: task.waiting.text });
+  if (st === 'queued' && task?.waiting) return label(task.waiting.kind === 'paused' ? 'warning' : board ? BOARD.queued[1] : STATUS.queued[1], waitText(t, task), { title: task.waiting.text });
+  if (board && BOARD[st]) return label(BOARD[st][1], t(BOARD[st][0]));
   return label(STATUS[st]?.[1] ?? 'secondary', STATUS[st]?.[0] ?? st);
 }
 
@@ -80,9 +83,9 @@ export function PausedNote({ className }) {
   );
 }
 
-const acceptHeld = (t, task) => act(call('tasks.accept', { id: task.id }), t('tasks.held.accepted'));
-async function undoHeld(t, task) {
-  if (await confirm(t('tasks.undo.title'), t('tasks.undo.body'), { ok: t('tasks.undo.ok'), danger: true })) act(call('tasks.undo', { id: task.id }));
+export const acceptHeld = (t, task) => act(call('tasks.accept', { id: task.id }), t('tasks.held.accepted'));
+export async function undoHeld(t, task) {
+  if (await confirm(t('tasks.undo.title'), t('tasks.undo.body'), { ok: t('tasks.undo.ok'), danger: true })) await act(call('tasks.undo', { id: task.id }));
 }
 
 // A task Orb held for review: what it did, where, and the two ways out. `link`: a button to its detail (the chat).

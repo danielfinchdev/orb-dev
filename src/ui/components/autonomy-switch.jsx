@@ -1,12 +1,12 @@
 // the permission selector under a chat's box: ONE dropdown (combobox + listbox) that shows the current level and lists
 // them all with an icon, a short description and a mark on the current one. «Auto» (works on its own inside the project
-// folder, undo instead of asking) and «Preguntar» (asks before anything risky) come first, then `more` (read only, review
+// folder, undo instead of asking) and «Preguntar» (asks before anything risky) come first (Preguntar, then Auto), then `more` (read only, review
 // and test, ask for everything, full access). value: the chat's permission ('auto', 'editar', …); onChange(permission).
 // more: the extra levels [{ value, label }] (none: only Auto and Preguntar). Same height, border and radius as the model
 // and reasoning chips next to it. request: { at, focus } opens the menu with «Más opciones» unfolded and the focus on the switch whose
 // key is `focus`; it changes nothing by itself.
 import { useEffect, useId, useRef, useState } from 'react';
-import { Zap, Hand, Eye, FlaskConical, MessageCircleQuestion, ShieldAlert, ChevronDown, ChevronRight, Check, SlidersHorizontal } from 'lucide-react';
+import { ShieldCheck, ShieldQuestion, Eye, FlaskConical, ShieldAlert, ShieldOff, ChevronDown, ChevronRight, Check, SlidersHorizontal } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent, Switch } from '@/components/ui/overlay.jsx';
 import { cn } from '@/lib/utils.js';
 import { t } from '@/lib/i18n.js';
@@ -15,17 +15,20 @@ import { act, bridge, call, getState, refresh, setState, useStore } from '@/lib/
 import { notify } from '@/lib/notify.js';
 
 const LEVEL = {
-  auto: { Icon: Zap, label: () => t('session.autoMode'), tip: () => t('session.autoTip') },
-  editar: { Icon: Hand, label: () => t('session.askMode'), tip: () => t('session.askTip') },
+  auto: { Icon: ShieldCheck, label: () => t('session.autoMode'), tip: () => t('session.autoTip') },
+  editar: { Icon: ShieldQuestion, label: () => t('session.askMode'), tip: () => t('session.askTip') },
   leer: { Icon: Eye, label: () => PERMISSION.leer, tip: () => t('session.tip.leer') },
   probar: { Icon: FlaskConical, label: () => PERMISSION.probar, tip: () => t('session.tip.probar') },
-  preguntar: { Icon: MessageCircleQuestion, label: () => PERMISSION.preguntar, tip: () => t('session.tip.preguntar') },
-  total: { Icon: ShieldAlert, label: () => PERMISSION.total, tip: () => t('session.tip.total') }
+  preguntar: { Icon: ShieldAlert, label: () => PERMISSION.preguntar, tip: () => t('session.tip.preguntar') },
+  total: { Icon: ShieldOff, label: () => PERMISSION.total, tip: () => t('session.tip.total') }
 };
+
+// the order of the levels under «Más opciones»: from the least to the most access.
+const MORE_ORDER = ['leer', 'probar', 'preguntar', 'total'];
 
 // main: the levels listed first (default Auto and Preguntar; none lists `more` directly, with no «Más opciones» row).
 // extra: switches under the extra levels inside «Más opciones» [{ key, testid, Icon, label, tip, checked, onToggle }].
-export function AutonomySwitch({ value, onChange, more = [], extra = [], main = ['auto', 'editar'], disabled = false, testid = 'autonomy', request = null }) {
+export function AutonomySwitch({ value, onChange, more = [], extra = [], main = ['editar', 'auto'], disabled = false, testid = 'autonomy', request = null }) {
   const [open, setOpen] = useState(false);
   const [at, setAt] = useState(0);
   const [expanded, setExpanded] = useState(false);
@@ -33,9 +36,10 @@ export function AutonomySwitch({ value, onChange, more = [], extra = [], main = 
   const refs = useRef([]);
   const extras = useRef(null);
   const aim = useRef(null); // the switch the focus goes to once the menu has opened
-  const meta = (v) => LEVEL[v] ?? { Icon: Hand, label: () => PERMISSION[v] ?? String(v), tip: () => '' };
+  const meta = (v) => LEVEL[v] ?? { Icon: ShieldQuestion, label: () => PERMISSION[v] ?? String(v), tip: () => '' };
   const first = main.map((v) => ({ value: v, label: meta(v).label() }));
-  const rest = more.filter((o) => !main.includes(o.value));
+  const rank = (v) => { const i = MORE_ORDER.indexOf(v); return i < 0 ? MORE_ORDER.length : i; };
+  const rest = more.filter((o) => !main.includes(o.value)).sort((x, y) => rank(x.value) - rank(y.value));
   const group = rest.length > 0 || extra.length > 0;
   // «Más opciones» unfolds inside this same menu; with no main levels the group is simply the menu.
   const showRest = main.length === 0 || expanded;
@@ -85,8 +89,8 @@ export function AutonomySwitch({ value, onChange, more = [], extra = [], main = 
         onClick={() => pick(o.value)} data-testid={`${testid}-${o.value}`}
         className="hover:bg-accent focus-visible:bg-accent flex w-full cursor-pointer items-start gap-2 rounded-[var(--r-ctl)] px-2 py-1.5 text-left outline-none">
         <Icon className="mt-0.5 size-4 shrink-0" />
-        <span className="grid min-w-0 flex-1 gap-0.5"><span className="text-control font-medium">{o.label}</span><span className="text-muted-foreground text-xs leading-snug">{tip()}</span></span>
-        <Check className={cn('text-primary-text mt-0.5 size-4 shrink-0', on ? 'opacity-100' : 'opacity-0')} aria-hidden />
+        <span className="grid min-w-0 flex-1 gap-0.5"><span className="text-control font-medium">{o.value === 'total' && !o.label.endsWith('…') ? `${o.label}…` : o.label}</span><span className="text-muted-foreground text-xs leading-snug">{tip()}</span></span>
+        <Check className={cn('text-muted-foreground mt-0.5 size-4 shrink-0', on ? 'opacity-100' : 'opacity-0')} aria-hidden />
       </button>
     );
   };

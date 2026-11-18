@@ -1,6 +1,6 @@
 // The conversation's top bar pieces shared by the chat and an agent's conversation: the clock, the title, pause,
 // «Compactar» and each message's time.
-import { Pause, Play, Folder, Shrink } from 'lucide-react';
+import { Pause, Play, Folder, FoldVertical } from 'lucide-react';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { Spinner } from '@/components/ui/basic.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -60,11 +60,12 @@ export function BarHeading({ title, project, onRename, renameLabel, extra, showP
 // the share of the context at which the composer suggests «Compactar» (DESIGN-SYSTEM §2.2).
 export const COMPACT_AT = 0.7;
 // «Compactar» in the contextual slot: the conversation goes on from a summary; nothing of the history is lost.
-export function CompactButton({ onCompact, busy }) {
+// percent: how full the context is, shown after the name (the chat with the assistant).
+export function CompactButton({ onCompact, busy, percent = null }) {
   const t = useT();
   return (
     <BubbleTip title={t('compact.title')} text={t('compact.tip')} side="top">
-      <Button size="xs" variant="soft" onClick={onCompact} disabled={busy} data-testid="chat-compact">{busy ? <Spinner /> : <Shrink />}{busy ? t('compact.busy') : t('compact.button')}</Button>
+      <Button size="xs" variant="ghost" className="text-muted-foreground font-normal" onClick={onCompact} disabled={busy} data-testid="chat-compact">{busy ? <Spinner /> : <FoldVertical />}{busy ? t('compact.busy') : t('compact.button')}{!busy && percent != null ? ` · ${percent} %` : ''}</Button>
     </BubbleTip>
   );
 }

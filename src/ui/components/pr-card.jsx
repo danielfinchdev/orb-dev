@@ -2,9 +2,10 @@
 // src/engine/host/pr-tools.mjs). Only in this PC's window. Every string of the PR comes from the internet, so it is
 // rendered as plain text (React text nodes), never as HTML or markdown.
 import { useEffect, useRef, useState } from 'react';
-import { GitPullRequest, ShieldAlert, MessageSquareWarning, GitMerge, Radar, ExternalLink, ChevronDown, CircleCheck, GitBranch, Users } from 'lucide-react';
+import { GitPullRequest, ShieldAlert, MessageSquareWarning, GitMerge, Radar, ExternalLink, ChevronDown, CircleCheck, GitBranch, Users, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Switch, BubbleTip } from '@/components/ui/overlay.jsx';
+import { ProjectIcon } from '@/components/project-icon.jsx';
 import { call, act, bridge, fullPc } from '@/lib/store.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { quiet } from '@/lib/quiet.js';
@@ -142,12 +143,16 @@ export function PrPanel({ session, pr }) {
   const checks = checksOf(Array.isArray(detail?.checks) ? detail.checks : []);
   const checksText = !detail ? '…' : !checks.n ? t('panel.pr.checksNone') : checks.bad ? t('panel.pr.checksFail', { ...checks, bad: checks.bad }) : checks.running ? t('panel.pr.checksRun', checks) : t('panel.pr.checksOk', checks);
   const checksTone = checks.bad ? 'text-destructive' : checks.running || !checks.n ? 'text-muted-foreground' : 'text-success';
+  const reviewers = Array.isArray(detail?.reviewers) ? detail.reviewers : [];
+  const commentCount = Number(detail?.comments) || 0;
+  // «Arreglar conflictos» only waits when GitHub says there are none; unknown (not read yet, or still computing) leaves it on
+  const noConflicts = (detail?.mergeable ?? pr.mergeable) === 'MERGEABLE';
   const dt = 'text-muted-foreground flex items-center gap-1.5 whitespace-nowrap [&_svg]:size-3.5';
   return (
     <section className="grid gap-0" data-testid="pr-bar" role="group" aria-label={t('prbar.pr', { number: pr.number, n: pr.number })}>
       <h2 className="mb-2 font-(family-name:--title) text-[16px] leading-[1.35] font-semibold" data-testid="pr-title"><bdi>{d.title}</bdi></h2>
       <div className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-1 text-control">
-        {d.author ? <><b className="text-foreground font-medium"><bdi>{d.author}</bdi></b> ·</> : null}
+        {d.author ? <><ProjectIcon name={d.author} size={18} /><b className="text-foreground font-medium"><bdi>{d.author}</bdi></b> ·</> : null}
         {d.createdAt || d.updatedAt ? <><span>{ago(d.createdAt ?? d.updatedAt, locale)}</span> ·</> : null}
         <span className={cn('inline-flex items-center gap-1', state === 'merged' && 'text-primary-text font-medium')}>{state === 'merged' ? <GitMerge className="size-3.5" /> : <GitPullRequest className="size-3.5" />}{t(`panel.pr.${state}`)}</span>
         {d.url ? <BubbleTip title={t('panel.pr.openGithub')}><button type="button" className="text-info focus-visible:outline-ring ml-auto inline-flex cursor-pointer items-center gap-1 rounded-sm hover:underline focus-visible:outline-2" onClick={() => bridge.openExternal(d.url)} data-testid="pr-open-github"><ExternalLink className="size-3.5" />{t('panel.pr.github')}</button></BubbleTip> : null}
@@ -156,7 +161,10 @@ export function PrPanel({ session, pr }) {
         <dt className={dt}><GitBranch />{t('panel.pr.branch')}</dt>
         <dd className="m-0 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1"><code className="whitespace-nowrap"><bdi>{d.headRefName}</bdi></code>{d.baseRefName ? <> → <code className="whitespace-nowrap"><bdi>{d.baseRefName}</bdi></code></> : null}
           {detail ? <><span className="text-success">+{detail.additions}</span> <span className="text-destructive">−{detail.deletions}</span></> : null}</dd>
-        {detail?.reviewDecision ? <><dt className={dt}><Users />{t('panel.pr.review')}</dt><dd className="m-0">{t(`panel.pr.${detail.reviewDecision}`)}</dd></> : null}
+        <dt className={dt}><Users />{t('panel.pr.reviewers')}</dt>
+        <dd className="m-0 min-w-0" data-testid="pr-reviewers">{!detail ? '…' : reviewers.length ? <bdi>{reviewers.join(', ')}</bdi> : t('panel.pr.reviewersNone')}{detail?.reviewDecision ? <span className="text-muted-foreground"> · {t(`panel.pr.${detail.reviewDecision}`)}</span> : null}</dd>
+        <dt className={dt}><MessageSquare />{t('panel.pr.comments')}</dt>
+        <dd className="m-0" data-testid="pr-comments">{!detail ? '…' : commentCount ? t(commentCount === 1 ? 'panel.pr.commentsOne' : 'panel.pr.commentsMany', { n: commentCount }) : t('panel.pr.commentsNone')}</dd>
         <dt className={dt}><CircleCheck />{t('panel.pr.checks')}</dt>
         <dd className={cn('m-0 flex items-center gap-1.5', checksTone)} data-testid="pr-checks">{checks.n && !checks.bad && !checks.running ? <CircleCheck className="size-3.5" /> : null}{checksText}</dd>
         <dt className={dt}><BubbleTip title={t('prbar.watch')} text={t('prbar.watchTip')} side="left"><span className="inline-flex items-center gap-1.5"><Radar />{watch ? t('prbar.watching', { attempts: watch.attempts, max: watch.max }) : t('prbar.watch')}</span></BubbleTip></dt>
@@ -164,7 +172,7 @@ export function PrPanel({ session, pr }) {
       </dl>
       <div className="flex flex-wrap gap-1.5 border-y py-3">
         <BubbleTip title={t('prbar.fixComments')} text={t('prbar.fixTip')}><Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => fix('comments')} data-testid="pr-fix-comments"><MessageSquareWarning />{t('prbar.fixComments')}</Button></BubbleTip>
-        <BubbleTip title={t('prbar.fixConflicts')} text={t('prbar.fixTip')}><Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => fix('conflicts')} data-testid="pr-fix-conflicts"><GitMerge />{t('prbar.fixConflicts')}</Button></BubbleTip>
+        <BubbleTip title={t('prbar.fixConflicts')} text={t('prbar.fixTip')}><Button type="button" size="sm" variant="outline" disabled={busy || noConflicts} onClick={() => fix('conflicts')} data-testid="pr-fix-conflicts"><GitMerge />{t('prbar.fixConflicts')}</Button></BubbleTip>
       </div>
       <button type="button" className="focus-visible:outline-ring mt-[18px] mb-1.5 flex w-full cursor-pointer items-center gap-1.5 text-left font-(family-name:--title) text-[15px] font-semibold focus-visible:outline-2" aria-expanded={bodyOpen} onClick={() => setBodyOpen(!bodyOpen)}>
         {t('panel.pr.description')}<ChevronDown className={cn('text-muted-foreground size-3.5 transition-transform duration-200', !bodyOpen && '-rotate-90')} />

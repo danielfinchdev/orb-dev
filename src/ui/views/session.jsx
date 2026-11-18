@@ -32,7 +32,8 @@ import { takePoints, onPoints } from '@/lib/browser-points.js';
 import { TerminalPanel } from '@/components/terminal-panel.jsx';
 import { onTerminalPaste } from '@/lib/terminal-paste.js';
 import { NotificationBell } from '@/components/notification-center.jsx';
-import { useCatalog, modelsOf, modelLabel, ReasoningMenu } from '@/components/brain-picker.jsx';
+import { useCatalog, modelsOf, modelLabel, AgentChip } from '@/components/brain-picker.jsx';
+import { WorkspacePills } from '@/components/workspace-pills.jsx';
 import { stepText, bareTool } from '@/components/chat-live.jsx';
 import { readableInput, readableCommand } from '@/lib/tools.js';
 import { GeneratedImage, openImage } from '@/components/image-viewer.jsx';
@@ -56,7 +57,7 @@ import { BarClock, BarPause, BarHeading, COMPACT_AT, CompactButton } from '@/com
 import { ContextMeter } from '@/components/conversation/context-meter.jsx';
 import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
 import { TurnFlow } from '@/components/conversation/turn-card.jsx';
-import { onOpenChanges } from '@/lib/open-changes.js';
+import { onOpenChanges, onOpenPanel } from '@/lib/open-changes.js';
 import { AttachMenu } from '@/components/conversation/attach-menu.jsx';
 import { TaskStatus } from '@/components/task-state.jsx';
 import { quiet } from '@/lib/quiet.js';
@@ -368,8 +369,10 @@ export function SessionView({ route }) {
   const openTab = (tab) => { setPanel(tab); setLastTab(tab); };
   // «Revisar» on a turn card opens Changes on that turn
   useEffect(() => onOpenChanges(({ session, turn }) => { if (session === route.id) { setChangesTurn({ turn, at: Date.now() }); openTab('changes'); } }), [route.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // «Información» in a chat's row menu opens this chat on its Ficha (only where the panel exists: a chat with a project, on the PC).
+  useEffect(() => onOpenPanel(({ session, tab }) => { if (session === route.id && s?.kind === 'chat' && Boolean(s?.project) && fullPc()) openTab(tab); }), [route.id, s?.kind, s?.project]); // eslint-disable-line react-hooks/exhaustive-deps
   const pendingComments = useComments(route.id);
-  const hasPanel = s.kind === 'chat' && Boolean(s.project) && fullPc();
+  const hasPanel = s?.kind === 'chat' && Boolean(s?.project) && fullPc(); // s is missing while a deleted chat's route is still open
   const pr = usePr(s);
   useEffect(() => { setPanel(null); setChangesTurn(null); setCommitOpen(false); }, [route.id]);
   // Ctrl+D opens the panel on Cambios, or closes it when it is already there
@@ -506,7 +509,9 @@ export function SessionView({ route }) {
   const pictures = images.map((p) => <Badge key={p} variant="secondary" className="gap-1.5 font-normal"><AttachIcon file={p} />{baseName(p)}<button className="cursor-pointer" onClick={() => setImages(images.filter((x) => x !== p))} aria-label={t('session.remove')}><X className="size-3" /></button></Badge>);
 
   return (
-    <>
+    <div className="flex min-h-0 flex-1">
+      {/* two full-height columns: the conversation (its header is as wide as it is) and the panel (its own 56 px strip). */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* like the chat's: the clock on the left, the conversation's title (and under it its project and agent) in the
           middle, its controls on the right. */}
       <PageHeader className="topbar-chat" palette={false} title={<BarClock />} back={<BackToList to={s.kind === 'chat' ? 'chats' : 'tasks'} />}
@@ -522,25 +527,23 @@ export function SessionView({ route }) {
         {/* only the bell and pause stay on the bar; the folder, the details, fork, archive, delete and the games go into ⋯. */}
         <DropdownMenu modal={false}>
           <BubbleTip title={t('chats.more')}><DropdownMenuTrigger asChild><MoreButton label={t('chats.more')} data-testid="session-more" /></DropdownMenuTrigger></BubbleTip>
-          <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuContent align="end" className="w-[250px]">
             {s.kind === 'chat' && s.project && fullPc() ? <><CommitMenuItem onOpen={() => setCommitOpen(true)} /><DropdownMenuSeparator /></> : null}
             {bridge.mobile ? null : <DropdownMenuItem onSelect={() => act(bridge.openPath(s.cwd))} data-testid="open-folder"><FolderOpen />{t('session.openFolder')}</DropdownMenuItem>}
-            {fullPc() ? <DropdownMenuItem onSelect={() => setTerminal(!terminal)} data-testid="session-terminal"><SquareTerminal />{terminal ? t('terminal.hide') : t('terminal.show')}</DropdownMenuItem> : null}
+            {fullPc() ? <DropdownMenuItem onSelect={() => setTerminal(!terminal)} data-testid="session-terminal"><SquareTerminal />{terminal ? t('session.menu.terminalHide') : t('session.menu.terminalShow')}</DropdownMenuItem> : null}
             <DropdownMenuItem onSelect={() => showDetails(s, task)} data-testid="details"><Info />{t('session.detailsShort')}</DropdownMenuItem>
             <DropdownMenuItem disabled={running} onSelect={fork} data-testid="fork"><GitFork />{t('session.fork')}</DropdownMenuItem>
-            {others.length ? <DropdownMenuItem disabled={running} onSelect={switchAgent} data-testid="switch-agent"><Shuffle />{t('session.switchAgent')}</DropdownMenuItem> : null}
+            {others.length ? <DropdownMenuItem disabled={running} onSelect={switchAgent} data-testid="switch-agent"><Shuffle />{t('session.menu.switchAgent')}</DropdownMenuItem> : null}
             {others.length && s.kind === 'chat' ? <DropdownMenuItem disabled={running} onSelect={handoff} data-testid="handoff"><Shuffle />{t('session.handoff')}</DropdownMenuItem> : null}
             {s.kind === 'chat' ? <DropdownMenuItem onSelect={async () => { const ok = await act(call('sessions.update', { id: s.id, archived: !s.archived })); if (!s.archived) { if (ok) await offerWorktreeRemoval(s, t); go('chat'); } }} data-testid="archive"><Archive />{s.archived ? t('session.restore') : t('session.archive')}</DropdownMenuItem> : null}
             {fullPc() ? <DropdownMenuItem onSelect={openGames} data-testid="bar-games"><Gamepad2 />{t('bar.games')}</DropdownMenuItem> : null}
             {s.kind === 'chat' ? <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onSelect={async () => { if (await confirm(t('session.deleteTitle'), t('session.deleteBody') + (await hasWorktree(s) ? ` ${t('session.wt.deleteKept')}` : ''), { ok: t('session.delete'), danger: true })) { await act(call('sessions.remove', { id: s.id })); go('chat'); } }} data-testid="delete"><Trash2 />{t('session.deleteTip')}</DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onSelect={async () => { if (await confirm(t('session.deleteTitle'), t('session.deleteBody') + (await hasWorktree(s) ? ` ${t('session.wt.deleteKept')}` : ''), { ok: t('session.delete'), danger: true })) { await act(call('sessions.remove', { id: s.id })); go('chat'); } }} data-testid="delete"><Trash2 />{t('session.menu.delete')}</DropdownMenuItem>
             </> : null}
           </DropdownMenuContent>
         </DropdownMenu>
       </PageHeader>
-      <div className="flex min-h-0 flex-1">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={trail.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
         <div className="lazy-lines mx-auto flex max-w-3xl flex-col gap-3.5 px-5 py-6">
@@ -588,10 +591,15 @@ export function SessionView({ route }) {
       {terminal && fullPc() ? <TerminalPanel dir={s.cwd} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
       {pendingComments.length ? <div className="text-muted-foreground mx-auto w-full max-w-3xl shrink-0 px-5 pb-1.5 text-xs" data-testid="pending-comments">{t('turns.pending', { n: pendingComments.length })}</div> : null}
       <Composer draft={draft} onSend={send} suggestion={suggestion} onSuggestionDone={dropSuggestion} attached={images.length > 0} notice={s.kind === 'chat' && CAN_COMPACT[s.agent] === true ? <ColdNotice id={`s${s.id}`} agent={s.agent} used={s.context?.used} lastAt={s.updated_at} busy={running} compacting={compacting} onCompact={compact} onFresh={() => newChat(s.project ?? undefined)} /> : null} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
-        placeholder={running ? (AGENT_CAN_STEER[s.agent] ? t('session.phSteer', { agent: AGENT[s.agent] }) : t('session.phWait', { agent: AGENT[s.agent] })) : s.kind === 'task' ? t('session.phTask') : t('session.ph', { agent: AGENT[s.agent] })}
+        placeholder={running ? (AGENT_CAN_STEER[s.agent] ? t('session.phSteer', { agent: AGENT[s.agent] }) : t('session.phWait', { agent: AGENT[s.agent] })) : s.kind === 'task' ? t('session.phTask') : t('session.phChat')}
         onPaste={(e) => { fromTransfer(e.clipboardData).then((f) => { if (f.length) addImages(f); }); }}
         onDrop={(e) => { fromTransfer(e.dataTransfer).then(addImages); }}
-        top={images.length || compactable ? <>{compactable ? <ContextSlot items={[{ key: 'compact', node: <CompactButton onCompact={compact} busy={compacting} /> }]} /> : null}<div className="flex min-w-0 flex-wrap items-center gap-2">{pictures}</div></> : null}
+        above={s.kind === 'chat' && ((s.project && fullPc()) || compactable) ? <>
+          {/* where this chat works (Local or its worktree and the branch it started from; fixed once started) and, when the context is full, «Compactar». */}
+          {s.project && fullPc() ? <WorkspacePills project={s.project} chat={s.id} value={{ mode: 'local', base: '' }} onChange={() => {}} /> : null}
+          <ContextSlot className="ml-auto" items={[compactable ? { key: 'compact', node: <CompactButton onCompact={compact} busy={compacting} /> } : null]} />
+        </> : null}
+        top={images.length ? <div className="flex min-w-0 flex-wrap items-center gap-2">{pictures}</div> : null}
         bottom={<>
           {/* «+»: attach a file and, on the PC, capture a window (the system's picker) as a picture. */}
           <AttachMenu onAttach={async () => addImages(await bridge.pickAttachments())} onCapture={fullPc() && canCapture() ? capture : null} />
@@ -612,17 +620,16 @@ export function SessionView({ route }) {
                 const unlock = await unlockCore('fullAccess');
                 if (unlock) act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged'));
               }} />}
-            {s.permission === 'total' ? <Tip label={t('session.fullPcTip')}><span tabIndex={0} className="inline-flex h-[var(--ctl)] shrink-0 items-center gap-1.5 rounded-[var(--r-ctl)] border border-warning/50 bg-warning-soft px-2 text-control font-medium whitespace-nowrap text-warning-ink" data-testid="session-fullpc"><ShieldAlert className="size-4" />{t('session.fullPcChip')}</span></Tip> : null}
+            {s.permission === 'total' ? <Tip label={t('session.fullPcTip')}><span tabIndex={0} className="inline-flex h-[var(--ctl)] shrink-0 items-center gap-1.5 rounded-[var(--r-ctl)] bg-warning-soft px-2 text-control whitespace-nowrap text-warning-ink" data-testid="session-fullpc"><ShieldAlert className="size-4" />{t('session.fullPcChip')}</span></Tip> : null}
             {/* says that the phone is in use and opens the permissions on its switch, where it is taken back. */}
-            {s.android && !(!s.project && s.permission === 'total') ? <button type="button" onClick={() => setPermAsk({ at: Date.now(), focus: 'android' })} title={t('session.androidChipTip')} className="inline-flex h-[var(--ctl)] cursor-pointer items-center gap-1.5 rounded-[var(--r-ctl)] border border-success/50 bg-success-soft px-2 text-control text-success outline-none focus-visible:ring-2 focus-visible:ring-ring/50" data-testid="session-android-chip"><Smartphone className="size-4" />{t('session.androidChip')}</button> : null}
+            {s.android && !(!s.project && s.permission === 'total') ? <button type="button" onClick={() => setPermAsk({ at: Date.now(), focus: 'android' })} title={t('session.androidChipTip')} className="inline-flex h-[var(--ctl)] cursor-pointer items-center gap-1.5 rounded-[var(--r-ctl)] bg-success-soft px-2 text-control text-success outline-none focus-visible:ring-2 focus-visible:ring-ring/50" data-testid="session-android-chip"><Smartphone className="size-4" />{t('session.androidChip')}</button> : null}
           </>) : null}
-          {/* the folder as a chip of the same height, padding and gap as the permissions one. */}
-          <Tip label={s.cwd}><span tabIndex={0} className="text-muted-foreground hidden h-[var(--ctl)] min-w-0 items-center gap-1.5 rounded-[var(--r-ctl)] px-2 text-control whitespace-nowrap outline-none focus-visible:ring-ring/40 focus-visible:ring-[3px] xl:inline-flex" data-testid="session-folder"><FolderOpen className="size-4 shrink-0" /><span className="truncate">{s.project ?? baseName(s.cwd)}</span></span></Tip>
           <span className="ml-auto" aria-hidden="true" />
           {s.context ? <span className="text-muted-foreground text-xs"><ContextMeter context={s.context} /></span> : null}
           {s.kind === 'chat' ? (<>
-            {models.length ? <Select size="sm" value={s.model || models[0].value} title={t('session.model')} options={models} onValueChange={(model) => act(call('sessions.update', { id: s.id, model }), t('session.modelSet', { model: modelName(model) }))} data-testid="session-model" /> : null}
-            <ReasoningMenu catalog={catalog} value={{ agent: s.agent, model: s.model ?? '', account: s.account, reasoning: s.reasoning ?? 'medium' }} onChange={(reasoning) => act(call('sessions.update', { id: s.id, reasoning }))} />
+            {/* one chip for the agent, its model and its reasoning; its menu lists the models, the levels and «Guía de modelos». */}
+            <AgentChip catalog={catalog} agent={s.agent} account={s.account} models={models} model={s.model ?? ''} modelName={models.length ? modelName(s.model || models[0].value) : ''} reasoning={s.reasoning ?? 'medium'}
+              onModel={(model) => act(call('sessions.update', { id: s.id, model }), t('session.modelSet', { model: modelName(model) }))} onReasoning={(reasoning) => act(call('sessions.update', { id: s.id, reasoning }))} />
           </>) : null}
         </>} />
       </div>
@@ -634,8 +641,7 @@ export function SessionView({ route }) {
         </ChatPanel>
       ) : null}
       {hasPanel ? <CommitDialog project={s.project} session={s.id} open={commitOpen} onOpenChange={setCommitOpen} /> : null}
-      </div>
-    </>
+    </div>
   );
 }
 

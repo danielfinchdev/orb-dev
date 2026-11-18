@@ -73,7 +73,8 @@ test('the filter sits inside the search box and «+» is an icon button', () => 
 
 test('the rows of the list: the agent mark (12 px), the working spinner and the ⋯ over the row', () => {
   const row = inbox.slice(inbox.indexOf('const OrbRow'), inbox.indexOf('// ---- a project'));
-  assert.match(row, /<AgentIcon agent=\{agents\[0\]\} \/>/);
+  // the mark is small and pale in a row (10 px at 70 %), the robot's head only for Orbe's chat in the Orb theme
+  assert.match(row, /<AgentIcon agent=\{agents\[0\]\} className="size-2\.5 opacity-70" \/>/);
   assert.match(read('components/agent-icon.jsx'), /cn\('ag size-3 shrink-0', className\)/, '12 px, no background');
   assert.match(row, /<LoaderCircle [^>]*animate-spin/);
   assert.match(row, /<OrbMenu item=\{item\} open=\{menu\} setOpen=\{setMenu\} className="absolute top-\[5px\] right-2" \/>/);
@@ -118,4 +119,17 @@ test('step 5D: icons draw with a 1.75 stroke, the menus have 220 px and 31 px ro
   assert.ok(overlay.match(/text-control leading-\[1\.45\] outline-hidden/g)?.length >= 3, 'items, ticks and radios: 6 + 18.85 + 6 px');
   assert.match(inbox, /side=\{fab \? 'top' : 'bottom'\} className="w-\[220px\]"/);
   assert.match(inbox, /<IconButton label=\{t\('orbchats\.sortFilter'\)\} data-testid="sidebar-sort"><ArrowUpDown className="size-3\.5" \/>/, '32 px button, 14 px icon');
+});
+
+test('the robot inside the brand button carries no drag region of its own', () => {
+  // Found in the real window: the head floats on hover and while agents work; as a no-drag region nested in the
+  // button's own, its animation kept the WebView reworking the window's draggable regions and the window froze.
+  const rule = css.split(/\r?\n/).find((l) => l.startsWith('.app-titlebar :is('));
+  assert.ok(rule, 'the no-drag list of the title bars');
+  assert.ok(rule.includes('.orb:not(:is(button, a, [role=button]) .orb)'), 'robots inside a control are left out');
+  assert.ok(!rule.includes(', .orb)'), 'a bare .orb would cover the robot inside the button again');
+  // app-region is inherited: the parts that float must reset it, or the button's region reaches them anyway
+  assert.ok(css.includes('.app-titlebar .orb *, .app-titlebar :is(button, a, [role=button]) .orb { -webkit-app-region: initial; app-region: initial; }'), 'the moving parts carry no region');
+  const button = sidebar.slice(sidebar.indexOf('data-testid="sidebar-home"'));
+  assert.ok(button.slice(0, button.indexOf('</button>')).includes('<Robot '), 'the head lives inside the brand button');
 });

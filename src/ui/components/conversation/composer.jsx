@@ -105,7 +105,7 @@ function PastedCards({ draft, blocks }) {
 // it. attached: something besides text can be sent (pictures). The box grows with its text in CSS (field-sizing), with
 // no layout read per key; where the browser lacks it, measured once per change.
 const FIELD_SIZING = typeof CSS !== 'undefined' && CSS.supports?.('field-sizing', 'content');
-export function Composer({ draft, onSend, onStop, busy, placeholder, suggestion, onSuggestionDone, top, bottom, notice, disabled, onPaste, onDrop, testid, attached = false, mentions = true }) {
+export function Composer({ draft, onSend, onStop, busy, placeholder, suggestion, onSuggestionDone, top, above, bottom, notice, disabled, onPaste, onDrop, testid, attached = false, mentions = true }) {
   const t = useT();
   const ta = useRef(null);
   const value = useDraftValue(draft);
@@ -144,6 +144,8 @@ export function Composer({ draft, onSend, onStop, busy, placeholder, suggestion,
   };
   return (
     <div className="composer-dock shrink-0 px-5 pb-5">
+      {/* the row over the box (where the chat works, «Compactar»): outside the box, as wide as it. */}
+      {above ? <div className="mx-auto mb-1.5 flex max-w-[var(--chat-max-width)] min-w-0 items-center gap-1" data-testid="composer-above">{above}</div> : null}
       <div data-slot="composer" className={cn('bg-card relative mx-auto max-w-[var(--chat-max-width)] rounded-big border border-[color-mix(in_oklab,var(--foreground)_10%,transparent)] shadow-[var(--shadow)] transition-shadow focus-within:ring-[3px] focus-within:ring-ring/25', dropping && 'ring-ring ring-2')}
         onDragOver={onDrop ? (e) => { e.preventDefault(); setDropping(true); } : undefined} onDragLeave={() => setDropping(false)} onDrop={onDrop ? (e) => { e.preventDefault(); setDropping(false); onDrop(e); } : undefined}>
         {mentions && m.list.length ? null : notice}
@@ -167,7 +169,7 @@ export function Composer({ draft, onSend, onStop, busy, placeholder, suggestion,
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1" data-testid="composer-bottom">{bottom}</div>
           {mic ? <Tip label={t('chat.dictate')}><Button size="icon-sm" variant="ghost" className="rounded-full" onClick={dictate} disabled={disabled || hearing} aria-label={t('chat.dictate')} data-testid="dictate"><Mic className={hearing ? 'text-primary-text animate-pulse' : undefined} /></Button></Tip> : null}
           {busy && onStop ? <Tip label={t('chat.stop')}><Button size="icon-sm" variant="secondary" onClick={onStop} aria-label={t('chat.stop')}><Square className="size-3.5 fill-current" /></Button></Tip> : null}
-          <Button size="icon-sm" className="rounded-full" onClick={() => onSend({ alt: false })} disabled={disabled || !(value.trim() || attached || blocks.length)} aria-label={t('chat.send')} data-testid="send"><ArrowUp /></Button>
+          <Button size="icon-sm" className={cn('rounded-full', !disabled && 'disabled:opacity-100')} onClick={() => onSend({ alt: false })} disabled={disabled || !(value.trim() || attached || blocks.length)} aria-label={t('chat.send')} data-testid="send"><ArrowUp /></Button>
         </div>
       </div>
     </div>

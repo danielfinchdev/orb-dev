@@ -53,7 +53,7 @@ export function greetingFor(g, project) {
 
 // the suggestions under the greeting. With a project already chosen, nothing about creating one; without one,
 // nothing about «the project».
-const SUGGESTIONS = ['chat.suggestion1', 'chat.suggestion2', 'chat.suggestion4'];
+const SUGGESTIONS = ['chat.suggestion1', 'chat.suggestion2', 'chat.suggestion4', 'chat.suggestion5'];
 const PROJECT_SUGGESTIONS = ['chat.suggestionProject1', 'chat.suggestion3', 'chat.suggestion2', 'chat.suggestionProject2'];
 export const suggestionsFor = (project) => (project ? PROJECT_SUGGESTIONS : SUGGESTIONS);
 

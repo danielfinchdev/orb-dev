@@ -48,10 +48,12 @@ export function DialogDescription({ className, ...props }) { return <DialogPrimi
 // list kept in a detached fragment while closed, React 19 could fail with «insertBefore… is not a child of this node» when
 // the screen changed (seen going from one screen to another). With children there is one writer: options may carry
 // an icon (an avatar) again. o.icon: drawn before the label in the list and in the trigger.
-export function Select({ value, onValueChange, options, placeholder, className, size = 'default', disabled, title, id, 'aria-describedby': describedBy, 'data-testid': testid, ...props }) {
+// prefix: a quiet name before the value («Proyecto Todos»), for a filter that has no label of its own next to it.
+export function Select({ value, onValueChange, options, placeholder, prefix, className, size = 'default', disabled, title, id, 'aria-describedby': describedBy, 'data-testid': testid, ...props }) {
   const chosen = options.find((o) => o.value === value) ?? null;
   const trigger = (
     <SelectPrimitive.Trigger data-slot="select-trigger" id={id} aria-describedby={describedBy} aria-label={title} data-testid={testid} className={cn("btn pick out border-border bg-card text-foreground hover:bg-accent data-[placeholder]:text-muted-foreground flex h-(--ctl) w-fit items-center justify-between gap-1.5 rounded-ctl border px-2.5 text-control whitespace-nowrap transition-[background-color,border-color] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-45 cursor-pointer *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4", className)}>
+      {prefix ? <span className="k text-muted-foreground shrink-0">{prefix}</span> : null}
       <SelectPrimitive.Value data-slot="select-value" placeholder={placeholder}>{chosen ? <>{chosen.icon ?? null}<span className="truncate">{chosen.label}</span></> : null}</SelectPrimitive.Value>
       <SelectPrimitive.Icon asChild><ChevronDownIcon className="text-muted-foreground size-4" /></SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>

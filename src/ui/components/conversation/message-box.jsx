@@ -1,15 +1,43 @@
-// The one anatomy of a message in a chat: avatar, name and time on top, then the content, then its actions.
-// `user` messages keep the bubble on the right; the assistant's sit on the glass card.
-import { Pin } from 'lucide-react';
+// The one anatomy of a message in a chat. On the PC (the mock-up's .me and plain answer): the person's message is a grey pill on
+// the right, the answer is plain text without name, avatar or box, and under it a quiet row with copy and the time. Edit, pin and
+// the message's other actions appear on hover or keyboard focus (always on a touch screen); a pinned message keeps its mark in view.
+// The phone and a linked browser keep the avatar, name and time on top, with the bubble and the glass card.
+import { useRef } from 'react';
+import { Copy, Pin } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { MsgTime } from '@/components/conversation/bar.jsx';
+import { IconButton } from '@/components/ui/primitives.jsx';
+import { fullPc } from '@/lib/store.js';
+import { notifyOk } from '@/lib/notify.js';
+import { quiet } from '@/lib/quiet.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
-// icon: replaces the robot in front of the assistant's name (an agent's conversation shows that agent's own icon).
-// pin: { pinned, onToggle } adds the pin button on the header (hidden until the message is hovered or focused, always shown when pinned).
+// icon: replaces the robot in front of the assistant's name (an agent's conversation shows that agent's own icon); phone only.
+// pin: { pinned, onToggle } adds the pin button (hidden until the message is hovered or focused, always shown when pinned).
 export function MessageBox({ user = false, name, at, actions, icon, pin, className, children, ...props }) {
   const t = useT();
+  const body = useRef(null);
+  if (fullPc()) {
+    const copy = () => navigator.clipboard?.writeText(String(body.current?.innerText ?? '').trim()).then(() => notifyOk(t('msg.copied'))).catch(quiet);
+    // hidden until the message is hovered or focused; shown at once on a touch screen
+    const reveal = 'opacity-0 transition-opacity group-hover/msg:opacity-100 group-focus-within/msg:opacity-100 [@media(hover:none)]:opacity-100';
+    const pinButton = pin ? <IconButton small label={pin.pinned ? t('pins.unpin') : t('pins.pin')} title={pin.pinned ? t('pins.unpin') : t('pins.pin')} aria-pressed={pin.pinned} onClick={pin.onToggle} className={pin.pinned ? 'text-primary-text' : reveal} data-testid="msg-pin"><Pin className={cn(pin.pinned && 'fill-current')} /></IconButton> : null;
+    return (
+      <article className={cn('msg-box group/msg flex min-w-0 flex-col', user ? 'ml-auto max-w-[80%] items-end' : 'items-start', className)} data-role={user ? 'user' : 'assistant'} {...props}>
+        {/* the name stays for screen readers (and out of the trail's text, like the phone's header) */}
+        <span className="msg-box-head sr-only" data-testid="msg-name">{name}</span>
+        <div ref={body} className={cn('min-w-0 max-w-full break-words', user && 'bg-bubble text-bubble-foreground rounded-big px-3.5 py-[9px] whitespace-pre-wrap compact:text-body')}>{children}</div>
+        {/* the person's row hangs under the pill without taking room: it only shows on hover */}
+        <div className={cn('chat-actions text-faint-foreground flex flex-wrap gap-1 text-caption', user ? 'relative z-10 h-0 items-start justify-end' : 'items-center -mt-1')}>
+          {user ? null : <IconButton small label={t('msg.copy')} onClick={copy} data-testid="msg-copy"><Copy /></IconButton>}
+          <span className={cn('inline-flex items-center', user && cn('h-6', reveal))}><MsgTime at={at} inline /></span>
+          {pinButton}
+          {actions ? <span className={cn('inline-flex flex-wrap items-center gap-1', user && reveal)}>{actions}</span> : null}
+        </div>
+      </article>
+    );
+  }
   const initial = String(name ?? '').trim().charAt(0).toUpperCase();
   return (
     <article className={cn('msg-box group/msg min-w-0', user ? 'bg-bubble text-bubble-foreground ml-auto max-w-[80%] rounded-big px-3.5 py-[9px] compact:text-body' : 'chat-glass', className)} data-role={user ? 'user' : 'assistant'} {...props}>

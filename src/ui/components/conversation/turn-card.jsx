@@ -52,7 +52,8 @@ function TurnCard({ sessionId, turn, user, running }) {
   const [all, setAll] = useState(false);
   const files = data?.files ?? [];
   const more = data?.more ?? 0; // files past the engine's cap: counted, never shown
-  if (data && !files.length) return <div ref={box} />;
+  // a card is drawn once it has files: while the numbers are on their way, or when the turn changed nothing, only its marker stays
+  if (!failed && (!data || !files.length)) return <div ref={box} className="min-h-px" />;
   const added = files.reduce((a, f) => a + f.added, 0); const removed = files.reduce((a, f) => a + f.removed, 0);
   const shown = all ? files : files.slice(0, SHOWN);
   const review = () => openChanges(sessionId, turn.n);
@@ -61,12 +62,12 @@ function TurnCard({ sessionId, turn, user, running }) {
       <div className="flex items-center gap-2.5 px-3 py-2.5">
         <FilePen className="text-muted-foreground size-3.5 shrink-0" aria-hidden="true" />
         <div className="min-w-0 flex-1">
-          <div className="font-medium" data-testid="turn-card-title">{data ? t(files.length + more === 1 ? 'turn.changedOne' : 'turn.changedMany', { n: files.length + more }) : failed ? t('turn.changedUnknown') : '…'}</div>
+          <div className="font-medium" data-testid="turn-card-title">{data ? t(files.length + more === 1 ? 'turn.changedOne' : 'turn.changedMany', { n: files.length + more }) : t('turn.changedUnknown')}</div>
           {data ? <div className="font-mono text-xs tabular-nums"><span className="text-success">+{added}</span> <span className="text-destructive">−{removed}</span></div> : null}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {user && !running && fullPc() ? <Button variant="ghost" onClick={() => rewindFrom(sessionId, user)} title={t('turn.rewindTip', { message: snippet(user) })} data-testid="turn-rewind"><Undo2 className="size-3.5" />{t('turn.rewind')}</Button> : null}
-          <Button variant="outline" onClick={review} title={t('turn.reviewTip')} disabled={!data && !failed} data-testid="turn-review">{t('turn.review')}</Button>
+          <Button variant="outline" onClick={review} title={t('turn.reviewTip')} data-testid="turn-review">{t('turn.review')}</Button>
           <Button variant="ghost" size="icon-xs" aria-label={open ? t('turn.fold') : t('turn.unfold')} aria-expanded={open} onClick={() => setOpen(!open)} data-testid="turn-fold"><ChevronDown className={cn('transition-transform', !open && '-rotate-90')} /></Button>
         </div>
       </div>
@@ -80,7 +81,7 @@ function TurnCard({ sessionId, turn, user, running }) {
                 <span className="min-w-0 flex-1 truncate font-mono" title={f.path}>{f.path}</span>
                 {f.binary ? <span className="text-faint-foreground text-xs">{t(PICTURE.test(f.path) ? 'turn.image' : 'turn.binary')}</span>
                   : <><span className="text-success font-mono text-xs tabular-nums">+{f.added}</span><span className="text-destructive font-mono text-xs tabular-nums">−{f.removed}</span></>}
-                <ChevronRight className="text-muted-foreground size-3.5 shrink-0" aria-hidden="true" />
+                <ChevronDown className="text-muted-foreground size-3.5 shrink-0" aria-hidden="true" />
               </button>
             );
           })}
@@ -101,7 +102,7 @@ function Worked({ entry, live, children }) {
   const line = live ? t('worked.running') : span ? t('worked.line', { time: span }) : t('worked.lineNoTime');
   return (
     <Collapsible open={open} onOpenChange={setManual} className="worked-group" data-testid="worked">
-      <CollapsibleTrigger className="text-muted-foreground hover:text-foreground group flex w-full cursor-pointer items-center gap-1.5 border-b pb-2 text-[13px]" aria-label={t('worked.toggle', { line })} data-testid="worked-toggle">
+      <CollapsibleTrigger className="text-muted-foreground hover:text-foreground group flex w-full cursor-pointer items-center gap-1.5 text-[13px]" aria-label={t('worked.toggle', { line })} data-testid="worked-toggle">
         <span>{line}</span><ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" aria-hidden="true" />
       </CollapsibleTrigger>
       <CollapsibleContent><div className="mt-2 grid gap-2 pl-5">{children}</div></CollapsibleContent>

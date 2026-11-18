@@ -26,9 +26,11 @@ import { notify } from '@/lib/notify.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { useOrbItems, deleteChat } from './inbox.jsx';
-import { TaskStatus } from '@/components/task-state.jsx';
+import { TaskStatus, acceptHeld, undoHeld } from '@/components/task-state.jsx';
 import { ChatNotes, PinnedList } from '@/components/conversation/chat-notes.jsx';
 import { quiet } from '@/lib/quiet.js';
+import { approveTask, rejectTask } from '@/components/task-approval.jsx';
+import { lastEntry } from '@/lib/logbook.js';
 
 const OPEN = ['queued', 'running', 'awaiting_approval', 'limited'];
 // On the phone the info covers the screen: going somewhere from it closes it.
@@ -184,16 +186,24 @@ function ProjectInfo({ name }) {
 // tasks and the project's logbook. `line` is the agent · model · permission text the chat already computed.
 export function SessionInfo({ session: s, line, onRename, task }) {
   const t = useT();
+  const locale = useLocale();
   const item = useOrbItems().find((x) => x.key === `session:${s.id}`) ?? null;
+  const tasks = useStore((st) => st.tasks.filter((x) => String(x.session_id) === String(s.id) && x.id !== task?.id));
   const [info, setInfo] = useState(null);
-  const [tree, setTree] = useState(false);
+  const [tree, setTree] = useState(null); // the chat's own worktree (branch it works on), when it has one
+  const [entry, setEntry] = useState(null);
   useEffect(() => {
-    let alive = true; setInfo(null); setTree(false);
-    if (s.project) call('projects.info', { name: s.project }).then((r) => { if (alive) setInfo(r); }).catch(quiet);
-    call('worktrees.status', { id: String(s.id) }).then((r) => { if (alive) setTree(r?.has === true); }).catch(quiet);
+    let alive = true; setInfo(null); setTree(null); setEntry(null);
+    if (s.project) {
+      call('projects.info', { name: s.project }).then((r) => { if (alive) setInfo(r); }).catch(quiet);
+      call('logs.read', { project: s.project }).then((r) => { if (alive) setEntry(lastEntry(r)); }).catch(quiet);
+    }
+    call('worktrees.status', { id: String(s.id) }).then((r) => { if (alive) setTree(r?.has === true ? r : null); }).catch(quiet);
     return () => { alive = false; };
   }, [s.id, s.project]);
   const dt = 'text-muted-foreground flex items-center gap-1.5 whitespace-nowrap [&_svg]:size-3.5';
+  const mine = [...(task ? [task] : []), ...[...tasks].sort((a, b) => b.id - a.id)];
+  const branch = tree?.branch ?? (info?.git ? info.branch : null);
   return (
     <section className="grid gap-0" data-testid="orb-info">
       <div className="bg-card rounded-card border px-3 py-2.5">
@@ -205,22 +215,44 @@ export function SessionInfo({ session: s, line, onRename, task }) {
       </div>
       <dl className="my-4 grid grid-cols-[minmax(120px,max-content)_1fr] items-center gap-x-2.5 gap-y-[9px] text-control">
         {s.project ? <><dt className={dt}><FolderGit2 />{t('panel.info.project')}</dt><dd className="m-0 flex min-w-0 items-center gap-1.5" data-testid="info-project"><ProjectIcon name={s.project} className="size-3.5" /><span className="truncate">{s.project}</span></dd></> : null}
+        {/* the folder the chat works in: it left the box (the permissions row) for here; «Abrir la carpeta» is in the ⋯ menu. */}
         <dt className={dt}><Folder />{t('panel.info.folder')}</dt>
-        <dd className="m-0 min-w-0 font-mono text-xs break-all">{s.cwd}</dd>
-        {info?.git && info.branch ? <><dt className={dt}><GitBranch />{tree ? t('panel.info.worktree') : t('panel.info.branch')}</dt><dd className="m-0 min-w-0 font-mono text-xs break-all">{info.branch}</dd></> : null}
+        <dd className="m-0 min-w-0 font-mono text-xs break-all" data-testid="session-folder">{s.cwd}</dd>
+        {branch ? <><dt className={dt}><GitBranch />{tree ? t('panel.info.worktree') : t('panel.info.branch')}</dt><dd className="m-0 min-w-0 font-mono text-xs break-all">{branch}</dd></> : null}
         <dt className={dt}><BubbleTip title={t('panel.info.notify')} text={t('panel.info.notifyTip')} side="left"><span className="inline-flex items-center gap-1.5"><Bell />{t('panel.info.notify')}</span></BubbleTip></dt>
         <dd className="m-0"><Switch checked={!item?.muted} disabled={!item} onCheckedChange={(on) => orbAct('inbox.mute', { kind: 'session', id: s.id, muted: !on })} aria-label={t('panel.info.notify')} data-testid="info-notify" /></dd>
       </dl>
-      {task ? (
+      {mine.length ? (
         <>
           <div className="mt-[18px] mb-1.5 font-(family-name:--title) text-[15px] font-semibold">{t('panel.info.tasks')}</div>
-          <button type="button" onClick={() => go({ view: 'tasks', id: task.id })} className="bg-card hover:bg-accent/60 rounded-card focus-visible:outline-ring flex w-full cursor-pointer items-center justify-between gap-2 border px-3 py-2.5 text-left text-control focus-visible:outline-2" data-testid={`info-task-${task.id}`}>
-            <span className="min-w-0 truncate">#{task.id} {task.title}</span><TaskStatus task={task} className="shrink-0" />
-          </button>
+          <div className="grid gap-2" data-testid="info-tasks">
+            {mine.slice(0, 8).map((x) => (
+              <div key={x.id} className="bg-card rounded-card border text-control">
+                <button type="button" onClick={() => go({ view: 'tasks', id: x.id })} className="hover:bg-accent/60 rounded-card focus-visible:outline-ring flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2.5 text-left focus-visible:outline-2" data-testid={`info-task-${x.id}`}>
+                  <span className="min-w-0 truncate">#{x.id} {x.title}</span><TaskStatus task={x} className="shrink-0" />
+                </button>
+                {/* the same approval as Tareas (components/task-approval.jsx): what is approved is shown and confirmed there. */}
+                {x.status === 'awaiting_approval' ? (
+                  <div className="flex justify-end gap-2 px-3 pb-2.5" data-testid={`info-task-approval-${x.id}`}>
+                    <Button size="sm" variant="ghost" onClick={() => rejectTask(x)} data-testid={`info-task-reject-${x.id}`}>{t('tasks.reject')}</Button>
+                    <Button size="sm" onClick={() => approveTask(x)} data-testid={`info-task-approve-${x.id}`}>{t('tasks.approve.ok')}</Button>
+                  </div>
+                ) : x.held ? (
+                  /* a held task is not waiting for approval: its two ways out are the ones of the Tareas panel. */
+                  <div className="flex justify-end gap-2 px-3 pb-2.5" data-testid={`info-task-held-${x.id}`}>
+                    <Button size="sm" variant="outline" onClick={() => undoHeld(t, x)} data-testid={`info-task-undo-${x.id}`}>{t('tasks.undo.btn')}</Button>
+                    <Button size="sm" onClick={() => acceptHeld(t, x)} data-testid={`info-task-accept-${x.id}`}>{t('tasks.held.accept')}</Button>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+            {mine.length > 8 ? <button type="button" onClick={() => go({ view: 'tasks', project: s.project ?? undefined })} className="text-info w-fit cursor-pointer text-control hover:underline">{t('comp.sidebar.viewAll', { n: mine.length })}</button> : null}
+          </div>
         </>) : null}
       {s.project ? (
         <>
           <div className="mt-[18px] mb-1.5 font-(family-name:--title) text-[15px] font-semibold">{t('panel.info.log')}</div>
+          {entry ? <p className="text-muted-foreground mb-1.5 truncate text-control" data-testid="info-log-last">{entry.date.toLocaleDateString(locale, { day: 'numeric', month: 'short' })} · {entry.topic}</p> : null}
           <button type="button" onClick={() => go({ view: 'logs', name: s.project })} className="text-info focus-visible:outline-ring inline-flex w-fit cursor-pointer items-center gap-1 rounded-sm text-control hover:underline focus-visible:outline-2" data-testid="info-open-log">{t('panel.info.openLog')}<ChevronRight className="size-3.5" /></button>
         </>) : null}
     </section>

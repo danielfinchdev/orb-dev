@@ -17,7 +17,7 @@ test('the list ⋯ of a chat and of an agent conversation offers «Renombrar»',
   assert.match(inbox, /item\.kind === 'session' \? 'sessions\.update' : 'conversations\.update'/);
   // Both lists (the agent's conversation and the assistant's chat) carry the action.
   const actions = inbox.slice(inbox.indexOf('export function useOrbActions'), inbox.indexOf('export function renameChat'));
-  assert.equal([...actions.matchAll(/^\s+rename,$/gm)].length, 2);
+  assert.equal([...actions.matchAll(/\[info, rename, pin,/g)].length, 2);
 });
 
 test('the chat bars keep only the bell and pause; the rest goes into ⋯', () => {
@@ -45,9 +45,9 @@ test('bubbles stay inside the window and the composer folder is a chip like the 
   // Both bubbles keep their tail off the rounded corners (it hides instead of looking cut against the window's edge).
   assert.equal([...overlay.matchAll(/collisionPadding=\{12\} arrowPadding=\{TAIL_PAD\}/g)].length, 2);
   assert.match(read('components', 'sidebar.jsx'), /side="top" align=\{n === 0 \? 'start' : 'center'\}/);
-  const chip = read('views', 'session.jsx').match(/<span tabIndex=\{0\} className="([^"]+)" data-testid="session-folder">/);
-  assert.ok(chip, 'folder chip');
-  for (const c of ['h-[var(--ctl)]', 'rounded-[var(--r-ctl)]', 'px-2', 'gap-1.5', 'text-control']) assert.ok(chip[1].split(' ').includes(c), c);
+  // the folder left the box: it is the «Carpeta» row of the panel's Ficha
+  assert.match(read('views', 'orb', 'info.jsx'), /data-testid="session-folder">\{s\.cwd\}/);
+  assert.doesNotMatch(read('views', 'session.jsx'), /data-testid="session-folder"/);
 });
 
 test('the cost line can be hidden in Apariencia and the message time shows on hover', async () => {
