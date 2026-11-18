@@ -21,5 +21,19 @@ export default {
   'wb.removeBody': '«{name}» se quitará de la pizarra y se moverá a pizarra/.papelera.',
   'wb.openFolder': 'Abrir carpeta',
   'wb.hidePanel': 'Ocultar adjuntos',
-  'wb.showPanel': 'Mostrar adjuntos'
+  'wb.showPanel': 'Mostrar adjuntos',
+  'wb.saveHint': 'Se guarda en la carpeta pizarra del proyecto',
+  'wb.project': 'Proyecto',
+  'wb.togglePanel': 'Muestra u oculta el panel de adjuntos',
+  'wb.canvasMenu': 'Menú del lienzo',
+  'wb.export': 'Exportar el dibujo',
+  'wb.fit': 'Ajustar al contenido',
+  'wb.clear': 'Vaciar el lienzo…',
+  'wb.clear.title': 'Vaciar el lienzo',
+  'wb.clear.body': 'Se borrará todo el dibujo de esta pizarra. Los adjuntos no se tocan.',
+  'wb.clear.ok': 'Vaciar',
+  'wb.noteShort': 'Nota para {assistant}',
+  'wb.noteFor': 'Nota para {assistant} sobre {name}',
+  'wb.noAttTitle': 'Sin adjuntos',
+  'wb.noAttBody': 'Adjunta fotos, vídeos o documentos para que {assistant} los vea.'
 };

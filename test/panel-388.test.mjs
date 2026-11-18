@@ -29,7 +29,7 @@ test('the panel has the three tabs, Ficha, Cambios and PR', () => {
 test('its width is dragged between 320 and 640 px and remembered', () => {
   assert.match(panel, /PANEL_MIN = 320; const PANEL_MAX = 640/);
   assert.match(panel, /Math\.min\(PANEL_MAX, Math\.max\(PANEL_MIN, n\)\)/);
-  assert.match(panel, /localStorage\.setItem\(WIDTH_KEY/);
+  assert.match(panel, /localStorage\.setItem\(key/);
   assert.match(panel, /role="separator"/);
   assert.match(css, /\.chat-panel-resize \{[^}]*cursor: col-resize/);
 });
@@ -182,4 +182,9 @@ test('step 6D: the Ficha approves only what waits for approval and gives a held 
 test('step 6D: the chip gives the reasoning levels the own model, not the first of the list', () => {
   assert.match(session, /<AgentChip [^\n]*model=\{s\.model \?\? ''\}/);
   assert.doesNotMatch(session, /<AgentChip [^\n]*model=\{s\.model \|\|/);
+});
+
+test('paso 7C1: la Ficha dice «Worktree» si el chat tiene worktree y «Rama» si no', () => {
+  const info = read('src/ui/views/orb/info.jsx');
+  assert.match(info, /<GitBranch \/>\{tree \? t\('panel\.info\.worktree'\) : t\('panel\.info\.branch'\)\}/);
 });

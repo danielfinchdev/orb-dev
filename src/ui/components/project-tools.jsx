@@ -2,13 +2,13 @@
 // (commands of the user's own, such as «npm test», run in a terminal window from the bar or with their shortcut, with an
 // optional preview of a page of this PC).
 import { useEffect, useState } from 'react';
-import { ChevronDown, FolderOpen, Play, Plus, Pencil, Trash2, Zap, Code2, MousePointer2 } from 'lucide-react';
+import { ChevronDown, ExternalLink, FolderOpen, Play, Plus, Pencil, Trash2, Zap, Code2, MousePointer2, SquareTerminal } from 'lucide-react';
 import { notifyInfo } from '@/lib/notify.js';
 import { Button } from './ui/button.jsx';
 import { Input, Textarea, Field } from './ui/basic.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, Switch } from './ui/overlay.jsx';
 import { form, confirm } from './dialogs.jsx';
-import { useStore, call, act, bridge } from '@/lib/store.js';
+import { useStore, call, act, bridge, openTerminal } from '@/lib/store.js';
 import { useT, t as tNow } from '@/lib/i18n.js';
 
 // The order the main button picks from (the first one installed); the menu lists the installed ones in it.
@@ -42,6 +42,31 @@ export function OpenInMenu({ project, labelClassName }) {
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
+  );
+}
+
+// «Abrir en…» of the projects' list and page: one menu with the editors installed, the file manager and a terminal.
+// `page`: the header's button (with its icon, VS Code first); otherwise the row's compact one.
+export function ProjectOpenMenu({ project, page = false }) {
+  const t = useT();
+  const editors = useEditors();
+  if (!project?.path || !bridge.openIn) return null;
+  const order = page ? ['vscode', 'cursor', 'windsurf', 'zed', 'jetbrains'] : EDITOR_ORDER;
+  const ICON = { cursor: MousePointer2, vscode: Code2, windsurf: Code2, zed: Code2, jetbrains: Code2, explorer: FolderOpen, terminal: SquareTerminal };
+  const LABEL = { cursor: 'Cursor', vscode: 'VS Code', windsurf: 'Windsurf', zed: 'Zed', jetbrains: 'JetBrains', explorer: t(!window.orb?.platform || window.orb.platform === 'win32' ? 'tools.explorer' : 'tools.files'), terminal: 'Terminal' };
+  const ids = [...order.filter((w) => editors[w]), 'explorer', ...(bridge.openTerminal ? ['terminal'] : [])];
+  const open = (which) => (which === 'terminal' ? openTerminal(project.path) : act(bridge.openIn(which, project.path)));
+  return (
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size={page ? 'default' : 'xs'} aria-label={t('projects.openIn')} data-testid="project-open-in">
+          {page ? <ExternalLink /> : null}{page ? t('projects.openInShort') : t('projects.openIn')}<ChevronDown />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52" data-testid="project-open-in-list">
+        {ids.map((w) => { const I = ICON[w]; return <DropdownMenuItem key={w} onSelect={() => open(w)}><I />{LABEL[w]}</DropdownMenuItem>; })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

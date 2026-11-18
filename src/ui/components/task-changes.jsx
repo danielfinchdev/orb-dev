@@ -1,16 +1,17 @@
 // «Cambios» of a finished task: the files it changed, each one folding out to its diff (tasks.diff, read only,
 // from the task's undo checkpoint). Shown in the task's detail and at the end of its agent's conversation; nothing when
 // there is nothing to show (running, undone, a folder without git).
-import { useEffect, useState } from 'react';
-import { Check, ChevronRight, Copy, FileEdit, FileMinus2, FilePlus2, FileDiff } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Check, ChevronRight, Copy, FileEdit, FileMinus2, FilePlus2, FileDiff, MessageSquarePlus, X } from 'lucide-react';
 import { notifyError, notifyOk } from '@/lib/notify.js';
 import { DiffLines } from '@/components/diff-view.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Card } from '@/components/ui/basic.jsx';
+import { Card, Textarea } from '@/components/ui/basic.jsx';
 import { SearchInput } from '@/components/ui/primitives.jsx';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent, Tip } from '@/components/ui/overlay.jsx';
 import { call } from '@/lib/store.js';
-import { useT } from '@/lib/i18n.js';
+import { useT, currentLocale } from '@/lib/i18n.js';
+import { addComment, removeComment, useComments } from '@/lib/turn-comments.js';
 import { cn } from '@/lib/utils.js';
 
 const ICON = { A: FilePlus2, D: FileMinus2 };
@@ -66,37 +67,126 @@ export function ChangesSummary({ data, onOpen, className }) {
   );
 }
 
-const LETTER = { A: 'text-success', D: 'text-destructive' };
-function PanelFile({ f, seen, onSeen }) {
+// «+120 −18» of a task for its row of the list: tasks.diff {stat:true} (line counts only), asked only once the row is on screen,
+// one read at a time, each with a time limit, kept by task state. A row that leaves the screen or the view drops its place in the queue.
+const statCache = new Map(); const statWaiting = new Map(); let statDraining = false;
+export const STAT_TIMEOUT_MS = 8000;
+const withLimit = (p, ms) => new Promise((resolve, reject) => { const timer = setTimeout(() => reject(new Error('timeout')), ms); p.then((v) => { clearTimeout(timer); resolve(v); }, (e) => { clearTimeout(timer); reject(e); }); });
+async function drainStats() {
+  if (statDraining) return;
+  statDraining = true;
+  try {
+    while (statWaiting.size) {
+      const [key, job] = statWaiting.entries().next().value;
+      statWaiting.delete(key);
+      await job();
+    }
+  } finally { statDraining = false; }
+}
+export function useDiffStat(task, enabled) {
+  const key = `${task.id}:${task.status}:${task.updated_at}`;
+  const [stat, setStat] = useState(() => statCache.get(key));
+  const [seen, setSeen] = useState(false);
+  const node = useRef(null);
+  useEffect(() => {
+    if (!enabled || statCache.has(key)) return undefined;
+    const el = node.current;
+    if (!el || typeof IntersectionObserver === 'undefined') { setSeen(true); return undefined; }
+    const io = new IntersectionObserver((entries) => { if (entries.some((e) => e.isIntersecting)) { setSeen(true); io.disconnect(); } });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [key, enabled]);
+  useEffect(() => {
+    if (!enabled || !seen) return undefined;
+    if (statCache.has(key)) { setStat(statCache.get(key)); return undefined; }
+    let alive = true;
+    statWaiting.set(key, () => withLimit(call('tasks.diff', { id: task.id, stat: true }), STAT_TIMEOUT_MS)
+      .then((r) => { statCache.set(key, r?.available && r.files.length ? sumOf(r) : null); })
+      .catch(() => { statCache.set(key, null); })
+      .then(() => { if (alive) setStat(statCache.get(key)); }));
+    drainStats();
+    return () => { alive = false; statWaiting.delete(key); };
+  }, [key, enabled, seen]); // eslint-disable-line react-hooks/exhaustive-deps
+  return [enabled ? stat : null, node];
+}
+export function DiffStat({ stat, className }) {
+  if (!stat) return null;
+  return <span className={cn('tabular-nums', className)} data-testid="task-diff-stat"><span className="text-success">+{stat.added}</span> <span className="text-destructive">−{stat.removed}</span></span>;
+}
+
+const clock = (iso) => (iso ? new Date(iso).toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' }) : '');
+// «6 archivos +120 −18 · revisada por Codex» and, on the right, the time of the photo the task can be undone to.
+export function ChangesMeta({ data, reviewer, photoAt, canUndo, className }) {
   const t = useT();
-  const copy = (e) => { e.stopPropagation(); navigator.clipboard?.writeText(f.path).then(() => notifyOk(t('tasks.changes.copied'))).catch(() => notifyError(t('app.copyFailed'))); };
-  const note = f.binary ? t('tasks.changes.binary') : f.cut ? t('tasks.changes.tooBig') : !f.patch ? t('tasks.changes.noText') : null;
+  const { added, removed, count } = sumOf(data);
   return (
-    <Collapsible className="frow-wrap border-border border-t first:border-t-0" data-testid="task-change">
-      <div className="frow hover:bg-accent flex items-center gap-2.5 py-1.5 pr-1.5 pl-3">
-        <CollapsibleTrigger className="group flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 py-0.5 text-left text-control">
-          <span className={cn('st w-4 shrink-0 text-center text-caption font-semibold', LETTER[f.status] ?? 'text-info')}>{f.status === 'A' || f.status === 'D' ? f.status : 'M'}</span>
-          <span className="p min-w-0 flex-1 truncate font-mono text-caption" title={f.path}>{f.path}</span>
-          {f.binary ? null : <span className="nums shrink-0 text-caption tabular-nums"><span className="text-success">+{f.added}</span> <span className="text-destructive">−{f.removed}</span></span>}
-        </CollapsibleTrigger>
-        <Tip label={t('tasks.changes.copyPath')}><Button size="icon-xs" variant="ghost" aria-label={t('tasks.changes.copyPath')} onClick={copy}><Copy /></Button></Tip>
-      </div>
-      <CollapsibleContent>
-        {note ? <p className="text-muted-foreground px-4 pb-2.5 text-caption">{note}</p>
-          : <div className="mx-3 mb-2 max-h-96 overflow-auto rounded-lg border"><DiffLines text={f.patch} headers={false} /></div>}
-        <div className="flex justify-end px-3 pb-2"><Button size="xs" variant={seen ? 'soft' : 'ghost'} onClick={onSeen} aria-pressed={seen} data-testid="task-change-seen"><Check />{t('tasks.changes.seen')}</Button></div>
-      </CollapsibleContent>
-    </Collapsible>
+    <div className={cn('flex flex-wrap items-center gap-x-3 gap-y-1 text-control', className)} data-testid="task-changes-meta">
+      <span className="text-muted-foreground">{filesLabel(t, count)} <DiffStat stat={{ added, removed }} />{reviewer ? ` · ${t('tasks.reviewedBy.lower', { agent: reviewer })}` : ''}</span>
+      {photoAt ? <span className="text-faint-foreground ml-auto text-caption" data-testid="task-changes-photo">{t(canUndo ? 'tasks.changes.photoUndo' : 'tasks.changes.photo', { time: clock(photoAt) })}</span> : null}
+    </div>
   );
 }
 
-// The files a task changed as the mock-up's .flist: a letter for what happened to each, its numbers, and its diff when opened.
-export function ChangesFiles({ data, className }) {
+const LETTER = { A: 'text-success', D: 'text-destructive' };
+// The comment box of a line (the same words as the chat's Cambios).
+function Writer({ onAdd, onCancel }) {
+  const t = useT(); const [text, setText] = useState('');
+  return (
+    <div className="bg-card mx-2 my-1.5 grid gap-1.5 rounded-lg border p-2 whitespace-normal" data-testid="diff-comment-box">
+      <Textarea autoFocus rows={2} value={text} placeholder={t('turns.commentPlaceholder')} onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && text.trim()) onAdd(text); if (e.key === 'Escape') onCancel(); }} />
+      <div className="flex justify-end gap-1.5">
+        <Button size="sm" variant="ghost" onClick={onCancel}>{t('turns.commentCancel')}</Button>
+        <Button size="sm" disabled={!text.trim()} onClick={() => onAdd(text)} data-testid="diff-comment-save">{t('turns.commentAdd')}</Button>
+      </div>
+    </div>
+  );
+}
+
+// The diff of the file chosen: its name and numbers, «Visto», copying its path and, when the task has a conversation of its
+// own, a «+» on each line to write a comment that goes with the next message there (lib/turn-comments.js).
+function PanelDiff({ f, seen, onSeen, sessionId }) {
+  const t = useT();
+  const comments = useComments(sessionId ?? '');
+  const [writing, setWriting] = useState(null);
+  const copy = () => navigator.clipboard?.writeText(f.path).then(() => notifyOk(t('tasks.changes.copied'))).catch(() => notifyError(t('app.copyFailed')));
+  const note = f.binary ? t('tasks.changes.binary') : f.cut ? t('tasks.changes.tooBig') : !f.patch ? t('tasks.changes.noText') : null;
+  const mine = sessionId ? comments.filter((c) => c.path === f.path) : [];
+  const same = (a, r) => a.line === r.line && a.side === r.side;
+  const below = (r) => (<>
+    {mine.filter((c) => same(c, r)).map((c) => (
+      <div key={c.key} data-comment={c.key} className="bg-accent/40 mx-2 my-1 flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-xs whitespace-normal" data-testid="diff-comment">
+        <MessageSquarePlus className="text-primary-text mt-0.5 size-3.5 shrink-0" /><span className="min-w-0 flex-1 break-words">{c.text}</span>
+        <button type="button" className="text-muted-foreground cursor-pointer" aria-label={t('turns.trayRemove')} onClick={() => removeComment(sessionId, c.key)}><X className="size-3.5" /></button>
+      </div>
+    ))}
+    {writing && same(writing, r) ? <Writer onCancel={() => setWriting(null)} onAdd={(text) => { addComment(sessionId, { path: f.path, ...writing, text }); setWriting(null); }} /> : null}
+  </>);
+  return (
+    <div className="grid gap-2" data-testid="task-diff">
+      <div className="flex items-center gap-2 text-control">
+        <b className="min-w-0 truncate font-mono text-caption font-semibold" title={f.path}>{f.path}</b>
+        {f.binary ? null : <span className="text-caption tabular-nums"><span className="text-success">+{f.added}</span> <span className="text-destructive">−{f.removed}</span></span>}
+        <span className="ml-auto flex shrink-0 items-center gap-1">
+          <Tip label={t('tasks.changes.copyPath')}><Button size="icon-xs" variant="ghost" aria-label={t('tasks.changes.copyPath')} onClick={copy}><Copy /></Button></Tip>
+          <Button size="xs" variant={seen ? 'soft' : 'ghost'} onClick={onSeen} aria-pressed={seen} data-testid="task-change-seen"><Check />{t('tasks.changes.seen')}</Button>
+        </span>
+      </div>
+      {note ? <p className="text-muted-foreground m-0 text-caption">{note}</p>
+        : <div className="border-border max-h-96 overflow-auto rounded-card border"><DiffLines text={f.patch} headers={false} onLine={sessionId ? setWriting : undefined} below={sessionId ? below : undefined} lineLabel={t('turns.comment')} /></div>}
+    </div>
+  );
+}
+
+// The files a task changed as the mock-up's .flist: a letter for what happened to each and its numbers; the one chosen shows its diff below.
+export function ChangesFiles({ data, sessionId, className }) {
   const t = useT();
   const [query, setQuery] = useState('');
+  const [pick, setPick] = useState(null);
   const [seen, setSeen] = useState(() => new Set());
   const q = query.trim().toLowerCase();
   const files = q ? data.files.filter((f) => f.path.toLowerCase().includes(q)) : data.files;
+  const current = files.find((f) => f.path === pick) ?? files[0] ?? null;
   const toggle = (path) => setSeen((prev) => { const next = new Set(prev); if (!next.delete(path)) next.add(path); return next; });
   return (
     <div className={cn('grid gap-2', className)} data-testid="task-changes">
@@ -106,10 +196,18 @@ export function ChangesFiles({ data, className }) {
         <SearchInput className="ml-auto w-auto min-w-0 flex-1" value={query} onChange={setQuery} placeholder={t('tasks.changes.search')} data-testid="task-changes-search" />
       </div>
       <div className="flist border-border bg-card overflow-hidden rounded-card border">
-        {files.map((f) => <PanelFile key={f.path} f={f} seen={seen.has(f.path)} onSeen={() => toggle(f.path)} />)}
-        {data.more && !q ? <p className="text-muted-foreground border-border border-t px-3 py-2 text-control">{t('tasks.changes.more', { n: data.more })}</p> : null}
+        {files.map((f) => (
+          <button key={f.path} type="button" onClick={() => setPick(f.path)} aria-pressed={f === current} title={f.path} data-testid="task-change"
+            className="frow hover:bg-accent aria-pressed:bg-accent border-border focus-visible:outline-ring flex w-full cursor-pointer items-center gap-2.5 border-t px-3 py-2 text-left text-control outline-none first:border-t-0 focus-visible:outline-2">
+            <span className={cn('st w-4 shrink-0 text-center text-caption font-semibold', LETTER[f.status] ?? 'text-info')}>{f.status === 'A' || f.status === 'D' ? f.status : 'M'}</span>
+            <span className="p min-w-0 flex-1 truncate font-mono text-caption"><bdi>{f.path}</bdi></span>
+            {f.binary ? null : <span className="nums shrink-0 text-caption tabular-nums"><span className="text-success">+{f.added}</span> <span className="text-destructive">−{f.removed}</span></span>}
+          </button>
+        ))}
+        {data.more && !q ? <p className="text-muted-foreground border-border m-0 border-t px-3 py-2 text-control">{t('tasks.changes.more', { n: data.more })}</p> : null}
       </div>
       <p className="text-faint-foreground m-0 text-caption">{t('tasks.changes.legend')}</p>
+      {current ? <PanelDiff key={current.path} f={current} seen={seen.has(current.path)} onSeen={() => toggle(current.path)} sessionId={sessionId} /> : null}
     </div>
   );
 }

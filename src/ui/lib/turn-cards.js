@@ -120,6 +120,42 @@ export function groupWorked(blocks) {
   return out;
 }
 
+// → Map<key of the block that ends a turn, { text, at }>: what the row closing the turn needs. A turn runs from a message of the
+// person (a steer does not start one) to the next; it only has a row when the agent wrote text in it. text: those answers,
+// joined; at: the time of the last one. The turn still running (the last one when `running`) has none yet.
+export function turnTails(blocks, running = false) {
+  const out = new Map();
+  if (!blocks?.length) return out;
+  let texts = []; let at = null; let end = null;
+  const close = () => { if (end && texts.length) out.set(end, { text: texts.join('\n\n'), at }); texts = []; at = null; end = null; };
+  for (const b of blocks) {
+    const it = b?.type === 'item' ? b.item : null;
+    if (it && it.role === 'user' && it.kind === 'text' && !it.body?.steer) { close(); continue; }
+    end = b.key;
+    if (it && it.role === 'assistant' && it.kind === 'text') {
+      const body = typeof it.body === 'string' ? it.body : it.body?.text ?? '';
+      if (body.trim()) { texts.push(body.trim()); at = it.at ?? at; }
+    }
+  }
+  if (!running) close();
+  return out;
+}
+
+// The same for the lines of the chat with the assistant (role 'usuario' starts a turn; 'orb' lines with text are its answers).
+// → Map<id of the line that ends the turn, { text, at }>.
+export function orbTurnTails(lines, running = false) {
+  const out = new Map();
+  let texts = []; let at = null; let end = null;
+  const close = () => { if (end != null && texts.length) out.set(end, { text: texts.join('\n\n'), at }); texts = []; at = null; end = null; };
+  for (const m of lines ?? []) {
+    if (m.role === 'usuario') { close(); continue; }
+    end = m.id;
+    if (m.role === 'orb' && (!m.meta?.kind || m.meta.kind === 'report') && typeof m.body === 'string' && m.body.trim()) { texts.push(m.body.trim()); at = m.at ?? at; }
+  }
+  if (!running) close();
+  return out;
+}
+
 // 4 min 20 s · 35 s · 1 h 5 min (null when there is no time to tell)
 export function formatSpan(ms) {
   if (!Number.isFinite(ms) || ms < 0) return null;

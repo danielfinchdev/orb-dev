@@ -23,6 +23,8 @@ export default {
   'compact.busy': 'Compacting…',
   'compact.title': 'Compact the conversation',
   'compact.tip': 'The context is almost full. The conversation is summarised so it can continue with more room; the history is kept.',
+  'compact.noRoom': 'There is still plenty of room in the context: it can be compacted once it passes 70 %.',
+  'compact.noChat': 'There is nothing to compact yet: the conversation starts when you write.',
   'msg.orch.compactBusy': 'Wait for the current answer to finish before compacting the conversation.',
   'msg.orch.compacted': 'Conversation compacted. It continues from a summary; the history is kept.',
   'msg.orch.compactRenewed': 'Conversation compacted. The next answer starts from a summary of the conversation; the history is kept.',

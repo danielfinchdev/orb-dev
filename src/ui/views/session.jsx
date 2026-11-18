@@ -548,7 +548,7 @@ export function SessionView({ route }) {
       <div ref={trail.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
         <div className="lazy-lines mx-auto flex max-w-3xl flex-col gap-3.5 px-5 py-6">
           {more ? <Button variant="ghost" size="sm" className="self-center" onClick={loadOlder}><ChevronUp />{t('session.older')}</Button> : null}
-          {blocks.length || unsaved.length ? <TurnFlow blocks={blocks} session={s} running={running} renderBlock={(b) => <Block key={b.key} b={b} agent={s.agent} who={who} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />} />
+          {blocks.length || unsaved.length ? <TurnFlow blocks={blocks} session={s} running={running} onFork={s.kind === 'chat' ? fork : null} forkDisabled={running} renderBlock={(b) => <Block key={b.key} b={b} agent={s.agent} who={who} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />} />
             : <Empty title={t('session.emptyTitle', { agent: AGENT[s.agent] })}>{t('session.workIn')} <span className="font-mono text-xs">{s.cwd}</span> {t('session.withPerm', { perm: PERMISSION[s.permission] })}</Empty>}
           {unsaved.map((p) => <Block key={p.id} b={{ type: 'item', key: p.id, item: { id: p.id, session_id: s.id, role: 'user', kind: 'text', body: p.text, at: p.at } }} agent={s.agent} who={who} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />)}
           <LivePartial key={s.id} id={s.id} agent={s.agent} running={running} />
@@ -595,9 +595,11 @@ export function SessionView({ route }) {
         onPaste={(e) => { fromTransfer(e.clipboardData).then((f) => { if (f.length) addImages(f); }); }}
         onDrop={(e) => { fromTransfer(e.dataTransfer).then(addImages); }}
         above={s.kind === 'chat' && ((s.project && fullPc()) || compactable) ? <>
-          {/* where this chat works (Local or its worktree and the branch it started from; fixed once started) and, when the context is full, «Compactar». */}
-          {s.project && fullPc() ? <WorkspacePills project={s.project} chat={s.id} value={{ mode: 'local', base: '' }} onChange={() => {}} /> : null}
-          <ContextSlot className="ml-auto" items={[compactable ? { key: 'compact', node: <CompactButton onCompact={compact} busy={compacting} /> } : null]} />
+          {/* where this chat works (Local or its worktree and the branch it started from; fixed once started) and «Compactar»: in a project's chat on the PC both are always there («Compactar» disabled, with its reason, until the context is full). */}
+          {s.project && fullPc() ? <WorkspacePills project={s.project} chat={s.id} branch={s.branch ?? ''} value={{ mode: 'local', base: '' }} onChange={() => {}} /> : null}
+          {s.project && fullPc()
+            ? <span className="ml-auto"><CompactButton onCompact={compact} busy={compacting} reason={compactable ? null : CAN_COMPACT[s.agent] !== true ? t('msg.sessions.cannotCompact', { label: AGENT[s.agent] }) : running ? t('msg.orch.compactBusy') : t('compact.noRoom')} /></span>
+            : <ContextSlot className="ml-auto" items={[compactable ? { key: 'compact', node: <CompactButton onCompact={compact} busy={compacting} /> } : null]} />}
         </> : null}
         top={images.length ? <div className="flex min-w-0 flex-wrap items-center gap-2">{pictures}</div> : null}
         bottom={<>

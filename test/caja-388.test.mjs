@@ -273,7 +273,12 @@ test('step 6C1: one chip for agent, model and reasoning with one menu; the folde
   // a chat that started shows where it works but cannot change it
   const pills = ui('components', 'workspace-pills.jsx');
   assert.match(pills, /call\('worktrees\.status', \{ id: String\(chat\) \}\)/);
-  assert.match(pills, /disabled aria-pressed=\{!info\.has\}/);
+  // the chosen segment is marked like any other (never dimmed by `disabled`) and the base branch always shows when it is known
+  const locked = pills.slice(pills.indexOf('data-locked'), pills.indexOf('const git ='));
+  assert.doesNotMatch(locked, /disabled/);
+  assert.match(locked, /aria-pressed=\{!info\.has\}/);
+  assert.match(pills, /const from = info\.has \? info\.base : branch/);
+  assert.match(session, /<WorkspacePills project=\{s\.project\} chat=\{s\.id\} branch=\{s\.branch \?\? ''\}/);
   for (const id of ['workspace-pills', 'workspace-local', 'workspace-worktree', 'workspace-base']) assert.ok(pills.includes(`data-testid="${id}"`), id);
   assert.match(session, /t\('session\.phChat'\)/);
 });
@@ -295,4 +300,30 @@ test('paso 6C2: una tarjeta de cambios sin archivos (o aún sin números) no se 
   assert.match(card, /<ChevronDown className="text-muted-foreground size-3\.5 shrink-0" aria-hidden="true" \/>\s*<\/button>/);
   assert.match(card, /turn\.moreFiles/);
   assert.doesNotMatch(card, /border-b pb-2 text-\[13px\]/, 'sin línea bajo «Trabajó…»');
+});
+
+test('paso 7C1: «Compactar» está siempre en la fila de un chat con proyecto (desactivado con su motivo) y la línea de acciones cierra el turno una vez', () => {
+  assert.match(session, /<CompactButton onCompact=\{compact\} busy=\{compacting\} reason=\{compactable \? null :/);
+  assert.match(session, /t\('compact\.noRoom'\)/);
+  const bar = ui('components', 'conversation', 'bar.jsx');
+  assert.match(bar, /disabled=\{busy \|\| Boolean\(reason\)\}/);
+  // an answer has no copy or time of its own on the PC: TurnActions closes the turn, after the changes card
+  const box = ui('components', 'conversation', 'message-box.jsx');
+  const answerRow = box.slice(box.indexOf('{user || pinButton || actions ?'), box.indexOf('</article>'));
+  assert.doesNotMatch(answerRow, /msg-copy/);
+  assert.match(box, /export function TurnActions/);
+  assert.ok(card.indexOf('<TurnCard sessionId') < card.indexOf('<TurnActions at='), 'the row goes after the card');
+  assert.match(session, /<TurnFlow [^>]*onFork=\{s\.kind === 'chat' \? fork : null\}/);
+});
+
+test('paso 7C1: turnTails da una sola fila por turno (con el texto de sus respuestas) y ninguna al turno en curso', async () => {
+  const { turnTails } = await import('../src/ui/lib/turn-cards.js');
+  const u = (key, id) => ({ type: 'item', key, item: { id, role: 'user', kind: 'text', body: 'hola', at: 1 } });
+  const a = (key, body, at) => ({ type: 'item', key, item: { role: 'assistant', kind: 'text', body, at } });
+  const blocks = [u('u1', 1), a('a1', 'uno', 10), { type: 'tool', key: 't1' }, a('a2', 'dos', 20), u('u2', 2), a('a3', 'tres', 30)];
+  const done = turnTails(blocks, false);
+  assert.deepEqual([...done.keys()], ['t1'.replace('t1', 'a2'), 'a3']);
+  assert.equal(done.get('a2').text, 'uno\n\ndos');
+  assert.equal(done.get('a2').at, 20);
+  assert.deepEqual([...turnTails(blocks, true).keys()], ['a2']);
 });

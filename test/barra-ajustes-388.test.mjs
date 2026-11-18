@@ -28,7 +28,7 @@ test('el menú «+» enseña el atajo de chat nuevo (Ctrl+N; Ctrl+T sigue abrien
   assert.match(read('src/ui/components/chat-tabs.jsx'), /useShortcut\('chat\.new'/);
 });
 
-test('los avisos flotantes usan los tokens de .pop y quedan bajo la cabecera de 56 px', () => {
+test('los avisos flotantes usan los tokens de .pop y no pisan la barra de filtros: abajo a la derecha en el PC, arriba en el móvil', () => {
   const css = read('src/ui/themes/pieces.css');
   const at = css.indexOf('passing notices');
   assert.ok(at > 0);
@@ -36,7 +36,9 @@ test('los avisos flotantes usan los tokens de .pop y quedan bajo la cabecera de 
   for (const tok of ['--popover)', '--border)', '--r-card)', '--shadow)', '--primary-text)']) assert.ok(block.includes(tok), tok);
   assert.match(block, /font-size: 13px/);
   const main = read('src/ui/main.jsx');
-  assert.match(main, /offset=\{72\}/);
+  assert.match(main, /position=\{phone \? 'top-center' : 'bottom-right'\}/);
+  assert.match(main, /offset=\{phone \? 72 : \{ bottom: 112, right: 24 \}\}/);
+  assert.match(main, /visibleToasts=\{1\}/);
   assert.match(main, /orb-toast/);
   assert.doesNotMatch(main, /<Toaster[^>]*richColors/);
 });

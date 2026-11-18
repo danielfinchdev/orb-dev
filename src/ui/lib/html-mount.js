@@ -6,3 +6,17 @@ export function mountable(pages) {
   const net = list.find((p) => p?.internet === true);
   return new Set(net ? [net.id] : list.map((p) => p.id));
 }
+
+// The agent sessions whose pages a conversation shows beside its box: one entry per session, the one of the newest task first.
+// All of them feed ONE list of pages, so mountable() sees the whole set and never leaves a page without internet beside one with it.
+export function sideSessionIds(tasks, conversation, max = 5) {
+  if (conversation == null) return [];
+  const mine = (Array.isArray(tasks) ? tasks : []).filter((x) => x.conversation_id === conversation && x.session_id);
+  const seen = new Set();
+  const out = [];
+  for (const x of [...mine].sort((a, b) => b.id - a.id)) {
+    const sid = String(x.session_id);
+    if (!seen.has(sid)) { seen.add(sid); out.push(sid); }
+  }
+  return out.slice(0, max);
+}

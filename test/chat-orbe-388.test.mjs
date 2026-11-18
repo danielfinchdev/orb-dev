@@ -64,3 +64,42 @@ test('every data-testid the chat had is still there', () => {
     assert.ok(all.includes(`"${id}"`) || all.includes(`testid="${id}"`) || all.includes(`'${id}'`), id);
   }
 });
+
+test('paso 7C1: la caja del chat con Orbe en el PC lleva un solo chip de agente, modelo y razonamiento, y la fila «Proyecto» / «Compactar · %»', () => {
+  const brain = read('src/ui/components/brain-picker.jsx');
+  assert.match(brain, /export function BrainChip/);
+  const chip = brain.slice(brain.indexOf('export function BrainChip'), brain.indexOf('// four small bars'));
+  for (const id of ['brain-picker', 'reasoning-picker', 'reasoning-level', 'reasoning-menu']) assert.ok(chip.includes(`data-testid="${id}"`), id);
+  assert.match(chip, /<ReasoningTail /);
+  assert.match(chat, /fullPc\(\) \? <BrainChip catalog=\{catalog\} value=\{brain\}/);
+  // the phone keeps the two buttons
+  assert.match(chat, /<BrainPicker catalog=\{catalog\} value=\{brain\} onChange=\{pickBrain\}/);
+  // the row over the box: «Sin proyecto ⌄» on the left, «Compactar · 62 %» always on the right (disabled with its reason)
+  assert.match(chat, /fullPc\(\) \? <ProjectChip conversation=\{id\} \/>/);
+  assert.match(chat, /<CompactButton onCompact=\{compact\} busy=\{compacting\} percent=\{percent\} reason=\{compactable \? null :/);
+  assert.match(read('src/ui/components/conversation/project-chip.jsx'), /data-testid="project-picker"/);
+  // copy and the time close each turn once; no «+» because chat.send takes no attachments
+  assert.match(chat, /orbTurnTails\(lines,/);
+  assert.match(chat, /<TurnActions at=\{turnEnds\.get\(lastLine\)\.at\}/);
+  assert.doesNotMatch(chat, /AttachMenu/);
+});
+
+test('paso 7C1: el chat con Orbe muestra el terminal, las páginas HTML y los secretos de las tareas con los componentes del chat con un agente', () => {
+  assert.match(chat, /<TerminalPanel dir=\{terminalDir\} draft=\{termDraft\}/);
+  assert.match(chat, /onTerminalPaste\(\(line, from\) => \{[^\n]*setTerminal\(true\); setTermDraft\(line\); \}\)/);
+  assert.match(chat, /data-testid="session-terminal"/);
+  assert.match(chat, /<SecretCards key=\{sid\} sessionId=\{sid\} \/>/); assert.match(chat, /<HtmlPages sessionIds=\{list\}/);
+  assert.match(chat, /sideSessionIds\(s\.tasks, conversation\)/);
+});
+
+test('step 7F: the pages of the tasks of a chat are ONE list (the internet rule sees them all), without answer buttons, and a paste reaches only its pane', async () => {
+  const chat = fs.readFileSync(new URL('../src/ui/views/chat.jsx', import.meta.url), 'utf8');
+  const side = chat.slice(chat.indexOf('function TaskSideCards'), chat.indexOf('function TaskLines'));
+  assert.match(side, /<HtmlPages sessionIds=\{list\} choices=\{false\} \/>/);
+  assert.doesNotMatch(side, /<HtmlPages sessionId=/);
+  const { sideSessionIds } = await import('../src/ui/lib/html-mount.js');
+  const tasks = [{ id: 1, conversation_id: 'c', session_id: 'aaa' }, { id: 3, conversation_id: 'c', session_id: 'bbb' }, { id: 2, conversation_id: 'c', session_id: 'aaa' }, { id: 9, conversation_id: 'x', session_id: 'zzz' }, { id: 10, conversation_id: 'c', session_id: null }];
+  assert.deepEqual(sideSessionIds(tasks, 'c'), ['bbb', 'aaa']);
+  assert.match(chat, /data-paste-chat=\{String\(id \?\? 'new'\)\}/);
+  assert.match(chat, /onTerminalPaste\(\(line, from\) =>/);
+});

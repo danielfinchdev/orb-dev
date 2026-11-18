@@ -3,13 +3,20 @@
 // it, the brain (agent and model), the reasoning (brain button) and, for a new conversation, the orchestrator (icon and a
 // small switch: on = with the assistant, who coordinates the agents; off = directly with the agent chosen).
 // each conversation is its own (route.id), several at once.
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { orbTurnTails } from '@/lib/turn-cards.js';
+import { onTerminalPaste } from '@/lib/terminal-paste.js';
+import { TerminalPanel } from '@/components/terminal-panel.jsx';
+import { SecretCards } from '@/components/secret-card.jsx';
+import { HtmlPages } from '@/components/html-page.jsx';
+import { sideSessionIds } from '@/lib/html-mount.js';
 import { useDraft } from '@/lib/draft.js';
-import { PanelRight, FolderPlus, NotebookPen, Gauge, ShieldQuestion, LoaderCircle, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, ChevronRight, Presentation, History, FlaskConical, Folder, ListChecks, Info, BellOff, MessageSquare } from 'lucide-react';
+import { PanelRight, FolderPlus, NotebookPen, Gauge, ShieldQuestion, LoaderCircle, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, ChevronRight, Presentation, History, FlaskConical, Folder, ListChecks, Info, BellOff, MessageSquare, SquareTerminal } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown, TypingMarkdown, TypedMarkdown } from '@/components/markdown.jsx';
 import { ExtensionRequestCard } from './extensions.jsx';
 import { ProjectPicker } from '@/components/project-actions.jsx';
+import { ProjectChip } from '@/components/conversation/project-chip.jsx';
 import { useLiveTasks, liveOf, ProgressBar, elapsed } from '@/components/live-tasks.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { ChatBar, BackToList } from '@/components/chat-bar.jsx';
@@ -27,7 +34,7 @@ import { notify } from '@/lib/notify.js';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { pickGreeting, pickSubtitle, suggestionsFor, greetingFor } from '@/lib/greeting.js';
 import { LiveActivity, QuestionCard } from '@/components/chat-live.jsx';
-import { BrainPicker, ReasoningMenu, UsageBubble, useCatalog, useUsageBubble, favoriteLabel, modelLabel } from '@/components/brain-picker.jsx';
+import { BrainPicker, BrainChip, ReasoningMenu, UsageBubble, useCatalog, useUsageBubble, favoriteLabel, modelLabel } from '@/components/brain-picker.jsx';
 import { favoriteBrains } from '@/lib/favorite-brains.js';
 import { stepFavorite } from '../../shared/favorite-brains.mjs';
 import { useShortcut } from '@/lib/keys.js';
@@ -40,7 +47,7 @@ import { useT } from '@/lib/i18n.js';
 import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
 import { keepSame } from '@/lib/memo.js';
 import { useAutoScroll, Composer } from '@/components/conversation/composer.jsx';
-import { MessageBox } from '@/components/conversation/message-box.jsx';
+import { MessageBox, TurnActions } from '@/components/conversation/message-box.jsx';
 import { ColdNotice } from '@/components/conversation/cold-notice.jsx';
 import { BarPause, COMPACT_AT, CompactButton } from '@/components/conversation/bar.jsx';
 import { ContextMeter } from '@/components/conversation/context-meter.jsx';
@@ -194,6 +201,16 @@ function TaskApprovalLine({ m }) {
       </div>
     </div>
   );
+}
+
+// What the agents of this conversation's tasks ask or show (a private secret, an isolated HTML page), over the box as under an
+// agent's own chat: they are the same cards, read from the agent's session of each task.
+function TaskSideCards({ conversation }) {
+  const ids = useStore((s) => sideSessionIds(s.tasks, conversation).join(','));
+  if (!ids || !fullPc()) return null;
+  const list = ids.split(',');
+  // one list of pages for all the sessions: the internet rule (html-mount.js) must see the whole set at once
+  return <>{list.map((sid) => <SecretCards key={sid} sessionId={sid} />)}<HtmlPages sessionIds={list} choices={false} /></>;
 }
 
 // the tasks of this conversation that are running or waiting their turn, each as one live line in the
@@ -374,6 +391,12 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const bubble = useUsageBubble(catalog, brain);
   const userName = useStore((st) => st.app?.config?.userName?.trim() || '');
   const [sending, setSending] = useState(false);
+  // the terminal under the chat (PC): in the project's folder, or in Orb's when the conversation has none
+  const [terminal, setTerminal] = useState(false);
+  const [termDraft, setTermDraft] = useState('');
+  // only the pane the command was pasted from reacts: a split view has two chats, each with its own folder
+  useEffect(() => (fullPc() ? onTerminalPaste((line, from) => { const pane = from?.closest?.('[data-paste-chat]'); if (from && pane?.getAttribute('data-paste-chat') !== String(id ?? 'new')) return; setTerminal(true); setTermDraft(line); }) : undefined), [id]);
+  useEffect(() => { setTerminal(false); setTermDraft(''); }, [id]);
   // in God mode, a new conversation goes to the project chosen there, and the bar says that one.
   const projects = useStore((s) => s.projects);
   const workProject = inProject ? projects.find((p) => p.name === inProject) ?? { name: inProject } : app.activeProject ?? null;
@@ -467,6 +490,9 @@ export function ChatView({ route, onConversation, project: inProject }) {
   // The answer that ended the turn goes after the lines until a new read of the conversation brings it.
   const lastId = saved.at(-1)?.id ?? 0;
   const lines = answer && answer.id > lastId ? [...saved, answer] : saved;
+  // copy and the time close each turn once, on the PC (the phone keeps them in each message's header)
+  const lastLine = lines.at(-1)?.id; // the last turn's row goes after the tasks' cards
+  const turnEnds = useMemo(() => (fullPc() ? orbTurnTails(lines, chat.busy || chat.waiting || sending) : new Map()), [lines, chat.busy, chat.waiting, sending]);
   const unsaved = pendingShown(pending, lines.filter((m) => m.role === 'usuario').map((m) => ({ id: m.id, text: m.body })));
   useEffect(() => { for (const p of pending) if (!unsaved.includes(p)) dropPending(p.id); }, [pending, unsaved]);
   // «Compactar» when the conversation's context is at 70 % or more (never while it answers).
@@ -474,6 +500,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const context = live ?? conv?.context ?? null;
   const [compacting, setCompacting] = useState(false);
   const compactable = id != null && !chat.waiting && (compacting || (!chat.busy && context?.size > 0 && context.used / context.size >= COMPACT_AT));
+  const percent = context?.size > 0 ? Math.round((context.used / context.size) * 100) : null;
   const compact = async () => {
     setCompacting(true);
     try { const r = await act(call('chat.compact', { conversation: id })); if (r) refreshSoon(); }
@@ -484,6 +511,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const slim = phoneLayout() && Boolean(conv);
   const infoOpen = useStore((s) => s.orbInfo?.type === 'chat') && !embedded;
   const headProject = conv ? conv.project ?? null : workProject?.name ?? null;
+  const terminalDir = projects.find((p) => p.name === headProject)?.path ?? app?.home ?? '';
   const brainName = modelLabel(catalog, brain.agent, brain.model);
   const waitingTask = useStore((s) => (id != null ? s.tasks.find((x) => x.conversation_id === id && needsApproval(x)) : undefined));
   const waitingYou = Boolean(waitingTask);
@@ -524,6 +552,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
               {conv && !embedded ? <DropdownMenuItem onSelect={() => openOrbInfo({ type: 'chat' })} data-testid="more-info"><Info />{t('orbchats.info')}</DropdownMenuItem> : null}
               {slim ? <DropdownMenuItem onSelect={() => setQueuePaused(!app.paused, t)} data-testid={app.paused ? 'bar-resume' : 'bar-pause'}>{app.paused ? <Play /> : <Pause />}{app.paused ? t('bar.resume') : t('bar.pause')}</DropdownMenuItem> : null}
               {chatActions.filter((a) => a.id !== 'info' && !a.danger).map((a) => <DropdownMenuItem key={a.id} onSelect={a.run} data-testid={`more-${a.id}`}><a.icon />{a.label}</DropdownMenuItem>)}
+              {fullPc() ? <DropdownMenuItem onSelect={() => setTerminal(!terminal)} data-testid="session-terminal"><SquareTerminal />{terminal ? t('session.menu.terminalHide') : t('session.menu.terminalShow')}</DropdownMenuItem> : null}
               {fullPc() ? <DropdownMenuItem onSelect={openGames} data-testid="bar-games"><Gamepad2 />{t('bar.games')}</DropdownMenuItem> : null}
               {chatActions.filter((a) => a.danger).map((a) => <div key={a.id}><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onSelect={a.run} data-testid={`more-${a.id}`}><a.icon />{a.label}</DropdownMenuItem></div>)}
             </DropdownMenuContent>
@@ -532,7 +561,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
       </ChatBar>
       <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={trail.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
-        <div className="lazy-lines mx-auto flex min-h-full max-w-[var(--chat-max-width)] flex-col gap-5 px-5 py-6" data-testid="chat-lines">
+        <div className="lazy-lines mx-auto flex min-h-full max-w-[var(--chat-max-width)] flex-col gap-5 px-5 py-6" data-testid="chat-lines" data-paste-chat={String(id ?? 'new')}>
           {more ? <Button variant="ghost" size="sm" className="text-muted-foreground mx-auto" onClick={loadOlder} disabled={loading} data-testid="chat-older"><History />{t('chat.older')}</Button> : null}
           {id == null && !sending ? (
             <div className="flex min-h-full flex-1 flex-col items-center justify-center gap-3 py-6 text-center" data-testid="empty-chat">
@@ -545,25 +574,35 @@ export function ChatView({ route, onConversation, project: inProject }) {
               <div className="mt-1 flex max-w-xl flex-wrap justify-center gap-2" role="group" aria-label={t('chat.suggestions')}>{suggestionsFor(workProject?.name).map((s) => { const Icon = SUGGESTION_ICON[s]; return <Button key={s} variant="outline" size="sm" className="h-auto max-w-full shrink rounded-full py-1.5 whitespace-normal" onClick={() => box.set(t(s))}>{Icon ? <Icon /> : null}{t(s)}</Button>; })}</div>
               <p className="text-faint-foreground max-w-[520px] text-xs">{t('chat.heroHint', { name })}</p>
             </div>
-          ) : lines.map((m) => <Message key={m.id} m={m} name={name} user={userName} onChanges={askChanges} tail={`chat:${id}`} onPin={pinLine} />)}
+          ) : lines.map((m) => (
+            <Fragment key={m.id}>
+              <Message m={m} name={name} user={userName} onChanges={askChanges} tail={`chat:${id}`} onPin={pinLine} />
+              {turnEnds.has(m.id) && m.id !== lastLine ? <TurnActions at={turnEnds.get(m.id).at} text={turnEnds.get(m.id).text} /> : null}
+            </Fragment>
+          ))}
           {unsaved.map((p) => <Message key={p.id} m={{ id: p.id, role: 'usuario', body: p.text, at: p.at }} name={name} user={userName} onChanges={askChanges} />)}
           <TaskLines conversation={id} />
+          {lastLine != null && turnEnds.has(lastLine) ? <TurnActions at={turnEnds.get(lastLine).at} text={turnEnds.get(lastLine).text} /> : null}
           {chat.busy || chat.waiting || sending ? <LiveAnswer id={id} name={name} /> : null}
         </div>
       </div>
       <ConversationTrail scrollRef={trail.node} />
       </div>
+      <TaskSideCards conversation={id} />
+      {terminal && fullPc() ? <TerminalPanel dir={terminalDir} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
       <Composer draft={box} onSend={send} onStop={id != null ? () => act(call('chat.stop', { conversation: id })) : undefined} busy={chat.busy} disabled={sending} testid="chat-input"
         placeholder={chat.busy ? t('chat.placeholderBusy', { name }) : orchestrate ? t('chat.placeholder', { name }) : t('chat.placeholderDirect', { agent: AGENT[brain.agent] ?? brain.agent })}
         top={<>
           {/* in God mode a new conversation takes the project chosen at the top of God mode. */}
-          {inProject && id == null ? null : <ProjectPicker conversation={id} />}
+          {inProject && id == null ? null : fullPc() ? <ProjectChip conversation={id} /> : <ProjectPicker conversation={id} />}
+          {/* on the PC «Compactar · 62 %» is always on the right (disabled, with its reason, until it applies); elsewhere it only appears when the context fills up. */}
           <ContextSlot className="ml-auto" items={[
             // the context is filling up: compact it (the history stays; the assistant goes on from a summary).
-            compactable ? { key: 'compact', node: <CompactButton onCompact={compact} busy={compacting} percent={context?.size > 0 ? Math.round((context.used / context.size) * 100) : null} /> } : null,
+            compactable && !fullPc() ? { key: 'compact', node: <CompactButton onCompact={compact} busy={compacting} percent={percent} /> } : null,
             // the test of the day (first opening of the day, until the user writes; always in Ajustes › Agentes y uso).
             showTest ? { key: 'test', node: <BubbleTip title={t('test.button')} text={t('test.tip')} side="top"><Button size="xs" variant="soft" onClick={() => runTest(t('test.prompt'))} data-testid="chat-test"><FlaskConical />{t('test.button')}</Button></BubbleTip> } : null
           ]} />
+          {fullPc() ? <CompactButton onCompact={compact} busy={compacting} percent={percent} reason={compactable ? null : id == null ? t('compact.noChat') : chat.busy || chat.waiting ? t('msg.orch.compactBusy') : t('compact.noRoom')} /> : null}
         </>}
         notice={bubble.text ? <UsageBubble text={bubble.text} onClose={bubble.close} /> : id != null ? <ColdNotice id={id} agent={conv?.agent} used={context?.used} lastAt={saved.at(-1)?.at ?? conv?.updated_at} busy={chat.busy || chat.waiting} compacting={compacting} onCompact={compact} onFresh={() => newChat(conv?.project ?? undefined)} /> : null}
         bottom={<>
@@ -580,8 +619,11 @@ export function ChatView({ route, onConversation, project: inProject }) {
           <span className="ml-auto" aria-hidden="true" />
           {context ? <span className="text-muted-foreground shrink-0 text-xs"><ContextMeter context={context} /></span> : null}
           <div role="group" aria-label={t('session.model')} className="flex min-w-0 shrink items-center gap-1.5" data-testid="composer-group-brain">
-            <BrainPicker catalog={catalog} value={brain} onChange={pickBrain} className="min-w-0 shrink" />
-            <ReasoningMenu catalog={catalog} value={brain} onChange={(reasoning) => settings({ reasoning })} />
+            {/* the PC: one chip for the agent, its model and its reasoning, as under an agent's chat; the phone keeps the two buttons. */}
+            {fullPc() ? <BrainChip catalog={catalog} value={brain} onChange={pickBrain} onReasoning={(reasoning) => settings({ reasoning })} /> : <>
+              <BrainPicker catalog={catalog} value={brain} onChange={pickBrain} className="min-w-0 shrink" />
+              <ReasoningMenu catalog={catalog} value={brain} onChange={(reasoning) => settings({ reasoning })} />
+            </>}
           </div>
         </>} />
     </>

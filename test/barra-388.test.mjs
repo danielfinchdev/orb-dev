@@ -133,3 +133,9 @@ test('the robot inside the brand button carries no drag region of its own', () =
   const button = sidebar.slice(sidebar.indexOf('data-testid="sidebar-home"'));
   assert.ok(button.slice(0, button.indexOf('</button>')).includes('<Robot '), 'the head lives inside the brand button');
 });
+
+test('paso 7C1: el menú de la fila lleva siempre «Marcar como leído» (desactivado si no hay nada sin leer)', () => {
+  const inbox = read('views/orb/inbox.jsx');
+  assert.match(inbox, /const read = item\.unread \|\| row \? \[\{ id: 'read', icon: CheckCheck, label: t\('chats\.markRead'\), disabled: !item\.unread/);
+  assert.match(inbox, /disabled=\{a\.disabled\} onSelect=\{a\.run\} data-testid=\{`chat-\$\{a\.id\}`\}/);
+});

@@ -247,5 +247,12 @@ export default {
   'tasks.empty.filtered': 'No task matches the filters',
   'tasks.empty.filteredHint': 'Remove the project, the agent or the search to see more.',
   'tasks.sec.history': 'History',
-  'tasks.sec.events': '{n} events'
+  'tasks.sec.events': '{n} events',
+  'tasks.reviewedBy': 'Reviewed by {agent}',
+  'tasks.reviewedBy.lower': 'reviewed by {agent}',
+  'tasks.crossReview': 'Cross review',
+  'tasks.changes.photo': 'Snapshot before {time}',
+  'tasks.changes.photoUndo': 'Snapshot before {time} · can be undone',
+  'tasks.changes.ask': 'Request changes',
+  'tasks.changes.askN': 'Request changes ({n})'
 };

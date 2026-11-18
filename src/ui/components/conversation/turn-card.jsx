@@ -8,7 +8,8 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 import { rewindFrom } from '@/components/edit-message.jsx';
 import { fullPc } from '@/lib/store.js';
 import { openChanges } from '@/lib/open-changes.js';
-import { groupWorked, placeTurns, formatSpan } from '@/lib/turn-cards.js';
+import { groupWorked, placeTurns, turnTails, formatSpan } from '@/lib/turn-cards.js';
+import { TurnActions } from '@/components/conversation/message-box.jsx';
 import { readDiff, requestDiff, useTurns } from '@/lib/turn-data.js';
 import { useT } from '@/lib/i18n.js';
 import { cn } from '@/lib/utils.js';
@@ -110,13 +111,16 @@ function Worked({ entry, live, children }) {
   );
 }
 
-// The blocks of a conversation with the turn cards and the folded «Trabajó…» lines; the view says how to draw one block.
-export function TurnFlow({ blocks, session, running, renderBlock }) {
+// The blocks of a conversation with the turn cards, the row that closes each turn and the folded «Trabajó…» lines; the view says
+// how to draw one block. onFork: «Bifurcar» in the last turn's row (the chat is forked whole, so only the last turn offers it).
+export function TurnFlow({ blocks, session, running, renderBlock, onFork = null, forkDisabled = false }) {
   const enabled = session.kind === 'chat' && Boolean(session.project) && fullPc();
   const list = useTurns(session, enabled);
   const turns = list?.available ? list.turns : EMPTY;
   const placed = useMemo(() => placeTurns(blocks, turns), [blocks, turns]);
   const entries = useMemo(() => groupWorked(blocks), [blocks]);
+  const tails = useMemo(() => (fullPc() ? turnTails(blocks, running) : new Map()), [blocks, running]);
+  const lastKey = blocks.at(-1)?.key;
   return entries.map((entry, i) => {
     const last = entry.blocks.at(-1);
     const card = placed.get(last.key);
@@ -125,6 +129,7 @@ export function TurnFlow({ blocks, session, running, renderBlock }) {
       <Fragment key={entry.key ?? last.key}>
         {entry.worked ? <Worked entry={entry} live={live}>{entry.blocks.map(renderBlock)}</Worked> : renderBlock(last)}
         {card ? <TurnCard sessionId={session.id} turn={turns.find((x) => x.n === card.n)} user={card.user} running={running || session.status === 'running'} /> : null}
+        {tails.has(last.key) ? <TurnActions at={tails.get(last.key).at} text={tails.get(last.key).text} onFork={last.key === lastKey ? onFork : null} forkDisabled={forkDisabled} /> : null}
       </Fragment>
     );
   });

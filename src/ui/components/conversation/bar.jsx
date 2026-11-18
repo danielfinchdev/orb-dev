@@ -61,11 +61,13 @@ export function BarHeading({ title, project, onRename, renameLabel, extra, showP
 export const COMPACT_AT = 0.7;
 // «Compactar» in the contextual slot: the conversation goes on from a summary; nothing of the history is lost.
 // percent: how full the context is, shown after the name (the chat with the assistant).
-export function CompactButton({ onCompact, busy, percent = null }) {
+// reason: why it cannot be used now; the button stays in its place, disabled, and its bubble says why.
+export function CompactButton({ onCompact, busy, percent = null, reason = null }) {
   const t = useT();
+  const button = <Button size="xs" variant="ghost" className="text-muted-foreground font-normal" onClick={onCompact} disabled={busy || Boolean(reason)} data-testid="chat-compact">{busy ? <Spinner /> : <FoldVertical />}{busy ? t('compact.busy') : t('compact.button')}{!busy && percent != null ? ` · ${percent} %` : ''}</Button>;
   return (
-    <BubbleTip title={t('compact.title')} text={t('compact.tip')} side="top">
-      <Button size="xs" variant="ghost" className="text-muted-foreground font-normal" onClick={onCompact} disabled={busy} data-testid="chat-compact">{busy ? <Spinner /> : <FoldVertical />}{busy ? t('compact.busy') : t('compact.button')}{!busy && percent != null ? ` · ${percent} %` : ''}</Button>
+    <BubbleTip title={t('compact.title')} text={reason ?? t('compact.tip')} side="top">
+      {reason ? <span className="inline-flex">{button}</span> : button}
     </BubbleTip>
   );
 }

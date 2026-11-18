@@ -11,9 +11,9 @@ import { useT } from '@/lib/i18n.js';
 const PANEL_MIN = 320; const PANEL_MAX = 640; const PANEL_DEFAULT = 440; const WIDTH_KEY = 'orb.anchoPanel';
 const clamp = (n) => Math.round(Math.min(PANEL_MAX, Math.max(PANEL_MIN, n)));
 
-function usePanelWidth() {
-  const [width, setRaw] = useState(() => { try { const n = Number(localStorage.getItem(WIDTH_KEY)); return n >= PANEL_MIN && n <= PANEL_MAX ? n : PANEL_DEFAULT; } catch { return PANEL_DEFAULT; } });
-  const remember = (w) => { try { localStorage.setItem(WIDTH_KEY, String(w)); } catch { /* storage unavailable */ } };
+function usePanelWidth(key, initial) {
+  const [width, setRaw] = useState(() => { try { const n = Number(localStorage.getItem(key)); return n >= PANEL_MIN && n <= PANEL_MAX ? n : initial; } catch { return initial; } });
+  const remember = (w) => { try { localStorage.setItem(key, String(w)); } catch { /* storage unavailable */ } };
   const setWidth = (n) => { const w = clamp(n); setRaw(w); remember(w); };
   // The edge is on the panel's left: dragging left widens it. The pointer stays captured, so a release outside the window
   // or a cancelled drag still ends it; the width is saved once, on release.
@@ -36,9 +36,10 @@ function usePanelWidth() {
 
 // open: the panel is shown; while it closes it stays mounted for the length of its exit animation.
 // tabs: another screen's own tabs ([{ value, icon, label, testid }], Tareas); without them, the chat's Ficha / Cambios / PR.
-export function ChatPanel({ open, tab, onTab, onClose, prNumber, children, tabs, label, closeLabel, closeTestId }) {
+// widthKey / defaultWidth: a screen that wants its own remembered width (the Pizarra's canvas needs room to keep its desktop tools).
+export function ChatPanel({ open, tab, onTab, onClose, prNumber, children, tabs, label, closeLabel, closeTestId, widthKey = WIDTH_KEY, defaultWidth = PANEL_DEFAULT }) {
   const t = useT();
-  const { width, setWidth, startResize } = usePanelWidth();
+  const { width, setWidth, startResize } = usePanelWidth(widthKey, defaultWidth);
   const [mounted, setMounted] = useState(open);
   useEffect(() => {
     if (open) { setMounted(true); return undefined; }
@@ -52,7 +53,7 @@ export function ChatPanel({ open, tab, onTab, onClose, prNumber, children, tabs,
   return (
     <aside className="chat-panel bg-background relative flex max-w-[70%] shrink-0 flex-col border-l" style={{ width }} data-state={open ? 'open' : 'closed'} data-testid="chat-panel" aria-label={label ?? t('panel.tabs')}>
       <div className="chat-panel-resize" role="separator" aria-orientation="vertical" aria-label={t('panel.resize')} aria-valuemin={PANEL_MIN} aria-valuemax={PANEL_MAX} aria-valuenow={width} tabIndex={0}
-        onPointerDown={startResize} onDoubleClick={() => setWidth(PANEL_DEFAULT)} onKeyDown={nudge} data-testid="chat-panel-resize" />
+        onPointerDown={startResize} onDoubleClick={() => setWidth(defaultWidth)} onKeyDown={nudge} data-testid="chat-panel-resize" />
       <Tabs value={tab} onValueChange={onTab} className="flex min-h-0 flex-1 flex-col">
         <div className="chat-panel-tabs app-titlebar relative flex h-14 shrink-0 items-center gap-0.5 border-b pl-2.5 pr-2.5">
           <TabsList variant="line" className="no-drag h-auto w-auto border-b-0 pb-0">

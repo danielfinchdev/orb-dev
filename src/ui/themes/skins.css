@@ -37,6 +37,9 @@ html[data-skin="orb"], html[data-skin="vaporwave"], html[data-skin="candy"], htm
 html[data-skin="candy"] { --veil: 76%; --veil-side: 68%; }
 .orb-shader { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; display: block; pointer-events: none; contain: strict; }
 html[data-skin]:not([data-skin="predeterminado"]) main.theme-scene { background: color-mix(in oklab, var(--background) var(--veil), transparent); }
+/* The title bars of the views are tinted and blurred in the predeterminado; here they let the scene through like the rest of the centre
+   (the mock-up's .bar has no fill), so the shapes behind the conversation are not hidden under a strip. */
+html[data-skin]:not([data-skin="predeterminado"]) main.theme-scene .topbar { background-color: transparent; backdrop-filter: none; }
 html[data-skin]:not([data-skin="predeterminado"]):not([data-skin="cristal"]) aside.bg-sidebar { background-color: color-mix(in oklab, var(--sidebar) var(--veil-side), transparent); backdrop-filter: blur(14px) saturate(1.1); }
 html[data-skin]:not([data-skin="predeterminado"]) :is([data-testid="chat-panel"], [data-testid="turn-changes"], [data-testid="chat-tabs"]) { background: color-mix(in oklab, var(--background) var(--veil-side), transparent); backdrop-filter: blur(14px); }
 /* the Cambios tab sits inside the panel, which already has the veil */

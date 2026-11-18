@@ -687,11 +687,12 @@ function ThemedToaster() {
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => obs.disconnect();
   }, []);
-  // below the window's 56 px header (offset 72), so a passing notice never covers its title or buttons; drawn as the
-  // mock-up's .pop (themes/pieces.css › .orb-toast), the tone shown by its icon.
-  // one on screen at a time (the newest); the others are under the bell of the top bar.
-  // on a phone, below the status bar as well (edge to edge, the page starts under it).
-  return <Toaster position="top-center" offset={72} mobileOffset={{ top: 'calc(env(safe-area-inset-top, 0px) + 64px)' }} visibleToasts={1} theme={dark ? 'dark' : 'light'} closeButton toastOptions={{ className: 'font-sans orb-toast' }} />;
+  // On the PC they sit at the bottom right, above the chat's text box and clear of the top bar's and the filters' controls
+  // (the robot of the Orb theme keeps its own corner lower down); drawn as the mock-up's .pop (themes/pieces.css › .orb-toast),
+  // the tone shown by its icon. One on screen at a time (the newest); the others are under the bell of the top bar.
+  // On a phone they stay at the top, below the status bar as well (edge to edge, the page starts under it).
+  const phone = phoneLayout();
+  return <Toaster position={phone ? 'top-center' : 'bottom-right'} offset={phone ? 72 : { bottom: 112, right: 24 }} mobileOffset={{ top: 'calc(env(safe-area-inset-top, 0px) + 64px)' }} visibleToasts={1} theme={dark ? 'dark' : 'light'} closeButton toastOptions={{ className: 'font-sans orb-toast' }} />;
 }
 
 applyTheme();

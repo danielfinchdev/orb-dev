@@ -119,7 +119,8 @@ function actionList(item, t, row = false) {
   const info = { id: 'info', icon: Info, label: row ? t('orbchats.rowInfo') : t('orbchats.info'), run: () => { openOrbItem(item); if (item.kind === 'session') openPanel(item.id, 'info'); else openOrbInfo({ type: 'chat' }); } };
   const pin = item.pinned ? { id: 'unpin', icon: PinOff, label: t('chats.unpin'), run: () => orbAct('inbox.unpin', ref) } : { id: 'pin', icon: Pin, label: row ? t('orbchats.rowPin') : t('chats.pin'), run: () => orbAct('inbox.pin', ref) };
   const mute = item.muted ? { id: 'unmute', icon: Bell, label: t('chats.unmute'), run: () => orbAct('inbox.mute', { ...ref, muted: false }) } : { id: 'mute', icon: BellOff, label: t('chats.mute'), run: () => orbAct('inbox.mute', { ...ref, muted: true }) };
-  const read = item.unread ? [{ id: 'read', icon: CheckCheck, label: t('chats.markRead'), run: () => orbAct('inbox.markRead', ref) }] : [];
+  // the row's menu always lists it (the mock-up's nine entries): disabled while there is nothing unread; Orb has no «mark as unread»
+  const read = item.unread || row ? [{ id: 'read', icon: CheckCheck, label: t('chats.markRead'), disabled: !item.unread, run: () => orbAct('inbox.markRead', ref) }] : [];
   const done = (method, args) => (item.done
     ? { id: 'reopen', icon: Undo2, label: t('orbchats.reopen'), run: () => act(call(method, { ...args, done: false })).then(refreshSoon) }
     : { id: 'complete', icon: CircleCheck, label: row ? t('orbchats.rowComplete') : t('orbchats.complete'), run: () => act(call(method, { ...args, done: true })).then(refreshSoon) });
@@ -206,7 +207,7 @@ function OrbMenu({ item, open, setOpen, className }) {
         <MoreButton small label={t('chats.menu', { name: item.title })} className={cn('shrink-0 opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100', className)} data-testid="chat-menu" onClick={(e) => e.stopPropagation()} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[230px]" data-testid="chat-menu-list">
-        {actions.map((a) => <div key={a.id}>{a.danger ? <DropdownMenuSeparator /> : null}<DropdownMenuItem variant={a.danger ? 'destructive' : undefined} onSelect={a.run} data-testid={`chat-${a.id}`}><a.icon />{a.label}</DropdownMenuItem></div>)}
+        {actions.map((a) => <div key={a.id}>{a.danger ? <DropdownMenuSeparator /> : null}<DropdownMenuItem variant={a.danger ? 'destructive' : undefined} disabled={a.disabled} onSelect={a.run} data-testid={`chat-${a.id}`}><a.icon />{a.label}</DropdownMenuItem></div>)}
       </DropdownMenuContent>
     </DropdownMenu>
   );

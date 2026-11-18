@@ -23,6 +23,8 @@ export default {
   'compact.busy': 'Compactando…',
   'compact.title': 'Compactar la conversación',
   'compact.tip': 'El contexto está casi lleno. Se resume lo hablado para continuar con más margen; el historial se conserva.',
+  'compact.noRoom': 'Aún hay margen de sobra en el contexto: se podrá compactar cuando pase del 70 %.',
+  'compact.noChat': 'Aún no hay nada que compactar: la conversación empieza cuando escribes.',
   'msg.orch.compactBusy': 'Espera a que termine la respuesta en curso para compactar la conversación.',
   'msg.orch.compacted': 'Conversación compactada. Continúa a partir de un resumen; el historial se conserva.',
   'msg.orch.compactRenewed': 'Conversación compactada. La próxima respuesta parte de un resumen de lo hablado; el historial se conserva.',

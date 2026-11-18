@@ -315,3 +315,11 @@ test('contrast AA: --foreground and --muted-foreground on --background and --car
   if (process.env.TEMAS_RATIOS) console.log('lowest ratio', lowest.toFixed(2));
   assert.deepEqual(failed, []);
 });
+
+test('step 7C2: the title bars let the scene through in every theme with a background, and Cristal keeps the sidebar of the mock-up', () => {
+  assert.match(skinsCss, /html\[data-skin\]:not\(\[data-skin="predeterminado"\]\) main\.theme-scene \.topbar \{ background-color: transparent; backdrop-filter: none; \}/);
+  // the sidebar of Cristal: 26 % fill and the 40 px blur with saturation, as temas.css of the mock-up
+  assert.match(skinsCss, /--veil:34%;--veil-side:26%/);
+  assert.match(skinsCss, /aside\.bg-sidebar::before \{[^}]*backdrop-filter: blur\(40px\) saturate\(1\.6\)/);
+  assert.match(skinsCss, /html\[data-skin="candy"\] \{ --veil: 76%; --veil-side: 68%; \}/);
+});

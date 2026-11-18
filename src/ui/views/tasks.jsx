@@ -1,7 +1,7 @@
 // Tasks: the board. Filters, approvals, details and every action on a task (undo, retry, model, merge, pull request, OK).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { notifyOk } from '@/lib/notify.js';
-import { Check, X, Zap, RotateCw, Square, Shuffle, Undo2, MessageSquare, GitMerge, GitPullRequest, Trash2, ClipboardCheck, ThumbsUp, ChevronRight, ScanSearch, Hourglass, GitBranch, Play, Pause, Plus, Layers, Users, Clock, ShieldAlert, RefreshCw, Activity, CircleStop, CircleX, UserCog, Bot, Calendar, Link, BadgeCheck, Folder, Info, FileDiff, MessagesSquare, Ellipsis } from 'lucide-react';
+import { Check, X, Zap, RotateCw, Square, Shuffle, Undo2, MessageSquare, GitMerge, GitPullRequest, Trash2, ClipboardCheck, ThumbsUp, ChevronRight, ScanSearch, MessageSquarePlus, Hourglass, GitBranch, Play, Pause, Plus, Layers, Users, Clock, ShieldAlert, RefreshCw, Activity, CircleStop, CircleX, UserCog, Bot, Calendar, Link, BadgeCheck, Folder, Info, FileDiff, MessagesSquare, Ellipsis } from 'lucide-react';
 import { PageHeader, PageBody, BackButton } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
@@ -10,7 +10,8 @@ import { useLiveTasks, liveOf, LiveTask, ProgressBar } from '@/components/live-t
 import { modelsOf } from '@/components/brain-picker.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
-import { TaskChanges, ChangesSummary, ChangesFiles, useTaskDiff } from '@/components/task-changes.jsx';
+import { TaskChanges, ChangesSummary, ChangesFiles, ChangesMeta, DiffStat, useDiffStat, useTaskDiff } from '@/components/task-changes.jsx';
+import { useComments } from '@/lib/turn-comments.js';
 import { HeldCard, PausedNote, TaskStatus, waitText, setQueuePaused, acceptHeld, undoHeld } from '@/components/task-state.jsx';
 import { ChatPanel } from '@/components/chat-panel.jsx';
 import { NotificationBell } from '@/components/notification-center.jsx';
@@ -113,15 +114,21 @@ function taskActions(task, tr) {
 }
 
 // A task read whole (tasks.get), again whenever the lists change.
-function useTaskDetail(id) {
+// `loading` is true from the moment a task is chosen until its first read ends, so the panel can wait instead of
+// saying «Selecciona una tarea» next to a row that is already marked.
+function useTaskDetailState(id) {
   const version = useStore((s) => s.version);
   const [task, setTask] = useState(null);
+  const [settled, setSettled] = useState(null); // the id whose read has ended
   useEffect(() => {
-    if (id == null) { setTask(null); return undefined; }
-    let alive = true; call('tasks.get', { id }).then((r) => alive && setTask(r)).catch(() => alive && setTask(null)); return () => { alive = false; };
+    if (id == null) { setTask(null); setSettled(null); return undefined; }
+    let alive = true;
+    call('tasks.get', { id }).then((r) => { if (alive) { setTask(r); setSettled(id); } }).catch(() => { if (alive) { setTask(null); setSettled(id); } });
+    return () => { alive = false; };
   }, [id, version]);
-  return task;
+  return [task && String(task.id) === String(id) ? task : null, id != null && settled !== id];
 }
+const useTaskDetail = (id) => useTaskDetailState(id)[0];
 
 // The detail of the phone and of a linked browser: one card.
 function TaskDetail({ id, live }) {
@@ -381,7 +388,6 @@ function TaskPanelDetail({ t, live, diff, onChanges }) {
       </div>
       {t.held ? <p className="note text-muted-foreground m-0 text-caption">{tr('tasks.held.note')}</p> : null}
 
-      {review ? <p className="text-muted-foreground m-0 text-control"><b className="text-foreground font-medium">{tr('tasks.review.line', { agent: AGENT[review.agent] ?? review.agent })}</b> {verdictLabel(review.verdict)} <Button size="xs" variant="ghost" onClick={() => go({ view: 'tasks', id: review.task })}>{tr('tasks.review.see', { id: review.task })}</Button></p> : null}
 
       <Kv>
         <KvRow icon={Bot} label={tr('tasks.agent')}><AgentMark agent={who}>{tr('tasks.agentLine', { agent: `${t.accountLabel ?? AGENT[who] ?? who}${t.model ? ` · ${t.modelLabel ?? t.model}` : ''}`, reasoning: REASONING[t.reasoning]?.toLowerCase() ?? t.reasoning })}</AgentMark></KvRow>
@@ -392,6 +398,7 @@ function TaskPanelDetail({ t, live, diff, onChanges }) {
         {t.children?.length ? <KvRow icon={GitBranch} label={tr('tasks.subtasks')}>{t.children.map((c) => <button key={c.id} onClick={() => go({ view: 'tasks', id: c.id })} className="cursor-pointer"><Badge variant={STATUS[c.status]?.[1] ?? 'secondary'} className="gap-1"><GitBranch className="size-3" />#{c.id} {AGENT[c.assigned_to ?? c.agent] ?? c.agent} · <TaskStatus task={c} plain /></Badge></button>)}</KvRow> : null}
         {t.dependencies?.length ? <KvRow icon={Link} label={tr('tasks.dependsOn')}>{t.dependencies.filter(Boolean).map((d) => <Badge key={d.id} variant="secondary">#{d.id} <TaskStatus task={d} plain /></Badge>)}</KvRow> : null}
         {t.sensitivity.length ? <KvRow icon={BadgeCheck} label={tr('tasks.approval')}>{t.sensitivity.map((s) => <Badge key={s} variant="warning">{SENSITIVE[s] ?? s}</Badge>)}</KvRow> : null}
+        {review ? <KvRow icon={ScanSearch} label={tr('tasks.crossReview')}><AgentMark agent={review.agent}>{AGENT[review.agent] ?? review.agent}: {verdictLabel(review.verdict)}</AgentMark><Button size="xs" variant="ghost" onClick={() => go({ view: 'tasks', id: review.task })}>{tr('tasks.review.see', { id: review.task })}</Button></KvRow> : null}
       </Kv>
 
       <Sec>{tr('tasks.sec.brief')}</Sec>
@@ -419,6 +426,9 @@ function TaskPanelChanges({ t, diff }) {
   const { createPr, undo, merge } = taskActions(t, tr);
   const [busy, run] = useBusy();
   const canUndo = t.hasCheckpoint && t.status !== 'running' && !t.held;
+  // The comments written on lines wait in the tray of the task's own conversation and go with the next message there.
+  const comments = useComments(t.session_id ?? '').length;
+  const photoAt = t.events?.find((e) => e.kind === 'checkpoint')?.at;
   return (
     <div data-testid="task-panel-changes">
       <div className="head flex items-start gap-2">
@@ -428,17 +438,23 @@ function TaskPanelChanges({ t, diff }) {
       <div className="by text-muted-foreground mt-1 text-control">{t.title} · {t.project}{t.branch ? <> · <code className="font-mono text-caption">{t.branch}</code></> : null}</div>
       <div className="acts-r my-2.5 flex flex-wrap items-center justify-end gap-1.5">
         {canUndo ? <Button variant="ghost" disabled={busy} onClick={run(undo)}><Undo2 className="size-3.5" />{tr('tasks.undo.btn')}</Button> : null}
+        {t.session_id ? <Button variant="outline" onClick={() => go({ view: 'session', id: t.session_id })} data-testid="task-request-changes"><MessageSquarePlus className="size-3.5" />{comments ? tr('tasks.changes.askN', { n: comments }) : tr('tasks.changes.ask')}</Button> : null}
         {t.branch && t.status === 'done' ? (<>
           <Button variant="outline" onClick={createPr}><GitPullRequest className="size-3.5" />{tr('tasks.pr.title')}</Button>
           <Button disabled={busy} onClick={run(merge)}><GitMerge className="size-3.5" />{tr('tasks.merge')}</Button>
         </>) : null}
       </div>
-      <ChangesFiles data={diff} />
+      <ChangesMeta data={diff} reviewer={t.review ? (AGENT[t.review.agent] ?? t.review.agent) : null} photoAt={photoAt} canUndo={canUndo} className="mb-2" />
+      <ChangesFiles data={diff} sessionId={t.session_id} />
     </div>
   );
 }
 
 // What a row of the list can do at a glance. Each button is the same call as in the panel (taskActions).
+// A rejected task stays 'cancelled' and a sensitive one was already signed as approved, so a retry from a list would skip the
+// approval card: only plain failed, blocked or limited tasks are retried from a row.
+export const canRetryFromRow = (t) => ['failed', 'blocked', 'limited'].includes(t?.status) && !t?.sensitivity?.length;
+
 function RowActions({ t, onOpen, busy, run }) {
   const tr = useT();
   const a = taskActions(t, tr);
@@ -463,15 +479,17 @@ function RowActions({ t, onOpen, busy, run }) {
   if (t.status === 'running') return <BubbleTip title={tr('tasks.cancelTask')}><IconButton small label={tr('tasks.cancelTask')} disabled={busy} onClick={run(a.cancel)} data-testid="task-row-cancel"><CircleStop /></IconButton></BubbleTip>;
   if (t.status === 'queued') return <Button size="xs" variant="outline" onClick={a.launch} data-testid="task-row-launch">{tr('tasks.launchAnyway')}</Button>;
   // A rejected task or one that needs approval is retried from its panel, never from the list.
-  if (['failed', 'blocked', 'limited'].includes(t.status) && !t.sensitivity?.length) return <Button size="xs" disabled={busy} onClick={run(a.retry)} data-testid="task-row-retry"><RotateCw />{t.status === 'limited' ? tr('tasks.continueNow') : tr('tasks.retry')}</Button>;
+  if (canRetryFromRow(t)) return <Button size="xs" disabled={busy} onClick={run(a.retry)} data-testid="task-row-retry"><RotateCw />{t.status === 'limited' ? tr('tasks.continueNow') : tr('tasks.retry')}</Button>;
   if (t.status === 'done' && !t.review_of) return <Button size="xs" variant="outline" onClick={() => askReview({ task: t })} data-testid="task-row-review">{tr('tasks.reviewTask')}</Button>;
   return null;
 }
 
 // A row of the list (.lrow): project dot, title and its line of facts, progress, state and actions.
-function TaskRow({ t, live, selected, onOpen, busy, run }) {
+function TaskRow({ t, live, selected, onOpen, busy, run, reviewer }) {
   const tr = useT();
   const who = whoOf(t);
+  // «+120 −18»: only for work that waits for its OK or is finished, read in light mode (tasks.diff {stat}) once the row is on screen.
+  const [stat, statRef] = useDiffStat(t, (t.status === 'done' || t.status === 'awaiting_approval') && !t.held && !t.undone && !t.review_of);
   const why = t.status === 'queued' && t.waiting ? { icon: Clock, text: waitText(tr, t) } : t.held ? { icon: ShieldAlert, text: tr('tasks.held.short', { reasons: t.held.reasons }) } : null;
   const progress = t.status === 'running' && live ? (
     <div className="prog flex shrink-0 items-center gap-2">
@@ -488,7 +506,10 @@ function TaskRow({ t, live, selected, onOpen, busy, run }) {
         <span className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
           <span>#{t.id} · {t.project}</span>
           <span className="inline-flex items-center gap-1"><AgentIcon agent={who} className="size-3.5" />{AGENT[who] ?? who} · {ago(t.updated_at)}</span>
+          {reviewer ? <span>{tr('tasks.reviewedBy', { agent: AGENT[reviewer] ?? reviewer })}</span> : null}
           {t.branch ? <span className="inline-flex items-center gap-1"><GitBranch className="size-3.5" />{t.branch}</span> : null}
+          <span ref={statRef} aria-hidden="true" className="-mr-2.5 size-px" />
+          <DiffStat stat={stat} />
           {why ? <span className="text-warning-ink inline-flex items-center gap-1"><why.icon className="size-3.5" />{why.text}</span> : null}
         </span>
       )}
@@ -555,12 +576,14 @@ function TasksPc({ route }) {
   const narrowed = useMemo(() => tasks.filter((x) => (project === ALL || x.project === project) && (agent === ALL || whoOf(x) === agent)
     && (!q || x.title.toLowerCase().includes(q) || `#${x.id}`.includes(q) || x.project.toLowerCase().includes(q))), [tasks, project, agent, q]);
   const rows = narrowed.filter(PC_FILTERS.find(([k]) => k === filter)[2]);
+  // Who read each finished task (its Task Review is a task of its own that points back at it).
+  const reviewedBy = useMemo(() => new Map(all.filter((x) => x.review_of && x.status === 'done').map((x) => [x.review_of, whoOf(x)])), [all]);
   const projects = [...new Set(tasks.map((x) => x.project))].sort();
   const agents = [...new Set(tasks.map(whoOf))].sort();
-  // The first task of the list is open when nothing (or something no longer listed) is selected.
-  useEffect(() => { if (panelOpen && rows.length && !rows.some((x) => x.id === selected)) setSelected(rows[0].id); }, [filter, project, agent, q, rows.length]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const sel = useTaskDetail(panelOpen ? selected : null);
+  // The first task of the list is the one open when nothing (or something no longer listed) is selected. It is worked out
+  // here, not in an effect, so a row is never marked while the panel still has nothing to show for it.
+  const current = rows.some((x) => x.id === selected) ? selected : panelOpen && rows.length ? rows[0].id : selected;
+  const [sel, loadingSel] = useTaskDetailState(panelOpen ? current : null);
   const diff = useTaskDiff(sel?.id, `${sel?.status}:${sel?.updated_at}`, Boolean(sel?.hasCheckpoint && sel.status !== 'running'));
   const shownTab = tab === 'changes' && diff ? 'changes' : 'info';
   const open = (x) => { setSelected(x.id); setPanelOpen(true); setTab('info'); };
@@ -587,26 +610,28 @@ function TasksPc({ route }) {
             <QueueCard tasks={all} />
             <div className="toolbar flex flex-wrap items-center gap-1.5">
               <Tabs value={filter} onValueChange={setFilter}>
-                <TabsList data-testid="task-filters">{PC_FILTERS.map(([key, label, fn]) => { const n = narrowed.filter(fn).length; return <TabsTrigger key={key} value={key}>{tr(label)}{key !== 'todas' && n ? <span className="n text-micro text-faint-foreground tabular-nums">{n}</span> : null}</TabsTrigger>; })}</TabsList>
+                <TabsList data-testid="task-filters">{PC_FILTERS.map(([key, label, fn]) => { const n = narrowed.filter(fn).length; return <TabsTrigger key={key} value={key}>{tr(label)}{key !== 'todas' ? <span className="n text-micro text-faint-foreground tabular-nums">{n}</span> : null}</TabsTrigger>; })}</TabsList>
               </Tabs>
-              <span className="grow" />
+              {/* One group: it sits beside the tabs when there is room and otherwise takes the next line whole; the search is what gives way. */}
+              <div className="flex min-w-0 flex-[1_1_440px] items-center justify-end gap-1.5">
               <Select value={project} onValueChange={setProject} prefix={tr('tasks.fProjectKey')} title={tr('tasks.fProject')} data-testid="task-filter-project"
                 options={[{ value: ALL, label: tr('tasks.fAll') }, ...projects.map((name) => ({ value: name, label: name, icon: <ProjectIcon name={name} small /> }))]} />
               <Select value={agent} onValueChange={setAgent} prefix={tr('tasks.fAgentKey')} title={tr('tasks.fAgent')} data-testid="task-filter-agent"
                 options={[{ value: ALL, label: tr('tasks.fAll') }, ...agents.map((id) => ({ value: id, label: AGENT[id] ?? id, icon: <AgentIcon agent={id} className="size-3.5" /> }))]} />
-              <SearchInput className="w-auto flex-[0_1_220px]" value={query} onChange={setQuery} placeholder={tr('tasks.search')} data-testid="task-search" />
+              <SearchInput className="w-auto min-w-24 flex-[0_1_220px]" value={query} onChange={setQuery} placeholder={tr('tasks.search')} data-testid="task-search" />
               <Button onClick={async () => { const made = await askNewTask(tr, storedProjects.map((p) => p.name), route.project ?? (project === ALL ? undefined : project)); if (made?.id) { setFilter('todas'); open(made); } }} data-testid="task-new"><Plus />{tr('tasks.new')}</Button>
+              </div>
             </div>
             <ListCard data-testid="tasks-list">
-              {rows.length ? rows.map((x) => <TaskRow key={x.id} t={x} live={liveOf(live, x.id)} selected={panelOpen && selected === x.id} onOpen={open} busy={busy} run={run} />)
+              {rows.length ? rows.map((x) => <TaskRow key={x.id} t={x} reviewer={reviewedBy.get(x.id)} live={liveOf(live, x.id)} selected={panelOpen && current === x.id} onOpen={open} busy={busy} run={run} />)
                 : filtering ? <Empty icon={ClipboardCheck} title={tr('tasks.empty.filtered')}>{tr('tasks.empty.filteredHint')}</Empty>
                   : <Empty icon={ClipboardCheck} title={filter === 'aprobar' ? tr('tasks.empty.approve') : tr('tasks.empty.none')}>{tr('tasks.empty.hint')}</Empty>}
             </ListCard>
           </div>
         </PageBody>
       </div>
-      <ChatPanel open={panelOpen && selected != null} tab={shownTab} onTab={setTab} onClose={() => setPanelOpen(false)} tabs={tabs} label={tr('tasks.panel.label')} closeLabel={tr('tasks.panel.close')} closeTestId="task-panel-close">
-        {!sel ? <Empty icon={ClipboardCheck} title={tr('tasks.pick')}>{tr('tasks.pickHint')}</Empty>
+      <ChatPanel open={panelOpen && current != null} tab={shownTab} onTab={setTab} onClose={() => setPanelOpen(false)} tabs={tabs} label={tr('tasks.panel.label')} closeLabel={tr('tasks.panel.close')} closeTestId="task-panel-close">
+        {!sel ? (loadingSel ? <div aria-busy="true" data-testid="task-panel-loading" /> : <Empty icon={ClipboardCheck} title={tr('tasks.pick')}>{tr('tasks.pickHint')}</Empty>)
           : shownTab === 'changes' ? <TaskPanelChanges t={sel} diff={diff} />
             : <TaskPanelDetail t={sel} live={liveOf(live, sel.id)} diff={diff} onChanges={() => setTab('changes')} />}
       </ChatPanel>

@@ -85,8 +85,8 @@ test('the texts the board adds exist in Spanish and in English', async () => {
 test('step 6D: a held task cannot be accepted from its row, and the rows do not retry rejected or sensitive tasks', () => {
   assert.doesNotMatch(rowActions, /acceptHeld|task-row-accept/);
   assert.match(rowActions, /undoHeld\(tr, t\)/);
-  const retry = rowActions.slice(rowActions.indexOf("['failed', 'blocked', 'limited']"));
-  assert.match(retry, /^\['failed', 'blocked', 'limited'\]\.includes\(t\.status\) && !t\.sensitivity\?\.length\) return <Button[^\n]*task-row-retry/);
+  assert.match(rowActions, /if \(canRetryFromRow\(t\)\) return <Button[^\n]*task-row-retry/);
+  assert.match(tasks, /export const canRetryFromRow = \(t\) => \['failed', 'blocked', 'limited'\]\.includes\(t\?\.status\) && !t\?\.sensitivity\?\.length;/);
   assert.doesNotMatch(rowActions, /'cancelled'/);
 });
 
@@ -110,4 +110,39 @@ test('step 6D: the buttons of a list or panel are disabled while their action ru
   for (const piece of ['disabled={busy} onClick={run(() => undoHeld(tr, t))}', 'disabled={busy} onClick={run(() => approveTask(t))}', 'disabled={busy} onClick={run(() => rejectTask(t))}', 'disabled={busy} onClick={run(a.cancel)}']) assert.ok(rowActions.includes(piece), piece);
   // the confirmed calls are awaited so the lock lasts until they end
   for (const name of ['tasks.undo', 'projects.merge', 'tasks.discardBranch', 'tasks.cancel']) assert.ok(tasks.includes("await act(call('" + name + "'"), name);
+});
+
+test('step 7C2: the filters are one group that sits beside the tabs or takes the next line whole, and the search is what gives way', () => {
+  assert.doesNotMatch(pc, /<span className="grow" \/>/);
+  assert.match(pc, /<div className="flex min-w-0 flex-\[1_1_440px\] items-center justify-end gap-1\.5">/);
+  assert.match(pc, /<SearchInput className="w-auto min-w-24 flex-\[0_1_220px\]"/);
+});
+
+test('step 7C2: every tab but «Todas» carries its number, also 0, in the mock-up order', () => {
+  const keys = [...pc.slice(0, pc.indexOf('];')).matchAll(/\['(\w+)', 'tasks\.filter/g)].map((m) => m[1]);
+  assert.deepEqual(keys, ['todas', 'encurso', 'aprobar', 'encola', 'incidencias', 'hechas']);
+  assert.match(pc, /key !== 'todas' \? <span className="n /);
+});
+
+test('step 7C2: the row marked is the task the panel shows, and while it loads the panel waits instead of asking to select one', () => {
+  assert.match(pc, /const current = rows\.some\(\(x\) => x\.id === selected\) \? selected : panelOpen && rows\.length \? rows\[0\]\.id : selected;/);
+  assert.match(pc, /selected=\{panelOpen && current === x\.id\}/);
+  assert.match(pc, /loadingSel \? <div aria-busy="true" data-testid="task-panel-loading" \/>/);
+  assert.match(tasks, /function useTaskDetailState\(id\)/);
+});
+
+test('step 7C2: what the mock-up draws and Orb already had is connected: +N −M and who reviewed in the rows, photo, request changes and line comments in Cambios', () => {
+  const changes = read('src/ui/components/task-changes.jsx');
+  assert.match(changes, /call\('tasks\.diff', \{ id: task\.id, stat: true \}\)/);
+  assert.match(pc, /const \[stat, statRef\] = useDiffStat\(t, \(t\.status === 'done' \|\| t\.status === 'awaiting_approval'\) && !t\.held && !t\.undone && !t\.review_of\);/);
+  assert.match(pc, /tr\('tasks\.reviewedBy', \{ agent:/);
+  assert.match(pc, /e\.kind === 'checkpoint'/);
+  assert.match(pc, /data-testid="task-request-changes"/);
+  assert.match(pc, /go\(\{ view: 'session', id: t\.session_id \}\)/);
+  assert.match(changes, /addComment\(sessionId, \{ path: f\.path/);
+  assert.match(changes, /data-testid="task-change-seen"/);
+  // cancelling a running task: the row's button and the panel's, and «Más acciones» for the rest
+  assert.match(pc, /data-testid="task-row-cancel"/);
+  assert.match(pc, /data-testid="task-cancel-running"/);
+  assert.match(pc, /key: 'cancel'/);
 });

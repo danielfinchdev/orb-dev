@@ -247,5 +247,12 @@ export default {
   'tasks.empty.filtered': 'Ninguna tarea coincide con los filtros',
   'tasks.empty.filteredHint': 'Quita el proyecto, el agente o la búsqueda para ver más.',
   'tasks.sec.history': 'Historial',
-  'tasks.sec.events': '{n} eventos'
+  'tasks.sec.events': '{n} eventos',
+  'tasks.reviewedBy': 'Revisada por {agent}',
+  'tasks.reviewedBy.lower': 'revisada por {agent}',
+  'tasks.crossReview': 'Revisión cruzada',
+  'tasks.changes.photo': 'Foto previa {time}',
+  'tasks.changes.photoUndo': 'Foto previa {time} · se puede deshacer',
+  'tasks.changes.ask': 'Pedir cambios',
+  'tasks.changes.askN': 'Pedir cambios ({n})'
 };

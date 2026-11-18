@@ -21,5 +21,19 @@ export default {
   'wb.removeBody': '“{name}” will be removed from the whiteboard and moved to pizarra/.papelera.',
   'wb.openFolder': 'Open folder',
   'wb.hidePanel': 'Hide attachments',
-  'wb.showPanel': 'Show attachments'
+  'wb.showPanel': 'Show attachments',
+  'wb.saveHint': 'Saved in the project’s pizarra folder',
+  'wb.project': 'Project',
+  'wb.togglePanel': 'Shows or hides the attachments panel',
+  'wb.canvasMenu': 'Canvas menu',
+  'wb.export': 'Export the drawing',
+  'wb.fit': 'Fit to content',
+  'wb.clear': 'Clear the canvas…',
+  'wb.clear.title': 'Clear the canvas',
+  'wb.clear.body': 'The whole drawing of this whiteboard will be erased. Attachments are not touched.',
+  'wb.clear.ok': 'Clear',
+  'wb.noteShort': 'Note for {assistant}',
+  'wb.noteFor': 'Note for {assistant} about {name}',
+  'wb.noAttTitle': 'No attachments',
+  'wb.noAttBody': 'Attach photos, videos or documents so {assistant} can see them.'
 };
