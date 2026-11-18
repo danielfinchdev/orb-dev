@@ -71,7 +71,30 @@ pub async fn handle(app: &AppHandle, method: &str, params: &Value) -> Result<Val
         None => None,
       };
       let args = tools::editor_args(&which, &dir, resolved.as_deref(), line);
-      spawn_detached(&Program { cmd: exe, args, cwd: dir }).map_err(|e| t("sys.terminal.openFailed", &[("name", name.into()), ("error", e)]))?;
+      // Checks the .exe that is started: a valid embedded signature from the editor's maker. It does not cover what the
+      // editor loads later from its own folder (resources, DLLs, JVM options), which in a per-user install any program of
+      // the user can write. The file stays open without write access (`verified`) until it has started, and the path that
+      // is started is the one the open file really has.
+      use crate::signature::{expected_signer, verify_editor, Expected, Failure};
+      let canonical = std::fs::canonicalize(&exe).map(|c| tools::plain_path(&c));
+      let shown = canonical.as_ref().unwrap_or(&exe).to_string_lossy().into_owned();
+      let verified = match &canonical {
+        Ok(c) => verify_editor(c, &which),
+        Err(_) => Err(Failure::Unreadable),
+      }
+      .map_err(|f| {
+        let expected = match expected_signer(&which) {
+          Expected::Named(names) => names.first().copied().unwrap_or("").to_string(),
+          Expected::AnyTrusted => String::new(),
+        };
+        let (name, path) = (name.to_string(), shown.clone());
+        match f {
+          Failure::Unsigned => t("sys.editor.unsigned", &[("name", name), ("path", path)]),
+          Failure::WrongSigner(found) => t("sys.editor.wrongSigner", &[("name", name), ("found", found), ("expected", expected), ("path", path)]),
+          Failure::Unreadable => t("sys.editor.unreadable", &[("name", name), ("path", path)]),
+        }
+      })?;
+      spawn_detached(&Program { cmd: verified.path.clone(), args, cwd: dir }).map_err(|e| t("sys.terminal.openFailed", &[("name", name.into()), ("error", e)]))?;
       json!(true)
     }
     HostRequest::RunAction { command, dir, choice } => {

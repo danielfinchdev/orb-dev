@@ -44,6 +44,9 @@ export default {
   'sys.terminal.none': 'no terminal was found on this PC',
   'sys.terminal.folderOnly': 'a terminal can only be opened in a folder',
   'sys.terminal.openFailed': 'could not open {name}: {error}',
+  'sys.editor.unsigned': '{name} was not opened: the program has no valid signature. Program: {path}',
+  'sys.editor.wrongSigner': '{name} was not opened: it is signed by "{found}", not {expected}. Program: {path}',
+  'sys.editor.unreadable': '{name} was not opened: the program could not be checked. Program: {path}',
   // Agents' browser
   'sys.browser.noUrl': 'the address is missing',
   'sys.browser.badUrl': 'invalid address: {url}',

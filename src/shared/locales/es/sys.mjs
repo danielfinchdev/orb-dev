@@ -46,6 +46,9 @@ export default {
   'sys.terminal.none': 'no se ha encontrado ninguna terminal en este PC',
   'sys.terminal.folderOnly': 'solo se puede abrir una terminal en una carpeta',
   'sys.terminal.openFailed': 'no se pudo abrir {name}: {error}',
+  'sys.editor.unsigned': 'No se ha abierto {name}: el programa no tiene una firma válida. Programa: {path}',
+  'sys.editor.wrongSigner': 'No se ha abierto {name}: lo firma «{found}», no {expected}. Programa: {path}',
+  'sys.editor.unreadable': 'No se ha abierto {name}: no se ha podido comprobar el programa. Programa: {path}',
   // Navegador de los agentes
   'sys.browser.noUrl': 'falta la dirección',
   'sys.browser.badUrl': 'dirección no válida: {url}',
