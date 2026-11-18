@@ -413,6 +413,26 @@ export function diffBetween(repo, before, after, { maxFiles = 300, maxPatch = 20
   return { files, more: list.filter((f) => !isSecretPath(f.path)).length - files.length };
 }
 
+// The line counts of diffBetween without its patches: the same range and options, one `git diff --numstat`, so the numbers
+// are the ones the patch shows. Read only. → { files: [{ status, path, added, removed, binary }], more } (secret-looking paths left out, as in
+// diffBetween), at most maxFiles of them; `more` is how many were left past the cap.
+export const statBetween = (repo, before, after, opts) => finishStat(runSync(repo, statFlow(before, after)), opts);
+export const statBetweenAsync = async (repo, before, after, opts) => finishStat(await runAsync(repo, statFlow(before, after)), opts);
+function* statFlow(before, after) {
+  const r = yield ask({}, 'diff', '--numstat', '-z', '--no-renames', '--no-color', '--no-ext-diff', '--no-textconv', before, after);
+  if (r.status !== 0) throw new Error(oneLineOf(r.stderr) || 'git diff');
+  const status = new Map((yield* changedFlow(before, after)).map((c) => [c.path, c.status]));
+  return r.stdout.split('\0').filter(Boolean).map((row) => {
+    const [added, removed, ...rest] = row.split('\t');
+    const path = rest.join('\t');
+    return { status: status.get(path) ?? 'M', path, binary: added === '-', added: Number(added) || 0, removed: Number(removed) || 0 };
+  });
+}
+function finishStat(list, { maxFiles = 300 } = {}) {
+  const shown = list.filter((f) => !isSecretPath(f.path));
+  return { files: shown.slice(0, maxFiles), more: Math.max(0, shown.length - maxFiles) };
+}
+
 const walkFiles = (root, rel = '') => fs.readdirSync(path.join(root, rel), { withFileTypes: true }).flatMap((e) => {
   const r = rel ? `${rel}/${e.name}` : e.name;
   if (/(^|\/)(\.git|node_modules)$/.test(r) || isSecretPath(r) || e.isSymbolicLink()) return [];

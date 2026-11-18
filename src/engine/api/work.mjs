@@ -19,6 +19,7 @@ import { listTurns, turnDiff, commentsBlock } from '../../domain/conversations/t
 import { editMessage, undoRewind, rewindInfo } from '../edit-message.mjs';
 import { fail, str, int, oneOf, images, DECISION } from './common.mjs';
 import { createDedupe, conversationKey } from './dedupe.mjs';
+import { cachedBranch, cachedPr } from '../host/pr-cache.mjs';
 
 export function workMethods({ trash, project, cut, accept, taskRejected, modelLabelOf, grants, board, sessions, scheduler, chatTrees, log }) {
   const runMode = (s, { name, args }) => {
@@ -121,7 +122,22 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       const act = oneOf(action, ['start', 'stop', 'resume', 'clear'], 'acción');
       return runMode(s, { name: 'goal', args: act === 'start' ? str(text, 'objetivo', 1500) : { stop: 'parar', resume: 'continuar', clear: 'quitar' }[act] });
     },
-    'sessions.list': ({ archived }) => sessions.list({ archived: Boolean(archived) }),
+    // `branch` and `prNumber` are optional and only read from what the engine already holds (the chats' worktree records, and
+    // the branch and open PRs that projects.info / projects.prs last read): this list never runs git or gh.
+    'sessions.list': ({ archived }) => {
+      const list = sessions.list({ archived: Boolean(archived) });
+      let trees = null;
+      return list.map((s) => {
+        if (s.kind !== 'chat' || !s.project) return s;
+        trees ??= new Map(chatTrees.all().filter((r) => !r.removed).map((r) => [r.id, r]));
+        const tree = trees.get(s.id);
+        // the project's branch is today's: a settled or archived chat did not work on it
+        const branch = tree?.branch || (s.archived || s.settled ? null : cachedBranch(s.cwd));
+        if (!branch) return s;
+        const pr = cachedPr(tree?.repo || s.cwd, branch);
+        return { ...s, branch, ...(pr ? { prNumber: pr } : {}) };
+      });
+    },
     'sessions.create': (p) => {
       const proj = p.project ? project(p.project) : null;
       const cwd = proj ? proj.path : ctx.paths.projects;
@@ -179,7 +195,7 @@ ${block}` : ''}` });
     },
     // «Cambios» of a direct chat, turn by turn (turns.mjs): read only, from Orb's light photos of the folder.
     'sessions.turns': async ({ id }) => { const s = sessions.must(str(id, 'conversación', 64)); return s.kind === 'chat' && s.project ? listTurns(s.cwd, s.id) : { available: false, turns: [] }; },
-    'sessions.turnDiff': async ({ id, scope, n }) => { const s = sessions.must(str(id, 'conversación', 64)); return s.kind === 'chat' && s.project ? turnDiff(s.cwd, s.id, { scope: oneOf(scope, ['last', 'all', 'turn', 'head'], 'ámbito', 'last'), n }) : { available: false, files: [], more: 0 }; },
+    'sessions.turnDiff': async ({ id, scope, n, stat }) => { const s = sessions.must(str(id, 'conversación', 64)); return s.kind === 'chat' && s.project ? turnDiff(s.cwd, s.id, { scope: oneOf(scope, ['last', 'all', 'turn', 'head'], 'ámbito', 'last'), n, stat: stat === true }) : { available: false, files: [], more: 0 }; },
     'sessions.queue': ({ id }) => sessions.queue(str(id, 'conversación', 64)),
     'sessions.editQueued': ({ id, queueId, text, remove, move }) => sessions.editQueued(str(id, 'conversación', 64), int(queueId, 'mensaje'), { text: text === undefined ? undefined : str(text, 'mensaje', 20000), remove: Boolean(remove), move: oneOf(move, ['up', 'down'], 'mover', undefined) }),
     'sessions.approve': ({ id, request, decision }) => sessions.respond(str(id, 'conversación', 64), str(request, 'petición', 200), oneOf(decision, DECISION, 'decisión')),

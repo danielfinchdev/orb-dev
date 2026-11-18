@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { git, gitAsync, REF_PREFIX, isGitRepoAsync, repoRootAsync } from '../../platform/git.mjs';
-import { snapshotCommitAsync, diffBetween, RAW_GIT, RAW_INDEX, caseRenamed, indexId } from '../tasks/checkpoints.mjs';
+import { snapshotCommitAsync, diffBetween, statBetweenAsync, RAW_GIT, RAW_INDEX, caseRenamed, indexId } from '../tasks/checkpoints.mjs';
 import { isSecretPath } from '../../shared/secrets-scan.mjs';
 
 const TURNS = `${REF_PREFIX}/turnos`;
@@ -158,7 +158,8 @@ export async function listTurns(cwd, sid) {
 }
 
 // scope: 'last' | 'all' | 'turn' (with n) | 'head' (the last photo against the current HEAD commit).
-export async function turnDiff(cwd, sid, { scope = 'last', n } = {}) {
+// stat: only the line counts per file (statBetween), no patches.
+export async function turnDiff(cwd, sid, { scope = 'last', n, stat = false } = {}) {
   if (!cwd || !(await isGitRepoAsync(cwd))) return { available: false, files: [], more: 0 };
   const repo = await repoRootAsync(cwd);
   const refs = await listRefs(repo, sid);
@@ -176,7 +177,7 @@ export async function turnDiff(cwd, sid, { scope = 'last', n } = {}) {
     if (!head) return { available: false, files: [], more: 0 };
     a = { commit: head }; label = 'head';
   } else { a = refs[refs.length - 2]; label = last.n; }
-  return { available: true, scope: label, ...diffBetween(repo, a.commit, b.commit) };
+  return { available: true, scope: label, ...(stat ? await statBetweenAsync(repo, a.commit, b.commit) : diffBetween(repo, a.commit, b.commit)) };
 }
 
 // An archived or deleted conversation leaves nothing behind. Sync on purpose: it runs where the conversation is removed.

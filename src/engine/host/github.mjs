@@ -15,6 +15,7 @@ import { folderName } from '../../platform/paths.mjs';
 import { checkCategory } from '../../domain/projects/projects.mjs';
 import { ATTACH_DIR } from '../sessions.mjs';
 import { cleanCommitMessage } from '../../shared/commit-message.mjs';
+import { rememberRepo } from './pr-cache.mjs';
 
 function ghExe() {
   const pf = process.env.ProgramFiles ?? 'C:\\Program Files';
@@ -79,11 +80,12 @@ export async function projectInfo(project) {
   const branches = refs.stdout.split(/\r?\n/).filter(Boolean).slice(0, 100);
   const changes = st.stdout.split(/\r?\n/).filter(Boolean).length;
   const ahead = remote ? (await query(project.path, 'rev-list', '--count', '@{upstream}..HEAD')).stdout.trim() : '';
-  let prs = [];
+  let prs = []; let prsRead = false;
   if (remote && /github\.com/i.test(remote) && ghExe()) {
-    const r = await gh(['pr', 'list', '--state', 'open', '--limit', '20', '--json', 'number,title,headRefName,url,isDraft'], { cwd: project.path, timeoutMs: 30_000 });
-    if (r.ok) { try { prs = JSON.parse(r.out); } catch { /* ignore */ } }
+    const r = await gh(['pr', 'list', '--state', 'open', '--limit', '20', '--json', 'number,title,headRefName,url,isDraft,isCrossRepository'], { cwd: project.path, timeoutMs: 30_000 });
+    if (r.ok) { try { prs = JSON.parse(r.out); prsRead = Array.isArray(prs); } catch { /* ignore */ } }
   }
+  rememberRepo(project.path, { branch, prs: prsRead ? prs : undefined });
   return { git: true, branch, remote, branches, changes, ahead: ahead === '' ? null : Number(ahead), prs };
 }
 
@@ -194,8 +196,10 @@ const oidOf = (v) => (typeof v === 'string' && HEAD_OID_RE.test(v) ? v.toLowerCa
 const authorOf = (a) => (a && typeof a === 'object' ? String(a.login ?? a.name ?? '') : String(a ?? ''));
 
 export async function listPrs(project) {
-  const list = await ghJson(project, ['pr', 'list', '--state', 'open', '--limit', '30', '--json', 'number,title,headRefName,headRefOid,baseRefName,url,isDraft,author,updatedAt,reviewDecision,mergeable']);
-  return (Array.isArray(list) ? list : []).slice(0, 30).map((x) => ({ number: x.number, title: oneLine(x.title, 300), headRefName: x.headRefName, headRefOid: oidOf(x.headRefOid), baseRefName: x.baseRefName, url: x.url, isDraft: Boolean(x.isDraft), author: authorOf(x.author), updatedAt: x.updatedAt, reviewDecision: x.reviewDecision || null, mergeable: x.mergeable || null }));
+  const list = await ghJson(project, ['pr', 'list', '--state', 'open', '--limit', '30', '--json', 'number,title,headRefName,headRefOid,baseRefName,url,isDraft,author,updatedAt,reviewDecision,mergeable,isCrossRepository']);
+  const out = (Array.isArray(list) ? list : []).slice(0, 30).map((x) => ({ number: x.number, title: oneLine(x.title, 300), headRefName: x.headRefName, headRefOid: oidOf(x.headRefOid), baseRefName: x.baseRefName, url: x.url, isDraft: Boolean(x.isDraft), author: authorOf(x.author), updatedAt: x.updatedAt, reviewDecision: x.reviewDecision || null, mergeable: x.mergeable || null }));
+  rememberRepo(project.path, { prs: Array.isArray(list) ? list.slice(0, 30) : undefined });
+  return out;
 }
 
 export async function viewPr(project, number) {
