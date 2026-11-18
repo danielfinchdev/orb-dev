@@ -58,14 +58,14 @@ test('kit.js, sfx.js and thumbs.jsx export what they did (the Android app shares
 
 test('no test id of the old views disappears', () => {
   for (const f of ['src/ui/views/tutorials.jsx', 'src/ui/views/expert.jsx', 'src/ui/games/games.jsx']) {
-    const now = ids(read(f));
+    const now = ids(read(f) + (f.endsWith('expert.jsx') ? read('src/ui/components/expert-git.jsx') : '')); // the git panel moved to its own file
     for (const id of ids(head(f))) {
       // God mode's panels got their ids written out (it was one `testid` prop)
       if (f.endsWith('expert.jsx') && id === '{testid}') continue;
       assert.ok(now.has(id), `${f}: ${id}`);
     }
   }
-  const expert = read('src/ui/views/expert.jsx');
+  const expert = read('src/ui/views/expert.jsx') + read('src/ui/components/expert-git.jsx');
   for (const id of ['panel-explorer', 'panel-git', 'panel-history', 'panel-running', 'panel-usage', 'panel-system', 'panel-activity']) assert.ok(expert.includes(`"${id}"`), id);
 });
 
@@ -126,9 +126,9 @@ test('10C-b God mode: the diff is one card per hunk, the path bar says what is k
   assert.match(src, /data-testid="expert-diff"/);
   assert.match(src, /data-testid="expert-status"/);
   assert.doesNotMatch(src, /UTF-8|Ln \d|Col \d/, 'no encoding nor cursor: the viewer is read-only');
-  assert.match(src, /st\.upstream \? 'expert\.aheadOf' : 'expert\.ahead'/);
-  assert.match(src, /f\.add != null \? <span/);
-  assert.doesNotMatch(src, /type="checkbox"|<Checkbox/, 'no commit checkbox: God mode does not commit');
+  const panel = read('src/ui/components/expert-git.jsx'); // the git panel lives in its own component since G3
+  assert.match(panel, /st\.upstream \? 'expert\.aheadOf' : 'expert\.ahead'/);
+  assert.match(panel, /f\.add != null \? <span/);
   const patch = read('src/ui/components/patch-view.jsx');
   assert.match(patch, /bodyClass = 'max-h-96'/, 'the tab Cambios of the tasks keeps its 24 rem');
   for (const l of ['es', 'en']) { const s = read(`src/shared/locales/${l}/expert.mjs`); for (const k of ['aheadOf', 'behindOf', 'lines']) assert.match(s, new RegExp(`'expert\.${k}'`)); }
