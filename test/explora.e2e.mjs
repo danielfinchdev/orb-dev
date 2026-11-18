@@ -314,7 +314,7 @@ try {
       // «Crea tu contraseña maestra» with both fields written (a made-up example, cleared again so throughStart fills them as before)
       if (name === 'master') {
         try {
-          const example = 'contraseña-de-ejemplo-1';
+          const example = 'cuatro palabras de ejemplo 7'; // a phrase, as the mock-up's example, so the strength line reads like there
           await page.fill('[data-testid=master-new]', example); await page.fill('[data-testid=master-again]', example); await page.waitForTimeout(300);
           await shot('00a-contrasena-maestra-escrita'); await darkShot('00a-contrasena-maestra-escrita');
           // «Mostrar» on the first box: the made-up example in clear, hidden again before going on
