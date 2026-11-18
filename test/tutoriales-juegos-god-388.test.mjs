@@ -74,7 +74,8 @@ test('God mode keeps its exports and the calls it makes', () => {
   const before = head('src/ui/views/expert.jsx');
   for (const name of ['PANELS', 'savePanels', 'ExpertView']) assert.match(now, new RegExp(`export (?:const|async function|function) ${name}\\b`));
   const calls = (src) => new Set([...src.matchAll(/call\('([\w.]+)'/g)].map((m) => m[1]));
-  assert.deepEqual([...calls(now)].sort(), [...calls(before), 'expert.createFile'].sort()); // the one call added: «Nuevo archivo»
+  // the one call added: «Nuevo archivo» (a set: once committed, the version of before has it too)
+  assert.deepEqual([...calls(now)].sort(), [...new Set([...calls(before), 'expert.createFile'])].sort());
   // the PC-only guard stays (the phone never gets the tree, the files or git)
   assert.match(now, /if \(bridge\.mobile\) return/);
 });
