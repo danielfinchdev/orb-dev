@@ -3,8 +3,12 @@
 // with screenshots in test-results/explora/ (explora-en/ with ORB_LANG=en) and the page errors collected. Not an
 // assertion test: it is for looking at. On the test build of Orb, hidden (test/fixtures/launch-orb.mjs):
 //   npm run tauri:build:e2e && node test/explora.e2e.mjs
+// The assistant's folder is seeded with demo data like the mockups' (projects with a git repository, chats with fake
+// agents, tasks, a schedule, a chat with Orbe) before the pictures, so the sidebar, the chat and its side panel have
+// something to show. Everything lives in the temp folder; ORB_EXPLORA_SEED=0 skips it (the empty profile of before).
 import fs from 'node:fs';
 import os from 'node:os';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHome } from '../src/domain/workspace/home.mjs';
@@ -23,7 +27,7 @@ const notes = [];
 // Every Orb this run opens: a failed step closes them all, so the run always ends.
 const opened = [];
 // A run that hangs (a control that never shows) ends by itself: it closes its Orbs and exits with an error.
-setTimeout(async () => { console.error('✖ tiempo máximo agotado'); for (const stop of opened) { try { await stop(); } catch { /* already closed */ } } process.exit(2); }, Number(process.env.ORB_EXPLORA_MAX_MIN || 9) * 60000).unref();
+setTimeout(async () => { console.error('✖ tiempo máximo agotado'); for (const stop of opened) { try { await stop(); } catch { /* already closed */ } } process.exit(2); }, Number(process.env.ORB_EXPLORA_MAX_MIN || 12) * 60000).unref();
 // ORB_EXPLORA_SIZE=1440x880 gives every picture that window size (the mockups' size).
 const SIZE = /^(\d+)x(\d+)$/.exec(process.env.ORB_EXPLORA_SIZE || '');
 const note = (s) => { notes.push(s); console.log(`  · ${s}`); };
@@ -33,6 +37,8 @@ async function open(userData, env = {}) {
   const orb = await launchOrb({ userData, env: { ...sandboxEnv(tmp), ...env } });
   const page = orb.page; const stop = () => orb.close();
   opened.push(stop);
+  // Pictures show the themes as designed: a PC with Windows' transparency effects off would drop Cristal's blur.
+  try { const cdp = await page.context().newCDPSession(page); await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'no-preference' }] }); } catch { /* an older WebView2: the pictures follow the system's setting */ }
   if (SIZE) await page.setViewportSize({ width: Number(SIZE[1]), height: Number(SIZE[2]) });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -55,6 +61,82 @@ const closeSettings = async (page, where) => {
 };
 // Text that overflows its box inside the main area (truncated labels are fine: they are meant to be cut).
 const overflow = (page) => page.evaluate(() => [...document.querySelectorAll('main *, [role=dialog] *')].filter((e) => e.scrollWidth > e.clientWidth + 2 && getComputedStyle(e).overflowX !== 'visible' && e.clientWidth > 0 && !e.classList.contains('truncate') && !e.closest('.truncate, .sr-only') && !e.closest('pre, .overflow-x-auto, [data-slot=scroll-area-viewport]')).slice(0, 4).map((e) => `${e.tagName.toLowerCase()}.${String(e.className).slice(0, 70)} ${e.scrollWidth}>${e.clientWidth}`));
+
+// ---- demo data (the mockups' sidebar.json and 01-chat.html): what the second Orb is seeded with. All of it is fake: fake
+// agents (test/fixtures/fake-explora.mjs), folders under `tmp`, no network, never this PC's profile.
+const SEED = process.env.ORB_EXPLORA_SEED !== '0';
+const text = (...l) => `${l.join('\n')}\n`;
+const noted = new Set();
+const noteOnce = (s) => { if (!noted.has(s)) { noted.add(s); note(s); } };
+// A seeded step that fails is a note, never a stop: the tour goes on with what there is.
+const attempt = async (what, fn) => { try { return await fn(); } catch (error) { note(`no se pudo sembrar ${what}: ${String(error?.message ?? error).split('\n')[0]}`); return null; } };
+
+const REPOS = {
+  'orb-dev': { git: 'orb/contexto-real', files: {
+    'README.md': text('# orb-dev', 'Orb, el panel de agentes.'),
+    'src/context-meter.js': text('export function ContextMeter({ context }) {', '  const size = context.size;', '  const used = context.used;', '  const pct = size ? Math.round((used / size) * 100) : null;', '  return { pct };', '}'),
+    'src/sidebar.js': text('export const blocks = [\'chats\', \'plan\', \'usage\'];', 'export const hasPlanBlock = true;'),
+    'docs/context-switch-plan.md': text('# Context switch plan', '', 'Pending.') } },
+  'tienda-web': { git: 'main', files: { 'README.md': text('# tienda-web'), 'src/importar.js': text('export const importar = () => [];') } },
+  // no repository: its chats show the panel without a «Cambios» history
+  'api-pagos': { git: null, files: { 'README.md': text('# api-pagos'), 'src/reembolsos.js': text('export const reembolsar = () => null;'), 'src/checkout.js': text('export const checkout = () => null;') } }
+};
+const repeat = (n, make) => Array.from({ length: n }, (_, i) => make(i + 1));
+const METER_V1 = text('export function ContextMeter({ context }) {', '  const size = context.runtime?.size ?? context.size;', '  const used = context.runtime?.used ?? context.used;', '  const pct = size ? Math.round((used / size) * 100) : null;', '  return { pct, pending: pct === null };', '}');
+const METER_V2 = text('// The runtime reports its own budget: a model switch restarts the idle runtime and resumes the same chat.', ...METER_V1.split('\n').slice(0, -1));
+const BUSY_TEXT = 'Sigue leyendo designer.mjs y apunta lo que cambia del modo diseño';
+// What each chat says (the user's lines are the keys the fake agents answer to: ORB_FAKE_SCRIPT) and does (ORB_EXPLORA_PLAN).
+const CHATS = [
+  { key: 'contador', title: 'Arreglar el contador de contexto', agent: 'claude', project: 'orb-dev', permission: 'auto', turns: [
+    { text: 'Mira cómo se calcula el contador de contexto y dime qué falla.', reply: 'El contador usa el tamaño del modelo y no el del runtime: por eso marca mal al cambiar entre Auto, 200k y 1M. Lo arreglo en el siguiente paso.', files: { 'src/context-meter.js': METER_V1 } },
+    { text: 'Arréglalo y añade pruebas del área.', reply: 'El presupuesto sale del tiempo de ejecución del modelo que corresponde, también con Auto. Se mantienen el razonamiento, el modo rápido y la distribución.\n\n**Comprobado:**\n\n- 46 tests del área y 16 del navegador en verde\n- lint sin errores\n\nPlan y pruebas actualizados. Sin commit ni push.',
+      files: { 'src/context-meter.js': METER_V2, 'test/contexto-388.test.js': text(...repeat(24, (n) => `test('contador ${n}', () => assert.ok(${n}));`)), 'docs/context-switch-plan.md': text('# Context switch plan', '', ...repeat(11, (n) => `- Step ${n}: apply the runtime budget.`)) } },
+    { text: 'Revisa el código y, si hace falta, arréglalo y abre una PR.', reply: 'He abierto la PR #1260, commit `47dcd08`.\n\nRevisión completa: no hay fallos nuevos ni nada que refactorizar. Incluye capturas de antes y después.\n\nTodo en verde en local: formato, lint, tipos y 46 tests. La CI de GitHub acaba de empezar.\n\nWorktree limpio; nada fusionado y `main` sin cambios.',
+      files: { 'docs/context-switch-plan.md': text('# Context switch plan', '', ...repeat(14, (n) => `- Step ${n}: apply the runtime budget.`), '', 'Reviewed.') } }] },
+  { key: 'compactacion', title: 'La compactación no quita contexto', agent: 'claude', project: 'orb-dev', permission: 'editar', turns: [
+    { text: 'Mira por qué la compactación no quita contexto. Pide permiso antes de publicar la rama.', reply: 'Necesito publicar la rama para seguir.', append: 'PIDE_PERMISO', waitsApproval: true }] },
+  { key: 'sidebar', title: 'Quitar el bloque de la barra lateral', agent: 'codex', project: 'orb-dev', permission: 'editar', complete: true, turns: [
+    { text: 'Quita el bloque del plan de la barra lateral.', reply: 'Quité el bloque del plan y dejé el espacio para los chats.', files: { 'src/sidebar.js': text('export const blocks = [\'chats\', \'usage\'];') } }] },
+  { key: 'limite', title: 'Límite al pedir PR a GitHub', agent: 'cursor', project: 'orb-dev', permission: 'editar', unread: true, turns: [
+    { text: 'Mira por qué falla el límite al pedir la PR a GitHub.', reply: 'Es el límite de peticiones de la API: añado un reintento con espera antes de volver a pedirla.' }] },
+  { key: 'diseno', title: 'Diagnóstico del modo diseño', agent: 'claude', project: 'orb-dev', permission: 'editar', pinned: true, turns: [
+    { text: 'Haz un diagnóstico del modo diseño.', reply: 'Empiezo por designer.mjs y sigo con el panel.' },
+    { text: BUSY_TEXT, reply: 'Leyendo designer.mjs…', append: 'DUERME', busy: true }] },
+  { key: 'importar', title: 'Importar proyectos y voz con Ctrl+K', agent: 'codex', project: 'tienda-web', permission: 'editar', turns: [
+    { text: 'Importa los proyectos y la voz desde Ctrl+K.', reply: 'Hecho: Ctrl+K ya importa proyectos y la entrada de voz.', files: { 'src/importar.js': text('export const importar = (fuente) => [fuente];', 'export const voz = () => true;') } }] },
+  { key: 'reembolsos', title: 'Reembolsos parciales', agent: 'claude', project: 'api-pagos', permission: 'editar', turns: [
+    { text: 'Prepara el plan de los reembolsos parciales.', reply: 'Propongo dos pasos: primero el cálculo del importe y luego la llamada a la pasarela.' }] }
+];
+const TASKS = [
+  { project: 'tienda-web', title: 'Traducir las fichas de producto', agent: 'codex', text: 'Traduce las fichas de producto al inglés y al francés.', reply: 'Traduciendo…', append: 'DUERME', busy: true },
+  { project: 'api-pagos', title: 'Migrar el cobro a la API nueva de Stripe', agent: 'cursor', text: 'Migra el cobro y haz el pago de la factura con la tarjeta de prueba.', reply: 'Hecho.' },
+  { project: 'api-pagos', title: 'Revisar el checkout', agent: 'claude', text: 'Revisa el checkout y deja el resultado a punto de aceptar.', reply: 'Revisado: el checkout guarda el carrito entre recargas.', files: { 'src/checkout.js': text('export const checkout = (carrito) => ({ ...carrito, guardado: true });') } },
+  { project: 'api-pagos', title: 'Limpiar dependencias sin usar', agent: 'codex', text: 'Limpia las dependencias sin usar de la API.', reply: 'No pude terminar.', append: 'FALLA' }
+];
+const ORBE = [{ text: 'Dame tres planes para el fin de semana si llueve.', reply: 'Te dejo tres planes con lluvia: un museo por la mañana, una peli con comida en casa y una partida de mesa con amigos.' },
+  { text: 'Gracias, me quedo con el museo. ¿A qué hora abre?', reply: 'Casi todos abren a las 10:00. Mira el horario del que elijas antes de salir.' }];
+
+// The two files the fake agents read at start (so they exist before Orb launches): the natural answers and the side effects.
+function writeFakes() {
+  const turns = [...CHATS.flatMap((c) => c.turns), ...TASKS, ...ORBE];
+  const script = path.join(tmp, 'explora-guion.json'); const plan = path.join(tmp, 'explora-plan.json');
+  fs.writeFileSync(script, JSON.stringify(turns.map((t) => ({ when: t.text, reply: t.reply }))));
+  fs.writeFileSync(plan, JSON.stringify(turns.filter((t) => t.files || t.append).map((t) => ({ when: t.text, files: t.files, append: t.append }))));
+  return { ORB_FAKE_AGENTS: path.join(ROOT, 'test', 'fixtures', 'fake-explora.mjs'), ORB_FAKE_SCRIPT: script, ORB_EXPLORA_PLAN: plan };
+}
+// The projects' folders: files, and for the ones with a repository a first commit on main plus the branch the chat works on.
+function makeRepos() {
+  const dirs = {};
+  for (const [name, repo] of Object.entries(REPOS)) {
+    const dir = path.join(tmp, 'Proyectos', name); dirs[name] = dir;
+    for (const [rel, body] of Object.entries(repo.files)) { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), body); }
+    if (!repo.git) continue;
+    const git = (...args) => execFileSync('git', ['-c', 'user.name=Orb Explora', '-c', 'user.email=explora@example.invalid', '-c', 'commit.gpgsign=false', ...args], { cwd: dir, stdio: 'ignore', timeout: 20000, windowsHide: true });
+    git('init', '-b', 'main'); git('add', '-A'); git('commit', '-m', 'chore: initial commit');
+    if (repo.git !== 'main') git('checkout', '-b', repo.git);
+  }
+  return dirs;
+}
 
 try {
   // ---- 1. a brand-new PC: the welcome wizard, straight into the app.
@@ -90,7 +172,11 @@ try {
   fs.writeFileSync(path.join(home, 'web', 'webviaproject', 'src', 'index.html'), '<h1>hola</h1>\n');
   const userData = path.join(tmp, 'datos'); fs.mkdirSync(userData);
   fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home }));
-  const { page, errors, close } = await open(userData);
+  // The fake agents (and the demo folders) must exist before Orb starts: the engine reads them at launch.
+  const dirs = SEED ? await attempt('las carpetas de los proyectos', makeRepos) ?? {} : {};
+  const fakes = SEED ? await attempt('los agentes falsos', writeFakes) ?? {} : {};
+  if (SEED && !fakes.ORB_FAKE_AGENTS) note('sin agentes falsos: no habrá chats sembrados');
+  const { page, errors, close } = await open(userData, fakes);
   const shot = shooter(page);
   const call = (method, params = {}) => page.evaluate(([m, p]) => window.orb.call(m, p), [method, params]);
   // 3.8: a folder made before the first start has no master password yet: «Crea tu contraseña maestra» once.
@@ -102,6 +188,119 @@ try {
   // ORB_LANG=en: the same tour in English (the interface and the engine's notices follow config.language).
   if (LANG) { await call('config.save', { patch: { language: LANG } }); await page.reload(); await page.waitForSelector('[data-testid=sidebar-home]'); }
   if (await page.isVisible('text=Preparando tu PC')) { await shot('01-preparo-equipo'); await page.click('text=Continuar'); }
+  // ---- demo data: projects, chats of three fake agents, a chat with Orbe, tasks in several states, schedules, a bell.
+  const ids = {};
+  const sessionOf = async (id) => (await call('sessions.list')).find((s) => s.id === id);
+  // A turn takes a moment to start: it is only «idle» once it has begun and ended.
+  const waitIdle = async (id, ms = 25000) => { await page.waitForTimeout(700); await until(async () => (await sessionOf(id))?.status !== 'running', `chat ${id} en reposo`, ms); };
+  const seeded = SEED && Boolean(fakes.ORB_FAKE_AGENTS); // never with real agents: without the fakes nothing is seeded
+  if (seeded) {
+    note('datos de prueba: agentes falsos (claude, codex, cursor), sin red; todo en la carpeta temporal');
+    for (const name of Object.keys(REPOS)) await attempt(`el proyecto ${name}`, () => call('projects.import', { name, folder: dirs[name] }));
+    for (const c of CHATS) {
+      await attempt(`el chat «${c.title}»`, async () => {
+        const s = await call('sessions.create', { agent: c.agent, project: c.project, permission: c.permission, title: c.title });
+        ids[c.key] = s.id;
+        for (const t of c.turns) {
+          await call('sessions.send', { id: s.id, text: t.text });
+          // an approval stays pending on purpose; a «busy» turn keeps working (DUERME) so the sidebar shows it working
+          if (t.waitsApproval) await until(async () => (await call('approvals.list')).length > 0, 'permiso pendiente', 15000).catch(() => note(`«${c.title}»: no apareció la tarjeta de permiso`));
+          else if (t.busy) await page.waitForTimeout(1200);
+          else await waitIdle(s.id);
+        }
+      });
+    }
+    // the orbe chat: two exchanges, then its title
+    await attempt('el chat con Orbe', async () => {
+      const lines = async (conversation) => (await call('chat.list', { conversation })).filter((l) => l.role === 'orb');
+      const first = await call('chat.send', { text: ORBE[0].text, project: '' });
+      ids.orbe = first.conversation;
+      await until(async () => (await lines(ids.orbe)).length >= 1, 'respuesta de Orbe', 30000);
+      await call('chat.send', { text: ORBE[1].text, conversation: ids.orbe });
+      await until(async () => (await lines(ids.orbe)).length >= 2, 'segunda respuesta de Orbe', 30000);
+      await call('conversations.update', { id: ids.orbe, title: 'Ideas para el fin de semana' });
+    });
+    for (const t of TASKS) await attempt(`la tarea «${t.title}»`, () => call('tasks.create', { project: t.project, title: t.title, description: t.text, agent: t.agent }));
+    await attempt('el fin de las tareas', () => until(async () => { const l = await call('tasks.list'); return l.some((x) => x.status === 'failed' || x.status === 'blocked') && l.some((x) => x.status === 'done'); }, 'tareas terminadas', 40000)).then((v) => { if (v === null) note('las tareas no llegaron a todos sus estados (mira la vista Tareas)'); });
+    await attempt('la programada diaria', () => call('schedules.create', { project: 'api-pagos', title: 'Resumen de errores de la noche', description: 'Resume los errores de la noche.', agent: 'codex', readonly: true, every: 'daily', at_time: '08:30' }));
+    await attempt('la programada semanal', () => call('schedules.create', { project: 'tienda-web', title: 'Revisión semanal de dependencias', description: 'Revisa las dependencias y avisa de lo que falle.', agent: 'claude', every: 'weekly', weekdays: [1], at_time: '09:00' }));
+    // marks of the sidebar: one pinned, one completed, and unread only where the demo wants it (the rest are read)
+    for (const c of CHATS) {
+      if (!ids[c.key]) continue;
+      if (c.pinned) await attempt(`fijar «${c.title}»`, () => call('inbox.pin', { kind: 'session', id: ids[c.key] }));
+      if (c.complete) await attempt(`completar «${c.title}»`, () => call('sidebar.complete', { key: `s${ids[c.key]}`, done: true }));
+      if (!c.unread) await attempt(`marcar leído «${c.title}»`, () => call('inbox.markRead', { kind: 'session', id: ids[c.key] }));
+    }
+    note('no sembrado a propósito: PR de GitHub (sin red ni gh), solo carpetas locales');
+  }
+  // The tour lasts minutes and a fake «DUERME» turn ends after 30 s: before the pictures that need them, whatever has
+  // stopped working starts again, so the sidebar's spinner and «En curso» are there.
+  const keepBusy = async () => {
+    if (!seeded) return;
+    try {
+      const busyTask = TASKS.find((t) => t.busy);
+      if (!(await call('tasks.list')).some((x) => x.status === 'running' || (x.title === busyTask.title && x.status === 'queued'))) {
+        await call('tasks.create', { project: busyTask.project, title: busyTask.title, description: busyTask.text, agent: busyTask.agent });
+        await until(async () => (await call('tasks.list')).some((x) => x.status === 'running'), 'tarea en curso', 8000).catch(() => noteOnce('la tarea «en curso» no llegó a arrancar'));
+      }
+      const s = ids.diseno ? await sessionOf(ids.diseno) : null;
+      if (s && s.status !== 'running') await call('sessions.send', { id: s.id, text: BUSY_TEXT });
+    } catch (error) { noteOnce(`no se pudo mantener algo «trabajando»: ${error.message}`); }
+  };
+  // The chat of a row of the sidebar (by its title); a missing row is a note, not a stop.
+  const openChat = async (title) => {
+    try {
+      const row = page.getByTestId(`orb-row-${title}`).first();
+      await row.scrollIntoViewIfNeeded({ timeout: 4000 });
+      await row.locator('button').first().click({ timeout: 4000 });
+      await page.waitForTimeout(700);
+      return true;
+    } catch { noteOnce(`sin fila «${title}» en la barra lateral`); return false; }
+  };
+  // A control that may not be there: clicked for a short time, and its absence is a note.
+  const tap = async (testid, what) => {
+    try { await page.locator(`[data-testid="${testid}"]`).first().click({ timeout: 4000 }); await page.waitForTimeout(350); return true; } catch { noteOnce(`sin ${what ?? testid}`); return false; }
+  };
+  const closeMenus = async () => { await page.keyboard.press('Escape'); await page.waitForTimeout(250); };
+  const panelIsOpen = () => page.locator('[data-testid=chat-panel][data-state=open]').count().then((n) => n > 0).catch(() => false);
+  // The chat's side panel on one of its tabs (Ficha, Cambios, PR); false when the tab does not exist (no PR without network).
+  const openPanel = async (tab) => {
+    if (!(await panelIsOpen()) && !(await tap('turn-changes-toggle', 'botón del panel derecho'))) return false;
+    await page.locator('[data-testid=chat-panel][data-state=open]').waitFor({ timeout: 3000 }).catch(() => {});
+    if (!(await page.locator(`[data-testid=panel-tab-${tab}]`).count())) { noteOnce(`sin pestaña «${tab}» en el panel (${tab === 'pr' ? 'una PR necesita GitHub: no se puede sembrar sin red' : 'no aparece'})`); return false; }
+    return tap(`panel-tab-${tab}`);
+  };
+  const closePanel = async () => { if (await panelIsOpen()) await tap('turn-changes-close', 'cerrar el panel'); await page.waitForTimeout(300); };
+  // The pictures of the chat with an agent (the sidebar, the turns with their «Cambió N archivos» card, the panel and the
+  // menus of its bar and its box). prefix: «dia» / «noche».
+  const agentShots = async (prefix) => {
+    if (!seeded) return;
+    await keepBusy();
+    if (!(await openChat(CHATS[0].title))) return;
+    await closePanel();
+    await shot(`${prefix}-chat-agente`);
+    for (const [tab, name] of [['info', 'panel-ficha'], ['changes', 'panel-cambios'], ['pr', 'panel-pr']]) {
+      if (await openPanel(tab)) await shot(`${prefix}-${name}`);
+    }
+    await closePanel();
+    if (await tap('session-more', 'el ⋯ de la cabecera')) { await shot(`${prefix}-chat-agente-menu`); await closeMenus(); }
+    if (await tap('session-permission-more', 'el selector de permisos')) {
+      await shot(`${prefix}-chat-permisos`);
+      if (await tap('session-permission-options', '«Más opciones» de permisos')) await shot(`${prefix}-chat-permisos-mas-opciones`);
+      await closeMenus();
+    }
+    if (await tap('reasoning-picker', 'el selector de razonamiento')) { await shot(`${prefix}-chat-razonamiento`); await closeMenus(); }
+    if (ids.orbe && await openChat('Ideas para el fin de semana')) await shot(`${prefix}-chat-orbe`);
+    // the ⋯ of a row (it shows on hover) and two tabs open
+    const row = page.getByTestId(`orb-row-${CHATS[3].title}`).first();
+    try {
+      await row.hover({ timeout: 3000 });
+      await row.locator('[data-testid=chat-menu]').click({ timeout: 3000 });
+      await page.waitForTimeout(350);
+      await shot(`${prefix}-menu-fila`);
+      if (!(await tap('chat-newtab', '«Abrir en pestaña nueva» del menú de la fila'))) await closeMenus(); else await shot(`${prefix}-pestanas`);
+    } catch { noteOnce('sin menú ⋯ en la fila de un chat'); await closeMenus(); }
+  };
   const dark = () => page.evaluate(() => document.documentElement.classList.contains('dark'));
   const setDark = async (on) => { if (on !== (await dark())) await page.getByRole('button', { name: /claro y oscuro|day and night|light and dark/i }).click(); };
   // The robot at the top goes back to the chat; the professional theme has no robot (nothing drawn): there, a new chat
@@ -117,6 +316,7 @@ try {
   for (const theme of ['dia', 'noche']) {
     await setDark(theme === 'noche');
     for (const [nav, name] of views) {
+      await keepBusy();
       if (nav === 'sidebar-home') await goChat(); else await page.click(`[data-testid=${nav}]`);
       await shot(`${theme}-${name}`);
       if (theme === 'dia') {
@@ -145,6 +345,10 @@ try {
     await shot(`${theme}-menu-nuevo`);
     await page.click('[data-testid=new-conversation]', { timeout: 5000 }).catch(() => note('sin «Nuevo chat» en el menú «+»'));
     await shot(`${theme}-nueva-conversacion`); await page.keyboard.press('Escape');
+    // the seeded chats: with an agent (turns, «Cambió N archivos», panel, menus), with Orbe, the row's ⋯, two tabs
+    await agentShots(theme);
+    // Programadas lives in the sidebar's places: seeded with two schedules (a view the loop above does not list)
+    if (seeded && await tap('nav-schedules', 'Programadas')) await shot(`${theme}-programadas`);
   }
   // checks and switches in the night theme: their computed colors
   await page.click('[data-testid=nav-settings]');
@@ -155,18 +359,39 @@ try {
   note(`controles en noche:\n    ${controls.join('\n    ')}`);
   await closeSettings(page, 'controles');
 
+  // A click of the theme tour: 6 s at most; when something covers the control, the note names it and the tour goes on.
+  const tapOrNote = async (sel) => {
+    try { await page.click(sel, { timeout: 6000 }); return true; } catch (error) {
+      // Playwright's own log says at which stage the click stopped (visible, stable, hit target, receiving events)
+      const stage = String(error.message).split(String.fromCharCode(10)).map((l) => l.split(String.fromCharCode(27)).map((p, k) => (k ? p.slice(p.indexOf("m") + 1) : p)).join("").trim()).filter((l) => l.startsWith("-")).slice(-7).join(" / ");
+      const over = await page.evaluate((q) => { const e = document.querySelector(q); if (!e) return 'no existe'; const r = e.getBoundingClientRect(); const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); const path = []; for (let n = top; n && path.length < 4; n = n.parentElement) path.push(`${n.tagName.toLowerCase()}${n.dataset?.testid ? `[${n.dataset.testid}]` : ''}.${String(n.className?.baseVal ?? n.className ?? '').split(' ').slice(0, 3).join('.')}`); return path.join(' < '); }, sel).catch(() => '?');
+      // a control that never holds still cannot be clicked: say which animation moves it (or one of its ancestors)
+      const moving = await page.evaluate(async (q) => { const e = document.querySelector(q); if (!e) return ''; const rects = []; for (let i = 0; i < 8; i++) { const r = e.getBoundingClientRect(); rects.push(`${r.x.toFixed(1)},${r.y.toFixed(1)},${r.width.toFixed(1)}x${r.height.toFixed(1)}`); await new Promise((ok) => setTimeout(ok, 80)); } const anims = []; for (let n = e; n; n = n.parentElement) for (const a of n.getAnimations()) anims.push(`${n.tagName.toLowerCase()}${n.dataset?.testid ? `[${n.dataset.testid}]` : ''}.${String(n.className?.baseVal ?? n.className ?? '').split(' ').slice(0, 2).join('.')}:${a.animationName ?? a.transitionProperty ?? a.constructor.name}/${a.playState}`); return `posiciones ${[...new Set(rects)].join(' | ')} · animaciones ${anims.join(' ; ') || 'ninguna'}`; }, sel).catch(() => '?');
+      note(`no se pudo pulsar ${sel}: encima está ${over} · ${moving} · etapas: ${stage}`); return false;
+    }
+  };
+  // ORB_EXPLORA_SKINS=orb,retro limits the theme tour (to look again at one theme without the whole run).
+  const TOUR_SKINS = process.env.ORB_EXPLORA_SKINS ? SKINS.filter((x) => process.env.ORB_EXPLORA_SKINS.split(',').includes(x)) : SKINS;
   // ---- 3. the visual themes (Ajustes → Apariencia), each in day and night: the chat, Tareas and the Apariencia section.
   // The professional theme has no robot anywhere.
-  for (const skin of SKINS) {
+  for (const skin of TOUR_SKINS) {
     await call('config.save', { patch: { ui: { skin } } });
     await until(async () => (await page.evaluate(() => document.documentElement.dataset.skin)) === skin, `tema ${skin}`);
     for (const theme of ['dia', 'noche']) {
       // a theme that only exists in one mode has no day / night control: its other mode is skipped
       if ((theme === 'noche' && lightOnlySkin(skin)) || (theme === 'dia' && darkOnlySkin(skin))) continue;
       await setDark(theme === 'noche');
-      await goChat(); await shot(`tema-${skin}-${theme}-chat`);
-      await page.click('[data-testid=nav-tasks]'); await shot(`tema-${skin}-${theme}-tareas`);
-      await page.click('[data-testid=nav-settings]'); await page.click('[data-testid=settings-nav-general]'); await shot(`tema-${skin}-${theme}-ajustes`);
+      await keepBusy();
+      // How alive the page is in this theme: frames and DOM changes in one second, and which nodes change most. A theme
+      // that repaints or rebuilds without rest shows here (and its controls cannot be clicked: no two equal frames).
+      note(`pulso ${skin}/${theme}: ${await page.evaluate(() => new Promise((done) => { let frames = 0; let on = true; const tick = () => { if (!on) return; frames++; requestAnimationFrame(tick); }; requestAnimationFrame(tick); const hits = new Map(); let changes = 0; const mo = new MutationObserver((list) => { for (const m of list) { changes++; const n = m.target.nodeType === 1 ? m.target : m.target.parentElement; const k = n ? `${n.tagName.toLowerCase()}${n.dataset?.testid ? `[${n.dataset.testid}]` : ''}.${String(n.className?.baseVal ?? n.className ?? '').split(' ').slice(0, 2).join('.')}${m.type === 'attributes' ? `@${m.attributeName}` : ''}` : '?'; hits.set(k, (hits.get(k) ?? 0) + 1); } }); mo.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true }); setTimeout(() => { on = false; mo.disconnect(); done(`${frames} fotogramas/s, ${changes} cambios del DOM/s, oculta=${document.hidden} · ${[...hits].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, n]) => `${n}× ${k}`).join(' ; ')}`); }, 1000); })).catch((e) => `sin medir (${e.message})`)}`);
+      try { await page.click('[data-testid=sidebar-home]', { timeout: 6000 }); } catch { if (!(await tapOrNote('[data-testid=sidebar-home]'))) continue; }
+      await shot(`tema-${skin}-${theme}-chat`);
+      // the chat with an agent with its side panel open (Ficha)
+      if (seeded && await openChat(CHATS[0].title)) { if (await openPanel('info')) await shot(`tema-${skin}-${theme}-chat-agente`); await closePanel(); }
+      if (await tapOrNote('[data-testid=nav-tasks]')) await shot(`tema-${skin}-${theme}-tareas`);
+      if (!(await tapOrNote('[data-testid=nav-settings]')) || !(await tapOrNote('[data-testid=settings-nav-general]'))) continue;
+      await shot(`tema-${skin}-${theme}-ajustes`);
       if (theme === 'dia' || darkOnlySkin(skin)) {
         const wide = await overflow(page);
         if (wide.length) note(`tema ${skin}: contenido más ancho que su caja → ${wide.join(' | ')}`);
@@ -197,6 +422,11 @@ try {
   const state = await call('app.state');
   note(`versión ${state.version}, agentes: ${(await call('agents.status')).map((a) => `${a.id}=${a.installed ? 'instalado' : 'no'}/${a.login ?? '?'}`).join(', ')}`);
   note(`errores de la página: ${errors.join(' | ') || 'ninguno'}`);
+  // What still «works» (a 30 s fake turn, a task) is stopped, so closing the window does not ask about running tasks.
+  if (seeded) await attempt('parar lo que sigue trabajando', async () => {
+    for (const t of await call('tasks.list')) if (t.status === 'running') await call('tasks.cancel', { id: t.id }).catch(() => {});
+    for (const s of await call('sessions.list')) if (s.status === 'running') await call('sessions.stop', { id: s.id }).catch(() => {});
+  });
   await close();
 } catch (error) {
   console.error(`✖ ${error.stack}`);
