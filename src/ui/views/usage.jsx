@@ -3,7 +3,7 @@
 // by day, project, agent and model in the last 7, 30 or 90 days (usage.history, history.usage). The panel stays as it
 // was; this page only adds detail.
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { Download, Gauge, RefreshCw, OctagonX } from 'lucide-react';
+import { Download, Gauge, RefreshCw, OctagonX, TriangleAlert } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
@@ -32,18 +32,20 @@ const sum = (list) => list.reduce((n, d) => n + (d.usd ?? 0), 0);
 const CR = String.fromCharCode(13); const LF = String.fromCharCode(10); const BOM = String.fromCharCode(0xfeff);
 const csvCell = (v) => { const x = String(v ?? ''); return /[",;]/.test(x) || x.includes(CR) || x.includes(LF) ? `"${x.replaceAll('"', '""')}"` : x; };
 function downloadUsageCsv(data, rows, days) {
-  const lines = [['day', 'tokens_in', 'tokens_out', 'cost_usd'], ...data.days.map((d) => [d.day, d.tokensIn, d.tokensOut, d.usd.toFixed(4)]), [], ['agent', 'model', 'tokens_in', 'tokens_out', 'cost_usd'], ...rows.map((r) => [r.agent, r.model ?? '', r.tokensIn, r.tokensOut, (r.usd ?? 0).toFixed(4)])];
+  const cacheOf = (day) => data.byDay?.find((x) => x.day === day)?.tokensCache ?? '';
+  const lines = [['day', 'tokens_in', 'tokens_out', 'tokens_cache', 'cost_usd'], ...data.days.map((d) => [d.day, d.tokensIn, d.tokensOut, cacheOf(d.day), d.usd.toFixed(4)]), [], ['agent', 'model', 'tokens_in', 'tokens_out', 'cost_usd'], ...rows.map((r) => [r.agent, r.model ?? '', r.tokensIn, r.tokensOut, (r.usd ?? 0).toFixed(4)])];
   const url = URL.createObjectURL(new Blob([BOM + lines.map((l) => l.map(csvCell).join(',')).join(CR + LF) + CR + LF], { type: 'text/csv;charset=utf-8' }));
   const a = document.createElement('a'); a.href = url; a.download = `orb-usage-${days}d-${data.to}.csv`; document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
 // A bar like the mock-up's .progress, with the marks over it: the even pace (a thin line) and the brake (a red line).
-function Meter({ pct, pace = null, stop = null, label, title, className }) {
+function Meter({ pct, pace = null, stop = null, warn = null, color = null, label, title, className }) {
   return (
     <span className={cn('bg-muted relative block h-1.5 overflow-hidden rounded-full', className)} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={label} title={title}>
-      <span className="bg-primary-text block h-full rounded-full" style={{ width: `${Math.min(100, Math.max(pct, 1))}%` }} />
+      <span className={cn('block h-full rounded-full', !color && 'bg-primary-text')} style={{ width: `${Math.min(100, Math.max(pct, 1))}%`, ...(color ? { background: color } : {}) }} />
       {pace != null ? <span className="bg-foreground/60 absolute top-0 h-full w-0.5" style={{ left: `calc(${Math.min(100, Math.max(pace, 0))}% - 1px)` }} data-testid="usage-pace" /> : null}
+      {warn != null ? <span className="bg-warning absolute top-0 h-full w-0.5" style={{ left: `calc(${Math.min(100, Math.max(warn, 0))}% - 1px)` }} data-testid="usage-warn" /> : null}
       {stop != null ? <span className="bg-destructive absolute top-0 h-full w-0.5" style={{ left: `calc(${Math.min(100, Math.max(stop, 0))}% - 1px)` }} data-testid="usage-stop" /> : null}
     </span>
   );
@@ -74,48 +76,80 @@ function Rows({ head, rows, locale, total }) {
   );
 }
 
-// One bar a day: the cost when the agents report it, else the tokens; the table under it gives the numbers.
-function Days({ days, metric, locale }) {
+// The colour of each agent in the day bars and their legend (tokens of the theme, so every theme and both modes read right).
+const AGENT_COLORS = ['var(--primary-text)', 'var(--info)', 'var(--success)', 'var(--warning)', 'var(--destructive)'];
+// What each agent did that day, in the metric on screen (the cost, or the tokens it paid for plus the ones read from cache).
+const dayShare = (entry, agent, metric) => { const a = entry?.agents?.[agent]; return !a ? 0 : metric === 'usd' ? a.usd : a.tokensIn + a.tokensOut + a.tokensCache; };
+const dayTotal = (d, entry, metric) => (metric === 'usd' ? d.usd : d.tokensIn + d.tokensOut + (entry?.tokensCache ?? 0));
+// The agents that did something in the period, the most spent first (so a colour stays with its agent).
+const agentsOf = (byDay, order) => { const seen = new Set((byDay ?? []).flatMap((x) => Object.keys(x.agents ?? {}))); return [...order.filter((a) => seen.has(a)), ...[...seen].filter((a) => !order.includes(a))]; };
+
+// «Uso por día»: one thin bar per agent and day, stacked (the mock-up's bars), with the day's total on the right; the table
+// under it gives the numbers. Cost when the agents report it, else tokens.
+function Days({ days, byDay, order, metric, locale }) {
   const t = useT();
-  const value = (d) => (metric === 'usd' ? d.usd : d.tokensIn + d.tokensOut);
-  const max = Math.max(...days.map(value), 0);
+  const agents = agentsOf(byDay, order);
+  const entry = (d) => byDay?.find((x) => x.day === d.day);
+  const totals = days.map((d) => dayTotal(d, entry(d), metric));
+  const max = Math.max(...totals, 0);
   const fmt = (v) => (metric === 'usd' ? usd(v, locale) : t('usage.tokensN', { n: tokens(v) }));
   const dayName = (d, i) => {
-    const name = new Date(`${d.day}T12:00:00`).toLocaleDateString(locale, { weekday: 'short', day: 'numeric' });
+    const name = new Date(d.day + 'T12:00:00').toLocaleDateString(locale, { weekday: 'short', day: 'numeric' });
     return i === days.length - 1 ? t('usage.today', { day: name }) : name;
   };
   return (
     <ListCard role="img" aria-label={t('usage.byDay')} data-testid="usage-days">
-        {days.map((d, i) => {
-          const v = value(d);
-          return (
-            <div key={d.day} className="border-border grid grid-cols-[110px_1fr_70px] items-center gap-3 px-3.5 py-2 text-control not-first:border-t" title={`${dayName(d, i)} · ${fmt(v)}`}>
-              <span>{dayName(d, i)}</span>
-              <Meter pct={v && max ? (v / max) * 100 : 0} label={fmt(v)} className={cn(!v && '[&>span]:hidden')} />
-              <span className="text-right tabular-nums">{metric === 'usd' ? usd(v, locale) : tokens(v)}</span>
-            </div>
-          );
-        })}
+      {days.map((d, i) => {
+        const v = totals[i];
+        return (
+          <div key={d.day} className="border-border grid grid-cols-[110px_1fr_70px] items-center gap-3 px-3.5 py-2 text-control not-first:border-t" title={dayName(d, i) + ' · ' + fmt(v)}>
+            <span>{dayName(d, i)}</span>
+            {agents.length ? (
+              <span className="flex flex-col gap-1">
+                {agents.map((a, k) => { const x = dayShare(entry(d), a, metric); return <Meter key={a} pct={x && max ? (x / max) * 100 : 0} color={AGENT_COLORS[k % AGENT_COLORS.length]} label={(AGENT[a] ?? a) + ' · ' + fmt(x)} title={(AGENT[a] ?? a) + ' · ' + fmt(x)} className={cn(!x && '[&>span]:hidden')} />; })}
+              </span>
+            ) : <Meter pct={v && max ? (v / max) * 100 : 0} label={fmt(v)} className={cn(!v && '[&>span]:hidden')} />}
+            <span className="text-right tabular-nums">{metric === 'usd' ? usd(v, locale) : tokens(v)}</span>
+          </div>
+        );
+      })}
     </ListCard>
   );
 }
 
+// The legend of the day bars: a dot of each agent's colour and its name.
+function DaysLegend({ byDay, order }) {
+  const agents = agentsOf(byDay, order);
+  if (agents.length < 1) return null;
+  return (
+    <span className="text-muted-foreground flex flex-wrap items-center gap-3 text-caption" data-testid="usage-days-legend">
+      {agents.map((a, k) => <span key={a} className="inline-flex items-center gap-1.5"><span className="inline-block size-2.5 rounded-full" style={{ background: AGENT_COLORS[k % AGENT_COLORS.length] }} />{AGENT[a] ?? a}</span>)}
+    </span>
+  );
+}
+
 // The same days as a table for reading the numbers (not in the mock-up): under «Más opciones», which closes the page.
-function DaysTable({ days, metric, locale }) {
+function DaysTable({ days, byDay, order, metric, locale }) {
   const t = useT();
+  const agents = agentsOf(byDay, order);
+  const cols = { gridTemplateColumns: '1.2fr repeat(' + (3 + agents.length) + ', 1fr)' };
   const dayName = (d, i) => {
-    const name = new Date(`${d.day}T12:00:00`).toLocaleDateString(locale, { weekday: 'short', day: 'numeric' });
+    const name = new Date(d.day + 'T12:00:00').toLocaleDateString(locale, { weekday: 'short', day: 'numeric' });
     return i === days.length - 1 ? t('usage.today', { day: name }) : name;
   };
+  const num = (v) => (metric === 'usd' ? usd(v, locale) : tokens(v));
   return (
     <details className="text-faint-foreground text-caption" data-testid="usage-table">
-        <summary className="cursor-pointer" data-testid="usage-table-toggle">{t('usage.tableOf', { what: metric === 'usd' ? t('usage.costByDay') : t('usage.tokensByDay') })}</summary>
-        <ListCard className="mt-1.5">
-          <div className="text-faint-foreground grid grid-cols-[1.2fr_1fr_1fr_1fr] gap-3 px-3.5 py-2 text-micro uppercase"><span>{t('usage.day')}</span><span>{t('usage.in')}</span><span>{t('usage.out')}</span><span>{metric === 'usd' ? t('usage.cost') : t('usage.total')}</span></div>
-          {days.map((d, i) => (
-            <div key={d.day} className="border-border text-foreground grid grid-cols-[1.2fr_1fr_1fr_1fr] gap-3 border-t px-3.5 py-2 text-control tabular-nums"><span>{dayName(d, i)}</span><span>{tokens(d.tokensIn)}</span><span>{tokens(d.tokensOut)}</span><span>{metric === 'usd' ? usd(d.usd, locale) : tokens(d.tokensIn + d.tokensOut)}</span></div>
-          ))}
-        </ListCard>
+      <summary className="cursor-pointer" data-testid="usage-table-toggle">{t('usage.tableOf', { what: metric === 'usd' ? t('usage.costByDay') : t('usage.tokensByDay') })}</summary>
+      <ListCard className="mt-1.5">
+        <div className="text-faint-foreground grid gap-3 px-3.5 py-2 text-micro uppercase" style={cols}><span>{t('usage.day')}</span><span>{t('usage.in')}</span><span>{t('usage.out')}</span>{agents.map((a) => <span key={a} className="truncate">{AGENT[a] ?? a}</span>)}<span>{metric === 'usd' ? t('usage.cost') : t('usage.total')}</span></div>
+        {days.map((d, i) => {
+          const e = byDay?.find((x) => x.day === d.day);
+          return (
+            <div key={d.day} className="border-border text-foreground grid gap-3 border-t px-3.5 py-2 text-control tabular-nums" style={cols}><span>{dayName(d, i)}</span><span>{tokens(d.tokensIn)}</span><span>{tokens(d.tokensOut)}</span>{agents.map((a) => <span key={a}>{num(dayShare(e, a, metric))}</span>)}<span>{num(dayTotal(d, e, metric))}</span></div>
+          );
+        })}
+      </ListCard>
     </details>
   );
 }
@@ -181,16 +215,19 @@ function renewText(t, locale, at) {
   return t('usage.renewsOn', { when: new Date(at).toLocaleDateString(locale, { weekday: 'long' }) });
 }
 
-export function Account({ u, locale, stop, weeklyStop, reload }) {
+export function Account({ u, locale, stop, weeklyStop, warn = 0, reload }) {
   const t = useT();
   // the brakes apply to the 5-hour window and to the whole week, not to a window of one model
   const braked = u.windows?.some((w) => w.utilization != null && (/five_hour|^300min$|^5h$/.test(String(w.window)) ? w.utilization >= stop : /^seven_day$|^10080min$/.test(String(w.window)) && w.utilization >= weeklyStop));
   const name = AGENT[u.agent] ?? u.agent;
   const wlabel = (w) => (/five_hour|^300min$|^5h$/.test(String(w.window)) ? t('usage.win5', { h: u.windowHours ?? 5 }) : /^seven_day$|^10080min$/.test(String(w.window)) ? t('usage.winWeek') : windowLabel(t, w.window));
   const line = outlook(t, locale, u.windows ?? [], stop, weeklyStop);
+  // «Aviso»: a window that is past the warning level and still short of its brake (past the brake, «Freno» says it)
+  const warned = !braked && warn > 0 && u.windows?.some((w) => w.utilization != null && w.utilization >= warn && (/five_hour|^300min$|^5h$/.test(String(w.window)) || /^seven_day$|^10080min$/.test(String(w.window))));
+  const fiveStop = u.windows?.some((w) => /five_hour|^300min$|^5h$/.test(String(w.window)) && w.utilization >= warn) ? stop : weeklyStop;
   return (
     <div className="bg-card border-border rounded-card flex flex-col gap-2.5 border px-3.5 py-3 text-control" data-testid="usage-account">
-      <div className="flex items-center gap-2"><AgentIcon agent={u.agent} /><b className="min-w-0 flex-1 truncate font-(family-name:--title) text-card-title leading-[1.45] font-semibold">{u.label && u.label !== name ? `${name} · ${u.label}` : name}</b>{u.plan ? <Badge variant="secondary" title={t('agents.planHint')}>{u.plan}</Badge> : null}{braked ? <Badge variant="warning">{t('usage.brake')}</Badge> : null}</div>
+      <div className="flex items-center gap-2"><AgentIcon agent={u.agent} /><b className="min-w-0 flex-1 truncate font-(family-name:--title) text-card-title leading-[1.45] font-semibold">{u.label && u.label !== name ? `${name} · ${u.label}` : name}</b>{u.plan ? <Badge variant="secondary" title={t('agents.planHint')}>{u.plan}</Badge> : null}{braked ? <Badge variant="warning">{t('usage.brake')}</Badge> : warned ? <Badge variant="warning" data-testid="usage-warned">{t('usage.warnBadge')}</Badge> : null}</div>
       {u.windows?.length ? (
         <div className="text-muted-foreground grid grid-cols-[90px_1fr] items-center gap-x-2.5 gap-y-1.5 text-caption leading-[1.45]">
           {u.windows.map((w) => {
@@ -199,12 +236,13 @@ export function Account({ u, locale, stop, weeklyStop, reload }) {
             const weekly = /^seven_day$|^10080min$/.test(String(w.window));
             const five = /five_hour|^300min$|^5h$/.test(String(w.window));
             const mark = weekly ? weeklyStop : five ? stop : null;
+            const warnMark = warn > 0 && mark != null && warn < mark ? Math.round(warn * 100) : null;
             return (
               <Fragment key={w.window}>
                 <span>{wlabel(w)}</span>
                 <div className="flex flex-col gap-1">
                   <b className="text-foreground text-control leading-[1.45] font-medium tabular-nums">{p} %</b>
-                  <Meter pct={p} pace={pace} stop={mark != null ? Math.round(mark * 100) : null} label={wlabel(w)} title={paceText || undefined} />
+                  <Meter pct={p} pace={pace} stop={mark != null ? Math.round(mark * 100) : null} warn={warnMark} label={wlabel(w)} title={paceText || undefined} />
                   <span>{w.resetAt ? renewText(t, locale, w.resetAt) : ''}</span>
                 </div>
               </Fragment>
@@ -213,7 +251,7 @@ export function Account({ u, locale, stop, weeklyStop, reload }) {
         </div>
       ) : <p className="text-muted-foreground text-caption">{t('usage.noLimits')}</p>}
       <div className="flex flex-col gap-1">
-      {line ? <p className="text-muted-foreground m-0 text-caption leading-[1.45]">{line}</p> : null}
+      {warned ? <p className="text-muted-foreground m-0 text-caption leading-[1.45]" data-testid="usage-past-warn">{t('usage.pastWarn', { pct: Math.round(fiveStop * 100) })}</p> : line ? <p className="text-muted-foreground m-0 text-caption leading-[1.45]">{line}</p> : null}
       {/* what the queue holds for this account, and the pause the user can lift when the limit was only of one model or reset earlier. */}
       <div className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-caption leading-[1.45]">
         <span>{u.maxHeavy ? t('agents.tasksUsed', { used: u.used, max: u.max, heavy: u.heavy, maxHeavy: u.maxHeavy }) : t('agents.tasksUsedNoHeavy', { used: u.used, max: u.max })}</span>
@@ -234,6 +272,10 @@ function Limits({ cfg, windowHours }) {
   const weekly = Math.round((cfg.budget?.weeklyStopAt ?? 0.85) * 100);
   const opts = (list, cur) => [...new Set([...list, cur])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: `${n} %` }));
   const resume = cfg.continuity?.resumeAtReset !== false;
+  const switchAccount = cfg.continuity?.switchAccount !== false;
+  const warn = Math.round((cfg.budget?.warnAt ?? 0) * 100);
+  // the warning is only a heads-up (never a rail value): it is offered below the brake of the window, and 0 turns it off
+  const warnOpts = [{ value: '0', label: t('usage.warnOff') }, ...[...new Set([75, 80, 85, 90].filter((n) => n < stop).concat(warn ? [warn] : []))].sort((a, b) => a - b).map((n) => ({ value: String(n), label: `${n} %` }))];
   // «Parar la cola» is the rail «freno-uso» of «Normas»: the same confirmation and the master password every time, like there.
   const [rails, setRails] = useState([]);
   const load = () => call('rails.list', {}).then((r) => setRails(Array.isArray(r) ? r : []), quiet);
@@ -244,6 +286,8 @@ function Limits({ cfg, windowHours }) {
       <Panel className="mt-1.5">
         {stopRail ? <Setting label={t('usage.stopQueue', { pct: stop })} hint={t('usage.stopQueueHint')}><Switch checked={stopRail.activo !== false} onCheckedChange={async (enabled) => { if (!(await (enabled ? confirmResumeRail(stopRail) : confirmPauseRail(stopRail)))) return; if (await changeRail('freno-uso', { enabled }, t('rules.railSaved'))) load(); }} aria-label={t('usage.stopQueue', { pct: stop })} data-testid="usage-stop-queue" /></Setting> : null}
         <Setting label={t('usage.resume')} hint={t('usage.resumeHint')}><Switch checked={resume} onCheckedChange={(resumeAtReset) => save({ continuity: { resumeAtReset } })} aria-label={t('usage.resume')} /></Setting>
+        <Setting label={t('usage.switchAccount')} hint={t('usage.switchAccountHint')}><Switch checked={switchAccount} onCheckedChange={(v) => save({ continuity: { switchAccount: v } })} aria-label={t('usage.switchAccount')} data-testid="usage-switch-account" /></Setting>
+        <Setting label={t('usage.warnAt')} hint={t('usage.warnAtHint')}><Select caret="solid" value={String(warn)} options={warnOpts} onValueChange={(v) => save({ budget: { warnAt: Number(v) / 100 } })} title={t('usage.warnAt')} data-testid="usage-warn-at" /></Setting>
         <Setting label={t('usage.brake5', { h: windowHours })} hint={t('usage.brake5Hint')}><Select caret="solid" value={String(stop)} options={opts([75, 80, 85, 90, 92, 95, 98, 100], stop)} onValueChange={(v) => save({ budget: { profile: null, stopAt: Number(v) / 100 } })} title={t('usage.brake5', { h: windowHours })} data-testid="usage-brake-5h" /></Setting>
         <Setting label={t('usage.brakeWeek')} hint={t('usage.brakeWeekHint')}><Select caret="solid" value={String(weekly)} options={opts([70, 75, 80, 85, 90, 95, 100], weekly)} onValueChange={(v) => save({ budget: { weeklyStopAt: Number(v) / 100 } })} title={t('usage.brakeWeek')} data-testid="usage-brake-week" /></Setting>
       </Panel>
@@ -274,13 +318,17 @@ export function UsageView() {
   const reload = () => call('usage.get').then((r) => setAccounts(r ?? [])).catch(quiet);
   useEffect(() => { let alive = true; call('usage.get').then((r) => alive && setAccounts(r ?? [])).catch(quiet); return () => { alive = false; }; }, [version, tick]);
   const metric = data?.total?.usd ? 'usd' : 'tokens';
-  const totalTokens = data?.total ? data.total.tokensIn + data.total.tokensOut : 0;
+  // «Total» counts what was read from the cache too (the mock-up's four figures add up); the shares below stay on what was paid
+  const ioTokens = data?.total ? data.total.tokensIn + data.total.tokensOut : 0;
+  const totalTokens = ioTokens + (data?.tokensCache ?? 0);
   // one flat row per model (an agent that reports no model keeps its own name), with its cost and share.
   const agentRows = useMemo(() => (data?.models ?? []).map((m) => ({ ...m, key: `${m.agent}:${m.model ?? ''}`, name: m.label ?? m.model ?? AGENT[m.agent] ?? m.agent })), [data]);
   // from the ledger of this period (usage.history), the same source as the rest of the page
   const projects = (data?.projects ?? []).map((p) => ({ ...p, key: p.project, name: p.project || '—' }));
   const projectsTotal = projects.reduce((n, p) => n + p.tokensIn + p.tokensOut, 0);
-  const stop = cfg.budget?.stopAt ?? 0.92; const weeklyStop = cfg.budget?.weeklyStopAt ?? 0.85;
+  const stop = cfg.budget?.stopAt ?? 0.92; const weeklyStop = cfg.budget?.weeklyStopAt ?? 0.85; const warn = cfg.budget?.warnAt ?? 0;
+  const cacheTokens = data?.tokensCache ?? 0;
+  const order = (data?.agents ?? []).map((x) => x.agent);
   const delta = prev && data?.total?.usd ? Math.round(((data.total.usd - prev) / prev) * 100) : null;
   const meta = data?.total ? [range1(t, days), t('usage.tokensN', { n: tokens(totalTokens) }), data.total.usd ? t('usage.estimated', { cost: usd(data.total.usd, locale) }) : null].filter(Boolean).join(' · ') : range1(t, days);
   const range = data?.from ? t('usage.range', { from: new Date(`${data.from}T12:00:00`).toLocaleDateString(locale, { day: 'numeric', month: 'long' }), to: new Date(`${data.to}T12:00:00`).toLocaleDateString(locale, { day: 'numeric', month: 'long' }) }) : '';
@@ -304,8 +352,8 @@ export function UsageView() {
             <Button variant="outline" disabled={!data?.days} onClick={exportCsv} title={t('usage.exportCsvHint')} data-testid="usage-export-csv"><Download />{t('usage.exportCsv')}</Button>
           </div>
           <Block title={t('usage.byAccount')} count={accounts.length || null}>
-            <div className="text-muted-foreground flex flex-wrap items-center gap-3 text-caption"><span className="inline-flex items-center gap-1.5"><OctagonX className="size-3.5" />{t('usage.legendBrake', { pct: Math.round(stop * 100) })}</span><span className="inline-flex items-center gap-1.5"><OctagonX className="size-3.5" />{t('usage.legendBrakeWeek', { pct: Math.round(weeklyStop * 100) })}</span></div>
-            {accounts.length ? <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-2.5">{accounts.map((u) => <Account key={u.account} u={u} locale={locale} stop={stop} weeklyStop={weeklyStop} reload={reload} />)}</div> : <p className="text-muted-foreground text-control">{t('usage.noLimits')}</p>}
+            <div className="text-muted-foreground flex flex-wrap items-center gap-3 text-caption">{warn > 0 ? <span className="inline-flex items-center gap-1.5" data-testid="usage-legend-warn"><TriangleAlert className="size-3.5" />{t('usage.legendWarn', { pct: Math.round(warn * 100) })}</span> : null}<span className="inline-flex items-center gap-1.5"><OctagonX className="size-3.5" />{t('usage.legendBrake', { pct: Math.round(stop * 100) })}</span><span className="inline-flex items-center gap-1.5"><OctagonX className="size-3.5" />{t('usage.legendBrakeWeek', { pct: Math.round(weeklyStop * 100) })}</span></div>
+            {accounts.length ? <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-2.5">{accounts.map((u) => <Account key={u.account} u={u} locale={locale} stop={stop} weeklyStop={weeklyStop} warn={warn} reload={reload} />)}</div> : <p className="text-muted-foreground text-control">{t('usage.noLimits')}</p>}
           </Block>
           {data === null ? <Spinner /> : data === false ? <Empty icon={Gauge} title={t('usage.unavailable')} /> : (<>
             <ListCard className="flex flex-col gap-0.5 p-3.5 leading-[1.45]">
@@ -314,22 +362,23 @@ export function UsageView() {
               <span className="text-muted-foreground text-caption leading-[1.45]">{t('usage.costNote')}</span>
             </ListCard>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-2.5">
-              {[[t('usage.in'), tokens(data.total.tokensIn)], [t('usage.out'), tokens(data.total.tokensOut)], [t('usage.turns'), data.total.turns.toLocaleString(locale)], [t('usage.total'), tokens(totalTokens)]].map(([label, value]) => (
+              {[[t('usage.in'), tokens(data.total.tokensIn)], [t('usage.out'), tokens(data.total.tokensOut)], [t('usage.cache'), cacheTokens ? tokens(cacheTokens) : '—'], [t('usage.total'), tokens(totalTokens)]].map(([label, value]) => (
                 <div key={label} className="bg-card border-border rounded-card flex flex-col gap-1 border px-3.5 py-3"><span className="text-muted-foreground text-caption">{label}</span><b className="font-(family-name:--title) text-[24px] font-semibold tabular-nums">{value}</b></div>
               ))}
             </div>
-            <Block title={t('usage.byDay')} count={[metric === 'usd' ? t('usage.metricCost') : t('usage.metricTokens'), range].filter(Boolean).join(' · ')}>
-              <Days days={data.days} metric={metric} locale={locale} />
+            <Block title={t('usage.byDay')} count={[metric === 'usd' ? t('usage.metricCost') : t('usage.metricTokens'), range].filter(Boolean).join(' · ')} actions={<DaysLegend byDay={data.byDay} order={order} />}>
+              <Days days={data.days} byDay={data.byDay} order={order} metric={metric} locale={locale} />
             </Block>
             {projects.length ? <Block title={t('usage.byProject')}><Rows head={t('usage.project')} rows={projects} locale={locale} total={projectsTotal} /></Block> : null}
-            {agentRows.length ? <Block title={t('usage.byAgentModel')}><Rows head={t('usage.agent')} rows={agentRows} locale={locale} total={totalTokens} /></Block> : null}
+            {agentRows.length ? <Block title={t('usage.byAgentModel')}><Rows head={t('usage.agent')} rows={agentRows} locale={locale} total={ioTokens} /></Block> : null}
             {!data.total.turns ? <p className="text-muted-foreground text-control">{t('usage.empty')}</p> : null}
           </>)}
           {/* Orb's own, not drawn by the mock-up: at the end, under «Más opciones». Open, because the limits and the brake are there. */}
           <MoreOptions testid="usage-more-options">
             {fullPc() ? <Limits cfg={cfg} windowHours={accounts[0]?.windowHours ?? cfg.budget?.windowHours ?? 5} /> : null}
+            {data?.total?.turns ? <p className="text-muted-foreground text-caption" data-testid="usage-turns">{t('usage.turns')}: {data.total.turns.toLocaleString(locale)}</p> : null}
             <LocalUsage data={local || null} locale={locale} />
-            {data?.days?.length ? <DaysTable days={data.days} metric={metric} locale={locale} /> : null}
+            {data?.days?.length ? <DaysTable days={data.days} byDay={data.byDay} order={order} metric={metric} locale={locale} /> : null}
           </MoreOptions>
         </div>
       </PageBody>

@@ -24,12 +24,12 @@ export function UsageAccounts({ c }) {
   const [accounts, setAccounts] = useState(null);
   const load = () => call('usage.get').then((r) => setAccounts(r ?? [])).catch(() => setAccounts((a) => a ?? []));
   useEffect(() => { load(); }, [version]);
-  const stop = c.budget?.stopAt ?? 0.92; const weeklyStop = c.budget?.weeklyStopAt ?? 0.85;
+  const stop = c.budget?.stopAt ?? 0.92; const weeklyStop = c.budget?.weeklyStopAt ?? 0.85; const warn = c.budget?.warnAt ?? 0;
   const hours = accounts?.[0]?.windowHours ?? c.budget?.windowHours ?? 5;
   return (
     <Block title={t('settings.usageAccounts')} count={accounts?.length || null} note={t('settings.usageAccountsNote', { stop: Math.round(stop * 100), hours, week: Math.round(weeklyStop * 100) })} data-testid="usage-accounts">
       {accounts?.length
-        ? <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-2.5">{accounts.map((u) => <Account key={u.account} u={u} locale={locale} stop={stop} weeklyStop={weeklyStop} reload={load} />)}</div>
+        ? <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-2.5">{accounts.map((u) => <Account key={u.account} u={u} locale={locale} stop={stop} weeklyStop={weeklyStop} warn={warn} reload={load} />)}</div>
         : accounts ? <p className="text-muted-foreground text-control">{t('usage.noLimits')}</p> : null}
       <div><Button size="sm" variant="outline" onClick={() => { closeSettings(); go({ view: 'usage' }); }} data-testid="usage-accounts-all"><ChartNoAxesColumn />{t('usage.open')}</Button></div>
     </Block>
@@ -40,26 +40,28 @@ export function UsageAccounts({ c }) {
 // «freno-uso» and «freno-semanal»). save() asks the master password when one of them changes, as in «Normas».
 export function BrakesCard({ c }) {
   const t = useT();
-  const stopNow = pct(c.budget?.stopAt, 0.92); const weekNow = pct(c.budget?.weeklyStopAt, 0.85);
-  const [v, setV] = useState({ stop: String(stopNow), week: String(weekNow) });
-  useEffect(() => { setV({ stop: String(stopNow), week: String(weekNow) }); }, [stopNow, weekNow]);
+  const stopNow = pct(c.budget?.stopAt, 0.92); const weekNow = pct(c.budget?.weeklyStopAt, 0.85); const warnNow = pct(c.budget?.warnAt, 0);
+  const [v, setV] = useState({ stop: String(stopNow), week: String(weekNow), warn: String(warnNow) });
+  useEffect(() => { setV({ stop: String(stopNow), week: String(weekNow), warn: String(warnNow) }); }, [stopNow, weekNow, warnNow]);
   // Same ranges as the selects of the Uso view; an empty or out-of-range field saves nothing.
   // the engine takes 50 to 100 for both (a lower number is a stricter brake): none of that range is taken away here
-  const RANGE = { stop: [50, 100], week: [50, 100] };
-  const valid = (key) => { const s = String(v[key]).trim(); const n = Number(s); return s !== '' && Number.isFinite(n) && n >= RANGE[key][0] && n <= RANGE[key][1]; };
-  const allValid = valid('stop') && valid('week');
+  const RANGE = { stop: [50, 100], week: [50, 100], warn: [50, 100] };
+  // the warning is only a heads-up: 0 turns it off (any other value is in the same 50 to 100 range as the brakes)
+  const valid = (key) => { const s = String(v[key]).trim(); const n = Number(s); return s !== '' && Number.isFinite(n) && ((key === 'warn' && n === 0) || (n >= RANGE[key][0] && n <= RANGE[key][1])); };
+  const allValid = valid('stop') && valid('week') && valid('warn');
   const apply = () => {
     if (!allValid) return undefined;
-    const stop = Number(v.stop); const week = Number(v.week);
-    const budget = { ...(stop !== stopNow ? { profile: null, stopAt: stop / 100 } : {}), ...(week !== weekNow ? { weeklyStopAt: week / 100 } : {}) };
+    const stop = Number(v.stop); const week = Number(v.week); const warn = Number(v.warn);
+    // warnAt is not a rail value: saved alone it never asks for the master password
+    const budget = { ...(stop !== stopNow ? { profile: null, stopAt: stop / 100 } : {}), ...(week !== weekNow ? { weeklyStopAt: week / 100 } : {}), ...(warn !== warnNow ? { warnAt: warn / 100 } : {}) };
     if (!Object.keys(budget).length) return undefined;
-    return save({ budget }).then((r) => { if (!r) setV({ stop: String(stopNow), week: String(weekNow) }); });
+    return save({ budget }).then((r) => { if (!r) setV({ stop: String(stopNow), week: String(weekNow), warn: String(warnNow) }); });
   };
   // The linked phone cannot edit: the engine refuses it after asking for the password, so it only shows the values.
   const readOnly = !fullPc();
   const field = (key, label, hint, testid) => (
     <Setting label={label} hint={valid(key) || readOnly ? hint : t('settings.brakeInvalid', { min: RANGE[key][0], max: RANGE[key][1] })}>
-      {readOnly ? <span className="tabular-nums" data-testid={testid}>{key === 'stop' ? stopNow : weekNow} %</span>
+      {readOnly ? <span className="tabular-nums" data-testid={testid}>{key === 'stop' ? stopNow : key === 'week' ? weekNow : warnNow} %</span>
         : <Input type="number" min={RANGE[key][0]} max={RANGE[key][1]} className="w-[72px]" value={v[key]} onChange={(e) => setV({ ...v, [key]: e.target.value })} aria-label={label} aria-invalid={!valid(key)} data-testid={testid} />}
     </Setting>
   );
@@ -67,6 +69,7 @@ export function BrakesCard({ c }) {
     return (
       <Block title={t('settings.brakesTitle')} note={t('settings.brakesNote')} data-testid="usage-brakes">
         <Panel>
+          {field('warn', t('settings.warnAt'), t('settings.warnAtHint'), 'brake-warn')}
           {field('stop', t('settings.stopAt'), t('settings.stopAtHint'), 'brake-stop')}
           {field('week', t('settings.weeklyStop'), t('settings.weeklyStopHint'), 'brake-week')}
         </Panel>
@@ -76,6 +79,7 @@ export function BrakesCard({ c }) {
   return (
     <Block title={t('settings.brakesTitle')} note={t('settings.brakesNote')} data-testid="usage-brakes">
       <Panel>
+        {field('warn', t('settings.warnAt'), t('settings.warnAtHint'), 'brake-warn')}
         {field('stop', t('settings.stopAt'), t('settings.stopAtHint'), 'brake-stop')}
         {field('week', t('settings.weeklyStop'), t('settings.weeklyStopHint'), 'brake-week')}
         <CardFoot><Button size="sm" onClick={apply} disabled={!allValid} data-testid="brakes-save">{t('settings.save')}</Button></CardFoot>

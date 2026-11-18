@@ -139,6 +139,7 @@ export default {
   'settings.mobileScreenshotHint': 'Lets a linked phone ask for a picture of all monitors. The PC always shows a notice.',
   'settings.mobileTsHint': 'From any network. Lets you install the app and get notifications.',
   'settings.mobileUnavailable': 'Not available',
+  'settings.mobileWayHint': 'Lets devices connect this way. Its address and a button to copy it are shown above.',
   'settings.qrScanWifi': 'The device must be on the same Wi-Fi network. The code expires in 5 min.',
   'settings.qrScanTs': 'The device must have Tailscale on. The code expires in 5 min.',
   'settings.phone': "This phone",
@@ -182,6 +183,8 @@ export default {
   'settings.custom': 'Custom ({pct}%)',
   'settings.zoomOut': 'Zoom out',
   'settings.zoomIn': 'Zoom in',
+  'settings.zoomFine': 'Fine zoom',
+  'settings.zoomFineHint': 'Changes the interface size in steps of 10 %.',
   'settings.terminal': 'Terminal',
   'settings.terminalHint': 'Opens in the active project’s folder.',
   'settings.openTerminal': 'Open terminal',
@@ -359,5 +362,7 @@ export default {
   'settings.weeklyRail': 'Stop at the weekly brake ({pct}%)',
   'settings.weeklyRailHint': 'Without it, the account keeps working even when the week is almost used up.',
   'settings.copyAddress': 'Copy',
-  'settings.addressCopied': 'Address copied'
+  'settings.addressCopied': 'Address copied',
+  'settings.warnAt': 'Warning at (%)',
+  'settings.warnAtHint': 'An amber warning; it stops nothing. Enter 0 for none.'
 };

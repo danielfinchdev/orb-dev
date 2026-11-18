@@ -139,6 +139,7 @@ export default {
   'settings.mobileScreenshotHint': 'Deja que un móvil enlazado pida una imagen de todos los monitores. El PC siempre avisa.',
   'settings.mobileTsHint': 'Desde cualquier red. Permite instalar la app y recibir notificaciones.',
   'settings.mobileUnavailable': 'No disponible',
+  'settings.mobileWayHint': 'Permite entrar por esta vía. La dirección y su botón para copiarla salen arriba.',
   'settings.qrScanWifi': 'El dispositivo debe estar en la misma red wifi. El código caduca en 5 min.',
   'settings.qrScanTs': 'El dispositivo debe tener Tailscale activado. El código caduca en 5 min.',
   'settings.phone': "Este móvil",
@@ -182,6 +183,8 @@ export default {
   'settings.custom': 'Personalizado ({pct} %)',
   'settings.zoomOut': 'Reducir',
   'settings.zoomIn': 'Ampliar',
+  'settings.zoomFine': 'Ajuste fino del zoom',
+  'settings.zoomFineHint': 'Cambia el tamaño de la interfaz de 10 en 10 %.',
   'settings.terminal': 'Terminal',
   'settings.terminalHint': 'Se abre en la carpeta del proyecto activo.',
   'settings.openTerminal': 'Abrir terminal',
@@ -359,5 +362,7 @@ export default {
   'settings.weeklyRail': 'Parar al llegar al freno semanal ({pct} %)',
   'settings.weeklyRailHint': 'Sin él, la cuenta sigue trabajando aunque la semana vaya casi agotada.',
   'settings.copyAddress': 'Copiar',
-  'settings.addressCopied': 'Dirección copiada'
+  'settings.addressCopied': 'Dirección copiada',
+  'settings.warnAt': 'Aviso al llegar a (%)',
+  'settings.warnAtHint': 'Aviso en ámbar; no para nada. Pon 0 para no recibirlo.'
 };
