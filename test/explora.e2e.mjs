@@ -300,7 +300,7 @@ try {
       finally { await scheme(null).catch(() => {}); }
     };
     await darkShot('00-bienvenida');
-    const screens = { theme: '00a-tu-tema', layout: '00a-ordenar-carpetas', master: '00a-contrasena-maestra', prepare: '00b-preparo-equipo' };
+    const screens = { theme: '00a-tu-tema', layout: '00a-ordenar-carpetas', master: '00a-contrasena-maestra', code: '00a-contrasena-maestra-codigo', prepare: '00b-preparo-equipo' };
     const onScreen = async (name) => {
       // «Tu tema» with another theme marked, then back to the default so the rest of the tour keeps it
       if (EXTRA && name === 'theme') {
@@ -317,6 +317,9 @@ try {
           const example = 'contraseña-de-ejemplo-1';
           await page.fill('[data-testid=master-new]', example); await page.fill('[data-testid=master-again]', example); await page.waitForTimeout(300);
           await shot('00a-contrasena-maestra-escrita'); await darkShot('00a-contrasena-maestra-escrita');
+          // «Mostrar» on the first box: the made-up example in clear, hidden again before going on
+          const reveal = page.locator('[data-testid=master-create] [data-testid=master-reveal]').first();
+          if (await reveal.count()) { await reveal.click({ timeout: 3000 }); await page.waitForTimeout(200); await shot('00a-contrasena-maestra-mostrar'); await reveal.click({ timeout: 3000 }).catch(() => {}); }
           await page.fill('[data-testid=master-new]', ''); await page.fill('[data-testid=master-again]', '');
         } catch (error) { note(`bienvenida: no se pudo rellenar la contraseña de ejemplo (${String(error?.message ?? error).split(String.fromCharCode(10))[0]})`); }
       }
@@ -792,6 +795,12 @@ try {
           await page.waitForTimeout(800); await shot(`${prefix}-uso`);
           await page.locator('[data-testid=usage-limits]').first().scrollIntoViewIfNeeded({ timeout: 2000 }).catch(() => noteOnce('Uso: sin el bloque de límites'));
           await page.waitForTimeout(300); await shot(`${prefix}-uso-limites`);
+          // the same page with a warning at 85 %, so the bars and the legend draw it; the profile's own value goes back afterwards
+          const wasWarn = (await call('app.state').catch(() => null))?.config?.budget?.warnAt ?? 0;
+          if (await call('config.save', { patch: { budget: { warnAt: 0.85 } } }).then(() => true, () => false)) {
+            await page.waitForTimeout(2500); await scrollView('top'); await shot(`${prefix}-uso-aviso`);
+            await call('config.save', { patch: { budget: { warnAt: wasWarn } } }).catch(() => noteOnce('Uso: no se pudo devolver el aviso a su valor'));
+          } else noteOnce('Uso: no se pudo poner un aviso al 85 %');
           await tap('agents-tab-agents', 'pestaña «Agentes y cuentas»');
         }
       }
@@ -942,7 +951,13 @@ try {
         if (await section('agentes')) {
           await scrollShot(`${prefix}-ajustes-agentes-abajo`, 'end');
           // «Más opciones» of the spending card, unfolded (a fold of the page, nothing is saved)
-          if (await page.locator('[data-testid=spend-advanced]').count() && await tap('spend-advanced', '«Más opciones» de Ajustes › Agentes')) { await scrollShot(`${prefix}-ajustes-agentes-mas`, 'end'); await tap('spend-advanced', 'plegar «Más opciones»'); }
+          if (await page.locator('[data-testid=spend-advanced]').count() && await tap('spend-advanced', '«Más opciones» de Ajustes › Agentes')) {
+            await scrollShot(`${prefix}-ajustes-agentes-mas`, 'end');
+            // the same fold where «Sugerir el siguiente mensaje» is in sight
+            const suggest = page.locator('[data-testid=settings-suggest]').first();
+            if (await suggest.count()) { await suggest.scrollIntoViewIfNeeded({ timeout: 2000 }).catch(() => {}); await page.waitForTimeout(300); await shot(`${prefix}-ajustes-agentes-sugerir`); } else noteOnce('Ajustes › Agentes: sin la fila «Sugerir el siguiente mensaje»');
+            await tap('spend-advanced', 'plegar «Más opciones»');
+          }
           if (await tap('agents-tab-uso', 'pestaña «Uso» de Agentes y uso')) {
             await page.waitForTimeout(600); await scrollView('top'); await shot(`${prefix}-ajustes-agentes-uso`);
             await scrollShot(`${prefix}-ajustes-agentes-uso-abajo`, 'end');
@@ -1067,6 +1082,15 @@ try {
         await page.waitForTimeout(300); await shot(`${prefix}-god-mode-paneles-todos`);
         await scrollShot(`${prefix}-god-mode-abajo`, 'end', '[data-testid=expert-view] aside');
         if (await tap('expert-more', '⋯ del God mode')) { await shot(`${prefix}-god-mode-menu`); await closeMenus(); }
+        // the docked terminal: opened, pictured and its tab closed again. Nothing is typed, so nothing runs in it.
+        if (await page.locator('[data-testid=terminal-open]').count() && await tap('terminal-open', 'el terminal del God mode')) {
+          await page.locator('[data-testid=terminal-panel]').first().waitFor({ timeout: 5000 }).catch(() => noteOnce('God mode: el terminal no se abre'));
+          await page.waitForTimeout(900); await shot(`${prefix}-god-mode-terminal`);
+          if (await page.locator('[data-testid=terminal-close]').count()) await tap('terminal-close', 'cerrar la pestaña del terminal'); else if (await page.locator('[data-testid=terminal-fold]').count()) await tap('terminal-fold', 'plegar el terminal');
+          await page.waitForTimeout(300);
+        } else noteOnce('God mode: sin el botón del terminal');
+        // the agent's pill of the bar, when a task of this project is running
+        if (await page.locator('[data-testid=expert-agent-pill]').count()) { await page.locator('[data-testid=expert-agent-pill]').first().scrollIntoViewIfNeeded().catch(() => {}); await shot(`${prefix}-god-mode-agente`); } else noteOnce('God mode: sin la píldora del agente (ninguna tarea en marcha en el proyecto, o aún no existe)');
       } else noteOnce('God mode: no aparece en la barra tras activarlo');
       await goChat();
     } catch (error) { noteOnce(`God mode: el recorrido se cortó (${String(error?.message ?? error).split(String.fromCharCode(10))[0]})`); await closeMenus(); await goChat().catch(() => {}); }
@@ -1157,6 +1181,16 @@ try {
       await page.locator('[data-testid=master-error]').waitFor({ timeout: 8000 });
       await shot(`${prefix}-bloqueo-error`);
     } catch { noteOnce('bloqueo: con una contraseña equivocada no salió el error'); }
+    try {
+      await page.fill('[data-testid=master-password]', 'una frase de ejemplo');
+      const reveal = page.locator('[data-testid=master-locked] [data-testid=master-reveal]').first();
+      if (await reveal.count()) { await reveal.click({ timeout: 3000 }); await page.waitForTimeout(200); await shot(`${prefix}-bloqueo-mostrar`); await reveal.click({ timeout: 3000 }).catch(() => {}); } else noteOnce('bloqueo: sin «Mostrar»');
+      await page.fill('[data-testid=master-password]', '');
+      if (await page.locator('[data-testid=master-use-code]').count()) {
+        await page.click('[data-testid=master-use-code]', { timeout: 3000 }); await page.waitForTimeout(300); await shot(`${prefix}-bloqueo-codigo`);
+        await page.click('[data-testid=master-use-password]', { timeout: 3000 }); await page.waitForTimeout(300);
+      } else noteOnce('bloqueo: sin «Usar código de recuperación» (este perfil no tiene código)');
+    } catch (error) { noteOnce(`bloqueo: capturas de «Mostrar» y del código: ${String(error?.message ?? error).split(String.fromCharCode(10))[0]}`); }
     await page.fill('[data-testid=master-password]', TEST_MASTER);
     await page.press('[data-testid=master-password]', 'Enter');
     const back = await page.locator('[data-testid=sidebar-home]').waitFor({ timeout: 20000 }).then(() => true, () => false);
