@@ -141,3 +141,11 @@ test('10C-b Serpiente: the flat board of Predeterminado, the other themes keep t
   assert.doesNotMatch(snake, /SPEED = \{ facil: 150, normal: 105, dificil: 70 \}[^;]*;[\s\S]*SPEED = /);
   assert.match(snake, /const N = 20; const CELL = 21;/, 'the logical grid is untouched');
 });
+
+test('11D: the snake blocks fill their cell and the patch lines wear the soft green and red of the mock-up', () => {
+  const snake = read('src/ui/games/snake.jsx');
+  assert.match(snake, /ctx\.roundRect\(pts\[i\]\[0\] - CELL \/ 2, pts\[i\]\[1\] - CELL \/ 2, CELL, CELL, 5\)/);
+  const css = read('src/ui/app.css');
+  assert.match(css, /\.diff\[data-testid="patch-view"\] \.code-add \{ background: color-mix\(in oklab, var\(--success\) 12%, transparent\); \}/);
+  assert.match(css, /\.diff\[data-testid="patch-view"\] \.code-del \{ background: color-mix\(in oklab, var\(--destructive\) 10%, transparent\); \}/);
+});

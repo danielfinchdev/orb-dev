@@ -64,9 +64,9 @@ test('paso 6C2: los puntos de la cabecera de un grupo solo salen con el grupo pl
   assert.match(head, /\{open \? null : <>\s*\{group\.waiting/);
 });
 
-test('paso 6C2: «Toda la actividad» sin el margen de más y la marca del carril de la conversación solo al pasar el ratón', () => {
+test('paso 6C2: «Toda la actividad» sin el margen de más y el carril de la conversación siempre visible', () => {
   assert.doesNotMatch(inbox, /mt-1\.5 flex items-center justify-between px-4 pt-2\.5 pb-1 text-caption/);
-  assert.match(read('src/ui/app.css'), /\[data-testid="chat-trail"\]:not\(:hover\):not\(:focus-within\) span\.block \{ opacity: 0 !important; \}/);
+  assert.doesNotMatch(read('src/ui/app.css'), /\[data-testid="chat-trail"\]:not\(:hover\)/);
 });
 
 test('paso 6C2: el resumen del día usa la tarjeta de la maqueta (icono, texto corto, cerrar)', () => {

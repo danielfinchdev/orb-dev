@@ -106,7 +106,7 @@ test('the start-up preview (for the e2e tour) only opens with its variable, from
   assert.match(main, /const START_PREVIEWS = new Set\(\[[^\]]+\]\)/);
   assert.match(main, /typeof v === 'string' && START_PREVIEWS\.has\(v\) \? v : null/);
   assert.match(main, /name \? <StartPreview name=\{name\} \/> : <AppRoot \/>/);
-  assert.match(main, /<div inert className="h-full" data-testid="start-preview" data-preview=\{name\}>/);
+  assert.match(main, /<div inert className="flex h-full flex-col" data-testid="start-preview" data-preview=\{name\}>/);
   assert.match(main, /data-testid="start-preview-tag"/);
   assert.equal((main.match(/__ORB_START_PREVIEW__/g) ?? []).length >= 1, true);
   // the sample data load only when asked, and the module holds data only
@@ -173,4 +173,33 @@ test('10C-a: the master password step has 34 px fields, a 4-stretch bar and grey
   assert.match(create, /call\('master\.create', \{ password: v\.next \}\)/);
   assert.match(create, /const ready|!ready\(v\)/);
   assert.doesNotMatch(create, /type=\{|Mostrar|Atrás/);
+});
+
+test('11D: the key dialog has separate paragraphs, a placeholder and a button that waits for the word (onOk still checks it)', () => {
+  const ask = main.slice(main.indexOf('async function askNewSecret'), main.indexOf('// fingerprint, to compare'));
+  assert.match(ask, /paragraphs\.map\(\(p\) => <p key=\{p\}/);
+  assert.match(ask, /placeholder=\{word\}/);
+  assert.match(ask, /okDisabled: \(v\) => !typed\(v\)/);
+  assert.match(ask, /onOk: \(v\) => \{ if \(!typed\(v\)\) throw new Error\(tNow\('app\.newSecretWrong'/);
+  assert.match(ask, /v\.word\.trim\(\)\.toUpperCase\(\) === word\.toUpperCase\(\)/);
+  assert.match(ask, /if \(startError\?\.recovery\) return confirm\(/);
+  assert.match(main, /retryStart\(\{ newSecret: true \}\)/);
+  assert.match(read('src/ui/components/dialogs.jsx'), /disabled=\{busy \|\| Boolean\(d\.okDisabled\?\.\(values\)\)\}/);
+});
+
+test('11D: the migration path is monospace, and the core card widens for four buttons without touching its red confirmation', () => {
+  assert.match(read('src/ui/components/start-card.jsx'), /<code className="font-mono">\{path\}<\/code>/);
+  assert.match(main, /<StartPath icon=\{Folder\} text=/);
+  const core = read('src/ui/views/core-missing.jsx');
+  assert.match(core, /width=\{fourButtons \? 'w-\[600px\]' : undefined\}/);
+  assert.match(core, /\{ ok: t\('data\.core\.fresh'\), danger: true \}/);
+  assert.match(core, /disabled=\{busy \|\| !code\.trim\(\)\}/, 'Restaurar stays off until the code is typed');
+});
+
+test('11D: «Ordenar carpetas» has the full kicker, the green badge, and the segment only for two options', () => {
+  const layout = read('src/ui/views/layout.jsx');
+  assert.match(layout, /layout\.kickReview/);
+  assert.match(layout, /<Badge variant="success"[^>]*>\{t\('layout\.recommended'\)\}<\/Badge>/);
+  assert.match(layout, /options\.length <= 2/);
+  assert.match(layout, /bridge\.call\('app\.layoutApply', \{ choices: all \?\? choices \}\)/);
 });

@@ -45,3 +45,20 @@ test('the .app-titlebar region rules are the ones of HEAD', () => {
   try { head = execFileSync('git', ['show', 'HEAD:src/ui/app.css'], { encoding: 'utf8', maxBuffer: 1 << 26 }); } catch { return; }
   assert.deepEqual(rules(css), rules(head));
 });
+
+test('11D: the companion rests in a 72 px box with room for the bubble, greets once with real data, and keeps its bubble inside the window', () => {
+  assert.match(companion, /REST_RIGHT = 246/);
+  assert.match(companion, /grid size-\[72px\]/);
+  assert.match(companion, /<Robot size=\{56\}/);
+  assert.match(companion, /let greeted = false/);
+  assert.match(companion, /needsApproval/);
+  assert.match(companion, /app\?\.config\?\.userName\?\.trim\(\)/);
+  assert.match(companion, /GREETING_MS = 5200/);
+  assert.match(companion, /\.right \+ 8 \+ BUBBLE_W <= window\.innerWidth - EDGE/);
+  assert.match(companion, /motion-reduce:animate-none/);
+  assert.match(companion, /data-motion=minima/);
+  for (const lang of ['es', 'en']) {
+    const loc = fs.readFileSync(new URL(`../src/shared/locales/${lang}/comp.mjs`, import.meta.url), 'utf8');
+    for (const key of ['hello', 'helloAnon', 'helloAsk.one', 'helloAsk.many', 'helloAskAnon.one', 'helloAskAnon.many']) assert.ok(loc.includes(`'comp.companion.${key}'`), `${lang}: ${key}`);
+  }
+});

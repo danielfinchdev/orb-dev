@@ -134,8 +134,8 @@ test('the robot inside the brand button carries no drag region of its own', () =
   assert.ok(button.slice(0, button.indexOf('</button>')).includes('<Robot '), 'the head lives inside the brand button');
 });
 
-test('paso 7C1: el menú de la fila lleva siempre «Marcar como leído» (desactivado si no hay nada sin leer)', () => {
+test('paso 7C1: el menú de la fila lleva siempre su entrada de leído: «Marcar como leído» o, si no hay nada sin leer, «Marcar como no leído»', () => {
   const inbox = read('views/orb/inbox.jsx');
-  assert.match(inbox, /const read = item\.unread \|\| row \? \[\{ id: 'read', icon: CheckCheck, label: t\('chats\.markRead'\), disabled: !item\.unread/);
+  assert.match(inbox, /const read = item\.unread\s*\? \[\{ id: 'read', icon: CheckCheck, label: t\('chats\.markRead'\), run: \(\) => orbAct\('inbox\.markRead', ref\) \}\]\s*: row \? \[\{ id: 'unread', icon: CircleDot, label: t\('chats\.markUnread'\), run: \(\) => orbAct\('inbox\.markUnread', ref\) \}\] : \[\];/);
   assert.match(inbox, /disabled=\{a\.disabled\} onSelect=\{a\.run\} data-testid=\{`chat-\$\{a\.id\}`\}/);
 });

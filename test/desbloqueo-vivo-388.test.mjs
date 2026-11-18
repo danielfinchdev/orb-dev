@@ -72,7 +72,9 @@ test('the live window keeps every action it had and only shows what it showed', 
 
 test('10C-a: the lock screen draws the theme backdrop blurred under its veil and never the app', () => {
   assert.match(locked, /<Scene \/>/);
-  assert.match(locked, /bg-black\/32 p-6 backdrop-blur-\[10px\]/);
+  // the veil is its own layer and lets the pointer through, so the window's buttons (under it) keep working
+  assert.match(locked, /pointer-events-none fixed inset-0 z-\[46\] bg-black\/32 backdrop-blur-\[10px\]/);
+  assert.match(read('app.css'), /html:has\(\[data-testid="master-locked"\]\) \.win-controls \{ z-index: 45; \}/);
   assert.match(locked, /useBaseAppearance\(\)/);
   assert.match(master, /import \{ Scene \} from '@\/components\/scene\.jsx'/);
   // nothing of the app is mounted behind it

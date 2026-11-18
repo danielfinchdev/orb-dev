@@ -102,7 +102,7 @@ const noteOnce = (s) => { if (!noted.has(s)) { noted.add(s); note(s); } };
 const attempt = async (what, fn) => { try { return await fn(); } catch (error) { note(`no se pudo sembrar ${what}: ${String(error?.message ?? error).split('\n')[0]}`); return null; } };
 
 const REPOS = {
-  'orb-dev': { git: 'orb/contexto-real', files: {
+  'orb-dev': { git: 'orb/contexto-real', remote: true, files: {
     'README.md': text('# orb-dev', 'Orb, el panel de agentes.'),
     'src/context-meter.js': text('export function ContextMeter({ context }) {', '  const size = context.size;', '  const used = context.used;', '  const pct = size ? Math.round((used / size) * 100) : null;', '  return { pct };', '}'),
     'src/sidebar.js': text('export const blocks = [\'chats\', \'plan\', \'usage\'];', 'export const hasPlanBlock = true;'),
@@ -196,6 +196,14 @@ function makeRepos() {
     const git = (...args) => execFileSync('git', ['-c', 'user.name=Orb Explora', '-c', 'user.email=explora@example.invalid', '-c', 'commit.gpgsign=false', ...args], { cwd: dir, stdio: 'ignore', timeout: 20000, windowsHide: true });
     git('init', '-b', 'main'); git('add', '-A'); git('commit', '-m', 'chore: initial commit');
     if (repo.git !== 'main') git('checkout', '-b', repo.git);
+    // a remote inside the temp folder (no network): the branch is pushed, then one more commit stays unpushed, so God mode
+    // shows «1 por delante de…»
+    if (repo.remote) {
+      const bare = path.join(tmp, 'Remotos', `${name}.git`); fs.mkdirSync(bare, { recursive: true });
+      git('init', '--bare', '-b', 'main', bare); git('remote', 'add', 'origin', bare); git('push', '-u', 'origin', repo.git);
+      fs.appendFileSync(path.join(dir, 'README.md'), String.fromCharCode(10) + 'Notas de la rama.' + String.fromCharCode(10));
+      git('add', '-A'); git('commit', '-m', 'docs: add branch notes');
+    }
   }
   return dirs;
 }
@@ -289,6 +297,15 @@ try {
         } catch (error) { note(`bienvenida: no se pudo marcar otro tema (${String(error?.message ?? error).split(String.fromCharCode(10))[0]})`); }
       }
       await shot(screens[name]); await darkShot(screens[name]);
+      // «Crea tu contraseña maestra» with both fields written (a made-up example, cleared again so throughStart fills them as before)
+      if (name === 'master') {
+        try {
+          const example = 'contraseña-de-ejemplo-1';
+          await page.fill('[data-testid=master-new]', example); await page.fill('[data-testid=master-again]', example); await page.waitForTimeout(300);
+          await shot('00a-contrasena-maestra-escrita'); await darkShot('00a-contrasena-maestra-escrita');
+          await page.fill('[data-testid=master-new]', ''); await page.fill('[data-testid=master-again]', '');
+        } catch (error) { note(`bienvenida: no se pudo rellenar la contraseña de ejemplo (${String(error?.message ?? error).split(String.fromCharCode(10))[0]})`); }
+      }
     };
     // The folder comes chosen (ORB_DEFAULT_BASE): «Cambiar ubicación…» would open Windows' own dialog.
     await page.click('[data-testid=setup-create]');
@@ -659,6 +676,37 @@ try {
   // prefix: «dia» / «noche».
   // Agentes checks the installed programs on arrival (a spinner and «Comprobando los programas instalados…»): the picture waits for it.
   const settleAgents = () => page.getByText(/Comprobando los programas instalados|Checking installed programs/).first().waitFor({ state: 'hidden', timeout: 30000 }).catch(() => noteOnce('Agentes: la comprobación de programas no terminó'));
+  // What the chat gained: the trail of marks at rest and with its preview, a chat marked as unread (the same call as the
+  // row's menu, undone afterwards) and the Ficha of an agent chat with its way to order a task.
+  const chatExtraShots = async (prefix) => {
+    if (!seeded) return;
+    try {
+      if (!(await openChat(CHATS[0].title))) return;
+      await closePanel();
+      const trail = page.locator('[data-testid=chat-trail]');
+      if (await trail.count()) {
+        await shot(`${prefix}-carril`);
+        const marks = trail.locator('button');
+        const n = await marks.count();
+        if (n) {
+          await marks.nth(Math.min(1, n - 1)).hover({ timeout: 3000 });
+          await page.locator('[data-testid=chat-trail-card]').first().waitFor({ timeout: 3000 }).catch(() => noteOnce('carril: el globo no salió al pasar el ratón'));
+          await page.waitForTimeout(300); await shot(`${prefix}-carril-globo`);
+          await page.mouse.move(700, 400);
+        } else noteOnce('carril: sin rayitas');
+      } else noteOnce('carril: no está (¿menos de dos mensajes del usuario o sin margen?)');
+      if (ids.contador) {
+        await call('inbox.markUnread', { kind: 'session', id: ids.contador }).catch((e) => noteOnce(`no se pudo marcar como no leído: ${String(e?.message ?? e).split('\n')[0]}`));
+        await goChat(); await page.waitForTimeout(700); await shot(`${prefix}-chat-no-leido`);
+        await call('inbox.markRead', { kind: 'session', id: ids.contador }).catch(() => {});
+      }
+      if (await openChat(CHATS[0].title) && await openPanel('info')) {
+        await page.locator('[data-testid=info-new-task]').first().scrollIntoViewIfNeeded({ timeout: 2000 }).catch(() => noteOnce('Ficha: sin «Encargar una tarea»'));
+        await page.waitForTimeout(300); await shot(`${prefix}-ficha-tareas`);
+        await closePanel();
+      }
+    } catch (error) { noteOnce(`capturas del chat: el recorrido se cortó (${String(error?.message ?? error).split('\n')[0]})`); await closeMenus(); }
+  };
   const deepShots = async (prefix) => {
     if (!seeded) return;
     // Agentes: its two tabs, from the top to the end of the page
@@ -939,6 +987,7 @@ try {
     }
     if (EXTRA) {
       // the extra pass: deepShots takes the place of the chat pictures, the boards and the places, then the lock screen
+      await chatExtraShots(theme);
       await deepShots(theme);
       await footShots(theme);
       await lockShots(theme);
@@ -1134,6 +1183,21 @@ try {
       }
       // the sidebar's foot popups in every theme (the player's play button is never pressed here)
       if (EXTRA) await footShots(`tema-${skin}-${theme}`, false);
+      // the trail of marks and its preview over a theme with a backdrop
+      if (EXTRA && seeded && (skin === 'vaporwave' || skin === 'cristal') && await openChat(CHATS[0].title)) {
+        await closePanel();
+        const mark = page.locator('[data-testid=chat-trail] button').nth(1);
+        if (await mark.count()) {
+          await mark.hover({ timeout: 3000 }).catch(() => noteOnce(`carril en ${skin}: no se pudo pasar el ratón`));
+          await page.locator('[data-testid=chat-trail-card]').first().waitFor({ timeout: 3000 }).catch(() => noteOnce(`carril en ${skin}: el globo no salió`));
+          await page.waitForTimeout(300); await shot(`tema-${skin}-${theme}-carril-globo`);
+          await page.mouse.move(700, 400);
+        } else noteOnce(`carril en ${skin}: sin rayitas`);
+      }
+      // the lock screen over the Orb and Vaporwave themes (the others are pictured at the end of each view mode)
+      if (EXTRA && (skin === 'orb' || skin === 'vaporwave')) {
+        try { await lockShots(`tema-${skin}-${theme}`); } catch (error) { note(`bloqueo en ${skin}/${theme}: ${String(error?.message ?? error).split(String.fromCharCode(10))[0]}`); throw error; }
+      }
       // ORB_EXPLORA_EXTRA=1: Agentes and Uso in every theme too
       if (EXTRA && await tapOrNote('[data-testid=nav-agents]')) {
         await page.waitForTimeout(500); await shot(`tema-${skin}-${theme}-agentes`);

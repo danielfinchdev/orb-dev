@@ -82,3 +82,10 @@ test('both pop-ups are dialogs hanging from the foot, with Escape and the focus 
   assert.match(css, /html\[data-capturing\][^{]*feedback-pop/, 'the capture does not show the pop-up');
   assert.doesNotMatch(css.slice(css.indexOf('the sidebar foot\'s pop-ups')), /app-region/);
 });
+
+test('11D: the two pop-ups sit where the mock-up puts them and the form has its icons', () => {
+  for (const src of [player, feedback]) assert.match(src, /alignOffset=\{8\} offset=\{6\} collisionPadding=\{8\}/);
+  assert.match(feedback, /const TYPE_ICON = \{ error: Bug, idea: Lightbulb \}/);
+  assert.match(feedback, /<AppWindow \/>\{t\('contribute\.capture'\)\}/);
+  assert.doesNotMatch(feedback, /Camera/);
+});

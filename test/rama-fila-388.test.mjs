@@ -35,7 +35,7 @@ before(() => {
 });
 after(() => { setCacheClock(null); try { sessions.stopAll(); board.db.close(); } catch { /* closed */ } forgetRepos(); t.cleanup(); });
 
-test('sessions.list da la rama de un chat con worktree y nada al que no lo tiene', async () => {
+test('sessions.list da la rama de un chat con worktree y la de la carpeta al que no lo tiene', async () => {
   const tree = await call('sessions.create', { agent: 'claude', project: 'ramas', permission: 'editar', title: 'wt', workspace: 'worktree' });
   const plain = await call('sessions.create', { agent: 'claude', project: 'ramas', permission: 'editar', title: 'local' });
   forgetRepos();
@@ -43,7 +43,8 @@ test('sessions.list da la rama de un chat con worktree y nada al que no lo tiene
   const a = rows.find((x) => x.id === tree.id); const b = rows.find((x) => x.id === plain.id);
   assert.match(a.branch, /^orb\/chat-/);
   assert.equal('prNumber' in a, false);
-  assert.equal('branch' in b, false); assert.equal('prNumber' in b, false);
+  // the chat without a worktree gets the branch of its folder, read from .git/HEAD (and no PR: none is known)
+  assert.equal(b.branch, 'main'); assert.equal('prNumber' in b, false);
   // the rest of the row is what it was
   for (const k of ['id', 'title', 'agent', 'project', 'status', 'cwd', 'updated_at']) assert.ok(k in a, k);
 });
