@@ -313,11 +313,20 @@ html[data-skin="retro"] .notice-dot { border-radius: 0; }
 /* the Pizarra. The canvas is Excalidraw's own (light or dark with the app); around it, the theme's surfaces. */
 .wb-canvas { isolation: isolate; }
 .wb-canvas .excalidraw { --ui-font: var(--font-sans); }
-/* The PC canvas keeps only what the approved toolbar draws: Excalidraw's lock, key numbers, extra-tools button, main menu,
-   library button and hint are hidden here and live in the canvas menu (⋯) or stay on their shortcuts. */
+/* The PC canvas draws the approved tool bar itself (wb-controls.jsx): Excalidraw's own tool bar, lock, key numbers,
+   extra-tools button, main menu, library button, hint and help button are hidden here. Their functions live in the canvas
+   menu (⋯) and on Excalidraw's keyboard shortcuts, which keep working while hidden. */
+.wb-pc .excalidraw .App-toolbar-container, .wb-pc .excalidraw .layer-ui__wrapper__footer-right { display: none !important; }
 .wb-pc .excalidraw .ToolIcon__lock, .wb-pc .excalidraw .ToolIcon__keybinding, .wb-pc .excalidraw .App-toolbar__divider,
 .wb-pc .excalidraw .App-toolbar__extra-tools-trigger, .wb-pc .excalidraw .main-menu-trigger, .wb-pc .excalidraw .default-sidebar-trigger,
 .wb-pc .excalidraw .HintViewer { display: none !important; }
+/* Zoom and undo/redo are Excalidraw's own (its public API has no undo): dressed as the approved pill. */
+.wb-pc .excalidraw .layer-ui__wrapper__footer-left { --lg-button-size: var(--ctl-sm); --lg-icon-size: 16px; left: 14px; bottom: 14px; }
+.wb-pc .excalidraw .zoom-actions, .wb-pc .excalidraw .undo-redo-buttons { padding: 4px; gap: 2px; border: 1px solid var(--border); border-radius: var(--r-card); background: var(--background); box-shadow: none; }
+.wb-pc .excalidraw .zoom-actions button, .wb-pc .excalidraw .undo-redo-buttons button { height: var(--ctl-sm); min-width: var(--ctl-sm); border-radius: var(--r-ctl) !important; border: 0 !important; background: transparent !important; color: var(--foreground); box-shadow: none; }
+.wb-pc .excalidraw .zoom-actions button:hover:not(:disabled), .wb-pc .excalidraw .undo-redo-buttons button:hover:not(:disabled) { background: var(--accent) !important; }
+.wb-pc .excalidraw .zoom-actions button:disabled, .wb-pc .excalidraw .undo-redo-buttons button:disabled { opacity: 0.45; }
+.wb-pc .excalidraw .reset-zoom-button { font-size: 12px; color: var(--muted-foreground); }
 .wb-status { background: color-mix(in oklch, var(--card) 88%, transparent); color: var(--muted-foreground); border: 1px solid var(--border); box-shadow: 0 4px 14px -8px rgb(0 0 0 / 0.25); backdrop-filter: blur(6px); }
 .wb-item { background: color-mix(in oklch, var(--card) 70%, transparent); }
 .wb-panel { background: color-mix(in oklch, var(--sidebar) 94%, transparent); backdrop-filter: blur(10px); box-shadow: 0 18px 40px -18px rgb(0 0 0 / 0.35), 0 2px 8px -4px rgb(0 0 0 / 0.15); }

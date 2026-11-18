@@ -41,5 +41,22 @@ export default {
   'wb.noteShort': 'Nota para {assistant}',
   'wb.noteFor': 'Nota para {assistant} sobre {name}',
   'wb.noAttTitle': 'Sin adjuntos',
-  'wb.noAttBody': 'Adjunta fotos, vídeos o documentos para que {assistant} los vea.'
+  'wb.noAttBody': 'Adjunta fotos, vídeos o documentos para que {assistant} los vea.',
+  'wb.shortcuts': 'Atajos de teclado',
+  'wb.tools': 'Herramientas de dibujo',
+  'wb.tool.selection': 'Seleccionar',
+  'wb.tool.hand': 'Mano',
+  'wb.tool.rectangle': 'Rectángulo',
+  'wb.tool.diamond': 'Rombo',
+  'wb.tool.ellipse': 'Círculo',
+  'wb.tool.arrow': 'Flecha',
+  'wb.tool.line': 'Línea',
+  'wb.tool.freedraw': 'Lápiz',
+  'wb.tool.text': 'Texto',
+  'wb.tool.image': 'Imagen',
+  'wb.tool.eraser': 'Borrador',
+  'wb.canvasNote': 'Nota para {assistant}',
+  'wb.canvasNote.hint': 'Lo que {assistant} debe saber de todo el lienzo y no se ve en el dibujo. Lo lee junto con el dibujo y los adjuntos.',
+  'wb.canvasNote.ph': 'Por ejemplo: «El flujo de pago es lo prioritario; lo de la rama de abajo es solo una idea».',
+  'wb.canvasNote.count': '{n} / {max}'
 };

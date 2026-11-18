@@ -5,11 +5,12 @@
 // computer's browser linked with an Orb keep the floating panel.
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { notifyError } from '@/lib/notify.js';
-import { Presentation, Paperclip, FolderOpen, Trash2, FileText, Film, Music, PanelRightClose, PanelRightOpen, Check, CloudUpload, FolderX, Download, Maximize, Eraser, Image as ImageIcon, X, Lock, Library, Frame, Globe, Pointer, PaintBucket } from 'lucide-react';
+import { Presentation, Paperclip, Keyboard, FolderOpen, Trash2, FileText, Film, Music, PanelRightClose, PanelRightOpen, Check, CloudUpload, FolderX, Download, Maximize, Eraser, Image as ImageIcon, X, Lock, Library, Frame, Globe, Pointer, PaintBucket } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { ProjectPicker } from '@/components/project-actions.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { ChatPanel } from '@/components/chat-panel.jsx';
+import { WbToolbar, CanvasNote } from '@/components/wb-controls.jsx';
 import { NotificationBell } from '@/components/notification-center.jsx';
 import { BarPause } from '@/components/conversation/bar.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -49,11 +50,13 @@ function useBoard(project) {
   const [attachments, setAttachments] = useState([]);
   const [saving, setSaving] = useState('saved'); // saved | pending | saving
   const [dropping, setDropping] = useState(false);
+  const [canvasNote, setNoteText] = useState('');
+  const [noteState, setNoteState] = useState('saved'); // saved | pending | saving
   const latest = useRef(null); const savedFiles = useRef(new Set()); const timers = useRef({}); const lastPng = useRef(0);
   useEffect(() => {
     if (!project) return undefined;
     let alive = true;
-    call('whiteboard.load', { project }).then((d) => { if (!alive) return; savedFiles.current = new Set(Object.keys(d.files ?? {})); setAttachments(d.attachments ?? []); setData(d); })
+    call('whiteboard.load', { project }).then((d) => { if (!alive) return; savedFiles.current = new Set(Object.keys(d.files ?? {})); setAttachments(d.attachments ?? []); setNoteText(d.note ?? ''); setData(d); })
       .catch((e) => { if (alive) { notifyError(e); setData({ elements: [], appState: {}, files: {}, attachments: [] }); } });
     return () => { alive = false; };
   }, [project]);
@@ -87,6 +90,18 @@ function useBoard(project) {
   }, [save]);
   useEffect(() => () => { clearTimeout(timers.current.save); if (latest.current) save({ withPng: true }); }, [save]);
 
+  // The general note of the canvas: saved a moment after the last key, and when leaving.
+  const pendingNote = useRef(null);
+  const flushNote = useCallback(async () => {
+    clearTimeout(timers.current.note);
+    const value = pendingNote.current; if (value == null || !project) return;
+    pendingNote.current = null; setNoteState('saving');
+    try { await call('whiteboard.canvasNote', { project, note: value }); setNoteState(pendingNote.current == null ? 'saved' : 'pending'); }
+    catch (e) { pendingNote.current ??= value; setNoteState('pending'); notifyError(e); }
+  }, [project]);
+  const editNote = (value) => { setNoteText(value); pendingNote.current = value; setNoteState('pending'); clearTimeout(timers.current.note); timers.current.note = setTimeout(flushNote, 1200); };
+  useEffect(() => () => { flushNote(); }, [flushNote]);
+
   const attach = async (paths) => {
     const list = (paths ?? []).filter(Boolean); if (!list.length) return;
     const r = await act(call('whiteboard.attach', { project, paths: list }), t('wb.attached', { n: list.length }));
@@ -103,7 +118,7 @@ function useBoard(project) {
   // Files dropped on the panel (from the Explorer) are attached; on the canvas, Excalidraw places pictures itself.
   // Their real paths (a promise).
   const drop = (e) => { e.preventDefault(); setDropping(false); Promise.all([...(e.dataTransfer?.files ?? [])].map((f) => bridge.pathForFile?.(f))).then(attach); };
-  return { data, attachments, saving, dropping, setDropping, onChange, attach, pick, note, remove, openFolder, drop };
+  return { data, attachments, saving: saving === 'saved' && noteState === 'saved' ? 'saved' : saving === 'saved' ? noteState : saving, canvasNote, editNote, dropping, setDropping, onChange, attach, pick, note, remove, openFolder, drop };
 }
 
 // The Pizarra of the project in use: changing project (here or anywhere) changes the Pizarra.
@@ -135,12 +150,14 @@ function WhiteboardPc({ project }) {
   const [panel, setPanel] = usePanel();
   const b = useBoard(project);
   const api = useRef(null);
+  const [tool, setTool] = useState('selection');
   // The canvas menu is Excalidraw's own: its export dialog, its fit to content and its reset.
   const exportDrawing = () => api.current?.updateScene({ appState: { openDialog: { name: 'imageExport' } } });
   const fit = () => { const els = api.current?.getSceneElements() ?? []; if (els.length) api.current.scrollToContent(els, { fitToContent: true, animate: true }); };
   const clear = async () => { if (await confirm(t('wb.clear.title'), t('wb.clear.body'), { ok: t('wb.clear.ok'), danger: true })) api.current?.resetScene(); };
   // What the toolbar no longer draws (lock, library, the extra tools, the background) is reached from the same menu.
   const toggleLock = () => { const a = api.current; const tool = a?.getAppState().activeTool; if (tool) a.setActiveTool({ type: tool.type, locked: !tool.locked }); };
+  const shortcuts = () => api.current?.updateScene({ appState: { openDialog: { name: 'help' } } });
   const library = () => api.current?.toggleSidebar({ name: 'default', tab: 'library' });
   const useTool = (type) => () => api.current?.setActiveTool({ type });
   const BACKGROUNDS = ['#ffffff', '#f8f9fa', '#f5faff', '#fffce8', '#fdf8f6'];
@@ -180,6 +197,7 @@ function WhiteboardPc({ project }) {
               <DropdownMenuItem disabled={!ready} onSelect={useTool('frame')} data-testid="whiteboard-menu-frame"><Frame />{t('wb.toolFrame')}</DropdownMenuItem>
               <DropdownMenuItem disabled={!ready} onSelect={useTool('embeddable')} data-testid="whiteboard-menu-embed"><Globe />{t('wb.toolEmbed')}</DropdownMenuItem>
               <DropdownMenuItem disabled={!ready} onSelect={useTool('laser')} data-testid="whiteboard-menu-laser"><Pointer />{t('wb.toolLaser')}</DropdownMenuItem>
+              <DropdownMenuItem disabled={!ready} onSelect={shortcuts} data-testid="whiteboard-menu-shortcuts"><Keyboard />{t('wb.shortcuts')}</DropdownMenuItem>
               <DropdownMenuItem disabled={!ready} onSelect={nextBackground} data-testid="whiteboard-menu-background"><PaintBucket />{t('wb.background')}</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" disabled={!ready} onSelect={clear} data-testid="whiteboard-menu-clear"><Eraser />{t('wb.clear')}</DropdownMenuItem>
@@ -191,11 +209,15 @@ function WhiteboardPc({ project }) {
             <div className="wb-canvas wb-pc relative min-w-0 flex-1" data-testid="whiteboard-canvas">
               {b.data ? (
                 <Suspense fallback={<div className="grid h-full place-items-center"><Spinner /></div>}>
-                  <Board initial={b.data} dark={dark} lang={lang} onChange={b.onChange} onApi={(a) => { api.current = a ?? null; }} />
+                  <Board initial={b.data} dark={dark} lang={lang} onChange={b.onChange} onTool={setTool} onApi={(a) => { api.current = a ?? null; }} />
                 </Suspense>
               ) : <div className="grid h-full place-items-center"><Spinner /></div>}
-              <div className="pointer-events-none absolute right-16 bottom-3.5 z-10" data-testid="whiteboard-status">
-                {b.saving === 'saved' ? <Badge variant="success"><Check />{t('wb.saved')}</Badge> : <Badge variant="secondary"><CloudUpload />{t('wb.saving')}</Badge>}
+              {b.data ? <WbToolbar api={api} tool={tool} /> : null}
+              <div className="absolute right-3.5 bottom-3.5 z-10 flex items-center gap-1.5">
+                <span className="pointer-events-none" data-testid="whiteboard-status">
+                  {b.saving === 'saved' ? <Badge variant="success"><Check />{t('wb.saved')}</Badge> : <Badge variant="secondary"><CloudUpload />{t('wb.saving')}</Badge>}
+                </span>
+                {b.data ? <CanvasNote value={b.canvasNote} onChange={b.editNote} assistant={assistant} /> : null}
               </div>
             </div>
           </PageBody>

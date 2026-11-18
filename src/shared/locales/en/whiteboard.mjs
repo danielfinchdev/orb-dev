@@ -41,5 +41,22 @@ export default {
   'wb.noteShort': 'Note for {assistant}',
   'wb.noteFor': 'Note for {assistant} about {name}',
   'wb.noAttTitle': 'No attachments',
-  'wb.noAttBody': 'Attach photos, videos or documents so {assistant} can see them.'
+  'wb.noAttBody': 'Attach photos, videos or documents so {assistant} can see them.',
+  'wb.shortcuts': 'Keyboard shortcuts',
+  'wb.tools': 'Drawing tools',
+  'wb.tool.selection': 'Select',
+  'wb.tool.hand': 'Hand',
+  'wb.tool.rectangle': 'Rectangle',
+  'wb.tool.diamond': 'Diamond',
+  'wb.tool.ellipse': 'Circle',
+  'wb.tool.arrow': 'Arrow',
+  'wb.tool.line': 'Line',
+  'wb.tool.freedraw': 'Pencil',
+  'wb.tool.text': 'Text',
+  'wb.tool.image': 'Image',
+  'wb.tool.eraser': 'Eraser',
+  'wb.canvasNote': 'Note for {assistant}',
+  'wb.canvasNote.hint': 'What {assistant} should know about the whole canvas that the drawing does not show. It reads it with the drawing and the attachments.',
+  'wb.canvasNote.ph': 'For example: "The payment flow comes first; the branch below is only an idea".',
+  'wb.canvasNote.count': '{n} / {max}'
 };
