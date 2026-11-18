@@ -290,7 +290,7 @@ export function MasterLocked({ onDone, state = null }) {
   useEffect(() => {
     if (!screen) return undefined;
     let live = true;
-    call('master.state').then((s) => { if (live) setLockInfo({ at: s?.lockedAt ?? null, reason: s?.lockReason ?? null }); setCanForget(Boolean(s?.canForget)); }).catch(() => {});
+    call('master.state').then((s) => { if (!live) return; setLockInfo({ at: s?.lockedAt ?? null, reason: s?.lockReason ?? null }); setCanForget(Boolean(s?.canForget)); }).catch(quiet);
     return () => { live = false; };
   }, [screen]);
   const time = screen ? clockOf(lockInfo?.at) : null;

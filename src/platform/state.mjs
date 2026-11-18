@@ -24,6 +24,8 @@ export const STATE_KEYS = Object.freeze({
     'auto_mode_383',
     // the external MCP server (src/engine/api/mcp-ext.mjs): on/off and its port
     'mcpext_enabled', 'mcpext_port',
+    // what the last look for newer agent programs found (src/engine/usage/versions.mjs)
+    'agent_updates',
   ]),
   prefixes: Object.freeze({
     // a device's (the morning summary card shown today)
