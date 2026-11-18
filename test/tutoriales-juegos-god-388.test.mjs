@@ -74,7 +74,7 @@ test('God mode keeps its exports and the calls it makes', () => {
   const before = head('src/ui/views/expert.jsx');
   for (const name of ['PANELS', 'savePanels', 'ExpertView']) assert.match(now, new RegExp(`export (?:const|async function|function) ${name}\\b`));
   const calls = (src) => new Set([...src.matchAll(/call\('([\w.]+)'/g)].map((m) => m[1]));
-  assert.deepEqual([...calls(now)].sort(), [...calls(before)].sort());
+  assert.deepEqual([...calls(now)].sort(), [...calls(before), 'expert.createFile'].sort()); // the one call added: «Nuevo archivo»
   // the PC-only guard stays (the phone never gets the tree, the files or git)
   assert.match(now, /if \(bridge\.mobile\) return/);
 });
@@ -101,7 +101,7 @@ test('9C-a Juegos: the game dialog is 560 wide, centred, with the board scaled t
   const src = read('src/ui/games/games.jsx');
   assert.match(src, /w-\[min\(560px,96vw\)\]/);
   assert.match(src, /game && 'text-center leading-\[1\.45\]'/);
-  assert.match(src, /game && 'py-1\.5'/, 'the body keeps the 18 px of the design above and below the board');
+  assert.match(src, /'flex flex-col gap-3\.5 pt-1\.5', game && 'pb-1\.5'/, 'the body keeps the 18 px of the design above and below the board');
   assert.match(src, /game \? 'justify-center' : 'justify-between'/);
   assert.match(src, /\[&_canvas\]:h-auto! \[&_canvas\]:max-w-\[362px\]/);
   assert.match(src, /text-2xl leading-\[1\.45\] font-semibold/, 'score cards of 82 px');
@@ -114,7 +114,7 @@ test('9C-a God mode: file search, project as plain text with its dot, panels men
   assert.match(src, /border-transparent bg-transparent/);
   assert.match(src, /icon: <ProjectIcon name=\{p\.name\} small \/>/);
   assert.match(src, /DropdownMenuContent align="end" className="w-75"/);
-  assert.doesNotMatch(src, /new file|file-plus|Nuevo archivo/i, 'Orb cannot create files: no «+»');
+  assert.match(src, /expert.createFile/, 'the only write God mode makes: a new empty file'); assert.doesNotMatch(src, /expert.(delete|rename|remove)/);
   for (const lang of ['es', 'en']) assert.match(read(`src/shared/locales/${lang}/expert.mjs`), /'expert\.searchFiles'/);
 });
 

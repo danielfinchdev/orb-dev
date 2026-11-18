@@ -70,7 +70,7 @@ test('10: the Ficha title card is as tall as the mock-up and names a worktree as
 });
 
 test('11: the messages line up with the edges of the text box in both conversations', () => {
-  const column = /max-w-\[calc\(var\(--chat-max-width\)\+2\.5rem\)\]/;
+  const column = /max-w-\[calc\(var\(--chat-max-width\)\+2\.5rem-var\(--sb-w\)\)\]/;
   assert.match(chat, column);
   assert.match(session, column);
   for (const src of [chat, session]) assert.match(src, /pr-\[calc\(1\.25rem-var\(--sb-w\)\)\] pl-5/, 'the bar\'s room comes out of the right padding');

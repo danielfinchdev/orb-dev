@@ -1019,6 +1019,15 @@ try {
           await entry(/^src$/).click({ timeout: 3000 }); await page.waitForTimeout(500);
           await entry(/^context-meter\.js$/).click({ timeout: 3000 }); await page.waitForTimeout(900);
           await shot(`${prefix}-god-mode-archivo`);
+          // the file's «⋯» and «Nuevo archivo»: opened and closed, nothing is created
+          if (await tap('expert-file-more', 'el «⋯» del archivo abierto en el God mode')) { await shot(`${prefix}-god-mode-archivo-menu`); await closeMenus(); }
+          if (await tap('expert-new-file', '«Nuevo archivo» del God mode')) {
+            await page.locator('[data-testid=expert-new-file-name]').first().waitFor({ timeout: 3000 }).catch(() => noteOnce('God mode: «Nuevo archivo» no abre su diálogo'));
+            await shot(`${prefix}-god-mode-nuevo-archivo`);
+            const cancel = page.getByRole('dialog').getByRole('button', { name: /^(Cancelar|Cancel)$/ }).first();
+            if (!(await cancel.click({ timeout: 3000 }).then(() => true, () => false))) await closeMenus();
+            await page.waitForTimeout(300);
+          }
           if (await tap('expert-view-changes', '«Ver cambios» del archivo')) { await page.waitForTimeout(900); await shot(`${prefix}-god-mode-diff`); }
         } catch { noteOnce('God mode: no se pudo abrir una carpeta y un archivo del árbol'); }
         if (!(await page.locator('[data-testid=expert-view-changes]').count())) {

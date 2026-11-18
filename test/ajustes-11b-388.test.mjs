@@ -102,6 +102,6 @@ test('revisión: freno solo lectura en el móvil, rangos, carrera del QR, códig
   // 5: the code leaves the state when it expires and when a device links
   assert.match(link, /if \(expired\) \{ setWasExpired\(true\); setQr\(null\); \}/);
   assert.match(link, /event === 'link:devices'\) \{ reqN\.current \+= 1; setQr\(null\)/);
-  // 6: selecting the address does not flip the switch of the row
-  assert.match(devices, /select-text" onClick=\{\(e\) => e\.preventDefault\(\)\} data-testid=\{`mobile-\$\{kind\}-address`\}/);
+  // 6: the address is selectable text in a plain row (no label around it, so nothing flips when selecting)
+  assert.match(devices, /select-text" data-testid=\{`mobile-\$\{kind\}-address`\}/);
 });

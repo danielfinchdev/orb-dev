@@ -26,7 +26,7 @@ test('d: Ajustes gathers what the mock-up lacks under one «Más opciones» piec
   assert.match(locale('es', 'settings'), /'settings\.moreOptions': 'Más opciones'/);
   // General: chat tabs and shortcuts, not folded, after Actualizaciones
   const index = src('views', 'settings', 'index.jsx');
-  assert.match(index, /<MoreOptions testid="more-options-general"><TabsCard c=\{c\} \/><ShortcutsCard \/><\/MoreOptions>/);
+  assert.match(index, /<MoreOptions testid="more-options-general"><ZoomFineCard \/><TabsCard c=\{c\} \/><ShortcutsCard \/><\/MoreOptions>/);
   // Robot y sonidos: «Música que reacciona» and «Intensidad»
   const general = src('views', 'settings', 'general.jsx');
   const more = general.slice(general.indexOf('function MusicMore'), general.indexOf('function MusicSettings'));

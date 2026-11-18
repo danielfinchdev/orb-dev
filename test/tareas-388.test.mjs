@@ -20,7 +20,7 @@ test('the project and agent filters are Orb menus, never the system select', () 
 
 test('the state tabs are a segmented control with a counter and do not wrap', () => {
   for (const key of ['todas', 'encurso', 'aprobar', 'encola', 'incidencias', 'hechas']) assert.match(pc, new RegExp(`\\['${key}', 'tasks\\.filter\\.`), key);
-  assert.match(pc, /<TabsList data-testid="task-filters">/);
+  assert.match(pc, /<TabsList className="h-auto min-h-\(--ctl\) flex-wrap" data-testid="task-filters">/);
   assert.match(pc, /<span className="n [^"]*tabular-nums">\{n\}<\/span>/);
 });
 
