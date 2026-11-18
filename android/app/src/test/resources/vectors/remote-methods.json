@@ -1,6 +1,6 @@
 {
   "generatedBy": "scripts/android-vectors.mjs",
-  "source": "51d17ffda79a2a7511606455aa0f861249a7af3b87fdab7c828865182d46b3bd",
+  "source": "d23d31f32c365050eb8689e6c80edfa4ee5d187ee393358d24b93d77f79ba164",
   "methods": [
     "activity.list",
     "activity.report",
@@ -49,6 +49,7 @@
     "mentions.options",
     "models.catalog",
     "models.guide",
+    "notes.list",
     "notes.markRead",
     "pc.screenshot",
     "permissions.setMode",

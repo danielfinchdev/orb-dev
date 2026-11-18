@@ -9,7 +9,8 @@
 // attention server), remote-web.mjs (service worker, headers).
 import { isMuted, itemOfConversation } from '../../domain/conversations/inbox.mjs';
 import { buildNote, actionRoute } from '../../shared/notes.mjs';
-import { noticeNote } from './notes-center.mjs';
+import { noticeNote, targetOfNote } from './notes-center.mjs';
+import { recordNote } from '../../domain/notes/recent.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -519,8 +520,10 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const built = noticeNote(fact, { preview: pushPreview(ctx.config), assistantName: ctx.config.assistantName ?? 'Orb', hiddenText: tr('msg.remote.pushHidden') });
     return built ? pushNote(dress(built), null) : false;
   }
-  // The note goes out: a sealed event to the open apps, Web Push to the others.
+  // The note goes out (sealed event to the open apps, Web Push to the others) and is kept in the short list a phone reads
+  // back with notes.list. What is kept has no actions, no card and no token.
   function pushNote(n, conversation) {
+    try { recordNote(board, { key: n.key, kind: n.kind, title: n.title, body: n.body, hidden: n.hidden, route: n.route, line: n.line, target: targetOfNote(n) }, { conversation }); } catch (error) { log(`avisos: ${error.message}`); }
     const openNow = new Set();
     for (const c of clients) {
       openNow.add(c.device);

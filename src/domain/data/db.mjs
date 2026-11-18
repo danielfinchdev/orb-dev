@@ -118,6 +118,22 @@ CREATE TABLE IF NOT EXISTS devices (
   created_at TEXT NOT NULL,
   last_seen TEXT
 );
+-- 3.8.8: the last notices sent to the linked phones, so a phone can ask for the ones it missed (src/domain/notes/recent.mjs).
+-- Only what was delivered (text as shown, destination); never an action token.
+CREATE TABLE IF NOT EXISTS mobile_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  at INTEGER NOT NULL,
+  key TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  hidden INTEGER NOT NULL DEFAULT 0,
+  route TEXT,
+  target TEXT,
+  line INTEGER,
+  conversation_id INTEGER
+);
+CREATE INDEX IF NOT EXISTS mobile_notes_at ON mobile_notes (at);
 -- 2.3: messages waiting for a running turn (sent in order when it ends, or steered into it).
 CREATE TABLE IF NOT EXISTS session_queue (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

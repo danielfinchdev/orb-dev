@@ -56,6 +56,7 @@ import { workMethods } from './work.mjs';
 import { ChatWorktrees } from '../chat-worktrees.mjs';
 import { readActivity, buildReport, hidePcPaths } from '../../domain/activity/activity.mjs';
 import { snapshotBefore, recordUserCall } from '../../domain/activity/record.mjs';
+import { listRecent } from '../../domain/notes/recent.mjs';
 
 export { fail, str, int, oneOf } from './common.mjs';
 
@@ -299,6 +300,13 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
       if (ids != null && (!Array.isArray(ids) || ids.length > 200 || ids.some((x) => typeof x !== 'string' || x.length > 100))) fail(tr('msg.api.badList'));
       emit('notes:read', { ...(ids ? { ids } : {}), at: Date.now() });
       return { ok: true };
+    },
+    // The notices the PC sent to the phones lately (at most 100 and 7 days), newest first: what a phone missed while away.
+    // Read only; the text is the one that was delivered (the preview setting already applied).
+    'notes.list': ({ since, limit } = {}) => {
+      if (since != null && !Number.isFinite(Number(since))) fail(tr('msg.api.badList'));
+      if (limit != null && !Number.isFinite(Number(limit))) fail(tr('msg.api.badList'));
+      return { notes: listRecent(board, { since, limit }) };
     },
     // `dir` (where the logs live) is for the window only: the phone never gets this PC's folders
     'logs.list': (_params, principal) => logFiles(board).map(([name, file]) => { let size = 0; try { size = fs.statSync(file).size; } catch { /* empty */ } return { name, size, entries: countLogEntries(file), ...(principal?.channel === 'desktop' && name === 'general' ? { dir: path.dirname(file) } : {}) }; }),
