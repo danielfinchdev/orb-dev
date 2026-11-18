@@ -760,9 +760,14 @@ ${body}`;
   // forks (Claude, Codex) carry their whole history; for the others the copy starts with a summary of what was said.
   // agent: «Continuar con otro agente», the copy goes on with that agent (its own account and default model) and
   // always starts with the summary. Without it, the fork of before.
-  fork(id, { title, agent } = {}) {
+  // from: the id of a text line of this chat; the copy holds the conversation up to and including that line. The agent's
+  // native session also holds what came after, so a cut copy never uses it: it starts with the summary, like «Editar».
+  // Only the conversation is copied; the project's files are not touched.
+  fork(id, { title, agent, from } = {}) {
     const s = this.must(id);
     if (this.running.has(id)) throw new Error(tr('msg.sessions.forkWait'));
+    const cut = from == null ? null : Number(from);
+    if (cut != null && !this.board.one("SELECT id FROM session_items WHERE id = ? AND session_id = ? AND kind = 'text' AND role IN ('user', 'assistant')", cut, s.id)) throw new Error(tr('msg.edit.noMessage'));
     const other = agent && agent !== s.agent ? agent : null;
     const a = adapter(other ?? s.agent);
     if (other && UNGUARDED_AGENTS.includes(other)) requireLevel('leer', AGENT_LABELS[other] ?? other); // the copy never keeps «total»
@@ -770,10 +775,10 @@ ${body}`;
     const copy = this.create({ kind: 'chat', agent: other ?? s.agent, account: other ? null : s.account, model: other ? null : s.model, reasoning: other && s.reasoning === 'xhigh' ? 'high' : s.reasoning, permission: s.permission !== 'total' ? s.permission : s.project ? permissionOfAutonomy(globalAutonomy()) : 'leer',
       project: s.project, cwd: s.cwd, title: title || (other ? tr('msg.sessions.switchTitle', { title: s.title, agent: AGENT_LABELS[other] ?? other }) : tr('msg.sessions.forkTitle', { title: s.title })), parentId: s.id });
     this.board.run('UPDATE sessions SET titled = 1 WHERE id = ?', copy.id); // its title stays (not renamed by its next message)
-    const old = this.board.all("SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT 40", s.id).reverse();
+    const old = this.board.all(`SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant')${cut != null ? ' AND id <= ?' : ''} ORDER BY id DESC LIMIT 40`, s.id, ...(cut != null ? [cut] : [])).reverse();
     for (const it of old) this.board.run('INSERT INTO session_items (session_id, role, kind, body, at) VALUES (?, ?, ?, ?, ?)', copy.id, it.role, it.kind, it.body, it.at);
     this.addItem(copy.id, 'system', 'status', other ? tr('msg.sessions.switched', { title: s.title, agent: AGENT_LABELS[other] ?? other }) : tr('msg.sessions.forked', { title: s.title }));
-    if (!other && a.caps?.fork && s.cli_session) this.board.settingJson(`fork_pending:${copy.id}`, s.cli_session);
+    if (!other && cut == null && a.caps?.fork && s.cli_session) this.board.settingJson(`fork_pending:${copy.id}`, s.cli_session);
     else if (old.length) this.board.settingJson(`fork_summary:${copy.id}`, old.map((it) => `${it.role === 'user' ? 'Usuario' : 'Agente'}: ${oneLine(bodyText(parseItem(it).body), 400)}`).join('\n'));
     return copy;
   }

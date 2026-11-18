@@ -222,10 +222,11 @@ ${block}` : ''}` });
     'sessions.approve': ({ id, request, decision }) => sessions.respond(str(id, 'conversación', 64), str(request, 'petición', 200), oneOf(decision, DECISION, 'decisión')),
     'sessions.resume': ({ id }) => { trash.assertSessionNotTrashed(sessions.must(str(id, 'conversación', 64))); return sessions.resume(str(id, 'conversación', 64)); },
     // agent: go on with another agent (the copy gets a summary of the conversation; the original stays).
-    'sessions.fork': ({ id, title, agent }) => {
+    // from: a message of the chat; the copy is cut there (conversation only, never the files).
+    'sessions.fork': ({ id, title, agent, from }) => {
       const other = oneOf(agent, AGENT_IDS, 'agente', undefined);
       if (other && !(board.availableAgents() ?? AGENT_IDS).includes(other)) fail(tr('msg.api.agentUnavailable', { agent: other }));
-      return sessions.fork(str(id, 'conversación', 64), { title: str(title, 'título', 80, { optional: true }) || undefined, agent: other });
+      return sessions.fork(str(id, 'conversación', 64), { title: str(title, 'título', 80, { optional: true }) || undefined, agent: other, from: from === undefined || from === null ? undefined : int(from, 'mensaje') });
     },
     // the same chat goes on with another agent (a bounded summary travels; the chat's permission is kept, never raised).
     'sessions.handoff': ({ id, agent }) => {

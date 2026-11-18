@@ -54,10 +54,20 @@ function userItem(sessions, s, itemId) {
 }
 
 // What the dialog may offer for this message. → { canEdit, editWhy, canRewind, rewindWhy } (a «why» is text for the user)
+// canFork / forkWhy: «Bifurcar desde aquí» (sessions.fork with `from`) copies only the conversation up to a text line,
+// so it needs no photo, git or project: just a chat that is not working.
 export async function rewindInfo(sessions, id, itemId) {
   const s = sessions.must(id);
-  if (locked(sessions, s)) return { canEdit: false, editWhy: tr('msg.edit.busy'), canRewind: false, rewindWhy: tr('msg.edit.busy') };
-  return inspect(sessions, s, itemId);
+  const fork = forkInfo(sessions, s, itemId);
+  if (locked(sessions, s)) return { canEdit: false, editWhy: tr('msg.edit.busy'), canRewind: false, rewindWhy: tr('msg.edit.busy'), ...fork };
+  return { ...(await inspect(sessions, s, itemId)), ...fork };
+}
+
+function forkInfo(sessions, s, itemId) {
+  const why = s.kind !== 'chat' ? tr('msg.edit.notChat')
+    : !sessions.board.one("SELECT id FROM session_items WHERE id = ? AND session_id = ? AND kind = 'text' AND role IN ('user', 'assistant')", Number(itemId), s.id) ? tr('msg.edit.noMessage')
+      : sessions.running.has(s.id) || sessions.pendingApprovals(s.id).length ? tr('msg.edit.busy') : '';
+  return { canFork: !why, forkWhy: why };
 }
 
 async function inspect(sessions, s, itemId) {
