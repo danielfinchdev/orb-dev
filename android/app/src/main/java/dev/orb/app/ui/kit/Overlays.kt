@@ -9,7 +9,12 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -47,6 +52,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import dev.orb.app.ui.icons.OrbIcons
+import dev.orb.app.ui.theme.OrbFonts
 
 private val sheetShape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)
 private val scrim = Color.Black.copy(alpha = 0.32f)
@@ -82,7 +88,7 @@ fun OrbSheet(
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 6.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         title.orEmpty(), Modifier.weight(1f).semantics { heading() }, color = OrbKit.foreground, fontSize = 16.sp,
-                        lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        lineHeight = 22.sp, fontFamily = OrbFonts.title, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                     if (showClose) OrbIconButton(OrbIcons.Close, closeLabel, onDismiss)
                 }
@@ -136,10 +142,11 @@ fun OrbSheetChoice(title: String, hint: String, icon: ImageVector, selected: Boo
     ) {
         Icon(icon, null, Modifier.size(20.dp), tint = OrbKit.mutedForeground)
         Column(Modifier.weight(1f)) {
-            Text(title, color = OrbKit.foreground, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium)
-            Text(hint, color = OrbKit.mutedForeground, fontSize = 13.sp, lineHeight = 18.sp)
+            Text(title, color = OrbKit.foreground, fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium)
+            Text(hint, color = OrbKit.mutedForeground, fontSize = 13.sp, lineHeight = 17.sp)
         }
-        Icon(if (selected) OrbIcons.CircleCheck else OrbIcons.Circle, null, Modifier.size(20.dp), tint = if (selected) OrbKit.foreground else OrbKit.faintForeground)
+        // Like every `.it .lucide` of the mockup: the muted colour, chosen or not; only the glyph tells which one is on.
+        Icon(if (selected) OrbIcons.CircleCheck else OrbIcons.Circle, null, Modifier.size(20.dp), tint = OrbKit.mutedForeground)
     }
 }
 
@@ -185,22 +192,29 @@ fun OrbDialog(
     dismiss: OrbDialogAction? = null,
     content: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         // The mockups dim the screen by 32 %, lighter than the platform's default.
         (LocalView.current.parent as? DialogWindowProvider)?.window?.let { w -> SideEffect { w.setDimAmount(0.32f) } }
-        Surface(
-            modifier.padding(24.dp).fillMaxWidth(), shape = RadiusBig, color = OrbKit.popover, contentColor = OrbKit.foreground, shadowElevation = 12.dp,
+        // `.scrim.center`: the window spans the screen and the dialog sits in the middle of what the system bars and the
+        // keyboard leave free. A tap on the dim area dismisses it, as the platform does for a dialog that is not full-screen.
+        Box(
+            Modifier.fillMaxSize().systemBarsPadding().imePadding().pointerInput(Unit) { detectTapGestures { onDismiss() } }.padding(24.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 12.dp)) {
-                Text(
-                    title, Modifier.padding(bottom = 8.dp).semantics { heading() }, color = OrbKit.foreground, fontSize = 18.sp,
-                    lineHeight = 24.sp, fontWeight = FontWeight.SemiBold,
-                )
-                if (text != null) Text(text, Modifier.padding(bottom = 16.dp), color = OrbKit.mutedForeground, fontSize = 14.5.sp, lineHeight = 22.sp)
-                if (content != null) Column(Modifier.padding(bottom = 16.dp), content = content)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
-                    if (dismiss != null) OrbButton(dismiss.label, dismiss.onClick, enabled = dismiss.enabled, kind = if (dismiss.danger) OrbButtonKind.Danger else OrbButtonKind.Ghost)
-                    OrbButton(confirm.label, confirm.onClick, enabled = confirm.enabled, kind = if (confirm.danger) OrbButtonKind.Danger else OrbButtonKind.Primary)
+            Surface(
+                modifier.fillMaxWidth().pointerInput(Unit) { detectTapGestures { } }, shape = RadiusBig, color = OrbKit.popover, contentColor = OrbKit.foreground, shadowElevation = 12.dp,
+            ) {
+                Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 12.dp)) {
+                    Text(
+                        title, Modifier.padding(bottom = 8.dp).semantics { heading() }, color = OrbKit.foreground, fontSize = 18.sp,
+                        lineHeight = 24.sp, fontFamily = OrbFonts.title, fontWeight = FontWeight.SemiBold,
+                    )
+                    if (text != null) Text(text, Modifier.padding(bottom = 16.dp), color = OrbKit.mutedForeground, fontSize = 14.5.sp, lineHeight = 22.sp)
+                    if (content != null) Column(Modifier.padding(bottom = 16.dp), content = content)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+                        if (dismiss != null) OrbButton(dismiss.label, dismiss.onClick, enabled = dismiss.enabled, kind = if (dismiss.danger) OrbButtonKind.Danger else OrbButtonKind.Ghost)
+                        OrbButton(confirm.label, confirm.onClick, enabled = confirm.enabled, kind = if (confirm.danger) OrbButtonKind.Danger else OrbButtonKind.Primary)
+                    }
                 }
             }
         }

@@ -93,7 +93,7 @@ class KitTest {
     @Test fun bottomBarMarksTheActiveTabAndShowsNumbers() {
         var sel by mutableStateOf("chats")
         val tabs = listOf(
-            OrbTab("chats", "Chats", OrbIcons.Chat, 4), OrbTab("tasks", "Tareas", OrbIcons.Tasks, 2), OrbTab("projects", "Proyectos", OrbIcons.Folder),
+            OrbTab("chats", "Chats", OrbIcons.Chat, 4), OrbTab("tasks", "Tareas", OrbIcons.Tasks, 2), OrbTab("projects", "Proyectos", OrbIcons.FolderGit2),
         )
         show { OrbBottomBar(tabs, sel, { sel = it.key }) }
         rule.onNodeWithText("Chats").assertIsSelected()
@@ -162,6 +162,16 @@ class KitTest {
         assertTrue("main action right of the other", ok.left > cancel.left)
         rule.onNodeWithText("Archivar").performClick()
         assertEquals("confirm", done)
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "w390dp-h844dp")
+    fun dialogSitsInTheMiddleOfTheScreenNotAgainstTheTop() {
+        show { OrbDialog({}, "Renombrar", OrbDialogAction("Guardar", {}), dismiss = OrbDialogAction("Cancelar", {})) }
+        val title = rule.onNodeWithText("Renombrar").getUnclippedBoundsInRoot()
+        val buttons = rule.onNodeWithText("Guardar").getUnclippedBoundsInRoot()
+        val middle = (title.top + buttons.bottom) / 2
+        assertTrue("middle of the dialog at $middle", middle > 380.dp && middle < 460.dp)
     }
 
     @Test fun dialogClosesWithTheSystemBack() {

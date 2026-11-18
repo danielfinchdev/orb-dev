@@ -23,6 +23,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.graphicsLayer
+import dev.orb.app.ui.theme.OrbFonts
 import dev.orb.app.ui.theme.OrbMotion
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -167,7 +168,7 @@ fun OrbBadge(text: String, modifier: Modifier = Modifier, kind: OrbBadgeKind = O
     val (bg, fg) = when (kind) {
         OrbBadgeKind.Neutral -> OrbKit.secondary to OrbKit.mutedForeground
         OrbBadgeKind.Ok -> OrbKit.successSoft to OrbKit.success
-        OrbBadgeKind.Warn -> OrbKit.warningSoft to OrbKit.warning
+        OrbBadgeKind.Warn -> OrbKit.warningSoft to OrbKit.warningInk
         OrbBadgeKind.Err -> OrbKit.destructive.copy(alpha = 0.14f) to OrbKit.destructive
         OrbBadgeKind.Info -> OrbKit.info.copy(alpha = 0.14f) to OrbKit.info
         OrbBadgeKind.Acc -> OrbKit.primarySoft to OrbKit.primaryText
@@ -240,7 +241,7 @@ fun OrbEmpty(
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (icon != null) Icon(icon, null, Modifier.size(24.dp), tint = OrbKit.faintForeground)
-        Text(title, color = OrbKit.foreground, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+        Text(title, color = OrbKit.foreground, fontSize = 15.sp, lineHeight = 22.sp, fontFamily = OrbFonts.title, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
         if (text != null) Text(text, color = OrbKit.mutedForeground, fontSize = 14.5.sp, lineHeight = 21.sp, textAlign = TextAlign.Center)
         if (actions != null) Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), content = actions)
     }

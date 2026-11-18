@@ -173,7 +173,10 @@ class ChatActionsSheetTest {
         open(b)
         rule.onNodeWithText(ChatTexts.RENAME).performClick(); rule.waitForIdle()
         rule.onNodeWithText(ChatTexts.SAVE).assertIsDisplayed()
+        // The dialog replaces the sheet instead of standing over it; Cancel brings the actions back.
+        rule.onNodeWithText(ChatTexts.ARCHIVE).assertDoesNotExist()
         rule.onNodeWithText(ChatTexts.CANCEL).performClick(); rule.waitForIdle()
+        rule.onNodeWithText(ChatTexts.ARCHIVE).assertIsDisplayed()
         assertTrue(b.calls.isEmpty())
     }
 }

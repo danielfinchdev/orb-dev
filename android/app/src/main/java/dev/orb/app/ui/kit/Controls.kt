@@ -91,7 +91,7 @@ fun OrbButton(
         OrbButtonKind.Danger -> lerp(OrbKit.border, OrbKit.destructive, 0.4f)
         else -> null
     }
-    val hover = OrbKit.secondary
+    val hover = OrbKit.accent
     val h = if (small) 32.dp else 40.dp
     Box(
         modifier.then(if (block) Modifier.fillMaxWidth() else Modifier)
@@ -240,7 +240,7 @@ fun OrbTextField(
     focus: FocusRequester? = null, onDone: (() -> Unit)? = null,
 ) {
     Box(
-        modifier.fillMaxWidth().height(48.dp).clip(RadiusCard).border(1.dp, OrbKit.border, RadiusCard).padding(horizontal = 14.dp),
+        modifier.fillMaxWidth().height(48.dp).clip(RadiusCard).background(OrbKit.card).border(1.dp, OrbKit.border, RadiusCard).padding(horizontal = 14.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
         if (value.isEmpty()) Text(label, color = OrbKit.faintForeground, fontSize = 15.sp, maxLines = 1)

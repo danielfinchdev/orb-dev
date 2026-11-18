@@ -13,7 +13,7 @@ private fun lucide(name: String, vararg paths: String): ImageVector =
     ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).apply {
         for (d in paths) {
             addPath(
-                pathData = addPathNodes(d), fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 2f,
+                pathData = addPathNodes(d), fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.75f,
                 strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
             )
         }
@@ -48,11 +48,19 @@ object OrbIcons {
         lucide("message-square", "M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z")
     }
     val Tasks by lazy {
-        lucide("list-checks", "M4 5h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z", "m3 17 2 2 4-4", "M13 6h8", "M13 12h8", "M13 18h8")
+        lucide("list-checks", "m3 17 2 2 4-4", "m3 7 2 2 4-4", "M13 6h8", "M13 12h8", "M13 18h8")
     }
     val Folder by lazy {
         lucide("folder", "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z")
     }
+    /** The Projects tab of the bottom bar: a folder with a git node. */
+    val FolderGit2 by lazy {
+        lucide(
+            "folder-git-2", "M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v5",
+            circle(13f, 12f, 2f), "M18 19c-2.8 0-5-2.2-5-5v8", circle(20f, 19f, 2f),
+        )
+    }
+    val CircleAlert by lazy { lucide("circle-alert", circle(12f, 12f, 10f), "M12 8v4", "M12 16h.01") }
     val Pin by lazy {
         lucide(
             "pin", "M12 17v5",

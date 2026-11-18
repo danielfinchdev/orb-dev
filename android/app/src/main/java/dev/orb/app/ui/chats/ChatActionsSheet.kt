@@ -69,9 +69,10 @@ private enum class SheetDialog { None, Rename, NewSection }
 fun ChatActionsSheet(row: ChatRow, sections: List<ChatSection>, online: Boolean, actions: ChatActions, onDismiss: () -> Unit, nowMs: Long = System.currentTimeMillis()) {
     var mode by rememberSaveable { mutableStateOf(SheetMode.Main) }
     var dialog by rememberSaveable { mutableStateOf(SheetDialog.None) }
-    OrbSheet(onDismiss = onDismiss, header = { SheetHeader(row) }) {
+    // A dialog opened from the sheet replaces it (the mockup shows only the dialog over the list); Cancel brings the sheet back.
+    if (dialog == SheetDialog.None) OrbSheet(onDismiss = onDismiss, header = { SheetHeader(row) }) {
         if (!online) {
-            Text(ChatTexts.NEEDS_PC, Modifier.padding(horizontal = 20.dp, vertical = 4.dp), color = OrbKit.warning, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
+            Text(ChatTexts.NEEDS_PC, Modifier.padding(horizontal = 20.dp, vertical = 4.dp), color = OrbKit.warningInk, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
             OrbNote(ChatTexts.NEEDS_PC_HINT, Modifier.padding(start = 20.dp, end = 20.dp, bottom = 6.dp))
         }
         when (mode) {

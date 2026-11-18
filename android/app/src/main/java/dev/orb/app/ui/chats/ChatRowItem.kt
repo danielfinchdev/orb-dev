@@ -103,8 +103,8 @@ private fun messageLine(row: ChatRow, text: String?): String {
 private fun RowScope.RowSubtitle(line: RowLine) {
     when (line) {
         is RowLine.Waiting -> {
-            Icon(OrbIcons.Hand, null, Modifier.size(14.dp), tint = OrbKit.warning)
-            OrbSubtitle(line.text, color = OrbKit.warning)
+            Icon(OrbIcons.Hand, null, Modifier.size(14.dp), tint = OrbKit.mutedForeground)
+            OrbSubtitle(line.text, color = OrbKit.warningInk)
         }
         is RowLine.Working -> {
             OrbSpinner(tint = OrbKit.primaryText)
@@ -152,7 +152,7 @@ fun ChatRowItem(
     ) {
         OrbRow(
             row.title,
-            Modifier.then(if (selected) Modifier.background(OrbKit.secondary) else Modifier).semantics(mergeDescendants = true) { contentDescription = description },
+            Modifier.then(if (selected) Modifier.background(OrbKit.accent) else Modifier).semantics(mergeDescendants = true) { contentDescription = description },
             lead = { AgentMark(if (row.direct) row.agent ?: "acp" else "orbe") },
             subtitle = { RowSubtitle(line) },
             time = whenText,

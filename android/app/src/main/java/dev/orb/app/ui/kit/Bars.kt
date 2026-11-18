@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.orb.app.ui.theme.OrbFonts
 import dev.orb.app.ui.theme.OrbMotion
 
 /**
@@ -70,7 +71,7 @@ fun OrbTopBar(
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                 if (center != null) center() else Text(
                     title, Modifier.semantics { heading() }, color = OrbKit.foreground, fontSize = 16.sp, lineHeight = 22.sp,
-                    fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                    fontFamily = OrbFonts.title, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
                 )
                 if (sub != null) {
                     Text(sub, color = subColor, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -89,11 +90,11 @@ fun OrbWordmark(modifier: Modifier = Modifier, fontSize: TextUnit = 17.sp) {
     val em = fontSize.value
     val dot = OrbKit.primaryText
     Row(modifier.clearAndSetSemantics { contentDescription = "Orbe" }, verticalAlignment = Alignment.CenterVertically) {
-        Text("ORB", color = OrbKit.foreground, fontSize = fontSize, fontWeight = FontWeight.SemiBold, letterSpacing = (em * 0.16f).sp, lineHeight = fontSize)
+        Text("ORB", color = OrbKit.foreground, fontSize = fontSize, fontFamily = OrbFonts.title, fontWeight = FontWeight.SemiBold, letterSpacing = (em * 0.16f).sp, lineHeight = fontSize)
         Spacer(Modifier.width((em * 0.06f).dp))
         Box(Modifier.size(5.44.dp).clip(CircleShape).background(dot))
         Spacer(Modifier.width((em * 0.22f).dp))
-        Text("E", color = OrbKit.foreground, fontSize = fontSize, fontWeight = FontWeight.SemiBold, lineHeight = fontSize)
+        Text("E", color = OrbKit.foreground, fontSize = fontSize, fontFamily = OrbFonts.title, fontWeight = FontWeight.SemiBold, lineHeight = fontSize)
     }
 }
 
@@ -115,7 +116,7 @@ fun OrbIconButton(
             .semantics { contentDescription = label; if (badge != null) stateDescription = badge },
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.size(40.dp).clip(CircleShape).background(if (pressed) OrbKit.secondary else Color.Transparent), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(40.dp).clip(CircleShape).background(if (pressed) OrbKit.accent else Color.Transparent), contentAlignment = Alignment.Center) {
             Icon(icon, null, Modifier.size(20.dp), tint = if (enabled) tint else tint.copy(alpha = 0.45f))
             if (badge != null) OrbCountBadge(badge, Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 0.dp))
         }
@@ -152,7 +153,7 @@ fun OrbBottomBar(tabs: List<OrbTab>, selected: String, onSelect: (OrbTab) -> Uni
                         // The pill grows from the middle and fades in; both run in the compositor layer.
                         Box(
                             Modifier.matchParentSizeCompat().graphicsLayer { alpha = pill; scaleX = 0.6f + 0.4f * pill }
-                                .clip(CircleShape).background(OrbKit.secondary),
+                                .clip(CircleShape).background(OrbKit.accent),
                         )
                         Icon(tab.icon, null, Modifier.size(20.dp), tint = if (active) OrbKit.foreground else OrbKit.mutedForeground)
                         if (tab.count > 0) {
