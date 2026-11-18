@@ -54,7 +54,8 @@ test('the CSS of Cristal: glass variables, light only, blur on the few floating 
   const blurred = [...skins.matchAll(/(html\[data-skin="cristal"\][^{]*)\{[^}]*backdrop-filter: blur/g)].map((m) => m[1]);
   assert.ok(blurred.length >= 4, String(blurred.length));
   assert.ok(blurred.every((s) => !/\[data-slot="card"\]/.test(s)), 'cards stay solid');
-  assert.match(skins, /@media \(prefers-reduced-transparency: reduce\) \{[^]*html\[data-skin="cristal"\][^]*backdrop-filter: none/);
+  // Cristal stays glass even when the system asks for less transparency: the approved look (other themes have none)
+  assert.doesNotMatch(skins, /prefers-reduced-transparency/);
   // the Android build's glass look (glass.css) hangs from html.glass alone and never reads a theme
   assert.doesNotMatch(read('glass.css'), /data-skin|data-material/);
 });

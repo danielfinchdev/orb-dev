@@ -10,6 +10,7 @@ export const COMMANDS = Object.freeze([
   { id: 'inbox.nextNeeds', label: 'keys.cmd.nextNeeds', key: 'Ctrl+Alt+A', when: 'always' },
   { id: 'changes.toggle', label: 'keys.cmd.changes', key: 'Ctrl+D', when: 'chat' },
   { id: 'tabs.new', label: 'keys.cmd.tabNew', key: 'Ctrl+T', when: 'always' },
+  { id: 'chat.new', label: 'keys.cmd.chatNew', key: 'Ctrl+N', when: 'always' },
   { id: 'tabs.close', label: 'keys.cmd.tabClose', key: 'Ctrl+W', when: 'chat' },
   { id: 'tabs.next', label: 'keys.cmd.tabNext', key: 'Ctrl+PageDown', when: 'chat' },
   { id: 'tabs.prev', label: 'keys.cmd.tabPrev', key: 'Ctrl+PageUp', when: 'chat' },

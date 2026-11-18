@@ -86,3 +86,15 @@ html[data-skin="cristal"] [data-slot="button"][data-variant="default"] { box-sha
 html[data-motion="minima"] [data-slot="switch"] > span, html[data-motion="minima"] .range::-webkit-slider-thumb { transition: none; }
 html[data-motion="minima"][data-skin="candy"] [data-slot="button"] { transition: none; }
 html[data-motion="minima"][data-skin="candy"] [data-slot="button"]:not(:disabled):active { transform: none; }
+
+/* ---- passing notices (lib/notify.js): the mock-up's .pop, the tone said by the icon */
+html [data-sonner-toaster][data-sonner-theme] { --normal-bg: var(--popover); --normal-text: var(--popover-foreground); --normal-border: var(--border); --border-radius: var(--r-card); }
+.orb-toast { box-shadow: var(--shadow); font-size: 13px; }
+.orb-toast [data-title] { font-weight: 500; }
+.orb-toast [data-description] { color: var(--muted-foreground); }
+.orb-toast[data-type="success"] [data-icon] { color: var(--success); }
+.orb-toast[data-type="warning"] [data-icon] { color: var(--warning-ink); }
+.orb-toast[data-type="error"] [data-icon] { color: var(--destructive); }
+.orb-toast[data-type="info"] [data-icon], .orb-toast[data-type="loading"] [data-icon] { color: var(--primary-text); }
+.orb-toast [data-button] { height: var(--ctl-sm); border-radius: var(--r-ctl); font-size: 13px; }
+.orb-toast [data-button]:not([data-cancel]) { background: var(--primary); color: var(--primary-foreground); }

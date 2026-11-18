@@ -28,12 +28,13 @@ test('applyTheme forces .dark for a dark-only theme and keeps the saved choice',
 });
 
 test('the day / night controls explain why they are disabled', () => {
-  for (const f of ['theme-toggle.jsx', 'mobile-menu.jsx']) {
-    const src = read('src', 'ui', 'components', f);
-    assert.match(src, /useDarkOnly\(\)/, f);
-    assert.match(src, /comp\.theme\.darkOnly/, f);
-  }
-  assert.match(read('src', 'ui', 'components', 'theme-toggle.jsx'), /aria-disabled/);
+  const menu = read('src', 'ui', 'components', 'mobile-menu.jsx');
+  assert.match(menu, /useDarkOnly\(\)/);
+  assert.match(menu, /comp\.theme\.darkOnly/);
+  // the sidebar's button is not drawn at all in a one-mode theme
+  const toggle = read('src', 'ui', 'components', 'theme-toggle.jsx');
+  assert.match(toggle, /useDarkOnly\(\)/);
+  assert.match(toggle, /if \(darkOnly \|\| lightOnly\) return null;/);
   assert.match(read('src', 'ui', 'views', 'settings', 'general.jsx'), /darkOnly/);
   assert.ok(es['comp.theme.darkOnly'] && en['comp.theme.darkOnly']);
 });

@@ -84,7 +84,8 @@ export function orbItems({ inbox = null, conversations = [], sessions = [], task
     const m = marks.get(`session:${s.id}`) ?? {};
     out.push({ key: `session:${s.id}`, kind: 'session', id: s.id, title: s.title, project: s.project ?? null, agent: s.agent ?? null, model: s.model ?? null,
       pinned: Boolean(m.pinned), pinOrder: m.pinOrder ?? null, muted: Boolean(m.muted), snoozedUntil: m.snoozedUntil ?? null, unread: 0, lastMessage: null, at: s.updated_at ?? null,
-      done: Boolean(s.settled) || done.has(`s${s.id}`), busy: s.status === 'running', asks, stalled: stalled && !asks, agents: agentsOf(s.agent), tasks: [], open: 0 });
+      done: Boolean(s.settled) || done.has(`s${s.id}`), busy: s.status === 'running', asks, stalled: stalled && !asks, agents: agentsOf(s.agent), tasks: [], open: 0,
+      ...(typeof s.branch === 'string' && s.branch ? { branch: s.branch } : {}), ...(Number.isInteger(s.prNumber) ? { prNumber: s.prNumber } : {}) });
   }
   return out;
 }

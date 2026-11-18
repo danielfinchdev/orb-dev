@@ -8,7 +8,7 @@
 // A project: its initials or icon, name and folder, «Nuevo chat aquí»; Chats, Tareas, Programadas, Pizarra, Bitácora,
 // Compartir (with two or more users), Ajustes del proyecto (Proyectos) and, on the PC with God mode on, «Abrir en God mode».
 import { useEffect, useState } from 'react';
-import { Folder, ChevronRight, Sparkles, Bell, ClipboardCheck, Shrink, Download, Pin, PinOff, CircleCheck, Undo2, Trash2, Pencil, MessageSquarePlus, MessagesSquare, CalendarSync, Presentation, NotebookPen, Settings2, SquareTerminal } from 'lucide-react';
+import { Folder, FolderGit2, GitBranch, PencilLine, ChevronRight, Sparkles, Bell, ClipboardCheck, Shrink, Download, Pin, PinOff, CircleCheck, Undo2, Trash2, Pencil, MessageSquarePlus, MessagesSquare, CalendarSync, Presentation, NotebookPen, Settings2, SquareTerminal } from 'lucide-react';
 import { BrainIcon } from '@/components/brain-icon.jsx';
 import { OrchestratorIcon } from '@/components/orchestrator-icon.jsx';
 import { Robot } from '@/components/robot.jsx';
@@ -19,6 +19,7 @@ import { form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Input, Spinner } from '@/components/ui/basic.jsx';
 import { Switch, BubbleTip } from '@/components/ui/overlay.jsx';
+import { IconButton } from '@/components/ui/primitives.jsx';
 import { InfoFrame, List, Row } from '@/components/info-frame.jsx';
 import { useStore, call, act, go, setState, newChat, orbAct, closeOrbInfo, openOrbInfo, refreshSoon, phoneLayout, fullPc, chatOf } from '@/lib/store.js';
 import { notify } from '@/lib/notify.js';
@@ -27,6 +28,7 @@ import { useT, useLocale } from '@/lib/i18n.js';
 import { useOrbItems, deleteChat } from './inbox.jsx';
 import { TaskStatus } from '@/components/task-state.jsx';
 import { ChatNotes, PinnedList } from '@/components/conversation/chat-notes.jsx';
+import { quiet } from '@/lib/quiet.js';
 
 const OPEN = ['queued', 'running', 'awaiting_approval', 'limited'];
 // On the phone the info covers the screen: going somewhere from it closes it.
@@ -175,5 +177,52 @@ function ProjectInfo({ name }) {
         {god ? <Row icon={SquareTerminal} label={t('orbchats.pGod')} onClick={() => { setState({ expertProject: name }); leave({ view: 'expert' }); }} testid="project-info-god" /> : null}
       </List>
     </InfoFrame>
+  );
+}
+
+// ---- the «Ficha» tab of the panel of a chat with an agent (mock-up 01-chat): its name, where it works, its alerts, its
+// tasks and the project's logbook. `line` is the agent · model · permission text the chat already computed.
+export function SessionInfo({ session: s, line, onRename, task }) {
+  const t = useT();
+  const item = useOrbItems().find((x) => x.key === `session:${s.id}`) ?? null;
+  const [info, setInfo] = useState(null);
+  const [tree, setTree] = useState(false);
+  useEffect(() => {
+    let alive = true; setInfo(null); setTree(false);
+    if (s.project) call('projects.info', { name: s.project }).then((r) => { if (alive) setInfo(r); }).catch(quiet);
+    call('worktrees.status', { id: String(s.id) }).then((r) => { if (alive) setTree(r?.has === true); }).catch(quiet);
+    return () => { alive = false; };
+  }, [s.id, s.project]);
+  const dt = 'text-muted-foreground flex items-center gap-1.5 whitespace-nowrap [&_svg]:size-3.5';
+  return (
+    <section className="grid gap-0" data-testid="orb-info">
+      <div className="bg-card rounded-card border px-3 py-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <b className="min-w-0 truncate font-(family-name:--title) text-[15px] font-semibold" data-testid="info-name">{s.title}</b>
+          {s.kind === 'chat' ? <BubbleTip title={t('panel.info.rename')}><IconButton small label={t('panel.info.rename')} onClick={onRename} data-testid="info-rename"><PencilLine /></IconButton></BubbleTip> : null}
+        </div>
+        <div className="text-muted-foreground mt-1 text-xs">{line}</div>
+      </div>
+      <dl className="my-4 grid grid-cols-[minmax(120px,max-content)_1fr] items-center gap-x-2.5 gap-y-[9px] text-control">
+        {s.project ? <><dt className={dt}><FolderGit2 />{t('panel.info.project')}</dt><dd className="m-0 flex min-w-0 items-center gap-1.5" data-testid="info-project"><ProjectIcon name={s.project} className="size-3.5" /><span className="truncate">{s.project}</span></dd></> : null}
+        <dt className={dt}><Folder />{t('panel.info.folder')}</dt>
+        <dd className="m-0 min-w-0 font-mono text-xs break-all">{s.cwd}</dd>
+        {info?.git && info.branch ? <><dt className={dt}><GitBranch />{tree ? t('panel.info.worktree') : t('panel.info.branch')}</dt><dd className="m-0 min-w-0 font-mono text-xs break-all">{info.branch}</dd></> : null}
+        <dt className={dt}><BubbleTip title={t('panel.info.notify')} text={t('panel.info.notifyTip')} side="left"><span className="inline-flex items-center gap-1.5"><Bell />{t('panel.info.notify')}</span></BubbleTip></dt>
+        <dd className="m-0"><Switch checked={!item?.muted} disabled={!item} onCheckedChange={(on) => orbAct('inbox.mute', { kind: 'session', id: s.id, muted: !on })} aria-label={t('panel.info.notify')} data-testid="info-notify" /></dd>
+      </dl>
+      {task ? (
+        <>
+          <div className="mt-[18px] mb-1.5 font-(family-name:--title) text-[15px] font-semibold">{t('panel.info.tasks')}</div>
+          <button type="button" onClick={() => go({ view: 'tasks', id: task.id })} className="bg-card hover:bg-accent/60 rounded-card focus-visible:outline-ring flex w-full cursor-pointer items-center justify-between gap-2 border px-3 py-2.5 text-left text-control focus-visible:outline-2" data-testid={`info-task-${task.id}`}>
+            <span className="min-w-0 truncate">#{task.id} {task.title}</span><TaskStatus task={task} className="shrink-0" />
+          </button>
+        </>) : null}
+      {s.project ? (
+        <>
+          <div className="mt-[18px] mb-1.5 font-(family-name:--title) text-[15px] font-semibold">{t('panel.info.log')}</div>
+          <button type="button" onClick={() => go({ view: 'logs', name: s.project })} className="text-info focus-visible:outline-ring inline-flex w-fit cursor-pointer items-center gap-1 rounded-sm text-control hover:underline focus-visible:outline-2" data-testid="info-open-log">{t('panel.info.openLog')}<ChevronRight className="size-3.5" /></button>
+        </>) : null}
+    </section>
   );
 }

@@ -103,3 +103,19 @@ test('the texts exist in Spanish and English and the sidebar draws with tokens o
   const mine = [sidebar, inbox.slice(inbox.indexOf('function PlacesStub') < 0 ? 0 : 0)].join('\n');
   assert.doesNotMatch(mine, /#[0-9a-fA-F]{3,8}\b|oklch\(|rgb\(/, 'colours only through tokens');
 });
+
+test('step 5D: the mode button shows the destination and hides in one-mode themes; the fold icon is panel-left', () => {
+  const toggle = read('components/theme-toggle.jsx');
+  assert.match(toggle, /if \(darkOnly \|\| lightOnly\) return null;/, 'not drawn in Cristal / Retro');
+  assert.match(toggle, /<Moon className="size-4 dark:hidden" \/><Sun className="hidden size-4 dark:block" \/>/, 'moon in light, sun in dark');
+  assert.match(toggle, /<PanelLeft className="size-4" \/>/);
+  assert.doesNotMatch(toggle, /PanelLeftClose|PanelLeftOpen/);
+});
+
+test('step 5D: icons draw with a 1.75 stroke, the menus have 220 px and 31 px rows', () => {
+  assert.match(css, /svg\.lucide \{ stroke-width: 1\.75; \}/);
+  const overlay = read('components/ui/overlay.jsx');
+  assert.ok(overlay.match(/text-control leading-\[1\.45\] outline-hidden/g)?.length >= 3, 'items, ticks and radios: 6 + 18.85 + 6 px');
+  assert.match(inbox, /side=\{fab \? 'top' : 'bottom'\} className="w-\[220px\]"/);
+  assert.match(inbox, /<IconButton label=\{t\('orbchats\.sortFilter'\)\} data-testid="sidebar-sort"><ArrowUpDown className="size-3\.5" \/>/, '32 px button, 14 px icon');
+});

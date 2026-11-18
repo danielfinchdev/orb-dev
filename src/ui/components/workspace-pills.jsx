@@ -24,13 +24,13 @@ export function WorkspacePills({ project, value, onChange }) {
   const worktree = value.mode === 'worktree' && git;
   const pick = (mode) => onChange({ mode, base: '' });
   return (
-    <div role="group" aria-label={t('chat.workspace.tip')} className="flex shrink-0 items-center gap-1" data-testid="workspace-pills">
+    <div role="group" aria-label={t('chat.workspace.tip')} className="bg-secondary inline-flex shrink-0 items-center gap-0.5 rounded-[var(--r-ctl)] p-0.5" data-testid="workspace-pills">
       <BubbleTip title={t('chat.workspace.local')} text={t('chat.workspace.localTip')} side="top">
-        <Button size="xs" variant={worktree ? 'ghost' : 'soft'} onClick={() => pick('local')} aria-pressed={!worktree} data-testid="workspace-local"><Folder />{t('chat.workspace.local')}</Button>
+        <Button size="xs" variant="ghost" className={cn('rounded-[calc(var(--r-ctl)-2px)] px-2', !worktree && 'bg-card text-foreground shadow-sm hover:bg-card')} onClick={() => pick('local')} aria-pressed={!worktree} data-testid="workspace-local"><Folder />{t('chat.workspace.local')}</Button>
       </BubbleTip>
       <BubbleTip title={t('chat.workspace.worktree')} text={git ? t('chat.workspace.worktreeTip') : t('chat.workspace.noGit')} side="top">
         <span>
-          <Button size="xs" variant={worktree ? 'soft' : 'ghost'} disabled={!git} onClick={() => pick('worktree')} aria-pressed={worktree} data-testid="workspace-worktree"><GitBranch />{t('chat.workspace.worktree')}</Button>
+          <Button size="xs" variant="ghost" className={cn('rounded-[calc(var(--r-ctl)-2px)] px-2', worktree && 'bg-card text-foreground shadow-sm hover:bg-card')} disabled={!git} onClick={() => pick('worktree')} aria-pressed={worktree} data-testid="workspace-worktree"><GitBranch />{t('chat.workspace.worktree')}</Button>
         </span>
       </BubbleTip>
       {worktree ? (

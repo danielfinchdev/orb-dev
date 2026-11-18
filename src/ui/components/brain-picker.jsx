@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Flame, Lightbulb, Star, X } from 'lucide-react';
 import { AgentIcon } from './agent-icon.jsx';
-import { BrainIcon } from './brain-icon.jsx';
 import { Button } from './ui/button.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, BubbleTip } from './ui/overlay.jsx';
 import { call, useStore } from '@/lib/store.js';
@@ -190,9 +189,9 @@ export function ReasoningMenu({ catalog, value, onChange, levels, disabled }) {
     <DropdownMenu>
       <BubbleTip title={t('reasoning.title', { level: name })} text={t('reasoning.titleText')} side="top">
         <DropdownMenuTrigger asChild>
-          {/* a pill with the brain and the chosen level («Alto»), as tall as the model picker. */}
-          <Button variant="outline" size="sm" className="shrink-0 gap-1.5" disabled={disabled} aria-label={t('reasoning.title', { level: name })} data-testid="reasoning-picker" data-level={current}>
-            <BrainIcon className="size-4" /><span data-testid="reasoning-level">{name}</span>
+          {/* a quiet chip with the chosen level («Alto») and its bars, as tall as the model picker. */}
+          <Button variant="ghost" size="sm" className="text-muted-foreground shrink-0 gap-1.5 px-2 font-normal" disabled={disabled} aria-label={t('reasoning.title', { level: name })} data-testid="reasoning-picker" data-level={current}>
+            <span data-testid="reasoning-level">{name}</span><UsageMeter level={current} />
           </Button>
         </DropdownMenuTrigger>
       </BubbleTip>

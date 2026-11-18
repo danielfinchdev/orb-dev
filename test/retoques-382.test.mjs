@@ -34,7 +34,7 @@ test('the chat bars keep only the bell and pause; the rest goes into ⋯', () =>
   const head = session.slice(session.indexOf('<PageHeader className="topbar-chat"'), session.indexOf('</PageHeader>'));
   const top = head.slice(0, head.indexOf('<DropdownMenu'));
   assert.doesNotMatch(top, /FolderOpen|GitFork|Archive|Trash2|<Info|Gamepad2/);
-  assert.match(top, /<NotificationBell \/>\s*<BarPause \/>/);
+  assert.match(top, /<BarPause \/>\s*<NotificationBell \/>/);
   const menu = head.slice(head.indexOf('<DropdownMenu'));
   for (const id of ['open-folder', 'details', 'fork', 'archive', 'bar-games', 'delete']) assert.match(menu, new RegExp(`data-testid="${id}"`), id);
   assert.match(menu, /<DropdownMenuSeparator \/>\s*<DropdownMenuItem variant="destructive" onSelect=\{async \(\) => \{ if \(await confirm\(/);
@@ -47,7 +47,7 @@ test('bubbles stay inside the window and the composer folder is a chip like the 
   assert.match(read('components', 'sidebar.jsx'), /side="top" align=\{n === 0 \? 'start' : 'center'\}/);
   const chip = read('views', 'session.jsx').match(/<span tabIndex=\{0\} className="([^"]+)" data-testid="session-folder">/);
   assert.ok(chip, 'folder chip');
-  for (const c of ['h-8', 'rounded-lg', 'border', 'px-2.5', 'gap-1.5', 'text-control']) assert.ok(chip[1].split(' ').includes(c), c);
+  for (const c of ['h-[var(--ctl)]', 'rounded-[var(--r-ctl)]', 'px-2', 'gap-1.5', 'text-control']) assert.ok(chip[1].split(' ').includes(c), c);
 });
 
 test('the cost line can be hidden in Apariencia and the message time shows on hover', async () => {

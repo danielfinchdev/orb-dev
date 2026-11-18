@@ -42,7 +42,7 @@ test('captureFrame: the picker closed is no error; another failure is', async ()
 
 test('only the PC\'s composer offers it; agents get no way to it', () => {
   const session = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'views', 'session.jsx'), 'utf8');
-  assert.match(session, /\{fullPc\(\) && canCapture\(\) \? <Tip label=\{t\('session\.capture'\)\}>/);
+  assert.match(session, /onCapture=\{fullPc\(\) && canCapture\(\) \? capture : null\}/);
   assert.match(session, /call\('images\.mark', \{ dataUrl \}\)/, 'saved like a marked picture (PC only)');
   for (const dir of ['src/mcp', 'src/agents', 'src/engine']) {
     for (const file of fs.readdirSync(path.join(ROOT, dir)).filter((f) => f.endsWith('.mjs'))) assert.doesNotMatch(fs.readFileSync(path.join(ROOT, dir, file), 'utf8'), /getDisplayMedia|window-capture/, `${dir}/${file}`);

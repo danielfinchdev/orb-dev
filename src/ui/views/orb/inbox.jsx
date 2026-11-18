@@ -7,7 +7,7 @@
 // «Esperando tu aprobación», how its last task ended, else its last line) and the unread count. Right click or ⋯ (PC) and
 // a long press (phone) open the chat's menu: info, pin, mute, mark read, complete or reopen, delete.
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ClipboardCheck, FolderGit2, CalendarSync, Presentation, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, PencilLine, AlarmClock, AlarmClockOff, Hand, ArrowUpDown, ChevronDown, LoaderCircle } from 'lucide-react';
+import { PanelTop, Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ClipboardCheck, FolderGit2, CalendarSync, Presentation, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, PencilLine, AlarmClock, AlarmClockOff, Hand, ArrowUpDown, ChevronDown, LoaderCircle } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { OrbMark } from '@/components/orb-mark.jsx';
@@ -20,7 +20,9 @@ import { Input } from '@/components/ui/basic.jsx';
 import { useSearch } from '@/lib/search.js';
 import { useStore, go, call, act, newChat, orbAct, loadOrbInbox, openOrbInfo, closeOrbInfo, getState, phoneLayout, fullPc, refreshSoon, setState, robotSkin } from '@/lib/store.js';
 import { orbItems, orbProgress, groupOrb, shortTime, avatarStack, snoozeTimes, priorityKeys, nextNeedingYou } from '@/lib/inbox.js';
-import { useShortcut } from '@/lib/keys.js';
+import { useShortcut, useKeys } from '@/lib/keys.js';
+import { actTabs } from '@/lib/tabs.js';
+import * as T from '../../../shared/tabs.mjs';
 import { DayDigestCard } from '@/components/day-digest.jsx';
 import { sameItem } from '@/lib/memo.js';
 import { useDay } from '@/lib/use-day.js';
@@ -93,8 +95,17 @@ export function OrbAvatar({ item, size = 40 }) {
 }
 
 // ---- what can be done with a chat (the same list in the PC's menu and the phone's sheet)
-export function useOrbActions(item) {
+// tab: the PC's list also offers «Abrir en pestaña nueva» (what Ctrl+click on the row does); the chat's own ⋯ and the phone's sheet do not.
+export function useOrbActions(item, { tab = false } = {}) {
   const t = useT();
+  const tabsOn = useStore((s) => !phoneLayout() && s.app?.config?.ui?.tabs !== false);
+  const list = actionList(item, t);
+  if (!tab || !tabsOn || !item) return list;
+  const newTab = { id: 'newtab', icon: PanelTop, label: t('orbchats.openNewTab'), run: () => { actTabs((s) => T.openTab(s, `${item.kind === 'session' ? 'session' : 'chat'}:${item.id}`, { mode: 'new' })); openOrbItem(item); } };
+  const at = list.findIndex((a) => a.danger);
+  return at < 0 ? [...list, newTab] : [...list.slice(0, at), newTab, ...list.slice(at)];
+}
+function actionList(item, t) {
   if (!item) return [];
   // a direct conversation with an agent: pinned and muted like the others; completed through the sidebar's mark.
   const rename = { id: 'rename', icon: PencilLine, label: t('orbchats.rename'), run: () => renameChat(item, t) };
@@ -184,7 +195,7 @@ export async function deleteChat(item, t) {
 
 function OrbMenu({ item, open, setOpen, className }) {
   const t = useT();
-  const actions = useOrbActions(item);
+  const actions = useOrbActions(item, { tab: true });
   return (
     <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
       <DropdownMenuTrigger asChild>
@@ -256,10 +267,19 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet, showProject = false 
           </span>
           <span className={cn('mt-0.5 flex items-center gap-2 overflow-hidden text-caption whitespace-nowrap', needsYou || p.tone === 'warn' ? 'text-warning-ink' : p.tone === 'error' ? 'text-destructive' : p.tone === 'live' ? 'text-primary-text' : 'text-faint-foreground')} data-testid="orb-progress" data-tone={p.tone}>
             {showProject && item.project ? <span className="inline-flex shrink-0 items-center gap-1"><ProjectIcon name={item.project} small />{item.project}</span> : null}
-            <span className="inline-flex min-w-0 items-center gap-[3px]">
-              {needsYou ? <Hand className="size-3.5 shrink-0" aria-hidden="true" /> : null}
-              <span className="min-w-0 truncate">{p.prefix ? <span className="text-foreground/70">{p.prefix}</span> : null}{p.text}</span>
-            </span>
+            {item.branch && p.tone === 'muted' && !needsYou
+              ? (
+                <span className="inline-flex min-w-0 items-center gap-1.5" data-testid="orb-branch">
+                  <span className="min-w-0 truncate font-mono" title={item.branch}>{item.branch}</span>
+                  {item.prNumber ? <span className="text-primary-text shrink-0 tabular-nums" data-testid="orb-pr">#{item.prNumber}</span> : null}
+                </span>
+              )
+              : (
+                <span className="inline-flex min-w-0 items-center gap-[3px]">
+                  {needsYou ? <Hand className="size-3.5 shrink-0" aria-hidden="true" /> : null}
+                  <span className="min-w-0 truncate">{p.prefix ? <span className="text-foreground/70">{p.prefix}</span> : null}{p.text}</span>
+                </span>
+              )}
           </span>
         </button>
         <OrbMenu item={item} open={menu} setOpen={setMenu} className="absolute top-[5px] right-2" />
@@ -314,15 +334,18 @@ function ProjectHead({ group, open, phone }) {
           {open ? null : <span className="tabular-nums opacity-70">{group.items.length}</span>}
         </CollapsibleTrigger>
         {name ? (
+          <>
+          <IconButton small label={t('orbchats.projectNewChat')} className="mt-1.5 opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-visible:opacity-100" onClick={() => newChat(name)} data-testid={`project-new-${name}`}><Plus /></IconButton>
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
-              <IconButton small label={t('orbchats.projectMenu', { name })} className="mt-1.5 opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100" data-testid={`project-menu-${name}`}><Plus /></IconButton>
+              <IconButton small label={t('orbchats.projectMenu', { name })} className="mt-1.5 opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100" data-testid={`project-menu-${name}`}><Ellipsis /></IconButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-60">
               <DropdownMenuItem onSelect={() => newChat(name)} data-testid="project-new-chat"><MessageSquarePlus />{t('orbchats.projectNewChat')}</DropdownMenuItem>
               <DropdownMenuItem onSelect={() => openOrbInfo({ type: 'project', name })} data-testid="project-info"><Info />{t('orbchats.projectInfo')}</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </>
         ) : null}
       </div>
     );
@@ -382,14 +405,17 @@ export async function newProjectChat() {
 }
 function OrbNewMenu({ fab = false }) {
   const t = useT();
+  // The key of «new chat» (a new tab in a new chat): shown only where it works, the PC with the chat tabs on.
+  const newKey = useKeys().table.get('chat.new')?.key;
+  const tabsOn = useStore((s) => !phoneLayout() && s.app?.config?.ui?.tabs !== false);
   const trigger = fab
     ? <button type="button" className="press bg-primary text-primary-foreground fixed right-4 bottom-[calc(84px+env(safe-area-inset-bottom,0px))] z-30 grid size-14 cursor-pointer place-items-center rounded-2xl shadow-lg" aria-label={t('chats.new')} data-testid="chats-new"><Plus className="size-6" /></button>
     : <IconButton label={t('chats.new')} className="shrink-0" data-testid="chats-new"><Plus /></IconButton>;
   return (
     <DropdownMenu modal={false}>
       {fab ? <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger> : <BubbleTip title={t('chats.new')} text={t('chats.newHint')}><DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger></BubbleTip>}
-      <DropdownMenuContent align="end" side={fab ? 'top' : 'bottom'} className="w-56">
-        <DropdownMenuItem onSelect={() => newChat()} data-testid="new-conversation"><MessageSquarePlus />{t('nav.newChat')}</DropdownMenuItem>
+      <DropdownMenuContent align="end" side={fab ? 'top' : 'bottom'} className="w-[220px]">
+        <DropdownMenuItem onSelect={() => newChat()} data-testid="new-conversation"><MessageSquarePlus />{t('nav.newChat')}{tabsOn && newKey ? <span className="text-faint-foreground ml-auto text-micro" data-testid="new-conversation-key">{newKey}</span> : null}</DropdownMenuItem>
         <DropdownMenuItem onSelect={newProjectChat} data-testid="sidebar-new-project"><FolderPlus />{t('comp.projects.newTitle')}</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -406,7 +432,7 @@ function Places() {
   const config = useStore((s) => s.app?.config);
   const places = [['tasks', ClipboardCheck, 'nav.tasks'], ['projects', FolderGit2, 'nav.projects'], ['schedules', CalendarSync, 'nav.schedules'], ['board', Presentation, 'nav.board']];
   const more = config?.expert?.enabled && fullPc() ? [['expert', SquareTerminal, 'nav.expert']] : [];
-  const cls = (on) => cn('press relative flex min-w-0 cursor-pointer flex-col items-center gap-[3px] rounded-ctl pt-[7px] pb-1.5 text-caption transition-colors', on ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground');
+  const cls = (on) => cn('press relative flex min-w-0 cursor-pointer flex-col items-center gap-[3px] rounded-ctl pt-[7px] pb-1.5 text-caption leading-[1.45] transition-colors', on ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground');
   return (
     <nav className={cn('grid gap-0.5 px-2 pb-1.5', more.length ? 'grid-cols-5' : 'grid-cols-4')} aria-label={t('orbchats.places')} data-testid="orb-places">
       {places.map(([id, Icon, label]) => (
@@ -471,7 +497,7 @@ function SortMenu({ filter, setFilter, order, setOrder }) {
     <DropdownMenu modal={false}>
       <BubbleTip title={t('orbchats.sortFilter')}>
         <DropdownMenuTrigger asChild>
-          <IconButton small label={t('orbchats.sortFilter')} data-testid="sidebar-sort"><ArrowUpDown /></IconButton>
+          <IconButton label={t('orbchats.sortFilter')} data-testid="sidebar-sort"><ArrowUpDown className="size-3.5" /></IconButton>
         </DropdownMenuTrigger>
       </BubbleTip>
       <DropdownMenuContent align="end" className="w-56">
@@ -631,7 +657,7 @@ export function OrbInbox({ page = false }) {
       <div className={cn('grid gap-2', phone ? 'px-4 pt-3 pb-2' : 'mt-0.5 mr-2.5 mb-2 ml-3')} data-testid="sidebar-search">{search}</div>
       {phone ? null : <Places />}
       {phone ? null : (
-        <div className="text-faint-foreground flex items-center justify-between px-4 pt-2.5 pb-1 text-caption">
+        <div className="text-faint-foreground mt-1.5 flex items-center justify-between px-4 pt-2.5 pb-1 text-caption leading-[1.45]">
           <BubbleTip title={t('orbchats.activityTip')}>
             <button type="button" onClick={() => go('activity')} className="hover:text-foreground inline-flex cursor-pointer items-center gap-0.5" data-testid="sidebar-activity">{t('orbchats.activity')}<ChevronRight className="size-3.5" /></button>
           </BubbleTip>

@@ -88,3 +88,18 @@ test('every data-testid the header, the tabs and the window buttons had is still
   }
   for (const frag of ['data-testid={testid}', 'data-testid={`window-${action}`}', 'data-testid={`pane-${side}`}']) assert.ok(files.includes(frag), frag);
 });
+
+test('step 5D: the chat header has no mark, pause comes before the bell, the title uses the theme type', () => {
+  const chat = read('src/ui/views/chat.jsx');
+  const head = chat.slice(chat.indexOf('data-testid="orb-chat-head"'), chat.indexOf('data-testid="orb-chat-status"'));
+  assert.doesNotMatch(head, /<Robot/, 'no avatar left of the title');
+  assert.match(head, /font-\(family-name:--title\) text-card-title/);
+  assert.ok(chat.indexOf('<BarPause />') < chat.indexOf('<NotificationBell />', chat.indexOf('<BarPause />') - 80), 'pause, then bell');
+  assert.match(css, /\.notice-dot \{[^}]*background: var\(--primary-text\)/, 'the bell dot takes the accent');
+});
+
+test('step 5D: Cristal keeps the dialog scrim blur even when the system asks for less transparency', () => {
+  const skins = read('src/ui/themes/skins.css');
+  assert.match(skins, /\[data-slot="dialog-overlay"\] \{ background-color: var\(--g-shadow-near\); backdrop-filter: blur\(8px\); \}/);
+  assert.doesNotMatch(skins, /prefers-reduced-transparency/);
+});

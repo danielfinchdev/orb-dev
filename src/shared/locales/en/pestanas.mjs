@@ -41,6 +41,7 @@ export default {
   'keys.cmd.nextNeeds': 'Go to the next chat that needs you',
   'keys.cmd.changes': 'Show or hide the chat’s changes',
   'keys.cmd.tabNew': 'New tab',
+  'keys.cmd.chatNew': 'New chat',
   'keys.cmd.tabClose': 'Close the tab',
   'keys.cmd.tabNext': 'Next tab',
   'keys.cmd.tabPrev': 'Previous tab',

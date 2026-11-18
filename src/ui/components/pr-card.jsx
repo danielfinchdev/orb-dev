@@ -2,11 +2,11 @@
 // src/engine/host/pr-tools.mjs). Only in this PC's window. Every string of the PR comes from the internet, so it is
 // rendered as plain text (React text nodes), never as HTML or markdown.
 import { useEffect, useRef, useState } from 'react';
-import { GitPullRequest, ShieldAlert, MessageSquareWarning, GitMerge, Eye } from 'lucide-react';
+import { GitPullRequest, ShieldAlert, MessageSquareWarning, GitMerge, Radar, ExternalLink, ChevronDown, CircleCheck, GitBranch, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Switch, BubbleTip } from '@/components/ui/overlay.jsx';
 import { call, act, bridge, fullPc } from '@/lib/store.js';
-import { useT } from '@/lib/i18n.js';
+import { useT, useLocale } from '@/lib/i18n.js';
 import { quiet } from '@/lib/quiet.js';
 import { cn } from '@/lib/utils.js';
 
@@ -74,13 +74,9 @@ export function PrCards({ sessionId }) {
   return <div className="mx-auto grid w-full max-w-3xl shrink-0 gap-2 px-5 pb-2">{list.map((r) => <PrCard key={r.id} r={r} />)}</div>;
 }
 
-// The pull request of this chat's branch: gathers what is pending into the chat («Arreglar comentarios», «Arreglar
-// conflictos») and switches on the CI watch (engine/scheduler/ci-watch.mjs: it never merges). Only this PC's window.
-export function PrBar({ session }) {
-  const t = useT();
+// The open pull request of this chat's branch (what the panel's «PR» tab and its title are made of). Only this PC's window.
+export function usePr(session) {
   const [pr, setPr] = useState(null);
-  const [watch, setWatch] = useState(null);
-  const [busy, setBusy] = useState(false);
   const project = session?.project;
   useEffect(() => {
     if (!fullPc() || !project || session.kind !== 'chat') return undefined;
@@ -88,6 +84,42 @@ export function PrBar({ session }) {
     call('projects.info', { name: project }).then((info) => { if (alive) setPr((info?.prs ?? []).find((p) => p.headRefName === info.branch) ?? null); }).catch(quiet);
     return () => { alive = false; };
   }, [project, session?.id, session?.kind]);
+  return pr;
+}
+
+// how long ago, in the user's language
+function ago(iso, locale) {
+  const ms = Date.parse(iso ?? ''); if (Number.isNaN(ms)) return '';
+  const min = Math.round((Date.now() - ms) / 60000); const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+  if (min < 60) return rtf.format(-Math.max(min, 0), 'minute');
+  if (min < 60 * 24) return rtf.format(-Math.round(min / 60), 'hour');
+  return rtf.format(-Math.round(min / 1440), 'day');
+}
+const PASSED = new Set(['SUCCESS', 'NEUTRAL', 'SKIPPED']);
+const FAILED = new Set(['FAILURE', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE', 'ERROR']);
+function checksOf(list) {
+  const ok = list.filter((c) => PASSED.has(c.conclusion) || c.status === 'SUCCESS').length;
+  const bad = list.filter((c) => FAILED.has(c.conclusion) || FAILED.has(c.status)).length;
+  return { n: list.length, ok, bad, running: list.length - ok - bad };
+}
+
+// The «PR» tab: gathers what is pending into the chat («Arreglar comentarios», «Arreglar conflictos») and has «Vigilar la CI»
+// as a row of its list with its switch (engine/scheduler/ci-watch.mjs: it never merges). Every string comes from the
+// internet, so it is plain text (React text nodes), never markup. Only this PC's window.
+export function PrPanel({ session, pr }) {
+  const t = useT();
+  const locale = useLocale();
+  const [detail, setDetail] = useState(null);
+  const [watch, setWatch] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [bodyOpen, setBodyOpen] = useState(true);
+  const project = session?.project;
+  useEffect(() => {
+    if (!fullPc() || !project || !pr) return undefined;
+    let alive = true; setDetail(null);
+    call('projects.pr', { name: project, number: pr.number }).then((d) => { if (alive) setDetail(d); }).catch(quiet);
+    return () => { alive = false; };
+  }, [project, pr?.number]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!fullPc() || !project) return undefined;
     let alive = true;
@@ -105,15 +137,40 @@ export function PrBar({ session }) {
     const r = await act(call('ciWatch.set', { session: String(session.id), number: pr.number, on }), on ? t('prbar.watchOn') : t('prbar.watchOff'));
     if (r) setWatch(on ? { session: String(session.id), number: pr.number, attempts: 0, max: 3 } : null);
   };
+  const d = detail ?? pr;
+  const state = d.state === 'MERGED' ? 'merged' : d.state === 'CLOSED' ? 'closed' : d.isDraft ? 'draft' : 'open';
+  const checks = checksOf(Array.isArray(detail?.checks) ? detail.checks : []);
+  const checksText = !detail ? '…' : !checks.n ? t('panel.pr.checksNone') : checks.bad ? t('panel.pr.checksFail', { ...checks, bad: checks.bad }) : checks.running ? t('panel.pr.checksRun', checks) : t('panel.pr.checksOk', checks);
+  const checksTone = checks.bad ? 'text-destructive' : checks.running || !checks.n ? 'text-muted-foreground' : 'text-success';
+  const dt = 'text-muted-foreground flex items-center gap-1.5 whitespace-nowrap [&_svg]:size-3.5';
   return (
-    <div className="mx-auto flex w-full max-w-3xl shrink-0 flex-wrap items-center gap-2 px-5 pb-2 text-xs" data-testid="pr-bar" role="group" aria-label={t('prbar.pr', { number: pr.number, n: pr.number })}>
-      <GitPullRequest className="text-muted-foreground size-3.5 shrink-0" />
-      <span className="text-muted-foreground min-w-0 truncate"><bdi>{t('prbar.pr', { n: pr.number })}</bdi> · <bdi>{pr.title}</bdi></span>
-      <BubbleTip title={t('prbar.fixComments')} text={t('prbar.fixTip')}><Button type="button" size="sm" variant="outline" className="h-6 px-2 text-xs" disabled={busy} onClick={() => fix('comments')} data-testid="pr-fix-comments"><MessageSquareWarning className="size-3" />{t('prbar.fixComments')}</Button></BubbleTip>
-      <BubbleTip title={t('prbar.fixConflicts')} text={t('prbar.fixTip')}><Button type="button" size="sm" variant="outline" className="h-6 px-2 text-xs" disabled={busy} onClick={() => fix('conflicts')} data-testid="pr-fix-conflicts"><GitMerge className="size-3" />{t('prbar.fixConflicts')}</Button></BubbleTip>
-      <BubbleTip title={t('prbar.watch')} text={t('prbar.watchTip')}>
-        <label className="flex cursor-pointer items-center gap-1.5"><Eye className="size-3" /><span>{watch ? t('prbar.watching', { attempts: watch.attempts, max: watch.max }) : t('prbar.watch')}</span><Switch checked={Boolean(watch)} onCheckedChange={toggle} size="sm" data-testid="pr-watch" /></label>
-      </BubbleTip>
-    </div>
+    <section className="grid gap-0" data-testid="pr-bar" role="group" aria-label={t('prbar.pr', { number: pr.number, n: pr.number })}>
+      <h2 className="mb-2 font-(family-name:--title) text-[16px] leading-[1.35] font-semibold" data-testid="pr-title"><bdi>{d.title}</bdi></h2>
+      <div className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-1 text-control">
+        {d.author ? <><b className="text-foreground font-medium"><bdi>{d.author}</bdi></b> ·</> : null}
+        {d.createdAt || d.updatedAt ? <><span>{ago(d.createdAt ?? d.updatedAt, locale)}</span> ·</> : null}
+        <span className={cn('inline-flex items-center gap-1', state === 'merged' && 'text-primary-text font-medium')}>{state === 'merged' ? <GitMerge className="size-3.5" /> : <GitPullRequest className="size-3.5" />}{t(`panel.pr.${state}`)}</span>
+        {d.url ? <BubbleTip title={t('panel.pr.openGithub')}><button type="button" className="text-info focus-visible:outline-ring ml-auto inline-flex cursor-pointer items-center gap-1 rounded-sm hover:underline focus-visible:outline-2" onClick={() => bridge.openExternal(d.url)} data-testid="pr-open-github"><ExternalLink className="size-3.5" />{t('panel.pr.github')}</button></BubbleTip> : null}
+      </div>
+      <dl className="my-4 grid grid-cols-[minmax(120px,max-content)_1fr] items-center gap-x-2.5 gap-y-[9px] text-control">
+        <dt className={dt}><GitBranch />{t('panel.pr.branch')}</dt>
+        <dd className="m-0 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1"><code className="whitespace-nowrap"><bdi>{d.headRefName}</bdi></code>{d.baseRefName ? <> → <code className="whitespace-nowrap"><bdi>{d.baseRefName}</bdi></code></> : null}
+          {detail ? <><span className="text-success">+{detail.additions}</span> <span className="text-destructive">−{detail.deletions}</span></> : null}</dd>
+        {detail?.reviewDecision ? <><dt className={dt}><Users />{t('panel.pr.review')}</dt><dd className="m-0">{t(`panel.pr.${detail.reviewDecision}`)}</dd></> : null}
+        <dt className={dt}><CircleCheck />{t('panel.pr.checks')}</dt>
+        <dd className={cn('m-0 flex items-center gap-1.5', checksTone)} data-testid="pr-checks">{checks.n && !checks.bad && !checks.running ? <CircleCheck className="size-3.5" /> : null}{checksText}</dd>
+        <dt className={dt}><BubbleTip title={t('prbar.watch')} text={t('prbar.watchTip')} side="left"><span className="inline-flex items-center gap-1.5"><Radar />{watch ? t('prbar.watching', { attempts: watch.attempts, max: watch.max }) : t('prbar.watch')}</span></BubbleTip></dt>
+        <dd className="m-0"><Switch checked={Boolean(watch)} onCheckedChange={toggle} aria-label={t('prbar.watch')} data-testid="pr-watch" /></dd>
+      </dl>
+      <div className="flex flex-wrap gap-1.5 border-y py-3">
+        <BubbleTip title={t('prbar.fixComments')} text={t('prbar.fixTip')}><Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => fix('comments')} data-testid="pr-fix-comments"><MessageSquareWarning />{t('prbar.fixComments')}</Button></BubbleTip>
+        <BubbleTip title={t('prbar.fixConflicts')} text={t('prbar.fixTip')}><Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => fix('conflicts')} data-testid="pr-fix-conflicts"><GitMerge />{t('prbar.fixConflicts')}</Button></BubbleTip>
+      </div>
+      <button type="button" className="focus-visible:outline-ring mt-[18px] mb-1.5 flex w-full cursor-pointer items-center gap-1.5 text-left font-(family-name:--title) text-[15px] font-semibold focus-visible:outline-2" aria-expanded={bodyOpen} onClick={() => setBodyOpen(!bodyOpen)}>
+        {t('panel.pr.description')}<ChevronDown className={cn('text-muted-foreground size-3.5 transition-transform duration-200', !bodyOpen && '-rotate-90')} />
+      </button>
+      {bodyOpen ? <p className="m-0 text-control leading-[1.6] whitespace-pre-wrap" data-testid="pr-body"><bdi>{detail ? (detail.body?.trim() || t('panel.pr.noDescription')) : '…'}</bdi></p> : null}
+      <p className="text-faint-foreground mt-1.5 text-xs">{t('panel.pr.note')}</p>
+    </section>
   );
 }

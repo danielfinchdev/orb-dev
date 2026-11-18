@@ -63,7 +63,7 @@ export function Select({ value, onValueChange, options, placeholder, className, 
         <SelectPrimitive.Content data-slot="select-content" position="popper" sideOffset={4} className="pop bg-popover text-popover-foreground border-border data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 origin-(--radix-select-content-transform-origin) relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] min-w-(--radix-select-trigger-width) overflow-x-hidden overflow-y-auto rounded-card border text-control shadow-(--shadow)">
           <SelectPrimitive.Viewport className="p-1">
             {options.map((o) => (
-              <SelectPrimitive.Item key={o.value} value={o.value} disabled={o.disabled} className="it focus:bg-accent focus:text-foreground flex w-full cursor-pointer items-center gap-2 rounded-ctl px-2 py-1.5 text-control outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-45 [&_svg:not([class*='size-'])]:size-4">
+              <SelectPrimitive.Item key={o.value} value={o.value} disabled={o.disabled} className="it focus:bg-accent focus:text-foreground flex w-full cursor-pointer items-center gap-2 rounded-ctl px-2 py-1.5 text-control leading-[1.45] outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-45 [&_svg:not([class*='size-'])]:size-4">
                 {o.icon ?? null}<SelectPrimitive.ItemText>{o.label}</SelectPrimitive.ItemText>
                 <span className="chk text-primary-text ml-auto flex size-4 items-center justify-center"><SelectPrimitive.ItemIndicator><CheckIcon className="size-4" /></SelectPrimitive.ItemIndicator></span>
               </SelectPrimitive.Item>
@@ -168,12 +168,12 @@ export function DropdownMenuContent({ className, align = 'end', onCloseAutoFocus
 }
 export function DropdownMenuItem({ className, variant, onPointerLeave, ...props }) {
   const leave = (e) => { onPointerLeave?.(e); if (!e.defaultPrevented && closing(e.currentTarget)) e.preventDefault(); };
-  return <DropdownPrimitive.Item onPointerLeave={leave} className={cn("it focus:bg-accent focus:text-foreground relative flex cursor-pointer items-center gap-2 rounded-ctl px-2 py-1.5 text-control outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-45 [&_svg:not([class*='size-'])]:size-4 [&_svg]:text-muted-foreground", variant === 'destructive' && 'danger text-destructive focus:text-destructive [&_svg]:text-destructive', className)} {...props} />;
+  return <DropdownPrimitive.Item onPointerLeave={leave} className={cn("it focus:bg-accent focus:text-foreground relative flex cursor-pointer items-center gap-2 rounded-ctl px-2 py-1.5 text-control leading-[1.45] outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-45 [&_svg:not([class*='size-'])]:size-4 [&_svg]:text-muted-foreground", variant === 'destructive' && 'danger text-destructive focus:text-destructive [&_svg]:text-destructive', className)} {...props} />;
 }
 // an item that is ticked or not (lists where several can be chosen); the menu stays open while ticking.
 export function DropdownMenuCheckboxItem({ className, children, checked, onCheckedChange, ...props }) {
   return (
-    <DropdownPrimitive.CheckboxItem checked={checked} onCheckedChange={onCheckedChange} onSelect={(e) => e.preventDefault()} className={cn('it focus:bg-accent focus:text-foreground relative flex cursor-pointer items-center gap-2 rounded-ctl py-1.5 pr-2 pl-8 text-control outline-hidden select-none', className)} {...props}>
+    <DropdownPrimitive.CheckboxItem checked={checked} onCheckedChange={onCheckedChange} onSelect={(e) => e.preventDefault()} className={cn('it focus:bg-accent focus:text-foreground relative flex cursor-pointer items-center gap-2 rounded-ctl py-1.5 pr-2 pl-8 text-control leading-[1.45] outline-hidden select-none', className)} {...props}>
       <span className={cn('absolute left-2 grid size-4 place-items-center rounded-[calc(var(--r-ctl)-3px)] border', checked ? 'bg-primary-text border-primary-text text-primary-foreground' : 'border-input')}>
         <DropdownPrimitive.ItemIndicator><CheckIcon className="size-3" /></DropdownPrimitive.ItemIndicator>
       </span>
@@ -185,7 +185,7 @@ export function DropdownMenuCheckboxItem({ className, children, checked, onCheck
 export const DropdownMenuRadioGroup = DropdownPrimitive.RadioGroup;
 export function DropdownMenuRadioItem({ className, children, ...props }) {
   return (
-    <DropdownPrimitive.RadioItem className={cn('it focus:bg-accent focus:text-foreground relative flex cursor-pointer items-center gap-2 rounded-ctl py-1.5 pr-2 pl-8 text-control outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-45', className)} {...props}>
+    <DropdownPrimitive.RadioItem className={cn('it focus:bg-accent focus:text-foreground relative flex cursor-pointer items-center gap-2 rounded-ctl py-1.5 pr-2 pl-8 text-control leading-[1.45] outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-45', className)} {...props}>
       <span className="absolute left-2 grid size-4 place-items-center"><DropdownPrimitive.ItemIndicator><span className="bg-primary-text block size-2 rounded-full" /></DropdownPrimitive.ItemIndicator></span>
       {children}
     </DropdownPrimitive.RadioItem>

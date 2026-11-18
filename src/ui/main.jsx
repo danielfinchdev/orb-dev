@@ -687,10 +687,11 @@ function ThemedToaster() {
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => obs.disconnect();
   }, []);
-  // below the window's header (offset), so a passing notice never covers the menu or the window buttons.
+  // below the window's 56 px header (offset 72), so a passing notice never covers its title or buttons; drawn as the
+  // mock-up's .pop (themes/pieces.css › .orb-toast), the tone shown by its icon.
   // one on screen at a time (the newest); the others are under the bell of the top bar.
   // on a phone, below the status bar as well (edge to edge, the page starts under it).
-  return <Toaster position="top-center" offset={72} mobileOffset={{ top: 'calc(env(safe-area-inset-top, 0px) + 64px)' }} visibleToasts={1} theme={dark ? 'dark' : 'light'} richColors closeButton toastOptions={{ className: 'font-sans' }} />;
+  return <Toaster position="top-center" offset={72} mobileOffset={{ top: 'calc(env(safe-area-inset-top, 0px) + 64px)' }} visibleToasts={1} theme={dark ? 'dark' : 'light'} closeButton toastOptions={{ className: 'font-sans orb-toast' }} />;
 }
 
 applyTheme();

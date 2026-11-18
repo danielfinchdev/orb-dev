@@ -167,6 +167,8 @@ export function ChatTabs({ route, render }) {
 
   const fresh = () => { setEmpty(false); actTabs((s) => T.openTab(s, 'chat:new', { mode: 'new' })); newChat(); };
   useShortcut('tabs.new', (e) => { if (!enabled) return; e.preventDefault(); fresh(); }, { capture: true });
+  // a second key for the same action (the «+» menu shows this one)
+  useShortcut('chat.new', (e) => { if (!enabled) return; e.preventDefault(); fresh(); }, { capture: true });
   useShortcut('tabs.close', (e) => {
     const k = focused(tabsState()); if (!enabled || !k) return;
     e.preventDefault(); actTabs((s) => T.closeTab(s, k));

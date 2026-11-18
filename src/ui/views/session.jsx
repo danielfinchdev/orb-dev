@@ -2,7 +2,7 @@
 // files appear as the agent works, risky actions wait for a click (approval cards), messages written meanwhile correct the
 // agent on the fly or wait in a queue, and the context meter shows how full the conversation is. Task runs open here too.
 import { lazy, memo, Suspense, useEffect, useMemo, useState } from 'react';
-import { Info, FileDiff, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, X, ClipboardCheck, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Gamepad2, Smartphone, Shuffle, ScreenShare, SquareTerminal } from 'lucide-react';
+import { Info, PanelRight, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, X, ClipboardCheck, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Gamepad2, Smartphone, Shuffle, SquareTerminal } from 'lucide-react';
 import { unlockCore } from '@/lib/core-access.js';
 import { notifyError, notifyOk } from '@/lib/notify.js';
 import { TypingMarkdown, TypedMarkdown } from '@/components/markdown.jsx';
@@ -20,10 +20,12 @@ import { SubagentList } from '@/components/subagents.jsx';
 import { SideChats } from '@/components/chat-side.jsx';
 import { TaskChanges } from '@/components/task-changes.jsx';
 import { TurnChanges } from '@/components/turn-changes.jsx';
+import { ChatPanel } from '@/components/chat-panel.jsx';
+import { SessionInfo } from '@/views/orb/info.jsx';
 import { takeComments, putBackComments, useComments } from '@/lib/turn-comments.js';
 import { SecretCards } from '@/components/secret-card.jsx';
-import { PrCards, PrBar } from '@/components/pr-card.jsx';
-import { CommitButton } from '@/components/commit-dialog.jsx';
+import { PrCards, PrPanel, usePr } from '@/components/pr-card.jsx';
+import { CommitDialog, CommitMenuItem } from '@/components/commit-dialog.jsx';
 import { offerWorktreeRemoval } from '@/components/worktree-removal.jsx';
 import { HtmlPages } from '@/components/html-page.jsx';
 import { takePoints, onPoints } from '@/lib/browser-points.js';
@@ -53,9 +55,12 @@ import { EditButton, RewindLine } from '@/components/edit-message.jsx';
 import { BarClock, BarPause, BarHeading, COMPACT_AT, CompactButton } from '@/components/conversation/bar.jsx';
 import { ContextMeter } from '@/components/conversation/context-meter.jsx';
 import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
+import { TurnFlow } from '@/components/conversation/turn-card.jsx';
+import { onOpenChanges } from '@/lib/open-changes.js';
+import { AttachMenu } from '@/components/conversation/attach-menu.jsx';
 import { TaskStatus } from '@/components/task-state.jsx';
 import { quiet } from '@/lib/quiet.js';
-import { MoreButton } from '@/components/ui/primitives.jsx';
+import { MoreButton, IconButton } from '@/components/ui/primitives.jsx';
 import { ConversationTrail, useTrailScroll } from '@/components/conversation/trail.jsx';
 
 // An icon that says what the tool does (reading, writing, searching, the web, a command…).
@@ -354,11 +359,21 @@ export function SessionView({ route }) {
   // the user's terminal under the chat (this PC only), and a command pasted into it from the chat.
   const [terminal, setTerminal] = useState(false);
   // «Cambios» of this chat turn by turn (a direct chat in a project folder), and the comments waiting for the next message.
-  const [changes, setChanges] = useState(false);
+  // the chat's side panel (Ficha, Cambios, PR): the tab that is open (null: closed), the tab it opens on next and the turn «Revisar» asked for
+  const [panel, setPanel] = useState(null);
+  const [permAsk, setPermAsk] = useState(null); // the «Móvil» chip asks the permissions menu to open on the phone's switch
+  const [lastTab, setLastTab] = useState('info');
+  const [changesTurn, setChangesTurn] = useState(null);
+  const [commitOpen, setCommitOpen] = useState(false);
+  const openTab = (tab) => { setPanel(tab); setLastTab(tab); };
+  // «Revisar» on a turn card opens Changes on that turn
+  useEffect(() => onOpenChanges(({ session, turn }) => { if (session === route.id) { setChangesTurn({ turn, at: Date.now() }); openTab('changes'); } }), [route.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const pendingComments = useComments(route.id);
   const hasPanel = s.kind === 'chat' && Boolean(s.project) && fullPc();
-  useEffect(() => setChanges(false), [route.id]);
-  useShortcut('changes.toggle', (e) => { e.preventDefault(); setChanges((v) => !v); }, { enabled: hasPanel });
+  const pr = usePr(s);
+  useEffect(() => { setPanel(null); setChangesTurn(null); setCommitOpen(false); }, [route.id]);
+  // Ctrl+D opens the panel on Cambios, or closes it when it is already there
+  useShortcut('changes.toggle', (e) => { e.preventDefault(); if (panel === 'changes') setPanel(null); else { setChangesTurn(null); openTab('changes'); } }, { enabled: hasPanel });
   const [termDraft, setTermDraft] = useState('');
   useEffect(() => (fullPc() ? onTerminalPaste((line) => { setTerminal(true); setTermDraft(line); }) : undefined), [route.id]);
   useEffect(() => { setTerminal(false); setTermDraft(''); }, [route.id]);
@@ -480,6 +495,13 @@ export function SessionView({ route }) {
   const editQueued = (q, patch) => act(call('sessions.editQueued', { id: s.id, queueId: q.id, ...patch }));
   // «Compactar» in the composer's slot when the context is at 70 % or more and the agent can compact (Claude, Codex).
   const compactable = s.kind === 'chat' && CAN_COMPACT[s.agent] === true && (compacting || (!running && s.context?.size > 0 && s.context.used / s.context.size >= COMPACT_AT));
+  // «Usar mi móvil Android», a switch inside «Más opciones» of the permissions (never on the phone itself; included in «Acceso total al PC»).
+  // Granting it asks for the master password; taking it back asks nothing.
+  const androidRow = bridge.mobile || (!s.project && s.permission === 'total') ? [] : [{ key: 'android', testid: 'session-android', Icon: Smartphone, label: t('session.android'), tip: s.android ? t('session.androidOn') : t('session.androidOff'), checked: Boolean(s.android), onToggle: async () => {
+    if (s.android) { act(call('sessions.revokeGrant', { id: s.id, grant: 'android' })); return; }
+    const unlock = await unlockCore('android');
+    if (unlock) act(call('sessions.grantAndroid', { id: s.id, unlock }));
+  } }];
   const compact = async () => { setCompacting(true); try { await act(call('sessions.compact', { id: s.id })); } finally { setCompacting(false); } };
   const pictures = images.map((p) => <Badge key={p} variant="secondary" className="gap-1.5 font-normal"><AttachIcon file={p} />{baseName(p)}<button className="cursor-pointer" onClick={() => setImages(images.filter((x) => x !== p))} aria-label={t('session.remove')}><X className="size-3" /></button></Badge>);
 
@@ -490,10 +512,9 @@ export function SessionView({ route }) {
       <PageHeader className="topbar-chat" palette={false} title={<BarClock />} back={<BackToList to={s.kind === 'chat' ? 'chats' : 'tasks'} />}
         center={<BarHeading title={s.title} project={s.project} onRename={s.kind === 'chat' ? rename : null} renameLabel={t('session.renameTip')}
           extra={<span className="bar-title-agent"><AgentIcon agent={s.agent} className="size-3.5" />{who}{s.model ? ` · ${modelName(s.model)}` : ''}</span>} />}>
-        <NotificationBell />
         <BarPause />
-        {hasPanel ? <Tip label={t('turns.buttonTip')}><Button variant={changes ? 'secondary' : 'outline'} size="sm" onClick={() => setChanges(!changes)} data-testid="turn-changes-toggle"><FileDiff />{t('turns.button')}</Button></Tip> : null}
-        {s.kind === 'chat' && s.project && fullPc() ? <CommitButton project={s.project} session={s.id} /> : null}
+        <NotificationBell />
+        {hasPanel ? <BubbleTip title={t('panel.button')} text={t('panel.buttonTip')}><IconButton label={t('panel.button')} active={panel !== null} onClick={() => (panel ? setPanel(null) : openTab(lastTab === 'pr' && !pr ? 'info' : lastTab))} data-testid="turn-changes-toggle"><PanelRight /></IconButton></BubbleTip> : null}
         {s.kind === 'chat' ? null : (<>
           {task ? <TaskStatus task={task} /> : null}
           <Button variant="outline" size="sm" onClick={() => go({ view: 'tasks', id: s.task_id })}><ClipboardCheck />{t('session.viewTask', { id: s.task_id })}</Button>
@@ -502,6 +523,7 @@ export function SessionView({ route }) {
         <DropdownMenu modal={false}>
           <BubbleTip title={t('chats.more')}><DropdownMenuTrigger asChild><MoreButton label={t('chats.more')} data-testid="session-more" /></DropdownMenuTrigger></BubbleTip>
           <DropdownMenuContent align="end" className="w-56">
+            {s.kind === 'chat' && s.project && fullPc() ? <><CommitMenuItem onOpen={() => setCommitOpen(true)} /><DropdownMenuSeparator /></> : null}
             {bridge.mobile ? null : <DropdownMenuItem onSelect={() => act(bridge.openPath(s.cwd))} data-testid="open-folder"><FolderOpen />{t('session.openFolder')}</DropdownMenuItem>}
             {fullPc() ? <DropdownMenuItem onSelect={() => setTerminal(!terminal)} data-testid="session-terminal"><SquareTerminal />{terminal ? t('terminal.hide') : t('terminal.show')}</DropdownMenuItem> : null}
             <DropdownMenuItem onSelect={() => showDetails(s, task)} data-testid="details"><Info />{t('session.detailsShort')}</DropdownMenuItem>
@@ -520,10 +542,10 @@ export function SessionView({ route }) {
       <div className="flex min-h-0 flex-1">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="relative flex min-h-0 flex-1 flex-col">
-      <div ref={trail.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={trail.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
         <div className="lazy-lines mx-auto flex max-w-3xl flex-col gap-3.5 px-5 py-6">
           {more ? <Button variant="ghost" size="sm" className="self-center" onClick={loadOlder}><ChevronUp />{t('session.older')}</Button> : null}
-          {blocks.length || unsaved.length ? blocks.map((b) => <Block key={b.key} b={b} agent={s.agent} who={who} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />)
+          {blocks.length || unsaved.length ? <TurnFlow blocks={blocks} session={s} running={running} renderBlock={(b) => <Block key={b.key} b={b} agent={s.agent} who={who} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />} />
             : <Empty title={t('session.emptyTitle', { agent: AGENT[s.agent] })}>{t('session.workIn')} <span className="font-mono text-xs">{s.cwd}</span> {t('session.withPerm', { perm: PERMISSION[s.permission] })}</Empty>}
           {unsaved.map((p) => <Block key={p.id} b={{ type: 'item', key: p.id, item: { id: p.id, session_id: s.id, role: 'user', kind: 'text', body: p.text, at: p.at } }} agent={s.agent} who={who} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />)}
           <LivePartial key={s.id} id={s.id} agent={s.agent} running={running} />
@@ -562,7 +584,6 @@ export function SessionView({ route }) {
       {/* a secret the agent asked for, typed only here (never in the chat). */}
       <SecretCards sessionId={s.id} />
       <PrCards sessionId={s.id} />
-      <PrBar session={s} />
       {fullPc() ? <HtmlPages sessionId={s.id} /> : null}
       {terminal && fullPc() ? <TerminalPanel dir={s.cwd} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
       {pendingComments.length ? <div className="text-muted-foreground mx-auto w-full max-w-3xl shrink-0 px-5 pb-1.5 text-xs" data-testid="pending-comments">{t('turns.pending', { n: pendingComments.length })}</div> : null}
@@ -572,43 +593,47 @@ export function SessionView({ route }) {
         onDrop={(e) => { fromTransfer(e.dataTransfer).then(addImages); }}
         top={images.length || compactable ? <>{compactable ? <ContextSlot items={[{ key: 'compact', node: <CompactButton onCompact={compact} busy={compacting} /> }]} /> : null}<div className="flex min-w-0 flex-wrap items-center gap-2">{pictures}</div></> : null}
         bottom={<>
-          <Tip label={t('session.attach')}><Button variant="ghost" size="icon-sm" aria-label={t('session.attach')} onClick={async () => addImages(await bridge.pickAttachments())} data-testid="attach"><Paperclip /></Button></Tip>
-          {/* a window captured by the user (the system's picker), attached as a picture. PC only. */}
-          {fullPc() && canCapture() ? <Tip label={t('session.capture')}><Button variant="ghost" size="icon-sm" aria-label={t('session.capture')} onClick={capture} data-testid="capture-window"><ScreenShare /></Button></Tip> : null}
-          {/* the model, the permissions and the reasoning under the box, like the chat's brain (the bar keeps the title). */}
+          {/* «+»: attach a file and, on the PC, capture a window (the system's picker) as a picture. */}
+          <AttachMenu onAttach={async () => addImages(await bridge.pickAttachments())} onCapture={fullPc() && canCapture() ? capture : null} />
+          {/* the permissions, the model and the reasoning around the box, like the chat's brain (the bar keeps the title). */}
           {s.kind === 'chat' ? (<>
-            {models.length ? <Select size="sm" value={s.model || models[0].value} title={t('session.model')} options={models} onValueChange={(model) => act(call('sessions.update', { id: s.id, model }), t('session.modelSet', { model: modelName(model) }))} data-testid="session-model" /> : null}
             {/* «Acceso total» of a project's chat also asks for the master password every time and goes when
                 Orb locks; taken back, the chat returns to its permission before, then takes the one chosen. */}
-            {/* «Auto» / «Preguntar» at one click, the other levels under «⋯» (the phone may switch between them, never to «total»). */}
-            {s.project ? <AutonomySwitch value={s.permission} testid="session-permission" disabled={bridge.mobile && s.permission === 'total'} more={options(PERMISSION).filter((o) => o.value !== 'auto' && o.value !== 'editar' && (!bridge.mobile || o.value !== 'total'))} onChange={async (permission) => {
+            {/* «Auto» / «Preguntar» at one click, the other levels and «Usar mi móvil Android» under «Más opciones» (the phone may switch between levels, never to «total», and has no switch for its phone). */}
+            {s.project ? <AutonomySwitch value={s.permission} testid="session-permission" disabled={bridge.mobile && s.permission === 'total'} more={options(PERMISSION).filter((o) => o.value !== 'auto' && o.value !== 'editar' && (!bridge.mobile || o.value !== 'total'))} extra={androidRow} request={permAsk} onChange={async (permission) => {
               if (permission === 'total') { const unlock = await unlockCore('fullAccess'); if (unlock) act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged')); return; }
               if (s.permission === 'total') { const back = await act(call('sessions.revokeGrant', { id: s.id, grant: 'total' })); if (!back || back.permission === permission) return; }
               act(call('sessions.update', { id: s.id, permission }), permission === 'auto' ? t('session.autoOn') : permission === 'editar' ? t('session.askOn') : t('session.permissionsChanged'));
             }} />
               /* without a project, «Solo lectura» or «Acceso total al PC» (the master password every time; it goes
                  when Orb locks). Never from the phone. */
-              : <Select size="sm" value={s.permission === 'total' ? 'total' : 'leer'} title={t('session.noProjectReadOnly')} disabled={bridge.mobile} options={[{ value: 'leer', label: PERMISSION.leer }, { value: 'total', label: t('session.fullPc') }]} onValueChange={async (permission) => {
+              : <AutonomySwitch main={[]} value={s.permission === 'total' ? 'total' : 'leer'} testid="session-permission" disabled={bridge.mobile} more={[{ value: 'leer', label: PERMISSION.leer }, { value: 'total', label: t('session.fullPc') }]} extra={androidRow} request={permAsk} onChange={async (permission) => {
                 if (permission !== 'total') { act(call('sessions.revokeGrant', { id: s.id, grant: 'total' }), t('session.permissionsChanged')); return; }
                 const unlock = await unlockCore('fullAccess');
                 if (unlock) act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged'));
-              }} data-testid="session-permission" />}
-            {s.permission === 'total' ? <Tip label={t('session.fullPcTip')}><span tabIndex={0} className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-warning/50 bg-warning-soft px-2.5 text-control font-medium whitespace-nowrap text-warning-ink" data-testid="session-fullpc"><ShieldAlert className="size-4" />{t('session.fullPcChip')}</span></Tip> : null}
-            {/* «Usar mi móvil Android», in any chat (included in «Acceso total al PC»). */}
-            {!s.project && s.permission === 'total' ? null : bridge.mobile ? (s.android ? <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-success/50 bg-success-soft px-2.5 text-control text-success"><Smartphone className="size-4" />{t('session.androidChip')}</span> : null)
-              : <Tip label={s.android ? t('session.androidOn') : t('session.android')}><Button variant="ghost" size="sm" aria-label={t('session.android')} aria-pressed={Boolean(s.android)} className={cn('h-8 shrink-0', s.android && 'border border-success/50 bg-success-soft text-success')} onClick={async () => {
-                if (s.android) { act(call('sessions.revokeGrant', { id: s.id, grant: 'android' })); return; }
-                const unlock = await unlockCore('android');
-                if (unlock) act(call('sessions.grantAndroid', { id: s.id, unlock }));
-              }} data-testid="session-android"><Smartphone />{s.android ? t('session.androidChip') : null}</Button></Tip>}
+              }} />}
+            {s.permission === 'total' ? <Tip label={t('session.fullPcTip')}><span tabIndex={0} className="inline-flex h-[var(--ctl)] shrink-0 items-center gap-1.5 rounded-[var(--r-ctl)] border border-warning/50 bg-warning-soft px-2 text-control font-medium whitespace-nowrap text-warning-ink" data-testid="session-fullpc"><ShieldAlert className="size-4" />{t('session.fullPcChip')}</span></Tip> : null}
+            {/* says that the phone is in use and opens the permissions on its switch, where it is taken back. */}
+            {s.android && !(!s.project && s.permission === 'total') ? <button type="button" onClick={() => setPermAsk({ at: Date.now(), focus: 'android' })} title={t('session.androidChipTip')} className="inline-flex h-[var(--ctl)] cursor-pointer items-center gap-1.5 rounded-[var(--r-ctl)] border border-success/50 bg-success-soft px-2 text-control text-success outline-none focus-visible:ring-2 focus-visible:ring-ring/50" data-testid="session-android-chip"><Smartphone className="size-4" />{t('session.androidChip')}</button> : null}
+          </>) : null}
+          {/* the folder as a chip of the same height, padding and gap as the permissions one. */}
+          <Tip label={s.cwd}><span tabIndex={0} className="text-muted-foreground hidden h-[var(--ctl)] min-w-0 items-center gap-1.5 rounded-[var(--r-ctl)] px-2 text-control whitespace-nowrap outline-none focus-visible:ring-ring/40 focus-visible:ring-[3px] xl:inline-flex" data-testid="session-folder"><FolderOpen className="size-4 shrink-0" /><span className="truncate">{s.project ?? baseName(s.cwd)}</span></span></Tip>
+          <span className="ml-auto" aria-hidden="true" />
+          {s.context ? <span className="text-muted-foreground text-xs"><ContextMeter context={s.context} /></span> : null}
+          {s.kind === 'chat' ? (<>
+            {models.length ? <Select size="sm" value={s.model || models[0].value} title={t('session.model')} options={models} onValueChange={(model) => act(call('sessions.update', { id: s.id, model }), t('session.modelSet', { model: modelName(model) }))} data-testid="session-model" /> : null}
             <ReasoningMenu catalog={catalog} value={{ agent: s.agent, model: s.model ?? '', account: s.account, reasoning: s.reasoning ?? 'medium' }} onChange={(reasoning) => act(call('sessions.update', { id: s.id, reasoning }))} />
           </>) : null}
-          {/* the folder as a chip of the same height, padding and gap as the model, permissions and reasoning ones. */}
-          <Tip label={s.cwd}><span tabIndex={0} className="border-input text-muted-foreground dark:bg-input/30 hidden h-8 min-w-0 items-center gap-1.5 rounded-lg border px-2.5 text-control whitespace-nowrap shadow-xs outline-none focus-visible:ring-ring/40 focus-visible:ring-[3px] xl:inline-flex" data-testid="session-folder"><FolderOpen className="size-4 shrink-0" /><span className="truncate">{s.project ?? baseName(s.cwd)}</span></span></Tip>
-          {s.context ? <span className="text-muted-foreground ml-auto text-xs"><ContextMeter context={s.context} /></span> : null}
         </>} />
       </div>
-      {changes && hasPanel ? <TurnChanges session={s} version={`${s.status}:${s.updated_at}`} onClose={() => setChanges(false)} /> : null}
+      {hasPanel ? (
+        <ChatPanel open={panel !== null} tab={panel === 'pr' && !pr ? 'info' : panel ?? lastTab} onTab={openTab} onClose={() => setPanel(null)} prNumber={pr?.number ?? null}>
+          {(panel ?? lastTab) === 'changes' ? <TurnChanges session={s} turn={changesTurn?.turn} turnAt={changesTurn?.at} />
+            : (panel ?? lastTab) === 'pr' && pr ? <PrPanel session={s} pr={pr} />
+              : <SessionInfo session={s} task={task} onRename={rename} line={t('panel.info.agentLine', { agent: who, model: s.model ? modelName(s.model) : '—', perm: PERMISSION[s.permission] ?? s.permission })} />}
+        </ChatPanel>
+      ) : null}
+      {hasPanel ? <CommitDialog project={s.project} session={s.id} open={commitOpen} onOpenChange={setCommitOpen} /> : null}
       </div>
     </>
   );

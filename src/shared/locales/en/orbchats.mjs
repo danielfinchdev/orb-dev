@@ -58,6 +58,7 @@ export default {
   'orbchats.projectInfo': 'Project info',
   'orbchats.complete': 'Mark as completed',
   'orbchats.reopen': 'Reopen',
+  'orbchats.openNewTab': 'Open in new tab',
   'orbchats.info': 'Chat info',
   'orbchats.rename': 'Rename',
   'orbchats.snooze': 'Snooze',
