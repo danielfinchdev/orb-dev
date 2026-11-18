@@ -9,7 +9,6 @@ import { ProjectIcon } from '@/components/project-icon.jsx';
 import { ProjectOpenMenu } from '@/components/project-tools.jsx';
 import { createProjectFlow, linkFolderFlow, cloneRepoFlow, CATEGORIES } from '@/components/project-actions.jsx';
 import { finishFlow, chatHereFlow } from '@/components/project-flows.jsx';
-import { GithubCard, ContributionGraph } from '@/components/project-github.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Empty, PathText } from '@/components/ui/basic.jsx';
 import { Select, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/overlay.jsx';
@@ -100,7 +99,7 @@ function ProjectRow({ p, stamp, counts, last, onOpen }) {
 }
 
 // «Terminados»: folded by default; each one comes back with «Reabrir».
-function FinishedSection({ list, onReopened }) {
+function FinishedSection({ list, tasks, onReopened }) {
   const t = useT();
   const locale = useLocale();
   const [open, setOpen] = useState(false);
@@ -117,7 +116,7 @@ function FinishedSection({ list, onReopened }) {
         <ListCard className="mt-3">
           {list.map((x) => (
             <ListRow key={x.key} data-testid="project-finished" className="border-border rounded-none border-t first:border-t-0" leading={<ProjectIcon name={x.name} />} title={x.name}
-              meta={<span className="flex flex-wrap items-center gap-x-2.5"><span>{x.category ?? t('comp.projects.category.other')}</span><span>{t('projects.finished.on', { date: new Date(x.at).toLocaleDateString(locale, { day: 'numeric', month: 'short' }) })}</span></span>}
+              meta={<span className="flex flex-wrap items-center gap-x-2.5"><span>{x.category ?? t('comp.projects.category.other')}</span><span>{t('projects.finished.on', { date: new Date(x.at).toLocaleDateString(locale, { day: 'numeric', month: 'short' }) })} · {plural(t, 'projects.tasks', tasks.filter((k) => k.project === x.name).length)}</span></span>}
               trailing={<Button size="xs" variant="outline" onClick={() => reopen(x)} data-testid="project-reopen">{t('projects.reopen')}</Button>} />
           ))}
         </ListCard>
@@ -190,7 +189,7 @@ function ProjectsList() {
           </DropdownMenuContent>
         </DropdownMenu>
       </PageHeader>
-      <PageBody className="md:pb-28">
+      <PageBody className="px-6 md:pb-28">
         <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4">
           <div className="toolbar flex flex-wrap items-center gap-1.5">
             <Segmented value={catNow} onChange={setCat} aria-label={t('projects.cat.label')} itemTestId={(v) => `projects-cat-${v}`}
@@ -213,12 +212,7 @@ function ProjectsList() {
                 : <Empty icon={FolderGit2} title={t('projects.empty.title')}>{app.home ? t('projects.empty.hint', { home: app.home }) : t('projects.empty.hintRemote')}</Empty>}
             </ListCard>
           )}
-          {finished.length ? <FinishedSection list={finished} onReopened={open} /> : null}
-          <div className="grid gap-3">
-            <div className="sec-h"><h2 className="font-(family-name:--title) text-card-title font-semibold">{t('projects.github')}</h2></div>
-            <GithubCard />
-            <ContributionGraph />
-          </div>
+          {finished.length ? <FinishedSection list={finished} tasks={tasks} onReopened={open} /> : null}
         </div>
       </PageBody>
     </>

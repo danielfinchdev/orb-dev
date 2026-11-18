@@ -85,8 +85,9 @@ export default {
   'tasks.retry': 'Reintentar',
   'tasks.continueNow': 'Continuar ahora',
   'tasks.retry.done': 'Añadida de nuevo a la cola',
-  'tasks.undo.title': 'Deshacer la tarea',
-  'tasks.undo.body': 'Se restauran los archivos modificados por esta tarea. Los cambios posteriores se conservan.',
+  'tasks.undo.title': 'Deshacer esta tarea',
+  'tasks.undo.body': 'Se devuelven los archivos a como estaban antes de #{id}. Los cambios posteriores se conservan.',
+  'tasks.undo.bodyPhoto': 'Se devuelven los archivos a como estaban antes de #{id} (foto previa {time}). Los cambios posteriores se conservan.',
   'tasks.undo.ok': 'Deshacer',
   'tasks.undo.btn': 'Deshacer esta tarea',
   'tasks.merge': 'Integrar rama',
@@ -254,5 +255,10 @@ export default {
   'tasks.changes.photo': 'Foto previa {time}',
   'tasks.changes.photoUndo': 'Foto previa {time} · se puede deshacer',
   'tasks.changes.ask': 'Pedir cambios',
-  'tasks.changes.askN': 'Pedir cambios ({n})'
+  'tasks.changes.askN': 'Pedir cambios ({n})',
+  'tasks.held.acceptTitle': 'Aceptar la tarea #{id}',
+  'tasks.held.acceptBody': '{title}\n\nLa guardia la retuvo: {why}\n\nAceptar da por buena la tarea tal como está. Para devolver los archivos a como estaban, usa «Deshacer esta tarea».',
+  'tasks.summary.approval': 'Espera tu aprobación antes de empezar. Hasta que decidas, el agente no toca nada.',
+  'tasks.summary.approvalWhy': 'Espera tu aprobación antes de empezar ({why}). Hasta que decidas, el agente no toca nada.',
+  'tasks.progress.steps': '{n} pasos hechos'
 };

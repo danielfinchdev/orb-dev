@@ -8,6 +8,7 @@ import { BarPause } from '@/components/conversation/bar.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { ProjectOpenMenu } from '@/components/project-tools.jsx';
+import { GithubCard, ContributionGraph } from '@/components/project-github.jsx';
 import { TaskStatus } from '@/components/task-state.jsx';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { finishFlow, deleteProjectFlow, renameFlow, unlinkFlow, commitFlow, publishFlow, pushFlow, chatHereFlow, changeIconFlow, clearIconFlow } from '@/components/project-flows.jsx';
@@ -61,12 +62,13 @@ function LogCard({ p, full }) {
   useEffect(() => { let alive = true; call('logs.read', { project: p.name }).then((r) => alive && setEntry(lastLogEntry(r))).catch(() => alive && setEntry(null)); return () => { alive = false; }; }, [p.name, version]);
   return (
     <PjCard icon={NotebookPen} title={t('projects.log.last')} data-testid="project-log-card"
-      aside={<Button variant="link" size="xs" onClick={() => go({ view: 'logs', name: p.name })} data-testid="project-log-open">{t('projects.log.open')}</Button>}>
+      aside={<Button variant="link" size="xs" className="text-info" onClick={() => go({ view: 'logs', name: p.name })} data-testid="project-log-open">{t('projects.log.open')}</Button>}>
       {entry === undefined ? <Spinner /> : !entry ? <p className="text-muted-foreground text-control">{t('projects.log.none')}</p> : (<>
         <p className="text-muted-foreground text-caption">{[entry.who, `${entry.date}${entry.time ? ` ${entry.time}` : ''}`].filter(Boolean).join(' · ')}</p>
         <b className="text-body font-medium">{entry.topic}</b>
         <p className={cn('text-control whitespace-pre-line', !full && 'line-clamp-6')}>{entry.body}</p>
       </>)}
+      <Actions><Button variant={full ? 'default' : 'outline'} onClick={() => go({ view: 'logs', name: p.name })} data-testid="project-log">{t('projects.log.view')}</Button></Actions>
     </PjCard>
   );
 }
@@ -89,7 +91,7 @@ function GitCard({ p, info, reload, expert }) {
         <div className="flex flex-wrap items-center gap-2 text-control"><span className="text-muted-foreground">{t('projects.branchLabel')}</span><code className={code}>{info.branch}</code>{info.ahead ? <span className="text-muted-foreground">{plural(t, 'projects.unpushed', info.ahead)}</span> : null}</div>
         {files.length ? (
           <FileList>
-            {files.slice(0, 5).map((f) => <FileRow key={f.path} icon={FILE_ICON[f.status] ?? FilePen} path={f.path} />)}
+            {files.slice(0, 5).map((f) => <FileRow key={f.path} icon={FILE_ICON[f.status] ?? FilePen} path={f.path} nums={f.add != null ? <Nums add={f.add} del={f.del} /> : null} />)}
             {files.length > 5 ? <div className="text-muted-foreground border-border border-t px-3 py-[9px] text-control">{t('projects.moreFiles', { n: files.length - 5 })}</div> : null}
           </FileList>
         ) : null}
@@ -200,6 +202,13 @@ function PrDetail({ p, pr: row, reload }) {
           {pr.files.slice(0, 6).map((f) => <FileRow key={f.path} path={f.path} nums={<Nums add={f.additions} del={f.deletions} />} />)}
           {pr.changedFiles > 6 ? <div className="text-muted-foreground border-border border-t px-3 py-[9px] text-control">{t('projects.moreFiles', { n: pr.changedFiles - 6 })}</div> : null}
         </FileList>
+        {pr.changedFiles ? <Button variant="link" size="xs" className="text-info w-fit px-0" onClick={() => bridge.openExternal(`${pr.url}/files`)} data-testid="project-pr-files">{t('projects.prs.allFiles', { n: pr.changedFiles })}</Button> : null}
+        <h4 className={cn(H3, 'mt-2')}>{t('projects.prs.thread')} <span className="text-faint-foreground text-caption font-normal">{pr.comments}</span></h4>
+        {(pr.thread ?? []).map((c, i) => (
+          <div key={i} className="border-border flex gap-2 border-t py-2 text-control first:border-t-0" data-testid="project-pr-thread">
+            <div className="min-w-0"><b className="font-medium">{c.author || '?'}</b>{c.at ? <span className="text-faint-foreground"> · {since(c.at, t)}</span> : null}<p className="whitespace-pre-line break-words">{c.body}</p></div>
+          </div>
+        ))}
         <div className="mt-2 flex gap-2">
           <Input className="flex-1" value={comment} onChange={(e) => setComment(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') send(); }} placeholder={t('projects.prs.commentPh')} aria-label={t('projects.prs.commentPh')} data-testid="project-pr-comment" />
           <NoRepoTip off={!repo} t={t}><Button disabled={busy || !repo || !comment.trim()} onClick={send}>{t('projects.prs.comment')}</Button></NoRepoTip>
@@ -234,7 +243,7 @@ function GitPanel({ p, info, reload }) {
             <ListCard>
               {prs.length ? prs.map((pr) => (
                 <ListRow key={pr.number} selected={current?.number === pr.number} onClick={() => setSel(pr.number)} className="border-border rounded-none border-t first:border-t-0" data-testid="project-pr-row"
-                  title={pr.title} meta={<span>#{pr.number} · <code className={code}>{pr.headRefName}</code></span>} trailing={pr.isDraft ? <Badge variant="secondary">{t('projects.prs.draft')}</Badge> : null} />
+                  title={pr.title} meta={<span>#{pr.number} · <code className={code}>{pr.headRefName}</code>{pr.createdAt ? ` · ${since(pr.createdAt, t)}` : ''}</span>} trailing={pr.isDraft ? <Badge variant="secondary">{t('projects.prs.draft')}</Badge> : null} />
               )) : <Empty icon={GitPullRequest} title={t('projects.prs.none')} />}
             </ListCard>
             <p className="text-faint-foreground text-caption">{t('projects.prs.source')}</p>
@@ -246,27 +255,28 @@ function GitPanel({ p, info, reload }) {
       <ListCard>
         {(info.branches ?? []).map((b) => {
           const pr = prs.find((x) => x.headRefName === b);
-          return <ListRow key={b} className="border-border rounded-none border-t first:border-t-0" leading={<GitBranch className="text-muted-foreground size-3.5" />} title={<span className="font-mono">{b}</span>} meta={b === info.branch ? t('projects.branch') : pr ? `PR #${pr.number}${pr.isDraft ? ` · ${t('projects.prs.draft')}` : ''}` : null} />;
+          return <ListRow key={b} className="border-border rounded-none border-t first:border-t-0" leading={<GitBranch className="text-muted-foreground size-3.5" />} title={<span className="font-mono">{b}</span>} meta={b === info.branch ? `${t('projects.branch')}${info.ahead ? ` ${plural(t, 'projects.unpushed', info.ahead)}` : ''}` : pr ? `PR #${pr.number}${pr.isDraft ? ` · ${t('projects.prs.draft')}` : ''}` : null} />;
         })}
       </ListCard>
     </div>
   );
 }
 
-function TaskRow({ x }) {
+// compact: the summary card's row, one line with the state at the end; the tab's row also names the agent and approves.
+function TaskRow({ x, compact = false }) {
   const t = useT();
   return (
-    <ListRow data-testid="project-task-row" className="border-border rounded-none border-t first:border-t-0" leading={<AgentIcon agent={x.agent} className="size-4" />}
-      title={`#${x.id} ${x.title}`} meta={AGENT[x.agent] ?? x.agent}
-      trailing={<><TaskStatus task={x} board />{x.status === 'awaiting_approval' && !x.held ? <div className="acts flex shrink-0 items-center gap-1.5"><Button size="xs" variant="outline" onClick={() => rejectTask(x)}>{t('tasks.reject')}</Button><Button size="xs" onClick={() => approveTask(x)}>{t('tasks.approve.ok')}</Button></div> : null}</>} />
+    <ListRow data-testid="project-task-row" className={cn('border-border rounded-none border-t first:border-t-0', compact && 'px-0 py-2')} leading={<AgentIcon agent={x.agent} className="size-4" />}
+      title={`#${x.id} ${x.title}`} meta={compact ? null : (AGENT[x.agent] ?? x.agent)}
+      trailing={<><TaskStatus task={x} board />{!compact && x.status === 'awaiting_approval' && !x.held ? <div className="acts flex shrink-0 items-center gap-1.5"><Button size="xs" variant="outline" onClick={() => rejectTask(x)}>{t('tasks.reject')}</Button><Button size="xs" onClick={() => approveTask(x)}>{t('tasks.approve.ok')}</Button></div> : null}</>} />
   );
 }
 
-function ChatRow({ x, assistant }) {
+function ChatRow({ x, assistant, compact = false }) {
   const t = useT();
   const pr = orbProgress(x, t, { assistant });
   return (
-    <ListRow data-testid="project-chat-row" className="border-border cursor-pointer rounded-none border-t first:border-t-0" onClick={() => openOrbItem(x)} leading={<AgentIcon agent={x.kind === 'session' ? x.agent : 'orb'} className="size-4" />}
+    <ListRow data-testid="project-chat-row" className={cn('border-border cursor-pointer rounded-none border-t first:border-t-0', compact && 'px-0 py-2')} onClick={() => openOrbItem(x)} leading={<AgentIcon agent={x.kind === 'session' ? x.agent : 'orb'} className="size-4" />}
       title={x.title} meta={<span className="inline-flex items-center gap-2">{pr?.text ? <span className="truncate">{pr.prefix ?? ''}{pr.text}</span> : null}</span>}
       trailing={pr?.badge ? <Badge variant="warning">{t('projects.chats.permission')}</Badge> : x.at ? <span className="text-faint-foreground text-caption">{since(x.at, t)}</span> : null} />
   );
@@ -321,17 +331,12 @@ export function ProjectPage({ p }) {
           <BubbleTip title={t('projects.moreOptions')}><DropdownMenuTrigger asChild><MoreButton label={t('projects.moreOptions')} data-testid="project-more" /></DropdownMenuTrigger></BubbleTip>
           <DropdownMenuContent align="end" className="w-72" data-testid="project-page-menu-list">
             <DropdownMenuItem onSelect={() => chatHereFlow(p)} data-testid="project-chat"><MessageSquarePlus />{t('projects.newChat')}</DropdownMenuItem>
-            {!p.active ? <DropdownMenuItem onSelect={() => act(call('projects.setActive', { name: p.name }), t('projects.setActive.done', { name: p.name }))} data-testid="project-set-active"><Pin />{t('projects.setActive')}</DropdownMenuItem> : null}
             <DropdownMenuItem className="items-start" disabled={Boolean(p.open)} onSelect={rename} data-testid="project-rename"><PencilLine /><span>{t('projects.renameItem')}{p.open ? <><br /><span className="text-muted-foreground text-caption">{t('projects.rename.busy')}</span></> : null}</span>{p.open ? null : <Kbd className="ml-auto">F2</Kbd>}</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => changeIconFlow(p, t)} data-testid="project-icon-change"><ImageIcon />{t('projects.icon.change')}</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <BubbleTip title={t('projects.review')} text={t('projects.reviewTip')} side="left"><DropdownMenuItem onSelect={() => askReview({ project: p.name })} data-testid="project-review"><ScanSearch />{t('projects.review')}</DropdownMenuItem></BubbleTip>
-            <BubbleTip title={t('projects.security')} text={t('projects.securityTip')} side="left"><DropdownMenuItem onSelect={() => askSecurityReview({ project: p.name })} data-testid="project-security"><ShieldCheck />{t('projects.security')}</DropdownMenuItem></BubbleTip>
-            <DropdownMenuItem onSelect={() => go({ view: 'logs', name: p.name })} data-testid="project-log"><NotebookPen />{t('projects.log')}</DropdownMenuItem>
-            <DropdownMenuSeparator />
             <DropdownMenuItem className="items-start" onSelect={() => finishFlow(p, t).then((done) => done && go('projects'))} data-testid="project-finish"><CircleCheckBig /><span>{t('projects.finish.title')}<br /><span className="text-muted-foreground text-caption">{t('projects.finish.hint')}</span></span></DropdownMenuItem>
             {p.inHome ? <DropdownMenuItem className="items-start" variant="destructive" onSelect={() => deleteProjectFlow(p, t).then((done) => done && go('projects'))} data-testid="project-delete"><Trash2 /><span>{t('projects.delete.item')}<br /><span className="text-muted-foreground text-caption">{t('projects.delete.hint')}</span></span></DropdownMenuItem>
-              : <DropdownMenuItem variant="destructive" onSelect={() => unlinkFlow(p, t)} data-testid="project-unlink"><Unlink />{t('projects.unlink.ok')}</DropdownMenuItem>}
+              : <DropdownMenuItem className="items-start" variant="destructive" onSelect={() => unlinkFlow(p, t)} data-testid="project-unlink"><Unlink /><span>{t('projects.unlink.ok')}<br /><span className="text-muted-foreground text-caption">{t('projects.unlink.hint')}</span></span></DropdownMenuItem>}
           </DropdownMenuContent>
         </DropdownMenu>
       </PageHeader>
@@ -348,33 +353,32 @@ export function ProjectPage({ p }) {
           {tab === 'resumen' ? (
             <div className="grid items-start gap-4 lg:grid-cols-2" data-testid="project-summary">
               <div className="flex min-w-0 flex-col gap-4">
-                {p.active || p.notes ? (
-                  <div className="flex flex-wrap items-center gap-2" data-testid="project-intro">
-                    {p.active ? <Badge><Pin />{t('projects.workProject')}</Badge> : null}
-                    {p.notes ? <p className="text-muted-foreground text-control min-w-0 flex-1">{p.notes}</p> : null}
-                  </div>
-                ) : null}
+                {p.notes ? <p className="text-muted-foreground text-control" data-testid="project-intro">{p.notes}</p> : null}
                 <GitCard p={p} info={info} reload={reload} expert={expert} />
                 <PrsCard p={p} info={info} reload={reload} onOpenGit={() => setTab('git')} />
                 <LogCard p={p} />
               </div>
               <div className="flex min-w-0 flex-col gap-4">
-                <PjCard icon={ClipboardCheck} title={t('projects.tasks.active')} aside={<Button variant="link" size="xs" onClick={() => go({ view: 'tasks', project: p.name })}>{t('projects.tasks.all')}</Button>}>
-                  {active.length ? <ListCard className="border-0">{active.slice(0, 3).map((x) => <TaskRow key={x.id} x={x} />)}</ListCard> : <p className="text-muted-foreground text-control">{t('projects.tasks.none')}</p>}
+                <PjCard icon={ClipboardCheck} title={t('projects.tasks.active')} aside={<Button variant="link" size="xs" className="text-info" onClick={() => go({ view: 'tasks', project: p.name })}>{t('projects.tasks.all')}</Button>}>
+                  {active.length ? <ListCard className="border-0">{active.slice(0, 3).map((x) => <TaskRow key={x.id} x={x} compact />)}</ListCard> : <p className="text-muted-foreground text-control">{t('projects.tasks.none')}</p>}
                   <p className="text-faint-foreground text-caption">{t('projects.tasks.week', { done: week.filter((x) => x.status === 'done' && !x.undone).length, undone: week.filter((x) => x.undone).length })}</p>
                   <Actions><Button variant="outline" onClick={() => go({ view: 'tasks', project: p.name })}><Plus />{t('projects.tasks.new')}</Button></Actions>
                 </PjCard>
-                <PjCard icon={MessagesSquare} title={t('projects.chats.recent')} aside={items.length > 4 ? <Button variant="link" size="xs" onClick={() => setTab('chats')}>{t('projects.chats.all', { n: items.length })}</Button> : null}>
-                  {items.length ? <ListCard className="border-0">{items.slice(0, 4).map((x) => <ChatRow key={x.key} x={x} assistant={assistant} />)}</ListCard> : <p className="text-muted-foreground text-control">{t('projects.chats.none')}</p>}
+                <PjCard icon={MessagesSquare} title={t('projects.chats.recent')} aside={items.length > 4 ? <Button variant="link" size="xs" className="text-info" onClick={() => setTab('chats')}>{t('projects.chats.all', { n: items.length })}</Button> : null}>
+                  {items.length ? <ListCard className="border-0">{items.slice(0, 4).map((x) => <ChatRow key={x.key} x={x} assistant={assistant} compact />)}</ListCard> : <p className="text-muted-foreground text-control">{t('projects.chats.none')}</p>}
                 </PjCard>
                 <PjCard icon={ImageIcon} title={t('projects.icon.title')}>
                   <div className="flex items-center gap-3">
-                    <ProjectIcon name={p.name} size={32} />
+                    <ProjectIcon name={p.name} size={48} big />
                     <div className="flex-1 text-control font-medium">{icon ? t('projects.icon.own') : t('projects.icon.dot')}</div>
                     {icon ? <Button variant="ghost" onClick={() => clearIconFlow(p, t)}>{t('projects.icon.clear')}</Button> : null}
                     <Button variant="outline" onClick={() => changeIconFlow(p, t)}>{t('projects.icon.change')}</Button>
                   </div>
                 </PjCard>
+                <Card className="gap-2 p-3.5" data-testid="project-work-card">
+                  <div className="flex items-center gap-2"><Pin className="size-4" /><div className="flex flex-1 flex-col gap-0.5"><b className="text-control font-medium">{t('projects.workProject')}</b><span className="text-muted-foreground text-caption">{t('projects.workHint', { assistant })}</span></div>
+                    {p.active ? <Badge variant="success">{t('projects.workNow')}</Badge> : <Button variant="outline" onClick={() => act(call('projects.setActive', { name: p.name }), t('projects.setActive.done', { name: p.name }))} data-testid="project-set-active">{t('projects.setActive')}</Button>}</div>
+                </Card>
                 {expert ? (
                   <Card className="gap-2 p-3.5">
                     <div className="flex items-center gap-2"><SquareTerminal className="size-4" /><div className="flex flex-1 flex-col gap-0.5"><b className="text-control font-medium">{t('projects.expert.title')}</b><span className="text-muted-foreground text-caption">{t('projects.expert.desc', { assistant })}</span></div>
@@ -395,15 +399,22 @@ export function ProjectPage({ p }) {
           {tab === 'tareas' ? (
             <div className="flex flex-col gap-3">
               <div>
-                <div className="sec-h flex items-center gap-2"><h2 className={H3}>{t('projects.tasks.active')}</h2><span className="text-faint-foreground text-caption">{active.length}</span><span className="grow" /><Button variant="link" size="xs" onClick={() => go({ view: 'tasks', project: p.name })}>{t('projects.tasks.all')}</Button></div>
+                <div className="sec-h flex items-center gap-2"><h2 className={H3}>{t('projects.tasks.active')}</h2><span className="text-faint-foreground text-caption">{active.length}</span><span className="grow" /><Button variant="link" size="xs" className="text-info" onClick={() => go({ view: 'tasks', project: p.name })}>{t('projects.tasks.all')}</Button></div>
                 <ListCard className="mt-1.5">{active.length ? active.map((x) => <TaskRow key={x.id} x={x} />) : <Empty icon={ClipboardCheck} title={t('projects.tasks.none')} />}</ListCard>
               </div>
               <p className="text-faint-foreground text-caption">{t('projects.tasks.week', { done: week.filter((x) => x.status === 'done' && !x.undone).length, undone: week.filter((x) => x.undone).length })}</p>
-              <div className="flex justify-end"><Button onClick={() => go({ view: 'tasks', project: p.name })}><Plus />{t('projects.tasks.new')}</Button></div>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <BubbleTip title={t('projects.review')} text={t('projects.reviewTip')}><Button variant="outline" onClick={() => askReview({ project: p.name })} data-testid="project-review"><ScanSearch />{t('projects.review')}</Button></BubbleTip>
+                <BubbleTip title={t('projects.security')} text={t('projects.securityTip')}><Button variant="outline" onClick={() => askSecurityReview({ project: p.name })} data-testid="project-security"><ShieldCheck />{t('projects.security')}</Button></BubbleTip>
+                <Button onClick={() => go({ view: 'tasks', project: p.name })}><Plus />{t('projects.tasks.new')}</Button>
+              </div>
             </div>
           ) : null}
 
-          {tab === 'git' ? <GitPanel p={p} info={info} reload={reload} /> : null}
+          {tab === 'git' ? (<>
+            <GitPanel p={p} info={info} reload={reload} />
+            <div className="grid gap-3"><GithubCard /><ContributionGraph /></div>
+          </>) : null}
           {tab === 'bitacora' ? <LogCard p={p} full /> : null}
 
           {tab === 'pizarra' ? (

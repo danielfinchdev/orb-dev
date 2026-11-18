@@ -85,8 +85,9 @@ export default {
   'tasks.retry': 'Retry',
   'tasks.continueNow': 'Continue now',
   'tasks.retry.done': 'Added back to the queue',
-  'tasks.undo.title': 'Undo task',
-  'tasks.undo.body': 'The files modified by this task will be restored. Later changes are kept.',
+  'tasks.undo.title': 'Undo this task',
+  'tasks.undo.body': 'The files go back to how they were before #{id}. Later changes are kept.',
+  'tasks.undo.bodyPhoto': 'The files go back to how they were before #{id} (snapshot {time}). Later changes are kept.',
   'tasks.undo.ok': 'Undo',
   'tasks.undo.btn': 'Undo this task',
   'tasks.merge': 'Merge branch',
@@ -254,5 +255,10 @@ export default {
   'tasks.changes.photo': 'Snapshot before {time}',
   'tasks.changes.photoUndo': 'Snapshot before {time} · can be undone',
   'tasks.changes.ask': 'Request changes',
-  'tasks.changes.askN': 'Request changes ({n})'
+  'tasks.changes.askN': 'Request changes ({n})',
+  'tasks.held.acceptTitle': 'Accept task #{id}',
+  'tasks.held.acceptBody': '{title}\n\nThe guard held it: {why}\n\nAccepting keeps the task as it is. To put the files back as they were, use «Undo this task».',
+  'tasks.summary.approval': 'Waiting for your approval before it starts. Until you decide, the agent changes nothing.',
+  'tasks.summary.approvalWhy': 'Waiting for your approval before it starts ({why}). Until you decide, the agent changes nothing.',
+  'tasks.progress.steps': '{n} steps done'
 };

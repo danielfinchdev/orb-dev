@@ -107,5 +107,7 @@ export default {
   'rules.resumed.ok': 'Rule resumed.',
   'rules.deleted.ok': 'Rule deleted.',
   'rules.restored.ok': 'Shipped rules restored.',
-  'rules.railSaved': 'Rail updated.'
+  'rules.railSaved': 'Rail updated.',
+  'rules.noSwitch': 'No switch',
+  'rules.fixedMeta': '{n} locked rails · no switch'
 };

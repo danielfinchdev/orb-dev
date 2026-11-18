@@ -107,5 +107,7 @@ export default {
   'rules.resumed.ok': 'Norma reanudada.',
   'rules.deleted.ok': 'Norma eliminada.',
   'rules.restored.ok': 'Normas de serie restauradas.',
-  'rules.railSaved': 'Raíl actualizado.'
+  'rules.railSaved': 'Raíl actualizado.',
+  'rules.noSwitch': 'Sin interruptor',
+  'rules.fixedMeta': '{n} raíles con candado · sin interruptor'
 };

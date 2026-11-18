@@ -3,11 +3,11 @@
 // The card draws nothing when there is none, or when the engine does not know the method.
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button.jsx';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/basic.jsx';
 import { ListRow } from '@/components/ui/primitives.jsx';
 import { call, bridge } from '@/lib/store.js';
 import { offerWorktreeRemoval } from '@/components/worktree-removal.jsx';
 import { useT } from '@/lib/i18n.js';
+import { Block, Panel } from './rows.jsx';
 import { notifyError } from '@/lib/notify.js';
 
 export function WorktreesCard() {
@@ -26,14 +26,13 @@ export function WorktreesCard() {
     load();
   };
   return (
-    <Card data-testid="worktrees-card">
-      <CardHeader><CardTitle>{t('wtcopies.title')}</CardTitle><CardDescription>{t('wtcopies.desc')}</CardDescription></CardHeader>
-      <CardContent className="grid gap-1">
+    <Block title={t('wtcopies.title')} note={t('wtcopies.desc')} data-testid="worktrees-card">
+      <Panel>
         {items.map((it) => (
-          <ListRow key={it.id} title={it.chat?.title ?? t('wtcopies.deleted', { project: it.project })} meta={`${it.branch} · ${it.chat ? t('wtcopies.archived') : t('wtcopies.deletedChat')} · ${it.path}`}
-            trailing={<Button size="sm" variant="outline" onClick={() => remove(it)} data-testid="worktree-remove">{t('wtcopies.remove')}</Button>} />
+          <ListRow key={it.id} className="border-border rounded-none not-first:border-t" title={it.chat?.title ?? t('wtcopies.deleted', { project: it.project })} meta={`${it.branch} · ${it.chat ? t('wtcopies.archived') : t('wtcopies.deletedChat')} · ${it.path}`}
+            trailing={<Button size="xs" variant="outline" onClick={() => remove(it)} data-testid="worktree-remove">{t('wtcopies.remove')}</Button>} />
         ))}
-      </CardContent>
-    </Card>
+      </Panel>
+    </Block>
   );
 }

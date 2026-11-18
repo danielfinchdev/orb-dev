@@ -1,9 +1,10 @@
 // Ajustes › Datos (the owner, on this PC): encrypted backups (every day at 03:00, or now), the recovery code that
 // opens them on another PC, restoring one, and moving this Orb to another PC. src/engine/api/data.mjs does the work.
 import { useEffect, useState } from 'react';
-import { HardDriveDownload, KeyRound, RotateCcw, LoaderCircle, ShieldCheck, TriangleAlert, Copy, FolderOpen, Archive, Trash2, FolderLock } from 'lucide-react';
+import { KeyRound, LoaderCircle, Copy, FolderOpen, Archive, Trash2, Upload, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge, Card, CardContent, CardHeader, CardTitle, CardFooter, Field, Input } from '@/components/ui/basic.jsx';
+import { Badge, Field, Input } from '@/components/ui/basic.jsx';
+import { ListRow } from '@/components/ui/primitives.jsx';
 import { form, confirm } from '@/components/dialogs.jsx';
 import { call, act, bridge, useStore, getState, setState, openSettings } from '@/lib/store.js';
 import { notify, notifyOk } from '@/lib/notify.js';
@@ -11,6 +12,7 @@ import { unlockCore } from '@/lib/core-access.js';
 import { MasterCard } from '@/views/master.jsx';
 import { TrashCard } from './settings/trash.jsx';
 import { WorktreesCard } from './settings/worktrees.jsx';
+import { Block, Panel, Setting } from './settings/rows.jsx';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
 import { AUTHOR } from '../../shared/product.mjs';
 import { quiet } from '@/lib/quiet.js';
@@ -40,6 +42,37 @@ export async function newRecoveryCode() {
   return r;
 }
 
+// The way back to the previous key (and back to the new one), after «Empezar con una clave nueva»; own call, so it shows even when the backups' status fails.
+function KeyCard() {
+  const t = useT();
+  const [st, setSt] = useState(null);
+  useEffect(() => { call('backup.status').then(setSt).catch(quiet); }, []);
+  if (!st?.previousKey) return null;
+  // The way back after «Empezar con una clave nueva» ('anterior'), and back to the new key after that ('nueva').
+  const way = st.previousKey === 'nueva' ? 'datos.newKey' : 'datos.previousKey';
+  const previousKey = async () => {
+    const body = <>{t(`${way}Body`)} <button type="button" className="text-primary-text cursor-pointer underline-offset-2 hover:underline" onClick={() => act(bridge.openExternal(KEY_DOCS))} data-testid="previous-key-more">{t('datos.moreInfo')}</button></>;
+    if (!(await confirm(t(`${way}Title`), body, { ok: t(`${way}Use`), danger: true }))) return;
+    const unlock = await unlockCore('previousKey');
+    if (!unlock) return;
+    if (await act(call('backup.previousKey', { unlock }))) notifyOk(t(`${way}Ready`), { ms: 15000 });
+  };
+  return (
+    <>
+      {/* after «Empezar con una clave nueva», Windows opens the key from before again: the way back (and
+          the way back to the new key after that). */}
+        <Block title={t('datos.keyTitle')} note={t('datos.keyDesc')}>
+          <Panel>
+            <Setting label={t(`${way}Name`)} hint={t(way)} data-testid="previous-key">
+              <Button size="sm" variant="outline" onClick={previousKey} data-testid="previous-key-use"><Undo2 />{t(`${way}Use`)}</Button>
+            </Setting>
+          </Panel>
+        </Block>
+    </>
+  );
+}
+
+
 function BackupsCard() {
   const t = useT();
   const locale = useLocale();
@@ -63,15 +96,6 @@ function BackupsCard() {
     });
     if (r) notifyOk(t('datos.restoreReady'), { ms: 10000 });
   };
-  // The way back after «Empezar con una clave nueva» ('anterior'), and back to the new key after that ('nueva').
-  const way = st.previousKey === 'nueva' ? 'datos.newKey' : 'datos.previousKey';
-  const previousKey = async () => {
-    const body = <>{t(`${way}Body`)} <button type="button" className="text-primary-text cursor-pointer underline-offset-2 hover:underline" onClick={() => act(bridge.openExternal(KEY_DOCS))} data-testid="previous-key-more">{t('datos.moreInfo')}</button></>;
-    if (!(await confirm(t(`${way}Title`), body, { ok: t(`${way}Use`), danger: true }))) return;
-    const unlock = await unlockCore('previousKey');
-    if (!unlock) return;
-    if (await act(call('backup.previousKey', { unlock }))) notifyOk(t(`${way}Ready`), { ms: 15000 });
-  };
   // where the copies go: outside Orb's folder by default; another folder (never inside core) or back to the default.
   const setFolder = async (folder) => { const unlock = await unlockCore('backupFolder'); if (!unlock) return; if (await act(call('config.save', { patch: { backup: { folder } }, unlock }), t('datos.folderChanged'))) load(); };
   const pickFolder = async () => { const f = await bridge.pickFolder?.(t('datos.pickFolder')); if (f) setFolder(f); };
@@ -80,45 +104,39 @@ function BackupsCard() {
     const file = Array.isArray(files) ? files[0] : files;
     if (file) restore({ name: file, created: null });
   };
+  const lastLine = st.last ? (st.last.ok ? t('datos.lastOk', { when: when(st.last.at) }) : t('datos.lastFailed', { when: when(st.last.at), error: st.last.error ?? '' })) : t('datos.none');
   return (
-    <Card data-testid="backups-card">
-      <CardHeader className="flex-row items-start gap-3"><HardDriveDownload className="text-primary-text mt-0.5 size-5 shrink-0" /><CardTitle className="mt-1">{t('datos.backupsTitle')}</CardTitle></CardHeader>
-      <CardContent className="grid gap-3">
-        <div className="text-muted-foreground grid gap-1 text-xs">
-          <span>{t('datos.folder')}: <span className="text-foreground font-mono break-all" data-testid="backup-folder">{st.folder}</span></span>
-          {!st.custom ? <span>{t('datos.folderOutside')}</span> : null}
-          <span data-testid="backup-last">{st.last ? (st.last.ok ? t('datos.lastOk', { when: when(st.last.at) }) : t('datos.lastFailed', { when: when(st.last.at), error: st.last.error ?? '' })) : t('datos.none')}</span>
-          {!st.recovery ? <span className="text-warning-ink flex items-center gap-1"><TriangleAlert className="size-3.5" />{t('datos.noCode')}</span> : <span className="flex items-center gap-1"><ShieldCheck className="text-success size-3.5" />{t('datos.withCode')}</span>}
-        </div>
-        {/* after «Empezar con una clave nueva», Windows opens the key from before again: the way back (and
-            the way back to the new key after that). */}
-        {st.previousKey ? (
-          <div className="grid gap-2 rounded-lg border px-3 py-2.5 text-control" data-testid="previous-key">
-            <span>{t(way)}</span>
-            <Button size="sm" variant="outline" className="w-fit" onClick={previousKey} data-testid="previous-key-use"><KeyRound />{t(`${way}Use`)}</Button>
-          </div>
-        ) : null}
-        {list.length ? (
-          <div className="grid gap-1.5" data-testid="backup-list">
-            {list.slice(0, 8).map((b) => (
-              <div key={b.name} className="flex items-center gap-2 rounded-lg border px-3 py-1.5 text-control">
-                <span className="min-w-0 flex-1 truncate">{when(b.created)}</span>
-                <Badge variant="outline" className="font-normal">{t(`datos.kind.${['daily', 'manual', 'preupdate', 'premigration', 'move'].includes(b.kind) ? b.kind : 'other'}`)}</Badge>
-                <span className="text-muted-foreground text-xs tabular-nums">{size(b.size)}</span>
-                {b.damaged ? <Badge variant="destructive">{t('datos.damaged')}</Badge> : <Button size="xs" variant="ghost" onClick={() => restore(b)}><RotateCcw />{t('datos.restore')}</Button>}
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </CardContent>
-      <CardFooter className="flex-wrap">
-        <Button size="sm" onClick={now} disabled={busy || st.running} data-testid="backup-now">{busy || st.running ? <LoaderCircle className="animate-spin" /> : <HardDriveDownload />}{t('datos.now')}</Button>
-        <Button size="sm" variant="outline" onClick={async () => { if (await newRecoveryCode()) load(); }} data-testid="backup-code"><KeyRound />{st.recovery ? t('datos.codeAgain') : t('datos.codeMake')}</Button>
-        {bridge.pickFiles ? <Button size="sm" variant="ghost" onClick={pickFile}><FolderOpen />{t('datos.restoreFile')}</Button> : null}
-        {bridge.pickFolder ? <Button size="sm" variant="ghost" onClick={pickFolder} data-testid="backup-folder-change"><FolderOpen />{t('datos.folderChange')}</Button> : null}
-        {st.custom ? <Button size="sm" variant="ghost" onClick={() => setFolder('')}><RotateCcw />{t('datos.folderDefault')}</Button> : null}
-      </CardFooter>
-    </Card>
+    <>
+      <Block title={t('datos.backupsTitle')} note={<><span data-testid="backup-last">{lastLine}</span>{!st.custom ? ` ${t('datos.folderOutside')}` : ''}</>} data-testid="backups-card">
+        <Panel>
+          <Setting label={<span className="break-all" data-testid="backup-folder">{st.folder}</span>} hint={<Badge variant="info">{t('datos.folder')}</Badge>}>
+            {st.custom ? <Button size="sm" variant="outline" onClick={() => setFolder('')}>{t('datos.folderDefault')}</Button> : null}
+            {bridge.pickFolder ? <Button size="sm" variant="outline" onClick={pickFolder} data-testid="backup-folder-change">{t('datos.folderChange')}</Button> : null}
+          </Setting>
+          <Setting label={t('datos.codeLabel')} hint={!st.recovery ? <span className="text-warning-ink">{t('datos.noCode')}</span> : t('datos.withCode')}>
+            <Button size="sm" variant="outline" onClick={async () => { if (await newRecoveryCode()) load(); }} data-testid="backup-code"><KeyRound />{st.recovery ? t('datos.codeAgain') : t('datos.codeMake')}</Button>
+          </Setting>
+          {list.length ? (
+            <div className="border-border border-t" data-testid="backup-list">
+              {list.slice(0, 8).map((b) => (
+                <ListRow key={b.name} className="border-border rounded-none not-first:border-t" title={when(b.created)}
+                  meta={`${t(`datos.kind.${['daily', 'manual', 'preupdate', 'premigration', 'move'].includes(b.kind) ? b.kind : 'other'}`)} · ${b.damaged ? '—' : size(b.size)}`}
+                  trailing={(
+                    <div className="flex items-center gap-1.5">
+                      {b.damaged ? <Badge variant="destructive">{t('datos.damaged')}</Badge> : null}
+                      <Button size="xs" variant="outline" disabled={b.damaged} onClick={() => restore(b)}>{t('datos.restore')}</Button>
+                    </div>
+                  )} />
+              ))}
+            </div>
+          ) : null}
+        </Panel>
+      </Block>
+      <div className="flex flex-wrap justify-end gap-2">
+        {bridge.pickFiles ? <Button size="sm" variant="outline" onClick={pickFile}><Upload />{t('datos.restoreFile')}</Button> : null}
+        <Button size="sm" onClick={now} disabled={busy || st.running} data-testid="backup-now">{busy || st.running ? <LoaderCircle className="animate-spin" /> : <Archive />}{t('datos.now')}</Button>
+      </div>
+    </>
   );
 }
 
@@ -139,15 +157,13 @@ function LegacyCard() {
     setBusy(true); const r = await act(call('legacy.delete', { unlock }), t('datos.legacyDeleted')); setBusy(false); if (r) load();
   };
   return (
-    <Card data-testid="legacy-card">
-      <CardHeader className="flex-row items-start gap-3"><Archive className="text-primary-text mt-0.5 size-5 shrink-0" /><CardTitle className="mt-1">{t('datos.legacyTitle')}</CardTitle></CardHeader>
-      <CardContent className="grid gap-1.5">
-        {local > 0 && <p className="text-muted-foreground text-xs">{t('datos.legacyDesc', { size: size(st.bytes) })}</p>}
-        {st.oldBackups > 0 && <p className="text-muted-foreground text-xs" data-testid="legacy-backups">{t('datos.legacyBackups', { n: st.oldBackups })}</p>}
-        <p className="text-warning-ink text-xs" data-testid="legacy-keys">{t('datos.legacyKeys')}</p>
-      </CardContent>
-      {local > 0 && <CardFooter><Button size="sm" variant="destructive" onClick={remove} disabled={busy} data-testid="legacy-delete">{busy ? <LoaderCircle className="animate-spin" /> : <Trash2 />}{t('datos.legacyDelete')}</Button></CardFooter>}
-    </Card>
+    <Block title={t('datos.legacyTitle')} note={local > 0 ? t('datos.legacyDesc', { size: size(st.bytes) }) : null} data-testid="legacy-card">
+      <Panel>
+        <Setting label={st.oldBackups > 0 ? <span data-testid="legacy-backups">{t('datos.legacyBackups', { n: st.oldBackups })}</span> : t('datos.legacyTitle')} hint={<span className="text-warning-ink" data-testid="legacy-keys">{t('datos.legacyKeys')}</span>}>
+          {local > 0 && <Button size="sm" variant="danger" onClick={remove} disabled={busy} data-testid="legacy-delete">{busy ? <LoaderCircle className="animate-spin" /> : <Trash2 />}{t('datos.legacyDelete')}</Button>}
+        </Setting>
+      </Panel>
+    </Block>
   );
 }
 
@@ -159,15 +175,17 @@ function CoreCard() {
   if (!dir || !bridge.openPath) return null;
   const open = async () => { const unlock = await unlockCore('open'); if (unlock) act(bridge.openPath(dir, unlock)); };
   return (
-    <Card data-testid="core-card">
-      <CardHeader className="flex-row items-start gap-3"><FolderLock className="text-primary-text mt-0.5 size-5 shrink-0" /><CardTitle className="mt-1">{t('datos.coreTitle')}</CardTitle></CardHeader>
-      <CardContent className="grid gap-1 text-xs"><p className="text-muted-foreground">{t('datos.coreDesc')}</p><span className="font-mono break-all">{dir}</span></CardContent>
-      <CardFooter><Button size="sm" variant="outline" onClick={open} data-testid="core-open"><FolderOpen />{t('datos.coreOpen')}</Button></CardFooter>
-    </Card>
+    <Block title={t('datos.coreTitle')} note={t('datos.coreDesc')} data-testid="core-card">
+      <Panel>
+        <Setting label={<span className="break-all">{dir}</span>} hint={t('datos.coreHint')}>
+          <Button size="sm" variant="outline" onClick={open} data-testid="core-open"><FolderOpen />{t('datos.coreOpen')}</Button>
+        </Setting>
+      </Panel>
+    </Block>
   );
 }
 
-export function DataCards() { return <><MasterCard /><BackupsCard /><TrashCard /><WorktreesCard /><CoreCard /><LegacyCard /></>; }
+export function DataCards() { return <><MasterCard /><KeyCard /><LegacyCard /><BackupsCard /><TrashCard /><WorktreesCard /><CoreCard /></>; }
 
 // backups are on from the first day, sealed with this PC's key. A few days later, once, a quiet suggestion to make
 // the recovery code (Ajustes › Datos), so a copy also opens on another PC. Never on a phone.

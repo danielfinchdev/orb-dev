@@ -57,5 +57,20 @@ export default {
   'logbooks.reportPrivacy': 'Before copying, the keys and tokens that are recognised are hidden. Nothing leaves this PC: what you copy is ready to paste to an agent or into an issue.',
   'logbooks.reportCancel': 'Cancel',
   'logbooks.reportCopy': 'Copy {n} lines',
-  'logbooks.reportCopied': 'Copied'
+  'logbooks.reportCopied': 'Copied',
+  'logbooks.metaLogs': '{n} logs · read only',
+  'logbooks.metaActivity': '{n} events on screen',
+  'logbooks.metaRulesN': '{rules} rules · {rails} rails',
+  'logbooks.refresh': 'Refresh',
+  'logbooks.searchAll': 'Search all logs',
+  'logbooks.noHits': 'No log mentions it.',
+  'logbooks.entriesCount': '{n} entries · append only: they are not edited or deleted',
+  'logbooks.intro': 'Only Orb writes it. It is its journal: you read it here, you do not edit it. Agents read it when they start in {name}, so it holds no keys or personal data.',
+  'logbooks.introGeneral': 'Only Orb writes it. It is its journal: you read it here, you do not edit it. Agents read it when they start, so it holds no keys or personal data.',
+  'logbooks.today': 'today',
+  'logbooks.yesterday': 'yesterday',
+  'logbooks.preamble': 'Index and rules at the top of the file',
+  'logbooks.all': 'All',
+  'logbooks.noEntriesYet': 'There are no entries in this log yet.',
+  'logbooks.markShort': 'Mark to copy'
 };

@@ -232,5 +232,11 @@ export default {
   'projects.expert.open': 'Abrir',
   'projects.board.title': 'Pizarra de {name}',
   'projects.board.desc': 'Dibuja, escribe y adjunta lo que {assistant} debe saber. Se guarda en la carpeta pizarra del proyecto.',
-  'projects.board.open': 'Abrir la pizarra'
+  'projects.board.open': 'Abrir la pizarra',
+  'projects.log.view': 'Ver la bitácora',
+  'projects.workHint': '{assistant} trabaja en este proyecto cuando no dices otro.',
+  'projects.workNow': 'Ahora',
+  'projects.unlink.hint': 'Solo deja de aparecer en Orb; la carpeta se conserva.',
+  'projects.prs.allFiles': 'Ver los {n} archivos y el diff',
+  'projects.prs.thread': 'Conversación'
 };

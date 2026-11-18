@@ -592,8 +592,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
       {terminal && fullPc() ? <TerminalPanel dir={terminalDir} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
       <Composer draft={box} onSend={send} onStop={id != null ? () => act(call('chat.stop', { conversation: id })) : undefined} busy={chat.busy} disabled={sending} testid="chat-input"
         placeholder={chat.busy ? t('chat.placeholderBusy', { name }) : orchestrate ? t('chat.placeholder', { name }) : t('chat.placeholderDirect', { agent: AGENT[brain.agent] ?? brain.agent })}
-        top={<>
-          {/* in God mode a new conversation takes the project chosen at the top of God mode. */}
+        above={<>
+          {/* the row over the box (project and «Compactar»), outside it like under an agent's chat. In God mode a new conversation takes the project chosen at the top of God mode. */}
           {inProject && id == null ? null : fullPc() ? <ProjectChip conversation={id} /> : <ProjectPicker conversation={id} />}
           {/* on the PC «Compactar · 62 %» is always on the right (disabled, with its reason, until it applies); elsewhere it only appears when the context fills up. */}
           <ContextSlot className="ml-auto" items={[

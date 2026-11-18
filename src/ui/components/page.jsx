@@ -83,5 +83,5 @@ export function BackButton({ to, label }) {
 
 // The scrolling body under a PageHeader. `column`: one centred column for a list.
 export function PageBody({ className, column = false, children, ...props }) {
-  return <div className={cn('min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 py-5', className)} {...props}>{column ? <div className="mx-auto w-full max-w-3xl">{children}</div> : children}</div>;
+  return <div className={cn('min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-6 py-5', className)} {...props}>{column ? <div className="mx-auto w-full max-w-3xl">{children}</div> : children}</div>;
 }

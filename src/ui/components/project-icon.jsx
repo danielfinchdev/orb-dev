@@ -22,18 +22,19 @@ export function projectGradient(name) {
   return `linear-gradient(${ang}deg,hsl(${a} 95% 58%),hsl(${b} 90% 52%))`;
 }
 
+// `big` is the mock-up's .pj.xl: the same circle at 48 px, for the icon card of a project's page (with a picture, `size`).
 // A project without a picture is always a small dot (10 px; 8 px with `small` or a `size` of 14 or less, as in headers),
 // never a big ball. A bigger `size` only reserves that much room around the dot, so the layout of the caller holds.
 // With a picture, `size` is the picture's size (the .project-icon rule of app.css is not a utility, so a size class
 // would not win over it).
-export function ProjectIcon({ name, className, size, small = false }) {
+export function ProjectIcon({ name, className, size, small = false, big = false }) {
   const icon = useStore((s) => s.projectIcons?.[name] ?? null);
   if (!name) return null;
   if (icon) {
     const dims = size ? { width: size, height: size, borderRadius: Math.round(size * 0.3) } : undefined;
     return <img src={icon} alt="" aria-hidden="true" draggable={false} className={cn('project-icon is-image', className)} style={dims} />;
   }
-  const px = small || (size && size <= 14) ? 8 : 10;
-  const dot = <span className={cn('pj', !(size > 16) && className)} data-project={name} aria-hidden="true" style={{ width: px, height: px, background: projectGradient(name) }} />;
-  return size > 16 ? <span className={cn('inline-grid shrink-0 place-items-center', className)} style={{ width: size, height: size }} aria-hidden="true">{dot}</span> : dot;
+  const px = big ? 48 : small || (size && size <= 14) ? 8 : 10;
+  const dot = <span className={cn('pj', (big || !(size > 16)) && className)} data-project={name} aria-hidden="true" style={{ width: px, height: px, background: projectGradient(name) }} />;
+  return size > 16 && !big ? <span className={cn('inline-grid shrink-0 place-items-center', className)} style={{ width: size, height: size }} aria-hidden="true">{dot}</span> : dot;
 }

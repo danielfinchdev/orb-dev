@@ -12,7 +12,7 @@ import { confirm, form } from '@/components/dialogs.jsx';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { TaskChanges, ChangesSummary, ChangesFiles, ChangesMeta, DiffStat, useDiffStat, useTaskDiff } from '@/components/task-changes.jsx';
 import { useComments } from '@/lib/turn-comments.js';
-import { HeldCard, PausedNote, TaskStatus, waitText, setQueuePaused, acceptHeld, undoHeld } from '@/components/task-state.jsx';
+import { HeldCard, PausedNote, TaskStatus, waitText, setQueuePaused, acceptHeld, undoHeld, undoBody } from '@/components/task-state.jsx';
 import { ChatPanel } from '@/components/chat-panel.jsx';
 import { NotificationBell } from '@/components/notification-center.jsx';
 import { BarPause } from '@/components/conversation/bar.jsx';
@@ -106,7 +106,7 @@ function taskActions(task, tr) {
     accept: () => act(call('tasks.accept', { id: t.id }), tr('tasks.accepted')),
     launch: async () => { const r = await act(call('tasks.launchAnyway', { id: t.id })); if (r) notifyOk(tr(r.paused ? 'tasks.launchAnyway.paused' : 'tasks.launchAnyway.done')); },
     retry: () => act(call('tasks.retry', { id: t.id }), tr('tasks.retry.done')),
-    undo: async () => { if (await confirm(tr('tasks.undo.title'), tr('tasks.undo.body'), { ok: tr('tasks.undo.ok'), danger: true })) await act(call('tasks.undo', { id: t.id })); },
+    undo: async () => { if (await confirm(tr('tasks.undo.title'), undoBody(tr, t), { ok: tr('tasks.undo.ok'), danger: true })) await act(call('tasks.undo', { id: t.id })); },
     merge: async () => { if (await confirm(tr('tasks.merge'), tr('tasks.merge.body', { branch: t.branch }), { ok: tr('tasks.merge.ok'), danger: true })) await act(call('projects.merge', { name: t.project, branch: t.branch }), tr('tasks.merge.done')); },
     discard: async () => { if (await confirm(tr('tasks.discard'), tr('tasks.discard.body', { branch: t.branch }), { ok: tr('tasks.discard.ok'), danger: true })) await act(call('tasks.discardBranch', { id: t.id }), tr('tasks.discard.done')); },
     cancel: async () => { if (await confirm(tr('tasks.cancel.title'), t.status === 'running' ? tr('tasks.cancel.running') : tr('tasks.cancel.ask'), { ok: tr('tasks.cancel.title'), cancel: tr('tasks.cancel.back'), danger: true })) await act(call('tasks.cancel', { id: t.id }), tr('tasks.cancel.done')); }
@@ -340,6 +340,8 @@ function TaskPanelDetail({ t, live, diff, onChanges }) {
         <TaskStatus status={t.status} undone={Boolean(t.undone)} task={t} board />
       </div>
       <div className="by text-muted-foreground mt-1 flex items-center gap-1.5 text-control"><ProjectIcon name={t.project} small />{tr('tasks.byLine', { id: t.id, project: t.project })}</div>
+      {/* the summary in prose comes first; the buttons follow it (the mock-up's order) */}
+      {approval && !t.held ? <p className="text-muted-foreground m-0 mt-2.5 text-control" data-testid="task-summary">{t.sensitivity.length ? tr('tasks.summary.approvalWhy', { why: t.sensitivity.map((x) => SENSITIVE[x] ?? x).join(', ') }) : tr('tasks.summary.approval')}</p> : null}
 
       {t.held ? (
         <Note tone="warning" icon={ShieldAlert} className="my-2.5" data-testid="task-held">{t.held.folder ? tr('tasks.held.line', { reasons: t.held.reasons, folder: t.held.folder }) : tr('tasks.held.lineNoFolder', { reasons: t.held.reasons })}</Note>
@@ -469,8 +471,10 @@ function RowActions({ t, onOpen, busy, run }) {
       </DropdownMenu>
     );
   }
+  // «Aceptar» of a held task asks first, with the reason the guard held it (acceptHeld).
   if (t.held) return (<>
     <Button size="xs" variant="outline" disabled={busy} onClick={run(() => undoHeld(tr, t))} data-testid="task-row-undo">{tr('tasks.undo.btn')}</Button>
+    <Button size="xs" disabled={busy} onClick={run(() => acceptHeld(tr, t))} data-testid="task-row-accept">{tr('tasks.held.accept')}</Button>
   </>);
   if (t.status === 'awaiting_approval') return (<>
     <Button size="xs" variant="outline" disabled={busy} onClick={run(() => rejectTask(t))} data-testid="task-row-reject">{tr('tasks.reject')}</Button>
@@ -480,7 +484,10 @@ function RowActions({ t, onOpen, busy, run }) {
   if (t.status === 'queued') return <Button size="xs" variant="outline" onClick={a.launch} data-testid="task-row-launch">{tr('tasks.launchAnyway')}</Button>;
   // A rejected task or one that needs approval is retried from its panel, never from the list.
   if (canRetryFromRow(t)) return <Button size="xs" disabled={busy} onClick={run(a.retry)} data-testid="task-row-retry"><RotateCw />{t.status === 'limited' ? tr('tasks.continueNow') : tr('tasks.retry')}</Button>;
-  if (t.status === 'done' && !t.review_of) return <Button size="xs" variant="outline" onClick={() => askReview({ task: t })} data-testid="task-row-review">{tr('tasks.reviewTask')}</Button>;
+  if (t.status === 'done' && (!t.review_of || !t.accepted)) return (<>
+    {!t.review_of ? <Button size="xs" variant="outline" onClick={() => askReview({ task: t })} data-testid="task-row-review">{tr('tasks.reviewTask')}</Button> : null}
+    {!t.accepted ? <Button size="xs" disabled={busy} onClick={run(a.accept)} data-testid="task-row-accept-result">{tr('tasks.giveOk')}</Button> : null}
+  </>);
   return null;
 }
 
@@ -491,10 +498,15 @@ function TaskRow({ t, live, selected, onOpen, busy, run, reviewer }) {
   // «+120 −18»: only for work that waits for its OK or is finished, read in light mode (tasks.diff {stat}) once the row is on screen.
   const [stat, statRef] = useDiffStat(t, (t.status === 'done' || t.status === 'awaiting_approval') && !t.held && !t.undone && !t.review_of);
   const why = t.status === 'queued' && t.waiting ? { icon: Clock, text: waitText(tr, t) } : t.held ? { icon: ShieldAlert, text: tr('tasks.held.short', { reasons: t.held.reasons }) } : null;
+  // The bar is the accent colour at full strength, 84 px wide, with no text: the percentage or the steps done are its tooltip.
+  const quiet = live?.quietMin >= 5;
   const progress = t.status === 'running' && live ? (
-    <div className="prog flex shrink-0 items-center gap-2">
-      <ProgressBar percent={live.percent} quiet={live.quietMin >= 5} className="w-[84px]" />
-      <span className="text-muted-foreground shrink-0 text-micro tabular-nums">{live.percent != null ? `${live.percent} %` : tr('tasks.steps', { n: live.steps })}</span>
+    <div className="prog shrink-0" title={live.percent != null ? `${live.percent} %` : tr('tasks.progress.steps', { n: live.steps })}>
+      <div className="bg-muted relative h-1.5 w-[84px] overflow-hidden rounded-full" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={live.percent ?? undefined}>
+        {live.percent != null
+          ? <div className={cn('h-full rounded-full transition-[width] duration-700', quiet ? 'bg-warning' : 'bg-primary-text')} style={{ width: `${Math.max(3, live.percent)}%` }} />
+          : <div className={cn('absolute inset-y-0 left-0 w-1/3 rounded-full animate-[orb-indeterminate_1.6s_ease-in-out_infinite]', quiet ? 'bg-warning' : 'bg-primary-text')} />}
+      </div>
     </div>
   ) : null;
   return (
@@ -510,7 +522,7 @@ function TaskRow({ t, live, selected, onOpen, busy, run, reviewer }) {
           {t.branch ? <span className="inline-flex items-center gap-1"><GitBranch className="size-3.5" />{t.branch}</span> : null}
           <span ref={statRef} aria-hidden="true" className="-mr-2.5 size-px" />
           <DiffStat stat={stat} />
-          {why ? <span className="text-warning-ink inline-flex items-center gap-1"><why.icon className="size-3.5" />{why.text}</span> : null}
+          {why ? <span className="text-warning-ink inline-flex max-w-full min-w-0 items-center gap-1"><why.icon className="size-3.5 shrink-0" /><span className="truncate">{why.text}</span></span> : null}
         </span>
       )}
       trailing={<>
@@ -591,7 +603,7 @@ function TasksPc({ route }) {
   const tabs = [{ value: 'info', icon: Info, label: tr('tasks.panel.detail'), testid: 'task-panel-tab-detail' }, ...(diff ? [{ value: 'changes', icon: FileDiff, label: tr('tasks.panel.changes'), testid: 'task-panel-tab-changes' }] : [])];
 
   return (
-    <div className="flex min-h-0 flex-1">
+    <div className="flex min-h-0 min-w-0 flex-1">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <PageHeader title={route.project ? tr('tasks.titleProject', { project: route.project }) : tr('nav.tasks')} meta={tr('tasks.sub', { total: tasks.length, shown: rows.length, waiting: tasks.filter(needsApproval).length })}>
           {route.project ? <Button size="sm" variant="ghost" onClick={() => go('tasks')}><X />{tr('tasks.allProjects')}</Button> : null}
@@ -609,7 +621,7 @@ function TasksPc({ route }) {
           <div className="grid gap-3.5">
             <QueueCard tasks={all} />
             <div className="toolbar flex flex-wrap items-center gap-1.5">
-              <Tabs value={filter} onValueChange={setFilter}>
+              <Tabs value={filter} onValueChange={setFilter} className="max-w-full min-w-0 overflow-x-auto">
                 <TabsList data-testid="task-filters">{PC_FILTERS.map(([key, label, fn]) => { const n = narrowed.filter(fn).length; return <TabsTrigger key={key} value={key}>{tr(label)}{key !== 'todas' ? <span className="n text-micro text-faint-foreground tabular-nums">{n}</span> : null}</TabsTrigger>; })}</TabsList>
               </Tabs>
               {/* One group: it sits beside the tabs when there is room and otherwise takes the next line whole; the search is what gives way. */}

@@ -232,5 +232,11 @@ export default {
   'projects.expert.open': 'Open',
   'projects.board.title': '{name} whiteboard',
   'projects.board.desc': 'Draw, write and attach what {assistant} should know. It is saved in the project\'s whiteboard folder.',
-  'projects.board.open': 'Open the whiteboard'
+  'projects.board.open': 'Open the whiteboard',
+  'projects.log.view': 'View the logbook',
+  'projects.workHint': '{assistant} works on this project when you name no other.',
+  'projects.workNow': 'Now',
+  'projects.unlink.hint': 'It only stops showing in Orb; the folder stays.',
+  'projects.prs.allFiles': 'See all {n} files and the diff',
+  'projects.prs.thread': 'Conversation'
 };

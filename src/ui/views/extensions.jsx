@@ -6,17 +6,19 @@
 // that lists every file that will be turned on (the quarantine's copy, src/domain/extensions/extensions.mjs) and opens its folder.
 import { useEffect, useState } from 'react';
 import { notify, notifyError, notifyInfo, notifyOk, notifyProgress } from '@/lib/notify.js';
-import { Check, Download, FolderOpen, KeyRound, PencilLine, Plus, Puzzle, Server, Trash2, Upload, X } from 'lucide-react';
+import { Check, FolderOpen, KeyRound, PencilLine, Plus, Puzzle, Server, Trash2, Upload, X } from 'lucide-react';
 import { confirm, choose, form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input } from '@/components/ui/basic.jsx';
+import { Badge, Field, Input } from '@/components/ui/basic.jsx';
 import { Switch, BubbleTip, Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
 import { useStore, call, act, bridge, getState } from '@/lib/store.js';
 import { t, useT } from '@/lib/i18n.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { connectorKeys } from './master.jsx';
 import { CATEGORIES } from '../../shared/layout.mjs';
-import { MoreButton } from '@/components/ui/primitives.jsx';
+import { MoreButton, ListRow } from '@/components/ui/primitives.jsx';
+import { cn } from '@/lib/utils.js';
+import { Block, Panel, Setting, Stack, Hint } from './settings/rows.jsx';
 
 // Where one came from, in a word (orb.json › source).
 const SOURCE = { orb: 'ext.source.orb', importado: 'ext.source.imported', creado: 'ext.source.created', usuario: 'ext.source.user' };
@@ -48,95 +50,91 @@ export function ExtensionsPanel() {
   };
   const open = (dir) => act(bridge.openPath(dir));
   return (
-    <div className="grid gap-4" data-testid="extensions">
+    <div className="grid gap-4 [&>*]:min-w-0" data-testid="extensions">
       {data.pending.length ? <PendingCard list={data.pending} run={run} /> : null}
-      <Card>
-        <CardHeader className="flex-row items-start justify-between gap-3">
-          <div><CardTitle>{t('ext.title')}</CardTitle><CardDescription>{t('ext.desc')}</CardDescription><CardDescription className="mt-1">{t('ext.help')}</CardDescription></div>
-          <Button size="sm" onClick={() => importFlow(run)} data-testid="ext-import"><Download />{t('ext.import')}</Button>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          <Group title={t('ext.skills')} icon={Puzzle} dir={data.dirs.skills} onOpen={open} empty={t('ext.noSkills')}>
-            {data.skills.map((s) => (
-              <Row key={s.name} item={s} testid={`ext-skill-${s.name}`} detail={s.linked ? t('ext.linked') : s.valid ? s.description : t('ext.invalidSkill')}
-                note={s.asks?.tools || s.asks?.hooks ? t('ext.asksNote') : null}
-                on={s.enabled} disabled={(!s.valid || s.linked) && !s.enabled} onToggle={(v) => toggle('skill', s.name, v)}
-                menu={[{ icon: FolderOpen, label: t('ext.openFolder'), run: () => open(s.dir) }, null, { icon: Trash2, label: t('ext.remove'), danger: true, run: () => remove('skill', s.name), testid: 'ext-remove' }]} />
-            ))}
-          </Group>
-          <Group title={t('ext.servers')} icon={Server} dir={data.dirs.mcp} onOpen={open} empty={t('ext.noServers')}>
-            {data.mcp.map((s) => (
-              <Row key={s.name} item={s} testid={`ext-mcp-${s.name}`} detail={s.linked ? t('ext.linked') : s.description || (s.startable ? `${s.command} ${s.args.map((a) => a.split(/[\\/]/).pop()).join(' ')}` : t('ext.noStart'))}
-                on={s.enabled} disabled={!s.startable && !s.enabled} onToggle={(v) => toggle('mcp', s.name, v, s)}
-                extra={s.editing ? <Badge variant="outline" data-testid="ext-editing">{t('ext.editing')}</Badge> : null}
-                keys={s.connector ? { name: s.connector } : null}
-                menu={[
-                  { icon: FolderOpen, label: t('ext.openFolder'), run: () => open(s.dir) },
-                  s.editing ? { icon: Upload, label: t('ext.apply'), run: () => applyFlow(s.name, run), testid: 'ext-apply' } : { icon: PencilLine, label: t('ext.edit'), run: () => editFlow(s.name, run), testid: 'ext-edit' },
-                  null, { icon: Trash2, label: t('ext.remove'), danger: true, run: () => remove('mcp', s.name), testid: 'ext-remove' }]} />
-            ))}
-          </Group>
-          {data.connectors.length ? (
-            <Group title={t('ext.connectors')} hint={t('ext.connectorsHint')}>
-              {data.connectors.map((s) => (
-                <Row key={s.name} item={s} testid={`ext-connector-${s.name}`} detail={`${s.command} ${s.args.join(' ')}`} mono
-                  on={s.enabled} onToggle={(v) => toggle('connector', s.name, v)} keys={{ name: s.name }}
-                  menu={[{ icon: Trash2, label: t('ext.remove'), danger: true, run: () => remove('connector', s.name), testid: 'ext-remove' }]} />
-              ))}
-            </Group>
-          ) : null}
-          {data.projects.length ? (
-            <Group title={t('ext.projects')} hint={t('ext.projectsHint')}>
-              {data.projects.map((p) => (
-                <div key={p.dir} className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-dashed px-3 py-2" data-testid="ext-project">
-                  <div className="min-w-0 flex-1"><div className="text-sm">{p.name}{p.editOf ? <span className="text-muted-foreground"> · {t('ext.copyOf', { name: p.editOf })}</span> : null}</div><div className="text-muted-foreground truncate font-mono text-xs">{p.dir}</div></div>
-                  {p.connector ? <span className="text-muted-foreground text-xs">{t('ext.inUse', { name: p.connector })}</span>
-                    : <Button size="sm" variant="outline" onClick={() => connectProject(p, run)}><Plus />{t('ext.use')}</Button>}
-                  {p.editOf ? null : <Button size="sm" variant="outline" onClick={() => adoptFlow(p, run)} data-testid="ext-adopt">{t('ext.moveToCore')}</Button>}
+      <Hint>{t('ext.help')}</Hint>
+      <Group title={t('ext.skills')} note={t('ext.skillsHint')} dir={data.dirs.skills} onOpen={open} empty={t('ext.noSkills')} count={data.skills.length}>
+        {data.skills.map((s) => (
+          <Row key={s.name} item={s} testid={`ext-skill-${s.name}`} detail={s.linked ? t('ext.linked') : s.valid ? s.description : t('ext.invalidSkill')}
+            note={s.asks?.tools || s.asks?.hooks ? t('ext.asksNote') : null}
+            on={s.enabled} disabled={(!s.valid || s.linked) && !s.enabled} onToggle={(v) => toggle('skill', s.name, v)}
+            menu={[{ icon: FolderOpen, label: t('ext.openFolder'), run: () => open(s.dir) }, null, { icon: Trash2, label: t('ext.remove'), danger: true, run: () => remove('skill', s.name), testid: 'ext-remove' }]} />
+        ))}
+      </Group>
+      <div className="flex justify-end"><Button size="sm" variant="outline" onClick={() => importFlow(run)} data-testid="ext-import"><Upload />{t('ext.import')}</Button></div>
+      <Group title={t('ext.servers')} note={t('ext.serversHint')} dir={data.dirs.mcp} onOpen={open} empty={t('ext.noServers')} count={data.mcp.length}>
+        {data.mcp.map((s) => (
+          <Row key={s.name} item={s} testid={`ext-mcp-${s.name}`} detail={s.linked ? t('ext.linked') : s.description || (s.startable ? `${s.command} ${s.args.map((a) => a.split(/[\\/]/).pop()).join(' ')}` : t('ext.noStart'))}
+            on={s.enabled} disabled={!s.startable && !s.enabled} onToggle={(v) => toggle('mcp', s.name, v, s)}
+            extra={s.editing ? <Badge variant="outline" data-testid="ext-editing">{t('ext.editing')}</Badge> : null}
+            keys={s.connector ? { name: s.connector } : null}
+            menu={[
+              { icon: FolderOpen, label: t('ext.openFolder'), run: () => open(s.dir) },
+              s.editing ? { icon: Upload, label: t('ext.apply'), run: () => applyFlow(s.name, run), testid: 'ext-apply' } : { icon: PencilLine, label: t('ext.edit'), run: () => editFlow(s.name, run), testid: 'ext-edit' },
+              null, { icon: Trash2, label: t('ext.remove'), danger: true, run: () => remove('mcp', s.name), testid: 'ext-remove' }]} />
+        ))}
+      </Group>
+      {data.connectors.length ? (
+        <Group title={t('ext.connectors')} note={t('ext.connectorsHint')} count={data.connectors.length}>
+          {data.connectors.map((s) => (
+            <Row key={s.name} item={s} testid={`ext-connector-${s.name}`} detail={`${s.command} ${s.args.join(' ')}`} mono
+              on={s.enabled} onToggle={(v) => toggle('connector', s.name, v)} keys={{ name: s.name }}
+              menu={[{ icon: Trash2, label: t('ext.remove'), danger: true, run: () => remove('connector', s.name), testid: 'ext-remove' }]} />
+          ))}
+        </Group>
+      ) : null}
+      <Block title={t('settings.mcpAddTitle')} note={t('settings.mcpAddDesc')}>
+        <Panel><Setting label={t('ext.addConnector')}><Button size="sm" variant="outline" onClick={() => addConnector(run)}><Plus />{t('ext.addConnector')}</Button></Setting></Panel>
+      </Block>
+      {data.projects.length ? (
+        <Group title={t('ext.projects')} note={t('ext.projectsHint')} count={data.projects.length}>
+          {data.projects.map((p) => (
+            <ListRow key={p.dir} className="border-border rounded-none not-first:border-t" data-testid="ext-project" title={<>{p.name}{p.editOf ? <span className="text-muted-foreground font-normal"> · {t('ext.copyOf', { name: p.editOf })}</span> : null}</>} meta={<span className="font-mono">{p.dir}</span>}
+              trailing={(
+                <div className="flex items-center gap-1.5">
+                  {p.connector ? <span className="text-muted-foreground text-caption">{t('ext.inUse', { name: p.connector })}</span>
+                    : <Button size="xs" variant="outline" onClick={() => connectProject(p, run)}><Plus />{t('ext.use')}</Button>}
+                  {p.editOf ? null : <Button size="xs" variant="outline" onClick={() => adoptFlow(p, run)} data-testid="ext-adopt">{t('ext.moveToCore')}</Button>}
                 </div>
-              ))}
-            </Group>
-          ) : null}
-        </CardContent>
-        <CardFooter><Button size="sm" variant="outline" onClick={() => addConnector(run)}><Plus />{t('ext.addConnector')}</Button></CardFooter>
-      </Card>
+              )} />
+          ))}
+        </Group>
+      ) : null}
     </div>
   );
 }
 
-function Group({ title, hint, icon: Icon, dir, onOpen, empty, children }) {
+function Group({ title, note, count, dir, onOpen, empty, children }) {
   const t = useT();
   const rows = [children].flat().filter(Boolean);
   return (
-    <div className="grid min-w-0 gap-2">
-      <div className="flex min-w-0 items-center gap-2">
-        {Icon ? <Icon className="text-muted-foreground size-4 shrink-0" /> : null}
-        <div className="min-w-0 flex-1"><div className="text-sm font-medium">{title}</div>{hint ? <div className="text-muted-foreground text-xs">{hint}</div> : null}</div>
-        {dir ? <BubbleTip title={t('ext.openFolder')}><Button size="icon-sm" variant="ghost" onClick={() => onOpen(dir)} aria-label={t('ext.openFolder')}><FolderOpen /></Button></BubbleTip> : null}
-      </div>
-      {rows.length ? rows : <p className="text-muted-foreground text-sm">{empty}</p>}
-    </div>
+    <Block title={title} count={count} note={note}
+      actions={dir ? <BubbleTip title={t('ext.openFolder')}><Button size="icon-xs" variant="ghost" onClick={() => onOpen(dir)} aria-label={t('ext.openFolder')}><FolderOpen /></Button></BubbleTip> : null}>
+      <Panel>{rows.length ? rows : <Stack><Hint>{empty}</Hint></Stack>}</Panel>
+    </Block>
   );
 }
 
 function Row({ item, detail, note = null, mono = false, on, disabled = false, onToggle, keys = null, extra = null, menu = [], testid }) {
   const t = useT();
   return (
-    <div className="flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2" data-testid={testid}>
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm"><span className="truncate">{item.name}</span><Badge variant="outline" className="text-micro">{sourceLabel(item.source)}</Badge>{extra}</div>
-        <div className={`text-muted-foreground line-clamp-2 text-xs ${mono ? 'truncate font-mono' : ''}`}>{detail}</div>
-        {note ? <div className="text-warning-ink text-xs" data-testid="ext-note">{note}</div> : null}
-      </div>
-      <Switch checked={on} disabled={disabled} onCheckedChange={onToggle} aria-label={t('ext.toggle', { name: item.name })} data-testid="ext-toggle" />
-      {keys ? <BubbleTip title={t('master.keys')}><Button variant="ghost" size="icon-sm" aria-label={t('master.keys')} onClick={() => connectorKeys(keys)} data-testid="mcp-keys"><KeyRound /></Button></BubbleTip> : null}
-      <DropdownMenu modal={false}>
-        <DropdownMenuTrigger asChild><MoreButton label={t('ext.more', { name: item.name })} data-testid="ext-menu" /></DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          {menu.map((m, i) => (m ? <DropdownMenuItem key={m.label} variant={m.danger ? 'destructive' : undefined} onSelect={m.run} data-testid={m.testid}><m.icon />{m.label}</DropdownMenuItem> : <DropdownMenuSeparator key={`s${i}`} />))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
+    <ListRow className="border-border rounded-none not-first:border-t" data-testid={testid}
+      title={<code className="font-mono text-body">{item.name}</code>}
+      meta={<><span className={cn(mono && 'font-mono')}>{detail}</span>{note ? <span className="text-warning-ink ml-2" data-testid="ext-note">{note}</span> : null}</>}
+      trailing={(
+        <div className="flex items-center gap-1.5">
+          {extra}
+          <Badge variant="secondary">{sourceLabel(item.source)}</Badge>
+          <Switch checked={on} disabled={disabled} onCheckedChange={onToggle} aria-label={t('ext.toggle', { name: item.name })} data-testid="ext-toggle" />
+          {keys ? <BubbleTip title={t('master.keys')}><Button variant="ghost" size="icon-xs" aria-label={t('master.keys')} onClick={() => connectorKeys(keys)} data-testid="mcp-keys"><KeyRound /></Button></BubbleTip> : null}
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild><MoreButton label={t('ext.more', { name: item.name })} data-testid="ext-menu" /></DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              {menu.map((m, i) => (m ? <DropdownMenuItem key={m.label} variant={m.danger ? 'destructive' : undefined} onSelect={m.run} data-testid={m.testid}><m.icon />{m.label}</DropdownMenuItem> : <DropdownMenuSeparator key={`s${i}`} />))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )} />
   );
 }
 
@@ -144,23 +142,22 @@ function Row({ item, detail, note = null, mono = false, on, disabled = false, on
 function PendingCard({ list, run }) {
   const t = useT();
   return (
-    <Card className="border-warning/50" data-testid="ext-pending">
-      <CardHeader><CardTitle>{t('ext.pending')}</CardTitle><CardDescription>{t('ext.pendingDesc')}</CardDescription></CardHeader>
-      <CardContent className="grid gap-2">
+    <Block title={t('ext.pending')} count={list.length} note={t('ext.pendingDesc')} data-testid="ext-pending">
+      <Panel>
         {list.map((r) => (
-          <div key={r.id} className="grid gap-1.5 rounded-lg border px-3 py-2">
-            <div className="text-sm">{t(r.kind === 'skill' ? 'ext.kindSkill' : 'ext.kindMcp')} «{r.name}»{r.status === 'asking' ? ` · ${t('ext.wantsEdit')}` : r.update ? ` · ${t('ext.newVersion')}` : ''} <span className="text-muted-foreground">· {r.by?.agent ?? ''}</span></div>
-            <div className="text-muted-foreground text-xs">{r.description}</div>
+          <Stack key={r.id} className="border-border gap-1.5 not-first:border-t">
+            <div className="text-control font-medium">{t(r.kind === 'skill' ? 'ext.kindSkill' : 'ext.kindMcp')} «{r.name}»{r.status === 'asking' ? ` · ${t('ext.wantsEdit')}` : r.update ? ` · ${t('ext.newVersion')}` : ''} <span className="text-muted-foreground font-normal">· {r.by?.agent ?? ''}</span></div>
+            <div className="text-muted-foreground text-caption">{r.description}</div>
             {r.status === 'asking' ? null : <FileList files={r.files} total={r.total} />}
             <div className="flex flex-wrap gap-2">
               <Button size="xs" onClick={() => answerRequest(r, true, run)} data-testid="ext-approve"><Check />{t(r.status === 'asking' ? 'ext.allow' : 'ext.activate')}</Button>
               {r.dir ? <Button size="xs" variant="outline" onClick={() => act(bridge.openPath(r.dir))}><FolderOpen />{t('ext.openFolder')}</Button> : null}
               <Button size="xs" variant="outline" onClick={() => answerRequest(r, false, run)} data-testid="ext-reject"><X />{t('ext.discard')}</Button>
             </div>
-          </div>
+          </Stack>
         ))}
-      </CardContent>
-    </Card>
+      </Panel>
+    </Block>
   );
 }
 

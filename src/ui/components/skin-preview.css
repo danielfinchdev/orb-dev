@@ -4,10 +4,10 @@
    chat» button, a chosen menu item and three lines), the top bar with the window's buttons, the assistant's message, the
    user's bubble and the message box, over the theme's backdrop (--p-scene), its decorations and a light frost (--p-frost),
    as in the real screens. One gentle bob of the decorations, off with reduced motion or «Animaciones» off. */
-.skp { --p-r: 5px; position: relative; display: block; height: 88px; overflow: hidden; border-radius: 8px; isolation: isolate; contain: content;
+.skp { --p-r: 5px; position: relative; display: block; height: 88px; overflow: clip; border-radius: 8px; isolation: isolate; contain: content;
   background: var(--p-bg); color: var(--p-fg); font-family: var(--p-font); font-size: 7px; line-height: 1; font-weight: 500; text-align: left; letter-spacing: 0; text-transform: none; text-shadow: none; -webkit-text-stroke: 0; }
 .skp > *, .skp-scene > *, .skp-main > * { position: absolute; }
-.skp-scene { inset: 0; z-index: 0; background: var(--p-scene, none); }
+.skp-scene { inset: 0; overflow: clip; z-index: 0; background: var(--p-scene, none); }
 .skp-frost { inset: 0; background: var(--p-frost, none); }
 .skp .night { display: none; }
 .dark .skp .night { display: block; }

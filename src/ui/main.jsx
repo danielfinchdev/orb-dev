@@ -679,20 +679,63 @@ function AppLink() {
   );
 }
 
+// Where the notices sit on the PC, worked out from what is on screen: bottom right of the content column (left of an open side
+// panel) and, when a text box is there, over it and the row above it («Compactar»), never over its send button.
+// Without a box they sit in the page's bottom padding, which a list leaves free once it is scrolled to its end.
+const TOAST_GAP = 24;
+function useToastInsets() {
+  const [ins, setIns] = useState({ bottom: TOAST_GAP, right: TOAST_GAP });
+  useEffect(() => {
+    // a phone keeps its notices at the top: nothing to measure there
+    if (phoneLayout()) return undefined;
+    let frame = 0;
+    const seen = new Set();
+    const resizes = new ResizeObserver(() => schedule());
+    const WATCHED = '.composer-dock, [data-testid="chat-panel"]';
+    const measure = () => {
+      frame = 0;
+      // a box or panel that left the page is let go, or the observer would keep its whole view alive
+      for (const el of seen) if (!el.isConnected) { resizes.unobserve(el); seen.delete(el); }
+      // boxes and panels come and go with the views: watch each as it appears, and its size from then on
+      for (const el of document.querySelectorAll(WATCHED)) if (!seen.has(el)) { seen.add(el); resizes.observe(el); }
+      const shown = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? r : null; };
+      // with two conversations side by side the one nearest the right edge is where the notice lands
+      const docks = [...document.querySelectorAll('.composer-dock')].map(shown).filter(Boolean).sort((a, b) => b.right - a.right);
+      const panel = [...document.querySelectorAll('[data-testid="chat-panel"][data-state="open"]')].map(shown).find(Boolean);
+      const next = {
+        bottom: docks[0] ? Math.max(TOAST_GAP, Math.round(innerHeight - docks[0].top + 8)) : TOAST_GAP,
+        right: panel && panel.left < innerWidth ? Math.round(innerWidth - panel.left + TOAST_GAP) : TOAST_GAP
+      };
+      setIns((old) => (old.bottom === next.bottom && old.right === next.right ? old : next));
+    };
+    function schedule() { if (!frame) frame = requestAnimationFrame(measure); }
+    // Only a box or a panel coming or going moves the notices (their size is the ResizeObserver's): an agent writing its
+    // answer changes the page many times a second and must not cost a measure each time.
+    const touches = (nodes) => { for (const n of nodes) if (n.nodeType === 1 && (n.matches(WATCHED) || n.querySelector(WATCHED))) return true; return false; };
+    const mutations = new MutationObserver((list) => { if (list.some((m) => touches(m.addedNodes) || touches(m.removedNodes))) schedule(); });
+    mutations.observe(document.body, { childList: true, subtree: true });
+    addEventListener('resize', schedule);
+    schedule();
+    return () => { cancelAnimationFrame(frame); mutations.disconnect(); resizes.disconnect(); removeEventListener('resize', schedule); };
+  }, []);
+  return ins;
+}
+
 // the notifications follow the app's day / night (not the system's): more of them now that the notices pass by here.
 function ThemedToaster() {
+  const insets = useToastInsets();
   const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
   useEffect(() => {
     const obs = new MutationObserver(() => setDark(document.documentElement.classList.contains('dark')));
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => obs.disconnect();
   }, []);
-  // On the PC they sit at the bottom right, above the chat's text box and clear of the top bar's and the filters' controls
+  // On the PC they sit at the bottom right (useToastInsets), clear of the top bar's and the filters' controls
   // (the robot of the Orb theme keeps its own corner lower down); drawn as the mock-up's .pop (themes/pieces.css › .orb-toast),
   // the tone shown by its icon. One on screen at a time (the newest); the others are under the bell of the top bar.
   // On a phone they stay at the top, below the status bar as well (edge to edge, the page starts under it).
   const phone = phoneLayout();
-  return <Toaster position={phone ? 'top-center' : 'bottom-right'} offset={phone ? 72 : { bottom: 112, right: 24 }} mobileOffset={{ top: 'calc(env(safe-area-inset-top, 0px) + 64px)' }} visibleToasts={1} theme={dark ? 'dark' : 'light'} closeButton toastOptions={{ className: 'font-sans orb-toast' }} />;
+  return <Toaster position={phone ? 'top-center' : 'bottom-right'} offset={phone ? 72 : insets} mobileOffset={{ top: 'calc(env(safe-area-inset-top, 0px) + 64px)' }} visibleToasts={1} theme={dark ? 'dark' : 'light'} closeButton toastOptions={{ className: 'font-sans orb-toast' }} />;
 }
 
 applyTheme();

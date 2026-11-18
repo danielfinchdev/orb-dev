@@ -18,7 +18,8 @@ import { Select, Switch, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownM
 import { MoreButton, IconButton, ListCard, ListRow, Segmented, SectionLabel } from '@/components/ui/primitives.jsx';
 import { notifyError, notifyOk } from '@/lib/notify.js';
 import { useStore, call, act, go, getState, bridge, fullPc, refresh } from '@/lib/store.js';
-import { AGENT } from '@/lib/labels.js';
+import { AGENT, PERMISSION } from '@/lib/labels.js';
+import { modelsOf } from '@/components/brain-picker.jsx';
 import { canRetryFromRow } from './tasks.jsx';
 import { ago, cn } from '@/lib/utils.js';
 import { t, useT, currentLocale } from '@/lib/i18n.js';
@@ -30,13 +31,39 @@ const DAYS = [1, 2, 3, 4, 5, 6, 0];
 const when = (iso) => (iso ? new Date(iso).toLocaleString(currentLocale(), { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
 const dayName = (d) => new Date(2024, 0, 7 + d).toLocaleDateString(currentLocale(), { weekday: 'long' });
 
-// One line saying what the chosen frequency means, as the dialog's summary.
+// The zone the engine reads the wall time in: the owner's (Ajustes' tz) or, without one, this PC's.
+const PC_ZONE = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; } };
+function zoneName() {
+  const z = getState().app?.config?.tz;
+  try { if (z) { new Intl.DateTimeFormat(undefined, { timeZone: z }); return z; } } catch { /* an invalid zone: the engine falls back to the PC's */ }
+  return PC_ZONE();
+}
+const clock = (hhmm) => { const [h, m] = String(hhmm || '09:00').split(':'); return `${Number(h)}:${m ?? '00'}`; };
+const dayDate = (d) => { const text = d.toLocaleDateString(currentLocale(), { weekday: 'long', day: 'numeric', month: 'long' }); return currentLocale().startsWith('es') ? text.replace(',', '') : text; };
+
+// The next run of what the dialog describes, worked out in this PC's zone (the one the engine uses unless Ajustes sets another).
+function nextOccurrence(v, from = new Date()) {
+  const [h, m] = String(v.at_time || '09:00').split(':').map(Number);
+  if (v.every === 'once') { const d = v.at_date ? new Date(v.at_date) : null; return d && d > from ? d : null; }
+  if (v.every === 'hourly') { const d = new Date(from); d.setMinutes(0, 0, 0); d.setHours(d.getHours() + 1); return d; }
+  if (v.every === 'every_hours') return new Date(from.getTime() + (Number(v.hours) || 6) * 3_600_000);
+  const days = v.every === 'weekly' ? (v.weekdays.length ? v.weekdays : [1]) : DAYS;
+  for (let i = 0; i < 8; i++) { const d = new Date(from); d.setDate(d.getDate() + i); d.setHours(h, m, 0, 0); if (d > from && days.includes(d.getDay())) return d; }
+  return null;
+}
+
+// What the chosen frequency means, as the dialog's summary: «Cada lunes a las 9:00 (Europe/Madrid). Próxima: lunes 16 de noviembre.»
 function summary(v) {
-  if (v.every === 'once') return t('schedules.sum.once', { when: v.at_date ? new Date(v.at_date).toLocaleString(currentLocale(), { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '—' });
+  const tz = zoneName();
+  if (v.every === 'once') return t('schedules.sum.once', { when: v.at_date ? new Date(v.at_date).toLocaleString(currentLocale(), { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '—', tz });
   if (v.every === 'hourly') return t('schedules.sum.hourly');
   if (v.every === 'every_hours') return t('schedules.sum.hours', { n: Number(v.hours) || 6 });
-  if (v.every === 'daily') return t('schedules.sum.daily', { time: v.at_time });
-  return t('schedules.sum.weekly', { days: (v.weekdays.length ? DAYS.filter((d) => v.weekdays.includes(d)) : [1]).map(dayName).join(', '), time: v.at_time });
+  // the next run is worked out in this PC's zone: with another zone set in Ajustes it is left out rather than guessed
+  const next = tz === PC_ZONE() ? nextOccurrence(v) : null;
+  const tail = next ? t('schedules.sum.next', { when: dayDate(next) }) : '';
+  if (v.every === 'daily') return t('schedules.sum.daily', { time: clock(v.at_time), tz }) + tail;
+  const names = (v.weekdays.length ? DAYS.filter((d) => v.weekdays.includes(d)) : [1]).map(dayName);
+  return t('schedules.sum.weekly', { days: typeof Intl.ListFormat === 'function' ? new Intl.ListFormat(currentLocale(), { style: 'long', type: 'conjunction' }).format(names) : names.join(', '), time: clock(v.at_time), tz }) + tail;
 }
 
 // A setting of the dialog: its text on the left, its switch on the right; the whole row is the switch's label.
@@ -55,15 +82,24 @@ async function newSchedule(preset = {}) {
   if (!list.length) { notifyError(t('schedules.noProject')); return null; }
   // only the agents this PC can run (the engine refuses a schedule for another one).
   const agents = app?.agentsAvailable ?? Object.keys(app?.config?.agents ?? {});
+  // the agent and its model in one list: «Claude Code · Sonnet 5.5»; the value is «agent» or «agent::model» (split again on create).
+  const catalog = await call('models.catalog').catch(() => []);
+  const brains = [{ value: 'any', label: t('schedules.anyQuota') }, ...agents.flatMap((a) => {
+    const icon = <AgentIcon agent={a} className="size-3.5" />;
+    const own = modelsOf(catalog.find((c) => c.id === a), null).filter((m) => m.id);
+    // the agent alone comes first: its model is then Orb's choice at each run (a schedule is not tied to one model for good)
+    return [{ value: a, label: AGENT[a] ?? a, icon }, ...own.map((m) => ({ value: `${a}::${m.id}`, label: `${AGENT[a] ?? a} · ${m.label}`, icon }))];
+  })];
+  const mode = app?.config?.permissions?.mode === 'preguntar' ? 'editar' : 'auto';
   return form(t('schedules.new.title'), {
-    initial: { project: preset.project ?? app?.activeProject?.name ?? list[0].name, title: '', description: '', agent: 'any', every: 'weekly', at_time: '09:00', weekdays: [1], hours: 6, readonly: false, at_date: tomorrowAt9(), same_chat: false },
+    initial: { project: preset.project ?? app?.activeProject?.name ?? list[0].name, title: '', description: '', brain: 'any', every: 'weekly', at_time: '09:00', weekdays: [1], hours: 6, readonly: false, at_date: tomorrowAt9(), same_chat: false },
     wide: true,
     body: (v, set) => (<>
       <Field label={t('schedules.titleField')}><Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={120} placeholder={t('schedules.titlePh')} /></Field>
       <Field label={t('schedules.what')} hint={t('schedules.whatNote', { assistant: app?.config?.assistantName })}><Textarea rows={4} value={v.description} onChange={(e) => set({ description: e.target.value })} placeholder={t('schedules.whatHint')} /></Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label={t('schedules.project')}><Select className="w-full" value={v.project} onValueChange={(project) => set({ project })} options={list.map((p) => ({ value: p.name, label: p.name, icon: <ProjectIcon name={p.name} small /> }))} /></Field>
-        <Field label={t('schedules.agent')}><Select className="w-full" value={v.agent} onValueChange={(agent) => set({ agent })} options={[{ value: 'any', label: t('schedules.anyQuota') }, ...agents.map((a) => ({ value: a, label: AGENT[a] ?? a, icon: <AgentIcon agent={a} className="size-3.5" /> }))]} /></Field>
+        <Field label={t('schedules.agentModel')}><Select className="w-full" value={v.brain} onValueChange={(brain) => set({ brain })} options={brains} data-testid="schedule-brain" /></Field>
       </div>
       <Field label={t('schedules.frequency')}><Segmented className="self-start" aria-label={t('schedules.frequency')} value={v.every} onChange={(every) => set({ every })} options={EVERY.map((value) => ({ value, label: t(`schedules.every.${value}`) }))} /></Field>
       {v.every === 'weekly' ? (
@@ -76,16 +112,23 @@ async function newSchedule(preset = {}) {
           {v.every === 'every_hours' ? <Field label={t('schedules.everyHours')}><Input type="number" min={1} max={168} value={v.hours} onChange={(e) => set({ hours: e.target.value })} /></Field>
             : v.every === 'once' ? <Field label={t('schedules.dateTime')}><Input type="datetime-local" value={v.at_date} onChange={(e) => set({ at_date: e.target.value })} data-testid="schedule-at-date" /></Field>
               : <Field label={t('schedules.time')}><Input type="time" value={v.at_time} onChange={(e) => set({ at_time: e.target.value })} /></Field>}
+          {/* the engine reads the wall time in one zone (Ajustes' or this PC's): it is shown, not chosen */}
+          {v.every === 'every_hours' ? null : <Field label={t('schedules.tz')} hint={t('schedules.tzHint')}><Input value={zoneName()} readOnly disabled data-testid="schedule-tz" /></Field>}
         </div>
       )}
       <div className="bg-primary-soft text-primary-text flex items-center gap-2 rounded-card px-2.5 py-2 text-control" data-testid="schedule-summary"><CalendarClock className="size-3.5 shrink-0" />{summary(v)}</div>
       <ListCard>
         <SwitchRow label={t('schedules.readonlyLab')} hint={t('schedules.readonlyHint')} checked={v.readonly} onChange={(c) => set({ readonly: c === true })} />
+        {/* the level of permissions of the runs is Orb's own (Ajustes): shown here, changed there */}
+        <div className="border-border flex items-center gap-3 border-t px-3.5 py-3" data-testid="schedule-permissions">
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5"><b className="text-control font-medium">{t('schedules.perm')}</b><span className="text-muted-foreground text-caption">{t('schedules.permHint')}</span></span>
+          <Badge variant="secondary">{PERMISSION[mode]}</Badge>
+        </div>
         {v.every === 'once' ? null : <SwitchRow label={t('schedules.sameChat')} hint={t('schedules.sameChatHint')} checked={v.same_chat} onChange={(c) => set({ same_chat: c === true })} testid="schedule-same-chat" />}
       </ListCard>
     </>),
     ok: t('schedules.new.ok'),
-    onOk: async ({ at_date: date, ...v }) => call('schedules.create', { ...v, at_time: v.every === 'once' ? date : v.at_time, same_chat: v.every !== 'once' && v.same_chat, hours: Number(v.hours) || 6 })
+    onOk: async ({ at_date: date, brain, ...v }) => { const [agent, model] = brain.split('::'); return call('schedules.create', { ...v, agent, ...(model ? { model } : {}), at_time: v.every === 'once' ? date : v.at_time, same_chat: v.every !== 'once' && v.same_chat, hours: Number(v.hours) || 6 }); }
   });
 }
 
@@ -123,8 +166,10 @@ function RetryRun({ id }) {
   return <Button size="xs" variant="outline" disabled={busy} onClick={retry} data-testid="schedule-run-retry"><RotateCcw />{tr('tasks.retry')}</Button>;
 }
 
-function ScheduleRow({ s, load }) {
+function ScheduleRow({ s, load, catalog }) {
   const tr = useT();
+  // the model by its name («Sonnet 5.5»), else the agent's
+  const brain = (s.model && modelsOf(catalog?.find((c) => c.id === s.agent), null).find((m) => m.id === s.model)?.label) || s.model || AGENT[s.agent] || s.agent;
   const off = !s.enabled;
   const last = s.lastTask;
   const next = s.enabled && s.approved ? when(s.next_run) : spent(s) ? tr('schedules.spent') : tr('schedules.pausedBadge');
@@ -136,7 +181,7 @@ function ScheduleRow({ s, load }) {
       title={<span className={off ? 'text-muted-foreground' : undefined}>{s.title}</span>}
       meta={(
         <span className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
-          <span className="inline-flex items-center gap-1"><Repeat className="size-3.5" />{s.when}</span>
+          <span className="inline-flex items-center gap-1"><Repeat className="size-3.5" />{['daily', 'weekly', 'once'].includes(s.every) ? `${s.when} (${zoneName()})` : s.when}</span>
           <span>{s.project}</span>
           {s.readonly ? <Badge variant="secondary">{tr('schedules.readonlyBadge')}</Badge> : null}
           {!s.approved ? <Badge variant="warning">{tr('schedules.awaiting')}</Badge> : null}
@@ -145,7 +190,7 @@ function ScheduleRow({ s, load }) {
         </span>
       )}
       trailing={<>
-        <span className={cn('who flex w-[120px] flex-none items-center gap-1.5 text-control', off && 'text-muted-foreground')}><AgentIcon agent={s.agent} className="size-3.5" /><span className="truncate" title={s.model || undefined}>{AGENT[s.agent] ?? s.agent}</span></span>
+        <span className={cn('who flex w-[120px] flex-none items-center gap-1.5 text-control', off && 'text-muted-foreground')}><AgentIcon agent={s.agent} className="size-3.5" /><span className="truncate" title={`${AGENT[s.agent] ?? s.agent}${s.model ? ` · ${brain}` : ''}`}>{brain}</span></span>
         <span className="when text-muted-foreground flex w-[170px] flex-none flex-col gap-0.5 text-caption">
           <span>{next}</span>
           <span className={s.lastFailed ? 'text-destructive' : undefined}>{last ? <><TaskStatus plain task={last} />{lastDate ? ` · ${lastDate}` : ''}</> : s.last_task ? `#${s.last_task}${lastDate ? ` · ${lastDate}` : ''}` : tr('schedules.neverRun')}</span>
@@ -171,9 +216,11 @@ function SchedulesPc() {
   const version = useStore((s) => s.version);
   const tasks = useStore((s) => s.tasks) ?? [];
   const [list, setList] = useState(null);
+  const [catalog, setCatalog] = useState(null);
   const [filter, setFilter] = useState('all');
   const load = () => call('schedules.list').then(setList).catch(() => setList([]));
   useEffect(() => { load(); }, [version]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { call('models.catalog').then(setCatalog).catch(() => setCatalog([])); }, []);
   const create = async () => { if (await newSchedule()) load(); };
   const rows = (list ?? []).map((s) => { const lastTask = tasks.find((x) => x.id === s.last_task) ?? null; return { ...s, lastTask, lastFailed: Boolean(lastTask && FAILED.includes(lastTask.status) && !lastTask.undone) }; });
   const count = (key) => rows.filter(FILTERS.find(([k]) => k === key)[1]).length;
@@ -211,7 +258,7 @@ function SchedulesPc() {
                   <span className="flex-1">{tr('schedules.col.what')}</span><span className="w-[120px]">{tr('schedules.col.agent')}</span><span className="w-[170px]">{tr('schedules.col.next')}</span><span className="w-[300px] text-right">{tr('schedules.col.active')}</span>
                 </div>
                 <ListCard data-testid="schedules-list">
-                  {shown.length ? shown.map((s) => <ScheduleRow key={s.id} s={s} load={load} />) : <Empty icon={CalendarSync} title={tr('schedules.empty.filtered')} />}
+                  {shown.length ? shown.map((s) => <ScheduleRow key={s.id} s={s} load={load} catalog={catalog} />) : <Empty icon={CalendarSync} title={tr('schedules.empty.filtered')} />}
                 </ListCard>
               </div>
               {runs.length ? (

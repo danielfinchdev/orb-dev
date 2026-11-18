@@ -15,7 +15,7 @@ import { needsApproval } from '@/lib/task-approval.js';
 import { confirm } from './dialogs.jsx';
 import { call, act, go, setState } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
-import { useT } from '@/lib/i18n.js';
+import { useT, currentLocale } from '@/lib/i18n.js';
 import { Note } from './ui/primitives.jsx';
 
 export { needsApproval };
@@ -83,9 +83,20 @@ export function PausedNote({ className }) {
   );
 }
 
-export const acceptHeld = (t, task) => act(call('tasks.accept', { id: task.id }), t('tasks.held.accepted'));
+// Accepting a held task keeps what the guard stopped: it asks first, showing the reason it was held, then makes the same call as ever.
+export async function acceptHeld(t, task) {
+  const h = task.held;
+  const why = h?.folder ? `${h.reasons} (${h.folder})` : (h?.reasons ?? '');
+  if (!(await confirm(t('tasks.held.acceptTitle', { id: task.id }), t('tasks.held.acceptBody', { title: task.title, why }), { ok: t('tasks.held.accept'), warn: true }))) return undefined;
+  return act(call('tasks.accept', { id: task.id }), t('tasks.held.accepted'));
+}
+// What «Deshacer» says it will do: the task and, when the task's events are at hand, the time of the snapshot it goes back to.
+export function undoBody(t, task) {
+  const at = task.events?.find((e) => e.kind === 'checkpoint')?.at;
+  return at ? t('tasks.undo.bodyPhoto', { id: task.id, time: new Date(at).toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' }) }) : t('tasks.undo.body', { id: task.id });
+}
 export async function undoHeld(t, task) {
-  if (await confirm(t('tasks.undo.title'), t('tasks.undo.body'), { ok: t('tasks.undo.ok'), danger: true })) await act(call('tasks.undo', { id: task.id }));
+  if (await confirm(t('tasks.undo.title'), undoBody(t, task), { ok: t('tasks.undo.ok'), danger: true })) await act(call('tasks.undo', { id: task.id }));
 }
 
 // A task Orb held for review: what it did, where, and the two ways out. `link`: a button to its detail (the chat).

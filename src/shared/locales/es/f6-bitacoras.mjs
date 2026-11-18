@@ -60,5 +60,20 @@ export default {
   'logbooks.reportPrivacy': 'Antes de copiar se ocultan las claves y tokens que se reconocen. Nada sale de este PC: lo copiado queda listo para pegar a un agente o en un issue.',
   'logbooks.reportCancel': 'Cancelar',
   'logbooks.reportCopy': 'Copiar {n} líneas',
-  'logbooks.reportCopied': 'Copiado'
+  'logbooks.reportCopied': 'Copiado',
+  'logbooks.metaLogs': '{n} bitácoras · solo lectura',
+  'logbooks.metaActivity': '{n} eventos en pantalla',
+  'logbooks.metaRulesN': '{rules} normas · {rails} raíles',
+  'logbooks.refresh': 'Actualizar',
+  'logbooks.searchAll': 'Buscar en todas las bitácoras',
+  'logbooks.noHits': 'Ninguna bitácora lo menciona.',
+  'logbooks.entriesCount': '{n} entradas · solo se añaden: no se editan ni se eliminan',
+  'logbooks.intro': 'Solo la escribe Orb. Es su diario: aquí se lee, no se edita. Los agentes la consultan al empezar en {name}, así que no hay claves ni datos personales.',
+  'logbooks.introGeneral': 'Solo la escribe Orb. Es su diario: aquí se lee, no se edita. Los agentes la consultan al empezar, así que no hay claves ni datos personales.',
+  'logbooks.today': 'hoy',
+  'logbooks.yesterday': 'ayer',
+  'logbooks.preamble': 'Índice y normas del principio del archivo',
+  'logbooks.all': 'Todos',
+  'logbooks.noEntriesYet': 'Todavía no hay entradas en esta bitácora.',
+  'logbooks.markShort': 'Marcar para copiar'
 };

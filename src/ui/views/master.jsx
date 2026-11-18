@@ -8,7 +8,7 @@ import { notifyError, notifyOk } from '@/lib/notify.js';
 import { KeyRound, LockKeyhole, TriangleAlert, ArrowRight } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
+import { Field, Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
 import { Checkbox } from '@/components/ui/overlay.jsx';
 import { form, choose } from '@/components/dialogs.jsx';
 import { call, bridge, getState, setState, act, useStore } from '@/lib/store.js';
@@ -17,6 +17,7 @@ import { LOCK_MINUTES, lockMinutesOf } from '@/lib/idle-lock.js';
 import { setMasterAsker, keepUnlock, dropUnlock, unlockCore, passwordStrength, MASTER_MIN } from '@/lib/core-access.js';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
 import { cn } from '@/lib/utils.js';
+import { Block, Panel, Setting } from './settings/rows.jsx';
 
 const MIN = MASTER_MIN;
 const BAR = ['bg-destructive', 'bg-destructive', 'bg-warning', 'bg-success', 'bg-success'];
@@ -189,16 +190,16 @@ export function MasterCard() {
   const forgot = async () => { if (await forgotFlow({ canForget: st.canForget })) load(); };
   const when = st.changedAt ? new Date(st.changedAt).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }) : null;
   return (
-    <Card data-testid="master-card">
-      <CardHeader className="flex-row items-start gap-3"><KeyRound className="text-primary-text mt-0.5 size-5 shrink-0" /><div><CardTitle>{t('master.cardTitle')}</CardTitle><CardDescription>{t('master.cardDesc')}</CardDescription></div></CardHeader>
-      {when ? <CardContent><p className="text-muted-foreground text-xs">{t('master.since', { when })}</p></CardContent> : null}
-      <CardFooter className="flex-wrap">
-        <Button size="sm" variant="outline" onClick={change} data-testid="master-change"><KeyRound />{t('master.change')}</Button>
-        <Button size="sm" variant="ghost" onClick={forgot} data-testid="master-forgot">{t('master.forgot')}</Button>
-        {bridge.mobile ? null : <Button size="sm" variant="ghost" onClick={() => act(call('master.lock', { reason: 'hand' }))} data-testid="master-lock-now"><LockKeyhole />{t('master.lockNow')}</Button>}
-      </CardFooter>
-      {bridge.mobile ? null : <LockMinutes />}
-    </Card>
+    <Block title={t('master.cardTitle')} note={t('master.cardDesc')} data-testid="master-card">
+      <Panel>
+        <Setting label={t('master.cardTitle')} hint={when ? t('master.since', { when }) : t('master.cardHint')}>
+          <Button size="sm" variant="ghost" onClick={forgot} data-testid="master-forgot">{t('master.forgot')}</Button>
+          {bridge.mobile ? null : <Button size="sm" variant="outline" onClick={() => act(call('master.lock', { reason: 'hand' }))} data-testid="master-lock-now"><LockKeyhole />{t('master.lockNow')}</Button>}
+          <Button size="sm" variant="outline" onClick={change} data-testid="master-change"><KeyRound />{t('master.change')}</Button>
+        </Setting>
+        {bridge.mobile ? null : <LockMinutes />}
+      </Panel>
+    </Block>
   );
 }
 
@@ -212,11 +213,9 @@ function LockMinutes() {
     if (next) setState({ app: { ...getState().app, config: next } });
   };
   return (
-    <CardContent className="grid gap-1.5 border-t pt-4">
-      <Field label={t('master.lockAfter')} hint={t('master.lockAfterHint')}>
-        <Select className="w-full sm:w-56" value={value} onValueChange={pick} options={LOCK_MINUTES.map((n) => ({ value: String(n), label: t('master.lockMinutes', { n }) }))} data-testid="master-lock-minutes" />
-      </Field>
-    </CardContent>
+    <Setting label={t('master.lockAfter')} hint={t('master.lockAfterHint')}>
+      <Select value={value} onValueChange={pick} title={t('master.lockAfter')} options={LOCK_MINUTES.map((n) => ({ value: String(n), label: t('master.lockMinutes', { n }) }))} data-testid="master-lock-minutes" />
+    </Setting>
   );
 }
 
