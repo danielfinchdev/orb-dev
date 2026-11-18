@@ -11,6 +11,23 @@ are not overridden: they are the PC owner's.
   and `@noble/*`): `scripts/tauri-resources.mjs`. The e2e build (`npm run tauri:build:e2e`, cargo feature `e2e`, its own
   target folder) is the only one with a DevTools port, a hidden window, a local update feed and timing marks, and it
   trusts only the test updater key; `scripts/tauri-check-release.mjs` refuses a release `Orb.exe` with any of them.
+- **The installer's new face** (3.8.8, **not shipped yet: pending a real install test**; `src-tauri/installer/`, a crate
+  of its own, outside the app's workspace, with its own `Cargo.lock` and only dependencies the app's lock already holds, so
+  it builds offline): a small WebView2 window that shows the installer's screens (`ui/`) and runs, in silent mode (`/S`),
+  the verified NSIS setup that `tauri build` makes and that travels inside it. The face only shows screens; what installs,
+  removes Orb 3.8.0 and makes the shortcuts is still the NSIS setup, its hooks (`src-tauri/nsis/hooks.nsh`) and the updater,
+  none of which change. Before anything starts (`src/setup.rs`) the setup is written to a new private folder, reopened
+  without sharing writes, checked there against the SHA-256 fixed in the binary and the minisign signature with the
+  updater's public key, and exactly the path that was checked is started. A refusal of the hooks comes back as an exit code
+  and a reason file (`src/nsis.rs`); the window can only show its own origin and the `WEBVIEW2_*` variables are dropped
+  (`src/guard.rs`).
+  - **Build:** `npm run installer:build -- --setup <Orb_x.y.z_x64-setup.exe> --sig <Orb_x.y.z_x64-setup.exe.sig>`
+    (`scripts/installer-build.mjs`), after the setup has been signed: a real build refuses a missing signature or a setup
+    of another version. The result is `src-tauri/installer/target/release/Orb-<version>-instalador-nuevo.exe`; nothing is
+    signed or published by it.
+  - **Test mode:** `npm run installer:build -- --prueba` makes a binary with no setup inside, which can install nothing. A
+    run only counts as a test when `--prueba` is on its command line (`src/mode.rs`), and the code that starts a setup asks
+    for a token that only a real run can build. `--prueba=ok|rechazo[:reason]|abierto|error` shows each ending.
 - **Releases** (review D9): `.github/workflows/release.yml` builds and tests only (read-only token not kept in `.git`,
   actions pinned by commit, no keys): npm and cargo tests, the unsigned installer, the packaged-app smoke test
   (`test/smoke.e2e.mjs`), and the installer as an artifact. The owner signs and publishes on his PC: `npm run

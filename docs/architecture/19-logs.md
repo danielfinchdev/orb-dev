@@ -15,3 +15,10 @@ Part of [How Orb works](../ARCHITECTURE.md).
   (`board.moveProjectLog`), never left beside it; the header-only `name (2).md` copies earlier builds left are removed at
   start (`home.mjs › tidyProjectLogs`). «Memorias» shows the end of each log (the newest entries) and scrolls to them.
 - Files: `src/domain/journal/journal.mjs` and the screen `src/ui/views/logs.jsx`.
+- **Activity in plain words** (3.8.8): the activity list (`src/ui/views/activity.jsx`) never shows the engine's internal
+  names or JSON. Every kind of event has its label (`src/ui/lib/activity.js › activityLabel`, locale keys
+  `activity.kind.<kind with dots as underscores>`), the tools and the states in a detail are said like the rest of the
+  interface (`activityDetail`, the labels of the Tareas view), and the raw line stays on hover and when copied.
+  `test/actividad-etiquetas-388.test.mjs` fails when a new kind of event is written by the engine without a label in
+  both languages, so a new event must bring its words. `activity.list` can also return the totals of each source and level
+  for the filters in force.

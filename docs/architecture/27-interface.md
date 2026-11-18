@@ -2,14 +2,35 @@
 
 Part of [How Orb works](../ARCHITECTURE.md).
 
-- **Sidebar:** assistant, Tasks, Projects, Scheduled (and at the bottom Agents, Logs, Activity, Tutorials and Settings)
-  and, below:
+- **Sidebar:** the assistant; the four places Tasks, Projects, Scheduled and Whiteboard (`places` in `main.jsx`); "More"
+  with God mode; and a footer of icons (Agents, Logs, Tutorials, feedback, music and Settings, each with its tooltip, no
+  expandable footer). Below:
   - the **inbox**: "To approve" (permissions and approvals), "In progress" and "Issues" (tasks at their usage limit and
     interrupted or failed conversations; "Mark as resolved" removes them);
   - the **folders** (each project with its tasks and conversations) and "No folder".
   - File: `src/ui/components/sidebar.jsx`. The Tasks filters use the same names (`FILTERS` in
     `src/ui/views/tasks.jsx`): In progress (working or queued), To approve, Completed, Issues, All.
-- **Look:** shadcn/ui, Tailwind and the Outfit font, with colors in `src/ui/app.css`.
+- **Look (Orb UI 2.0):** shadcn/ui, Tailwind and the Outfit font.
+  - **Tokens:** `src/ui/tokens.css` holds the shadcn tokens (light, dark and the Tailwind mapping, the "Graphite" values:
+    neutral greys, one warm accent) and is imported by `app.css` and by the Android app. No variable is ever renamed:
+    a theme or a palette only restates tokens.
+  - **Themes:** `src/ui/themes.css` imports `src/ui/themes/skins.css` (the tokens, veil and few pieces of each theme, in
+    light `html[data-skin]` and dark `html.dark[data-skin]`, plus the palettes `html[data-palette]`) and
+    `src/ui/themes/pieces.css` (what the shared pieces need that a Tailwind class cannot say). The base theme
+    «predeterminado» has no rules of its own: it is `tokens.css`. The six themes (`SKINS` in `src/shared/appearance.mjs`)
+    are predeterminado, cristal (light only), orb, vaporwave, candy and retro (dark only); the retired themes
+    (Professional, Graphite, Palettes) have no CSS any more. The backdrops of orb, vaporwave, candy, retro and cristal are WebGL
+    shaders (`src/ui/lib/shaders.js`, mounted once by `src/ui/components/scene.jsx`): half resolution, 30 fps at most,
+    still while the window is hidden or under reduced motion, and harmless when WebGL is missing.
+  - **Migration:** `migrateAppearance` (`src/shared/appearance.mjs`, run when `orb.json` is read: `src/platform/config-file.mjs`
+    and `config.mjs`) takes an old `ui` object to the current model: Professional, Graphite and Palettes become
+    «predeterminado» (Palettes picks the closest of the six palettes by its accent), Cloud becomes «candy», the 28
+    palettes fall to the nearest of the six, the fonts and code fonts and colours that were retired fall to the first of
+    their list, and `density`, `chatWidth` and `fontSize` are deleted (their values are fixed). `accent` and `contrast`
+    are still accepted by the check of `orb.json` but nothing offers or applies them. The pass is pure and idempotent.
+  - **"More options":** a setting of Orb that the screen of a view does not draw up front is never deleted: it goes into a row's
+    "⋯" menu or into `MoreOptions` (`src/ui/views/settings/rows.jsx`), always at the end of its section (`fold` hides its
+    rows behind the title; a section whose cards all have nothing to show hides the title too).
   - Base components in `src/ui/components/ui/` (buttons, cards, selects, checkboxes and switches with fixed dark mode).
   - Real agent logos in `agent-icon.jsx` (Simple Icons, CC0).
   - Animated robot in `robot.jsx`.
@@ -72,14 +93,11 @@ Part of [How Orb works](../ARCHITECTURE.md).
   mood, agents working, the pointer over it, hello, a random moment every 30–90 s): `data-float`/`data-glow`, set by
   `orb.jsx` and taken away at the end of the sway or pulse in progress (`animationiteration`), where both are at rest,
   so it never jumps. At rest it only blinks (a few main-thread frames every 3–6 s): with nothing else moving the
-  compositor draws ~2–10 frames a second instead of 60. The «orb» theme blurs each cloud itself (`filter: blur(8px)`) instead of a full-screen
-  `backdrop-filter` that had to blur everything under it again on every frame. Avoid full-screen `backdrop-filter`
-  over anything that moves. The clouds drift ~0.5 px per 60 Hz frame, so they step 30 times a second (3.8.1, H4f:
-  `steps(dur × 30)` with whole-second durations and delays, so the three clouds step on the same instants and the
-  compositor draws ~30 frames a second instead of 60; each step is ~1 px under an 8 px blur). Slow
-  `background-position` drifts, which repaint on the main thread, step every ~0.5 px (the Candy band); fast ones move a
-  pre-drawn layer with `transform` instead (the Vaporwave floor's grid); the indeterminate progress bar slides with
-  `translate`, not `left`. The themes' backdrop pauses while the window is unfocused or hidden (`html.window-idle`).
+  compositor draws ~2–10 frames a second instead of 60. Avoid full-screen `backdrop-filter` over anything that moves. Since 3.8.8 the themes'
+  backdrops are not CSS scenes (clouds, bands, grids) but one WebGL canvas per window (`components/scene.jsx`,
+  `lib/shaders.js`): half resolution, at most 30 frames a second, nothing drawn while the window is hidden, one still
+  frame under reduced motion; the themes' CSS has no animated backdrop left, only small pieces such as Retro's cursor.
+  The indeterminate progress bar slides with `translate`, not `left`.
 - **Measuring:** `scripts/medir.mjs` (start, memory, CPU at rest, scrolling smoothness; `--hidden` keeps the window
   offscreen via `ORB_HIDDEN_WINDOW=1`; `--profile <dir>` saves a trace, CPU profiles, the compositor's layers and a
   heap snapshot; `--big` uses a large workspace and times refreshes on the Tasks screen; `--anim <s>` / `--anim-only` measure
@@ -119,9 +137,9 @@ menus, texts, permissions and themes.
 - **Search**: the sidebar search also finds tasks by content (`tasks.search`); Ctrl+K on the PC
   (`components/command-palette.jsx`, `lib/palette.js`) uses the same search (`lib/search.js`) plus Orb's places, and
   opens only when nothing else took the key (project actions, the whiteboard, a dialog).
-- **«Cristal» theme** (`themes.css`, `src/shared/appearance.mjs › SKIN_BASE`): Profesional plus a glass material
-  (`data-material="cristal"`); every Profesional rule applies, with blur only on the sidebar, chat bar, message box and
-  menus/dialogs, and `prefers-reduced-transparency` makes it opaque.
+- **«Cristal» theme** (`src/ui/themes/skins.css`, `src/ui/themes/pieces.css`): a theme of its own (light only, it takes
+  the palettes like the default one) with a glass material and a shader backdrop. It no longer derives from the retired
+  Profesional theme.
 - **Music** (Windows only; `src/engine/host/music.mjs`, `lib/music.js`): ♪ in the sidebar's foot and one track per
   mini-game, off by default; CC0 tracks pinned by size and SHA-256 and downloaded the first time to
   `core\herramientas\musica`; it stops when Orb locks or the window hides.
@@ -151,11 +169,16 @@ menus, texts, permissions and themes.
 - **Window over the app** (`SettingsDialog` in `src/ui/views/settings/index.jsx`), with sections on the left (`SECTIONS`) and,
   at the bottom, the developer's GitHub and the version. It opens with `openSettings(section)` from
   `src/ui/lib/store.js`; `go('settings')` opens it too. On the phone there is no Settings ("This phone").
-- **Appearance** (`src/shared/appearance.mjs`): `ui.skin` (orb, vaporwave, retro, profesional, nube), `ui.font`,
-  `ui.codeFont` and `ui.codeTheme`. `applyAppearance()` puts them on `<html>` as `data-skin`, `data-font`,
-  `data-code-font` and `data-code-theme`, and the CSS reads them: `src/ui/themes.css` (themes; "professional" removes
-  the robot in `robot.jsx`, the floating robot, decorative animations and sounds), `src/ui/fonts.css` (typefaces, latin
-  and latin-ext only) and `src/ui/code.css` (code colors). Highlighting (`src/ui/lib/highlight.js`, highlight.js with
+- **Appearance** (`src/shared/appearance.mjs`): `ui.skin` (predeterminado, cristal, orb, vaporwave, candy, retro),
+  `ui.palette` (the six palettes, only for predeterminado and cristal), `ui.font` (the theme's own, system, Outfit),
+  `ui.codeFont` and `ui.codeTheme`. `applyAppearance()` puts them on `<html>` as `data-skin`, `data-palette`, `data-font`,
+  `data-code-font` and `data-code-theme`, and the CSS reads them: `src/ui/themes.css` and `src/ui/themes/` (see Look
+  above; only the «orb» theme has the robot, `robotSkin`: the others wear the plain ORB·E mark, and the plain themes
+  `plainSkin` have no backdrop and no decorative motion), `src/ui/fonts.css` (typefaces, latin and latin-ext only) and
+  `src/ui/code.css` (code colors). Light, dark or system is `ui.theme`; «system» follows Windows, and a theme that exists
+  in one mode only (Retro dark, Glass light) ignores it without overwriting it. A phone or a linked browser wears only
+  «orb» or the default (`phoneSkin`). The previous options for density, chat width, text size, accent and contrast, and the
+  theme made of your own colours, are not offered any more; the zoom of the whole interface stays. Highlighting (`src/ui/lib/highlight.js`, highlight.js with
   common languages) is loaded the first time it is needed (`use-highlight.js`).
 - **Window without the Windows title bar:** `titleBarStyle: 'hidden'`. Minimize, maximize and close are drawn by
   `src/ui/components/window-controls.jsx` (the `window_act` command and the `app:window-state` event:
@@ -168,3 +191,14 @@ menus, texts, permissions and themes.
 - **Contribute and More apps** (`src/engine/host/feedback.mjs`, `app.feedbackSend` / `app.moreApps`, in the engine because the
   window does not go out to the internet; the screenshot and the picked files come from the app): the developer's PayPal; feedback via FormSubmit (to the developer's inbox) with up to 3 PNG/JPEG
   screenshots of the window or from files; and the other apps with their latest version from GitHub Releases.
+
+## Whiteboard fonts (3.8.8)
+
+The whiteboard (Excalidraw) never asks the internet for its drawing fonts. `src/ui/lib/excalidraw-assets.js` sets
+`window.EXCALIDRAW_ASSET_PATH` to the app's own `excalidraw/` folder and must be the first import of any module that loads
+Excalidraw (ES imports are hoisted, so a plain statement after the import would run too late). Two plugins of
+`vite.config.mjs` do the rest: `orb-excalidraw-fonts` copies every font of `@excalidraw/excalidraw` (Xiaolai too, the
+fallback of every family) to `excalidraw/fonts` in the build, and `orb-excalidraw-no-cdn` removes the `https://esm.sh/...`
+address that Excalidraw always appends to the places it tries for each font. The toolbar is Orb's own
+(`src/ui/components/wb-controls.jsx`), and a project's whiteboard keeps one general note, beside the drawing, that reaches
+the assistant inside `PIZARRA.md` as the user's own words.

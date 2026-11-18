@@ -42,7 +42,7 @@ section numbers (§N) used across the docs and code comments match the file pref
 | 24 | [Installer and session detection](architecture/24-installer-and-session-detection.md) | Detecting and installing agents and existing sessions. |
 | 25 | [Skills and MCP servers](architecture/25-skills-and-mcp-servers.md) | Skills and MCP servers in `core`: install, expose and permissions. |
 | 26 | [Languages](architecture/26-languages.md) | Spanish/English UI and how texts are translated. |
-| 27 | [Interface](architecture/27-interface.md) | Sidebar, inbox, themes, sizes, performance, tutorials and Settings. |
+| 27 | [Interface](architecture/27-interface.md) | Sidebar, inbox, Orb UI 2.0 tokens and themes, "More options", performance, tutorials, Settings and the whiteboard fonts. |
 | 28 | [Security](architecture/28-security.md) | Security measures: window hardening, approval key, connectors, agent identity and what the phone never sees. |
 | 29 | [Packaging, versions and CI](architecture/29-packaging-versions-and-ci.md) | WebView2, the Windows installer, releases, the updater and CI. |
 | 30 | [Tests](architecture/30-tests.md) | Test commands and what each one covers. |

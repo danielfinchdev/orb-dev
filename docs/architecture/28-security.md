@@ -107,3 +107,22 @@ Part of [How Orb works](../ARCHITECTURE.md).
   page frame cannot read it. That holds for Tauri 2.12.4 (`manager/webview.rs`, `main_frame_script`). `test/tauri-invoke-key.test.mjs`
   fails when the Tauri pin changes without this being re-checked, and, when the crate source is on disk, when the
   invoke-key script stops being main-frame-only. Review it on every Tauri bump.
+
+## Opening an editor: the program is checked first (3.8.8)
+
+«Open in» (VS Code, Cursor, JetBrains, Windsurf, Zed) goes through `host.openEditor` in `src-tauri/src/host.rs`, which now
+checks the program before starting it (`src-tauri/src/signature.rs`, Windows' Authenticode):
+- **What is checked:** the `.exe` that is started carries a valid embedded signature that Windows trusts, and its signer is
+  the maker of that editor (`expected_signer`): Microsoft Corporation for VS Code, Anysphere, Inc. for Cursor and JetBrains
+  s.r.o. for JetBrains. The names are compared whole and without regard to case, never as «contains». Nothing lets a program
+  through «anyway».
+- **Windsurf and Zed ask only for a valid, trusted signature** (`Expected::AnyTrusted`): their signer names have not been
+  checked on a real PC, and requiring a name nobody has confirmed would either block a good editor or be a guess. Once a name
+  is confirmed, switching that editor to `Named` is a one-line change.
+- **What is not checked:** only the program that is started. What the editor loads afterwards from its own folder (resources,
+  DLLs, JVM options) is not covered: in a per-user install any program of the user can write there.
+- **Against swaps between the check and the start:** the path is made canonical first; the file stays open without write
+  access (`verified`) until the editor has started, and the path that is started is the one the open file really has.
+- **When it refuses**, the editor does not start and the window says why with the program's path: unsigned or invalid
+  (`sys.editor.unsigned`), signed by someone else (`sys.editor.wrongSigner`, with the signer found and the one expected) or
+  not readable (`sys.editor.unreadable`).

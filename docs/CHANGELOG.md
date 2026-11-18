@@ -20,6 +20,62 @@ it on and the button next to them changes the style. In Settings › Appearance 
 turn "Music that reacts" off to keep one intensity, or go back to the free tracks. As before, it is off until you
 turn it on, stops when Orb locks and pauses while the window is hidden.
 
+**A new interface.** Every screen of the Windows app has been redrawn. There are six themes: Default (with six
+palettes: Graphite, Ocean, Forest, Grape, Ruby and Sand), Glass, Orb, Vaporwave, Candy and Retro. Glass is light only and
+Retro is dark only. Unless you choose light or dark, the app follows Windows. Only the Orb theme shows the robot.
+
+**What moved.** The technical options the new screens do not show up front are still there: they live in each row's
+"⋯" menu or under "More options" at the end of each settings section. For example, the tab and shortcut settings, the
+Trash, the local MCP server and the usage tables per model and project are now under "More options", and "Copy" in the
+logbooks is in the header's "⋯" menu. Nothing was removed from those places.
+
+**What is gone.** The Professional, Graphite and Palettes themes: whoever wore one now has Default (Palettes picks the
+closest of the six palettes), and Cloud is now called Candy. Density, chat width and text size are gone; their values
+are fixed, and the zoom of the whole app (Ctrl with + and −) is what remains to make everything bigger or smaller. The
+theme built from your own colours is gone too, and the 28 palettes are now six. Code fonts and colours that no longer
+exist fall back to the nearest one that does. The little arrow that opened the sidebar's footer, the list of subsections
+in Settings and the Orb icon in "About" are gone as well.
+
+**Chat and tasks.** The chat shows unread marks (and "Mark as unread"), the live branch of each chat and closed pull
+requests. A side panel has three tabs: Details, Changes and PR. Every turn that changed files ends with a card that
+lets you review them or go back. The assistant chat takes attachments and shows turns that were stopped. A task's
+changes can be read unified or split, before or after, with comments on a single line.
+
+**Projects.** A project has its own page with Summary, Tasks, Git, Logbook and Chats. You can create an empty folder as
+a project, move a project to another category, filter pull requests (with their checks), sync a branch (it only fetches
+and either fast-forwards or pushes, never forced and never while agents work there) and add a signed entry to the
+logbook by hand.
+
+**Schedules.** A schedule can now run monthly (a month without that day runs on its last day) and in a time zone of its
+own, and one dialog creates and edits all of it, including the permission its runs have. From a phone or an agent a
+schedule can only be made stricter, never looser.
+
+**Whiteboard.** A new toolbar and a general note about the whole drawing that the assistant reads as your own words.
+The drawing fonts come with the app, so the whiteboard never asks the internet for them.
+
+**Agents and usage.** Today's spend is shown, and Orb can warn you before the usage brake stops the queue. You can sign
+an account out, check which version of each agent and tool you have against the newest one, and choose whether Orb
+switches to another account when one reaches its limit (it still does, unless you turn it off).
+
+**God mode.** Full git: list, switch and create branches, save with a message and undo the last save (only when it was
+not pushed, is not a merge and is not the first one). It refuses while an agent works in the project. The terminal docks
+under the chat with tabs and only runs what you send with Enter. You can also create a new file, and each project has its
+own skills and connectors: one can be kept for some projects only.
+
+**Master password and lock screen.** The lock screen says when and why Orb locked (idle, by hand, Windows locked or the
+PC went to sleep), lets you show the password for a moment, tells the real wait after the free tries and lets you use the
+recovery code right there; that sets a new password and unlinks every phone, and the screen says so. When you create the
+master password, Orb gives you the recovery code at that moment. Behind the lock there is only an outline of the app,
+never what was on screen. In Settings › Data, "Start with a new key for this PC" asks for the master password, applies
+when Orb restarts, keeps the old key and lets you go back to it.
+
+**Opening an editor.** Before "Open in" starts VS Code, Cursor or a JetBrains IDE, Orb checks that the program carries a
+valid signature from its maker. For Windsurf and Zed it checks that the signature is valid, not yet who signed it. It
+checks the program that is started, not what the editor loads afterwards from its own folder.
+
+**Plain words.** Activity and history no longer show internal names or JSON: every event is told in plain words, and the
+original line is still there when you hover it or copy it.
+
 ## What's new in 3.8.7
 
 **Grafito and conversation marks.** A new graphite theme (also on Android, where phones can wear it). Plain themes
