@@ -56,7 +56,7 @@ test('paso 6C2: el menú de la fila de un chat con agente tiene Información, Ma
 test('paso 6C2: la fila en espera dice «Esperando tu aprobación» en ámbar y un chat trabajando no enseña la hora', () => {
   assert.match(inbox, /const waitText = needsYou \? t\('orbchats\.awaiting'\) : ''/);
   assert.match(inbox, /needsYou \|\| p\.tone === 'warn' \? 'text-warning-ink'/);
-  assert.match(inbox, /\{working \? null : <span className=\{cn\('shrink-0 text-micro tabular-nums'/);
+  assert.ok(inbox.includes('{working ? null : <span className="text-faint-foreground shrink-0 text-micro tabular-nums">{time}</span>}'));
 });
 
 test('paso 6C2: los puntos de la cabecera de un grupo solo salen con el grupo plegado', () => {

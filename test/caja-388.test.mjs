@@ -70,7 +70,7 @@ test('the tool calls fold under a «Trabajó…» line', () => {
 });
 
 test('the chat never scrolls sideways', () => {
-  assert.match(session, /className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"/);
+  assert.ok(session.includes('className="chat-fade min-h-0 flex-1 overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable]"'));
   assert.match(ui('app.css'), /\.lazy-lines pre \{[^}]*overflow-x: auto/);
 });
 

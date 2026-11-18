@@ -126,9 +126,9 @@ test('step 7C-b: the notices sit over the text box and left of an open side pane
   assert.doesNotMatch(main, /bottom: 112, right: 24/);
 });
 
-test('step 7C-b: scroll bars are invisible at rest and show while the pointer is over the scrolling area', () => {
+test('step 7C-b: scroll bars are invisible at rest and show only while the area scrolls or under the pointer', () => {
   const css = read('src/ui/app.css');
   assert.match(css, /::-webkit-scrollbar-thumb \{ background: transparent;/);
-  assert.match(css, /:hover::-webkit-scrollbar-thumb \{ background: color-mix/);
+  assert.match(css, /\[data-scrolling\]::-webkit-scrollbar-thumb, ::-webkit-scrollbar-thumb:hover \{ background: color-mix/);
   assert.match(read('src/ui/components/page.jsx'), /overflow-y-auto \[scrollbar-gutter:stable\] py-5 pr-\[calc\(1\.5rem-var\(--sb-w\)\)\] pl-6/, 'the page margin is the mock-up\'s 24 px, and the scrollbar takes its room from it');
 });

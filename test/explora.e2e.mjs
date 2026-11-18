@@ -152,8 +152,8 @@ const TASKS = [
   { project: 'tienda-web', title: 'Traducir las fichas de producto', agent: 'codex', text: 'Traduce las fichas de producto al inglés y al francés.', reply: 'Traduciendo…', append: 'PROGRESO DUERME', busy: true },
   { project: 'api-pagos', title: 'Migrar el cobro a la API nueva de Stripe', agent: 'cursor', text: 'Migra el cobro y haz el pago de la factura con la tarjeta de prueba.', reply: 'Hecho.' },
   { project: 'api-pagos', title: 'Revisar el checkout', agent: 'claude', text: 'Revisa el checkout y deja el resultado a punto de aceptar.', reply: 'Revisado: el checkout guarda el carrito entre recargas.', files: { 'src/checkout.js': text('export const checkout = (carrito) => ({ ...carrito, guardado: true });') } },
-  { project: 'orb-dev', title: 'Revisar el contador', agent: 'claude', text: 'Revisa el contador de contexto y deja el resultado dicho.', reply: 'Revisado: el contador usa el presupuesto del runtime.' },
-  { project: 'orb-dev', title: 'Probar en el móvil', agent: 'claude', after: 'Revisar el contador', text: 'Prueba el contador en el móvil y deja el resultado a punto de aceptar.', reply: 'Probado: el contador se ve bien en el móvil.',
+  { project: 'orb-dev', title: 'Revisar el contador', agent: 'claude', origin: 'contador', text: 'Revisa el contador de contexto y deja el resultado dicho.', reply: 'Revisado: el contador usa el presupuesto del runtime.' },
+  { project: 'orb-dev', title: 'Probar en el móvil', agent: 'claude', origin: 'contador', after: 'Revisar el contador', text: 'Prueba el contador en el móvil y deja el resultado a punto de aceptar.', reply: 'Probado: el contador se ve bien en el móvil.',
     files: { 'docs/prueba-movil.md': text('# Prueba en el móvil', '', 'El contador se ve bien.'), 'src/context-meter.js': text('export function ContextMeter({ context }) {', '  const pct = context.size ? Math.round((context.used / context.size) * 100) : null;', '  return { pct, mobile: true };', '}'), 'test/movil-contador.test.js': text(...repeat(8, (n) => `test('móvil ${n}', () => assert.ok(${n}));`)) } },
   { project: 'api-pagos', title: 'Limpiar dependencias sin usar', agent: 'codex', text: 'Limpia las dependencias sin usar de la API.', reply: 'No pude terminar.', append: 'FALLA' },
   { project: 'blog', title: 'Ordenar las exportaciones antiguas', agent: 'claude', text: 'Ordena la carpeta de exportaciones antiguas del blog.', reply: 'Carpeta ordenada.', append: 'ZAP_TODO' },
@@ -416,7 +416,8 @@ try {
     const taskIds = {};
     for (const t of TASKS) {
       await attempt(`la tarea «${t.title}»`, async () => {
-        const made = await call('tasks.create', { project: t.project, title: t.title, description: t.text, agent: t.agent, ...(t.mode ? { mode: t.mode } : {}), ...(t.after && taskIds[t.after] ? { depends_on: [taskIds[t.after]] } : {}) });
+        // `origin`: the chat (by its key) the task was ordered from, so its Ficha lists it under «Tareas de este chat»
+        const made = await call('tasks.create', { project: t.project, title: t.title, description: t.text, agent: t.agent, ...(t.origin && ids[t.origin] ? { origin_session: String(ids[t.origin]) } : {}), ...(t.mode ? { mode: t.mode } : {}), ...(t.after && taskIds[t.after] ? { depends_on: [taskIds[t.after]] } : {}) });
         taskIds[t.title] = made.id;
       });
     }
@@ -613,6 +614,14 @@ try {
         const files = page.locator('[data-testid=task-change]');
         await files.first().waitFor({ timeout: 6000 }).catch(() => noteOnce('Tareas: la pestaña Cambios no lista archivos'));
         if (await files.count().catch(() => 0)) { await files.nth(Math.min(1, (await files.count()) - 1)).click({ timeout: 3000 }).catch(() => {}); await page.waitForTimeout(500); }
+        // a comment on one line of the diff (kept in this window only, for «Pedir cambios»): the «+» shows on hover
+        const line = page.locator('[data-testid=patch-view] .dl[data-change]').first();
+        if (await line.hover({ timeout: 3000 }).then(() => true, () => false) && await tap('diff-comment-add', 'el «+» de una línea del diff')) {
+          const box = page.locator('[data-testid=diff-comment-box] textarea').first();
+          if (await box.fill('Guarda con un retraso de 300 ms: así no escribe en cada tecla.', { timeout: 3000 }).then(() => true, () => false) && await tap('diff-comment-save', 'guardar el comentario de la línea')) {
+            await page.mouse.move(700, 120); await page.waitForTimeout(300); await shot(`${prefix}-tareas-cambios-comentario`);
+          } else { noteOnce('Tareas: no se pudo escribir el comentario de una línea'); await closeMenus(); }
+        } else noteOnce('Tareas: una línea del diff no ofrece comentarla');
         if (await tap('task-change-more', 'el «⋯» del archivo abierto')) await shot(`${prefix}-tareas-cambios-menu`);
         // the switch keeps its menu open (it is a check): Escape closes it before anything else is pressed
         if (await tap('task-change-whole', '«Archivo entero» en el «⋯» del archivo')) {
@@ -744,6 +753,9 @@ try {
       // editing the monthly one. Nothing is saved and «Ejecutar ahora» is never pressed.
       if (await tap('nav-schedules', 'Programadas')) {
         const leave = async (what) => { if (!(await tap('schedule-cancel', `«Cancelar» de ${what}`))) await closeMenus(); await page.waitForTimeout(300); };
+        // «Últimas ejecuciones», at the end of the page (each seeded schedule ran once)
+        if (await page.locator('[data-testid=schedule-runs]').first().scrollIntoViewIfNeeded({ timeout: 3000 }).then(() => true, () => false)) { await page.waitForTimeout(400); await shot(`${prefix}-programadas-ejecuciones`); await scrollView('top'); }
+        else noteOnce('Programadas: sin «Últimas ejecuciones»');
         if (await tap('new-schedule', 'botón de nueva programada')) {
           await page.waitForTimeout(400); await shot(`${prefix}-programada-nueva`);
           if (await tap('schedule-every-monthly', 'la frecuencia «Cada mes»')) {
