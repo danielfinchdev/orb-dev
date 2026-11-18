@@ -19,7 +19,7 @@ import { oneLine } from '../../shared/text.mjs';
 import { redactSecrets } from '../../shared/secrets-scan.mjs';
 import { quickRun } from '../../agents/index.mjs';
 import { AUTONOMY } from '../../domain/security/guard.mjs';
-import { readLog, writeLog, logFiles } from '../../domain/journal/journal.mjs';
+import { readLog, writeLog, logFiles, countLogEntries } from '../../domain/journal/journal.mjs';
 import { ofUserLabel, userLabel, userName } from '../../domain/tasks/board.mjs';
 import { createAndroid } from '../host/android.mjs';
 import { grantMethods } from '../security/grants.mjs';
@@ -296,7 +296,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
       emit('notes:read', { ...(ids ? { ids } : {}), at: Date.now() });
       return { ok: true };
     },
-    'logs.list': () => logFiles(board).map(([name, file]) => { let size = 0; try { size = fs.statSync(file).size; } catch { /* empty */ } return { name, size }; }),
+    'logs.list': () => logFiles(board).map(([name, file]) => { let size = 0; try { size = fs.statSync(file).size; } catch { /* empty */ } return { name, size, entries: countLogEntries(file) }; }),
     'logs.read': ({ project: name, whole }) => readLog(board, str(name, 'bitácora', 200), { whole: Boolean(whole), chars: 40000 }),
 
     // Only q/limit: the events array the window has always had. Any other filter: the paged reader of every source

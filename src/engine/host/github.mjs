@@ -113,6 +113,19 @@ export async function changedFiles(project) {
     if (file === ATTACH_DIR || file.startsWith(`${ATTACH_DIR}/`)) continue;
     out.push({ path: file, ...(from ? { from } : {}), status: xy === '??' ? '??' : (xy[0] !== ' ' ? xy[0] : xy[1]), risky: isSecretPath(file) });
   }
+  // Added/removed lines of the tracked files, from one numstat of the whole change (no read per file). Untracked, binary and
+  // renamed files stay without numbers.
+  try {
+    const stat = (await peek(project.path, 'diff', 'HEAD', '--numstat', '-z', '--no-color', '--no-ext-diff', '--no-textconv')).stdout.split('\0');
+    const nums = new Map();
+    for (let i = 0; i < stat.length; i += 1) {
+      const m = /^(\d+|-)\t(\d+|-)\t([\s\S]*)$/.exec(stat[i]);
+      if (!m) continue;
+      if (!m[3]) { i += 2; continue; } // a rename: its old and new names follow as their own entries
+      if (m[1] !== '-') nums.set(m[3].replace(/\\/g, '/'), { add: Number(m[1]), del: Number(m[2]) });
+    }
+    for (const f of out) { const n = nums.get(f.path); if (n) { f.add = n.add; f.del = n.del; } }
+  } catch { /* the list works without the numbers */ }
   return out.slice(0, 500);
 }
 
@@ -220,7 +233,9 @@ export async function viewPr(project, number) {
   return {
     number: x.number, title: oneLine(x.title, 300), body: String(x.body ?? '').slice(0, 20_000), state: x.state, url: x.url, headRefName: x.headRefName, headRefOid: oidOf(x.headRefOid), baseRefName: x.baseRefName,
     isDraft: Boolean(x.isDraft), author: authorOf(x.author), createdAt: x.createdAt, updatedAt: x.updatedAt, mergeable: x.mergeable || null, mergeStateStatus: x.mergeStateStatus || null,
-    reviewDecision: x.reviewDecision || null, reviewers: reviewersOf(x), comments: Array.isArray(x.comments) ? x.comments.length : 0, additions: x.additions ?? 0, deletions: x.deletions ?? 0, changedFiles: x.changedFiles ?? 0,
+    reviewDecision: x.reviewDecision || null, reviewers: reviewersOf(x), comments: Array.isArray(x.comments) ? x.comments.length : 0,
+    thread: (Array.isArray(x.comments) ? x.comments : []).slice(-20).map((c) => ({ author: authorOf(c?.author), at: c?.createdAt ?? null, body: String(c?.body ?? '').slice(0, 1000) })),
+    additions: x.additions ?? 0, deletions: x.deletions ?? 0, changedFiles: x.changedFiles ?? 0,
     checks: (Array.isArray(x.statusCheckRollup) ? x.statusCheckRollup : []).slice(0, 100).map((c) => ({ name: oneLine(c.name ?? c.context ?? '', 120), status: c.status ?? c.state ?? null, conclusion: c.conclusion ?? null })),
     files: (Array.isArray(x.files) ? x.files : []).slice(0, 300).map((f) => ({ path: String(f.path ?? ''), additions: f.additions ?? 0, deletions: f.deletions ?? 0 })),
     commits: (Array.isArray(x.commits) ? x.commits : []).slice(0, 100).map((c) => ({ oid: String(c.oid ?? '').slice(0, 7), title: oneLine(c.messageHeadline ?? '', 200) }))

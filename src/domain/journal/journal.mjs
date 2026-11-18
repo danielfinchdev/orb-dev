@@ -21,6 +21,21 @@ const clean = (v, n) => redactSecrets(String(v ?? '').trim()).slice(0, n);
 export function logFiles(board) {
   return [['general', ctx.paths.generalLog], ...board.projects().map((p) => [p.name, board.projectLogFile(p.name)])];
 }
+// Entries of a log file (its «### » headings), counted once per version of the file: logs.list runs on every change and the
+// biggest logs weigh hundreds of KB. A file that is missing or unreadable has none.
+const entryCounts = new Map();
+export function countLogEntries(file) {
+  try {
+    const st = fs.statSync(file);
+    const key = `${st.size}:${st.mtimeMs}`;
+    const hit = entryCounts.get(file);
+    if (hit?.key === key) return hit.n;
+    const n = (fs.readFileSync(file, 'utf8').match(/^### /gm) ?? []).length;
+    entryCounts.set(file, { key, n });
+    return n;
+  } catch { entryCounts.delete(file); return 0; }
+}
+
 export function findLog(board, project) {
   const key = String(project ?? '').toLowerCase();
   const found = logFiles(board).find(([name]) => name.toLowerCase() === key || (key === 'central' && name === 'general'));

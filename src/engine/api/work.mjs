@@ -48,6 +48,8 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     'tasks.list': ({ limit }) => {
       // a range of the settings' key (its index), not LIKE (which would read every setting: one per accepted task, …).
       const undone = new Set(board.all("SELECT key FROM settings WHERE key >= 'undone:' AND key < 'undone;' AND value <> '' AND value <> 'null'").map((r) => Number(r.key.slice('undone:'.length))));
+      // the tasks whose result the user already accepted (the same index range), so a row can offer «Aceptar resultado» only once.
+      const accepted = new Set(board.all("SELECT key FROM settings WHERE key >= 'accepted:' AND key < 'accepted;' AND value = '1'").map((r) => Number(r.key.slice('accepted:'.length))));
       // the rows are new objects: changed in place (copying each task twice would cost more than reading it).
       const paused = board.setting('paused') === '1';
       return board.panelTasks(Math.min(Number(limit) || 150, 500)).map((task) => {
@@ -57,6 +59,7 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
         const held = board.heldInfo(task); if (held) task.held = held;
         task.description = cut(task.description); task.result = cut(task.result);
         if (undone.has(task.id)) task.undone = true;
+        if (accepted.has(task.id)) task.accepted = true;
         return task;
       });
     },
