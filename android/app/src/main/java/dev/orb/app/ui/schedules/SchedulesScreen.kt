@@ -21,14 +21,14 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
+import dev.orb.app.ui.kit.OrbFab
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SnackbarHost
+import dev.orb.app.ui.kit.OrbSnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -97,16 +97,9 @@ fun SchedulesScreen(vm: SchedulesViewModel, onBack: () -> Unit, modifier: Modifi
             }
         }
         if (state.canCreate) {
-            ExtendedFloatingActionButton(
-                onClick = vm::openNew,
-                icon = { Icon(OrbIcons.Plus, null) },
-                text = { Text(SchedulesTexts.NEW, fontWeight = FontWeight.SemiBold) },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
+            OrbFab(SchedulesTexts.NEW, OrbIcons.Plus, vm::openNew, Modifier.align(Alignment.BottomEnd).padding(16.dp), lifted = snackbar.currentSnackbarData != null)
         }
-        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
+        OrbSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
     }
 
     state.items.firstOrNull { it.id == running }?.let { s ->

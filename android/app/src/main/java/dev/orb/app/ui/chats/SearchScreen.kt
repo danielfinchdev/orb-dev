@@ -52,6 +52,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.TextStyle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.orb.app.ui.icons.OrbIcons
+import dev.orb.app.ui.kit.ProjectDot
+import dev.orb.app.ui.kit.ProjectDotSize
 import dev.orb.app.ui.theme.OrbTheme
 
 /** Highlights every occurrence of [q] in [text] (ignoring case). */
@@ -174,7 +176,7 @@ private fun Results(state: SearchState, onOpen: (ChatRef) -> Unit) {
                 item(key = "h:projects", contentType = "header") { Header(ChatTexts.GROUP_PROJECTS) }
                 items(r.projects, key = { "p:" + it.name }, contentType = { "project" }) { p ->
                     ResultRow(
-                        { Box(Modifier.size(40.dp).clip(CircleShape).background(projectColor(p.name)), contentAlignment = Alignment.Center) { Text(projectInitials(p.name), color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.Bold) } },
+                        { ProjectDot(p.name, size = ProjectDotSize.Normal) },
                         highlight(p.name, state.query, hl), "${ChatTexts.PROJECT_ON_PC} · ${ChatTexts.chatsOf(p.chats)}", null, onClick = null,
                     )
                 }
@@ -185,7 +187,7 @@ private fun Results(state: SearchState, onOpen: (ChatRef) -> Unit) {
 
 @Composable
 private fun Header(text: String) {
-    Text(text, Modifier.fillMaxWidth().padding(start = 16.dp, end = 24.dp, top = 16.dp, bottom = 4.dp).semantics { heading() }, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.secondary)
+    Text(text, Modifier.fillMaxWidth().padding(start = 16.dp, end = 24.dp, top = 16.dp, bottom = 4.dp).semantics { heading() }, style = MaterialTheme.typography.titleSmall, color = OrbTheme.colors.text2)
 }
 
 @Composable

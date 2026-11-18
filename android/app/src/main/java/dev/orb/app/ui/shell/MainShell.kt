@@ -52,6 +52,8 @@ import dev.orb.app.ui.notes.NotesViewModel
 import dev.orb.app.ui.chats.Message
 import dev.orb.app.ui.connectionText
 import dev.orb.app.ui.icons.OrbIcons
+import dev.orb.app.ui.kit.OrbBottomBar
+import dev.orb.app.ui.kit.OrbTab
 import dev.orb.app.ui.theme.OrbMotion
 import dev.orb.app.ui.theme.OrbTheme
 import dev.orb.app.ui.projects.ProjectsBackend
@@ -108,8 +110,9 @@ fun MainShell(
     projects: ProjectsBackend? = null,
     notes: NotesBackend? = null,
 ) {
-    val shell = viewModel<ShellViewModel>(factory = viewModelFactory { initializer { ShellViewModel(backend) } })
+    val shell = viewModel<ShellViewModel>(factory = viewModelFactory { initializer { ShellViewModel(backend, tasks) } })
     val unread by shell.unreadChats.collectAsStateWithLifecycle()
+    val toApprove by shell.tasksToApprove.collectAsStateWithLifecycle()
     val connection by backend.connection.collectAsStateWithLifecycle()
     // The notices list lives in the backend, so the bell counts even while the center is closed.
     val noticesVm = notes?.let { viewModel<NotesViewModel>(factory = viewModelFactory { initializer { NotesViewModel(it) } }) }
@@ -135,7 +138,7 @@ fun MainShell(
         bottomBar = {
             OrbNavigationBar(
                 selected = { tab -> current?.destination?.hasRoute(tab.route::class) == true },
-                unread = unread,
+                unread = unread, toApprove = toApprove,
                 onSelect = { tab ->
                     nav.navigate(tab.route) {
                         popUpTo(nav.graph.findStartDestination().id) { saveState = true }
@@ -175,23 +178,15 @@ fun MainShell(
 }
 
 @Composable
-private fun OrbNavigationBar(selected: (Tab) -> Boolean, unread: Int, onSelect: (Tab) -> Unit) {
-    NavigationBar(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainerLow) {
-        for (tab in tabs) {
-            NavigationBarItem(
-                selected = selected(tab), onClick = { onSelect(tab) }, label = { Text(tab.label) },
-                icon = {
-                    if (tab.route == ChatsTab && unread > 0) {
-                        BadgedBox(badge = { Badge { Text(unread.toString()) } }) { Icon(tab.icon, null) }
-                    } else Icon(tab.icon, null)
-                },
-                colors = NavigationBarItemDefaults.colors(
-                    indicatorColor = androidx.compose.material3.MaterialTheme.colorScheme.primaryContainer,
-                    selectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.onPrimaryContainer,
-                ),
-            )
-        }
+private fun OrbNavigationBar(selected: (Tab) -> Boolean, unread: Int, toApprove: Int, onSelect: (Tab) -> Unit) {
+    val items = tabs.map { tab ->
+        OrbTab(
+            tab.label, tab.label, tab.icon,
+            count = when (tab.route) { ChatsTab -> unread; TasksTab -> toApprove; else -> 0 },
+        )
     }
+    val current = tabs.firstOrNull(selected)?.label
+    OrbBottomBar(items, current ?: "", onSelect = { item -> tabs.first { it.label == item.key }.let(onSelect) })
 }
 
 @Composable

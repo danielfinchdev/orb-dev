@@ -25,11 +25,11 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExtendedFloatingActionButton
+import dev.orb.app.ui.kit.OrbFab
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
+import dev.orb.app.ui.kit.OrbSnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -113,7 +113,7 @@ fun DirectChatScreen(
                 )
             }
         }
-        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp, start = 16.dp, end = 16.dp))
+        OrbSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp, start = 16.dp, end = 16.dp))
     }
     if (renaming) TextDialog(
         ChatTexts.RENAME_TITLE, ChatTexts.TITLE_FIELD, state.title, ChatTexts.SAVE,
@@ -260,12 +260,7 @@ private fun DirectList(
             !stick && unseen, Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp),
             enter = fadeIn(tween(OrbMotion.Short)) + scaleIn(tween(OrbMotion.Short)), exit = fadeOut(tween(OrbMotion.Fast)) + scaleOut(tween(OrbMotion.Fast)),
         ) {
-            ExtendedFloatingActionButton(
-                onClick = { onStick(true); unseen = false },
-                icon = { Icon(OrbIcons.ArrowDown, null) }, text = { Text(ChatTexts.NEW_BELOW) },
-                modifier = Modifier.semantics { contentDescription = ChatTexts.NEW_BELOW_DESC },
-                containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
+            OrbFab(ChatTexts.NEW_BELOW, OrbIcons.ArrowDown, { onStick(true); unseen = false }, Modifier.semantics { contentDescription = ChatTexts.NEW_BELOW_DESC })
         }
     }
 }

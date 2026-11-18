@@ -64,7 +64,7 @@ class DirectActions(
 /** The agent's letter on its colour (Claude C, Codex X, Cursor Cu, Gemini G, ACP A). */
 @Composable
 fun AgentAvatar(agent: String?, size: Dp = 28.dp) {
-    val mark = AgentMarks.of(agent) ?: AgentMarks.of("acp")!!
+    val mark = AgentLetters.of(agent) ?: AgentLetters.of("acp")!!
     Box(Modifier.size(size).clip(CircleShape).background(mark.color), contentAlignment = Alignment.Center) {
         Text(mark.letter, color = Color.White, fontWeight = FontWeight.Bold, fontSize = (size.value * 0.42f).sp)
     }

@@ -47,10 +47,10 @@ class ThemeShotsTest {
             }
         }
         rule.waitForIdle()
-        Shots.save(rule.activity, "09-chats-${palette.key}-claro")
+        Shots.save(rule.activity, "tema-chats-${palette.key}-claro")
         dark = true
         rule.waitForIdle()
-        Shots.save(rule.activity, "09-chats-${palette.key}-oscuro")
+        Shots.save(rule.activity, "tema-chats-${palette.key}-oscuro")
     }
 
     @Test fun chatsGrafito() = chatList(OrbPaletteChoice.Grafito)

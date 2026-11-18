@@ -17,12 +17,12 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
+import dev.orb.app.ui.kit.OrbFab
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
+import dev.orb.app.ui.kit.OrbSnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarResult
@@ -102,15 +102,8 @@ fun ChatListScreen(
                 ListBody(state, onOpenChat, onLongPress = { actionsFor = it.key }, onRetry = vm::refresh, onCloseDigest = vm::closeDigest, onReorder = vm::reorder)
             }
         }
-        ExtendedFloatingActionButton(
-            onClick = onNewChat,
-            icon = { Icon(OrbIcons.Plus, null) },
-            text = { Text(ChatTexts.NEW_CHAT, fontWeight = FontWeight.SemiBold) },
-            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        )
-        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
+        OrbFab(ChatTexts.NEW_CHAT, OrbIcons.SquarePen, onNewChat, Modifier.align(Alignment.BottomEnd).padding(16.dp), lifted = snackbar.currentSnackbarData != null)
+        OrbSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
     }
 
     val doomed = deleting
@@ -272,8 +265,8 @@ private fun SectionHeader(h: HeaderEntry, modifier: Modifier = Modifier) {
         modifier.fillMaxWidth().padding(start = 16.dp, end = 24.dp, top = 16.dp, bottom = 4.dp).semantics { heading() },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (h.pin) Icon(OrbIcons.Pin, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.secondary)
-        Text(h.title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.secondary)
+        if (h.pin) Icon(OrbIcons.Pin, null, Modifier.size(14.dp), tint = OrbTheme.colors.text2)
+        Text(h.title, style = MaterialTheme.typography.titleSmall, color = OrbTheme.colors.text2)
     }
 }
 

@@ -33,7 +33,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SnackbarHost
+import dev.orb.app.ui.kit.OrbSnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -126,7 +126,7 @@ fun NewChatScreen(vm: NewChatViewModel, onClose: () -> Unit, onCreated: (NewChat
             Button(onClick = vm::create, enabled = state.canCreate, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
                 Text(if (state.sending) ChatTexts.NEW_CHAT_CREATING else ChatTexts.NEW_CHAT_CREATE)
             }
-            SnackbarHost(snackbar)
+            OrbSnackbarHost(snackbar)
         }
     }
 

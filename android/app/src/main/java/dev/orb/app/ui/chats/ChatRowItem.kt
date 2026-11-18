@@ -41,22 +41,24 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.orb.app.ui.icons.OrbIcons
+import dev.orb.app.ui.kit.AgentMark
+import dev.orb.app.ui.kit.ProjectDot
+import dev.orb.app.ui.kit.ProjectDotSize
 import dev.orb.app.ui.theme.OrbTheme
 import dev.orb.app.ui.theme.oklch
-import kotlin.math.abs
 
-/** The small letter badge of an agent, in the colours of the design. */
+/** The letter badge of an agent, still used by the direct-chat bubbles until they are redone. */
 @Immutable
-class AgentMark(val letter: String, val color: Color)
+class AgentLetter(val letter: String, val color: Color)
 
-object AgentMarks {
-    private val claude = AgentMark("C", oklch(0.62, 0.14, 45.0))
-    private val codex = AgentMark("X", oklch(0.35, 0.02, 268.0))
-    private val cursor = AgentMark("Cu", oklch(0.45, 0.03, 268.0))
-    private val gemini = AgentMark("G", oklch(0.58, 0.15, 250.0))
-    private val acp = AgentMark("A", oklch(0.55, 0.10, 180.0))
+object AgentLetters {
+    private val claude = AgentLetter("C", oklch(0.62, 0.14, 45.0))
+    private val codex = AgentLetter("X", oklch(0.35, 0.02, 268.0))
+    private val cursor = AgentLetter("Cu", oklch(0.45, 0.03, 268.0))
+    private val gemini = AgentLetter("G", oklch(0.58, 0.15, 250.0))
+    private val acp = AgentLetter("A", oklch(0.55, 0.10, 180.0))
 
-    fun of(agent: String?): AgentMark? = when (agent) {
+    fun of(agent: String?): AgentLetter? = when (agent) {
         null, "" -> null
         "claude" -> claude
         "codex" -> codex
@@ -66,41 +68,14 @@ object AgentMarks {
     }
 }
 
-/** Project avatar colour: a stable hue per project name. */
-fun projectColor(name: String): Color = oklch(0.55, 0.12, (abs(name.hashCode()) % 360).toDouble())
-
-/** «tienda-online» -> TO, «api» -> AP. */
-fun projectInitials(name: String): String {
-    val words = name.split('-', '_', ' ', '.').filter { it.isNotEmpty() }
-    return when {
-        words.size >= 2 -> "${words[0].first()}${words[1].first()}"
-        else -> name.take(2)
-    }.uppercase()
-}
-
+/** The mark of a chat: its agent for a direct chat, Orbe otherwise, with the project's dot at the corner. */
 @Composable
 fun ChatAvatar(row: ChatRow, modifier: Modifier = Modifier) {
-    val mark = AgentMarks.of(row.agent)
-    Box(modifier.size(40.dp)) {
-        when {
-            row.project != null -> LetterCircle(projectInitials(row.project), projectColor(row.project))
-            row.direct -> LetterCircle(mark?.letter ?: "A", mark?.color ?: AgentMarks.of("acp")!!.color)
-            else -> OrbeCircle()
+    Box(modifier.size(24.dp), contentAlignment = Alignment.TopCenter) {
+        AgentMark(if (row.direct) row.agent ?: "acp" else "orbe", Modifier.align(Alignment.Center), size = 20.dp)
+        if (row.project != null) {
+            ProjectDot(row.project, Modifier.align(Alignment.BottomEnd), ProjectDotSize.Small)
         }
-        if (mark != null && (row.project != null)) {
-            Box(
-                Modifier.align(Alignment.BottomEnd).padding(end = 0.dp).size(18.dp).clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.background).padding(1.5.dp).clip(CircleShape).background(mark.color),
-                contentAlignment = Alignment.Center,
-            ) { Text(mark.letter, color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
-        }
-    }
-}
-
-@Composable
-private fun LetterCircle(text: String, color: Color) {
-    Box(Modifier.size(40.dp).clip(CircleShape).background(color), contentAlignment = Alignment.Center) {
-        Text(text, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -181,7 +156,7 @@ fun ChatRowItem(row: ChatRow, whenText: String, onClick: () -> Unit, onLongClick
                 if (row.snoozedUntil != null) Icon(OrbIcons.Clock, ChatTexts.SNOOZED, Modifier.size(14.dp), tint = colors.text3)
                 Text(
                     whenText, fontSize = 12.sp, lineHeight = 16.sp,
-                    color = if (unread) MaterialTheme.colorScheme.secondary else colors.text3,
+                    color = colors.text3,
                     fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal,
                 )
             }
