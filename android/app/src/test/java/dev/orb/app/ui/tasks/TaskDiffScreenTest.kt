@@ -6,7 +6,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.resetMain
@@ -36,7 +36,7 @@ class TaskDiffScreenTest {
 
     private fun show(b: FakeTasksBackend) {
         val vm = TaskDiffViewModel(b, 4)
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { TaskDiffScreen(vm, onBack = {}) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { TaskDiffScreen(vm, onBack = {}) } }
         rule.waitForIdle()
     }
 

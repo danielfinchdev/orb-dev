@@ -22,7 +22,7 @@ import dev.orb.app.attach.UploadPolicy
 import dev.orb.app.ui.chats.ChatTexts
 import dev.orb.app.ui.chats.Composer
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,7 +46,7 @@ class AttachViewsTest {
     private val noLaunch = AttachLaunchers({}, {}, {})
 
     private fun sheet(policy: UploadPolicy, launchers: AttachLaunchers = noLaunch) {
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { AttachSheet(policy, launchers, onDismiss = {}) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { AttachSheet(policy, launchers, onDismiss = {}) } }
         rule.waitForIdle()
     }
 
@@ -74,7 +74,7 @@ class AttachViewsTest {
     }
 
     private fun strip(items: List<Attachment>, notice: String? = null, onRemove: (Long) -> Unit = {}, onRetry: (Long) -> Unit = {}) {
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { AttachStrip(items, notice, onRemove, onRetry) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { AttachStrip(items, notice, onRemove, onRetry) } }
         rule.waitForIdle()
     }
 
@@ -120,7 +120,7 @@ class AttachViewsTest {
         val c = AttachController(scope, io, up, { UploadPolicy(1000, setOf("png", "pdf")) }, File(tmp.newFolder(), "w"), Dispatchers.Unconfined)
         val sent = ArrayList<String>()
         rule.setContent {
-            OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) {
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) {
                 Composer(online = true, busy = false, mode = null, canSetMode = false, onSend = { sent += it }, onStop = {}, onMode = {}, attach = c)
             }
         }
@@ -143,7 +143,7 @@ class AttachViewsTest {
 
     @Test fun withoutAnAttachControllerThereIsNoPlus() {
         rule.setContent {
-            OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) {
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) {
                 Composer(online = true, busy = false, mode = null, canSetMode = false, onSend = {}, onStop = {}, onMode = {})
             }
         }

@@ -72,7 +72,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.orb.app.ui.icons.OrbIcons
-import dev.orb.app.ui.theme.GlassSurface
 import dev.orb.app.ui.theme.OrbMotion
 import dev.orb.app.ui.theme.OrbTheme
 
@@ -282,7 +281,6 @@ internal fun Composer(
     val attachOk = attached.all { it.state == dev.orb.app.attach.AttachState.Ready }
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(24.dp)
-    val glass = OrbTheme.colors.isGlass
     val body: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 6.dp)) {
             if (attach != null) {
@@ -348,8 +346,7 @@ internal fun Composer(
         dev.orb.app.ui.attach.AttachSheet(attach.currentPolicy, launchers, onDismiss = { sheet = false })
     }
     Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
-        if (glass) GlassSurface(Modifier.fillMaxWidth(), shape) { body() }
-        else Box(
+        Box(
             Modifier.fillMaxWidth().clip(shape).background(scheme.surfaceContainerLow).border(BorderStroke(1.dp, scheme.outlineVariant), shape),
         ) { body() }
     }

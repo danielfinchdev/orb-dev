@@ -13,7 +13,7 @@ import dev.orb.app.link.net.LinkError
 import dev.orb.app.link.net.LinkException
 import dev.orb.app.link.net.PcVersions
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -162,7 +162,7 @@ class MenuScreensTest {
     @After fun tearDown() = Dispatchers.resetMain()
 
     private fun showMenu(state: MenuState, actions: MenuActions) {
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { MenuContent(state, actions, close = {}) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { MenuContent(state, actions, close = {}) } }
         rule.waitForIdle()
     }
 
@@ -184,7 +184,7 @@ class MenuScreensTest {
         val got = ArrayList<String>()
         var closed = 0
         rule.setContent {
-            OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) {
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) {
                 MenuContent(
                     MenuState("PC"),
                     MenuActions(
@@ -204,7 +204,7 @@ class MenuScreensTest {
     }
 
     @Test fun tutorialsOffersEveryTutorialAndFaqWithoutAConnection() {
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { TutorialsScreen(onBack = {}) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { TutorialsScreen(onBack = {}) } }
         rule.waitForIdle()
         rule.onNodeWithText("Primeros pasos").assertIsDisplayed()
         rule.onNodeWithText("Cómo funciona").assertIsDisplayed()
@@ -216,7 +216,7 @@ class MenuScreensTest {
     }
 
     @Test fun aTutorialCardOpensAndFoldsAgain() {
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { TutorialsScreen(onBack = {}) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { TutorialsScreen(onBack = {}) } }
         val firstLine = TutorialTexts.named(TutorialTexts.TUTORIALS.first().lines.first())
         rule.onNodeWithText("•  $firstLine").assertDoesNotExist()
         rule.onNodeWithText("Primeros pasos").performClick()
@@ -230,7 +230,7 @@ class MenuScreensTest {
     @Test fun searchIgnoresAccentsAndCaseAndSaysWhenNothingMatches() {
         assertTrue(TutorialSearch.tutorials("BITACORA").any { it.id == "logs" })
         assertEquals(TutorialTexts.TUTORIALS.size, TutorialSearch.tutorials("  ").size)
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { TutorialsScreen(onBack = {}) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { TutorialsScreen(onBack = {}) } }
         rule.onNodeWithText("Buscar en los tutoriales…").performTextInput("zzzqq")
         rule.waitForIdle()
         rule.onNodeWithText("No hay resultados para «zzzqq».").assertIsDisplayed()
@@ -238,7 +238,7 @@ class MenuScreensTest {
 
     private fun showActivity(b: FakeActivityBackend) {
         val vm = ActivityViewModel(b)
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { ActivityScreen(vm, onBack = {}) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { ActivityScreen(vm, onBack = {}) } }
         rule.waitForIdle()
     }
 

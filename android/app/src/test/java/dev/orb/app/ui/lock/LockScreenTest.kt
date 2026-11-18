@@ -18,7 +18,7 @@ import dev.orb.app.lock.LockPrefs
 import dev.orb.app.lock.LockTexts
 import dev.orb.app.ui.theme.MemoryStore
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import org.junit.Assert.assertEquals
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertFalse
@@ -43,7 +43,7 @@ class LockScreenTest {
 
     @Test fun showsOnlyTheLockAndAsksTheSystemRightAway() {
         val (lock, auth) = lock()
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { LockScreen(lock) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { LockScreen(lock) } }
         rule.waitForIdle()
         rule.onNodeWithText(LockTexts.LOCKED_TITLE).assertIsDisplayed()
         rule.onNodeWithText(LockTexts.USE_PIN).assertIsDisplayed()
@@ -54,7 +54,7 @@ class LockScreenTest {
 
     @Test fun thePinButtonAsksForThePhonesPin() {
         val (lock, auth) = lock()
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = true, dynamic = false) { LockScreen(lock) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = true) { LockScreen(lock) } }
         rule.waitForIdle()
         auth.answer(AuthResult.Cancelled)
         rule.waitForIdle()
@@ -65,7 +65,7 @@ class LockScreenTest {
 
     @Test fun unlockingOpensTheGate() {
         val (lock, auth) = lock()
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { LockScreen(lock) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { LockScreen(lock) } }
         rule.waitForIdle()
         auth.answer(AuthResult.Success)
         assertTrue(lock.gate.isOpen())
@@ -73,7 +73,7 @@ class LockScreenTest {
 
     @Test fun aBlockedSensorIsExplainedAndNothingIsLost() {
         val (lock, auth) = lock()
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { LockScreen(lock) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { LockScreen(lock) } }
         rule.waitForIdle()
         auth.answer(AuthResult.Blocked)
         rule.waitForIdle()
@@ -88,7 +88,7 @@ class LockScreenTest {
         var opened: String? = null
         var composed = 0
         rule.setContent {
-            OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) {
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) {
                 LockGate(lock) {
                     composed++
                     val target by pending.collectAsState()
@@ -110,7 +110,7 @@ class LockScreenTest {
 
     @Test fun lockingAgainHidesTheContentAgain() {
         val (lock, auth) = lock()
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { LockGate(lock) { Text("contenido") } } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { LockGate(lock) { Text("contenido") } } }
         rule.waitForIdle()
         auth.answer(AuthResult.Success)
         rule.waitForIdle()
@@ -123,7 +123,7 @@ class LockScreenTest {
     }
 
     @Test fun theButtonsWaitWhileTheSystemIsAsking() {
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { LockContent(null as LockNotice?, busy = true, onUnlock = {}, onPin = {}) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { LockContent(null as LockNotice?, busy = true, onUnlock = {}, onPin = {}) } }
         rule.onNodeWithText(LockTexts.UNLOCK).assertIsNotEnabled()
     }
 }

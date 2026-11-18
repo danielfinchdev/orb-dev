@@ -10,7 +10,7 @@ import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.link.net.PcVersions
 import dev.orb.app.ui.theme.MemoryStore
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -90,7 +90,7 @@ class OfflineStripTest {
 
     private fun show() {
         val info = OfflineInfo(connection, contact, { retries++ }, clock = { now })
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { CompositionLocalProvider(LocalOffline provides info) { OfflineStrip() } } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { CompositionLocalProvider(LocalOffline provides info) { OfflineStrip() } } }
         rule.waitForIdle()
     }
 

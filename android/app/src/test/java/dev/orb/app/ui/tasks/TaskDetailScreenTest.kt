@@ -8,7 +8,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.resetMain
@@ -34,7 +34,7 @@ class TaskDetailScreenTest {
     private fun show(b: FakeTasksBackend, id: Long, onChanges: (Long) -> Unit = {}, onOpen: (Long) -> Unit = {}) {
         val vm = TaskDetailViewModel(b, id, reloadDebounceMs = 0)
         rule.setContent {
-            OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) {
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) {
                 TaskDetailScreen(vm, onBack = {}, onOpenTask = onOpen, onOpenChanges = onChanges, nowMs = { 1_800_000_000_000L })
             }
         }

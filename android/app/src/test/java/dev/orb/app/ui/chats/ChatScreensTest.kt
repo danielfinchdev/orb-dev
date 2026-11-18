@@ -12,10 +12,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.assertIsDisplayed
 import dev.orb.app.ui.shell.MainShell
 import dev.orb.app.ui.shell.ShellActions
-import dev.orb.app.ui.theme.MemoryStore
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
-import dev.orb.app.ui.theme.ThemePrefs
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -40,7 +38,7 @@ class ChatScreensTest {
     private fun list(b: FakeChatsBackend, onOpen: (ChatRef) -> Unit = {}) {
         val vm = ChatListViewModel(b, dispatcher = Dispatchers.Unconfined)
         rule.setContent {
-            OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) {
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) {
                 ChatListScreen(vm, menu, onOpenChat = onOpen, onSearch = {}, onNewChat = {})
             }
         }
@@ -147,7 +145,7 @@ class ChatScreensTest {
         )
         val vm = SearchViewModel(b, debounceMs = 0)
         var opened: ChatRef? = null
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { SearchScreen(vm, onBack = {}, onOpenChat = { opened = it }) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { SearchScreen(vm, onBack = {}, onOpenChat = { opened = it }) } }
         vm.setQuery("carrito")
         rule.waitUntil(5_000) { vm.state.value.phase == SearchPhase.Done }
         rule.waitForIdle()
@@ -168,10 +166,9 @@ class ChatScreensTest {
 
     @Test fun theThreeTabsNavigate() {
         val b = FakeChatsBackend(rows)
-        val prefs = ThemePrefs(MemoryStore())
         rule.setContent {
-            OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) {
-                MainShell(b, prefs, ShellActions({}, {}, {}, {}, {}, {}), Dispatchers.Unconfined)
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) {
+                MainShell(b, ShellActions({}, {}, {}, {}, {}, {}), Dispatchers.Unconfined)
             }
         }
         rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("Orb 3.8.4 seguimiento") > 0 }

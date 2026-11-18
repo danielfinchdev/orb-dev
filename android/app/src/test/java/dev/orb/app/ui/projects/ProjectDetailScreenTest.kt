@@ -10,7 +10,7 @@ import dev.orb.app.ui.chats.ChatRef
 import dev.orb.app.ui.chats.row
 import dev.orb.app.ui.tasks.task
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.resetMain
@@ -45,7 +45,7 @@ class ProjectDetailScreenTest {
 
     private fun show(b: FakeProjectsBackend, onBack: () -> Unit = {}, onChat: (ChatRef) -> Unit = {}, onTask: (Long) -> Unit = {}) {
         val vm = ProjectDetailViewModel(b, "app-movil", reloadDebounceMs = 0)
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { ProjectDetailScreen(vm, onBack, onChat, onTask) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { ProjectDetailScreen(vm, onBack, onChat, onTask) } }
         rule.waitForIdle()
     }
 

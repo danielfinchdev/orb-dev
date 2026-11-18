@@ -52,7 +52,6 @@ import dev.orb.app.ui.notes.NotesViewModel
 import dev.orb.app.ui.chats.Message
 import dev.orb.app.ui.connectionText
 import dev.orb.app.ui.icons.OrbIcons
-import dev.orb.app.ui.theme.GlassSurface
 import dev.orb.app.ui.theme.OrbMotion
 import dev.orb.app.ui.theme.OrbTheme
 import dev.orb.app.ui.projects.ProjectsBackend
@@ -61,7 +60,6 @@ import dev.orb.app.ui.projects.ProjectsViewModel
 import dev.orb.app.ui.tasks.TasksBackend
 import dev.orb.app.ui.tasks.TasksScreen
 import dev.orb.app.ui.tasks.TasksViewModel
-import dev.orb.app.ui.theme.ThemePrefs
 import kotlinx.serialization.Serializable
 
 @Serializable data object ChatsTab
@@ -103,14 +101,14 @@ class MenuAvailability(val schedules: Boolean = true, val activity: Boolean = tr
 /** The three tabs. Each keeps its own state while the others are shown. */
 @Composable
 fun MainShell(
-    backend: ChatsBackend, themePrefs: ThemePrefs, actions: ShellActions,
+    backend: ChatsBackend, actions: ShellActions,
     // Where the list is grouped; tests run it inline.
     listDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.Default,
     tasks: TasksBackend? = null,
     projects: ProjectsBackend? = null,
     notes: NotesBackend? = null,
 ) {
-    val shell = viewModel<ShellViewModel>(factory = viewModelFactory { initializer { ShellViewModel(backend, themePrefs) } })
+    val shell = viewModel<ShellViewModel>(factory = viewModelFactory { initializer { ShellViewModel(backend) } })
     val unread by shell.unreadChats.collectAsStateWithLifecycle()
     val connection by backend.connection.collectAsStateWithLifecycle()
     // The notices list lives in the backend, so the bell counts even while the center is closed.
@@ -178,27 +176,22 @@ fun MainShell(
 
 @Composable
 private fun OrbNavigationBar(selected: (Tab) -> Boolean, unread: Int, onSelect: (Tab) -> Unit) {
-    val glass = OrbTheme.colors.isGlass
-    val bar: @Composable () -> Unit = {
-        NavigationBar(containerColor = if (glass) Color.Transparent else androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainerLow) {
-            for (tab in tabs) {
-                NavigationBarItem(
-                    selected = selected(tab), onClick = { onSelect(tab) }, label = { Text(tab.label) },
-                    icon = {
-                        if (tab.route == ChatsTab && unread > 0) {
-                            BadgedBox(badge = { Badge { Text(unread.toString()) } }) { Icon(tab.icon, null) }
-                        } else Icon(tab.icon, null)
-                    },
-                    colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = androidx.compose.material3.MaterialTheme.colorScheme.primaryContainer,
-                        selectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.onPrimaryContainer,
-                    ),
-                )
-            }
+    NavigationBar(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainerLow) {
+        for (tab in tabs) {
+            NavigationBarItem(
+                selected = selected(tab), onClick = { onSelect(tab) }, label = { Text(tab.label) },
+                icon = {
+                    if (tab.route == ChatsTab && unread > 0) {
+                        BadgedBox(badge = { Badge { Text(unread.toString()) } }) { Icon(tab.icon, null) }
+                    } else Icon(tab.icon, null)
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    indicatorColor = androidx.compose.material3.MaterialTheme.colorScheme.primaryContainer,
+                    selectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.onPrimaryContainer,
+                ),
+            )
         }
     }
-    // Cristal: the bar floats over the colour field as a glass pill.
-    if (glass) Box(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) { GlassSurface(Modifier.padding(0.dp)) { bar() } } else bar()
 }
 
 @Composable

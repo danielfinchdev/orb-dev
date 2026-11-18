@@ -8,7 +8,7 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.resetMain
@@ -33,7 +33,7 @@ class UsageScreenTest {
 
     private fun show(b: FakeUsageBackend) {
         val vm = UsageViewModel(b)
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { UsageScreen(vm, onBack = {}, nowMs = { 0L }) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { UsageScreen(vm, onBack = {}, nowMs = { 0L }) } }
         rule.waitForIdle()
     }
 

@@ -9,7 +9,7 @@ import dev.orb.app.link.net.LinkError
 import dev.orb.app.link.net.LinkException
 import dev.orb.app.link.net.PcVersions
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -164,7 +164,7 @@ class NotesScreenTest {
 
     private fun show(b: FakeNotesBackend, onOpen: (NoticeTarget) -> Unit = {}) {
         val vm = NotesViewModel(b)
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { NotesScreen(vm, onBack = {}, onOpen = onOpen, nowMs = { 2_000 }) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { NotesScreen(vm, onBack = {}, onOpen = onOpen, nowMs = { 2_000 }) } }
         rule.waitForIdle()
     }
 

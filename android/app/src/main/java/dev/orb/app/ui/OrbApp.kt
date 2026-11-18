@@ -13,7 +13,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.orb.app.ui.settings.AppearanceSheet
-import dev.orb.app.ui.theme.OrbBackground
 import dev.orb.app.ui.theme.OrbTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -119,8 +118,7 @@ import kotlinx.serialization.Serializable
 fun OrbApp(container: AppContainer) {
     val theme by container.themePrefs.settings.collectAsStateWithLifecycle()
     OrbTheme(theme) {
-        // Transparent so Cristal's colour field shows through; Surface still provides the content colour.
-        OrbBackground { Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
+        Surface(modifier = Modifier.fillMaxSize(), color = androidx.compose.material3.MaterialTheme.colorScheme.background) {
             // The saved link is read off the main thread; until it is known there is nothing to show.
             val linked by produceState<Boolean?>(null, container) { value = container.startup.await() }
             if (linked == null) {
@@ -139,7 +137,7 @@ fun OrbApp(container: AppContainer) {
                     }
                 }
             }
-        } }
+        }
     }
 }
 
@@ -182,7 +180,7 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                     )
                 }
                 MainShell(
-                    backend, container.themePrefs,
+                    backend,
                     ShellActions(
                         onOpenChat = { nav.navigate(ChatRoute(it.kind.wire, it.id)) },
                         onSearch = { nav.navigate(Search) },

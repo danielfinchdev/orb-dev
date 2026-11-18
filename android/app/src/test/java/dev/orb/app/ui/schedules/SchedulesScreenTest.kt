@@ -10,7 +10,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import dev.orb.app.link.api.ApiMethods
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.resetMain
@@ -36,7 +36,7 @@ class SchedulesScreenTest {
 
     private fun show(b: FakeSchedulesBackend, onBack: () -> Unit = {}) {
         val vm = SchedulesViewModel(b, reloadDebounceMs = 0)
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { SchedulesScreen(vm, onBack) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { SchedulesScreen(vm, onBack) } }
         rule.waitForIdle()
     }
 

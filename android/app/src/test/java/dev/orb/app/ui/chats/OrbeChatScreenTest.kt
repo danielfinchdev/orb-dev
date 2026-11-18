@@ -10,7 +10,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -30,10 +30,10 @@ class OrbeChatScreenTest {
         raw(2, "orb", "Solo vive en **memoria** y se pierde al recargar."),
     )
 
-    private fun screen(b: FakeOrbeChatBackend, theme: ThemeChoice = ThemeChoice.Orbita): OrbeChatViewModel {
+    private fun screen(b: FakeOrbeChatBackend, theme: OrbPaletteChoice = OrbPaletteChoice.Grafito): OrbeChatViewModel {
         val vm = OrbeChatViewModel(b, 7, dispatcher = Dispatchers.Unconfined)
         rule.setContent {
-            OrbTheme(theme, dark = false, dynamic = false) { OrbeChatScreen(vm, onBack = {}) }
+            OrbTheme(theme, dark = false) { OrbeChatScreen(vm, onBack = {}) }
         }
         rule.waitForIdle()
         return vm
@@ -157,8 +157,8 @@ class OrbeChatScreenTest {
         assertEquals(0, rule.onAllNodesWithText("Pedir al PC que lo restaure").fetchSemanticsNodes().size)
     }
 
-    @Test fun cristalPaintsTheSameChat() {
-        screen(FakeOrbeChatBackend(thread), ThemeChoice.Cristal)
+    @Test fun anotherPalettePaintsTheSameChat() {
+        screen(FakeOrbeChatBackend(thread), OrbPaletteChoice.Oceano)
         rule.onNodeWithText("Mensaje para Orbe").assertIsDisplayed()
     }
 }

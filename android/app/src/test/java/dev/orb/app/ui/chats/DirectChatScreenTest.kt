@@ -12,7 +12,7 @@ import androidx.compose.ui.test.performTextInput
 import dev.orb.app.data.json
 import dev.orb.app.link.net.LinkEvent
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -38,7 +38,7 @@ class DirectChatScreenTest {
     private fun screen(b: FakeDirectChatBackend): DirectChatViewModel {
         val vm = DirectChatViewModel(b, "s1", dispatcher = Dispatchers.Unconfined)
         rule.setContent {
-            OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { DirectChatScreen(vm, onBack = {}, onOpenChat = {}) }
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) { DirectChatScreen(vm, onBack = {}, onOpenChat = {}) }
         }
         rule.waitForIdle()
         return vm

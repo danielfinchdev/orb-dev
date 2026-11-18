@@ -5,14 +5,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-enum class ThemeChoice(val key: String) {
-    Orbita("orbita"), Cristal("cristal"), Grafito("grafito");
-
-    companion object {
-        fun fromKey(key: String?) = entries.firstOrNull { it.key == key }
-    }
-}
-
 enum class DarkMode(val key: String) {
     System("sistema"), Light("claro"), Dark("oscuro");
 
@@ -21,28 +13,11 @@ enum class DarkMode(val key: String) {
     }
 }
 
-/**
- * The theme the phone wears when it follows the PC: «cristal» and «grafito» have a counterpart, every other one
- * (orb, profesional, nube, vaporwave, retro…) is Órbita, and so is "unknown".
- */
-fun phoneThemeFor(pcTheme: String?): ThemeChoice = when (pcTheme) {
-    "cristal" -> ThemeChoice.Cristal
-    "grafito" -> ThemeChoice.Grafito
-    else -> ThemeChoice.Orbita
-}
-
-/**
- * [choice] null = follow the PC. [pcTheme] is the PC's `ui.skin`, remembered so a cold start without a connection
- * still looks like the PC.
- */
+/** The one theme has a palette and a mode; the palette defaults to Grafito. */
 data class ThemeSettings(
-    val choice: ThemeChoice? = null,
+    val palette: OrbPaletteChoice = OrbPaletteChoice.Grafito,
     val dark: DarkMode = DarkMode.System,
-    val dynamic: Boolean = false,
-    val pcTheme: String? = null,
-) {
-    val effective: ThemeChoice get() = choice ?: phoneThemeFor(pcTheme)
-}
+)
 
 /** The few calls of SharedPreferences that are used, so the preferences can be tested without Android. */
 interface KeyValueStore {
@@ -71,19 +46,24 @@ class SharedPrefsStore(private val prefs: SharedPreferences) : KeyValueStore {
 
 /** Not a secret, so plain preferences: how the app looks is kept on the phone and never sent anywhere. */
 class ThemePrefs(private val store: KeyValueStore) {
-    private val _settings = MutableStateFlow(
-        ThemeSettings(
-            choice = ThemeChoice.fromKey(store.getString(CHOICE)),
-            dark = DarkMode.fromKey(store.getString(DARK)),
-            dynamic = store.getBoolean(DYNAMIC, false),
-            pcTheme = store.getString(PC_THEME),
-        ),
-    )
+    private val _settings: MutableStateFlow<ThemeSettings>
+
+    init {
+        // The old theme keys mean nothing now: whoever had any old theme lands on Grafito and keeps the light/dark choice.
+        store.edit { for (key in OLD_KEYS) putString(key, null) }
+        _settings = MutableStateFlow(
+            ThemeSettings(
+                palette = OrbPaletteChoice.fromKey(store.getString(PALETTE)) ?: OrbPaletteChoice.Grafito,
+                dark = DarkMode.fromKey(store.getString(DARK)),
+            ),
+        )
+    }
+
     val settings: StateFlow<ThemeSettings> = _settings.asStateFlow()
 
-    fun setChoice(choice: ThemeChoice?) {
-        store.edit { putString(CHOICE, choice?.key) }
-        _settings.value = _settings.value.copy(choice = choice)
+    fun setPalette(palette: OrbPaletteChoice) {
+        store.edit { putString(PALETTE, palette.key) }
+        _settings.value = _settings.value.copy(palette = palette)
     }
 
     fun setDark(dark: DarkMode) {
@@ -91,28 +71,9 @@ class ThemePrefs(private val store: KeyValueStore) {
         _settings.value = _settings.value.copy(dark = dark)
     }
 
-    fun setDynamic(dynamic: Boolean) {
-        store.edit { putBoolean(DYNAMIC, dynamic) }
-        _settings.value = _settings.value.copy(dynamic = dynamic)
-    }
-
-    /** Called with the `ui.skin` the PC reports in `app.state`. */
-    fun setPcTheme(skin: String?) {
-        if (skin == _settings.value.pcTheme) return
-        store.edit { putString(PC_THEME, skin) }
-        _settings.value = _settings.value.copy(pcTheme = skin)
-    }
-
     private companion object {
-        const val CHOICE = "theme.choice"
+        const val PALETTE = "theme.palette"
         const val DARK = "theme.dark"
-        const val DYNAMIC = "theme.dynamic"
-        const val PC_THEME = "theme.pc"
+        val OLD_KEYS = listOf("theme.choice", "theme.dynamic", "theme.pc")
     }
 }
-
-/** The PC's `ui.skin` out of an `app.state` answer (config.ui.skin); null when it is not there. */
-fun pcSkinFrom(appState: kotlinx.serialization.json.JsonElement?): String? =
-    ((((appState as? kotlinx.serialization.json.JsonObject)?.get("config") as? kotlinx.serialization.json.JsonObject)
-        ?.get("ui") as? kotlinx.serialization.json.JsonObject)?.get("skin") as? kotlinx.serialization.json.JsonPrimitive)
-        ?.takeIf { it.isString }?.content

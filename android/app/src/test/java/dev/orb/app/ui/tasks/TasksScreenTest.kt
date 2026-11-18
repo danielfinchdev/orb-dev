@@ -9,7 +9,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import dev.orb.app.link.api.ApiMethods
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -43,7 +43,7 @@ class TasksScreenTest {
     private fun show(b: FakeTasksBackend, onOpen: (Long) -> Unit = {}) {
         val vm = TasksViewModel(b, reloadDebounceMs = 0, searchDebounceMs = 0)
         rule.setContent {
-            OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { TasksScreen(vm, onOpen) }
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) { TasksScreen(vm, onOpen) }
         }
         rule.waitForIdle()
     }

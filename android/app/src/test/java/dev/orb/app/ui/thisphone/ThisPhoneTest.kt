@@ -16,7 +16,7 @@ import dev.orb.app.lock.LockDelay
 import dev.orb.app.lock.LockSettings
 import dev.orb.app.notify.NotifySettings
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -71,7 +71,7 @@ class ThisPhoneTest {
     private fun show(dark: Boolean = false) {
         val vm = ThisPhoneViewModel(backend)
         rule.setContent {
-            OrbTheme(ThemeChoice.Orbita, dark = dark, dynamic = false) {
+            OrbTheme(OrbPaletteChoice.Grafito, dark = dark) {
                 ThisPhoneScreen(vm, onBack = { back++ }, onAppearance = { appearance++ }, onUnlinked = { left++ })
             }
         }

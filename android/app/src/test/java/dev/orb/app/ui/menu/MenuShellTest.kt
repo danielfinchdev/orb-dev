@@ -12,10 +12,8 @@ import dev.orb.app.ui.notes.FakeNotesBackend
 import dev.orb.app.ui.notes.notice
 import dev.orb.app.ui.shell.MainShell
 import dev.orb.app.ui.shell.ShellActions
-import dev.orb.app.ui.theme.MemoryStore
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
-import dev.orb.app.ui.theme.ThemePrefs
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.resetMain
@@ -40,8 +38,8 @@ class MenuShellTest {
 
     private fun show(notes: FakeNotesBackend?, actions: ShellActions) {
         rule.setContent {
-            OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) {
-                MainShell(FakeChatsBackend(), ThemePrefs(MemoryStore()), actions, Dispatchers.Unconfined, notes = notes)
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) {
+                MainShell(FakeChatsBackend(), actions, Dispatchers.Unconfined, notes = notes)
             }
         }
         rule.waitForIdle()

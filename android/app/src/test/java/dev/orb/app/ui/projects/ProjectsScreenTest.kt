@@ -8,7 +8,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import dev.orb.app.link.api.ApiMethods
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.resetMain
@@ -36,7 +36,7 @@ class ProjectsScreenTest {
 
     private fun show(b: FakeProjectsBackend, onOpen: (String) -> Unit = {}) {
         val vm = ProjectsViewModel(b, reloadDebounceMs = 0)
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { ProjectsScreen(vm, onOpen) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { ProjectsScreen(vm, onOpen) } }
         rule.waitForIdle()
     }
 
