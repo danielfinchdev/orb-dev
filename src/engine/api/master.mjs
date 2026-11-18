@@ -21,11 +21,21 @@ import { scrubVaultedSecrets, DONE_AT } from '../../domain/data/legacy/migrate-3
 const userError = (key, vars, extra = {}) => Object.assign(new Error(tr(key, vars)), { userFacing: true, status: 403, ...extra });
 const WORDS = { short: 'msg.master.short', long: 'msg.master.long', exists: 'msg.master.exists', lost: 'msg.master.lost', locked: 'msg.master.locked', damaged: 'msg.master.damaged', none: 'msg.master.none' };
 const asUser = (error) => (error instanceof MasterError ? userError(WORDS[error.code] ?? 'msg.master.damaged', { n: MIN_LENGTH }, { reason: error.code }) : error);
+// The causes master.lock is told (the window: 'idle' and 'hand'; the app: 'windows' and 'sleep'); anything else is not known.
+const LOCK_REASONS = { idle: 'idle', hand: 'manual', windows: 'windows', sleep: 'sleep' };
 // What a failed check says: how many tries are left, or how long to wait. code: it was the recovery code.
 export function refused(r, { code = false } = {}) {
   if (r.reason === 'none') return userError('msg.master.none', {}, { reason: 'none' });
   if (r.reason === 'tries') return userError('msg.master.tries', {}, { reason: 'tries' });
   if (r.until) return userError(r.reason === 'wrong' ? (code ? 'msg.master.codeWrongWait' : 'msg.master.wrongWait') : 'msg.master.wait', { s: Math.max(1, Math.ceil((Date.parse(r.until) - Date.now()) / 1000)) }, { reason: 'wait', until: r.until });
+  // nextWait: the seconds the vault will make the user wait once the free tries are gone (absent in an older vault).
+  const next = Number.isFinite(r.nextWait) && r.nextWait > 0 ? r.nextWait : 0;
+  const extra = next ? { nextWait: next } : {};
+  if (next) {
+    const wait = next < 60 ? tr('msg.master.waitSeconds', { n: next }) : Math.round(next / 60) === 1 ? tr('msg.master.waitMinute') : tr('msg.master.waitMinutes', { n: Math.round(next / 60) });
+    const key = `msg.master.${code ? 'codeWrongNext' : 'wrongNext'}${r.left === 1 ? 'One' : ''}`;
+    return userError(key, { n: r.left, wait }, { reason: 'wrong', left: r.left, ...extra });
+  }
   if (code) return userError('msg.master.codeWrong', { n: r.left }, { reason: 'wrong', left: r.left });
   return userError(r.left === 1 ? 'msg.master.wrongOne' : 'msg.master.wrong', { n: r.left }, { reason: 'wrong', left: r.left });
 }
@@ -126,14 +136,18 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
   let screen = ctx.screenAtStart === true; // an engine restarted under the lock screen keeps it (the app says so)
   const screenTold = (v) => { try { onScreen(v); } catch (error) { log(`pantalla de bloqueo: ${error.message}`); } };
   screenTold(screen);
-  const screenOff = () => { if (screen) { screen = false; screenTold(false); emit('master:unlocked', {}); } };
+  // When and why the screen locked, for its subtitle. Not known for an engine restarted under the lock (the app only says it was locked).
+  let lockedAt = null; let lockReason = null;
+  const screenOff = () => { if (screen) { screen = false; lockedAt = null; lockReason = null; screenTold(false); emit('master:unlocked', {}); } };
   return {
     // canForget: «He olvidado la contraseña» can keep the secrets (this PC opened them and has a recovery code).
     'master.state': () => {
       const m = master();
       let recovery = false; try { recovery = hasRecovery(ctx.home, machineSecret()); } catch { recovery = false; }
       // upgraded: the data came from Orb 3.7 (the first start after upgrading asks for the password with its own words).
-      return { ...m.state(), canForget: m.unlocked() && recovery, minLength: MIN_LENGTH, unlockMinutes: UNLOCK_MS / 60_000, screenLocked: screen && m.hasPassword(), upgraded: Boolean(board.setting(DONE_AT)) };
+      const screenLocked = screen && m.hasPassword();
+      // lockedAt / lockReason only while the screen is locked; this PC's window only (master.state is never a phone's call).
+      return { ...m.state(), canForget: m.unlocked() && recovery, minLength: MIN_LENGTH, unlockMinutes: UNLOCK_MS / 60_000, screenLocked, ...(screenLocked ? { lockedAt, lockReason } : {}), upgraded: Boolean(board.setting(DONE_AT)) };
     },
     // The first one (the welcome, or the first start after upgrading from 3.7): no current one to ask for. → a token (the window is unlocked).
     'master.create': async ({ password: p }) => {
@@ -160,6 +174,8 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       const m = master(); m.lock();
       locked(reason === 'idle' ? 'bloqueo (sin usar)' : reason === 'hand' ? 'bloqueo (a mano)' : 'bloqueo');
       const was = screen; screen = m.hasPassword();
+      // The first lock keeps its time and cause: a second one (Windows locks while Orb already shows the lock) does not rewrite them.
+      if (screen && !was) { lockedAt = new Date().toISOString(); lockReason = Object.hasOwn(LOCK_REASONS, reason) ? LOCK_REASONS[reason] : null; }
       if (screen) screenTold(true);
       if (screen && !was) log(`pantalla de bloqueo${reason === 'idle' ? ' (sin usar)' : ''}`);
       emit('master:locked', { screen });

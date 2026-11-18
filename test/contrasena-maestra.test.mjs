@@ -135,7 +135,7 @@ test('contraseñas incorrectas: cinco seguidas y luego esperas que crecen; sin p
   const m = new Master(dir, { secret: secretA, now: () => now }); m.openWithMachine();
   const told = []; m.onFails = (channel, n) => told.push([channel, n]);
   await m.create(PASS);
-  for (let i = 1; i < FREE_TRIES; i++) assert.deepEqual(await m.verify('mala contraseña'), { ok: false, reason: 'wrong', left: FREE_TRIES - i });
+  for (let i = 1; i < FREE_TRIES; i++) assert.deepEqual(await m.verify('mala contraseña'), { ok: false, reason: 'wrong', left: FREE_TRIES - i, nextWait: 30 });
   const fifth = await m.verify('mala contraseña');
   assert.equal(fifth.reason, 'wrong'); assert.equal(Date.parse(fifth.until) - now, 30_000, 'la quinta empieza 30 s de espera');
   assert.deepEqual(told, [['pc', 5]], 'tras cinco fallos se avisa al dueño');

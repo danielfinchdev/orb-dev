@@ -1,6 +1,6 @@
 // Orb UI 2.0, step 10B: the lock screen and the live window follow the approved mock-ups (17, 18) without touching
-// what the vault depends on: the password field stays a password field, what the dialog asks for stays in view,
-// and the unlock calls are the ones that already existed.
+// what the vault depends on: the password field is hidden unless the timed «Mostrar» shows it (autocomplete kept), what
+// the dialog asks for stays in view, and the unlock calls are the ones that already existed.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -18,12 +18,11 @@ test('every test id of the unlock and live window screens is still there', () =>
   assert.ok(pip.includes('data-testid="pip"'));
 });
 
-test('the password fields stay type="password" with their autocomplete, and nothing reveals them', () => {
-  assert.match(locked, /<input id={fieldId} type="password" autoComplete="current-password"/);
+test('the password fields keep their autocomplete and are shown only through the timed reveal (bloqueo-388.test.mjs)', () => {
+  assert.match(locked, /type=\{reveal\.shown \? 'text' : 'password'\} autoComplete="current-password"/);
   assert.ok(locked.includes('data-testid="master-password"'));
   assert.match(asker, /<Input type="password" autoComplete="current-password"/);
   assert.ok(asker.includes('data-testid="master-ask"'));
-  assert.doesNotMatch(locked, /type=\{/);
   assert.doesNotMatch(locked, /console\./);
 });
 
@@ -33,12 +32,13 @@ test('the dialog that asks before a guarded action still says what for, and send
   assert.match(asker, /call\('master\.unlock', \{ password: v\.password, \.\.\.\(fresh \? \{ purpose: action \} : \{\}\) \}\)/);
 });
 
-test('the lock screen has no new way to unlock: one master.unlock call and the old forgot flow', () => {
+test('the lock screen has no new way to unlock: one master.unlock call (plus the read of when it locked) and the old forgot flow', () => {
   const calls = [...master.matchAll(/call\('(master\.[a-z]+)'/g)].map((m) => m[1]);
   assert.deepEqual([...new Set(calls)].sort(), ['master.change', 'master.create', 'master.forgot', 'master.lock', 'master.reset', 'master.state', 'master.unlock']);
-  assert.equal([...locked.matchAll(/call\('/g)].length, 1);
+  assert.equal([...locked.matchAll(/call\('/g)].length, 2);
+  assert.match(locked, /call\('master\.state'\)/);
   assert.match(locked, /call\('master\.unlock', \{ password \}\)/);
-  assert.match(locked, /forgotFlow\(\{ canForget: Boolean\(state\?\.canForget\) \}\)/);
+  assert.match(locked, /forgotFlow\(\{ canForget \}\)/);
 });
 
 test('the lock screen shows a failure inline without more than the engine said, and the password is not stored', () => {

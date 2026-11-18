@@ -206,8 +206,10 @@ impl Tried {
       Self::Ok => json!({ "ok": true }),
       Self::Wrong { left, until } => {
         let mut v = json!({ "ok": false, "reason": "wrong", "left": left });
-        if let Some(u) = until {
-          v["until"] = json!(iso(*u));
+        match until {
+          Some(u) => v["until"] = json!(iso(*u)),
+          // Tries still free: how long the wait will be once they are gone (the window says it in the error).
+          None => v["nextWait"] = json!(wait_seconds(FREE_TRIES)),
         }
         v
       }
@@ -673,5 +675,14 @@ mod tests {
   #[test]
   fn waits_grow() {
     assert_eq!([5, 6, 7, 10, 99].map(wait_seconds), [30, 60, 120, 900, 900]);
+  }
+  #[test]
+  fn wrong_try_tells_the_next_wait() {
+    let free = Tried::Wrong { left: 4, until: None }.to_json();
+    assert_eq!(free["nextWait"], json!(wait_seconds(FREE_TRIES)));
+    assert_eq!(free["left"], json!(4));
+    let waiting = Tried::Wrong { left: 0, until: Some(1_700_000_000_000) }.to_json();
+    assert!(waiting.get("nextWait").is_none());
+    assert!(waiting.get("until").is_some());
   }
 }

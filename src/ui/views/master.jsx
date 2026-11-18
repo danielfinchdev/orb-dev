@@ -3,9 +3,9 @@
 // another Windows user) or its file is missing. The dialog that asks for it before a guarded action (registered with
 // lib/core-access.js), the card of Ajustes › Datos (change it, «He olvidado la contraseña»: with the backups' recovery
 // code, or «Borrar secretos y empezar de cero») and a connector's keys.
-import { useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { notifyError, notifyOk } from '@/lib/notify.js';
-import { KeyRound, Lock, LockKeyhole, CircleAlert, Loader, ShieldQuestion, ShieldAlert, Trash2, Smartphone } from 'lucide-react';
+import { KeyRound, Lock, LockKeyhole, CircleAlert, Loader, ShieldQuestion, ShieldAlert, Trash2, Smartphone, LifeBuoy } from 'lucide-react';
 import { WizardPage, WizardCard, WizardFoot, WizardText, WizardTitle, useBaseAppearance } from '@/components/wizard.jsx';
 import { Scene } from '@/components/scene.jsx';
 import { Robot } from '@/components/robot.jsx';
@@ -120,14 +120,38 @@ export function MasterCreate({ onDone, upgrade = false, wizard = false }) {
   );
 }
 
+// Whether a typed password is shown in clear. It is never kept (no store, no storage) and goes back to hidden by itself:
+// the window loses focus or is hidden, the form is sent (hide()), the engine locks, 30 s pass, or the box goes away.
+export const REVEAL_MS = 30_000;
+export function useReveal() {
+  const [shown, setShown] = useState(false);
+  const hide = useCallback(() => setShown(false), []);
+  useEffect(() => {
+    if (!shown) return undefined;
+    const onHidden = () => { if (document.hidden) hide(); };
+    const timer = setTimeout(hide, REVEAL_MS);
+    window.addEventListener('blur', hide);
+    document.addEventListener('visibilitychange', onHidden);
+    const off = bridge.on?.('master:locked', hide);
+    return () => { clearTimeout(timer); window.removeEventListener('blur', hide); document.removeEventListener('visibilitychange', onHidden); if (typeof off === 'function') off(); };
+  }, [shown, hide]);
+  return { shown, toggle: () => setShown((v) => !v), hide };
+}
+// The «Mostrar» / «Ocultar» text button that sits inside a password box, at its right.
+function RevealButton({ reveal }) {
+  const t = useT();
+  return <button type="button" onClick={reveal.toggle} aria-pressed={reveal.shown} data-testid="master-reveal" className="text-info rounded-ctl hover:bg-accent focus-visible:ring-ring h-6 shrink-0 px-2 text-xs font-medium outline-none focus-visible:ring-2">{t(reveal.shown ? 'master.hide' : 'master.show')}</button>;
+}
+
 // «He olvidado la contraseña» with the backups' recovery code: the secrets stay (a new data key), every phone is unlinked.
-async function forgotWithCode() {
+// code: what was already typed on the lock screen.
+async function forgotWithCode(code = '') {
   return form(tNow('master.forgotTitle'), {
     description: tNow('master.forgotDesc'),
-    initial: { code: '', next: '', again: '', ack: false },
+    initial: { code, next: '', again: '', ack: false },
     body: (v, set) => (<>
-      <Field label={tNow('master.forgotCode')}><Input autoFocus autoComplete="off" spellCheck={false} autoCapitalize="characters" className="font-mono" value={v.code} onChange={(e) => set({ code: e.target.value })} placeholder="XXXX-XXXX-…" data-testid="master-code" /></Field>
-      <NewPassword v={v} set={set} ack={tNow('master.forgotAck')} />
+      <Field label={tNow('master.forgotCode')}><Input autoFocus={!code} autoComplete="off" spellCheck={false} autoCapitalize="characters" className="font-mono" value={v.code} onChange={(e) => set({ code: e.target.value })} placeholder="XXXX-XXXX-…" data-testid="master-code" /></Field>
+      <NewPassword v={v} set={set} ack={tNow('master.forgotAck')} autoFocus={Boolean(code)} />
     </>),
     ok: tNow('master.forgotOk'),
     onOk: async (v) => { if (!v.code.trim() || !ready(v)) throw new Error(tNow(v.next !== v.again ? 'master.mismatch' : 'master.fillAll')); return call('master.forgot', { code: v.code, password: v.next, confirm: true }); }
@@ -159,6 +183,12 @@ async function forgotFlow({ canForget = false } = {}) {
   return r;
 }
 
+// Why the screen locked, as the engine says it (master.state › lockReason); anything else only says when.
+const LOCK_SUBS = { idle: 'master.screenSubIdle', windows: 'master.screenSubWindows', sleep: 'master.screenSubSleep', manual: 'master.screenSubManual' };
+const pad2 = (n) => String(n).padStart(2, '0');
+// The PC's local time, HH:MM, or null when there is no (valid) time.
+const clockOf = (iso) => { const d = new Date(iso ?? ''); return Number.isNaN(d.getTime()) ? null : `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+
 // This PC cannot open the keys by itself (the password opens them), or the password's file is missing (lost: no
 // password to type; the recovery code, or starting from scratch). also Orb's lock screen (screenLocked: Windows
 // locked, the PC asleep, «Bloquear» or Orb unused for a while; the agents keep working meanwhile).
@@ -166,53 +196,131 @@ export function MasterLocked({ onDone, state = null }) {
   const t = useT();
   useBaseAppearance();
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [mode, setMode] = useState('password'); // 'password' | 'code' (the recovery code: it only leads to a new password)
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [lockInfo, setLockInfo] = useState(null);
+  const [canForget, setCanForget] = useState(Boolean(state?.canForget)); // the lock event's state has none: master.state says
+  const dialog = useRef(false); // a dialog opened from this card is on screen: no second one
+  const reveal = useReveal();
+  const fieldRef = useRef(null);
   const fieldId = useId();
   const lost = Boolean(state?.lost);
   const screen = !lost && !state?.locked && Boolean(state?.screenLocked);
+  const withCode = !lost && canForget;
+  const inCode = withCode && mode === 'code';
+  // When and why it locked is asked of the engine each time (the state this card was given may be from an earlier lock).
+  useEffect(() => {
+    if (!screen) return undefined;
+    let live = true;
+    call('master.state').then((s) => { if (live) setLockInfo({ at: s?.lockedAt ?? null, reason: s?.lockReason ?? null }); setCanForget(Boolean(s?.canForget)); }).catch(() => {});
+    return () => { live = false; };
+  }, [screen]);
+  const time = screen ? clockOf(lockInfo?.at) : null;
+  const sub = lost ? t('master.lostBody') : screen ? (time ? t(LOCK_SUBS[lockInfo?.reason] ?? 'master.screenSubAt', { time }) : t('master.screenSub')) : t('master.lockedBody');
+  const finish = (r) => { if (!r) return; if (r.unlock) keepUnlock(r); onDone?.(); };
+  // One dialog at a time, and never over a password that is shown.
+  const openDialog = async (open) => {
+    if (dialog.current) return;
+    dialog.current = true; reveal.hide();
+    try { finish(await open()); } finally { dialog.current = false; }
+  };
   const submit = async (e) => {
-    e.preventDefault(); setBusy(true); setError(null);
+    e.preventDefault(); reveal.hide();
+    if (busy) return;
+    if (inCode) {
+      if (!code.trim()) { fieldRef.current?.focus(); return; }
+      await openDialog(() => forgotWithCode(code.trim()));
+      return;
+    }
+    if (!password) { fieldRef.current?.focus(); return; }
+    setBusy(true); setError(null);
     try { keepUnlock(await call('master.unlock', { password })); onDone?.(); }
     catch (err) { setError(errorText(err)); setBusy(false); }
   };
-  const forgot = async () => { if (await forgotFlow({ canForget: Boolean(state?.canForget) })) onDone?.(); };
-  // Nothing of the app is drawn while it is locked: behind the veil there is only the theme's own backdrop, blurred.
-  // The veil and the card are siblings of the backdrop (not inside it) so the window's own buttons, which stay usable
-  // (the pointer goes through the veil), sit under the veil as in the mock-up: app.css lowers them while this card is shown.
+  const forgot = () => openDialog(() => forgotFlow({ canForget }));
+  const switchTo = (next) => { if (busy) return; reveal.hide(); setError(null); setMode(next); };
+  const linkClass = 'text-info hover:underline focus-visible:ring-ring rounded-ctl inline-flex items-center outline-none focus-visible:ring-2';
+  // Nothing of the app is drawn while it is locked: behind the veil there is only a static drawing of its outline
+  // (LockBackdrop: no text, no data), blurred. The veil and the card are siblings of the backdrop (not inside it) so the
+  // window's own buttons, which stay usable (the pointer goes through the veil), sit under the veil as in the mock-up:
+  // app.css lowers them while this card is shown.
   return (
     <>
       <div className="relative isolate h-full">
         <Scene />
-        <main className="theme-scene h-full" aria-hidden="true" />
+        <LockBackdrop />
       </div>
       <div className="pointer-events-none fixed inset-0 z-[46] bg-black/32 backdrop-blur-[10px]" aria-hidden="true" />
       <div className="pointer-events-none fixed inset-0 z-[47] flex overflow-auto p-6">
-        <form onSubmit={submit} data-slot="dialog-content" className="dialog bg-background text-foreground rounded-card border-border pointer-events-auto m-auto grid w-full max-w-[440px] gap-3 border p-[18px]" data-testid="master-locked" data-screen={screen ? '1' : undefined}>
+        <form onSubmit={submit} data-slot="dialog-content" className="dialog bg-background text-foreground rounded-card border-border pointer-events-auto m-auto grid w-full max-w-[440px] gap-3 border p-[18px]" data-testid="master-locked" data-screen={screen ? '1' : undefined} data-mode={inCode ? 'code' : undefined}>
             <div className="flex items-center gap-4">
               <LockMark busy={busy} lost={lost} />
               <div className="min-w-0">
                 <h1 className="font-(family-name:--title) text-lg leading-tight font-semibold">{t(lost ? 'master.lostTitle' : screen ? 'master.screenTitle' : 'master.lockedTitle')}</h1>
-                <p className="text-muted-foreground mt-0.5 text-xs leading-snug">{t(lost ? 'master.lostBody' : screen ? 'master.screenSub' : 'master.lockedBody')}</p>
+                <p className="text-muted-foreground mt-0.5 text-xs leading-snug" data-testid="master-sub">{sub}</p>
               </div>
             </div>
             {lost ? null : (<>
               <div className="grid gap-1.5">
-                <Label htmlFor={fieldId}>{t('master.password')}</Label>
+                <Label htmlFor={fieldId}>{t(inCode ? 'master.forgotCode' : 'master.password')}</Label>
                 <div className="border-border bg-card text-muted-foreground rounded-ctl focus-within:border-input flex h-[calc(var(--ctl)+2px)] items-center gap-2 border px-2.5 transition-[border-color]">
-                  <Lock className="size-3.5 shrink-0" />
-                  <input id={fieldId} type="password" autoComplete="current-password" autoFocus value={password} onChange={(e) => { setPassword(e.target.value); setError(null); }} placeholder={t('master.password')} data-testid="master-password" aria-invalid={error ? true : undefined} className="placeholder:text-faint-foreground text-foreground min-w-0 flex-1 bg-transparent text-[15px] tracking-[.08em] outline-none" />
+                  {inCode ? <LifeBuoy className="size-3.5 shrink-0" /> : <Lock className="size-3.5 shrink-0" />}
+                  {inCode
+                    ? <input key="code" ref={fieldRef} id={fieldId} type="text" autoComplete="off" autoFocus spellCheck={false} autoCapitalize="characters" value={code} onChange={(e) => { setCode(e.target.value); setError(null); }} placeholder={t('master.codePlaceholder')} data-testid="master-code-field" className="placeholder:text-faint-foreground text-foreground min-w-0 flex-1 bg-transparent font-mono text-[15px] outline-none" />
+                    : <input key="password" ref={fieldRef} id={fieldId} type={reveal.shown ? 'text' : 'password'} autoComplete="current-password" autoFocus spellCheck={false} autoCorrect="off" autoCapitalize="off" value={password} onChange={(e) => { setPassword(e.target.value); setError(null); }} placeholder={t('master.password')} data-testid="master-password" aria-invalid={error ? true : undefined} className="placeholder:text-faint-foreground text-foreground min-w-0 flex-1 bg-transparent text-[15px] tracking-[.08em] outline-none" />}
+                  {inCode ? null : <RevealButton reveal={reveal} />}
                 </div>
+                {inCode ? <p className="text-muted-foreground m-0 text-xs leading-snug" data-testid="master-code-note">{t('master.codeNote')}</p> : null}
               </div>
               {error ? <p className="text-destructive flex items-center gap-1.5 text-xs" role="alert" data-testid="master-error"><CircleAlert className="size-3.5 shrink-0" />{error}</p> : null}
-              <Button type="submit" className="w-full" disabled={!password || busy}>{busy ? <Spinner className="border-white/40 border-t-white" /> : null}{t('master.unlock')}</Button>
+              <Button type="submit" className="w-full" disabled={busy} data-testid="master-unlock">{busy ? <Spinner className="border-white/40 border-t-white" /> : null}{t(inCode ? 'master.unlockWithCode' : 'master.unlock')}</Button>
             </>)}
-            <div className="text-center"><Button type="button" variant={lost ? 'default' : 'ghost'} size="sm" onClick={forgot} data-testid="master-forgot">{t('master.forgot')}</Button></div>
+            {withCode ? (
+              <div className="text-muted-foreground grid justify-items-center gap-1 text-center text-xs">
+                {inCode ? (<>
+                  <button type="button" className={linkClass} disabled={busy} onClick={() => switchTo('password')} data-testid="master-use-password">{t('master.useMaster')}</button>
+                  <button type="button" className={linkClass} onClick={() => openDialog(resetFlow)} data-testid="master-no-code">{t('master.noCode')}</button>
+                </>) : (
+                  <span>{t('master.forgotAsk')} <button type="button" className={linkClass} disabled={busy} onClick={() => switchTo('code')} data-testid="master-use-code">{t('master.useCode')}</button></span>
+                )}
+              </div>
+            ) : (
+              <div className="text-center"><Button type="button" variant={lost ? 'default' : 'ghost'} size="sm" onClick={forgot} data-testid="master-forgot">{t('master.forgot')}</Button></div>
+            )}
             {screen ? <LockStatus /> : null}
             {screen ? <p className="text-muted-foreground text-xs leading-snug" data-testid="master-screen-note">{t('master.screenNote')}</p> : null}
           </form>
       </div>
     </>
+  );
+}
+
+// A static outline of the app (sidebar, top bar, a few conversation blocks) drawn with the theme's colours. It holds no
+// text and reads nothing from the store: the app is neither mounted nor captured under the lock, so nothing of it can leak.
+function LockBackdrop() {
+  return (
+    <main className="theme-scene flex h-full" aria-hidden="true" inert data-testid="lock-backdrop">
+      <aside className="bg-sidebar border-border flex h-full w-[260px] shrink-0 flex-col gap-3 border-r p-3">
+        <span className="bg-muted mt-1 h-5 w-16 rounded" />
+        <span className="bg-muted h-[var(--ctl)] rounded-ctl" />
+        <div className="grid grid-cols-4 gap-2 py-1">{[0, 1, 2, 3].map((i) => <span key={i} className="bg-muted h-9 rounded-ctl" />)}</div>
+        {[72, 58, 66, 50, 62].map((w) => (
+          <div key={w} className="flex items-center gap-3 px-1 py-1.5"><span className="bg-muted size-9 shrink-0 rounded-full" /><span className="flex flex-1 flex-col gap-1.5"><span className="bg-muted h-2.5 rounded" style={{ width: `${w}%` }} /><span className="bg-muted/60 h-2 w-4/5 rounded" /></span></div>
+        ))}
+      </aside>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="border-border flex h-14 shrink-0 items-center justify-center gap-2 border-b"><span className="bg-muted h-3 w-40 rounded" /></div>
+        <div className="mx-auto flex w-full max-w-[720px] flex-1 flex-col gap-4 overflow-hidden p-6">
+          <span className="bg-muted/70 h-16 w-3/5 self-end rounded-[14px]" />
+          <span className="bg-card border-border h-28 w-4/5 rounded-[14px] border" />
+          <span className="bg-muted/70 h-12 w-2/5 self-end rounded-[14px]" />
+          <span className="bg-card border-border h-36 w-full rounded-[14px] border" />
+        </div>
+        <div className="border-border mx-auto mb-4 h-[var(--ctl)] w-full max-w-[720px] rounded-ctl border" />
+      </div>
+    </main>
   );
 }
 
