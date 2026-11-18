@@ -11,7 +11,7 @@ import { validateConfig } from '../src/platform/config.mjs';
 import { DEFAULT_CONFIG, merge } from '../src/platform/config-file.mjs';
 import { ADAPTIVE_THEMES, MUSIC_MODES, DEFAULT_INTENSITY, DEFAULT_VOLUME, BACKGROUND, musicPrefs, nextTheme, previousTheme, nextTrack, previousTrack } from '../src/shared/music.mjs';
 import { THEME_IDS, SIGNALS, createAdaptiveMusic } from '../src/ui/lib/adaptive-music.js';
-import { createSignals, isTyping, TYPING_MS, EVENT_MS, IDLE_MS, WORKING_MS } from '../src/ui/lib/music-signals.js';
+import { createSignals, isTyping, levelOf, TYPING_MS, EVENT_MS, IDLE_MS, WORKING_MS, LEVEL_MS } from '../src/ui/lib/music-signals.js';
 import { textMood, chatMood, waitsForUser } from '../src/ui/lib/chat-mood.js';
 import es from '../src/shared/locales/es.mjs';
 import en from '../src/shared/locales/en.mjs';
@@ -234,7 +234,7 @@ test('the player keeps its rules with the adaptive music: a click starts it, the
   // The lock and the button stop it for good, and its context and listeners go with it.
   assert.match(music, /export function pauseAll\(\) \{\n\s+disarm\(\);\n\s+bg\?\.pause\(\); game\?\.pause\(\); stopBackground\(\);/);
   assert.match(music, /function stopBackground\(\) \{\n\s+runs\+\+;\n\s+bg\?\.pause\(\); stopAdaptive\(\); source = null; bgHeld = false;/);
-  assert.match(music, /function stopAdaptive\(\) \{\n\s+stopSignals\?\.\(\); stopSignals = null;\n\s+if \(!engine \|\| letGo\) return;\n\s+engine\.stop\(\);/);
+  assert.match(music, /function stopAdaptive\(\) \{\n\s+stopSignals\?\.\(\); stopSignals = null; stopLevel\(\);\n\s+if \(!engine \|\| letGo\) return;\n\s+engine\.stop\(\);/);
   assert.match(music, /engine\?\.destroy\(\); engine = null;\n\s+engineCtx\?\.close\(\)\.catch\(quiet\); engineCtx = null;/);
   // No theme silences it: it is there in every one and plays only when the user turns it on.
   assert.doesNotMatch(music, /plainSkin|stopIfPlain|onAppearance/);
@@ -246,10 +246,28 @@ test('the player keeps its rules with the adaptive music: a click starts it, the
   // It follows the activity only while it plays and reacts: no listener nor timer otherwise.
   assert.match(music, /if \(prefs\.reactive\) stopSignals = follow\(\);/);
   assert.match(music, /if \(engine && source === 'adaptive' && state\.playing && !hidden && !bgHeld\) engine\.signal\(signal\);/);
-  assert.equal(music.match(/setInterval\(/g).length, 1); assert.match(music, /clearInterval\(timer\);/);
+  assert.equal(music.match(/setInterval\(/g).length, 2, 'the signals and the level'); assert.match(music, /clearInterval\(timer\);/);
   assert.equal(music.match(/addEventListener\('keydown', onKey/g).length, music.match(/removeEventListener\('keydown', onKey/g).length);
   // A start overtaken while it loaded gives up (the button pressed twice, the lock while the engine loads).
   assert.match(music, /const \{ createAdaptiveMusic \} = await import\('\.\/adaptive-music\.js'\);\n\s+if \(run !== runs\) return;/);
+});
+
+test('the player is told how far the music has risen, in hundredths and only when it moves', () => {
+  // What the player shows: 0..1 in hundredths, so a smaller move draws nothing again.
+  assert.equal(levelOf(0), 0); assert.equal(levelOf(1), 1); assert.equal(levelOf(0.4567), 0.46); assert.equal(levelOf(0.004), 0);
+  assert.equal(levelOf(-0.2), 0); assert.equal(levelOf(1.7), 1); assert.equal(levelOf(undefined), 0); assert.equal(levelOf(NaN), 0);
+  assert.equal(levelOf(0.301), levelOf(0.304), 'a move of less than a hundredth is the same level');
+  assert.ok(LEVEL_MS >= 200 && LEVEL_MS <= 500, 'a few times a second, never every bar');
+  const music = read('lib', 'music.js');
+  // Part of what the button shows (musicState, subscribe); null while the adaptive music is not the one that plays.
+  assert.match(music, /let state = \{ playing: false, loading: false, error: null, track: null, theme: null, intensity: null \};/);
+  assert.match(music, /emit\(\{ loading: false, playing: true, theme: prefs\.theme, intensity: levelOf\(engine\.getState\(\)\.intensity\) \}\);/);
+  // Read on a timer of its own, which lives only while it plays; told only when the level changes; a paused music keeps it.
+  assert.match(music, /react\(\); watchLevel\(\);/);
+  assert.match(music, /if \(!engine \|\| hidden \|\| bgHeld\) return;\n\s+const intensity = levelOf\(engine\.getState\(\)\.intensity\);\n\s+if \(intensity !== state\.intensity\) emit\(\{ intensity \}\);\n\s+\}, LEVEL_MS\);/);
+  assert.match(music, /function stopLevel\(\) \{\n\s+clearInterval\(meter\); meter = null;\n\s+if \(state\.intensity !== null\) emit\(\{ intensity: null \}\);/);
+  // Only read: the engine is never told anything from here.
+  assert.doesNotMatch(music.slice(music.indexOf('function watchLevel'), music.indexOf('function react')), /engine\.(signal|setIntensity|setTheme|setVolume|start|stop)/);
 });
 
 test('Ajustes and the sidebar: the switch, the theme, «Música que reacciona» and the next theme', () => {

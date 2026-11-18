@@ -15,6 +15,10 @@ export const TYPING_MS = 110; // a held key repeats about thirty times a second
 export const EVENT_MS = 4000; // an error or a success at most this often
 export const IDLE_MS = 90_000; // without a key, a click or an agent working
 export const WORKING_MS = 5000; // «still working» is said again this often: a music that was paused meanwhile catches up
+export const LEVEL_MS = 250; // how often the music's level is read for the player that shows it
+
+// How far the music has risen, 0..1, in hundredths: what the player shows, so a smaller move draws nothing again.
+export const levelOf = (intensity) => Math.round(Math.min(1, Math.max(0, Number(intensity) || 0)) * 100) / 100;
 
 const TEXT_INPUTS = new Set(['', 'text', 'search', 'email', 'url', 'tel', 'number']);
 // Whether a key press writes text in a text box: shortcuts, arrows and keys pressed anywhere else are not typing.

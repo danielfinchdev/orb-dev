@@ -17,7 +17,7 @@
 import { bridge, call, getState, setState, fullPc, anyChatBusy } from './store.js';
 import { musicAllowed, musicPrefs as prefsOf, gameMusicOn as gameOnOf, nextTrack, previousTrack, nextTheme, previousTheme, gameTrack } from '../../shared/music.mjs';
 import { quietAudioContext } from './audio-context.js';
-import { createSignals } from './music-signals.js';
+import { createSignals, levelOf, LEVEL_MS } from './music-signals.js';
 import { textMood } from './chat-mood.js';
 import { quiet } from './quiet.js';
 
@@ -34,8 +34,10 @@ async function saveUi(patch) {
 }
 
 // ---- What the button shows, for components (useMusic in the sidebar). ----
-// track: the track that plays; theme: the adaptive music's theme, when that is what plays.
-let state = { playing: false, loading: false, error: null, track: null, theme: null };
+// track: the track that plays; theme: the adaptive music's theme, when that is what plays; intensity: how far the
+// adaptive music has risen, 0..1 in hundredths (it follows the activity, or goes to the intensity chosen), null when
+// it is not the one that plays.
+let state = { playing: false, loading: false, error: null, track: null, theme: null, intensity: null };
 const subs = new Set();
 const emit = (patch) => { state = { ...state, ...patch }; for (const fn of subs) fn(state); };
 export const subscribe = (fn) => { subs.add(fn); return () => subs.delete(fn); };
@@ -87,6 +89,7 @@ async function playBackground(id) {
 let engine = null; let engineCtx = null;
 let letGo = null; // the timer that frees the engine once its stop has faded out
 let stopSignals = null; // the listeners that follow the activity, while it reacts to it
+let meter = null; // the timer that reads how far the music has risen, while it plays
 
 // The slider's value on the engine's own scale. The engine is mixed to be heard at 0.6 and is quieter than a mastered
 // track: the square root puts the slider's default (0.35) there, so both sources are about as loud at the same setting.
@@ -110,8 +113,8 @@ async function playAdaptive() {
       // A seed of its own each time: with a fixed one every day would start with the same bars.
       engine = createAdaptiveMusic({ theme: prefs.theme, seed: `orb-${Date.now()}`, volume: engineVolume(prefs.volume), context: engineCtx, autoPause: false });
     } else { engine.setTheme(prefs.theme); engine.setVolume(engineVolume(prefs.volume)); }
-    react();
-    emit({ loading: false, playing: true, theme: prefs.theme });
+    react(); watchLevel();
+    emit({ loading: false, playing: true, theme: prefs.theme, intensity: levelOf(engine.getState().intensity) });
     if (game && !game.paused) { bgHeld = true; return; }
     engine.start(); catchUp();
   } catch (error) {
@@ -119,7 +122,7 @@ async function playAdaptive() {
   }
 }
 function stopAdaptive() {
-  stopSignals?.(); stopSignals = null;
+  stopSignals?.(); stopSignals = null; stopLevel();
   if (!engine || letGo) return;
   engine.stop();
   // Its context and buffers go once the stop has faded out (0.6 s in the engine), unless it plays again first.
@@ -129,6 +132,20 @@ function freeAdaptive() {
   clearTimeout(letGo); letGo = null;
   engine?.destroy(); engine = null;
   engineCtx?.close().catch(quiet); engineCtx = null;
+}
+// How far it has risen, for the player: read a few times a second and told only when it has moved by a hundredth, so
+// nothing is drawn again while it holds still. A music that is paused (hidden, or held for a game) keeps its level.
+function watchLevel() {
+  clearInterval(meter);
+  meter = setInterval(() => {
+    if (!engine || hidden || bgHeld) return;
+    const intensity = levelOf(engine.getState().intensity);
+    if (intensity !== state.intensity) emit({ intensity });
+  }, LEVEL_MS);
+}
+function stopLevel() {
+  clearInterval(meter); meter = null;
+  if (state.intensity !== null) emit({ intensity: null });
 }
 // The adaptive music follows the activity, or keeps the intensity chosen in Ajustes (ui.music.reactive, .intensity).
 function react() {
