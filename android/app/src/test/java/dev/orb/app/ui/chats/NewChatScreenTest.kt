@@ -13,7 +13,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.hasSetTextAction
 import dev.orb.app.link.net.ConnectionState
@@ -69,8 +72,14 @@ class NewChatScreenTest {
 
     @Test fun theBrainRowNamesTheBrainThePcUsesWhenItSaysSo() {
         sheet(FakeNewChatBackend().apply { optionsResult = Result.success(sampleOptions.copy(pcBrain = BrainInfo("Claude Code", "Opus", "high"))) })
-        rule.onNodeWithText("Opus · alto").assertIsDisplayed()
+        rule.onNodeWithText("Claude Code · Opus · razonamiento alto").assertIsDisplayed()
         assertTrue(rule.onAllNodesWithText("El que usa el PC").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test fun theProjectChipsHaveNoColouredDot() {
+        sheet(FakeNewChatBackend())
+        // A chip is its name only, as in the mockup: no mark before it.
+        rule.onNodeWithText("api-pagos").assertIsDisplayed()
     }
 
     @Test fun theActiveProjectIsChosenAndAnotherCanBePicked() {
@@ -139,24 +148,57 @@ class NewChatScreenTest {
         rule.onNodeWithText("No se pudo crear el chat en el PC. Sin conexión con el PC.").assertIsDisplayed()
     }
 
-    @Test fun theBrainRowOpensItsSheetWithModelsEffortAndTheRecommendedOne() {
+    @Test fun theBrainSheetListsTheUsualBrainsAsRowsLikeTheMockup() {
         val vm = sheet(FakeNewChatBackend())
         rule.onNodeWithText("El que usa el PC").performClick()
         rule.waitForIdle()
+        for (t in listOf("Opus · razonamiento alto", "Sonnet · razonamiento medio", "Codex · modelo por defecto", "La cuenta la elige el PC.", "Listo")) {
+            rule.onNodeWithText(t).assertIsDisplayed()
+        }
+        // The PC offers no Haiku and no Cursor here: those rows do not exist.
+        for (t in listOf("Haiku", "Cursor · modelo por defecto")) rule.onNodeWithText(t).assertDoesNotExist()
+        // The finer choices wait under «Más opciones».
+        rule.onNodeWithText("Dejar la elección del PC").assertDoesNotExist()
+        rule.onNodeWithText("Opus · razonamiento alto").performClick()
+        rule.waitForIdle()
+        assertEquals(Triple("claude", "opus", "high"), Triple(vm.state.value.brainAgent, vm.state.value.model, vm.state.value.effort))
+        rule.onNodeWithText("Opus · razonamiento alto").assertIsSelected()
+        rule.onNodeWithText("Codex · modelo por defecto").performClick()
+        rule.waitForIdle()
+        assertEquals(Triple("codex", null, null), Triple(vm.state.value.brainAgent, vm.state.value.model, vm.state.value.effort))
+        rule.onNodeWithText("Listo").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Codex").assertIsDisplayed()
+        rule.onNodeWithText("Empezar").assertIsDisplayed()
+    }
+
+    @Test fun theChosenRowReadsLikeTheMockupInTheBrainRow() {
+        val vm = sheet(FakeNewChatBackend())
+        vm.pickBrain("claude", "opus", "high")
+        rule.waitForIdle()
+        rule.onNodeWithText("Claude Code · Opus · razonamiento alto").assertIsDisplayed()
+    }
+
+    @Test fun moreOptionsKeepModelsEffortAndTheRecommendedOne() {
+        val vm = sheet(FakeNewChatBackend())
+        rule.onNodeWithText("El que usa el PC").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Más opciones").performClick()
+        rule.waitForIdle()
         rule.onNodeWithText("Dejar la elección del PC").assertIsDisplayed()
-        rule.onNodeWithText("La cuenta la elige el PC.").assertIsDisplayed()
-        rule.onNodeWithText("Claude Code").performClick()
+        rule.onNodeWithText("Con quién piensa").assertIsDisplayed()
+        rule.onAllNodesWithText("Claude Code").onLast().performClick()
         rule.waitForIdle()
         assertEquals("claude", vm.state.value.brainAgent)
         rule.onNodeWithText("Recomendado").assertIsDisplayed()
-        rule.onNodeWithText("Opus").performClick()
+        rule.onNodeWithText("Opus").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
         rule.waitForIdle()
-        rule.onNodeWithText("high").performClick()
+        rule.onNodeWithText("high").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
         rule.waitForIdle()
         assertEquals("high", vm.state.value.effort)
         rule.onNodeWithText("Listo").performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("Claude Code · Opus · high").assertIsDisplayed()
+        rule.onNodeWithText("Claude Code · Opus · razonamiento alto").assertIsDisplayed()
         rule.onNodeWithText("Empezar").assertIsDisplayed()
     }
 
@@ -166,9 +208,33 @@ class NewChatScreenTest {
         rule.waitForIdle()
         rule.onNodeWithText("Claude Code · Opus").performClick()
         rule.waitForIdle()
+        rule.onNodeWithText("Más opciones").performClick()
+        rule.waitForIdle()
         rule.onNodeWithText("Dejar la elección del PC").performClick()
         rule.waitForIdle()
         assertEquals(null, vm.state.value.brainAgent)
+    }
+
+    @Test fun inADirectChatAFamilyRowSwitchesTheAgentToo() {
+        val vm = sheet(FakeNewChatBackend())
+        rule.onNodeWithText("Directo con un agente").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Claude Code · El del PC").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Codex · modelo por defecto").performClick()
+        rule.waitForIdle()
+        assertEquals("codex", vm.state.value.agent)
+        assertTrue(vm.state.value.direct)
+    }
+
+    @Test fun withoutTheCatalogTheBrainSheetOffersOnlyThePcsChoice() {
+        val b = FakeNewChatBackend()
+        b.missing += "models.catalog"
+        sheet(b)
+        rule.onNodeWithText("El que usa el PC").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Dejar la elección del PC").assertIsDisplayed()
+        for (t in listOf("Opus · razonamiento alto", "Más opciones")) rule.onNodeWithText(t).assertDoesNotExist()
     }
 
     @Test fun nuevoOpensTheProjectDialogAndCreatesIt() {

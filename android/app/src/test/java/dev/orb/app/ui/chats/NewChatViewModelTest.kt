@@ -282,7 +282,7 @@ class NewChatViewModelTest {
         vm.selectAgent("claude")
         assertEquals("Claude Code", vm.state.value.brainLabel)
         vm.pickBrain("claude", "opus", "high")
-        assertEquals("Claude Code · Opus · high", vm.state.value.brainLabel)
+        assertEquals("Claude Code · Opus · razonamiento alto", vm.state.value.brainLabel)
         vm.selectOrbe()
         assertNull(vm.state.value.brainLabel)
     }

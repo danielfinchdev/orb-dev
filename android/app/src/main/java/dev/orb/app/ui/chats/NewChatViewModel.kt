@@ -65,8 +65,9 @@ data class NewChatState(
     val modelOption get() = agentOption?.models?.firstOrNull { it.id == model }
 
     /** Short label of the chosen brain/model; null while the PC's own choice stands. */
-    val brainLabel get() = if (brainOwner == null) null
-    else listOfNotNull(agentOption?.label, modelOption?.label?.takeIf { model != null }, effort).joinToString(" · ").ifEmpty { null }
+    val brainLabel get() = agentOption?.let { a ->
+        listOfNotNull(a.label, modelOption?.label?.takeIf { model != null }, effort?.let(::reasoningText)).joinToString(" · ")
+    }
 }
 
 /**
@@ -209,3 +210,6 @@ class NewChatViewModel(private val backend: NewChatBackend) : ViewModel() {
         }
     }
 }
+
+/** «razonamiento alto»: how the mockup names a reasoning level next to a model. */
+fun reasoningText(level: String) = "razonamiento ${BrainInfo.reasoningWord(level)}"

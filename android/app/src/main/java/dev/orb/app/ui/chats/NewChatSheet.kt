@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -74,7 +75,7 @@ fun NewChatSheet(vm: NewChatViewModel, onDismiss: () -> Unit, onOutcome: (NewCha
             Statuses(state, onRetry = vm::reload)
             if (state.direct && state.optionsStatus == OptionsStatus.Ready) {
                 OrbSheetLabel(ChatTexts.NEW_CHAT_AGENT)
-                if (state.options.agents.isEmpty()) Notice(ChatTexts.NEW_CHAT_NO_AGENTS, warn = true)
+                if (state.options.agents.isEmpty()) Notice(ChatTexts.NEW_CHAT_NO_AGENTS, warn = true, icon = OrbIcons.CircleAlert)
                 else ChipsRow {
                     for (a in state.options.agents) {
                         OrbChip(a.label, state.agent == a.id, { vm.selectAgent(a.id) }, lead = { AgentMark(a.id, size = 16.dp, description = null) })
@@ -90,7 +91,7 @@ fun NewChatSheet(vm: NewChatViewModel, onDismiss: () -> Unit, onOutcome: (NewCha
             OrbSheetLabel(ChatTexts.NEW_CHAT_PROJECT)
             ChipsRow {
                 for (p in state.options.projects) {
-                    OrbChip(p.name, state.project == p.name, { vm.pickProject(p.name) }, lead = { ProjectDot(p.name, size = ProjectDotSize.Normal) })
+                    OrbChip(p.name, state.project == p.name, { vm.pickProject(p.name) })
                 }
                 OrbChip(ChatTexts.NO_PROJECT, state.project == null, { vm.pickProject(null) })
                 if (state.canCreateProject) {
@@ -99,7 +100,7 @@ fun NewChatSheet(vm: NewChatViewModel, onDismiss: () -> Unit, onOutcome: (NewCha
             }
             OrbSheetLabel(ChatTexts.NEW_CHAT_BRAIN)
             OrbSheetItem(brainSummary(state), onClick = { brainOpen = true }, icon = OrbIcons.Brain, chevron = true)
-            failure?.let { Notice(it, warn = false) }
+            failure?.let { Notice(it, warn = false, icon = OrbIcons.CircleAlert) }
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                 OrbButton(ChatTexts.NEW_CHAT_CANCEL, onDismiss, kind = OrbButtonKind.Ghost)
                 OrbButton(
@@ -123,16 +124,20 @@ private fun directHint(s: NewChatState): String {
 }
 
 private fun brainSummary(s: NewChatState): String = when {
-    !s.direct -> s.brainLabel ?: s.options.pcBrain?.label ?: ChatTexts.NEW_CHAT_BRAIN_AUTO
+    !s.direct -> s.brainLabel ?: s.options.pcBrain?.let(::pcBrainText) ?: ChatTexts.NEW_CHAT_BRAIN_AUTO
     s.model == null -> "${s.agentOption?.label ?: ChatTexts.NEW_CHAT_AGENT} · ${ChatTexts.NEW_CHAT_MODEL_DEFAULT}"
     else -> s.brainLabel ?: ChatTexts.NEW_CHAT_MODEL_DEFAULT
 }
+
+/** «Claude · Opus · razonamiento alto»: the brain the PC itself starts Orbe chats with, named like a chosen one. */
+private fun pcBrainText(b: BrainInfo): String? =
+    listOfNotNull(b.agentLabel, b.modelLabel, b.reasoning?.let(::reasoningText)).joinToString(" · ").ifEmpty { null }
 
 /** What the PC is doing about the options and the link, said once under the two choices. */
 @Composable
 private fun Statuses(s: NewChatState, onRetry: () -> Unit) {
     when {
-        !s.online -> Notice(ChatTexts.NEW_CHAT_OFFLINE, warn = true)
+        !s.online -> Notice(ChatTexts.NEW_CHAT_OFFLINE, warn = true, icon = OrbIcons.WifiOff)
         s.optionsStatus == OptionsStatus.Loading -> Row(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -140,23 +145,26 @@ private fun Statuses(s: NewChatState, onRetry: () -> Unit) {
             Text(ChatTexts.NEW_CHAT_LOADING, color = OrbKit.mutedForeground, fontSize = 13.sp, lineHeight = 18.sp)
         }
         s.optionsStatus == OptionsStatus.Failed -> {
-            Notice(ChatTexts.NEW_CHAT_OPTIONS_FAILED, warn = true)
+            Notice(ChatTexts.NEW_CHAT_OPTIONS_FAILED, warn = true, icon = OrbIcons.CircleAlert)
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.End) { OrbButton(ChatTexts.RETRY, onRetry, small = true) }
         }
-        s.optionsStatus == OptionsStatus.Unsupported -> Notice(ChatTexts.NEW_CHAT_OLD_PC, warn = true)
+        s.optionsStatus == OptionsStatus.Unsupported -> Notice(ChatTexts.NEW_CHAT_OLD_PC, warn = true, icon = OrbIcons.CircleAlert)
     }
 }
 
-/** `.banner`: a rounded block that tells something is wrong ([warn]: the PC or the link) or failed (the error colour). */
+/** `.banner`: a rounded block with an icon that tells something is wrong ([warn]: the PC or the link) or failed (the error colour). */
 @Composable
-private fun Notice(text: String, warn: Boolean) {
-    val fg = if (warn) OrbKit.warning else OrbKit.destructive
+private fun Notice(text: String, warn: Boolean, icon: ImageVector) {
+    val fg = if (warn) OrbKit.warningInk else OrbKit.destructive
     val bg = if (warn) OrbKit.warningSoft else OrbKit.destructive.copy(alpha = 0.12f)
-    Text(
-        text, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(12.dp)).background(bg)
-            .padding(horizontal = 14.dp, vertical = 12.dp).semantics { liveRegion = LiveRegionMode.Polite },
-        color = fg, fontSize = 14.5.sp, lineHeight = 21.sp,
-    )
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(12.dp)).background(bg)
+            .padding(horizontal = 14.dp, vertical = 12.dp).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(icon, null, Modifier.padding(top = 3.dp).size(16.dp), tint = fg)
+        Text(text, Modifier.weight(1f), color = fg, fontSize = 14.5.sp, lineHeight = 21.sp)
+    }
 }
 
 @Composable
@@ -164,45 +172,94 @@ private fun ChipsRow(content: @Composable () -> Unit) {
     Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 0.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { content() }
 }
 
-/** «Cerebro»: who thinks, with which model and how much reasoning; the PC picks the account. */
+/** One line of the «Cerebro» sheet: a brain the PC can really give, with the model and reasoning it stands for. */
+private class BrainRow(val agent: AgentOption, val model: ModelOption?, val effort: String?, val text: String)
+
+private val number = Regex("""\d+(?:\.\d+)?""")
+
+private fun versionOf(m: ModelOption): Double = number.find(m.label)?.value?.toDoubleOrNull() ?: number.find(m.id)?.value?.toDoubleOrNull() ?: 0.0
+
+/** The newest model of a family the PC lists (the recommended one first); null when the PC has none, so the row is not offered. */
+private fun familyModel(a: AgentOption, family: String): ModelOption? =
+    a.models.filter { it.id.isNotEmpty() && "${it.id} ${it.label}".contains(family, ignoreCase = true) }
+        .sortedWith(compareByDescending<ModelOption> { it.recommended }.thenByDescending(::versionOf)).firstOrNull()
+
+/** Opus with high reasoning, Sonnet with medium and Haiku as it is; a level the model does not take is left out of the row. */
+private fun claudeRows(a: AgentOption): List<BrainRow> = buildList {
+    for ((family, level) in listOf("Opus" to "high", "Sonnet" to "medium", "Haiku" to null)) {
+        val m = familyModel(a, family) ?: continue
+        val effort = level?.takeIf { m.efforts.isEmpty() || it in m.efforts }
+        add(BrainRow(a, m, effort, if (effort != null) "$family · ${reasoningText(effort)}" else family))
+    }
+}
+
+/** «Cerebro»: the usual brains as rows; the finer choices (model, reasoning, the PC's own) wait under «Más opciones». */
 @Composable
 private fun BrainSheet(s: NewChatState, vm: NewChatViewModel, onDone: () -> Unit) {
+    var moreOpen by rememberSaveable { mutableStateOf(false) }
+    val ready = s.optionsStatus == OptionsStatus.Ready
+    val claude = s.options.agents.firstOrNull { it.id == "claude" }
+    val claudeRows = if (ready && claude != null) claudeRows(claude) else emptyList()
+    val others = if (ready) listOf("codex", "cursor").mapNotNull { id -> s.options.agents.firstOrNull { it.id == id } } else emptyList()
+    val otherRows = others.map { BrainRow(it, null, null, "${it.label} · ${ChatTexts.NEW_CHAT_MODEL_DEFAULT_ROW}") }
+    fun chosen(r: BrainRow) = s.brainOwner == r.agent.id && s.model == r.model?.id && s.effort == r.effort
+    fun pick(r: BrainRow) {
+        if (s.direct && s.agent != r.agent.id) vm.selectAgent(r.agent.id)
+        vm.pickBrain(r.agent.id, r.model?.id, r.effort)
+    }
+    val hasRows = claudeRows.isNotEmpty() || otherRows.isNotEmpty()
     OrbSheet(onDismiss = onDone, title = ChatTexts.NEW_CHAT_BRAIN) {
-        val ready = s.optionsStatus == OptionsStatus.Ready
-        val agent = s.agentOption
-        if (!s.direct) {
-            Column(Modifier.selectableGroup()) {
-                OrbSheetItem(ChatTexts.NEW_CHAT_USE_PC_CHOICE, onClick = vm::clearBrain, icon = OrbIcons.Brain, checked = s.brainAgent == null)
-                if (ready && s.options.agents.isNotEmpty()) {
-                    OrbSheetLabel(ChatTexts.NEW_CHAT_BRAIN_AGENT)
-                    for (a in s.options.agents) {
-                        OrbSheetItem(a.label, onClick = { vm.pickBrain(a.id, null, null) }, icon = OrbIcons.Brain, checked = s.brainAgent == a.id)
-                    }
-                }
+        Column(Modifier.selectableGroup()) {
+            if (claudeRows.isNotEmpty()) {
+                OrbSheetLabel(claude!!.label)
+                for (r in claudeRows) OrbSheetItem(r.text, onClick = { pick(r) }, icon = OrbIcons.Brain, checked = chosen(r))
+            }
+            if (otherRows.isNotEmpty()) {
+                OrbSheetLabel(others.joinToString(" y ") { it.label })
+                for (r in otherRows) OrbSheetItem(r.text, onClick = { pick(r) }, icon = OrbIcons.Brain, checked = chosen(r))
             }
         }
-        if (agent != null) {
-            OrbSheetLabel(if (s.direct) agent.label else ChatTexts.NEW_CHAT_MODEL)
-            Column(Modifier.selectableGroup()) {
-                if (s.direct) OrbSheetItem(ChatTexts.NEW_CHAT_MODEL_DEFAULT, onClick = { vm.pickBrain(agent.id, null, null) }, icon = OrbIcons.Brain, checked = s.model == null)
-                for (m in agent.models.filter { it.id.isNotEmpty() }) {
-                    OrbSheetItem(
-                        m.label, onClick = { vm.pickBrain(agent.id, m.id, null) }, icon = OrbIcons.Brain, checked = s.model == m.id,
-                        meta = if (m.recommended) ChatTexts.NEW_CHAT_RECOMMENDED else null,
-                    )
-                }
-            }
-            val efforts = s.modelOption?.efforts.orEmpty()
-            if (efforts.isNotEmpty()) {
-                OrbSheetLabel(ChatTexts.NEW_CHAT_EFFORT)
-                ChipsRow {
-                    for (e in efforts) OrbChip(e, s.effort == e, { vm.pickBrain(agent.id, s.model, if (s.effort == e) null else e) })
-                }
-            }
-        }
+        // Whatever the rows do not say stays reachable here: the PC's own choice, any agent, a model of its own, the level.
+        if (hasRows) OrbSheetItem(ChatTexts.MORE_OPTIONS, onClick = { moreOpen = !moreOpen }, icon = if (moreOpen) OrbIcons.ChevronUp else OrbIcons.ChevronDown)
+        if (moreOpen || !hasRows) MoreBrainOptions(s, vm, ready)
         OrbSheetLabel(ChatTexts.NEW_CHAT_ACCOUNT)
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp), horizontalArrangement = Arrangement.End) {
             OrbButton(ChatTexts.NEW_CHAT_DONE, onDone, kind = OrbButtonKind.Primary)
+        }
+    }
+}
+
+@Composable
+private fun MoreBrainOptions(s: NewChatState, vm: NewChatViewModel, ready: Boolean) {
+    val agent = s.agentOption
+    if (!s.direct) {
+        Column(Modifier.selectableGroup()) {
+            OrbSheetItem(ChatTexts.NEW_CHAT_USE_PC_CHOICE, onClick = vm::clearBrain, icon = OrbIcons.Brain, checked = s.brainAgent == null)
+            if (ready && s.options.agents.isNotEmpty()) {
+                OrbSheetLabel(ChatTexts.NEW_CHAT_BRAIN_AGENT)
+                for (a in s.options.agents) {
+                    OrbSheetItem(a.label, onClick = { vm.pickBrain(a.id, null, null) }, icon = OrbIcons.Brain, checked = s.brainAgent == a.id)
+                }
+            }
+        }
+    }
+    if (agent != null) {
+        OrbSheetLabel(if (s.direct) agent.label else ChatTexts.NEW_CHAT_MODEL)
+        Column(Modifier.selectableGroup()) {
+            if (s.direct) OrbSheetItem(ChatTexts.NEW_CHAT_MODEL_DEFAULT, onClick = { vm.pickBrain(agent.id, null, null) }, icon = OrbIcons.Brain, checked = s.model == null)
+            for (m in agent.models.filter { it.id.isNotEmpty() }) {
+                OrbSheetItem(
+                    m.label, onClick = { vm.pickBrain(agent.id, m.id, null) }, icon = OrbIcons.Brain, checked = s.model == m.id,
+                    meta = if (m.recommended) ChatTexts.NEW_CHAT_RECOMMENDED else null,
+                )
+            }
+        }
+        val efforts = s.modelOption?.efforts.orEmpty()
+        if (efforts.isNotEmpty()) {
+            OrbSheetLabel(ChatTexts.NEW_CHAT_EFFORT)
+            ChipsRow {
+                for (e in efforts) OrbChip(e, s.effort == e, { vm.pickBrain(agent.id, s.model, if (s.effort == e) null else e) })
+            }
         }
     }
 }

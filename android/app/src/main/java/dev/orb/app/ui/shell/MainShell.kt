@@ -45,7 +45,9 @@ import dev.orb.app.ui.chats.ChatTexts
 import dev.orb.app.ui.chats.ChatsBackend
 import dev.orb.app.ui.chats.ChatsMenu
 import dev.orb.app.ui.menu.MenuActions
+import dev.orb.app.ui.menu.InboxMenu
 import dev.orb.app.ui.menu.MenuSheet
+import dev.orb.app.ui.chats.ChatOrder
 import dev.orb.app.ui.menu.MenuState
 import dev.orb.app.ui.notes.NotesBackend
 import dev.orb.app.ui.notes.NotesViewModel
@@ -73,7 +75,7 @@ private class Tab(val route: Any, val label: String, val icon: ImageVector)
 private val tabs = listOf(
     Tab(ChatsTab, ChatTexts.TAB_CHATS, OrbIcons.Chat),
     Tab(TasksTab, ChatTexts.TAB_TASKS, OrbIcons.Tasks),
-    Tab(ProjectsTab, ChatTexts.TAB_PROJECTS, OrbIcons.Folder),
+    Tab(ProjectsTab, ChatTexts.TAB_PROJECTS, OrbIcons.FolderGit2),
 )
 
 /** What the shell hands back to the app's navigation. */
@@ -118,16 +120,24 @@ fun MainShell(
     val noticesVm = notes?.let { viewModel<NotesViewModel>(factory = viewModelFactory { initializer { NotesViewModel(it) } }) }
     val unreadNotices = noticesVm?.state?.collectAsStateWithLifecycle()?.value?.unread ?: 0
     var menuOpen by rememberSaveable { mutableStateOf(false) }
+    // The list's view model lives here because its ordering and day summary are choices of the ☰ menu.
+    val chatsVm = viewModel<ChatListViewModel>(factory = viewModelFactory { initializer { ChatListViewModel(backend, dispatcher = listDispatcher) } })
+    val chatsState by chatsVm.state.collectAsStateWithLifecycle()
     val nav = rememberNavController()
     val current by nav.currentBackStackEntryAsState()
     val fade = OrbMotion.Short
 
     if (menuOpen) {
         MenuSheet(
-            MenuState(connectionText(connection), unreadNotices, actions.menu.schedules, actions.menu.activity, actions.menu.usage, actions.menu.whiteboard),
+            MenuState(
+                connectionText(connection), unreadNotices, actions.menu.schedules, actions.menu.activity, actions.menu.usage, actions.menu.whiteboard,
+                inbox = InboxMenu(chatsState.order == ChatOrder.Priority, chatsState.canDigest),
+            ),
             MenuActions(
                 onNotices = actions.onNotices, onSchedules = actions.onSchedules, onActivity = actions.onActivity, onUsage = actions.onUsage, onWhiteboard = actions.onWhiteboard, onGames = actions.onGames, onTutorials = actions.onTutorials,
                 onThisPhone = actions.onThisPhone, onAppearance = actions.onAppearance, onLinkTest = actions.onLinkTest, onUnlink = actions.onUnlink,
+                onPriority = { chatsVm.setOrder(if (chatsState.order == ChatOrder.Priority) ChatOrder.Recent else ChatOrder.Priority) },
+                onReorder = chatsVm::reorder, onDigest = chatsVm::showDigest,
             ),
             onDismiss = { menuOpen = false },
         )
@@ -155,9 +165,8 @@ fun MainShell(
             exitTransition = { fadeOut(tween(fade, easing = OrbMotion.EaseIn)) },
         ) {
             composable<ChatsTab> {
-                val vm = viewModel<ChatListViewModel>(factory = viewModelFactory { initializer { ChatListViewModel(backend, dispatcher = listDispatcher) } })
                 ChatListScreen(
-                    vm, ChatsMenu(onMenu = { menuOpen = true }, unreadNotices = unreadNotices, onNotices = actions.onNotices.takeIf { notes != null }),
+                    chatsVm, ChatsMenu(onMenu = { menuOpen = true }, unreadNotices = unreadNotices, onNotices = actions.onNotices.takeIf { notes != null }),
                     onOpenChat = actions.onOpenChat, onSearch = actions.onSearch, onNewChat = actions.onNewChat,
                 )
             }

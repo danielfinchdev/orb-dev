@@ -203,6 +203,35 @@ class MenuScreensTest {
         assertEquals(10, closed)
     }
 
+    @Test fun moreOptionsGoLastAndKeepTheOrderingAndTheSummary() {
+        val got = ArrayList<String>()
+        rule.setContent {
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) {
+                MenuContent(
+                    MenuState("PC", inbox = InboxMenu(priority = true, canDigest = true)),
+                    MenuActions(onPriority = { got += "priority" }, onReorder = { got += "reorder" }, onDigest = { got += "digest" }),
+                    close = {},
+                )
+            }
+        }
+        for (t in listOf("Más opciones", "Ordenar por prioridad", "Activado", "Resumen del día", dev.orb.app.ui.chats.InboxTexts.current().reorder)) {
+            rule.onNodeWithText(t).performScrollTo().assertIsDisplayed()
+        }
+        for (t in listOf("Ordenar por prioridad", dev.orb.app.ui.chats.InboxTexts.current().reorder, "Resumen del día")) rule.onNodeWithText(t).performScrollTo().performClick()
+        assertEquals(listOf("priority", "reorder", "digest"), got)
+    }
+
+    @Test fun moreOptionsOfferOnlyWhatTheListCanDo() {
+        showMenu(MenuState("PC", inbox = InboxMenu(priority = false, canDigest = false)), MenuActions())
+        rule.onNodeWithText("Desactivado").performScrollTo().assertIsDisplayed()
+        for (t in listOf(dev.orb.app.ui.chats.InboxTexts.current().reorder, "Resumen del día")) rule.onNodeWithText(t).assertDoesNotExist()
+    }
+
+    @Test fun withoutTheListThereIsNoMoreOptions() {
+        showMenu(MenuState("PC"), MenuActions())
+        rule.onNodeWithText("Más opciones").assertDoesNotExist()
+    }
+
     @Test fun tutorialsOffersEveryTutorialAndFaqWithoutAConnection() {
         rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { TutorialsScreen(onBack = {}) } }
         rule.waitForIdle()

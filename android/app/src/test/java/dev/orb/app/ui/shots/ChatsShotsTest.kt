@@ -86,7 +86,7 @@ class ChatsShotsTest {
         ) + done
     }
 
-    private val tabs = listOf(OrbTab("chats", "Chats", OrbIcons.Chat, 3), OrbTab("tasks", "Tareas", OrbIcons.Tasks, 1), OrbTab("projects", "Proyectos", OrbIcons.Folder))
+    private val tabs = listOf(OrbTab("chats", "Chats", OrbIcons.Chat, 3), OrbTab("tasks", "Tareas", OrbIcons.Tasks, 1), OrbTab("projects", "Proyectos", OrbIcons.FolderGit2))
 
     private fun backend(rows: List<ChatRow>) = FakeChatsBackend(rows).apply {
         connectionState.value = ConnectionState.Online("http://pc", "PC de Dani", PcVersions(1, 1, "3.8.8"))
@@ -123,7 +123,7 @@ class ChatsShotsTest {
     }
 
     /** Screen 10: the list of the mockup under the sheet of «Revisar pasarela»; [steps] walks to each variant. */
-    private fun actions(palette: OrbPaletteChoice, suffix: String, steps: () -> Unit = {}, archive: Boolean = false) {
+    private fun actions(palette: OrbPaletteChoice, suffix: String, steps: () -> Unit = {}, archive: Boolean = false, trash: Boolean = false) {
         Shots.assumeEnabled()
         val rows = listOf(
             row("41", title = "Versión 2.0 de la app", pinned = true, unread = 2, lastText = "Tarea #41 espera tu OK", at = at(0, 13, 31)),
@@ -131,7 +131,7 @@ class ChatsShotsTest {
             row("o1", title = "Conversación antigua", project = "api-pagos", at = at(1, 11, 0), lastText = "¡Hola!"),
             row("b1", title = "Ideas para el blog", at = at(2, 11, 0), lastText = "Aquí tienes cinco temas."),
         )
-        val b = backend(rows).apply { data.value = data.value.copy(sections = listOf(ChatSection(1, "Pagos", 0, 0, 0))) }
+        val b = backend(rows).apply { data.value = data.value.copy(sections = listOf(ChatSection(1, "Pagos", 0, 0, 0))); trashAvailable = trash }
         val vm = ChatListViewModel(b, dispatcher = Dispatchers.Unconfined)
         twoModes("10-acciones-chat", palette, suffix, after = {
             if (archive) {
@@ -152,13 +152,13 @@ class ChatsShotsTest {
     }
 
     /** Screen 12: the sheet over the mockup's list, with the mockup's projects; [steps] walks to each variant. */
-    private fun newChat(palette: OrbPaletteChoice, suffix: String, steps: () -> Unit = {}, setup: (NewChatViewModel, FakeNewChatBackend) -> Unit = { _, _ -> }, brain: Boolean = true) {
+    private fun newChat(palette: OrbPaletteChoice, suffix: String, steps: () -> Unit = {}, setup: (FakeNewChatBackend) -> Unit = { }, brain: Boolean = true) {
         Shots.assumeEnabled()
         val b = FakeNewChatBackend().apply {
             optionsResult = Result.success(
                 NewChatOptions(
                     agents = listOf(
-                        AgentOption("claude", "Claude", "opus", listOf(ModelOption("opus", "Opus", true, listOf("bajo", "alto")), ModelOption("sonnet", "Sonnet", false, listOf("medio")), ModelOption("haiku", "Haiku", false, emptyList()))),
+                        AgentOption("claude", "Claude", "opus", listOf(ModelOption("opus", "Opus", true, listOf("low", "medium", "high")), ModelOption("sonnet", "Sonnet", false, listOf("low", "medium", "high")), ModelOption("haiku", "Haiku", false, emptyList()))),
                         AgentOption("codex", "Codex", null, listOf(ModelOption("gpt", "Modelo por defecto", false, emptyList()))),
                         AgentOption("cursor", "Cursor", null, listOf(ModelOption("auto", "Modelo por defecto", false, emptyList()))),
                     ),
@@ -167,10 +167,11 @@ class ChatsShotsTest {
                 ),
             )
         }
+        // The PC's state is set before the sheet reads it: a state changed afterwards would never show.
+        setup(b)
         val vm = NewChatViewModel(b)
         val list = ChatListViewModel(backend(mockupRows()), dispatcher = Dispatchers.Unconfined)
-        setup(vm, b)
-        if (brain) vm.pickBrain("claude", "opus", "alto")
+        if (brain) vm.pickBrain("claude", "opus", "high")
         twoModes("12-nuevo-chat", palette, suffix, after = steps) {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -186,12 +187,14 @@ class ChatsShotsTest {
     @Test fun newChatOceano() = newChat(OrbPaletteChoice.Oceano, "")
     @Test fun newChatDirect() = newChat(OrbPaletteChoice.Grafito, "-directo", { click("Directo con un agente") })
     @Test fun newChatDirectWithoutProject() = newChat(OrbPaletteChoice.Grafito, "-directo-sin-proyecto", { click("Directo con un agente"); clickLast("Sin proyecto") })
-    @Test fun newChatBrain() = newChat(OrbPaletteChoice.Grafito, "-cerebro", { click("Claude · Opus · alto") })
+    @Test fun newChatBrain() = newChat(OrbPaletteChoice.Grafito, "-cerebro", { click("Claude · Opus · razonamiento alto") })
+    @Test fun newChatBrainMore() = newChat(OrbPaletteChoice.Grafito, "-cerebro-opciones", { click("Claude · Opus · razonamiento alto"); click("Más opciones") })
+    @Test fun newChatBrainOceano() = newChat(OrbPaletteChoice.Oceano, "-cerebro", { click("Claude · Opus · razonamiento alto") })
     @Test fun newChatBrainDirect() = newChat(OrbPaletteChoice.Grafito, "-cerebro-directo", { click("Directo con un agente"); click("Claude · El del PC") }, brain = false)
     @Test fun newChatProject() = newChat(OrbPaletteChoice.Grafito, "-proyecto", { clickLast("Nuevo") })
-    @Test fun newChatOffline() = newChat(OrbPaletteChoice.Grafito, "-sin-conexion", setup = { _, b -> b.connectionState.value = ConnectionState.Offline(null, null) })
-    @Test fun newChatFailedOptions() = newChat(OrbPaletteChoice.Grafito, "-error-pc", setup = { _, b -> b.optionsResult = offline() })
-    @Test fun newChatOldPc() = newChat(OrbPaletteChoice.Grafito, "-pc-antiguo", setup = { _, b -> b.missing += "models.catalog" })
+    @Test fun newChatOffline() = newChat(OrbPaletteChoice.Grafito, "-sin-conexion", setup = { b -> b.connectionState.value = ConnectionState.Offline(null, null) })
+    @Test fun newChatFailedOptions() = newChat(OrbPaletteChoice.Grafito, "-error-pc", setup = { b -> b.optionsResult = offline() })
+    @Test fun newChatOldPc() = newChat(OrbPaletteChoice.Grafito, "-pc-antiguo", setup = { b -> b.missing += "models.catalog" })
 
     /** The chip of the sheet when the list behind has the same words; chips past the edge are scrolled into view first. */
     private fun clickLast(text: String) { rule.onAllNodesWithText(text).onLast().performScrollTo().performClick(); rule.waitForIdle() }
@@ -204,6 +207,8 @@ class ChatsShotsTest {
     @Test fun actionsSnooze() = actions(OrbPaletteChoice.Grafito, "-posponer", { click("Posponer") })
     @Test fun actionsSection() = actions(OrbPaletteChoice.Grafito, "-seccion", { click("Mover a sección") })
     @Test fun actionsRename() = actions(OrbPaletteChoice.Grafito, "-renombrar", { click("Renombrar") })
+    @Test fun actionsDelete() = actions(OrbPaletteChoice.Grafito, "-eliminar", { click("Borrar el chat en el PC") }, trash = true)
+    @Test fun actionsRenameOceano() = actions(OrbPaletteChoice.Oceano, "-renombrar", { click("Renombrar") })
     @Test fun actionsArchived() = actions(OrbPaletteChoice.Grafito, "-archivado", archive = true)
 
     @Test fun chatsGrafito() = chats(OrbPaletteChoice.Grafito)

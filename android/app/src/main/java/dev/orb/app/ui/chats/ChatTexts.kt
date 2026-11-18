@@ -153,6 +153,7 @@ object ChatTexts {
     const val NEW_CHAT_MODEL = "Modelo"
     const val NEW_CHAT_EFFORT = "Razonamiento"
     const val NEW_CHAT_MODEL_DEFAULT = "El del PC"
+    const val NEW_CHAT_MODEL_DEFAULT_ROW = "modelo por defecto"
     const val NEW_CHAT_USE_PC_CHOICE = "Dejar la elección del PC"
     const val NEW_CHAT_ACCOUNT = "La cuenta la elige el PC."
     const val NEW_CHAT_DONE = "Listo"

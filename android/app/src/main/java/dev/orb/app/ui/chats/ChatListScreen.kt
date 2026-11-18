@@ -65,7 +65,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.MutableStateFlow
 
-/** What the Chats bar offers: the ☰ menu (a sheet the shell shows) and, when the notices center exists, its bell. */
+/**
+ * What the Chats bar offers: the ☰ menu (a sheet the shell shows, which also holds the list's ordering and the day summary)
+ * and, when the notices center exists, its bell.
+ */
 class ChatsMenu(val onMenu: () -> Unit, val unreadNotices: Int = 0, val onNotices: (() -> Unit)? = null)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -95,7 +98,6 @@ fun ChatListScreen(
     }
     var deleting by rememberSaveable { mutableStateOf<String?>(null) }
     var actionsFor by rememberSaveable { mutableStateOf<String?>(null) }
-    var moreOpen by rememberSaveable { mutableStateOf(false) }
     val actions = remember(vm) {
         ChatActions(
             onPin = vm::togglePin, onMarkRead = vm::markRead, onMute = vm::mute, onSnooze = vm::snooze,
@@ -106,7 +108,7 @@ fun ChatListScreen(
 
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            ChatsTopBar(menu, ChatTexts.linkLine(state.connection), onMore = { moreOpen = true })
+            ChatsTopBar(menu, ChatTexts.linkLine(state.connection))
             if (!state.online && state.loaded) OfflineStrip()
             OrbSearchButton(ChatTexts.SEARCH, onSearch, Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp))
             ChatFilters(state, vm::setFilter)
@@ -120,19 +122,6 @@ fun ChatListScreen(
         }
         OrbFab(ChatTexts.NEW_CHAT, OrbIcons.SquarePen, onNewChat, Modifier.align(Alignment.BottomEnd).padding(16.dp), lifted = snackbar.currentSnackbarData != null)
         OrbSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
-    }
-
-    if (moreOpen) {
-        val texts = remember { InboxTexts.current() }
-        val priority = state.order == ChatOrder.Priority
-        OrbSheet(onDismiss = { moreOpen = false }, title = ChatTexts.MORE_OPTIONS) {
-            OrbSheetItem(
-                ChatTexts.ORDER_PRIORITY, onClick = { vm.setOrder(if (priority) ChatOrder.Recent else ChatOrder.Priority); moreOpen = false },
-                icon = OrbIcons.ListOrdered, meta = if (priority) ChatTexts.ORDER_PRIORITY_ON else ChatTexts.ORDER_PRIORITY_OFF,
-            )
-            if (priority) OrbSheetItem(texts.reorder, onClick = { vm.reorder(); moreOpen = false }, icon = OrbIcons.ArrowUp)
-            if (state.canDigest) OrbSheetItem(ChatTexts.DAY_SUMMARY, onClick = { vm.showDigest(); moreOpen = false }, icon = OrbIcons.Activity)
-        }
     }
 
     val doomed = deleting
@@ -165,7 +154,7 @@ fun ChatListScreen(
 }
 
 @Composable
-private fun ChatsTopBar(menu: ChatsMenu, sub: String, onMore: () -> Unit) {
+private fun ChatsTopBar(menu: ChatsMenu, sub: String) {
     OrbTopBar(
         title = ChatTexts.TAB_CHATS, sub = sub, center = { OrbWordmark() },
         leading = { OrbIconButton(OrbIcons.Menu, ChatTexts.MENU, menu.onMenu) },
@@ -177,7 +166,6 @@ private fun ChatsTopBar(menu: ChatsMenu, sub: String, onMore: () -> Unit) {
                     badge = n.takeIf { it > 0 }?.let { if (it > 99) "99+" else it.toString() },
                 )
             }
-            OrbIconButton(OrbIcons.MoreVertical, ChatTexts.MORE_OPTIONS, onMore)
         },
     )
 }

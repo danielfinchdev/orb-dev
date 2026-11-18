@@ -52,12 +52,13 @@ class ChatListScreenTest {
 
     private fun texts(t: String) = rule.onAllNodesWithText(t).fetchSemanticsNodes().size
 
-    @Test fun headerShowsTheWordmarkTheLinkLineTheBellAndTheMoreMenu() {
+    @Test fun headerShowsTheWordmarkTheLinkLineAndTheBellAndNothingElse() {
         list(FakeChatsBackend(rows), ChatsMenu(onMenu = {}, unreadNotices = 2, onNotices = {}))
         rule.onNodeWithText("PC · conectado").assertIsDisplayed()
         assertTrue(rule.onAllNodesWithContentDescription("Orbe").fetchSemanticsNodes().isNotEmpty())
         rule.onNodeWithContentDescription("Menú").assertExists()
-        rule.onNodeWithContentDescription("Más opciones").assertExists()
+        // The mockup draws only the menu and the bell: ordering and the summary live in the ☰ menu.
+        rule.onNodeWithContentDescription("Más opciones").assertDoesNotExist()
         // The bell carries its number and there is no magnifier in the bar: the search is the field.
         rule.onNodeWithContentDescription(dev.orb.app.ui.notes.NotesTexts.unreadDescription(2)).assertExists()
         rule.onNodeWithText("Buscar chats y proyectos").assertIsDisplayed()
@@ -76,34 +77,6 @@ class ChatListScreenTest {
         list(FakeChatsBackend(rows))
         for (c in listOf("Todos", "No leídos", "Trabajando", "Directos")) assertTrue(c, texts(c) >= 1)
         rule.onNodeWithText("Prioridad").assertDoesNotExist()
-    }
-
-    @Test fun theMoreMenuTurnsPriorityOnAndOffersToReorderAndShowsTheSummary() {
-        list(FakeChatsBackend(rows))
-        rule.onNodeWithContentDescription("Más opciones").performClick()
-        rule.waitForIdle()
-        rule.onNodeWithText("Ordenar por prioridad").assertExists()
-        rule.onNodeWithText("Resumen del día").assertExists()
-        rule.onNodeWithText(InboxTexts.current().reorder).assertDoesNotExist()
-        rule.onNodeWithText("Ordenar por prioridad").performClick()
-        rule.waitForIdle()
-        rule.onNodeWithContentDescription("Más opciones").performClick()
-        rule.waitForIdle()
-        rule.onNodeWithText(InboxTexts.current().reorder).assertExists()
-        rule.onNodeWithText("Activado").assertExists()
-    }
-
-    @Test fun theSummaryFromTheMenuAsksThePcAndShowsTheCard() {
-        val b = FakeChatsBackend(rows)
-        b.digestResult = Result.success(
-            kotlinx.serialization.json.Json.parseToJsonElement("""{"day":"2026-11-17","due":false,"empty":false,"done":{"count":2,"items":[]}}"""),
-        )
-        list(b)
-        rule.onNodeWithContentDescription("Más opciones").performClick()
-        rule.waitForIdle()
-        rule.onNodeWithText("Resumen del día").performClick()
-        rule.waitForIdle()
-        rule.onNodeWithTag("day-digest").assertExists()
     }
 
     @Test fun aGroupFoldsWithItsArrowAndTheChoiceIsKept() {

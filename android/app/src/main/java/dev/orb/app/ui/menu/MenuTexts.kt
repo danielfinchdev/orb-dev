@@ -17,6 +17,7 @@ object MenuTexts {
     const val LINK_TEST = "Prueba de conexión"
     const val UNLINK = "Desenlazar este móvil"
     const val CLOSE = "Cerrar"
+    const val MORE_OPTIONS = "Más opciones"
 
     const val BACK = "Volver"
     const val TAB_ACTIVITY = "Actividad"

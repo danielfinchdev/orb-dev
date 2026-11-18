@@ -22,7 +22,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import dev.orb.app.ui.chats.ChatTexts
+import dev.orb.app.ui.chats.InboxTexts
 import dev.orb.app.ui.icons.OrbIcons
+import dev.orb.app.ui.kit.OrbKit
+import dev.orb.app.ui.theme.OrbFonts
 import dev.orb.app.ui.theme.OrbTheme
 
 /**
@@ -37,7 +41,12 @@ class MenuState(
     val showActivity: Boolean = true,
     val showUsage: Boolean = true,
     val showWhiteboard: Boolean = true,
+    /** What the chat list offers that the mockup does not draw; null when the menu is not opened from the list. */
+    val inbox: InboxMenu? = null,
 )
+
+/** The list's ordering and the day summary, which live under «Más opciones» now that the Chats bar has no «⋮». */
+class InboxMenu(val priority: Boolean, val canDigest: Boolean)
 
 class MenuActions(
     val onNotices: () -> Unit = {},
@@ -51,13 +60,19 @@ class MenuActions(
     val onAppearance: () -> Unit = {},
     val onLinkTest: () -> Unit = {},
     val onUnlink: () -> Unit = {},
+    val onPriority: () -> Unit = {},
+    val onReorder: () -> Unit = {},
+    val onDigest: () -> Unit = {},
 )
 
 /** The ☰ menu of the Chats bar. Every choice closes the sheet first, then goes where it leads. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MenuSheet(state: MenuState, actions: MenuActions, onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = OrbKit.popover, contentColor = OrbKit.foreground,
+    ) {
         MenuContent(state, actions, onDismiss)
     }
 }
@@ -66,7 +81,7 @@ fun MenuSheet(state: MenuState, actions: MenuActions, onDismiss: () -> Unit) {
 fun MenuContent(state: MenuState, actions: MenuActions, close: () -> Unit) {
     fun go(f: () -> Unit): () -> Unit = { close(); f() }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 16.dp)) {
-        Text(MenuTexts.MENU, Modifier.padding(horizontal = 24.dp, vertical = 4.dp), style = MaterialTheme.typography.titleLarge)
+        Text(MenuTexts.MENU, Modifier.padding(horizontal = 24.dp, vertical = 4.dp), style = MaterialTheme.typography.titleLarge, fontFamily = OrbFonts.title)
         Text(state.pcLabel, Modifier.padding(horizontal = 24.dp, vertical = 2.dp), style = MaterialTheme.typography.bodyMedium, color = OrbTheme.colors.text2)
 
         Section(MenuTexts.SECTION_WORK)
@@ -83,6 +98,17 @@ fun MenuContent(state: MenuState, actions: MenuActions, close: () -> Unit) {
         Entry(MenuTexts.APPEARANCE, OrbIcons.Palette, go(actions.onAppearance))
         Entry(MenuTexts.LINK_TEST, OrbIcons.Activity, go(actions.onLinkTest))
         Entry(MenuTexts.UNLINK, OrbIcons.LogOut, go(actions.onUnlink), tint = MaterialTheme.colorScheme.error)
+
+        // What the mockup does not draw but the phone keeps: it goes last, under its own label.
+        state.inbox?.let { inbox ->
+            Section(MenuTexts.MORE_OPTIONS)
+            Entry(
+                ChatTexts.ORDER_PRIORITY, OrbIcons.ListOrdered, go(actions.onPriority),
+                meta = if (inbox.priority) ChatTexts.ORDER_PRIORITY_ON else ChatTexts.ORDER_PRIORITY_OFF,
+            )
+            if (inbox.priority) Entry(InboxTexts.current().reorder, OrbIcons.ArrowUp, go(actions.onReorder))
+            if (inbox.canDigest) Entry(ChatTexts.DAY_SUMMARY, OrbIcons.Activity, go(actions.onDigest))
+        }
     }
 }
 
@@ -91,13 +117,14 @@ private fun Section(title: String) =
     Text(title, Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 4.dp), style = MaterialTheme.typography.labelLarge, color = OrbTheme.colors.text3)
 
 @Composable
-private fun Entry(label: String, icon: ImageVector, onClick: () -> Unit, badge: Int = 0, tint: Color = Color.Unspecified) {
+private fun Entry(label: String, icon: ImageVector, onClick: () -> Unit, badge: Int = 0, tint: Color = Color.Unspecified, meta: String? = null) {
     Row(
         Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).padding(horizontal = 24.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, null, tint = if (tint == Color.Unspecified) OrbTheme.colors.text2 else tint)
         Text(label, Modifier.weight(1f).padding(start = 16.dp), style = MaterialTheme.typography.bodyLarge, color = if (tint == Color.Unspecified) Color.Unspecified else tint)
+        if (meta != null) Text(meta, style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text3)
         if (badge > 0) Badge { Text(if (badge > 99) "99+" else badge.toString()) }
     }
 }

@@ -4,10 +4,16 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.printToString
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import dev.orb.app.ui.chats.FakeChatsBackend
+import dev.orb.app.ui.chats.InboxTexts
+import dev.orb.app.ui.chats.row
 import dev.orb.app.ui.notes.FakeNotesBackend
 import dev.orb.app.ui.notes.notice
 import dev.orb.app.ui.shell.MainShell
@@ -36,10 +42,10 @@ class MenuShellTest {
     @Before fun setUp() = Dispatchers.setMain(Dispatchers.Unconfined)
     @After fun tearDown() = Dispatchers.resetMain()
 
-    private fun show(notes: FakeNotesBackend?, actions: ShellActions) {
+    private fun show(notes: FakeNotesBackend?, actions: ShellActions, backend: FakeChatsBackend = FakeChatsBackend()) {
         rule.setContent {
             OrbTheme(OrbPaletteChoice.Grafito, dark = false) {
-                MainShell(FakeChatsBackend(), actions, Dispatchers.Unconfined, notes = notes)
+                MainShell(backend, actions, Dispatchers.Unconfined, notes = notes)
             }
         }
         rule.waitForIdle()
@@ -53,6 +59,41 @@ class MenuShellTest {
         rule.onNodeWithText("Programadas").performScrollTo().performClick()
         rule.waitForIdle()
         assertEquals("schedules", went)
+    }
+
+    @Test fun moreOptionsOfTheMenuTurnPriorityOnAndOffersToReorder() {
+        show(null, ShellActions({}, {}, {}, {}, {}, {}))
+        rule.onNodeWithContentDescription("Menú").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Más opciones").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Desactivado").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText(InboxTexts.current().reorder).assertDoesNotExist()
+        rule.onNodeWithText("Ordenar por prioridad").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription("Menú").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Activado").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText(InboxTexts.current().reorder).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "w390dp-h844dp")
+    fun theDaySummaryFromTheMenuAsksThePcAndShowsTheCard() {
+        val b = FakeChatsBackend(listOf(row("1", title = "Carrito que no guarda")))
+        b.digestResult = Result.success(
+            kotlinx.serialization.json.Json.parseToJsonElement("""{"day":"2026-11-17","due":false,"empty":false,"done":{"count":2,"items":[]}}"""),
+        )
+        show(null, ShellActions({}, {}, {}, {}, {}, {}), b)
+        rule.onNodeWithContentDescription("Menú").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Resumen del día").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("day-digest").assertExists()
+    }
+
+    @Test fun theChatsBarHasNoMoreMenu() {
+        show(null, ShellActions({}, {}, {}, {}, {}, {}))
+        rule.onNodeWithContentDescription("Más opciones").assertDoesNotExist()
     }
 
     @Test fun theBellCountsUnreadNoticesAndOpensTheCenter() {
