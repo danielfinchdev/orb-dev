@@ -296,7 +296,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
       emit('notes:read', { ...(ids ? { ids } : {}), at: Date.now() });
       return { ok: true };
     },
-    'logs.list': () => logFiles(board).map(([name, file]) => { let size = 0; try { size = fs.statSync(file).size; } catch { /* empty */ } return { name, size, entries: countLogEntries(file) }; }),
+    // `dir` (where the logs live) is for the window only: the phone never gets this PC's folders
+    'logs.list': (_params, principal) => logFiles(board).map(([name, file]) => { let size = 0; try { size = fs.statSync(file).size; } catch { /* empty */ } return { name, size, entries: countLogEntries(file), ...(principal?.channel === 'desktop' && name === 'general' ? { dir: path.dirname(file) } : {}) }; }),
     'logs.read': ({ project: name, whole }) => readLog(board, str(name, 'bitácora', 200), { whole: Boolean(whole), chars: 40000 }),
 
     // Only q/limit: the events array the window has always had. Any other filter: the paged reader of every source
