@@ -5,10 +5,11 @@
 // retries that fail, «Reintentar» reloads the page. A window over the screen (Ajustes, the games, the tour) passes
 // `onFail` instead: it closes and says why, and draws again when it is opened again (`resetKey` changes).
 import { Component, Fragment } from 'react';
-import { Home, RotateCw, WifiOff } from 'lucide-react';
+import { Home, RotateCw, TriangleAlert, WifiOff } from 'lucide-react';
 import { Button } from './ui/button.jsx';
-import { Robot } from './robot.jsx';
+import { StartNotice, startText, startHint } from './start-card.jsx';
 import { t } from '@/lib/i18n.js';
+import { bridge } from '@/lib/store.js';
 import { isLoadError, retryLoads } from '@/lib/lazy.js';
 
 export class ErrorBoundary extends Component {
@@ -33,24 +34,18 @@ export class ErrorBoundary extends Component {
     if (this.props.onFail) return null;
     const home = () => { this.setState({ failed: false }); this.props.onHome?.(); };
     if (this.state.offline) return (
-      <div className="grid min-h-0 flex-1 place-items-center overflow-y-auto p-8 text-center" role="alert" data-testid="screen-offline">
-        <div className="grid max-w-sm justify-items-center gap-3">
-          <WifiOff className="text-muted-foreground size-10" aria-hidden="true" />
-          <h1 className="text-lg">{t('app.loadOfflineTitle')}</h1>
-          <p className="text-muted-foreground text-sm">{t('app.loadOfflineBody')}</p>
-          <Button onClick={this.retry} data-testid="screen-offline-retry"><RotateCw />{t('app.offlineRetry')}</Button>
-        </div>
-      </div>
+      <StartNotice testid="screen-offline" role="alert" cover={false} icon={WifiOff} title={t('app.loadOfflineTitle')}
+        footer={<Button onClick={this.retry} data-testid="screen-offline-retry"><RotateCw />{t('app.offlineRetry')}</Button>}>
+        <p className={startText}>{t('app.loadOfflineBody')}</p>
+        <p className={startText}>{t('app.loadOfflineNote')}</p>
+      </StartNotice>
     );
     return (
-      <div className="grid min-h-0 flex-1 place-items-center overflow-y-auto p-8 text-center" role="alert" data-testid="screen-failed">
-        <div className="grid max-w-sm justify-items-center gap-3">
-          <Robot size={84} mood="worried" />
-          <h1 className="text-lg">{t('app.crashTitle')}</h1>
-          <p className="text-muted-foreground text-sm">{t('app.crashBody')}</p>
-          <Button onClick={home} data-testid="screen-failed-home"><Home />{t('app.crashHome')}</Button>
-        </div>
-      </div>
+      <StartNotice testid="screen-failed" role="alert" cover={false} icon={TriangleAlert} title={t('app.crashTitle')}
+        footer={<Button onClick={home} data-testid="screen-failed-home"><Home />{t('app.crashHome')}</Button>}>
+        <p className={startText}>{t('app.crashBody')}</p>
+        {bridge.desktop ? <p className={startHint}>{t('app.errorHint')}</p> : null}
+      </StartNotice>
     );
   }
 }

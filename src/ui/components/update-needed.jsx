@@ -1,7 +1,7 @@
 // The «update the app» screen: the Orb speaks a newer version of the link than this app (or page).
 import { Download } from 'lucide-react';
-import { Robot } from '@/components/robot.jsx';
 import { Button } from '@/components/ui/button.jsx';
+import { StartNotice, startText } from '@/components/start-card.jsx';
 import { bridge } from '@/lib/store.js';
 import { AUTHOR } from '../../shared/product.mjs';
 import { useT } from '@/lib/i18n.js';
@@ -10,13 +10,9 @@ export function UpdateNeeded({ info }) {
   const t = useT();
   const u = info?.needsUpdate ?? {};
   return (
-    <div className="brand-sky flex h-full overflow-y-auto p-6 pt-20 text-center" data-testid="update-needed">
-      <div className="bg-card/95 m-auto text-card-foreground grid w-full max-w-sm gap-4 rounded-3xl p-7 shadow-2xl">
-        <div className="-mt-16 flex justify-center"><Robot size={104} mood="worried" /></div>
-        <h1 className="text-xl">{t('appUpdate.title')}</h1>
-        <p className="text-muted-foreground text-sm">{u.message || t('appUpdate.body')}</p>
-        {u.app ? <Button size="lg" onClick={() => bridge.openExternal?.(`https://github.com/${AUTHOR.repo}/releases/latest`)} data-testid="update-open"><Download />{t('appUpdate.download')}</Button> : null}
-      </div>
-    </div>
+    <StartNotice testid="update-needed" icon={Download} title={t('appUpdate.title')}
+      footer={u.app ? <Button onClick={() => bridge.openExternal?.(`https://github.com/${AUTHOR.repo}/releases/latest`)} data-testid="update-open"><Download />{t('appUpdate.download')}</Button> : null}>
+      <p className={startText}>{u.message || t('appUpdate.body')}</p>
+    </StartNotice>
   );
 }

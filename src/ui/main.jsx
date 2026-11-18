@@ -8,7 +8,7 @@ if (import.meta.env.MODE === 'android') (await import('./lib/glass.js')).enableG
 import { StrictMode, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { notify, notifyError, notifyOk, Toaster } from '@/lib/notify.js';
-import { Menu, Smartphone, ScanLine, Link2, RotateCw, FolderOpen, Download, KeyRound, ArrowLeft, WifiOff } from 'lucide-react';
+import { Menu, Smartphone, ScanLine, Link2, RotateCw, RefreshCw, FolderOpen, Folder, Database, TriangleAlert, Download, KeyRound, ArrowLeft, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Field, Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
 import { MobileTabs, MoreView } from '@/components/mobile-tabs.jsx';
@@ -49,6 +49,7 @@ import { SessionView } from '@/views/session.jsx';
 import { OrbChatsView } from '@/views/orb/inbox.jsx';
 import { OrbInfoHost } from '@/views/orb/info.jsx';
 import { UpdateNeeded } from '@/components/update-needed.jsx';
+import { StartNotice, StartDetails, StartPath, StartProgress, startText, startHint } from '@/components/start-card.jsx';
 import { NoteOpener } from '@/lib/notes.js';
 import { RecoveryNotice } from '@/views/data.jsx';
 import { AutoNotice } from '@/components/autonomy-switch.jsx';
@@ -437,19 +438,25 @@ function Root() {
   if (phase === 'migration') return <>{strip}<MigrationFailed state={migration} /></>;
   // on the phone, a way out: try again, or link with another PC.
   if (phase === 'error') return (
-    <div className="grid h-full place-items-center overflow-y-auto p-8 text-center" data-testid="app-error">{strip}
-      <div className="grid max-w-md justify-items-center gap-3">
-        <Robot size={90} mood="worried" /><h1 className="mt-1 text-xl">{t('app.errorTitle')}</h1><p className="text-muted-foreground text-sm break-words">{error}</p>
-        {bridge.mobile ? <Button size="lg" onClick={() => location.reload()} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
-        {/* start the engine again; after sealed keys that do not open, also with a new key (asked first). */}
-        {bridge.retryStart ? <Button size="lg" onClick={() => bridge.retryStart().catch(quiet).finally(() => location.reload())} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
-        {bridge.retryStart && startError?.code === 'secretUnreadable' ? <Button variant="ghost" size="sm" data-testid="app-error-new-secret" onClick={async () => {
-          if (!(await askNewSecret(startError))) return;
-          await bridge.retryStart({ newSecret: true }).catch(quiet); location.reload();
-        }}>{t('app.newSecretOk')}</Button> : null}
-        {bridge.mobile && bridge.unlink ? <Button variant="ghost" size="sm" onClick={async () => { if (await relinkPhone(getState().info?.pcName)) setPhase('pair'); }} data-testid="app-error-relink"><Link2 />{t('app.offlineRelink')}</Button> : null}
-      </div>
-    </div>
+    <>{strip}
+      <StartNotice testid="app-error" icon={startError?.code === 'secretUnreadable' ? KeyRound : TriangleAlert} title={t('app.errorTitle')}
+        footer={(
+          <>
+            {bridge.mobile && bridge.unlink ? <Button variant="ghost" onClick={async () => { if (await relinkPhone(getState().info?.pcName)) setPhase('pair'); }} data-testid="app-error-relink"><Link2 />{t('app.offlineRelink')}</Button> : null}
+            {/* after sealed keys that do not open, the engine may also start with a new key (asked first). */}
+            {bridge.retryStart && startError?.code === 'secretUnreadable' ? <Button variant="outline" data-testid="app-error-new-secret" onClick={async () => {
+              if (!(await askNewSecret(startError))) return;
+              await bridge.retryStart({ newSecret: true }).catch(quiet); location.reload();
+            }}><KeyRound />{t('app.newSecretOk')}</Button> : null}
+            {/* on the phone, a way out: try again, or link with another PC; on the PC, start the engine again. */}
+            {bridge.mobile ? <Button onClick={() => location.reload()} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
+            {bridge.retryStart ? <Button onClick={() => bridge.retryStart().catch(quiet).finally(() => location.reload())} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
+          </>
+        )}>
+        <p className={`${startText} break-words`}>{error}</p>
+        {bridge.desktop ? <p className={startHint}>{t('app.crashHint')}</p> : null}
+      </StartNotice>
+    </>
   );
   if (phase !== 'app' || !ready) return <div className="grid h-full place-items-center">{strip}<Robot size={80} mood="thinking" /></div>;
   // a tapped notification opens its chat (lib/notes.js).
@@ -531,26 +538,24 @@ function MigrationFailed({ state }) {
     catch (e) { setS({ ...s, reason: String(e?.message ?? e) }); }
     finally { setBusy(false); }
   };
+  const footer = (
+    <>
+      {v.folder && bridge.openPath ? <Button variant="ghost" onClick={() => act(bridge.openPath(v.folder))}><FolderOpen />{t('data.migration38.openFolder')}</Button> : null}
+      {u?.action === 'check' ? <Button variant="outline" disabled={u.busy} onClick={updateActions.check} data-testid="migration-update">{u.busy ? <Spinner /> : <RefreshCw />}{t('data.migration38.checkUpdate')}</Button> : null}
+      {u?.action === 'update' ? <Button variant="outline" onClick={() => updateActions.update({ portable: u.portable })} data-testid="migration-update"><Download />{t(u.portable ? 'update.download' : 'update.update')} {u.version}</Button> : null}
+      {u?.action === 'restart' ? <Button variant="outline" onClick={updateActions.restart} data-testid="migration-update"><RotateCw />{t('update.restart')}</Button> : null}
+      <Button disabled={busy} onClick={retry} data-testid="migration-retry">{busy ? <Spinner className="border-primary-foreground/40 border-t-primary-foreground" /> : null}{t('data.migration38.retry')}</Button>
+    </>
+  );
   return (
-    <div className="grid h-full place-items-center overflow-y-auto p-8 text-center" data-testid="migration-failed">
-      <div className="grid max-w-md gap-3">
-        <div className="flex justify-center"><Robot size={90} mood={busy ? 'thinking' : 'worried'} /></div>
-        <h1 className="text-xl">{t('data.migration38.title')}</h1>
-        <p className="text-muted-foreground text-sm">{t(v.body)}</p>
-        <p className="text-sm" role="alert">{t('data.migration38.help')}</p>
-        <p className="text-muted-foreground text-xs break-all">{s.backup ? t('data.migration38.backup', { path: s.backup }) : t('data.migration38.noBackup', { path: s.data })}</p>
-        <div className="flex flex-wrap justify-center gap-2">
-          <Button disabled={busy} onClick={retry} data-testid="migration-retry">{busy ? <Spinner /> : <RotateCw />}{t('data.migration38.retry')}</Button>
-          {v.folder && bridge.openPath ? <Button variant="outline" onClick={() => act(bridge.openPath(v.folder))}><FolderOpen />{t('data.migration38.openFolder')}</Button> : null}
-          {u?.action === 'check' ? <Button variant="outline" disabled={u.busy} onClick={updateActions.check} data-testid="migration-update">{u.busy ? <Spinner /> : <Download />}{t('data.migration38.checkUpdate')}</Button> : null}
-          {u?.action === 'update' ? <Button variant="outline" onClick={() => updateActions.update({ portable: u.portable })} data-testid="migration-update"><Download />{t(u.portable ? 'update.download' : 'update.update')} {u.version}</Button> : null}
-          {u?.action === 'restart' ? <Button variant="outline" onClick={updateActions.restart} data-testid="migration-update"><RotateCw />{t('update.restart')}</Button> : null}
-        </div>
-        {u?.percent != null ? <p className="text-muted-foreground text-xs">{t('update.downloading', { percent: u.percent })}</p> : null}
-        {u?.none ? <p className="text-muted-foreground text-xs">{t('data.migration38.noUpdate')}</p> : null}
-        <details className="text-muted-foreground text-left text-xs"><summary className="cursor-pointer text-center">{t('data.migration38.details')}</summary><p className="mt-2 break-words">{t('data.migration38.reason', { reason: s.reason })}</p></details>
-      </div>
-    </div>
+    <StartNotice testid="migration-failed" icon={Database} mood={busy ? 'thinking' : 'worried'} title={t('data.migration38.title')} footer={footer}
+      details={<StartDetails>{t('data.migration38.reason', { reason: s.reason })}</StartDetails>}>
+      <p className={startText}>{t(v.body)}</p>
+      {u?.percent != null ? null : <p className={startText} role="alert">{t('data.migration38.help')}</p>}
+      <StartPath icon={Folder}>{s.backup ? t('data.migration38.backup', { path: s.backup }) : t('data.migration38.noBackup', { path: s.data })}</StartPath>
+      {u?.percent != null ? <><StartProgress percent={u.percent} /><p className={startText}>{t('update.downloading', { percent: u.percent })}</p></> : null}
+      {u?.none ? <p className={startText}>{t('data.migration38.noUpdate')}</p> : null}
+    </StartNotice>
   );
 }
 
@@ -683,7 +688,7 @@ function AppLink() {
 // panel) and, when a text box is there, over it and the row above it («Compactar»), never over its send button.
 // Without a box they sit in the page's bottom padding, which a list leaves free once it is scrolled to its end.
 // Over the whiteboard they clear its status bar and zoom controls; with a dialog open they stay outside its box (beside it,
-// under it or above it, wherever they fit) and only as a last resort sit just over its footer.
+// under it or above it, wherever the notice's real height fits) and only as a last resort sit in the window's corner.
 const TOAST_GAP = 24;
 const TOAST_W = 356;
 const TOAST_H = 56;
@@ -696,7 +701,8 @@ function useToastInsets() {
     const seen = new Set();
     const resizes = new ResizeObserver(() => schedule());
     const BOARD_BAR = '[data-testid="whiteboard-status"], .zoom-actions, .layer-ui__wrapper__footer-left';
-    const WATCHED = `.composer-dock, [data-testid="chat-panel"], [data-slot="dialog-content"], ${BOARD_BAR}`;
+    // the notice itself is watched too: a long text makes it taller than the guess, and the gap beside a dialog depends on it
+    const WATCHED = `.composer-dock, [data-testid="chat-panel"], [data-slot="dialog-content"], [data-sonner-toast], ${BOARD_BAR}`;
     const measure = () => {
       frame = 0;
       // a box or panel that left the page is let go, or the observer would keep its whole view alive
@@ -719,11 +725,12 @@ function useToastInsets() {
         const below = innerHeight - dialog.bottom;
         const edge = Math.max(TOAST_GAP, Math.round(innerWidth - dialog.right));
         if (innerWidth - dialog.right >= TOAST_W + 2 * TOAST_GAP) next = { bottom: TOAST_GAP, right: TOAST_GAP };
-        else if (below >= TOAST_H - 8) next = { bottom: Math.max(4, Math.floor((below - TOAST_H) / 2)), right: edge };
-        else if (dialog.top >= TOAST_H + 8) next = { bottom: Math.round(innerHeight - dialog.top + 8), right: edge };
         else {
-          const foot = [...document.querySelectorAll('[data-slot="dialog-content"]')].at(-1)?.querySelector('[data-slot="dialog-footer"]')?.getBoundingClientRect();
-          next = { bottom: Math.round(innerHeight - (foot && foot.height > 0 ? foot.top : dialog.bottom) + 8), right: edge };
+          const toastH = [...document.querySelectorAll('[data-sonner-toast]')].map(shown).find(Boolean)?.height ?? TOAST_H;
+          if (below >= toastH + 8) next = { bottom: Math.max(4, Math.floor((below - toastH) / 2)), right: edge };
+          else if (dialog.top >= toastH + 8) next = { bottom: Math.round(innerHeight - dialog.top + 8), right: edge };
+          // nowhere outside the box: the window's corner, so the notice never sits inside the dialog's own area higher up
+          else next = { bottom: 4, right: 4 };
         }
       }
       setIns((old) => (old.bottom === next.bottom && old.right === next.right ? old : next));

@@ -4,17 +4,22 @@
 // welcome and when an updated Orb finds them (main.jsx, phase 'layout'). When the logs went into core, a last
 // screen says once where they are now (other tools, like the user's AGENTS.md or CLAUDE.md, must point there).
 import { useState } from 'react';
-import { ArrowRight, Copy, RotateCw } from 'lucide-react';
-import { Robot } from '@/components/robot.jsx';
+import { BookOpen, Copy, FolderCheck, Plug, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Spinner } from '@/components/ui/basic.jsx';
 import { Select } from '@/components/ui/overlay.jsx';
+import { Segmented, ListCard } from '@/components/ui/primitives.jsx';
+import { WizardPage, WizardCard, WizardFoot, WizardText, WizardTitle, StartMark } from '@/components/wizard.jsx';
 import { bridge } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
 import { layoutOptions, layoutTitle } from '@/lib/core-access.js';
 import { notifyError } from '@/lib/notify.js';
 
-export function LayoutReview({ plan, onDone }) {
+const KIND_ICON = { logs: BookOpen, adb: Smartphone, mcp: Plug };
+const H2 = 'm-0 font-(family-name:--title) text-dialog leading-[1.45] font-semibold';
+
+// step: 'carpetas' when it is a step of the welcome (its row of steps on top); none when an updated Orb finds the folders.
+export function LayoutReview({ plan, onDone, step = null }) {
   const t = useT();
   const items = (plan?.items ?? []).filter((it) => !it.kept);
   const [choices, setChoices] = useState(() => Object.fromEntries(items.map((it) => [it.id, it.choice])));
@@ -30,38 +35,45 @@ export function LayoutReview({ plan, onDone }) {
     catch (e) { setError(String(e?.message ?? e)); }
     finally { setBusy(false); }
   };
-  if (moved) return <Moved logs={moved.logs} servers={moved.servers} onDone={onDone} />;
+  const kick = step ? t('setup.kick', { n: 3 }) : null;
+  if (moved) return <Moved logs={moved.logs} servers={moved.servers} onDone={onDone} step={step} kick={kick} />;
   const toCore = items.some((it) => ['move', 'mcp'].includes(choices[it.id]));
   return (
-    <div className="grid h-full place-items-center overflow-y-auto p-6" data-testid="layout-review">
-      <div className="grid w-full max-w-xl gap-4">
-        <div className="flex justify-center"><Robot size={80} mood={busy ? 'thinking' : 'hello'} /></div>
-        <div className="text-center">
-          <h1 className="text-xl">{t('layout.title')}</h1>
-          <p className="text-muted-foreground mt-1 text-sm">{t('layout.intro', { home: plan?.home ?? '' })}</p>
-        </div>
-        <div className="grid gap-2">
-          {items.map((it) => (
-            <div key={it.id} className="flex min-w-0 flex-wrap items-center gap-3 rounded-lg border px-3 py-2" data-testid={`layout-item-${it.id}`}>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm">{t(layoutTitle(it))}</div>
-                <div className="text-muted-foreground truncate font-mono text-xs">{it.name}</div>
-                {it.project ? <div className="text-muted-foreground text-xs">{t('layout.mcpProject')}</div> : null}
-                {it.kind === 'logs' ? <div className="text-muted-foreground text-xs" data-testid="layout-logs-note">{t('layout.logsNote')}</div> : null}
+    <WizardPage step={step} data-testid="layout-review">
+      <WizardCard kick={kick}>
+        <WizardTitle>{t('layout.title')}</WizardTitle>
+        <WizardText>{t('layout.intro', { home: plan?.home ?? '' })}</WizardText>
+        <ListCard>
+          {items.map((it) => {
+            const Icon = KIND_ICON[it.kind] ?? Plug;
+            const options = layoutOptions(it).map((o) => ({ value: o.value, label: t(o.key, o.vars) }));
+            const set = (v) => setChoices({ ...choices, [it.id]: v });
+            return (
+              <div key={it.id} className="border-border flex min-w-0 flex-wrap items-start gap-3 px-3.5 py-3 not-first:border-t" data-testid={`layout-item-${it.id}`}>
+                <Icon className="text-muted-foreground mt-0.5 size-4 flex-none" aria-hidden="true" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-control leading-[1.45] font-medium">{t(layoutTitle(it))}</div>
+                  <div className="text-muted-foreground mt-0.5 text-caption leading-[1.45]">
+                    <code className="font-mono break-all">{it.name}</code>
+                    {it.project ? <> · {t('layout.mcpProject')}</> : null}
+                    {it.kind === 'logs' ? <span data-testid="layout-logs-note"> · {t('layout.logsNote')}</span> : null}
+                  </div>
+                </div>
+                {options.length <= 2
+                  ? <Segmented role="group" aria-label={t(layoutTitle(it))} value={choices[it.id]} onChange={(v) => { if (!busy) set(v); }} options={options.map((o) => ({ ...o, testid: `layout-choice-${it.id}-${o.value}` }))} data-testid={`layout-choice-${it.id}`} />
+                  : <Select className="w-full sm:w-56" value={choices[it.id]} disabled={busy} onValueChange={set} options={options} data-testid={`layout-choice-${it.id}`} />}
               </div>
-              <Select className="w-full sm:w-56" value={choices[it.id]} disabled={busy} onValueChange={(v) => setChoices({ ...choices, [it.id]: v })}
-                options={layoutOptions(it).map((o) => ({ value: o.value, label: t(o.key, o.vars) }))} data-testid={`layout-choice-${it.id}`} />
-            </div>
-          ))}
-        </div>
-        <p className="text-muted-foreground text-xs">{toCore ? `${t('layout.coreNote')} ` : ''}{t('layout.pathsNote')}</p>
-        {error ? <p className="text-destructive text-sm" role="alert" data-testid="layout-error">{error}</p> : null}
-        <div className="flex flex-wrap justify-center gap-2">
-          <Button disabled={busy} onClick={() => apply()} data-testid="layout-apply">{busy ? <Spinner /> : error ? <RotateCw /> : <ArrowRight />}{t(error ? 'layout.retry' : 'layout.apply')}</Button>
-          <Button variant="ghost" disabled={busy} onClick={() => apply(Object.fromEntries(items.map((it) => [it.id, 'keep'])))} data-testid="layout-keep-all">{t('layout.keepAll')}</Button>
-        </div>
-      </div>
-    </div>
+            );
+          })}
+        </ListCard>
+        <WizardText>{toCore ? `${t('layout.coreNote')} ` : ''}{t('layout.pathsNote')}</WizardText>
+        {error ? <p className="text-destructive m-0 text-control" role="alert" data-testid="layout-error">{error}</p> : null}
+        <WizardFoot>
+          <Button variant="outline" disabled={busy} onClick={() => apply(Object.fromEntries(items.map((it) => [it.id, 'keep'])))} data-testid="layout-keep-all">{t('layout.keepAll')}</Button>
+          <Button disabled={busy} onClick={() => apply()} data-testid="layout-apply">{busy ? <Spinner className="border-primary-foreground/40 border-t-primary-foreground" /> : null}{t(error ? 'layout.retry' : 'layout.apply')}</Button>
+        </WizardFoot>
+      </WizardCard>
+    </WizardPage>
   );
 }
 
@@ -70,53 +82,56 @@ function Path({ p, testid }) {
   const t = useT();
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <span className="min-w-0 flex-1 font-mono text-xs break-all" data-testid={testid}>{p}</span>
-      <Button variant="ghost" size="icon" title={t('layout.copyPath')} aria-label={t('layout.copyPath')} onClick={() => navigator.clipboard?.writeText(p).catch(() => notifyError(t('app.copyFailed')))}><Copy /></Button>
+      <code className="min-w-0 flex-1 font-mono text-caption break-all" data-testid={testid}>{p}</code>
+      <Button variant="ghost" size="icon-xs" title={t('layout.copyPath')} aria-label={t('layout.copyPath')} onClick={() => navigator.clipboard?.writeText(p).catch(() => notifyError(t('app.copyFailed')))}><Copy /></Button>
     </div>
   );
 }
-function Moved({ logs, servers = [], onDone }) {
+const DoneBox = ({ children, ...props }) => <div className="bg-card border-border rounded-card flex flex-col items-start gap-3 border p-4" {...props}>{children}</div>;
+function Moved({ logs, servers = [], onDone, step, kick }) {
   const t = useT();
   return (
-    <div className="grid h-full place-items-center overflow-y-auto p-6" data-testid="layout-logs-moved">
-      <div className="grid w-full max-w-xl gap-5">
-        <div className="flex justify-center"><Robot size={80} mood="happy" /></div>
+    <WizardPage step={step} data-testid="layout-logs-moved">
+      <WizardCard kick={kick}>
         {logs ? <LogsMoved moved={logs} /> : null}
         {servers.length ? (
-          <div className="grid gap-2" data-testid="layout-servers-moved">
-            <div className="text-center"><h1 className="text-xl">{t('layout.serversMovedTitle')}</h1><p className="text-muted-foreground mt-1 text-sm">{t('layout.serversMovedIntro')}</p></div>
+          <DoneBox data-testid="layout-servers-moved">
+            <StartMark icon={FolderCheck} mood="happy" />
+            <h2 className={H2}>{t('layout.serversMovedTitle')}</h2>
+            <WizardText>{t('layout.serversMovedIntro')}</WizardText>
             {servers.map((m) => (
-              <div key={m.to} className="grid gap-1 rounded-lg border px-3 py-2">
-                <span className="text-muted-foreground truncate font-mono text-xs line-through">{m.from}</span>
+              <div key={m.to} className="grid gap-1 self-stretch">
+                <span className="text-muted-foreground truncate font-mono text-caption line-through">{m.from}</span>
                 <Path p={m.to} testid="layout-server-path" />
               </div>
             ))}
-            <p className="text-muted-foreground text-xs">{t('layout.serversMovedNote')}</p>
-          </div>
+            <WizardText>{t('layout.serversMovedNote')}</WizardText>
+          </DoneBox>
         ) : null}
-        <div className="flex justify-center"><Button onClick={onDone} data-testid="layout-logs-ok"><ArrowRight />{t('layout.continue')}</Button></div>
-      </div>
-    </div>
+        <WizardFoot><Button onClick={onDone} data-testid="layout-logs-ok">{t('layout.continue')}</Button></WizardFoot>
+      </WizardCard>
+    </WizardPage>
   );
 }
 function LogsMoved({ moved }) {
   const t = useT();
   const files = moved.files?.length ? moved.files : [moved.dir];
   return (
-    <div className="grid gap-2">
-        <div className="text-center">
-          <h1 className="text-xl">{t('layout.logsMovedTitle')}</h1>
-          <p className="text-muted-foreground mt-1 text-sm">{t('layout.logsMovedIntro')}</p>
-        </div>
-        <div className="grid gap-2">
+    <>
+      <DoneBox>
+        <StartMark icon={FolderCheck} mood="happy" />
+        <h2 className={H2}>{t('layout.logsMovedTitle')}</h2>
+        <WizardText>{t('layout.logsMovedIntro')}</WizardText>
+        <div className="grid gap-2 self-stretch">
           {files.map((f) => (
-            <div key={f} className="grid gap-1 rounded-lg border px-3 py-2">
+            <div key={f} className="grid gap-1">
               <Path p={f} testid="layout-logs-path" />
-              {moved.readOnly?.includes(f) ? <span className="text-muted-foreground text-xs" data-testid="layout-logs-readonly">{t('layout.logsReadOnly')}</span> : null}
+              {moved.readOnly?.includes(f) ? <span className="text-muted-foreground text-caption" data-testid="layout-logs-readonly">{t('layout.logsReadOnly')}</span> : null}
             </div>
           ))}
         </div>
-        <p className="text-muted-foreground text-xs">{t('layout.logsMovedNote')}</p>
-    </div>
+      </DoneBox>
+      <WizardText>{t('layout.logsMovedNote')}</WizardText>
+    </>
   );
 }

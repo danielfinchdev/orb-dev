@@ -26,5 +26,6 @@ export default {
   'session.autoOn': 'Modo Auto',
   'session.askOn': 'Modo Preguntar',
   'settings.autonomy': 'Permisos de los agentes',
-  'settings.autonomyHint': 'Auto: trabajan sin preguntar dentro de la carpeta del proyecto (se puede deshacer). Preguntar: piden permiso antes de lo arriesgado.'
+  'settings.autonomyHintAuto': 'trabajan sin preguntar dentro de la carpeta del proyecto (se puede deshacer).',
+  'settings.autonomyHintAsk': 'piden permiso antes de lo arriesgado.'
 };

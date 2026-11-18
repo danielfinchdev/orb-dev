@@ -15,5 +15,15 @@ export default {
   'setup.pickLocation': 'Elegir ubicación…',
   'setup.example': 'Por ejemplo, D:\\ para crear D:\\{name}',
   'setup.folderNote': 'Aquí van tus proyectos, cada uno en su categoría, y mi carpeta core (oculta) con mis datos. Si eliges una carpeta que ya he usado, la seguiré usando.',
-  'setup.create': 'Crear y empezar'
+  'setup.create': 'Crear y empezar',
+  'setup.stepsLabel': 'Pasos de la bienvenida',
+  'setup.step.welcome': 'Bienvenida',
+  'setup.step.theme': 'Tu tema',
+  'setup.step.folders': 'Ordenar carpetas',
+  'setup.step.master': 'Contraseña maestra',
+  'setup.step.equipo': 'Prepara tu equipo',
+  'setup.kick': 'Paso {n}',
+  'setup.themeTitle': 'Elige tu tema',
+  'setup.themeDesc': 'Cambia los colores y el estilo de toda la aplicación. Lo puedes cambiar después en Ajustes › General › Apariencia.',
+  'setup.themeLabel': 'Tema'
 };

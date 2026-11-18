@@ -60,6 +60,8 @@ export default {
   'expert.activity': 'Actividad',
   'expert.close': 'Cerrar',
   'expert.files': 'Archivos',
+  'expert.searchFiles': 'Buscar archivos',
+  'expert.searchFilesHint': 'Busca por nombre entre los archivos ya leídos; abre una carpeta para buscar dentro.',
   'expert.exit': 'Salir del God mode',
   'expert.openTerminal': 'Abrir un terminal aquí',
   'expert.panelsHint': 'Tú eliges cuáles ver.',

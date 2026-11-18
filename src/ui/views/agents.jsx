@@ -425,11 +425,11 @@ function TeamBlock({ team, agents }) {
   return (
     <Block title={t('agents.team.title')} count={team.items ? (missing.length ? t('agents.team.missing', { n: missing.length }) : null) : null} note={t('agents.team.note')} data-testid="agents-team">
       {!team.items ? <div className="text-muted-foreground flex items-center gap-2 text-control"><Spinner />{t('comp.installer.checking')}</div> : (
-        <Panel>
+        <Panel className="mt-0">
           {items.map((i) => {
             const step = stepOf(i.id);
             const busy = step?.state === 'instalando';
-            const version = versionOf(i.id);
+            const version = i.version?.match(/\d+(?:\.\d+)+/)?.[0] ?? versionOf(i.id);
             return (
               <Setting key={i.id} label={i.label} hint={i.installed ? '' : i.why}>
                 {i.installed || step?.state === 'hecho' ? <>{version ? <span className="text-muted-foreground text-control">{version}</span> : null}<Badge variant="success">{t('comp.installer.installed')}</Badge></>

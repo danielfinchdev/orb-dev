@@ -9,8 +9,8 @@ export function AgentsUsageTabs({ current }) {
   return (
     <Tabs value={current} onValueChange={(view) => go(view === 'usage' ? { view: 'usage' } : 'agents')}>
       <TabsList variant="line" aria-label={t('agents.title')} data-testid="agents-tabs">
-        <TabsTrigger value="agents" data-testid="agents-tab-agents"><Bot />{t('agents.tabAgents')}</TabsTrigger>
-        <TabsTrigger value="usage" data-testid="agents-tab-usage"><ChartNoAxesColumn />{t('usage.title')}</TabsTrigger>
+        <TabsTrigger value="agents" className="underline" data-testid="agents-tab-agents"><Bot />{t('agents.tabAgents')}</TabsTrigger>
+        <TabsTrigger value="usage" className="underline" data-testid="agents-tab-usage"><ChartNoAxesColumn />{t('usage.title')}</TabsTrigger>
       </TabsList>
     </Tabs>
   );

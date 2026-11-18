@@ -138,7 +138,7 @@ export function TurnChanges({ session, turn, turnAt }) {
       {turns?.available ? (
         <div className="flex items-center gap-2 text-control">
           <span className="text-muted-foreground">{t('turns.scope')}</span>
-          <Select className="min-w-0" value={scope} onValueChange={setScope} options={options} data-testid="turn-scope" />
+          <Select caret="solid" className="min-w-0" value={scope} onValueChange={setScope} options={options} data-testid="turn-scope" />
           <span className="ml-auto flex items-center gap-1">
             <Tip label={t('turns.prev')}><IconButton small label={t('turns.prev')} onClick={() => jump(-1)}><ChevronUp /></IconButton></Tip>
             <Tip label={t('turns.next')}><IconButton small label={t('turns.next')} onClick={() => jump(1)}><ChevronDown /></IconButton></Tip>

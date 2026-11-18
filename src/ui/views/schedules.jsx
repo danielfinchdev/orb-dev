@@ -98,8 +98,8 @@ async function newSchedule(preset = {}) {
       <Field label={t('schedules.titleField')}><Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={120} placeholder={t('schedules.titlePh')} /></Field>
       <Field label={t('schedules.what')} hint={t('schedules.whatNote', { assistant: app?.config?.assistantName })}><Textarea rows={4} value={v.description} onChange={(e) => set({ description: e.target.value })} placeholder={t('schedules.whatHint')} /></Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label={t('schedules.project')}><Select className="w-full" value={v.project} onValueChange={(project) => set({ project })} options={list.map((p) => ({ value: p.name, label: p.name, icon: <ProjectIcon name={p.name} small /> }))} /></Field>
-        <Field label={t('schedules.agentModel')}><Select className="w-full" value={v.brain} onValueChange={(brain) => set({ brain })} options={brains} data-testid="schedule-brain" /></Field>
+        <Field label={t('schedules.project')}><Select caret="solid" className="w-full" value={v.project} onValueChange={(project) => set({ project })} options={list.map((p) => ({ value: p.name, label: p.name, icon: <ProjectIcon name={p.name} small /> }))} /></Field>
+        <Field label={t('schedules.agentModel')}><Select caret="solid" className="w-full" value={v.brain} onValueChange={(brain) => set({ brain })} options={brains} data-testid="schedule-brain" /></Field>
       </div>
       <Field label={t('schedules.frequency')}><Segmented className="self-start" aria-label={t('schedules.frequency')} value={v.every} onChange={(every) => set({ every })} options={EVERY.map((value) => ({ value, label: t(`schedules.every.${value}`) }))} /></Field>
       {v.every === 'weekly' ? (

@@ -10,7 +10,8 @@ import { NotificationBell } from '@/components/notification-center.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { OpenInMenu, ActionsMenu } from '@/components/project-tools.jsx';
 import { Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, Switch, BubbleTip } from '@/components/ui/overlay.jsx';
-import { IconButton, MoreButton } from '@/components/ui/primitives.jsx';
+import { IconButton, MoreButton, SearchInput } from '@/components/ui/primitives.jsx';
+import { ProjectIcon } from '@/components/project-icon.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { useStore, call, act, go, bridge, setState, getState, openTerminal } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
@@ -77,32 +78,37 @@ const Notice = ({ icon: Icon, title, children }) => (
 
 // ---- explorer
 // `changes`: the git state of each file (the letter beside its name).
-function Tree({ project, onOpen, version, current, changes }) {
+function Tree({ project, onOpen, version, current, changes, filter = '' }) {
   const t = useT();
   const [dirs, setDirs] = useState({});
   const [open, setOpen] = useState(() => new Set(['']));
   const load = useCallback(async (dir) => { try { const r = await call('expert.tree', { project, dir }); setDirs((d) => ({ ...d, [dir]: r })); } catch (e) { setDirs((d) => ({ ...d, [dir]: { error: errorText(e), entries: [] } })); } }, [project]);
   useEffect(() => { setDirs({}); setOpen(new Set([''])); }, [project]);
   useEffect(() => { for (const dir of open) load(dir); }, [project, version]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The search only looks at what the tree has already read (folders opened so far), by name without accents or case.
+  const needle = filter.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const named = (e) => e.name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().includes(needle);
+  const hits = (e) => named(e) || (e.kind === 'dir' && (dirs[e.path]?.entries ?? []).some(hits));
+  const isOpen = (path) => open.has(path) || Boolean(needle && (dirs[path]?.entries ?? []).some(hits));
   const toggle = (dir) => { const next = new Set(open); if (next.has(dir)) next.delete(dir); else { next.add(dir); if (!dirs[dir]) load(dir); } setOpen(next); };
   const render = (dir, depth) => {
     const d = dirs[dir];
     const pad = { paddingLeft: `calc(6px + ${depth} * 14px)` };
     if (!d) return <div className="text-muted-foreground py-1 text-caption" style={pad}><Spinner className="size-3" /></div>;
     if (d.error) return <div className="text-destructive py-1 text-caption" style={pad}>{d.error}</div>;
-    return d.entries.map((e) => {
+    return d.entries.filter((e) => !needle || hits(e)).map((e) => {
       const dir = e.kind === 'dir'; const FileIcon = fileIcon(e.name); const state = !dir ? changes[e.path] : null;
       return (
         <div key={e.path}>
           <button type="button" onClick={() => (dir ? toggle(e.path) : e.secret ? null : onOpen(e.path))} title={e.secret ? t('expert.secretFile') : `${e.path}${e.size != null ? ` · ${size(e.size)}` : ''}`} aria-selected={!dir && current === e.path ? true : undefined}
             className={cn('hover:bg-accent/60 flex h-7 w-full cursor-pointer items-center gap-1.5 rounded-ctl pr-1.5 text-left text-control', !dir && current === e.path && 'bg-accent', e.secret && 'text-muted-foreground cursor-not-allowed', dir && e.name === 'node_modules' && 'text-faint-foreground')} style={pad}>
-            {dir ? <><ChevronRight className={cn('text-muted-foreground size-3.5 shrink-0 transition-transform', open.has(e.path) && 'rotate-90')} />{open.has(e.path) ? <FolderOpen className="text-muted-foreground size-4 shrink-0" /> : <Folder className="text-muted-foreground size-4 shrink-0" />}</>
+            {dir ? <><ChevronRight className={cn('text-muted-foreground size-3.5 shrink-0 transition-transform', isOpen(e.path) && 'rotate-90')} />{isOpen(e.path) ? <FolderOpen className="text-muted-foreground size-4 shrink-0" /> : <Folder className="text-muted-foreground size-4 shrink-0" />}</>
               : <><span className="w-3.5 shrink-0" />{e.secret ? <Lock className="text-muted-foreground size-4 shrink-0" /> : <FileIcon className="text-muted-foreground size-4 shrink-0" />}</>}
             <span className="min-w-0 flex-1 truncate">{e.name}</span>
             {e.secret ? <span className="text-faint-foreground text-micro">{t('expert.secret')}</span> : null}
             {state ? <span className={cn('w-4 text-center text-micro font-semibold', STATE_TONE[state])} title={STATE_KEY[state] ? t(STATE_KEY[state]) : state}>{STATE_LETTER[state] ?? '·'}</span> : null}
           </button>
-          {dir && open.has(e.path) ? render(e.path, depth + 1) : null}
+          {dir && isOpen(e.path) ? render(e.path, depth + 1) : null}
         </div>
       );
     });
@@ -268,7 +274,7 @@ function PanelsMenu() {
   return (
     <DropdownMenu modal={false}>
       <BubbleTip title={t('expert.panelsWhich')} text={t('expert.panelsHint')}><DropdownMenuTrigger asChild><IconButton label={t('expert.panelsWhich')} data-testid="expert-panels"><LayoutPanelLeft /></IconButton></DropdownMenuTrigger></BubbleTip>
-      <DropdownMenuContent align="end" className="w-72">
+      <DropdownMenuContent align="end" className="w-75">
         <DropdownMenuLabel>{t('expert.panelsWhich')}</DropdownMenuLabel>
         {Object.entries(PANELS).map(([id, label]) => {
           const Icon = PANEL_ICON[id];
@@ -300,11 +306,12 @@ export function ExpertView() {
   useEffect(() => { setConversation(latest(project)); setState({ expertProject: project }); }, [project]); // eslint-disable-line react-hooks/exhaustive-deps
   const info = projects.find((p) => p.name === project) ?? null;
   const [tabs, setTabs] = useState([]);
+  const [fileQuery, setFileQuery] = useState('');
   const [current, setCurrent] = useState('chat');
   const st = useGitStatus(project, version);
   const changes = useMemo(() => Object.fromEntries((st?.files ?? []).map((f) => [f.path, f.state])), [st]);
   useEffect(() => { if (!project && projects[0]) setProject(app.activeProject?.name ?? projects[0].name); }, [projects]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { setTabs([]); setCurrent('chat'); }, [project]);
+  useEffect(() => { setTabs([]); setCurrent('chat'); setFileQuery(''); }, [project]);
   const openTab = (kind, path) => {
     const id = `${kind}:${path}`;
     if (!tabs.some((t) => t.id === id)) setTabs([...tabs, { id, kind, path, label: kind === 'diff' ? (path ? `Δ ${path.split('/').pop()}` : null) : path.split('/').pop() }].slice(-12));
@@ -339,7 +346,8 @@ export function ExpertView() {
         {/* the project's bar is a container: the narrower it is, the more it leaves out (its path, the running task, the
             words of its buttons), so nothing ever overflows. */}
         <div className="border-border @container/bar flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-3.5" data-testid="expert-bar">
-          <Select size="sm" value={project} onValueChange={setProject} title={t('expert.project')} className="w-40 min-w-24 shrink @4xl/bar:w-52" placeholder={t('expert.pickProject')} options={projects.map((p) => ({ value: p.name, label: p.name }))} />
+          {/* the project reads as plain text; the arrow shows on hover and the list still changes it */}
+          <Select size="sm" value={project} onValueChange={setProject} title={t('expert.project')} className="-ml-1.5 w-auto max-w-52 min-w-0 shrink border-transparent bg-transparent px-1.5 font-medium hover:bg-accent data-[state=open]:bg-accent [&>svg]:opacity-0 hover:[&>svg]:opacity-100 focus-visible:[&>svg]:opacity-100 data-[state=open]:[&>svg]:opacity-100" placeholder={t('expert.pickProject')} options={projects.map((p) => ({ value: p.name, label: p.name, icon: <ProjectIcon name={p.name} small /> }))} />
           <span className="text-faint-foreground hidden min-w-0 flex-1 truncate font-mono text-caption @4xl/bar:inline" title={info?.path}>{info?.path}</span>
           <Badge className="shrink-0">{t('nav.expert')}</Badge>
           {st?.repo ? <Button variant="ghost" size="sm" className="min-w-0 shrink" onClick={() => openTab('diff', '')} title={t('expert.allChanges')}><GitBranch /><span className="truncate">{st.branch}</span></Button> : null}
@@ -356,7 +364,8 @@ export function ExpertView() {
               <div className="text-faint-foreground flex items-center gap-1 py-2 pr-2 pl-3 text-micro tracking-wide uppercase"><span className="flex-1 truncate">{t('expert.files')}</span>
                 <BubbleTip title={t('expert.reload')}><IconButton small label={t('expert.reload')} onClick={() => setManual((n) => n + 1)}><RefreshCw /></IconButton></BubbleTip>
               </div>
-              <div className="min-h-0 flex-1 overflow-auto"><Tree project={project} version={version} current={tab?.kind === 'file' ? tab.path : null} changes={changes} onOpen={(p) => openTab('file', p)} /></div>
+              <SearchInput value={fileQuery} onChange={setFileQuery} placeholder={t('expert.searchFiles')} title={t('expert.searchFilesHint')} className="mx-2 mb-1.5 w-auto" data-testid="expert-file-search" />
+              <div className="min-h-0 flex-1 overflow-auto"><Tree project={project} version={version} filter={fileQuery} current={tab?.kind === 'file' ? tab.path : null} changes={changes} onOpen={(p) => openTab('file', p)} /></div>
             </nav>
           ) : null}
           <div className="flex min-w-0 flex-1 flex-col">

@@ -15,5 +15,15 @@ export default {
   'setup.pickLocation': 'Choose location…',
   'setup.example': 'For example, D:\\ to create D:\\{name}',
   'setup.folderNote': 'Your projects go here, each in its category, plus my hidden core folder with my data. If you pick a folder I’ve used before, I’ll keep using it.',
-  'setup.create': 'Create and start'
+  'setup.create': 'Create and start',
+  'setup.stepsLabel': 'Welcome steps',
+  'setup.step.welcome': 'Welcome',
+  'setup.step.theme': 'Your theme',
+  'setup.step.folders': 'Tidy up folders',
+  'setup.step.master': 'Master password',
+  'setup.step.equipo': 'Set up your PC',
+  'setup.kick': 'Step {n}',
+  'setup.themeTitle': 'Choose your theme',
+  'setup.themeDesc': 'Changes the colours and style of the whole app. You can change it later in Settings › General › Appearance.',
+  'setup.themeLabel': 'Theme'
 };

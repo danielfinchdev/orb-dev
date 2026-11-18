@@ -154,7 +154,7 @@ export function PermissionsCard({ c }) {
   return (
     <Block title={t('settings.autonomy')} note={t('settings.autonomyNote')}>
       <Panel>
-        <Setting label={t('settings.autonomyLabel')} hint={t('settings.autonomyHint')}>
+        <Setting label={t('settings.autonomyLabel')} hint={<><b className="text-control font-medium">{t('session.autoMode')}:</b> {t('settings.autonomyHintAuto')} <b className="text-control font-medium">{t('session.askMode')}:</b> {t('settings.autonomyHintAsk')}</>}>
           {/* the same action as the chat's selector (the pieces of the mock-up here: two buttons, Auto and Preguntar) */}
           <Segmented value={mode} data-testid="settings-autonomy" aria-label={t('settings.autonomyLabel')} onChange={(p) => act(call('permissions.setMode', { mode: p === 'auto' ? 'auto' : 'preguntar' }), p === 'auto' ? t('session.autoOn') : t('session.askOn')).then(() => refresh())}
             options={[{ value: 'auto', label: t('session.autoMode'), testid: 'settings-autonomy-auto' }, { value: 'editar', label: t('session.askMode'), testid: 'settings-autonomy-editar' }]} />

@@ -196,7 +196,7 @@ function ProjectsList() {
               options={[{ value: 'all', label: t('projects.cat.all'), count: projects.length }, ...present.map((c) => ({ value: c ?? 'other', label: c ?? t('comp.projects.category.other'), count: rows.filter((r) => sectionOf(r.p) === c).length }))]} />
             <span className="grow" />
             <SearchInput className="w-auto flex-[0_1_220px]" value={q} onChange={setQ} placeholder={t('projects.search')} data-testid="projects-search" />
-            <Select value={order} onValueChange={setOrder} title={t('projects.order.label')} data-testid="projects-order" options={ORDERS.map((o) => ({ value: o, label: t(`projects.order.${o}`) }))} />
+            <Select value={order} caret="solid" onValueChange={setOrder} title={t('projects.order.label')} data-testid="projects-order" options={ORDERS.map((o) => ({ value: o, label: t(`projects.order.${o}`) }))} />
             <NewProject onMade={(p) => p && open(p.name)} />
           </div>
           {sections.length ? sections.map(({ c, list }) => (

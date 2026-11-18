@@ -26,5 +26,6 @@ export default {
   'session.autoOn': 'Auto mode',
   'session.askOn': 'Ask mode',
   'settings.autonomy': 'Agent permissions',
-  'settings.autonomyHint': 'Auto: they work without asking inside the project folder (it can be undone). Ask: they ask for permission before anything risky.'
+  'settings.autonomyHintAuto': 'they work without asking inside the project folder (it can be undone).',
+  'settings.autonomyHintAsk': 'they ask for permission before anything risky.'
 };

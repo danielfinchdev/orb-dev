@@ -60,6 +60,8 @@ export default {
   'expert.activity': 'Activity',
   'expert.close': 'Close',
   'expert.files': 'Files',
+  'expert.searchFiles': 'Search files',
+  'expert.searchFilesHint': 'Searches by name among the files already read; open a folder to search inside it.',
   'expert.exit': 'Leave God mode',
   'expert.openTerminal': 'Open a terminal here',
   'expert.panelsHint': 'You choose which to see.',

@@ -2,7 +2,7 @@
 // about), the keyboard shortcuts and the frequently asked questions, all searchable; and the button that replays the
 // robot's guided tour (components/tour.jsx), also in the header's «⋯». Texts: help.* in the locales.
 import { useState } from 'react';
-import { SearchX, Rocket, MessageSquare, Brain, MessageSquarePlus, ClipboardCheck, FolderGit2, Orbit, Gauge, CalendarSync, NotebookPen, Smartphone, SquareTerminal, Gamepad2, Palette, ShieldCheck, Presentation, Keyboard, CircleHelp, ChevronDown, Play, ArrowRight, Route, BookOpen, Info } from 'lucide-react';
+import { SearchX, Rocket, MessageSquare, Brain, MessagesSquare, ListChecks, PanelLeft, Bot, Gauge, CalendarClock, NotebookPen, Smartphone, SquareTerminal, Gamepad2, Palette, ShieldCheck, PencilRuler, Keyboard, CircleHelp, ChevronDown, Play, ArrowRight, Route, BookOpen, Info } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { NotificationBell } from '@/components/notification-center.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -18,13 +18,13 @@ const TUTORIALS = {
   start: { icon: Rocket, lines: 5, go: () => go('projects') },
   chat: { icon: MessageSquare, lines: 4, go: () => go('chat') },
   brain: { icon: Brain, lines: 5, go: () => go('chat') },
-  newchat: { icon: MessageSquarePlus, lines: 4, go: () => newChat() },
-  tasks: { icon: ClipboardCheck, lines: 6, go: () => go('tasks') },
-  sidebar: { icon: FolderGit2, lines: 4, go: () => go('projects') },
-  board: { icon: Presentation, lines: 3, go: () => go('board') },
-  agents: { icon: Orbit, lines: 4, go: () => go('agents'), pc: true },
+  newchat: { icon: MessagesSquare, lines: 4, go: () => newChat() },
+  tasks: { icon: ListChecks, lines: 6, go: () => go('tasks') },
+  sidebar: { icon: PanelLeft, lines: 4, go: () => go('projects') },
+  board: { icon: PencilRuler, lines: 3, go: () => go('board') },
+  agents: { icon: Bot, lines: 4, go: () => go('agents'), pc: true },
   usage: { icon: Gauge, lines: 3, go: () => openSettings('tareas'), pc: true },
-  schedules: { icon: CalendarSync, lines: 3, go: () => go('schedules') },
+  schedules: { icon: CalendarClock, lines: 3, go: () => go('schedules') },
   logs: { icon: NotebookPen, lines: 3, go: () => go('logs') },
   phone: { icon: Smartphone, lines: 3, go: () => openSettings('movil'), pc: true },
   expert: { icon: SquareTerminal, lines: 2, go: () => openSettings('experto'), pc: true },
@@ -83,10 +83,10 @@ function Faq({ n, t, name }) {
 
 function Section({ icon: Icon, title, count, children }) {
   return (
-    <section className="grid gap-3">
+    <section className="mt-1 grid gap-1.5">
       <div className="sec-h flex items-center gap-2">
         <Icon className="text-muted-foreground size-4" />
-        <h2 className="font-(family-name:--title) text-card-title font-semibold">{title}</h2>
+        <h2 className="font-(family-name:--title) text-card-title leading-[1.45] font-semibold">{title}</h2>
         {count != null ? <span className="text-faint-foreground text-caption">{count}</span> : null}
       </div>
       {children}
@@ -126,8 +126,8 @@ export function TutorialsView() {
             <div className="bg-card border-border rounded-card flex items-center gap-3.5 border px-4 py-3.5" data-testid="tour-card">
               <span className="bg-primary-soft text-primary-text grid size-10 shrink-0 place-items-center rounded-ctl"><Route className="size-4" /></span>
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <b className="font-(family-name:--title) text-card-title font-semibold">{t('help.replayTitle')}</b>
-                <span className="text-muted-foreground text-control">{t('help.replayDesc', { name })}</span>
+                <b className="font-(family-name:--title) text-card-title leading-[1.45] font-semibold">{t('help.replayTitle')}</b>
+                <span className="text-muted-foreground text-control leading-[1.45]">{t('help.replayDesc', { name })}</span>
               </div>
               <Button onClick={startTour} data-testid="tour-replay"><Play />{t('help.replay')}</Button>
             </div>

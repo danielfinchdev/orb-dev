@@ -121,7 +121,7 @@ export function SettingsDialog() {
                 })}
               </div>
               {/* the developer's GitHub, the version and the licence at the foot of the list again (also in «Acerca de»). */}
-              <div className="text-faint-foreground px-2.5 py-2 text-caption leading-normal max-sm:px-1" data-testid="settings-foot">
+              <div className="text-faint-foreground mb-2.5 px-[18px] py-2 text-caption leading-normal max-sm:px-1" data-testid="settings-foot">
                 <BubbleTip title={`@${AUTHOR.github}`} text={AUTHOR.url.replace('https://', '')} side="top" align="start">
                   <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary-text cursor-pointer" aria-label={AUTHOR.url.replace('https://', '')} data-testid="settings-foot-github">
                     <ToolIcon tool="gh" className="size-4 sm:hidden" /><span className="max-sm:hidden">@{AUTHOR.github}</span>

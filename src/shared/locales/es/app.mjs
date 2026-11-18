@@ -110,6 +110,9 @@ export default {
   "app.loadOfflineTitle": "Sin conexión",
   "app.loadOfflineBody": "No se pudo cargar esta pantalla. Comprueba la conexión y vuelve a intentarlo.",
   "app.loadOfflineToast": "No se pudo abrir: sin conexión.",
+  "app.errorHint": "Pulsa F5 para volver a cargar la ventana. Orb sigue funcionando por debajo.",
+  "app.crashHint": "Con F5 se vuelve a cargar la ventana.",
+  "app.loadOfflineNote": "Se guarda la pantalla en la que estabas. Tras dos intentos que fallan, «Reintentar» recarga la página.",
   'app.linkOfflineWifi': 'No se pudo conectar con tu Orb por la red local. En el PC, permite Orb en el firewall de Windows para redes privadas.',
   "app.copyFailed": "No se pudo copiar.",
 };

@@ -3,16 +3,18 @@
 // by day, project, agent and model in the last 7, 30 or 90 days (usage.history, history.usage). The panel stays as it
 // was; this page only adds detail.
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { Gauge, RefreshCw, OctagonX } from 'lucide-react';
+import { Download, Gauge, RefreshCw, OctagonX } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { AgentsUsageTabs } from '@/components/agents-tabs.jsx';
 import { windowLabel, resetText, shortTokens } from '@/components/usage-bits.jsx';
 import { Badge, Empty, Spinner } from '@/components/ui/basic.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { ListCard, MoreButton, Segmented } from '@/components/ui/primitives.jsx';
+import { IconButton, ListCard, MoreButton, Segmented } from '@/components/ui/primitives.jsx';
 import { BubbleTip, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Select, Switch, Tip } from '@/components/ui/overlay.jsx';
 import { useStore, call, act, fullPc } from '@/lib/store.js';
+import { changeRail } from '@/lib/rules-actions.js';
+import { confirmPauseRail, confirmResumeRail } from '@/views/rules-dialogs.jsx';
 import { paceOf, windowMs } from '@/lib/usage-pace.js';
 import { AGENT } from '@/lib/labels.js';
 import { useT, useLocale } from '@/lib/i18n.js';
@@ -22,7 +24,18 @@ import { Block, Panel, Setting, save } from './settings/rows.jsx';
 
 const usd = (n, locale) => `$${Number(n ?? 0).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const tokens = shortTokens;
+const range1 = (t, n) => (n === '1' ? t('usage.todayRange') : t('usage.days', { n }));
 const sum = (list) => list.reduce((n, d) => n + (d.usd ?? 0), 0);
+
+// The rows of «Uso por día» and «Por agente y modelo» as a CSV the user saves (same Blob download as the chat export).
+const CR = String.fromCharCode(13); const LF = String.fromCharCode(10); const BOM = String.fromCharCode(0xfeff);
+const csvCell = (v) => { const x = String(v ?? ''); return /[",;]/.test(x) || x.includes(CR) || x.includes(LF) ? `"${x.replaceAll('"', '""')}"` : x; };
+function downloadUsageCsv(data, rows, days) {
+  const lines = [['day', 'tokens_in', 'tokens_out', 'cost_usd'], ...data.days.map((d) => [d.day, d.tokensIn, d.tokensOut, d.usd.toFixed(4)]), [], ['agent', 'model', 'tokens_in', 'tokens_out', 'cost_usd'], ...rows.map((r) => [r.agent, r.model ?? '', r.tokensIn, r.tokensOut, (r.usd ?? 0).toFixed(4)])];
+  const url = URL.createObjectURL(new Blob([BOM + lines.map((l) => l.map(csvCell).join(',')).join(CR + LF) + CR + LF], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a'); a.href = url; a.download = `orb-usage-${days}d-${data.to}.csv`; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
 
 // A bar like the mock-up's .progress, with the marks over it: the even pace (a thin line) and the brake (a red line).
 function Meter({ pct, pace = null, stop = null, label, className }) {
@@ -71,8 +84,7 @@ function Days({ days, metric, locale }) {
     return i === days.length - 1 ? t('usage.today', { day: name }) : name;
   };
   return (
-    <>
-      <ListCard className={cn(days.length > 14 && 'max-h-[30rem] overflow-y-auto')} role="img" aria-label={t('usage.byDay')} data-testid="usage-days">
+    <ListCard className={cn(days.length > 14 && 'max-h-[30rem] overflow-y-auto')} role="img" aria-label={t('usage.byDay')} data-testid="usage-days">
         {days.map((d, i) => {
           const v = value(d);
           return (
@@ -83,8 +95,19 @@ function Days({ days, metric, locale }) {
             </div>
           );
         })}
-      </ListCard>
-      <details className="text-faint-foreground text-caption">
+    </ListCard>
+  );
+}
+
+// The same days as a table for reading the numbers; it closes the page.
+function DaysTable({ days, metric, locale }) {
+  const t = useT();
+  const dayName = (d, i) => {
+    const name = new Date(`${d.day}T12:00:00`).toLocaleDateString(locale, { weekday: 'short', day: 'numeric' });
+    return i === days.length - 1 ? t('usage.today', { day: name }) : name;
+  };
+  return (
+    <details className="text-faint-foreground text-caption">
         <summary className="cursor-pointer">{t('usage.tableOf', { what: metric === 'usd' ? t('usage.costByDay') : t('usage.tokensByDay') })}</summary>
         <ListCard className="mt-1.5">
           <div className="text-faint-foreground grid grid-cols-[1.2fr_1fr_1fr_1fr] gap-3 px-3.5 py-2 text-micro uppercase"><span>{t('usage.day')}</span><span>{t('usage.in')}</span><span>{t('usage.out')}</span><span>{metric === 'usd' ? t('usage.cost') : t('usage.total')}</span></div>
@@ -92,8 +115,7 @@ function Days({ days, metric, locale }) {
             <div key={d.day} className="border-border text-foreground grid grid-cols-[1.2fr_1fr_1fr_1fr] gap-3 border-t px-3.5 py-2 text-control tabular-nums"><span>{dayName(d, i)}</span><span>{tokens(d.tokensIn)}</span><span>{tokens(d.tokensOut)}</span><span>{metric === 'usd' ? usd(d.usd, locale) : tokens(d.tokensIn + d.tokensOut)}</span></div>
           ))}
         </ListCard>
-      </details>
-    </>
+    </details>
   );
 }
 
@@ -201,12 +223,18 @@ function Limits({ cfg, windowHours }) {
   const weekly = Math.round((cfg.budget?.weeklyStopAt ?? 0.85) * 100);
   const opts = (list, cur) => [...new Set([...list, cur])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: `${n} %` }));
   const resume = cfg.continuity?.resumeAtReset !== false;
+  // «Parar la cola» is the rail «freno-uso» of «Normas»: the same confirmation and the master password every time, like there.
+  const [rails, setRails] = useState([]);
+  const load = () => call('rails.list', {}).then((r) => setRails(Array.isArray(r) ? r : []), quiet);
+  useEffect(() => { load(); }, []);
+  const stopRail = rails.find((r) => r.id === 'freno-uso');
   return (
     <Block title={t('usage.atLimit')} note={t('usage.atLimitNote')} data-testid="usage-limits">
-      <Panel>
+      <Panel className="mt-1.5">
+        {stopRail ? <Setting label={t('usage.stopQueue', { pct: stop })} hint={t('usage.stopQueueHint')}><Switch checked={stopRail.activo !== false} onCheckedChange={async (enabled) => { if (!(await (enabled ? confirmResumeRail(stopRail) : confirmPauseRail(stopRail)))) return; if (await changeRail('freno-uso', { enabled }, t('rules.railSaved'))) load(); }} aria-label={t('usage.stopQueue', { pct: stop })} data-testid="usage-stop-queue" /></Setting> : null}
         <Setting label={t('usage.resume')} hint={t('usage.resumeHint')}><Switch checked={resume} onCheckedChange={(resumeAtReset) => save({ continuity: { resumeAtReset } })} aria-label={t('usage.resume')} /></Setting>
-        <Setting label={t('usage.brake5', { h: windowHours })} hint={t('usage.brake5Hint')}><Select value={String(stop)} options={opts([75, 80, 85, 90, 92, 95, 98, 100], stop)} onValueChange={(v) => save({ budget: { profile: null, stopAt: Number(v) / 100 } })} title={t('usage.brake5', { h: windowHours })} data-testid="usage-brake-5h" /></Setting>
-        <Setting label={t('usage.brakeWeek')} hint={t('usage.brakeWeekHint')}><Select value={String(weekly)} options={opts([70, 75, 80, 85, 90, 95, 100], weekly)} onValueChange={(v) => save({ budget: { weeklyStopAt: Number(v) / 100 } })} title={t('usage.brakeWeek')} data-testid="usage-brake-week" /></Setting>
+        <Setting label={t('usage.brake5', { h: windowHours })} hint={t('usage.brake5Hint')}><Select caret="solid" value={String(stop)} options={opts([75, 80, 85, 90, 92, 95, 98, 100], stop)} onValueChange={(v) => save({ budget: { profile: null, stopAt: Number(v) / 100 } })} title={t('usage.brake5', { h: windowHours })} data-testid="usage-brake-5h" /></Setting>
+        <Setting label={t('usage.brakeWeek')} hint={t('usage.brakeWeekHint')}><Select caret="solid" value={String(weekly)} options={opts([70, 75, 80, 85, 90, 95, 100], weekly)} onValueChange={(v) => save({ budget: { weeklyStopAt: Number(v) / 100 } })} title={t('usage.brakeWeek')} data-testid="usage-brake-week" /></Setting>
       </Panel>
     </Block>
   );
@@ -227,7 +255,7 @@ export function UsageView() {
   // the period before this one, from the next longer range (7 → 30, 30 → 90), to say if the cost went up or down.
   useEffect(() => {
     let alive = true; setPrev(null);
-    const longer = days === '7' ? 30 : days === '30' ? 90 : null;
+    const longer = days === '1' ? 7 : days === '7' ? 30 : days === '30' ? 90 : null;
     if (longer) call('usage.history', { days: longer }).then((r) => { if (alive) setPrev(sum(r.days.slice(-2 * Number(days), -Number(days)))); }).catch(quiet);
     return () => { alive = false; };
   }, [days, version, tick]);
@@ -236,20 +264,20 @@ export function UsageView() {
   useEffect(() => { let alive = true; call('usage.get').then((r) => alive && setAccounts(r ?? [])).catch(quiet); return () => { alive = false; }; }, [version, tick]);
   const metric = data?.total?.usd ? 'usd' : 'tokens';
   const totalTokens = data?.total ? data.total.tokensIn + data.total.tokensOut : 0;
-  const agentRows = useMemo(() => (data?.agents ?? []).flatMap((a) => [
-    { ...a, key: a.agent, name: AGENT[a.agent] ?? a.agent, bold: true },
-    ...(data.models ?? []).filter((m) => m.agent === a.agent && m.model).map((m) => ({ ...m, key: `${m.agent}:${m.model}`, name: m.label ?? m.model, indent: true, plain: true }))
-  ]), [data]);
+  // one flat row per model (an agent that reports no model keeps its own name), with its cost and share.
+  const agentRows = useMemo(() => (data?.models ?? []).map((m) => ({ ...m, key: `${m.agent}:${m.model ?? ''}`, name: m.label ?? m.model ?? AGENT[m.agent] ?? m.agent })), [data]);
   const projects = (local?.projects ?? []).map((p) => ({ ...p, key: p.project, name: p.project || '—', plain: true }));
   const projectsTotal = projects.reduce((n, p) => n + p.tokensIn + p.tokensOut, 0);
   const stop = cfg.budget?.stopAt ?? 0.92; const weeklyStop = cfg.budget?.weeklyStopAt ?? 0.85;
   const delta = prev && data?.total?.usd ? Math.round(((data.total.usd - prev) / prev) * 100) : null;
-  const meta = data?.total ? [t('usage.days', { n: days }), t('usage.tokensN', { n: tokens(totalTokens) }), data.total.usd ? t('usage.estimated', { cost: usd(data.total.usd, locale) }) : null].filter(Boolean).join(' · ') : t('usage.days', { n: days });
+  const meta = data?.total ? [range1(t, days), t('usage.tokensN', { n: tokens(totalTokens) }), data.total.usd ? t('usage.estimated', { cost: usd(data.total.usd, locale) }) : null].filter(Boolean).join(' · ') : range1(t, days);
   const range = data?.from ? t('usage.range', { from: new Date(`${data.from}T12:00:00`).toLocaleDateString(locale, { day: 'numeric', month: 'long' }), to: new Date(`${data.to}T12:00:00`).toLocaleDateString(locale, { day: 'numeric', month: 'long' }) }) : '';
+  const exportCsv = () => { if (data?.days) downloadUsageCsv(data, data.models ?? [], days); };
   const withTabs = fullPc();
   return (
     <>
       <PageHeader title={t('usage.title')} meta={meta}>
+        <BubbleTip title={`${t('usage.exportCsv')} · ${t('usage.exportCsvHint')}`}><IconButton label={t('usage.exportCsv')} disabled={!data?.days} onClick={exportCsv} data-testid="usage-export-icon"><Download /></IconButton></BubbleTip>
         <DropdownMenu modal={false}>
           <BubbleTip title={t('nav.more')}><DropdownMenuTrigger asChild><MoreButton data-testid="usage-more" /></DropdownMenuTrigger></BubbleTip>
           <DropdownMenuContent align="end" className="w-48"><DropdownMenuItem onSelect={() => setTick((n) => n + 1)} data-testid="usage-refresh"><RefreshCw />{t('agents.refresh')}</DropdownMenuItem></DropdownMenuContent>
@@ -259,7 +287,9 @@ export function UsageView() {
         <div className="@container mx-auto flex w-full max-w-[1180px] flex-col gap-4" data-testid="usage-view">
           {withTabs ? <AgentsUsageTabs current="usage" /> : null}
           <div className="flex flex-wrap items-center gap-2">
-            <Segmented value={days} onChange={setDays} aria-label={t('usage.period')} options={['7', '30', '90'].map((d) => ({ value: d, label: t('usage.days', { n: d }), testid: `usage-range-${d}` }))} />
+            <Segmented value={days} onChange={setDays} aria-label={t('usage.period')} options={['1', '7', '30', '90'].map((d) => ({ value: d, label: range1(t, d), testid: `usage-range-${d}` }))} />
+            <span className="grow" />
+            <Button variant="outline" disabled={!data?.days} onClick={exportCsv} title={t('usage.exportCsvHint')} data-testid="usage-export-csv"><Download />{t('usage.exportCsv')}</Button>
           </div>
           <Block title={t('usage.byAccount')} count={accounts.length || null}>
             <div className="text-muted-foreground flex flex-wrap items-center gap-3 text-caption"><span className="inline-flex items-center gap-1.5"><OctagonX className="size-3.5" />{t('usage.legendBrake', { pct: Math.round(stop * 100) })}</span><span className="inline-flex items-center gap-1.5"><OctagonX className="size-3.5" />{t('usage.legendBrakeWeek', { pct: Math.round(weeklyStop * 100) })}</span></div>
@@ -267,8 +297,8 @@ export function UsageView() {
           </Block>
           {data === null ? <Spinner /> : data === false ? <Empty icon={Gauge} title={t('usage.unavailable')} /> : (<>
             <ListCard className="flex flex-col gap-0.5 p-3.5">
-              <span className="text-muted-foreground text-caption uppercase">{t('usage.costEstimated', { n: days })}</span>
-              <div className="flex items-center gap-2"><span className="font-(family-name:--title) text-[24px] font-semibold tabular-nums">{usd(data.total.usd, locale)}</span>{delta != null ? <Badge variant={delta > 0 ? 'warning' : 'success'}>{t(delta > 0 ? 'usage.deltaUp' : 'usage.deltaDown', { pct: Math.abs(delta), vs: t(days === '7' ? 'usage.vsWeek' : 'usage.vsMonth') })}</Badge> : null}</div>
+              <span className="text-muted-foreground text-caption uppercase">{days === '1' ? t('usage.costToday') : t('usage.costEstimated', { n: days })}</span>
+              <div className="flex items-center gap-2"><span className="text-muted-foreground font-(family-name:--title) text-caption font-semibold tabular-nums">{usd(data.total.usd, locale)}</span>{delta != null ? <Badge variant={delta > 0 ? 'warning' : 'success'}>{t(delta > 0 ? 'usage.deltaUp' : 'usage.deltaDown', { pct: Math.abs(delta), vs: t(days === '1' ? 'usage.vsYesterday' : days === '7' ? 'usage.vsWeek' : 'usage.vsMonth') })}</Badge> : null}</div>
               <span className="text-muted-foreground text-caption">{t('usage.costNote')}</span>
             </ListCard>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-2.5">
@@ -285,6 +315,7 @@ export function UsageView() {
           </>)}
           {fullPc() ? <Limits cfg={cfg} windowHours={accounts[0]?.windowHours ?? cfg.budget?.windowHours ?? 5} /> : null}
           <LocalUsage data={local || null} locale={locale} />
+          {data?.days?.length ? <DaysTable days={data.days} metric={metric} locale={locale} /> : null}
         </div>
       </PageBody>
     </>

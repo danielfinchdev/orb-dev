@@ -199,5 +199,12 @@ export default {
   'usage.metricTokens': 'tokens',
   'usage.range': '{from} al {to}',
   'usage.byAgentModel': 'Por agente y modelo',
-  'usage.estimated': '{cost} estimados'
+  'usage.estimated': '{cost} estimados',
+  'usage.exportCsv': 'Exportar CSV',
+  'usage.exportCsvHint': 'Descarga el uso del periodo.',
+  'usage.todayRange': 'Hoy',
+  'usage.costToday': 'Coste estimado · hoy',
+  'usage.vsYesterday': 'ayer',
+  'usage.stopQueue': 'Parar la cola al {pct} %',
+  'usage.stopQueueHint': 'No empieza tareas nuevas; las que van, terminan.'
 };

@@ -64,7 +64,7 @@ export function GamesDialog() {
   const soundText = !appSounds ? t('games.soundAppOff') : soundOn ? t('games.soundOn') : t('games.soundOff');
   return (
     <Dialog open={Boolean(open)} onOpenChange={(v) => { if (!v) close(); }}>
-      <DialogContent showClose={false} className={cn('max-h-[92vh] max-w-none overflow-y-auto outline-none sm:max-w-none', game ? 'w-[min(620px,96vw)]' : 'w-[min(760px,96vw)]')} data-testid="games-dialog">
+      <DialogContent showClose={false} className={cn('max-h-[92vh] max-w-none overflow-y-auto outline-none sm:max-w-none', game ? 'w-[min(560px,96vw)]' : 'w-[min(760px,96vw)]')} data-testid="games-dialog">
         <DialogHeader className="flex-row items-center gap-2 pr-2.5">
           {game ? <Button variant="ghost" size="icon-sm" onClick={back} aria-label={t('games.back')}><ArrowLeft /></Button> : null}
           <DialogTitle className="min-w-0 flex-1 text-card-title">{game ? t(`games.${game}`) : t('games.title')}</DialogTitle>
@@ -81,9 +81,9 @@ export function GamesDialog() {
           <DialogClose asChild><Button variant="ghost" size="icon-sm" aria-label={t('comp.close')} data-testid="games-close"><X /></Button></DialogClose>
         </DialogHeader>
         <div className="flex flex-col gap-3.5">
-          <DialogDescription className="text-control">{game ? t(`games.${game}Help`) : t('games.desc')}</DialogDescription>
+          <DialogDescription className={cn('text-control', game && 'text-center')}>{game ? t(`games.${game}Help`) : t('games.desc')}</DialogDescription>
           {/* Difficulty: chosen before playing, and changing it starts the game again. */}
-          <div className="flex items-center justify-between gap-3 text-control" role="radiogroup" aria-label={t('games.level')}>
+          <div className={cn('flex items-center gap-3 text-control', game ? 'justify-center' : 'justify-between')} role="radiogroup" aria-label={t('games.level')}>
             <span className="text-muted-foreground">{t('games.level')}</span>
             <div className="segm bg-secondary inline-flex gap-0.5 rounded-ctl p-0.5">
               {LEVELS.map((l) => (
@@ -110,10 +110,10 @@ export function GamesDialog() {
             <div className="flex flex-col items-center gap-3.5">
               <div className="flex w-full gap-2.5">
                 {[[t('games.score'), score], [t('games.best'), Math.max(record, score)]].map(([label, value]) => (
-                  <div key={label} className="bg-card border-border rounded-card flex flex-1 flex-col gap-1 border px-3.5 py-3"><span className="text-muted-foreground text-caption">{label}</span><b className="font-(family-name:--title) text-2xl font-semibold tabular-nums">{value}</b></div>
+                  <div key={label} className="bg-card border-border rounded-card flex flex-1 flex-col gap-1 border px-3.5 py-3"><span className="text-muted-foreground text-caption leading-[1.45]">{label}</span><b className="font-(family-name:--title) text-2xl leading-[1.45] font-semibold tabular-nums">{value}</b></div>
                 ))}
               </div>
-              <div className="relative max-w-full">
+              <div className="relative max-w-full [&_canvas]:h-auto! [&_canvas]:max-w-[362px]">
                 <Suspense fallback={<div className="text-muted-foreground p-10 text-control">…</div>}>
                   <Game key={`${game}-${level}-${round}`} level={level} paused={Boolean(over) || !open} onScore={setScore}
                     onOver={ended} />
