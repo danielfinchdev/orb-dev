@@ -15,19 +15,30 @@ import { moveIntoCore } from '../../domain/workspace/core-folder.mjs';
 import { sealConnectors, rebindOrWait, settleRebinds, REBINDS } from '../../domain/security/connector-secrets.mjs';
 import { oneOf, str } from './common.mjs';
 import {
-  listExtensions, skillsWith, mcpWith, importExtension, removeExtension, exposeSkills, activateRequest, editInProject,
+  listExtensions, scopeOf, scopeChange, scopeOnly, pruneScoped, connectorSafe, skillsWith, mcpWith, importExtension, removeExtension, exposeSkills, activateRequest, editInProject,
   applyEdit, prepareApply, isMcpProject, startCommand, checkSkill, allowDraft, discardRequest, installFor,
   ExtensionError, REQUESTS, EDITS, MCP_NAME, SKILL_NAME, cleanExtensionLeftovers
 } from '../../domain/extensions/extensions.mjs';
 
 // ---- what the agents load (core\skills\.activas), made again when the skills that are on change
-let live = null; let liveKey = null;
+// One plugin per distinct set of skills: the usual one (no project, or a project with nothing of its own) and, for a project
+// that also receives skills scoped to it, one for that set (exposeSkills).
+let live = null; let liveKey = null; const byProject = new Map();
 export function refreshSkills() {
   liveKey = JSON.stringify(ctx.config?.skills ?? []);
+  byProject.clear();
+  try { pruneScoped(ctx.paths.core, ctx.config); } catch { /* left for the next change */ }
   try { live = exposeSkills(ctx.paths.core, ctx.config); } catch { live = { plugin: null, root: null, list: [] }; }
   return live;
 }
-export const liveSkills = () => (live && liveKey === JSON.stringify(ctx.config?.skills ?? []) ? live : refreshSkills());
+export function liveSkills(project = null) {
+  const base = live && liveKey === JSON.stringify(ctx.config?.skills ?? []) ? live : refreshSkills();
+  if (!project || !(ctx.config?.skills ?? []).some((s) => scopeOf(s).length)) return base;
+  if (!byProject.has(project)) {
+    try { byProject.set(project, exposeSkills(ctx.paths.core, ctx.config, { project })); } catch { return { plugin: null, root: null, list: [] }; }
+  }
+  return byProject.get(project);
+}
 
 // ---- a connector Orb moved while the vault was locked: its keys are tied again when it opens (never silently lost)
 const rebindStore = (board) => ({ get: () => board.settingJson(REBINDS) ?? [], set: (v) => board.settingJson(REBINDS, v) });
@@ -117,6 +128,49 @@ export function extensionMethods({ board, emit, log }) {
       log(`extensiones: ${k} ${raw} ${on ? 'activado' : 'desactivado'}`);
       return list();
     },
+    // A project's own skills and connectors (the card of the project page): add = true puts the project in the scope of an
+    // installed skill or connector (one that is off goes on for that project only, after the checks toggle makes to turn it
+    // on); add = false takes it out, and the last project out turns it off (never «every project»). Nothing is installed or
+    // created here: a connector is the exact entry the dialog showed (a server of core with no connector yet, or one that
+    // needs its packages, is turned on in Ajustes first), and of the whole mcpServers list only that entry's `projects`
+    // and `enabled` may change (scopeOnly). A desktop call like toggle (never the phone nor an agent: permissions.mjs).
+    'extensions.scope': ({ kind, name: raw, project, add }) => {
+      const k = oneOf(kind, KINDS, 'tipo');
+      const target = board.project(str(project, 'proyecto', 60));
+      if (!target) throw new Error(tr('msg.board.noProject', { name: String(project ?? '') }));
+      const on = add === true;
+      const n = k === 'connector' ? str(raw, 'nombre', 40) : name(raw, k);
+      let cfg = ctx.config; let fresh = false;
+      if (k === 'skill') {
+        if (on) {
+          const row = list().skills.find((s) => s.name === n);
+          if (!row || !row.valid) fail(row?.linked ? 'ext.err.link' : 'ext.err.notFound', { name: n, file: n });
+          checkSkill(row.dir, { name: n, tr });
+          fresh = !(cfg.skills ?? []).some((s) => s.name === n && s.enabled === true);
+          if (fresh) cfg = { ...cfg, skills: skillsWith(cfg, n, { enabled: false }) };
+        }
+        const patch = scopeChange(cfg, { kind: 'skill', name: n, project: target.name, add: on, fresh });
+        if (patch) { save(patch); log(`extensiones: skill ${n} ${on ? 'añadida a' : 'quitada de'} ${target.name}`); }
+        return list();
+      }
+      const row = k === 'mcp' ? list().mcp.find((s) => s.name === n) : null;
+      if (k === 'mcp' && !row) fail('ext.err.notFound', { name: n });
+      const entryName = k === 'mcp' ? row.connector : n;
+      const entry = entryName ? (cfg.mcpServers ?? []).find((s) => s.name === entryName) : null;
+      if (!entry) { if (on) fail(k === 'mcp' ? 'ext.err.activateFirst' : 'ext.err.notFound', { name: n }); return list(); }
+      if (on) {
+        if (row?.linked || !connectorSafe(ctx.paths.core, entry)) fail('ext.err.link', { file: n });
+        if (row?.needsInstall) fail('ext.err.needsInstall', { name: n });
+        fresh = entry.enabled === false;
+      }
+      const patch = scopeChange(cfg, { kind: 'mcp', name: entryName, project: target.name, add: on, fresh });
+      if (patch) {
+        if (!scopeOnly(cfg.mcpServers, patch.mcpServers, entryName)) fail('ext.err.scopeOther', { name: n });
+        save(patch);
+        log(`extensiones: ${k} ${n} ${on ? 'añadido a' : 'quitado de'} ${target.name}`);
+      }
+      return list();
+    },
     // From a folder of this PC or a git repository (https): into core, checked, off until the user turns it on.
     // Cloned or copied into the quarantine without running anything (no git hooks, no install scripts), in the background.
     'extensions.import': async ({ from, url }) => {
@@ -158,7 +212,7 @@ export function extensionMethods({ board, emit, log }) {
       save(out.patch, { moved: Boolean(r.update) });
       updateRequests((list) => list.filter((x) => x.id !== r.id));
       markCards(r.id, 'approved');
-      board.notice(tr(r.kind === 'skill' ? 'ext.approvedSkill' : 'ext.approvedMcp', { name: r.name }), 'success');
+      board.notice(tr(out.keptOff ? 'ext.approvedKeptOff' : r.kind === 'skill' ? 'ext.approvedSkill' : 'ext.approvedMcp', { name: r.name }), 'success');
       log(`extensiones: ${r.kind} ${r.name} aprobado (${r.update ? 'versión nueva' : 'nuevo'})`);
       return list();
     }),

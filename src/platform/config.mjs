@@ -14,9 +14,21 @@ import { MUSIC_MODES, ADAPTIVE_THEMES } from '../shared/music.mjs';
 // A connector's name as it goes into environment variable names (case does not count on Windows).
 export const connectorKey = (name) => String(name ?? '').toLowerCase().replace(/[^a-z0-9_]/g, '_');
 const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'skills', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'oneAtATime', 'approvalWaitMinutes', 'permissions', 'rails', 'protected', 'backup', 'tz', 'setupPending', 'git', 'suggestNext'];
+// A `projects` scope written by hand that is not a list of texts: the texts are kept; with none left (or not a list at all)
+// the entry reaches nobody, so it is turned off instead (an empty list would mean every project).
+function tidyScope(entry) {
+  if (!entry || typeof entry !== 'object' || entry.projects === undefined) return entry;
+  const list = Array.isArray(entry.projects) ? entry.projects : null;
+  const texts = list ? list.filter((p) => typeof p === 'string' && p) : [];
+  if (list && texts.length === list.length) return entry;
+  if (texts.length) return { ...entry, projects: texts };
+  const { projects: _bad, ...bare } = entry;
+  return { ...bare, enabled: false, scopeOff: true };
+}
 function tidyStored(stored) {
   const out = structuredClone(stored);
   if (out.ui !== undefined) out.ui = migrateAppearance(out.ui);
+  for (const key of ['skills', 'mcpServers']) if (Array.isArray(out[key])) out[key] = out[key].map(tidyScope);
   const rounds = out.budget?.maxFixRounds;
   if (rounds != null && !(Number.isInteger(rounds) && rounds >= 0 && rounds <= 10)) {
     const n = Number(rounds);
@@ -118,6 +130,10 @@ export function validateConfig(c) {
     envNames.add(envName);
     if (typeof s.command !== 'string' || !s.command.trim()) throw new Error(tr('msg.ctx.connectorCommand', { name: s.name }));
     if (s.args && (!Array.isArray(s.args) || s.args.some((x) => typeof x !== 'string'))) throw new Error(tr('msg.ctx.connectorArgs', { name: s.name }));
+  }
+  // the projects a connector or a skill is limited to: a list of names, or absent (every project).
+  for (const e of [...c.mcpServers, ...(Array.isArray(c.skills) ? c.skills : [])]) {
+    if (e?.projects !== undefined && (!Array.isArray(e.projects) || e.projects.some((p) => typeof p !== 'string' || !p))) throw new Error(tr('msg.ctx.badAppearance', { name: `projects (${e.name})` }));
   }
   // the skills of core\skills that are on (src/domain/extensions/extensions.mjs).
   if (c.skills !== undefined && (!Array.isArray(c.skills) || c.skills.length > 500 || c.skills.some((s) => !/^[a-z0-9][a-z0-9-]{0,62}$/.test(s?.name ?? '') || typeof s.enabled !== 'boolean' || (s.source !== undefined && typeof s.source !== 'string')))) throw new Error(tr('msg.ctx.badAppearance', { name: 'skills' }));

@@ -32,7 +32,7 @@ import { inside } from '../../platform/fsx.mjs';
 import { tr } from '../../platform/context.mjs';
 import { ARCHIVE_DIR, forgetRun } from './legacy/migrate-38.mjs';
 import { KEPT as SECRET_FILES } from '../security/master.mjs';
-import { LIVE_DIR, OLD_DIR } from '../extensions/extensions.mjs';
+import { LIVE_DIR, SCOPED_DIR, OLD_DIR } from '../extensions/extensions.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
 
@@ -294,7 +294,7 @@ async function stageFiles(home, stage, { secret, includeProjects = false, includ
   for (const f of walkFiles(p.logs)) put(f, archiveName(home, f));
   // every server, every skill and every text rule of core (not the links the agents load, core\skills\.activas, nor the versions
   // before the last change, .anterior: made again or not needed).
-  for (const dir of [p.mcp, p.skills, p.rules]) for (const f of walkFiles(dir, (n) => NO_COPY.has(n) || n === LIVE_DIR || n === OLD_DIR)) put(f, archiveName(home, f));
+  for (const dir of [p.mcp, p.skills, p.rules]) for (const f of walkFiles(dir, (n) => NO_COPY.has(n) || n === LIVE_DIR || n === SCOPED_DIR || n === OLD_DIR)) put(f, archiveName(home, f));
   // The projects: their whiteboards always, the whole folder only if asked (without dependencies and build output).
   let projects = [];
   if (fs.existsSync(dbOut)) {

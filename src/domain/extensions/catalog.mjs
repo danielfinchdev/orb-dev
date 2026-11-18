@@ -11,13 +11,91 @@ export const realFolder = (root, dir) => isDir(dir) && !isLink(dir) && realInsid
 
 // core: the core folder; config: orb.json; projects: the board's projects ({ name, path }); requests / edits: the board's.
 // → { dirs, skills, mcp, connectors, projects, pending }
+// ---- scope: which projects a connector or a skill reaches
+// An entry (a connector of mcpServers, a skill of skills) whose `projects` is a non-empty list is delivered only to the
+// chats and tasks of those projects; with no `projects`, or an empty list, it reaches every project. Anything else written
+// there by hand (a text, an object, a list with no text in it) reaches nobody: a value that is not understood never widens.
+// A name that no longer matches a project simply never matches. The scopes follow a project only while it is the same
+// record (renamed); when it leaves Orb (removed, finished, deleted) it leaves every scope (scopesRemoved).
+const texts = (v) => (Array.isArray(v) ? v.filter((p) => typeof p === 'string' && p) : []);
+export const isScoped = (entry) => entry?.projects !== undefined && !(Array.isArray(entry.projects) && entry.projects.length === 0);
+export const scopeOf = (entry) => texts(entry?.projects);
+export const reaches = (entry, project) => !isScoped(entry) || (Boolean(project) && texts(entry.projects).includes(project));
+
+// What an approved improvement keeps: an entry that is scoped (or that was, and was turned off by taking its last project
+// away) keeps `enabled` and `projects` as they are. One that never had a scope behaves as it always did.
+export const keepsState = (entry) => Boolean(entry) && (isScoped(entry) || entry.scopeOff === true);
+
+// The scope of an entry with one project taken out. The last one out turns the entry off (marked scopeOff so an approved
+// improvement does not turn it on for everybody): taking a project away never widens what the rest receive.
+const without = (entry, project) => {
+  const rest = texts(entry.projects).filter((p) => p !== project);
+  if (rest.length) return { ...entry, projects: rest };
+  const { projects: _gone, ...bare } = entry;
+  return { ...bare, enabled: false, scopeOff: true };
+};
+const touches = (entry, project) => isScoped(entry) && texts(entry.projects).includes(project);
+
+// The patch that adds a project to the scope of a skill or connector (or removes it) → { skills } | { mcpServers } | null
+// (nothing to change). fresh: the entry was off and was just made ready to turn on: it goes on for that project only.
+export function scopeChange(config, { kind, name, project, add, fresh = false }) {
+  const next = (entry) => {
+    if (add) {
+      const { scopeOff: _marker, ...bare } = entry;
+      if (fresh || entry.enabled === false) return { ...bare, enabled: true, projects: [project] };
+      if (!isScoped(entry) || touches(entry, project)) return null; // already received
+      return { ...bare, projects: [...texts(entry.projects), project] };
+    }
+    return touches(entry, project) ? without(entry, project) : null;
+  };
+  const list = kind === 'skill' ? config.skills ?? [] : config.mcpServers ?? [];
+  const i = list.findIndex((e) => e?.name === name);
+  if (i < 0) return null;
+  const changed = next(list[i]);
+  if (!changed) return null;
+  const out = list.map((e, j) => (j === i ? changed : e));
+  return kind === 'skill' ? { skills: out } : { mcpServers: out };
+}
+
+// A project left Orb: it leaves every scope, with the same rule as taking it away by hand. → patch | null
+export function scopesRemoved(config, project) {
+  const strip = (list) => (Array.isArray(list) && list.some((e) => touches(e, project)) ? list.map((e) => (touches(e, project) ? without(e, project) : e)) : null);
+  const skills = strip(config.skills); const mcpServers = strip(config.mcpServers);
+  return skills || mcpServers ? { ...(skills ? { skills } : {}), ...(mcpServers ? { mcpServers } : {}) } : null;
+}
+
+// A project was renamed: its name follows in every scope. A scope that already named the new name belonged to a project
+// that is gone, so it goes first and cannot be inherited. → patch | null
+export function scopesRenamed(config, from, to) {
+  const cleaned = { skills: config.skills, mcpServers: config.mcpServers, ...(scopesRemoved(config, to) ?? {}) };
+  const swap = (list) => (Array.isArray(list) && list.some((e) => touches(e, from))
+    ? list.map((e) => (touches(e, from) ? { ...e, projects: [...new Set(texts(e.projects).map((p) => (p === from ? to : p)))] } : e)) : null);
+  const skills = swap(cleaned.skills) ?? (cleaned.skills !== config.skills ? cleaned.skills : null);
+  const mcpServers = swap(cleaned.mcpServers) ?? (cleaned.mcpServers !== config.mcpServers ? cleaned.mcpServers : null);
+  return skills || mcpServers ? { ...(skills ? { skills } : {}), ...(mcpServers ? { mcpServers } : {}) } : null;
+}
+
+// Whether `after` is `before` with nothing changed but the scope (`projects`, `enabled` and the marker) of the entry
+// `name`: same length, same order, every other entry and every other field equal.
+export function scopeOnly(before, after, name) {
+  if (!Array.isArray(before) || !Array.isArray(after) || before.length !== after.length) return false;
+  const free = new Set(['projects', 'enabled', 'scopeOff']);
+  return before.every((b, i) => {
+    const a = after[i];
+    if (b?.name !== name) return JSON.stringify(a) === JSON.stringify(b);
+    const rest = (e) => JSON.stringify(Object.entries(e ?? {}).filter(([k]) => !free.has(k)));
+    return a?.name === name && rest(a) === rest(b);
+  });
+}
+
+
 export function listExtensions(core, config = {}, { projects = [], requests = [], edits = {} } = {}) {
   const P = extensionPaths(core);
   const folders = (dir) => { try { return fs.readdirSync(dir, { withFileTypes: true }).filter((e) => (e.isDirectory() || e.isSymbolicLink()) && !e.name.startsWith('.')).map((e) => e.name).sort(); } catch { return []; } };
   const state = new Map((config.skills ?? []).map((s) => [s.name, s]));
   const skills = folders(P.skills).map((name) => {
     const dir = path.join(P.skills, name); const ok = realFolder(P.skills, dir); const meta = ok ? skillMeta(dir) : null; const s = state.get(name);
-    return { kind: 'skill', name, dir, description: meta?.description ?? '', valid: Boolean(meta?.description), linked: !ok, asks: ok ? skillAsks(dir) : null, source: s?.source ?? 'usuario', enabled: s?.enabled === true };
+    return { kind: 'skill', name, dir, description: meta?.description ?? '', valid: Boolean(meta?.description), linked: !ok, asks: ok ? skillAsks(dir) : null, source: s?.source ?? 'usuario', enabled: s?.enabled === true, projects: scopeOf(s), scoped: isScoped(s) };
   });
   const servers = config.mcpServers ?? [];
   const inFolder = (s, dir) => (s.args ?? []).some((a) => typeof a === 'string' && path.isAbsolute(a) && (norm(a) === norm(dir) || norm(a).startsWith(norm(dir) + path.sep)));
@@ -28,11 +106,11 @@ export function listExtensions(core, config = {}, { projects = [], requests = []
     if (entry) used.add(entry.name);
     const start = ok ? startCommand(dir) : null;
     return { kind: 'mcp', name, dir, description: ok ? mcpDescription(dir) : '', command: entry?.command ?? start?.command ?? null, args: entry?.args ?? start?.args ?? [], startable: Boolean(start), linked: !ok,
-      needsInstall: ok && needsDeps(dir), connector: entry?.name ?? null, enabled: Boolean(entry) && entry.enabled !== false, source: entry?.source ?? 'usuario', keys: Object.keys(entry?.env ?? {}), agents: entry?.agents ?? [],
+      needsInstall: ok && needsDeps(dir), connector: entry?.name ?? null, enabled: Boolean(entry) && entry.enabled !== false, source: entry?.source ?? 'usuario', keys: Object.keys(entry?.env ?? {}), agents: entry?.agents ?? [], projects: scopeOf(entry), scoped: isScoped(entry),
       editing: typeof edits?.[name] === 'string' && isDir(edits[name]) ? edits[name] : null };
   });
   // The connectors that are not a folder of core (a package run with npx, a program of the PC).
-  const connectors = servers.filter((s) => !used.has(s.name)).map((s) => ({ kind: 'connector', name: s.name, command: s.command, args: s.args ?? [], enabled: s.enabled !== false, keys: Object.keys(s.env ?? {}), agents: s.agents ?? [], source: s.source ?? 'usuario' }));
+  const connectors = servers.filter((s) => !used.has(s.name)).map((s) => ({ kind: 'connector', name: s.name, command: s.command, args: s.args ?? [], enabled: s.enabled !== false, keys: Object.keys(s.env ?? {}), agents: s.agents ?? [], source: s.source ?? 'usuario', projects: scopeOf(s), scoped: isScoped(s) }));
   // The projects that are MCP servers (the user develops one): they can be used from there or moved into core.
   const fromProjects = (projects ?? []).filter((pr) => typeof pr?.path === 'string' && isDir(pr.path) && isMcpProject(pr.path) && startCommand(pr.path)).map((pr) => {
     const start = startCommand(pr.path);
@@ -90,14 +168,44 @@ export function connectorSafe(core, server) {
 // → { plugin, root, list: [{ name, description, file }], skipped: [name] } (file: the copy's SKILL.md)
 const COPIES = '.copias.json';
 
-export function exposeSkills(core, config = {}) {
+// project: whose chat or task gets them. The skills without a scope make the usual plugin (core/skills/.activas); a project
+// that also receives scoped skills gets its own plugin folder for that exact set (core/skills/.ambitos/<hash of the names>),
+// beside the usual one, so the folder every other project loads never holds a skill that is not theirs.
+const setHash = (names) => crypto.createHash('sha1').update(names.join(',')).digest('hex').slice(0, 12);
+const liveSkillNames = (config) => (config.skills ?? []).filter((s) => s?.enabled === true && SKILL_NAME.test(s.name ?? ''));
+const namesOf = (list) => list.map((s) => s.name).sort();
+
+// The folders of scoped sets that no project uses any more go (a set changes when a skill is turned off, removed or
+// re-scoped); so do the copies a kept folder holds of skills that are no longer on. Called whenever the skills change.
+export function pruneScoped(core, config = {}) {
   const P = extensionPaths(core);
+  const on = liveSkillNames(config);
+  const common = namesOf(on.filter((s) => reaches(s, null))).join(',');
+  const sets = new Map();
+  for (const project of new Set(on.flatMap((s) => scopeOf(s)))) {
+    const names = namesOf(on.filter((s) => reaches(s, project)));
+    if (names.join(',') !== common) sets.set(setHash(names), new Set(names));
+  }
+  let have = []; try { have = fs.readdirSync(P.scoped, { withFileTypes: true }); } catch { return; }
+  for (const e of have) {
+    const at = path.join(P.scoped, e.name);
+    if (!sets.has(e.name)) { fs.rmSync(at, { recursive: true, force: true }); continue; }
+    let copies = []; try { copies = fs.readdirSync(path.join(at, 'skills')); } catch { copies = []; }
+    for (const c of copies) if (!sets.get(e.name).has(c)) fs.rmSync(path.join(at, 'skills', c), { recursive: true, force: true });
+  }
+}
+export function exposeSkills(core, config = {}, { project = null } = {}) {
+  const P0 = extensionPaths(core);
+  const enabled = liveSkillNames(config);
+  const seen = namesOf(enabled.filter((s) => reaches(s, project)));
+  const variant = seen.join(',') !== namesOf(enabled.filter((s) => reaches(s, null))).join(',');
+  const P = variant ? { ...P0, live: path.join(P0.scoped, setHash(seen)) } : P0;
   const into = path.join(P.live, 'skills');
   fs.mkdirSync(into, { recursive: true });
   const manifest = path.join(P.live, '.claude-plugin', 'plugin.json');
   const want = JSON.stringify({ name: PLUGIN_NAME, description: 'Skills de Orb (core\\skills)', version: '1.0.0' }, null, 2);
   try { if (fs.readFileSync(manifest, 'utf8') !== want) throw new Error('changed'); } catch { fs.mkdirSync(path.dirname(manifest), { recursive: true }); fs.writeFileSync(manifest, want); }
-  const on = new Set((config.skills ?? []).filter((s) => s?.enabled === true && SKILL_NAME.test(s.name ?? '')).map((s) => s.name));
+  const on = new Set(seen);
   const list = []; const skipped = [];
   for (const name of [...on].sort()) {
     const dir = path.join(P.skills, name);
@@ -242,6 +350,8 @@ export function removeExtension(core, config, kind, name, { tr = null } = {}) {
   if (kind === 'skill') {
     const live = path.join(P.live, 'skills', name);
     try { if (fs.lstatSync(live).isSymbolicLink()) fs.unlinkSync(live); else fs.rmSync(live, { recursive: true, force: true }); } catch { /* not on */ }
+    // and its copy in every project's own plugin
+    try { for (const e of fs.readdirSync(P.scoped)) fs.rmSync(path.join(P.scoped, e, 'skills', name), { recursive: true, force: true }); } catch { /* none */ }
     drop();
     return { skills: (config.skills ?? []).filter((s) => s.name !== name) };
   }

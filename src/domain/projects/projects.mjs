@@ -8,6 +8,8 @@ import { folderName, isReservedName, isReservedInCategory, isCategory, categoryO
 import { IGNORED_PROJECTS, FINISHED_PROJECTS } from '../../platform/state.mjs';
 import { git, ORB_GIT } from '../../platform/git.mjs';
 import { projectNameProblem } from '../../shared/product.mjs';
+import { saveConfig } from '../../platform/config.mjs';
+import { scopesRenamed, scopesRemoved } from '../extensions/catalog.mjs';
 import { settleDeleting, deletingProjects } from './project-close.mjs';
 
 export const checkCategory = (category) => {
@@ -84,7 +86,12 @@ export function renameProject(board, { name, to }, actor) {
     git(target, 'worktree', 'repair'); // isolated copies of old tasks keep pointing at the moved repository
   }
   const moveIn = (p) => (p && inside && (p === project.path || p.startsWith(project.path + path.sep)) ? target + p.slice(project.path.length) : p);
+  // The skills and connectors scoped to it follow the new name, saved before anything else changes: if that fails the whole
+  // rename fails (and the folder goes back), so the old name never stays claimable by a new project.
+  const swapped = scopesRenamed(ctx.config, project.name, next);
+  let scopesSaved = false;
   try {
+    if (swapped) { saveConfig(swapped); scopesSaved = true; }
     board.transaction(() => {
       board.run('UPDATE projects SET name = ?, path = ? WHERE name = ?', next, target, project.name);
       for (const table of ['tasks', 'conversations', 'sessions', 'schedules']) board.run(`UPDATE ${table} SET project = ? WHERE project = ?`, next, project.name);
@@ -99,6 +106,7 @@ export function renameProject(board, { name, to }, actor) {
       }
     });
   } catch (error) {
+    if (scopesSaved) { try { saveConfig(scopesRenamed(ctx.config, next, project.name) ?? {}); } catch { try { saveConfig(scopesRemoved(ctx.config, next) ?? {}); } catch { /* reported below */ } } }
     if (inside) { try { fs.renameSync(target, project.path); git(project.path, 'worktree', 'repair'); } catch { /* reported below */ } }
     throw error;
   }

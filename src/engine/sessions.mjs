@@ -15,7 +15,7 @@ import { liveSkills } from './api/extensions.mjs';
 import { orbMcpServer, connectorLauncher } from '../agents/common.mjs';
 import { agentAuth } from '../domain/security/agent-auth.mjs';
 import { connectorLaunch } from '../domain/security/connector-secrets.mjs';
-import { connectorSafe } from '../domain/extensions/extensions.mjs';
+import { connectorSafe, reaches } from '../domain/extensions/extensions.mjs';
 import { CURSOR_FILES } from '../agents/cursor.mjs';
 import { runLog } from '../platform/log.mjs';
 import { oneLine } from '../shared/text.mjs';
@@ -59,8 +59,10 @@ export const browserOn = () => Boolean(ctx.browser) && ctx.config.browser?.enabl
 // carries only the pipe and a ticket per server, new for every agent process and taken back when it closes
 // (Sessions.closeLive, the coordinator's Lane.closeLive). A worker's tools act only on its task (permissions.mjs ›
 // ownsTask); two direct conversations of one agent are two identities.
+// project: the chat or task's project (none in a chat without one): a connector with a scope of projects is handed over only
+// to those, one without it to every project.
 // Reusable: Cursor's tickets, new every turn (mcpServersEachTurn) and released when the turn ends (.release()).
-export function mcpServersFor(agent, { taskId = '', orchestrator = false, browser = !orchestrator, session = '', conversation = null, reusable = false } = {}) {
+export function mcpServersFor(agent, { project = null, taskId = '', orchestrator = false, browser = !orchestrator, session = '', conversation = null, reusable = false } = {}) {
   const who = orchestrator ? 'orb' : agent;
   const sid = session ? String(session) : null;
   const ticketed = (name, base, reply) => {
@@ -77,7 +79,7 @@ export function mcpServersFor(agent, { taskId = '', orchestrator = false, browse
   if (!orchestrator) {
     const taken = new Set(['orb']);
     for (const s of ctx.config.mcpServers ?? []) {
-      if (s.enabled === false || (s.agents?.length && !s.agents.includes(agent)) || taken.has(connectorKey(s.name))) continue;
+      if (s.enabled === false || !reaches(s, project) || (s.agents?.length && !s.agents.includes(agent)) || taken.has(connectorKey(s.name))) continue;
       // a server of core\mcp whose folder is a link or a junction (or reaches out of core) never starts.
       if (!connectorSafe(ctx.paths.core, s)) continue;
       taken.add(connectorKey(s.name)); // never two servers on one variable name (config checks it too)
@@ -342,7 +344,7 @@ export class Sessions {
       promptDir, secretValues: Object.values(keyEnv),
       exe, cwd: s.cwd, model: s.model, reasoning: s.reasoning, permission: s.permission,
       resumeId: forkFrom || s.cli_session || null, forkSession: Boolean(forkFrom), newSessionId,
-      mcpServers: mcpServersOf(a, s.agent, { taskId, session: s.id }), budgetUsd,
+      mcpServers: mcpServersOf(a, s.agent, { taskId, session: s.id, project: s.project || null }), budgetUsd,
       env: { ...accountEnv(acc), ...keyEnv, ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
       internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, cfg: ctx.config.agents[s.agent] ?? {},
       // the project's folder for the guard's inside/outside rules (none in a chat without a project), and what the
@@ -351,7 +353,7 @@ export class Sessions {
       userAsked: () => this.asked.get(s.id) ?? [],
       // read on every action (the owner may take it back at any moment): adb by hand needs it (src/domain/security/guard.mjs).
       android: () => androidAllowed(this.get(s.id)),
-      skills: liveSkills(), // the skills of core that are on (Claude and Codex load them themselves)
+      skills: liveSkills(s.project || null), // the skills of core that are on (Claude and Codex load them themselves)
       onEvent: (ev) => this.onLiveEvent(s.id, ev)
     });
     this.lives.set(s.id, entry);

@@ -26,13 +26,13 @@
 //     core\skills\.anterior\<name>).
 
 export {
-  SKILL_FILE, LIVE_DIR, OLD_DIR, REQUESTS, EDITS, PLUGIN_NAME, QUARANTINE, SKILL_NAME, MCP_NAME, DEP_DIRS, ExtensionError, extensionPaths, startCommand, isMcpProject, mcpDescription, skillMeta, needsDeps, localDep, linkOut, runProcess, installDeps,
+  SKILL_FILE, LIVE_DIR, SCOPED_DIR, OLD_DIR, REQUESTS, EDITS, PLUGIN_NAME, QUARANTINE, SKILL_NAME, MCP_NAME, DEP_DIRS, ExtensionError, extensionPaths, startCommand, isMcpProject, mcpDescription, skillMeta, needsDeps, localDep, linkOut, runProcess, installDeps,
 } from './basics.mjs';
 export {
   scanTree, copyTree, skillAsks, orbSkillText, checkSkill, checkMcp, kindOf, mcpNameOf, fingerprint, fileList, secretTest, gitignored, privateTest, holdsKeys, cleanGitConfig,
 } from './checks.mjs';
 export {
-  listExtensions, skillsWith, mcpWith, connectorSafe, exposeSkills, skillsBrief, fetchInto, importExtension, removeExtension,
+  listExtensions, scopeOf, isScoped, reaches, scopeChange, scopesRenamed, scopesRemoved, keepsState, scopeOnly, pruneScoped, skillsWith, mcpWith, connectorSafe, exposeSkills, skillsBrief, fetchInto, importExtension, removeExtension,
 } from './catalog.mjs';
 export {
   draftExtension, allowDraft, requestActivation, activateRequest, STALE_DAYS, cleanExtensionLeftovers, OPEN_PER_CONVERSATION, openRequestsOf, discardRequest, refreshStart, installFor, editInProject, compareTrees, prepareApply, applyEdit,

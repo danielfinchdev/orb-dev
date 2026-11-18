@@ -77,6 +77,7 @@ export function projectMethods({ emit, realHome, insideHome, project, holding, c
       const old = project(name); const from = old.name;
       const p = renameProject(board, { name: from, to: str(to, 'nombre', 60) }, 'usuario');
       renameProjectIcon(from, p.name);
+      emit('config:changed', ctx.config);
       chatTrees.followProject(from, old.path, p);
       return p;
     },

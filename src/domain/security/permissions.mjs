@@ -36,6 +36,7 @@ export const METHODS = Object.freeze({
   'android.emulators': 'pc', 'android.emulatorStart': 'pc', 'devtools.check': 'pc',
   'github.status': 'pc', 'github.contributions': 'pc', 'github.login': 'pc',
   'expert.tree': 'pc', 'projects.findFiles': 'pc', 'projects.searchText': 'pc', 'expert.read': 'pc', 'expert.status': 'pc', 'expert.diff': 'pc', 'expert.log': 'pc', 'expert.system': 'pc', 'expert.createFile': 'pc',
+  'expert.branches': 'pc', 'expert.lastCommit': 'pc', 'expert.switchBranch': 'pc', 'expert.createBranch': 'pc', 'expert.undoCommit': 'pc',
   'actions.list': 'pc', 'actions.save': 'pc', 'actions.remove': 'pc',
   'images.read': 'pc', 'images.mark': 'pc', 'images.save': 'pc', 'attachments.read': 'pc',
   // conversations with the assistant
@@ -99,7 +100,7 @@ export const METHODS = Object.freeze({
   // Ajustes › Skills y MCP (src/engine/api/extensions.mjs): what agents run comes in and out of core only here
   // the chats and usage that Claude Code and Codex keep on this PC (src/engine/api/history.mjs, read-only)
   'history.list': 'pc', 'history.read': 'pc', 'history.usage': 'pc',
-  'extensions.list': 'pc', 'extensions.toggle': 'pc', 'extensions.import': 'pc', 'extensions.remove': 'pc', 'extensions.approve': 'pc',
+  'extensions.list': 'pc', 'extensions.toggle': 'pc', 'extensions.scope': 'pc', 'extensions.import': 'pc', 'extensions.remove': 'pc', 'extensions.approve': 'pc',
   'extensions.reject': 'pc', 'extensions.edit': 'pc', 'extensions.adopt': 'pc', 'extensions.applyCheck': 'pc', 'extensions.apply': 'pc',
   // the text rules and the rails (src/engine/api/rules.mjs): the phone may only read them, every change is made here
   'rules.list': 'remote', 'rules.read': 'remote', 'rails.list': 'remote',
