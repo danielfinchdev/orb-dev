@@ -8,8 +8,6 @@ import dev.orb.app.ui.linkErrorText
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -19,6 +17,9 @@ import java.util.UUID
 data class OrbeDraftState(
     val project: String?,
     val online: Boolean = false,
+    val connection: ConnectionState = ConnectionState.Connecting,
+    /** The brain the first message will be answered with, named as the PC names it; null until it is known. */
+    val brain: String? = null,
     /** The first message while it travels to the PC, or after the PC refused it. */
     val pending: PendingMessage? = null,
 ) {
@@ -48,8 +49,19 @@ class OrbeDraftViewModel(
 
     init {
         viewModelScope.launch {
-            backend.connection.map { it is ConnectionState.Online }.distinctUntilChanged().collect { online -> _state.update { it.copy(online = online) } }
+            backend.connection.collect { c -> _state.update { it.copy(online = c is ConnectionState.Online, connection = c) } }
         }
+        viewModelScope.launch {
+            // Only names what the PC offers: the chosen brain with the catalog's labels, or the PC's own choice.
+            backend.options().onSuccess { o -> _state.update { it.copy(brain = brainLabel(o)) } }
+        }
+    }
+
+    private fun brainLabel(o: NewChatOptions): String? {
+        val b = draft.brain ?: return o.pcBrain?.label
+        val agent = o.agents.firstOrNull { it.id == b.agent }
+        val model = agent?.models?.firstOrNull { it.id == b.model }?.label
+        return BrainInfo(agent?.label, model, b.reasoning).label
     }
 
     fun send(text: String) {

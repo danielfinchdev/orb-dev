@@ -50,4 +50,36 @@ class OrbeParsingTest {
         assertEquals("Usando una herramienta", ToolText.step("server_tool_name", null))
         assertEquals("1 min 3 s", elapsedText(63_000))
     }
+
+    @Test fun aLineKeepsTheTaskItIsAbout() {
+        assertEquals(42L, OrbeParser.parse(raw(10, "system", "Tarea #42 creada", """{"task":42}"""))!!.task)
+        assertNull(OrbeParser.parse(raw(11, "orb", "hola"))!!.task)
+    }
+
+    @Test fun theBrainIsReadFromChatSettingsWithoutInventingAnything() {
+        val info = OrbeParser.brain(dev.orb.app.data.json("""{"agent":"claude","agentLabel":"Claude Code","modelLabel":"Opus","reasoning":"high","conversation":7}"""))!!
+        assertEquals("Opus · alto", info.label)
+        assertEquals("Claude Code · medio", OrbeParser.brain(dev.orb.app.data.json("""{"agentLabel":"Claude Code","reasoning":"medium"}"""))!!.label)
+        assertEquals("Opus", OrbeParser.brain(dev.orb.app.data.json("""{"modelLabel":"Opus"}"""))!!.label)
+        assertEquals("GPT · extra", OrbeParser.brain(dev.orb.app.data.json("""{"modelLabel":"GPT","reasoning":"xhigh"}"""))!!.label)
+        assertNull(OrbeParser.brain(dev.orb.app.data.json("""{"conversation":7}""")))
+        assertNull(OrbeParser.brain(dev.orb.app.data.json("""[]""")))
+        assertNull(OrbeParser.brain(null))
+    }
+
+    @Test fun liveTasksCarryWhatEachOneIsDoing() {
+        val tasks = OrbeParser.liveTasks(
+            dev.orb.app.data.json(
+                """[{"id":42,"title":"Registro","agent":"codex","last":"Leyendo src/push.ts","note":"nota","percent":40,"waiting":0},
+                    {"id":43,"title":"Otra","agent":"claude","note":"Probando","waiting":1},{"title":"sin id"}]""",
+            ),
+        )
+        assertEquals(listOf(42L, 43L), tasks.map { it.id })
+        assertEquals("Leyendo src/push.ts", tasks[0].doing)
+        assertEquals(40, tasks[0].percent)
+        assertEquals(false, tasks[0].waiting)
+        assertEquals("Probando", tasks[1].doing)
+        assertEquals(true, tasks[1].waiting)
+        assertEquals(emptyList<LiveTask>(), OrbeParser.liveTasks(null))
+    }
 }

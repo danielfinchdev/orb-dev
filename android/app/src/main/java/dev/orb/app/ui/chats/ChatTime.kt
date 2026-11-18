@@ -43,6 +43,12 @@ object ChatTime {
         }
     }
 
+    /** «14:41» in the phone's time zone for a moment given in epoch milliseconds. */
+    fun clock(ms: Long, tz: TimeZone = TimeZone.getDefault()): String {
+        val c = GregorianCalendar(tz).apply { timeInMillis = ms }
+        return "${c.get(Calendar.HOUR_OF_DAY)}:${c.get(Calendar.MINUTE).toString().padStart(2, '0')}"
+    }
+
     /** [short] as the list rows write it: «Ayer», «Lun». */
     fun listTime(iso: String?, nowMs: Long): String = short(iso, nowMs).replaceFirstChar { it.uppercase() }
 

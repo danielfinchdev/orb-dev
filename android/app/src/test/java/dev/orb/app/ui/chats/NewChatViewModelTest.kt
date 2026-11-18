@@ -322,4 +322,21 @@ class NewChatViewModelTest {
         val all = NewChatParser.parse(catalog, Json.parseToJsonElement("""{"agentsAvailable":null}"""), null)
         assertEquals(listOf("claude", "codex"), all.agents.map { it.id })
     }
+
+    @Test fun thePcsOwnBrainIsNamedFromItsConfigAndNeverInvented() {
+        val catalog = Json.parseToJsonElement("""[{"id":"claude","label":"Claude Code","models":[{"id":"opus","label":"Opus"}]}]""")
+        val named = NewChatParser.parse(
+            catalog, Json.parseToJsonElement("""{"config":{"orchestrator":{"agent":"claude","model":"opus","reasoning":"high"}}}"""), null,
+        )
+        assertEquals("Opus · alto", named.pcBrain?.label)
+        // The model of the assistant's own list wins over the catalog's.
+        val own = NewChatParser.parse(
+            catalog, Json.parseToJsonElement("""{"config":{"orchestrator":{"agent":"claude","model":"x","models":[{"id":"x","label":"Sonnet 5.5"}],"reasoning":"medium"}}}"""), null,
+        )
+        assertEquals("Sonnet 5.5 · medio", own.pcBrain?.label)
+        // No model chosen: the agent is named; nothing at all: no label.
+        assertEquals("Claude Code · bajo", NewChatParser.parse(catalog, Json.parseToJsonElement("""{"config":{"orchestrator":{"reasoning":"low"}}}"""), null).pcBrain?.label)
+        assertNull(NewChatParser.parse(catalog, Json.parseToJsonElement("""{"config":{}}"""), null).pcBrain)
+        assertNull(NewChatParser.parse(catalog, null, null).pcBrain)
+    }
 }

@@ -83,6 +83,14 @@ class FakeOrbeChatBackend(initial: List<String> = emptyList()) : OrbeChatBackend
     override suspend fun setMode(mode: String): Result<Unit> { calls += "mode $mode"; return actionResult }
     /** Holds taskDetail open so a test can tap twice while the first answer is pending. */
     var detailGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+    /** What `chat.settings` and `tasks.live` answer; null / empty = the PC does not say. */
+    var brainOnPc: BrainInfo? = null
+    var liveOnPc: List<LiveTask> = emptyList()
+    var brainReads = 0
+    var liveReads = 0
+    override suspend fun brain(conversation: Long): Result<BrainInfo?> { brainReads++; return Result.success(brainOnPc) }
+    override suspend fun liveTasks(): Result<List<LiveTask>> { liveReads++; return Result.success(liveOnPc) }
+
     override suspend fun taskDetail(id: Long): Result<TaskDetail> { calls += "detail $id"; detailGate?.await(); return Result.success(taskDetail) }
     override suspend fun decideTask(id: Long, approve: Boolean, hash: String?): Result<Unit> { calls += "task $id $approve $hash"; return actionResult }
     override suspend fun decideRequest(session: String, request: String, decision: String): Result<Unit> { calls += "request $session $request $decision"; return actionResult }

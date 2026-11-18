@@ -29,7 +29,11 @@ data class ProjectOption(val name: String, val active: Boolean)
 
 /** What the PC offers for a new chat: the agents it can run now, its projects and the one it has active. */
 @Immutable
-data class NewChatOptions(val agents: List<AgentOption>, val projects: List<ProjectOption>, val activeProject: String?) {
+data class NewChatOptions(
+    val agents: List<AgentOption>, val projects: List<ProjectOption>, val activeProject: String?,
+    /** The brain the PC starts new Orbe chats with, as it names it; null when it does not say. */
+    val pcBrain: BrainInfo? = null,
+) {
     companion object {
         val Empty = NewChatOptions(emptyList(), emptyList(), null)
     }
@@ -133,6 +137,18 @@ object NewChatParser {
             val name = o.str("name") ?: return@mapNotNull null
             ProjectOption(name, o.str("active") == "true" || (o["active"] as? JsonPrimitive)?.booleanOrNull == true || name == active)
         }
-        return NewChatOptions(agents, list, active ?: list.firstOrNull { it.active }?.name)
+        return NewChatOptions(agents, list, active ?: list.firstOrNull { it.active }?.name, pcBrain(appState, agents))
+    }
+
+    /** `app.state` → `config.orchestrator`, named with the catalog's labels. Nothing is invented: no data, no label. */
+    fun pcBrain(appState: JsonElement?, agents: List<AgentOption>): BrainInfo? {
+        val o = ((appState as? JsonObject)?.get("config") as? JsonObject)?.get("orchestrator") as? JsonObject ?: return null
+        val agent = agents.firstOrNull { it.id == (o.str("agent") ?: "claude") }
+        val modelId = o.str("model")?.takeIf { it.isNotBlank() }
+        val modelLabel = modelId?.let { id ->
+            (o["models"] as? JsonArray).orEmpty().firstNotNullOfOrNull { m -> (m as? JsonObject)?.takeIf { it.str("id") == id }?.str("label") }
+                ?: agent?.models?.firstOrNull { it.id == id }?.label
+        }
+        return BrainInfo(agent?.label, modelLabel, o.str("reasoning")).takeIf { it.label != null }
     }
 }

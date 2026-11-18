@@ -126,6 +126,23 @@ class OrbeDraftViewModelTest {
         assertTrue(b.calls.isEmpty())
         assertNull(vm.state.value.pending)
     }
+
+    @Test fun theBrainIsNamedWithTheCatalogsLabelsOrThePcsOwnChoice() = runTest(dispatcher) {
+        assertEquals("Opus · alto", vm(FakeNewChatBackend()).state.value.brain)
+        val b = FakeNewChatBackend().apply { optionsResult = Result.success(sampleOptions.copy(pcBrain = BrainInfo("Claude Code", "Sonnet", "medium"))) }
+        assertEquals("Sonnet · medio", vm(b, OrbeDraft(false, null, null)).state.value.brain)
+        // The PC says nothing: nothing is invented.
+        assertNull(vm(FakeNewChatBackend(), OrbeDraft(false, null, null)).state.value.brain)
+    }
+
+    @Test fun theLinkStateIsKeptForTheBand() = runTest(dispatcher) {
+        val b = FakeNewChatBackend()
+        val vm = vm(b)
+        b.connectionState.value = ConnectionState.UpdatePc
+        runCurrent()
+        assertEquals(ConnectionState.UpdatePc, vm.state.value.connection)
+        assertEquals(false, vm.state.value.online)
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -182,6 +199,24 @@ class OrbeDraftScreenTest {
         rule.waitForIdle()
         assertNull(vm.state.value.pending)
         rule.onNodeWithText("Escribe lo primero que necesitas. El chat se crea en el PC al enviarlo.").assertIsDisplayed()
+    }
+
+    @Test fun theBoxNamesTheBrainAndKeepsTheMicrophoneOff() {
+        screen(FakeNewChatBackend(), d = OrbeDraft(true, "api-pagos", Brain("claude", "opus", "high")))
+        rule.onNodeWithContentDescription("Cerebro de este chat: Opus · alto").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Dictar por voz, aún no disponible").assertIsDisplayed()
+    }
+
+    @Test fun withoutWhatThePcSaysTheBrainReadsAsThePcs() {
+        screen(FakeNewChatBackend())
+        rule.onNodeWithContentDescription("Cerebro de este chat: El del PC").assertIsDisplayed()
+    }
+
+    @Test fun withoutTheLinkTheBandSaysSo() {
+        val b = FakeNewChatBackend()
+        b.connectionState.value = ConnectionState.Offline(null, null)
+        screen(b)
+        rule.onNodeWithText("Sin conexión con tu PC. Reintentando…").assertIsDisplayed()
     }
 
     @Test fun withoutTheLinkTheFieldIsNotOffered() {

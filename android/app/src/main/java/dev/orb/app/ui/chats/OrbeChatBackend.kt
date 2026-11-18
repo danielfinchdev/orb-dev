@@ -5,6 +5,7 @@ import dev.orb.app.LinkRuntime
 import dev.orb.app.data.OutboxState
 import dev.orb.app.data.ThreadId
 import dev.orb.app.link.api.ApiMethod
+import dev.orb.app.link.api.ApiMethods
 import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.link.net.LinkError
 import dev.orb.app.link.net.LinkEvent
@@ -68,6 +69,12 @@ interface OrbeChatBackend {
     /** `app.state`: the permission mode, and this conversation's live state when it is answering or has a queue. */
     suspend fun snapshot(conversation: Long): Result<PcSnapshot>
     suspend fun setMode(mode: String): Result<Unit>
+
+    /** The brain of this conversation (`chat.settings`, read only); null when the PC does not offer it or says nothing usable. */
+    suspend fun brain(conversation: Long): Result<BrainInfo?>
+
+    /** The tasks running on the PC now (`tasks.live`); empty when the PC does not offer it. */
+    suspend fun liveTasks(): Result<List<LiveTask>>
 
     suspend fun taskDetail(id: Long): Result<TaskDetail>
     suspend fun decideTask(id: Long, approve: Boolean, hash: String?): Result<Unit>
@@ -151,6 +158,13 @@ class RuntimeOrbeChatBackend(private val container: AppContainer, private val ru
     }
 
     override suspend fun setMode(mode: String) = api.permissions.setMode(buildJsonObject { put("mode", mode) }).map { }
+
+    override suspend fun brain(conversation: Long): Result<BrainInfo?> =
+        if (!api.available(ApiMethods.CHAT_SETTINGS)) Result.success(null)
+        else api.chat.settings(buildJsonObject { put("conversation", conversation) }).map { OrbeParser.brain(it) }
+
+    override suspend fun liveTasks(): Result<List<LiveTask>> =
+        if (!api.available(ApiMethods.TASKS_LIVE)) Result.success(emptyList()) else api.tasks.live().map { OrbeParser.liveTasks(it) }
 
     override suspend fun taskDetail(id: Long): Result<TaskDetail> = api.tasks.get(buildJsonObject { put("id", id) }).mapCatching { el ->
         val o = el as? JsonObject ?: throw LinkException(LinkError.BadAnswer)

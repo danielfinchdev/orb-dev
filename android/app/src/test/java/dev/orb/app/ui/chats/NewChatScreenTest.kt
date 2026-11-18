@@ -67,6 +67,12 @@ class NewChatScreenTest {
         assertTrue(rule.onAllNodesWithText("Se crea en el PC desde Proyectos", substring = true).fetchSemanticsNodes().isEmpty())
     }
 
+    @Test fun theBrainRowNamesTheBrainThePcUsesWhenItSaysSo() {
+        sheet(FakeNewChatBackend().apply { optionsResult = Result.success(sampleOptions.copy(pcBrain = BrainInfo("Claude Code", "Opus", "high"))) })
+        rule.onNodeWithText("Opus · alto").assertIsDisplayed()
+        assertTrue(rule.onAllNodesWithText("El que usa el PC").fetchSemanticsNodes().isEmpty())
+    }
+
     @Test fun theActiveProjectIsChosenAndAnotherCanBePicked() {
         val vm = sheet(FakeNewChatBackend())
         rule.onNodeWithText("tienda-online").assertIsSelected()

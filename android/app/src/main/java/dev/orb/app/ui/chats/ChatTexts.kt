@@ -212,8 +212,12 @@ object ChatTexts {
 
     // Pending messages
     const val PENDING_SENDING = "Enviando…"
-    const val PENDING_WAITING = "En espera, sale al volver la conexión"
-    const val PENDING_FAILED = "No se envió"
+    const val PENDING_WAITING = "Se enviará al volver"
+    const val PENDING_UPDATE_PC = "No saldrá hasta actualizar Orb en el PC"
+    const val PENDING_UPDATE_APP = "No saldrá hasta actualizar la app"
+    const val PENDING_UNLINKED = "No saldrá: el móvil ya no está enlazado"
+    const val PENDING_ATTENTION = "Saldrá cuando el PC esté listo"
+    const val PENDING_FAILED = "No enviado"
     const val PENDING_DISCARD = "Descartar"
     const val PENDING_KEPT = "Tu mensaje sigue en este móvil y no se ha perdido."
     const val REMOVE = "Quitar"
@@ -224,6 +228,28 @@ object ChatTexts {
     const val MODE_AUTO_HINT = "El PC decide solo lo que es seguro"
     const val MODE_ASK_HINT = "El PC te pregunta antes de lo delicado"
     const val MODE_MENU = "Permisos en el PC"
+    const val MODE_UNKNOWN = "Permisos"
+
+    // Writing box
+    const val BRAIN_UNKNOWN = "El del PC"
+    const val BRAIN_DESC = "Cerebro de este chat"
+    const val MIC = "Dictar por voz"
+    const val MIC_SOON = "Dictar por voz, aún no disponible"
+    const val STATE_WORKING = "Orbe trabajando"
+    const val STATE_WAITING = "Orbe espera su turno"
+    const val STATE_IDLE = "al día"
+    const val STATE_RECONNECTING = "Reconectando…"
+    const val TASK_RUNNING = "En curso"
+    const val TASK_WAITING_PERMISSION = "Espera un permiso"
+    const val TASK_EDIT_QUEUED = "Editar mensaje en cola"
+    const val TASK_EDIT = "Editar"
+    const val QUEUED_REMOVE = "Quitar"
+    const val QUEUED_SAVE = "Guardar"
+    fun chatLine(project: String?, state: String) = if (project.isNullOrBlank()) state.replaceFirstChar { it.uppercase() } else "$project · $state"
+    fun queuedLine(n: Int, first: String?) = if (first.isNullOrBlank()) queuedTurns(n) else "${queuedTurns(n)}: «$first»"
+    fun taskTitle(id: Long, title: String?) = if (title.isNullOrBlank()) "Tarea #$id" else "#$id $title"
+    fun taskLiveLine(agent: String?, doing: String?, percent: Int?): String =
+        listOfNotNull(agent?.takeIf { it.isNotBlank() }, doing?.takeIf { it.isNotBlank() }, percent?.let { "$it %" }).joinToString(" · ")
 
     // Cards
     const val ANSWER_PICK = "Elige una opción o escribe otra. Responde al agente en el PC."
@@ -316,6 +342,14 @@ object ChatTexts {
     fun reportAccepted(ids: List<Long>) = "Aceptado · tareas " + ids.joinToString(", ") { "#$it" }
     fun reportTasks(ids: List<Long>) = "Tareas " + ids.joinToString(", ") { "#$it" }
     fun queuedTurns(n: Int) = "$n en cola"
+    /** What a queued message says, never promising a send the link cannot make. */
+    fun pendingLine(c: dev.orb.app.link.net.ConnectionState?): String = when (c) {
+        dev.orb.app.link.net.ConnectionState.UpdatePc -> PENDING_UPDATE_PC
+        dev.orb.app.link.net.ConnectionState.UpdateApp -> PENDING_UPDATE_APP
+        dev.orb.app.link.net.ConnectionState.Unlinked -> PENDING_UNLINKED
+        is dev.orb.app.link.net.ConnectionState.Attention -> PENDING_ATTENTION
+        else -> PENDING_WAITING
+    }
     fun pendingFailed(reason: String?) = if (reason.isNullOrBlank()) PENDING_FAILED else "$PENDING_FAILED: $reason"
 
     fun unread(n: Int) = if (n == 1) "1 sin leer" else "$n sin leer"

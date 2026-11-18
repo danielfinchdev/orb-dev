@@ -45,17 +45,42 @@ data class ChatMessage(
     val at: String?,
     val card: MsgCard,
     val clientId: String?,
+    /** The task the PC says this line is about (`meta.task`), whatever kind of line it is. */
+    val task: Long? = null,
 )
 
 /** A message written on the phone that the PC has not confirmed yet. */
 @Immutable
 data class PendingMessage(val clientId: String, val text: String, val state: PendingState, val error: String?, val at: Long)
 
-enum class PendingState { Waiting, Sending, Failed }
+/** [Arrived]: the PC took the message (`chat.send` answered) but its own line has not come back yet. */
+enum class PendingState { Waiting, Sending, Arrived, Failed }
 
 /** What the assistant is doing now (`chat:state`), without the streamed text, which lives apart so it can change fast. */
 @Immutable
 data class LiveInfo(val busy: Boolean, val waiting: Boolean, val queued: Int, val since: Long?, val activity: String?, val hasText: Boolean)
+
+/** The brain a conversation thinks with, as the PC names it (`chat.settings`). Nothing here is guessed. */
+@Immutable
+data class BrainInfo(val agentLabel: String?, val modelLabel: String?, val reasoning: String?) {
+    /** «Opus · alto»: the model (or the agent when the PC names no model) and the reasoning level. */
+    val label: String?
+        get() = listOfNotNull((modelLabel ?: agentLabel)?.takeIf { it.isNotBlank() }, reasoning?.let(::reasoningWord)).joinToString(" · ").ifEmpty { null }
+
+    companion object {
+        fun reasoningWord(level: String): String = when (level) {
+            "low" -> "bajo"
+            "medium" -> "medio"
+            "high" -> "alto"
+            "xhigh" -> "extra"
+            else -> level
+        }
+    }
+}
+
+/** A task that is running now (`tasks.live`): what it is doing, said by the PC. */
+@Immutable
+data class LiveTask(val id: Long, val title: String, val agent: String?, val doing: String?, val percent: Int?, val waiting: Boolean)
 
 object OrbeParser {
     private val json = Json { ignoreUnknownKeys = true }
@@ -72,7 +97,7 @@ object OrbeParser {
         val meta = o["meta"] as? JsonObject
         return ChatMessage(
             id = id, role = role, body = o.str("body").orEmpty(), at = o.str("at"), card = card(role, meta),
-            clientId = o.str("clientId") ?: meta?.str("clientId"),
+            clientId = o.str("clientId") ?: meta?.str("clientId"), task = meta?.long("task"),
         )
     }
 
@@ -130,6 +155,24 @@ object OrbeParser {
 
     /** The final line a finished turn carries, if the PC sent it along. */
     fun answer(state: JsonObject): ChatMessage? = (state["answer"] as? JsonObject)?.let(::message)
+
+    /** `chat.settings` → the brain; null when the PC says nothing usable. */
+    fun brain(el: kotlinx.serialization.json.JsonElement?): BrainInfo? {
+        val o = el as? JsonObject ?: return null
+        val info = BrainInfo(o.str("agentLabel"), o.str("modelLabel"), o.str("reasoning"))
+        return info.takeIf { it.label != null }
+    }
+
+    /** `tasks.live` → the running tasks. */
+    fun liveTasks(el: kotlinx.serialization.json.JsonElement?): List<LiveTask> = (el as? JsonArray).orEmpty().mapNotNull { x ->
+        val o = x as? JsonObject ?: return@mapNotNull null
+        val id = o.long("id") ?: return@mapNotNull null
+        val waiting = (o["waiting"] as? JsonPrimitive)?.let { it.longOrNull?.let { n -> n > 0 } ?: (it.contentOrNull == "true") } ?: false
+        LiveTask(
+            id, o.str("title").orEmpty(), o.str("agent"), (o.str("last") ?: o.str("note"))?.lineSequence()?.firstOrNull()?.take(160)?.ifBlank { null },
+            o.long("percent")?.toInt(), waiting,
+        )
+    }
 
     fun conversationOf(payload: JsonObject): Long? = payload.long("conversation")
 }

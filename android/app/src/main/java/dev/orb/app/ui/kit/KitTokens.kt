@@ -26,6 +26,8 @@ object OrbKit {
     val secondary: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.surfaceContainer
     val muted: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.surfaceContainerHighest
     val sidebar: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.surfaceContainerLow
+    /** `--bubble`: the person's own message. */
+    val bubble: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.surfaceContainerHigh
     val mutedForeground: Color @Composable @ReadOnlyComposable get() = OrbTheme.colors.text2
     val faintForeground: Color @Composable @ReadOnlyComposable get() = OrbTheme.colors.text3
     val border: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.outlineVariant

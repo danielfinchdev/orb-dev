@@ -199,7 +199,7 @@ fun OrbDialog(
                 if (text != null) Text(text, Modifier.padding(bottom = 16.dp), color = OrbKit.mutedForeground, fontSize = 14.5.sp, lineHeight = 22.sp)
                 if (content != null) Column(Modifier.padding(bottom = 16.dp), content = content)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
-                    if (dismiss != null) OrbButton(dismiss.label, dismiss.onClick, kind = OrbButtonKind.Ghost)
+                    if (dismiss != null) OrbButton(dismiss.label, dismiss.onClick, enabled = dismiss.enabled, kind = if (dismiss.danger) OrbButtonKind.Danger else OrbButtonKind.Ghost)
                     OrbButton(confirm.label, confirm.onClick, enabled = confirm.enabled, kind = if (confirm.danger) OrbButtonKind.Danger else OrbButtonKind.Primary)
                 }
             }

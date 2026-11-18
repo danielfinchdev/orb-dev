@@ -123,7 +123,7 @@ private fun directHint(s: NewChatState): String {
 }
 
 private fun brainSummary(s: NewChatState): String = when {
-    !s.direct -> s.brainLabel ?: ChatTexts.NEW_CHAT_BRAIN_AUTO
+    !s.direct -> s.brainLabel ?: s.options.pcBrain?.label ?: ChatTexts.NEW_CHAT_BRAIN_AUTO
     s.model == null -> "${s.agentOption?.label ?: ChatTexts.NEW_CHAT_AGENT} · ${ChatTexts.NEW_CHAT_MODEL_DEFAULT}"
     else -> s.brainLabel ?: ChatTexts.NEW_CHAT_MODEL_DEFAULT
 }

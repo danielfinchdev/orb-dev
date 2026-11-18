@@ -74,6 +74,12 @@ data class OrbeChatState(
     /** Status of the tasks behind `attention` cards (`awaiting_approval`, `running`…). */
     val taskStatus: Map<Long, String> = emptyMap(),
     val approval: ApprovalAsk? = null,
+    /** How this conversation thinks, as the PC says it (`chat.settings`); null when it does not say. */
+    val brain: BrainInfo? = null,
+    /** Tasks of this conversation that are running now, with what each is doing (`tasks.live`). */
+    val liveTasks: List<LiveTask> = emptyList(),
+    /** What the PC says about the tasks behind cards: title, agent and state. */
+    val taskInfo: Map<Long, TaskDetail> = emptyMap(),
 )
 
 /** The streamed answer. Apart from the rest of the state so only its own bubble is drawn again on each piece. */
@@ -120,6 +126,10 @@ class OrbeChatViewModel(
     private val loadingOlder = MutableStateFlow(false)
     private val taskStatus = MutableStateFlow<Map<Long, String>>(emptyMap())
     private val approval = MutableStateFlow<ApprovalAsk?>(null)
+    private val brain = MutableStateFlow<BrainInfo?>(null)
+    private val runningTasks = MutableStateFlow<List<LiveTask>>(emptyList())
+    private val taskInfo = MutableStateFlow<Map<Long, TaskDetail>>(emptyMap())
+    private val liveRequests = Channel<Unit>(Channel.CONFLATED)
     private val ghosts = MutableStateFlow<Map<String, Ghost>>(emptyMap())
     private val reloads = Channel<Unit>(Channel.CONFLATED)
     private var seq = 0L
@@ -147,8 +157,11 @@ class OrbeChatViewModel(
         val statusFlow = combine(backend.connection, mode, busyCards, taskStatus, approval) { c, m, b, t, a -> Status(c, m, b, t, a) }
         val flagsFlow = combine(deleted, loadFailed, loadedOnce, canLoadMore, loadingOlder) { d, f, l, c, o -> Flags(d, f, l, c, o) }
 
-        combine(listFlow, pendingFlow, statusFlow, flagsFlow, backend.header(conversation)) { lines, pend, st, fl, header ->
-            build(lines, pend.first, pend.second, st, fl, header)
+        val extraFlow = combine(brain, runningTasks, taskInfo) { b, l, t -> Extra(b, l, t) }
+        val headerFlow = combine(backend.header(conversation), extraFlow) { h, e -> h to e }
+
+        combine(listFlow, pendingFlow, statusFlow, flagsFlow, headerFlow) { lines, pend, st, fl, head ->
+            build(lines, pend.first, pend.second, st, fl, head.first, head.second)
         }.onEach { _state.value = it }.launchIn(viewModelScope)
 
         // Waiting messages that left the queue turn into ghosts until the PC's own line is here.
@@ -168,20 +181,28 @@ class OrbeChatViewModel(
         viewModelScope.launch {
             for (u in reloads) reload()
         }
+        // At most one `tasks.live` call every 1.5 s however many events ask for it.
+        viewModelScope.launch {
+            for (u in liveRequests) {
+                if (backend.connection.value is ConnectionState.Online) backend.liveTasks().onSuccess { runningTasks.value = it }
+                kotlinx.coroutines.delay(LIVE_GAP_MS)
+            }
+        }
 
         // The first answer of the PC, and again whenever the link comes back.
         backend.connection.map { it is ConnectionState.Online }.distinctUntilChanged().onEach { online ->
-            if (online) { reloads.trySend(Unit); loadSnapshot(); markRead() }
+            if (online) { reloads.trySend(Unit); loadSnapshot(); markRead(); liveRequests.trySend(Unit) }
         }.launchIn(viewModelScope)
     }
 
     private data class Lines(val saved: List<ChatMessage>, val fresh: Map<Long, ChatMessage>, val provisional: List<ChatMessage>, val overrides: Map<Long, MsgCard>)
+    private data class Extra(val brain: BrainInfo?, val running: List<LiveTask>, val info: Map<Long, TaskDetail>)
     private data class Status(val c: ConnectionState, val mode: String?, val busy: Set<Long>, val tasks: Map<Long, String>, val approval: ApprovalAsk?)
     private data class Flags(val deleted: Boolean, val failed: Boolean, val loaded: Boolean, val more: Boolean, val older: Boolean)
 
 
     private fun build(
-        lines: Lines, queued: List<PendingMessage>, ghost: Map<String, Ghost>, st: Status, fl: Flags, header: ChatRow?,
+        lines: Lines, queued: List<PendingMessage>, ghost: Map<String, Ghost>, st: Status, fl: Flags, header: ChatRow?, extra: Extra,
     ): OrbeChatState {
         val byId = LinkedHashMap<Long, ChatMessage>()
         for (m in lines.saved) byId[m.id] = m
@@ -197,7 +218,7 @@ class OrbeChatViewModel(
             .mapTo(items) { ChatItem.Msg(it, provisional = true) }
         for (g in ghost.values) {
             val echoed = real.any { it.role == MsgRole.User && it.id > g.baseId && (it.clientId == g.pending.clientId || it.body == g.pending.text) }
-            if (!echoed) items += ChatItem.Waiting(g.pending.copy(state = PendingState.Sending))
+            if (!echoed) items += ChatItem.Waiting(g.pending.copy(state = PendingState.Arrived))
         }
         queued.mapTo(items) { ChatItem.Waiting(it) }
         val online = st.c is ConnectionState.Online
@@ -206,10 +227,30 @@ class OrbeChatViewModel(
             loaded = fl.loaded || real.isNotEmpty() || items.isNotEmpty(), deleted = fl.deleted, canRestore = backend.available(ApiMethods.CONVERSATIONS_RESTORE), online = online, connection = st.c,
             canLoadMore = fl.more, loadingOlder = fl.older, loadFailed = fl.failed, mode = st.mode,
             canSetMode = backend.available(ApiMethods.PERMISSIONS_SET_MODE), canCompact = backend.available(ApiMethods.CHAT_COMPACT),
-            busyCards = st.busy, taskStatus = st.tasks, approval = st.approval,
+            busyCards = st.busy, taskStatus = st.tasks, approval = st.approval, brain = extra.brain, taskInfo = extra.info,
+            liveTasks = referencedTasks(real).let { ids -> extra.running.filter { it.id in ids }.sortedBy { it.id } },
         )
     }
 
+
+    /** The tasks the thread talks about: the ones its lines carry and the ones the recent lines name with «#42». */
+    private fun referencedTasks(lines: List<ChatMessage>): Set<Long> {
+        val ids = HashSet<Long>()
+        for (m in lines) {
+            m.task?.let(ids::add)
+            when (val c = m.card) {
+                is MsgCard.TaskAttention -> ids += c.task
+                is MsgCard.Permission -> c.task?.let(ids::add)
+                is MsgCard.Report -> ids += c.tasks
+                else -> {}
+            }
+        }
+        for (m in lines.takeLast(MENTION_WINDOW)) if (m.role != MsgRole.User) MENTION.findAll(m.body).forEach { it.groupValues[1].toLongOrNull()?.let(ids::add) }
+        return ids
+    }
+
+    /** Asks for the running tasks again; the screen calls it while something is running. */
+    fun refreshLive() { liveRequests.trySend(Unit) }
 
     private fun onEvent(ev: LinkEvent) {
         val o = ev.payload as? JsonObject
@@ -224,6 +265,7 @@ class OrbeChatViewModel(
             }
             LinkEvent.RELOAD -> if (o != null && OrbeParser.conversationOf(o) == conversation) { reloads.trySend(Unit); viewModelScope.launch { loadSnapshot() } }
             "config:changed" -> viewModelScope.launch { loadSnapshot() }
+            "board:changed" -> liveRequests.trySend(Unit)
         }
     }
 
@@ -282,6 +324,7 @@ class OrbeChatViewModel(
             // Opened in the middle of a turn: there is no event to wait for, so the state is taken from here.
             s.chat?.let { c -> if (_liveInfo.value == null) onState(c) }
         }
+        backend.brain(conversation).onSuccess { b -> if (b != null) brain.value = b }
     }
 
     private fun markRead() {
@@ -405,7 +448,10 @@ class OrbeChatViewModel(
     }
 
     private suspend fun refreshTask(task: Long) {
-        backend.taskDetail(task).onSuccess { d -> d.status?.let { s -> taskStatus.update { it + (task to s) } } }
+        backend.taskDetail(task).onSuccess { d ->
+            d.status?.let { s -> taskStatus.update { it + (task to s) } }
+            taskInfo.update { it + (task to d) }
+        }
     }
 
     /** «Aprobar»: first shows what the task is and where it runs, as the PC's own window does. */
@@ -461,5 +507,8 @@ class OrbeChatViewModel(
     companion object {
         const val PAGE = 150
         const val OLDER_PAGE = 100
+        const val LIVE_GAP_MS = 1_500L
+        private const val MENTION_WINDOW = 20
+        private val MENTION = Regex("""(?<![\w&])#(\d{1,7})\b""")
     }
 }

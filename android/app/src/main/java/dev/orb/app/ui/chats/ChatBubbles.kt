@@ -57,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
@@ -74,6 +75,21 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.orb.app.ui.icons.OrbIcons
+import dev.orb.app.link.net.ConnectionState
+import dev.orb.app.ui.kit.OrbAuthor
+import dev.orb.app.ui.kit.OrbBadge
+import dev.orb.app.ui.kit.OrbBadgeKind
+import dev.orb.app.ui.kit.OrbBubble
+import dev.orb.app.ui.kit.OrbButton
+import dev.orb.app.ui.kit.OrbButtonKind
+import dev.orb.app.ui.kit.OrbDelivery
+import dev.orb.app.ui.kit.OrbDeliveryMark
+import dev.orb.app.ui.kit.OrbKit
+import dev.orb.app.ui.kit.OrbMessageText
+import dev.orb.app.ui.kit.OrbNote
+import dev.orb.app.ui.kit.OrbTaskCard
+import dev.orb.app.ui.kit.OrbThinking
+import androidx.compose.foundation.layout.fillMaxSize
 import dev.orb.app.ui.theme.OrbMotion
 import dev.orb.app.ui.theme.OrbTheme
 
@@ -86,6 +102,17 @@ internal fun openSafeLink(context: android.content.Context, url: String) {
         context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(target)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
     } catch (e: Exception) {
     }
+}
+
+/** Where the text of the last block ended up on screen, kept out of state so drawing the cursor never recomposes. */
+private class CaretHolder { var layout: androidx.compose.ui.text.TextLayoutResult? = null }
+
+/** The writing cursor of the answer being streamed: a 2 dp bar at the end of the text, drawn over it (no text is added). */
+private fun Modifier.endCaret(holder: CaretHolder, ink: androidx.compose.ui.graphics.Color) = drawWithContent {
+    drawContent()
+    val l = holder.layout ?: return@drawWithContent
+    val r = l.getCursorRect(l.layoutInput.text.length)
+    drawRect(ink, androidx.compose.ui.geometry.Offset(r.left, r.top), androidx.compose.ui.geometry.Size(2.dp.toPx(), r.height))
 }
 
 @Composable
@@ -118,22 +145,38 @@ private fun spansToText(spans: List<Span>): AnnotatedString {
 
 /** A message body as light Markdown. [blocks] is parsed by the caller so it can be remembered per message. */
 @Composable
-fun MarkdownBody(blocks: List<MdBlock>, modifier: Modifier = Modifier) {
+fun MarkdownBody(blocks: List<MdBlock>, modifier: Modifier = Modifier, caret: Boolean = false) {
     val scheme = MaterialTheme.colorScheme
+    val holder = remember { CaretHolder() }
+    // 15 sp on 1.5 lines, the same as the person's own bubble.
+    val body = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, lineHeight = 22.5.sp)
+    val ink = OrbKit.foreground
+    // The cursor sits at the end of the last line of text, whatever block that is.
+    val last = if (caret) blocks.indexOfLast { it is MdBlock.Paragraph || it is MdBlock.Heading || it is MdBlock.Item || it is MdBlock.Quote } else -1
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (b in blocks) when (b) {
-            is MdBlock.Paragraph -> Text(spansToText(b.spans), style = MaterialTheme.typography.bodyLarge)
+        for ((i, b) in blocks.withIndex()) when (b) {
+            is MdBlock.Paragraph -> Text(
+                spansToText(b.spans), Modifier.then(if (i == last) Modifier.endCaret(holder, ink) else Modifier), style = body,
+                onTextLayout = { if (i == last) holder.layout = it },
+            )
             is MdBlock.Heading -> Text(
-                spansToText(b.spans), fontWeight = FontWeight.SemiBold,
+                spansToText(b.spans), Modifier.then(if (i == last) Modifier.endCaret(holder, ink) else Modifier), fontWeight = FontWeight.SemiBold,
+                onTextLayout = { if (i == last) holder.layout = it },
                 style = if (b.level <= 2) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleSmall,
             )
             is MdBlock.Item -> Row(Modifier.padding(start = (12 * b.depth).dp)) {
-                Text(if (b.number != null) "${b.number}." else "•", Modifier.widthIn(min = 20.dp), color = OrbTheme.colors.text2)
-                Text(spansToText(b.spans), style = MaterialTheme.typography.bodyLarge)
+                Text(if (b.number != null) "${b.number}." else "•", Modifier.widthIn(min = 20.dp), color = OrbTheme.colors.text2, style = body)
+                Text(
+                    spansToText(b.spans), Modifier.then(if (i == last) Modifier.endCaret(holder, ink) else Modifier), style = body,
+                    onTextLayout = { if (i == last) holder.layout = it },
+                )
             }
             is MdBlock.Quote -> Row(Modifier.fillMaxWidth().padding(start = 2.dp)) {
                 Box(Modifier.padding(end = 10.dp).size(3.dp, 20.dp).background(scheme.outline, RoundedCornerShape(2.dp)))
-                Text(spansToText(b.spans), style = MaterialTheme.typography.bodyLarge, color = OrbTheme.colors.text2)
+                Text(
+                    spansToText(b.spans), Modifier.then(if (i == last) Modifier.endCaret(holder, ink) else Modifier), style = body,
+                    color = OrbTheme.colors.text2, onTextLayout = { if (i == last) holder.layout = it },
+                )
             }
             is MdBlock.Code -> if (b.rich != null) {
                 IslandBlock(b.rich, b.text, dark = scheme.background.luminance() < 0.5f) { CodeBlock(b) }
@@ -165,14 +208,6 @@ private fun CodeBlock(b: MdBlock.Code) {
 
 // ---------- Bubbles ----------
 
-@Composable
-private fun OrbeMark() {
-    Box(
-        Modifier.size(28.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
-        contentAlignment = Alignment.Center,
-    ) { Text("O", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
-}
-
 private fun timeOf(at: String?, now: Long) = ChatTime.short(at, now)
 
 /** One line of the conversation. Rows are cheap: the parsed Markdown is remembered per message. */
@@ -182,23 +217,28 @@ fun MessageRow(
 ) {
     val m = item.message
     when (m.role) {
-        MsgRole.User -> UserBubble(m.body, timeOf(m.at, now), modifier)
+        // A line that came back from the PC is saved there: two ticks.
+        MsgRole.User -> UserBubble(m.body, timeOf(m.at, now), modifier, delivery = OrbDelivery.Saved)
         MsgRole.Orbe -> OrbeMessage(m, state, now, actions, modifier)
         MsgRole.System -> SystemMessage(m, state, actions, modifier)
     }
 }
 
+/**
+ * The person's message. With a [delivery] the time and the ticks sit inside the bubble; without one (a conversation
+ * that keeps no ticks) the time goes under it. [status] replaces both, for messages that have not arrived.
+ */
 @Composable
-fun UserBubble(text: String, time: String, modifier: Modifier = Modifier, status: @Composable (() -> Unit)? = null) {
+fun UserBubble(
+    text: String, time: String, modifier: Modifier = Modifier, delivery: OrbDelivery? = null,
+    status: (@Composable ColumnScope.() -> Unit)? = null,
+) {
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
-        Column(
-            Modifier.widthIn(max = 300.dp)
-                .clip(RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-        ) { Text(text, style = MaterialTheme.typography.bodyLarge) }
-        if (status != null) status() else if (time.isNotEmpty()) {
-            Text(time, Modifier.padding(top = 2.dp, end = 4.dp), color = OrbTheme.colors.text3, style = MaterialTheme.typography.labelSmall)
+        OrbBubble {
+            OrbMessageText(text)
+            if (delivery != null) OrbDeliveryMark(time, delivery, Modifier.align(Alignment.End).padding(top = 2.dp))
         }
+        if (status != null) status() else if (delivery == null && time.isNotEmpty()) OrbNote(time, Modifier.padding(top = 2.dp, end = 4.dp))
     }
 }
 
@@ -206,17 +246,15 @@ fun UserBubble(text: String, time: String, modifier: Modifier = Modifier, status
 private fun OrbeMessage(m: ChatMessage, state: OrbeChatState, now: Long, actions: CardActions, modifier: Modifier) {
     val blocks = remember(m.id, m.body) { LightMarkdown.parse(m.body) }
     val card = m.card
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        OrbeMark()
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        OrbAuthor("orbe", "Orbe", time = timeOf(m.at, now))
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (card is MsgCard.Question) {
                 QuestionCard(m, card, state.online, m.id in state.busyCards, actions)
             } else {
                 MarkdownBody(blocks)
                 if (card is MsgCard.Report) ReportCard(m, card, state.online, m.id in state.busyCards, actions)
             }
-            val t = timeOf(m.at, now)
-            if (t.isNotEmpty()) Text(t, color = OrbTheme.colors.text3, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
@@ -257,26 +295,39 @@ fun NoteLine(text: String, modifier: Modifier = Modifier, fold: String? = null) 
 
 // ---------- Messages written on the phone ----------
 
+/**
+ * A message that has not been saved by the PC yet. Queued, it says what will happen given the state of the link (it
+ * never promises a send that cannot happen); handed over, it carries one tick; refused, it stays here to retry or discard.
+ */
 @Composable
-fun PendingRow(p: PendingMessage, online: Boolean, onRetry: () -> Unit, onDiscard: () -> Unit, modifier: Modifier = Modifier) {
-    val scheme = MaterialTheme.colorScheme
+fun PendingRow(
+    p: PendingMessage, online: Boolean, onRetry: () -> Unit, onDiscard: () -> Unit, modifier: Modifier = Modifier,
+    connection: ConnectionState? = null,
+) {
+    val time = remember(p.at) { if (p.at > 0) ChatTime.clock(p.at) else "" }
+    if (p.state == PendingState.Arrived) {
+        UserBubble(p.text, time, modifier, delivery = OrbDelivery.Arrived)
+        return
+    }
     UserBubble(
-        p.text, "", modifier,
+        p.text, time, modifier,
         status = {
-            when (p.state) {
-                PendingState.Failed -> Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(top = 4.dp)) {
-                    Text(ChatTexts.pendingFailed(p.error), color = scheme.error, style = MaterialTheme.typography.labelMedium)
-                    Text(ChatTexts.PENDING_KEPT, color = OrbTheme.colors.text2, style = MaterialTheme.typography.labelSmall)
-                    Row {
-                        TextButton(onClick = onRetry) { Text(ChatTexts.RETRY) }
-                        TextButton(onClick = onDiscard) { Text(ChatTexts.PENDING_DISCARD) }
+            if (p.state == PendingState.Failed) {
+                Column(Modifier.padding(top = 4.dp, end = 2.dp), horizontalAlignment = Alignment.End) {
+                    Text(ChatTexts.pendingFailed(p.error), color = OrbKit.destructive, fontSize = 12.sp, lineHeight = 16.sp)
+                    Text(ChatTexts.PENDING_KEPT, color = OrbKit.mutedForeground, fontSize = 12.sp, lineHeight = 16.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        OrbButton(ChatTexts.RETRY, onRetry, small = true)
+                        OrbButton(ChatTexts.PENDING_DISCARD, onDiscard, kind = OrbButtonKind.Ghost, small = true)
                     }
                 }
-                else -> Row(Modifier.padding(top = 2.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(OrbIcons.Clock, null, Modifier.size(12.dp), tint = OrbTheme.colors.text3)
-                    Text(
-                        if (!online && p.state == PendingState.Waiting) ChatTexts.PENDING_WAITING else ChatTexts.PENDING_SENDING,
-                        Modifier.padding(start = 4.dp), color = OrbTheme.colors.text3, style = MaterialTheme.typography.labelSmall,
+            } else {
+                val held = !online && p.state == PendingState.Waiting
+                Row(Modifier.padding(top = 4.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (time.isNotEmpty()) OrbNote(time)
+                    OrbBadge(
+                        if (held) ChatTexts.pendingLine(connection) else ChatTexts.PENDING_SENDING,
+                        kind = if (held) OrbBadgeKind.Warn else OrbBadgeKind.Neutral, icon = OrbIcons.Clock,
                     )
                 }
             }
@@ -294,19 +345,34 @@ fun PendingRow(p: PendingMessage, online: Boolean, onRetry: () -> Unit, onDiscar
 fun LiveBubble(info: LiveInfo, text: () -> String, nowMs: () -> Long, modifier: Modifier = Modifier) {
     val body = text()
     val blocks = remember(body) { if (body.isEmpty()) emptyList() else LightMarkdown.parse(body) }
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        OrbeMark()
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (blocks.isNotEmpty()) MarkdownBody(blocks)
-            if (info.waiting && !info.busy) {
-                Text(ChatTexts.WAITING_TURN, color = OrbTheme.colors.text2, style = MaterialTheme.typography.bodyMedium)
-            } else {
-                ActivityLine(info, nowMs)
-            }
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (blocks.isNotEmpty()) {
+            OrbAuthor("orbe", "Orbe")
+            MarkdownBody(blocks, caret = true)
+        }
+        if (info.waiting && !info.busy) {
+            Text(ChatTexts.WAITING_TURN, color = OrbTheme.colors.text2, style = MaterialTheme.typography.bodyMedium)
+        } else {
+            LiveActivity(info, nowMs)
         }
     }
 }
 
+/** What the assistant is doing now, with the bobbing dots and how long the turn has taken. */
+@Composable
+private fun LiveActivity(info: LiveInfo, nowMs: () -> Long) {
+    val label = info.activity ?: if (info.hasText) ChatTexts.WRITING else ChatTexts.THINKING
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OrbThinking(label, Modifier.weight(1f, fill = false))
+        val since = info.since
+        if (since != null) {
+            val now by produceState(nowMs()) { while (true) { delay(1000); value = nowMs() } }
+            OrbNote(elapsedText(now - since))
+        }
+    }
+}
+
+/** The line of a direct chat's agent at work (the direct chat has its own marks until it is redrawn). */
 @Composable
 internal fun ActivityLine(info: LiveInfo, nowMs: () -> Long) {
     val label = info.activity ?: if (info.hasText) ChatTexts.WRITING else ChatTexts.THINKING
@@ -509,23 +575,47 @@ private fun PermissionCard(m: ChatMessage, p: MsgCard.Permission, online: Boolea
 private fun TaskCard(m: ChatMessage, task: Long, state: OrbeChatState, actions: CardActions, modifier: Modifier) {
     androidx.compose.runtime.LaunchedEffect(task) { actions.watchTask(task) }
     val status = state.taskStatus[task]
+    val info = state.taskInfo[task]
     val waiting = status == "awaiting_approval"
-    CardFrame(modifier, warn = waiting) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Icon(OrbIcons.Tasks, null, Modifier.size(20.dp), tint = if (waiting) OrbTheme.colors.warn else OrbTheme.colors.text2)
-            Text(m.body.removePrefix("⚠️").trim(), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-        }
-        if (waiting) {
-            if (!state.online) Text(ChatTexts.NEEDS_PC_TO_ANSWER, color = OrbTheme.colors.text2, style = MaterialTheme.typography.bodySmall)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+    val body = m.body.removePrefix("⚠️").trim()
+    val named = !info?.title.isNullOrBlank()
+    val (badge, kind) = taskBadge(status)
+    OrbTaskCard(
+        title = if (named) ChatTexts.taskTitle(task, info?.title) else body,
+        badge = badge, badgeKind = kind, modifier = modifier, agent = info?.agent,
+        // Waiting, the line says why; later it says who is on it.
+        line = if (waiting && named) body else info?.agent?.let { agentName(it) ?: it },
+        lineMaxLines = if (waiting && named) 3 else 1,
+        footer = if (waiting) {
+            {
                 val enabled = state.online && -task !in state.busyCards
-                OutlinedButton(onClick = { actions.rejectTask(task) }, Modifier.heightIn(min = 48.dp), enabled = enabled) { Text(ChatTexts.REJECT) }
-                Button(onClick = { actions.askApproval(task) }, Modifier.heightIn(min = 48.dp), enabled = enabled) { Text(ChatTexts.APPROVE) }
+                if (!state.online) Text(ChatTexts.NEEDS_PC_TO_ANSWER, Modifier.weight(1f), color = OrbKit.mutedForeground, fontSize = 12.sp, lineHeight = 16.sp)
+                OrbButton(ChatTexts.REJECT, { actions.rejectTask(task) }, enabled = enabled)
+                OrbButton(ChatTexts.APPROVE, { actions.askApproval(task) }, kind = OrbButtonKind.Primary, enabled = enabled)
             }
-        } else if (status != null) {
-            Text(ChatTexts.taskStatus(status), color = OrbTheme.colors.text2, style = MaterialTheme.typography.labelLarge)
-        }
-    }
+        } else null,
+    )
+}
+
+private fun taskBadge(status: String?): Pair<String, OrbBadgeKind> = when (status) {
+    "awaiting_approval", null -> ChatTexts.taskStatus("awaiting_approval") to OrbBadgeKind.Warn
+    "running" -> ChatTexts.TASK_RUNNING to OrbBadgeKind.Acc
+    "done" -> "Hecha" to OrbBadgeKind.Ok
+    "failed" -> ChatTexts.taskStatus(status) to OrbBadgeKind.Err
+    "blocked" -> ChatTexts.taskStatus(status) to OrbBadgeKind.Warn
+    else -> ChatTexts.taskStatus(status) to OrbBadgeKind.Neutral
+}
+
+/** A task of this conversation that is running now, as the PC reports it: who is on it and what they are doing. */
+@Composable
+fun LiveTaskCard(t: LiveTask, modifier: Modifier = Modifier) {
+    OrbTaskCard(
+        title = ChatTexts.taskTitle(t.id, t.title),
+        badge = if (t.waiting) ChatTexts.TASK_WAITING_PERMISSION else ChatTexts.TASK_RUNNING,
+        badgeKind = if (t.waiting) OrbBadgeKind.Warn else OrbBadgeKind.Acc,
+        modifier = modifier, agent = t.agent, working = !t.waiting,
+        line = ChatTexts.taskLiveLine(agentName(t.agent) ?: t.agent, t.doing, t.percent).ifEmpty { null },
+    )
 }
 
 /** What the PC's own window shows before approving a task: its title, agent, folder and why it waits. */

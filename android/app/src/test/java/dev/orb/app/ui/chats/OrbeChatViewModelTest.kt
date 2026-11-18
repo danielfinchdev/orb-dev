@@ -329,4 +329,69 @@ class OrbeChatViewModelTest {
         assertEquals("Va por la mitad", vm.liveText.value.text)
         assertTrue(vm.liveInfo.value!!.busy)
     }
+
+    @Test fun aMessageThePcTookCarriesOneTickUntilItsOwnLineComesBack() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two)
+        val vm = vm(b)
+        vm.send("Hazlo")
+        runCurrent()
+        assertEquals(PendingState.Waiting, (vm.state.value.items.last() as ChatItem.Waiting).pending.state)
+        // chat.send answered (the queued copy is gone) but the thread does not have the line yet: handed over, not saved.
+        b.loadResult = refused("todavía no").map { 0 }
+        b.queue.value = emptyList()
+        runCurrent()
+        assertEquals(PendingState.Arrived, (vm.state.value.items.last() as ChatItem.Waiting).pending.state)
+        // The PC's own line is the proof that it is saved.
+        b.loadResult = Result.success(0)
+        b.rows.value = two + raw(6, "usuario", "Hazlo", extra = ",\"clientId\":\"c1\"")
+        vm.retryLoad()
+        runCurrent()
+        assertTrue(vm.state.value.items.none { it is ChatItem.Waiting })
+        assertEquals(MsgRole.User, vm.msgs().last().role)
+    }
+
+    @Test fun theHourOfWritingTravelsWithTheQueuedMessage() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two)
+        val vm = vm(b)
+        b.queue.value = listOf(PendingMessage("a", "primero", PendingState.Waiting, null, 111L), PendingMessage("b", "segundo", PendingState.Waiting, null, 222L))
+        runCurrent()
+        val waiting = vm.state.value.items.filterIsInstance<ChatItem.Waiting>()
+        assertEquals(listOf("primero", "segundo"), waiting.map { it.pending.text })
+        assertEquals(listOf(111L, 222L), waiting.map { it.pending.at })
+    }
+
+    @Test fun theBrainIsReadFromThePcAndKeptWhenItSaysNothing() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two)
+        b.brainOnPc = BrainInfo("Claude Code", "Opus", "high")
+        val vm = vm(b)
+        assertEquals("Opus · alto", vm.state.value.brain?.label)
+        val b2 = FakeOrbeChatBackend(two)
+        assertNull(vm(b2).state.value.brain)
+    }
+
+    @Test fun onlyTheRunningTasksTheThreadTalksAboutGetALiveCard() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two + raw(3, "system", "Tarea #42 creada", """{"task":42}""") + raw(4, "orb", "La #43 es para Claude"))
+        b.liveOnPc = listOf(
+            LiveTask(42, "Registro", "codex", "Leyendo src/push.ts", null, false),
+            LiveTask(43, "Prueba", "claude", null, 10, false),
+            LiveTask(99, "De otro chat", "cursor", null, null, false),
+        )
+        val vm = vm(b)
+        assertEquals(listOf(42L, 43L), vm.state.value.liveTasks.map { it.id })
+        // The PC says it ended: the card goes.
+        b.liveOnPc = emptyList()
+        vm.refreshLive()
+        dispatcher.scheduler.advanceTimeBy(OrbeChatViewModel.LIVE_GAP_MS + 1)
+        runCurrent()
+        assertTrue(vm.state.value.liveTasks.isEmpty())
+    }
+
+    @Test fun theTaskBehindACardKeepsItsTitleAndAgent() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two + raw(5, "system", "⚠️ La #42 espera tu OK", """{"kind":"attention","task":42}"""))
+        val vm = vm(b)
+        vm.watchTask(42)
+        runCurrent()
+        assertEquals("Guardar el carrito", vm.state.value.taskInfo[42]?.title)
+        assertEquals("awaiting_approval", vm.state.value.taskStatus[42])
+    }
 }

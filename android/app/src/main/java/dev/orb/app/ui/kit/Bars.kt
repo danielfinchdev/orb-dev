@@ -60,6 +60,7 @@ fun OrbTopBar(
     center: (@Composable () -> Unit)? = null,
     line: Boolean = false,
     sideWidth: Dp = 96.dp,
+    subColor: Color = OrbKit.mutedForeground,
     leading: @Composable RowScope.() -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {},
 ) {
@@ -72,7 +73,7 @@ fun OrbTopBar(
                     fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
                 )
                 if (sub != null) {
-                    Text(sub, color = OrbKit.mutedForeground, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(sub, color = subColor, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             // A text action (not just icons) may need more than 96 dp; the title then gives way.

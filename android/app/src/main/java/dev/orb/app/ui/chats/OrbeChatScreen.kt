@@ -1,6 +1,5 @@
 package dev.orb.app.ui.chats
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -8,14 +7,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,7 +15,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -33,19 +24,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import dev.orb.app.ui.kit.OrbFab
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import dev.orb.app.ui.kit.OrbSnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -61,27 +45,53 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.orb.app.link.net.ConnectionState
+import dev.orb.app.ui.connectionText
 import dev.orb.app.ui.icons.OrbIcons
+import dev.orb.app.ui.kit.OrbButton
+import dev.orb.app.ui.kit.OrbButtonKind
+import dev.orb.app.ui.kit.OrbComposerFrame
+import dev.orb.app.ui.kit.OrbComposerIcon
+import dev.orb.app.ui.kit.OrbComposerLabel
+import dev.orb.app.ui.kit.OrbFab
+import dev.orb.app.ui.kit.OrbIconButton
+import dev.orb.app.ui.kit.OrbKit
+import dev.orb.app.ui.kit.OrbSendButton
+import dev.orb.app.ui.kit.OrbSheet
+import dev.orb.app.ui.kit.OrbSheetChoice
+import dev.orb.app.ui.kit.OrbSheetInfo
+import dev.orb.app.ui.kit.OrbSheetItem
+import dev.orb.app.ui.kit.OrbSnackbarHost
+import dev.orb.app.ui.kit.OrbTopBar
+import dev.orb.app.ui.offline.ConnectionBand
 import dev.orb.app.ui.theme.OrbMotion
 import dev.orb.app.ui.theme.OrbTheme
+import kotlinx.coroutines.delay
 
-/** The conversation with Orbe. A remote control: it shows what the PC says and sends what the person asks for. */
+/**
+ * The conversation with Orbe. A remote control: it shows what the PC says and sends what the person asks for.
+ * [liveRefreshMs] is how often the running tasks are asked for again while something is running (0 = only on events).
+ * [queued], [onEditQueued] and [onRemoveQueued] are for a PC that lists the queued messages: the bar then quotes the first
+ * one and offers to edit it; until then it only counts them.
+ */
 @Composable
 fun OrbeChatScreen(
     vm: OrbeChatViewModel,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     nowMs: () -> Long = System::currentTimeMillis,
+    liveRefreshMs: Long = 4_000L,
+    queued: List<QueuedMsg> = emptyList(),
+    onEditQueued: ((QueuedMsg, String) -> Unit)? = null,
+    onRemoveQueued: ((QueuedMsg) -> Unit)? = null,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val liveInfo by vm.liveInfo.collectAsStateWithLifecycle()
@@ -91,11 +101,16 @@ fun OrbeChatScreen(
     val actions = remember(vm) {
         CardActions(vm::answer, vm::accept, vm::decideRequest, vm::askApproval, vm::rejectTask, vm::watchTask)
     }
+    // While a task runs (or the assistant may be starting one) its card is kept fresh; events cover the rest.
+    val tracking = state.online && (liveInfo?.busy == true || state.liveTasks.isNotEmpty())
+    LaunchedEffect(tracking, liveRefreshMs) {
+        if (tracking && liveRefreshMs > 0) while (true) { vm.refreshLive(); delay(liveRefreshMs) }
+    }
 
     Box(modifier.fillMaxSize().imePadding()) {
         Column(Modifier.fillMaxSize()) {
-            ChatTopBar(state, onBack, onCompact = vm::compact)
-            AnimatedVisibility(!state.online && state.loaded && !state.deleted, enter = fadeIn() + slideInVertically { -it / 2 }, exit = fadeOut()) { OfflineBanner() }
+            ChatTopBar(state, liveInfo, onBack, onCompact = vm::compact)
+            if (state.loaded && !state.deleted) ConnectionBand(state.connection)
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
                     state.deleted -> DeletedChat(onBack, if (state.canRestore) vm::restore else null)
@@ -104,10 +119,11 @@ fun OrbeChatScreen(
                 }
             }
             if (!state.deleted) {
+                ChatQueueBar(liveInfo?.queued ?: 0, items = queued, onEdit = onEditQueued, onRemove = onRemoveQueued)
                 Composer(
                     online = state.online, busy = liveInfo?.busy == true, mode = state.mode, canSetMode = state.canSetMode,
                     onSend = { stick = true; vm.send(it) }, onStop = vm::stop, onMode = vm::setMode,
-                    attach = vm.attach,
+                    attach = vm.attach, brain = state.brain?.label ?: ChatTexts.BRAIN_UNKNOWN, mic = true,
                 )
             }
         }
@@ -116,44 +132,29 @@ fun OrbeChatScreen(
     state.approval?.let { ApprovalDialog(it, onConfirm = vm::confirmApproval, onDismiss = vm::dismissApproval) }
 }
 
-@Composable
-private fun ChatTopBar(state: OrbeChatState, onBack: () -> Unit, onCompact: () -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) { Icon(OrbIcons.ArrowLeft, ChatTexts.BACK, tint = OrbTheme.colors.text2) }
-        Column(Modifier.weight(1f).padding(start = 4.dp)) {
-            Text(
-                state.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, maxLines = 1,
-                overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() },
-            )
-            Text(
-                state.project?.let { "$it · Orbe" } ?: "Orbe", color = OrbTheme.colors.text2, style = MaterialTheme.typography.bodySmall,
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (state.canCompact && !state.deleted) {
-            Box {
-                IconButton(onClick = { open = true }) { Icon(OrbIcons.MoreVertical, ChatTexts.MORE, tint = OrbTheme.colors.text2) }
-                DropdownMenu(open, onDismissRequest = { open = false }) {
-                    DropdownMenuItem(
-                        text = { Text(ChatTexts.COMPACT) }, enabled = state.online,
-                        onClick = { open = false; onCompact() },
-                    )
-                    if (!state.online) Text(ChatTexts.NEEDS_PC, Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = OrbTheme.colors.text2, style = MaterialTheme.typography.bodySmall)
-                }
-            }
-        }
-    }
+/** The useful line under the name: the project and what Orbe is doing; with no link, what is wrong with it. */
+internal fun headerLine(state: OrbeChatState, live: LiveInfo?): String = when {
+    state.connection is ConnectionState.Online ->
+        ChatTexts.chatLine(state.project, if (live?.busy == true) ChatTexts.STATE_WORKING else if (live?.waiting == true) ChatTexts.STATE_WAITING else ChatTexts.STATE_IDLE)
+    state.connection is ConnectionState.Offline || state.connection is ConnectionState.Connecting -> ChatTexts.STATE_RECONNECTING
+    else -> connectionText(state.connection)
 }
 
 @Composable
-private fun OfflineBanner() {
-    Column(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(RoundedCornerShape(12.dp))
-            .background(OrbTheme.colors.warnSoft).padding(horizontal = 14.dp, vertical = 10.dp),
-    ) {
-        Text(ChatTexts.ORBE_OFFLINE_TITLE, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-        Text(ChatTexts.ORBE_OFFLINE_BODY, color = OrbTheme.colors.text2, style = MaterialTheme.typography.bodySmall)
+private fun ChatTopBar(state: OrbeChatState, live: LiveInfo?, onBack: () -> Unit, onCompact: () -> Unit) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    OrbTopBar(
+        state.title, sub = headerLine(state, live), sideWidth = 56.dp,
+        subColor = if (state.online) OrbKit.mutedForeground else OrbKit.destructive,
+        leading = { OrbIconButton(OrbIcons.ArrowLeft, ChatTexts.BACK, onBack) },
+        actions = { if (state.canCompact && !state.deleted) OrbIconButton(OrbIcons.MoreVertical, ChatTexts.MORE, { open = true }) },
+    )
+    if (open) {
+        OrbSheet(onDismiss = { open = false }) {
+            if (state.online) OrbSheetItem(ChatTexts.COMPACT, onClick = { open = false; onCompact() }, icon = OrbIcons.FoldVertical)
+            else OrbSheetInfo(ChatTexts.COMPACT, OrbIcons.FoldVertical, meta = ChatTexts.NEEDS_PC)
+            state.brain?.label?.let { OrbSheetInfo(ChatTexts.BRAIN_DESC, OrbIcons.Brain, meta = it) }
+        }
     }
 }
 
@@ -168,7 +169,7 @@ private fun DeletedChat(onBack: () -> Unit, onRestore: (() -> Unit)?) {
         Text(ChatTexts.DELETED_TITLE, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
         Text(ChatTexts.DELETED_BODY, color = OrbTheme.colors.text2, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
         if (onRestore != null) Button(onClick = onRestore) { Text(ChatTexts.RESTORE_ASK) }
-        if (onRestore != null) androidx.compose.material3.TextButton(onClick = onBack) { Text(ChatTexts.BACK_TO_CHATS) }
+        if (onRestore != null) TextButton(onClick = onBack) { Text(ChatTexts.BACK_TO_CHATS) }
         else Button(onClick = onBack) { Text(ChatTexts.BACK_TO_CHATS) }
     }
 }
@@ -207,12 +208,12 @@ private fun MessageList(
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState, modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(18.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             if (state.loadingOlder) item(key = "older", contentType = "older") {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
             }
-            if (items.isEmpty() && !hasLive) item(key = "empty", contentType = "empty") {
+            if (items.isEmpty() && !hasLive && state.liveTasks.isEmpty()) item(key = "empty", contentType = "empty") {
                 Text(ChatTexts.EMPTY_CHAT, Modifier.fillMaxWidth().padding(vertical = 48.dp), color = OrbTheme.colors.text2, textAlign = TextAlign.Center)
             }
             items(items, key = { it.key }, contentType = { it.contentType }) { item ->
@@ -223,8 +224,14 @@ private fun MessageList(
                 )
                 when (item) {
                     is ChatItem.Msg -> MessageRow(item, state, now, actions, enter)
-                    is ChatItem.Waiting -> PendingRow(item.pending, state.online, { vm.retrySend(item.pending.clientId) }, { vm.discard(item.pending.clientId) }, enter)
+                    is ChatItem.Waiting -> PendingRow(
+                        item.pending, state.online, { vm.retrySend(item.pending.clientId) }, { vm.discard(item.pending.clientId) }, enter,
+                        connection = state.connection,
+                    )
                 }
+            }
+            items(state.liveTasks, key = { "t:${it.id}" }, contentType = { "task-live" }) { t ->
+                LiveTaskCard(t, Modifier.animateItem(fadeInSpec = tween(OrbMotion.Medium), fadeOutSpec = tween(OrbMotion.Fast)))
             }
             if (liveInfo != null) item(key = "live", contentType = "live") {
                 val live by vm.liveText.collectAsStateWithLifecycle()
@@ -254,6 +261,11 @@ internal suspend fun LazyListState.toEnd() {
 /** One way to send a message while the agent works. */
 class ComposerChoice(val label: String, val send: (String) -> Unit)
 
+/**
+ * The writing box (`.mcomp`): the text on top and, below, «+», the permission label (or [leading]), the brain label,
+ * the microphone and the round send/stop button. [brain] null hides the brain label; [mic] draws the microphone,
+ * switched off because dictation is not there yet.
+ */
 @Composable
 internal fun Composer(
     online: Boolean, busy: Boolean, mode: String?, canSetMode: Boolean,
@@ -261,10 +273,12 @@ internal fun Composer(
     placeholder: String = ChatTexts.MESSAGE_FIELD,
     /** While the agent works and there is text: the ways to send it («Corregir», «Encolar»); the first is the send button's. */
     busyChoices: List<ComposerChoice> = emptyList(),
-    /** Replaces the permission-mode pill (a direct chat shows its agent and model instead). */
+    /** Replaces the permission label (a direct chat shows its agent and model instead). */
     leading: (@Composable () -> Unit)? = null,
     /** The pictures and files of this message; null hides «+» (where nothing can be attached). */
     attach: dev.orb.app.attach.AttachController? = null,
+    brain: String? = null,
+    mic: Boolean = false,
 ) {
     var text by rememberSaveable { mutableStateOf("") }
     val attached = attach?.items?.collectAsState()?.value.orEmpty()
@@ -274,105 +288,64 @@ internal fun Composer(
     val launchers = if (attach != null) dev.orb.app.ui.attach.rememberAttachLaunchers(attach) { problem = it } else null
     // Sending waits for every upload: a message that left before them would reach the PC without its files.
     val attachOk = attached.all { it.state == dev.orb.app.attach.AttachState.Ready }
-    val scheme = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(24.dp)
-    val body: @Composable () -> Unit = {
-        Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 6.dp)) {
-            if (attach != null) {
-                dev.orb.app.ui.attach.AttachStrip(attached, attachNotice ?: problem, attach::remove, attach::retry, Modifier.padding(end = 8.dp))
-            }
-            Box(Modifier.fillMaxWidth().heightIn(min = 40.dp, max = 160.dp).padding(end = 8.dp, top = 4.dp), contentAlignment = Alignment.CenterStart) {
-                BasicTextField(
-                    text, { text = it }, Modifier.fillMaxWidth().semantics { contentDescription = placeholder },
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface),
-                    cursorBrush = SolidColor(scheme.primary), maxLines = 8,
-                    keyboardOptions = KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences),
-                )
-                if (text.isEmpty()) Text(placeholder, color = OrbTheme.colors.text3, style = MaterialTheme.typography.bodyLarge)
-            }
-            val canSend = text.isNotBlank() && attachOk
-            AnimatedVisibility(
-                busy && canSend && busyChoices.isNotEmpty(),
-                enter = fadeIn(tween(OrbMotion.Short)) + expandVertically(OrbMotion.standard(OrbMotion.Short)),
-                exit = fadeOut(tween(OrbMotion.Fast)) + shrinkVertically(OrbMotion.standard(OrbMotion.Fast)),
-            ) {
-                Row(Modifier.padding(top = 4.dp, bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (choice in busyChoices) {
-                        Box(
-                            Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).border(BorderStroke(1.dp, scheme.outlineVariant), RoundedCornerShape(16.dp))
-                                .clickable { val t = text; text = ""; choice.send(t) }.padding(horizontal = 14.dp),
-                            contentAlignment = Alignment.Center,
-                        ) { Text(choice.label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = scheme.primary) }
-                    }
-                }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (attach != null) {
-                    IconButton(
-                        onClick = { problem = null; sheet = true }, modifier = Modifier.size(36.dp),
-                    ) { Icon(OrbIcons.Plus, dev.orb.app.attach.AttachTexts.ADD, Modifier.size(20.dp), tint = OrbTheme.colors.text2) }
-                }
-                if (leading != null) leading() else if (canSetMode) ModePill(mode, onMode)
-                Box(Modifier.weight(1f))
-                // Parar only when there is nothing to send: with text, the message goes to the PC's queue behind the turn.
-                AnimatedContent(
-                    targetState = busy && !canSend, label = "send-stop",
-                    transitionSpec = { (fadeIn(tween(OrbMotion.Short)) + scaleIn(tween(OrbMotion.Short), 0.8f)) togetherWith (fadeOut(tween(OrbMotion.Fast)) + scaleOut(tween(OrbMotion.Fast), 0.8f)) },
-                ) { stopping ->
-                    if (stopping) {
-                        IconButton(
-                            onClick = onStop, modifier = Modifier.size(44.dp).clip(CircleShape).background(scheme.onSurface),
-                        ) { Icon(OrbIcons.Square, ChatTexts.STOP, Modifier.size(16.dp), tint = scheme.surface) }
-                    } else {
-                        IconButton(
-                            onClick = {
-                                val t = text; text = ""
-                                if (busy && busyChoices.isNotEmpty()) busyChoices.first().send(t) else onSend(t)
-                            },
-                            enabled = canSend,
-                            modifier = Modifier.size(44.dp).clip(CircleShape).background(if (canSend) scheme.primary else scheme.surfaceContainerHighest),
-                        ) { Icon(OrbIcons.Send, ChatTexts.SEND, Modifier.size(18.dp), tint = if (canSend) scheme.onPrimary else OrbTheme.colors.text3) }
-                    }
-                }
-            }
-        }
-    }
+    val canSend = text.isNotBlank() && attachOk
     if (sheet && attach != null && launchers != null) {
         dev.orb.app.ui.attach.AttachSheet(attach.currentPolicy, launchers, onDismiss = { sheet = false })
     }
-    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
-        Box(
-            Modifier.fillMaxWidth().clip(shape).background(scheme.surfaceContainerLow).border(BorderStroke(1.dp, scheme.outlineVariant), shape),
-        ) { body() }
+    OrbComposerFrame {
+        if (attach != null) {
+            dev.orb.app.ui.attach.AttachStrip(attached, attachNotice ?: problem, attach::remove, attach::retry, Modifier.padding(end = 8.dp))
+        }
+        Box(Modifier.fillMaxWidth().heightIn(min = 22.dp, max = 160.dp).padding(end = 4.dp), contentAlignment = Alignment.CenterStart) {
+            BasicTextField(
+                text, { text = it }, Modifier.fillMaxWidth().semantics { contentDescription = placeholder },
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = OrbKit.foreground, fontSize = 15.sp, lineHeight = 22.sp),
+                cursorBrush = SolidColor(OrbKit.foreground), maxLines = 8,
+                keyboardOptions = KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences),
+            )
+            if (text.isEmpty()) Text(placeholder, color = OrbKit.faintForeground, fontSize = 15.sp, lineHeight = 22.sp)
+        }
+        AnimatedVisibility(
+            busy && canSend && busyChoices.isNotEmpty(),
+            enter = fadeIn(tween(OrbMotion.Short)) + expandVertically(OrbMotion.standard(OrbMotion.Short)),
+            exit = fadeOut(tween(OrbMotion.Fast)) + shrinkVertically(OrbMotion.standard(OrbMotion.Fast)),
+        ) {
+            Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (choice in busyChoices) {
+                    OrbButton(choice.label, { val t = text; text = ""; choice.send(t) }, small = true)
+                }
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (attach != null) OrbComposerIcon(OrbIcons.Plus, dev.orb.app.attach.AttachTexts.ADD, { problem = null; sheet = true })
+            if (leading != null) leading() else if (canSetMode) ModePill(mode, onMode)
+            if (brain != null) OrbComposerLabel(brain, description = "${ChatTexts.BRAIN_DESC}: $brain")
+            Box(Modifier.weight(1f))
+            if (mic) OrbComposerIcon(OrbIcons.Mic, ChatTexts.MIC_SOON, {}, enabled = false)
+            // Parar only when there is nothing to send: with text, the message goes to the PC's queue behind the turn.
+            OrbSendButton(
+                stop = busy && !canSend, enabled = canSend, sendLabel = ChatTexts.SEND, stopLabel = ChatTexts.STOP,
+                onClick = {
+                    if (busy && !canSend) onStop() else {
+                        val t = text; text = ""
+                        if (busy && busyChoices.isNotEmpty()) busyChoices.first().send(t) else onSend(t)
+                    }
+                },
+            )
+        }
     }
 }
 
-/** «Auto» / «Preguntar», the PC's way of treating what needs a permission. */
+/** «Auto» / «Preguntar»: the PC's way of treating what needs a permission; tapping it opens the choice. */
 @Composable
 internal fun ModePill(mode: String?, onMode: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
-    val label = when (mode) { "auto" -> ChatTexts.MODE_AUTO; "preguntar" -> ChatTexts.MODE_ASK; else -> ChatTexts.MODE_MENU }
-    Box {
-        Row(
-            Modifier.height(32.dp).clip(RoundedCornerShape(10.dp)).clickable { open = true }.padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Icon(OrbIcons.Shield, null, Modifier.size(16.dp), tint = OrbTheme.colors.text2)
-            Text(label, color = OrbTheme.colors.text2, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
-            Icon(OrbIcons.ChevronDown, null, Modifier.size(14.dp), tint = OrbTheme.colors.text3)
-        }
-        DropdownMenu(open, onDismissRequest = { open = false }) {
-            Text(ChatTexts.MODE_MENU, Modifier.padding(horizontal = 16.dp, vertical = 6.dp), color = OrbTheme.colors.text2, style = MaterialTheme.typography.labelMedium)
-            for ((value, name, hint) in listOf(
-                Triple("auto", ChatTexts.MODE_AUTO, ChatTexts.MODE_AUTO_HINT), Triple("preguntar", ChatTexts.MODE_ASK, ChatTexts.MODE_ASK_HINT),
-            )) {
-                DropdownMenuItem(
-                    text = { Column { Text(name, fontWeight = FontWeight.Medium); Text(hint, color = OrbTheme.colors.text2, style = MaterialTheme.typography.bodySmall) } },
-                    trailingIcon = { if (mode == value) Icon(OrbIcons.Check, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary) },
-                    onClick = { open = false; onMode(value) },
-                )
-            }
+    val label = when (mode) { "auto" -> ChatTexts.MODE_AUTO; "preguntar" -> ChatTexts.MODE_ASK; else -> ChatTexts.MODE_UNKNOWN }
+    OrbComposerLabel(label, icon = OrbIcons.ShieldCheck, onClick = { open = true })
+    if (open) {
+        OrbSheet(onDismiss = { open = false }, title = ChatTexts.MODE_MENU) {
+            OrbSheetChoice(ChatTexts.MODE_AUTO, ChatTexts.MODE_AUTO_HINT, OrbIcons.Shield, selected = mode == "auto", onClick = { open = false; onMode("auto") })
+            OrbSheetChoice(ChatTexts.MODE_ASK, ChatTexts.MODE_ASK_HINT, OrbIcons.ShieldCheck, selected = mode == "preguntar", onClick = { open = false; onMode("preguntar") })
         }
     }
 }
-

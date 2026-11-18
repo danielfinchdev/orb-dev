@@ -22,6 +22,7 @@ import dev.orb.app.ui.kit.OrbIconButton
 import dev.orb.app.ui.kit.OrbKit
 import dev.orb.app.ui.kit.OrbNote
 import dev.orb.app.ui.kit.OrbTopBar
+import dev.orb.app.ui.offline.ConnectionBand
 
 /**
  * The Orbe chat before its first message: the project and the brain chosen in the new-chat sheet are already set, and the
@@ -34,9 +35,10 @@ fun OrbeDraftScreen(vm: OrbeDraftViewModel, onBack: () -> Unit, onCreated: (Long
 
     Column(modifier.fillMaxSize().imePadding()) {
         OrbTopBar(
-            ChatTexts.NEW_CHAT, sub = ChatTexts.withOrbe(state.project), line = true, sideWidth = 56.dp,
+            ChatTexts.NEW_CHAT, sub = ChatTexts.withOrbe(state.project), sideWidth = 56.dp,
             leading = { OrbIconButton(OrbIcons.ArrowLeft, ChatTexts.BACK, onBack) },
         )
+        ConnectionBand(state.connection)
         Box(Modifier.weight(1f).fillMaxWidth()) {
             val pending = state.pending
             if (pending == null) {
@@ -44,12 +46,15 @@ fun OrbeDraftScreen(vm: OrbeDraftViewModel, onBack: () -> Unit, onCreated: (Long
                     Text(ChatTexts.DRAFT_HINT, color = OrbKit.mutedForeground, fontSize = 14.5.sp, lineHeight = 21.sp, textAlign = TextAlign.Center)
                 }
             } else {
-                Column(Modifier.fillMaxSize().padding(16.dp)) { PendingRow(pending, state.online, onRetry = vm::retry, onDiscard = vm::discard) }
+                Column(Modifier.fillMaxSize().padding(16.dp)) { PendingRow(pending, state.online, onRetry = vm::retry, onDiscard = vm::discard, connection = state.connection) }
             }
         }
         // Without the link nothing can be created, so the field is not offered instead of swallowing what is written;
         // while a message is on its way or refused, it is the only one and has its own retry and discard.
         if (!state.online) OrbNote(ChatTexts.DRAFT_OFFLINE, Modifier.padding(horizontal = 20.dp, vertical = 16.dp))
-        else if (state.pending == null) Composer(online = true, busy = false, mode = null, canSetMode = false, onSend = vm::send, onStop = {}, onMode = {})
+        else if (state.pending == null) Composer(
+            online = true, busy = false, mode = null, canSetMode = false, onSend = vm::send, onStop = {}, onMode = {},
+            brain = state.brain ?: ChatTexts.BRAIN_UNKNOWN, mic = true,
+        )
     }
 }
