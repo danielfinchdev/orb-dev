@@ -500,7 +500,11 @@ html[data-motion="minima"] :is(.animate-in, .animate-out, [class*=":animate-in"]
 /* the message box grows with its text in CSS (no layout read per key; views/chat.jsx › Composer): two lines at
    least (its rows), 260 px at most, then it scrolls. */
 /* A conversation's scroller ends in a soft fade instead of a hard cut, so a line passing under the row above the text box never shows half a line. */
-.chat-fade { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent); }
+/* A row that scrolls sideways fades its right edge while more of it is out of sight; fitting, or scrolled to the end, it is untouched. */
+@property --fade-end { syntax: '<length>'; inherits: false; initial-value: 0px; }
+@keyframes fade-end-x { from { --fade-end: 16px; } to { --fade-end: 0px; } }
+.fade-end-x { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--fade-end)), transparent); mask-image: linear-gradient(to right, #000 calc(100% - var(--fade-end)), transparent); animation: fade-end-x linear both; animation-timeline: scroll(self inline); }
+.chat-fade {-webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent); }
 @supports (field-sizing: content) { .composer-text { field-sizing: content; min-height: 56px; max-height: 260px; } }
 
 /* the composer's contextual action slot (components/context-slot.jsx, DESIGN-SYSTEM §2.2): one suggestion at a

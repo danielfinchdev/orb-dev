@@ -149,7 +149,7 @@ test('step 6D: the buttons of a list or panel are disabled while their action ru
 test('step 7C2: the filters are one group that sits beside the tabs or takes the next line whole, and the search is what gives way', () => {
   assert.doesNotMatch(pc, /<span className="grow" \/>/);
   assert.match(pc, /<div className="flex min-w-0 flex-\[1_1_440px\] items-center gap-1\.5 overflow-x-auto /);
-  assert.match(pc, /<SearchInput className="w-auto min-w-24 flex-\[0_1_220px\]"/);
+  assert.match(pc, /<SearchInput className="w-auto min-w-24 flex-\[0_1_220px\][ "]/);
 });
 
 test('step 7C2: every tab but «Todas» carries its number, also 0, in the mock-up order', () => {

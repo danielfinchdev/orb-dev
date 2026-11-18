@@ -610,7 +610,7 @@ function TasksPc({ route }) {
 
   return (
     <div className="@container/tasks relative flex min-h-0 min-w-0 flex-1">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="@container/tlist flex min-h-0 min-w-0 flex-1 flex-col">
         <PageHeader title={route.project ? tr('tasks.titleProject', { project: route.project }) : tr('nav.tasks')} meta={tr('tasks.sub', { total: tasks.length, shown: rows.length, waiting: tasks.filter(needsApproval).length })}>
           {route.project ? <Button size="sm" variant="ghost" onClick={() => go('tasks')}><X />{tr('tasks.allProjects')}</Button> : null}
           <BarPause />
@@ -628,17 +628,17 @@ function TasksPc({ route }) {
             <QueueCard tasks={all} />
             <div className="toolbar flex flex-wrap items-center gap-1.5">
               <Tabs value={filter} onValueChange={setFilter} className="max-w-full min-w-0 overflow-x-auto">
-                <TabsList className="h-auto min-h-(--ctl) flex-nowrap px-1 @max-[44rem]/tasks:flex-wrap @max-[44rem]/tasks:px-0.5 [&>*]:shrink-0" data-testid="task-filters">{PC_FILTERS.map(([key, label, fn]) => { const n = narrowed.filter(fn).length; return <TabsTrigger key={key} value={key}>{tr(label)}{key !== 'todas' ? <span className="n text-micro text-faint-foreground tabular-nums">{n}</span> : null}</TabsTrigger>; })}</TabsList>
+                <TabsList className="h-auto min-h-(--ctl) flex-nowrap fade-end-x px-1 @max-[44rem]/tasks:flex-wrap @max-[44rem]/tasks:px-0.5 [&>*]:shrink-0" data-testid="task-filters">{PC_FILTERS.map(([key, label, fn]) => { const n = narrowed.filter(fn).length; return <TabsTrigger key={key} value={key}>{tr(label)}{key !== 'todas' ? <span className="n text-micro text-faint-foreground tabular-nums">{n}</span> : null}</TabsTrigger>; })}</TabsList>
               </Tabs>
               {/* One group: it sits beside the tabs when there is room and otherwise takes the next line whole; the search is what gives way. */}
               {/* Overflow scrolls instead of clipping: first-child auto margin keeps the right alignment without the negative overflow that justify-end causes. */}
-              <div className="flex min-w-0 flex-[1_1_440px] items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&>button]:shrink-0 [&>:first-child]:ml-auto">
+              <div className="flex min-w-0 flex-[1_1_440px] items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&>button]:shrink-0 [&>:first-child]:ml-auto @max-[34rem]/tlist:flex-wrap @max-[34rem]/tlist:overflow-visible @max-[34rem]/tlist:[&>:first-child]:ml-0">
               <Select value={project} onValueChange={setProject} prefix={tr('tasks.fProjectKey')} title={tr('tasks.fProject')} data-testid="task-filter-project"
                 options={[{ value: ALL, label: tr('tasks.fAll') }, ...projects.map((name) => ({ value: name, label: name, icon: <ProjectIcon name={name} small /> }))]} />
               <Select value={agent} onValueChange={setAgent} prefix={tr('tasks.fAgentKey')} title={tr('tasks.fAgent')} data-testid="task-filter-agent"
                 options={[{ value: ALL, label: tr('tasks.fAll') }, ...agents.map((id) => ({ value: id, label: AGENT[id] ?? id, icon: <AgentIcon agent={id} className="size-3.5" /> }))]} />
-              <SearchInput className="w-auto min-w-24 flex-[0_1_220px]" value={query} onChange={setQuery} placeholder={tr('tasks.search')} shortPlaceholder={tr('tasks.searchShort')} data-testid="task-search" />
-              <Button onClick={async () => { const made = await askNewTask(tr, storedProjects.map((p) => p.name), route.project ?? (project === ALL ? undefined : project)); if (made?.id) { setFilter('todas'); open(made); } }} data-testid="task-new"><Plus />{tr('tasks.new')}</Button>
+              <SearchInput className="w-auto min-w-24 flex-[0_1_220px] @max-[34rem]/tlist:order-last @max-[34rem]/tlist:basis-full!" value={query} onChange={setQuery} placeholder={tr('tasks.search')} shortPlaceholder={tr('tasks.searchShort')} data-testid="task-search" />
+              <Button className="@max-[34rem]/tlist:ml-auto" onClick={async () => { const made = await askNewTask(tr, storedProjects.map((p) => p.name), route.project ?? (project === ALL ? undefined : project)); if (made?.id) { setFilter('todas'); open(made); } }} data-testid="task-new"><Plus />{tr('tasks.new')}</Button>
               </div>
             </div>
             <ListCard data-testid="tasks-list">

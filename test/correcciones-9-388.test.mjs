@@ -64,3 +64,17 @@ test('1b: the state tabs wrap only in the narrow view; above it they scroll on o
   assert.match(tabs, /\[&>\*\]:shrink-0/);
   assert.match(tabs, /(^| )px-1( |$)/);
 });
+
+test('1c: a narrow list column puts the search on its own line; the state tabs fade where more is out of sight', () => {
+  const tasks = read('src/ui/views/tasks.jsx');
+  assert.match(tasks, /<div className="@container\/tlist flex min-h-0 min-w-0 flex-1 flex-col">/);
+  const group = tasks.match(/<div className="([^"]*flex-\[1_1_440px\][^"]*)">/)?.[1] ?? '';
+  assert.match(group, /@max-\[34rem\]\/tlist:flex-wrap/);
+  assert.match(group, /@max-\[34rem\]\/tlist:overflow-visible/);
+  assert.match(group, /@max-\[34rem\]\/tlist:\[&>:first-child\]:ml-0/);
+  assert.match(tasks, /<SearchInput className="[^"]*@max-\[34rem\]\/tlist:order-last @max-\[34rem\]\/tlist:basis-full!"/);
+  assert.match(tasks, /<Button className="@max-\[34rem\]\/tlist:ml-auto" onClick=\{async \(\) => \{ const made = await askNewTask/);
+  assert.match(tasks, /data-testid="task-filters"/);
+  assert.match(tasks, /fade-end-x[^"]*" data-testid="task-filters"/);
+  assert.match(read('src/ui/app.css'), /\.fade-end-x \{[^}]*animation-timeline: scroll\(self inline\)/);
+});
