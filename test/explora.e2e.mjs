@@ -1464,8 +1464,13 @@ try {
         note(`${name}/${view}: cadena → ${chain}`);
       }
       await shot(`${name}-${view}`);
+      // the narrow window in the dark too
+      // (the switch may be out of reach in a narrow window: the theme is then set as it does, by the class of the page)
+      const paint = (on) => setDark(on).catch(() => page.evaluate((d) => document.documentElement.classList.toggle('dark', d), on));
+      const darkToo = async (file) => { if (name !== 'estrecha') return; await paint(true); await page.waitForTimeout(200); await shot(`${file}-noche`); await paint(false); };
+      await darkToo(`${name}-${view}`);
       if (view === 'ajustes') {
-        for (const id of ['general', 'agentes', 'acerca']) { await page.click(`[data-testid=settings-nav-${id}]`); await shot(`${name}-ajustes-${id}`); }
+        for (const id of ['general', 'agentes', 'acerca']) { await page.click(`[data-testid=settings-nav-${id}]`); await shot(`${name}-ajustes-${id}`); await darkToo(`${name}-ajustes-${id}`); }
         await closeSettings(page, `${name}/ajustes`);
       }
     }
