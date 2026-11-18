@@ -84,7 +84,8 @@ test('12: the panel button of both headers is marked while its panel is open', (
 });
 
 test('13b: «Algo falló» and «Sin conexión» are drawn in the content area with the sidebar on view', () => {
-  assert.match(main, /function InArea\(\{ children \}\)[\s\S]*<Sidebar mood="idle" \/>/);
+  // the preview has no data for the real sidebar: its place is kept, so the card is centred in the content area
+  assert.match(main, /function InArea\(\{ children \}\)[\s\S]*bg-sidebar hidden w-\[340px\] shrink-0 border-r md:block/);
   assert.match(main, /data\.card === 'crash' \? <InArea><CrashCard/);
   assert.match(main, /data\.card === 'offline' \? <InArea><OfflineCard/);
 });

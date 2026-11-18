@@ -540,7 +540,8 @@ const previewName = () => { const v = window.__ORB_START_PREVIEW__; return typeo
 function InArea({ children }) {
   return (
     <div className="flex h-full">
-      <ErrorBoundary onFail={() => {}}><div className="hidden md:flex"><Sidebar mood="idle" /></div></ErrorBoundary>
+      {/* the sidebar's place only (the preview has no data to draw the real one): the card is centred in what is left, as in the app */}
+      <div className="bg-sidebar hidden w-[340px] shrink-0 border-r md:block" aria-hidden="true" />
       <main className="flex min-w-0 flex-1 flex-col">{children}</main>
     </div>
   );
