@@ -95,4 +95,9 @@ export default {
   // conversaciones, menú lateral, buscador y globito
   'comp.sidebar.clearSearch': 'Borrar la búsqueda',
   // en singular
+  // new project: template switch
+  'comp.projects.moreOptions': 'Más opciones',
+  'comp.projects.template': 'Plantilla y git',
+  'comp.projects.templateHint': 'Carpeta nueva con plantilla y repositorio git. Apagado: solo la carpeta vacía.',
+  'comp.projects.emptyFolderHint': 'Solo la carpeta vacía, sin git: {path}',
 };

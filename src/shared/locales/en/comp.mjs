@@ -95,4 +95,9 @@ export default {
   // conversaciones, menú lateral, buscador y globito
   'comp.sidebar.clearSearch': 'Clear the search',
   // en singular
+  // new project: template switch
+  'comp.projects.moreOptions': 'More options',
+  'comp.projects.template': 'Template and git',
+  'comp.projects.templateHint': 'New folder with a template and a git repository. Off: just the empty folder.',
+  'comp.projects.emptyFolderHint': 'Just the empty folder, no git: {path}',
 };

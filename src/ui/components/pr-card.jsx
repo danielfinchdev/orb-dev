@@ -12,9 +12,10 @@ import { quiet } from '@/lib/quiet.js';
 import { cn } from '@/lib/utils.js';
 
 // The answer names the request by everything the card showed, so a stale card cannot answer another request.
-const refOf = (r) => ({ id: r.id, session: r.session, number: r.number, headRefOid: r.headRefOid ?? null });
+export const refOf = (r) => ({ id: r.id, session: r.session, number: r.number, headRefOid: r.headRefOid ?? null });
 
-function PrCard({ r }) {
+// onDone: where the card is shown beside a PR (the project page), to reload once an answer went.
+export function PrCard({ r, onDone }) {
   const t = useT();
   const [busy, setBusy] = useState(false);
   const comment = r.kind === 'comment';
@@ -30,7 +31,8 @@ function PrCard({ r }) {
     if (focusCancel && !typing) declineRef.current?.focus();
   }, [focusCancel]);
   const checks = Array.isArray(r.checks) ? r.checks.slice(0, 30) : [];
-  const accept = async () => { setBusy(true); try { await act(call('prConfirm.answer', refOf(r))); } finally { setBusy(false); } };
+  const accept = async () => { setBusy(true); try { const out = await act(call('prConfirm.answer', refOf(r))); if (out !== undefined) onDone?.(r, 'prConfirm.answer'); } finally { setBusy(false); } };
+  const decline = async () => { setBusy(true); try { const out = await act(call('prConfirm.decline', refOf(r))); if (out !== undefined) onDone?.(r, 'prConfirm.decline'); } finally { setBusy(false); } };
   return (
     <div role="group" aria-label={t('prcard.group', { number: r.number })} className={cn('bg-card grid gap-2.5 rounded-xl border px-3.5 py-3 text-control', danger && 'border-warning/50')} data-testid="pr-card">
       <div className="flex items-center gap-2 font-medium">
@@ -51,7 +53,7 @@ function PrCard({ r }) {
       {comment ? <pre className="bg-muted max-h-48 overflow-auto whitespace-pre-wrap rounded-md p-2 text-xs" data-testid="pr-body">{r.body}</pre> : null}
       {danger ? <p className="text-warning-ink flex items-start gap-1.5 text-xs font-medium" data-testid="pr-danger"><ShieldAlert className="mt-px size-3.5 shrink-0" />{t('prcard.dangerNote')}</p> : null}
       <div className="flex flex-wrap items-center justify-end gap-2">
-        <Button type="button" size="sm" variant="ghost" ref={declineRef} disabled={busy} onClick={() => act(call('prConfirm.decline', refOf(r)))} data-testid="pr-decline">{t('prcard.decline')}</Button>
+        <Button type="button" size="sm" variant="ghost" ref={declineRef} disabled={busy} onClick={decline} data-testid="pr-decline">{t('prcard.decline')}</Button>
         <Button type="button" size="sm" className={cn(danger && 'ring-warning/60 ring-2 ring-offset-1')} disabled={busy} onClick={accept} data-testid="pr-accept">{comment ? t('prcard.acceptComment') : t('prcard.acceptMergeMethod', { method: r.method })}</Button>
       </div>
     </div>

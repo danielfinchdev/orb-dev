@@ -19,7 +19,9 @@ const KIND_ICON = { logs: BookOpen, adb: Smartphone, mcp: Plug };
 const H2 = 'm-0 font-(family-name:--title) text-dialog leading-[1.45] font-semibold';
 
 // step: 'carpetas' when it is a step of the welcome (its row of steps on top); none when an updated Orb finds the folders.
-export function LayoutReview({ plan, onDone, step = null }) {
+// applyMethod: the call that applies it; «Ordenar carpetas» on demand uses projects.layoutApply (the same, refused while
+// anything is working).
+export function LayoutReview({ plan, onDone, step = null, applyMethod = 'app.layoutApply' }) {
   const t = useT();
   const items = (plan?.items ?? []).filter((it) => !it.kept);
   const [choices, setChoices] = useState(() => Object.fromEntries(items.map((it) => [it.id, it.choice])));
@@ -29,7 +31,7 @@ export function LayoutReview({ plan, onDone, step = null }) {
   const apply = async (all) => {
     setBusy(true); setError('');
     try {
-      const r = await bridge.call('app.layoutApply', { choices: all ?? choices });
+      const r = await bridge.call(applyMethod, { choices: all ?? choices });
       if (r?.logsMoved || r?.serversMoved?.length) setMoved({ logs: r.logsMoved ?? null, servers: r.serversMoved ?? [] }); else onDone();
     }
     catch (e) { setError(String(e?.message ?? e)); }

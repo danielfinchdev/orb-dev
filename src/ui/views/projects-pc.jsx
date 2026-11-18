@@ -1,18 +1,20 @@
 // Projects on the PC (orb-ui-2.0 04-proyectos): the list by category with each project's git and work state, the way to
 // add one, the finished ones folded at the end and GitHub's account. A project opens on its own page (project-page.jsx).
 import { useEffect, useMemo, useState } from 'react';
-import { FolderGit2, Plus, ChevronDown, ChevronRight, FolderPlus, Link2, GitFork, RefreshCw, MessageSquarePlus, CircleCheckBig, GitBranch, FilePen, Check, GitPullRequest, ArrowUp } from 'lucide-react';
+import { FolderTree, FolderGit2, Plus, ChevronDown, ChevronRight, FolderPlus, Link2, GitFork, RefreshCw, MessageSquarePlus, CircleCheckBig, GitBranch, FilePen, Check, GitPullRequest, ArrowUp } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { NotificationBell } from '@/components/notification-center.jsx';
 import { BarPause } from '@/components/conversation/bar.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { ProjectOpenMenu } from '@/components/project-tools.jsx';
 import { createProjectFlow, linkFolderFlow, cloneRepoFlow, CATEGORIES } from '@/components/project-actions.jsx';
-import { finishFlow, chatHereFlow } from '@/components/project-flows.jsx';
+import { finishFlow, chatHereFlow, changeCategory } from '@/components/project-flows.jsx';
+import { LayoutReview } from './layout.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Empty, PathText } from '@/components/ui/basic.jsx';
 import { Select, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/overlay.jsx';
-import { Segmented, SearchInput, ListCard, ListRow, MoreButton } from '@/components/ui/primitives.jsx';
+import { Segmented, SearchInput, ListCard, ListRow, MoreButton, IconButton, CloseButton } from '@/components/ui/primitives.jsx';
+import { notifyOk, notifyError } from '@/lib/notify.js';
 import { useStore, call, act, go, refresh } from '@/lib/store.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { usePress } from '@/lib/use-press.js';
@@ -69,6 +71,7 @@ function RowMenu({ p, open, setOpen }) {
       </BubbleTip>
       <DropdownMenuContent align="end" className="w-56" data-testid="project-menu-list">
         <DropdownMenuItem onSelect={() => chatHereFlow(p)} data-testid="project-chat"><MessageSquarePlus />{t('projects.newChat')}</DropdownMenuItem>
+        <DropdownMenuItem disabled={!p.category} title={p.category ? undefined : t('projects.category.linked')} onSelect={() => changeCategory(t, p)} data-testid="project-change-category"><FolderTree />{t('projects.category.item')}</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => finishFlow(p, t)} data-testid="project-finish"><CircleCheckBig />{t('projects.finish.title')}</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -161,6 +164,17 @@ function ProjectsList() {
   const [finished, setFinished] = useState([]);
   useEffect(() => { let alive = true; call('projects.finished').then((l) => alive && setFinished(l ?? [])).catch(quiet); return () => { alive = false; }; }, [version]);
   const [stamp, setStamp] = useState(0);
+  const [arrange, setArrange] = useState(null); // the plan of «Ordenar carpetas» while its review is open
+  // The same plan the welcome shows (app.layoutPlan), opened on demand: nothing to arrange says so; with work in progress
+  // it does not open (folders in use cannot move); applying goes through projects.layoutApply, which checks that again.
+  const openArrange = async () => {
+    try {
+      const plan = await call('projects.layoutPlan');
+      if (plan?.busy) notifyError(t('projects.arrange.busy'));
+      else if (!plan?.pending) notifyOk(t('projects.arrange.none'));
+      else setArrange(plan);
+    } catch (e) { notifyError(e); }
+  };
   const reloadInfos = () => { forgetRowInfos(); setStamp((n) => n + 1); };
   const open = (name) => go({ view: 'projects', name });
 
@@ -180,12 +194,14 @@ function ProjectsList() {
   return (
     <>
       <PageHeader title={t('projects.title')} meta={meta}>
+        <BubbleTip title={t('projects.arrange')} text={t('projects.arrange.hint')}><IconButton label={t('projects.arrange')} onClick={openArrange} data-testid="projects-arrange"><FolderTree /></IconButton></BubbleTip>
         <BarPause />
         <NotificationBell />
         <DropdownMenu modal={false}>
           <BubbleTip title={t('nav.more')}><DropdownMenuTrigger asChild><MoreButton label={t('nav.more')} data-testid="projects-more" /></DropdownMenuTrigger></BubbleTip>
           <DropdownMenuContent align="end" className="w-64">
             <DropdownMenuItem onSelect={reloadInfos} data-testid="projects-refresh-git"><RefreshCw />{t('projects.refreshGit')}</DropdownMenuItem>
+            <DropdownMenuItem onSelect={openArrange} data-testid="projects-arrange-item"><FolderTree />{t('projects.arrange')}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </PageHeader>
@@ -215,6 +231,12 @@ function ProjectsList() {
           {finished.length ? <FinishedSection list={finished} tasks={tasks} onReopened={open} /> : null}
         </div>
       </PageBody>
+      {arrange ? (
+        <div className="bg-background fixed inset-0 z-50 overflow-auto" data-testid="projects-arrange-panel">
+          <CloseButton className="fixed top-3 right-3 z-10" label={t('comp.dialogs.cancel')} onClick={() => setArrange(null)} data-testid="projects-arrange-close" />
+          <LayoutReview plan={arrange} applyMethod="projects.layoutApply" onDone={() => { setArrange(null); refresh().catch(quiet); }} />
+        </div>
+      ) : null}
     </>
   );
 }

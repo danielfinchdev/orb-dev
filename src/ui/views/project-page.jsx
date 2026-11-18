@@ -1,7 +1,7 @@
 // One project's page on the PC (orb-ui-2.0 05-proyecto): the header with where it lives and what to open it with, the
 // tabs (Resumen, Chats, Tareas, Git y PR, Bitácora, Pizarra) and the ⋯ menu with everything that can be done to it.
 import { useEffect, useMemo, useState } from 'react';
-import { LayoutDashboard, MessagesSquare, ClipboardCheck, GitPullRequest, NotebookPen, Presentation, MessageSquarePlus, PencilLine, ImageIcon, CircleCheckBig, Trash2, ScanSearch, ShieldCheck, Unlink, Pin, RefreshCw, GitBranch, FilePen, FilePlus2, FileX2, Check, CircleCheck, CircleX, LoaderCircle, ExternalLink, GitMerge, Plus, Upload, SquareTerminal, GitPullRequestCreate } from 'lucide-react';
+import { FolderTree, LayoutDashboard, MessagesSquare, ClipboardCheck, GitPullRequest, NotebookPen, Presentation, MessageSquarePlus, PencilLine, ImageIcon, CircleCheckBig, Trash2, ScanSearch, ShieldCheck, Unlink, Pin, RefreshCw, GitBranch, FilePen, FilePlus2, FileX2, Check, CircleCheck, CircleX, LoaderCircle, ExternalLink, GitMerge, Plus, Upload, SquareTerminal, GitPullRequestCreate, ArrowDownUp, ChevronDown } from 'lucide-react';
 import { PageHeader } from '@/components/page.jsx';
 import { NotificationBell } from '@/components/notification-center.jsx';
 import { BarPause } from '@/components/conversation/bar.jsx';
@@ -11,9 +11,11 @@ import { ProjectOpenMenu } from '@/components/project-tools.jsx';
 import { GithubCard, ContributionGraph } from '@/components/project-github.jsx';
 import { TaskStatus } from '@/components/task-state.jsx';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
-import { finishFlow, deleteProjectFlow, renameFlow, unlinkFlow, commitFlow, publishFlow, pushFlow, chatHereFlow, changeIconFlow, clearIconFlow } from '@/components/project-flows.jsx';
+import { finishFlow, deleteProjectFlow, renameFlow, unlinkFlow, commitFlow, publishFlow, pushFlow, chatHereFlow, changeIconFlow, clearIconFlow, changeCategory } from '@/components/project-flows.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { askReview, askSecurityReview } from './tasks.jsx';
+import { PrFilter, usePrCounts, usePrList, PrChecksBadge, usePrWatch, usePrRequests, PrAsk } from '@/components/pr-project.jsx';
+import { syncFlow, writeEntryFlow } from '@/components/project-sync.jsx';
 import { useOrbItems, openOrbItem } from './orb/inbox.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, Empty, Field, Input, Kbd, Spinner, Textarea } from '@/components/ui/basic.jsx';
@@ -59,7 +61,8 @@ function LogCard({ p, full }) {
   const t = useT();
   const version = useStore((s) => s.version);
   const [entry, setEntry] = useState(undefined);
-  useEffect(() => { let alive = true; call('logs.read', { project: p.name }).then((r) => alive && setEntry(lastLogEntry(r))).catch(() => alive && setEntry(null)); return () => { alive = false; }; }, [p.name, version]);
+  const [written, setWritten] = useState(0);
+  useEffect(() => { let alive = true; call('logs.read', { project: p.name }).then((r) => alive && setEntry(lastLogEntry(r))).catch(() => alive && setEntry(null)); return () => { alive = false; }; }, [p.name, version, written]);
   return (
     <PjCard icon={NotebookPen} title={t('projects.log.last')} data-testid="project-log-card"
       aside={<Button variant="link" size="xs" className="text-info" onClick={() => go({ view: 'logs', name: p.name })} data-testid="project-log-open">{t('projects.log.open')}</Button>}>
@@ -68,7 +71,10 @@ function LogCard({ p, full }) {
         <b className="text-body font-medium">{entry.topic}</b>
         <p className={cn('text-control whitespace-pre-line', !full && 'line-clamp-6')}>{entry.body}</p>
       </>)}
-      <Actions><Button variant={full ? 'default' : 'outline'} onClick={() => go({ view: 'logs', name: p.name })} data-testid="project-log">{t('projects.log.view')}</Button></Actions>
+      <Actions>
+        <Button variant="outline" onClick={() => writeEntryFlow(p, t, () => setWritten((n) => n + 1))} data-testid="project-log-write"><PencilLine />{t('projects.log.write')}</Button>
+        <Button variant={full ? 'default' : 'outline'} onClick={() => go({ view: 'logs', name: p.name })} data-testid="project-log">{t('projects.log.view')}</Button>
+      </Actions>
     </PjCard>
   );
 }
@@ -98,7 +104,7 @@ function GitCard({ p, info, reload, expert }) {
         {last ? <p className="text-faint-foreground text-caption">{t('projects.lastCommit', { subject: last.subject, when: since(last.date, t) })}</p> : null}
         <Actions>
           {expert ? <Button variant="ghost" onClick={async () => { await act(call('projects.setActive', { name: p.name })); go('expert'); }} data-testid="project-see-changes">{t('projects.seeChanges')}</Button> : null}
-          <Button variant="outline" onClick={reload} data-testid="project-git-refresh"><RefreshCw />{t('projects.refresh')}</Button>
+          {info.remote ? <Button variant="outline" onClick={() => syncFlow(p, t, reload)} data-testid="project-sync"><ArrowDownUp />{t('projects.sync')}</Button> : null}
           {info.changes ? <Button onClick={() => commitFlow(p, t, reload)} data-testid="project-commit">{t('projects.commit.title')}</Button> : null}
         </Actions>
       </>)}
@@ -150,8 +156,10 @@ function NoRepoTip({ off, t, children }) {
 }
 
 // a pull request with its checks, files and the actions on it. Merge asks first and goes with the exact commit the user saw.
-function PrDetail({ p, pr: row, reload }) {
+function PrDetail({ p, pr: row, reload, onChanged }) {
   const t = useT();
+  const watching = usePrWatch(p.name, row.number);
+  const asks = usePrRequests(p.name, row.number);
   const [pr, setPr] = useState(null);
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
@@ -171,7 +179,7 @@ function PrDetail({ p, pr: row, reload }) {
       if (!nowRepo) { notifyWarn(t('projects.prs.noRepo')); return; }
       setPr(now);
       if (!(await confirm(t('projects.prs.mergeTitle'), t('projects.prs.mergeBody', { repo: nowRepo, n: now.number, title: now.title, base: now.baseRefName }), { ok: t('projects.prs.mergeOk'), danger: true }))) return;
-      if ((await act(call('projects.mergePr', { name: p.name, number: now.number, method: 'merge', headRefOid: now.headRefOid }), t('projects.prs.merged'))) !== undefined) { forgetInfo(p.name); reload(); }
+      if ((await act(call('projects.mergePr', { name: p.name, number: now.number, method: 'merge', headRefOid: now.headRefOid }), t('projects.prs.merged'))) !== undefined) { forgetInfo(p.name); reload(); onChanged?.(); }
     } finally { setBusy(false); }
   };
   // The exact text goes into the review step; nothing is published until «Publicar comentario». What is shown is what is sent.
@@ -184,16 +192,26 @@ function PrDetail({ p, pr: row, reload }) {
       if ((await act(call('projects.prComment', { name: p.name, number: pr.number, body }), t('projects.prs.commented'))) !== undefined) setComment('');
     } finally { setBusy(false); }
   };
+  // The task that already reviews this PR is opened; without one, a read-only review task is made (it never changes files).
+  const reviewTask = async () => {
+    const r = await act(call('projects.prReview', { name: p.name, number: row.number }), undefined);
+    if (!r) return;
+    if (r.created) notifyOk(t('projects.prs.reviewMade'));
+    go({ view: 'tasks', id: r.id });
+  };
   const checkIcon = (c) => (c.conclusion === 'SUCCESS' || c.conclusion === 'NEUTRAL' || c.conclusion === 'SKIPPED' ? [CircleCheck, 'text-success'] : c.conclusion ? [CircleX, 'text-destructive'] : [LoaderCircle, 'text-info animate-spin']);
   return (
     <Card className="gap-2 p-3.5" data-testid="project-pr-detail">
       {!pr ? <Spinner /> : pr.error ? <p className="text-destructive text-control">{pr.error}</p> : (<>
-        <h3 className={cn(H3, 'flex items-center gap-2')}><span className="min-w-0 flex-1">{pr.title}</span><Badge variant={pr.isDraft ? 'secondary' : 'success'}>{pr.isDraft ? t('projects.prs.draft') : t('projects.prs.stateOpen')}</Badge></h3>
-        <p className="text-muted-foreground text-caption">#{pr.number}{pr.author ? ` · ${pr.author}` : ''} · {since(pr.createdAt, t)} · <code className={code}>{pr.headRefName}</code> → <code className={code}>{pr.baseRefName}</code></p>
+        <h3 className={cn(H3, 'flex items-center gap-2')}><span className="min-w-0 flex-1">{pr.title}</span><Badge variant={pr.state === 'MERGED' ? 'info' : pr.state === 'CLOSED' || pr.isDraft ? 'secondary' : 'success'} data-testid="project-pr-state">{pr.state === 'MERGED' ? t('projects.prs.stateMerged') : pr.state === 'CLOSED' ? t('projects.prs.stateClosed') : pr.isDraft ? t('projects.prs.draft') : t('projects.prs.stateOpen')}</Badge></h3>
+        <p className="text-muted-foreground text-caption">#{pr.number}{pr.author ? ` · ${pr.author}` : ''} · {since(pr.createdAt, t)} · <code className={code}>{pr.headRefName}</code> → <code className={code}>{pr.baseRefName}</code>{watching && pr.state === 'OPEN' ? <> · <Badge variant="info" data-testid="project-pr-watching">{t('projects.prs.watching')}</Badge></> : null}</p>
+        {asks.map((r) => <PrAsk key={r.id} r={r} project={p.name} number={pr.number} onDone={() => { reload(); onChanged?.(); }} />)}
+        {watching && pr.state === 'OPEN' ? <p className="text-faint-foreground text-caption" data-testid="project-pr-watch-note">{t('projects.prs.watchNote')}</p> : null}
         {prState(pr, t) ? <span className={cn('inline-flex items-center gap-1 text-control', prState(pr, t).cls)}>{(() => { const I = prState(pr, t).icon; return <I className="size-3.5" />; })()}{prState(pr, t).text}</span> : null}
         <Actions>
+          <Button variant="ghost" onClick={reviewTask} data-testid="project-pr-review">{t('projects.prs.reviewTask')}</Button>
           <Button variant="outline" onClick={() => bridge.openExternal(pr.url)}><ExternalLink />{t('projects.prs.openGh')}</Button>
-          <NoRepoTip off={!repo} t={t}><Button disabled={busy || !repo || pr.isDraft || pr.mergeable === 'CONFLICTING'} onClick={merge} data-testid="project-pr-merge"><GitMerge />{t('projects.prs.merge', { base: pr.baseRefName })}</Button></NoRepoTip>
+          <NoRepoTip off={!repo} t={t}><Button disabled={busy || !repo || pr.state !== 'OPEN' || pr.isDraft || pr.mergeable === 'CONFLICTING'} onClick={merge} data-testid="project-pr-merge"><GitMerge />{t('projects.prs.merge', { base: pr.baseRefName })}</Button></NoRepoTip>
         </Actions>
         <h4 className={cn(H3, 'mt-2')}>{t('projects.prs.checks')}</h4>
         {pr.checks.length ? pr.checks.slice(0, 12).map((c, i) => { const [I, cls] = checkIcon(c); return <div key={`${c.name}${i}`} className="flex items-center gap-2 py-1 text-control"><I className={cn('size-3.5', cls)} /><span>{c.name}</span></div>; }) : <p className="text-muted-foreground text-control">{t('projects.prs.noChecks')}</p>}
@@ -222,7 +240,12 @@ function GitPanel({ p, info, reload }) {
   const t = useT();
   const prs = info?.prs ?? [];
   const [sel, setSel] = useState(null);
-  const current = prs.find((x) => x.number === sel) ?? prs[0] ?? null;
+  const [filter, setFilter] = useState('open');
+  const [counts, loadCounts] = usePrCounts(p.name, info);
+  const { list, error } = usePrList(p.name, filter, info);
+  // the open list falls back to the page's own read while the richer one loads or fails
+  const shown = list ?? (filter === 'open' ? prs : []);
+  const current = shown.find((x) => x.number === sel) ?? shown[0] ?? null;
   const github = info?.git && info.remote && /github\.com/i.test(info.remote);
   if (!info) return <Spinner />;
   if (!info.git) return <Note>{info.error ?? t('projects.noGit')}</Note>;
@@ -232,23 +255,26 @@ function GitPanel({ p, info, reload }) {
         <span className="text-muted-foreground text-control">{info.remote ? t('projects.prs.repo', { remote: repoOf(info.remote) ?? info.remote }) : t('projects.unpublished')} <code className={code}>{info.branch}</code></span>
         <span className="grow" />
         {info.remote ? <Button variant="outline" onClick={() => pushFlow(p, info, t, reload)} data-testid="project-push"><Upload />{t('projects.pushBtn')}</Button> : null}
-        <Button variant="outline" onClick={reload}><RefreshCw />{t('projects.refresh')}</Button>
+        {info.remote ? <Button variant="outline" onClick={() => syncFlow(p, t, reload)} data-testid="project-panel-sync"><ArrowDownUp />{t('projects.sync')}</Button> : null}
         {info.remote ? (github ? <Button onClick={() => createPrFlow(p, info, t, reload)} data-testid="project-pr-create"><GitPullRequestCreate />{t('projects.prs.create')}</Button> : null)
           : <Button onClick={() => publishFlow(p, t, reload)} data-testid="project-publish"><Upload />{t('projects.publish.title')}</Button>}
       </div>
       {github ? (
         <div className="grid items-start gap-4 lg:grid-cols-2">
           <div className="flex min-w-0 flex-col gap-4">
-            <div className="flex items-center gap-2"><h2 className={H3}>{t('projects.prs.title')}</h2><Badge variant="secondary">{prs.length}</Badge></div>
+            <div className="flex items-center gap-2"><h2 className={H3}>{t('projects.prs.title')}</h2></div>
+            <PrFilter value={filter} onChange={(v) => { setFilter(v); setSel(null); }} counts={counts} />
+            {error ? <Note data-testid="project-pr-error">{t('projects.prs.readFail', { detail: error })}</Note> : null}
             <ListCard>
-              {prs.length ? prs.map((pr) => (
+              {list === null && filter !== 'open' ? <Spinner /> : shown.length ? shown.map((pr) => (
                 <ListRow key={pr.number} selected={current?.number === pr.number} onClick={() => setSel(pr.number)} className="border-border rounded-none border-t first:border-t-0" data-testid="project-pr-row"
-                  title={pr.title} meta={<span>#{pr.number} · <code className={code}>{pr.headRefName}</code>{pr.createdAt ? ` · ${since(pr.createdAt, t)}` : ''}</span>} trailing={pr.isDraft ? <Badge variant="secondary">{t('projects.prs.draft')}</Badge> : null} />
-              )) : <Empty icon={GitPullRequest} title={t('projects.prs.none')} />}
+                  title={pr.title} meta={<span>#{pr.number} · <code className={code}>{pr.headRefName}</code>{pr.baseRefName ? <> → <code className={code}>{pr.baseRefName}</code></> : null}{pr.createdAt ? ` · ${since(pr.createdAt, t)}` : ''}</span>}
+                  trailing={<>{filter === 'open' ? <PrChecksBadge s={pr.checksSummary} /> : <Badge variant={filter === 'merged' ? 'info' : 'secondary'}>{t(filter === 'merged' ? 'projects.prs.stateMerged' : 'projects.prs.stateClosed')}</Badge>}{pr.isDraft ? <Badge variant="secondary">{t('projects.prs.draft')}</Badge> : null}</>} />
+              )) : <Empty icon={GitPullRequest} title={t(filter === 'open' ? 'projects.prs.none' : filter === 'merged' ? 'projects.prs.noneMerged' : 'projects.prs.noneClosed')} />}
             </ListCard>
             <p className="text-faint-foreground text-caption">{t('projects.prs.source')}</p>
           </div>
-          <div className="min-w-0">{current ? <PrDetail key={current.number} p={p} pr={current} reload={reload} /> : <Card className="p-3.5"><Empty title={t('projects.prs.pick')} /></Card>}</div>
+          <div className="min-w-0">{current ? <PrDetail key={current.number} p={p} pr={current} reload={reload} onChanged={() => loadCounts(true)} /> : <Card className="p-3.5"><Empty title={t('projects.prs.pick')} /></Card>}</div>
         </div>
       ) : <Note>{t('projects.prs.noGithub')}</Note>}
       <div className="flex items-center gap-2"><h2 className={H3}>{t('projects.prs.branches')}</h2><span className="text-faint-foreground text-caption">{info.branches?.length ?? 0}</span></div>
@@ -332,7 +358,11 @@ export function ProjectPage({ p }) {
           <DropdownMenuContent align="end" className="w-72" data-testid="project-page-menu-list">
             <DropdownMenuItem onSelect={() => chatHereFlow(p)} data-testid="project-chat"><MessageSquarePlus />{t('projects.newChat')}</DropdownMenuItem>
             <DropdownMenuItem className="items-start" disabled={Boolean(p.open)} onSelect={rename} data-testid="project-rename"><PencilLine /><span>{t('projects.renameItem')}{p.open ? <><br /><span className="text-muted-foreground text-caption">{t('projects.rename.busy')}</span></> : null}</span>{p.open ? null : <Kbd className="ml-auto">F2</Kbd>}</DropdownMenuItem>
+            <DropdownMenuItem disabled={Boolean(p.active)} onSelect={() => act(call('projects.setActive', { name: p.name }), t('projects.setActive.done', { name: p.name }))} data-testid="project-set-active"><Pin />{p.active ? t('projects.workNow') : t('projects.setActive')}</DropdownMenuItem>
+            <DropdownMenuItem onSelect={reload} data-testid="project-git-refresh"><RefreshCw />{t('projects.refresh')}</DropdownMenuItem>
+            {expert ? <DropdownMenuItem onSelect={async () => { await act(call('projects.setActive', { name: p.name })); go('expert'); }} data-testid="project-expert-open"><SquareTerminal />{t('projects.expert.title')}</DropdownMenuItem> : null}
             <DropdownMenuItem onSelect={() => changeIconFlow(p, t)} data-testid="project-icon-change"><ImageIcon />{t('projects.icon.change')}</DropdownMenuItem>
+            <DropdownMenuItem disabled={!p.category} title={p.category ? undefined : t('projects.category.linked')} onSelect={() => changeCategory(t, p, reload)} data-testid="project-change-category"><FolderTree />{t('projects.category.item')}</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="items-start" onSelect={() => finishFlow(p, t).then((done) => done && go('projects'))} data-testid="project-finish"><CircleCheckBig /><span>{t('projects.finish.title')}<br /><span className="text-muted-foreground text-caption">{t('projects.finish.hint')}</span></span></DropdownMenuItem>
             {p.inHome ? <DropdownMenuItem className="items-start" variant="destructive" onSelect={() => deleteProjectFlow(p, t).then((done) => done && go('projects'))} data-testid="project-delete"><Trash2 /><span>{t('projects.delete.item')}<br /><span className="text-muted-foreground text-caption">{t('projects.delete.hint')}</span></span></DropdownMenuItem>
@@ -375,16 +405,6 @@ export function ProjectPage({ p }) {
                     <Button variant="outline" onClick={() => changeIconFlow(p, t)}>{t('projects.icon.change')}</Button>
                   </div>
                 </PjCard>
-                <Card className="gap-2 p-3.5" data-testid="project-work-card">
-                  <div className="flex items-center gap-2"><Pin className="size-4" /><div className="flex flex-1 flex-col gap-0.5"><b className="text-control font-medium">{t('projects.workProject')}</b><span className="text-muted-foreground text-caption">{t('projects.workHint', { assistant })}</span></div>
-                    {p.active ? <Badge variant="success">{t('projects.workNow')}</Badge> : <Button variant="outline" onClick={() => act(call('projects.setActive', { name: p.name }), t('projects.setActive.done', { name: p.name }))} data-testid="project-set-active">{t('projects.setActive')}</Button>}</div>
-                </Card>
-                {expert ? (
-                  <Card className="gap-2 p-3.5">
-                    <div className="flex items-center gap-2"><SquareTerminal className="size-4" /><div className="flex flex-1 flex-col gap-0.5"><b className="text-control font-medium">{t('projects.expert.title')}</b><span className="text-muted-foreground text-caption">{t('projects.expert.desc', { assistant })}</span></div>
-                      <Button variant="outline" onClick={async () => { await act(call('projects.setActive', { name: p.name })); go('expert'); }}>{t('projects.expert.open')}</Button></div>
-                  </Card>
-                ) : null}
               </div>
             </div>
           ) : null}
@@ -404,16 +424,24 @@ export function ProjectPage({ p }) {
               </div>
               <p className="text-faint-foreground text-caption">{t('projects.tasks.week', { done: week.filter((x) => x.status === 'done' && !x.undone).length, undone: week.filter((x) => x.undone).length })}</p>
               <div className="flex flex-wrap items-center justify-end gap-2">
-                <BubbleTip title={t('projects.review')} text={t('projects.reviewTip')}><Button variant="outline" onClick={() => askReview({ project: p.name })} data-testid="project-review"><ScanSearch />{t('projects.review')}</Button></BubbleTip>
-                <BubbleTip title={t('projects.security')} text={t('projects.securityTip')}><Button variant="outline" onClick={() => askSecurityReview({ project: p.name })} data-testid="project-security"><ShieldCheck />{t('projects.security')}</Button></BubbleTip>
-                <Button onClick={() => go({ view: 'tasks', project: p.name })}><Plus />{t('projects.tasks.new')}</Button>
+                <div className="inline-flex" data-testid="project-new-task-split">
+                  <Button className="rounded-r-none" onClick={() => go({ view: 'tasks', project: p.name })} data-testid="project-new-task"><Plus />{t('projects.tasks.new')}</Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild><Button className="border-primary-foreground/25 rounded-l-none border-l px-2" aria-label={t('projects.tasks.moreKinds')} data-testid="project-new-task-more"><ChevronDown /></Button></DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-72" data-testid="project-new-task-menu">
+                      <DropdownMenuItem className="items-start" onSelect={() => askReview({ project: p.name })} data-testid="project-review"><ScanSearch /><span>{t('projects.review')}<br /><span className="text-muted-foreground text-caption">{t('projects.reviewTip')}</span></span></DropdownMenuItem>
+                      <DropdownMenuItem className="items-start" onSelect={() => askSecurityReview({ project: p.name })} data-testid="project-security"><ShieldCheck /><span>{t('projects.security')}<br /><span className="text-muted-foreground text-caption">{t('projects.securityTip')}</span></span></DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
             </div>
           ) : null}
 
           {tab === 'git' ? (<>
             <GitPanel p={p} info={info} reload={reload} />
-            <div className="grid gap-3"><GithubCard /><ContributionGraph /></div>
+            {/* Orb's own, not drawn by the mock-up: under «Más opciones», at the end of the tab. */}
+            <div className="grid gap-3" data-testid="project-git-more"><h2 className={H3}>{t('settings.moreOptions')}</h2><GithubCard /><ContributionGraph /></div>
           </>) : null}
           {tab === 'bitacora' ? <LogCard p={p} full /> : null}
 

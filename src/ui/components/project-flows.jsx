@@ -1,12 +1,13 @@
 // What can be done with a whole project, as flows (dialog, call, notice): shared by the PC's list and page and by the
 // phone's and the browser's detail card, so a confirmation or a call never differs between them.
 import { Field, Input } from '@/components/ui/basic.jsx';
-import { Checkbox } from '@/components/ui/overlay.jsx';
+import { Checkbox, Select } from '@/components/ui/overlay.jsx';
 import { confirm, choose, form } from '@/components/dialogs.jsx';
 import { notifyError, notifyOk } from '@/lib/notify.js';
 import { call, act, go, bridge, setState, refresh } from '@/lib/store.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { quiet } from '@/lib/quiet.js';
+import { CATEGORIES } from '../../shared/layout.mjs';
 
 // the end of a project (src/domain/projects/project-close.mjs). Finished: it leaves Orb, its folder stays («Finalizados»
 // brings it back). Deleted: its folder goes to the Recycle Bin (the app), behind the master password, only on the PC.
@@ -43,6 +44,21 @@ export async function renameFlow(p, t, onRenamed) {
     body: (v, set) => <Field label={t('projects.rename.label')}><Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} maxLength={60} /></Field>,
     ok: t('projects.rename.ok'), onOk: (v) => call('projects.rename', { name: p.name, to: v.name.trim() }) });
   if (r) { notifyOk(t('projects.rename.done', { name: r.name })); await refresh().catch(quiet); onRenamed?.(r.name); }
+}
+
+// the project's folder to another category (projects.setCategory): the dialog says from where to where, and the engine
+// refuses (with its reason) when anything is working in it, the destination exists or the folder is not Orb's to move.
+export async function changeCategory(t, p, onMoved) {
+  const label = (c) => t(`comp.projects.category.${c}`);
+  const from = p.category ?? null;
+  const r = await form(t('projects.category.title'), { description: t('projects.category.desc'), initial: { category: CATEGORIES.find((c) => c !== from) ?? CATEGORIES[0] },
+    body: (v, set) => (<>
+      <Field label={t('projects.category.label')}><Select className="w-full" value={v.category} onValueChange={(category) => set({ category })} options={CATEGORIES.map((value) => ({ value, label: label(value) }))} data-testid="project-category-select" /></Field>
+      <p className="text-muted-foreground m-0 text-caption break-all" data-testid="project-category-move">{v.category === from ? t('projects.category.same') : t('projects.category.move', { from: from ? label(from) : p.path, to: label(v.category) })}</p>
+    </>),
+    okDisabled: (v) => v.category === from, ok: t('projects.category.ok'), onOk: (v) => call('projects.setCategory', { name: p.name, category: v.category }) });
+  if (r) { notifyOk(t('projects.category.done', { category: label(r.category) })); await refresh().catch(quiet); onMoved?.(r); }
+  return r || null;
 }
 
 // a linked folder only leaves Orb; its folder and files stay.
