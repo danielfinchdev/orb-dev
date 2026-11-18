@@ -385,7 +385,7 @@ function* changedFlow(before, after) {
 // what a task changed, file by file, for the window's diff panel. Read only: one `git diff` between the checkpoint
 // before the task and the one after (commits, so line endings and the user's index never matter). Secret-looking paths
 // are left out (the snapshots already keep them out) and secret-looking text in the patches is hidden. Each file's patch and the whole answer are capped, and a binary file
-// has no patch. → { files: [{ status, path, added, removed, binary, patch, cut }], more }
+// has no patch. → { files: [{ status, path, added, removed, binary, patch, cut }], more, hidden } (hidden: changed files not shown because they look like secrets)
 export function diffBetween(repo, before, after, { maxFiles = 300, maxPatch = 200_000, maxTotal = 2_000_000 } = {}) {
   const range = ['--no-renames', '--no-color', '--no-ext-diff', '--no-textconv', before, after]; // never a program of the project
   const stats = git(repo, 'diff', '--numstat', '-z', ...range);
@@ -410,12 +410,40 @@ export function diffBetween(repo, before, after, { maxFiles = 300, maxPatch = 20
     total += patch.length;
     files.push({ status: status.get(f.path) ?? 'M', ...f, patch, cut });
   });
-  return { files, more: list.filter((f) => !isSecretPath(f.path)).length - files.length };
+  return { files, more: list.filter((f) => !isSecretPath(f.path)).length - files.length, hidden: list.filter((f) => isSecretPath(f.path)).length };
+}
+
+// One file of that diff whole, before and after the task, for the «Antes» / «Después» views. Only a path the diff itself lists
+// (never any other file of the repository), no secret-looking path, never a program of the project (cat-file applies no
+// textconv). A side over maxBytes is not read at all: { tooBig: true }. A binary file is told apart, not shown.
+// → { path, status, binary, tooBig, before, after } (a side that does not exist is null).
+export function fileBetween(repo, before, after, file, { maxBytes = 512 * 1024 } = {}) {
+  const rel = String(file ?? '').replace(/\\/g, '/');
+  const bad = (key) => Object.assign(new Error(tr(key)), { userFacing: true });
+  if (!rel || rel.includes('\0') || isSecretPath(rel) || isSecretPath(rel.toLowerCase())) throw bad('msg.api.fileNotInDiff');
+  const entry = changedBetween(repo, before, after).find((c) => c.path === rel);
+  if (!entry) throw bad('msg.api.fileNotInDiff');
+  const out = { path: rel, status: entry.status, binary: false, tooBig: false, before: null, after: null };
+  const read = (commit) => {
+    const spec = `${commit}:${rel}`; // a revision, so the path is taken literally
+    const size = git(repo, 'cat-file', '-s', spec);
+    if (size.status !== 0) return null;
+    if (Number(size.stdout.trim()) > maxBytes) { out.tooBig = true; return null; }
+    const blob = gitBuffer(repo, 'cat-file', 'blob', spec);
+    if (blob.status !== 0) return null;
+    const buf = blob.stdout;
+    if (buf.subarray(0, 8000).includes(0)) { out.binary = true; return null; }
+    return redactSecrets(buf.toString('utf8'));
+  };
+  if (entry.status !== 'A') out.before = read(before);
+  if (entry.status !== 'D') out.after = read(after);
+  if (out.binary || out.tooBig) { out.before = null; out.after = null; }
+  return out;
 }
 
 // The line counts of diffBetween without its patches: the same range and options, one `git diff --numstat`, so the numbers
 // are the ones the patch shows. Read only. → { files: [{ status, path, added, removed, binary }], more } (secret-looking paths left out, as in
-// diffBetween), at most maxFiles of them; `more` is how many were left past the cap.
+// diffBetween), at most maxFiles of them; `more` is how many were left past the cap, `hidden` how many were left out as secrets.
 export const statBetween = (repo, before, after, opts) => finishStat(runSync(repo, statFlow(before, after)), opts);
 export const statBetweenAsync = async (repo, before, after, opts) => finishStat(await runAsync(repo, statFlow(before, after)), opts);
 function* statFlow(before, after) {
@@ -430,7 +458,7 @@ function* statFlow(before, after) {
 }
 function finishStat(list, { maxFiles = 300 } = {}) {
   const shown = list.filter((f) => !isSecretPath(f.path));
-  return { files: shown.slice(0, maxFiles), more: Math.max(0, shown.length - maxFiles) };
+  return { files: shown.slice(0, maxFiles), more: Math.max(0, shown.length - maxFiles), hidden: list.length - shown.length };
 }
 
 const walkFiles = (root, rel = '') => fs.readdirSync(path.join(root, rel), { withFileTypes: true }).flatMap((e) => {

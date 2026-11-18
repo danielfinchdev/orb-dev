@@ -7,15 +7,23 @@
 import { ctx, tr } from '../../platform/context.mjs';
 import { fail } from './common.mjs';
 import { hostCall, localPath } from '../host/host.mjs';
-import { findEditors, EDITOR_IDS } from '../host/editors.mjs';
+import { findEditors, EDITOR_IDS, fileArgs } from '../host/editors.mjs';
+import { insideProject } from '../host/expert.mjs';
+import { isSecretPath } from '../../shared/secrets-scan.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
 import { guardedCore } from '../desktop-home.mjs';
 import { checkUnlock } from './master.mjs';
 import { sendFeedback, moreApps } from '../host/feedback.mjs';
 
 const absolute = localPath;
 
+// The same folder however it is written (case on Windows, trailing separators, links).
+const folderKey = (p) => { let r = path.resolve(p); try { r = fs.realpathSync.native(r); } catch { /* not there: as written */ } return process.platform === 'win32' ? r.toLowerCase() : r; };
+
 // home: the workspace (also before useHome, while core is blocked); version: the app's.
-export function appMethods({ home, version }) {
+// folders: () => the folders a file may be opened from (the projects' and the tasks' work folders); without it none is.
+export function appMethods({ home, version, folders = () => [] }) {
   const language = () => (ctx.config?.language === 'en' ? 'en' : 'es');
   const choice = () => ctx.config?.ui?.terminal ?? 'auto';
   const openUrl = (url) => hostCall('host.openUrl', { url });
@@ -39,6 +47,26 @@ export function appMethods({ home, version }) {
       if (which === 'explorer') { await hostCall('host.openPath', { path: dir }); return true; }
       await hostCall('host.openEditor', { which, dir });
       return true;
+    },
+    // One file of a project (and a line) in the editor the user chose. The path is resolved inside the folder with the
+    // same check as God mode's viewer (no .., absolute or odd Windows names, no link out), it must be a file that
+    // exists, and a secret-looking one is never opened. The host is asked by kind (host.openEditor), never a command.
+    'app.openFileIn': async ({ which, dir, file, line, unlock } = {}) => {
+      if (!EDITOR_IDS.includes(which) || !absolute(dir) || typeof file !== 'string') fail(tr('sys.main.badPath'));
+      if (line != null && !(Number.isInteger(line) && line > 0 && line <= 10_000_000)) fail(tr('sys.main.badPath'));
+      if (guardedCore(home, dir)) checkUnlock('master.check', { unlock });
+      // only the folder of a project or of a task's work: never an arbitrary one the caller names
+      const key = folderKey(dir);
+      if (!folders().some((d) => typeof d === 'string' && d && folderKey(d) === key)) fail(tr('sys.main.badPath'));
+      if (!findEditors()[which]) fail(tr('sys.main.badPath'));
+      const { abs, rel } = insideProject(dir, file);
+      // the file itself may sit in core even when the folder given does not (the workspace folder holds core/)
+      if (guardedCore(home, abs)) checkUnlock('master.check', { unlock });
+      if (isSecretPath(rel) || isSecretPath(rel.toLowerCase())) fail(tr('msg.expert.secrets'));
+      if (!fs.statSync(abs).isFile()) fail(tr('msg.expert.notFile'));
+      const args = fileArgs(which, dir, abs, line ?? null);
+      await hostCall('host.openEditor', { which, dir, file: rel, line: line ?? null });
+      return { file: rel, line: line ?? null, args };
     },
     // A project's action in a terminal window of its own; its preview (only a page of this PC) opens a moment later.
     // Never in core itself or its secrets without a fresh unlock (as app.openIn).

@@ -14,7 +14,7 @@ import { expandMentions, mentionOptions } from '../mentions.mjs';
 import { modelCatalog, REASONING_LEVELS, levelsOf } from '../usage/catalog.mjs';
 import { titleFrom } from '../../shared/titles.mjs';
 import { autoTitle } from '../titles.mjs';
-import { diffBetween, statBetweenAsync } from '../../domain/tasks/checkpoints.mjs';
+import { diffBetween, fileBetween, statBetweenAsync } from '../../domain/tasks/checkpoints.mjs';
 import { listTurns, turnDiff, commentsBlock } from '../../domain/conversations/turns.mjs';
 import { editMessage, undoRewind, rewindInfo } from '../edit-message.mjs';
 import { fail, str, int, oneOf, images, DECISION } from './common.mjs';
@@ -70,7 +70,7 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       // «Deshecha» (undone: the files are as before the task), the model by its name («Haiku 4.5», not «haiku») and the
       // account that ran it by the name the user gave it («Codex Pro»).
       const who = d.assigned_to ?? d.agent; const acc = d.run_account ?? d.account ?? null;
-      return { ...d, waiting: board.waitReason(d), held: board.heldInfo(d), accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
+      return { ...d, waiting: board.waitReason(d), held: board.heldInfo(d), accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), approval: board.approvalInfo(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
         undone: board.settingJson(`undone:${d.id}`), modelLabel: d.model ? modelLabelOf(who, acc ?? who, d.model) : null, accountLabel: acc && accountsOf(who).length > 1 ? accountLabel(acc) : null };
     },
     'tasks.create': (p) => board.createTask({
@@ -93,12 +93,22 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     // what a finished task changed, with each file's diff (read only, against its undo checkpoint: «Deshacer» works
     // the same). Nothing to show while it runs, after it was undone, or without git (a copy checkpoint).
     // stat: true → only the line counts per file, no patch, and nothing else is done (read only, no recheck of held files).
-    'tasks.diff': async ({ id, stat }) => {
+    // file: one file of that diff whole, before and after (checkpoints.mjs › fileBetween), asked when it is opened in that view.
+    'tasks.diff': async ({ id, stat, file }, principal) => {
+      // a whole file is read only by the PC's window (the phone of 3.8.7 never asks for it)
+      if (file != null && principal && principal.channel !== 'desktop') fail(tr('msg.remote.pcOnly'));
       const task = board.task(int(id, 'tarea')) ?? fail(tr('msg.api.noTaskThat'));
-      // a held task's diff is read from every file again (safety.mjs › recheckHeld): what accepting it keeps.
-      if (stat !== true && board.heldInfo(task)) await scheduler.recheckHeld(task);
+      // a held task's diff is read from every file again (safety.mjs › recheckHeld): what accepting it keeps. A whole-file
+      // view is read only and was already rechecked when the tab opened, so it does not repeat it.
+      if (stat !== true && file == null && board.heldInfo(task)) await scheduler.recheckHeld(task);
       const cp = board.settingJson(`checkpoint:${task.id}`);
-      if (cp?.before?.kind !== 'git' || !cp.after?.commit || !cp.before.repo || !fs.existsSync(cp.before.repo)) return { available: false, files: [], more: 0 };
+      // reason (why there is no diff): nophoto (no checkpoint), nogit (a copy checkpoint, no git), notdone (no photo after
+      // the work yet), gone (the repository is not there any more).
+      if (cp?.before?.kind !== 'git' || !cp.after?.commit || !cp.before.repo || !fs.existsSync(cp.before.repo)) {
+        const reason = !cp?.before ? 'nophoto' : cp.before.kind !== 'git' ? 'nogit' : !cp.after?.commit ? 'notdone' : 'gone';
+        return { available: false, reason, files: [], more: 0 };
+      }
+      if (typeof file === 'string') return { available: true, ...fileBetween(cp.before.repo, cp.before.commit, cp.after.commit, file) };
       if (stat === true) return { available: true, ...(await statBetweenAsync(cp.before.repo, cp.before.commit, cp.after.commit)) };
       return { available: true, ...diffBetween(cp.before.repo, cp.before.commit, cp.after.commit) };
     },

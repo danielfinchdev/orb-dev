@@ -290,6 +290,15 @@ export class Board {
   previewHash(task) { return contentHash({ ...task, project_path: this.projectPathNow(task) }); }
   approvalOk(task) { return !task.sensitivity.length || verify(this.key, task); }
   clearApproval() { return { approved_by: null, approval_hash: null, approval_sig: null }; }
+  // What the detail tells about the OK of a task, read-only: the scheduler's own check (verify) run now, never the
+  // signature itself. verified is null when this process holds no key and so cannot check anything.
+  approvalInfo(task) {
+    const required = task.sensitivity.length > 0;
+    const signed = Boolean(task.approval_sig && task.approval_hash);
+    const verified = !this.key ? null : signed ? verify(this.key, task) : false;
+    const at = signed ? this.one("SELECT at FROM events WHERE task_id = ? AND kind = 'task.approved' ORDER BY id DESC LIMIT 1", task.id)?.at ?? null : null;
+    return { required, signed, verified, by: signed ? task.approved_by ?? null : null, at };
+  }
 
   // Queued tasks whose approval is missing or stale, or whose folder moved, go back to waiting for the user.
   revalidateQueued() {

@@ -59,6 +59,7 @@ export default {
   "msg.api.noProject": "project {name} does not exist",
   "msg.api.noScheduled": "that scheduled task no longer exists",
   "msg.api.noTaskThat": "that task does not exist",
+  "msg.api.fileNotInDiff": "that file is not among the task's changes",
   "msg.api.notReport": "that message is not a report",
   "msg.api.questionGone": "that question has already been answered",
   "msg.api.badShortcut": "that shortcut does not work: use Ctrl, Alt or Shift with a letter or a number (or an F key)",

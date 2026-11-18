@@ -59,6 +59,7 @@ export default {
   "msg.api.noProject": "no existe el proyecto {name}",
   "msg.api.noScheduled": "esa tarea programada ya no existe",
   "msg.api.noTaskThat": "no existe esa tarea",
+  "msg.api.fileNotInDiff": "ese archivo no está entre los cambios de la tarea",
   "msg.api.notReport": "ese mensaje no es un informe",
   "msg.api.questionGone": "esa pregunta ya está respondida",
   "msg.api.badShortcut": "el atajo no vale: usa Ctrl, Alt o Mayús con una letra o un número (o una tecla F)",

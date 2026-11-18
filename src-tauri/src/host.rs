@@ -51,7 +51,7 @@ pub async fn handle(app: &AppHandle, method: &str, params: &Value) -> Result<Val
       }
       json!(name)
     }
-    HostRequest::OpenEditor { which, dir } => {
+    HostRequest::OpenEditor { which, dir, file, line } => {
       let name = match which.as_str() {
         "vscode" => "VS Code",
         "windsurf" => "Windsurf",
@@ -60,8 +60,18 @@ pub async fn handle(app: &AppHandle, method: &str, params: &Value) -> Result<Val
         _ => "Cursor",
       };
       let exe = tools::find_editor(&finder(), &which).ok_or_else(|| t("sys.terminal.notInstalled", &[("name", name.into())]))?;
-      let dir_text = dir.to_string_lossy().to_string();
-      spawn_detached(&Program { cmd: exe, args: vec![dir_text], cwd: dir }).map_err(|e| t("sys.terminal.openFailed", &[("name", name.into()), ("error", e)]))?;
+      // The editors are always .exe (tools.rs › find_editor), so no shell rereads the name. The file must exist and, once
+      // links are resolved, stay inside the folder; the editor gets that resolved path (without the long-path prefix), so
+      // what is opened is what was checked.
+      let resolved = match &file {
+        Some(f) => match (f.canonicalize(), dir.canonicalize()) {
+          (Ok(c), Ok(d)) if f.is_file() && c.starts_with(&d) => Some(tools::plain_path(&c)),
+          _ => return Err("archivo no válido".to_string().into()),
+        },
+        None => None,
+      };
+      let args = tools::editor_args(&which, &dir, resolved.as_deref(), line);
+      spawn_detached(&Program { cmd: exe, args, cwd: dir }).map_err(|e| t("sys.terminal.openFailed", &[("name", name.into()), ("error", e)]))?;
       json!(true)
     }
     HostRequest::RunAction { command, dir, choice } => {

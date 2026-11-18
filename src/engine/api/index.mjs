@@ -408,7 +408,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     'terminal.close': ({ id }) => terminals.close({ id: int(id, 'terminal') }),
     ...extensionMethods(shared),
     ...rulesMethods(shared), // the text rules and the rails (core/normas, orb.json rails)
-    ...appMethods({ home: ctx.home, version }), // this PC's tools (terminal, editors, feedback…)
+    ...appMethods({ home: ctx.home, version, folders: () => [...board.projects().map((p) => p.path), ...board.all('SELECT DISTINCT workdir FROM tasks WHERE workdir IS NOT NULL').map((x) => x.workdir)] }), // this PC's tools (terminal, editors, feedback…)
     ...musicMethods({ log }) // the music's tracks, downloaded the first time (src/engine/host/music.mjs)
   };
   const feeds = createFeeds();

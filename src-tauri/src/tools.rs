@@ -178,10 +178,62 @@ fn encode_component(s: &str) -> String {
   out
 }
 
+/// Arguments of an editor: the folder, and when a file is given, that file at its line. Always separate list items, never a
+/// command line. `file` is absolute, so it can never pass for an option.
+pub fn editor_args(which: &str, dir: &Path, file: Option<&Path>, line: Option<u32>) -> Vec<String> {
+  let dir_text = dir.to_string_lossy().to_string();
+  let Some(file) = file else { return vec![dir_text] };
+  let abs = file.to_string_lossy().to_string();
+  match which {
+    "jetbrains" => match line {
+      Some(n) => vec![dir_text, "--line".into(), n.to_string(), abs],
+      None => vec![dir_text, abs],
+    },
+    "zed" => vec![dir_text, line.map_or(abs.clone(), |n| format!("{abs}:{n}"))],
+    _ => vec![dir_text, "--goto".into(), line.map_or(abs.clone(), |n| format!("{abs}:{n}"))],
+  }
+}
+
+/// The path as the editors want it: Windows' canonical form carries a long-path prefix (`\\?\C:\x`, `\\?\UNC\srv\share\x`)
+/// that not every editor understands. A path without it is returned as it is.
+pub fn plain_path(p: &Path) -> PathBuf {
+  let text = p.to_string_lossy();
+  if let Some(rest) = text.strip_prefix("\\\\?\\UNC\\") {
+    return PathBuf::from(format!("\\\\{rest}"));
+  }
+  match text.strip_prefix("\\\\?\\") {
+    Some(rest) => PathBuf::from(rest),
+    None => p.to_path_buf(),
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
   use std::collections::{HashMap, HashSet};
+
+  #[test]
+  fn plain_path_drops_the_long_path_prefix() {
+    assert_eq!(plain_path(Path::new("\\\\?\\C:\\x\\a.rs")), PathBuf::from("C:\\x\\a.rs"));
+    assert_eq!(plain_path(Path::new("\\\\?\\UNC\\srv\\share\\x")), PathBuf::from("\\\\srv\\share\\x"));
+    assert_eq!(plain_path(Path::new("C:\\x")), PathBuf::from("C:\\x"));
+    assert_eq!(plain_path(Path::new("\\\\srv\\share")), PathBuf::from("\\\\srv\\share"));
+  }
+
+  #[test]
+  fn editor_args_by_editor() {
+    let dir = Path::new("C:\\p");
+    let f = Path::new("C:\\p\\src\\a b\\c.rs");
+    assert_eq!(editor_args("vscode", dir, None, Some(3)), vec!["C:\\p"]);
+    for w in ["cursor", "vscode", "windsurf"] {
+      assert_eq!(editor_args(w, dir, Some(f), Some(12)), vec!["C:\\p", "--goto", "C:\\p\\src\\a b\\c.rs:12"]);
+      assert_eq!(editor_args(w, dir, Some(f), None), vec!["C:\\p", "--goto", "C:\\p\\src\\a b\\c.rs"]);
+    }
+    assert_eq!(editor_args("zed", dir, Some(f), Some(12)), vec!["C:\\p", "C:\\p\\src\\a b\\c.rs:12"]);
+    assert_eq!(editor_args("zed", dir, Some(f), None), vec!["C:\\p", "C:\\p\\src\\a b\\c.rs"]);
+    assert_eq!(editor_args("jetbrains", dir, Some(f), Some(12)), vec!["C:\\p", "--line", "12", "C:\\p\\src\\a b\\c.rs"]);
+    assert_eq!(editor_args("jetbrains", dir, Some(f), None), vec!["C:\\p", "C:\\p\\src\\a b\\c.rs"]);
+  }
 
   fn finder<'a>(env: &'a HashMap<&str, &str>, files: &'a HashSet<PathBuf>) -> (impl Fn(&str) -> Option<String> + 'a, impl Fn(&Path) -> bool + 'a) {
     (move |k: &str| env.get(k).map(|v| v.to_string()), move |p: &Path| files.contains(p))
