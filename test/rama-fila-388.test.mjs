@@ -51,7 +51,7 @@ test('sessions.list da la rama de un chat con worktree y nada al que no lo tiene
 test('la PR y la rama del chat local salen solo de lo que projects.info ya leyó', async () => {
   const tree = sessions.list().find((x) => x.title === 'wt'); const plain = sessions.list().find((x) => x.title === 'local');
   const branch = (await call('sessions.list', {})).find((x) => x.id === tree.id).branch;
-  rememberRepo(repo, { branch: 'main', prs: [{ number: 41, headRefName: 'other' }, { number: 42, headRefName: branch }] });
+  rememberRepo(repo, { branch: 'main', prs: [{ number: 41, headRefName: 'other', isCrossRepository: false }, { number: 42, headRefName: branch, isCrossRepository: false }] });
   const rows = await call('sessions.list', {});
   assert.equal(rows.find((x) => x.id === tree.id).prNumber, 42);
   const local = rows.find((x) => x.id === plain.id);
@@ -69,11 +69,13 @@ test('la lista no lanza git ni gh: con el PATH vacío da lo mismo', async () => 
   assert.doesNotMatch(block, /await|git\(|gitAsync|gh\(|spawn|exec/);
 });
 
-test('caché: una PR de un fork no se guarda, aunque su rama se llame como la nuestra', () => {
+test('caché: una PR de un fork, o sin el campo isCrossRepository, no se guarda', () => {
   forgetRepos();
   rememberRepo(repo, { branch: 'main', prs: [{ number: 5, headRefName: 'main', isCrossRepository: true }, { number: 6, headRefName: 'feat', isCrossRepository: false }, { number: 7, headRefName: 'old' }] });
   assert.equal(cachedPr(repo, 'main'), null);
-  assert.equal(cachedPr(repo, 'feat'), 6); assert.equal(cachedPr(repo, 'old'), 7);
+  assert.equal(cachedPr(repo, 'feat'), 6);
+  // an old gh does not report the field: such a PR cannot be told apart from a fork's, so it is not kept
+  assert.equal(cachedPr(repo, 'old'), null);
 });
 
 test("caché: la rama 'HEAD' o vacía borra la anterior en vez de conservarla", () => {
@@ -88,9 +90,9 @@ test('caché: cada campo caduca a los 30 min de su última lectura real', () => 
   let clock = 1_000_000; setCacheClock(() => clock);
   try {
     forgetRepos();
-    rememberRepo(repo, { branch: 'main', prs: [{ number: 1, headRefName: 'main' }] });
+    rememberRepo(repo, { branch: 'main', prs: [{ number: 1, headRefName: 'main', isCrossRepository: false }] });
     clock += 20 * 60_000;
-    rememberRepo(repo, { prs: [{ number: 2, headRefName: 'main' }] }); // listPrs: reads PRs, not the branch
+    rememberRepo(repo, { prs: [{ number: 2, headRefName: 'main', isCrossRepository: false }] }); // listPrs: reads PRs, not the branch
     clock += 15 * 60_000; // 35 min since the branch was read, 15 since the PRs
     assert.equal(cachedBranch(repo), null);
     assert.equal(cachedPr(repo, 'main'), 2);
@@ -98,7 +100,7 @@ test('caché: cada campo caduca a los 30 min de su última lectura real', () => 
     assert.equal(cachedPr(repo, 'main'), null);
     // a read of the branch alone (gh missing, offline) does not renew the PRs
     forgetRepos(); clock = 5_000_000;
-    rememberRepo(repo, { branch: 'main', prs: [{ number: 3, headRefName: 'main' }] });
+    rememberRepo(repo, { branch: 'main', prs: [{ number: 3, headRefName: 'main', isCrossRepository: false }] });
     clock += 29 * 60_000; rememberRepo(repo, { branch: 'main' });
     clock += 2 * 60_000;
     assert.equal(cachedBranch(repo), 'main'); assert.equal(cachedPr(repo, 'main'), null);
@@ -108,7 +110,7 @@ test('caché: cada campo caduca a los 30 min de su última lectura real', () => 
 test('caché: barra invertida y normal, la barra final y el cwd relativo a la misma carpeta dan la misma clave', () => {
   forgetRepos();
   const slashes = repo.replace(/[\\]/g, '/');
-  rememberRepo(`${slashes}/`, { branch: 'dev', prs: [{ number: 9, headRefName: 'dev' }] });
+  rememberRepo(`${slashes}/`, { branch: 'dev', prs: [{ number: 9, headRefName: 'dev', isCrossRepository: false }] });
   for (const spelling of [repo, `${repo}${path.sep}`, slashes, path.join(repo, 'sub', '..')]) {
     assert.equal(cachedBranch(spelling), 'dev', spelling); assert.equal(cachedPr(spelling, 'dev'), 9, spelling);
   }
@@ -135,6 +137,18 @@ test('orbItems pasa branch y prNumber de un chat y la fila los pinta', () => {
   assert.equal('branch' in bare, false); assert.equal('prNumber' in bare, false);
   const jsx = read('src/ui/views/orb/inbox.jsx');
   assert.match(jsx, /item\.branch && p\.tone === 'muted'/);
-  assert.match(jsx, /font-mono[^\n]*\{item\.branch\}/);
-  assert.match(jsx, /text-primary-text[^\n]*#\{item\.prNumber\}/);
+  // the second line of the mock-up: the PR (icon and number in the info colour), then the branch (icon, normal letter)
+  assert.match(jsx, /text-info[^\n]*<GitPullRequest[^\n]*#\{item\.prNumber\}/);
+  assert.match(jsx, /<GitBranch[^\n]*\{item\.branch\}/);
+  assert.doesNotMatch(jsx, /font-mono[^\n]*\{item\.branch\}/);
+});
+
+test('paso 6C2: el panel de la PR pide sus campos en la misma llamada de gh y pinta revisores, comentarios y conflictos', () => {
+  const gh = read('src/engine/host/github.mjs');
+  assert.match(gh, /'--json', 'number,title,headRefName,url,isDraft,isCrossRepository,author,createdAt,mergeable'/);
+  assert.match(gh, /'pr', 'view', String\(number\), '--json', '[^']*,reviewRequests,latestReviews,comments'/);
+  const card = read('src/ui/components/pr-card.jsx');
+  assert.match(card, /data-testid="pr-reviewers"/); assert.match(card, /data-testid="pr-comments"/);
+  assert.match(card, /\(detail\?\.mergeable \?\? pr\.mergeable\) === 'MERGEABLE'/);
+  assert.match(card, /disabled=\{busy \|\| noConflicts\} onClick=\{\(\) => fix\('conflicts'\)\}/);
 });

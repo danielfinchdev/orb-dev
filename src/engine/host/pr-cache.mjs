@@ -18,8 +18,9 @@ const keyOf = (dir) => {
   return process.platform === 'win32' ? key.toLowerCase() : key;
 };
 
-// A PR opened from a fork shares its branch name with ours without being ours (a fork's `main`): never remembered.
-const ours = (p) => Number.isInteger(p?.number) && typeof p.headRefName === 'string' && p.isCrossRepository !== true;
+// A PR opened from a fork shares its branch name with ours without being ours (a fork's `main`): never remembered. One that
+// arrives without the field (an old gh does not know it) cannot be told apart, so it is left out too.
+const ours = (p) => Number.isInteger(p?.number) && typeof p.headRefName === 'string' && p.isCrossRepository === false;
 
 // branch: given only by a call that read it ('HEAD' = detached and '' = failed read both mean no branch);
 // prs: given only by a call that read them (left out when gh could not be read, so the old list just expires).

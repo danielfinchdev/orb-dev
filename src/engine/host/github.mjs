@@ -82,8 +82,9 @@ export async function projectInfo(project) {
   const ahead = remote ? (await query(project.path, 'rev-list', '--count', '@{upstream}..HEAD')).stdout.trim() : '';
   let prs = []; let prsRead = false;
   if (remote && /github\.com/i.test(remote) && ghExe()) {
-    const r = await gh(['pr', 'list', '--state', 'open', '--limit', '20', '--json', 'number,title,headRefName,url,isDraft,isCrossRepository'], { cwd: project.path, timeoutMs: 30_000 });
-    if (r.ok) { try { prs = JSON.parse(r.out); prsRead = Array.isArray(prs); } catch { /* ignore */ } }
+    const r = await gh(['pr', 'list', '--state', 'open', '--limit', '20', '--json', 'number,title,headRefName,url,isDraft,isCrossRepository,author,createdAt,mergeable'], { cwd: project.path, timeoutMs: 30_000 });
+    // the author is flattened to its login, the way listPrs and viewPr give it
+    if (r.ok) { try { prs = JSON.parse(r.out); prsRead = Array.isArray(prs); if (prsRead) prs = prs.map((x) => ({ ...x, author: authorOf(x?.author) })); } catch { /* ignore */ } }
   }
   rememberRepo(project.path, { branch, prs: prsRead ? prs : undefined });
   return { git: true, branch, remote, branches, changes, ahead: ahead === '' ? null : Number(ahead), prs };
@@ -193,6 +194,9 @@ const ghJson = async (project, args) => {
 };
 export const HEAD_OID_RE = /^[0-9a-f]{40}$/i;
 const oidOf = (v) => (typeof v === 'string' && HEAD_OID_RE.test(v) ? v.toLowerCase() : null);
+// Who was asked to review and who already did (logins, or a team's name), each once.
+const reviewersOf = (x) => [...new Set([...(Array.isArray(x.latestReviews) ? x.latestReviews.map((r) => r?.author) : []), ...(Array.isArray(x.reviewRequests) ? x.reviewRequests : [])]
+  .map((r) => oneLine(r?.login ?? r?.name ?? r?.slug ?? '', 80)).filter(Boolean))].slice(0, 10);
 const authorOf = (a) => (a && typeof a === 'object' ? String(a.login ?? a.name ?? '') : String(a ?? ''));
 
 export async function listPrs(project) {
@@ -203,11 +207,11 @@ export async function listPrs(project) {
 }
 
 export async function viewPr(project, number) {
-  const x = await ghJson(project, ['pr', 'view', String(number), '--json', 'number,title,body,state,url,headRefName,headRefOid,baseRefName,isDraft,author,createdAt,updatedAt,mergeable,mergeStateStatus,reviewDecision,additions,deletions,changedFiles,statusCheckRollup,files,commits']);
+  const x = await ghJson(project, ['pr', 'view', String(number), '--json', 'number,title,body,state,url,headRefName,headRefOid,baseRefName,isDraft,author,createdAt,updatedAt,mergeable,mergeStateStatus,reviewDecision,additions,deletions,changedFiles,statusCheckRollup,files,commits,reviewRequests,latestReviews,comments']);
   return {
     number: x.number, title: oneLine(x.title, 300), body: String(x.body ?? '').slice(0, 20_000), state: x.state, url: x.url, headRefName: x.headRefName, headRefOid: oidOf(x.headRefOid), baseRefName: x.baseRefName,
     isDraft: Boolean(x.isDraft), author: authorOf(x.author), createdAt: x.createdAt, updatedAt: x.updatedAt, mergeable: x.mergeable || null, mergeStateStatus: x.mergeStateStatus || null,
-    reviewDecision: x.reviewDecision || null, additions: x.additions ?? 0, deletions: x.deletions ?? 0, changedFiles: x.changedFiles ?? 0,
+    reviewDecision: x.reviewDecision || null, reviewers: reviewersOf(x), comments: Array.isArray(x.comments) ? x.comments.length : 0, additions: x.additions ?? 0, deletions: x.deletions ?? 0, changedFiles: x.changedFiles ?? 0,
     checks: (Array.isArray(x.statusCheckRollup) ? x.statusCheckRollup : []).slice(0, 100).map((c) => ({ name: oneLine(c.name ?? c.context ?? '', 120), status: c.status ?? c.state ?? null, conclusion: c.conclusion ?? null })),
     files: (Array.isArray(x.files) ? x.files : []).slice(0, 300).map((f) => ({ path: String(f.path ?? ''), additions: f.additions ?? 0, deletions: f.deletions ?? 0 })),
     commits: (Array.isArray(x.commits) ? x.commits : []).slice(0, 100).map((c) => ({ oid: String(c.oid ?? '').slice(0, 7), title: oneLine(c.messageHeadline ?? '', 200) }))
