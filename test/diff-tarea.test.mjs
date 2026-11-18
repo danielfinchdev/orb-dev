@@ -89,7 +89,7 @@ test('tasks.diff: read only, also from the phone without paths of this PC; «Des
   assert.deepEqual(undone.removed.sort(), ['new file.txt', 'pic.bin']);
   assert.equal(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8').replace(/\r\n/g, '\n'), 'one\ntwo\nthree\n');
   // Undone: no checkpoint left, so nothing to show.
-  assert.deepEqual(await call('tasks.diff', { id: task.id }), { available: false, files: [], more: 0 });
+  assert.deepEqual(await call('tasks.diff', { id: task.id }), { available: false, reason: 'nophoto', files: [], more: 0 });
 });
 
 test('tasks.diff: nothing while a task has no checkpoint after it, and an unknown task is refused', async () => {

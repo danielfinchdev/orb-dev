@@ -168,6 +168,17 @@ const RUNS = [
 ];
 const ORBE = [{ text: 'Dame tres planes para el fin de semana si llueve.', reply: 'Te dejo tres planes con lluvia: un museo por la mañana, una peli con comida en casa y una partida de mesa con amigos.' },
   { text: 'Gracias, me quedo con el museo. ¿A qué hora abre?', reply: 'Casi todos abren a las 10:00. Mira el horario del que elijas antes de salir.' }];
+// ORB_EXPLORA_EXTRA=1, a second chat with Orbe: a message with two files attached, then a task ordered from the chat whose
+// turn Orb stops (fake-live's CREA_TAREA makes a task whose text is STOP_WHEN; the plan's «stop» sends the guard's event).
+const ORBE_STOP = [{ text: 'Mira esta captura del error al cobrar y el registro de la pasarela.', reply: 'El cobro falla con un 401: la clave de pruebas de la pasarela ha caducado. Hay que renovarla y repetir el cobro.' },
+  { text: 'Encarga a un agente que lo revise en api-pagos.', reply: 'Encargado. Te aviso en cuanto termine.', append: 'CREA_TAREA api-pagos' }];
+const STOP_TITLE = 'Error al cobrar con tarjeta';
+const STOP_WHEN = 'ESCRIBE un archivo de prueba';
+const STOP_WHY = 'leer el archivo .env de otro proyecto';
+const STOP = { cause: 'guard', why: STOP_WHY, body: `Orb ha parado el turno: el agente ejecutó por su cuenta algo que no está permitido (${STOP_WHY}).` };
+// ORB_EXPLORA_EXTRA=1: a sensitive task approved by the tour (the same call as the window's «Aprobar»), for the «Firma» row.
+const SIGNED = { project: 'api-pagos', title: 'Repetir el cobro de marzo', agent: 'cursor', text: 'Repite el cobro y haz el pago de la factura de marzo con la tarjeta de prueba.', reply: 'Cobro repetido en el entorno de pruebas.' };
+const PNG_1PX = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 // ORB_EXPLORA_PIP=1: a turn whose fake agent opens a local page in the agents' browser (NAVEGA_GUION: open, picture, wait so
 // the live window stays up); the script file is written with the page's port once the local site is listening.
@@ -177,12 +188,12 @@ const PIP_TURN = { text: 'Abre la web de ejemplo en el navegador y dime qué ves
 
 // The two files the fake agents read at start (so they exist before Orb launches): the natural answers and the side effects.
 function writeFakes() {
-  const turns = [...CHATS.flatMap((c) => c.turns), ...TASKS, ...RUNS, ...ORBE, ...(PIP ? [PIP_TURN] : [])];
+  const turns = [...CHATS.flatMap((c) => c.turns), ...TASKS, ...RUNS, ...ORBE, ...ORBE_STOP, SIGNED, ...(PIP ? [PIP_TURN] : [])];
   const script = path.join(tmp, 'explora-guion.json'); const plan = path.join(tmp, 'explora-plan.json');
   fs.writeFileSync(script, JSON.stringify(turns.map((t) => ({ when: t.text, reply: t.reply }))));
   // the two «keep working» lines are not seeded turns: they only need DUERME to reach the fake agent
   fs.writeFileSync(plan, JSON.stringify([...turns.filter((t) => t.files || t.append).map((t) => ({ when: t.text, files: t.files, append: t.append })),
-    { when: BUSY_AGAIN, append: 'DUERME' }, { when: TASK_AGAIN, append: 'PROGRESO DUERME' }]));
+    { when: BUSY_AGAIN, append: 'DUERME' }, { when: TASK_AGAIN, append: 'PROGRESO DUERME' }, { when: STOP_WHEN, stop: STOP }]));
   // the extra pass shows consumption on the account cards: the fake Claude and Codex report part of their windows used
   return { ORB_FAKE_AGENTS: path.join(ROOT, 'test', 'fixtures', 'fake-explora.mjs'), ORB_FAKE_SCRIPT: script, ORB_EXPLORA_PLAN: plan, ...(EXTRA ? { ORB_EXPLORA_USAGE: '1' } : {}) };
 }
@@ -382,6 +393,25 @@ try {
       await until(async () => (await lines(ids.orbe)).length >= 2, 'segunda respuesta de Orbe', 30000);
       await call('conversations.update', { id: ids.orbe, title: 'Ideas para el fin de semana' });
     });
+    // the second chat with Orbe (files attached, and a task of the chat whose turn Orb stops)
+    if (EXTRA) await attempt('el chat con Orbe con adjuntos y una parada', async () => {
+      const dir = path.join(tmp, 'Descargas'); fs.mkdirSync(dir, { recursive: true });
+      const picture = path.join(dir, 'error-al-cobrar.png'); const record = path.join(dir, 'pasarela.log');
+      fs.writeFileSync(picture, Buffer.from(PNG_1PX, 'base64')); fs.writeFileSync(record, '12:04:11 POST /cobros 401 clave caducada\n');
+      const lines = async () => call('chat.list', { conversation: ids.parada });
+      ids.parada = (await call('chat.send', { text: ORBE_STOP[0].text, project: '', images: [picture, record] })).conversation;
+      await until(async () => (await lines()).some((l) => l.role === 'orb'), 'respuesta de Orbe al adjunto', 30000);
+      await call('chat.send', { text: ORBE_STOP[1].text, conversation: ids.parada });
+      await call('conversations.update', { id: ids.parada, title: STOP_TITLE });
+      await until(async () => (await lines()).some((l) => l.meta?.kind === 'turn-stopped'), 'la línea «Orb ha parado el turno»', 40000);
+    });
+    // a sensitive task approved as the window does (what it showed, by its hash): its detail has the «Firma» row verified
+    if (EXTRA) await attempt('la tarea aprobada', async () => {
+      const made = await call('tasks.create', { project: SIGNED.project, title: SIGNED.title, description: SIGNED.text, agent: SIGNED.agent });
+      const full = await call('tasks.get', { id: made.id });
+      if (!full.sensitivity?.length) return note(`«${SIGNED.title}» no pide aprobación: la fila «Firma» saldrá como «no necesitaba aprobación»`);
+      await call('tasks.approve', { id: made.id, decision: 'approved', hash: full.previewHash });
+    });
     const taskIds = {};
     for (const t of TASKS) {
       await attempt(`la tarea «${t.title}»`, async () => {
@@ -565,6 +595,51 @@ try {
       } catch { noteOnce('Tareas: no se pudo abrir o cerrar la confirmación de «Aceptar»'); await closeMenus(); }
     } else noteOnce('Tareas: sin «Aceptar» en la fila de la tarea retenida');
   };
+  // The extra pass of Tareas: a file whole (after and before), the Cambios tab of a task that changed nothing, and the
+  // «Firma» row of the approved task. The button that opens a file in an editor is only looked for: pressing it would start one.
+  const taskExtraShots = async (prefix) => {
+    if (!seeded) return;
+    try {
+      if (!(await tap('nav-tasks', 'Tareas'))) return;
+      const openTask = async (title) => {
+        try { await page.locator('[data-testid=task-row]', { hasText: title }).first().locator('[data-testid=task-open]').click({ timeout: 3000 }); await page.waitForTimeout(600); return true; } catch { noteOnce(`Tareas: sin fila «${title}»`); return false; }
+      };
+      await page.locator('[data-testid=task-filters] [role=tab]').first().click({ timeout: 3000 }).catch(() => noteOnce('Tareas: sin la pestaña «Todas»'));
+      await page.locator('[data-testid=task-row]').first().waitFor({ timeout: 4000 }).catch(() => noteOnce('Tareas: ninguna fila a la vista'));
+      if (await openTask('Probar en el móvil') && await tap('task-panel-tab-changes', 'la pestaña «Cambios» de la tarea')) {
+        const files = page.locator('[data-testid=task-change]');
+        await files.first().waitFor({ timeout: 6000 }).catch(() => noteOnce('Tareas: la pestaña Cambios no lista archivos'));
+        if (await files.count().catch(() => 0)) { await files.nth(Math.min(1, (await files.count()) - 1)).click({ timeout: 3000 }).catch(() => {}); await page.waitForTimeout(500); }
+        if (await tap('task-change-whole', '«Archivo entero» del archivo abierto')) {
+          await page.locator('[data-testid=file-view]').first().waitFor({ timeout: 5000 }).catch(() => noteOnce('Tareas: «Archivo entero» no enseña el archivo'));
+          await shot(`${prefix}-tareas-cambios-entero`);
+          await tap('task-change-whole', 'volver al parche');
+        }
+        if (await tap('task-changes-before', '«Antes» de los cambios')) {
+          await page.locator('[data-testid=file-view]').first().waitFor({ timeout: 5000 }).catch(() => noteOnce('Tareas: «Antes» no enseña el archivo entero'));
+          await shot(`${prefix}-tareas-cambios-antes`);
+          await tap('task-changes-after', 'volver a «Después»');
+        }
+        if (!(await page.locator('[data-testid=open-file-in]').count())) noteOnce('Tareas: sin botón para abrir el archivo en el editor (¿ningún editor instalado en este PC?)');
+      }
+      // a task that changed nothing keeps its Cambios tab, with the reason
+      if (await openTask('Revisar el contador') && await tap('task-panel-tab-changes', 'la pestaña «Cambios» de una tarea sin cambios')) {
+        const empty = page.locator('[data-testid=task-changes-empty]:not([data-reason=loading])').first();
+        await empty.waitFor({ timeout: 6000 }).catch(() => noteOnce('Tareas: la pestaña Cambios vacía no dice por qué'));
+        await shot(`${prefix}-tareas-cambios-vacio`);
+      }
+      // the «Firma» row of the approved task
+      if (await openTask(SIGNED.title)) {
+        await tap('task-panel-tab-detail', 'la pestaña «Detalle»');
+        const sign = page.locator('[data-testid=task-sign]').first();
+        await sign.scrollIntoViewIfNeeded({ timeout: 4000 }).catch(() => noteOnce('Tareas: el detalle no tiene la fila «Firma»'));
+        const state = await sign.getAttribute('data-state', { timeout: 2000 }).catch(() => null);
+        if (state !== 'verified') noteOnce(`Tareas: la firma de «${SIGNED.title}» sale como «${state ?? 'sin fila'}», no como verificada`);
+        await shot(`${prefix}-tareas-firma`);
+      }
+      await tap('task-panel-tab-detail', 'volver a «Detalle»');
+    } catch (error) { noteOnce(`capturas de Tareas: el recorrido se cortó (${String(error?.message ?? error).split('\n')[0]})`); await closeMenus(); }
+  };
   // One project's page (its tabs and its ⋯), the whiteboard with its attachments, and the new-schedule dialog. Only opens
   // and cancels: it never presses Fusionar, Publicar comentario, Push, Publicar or Crear PR.
   const projectShots = async (prefix) => {
@@ -705,6 +780,17 @@ try {
         await page.waitForTimeout(300); await shot(`${prefix}-ficha-tareas`);
         await closePanel();
       }
+      // the chat with Orbe with files attached and a stopped turn, and the «+» of its box (nothing is picked: only the menu)
+      if (ids.parada && await openChat(STOP_TITLE)) {
+        await closePanel();
+        await page.locator('[data-testid=stopped-card]').first().waitFor({ timeout: 5000 }).catch(() => noteOnce('Orbe: sin la tarjeta «Orb ha parado el turno»'));
+        const center = (testid) => page.locator(`[data-testid=${testid}]`).first().evaluate((e) => e.scrollIntoView({ block: 'center' })).then(() => page.waitForTimeout(400));
+        if (await page.locator('[data-testid=message-attachments]').count()) { await center('message-attachments'); await shot(`${prefix}-orbe-adjuntos`); } else noteOnce('Orbe: el mensaje no enseña sus adjuntos');
+        await page.locator('[data-testid=stopped-undo]').first().waitFor({ timeout: 3000 }).catch(() => noteOnce('Orbe: la tarjeta de parada no ofrece «Deshacer esta tarea»'));
+        await center('stopped-card').catch(() => {});
+        await shot(`${prefix}-orbe-parada`);
+        if (await tap('attach-menu', 'el «+» de la caja de Orbe')) { await shot(`${prefix}-orbe-adjuntar`); await closeMenus(); }
+      } else if (EXTRA) noteOnce('Orbe: sin el chat con adjuntos y parada');
     } catch (error) { noteOnce(`capturas del chat: el recorrido se cortó (${String(error?.message ?? error).split('\n')[0]})`); await closeMenus(); }
   };
   const deepShots = async (prefix) => {
@@ -988,6 +1074,7 @@ try {
     if (EXTRA) {
       // the extra pass: deepShots takes the place of the chat pictures, the boards and the places, then the lock screen
       await chatExtraShots(theme);
+      await taskExtraShots(theme);
       await deepShots(theme);
       await footShots(theme);
       await lockShots(theme);

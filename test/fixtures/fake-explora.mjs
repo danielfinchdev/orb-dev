@@ -49,6 +49,9 @@ export function fakeAdapter(id, real) {
       // without the quoted context, fake-live finds its own answer for the turn
       if (when && !hit) return send({ ...message, text: when });
       if (!hit) return send(message);
+      // «stop»: Orb ends this task's turn itself. The same event the guard's stop sends (src/agents/codex.mjs), so the
+      // conversation that ordered the task gets its «Orb ha parado el turno» card. Only in a task's own turn.
+      if (hit.stop && text.includes('## Tarea #')) o.onEvent?.({ type: 'item', role: 'system', kind: 'status', body: hit.stop.body, stop: { cause: hit.stop.cause, why: hit.stop.why } });
       const root = path.resolve(o.cwd);
       for (const [rel, body] of Object.entries(hit.files ?? {})) {
         const file = path.resolve(root, rel);
