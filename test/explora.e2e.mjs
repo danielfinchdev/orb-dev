@@ -111,6 +111,8 @@ const TASKS = [
   { project: 'tienda-web', title: 'Traducir las fichas de producto', agent: 'codex', text: 'Traduce las fichas de producto al inglés y al francés.', reply: 'Traduciendo…', append: 'DUERME', busy: true },
   { project: 'api-pagos', title: 'Migrar el cobro a la API nueva de Stripe', agent: 'cursor', text: 'Migra el cobro y haz el pago de la factura con la tarjeta de prueba.', reply: 'Hecho.' },
   { project: 'api-pagos', title: 'Revisar el checkout', agent: 'claude', text: 'Revisa el checkout y deja el resultado a punto de aceptar.', reply: 'Revisado: el checkout guarda el carrito entre recargas.', files: { 'src/checkout.js': text('export const checkout = (carrito) => ({ ...carrito, guardado: true });') } },
+  { project: 'orb-dev', title: 'Revisar el contador', agent: 'claude', text: 'Revisa el contador de contexto y deja el resultado dicho.', reply: 'Revisado: el contador usa el presupuesto del runtime.' },
+  { project: 'orb-dev', title: 'Probar en el móvil', agent: 'claude', text: 'Prueba el contador en el móvil y deja el resultado a punto de aceptar.', reply: 'Probado: el contador se ve bien en el móvil.', files: { 'docs/prueba-movil.md': text('# Prueba en el móvil', '', 'El contador se ve bien.') } },
   { project: 'api-pagos', title: 'Limpiar dependencias sin usar', agent: 'codex', text: 'Limpia las dependencias sin usar de la API.', reply: 'No pude terminar.', append: 'FALLA' }
 ];
 const ORBE = [{ text: 'Dame tres planes para el fin de semana si llueve.', reply: 'Te dejo tres planes con lluvia: un museo por la mañana, una peli con comida en casa y una partida de mesa con amigos.' },
@@ -235,16 +237,18 @@ try {
   }
   // The tour lasts minutes and a fake «DUERME» turn ends after 30 s: before the pictures that need them, whatever has
   // stopped working starts again, so the sidebar's spinner and «En curso» are there.
+  // ORB_EXPLORA_BUSY=none|task|chat limits what is kept working (to tell which one a theme cannot cope with).
+  const BUSY = process.env.ORB_EXPLORA_BUSY || 'all';
   const keepBusy = async () => {
-    if (!seeded) return;
+    if (!seeded || BUSY === 'none') return;
     try {
       const busyTask = TASKS.find((t) => t.busy);
-      if (!(await call('tasks.list')).some((x) => x.status === 'running' || (x.title === busyTask.title && x.status === 'queued'))) {
+      if (BUSY !== 'chat' && !(await call('tasks.list')).some((x) => x.status === 'running' || (x.title === busyTask.title && x.status === 'queued'))) {
         await call('tasks.create', { project: busyTask.project, title: busyTask.title, description: busyTask.text, agent: busyTask.agent });
         await until(async () => (await call('tasks.list')).some((x) => x.status === 'running'), 'tarea en curso', 8000).catch(() => noteOnce('la tarea «en curso» no llegó a arrancar'));
       }
       const s = ids.diseno ? await sessionOf(ids.diseno) : null;
-      if (s && s.status !== 'running') await call('sessions.send', { id: s.id, text: BUSY_TEXT });
+      if (BUSY !== 'task' && s && s.status !== 'running') await call('sessions.send', { id: s.id, text: BUSY_TEXT });
     } catch (error) { noteOnce(`no se pudo mantener algo «trabajando»: ${error.message}`); }
   };
   // The chat of a row of the sidebar (by its title); a missing row is a note, not a stop.
@@ -313,7 +317,8 @@ try {
   note(`letras de serie: cuerpo «${await page.evaluate(() => getComputedStyle(document.body).fontFamily)}» · mono «${await page.evaluate(() => { const e = document.createElement('code'); e.className = 'font-mono'; document.body.append(e); const v = getComputedStyle(e).fontFamily; e.remove(); return v; })}»`);
   const views = [['sidebar-home', 'chat'], ['nav-tasks', 'tareas'], ['nav-projects', 'proyectos'], ['nav-agents', 'agentes'], ['nav-memories', 'bitacoras'], ['memories-activity', 'actividad'], ['nav-settings', 'ajustes']];
   const SECTIONS = ['general', 'magiclink', 'agentes', 'permisos', 'extensiones', 'datos', 'avanzado', 'acerca'];
-  for (const theme of ['dia', 'noche']) {
+  // ORB_EXPLORA_ONLY_THEMES=1 skips the tour of every view (to look again at the themes alone).
+  if (!process.env.ORB_EXPLORA_ONLY_THEMES) for (const theme of ['dia', 'noche']) {
     await setDark(theme === 'noche');
     for (const [nav, name] of views) {
       await keepBusy();
@@ -360,6 +365,7 @@ try {
   await closeSettings(page, 'controles');
 
   // A click of the theme tour: 6 s at most; when something covers the control, the note names it and the tour goes on.
+  let dissected = false;
   const tapOrNote = async (sel) => {
     try { await page.click(sel, { timeout: 6000 }); return true; } catch (error) {
       // Playwright's own log says at which stage the click stopped (visible, stable, hit target, receiving events)
@@ -367,13 +373,43 @@ try {
       const over = await page.evaluate((q) => { const e = document.querySelector(q); if (!e) return 'no existe'; const r = e.getBoundingClientRect(); const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); const path = []; for (let n = top; n && path.length < 4; n = n.parentElement) path.push(`${n.tagName.toLowerCase()}${n.dataset?.testid ? `[${n.dataset.testid}]` : ''}.${String(n.className?.baseVal ?? n.className ?? '').split(' ').slice(0, 3).join('.')}`); return path.join(' < '); }, sel).catch(() => '?');
       // a control that never holds still cannot be clicked: say which animation moves it (or one of its ancestors)
       const moving = await page.evaluate(async (q) => { const e = document.querySelector(q); if (!e) return ''; const rects = []; for (let i = 0; i < 8; i++) { const r = e.getBoundingClientRect(); rects.push(`${r.x.toFixed(1)},${r.y.toFixed(1)},${r.width.toFixed(1)}x${r.height.toFixed(1)}`); await new Promise((ok) => setTimeout(ok, 80)); } const anims = []; for (let n = e; n; n = n.parentElement) for (const a of n.getAnimations()) anims.push(`${n.tagName.toLowerCase()}${n.dataset?.testid ? `[${n.dataset.testid}]` : ''}.${String(n.className?.baseVal ?? n.className ?? '').split(' ').slice(0, 2).join('.')}:${a.animationName ?? a.transitionProperty ?? a.constructor.name}/${a.playState}`); return `posiciones ${[...new Set(rects)].join(' | ')} · animaciones ${anims.join(' ; ') || 'ninguna'}`; }, sel).catch(() => '?');
-      note(`no se pudo pulsar ${sel}: encima está ${over} · ${moving} · etapas: ${stage}`); return false;
+      // what the window looked like when the click could not be made
+      await page.screenshot({ path: path.join(OUT, `fallo-${sel.replace(/[^a-z0-9-]+/gi, '_')}-${Date.now() % 100000}.png`) }).catch(() => {});
+      note(`no se pudo pulsar ${sel}: encima está ${over} · ${moving} · etapas: ${stage}`);
+      // ORB_EXPLORA_DISSECT=1: once, the theme's pieces are taken out one at a time to see with which one a click works again
+      if (process.env.ORB_EXPLORA_DISSECT && !dissected) {
+        dissected = true;
+        const tryClick = async (label) => {
+          const t = Date.now(); let ok = true;
+          try { await page.locator(sel).click({ trial: true, timeout: 4000 }); } catch { ok = false; }
+          const took = Date.now() - t; const t2 = Date.now();
+          const count = await Promise.race([page.locator(sel).count().catch(() => 'error'), new Promise((r) => setTimeout(() => r('sin respuesta'), 3000))]);
+          note(`disección «${label}»: clic ${ok ? 'OK' : 'FALLA'} en ${took} ms · locator.count() = ${count} en ${Date.now() - t2} ms`);
+        };
+        await tryClick('tal cual');
+        const pieces = [['el fondo WebGL', 'canvas.orb-shader{display:none!important}'], ['mix-blend-mode', '*{mix-blend-mode:normal!important}'], ['backdrop-filter', '*{backdrop-filter:none!important}'], ['animaciones del robot', '.orb,.orb *{animation:none!important;transition:none!important;will-change:auto!important}'], ['los robots', '.orb{display:none!important}'], ['todas las animaciones', '*,*::before,*::after{animation:none!important;transition:none!important}']];
+        for (const [label, text] of pieces) {
+          await page.evaluate((css) => { const st = document.createElement('style'); st.id = 'orb-dissect'; st.textContent = css; document.head.append(st); }, text);
+          await page.waitForTimeout(600); await tryClick(`sin ${label}`);
+          await page.evaluate(() => document.getElementById('orb-dissect')?.remove());
+        }
+        // another theme's stylesheet with Orb's own components still mounted: tells the CSS from the components
+        for (const other of ['vaporwave', 'predeterminado']) {
+          await page.evaluate((s) => { document.documentElement.dataset.skin = s; }, other);
+          await page.waitForTimeout(600); await tryClick(`data-skin=${other} solo en el DOM`);
+          await page.evaluate(() => { document.documentElement.dataset.skin = 'orb'; });
+        }
+        await page.waitForTimeout(600); await tryClick('otra vez tal cual');
+      }
+      return false;
     }
   };
   // ORB_EXPLORA_SKINS=orb,retro limits the theme tour (to look again at one theme without the whole run).
   const TOUR_SKINS = process.env.ORB_EXPLORA_SKINS ? SKINS.filter((x) => process.env.ORB_EXPLORA_SKINS.split(',').includes(x)) : SKINS;
   // ---- 3. the visual themes (Ajustes → Apariencia), each in day and night: the chat, Tareas and the Apariencia section.
   // The professional theme has no robot anywhere.
+  // with the tour of the views skipped, whatever dialog the seeding left open is closed first
+  if (process.env.ORB_EXPLORA_ONLY_THEMES) { await page.keyboard.press('Escape'); await page.waitForTimeout(400); }
   for (const skin of TOUR_SKINS) {
     await call('config.save', { patch: { ui: { skin } } });
     await until(async () => (await page.evaluate(() => document.documentElement.dataset.skin)) === skin, `tema ${skin}`);
@@ -385,7 +421,97 @@ try {
       // How alive the page is in this theme: frames and DOM changes in one second, and which nodes change most. A theme
       // that repaints or rebuilds without rest shows here (and its controls cannot be clicked: no two equal frames).
       note(`pulso ${skin}/${theme}: ${await page.evaluate(() => new Promise((done) => { let frames = 0; let on = true; const tick = () => { if (!on) return; frames++; requestAnimationFrame(tick); }; requestAnimationFrame(tick); const hits = new Map(); let changes = 0; const mo = new MutationObserver((list) => { for (const m of list) { changes++; const n = m.target.nodeType === 1 ? m.target : m.target.parentElement; const k = n ? `${n.tagName.toLowerCase()}${n.dataset?.testid ? `[${n.dataset.testid}]` : ''}.${String(n.className?.baseVal ?? n.className ?? '').split(' ').slice(0, 2).join('.')}${m.type === 'attributes' ? `@${m.attributeName}` : ''}` : '?'; hits.set(k, (hits.get(k) ?? 0) + 1); } }); mo.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true }); setTimeout(() => { on = false; mo.disconnect(); done(`${frames} fotogramas/s, ${changes} cambios del DOM/s, oculta=${document.hidden} · ${[...hits].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, n]) => `${n}× ${k}`).join(' ; ')}`); }, 1000); })).catch((e) => `sin medir (${e.message})`)}`);
+      // ORB_EXPLORA_STRIP=1: the theme's pieces are taken out BEFORE entering the chat with Orbe and given back one at a
+      // time, entering again each time: the piece whose return hangs the window is the one to fix.
+      if (process.env.ORB_EXPLORA_STRIP && skin === 'orb' && !dissected) {
+        dissected = true;
+        const strips = [['los robots', '.orb{display:none!important}'], ['el fondo WebGL', 'canvas.orb-shader{display:none!important}'], ['mix-blend-mode', '*{mix-blend-mode:normal!important}'], ['backdrop-filter', '*{backdrop-filter:none!important}'], ['animaciones y transiciones', '*,*::before,*::after{animation:none!important;transition:none!important}'], ['content-visibility y contain', '*{content-visibility:visible!important;contain:none!important}'], ['will-change', '*{will-change:auto!important}'], ['filtros y máscaras', '*{filter:none!important;mask:none!important;-webkit-mask:none!important}']];
+        await page.evaluate((list) => { list.forEach(([, css], i) => { const st = document.createElement('style'); st.id = `orb-strip-${i}`; st.textContent = css; document.head.append(st); }); }, strips);
+        const alive = async (label) => {
+          const t = Date.now(); let ok = true;
+          try { await page.screenshot({ timeout: 5000 }); } catch { ok = false; }
+          const answer = await Promise.race([page.evaluate(() => `${document.querySelectorAll('.orb').length} robots, ${document.querySelectorAll('*').length} nodos`).catch(() => 'error'), new Promise((r) => setTimeout(() => r('la página no responde'), 4000))]);
+          note(`tira «${label}»: ${ok ? 'VIVA' : 'COLGADA'} (captura en ${Date.now() - t} ms) · ${answer}`);
+          return ok && answer !== 'la página no responde';
+        };
+        const enter = async () => { await page.evaluate(() => document.querySelector('[data-testid=sidebar-home]')?.click()); await page.waitForTimeout(1500); };
+        const leave = async () => { await page.evaluate(() => document.querySelector('[data-testid=nav-tasks]')?.click()); await page.waitForTimeout(800); };
+        await enter();
+        if (await alive('con todo quitado')) {
+          for (let i = 0; i < strips.length; i++) {
+            await leave();
+            await page.evaluate((n) => document.getElementById(`orb-strip-${n}`)?.remove(), i);
+            await page.waitForTimeout(300); await enter();
+            if (!(await alive(`devuelto: ${strips[i][0]}`))) { note(`CULPABLE: ${strips[i][0]}`); break; }
+          }
+        } else note('se cuelga incluso con todo quitado: no es el CSS del tema, son sus componentes');
+        // Entering with a synthetic click never hangs; the tour enters with a real pointer, which hovers and presses the
+        // robot's head and then stays over it. So: the real pointer, one gesture at a time.
+        const head = await page.evaluate(() => { const e = document.querySelector('[data-testid=sidebar-home] .orb') ?? document.querySelector('[data-testid=sidebar-home]'); const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, robot: e.classList.contains('orb'), w: Math.round(r.width), h: Math.round(r.height) }; });
+        note(`cabeza del robot: ${JSON.stringify(head)}`);
+        await leave();
+        await page.mouse.move(700, 500); await page.waitForTimeout(400);
+        if (await alive('ratón lejos, en Tareas')) {
+          await page.mouse.move(head.x, head.y, { steps: 6 }); await page.waitForTimeout(1500);
+          if (await alive('ratón REAL encima de la cabeza del robot, sin pulsar')) {
+            await page.mouse.down(); await page.mouse.up(); await page.waitForTimeout(1500);
+            if (await alive('clic REAL en la cabeza, ratón aún encima')) {
+              await page.mouse.move(700, 500, { steps: 6 }); await page.waitForTimeout(800);
+              await alive('ratón fuera otra vez');
+            } else note('CULPABLE: el clic real sobre la cabeza del robot (con el ratón encima)');
+          } else note('CULPABLE: el ratón real encima de la cabeza del robot');
+        }
+        break;
+      }
+      let spy = null;
+      if (process.env.ORB_EXPLORA_DISSECT && !dissected) {
+        // armed before the view that hangs: a paused stack is the only thing a busy main thread still answers
+        spy = await page.context().newCDPSession(page);
+        await spy.send('Debugger.enable'); await spy.send('Profiler.enable'); await spy.send('Profiler.setSamplingInterval', { interval: 2000 }); await spy.send('Profiler.start');
+      }
       try { await page.click('[data-testid=sidebar-home]', { timeout: 6000 }); } catch { if (!(await tapOrNote('[data-testid=sidebar-home]'))) continue; }
+      // ORB_EXPLORA_DISSECT=1: in the chat with Orbe, can the window still give a picture? If not, the theme's pieces are
+      // taken out one at a time to see which one stops the frames.
+      if (process.env.ORB_EXPLORA_DISSECT && !dissected) {
+        dissected = true;
+        const probe = async (label) => {
+          const t = Date.now(); let ok = true;
+          try { await page.screenshot({ timeout: 4000 }); } catch { ok = false; }
+          const took = Date.now() - t;
+          const info = await Promise.race([page.evaluate(() => new Promise((done) => { let n = 0; let on = true; const tick = () => { if (!on) return; n++; requestAnimationFrame(tick); }; requestAnimationFrame(tick); setTimeout(() => { on = false; done(`${n} fotogramas/s, ${document.querySelectorAll('.orb').length} robots, ${document.querySelectorAll('*').length} nodos, mensajes ${document.querySelectorAll('[data-slot=message], .msg-box, [data-testid^=msg]').length}`); }, 1000); })), new Promise((r) => setTimeout(() => r('la página no responde'), 4000))]);
+          note(`disección «${label}»: captura ${ok ? 'OK' : 'FALLA'} en ${took} ms · ${info}`);
+          return ok;
+        };
+        if (!(await probe('chat con Orbe, tal cual'))) {
+          const frameOf = (c) => `${c.functionName || '(anon)'} ${String(c.url ?? '').split('/').pop()}:${(c.location?.lineNumber ?? c.lineNumber)}:${(c.location?.columnNumber ?? c.columnNumber)}`;
+          for (let i = 0; i < 3 && spy; i++) {
+            const paused = new Promise((ok) => spy.once('Debugger.paused', (p) => ok(p.callFrames.slice(0, 9).map(frameOf).join(' < '))));
+            spy.send('Debugger.pause').catch(() => {});
+            const stack = await Promise.race([paused, new Promise((r) => setTimeout(() => r('no se pudo pausar en 5 s'), 5000))]);
+            note(`pila ${i + 1} del hilo principal: ${stack}`);
+            await Promise.race([spy.send('Debugger.resume').catch(() => {}), new Promise((r) => setTimeout(r, 1000))]);
+            await new Promise((r) => setTimeout(r, 700));
+          }
+          if (spy) {
+            const prof = await Promise.race([spy.send('Profiler.stop'), new Promise((r) => setTimeout(() => r(null), 8000))]);
+            if (prof?.profile) { const byId = new Map(prof.profile.nodes.map((n) => [n.id, n])); const self = new Map(); for (const id of prof.profile.samples ?? []) { const k = frameOf(byId.get(id).callFrame); self.set(k, (self.get(k) ?? 0) + 1); } note(`perfil (${prof.profile.samples?.length ?? 0} muestras): ${[...self].sort((x, y) => y[1] - x[1]).slice(0, 12).map(([k, v]) => `${v} ${k}`).join(' ; ')}`); } else note('el perfilador no devolvió nada en 8 s');
+          }
+          break;
+          const pieces = [['el fondo WebGL', 'canvas.orb-shader{display:none!important}'], ['mix-blend-mode', '*{mix-blend-mode:normal!important}'], ['backdrop-filter', '*{backdrop-filter:none!important}'], ['animaciones del robot', '.orb,.orb *{animation:none!important;transition:none!important;will-change:auto!important}'], ['los robots', '.orb{display:none!important}'], ['todas las animaciones', '*,*::before,*::after{animation:none!important;transition:none!important}'], ['content-visibility', '*{content-visibility:visible!important;contain:none!important}'], ['will-change', '*{will-change:auto!important}']];
+          for (const [label, text] of pieces) {
+            await page.evaluate((css) => { const st = document.createElement('style'); st.id = 'orb-dissect'; st.textContent = css; document.head.append(st); }, text);
+            await page.waitForTimeout(500); await probe(`sin ${label}`);
+            await page.evaluate(() => document.getElementById('orb-dissect')?.remove());
+          }
+          for (const other of ['vaporwave', 'predeterminado']) {
+            await page.evaluate((x) => { document.documentElement.dataset.skin = x; }, other);
+            await page.waitForTimeout(500); await probe(`data-skin=${other} solo en el DOM`);
+            await page.evaluate(() => { document.documentElement.dataset.skin = 'orb'; });
+          }
+          await page.waitForTimeout(500); await probe('otra vez tal cual');
+          break;
+        }
+      }
       await shot(`tema-${skin}-${theme}-chat`);
       // the chat with an agent with its side panel open (Ficha)
       if (seeded && await openChat(CHATS[0].title)) { if (await openPanel('info')) await shot(`tema-${skin}-${theme}-chat-agente`); await closePanel(); }
