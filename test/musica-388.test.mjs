@@ -252,10 +252,15 @@ test('the player keeps its rules with the adaptive music: a click starts it, the
   assert.match(music, /const \{ createAdaptiveMusic \} = await import\('\.\/adaptive-music\.js'\);\n\s+if \(run !== runs\) return;/);
 });
 
-test('Ajustes and the sidebar: the source, the theme, «Música que reacciona» and the next theme', () => {
+test('Ajustes and the sidebar: the switch, the theme, «Música que reacciona» and the next theme', () => {
   const settings = settingsSource();
   assert.match(settings, /\{musicAvailable\(\) \? <MusicSettings \/> : null\}/);
-  for (const id of ['music-mode', 'music-theme', 'music-reactive', 'music-intensity', 'music-volume']) assert.match(settings, new RegExp(`data-testid="${id}"`), id);
+  for (const id of ['music-on', 'music-mode', 'music-theme', 'music-reactive', 'music-intensity', 'music-volume']) assert.match(settings, new RegExp(`data-testid="${id}"`), id);
+  // The switch is the sidebar's button: it shows what plays and goes through the same toggle.
+  assert.match(settings, /<Switch checked=\{playing\} onCheckedChange=\{\(\) => toggleMusic\(\)\}/);
+  // Only the adaptive music is offered: the source shows when an earlier version left the tracks chosen, to leave them.
+  assert.match(settings, /\{prefs\.mode !== 'adaptive' \? \(/);
+  assert.match(settings, /MUSIC_MODES\.filter\(\(value\) => value === 'adaptive' \|\| value === prefs\.mode\)/);
   assert.match(settings, /value=\{prefs\.mode\} onValueChange=\{setMusicMode\}/);
   assert.match(settings, /value=\{prefs\.theme\} onValueChange=\{setMusicTheme\}/);
   assert.match(settings, /<Switch checked=\{prefs\.reactive\} onCheckedChange=\{setMusicReactive\}/);

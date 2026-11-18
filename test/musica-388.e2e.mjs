@@ -2,7 +2,8 @@
 // fake agents and a throwaway workspace:  npm run tauri:build:e2e && node test/musica-388.e2e.mjs
 // The volume is set to zero first, so nothing sounds on the PC that runs it; the page's audio contexts are watched instead: the music's own one is made only by the
 // click, runs while it plays and is closed when it stops. Checked: off and unloaded at the start, the button, the next
-// theme, Ajustes (source, theme, «Música que reacciona», intensity, volume), what is saved, and the lock.
+// theme, Ajustes (its switch, theme, «Música que reacciona», intensity, volume, and the way out of the free tracks,
+// which are no longer offered), what is saved, and the lock.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -101,32 +102,51 @@ try {
   await until(async () => (await music()).theme === 'orbita', 'the theme chosen in Ajustes');
   assert.equal((await contexts())[0].state, 'running', 'still playing through every change');
 
-  step('the free tracks instead: the engine stops and its context is closed');
-  await page.click('[data-testid=music-mode]');
-  await page.getByRole('option', { name: 'Pistas libres' }).click();
-  await until(async () => (await music()).mode === 'tracks', 'the source saved');
+  step('the switch in Ajustes stops it: its context is closed, and no other source is offered');
+  const onOff = page.locator('[data-testid=music-on]');
+  const mode = page.locator('[data-testid=music-mode]');
+  assert.equal(await onOff.getAttribute('aria-checked'), 'true', 'the switch follows the button');
+  assert.equal(await mode.count(), 0, 'only the adaptive music is offered');
+  await onOff.click();
   await until(async () => (await contexts())[0].state === 'closed', 'the adaptive music let go');
-  // No downloads in a test (the fake agents turn them off): the track cannot play, and that is all that happens.
-  await until(async () => (await button.getAttribute('aria-pressed')) === 'false', 'the track that cannot be downloaded');
-  // The volume, moved while nothing can sound, and back to zero.
+  await until(async () => (await music()).on === false, 'remembered as off');
+  assert.equal(await onOff.getAttribute('aria-checked'), 'false');
+  assert.equal(await button.getAttribute('aria-pressed'), 'false');
+  // The volume, moved while nothing sounds, and back to zero.
   await page.locator('[data-testid=music-volume]').focus();
   await page.keyboard.press('ArrowRight');
   await until(async () => Math.abs(((await music()).volume ?? 0) - 0.05) < 0.001, 'the volume saved');
   await page.keyboard.press('ArrowLeft');
   await until(async () => (await music()).volume === 0, 'the volume back to zero');
 
-  step('back to the adaptive music, with a context of its own again');
-  await page.click('[data-testid=music-mode]');
-  await page.getByRole('option', { name: 'Adaptativa' }).click();
-  await until(async () => (await music()).mode === 'adaptive', 'the source saved');
-  await closeSettings();
-  if ((await button.getAttribute('aria-pressed')) !== 'true') await button.click();
+  step('the switch starts it again, with a context of its own');
+  await onOff.click();
   await until(async () => { const c = await contexts(); return c.length === 2 && c[1].state === 'running'; }, 'a new context running');
+  await until(async () => (await onOff.getAttribute('aria-checked')) === 'true', 'the switch on');
+  await until(async () => (await music()).on === true, 'remembered as on');
+  await closeSettings();
+  assert.equal(await button.getAttribute('aria-pressed'), 'true');
 
   step('pause with the button: closed again, and remembered as off');
   await button.click();
   await until(async () => (await contexts())[1].state === 'closed', 'closed after the pause');
   assert.equal((await music()).on, false);
+  assert.equal(await button.getAttribute('aria-pressed'), 'false');
+
+  step('the free tracks left chosen by an earlier version: the source shows, to go back to the adaptive music');
+  // Written to orb.json the way 3.8.7 left it: Ajustes no longer has a way to choose the tracks.
+  await orb.call('config.save', { patch: { ui: { music: { ...(await music()), mode: 'tracks' } } } });
+  await until(async () => (await music()).mode === 'tracks', 'the tracks saved');
+  await page.click('[data-testid=nav-settings]');
+  await mode.waitFor();
+  assert.equal(await page.locator('[data-testid=music-theme]').count(), 0, 'the themes belong to the adaptive music');
+  await mode.click();
+  await page.getByRole('option', { name: 'Adaptativa' }).click();
+  await until(async () => (await music()).mode === 'adaptive', 'the source saved');
+  await mode.waitFor({ state: 'detached' });
+  await page.locator('[data-testid=music-theme]').waitFor();
+  await closeSettings();
+  assert.equal((await contexts()).length, 2, 'choosing the source starts nothing');
   assert.equal(await button.getAttribute('aria-pressed'), 'false');
 
   step('the lock stops it and it does not come back by itself');
