@@ -28,7 +28,6 @@ export default {
   'master.lockedTitle': 'Type your master password',
   'master.lockedBody': "This PC cannot open Orb's keys by itself (for example, after restoring a backup on another PC or with another Windows user). Type your master password to continue.",
   'master.screenTitle': 'Orb is locked',
-  'master.screenBody': 'Type your master password to go on. Your agents keep working meanwhile.',
   'master.screenSub': 'Type your master password to go on.',
   'master.screenSubAt': 'Locked at {time}',
   'master.screenSubIdle': 'Locked at {time} after being idle',

@@ -23,7 +23,6 @@ export default {
   'data.migration38.body': 'Orb no funciona hasta terminar. Tus datos de Orb 3.7 no se han tocado: solo se ha hecho una copia.',
   'data.migration38.bodyCommitted': 'Tus datos ya están en Orb 3.8, pero falta terminar de ordenar sus archivos. No vuelvas a instalar Orb 3.7.',
   'data.migration38.help': 'Libera espacio o cierra los programas que usen la carpeta de Orb y reintenta. Si sigue fallando, busca una actualización de Orb.',
-  'data.migration38.details': 'Detalles',
   'data.migration38.openFolder': 'Abrir carpeta',
   'data.migration38.checkUpdate': 'Buscar actualización',
   'data.migration38.noUpdate': 'No hay ninguna versión nueva.',

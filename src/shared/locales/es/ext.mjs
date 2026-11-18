@@ -29,7 +29,6 @@ export default {
   'ext.adoptTitle': '¿Mover {name} a core?',
   'ext.adoptBody': 'La carpeta {path} pasa a la carpeta de servidores MCP de core y deja de ser un proyecto. Sus ajustes en Orb siguen funcionando. Si otros programas usan su ruta, cámbiala después.',
   'ext.adopted': '{name} está ahora en core',
-  'ext.addConnector': 'Añadir conector',
   'ext.toggle': 'Activar o desactivar {name}',
   'ext.turnedOn': 'Se ha activado {name}',
   'ext.turnedOff': 'Se ha desactivado {name}',

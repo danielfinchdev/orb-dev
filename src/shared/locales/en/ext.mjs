@@ -29,7 +29,6 @@ export default {
   'ext.adoptTitle': 'Move {name} into core?',
   'ext.adoptBody': 'The folder {path} goes into the MCP servers folder of core and is no longer a project. Its settings in Orb keep working. If other programs use its path, change it afterwards.',
   'ext.adopted': '{name} is now in core',
-  'ext.addConnector': 'Add connector',
   'ext.toggle': 'Turn {name} on or off',
   'ext.turnedOn': '{name} turned on',
   'ext.turnedOff': '{name} turned off',

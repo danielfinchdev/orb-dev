@@ -33,7 +33,6 @@ export default {
   'rules.railsTitle': 'Rails',
   'rules.railsMeta': '{n} · enforced by Orb\'s code',
   'rules.noRails': 'There are no rails to show.',
-  'rules.switchFor': 'Switch for "{name}"',
   'rules.pauseRail': 'Pause the rail',
   'rules.deleteRail': 'Remove rail',
   'rules.removedTitle': 'Removed rails',

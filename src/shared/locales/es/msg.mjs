@@ -514,8 +514,6 @@ export default {
   "msg.schedules.hourly": "cada hora",
   "msg.schedules.needsApproval": " La ha creado el asistente. Apruébala en «Programadas» para activarla.",
   "msg.schedules.monthly": "el día {day} de cada mes a las {time}",
-  "msg.schedules.endedOk": "«{title}» (programada): terminada.",
-  "msg.schedules.endedFail": "«{title}» (programada): falló.",
   "msg.schedules.noProject": "no existe el proyecto {project}",
   "msg.schedules.noSchedule": "esa tarea programada ya no existe",
   "msg.schedules.once": "una vez, el {date} a las {time}",

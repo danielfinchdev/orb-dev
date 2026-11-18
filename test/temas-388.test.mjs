@@ -209,7 +209,7 @@ test('no stylesheet of the interface names a retired theme or the old material',
   }
   assert.ok(!fs.existsSync(path.join(UI, 'themes', 'scene-nube.css')));
   assert.doesNotMatch(readUi('themes.css'), /scene-nube/);
-  for (const file of ['components/skin-preview.jsx', 'components/scene.jsx']) assert.doesNotMatch(readUi(...file.split('/')), /nube|profesional/i, file);
+  for (const file of ['components/scene.jsx']) assert.doesNotMatch(readUi(...file.split('/')), /nube|profesional/i, file);
 });
 
 test('no theme rule switches off the animations or the sounds: those are settings of the user', () => {

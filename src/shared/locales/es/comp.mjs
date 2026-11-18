@@ -21,7 +21,6 @@ export default {
   'comp.installer.missing': 'No instalado',
   'comp.installer.installingBtn': 'Instalando…',
   'comp.installer.installMarked': 'Instalar seleccionados ({n})',
-  'comp.installer.allReady': 'Todo está instalado.',
   'comp.installer.check': 'Volver a comprobar',
   'comp.installer.windowOpened': 'Si Windows solicita permiso, acéptalo. Al terminar, inicia sesión en cada agente desde «Agentes».',
   'comp.live.sec': '{n} s',

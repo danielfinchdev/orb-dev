@@ -514,8 +514,6 @@ export default {
   "msg.schedules.hourly": "every hour",
   "msg.schedules.needsApproval": " It was created by the assistant. Approve it in “Scheduled” to activate it.",
   "msg.schedules.monthly": "on day {day} of every month at {time}",
-  "msg.schedules.endedOk": "“{title}” (scheduled): finished.",
-  "msg.schedules.endedFail": "“{title}” (scheduled): failed.",
   "msg.schedules.noProject": "project {project} does not exist",
   "msg.schedules.noSchedule": "that scheduled task no longer exists",
   "msg.schedules.once": "once, on {date} at {time}",

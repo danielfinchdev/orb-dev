@@ -99,8 +99,6 @@ export default {
   'settings.stopAtHint': 'Then new tasks wait or use another account.',
   'settings.maxPerTask': 'Subtasks per task',
   'settings.maxPerTaskHint': 'Trusted ones only.',
-  'settings.safetyNet': 'Additional limit per account:',
-  'settings.colAgent': 'Agent',
   'settings.colTasks': 'Tasks per window',
   'settings.colHeavy': 'With powerful models',
   'settings.android': 'Android',

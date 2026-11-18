@@ -416,7 +416,7 @@ try {
         await setLook(P, { ...look, skin });
         await views(P, ['chat', 'tasks', 'projects'], st, { scroll: false });
         await attempt(P, `conversation ${skin}`, async () => { await nav(P, { view: 'chat', id: conv.id }); await shot(P, { area: 'orb', screen: 'chat', state: 'conversation', src: 'src/ui/views/chat.jsx + themes.css', desc: `Orb chat, conversation, skin ${skin}` }); });
-        await attempt(P, `settings ${skin}`, async () => { await P.evaluate(() => window.__orbFire('ui:navigate', { view: 'settings', section: 'apariencia' })); await P.waitForSelector('[data-testid=settings-dialog]'); await P.click('[data-testid=settings-nav-general]'); await P.click('[data-testid=settings-sub-apariencia]'); await shot(P, { area: 'settings', screen: 'apariencia', state: st, src: 'src/ui/views/settings/index.jsx + components/skin-preview.jsx', desc: `Settings › Appearance, skin ${skin}` }); await P.keyboard.press('Escape'); });
+        await attempt(P, `settings ${skin}`, async () => { await P.evaluate(() => window.__orbFire('ui:navigate', { view: 'settings', section: 'apariencia' })); await P.waitForSelector('[data-testid=settings-dialog]'); await P.click('[data-testid=settings-nav-general]'); await P.click('[data-testid=settings-sub-apariencia]'); await shot(P, { area: 'settings', screen: 'apariencia', state: st, src: 'src/ui/views/settings/index.jsx', desc: `Settings › Appearance, skin ${skin}` }); await P.keyboard.press('Escape'); });
       }
       await setLook(P, { ...look, skin: 'orb' });
     }

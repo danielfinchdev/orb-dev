@@ -91,7 +91,7 @@ test('countHits: only the logs that mention the text', () => {
 });
 
 test('the new texts exist in both languages', () => {
-  const keys = ['logbooks.metaLogs', 'logbooks.metaActivity', 'logbooks.metaRulesN', 'logbooks.refresh', 'logbooks.searchAll', 'logbooks.noHits', 'logbooks.entriesCount', 'logbooks.intro', 'logbooks.introGeneral', 'logbooks.today', 'logbooks.yesterday', 'logbooks.preamble', 'logbooks.all', 'logbooks.markShort', 'rules.noSwitch', 'rules.fixedMeta'];
+  const keys = ['logbooks.refresh', 'logbooks.searchAll', 'logbooks.noHits', 'logbooks.entriesCount', 'logbooks.intro', 'logbooks.introGeneral', 'logbooks.today', 'logbooks.yesterday', 'logbooks.preamble', 'logbooks.all', 'logbooks.markShort', 'rules.noSwitch', 'rules.fixedMeta'];
   for (const k of keys) { assert.ok(es[k], `es ${k}`); assert.ok(en[k], `en ${k}`); }
   for (const f of ['views/memories.jsx', 'views/logs.jsx', 'views/activity.jsx', 'views/rules.jsx', 'views/rules-cards.jsx', 'views/bitacoras-page.jsx']) {
     for (const m of src(f).matchAll(/\bt\('([\w.]+)'/g)) { assert.ok(es[m[1]], `es ${m[1]} (${f})`); assert.ok(en[m[1]], `en ${m[1]} (${f})`); }

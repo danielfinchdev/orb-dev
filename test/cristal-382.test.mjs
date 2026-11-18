@@ -28,7 +28,6 @@ test('Cristal is a theme of its own, plain and light only', () => {
   const store = read('lib', 'store.js');
   assert.match(store, /put\('skin', skin\);/);
   assert.doesNotMatch(store, /root\.material = /);
-  assert.match(read('components', 'skin-preview.jsx'), /cristal: null/);
   // No robot; its backdrop is the shader of the theme, mounted by the same component as the others.
   assert.match(read('components', 'scene.jsx'), /hasShader\(skin\)/);
   for (const f of ['robot.jsx', 'companion.jsx']) assert.match(read('components', f), /robotSkin\(/, f);

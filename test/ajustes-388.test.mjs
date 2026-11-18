@@ -13,7 +13,7 @@ import en from '../src/shared/locales/en.mjs';
 const view = (...p) => fs.readFileSync(path.join(ROOT, 'src', 'ui', 'views', ...p), 'utf8');
 const SETTINGS = ['index', 'general', 'about', 'devices', 'mcp-ext', 'rows', 'shortcuts', 'trash', 'worktrees'].map((f) => view('settings', `${f}.jsx`));
 const SECTIONS = ['magic-link', 'extensions', 'data', 'master'].map((f) => view(`${f}.jsx`));
-const ALL = [...SETTINGS, ...SECTIONS, fs.readFileSync(path.join(ROOT, 'src', 'ui', 'components', 'skin-preview.jsx'), 'utf8')].join('\n');
+const ALL = [...SETTINGS, ...SECTIONS].join('\n');
 const general = view('settings', 'general.jsx');
 
 test('the eight sections of the menu, as the mock-up names and orders them', () => {

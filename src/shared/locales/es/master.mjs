@@ -28,7 +28,6 @@ export default {
   'master.lockedTitle': 'Escribe tu contraseña maestra',
   'master.lockedBody': 'Este PC no puede abrir por sí solo las claves de Orb (por ejemplo, tras restaurar una copia en otro PC o con otro usuario de Windows). Escribe tu contraseña maestra para continuar.',
   'master.screenTitle': 'Orb está bloqueado',
-  'master.screenBody': 'Escribe tu contraseña maestra para seguir. Los agentes siguen trabajando mientras tanto.',
   'master.screenSub': 'Escribe tu contraseña maestra para seguir.',
   'master.screenSubAt': 'Se bloqueó a las {time}',
   'master.screenSubIdle': 'Se bloqueó a las {time} por inactividad',

@@ -33,7 +33,6 @@ export default {
   'rules.railsTitle': 'Raíles',
   'rules.railsMeta': '{n} · los hace cumplir el código de Orb',
   'rules.noRails': 'No hay raíles que mostrar.',
-  'rules.switchFor': 'Interruptor de «{name}»',
   'rules.pauseRail': 'Pausar el raíl',
   'rules.deleteRail': 'Eliminar raíl',
   'rules.removedTitle': 'Raíles quitados',

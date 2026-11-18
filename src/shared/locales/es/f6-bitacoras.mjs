@@ -6,9 +6,6 @@ export default {
   'logbooks.tabLogs': 'Bitácoras',
   'logbooks.tabActivity': 'Actividad',
   'logbooks.tabRules': 'Normas',
-  'logbooks.metaRules': 'Lo que Orb y los subagentes deben respetar',
-  'logbooks.rulesSoon': 'Próximamente',
-  'logbooks.rulesSoonHint': 'Aquí podrás ver y cambiar las normas de Orb y de los subagentes.',
   // Bitácoras (D50)
   'logbooks.groupGeneral': 'General',
   'logbooks.groupProjects': 'Proyectos',
@@ -50,7 +47,6 @@ export default {
   'logbooks.level.error': 'Error',
   'logbooks.noProject': 'Sin proyecto',
   'logbooks.loadMore': 'Cargar más antiguas',
-  'logbooks.loading': 'Cargando…',
   'logbooks.local': 'Todo se queda en este PC. Los registros de Orb, Usuario y App rotan a los 10 MB (queda el anterior); el de Subagentes no rota. Se leen por páginas.',
   'logbooks.mark': 'Elegir este momento para copiar',
   'logbooks.marked': 'Momento elegido para copiar',
@@ -66,9 +62,6 @@ export default {
   'logbooks.reportCancel': 'Cancelar',
   'logbooks.reportCopy': 'Copiar {n} líneas',
   'logbooks.reportCopied': 'Copiado',
-  'logbooks.metaLogs': '{n} bitácoras · solo lectura',
-  'logbooks.metaActivity': '{n} eventos en pantalla',
-  'logbooks.metaRulesN': '{rules} normas · {rails} raíles',
   'logbooks.refresh': 'Actualizar',
   'logbooks.searchAll': 'Buscar en todas las bitácoras',
   'logbooks.noHits': 'Ninguna bitácora lo menciona.',
@@ -84,5 +77,4 @@ export default {
   'logbooks.task': 'Tarea',
   'logbooks.reviewTask': 'Revisar tarea #{n}',
   'logbooks.dateClear': 'Borrar',
-  'logbooks.datePick': 'Elegir fecha'
 };

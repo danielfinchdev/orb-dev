@@ -99,8 +99,6 @@ export default {
   'settings.stopAtHint': 'Después, las tareas nuevas esperan o usan otra cuenta.',
   'settings.maxPerTask': 'Subtareas por tarea',
   'settings.maxPerTaskHint': 'Solo las de confianza.',
-  'settings.safetyNet': 'Límite adicional por cuenta:',
-  'settings.colAgent': 'Agente',
   'settings.colTasks': 'Tareas por ventana',
   'settings.colHeavy': 'Con modelos potentes',
   'settings.android': 'Android',

@@ -6,9 +6,6 @@ export default {
   'logbooks.tabLogs': 'Logs',
   'logbooks.tabActivity': 'Activity',
   'logbooks.tabRules': 'Rules',
-  'logbooks.metaRules': 'What Orb and the subagents must follow',
-  'logbooks.rulesSoon': 'Coming soon',
-  'logbooks.rulesSoonHint': 'Here you will see and change the rules of Orb and of the subagents.',
   'logbooks.groupGeneral': 'General',
   'logbooks.groupProjects': 'Projects',
   'logbooks.groupDeleted': 'Deleted',
@@ -48,7 +45,6 @@ export default {
   'logbooks.level.error': 'Error',
   'logbooks.noProject': 'No project',
   'logbooks.loadMore': 'Load older',
-  'logbooks.loading': 'Loading…',
   'logbooks.local': 'Everything stays on this PC. The Orb, User and App logs rotate at 10 MB (the previous one is kept); the Subagents one does not rotate. Read in pages.',
   'logbooks.mark': 'Pick this moment to copy',
   'logbooks.marked': 'Moment picked to copy',
@@ -63,9 +59,6 @@ export default {
   'logbooks.reportCancel': 'Cancel',
   'logbooks.reportCopy': 'Copy {n} lines',
   'logbooks.reportCopied': 'Copied',
-  'logbooks.metaLogs': '{n} logs · read only',
-  'logbooks.metaActivity': '{n} events on screen',
-  'logbooks.metaRulesN': '{rules} rules · {rails} rails',
   'logbooks.refresh': 'Refresh',
   'logbooks.searchAll': 'Search all logs',
   'logbooks.noHits': 'No log mentions it.',
@@ -81,5 +74,4 @@ export default {
   'logbooks.task': 'Task',
   'logbooks.reviewTask': 'Review task #{n}',
   'logbooks.dateClear': 'Clear',
-  'logbooks.datePick': 'Pick a date'
 };
