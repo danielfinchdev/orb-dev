@@ -5,7 +5,7 @@
 // code, or «Borrar secretos y empezar de cero») and a connector's keys.
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { notifyError, notifyOk } from '@/lib/notify.js';
-import { KeyRound, Lock, LockKeyhole, CircleAlert, Loader, ShieldQuestion, ShieldAlert, Trash2, Smartphone, LifeBuoy } from 'lucide-react';
+import { Copy, KeyRound, Lock, LockKeyhole, CircleAlert, Loader, ShieldQuestion, ShieldAlert, Trash2, Smartphone, LifeBuoy } from 'lucide-react';
 import { WizardPage, WizardCard, WizardFoot, WizardText, WizardTitle, useBaseAppearance } from '@/components/wizard.jsx';
 import { Scene } from '@/components/scene.jsx';
 import { Robot } from '@/components/robot.jsx';
@@ -17,9 +17,10 @@ import { form, choose } from '@/components/dialogs.jsx';
 import { call, bridge, getState, setState, act, useStore, robotSkin } from '@/lib/store.js';
 import { Select } from '@/components/ui/overlay.jsx';
 import { LOCK_MINUTES, lockMinutesOf } from '@/lib/idle-lock.js';
-import { setMasterAsker, keepUnlock, dropUnlock, unlockCore, passwordStrength, MASTER_MIN } from '@/lib/core-access.js';
+import { setMasterAsker, keepUnlock, heldUnlock, dropUnlock, unlockCore, passwordStrength, passwordShape, MASTER_MIN } from '@/lib/core-access.js';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
 import { cn, errorText } from '@/lib/utils.js';
+import { quiet } from '@/lib/quiet.js';
 import { Block, Panel, Setting } from './settings/rows.jsx';
 
 const MIN = MASTER_MIN;
@@ -51,57 +52,129 @@ function NewPassword({ v, set, ack = null, autoFocus = false }) {
 const ready = (v, ack = true) => [...String(v.next ?? '')].length >= MIN && v.next === v.again && (!ack || v.ack === true);
 
 // What «Si la olvidas no se puede recuperar» means, said where the password is made: plain grey text, its title leading it.
-function Warning() {
+// recovery: false = the code is given right after creating it, true = Orb already has one (kept as it is), null = not known
+// (the older words, which promise nothing about a code).
+function Warning({ recovery = null }) {
   const t = useT();
-  return <WizardText role="note" data-testid="master-warning"><span className="text-foreground font-medium">{t('master.warnTitle')}.</span> {t('master.warnBody')}</WizardText>;
+  if (recovery === null) return <WizardText role="note" data-testid="master-warning"><span className="text-foreground font-medium">{t('master.warnTitle')}.</span> {t('master.warnBody')}</WizardText>;
+  return <WizardText role="note" data-testid="master-warning">{t(recovery ? 'master.warnHave' : 'master.warnGive')}</WizardText>;
+}
+
+// The line under the strength bar (the badge already says the level), true for what was typed: what it holds and what would
+// make it better.
+function strengthLine(t, score, p) {
+  if (score === 0) return t('master.shape.weak', { chars: t(p.chars === 1 ? 'master.shape.char1' : 'master.shape.chars', { n: p.chars }), min: MIN });
+  const words = t(p.words === 1 ? 'master.shape.word1' : 'master.shape.words', { n: p.words });
+  let what = t('master.shape.noWords');
+  if (p.words) what = !p.numbers ? words : t(p.numbers === 1 ? 'master.shape.wordsNum1' : 'master.shape.wordsNums', { words, n: p.numbers });
+  const chars = t('master.shape.chars', { n: p.chars });
+  if (score >= 3) return t('master.shape.strong', { what, chars });
+  return t(p.words >= 3 ? 'master.shape.fairLong' : 'master.shape.fairShort', { what, chars });
 }
 
 const PROTECTS = [[KeyRound, 'master.protectsKeys'], [ShieldAlert, 'master.protectsFull'], [Trash2, 'master.protectsDelete'], [Smartphone, 'master.protectsLink']];
 const STRENGTH_TONE = ['destructive', 'destructive', 'warning', 'success', 'success'];
 
-// A password box as the welcome's mock-up draws it (.field.pw): a label, a 34 px box with a lock, then the text. Kept a password
-// field, never shown in clear. children go under the box (the strength bar).
-function PasswordBox({ id, label, value, onChange, autoFocus = false, 'data-testid': testid, children = null, describedBy }) {
+// A password box as the welcome's mock-up draws it (.field.pw): a label, a 34 px box with a lock, the text and «Mostrar» at its
+// right. Kept a password field unless the user shows it (reveal: useReveal, one per box). children go under the box.
+function PasswordBox({ id, label, value, onChange, reveal, autoFocus = false, 'data-testid': testid, children = null, describedBy }) {
   return (
     <div className="grid min-w-0 content-start gap-1.5">
       <Label htmlFor={id}>{label}</Label>
       <div className="bg-card border-border text-muted-foreground rounded-ctl focus-within:border-input flex h-[calc(var(--ctl)+2px)] items-center gap-2 border px-2.5 transition-[border-color]">
         <Lock className="size-4 flex-none" aria-hidden="true" />
-        <input id={id} type="password" autoComplete="new-password" autoFocus={autoFocus} value={value} onChange={onChange} aria-describedby={describedBy} data-testid={testid}
-          className="text-foreground min-w-0 flex-1 border-0 bg-transparent text-[15px] tracking-[0.08em] outline-none" />
+        <input id={id} type={reveal.shown ? 'text' : 'password'} autoComplete="new-password" spellCheck={false} autoCorrect="off" autoCapitalize="off" autoFocus={autoFocus} value={value} onChange={onChange} aria-describedby={describedBy} data-testid={testid}
+          className={cn('text-foreground min-w-0 flex-1 border-0 bg-transparent text-[15px] outline-none', !reveal.shown && 'tracking-[0.08em]')} />
+        <RevealButton reveal={reveal} />
       </div>
       {children}
     </div>
   );
 }
 
+// The recovery code, shown once in the card of the password just made; when it could not be made, the same card says so and
+// the user chooses (try again, or make it later in Ajustes › Datos). It lives in this component's state only: nothing stores it.
+function RecoveryCode({ code = null, error = null, busy = false, wizard = false, onRetry, onLater, onDone }) {
+  const t = useT();
+  const [kept, setKept] = useState(false);
+  return (
+    <WizardPage step={wizard ? 'maestra' : undefined}>
+      <WizardCard kick={wizard ? t('setup.kick', { n: 4 }) : null} data-testid="master-code-card">
+        <WizardTitle>{t('master.codeTitle')}</WizardTitle>
+        {code ? (<>
+          <WizardText>{t('master.codeIntro')}</WizardText>
+          <div className="bg-muted rounded-ctl px-3 py-3 text-center font-mono text-lg font-semibold tracking-wider break-all select-all" data-testid="master-code-value">{code}</div>
+          {navigator.clipboard ? <Button type="button" size="sm" variant="ghost" className="w-fit" onClick={() => navigator.clipboard.writeText(code).then(() => notifyOk(tNow('datos.copied'))).catch(quiet)} data-testid="master-code-copy"><Copy />{t('datos.copy')}</Button> : null}
+          <label className="flex cursor-pointer items-start gap-2 text-control"><Checkbox checked={kept} onCheckedChange={(c) => setKept(c === true)} data-testid="master-code-kept" className="mt-0.5" /><span>{t('master.codeKept')}</span></label>
+          <WizardFoot><Button type="button" disabled={!kept || busy} onClick={onDone} data-testid="master-code-continue">{t('setup.continue')}</Button></WizardFoot>
+        </>) : (<>
+          <FieldError>{t('master.codeError')}</FieldError>
+          {error === 'expired' ? <WizardText>{t('master.codeExpired')}</WizardText> : null}
+          <WizardFoot>
+            <Button type="button" variant="outline" disabled={busy} onClick={onLater} data-testid="master-code-later">{t('master.codeLater')}</Button>
+            {error === 'expired' ? null : <Button type="button" disabled={busy} onClick={onRetry} data-testid="master-code-retry">{busy ? <Spinner className="border-primary-foreground/40 border-t-primary-foreground" /> : null}{t('master.codeRetry')}</Button>}
+          </WizardFoot>
+        </>)}
+      </WizardCard>
+    </WizardPage>
+  );
+}
+
 // wizard: one more step of the welcome (its row of steps on top); without it, the screen an updated Orb shows alone.
-export function MasterCreate({ onDone, upgrade = false, wizard = false }) {
+// onBack: the welcome's way back (never given to the lone screen).
+export function MasterCreate({ onDone, upgrade = false, wizard = false, onBack = null }) {
   const t = useT();
   const uid = useId();
   const [v, setV] = useState({ next: '', again: '', ack: false });
   const [busy, setBusy] = useState(false);
+  // Whether Orb already has the backups' recovery code (null: not known). One is given only when there is none: a new one
+  // would leave the one the user wrote down useless.
+  const [hasCode, setHasCode] = useState(null);
+  const [code, setCode] = useState(null);
+  const revealNew = useReveal();
+  const revealAgain = useReveal();
+  useEffect(() => { call('backup.status').then((s) => setHasCode(Boolean(s?.recovery))).catch(quiet); }, []);
   const set = (patch) => setV((x) => ({ ...x, ...patch }));
   const score = passwordStrength(v.next, MIN);
+  // The recovery code: → { code } | { have: true } (Orb already has one) | { error: 'failed' | 'expired' }.
+  const issue = async () => {
+    const unlock = heldUnlock();
+    if (!unlock) return { error: 'expired' };
+    try {
+      if ((await call('master.state'))?.canForget) return { have: true };
+      const made = (await call('backup.recovery', { unlock }))?.code;
+      return made ? { code: made } : { error: 'failed' };
+    } catch { return { error: 'failed' }; }
+  };
+  const showIssue = (r) => { if (r.have) onDone?.(); else { setCode(r); setBusy(false); } };
   const submit = async (e) => {
     e.preventDefault();
     if (!ready(v)) return;
+    revealNew.hide(); revealAgain.hide();
     setBusy(true);
-    try { keepUnlock(await call('master.create', { password: v.next })); notifyOk(t('master.created')); onDone?.(); }
+    try {
+      keepUnlock(await call('master.create', { password: v.next }));
+      notifyOk(t('master.created'));
+      set({ next: '', again: '' });
+      if (hasCode !== false) { onDone?.(); return; }
+      showIssue(await issue());
+    }
     catch (error) { notifyError(error); setBusy(false); }
   };
+  const retry = async () => { setBusy(true); showIssue(await issue()); };
+  if (code) return <RecoveryCode code={code.code} error={code.error} busy={busy} wizard={wizard} onRetry={retry} onLater={() => onDone?.()} onDone={() => onDone?.()} />;
   return (
     <WizardPage step={wizard ? 'maestra' : undefined}>
       <WizardCard as="form" onSubmit={submit} data-testid="master-create" kick={wizard ? t('setup.kick', { n: 4 }) : null}>
         <WizardTitle>{t('master.createTitle')}</WizardTitle>
         <WizardText>{t(upgrade ? 'master.upgradeIntro' : 'master.createIntro')}</WizardText>
-        <PasswordBox id={`${uid}-new`} label={t('master.password')} value={v.next} onChange={(e) => set({ next: e.target.value })} describedBy={`${uid}-hint`} autoFocus data-testid="master-new">
+        <PasswordBox id={`${uid}-new`} label={t('master.password')} value={v.next} onChange={(e) => set({ next: e.target.value })} reveal={revealNew} describedBy={`${uid}-hint`} autoFocus data-testid="master-new">
           <div className="grid gap-1.5" data-testid="master-strength">
             <div className="flex gap-1" aria-hidden="true">{[1, 2, 3, 4].map((i) => <span key={i} className={cn('h-1 flex-1 rounded-full', v.next && i <= score ? BAR[score] : 'bg-border')} />)}</div>
-            <p id={`${uid}-hint`} className="text-muted-foreground m-0 text-control">{v.next ? <><Badge variant={STRENGTH_TONE[score]}>{t(`master.strength.${score}`)}</Badge>{' '}</> : null}{t('master.hint', { n: MIN })}</p>
+            <p id={`${uid}-hint`} className="text-muted-foreground m-0 text-control">{v.next ? <><Badge variant={STRENGTH_TONE[score]}>{t(`master.strength.${score}`)}</Badge>{' '}{strengthLine(t, score, passwordShape(v.next))}</> : t('master.hint', { n: MIN })}</p>
           </div>
         </PasswordBox>
-        <PasswordBox id={`${uid}-again`} label={t('master.repeat')} value={v.again} onChange={(e) => set({ again: e.target.value })} data-testid="master-again">
+        <PasswordBox id={`${uid}-again`} label={t('master.repeat')} value={v.again} onChange={(e) => set({ again: e.target.value })} reveal={revealAgain} data-testid="master-again">
           {v.again && v.again !== v.next ? <FieldError>{t('master.mismatch')}</FieldError> : null}
           {v.again && v.again === v.next ? <p className="text-muted-foreground m-0 text-control"><Badge variant="success">{t('master.match')}</Badge></p> : null}
         </PasswordBox>
@@ -111,10 +184,13 @@ export function MasterCreate({ onDone, upgrade = false, wizard = false }) {
             {PROTECTS.map(([Icon, key]) => <li key={key} className="flex items-center gap-2"><Icon className="text-muted-foreground size-4 flex-none" aria-hidden="true" />{t(key)}</li>)}
           </ul>
         </div>
-        <Warning />
-        <label className="flex cursor-pointer items-start gap-2 text-control"><Checkbox checked={Boolean(v.ack)} onCheckedChange={(c) => set({ ack: c === true })} data-testid="master-ack" className="mt-0.5" /><span>{t('master.ack')}</span></label>
+        <Warning recovery={hasCode} />
+        <label className="flex cursor-pointer items-start gap-2 text-control"><Checkbox checked={Boolean(v.ack)} onCheckedChange={(c) => set({ ack: c === true })} data-testid="master-ack" className="mt-0.5" /><span>{t(hasCode === null ? 'master.ack' : hasCode ? 'master.ackHave' : 'master.ackCode')}</span></label>
         <WizardText>{t('master.manager')}</WizardText>
-        <WizardFoot><Button type="submit" disabled={!ready(v) || busy} data-testid="master-create-ok">{busy ? <Spinner className="border-primary-foreground/40 border-t-primary-foreground" /> : null}{t('master.create')}</Button></WizardFoot>
+        <WizardFoot>
+          {onBack ? <Button type="button" variant="outline" disabled={busy} onClick={onBack} data-testid="master-back">{t('setup.back')}</Button> : null}
+          <Button type="submit" disabled={!ready(v) || busy} data-testid="master-create-ok">{busy ? <Spinner className="border-primary-foreground/40 border-t-primary-foreground" /> : null}{t('master.create')}</Button>
+        </WizardFoot>
       </WizardCard>
     </WizardPage>
   );

@@ -41,6 +41,7 @@ export function Setup({ onDone, resume = null }) {
   const [mood, setMood] = useState('happy');
   const [step, setStep] = useState(resume?.step ?? 'datos'); // datos → tema → carpetas (folders of an earlier Orb, if any) → maestra (the master password) → equipo (Windows: install what is missing) → app
   const [plan, setPlan] = useState(resume?.plan ?? null);
+  const [foldersDone, setFoldersDone] = useState(false);
   // the welcome opens maximised (its screens fit without scrolling; only the agents' install may scroll).
   useEffect(() => { bridge.windowControls?.act('maximize-on').catch(quiet); }, []);
   const shown = name.trim() || PRODUCT.assistant;
@@ -67,10 +68,11 @@ export function Setup({ onDone, resume = null }) {
   const finish = async (route) => { await call('config.save', { patch: { setupPending: false } }).catch((e) => notifyError(e)); onDone(route); };
   const afterMaster = async () => { const info = await bridge.info(); if (info.platform === 'win32') setStep('equipo'); else await finish(); };
   // A welcome that goes on may already have its master password (it stopped at «Ordenar carpetas» after making it).
-  const afterFolders = async () => { const ms = await call('master.state').catch(() => null); if (ms?.exists) await afterMaster(); else setStep('maestra'); };
-  if (step === 'tema') return <ThemeStep onDone={() => setStep(plan?.pending ? 'carpetas' : 'maestra')} />;
+  // «Ordenar carpetas» is over (applied or kept as it was): going back from the password never shows it again.
+  const afterFolders = async () => { setFoldersDone(true); const ms = await call('master.state').catch(() => null); if (ms?.exists) await afterMaster(); else setStep('maestra'); };
+  if (step === 'tema') return <ThemeStep onDone={() => setStep(plan?.pending && !foldersDone ? 'carpetas' : 'maestra')} />;
   if (step === 'carpetas') return <LayoutReview plan={plan} step="carpetas" onDone={afterFolders} />;
-  if (step === 'maestra') return <MasterCreate wizard onDone={afterMaster} />;
+  if (step === 'maestra') return <MasterCreate wizard onDone={afterMaster} onBack={() => setStep('tema')} />;
   if (step === 'equipo') return <Prepare name={shown} onDone={() => finish()} onAgents={() => finish({ view: 'agents' })} />;
   return (
     <WizardPage step="datos">

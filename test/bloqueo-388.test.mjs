@@ -49,11 +49,13 @@ test('2: the field keeps its autocomplete and is not corrected or capitalised wh
   assert.match(es, /'master\.hide': 'Ocultar'/);
 });
 
-test('2: the reveal is reusable and is not applied to the creation screen or PasswordBox', () => {
+// 3.8.8: the creation screen shows it too (test/bienvenida-388.test.mjs): one useReveal per box, handed to PasswordBox.
+test('2: the reveal is reusable: the lock screen and the creation screen share the hook and the button', () => {
   assert.match(master, /export function useReveal\(\)/);
-  assert.doesNotMatch(create, /useReveal|RevealButton/);
-  const box = master.slice(master.indexOf('function PasswordBox'), master.indexOf('// wizard: one more step'));
-  assert.doesNotMatch(box, /useReveal|RevealButton/);
+  assert.match(create, /useReveal\(\)/);
+  const box = master.slice(master.indexOf('function PasswordBox'), master.indexOf('function RecoveryCode'));
+  assert.match(box, /<RevealButton reveal=\{reveal\} \/>/);
+  assert.doesNotMatch(box, /useReveal/);
 });
 
 test('review: canForget comes from master.state, one dialog at a time, hidden password under dialogs, no switching while busy', () => {

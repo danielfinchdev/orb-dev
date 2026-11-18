@@ -3,6 +3,7 @@ export default {
   'setup.prepareTitle': 'Preparing your PC',
   'setup.prepareDesc': 'I’ll install any missing agents and tools with their official installers. Then sign in to each one from Agents.',
   'setup.continue': 'Continue',
+  'setup.back': 'Back',
   'setup.signIn': 'Sign in to the agents',
   'setup.hello': 'Hello, I’m {name}',
   'setup.tagline': 'Your pocket director',
