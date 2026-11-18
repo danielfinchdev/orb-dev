@@ -77,6 +77,12 @@ checks the program that is started, not what the editor loads afterwards from it
 **Plain words.** Activity and history no longer show internal names or JSON: every event is told in plain words, and the
 original line is still there when you hover it or copy it.
 
+### Before going back to 3.8.7
+
+Pause or delete your monthly schedules first. 3.8.7 does not know "every month" and would run them far more often than
+that. It also ignores what 3.8.8 added to a schedule: its own time zone (3.8.7 uses yours) and the permission chosen for
+its runs (3.8.7 uses the one in Settings).
+
 ## What's new in 3.8.7
 
 **Grafito and conversation marks.** A new graphite theme (also on Android, where phones can wear it). Plain themes
