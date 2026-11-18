@@ -33,19 +33,28 @@ export class ErrorBoundary extends Component {
     if (!this.state.failed) return <Fragment key={this.state.round}>{this.props.children}</Fragment>;
     if (this.props.onFail) return null;
     const home = () => { this.setState({ failed: false }); this.props.onHome?.(); };
-    if (this.state.offline) return (
-      <StartNotice testid="screen-offline" role="alert" cover={false} icon={WifiOff} title={t('app.loadOfflineTitle')}
-        footer={<Button onClick={this.retry} data-testid="screen-offline-retry"><RotateCw />{t('app.offlineRetry')}</Button>}>
-        <p className={startText}>{t('app.loadOfflineBody')}</p>
-        <p className={startText}>{t('app.loadOfflineNote')}</p>
-      </StartNotice>
-    );
-    return (
-      <StartNotice testid="screen-failed" role="alert" cover={false} icon={TriangleAlert} title={t('app.crashTitle')}
-        footer={<Button onClick={home} data-testid="screen-failed-home"><Home />{t('app.crashHome')}</Button>}>
-        <p className={startText}>{t('app.crashBody')}</p>
-        {bridge.desktop ? <p className={startHint}>{t('app.errorHint')}</p> : null}
-      </StartNotice>
-    );
+    if (this.state.offline) return <OfflineCard onRetry={this.retry} />;
+    return <CrashCard onHome={home} />;
   }
+}
+
+// The two cards, also drawn alone by the start-up preview of the e2e tour (main.jsx).
+export function OfflineCard({ onRetry }) {
+  return (
+    <StartNotice testid="screen-offline" role="alert" cover={false} icon={WifiOff} title={t('app.loadOfflineTitle')}
+      footer={<Button onClick={onRetry} data-testid="screen-offline-retry"><RotateCw />{t('app.offlineRetry')}</Button>}>
+      <p className={startText}>{t('app.loadOfflineBody')}</p>
+      <p className={startText}>{t('app.loadOfflineNote')}</p>
+    </StartNotice>
+  );
+}
+export function CrashCard({ onHome }) {
+  return (
+    <StartNotice testid="screen-failed" role="alert" cover={false} icon={TriangleAlert} title={t('app.crashTitle')}
+      footer={<Button onClick={onHome} data-testid="screen-failed-home"><Home />{t('app.crashHome')}</Button>}>
+      <p className={startText}>{t('app.crashBody')}</p>
+      {/* a screen failed but the engine is alive: only here is it true that Orb keeps working underneath */}
+      {bridge.desktop ? <p className={startHint}>{t('app.errorHint')}</p> : null}
+    </StartNotice>
+  );
 }

@@ -6,8 +6,9 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Download, Gauge, RefreshCw, OctagonX } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
+import { ProjectIcon } from '@/components/project-icon.jsx';
 import { AgentsUsageTabs } from '@/components/agents-tabs.jsx';
-import { windowLabel, resetText, shortTokens } from '@/components/usage-bits.jsx';
+import { windowLabel, shortTokens } from '@/components/usage-bits.jsx';
 import { Badge, Empty, Spinner } from '@/components/ui/basic.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { IconButton, ListCard, MoreButton, Segmented } from '@/components/ui/primitives.jsx';
@@ -38,9 +39,9 @@ function downloadUsageCsv(data, rows, days) {
 }
 
 // A bar like the mock-up's .progress, with the marks over it: the even pace (a thin line) and the brake (a red line).
-function Meter({ pct, pace = null, stop = null, label, className }) {
+function Meter({ pct, pace = null, stop = null, label, title, className }) {
   return (
-    <span className={cn('bg-muted relative block h-1.5 overflow-hidden rounded-full', className)} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={label}>
+    <span className={cn('bg-muted relative block h-1.5 overflow-hidden rounded-full', className)} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={label} title={title}>
       <span className="bg-primary-text block h-full rounded-full" style={{ width: `${Math.min(100, Math.max(pct, 1))}%` }} />
       {pace != null ? <span className="bg-foreground/60 absolute top-0 h-full w-0.5" style={{ left: `calc(${Math.min(100, Math.max(pace, 0))}% - 1px)` }} data-testid="usage-pace" /> : null}
       {stop != null ? <span className="bg-destructive absolute top-0 h-full w-0.5" style={{ left: `calc(${Math.min(100, Math.max(stop, 0))}% - 1px)` }} data-testid="usage-stop" /> : null}
@@ -62,7 +63,7 @@ function Rows({ head, rows, locale, total }) {
         const share = total ? Math.round((n / total) * 100) : 0;
         return (
           <div key={r.key} className={cn('border-border grid items-center gap-3 border-t px-3.5 py-2.5 text-control', COLS)}>
-            <span className={cn('flex min-w-0 items-center gap-2', r.indent && 'pl-6')}>{r.agent && !r.plain ? <AgentIcon agent={r.agent} className="size-4 shrink-0" /> : null}<span className={cn('truncate', r.bold && 'font-medium')}>{r.name}</span></span>
+            <span className={cn('flex min-w-0 items-center gap-2', r.indent && 'pl-6')}>{r.project != null ? <ProjectIcon name={r.project} /> : r.agent && !r.plain ? <AgentIcon agent={r.agent} /> : null}<span className={cn('truncate', r.bold && 'font-medium')}>{r.name}</span></span>
             <span className="text-right tabular-nums">{n ? tokens(n) : '—'}</span>
             <span className="text-right tabular-nums">{r.usd ? usd(r.usd, locale) : '—'}</span>
             <span className="max-[899px]:hidden" title={`${share} %`}><Meter pct={share} label={`${share} %`} /></span>
@@ -84,7 +85,7 @@ function Days({ days, metric, locale }) {
     return i === days.length - 1 ? t('usage.today', { day: name }) : name;
   };
   return (
-    <ListCard className={cn(days.length > 14 && 'max-h-[30rem] overflow-y-auto')} role="img" aria-label={t('usage.byDay')} data-testid="usage-days">
+    <ListCard role="img" aria-label={t('usage.byDay')} data-testid="usage-days">
         {days.map((d, i) => {
           const v = value(d);
           return (
@@ -173,6 +174,13 @@ function outlook(t, locale, windows, stop, weeklyStop) {
   return weekly ? t('usage.paceHitsDay', { when: new Date(hit).toLocaleString(locale, { weekday: 'long' }) }) : t('usage.paceHitsTime', { when: new Date(hit).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) });
 }
 
+// The short form the card shows: the clock time within a day, the weekday further away.
+function renewText(t, locale, at) {
+  if (at <= Date.now()) return t('session.usage.resetNow');
+  if (at - Date.now() < 86_400_000) return t('usage.renewsAt', { when: new Date(at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) });
+  return t('usage.renewsOn', { when: new Date(at).toLocaleDateString(locale, { weekday: 'long' }) });
+}
+
 function Account({ u, locale, stop, weeklyStop, reload }) {
   const t = useT();
   // the brakes apply to the 5-hour window and to the whole week, not to a window of one model
@@ -181,12 +189,13 @@ function Account({ u, locale, stop, weeklyStop, reload }) {
   const wlabel = (w) => (/five_hour|^300min$|^5h$/.test(String(w.window)) ? t('usage.win5', { h: u.windowHours ?? 5 }) : /^seven_day$|^10080min$/.test(String(w.window)) ? t('usage.winWeek') : windowLabel(t, w.window));
   const line = outlook(t, locale, u.windows ?? [], stop, weeklyStop);
   return (
-    <div className="bg-card border-border rounded-card flex flex-col gap-2.5 border p-3.5 text-control" data-testid="usage-account">
-      <div className="flex items-center gap-2"><AgentIcon agent={u.agent} className="size-4 shrink-0" /><b className="min-w-0 flex-1 truncate font-(family-name:--title) text-card-title font-semibold">{u.label && u.label !== name ? `${name} · ${u.label}` : name}</b>{u.plan ? <Badge variant="secondary" title={t('agents.planHint')}>{u.plan}</Badge> : null}{braked ? <Badge variant="warning">{t('usage.brake')}</Badge> : null}</div>
+    <div className="bg-card border-border rounded-card flex flex-col gap-2.5 border px-3.5 py-3 text-control" data-testid="usage-account">
+      <div className="flex items-center gap-2"><AgentIcon agent={u.agent} /><b className="min-w-0 flex-1 truncate font-(family-name:--title) text-card-title leading-[1.45] font-semibold">{u.label && u.label !== name ? `${name} · ${u.label}` : name}</b>{u.plan ? <Badge variant="secondary" title={t('agents.planHint')}>{u.plan}</Badge> : null}{braked ? <Badge variant="warning">{t('usage.brake')}</Badge> : null}</div>
       {u.windows?.length ? (
-        <div className="text-muted-foreground grid grid-cols-[90px_1fr] items-center gap-x-2.5 gap-y-1.5 text-caption">
+        <div className="text-muted-foreground grid grid-cols-[90px_1fr] items-center gap-x-2.5 gap-y-1.5 text-caption leading-[1.45]">
           {u.windows.map((w) => {
             const p = Math.round((w.utilization ?? 0) * 100); const pace = paceOf(w);
+            const paceText = pace != null ? t(p > pace ? 'usage.aheadOfPace' : 'usage.withinPace', { pace }) : '';
             const weekly = /^seven_day$|^10080min$/.test(String(w.window));
             const five = /five_hour|^300min$|^5h$/.test(String(w.window));
             const mark = weekly ? weeklyStop : five ? stop : null;
@@ -194,22 +203,24 @@ function Account({ u, locale, stop, weeklyStop, reload }) {
               <Fragment key={w.window}>
                 <span>{wlabel(w)}</span>
                 <div className="flex flex-col gap-1">
-                  <b className="text-foreground text-control font-medium tabular-nums">{p} %</b>
-                  <Meter pct={p} pace={pace} stop={mark != null ? Math.round(mark * 100) : null} label={wlabel(w)} />
-                  <span>{[pace != null ? t(p > pace ? 'usage.aheadOfPace' : 'usage.withinPace', { pace }) : null, w.resetAt ? resetText(t, locale, w.resetAt) : null].filter(Boolean).join(' · ')}</span>
+                  <b className="text-foreground text-control leading-[1.45] font-medium tabular-nums">{p} %</b>
+                  <Meter pct={p} pace={pace} stop={mark != null ? Math.round(mark * 100) : null} label={wlabel(w)} title={paceText || undefined} />
+                  <span>{w.resetAt ? renewText(t, locale, w.resetAt) : ''}</span>
                 </div>
               </Fragment>
             );
           })}
         </div>
       ) : <p className="text-muted-foreground text-caption">{t('usage.noLimits')}</p>}
-      {line ? <p className="text-muted-foreground m-0 text-caption">{line}</p> : null}
+      <div className="flex flex-col gap-1">
+      {line ? <p className="text-muted-foreground m-0 text-caption leading-[1.45]">{line}</p> : null}
       {/* what the queue holds for this account, and the pause the user can lift when the limit was only of one model or reset earlier. */}
-      <div className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-caption">
+      <div className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-caption leading-[1.45]">
         <span>{u.maxHeavy ? t('agents.tasksUsed', { used: u.used, max: u.max, heavy: u.heavy, maxHeavy: u.maxHeavy }) : t('agents.tasksUsedNoHeavy', { used: u.used, max: u.max })}</span>
         {u.cooldownUntil ? <Badge variant="destructive">{u.cooldownUntil - Date.now() > 20 * 3_600_000 ? t('agents.cooldownDay', { time: new Date(u.cooldownUntil).toLocaleString(locale, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }) : t('agents.cooldown', { time: new Date(u.cooldownUntil).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) })}</Badge> : null}
         {u.modelLimits?.map((m) => <Badge key={m.model} variant="warning" title={m.model}>{t('agents.modelLimit', { model: m.label, time: new Date(m.until).toLocaleString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) })}</Badge>)}
         {fullPc() && (u.cooldownUntil || u.modelLimits?.length) ? <Button size="xs" variant="outline" data-testid={`clear-cooldown-${u.account}`} onClick={async () => { if (await act(call('accounts.clearCooldown', { account: u.account }), t('agents.clearCooldownDone', { name: u.label }))) reload(); }}>{t('agents.clearCooldown')}</Button> : null}
+      </div>
       </div>
     </div>
   );
@@ -266,7 +277,8 @@ export function UsageView() {
   const totalTokens = data?.total ? data.total.tokensIn + data.total.tokensOut : 0;
   // one flat row per model (an agent that reports no model keeps its own name), with its cost and share.
   const agentRows = useMemo(() => (data?.models ?? []).map((m) => ({ ...m, key: `${m.agent}:${m.model ?? ''}`, name: m.label ?? m.model ?? AGENT[m.agent] ?? m.agent })), [data]);
-  const projects = (local?.projects ?? []).map((p) => ({ ...p, key: p.project, name: p.project || '—', plain: true }));
+  // from the ledger of this period (usage.history), the same source as the rest of the page
+  const projects = (data?.projects ?? []).map((p) => ({ ...p, key: p.project, name: p.project || '—' }));
   const projectsTotal = projects.reduce((n, p) => n + p.tokensIn + p.tokensOut, 0);
   const stop = cfg.budget?.stopAt ?? 0.92; const weeklyStop = cfg.budget?.weeklyStopAt ?? 0.85;
   const delta = prev && data?.total?.usd ? Math.round(((data.total.usd - prev) / prev) * 100) : null;
@@ -296,10 +308,10 @@ export function UsageView() {
             {accounts.length ? <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-2.5">{accounts.map((u) => <Account key={u.account} u={u} locale={locale} stop={stop} weeklyStop={weeklyStop} reload={reload} />)}</div> : <p className="text-muted-foreground text-control">{t('usage.noLimits')}</p>}
           </Block>
           {data === null ? <Spinner /> : data === false ? <Empty icon={Gauge} title={t('usage.unavailable')} /> : (<>
-            <ListCard className="flex flex-col gap-0.5 p-3.5">
-              <span className="text-muted-foreground text-caption uppercase">{days === '1' ? t('usage.costToday') : t('usage.costEstimated', { n: days })}</span>
-              <div className="flex items-center gap-2"><span className="text-muted-foreground font-(family-name:--title) text-caption font-semibold tabular-nums">{usd(data.total.usd, locale)}</span>{delta != null ? <Badge variant={delta > 0 ? 'warning' : 'success'}>{t(delta > 0 ? 'usage.deltaUp' : 'usage.deltaDown', { pct: Math.abs(delta), vs: t(days === '1' ? 'usage.vsYesterday' : days === '7' ? 'usage.vsWeek' : 'usage.vsMonth') })}</Badge> : null}</div>
-              <span className="text-muted-foreground text-caption">{t('usage.costNote')}</span>
+            <ListCard className="flex flex-col gap-0.5 p-3.5 leading-[1.45]">
+              <span className="text-muted-foreground text-caption leading-[1.45] uppercase">{days === '1' ? t('usage.costToday') : t('usage.costEstimated', { n: days })}</span>
+              <div className="flex min-h-5 items-center gap-2"><span className="text-muted-foreground font-(family-name:--title) text-caption leading-[1.45] font-semibold tabular-nums">{usd(data.total.usd, locale)}</span>{delta != null ? <Badge variant={delta > 0 ? 'warning' : 'success'}>{t(delta > 0 ? 'usage.deltaUp' : 'usage.deltaDown', { pct: Math.abs(delta), vs: t(days === '1' ? 'usage.vsYesterday' : days === '7' ? 'usage.vsWeek' : 'usage.vsMonth') })}</Badge> : null}</div>
+              <span className="text-muted-foreground text-caption leading-[1.45]">{t('usage.costNote')}</span>
             </ListCard>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-2.5">
               {[[t('usage.in'), tokens(data.total.tokensIn)], [t('usage.out'), tokens(data.total.tokensOut)], [t('usage.turns'), data.total.turns.toLocaleString(locale)], [t('usage.total'), tokens(totalTokens)]].map(([label, value]) => (

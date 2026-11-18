@@ -69,7 +69,7 @@ html[data-motion="minima"] .orb-tip { animation: none; }
 
 /* Ajustes → Contribuye → «Capturar la ventana»: the capture shows what is behind Ajustes, not Ajustes itself. At once:
    the window's duration-200 would otherwise fade it over 200 ms (transition-property defaults to all). */
-html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-dialog"]) { visibility: hidden; }
+html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-dialog"], [data-testid="feedback-pop"]) { visibility: hidden; }
 html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-dialog"], [data-testid="settings-dialog"] *) { transition: none; }
 
 /* The little floating window: dragged by its header, buttons stay clickable. */
@@ -391,6 +391,11 @@ html[data-motion="minima"] .win-control { transition: none; }
    standing alone keeps a region on its own still box, so it stays clickable. */
 .app-titlebar :is(button, a, input, select, textarea, label, [role=button], [role=combobox], [role=tab], [role=switch], [contenteditable], [data-no-drag], .orb:not(:is(button, a, [role=button]) .orb)) { -webkit-app-region: no-drag; app-region: no-drag; }
 .app-titlebar .orb *, .app-titlebar :is(button, a, [role=button]) .orb { -webkit-app-region: initial; app-region: initial; }
+/* the brand's robot hops once when the pointer comes onto the brand (Orb theme: only there is the head an .orb). Only
+   transform, and no region of its own: the head keeps taking the button's. */
+.side-brand .orb { transform-origin: 50% 90%; }
+@keyframes brand-hop { 0% { transform: translateY(0); } 35% { transform: translateY(-5px) rotate(4deg); } 70% { transform: translateY(0) rotate(-2deg); } 100% { transform: none; } }
+@media (prefers-reduced-motion: no-preference) { html:not([data-motion="minima"]) .side-brand:hover .orb { animation: brand-hop 0.6s ease-out; } }
 .wco-pad { padding-inline-end: calc(var(--wco-inset) + 0.75rem) !important; }
 @media (min-width: 768px) { .wco-pad-md { padding-inline-end: calc(var(--wco-inset) + 1.25rem) !important; } }
 
@@ -525,3 +530,54 @@ html[data-motion="minima"] .context-slot-item { animation-name: slot-fade; }
 .lazy-lines { min-width: 0; }
 .lazy-lines > * { min-width: 0; }
 .lazy-lines pre { max-width: 100%; overflow-x: auto; }
+
+/* ---- the sidebar foot's pop-ups (music player, «Enviar comentarios»): they hang from the whole foot (.foot-anchor) and
+   take its width less 8 px a side, so they never leave the window. */
+.side-foot-icon[aria-expanded="true"] { color: var(--foreground); background: var(--accent); }
+.foot-anchor { position: absolute; inset: 0; pointer-events: none; }
+.orb-tip.foot-pop { width: calc(var(--radix-popover-trigger-width) - 16px); max-width: none; max-height: var(--radix-popover-content-available-height); overflow-y: auto; padding: 12px; font-size: 13px; }
+.foot-pop svg { flex: none; }
+.mp-now { display: flex; align-items: center; gap: 10px; }
+.mp-art { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: var(--r-ctl); background: var(--primary-soft); color: var(--primary-text); }
+.mp-art svg { width: 20px; height: 20px; }
+.mp-t { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mp-t b { font-weight: 600; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-t span { font-size: 12px; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-t .mp-err { color: var(--destructive); }
+.mp-ctl { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 12px; }
+.mp-ctl .mp-play { border-radius: var(--r-full); }
+.mp-play svg { width: 16px; height: 16px; }
+.mp-hr { border: 0; border-top: 1px solid var(--border); margin: 12px -12px; }
+.mp-row { display: flex; align-items: flex-start; gap: 12px; }
+.mp-lab { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mp-lab b { font-weight: 500; font-size: 13px; }
+.mp-lab span { font-size: 12px; color: var(--muted-foreground); }
+.mp-sl { display: grid; grid-template-columns: 96px 1fr 40px; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; }
+.mp-k { display: inline-flex; align-items: center; gap: 6px; color: var(--muted-foreground); }
+.mp-k svg { width: 14px; height: 14px; }
+.mp-v { font-size: 12px; color: var(--muted-foreground); text-align: right; font-variant-numeric: tabular-nums; }
+.orb-tip.foot-pop.fb-pop { display: flex; flex-direction: column; padding: 0; }
+.fb-h { display: flex; flex-direction: column; gap: 2px; padding: 12px 12px 0; }
+.fb-h b { font-family: var(--title); font-weight: 600; font-size: 15px; }
+.fb-h span { font-size: 12px; color: var(--muted-foreground); }
+.fb-form { display: flex; flex-direction: column; gap: 10px; padding: 12px; }
+.fb-form .fb-type { align-self: flex-start; }
+.fb-form .fb-msg { field-sizing: fixed; min-height: 104px; padding: 8px 10px; resize: vertical; font-size: 13px; line-height: 1.45; }
+.fb-att { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; margin: -4px 0 0 -8px; }
+.fb-att [data-slot="button"] { padding: 0 8px; font-size: 12px; }
+.fb-n { font-size: 11px; color: var(--faint-foreground); margin-left: auto; }
+.fb-imgs { display: flex; flex-wrap: wrap; gap: 6px; }
+.fb-img { position: relative; width: 48px; height: 36px; border-radius: var(--r-ctl); border: 1px solid var(--border); background: var(--secondary); }
+.fb-img img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+.fb-img button { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; display: grid; place-items: center; border-radius: 50%; cursor: pointer; background: var(--foreground); color: var(--background); }
+.fb-img button svg { width: 10px; height: 10px; }
+.fb-mail { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted-foreground); }
+.fb-mail small { font-size: 11px; color: var(--faint-foreground); }
+.fb-err { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; color: var(--destructive); }
+.fb-err svg { width: 14px; height: 14px; }
+.fb-ok { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 28px 12px; text-align: center; }
+.fb-ok > svg { width: 24px; height: 24px; color: var(--success); }
+.fb-ok b { font-weight: 500; font-size: 14.5px; }
+.fb-f { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--border); }
+.fb-priv { flex: 1; display: flex; align-items: flex-start; gap: 6px; font-size: 11px; color: var(--faint-foreground); }
+.fb-priv svg { width: 14px; height: 14px; margin-top: 1px; }

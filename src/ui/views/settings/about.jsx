@@ -13,6 +13,7 @@ import { useT, useLocale } from '@/lib/i18n.js';
 import { useUpdate, updateActions, notesUrl } from '@/components/update-card.jsx';
 import { TRACKS } from '../../../shared/music.mjs';
 import { available as musicAvailable } from '@/lib/music.js';
+import { useFeedback, FEEDBACK_TYPES } from '@/components/feedback-pop.jsx';
 import { Block, Panel, Setting, Fld, Stack, CardFoot, Hint } from './rows.jsx';
 
 // New versions of Orb (GitHub Releases): the installed version, «Buscar actualizaciones» and the same steps as the card.
@@ -55,26 +56,10 @@ export function SupportCard() {
   );
 }
 
-const FEEDBACK_TYPES = ['error', 'idea', 'otro'];
+// The same form as the sidebar's pop-up (components/feedback-pop.jsx): one state, one call to the engine.
 export function FeedbackCard() {
   const t = useT();
-  const [v, setV] = useState({ type: 'idea', message: '', contact: '' });
-  const [images, setImages] = useState([]);
-  const [busy, setBusy] = useState(false);
-  const room = images.length < 3;
-  const add = (list) => setImages((now) => [...now, ...list.filter(Boolean)].slice(0, 3));
-  // The capture shows the app behind Ajustes (what the user wants to report), so the window hides while it is taken.
-  const capture = async () => {
-    document.documentElement.dataset.capturing = '1';
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    try { return await act(bridge.feedback.capture()); } finally { delete document.documentElement.dataset.capturing; }
-  };
-  const send = async () => {
-    setBusy(true);
-    const ok = await act(bridge.feedback.send({ ...v, images }), t('contribute.sent'));
-    setBusy(false);
-    if (ok) { setV({ ...v, message: '' }); setImages([]); }
-  };
+  const { v, setV, images, setImages, room, busy, addCapture, addImages, send } = useFeedback({ toasts: true });
   return (
     <Block title={t('contribute.feedbackTitle')} note={t('contribute.feedbackDesc')}>
       <Panel>
@@ -83,8 +68,8 @@ export function FeedbackCard() {
         <Fld label={t('contribute.contact')} hint={t('contribute.contactHint')}><Input type="email" value={v.contact} maxLength={120} placeholder={t('contribute.contactPh')} onChange={(e) => setV({ ...v, contact: e.target.value })} /></Fld>
         <Stack className="border-border border-t">
           <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" variant="outline" disabled={!room} onClick={async () => add([await capture()])} data-testid="feedback-capture"><Camera />{t('contribute.capture')}</Button>
-            <Button size="sm" variant="outline" disabled={!room} onClick={async () => add((await act(bridge.feedback.images())) ?? [])}><ImagePlus />{t('contribute.addImage')}</Button>
+            <Button size="sm" variant="outline" disabled={!room} onClick={addCapture} data-testid="feedback-capture"><Camera />{t('contribute.capture')}</Button>
+            <Button size="sm" variant="outline" disabled={!room} onClick={addImages}><ImagePlus />{t('contribute.addImage')}</Button>
           </div>
           <Hint>{t('contribute.imagesLimit')}</Hint>
           {images.length ? (

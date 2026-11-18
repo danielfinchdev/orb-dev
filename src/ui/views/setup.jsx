@@ -9,8 +9,8 @@
 // maximised, and the steps' column scrolls only for what does not fit (components/wizard.jsx).
 // Until the user picks a theme the welcome wears the default one: nothing applies the saved appearance before the app opens.
 import { useEffect, useState } from 'react';
-import { Bot, Candy, CircleCheck, Folder, Gem, LayoutDashboard, LoaderCircle, Sparkles, Terminal, TriangleAlert, Waves } from 'lucide-react';
-import { Installer, InstallProgress, useFunPhrase } from '@/components/installer.jsx';
+import { Bot, Candy, CircleCheck, Download, Folder, Gem, LayoutDashboard, LoaderCircle, RefreshCw, Sparkles, Terminal, TriangleAlert, Waves } from 'lucide-react';
+import { InstallRows, InstallCard, useInstaller, useFunPhrase } from '@/components/installer.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Input, Field, Spinner } from '@/components/ui/basic.jsx';
 import { WizardPage, WizardCard, WizardFoot, WizardText, WizardTitle, StartMark } from '@/components/wizard.jsx';
@@ -121,7 +121,7 @@ function ThemeStep({ onDone }) {
             const Icon = SKIN_ICON[skin];
             return (
               <button key={skin} type="button" role="radio" aria-checked={ui.skin === skin} onClick={() => choose({ skin })} data-testid={`setup-skin-${skin}`}
-                className={cn('focus-visible:outline-ring rounded-card flex min-w-0 cursor-pointer flex-col items-start gap-1 border p-2.5 text-left outline-none focus-visible:outline-2', ui.skin === skin ? 'border-primary-text bg-card shadow-[0_0_0_1px_var(--primary-text)]' : 'border-border bg-card hover:bg-accent')}>
+                className={cn('focus-visible:outline-ring rounded-card flex min-h-[82px] min-w-0 cursor-pointer flex-col items-start gap-1 border p-2.5 text-left outline-none focus-visible:outline-2', ui.skin === skin ? 'border-primary-text bg-card shadow-[0_0_0_1px_var(--primary-text)]' : 'border-border bg-card hover:bg-accent')}>
                 <Icon className="size-4" aria-hidden="true" />
                 <span className="text-control font-medium">{t(`appearance.skin.${skin}`)}</span>
                 <span className="text-muted-foreground text-caption">{t(`appearance.skinDesc.${skin}`)}</span>
@@ -150,15 +150,18 @@ function ThemeStep({ onDone }) {
 }
 
 // Windows, after the folder: install what is missing. While it installs, the title is a light phrase that changes every
-// few seconds, the bar goes under it and the explanation under the bar.
+// few seconds; the progress card, the tools and the optional ones go as the mock-up draws them.
 export function Prepare({ name, onDone, onAgents = null }) {
   const t = useT();
-  const [progress, setProgress] = useState(null);
+  const inst = useInstaller();
+  const { progress } = inst;
   const running = Boolean(progress?.running);
   const { n, phrase } = useFunPhrase(running);
   const finished = progress?.finished && !progress.interrupted;
+  const failed = Boolean(progress?.steps.some((x) => x.state === 'error'));
   const title = running ? `${phrase}…` : finished ? t('install.ready') : progress?.interrupted ? t('install.interrupted') : t('setup.prepareTitle');
   const icon = finished ? CircleCheck : progress?.interrupted ? TriangleAlert : LoaderCircle;
+  const desc = finished && !failed ? 'install.readyDesc' : progress?.interrupted ? 'install.stoppedDesc' : 'setup.prepareDesc';
   return (
     <WizardPage step="equipo" data-testid="setup-prepare">
       <WizardCard kick={t('setup.kick', { n: 5 })}>
@@ -166,12 +169,16 @@ export function Prepare({ name, onDone, onAgents = null }) {
           <StartMark icon={icon} mood={running ? 'thinking' : finished ? 'happy' : progress?.interrupted ? 'worried' : 'hello'} title={name} />
           <WizardTitle key={running ? n : title} className="animate-in fade-in slide-in-from-bottom-1 duration-500" aria-live="polite" data-testid="prepare-title">{title}</WizardTitle>
         </div>
-        <WizardText>{t('setup.prepareDesc')}</WizardText>
-        {progress?.steps.length ? <div className="bg-card border-border rounded-card border px-3.5 pb-3.5"><InstallProgress progress={progress} fun={false} /></div> : null}
-        <Installer bar={false} onProgress={setProgress} />
+        <WizardText>{t(desc)}</WizardText>
+        {progress?.steps.length && (running || (finished && failed)) ? <InstallCard progress={progress} /> : null}
+        {inst.items
+          ? <InstallRows items={inst.items} chosen={inst.chosen} setChosen={inst.setChosen} progress={progress} />
+          : <div className="text-muted-foreground flex items-center gap-2 text-control"><Spinner />{t('comp.installer.checking')}</div>}
         <WizardFoot>
           {/* where to sign in to the agents, one click away. */}
           {onAgents ? <Button variant="outline" onClick={onAgents} data-testid="setup-agents">{t('setup.signIn')}</Button> : null}
+          <Button variant="outline" onClick={inst.load} disabled={running}><RefreshCw />{t('comp.installer.check')}</Button>
+          {inst.missing.length ? <Button variant="outline" disabled={!inst.ids.length || running} onClick={inst.start} data-testid="setup-install"><Download />{running ? t('comp.installer.installingBtn') : t('comp.installer.installMarked', { n: inst.ids.length })}</Button> : null}
           <Button onClick={onDone} data-testid="setup-continue">{t('setup.continue')}</Button>
         </WizardFoot>
       </WizardCard>

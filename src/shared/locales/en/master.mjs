@@ -5,6 +5,7 @@ export default {
   'master.upgradeIntro': 'Orb 3.8 protects the keys of your phones and connectors with a master password. Create it to continue: you only do this once.',
   'master.password': 'Master password',
   'master.repeat': 'Repeat the password',
+  'master.manager': 'You can paste it and use your password manager (Bitwarden, 1Password…).',
   'master.hint': 'At least {n} characters. 12 or more is better: a phrase you remember is a good choice.',
   'master.strength.0': 'Too short',
   'master.strength.1': 'Weak',

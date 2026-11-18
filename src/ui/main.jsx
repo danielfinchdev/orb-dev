@@ -7,7 +7,7 @@ import './app.css';
 if (import.meta.env.MODE === 'android') (await import('./lib/glass.js')).enableGlass();
 import { StrictMode, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { notify, notifyError, notifyOk, Toaster } from '@/lib/notify.js';
+import { notify, notifyError, notifyOk, holdNotices, Toaster } from '@/lib/notify.js';
 import { Menu, Smartphone, ScanLine, Link2, RotateCw, RefreshCw, FolderOpen, Folder, Database, TriangleAlert, Download, KeyRound, ArrowLeft, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Field, Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
@@ -37,7 +37,7 @@ import { dropUnlock } from '@/lib/core-access.js';
 import { isReloadKey, reloadOrb } from '@/lib/reload.js';
 import { isOffline, retryLoop } from '@/lib/net.js';
 import { ago } from '@/lib/utils.js';
-import { ErrorBoundary } from '@/components/error-boundary.jsx';
+import { ErrorBoundary, CrashCard, OfflineCard } from '@/components/error-boundary.jsx';
 import { lazyScreen } from '@/lib/lazy.js';
 import { AGENT } from '@/lib/labels.js';
 import { WindowControls, WindowControlsSlot } from '@/components/window-controls.jsx';
@@ -267,7 +267,7 @@ function NotifyOffer() {
     </div>
   );
 }
-function Root() {
+function AppRoot() {
   const t = useT();
   const ready = useStore((s) => s.ready);
   const [phase, setPhase] = useState('loading'); // loading | setup | pair | update | offline | core | migration | master | unlock | layout | app | error
@@ -437,27 +437,7 @@ function Root() {
   if (phase === 'layout') return <>{strip}<Suspense fallback={null}><LayoutReview plan={layout} onDone={() => location.reload()} /></Suspense></>;
   if (phase === 'migration') return <>{strip}<MigrationFailed state={migration} /></>;
   // on the phone, a way out: try again, or link with another PC.
-  if (phase === 'error') return (
-    <>{strip}
-      <StartNotice testid="app-error" icon={startError?.code === 'secretUnreadable' ? KeyRound : TriangleAlert} title={t('app.errorTitle')}
-        footer={(
-          <>
-            {bridge.mobile && bridge.unlink ? <Button variant="ghost" onClick={async () => { if (await relinkPhone(getState().info?.pcName)) setPhase('pair'); }} data-testid="app-error-relink"><Link2 />{t('app.offlineRelink')}</Button> : null}
-            {/* after sealed keys that do not open, the engine may also start with a new key (asked first). */}
-            {bridge.retryStart && startError?.code === 'secretUnreadable' ? <Button variant="outline" data-testid="app-error-new-secret" onClick={async () => {
-              if (!(await askNewSecret(startError))) return;
-              await bridge.retryStart({ newSecret: true }).catch(quiet); location.reload();
-            }}><KeyRound />{t('app.newSecretOk')}</Button> : null}
-            {/* on the phone, a way out: try again, or link with another PC; on the PC, start the engine again. */}
-            {bridge.mobile ? <Button onClick={() => location.reload()} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
-            {bridge.retryStart ? <Button onClick={() => bridge.retryStart().catch(quiet).finally(() => location.reload())} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
-          </>
-        )}>
-        <p className={`${startText} break-words`}>{error}</p>
-        {bridge.desktop ? <p className={startHint}>{t('app.crashHint')}</p> : null}
-      </StartNotice>
-    </>
-  );
+  if (phase === 'error') return <>{strip}<StartError error={error} startError={startError} onRelink={() => setPhase('pair')} /></>;
   if (phase !== 'app' || !ready) return <div className="grid h-full place-items-center">{strip}<Robot size={80} mood="thinking" /></div>;
   // a tapped notification opens its chat (lib/notes.js).
   return bridge.mobile ? <><NoteOpener /><Shell /></> : <Shell />;
@@ -524,13 +504,78 @@ function PcOffline({ info, onRelink }) {
   );
 }
 
+// «No se pudo iniciar Orb»: the engine did not start (main.jsx › Root, phase 'error'). On the phone, a way out: try again, or link with another PC.
+function StartError({ error, startError, onRelink }) {
+  const t = useT();
+  return (
+    <StartNotice testid="app-error" icon={startError?.code === 'secretUnreadable' ? KeyRound : TriangleAlert} title={t('app.errorTitle')}
+      footer={(
+        <>
+          {bridge.mobile && bridge.unlink ? <Button variant="ghost" onClick={async () => { if (await relinkPhone(getState().info?.pcName)) onRelink(); }} data-testid="app-error-relink"><Link2 />{t('app.offlineRelink')}</Button> : null}
+          {/* after sealed keys that do not open, the engine may also start with a new key (asked first). */}
+          {bridge.retryStart && startError?.code === 'secretUnreadable' ? <Button variant="outline" data-testid="app-error-new-secret" onClick={async () => {
+            if (!(await askNewSecret(startError))) return;
+            await bridge.retryStart({ newSecret: true }).catch(quiet); location.reload();
+          }}><KeyRound />{t('app.newSecretOk')}</Button> : null}
+          {/* on the phone, a way out: try again, or link with another PC; on the PC, start the engine again. */}
+          {bridge.mobile ? <Button onClick={() => location.reload()} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
+          {bridge.retryStart ? <Button onClick={() => bridge.retryStart().catch(quiet).finally(() => location.reload())} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
+        </>
+      )}>
+      <p className={`${startText} break-words`}>{error}</p>
+      {/* the engine did not start here: the hint must not say that Orb keeps working underneath (that one is the crash card's) */}
+      {bridge.desktop ? <p className={startHint}>{t('app.crashHint')}</p> : null}
+    </StartNotice>
+  );
+}
+
+// Start-up notices preview, only for the e2e tour (test/explora.e2e.mjs, ORB_EXPLORA_START=1): it pictures the cards that
+// cannot be provoked, with sample data and without the engine. Only whoever drives the page over CDP can set
+// window.__ORB_START_PREVIEW__ (an init script); the value only picks among this fixed list and is never evaluated or
+// used as HTML. The cards sit inside an `inert` box: nothing in them can be focused or pressed.
+const START_PREVIEWS = new Set(['core', 'core-sin', 'core-danada', 'core-confirma', 'migra', 'migra-act', 'error', 'clave', 'falla', 'falla-red', 'actualiza']);
+const previewName = () => { const v = window.__ORB_START_PREVIEW__; return typeof v === 'string' && START_PREVIEWS.has(v) ? v : null; };
+function StartPreview({ name }) {
+  const t = useT();
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    import('@/lib/start-preview.js').then((m) => { if (alive) setData(m.PREVIEW[name] ?? null); });
+    return () => { alive = false; };
+  }, [name]);
+  // The small dialogs of the mock-up open over their card; their answer is ignored (they call nothing).
+  useEffect(() => {
+    if (data?.confirm) confirm(t('data.core.fresh'), t('data.core.freshConfirm'), { ok: t('data.core.fresh'), danger: true });
+    if (data?.dialog) askNewSecret(data.startError);
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!data) return null;
+  return (
+    <>
+      <div className="bg-foreground text-background fixed top-0 left-1/2 z-[60] -translate-x-1/2 rounded-b-md px-2 py-0.5 text-micro" data-testid="start-preview-tag">Vista previa — datos de ejemplo</div>
+      <div inert className="h-full" data-testid="start-preview" data-preview={name}>
+        {data.card === 'core' ? <Suspense fallback={null}><CoreMissing state={data.state} /></Suspense>
+          : data.card === 'migration' ? <MigrationFailed state={data.state} preview={{ update: data.update }} />
+            : data.card === 'error' ? <StartError error={data.error} startError={data.startError} onRelink={() => {}} />
+              : data.card === 'crash' ? <CrashCard onHome={() => {}} />
+                : data.card === 'offline' ? <OfflineCard onRetry={() => {}} />
+                  : <UpdateNeeded info={data.info} />}
+      </div>
+    </>
+  );
+}
+function Root() {
+  const name = previewName();
+  return name ? <StartPreview name={name} /> : <AppRoot />;
+}
+
 // the data of Orb 3.7 could not be updated (src/domain/data/legacy/migrate-38.mjs): what to do, where the copy is («Abrir
 // carpeta»), «Reintentar», a new version of Orb (the way out when the cause is Orb's own) and the reason under «Detalles».
-function MigrationFailed({ state }) {
+function MigrationFailed({ state, preview = null }) {
   const t = useT();
   const [s, setS] = useState(state);
   const [busy, setBusy] = useState(false);
-  const v = migrationView(s, useUpdate());
+  const live = useUpdate(!preview); // a preview (the e2e tour's) never asks the updater
+  const v = migrationView(s, preview ? preview.update : live);
   const u = v.update;
   const retry = async () => {
     setBusy(true);
@@ -565,15 +610,16 @@ function MigrationFailed({ state }) {
 // recovery code and the master password exist in core). Without a recovery code the backups made until now will not
 // open any more: the word EMPEZAR must be typed.
 async function askNewSecret(startError) {
-  const lines = [t('app.newSecretIntro'), startError?.master ? t('app.newSecretMaster') : startError?.vault ? t('app.newSecretVault') : null, startError?.recovery ? t('app.newSecretRecovery') : t('app.newSecretNoRecovery'), t('app.newSecretBack')].filter(Boolean).join('\n\n');
-  if (startError?.recovery) return confirm(t('app.newSecretTitle'), lines, { ok: t('app.newSecretOk'), danger: true });
-  const word = t('app.newSecretWord');
-  return Boolean(await form(t('app.newSecretTitle'), {
+  // not a component: the module's own translator (there is no `t` in scope here)
+  const lines = [tNow('app.newSecretIntro'), startError?.master ? tNow('app.newSecretMaster') : startError?.vault ? tNow('app.newSecretVault') : null, startError?.recovery ? tNow('app.newSecretRecovery') : tNow('app.newSecretNoRecovery'), tNow('app.newSecretBack')].filter(Boolean).join('\n\n');
+  if (startError?.recovery) return confirm(tNow('app.newSecretTitle'), lines, { ok: tNow('app.newSecretOk'), danger: true });
+  const word = tNow('app.newSecretWord');
+  return Boolean(await form(tNow('app.newSecretTitle'), {
     description: lines,
     initial: { word: '' },
-    body: (v, set) => <Field label={t('app.newSecretType', { word })}><Input autoComplete="off" value={v.word} onChange={(e) => set({ word: e.target.value })} data-testid="new-secret-word" /></Field>,
-    ok: t('app.newSecretOk'),
-    onOk: (v) => { if (v.word.trim().toUpperCase() !== word.toUpperCase()) throw new Error(t('app.newSecretWrong', { word })); return true; }
+    body: (v, set) => <Field label={tNow('app.newSecretType', { word })}><Input autoComplete="off" value={v.word} onChange={(e) => set({ word: e.target.value })} data-testid="new-secret-word" /></Field>,
+    ok: tNow('app.newSecretOk'),
+    onOk: (v) => { if (v.word.trim().toUpperCase() !== word.toUpperCase()) throw new Error(tNow('app.newSecretWrong', { word })); return true; }
   }));
 }
 
@@ -692,6 +738,8 @@ function AppLink() {
 const TOAST_GAP = 24;
 const TOAST_W = 356;
 const TOAST_H = 56;
+// a notice with a title, a description and a button
+const TOAST_TALL = 140;
 function useToastInsets() {
   const [ins, setIns] = useState({ bottom: TOAST_GAP, right: TOAST_GAP });
   useEffect(() => {
@@ -733,6 +781,8 @@ function useToastInsets() {
           else next = { bottom: 4, right: 4 };
         }
       }
+      // no room for a tall notice at the right of the dialog, below it or above it: those wait until it closes
+      holdNotices(Boolean(dialog) && innerWidth - dialog.right < TOAST_W + 2 * TOAST_GAP && innerHeight - dialog.bottom < TOAST_TALL + 8 && dialog.top < TOAST_TALL + 8);
       setIns((old) => (old.bottom === next.bottom && old.right === next.right ? old : next));
     };
     function schedule() { if (!frame) frame = requestAnimationFrame(measure); }

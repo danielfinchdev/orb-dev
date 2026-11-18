@@ -5,8 +5,9 @@
 // code, or «Borrar secretos y empezar de cero») and a connector's keys.
 import { useEffect, useId, useState } from 'react';
 import { notifyError, notifyOk } from '@/lib/notify.js';
-import { KeyRound, Lock, LockKeyhole, TriangleAlert, CircleAlert, Loader, ShieldQuestion, ShieldAlert, Trash2, Smartphone } from 'lucide-react';
-import { WizardPage, WizardCard, WizardFoot, WizardText, WizardTitle } from '@/components/wizard.jsx';
+import { KeyRound, Lock, LockKeyhole, CircleAlert, Loader, ShieldQuestion, ShieldAlert, Trash2, Smartphone } from 'lucide-react';
+import { WizardPage, WizardCard, WizardFoot, WizardText, WizardTitle, useBaseAppearance } from '@/components/wizard.jsx';
+import { Scene } from '@/components/scene.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Field, FieldError, Input, Label, Textarea, Spinner } from '@/components/ui/basic.jsx';
@@ -49,31 +50,27 @@ function NewPassword({ v, set, ack = null, autoFocus = false }) {
 }
 const ready = (v, ack = true) => [...String(v.next ?? '')].length >= MIN && v.next === v.again && (!ack || v.ack === true);
 
-// What «Si la olvidas no se puede recuperar» means, said where the password is made.
+// What «Si la olvidas no se puede recuperar» means, said where the password is made: plain grey text, its title leading it.
 function Warning() {
   const t = useT();
-  return (
-    <div className="border-warning/50 bg-warning/10 rounded-card grid gap-1 border px-3.5 py-3 text-left" role="note" data-testid="master-warning">
-      <span className="flex items-center gap-1.5 text-control font-medium"><TriangleAlert className="text-warning-ink size-4 shrink-0" />{t('master.warnTitle')}</span>
-      <span className="text-muted-foreground text-xs leading-relaxed">{t('master.warnBody')}</span>
-    </div>
-  );
+  return <WizardText role="note" data-testid="master-warning"><span className="text-foreground font-medium">{t('master.warnTitle')}.</span> {t('master.warnBody')}</WizardText>;
 }
 
 const PROTECTS = [[KeyRound, 'master.protectsKeys'], [ShieldAlert, 'master.protectsFull'], [Trash2, 'master.protectsDelete'], [Smartphone, 'master.protectsLink']];
 const STRENGTH_TONE = ['destructive', 'destructive', 'warning', 'success', 'success'];
 
-// A password box as the welcome's mock-up draws it (.field.pw): a lock, then the text. Kept a password field, never shown in clear.
-function PasswordBox({ id, label, hint, hintId, value, onChange, autoFocus = false, 'data-testid': testid }) {
+// A password box as the welcome's mock-up draws it (.field.pw): a label, a 34 px box with a lock, then the text. Kept a password
+// field, never shown in clear. children go under the box (the strength bar).
+function PasswordBox({ id, label, value, onChange, autoFocus = false, 'data-testid': testid, children = null, describedBy }) {
   return (
     <div className="grid min-w-0 content-start gap-1.5">
       <Label htmlFor={id}>{label}</Label>
-      <div className="bg-card border-border text-muted-foreground rounded-ctl focus-within:border-input flex h-10 items-center gap-2 border px-2.5 transition-[border-color]">
+      <div className="bg-card border-border text-muted-foreground rounded-ctl focus-within:border-input flex h-[calc(var(--ctl)+2px)] items-center gap-2 border px-2.5 transition-[border-color]">
         <Lock className="size-4 flex-none" aria-hidden="true" />
-        <input id={id} type="password" autoComplete="new-password" autoFocus={autoFocus} value={value} onChange={onChange} aria-describedby={hintId} data-testid={testid}
+        <input id={id} type="password" autoComplete="new-password" autoFocus={autoFocus} value={value} onChange={onChange} aria-describedby={describedBy} data-testid={testid}
           className="text-foreground min-w-0 flex-1 border-0 bg-transparent text-[15px] tracking-[0.08em] outline-none" />
       </div>
-      {hint ? <p id={hintId} className="text-muted-foreground m-0 text-caption leading-snug">{hint}</p> : null}
+      {children}
     </div>
   );
 }
@@ -98,21 +95,17 @@ export function MasterCreate({ onDone, upgrade = false, wizard = false }) {
       <WizardCard as="form" onSubmit={submit} data-testid="master-create" kick={wizard ? t('setup.kick', { n: 4 }) : null}>
         <WizardTitle>{t('master.createTitle')}</WizardTitle>
         <WizardText>{t(upgrade ? 'master.upgradeIntro' : 'master.createIntro')}</WizardText>
-        <div className="grid gap-1.5">
-          <PasswordBox id={`${uid}-new`} label={t('master.password')} hint={t('master.hint', { n: MIN })} hintId={`${uid}-hint`} value={v.next} onChange={(e) => set({ next: e.target.value })} autoFocus data-testid="master-new" />
-          {v.next ? (
-            <div className="grid gap-1.5" data-testid="master-strength">
-              <div className="flex gap-1" aria-hidden="true">{[1, 2, 3, 4].map((i) => <span key={i} className={cn('h-1 flex-1 rounded-full', i <= score ? BAR[score] : 'bg-border')} />)}</div>
-              <span><Badge variant={STRENGTH_TONE[score]}>{t(`master.strength.${score}`)}</Badge></span>
-            </div>
-          ) : null}
-        </div>
-        <div className="grid gap-1.5">
-          <PasswordBox id={`${uid}-again`} label={t('master.repeat')} value={v.again} onChange={(e) => set({ again: e.target.value })} data-testid="master-again" />
+        <PasswordBox id={`${uid}-new`} label={t('master.password')} value={v.next} onChange={(e) => set({ next: e.target.value })} describedBy={`${uid}-hint`} autoFocus data-testid="master-new">
+          <div className="grid gap-1.5" data-testid="master-strength">
+            <div className="flex gap-1" aria-hidden="true">{[1, 2, 3, 4].map((i) => <span key={i} className={cn('h-1 flex-1 rounded-full', v.next && i <= score ? BAR[score] : 'bg-border')} />)}</div>
+            <p id={`${uid}-hint`} className="text-muted-foreground m-0 text-control">{v.next ? <><Badge variant={STRENGTH_TONE[score]}>{t(`master.strength.${score}`)}</Badge>{' '}</> : null}{t('master.hint', { n: MIN })}</p>
+          </div>
+        </PasswordBox>
+        <PasswordBox id={`${uid}-again`} label={t('master.repeat')} value={v.again} onChange={(e) => set({ again: e.target.value })} data-testid="master-again">
           {v.again && v.again !== v.next ? <FieldError>{t('master.mismatch')}</FieldError> : null}
-          {v.again && v.again === v.next ? <span><Badge variant="success">{t('master.match')}</Badge></span> : null}
-        </div>
-        <div className="bg-card border-border rounded-card border px-3 py-2.5">
+          {v.again && v.again === v.next ? <p className="text-muted-foreground m-0 text-control"><Badge variant="success">{t('master.match')}</Badge></p> : null}
+        </PasswordBox>
+        <div className="bg-card border-border rounded-card my-2 border px-3 py-2.5">
           <span className="text-faint-foreground text-micro font-semibold tracking-[0.06em] uppercase">{t('master.protects')}</span>
           <ul className="m-0 mt-2 flex list-none flex-col gap-1.5 p-0 text-control">
             {PROTECTS.map(([Icon, key]) => <li key={key} className="flex items-center gap-2"><Icon className="text-muted-foreground size-4 flex-none" aria-hidden="true" />{t(key)}</li>)}
@@ -120,6 +113,7 @@ export function MasterCreate({ onDone, upgrade = false, wizard = false }) {
         </div>
         <Warning />
         <label className="flex cursor-pointer items-start gap-2 text-control"><Checkbox checked={Boolean(v.ack)} onCheckedChange={(c) => set({ ack: c === true })} data-testid="master-ack" className="mt-0.5" /><span>{t('master.ack')}</span></label>
+        <WizardText>{t('master.manager')}</WizardText>
         <WizardFoot><Button type="submit" disabled={!ready(v) || busy} data-testid="master-create-ok">{busy ? <Spinner className="border-primary-foreground/40 border-t-primary-foreground" /> : null}{t('master.create')}</Button></WizardFoot>
       </WizardCard>
     </WizardPage>
@@ -170,6 +164,7 @@ async function forgotFlow({ canForget = false } = {}) {
 // locked, the PC asleep, «Bloquear» or Orb unused for a while; the agents keep working meanwhile).
 export function MasterLocked({ onDone, state = null }) {
   const t = useT();
+  useBaseAppearance();
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -182,31 +177,37 @@ export function MasterLocked({ onDone, state = null }) {
     catch (err) { setError(errorText(err)); setBusy(false); }
   };
   const forgot = async () => { if (await forgotFlow({ canForget: Boolean(state?.canForget) })) onDone?.(); };
+  // Nothing of the app is drawn while it is locked: behind the veil there is only the theme's own backdrop, blurred.
   return (
-    <div className="flex h-full overflow-auto bg-black/32 p-6">
-      <form onSubmit={submit} data-slot="dialog-content" className="dialog bg-background text-foreground rounded-card border-border m-auto grid w-full max-w-[440px] gap-3 border p-[18px]" data-testid="master-locked" data-screen={screen ? '1' : undefined}>
-        <div className="flex items-center gap-4">
-          <LockMark busy={busy} lost={lost} />
-          <div className="min-w-0">
-            <h1 className="font-(family-name:--title) text-lg leading-tight font-semibold">{t(lost ? 'master.lostTitle' : screen ? 'master.screenTitle' : 'master.lockedTitle')}</h1>
-            <p className="text-muted-foreground mt-0.5 text-xs leading-snug">{t(lost ? 'master.lostBody' : screen ? 'master.screenSub' : 'master.lockedBody')}</p>
-          </div>
-        </div>
-        {lost ? null : (<>
-          <div className="grid gap-1.5">
-            <Label htmlFor={fieldId}>{t('master.password')}</Label>
-            <div className="border-border bg-card text-muted-foreground rounded-ctl focus-within:border-input flex h-[calc(var(--ctl)+2px)] items-center gap-2 border px-2.5 transition-[border-color]">
-              <Lock className="size-3.5 shrink-0" />
-              <input id={fieldId} type="password" autoComplete="current-password" autoFocus value={password} onChange={(e) => { setPassword(e.target.value); setError(null); }} placeholder={t('master.password')} data-testid="master-password" aria-invalid={error ? true : undefined} className="placeholder:text-faint-foreground text-foreground min-w-0 flex-1 bg-transparent text-[15px] tracking-[.08em] outline-none" />
+    <div className="relative isolate h-full">
+      <Scene />
+      <main className="theme-scene h-full">
+        <div className="flex h-full overflow-auto bg-black/32 p-6 backdrop-blur-[10px]">
+          <form onSubmit={submit} data-slot="dialog-content" className="dialog bg-background text-foreground rounded-card border-border m-auto grid w-full max-w-[440px] gap-3 border p-[18px]" data-testid="master-locked" data-screen={screen ? '1' : undefined}>
+            <div className="flex items-center gap-4">
+              <LockMark busy={busy} lost={lost} />
+              <div className="min-w-0">
+                <h1 className="font-(family-name:--title) text-lg leading-tight font-semibold">{t(lost ? 'master.lostTitle' : screen ? 'master.screenTitle' : 'master.lockedTitle')}</h1>
+                <p className="text-muted-foreground mt-0.5 text-xs leading-snug">{t(lost ? 'master.lostBody' : screen ? 'master.screenSub' : 'master.lockedBody')}</p>
+              </div>
             </div>
-          </div>
-          {error ? <p className="text-destructive flex items-center gap-1.5 text-xs" role="alert" data-testid="master-error"><CircleAlert className="size-3.5 shrink-0" />{error}</p> : null}
-          <Button type="submit" className="w-full" disabled={!password || busy}>{busy ? <Spinner className="border-white/40 border-t-white" /> : null}{t('master.unlock')}</Button>
-        </>)}
-        <div className="text-center"><Button type="button" variant={lost ? 'default' : 'ghost'} size="sm" onClick={forgot} data-testid="master-forgot">{t('master.forgot')}</Button></div>
-        {screen ? <LockStatus /> : null}
-        {screen ? <p className="text-muted-foreground text-xs leading-snug" data-testid="master-screen-note">{t('master.screenNote')}</p> : null}
-      </form>
+            {lost ? null : (<>
+              <div className="grid gap-1.5">
+                <Label htmlFor={fieldId}>{t('master.password')}</Label>
+                <div className="border-border bg-card text-muted-foreground rounded-ctl focus-within:border-input flex h-[calc(var(--ctl)+2px)] items-center gap-2 border px-2.5 transition-[border-color]">
+                  <Lock className="size-3.5 shrink-0" />
+                  <input id={fieldId} type="password" autoComplete="current-password" autoFocus value={password} onChange={(e) => { setPassword(e.target.value); setError(null); }} placeholder={t('master.password')} data-testid="master-password" aria-invalid={error ? true : undefined} className="placeholder:text-faint-foreground text-foreground min-w-0 flex-1 bg-transparent text-[15px] tracking-[.08em] outline-none" />
+                </div>
+              </div>
+              {error ? <p className="text-destructive flex items-center gap-1.5 text-xs" role="alert" data-testid="master-error"><CircleAlert className="size-3.5 shrink-0" />{error}</p> : null}
+              <Button type="submit" className="w-full" disabled={!password || busy}>{busy ? <Spinner className="border-white/40 border-t-white" /> : null}{t('master.unlock')}</Button>
+            </>)}
+            <div className="text-center"><Button type="button" variant={lost ? 'default' : 'ghost'} size="sm" onClick={forgot} data-testid="master-forgot">{t('master.forgot')}</Button></div>
+            {screen ? <LockStatus /> : null}
+            {screen ? <p className="text-muted-foreground text-xs leading-snug" data-testid="master-screen-note">{t('master.screenNote')}</p> : null}
+          </form>
+        </div>
+      </main>
     </div>
   );
 }

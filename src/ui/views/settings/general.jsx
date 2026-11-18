@@ -76,8 +76,8 @@ export function AppearanceCard({ c }) {
                   <button key={skin} type="button" role="radio" aria-checked={ui.skin === skin} onClick={() => set({ skin })} data-testid={`skin-${skin}`}
                     className={cn('focus-visible:outline-ring flex min-w-0 cursor-pointer flex-col items-start gap-1 rounded-card border p-2.5 text-left outline-none focus-visible:outline-2', ui.skin === skin ? 'border-primary-text bg-card shadow-[0_0_0_1px_var(--primary-text)]' : 'border-border bg-card hover:bg-accent')}>
                     {(() => { const Icon = SKIN_ICON[skin]; return <Icon className="size-4" aria-hidden="true" />; })()}
-                    <span className="text-control font-medium">{t(`appearance.skin.${skin}`)}</span>
-                    <span className="text-muted-foreground text-caption">{t(`appearance.skinDesc.${skin}`)}</span>
+                    <span className="text-control leading-[1.45] font-medium">{t(`appearance.skin.${skin}`)}</span>
+                    <span className="text-muted-foreground text-caption leading-[1.45]">{t(`appearance.skinDesc.${skin}`)}</span>
                   </button>
                 ))}
               </div>
@@ -117,7 +117,7 @@ export function AppearanceCard({ c }) {
           <Row label={t('settings.companion')} hint={t('settings.companionHint')}><Switch checked={ui.companion !== false} onCheckedChange={(companion) => set({ companion }, companion ? t('settings.companionOn') : t('settings.companionOff'))} /></Row>
           <Row label={t('settings.sounds')} hint={t('settings.soundsHint')}><Switch checked={ui.sounds !== false} onCheckedChange={(sounds) => set({ sounds }, sounds ? t('settings.soundsOn') : t('settings.soundsOff')).then(() => sounds && play('wake'))} /></Row>
           <Setting label={t('settings.volume')} hint={t('settings.volumeHint')}>
-            <Range min={0.1} max={1} step={0.1} value={volume} aria-label={t('settings.volume')} disabled={ui.sounds === false} className="w-[120px] cursor-pointer"
+            <Range min={0.1} max={1} step={0.1} value={volume} aria-label={t('settings.volume')} disabled={ui.sounds === false} className="w-[120px]! cursor-pointer"
               onChange={(e) => setVolume(Number(e.target.value))} onPointerUp={() => set({ volume }).then(() => play('boop'))} onKeyUp={() => set({ volume })} />
           </Setting>
           <Row label={t('settings.motion')} hint={t('settings.motionHint')}><Switch checked={ui.motion !== 'minima'} onCheckedChange={(on) => set({ motion: on ? 'completa' : 'minima' }, on ? t('settings.motionOn') : t('settings.motionOff'))} /></Row>
@@ -159,7 +159,7 @@ export function PermissionsCard({ c }) {
           <Segmented value={mode} data-testid="settings-autonomy" aria-label={t('settings.autonomyLabel')} onChange={(p) => act(call('permissions.setMode', { mode: p === 'auto' ? 'auto' : 'preguntar' }), p === 'auto' ? t('session.autoOn') : t('session.askOn')).then(() => refresh())}
             options={[{ value: 'auto', label: t('session.autoMode'), testid: 'settings-autonomy-auto' }, { value: 'editar', label: t('session.askMode'), testid: 'settings-autonomy-editar' }]} />
         </Setting>
-        <Stack className="border-border border-t"><Hint>{t('settings.autonomyAlways')}</Hint><Hint>{t('settings.autonomyMore')}</Hint></Stack>
+        <Stack><Hint className="leading-[1.45]">{t('settings.autonomyAlways')}</Hint><Hint className="leading-[1.45]">{t('settings.autonomyMore')}</Hint></Stack>
       </Panel>
     </Block>
   );
@@ -242,7 +242,7 @@ export function TasksCard({ c }) {
             <Panel>
               <Setting label={t('settings.spendFine')} hint={t('settings.spendFineHint')}>
                 <span className="text-primary-text text-control font-medium">{level == null ? t('settings.spendCustom') : t(`settings.spend${level}`)}</span>
-                <Range min={0} max={4} step={1} value={level ?? 2} onChange={(e) => applyProfile(Number(e.target.value))} className="w-[120px] cursor-pointer" aria-label={t('settings.spendFine')} aria-valuetext={level == null ? t('settings.spendCustom') : t(`settings.spend${level}`)} data-testid="spend-slider" />
+                <Range min={0} max={4} step={1} value={level ?? 2} onChange={(e) => applyProfile(Number(e.target.value))} className="w-[120px]! cursor-pointer" aria-label={t('settings.spendFine')} aria-valuetext={level == null ? t('settings.spendCustom') : t(`settings.spend${level}`)} data-testid="spend-slider" />
               </Setting>
               <Row label={<>{t('settings.review')} <Badge variant="info">{t('settings.reviewBadge')}</Badge></>} hint={t('settings.reviewHint')}><Switch checked={v.review} onCheckedChange={(review) => { setV({ ...v, review }); setProfile(null); save({ review: { auto: review }, budget: { profile: null } }); }} /></Row>
               <Row label={t('settings.trusted')} hint={t('settings.trustedHint', { n: v.maxPerTask })}><Switch checked={v.trusted} disabled={!v.delegation} onCheckedChange={(trusted) => { setV({ ...v, trusted }); setProfile(null); save({ delegation: { trusted }, budget: { profile: null } }); }} /></Row>
@@ -434,7 +434,7 @@ function MusicSettings() {
       <Row label={t('appearance.music')} hint={t('appearance.musicHint')} className="border-t"><Switch checked={playing} onCheckedChange={() => toggleMusic()} aria-label={t('appearance.music')} data-testid="music-on" /></Row>
       {/* the mock-up's rows first (on, volume); what it does not draw, after them */}
       <Setting label={t('appearance.musicVolume')} hint={t('appearance.musicVolumeHint')}>
-        <Range min={0} max={1} step={0.05} value={v} aria-label={t('appearance.musicVolume')} className="w-[120px] cursor-pointer" data-testid="music-volume"
+        <Range min={0} max={1} step={0.05} value={v} aria-label={t('appearance.musicVolume')} className="w-[120px]! cursor-pointer" data-testid="music-volume"
           onChange={(e) => { const n = Number(e.target.value); setV(n); setMusicVolume(n); }} onPointerUp={keepVolume} onKeyUp={keepVolume} />
       </Setting>
       {prefs.mode !== 'adaptive' ? (
@@ -450,7 +450,7 @@ function MusicSettings() {
           <Row label={t('appearance.musicReactive')} hint={t('appearance.musicReactiveHint')}><Switch checked={prefs.reactive} onCheckedChange={setMusicReactive} data-testid="music-reactive" /></Row>
           {prefs.reactive ? null : (
             <Setting label={t('appearance.musicIntensity')}>
-              <Range min={0} max={1} step={0.05} value={level} aria-label={t('appearance.musicIntensity')} className="w-[120px] cursor-pointer" data-testid="music-intensity"
+              <Range min={0} max={1} step={0.05} value={level} aria-label={t('appearance.musicIntensity')} className="w-[120px]! cursor-pointer" data-testid="music-intensity"
                 onChange={(e) => { const n = Number(e.target.value); setLevel(n); setMusicIntensity(n); }} onPointerUp={keepLevel} onKeyUp={keepLevel} />
             </Setting>
           )}

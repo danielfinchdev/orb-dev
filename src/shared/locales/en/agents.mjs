@@ -176,6 +176,8 @@ export default {
   'usage.paceHitsTime': 'At this pace you reach 100 % at {when}.',
   'usage.brake': 'Brake',
   'usage.win5': '{h} h window',
+  'usage.renewsAt': 'resets {when}',
+  'usage.renewsOn': 'resets on {when}',
   'usage.winWeek': 'Week',
   'usage.atLimit': 'When the limit is near',
   'usage.atLimitNote': 'What Orb does when an account gets close to its limit.',

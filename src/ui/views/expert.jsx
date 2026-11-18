@@ -17,7 +17,7 @@ import { useStore, call, act, go, bridge, setState, getState, openTerminal } fro
 import { AGENT } from '@/lib/labels.js';
 import { cn, errorText } from '@/lib/utils.js';
 import { useHighlight } from '@/lib/use-highlight.js';
-import { DiffLines } from '@/components/diff-view.jsx';
+import { PatchView } from '@/components/patch-view.jsx';
 import { t, useT, useLocale } from '@/lib/i18n.js';
 import { stepText } from '@/components/chat-live.jsx';
 import { activityLabel, activityDetail } from '@/lib/activity.js';
@@ -37,6 +37,22 @@ const RIGHT_PANELS = ['git', 'history', 'running', 'usage', 'system', 'activity'
 
 const size = (n) => (n == null ? '' : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1073741824).toFixed(1)} GB`);
 const ago = (iso) => { const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000); return s < 60 ? t('expert.ago.now') : s < 3600 ? t('expert.ago.min', { n: Math.round(s / 60) }) : s < 86400 ? t('expert.ago.hour', { n: Math.round(s / 3600) }) : t('expert.ago.day', { n: Math.round(s / 86400) }); };
+// The language shown in the viewer's status bar, from the file's extension (the viewer is read-only and does not detect more).
+const LANGUAGE = { ts: 'TypeScript', tsx: 'TypeScript React', js: 'JavaScript', jsx: 'JavaScript React', mjs: 'JavaScript', cjs: 'JavaScript', json: 'JSON', md: 'Markdown', css: 'CSS', html: 'HTML', htm: 'HTML', rs: 'Rust', py: 'Python', go: 'Go', java: 'Java', kt: 'Kotlin', c: 'C', h: 'C', cpp: 'C++', cs: 'C#', rb: 'Ruby', php: 'PHP', sh: 'Shell', ps1: 'PowerShell', yml: 'YAML', yaml: 'YAML', toml: 'TOML', xml: 'XML', sql: 'SQL', swift: 'Swift', vue: 'Vue', svelte: 'Svelte', txt: 'Plain text' };
+const languageOf = (path) => LANGUAGE[/\.([a-z0-9]+)$/i.exec(path ?? '')?.[1]?.toLowerCase()] ?? null;
+const sumCounts = (by) => { const all = Object.values(by); return all.length ? { add: all.reduce((n, f) => n + f.add, 0), del: all.reduce((n, f) => n + f.del, 0) } : null; };
+// The right end of the path bar: what is known for sure about the open file (its language, the lines it changed).
+function StatusBar({ language, counts }) {
+  const t = useT();
+  if (!language && !counts) return null;
+  return (
+    <span className="ml-auto flex shrink-0 items-center gap-1.5 whitespace-nowrap" data-testid="expert-status">
+      {language ? <span>{language}</span> : null}
+      {language && counts ? <span aria-hidden="true">·</span> : null}
+      {counts ? <span title={t('expert.lines', counts)}><span className="text-success">+{counts.add}</span> <span className="text-destructive">−{counts.del}</span></span> : null}
+    </span>
+  );
+}
 const splitPath = (p) => { const i = p.lastIndexOf('/'); return i < 0 ? ['', p] : [p.slice(0, i), p.slice(i + 1)]; };
 const fileIcon = (name) => (/\.(test|spec)\./.test(name) ? FlaskConical : /\.jsonc?$/i.test(name) ? FileJson : /\.(md|mdx|txt)$/i.test(name) ? FileText : /\.(jsx?|tsx?|mjs|cjs|rs|py|css|html?|go|java|cs|cpp|c|h|sh|ps1|toml|ya?ml)$/i.test(name) ? FileCode2 : File);
 
@@ -128,10 +144,39 @@ function CodeView({ text, path }) {
     </div>
   );
 }
+// A git diff as one block per hunk, each with the file it belongs to (the cards of components/patch-view.jsx). A file
+// the engine shows whole (not tracked yet) has no «@@» line: its lines make one block with a header of its own. A file
+// with no lines at all (a rename, a mode change) gets a block with the note git wrote about it.
+function diffBlocks(text) {
+  const blocks = []; const head = []; let path = ''; let cur = null; let hunks = 0;
+  const closeFile = () => { if (path && !hunks) blocks.push({ path, note: head.filter((l) => /^(Binary|rename|copy|deleted|old mode|new mode)/.test(l)).join(' · ') }); head.length = 0; hunks = 0; };
+  const all = String(text ?? '').split('\n');
+  for (let i = 0; i < all.length; i++) {
+    const l = all[i];
+    if (l.startsWith('diff --git ')) { closeFile(); path = /^diff --git a\/.+ b\/(.+)$/.exec(l)?.[1] ?? ''; cur = null; continue; }
+    if (l.startsWith('@@')) { cur = { path, patch: [l] }; blocks.push(cur); hunks++; continue; }
+    if (cur) { cur.patch.push(l); continue; }
+    if (/^\+\+\+ b\//.test(l)) { path = l.slice(6); if (all[i + 1] != null && !all[i + 1].startsWith('@@')) { cur = { path, patch: [], whole: true }; blocks.push(cur); hunks++; } continue; }
+    head.push(l);
+  }
+  closeFile();
+  return blocks.map((b) => {
+    if (!b.whole) return { ...b, patch: b.patch?.join('\n') };
+    const lines = b.patch.at(-1) === '' ? b.patch.slice(0, -1) : b.patch;
+    return { ...b, patch: [`@@ -0,0 +1,${lines.length} @@`, ...lines].join('\n') };
+  });
+}
 function DiffView({ text }) {
   const t = useT();
-  if (!text) return <Notice icon={FileDiff} title={t('expert.noChanges')}>{t('expert.noChangesBody')}</Notice>;
-  return <DiffLines text={text} className="min-h-full" testid="expert-diff" />;
+  const blocks = useMemo(() => diffBlocks(text), [text]);
+  if (!text || !blocks.length) return <Notice icon={FileDiff} title={t('expert.noChanges')}>{t('expert.noChangesBody')}</Notice>;
+  return (
+    <div className="flex min-h-full flex-col gap-3.5 p-3.5" data-testid="expert-diff">
+      {blocks.map((b, i) => (b.patch
+        ? <PatchView key={i} text={b.patch} path={b.path} name={b.path} bodyClass="max-h-none" />
+        : <div key={i} className="border-border bg-secondary text-muted-foreground rounded-card border px-2.5 py-1.5 font-mono text-caption">{b.path}{b.note ? ` · ${b.note}` : ''}</div>))}
+    </div>
+  );
 }
 // a picture of the project is shown as a picture (it said «binary file, cannot be shown as text»).
 const IMAGE = /\.(png|jpe?g|webp|gif)$/i;
@@ -184,6 +229,7 @@ function GitPanel({ st, onDiff }) {
           return (
             <button key={f.path} type="button" disabled={f.secret} onClick={() => onDiff(f.path)} title={f.secret ? t('expert.secretFile') : f.path} className="hover:bg-accent/60 flex min-h-7 w-full cursor-pointer items-center gap-2 rounded-ctl px-1 text-left text-control disabled:cursor-not-allowed disabled:opacity-60">
               <span className="min-w-0 flex-1 truncate">{name}{dir ? <small className="text-faint-foreground ml-1 text-micro">{dir}</small> : null}</span>
+              {f.add != null ? <span className="text-micro tabular-nums" title={t('expert.lines', f)}><span className="text-success">+{f.add}</span> <span className="text-destructive">−{f.del}</span></span> : null}
               <span className={cn('text-micro font-semibold', STATE_TONE[f.state])} title={STATE_KEY[f.state] ? t(STATE_KEY[f.state]) : f.state}>{f.secret ? t('expert.secret') : STATE_LETTER[f.state] ?? '·'}</span>
             </button>
           );
@@ -310,6 +356,7 @@ export function ExpertView() {
   const [current, setCurrent] = useState('chat');
   const st = useGitStatus(project, version);
   const changes = useMemo(() => Object.fromEntries((st?.files ?? []).map((f) => [f.path, f.state])), [st]);
+  const lineCounts = useMemo(() => Object.fromEntries((st?.files ?? []).filter((f) => f.add != null).map((f) => [f.path, f])), [st]);
   useEffect(() => { if (!project && projects[0]) setProject(app.activeProject?.name ?? projects[0].name); }, [projects]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setTabs([]); setCurrent('chat'); setFileQuery(''); }, [project]);
   const openTab = (kind, path) => {
@@ -388,7 +435,8 @@ export function ExpertView() {
               </div>
               {tab?.kind === 'file' && !IMAGE.test(tab.path) ? <Button variant="ghost" size="sm" onClick={() => openTab('diff', tab.path)} title={t('expert.viewChangesHint')} data-testid="expert-view-changes"><FileDiff />{t('expert.viewChanges')}</Button> : null}
             </div>
-            {tab ? <div className="border-border text-muted-foreground flex shrink-0 items-center gap-1.5 border-b px-3.5 py-1.5 text-caption"><span className="font-mono">{dir ? `${dir.split('/').join(' › ')} ›` : null}</span><b className="text-foreground font-medium">{tab.kind === 'diff' && !tab.path ? t('expert.allChanges') : fileName}</b></div> : null}
+            {tab ? <div className="border-border text-muted-foreground flex shrink-0 items-center gap-1.5 border-b px-3.5 py-1.5 text-caption"><span className="font-mono">{dir ? `${dir.split('/').join(' › ')} ›` : null}</span><b className="text-foreground font-medium">{tab.kind === 'diff' && !tab.path ? t('expert.allChanges') : fileName}</b>
+              <StatusBar language={tab.path ? languageOf(tab.path) : null} counts={tab.path ? lineCounts[tab.path] : sumCounts(lineCounts)} /></div> : null}
             {/* The chat stays mounted so switching tabs never loses what is being written. */}
             <div className={cn('min-h-0 flex-1 flex-col', current === 'chat' ? 'flex' : 'hidden')}><ChatView route={{ view: 'chat', id: conversation }} onConversation={setConversation} project={project || undefined} /></div>
             {tab ? <div className="min-h-0 flex-1 overflow-auto" data-testid="expert-viewer"><Viewer project={project} root={info?.path} tab={tab} version={version} /></div> : null}
@@ -398,7 +446,7 @@ export function ExpertView() {
               {on('git') || on('history') ? (
                 <div className="border-border flex items-center gap-1.5 border-b py-2 pr-2 pl-3">
                   <div className="flex min-w-0 flex-1 flex-col"><b className="font-(family-name:--title) text-card-title font-semibold">{t('expert.git')}</b>
-                    {st?.repo ? <span className="text-muted-foreground truncate text-caption">{[st.branch, st.ahead ? t('expert.ahead', { n: st.ahead }) : null, st.behind ? t('expert.behind', { n: st.behind }) : null].filter(Boolean).join(' · ')}</span> : null}</div>
+                    {st?.repo ? <span className="text-muted-foreground truncate text-caption">{[st.branch, st.ahead ? t(st.upstream ? 'expert.aheadOf' : 'expert.ahead', { n: st.ahead, base: st.upstream }) : null, st.behind ? t(st.upstream ? 'expert.behindOf' : 'expert.behind', { n: st.behind, base: st.upstream }) : null].filter(Boolean).join(' · ')}</span> : null}</div>
                 </div>
               ) : null}
               {on('git') ? <GitPanel st={st} onDiff={(p) => openTab('diff', p)} /> : null}

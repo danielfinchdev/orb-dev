@@ -25,7 +25,8 @@ function Cell({ r, no, at, onLine, lineLabel, className }) {
 
 // text: the file's unified patch. view: 'unified' | 'split'. side: 'after' (the diff) | 'before' (the old file alone).
 // onLine({ line, side }) enables the comments; below({ line, side }) gives what shows under a line (comments, the box).
-export function PatchView({ text, path, view = 'unified', side = 'after', onLine, below, lineLabel, className }) {
+// name: what the header shows for the file (its base name by default); bodyClass: the code area's own sizing.
+export function PatchView({ text, path, name, view = 'unified', side = 'after', onLine, below, lineLabel, className, bodyClass = 'max-h-96' }) {
   const hl = useHighlight(Boolean(text));
   const parsed = useMemo(() => patchRows(text), [text]);
   const rows = useMemo(() => {
@@ -44,8 +45,8 @@ export function PatchView({ text, path, view = 'unified', side = 'after', onLine
     : <div key={key} className="text-muted-foreground px-3 whitespace-pre">{r.l}</div>);
   return (
     <div className={cn('diff border-border overflow-hidden rounded-card border font-mono text-caption leading-[1.7]', className)} data-testid="patch-view" data-view={pairs ? 'split' : 'unified'} data-side={side}>
-      <div className="hd bg-secondary text-muted-foreground px-2.5 py-1.5 whitespace-pre">{baseName(path)}{firstHunk ? ` · ${firstHunk.l}` : ''}</div>
-      <div className="code-surface max-h-96 overflow-auto">
+      <div className="hd bg-secondary text-muted-foreground px-2.5 py-1.5 whitespace-pre">{name ?? baseName(path)}{firstHunk ? ` · ${firstHunk.l}` : ''}</div>
+      <div className={cn('code-surface overflow-auto', bodyClass)}>
         <div className="w-max min-w-full">
           {pairs ? pairs.map((p, i) => {
             if (p.full) return full(p.full, i);

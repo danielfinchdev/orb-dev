@@ -12,13 +12,13 @@ const SHOWN = new Set(['available', 'downloading', 'downloaded', 'installing']);
 const HIDDEN_KEY = 'orb.update.hidden';
 export const notesUrl = (version) => `https://github.com/${AUTHOR.repo}/releases/tag/v${version}`;
 
-export function useUpdate() {
+export function useUpdate(enabled = true) {
   const [st, setSt] = useState(null);
   useEffect(() => {
-    if (!bridge?.update) return undefined;
+    if (!enabled || !bridge?.update) return undefined;
     bridge.update.get().then(setSt).catch(quiet);
     return bridge.on('app:update', setSt);
-  }, []);
+  }, [enabled]);
   return st;
 }
 

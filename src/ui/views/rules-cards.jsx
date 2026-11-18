@@ -20,6 +20,15 @@ export function EveryTime({ className }) {
 }
 
 // ---- text rules
+// The one-line summary under a rule's title: its first line of prose with the text marks off (heading hashes, bullets,
+// emphasis, code ticks); a rule made only of headings falls back to the first heading's text.
+export function ruleSummary(texto) {
+  const lines = String(texto ?? '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const plain = (l) => l.replace(/^(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+)+/, '').replace(/\*\*|__|`/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').trim();
+  const prose = lines.find((l) => !/^#{1,6}\s/.test(l));
+  return plain(prose ?? lines[0] ?? '');
+}
+
 export function RuleCard({ rule, onEdit, onToggle, onDelete }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -43,7 +52,7 @@ export function RuleCard({ rule, onEdit, onToggle, onDelete }) {
     <div data-testid={`rule-${rule.id}`} data-state={rule.estado}>
       <ListRow
         title={<span className="inline-flex items-center gap-2">{rule.titulo}<Badge variant="outline">{t(seed ? 'rules.seed' : 'rules.mine')}</Badge></span>}
-        meta={<span className="block truncate">{String(rule.texto ?? '').split(/\r?\n/).find((l) => l.trim()) ?? ''}</span>}
+        meta={<span className="block truncate">{ruleSummary(rule.texto)}</span>}
         trailing={<span className="acts flex shrink-0 items-center gap-2"><Badge variant={paused ? 'secondary' : 'success'}>{t(paused ? 'rules.paused' : 'rules.active')}</Badge>{acts}</span>} />
       {open ? <pre className="bg-muted/50 mx-3.5 mb-3 max-h-72 overflow-auto rounded-ctl p-3 font-mono text-control whitespace-pre-wrap" data-testid={`rule-body-${rule.id}`}>{rule.texto}</pre> : null}
     </div>

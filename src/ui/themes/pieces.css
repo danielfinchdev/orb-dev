@@ -58,7 +58,8 @@ html[data-skin="retro"] .pj { border-radius: 0; background: var(--primary) !impo
 html[data-skin="retro"] :is([data-slot="dialog-content"], [data-slot="popover"], [data-slot="tip"]) { box-shadow: none; border-color: var(--input); }
 html[data-skin="retro"] :is([data-slot="button"][data-variant="outline"], [data-slot="input"], [data-slot="textarea"], [data-slot="search"], [data-slot="checkbox"]) { border-color: var(--input); }
 html[data-skin="retro"] [data-slot="switch"] > span { box-shadow: none; }
-html[data-skin="retro"] [data-slot="segmented"], html[data-skin="retro"] [data-slot="tabs-list"] { border: 1px solid var(--input); }
+/* the line tabs (.vtabs) keep only the hairline under them, as in the mock-up */
+html[data-skin="retro"] [data-slot="segmented"], html[data-skin="retro"] [data-slot="tabs-list"]:not([data-variant="line"]) { border: 1px solid var(--input); }
 
 /* ---- Cristal: the rim of light on the panes of glass (menus, popovers, bubbles and dialogs) */
 /* The dialog is left out of `position`: it is fixed, which already anchors its rim; made relative it would drop into

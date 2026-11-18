@@ -71,6 +71,9 @@ export default {
   'expert.viewChangesHint': 'See this file’s changes',
   'expert.ahead': '{n} ahead',
   'expert.behind': '{n} behind',
+  'expert.aheadOf': '{n} ahead of {base}',
+  'expert.behindOf': '{n} behind {base}',
+  'expert.lines': '{add} lines added and {del} removed',
   'expert.workingOn': '{agent} working on #{id}',
   'expert.openFiles': 'Open files',
   // God mode: open in and actions

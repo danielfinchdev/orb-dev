@@ -176,6 +176,8 @@ export default {
   'usage.paceHitsTime': 'A este ritmo llegas al 100 % a las {when}.',
   'usage.brake': 'Freno',
   'usage.win5': 'Ventana de {h} h',
+  'usage.renewsAt': 'renueva {when}',
+  'usage.renewsOn': 'renueva el {when}',
   'usage.winWeek': 'Semana',
   'usage.atLimit': 'Al llegar al límite',
   'usage.atLimitNote': 'Qué hace Orb cuando una cuenta se acerca a su límite.',

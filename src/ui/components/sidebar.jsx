@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react';
-import { Orbit, NotebookPen, MessageSquareWarning, Settings, LifeBuoy, Headphones, Pause, SkipForward, LoaderCircle } from 'lucide-react';
+import { Orbit, NotebookPen, MessageSquareWarning, Settings, LifeBuoy, Headphones, SkipForward, LoaderCircle } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { ThemeToggle, SidebarToggle } from './theme-toggle.jsx';
 import { useStore, go, bridge, openSettings, anyChatBusy } from '@/lib/store.js';
-import { Tip, BubbleTip } from './ui/overlay.jsx';
-import { NavRow } from '@/components/ui/primitives.jsx';
+import { Tip, BubbleTip, PopoverTrigger } from './ui/overlay.jsx';
+import { MusicPlayer } from './music-player.jsx';
+import { FeedbackPop } from './feedback-pop.jsx';
+import { NavRow, IconButton } from '@/components/ui/primitives.jsx';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { PRODUCT } from '../../shared/product.mjs';
 import { BrowserSettingsMenu } from './browser-settings-menu.jsx';
 import { OrbInbox } from '@/views/orb/inbox.jsx';
-import { available as musicAvailable, musicState, subscribe as onMusic, toggleMusic, skipTrack } from '@/lib/music.js';
-import { trackOf, musicPrefs } from '../../shared/music.mjs';
+import { available as musicAvailable, musicState, subscribe as onMusic, skipTrack, setMusicTheme } from '@/lib/music.js';
+import { trackOf, musicPrefs, nextTheme } from '../../shared/music.mjs';
 
 // The assistant's wordmark ORB·E, drawn its own way in each theme (app.css .wordmark): spaced capitals with a dot of the
 // theme's colour in Orb, a techno one underlined in Vaporwave…
@@ -67,7 +69,7 @@ function SidebarFooter({ version, is, settingsOpen }) {
     { icon: LifeBuoy, label: t('nav.tutorials'), active: is('tutorials'), onClick: () => go('tutorials'), testid: 'nav-tutorials' }
   ];
   return (
-    <div className="side-foot border-border flex items-center gap-1 border-t px-2.5 py-2" data-testid="sidebar-footer">
+    <div className="side-foot border-border relative flex items-center gap-1 border-t px-2.5 py-2" data-testid="sidebar-footer">
       {/* A linked browser's gear opens this device's settings (browser-settings-menu.jsx). */}
       {items.map((i, n) => (i.testid === 'nav-settings' && bridge.mobile ? <BrowserSettingsMenu key={i.testid} active={i.active} /> : (
         // the first icon sits at the window's left edge: its bubble starts at the icon instead of being cut there.
@@ -77,43 +79,47 @@ function SidebarFooter({ version, is, settingsOpen }) {
       )))}
       <span className="flex-1" />
       {musicAvailable() ? <MusicButtons /> : null}
-      {/* The bug: straight to «Enviar comentarios» (Ajustes › Acerca de), with the version next to it. */}
+      {/* The bug: «Enviar comentarios» opens over the foot (the same form is in Ajustes › Acerca de), with the version next to it. */}
       {bridge.mobile ? null : (
-        <BubbleTip title={t('nav.feedback')} side="top">
-          <button type="button" onClick={() => openSettings('contribuye')} aria-label={t('nav.feedback')} data-testid="nav-feedback" className="side-foot-icon"><MessageSquareWarning className="size-5" /></button>
-        </BubbleTip>
+        <FeedbackPop>
+          <BubbleTip title={t('nav.feedback')} side="top">
+            <PopoverTrigger asChild>
+              <button type="button" aria-label={t('nav.feedback')} data-testid="nav-feedback" className="side-foot-icon"><MessageSquareWarning className="size-5" /></button>
+            </PopoverTrigger>
+          </BubbleTip>
+        </FeedbackPop>
       )}
       {version ? <span className="side-foot-version" data-testid="app-version">v{version}</span> : null}
     </div>
   );
 }
 
-// the background music (Windows only, lib/music.js): play / pause, and while it plays the next track, or the next
-// theme of the adaptive music.
+// the background music (Windows only, lib/music.js): the headphones open the player (components/music-player.jsx) over the
+// foot; they show whether it plays. Their bubble says what plays, or what a click on Play would start.
 function MusicButtons() {
   const t = useT();
   const [s, setS] = useState(musicState);
   useEffect(() => onMusic(setS), []);
-  // While it plays, what plays; before, what the button would start (Ajustes › Apariencia).
+  // While it plays, what plays; before, what the player would start (Ajustes › Apariencia).
   const chosen = useStore((st) => musicPrefs(st.app?.config?.ui).mode === 'adaptive');
+  const theme = useStore((st) => musicPrefs(st.app?.config?.ui).theme);
   const adaptive = s.playing || s.loading ? Boolean(s.theme) : chosen;
   const now = trackOf(s.track);
   const text = adaptive
     ? (s.error ? t('nav.musicErrorAdaptive') : s.playing ? t('nav.musicNowAdaptive', { theme: t(`nav.musicTheme.${s.theme}`) }) : t('nav.musicHintAdaptive'))
     : s.error ? t('nav.musicError') : s.loading ? t('nav.musicLoading') : s.playing && now ? t('nav.musicNow', { title: now.title, author: now.author }) : t('nav.musicHint');
   const next = t(adaptive ? 'nav.musicNextTheme' : 'nav.musicNext');
+  // While it plays the engine moves on by itself; before, the arrow only chooses the style the next play starts with.
+  const skip = () => (s.playing ? skipTrack() : setMusicTheme(nextTheme(theme)));
   return (
-    <>
-      {s.playing ? (
-        <BubbleTip title={next} side="top">
-          <button type="button" onClick={skipTrack} aria-label={next} data-testid="nav-music-next" className="side-foot-icon"><SkipForward className="size-5" /></button>
-        </BubbleTip>
-      ) : null}
+    <MusicPlayer next={<IconButton label={next} onClick={skip} data-testid="nav-music-next"><SkipForward className="size-4" /></IconButton>}>
       <BubbleTip title={t('nav.music')} text={text} side="top">
-        <button type="button" onClick={toggleMusic} aria-label={s.playing || s.loading ? t('nav.musicPause') : t('nav.musicPlay')} aria-pressed={s.playing} data-testid="nav-music" data-music-button=""
-          className={cn('side-foot-icon', s.playing && 'is-active')}>{s.loading ? <LoaderCircle className="size-5 animate-spin" /> : s.playing ? <Pause className="size-5" /> : <Headphones className="size-5" />}</button>
+        <PopoverTrigger asChild>
+          <button type="button" aria-label={t('nav.music')} aria-pressed={s.playing} data-testid="nav-music" data-music-button=""
+            className={cn('side-foot-icon', s.playing && 'is-active')}>{s.loading ? <LoaderCircle className="size-5 animate-spin" /> : <Headphones className="size-5" />}</button>
+        </PopoverTrigger>
       </BubbleTip>
-    </>
+    </MusicPlayer>
   );
 }
 

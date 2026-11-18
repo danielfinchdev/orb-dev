@@ -350,7 +350,7 @@ function AgentCard({ a, reload, usage, team }) {
       <div className="agh flex items-center gap-3 p-3.5">
         <span className="bg-secondary grid size-8 flex-none place-items-center rounded-ctl"><AgentIcon agent={a.id} className="size-4" /></span>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <b className="flex items-center gap-1.5 font-(family-name:--title) text-card-title font-semibold"><span className="truncate">{a.label}</span>{a.kind === 'acp' ? <Badge variant="info">ACP</Badge> : null}</b>
+          <b className="flex items-center gap-1.5 font-(family-name:--title) text-card-title font-semibold"><span className="truncate">{a.label}</span>{a.kind === 'acp' || !NATIVE.includes(a.id) ? <Badge variant="info">ACP</Badge> : null}</b>
           <span className="text-muted-foreground truncate text-caption">{a.installed ? a.version ?? t('agents.installed') : NATIVE.includes(a.id) ? t('agents.notHere') : t('agents.notFoundHere')}</span>
         </div>
         <div className="flex flex-none items-center gap-1.5">

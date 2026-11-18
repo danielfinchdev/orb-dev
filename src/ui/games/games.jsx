@@ -80,8 +80,8 @@ export function GamesDialog() {
           ) : null}
           <DialogClose asChild><Button variant="ghost" size="icon-sm" aria-label={t('comp.close')} data-testid="games-close"><X /></Button></DialogClose>
         </DialogHeader>
-        <div className="flex flex-col gap-3.5">
-          <DialogDescription className={cn('text-control', game && 'text-center')}>{game ? t(`games.${game}Help`) : t('games.desc')}</DialogDescription>
+        <div className={cn('flex flex-col gap-3.5', game && 'py-1.5')}>
+          <DialogDescription className={cn('text-control', game && 'text-center leading-[1.45]')}>{game ? t(`games.${game}Help`) : t('games.desc')}</DialogDescription>
           {/* Difficulty: chosen before playing, and changing it starts the game again. */}
           <div className={cn('flex items-center gap-3 text-control', game ? 'justify-center' : 'justify-between')} role="radiogroup" aria-label={t('games.level')}>
             <span className="text-muted-foreground">{t('games.level')}</span>

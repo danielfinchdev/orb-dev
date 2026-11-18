@@ -4,7 +4,7 @@ import { Field, Input } from '@/components/ui/basic.jsx';
 import { Checkbox } from '@/components/ui/overlay.jsx';
 import { confirm, choose, form } from '@/components/dialogs.jsx';
 import { notifyError, notifyOk } from '@/lib/notify.js';
-import { call, act, go, bridge, setState } from '@/lib/store.js';
+import { call, act, go, bridge, setState, refresh } from '@/lib/store.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { quiet } from '@/lib/quiet.js';
 
