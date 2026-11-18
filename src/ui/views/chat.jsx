@@ -30,7 +30,11 @@ import { TaskStatus, WaitLabel, HeldCard, resumeQueue, setQueuePaused } from '@/
 import { Badge } from '@/components/ui/basic.jsx';
 import { Switch, BubbleTip } from '@/components/ui/overlay.jsx';
 import { bridge, useStore, call, act, setState, getState, go, newChat, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout, plainSkin, robotSkin, addPending, movePending, dropPending, pendingShown, usePending } from '@/lib/store.js';
-import { notify } from '@/lib/notify.js';
+import { notify, notifyError } from '@/lib/notify.js';
+import { AttachMenu } from '@/components/conversation/attach-menu.jsx';
+import { AttachIcon, AttachedFiles } from '@/components/conversation/attach-chip.jsx';
+import { StoppedCard } from '@/components/conversation/stopped-card.jsx';
+import { canCapture, captureFrame } from '@/lib/window-capture.js';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { pickGreeting, pickSubtitle, suggestionsFor, greetingFor } from '@/lib/greeting.js';
 import { LiveActivity, QuestionCard } from '@/components/chat-live.jsx';
@@ -41,7 +45,7 @@ import { useShortcut } from '@/lib/keys.js';
 import { useAddToChat, appendToBox } from '@/lib/add-to-chat.js';
 import { ContextSlot } from '@/components/context-slot.jsx';
 import { WorkspacePills } from '@/components/workspace-pills.jsx';
-import { cn } from '@/lib/utils.js';
+import { baseName, cn } from '@/lib/utils.js';
 import { DECISION, AGENT } from '@/lib/labels.js';
 import { useT } from '@/lib/i18n.js';
 import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
@@ -85,7 +89,7 @@ const Message = memo(function Message({ m, name, user, onChanges, tail, onPin })
   );
   // the person's and the assistant's saved messages can be pinned (one still on its way has no saved line yet)
   const pin = onPin && m.pinned_at !== undefined ? { pinned: Boolean(m.pinned_at), onToggle: () => onPin(m) } : undefined;
-  if (m.role === 'usuario') return <MessageBox user id={`msg-${m.id}`} pin={pin} name={user || t('chat.you')} at={m.at}>{m.body}</MessageBox>;
+  if (m.role === 'usuario') return <MessageBox user id={`msg-${m.id}`} pin={pin} name={user || t('chat.you')} at={m.at}>{m.body}<AttachedFiles files={m.meta?.images} /></MessageBox>;
   if (m.role === 'orb') {
     const report = m.meta?.kind === 'report' && m.meta.tasks?.length ? m.meta : null;
     const actions = report ? (
@@ -112,6 +116,8 @@ const Message = memo(function Message({ m, name, user, onChanges, tail, onPin })
   );
   // the tasks of this chat wait because the queue is paused: «Reanudar» right there (while it still is).
   if (m.meta?.kind === 'paused') return <PausedLine body={m.body} />;
+  // Orb ended a turn itself (the guard, a time limit): the reason, and the task's own «Ver tarea» / «Deshacer».
+  if (m.meta?.kind === 'turn-stopped') return <StoppedCard m={m} name={name} />;
   // a finished task says it in one line; what the agent reported (technical) unfolds on request.
   if (m.meta?.kind === 'task-end' && m.meta.result) return (
     <div className="bg-muted/70 text-muted-foreground mx-auto max-w-[88%] rounded-xl px-3.5 py-2 text-center text-control">
@@ -319,6 +325,19 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const conv = useStore((s) => (id == null ? null : s.conversations.find((c) => c.id === id) ?? null));
   const [rows, setRows] = useState([]);
   const box = useDraft();
+  // what is attached to the message being written (absolute paths, at most 10), as in an agent's chat (views/session.jsx)
+  const [images, setImages] = useState([]);
+  const addImages = (paths) => setImages((prev) => [...new Set([...prev, ...(paths ?? []).filter(Boolean)])].slice(0, 10));
+  const capture = async () => {
+    try {
+      const dataUrl = await captureFrame(); if (!dataUrl) return;
+      const saved = await act(call('images.mark', { dataUrl })); if (saved?.path) addImages([saved.path]);
+    } catch { notifyError(t('session.captureFailed')); }
+  };
+  const fromTransfer = (dt) => Promise.all([...(dt?.files ?? [])].filter((f) => !bridge.mobile || /^image\//.test(f.type)).map((f) => bridge.pathForFile(f))).then((p) => p.filter(Boolean));
+  // files attached in one conversation never travel to another one
+  useEffect(() => { setImages([]); }, [id]);
+  const idNow = useRef(id); idNow.current = id;
   // text sent here by the project search (Ctrl+P / Ctrl+Shift+F) or by «Añadir al chat»
   useAddToChat((text) => box.set((prev) => appendToBox(prev, text)));
   // the Android app: what was shared from another app («Compartir con Orb») is waiting in the text box to be sent.
@@ -419,13 +438,18 @@ export function ChatView({ route, onConversation, project: inProject }) {
   // the message is (one click away).
   const leftBehind = (target, title) => notify({ title: t('chat.startedIn', { title }), body: t('chat.startedInBody'), tone: 'info', go: target, action: { label: t('notice.open'), onClick: () => go(target) } });
   const send = async () => {
-    const msg = box.message().trim(); if (!msg || sending) return;
-    box.set(''); box.clearBlocks();
+    const typed = box.message().trim(); if ((!typed && !images.length) || sending) return;
+    // only files: the same line an agent's chat sends
+    const msg = typed || t('session.lookAtFiles'); const sentImages = images;
+    box.set(''); box.clearBlocks(); setImages([]);
     dismissTest();
     const mine = addPending(id == null ? 'new' : `chat:${id}`, msg, lastId);
+    const files = sentImages.length ? { images: sentImages } : {};
+    // the files go back only to the conversation they were attached in (God mode keeps this view through a change of chat)
+    const giveBack = () => { if (typed) box.set((now) => (now.trim() ? now : typed)); if (idNow.current === id) setImages((now) => (now.length ? now : sentImages)); };
     if (id != null) {
       // The send failed: the message goes back to the box (unless something else was written there meanwhile).
-      if ((await act(call('chat.send', { text: msg, conversation: id }))) === undefined) { dropPending(mine); box.set((now) => (now.trim() ? now : msg)); }
+      if ((await act(call('chat.send', { text: msg, conversation: id, ...files }))) === undefined) { dropPending(mine); giveBack(); }
       else fetchList();
       return;
     }
@@ -436,8 +460,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
       if (orchestrate) {
         // the first message makes the conversation (in the working folder): then the screen is that conversation.
         const chosen = local && draft ? Object.fromEntries(['agent', 'model', 'reasoning'].filter((k) => draft[k] !== undefined).map((k) => [k, draft[k]])) : {};
-        const r = await act(call('chat.send', { text: msg, ...(inProject ? { project: inProject } : {}), ...(Object.keys(chosen).length ? { brain: chosen } : {}) }));
-        if (!r) { dropPending(mine); if (!moved()) box.set(msg); return; }
+        const r = await act(call('chat.send', { text: msg, ...(inProject ? { project: inProject } : {}), ...(Object.keys(chosen).length ? { brain: chosen } : {}), ...files }));
+        if (!r) { dropPending(mine); if (!moved()) giveBack(); return; }
         movePending(mine, `chat:${r.conversation}`);
         await refresh().catch(quiet);
         if (moved()) { leftBehind({ view: 'chat', id: r.conversation }, getState().conversations.find((c) => c.id === r.conversation)?.title ?? msg.slice(0, 60)); return; }
@@ -447,9 +471,9 @@ export function ChatView({ route, onConversation, project: inProject }) {
         // (in God mode, in the project chosen there).
         const project = inProject ?? app.activeProject?.name ?? null;
         const s = await act(call('sessions.create', { agent: brain.agent, account: brain.account && brain.account !== brain.agent ? brain.account : undefined, model: brain.model || undefined, reasoning: brain.reasoning, project, ...(project ? {} : { permission: 'leer' }), ...(project && where.mode === 'worktree' ? { workspace: 'worktree', ...(where.base ? { base: where.base } : {}) } : {}) }));
-        if (!s) { dropPending(mine); if (!moved()) box.set(msg); return; }
+        if (!s) { dropPending(mine); if (!moved()) giveBack(); return; }
         movePending(mine, `session:${s.id}`);
-        if ((await act(call('sessions.send', { id: s.id, text: msg }))) === undefined) dropPending(mine);
+        if ((await act(call('sessions.send', { id: s.id, text: msg, ...files }))) === undefined) dropPending(mine);
         await refresh().catch(quiet);
         if (!stillHere(ticket)) { leftBehind({ view: 'session', id: s.id }, s.title); return; }
         go({ view: 'session', id: s.id });
@@ -600,6 +624,10 @@ export function ChatView({ route, onConversation, project: inProject }) {
       <TaskSideCards conversation={id} />
       {terminal && fullPc() ? <TerminalPanel dir={terminalDir} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
       <Composer draft={box} onSend={send} onStop={id != null ? () => act(call('chat.stop', { conversation: id })) : undefined} busy={chat.busy} disabled={sending} testid="chat-input"
+        attached={images.length > 0}
+        onPaste={(e) => { fromTransfer(e.clipboardData).then((f) => { if (f.length) addImages(f); }); }}
+        onDrop={(e) => { fromTransfer(e.dataTransfer).then(addImages); }}
+        top={images.length ? <div className="flex min-w-0 flex-wrap items-center gap-2">{images.map((p) => <Badge key={p} variant="secondary" className="gap-1.5 font-normal"><AttachIcon file={p} />{baseName(p)}<button className="cursor-pointer" onClick={() => setImages(images.filter((x) => x !== p))} aria-label={t('session.remove')}><X className="size-3" /></button></Badge>)}</div> : null}
         placeholder={chat.busy ? t('chat.placeholderBusy', { name }) : orchestrate ? t('chat.placeholder', { name }) : t('chat.placeholderDirect', { agent: AGENT[brain.agent] ?? brain.agent })}
         above={<>
           {/* the row over the box (project and «Compactar»), outside it like under an agent's chat. In God mode a new conversation takes the project chosen at the top of God mode. */}
@@ -618,6 +646,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
           {/* the permission and the orchestrator come first; at the far end the context meter, then the model and its
               reasoning, which stay together. Each group wraps as a whole on a narrow window. */}
           <div role="group" aria-label={t('session.permissions')} className="flex shrink-0 items-center gap-1.5" data-testid="composer-group-access">
+          {/* «+»: attach a file and, on the PC, capture a window (the system's picker) as a picture, as in an agent's chat. */}
+          <AttachMenu onAttach={async () => addImages(await bridge.pickAttachments())} onCapture={fullPc() && canCapture() ? capture : null} />
           {/* «Auto» / «Preguntar» for the tasks the assistant creates and the new chats (the global level, also from the phone). */}
           <AutonomySwitch value={app?.config?.permissions?.mode === 'preguntar' ? 'editar' : 'auto'} testid="chat-autonomy" onChange={(p) => act(call('permissions.setMode', { mode: p === 'auto' ? 'auto' : 'preguntar' }), p === 'auto' ? t('session.autoOn') : t('session.askOn')).then(() => refresh())} />
           {/* whether a NEW conversation is with the assistant or directly with the agent chosen; a conversation keeps

@@ -241,5 +241,7 @@ export default {
   'guide.open': 'Guía de modelos',
   'session.phChat': 'Pide algo, menciona con @ o usa / para ver los comandos',
   'chat.workspace.from': 'desde {branch}',
-  'chat.workspace.locked': 'Este chat ya empezó: donde trabaja ya no se puede cambiar.'
+  'chat.workspace.locked': 'Este chat ya empezó: donde trabaja ya no se puede cambiar.',
+  'chat.stopped.title': 'Orb ha parado el turno',
+  'chat.stopped.badge': 'Parada'
 };

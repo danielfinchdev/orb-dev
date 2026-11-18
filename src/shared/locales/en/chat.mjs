@@ -241,5 +241,7 @@ export default {
   'guide.open': 'Model guide',
   'session.phChat': 'Ask for something, mention with @ or use / to see the commands',
   'chat.workspace.from': 'from {branch}',
-  'chat.workspace.locked': 'This chat has already started: where it works can no longer be changed.'
+  'chat.workspace.locked': 'This chat has already started: where it works can no longer be changed.',
+  'chat.stopped.title': 'Orb stopped the turn',
+  'chat.stopped.badge': 'Stopped'
 };
