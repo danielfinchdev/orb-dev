@@ -250,11 +250,12 @@ async function signOut(acc, reload) {
 }
 
 // One account: its name with the plan and the state of its login, and a menu with what can be done with it.
-function AccountRow({ acc, plan, reload }) {
+function AccountRow({ acc, plan, reload, agentOn = true }) {
   const t = useT();
   const login = LOGIN[acc.login] ?? LOGIN.desconocido;
   // The state as the mock-up's row says it: signed out, paused (not used by Orb) or active (signed in and in use).
-  const state = acc.login === 'no' ? [t('agents.accountNoLogin'), 'warning'] : acc.enabled === false ? [t('agents.accountPaused'), 'secondary'] : acc.login === 'si' ? [t('agents.accountActive'), 'success'] : login;
+  // With its agent turned off no account is in use, so a signed-in one only says that it is signed in.
+  const state = acc.login === 'no' ? [t('agents.accountNoLogin'), 'warning'] : acc.enabled === false ? [t('agents.accountPaused'), 'secondary'] : acc.login === 'si' ? (agentOn ? [t('agents.accountActive'), 'success'] : [t('login.si'), 'secondary']) : login;
   return (
     <ListRow className={cn('border-border not-first:border-t', acc.enabled === false && 'opacity-60')} title={acc.label} meta={plan ? <span>{plan}</span> : null}
       trailing={(
@@ -438,7 +439,7 @@ function AgentCard({ a, reload, usage, team, today }) {
       {a.id === 'hermes' ? <Stack><p className="text-warning-ink text-caption" data-testid="agent-hermes-note">{t('agents.hermesNote')}</p></Stack> : null}
       {a.unverified ? <Stack><p className="text-warning-ink text-caption" data-testid={`agent-unverified-${a.id}`}>{t('agents.unverifiedNote')}</p></Stack> : null}
       {a.id === 'pi' || a.id === 'antigravity' ? <Stack><p className="text-warning-ink text-caption" data-testid={`agent-noguard-${a.id}`}>{t('agents.noGuardNote')}</p></Stack> : null}
-      {a.installed ? a.accounts.map((acc) => <AccountRow key={acc.id} acc={acc} plan={planOf(acc)} reload={reload} />) : null}
+      {a.installed ? a.accounts.map((acc) => <AccountRow key={acc.id} acc={acc} plan={planOf(acc)} reload={reload} agentOn={!!cfg.enabled} />) : null}
       {a.installed && a.multi && a.accounts.filter((acc) => acc.enabled !== false).length === 1 ? <Stack className="py-2.5"><span className="text-muted-foreground text-caption" data-testid={`agent-one-account-${a.id}`}>{t('agents.oneAccount')}</span></Stack> : null}
       {a.installed && !a.multi ? <Stack className="py-2.5"><span className="text-faint-foreground text-caption">{t('agents.fixedSession', { label: a.label })}</span></Stack> : null}
       {a.keys?.length ? <AgentKeys a={a} /> : null}

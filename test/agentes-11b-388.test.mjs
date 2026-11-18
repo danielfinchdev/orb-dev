@@ -79,6 +79,11 @@ test('Uso: aviso en las barras, leyenda y «Aviso» en la cuenta; el aviso y el 
   for (const k of ['usage.warnAt', 'usage.warnAtHint', 'usage.legendWarn', 'usage.warnBadge', 'usage.pastWarn', 'usage.switchAccount', 'usage.cache', 'settings.warnAt']) for (const l of [es, en]) assert.ok(l[k], k);
 });
 
+test('con el agente desactivado ninguna cuenta dice «Activa»: solo que tiene la sesión iniciada', () => {
+  assert.match(agents, /acc\.login === 'si' \? \(agentOn \? \[t\('agents\.accountActive'\), 'success'\] : \[t\('login\.si'\), 'secondary'\]\) : login/);
+  assert.match(agents, /<AccountRow [^>]*agentOn=\{!!cfg\.enabled\} \/>/);
+});
+
 test('la acentuación sigue siendo un token en las dos páginas', () => {
   for (const src of [agents, usage]) assert.doesNotMatch(src, /\btext-primary\b(?!-)/);
 });
