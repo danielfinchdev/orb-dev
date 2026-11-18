@@ -289,8 +289,12 @@ try {
     await shot('00-bienvenida');
     // The welcome has no day / night control: before the setup the theme follows the system, so the dark pictures change the
     // system's colour scheme (the transparency setting of open() is kept) and give it back.
+    // One session for every change: an override set by one session is not cleared by another, so a new session per call
+    // left the welcome dark for good after its first dark picture.
+    let schemeCdp = null;
     const scheme = async (value) => {
-      const cdp = await page.context().newCDPSession(page);
+      schemeCdp ??= await page.context().newCDPSession(page);
+      const cdp = schemeCdp;
       await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'no-preference' }, ...(value ? [{ name: 'prefers-color-scheme', value }] : [])] });
       await page.waitForTimeout(400);
     };
@@ -749,6 +753,9 @@ try {
         await page.waitForTimeout(1500);
         if (await page.locator('[data-testid=whiteboard-toggle-panel]').count()) { await tap('whiteboard-toggle-panel', 'cerrar el panel de adjuntos de la pizarra'); await page.waitForTimeout(300); }
         await shot(`${prefix}-pizarra`);
+        // two attachments (copies of two files of the test project, kept in its own «pizarra» folder) so the panel has rows
+        if (dirs?.['tienda-web']) await call('whiteboard.attach', { project: 'tienda-web', paths: [path.join(dirs['tienda-web'], 'README.md'), path.join(dirs['tienda-web'], 'src', 'importar.js')] }).catch(() => noteOnce('Pizarra: no se pudieron adjuntar los dos archivos de ejemplo'));
+        await page.waitForTimeout(600);
         if (await page.locator('[data-testid=whiteboard-show-panel]').count()) { await tap('whiteboard-show-panel', 'panel de adjuntos de la pizarra'); await page.waitForTimeout(300); }
         if (await page.locator('[data-testid=whiteboard-panel]').count()) await shot(`${prefix}-pizarra-adjuntos`); else noteOnce('Pizarra: no hay panel de adjuntos con un proyecto elegido');
         if (await tap('whiteboard-more', '⋯ de la pizarra')) { await shot(`${prefix}-pizarra-adjuntos-menu`); await closeMenus(); }
@@ -1083,12 +1090,24 @@ try {
         await scrollShot(`${prefix}-god-mode-abajo`, 'end', '[data-testid=expert-view] aside');
         if (await tap('expert-more', '⋯ del God mode')) { await shot(`${prefix}-god-mode-menu`); await closeMenus(); }
         // the docked terminal: opened, pictured and its tab closed again. Nothing is typed, so nothing runs in it.
+        await scrollView('top', '[data-testid=expert-view] aside');
         if (await page.locator('[data-testid=terminal-open]').count() && await tap('terminal-open', 'el terminal del God mode')) {
           await page.locator('[data-testid=terminal-panel]').first().waitFor({ timeout: 5000 }).catch(() => noteOnce('God mode: el terminal no se abre'));
           await page.waitForTimeout(900); await shot(`${prefix}-god-mode-terminal`);
           if (await page.locator('[data-testid=terminal-close]').count()) await tap('terminal-close', 'cerrar la pestaña del terminal'); else if (await page.locator('[data-testid=terminal-fold]').count()) await tap('terminal-fold', 'plegar el terminal');
           await page.waitForTimeout(300);
         } else noteOnce('God mode: sin el botón del terminal');
+        // A project action running in its own tab of the docked terminal. The action is a harmless one made for this shot
+        // (a ping to this same PC), run with the app's own «Acciones» menu, closed and removed afterwards.
+        try {
+          const made = await call('actions.save', { project: 'orb-dev', action: { id: 'recorrido-ping', name: 'ping de prueba', command: 'ping -n 40 127.0.0.1' } }).then(() => true, () => false);
+          if (made && await page.locator('[data-testid=actions-menu]').count() && await tap('actions-menu', '«Acciones» del God mode') && await tap('action-recorrido-ping', 'la acción de prueba')) {
+            await page.locator('[data-testid=terminal-panel]').first().waitFor({ timeout: 5000 }).catch(() => noteOnce('God mode: la acción no abre su pestaña en el terminal'));
+            await page.waitForTimeout(1800); await shot(`${prefix}-god-mode-terminal-accion`);
+            for (let i = 0; i < 3 && await page.locator('[data-testid=terminal-close]').count(); i++) { await tap('terminal-close', 'cerrar la pestaña de la acción'); await page.waitForTimeout(300); }
+          } else { noteOnce('God mode: no se pudo lanzar la acción de prueba desde «Acciones»'); await closeMenus(); }
+        } catch (error) { noteOnce(`God mode: la acción de prueba: ${String(error?.message ?? error).split(String.fromCharCode(10))[0]}`); await closeMenus(); }
+        await call('actions.remove', { project: 'orb-dev', id: 'recorrido-ping' }).catch(() => {});
         // the agent's pill of the bar, when a task of this project is running
         if (await page.locator('[data-testid=expert-agent-pill]').count()) { await page.locator('[data-testid=expert-agent-pill]').first().scrollIntoViewIfNeeded().catch(() => {}); await shot(`${prefix}-god-mode-agente`); } else noteOnce('God mode: sin la píldora del agente (ninguna tarea en marcha en el proyecto, o aún no existe)');
       } else noteOnce('God mode: no aparece en la barra tras activarlo');
@@ -1197,6 +1216,18 @@ try {
     if (!back || await screen.count()) { note('bloqueo: no volvió la app al desbloquear'); throw new Error('bloqueo: el desbloqueo falló; se termina el recorrido'); }
     // Ajustes was left open behind the lock screen
     if (await page.locator('[data-testid=settings-dialog]').count()) await closeSettings(page, `${prefix}/bloqueo`);
+    // The same screen when Orb locks by itself: the engine's own lock call with the cause the idle timer gives, then the
+    // test password again. Only in the extra pass (one more lock per mode).
+    if (EXTRA) {
+      await call('master.lock', { reason: 'idle' }).catch((error) => noteOnce(`bloqueo por inactividad: master.lock falló (${String(error?.message ?? error).split(String.fromCharCode(10))[0]})`));
+      if (await screen.waitFor({ timeout: 8000 }).then(() => true, () => false)) {
+        await page.waitForTimeout(400); await shot(`${prefix}-bloqueo-inactividad`);
+        await page.fill('[data-testid=master-password]', TEST_MASTER);
+        await page.press('[data-testid=master-password]', 'Enter');
+        const again = await page.locator('[data-testid=sidebar-home]').waitFor({ timeout: 20000 }).then(() => true, () => false);
+        if (!again || await screen.count()) { note('bloqueo por inactividad: no volvió la app al desbloquear'); throw new Error('bloqueo: el desbloqueo falló; se termina el recorrido'); }
+      } else noteOnce('bloqueo por inactividad: no salió la pantalla de bloqueo');
+    }
   };
   const dark =() => page.evaluate(() => document.documentElement.classList.contains('dark'));
   const setDark = async (on) => { if (on !== (await dark())) await page.getByRole('button', { name: /claro y oscuro|day and night|light and dark/i }).click(); };
