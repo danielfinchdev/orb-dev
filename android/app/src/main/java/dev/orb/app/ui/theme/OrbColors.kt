@@ -8,7 +8,7 @@ import androidx.compose.ui.graphics.Color
 /** What Material 3 has no slot for: the secondary texts and the state colours. */
 class OrbColors(
     val text2: Color, val text3: Color,
-    val ok: Color, val okSoft: Color, val warn: Color, val warnSoft: Color, val errSoft: Color,
+    val ok: Color, val okSoft: Color, val warn: Color, val warnSoft: Color, val errSoft: Color, val info: Color,
 )
 
 internal val LocalOrbColors = staticCompositionLocalOf<OrbColors> { error("OrbTheme is missing") }

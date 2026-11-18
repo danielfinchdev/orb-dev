@@ -13,7 +13,8 @@ fun colorSchemeFor(p: OrbPalette, dark: Boolean): ColorScheme {
         primaryContainer = p.primarySoft, onPrimaryContainer = p.primaryText,
         inversePrimary = p.primaryText, surfaceTint = p.primary,
         secondary = p.primaryText, onSecondary = p.surface,
-        secondaryContainer = p.primarySoft, onSecondaryContainer = p.primaryText,
+        // Selected chips and tabs of Material pieces are neutral like the mockups' pressed chip; the accent stays on primaryContainer.
+        secondaryContainer = p.primary, onSecondaryContainer = p.onPrimary,
         tertiary = p.ok, onTertiary = p.surface, tertiaryContainer = p.okSoft, onTertiaryContainer = p.ok,
         background = p.bg, onBackground = p.text,
         surface = p.surface, onSurface = p.text, surfaceVariant = p.scHighest, onSurfaceVariant = p.text2,
@@ -28,5 +29,5 @@ fun colorSchemeFor(p: OrbPalette, dark: Boolean): ColorScheme {
 }
 
 fun orbColorsFor(p: OrbPalette) = OrbColors(
-    text2 = p.text2, text3 = p.text3, ok = p.ok, okSoft = p.okSoft, warn = p.warn, warnSoft = p.warnSoft, errSoft = p.errSoft,
+    text2 = p.text2, text3 = p.text3, ok = p.ok, okSoft = p.okSoft, warn = p.warn, warnSoft = p.warnSoft, errSoft = p.errSoft, info = p.info,
 )

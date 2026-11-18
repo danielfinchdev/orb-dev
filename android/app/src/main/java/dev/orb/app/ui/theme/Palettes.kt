@@ -14,6 +14,8 @@ data class OrbPalette(
     val primary: Color, val onPrimary: Color, val primarySoft: Color, val primaryText: Color,
     val ok: Color, val okSoft: Color, val warn: Color, val warnSoft: Color, val err: Color, val errSoft: Color,
     val scrim: Color,
+    /** `--info`: links and the Orbe mark; it has no Material slot. */
+    val info: Color,
 )
 
 /** The six palettes of the single theme; [key] is what is saved, [label] what the user reads. */
@@ -39,7 +41,7 @@ val GrafitoLightPalette = OrbPalette(
     onPrimary = Color(0xFFFAFAFA), primarySoft = Color(0xFFFFEDE6), primaryText = Color(0xFFB53900),
     ok = Color(0xFF007948), okSoft = Color(0xFFE2F9EC), warn = Color(0xFF945A00),
     warnSoft = Color(0xFFFFF3D6), err = Color(0xFFD01D21), errSoft = Color(0xFFFFEFED),
-    scrim = Color(0x6612161F),
+    scrim = Color(0x6612161F), info = oklch(0.53, 0.17, 254.0),
 )
 
 val GrafitoDarkPalette = OrbPalette(
@@ -50,7 +52,7 @@ val GrafitoDarkPalette = OrbPalette(
     onPrimary = Color(0xFF171717), primarySoft = Color(0xFF3B1D13), primaryText = Color(0xFFF78955),
     ok = Color(0xFF4EC983), okSoft = Color(0xFF13271A), warn = Color(0xFFF0BA59),
     warnSoft = Color(0xFF30200D), err = Color(0xFFFF645F), errSoft = Color(0xFF391919),
-    scrim = Color(0x8C000000),
+    scrim = Color(0x8C000000), info = oklch(0.68, 0.17, 250.0),
 )
 
 // Every other palette is Grafito plus what its line of temas.css overrides: accent, field, sidebar, bubble, card, border.
